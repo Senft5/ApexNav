@@ -1335,6 +1335,21 @@
     // the strip to Clear and back. U-74: noteNearUntil, while the lead note is within its lead, plain toasts wait (heldToast).
     const LEAD_HOLD_MS = 600, PASSED_STOP_MS = 3000;
     const strip = { track: null, passed: new Set(), approached: null, stall: null, stallAt: 0, shown: null, pending: null, pendingAt: 0 };
+    // AM-2 (panel round 2): the strip said for VoiceOver, one line kept last in #notes (the strip's own boxes are hidden from
+    // it): the calls in the grammar's words with their distances (say.js strip). Its words change only when the lead does or
+    // its distance crosses a band, and it is never live, so it is read when swiped to and never talks over the co-driver.
+    const bookSay = { el: null, text: null };
+    function roadBookSaid(notes) {
+      const box = $('notes');
+      if (!window.ApexSay || !box) return;
+      if (!bookSay.el) { bookSay.el = document.createElement('p'); bookSay.el.className = 'sr-only'; bookSay.el.id = 'notesSaid'; }
+      if (bookSay.el.parentNode !== box || box.lastElementChild !== bookSay.el) {   // the strip was built anew: its boxes are pictures
+        for (const c of box.children) if (c !== bookSay.el) c.setAttribute('aria-hidden', 'true');
+        box.append(bookSay.el);
+      }
+      const t = ApexSay.strip(notes);
+      if (t !== bookSay.text) { bookSay.text = t; bookSay.el.textContent = t; }
+    }
     let heldToast = null;
     // U-67: the road under the car, from the map's own road names (ApexRoadNames, the source the saved drive is named by in
     // leaveDrive), read at most every 2 s; null while the map has no named road there (the binnacle shows "--").
@@ -1453,6 +1468,7 @@
       }
       showN.words = state.noteWords;                                    // M-3: the next cells in the head's notation
       Inst.renderNotes($('notes'), look.theme, showN);
+      roadBookSaid(showN);
       state.crestAhead = !!(showN[0] && showN[0].type === 'crest' && showN[0].distM < 150);   // Kit sits up for it
       lastNotes = showN;
       if (live) pushActivity(notes);

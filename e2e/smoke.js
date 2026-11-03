@@ -755,6 +755,65 @@ flow('Dynamic Type (IN-1, GR-2): the route card, plan sheet, end card and the dr
   check(!garageCut.length, 'the Garage at 2x cuts nothing: ' + JSON.stringify(garageCut));
 }, { geolocation: { latitude: 35.9606, longitude: -83.9207 }, permissions: ['geolocation'] });
 
+flow('VoiceOver (AM-1/2/3): shut doors are out of reach, dialogs take focus and give it back, the strip and every instrument are said', async (page, base) => {
+  await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); } catch (_) {} });
+  await page.goto(base + '/index.html');
+  await page.waitForFunction(() => window.apexDoors && window.apexDebug && window.apexDebug.map);
+  const reach = () => page.evaluate(() => {
+    const out = (sel) => { const n = document.querySelector(sel); return !!n && !n.closest('[inert]') && getComputedStyle(n).visibility !== 'hidden'; };
+    return { sheet: out('#sheet .body'), notes: out('#notes'), plan: out('#destInput'), map: out('#map'), tabs: out('#tabbar'), announcer: out('#announcer'),
+      current: [...document.querySelectorAll('#tabbar .tab')].filter((t) => t.getAttribute('aria-current') === 'page').map((t) => t.dataset.view),
+      focus: document.activeElement && (document.activeElement.id || document.activeElement.className) };
+  });
+  // AM-1: the closed Menu is out of the swipe order; the tab bar says where you are
+  let r = await reach();
+  check(!r.sheet && r.plan && r.tabs && JSON.stringify(r.current) === '["map"]', 'the closed Menu is unreachable, the map is current: ' + JSON.stringify(r));
+  await page.click('#tabbar .tab[data-view="garage"]');
+  await page.waitForTimeout(300);
+  r = await reach();
+  check(r.sheet && !r.notes && !r.plan && !r.map && r.tabs && r.announcer && JSON.stringify(r.current) === '["garage"]',
+    'the open Garage is all that is reachable, with the tab bar and the announcer: ' + JSON.stringify(r));
+  check(await page.evaluate(() => document.getElementById('sheet').contains(document.activeElement)), 'focus moves into the Garage');
+  await page.click('#tabbar .tab[data-view="map"]');
+  await page.waitForTimeout(400);
+  r = await reach();
+  check(!r.sheet && r.plan && r.map && !(await page.evaluate(() => document.querySelectorAll('[inert]').length)), 'closed again: nothing left inert, the Menu hidden: ' + JSON.stringify(r));
+  // a dialog: focus into it, nothing behind it, and focus back to its opener
+  await page.focus('#swTab');
+  await page.evaluate(() => { const lat = [], lon = []; for (let i = 0; i < 200; i++) { lat.push(35.36 + i * 5 / 110540); lon.push(-84.29); }
+    apexDebug.showEndCard({ id: 'am1', name: 'Cherohala Skyway', date: new Date().toISOString(), lat, lon, dist: lat.map((_, i) => i * 5), speed_mps: lat.map(() => 15),
+      lon_g: lat.map(() => 0), lat_g: lat.map(() => 0), g_known: null, events: [], elev: null, hz: 1, source: 'web-gps', corners: [] }, Date.now() - 1800e3); });
+  await page.waitForSelector('#endCard.show');
+  await page.waitForTimeout(200);
+  const dlg = await page.evaluate(() => ({ inCard: document.getElementById('endCard').contains(document.activeElement), focus: document.activeElement.id,
+    tabs: !!document.getElementById('tabbar').closest('[inert]'), notes: !!document.getElementById('notes').closest('[inert]'), card: !!document.getElementById('endCard').closest('[inert]') }));
+  check(dlg.inCard && dlg.tabs && dlg.notes && !dlg.card, 'the end card takes focus and shuts everything behind it: ' + JSON.stringify(dlg));
+  await page.click('#endDone');
+  await page.waitForTimeout(200);
+  const after = await page.evaluate(() => ({ focus: document.activeElement.id, inert: document.querySelectorAll('[inert]').length }));
+  check(after.focus === 'swTab' && after.inert === 0, 'Done gives focus back to what opened it: ' + JSON.stringify(after));
+  // AM-2 and AM-3 in a drive: the strip and the instruments, said
+  await page.evaluate(async () => {
+    const f = (i) => ({ lat: 35.96 + i * 1e-5, lon: -83.92, accuracy_m: 5, speed_mps: 12, course_deg: 0, has_fix: true, calibration: 'locked' });
+    for (let i = 0; i < 30; i++) { window.apex.live(f(i)); await new Promise(r => setTimeout(r, 60)); }
+  });
+  await page.waitForTimeout(1100);   // the names change at most once a second
+  const said = await page.evaluate(() => {
+    const n = document.getElementById('notes'), s = document.getElementById('notesSaid'), a = (sel) => { const e = document.querySelector(sel); return e && e.getAttribute('aria-label'); };
+    const sight = document.querySelector('#cluster .ro-sight');
+    return { role: n.getAttribute('role'), label: n.getAttribute('aria-label'), live: n.getAttribute('aria-live') || (s && s.getAttribute('aria-live')),
+      said: s && s.textContent, last: n.lastElementChild === s, boxes: [...n.children].filter((c) => c !== s).every((c) => c.getAttribute('aria-hidden') === 'true'),
+      speed: a('#cluster .dial-speed'), limit: a('#cluster .ro-limit'), sight: a('#cluster .ro-sight'), score: a('#cluster .g-score'), grip: a('#cluster .dial-g > svg'),
+      means: sight && sight.getAttribute('aria-describedby') && (document.getElementById(sight.getAttribute('aria-describedby')) || {}).textContent,
+      map: document.getElementById('map').getAttribute('aria-hidden'), live2: document.getElementById('app').classList.contains('live') };
+  });
+  check(said.role === 'group' && said.label === 'Road book' && !said.live && said.said && said.last && said.boxes, 'the road book is one named group, said on demand, its boxes hidden: ' + JSON.stringify(said));
+  check(/^27 miles per hour, Speed$/.test(said.speed) && /^(\d+ miles per hour|unknown), Speed limit$/.test(said.limit) && /, Sight/.test(said.sight) && /^(\d+|unknown), Vetta Score$/.test(said.score) && /, Grip$/.test(said.grip),
+    'every instrument named value first: ' + JSON.stringify(said));
+  check(/stop from within what you can see/.test(said.means || ''), 'Sight says what it means');
+  check(!said.live2 || said.map === 'true', 'the map is hidden from VoiceOver while driving: ' + JSON.stringify(said));
+});
+
 flow('share your ETA: the route card makes a link; its page says who and when, never where (Worker stubbed, IDEAS S-19)', async (page, base) => {
   await page.route('https://photon.komoot.io/**', (route) => route.fulfill({ contentType: 'application/json', body: JSON.stringify({ features: [
     { geometry: { coordinates: [-83.9700, 35.7565] }, properties: { name: 'Maryville', state: 'Tennessee' } }] }) }));
