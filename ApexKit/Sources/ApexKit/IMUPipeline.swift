@@ -14,7 +14,15 @@ public struct IMUPipeline: Sendable {
     public private(set) var roughMeanSq = 0.0    // EMA of hpVert^2, (m/s^2)^2
     var segRoughSumSq = 0.0
     var segRoughCount = 0
-    public private(set) var camberRad = 0.0      // turn-relative bank
+    /// Turn-relative bank (rad), or nil when it has not been observed in the last `camberHoldS` (never a made-up 0).
+    public private(set) var camberRad: Double?
+    var camberAt: Double?                         // sensor time of the last camber observation
+    /// Camber is observable only under cornering load (|v * yaw rate| > camberGateMps2); see core/live_pipeline.CAMBER_HOLD_S.
+    public static let camberGateMps2 = 1.5
+    public static let camberHoldS = 1.0
+    /// Written with every frame as `camber_v`: camber from this pipeline (unknown when unobserved). Frames, rows and
+    /// uploads without it come from builds whose camber decayed to a placeholder 0 on straights, and their camber is not used.
+    public static let camberVersion = 2
     public private(set) var engagement = 0.0
 
     public init() {}
@@ -49,12 +57,20 @@ public struct IMUPipeline: Sendable {
         segRoughCount += 1
 
         // a_y = v w_z cos(phi) - g sin(phi), turn-relative (same gating as core/kinematics.py)
+        // Observed only while cornering; held camberHoldS after the last observation, then unknown (nil, never 0).
         let aKin = speedMps * yawRateRadS
-        if abs(aKin) > 1.5 {
+        if abs(aKin) > Self.camberGateMps2 {
             let sinPhi = max(-0.5, min(0.5, (abs(aKin) - abs(latAccMps2)) / gStd))
-            camberRad += lowPassAlpha(dt: dt, tau: 0.3) * (asin(sinPhi) - camberRad)
-        } else {
-            camberRad -= lowPassAlpha(dt: dt, tau: 0.6) * camberRad
+            let phi = asin(sinPhi)
+            if let c = camberRad {
+                camberRad = c + lowPassAlpha(dt: dt, tau: 0.3) * (phi - c)
+            } else {
+                camberRad = phi
+            }
+            camberAt = timestamp
+        } else if let at = camberAt, !(timestamp - at >= 0 && timestamp - at <= Self.camberHoldS) {
+            camberRad = nil
+            camberAt = nil
         }
 
         let combinedG = hypot(latAccMps2, lonAccMps2) / gStd
@@ -81,8 +97,8 @@ public struct IMUPipeline: Sendable {
 
     public var roughRMSMps2: Double { sqrt(max(0.0, roughMeanSq)) }
 
-    /// Same order as core/live_pipeline.IMUPipeline.outputs().
-    public var outputs: [Double] {
+    /// Same order as core/live_pipeline.IMUPipeline.outputs(); camber is nil when unknown.
+    public var outputs: [Double?] {
         [lonAccMps2, latAccMps2, yawRateRadS, crestAccMps2, hpVert, roughMeanSq, camberRad, engagement, vertPeakMps2]
     }
 }

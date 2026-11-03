@@ -1,6 +1,6 @@
 import { env } from "cloudflare:workers";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { LIMITS, validateContribution } from "../src/contribute";
+import { CAM_V, LIMITS, validateContribution } from "../src/contribute";
 import { api, freshDb, makeUser, ok } from "./helpers";
 
 beforeEach(freshDb);
@@ -10,7 +10,8 @@ afterEach(() => { while (dbRestorers.length) dbRestorers.pop()!(); });
 const today = () => new Date().toISOString().slice(0, 10);
 const daysAgo = (n: number) => new Date(Date.now() - n * 86400_000).toISOString().slice(0, 10);
 const bins = (n = 60, start = 0) => Array.from({ length: n }, (_, j) => ({ i: start + j, cam: 1.5, rough: 0.05, crest: 0.1, k: 0.01 }));
-const upload = (over: Record<string, unknown> = {}) => ({ way_id: 123456, dir: 0, driven_on: today(), drive_id: "drive-aaaa-0001", bins: bins(), ...over });
+// cam_v: CAM_V is what the current app sends (camber from the fixed live pipeline)
+const upload = (over: Record<string, unknown> = {}) => ({ way_id: 123456, dir: 0, driven_on: today(), drive_id: "drive-aaaa-0001", bins: bins(), cam_v: CAM_V, ...over });
 
 function injectBatchFailure(error: Error, commitThenFail = false): void {
   const db = env.DB;
@@ -258,6 +259,25 @@ describe("POST /api/contribute (real time)", () => {
     expect(r.rough_m2).toBeCloseTo([0.1, 0.2, 0.6].reduce((s, x) => s + (x - 0.3) ** 2, 0));
     expect(r.camber_n).toBe(2); expect(r.camber_mean).toBeCloseTo(3);                  // the third pass had no camber: unknown stays unknown
     expect(r.crest_peak).toBeCloseTo(2);
+  });
+
+  it("stores camber from an older build (no cam_v) as unknown, keeping its roughness, crest and curvature", async () => {
+    const [a, b] = [await makeUser("alice"), await makeUser("bob")]; await optIn(a, b);
+    const old = bins().map((x) => ({ ...x, cam: 0, rough: 0.2, crest: 0.4, k: 0.02 }));   // the old pipeline's placeholder 0
+    const { cam_v: _unused, ...oldUpload } = upload({ drive_id: "drive-alice-1", bins: old });
+    await ok(api(a, "POST", "/api/contribute", oldUpload));
+    type Row = { n: number; camber_mean: number | null; camber_n: number; rough_mean: number; crest_peak: number; k_mean: number; k_n: number };
+    const row = () => q<Row>("SELECT n, camber_mean, camber_n, rough_mean, crest_peak, k_mean, k_n FROM road_bins WHERE bin_idx = 5");
+    let r = await row();
+    expect(r).toMatchObject({ n: 1, camber_mean: null, camber_n: 0, k_n: 1 });
+    expect(r.rough_mean).toBeCloseTo(0.2); expect(r.crest_peak).toBeCloseTo(0.4); expect(r.k_mean).toBeCloseTo(0.02);
+    await ok(post(a, { drive_id: "drive-alice-2", bins: old, cam_v: 1 }));              // any other marker is not the fixed pipeline either
+    expect((await row()).camber_n).toBe(0);
+    // the current app (cam_v: 2): its camber is kept
+    await ok(post(b, { drive_id: "drive-bob-001", bins: bins().map((x) => ({ ...x, cam: 3.5 })) }));
+    r = await row();
+    expect(r).toMatchObject({ n: 3, camber_n: 1 });
+    expect(r.camber_mean).toBeCloseTo(3.5);
   });
 
   it("a missing crest stays unknown and never erases a measured one", async () => {

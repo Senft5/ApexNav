@@ -17,23 +17,25 @@ public struct JournalFrame: Codable, Equatable, Sendable {
     public var roughnessRms: Double?
     public var vertPeakG: Double?
     public var calibration: String?
+    /// IMUPipeline.camberVersion when the frame's camber came from the fixed pipeline; absent in journals of older builds.
+    public var camberV: Int?
     public var hasFix: Bool
 
     enum CodingKeys: String, CodingKey {
         case seq, at, lat, lon, calibration
         case accuracyM = "accuracy_m", speedMps = "speed_mps", courseDeg = "course_deg", elevationM = "elevation_m"
         case latG = "lat_g", lonG = "lon_g", camberDeg = "camber_deg", crestVerticalG = "crest_vertical_g"
-        case roughnessRms = "roughness_rms", vertPeakG = "vert_peak_g", hasFix = "has_fix"
+        case roughnessRms = "roughness_rms", vertPeakG = "vert_peak_g", hasFix = "has_fix", camberV = "camber_v"
     }
 
     public init(seq: Int, at: Double, lat: Double, lon: Double, accuracyM: Double? = nil, speedMps: Double? = nil,
                 courseDeg: Double? = nil, elevationM: Double? = nil, latG: Double? = nil, lonG: Double? = nil,
                 camberDeg: Double? = nil, crestVerticalG: Double? = nil, roughnessRms: Double? = nil,
-                vertPeakG: Double? = nil, calibration: String? = nil) {
+                vertPeakG: Double? = nil, calibration: String? = nil, camberV: Int? = nil) {
         self.seq = seq; self.at = at; self.lat = lat; self.lon = lon; self.accuracyM = accuracyM; self.speedMps = speedMps
         self.courseDeg = courseDeg; self.elevationM = elevationM; self.latG = latG; self.lonG = lonG; self.camberDeg = camberDeg
         self.crestVerticalG = crestVerticalG; self.roughnessRms = roughnessRms; self.vertPeakG = vertPeakG
-        self.calibration = calibration; self.hasFix = true
+        self.calibration = calibration; self.camberV = camberV; self.hasFix = true
     }
 }
 

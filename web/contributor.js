@@ -7,6 +7,10 @@
   const BIN_M = 5, MIN_BINS = 20, MAX_BINS = 2000, MAX_OFF_ROAD_M = 25, MAX_AGE_DAYS = 13;
   const SKIP_CLASSES = new Set(['residential', 'service_other', 'unclassified_service', 'service']);   // private-feeling roads are never contributed
   const M_LAT = 110540;
+  // Camber from the fixed live pipeline (ApexKit IMUPipeline.camberVersion; frames and rows say camber_v, a drive cam_v).
+  // Older builds decayed camber to a placeholder 0 on every straight: their camber is never shared (cam: null), and the
+  // server ignores camber from any upload without cam_v (backend/src/contribute.ts). Roughness, crest and curvature still go.
+  const CAM_V = 2;
 
   /** Arc-length offset (m) of a point along a polyline [[lat,lon],...], plus its distance off the line. Local flat-earth projection. */
   function project(poly, lat, lon, cum) {
@@ -33,13 +37,14 @@
   const finite = (v) => typeof v === 'number' && Number.isFinite(v);
 
   /**
-   * drive: { lat[], lon[], camber[] (deg or null), rough[], crest[], kappa[] } at 5 m spacing
+   * drive: { lat[], lon[], camber[] (deg or null), rough[], crest[], kappa[], cam_v } at 5 m spacing; camber is used only
+   *        when cam_v === CAM_V (recorded by the fixed pipeline), otherwise every bin's cam is null
    * match: per-sample { way: number|null, cls: string|null } (null = unmatched)
    * ways:  { [wayId]: [[lat, lon], ...] } OSM geometry, bins count from the way's first node
    * Returns contributions in the /api/contribute shape. Samples within trimM of either end are dropped (hides where a trip starts and ends).
    */
   function buildContributions({ drive, match, ways, drivenOn, driveId, trimM = 1000 }) {
-    const trim = Math.round(trimM / BIN_M), out = [], best = new Map();
+    const trim = Math.round(trimM / BIN_M), out = [], best = new Map(), camOk = drive.cam_v === CAM_V;
     for (const run of locate({ drive, match, ways, from: trim, to: drive.lat.length - trim })) {   // keep the longest run per (way, direction)
       const byBin = new Map();
       for (const p of run.pts) (byBin.get(p.bin) ?? byBin.set(p.bin, []).get(p.bin)).push(p.i);
@@ -47,7 +52,7 @@
       for (const [b, ids] of [...byBin].sort((x, y) => x[0] - y[0])) {
         const rough = ids.map((i) => drive.rough[i]).filter(finite);
         if (!rough.length) continue;                                   // roughness unknown: leave the bin out rather than invent it
-        const cam = ids.map((i) => drive.camber && drive.camber[i]).filter((v) => finite(v) && Math.abs(v) <= 15);
+        const cam = camOk ? ids.map((i) => drive.camber && drive.camber[i]).filter((v) => finite(v) && Math.abs(v) <= 15) : [];
         const crest = ids.map((i) => drive.crest && drive.crest[i]).filter(finite);
         const k = ids.map((i) => drive.kappa && drive.kappa[i]).filter((v) => finite(v) && Math.abs(v) <= 0.2);
         bins.push({ i: b, cam: cam.length ? +mean(cam).toFixed(2) : null, rough: +Math.min(1.5, mean(rough)).toFixed(3),
@@ -58,16 +63,34 @@
       const span = bins[bins.length - 1].i - bins[0].i + 1;
       if (bins.length / span < 0.6) continue;                          // scattered, not a run (5 m samples on 5 m bins can skip a bin now and then: about 75% is normal worst case)
       const key = `${run.way}|${run.dir}`;
-      if (!best.has(key) || best.get(key).bins.length < bins.length) best.set(key, { way_id: run.way, dir: run.dir, driven_on: drivenOn, drive_id: driveId, bins: bins.slice(0, MAX_BINS), shape: shapeOf(ways[run.way]), cls: run.cls });
+      if (!best.has(key) || best.get(key).bins.length < bins.length) best.set(key, { way_id: run.way, dir: run.dir, driven_on: drivenOn, drive_id: driveId, bins: bins.slice(0, MAX_BINS), shape: shapeOf(ways[run.way]), cls: run.cls, cam_v: camOk ? CAM_V : null });
     }
     return [...best.values()];
   }
 
-  /** The way's own OSM line (public map data, not the drive) for the coverage map, IDEAS Q-14: at most 64 points, ends kept. */
+  /**
+   * The way's own OSM line (public map data, not the drive) for the coverage map, IDEAS Q-14: at most MAX_SHAPE points, ends
+   * kept, simplified so it keeps the road's length. The server drops a line much shorter than the bins say the way is
+   * (contribute.ts validateShape), and every 5 m bin is counted along the full line, so picking nodes by index (which cuts
+   * across hairpins) lost a twisty road: a 10 km twisty way kept about 80% of its length, under the server's bar. Top-down
+   * insertion by length: the node that gives back the most length to its chord is added, until MAX_SHAPE points or no node
+   * adds 0.5 m (the same road kept about 90%).
+   */
+  const MAX_SHAPE = 64;
   function shapeOf(poly) {
     if (!poly || poly.length < 2) return null;
-    const n = Math.min(64, poly.length), pick = Array.from({ length: n }, (_, k) => poly[Math.round(k * (poly.length - 1) / (n - 1))]);
-    return pick.map(([la, lo]) => [+la.toFixed(5), +lo.toFixed(5)]);
+    const mLon = 111320 * Math.cos(poly[0][0] * Math.PI / 180), xy = poly.map(([la, lo]) => [(lo - poly[0][1]) * mLon, (la - poly[0][0]) * M_LAT]);
+    const dist = (i, j) => Math.hypot(xy[j][0] - xy[i][0], xy[j][1] - xy[i][1]);
+    const gain = (k, a, b) => dist(a, k) + dist(k, b) - dist(a, b);   // length node k gives back to the chord a-b, m
+    const far = (a, b) => { let k = -1, g = 0; for (let j = a + 1; j < b; j++) { const e = gain(j, a, b); if (e > g) { g = e; k = j; } } return { a, b, k, d: g }; };
+    const keep = new Set([0, poly.length - 1]), spans = [far(0, poly.length - 1)];
+    while (keep.size < MAX_SHAPE) {
+      let w = 0; for (let j = 1; j < spans.length; j++) if (spans[j].d > spans[w].d) w = j;
+      const s = spans[w];
+      if (s.k < 0 || s.d < 0.5) break;
+      keep.add(s.k); spans.splice(w, 1, far(s.a, s.k), far(s.k, s.b));
+    }
+    return [...keep].sort((x, y) => x - y).map((k) => [+poly[k][0].toFixed(5), +poly[k][1].toFixed(5)]);
   }
 
   /**
@@ -177,7 +200,7 @@
       try {
         if (!pending.length) {
           const lo = Math.max(0, from - ctx), hi = Math.min(n, to + ctx);
-          const slice = { lat: A.lat.slice(lo, hi), lon: A.lon.slice(lo, hi), rough: A.rough.slice(lo, hi), camber: A.camber.slice(lo, hi), crest: A.crest.slice(lo, hi) };
+          const slice = { lat: A.lat.slice(lo, hi), lon: A.lon.slice(lo, hi), rough: A.rough.slice(lo, hi), camber: A.camber.slice(lo, hi), crest: A.crest.slice(lo, hi), cam_v: CAM_V };   // push() kept only fixed-pipeline camber
           slice.kappa = Array.from(Core.computeCurvature(slice.lat, slice.lon).kappa);
           const match = await matchDrive(slice, fetchFn);
           const end = final ? to : lo + settledEnd(match, from - lo, to - lo);
@@ -199,11 +222,11 @@
       finally { busy = false; status(); }
     }
     return {
-      /** One 5 m row from the recorder: { lat, lon, roughness_rms, camber_deg? , crest? }. Never blocks. */
+      /** One 5 m row from the recorder: { lat, lon, roughness_rms, camber_deg?, camber_v?, crest? }. Never blocks. */
       push(row) {
         A.lat.push(row.lat); A.lon.push(row.lon);
         A.rough.push(Number.isFinite(row.roughness_rms) ? row.roughness_rms : null);
-        A.camber.push(Number.isFinite(row.camber_deg) ? row.camber_deg : null);
+        A.camber.push(row.camber_v === CAM_V && Number.isFinite(row.camber_deg) ? row.camber_deg : null);   // an older build's camber: unknown
         A.crest.push(Number.isFinite(row.crest) ? row.crest : null);
         if (pending.length || A.lat.length - Math.max(done, skip) - lag >= chunk) run();
       },
@@ -265,7 +288,7 @@
         trip.rec.add(fr);
         while (trip.idx < trip.rec.rows.length) {
           const x = trip.rec.rows[trip.idx++];
-          trip.live.push({ lat: x.lat, lon: x.lon, roughness_rms: x.roughness_rms, camber_deg: x.camber_deg, crest: x.crest_vertical_g });
+          trip.live.push({ lat: x.lat, lon: x.lon, roughness_rms: x.roughness_rms, camber_deg: x.camber_deg, camber_v: x.camber_v, crest: x.crest_vertical_g });
         }
         if (trip.live.stats().stopped) { end(); pausedUntil = t + pauseS * 1000; status(); }
       },
@@ -414,6 +437,6 @@
     return Math.round(100 * (1 - Math.max(0, Math.min(1, (m.roughness - 0.08) / 0.30))));
   }
 
-  const api = { createLive, privateEdge, createAmbient, driveIdFor, measuredSeries, seriesFrom, agreement, AGREE, measuredAdjust, surfaceScore, measuredAlong, summarize, locate, buildContributions, matchDrive, fetchWays, contributeDrive, eligible, project, cumulative, SKIP_CLASSES };
+  const api = { CAM_V, shapeOf, createLive, privateEdge, createAmbient, driveIdFor, measuredSeries, seriesFrom, agreement, AGREE, measuredAdjust, surfaceScore, measuredAlong, summarize, locate, buildContributions, matchDrive, fetchWays, contributeDrive, eligible, project, cumulative, SKIP_CLASSES };
   if (typeof module !== 'undefined' && module.exports) module.exports = api; else root.ApexContributor = api;
 })(typeof window !== 'undefined' ? window : globalThis);

@@ -17,6 +17,13 @@ from dataclasses import dataclass, field
 G = 9.80665
 SEGMENT_M = 5.0
 EARTH_RADIUS_M = 6371008.8
+# Camber is observable only under cornering load (|v * yaw rate| > CAMBER_GATE_MPS2). After the last such sample the
+# estimate is held for CAMBER_HOLD_S and is then unknown (None), never decayed to a made-up 0. One second bridges one
+# GPS fix (speed is held between 1 Hz fixes, so a corner hovering near the gate can drop under it for up to a fix) and
+# the 0.15 s filter lag at a corner's ends, while carrying a corner's bank at most ~25 m (5 bins at 25 m/s) onto the
+# straight that follows it.
+CAMBER_GATE_MPS2 = 1.5
+CAMBER_HOLD_S = 1.0
 
 
 def _dot(a, b): return a[0] * b[0] + a[1] * b[1] + a[2] * b[2]
@@ -251,7 +258,8 @@ class IMUPipeline:
     rough_mean_sq: float = 0.0
     seg_rough_sum_sq: float = 0.0
     seg_rough_count: int = 0
-    camber: float = 0.0         # turn-relative bank, rad
+    camber: float | None = None  # turn-relative bank, rad; None = not observed in the last CAMBER_HOLD_S
+    camber_at: float | None = None  # sensor time of the last camber observation
     engagement: float = 0.0
 
     def step(self, accel, gyro, timestamp: float, speed_mps: float, gravity_g=None) -> None:
@@ -286,12 +294,15 @@ class IMUPipeline:
         self.seg_rough_count += 1
 
         # a_y = v w_z cos(phi) - g sin(phi), turn-relative (same gating as core/kinematics.py)
+        # Observed only while cornering; held CAMBER_HOLD_S after the last observation, then unknown (never 0).
         a_kin = speed_mps * self.yaw_rate
-        if abs(a_kin) > 1.5:
+        if abs(a_kin) > CAMBER_GATE_MPS2:
             sin_phi = max(-0.5, min(0.5, (abs(a_kin) - abs(self.lat_acc)) / G))
-            self.camber += alpha(dt, 0.3) * (math.asin(sin_phi) - self.camber)
-        else:
-            self.camber -= alpha(dt, 0.6) * self.camber
+            phi = math.asin(sin_phi)
+            self.camber = phi if self.camber is None else self.camber + alpha(dt, 0.3) * (phi - self.camber)
+            self.camber_at = timestamp
+        elif self.camber_at is not None and not (0.0 <= timestamp - self.camber_at <= CAMBER_HOLD_S):
+            self.camber, self.camber_at = None, None
 
         combined_g = math.hypot(self.lat_acc, self.lon_acc) / G
         rough_g = math.sqrt(max(0.0, self.rough_mean_sq)) / G

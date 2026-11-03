@@ -14,6 +14,8 @@ final class LiveFixtureTests: XCTestCase {
 
     func doubles(_ key: String) -> [Double] { (Self.fixture[key] as! [Any]).map { ($0 as! NSNumber).doubleValue } }
     func rows(_ key: String) -> [[Double]] { (Self.fixture[key] as! [[Any]]).map { $0.map { ($0 as! NSNumber).doubleValue } } }
+    /// Rows where JSON null (unknown, e.g. camber off a corner) reads as nil.
+    func optionalRows(_ key: String) -> [[Double?]] { (Self.fixture[key] as! [[Any]]).map { $0.map { ($0 as? NSNumber)?.doubleValue } } }
 
     func runPipeline(_ check: (Int, IMUPipeline) -> Void) {
         let t = doubles("t"), speed = doubles("speed")
@@ -27,12 +29,14 @@ final class LiveFixtureTests: XCTestCase {
     }
 
     func testIMUPipelineMatchesReference() {
-        var expected: [Int: [Double]] = [:]
-        for row in rows("outputs_every_10") { expected[Int(row[0])] = Array(row.dropFirst()) }
+        var expected: [Int: [Double?]] = [:]
+        for row in optionalRows("outputs_every_10") { expected[Int(row[0]!)] = Array(row.dropFirst()) }
         var compared = 0
         runPipeline { i, pipe in
             guard let want = expected[i] else { return }
             for (k, (got, exp)) in zip(pipe.outputs, want).enumerated() {
+                guard let exp else { XCTAssertNil(got, "sample \(i) output \(k): unknown stays unknown"); continue }
+                guard let got else { XCTFail("sample \(i) output \(k): nil, want \(exp)"); continue }
                 XCTAssertEqual(got, exp, accuracy: 1e-9 * max(1.0, abs(exp)), "sample \(i) output \(k)")
             }
             compared += 1
@@ -65,9 +69,35 @@ final class LiveFixtureTests: XCTestCase {
 
     func testCamberReadsTheBankInTheTurn() {
         var samples: [Double] = []
-        runPipeline { i, pipe in if (1800..<2550).contains(i) { samples.append(pipe.camberRad) } }
+        runPipeline { i, pipe in if (1800..<2550).contains(i), let c = pipe.camberRad { samples.append(c) } }
+        XCTAssertEqual(samples.count, 750, "measured all through the turn")
         let meanDeg = samples.reduce(0, +) / Double(samples.count) * 180 / .pi
         XCTAssertEqual(meanDeg, 4.0, accuracy: 0.3)   // fixture banks the turn at 4 degrees
+    }
+
+    func testCamberIsUnknownOnAStraightNeverZero() {
+        // before the first turn (pulling away, braking) and on the straight after it (26 s), past the hold: nil, not 0
+        var straight = 0, known = 0
+        runPipeline { i, pipe in
+            if (500..<1500).contains(i) || (2800..<3100).contains(i) {
+                straight += 1
+                if pipe.camberRad != nil { known += 1 }
+            }
+        }
+        XCTAssertEqual(straight, 1300)
+        XCTAssertEqual(known, 0)
+        // a corner holds its value for camberHoldS after its last cornering sample, then it is unknown
+        var pipe = IMUPipeline()
+        pipe.mount = MountCalibrator(rows: [1, 0, 0, 0, 1, 0, 0, 0, 1])
+        for i in 0..<300 {
+            pipe.step(accel: Vec3(x: 0, y: 4.0, z: 0), gyro: Vec3(x: 0, y: 0, z: 0.2), timestamp: Double(i) * 0.01, speedMps: 20)
+        }
+        XCTAssertNotNil(pipe.camberRad)
+        for i in 300..<500 {
+            pipe.step(accel: Vec3(x: 0, y: 0, z: 0), gyro: Vec3(x: 0, y: 0, z: 0), timestamp: Double(i) * 0.01, speedMps: 20)
+            if i == 350 { XCTAssertNotNil(pipe.camberRad, "held just after the corner") }
+        }
+        XCTAssertNil(pipe.camberRad)
     }
 
     func testOdometerAndElevationFusionMatchReference() {

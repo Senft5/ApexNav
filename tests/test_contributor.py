@@ -16,7 +16,7 @@ const way = [[lat0, lon0], [lat0, lon0 + 6000 / mLon]];
 const drive = (n, rev = false) => {
   const lat = [], lon = [];
   for (let i = 0; i < n; i++) { const x = (rev ? n - 1 - i : i) * 5; lat.push(lat0 + 3 / 110540); lon.push(lon0 + x / mLon); }
-  return { lat, lon, camber: lat.map((_, i) => (i % 7 === 0 ? null : 4)), rough: lat.map(() => 0.2), crest: lat.map((_, i) => 0.1 + (i % 10) / 100), kappa: lat.map(() => 0.01) };
+  return { lat, lon, camber: lat.map((_, i) => (i % 7 === 0 ? null : 4)), rough: lat.map(() => 0.2), crest: lat.map((_, i) => 0.1 + (i % 10) / 100), kappa: lat.map(() => 0.01), cam_v: C.CAM_V };
 };
 const run = (d, m, w = { 77: way }, extra = {}) => C.buildContributions({ drive: d, match: m, ways: w, drivenOn: '2026-10-20', driveId: 'drive_test_0001', ...extra });
 const out = {};
@@ -44,6 +44,18 @@ out.driveIds = [C.driveIdFor({ id: 'rec_Dry Ridge.csv', date: '2026-10-22T09:00'
 out.shape = JSON.stringify(a[0].shape) === JSON.stringify(way.map(([la, lo]) => [+la.toFixed(5), +lo.toFixed(5)]));   // the way's map line, not the drive's points (3 m off it)
 out.keys = Object.keys(a[0]).sort().join() + '|' + Object.keys(a[0].bins[0]).sort().join();
 out.cls = a[0].cls;
+// a drive recorded before the camber fix (no cam_v): its placeholder camber is never sent; everything else is
+{ const { cam_v, ...old } = d; const o = run({ ...old, camber: d.camber.map(() => 0) }, m)[0];
+  out.oldDrive = { camV: o.cam_v, cams: [...new Set(o.bins.map((b) => b.cam))], rough: [...new Set(o.bins.map((b) => b.rough))], bins: o.bins.length, newCamV: a[0].cam_v }; }
+// a 10 km twisty way (corners of 15-75 m radius every 5 m, straights with end nodes only): the line sent keeps its length
+{ let seed = 1, x = 0, y = 0, h = 0, total = 0, sign = 1; const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647, pts = [[0, 0]];
+  while (total < 10000) {
+    const L = rnd() * 60; x += L * Math.cos(h); y += L * Math.sin(h); total += L; pts.push([x, y]);
+    const R = 15 + rnd() * 60, A = (30 + rnd() * 150) * Math.PI / 180, st = 5 / R; sign = rnd() < 0.8 ? -sign : sign;
+    for (let q = st; q <= A; q += st) { h += sign * st; x += 5 * Math.cos(h); y += 5 * Math.sin(h); total += 5; pts.push([x, y]); }
+  }
+  const poly = pts.map(([px, py]) => [lat0 + py / 110540, lon0 + px / mLon]), cum = C.cumulative(poly), sh = C.shapeOf(poly), cs = C.cumulative(sh);
+  out.twisty = { nodes: poly.length, sent: sh.length, kept: cs[cs.length - 1] / cum[cum.length - 1], ends: JSON.stringify([sh[0], sh[sh.length - 1]]) === JSON.stringify([poly[0], poly[poly.length - 1]].map(([la, lo]) => [+la.toFixed(5), +lo.toFixed(5)])) }; }
 // network shell with a fake fetch: Valhalla trace_attributes + Overpass, then upload
 // a mostly disputed road: 45 of 50 measured bins disagree, 5 agree on smooth: tiny weight, no Surface
 out.mostlyDisputed = (() => { const m = { km: 0.5, coverage: 0.5, roughCoverage: 0.05, roughness: 0.05, avgPasses: 3, bankedKm: 0, offCamberKm: 0 }; return { adj: C.measuredAdjust(m), surface: C.surfaceScore(m) }; })();
@@ -140,15 +152,28 @@ def test_eligibility_window(result):
 
 def test_payload_has_no_drive_coordinates_or_times(result):
     assert result["shape"] is True
-    assert result["keys"] == "bins,cls,dir,drive_id,driven_on,shape,way_id|cam,crest,i,k,rough"
+    assert result["keys"] == "bins,cam_v,cls,dir,drive_id,driven_on,shape,way_id|cam,crest,i,k,rough"
     assert result["cls"] == "tertiary", "the map match's road class goes with it (the server's open-road rule)"
+
+
+def test_a_drive_recorded_before_the_camber_fix_sends_no_camber(result):
+    o = result["oldDrive"]
+    assert result["oldDrive"]["newCamV"] == 2, "a drive from the fixed pipeline says so"
+    assert o["camV"] is None and o["cams"] == [None], "the old pipeline's placeholder 0s are never shared as measured"
+    assert o["rough"] == [0.2] and o["bins"] == 600, "roughness and the rest still go"
+
+
+def test_a_long_twisty_way_keeps_its_length_in_the_line_sent(result):
+    t = result["twisty"]
+    assert t["nodes"] > 1000 and 2 <= t["sent"] <= 64 and t["ends"]
+    assert t["kept"] > 0.88, "the server drops a line under 80% of the length the bins reach (contribute.ts validateShape)"
 
 
 def test_network_shell_matches_fetches_and_uploads_bins_only(result):
     sh = result["shell"]
     assert sh["res"] == {"built": 1, "sent": 1} and sh["posted"] == 1
     assert sh["valhalla"] == 1 and sh["overpass"] == 1
-    assert sh["keys"] == "bins,cls,dir,drive_id,driven_on,shape,way_id"
+    assert sh["keys"] == "bins,cam_v,cls,dir,drive_id,driven_on,shape,way_id"
 
 
 def test_server_refusal_stops_uploading(result):
@@ -289,6 +314,14 @@ const out = {};
     const live = C.createLive({ Core, fetch: fake(st), driveId: 'd_live_test_07', drivenOn: '2026-10-25', post: async (c) => { posts.push(c); return true; } });
     for (let i = 0; i < 199; i++) live.push(row(i));
     await live.finish(); out.edges = { e, distinct: many.size, min: Math.min(...many), max: Math.max(...many), shortPosts: posts.length, matches: st.matches }; }
+  // 8. camber: a row from the fixed pipeline (camber_v 2) keeps its camber; a row without it (an older build's frame) is unknown
+  for (const v of [2, undefined]) {
+    const st = { matches: 0, overpass: 0, failTimes: 0 }, posts = [];
+    const live = C.createLive({ Core, skip: 200, lag: 200, fetch: fake(st), driveId: 'd_live_test_08', drivenOn: '2026-10-25', post: async (c) => { posts.push(c); return true; } });
+    for (let i = 0; i < N; i++) { live.push({ ...row(i), camber_deg: i % 2 ? 3 : null, camber_v: v }); if (i % 50 === 0) await new Promise((r) => setTimeout(r, 0)); }
+    await live.finish();
+    out['cam' + (v || 'Old')] = { camV: [...new Set(posts.map((p) => p.cam_v))], cams: [...new Set(posts.flatMap((p) => p.bins.map((b) => b.cam)))].sort() };
+  }
   console.log(JSON.stringify(out));
 })();
 """
@@ -306,7 +339,7 @@ def test_live_never_sends_first_or_last_km(live):
     n = live["normal"]
     assert n["lo"] >= 200 - 1 and n["hi"] <= 1200 - 200 + 1          # rows 0-199 and the last 200 rows never leave the phone
     assert n["n"] == n["unique"] and n["n"] >= 780                    # about 800 settled rows, none sent twice
-    assert n["ids"] == ["d_live_test_01"] and n["keys"] == "bins,cls,dir,drive_id,driven_on,shape,way_id"
+    assert n["ids"] == ["d_live_test_01"] and n["keys"] == "bins,cam_v,cls,dir,drive_id,driven_on,shape,way_id"
     assert n["overpass"] == 1 and n["firstState"] == "on"             # way geometry fetched once, then cached
 
 
@@ -337,6 +370,11 @@ def test_live_road_change_at_a_chunk_edge_loses_nothing(live, split):
     s = live[f"split{split}"]
     assert s["n"] == s["unique"] and s["n"] >= 780
     assert s["max77"] >= split - 2 and s["min78"] <= 2                # both roads are sent right up to where they meet
+
+
+def test_live_camber_only_from_the_fixed_pipeline(live):
+    assert live["cam2"]["camV"] == [2] and 3 in live["cam2"]["cams"]
+    assert live["camOld"]["cams"] == [None], "an older build's camber (a decayed placeholder) is never sent"
 
 
 def test_live_unknown_crest_is_null_not_zero(live):
