@@ -166,7 +166,14 @@
     /* the real map under the route picture (drive_basemap.js): the SVG on top, the map fades in only once its tiles drew */
     .dv-plan { position: relative; } .dv-plan > svg { position: relative; z-index: 1; display: block; width: 100%; height: auto; }
     .dv-plan > .dv-basemap { position: absolute; inset: 0; z-index: 0; opacity: 0; transition: opacity 0.3s ease-out; pointer-events: none; overflow: hidden; }
-    .dv-plan > .dv-basemap.shown { opacity: 0.85; }   /* .dv-plan > : over maplibre-gl.css's .maplibregl-map { position: relative } */
+    .dv-plan > .dv-basemap.shown { opacity: 0.85; pointer-events: auto; }   /* .dv-plan > : over maplibre-gl.css's .maplibregl-map { position: relative } */
+    /* on the map, two fingers pinch and pan it through the picture; the corner numbers still take a tap; the path keeps
+       its width at any zoom (drive_basemap.js overlay) */
+    .dv-plan { overflow: hidden; }
+    .dv-plan.on-map > svg { pointer-events: none; } .dv-plan.on-map > svg [data-k] { pointer-events: auto; }
+    .dv-plan.on-map #dvGeo line, .dv-plan.on-map #dvGeo polyline { vector-effect: non-scaling-stroke; }
+    .dv-recenter { position: absolute; top: 6px; right: 6px; z-index: 2; min-height: 32px; padding: 4px 10px; font: 600 12px var(--font-ui); color: var(--panel-ink); background: var(--panel); border: 1px solid var(--rule); cursor: pointer; }
+    .dv-mapnote { position: absolute; left: 0; bottom: 0; z-index: 2; padding: 2px 5px; font-size: 11px; line-height: 1.2; color: var(--panel-dim); background: var(--panel); pointer-events: none; }
     .dv-credit { position: absolute; right: 0; bottom: 0; z-index: 2; padding: 2px 5px; font-size: 9px; line-height: 1.2; color: var(--panel-dim); background: var(--panel); pointer-events: none; }
     .dv-time { margin: 0 0 12px; padding: 0; list-style: none; display: grid; gap: 6px; }
     .dv-time button { width: 100%; text-align: left; background: transparent; color: inherit; font: inherit; cursor: pointer; display: grid; grid-template-columns: auto 1fr auto; gap: 2px 10px; align-items: baseline; padding: 8px 10px; border: 1px solid var(--rule); }

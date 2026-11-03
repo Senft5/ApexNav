@@ -1,7 +1,7 @@
 """TestFlight feedback from App Store Connect, for CI (.github/workflows/crash-logs.yml): crash reports
 (betaFeedbackCrashSubmissions) and screenshot feedback (betaFeedbackScreenshotSubmissions).
 
-Prints each crash's build, time, exception and crashed thread, and each screenshot's comment; never the tester's email
+Prints each crash's build, time, exception and crashed thread, and each screenshot's build and comment; never the tester's email
 or device name, because the repository's Actions logs are public. Screenshots are saved to feedback/ for a short-lived
 workflow artifact, not printed.
 """
@@ -65,8 +65,37 @@ def crashed_part(text):
     return "\n".join(keep) or text[:4000]
 
 
+def build_text(version, number):
+    """"build 1.4 (212)": the app version and build number a note came from, "?" for a part not known."""
+    v, b = (str(version).strip() if version else ""), (str(number).strip() if number else "")
+    if not v and not b:
+        return "build unknown"
+    return f"build {v or '?'} ({b or '?'})"
+
+
+def build_of(sub, included, tok, cache):
+    """The build a feedback submission came from (its `build` relationship, asked for with include=build), as
+    build_text(); the marketing version from the build's preReleaseVersion, fetched once per build."""
+    rel = ((sub.get("relationships") or {}).get("build") or {}).get("data") or {}
+    bid = rel.get("id")
+    if not bid:
+        a = sub.get("attributes", {})
+        return build_text(None, a.get("appBuild") or a.get("buildNumber"))
+    if bid not in cache:
+        b = next((x for x in included if x.get("type") == "builds" and x.get("id") == bid), None)
+        number = (b or {}).get("attributes", {}).get("version")
+        version = None
+        try:
+            version = get(f"/builds/{bid}/preReleaseVersion?fields[preReleaseVersions]=version", tok).get("data", {}).get("attributes", {}).get("version")
+        except Exception:   # the build number alone still says which upload it was
+            pass
+        cache[bid] = build_text(version, number)
+    return cache[bid]
+
+
 def screenshots(app_id, tok):
-    subs = get(f"/apps/{app_id}/betaFeedbackScreenshotSubmissions?limit=20&sort=-createdDate", tok).get("data", [])
+    res = get(f"/apps/{app_id}/betaFeedbackScreenshotSubmissions?limit=20&sort=-createdDate&include=build", tok)
+    subs, included, builds = res.get("data", []), res.get("included", []), {}
     print(f"{len(subs)} screenshot feedback(s)")
     os.makedirs("feedback", exist_ok=True)
     others = 0
@@ -77,7 +106,7 @@ def screenshots(app_id, tok):
             print(f"#{n} shared", a.get("createdDate"), "· from another tester", tester(a) or "(no email)", "· not shown")
             continue
         print("=" * 80)
-        print(f"#{n} shared", a.get("createdDate"), f"· from: {who(a)} · iOS", a.get("osVersion"), "· app", a.get("appPlatform") or "")
+        print(f"#{n} shared", a.get("createdDate"), f"· from: {who(a)} ·", build_of(s, included, tok, builds), "· iOS", a.get("osVersion"))
         print("comment:", (a.get("comment") or "(none)").strip())
         for k, shot in enumerate(a.get("screenshots") or [], 1):
             try:
@@ -96,13 +125,14 @@ def main():
     if not apps:
         sys.exit("no app with bundle id com.senft.ApexNav")
     screenshots(apps[0]["id"], tok)
-    subs = get(f"/apps/{apps[0]['id']}/betaFeedbackCrashSubmissions?limit=5&sort=-createdDate", tok).get("data", [])
+    res = get(f"/apps/{apps[0]['id']}/betaFeedbackCrashSubmissions?limit=5&sort=-createdDate&include=build", tok)
+    subs, included, builds = res.get("data", []), res.get("included", []), {}
     print(f"{len(subs)} crash report(s) shared from TestFlight")
     for s in subs:
         a = s.get("attributes", {})
         print("=" * 80)
-        print("shared", a.get("createdDate"), "· from:", who(a) or "another tester", "· build",
-              a.get("appBuild") or a.get("buildNumber") or "?", "· iOS", a.get("osVersion"), "· device", a.get("deviceModel") or "?")
+        print("shared", a.get("createdDate"), "· from:", who(a) or "another tester", "·", build_of(s, included, tok, builds),
+              "· iOS", a.get("osVersion"), "· device", a.get("deviceModel") or "?")
         try:
             log = get(f"/betaFeedbackCrashSubmissions/{s['id']}/crashLog", tok)
             print(crashed_part(log.get("data", {}).get("attributes", {}).get("logText", "")))

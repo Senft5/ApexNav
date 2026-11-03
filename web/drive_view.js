@@ -276,6 +276,9 @@
     const MW = 360, pad = 16, ms = (MW - 2 * pad) / Math.max(x1 - x0, y1 - y0, 1), MH = Math.max(200, Math.round((y1 - y0) * ms + 2 * pad));
     const xc = (x0 + x1) / 2, yc = (y0 + y1) / 2;
     const P = (i) => [MW / 2 + (x[i] - xc) * ms, MH / 2 - (y[i] - yc) * ms];
+    const T0 = { s: 1, tx: 0, ty: 0 };
+    let cam = T0;                                                    // where the map has moved the picture (identity: fitted)
+    const TP = (T, i) => { const [u, v] = P(i); return [T.s * u + T.tx, T.s * v + T.ty]; };
     const vmax = Math.max(...d.speed_mps) || 1;
     const lerp = (a, b, t) => Math.round(a + (b - a) * t);
     const hex = (h) => [1, 3, 5].map(k => parseInt(h.slice(k, k + 2), 16));
@@ -293,7 +296,7 @@
     const ab = Core.abruptMoments && d.lat_g && d.lon_g ? Core.abruptMoments(d.lat_g, d.lon_g, d.speed_mps, d.g_known || null) : null;
     const calm = hex(asHex(C.panelDim, '#8A94A6')), sharp = hex(asHex(C.signal, '#E5484D'));
     const jerkColor = (j) => { const t = Math.min(1, j / 0.6); return `rgb(${lerp(calm[0], sharp[0], t)},${lerp(calm[1], sharp[1], t)},${lerp(calm[2], sharp[2], t)})`; };
-    let jsegs = '', jmarks = '';
+    let jsegs = '', jmarksAt = () => '';
     if (ab && ab.jerk.some((x) => x != null)) {                    // any measured stretch: a smooth drive still gets its map
       for (let i = 0; i + stepM < n + stepM; i += stepM) {
         const j = Math.min(n - 1, i + stepM); if (j === i) break;
@@ -302,16 +305,17 @@
         jsegs += mx == null ? `<line x1="${ax.toFixed(1)}" y1="${ay.toFixed(1)}" x2="${bx.toFixed(1)}" y2="${by.toFixed(1)}" stroke="${C.panelDim}" stroke-width="1.5" stroke-dasharray="2 3" opacity="0.5"/>`
           : `<line x1="${ax.toFixed(1)}" y1="${ay.toFixed(1)}" x2="${bx.toFixed(1)}" y2="${by.toFixed(1)}" stroke="${jerkColor(mx)}" stroke-width="3.5" stroke-linecap="round"/>`;
       }
-      jmarks = ab.moments.map((m, k) => { const [px, py] = P(m.index); return `<circle cx="${px.toFixed(1)}" cy="${py.toFixed(1)}" r="7" fill="none" stroke="${C.signal}" stroke-width="2"/><text x="${(px + 10).toFixed(1)}" y="${(py + 4).toFixed(1)}" font-size="10" font-weight="700" fill="${C.signal}" stroke="${C.panel}" stroke-width="3" paint-order="stroke">${String.fromCharCode(65 + k)}</text>`; }).join('');
+      jmarksAt = (T) => ab.moments.map((m, k) => { const [px, py] = TP(T, m.index); return `<circle cx="${px.toFixed(1)}" cy="${py.toFixed(1)}" r="7" fill="none" stroke="${C.signal}" stroke-width="2"/><text x="${(px + 10).toFixed(1)}" y="${(py + 4).toFixed(1)}" font-size="10" font-weight="700" fill="${C.signal}" stroke="${C.panel}" stroke-width="3" paint-order="stroke">${String.fromCharCode(65 + k)}</text>`; }).join('');
     }
     // a casing in the panel's colour under the coloured line, so slow grey and calm grey still read over the map's roads
     let casePts = '';
     for (let i = 0; i < n; i += stepM) casePts += P(i).map((q) => q.toFixed(1)).join(',') + ' ';
     casePts += P(n - 1).map((q) => q.toFixed(1)).join(',');
     const casing = `<polyline id="dvCase" points="${casePts}" fill="none" stroke="${C.panel}" stroke-width="7" stroke-linecap="round" stroke-linejoin="round" opacity="0.85"/>`;
-    let placed = [];
-    const marks = d.corners.map((c, k) => { const [px, py] = P(c.apex); if (placed.some(([qx, qy]) => Math.hypot(qx - px, qy - py) < 18)) return `<circle cx="${px.toFixed(1)}" cy="${py.toFixed(1)}" r="2" fill="${C.signal}"/>`; placed.push([px, py]); return `<g data-k="${k}" style="cursor:pointer"><circle cx="${px.toFixed(1)}" cy="${py.toFixed(1)}" r="8" fill="${C.panel}" stroke="${C.signal}" stroke-width="1.6"/><text x="${px.toFixed(1)}" y="${(py + 3.2).toFixed(1)}" text-anchor="middle" font-size="9" font-weight="700" fill="${C.panelInk}">${k + 1}</text></g>`; }).join('');
-    mapBox.innerHTML = `<div class="dv-plan"><svg viewBox="0 0 ${MW} ${MH}" role="img" aria-label="Route map coloured by speed, ${d.corners.length} corners">${casing}<g id="dvSpeed">${segs}</g><g id="dvJerk" display="none">${jsegs}</g><polyline id="dvWin" fill="none" stroke="${C.panelInk}" stroke-width="7" stroke-linecap="round" stroke-linejoin="round" opacity="0.28"/>${marks}<g id="dvJerkMarks" display="none" pointer-events="none">${jmarks}</g><circle id="dvDot" r="6" fill="${C.accent}" stroke="${C.panel}" stroke-width="2"/></svg><span class="dv-credit" hidden>\u00a9 OpenStreetMap \u00b7 OpenFreeMap</span></div>
+    // the corner numbers at camera T (the map's zoom and pan, drive_basemap.js overlay): redrawn as it moves, so they keep
+    // their size and spread out as the map zooms in
+    const marksAt = (T) => { const placed = []; return d.corners.map((c, k) => { const [px, py] = TP(T, c.apex); if (placed.some(([qx, qy]) => Math.hypot(qx - px, qy - py) < 18)) return `<circle cx="${px.toFixed(1)}" cy="${py.toFixed(1)}" r="2" fill="${C.signal}"/>`; placed.push([px, py]); return `<g data-k="${k}" style="cursor:pointer"><circle cx="${px.toFixed(1)}" cy="${py.toFixed(1)}" r="8" fill="${C.panel}" stroke="${C.signal}" stroke-width="1.6"/><text x="${px.toFixed(1)}" y="${(py + 3.2).toFixed(1)}" text-anchor="middle" font-size="9" font-weight="700" fill="${C.panelInk}">${k + 1}</text></g>`; }).join(''); };
+    mapBox.innerHTML = `<div class="dv-plan"><svg viewBox="0 0 ${MW} ${MH}" role="img" aria-label="Route map coloured by speed, ${d.corners.length} corners"><g id="dvGeo">${casing}<g id="dvSpeed">${segs}</g><g id="dvJerk" display="none">${jsegs}</g><polyline id="dvWin" fill="none" stroke="${C.panelInk}" stroke-width="7" stroke-linecap="round" stroke-linejoin="round" opacity="0.28"/></g><g id="dvMarks">${marksAt(T0)}</g><g id="dvJerkMarks" display="none" pointer-events="none">${jmarksAt(T0)}</g><circle id="dvDot" r="6" fill="${C.accent}" stroke="${C.panel}" stroke-width="2"/></svg><span class="dv-credit" hidden>\u00a9 OpenStreetMap \u00b7 OpenFreeMap</span></div>
       <div class="dv-legend" id="dvLegSpeed"><span>slow</span><i style="background:linear-gradient(90deg,${colorAt(0)},${colorAt(vmax)})"></i><span>${Math.round(vmax * MPH)} ${SPD()}</span></div>`
       + (jsegs ? `<div class="dv-legend" id="dvLegJerk" hidden><span>calm</span><i style="background:linear-gradient(90deg,${jerkColor(0)},${jerkColor(0.6)})"></i><span>abrupt</span></div>` : '');
     let showSmooth = null;
@@ -342,6 +346,17 @@
         box: [la0, lo0, la1, lo1], palette: o.mapPalette,
         view: () => { const w = planBox.clientWidth; return w ? BM.viewFor(plan.frame, xc, yc, ms * w / MW) : null; },
         onShown: () => { const cr = planBox.querySelector('.dv-credit'); if (cr) cr.hidden = false; },
+        // the path moves with the map (one transform; CSS keeps its lines their width), the numbers and letters are
+        // redrawn where they now fall, at their own size
+        onMove: (c) => {
+          const w = planBox.clientWidth, fit = w ? BM.viewFor(plan.frame, xc, yc, ms * w / MW) : null;
+          cam = c && fit ? BM.overlay(plan.frame, xc, yc, ms, MW, MH, fit.zoom, c) : T0;
+          const g = planBox.querySelector('#dvGeo'), mk = planBox.querySelector('#dvMarks'), jm = planBox.querySelector('#dvJerkMarks');
+          if (g) { if (cam === T0) g.removeAttribute('transform'); else g.setAttribute('transform', `matrix(${cam.s} 0 0 ${cam.s} ${cam.tx} ${cam.ty})`); }
+          if (mk) mk.innerHTML = marksAt(cam);
+          if (jm) jm.innerHTML = jmarksAt(cam);
+          const [px, py] = TP(cam, state.i); dot.setAttribute('cx', px); dot.setAttribute('cy', py);
+        },
       });
     }
 
@@ -447,7 +462,7 @@
       i = Math.max(0, Math.min(n - 1, Math.round(i))); state.i = i;
       const hair = lanes.querySelector('#dvHair'); if (hair && geo) { const gx = geo.X(i); hair.setAttribute('x1', gx); hair.setAttribute('x2', gx); hair.style.display = i < state.v0 || i > state.v1 ? 'none' : ''; }
       lanes.setAttribute('aria-valuenow', i); lanes.setAttribute('aria-valuetext', `${DIST_WORDS(d.dist[i])}, ${Math.round(d.speed_mps[i] * MPH)} ${SPD_WORDS()}`);
-      const [px, py] = P(i); dot.setAttribute('cx', px); dot.setAttribute('cy', py);
+      const [px, py] = TP(cam, i); dot.setAttribute('cx', px); dot.setAttribute('cy', py);
       const k = cornerAt(i), c = k >= 0 ? d.corners[k] : null;
       const cell = (label, v) => `<div><b>${v}</b><span>${label}</span></div>`;
       read.innerHTML = cell('Distance', DIST(d.dist[i])) + cell('Time', fmtT(T[i])) + cell('Speed', `${Math.round(d.speed_mps[i] * MPH)} ${SPD()}`)
@@ -550,7 +565,7 @@
     const ro = new ResizeObserver(() => { if (Math.abs((lanes.clientWidth || 0) - W) > 2) draw(); if (basemap) basemap.refit(); });
     ro.observe(lanes); if (basemap && planBox) ro.observe(planBox);
     function setRoadFeel(series) { feel = series; draw(); }
-    return { move, setRoadFeel, restyleMap() { if (basemap) basemap.restyle(); }, destroy() { ro.disconnect(); if (basemap) basemap.destroy(); }, summary: S };
+    return { move, setRoadFeel, restyleMap() { if (basemap) basemap.restyle(); }, recenterMap() { if (basemap) basemap.recenter(); }, destroy() { ro.disconnect(); if (basemap) basemap.destroy(); }, summary: S };
   }
 
   const api = { mount, summarize, tipText, plainCoach, abruptAdvice, fatigueText, consistencyRows, noteWordsPref, cornerCall };
