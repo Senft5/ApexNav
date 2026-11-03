@@ -101,6 +101,20 @@ export function num(v: unknown, field: string, min: number, max: number): number
   return v;
 }
 
+/**
+ * VI-1: a "near me" lookup never learns where you are to better than a coarse cell. The point is snapped to a CELL_DEG grid
+ * (0.1 degree, about 11 km north-south) and the search radius grows by CELL_COVER_KM, the most a point in the cell can be
+ * from its centre (half the diagonal: 0.05 degree each way is under 5.6 km on both axes, so under 7.9 km), so anything
+ * within `km` of the real point is still returned. The phone sends the cell already (web/privacy_zones.js cell) and sorts
+ * by its own distance; this is the side a page can't skip. Distances returned are from the cell's centre.
+ */
+export const CELL_DEG = 0.1, CELL_COVER_KM = 8;
+export const toCell = (x: number) => Math.round(x * 10) / 10;   // CELL_DEG = 0.1: one decimal place
+export function nearCell(url: URL): { lat: number; lon: number } {
+  const q = (k: string) => { const s = url.searchParams.get(k); return s === null || s.trim() === "" ? NaN : Number(s); };
+  return { lat: toCell(num(q("lat"), "lat", -85, 85)), lon: toCell(num(q("lon"), "lon", -180, 180)) };
+}
+
 export const HANDLE_RE = /^[a-z0-9_]{3,20}$/;
 export const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 export const pair = (x: string, y: string): [string, string] => (x < y ? [x, y] : [y, x]);

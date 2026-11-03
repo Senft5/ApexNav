@@ -6,7 +6,9 @@
   "name": "apexnav",
   "main": "backend/src/index.ts",
   "compatibility_date": "2026-10-19",
-  "observability": { "enabled": true },
+  // VI-1: no request URL is kept. Invocation logs (one per request, carrying its URL) are off, and query strings are
+  // redacted from anything else that records a URL (traces). Our own console lines stay: errors.ts scrubs them.
+  "observability": { "enabled": true, "redact_query_string": true, "logs": { "invocation_logs": false } },
   // Not a secret: Google shows the client ID in the sign-in URL. The client SECRET, OWNER_EMAIL and PEPPER are dashboard secrets and never go in this file.
   "vars": {
     "GOOGLE_CLIENT_ID": "299251127161-jj8nql86bqkr48pmidejbbrjaupns1om.apps.googleusercontent.com"
@@ -32,6 +34,7 @@
   // Preview builds (branches and pull requests) run `wrangler preview`, which reads only this block and does not inherit production settings.
   // They get their own empty database (apexnav-preview-db, same schema) so a preview can never touch real data.
   "previews": {
+    "observability": { "enabled": true, "redact_query_string": true, "logs": { "invocation_logs": false } },
     "ratelimits": [
       { "name": "WRITE_LIMIT", "namespace_id": "1003", "simple": { "limit": 60, "period": 60 } },
       { "name": "AUTH_LIMIT", "namespace_id": "1004", "simple": { "limit": 20, "period": 60 } }

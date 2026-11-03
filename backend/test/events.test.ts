@@ -107,6 +107,7 @@ describe("crew drives", () => {
     expect(JSON.stringify(m)).not.toMatch(/alice|by_handle/);                                      // no handles for outsiders
     expect((await near(b)).length).toBe(1);
     expect(await near(b, 37.5, -83.9)).toEqual([]);                                                    // ~190 km away
+    expect(await near(b, 35.8321, -83.8765)).toEqual(await near(b));                                  // VI-1: only the cell is used
     await ok(api(b, "POST", `/api/crews/${pub}/join`));
     expect((await near(b))[0].member).toBe(true);
     await ok(api(c, "POST", "/api/blocks", { handle: "alice" }));

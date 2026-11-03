@@ -664,6 +664,7 @@
     sc.dataset.explain = 'score';
     html('span', '', sc, 'SCORE');
     u.push(d => { const t = Number.isFinite(d.score) ? String(Math.round(d.score)) : '--'; if (scV.textContent !== t) scV.textContent = t; });
+    u.push(named(el));                                                // AM-3: each instrument said, value first
     if (theme.mascot === 'kit') u.push(kitRow(el));                  // Tapedeck's fox, a row of its own under the gauges
     // Keep the road type below Trip; a route without sector data has no known type.
     const roadType = html('div', 'dna-arch', center, 'Road: --');
@@ -679,6 +680,32 @@
       roadType.hidden = !(d.routeOnly || d.sector || name);
     });
     return { update: (d) => u.forEach(f => f(d)) };
+  }
+
+  // Panel round 2 AM-3: VoiceOver names every instrument value first, unit spelled out, "unknown" for a dash
+  // ("48 miles per hour, Speed"; say.js instruments). Each is one image with that name, so its drawn parts aren't read one
+  // by one; the names change at most once a second. Sight carries a one-line description of what it means.
+  function named(el) {
+    const Say = root.ApexSay;
+    if (!Say) return () => {};
+    const parts = {
+      speed: el.querySelector('.dial-speed'), limit: el.querySelector('.ro-limit'), sight: el.querySelector('.ro-sight'),
+      grip: el.querySelector('.dial-g > svg'), score: el.querySelector('.g-score'), trip: el.querySelector('.odo'),
+    };
+    for (const k in parts) if (parts[k]) parts[k].setAttribute('role', 'img');
+    if (parts.sight) {
+      const id = `sightMeans${Math.random().toString(36).slice(2, 7)}`;
+      html('span', 'sr-only', el, Say.SIGHT_MEANS).id = id;
+      parts.sight.setAttribute('aria-describedby', id);
+    }
+    let at = -Infinity;
+    return (d) => {
+      const now = typeof performance !== 'undefined' ? performance.now() : Date.now();
+      if (now - at < 1000) return;
+      at = now;
+      const names = Say.instruments(d, U() ? U().speedU() : 'mph', U() ? U().longU() : 'mi');
+      for (const k in parts) if (parts[k] && parts[k].getAttribute('aria-label') !== names[k]) parts[k].setAttribute('aria-label', names[k]);
+    };
   }
 
   function mountCluster(el, theme) {
