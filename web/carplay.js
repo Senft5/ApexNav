@@ -276,8 +276,20 @@
     const pal = (m) => (t.map && t.map[m] && t[m] ? { ...t.map[m], route: t[m].route, plate: t[m].panel, plateInk: t[m].panelInk, accent: t[m].accent } : null);
     const day = pal('day'), night = pal('night');
     // units: the car shows distances in the driver's (miles and feet, or km and metres), not the metres it is sent
-    return { kind: 'look', theme: t.id || 'roadbook', card: n.panel || '#151310', cardInk: n.panelInk || '#EDE4D3', accent: n.accent || '#E65252', voice: !!voiceOn,
+    const msg = { kind: 'look', theme: t.id || 'roadbook', card: n.panel || '#151310', cardInk: n.panelInk || '#EDE4D3', accent: n.accent || '#E65252', voice: !!voiceOn,
              units: units === 'metric' ? 'metric' : 'imperial', palette: day && night ? { day, night } : null };
+    const puck = carPuck(t);
+    if (puck) msg.puck = puck;
+    return msg;
+  }
+  /** A car's own theme (theme.car, the private themes): its outline from above, nose up, in the car map's 34-point arrow box,
+   *  and its paint, for the native car map's arrow (ApexCarMap.swift ApexCarPuckView); null for every other theme. Pure. */
+  function carPuck(t) {
+    const car = t && t.car, s = car && car.silhouette;
+    if (!s || !car.paint || !/^#[0-9A-Fa-f]{6}$/.test(car.paint.hex || '') || !Array.isArray(s.body)) return null;
+    const k = Math.min(34 / s.w, 34 / s.h), ox = (34 - s.w * k) / 2, oy = (34 - s.h * k) / 2;
+    const pts = (a) => (Array.isArray(a) ? a.map(([x, y]) => [Math.round((ox + x * k) * 10) / 10, Math.round((oy + y * k) * 10) / 10]) : null);
+    return { paint: car.paint.hex, glass: '#1A1D22', body: pts(s.body), ...(s.glass ? { glass_shape: pts(s.glass) } : {}), ...(s.roof ? { roof: pts(s.roof) } : {}) };
   }
 
   /**

@@ -60,3 +60,21 @@ def test_every_theme_has_sounds():
     sounds = open(os.path.join(ROOT, "web", "theme_sounds.js"), encoding="utf-8").read()
     for tid in ("roadbook", "tapedeck", "billet"):
         assert f"id: '{tid}'" in themes and f"{tid}: {{ key:" in sounds
+
+
+OWN = r"""
+const S = require(process.argv[1] + '/web/theme_sounds.js');
+const own = { key: [{ type: 'sine', f: 500, at: 0, dur: 0.02, gain: 0.05 }], pre: [] };
+console.log(JSON.stringify({ key: S.recipe('frs', 'key', own), pre: S.recipe('frs', 'pre', own), hazard: S.recipe('frs', 'hazard', { hazard: own.key }),
+  wake: S.recipe('frs', 'wake', { wake: own.key }), rb: [S.recipe('roadbook', 'pre'), S.recipe('roadbook', 'hazard'), S.recipe('roadbook', 'wake')] }));
+"""
+
+
+def test_a_private_theme_brings_its_own_key_and_pre_call_but_never_the_hazard():
+    """A private theme's sounds come with its look from the server (themes.js carFrom cleans them); an empty one falls back
+    to the road book's, and what a hazard or a mode change sounds like is never a theme's."""
+    r = json.loads(subprocess.run([NODE, "-e", OWN, ROOT], capture_output=True, text=True, check=True).stdout)
+    assert r["key"] == [{"type": "sine", "f": 500, "at": 0, "dur": 0.02, "gain": 0.05}]
+    assert r["pre"] == r["rb"][0] and r["hazard"] == r["rb"][1] and r["wake"] == r["rb"][2]
+    cockpit = open(os.path.join(ROOT, "web", "cockpit.js"), encoding="utf-8").read()
+    assert cockpit.count("Themes.get(state.theme).sounds)") == 3

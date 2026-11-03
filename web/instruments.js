@@ -411,9 +411,13 @@
       now: (d) => bankText(d.camberDeg) },
     meters: { title: 'Surface and Brake / Turn', what: 'Surface: how rough the road is under you. Brake / Turn: how hard you braked or turned, the last few seconds.',
       how: 'From the phone\'s motion sensors. Dark bars are readings not taken yet.', now: () => '' },
-    pod: { title: 'Turn, Brake and Bank', what: 'Three small gauges in a row. Turn: how hard you are turning. Brake: how hard you are braking. Bank: how much the road leans in the corner.',
+    pod: { title: 'Turn, Brake and Bank', what: 'The car\'s small gauges, reading what Vetta measures. Turn: how hard you are turning. Brake: how hard you are braking. Bank: how much the road leans in the corner.',
       how: 'From the phone\'s motion sensors. A needle lies dim at rest until it is measured; Bank reads -- until the phone is calibrated in its mount.',
       now: (d) => bankText(d.camberDeg) },
+    grip: { title: 'Grip, Turn, Brake and Bank', what: 'The big dial reads grip: turning and braking together, in tenths of g (8 is 0.8 g). The two small gauges: Turn and Brake. Bank: how much the road leans.',
+      how: 'From the phone\'s motion sensors. A needle lies dim at rest until it is measured; Bank reads -- until the phone is calibrated.', now: (d) => bankText(d.camberDeg) },
+    tach: { title: 'Speed', what: 'How fast you are going, in the window. The big dial is the car\'s rev counter: Vetta can\'t read the engine, so its needle rests, dimmed. PACE is what the next corner allows; the lamp lights over it.',
+      how: 'From GPS, smoothed. -- with no fix.', now: (d, u) => nf(d.speedMph, u) },
     score: { title: 'Vetta Score', what: 'How cleanly you drove the corners: your pace against what each one allows, smoothness, braking and rhythm. Out of 1000.',
       how: 'Worked out from this drive every 30 seconds while you record. -- until there are enough clean corners.',
       now: (d) => (Number.isFinite(d.score) ? String(Math.round(d.score)) : '--') },
@@ -641,53 +645,171 @@
   }
   const bezelG = (parent) => bezel(parent, gDial(parent, true));
 
-  // ---- The private themes' two (themes.js grant(), migration 0044) ------------------------------------------------------
-  // tach (FR-S): the printed speed dial with the car's lit ring round its scale (.tach-ring, the paint's blue in its CSS),
-  // the numerals and needle in the face's white, and a light, quick needle on the spring. Readings stay ink.
-  function tachDial(parent) {
-    const up = speedDial(parent, true), s = parent.querySelector('svg.dial-svg'), spring = springNeedle();
-    if (s) {
-      s.classList.add('tach');
-      const ring = svg('circle', { cx: 100, cy: 100, r: 93.5, fill: 'none', class: 'tach-ring', 'aria-hidden': 'true' }, s);
-      s.insertBefore(ring, s.children[1] || null);                   // over the face, under the scale and the needle
+  // ---- A car's own cluster (the private themes: themes.js grant(), migration 0044) -------------------------------------
+  // The look of a real car's gauges is data the server sends only to an account granted it (backend/src/private_themes.json
+  // car.dial / car.meter): faces, chrome rings, scales with their ranges and red zones, needles, windows and lamps, in the
+  // 200 x 200 box every dial here uses. This code knows no car. What a scale reads is one of CAR_READS: the four Vetta
+  // measures move a needle; anything else (engine speed, fuel, coolant, torque, volts) is drawn as the car has it and its
+  // needle lies at rest, dimmed, because Vetta cannot read the engine (CLAUDE.md: unknown stays unknown).
+  const CAR_READS = ['speed', 'speedAlt', 'latG', 'brakeG', 'bank', 'grip', 'rpm', 'fuel', 'temp', 'torque', 'volts', 'mpg'];
+  const KMH = 1.609344;
+  const metricNow = () => !!(U() && U().metric && U().metric());
+  /** A scale's reading from the cluster's frame, in the scale's units, or null when Vetta doesn't measure it. Pure. */
+  function carReading(reads, d, metric) {
+    const g = d && d.latG != null && d.lonG != null;
+    switch (reads) {
+      case 'speed': return d && Number.isFinite(d.speedMph) ? (d.needleMph != null && Number.isFinite(d.needleMph) ? d.needleMph : d.speedMph) : null;
+      case 'latG': return g ? d.latG : null;                         // + is a left turn (ISO 8855)
+      case 'brakeG': return g ? Math.max(0, -d.lonG) : null;          // braking is -X
+      case 'bank': return d && Number.isFinite(d.camberDeg) ? d.camberDeg : null;
+      case 'grip': return g ? Math.hypot(d.latG, d.lonG) : null;    // turning and braking together, g
+      default: return null;                                          // speedAlt has no needle; the engine's are never read
     }
-    return (d) => up({ ...d, needleMph: spring(d.speedMph, typeof performance !== 'undefined' ? performance.now() : Date.now()) });
   }
-  // pod (Tiburon): three small gauges in a row, as in the pod over the GT's radio (there: torque, fuel use, volts). Here
-  // they are the meter's readings: TURN (lateral g, centre zero), BRAKE (braking g) and BANK (the road's lean, centre
-  // zero), with Bank's value under them as the g-ball has it. A needle not measured lies at rest, dim; Bank reads "--".
-  function podMeter(parent) {
-    const s = svg('svg', { viewBox: '0 0 200 200', class: 'dial-svg pod' }, parent);
-    const R = 30, Y = 56;
-    const gauge = (cx, cap, from, sweep) => {
-      svg('circle', { cx, cy: Y, r: R + 3, fill: 'var(--face)', stroke: 'var(--face-ink)', 'stroke-width': 2, class: 'pod-bezel' }, s);
-      for (let k = 0; k <= 4; k++) {
-        const a = (from + sweep * k / 4) * Math.PI / 180, r2 = k % 2 ? R - 4 : R - 7;
-        svg('line', { x1: cx + R * Math.cos(a), y1: Y + R * Math.sin(a), x2: cx + r2 * Math.cos(a), y2: Y + r2 * Math.sin(a), stroke: 'var(--face-ink)', 'stroke-width': k % 2 ? 1 : 1.8 }, s);
+  // a scale's numbers in the driver's units: a speed scale carries { mph: {...}, kmh: {...} } over its own
+  const scaleIn = (p, metric) => {
+    const u = (p.reads === 'speed' && (metric ? p.kmh : p.mph)) || (p.reads === 'speedAlt' && (metric ? p.mph : p.kmh)) || null;
+    return u ? { ...p, ...u } : p;
+  };
+  const deg = (a) => a * Math.PI / 180;
+  const at = (cx, cy, r, a) => [cx + r * Math.sin(deg(a)), cy - r * Math.cos(deg(a))];   // a: degrees clockwise from up
+  const fmtTick = (v, div) => { const x = v / (div || 1); return Math.abs(x) < 1 && x !== 0 ? String(Math.round(x * 10) / 10).replace(/^(-?)0\./, '$1.') : String(Math.round(x * 10) / 10); };
+  function arcPath(cx, cy, r, a0, a1) {
+    const [x0, y0] = at(cx, cy, r, a0), [x1, y1] = at(cx, cy, r, a1);
+    return `M${x0.toFixed(2)} ${y0.toFixed(2)} A${r} ${r} 0 ${Math.abs(a1 - a0) > 180 ? 1 : 0} ${a1 > a0 ? 1 : 0} ${x1.toFixed(2)} ${y1.toFixed(2)}`;
+  }
+  /** Draws one scale: ticks, numerals, a red zone and the needle; returns (d) => void, or null with no needle. */
+  function carScale(s, p0, metric) {
+    const p = scaleIn(p0, metric), span = p.max - p.min, a = (v) => p.a0 + (p.a1 - p.a0) * (Math.max(p.min, Math.min(p.max, v)) - p.min) / span;
+    const g = svg('g', { class: `car-scale car-${p.reads}` }, s);
+    if (p.arc) svg('path', { d: arcPath(p.cx, p.cy, p.r, p.a0, p.a1), fill: 'none', stroke: 'var(--face-ink)', 'stroke-width': p.arc }, g);
+    if (p.red) {                                                     // the car's red zone: printed, a limit, in the one red
+      const w = p.redW || 6;
+      svg('path', { d: arcPath(p.cx, p.cy, p.r - w / 2, a(p.red[0]), a(p.red[1])), fill: 'none', stroke: 'var(--signal)', 'stroke-width': w, class: 'car-red' }, g);
+    }
+    const step = p.minor || p.major, n = Math.round(span / step);
+    for (let i = 0; i <= n; i++) {
+      const v = p.min + i * step, major = Math.abs(((v - p.min) / p.major) - Math.round((v - p.min) / p.major)) < 1e-6;
+      const [x1, y1] = at(p.cx, p.cy, p.r, a(v)), [x2, y2] = at(p.cx, p.cy, p.r - (major ? (p.majorLen || 10) : (p.minorLen || 5)), a(v));
+      svg('line', { x1, y1, x2, y2, stroke: 'var(--face-ink)', 'stroke-width': major ? (p.majorW || 2.4) : (p.minorW || 1) }, g);
+    }
+    if (p.label) {
+      const top = p.labelMax != null ? p.labelMax : p.max;           // labelMin/labelMax: a numeral the print around it would cover is left off
+      for (let v = p.labelMin != null ? p.labelMin : p.min; v <= top + 1e-9; v += p.label) {
+        const [tx, ty] = at(p.cx, p.cy, p.labelR || p.r - 22, a(v));
+        const t = svg('text', { x: tx.toFixed(1), y: (ty + (p.labelSize || 15) * 0.34).toFixed(1), 'text-anchor': 'middle', class: `${p.small ? 'dial-tiny' : 'dial-num car-num'}${ty > 130 && p.reads === 'speed' ? ' low' : ''}` }, g);
+        if (p.labelSize) t.style.fontSize = `${p.labelSize}px`;
+        t.textContent = fmtTick(v, p.labelDiv);
       }
-      const needle = svg('line', { x1: cx, y1: Y, x2: cx, y2: Y - R + 5, stroke: 'var(--face-ink)', 'stroke-width': 2.4, 'stroke-linecap': 'round' }, s);
-      svg('circle', { cx, cy: Y, r: 3.2, fill: 'var(--face-ink)' }, s);
-      svg('text', { x: cx, y: Y + R + 22, 'text-anchor': 'middle', class: 'dial-label pod-cap' }, s).textContent = cap;
-      return (deg, known) => { setA(needle, 'transform', `rotate(${deg} ${cx} ${Y})`); setS(needle, 'opacity', known ? 1 : 0.25); };
-    };
-    // angles: 0 is straight up; a centre-zero gauge swings 120° either way, Brake sweeps 240° from the left
-    const turn = gauge(36, 'TURN', 150, 240), brake = gauge(100, 'BRAKE', 150, 240), bank = gauge(164, 'BANK', 150, 240);
-    const bankTxt = svg('text', { x: 100, y: 168, 'text-anchor': 'middle', class: 'dial-digital small' }, s);
-    const clip = (v) => Math.max(-1, Math.min(1, v));
+    }
+    for (const e of p.ends || []) {                                  // words at a scale's ends, as a fuel gauge's E and F
+      const [tx, ty] = at(p.cx, p.cy, e.r || p.r - 16, a(e.v));
+      svg('text', { x: tx.toFixed(1), y: (ty + 5).toFixed(1), 'text-anchor': 'middle', class: 'dial-label car-end' }, g).textContent = e.t;
+    }
+    if (!p.needle) return null;
+    const nd = p.needle, live = CAR_READS.slice(0, 6).includes(p.reads) && p.reads !== 'speedAlt';
+    const ng = svg('g', { class: 'car-needle' }, s);
+    const w = nd.w || 3, len = nd.len || p.r - 6, tail = nd.tail || 0;
+    const shape = nd.style === 'taper' ? `M${p.cx - w / 2} ${p.cy + tail} L${p.cx - 0.6} ${p.cy - len} L${p.cx + 0.6} ${p.cy - len} L${p.cx + w / 2} ${p.cy + tail} Z`
+      : `M${p.cx - w / 2} ${p.cy + tail} L${p.cx - w / 2} ${p.cy - len + w} L${p.cx} ${p.cy - len} L${p.cx + w / 2} ${p.cy - len + w} L${p.cx + w / 2} ${p.cy + tail} Z`;
+    const np = svg('path', { d: shape, fill: 'var(--car-needle, var(--face-ink))' }, ng);
+    if (nd.hub) svg('circle', { cx: p.cx, cy: p.cy, r: nd.hub, class: 'car-hub' }, s);
+    const spring = p.reads === 'speed' && nd.spring ? springNeedle() : null;
     return (d) => {
-      const g = d.latG != null && d.lonG != null;
-      turn(g ? clip(-d.latG / 0.8) * 120 : 0, g);                     // a left turn (+) swings it left
-      brake(g ? -120 + Math.max(0, Math.min(1, -d.lonG / 0.8)) * 240 : -120, g);   // braking is -X (ISO 8855)
-      const banked = Number.isFinite(d.camberDeg);
-      bank(banked ? clip(d.camberDeg / 10) * 120 : 0, banked);
-      setT(bankTxt, bankText(d.camberDeg));
-      bankTxt.classList.toggle('unk', !banked);
+      let v = live ? carReading(p.reads, d, metric) : null;
+      if (p.invert && v != null) v = -v;
+      if (spring && v != null) v = spring(v, typeof performance !== 'undefined' ? performance.now() : Date.now());
+      const known = v != null && Number.isFinite(v), rest = p.rest != null ? p.rest : (p.min <= 0 && p.max >= 0 ? 0 : p.min);
+      // at rest a needle lies on its stop, which may sit just under the scale's start, clear of its first numeral, as a real one
+      const restA = p.a0 + (p.a1 - p.a0) * (rest - p.min) / span;
+      setA(ng, 'transform', `rotate(${(known ? a(v) : restA).toFixed(2)} ${p.cx} ${p.cy})`);
+      setS(ng, 'opacity', known ? 1 : 0.25);                         // not measured: at rest, dim
+      // panel round 2 (PR-2): a reading is never the alarm red, except the speed needle when you are over the corner's pace
+      if (p.reads === 'speed') setA(np, 'fill', known && d.paceMph != null && d.speedMph > d.paceMph + 1 ? 'var(--signal)' : 'var(--car-needle, var(--face-ink))');
     };
   }
+  /** A car's dial or meter from its data (theme.car.dial / theme.car.meter). Speed parts put the pace, Sight and Limit
+   *  marks where the printed dial has them; `digital` is the speed numeral (the contract's 40 px floor), `bank` the Bank
+   *  readout, `lamp` lights in the signal over the corner's pace, `mid` reads the pace in words. */
+  function carGauge(parent, spec, slot) {
+    const metric = metricNow();
+    const vh = spec && Number.isFinite(spec.vb) && spec.vb >= 80 && spec.vb <= 200 ? spec.vb : 200;   // a meter may be wider than tall (a pod)
+    const vw = spec && Number.isFinite(spec.vw) && spec.vw >= 80 && spec.vw <= 400 ? spec.vw : 200;   // or two dials wide
+    const s = svg('svg', { viewBox: `0 0 ${vw} ${vh}`, class: `dial-svg car-gauge car-${slot}` }, parent);
+    const ups = [];
+    for (const p of (spec && spec.parts) || []) {
+      switch (p.k) {
+        case 'face': svg('circle', { cx: p.cx, cy: p.cy, r: p.r, fill: p.deep ? 'var(--car-disc, var(--face))' : 'var(--face)', class: 'car-face' }, s); break;
+        case 'ring': {
+          svg('circle', { cx: p.cx, cy: p.cy, r: p.r, fill: 'none', stroke: 'var(--car-ring, var(--face-ink))', 'stroke-width': p.w || 3, class: 'car-ring' }, s);
+          for (let i = 0; i < (p.pegs || 0); i++) { const [x, y] = at(p.cx, p.cy, p.r - (p.w || 3) / 2 - 1.5, (p.peg0 || 0) + i * 360 / p.pegs); svg('circle', { cx: x.toFixed(1), cy: y.toFixed(1), r: 2.2, class: 'car-peg' }, s); }
+          break;
+        }
+        case 'pod': svg('rect', { x: p.x, y: p.y, width: p.w, height: p.h, rx: p.rx || 0, class: 'car-pod' }, s); break;
+        case 'disc': svg('circle', { cx: p.cx, cy: p.cy, r: p.r, class: 'car-disc' }, s); break;
+        case 'box': svg('rect', { x: p.x, y: p.y, width: p.w, height: p.h, rx: p.rx || 4, class: p.lcd ? 'car-box car-lcd' : 'car-box' }, s); break;
+        case 'text': {
+          const t = svg('text', { x: p.x, y: p.y, 'text-anchor': p.anchor || 'middle', class: p.cls === 'tiny' ? 'dial-tiny' : 'dial-label car-cap' }, s);
+          t.textContent = p.t === '{unit}' ? (U() ? U().speedU().toUpperCase() : 'MPH') : p.t === '{alt}' ? (metric ? 'MPH' : 'km/h') : p.t;
+          break;
+        }
+        case 'scale': { const u = carScale(s, p, metric); if (u) ups.push(u); break; }
+        case 'marks': {                                              // pace, Sight and Limit on a speed scale, as the printed dial
+          const q = scaleIn({ ...p, reads: 'speed' }, metric), a = (v) => q.a0 + (q.a1 - q.a0) * (Math.max(q.min, Math.min(q.max, v)) - q.min) / (q.max - q.min);
+          const r = q.r, limit = svg('g', {}, s);
+          svg('rect', { x: q.cx - 6, y: q.cy - r - 6, width: 12, height: 14, fill: 'var(--face)', stroke: 'var(--face-ink)', 'stroke-width': 1.6 }, limit);
+          const sight = svg('path', { d: `M${q.cx} ${q.cy - r + 8} L${q.cx - 5} ${q.cy - r - 2} L${q.cx + 5} ${q.cy - r - 2} Z`, fill: 'none', stroke: 'var(--amber)', 'stroke-width': 2 }, s);
+          const pace = svg('path', { d: `M${q.cx} ${q.cy - r + 10} L${q.cx - 6} ${q.cy - r - 2} L${q.cx + 6} ${q.cy - r - 2} Z`, fill: 'var(--face-ink)' }, s);
+          ups.push((d) => {
+            const place = (node, v) => {
+              if (v == null || !isFinite(v)) { setS(node, 'display', 'none'); return; }
+              setS(node, 'display', ''); setA(node, 'transform', `rotate(${a(v).toFixed(2)} ${q.cx} ${q.cy})`);
+            };
+            place(pace, d.paceMph); place(sight, d.sightMph); place(limit, d.limitMph);
+          });
+          break;
+        }
+        case 'digital': {
+          const t = svg('text', { x: p.x, y: p.y, 'text-anchor': 'middle', class: 'dial-digital' }, s);
+          ups.push((d) => {
+            const v = d.speedMph != null && Number.isFinite(d.speedMph) ? String(Math.round(d.speedMph)) : '--';
+            setT(t, v);
+            if (p.fit && v.length > 2) { setA(t, 'textLength', p.fit); setA(t, 'lengthAdjust', 'spacingAndGlyphs'); } else if (t.hasAttribute('textLength')) t.removeAttribute('textLength');
+          });
+          break;
+        }
+        case 'bank': {
+          const t = svg('text', { x: p.x, y: p.y, 'text-anchor': 'middle', class: p.lcd ? 'dial-digital small car-on-lcd' : 'dial-digital small' }, s);
+          let a = null, b = null;
+          if (p.lines) { a = svg('tspan', { x: p.x }, t); b = svg('tspan', { x: p.x, dy: p.lines }, t); }
+          ups.push((d) => {
+            const txt = bankText(d.camberDeg);                       // "BANK --" until measured
+            if (a) { setT(a, 'BANK '); setT(b, txt.slice(5)); } else setT(t, txt);
+            t.classList.toggle('unk', !Number.isFinite(d.camberDeg));
+          });
+          break;
+        }
+        case 'lamp': {
+          const l = svg('circle', { cx: p.x, cy: p.y, r: p.r || 5, class: 'car-lamp' }, s);
+          ups.push((d) => { const on = Number.isFinite(d.speedMph) && d.paceMph != null && d.speedMph > d.paceMph + 1; l.classList.toggle('on', on); });
+          break;
+        }
+        case 'mid': {
+          const t = svg('text', { x: p.x, y: p.y, 'text-anchor': 'middle', class: 'dial-num car-mid' }, s);
+          ups.push((d) => setT(t, `PACE ${fmt(d.paceMph)}`));
+          break;
+        }
+        default: break;
+      }
+    }
+    return (d) => ups.forEach((f) => f(d));
+  }
+  const carDial = (parent, theme) => carGauge(parent, theme && theme.car && theme.car.dial, 'dial');
+  const carMeter = (parent, theme) => carGauge(parent, theme && theme.car && theme.car.meter, 'meter');
 
   // The theme contract's three renderers (theme_contract.js): a theme names its dial, meter and strip; Pro themes register
   // theirs here (register(slot, id, fn)). Everything around them, and the hazard plate, stays the page's.
-  const RENDER = { dial: { printed: (el) => speedDial(el, true), sevenseg: sevenSeg, bezel: bezelDial, tach: tachDial }, meter: { gball: (el) => gDial(el, true), bars: barMeters, bezelg: bezelG, pod: podMeter },
+  const RENDER = { dial: { printed: (el) => speedDial(el, true), sevenseg: sevenSeg, bezel: bezelDial, car: carDial }, meter: { gball: (el) => gDial(el, true), bars: barMeters, bezelg: bezelG, car: carMeter },
     strip: { roadbook: null, vfd: null } };                          // the VFD strip is the road book's, in the VFD skin
   function register(slot, id, fn) { if (RENDER[slot]) RENDER[slot][id] = fn; }
   const pick = (theme, slot, fallback) => (theme.renderers && RENDER[slot][theme.renderers[slot]]) || RENDER[slot][fallback];
@@ -699,10 +821,14 @@
     const sp = html('div', 'dial dial-speed', el);
     const center = html('div', 'cluster-center', el);
     const gg = html('div', 'dial dial-g', el);
-    const u = [pick(theme, 'dial', 'printed')(sp), readouts(center), odometer(center, printed), pick(theme, 'meter', 'gball')(gg)];
+    const u = [pick(theme, 'dial', 'printed')(sp, theme), readouts(center), odometer(center, printed), pick(theme, 'meter', 'gball')(gg, theme)];
     // PR-1: what a tap on each part explains (cockpit.js openExplain)
     const meterKind = theme.renderers && theme.renderers.meter;
-    sp.dataset.explain = 'speed'; gg.dataset.explain = meterKind === 'bars' ? 'meters' : meterKind === 'pod' ? 'pod' : 'gball';
+    const car = theme.car || {};   // a car's own cluster says what its parts are (theme.car.dial.explain: 'tach' when the speed is in a window)
+    sp.dataset.explain = 'speed';
+    if (theme.renderers && theme.renderers.dial === 'car' && car.dial && car.dial.explain === 'tach') sp.dataset.explain = 'tach';
+    gg.dataset.explain = meterKind === 'bars' ? 'meters' : meterKind === 'car' ? 'pod' : 'gball';
+    if (meterKind === 'car' && car.meter && car.meter.explain === 'grip') gg.dataset.explain = 'grip';
     const odoEl = center.querySelector('.odo'); if (odoEl) odoEl.dataset.explain = 'trip';
     // Night (REVIEW2.md U-36): the trip readout steps aside for a quiet Trip key; a tap shows it for ten seconds
     const peek = html('button', 'trip-peek', center, 'Trip'); peek.type = 'button'; let peekT = 0;
@@ -760,7 +886,7 @@
     return mountDials(el, theme);
   }
 
-  const api = { mountCluster, renderNotes, tulipSVG, lockup, stripCode, register, kitPose, KIT, springNeedle, SPEED_MAX,
+  const api = { mountCluster, renderNotes, tulipSVG, lockup, stripCode, register, kitPose, KIT, springNeedle, SPEED_MAX, carGauge, carReading, CAR_READS,
     sightCell, sightValue, sightShort, slowLine, bankText, EXPLAIN, explainAllowed };
   if (typeof module !== 'undefined' && module.exports) module.exports = api; else root.ApexInstruments = api;
 })(typeof window !== 'undefined' ? window : globalThis);

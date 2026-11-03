@@ -19,7 +19,7 @@
   const SIGNAL_FLOOR = 3;
   const APART = 90;
   const ALARM = { token: 'signal', channels: ['colour', 'shape', 'word'] };
-  const RENDERERS = { dial: ['printed', 'sevenseg', 'bezel', 'tach'], meter: ['gball', 'bars', 'bezelg', 'pod'], strip: ['roadbook', 'vfd'] };   // grows as themes add theirs (tach, pod: the private themes)
+  const RENDERERS = { dial: ['printed', 'sevenseg', 'bezel', 'car'], meter: ['gball', 'bars', 'bezelg', 'car'], strip: ['roadbook', 'vfd'] };   // grows as themes add theirs (car: a private theme's own cluster, drawn from its data)
   const REQUIRED = ['stage', 'ink', 'dim', 'route', 'panel', 'panelInk', 'panelDim', 'rule', 'accent', 'signal', 'face', 'faceInk', 'faceDim'];
   const FORBIDDEN = ['hzBg', 'hzEdge', 'hzInk'];                                     // a theme can't set the plate
 
@@ -71,7 +71,35 @@
         const d = apart(t[k], t.signal);
         if (d != null && d < APART) out.push(`${mode}: ${k} is the warning's colour (${Math.round(d)} from signal, under ${APART})`);
       }
+      // a car's own cluster (theme.car, the private themes). The owner (2026-11-03): "red doesn't need to be warnings only if
+      // it's stuff like needles or accent." A car's needles, red zone, night light and accents may be red where the real car's
+      // are; the warning stays unmistakable by what only it has (ALARM: its shape, its word, the plate) and by its floors
+      // (signal 3:1 on the panel; the route and the calm ribbon, which run the length of the screen, stay apart from it).
+      // A needle still reads on its face (3:1); an LCD's ink on the LCD 4.5:1; the arrow's outline (the map's casing) 3:1 on the map.
+      const car = theme.car;
+      if (car) {
+        const nd = car.needle && car.needle[mode], c = nd ? contrast(nd, t.face) : null;
+        if (c != null && c < SIGNAL_FLOOR) out.push(`${mode}: the needle on the face is ${c.toFixed(2)}:1, under ${SIGNAL_FLOOR}:1`);
+        const lcd = car.lcd && car.lcd[mode], li = car.lcdInk && car.lcdInk[mode], lc = lcd && li ? contrast(li, lcd) : null;
+        if (lc != null && lc < 4.5) out.push(`${mode}: the LCD's ink is ${lc.toFixed(2)}:1, under 4.5:1`);
+        const mp = theme.map && theme.map[mode], edge = mp ? contrast(mp.casing, mp.bg) : null;
+        if (car.silhouette && edge != null && edge < SIGNAL_FLOOR) out.push(`${mode}: the car's outline on the map is ${edge.toFixed(2)}:1, under ${SIGNAL_FLOOR}:1`);
+      }
     }
+    for (const slot of ['dial', 'meter']) {
+      const r = theme.renderers && theme.renderers[slot];
+      if (r === 'car' && !(theme.car && theme.car[slot] && Array.isArray(theme.car[slot].parts) && theme.car[slot].parts.length)) out.push(`renderer ${slot}: car without the car's ${slot}`);
+    }
+    if (theme.renderers && theme.renderers.dial === 'car') {          // the dial carries the speed numeral, whatever the car
+      const parts = (theme.car && theme.car.dial && theme.car.dial.parts) || [];
+      if (!parts.some((p) => p && p.k === 'digital')) out.push('renderer dial: car without the speed numeral');
+    }
+    if (theme.renderers && theme.renderers.meter === 'car') {         // and the meter the Bank readout (HE-1: -- until measured)
+      const parts = (theme.car && theme.car.meter && theme.car.meter.parts) || [];
+      if (!parts.some((p) => p && p.k === 'bank')) out.push('renderer meter: car without the Bank readout');
+    }
+    // the warning's own cues, whatever a theme paints red: never colour alone (the shape and the word are not a theme's)
+    if (!['shape', 'word'].every((c) => ALARM.channels.includes(c))) out.push('the warning lost its shape or its word');
     const hz = contrast(HAZARD.ink, HAZARD.bg);
     if (hz < 7) out.push('hazard plate contrast');                                 // a guard on the constants themselves
     return out;
