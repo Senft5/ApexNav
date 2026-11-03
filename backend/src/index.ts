@@ -30,6 +30,7 @@ import { contribute, setContribute } from "./contribute";
 import { pointsFor } from "./points";
 import { redeem, shop } from "./redeem";
 import { flagsFor } from "./flags";
+import { grantedThemes } from "./themes";
 import { coverage, exportRoads, roadBins } from "./roads";
 import { crewStandings } from "./standings";
 import { crewBoard, publishDriveScores } from "./drive_scores";
@@ -95,8 +96,10 @@ on("GET", "/api/me", async (req, env) => {
   const waiting = v.member ? await env.DB.prepare(
     "SELECT COUNT(*) AS n FROM friendships WHERE status = 'pending' AND requested_by != ?1 AND (user_a = ?1 OR user_b = ?1)").bind(v.id).first<{ n: number }>() : null;
   const photo = v.member ? await env.DB.prepare("SELECT photo_id FROM users WHERE id = ?").bind(v.id).first<{ photo_id: string | null }>() : null;
+  // private themes granted to this account by hand (migration 0044): their looks, for this account only; [] for everyone else
+  const themes = await grantedThemes(env, v.id);
   return json({ signed_in: true, id: v.id, handle: v.handle, name: v.displayName, member: v.member, requests: waiting?.n ?? 0, photo_id: photo?.photo_id ?? null,
-               ...(v.member && isModerator(env, v) ? { moderator: true } : {}) });
+               themes, ...(v.member && isModerator(env, v) ? { moderator: true } : {}) });
 });
 on("POST", "/api/invites/redeem", async (req, env) => { await redeemInvite(env, await requireUser(req, env), req); return noContent(); });
 on("POST", "/api/invites/preview", async (req, env) => json(await invitePreview(env, await requireMember(req, env), req)));   // P-02: whose friend link

@@ -58,5 +58,6 @@ SELECT
   (SELECT COUNT(*) FROM crew_voice) AS crew_voice,
   (SELECT COUNT(*) FROM livery_grants) AS livery_grants,
   (SELECT COUNT(*) FROM drive_scores) AS drive_scores,
+  (SELECT COUNT(*) FROM theme_grants) AS theme_grants,
   (SELECT COUNT(*) FROM d1_migrations) AS d1_migrations
 ;

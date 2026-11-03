@@ -73,6 +73,11 @@ Implemented in `backend/src/{auth,social,segments}.ts`, one router in `index.ts`
   `photo_id`, the `total` of those drive Scores (null when none) and how many `drives`. The grant switched off, leaving or
   the crew ending deletes them; export has `drive_scores_shared`. The page's own `board` (best stage Score this month) stays
   for old builds.
+- **Private themes (migration 0044, src/themes.ts, src/private_themes.json)**: `theme_grants (user_id, theme)` rows are written
+  by hand only. `GET /api/me` answers `themes`: the full look of each theme granted to the signed-in account ([] for everyone
+  else; signed out gets only `{signed_in: false}`); a row naming a theme the server doesn't know is skipped. The app checks
+  each look against the theme contract before showing it and drops it when `themes` stops listing it (web/themes.js
+  `grant()`). Export has `themes_granted`; the rows go with the account.
 - **State-changing requests** must carry our own `Origin` and an `X-ApexNav: 1` header (CSRF), on top of `SameSite=Lax`, `HttpOnly`, `__Host-` cookies.
 - **Sharing is opt-in per friend and per crew**: a score reaches an audience only through `POST /api/board` and only if a grant for that
   audience exists. `GET /api/board/:canon` returns only entries published **to the viewer**, by someone who is still their friend / crew-mate, whose grant is
