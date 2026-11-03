@@ -139,7 +139,7 @@ final class ReviewFlows: XCTestCase {
             let e = all.element(boundBy: i)
             guard e.exists, e.isHittable else { continue }
             let f = e.frame, mid = CGPoint(x: f.midX, y: f.midY)
-            if !f.isEmpty, screen.isEmpty || (screen.contains(mid) && mid.y >= screen.minY + screen.height * share, mid.y <= screen.minY + screen.height * limit) { return e }
+            if !f.isEmpty, screen.isEmpty || (screen.contains(mid) && mid.y >= screen.minY + screen.height * share && mid.y <= screen.minY + screen.height * limit) { return e }
         }
         return nil
     }
