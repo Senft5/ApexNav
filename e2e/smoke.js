@@ -311,10 +311,11 @@ flow('the co-driver reads the road: the first note is called before the car move
   await page.waitForFunction(() => window.apexDebug.driveActive);
   const at = (i, v, cal) => page.evaluate(([i, v, cal]) => { const t = apexDebug.track;
     window.apex.live({ lat: t.lat[i], lon: t.lon[i], accuracy_m: 5, speed_mps: v, course_deg: i < 12 ? 0 : 90, has_fix: true, lat_g: 0, lon_g: 0, calibration: cal, thermal: 0 }); }, [i, v, cal]);
-  // stopped at the start, still calibrating: the first line of the drive is the corner, before the car moves
+  // stopped at the start, still calibrating: the drive opens with the road's name (panel round 2 DA-3), then the first
+  // corner, before the car moves
   for (let k = 0; k < 10; k++) { await at(0, 0, 'default'); await page.waitForTimeout(100); }
-  const first = await page.evaluate(() => window.__said.slice());
-  check(first.length >= 1 && /right/i.test(first[0]), 'the first line of the drive is its first corner: ' + JSON.stringify(first));
+  const first = await page.evaluate(() => window.__said.filter((s) => !/^\[chime/.test(s)));
+  check(first.length >= 2 && first[0] === 'Test Ridge Road. Full notes.' && /right/i.test(first[1]), 'the drive opens with the road, then its first corner: ' + JSON.stringify(first));
   check(/right/i.test(await page.textContent('#notes')), 'the strip shows the first corner: ' + await page.textContent('#notes'));
   // the mount locks as the car pulls away: the status line says so, no toast over the map (U-74)
   await at(2, 3, 'locked');
@@ -343,7 +344,9 @@ flow('the co-driver reads the road: the first note is called before the car move
   check(/Clear/.test(strip) && !/Ridge run/.test(strip), 'the quiet line names the road, not the route: ' + strip);
   check(/Road: Test Ridge Road/.test(await page.textContent('#cluster')), 'the binnacle names the road: ' + await page.textContent('#cluster'));
   const said = await page.evaluate(() => window.__said.slice());
-  check(said.filter((s) => s === 'Quiet from here. Bumps and cameras only.').length === 1, 'going quiet is said once: ' + JSON.stringify(said));
+  // panel round 2 LA-4 / MA-1: going quiet is the falling chime once, with how far the quiet lasts when that is known
+  check(said.filter((s) => s === '[chime: sleep]').length === 1 && !said.includes('Quiet from here. Bumps and cameras only.')
+    && said.filter((s) => /^Quiet for /.test(s)).length <= 1, 'going quiet is a chime, once: ' + JSON.stringify(said));
   check(!said.includes('Full notes.'), 'the drive began awake, so it never said the notes came on: ' + JSON.stringify(said));
 });
 
