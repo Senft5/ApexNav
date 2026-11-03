@@ -167,10 +167,23 @@
       + `<path d="${hull}" fill="none" stroke="${C.panelInk}" stroke-width="1.6" stroke-linejoin="round"/>`
       + txt(c0, 26, 'middle', 'THROTTLE') + txt(c0, S - 18, 'middle', 'BRAKE') + txt(16, c0 - 4, 'start', 'L') + txt(S - 16, c0 - 4, 'end', 'R') + '</svg>';
     const g2 = (v) => (v == null ? '--' : `${v.toFixed(2)} g`);
-    const base = `Your grip on this drive: braking ${g2(env.brake_g)}, cornering left ${g2(env.left_g)} and right ${g2(env.right_g)}, throttle ${g2(env.throttle_g)}.`;
+    const base = `The outline on this drive: braking ${g2(env.brake_g)}, cornering left ${g2(env.left_g)} and right ${g2(env.right_g)}, throttle ${g2(env.throttle_g)}.`;
     cap.textContent = base;
     const head = el('h3', null, 'Grip circle');
-    box.append(head, pic, cap);
+    // TestFlight 14 ("explain what grip circle actually means?"): its one line from the vocabulary (one term, one meaning),
+    // and the rest behind a tap, as the Log's other quiet rows open
+    const V = root.ApexVocabulary || (typeof module !== 'undefined' && typeof require === 'function' ? require('./vocabulary.js') : null);
+    const term = V && V.TERMS && V.TERMS.gripCircle;
+    const lede = el('p', 'note dv-gg-lede');
+    lede.textContent = term ? term.meaning : '';
+    const more = el('details', 'quiet dv-gg-more');
+    more.innerHTML = '<summary>What the grip circle shows</summary>'
+      + '<p class="note"><b>The dots.</b> One for every 5 m of the drive where the phone measured the forces on the car: how hard you were braking or speeding up (down and up) and turning (left and right) at that moment. Dots near the middle are gentle driving.</p>'
+      + `<p class="note"><b>The outline.</b> In each of 16 directions, how far your dots reach, leaving out the furthest 5 in 100 so one pothole doesn’t count. Where it breaks off, too few moments went that way to say.</p>`
+      + `<p class="note"><b>The rings.</b> 0.5 g${R > 1.05 ? ' and 1 g' : ''}. At 1 g the push you feel is as strong as gravity.</p>`
+      + '<p class="note"><b>What the shape means.</b> A bigger shape: you asked more of the tyres. A rounder one: you blended braking into turning, and turning into speeding up, instead of doing one and then the other. It is a picture of how you drove, not a target to push: on a public road the grip left in reserve is what keeps you safe.</p>'
+      + '<p class="note">Move along the drive into a corner and that corner’s own line is drawn on top.</p>';
+    box.append(...(term ? [head, lede, pic, cap, more] : [head, pic, cap, more]));
     pic.append(hot);
     let shown = -2;
     function show(c, kc) {
@@ -181,7 +194,7 @@
       for (let i = lo; i <= c.end; i++) if (ok(i)) { const [x, y] = xy(d.lat_g[i], d.lon_g[i]); p += `${p ? 'L' : 'M'}${x.toFixed(1)} ${y.toFixed(1)}`; }
       hot.innerHTML = `<svg viewBox="0 0 ${S} ${S}" aria-hidden="true"><path d="${p}" fill="none" stroke="${C.accent}" stroke-width="2.4" stroke-linejoin="round" stroke-linecap="round" opacity="0.9"/></svg>`;
       const use = Core.gripUse(d.lat_g, d.lon_g, lo, c.end, env, d.g_known || null);
-      cap.textContent = `Corner ${kc + 1}, from 100 m before turn-in to the exit: ${use == null ? '--' : `${Math.round(Math.min(1, use) * 100)} %`} of your grip on this drive.`;
+      cap.textContent = `Corner ${kc + 1}, from 100 m before turn-in to the exit: on average ${use == null ? '--' : `${Math.round(Math.min(1, use) * 100)} %`} of the way out to the outline.`;
     }
     return { box, show, env };
   }
@@ -253,11 +266,16 @@
     root_.append(list);
 
     // ---- plan map ------------------------------------------------------------------------------------------------
-    const { x, y } = Core.localXY(d.lat, d.lon);
+    // planned in Web Mercator metres (drive_basemap.js project) so the real map lines up under it exactly; centred, and at
+    // least 200 high so the map round a straight east-west drive still shows where it was
+    const BM = root.ApexDriveBasemap || (typeof module !== 'undefined' && typeof require === 'function' ? require('./drive_basemap.js') : null);
+    const plan = BM ? BM.project(d.lat, d.lon) : { ...Core.localXY(d.lat, d.lon), frame: null };
+    const { x, y } = plan;
     let x0 = Infinity, x1 = -Infinity, y0 = Infinity, y1 = -Infinity;
     for (let i = 0; i < n; i++) { x0 = Math.min(x0, x[i]); x1 = Math.max(x1, x[i]); y0 = Math.min(y0, y[i]); y1 = Math.max(y1, y[i]); }
-    const MW = 360, pad = 16, ms = (MW - 2 * pad) / Math.max(x1 - x0, y1 - y0, 1), MH = Math.round((y1 - y0) * ms + 2 * pad);
-    const P = (i) => [pad + (x[i] - x0) * ms, MH - pad - (y[i] - y0) * ms];
+    const MW = 360, pad = 16, ms = (MW - 2 * pad) / Math.max(x1 - x0, y1 - y0, 1), MH = Math.max(200, Math.round((y1 - y0) * ms + 2 * pad));
+    const xc = (x0 + x1) / 2, yc = (y0 + y1) / 2;
+    const P = (i) => [MW / 2 + (x[i] - xc) * ms, MH / 2 - (y[i] - yc) * ms];
     const vmax = Math.max(...d.speed_mps) || 1;
     const lerp = (a, b, t) => Math.round(a + (b - a) * t);
     const hex = (h) => [1, 3, 5].map(k => parseInt(h.slice(k, k + 2), 16));
@@ -284,11 +302,16 @@
         jsegs += mx == null ? `<line x1="${ax.toFixed(1)}" y1="${ay.toFixed(1)}" x2="${bx.toFixed(1)}" y2="${by.toFixed(1)}" stroke="${C.panelDim}" stroke-width="1.5" stroke-dasharray="2 3" opacity="0.5"/>`
           : `<line x1="${ax.toFixed(1)}" y1="${ay.toFixed(1)}" x2="${bx.toFixed(1)}" y2="${by.toFixed(1)}" stroke="${jerkColor(mx)}" stroke-width="3.5" stroke-linecap="round"/>`;
       }
-      jmarks = ab.moments.map((m, k) => { const [px, py] = P(m.index); return `<circle cx="${px.toFixed(1)}" cy="${py.toFixed(1)}" r="7" fill="none" stroke="${C.signal}" stroke-width="2"/><text x="${(px + 10).toFixed(1)}" y="${(py + 4).toFixed(1)}" font-size="10" font-weight="700" fill="${C.signal}">${String.fromCharCode(65 + k)}</text>`; }).join('');
+      jmarks = ab.moments.map((m, k) => { const [px, py] = P(m.index); return `<circle cx="${px.toFixed(1)}" cy="${py.toFixed(1)}" r="7" fill="none" stroke="${C.signal}" stroke-width="2"/><text x="${(px + 10).toFixed(1)}" y="${(py + 4).toFixed(1)}" font-size="10" font-weight="700" fill="${C.signal}" stroke="${C.panel}" stroke-width="3" paint-order="stroke">${String.fromCharCode(65 + k)}</text>`; }).join('');
     }
+    // a casing in the panel's colour under the coloured line, so slow grey and calm grey still read over the map's roads
+    let casePts = '';
+    for (let i = 0; i < n; i += stepM) casePts += P(i).map((q) => q.toFixed(1)).join(',') + ' ';
+    casePts += P(n - 1).map((q) => q.toFixed(1)).join(',');
+    const casing = `<polyline id="dvCase" points="${casePts}" fill="none" stroke="${C.panel}" stroke-width="7" stroke-linecap="round" stroke-linejoin="round" opacity="0.85"/>`;
     let placed = [];
     const marks = d.corners.map((c, k) => { const [px, py] = P(c.apex); if (placed.some(([qx, qy]) => Math.hypot(qx - px, qy - py) < 18)) return `<circle cx="${px.toFixed(1)}" cy="${py.toFixed(1)}" r="2" fill="${C.signal}"/>`; placed.push([px, py]); return `<g data-k="${k}" style="cursor:pointer"><circle cx="${px.toFixed(1)}" cy="${py.toFixed(1)}" r="8" fill="${C.panel}" stroke="${C.signal}" stroke-width="1.6"/><text x="${px.toFixed(1)}" y="${(py + 3.2).toFixed(1)}" text-anchor="middle" font-size="9" font-weight="700" fill="${C.panelInk}">${k + 1}</text></g>`; }).join('');
-    mapBox.innerHTML = `<svg viewBox="0 0 ${MW} ${MH}" role="img" aria-label="Route map coloured by speed, ${d.corners.length} corners"><g id="dvSpeed">${segs}</g><g id="dvJerk" display="none">${jsegs}</g><polyline id="dvWin" fill="none" stroke="${C.panelInk}" stroke-width="7" stroke-linecap="round" stroke-linejoin="round" opacity="0.28"/>${marks}<g id="dvJerkMarks" display="none" pointer-events="none">${jmarks}</g><circle id="dvDot" r="6" fill="${C.accent}" stroke="${C.panel}" stroke-width="2"/></svg>
+    mapBox.innerHTML = `<div class="dv-plan"><svg viewBox="0 0 ${MW} ${MH}" role="img" aria-label="Route map coloured by speed, ${d.corners.length} corners">${casing}<g id="dvSpeed">${segs}</g><g id="dvJerk" display="none">${jsegs}</g><polyline id="dvWin" fill="none" stroke="${C.panelInk}" stroke-width="7" stroke-linecap="round" stroke-linejoin="round" opacity="0.28"/>${marks}<g id="dvJerkMarks" display="none" pointer-events="none">${jmarks}</g><circle id="dvDot" r="6" fill="${C.accent}" stroke="${C.panel}" stroke-width="2"/></svg><span class="dv-credit" hidden>\u00a9 OpenStreetMap \u00b7 OpenFreeMap</span></div>
       <div class="dv-legend" id="dvLegSpeed"><span>slow</span><i style="background:linear-gradient(90deg,${colorAt(0)},${colorAt(vmax)})"></i><span>${Math.round(vmax * MPH)} ${SPD()}</span></div>`
       + (jsegs ? `<div class="dv-legend" id="dvLegJerk" hidden><span>calm</span><i style="background:linear-gradient(90deg,${jerkColor(0)},${jerkColor(0.6)})"></i><span>abrupt</span></div>` : '');
     let showSmooth = null;
@@ -309,6 +332,18 @@
       sw.append(bs, bj); mapBox.prepend(sw);
     }
     const dot = mapBox.querySelector('#dvDot');
+    // the real map under the path (drive_basemap.js): only on a page that asks for it (o.mapPalette), fitted to the picture
+    let basemap = null;
+    const planBox = mapBox.querySelector('.dv-plan');
+    if (BM && plan.frame && o.mapPalette && planBox && BM.attach) {
+      let la0 = Infinity, la1 = -Infinity, lo0 = Infinity, lo1 = -Infinity;
+      for (let i = 0; i < n; i++) { la0 = Math.min(la0, d.lat[i]); la1 = Math.max(la1, d.lat[i]); lo0 = Math.min(lo0, d.lon[i]); lo1 = Math.max(lo1, d.lon[i]); }
+      basemap = BM.attach(planBox, {
+        box: [la0, lo0, la1, lo1], palette: o.mapPalette,
+        view: () => { const w = planBox.clientWidth; return w ? BM.viewFor(plan.frame, xc, yc, ms * w / MW) : null; },
+        onShown: () => { const cr = planBox.querySelector('.dv-credit'); if (cr) cr.hidden = false; },
+      });
+    }
 
     // ---- lanes -----------------------------------------------------------------------------------------------------
     let W = 0, geo = null;
@@ -512,10 +547,10 @@
     prev.onclick = () => pan(-1); next.onclick = () => pan(1); zoom.append(prev, next);
     zoom.firstChild.classList.add('on');
     draw();
-    const ro = new ResizeObserver(() => { if (Math.abs((lanes.clientWidth || 0) - W) > 2) draw(); });
-    ro.observe(lanes);
+    const ro = new ResizeObserver(() => { if (Math.abs((lanes.clientWidth || 0) - W) > 2) draw(); if (basemap) basemap.refit(); });
+    ro.observe(lanes); if (basemap && planBox) ro.observe(planBox);
     function setRoadFeel(series) { feel = series; draw(); }
-    return { move, setRoadFeel, destroy() { ro.disconnect(); }, summary: S };
+    return { move, setRoadFeel, restyleMap() { if (basemap) basemap.restyle(); }, destroy() { ro.disconnect(); if (basemap) basemap.destroy(); }, summary: S };
   }
 
   const api = { mount, summarize, tipText, plainCoach, abruptAdvice, fatigueText, consistencyRows, noteWordsPref, cornerCall };

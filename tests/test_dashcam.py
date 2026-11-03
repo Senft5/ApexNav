@@ -27,3 +27,28 @@ def test_overlay_follows_the_drive():
     assert a["speed"] == "22 mph" and abs(a["latG"] - 110 / 400) < 1e-9 and a["lonG"] == -0.1 and a["note"] == "Left 4 · 50 m"
     assert out["before"] is None, "before the drive starts: nothing drawn"
     assert out["far"]["note"] is None, "no call more than 200 m out; hazards aren't corner calls"
+
+
+ALIGN = r"""
+const D = require(process.argv[1] + '/web/dashcam.js');
+const n = 200, d = { speed_mps: Array(n).fill(10), events: [{ type: 'corner', dist_m: 600, call: 'Left 4' }, { type: 'hazard', dist_m: 300, call: 'Bump' },
+  { type: 'corner', dist_m: 250, call: 'Right 2' }, { type: 'corner', dist_m: 5000, call: 'Off the end' }] };
+const T = Array.from({ length: n }, (_, i) => i * 0.5);
+const calls = D.cornerCalls(d);
+console.log(JSON.stringify({ calls, vt: D.videoTimeFor(T[calls[1].i], 40),
+  next0: D.stepCall(calls, T, 0, 1), next1: D.stepCall(calls, T, 25, 1), prev: D.stepCall(calls, T, 60, -1), none: D.stepCall(calls, T, 0, -1),
+  o: [D.offsetText(163), D.offsetText(-12), D.offsetText(4.5)],
+  empty: D.frameDrawn(new Uint8ClampedArray(16)), drawn: D.frameDrawn(Uint8ClampedArray.from([0, 0, 0, 255])) }));
+"""
+
+
+def test_lining_up_on_the_corner_calls():
+    """TestFlight 13 ("how do i slide to align when video doesn't preview?"): the preview steps through the corner calls in
+    road order, a call's frame is its drive time less the offset, and a frame the phone could not decode is told apart."""
+    out = json.loads(subprocess.run([NODE, "-e", ALIGN, ROOT], capture_output=True, text=True, check=True).stdout)
+    assert [c["call"] for c in out["calls"]] == ["Right 2", "Left 4", "Off the end"], "corners only, in road order"
+    assert out["calls"][0]["i"] == 50 and out["calls"][2]["i"] == 199, "a call past the end sits on the last sample"
+    assert out["vt"] == 20, "Left 4 at 60 s into the drive, the video starting 40 s in: 20 s into the video"
+    assert out["next0"] == 0 and out["next1"] == 1 and out["prev"] == 0 and out["none"] == -1
+    assert out["o"] == ["Video starts 163 s into the drive", "Video starts 12 s before the drive", "Video starts 4.5 s into the drive"]
+    assert out["empty"] is False and out["drawn"] is True

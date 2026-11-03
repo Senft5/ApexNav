@@ -3931,10 +3931,110 @@ flow('dashcam overlay: a video from the drive gets its speed, g and calls drawn 
     window.__saved = null; ApexSaveFile.saveFile = async (blob, name, type) => { window.__saved = { size: blob.size, name, type }; return 'saved'; };
   });
   await page.waitForFunction(() => { const b = [...document.querySelectorAll('#dvDashcam button')].find((x) => /Make the video/.test(x.textContent)); return b && !b.disabled; }, null, { timeout: 8000 });
+  // TestFlight 13 ("how do i slide to align when video doesn't preview?"): the video is shown with the overlay drawn on it
+  const btn = (re) => page.evaluate((s) => [...document.querySelectorAll('#dvDashcam button')].find((x) => new RegExp(s).test(x.textContent)).click(), re);
+  const pv = () => page.evaluate(() => {
+    const st = document.querySelector('#dvDashcam .dc-stage'), ov = st.querySelector('canvas'), g = ov.getContext('2d'), v = st.querySelector('video');
+    const strip = ov.width && ov.height ? g.getImageData(0, Math.round(ov.height * 0.95), ov.width, 1).data : [];
+    let ink = 0; for (let k = 3; k < strip.length; k += 4) if (strip[k] > 0) ink++;
+    return { shown: !st.hidden && st.getBoundingClientRect().height > 50, ink, vt: v.currentTime, where: document.querySelector('#dvDashcam .dc-where').textContent,
+      off: document.querySelector('#dvDashcam input[aria-label^="When the video starts"]').value };
+  });
+  let p = await pv();
+  check(p.shown && p.ink > 0, 'a preview with the overlay strip drawn over the video: ' + JSON.stringify(p));
+  // the corner call (500 m at 15 m/s: 33.3 s into the drive) is past this 2 s video: the preview says which way to slide
+  await btn('Next call');
+  p = await pv();
+  check(/Left 4/.test(p.where) && /after the video ends/.test(p.where) && /slide Later/.test(p.where), 'the call outside the video, said: ' + p.where);
+  // slide the video's start to 32.5 s into the drive: the call is 0.8 s into the video, and the preview goes there
+  await page.evaluate(() => { const r = document.querySelector('#dvDashcam input[aria-label^="When the video starts"]'); r.value = '32.5'; r.dispatchEvent(new Event('input')); });
+  await page.waitForFunction(() => Math.abs(document.querySelector('#dvDashcam video').currentTime - 0.83) < 0.1, null, { timeout: 5000 });
+  await page.waitForFunction(() => /Slide until the car is at this corner/.test(document.querySelector('#dvDashcam .dc-where').textContent));
+  p = await pv();
+  check(/corner call 1 of 1, Left 4/.test(p.where) && p.ink > 0, 'the call lands on its frame: ' + JSON.stringify(p));
+  check(/Video starts 32\.5 s into the drive/.test(await page.textContent('#dvDashcam')), 'the offset in words');
+  await btn('\\+ 0\\.5 s');
+  check((await pv()).off === '33', 'a half-second nudge');
   await page.evaluate(() => [...document.querySelectorAll('#dvDashcam button')].find((x) => /Make the video/.test(x.textContent)).click());
   await page.waitForFunction(() => window.__saved, null, { timeout: 20000 });
   const saved = await page.evaluate(() => window.__saved);
   check(saved.size > 500 && /^Dashcam_road-dashcam-.*\.(webm|mp4)$/.test(saved.name), 'a new video: ' + JSON.stringify(saved));
+  // a file this phone can't open: said plainly, no blank preview, no Make the video
+  await page.evaluate(() => {
+    const dt = new DataTransfer(); dt.items.add(new File([new Uint8Array(4096).fill(7)], 'broken.mp4', { type: 'video/mp4' }));
+    const input = document.querySelector('#dvDashcam input[type=file]'); input.files = dt.files; input.dispatchEvent(new Event('change'));
+  });
+  await page.waitForFunction(() => /couldn’t open that video/.test(document.querySelector('#dvDashcam .dc-status').textContent), null, { timeout: 8000 });
+  check(await page.evaluate(() => document.querySelector('#dvDashcam .dc-stage').hidden
+    && [...document.querySelectorAll('#dvDashcam button')].find((x) => /Make the video/.test(x.textContent)).disabled), 'nothing to preview or make from it');
+});
+
+// A drive for the drive page's own flows: north 1.5 km with a corner call (dashcam) and some g (the grip circle)
+async function storeDashDrive(page, id = 'dc1', name = 'Dashcam road') {
+  await page.evaluate(async ([id, name]) => {
+    const lat = [], lon = [];
+    for (let i = 0; i < 300; i++) { lat.push(35.6 + i * 5 / 110540); lon.push(-83.9 + Math.sin(i / 40) * 0.002); }
+    await ApexRecording.store({ id, name, date: '2026-10-20T15:00:00Z', lat, lon, dist: lat.map((_, i) => i * 5), speed_mps: lat.map(() => 15),
+      lon_g: lat.map(() => -0.1), lat_g: lat.map((_, i) => Math.sin(i / 10) * 0.3), g_known: null, elev: null, hz: 1, source: 'web-gps',
+      events: [{ type: 'corner', code: 'L4', call: 'Left 4', index: 100, dist_m: 500, start_m: 480, end_m: 520, radius_m: 80, apex_mph: 30, dir: 'L', severity: 4 }] });
+  }, [id, name]);
+}
+
+flow('the drive page\'s map: with no map to be had the picture keeps its blank panel; MapLibre loads only for it (TestFlight 15)', async (page, base) => {
+  await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); } catch (_) {} });
+  await page.goto(base + '/analysis.html');
+  await page.waitForFunction(() => window.apexLogDebug && window.apexLogDebug.loaded() && window.ApexRecording);
+  await storeDashDrive(page, 'bm1', 'Map road');
+  check(!(await page.evaluate(() => !!window.maplibregl || performance.getEntriesByType('resource').some((e) => /maplibre-gl\.js/.test(e.name)))),
+    'the Log list never loads MapLibre');
+  await page.goto(base + '/analysis.html?drive=bm1');
+  await page.waitForSelector('.dv-plan svg');
+  await page.evaluate(() => document.querySelector('.dv-plan').scrollIntoView());
+  // tiles are blocked here: MapLibre loads for the picture, its style fails, and the map is taken away again
+  await page.waitForFunction(() => !!window.maplibregl, null, { timeout: 15000 });
+  await page.waitForFunction(() => !document.querySelector('.dv-basemap'), null, { timeout: 15000 });
+  const s = await page.evaluate(() => ({ on: document.querySelector('.dv-plan').classList.contains('on-map'), credit: document.querySelector('.dv-credit').hidden,
+    path: document.querySelectorAll('#dvSpeed line').length, casing: !!document.querySelector('#dvCase') }));
+  check(!s.on && s.credit && s.path > 10 && s.casing, 'the blank panel, the path drawn, no credit for a map not shown: ' + JSON.stringify(s));
+});
+
+flow('the drive page\'s map: when the map can draw it sits under the path, fitted, still and in the theme (stubbed MapLibre, TestFlight 15)', async (page, base) => {
+  await page.addInitScript(() => {
+    try { localStorage.setItem('apex.onboarded', '1'); } catch (_) {}
+    // a stand-in MapLibre: records how it was made and draws one tile
+    window.__maps = [];
+    window.maplibregl = { Map: class {
+      constructor(o) {
+        this.o = o; this.h = {}; const c = o.container;
+        c.classList.add('maplibregl-map');                               // as MapLibre does: its stylesheet's position: relative must not win
+        c.getBoundingClientRect();
+        window.__maps.push({ style: o.style, center: o.center, zoom: o.zoom, interactive: o.interactive, w: c.clientWidth, h: c.clientHeight, cls: c.className });
+        setTimeout(() => { this.fire('styledata'); this.fire('data', { dataType: 'source', tile: {} }); this.fire('idle'); }, 50);
+      }
+      on(k, f) { (this.h[k] = this.h[k] || []).push(f); } fire(k, e) { (this.h[k] || []).forEach((f) => f(e)); }
+      isStyleLoaded() { return true; } resize() {} jumpTo(v) { window.__jump = v; } remove() { window.__removed = (window.__removed || 0) + 1; }
+    } };
+    window.ApexBasemap = { restyle(map, P) { window.__palette = P; } };
+  });
+  await page.goto(base + '/analysis.html');
+  await page.waitForFunction(() => window.apexLogDebug && window.apexLogDebug.loaded() && window.ApexRecording);
+  await storeDashDrive(page, 'bm2', 'Map road');
+  await page.goto(base + '/analysis.html?drive=bm2');
+  await page.waitForSelector('.dv-plan svg');
+  await page.evaluate(() => document.querySelector('.dv-plan').scrollIntoView());
+  await page.waitForSelector('.dv-basemap.shown', { timeout: 8000 });
+  const s = await page.evaluate(() => {
+    const plan = document.querySelector('.dv-plan'), svg = plan.querySelector('svg'), layer = plan.querySelector('.dv-basemap');
+    const sv = svg.getBoundingClientRect(), lr = layer.getBoundingClientRect();
+    return { m: window.__maps, n: window.__maps.length, on: plan.classList.contains('on-map'), credit: !plan.querySelector('.dv-credit').hidden,
+      under: getComputedStyle(layer).zIndex < getComputedStyle(svg).zIndex, first: plan.firstElementChild === layer,
+      same: Math.abs(sv.width - lr.width) < 1 && Math.abs(sv.height - lr.height) < 1, palette: window.__palette, bg: layer.style.background };
+  });
+  const m = s.m[0];
+  check(s.n === 1 && /tiles\.openfreemap\.org\/styles\//.test(m.style) && m.interactive === false, 'one still map of the app\'s own style: ' + JSON.stringify(s.m));
+  check(Math.abs(m.center[1] - (35.6 + 150 * 5 / 110540)) < 0.002 && Math.abs(m.center[0] + 83.9) < 0.003 && m.zoom > 12 && m.zoom < 17, 'fitted on the drive: ' + JSON.stringify(m));
+  check(s.on && s.credit && s.under && s.first && s.same, 'under the path, the picture\'s exact size, credited: ' + JSON.stringify(s));
+  check(s.palette && s.palette.bg && s.bg, 'painted in the theme\'s map palette');
 });
 
 flow('the Log page opens', async (page, base) => {
