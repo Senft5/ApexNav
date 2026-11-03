@@ -2,8 +2,10 @@
 // rows. Pure; no DOM.
 //
 // Nothing is said for a drive whose mount never calibrated: the recorder keeps a row's camber only once the mount is
-// locked (sensors.js; a browser only once checked against GPS), so a drive with fewer than MIN_ROWS rows of camber has no
-// road feel to show, and its line is empty. No number is invented: unknown stays unknown (CLAUDE.md rule 3).
+// locked (sensors.js; a browser only once checked against GPS), and camber is measured only in corners (it is unknown on a
+// straight, 2026-11-03), so MIN_BANK_ROWS rows of camber (40 m of measured corner) are the proof the mount locked and the
+// least banking is spoken about. Roughness, measured everywhere, needs MIN_ROWS rows of its own (200 m) on such a drive.
+// No number is invented: unknown stays unknown (CLAUDE.md rule 3).
 //
 //   columns(rows)                 the recorder's rows [{ distance_m, camber_deg, roughness_rms }] -> { dist, camber, rough }
 //   summary({ dist, camber, rough }) -> null | { rows, bankDeg, bankAtM, roughAtM }
@@ -12,7 +14,8 @@
 //   endLine(summary, fmtDist)     "Road feel: banked 4° at 2.4 mi · roughest at 3.1 mi", or '' with nothing measured
 (function (root) {
   'use strict';
-  const MIN_ROWS = 40;      // 200 m of calibrated road before anything is said
+  const MIN_ROWS = 40;      // roughness: 200 m of measured road before it is spoken about
+  const MIN_BANK_ROWS = 8;  // banking: 40 m of measured corner (camber is unknown on a straight), and the proof of a locked mount
   const BANK_ROWS = 4;      // banking: the mean of 20 m, so one noisy sample is never the headline
   const BANK_MAX = 15;      // a sample past 15° is no public road: a measurement artefact, and its 20 m are left out
   const BANK_MIN = 1;       // under 1° anywhere: the line says the road was flat, measured
@@ -32,7 +35,7 @@
     const cam = d.camber, n = cam.length;
     const dist = Array.isArray(d.dist) && d.dist.length === n ? d.dist : cam.map((_, i) => i * 5);
     const rows = cam.filter(fin).length;
-    if (rows < MIN_ROWS) return null;
+    if (rows < MIN_BANK_ROWS) return null;
     const d0 = fin(dist[0]) ? dist[0] : 0, at = (i) => (fin(dist[i]) ? dist[i] - d0 : i * 5);
     let bankDeg = null, bankAtM = null;
     for (let i = 0; i + BANK_ROWS <= n; i++) {
@@ -43,7 +46,8 @@
       if (bankDeg == null || Math.abs(m) > Math.abs(bankDeg)) { bankDeg = m; bankAtM = at(i); }
     }
     let roughAtM = null, worst = -Infinity;
-    const rough = Array.isArray(d.rough) && d.rough.length === n ? d.rough : null;
+    const roughCol = Array.isArray(d.rough) && d.rough.length === n ? d.rough : null;
+    const rough = roughCol && roughCol.filter(fin).length >= MIN_ROWS ? roughCol : null;
     if (rough) {
       for (let i = 0; i + ROUGH_ROWS <= n; i++) {
         let s = 0, k = 0;
@@ -69,6 +73,6 @@
     return parts.length ? `Road feel: ${parts.join(' · ')}.` : '';
   }
 
-  const api = { columns, summary, endLine, MIN_ROWS, BANK_MAX, ROUGH_G };
+  const api = { columns, summary, endLine, MIN_ROWS, MIN_BANK_ROWS, BANK_MAX, ROUGH_G };
   if (typeof module !== 'undefined' && module.exports) module.exports = api; else root.ApexRoadFeel = api;
 })(typeof window !== 'undefined' ? window : globalThis);
