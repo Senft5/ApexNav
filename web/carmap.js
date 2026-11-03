@@ -140,8 +140,10 @@
   }
 
   function drawPuck() {
-    const { C } = look();
-    puck.getElement().innerHTML = `<svg viewBox="0 0 34 34" width="34" height="34"><circle cx="17" cy="17" r="14" fill="${C.panel}" stroke="${C.panelInk}" stroke-width="2.5"/><path d="M17 7 L25 24 L17 19.8 L9 24 Z" fill="${C.panelInk}"/></svg>`;   // panel round 2: a position, in ink
+    const { C } = look(), theme = root.ApexThemes.get(state.theme);
+    // a car's own theme: that car from above in its paint, outlined in ink, in the same 34 px; else the ink arrow (panel round 2)
+    const car = root.ApexThemes.carSVG ? root.ApexThemes.carSVG(theme, C.panelInk, 34, 34, { stroke: 1.6 }) : '';
+    puck.getElement().innerHTML = car || `<svg viewBox="0 0 34 34" width="34" height="34"><circle cx="17" cy="17" r="14" fill="${C.panel}" stroke="${C.panelInk}" stroke-width="2.5"/><path d="M17 7 L25 24 L17 19.8 L9 24 Z" fill="${C.panelInk}"/></svg>`;   // panel round 2: a position, in ink
   }
 
   // The sight-line speed under the arrow (web/carplay.js sightMessage): its own marker, so it stays upright while the

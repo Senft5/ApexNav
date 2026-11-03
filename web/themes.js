@@ -111,10 +111,86 @@
     const day = colours(d.day, TOKENS), night = colours(d.night, TOKENS), mday = colours(d.map && d.map.day, MAP_KEYS), mnight = colours(d.map && d.map.night, MAP_KEYS);
     const r = d.renderers || {}, v = d.voice || {}, label = str(d.label, 24);
     if (!day || !night || !mday || !mnight || !label) return null;
-    return { id: d.id, label, tag: str(d.tag, 2) || '', blurb: str(d.blurb, 80) || '', about: str(d.about, 280) || '', pro: false, granted: true,
+    const car = carFrom(d.car);
+    return { id: d.id, label, tag: str(d.tag, 2) || '', blurb: str(d.blurb, 80) || '', about: str(d.about, 400) || '', pro: false, granted: true,
       voice: str(v.id, 20) ? { id: str(v.id, 20), name: str(v.name, 24) || '', who: str(v.who, 120) || '' } : null,
-      fonts: FONT, cluster: 'dials', notes: 'roadbook', gauge: d.gauge === 'vfd' ? 'vfd' : 'printed',
-      renderers: { dial: str(r.dial, 20), meter: str(r.meter, 20), strip: str(r.strip, 20) }, day, night, map: { day: mday, night: mnight } };
+      fonts: car && NUMERALS[car.numerals] ? { ...FONT, dial: NUMERALS[car.numerals] } : FONT, cluster: 'dials', notes: 'roadbook', gauge: d.gauge === 'vfd' ? 'vfd' : 'printed',
+      renderers: { dial: str(r.dial, 20), meter: str(r.meter, 20), strip: str(r.strip, 20) }, day, night, map: { day: mday, night: mnight },
+      ...(car ? { car, sounds: car.sounds } : {}) };
+  }
+
+  // A car's own look (theme.car, the private themes): its cluster as data for instruments.js carGauge, its top-down outline for
+  // the arrow on the map, the Garage card and the share card, its paint, needles, chrome and finish, and its key and pre-call
+  // sounds. Only known keys pass, numbers in range, words from short lists: the server's file is data, never code or markup.
+  const NUMERALS = {   // the dial's numerals: a style the car's has, from the phone's own faces, else the bundled condensed
+    rounded: '"Arial Rounded MT Bold", "Varela Round", "Barlow Condensed", sans-serif',
+    din: '"DIN Alternate", "DIN 2014", "Bahnschrift", "Barlow Condensed", sans-serif',
+    condensed: '"Barlow Condensed", "Arial Narrow", sans-serif',
+  };
+  const FINISHES = ['metalgrain', 'carbon', 'cloth'];
+  const PART_KINDS = ['face', 'ring', 'pod', 'disc', 'box', 'text', 'scale', 'marks', 'digital', 'bank', 'lamp', 'mid'];
+  const READS = ['speed', 'speedAlt', 'latG', 'brakeG', 'bank', 'rpm', 'fuel', 'temp', 'torque', 'volts', 'mpg'];   // instruments.js CAR_READS
+  const PART_NUM = ['cx', 'cy', 'r', 'w', 'h', 'x', 'y', 'rx', 'a0', 'a1', 'min', 'max', 'major', 'minor', 'label', 'labelR', 'labelSize', 'labelDiv',
+    'majorLen', 'minorLen', 'majorW', 'minorW', 'arc', 'redW', 'pegs', 'peg0', 'rest', 'lines', 'fit'];
+  const n = (v, lo = -1000, hi = 1000) => (typeof v === 'number' && Number.isFinite(v) && v >= lo && v <= hi ? v : null);
+  const nums = (o, keys) => { const out = {}; if (o && typeof o === 'object') for (const k of keys) { const x = n(o[k]); if (x != null) out[k] = x; } return out; };
+  const pair = (o) => (o && HEX.test(o.day || '') && HEX.test(o.night || '') ? { day: o.day, night: o.night } : null);
+  const WORD = /^[A-Za-z0-9 .+\-\/°{}]{1,16}$/;
+  function partFrom(p) {
+    if (!p || typeof p !== 'object' || !PART_KINDS.includes(p.k)) return null;
+    const out = { k: p.k, ...nums(p, PART_NUM) };
+    if (p.reads !== undefined) { if (!READS.includes(p.reads)) return null; out.reads = p.reads; }
+    for (const b of ['deep', 'small', 'invert']) if (p[b] === true) out[b] = true;
+    if (typeof p.t === 'string' && WORD.test(p.t)) out.t = p.t; else if (out.k === 'text') return null;   // a word, or no part
+    if (p.cls === 'tiny') out.cls = 'tiny';
+    if (['start', 'middle', 'end'].includes(p.anchor)) out.anchor = p.anchor;
+    if (Array.isArray(p.red) && p.red.length === 2 && p.red.every((x) => n(x) != null)) out.red = p.red.slice();
+    if (Array.isArray(p.ends)) out.ends = p.ends.slice(0, 4).map((e) => (e && n(e.v) != null && typeof e.t === 'string' && WORD.test(e.t) ? { v: e.v, t: e.t, ...nums(e, ['r']) } : null)).filter(Boolean);
+    if (p.needle && typeof p.needle === 'object') out.needle = { ...nums(p.needle, ['len', 'tail', 'w', 'hub']), ...(p.needle.style === 'taper' ? { style: 'taper' } : {}), ...(p.needle.spring === true ? { spring: true } : {}) };
+    for (const u of ['mph', 'kmh']) if (p[u] && typeof p[u] === 'object') out[u] = nums(p[u], PART_NUM);
+    if (out.k === 'scale' && !(out.reads && out.max > out.min && (out.major > 0) && out.a1 !== out.a0)) {
+      const m = { ...out, ...(out.mph || {}) };                      // a speed scale may carry its numbers per unit only
+      if (!(out.reads && m.max > m.min && m.major > 0)) return null;
+    }
+    return out;
+  }
+  const gaugeFrom = (g) => { const parts = g && Array.isArray(g.parts) ? g.parts.slice(0, 48).map(partFrom).filter(Boolean) : []; return parts.length ? { parts, ...(g.explain === 'tach' ? { explain: 'tach' } : {}), ...(n(g.vb, 80, 200) != null ? { vb: g.vb } : {}) } : null; };
+  const poly = (a) => (Array.isArray(a) && a.length >= 3 && a.length <= 120 && a.every((q) => Array.isArray(q) && q.length === 2 && n(q[0], 0, 200) != null && n(q[1], 0, 200) != null) ? a.map((q) => [q[0], q[1]]) : null);
+  const VOICE_TYPES = ['sine', 'square', 'triangle', 'sawtooth', 'noise'];
+  const voices = (a) => (Array.isArray(a) ? a.slice(0, 4).map((v) => (v && VOICE_TYPES.includes(v.type) && n(v.f, 20, 12000) != null && n(v.at, 0, 1) != null && n(v.dur, 0.003, 0.5) != null && n(v.gain, 0.0005, 0.2) != null
+    ? { type: v.type, f: v.f, at: v.at, dur: v.dur, gain: v.gain, ...(n(v.q, 0.1, 20) != null ? { q: v.q } : {}) } : null)).filter(Boolean) : []);
+  /** The car part of a server's theme, cleaned, or null. Pure. */
+  function carFrom(c) {
+    if (!c || typeof c !== 'object') return null;
+    const s = c.silhouette || {}, body = poly(s.body), w = n(s.w, 1, 200), h = n(s.h, 1, 200);
+    const out = {
+      model: str(c.model, 60) || '', paint: c.paint && HEX.test(c.paint.hex || '') ? { name: str(c.paint.name, 40) || '', hex: c.paint.hex } : null,
+      finish: FINISHES.includes(c.finish) ? c.finish : null, numerals: NUMERALS[c.numerals] ? c.numerals : null,
+      needle: pair(c.needle), ring: pair(c.ring), disc: pair(c.disc), lamp: pair(c.lamp),
+      dial: gaugeFrom(c.dial), meter: gaugeFrom(c.meter),
+      silhouette: body && w && h ? { w, h, body, glass: poly(s.glass), roof: poly(s.roof), lamps: Array.isArray(s.lamps) ? s.lamps.slice(0, 6).map(poly).filter(Boolean) : [] } : null,
+      sounds: c.sounds && typeof c.sounds === 'object' ? { key: voices(c.sounds.key), pre: voices(c.sounds.pre) } : null,
+    };
+    return out;
+  }
+
+  /** The car's top-down outline, nose up, as SVG markup in a w x h box (the arrow on the map, the Garage card). Its paint,
+   *  the glass darker, the outline in `edge` (the panel's ink, so it reads on the map). '' without a car. Pure. */
+  function carSVG(theme, edge, w, h, opts = {}) {
+    const car = theme && theme.car, s = car && car.silhouette;
+    if (!s || !car.paint) return '';
+    const W = opts.rotate ? h : w, H = opts.rotate ? w : h;           // rotate: lying nose right, in a w x h box
+    const k = Math.min(W / s.w, H / s.h), ox = (W - s.w * k) / 2, oy = (H - s.h * k) / 2;
+    const pts = (a) => a.map(([x, y]) => `${(ox + x * k).toFixed(1)},${(oy + y * k).toFixed(1)}`).join(' ');
+    const ink = HEX.test(edge || '') ? edge : '#111111', glass = opts.glass && HEX.test(opts.glass) ? opts.glass : '#1A1D22';
+    const sw = (opts.stroke || 1.4).toFixed(2);
+    return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${w} ${h}" width="${w}" height="${h}" aria-hidden="true">`
+      + (opts.rotate ? `<g transform="translate(${w} 0) rotate(90)">` : '')
+      + `<polygon points="${pts(s.body)}" fill="${car.paint.hex}" stroke="${ink}" stroke-width="${sw}" stroke-linejoin="round"/>`
+      + (s.glass ? `<polygon points="${pts(s.glass)}" fill="${glass}"/>` : '')
+      + (s.roof ? `<polygon points="${pts(s.roof)}" fill="${car.paint.hex}"/>` : '')
+      + s.lamps.map((l) => `<polygon points="${pts(l)}" fill="#F2F4F6" opacity="0.9"/>`).join('')
+      + (opts.rotate ? '</g>' : '') + '</svg>';
   }
   /** The granted themes, from /api/me: replaces the last list. contract: web/theme_contract.js, when loaded (a theme that
    *  breaks it is never shown). True when the set of granted themes changed. */
@@ -147,6 +223,11 @@
     for (const [k, v] of Object.entries(c)) r.style.setProperty(`--${k.replace(/[A-Z]/g, m => '-' + m.toLowerCase())}`, v);
     r.style.setProperty('--font-ui', t.fonts.ui);
     r.style.setProperty('--font-num', t.fonts.num);
+    // a car's own look (theme.car): its needles, chrome, inner dial, lamp and paint as tokens, its finish on the binnacle
+    const car = t.car, m = night ? 'night' : 'day';
+    for (const [k, v] of [['--car-needle', car && car.needle && car.needle[m]], ['--car-ring', car && car.ring && car.ring[m]], ['--car-disc', car && car.disc && car.disc[m]],
+      ['--car-lamp', car && car.lamp && car.lamp[m]], ['--car-paint', car && car.paint && car.paint.hex], ['--font-dial', t.fonts.dial]]) { if (v) r.style.setProperty(k, v); else if (r.style.removeProperty) r.style.removeProperty(k); }
+    if (car && car.finish) r.dataset.finish = car.finish; else delete r.dataset.finish;
     r.dataset.theme = t.id;
     r.dataset.mode = night ? 'night' : 'day';
     try { root.localStorage.setItem(LAST_KEY, JSON.stringify([t.id, !!night])); } catch (_) {}
@@ -159,5 +240,5 @@
   function last() { try { const l = JSON.parse(root.localStorage.getItem(LAST_KEY)); return Array.isArray(l) ? { id: l[0], night: !!l[1] } : null; } catch (_) { return null; } }
   { const l = last(); if (l) apply(l.id, l.night); }
 
-  root.ApexThemes = { THEMES, ACCENTS, get, apply, accent, setAccent, last, grant, granted, fromGrant, GRANT_KEY };
+  root.ApexThemes = { THEMES, ACCENTS, get, apply, accent, setAccent, last, grant, granted, fromGrant, carFrom, carSVG, GRANT_KEY };
 })(window);

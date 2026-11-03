@@ -1,46 +1,322 @@
 {
   "tiburon": {
-    "id": "tiburon", "label": "Tiburon", "tag": "D", "blurb": "Silver V6 coupe, three gauges in the pod.",
-    "about": "A silver 2005 GT V6: brushed silver by day, black faces lit at night, and three small gauges in a pod over the radio, as the car has. Here they read Turn, Brake and Bank.",
+    "id": "tiburon",
+    "label": "Tiburon",
+    "tag": "D",
+    "blurb": "Sterling silver GT V6, orange-lit gauges.",
+    "about": "The 2005 Tiburon GT V6's cluster: the 160 MPH speedometer with its km/h ring, chrome bezels and red-orange needles, white faces by day and orange light at night, metal-grain trim, and the three-gauge pod over the radio reading Turn, Brake and Bank. Your car in Sterling silver on the map.",
     "voice": { "id": "hale", "name": "Hale", "who": "Low, even, zero drama. A test driver reading a card." },
-    "gauge": "printed", "renderers": { "dial": "bezel", "meter": "pod", "strip": "roadbook" },
-    "day": {
-      "stage": "#D5D8DB", "ink": "#121417", "dim": "#4A4F56", "route": "#121417", "routeCasing": "#D5D8DB",
-      "panel": "#CBCED2", "panelInk": "#0F1114", "panelDim": "#474C53", "rule": "#2A2E33", "accent": "#A3101C",
-      "signal": "#A3101C", "amber": "#7A4E00", "calm": "#0F1114",
-      "face": "#E4E6E9", "faceInk": "#0D0F12", "faceDim": "#50555C", "hair": "#B9BDC2", "gain": "#2C6B3E"
-    },
-    "night": {
-      "stage": "#121417", "ink": "#DDE1E6", "dim": "#8E949C", "route": "#DDE1E6", "routeCasing": "#121417",
-      "panel": "#101215", "panelInk": "#E2E6EB", "panelDim": "#8C939B", "rule": "#3A3F46", "accent": "#FF5247",
-      "signal": "#FF5247", "amber": "#E3A13E", "calm": "#E2E6EB",
-      "face": "#08090B", "faceInk": "#E8ECF0", "faceDim": "#8F959D", "hair": "#24282D", "gain": "#86CF8E"
-    },
+    "gauge": "printed",
+    "renderers": { "dial": "car", "meter": "car", "strip": "roadbook" },
+    "day": { "stage": "#D5D8DB", "ink": "#121417", "dim": "#4A4F56", "route": "#121417", "routeCasing": "#D5D8DB", "panel": "#CBCED2", "panelInk": "#0F1114", "panelDim": "#474C53", "rule": "#2A2E33", "accent": "#A30F2A", "signal": "#A30F2A", "amber": "#7A4E00", "calm": "#0F1114", "face": "#F3F4F5", "faceInk": "#111317", "faceDim": "#50555C", "hair": "#C4C8CC", "gain": "#2C6B3E" },
+    "night": { "stage": "#100E0C", "ink": "#FFB57E", "dim": "#B07A52", "route": "#FFB57E", "routeCasing": "#100E0C", "panel": "#0E0C0B", "panelInk": "#FFBE8C", "panelDim": "#B9845C", "rule": "#4A3424", "accent": "#FF3358", "signal": "#FF3358", "amber": "#E8C24A", "calm": "#FFBE8C", "face": "#070707", "faceInk": "#FF9C4E", "faceDim": "#C2733A", "hair": "#2A1C12", "gain": "#86CF8E" },
     "map": {
       "day": { "bg": "#D9DCDF", "water": "#B9C6CF", "waterLine": "#7D8E99", "land": "#D4D7DA", "wood": "#C8CDC8", "road": "#F4F5F6", "roadMinor": "#EEEFF0", "casing": "#2A2E33", "label": "#1E2125", "halo": "#D9DCDF", "boundary": "#8A9097", "contour": "#8A8F94", "shadow": "#8E959C", "highlight": "#F7F8F9", "accentShade": "#AEB3B8" },
-      "night": { "bg": "#14161A", "water": "#0E1216", "waterLine": "#26303A", "land": "#16181C", "wood": "#181B1E", "road": "#2C3036", "roadMinor": "#24282D", "casing": "#9EA5AD", "label": "#9AA1A9", "halo": "#14161A", "boundary": "#2E3238", "contour": "#2A2E33", "shadow": "#07080A", "highlight": "#22262B", "accentShade": "#101215" }
+      "night": { "bg": "#12100E", "water": "#0D1114", "waterLine": "#2A2A2A", "land": "#14120F", "wood": "#161411", "road": "#2E2924", "roadMinor": "#25211D", "casing": "#B07A52", "label": "#C08A60", "halo": "#12100E", "boundary": "#33291F", "contour": "#2C241C", "shadow": "#060505", "highlight": "#221D18", "accentShade": "#0E0C0A" }
+    },
+    "car": {
+      "model": "2005 Hyundai Tiburon GT V6",
+      "paint": { "name": "Sterling Metallic", "hex": "#B8BBBF" },
+      "finish": "metalgrain",
+      "numerals": "rounded",
+      "needle": { "day": "#D85A12", "night": "#FF9330" },
+      "ring": { "day": "#A7ACB2", "night": "#5C5E61" },
+      "disc": { "day": "#E4E6E9", "night": "#0D0D0E" },
+      "lamp": { "day": "#3A2A26", "night": "#2A1A16" },
+      "dial": {
+        "parts": [
+          { "k": "face", "cx": 100, "cy": 100, "r": 97 },
+          { "k": "ring", "cx": 100, "cy": 100, "r": 95, "w": 5 },
+          {
+            "k": "scale",
+            "reads": "speed",
+            "cx": 100,
+            "cy": 100,
+            "r": 88,
+            "a0": -135,
+            "a1": 135,
+            "min": 0,
+            "mph": { "max": 160, "major": 20, "minor": 10, "label": 20 },
+            "kmh": { "max": 260, "major": 20, "minor": 10, "label": 40 },
+            "labelR": 69,
+            "majorLen": 12,
+            "minorLen": 6,
+            "majorW": 3,
+            "minorW": 1.4,
+            "needle": { "len": 84, "tail": 16, "w": 5, "hub": 11, "style": "taper" }
+          },
+          {
+            "k": "scale",
+            "reads": "speedAlt",
+            "cx": 100,
+            "cy": 100,
+            "r": 50,
+            "a0": -135,
+            "min": 0,
+            "kmh": { "max": 260, "major": 20, "minor": 20, "label": 40, "a1": 137.6 },
+            "mph": { "max": 160, "major": 20, "minor": 10, "label": 40, "a1": 132.4 },
+            "a1": 138,
+            "labelR": 38,
+            "small": true,
+            "majorLen": 4,
+            "minorLen": 2.5,
+            "majorW": 1.2,
+            "minorW": 0.8,
+            "arc": 0.8
+          },
+          {
+            "k": "marks",
+            "cx": 100,
+            "cy": 100,
+            "r": 90,
+            "a0": -135,
+            "a1": 135,
+            "min": 0,
+            "mph": { "max": 160 },
+            "kmh": { "max": 260 }
+          },
+          {
+            "k": "text",
+            "x": 100,
+            "y": 125,
+            "t": "{unit}"
+          },
+          { "k": "digital", "x": 100, "y": 189, "fit": 78 }
+        ]
+      },
+      "meter": {
+        "vb": 136,
+        "parts": [
+          { "k": "pod", "x": 2, "y": 4, "w": 196, "h": 98, "rx": 46 },
+          { "k": "face", "cx": 36, "cy": 46, "r": 30 },
+          { "k": "ring", "cx": 36, "cy": 46, "r": 30.5, "w": 3.5 },
+          {
+            "k": "scale",
+            "reads": "latG",
+            "cx": 36,
+            "cy": 46,
+            "r": 27,
+            "a0": -120,
+            "a1": 120,
+            "min": -0.8,
+            "max": 0.8,
+            "major": 0.4,
+            "minor": 0.2,
+            "majorLen": 7,
+            "minorLen": 4,
+            "majorW": 2.2,
+            "minorW": 1,
+            "needle": { "len": 24, "tail": 6, "w": 3, "hub": 4.5, "style": "taper" },
+            "invert": true
+          },
+          { "k": "text", "x": 36, "y": 94, "t": "TURN" },
+          { "k": "face", "cx": 100, "cy": 46, "r": 30 },
+          { "k": "ring", "cx": 100, "cy": 46, "r": 30.5, "w": 3.5 },
+          {
+            "k": "scale",
+            "reads": "brakeG",
+            "cx": 100,
+            "cy": 46,
+            "r": 27,
+            "a0": -120,
+            "a1": 120,
+            "min": 0,
+            "max": 0.8,
+            "major": 0.4,
+            "minor": 0.1,
+            "majorLen": 7,
+            "minorLen": 4,
+            "majorW": 2.2,
+            "minorW": 1,
+            "needle": { "len": 24, "tail": 6, "w": 3, "hub": 4.5, "style": "taper" }
+          },
+          { "k": "text", "x": 100, "y": 94, "t": "BRAKE" },
+          { "k": "face", "cx": 164, "cy": 46, "r": 30 },
+          { "k": "ring", "cx": 164, "cy": 46, "r": 30.5, "w": 3.5 },
+          {
+            "k": "scale",
+            "reads": "bank",
+            "cx": 164,
+            "cy": 46,
+            "r": 27,
+            "a0": -120,
+            "a1": 120,
+            "min": -10,
+            "max": 10,
+            "major": 5,
+            "minor": 2.5,
+            "majorLen": 7,
+            "minorLen": 4,
+            "majorW": 2.2,
+            "minorW": 1,
+            "needle": { "len": 24, "tail": 6, "w": 3, "hub": 4.5, "style": "taper" }
+          },
+          { "k": "text", "x": 164, "y": 94, "t": "BANK" },
+          { "k": "bank", "x": 100, "y": 132 }
+        ]
+      },
+      "silhouette": {
+        "w": 40,
+        "h": 100,
+        "body": [ [20, 0], [26.5, 0.5], [31.5, 1.8], [35.2, 4.2], [37.4, 7.8], [38.6, 12.5], [39.3, 19], [39.4, 25.5], [38.7, 31.5], [37.9, 37], [37.6, 47], [38.1, 56], [39.2, 64], [39.8, 72], [39.6, 80], [38.8, 86.5], [37.2, 91.8], [34.6, 95.8], [30.4, 98.4], [25, 99.6], [20, 100], [15, 99.6], [9.6, 98.4], [5.4, 95.8], [2.8, 91.8], [1.2, 86.5], [0.4, 80], [0.2, 72], [0.8, 64], [1.9, 56], [2.4, 47], [2.1, 37], [1.3, 31.5], [0.6, 25.5], [0.7, 19], [1.4, 12.5], [2.6, 7.8], [4.8, 4.2], [8.5, 1.8], [13.5, 0.5] ],
+        "glass": [ [20, 31.5], [27.5, 32], [32.4, 34], [33.6, 39], [33.4, 47], [33, 57], [32.2, 67], [30.6, 77], [28, 84.5], [24.5, 88], [20, 88.6], [15.5, 88], [12, 84.5], [9.4, 77], [7.8, 67], [7, 57], [6.6, 47], [6.4, 39], [7.6, 34], [12.5, 32] ],
+        "roof": [ [20, 45.5], [28.4, 46], [30.6, 49], [30.4, 57], [29.6, 62], [20, 62.6], [10.4, 62], [9.6, 57], [9.4, 49], [11.6, 46] ],
+        "lamps": [
+          [ [30.2, 2.6], [35.4, 5.0], [37.0, 9.2], [33.8, 7.6], [30.0, 4.8] ],
+          [ [9.8, 2.6], [4.6, 5.0], [3.0, 9.2], [6.2, 7.6], [10.0, 4.8] ]
+        ]
+      },
+      "sounds": {
+        "key": [
+          { "type": "noise", "f": 1800, "at": 0, "dur": 0.03, "gain": 0.08, "q": 1.5 },
+          { "type": "sine", "f": 160, "at": 0, "dur": 0.04, "gain": 0.08 }
+        ],
+        "pre": [
+          { "type": "triangle", "f": 740, "at": 0, "dur": 0.16, "gain": 0.1 },
+          { "type": "sine", "f": 1480, "at": 0, "dur": 0.08, "gain": 0.025 }
+        ]
+      }
     }
   },
   "frs": {
-    "id": "frs", "label": "FR-S", "tag": "E", "blurb": "Ultramarine, black cloth, white light.",
-    "about": "A blue 2013 FR-S: the black cabin, white-lit numerals, an Ultramarine ring round the speed dial, a light quick needle, and the route in the same blue.",
+    "id": "frs",
+    "label": "FR-S",
+    "tag": "E",
+    "blurb": "Ultramarine, the big centre tach, white light.",
+    "about": "The 2013 FR-S's cluster: the big centre tachometer (9,000 r/min, red from 7,500) with the speed in digits inside it, PACE in its window and the REV lamp, the right dial's two gauges reading Turn and Brake, black faces lit white, silver rings and the carbon-look trim. Your car in Ultramarine on the map.",
     "voice": { "id": "kit", "name": "Kit", "who": "Quick, dry, a little cheeky, never silly." },
-    "gauge": "printed", "renderers": { "dial": "tach", "meter": "gball", "strip": "roadbook" },
-    "day": {
-      "stage": "#0E1014", "ink": "#F1F3F6", "dim": "#A3AAB5", "route": "#5C88FF", "routeCasing": "#0E1014",
-      "panel": "#0C0E12", "panelInk": "#F4F6F9", "panelDim": "#A0A7B2", "rule": "#2E3440", "accent": "#6E96FF",
-      "signal": "#FF4A3D", "amber": "#FFB040", "calm": "#F4F6F9",
-      "face": "#07080A", "faceInk": "#F6F8FA", "faceDim": "#9BA2AD", "hair": "#1E222A", "gain": "#8FD6A0"
-    },
-    "night": {
-      "stage": "#0A0B0E", "ink": "#E6E9EE", "dim": "#969DA8", "route": "#4F7DF5", "routeCasing": "#0A0B0E",
-      "panel": "#08090C", "panelInk": "#E9ECF1", "panelDim": "#959CA7", "rule": "#283040", "accent": "#6A90F8",
-      "signal": "#F5473B", "amber": "#F0A63C", "calm": "#E9ECF1",
-      "face": "#050608", "faceInk": "#ECEFF3", "faceDim": "#929AA5", "hair": "#191C23", "gain": "#86CC97"
-    },
+    "gauge": "printed",
+    "renderers": { "dial": "car", "meter": "car", "strip": "roadbook" },
+    "day": { "stage": "#0E1014", "ink": "#F1F3F6", "dim": "#A3AAB5", "route": "#5C88FF", "routeCasing": "#0E1014", "panel": "#0C0E12", "panelInk": "#F4F6F9", "panelDim": "#A0A7B2", "rule": "#2E3440", "accent": "#6E96FF", "signal": "#FF4A3D", "amber": "#FFB040", "calm": "#F4F6F9", "face": "#060709", "faceInk": "#F6F8FA", "faceDim": "#9BA2AD", "hair": "#1E222A", "gain": "#8FD6A0" },
+    "night": { "stage": "#0A0B0E", "ink": "#E6E9EE", "dim": "#969DA8", "route": "#4F7DF5", "routeCasing": "#0A0B0E", "panel": "#08090C", "panelInk": "#E9ECF1", "panelDim": "#959CA7", "rule": "#283040", "accent": "#6A90F8", "signal": "#F5473B", "amber": "#F0A63C", "calm": "#E9ECF1", "face": "#040506", "faceInk": "#ECEFF3", "faceDim": "#929AA5", "hair": "#191C23", "gain": "#86CC97" },
     "map": {
       "day": { "bg": "#101318", "water": "#0B1830", "waterLine": "#1F3A70", "land": "#11141A", "wood": "#12161B", "road": "#1C2129", "roadMinor": "#181C23", "casing": "#8FA3C8", "label": "#A6B0C0", "halo": "#101318", "boundary": "#262C38", "contour": "#1C222C", "shadow": "#050608", "highlight": "#1A1F27", "accentShade": "#0B0D11" },
       "night": { "bg": "#0B0D11", "water": "#081226", "waterLine": "#1A315E", "land": "#0C0F13", "wood": "#0D1015", "road": "#171B22", "roadMinor": "#13161C", "casing": "#7488AE", "label": "#8E99AB", "halo": "#0B0D11", "boundary": "#1F2430", "contour": "#171C25", "shadow": "#040506", "highlight": "#151920", "accentShade": "#08090C" }
+    },
+    "car": {
+      "model": "2013 Scion FR-S",
+      "paint": { "name": "Ultramarine Pearl", "hex": "#2448B0" },
+      "finish": "carbon",
+      "numerals": "din",
+      "ring": { "day": "#9DA3AB", "night": "#6A7079" },
+      "disc": { "day": "#11141A", "night": "#0C0E12" },
+      "lamp": { "day": "#2A2020", "night": "#221A1A" },
+      "dial": {
+        "explain": "tach",
+        "parts": [
+          { "k": "face", "cx": 100, "cy": 100, "r": 97 },
+          { "k": "ring", "cx": 100, "cy": 100, "r": 95.5, "w": 3.5, "pegs": 9, "peg0": 0 },
+          { "k": "disc", "cx": 100, "cy": 100, "r": 50 },
+          { "k": "box", "x": 112, "y": 98, "w": 68, "h": 30, "rx": 5 },
+          {
+            "k": "scale",
+            "reads": "rpm",
+            "cx": 100,
+            "cy": 100,
+            "r": 88,
+            "a0": -140,
+            "a1": 70,
+            "min": 0,
+            "max": 9,
+            "major": 1,
+            "minor": 0.2,
+            "label": 1,
+            "labelR": 70,
+            "labelSize": 17,
+            "red": [7.5, 9],
+            "redW": 7,
+            "majorLen": 12,
+            "minorLen": 6,
+            "majorW": 3,
+            "minorW": 1.2,
+            "needle": { "len": 84, "tail": 14, "w": 3.6, "hub": 12 }
+          },
+          { "k": "text", "x": 110, "y": 80, "t": "x1000r/min", "cls": "tiny" },
+          { "k": "lamp", "x": 72, "y": 74, "r": 6 },
+          { "k": "mid", "x": 146, "y": 119 },
+          {
+            "k": "text",
+            "x": 100,
+            "y": 125,
+            "t": "{unit}"
+          },
+          { "k": "digital", "x": 100, "y": 186, "fit": 78 }
+        ]
+      },
+      "meter": {
+        "parts": [
+          { "k": "face", "cx": 100, "cy": 100, "r": 97 },
+          { "k": "ring", "cx": 100, "cy": 100, "r": 95.5, "w": 3.5 },
+          {
+            "k": "scale",
+            "reads": "latG",
+            "invert": true,
+            "cx": 104,
+            "cy": 70,
+            "r": 60,
+            "a0": 0,
+            "a1": 90,
+            "min": -0.8,
+            "max": 0.8,
+            "major": 0.8,
+            "minor": 0.2,
+            "majorLen": 10,
+            "minorLen": 5,
+            "majorW": 3,
+            "minorW": 1.4,
+            "ends": [
+              { "v": -0.8, "t": "L", "r": 44 },
+              { "v": 0.8, "t": "R", "r": 44 }
+            ],
+            "needle": { "len": 56, "tail": 10, "w": 3.2, "hub": 7 }
+          },
+          {
+            "k": "scale",
+            "reads": "brakeG",
+            "cx": 104,
+            "cy": 128,
+            "r": 60,
+            "a0": 180,
+            "a1": 90,
+            "min": 0,
+            "max": 0.8,
+            "major": 0.4,
+            "minor": 0.1,
+            "majorLen": 10,
+            "minorLen": 5,
+            "majorW": 3,
+            "minorW": 1.4,
+            "ends": [
+              { "v": 0, "t": "0", "r": 44 },
+              { "v": 0.8, "t": ".8", "r": 44 }
+            ],
+            "needle": { "len": 56, "tail": 10, "w": 3.2, "hub": 7 }
+          },
+          { "k": "text", "x": 114, "y": 94, "t": "TURN", "anchor": "start" },
+          { "k": "text", "x": 114, "y": 113, "t": "BRAKE", "anchor": "start" },
+          { "k": "bank", "x": 50, "y": 92, "lines": 36 }
+        ]
+      },
+      "silhouette": {
+        "w": 42,
+        "h": 100,
+        "body": [ [21, 0], [26.6, 0.4], [31.2, 1.6], [34.8, 3.8], [37.6, 7], [39.6, 11.6], [40.6, 17.5], [40.6, 24], [39.4, 30.5], [38.3, 37], [38.0, 47], [38.6, 57], [40.2, 65], [41.4, 72.5], [41.2, 80.5], [39.9, 87.5], [37.6, 93.2], [33.8, 97.2], [27.8, 99.4], [21, 100], [14.2, 99.4], [8.2, 97.2], [4.4, 93.2], [2.1, 87.5], [0.8, 80.5], [0.6, 72.5], [1.8, 65], [3.4, 57], [4.0, 47], [3.7, 37], [2.6, 30.5], [1.4, 24], [1.4, 17.5], [2.4, 11.6], [4.4, 7], [7.2, 3.8], [10.8, 1.6], [15.4, 0.4] ],
+        "glass": [ [21, 33.5], [28.6, 33.9], [32.6, 36], [33.4, 41.5], [33, 51], [32.4, 61], [31, 69], [28.6, 75.4], [24.6, 78.8], [21, 79.2], [17.4, 78.8], [13.4, 75.4], [11, 69], [9.6, 61], [9, 51], [8.6, 41.5], [9.4, 36], [13.4, 33.9] ],
+        "roof": [ [21, 46.5], [28.6, 46.9], [29.8, 50.5], [29.4, 59.5], [28.2, 64], [21, 64.4], [13.8, 64], [12.6, 59.5], [12.2, 50.5], [13.4, 46.9] ],
+        "lamps": [
+          [ [31.6, 1.9], [36.2, 4.7], [38.6, 9.6], [35.2, 7.8], [31.2, 4.2] ],
+          [ [10.4, 1.9], [5.8, 4.7], [3.4, 9.6], [6.8, 7.8], [10.8, 4.2] ]
+        ]
+      },
+      "sounds": {
+        "key": [
+          { "type": "noise", "f": 5200, "at": 0, "dur": 0.01, "gain": 0.06, "q": 3 }
+        ],
+        "pre": [
+          { "type": "square", "f": 2000, "at": 0, "dur": 0.05, "gain": 0.035 },
+          { "type": "square", "f": 2000, "at": 0.08, "dur": 0.05, "gain": 0.035 }
+        ]
+      }
     }
   }
 }

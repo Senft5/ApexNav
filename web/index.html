@@ -801,23 +801,36 @@
     .bezel-ring .knurl { fill: none; stroke: #6B6E74; stroke-width: 5; stroke-dasharray: 1.2 1.6; }
     .bezel-ring .screw { fill: #3A3C40; stroke: #8A8D93; stroke-width: 0.8; }
     .tp-billet { background: linear-gradient(180deg, #2A2B2E, #1C1D1F); } .tp-billet .tp-speed b { color: #FF5A4C; text-shadow: 0 0 8px rgba(255, 74, 61, 0.6); }
-    /* ---------------- The private themes (themes.js grant(), migration 0044): shown only to an account granted them ----------------
-       Tiburon: a silver 2005 GT V6. Brushed silver by day, black faces lit at night, smooth silver bezels, three gauges in a pod.
-       FR-S: a blue 2013 FR-S. Black cloth, white-lit numerals, an Ultramarine ring round the dial. Glow is additive; red stays the warning's. */
-    html[data-theme="tiburon"][data-mode="day"] .binnacle, html[data-theme="tiburon"][data-mode="day"] .notes {
-      background: repeating-linear-gradient(90deg, rgba(255,255,255,0.16) 0 1px, transparent 1px 3px), linear-gradient(180deg, #DDE0E3, var(--panel) 70%); }
-    html[data-theme="tiburon"][data-mode="night"] .binnacle, html[data-theme="tiburon"][data-mode="night"] .notes { background: linear-gradient(180deg, #1B1E22, var(--panel) 60%); }
-    html[data-theme="tiburon"] .bezel-ring .knurl { stroke: #A3A9AF; stroke-width: 4; stroke-dasharray: none; }
-    html[data-theme="tiburon"] .bezel-ring .screw { display: none; }
-    html[data-theme="tiburon"] .pod .pod-bezel { stroke: #9EA4AB; stroke-width: 3; }
-    html[data-theme="tiburon"][data-mode="night"] .dial-digital { filter: drop-shadow(0 0 3px rgba(232, 236, 240, 0.45)); }
-    html[data-theme="tiburon"] .key, html[data-theme="tiburon"] .ink-btn { border-radius: 10px; }
-    .tp-tiburon { background: repeating-linear-gradient(90deg, rgba(255,255,255,0.18) 0 1px, transparent 1px 3px), linear-gradient(180deg, #E1E3E6, #C3C7CC); box-shadow: inset 0 -4px 0 #A3A9AF; }
-    .tach-ring { stroke: var(--route); stroke-width: 3; }
-    html[data-theme="frs"] .binnacle, html[data-theme="frs"] .notes { background: repeating-linear-gradient(45deg, rgba(255,255,255,0.018) 0 2px, transparent 2px 4px), var(--panel); }
-    html[data-theme="frs"] .dial-digital { filter: drop-shadow(0 0 4px rgba(246, 248, 250, 0.45)); }
-    html[data-theme="frs"] .rb-dist b, html[data-theme="frs"] .odo-digits { text-shadow: 0 0 6px rgba(246, 248, 250, 0.35); }
-    .tp-frs { background: #0C0E12; box-shadow: inset 0 -4px 0 #2F5BD3; } .tp-frs .tp-speed b { text-shadow: 0 0 8px rgba(246, 248, 250, 0.5); }
+    /* ---------------- A car's own cluster (the private themes: themes.js grant(), instruments.js carGauge) ----------------
+       Nothing here names a car: a granted theme's data sets the tokens (--car-needle, --car-ring, --car-disc, --car-lamp,
+       --car-paint, --font-dial) and its finish (data-finish); the gauges' shapes are its data too. Red stays the warning's. */
+    .car-gauge .car-ring { stroke: var(--car-ring, var(--face-ink)); }
+    .car-gauge .car-peg { fill: var(--car-ring, var(--face-ink)); }
+    .car-gauge .car-disc { fill: var(--car-disc, var(--face)); }
+    .car-gauge .car-box { fill: var(--car-disc, var(--face)); stroke: var(--car-ring, var(--face-dim)); stroke-width: 1; }
+    .car-gauge .car-pod { fill: var(--car-disc, var(--panel)); stroke: var(--car-ring, var(--face-ink)); stroke-width: 3; }
+    .car-gauge .car-hub { fill: var(--car-ring, var(--face-ink)); stroke: var(--face); stroke-width: 1; }
+    .car-gauge .car-lamp { fill: var(--car-lamp, var(--face)); stroke: var(--face-dim); stroke-width: 1; }
+    .car-gauge .car-lamp.on { fill: var(--signal); stroke: var(--signal); }
+    .car-gauge .car-num, .car-gauge .car-mid, html[data-finish] .odo-digits, html[data-finish] .rb-dist b { font-family: var(--font-dial, var(--font-num)); }
+    .car-gauge .car-mid { font-size: 17px; }
+    .car-gauge .car-cap, .car-gauge .car-end { fill: var(--face-dim); }
+    html[data-mode="night"][data-finish] .car-gauge .dial-digital:not(.unk) { filter: drop-shadow(0 0 2px var(--face-ink)); }   /* lit, not blurred */
+    html[data-finish="metalgrain"][data-mode="day"] .binnacle, html[data-finish="metalgrain"][data-mode="day"] .notes {   /* metal-grain trim, brushed */
+      background: repeating-linear-gradient(90deg, rgba(255,255,255,0.16) 0 1px, transparent 1px 3px), linear-gradient(180deg, color-mix(in srgb, var(--panel) 80%, #fff), var(--panel) 70%); }
+    html[data-finish="metalgrain"][data-mode="night"] .binnacle, html[data-finish="metalgrain"][data-mode="night"] .notes { background: linear-gradient(180deg, color-mix(in srgb, var(--panel) 88%, #fff), var(--panel) 60%); }
+    html[data-finish="carbon"] .binnacle, html[data-finish="carbon"] .notes {   /* carbon-look weave */
+      background: repeating-linear-gradient(45deg, rgba(255,255,255,0.03) 0 3px, transparent 3px 6px), repeating-linear-gradient(-45deg, rgba(0,0,0,0.35) 0 3px, transparent 3px 6px), var(--panel); }
+    html[data-finish="cloth"] .binnacle, html[data-finish="cloth"] .notes { background: repeating-linear-gradient(0deg, rgba(255,255,255,0.025) 0 1px, transparent 1px 2px), var(--panel); }
+    html[data-finish] .key, html[data-finish] .ink-btn { border-radius: 10px; }
+    .switch.pack-switch { display: grid; grid-template-columns: 1fr 1fr; }   /* four voices in two rows */
+    html[data-type-size] .switch.pack-switch { grid-template-columns: 1fr; }   /* one a row with large text: every name whole */
+    .puck.car-puck { width: 34px; height: 34px; display: grid; place-items: center; }
+    .tp-car { display: grid !important; grid-template-columns: 1fr 1fr; gap: 6px; align-items: center; padding: 10px !important; background: var(--panel); position: relative; }
+    .tp-car .tp-g { aspect-ratio: 1; min-width: 0; } .tp-car .tp-g svg { width: 100%; height: 100%; display: block; }
+    .tp-car .tp-silhouette { grid-column: 1 / -1; justify-self: center; width: 96px; height: 40px; }
+    .tp-car .tp-silhouette svg { width: 100%; height: 100%; }
+    .tp-car .car-needle { opacity: 1 !important; }   /* the card is the car parked: needles at rest, no reading */
     .rc-links { display: flex; flex-wrap: wrap; justify-content: center; gap: 4px 18px; margin-top: 10px; }
     /* two weights: Save and Share in ink, the rest in pencil (REVIEW2.md route card) */
     .rc-links .linkbtn { color: var(--panel-dim); font-weight: 500; } .rc-links #routeSaveBtn, .rc-links #routeShareBtn { color: var(--panel-ink); font-weight: 700; }
@@ -1481,8 +1494,15 @@
                a Hear key. Pro themes carry a PRO tag (never a padlock) and can be tried in full on the demo replay. -->
           <section data-panel="garage" id="lookSection">
             <h3>Look and voice</h3>
-            <p class="note">A theme changes the type, colours, gauges, map, motion and the co-driver's voice. The calls, the hazards and where things sit never change.</p>
+            <p class="note">A theme changes the type, colours, gauges, map and motion, and suggests a co-driver. The calls, the hazards and where things sit never change.</p>
             <div class="theme-cards" id="themeCards"></div>
+            <!-- The co-driver's voice is its own choice: any pack with any theme (private themes too), kept across theme changes.
+                 Suggested follows the theme's. One home (web/vocabulary.js TERMS.pack). -->
+            <div class="ctl"><p class="ctl-label">Co-driver's voice</p>
+              <div class="switch pack-switch" id="packSwitch" role="radiogroup" aria-label="Co-driver's voice">
+                <button data-pack="look" role="radio">Suggested</button><button data-pack="marguerite" role="radio">Marguerite</button><button data-pack="kit" role="radio">Kit</button><button data-pack="hale" role="radio">Hale</button>
+              </div></div>
+            <p class="note" id="packNote" role="status" aria-live="polite"></p>
           </section>
           <section data-panel="garage">
             <h3>Co-driver</h3>
@@ -1500,7 +1520,7 @@
           </section>
           <section data-panel="garage">
             <h3>The words</h3>
-            <p class="note" style="margin:0 0 8px">Your co-driver comes with your theme (Look and voice above). Works offline.</p>
+            <p class="note" style="margin:0 0 8px">Your co-driver's voice is chosen under Look and voice, above. Works offline.</p>
             <div class="switch mt-8" id="noteWordsList" role="group" aria-label="Note words">
               <button data-words="plain">Plain words</button>
               <button data-words="rally">Rally notes</button>

@@ -22,6 +22,19 @@ describe("private themes", () => {
     expect(JSON.stringify(out)).not.toContain("tiburon");
   });
 
+  it("a car's own look (its cluster, its outline, its sounds) goes only with the grant", async () => {
+    const owner = await makeUser("owner"), other = await makeUser("other");
+    await grant(owner.id, "frs");
+    const a = (await (await api(owner, "GET", "/api/me")).json()) as { themes: { id: string; car: { silhouette: { body: number[][] }; dial: { parts: unknown[] }; sounds: unknown } }[] };
+    const frs = a.themes.find((t) => t.id === "frs")!;
+    expect(frs.car.silhouette.body.length).toBeGreaterThan(20);
+    expect(frs.car.dial.parts.length).toBeGreaterThan(5);
+    expect(frs.car.sounds).toEqual(PRIVATE_THEMES.frs.car.sounds);
+    const b = JSON.stringify(await (await api(other, "GET", "/api/me")).json());
+    for (const s of ["silhouette", "Ultramarine", "Sterling", PRIVATE_THEMES.frs.car.paint.hex]) expect(b).not.toContain(s);
+    expect(JSON.stringify(PRIVATE_THEMES).length).toBeLessThan(24000);   // /api/me carries it on every sign-in check
+  });
+
   it("a grant taken away is gone on the next /api/me; a grant for a theme the server doesn't know is skipped", async () => {
     const u = await makeUser("owner");
     await grant(u.id, "tiburon"); await grant(u.id, "nosuch");

@@ -3793,13 +3793,42 @@ flow('private themes: a granted account sees the Tiburon and the FR-S, uses each
   await page.waitForFunction(() => document.querySelectorAll('#themeCards .theme-card').length === 5, null, { timeout: 15000 });
   const c = await cards();
   check(c.some((t) => /^TiburonPRIVATE/.test(t)) && c.some((t) => /^FR-SPRIVATE/.test(t)), 'the granted account sees both, private: ' + JSON.stringify(c));
-  for (const [id, label, part] of [['tiburon', 'Tiburon', '#cluster .dial-g svg.pod'], ['frs', 'FR-S', '#cluster .dial-speed .tach-ring']]) {
+  // each card is that car's cluster, parked, with the car from above in its paint
+  const tp = await page.evaluate(() => [...document.querySelectorAll('#themeCards .theme-preview.tp-car')].map((b) => ({ g: b.querySelectorAll('svg.car-gauge').length, car: !!b.querySelector('.tp-silhouette polygon') })));
+  check(tp.length === 2 && tp.every((x) => x.g === 2 && x.car), 'the two cards are the cars\' clusters with their outlines: ' + JSON.stringify(tp));
+  for (const [id, label, part] of [['tiburon', 'Tiburon', '#cluster .dial-g svg.car-meter .car-pod'], ['frs', 'FR-S', '#cluster .dial-speed svg.car-dial .car-red']]) {
     await page.evaluate((l) => document.querySelector(`#themeCards [aria-label="Use ${l}"]`).click(), label);
     await page.waitForFunction((t) => document.documentElement.dataset.theme === t, id);
     check(await page.$(part), `${id}: its own instruments (${part})`);
     check(await page.evaluate(() => getComputedStyle(document.documentElement).getPropertyValue('--route').trim().toLowerCase()) === PRIVATE[id].day.route.toLowerCase(), `${id}: its own route colour`);
+    // the arrow on the map is the car from above, in its paint, outlined in ink
+    const puck = await page.evaluate(() => { const p = document.querySelector('.puck.car-puck polygon'); return p && { fill: p.getAttribute('fill'), stroke: p.getAttribute('stroke') }; });
+    check(puck && puck.fill === PRIVATE[id].car.paint.hex && puck.stroke.toLowerCase() === PRIVATE[id].day.panelInk.toLowerCase(), `${id}: the arrow is the car: ` + JSON.stringify(puck));
+    check(await page.evaluate(() => document.documentElement.dataset.finish) === PRIVATE[id].car.finish, `${id}: its trim on the binnacle`);
   }
   check(JSON.parse(await page.evaluate(() => localStorage.getItem('apex.prefs'))).theme === 'frs', 'the choice is kept');
+  // nothing Vetta can't measure moves: the FR-S's rev counter rests, dimmed, at 0 in a drive; the speed is read in digits
+  await page.evaluate(() => window.apex.live({ lat: 35.96, lon: -83.92, accuracy_m: 5, speed_mps: 24, course_deg: 0, has_fix: true, calibration: 'locked', lat_g: 0.3, lon_g: -0.2 }));
+  await page.waitForTimeout(300);
+  const tach = await page.evaluate(() => { const n = document.querySelector('#cluster .car-dial .car-rpm + .car-needle') || document.querySelectorAll('#cluster .car-dial .car-needle')[0];
+    return { op: n.style.opacity, tf: n.getAttribute('transform'), digits: document.querySelector('#cluster .car-dial .dial-digital').textContent }; });
+  check(tach.op === '0.25' && /^rotate\(-140\.00 /.test(tach.tf) && /^\d+$/.test(tach.digits), 'the rev counter rests, the speed is in digits: ' + JSON.stringify(tach));
+  // any voice pack with a car theme: the pick wins over the theme's suggestion and stays when the theme changes
+  const pickPack = (p) => page.evaluate((x) => document.querySelector(`#packSwitch [data-pack="${x}"]`).click(), p);
+  await page.waitForFunction(() => window.apexDebug.state.voiceId === 'kit', null, { timeout: 10000 });   // the FR-S suggests Kit
+  await pickPack('marguerite');
+  check(await page.evaluate(() => window.apexDebug.state.voiceId) === 'marguerite' && await page.evaluate(() => document.querySelector('#packSwitch [data-pack="marguerite"]').getAttribute('aria-checked')) === 'true', 'a car theme with Marguerite');
+  await page.evaluate(() => document.querySelector('#themeCards [aria-label="Use Tiburon"]').click());
+  await page.waitForFunction(() => document.documentElement.dataset.theme === 'tiburon');
+  check(await page.evaluate(() => window.apexDebug.state.voiceId) === 'marguerite', 'the pick stays across a theme change');
+  check(JSON.parse(await page.evaluate(() => localStorage.getItem('apex.prefs'))).voicePick === 'marguerite', 'and is kept');
+  await pickPack('look');
+  check(await page.evaluate(() => window.apexDebug.state.voiceId) === 'hale' && /Hale, the voice Tiburon suggests/.test(await page.textContent('#packNote')), 'Suggested is the theme\'s again');
+  await pickPack('kit');
+  check(await page.evaluate(() => window.apexDebug.state.voiceId) === 'kit', 'the Tiburon with Kit');
+  await pickPack('look');
+  await page.evaluate(() => document.querySelector('#themeCards [aria-label="Use FR-S"]').click());
+  await page.waitForFunction(() => document.documentElement.dataset.theme === 'frs');
   // the contract on the page, day and night, on the replay: the same hazard plate, floors, Limit sign and Score as every theme
   for (const id of PRIVATE_IDS) for (const night of [false, true]) {
     await page.addInitScript((n) => { try { localStorage.setItem('apex.prefs', JSON.stringify({ notesMode: 'full', nightMode: n ? 'on' : 'off' })); } catch (_) {} }, night);
@@ -3825,6 +3854,10 @@ flow('private themes: a granted account sees the Tiburon and the FR-S, uses each
     check(r.bg === 'rgb(17, 17, 17)' && r.edge === 'rgb(255, 122, 26)' && r.ink === 'rgb(255, 255, 255)', `${m}: the same hazard plate ` + JSON.stringify(r));
     check(r.speed >= 40 && r.call >= 21 && !r.small.length && r.bankPx >= 13, `${m}: speed ${r.speed}, call ${r.call}, bank ${r.bankPx}, small ` + JSON.stringify(r.small));
     check(/^BANK /.test(r.bank || ''), `${m}: Bank is read out, -- until measured: ` + r.bank);
+    if (night) {                                                     // U-36: the night numeral, 46 px, in the car's own dial too
+      const px = await page.evaluate(() => { const d = document.querySelector('.dial-speed .dial-digital'); return Math.round(parseFloat(getComputedStyle(d).fontSize) * d.getScreenCTM().a); });
+      check(px >= 46, `${m}: a 46 px numeral at night: ${px}`);
+    }
     check(r.limit && r.limit.w === 44 && r.limit.h === 52 && (r.limit.unknown || r.limit.bg === 'rgb(255, 255, 255)'), `${m}: the same Limit sign: ` + JSON.stringify(r.limit));
     check(/^--SCORE$/.test(r.score.text) && r.score.inside, `${m}: the Score under the meter, -- on a replay: ` + JSON.stringify(r.score));
   }

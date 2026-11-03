@@ -130,7 +130,7 @@
     const state = {
       mode: 'replay', playing: false, rate: 1, cursorM: 0, cursorIdx: 0, follow: true, bearing: 0,
       live: null, liveAt: 0, lastPosition: null, spiritedAt: -Infinity, spoken: new Set(), tapToRoute: false,
-      theme: 'roadbook', camFeel: 'dynamic', voiceId: 'marguerite', liveVoice: false, voiceStyle: 'codriver', voiceName: '', hlOn: false, hlStrength: 1,
+      theme: 'roadbook', camFeel: 'dynamic', voiceId: 'marguerite', voicePick: null, liveVoice: false, voiceStyle: 'codriver', voiceName: '', hlOn: false, hlStrength: 1,
       notesMode: 'auto', nightMode: 'auto', musicMode: 'lower',   // Notes: auto | full | quiet. Night: auto (sunset/sunrise) | on | off
       noteWords: 'plain',                     // rally ("Left 4 minus") | plain ("Medium left"), IDEAS V-02; a saved setting wins
       toggles: { stage: false, voice: true, lpr: true, dna: false, night: false, twisty: true, haptics: true, crash: true, health: true, terrain: false, coverage: false, keys: true, friends: false, nudge: false }   // twisty on by default (panel D-2), the weekly reminder off until asked for (R-1); stage and night are derived from the two modes; analysis.html reads toggles.night
@@ -175,7 +175,7 @@
         state.notesMode = NOTES_MODES.includes(saved.notesMode) ? saved.notesMode : (saved.toggles && saved.toggles.stage ? 'full' : 'auto');
         state.nightMode = NIGHT_MODES.includes(saved.nightMode) ? saved.nightMode : (saved.toggles && saved.toggles.night ? 'on' : saved.toggles && 'night' in saved.toggles ? 'off' : 'auto');
       }
-      if (saved) { if (saved.theme && saved.themeV === 2) state.theme = saved.theme; if (saved.camFeel) state.camFeel = saved.camFeel; if (saved.voiceId) state.voiceId = saved.voiceId; if (saved.liveVoice != null && saved.liveVoiceV >= 2) state.liveVoice = saved.liveVoice; /* saves from before v2 defaulted to ON and started a 90 MB download unasked */ if (saved.voiceName != null) state.voiceName = saved.voiceName; if (saved.hlOn != null) state.hlOn = !!saved.hlOn; if (saved.hlStrength > 0) state.hlStrength = saved.hlStrength; }
+      if (saved) { if (saved.theme && saved.themeV === 2) state.theme = saved.theme; if (saved.camFeel) state.camFeel = saved.camFeel; if (saved.voiceId) state.voiceId = saved.voiceId; if (typeof saved.voicePick === 'string' && /^[a-z]{1,20}$/.test(saved.voicePick)) state.voicePick = saved.voicePick; if (saved.liveVoice != null && saved.liveVoiceV >= 2) state.liveVoice = saved.liveVoice; /* saves from before v2 defaulted to ON and started a 90 MB download unasked */ if (saved.voiceName != null) state.voiceName = saved.voiceName; if (saved.hlOn != null) state.hlOn = !!saved.hlOn; if (saved.hlStrength > 0) state.hlStrength = saved.hlStrength; }
     } catch (_) {}
     if (params.has('night')) state.nightMode = params.get('night') === '1' ? 'on' : params.get('night') === 'auto' ? 'auto' : 'off';
     if (params.has('notes') && NOTES_MODES.includes(params.get('notes'))) state.notesMode = params.get('notes');
@@ -195,13 +195,17 @@
     const health = window.ApexHealth ? ApexHealth.createHealth(localStorage,
       async (b) => window.APEX_REVIEW ? 204 : (await fetch(`${window.ApexSync ? ApexSync.apiBase : ''}/api/app-health`, { method: 'POST', credentials: 'omit', headers: { 'content-type': 'application/json', 'x-apexnav': '1' }, body: JSON.stringify(b) })).status,
       () => !!state.toggles.health) : { bump() {}, flush: async () => 0 };
-    function savePrefs() { try { localStorage.setItem('apex.prefs', JSON.stringify({ theme: state.theme, themeV: 2, camFeel: state.camFeel, voiceId: state.voiceId, liveVoice: state.liveVoice, liveVoiceV: 2, voiceName: state.voiceName, hlOn: state.hlOn, hlStrength: state.hlStrength, notesMode: state.notesMode, noteWords: state.noteWords, musicMode: state.musicMode, nightMode: state.nightMode, toggles: state.toggles, twistyV: 2 })); } catch (_) {} }
+    function savePrefs() { try { localStorage.setItem('apex.prefs', JSON.stringify({ theme: state.theme, themeV: 2, camFeel: state.camFeel, voiceId: state.voiceId, voicePick: state.voicePick, liveVoice: state.liveVoice, liveVoiceV: 2, voiceName: state.voiceName, hlOn: state.hlOn, hlStrength: state.hlStrength, notesMode: state.notesMode, noteWords: state.noteWords, musicMode: state.musicMode, nightMode: state.nightMode, toggles: state.toggles, twistyV: 2 })); } catch (_) {} }
     function paintSwitches() {
       try { carLook(); } catch (_) {}                                     // the car's screen follows the theme and the voice switch
       document.querySelectorAll('[data-toggle]').forEach(b => { const on = !!state.toggles[b.dataset.toggle]; b.classList.toggle('on', on); b.setAttribute('role', 'switch'); b.setAttribute('aria-checked', String(on)); });
       document.querySelectorAll('#nightSwitch [data-night]').forEach(b => b.setAttribute('aria-checked', String(b.dataset.night === state.nightMode)));
       document.querySelectorAll('[data-notes]').forEach(b => b.setAttribute('aria-checked', String(b.dataset.notes === state.notesMode)));   // U-82
       document.querySelectorAll('[data-music]').forEach(b => b.setAttribute('aria-checked', String(b.dataset.music === state.musicMode)));
+      // the co-driver's voice is its own choice (any pack with any theme, private ones too); Suggested follows the look
+      document.querySelectorAll('[data-pack]').forEach(b => b.setAttribute('aria-checked', String(b.dataset.pack === (state.voicePick || 'look'))));
+      const pn = document.getElementById('packNote'), sug = look && look.theme && look.theme.voice;
+      if (pn) pn.textContent = state.voicePick ? `${packName(state.voicePick)} reads the notes, whatever the theme.` : sug ? `${sug.name}, the voice ${look.theme.label} suggests. It changes when the theme does.` : '';
       // SO-1: the Garage says what the one Notes and Voice switches (in Layers) are set to, in their own words
       const now = document.getElementById('coNotesNow');
       if (now) now.textContent = `Notes: ${({ quiet: 'Quiet', auto: 'Auto', full: 'Full' })[state.notesMode] || '--'} · Voice ${state.toggles.voice ? 'on' : 'off'}`;
@@ -213,7 +217,7 @@
     function applyTheme() {
       syncDerivedToggles();
       look = Themes.apply(state.theme, state.toggles.night);
-      if (typeof themeVoice === 'function') themeVoice();               // the co-driver comes with the theme
+      if (typeof themeVoice === 'function') themeVoice();               // the theme's suggested co-driver, unless the driver chose one
       cluster = Inst.mountCluster($('cluster'), look.theme);
       paintSwitches();
       restyleBasemap();
@@ -369,8 +373,12 @@
       if (live && key !== car.sightKey) { car.sightKey = key; carPost(m); }
     }
     function drawPuck() {
-      const c = look.colors;
-      puckEl.innerHTML = `<svg viewBox="0 0 26 26" width="26" height="26"><circle cx="13" cy="13" r="11" fill="${c.panel}" stroke="${c.panelInk}" stroke-width="2"/><path d="M13 5 L19 18 L13 14.8 L7 18 Z" fill="${c.panelInk}"/></svg>`;   // panel round 2: a position, in ink
+      const c = look.colors, carSvg = Themes.carSVG(look.theme, c.panelInk, 34, 34);
+      // a car's own theme: the arrow is that car from above, in its paint, outlined in the panel's ink (theme_contract.js holds
+      // the outline to 3:1 on the map); every other theme keeps the ink arrow (panel round 2: a position, in ink)
+      puckEl.classList.toggle('car-puck', !!carSvg);
+      puckEl.innerHTML = carSvg || `<svg viewBox="0 0 26 26" width="26" height="26"><circle cx="13" cy="13" r="11" fill="${c.panel}" stroke="${c.panelInk}" stroke-width="2"/><path d="M13 5 L19 18 L13 14.8 L7 18 Z" fill="${c.panelInk}"/></svg>`;   // panel round 2: a position, in ink
+      sightTag.setOffset([0, carSvg ? 19 : 15]);                         // the tag stays clear of the car's tail
     }
 
     function restyleBasemap() {
@@ -1213,7 +1221,7 @@
       if (!item) {
         speech.current = null; speech.via = null;
         if (chimed) saidLog(`[chime: ${chimed}]`);   // review recordings: the earcon in the transcript, where the line used to be
-        if (chimed && window.ApexThemeSounds && window.ApexVoice) { try { ApexThemeSounds.play(ApexVoice.unlock(), ApexThemeSounds.recipe(state.theme, chimed)); } catch (_) {} }
+        if (chimed && window.ApexThemeSounds && window.ApexVoice) { try { ApexThemeSounds.play(ApexVoice.unlock(), ApexThemeSounds.recipe(state.theme, chimed, Themes.get(state.theme).sounds)); } catch (_) {} }
         return;
       }
       // MA-3: advice rides in its call; a call that waited in the queue past the advice's last start says the call alone
@@ -1228,7 +1236,7 @@
       const cue = item.kind === 'hazard' ? 'hazard' : item.cue || chimed || (item.chain ? 'pre' : null);
       if (cue === 'wake' || cue === 'sleep') saidLog(`[chime: ${cue}]`);
       if (cue && window.ApexThemeSounds && window.ApexVoice) {
-        try { const len = ApexThemeSounds.play(ApexVoice.unlock(), ApexThemeSounds.recipe(state.theme, cue)); await new Promise(r => setTimeout(r, len * 1000 + 40)); } catch (_) {}
+        try { const len = ApexThemeSounds.play(ApexVoice.unlock(), ApexThemeSounds.recipe(state.theme, cue, Themes.get(state.theme).sounds)); await new Promise(r => setTimeout(r, len * 1000 + 40)); } catch (_) {}
       }
       const duck = ApexSpeechQueue.ducks(item, isSpirited());
       let played = false;
@@ -5350,6 +5358,18 @@
     function fillPreview(box, t) {
       const c = t.day, st = window.ApexVocabulary && ApexVocabulary.sampleStrip(state.noteWords, vocabDeps());
       box._words = state.noteWords;
+      if (t.car && t.car.dial && t.car.meter) {
+        // a car's own theme: its card is the car's cluster, parked (needles at rest: no reading is shown), and the car from
+        // above in its paint
+        box.classList.add('tp-car');
+        for (const [k, v] of [['--car-needle', t.car.needle && t.car.needle.day], ['--car-ring', t.car.ring && t.car.ring.day], ['--car-disc', t.car.disc && t.car.disc.day],
+          ['--car-lamp', t.car.lamp && t.car.lamp.day], ['--font-dial', t.fonts.dial]]) if (v) box.style.setProperty(k, v);
+        if (t.car.finish) box.dataset.finish = t.car.finish;
+        box.replaceChildren();
+        for (const slot of ['dial', 'meter']) { const g = el('div', { className: 'tp-g' }); box.append(g); Inst.carGauge(g, t.car[slot], slot)({}); }
+        const sil = el('span', { className: 'tp-silhouette' }); sil.innerHTML = Themes.carSVG(t, c.panelInk, 96, 40, { rotate: true }); box.append(sil);
+        return;
+      }
       if (!st) { box.innerHTML = ''; return; }
       box.innerHTML = `<span class="tp-tulip">${Inst.tulipSVG(st.note, c.panelInk, c.accent)}</span><span class="tp-call"><b></b><i></i></span><span class="tp-speed"><b></b><small></small></span>`;
       box.querySelector('.tp-call b').textContent = st.head.toUpperCase();
@@ -5385,7 +5405,7 @@
           card.append(preview,
             el('div', { className: 'tc-head' }, el('b', { textContent: t.label }), ...(t.pro ? [el('span', { className: 'tc-pro', textContent: 'PRO' })] : t.granted ? [el('span', { className: 'tc-pro', textContent: 'PRIVATE' })] : []), key),
             el('p', { className: 'note', textContent: t.about || t.blurb || '' }),
-            el('div', { className: 'tc-voice' }, el('p', {}, el('b', { textContent: `Voice: ${t.voice ? t.voice.name : '--'}. ` }), quote), hear));
+            el('div', { className: 'tc-voice' }, el('p', {}, el('b', { textContent: `Suggested voice: ${t.voice ? t.voice.name : '--'}. ` }), quote), hear));
           themeCards.set(t.id, { t, card, preview, key, inUseTag, ok, quote, line });
           return card;
         }));
@@ -5491,20 +5511,27 @@
       closeHighlightDialog(); renderHighlights(); toast(`Spot saved · ${name}`);
     });
 
-    // Voices come with themes (REVIEW.md 4.4, roadmap 18): Roadbook's Marguerite, Tapedeck's Kit, Billet's Hale. The voice
-    // list and custom voices are gone; the theme's pack is used whenever its bank is on the phone, the phone's own voice
-    // only when it isn't (or for words no bank has). (bankVoices is declared with the state, before the first applyTheme.)
+    // A theme suggests a voice (REVIEW.md 4.4, roadmap 18): Roadbook's Marguerite, Tapedeck's Kit, Billet's Hale, and each
+    // private theme's own. The driver can pick any pack in the Garage (Look and voice: data-pack, one home), with any theme,
+    // and that choice stays across theme changes; Suggested goes back to the look's. A pack is used whenever its bank is on
+    // the phone, the phone's own voice only when it isn't (or for words no bank has). (bankVoices is declared with the state.)
     function themeVoice() {
-      const want = look && look.theme && look.theme.voice ? look.theme.voice.id : null;
+      const want = state.voicePick || (look && look.theme && look.theme.voice ? look.theme.voice.id : null);
       if (want && bankVoices.some(v => v.id === want)) { state.voiceId = want; state.voiceStyle = 'codriver'; }
       else if (!bankVoices.some(v => v.id === state.voiceId)) { state.voiceId = 'device'; state.voiceStyle = 'codriver'; }
     }
     function renderVoiceList() { themeVoice(); }
+    function packName(id) { const v = bankVoices.find((x) => x.id === id); return v ? v.name : id.charAt(0).toUpperCase() + id.slice(1); }
+    document.querySelectorAll('[data-pack]').forEach((b) => b.addEventListener('click', () => {
+      state.voicePick = b.dataset.pack === 'look' ? null : b.dataset.pack;
+      themeVoice(); savePrefs(); paintSwitches();
+      if (window.ApexVoice && state.voiceId !== 'device') ApexVoice.load(state.voiceId).catch(() => {});
+    }));
     // Key sounds (REVIEW.md 4.2): the theme's own click on its keys; off in Garage > Co-driver
     document.addEventListener('pointerdown', (e) => {
       const k = e.target.closest && e.target.closest('.key, .ink-btn, .rec-key, .btn-start, .map-key, .find-key, .switch > button, .detents > button, .stamps > button');
       if (!k || state.toggles.keys === false || !window.ApexThemeSounds || !window.ApexVoice) return;
-      try { ApexThemeSounds.play(ApexVoice.unlock(), ApexThemeSounds.recipe(state.theme, 'key')); } catch (_) {}
+      try { ApexThemeSounds.play(ApexVoice.unlock(), ApexThemeSounds.recipe(state.theme, 'key', Themes.get(state.theme).sounds)); } catch (_) {}
     }, { passive: true });
     // Hear on a theme card: that pack's own sample line, then back to the voice in use
     // HE-3: a theme card's sample as a drive says it: the call (plain words in the phone's voice, rally notes from the pack's
@@ -6704,7 +6731,8 @@
       if (!model) return;
       const css = getComputedStyle(document.documentElement), v = (k) => css.getPropertyValue(k).trim();
       const cv = ApexDriveCard.drawCard(document.createElement('canvas'), model,
-        { panel: v('--panel'), panelInk: v('--panel-ink'), panelDim: v('--panel-dim'), accent: v('--accent'), fontNum: v('--font-num'), fontUi: v('--font-ui') });
+        { panel: v('--panel'), panelInk: v('--panel-ink'), panelDim: v('--panel-dim'), accent: v('--accent'), fontNum: v('--font-num'), fontUi: v('--font-ui') },
+        { car: look.theme.car && look.theme.car.silhouette ? { silhouette: look.theme.car.silhouette, paint: look.theme.car.paint && look.theme.car.paint.hex, name: look.theme.label } : null });
       const out = await ApexDriveCard.shareCard(cv, `${(endDrive.name || 'drive').replace(/[^A-Za-z0-9 _-]+/g, '').trim() || 'drive'}.png`);
       if (out === 'saved') toast('Card saved.');
     });
