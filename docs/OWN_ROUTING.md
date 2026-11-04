@@ -393,6 +393,70 @@ phone's reader); tests/test_graph_tiles.py round-trips through both. What a rout
     then dominance); `apexDebug.lastLoop` lists every loop with its kind, value, highway share, corners, time and pick.
   - Live before and after (the real app in Playwright, production's Worker; table in STATE.md 2026-11-06).
 
+- 2026-11-07: instant and offline; Valhalla only as backup (branch claude/own-routing-instant; CALL_SHEET 2026-11-07):
+  - **Timeline per plan:** `apexDebug.timeline` ([what, start, end] ms from the plan's start): the worker's quickest
+    and plan, members' roads, each context provider, the Valhalla checks and instructions, towns, ranking, each track
+    build (yield, resample, the analysis worker, corners) and each draw with its card; `lastOwn` adds viewMs, geoMs,
+    partial and quickLoadMs.
+  - **Removed from the critical path** (first route to final card), in the order the timeline showed them:
+    (1) members' roads: the plan waited up to 1.5 s (signed out 0.2-0.3 s for "sign in" on every plan); now kept per
+    cell on the phone, signed out not asked, 0.25 s budget, the fresh answer into the after-card plan;
+    (2) a second build and draw of our quickest when it is the pick (0.2-0.4 s); now it is kept, alternates or not;
+    (3) localTime's formatToParts per sample (75 ms of each ranking on 30 km), now per minute and zone;
+    (4) the engine re-evaluating a candidate for every ranking of the same pool (lead, Prefer, three level cards);
+    (5) the pick's track queued behind a track built ahead that the ranking didn't pick: a second analysis worker,
+    started with the first (its own start was 0.2-0.3 s when made late);
+    (6) the page's turn before a track built ahead (it waited 0.1-0.35 s behind the map's frames);
+    (7) the routes' light geometry on the page: now made in the routing worker, the same function on the same line;
+    (8) the plan's tile loading competing with the first route's in the worker (0.1-0.3 s on a first visit);
+    (9) a first plan made on the line's tiles alone picked a 37 min route against 27 (Harrison cold): the corridor's
+    tiles get 0.7 s first, and the refine replaces a route the whole corridor shows is over budget.
+    Not on it (checked): Valhalla's checks (after the first draw, joined only when in), its instructions (swap in later).
+  - **Live, 8 cases, local serve of web/ (as the app bundles it) with /api relayed to production; before = origin/main
+    at #305, after = this branch on it; ms from Enter: first route drawn / final card; cold = a fresh profile, warm =
+    the same profile reopened (tiles in IndexedDB):**
+
+    | case | before cold | after cold | before warm | after warm |
+    |---|---|---|---|---|
+    | subdivision fun | 207 / 1078 | 225 / 517 | 176 / 880 | 230 / 463 |
+    | subdivision4 fun | 195 / 873 | 199 / 602 | 223 / 662 | 240 / 583 |
+    | northgate fun | 369 / 1510 | 404 / 1291 | 213 / 1152 | 277 / 992 |
+    | harrison fun | 384 / 1446 | 404 / 1235 | 425 / 1500 | 396 / 1174 |
+    | colerain quick | 388 / 981 | 371 / 728 | 339 / 921 | 309 / 648 |
+    | colerain fun | 388 / 1222 | 343 / 880 | 414 / 1268 | 382 / 921 |
+    | colerain max | 271 / 1422 | 329 / 923 | 274 / 1130 | 422 / 912 |
+    | owner1 fun | 243 / 976 | 347 / 848 | 241 / 837 | 232 / 635 |
+
+    The pick is the same route as before's in 16 of 16 runs (scratchpad instant/judge2.js). Met: the first route under
+    0.5 s warm (8/8), the final card under 1.5 s cold (8/8). Not met: the card under 1 s warm in 6 of 8 (harrison 1.17 s,
+    northgate 0.99 s; what's left there is the context's main-thread work 0.15-0.25 s, the first ranking 0.1 s and the
+    pick's track analysis 0.15-0.2 s, sight distance being most of it). Numbers in a headless browser whose map renders
+    in software on a loaded 4-core box: noisy by 0.1-0.2 s; production (the tiles over the network) is slower cold.
+  - **Offline, demonstrated** (e2e "offline: plan a route and a loop from our tiles with no network": every request but
+    the app's own files refused, then the browser's offline switch as well): Quick, Fun and Long way to a saved place
+    in 0.4-0.7 s each with our own turn instructions, the card saying "No signal: the weather and live road events on
+    this route aren't known."; typed search says it is offline; a map tap's coordinates route; a loop from our tiles; a
+    plan with the browser offline. Before this branch the same flow failed only on the card (the weather line was
+    hidden, read as "nothing to say"). Can't work offline: typed search, the basemap where no area was saved, weather,
+    events, live hazards, Valhalla's maneuvers (lanes, exits), posted limits from map matching, members' roads not kept,
+    region tiles never fetched, the traffic detour.
+  - **Valhalla, call by call, where our tiles cover the trip** (after this round):
+
+    | call | where | on the critical path? | still needed for |
+    |---|---|---|---|
+    | `valhallaRoutes([from, to], 2)` (its quickest) | funRoute check | no: asked after the first route is drawn, joins the ranking only if in when our context is | the one clock (oneClock), a sanity check; the route when ours fail |
+    | `valhallaRoutes(..., highwayCosting)` | funRoute check | no (as above) | the same |
+    | OSRM after a failed Valhalla check | funRoute | no | the fallback's fallback |
+    | `valhallaMatrix` + stage legs (`connectorCosting`) | funRoute stage plans | skipped with our routes | trips off our tiles |
+    | `trace_route` (turn instructions) | ownInstructions, ownInstructLater | no: ours go up with the route, Valhalla's swap in when they come (3 s cap) | lane, exit and roundabout wording until ours are as good |
+    | stage discovery + `valhallaMatrix` + stage legs + circle | buildLoop | **was** (every loop waited for them); now after the card (loopRefine) when our tiles have loops | loops off our tiles; stage loops that the level ranks first |
+    | `valhallaRoutes(points)` | reroute | **was** (a reroute needed the network); now our `through` where the tiles cover | reroutes off our tiles |
+    | `valhallaRoutes(pts)` | Best roads nearby's road, a suggestion, Drive it again, a road link, buildRoute(points) (Home, a link's or GPX file's stops) | **was**; now our `through` | the same, off our tiles |
+    | `valhallaMatrix` | Explore (Best roads nearby list) | skipped with our tiles (already) | off our tiles |
+    | `valhallaRoutes` + `exclude_polygons` | trafficDetour (iOS, Apple traffic) | not planning: during a drive, after a jam | needs Valhalla's jam polygons; needs the network for traffic anyway |
+    | `trace_attributes` | attachLimits (posted limits on the card and the strip) | no (after the card) | limits; offline they stay unknown (our tiles carry limits: a next step) |
+    | `trace_attributes` | contributor.js (an upload's OSM way lines) | no | contributions (online anyway) |
+
 - 2026-11-04 (region grid): the context grid for OH+KY+IN on graph-data ctx/v1 (ctx-region.yml, 6 shards, 32 min):
   33 bundles, 35.6 MB, 1.46 M HPMS road spans, 13,574 fatal crashes; served at /api/ctx/v1/ (KV first, then the branch).
   The region graph was rebuilt with it (build 2026-45-95960e6d-gebab6b, 584 tiles, 228.9 MB; Columbus tile 388_519:
