@@ -3562,24 +3562,38 @@
     async function changeLevel(level) {
       if (!FunRoute.LEVELS[level] || level === funLevel || $('planPanel').classList.contains('busy') || loopBusy || optionBusy) return;
       const was = funLevel, t = plannedRoute, o = routeOptions;
-      // the switch you tapped stays under your finger: the card above it is drawn again for the new route (its lines can
-      // be fewer, or wrap otherwise), so the scroll is moved by however far the switch moved. The browser's own scroll
-      // anchoring picks some element of its choosing, and on CI it picked one above the change (#297's flow, 41 px)
-      const sw = () => { const e = document.getElementById('routeCardFun'); return e ? e.getBoundingClientRect().top : null; };
-      const y0 = sw();
-      const keep = () => { const y1 = sw(), b = $('planBody'); if (y0 != null && y1 != null && b && Math.abs(y1 - y0) > 0.5) b.scrollTop += y1 - y0; };
-      // the card keeps settling for a moment after the re-rank (the note, the tiles, the profile's slot), so the switch is
-      // held for 600 ms of frames, with the browser's own anchoring off for that moment so the two never fight
-      const hold = () => {
-        const b = $('planBody'); if (b) b.style.overflowAnchor = 'none';
-        const end = performance.now() + 600;
-        const step = () => { keep(); if (performance.now() < end) requestAnimationFrame(step); else if (b) b.style.overflowAnchor = ''; };
-        step();
+      // the switch you tapped stays under your finger. The card above it is drawn again for the new route and can be far
+      // shorter (CI, 2026-11-05: 90 px, the sheet itself moved 4 px), so the scroll is set from where the switch now is in
+      // the content, not nudged by how far it moved: scrollTop = its content offset - where it was on screen relative to
+      // the scroller's top, clamped. Applied on every resize of the card or the scroller until neither has changed size
+      // for two frames, with the browser's own scroll anchoring off meanwhile so nothing else moves it.
+      const swEl = () => document.getElementById('routeCardFun');
+      const y0 = swEl() ? swEl().getBoundingClientRect().top : null;
+      const settle = () => {
+        const b = $('planBody'), card = $('routeCard');
+        if (y0 == null || !b) return;
+        const apply = () => {
+          const e = swEl(); if (!e) return;
+          const top = b.getBoundingClientRect().top, offset = e.getBoundingClientRect().top - top + b.scrollTop;
+          b.scrollTop = Math.max(0, Math.min(b.scrollHeight - b.clientHeight, offset - (y0 - top)));
+        };
+        b.style.overflowAnchor = 'none';
+        const ro = typeof ResizeObserver === 'function' ? new ResizeObserver(apply) : null;
+        if (ro) { ro.observe(b); if (card) ro.observe(card); }
+        let stable = 0, last = null;
+        const t1 = performance.now();
+        const tick = () => {
+          apply();
+          const size = `${b.scrollHeight}x${b.clientHeight}x${card ? card.scrollHeight : 0}`;
+          stable = size === last ? stable + 1 : 0; last = size;
+          if (stable >= 2 || performance.now() - t1 > 2000) { if (ro) ro.disconnect(); b.style.overflowAnchor = ''; } else requestAnimationFrame(tick);
+        };
+        apply(); requestAnimationFrame(tick);
       };
       setFunLevel(level);
       if (t && o && o.current === t && state.mode !== 'live') {
-        if (o.kind === 'loop') { await relevelLoop(o, level); hold(); return; }
-        if (o.pool && LEVEL_ORDER[level] <= LEVEL_ORDER[o.builtLevel || 'quick']) { if (!(await rerank(o, level))) setFunLevel(was); hold(); return; }
+        if (o.kind === 'loop') { await relevelLoop(o, level); settle(); return; }
+        if (o.pool && LEVEL_ORDER[level] <= LEVEL_ORDER[o.builtLevel || 'quick']) { if (!(await rerank(o, level))) setFunLevel(was); settle(); return; }
       }
       if (!(await replanForLevel(FunRoute.LEVELS[level].label))) setFunLevel(was);
     }
