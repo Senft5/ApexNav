@@ -4,6 +4,30 @@ Decisions Claude made for you, newest first. Each one says what was decided, why
 you reach one you've seen. If you disagree with a call, say so and it gets reversed; nothing here is hard to undo unless
 it says so. Things only you can do are in docs/OWNER_TODO.md.
 
+## 2026-11-04 (late): Best roads nearby never a neighbourhood; a Satellite layer for the two of you
+
+Your report: the top pick near you was a residential neighbourhood. On your point the map's stage search (what the app
+used before our tiles, and still uses where they find nothing) put Lafayette Avenue through Clifton first: residential all
+along, 57 addresses per km, posted 25 mph, our tiles' quality 0.10, but 10 good corners. Corners counted; what the road is
+didn't, unless the live context happened to answer in time.
+- **A neighbourhood street is never a best road.** Residential, living-street or service class with houses every 25 m,
+  density 6+, or a posted 25 mph among houses (fun_route.js `STREET`). Class alone never counts (county lanes tagged
+  residential stay: Second Creek Road, Big Cedar Road). Undo: `streetSample` returns null.
+- **Where our tiles cover a map stage, a road our model scores under 0.45 isn't listed** (the bar our own search already
+  had). Undo: the `'poor'` line in route_engine.js `rescoreStages`.
+- **Through roads only**: a stage's end that runs into a dead end is cut back to the last junction; a road that only
+  leads to its own dead end (Cook Road, Mudlick Road, Second Creek Road) is no longer listed. Undo: the two cut-back
+  lines in graph_router.js `explore`.
+- **The list shows only stages the engine checked** once it checked any (the first 12), so an unchecked 13th can't fill in.
+  Undo: `looked` in fun_route.js `exploreShortlist`.
+- Not fixed: outside our tiles, or with own routing off, when the live context is too slow to say, a neighbourhood is
+  unknown and can still be listed.
+- **Satellite in Layers, for you and @fish5spd only.** The server says `developer: true` in `/api/me` to the owner
+  (`OWNER_EMAIL`) and to his address's fingerprint (the same one tools/crash_logs.py follows his notes by). If his Google
+  or Apple sign-in address differs from his TestFlight one, he won't get it: add his sign-in address's fingerprint to the
+  Worker var `DEV_FINGERPRINTS` (OWNER_TODO). Imagery: USGS The National Map (public domain, US only, sharp to zoom 16),
+  under our roads and routes, the base map's labels on top. No migration. Undo: drop `developer` from `/api/me`.
+
 ## 2026-11-05 (night): Planning with our tiles, the speed round
 
 - **The route card is final as soon as our tiles have ranked the routes**, with the weather and events as last

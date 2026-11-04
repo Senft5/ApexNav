@@ -35,6 +35,7 @@ import { ctxKeys, workzones } from "./route_feeds";
 import { osmTile } from "./osm_relay";
 import { traceTile } from "./trace_relay";
 import { grantedThemes } from "./themes";
+import { isDeveloper } from "./developers";
 import { coverage, exportRoads, roadBins } from "./roads";
 import { crewStandings } from "./standings";
 import { crewBoard, publishDriveScores } from "./drive_scores";
@@ -105,7 +106,7 @@ on("GET", "/api/me", async (req, env) => {
   // private themes granted to this account by hand (migration 0044): their looks, for this account only; [] for everyone else
   const themes = await grantedThemes(env, v.id);
   return json({ signed_in: true, id: v.id, handle: v.handle, name: v.displayName, member: v.member, requests: waiting?.n ?? 0, photo_id: photo?.photo_id ?? null,
-               themes, ...(v.member && isModerator(env, v) ? { moderator: true } : {}) });
+               themes, ...(v.member && isModerator(env, v) ? { moderator: true } : {}), ...(await isDeveloper(env, v) ? { developer: true } : {}) });
 });
 on("POST", "/api/invites/redeem", async (req, env) => { await redeemInvite(env, await requireUser(req, env), req); return noContent(); });
 on("POST", "/api/invites/preview", async (req, env) => json(await invitePreview(env, await requireMember(req, env), req)));   // P-02: whose friend link

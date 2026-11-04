@@ -144,7 +144,7 @@
       theme: 'roadbook', camFeel: 'dynamic', voiceId: 'marguerite', voicePick: null, liveVoice: false, voiceStyle: 'codriver', voiceName: '', hlOn: false, hlStrength: 1,
       notesMode: 'auto', nightMode: 'auto', musicMode: 'lower',   // Notes: auto | full | quiet. Night: auto (sunset/sunrise) | on | off
       noteWords: 'plain',                     // rally ("Left 4 minus") | plain ("Medium left"), IDEAS V-02; a saved setting wins
-      toggles: { stage: false, voice: true, lpr: true, dna: false, night: false, twisty: true, haptics: true, crash: true, health: true, terrain: false, coverage: false, keys: true, friends: false, nudge: false }   // twisty on by default (panel D-2), the weekly reminder off until asked for (R-1); stage and night are derived from the two modes; analysis.html reads toggles.night
+      toggles: { stage: false, voice: true, lpr: true, dna: false, night: false, twisty: true, haptics: true, crash: true, health: true, terrain: false, coverage: false, keys: true, friends: false, nudge: false, satellite: false }   // twisty on by default (panel D-2), the weekly reminder off until asked for (R-1); stage and night are derived from the two modes; analysis.html reads toggles.night
     };
     const NOTES_MODES = ['auto', 'full', 'quiet'], NIGHT_MODES = ['auto', 'on', 'off'], MUSIC_MODES = ['lower', 'pause'];
     const MODE_LABEL = { auto: 'Auto', full: 'Full', quiet: 'Quiet', on: 'On', off: 'Off' };
@@ -447,6 +447,31 @@
         paint: { 'line-color': ['get', 'c'], 'line-width': width(4, 9) } });
     }
     const emptyFC = () => ({ type: 'FeatureCollection', features: [] });
+    // Satellite, for developers only (the owner, 2026-11-04: to troubleshoot picks like a neighbourhood ranked a best road):
+    // USGS The National Map's orthoimagery (USDA NAIP and USGS, public domain; the US only; tiles to zoom 16, stretched past
+    // it) over the base map's fills and road lines, under our twisty and measured roads, the labels and every route line,
+    // so what a road physically is shows under what we say about it. Drawn only while the server's /api/me says this account
+    // is a developer (backend/src/developers.ts: the owner and the co-developer); a switch left on in localStorage, or by
+    // another account on this phone, draws nothing and asks for no tile.
+    const SAT_TILES = 'https://basemap.nationalmap.gov/arcgis/rest/services/USGSImageryOnly/MapServer/tile/{z}/{y}/{x}';
+    let devAccess = false;
+    function applySatellite() {
+      if (!mapReady) return;
+      const on = devAccess && !!state.toggles.satellite;
+      if (on && !map.getLayer('apex-satellite')) {
+        if (!map.getSource('apex-satellite-src')) map.addSource('apex-satellite-src', { type: 'raster', tiles: [SAT_TILES], tileSize: 256, maxzoom: 16,
+          attribution: 'Imagery: <a href="https://www.usgs.gov/programs/national-geospatial-program/national-map">USGS The National Map</a> (USDA NAIP), public domain' });
+        map.addLayer({ id: 'apex-satellite', type: 'raster', source: 'apex-satellite-src', paint: { 'raster-fade-duration': 150 } }, map.getLayer('apex-twisty') ? 'apex-twisty' : undefined);
+      } else if (!on && map.getLayer('apex-satellite')) { map.removeLayer('apex-satellite'); map.removeSource('apex-satellite-src'); }
+    }
+    // /api/me's word on developer tools: only a fresh answer counts (none at start, offline keeps none)
+    function applyDevFlags(me) {
+      if (!me || typeof me.signed_in !== 'boolean') return;
+      devAccess = !!(me.signed_in && me.member && me.developer === true);
+      $('satSwitch').hidden = !devAccess;
+      if (!devAccess && state.toggles.satellite) { state.toggles.satellite = false; savePrefs(); paintSwitches(); }
+      applySatellite();
+    }
 
     function mixHex(a, b, t) {
       const p = (h) => [1, 3, 5].map(i => parseInt(h.slice(i, i + 2), 16));
@@ -542,6 +567,7 @@
     map.on('load', () => {
       mapReady = true;
       addApexLayers();
+      applySatellite();
       restyleBasemap();
       // U-68: the canvas shows only now it is ours. REVIEW_FEEL F-03: the cover lifts on the first frame that has the base map's
       // first tile in our style, not when the last tile and the terrain have come in: the rest fills in under the deck, as in
@@ -3396,10 +3422,7 @@
     // Coverage is answered on the page from index.json (fetched once): asking the worker queued the question behind its
     // tile loading, live on the preview 1.5 s, and the plan gave up on our tiles (2026-11-05)
     let ownIndexP = null;
-    // the shipped tiles' index and the region's (graph_tiles.js index(): the union, the region's asked once a day), so a
-    // trip anywhere in OH+KY+IN is ours; without the reader, the shipped index alone
-    const ownIndex = () => (ownIndexP || (ownIndexP = (window.ApexGraphTiles && ApexGraphTiles.index ? ApexGraphTiles.index()
-      : fetch('data/graph/v1/index.json').then((r) => (r.ok ? r.json() : null))).then((j) => ApexGraphRouter.indexKeys(j))
+    const ownIndex = () => (ownIndexP || (ownIndexP = fetch('data/graph/v1/index.json').then((r) => (r.ok ? r.json() : null)).then((j) => ApexGraphRouter.indexKeys(j))
       .catch(() => { ownIndexP = null; return new Set(); })));
     const ownRouter = () => (ownClient || (ownClient = Object.assign(ApexGraphRouter.client({ url: 'graph_worker.js', timeoutMs: OWN_PLAN_MS }),
       { covers: (points) => ownIndex().then((keys) => ApexGraphRouter.covers(keys, points)) })));
@@ -5054,6 +5077,7 @@
       try { const r = await apiCall('GET', '/api/me'); if (r.ok && (r.headers.get('content-type') || '').includes('json')) me = await r.json(); } catch (_) {}
       if (gen !== renderGen) return;
       try { applyThemeGrants(me); } catch (e) { console.error('theme grants', e); }   // the account's private themes, or none
+      try { applyDevFlags(me); } catch (e) { console.error('dev flags', e); }          // developer tools (Satellite), or none
       // F-03: People and the Garage are never drawn without their modules while they are open; once loaded, needSocial draws them
       if (!socialIn && !socialFailed && (view === 'people' || view === 'garage')) { needSocial(); return; }
       accountMe = me && me.signed_in ? me : null;
@@ -5774,19 +5798,8 @@
       placeAsk.at = Date.now(); placeAsk.lat = p.lat; placeAsk.lon = p.lon;
       const la = p.lat.toFixed(2), lo = p.lon.toFixed(2), d = {};
       try { const r = await RouteLoading.json(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${la}&lon=${lo}&zoom=12&addressdetails=1`, {}, 6000); d.place = ApexPlacePlate.town(r); } catch (_) {}
-      // the forecast's now and its last 3 hours of rain, and (US) the nearest NWS stations' latest observation, together
-      const om = RouteLoading.json(`https://api.open-meteo.com/v1/forecast?latitude=${la}&longitude=${lo}&current=temperature_2m,weather_code,precipitation&hourly=precipitation&past_hours=3&forecast_hours=1&timezone=GMT`, {}, 6000)
-        .then((w) => { if (w && w.current) { d.tempC = w.current.temperature_2m; d.code = w.current.weather_code; d.mmNow = w.current.precipitation; } d.mm3h = ApexPlacePlate.pastMm(w); }).catch(() => {});
-      const nws = (async () => {
-        const pt = await RouteLoading.json(`https://api.weather.gov/points/${la},${lo}`, {}, 6000);
-        const st = await RouteLoading.json(pt.properties.observationStations, {}, 6000);
-        const ids = ((st && st.features) || []).slice(0, 3).map((f) => f.properties && f.properties.stationIdentifier).filter(Boolean);
-        const got = await Promise.allSettled(ids.map((id) => RouteLoading.json(`https://api.weather.gov/stations/${id}/observations/latest`, {}, 6000)));
-        const obs = got.filter((g) => g.status === 'fulfilled').map((g) => ApexPlacePlate.obsOf(g.value && g.value.properties)).filter(Boolean);
-        obs.sort((a, b) => a.ageMin - b.ageMin);                         // the freshest of the nearest three
-        d.obs = obs[0] || null;
-      })().catch(() => {});
-      await Promise.all([om, nws]);
+      try { const w = await RouteLoading.json(`https://api.open-meteo.com/v1/forecast?latitude=${la}&longitude=${lo}&current=temperature_2m,weather_code`, {}, 6000);
+        if (w && w.current) { d.tempC = w.current.temperature_2m; d.code = w.current.weather_code; } } catch (_) {}
       placeAsk.data = d;
       $('placePlate').textContent = ApexPlacePlate.text(d, ApexUnits.metric());
       paintPlacePlate();
@@ -6455,6 +6468,10 @@
       state.toggles[k] = !state.toggles[k];
       paintSwitches();
       if (k === 'lpr') updatePins();
+      if (k === 'satellite') {                                         // developers only (applyDevFlags); anyone else: stays off
+        if (!devAccess) { state.toggles.satellite = false; paintSwitches(); return; }
+        applySatellite();
+      }
       if (k === 'haptics' && state.toggles.haptics) haptic('note');   // feel it once
       if (k === 'terrain') {
         if (state.toggles.terrain && mapReady && state.mode !== 'live' && map.getPitch() < 40) map.easeTo({ pitch: 60, duration: 800 });
