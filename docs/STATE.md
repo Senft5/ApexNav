@@ -15,6 +15,8 @@
   docs/ROUTE_ENGINE.md (lands with the engine PR).
 - Local e2e flakes under heavy machine load ("Where to?" suggestion, "car map glides"); green in CI. Re-check idle.
 - Unverified: Swift (ApexContext for calendar/album; CI compiles), the engine on a real drive, the Kentucky relay live.
+- [x] Route engine fixed on the live network (#293): live checks on five real trips pick the expected roads; planning
+  4.4-6.6 s. tests/test_route_engine_live.py holds the live captures. Still slow-ish: first route 1.3-2.4 s (target 1.5).
 - Exact next task: a real drive with the engine (owner), the wider-region context grid once its storage is set up, then
   recording 8 / panel round 3.
 
