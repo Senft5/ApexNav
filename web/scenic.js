@@ -64,6 +64,50 @@
     return line.charAt(0).toUpperCase() + line.slice(1);
   }
 
-  const api = { along, fuelGap, summary, NEAR_M, FUEL_WARN_M };
+  /**
+   * Which pins the map shows so none overlap (the owner, 2026-11-04: "a pile of overlapping FUEL labels"). `pins` =
+   * [{ kind, named, m, x, y, w, h }]: the pin's centre and size on screen, `m` its place along the route; `view` = { w, h }.
+   * The most useful first: named viewpoints, other viewpoints, cafés, fuel; within a kind, spread along the route (the
+   * first, then each time the one farthest from those already kept). A pin that would touch one already shown is hidden
+   * (PAD px apart, PAD_SAME between two of a kind), and at most KEEP of a kind are shown on screen at once. Pins off the
+   * screen don't count and stay as they are. Returns a boolean per pin, true = shown.
+   */
+  const KIND_RANK = { view: 0, cafe: 1, fuel: 2 }, KEEP = { view: 6, cafe: 4, fuel: 4 }, PAD = 4, PAD_SAME = 24;
+  function declutter(pins, view = null) {
+    const list = pins || [], show = list.map(() => true);
+    const on = list.map((p, i) => i).filter((i) => {
+      const p = list[i];
+      if (!p || !finite(p.x) || !finite(p.y)) return false;
+      return !view || (p.x >= 0 && p.y >= 0 && p.x <= view.w && p.y <= view.h);
+    });
+    const order = [];
+    for (const kind of Object.keys(KIND_RANK).sort((a, b) => KIND_RANK[a] - KIND_RANK[b])) {
+      for (const named of kind === 'view' ? [true, false] : [null]) {
+        const left = on.filter((i) => list[i].kind === kind && (named == null || !!list[i].named === named)).sort((a, b) => (list[a].m || 0) - (list[b].m || 0));
+        const kept = [];
+        while (left.length) {
+          let k = 0;
+          if (kept.length) {
+            let far = -1;
+            left.forEach((i, j) => { const d = Math.min(...kept.map((m) => Math.abs((list[i].m || 0) - m))); if (d > far) { far = d; k = j; } });
+          }
+          const [i] = left.splice(k, 1);
+          kept.push(list[i].m || 0); order.push(i);
+        }
+      }
+    }
+    for (const i of on) if (!(list[i].kind in KIND_RANK)) order.push(i);   // another kind: last, still kept off the others
+    const placed = [], count = {};
+    for (const i of order) {
+      const p = list[i], w = finite(p.w) ? p.w : 40, h = finite(p.h) ? p.h : 16;
+      const box = { x0: p.x - w / 2, x1: p.x + w / 2, y0: p.y - h / 2, y1: p.y + h / 2, kind: p.kind };
+      const hit = placed.some((b) => { const g = b.kind === box.kind ? PAD_SAME : PAD; return box.x0 < b.x1 + g && b.x0 < box.x1 + g && box.y0 < b.y1 + g && b.y0 < box.y1 + g; });
+      if (hit || (count[p.kind] || 0) >= (KEEP[p.kind] || Infinity)) { show[i] = false; continue; }
+      placed.push(box); count[p.kind] = (count[p.kind] || 0) + 1;
+    }
+    return show;
+  }
+
+  const api = { along, fuelGap, summary, declutter, NEAR_M, FUEL_WARN_M };
   if (typeof module !== 'undefined' && module.exports) module.exports = api; else root.ApexScenic = api;
 })(typeof window !== 'undefined' ? window : globalThis);
