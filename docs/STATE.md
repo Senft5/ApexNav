@@ -1,6 +1,6 @@
 # VETTA — CURRENT AGENT HANDOFF STATE
 
-## Session 2026-11-05 (after the speed round): level cards and the map's labels (claude/level-cards)
+## Session 2026-11-06 (later): level cards and the map's labels (claude/level-cards)
 
 - [x] The route card's level is one control: three cards (Quick, Fun, Long way), each its pick of the routes already
   found (time, corners); a tap puts it up with nothing planned again, the card you tapped held under your finger
@@ -21,6 +21,51 @@
   loops would test a loop's level change moving the route.
 - Exact next task: the owner looks at the cards on a real 90 mi loop; then, if wanted, a loop stub with three distinct
   loops in e2e/smoke.js planRouter.
+
+## Session 2026-11-06: loops off the highway, from the best roads (claude/loops-off-highway)
+
+- [x] The owner: "it also seems to route mostly highway for loops", and "the loops don't at all need to be a circle".
+  A loop is now any route back to the start with little driven twice, built from the best roads within reach
+  (CALL_SHEET 2026-11-06; OWN_ROUTING.md §5 and §8).
+- Root causes:
+  - our router's ring legs had no highway cost, and its objective reads a motorway as good, fast road;
+  - Valhalla's stage legs and loop matrix asked `use_highways` 0.6;
+  - the loop ranking had no highway term, and the engine's quality and side-street terms favour a motorway;
+  - removeSpurs' 400-point look-ahead was the whole of a sparse own-routed loop, so 0 km loops won.
+- [x] Fixes:
+  - graph_router.js `loop`: the best stages chained one to three at a time; motorway/trunk ×2.5/×3/×4 at
+    Quick/Fun/Long way; connectors at a ≤ 3; rings only as the fallback.
+  - `loopCosting` (use_highways 0.25 at Quick, 0.1 otherwise).
+  - `FunRoute.loopRank`: highway share charged, and a loop beaten on both corners and time never wins (the owner's
+    90 mi Long way case).
+  - The circle baseline only as the last resort; spurs cut on an even 5 m line.
+- Live (the real app in Playwright on production's Worker; winner's motorway/trunk share, before → after):
+
+  | case | before | after |
+  |---|---|---|
+  | Sharon Woods 30 mi Fun / Long way | stages 52 km, 56 % / same | stages 48 km, 0 % / same |
+  | Sharon Woods 1 h Fun | own 33 km, 80 % | own 31 km, 13 % |
+  | Sharon Woods 1 h Long way | own 46 km, 90 % | own 40 km, 0 % |
+  | Sharon Woods 90 mi Long way | own 127 km, 34 % | stages 113 km, 0 % |
+  | Fountain Square 15 mi Fun | own **0 km** | own 21 km, 4 % |
+  | Fountain Square 30 mi Fun | own 38 km, 93 % | own 67 km, 11 % |
+  | Fountain Square 1 h Long way | own 31 km, 89 % | stages 43 km, 8 % |
+  | Winton Woods 15 mi Quick | stages 16 km, 0 % | own 24 km, 0 % |
+  | Winton Woods 30 mi Fun / Long way | own 50 km, 13 % / 0 % | own 31 km, 0 % (both) |
+  | Winton Woods 1 h Fun | stages 42 km, 0 % | own 31 km, 0 % |
+  | Winton Woods 90 mi Long way | circle 126 km, 0 % | stages 93 km, 0 % |
+  | Miami Whitewater 30 mi Fun / 1 h Long way | own 47 km, 0 % / 39 km, 0 % | own 40 km, 0 % / 45 km, 0 % |
+
+- Tests: tests/test_graph_router.py (motorway grid: every loop "stages", at most 20 % / 10 % / 10 % motorway),
+  tests/test_plan_options.py (the 90 mi case, highway cost), e2e "own routing: a loop from our tiles … keeps off the
+  motorway".
+- Open:
+  - Short loops (under about 25 km) from suburban starts still come from the rings, because no stage loop fits.
+  - Our loop lengths cluster (Winton Woods 30 mi: 31 or 65-75 km), so the pick can be 35 % short ("the closest good
+    loop to 30 mi").
+  - The planner's loop pick still leans on the engine's side-street terms more than on length.
+- Exact next task: a stage-loop length search (route the best combos, then re-pick the stages by the routed length
+  until one lands within 20 %); then the owner drives a Fun loop from home.
 
 ## Session 2026-11-05 (night): own routing, the speed round (claude/own-routing-fast)
 

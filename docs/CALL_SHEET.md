@@ -4,7 +4,7 @@ Decisions Claude made for you, newest first. Each one says what was decided, why
 you reach one you've seen. If you disagree with a call, say so and it gets reversed; nothing here is hard to undo unless
 it says so. Things only you can do are in docs/OWNER_TODO.md.
 
-## 2026-11-05 (after the speed round): The route card's levels are the choices (claude/level-cards)
+## 2026-11-06 (later): The route card's levels are the choices (claude/level-cards)
 
 Your note on the 90 mi loop's card ("quick, fun and long way are separate from the cards above? how the hell does that
 work?"). The coordinator decided one control; these are the calls inside it.
@@ -28,6 +28,36 @@ work?"). The coordinator decided one control; these are the calls inside it.
 - **Fixed on the way: the "weather ahead" swap on our own routes never happened** (ownRefine handed useOption a copy
   of the options it always refused). It now swaps when the refined ranking finds a clearly better route (5 points), as
   intended. Undo: the two `routeOptions = n` lines in cockpit.js ownRefine.
+
+## 2026-11-06: Loops off the highway, from the best roads
+
+- **What a loop is (your words):** any route that starts and ends at the same place, keeps the distance driven twice
+  low, and is built from the best roads within reach of the time or length you asked for. It does not need to be a
+  circle, and nothing in building or ranking loops rewards roundness any more.
+- **Our router's loops are built from the best roads, not rings.** It takes the best-scored roads within reach from our
+  tiles (the same ones Best roads nearby lists), and chains one, two or three of them back to the start: a lollipop, a
+  figure-eight, out on one good road and back on another. The rings round the start are only the fallback where no such
+  loop exists (downtown, for instance). Undo: `rings` as the only source in graph_router.js `loop`.
+- **The circle loop from Valhalla is the last resort**, only when no other loop was built or all of them failed.
+  Undo: push `circle()` into `jobs` unconditionally in cockpit.js `buildLoop`.
+- **Highways on a loop are a short link at most.** Our router costs motorway and trunk ×2.5 at Quick, ×3 at Fun, ×4 at
+  Long way on every leg of a loop. Valhalla's loop legs and the matrix between a loop's roads ask `use_highways` 0.25 at
+  Quick and 0.1 at Fun and Long way (they used 0.6, "highways welcome", which let highways carry half a loop). Undo:
+  `LOOP_HWY_X` in graph_router.js, `LOOP_USE_HIGHWAYS` in route_engine.js.
+- **The ranking charges a loop for its highway share**: 1.5 points per % beyond a tenth at Fun, a twentieth at Long way,
+  and 1 point per % beyond a quarter at Quick. The engine scored highway as good, smooth road with no side streets, so
+  before this change a loop that was 80-93 % highway won. Where the road class isn't known, nothing is charged
+  (unknown stays unknown). Undo: `LOOP_HWY` in fun_route.js.
+- **A loop beaten on both corners and time never wins**, at any level (your 90 mi Long way case: C at 2:03 and 89
+  corners was picked over A at 1:53 and 118). This applies only when the better loop doesn't have more of it driven
+  twice (5 % slack), more of it on highway (5 %), or isn't much further off the length you asked for (20 % slack, so a
+  28 mi loop isn't the answer to a 15 mi ask just because it's quicker than a slow 15). Why C won before: on a 90 mi
+  loop the corner score is a per-km rate of about 10-20 points, so 30 more corners added 4-8 points, while closeness to
+  90 mi and the road-quality terms were worth tens of points. Undo: `loopDominates` in fun_route.js `loopRank`.
+- **A loop cut to almost nothing is dropped** (under 30 % of the asked length after its spurs are cut). In production a
+  0 km "loop" from our router won a 15 mi Fun ask. The cause: the spur cutter looks 400 points ahead, which on our
+  router's sparse lines was the whole loop. Lines are now made even (5 m) before spurs are cut. Undo: the
+  `resamplePolyline` line in `buildLoop`.
 
 ## 2026-11-04 (evening): The weather word on the map
 
