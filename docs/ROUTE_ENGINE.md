@@ -28,8 +28,8 @@ How data becomes a ranking, as built (2026-11-04). Five linked diagrams: (1) sou
 quality and scenery, (3) penalties, bonuses and hard constraints, (4) a candidate's value, (5) candidates, ranking and the
 why line. The weights in them are the code's; the tables in "Weights (checked against the code)" below are read back
 from `web/route_engine.js`, `web/fun_route.js` and the providers by tests/test_route_engine_doc.py. Providers marked
-*(contract)* are another builder's and not merged on this branch yet (C, D): their channel names are the contract's. B
-(map features) and E (driver, crowd, car, phone) are merged and drawn with their real channel names.
+All five builders' providers are merged and drawn with their real channel names; what isn't built is named in its box
+(snowplough positions, city event permits, live FEMA flood zones, NC and VA work zones, FCC mobile coverage).
 A rendered copy for a phone: docs/design/route_engine_flow.html (`python3 tools/route_engine_flow.py` rebuilds it from
 this page).
 
@@ -40,13 +40,14 @@ flowchart TD
   P["Plan: A to B, loop or Explore"] --> CAND["Candidates, see diagram 5"]
   CAND --> COR["Corridor per candidate: samples every 25 m,<br>heading, bbox, etaAt from the router's<br>maneuver clock, else its total time by<br>distance, else 50 km/h; times the live pace<br>0.6 to 1.8 while driving; the Garage car"]
   COR --> RUN["ApexRouteCtx.run: every provider at once on<br>all corridors of the plan; one budget, 4 s<br>for candidates, 1.2 s for stages; each<br>provider gets min of its budgetMs and what<br>is left, and an AbortSignal at the deadline"]
+  RUN --> PH["Two phases: D's conditions, wildlife,<br>hazards-live and events, and E's car, start<br>when the rest has landed or at half the<br>budget, with their land use, terrain,<br>density, coverage and schools as<br>opts.channels, peer, places"]
   RUN --> A1["A router_edges.js, priority 10, 2.4 s,<br>stages too: one Valhalla trace_attributes<br>per candidate, edge_walk then map_snap on<br>2000 points, 2 at a time, kept 30 min per<br>line. speed_limit_kph, speed_limit_est_kph<br>flagged, speed_kph, road_class, road_use,<br>density, lanes, surface, sidewalk,<br>truck_route, bridge, tunnel, toll, ramp,<br>roundabout, signals_per_km, access_per_km,<br>intersections_per_km; points signal,<br>junction, driveway"]
   RUN --> A2["A dem.js, priority 20, 2 s, stages too: z12<br>Terrarium tiles, at most 64 a plan, shortest<br>corridors first. elev_m, grade_pct,<br>relief_m, tpi_m, aspect_rad, west_descent;<br>spans climb, descent"]
   RUN --> B1["B osm_tiles.js, 8 s:<br>lu_residential, lu_commercial, lu_retail,<br>lu_industrial, lu_forest, lu_farmland,<br>lu_open, lu_park, lu_mapped, water_near,<br>creek_follow, bldg_per_km, addr_per_km,<br>biz_per_km, junctions_per_km,<br>driveways_per_km, access_per_km, road_class<br>in map codes, on_bridge, in_tunnel, unpaved;<br>points school, worship, viewpoint, place,<br>rail_crossing, gate"]
   RUN --> B2["B osm_overpass.js, 15 s:<br>maxspeed_kph, lanes, divided, oneway,<br>surface_paved, smoothness, hgv,<br>access_level, guard_rail, cycle_route,<br>byway,<br>signals/stops/crossings/calming_per_km,<br>side_roads_per_km, driveway_joins_per_km;<br>points signal, stop, give_way, crossing,<br>calming, level_crossing, curve_sign,<br>animal_crossing, buggy, viewpoint, historic,<br>fuel; spans roundabout, one_lane_bridge,<br>covered_bridge, access_private,<br>access_destination, cycle_route, byway"]
   RUN --> B3["B road_name_age.js: name_age"]
-  RUN --> C1["C national grid (contract): night_light,<br>impervious_pct, address_per_km,<br>housing_per_km2, noise_db, aadt, iri,<br>hgv_share, canopy_pct, crash_rate,<br>built_year, signal_coverage"]
-  RUN --> D1["D time and world (contract): deer_risk,<br>fog_vis_m, crosswind_ms, road_temp_c,<br>snow_cover, foliage, park_visitors,<br>photo_per_km; spans school, church, event,<br>works, closure, flood, harvest, unploughed"]
+  RUN --> C1["C context_grid.js, 4 s, local bundles<br>web/data/ctx/v1 then the Worker's KV:<br>night_lights, impervious_pct, canopy_pct,<br>noise_db, housing_density,<br>population_density, address_density,<br>median_year_built, flood_zone,<br>cropland_class, park_visits, aadt, iri,<br>hpms_speed_limit, hpms_lanes, hpms_fclass,<br>crash_density; mobile_coverage not built<br>(always unknown); spans nps_unit; points<br>fatal_crash"]
+  RUN --> D1["D, second phase with the first's land use<br>and terrain: conditions.js air_temp_c,<br>road_temp_c, visibility_m, fog_risk,<br>crosswind_mps, exposure, precip_6h/48h_mm,<br>wx_hazard, light, glare, golden_view;<br>wildlife.js deer_time_risk, deer_risk;<br>events.js event_crowd, school_zone,<br>school_bus_hour, church_window;<br>hazards_live.js flood_risk, works,<br>harvest_traffic, park_busy, foliage, spans<br>closure, works, flood, low-water, paving;<br>photos.js photo_score, sign_maxspeed_mps,<br>curve_sign. Not built: snowplough (no OHGO<br>endpoint), city permits, FEMA flood zones live,<br>NC and VA work zones"]
   RUN --> E1["E crowd.js, 9 s: crowd_rough_g, crowd_bank_deg,<br>crowd_curv, crowd_conf, crowd_flow, loved,<br>taste, crowd_busy (quiet_hours flag, off);<br>needs lookup /api/roads, crewLines, myTracks"]
   RUN --> E2["E driver.js, 8 s: passenger_cost, tech_level,<br>skill_fit, dark, lit, cyclist_route,<br>cyclist_time, tunnel, driver_fit; spans<br>hairpins, abrupt, unlit_dark, cycle_route,<br>tunnel; For this drive prefs passenger,<br>lit, cyclists, tunnels"]
   RUN --> E3["E car.js, 8 s: fuel_since_km, fuel_margin,<br>signal; spans fuel_gap hard, fuel_check,<br>no_signal; points fuel_stop, share_eta,<br>ask_range; needs apiGet /api/chargers"]
@@ -58,6 +59,7 @@ flowchart TD
   MERGE --> STAT["status per provider: ok, partial,<br>unavailable, no-key, out of time; onUpdate<br>as each lands"]
   MERGE --> CANON["channel: canonical name, gaps filled from<br>aliases and other providers' names, e.g.<br>maxspeed_kph to speed_limit_kph, biz_per_km<br>to business_per_km, lu shares where<br>lu_mapped at least 0.3"]
   CANON --> S2["Diagram 2: per sample"]
+  CANON --> CHAIN["speed limit chain: router, OSM maxspeed,<br>Mapillary signs, HPMS (all measured), then<br>the class estimate; HPMS lanes and class<br>fill gaps; D's visibility, crosswind, light<br>and park_busy and C's housing, year built,<br>park visits under the model's names"]
   CHOSEN["route chosen"] --> AFTER["car.js aftercare: ask_range asks once for<br>the car's range; no_signal stretches offer<br>to save their maps (offlineAreas,<br>prepareOffline), then share_eta offers<br>Share ETA"]
 ```
 
@@ -92,7 +94,7 @@ flowchart TD
 flowchart TD
   ETA["etaAt of each sample, the phone's local time"] --> MOM["every 10th sample: sun position, deer hour:<br>sun from -10 to 8 degrees full, night 0.35,<br>day 0.1; dark: sun under -6; weekend morning<br>Sat/Sun 7-11; weekend day 9-18"]
   MOM --> PK["Per-km channels: strength = value curve<br>times time factor times exposure times<br>valley factor; points = strength times perKm<br>times km; see the Penalties table"]
-  PK --> FOG["fog: x1.5 in a valley tpi -10 m or less,<br>x0.5 on a ridge 20 m or more"]
+  PK --> FOG["fog: D's fog_risk (valleys and ridges in it),<br>else visibility x1.5 in a valley, x0.5 on a<br>ridge; crosswind x D's exposure; deer at D's<br>own hour; flood zone only when wet; harvest<br>where C's crop is; fatal crashes per vehicle<br>with AADT, never per km on a motorway"]
   PK --> WIND["crosswind: bridges and ridges only"]
   PK --> UNLIT["unlit = dark and not lit, or lit 0: only<br>with Lit roads at night; cyclists only with<br>Cyclist courtesy, at cyclist_time;<br>passenger_cost only with Passenger aboard"]
   ETA --> WHEN{{"span or point active? when: windows, weekly<br>days and HH:MM incl. past midnight, months;<br>else the kind's default; none is always"}}
@@ -203,6 +205,15 @@ under "The channels" are checked the same way (channel and weight).
 | crowd_busy | 0.6 |
 | park_visitors | 0.5 |
 | signal_coverage | 0.15 |
+| fog_risk | 1.2 |
+| crash_density | 0.6 |
+| event_crowd | 2 |
+| school_zone | 3 |
+| school_bus_hour | 0.3 |
+| church_window | 1 |
+| harvest_traffic | 0.5 |
+| flood_zone | 2 |
+| ice | 3 |
 | passenger_cost | 1.5 |
 | fuel_margin | 0.5 |
 
@@ -398,8 +409,10 @@ the lower `priority` provider wins where it knows, the other fills its gaps.
 | `landuse_residential` | share | B | 1 | 1 − 0.8 v |
 | `buildings_per_ha` | /ha within 100 m | B | 1 | e^(−v/3) |
 | `night_light` | VIIRS nW/cm²/sr | C | 1 | 1 − ln(1+v)/ln 51 |
+| `night_lights` | 0–1 Black Marble brightness | C | 0.6 | ≤ 0.15 → 1, 0.6 → 0.4, 1 → 0.3 (saturates in suburbs: dark vs lit), only without `night_light` |
 | `impervious_pct` | NLCD % | C | 1 | 5 → 1, 50 → 0 |
 | `address_per_km` | /km | C | 1 | e^(−v/40) |
+| `address_density` | address points /km² | C | 1 | e^(−v/500), only without `address_per_km` |
 | `housing_per_km2` | Census housing units /km² | C | 0.8 | e^(−v/300) |
 | `noise_db` | BTS road noise dB | C | 0.6 | 50 → 1, 70 → 0 |
 | `aadt` | vehicles/day (HPMS) | C | 1.5 | ≤1000 → 1, 25 000 → 0 (log) |
@@ -424,6 +437,8 @@ lights, impervious, addresses, housing, residential land use.
 | `open_country` | farmland/grass share | B | 0.6 | 0.4 + 0.45 v |
 | `protected` | 0/1 park or protected area | B | 1 | 1 / 0.4 |
 | `photo_per_km` | geotagged photos /km (Wikimedia, Flickr) | B/D | 1 | 1 − e^(−v/3) |
+| `photo_score` | 0–1 (Commons + Flickr spots) | D | 1 | v, only where router density < 4 (towns are photographed too) |
+| `curve_sign` | 0/1 after a curve-warning sign | D (Mapillary) | 0.4 | 1 / 0.5 |
 | `tpi_m` | m (+ ridge, − valley) | A | 0.8 | \|v\|: 0 → 0.25, 40 → 1 |
 | `relief_m` | m within 800 m | A | 1 | 10 → 0.1, 150 → 1 |
 | `foliage` | 0–1 autumn colour | D | 0.8 | v × canopy/70 (only with `canopy_pct`) |
@@ -481,6 +496,29 @@ last quarter of the safe range; the `fuel_gap` span is hard; `signal` and C's `m
 their maps (`offlineAreas`, `prepareOffline`) and `share_eta` offers Share ETA (cockpit `routeAftercare`). The cockpit
 passes the crowd provider `lookup` (GET /api/roads), the crews' shared lines and the taste fit, and the car provider
 `apiGet` (GET /api/chargers); the Driver's For this drive prefs (`apex.driverPrefs`) join the engine's prefs.
+
+### Builders C's and D's names (context_grid.js; conditions, wildlife, events, hazards_live, photos; merged)
+
+C: `night_lights` (0–1, saturates in suburbs) is a quality term and the dark-vs-lit fallback for `unlit`;
+`address_density` (/km²) a quality term; `housing_density` → `housing_per_km2`; `median_year_built` → `built_year`;
+`crash_density` (fatal /km/yr) costs per vehicle with AADT (rate per 100 M vehicle-km over the US ~0.8), never per km on a
+motorway; `flood_zone` (0–4) costs only when D says it's wet (48 h rain ≥ 25 mm or flood_risk ≥ 0.5) and is never hard;
+`cropland_class` limits D's harvest cost to crops and hay (others ×0.2); `park_visits` and D's `park_busy` are one term
+(`park_visitors`); `hpms_speed_limit` (mph), `hpms_lanes` (both directions, halved) and `hpms_fclass` fill gaps;
+`mobile_coverage` is not built and stays unknown. `canopy_pct`, `impervious_pct`, `noise_db`, `aadt`, `iri` are the
+model's names; volume, noise and trucks say nothing against a motorway. D: the speed-limit chain is router → OSM →
+Mapillary `sign_maxspeed_mps` → HPMS → class estimate (all but the last measured); `visibility_m` → `fog_vis_m`, and
+`fog_risk` (valleys and ridges already in it) replaces it when present; `crosswind_mps` → `crosswind_ms`, scaled by
+`exposure`; `deer_risk` is a rate (1 = the average hour) with the hour in it when `deer_time_risk` is given;
+`event_crowd`, `school_zone`, `school_bus_hour` (country roads), `church_window`, `harvest_traffic` replace the span
+defaults; `light` → `dark`; `golden_view` replaces the DEM's golden light; `photo_score` counts only out of town;
+`curve_sign`; `foliage` (already × canopy). D's `glare` is not ranked: the cockpit's glare term counts it once, and
+`wx_hazard` likewise (the weather term). Hyphenated kinds map: `deer-crossing`, `curve-sign`, `farm-traffic` → harvest,
+`low-water` → flood, `paving` → resurfaced; the rest are said, not ranked.
+
+With C's grid loaded the four calibration picks hold; at Colerain Fun and Max the grid's impervious ground, canopy,
+housing and addresses move the pick from Pippin and Struble to Blue Rock Road (more rural); removing impervious alone
+moves it back. Noise and AADT change no pick in these cases.
 
 ### Built by A
 

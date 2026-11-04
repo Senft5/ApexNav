@@ -123,7 +123,7 @@ const arterial = { speed_limit_kph: 56, road_class: 2, road_use: 0, density: 9, 
 {
   const goodBad = { forest_share: [1, 0], canopy_pct: [80, 0], water_near: [1, 0], creek_follow: [1, 0], open_country: [1, 0], protected: [1, 0], photo_per_km: [10, 0],
     tpi_m: [50, 0], relief_m: [200, 5], foliage: [1, 0], old_road: [1, 0], loved: [1, 0], guardrail: [1, 0], curve_signs_per_km: [4, 0], crowd_camber_deg: [4, -3],
-    divided: [0, 1], surface: [0, 5], sidewalk: [0, 1], truck_route: [0, 1], access_destination: [0, 1], road_class: [4, 6], road_use: [0, 4], built_year: [1900, 2010], name_age: [1, -1] };
+    divided: [0, 1], surface: [0, 5], sidewalk: [0, 1], truck_route: [0, 1], access_destination: [0, 1], road_class: [4, 6], road_use: [0, 4], built_year: [1900, 2010], name_age: [1, -1], photo_score: [1, 0], curve_sign: [1, 0], night_lights: [0.05, 0.9], address_density: [10, 3000] };
   const wrong = [];
   const extraCh = { canopy_pct: 80 };                 // foliage counts where there are trees
   for (const t of [...E.QUALITY, ...E.SCENERY]) {
@@ -135,9 +135,10 @@ const arterial = { speed_limit_kph: 56, road_class: 2, road_use: 0, density: 9, 
     if (!(value(g, [b]) > value(b, [g]))) wrong.push(t.ch);
   }
   for (const t of E.PER_KM) {
-    const v = { deer_risk: 1, fog_vis_m: 100, crosswind_ms: 20, road_temp_c: -5, crash_rate: 5, cyclist_route: 1, buggy: 1, unlit: 1, snow_cover: 1, crowd_busy: 2, park_visitors: 1, signal_coverage: 0, passenger_cost: 1, fuel_margin: 0 }[t.ch];
+    const v = { deer_risk: 4, fog_vis_m: 100, crosswind_ms: 20, road_temp_c: -5, crash_rate: 5, cyclist_route: 1, buggy: 1, unlit: 1, snow_cover: 1, crowd_busy: 2, park_visitors: 1, signal_coverage: 0, passenger_cost: 1, fuel_margin: 0, fog_risk: 1, crash_density: 0.2, event_crowd: 30, school_zone: 1, school_bus_hour: 1, church_window: 1, harvest_traffic: 1, flood_zone: 3, ice: 1 }[t.ch];
+    const extraWet = t.ch === 'flood_zone' ? { precip_48h_mm: 30 } : {};
     const when = t.ch === 'deer_risk' ? Date.parse('2026-11-04T17:20:00-05:00') : t.ch === 'cyclist_route' ? Date.parse('2026-11-07T08:30:00-05:00') : t.ch === 'park_visitors' ? Date.parse('2026-11-07T13:00:00-05:00') : t.ch === 'unlit' ? Date.parse('2026-11-04T21:00:00-05:00') : DEPART;
-    const exposedCh = t.ch === 'crosswind_ms' ? { tpi_m: 40 } : {};
+    const exposedCh = { ...(t.ch === 'crosswind_ms' ? { tpi_m: 40 } : {}), ...extraWet };
     const prefs = t.pref ? { [t.pref]: true } : {};
     const clean = cand(wiggly(6000), 700, { ...back, ...exposedCh }, { departAt: when }), dirty = cand(wiggly(6000), 700, { ...back, ...exposedCh, [t.ch]: v }, { departAt: when });
     if (!(value(clean, [dirty], { prefs }) > value(dirty, [clean], { prefs }))) wrong.push(t.ch);
@@ -211,6 +212,36 @@ const arterial = { speed_limit_kph: 56, road_class: 2, road_use: 0, density: 9, 
   out.eLate = ev({}, { spans: [{ fromM: 3000, toM: 6000, kind: 'past_next_event', value: 12 }] }).penaltyPts;
   out.ePassenger = [ev({ passenger_cost: 0.8 }, {}, { passenger: true }).penaltyPts > 0, ev({ passenger_cost: 0.8 }).penaltyPts];
   out.eBusyAvg = ev({ crowd_busy: 1 }).penaltyPts;
+}
+// 6d. builder C's grid and builder D's names: each maps onto the model's meaning
+{
+  globalThis.ApexContextGrid = require(root + '/web/route_ctx/context_grid.js');
+  const ch = (chans, name) => { const c = cand(straight(3000), 300, chans), a = E.channel(c.ctx, name); return a ? Array.from(a).slice(0, 2).map((v) => (Number.isNaN(v) ? null : +v.toFixed(3))) : null; };
+  out.cAlias = {
+    housing: ch({ housing_density: 800 }, 'housing_per_km2'), year: ch({ median_year_built: 1952 }, 'built_year'),
+    unlitDark: ch({ night_lights: 0.05 }, 'unlit'), unlitLit: ch({ night_lights: 0.7 }, 'unlit'),
+    coverageUnknown: ch({ mobile_coverage: NaN }, 'signal_coverage'), coverage: ch({ mobile_coverage: 2 }, 'signal_coverage'),
+    hpmsLimit: ch({ hpms_speed_limit: 45 }, 'speed_limit_kph'), hpmsLanes: ch({ hpms_lanes: 4 }, 'lanes'), hpmsClass: ch({ hpms_fclass: 7 }, 'road_class'),
+    chainRouterFirst: ch({ speed_limit_kph: 89, sign_maxspeed_mps: 15.6, hpms_speed_limit: 25 }, 'speed_limit_kph'),
+    chainSignBeforeHpms: ch({ sign_maxspeed_mps: 15.6, hpms_speed_limit: 25 }, 'speed_limit_kph'),
+    vis: ch({ visibility_m: 300 }, 'fog_vis_m'), cross: ch({ crosswind_mps: 14 }, 'crosswind_ms'), dark: ch({ light: 0 }, 'dark'),
+    park: ch({ park_busy: 1.6 }, 'park_visitors'), parkC: ch({ park_visits: 2e6 }, 'park_visitors'),
+  };
+  const pen = (chans, extra = {}, departAt = DEPART) => { const c = cand(wiggly(6000), 700, { ...back, ...chans }, { departAt, ...extra }); E.evaluate(c, {}); return +c.ev.penaltyPts.toFixed(2); };
+  out.cPen = {
+    floodDry: pen({ flood_zone: 3 }), floodWet: pen({ flood_zone: 3, precip_48h_mm: 40 }),
+    harvestCorn: pen({ harvest_traffic: 1, cropland_class: 1 }), harvestForest: pen({ harvest_traffic: 1, cropland_class: 141 }),
+    crashQuiet: pen({ crash_density: 0.1, aadt: 1000 }), crashBusy: pen({ crash_density: 0.1, aadt: 60000 }),
+    crashMotorwayNoAadt: pen({ ...hwy, crash_density: 0.1 }),
+    deerTimed: pen({ deer_risk: 4, deer_time_risk: 4 }, {}, DEPART), deerUntimed: pen({ deer_risk: 4 }, {}, DEPART),
+    eventOnce: pen({ event_crowd: 30 }, { spans: [{ fromM: 0, toM: 6000, kind: 'event', value: 30 }] }) === pen({ event_crowd: 30 }),
+    fogRiskOnce: pen({ fog_risk: 1, visibility_m: 100 }) === pen({ fog_risk: 1 }),
+    crossExposure: [pen({ crosswind_mps: 20, exposure: 1 }), pen({ crosswind_mps: 20, exposure: 0.4 })],
+  };
+  const glareSame = (() => { const a = cand(wiggly(6000), 700, back), b = cand(wiggly(6000), 700, { ...back, glare: 1 }); return value(a, [b]) === value(b, [a]); })();
+  out.glareOnce = glareSame;
+  const sc = (chans) => { const c = cand(wiggly(6000), 700, { ...back, ...chans }); E.evaluate(c, {}); return c.ev.scenery; };
+  out.photoRural = [sc({ photo_score: 1 }) > sc({ photo_score: 0 }), sc({ photo_score: 1, density: 9 }) === sc({ photo_score: 0, density: 9 })];
 }
 // 7. active(): windows, weekly (wrapping midnight), months
 out.active = [E.active(null, DEPART), E.active({ weekly: [{ from: '19:00', to: '07:00' }] }, Date.parse('2026-11-04T23:30:00-05:00')),
@@ -323,6 +354,26 @@ def test_builder_e_channels(r):
     assert r["eLate"] == 12, "12 min past the next event at the Fun level's minute"
     assert r["ePassenger"][0] and r["ePassenger"][1] == 0
     assert r["eBusyAvg"] == 0, "an average hour costs nothing"
+
+
+def test_builder_c_and_d_names_keep_their_meaning(r):
+    a = r["cAlias"]
+    assert a["housing"] == [800, 800] and a["year"] == [1952, 1952]
+    assert a["unlitDark"] == [1, 1] and a["unlitLit"] == [0, 0], "Black Marble saturates in suburbs: read as dark vs lit"
+    assert a["coverageUnknown"] is None and a["coverage"] == [1, 1], "no FCC data yet: unknown, never 0"
+    assert a["hpmsLimit"] == [72.42, 72.42] and a["hpmsLanes"] == [2, 2] and a["hpmsClass"] == [6, 6]
+    assert a["chainRouterFirst"] == [89, 89] and a["chainSignBeforeHpms"] == [56.16, 56.16], "router/OSM, then signs, then HPMS"
+    assert a["vis"] == [300, 300] and a["cross"] == [14, 14] and a["dark"] == [1, 1]
+    assert a["park"] == [0.6, 0.6] and a["parkC"] == [1, 1]
+    p = r["cPen"]
+    assert p["floodDry"] == 0 and p["floodWet"] > 0, "a flood zone only matters when it's wet"
+    assert p["harvestCorn"] > p["harvestForest"] > 0, "harvest traffic where the crop is"
+    assert p["crashQuiet"] > p["crashBusy"] and p["crashMotorwayNoAadt"] == 0, "fatal crashes per vehicle, not per km"
+    assert p["deerTimed"] > 5 * p["deerUntimed"] > 0, "D's deer_time_risk already holds the hour: not scaled down again by the noon sun"
+    assert p["eventOnce"] and p["fogRiskOnce"]
+    assert p["crossExposure"][0] > p["crossExposure"][1] > 0
+    assert r["glareOnce"], "glare is counted once, by the cockpit's glare term"
+    assert r["photoRural"] == [True, True], "photos count in the country, not in town"
 
 
 def test_hard_constraints(r):

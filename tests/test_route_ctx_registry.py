@@ -135,3 +135,28 @@ def test_builder_b_and_e_providers_register_in_either_order(first):
     res = subprocess.run([NODE, "-e", REAL, os.path.abspath("."), first], capture_output=True, text=True, timeout=30)
     assert res.returncode == 0, res.stderr
     assert json.loads(res.stdout) == sorted(["router", "dem", "osm_tiles", "osm_overpass", "road_name_age", "crowd", "driver", "car", "ios_context", "crew_meet"])
+
+
+ALL_IDS = sorted(["router", "dem", "osm_tiles", "osm_overpass", "road_name_age", "crowd", "driver", "car", "ios_context", "crew_meet",
+                  "conditions", "wildlife", "events", "hazards-live", "photos", "context_grid"])
+RANDOM = r"""
+const root = process.argv[1], seed = +process.argv[2];
+globalThis.ApexCore = require(root + '/web/apex_core.js');
+globalThis.ApexSun = require(root + '/web/sun.js');
+const files = ['registry', 'router_edges', 'dem', 'osm_common', 'osm_tiles', 'osm_overpass', 'road_name_age', 'ctx_util', 'crowd', 'driver', 'car',
+  'ios_context', 'crew_meet', 'conditions', 'wildlife', 'events', 'hazards_live', 'photos', 'context_grid'];
+let x = seed;
+const rnd = () => { x = (x * 1103515245 + 12345) % 2147483648; return x / 2147483648; };
+for (let i = files.length - 1; i > 0; i--) { const j = Math.floor(rnd() * (i + 1)); [files[i], files[j]] = [files[j], files[i]]; }
+for (const f of files) require(root + '/web/route_ctx/' + f + '.js');
+process.stdout.write(JSON.stringify({ order: files, ids: globalThis.ApexRouteCtx.list().map((p) => p.id).sort() }));
+"""
+
+
+@pytest.mark.parametrize("seed", [1, 7, 42, 99, 123, 2024, 31337, 65535])
+def test_every_provider_registers_in_any_load_order(seed):
+    """Builders B, C, D and E each queue on a shim when the registry isn't there yet; whatever the order, all are adopted."""
+    res = subprocess.run([NODE, "-e", RANDOM, os.path.abspath("."), str(seed)], capture_output=True, text=True, timeout=60)
+    assert res.returncode == 0, res.stderr
+    r = json.loads(res.stdout)
+    assert r["ids"] == ALL_IDS, (r["order"], set(ALL_IDS) ^ set(r["ids"]))

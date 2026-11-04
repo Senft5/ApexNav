@@ -25,7 +25,14 @@ out.dem = Object.fromEntries(fx.candidates.map((c) => {
   const e = c.dem.elev_m.filter((v) => v != null), rel = c.dem.relief_m.filter((v) => v != null);
   return [c.label, { status: c.dem.status, min: Math.min(...e), max: Math.max(...e), relief: rel.reduce((a, b) => a + b, 0) / rel.length }];
 }));
-process.stdout.write(JSON.stringify(out));
+(async () => {
+  // with C's context grid (the real Cincinnati bundles in web/data/ctx/v1) on every candidate
+  for (const c of ['subdivision', 'northgate', 'colerain', 'harrison']) for (const l of ['quick', 'fun', 'max']) out['grid:' + c + ':' + l] = await H.compareGrid(c, l);
+  const list = H.cands('colerain'); await H.addGrid(list);
+  for (const x of list) { delete x.ctx.channels.impervious_pct; x.ev = null; }
+  out['grid:colerain:fun:-impervious'] = H.compare('colerain', 'fun', { list });
+  process.stdout.write(JSON.stringify(out));
+})();
 """
 
 
@@ -93,3 +100,21 @@ def test_dem_along_real_roads(r):
         assert d["status"] == "ok", label
         assert 140 < d["min"] < d["max"] < 320, (label, d)
     assert r["dem"]["router0"]["relief"] > 40, "hill country"
+
+
+def test_picks_hold_with_the_context_grid(r):
+    """C's national grid (night lights, impervious, canopy, noise, AADT, IRI, HPMS limits, fatal crashes, flood zones…) on."""
+    for lv in ("quick", "fun", "max"):
+        assert r[f"grid:subdivision:{lv}"]["engine"][0] == "router0"
+        assert r[f"grid:northgate:{lv}"]["engine"][0] == "highway", "AADT, noise and crashes per km don't count against a motorway"
+        e = r[f"grid:colerain:{lv}"]["engine"]
+        assert e[0] in ("router0", "router2") and e.index("router1") > e.index("router0")
+    assert r["grid:harrison:quick"]["engine"][0] == "highway" and r["grid:harrison:fun"]["engine"][0] == "router0"
+    assert all(s == "ok" for k, v in r.items() if k.startswith("grid:") and "gridStatus" in v for s in v["gridStatus"])
+
+
+def test_impervious_ground_changes_a_pick(r):
+    """Colerain at Fun: with the grid, Blue Rock Road (more canopy, less pavement and housing) beats Pippin and Struble; take
+    impervious surface away and Pippin wins again. Noise and AADT alone change no pick in the four cases."""
+    assert r["grid:colerain:fun"]["engine"][0] == "router2"
+    assert r["grid:colerain:fun:-impervious"]["engine"][0] == "router0"

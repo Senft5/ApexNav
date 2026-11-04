@@ -177,6 +177,36 @@
   }
   /** One status for a provider over all corridors: ok when every one is, partial when some answered, else the first failure. */
   const overall = (ss) => (ss.every((s) => s === 'ok') ? 'ok' : ss.some((s) => s === 'ok' || s === 'partial') ? 'partial' : ss[0] || 'unavailable');
+  const LATE = new Set(['conditions', 'wildlife', 'hazards-live', 'events', 'car']), LATE_AT = 0.5;
+  /**
+   * What the second phase gets from the first (per corridor id): `channels` under the names D's providers read (forest_frac,
+   * farmland_frac, canopy_frac, urban_density, elev_m, tpi_m, bridge, park, precip_48h_mm), `peer` (all channels, for E's car:
+   * C's mobile_coverage) and `places` ({ schools, worship } as [{ lat, lon }] from the map providers' points).
+   */
+  function inputsFor(cs, res) {
+    const channels = {}, peer = {}, schools = [], worship = [];
+    const pick = (ch, names, f = (v) => v) => { for (const n of names) if (ch[n]) return Float32Array.from(ch[n], (v) => (Number.isFinite(v) ? f(v) : NaN)); return null; };
+    for (const c of cs) {
+      const r = res.byId[c.id];
+      if (!r) continue;
+      const ch = r.channels, out = {};
+      const put = (k, v) => { if (v) out[k] = v; };
+      put('forest_frac', pick(ch, ['forest_share', 'lu_forest']));
+      put('farmland_frac', pick(ch, ['lu_farmland', 'open_country']));
+      put('canopy_frac', pick(ch, ['canopy_pct'], (v) => v / 100));
+      put('urban_density', pick(ch, ['density']));
+      put('park', pick(ch, ['lu_park', 'protected']));
+      for (const k of ['elev_m', 'tpi_m', 'bridge', 'precip_48h_mm']) put(k, pick(ch, [k]));
+      channels[c.id] = out;
+      peer[c.id] = { channels: ch };
+      for (const pt of r.points || []) {
+        const i = Math.max(0, Math.min(c.lat.length - 1, Math.round(pt.atM / STEP_M)));
+        if (pt.kind === 'school') schools.push({ lat: c.lat[i], lon: c.lon[i], name: pt.label || null });
+        if (pt.kind === 'worship') worship.push({ lat: c.lat[i], lon: c.lon[i], name: pt.label || null });
+      }
+    }
+    return { channels, peer, ...(schools.length || worship.length ? { places: { schools, worship } } : {}) };
+  }
   const sleep = (ms, signal) => new Promise((resolve) => {
     if (signal && signal.aborted) { resolve(); return; }
     const t = setTimeout(resolve, ms);
@@ -205,8 +235,18 @@
     };
     if (!cs.length || !chosen.length) return result();
     for (const p of chosen) status[p.id] = { status: 'pending', ms: null };
+    // Two phases: providers that read other providers' channels (D's conditions, wildlife and live hazards read land use,
+    // terrain and density; E's car reads C's coverage; D's events reads schools and churches) start once the first phase
+    // has landed, or at LATE_AT of the budget, whichever is first, with what has arrived as opts.channels / peer / places.
+    const late = (p) => (p.needs && p.needs.channels === true) || LATE.has(p.id);
+    const early = chosen.filter((p) => !late(p));
+    let firstDone = null;
+    const firstPhase = new Promise((resolve) => { firstDone = resolve; });
+    setTimeout(() => firstDone(), Math.max(0, budget * LATE_AT));
     const tasks = chosen.map(async (p) => {
+      if (late(p)) await firstPhase;
       const t = Date.now();
+      const inputs = late(p) ? inputsFor(cs, result()) : {};
       if (p.needs && p.needs.key && !settings[p.needs.key]) { status[p.id] = { status: 'no-key', ms: 0, note: `needs ${p.needs.key}` }; return; }
       if (ctrl && ctrl.signal.aborted) { status[p.id] = { status: 'unavailable', ms: 0, note: 'cancelled' }; return; }
       const mine = typeof AbortController === 'function' ? new AbortController() : null;
@@ -216,7 +256,7 @@
       if (ctrl) ctrl.signal.addEventListener('abort', off, { once: true });
       try {
         const raw = await Promise.race([
-          Promise.resolve().then(() => p.fetch(cs, { ...(opts.providerOpts || {}), signal: mine ? mine.signal : undefined, budgetMs: ms, departAt: opts.departAt, settings, ...(opts.fetch ? { fetch: opts.fetch } : {}) })),
+          Promise.resolve().then(() => p.fetch(cs, { ...(opts.providerOpts || {}), ...inputs, signal: mine ? mine.signal : undefined, budgetMs: ms, departAt: opts.departAt, settings, ...(opts.fetch ? { fetch: opts.fetch } : {}) })),
           sleep(ms + 50, mine ? mine.signal : undefined).then(() => null),
         ]);
         if (!raw) { status[p.id] = { status: 'unavailable', ms: Date.now() - t, note: 'out of time' }; return; }
@@ -232,13 +272,14 @@
         if (ctrl) ctrl.signal.removeEventListener('abort', off);
       }
     });
+    Promise.allSettled(tasks.filter((_, k) => early.includes(chosen[k]))).then(() => firstDone());
     await Promise.race([Promise.allSettled(tasks), sleep(budget + 100, ctrl ? ctrl.signal : undefined)]);
     if (ctrl) ctrl.abort();
     for (const p of chosen) if (status[p.id].status === 'pending') status[p.id] = { status: 'unavailable', ms: Date.now() - t0, note: 'out of time' };
     return result();
   }
 
-  const api = { STEP_M, DEFAULT_BUDGET_MS, TRANSLATE, register, unregister, list, corridor, unionBox, indexAt, unknown, fillSpans, cache, keyOf, run, merge, clean, hav, bearing, cumulative };
+  const api = { STEP_M, DEFAULT_BUDGET_MS, TRANSLATE, LATE, inputsFor, register, unregister, list, corridor, unionBox, indexAt, unknown, fillSpans, cache, keyOf, run, merge, clean, hav, bearing, cumulative };
   adopt();
   if (!Array.isArray(shared.providers)) shared.providers = [];
   delete shared.shim;

@@ -13,7 +13,8 @@
 // "Elevation: Mapzen Terrain Tiles" in About > Sources). Static: no update cadence.
 (function (root) {
   'use strict';
-  const Ctx = root.ApexRouteCtx || (typeof require === 'function' ? require('./registry.js') : null);
+  // the registry itself (a provider shim, ctx_util.js / osm_common.js, has only register): in node, require it
+  const Ctx = root.ApexRouteCtx && root.ApexRouteCtx.corridor ? root.ApexRouteCtx : typeof require === 'function' ? require('./registry.js') : root.ApexRouteCtx || null;
   const Z = 12, MAX_TILES = 64, RING_NEAR_M = 300, RING_FAR_M = 800, PROBE_EVERY = 4;   // probes every 4th sample (100 m)
 
   const tileOf = (lat, lon, z = Z) => {

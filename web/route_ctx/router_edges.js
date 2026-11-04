@@ -24,7 +24,8 @@
 // Update cadence: the server's OSM extract (about weekly). Stop signs are not in the router's data (map features provider).
 (function (root) {
   'use strict';
-  const Ctx = root.ApexRouteCtx || (typeof require === 'function' ? require('./registry.js') : null);
+  // the registry itself (a provider shim, ctx_util.js / osm_common.js, has only register): in node, require it
+  const Ctx = root.ApexRouteCtx && root.ApexRouteCtx.corridor ? root.ApexRouteCtx : typeof require === 'function' ? require('./registry.js') : root.ApexRouteCtx || null;
   const VALHALLA = 'https://valhalla1.openstreetmap.de';
   const ATTRS = ['edge.speed_limit', 'edge.speed', 'edge.road_class', 'edge.use', 'edge.density', 'edge.lane_count', 'edge.surface', 'edge.unpaved',
     'edge.bridge', 'edge.tunnel', 'edge.toll', 'edge.traffic_signal', 'edge.length', 'edge.roundabout', 'edge.truck_route', 'edge.sidewalk',
@@ -35,7 +36,7 @@
   const SURFACE = { paved_smooth: 0, paved: 1, paved_rough: 2, compacted: 3, dirt: 4, gravel: 5, path: 6, impassable: 7 };
   const MAX_KM = 200;            // the public server's trace limit
   const TTL_MS = 30 * 60000;
-  const kept = Ctx ? Ctx.cache(TTL_MS, 60) : null;
+  const kept = Ctx && Ctx.cache ? Ctx.cache(TTL_MS, 60) : null;
 
   /** Class-typical limit (km/h) where none is posted: US rural/urban practice by class and the router's density. */
   function estimateLimit(rc, use, density) {

@@ -61,9 +61,9 @@ function cands(name, o = {}) {
 }
 /** The labels best first under the engine and under the old ranking, plus each one's parts and the why line. */
 function compare(name, level, o = {}) {
-  const list = cands(name, o);
+  const list = o.list || cands(name, o);
   const opts = { level, prefs: o.prefs || {}, score: (cand, scaleAt) => FunRoute.score(cand.t, cand.turnsM, o.prefs || null, scaleAt) };
-  const ranked = Engine.rank(list, opts);
+  const ranked = Engine.rank(list, { ...opts, fresh: true });
   const quick = ranked.find((c) => c.extraS === 0) || ranked.reduce((a, b) => (b.timeS < a.timeS ? b : a), ranked[0]);
   const old = FunRoute.rank(list.map((c) => ({ ...c })), level);
   const w = Engine.why(ranked[0], quick, { metric: false });
@@ -73,7 +73,34 @@ function compare(name, level, o = {}) {
       qual: c.ev && c.ev.quality, poorKm: c.ev && +c.ev.poorKm.toFixed(2), conf: c.ev && +c.ev.confidence.toFixed(2), good: c.ev && c.ev.funGated ? c.ev.funGated.good : null, rawGood: c.fun ? c.fun.good : null, min: +(c.timeS / 60).toFixed(1) }])),
   };
 }
-module.exports = { load, candidate, cands, compare, Engine, FunRoute, Ctx, Router, decode6 };
+/** C's context grid (web/data/ctx/v1, the real Cincinnati bundles) laid on each candidate's context, as the app would. */
+const Grid = require(path.join(ROOT, 'web/route_ctx/context_grid.js'));
+async function addGrid(list) {
+  const fetchFn = async (url) => {
+    const p = path.join(ROOT, 'web', url);
+    if (!fs.existsSync(p)) return { ok: false, status: 404 };
+    const b = fs.readFileSync(p);
+    return { ok: true, status: 200, arrayBuffer: async () => b.buffer.slice(b.byteOffset, b.byteOffset + b.length), json: async () => JSON.parse(b.toString()) };
+  };
+  const res = await Grid.fetch(list.map((c) => c.corridor), { fetchFn, apiBase: null, budgetMs: 20000 });
+  for (const c of list) {
+    const r = res[c.corridor.id];
+    if (!r || !c.ctx) continue;
+    for (const [k, v] of Object.entries(r.channels || {})) c.ctx.channels[k] = Float32Array.from(v, (x) => (x == null ? NaN : x));
+    c.ctx.spans.push(...(r.spans || [])); c.ctx.points.push(...(r.points || []));
+    c.ev = null;
+  }
+  return res;
+}
+/** compare() with C's grid loaded. */
+async function compareGrid(name, level, o = {}) {
+  const list = cands(name, o);
+  const res = await addGrid(list);
+  const out = compare(name, level, { ...o, list });
+  out.gridStatus = Object.values(res).map((r) => r.status);
+  return out;
+}
+module.exports = { load, candidate, cands, compare, compareGrid, addGrid, Engine, FunRoute, Ctx, Router, decode6 };
 if (require.main === module) {
   const [name, level] = process.argv.slice(2);
   console.log(JSON.stringify(compare(name, level || 'fun'), null, 1));

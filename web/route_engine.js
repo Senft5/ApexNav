@@ -18,7 +18,7 @@
 (function (root) {
   'use strict';
   const FunRoute = root.ApexFunRoute || (typeof require === 'function' ? require('./fun_route.js') : null);
-  const Ctx = root.ApexRouteCtx || (typeof require === 'function' ? require('./route_ctx/registry.js') : null);
+  const Ctx = root.ApexRouteCtx && root.ApexRouteCtx.corridor ? root.ApexRouteCtx : typeof require === 'function' ? require('./route_ctx/registry.js') : root.ApexRouteCtx || null;
   const Sun = () => root.ApexSun || null;
 
   const clamp01 = (v) => Math.max(0, Math.min(1, v));
@@ -61,8 +61,10 @@
     { ch: 'buildings_per_ha', w: 1, g: decay(3), family: 'built' },
     { ch: 'bldg_per_km', w: 1, g: decay(40), family: 'built', unless: ['buildings_per_ha'] },        // map tiles: buildings within 60 m
     { ch: 'night_light', w: 1, g: (v) => 1 - clamp01(Math.log1p(Math.max(0, v)) / Math.log1p(50)), family: 'built' },   // VIIRS nW/cm²/sr
+    { ch: 'night_lights', w: 0.6, g: ramp([[0.15, 1], [0.6, 0.4], [1, 0.3]]), family: 'built', unless: ['night_light'] },   // C: Black Marble 0-1, saturates in suburbs: dark vs lit
     { ch: 'impervious_pct', w: 1, g: ramp([[5, 1], [50, 0]]), family: 'built' },
     { ch: 'address_per_km', w: 1, g: decay(40), family: 'built' },
+    { ch: 'address_density', w: 1, g: decay(500), family: 'built', unless: ['address_per_km'] },   // C: address points /km²
     { ch: 'housing_per_km2', w: 0.8, g: decay(300), family: 'built' },
     { ch: 'noise_db', w: 0.6, g: ramp([[50, 1], [70, 0]]), family: 'busy' },
     { ch: 'aadt', w: 1.5, g: (v) => 1 - clamp01(Math.log10(Math.max(1, v) / 1000) / Math.log10(25)), family: 'busy' },
@@ -81,9 +83,11 @@
     { ch: 'open_country', w: 0.6, g: (v) => 0.4 + 0.45 * clamp01(v), family: 'open' },
     { ch: 'protected', w: 1, g: yes(1, 0.4), family: 'park' },
     { ch: 'photo_per_km', w: 1, g: (v) => 1 - Math.exp(-Math.max(0, v) / 3), family: 'photos' },
+    { ch: 'photo_score', w: 1, g: clamp01, family: 'photos', unless: ['photo_per_km'], rural: true },   // D: Commons + Flickr; towns are photographed too
+    { ch: 'curve_sign', w: 0.4, g: yes(1, 0.5), family: 'drama', unless: ['curve_signs_per_km'] },      // D: Mapillary curve-warning signs
     { ch: 'tpi_m', w: 0.8, g: (v) => ramp([[0, 0.25], [40, 1]])(Math.abs(v)), family: 'terrain' },   // a ridge or a valley, not a plain
     { ch: 'relief_m', w: 1, g: ramp([[10, 0.1], [150, 1]]), family: 'terrain' },
-    { ch: 'foliage', w: 0.8, g: clamp01, family: 'forest', needs: 'canopy_pct' },    // autumn colour counts where there are trees
+    { ch: 'foliage', w: 0.8, g: clamp01, family: 'forest' },    // D: autumn colour near its peak, already × canopy
     { ch: 'old_road', w: 0.5, g: yes(1, 0.45), family: 'history' },
     { ch: 'loved', w: 1.5, g: clamp01, family: 'crowd' },
     { ch: 'guardrail', w: 0.3, g: yes(0.9, 0.5), family: 'drama' },
@@ -94,11 +98,13 @@
   ];
   /** Per-sample penalty channels: points per km at full strength, `at` = how strong at that time (0–1). */
   const PER_KM = [
-    { ch: 'deer_risk', perKm: 1.5, label: 'deer', at: (ctx) => ctx.deerHour },
-    { ch: 'fog_vis_m', perKm: 1.2, label: 'fog', value: (v) => clamp01(1 - v / 1000), valley: true },   // worse in the valleys, lighter on ridges
-    { ch: 'crosswind_ms', perKm: 0.6, label: 'crosswind', value: (v) => clamp01((v - 8) / 10), exposed: true },
+    { ch: 'deer_risk', perKm: 1.5, label: 'deer', value: (v) => clamp01((v - 1) / 3), at: (ctx) => ctx.deerHour, timedBy: 'deer_time_risk' },   // D: a rate, 1 = the state's average hour
+    { ch: 'fog_vis_m', perKm: 1.2, label: 'fog', value: (v) => clamp01(1 - v / 1000), valley: true, skipIf: 'fog_risk' },   // worse in the valleys, lighter on ridges
+    { ch: 'fog_risk', perKm: 1.2, label: 'fog', value: clamp01 },                                  // D: 0-1, valleys and ridges already in it
+    { ch: 'crosswind_ms', perKm: 0.6, label: 'crosswind', value: (v) => clamp01((v - 8) / 10), exposed: true },   // D's crosswind_mps, × its exposure
     { ch: 'road_temp_c', perKm: 0.25, label: 'cold road', value: (v) => clamp01((7 - v) / 10) },
     { ch: 'crash_rate', perKm: 0.6, label: 'crash history', value: (v) => clamp01(v / 5) },          // crashes per km per year
+    { ch: 'crash_density', perKm: 0.6, label: 'fatal crashes', value: (v) => clamp01(v / 0.1), skipIf: 'crash_rate', perVehicle: true },   // C: FARS fatal /km/yr
     { ch: 'cyclist_route', perKm: 0.5, label: 'cyclists', value: clamp01, at: (ctx) => ctx.weekendMorning, atCh: 'cyclist_time', pref: 'cyclists' },   // Cyclist courtesy (driver.js)
     { ch: 'buggy', perKm: 0.8, label: 'buggies', value: clamp01 },
     { ch: 'unlit', perKm: 0.6, label: 'unlit at night', value: clamp01, at: (ctx) => ctx.dark, atCh: 'dark', pref: 'lit' },             // Lit roads at night (driver.js)
@@ -106,6 +112,13 @@
     { ch: 'crowd_busy', perKm: 0.6, label: 'busy at that hour', value: (v) => clamp01(v - 1) },      // crowd.js: 1 = the road's average hour, 2 = twice (quiet_hours flag, off)
     { ch: 'park_visitors', perKm: 0.5, label: 'park crowds', value: clamp01, at: (ctx) => ctx.weekendDay },
     { ch: 'signal_coverage', perKm: 0.15, label: 'no phone signal', value: (v) => 1 - clamp01(v) },
+    { ch: 'event_crowd', perKm: 2, label: 'event traffic', value: (v) => clamp01(v / 20) },        // D: thousands of people heading there then
+    { ch: 'school_zone', perKm: 3, label: 'school zone', value: clamp01 },                         // D: at arrival and dismissal on school days
+    { ch: 'school_bus_hour', perKm: 0.3, label: 'school buses', value: clamp01, rural: true },     // D: bus-run hours, on country roads
+    { ch: 'church_window', perKm: 1, label: 'church traffic', value: clamp01 },                    // D: service windows by a church
+    { ch: 'harvest_traffic', perKm: 0.5, label: 'farm traffic', value: clamp01, crop: true },       // D × C's crop at that place
+    { ch: 'flood_zone', perKm: 2, label: 'flood-prone', value: (v) => clamp01((v - 1) / 2), wet: true },   // C: only when D says it's wet
+    { ch: 'ice', perKm: 3, label: 'ice', value: clamp01 },
     { ch: 'passenger_cost', perKm: 1.5, label: 'hard on your passenger', value: clamp01, pref: 'passenger' },   // driver.js, Passenger aboard
     { ch: 'fuel_margin', perKm: 0.5, label: 'low on fuel', value: (v) => clamp01((0.25 - v) / 0.25) },          // car.js: the last quarter of the safe range
   ];
@@ -115,11 +128,11 @@
     closure: { hard: true, label: 'closed' },
     no_access: { hard: true, label: 'private road' },
     flood: { hard: (s) => (s.value == null || s.value >= 1), each: 5, label: 'flooding' },        // value < 1: risk, ≥ 1 water over the road
-    school: { each: 2, perKm: 1, label: 'school zone', when: { weekly: [{ days: [1, 2, 3, 4, 5], from: '07:00', to: '08:45' }, { days: [1, 2, 3, 4, 5], from: '14:00', to: '16:15' }], months: [1, 2, 3, 4, 5, 8, 9, 10, 11, 12] } },
-    church: { each: 1, label: 'church traffic', when: { weekly: [{ days: [0], from: '08:00', to: '12:30' }] } },
-    event: { each: 6, label: 'event traffic' },
+    school: { each: 2, perKm: 1, label: 'school zone', unlessChannel: 'school_zone', when: { weekly: [{ days: [1, 2, 3, 4, 5], from: '07:00', to: '08:45' }, { days: [1, 2, 3, 4, 5], from: '14:00', to: '16:15' }], months: [1, 2, 3, 4, 5, 8, 9, 10, 11, 12] } },
+    church: { each: 1, label: 'church traffic', unlessChannel: 'church_window', when: { weekly: [{ days: [0], from: '08:00', to: '12:30' }] } },
+    event: { each: 6, label: 'event traffic', unlessChannel: 'event_crowd' },
     works: { each: 4, perMinValue: true, label: 'road works' },                    // value: delay in minutes when known
-    harvest: { perKm: 0.5, label: 'farm traffic', when: { months: [9, 10, 11], weekly: [{ from: '07:00', to: '20:00' }] } },
+    harvest: { perKm: 0.5, label: 'farm traffic', unlessChannel: 'harvest_traffic', when: { months: [9, 10, 11], weekly: [{ from: '07:00', to: '20:00' }] } },
     unploughed: { perKm: 2, label: 'not ploughed' },
     byway: { bonusPerKm: 0.4, bonusCap: 12, label: 'scenic byway' },
     level_crossing: { each: 0.7, label: 'level crossings' },
@@ -138,14 +151,18 @@
     past_next_event: { each: 0, perMinValue: true, label: 'past your next event' },  // ios_context.js: value = minutes late
     gate: { each: 1, label: 'gates' },
     buggy: { each: 0.5, label: 'buggies', unlessChannel: 'buggy' },
-    curve_sign: { bonus: 0.2, bonusCap: 2, label: 'curve signs', unlessChannel: 'curve_signs_per_km' },
+    curve_sign: { bonus: 0.2, bonusCap: 2, label: 'curve signs', unlessChannel: ['curve_signs_per_km', 'curve_sign'] },
     access_destination: { each: 1, perKm: 2, label: 'destination-only road', unlessChannel: 'access_destination' },
     cycle_route: { perKm: 0.5, label: 'cyclists', unlessChannel: 'cyclist_route', when: { weekly: [{ days: [0, 6], from: '07:00', to: '11:00' }] } },                     // counted on the card; avoided by the router when asked (Avoid → Cameras), never ranked
   };
   // Channel names other builders may use for the same thing (the integrator's safety net; ROUTE_ENGINE.md is canonical).
   // Span and point kinds other providers name differently (osm_tiles.js, osm_overpass.js).
-  const KIND_ALIASES = { worship: 'church', rail_crossing: 'level_crossing', give_way: 'stop', calming: 'speed_bump', access_private: 'no_access', old_road_name: null, subdivision_name: null };
-  const ALIASES = { crowd_bank_deg: 'crowd_camber_deg', mobile_coverage: 'signal_coverage', signal: 'signal_coverage', businesses_per_km: 'business_per_km', maxspeed_kph: 'speed_limit_kph', viirs: 'night_light', canopy: 'canopy_pct',
+  const KIND_ALIASES = { worship: 'church', rail_crossing: 'level_crossing', give_way: 'stop', calming: 'speed_bump', access_private: 'no_access', old_road_name: null, subdivision_name: null,
+    // D's kinds (hyphenated): the channels carry fog, glare, dark, deer hours, school zones and photos; these are said, not ranked twice
+    'deer-crossing': 'animal_crossing', 'curve-sign': 'curve_sign', 'farm-traffic': 'harvest', 'low-water': 'flood', paving: 'resurfaced',
+    'park-season': null, nps_unit: null, 'school-zone': null, 'deer-hour': null, 'golden-view': null, glare: null, dark: null, 'cold-tyres': null,
+    'fall-colour': null, 'photo-spot': null, 'speed-sign': null, gauge: null, venue: null, fatal_crash: null };
+  const ALIASES = { crowd_bank_deg: 'crowd_camber_deg', signal: 'signal_coverage', businesses_per_km: 'business_per_km', maxspeed_kph: 'speed_limit_kph', viirs: 'night_light', canopy: 'canopy_pct',
     impervious: 'impervious_pct', addresses_per_km: 'address_per_km', photos_per_km: 'photo_per_km', forest: 'forest_share', deer: 'deer_risk' };
 
   // ---- weights of the route value (points, the 0–100 fun scale) -----------------------------------------------------
@@ -205,7 +222,17 @@
   const SUM = (names) => (ch, i) => (names.every((k) => ch[k] && Number.isFinite(ch[k][i])) ? names.reduce((a, k) => a + ch[k][i], 0) : NaN);
   const MAP = (k, f) => (ch, i) => (ch[k] && Number.isFinite(ch[k][i]) ? f(ch[k][i]) : NaN);
   const SOURCES = {
-    speed_limit_kph: [MAP('maxspeed_kph', (v) => v)],
+    // the speed-limit chain: router → OSM → Mapillary signs (D) → HPMS (C, mph); all measured, ahead of the class estimate
+    speed_limit_kph: [MAP('maxspeed_kph', (v) => v), MAP('sign_maxspeed_mps', (v) => v * 3.6), MAP('hpms_speed_limit', (v) => v * 1.609344)],
+    lanes: [MAP('hpms_lanes', (v) => Math.ceil(v / 2))],                                          // HPMS counts both directions
+    road_class: [MAP('hpms_fclass', (v) => ({ 1: 0, 2: 0, 3: 2, 4: 3, 5: 4, 6: 4, 7: 6 }[v] ?? NaN))],
+    fog_vis_m: [MAP('visibility_m', (v) => v)],
+    crosswind_ms: [MAP('crosswind_mps', (v) => v)],
+    housing_per_km2: [MAP('housing_density', (v) => v)],
+    built_year: [MAP('median_year_built', (v) => v)],
+    signal_coverage: [MAP('mobile_coverage', (v) => (v >= 1 ? 1 : 0))],
+    park_visitors: [MAP('park_busy', (v) => clamp01(v - 1)), MAP('park_visits', (v) => (v >= 1e6 ? 1 : v >= 1e5 ? 0.5 : v > 0 ? 0.2 : 0))],
+    dark: [MAP('light', (v) => (v === 0 ? 1 : 0))],
     business_per_km: [MAP('biz_per_km', (v) => v)],
     address_per_km: [MAP('addr_per_km', (v) => v)],
     access_per_km: [SUM(['side_roads_per_km', 'driveway_joins_per_km'])],
@@ -221,7 +248,8 @@
     access_destination: [MAP('access_level', (v) => (v >= 1 ? 1 : 0))],
     guardrail: [MAP('guard_rail', (v) => v)],
     cyclist_route: [MAP('cycle_route', (v) => (v > 0 ? 1 : 0))],
-    unlit: [(ch, i) => (ch.dark && ch.lit && Number.isFinite(ch.dark[i]) && Number.isFinite(ch.lit[i]) ? (ch.dark[i] >= 0.5 && ch.lit[i] < 0.5 ? 1 : 0) : NaN), MAP('lit', (v) => (v >= 0.5 ? 0 : 1))],
+    unlit: [(ch, i) => (ch.dark && ch.lit && Number.isFinite(ch.dark[i]) && Number.isFinite(ch.lit[i]) ? (ch.dark[i] >= 0.5 && ch.lit[i] < 0.5 ? 1 : 0) : NaN), MAP('lit', (v) => (v >= 0.5 ? 0 : 1)),
+      MAP('night_lights', (v) => (v < 0.15 ? 1 : 0))],                                           // C: dark country vs lit
   };
   /** A context's channel by canonical name: its own values, gaps filled from the aliases and other providers' names. */
   function channel(ctx, name) {
@@ -256,7 +284,8 @@
     // A motorway or its ramps has no frontage: the shops, houses and lights beside it don't stop you (a trunk road can have them).
     const rcCh = channel(ctx, 'road_class'), useCh = channel(ctx, 'road_use');
     const limited = (i) => (rcCh && rcCh[i] === 0) || (useCh && useCh[i] === 1);
-    const ss = SCENERY.map((t) => ({ t, v: channel(ctx, t.ch), need: t.needs ? channel(ctx, t.needs) : null })).filter((x) => x.v && (!x.t.needs || x.need));
+    const ss = SCENERY.map((t) => ({ t, v: channel(ctx, t.ch), need: t.needs ? channel(ctx, t.needs) : null }))
+      .filter((x) => x.v && (!x.t.needs || x.need) && !(x.t.unless || []).some((u) => channel(ctx, u)));
     const terms = {};
     for (const x of [...qs, ...ss]) { let k = 0; for (let i = 0; i < n; i++) if (Number.isFinite(x.v[i])) k++; terms[x.t.ch] = k / n; }
     const dens = channel(ctx, 'density'), walk = channel(ctx, 'sidewalk');
@@ -266,7 +295,8 @@
       for (const x of qs) {
         let v = x.v[i];
         if (!Number.isFinite(v) || x.u.some((u) => u && Number.isFinite(u[i]))) continue;
-        if ((x.t.family === 'built' || x.t.family === 'business') && limited(i)) continue;
+        // a motorway carries its traffic by design: its volume, noise and trucks say nothing against it (live traffic still does)
+        if ((x.t.family === 'built' || x.t.family === 'business' || (x.t.family === 'busy' && x.t.ch !== 'traffic_ratio')) && limited(i)) continue;
         // a "residential" road in open country with no sidewalk is a country lane (US TIGER imports tag county roads so)
         if (x.t.ch === 'road_class' && v === 6 && dens && dens[i] <= RURAL_DENSITY && !(walk && walk[i] >= 0.5)) v = 5;
         const g = x.t.g(v);
@@ -285,6 +315,7 @@
       let a = 0, b = 0;
       for (const x of ss) {
         const v = x.v[i];
+        if (x.t.rural && dens && dens[i] >= 4) continue;                // photos in town are of the town
         if (!Number.isFinite(v) || (x.need && !Number.isFinite(x.need[i]))) continue;
         const g = x.t.g(v) * (x.need ? clamp01(x.need[i] / 70) : 1);
         if (!finite(g)) continue;
@@ -352,19 +383,39 @@
     const pen = new Map(), addPen = (label, pts, km = 0) => { const p = pen.get(label) || { label, points: 0, km: 0 }; p.points += pts; p.km += km; pen.set(label, p); };
     const exposed = (i) => { const b = channel(ctx, 'bridge'), t = channel(ctx, 'tpi_m'); return (b && b[i] >= 0.5) || (t && t[i] >= 20); };
     const tpiCh = channel(ctx, 'tpi_m'), valleyFactor = (i) => (!tpiCh || !Number.isFinite(tpiCh[i]) ? 1 : tpiCh[i] <= -10 ? 1.5 : tpiCh[i] >= 20 ? 0.5 : 1);
+    const expoCh = channel(ctx, 'exposure'), densCh = channel(ctx, 'density'), cropCh = channel(ctx, 'cropland_class'), aadtCh = channel(ctx, 'aadt');
+    const rcC = channel(ctx, 'road_class'), useC = channel(ctx, 'road_use'), limited = (i) => (rcC && rcC[i] === 0) || (useC && useC[i] === 1);
+    const rainCh = channel(ctx, 'precip_48h_mm'), floodCh = channel(ctx, 'flood_risk');
+    const CropGroup = root.ApexContextGrid && root.ApexContextGrid.cropGroup;
+    const cropFactor = (i) => (!cropCh || !Number.isFinite(cropCh[i]) || !CropGroup ? 1 : ['crops', 'hay'].includes(CropGroup(cropCh[i])) ? 1 : 0.2);
+    const wet = (i) => ((rainCh && rainCh[i] >= 25) || (floodCh && floodCh[i] >= 0.5) ? 1 : 0);
     for (const term of PER_KM) {
       const v = channel(ctx, term.ch), atCh = term.atCh ? channel(ctx, term.atCh) : null;
-      if (!v || (term.pref && !prefs[term.pref])) continue;
+      if (!v || (term.pref && !prefs[term.pref]) || (term.skipIf && channel(ctx, term.skipIf))) continue;
+      const timed = term.timedBy && channel(ctx, term.timedBy);   // the provider already put the time of day in the value
       for (let i = 0; i < n; i++) {
         if (!Number.isFinite(v[i])) continue;
-        const when = atCh && Number.isFinite(atCh[i]) ? atCh[i] : term.at ? (term.at(mom(i)) ?? 0) : 1;
-        const strength = (term.value ? term.value(v[i]) : clamp01(v[i])) * when * (term.exposed && !exposed(i) ? 0 : 1) * (term.valley ? valleyFactor(i) : 1);
+        const when = timed ? 1 : atCh && Number.isFinite(atCh[i]) ? atCh[i] : term.at ? (term.at(mom(i)) ?? 0) : 1;
+        const place = (term.rural ? (densCh && densCh[i] >= 4 ? 0 : 1) : 1) * (term.crop ? cropFactor(i) : 1) * (term.wet ? wet(i) : 1);
+        if (term.perVehicle) {
+          // crashes per km follow traffic: with the road's AADT, the rate per 100 million vehicle-km against the US fatal rate
+          // (~0.8 per 100 M vehicle-km); without it, a busy road's count says nothing (motorways) and a quiet road's counts as is
+          const a = aadtCh && Number.isFinite(aadtCh[i]) && aadtCh[i] > 0 ? aadtCh[i] : null;
+          if (a) { const rate = v[i] / (a * 365) * 1e8; const sx = clamp01((rate - 0.8) / 2.4) * place; if (sx > 0) addPen(term.label, sx * term.perKm * step / 1000, sx * step / 1000); continue; }
+          if (limited(i)) continue;
+        }
+        const exp = term.exposed ? (expoCh && Number.isFinite(expoCh[i]) ? expoCh[i] : exposed(i) ? 1 : 0) : 1;
+        const strength = (term.value ? term.value(v[i]) : clamp01(v[i])) * when * place * exp * (term.valley ? valleyFactor(i) : 1);
         if (strength > 0) addPen(term.label, strength * term.perKm * step / 1000, strength * step / 1000);
       }
     }
     // golden light: west-facing ground with the sun low in the west at the time (a view, not glare; glare is costed apart)
-    const west = channel(ctx, 'west_descent'), aspect = channel(ctx, 'aspect_rad');
-    if (aspect) {
+    const west = channel(ctx, 'west_descent'), aspect = channel(ctx, 'aspect_rad'), gview = channel(ctx, 'golden_view');
+    if (gview) {                                                       // D's golden_view: a descent toward the low sun, never the glare cone
+      let km = 0;
+      for (let i = 0; i < n; i++) if (gview[i] >= 0.5) km += step / 1000;
+      if (km >= 0.5) out.bonuses.push({ label: 'golden light', points: Math.min(4, 0.5 * km), km });
+    } else if (aspect) {
       let km = 0;
       for (let i = 0; i < n; i++) {
         const m = mom(i), p = m.sun;
@@ -379,7 +430,7 @@
     for (const sp of [...(ctx.spans || []), ...(ctx.points || []).map((p) => ({ ...p, fromM: p.atM, toM: p.atM, point: true }))]) {
       const kind = sp.kind in KIND_ALIASES ? KIND_ALIASES[sp.kind] : sp.kind, rule = kind && SPANS[kind];
       if (!rule) continue;
-      if (rule.unlessChannel && channel(ctx, rule.unlessChannel)) continue;
+      if (rule.unlessChannel && [].concat(rule.unlessChannel).some((u) => channel(ctx, u))) continue;
       if (rule.pref && !prefs[rule.pref]) continue;
       const i = at(c, sp.fromM), when = sp.when || rule.when || null;
       if (!active(when, c.etaAt[i])) continue;
@@ -552,7 +603,7 @@
     }
     if (d('penalty') > 1 && q.penalties && q.penalties.length) {
       const top = q.penalties.map((p) => [p, p.points - ((b.penalties || []).find((x) => x.label === p.label) || { points: 0 }).points]).sort((x, y) => y[1] - x[1])[0];
-      if (top && top[1] > 1) facts.push({ w: d('penalty'), text: top[0].label === 'deer' ? 'Deer hour: open roads' : `less ${top[0].label}` });
+      if (top && top[1] > 1) facts.push({ w: d('penalty'), text: top[0].label === 'deer' ? 'Deer hour: open roads' : `${/s$/.test(top[0].label) ? 'fewer' : 'less'} ${top[0].label}` });
     }
     if (d('bonus') > 1 && b.bonuses && b.bonuses.length) facts.push({ w: d('bonus'), text: b.bonuses[0].label === 'golden light' ? 'golden light on the hills' : `${b.bonuses[0].label}` });
     if (d('towns') > 1 && finite(best.townKm) && finite(quick.townKm) && quick.townKm - best.townKm >= 0.5) facts.push({ w: d('towns'), text: `${mi(quick.townKm - best.townKm, metric)} less in towns` });
