@@ -1,5 +1,21 @@
 # VETTA — CURRENT AGENT HANDOFF STATE
 
+## Session 2026-11-04: owner notes through #290; route engine being integrated
+
+- [x] #286-#290: convoy line behind the car (@fish5spd), car-specific themes with any voice pack and red needles,
+  End undo 1.7 s, a granted theme from a newer server falls back to a known renderer (#289), the drive page map zooms a
+  little out and freely in, menu sheets swipe down to close, feedback runs print the build number.
+- [x] e2e can run in WebKit (`BROWSER=webkit`), the app's own engine.
+- Deploy note: Workers Builds did not start a production build for #290's merge (no check on 6885631 after 35 min;
+  earlier merges all built). The next merge to main deploys it; verify by curling `cockpit.js` for `SWIPE_CLOSE_PX`.
+- In progress (route intelligence): one route engine scoring every 25 m for road quality (speed limit, class, signals,
+  driveways, businesses, density, land use) and scenery, with time-dependent penalties and hard constraints, fed by five
+  data families (router edges + DEM, OSM tiles/Overpass, national context grid, time/world, driver/crowd/car). Branches
+  are being merged into the engine branch; calibrated on four real Cincinnati route choices. Flowchart:
+  docs/ROUTE_ENGINE.md (lands with the engine PR).
+- Local e2e flakes under heavy machine load ("Where to?" suggestion, "car map glides"); green in CI. Re-check idle.
+- Exact next task: finish the route engine merge, full tests, one PR, then recording 8 / panel round 3.
+
 ## Session 2026-11-03 (later): road data, tester feedback, private themes (#285)
 
 - [x] Road data reaches the map (line and class uploaded; 187 roads backfilled from OSM), no placeholder camber (all
