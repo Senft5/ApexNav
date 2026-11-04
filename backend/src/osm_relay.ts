@@ -11,6 +11,8 @@
 export const TILE = 0.05;
 export const KEEP_S = 7 * 86400;
 export const MIRROR_MS = 9000;
+// the Overpass usage policy asks for an identifying User-Agent with a way to reach the operator (no person's email)
+export const UA = "Vetta-route-context/1.0 (+https://apexnav.senftns.workers.dev/about.html)";
 export const WAIT_MS = 3500;   // a miss: the phone gets 504 after this (its plan has moved on) and the fetch finishes for the next one
 export const MIRRORS = ["https://overpass-api.de/api/interpreter", "https://overpass.kumi.systems/api/interpreter",
   "https://overpass.private.coffee/api/interpreter", "https://maps.mail.ru/osm/tools/overpass/api/interpreter"];
@@ -72,7 +74,7 @@ type Waiter = { waitUntil(p: Promise<unknown>): void };
 export async function ask(q: string, fetcher: typeof fetch = fetch, mirrors = MIRRORS, ms = MIRROR_MS): Promise<unknown | null> {
   try {
     return await Promise.any(mirrors.map(async (url) => {
-      const r = await fetcher(url, { method: "POST", body: "data=" + encodeURIComponent(q), headers: { "content-type": "application/x-www-form-urlencoded", "user-agent": "Vetta route context relay" }, signal: AbortSignal.timeout(ms) });
+      const r = await fetcher(url, { method: "POST", body: "data=" + encodeURIComponent(q), headers: { "content-type": "application/x-www-form-urlencoded", "user-agent": UA }, signal: AbortSignal.timeout(ms) });
       if (!r.ok) throw new Error(`http ${r.status}`);
       const j = await r.json() as { remark?: string; elements?: unknown };
       if (!j || !Array.isArray(j.elements) || (j.remark && /error|timed out/i.test(j.remark))) throw new Error("bad answer");
@@ -80,6 +82,26 @@ export async function ask(q: string, fetcher: typeof fetch = fetch, mirrors = MI
     }));
   } catch { return null; }
 }
+
+/** ?diag=1: each mirror asked once for the tile, in parallel: its status, time and size (never the data), and the cache. */
+export async function diag(tile: string, fetcher: typeof fetch = fetch, ms = MIRROR_MS): Promise<Response> {
+  const q = query([tile]);
+  const mirrors = await Promise.all(MIRRORS.map(async (url) => {
+    const t0 = Date.now();
+    try {
+      const r = await fetcher(url, { method: "POST", body: "data=" + encodeURIComponent(q), headers: { "content-type": "application/x-www-form-urlencoded", "user-agent": UA }, signal: AbortSignal.timeout(ms) });
+      const text = await r.text();
+      let elements: number | null = null, remark: string | null = null;
+      try { const j = JSON.parse(text); elements = Array.isArray(j.elements) ? j.elements.length : null; remark = typeof j.remark === "string" ? j.remark.slice(0, 120) : null; } catch { /* not JSON */ }
+      return { mirror: new URL(url).host, status: r.status, ms: Date.now() - t0, bytes: text.length, elements, remark, head: elements == null ? text.slice(0, 120) : undefined };
+    } catch (e) { return { mirror: new URL(url).host, status: 0, ms: Date.now() - t0, error: String((e as Error)?.name || e).slice(0, 80) }; }
+  }));
+  const cache = typeof caches !== "undefined" ? (caches as unknown as { default: Cache }).default : null;
+  let cached: boolean | null = null;
+  try { cached = cache ? !!(await cache.match(cacheKey(tile))) : null; } catch { cached = null; }
+  return new Response(JSON.stringify({ tile, cached, mirrors }), { headers: { "content-type": "application/json", "cache-control": "no-store" } });
+}
+const cacheKey = (tile: string) => new Request(`https://apexnav.cache/osm/v1/${tile}`);
 
 const inflight = new Map<string, Promise<string | null>>();
 /**
@@ -91,6 +113,7 @@ export async function osmTile(url: URL, env: { OSM?: Kv }, waiter?: Waiter, fetc
   const tile = tileOf(url.searchParams.get("bbox"));
   const headers = { "content-type": "application/json", "cache-control": `public, max-age=${KEEP_S}`, "x-content-type-options": "nosniff" };
   if (!tile) return new Response(JSON.stringify({ error: "bad_bbox" }), { status: 400, headers: { "content-type": "application/json" } });
+  if (url.searchParams.get("diag") === "1") return diag(tile, fetcher);
   const key = new Request(`https://apexnav.cache/osm/v1/${tile}`), kvKey = `osm/v1/${tile}`;
   const cache = typeof caches !== "undefined" ? (caches as unknown as { default: Cache }).default : null;
   try {
