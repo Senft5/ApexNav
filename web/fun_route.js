@@ -314,6 +314,56 @@
     return (L.fun - 1) * f - 80 * (L.len - 1) * (Number.isFinite(offShare) ? Math.abs(offShare) : 0);
   }
   /**
+   * A loop is a drive for fun back to the start (the owner, 2026-11-04: "it also seems to route mostly highway for
+   * loops"): a motorway or trunk road may be a short link to the good roads, never the bulk. What a loop gives up for the
+   * share of it on motorway or trunk (0..1) beyond the level's free share: 1.5 points per % over (retraced road is 2 per %,
+   * loopValue). Quick lets a quarter be highway, Fun a tenth, Long way a twentieth. Unknown (null) costs nothing: the road
+   * class wasn't known, which is not the same as no highway.
+   */
+  const LOOP_HWY = { quick: { free: 0.25, per: 100 }, fun: { free: 0.10, per: 150 }, max: { free: 0.05, per: 150 } };
+  function loopHighwayCost(share, level) {
+    if (!Number.isFinite(share)) return 0;
+    const L = LOOP_HWY[level] || LOOP_HWY.fun;
+    return L.per * Math.max(0, share - L.free);
+  }
+  /**
+   * Does loop a beat loop b on everything the card shows (corners and time), without more of it retraced or on highway,
+   * and not much further off the asked length (0.2 of it: a 28 mi loop isn't the answer to a 15 mi ask because it is
+   * quicker than a slow 15)? Then b must never rank above a, at any level (the owner, a 90 mi Long way loop: C, 2:03 and 89
+   * corners, picked over A, 1:53 and 118). Items: { corners, timeS, retraced, hwyShare, off, hard }; unknown numbers never
+   * dominate.
+   */
+  function loopDominates(a, b) {
+    const n = Number.isFinite;
+    if (!a || !b || a.hard || !n(a.corners) || !n(b.corners) || !n(a.timeS) || !n(b.timeS)) return false;
+    if (!(a.corners >= b.corners && a.timeS <= b.timeS && (a.corners > b.corners || a.timeS < b.timeS))) return false;
+    if ((a.retraced || 0) > (b.retraced || 0) + 0.05) return false;
+    if (n(a.off) && Math.abs(a.off) > (n(b.off) ? Math.abs(b.off) : 0) + 0.2) return false;
+    if (n(a.hwyShare) ? n(b.hwyShare) && a.hwyShare > b.hwyShare + 0.05 : n(b.hwyShare)) return false;
+    return true;
+  }
+  /**
+   * The loops built, best first for a level: value = score (the Fun ranking, no highway cost in it) + the level's
+   * adjustment (loopLevelAdjust) - the level's highway cost (loopHighwayCost); then no loop stays above one that
+   * dominates it (loopDominates). items: [{ score, fun, off, hwyShare, corners, timeS, retraced, hard }]. Returns
+   * [{ item, v }] in order.
+   */
+  function loopRank(items, level) {
+    const out = (items || []).map((d) => ({ item: d, v: d.score + loopLevelAdjust(d.fun, d.off, level) - loopHighwayCost(d.hwyShare, level) })).sort((a, b) => b.v - a.v);
+    for (let guard = 0, moved = true; moved && guard < out.length * out.length; guard++) {
+      moved = false;
+      for (let i = 0; i < out.length && !moved; i++) {
+        for (let j = i + 1; j < out.length; j++) {
+          if (!loopDominates(out[j].item, out[i].item)) continue;
+          out.splice(i, 0, out.splice(j, 1)[0]);                     // the better loop goes ahead of the one it beats
+          moved = true;
+          break;
+        }
+      }
+    }
+    return out;
+  }
+  /**
    * Stages worth timing for a loop of targetKm from start: the best-scoring ones close enough to
    * reach and come back from (crow fly out and back within the target), no duplicates. At most `k`;
    * the matrix is (1 + 2k) x (2k + 1), split into calls of 100 pairs.
@@ -702,6 +752,6 @@
     return out;
   }
 
-  const api = { LEVELS, BUILT, builtKeep, builtAgree, shown, dominates, cornerWeight, townKm, townCost, exploreShortlist, exploreTargets, explorePicks, distinctOptions, glare, glareCost, LOOP_BY_TIME, LOOP_LEVEL, loopLevelAdjust, AVOID_DEFAULT, AVOID_LABELS, STAGE_KEPT, stageCoverage, keptStages, CAMERA_BOX_DEG, camerasToExclude, costing, unavoided, keepAvoiding, why, geometry, alongPoints, insertVia, loopValue, loopShortlist, loopPlansFromMatrix, score, shortlist, matrixPoints, plansFromMatrix, sectionCount, sectionPoints, combineSections, planKey, searchArea, waypoints, rank, along, kmBetween, directionBonus, setList, SET_FINISH, SET_FATIGUE, MAX_TECH_PER_KM, carNote, stageSpans, stageAhead };
+  const api = { LEVELS, BUILT, builtKeep, builtAgree, shown, dominates, cornerWeight, townKm, townCost, exploreShortlist, exploreTargets, explorePicks, distinctOptions, glare, glareCost, LOOP_BY_TIME, LOOP_LEVEL, loopLevelAdjust, LOOP_HWY, loopHighwayCost, loopDominates, loopRank, AVOID_DEFAULT, AVOID_LABELS, STAGE_KEPT, stageCoverage, keptStages, CAMERA_BOX_DEG, camerasToExclude, costing, unavoided, keepAvoiding, why, geometry, alongPoints, insertVia, loopValue, loopShortlist, loopPlansFromMatrix, score, shortlist, matrixPoints, plansFromMatrix, sectionCount, sectionPoints, combineSections, planKey, searchArea, waypoints, rank, along, kmBetween, directionBonus, setList, SET_FINISH, SET_FATIGUE, MAX_TECH_PER_KM, carNote, stageSpans, stageAhead };
   if (typeof module !== 'undefined' && module.exports) module.exports = api; else root.ApexFunRoute = api;
 })(typeof window !== 'undefined' ? window : globalThis);

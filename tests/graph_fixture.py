@@ -1,7 +1,9 @@
 """Synthetic graph tiles written by the real writer (tools/graph_etl/tiles.py), for the router's worker test and the
 own-routing e2e flows: tests/graph_router_harness.js makes a city-like grid, this writes one .vgr per tile and index.json.
 
-    python3 tests/graph_fixture.py <out dir> [seed nx ny stepDeg lat0 lon0]
+    python3 tests/graph_fixture.py <out dir> [seed nx ny stepDeg lat0 lon0 [motorway]]
+
+motorway 1: the grid's arterials are motorways (the loop e2e flow: loops keep off them).
 """
 import json
 import os
@@ -15,16 +17,16 @@ from tools.graph_etl import tiles as T  # noqa: E402
 
 DUMP = r"""
 const H = require(process.argv[1] + '/tests/graph_router_harness.js');
-const [seed, nx, ny, stepDeg, lat0, lon0] = process.argv.slice(2).map(Number);
-const g = H.grid({ seed, nx, ny, holes: 0.05, oneway: 0.05, signals: 0.15, stepDeg, lat0, lon0 });
+const [seed, nx, ny, stepDeg, lat0, lon0, motorway] = process.argv.slice(2).map(Number);
+const g = H.grid({ seed, nx, ny, holes: 0.05, oneway: 0.05, signals: 0.15, stepDeg, lat0, lon0, motorway: motorway === 1 });
 process.stdout.write(JSON.stringify(H.dump(H.tiles(g.nodes, g.edges).tiles)));
 """
 DEFAULT = (3, 30, 30, 0.004, 39.15, -84.62)
 
 
-def dump(seed=3, nx=30, ny=30, step=0.004, lat0=39.15, lon0=-84.62):
+def dump(seed=3, nx=30, ny=30, step=0.004, lat0=39.15, lon0=-84.62, motorway=0):
     node = shutil.which("node")
-    out = subprocess.run([node, "-e", DUMP, ROOT, *map(str, (seed, nx, ny, step, lat0, lon0))], capture_output=True, text=True, check=True).stdout
+    out = subprocess.run([node, "-e", DUMP, ROOT, *map(str, (seed, nx, ny, step, lat0, lon0, motorway))], capture_output=True, text=True, check=True).stdout
     return json.loads(out)
 
 
@@ -50,5 +52,5 @@ def write_tiles(tiles, d):
 
 if __name__ == "__main__":
     args = sys.argv[2:]
-    params = [int(a) if k < 3 else float(a) for k, a in enumerate(args)] if args else DEFAULT
+    params = [int(a) if k < 3 or k == 6 else float(a) for k, a in enumerate(args)] if args else DEFAULT
     print(json.dumps(write_tiles(dump(*params), sys.argv[1])["tiles"]))

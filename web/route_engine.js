@@ -598,7 +598,7 @@
     const fts = features(ctx), signals = fts.filter((p) => p.point && p.kind === 'signal').length, stops = fts.filter((p) => p.point && p.kind === 'stop').length;
     const km = (m) => m / 1000;
     return { limitLoKph: quantile(limits, 0.25), limitHiKph: quantile(limits, 0.75), limitMedKph: median(limits), signals: channel(ctx, 'signals_per_km') ? signals : null,
-      stops: channel(ctx, 'stops_per_km') || stops ? stops : null, highwayKm: known.rc ? km(hwyM) : null, residentialKm: known.rc ? km(resM) : null,
+      stops: channel(ctx, 'stops_per_km') || stops ? stops : null, highwayKm: known.rc ? km(hwyM) : null, classKm: known.rc ? km(known.rc * step) : null, residentialKm: known.rc ? km(resM) : null,
       businessKm: known.biz ? km(bizM) : null, forestKm: known.forest ? km(forestM) : null, forestShare: known.forest ? forestM / (known.forest * step) : null,
       waterKm: known.water ? km(waterM) : null, ridgeKm: known.ridge ? km(ridgeM) : null, climbM: climb == null ? null : Math.round(climb), km: km(c.totalM || c.distM[n - 1]) };
   }
@@ -834,6 +834,15 @@
   }
   const highwayCosting = (avoid, car) => (avoid && avoid.highways ? null : connectorCosting(avoid, car, 1.0));
   /**
+   * Router costing for a loop's legs (stage plans, the matrix between a loop's stages): a loop is a drive for fun, so
+   * highways are a short link at most, never welcome (connectorCosting's 0.6 let them carry half a loop, live 2026-11-04).
+   * Quick 0.25, Fun and Long way 0.1 (Valhalla's default is 0.5); avoided highways stay at FunRoute.costing's 0.
+   */
+  const LOOP_USE_HIGHWAYS = { quick: 0.25, fun: 0.1, max: 0.1 };
+  const loopCosting = (avoid, car, level = 'fun') => connectorCosting(avoid, car, LOOP_USE_HIGHWAYS[level] != null ? LOOP_USE_HIGHWAYS[level] : 0.1);
+  /** The share of a ranked route on motorway or trunk (0..1) where the context knew the road class; null where it didn't. */
+  const highwayShare = (ev) => (ev && ev.stats && Number.isFinite(ev.stats.highwayKm) && ev.stats.classKm > 0 ? Math.min(1, ev.stats.highwayKm / ev.stats.classKm) : null);
+  /**
    * Stages re-scored by what the context says about the road (the network step: good roads, not just twisty lines): each
    * stage's geometry score times its corner gate (a curvy subdivision street falls to 40 %), plus scenery. Sorted best
    * first; stages with no context keep their score. Mutates s.score (s.mapScore keeps the original) and sets s.ev.
@@ -878,7 +887,7 @@
   }
 
   const api = { VERSION: 1, QUALITY, SCENERY, PER_KM, SPANS, ALIASES, KIND_ALIASES, SOURCES, W, SPEED, gate, builtKeep, cornerGate, active, moment, channel, builtEvidence, samples, evaluate, stats, rank, why, whyOver, whyQuickest,
-    placeTimes, corridorFor, stageCorridor, stageCorridors, connectorCosting, highwayCosting, rescoreStages, loopValue, ramp, decay };
+    placeTimes, corridorFor, stageCorridor, stageCorridors, connectorCosting, highwayCosting, loopCosting, LOOP_USE_HIGHWAYS, highwayShare, rescoreStages, loopValue, ramp, decay };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   root.ApexRouteEngine = api;
 })(typeof window !== 'undefined' ? window : globalThis);
