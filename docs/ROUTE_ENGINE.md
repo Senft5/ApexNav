@@ -44,11 +44,11 @@ flowchart TD
   RUN --> A1["A router_edges.js, priority 10, 2.4 s,<br>stages too: one Valhalla trace_attributes<br>per candidate, edge_walk then map_snap on<br>2000 points, 2 at a time, kept 30 min per<br>line. speed_limit_kph, speed_limit_est_kph<br>flagged, speed_kph, road_class, road_use,<br>density, lanes, surface, sidewalk,<br>truck_route, bridge, tunnel, toll, ramp,<br>roundabout, signals_per_km, access_per_km,<br>intersections_per_km; points signal,<br>junction, driveway"]
   RUN --> A2["A dem.js, priority 20, 2 s, stages too: z12<br>Terrarium tiles, at most 64 a plan, shortest<br>corridors first. elev_m, grade_pct,<br>relief_m, tpi_m, aspect_rad, west_descent;<br>spans climb, descent"]
   RUN --> B1["B osm_tiles.js, 8 s:<br>lu_residential, lu_commercial, lu_retail,<br>lu_industrial, lu_forest, lu_farmland,<br>lu_open, lu_park, lu_mapped, water_near,<br>creek_follow, bldg_per_km, addr_per_km,<br>biz_per_km, junctions_per_km,<br>driveways_per_km, access_per_km, road_class<br>in map codes, on_bridge, in_tunnel, unpaved;<br>points school, worship, viewpoint, place,<br>rail_crossing, gate"]
-  RUN --> B2["B osm_overpass.js, 15 s:<br>maxspeed_kph, lanes, divided, oneway,<br>surface_paved, smoothness, hgv,<br>access_level, guard_rail, cycle_route,<br>byway,<br>signals/stops/crossings/calming_per_km,<br>side_roads_per_km, driveway_joins_per_km;<br>points signal, stop, give_way, crossing,<br>calming, level_crossing, curve_sign,<br>animal_crossing, buggy, viewpoint, historic,<br>fuel; spans roundabout, one_lane_bridge,<br>covered_bridge, access_private,<br>access_destination, cycle_route, byway"]
+  RUN --> B2["B osm_overpass.js, 15 s, by 0.05° tiles, never<br>the route's line:<br>maxspeed_kph, lanes, divided, oneway,<br>surface_paved, smoothness, hgv,<br>access_level, guard_rail, cycle_route,<br>byway,<br>signals/stops/crossings/calming_per_km,<br>side_roads_per_km, driveway_joins_per_km;<br>points signal, stop, give_way, crossing,<br>calming, level_crossing, curve_sign,<br>animal_crossing, buggy, viewpoint, historic,<br>fuel; spans roundabout, one_lane_bridge,<br>covered_bridge, access_private,<br>access_destination, cycle_route, byway"]
   RUN --> B3["B road_name_age.js: name_age"]
   RUN --> C1["C context_grid.js, 4 s, local bundles<br>web/data/ctx/v1 then the Worker's KV:<br>night_lights, impervious_pct, canopy_pct,<br>noise_db, housing_density,<br>population_density, address_density,<br>median_year_built, flood_zone,<br>cropland_class, park_visits, aadt, iri,<br>hpms_speed_limit, hpms_lanes, hpms_fclass,<br>crash_density; mobile_coverage not built<br>(always unknown); spans nps_unit; points<br>fatal_crash"]
   RUN --> D1["D, second phase with the first's land use<br>and terrain: conditions.js air_temp_c,<br>road_temp_c, visibility_m, fog_risk,<br>crosswind_mps, exposure, precip_6h/48h_mm,<br>wx_hazard, light, glare, golden_view;<br>wildlife.js deer_time_risk, deer_risk;<br>events.js event_crowd, school_zone,<br>school_bus_hour, church_window;<br>hazards_live.js flood_risk, works,<br>harvest_traffic, park_busy, foliage, spans<br>closure, works, flood, low-water, paving;<br>photos.js photo_score, sign_maxspeed_mps,<br>curve_sign. Not built: snowplough (no OHGO<br>endpoint), city permits, FEMA flood zones live,<br>NC and VA work zones"]
-  RUN --> E1["E crowd.js, 9 s: crowd_rough_g, crowd_bank_deg,<br>crowd_curv, crowd_conf, crowd_flow, loved,<br>taste, crowd_busy (quiet_hours flag, off);<br>needs lookup /api/roads, crewLines, myTracks"]
+  RUN --> E1["E crowd.js, 9 s, second phase: members' data<br>by 0.1° cells, ways from the router's edges:<br>crowd_rough_g, crowd_bank_deg,<br>crowd_curv, crowd_conf, crowd_flow, loved,<br>taste, crowd_busy (quiet_hours flag, off);<br>needs lookupCells /api/roads?cells=,<br>crewLines"]
   RUN --> E2["E driver.js, 8 s: passenger_cost, tech_level,<br>skill_fit, dark, lit, cyclist_route,<br>cyclist_time, tunnel, driver_fit; spans<br>hairpins, abrupt, unlit_dark, cycle_route,<br>tunnel; For this drive prefs passenger,<br>lit, cyclists, tunnels"]
   RUN --> E3["E car.js, 8 s: fuel_since_km, fuel_margin,<br>signal; spans fuel_gap hard, fuel_check,<br>no_signal; points fuel_stop, share_eta,<br>ask_range; needs apiGet /api/chargers"]
   RUN --> E4["E ios_context.js: free_min; span<br>past_next_event; point album_ends.<br>crew_meet.js: point crew_start"]
@@ -73,7 +73,8 @@ flowchart TD
   LIM -- no --> RUR{{"road_class residential, density 2 or less,<br>no sidewalk?"}}
   RUR -- yes --> LANE["read as unclassified, a country lane"]
   NOFR ~~~ LANE
-  NOFR & LANE & RUR --> G["Each quality term: goodness g 0 to 1 from<br>its curve, weight w, see the Quality table"]
+  NOFR & LANE & RUR --> BLT["built evidence 0 to 1 (density, sidewalk,<br>residential class, businesses, housing,<br>impervious, addresses, buildings, land use):<br>speed goodness floored at 0.7 x (1 - built),<br>driveways at 0.75 x (1 - built)"]
+  BLT --> G["Each quality term: goodness g 0 to 1 from<br>its curve, weight w, see the Quality table"]
   G --> GM["Weighted geometric mean: exp of sum w ln max<br>0.05 g over sum w"]
   G --> FAM["Damning families speed, road, stops, access,<br>business: each a weighted geometric mean;<br>take the worst"]
   GM & FAM --> Q["quality = geometric mean times sqrt of the<br>worst family"]
@@ -109,7 +110,8 @@ flowchart TD
   FOG ~~~ WIND ~~~ UNLIT
   HARD ~~~ PEN ~~~ BON
   CAR ~~~ ASP ~~~ PASS
-  PK & PEN & TIGHT --> PSUM["penalties, cap 40"]
+  PK & PEN & TIGHT --> DED["duplicates across providers once (same kind<br>within 40 m / 150 m); each kind saturates<br>softly toward 12"]
+  DED --> PSUM["penalties, cap 40"]
   BON & GOLD --> BSUM["bonuses, cap 15"]
   HARD & FIT --> HSUM["hard list"]
   PSUM ~~~ BSUM ~~~ HSUM
@@ -134,6 +136,7 @@ flowchart TD
   LVL ~~~ TIME ~~~ QT ~~~ OLD ~~~ BP
   FUN & GAIN & TIME & QT & POOR & SCN --> V["value = fun + gain + time + quality + poor +<br>scenery + bonuses + penalties + driver +<br>glare + towns + weather + measured + taste + prefer"]
   BP["bonuses, penalties, hard from diagram 3"] --> V
+  UNK["unknown stretches: the lowest known<br>candidate's gate and quality, the highest<br>side-street cost per km: unknown can't win"] --> V
   V --> NOCTX["No context at all: every new term is 0,<br>value equals ApexFunRoute.rank exactly"]
   NOCTX ~~~ CONF
   V --> CONF["confidence = mean of 2 qConf + sConf over 3"]
@@ -183,71 +186,69 @@ under "The channels" are checked the same way (channel and weight).
 | END_GRACE_M | 1200 | metres free at each end |
 | SCENERY | 20 | points for scenery 1 vs 0.5, times how much is known |
 | Q_FULL_CONF | 0.3 | share of quality weight known for full weight |
-| S_FULL_CONF | 0.35 | share of scenery weight known for full weight |
+| S_FULL_CONF | 0.2 | share of scenery weight known for full weight (land use alone counts) |
 | GATE_LO | 0.25 | quality at which a corner counts nothing |
 | GATE_HI | 0.6 | quality at which a corner counts in full |
-| PENALTY_CAP | 40 | the most penalties cost |
+| PENALTY_CAP | 40 | the total penalties saturate softly toward this |
 | BONUS_CAP | 15 | the most bonuses add |
-| LOG_FLOOR | 0.05 | the lowest goodness in the geometric mean |
 | DRIVER | 6 | points for driver_fit (else skill_fit) 1 vs 0, times the share known |
+| LOG_FLOOR | 0.05 | the lowest goodness in the geometric mean |
+| SPEED_FLOOR | 0.7 | speed goodness floor in open country (× 1 − built evidence) |
+| ACCESS_FLOOR | 0.75 | driveway goodness floor in open country (× 1 − built evidence) |
+| KIND_CAP | 12 | each kind of penalty saturates softly toward this |
 
 | per-km penalty | points per km |
 |---|---|
 | deer_risk | 1.5 |
 | fog_vis_m | 1.2 |
+| fog_risk | 1.2 |
 | crosswind_ms | 0.6 |
-| road_temp_c | 0.25 |
-| crash_rate | 0.6 |
+| road_temp_c | 0.6 |
+| crash_density | 0.6 |
 | cyclist_route | 0.5 |
 | buggy | 0.8 |
 | unlit | 0.6 |
-| snow_cover | 2 |
 | crowd_busy | 0.6 |
 | park_visitors | 0.5 |
-| signal_coverage | 0.15 |
-| fog_risk | 1.2 |
-| crash_density | 0.6 |
+| signal_coverage | 0.4 |
 | event_crowd | 2 |
 | school_zone | 3 |
-| school_bus_hour | 0.3 |
+| school_bus_hour | 0.8 |
 | church_window | 1 |
 | harvest_traffic | 0.5 |
 | flood_zone | 2 |
-| ice | 3 |
 | passenger_cost | 1.5 |
 | fuel_margin | 0.5 |
 
 | span or point | each | per km | bonus | bonus per km | cap | hard |
 |---|---|---|---|---|---|---|
-| closure | | | | | | yes |
-| no_access | | | | | | yes |
-| flood | 5 | | | | | value 1 or more |
-| school | 2 | 1 | | | | |
-| church | 1 | | | | | |
-| event | 6 | | | | | |
-| works | 4 | | | | | |
-| harvest | | 0.5 | | | | |
-| unploughed | | 2 | | | | |
-| byway | | | | 0.4 | 12 | |
-| level_crossing | 0.7 | | | | | |
-| one_lane_bridge | 0.5 | | | | | |
-| animal_crossing | 0.3 | | | | | |
-| speed_bump | 0.5 | | | | | |
-| stop | 0.4 | | | | | |
-| viewpoint | | | 1.5 | | 6 | |
-| covered_bridge | | | 2 | | 4 | |
-| historic | | | 0.5 | | 3 | |
-| waterfall | | | 1 | | 3 | |
-| tunnel | | | 1.5 | | 4.5 | |
-| resurfaced | | | | 0.3 | 3 | |
-| camera | | | | | | |
-| gate | 1 | | | | | |
-| buggy | 0.5 | | | | | |
-| curve_sign | | | 0.2 | | 2 | |
-| access_destination | 1 | 2 | | | | |
-| cycle_route | | 0.5 | | | | |
-| fuel_gap | | | | | | yes |
-| past_next_event | 0 | | | | | |
+| closure |  |  |  |  |  | yes |
+| no_access |  |  |  |  |  | yes |
+| flood | 5 |  |  |  |  | value 1 or more |
+| school | 2 | 1 |  |  |  |  |
+| church | 1 |  |  |  |  |  |
+| event | 6 |  |  |  |  |  |
+| works | 4 |  |  |  |  |  |
+| harvest |  | 0.5 |  |  |  |  |
+| byway |  |  |  | 0.4 | 12 |  |
+| level_crossing | 0.7 |  |  |  |  |  |
+| one_lane_bridge | 0.5 |  |  |  |  |  |
+| animal_crossing | 0.3 |  |  |  |  |  |
+| speed_bump | 0.5 |  |  |  |  |  |
+| stop | 0.4 |  |  |  |  |  |
+| viewpoint |  |  | 1.5 |  | 6 |  |
+| covered_bridge |  |  | 2 |  | 4 |  |
+| historic |  |  | 0.5 |  | 3 |  |
+| tunnel |  |  | 1.5 |  | 4.5 |  |
+| resurfaced |  |  |  | 0.3 | 3 |  |
+| fuel_gap |  |  |  |  |  | yes |
+| past_next_event | 0 |  |  |  |  |  |
+| gate | 1 |  |  |  |  |  |
+| ice |  | 3 |  |  |  |  |
+| buggy | 0.5 |  |  |  |  |  |
+| curve_sign |  |  | 0.2 |  | 2 |  |
+| access_destination | 1 | 2 |  |  |  |  |
+| cycle_route |  | 0.5 |  |  |  |  |
 
 | level | budget | slack s | points per extra minute |
 |---|---|---|---|
@@ -267,7 +268,13 @@ under "The channels" are checked the same way (channel and weight).
   a 25 mph side street, a driveway every 30 m or a row of shops a good road. Values on real roads (Cincinnati fixtures):
   country back roads 0.6–0.85, interstates 0.65–0.75, suburban collectors 0.3–0.45, subdivisions 0.1–0.25, strip-mall
   arterials 0.05–0.25.
-- A motorway or ramp has no frontage: the built and business terms (shops, houses, lights beside it) are skipped there.
+- **A low limit damns a road only where the built signals agree.** Each sample's built evidence (0 open country … 1 town)
+  is the most built of: router density, sidewalks, a residential or service road, businesses, housing, impervious ground,
+  addresses, buildings, residential or urban land use. The speed family's goodness is floored at 0.7 × (1 − built) and the
+  driveway family's at 0.75 × (1 − built): a 30 mph primary through forest (the Dragon kind) keeps quality ~0.7 and its
+  corners; the same road built up does not. Unknown built evidence: no floor.
+- A motorway or ramp has no frontage: the built and business terms (shops, houses, lights beside it) and its traffic
+  volume, noise and trucks are skipped there.
 - A "residential" road with router density ≤ 2 and no sidewalk is read as a country lane (US TIGER imports tag county
   roads residential), class unclassified and an estimated 35 mph.
 - **Scenery** is a weighted arithmetic mean (one nice thing is nice).
@@ -285,26 +292,30 @@ under "The channels" are checked the same way (channel and weight).
 | scenery | 20 × mean(scenery − 0.5) weighted by how much of it is known (full at 35 %) | ±10 |
 | poor | −3 per km of side street or business district: smooth from quality 0.45 down, full at 0.25; the first and last 1.2 km are free (every trip starts in a street); cap 60 | ≤ 0 |
 | bonuses | byways 0.4/km (cap 12), viewpoints 1.5 (cap 6), a covered bridge 2, history 0.5, a waterfall 1, tunnels 1.5 (if preferred), fresh asphalt 0.3/km, golden light on west-facing ground (0.5/km, cap 4); all bonuses cap 15 | ≤ 15 |
-| penalties | per km and per span at the time you'd be there (below); cap 40 | ≥ −40 |
+| penalties | per km and per span at the time you'd be there (below); each kind saturates softly toward 12 (KIND_CAP: deer alone can't fill it, a longer deer road still costs more), the total toward 40 | ≥ −40 |
 | time | − the level's perMin × extra minutes (Quick 3, Fun 1, Max 0.35) | |
 | glare, towns, weather, measured, taste, prefer | today's terms, unchanged: glare 1/min (cap 20), towns 3/km (cap 60, when avoided), weather (ice 30, storms 15, rain 6, fog 4 by share, relative), members' roughness/banking −8…+5, taste ±8, the Prefer stamps | |
 
-`value` is their sum; `rank` drops candidates past the level's budget (as before) and any with a hard constraint, unless
-every candidate fails one (then they stay, flagged, and the card says what). **With no context at all the value is
+`value` is their sum; `rank` takes the quickest and the budget from the candidates that can be driven, drops those past
+the budget and any with a hard constraint; if every candidate breaks one, the least bad (fewest) stays, flagged, and the
+route card says what (never an empty ranking). **Unknown data can't win:** where a candidate's road quality is unknown
+(or only in part) and others' is known, its unknown stretches take the lowest known candidate's corner gate and quality
+and the highest side-street cost per km. **With no context at all the value is
 exactly ApexFunRoute.rank's**, value for value (tests/test_route_engine.py runs 600 random pools): when every provider is
 slow or down, routing is today's.
 
 ### Time-dependent penalties
 
 Each sample has `etaAt` (the router's maneuver clock placed on the line, else its total spread by distance, else 50 km/h;
-times the driver's live pace while driving). At that time, in the phone's local time:
+times the driver's live pace while driving). At that time, in the local time of the place (ctx_util.js `localTime`, the
+sample's own zone, not the phone's):
 
 | term | when | cost |
 |---|---|---|
-| `deer_risk` | sun −10°…+8° (full), night 0.35, day 0.1 | 1.5/km |
+| `deer_risk` | D's rate (1 = the average hour) with the hour in it; × 0.25 on motorways and ramps | 1.5/km at 4× |
 | `fog_vis_m` | as forecast; ×1.5 in a valley (TPI ≤ −10 m), ×0.5 on a ridge (TPI ≥ 20 m) | 1.2/km below 1 km |
 | `crosswind_ms` | on bridges and ridges only | 0.6/km over 8 m/s |
-| `road_temp_c` | cold tyres | 0.25/km below 7 °C |
+| `road_temp_c` | cold tyres | 0.6/km below 7 °C |
 | `cyclist_route` | Sat/Sun 7–11 | 0.5/km |
 | `park_visitors` | Sat/Sun 9–18 | 0.5/km |
 | `unlit` | after dusk (sun < −6°), only with the "avoid unlit roads" preference | 0.6/km |
@@ -322,8 +333,11 @@ months: [1–12] }` (weekly windows may wrap midnight); none means always, or th
 ### Hard constraints
 
 A `closure` or `no_access` span active at the time; `flood` with value ≥ 1 (water over the road); a car that doesn't fit
-(`maxwidth_m`, `maxheight_m`, `maxweight_t` under the Garage car's width, height or weight); unpaved (`surface` ≥ 3) for
-a low car; a gap between `fuel` points longer than 85 % of the car's `range_km`.
+(`maxwidth_m`, `maxheight_m`, `maxweight_t`, from OSM maxwidth / maxheight / maxweight via osm_overpass.js, under the
+Garage car's width, height or weight); unpaved (`surface` ≥ 3) for a low car; car.js's `fuel_gap` span (longer than the
+car's safe range between stations), hard only where every station tile along it answered (else `fuel_unsure`, said).
+Duplicates across providers count once: the same kind within 40 m (signals, stops, crossings) or 150 m (spans and other
+points), with kinds normalised (`rail_crossing` = `level_crossing`).
 
 ### The why line
 
@@ -388,7 +402,6 @@ the lower `priority` provider wins where it knows, the other fills its gaps.
 |---|---|---|---|---|
 | `speed_limit_kph` | km/h | A | 3 | 30→0, 40→0.03, 56→0.35, 72→0.7, 89→0.95, 105→1 (never falls with speed) |
 | `speed_limit_est_kph` | km/h | A (flag: an estimate) | 1.2 | the same, only where no limit is posted |
-| `mapillary_limit_kph` | km/h | B (sign photos) | 2.5 | the same, where no limit is posted |
 | `speed_kph` | km/h | A | 0.8 | the same, only where neither limit is known |
 | `road_class` | 0 motorway … 7 service | A | 2 | 0.55, 0.6, 0.65, 0.85, 0.95, 0.85, 0.12, 0.05 |
 | `road_use` | Valhalla use code | A | 2 | road 1, ramp 0.6, track 0.3, driveway/parking/alley/living street 0, service 0.08 |
@@ -407,20 +420,16 @@ the lower `priority` provider wins where it knows, the other fills its gaps.
 | `business_per_km` | /km within 80 m, excluding fuel and cafés | B | 2.5 | e^(−n/6) |
 | `landuse_urban` | share commercial/retail/industrial | B | 1.5 | 1 − v |
 | `landuse_residential` | share | B | 1 | 1 − 0.8 v |
-| `buildings_per_ha` | /ha within 100 m | B | 1 | e^(−v/3) |
-| `night_light` | VIIRS nW/cm²/sr | C | 1 | 1 − ln(1+v)/ln 51 |
-| `night_lights` | 0–1 Black Marble brightness | C | 0.6 | ≤ 0.15 → 1, 0.6 → 0.4, 1 → 0.3 (saturates in suburbs: dark vs lit), only without `night_light` |
+| `night_lights` | 0–1 Black Marble brightness | C | 0.6 | ≤ 0.15 → 1, 0.6 → 0.4, 1 → 0.3 (saturates in suburbs: dark vs lit) |
 | `impervious_pct` | NLCD % | C | 1 | 5 → 1, 50 → 0 |
 | `address_per_km` | /km | C | 1 | e^(−v/40) |
 | `address_density` | address points /km² | C | 1 | e^(−v/500), only without `address_per_km` |
 | `housing_per_km2` | Census housing units /km² | C | 0.8 | e^(−v/300) |
 | `noise_db` | BTS road noise dB | C | 0.6 | 50 → 1, 70 → 0 |
 | `aadt` | vehicles/day (HPMS) | C | 1.5 | ≤1000 → 1, 25 000 → 0 (log) |
-| `traffic_ratio` | live speed / free flow | E | 1 | v |
 | `iri` | HPMS IRI in/mi | C | 0.8 | 60 → 1, 200 → 0 |
 | `crowd_rough_g` | members' rms g | E | 1 | 0.05 → 1, 0.38 → 0 |
 | `crowd_flow` | 0–1 | E | 1 | v |
-| `hgv_share` | share of trucks | C | 0.5 | 1 − v/0.3 |
 
 Families for the soft minimum: speed (the limits), road (class, use, lanes, divided, truck, destination), stops
 (signals, stops, crossings, calming), access, business (businesses, urban land use). Built: density, sidewalk, buildings,
@@ -436,33 +445,44 @@ lights, impervious, addresses, housing, residential land use.
 | `creek_follow` | 0/1 (a stream within 150 m, parallel) | B | 1 | 1 / 0.35 |
 | `open_country` | farmland/grass share | B | 0.6 | 0.4 + 0.45 v |
 | `protected` | 0/1 park or protected area | B | 1 | 1 / 0.4 |
-| `photo_per_km` | geotagged photos /km (Wikimedia, Flickr) | B/D | 1 | 1 − e^(−v/3) |
 | `photo_score` | 0–1 (Commons + Flickr spots) | D | 1 | v, only where router density < 4 (towns are photographed too) |
-| `curve_sign` | 0/1 after a curve-warning sign | D (Mapillary) | 0.4 | 1 / 0.5 |
+| `curve_sign` | 0/1 after a curve-warning sign | D (Mapillary) | 0.6 | 1 / 0.5 |
+| `grade_pct` | % along travel | A | 0.6 | \|v\|: 0 → 0.3, 6 → 1 (climbs and descents) |
 | `tpi_m` | m (+ ridge, − valley) | A | 0.8 | \|v\|: 0 → 0.25, 40 → 1 |
 | `relief_m` | m within 800 m | A | 1 | 10 → 0.1, 150 → 1 |
-| `foliage` | 0–1 autumn colour | D | 0.8 | v × canopy/70 (only with `canopy_pct`) |
-| `old_road` | 0/1 (Old, Pike, Hollow, Mill …) | B | 0.5 | 1 / 0.45 |
-| `built_year` | median year built (parcels) | C | 0.3 | 1900 → 1, 2000 → 0.2 |
+| `foliage` | 0–1 autumn colour near its peak, already × canopy | D | 0.8 | v |
+| `built_year` | median year built (block group) | C | 0.6 | 1900 → 1, 2000 → 0.2 |
 | `loved` | 0–1 (drive-it-again, votes, crew favourites, stages) | E | 1.5 | v |
-| `guardrail` | 0/1 | B | 0.3 | 0.9 / 0.5 |
-| `curve_signs_per_km` | /km | B | 0.4 | 1 − e^(−v/2) |
+| `guardrail` | 0/1 | B | 0.6 | 0.9 / 0.5 |
 | `crowd_camber_deg` | ° into the corner | E | 0.5 | −3 → 0, 0 → 0.5, 4 → 1 |
+| `name_age` | −1 subdivision name … +1 old-road name | B | 0.5 | 0.5 + 0.5 v |
 
 ### Penalties per km (see the time table above)
 
-`deer_risk` (0–1, D), `fog_vis_m` (m, D), `crosswind_ms` (m/s, D), `road_temp_c` (°C, D), `crash_rate` (crashes /km/yr,
-C; 0.6/km at 5), `cyclist_route` (0/1, B), `buggy` (0/1, B; 0.8/km), `unlit` (0/1, B/C), `snow_cover` (0–1, D; 2/km),
-`crowd_busy` (0–1 at that hour, E; 0.6/km), `park_visitors` (0–1, D), `signal_coverage` (0–1 FCC, C; 0.15/km without).
+See the per-km table under Weights: each channel, its points per km at full strength, and the time it applies.
 
 ### Spans and points (`kind`)
 
-Hard: `closure`, `no_access`, `flood` (value ≥ 1). Penalties: `school`, `church`, `event`, `works` (value: minutes),
-`harvest`, `unploughed`, `level_crossing`, `one_lane_bridge`, `animal_crossing`, `speed_bump` (only without
-`calming_per_km`), `stop` (only without `stops_per_km`). Bonuses: `byway`, `viewpoint`, `covered_bridge`, `historic`,
-`waterfall`, `tunnel` (with the tunnels preference), `resurfaced`. Shown, not ranked: `camera` (Avoid → Cameras asks the
-router), `signal`, `junction`, `driveway`, `climb`, `descent`, `bridge`, `tunnel`, `toll`, `roundabout`, `unpaved` (A).
-`fuel` points feed the range check. Other kinds are kept for the card and ignored by the ranking.
+See the spans table under Weights. Shown, not ranked: `signal`, `junction`, `driveway` (their per-km channels rank them),
+`climb`, `descent`, `bridge`, `toll`, `roundabout`, `unpaved`, `fuel`, `fuel_stop`, `fuel_check`, `fuel_unsure`,
+`no_signal`, `share_eta`, `ask_range` (acted on when a route is chosen). Any span with `hard: true` is hard.
+
+### Not available (no provider emits it, or not before a drive)
+
+| item | why |
+|---|---|
+| live traffic in planning | Apple MapKit timing runs on the iPhone during a drive (traffic detours); no free keyless source times candidates before one |
+| VIIRS radiance (`night_light`) | C ships Black Marble brightness (`night_lights`, 0–1) instead: used |
+| buildings per hectare | B's `bldg_per_km` (within 60 m) is the building term |
+| Mapillary limits as their own channel | D's `sign_maxspeed_mps` is in the speed-limit chain (measured, after OSM, before HPMS) |
+| truck share (`hgv_share`) | no free per-road truck share; the router's `truck_route` and OSM `hgv` stand in |
+| all-crash rate | Ohio's crash data isn't in C's grid; FARS fatal crashes (`crash_density`) per vehicle are |
+| photos per km | D's `photo_score` (from `photo_spots`, saturating) is the photo term; `photo_spots` itself is shown |
+| curve signs per km, `old_road` | D's `curve_sign` channel and B's `curve_sign` points; B's `name_age` replaces the old-road flag |
+| snow cover, snowplough positions | OHGO has no plough endpoint; snow and ice codes are the weather term, D's frost is the `ice` span |
+| waterfalls, unploughed spans, cameras as a ranking term | no provider emits the first two; cameras are avoided by the router on request (Avoid → Cameras) |
+| city event permits, live FEMA flood zones, NC/VA work zones, FCC coverage | not built (D's and C's notes); `mobile_coverage` stays unknown |
+| `crowd_curv`, `crowd_conf`, `tech_level`, `free_min`, `intersections_per_km`, `fuel_since_km` | said or used elsewhere: members' curvature corrects corners on the drive, `tech_level` is inside `driver_fit`, `free_min` sizes loops (My free time), junctions are inside `access_per_km` |
 
 ### Other providers' names (builder B's OSM providers, mapped as they are)
 
@@ -481,6 +501,10 @@ unmapped is unknown); `on_bridge`/`in_tunnel` → `bridge`/`tunnel`; `smoothness
 `cycle_route` spans are costed where the channel isn't known. The registry adopts a provider shim
 (`{ providers: [], register }`, osm_common.js) in either script order.
 
+B's Overpass provider asks by the 0.05° tiles it caches (at most 12 a plan, most-used first; the rest come from the cache
+on a later plan), never by the route's line; which ways the route uses is worked out on the phone. It also emits
+`maxheight_m`, `maxwidth_m`, `maxweight_t` (car fit) and lanes in your direction (OSM's total halved unless one-way).
+
 ### Builder E's names (crowd.js, driver.js, car.js, ios_context.js, crew_meet.js; merged)
 
 `crowd_rough_g`, `crowd_flow`, `loved` as above; `crowd_bank_deg` → `crowd_camber_deg`; `crowd_busy` is a ratio to the
@@ -494,7 +518,9 @@ last quarter of the safe range; the `fuel_gap` span is hard; `signal` and C's `m
 `crowd_curv`, `crowd_conf`, `fuel_since_km`, `free_min`, `fuel_check`, `fuel_stop`, `no_signal`, `album_ends`,
 `crew_start`. When a route is chosen, `ask_range` asks for the car's range once, `no_signal` stretches offer to save
 their maps (`offlineAreas`, `prepareOffline`) and `share_eta` offers Share ETA (cockpit `routeAftercare`). The cockpit
-passes the crowd provider `lookup` (GET /api/roads), the crews' shared lines and the taste fit, and the car provider
+passes the crowd provider `lookupCells` (GET /api/roads?cells=: the 0.1° cells a plan crosses, VI-1, answered with the
+measured ways there and their map lines; the route's ways come from the router's own edges, `edge.way_id`, so there is no
+second map match), the crews' shared lines and the taste fit, and the car provider
 `apiGet` (GET /api/chargers); the Driver's For this drive prefs (`apex.driverPrefs`) join the engine's prefs.
 
 ### Builders C's and D's names (context_grid.js; conditions, wildlife, events, hazards_live, photos; merged)

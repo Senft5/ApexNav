@@ -37,7 +37,7 @@ out.dem = Object.fromEntries(fx.candidates.map((c) => {
   // with C's context grid (the real Cincinnati bundles in web/data/ctx/v1) on every candidate
   for (const c of ['subdivision', 'northgate', 'colerain', 'harrison']) for (const l of ['quick', 'fun', 'max']) out['grid:' + c + ':' + l] = await H.compareGrid(c, l);
   const without = async (level, ch) => { const list = H.cands('colerain'); await H.addGrid(list); for (const x of list) { delete x.ctx.channels[ch]; x.ev = null; } return H.compare('colerain', level, { list }); };
-  out['grid:colerain:max:-impervious'] = await without('max', 'impervious_pct');
+  out['grid:colerain:fun:-aadt'] = await without('fun', 'aadt');
   out['grid:colerain:fun:-noise'] = await without('fun', 'noise_db');
   process.stdout.write(JSON.stringify(out));
 })();
@@ -122,12 +122,12 @@ def test_picks_hold_with_the_context_grid(r):
 
 
 def test_grid_channels_change_close_picks(r):
-    """Colerain, Pippin and Struble Roads vs Blue Rock Road. Max fun: with the grid, Blue Rock (more canopy, less pavement)
-    wins; without impervious surface Pippin wins again. Fun: the road-noise map keeps Pippin (Blue Rock is louder: more
-    traffic) ahead; without it Blue Rock wins."""
-    assert r["grid:colerain:max"]["engine"][0] == "router2" and r["grid:colerain:max:-impervious"]["engine"][0] == "router0"
-    assert r["grid:colerain:fun"]["engine"][0] == "router0" and r["grid:colerain:fun:-noise"]["engine"][0] == "router2"
-
+    """Colerain at Fun: Pippin and Struble Roads vs Blue Rock Road, a close call. The grid's traffic counts (AADT) and road
+    noise say Blue Rock carries more traffic: Pippin stays ahead; without either, Blue Rock wins. At Max fun Blue Rock's
+    corners and country carry it either way."""
+    assert r["grid:colerain:fun"]["engine"][0] == "router0"
+    assert r["grid:colerain:fun:-noise"]["engine"][0] == "router2" and r["grid:colerain:fun:-aadt"]["engine"][0] == "router2"
+    assert r["grid:colerain:max"]["engine"][0] == "router2"
 
 def test_real_35_mph_country_road_keeps_its_corners(r):
     """Lees Creek and Day Roads near Harrison are posted 35 mph in open country: a low limit there is the road's character."""

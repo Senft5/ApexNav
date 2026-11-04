@@ -43,6 +43,12 @@
     for (const c of corridors) for (let i = 0; i < c.lat.length; i += 8) for (const d of [-0.01, 0.01]) s.add(tileKey(c.lat[i] + d, c.lon[i] + d));
     return [...s].sort();
   }
+  /** Every station tile along a stretch of a corridor was answered (or read from the cache). */
+  function gapCovered(c, g, covered) {
+    if (!covered) return false;
+    for (let i = 0; i < c.lat.length; i++) if (c.distM[i] >= g.fromM && c.distM[i] <= g.toM && !covered.has(tileKey(c.lat[i], c.lon[i]))) return false;
+    return true;
+  }
   /** Overpass: fuel stations (nodes and ways, their centre), positions only. */
   const fuelQuery = (tiles) => `[out:json][timeout:25];(${tiles.map((k) => { const b = tileBox(k).map((v) => v.toFixed(4)).join(','); return `node["amenity"="fuel"](${b});way["amenity"="fuel"](${b});`; }).join('')});out center qt;`;
   /** Overpass elements as stations [{ lat, lon }]. */
@@ -183,24 +189,26 @@
    * status is 'ok', 'partial' (some tiles missing), 'unavailable', or 'no-key' (chargers with no NREL key on the server).
    */
   async function stationsFor(tiles, { electric, fetch: fetchFn, apiGet, storage, signal, now = Date.now() } = {}) {
-    const kind = electric ? 'ev' : 'fuel', have = [], need = [];
+    const kind = electric ? 'ev' : 'fuel', have = [], need = [], covered = new Set();   // covered: tiles whose stations are known
     for (const k of tiles) {
       let c = null; try { c = JSON.parse((storage && storage.getItem(`${PREFIX}${kind}.${k}`)) || 'null'); } catch (_) {}
-      if (c && now - c.at < FUEL_MS && Array.isArray(c.s)) have.push(...c.s); else need.push(k);
+      if (c && now - c.at < FUEL_MS && Array.isArray(c.s)) { have.push(...c.s); covered.add(k); } else need.push(k);
     }
-    if (!need.length) return { stations: have, status: 'ok' };
-    const none = (status) => ({ stations: have.length ? have : null, status: have.length ? 'partial' : status });   // unknown, never "no stations"
+    if (!need.length) return { stations: have, status: 'ok', covered };
+    const none = (status) => ({ stations: have.length ? have : null, status: have.length ? 'partial' : status, covered });   // unknown, never "no stations"
     let got = null, status = 'ok';
     if (electric) {
       if (!apiGet) return none('unavailable');
       const parts = [];
+      const answered = [];
       for (let s = 0; s < need.length; s += 40) {
         const r = await apiGet(`/api/chargers?tiles=${need.slice(s, s + 40).join(',')}`).catch(() => null);
         if (r && r.status === 503) return none('no-key');
         const j = r && r.ok ? await r.json().catch(() => null) : null;
         if (!j) { status = 'partial'; continue; }
-        parts.push(...parseChargers(j));
+        parts.push(...parseChargers(j)); answered.push(...need.slice(s, s + 40));
       }
+      need.splice(0, need.length, ...answered);
       got = parts;
     } else {
       const j = fetchFn ? await raceOverpass(fetchFn, fuelQuery(need), signal) : null;
@@ -210,8 +218,9 @@
     for (const k of need) {
       const [s, w, n, e] = tileBox(k), mine = got.filter((x) => x.lat >= s && x.lat < n && x.lon >= w && x.lon < e);
       try { storage && storage.setItem(`${PREFIX}${kind}.${k}`, JSON.stringify({ at: now, s: mine })); } catch (_) {}
+      covered.add(k);
     }
-    return { stations: [...have, ...got], status };
+    return { stations: [...have, ...got], status, covered };
   }
 
   /**
@@ -232,6 +241,9 @@
       let spans = [], points = [], notes = [], status = 'ok';
       if (st.stations) {
         const f = fuelPlan(c, stationsAlong(c, st.stations), car);
+        // a gap is a hard limit only where the stations along it are known (every tile it crosses answered); elsewhere it
+        // may be stations we couldn't load: said, not enforced
+        for (const g of f.spans) if (g.kind === 'fuel_gap' && !gapCovered(c, g, st.covered)) { g.hard = false; g.kind = 'fuel_unsure'; }
         channels.fuel_since_km = f.since; channels.fuel_margin = f.margin; spans.push(...f.spans); points.push(...f.points);
         if (!safeKm(car)) { status = 'partial'; notes.push('No range for your car'); if (askRangeOnce(storage, car || { label: 'car' }, f.longestKm)) points.push({ atM: 0, kind: 'ask_range', label: `${f.longestKm} km without ${car && car.electric ? 'a charger' : 'fuel'} on this route. How far does your car go on a full ${car && car.electric ? 'charge' : 'tank'}? Add it in the Garage.` }); }
         if (st.status !== 'ok') status = 'partial';
@@ -249,7 +261,7 @@
   const provider = { id: 'car', version: 1, channels: CH, needs: { network: true }, budgetMs: 8000, fetch: fetchCtx };
   U.registry().register(provider);
 
-  const api = { provider, CH, carOf, safeKm, tilesOf, fuelQuery, parseFuel, parseChargers, stationsAlong, fuelPlan, signalPlan, offlineAreas, prepareOffline,
+  const api = { provider, CH, carOf, safeKm, tilesOf, gapCovered, fuelQuery, parseFuel, parseChargers, stationsAlong, fuelPlan, signalPlan, offlineAreas, prepareOffline,
     askRangeOnce, stationsFor, SAFE_SHARE, EV_SAFE_SHARE, ASK_KM };
   if (typeof module !== 'undefined' && module.exports) module.exports = api; else root.ApexRouteCar = api;
 })(typeof window !== 'undefined' ? window : globalThis);

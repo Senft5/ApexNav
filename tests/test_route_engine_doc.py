@@ -90,7 +90,7 @@ def test_quality_and_scenery_tables(code):
     s = {r[0].strip("`"): float(r[3]) for r in under("### Scenery (weight; goodness)")}
     extra = {"bldg_per_km": 1.0}                          # documented with builder B's names, not in the table
     assert {**q, **extra} == code["quality"], set(q) ^ set(code["quality"])
-    assert {**s, "name_age": 0.15} == code["scenery"], set(s) ^ set(code["scenery"])
+    assert s == code["scenery"], set(s) ^ set(code["scenery"])
 
 
 def test_flowchart_is_there_and_the_page_is_current():

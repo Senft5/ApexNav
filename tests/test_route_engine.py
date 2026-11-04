@@ -125,7 +125,7 @@ const arterial = { speed_limit_kph: 56, road_class: 2, road_use: 0, density: 9, 
 {
   const goodBad = { forest_share: [1, 0], canopy_pct: [80, 0], water_near: [1, 0], creek_follow: [1, 0], open_country: [1, 0], protected: [1, 0], photo_per_km: [10, 0],
     tpi_m: [50, 0], relief_m: [200, 5], foliage: [1, 0], old_road: [1, 0], loved: [1, 0], guardrail: [1, 0], curve_signs_per_km: [4, 0], crowd_camber_deg: [4, -3],
-    divided: [0, 1], surface: [0, 5], sidewalk: [0, 1], truck_route: [0, 1], access_destination: [0, 1], road_class: [4, 6], road_use: [0, 4], built_year: [1900, 2010], name_age: [1, -1], photo_score: [1, 0], curve_sign: [1, 0], night_lights: [0.05, 0.9], address_density: [10, 3000] };
+    divided: [0, 1], surface: [0, 5], sidewalk: [0, 1], truck_route: [0, 1], access_destination: [0, 1], road_class: [4, 6], road_use: [0, 4], built_year: [1900, 2010], name_age: [1, -1], photo_score: [1, 0], curve_sign: [1, 0], night_lights: [0.05, 0.9], address_density: [10, 3000], grade_pct: [6, 0] };
   const wrong = [];
   const extraCh = { canopy_pct: 80 };                 // foliage counts where there are trees
   for (const t of [...E.QUALITY, ...E.SCENERY]) {
@@ -279,8 +279,8 @@ const arterial = { speed_limit_kph: 56, road_class: 2, road_use: 0, density: 9, 
   const ru = rank([known, unknown, quickHwy], { level: 'fun' });
   out.unknownLoses = ru.findIndex((c) => c.id === unknown.id) >= ru.findIndex((c) => c.id === known.id);
   // deer can't fill the total: ice still counts, and a longer deer road still costs more
-  const deer = (km, extra = {}) => { const c = cand(straight(km * 1000), km * 60, { ...back, deer_risk: 4, ...extra }, { departAt: Date.parse('2026-11-04T17:20:00-05:00') }); E.evaluate(c, {}); return c.ev.penaltyPts; };
-  out.deerSat = { d40: deer(40), d80: deer(80), d40ice: deer(40, { ice: 1 }) };
+  const deer = (km, spans = []) => { const c = cand(straight(km * 1000), km * 60, { ...back, deer_risk: 4 }, { departAt: Date.parse('2026-11-04T17:20:00-05:00'), spans }); E.evaluate(c, {}); return c.ev.penaltyPts; };
+  out.deerSat = { d40: deer(40), d80: deer(80), d40ice: deer(40, [{ fromM: 1000, toM: 4000, kind: 'ice' }]) };
   const hwDeer = (() => { const c = cand(straight(40000), 1500, { ...hwy, deer_risk: 4 }, { departAt: Date.parse('2026-11-04T17:20:00-05:00') }); E.evaluate(c, {}); return c.ev.penaltyPts; })();
   out.deerMotorway = hwDeer < out.deerSat.d40;
   // a signal from the router and the same one from OSM, a level crossing under two names: once each
@@ -291,6 +291,19 @@ const arterial = { speed_limit_kph: 56, road_class: 2, road_use: 0, density: 9, 
   const sunday830 = Date.parse('2026-11-08T08:30:00-05:00');
   out.tz = E.active({ weekly: [{ days: [0], from: '08:00', to: '12:30' }] }, sunday830, 39.1, -84.5);
   out.tzDenver = E.active({ weekly: [{ days: [0], from: '08:00', to: '12:30' }] }, sunday830, 37.97, -87.57);   // Evansville, Central: 7:30 there
+}
+// 6f. the small terms decide close calls: the same road, the better one a minute slower (a 1-point deficit at Fun)
+{
+  const cases = { name_age: [1, -1], built_year: [1900, 2010], guardrail: [1, 0], road_temp_c: [15, -5], school_bus_hour: [0, 1], signal_coverage: [1, 0], forest_share: [0.8, 0.2] };
+  out.nearTie = {};
+  for (const [ch, [good, bad]] of Object.entries(cases)) {
+    const base = { ...back };
+    const a = cand(wiggly(6000), 760, { ...base, [ch]: good }), b = cand(wiggly(6000), 700, { ...base, [ch]: bad });
+    const a0 = cand(wiggly(6000), 760, base), b0 = cand(wiggly(6000), 700, base);
+    const withIt = rank([a, b], { level: 'fun' }), without = rank([a0, b0], { level: 'fun' });
+    const swing = (withIt.find((c) => c.id === a.id).value - withIt.find((c) => c.id === b.id).value) - (without.find((c) => c.id === a0.id).value - without.find((c) => c.id === b0.id).value);
+    out.nearTie[ch] = { flips: without[0].id === b0.id && withIt[0].id === a.id, swing: +swing.toFixed(2) };
+  }
 }
 // 7. active(): windows, weekly (wrapping midnight), months
 out.active = [E.active(null, DEPART), E.active({ weekly: [{ from: '19:00', to: '07:00' }] }, Date.parse('2026-11-04T23:30:00-05:00')),
@@ -477,3 +490,10 @@ def test_duplicates_across_providers_count_once(r):
 
 def test_time_windows_use_the_places_zone(r):
     assert r["tz"] is True and r["tzDenver"] is False
+
+
+def test_small_terms_decide_near_ties_never_blowouts(r):
+    """name_age, built_year, guardrail, cold road, school buses, phone signal and land-use-only scenery each turn a 1-point
+    deficit (a minute at Fun) around, and none moves a route by more than 10 points on its own (6 km)."""
+    for ch, x in r["nearTie"].items():
+        assert x["flips"] and 1 < x["swing"] < 10, (ch, x)

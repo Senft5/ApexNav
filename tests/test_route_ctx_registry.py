@@ -160,3 +160,33 @@ def test_every_provider_registers_in_any_load_order(seed):
     assert res.returncode == 0, res.stderr
     r = json.loads(res.stdout)
     assert r["ids"] == ALL_IDS, (r["order"], set(ALL_IDS) ^ set(r["ids"]))
+
+
+SECOND = r"""
+const root = process.argv[1];
+globalThis.ApexSun = require(root + '/web/sun.js');
+const C = require(root + '/web/route_ctx/registry.js');
+const Wl = require(root + '/web/route_ctx/wildlife.js');
+const lat0 = 39.2, mLon = 1 / (111320 * Math.cos(lat0 * Math.PI / 180));
+const coords = Array.from({ length: 41 }, (_, i) => [-84.6 + i * 100 * mLon, lat0]);
+const c = C.corridor('a', coords, { timeS: 300, departAt: Date.parse('2026-11-04T17:20:00-05:00') });
+const n = c.distM.length, fill = (v) => new Float32Array(n).fill(v);
+const chans = { forest_share: fill(0.6), lu_farmland: fill(0.3), density: fill(1), road_use: fill(0) };
+const pts = [{ atM: 500, kind: 'animal_crossing', label: 'deer' }, { atM: 700, kind: 'school' }];
+const inp = C.inputsFor([c], { byId: { a: { channels: { ...chans, road_class: fill(0) }, spans: [], points: pts } } });
+const mw = Wl.evaluate(c, inp);
+const country = Wl.evaluate(c, C.inputsFor([c], { byId: { a: { channels: { ...chans, road_class: fill(4) }, spans: [], points: pts } } }));
+const mean = (a) => { const v = Array.from(a).filter(Number.isFinite); return v.reduce((s, x) => s + x, 0) / (v.length || 1); };
+process.stdout.write(JSON.stringify({ keys: Object.keys(inp.channels.a).sort(), crossings: inp.places.animal_crossing.length, schools: inp.places.schools.length,
+  motorway: mean(mw.channels.deer_risk), country: mean(country.channels.deer_risk), deerPoints: country.points.map((p) => p.kind) }));
+"""
+
+
+def test_second_phase_gets_land_use_road_class_and_deer_crossings():
+    res = subprocess.run([NODE, "-e", SECOND, os.path.abspath(".")], capture_output=True, text=True, timeout=30, env={**os.environ, "TZ": "America/New_York"})
+    assert res.returncode == 0, res.stderr
+    r = json.loads(res.stdout)
+    assert {"forest_frac", "farmland_frac", "urban_density", "road_class", "road_use"} <= set(r["keys"])
+    assert r["crossings"] == 1 and r["schools"] == 1
+    assert 0 < r["motorway"] <= 0.3 * r["country"], "deer on a motorway: about a quarter of a country road's"
+    assert "deer-crossing" in r["deerPoints"], "an OSM deer crossing on the route at deer hour reaches wildlife.js"

@@ -2270,7 +2270,7 @@
     function routeCtxSettings() {
       try { return JSON.parse(localStorage.getItem('apex.routeKeys') || '{}') || {}; } catch (_) { return {}; }
     }
-    // What the crowd and car providers need from the app (route_ctx/crowd.js, car.js): members' road data (/api/roads,
+    // What the crowd and car providers need from the app (route_ctx/crowd.js, car.js): members' road data (/api/roads?cells=,
     // signed out: null and they say so), the Worker for chargers, the crews' shared lines when Prefer has them, your taste
     // fit. `peer` would carry the national grid's mobile_coverage; the engine reads that channel itself (route_engine.js
     // SOURCES), so the car provider's own signal stays unknown until the grid lands.
@@ -2278,7 +2278,8 @@
       const get = async (path) => { try { const r = await apiCall('GET', path); return r && r.ok ? await r.json() : null; } catch (_) { return null; } };
       let taste = null;
       try { taste = window.ApexTaste ? ApexTaste.fit(ApexTaste.load(localStorage)) : null; } catch (_) { taste = null; }
-      return { lookup: window.ApexSync ? (ids) => get(`/api/roads?ways=${ids.join(',')}`) : undefined, apiGet: get,
+      // members' road data by the 0.1° cells a plan crosses (VI-1), never by the route's way ids
+      return { lookupCells: window.ApexSync ? (cells) => get(`/api/roads?cells=${cells.join(',')}`) : undefined, apiGet: get,
         crewLines: (typeof preferCache !== 'undefined' && preferCache.crewLines) || null, myTracks: null, taste, peer: {} };
     }
     // After a route is chosen (route_ctx/car.js): a car with no range meeting a long stretch without fuel is asked for it once;
@@ -6087,7 +6088,10 @@
           const ac = new AbortController(), timer = setTimeout(() => ac.abort(), 6000);
           const r = await fetch(ApexRouteWeather.url(pts), { signal: ac.signal });
           clearTimeout(timer);
-          return r.ok ? ApexRouteWeather.cost(ApexRouteWeather.atArrival(await r.json(), pts)) : null;
+          // fog the route engine already costs per km (conditions' fog_risk / visibility) isn't costed again here
+          const fogKnown = !!(c.ctx && c.ctx.channels && ['fog_risk', 'visibility_m', 'fog_vis_m'].some((k) => c.ctx.channels[k] && Array.from(c.ctx.channels[k]).some(Number.isFinite)));
+          const iceKnown = !!(c.ctx && (c.ctx.spans || []).some((x) => x.kind === 'ice'));   // conditions.js frost spans, costed per km
+          return r.ok ? ApexRouteWeather.cost(ApexRouteWeather.atArrival(await r.json(), pts), [...(fogKnown ? ['fog'] : []), ...(iceKnown ? ['ice'] : [])]) : null;
         } catch (_) { return null; }
       }));
       // only when every one came back, and only the difference: rain over the whole area changes nothing

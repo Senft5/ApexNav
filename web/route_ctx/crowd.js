@@ -165,11 +165,37 @@
   }
 
   // ---- network shell -------------------------------------------------------------------------------------------------
-  const cache = new Map(), CACHE_MS = 30 * 60000;                     // /api/roads answers per way, this session
+  const cache = new Map(), CACHE_MS = 30 * 60000;                     // /api/roads cell answers, this session
+  const CELL = 0.1, MAX_CELLS = 16;                                    // VI-1: the server learns ~11 km cells, never the route
+
+  /** The 0.1-degree cells ("i_j") a plan's corridors cross, most-used first, at most MAX_CELLS. */
+  function cellsOf(corridors) {
+    const n = new Map();
+    for (const c of corridors) for (let i = 0; i < c.lat.length; i += 4) { const k = `${Math.floor(c.lat[i] / CELL)}_${Math.floor(c.lon[i] / CELL)}`; n.set(k, (n.get(k) || 0) + 1); }
+    return [...n.entries()].sort((a, b) => b[1] - a[1]).slice(0, MAX_CELLS).map(([k]) => k);
+  }
+  /**
+   * Each sample's OSM way from the router's own edges (route_ctx/router_edges.js keeps them on the corridor, with way_id):
+   * no second map match. [{ way, cls, name }] per sample, null where no edge is known.
+   */
+  function matchFromEdges(c) {
+    const e = c.edges, n = c.lat.length, out = new Array(n).fill(null);
+    if (!Array.isArray(e) || !e.length) return null;
+    const total = c.totalM || c.distM[n - 1], scale = e[e.length - 1].toM > 0 ? total / e[e.length - 1].toM : 1;
+    let k = 0;
+    for (let i = 0; i < n; i++) {
+      const m = c.distM[i] / scale;
+      while (k < e.length - 1 && e[k].toM <= m) k++;
+      if (e[k].way != null) out[i] = { way: e[k].way, cls: e[k].cls || null, name: e[k].name || null };
+    }
+    return out;
+  }
 
   /**
-   * opts: { signal, budgetMs, fetch, lookup(ids) -> /api/roads JSON | null (signed out), Contributor (contributor.js),
-   *         quietHours, crewLines, myTracks, votes, taste (taste.fit result), Core, Taste, now }.
+   * opts: { signal, budgetMs, lookupCells(cells) -> { ways: /api/roads JSON, lines: { way: [[lat, lon]] } } | null (signed
+   *         out), Contributor (contributor.js: project, cumulative, SKIP_CLASSES), quietHours, crewLines, myTracks, votes,
+   *         taste (taste.fit result), Core, Taste, now }.
+   * Members' road data comes by the 0.1° cells the plan crosses; which ways the route uses comes from the router's edges.
    * Never throws; a corridor with nothing to say is 'unavailable', signed out 'no-key' (members only).
    */
   async function fetchCtx(corridors, opts = {}) {
@@ -181,32 +207,30 @@
     const local = { crewGrid, againGrid: mine, votes: opts.votes || null, quietHours: !!opts.quietHours };
     // taste and the phone's own parts need no network: filled even when the server can't answer
     let closed = false;                                                // past the budget: the answer already went back as it was
-    const fill = (c, runs, roads, names) => {
+    const fill = (c, runs, roads, names, note) => {
       if (closed) return;
       const r = channelsFrom(c.lat.length, runs, roads, { ...local, lat: c.lat, lon: c.lon, etaAt: c.etaAt, names });
       r.channels.taste = tasteChannel(c, opts.taste, { Core: opts.Core || root.ApexCore, Taste: opts.Taste || root.ApexTaste });
       const any = CH.some((k) => r.channels[k].some(finite));
-      out[c.id] = { status: !roads ? (any ? 'partial' : (opts.lookup ? 'unavailable' : 'no-key')) : (r.located > 0.5 ? 'ok' : 'partial'),
-        ...(roads ? {} : { note: opts.lookup ? 'Members’ road data couldn’t be loaded' : 'Members’ road data needs signing in' }),
+      out[c.id] = { status: !roads ? (any ? 'partial' : (opts.lookupCells ? 'unavailable' : 'no-key')) : (r.located > 0.5 ? 'ok' : 'partial'),
+        ...(note ? { note } : roads ? {} : { note: opts.lookupCells ? 'Members’ road data couldn’t be loaded' : 'Members’ road data needs signing in' }),
         channels: r.channels, spans: spansFrom(r.channels, c.distM, names), points: [] };
     };
     const work = (async () => {
-      if (!C || !opts.lookup) { for (const c of corridors) fill(c, [], null, null); return; }
-      const matches = await Promise.all(corridors.map((c) => C.matchDrive({ lat: Array.from(c.lat), lon: Array.from(c.lon) }, opts.fetch).catch(() => null)));
-      const ids = [...new Set(matches.flat().filter((m) => m && m.way != null).map((m) => m.way))].slice(0, MAX_WAYS);
-      const fresh = ids.filter((id) => !(cache.has(id) && now - cache.get(id).at < CACHE_MS));
-      let ways = {}, roads = {};
+      if (!C || !opts.lookupCells) { for (const c of corridors) fill(c, [], null, null); return; }
+      const matches = corridors.map(matchFromEdges);
+      const cells = cellsOf(corridors), fresh = cells.filter((k) => !(cache.has(k) && now - cache.get(k).at < CACHE_MS));
+      let roads = {}, lines = {};
       try {
-        const parts = [];
-        for (let s = 0; s < fresh.length; s += 50) parts.push(await opts.lookup(fresh.slice(s, s + 50)));
-        if (parts.some((p) => !p)) roads = null;
-        else { for (const p of parts) Object.assign(roads, p); for (const id of fresh) cache.set(id, { at: now, road: roads[id] || null }); }
-        if (roads) for (const id of ids) if (!fresh.includes(id)) { const r = cache.get(id).road; if (r) roads[id] = r; }
-        ways = ids.length ? await C.fetchWays(ids, opts.fetch) : {};
+        const got = fresh.length ? await opts.lookupCells(fresh) : { ways: {}, lines: {} };
+        if (!got) roads = null;
+        else for (const k of fresh) cache.set(k, { at: now, ways: got.ways || {}, lines: got.lines || {} });
+        if (roads) for (const k of cells) { const e = cache.get(k); if (e) { Object.assign(roads, e.ways); Object.assign(lines, e.lines); } }
       } catch (_) { roads = null; }
       corridors.forEach((c, k) => {
-        const m = matches[k] || [];
-        const runs = m.length ? locateCoarse(c, m, ways, { project: C.project, cumulative: C.cumulative, SKIP: C.SKIP_CLASSES }) : [];
+        const m = matches[k];
+        if (!m) { fill(c, [], roads, null, 'No router edges to place members’ data on'); return; }
+        const runs = locateCoarse(c, m, lines, { project: C.project, cumulative: C.cumulative, SKIP: C.SKIP_CLASSES });
         fill(c, runs, roads, m.map((x) => (x && x.name) || null));
       });
     })().catch(() => { for (const c of corridors) fill(c, [], null, null); });
@@ -215,9 +239,9 @@
     return out;
   }
 
-  const provider = { id: 'crowd', version: 1, channels: CH, needs: { network: true }, budgetMs: 9000, fetch: fetchCtx };
+  const provider = { id: 'crowd', version: 1, channels: CH, needs: { network: true, channels: true }, budgetMs: 9000, fetch: fetchCtx };   // second phase: after the router's edges
   U.registry().register(provider);
 
-  const api = { provider, CH, flowConfidence, bucketOf, busyAt, locateCoarse, channelsFrom, againGrid, lineGrid, tasteChannel, spansFrom, confLevel, FLOW_FULL_PASSES };
+  const api = { provider, CH, cellsOf, matchFromEdges, flowConfidence, bucketOf, busyAt, locateCoarse, channelsFrom, againGrid, lineGrid, tasteChannel, spansFrom, confLevel, FLOW_FULL_PASSES };
   if (typeof module !== 'undefined' && module.exports) module.exports = api; else root.ApexRouteCrowd = api;
 })(typeof window !== 'undefined' ? window : globalThis);

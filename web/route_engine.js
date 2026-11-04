@@ -47,7 +47,6 @@
     { ch: 'speed_limit_kph', w: 3, g: SPEED, family: 'speed' },
     { ch: 'speed_limit_est_kph', w: 1.2, g: SPEED, family: 'speed', unless: ['speed_limit_kph'] },        // a class estimate weighs less
     { ch: 'speed_kph', w: 0.8, g: SPEED, family: 'speed', unless: ['speed_limit_kph', 'speed_limit_est_kph'] },
-    { ch: 'mapillary_limit_kph', w: 2.5, g: SPEED, family: 'speed', unless: ['speed_limit_kph'] },        // a sign photographed: near posted
     { ch: 'road_class', w: 2, g: table({ 0: 0.55, 1: 0.6, 2: 0.65, 3: 0.85, 4: 0.95, 5: 0.85, 6: 0.12, 7: 0.05 }), family: 'road' },
     { ch: 'road_use', w: 2, g: table({ 0: 1, 1: 0.6, 2: 0.7, 3: 0.3, 4: 0, 5: 0.03, 6: 0, 7: 0, 8: 0, 9: 0.05, 10: 0, 11: 0.08 }, 0.5), family: 'road' },
     { ch: 'density', w: 2, g: ramp([[2, 1], [6, 0.55], [11, 0.05], [15, 0]]), family: 'built' },
@@ -65,21 +64,17 @@
     { ch: 'business_per_km', w: 2.5, g: decay(6), family: 'business' },              // shops, amenities, offices; NOT fuel or cafés
     { ch: 'landuse_urban', w: 1.5, g: (v) => 1 - clamp01(v), family: 'business' },    // share commercial / retail / industrial
     { ch: 'landuse_residential', w: 1, g: (v) => 1 - 0.8 * clamp01(v), family: 'built' },
-    { ch: 'buildings_per_ha', w: 1, g: decay(3), family: 'built' },
-    { ch: 'bldg_per_km', w: 1, g: decay(40), family: 'built', unless: ['buildings_per_ha'] },        // map tiles: buildings within 60 m
-    { ch: 'night_light', w: 1, g: (v) => 1 - clamp01(Math.log1p(Math.max(0, v)) / Math.log1p(50)), family: 'built' },   // VIIRS nW/cm²/sr
-    { ch: 'night_lights', w: 0.6, g: ramp([[0.15, 1], [0.6, 0.4], [1, 0.3]]), family: 'built', unless: ['night_light'] },   // C: Black Marble 0-1, saturates in suburbs: dark vs lit
+    { ch: 'bldg_per_km', w: 1, g: decay(40), family: 'built' },        // map tiles: buildings within 60 m
+    { ch: 'night_lights', w: 0.6, g: ramp([[0.15, 1], [0.6, 0.4], [1, 0.3]]), family: 'built' },   // C: Black Marble 0-1, saturates in suburbs: dark vs lit
     { ch: 'impervious_pct', w: 1, g: ramp([[5, 1], [50, 0]]), family: 'built' },
     { ch: 'address_per_km', w: 1, g: decay(40), family: 'built' },
     { ch: 'address_density', w: 1, g: decay(500), family: 'built', unless: ['address_per_km'] },   // C: address points /km²
     { ch: 'housing_per_km2', w: 0.8, g: decay(300), family: 'built' },
     { ch: 'noise_db', w: 0.6, g: ramp([[50, 1], [70, 0]]), family: 'busy' },
     { ch: 'aadt', w: 1.5, g: (v) => 1 - clamp01(Math.log10(Math.max(1, v) / 1000) / Math.log10(25)), family: 'busy' },
-    { ch: 'traffic_ratio', w: 1, g: clamp01, family: 'busy' },                       // live speed over free flow
     { ch: 'iri', w: 0.8, g: ramp([[60, 1], [200, 0]]), family: 'surface' },          // HPMS roughness, in/mi
     { ch: 'crowd_rough_g', w: 1, g: ramp([[0.05, 1], [0.38, 0]]), family: 'surface' },
     { ch: 'crowd_flow', w: 1, g: clamp01, family: 'crowd' },
-    { ch: 'hgv_share', w: 0.5, g: (v) => 1 - clamp01(v / 0.3), family: 'busy' },
   ];
   /** Scenery terms (arithmetic weighted mean: one nice thing is nice; nothing nice is neutral-low). */
   const SCENERY = [
@@ -89,19 +84,17 @@
     { ch: 'creek_follow', w: 1, g: yes(1, 0.35), family: 'water' },
     { ch: 'open_country', w: 0.6, g: (v) => 0.4 + 0.45 * clamp01(v), family: 'open' },
     { ch: 'protected', w: 1, g: yes(1, 0.4), family: 'park' },
-    { ch: 'photo_per_km', w: 1, g: (v) => 1 - Math.exp(-Math.max(0, v) / 3), family: 'photos' },
-    { ch: 'photo_score', w: 1, g: clamp01, family: 'photos', unless: ['photo_per_km'], rural: true },   // D: Commons + Flickr; towns are photographed too
-    { ch: 'curve_sign', w: 0.4, g: yes(1, 0.5), family: 'drama', unless: ['curve_signs_per_km'] },      // D: Mapillary curve-warning signs
+    { ch: 'photo_score', w: 1, g: clamp01, family: 'photos', rural: true },   // D: Commons + Flickr; towns are photographed too
+    { ch: 'curve_sign', w: 0.6, g: yes(1, 0.5), family: 'drama' },      // D: Mapillary curve-warning signs
     { ch: 'tpi_m', w: 0.8, g: (v) => ramp([[0, 0.25], [40, 1]])(Math.abs(v)), family: 'terrain' },   // a ridge or a valley, not a plain
+    { ch: 'grade_pct', w: 0.6, g: (v) => ramp([[0, 0.3], [6, 1]])(Math.abs(v)), family: 'terrain' },   // climbs and descents
     { ch: 'relief_m', w: 1, g: ramp([[10, 0.1], [150, 1]]), family: 'terrain' },
     { ch: 'foliage', w: 0.8, g: clamp01, family: 'forest' },    // D: autumn colour near its peak, already × canopy
-    { ch: 'old_road', w: 0.5, g: yes(1, 0.45), family: 'history' },
     { ch: 'loved', w: 1.5, g: clamp01, family: 'crowd' },
-    { ch: 'guardrail', w: 0.3, g: yes(0.9, 0.5), family: 'drama' },
-    { ch: 'curve_signs_per_km', w: 0.4, g: (v) => 1 - Math.exp(-Math.max(0, v) / 2), family: 'drama' },
+    { ch: 'guardrail', w: 0.6, g: yes(0.9, 0.5), family: 'drama' },
     { ch: 'crowd_camber_deg', w: 0.5, g: ramp([[-3, 0], [0, 0.5], [4, 1]]), family: 'crowd' },
-    { ch: 'name_age', w: 0.15, g: (v) => 0.5 + 0.5 * Math.max(-1, Math.min(1, v)), family: 'history' },   // a weak prior from the name
-    { ch: 'built_year', w: 0.3, g: ramp([[1900, 1], [1960, 0.6], [2000, 0.2]]), family: 'history' },   // county parcels: an old road's houses
+    { ch: 'name_age', w: 0.5, g: (v) => 0.5 + 0.5 * Math.max(-1, Math.min(1, v)), family: 'history' },   // a weak prior from the name
+    { ch: 'built_year', w: 0.6, g: ramp([[1900, 1], [1960, 0.6], [2000, 0.2]]), family: 'history' },   // county parcels: an old road's houses
   ];
   /** Per-sample penalty channels: points per km at full strength, `at` = how strong at that time (0–1). */
   const PER_KM = [
@@ -109,23 +102,20 @@
     { ch: 'fog_vis_m', perKm: 1.2, label: 'fog', value: (v) => clamp01(1 - v / 1000), valley: true, skipIf: 'fog_risk' },   // worse in the valleys, lighter on ridges
     { ch: 'fog_risk', perKm: 1.2, label: 'fog', value: clamp01 },                                  // D: 0-1, valleys and ridges already in it
     { ch: 'crosswind_ms', perKm: 0.6, label: 'crosswind', value: (v) => clamp01((v - 8) / 10), exposed: true },   // D's crosswind_mps, × its exposure
-    { ch: 'road_temp_c', perKm: 0.25, label: 'cold road', value: (v) => clamp01((7 - v) / 10) },
-    { ch: 'crash_rate', perKm: 0.6, label: 'crash history', value: (v) => clamp01(v / 5) },          // crashes per km per year
-    { ch: 'crash_density', perKm: 0.6, label: 'fatal crashes', value: (v) => clamp01(v / 0.1), skipIf: 'crash_rate', perVehicle: true },   // C: FARS fatal /km/yr
+    { ch: 'road_temp_c', perKm: 0.6, label: 'cold road', value: (v) => clamp01((7 - v) / 10) },
+    { ch: 'crash_density', perKm: 0.6, label: 'fatal crashes', value: (v) => clamp01(v / 0.1), perVehicle: true },   // C: FARS fatal /km/yr
     { ch: 'cyclist_route', perKm: 0.5, label: 'cyclists', value: clamp01, at: (ctx) => ctx.weekendMorning, atCh: 'cyclist_time', pref: 'cyclists' },   // Cyclist courtesy (driver.js)
     { ch: 'buggy', perKm: 0.8, label: 'buggies', value: clamp01 },
     { ch: 'unlit', perKm: 0.6, label: 'unlit at night', value: clamp01, at: (ctx) => ctx.dark, atCh: 'dark', pref: 'lit' },             // Lit roads at night (driver.js)
-    { ch: 'snow_cover', perKm: 2, label: 'snow', value: clamp01 },
     { ch: 'crowd_busy', perKm: 0.6, label: 'busy at that hour', value: (v) => clamp01(v - 1) },      // crowd.js: 1 = the road's average hour, 2 = twice (quiet_hours flag, off)
     { ch: 'park_visitors', perKm: 0.5, label: 'park crowds', value: clamp01, at: (ctx) => ctx.weekendDay },
-    { ch: 'signal_coverage', perKm: 0.15, label: 'no phone signal', value: (v) => 1 - clamp01(v) },
+    { ch: 'signal_coverage', perKm: 0.4, label: 'no phone signal', value: (v) => 1 - clamp01(v) },
     { ch: 'event_crowd', perKm: 2, label: 'event traffic', value: (v) => clamp01(v / 20) },        // D: thousands of people heading there then
     { ch: 'school_zone', perKm: 3, label: 'school zone', value: clamp01 },                         // D: at arrival and dismissal on school days
-    { ch: 'school_bus_hour', perKm: 0.3, label: 'school buses', value: clamp01, rural: true },     // D: bus-run hours, on country roads
+    { ch: 'school_bus_hour', perKm: 0.8, label: 'school buses', value: clamp01, rural: true },     // D: bus-run hours, on country roads
     { ch: 'church_window', perKm: 1, label: 'church traffic', value: clamp01 },                    // D: service windows by a church
     { ch: 'harvest_traffic', perKm: 0.5, label: 'farm traffic', value: clamp01, crop: true },       // D × C's crop at that place
     { ch: 'flood_zone', perKm: 2, label: 'flood-prone', value: (v) => clamp01((v - 1) / 2), wet: true },   // C: only when D says it's wet
-    { ch: 'ice', perKm: 3, label: 'ice', value: clamp01 },
     { ch: 'passenger_cost', perKm: 1.5, label: 'hard on your passenger', value: clamp01, pref: 'passenger' },   // driver.js, Passenger aboard
     { ch: 'fuel_margin', perKm: 0.5, label: 'low on fuel', value: (v) => clamp01((0.25 - v) / 0.25) },          // car.js: the last quarter of the safe range
   ];
@@ -140,7 +130,6 @@
     event: { each: 6, label: 'event traffic', unlessChannel: 'event_crowd' },
     works: { each: 4, perMinValue: true, label: 'road works' },                    // value: delay in minutes when known
     harvest: { perKm: 0.5, label: 'farm traffic', unlessChannel: 'harvest_traffic', when: { months: [9, 10, 11], weekly: [{ from: '07:00', to: '20:00' }] } },
-    unploughed: { perKm: 2, label: 'not ploughed' },
     byway: { bonusPerKm: 0.4, bonusCap: 12, label: 'scenic byway' },
     level_crossing: { each: 0.7, label: 'level crossings' },
     one_lane_bridge: { each: 0.5, label: 'one-lane bridges' },
@@ -150,13 +139,12 @@
     viewpoint: { bonus: 1.5, bonusCap: 6, label: 'viewpoints' },
     covered_bridge: { bonus: 2, bonusCap: 4, label: 'a covered bridge' },
     historic: { bonus: 0.5, bonusCap: 3, label: 'history' },
-    waterfall: { bonus: 1, bonusCap: 3, label: 'a waterfall' },
     tunnel: { bonus: 1.5, bonusCap: 4.5, pref: 'tunnels', label: 'tunnels' },
     resurfaced: { bonusPerKm: 0.3, bonusCap: 3, label: 'fresh asphalt' },
-    camera: { label: 'cameras' },
     fuel_gap: { hard: true, label: 'longer than your range without fuel' },        // car.js
     past_next_event: { each: 0, perMinValue: true, label: 'past your next event' },  // ios_context.js: value = minutes late
     gate: { each: 1, label: 'gates' },
+    ice: { perKm: 3, label: 'ice' },                                               // conditions.js: frost on the road at that hour
     buggy: { each: 0.5, label: 'buggies', unlessChannel: 'buggy' },
     curve_sign: { bonus: 0.2, bonusCap: 2, label: 'curve signs', unlessChannel: ['curve_signs_per_km', 'curve_sign'] },
     access_destination: { each: 1, perKm: 2, label: 'destination-only road', unlessChannel: 'access_destination' },
@@ -177,7 +165,7 @@
     QUALITY: 0.3,          // points per quality point (0–100) above or below 50, times the share of the route known
     POOR_Q_HI: 0.45, POOR_Q_LO: 0.25, POOR_PER_KM: 3, POOR_CAP: 60, END_GRACE_M: 1200,   // side streets and business districts
     SCENERY: 20,           // points for scenery 1 vs 0.5 (so ±10), times how much of it is known
-    Q_FULL_CONF: 0.3, S_FULL_CONF: 0.35,            // the share of the weights known at which a sample's quality / scenery counts in full
+    Q_FULL_CONF: 0.3, S_FULL_CONF: 0.2,            // the share of the weights known at which a sample's quality / scenery counts in full
     GATE_LO: 0.25, GATE_HI: 0.6,                    // a corner on quality ≤ 0.25 counts nothing, ≥ 0.6 in full
     PENALTY_CAP: 40, BONUS_CAP: 15,
     DRIVER: 6,             // points for a route that fits the driver (driver_fit 1) vs one that doesn't (-1): ±6
@@ -237,7 +225,7 @@
     road_class: [MAP('hpms_fclass', (v) => ({ 1: 0, 2: 0, 3: 2, 4: 3, 5: 4, 6: 4, 7: 6 }[v] ?? NaN))],
     fog_vis_m: [MAP('visibility_m', (v) => v)],
     crosswind_ms: [MAP('crosswind_mps', (v) => v)],
-    housing_per_km2: [MAP('housing_density', (v) => v)],
+    housing_per_km2: [MAP('housing_density', (v) => v), MAP('population_density', (v) => v / 2.5)],
     built_year: [MAP('median_year_built', (v) => v)],
     signal_coverage: [MAP('mobile_coverage', (v) => (v >= 1 ? 1 : 0))],
     park_visitors: [MAP('park_busy', (v) => clamp01(v - 1)), MAP('park_visits', (v) => (v >= 1e6 ? 1 : v >= 1e5 ? 0.5 : v > 0 ? 0.2 : 0))],

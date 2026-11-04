@@ -122,3 +122,22 @@ def test_routing_car_carries_fuel_and_range_and_the_garage_has_the_fields():
     assert "fuel: c.fuel || null, range_km: c.range_km || null" in cockpit
     ui = (ROOT / "web" / "garage_ui.js").read_text()
     assert "sel('fuel', 'Fuel', FUEL, c.fuel)" in ui and "range_km:" in ui and "Range on a full tank" in ui
+
+
+def test_fuel_gap_is_hard_only_where_the_stations_are_known():
+    """A gap whose tiles all answered is a hard limit; where some tiles couldn't be loaded it may be stations we missed:
+    fuel_unsure, said, never enforced (the route engine drops a route only on a hard fuel_gap)."""
+    js = """(async () => {
+      const t = corridor(120), all = mem(), some = mem();
+      const tiles = C.tilesOf([t]);
+      for (const k of tiles) all.setItem(`apex.fuel.fuel.${k}`, JSON.stringify({ at: Date.now(), s: [] }));
+      all.setItem(`apex.fuel.fuel.${tiles[0]}`, JSON.stringify({ at: Date.now(), s: [at(1)] }));
+      tiles.forEach((k, j) => { if (j % 2 === 0) some.setItem(`apex.fuel.fuel.${k}`, JSON.stringify({ at: Date.now(), s: j === 0 ? [at(1)] : [] })); });
+      const known = await C.provider.fetch([t], { car: { fuel: 'petrol', range_km: 60 }, storage: all, fetch: () => { throw new Error('no network'); } });
+      const holes = await C.provider.fetch([t], { car: { fuel: 'petrol', range_km: 60 }, storage: some, fetch: () => { throw new Error('no network'); } });
+      const kinds = (r) => r.c1.spans.map((s) => [s.kind, !!s.hard]);
+      return { known: kinds(known), holes: kinds(holes) };
+    })()"""
+    out = run(js)
+    assert ["fuel_gap", True] in out["known"], out
+    assert ["fuel_gap", True] not in out["holes"] and ["fuel_unsure", False] in out["holes"], out

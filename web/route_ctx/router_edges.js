@@ -29,7 +29,7 @@
   const VALHALLA = 'https://valhalla1.openstreetmap.de';
   const ATTRS = ['edge.speed_limit', 'edge.speed', 'edge.road_class', 'edge.use', 'edge.density', 'edge.lane_count', 'edge.surface', 'edge.unpaved',
     'edge.bridge', 'edge.tunnel', 'edge.toll', 'edge.traffic_signal', 'edge.length', 'edge.roundabout', 'edge.truck_route', 'edge.sidewalk',
-    'node.traffic_signal', 'node.type', 'node.intersecting_edge.use', 'node.intersecting_edge.driveability', 'node.intersecting_edge.road_class'];
+    'edge.way_id', 'edge.names', 'node.traffic_signal', 'node.type', 'node.intersecting_edge.use', 'node.intersecting_edge.driveability', 'node.intersecting_edge.road_class'];
   const ROAD_CLASS = { motorway: 0, trunk: 1, primary: 2, secondary: 3, tertiary: 4, unclassified: 5, residential: 6, service_other: 7 };
   const ROAD_USE = { road: 0, ramp: 1, turn_channel: 2, track: 3, driveway: 4, alley: 5, parking_aisle: 6, emergency_access: 7, drive_through: 8,
     culdesac: 9, living_street: 10, service_road: 11, cycleway: 20, mountain_bike: 21, footway: 25, steps: 26, path: 27, pedestrian: 28, ferry: 41 };
@@ -94,7 +94,8 @@
         truck: e.truck_route === undefined ? null : e.truck_route ? 1 : 0,
         bridge: e.bridge ? 1 : 0, tunnel: e.tunnel ? 1 : 0, toll: e.toll ? 1 : 0, ramp: use === ROAD_USE.ramp ? 1 : 0, roundabout: e.roundabout ? 1 : 0,
         unpaved: e.unpaved ? 1 : 0, signal: node.traffic_signal === true || e.traffic_signal === true ? 1 : 0,
-        junction: node.type === 'street_intersection' || side > 0 ? 1 : 0, side, drive };
+        junction: node.type === 'street_intersection' || side > 0 ? 1 : 0, side, drive,
+        way: Number.isSafeInteger(e.way_id) ? e.way_id : null, name: Array.isArray(e.names) && e.names[0] ? e.names[0] : null, cls: typeof e.road_class === 'string' ? e.road_class : null };   // the OSM way (crowd.js reads members' data by it)
       m += len;
       return out;
     });

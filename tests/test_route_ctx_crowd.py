@@ -98,9 +98,10 @@ def test_busy_times_only_with_quiet_hours_on():
 def test_provider_signed_out_and_slow_server_never_block():
     js = """(async () => {
       const t = corridor(60);
+      t.edges = [{ fromM: 0, toM: 1500, way: 77, cls: 'tertiary', name: 'Ridge Rd' }];
       const signedOut = await C.provider.fetch([t], { Contributor: K });
       const t0 = Date.now();
-      const slow = await C.provider.fetch([t], { Contributor: { ...K, matchDrive: () => new Promise(() => {}) }, lookup: async () => ({}), budgetMs: 300 });
+      const slow = await C.provider.fetch([t], { Contributor: K, lookupCells: () => new Promise(() => {}), budgetMs: 300 });
       return { s: signedOut.c1.status, note: signedOut.c1.note, n: signedOut.c1.channels.crowd_rough_g.length, slow: slow.c1.status, ms: Date.now() - t0 };
     })()"""
     out = run(js)
@@ -108,20 +109,29 @@ def test_provider_signed_out_and_slow_server_never_block():
     assert out["slow"] == "unavailable" and out["ms"] < 2000
 
 
-def test_provider_end_to_end_with_stubbed_matcher_and_server():
+def test_provider_end_to_end_by_cells_and_router_edges():
+    """The server gets 0.1-degree cells (VI-1), never way ids or the route; the ways come from the router's own edges (no
+    second map match), the lines from the answer."""
     js = """(async () => {
       const t = corridor(60);
+      t.edges = [{ fromM: 0, toM: 1500, way: 77, cls: 'tertiary', name: 'Ridge Rd' }];
       const poly = [[35.5, -83.5], [35.5 + 2000 / 110540, -83.5]];
-      const Kx = { ...K, matchDrive: async (d) => d.lat.map(() => ({ way: 77, cls: 'tertiary', name: 'Ridge Rd' })), fetchWays: async () => ({ 77: poly }) };
       const bins = Array.from({ length: 300 }, (_, b) => b);
-      const lookup = async (ids) => ({ 77: { 0: { i: bins, n: bins.map(() => 4), rough: bins.map(() => 0.06), rsd: bins.map(() => 0.01), cam: bins.map(() => null), cn: bins.map(() => 0),
-        csd: bins.map(() => null), k: bins.map(() => null), kn: bins.map(() => 0), fl: bins.map(() => 0.95), hb: bins.map(() => 0), fn: bins.map(() => 4), ag: 3 } } });
-      const r = (await C.provider.fetch([t], { Contributor: Kx, lookup }))[`c1`];
-      return { status: r.status, rough: r.channels.crowd_rough_g[10], flow: r.channels.crowd_flow[10], loved: r.channels.loved[10], spans: r.spans.map((s) => [s.kind, s.label]) };
+      const asked = [];
+      const lookupCells = async (cells) => { asked.push(cells); return { ways: { 77: { 0: { i: bins, n: bins.map(() => 4), rough: bins.map(() => 0.06), rsd: bins.map(() => 0.01), cam: bins.map(() => null), cn: bins.map(() => 0),
+        csd: bins.map(() => null), k: bins.map(() => null), kn: bins.map(() => 0), fl: bins.map(() => 0.95), hb: bins.map(() => 0), fn: bins.map(() => 4), ag: 3 } } }, lines: { 77: poly } }; };
+      const noTrace = { ...K, matchDrive: () => { throw new Error('a second map match'); }, fetchWays: () => { throw new Error('Overpass for way lines'); } };
+      const r = (await C.provider.fetch([t], { Contributor: noTrace, lookupCells }))[`c1`];
+      const t2 = corridor(60, 'c2');
+      const none = (await C.provider.fetch([t2], { Contributor: noTrace, lookupCells, now: Date.now() + 3600e3 }))[`c2`];
+      return { status: r.status, rough: r.channels.crowd_rough_g[10], flow: r.channels.crowd_flow[10], loved: r.channels.loved[10], spans: r.spans.map((s) => [s.kind, s.label]),
+        asked, noEdges: [none.status, none.note] };
     })()"""
     out = run(js)
     assert out["status"] == "ok" and abs(out["rough"] - 0.06) < 1e-6 and abs(out["flow"] - 0.95) < 1e-6 and out["loved"] == 1
     assert ["loved", "Ridge Rd"] in out["spans"] and ["flowing", "Members drive it smoothly"] in out["spans"]
+    assert out["asked"][0] == ["355_-835"] and all(len(a) == 1 for a in out["asked"]), "one 0.1-degree cell, no way ids, no coordinates"
+    assert out["noEdges"][0] in ("unavailable", "partial") and "router edges" in out["noEdges"][1]
 
 
 def test_contributor_flow_per_bin_is_a_ratio_and_a_yes_no():
