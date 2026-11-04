@@ -3835,12 +3835,15 @@ flow('satellite: a developer gets a Satellite switch in Layers that lays USGS im
   const r = await page.evaluate(() => {
     const m = window.apexDebug.map, ids = m.getStyle().layers.map((l) => l.id), at = (id) => ids.indexOf(id);
     return { below: ['apex-twisty', 'apex-coverage', 'apex-alt', 'apex-explore', 'apex-route-casing', 'apex-route'].every((id) => at(id) > at('apex-satellite')),
-      tiles: m.getSource('apex-satellite-src').tiles, attrib: m.getSource('apex-satellite-src').attribution, on: document.getElementById('satSwitch').getAttribute('aria-checked') };
+      // the source as the style holds it (a raster source's own .tiles and .attribution are set only once it has loaded)
+      tiles: (m.getStyle().sources['apex-satellite-src'] || {}).tiles || [], attrib: (m.getStyle().sources['apex-satellite-src'] || {}).attribution || '',
+      on: document.getElementById('satSwitch').getAttribute('aria-checked') };
   });
   check(r.below && r.on === 'true', 'under our twisty and measured roads and every route line: ' + JSON.stringify(r));
-  check(r.tiles[0].startsWith('https://basemap.nationalmap.gov/arcgis/rest/services/USGSImageryOnly/MapServer/tile/') && /USGS/.test(r.attrib), 'USGS imagery, credited: ' + JSON.stringify(r));
-  await page.waitForFunction(() => window.apexDebug.map.loaded() || window.apexDebug.map.areTilesLoaded(), null, { timeout: 8000 }).catch(() => {});
-  check(tiles.length > 0, 'its tiles are asked for (the page policy lets them through)');
+  check(r.tiles.length === 1 && r.tiles[0].startsWith('https://basemap.nationalmap.gov/arcgis/rest/services/USGSImageryOnly/MapServer/tile/') && /USGS/.test(r.attrib), 'USGS imagery, credited: ' + JSON.stringify(r));
+  // its tiles are asked for (stubbed above: the run reaches no real host), and the page policy lets them through
+  for (let t = 0; t < 80 && !tiles.length; t++) await page.waitForTimeout(100);
+  check(tiles.length > 0 && tiles.every((u) => u.startsWith('https://basemap.nationalmap.gov/')), 'its tiles are asked for: ' + tiles.length);
   await page.click('#satSwitch');
   await page.waitForFunction(() => !window.apexDebug.map.getLayer('apex-satellite') && !window.apexDebug.map.getSource('apex-satellite-src'));
 });
