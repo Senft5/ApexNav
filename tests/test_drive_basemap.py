@@ -36,6 +36,30 @@ function worst(lat, lon, pxPerM) {
   }
   return { err, zoom: cam.zoom, center: cam.center };
 }
+// the picture's transform (overlay) at a zoomed, panned camera puts every point where MapLibre draws it
+function follow(lat, lon) {
+  const p = B.project(lat, lon), MW = 360, MH = 300, ms = 0.05, w = 720;            // 2 screen px per viewBox unit
+  let x0 = Infinity, x1 = -Infinity, y0 = Infinity, y1 = -Infinity;
+  for (let i = 0; i < lat.length; i++) { x0 = Math.min(x0, p.x[i]); x1 = Math.max(x1, p.x[i]); y0 = Math.min(y0, p.y[i]); y1 = Math.max(y1, p.y[i]); }
+  const xc = (x0 + x1) / 2, yc = (y0 + y1) / 2, fit = B.viewFor(p.frame, xc, yc, ms * w / MW);
+  const cam = { center: B.unproject(p.frame, xc + 400, yc - 250), zoom: fit.zoom + 2.3 }, T = B.overlay(p.frame, xc, yc, ms, MW, MH, fit.zoom, cam);
+  const c = screen(cam.center[0], cam.center[1], cam), u = w / MW;
+  let err = 0;
+  for (let i = 0; i < lat.length; i += 7) {
+    const sv = [MW / 2 + (p.x[i] - xc) * ms, MH / 2 - (p.y[i] - yc) * ms], s = screen(lon[i], lat[i], cam);
+    const mapPx = [s[0] - c[0] + w / 2, s[1] - c[1] + MH * u / 2], svgPx = [(T.s * sv[0] + T.tx) * u, (T.s * sv[1] + T.ty) * u];
+    err = Math.max(err, Math.hypot(mapPx[0] - svgPx[0], mapPx[1] - svgPx[1]));
+  }
+  const id = B.overlay(p.frame, xc, yc, ms, MW, MH, fit.zoom, fit), none = B.overlay(p.frame, xc, yc, ms, MW, MH, fit.zoom, null);
+  const back = B.planOf(p.frame, ...B.unproject(p.frame, 123.4, -567.8));
+  return { err, s: T.s, id, none, back };
+}
+function lim(lat, lon) {
+  const fit = { center: [-83.9, 35.6], zoom: 13.4 }, L = B.limits(fit, 360, 240), cam = { zoom: L.minZoom };
+  // at the lowest zoom the whole view still fits inside the pan box: the limit is the zoom, not the box
+  const ws = 512 * 2 ** L.minZoom, sw = screen(L.maxBounds[0][0], L.maxBounds[0][1], cam), ne = screen(L.maxBounds[1][0], L.maxBounds[1][1], cam);
+  return { L, fitZoom: fit.zoom, wide: ne[0] - sw[0], tall: sw[1] - ne[1], ws };
+}
 const loop = (lat0, lon0, km) => { const lat = [], lon = [];
   for (let i = 0; i <= 400; i++) { const a = i / 400 * 2 * Math.PI; lat.push(lat0 + Math.sin(a) * km / 111 + i * 1e-5); lon.push(lon0 + Math.cos(a) * km / 70); }
   return [lat, lon]; };
@@ -47,6 +71,7 @@ console.log(JSON.stringify({
   bad: B.covered([{ lat: null, lon: 1, radiusKm: 5 }], [0, 0, 0.01, 0.01]),
   tryOnline: B.worthTrying(true, [], [0, 0, 1, 1]), tryOffNone: B.worthTrying(false, [], [35.55, -83.95, 35.65, -83.85]),
   tryOffSaved: B.worthTrying(false, areas, [35.55, -83.95, 35.65, -83.85]), tryUnknown: B.worthTrying(undefined, [], [0, 0, 1, 1]),
+  follow: follow(la, lo), lim: lim(la, lo),
 }));
 """
 
@@ -78,9 +103,29 @@ def test_the_page_loads_it_lazily_and_inside_the_policy():
     assert 'src="vendor/maplibre-gl.js"' not in an and 'href="vendor/maplibre-gl.css"' not in an
     assert '<script src="drive_basemap.js"></script>' in an and an.index("drive_basemap.js") < an.index('src="drive_view.js"')
     assert "IntersectionObserver" in src and "'vendor/maplibre-gl.js'" in src
-    assert "interactive: false" in src and "transformRequest: O ? O.transform" in src, "a picture, through the offline areas"
+    assert "transformRequest: O ? O.transform" in src, "through the offline areas"
+    # the owner, 2026-11-03: zoom in and out "but not all the way out": two fingers (one finger scrolls the page)
+    assert "interactive: true, cooperativeGestures: true, dragRotate: false" in src
+    assert "minZoom: lim.minZoom, maxBounds: lim.maxBounds" in src
     assert "mapPalette: () => look.map" in an, "the theme's own day or night map palette"
     # every host it talks to is already in the policy: the style and tiles only
     csp = an.split('http-equiv="Content-Security-Policy" content="', 1)[1].split('"', 1)[0]
     assert "https://tiles.openfreemap.org" in csp and "worker-src 'self' apexnav: blob:" in csp
     assert (WEB / "vendor" / "maplibre-gl.js").exists() and (WEB / "vendor" / "maplibre-gl.css").exists()
+
+
+def test_the_path_follows_the_map_when_zoomed_and_panned(r):
+    f = r["follow"]
+    assert f["err"] < 0.05, f                                     # every point within a twentieth of a pixel
+    assert abs(f["s"] - 2 ** 2.3) < 1e-9
+    for t in (f["id"], f["none"]):                                 # the fitted view, or no map: the picture as drawn
+        assert abs(t["s"] - 1) < 1e-12 and abs(t["tx"]) < 1e-6 and abs(t["ty"]) < 1e-6, t
+    assert abs(f["back"][0] - 123.4) < 1e-6 and abs(f["back"][1] + 567.8) < 1e-6
+
+
+def test_out_a_little_past_the_drive_never_all_the_way(r):
+    lim = r["lim"]
+    assert abs(lim["L"]["minZoom"] - (lim["fitZoom"] - 1)) < 1e-12, "one zoom level past the fitted view, no further"
+    # the pan box is three fitted views across: at the lowest zoom (half the scale) one and a half views of it show,
+    # wider than the 360 x 240 box, so the zoom-out limit is the one that holds and the drive stays in reach
+    assert abs(lim["wide"] - 540) < 0.5 and abs(lim["tall"] - 360) < 0.5, lim

@@ -5,7 +5,9 @@
 const http = require('http');
 const fs = require('fs');
 const path = require('path');
-const { chromium } = require('playwright');
+const playwright = require('playwright');
+// BROWSER=webkit runs the flows in Safari's engine (the iOS app is a WKWebView); chromium by default, as CI runs
+const chromium = playwright[process.env.BROWSER || 'chromium'];
 
 const WEB = path.resolve(__dirname, '..', 'web');
 // The private themes' looks (migration 0044): the server sends them in /api/me only to a granted account; the stubs below do the same
@@ -4189,11 +4191,29 @@ flow('the drive page\'s map: with no map to be had the picture keeps its blank p
   await page.waitForFunction(() => !!window.maplibregl, null, { timeout: 15000 });
   await page.waitForFunction(() => !document.querySelector('.dv-basemap'), null, { timeout: 15000 });
   const s = await page.evaluate(() => ({ on: document.querySelector('.dv-plan').classList.contains('on-map'), credit: document.querySelector('.dv-credit').hidden,
-    path: document.querySelectorAll('#dvSpeed line').length, casing: !!document.querySelector('#dvCase') }));
-  check(!s.on && s.credit && s.path > 10 && s.casing, 'the blank panel, the path drawn, no credit for a map not shown: ' + JSON.stringify(s));
+    path: document.querySelectorAll('#dvSpeed line').length, casing: !!document.querySelector('#dvCase'),
+    note: (document.querySelector('.dv-plan .dv-mapnote') || {}).textContent, key: !!document.querySelector('.dv-recenter') }));
+  check(!s.on && s.credit && s.path > 10 && s.casing && !s.key, 'the blank panel, the path drawn, no credit for a map not shown: ' + JSON.stringify(s));
+  check(s.note === 'Map couldn’t load', 'never silent: the panel says the map couldn’t load: ' + JSON.stringify(s.note));
 });
 
-flow('the drive page\'s map: when the map can draw it sits under the path, fitted, still and in the theme (stubbed MapLibre, TestFlight 15)', async (page, base) => {
+flow('the drive page\'s map: with no signal and no saved area the panel says the map is unavailable offline, and MapLibre never loads', async (page, base) => {
+  await page.addInitScript(() => {
+    try { localStorage.setItem('apex.onboarded', '1'); } catch (_) {}
+    Object.defineProperty(Navigator.prototype, 'onLine', { get: () => false, configurable: true });
+  });
+  await page.goto(base + '/analysis.html');
+  await page.waitForFunction(() => window.apexLogDebug && window.apexLogDebug.loaded() && window.ApexRecording);
+  await storeDashDrive(page, 'bm0', 'Map road');
+  await page.goto(base + '/analysis.html?drive=bm0');
+  await page.waitForSelector('.dv-plan svg');
+  await page.evaluate(() => document.querySelector('.dv-plan').scrollIntoView());
+  await page.waitForSelector('.dv-plan .dv-mapnote', { timeout: 8000 });
+  const s = await page.evaluate(() => ({ note: document.querySelector('.dv-mapnote').textContent, gl: !!window.maplibregl, layer: !!document.querySelector('.dv-basemap') }));
+  check(s.note === 'Map unavailable offline' && !s.gl && !s.layer, 'offline, said in one line: ' + JSON.stringify(s));
+});
+
+flow('the drive page\'s map: when the map can draw it sits under the path, fitted and in the theme; two fingers zoom it, a little out at most, the path follows, Recenter fits it again (stubbed MapLibre)', async (page, base) => {
   await page.addInitScript(() => {
     try { localStorage.setItem('apex.onboarded', '1'); } catch (_) {}
     // a stand-in MapLibre: records how it was made and draws one tile
@@ -4203,11 +4223,16 @@ flow('the drive page\'s map: when the map can draw it sits under the path, fitte
         this.o = o; this.h = {}; const c = o.container;
         c.classList.add('maplibregl-map');                               // as MapLibre does: its stylesheet's position: relative must not win
         c.getBoundingClientRect();
-        window.__maps.push({ style: o.style, center: o.center, zoom: o.zoom, interactive: o.interactive, w: c.clientWidth, h: c.clientHeight, cls: c.className });
+        window.__maps.push({ style: o.style, center: o.center, zoom: o.zoom, interactive: o.interactive, coop: o.cooperativeGestures, rotate: o.dragRotate,
+          minZoom: o.minZoom, maxBounds: o.maxBounds, w: c.clientWidth, h: c.clientHeight, cls: c.className });
+        this.c = { lng: o.center[0], lat: o.center[1] }; this.z = o.zoom; window.__map = this;
         setTimeout(() => { this.fire('styledata'); this.fire('data', { dataType: 'source', tile: {} }); this.fire('idle'); }, 50);
       }
       on(k, f) { (this.h[k] = this.h[k] || []).push(f); } fire(k, e) { (this.h[k] || []).forEach((f) => f(e)); }
-      isStyleLoaded() { return true; } resize() {} jumpTo(v) { window.__jump = v; } remove() { window.__removed = (window.__removed || 0) + 1; }
+      getCenter() { return this.c; } getZoom() { return this.z; } setMinZoom(z) { window.__minZoom = z; } setMaxBounds(b) { if (b) window.__maxBounds = b; }
+      moveTo(lng, lat, z) { this.c = { lng, lat }; this.z = z; this.fire('move'); }   // as a pinch or pan would
+      isStyleLoaded() { return true; } resize() {} jumpTo(v) { window.__jump = v; this.c = { lng: v.center[0], lat: v.center[1] }; this.z = v.zoom; this.fire('move'); }
+      remove() { window.__removed = (window.__removed || 0) + 1; }
     } };
     window.ApexBasemap = { restyle(map, P) { window.__palette = P; } };
   });
@@ -4226,10 +4251,38 @@ flow('the drive page\'s map: when the map can draw it sits under the path, fitte
       same: Math.abs(sv.width - lr.width) < 1 && Math.abs(sv.height - lr.height) < 1, palette: window.__palette, bg: layer.style.background };
   });
   const m = s.m[0];
-  check(s.n === 1 && /tiles\.openfreemap\.org\/styles\//.test(m.style) && m.interactive === false, 'one still map of the app\'s own style: ' + JSON.stringify(s.m));
+  check(s.n === 1 && /tiles\.openfreemap\.org\/styles\//.test(m.style), 'one map of the app\'s own style: ' + JSON.stringify(s.m));
+  // the owner, 2026-11-03: "zoom in on it and out but not all the way out just a little extra"
+  check(m.interactive === true && m.coop === true && m.rotate === false, 'pinch and pan with two fingers, one finger scrolls the page, no rotating: ' + JSON.stringify(m));
+  check(Math.abs(m.minZoom - (m.zoom - 1)) < 1e-9 && m.maxBounds && m.maxBounds[0][0] < m.center[0] && m.maxBounds[1][0] > m.center[0]
+    && m.maxBounds[0][1] < m.center[1] && m.maxBounds[1][1] > m.center[1], 'out one level past the fit at most, panning held round the drive: ' + JSON.stringify(m));
   check(Math.abs(m.center[1] - (35.6 + 150 * 5 / 110540)) < 0.002 && Math.abs(m.center[0] + 83.9) < 0.003 && m.zoom > 12 && m.zoom < 17, 'fitted on the drive: ' + JSON.stringify(m));
   check(s.on && s.credit && s.under && s.first && s.same, 'under the path, the picture\'s exact size, credited: ' + JSON.stringify(s));
   check(s.palette && s.palette.bg && s.bg, 'painted in the theme\'s map palette');
+  // a pinch in on the first corner: the path, the numbers and the dot follow the map, the numbers keep their size
+  const z = await page.evaluate(async () => {
+    const svg = document.querySelector('.dv-plan svg'), r = svg.getBoundingClientRect(), u = r.width / svg.viewBox.baseVal.width;
+    const mark = () => { const g = document.querySelector('#dvMarks [data-k="0"]'); const b = g.getBoundingClientRect(); return [b.left + b.width / 2 - r.left, b.top + b.height / 2 - r.top, b.width]; };
+    const before = mark(), m = window.__map, z0 = m.z;
+    // the camera that puts corner 1's apex at the picture's centre, two levels in, through drive_basemap's own maths
+    const p = before; const lonlat = (() => {
+      const c0 = m.c, ws = 512 * 2 ** z0, merc = (lat) => Math.log(Math.tan(Math.PI / 4 + lat * Math.PI / 360));
+      const cx = (c0.lng + 180) / 360 * ws + (p[0] - r.width / 2), cy = (1 - merc(c0.lat) / Math.PI) / 2 * ws + (p[1] - r.height / 2);
+      return [cx / ws * 360 - 180, (2 * Math.atan(Math.exp(Math.PI * (1 - 2 * cy / ws))) - Math.PI / 2) * 180 / Math.PI];
+    })();
+    m.moveTo(lonlat[0], lonlat[1], z0 + 2);
+    const after = mark(), geo = document.querySelector('#dvGeo').getAttribute('transform');
+    const key = document.querySelector('.dv-plan .dv-recenter');
+    const shownKey = key && !key.hidden && getComputedStyle(key).display !== 'none';
+    key.click();
+    return { before, after, geo, shownKey, w: r.width, h: r.height, u, jump: window.__jump, z0, back: document.querySelector('#dvGeo').getAttribute('transform'),
+      again: mark(), minZoom: window.__minZoom };
+  });
+  check(Math.abs(z.after[0] - z.w / 2) < 2 && Math.abs(z.after[1] - z.h / 2) < 2, 'corner 1 lands where the map put its apex, the centre: ' + JSON.stringify(z));
+  check(/^matrix\(4 0 0 4 /.test(z.geo || ''), 'the path scaled with the map, two levels in: ' + z.geo);
+  check(Math.abs(z.after[2] - z.before[2]) < 1, 'the corner number keeps its size: ' + JSON.stringify([z.before[2], z.after[2]]));
+  check(z.shownKey && z.jump && Math.abs(z.jump.zoom - z.z0) < 1e-9 && Math.abs(z.minZoom - (z.z0 - 1)) < 1e-9, 'Recenter fits the drive again: ' + JSON.stringify(z.jump));
+  check(Math.abs(z.again[0] - z.before[0]) < 1 && Math.abs(z.again[1] - z.before[1]) < 1 && /^matrix\(1 0 0 1 /.test(z.back || 'matrix(1 0 0 1 '), 'and the picture is back where it was: ' + JSON.stringify([z.before, z.again, z.back]));
 });
 
 flow('the Log page opens', async (page, base) => {
@@ -4478,6 +4531,24 @@ flow('REVIEW5 §2: the Garage leads with you, your cars, Look and voice and the 
   await page.fill('#crashName', 'Sam'); await page.fill('#crashPhone', '+1 555 010 2030');
   check(/text Sam where you are\.$/.test(await page.textContent('#crashState')), 'crash, with Sam: ' + await page.textContent('#crashState'));
   await page.click('.garage-pop.open[data-setting="crash"] .side-pop-head button');
+  // The owner (2026-11-03): "i should be able to swipe this submenu out of the way". A short drag springs back; a long one
+  // closes the sheet under the finger and leaves the Settings list under it open.
+  const swipe = (dy) => page.evaluate(async (dy) => {
+    const p = document.querySelector('.garage-pop.open[data-setting="crash"]'), r = p.getBoundingClientRect();
+    const at = (y) => { const t = new Touch({ identifier: 7, target: p, clientX: r.left + r.width / 2, clientY: y }); return { touches: [t], targetTouches: [t], changedTouches: [t], bubbles: true, cancelable: true }; };
+    const y0 = r.top + 40;
+    p.dispatchEvent(new TouchEvent('touchstart', at(y0)));
+    for (let i = 1; i <= 6; i++) { p.dispatchEvent(new TouchEvent('touchmove', at(y0 + dy * i / 6))); await new Promise((f) => setTimeout(f, 40)); }
+    p.dispatchEvent(new TouchEvent('touchend', { ...at(y0 + dy), touches: [], targetTouches: [] }));
+    await new Promise((f) => setTimeout(f, 300));
+    return { crash: !!document.querySelector('.garage-pop.open[data-setting="crash"]'), list: document.getElementById('garageSettings').classList.contains('open'), t: p.style.transform };
+  }, dy);
+  await page.click('#garageSettings .nav-row[data-setting="crash"]');
+  await page.waitForSelector('.garage-pop.open[data-setting="crash"]');
+  const short = await swipe(30);
+  check(short.crash && short.list && !short.t, 'a short drag springs back: ' + JSON.stringify(short));
+  const long = await swipe(220);
+  check(!long.crash && long.list, 'a long swipe closes the sheet back to the Settings list: ' + JSON.stringify(long));
   // U-135: the default-on switch says anonymous on the row
   await page.click('#garageSettings .nav-row[data-setting="data"]');
   check(await page.isVisible('.garage-pop.open [data-toggle="health"] >> text=Share app health (anonymous counts)'), 'Share app health says anonymous on the row');
