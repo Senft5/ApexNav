@@ -27,3 +27,5 @@ from any tester are fixed when they are an app bug.
 | 2026-10-31T00:18:33Z | owner note | explain what grip circle actually means? | #286 (a line and a tap-to-open explanation) |
 | 2026-10-31T00:19:26Z | owner note | how do I slide to align when video doesn't preview? (dashcam overlay) | #286 (live preview with the overlay, step by call) |
 | 2026-11-03T17:10:38Z | co-developer note | "Shits in my way when I lead" (convoy card over the road ahead) | #286 (one line behind the car; calls from Report or a tap) |
+| 2026-11-03T22:00:11Z | owner note | "I want to see the rest of the map here not just my path" (drive page) | #290 (map zooms and pans; the map itself was build lag) |
+| 2026-11-03T22:59:22Z | owner note | "i should be able to swipe this submenu out of the way" (Crash check sheet) | #290 (sheets swipe down to close) |

@@ -4,6 +4,21 @@ Decisions Claude made for you, newest first. Each one says what was decided, why
 you reach one you've seen. If you disagree with a call, say so and it gets reversed; nothing here is hard to undo unless
 it says so. Things only you can do are in docs/OWNER_TODO.md.
 
+## 2026-11-04: Sheets swipe down; the drive map zooms; a production deploy that never ran
+
+- **Menu sheets swipe down to close** (you: "i should be able to swipe this submenu out of the way"): a bottom sheet
+  follows your finger down from its top and closes past 80 px or on a flick, through its own back/Done key, so a sheet
+  over the Settings list goes back to the list. Undo: the swipe block after popScrim in cockpit.js.
+- **The drive page's map zooms** (you: "zoom in on it and out but not all the way out just a little extra"): two fingers
+  pinch and pan (one finger still scrolls the page), zoom in freely, out one level past the fitted drive, panning held
+  near the drive, a Recenter key; it says why when it can't show ("Map unavailable offline" / "couldn't load").
+  Undo: `cooperativeGestures` and `limits()` in web/drive_basemap.js.
+- **Feedback runs print each note's build** ("build 1.0 (574)") so a note can be matched to what it was seen on.
+- **Why the car themes vanished on 574**: #288's production deploy never ran. Right after the merge I pushed this branch
+  at main's exact commit, and Cloudflare built that commit as a branch preview instead; the server stayed on #287 and
+  sent the old theme format, which 574 rejects. #289's merge deployed it (checked live). I no longer push the branch at
+  main's commit after a merge, and I check the live files after each merge that touches the server.
+
 ## 2026-11-03: A theme from a newer server falls back instead of vanishing
 
 - The car themes disappeared on 572.1: the server deployed the new `car` renderer at once, and the older app's contract
