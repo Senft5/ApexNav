@@ -256,6 +256,30 @@ dull road beat a much better one (it keeps a 20-point lead). The route card adds
 ARCHITECTURE §1), hazards, and measured data during stage discovery itself (stages are still found on
 map geometry; measured data only re-ranks routed candidates).
 
+## Route context: time and the world (2026-11-03)
+
+Providers in `web/route_ctx/` (ROUTE_ENGINE_CONTRACT: `ApexRouteCtx.register`, one fetch for all candidates of a plan, per-sample
+channels with NaN for unknown, spans and points) evaluate each 25 m sample at its own eta. Each file's header documents its
+channels, sources, licences and cadence; the engine (builder A) weighs them.
+- `conditions.js`: Open-Meteo per 0.05° cell (an hour's cache): air and ground temperature, visibility and a fog risk raised in
+  valleys and cut on ridges (from `tpi_m` or the DEM against the cell's terrain), wind, gusts and the gust's crosswind against
+  the heading (with ridge/bridge exposure), rain in the last 6 and 48 h, route_weather.js's hazard per sample, light (day,
+  civil twilight, dark), glare (the R-13 cone) and a golden-hour view on descents that never rewards the glare cone. Spans fog,
+  crosswind, cold-tyres (< 7 °C), ice (frost or wet at ≤ 0.5 °C), dark, glare, golden-view.
+- `wildlife.js`: deer risk = sun-relative hour (fitted to OSHP's 26 % / 31 % dawn and dusk shares) x the state's month (each
+  state agency's Q4 and November shares) x land (forest edge high, towns low; unknown without land use). Span deer-hour.
+- `events.js`: MLB and Triple-A games (MLB Stats API), other sports and concerts with a SeatGeek id, sized by a venue table;
+  arrival 2.5 h before to the start, departure to 1 h after; school runs near schools on school days, bus hours, Sunday and
+  Saturday-vigil church hours (OSM places). City permit data for festivals and closures was checked (Cincinnati, Columbus,
+  Louisville, Lexington): none current and machine-readable.
+- `hazards_live.js`: NOAA flood categories and USGS 24 h rises near the route and at fords (with conditions' 48 h rain), WZDx
+  work zones and closures (Indiana direct, Kentucky via `/api/ctx/workzones`, Ohio with an OHGO key; paving labelled), harvest
+  (NASS weekly progress, else the USDA usual dates) x farmland, NPS monthly visits in the parks, typical fall-colour peak by
+  latitude and height x canopy. No snowplough feed exists in OHGO's public API.
+- `photos.js`: Wikimedia Commons photo spots within 250 m (and Flickr with a key) as a saturating scenic score; Mapillary
+  speed-limit signs (carried 2 km, fills missing maxspeed) and curve-warning signs with a token.
+Tests: `tests/test_route_ctx_*.py` on real answers for the Cincinnati area saved 2026-11-03 (`tests/fixtures/route_ctx/`).
+
 ## Sun glare
 
 Every candidate (A→B and loops) is driven in time from now over its router time, and each 100 m that heads within

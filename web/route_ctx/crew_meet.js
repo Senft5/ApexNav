@@ -11,7 +11,7 @@
 // Pure parts exported for tests (tests/test_route_ctx_crew_meet.py).
 (function (root) {
   'use strict';
-  const U = typeof module !== 'undefined' && module.exports ? require('./ctx_util.js') : root.ApexRouteCtxUtil;
+  const U = (typeof module !== 'undefined' && module.exports ? require('./ctx_util.js') : root.ApexRouteCtxUtil).E;   // E's helpers (ctx_util.js)
   const CELL_DEG = 0.1, MEAN_WEIGHT = 0.25, MAX_CANDIDATES = 10, DETOUR = 1.35, FALLBACK_KMH = 60, MIN_CELLS = 2;
   const VALHALLA = 'https://valhalla1.openstreetmap.de';
   const finite = U.finite;

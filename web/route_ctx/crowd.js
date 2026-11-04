@@ -25,7 +25,7 @@
 // Pure parts exported for tests (tests/test_route_ctx_crowd.py); fetch is the network shell.
 (function (root) {
   'use strict';
-  const U = typeof module !== 'undefined' && module.exports ? require('./ctx_util.js') : root.ApexRouteCtxUtil;
+  const U = (typeof module !== 'undefined' && module.exports ? require('./ctx_util.js') : root.ApexRouteCtxUtil).E;   // E's helpers (ctx_util.js)
   const CH = ['crowd_rough_g', 'crowd_bank_deg', 'crowd_curv', 'crowd_conf', 'crowd_flow', 'loved', 'taste', 'crowd_busy'];
   const FLOW_FULL_PASSES = 3, MAX_WAYS = 150, TASTE_WIN = 80;          // 80 x 25 m = 2 km windows
   const AGREE = { camber_deg: 1.5, rough_g: 0.05 };                    // as contributor.js

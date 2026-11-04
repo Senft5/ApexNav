@@ -19,7 +19,7 @@
 // Pure parts are exported for tests (tests/test_route_ctx_car.py).
 (function (root) {
   'use strict';
-  const U = typeof module !== 'undefined' && module.exports ? require('./ctx_util.js') : root.ApexRouteCtxUtil;
+  const U = (typeof module !== 'undefined' && module.exports ? require('./ctx_util.js') : root.ApexRouteCtxUtil).E;   // E's helpers (ctx_util.js)
   const CH = ['fuel_since_km', 'fuel_margin', 'signal'];
   const NEAR_M = 1000, SAFE_SHARE = 0.8, EV_SAFE_SHARE = 0.75, ASK_KM = 150, NO_SIGNAL = 0.3, NO_SIGNAL_M = 2000;
   const TILE = 0.25, FUEL_MS = 14 * 864e5, PREFIX = 'apex.fuel.', ASKED = 'apex.rangeAsked', TIMEOUT_MS = 12000;

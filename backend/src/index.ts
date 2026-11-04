@@ -30,6 +30,7 @@ import { contribute, setContribute } from "./contribute";
 import { pointsFor } from "./points";
 import { redeem, shop } from "./redeem";
 import { flagsFor } from "./flags";
+import { ctxKeys, workzones } from "./route_feeds";
 import { grantedThemes } from "./themes";
 import { coverage, exportRoads, roadBins } from "./roads";
 import { crewStandings } from "./standings";
@@ -125,6 +126,9 @@ on("GET", "/api/ops/roads.geojson", async (req, env) => {
 });
 on("GET", "/api/points", async (req, env) => json(await pointsFor(env, (await requireMember(req, env)).id)));
 on("GET", "/api/flags", async (req, env) => json(await flagsFor(env, req)));
+// Work zones from state feeds without CORS (web/route_ctx/hazards_live.js); 0.5° tiles only, nothing kept.
+on("GET", "/api/ctx/workzones", async (req) => workzones(req));
+on("GET", "/api/ctx/keys", async (_req, env) => ctxKeys(env));
 on("GET", "/api/shop", async (req, env) => json(await shop(env, await requireMember(req, env))));
 on("POST", "/api/redeem", async (req, env) => json(await redeem(env, await requireMember(req, env), req)));
 

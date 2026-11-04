@@ -17,7 +17,7 @@
 // Pure parts exported for tests (tests/test_route_ctx_ios_context.py).
 (function (root) {
   'use strict';
-  const U = typeof module !== 'undefined' && module.exports ? require('./ctx_util.js') : root.ApexRouteCtxUtil;
+  const U = (typeof module !== 'undefined' && module.exports ? require('./ctx_util.js') : root.ApexRouteCtxUtil).E;   // E's helpers (ctx_util.js)
   const FREE_BUFFER_MIN = 15, MIN_LOOP_MIN = 20, MAX_LOOP_MIN = 240, STEP_MIN = 15, TIMEOUT_MS = 30000;
   const CH = ['free_min'];
   const state = { nextEventAt: null, albumEndsAt: null, asked: {} };

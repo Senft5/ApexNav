@@ -13,6 +13,21 @@ something blocks on you, delete it once it's done. Everything else is in docs/ID
 | **Google's sign-in screen says "to continue to senftns.workers.dev"**: in Google Cloud → APIs & Services → OAuth consent screen, set the app name to **Vetta** (and the logo); with the domain (row below), Claude moves the sign-in to it | REVIEW4 U-66: it's the moment a new member decides whether to trust the app | 10 min |
 
 | **Create a free NREL key** (EV chargers for fuel-stop spacing, route_ctx/car.js): developer.nrel.gov/signup (an api.data.gov key, free, 1,000 calls an hour), then in Cloudflare (Workers → apexnav → Settings → Variables and Secrets) add the secret `NREL_API_KEY` | Electric cars get planned charging stops on long back-road stretches. Without it the route card says chargers couldn't be checked; petrol cars use OpenStreetMap and need nothing | 5 min |
+## Free keys for route intelligence (new, 2026-11-03)
+
+All free. Make each account, then put the keys in **one** Worker secret: Cloudflare → Workers → apexnav → Settings →
+Variables and Secrets → add secret **`CTX_KEYS`** with JSON like `{"seatgeekClientId": "…", "mapillaryToken": "MLY|…",
+"ohgoApiKey": "…", "nassApiKey": "…", "flickrApiKey": "…"}` (leave out any you skip). Phones fetch them within a day; nothing is
+in the code. Until then each source is simply unknown on the route card, never guessed.
+
+| what | why | how long |
+|---|---|---|
+| **SeatGeek client id**: seatgeek.com/account/develop → New App (name Vetta), accept the API terms, copy the Client ID | NFL, MLS, NBA, NHL, college games, races and big concerts near a route at the hour you'd pass (MLB already works without a key). Without it only baseball traffic is known | 5 min |
+| **Mapillary token**: mapillary.com/dashboard/developers → Register application (read access), copy the client token (starts `MLY|`) | Speed-limit signs fill missing speed limits, curve-warning signs mark corners; data is CC BY-SA (attribution is in Sources) | 5 min |
+| **OHGO key**: publicapi.ohgo.com/accounts/registration (email, password, "route planning for a free driving app"), copy the key from the account page | Ohio's work zones and closures on the route (Kentucky and Indiana already work). OHGO has no snowplough feed, so ploughs stay unknown | 5 min |
+| **USDA NASS key**: quickstats.nass.usda.gov/api → Request API key (email) | This week's harvest progress per state (farm machinery on rural roads); without it the typical-year harvest dates are used | 2 min |
+| **Flickr key** (optional): flickr.com/services/apps/create → Apply for a non-commercial key | More photo spots for the scenery score. Non-commercial terms: if Pro goes on sale, either apply for a commercial key or drop this one (Wikimedia Commons is used either way) | 5 min |
+| **MLB schedules**: read gdx.mlb.com/components/copyright.txt (individual, non-commercial, non-bulk use) and say if you're fine with Vetta reading the day's schedule once per plan; if not, Claude turns it off (`events.js`) | Reds and Triple-A game traffic | 2 min |
 
 ## Money and marketing (new, 2026-10-28)
 

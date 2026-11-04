@@ -29,7 +29,7 @@
 // Points: tunnel (its entrance). Pure parts are exported for tests (tests/test_route_ctx_driver.py).
 (function (root) {
   'use strict';
-  const U = typeof module !== 'undefined' && module.exports ? require('./ctx_util.js') : root.ApexRouteCtxUtil;
+  const U = (typeof module !== 'undefined' && module.exports ? require('./ctx_util.js') : root.ApexRouteCtxUtil).E;   // E's helpers (ctx_util.js)
   const KEY = 'apex.driverPrefs', PREFS = ['passenger', 'lit', 'cyclists', 'tunnels'];
   const LABELS = { passenger: 'Passenger aboard', lit: 'Lit roads at night', cyclists: 'Cyclist courtesy', tunnels: 'Tunnels' };
   const CH = ['passenger_cost', 'tech_level', 'skill_fit', 'dark', 'lit', 'cyclist_route', 'cyclist_time', 'tunnel', 'driver_fit'];
