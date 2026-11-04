@@ -4,6 +4,95 @@ Decisions Claude made for you, newest first. Each one says what was decided, why
 you reach one you've seen. If you disagree with a call, say so and it gets reversed; nothing here is hard to undo unless
 it says so. Things only you can do are in docs/OWNER_TODO.md.
 
+## 2026-11-05 (later): Our tiles see side streets; planning under 1.5 s
+
+- **The new tiles carry businesses, driveways, signals, sidewalks and density per road**, and the ranking reads them as
+  the live model does: all 10 test trips now pick at least as well as production, the Pippin Road subdivision trip
+  included. Table in OWN_ROUTING.md §8.
+- **The ranked route is up in 0.8-1.5 s** in a warm session (was 1.2-1.8 s). The ranked route waits 0.4 s for the land
+  cover beside the road, then uses the cautious sight distance; the full one is there on the next plan. Undo:
+  `OWN_SIGHT_MS` in cockpit.js.
+
+## 2026-11-05: Planning with our tiles, faster
+
+- **Our quickest route goes up first** (about half a second), before Valhalla answers; Valhalla's turn instructions
+  replace ours on it when they arrive. Undo: `ownQuickP` in cockpit.js funRoute.
+- **Our routes are ranked with the tiles' own road scores** plus the time-dependent data only (weather, wildlife,
+  events, live hazards, the national grid), in 0.9 s instead of 4 s. This moved 5 of 10 test picks; on full data 9 of
+  10 are still at least as good as production, one (a short trip by the Pippin Road subdivision) is worse until the
+  graph builder bakes in the router's density and driveway data (OWN_ROUTING.md §8). Undo: `OWN_CTX` in cockpit.js.
+- **The tiles round you load at start** (bundled, kept in IndexedDB). Off on one phone: localStorage `apex.ownWarm` = "0".
+
+## 2026-11-04 (night): Our own routing on the real Cincinnati roads
+
+Live on 10 trips, our router's pick won the engine's ranking on all 10 and scored at least as well as production's
+on 9; the tenth is the same route as production's, scored at a different hour (OWN_ROUTING.md §8 has the table).
+- **Fun and Max now really trade time for road**: the cost is `time x exp(a x badness)` (the multiplicative form could
+  never buy more than about 9 % more time here), and corners carry most of the goodness, so the motorway's high
+  quality no longer pulls Fun onto it. Undo or tune: `K` in web/graph_router.js.
+- **One clock**: where Valhalla's route and ours are the same way, our times are put on Valhalla's clock (ours ran 12 %
+  slow), so a Quick plan doesn't lose a route to its own copy. Valhalla's highway-friendly route is asked again as a
+  check for this. Undo: `oneClock` in own_routing.js.
+- **Members' data counts per stretch inside the search**: measured roughness, flow, loved roads and banking change
+  each edge's goodness with the route engine's own weights. Signed out: no change. Undo: `crowd:` in cockpit.js funRoute.
+- **Via-way turn restrictions are not applied** (259 here): the tiles don't carry them yet (a gap in OWN_ROUTING.md).
+
+## 2026-11-04 (evening): Our own routing on the phone (the router half)
+
+The phone can now find routes itself over our own scored road network (docs/OWN_ROUTING.md §5, §8). It does nothing
+until the Cincinnati tiles ship: where no tiles cover a trip, planning is exactly as before.
+- **Where our tiles cover the trip, our routes are the candidates** and the stage search, its matrix and the
+  highway-costed router call are skipped; Valhalla's quickest stays in the pool as a check, and is waited for at most
+  2.5 s once ours are in. Undo: `ownCovered` in cockpit.js funRoute, or the flag below.
+- **One switch:** the `own_routing` flag (on; it only acts where tiles exist). Off for everyone: FLAGS
+  {"own_routing":{"on":false}} in the Worker's variables; one phone: localStorage `apex.ownRouting` = "0".
+- **Fun and Max fun trade time for good road** as `time x (1 + a x (1 - goodness))`, `a` found so the route stays
+  inside the level's time budget (the same budgets as today); goodness is half quality, three tenths corners, a fifth
+  scenery, and unknown road counts as below average so it can't win. Every route found on the way is offered to the
+  route engine, which still picks. Undo or tune: `K` in web/graph_router.js.
+- **Signals and stop signs on a junction are added by the router** (15 s and 7 s, the graph builder's own numbers for
+  those inside an edge), so each is counted once; OWN_ROUTING.md §3 says so. Undo: `SIGNAL_S`, `STOP_S`.
+- **Turn instructions for our route come from Valhalla's trace_route** on our line when online (one request, 3 s at
+  most), our own from name changes and turn angles offline. That sends the route's line to the public router, as the
+  road-data provider (router_edges) already does for every candidate; nothing new leaves the phone. Undo:
+  `ownInstructions` in cockpit.js.
+- **Our routes are always pinned with shaping points**, so a reroute (still Valhalla's) keeps to them.
+- Not done: the live comparison against production (no real tiles yet), Explore on our router.
+
+## 2026-11-04 (own routing): the scored road network (graph half)
+
+- **Side-street evidence in the tiles (format v2)**, after the router builder found tile-only rankings rated suburban
+  streets too high. Against the live engine on the calibration roads (each sample matched to its tile edge) the tiles
+  read 0.04-0.10 high on suburban roads. Fixed: road density now counts every vehicle way, driveways and car-park
+  lanes too, as Valhalla's graph does (it had counted only the routable, trimmed graph); businesses within 80 m, as the
+  live engine counts them (40 m missed shops behind their car parks); footway=sidewalk lines give `sidewalk`; addresses
+  count. Springdale Rd now 0.31 vs the live engine's 0.30, Pippin 0.37 vs 0.33, W Kemper 0.28 vs 0.28. Pippin Road is
+  low in the live engine too (homes along it): it is reported, not gated. Undo: `DENSITY_KNOTS`, `BUSINESS_M`.
+
+- **Every road is scored once, ahead of time, by the app's own model**: tools/graph_etl/score_edges.js runs
+  web/route_engine.js, fun_route.js, dem.js and context_grid.js in node on each edge; the Python side only measures
+  (OSM tags, counts, land use, density). No second model to drift. Undo: delete tools/graph_etl and web/data/graph.
+- **Per-km counts use the road's own continuation, ±500 m**, across junctions (same name, else under 50° of turn), so a
+  60 m edge between two side streets reads like the road it belongs to, as the router's ±500 m windows do. Undo:
+  `WINDOW_M` / `Graph._continuation` in features.py.
+- **Road density is computed, not asked**: road km per km² within 2 km, mapped to Valhalla's 0-15 by the medians on the
+  calibration fixtures' 2055 router edges (r = 0.95). It decides when a "residential" road is a TIGER county lane.
+  Undo: `DENSITY_KNOTS` in build.py.
+- **Travel time is our own simple model** (posted limit or the app's class estimate x a class flow factor, corners at
+  0.3 g, signals and stops inside the edge); signals and stops at an edge's ends are left to the router's turn cost so
+  they are never counted twice. Undo: `FLOW`, `MU_TRAVEL` in score_edges.js.
+- **Bollards and locked gates are dead ends from both sides** (each road ending there gets its own node); open gates
+  are a flag. Undo: the barrier block in osm_graph.build_chains.
+- **Car-park lanes are left out to fit the app**: the first Cincinnati build was 26.5 MB (598k edges, 40 % unnamed
+  service roads). Unnamed service roads and tracks that meet no public road (the lanes inside car parks and campuses),
+  and unnamed dead-end service stubs under 200 m (a lot's entrance), are not routable; they still count as driveways
+  and joins. A destination there snaps to the street in front. Named and longer service roads stay. With the tighter
+  tile layout (u16 node coordinates and lengths, 0.5 m geometry steps) the 16 tiles fit the 15 MB target. Undo:
+  `trim_service` / `STUB_M` in build.py.
+- **The tiles are ODbL** (a derived OpenStreetMap database shipped in the app): said on the licences page.
+- **Blue Rock Road's spot check is its rural stretch** (north of the I-275 ring, the one the calibration's Blue Rock
+  route drives): inside the ring it is a posted 35 mph suburban street and scores like one. Undo: the box in check.py.
+- **Via-way turn restrictions are counted, not applied** (index.json `stats`). Undo: none needed; applying them is next.
 ## 2026-11-04 (evening): The plan flow, simpler
 
 You said planning a route was "clunky and confusing". An audit on production (iPhone 15 size) found eleven problems; all

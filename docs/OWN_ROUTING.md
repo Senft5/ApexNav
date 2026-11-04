@@ -51,7 +51,9 @@ Scores, computed by calling `web/route_engine.js` itself (node, at build time; n
 - `fun` per edge: the gated corner score of the edge's geometry (corners only count on good road), plus the
   corner-entry context across edge joins handled at query time (a corner split across two edges must still count:
   edges keep their first/last 60 m heading so the router can score the join).
-- `t_s` travel time: from the speed model the engine uses (posted/estimated speed, class, curvature, signals, stops).
+- `t_s` travel time: from the speed model the engine uses (posted/estimated speed, class, curvature, and the signals,
+  stops and crossings inside the edge). Not those on its end nodes: they are node flags and the router adds them at
+  query time with the same seconds (§5, §8), so each is counted once.
 - `conf` how much of the edge's weight was known (unknown stays unknown, never 0).
 Time-dependent things (deer hour, school hours, weather, works, events, sun glare) are NOT baked in: they are applied at
 query time from the existing providers along the chosen route and its alternatives.
@@ -68,6 +70,52 @@ query time from the existing providers along the chosen route and its alternativ
 - `index.json`: tiles present, build date, source timestamps, model version (the route_engine.js weights hash).
 - Size target: Cincinnati area (about 100 x 100 km, 16 tiles) under 15 MB uncompressed, shipped in the app. The region
   (OH+KY+IN) is downloaded by tile on demand and kept for offline areas.
+
+### As built (2026-11-04): the exact v1 layout and what the router reads
+
+The byte layout is in `tools/graph_etl/tiles.py` (writer, plus a reader for checks) and `web/graph_tiles.js` (the
+phone's reader); tests/test_graph_tiles.py round-trips through both. What a router builder needs:
+
+- `ApexGraphTiles.decode(arrayBuffer)` -> `{ tile, nodes: { count, lat, lon (Int32 microdegrees, multiples of 5), firstEdge (Uint32,
+  count + 1: CSR), flags }, edges: { count, from, to, toTile, len_dm, t_ds, quality, scenery, fun, conf, flags, cls,
+  speed, name, geomOff, hIn, hOut }, restrictions, names, geom(edgeIdx) }`; `ApexGraphTiles.load(i, j)` (memory,
+  IndexedDB `vetta-graph`, then `data/graph/v1/<i>_<j>.vgr`; null when index.json doesn't list the tile);
+  `tileOf(lat, lon)`, `keyOf(i, j)` = `(i << 16) | j`, `tilesIn(s, w, n, e)`.
+- Storage is compact (u16 node coordinates in 5 µdeg steps from the tile corner, u16 `to` unless a tile has more than
+  65 535 nodes, u16 lengths and times: the ETL splits edges at 6 km; geometry in 5 µdeg steps, its ends put exactly on
+  the nodes); `decode` gives the full-width arrays above either way. Not in the graph: unnamed service roads that meet
+  no public road, and unnamed dead-end service stubs under 200 m (CALL_SHEET 2026-11-04).
+- **Format v2** (header version 2; `decode` reads v1 and v2): `edges.ch`, the road-side evidence per edge as
+  Float32Arrays (NaN unknown), so the router can rank side streets from the tiles alone: `business_per_km` (within
+  80 m, no fuel or cafes), `access_per_km` (every driveway, service and residential way joining, routable or not),
+  `signals_per_km`, `stops_per_km`, `crossings_per_km`, `calming_per_km`, `schools_per_km`, `worship_per_km` (within
+  150 m), all over the road's own ±500 m; `sidewalk` (the tag, else mapped footway=sidewalk lines within 15 m along
+  40 % of it); `built` (the engine's built evidence 0..1: density, sidewalks, businesses, housing, impervious,
+  addresses, buildings, land use); `density` (Valhalla's 0-15 from road km per km² of every vehicle way);
+  `bldg_per_km`, `addr_per_km`. Stored once per polyline (both directions share it), u8 with the scales in
+  `ApexGraphTiles.CHANNELS` / tiles.py `CHANNELS`. The same values already feed `quality`.
+- Tile i = floor((lon + 180) / 0.25), j = floor((lat + 90) / 0.25). A node lives in the tile its position is in; an edge
+  in its from-node's tile. `toTile` is the packed key of the to-node's tile (the tile's own key for a local edge) and
+  `to` the node's index there. Incoming edges are not stored: build the reverse adjacency from the loaded tiles.
+- Unknown stays unknown: `quality`/`scenery` 255 and `fun` 65535 are unknown (`unq8`, `funPts` give NaN); `conf` 0..255
+  is the share of the engine's weight that was known.
+- `quality`, `scenery`: 0..254 = 0..1, the engine's per-25 m values, mean over the edge. `fun`: gated corner points x
+  100 (sum over the corners whose apex is on the edge of `fun_route.js` cornerWeight x the engine's quality gate there;
+  corners are detected on the edge plus 100 m of its road's continuation each way, so a corner across a join is seen
+  whole and counted once). `hIn`/`hOut`: bearing over the first/last 60 m (256ths of a turn, 0 north) for a corner made
+  by a turn at a join.
+- `t_ds`: the time model in score_edges.js (posted limit, else the app's class estimate, times a class flow factor;
+  corners at 0.3 g lateral, braking 2.5 / accelerating 1.5 m/s²; signals, stops, crossings, calming and level crossings
+  *inside* the edge). The edge's end nodes are NOT in `t_ds`: their `nodes.flags` (signal, stop, give way, barrier,
+  level crossing, crossing, calming, dead end) are the router's turn cost.
+- `flags` (`ApexGraphTiles.FLAGS`): oneway, toll, ferry, unpaved, tunnel, bridge, motorway, ramp, roundabout, private,
+  geomRev (internal), speedEst (no posted limit), barrier (a gate inside), destination (access=destination/customers).
+  `cls`: 0 motorway .. 7 service, 8 track, 9 ferry. `speed`: km/h, posted or the estimate.
+- Restrictions (via node, in the via node's tile): `{ fromEdge, fromTile, via, toEdge, only }`. A via-way restriction is
+  counted in index.json `stats` and not applied.
+- index.json: `{ version, built, osm (replication timestamp), source, model (sha256 of the engine's weights, the corner
+  weights and the time model), model_files (each scored file's hash), bbox, tiles: { "i_j": { bytes, nodes, edges,
+  restrictions } }, bytes, stats }`. `CHECK.txt` beside it is the build's spot-check table.
 
 ## 5. Routing on the phone
 
@@ -105,3 +153,155 @@ query time from the existing providers along the chosen route and its alternativ
 
 - 2026-11-04: plan written. Geofabrik is unreachable from the build container (proxy drops the connection); the ETL is
   run in GitHub Actions and its artifact downloaded.
+- 2026-11-04: the phone's router built (branch `claude/own-routing-router`, merged with the codec branch):
+  - `web/graph_router.js` (pure, node-tested): the loaded tiles as one flat graph, cross-tile edges stitched by the
+    tiles' packed keys; edge-based A* (the state is the edge you arrived on, so restrictions, U-turns and turn costs are
+    exact), heuristic straight-line distance over the network's top speed times the objective's smallest per-second
+    cost (admissible at every `a`). Snapping to the nearest edge and its other direction, part-way along.
+  - Costs: edge `t_s`; turns by angle (right 2-10 s, left 5-21 s, U 30 s), only at junctions or bends over 70°;
+    U-turns back the way you came only at dead ends; end-node flags signal 15 s, stop 7 s, give way 2 s, level
+    crossing 4 s, calming 3 s, crossing 1 s (build.py DELAY_S), barrier 120 s; private and barrier edges x10 + 600 s, destination-only x2 + 60 s, unpaved x1.5,
+    ferry x2; Avoid chips multiply (highways x4, tolls x3, ferries x5, unpaved x5).
+  - Goodness per edge: 0.5 quality + 0.3 fun (gated corner points per km against the loaded network's 90th
+    percentile) + 0.2 scenery (half-counted below the corner gate), the corner prefs scaling fun; unknown channels drop
+    out, and the whole blends to 0.3 by how little was known (`conf`), so unknown road can't win.
+  - Plans: the quickest, then `a` bisected in log steps (at most 5 more searches) for the largest `a` whose time is
+    inside the level's budget (fun_route.js LEVELS, the same numbers); every distinct route found inside the budget is
+    a candidate. Two alternates by the penalty method (x1.6, x2.5, x5 on the chosen edges) that differ by 30 % of
+    their length and stay inside the budget. At most 5 routes go to the route engine.
+  - Loops: 4 rings through the start (radius from the length / 2π / 1.35), 3 waypoints each snapped to through roads,
+    each leg on a fixed `a` (Quick 0.6, Fun 3, Max 8) with earlier legs' edges x3; they join the loop planner's pool.
+  - Output per route: `coords` [[lat, lon]] at the edges' geometry, `edges` ("i_j:local" ids), `timeS`, `distM`,
+    `names` per stretch, `why` (quality, scenery, fun, conf, a, role, signals, junctions) and `route` in the shape of
+    cockpit.js routeOf (coords [[lon, lat]], turns, times, steps as Valhalla maneuver types, names, has), so corridors,
+    the context run, the ranking and the why line take it unchanged.
+  - `web/graph_worker.js` hosts it (messages covers / plan / loop by id); `web/own_routing.js` is the planner's side.
+  - Planner glue (cockpit.js funRoute, buildLoop): where index.json covers start and end, our routes are the
+    candidates, the stage plans, matrix and highway-costed call are skipped, and Valhalla's quickest stays in the pool
+    as a check (waited for at most 2.5 s once ours are in). The chosen route gets Valhalla's maneuvers from one
+    `trace_route` (map_snap, our line as encoded_polyline, 3 s), else our own. Ours are always pinned with shaping
+    points so a Valhalla reroute keeps to them. Not covered, flag off, or any failure: today's path, unchanged.
+  - Flag `own_routing` (backend/src/flags.ts), on; it only acts where tiles exist. Off for everyone:
+    FLAGS {"own_routing":{"on":false}}; one phone: localStorage `apex.ownRouting` = "0".
+  - Measured (node, 16-tile synthetic network of 179k edges): one search 2-90 ms, a whole Fun plan 90-550 ms, the
+    graph view built in about 100 ms. tests/test_graph_router.py; e2e: two flows in e2e/smoke.js.
+  - Not yet: the live comparison with production on the 7 cases (no real Cincinnati tiles exist yet); Explore still
+    uses Valhalla; corner entry across edge joins (hIn/hOut) is read for turn angles only, not yet scored as fun.
+- 2026-11-04 (later): the router on the real Cincinnati tiles (16 tiles, 14.6 MB), live against production:
+  - **Fixed, from the live run:** (1) `t x (1 + a x bad)` could never buy more time than the ratio of two roads'
+    badness (0.68 vs 0.74 here: any detour over 9 % lost at every `a`), so Fun and Max came back as the quickest. The
+    objective is now `t x exp(a x bad)` (same heuristic argument: exp(a x min bad) >= 1), `a` bisected in [0, 40].
+    (2) Goodness was quality-led, and the motorway has the network's best quality, so a large `a` pulled toward I-275:
+    goodness is now 0.2 not-a-side-street (quality 0.25-0.45, the engine's poor cost) + 0.15 quality + 0.45 corners
+    (per km against the network's median) + 0.2 scenery. (3) Our clock ran 12 % slow against Valhalla's on the same
+    roads, so at Quick our copy of the router's route lost to it on time alone: where Valhalla's route (default or
+    highway-friendly, both asked as checks) is the same way as our quickest, ours go on its clock (oneClock, 0.75-1.33).
+    (4) Route names in km, as routeOf has them. (5) Every bisection step goes to the engine (up to 7 routes).
+  - **Members' data in the search:** at plan time the corridor's `/api/roads?cells=` (0.1° cells, VI-1, at most 16, 1.5
+    s) is fetched alongside the coverage check; the tiles hold no OSM way ids, so each way's line is walked every 10 m in
+    its measured direction onto the nearest same-heading edge within 15 m (crowdOnto). Each measured edge's quality takes
+    roughness and flow, its scenery loved and banking, with the engine's own weights (rough 1, flow 1, loved 1.5,
+    camber 0.5) against the model weight the tile already knew (conf x 37.1 quality, 12.8 scenery). Signed out or no
+    data: unchanged. Test: a loved, smooth lane wins a 2 s near-tie in the search.
+  - **Gap:** via-way turn restrictions (259 in Cincinnati) are counted by the ETL and not in the tiles, so the router
+    can't apply them; the tile format needs a via-way table (from-edge, via edges, to-edge) first.
+  - **Live, 2026-11-04** (scratchpad live2/run_own.js on a local serve; production's pick scored by the same engine in
+    the same pool; values in engine points, higher is better):
+
+    | case | our pick (km) | vs quickest | ours | prod | plan / first route |
+    |---|---|---|---|---|---|
+    | owner1 quick | Blue Rock 6.4, Dry Ridge 3.7, Cheviot 1.9, Weik 1.0 | +1.1 min | -32.5 | -66.6 | 6.0 / 1.7 s |
+    | owner1 fun | Blue Rock 4.3, Dry Ridge 3.7, Jessup 3.6, Sheed 2.4 | +2.5 min | -24.1 | -33.0 | 6.9 / 1.8 s |
+    | owner1 max | Sheed 4.5, Thompson 4.3, Dry Ridge 3.7, Jessup 3.6 | +13.8 min | -1.6 | -30.6 | 7.3 / 1.9 s |
+    | subdivision fun | Pippin 2.4, Redharvest 0.4 (the same as prod) | 0 | -34.2 | -34.2 | 3.3 / 1.1 s |
+    | subdivision4 fun | Pippin, Miles, Hamilton, Struble (the same roads as prod) | +3.1 min | -55.5 | -53.8 | 4.3 / 1.6 s |
+    | northgate fun | Mill Road 3.3 | +1.4 min | -25.6 | -42.8 | 6.3 / 2.5 s |
+    | colerain quick | Cross County Hwy 6.0, Blue Rock 4.0, E Miami River 1.7 | +0.7 min | -5.1 | over budget | 5.3 / 1.7 s |
+    | colerain fun | the same, Weik and Dry Ridge | +0.7 min | -0.4 | -40.1 | 4.9 / 1.7 s |
+    | colerain max | the same, a longer way in | +1.5 min | 2.9 | -36.1 | 5.8 / 1.6 s |
+    | harrison fun | Cincinnati Brookville 6.3, California 4.0, Alert-New London 3.3 | +8.2 min | 30.3 | 13.6 | 7.3 / 1.8 s |
+
+    Our router produced every winner. subdivision4 is the same route as production's; the 1.7 points are the hour's
+    deer and low-sun penalties (the two captures were made at different times). Strip mall at most 0.6 km on any pick
+    (production up to 1.7 km). Tiles per plan 2-6 (3.6-8.5 MB); the router's own time 0.1-1.5 s in the browser.
+    Plan times are still the route context's 4 s budget (unchanged; the router is not the long pole).
+- 2026-11-05: faster planning with our tiles (merged main through #297, the planning flow):
+  - **First route:** our quickest alone (one search, the worker's `quick`) goes up the moment it lands; Valhalla's
+    answers are checks and its trace_route maneuvers replace ours on the track when they come (nothing waits for them).
+    The plan keeps that same candidate when it is the plan's quickest, so the card says "Checked N routes" rather than
+    "Better route found" for an unchanged route.
+  - **Ranking:** own-routed plans run only `graph` (new, route_ctx/graph.js: the tiles' quality and scenery on any
+    corridor by the nearest same-heading edge), `context_grid` (local bundles), conditions, wildlife, events,
+    hazards-live and driver, in 0.9 s, at once (no first-route gate). route_engine.js fills a sample's quality and
+    scenery from the tiles where its live channels know under 30 % of the model's weight, and keeps the lower of the
+    two where it knows some (an edge mean can smooth over a built-up stretch). Valhalla's checks join only if they are in
+    150 ms after our context; geometry and forecasts are prepared while the context runs.
+  - **Warm tiles:** the tiles within 15 km of you load into the worker 1.5 s after start (bundled files, then IndexedDB)
+    and again after 10 km; one view is kept and grown (up to 20 tiles), so a plan nearby builds nothing.
+  - **Live, 10 runs** (first route / ranked route built, ms; warm = the second plan in the session; values on the SAME
+    full context for both picks, scratchpad live2/judge.js):
+
+    | case | cold first | warm first | warm ranked | ours | prod |
+    |---|---|---|---|---|---|
+    | owner1 quick | 421 | 840 | 1699 | -48.4 | -66.5 |
+    | owner1 fun | 641 | 863 | 1199 | -25.2 | -35.6 |
+    | owner1 max | 570 | 1053 | 1588 | -21.5 | -34.1 |
+    | subdivision fun | 349 | 481 | 1604 | -44.6 | -34.2 |
+    | subdivision4 fun | 411 | 659 | 1293 | -52.7 | -53.3 |
+    | northgate fun | 457 | 766 | 1635 | -41.1 | -41.0 (same route) |
+    | colerain fun | 536 | 865 | 1834 | -7.0 | -40.1 |
+    | harrison fun | 481 | 956 | 1565 | 23.9 | 12.2 |
+    | colerain quick | 590 | 993 | 1533 | -9.3 | over budget |
+    | colerain max | 1313 | 945 | 1547 | -7.0 | -36.1 |
+
+    Picks changed against the full-context round in 5 runs (owner1 quick and max, harrison, colerain fun and max): the
+    ranking now sees the tiles' edge scores instead of the live per-25 m channels (no business cost, no OSM points such
+    as schools or crossings). On the same full data 9 of 10 are at least as good as production; **subdivision fun is
+    worse** (Pippin, Springdale, Struble +3.6 min, -44.6 against -34.2): the tiles score Springdale Road and Hamilton
+    Avenue higher than the live model does, because the build has no router density, sidewalks or driveways (the
+    router's own edges). Fix in the ETL: those channels, or a per-edge share of side-street samples, baked in.
+  - Not met: the ranked route under 1.5 s warm (1.2-1.8 s; the time-dependent context is 0.15-0.9 s of it, building the
+    track 0.05-0.3 s, the rest the pool's preparation).
+- 2026-11-04: the network half is built (branch claude/own-routing-graph): tile codec v1 (tools/graph_etl/tiles.py,
+  web/graph_tiles.js), the ETL (tools/graph_etl, scored by web/route_engine.js through score_edges.js), CI
+  (.github/workflows/graph.yml) committing web/data/graph/v1. Cincinnati tiles (CI, Geofabrik 2026-11-04): 16 tiles, 14.63 MB, 400,913 edges, 173,598 nodes, 4,225 turn
+  restrictions applied (2,273 skipped: via node outside the tiles or a removed lot lane; 259 via-way not applied).
+  Spot checks (web/data/graph/v1/CHECK.txt): Colerain Ave quality 0.25, Blue Rock Rd (north of I-275) 0.68, E Miami
+  River Rd 0.72, Lees Creek Rd 0.58, I-275 motorway 0.82 at 109 km/h. Local e2e: one reroute flow failed under load
+  (the known flake), unrelated (no page script changed).
+  Not yet: the phone router (§5), the region upload (owner's R2, §7), via-way restrictions, crowd channels (no
+  members' data is baked in; they stay query-time), Overpass-only channels beyond what OSM tags give directly.
+- 2026-11-04 (v2): side-street evidence per edge in the tiles (`edges.ch`); 17.44 MB for the 16 tiles. Spot checks:
+  Colerain Ave 0.22, Springdale Rd east of -84.62 0.32 (was 0.39), Hamilton Ave 0.21 (0.24), Pippin Rd 0.33 (0.42; the
+  live engine also 0.33), Blue Rock rural 0.68, E Miami River 0.72, Lees Creek 0.58, I-275 0.82.
+- 2026-11-05 (later): v2 tiles (17.4 MB, road channels per edge) and the plan profiled:
+  - route_ctx/graph.js passes the v2 channels under the engine's own names (business, access, signals, stops,
+    crossings, calming per km, sidewalk, density, buildings, addresses), so the ranking from tiles reads side streets,
+    density and businesses as the live model does; the subdivision pick is now production's route.
+  - Where the warm plan's time went, and the fixes: a fresh fix asked for again (0.2-0.5 s: a fix under 10 s old is
+    used); a timer per candidate and per check waiting behind the map's work (yield only after 40 ms; checks only when
+    already in); the per-edge objective rebuilt per request over 400k edges (cached per view); the A* flooding the
+    preloaded area at large `a` (bounded by the corridor ellipse: plans 340-1070 ms -> about 110 ms); the plan message
+    (nested coordinate arrays: now one Float64Array per route, coords built when read); corridors, scoring and
+    Valhalla's checks started alongside the first draw (now after the frame that shows it); the early route's land cover
+    decoded on the page (not asked for the early route); the ranked route's land cover waited up to 4 s (400 ms, then
+    the cautious 4 m; the tiles land in the cache); the context 600 ms.
+  - **Live, 10 runs, v2 tiles** (ms from Enter as the page gets it; cold = the session's first plan with the tiles
+    preloaded, warm = the second; values on the same full context for both picks):
+
+    | case | cold first / ranked | warm first / ranked | ours | prod |
+    |---|---|---|---|---|
+    | owner1 quick | 983 / 2532 | 434 / 907 | -26.0 | -64.8 |
+    | owner1 fun | 386 / 1989 | 453 / 1029 | -20.3 | -32.6 |
+    | owner1 max | 471 / 2199 | 373 / 1081 | -13.6 | -29.8 |
+    | subdivision fun | 269 / 1775 | 289 / 875 | -34.0 | -34.2 |
+    | subdivision4 fun | 281 / 1448 | 332 / 813 | -49.6 | -50.1 |
+    | northgate fun | 629 / 2082 | 451 / 1065 | -35.8 | -37.8 |
+    | colerain fun | 394 / 1920 | 463 / 1115 | -7.0 | -38.4 |
+    | harrison fun | 519 / 2498 | 479 / 1483 | 16.3 | 10.2 |
+    | colerain quick | 788 / 2107 | 548 / 1261 | -7.0 | over budget |
+    | colerain max | 501 / 1741 | 464 / 1022 | -4.4 | -34.2 |
+
+    Every pick at least as good as production's; warm ranked 0.8-1.5 s. Not met: the warm first route is still 20-70 ms
+    slower than cold in 4 runs (the worker answers the first question 70-90 ms after Enter in a warm session, 5-100 ms
+    cold; not found yet).

@@ -1,5 +1,65 @@
 # VETTA — CURRENT AGENT HANDOFF STATE
 
+## Session 2026-11-05 (later): own routing on v2 tiles, profiled
+
+- [x] v2 tiles merged and mapped (route_ctx/graph.js); 10/10 live picks at least as good as production; warm ranked
+  0.8-1.5 s, warm first 0.29-0.55 s (OWN_ROUTING.md §8).
+- Open: warm first route 20-70 ms slower than cold in 4 of 10 runs (worker's first answer later in a warm session).
+- Exact next task: find the warm worker's 70-90 ms first answer; then a real drive on owner1 at Fun.
+
+## Session 2026-11-05: own routing, faster (merged main through #297)
+
+- [x] First route = our quickest from the worker (0.35-1.05 s); ranking on tile scores + time-dependent providers
+  (route_ctx/graph.js); warm tiles at start. Table in OWN_ROUTING.md §8.
+- Open: ranked route 1.2-1.8 s warm (target 1.5); subdivision fun pick worse on full data (ETL lacks router density /
+  driveways).
+- Exact next task: graph builder bakes router-like density, sidewalks and driveways (or a per-edge side-street share)
+  into the tiles; then re-run live2/run_own.js and judge.js.
+
+## Session 2026-11-04 (night): own routing on the real Cincinnati tiles
+
+- [x] Merged the 16 Cincinnati tiles (claude/own-routing-graph 2ff318b). Live comparison on the 7 cases plus owner1 at
+  three levels: our router produced every winner, at least as good as production's on the engine's value except
+  subdivision4 (the same route, scored at a different hour). Table in OWN_ROUTING.md §8.
+- [x] Objective `t x exp(a x bad)`, corners-led goodness, one clock with Valhalla, members' data in the search.
+- Gaps: via-way restrictions (not in the tiles), Explore on Valhalla, plan time still the context's ~4-7 s.
+- Exact next task: the owner drives owner1 at Fun; then a via-way table in the tile format (graph builder).
+
+## Session 2026-11-04 (evening): own routing, the phone's router (branch claude/own-routing-router)
+
+- [x] web/graph_router.js (edge-based A*, turn restrictions, one-ways, U-turns at dead ends only, turn and node costs,
+  Quick / Fun / Max with the goodness weight bisected to the level budget, 2 alternates 30 % different, loops),
+  web/graph_worker.js, web/own_routing.js, the planner glue in cockpit.js (funRoute, buildLoop), the `own_routing`
+  flag. Merged the codec branch (claude/own-routing-graph: web/graph_tiles.js, tools/graph_etl/tiles.py).
+- [x] tests/test_graph_router.py (A* = brute-force Dijkstra on 720 random queries, rules, budgets, alternates,
+  determinism, the worker on .vgr tiles from the real writer, client fallback, glue, performance), two e2e flows.
+  Performance (node, 16 tiles, 179k edges): a search 2-90 ms, a whole Fun plan 90-550 ms.
+- Not done: the live comparison with production on the 7 cases waits for the real Cincinnati tiles (the ETL branch has
+  only the codec so far); Explore stays on Valhalla; corners split across edge joins aren't scored by the router yet.
+- Exact next task: when web/data/graph/v1 has the Cincinnati tiles, serve locally and run the live harness
+  (scratchpad live2/run.js with BASE=) on the 7 cases; tune `K` in graph_router.js on what it finds.
+
+## Session 2026-11-04: own routing, the road-network half (branch claude/own-routing-graph)
+
+- [x] docs/OWN_ROUTING.md (the plan and contract) committed; §4 "As built" has the exact tile interface, §8 the status.
+- [x] Tile codec v1: tools/graph_etl/tiles.py (writer + reader), web/graph_tiles.js (`ApexGraphTiles.decode`, `load`),
+  tests/test_graph_tiles.py round-trips through both.
+- [x] Graph ETL (tools/graph_etl): pyosmium reader, chains, oneways, access, via-node restrictions, barriers, point
+  features, joins, businesses (40 m, no fuel/cafes), buildings, land use, water, road density; score_edges.js scores
+  each edge with web/route_engine.js + fun_route.js + dem.js + context_grid.js (no second model). tests/test_graph_etl.py
+  on a toy network and a real Colerain Township piece (tests/fixtures/graph, from the OSM API).
+- [x] CI .github/workflows/graph.yml: Geofabrik OH+KY+IN, merged, Cincinnati's 16 tiles committed back to the branch;
+  region build as an artifact, R2 upload gated on the owner's secrets (OWNER_TODO).
+- Cincinnati tiles (CI, Geofabrik 2026-11-04): 16 tiles, 14.63 MB, 400,913 edges, 173,598 nodes, 4,225 turn
+  restrictions applied (2,273 skipped: via node outside the tiles or a removed lot lane; 259 via-way not applied).
+  Spot checks (web/data/graph/v1/CHECK.txt): Colerain Ave quality 0.25, Blue Rock Rd (north of I-275) 0.68, E Miami
+  River Rd 0.72, Lees Creek Rd 0.58, I-275 motorway 0.82 at 109 km/h. Local e2e: one reroute flow failed under load
+  (the known flake), unrelated (no page script changed).
+- [x] Tiles v2: side-street evidence per edge in the tiles (`edges.ch`); 17.44 MB for the 16 tiles. Spot checks:
+  Colerain Ave 0.22, Springdale Rd east of -84.62 0.32 (was 0.39), Hamilton Ave 0.21 (0.24), Pippin Rd 0.33 (0.42; the
+  live engine also 0.33), Blue Rock rural 0.68, E Miami River 0.72, Lees Creek 0.58, I-275 0.82.
+- Exact next task: the phone router (web/graph_router.js + graph_worker.js) on these tiles (the parallel builder), then
+  OWN_ROUTING.md §6's proof against today's picks.
 ## Session 2026-11-04 (evening): the plan flow, simpler (branch claude/plan-flow)
 
 - [x] The planux audit's eleven findings are fixed (CALL_SHEET 2026-11-04 evening has each call and how to undo it):

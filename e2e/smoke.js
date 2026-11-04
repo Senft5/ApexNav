@@ -16,11 +16,27 @@ const PRIVATE_IDS = Object.keys(PRIVATE);
 const TYPES = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.json': 'application/json', '.png': 'image/png',
   '.svg': 'image/svg+xml', '.wasm': 'application/wasm', '.onnx': 'application/octet-stream', '.webmanifest': 'application/manifest+json' };
 
+// Our own routing's graph tiles (docs/OWN_ROUTING.md): a flow can serve synthetic ones (graphDir, written by
+// tests/graph_fixture.py with the real writer); with none here, an empty index, as a build without tiles answers.
+let graphDir = null;
+const GRAPH = 'data/graph/v1/';
+function graphFixture() {
+  if (graphFixture.dir) return graphFixture.dir;
+  const dir = fs.mkdtempSync(path.join(require('os').tmpdir(), 'vetta-graph-'));
+  require('child_process').execFileSync('python3', [path.resolve(__dirname, '..', 'tests', 'graph_fixture.py'), dir]);
+  return (graphFixture.dir = dir);
+}
+
 function serve() {
   const server = http.createServer((req, res) => {
     let rel;
     try { rel = decodeURIComponent(new URL(req.url, 'http://x').pathname).replace(/^\/+/, '') || 'index.html'; }
     catch (_) { res.writeHead(400); res.end(); return; }
+    if (rel.startsWith(GRAPH) && (graphDir || !fs.existsSync(path.resolve(WEB, rel)))) {
+      const f = graphDir && graphDir !== 'none' ? path.join(graphDir, path.basename(rel)) : null;   // 'none': a build without tiles
+      if (f && fs.existsSync(f)) { res.writeHead(200, { 'content-type': TYPES[path.extname(f)] || 'application/octet-stream' }); fs.createReadStream(f).pipe(res); return; }
+      if (rel === GRAPH + 'index.json') { res.writeHead(200, { 'content-type': 'application/json' }); res.end('{"tiles":{}}'); return; }
+    }
     const file = path.resolve(WEB, rel);
     if (!file.startsWith(WEB + path.sep) || !fs.existsSync(file) || fs.statSync(file).isDirectory()) { res.writeHead(404); res.end(); return; }
     res.writeHead(200, { 'content-type': TYPES[path.extname(file)] || 'application/octet-stream' });
@@ -642,6 +658,68 @@ flow('a short trip with one route finishes: the plan ends, busy clears and Searc
     && !(document.getElementById('toast').classList.contains('show') && /Searching/.test(document.getElementById('toast').textContent)), null, { timeout: 12000 }).then(() => true, () => false);
   check(done, 'the plan finished (ranked, busy cleared, Searching gone) within 12 s of the route going up');
 }, { geolocation: { latitude: 35.7400, longitude: -83.9700 }, permissions: ['geolocation'] });
+
+// Our own routing (docs/OWN_ROUTING.md §5): the same trip with our graph tiles and without them.
+async function ownTrip(page, base) {
+  const calls = { route: [], trace: [], matrix: 0 };
+  await page.route('https://photon.komoot.io/**', (route) => route.fulfill({ contentType: 'application/json', body: JSON.stringify({ features: [
+    { geometry: { coordinates: [-84.57, 39.19] }, properties: { name: 'Forest Park', state: 'Ohio' } }] }) }));
+  await page.route('https://valhalla1.openstreetmap.de/**', (route) => {
+    const u = route.request().url(), req = JSON.parse(route.request().postData() || '{}');
+    if (u.endsWith('/route')) {
+      calls.route.push(req);
+      const t = stubTrip(req.locations);
+      t.trip.summary.time = 3000;                                   // a slow way round: a check, not a contender
+      return route.fulfill({ contentType: 'application/json', body: JSON.stringify(t) });
+    }
+    if (u.endsWith('/trace_route')) {
+      // Valhalla's maneuvers on the line it was sent (our own)
+      calls.trace.push(req);
+      const n = (() => { let k = 0, i = 0; const s = req.encoded_polyline || ''; while (i < s.length) { for (let c = 0; c < 2; c++) { let b; do { b = s.charCodeAt(i++) - 63; } while (b >= 0x20); } k++; } return k; })();
+      return route.fulfill({ contentType: 'application/json', body: JSON.stringify({ trip: { legs: [{ shape: req.encoded_polyline, maneuvers: [
+        { type: 1, begin_shape_index: 0, length: 1, street_names: ['Row 0'] }, { type: 15, begin_shape_index: Math.floor(n / 2), length: 1, street_names: ['Instruction Lane'] },
+        { type: 4, begin_shape_index: n - 1, length: 0 }] }], summary: { length: 5, time: 400 } } }) });
+    }
+    if (u.includes('sources_to_targets')) calls.matrix++;
+    return route.abort();
+  });
+  await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); } catch (_) {} });
+  await page.goto(base + '/index.html');
+  await page.waitForFunction(() => window.apexDebug && window.apexDebug.map);
+  await page.click('#destInput');
+  await page.fill('#destInput', 'Forest Park');
+  await page.waitForSelector('#placeList .place', { timeout: 10000 });
+  await page.click('#placeList .place');
+  await page.waitForFunction(() => Array.isArray(window.apexDebug.lastFun) && window.apexDebug.lastOwn && !document.getElementById('planPanel').classList.contains('busy'), null, { timeout: 30000 });
+  await page.waitForTimeout(300);
+  const r = await page.evaluate(() => ({ own: window.apexDebug.lastOwn, kinds: window.apexDebug.lastFun.map((c) => c.kind), track: window.apexDebug.track.kind,
+    steps: (window.apexDebug.track.steps || []).map((s) => s.street), via: ((window.apexDebug.track.request || {}).via || []).length }));
+  return { r, calls };
+}
+flow('own routing: where our graph tiles cover the trip, our route wins and Valhalla only gives the turn instructions (docs/OWN_ROUTING.md)', async (page, base) => {
+  graphDir = graphFixture();
+  try {
+    const { r, calls } = await ownTrip(page, base);
+    check(r.own.covered && r.own.used && r.own.n >= 2, 'our router planned it: ' + JSON.stringify(r.own));
+    check(r.kinds[0] === 'own' && r.track === 'route', 'our route won the ranking: ' + JSON.stringify(r.kinds));
+    // (its stand-in here takes 50 min, past every budget, so the ranking drops it)
+    check(calls.route.length >= 1 && calls.route.length <= 2, "Valhalla's quickest (and its highway-friendly one) asked for as a check: " + calls.route.length);
+    check(calls.matrix === 0 && calls.route.every((q) => q.locations.length === 2), 'no stage plans or matrix: ' + calls.route.map((q) => q.locations.length));
+    check(calls.trace.length >= 1 && calls.trace.every((q) => q.shape_match === 'map_snap' && q.encoded_polyline), 'instructions from trace_route on our line');
+    check(r.steps.includes('Instruction Lane'), "the route's spoken directions are Valhalla's: " + JSON.stringify(r.steps));
+    check(r.via >= 1, 'pinned with shaping points, so a reroute keeps to it: ' + r.via);
+  } finally { graphDir = null; }
+}, { geolocation: { latitude: 39.155, longitude: -84.615 }, permissions: ['geolocation'] });
+
+flow('own routing: with no graph tiles for the trip, Valhalla plans it as before', async (page, base) => {
+  graphDir = 'none';                                              // the shipped Cincinnati tiles cover this trip: hide them
+  let out;
+  try { out = await ownTrip(page, base); } finally { graphDir = null; }
+  const { r, calls } = out;
+  check(!r.own.covered && !r.own.used, 'not covered: ' + JSON.stringify(r.own));
+  check(r.kinds.length >= 1 && !r.kinds.includes('own'), 'only the router\'s candidates: ' + JSON.stringify(r.kinds));
+  check(calls.trace.length === 0 && calls.route.length >= 1, 'no instructions asked for: the router gave its own');
+}, { geolocation: { latitude: 39.155, longitude: -84.615 }, permissions: ['geolocation'] });
 
 flow('Where to?: a suggestion builds a route with a card and a Start button (search and router stubbed)', async (page, base) => {
   // a road on the route closed at all hours by the map's conditional tags (IDEAS R-22)

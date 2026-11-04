@@ -3,7 +3,7 @@
 // tiles, routing, search keep their own caching), never the large voice models. The iOS app bundles its pages and has no
 // service worker.
 const CACHE = 'apexnav-shell-v2';
-const SHELL = ['/index.html', '/analysis.html', '/manifest.webmanifest', '/brand/mark.svg', '/brand/icon-192.png', '/analysis_worker.js', '/stages_worker.js'];   // the worker has no <script> tag
+const SHELL = ['/index.html', '/analysis.html', '/manifest.webmanifest', '/brand/mark.svg', '/brand/icon-192.png', '/analysis_worker.js', '/stages_worker.js', '/graph_worker.js', '/graph_tiles.js'];   // the worker has no <script> tag
 /** The pages' own scripts (read from their <script src>), so the cockpit works offline after the first visit. */
 // route_ctx/: the route-context providers' folder (builder E), kept offline like the rest
 const scriptsOf = (html) => [...html.matchAll(/<script src="((?:route_ctx\/)?[^"/:]+\.js)"/g)].map((m) => '/' + m[1]);

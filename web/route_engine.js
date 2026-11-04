@@ -301,6 +301,7 @@
    * Per-sample quality, scenery and their confidences (share of the possible weight that was known) for a corridor's
    * context. Pure. { n, quality, qConf, scenery, sConf, terms: { [channel]: known share } }.
    */
+  const GRAPH_OVER = 0.3;
   function samples(c, ctx) {
     const n = c.distM.length;
     const quality = new Float32Array(n).fill(NaN), scenery = new Float32Array(n).fill(NaN), qConf = new Float32Array(n), sConf = new Float32Array(n);
@@ -315,6 +316,9 @@
     for (const x of [...qs, ...ss]) { let k = 0; for (let i = 0; i < n; i++) if (Number.isFinite(x.v[i])) k++; terms[x.t.ch] = k / n; }
     const dens = channel(ctx, 'density'), walk = channel(ctx, 'sidewalk');
     const builtAt = builtEvidence(ctx);
+    // our own network's scores (route_ctx/graph.js: this same model, run once per edge at build time) fill a sample whose
+    // own channels know under GRAPH_OVER of the model's weight; where the live channels say more, they win
+    const gq = ctx && ctx.channels ? ctx.channels.graph_quality : null, gs = ctx && ctx.channels ? ctx.channels.graph_scenery : null, gc = ctx && ctx.channels ? ctx.channels.graph_conf : null;
     for (let i = 0; i < n; i++) {
       let lw = 0, sw = 0;
       const fam = {}, built = builtAt(i);
@@ -352,6 +356,11 @@
         a += x.t.w * g; b += x.t.w;
       }
       if (b > 0) { scenery[i] = a / b; sConf[i] = Math.min(1, b / sTotal); }
+      const gConf = gc && finite(gc[i]) ? gc[i] : 0.5;
+      // (the tiles' score is an edge's mean: where the few live channels here (the national grid, the class and limit)
+      // say worse, the worse stands, so a built-up street the edge mean smooths over still pays as one)
+      if (gq && finite(gq[i]) && !(sw >= GRAPH_OVER * qTotal)) { quality[i] = Number.isFinite(quality[i]) ? Math.min(quality[i], gq[i]) : gq[i]; qConf[i] = Math.max(qConf[i], gConf); }
+      if (gs && finite(gs[i]) && !(b >= GRAPH_OVER * sTotal)) { scenery[i] = gs[i]; sConf[i] = Math.max(sConf[i], gConf); }
     }
     return { n, quality, qConf, scenery, sConf, terms };
   }
@@ -795,7 +804,7 @@
     return base + (ev.quality != null ? W.QUALITY * (ev.quality - 50) * ev.qWeight : 0) + ev.sceneryPts + ev.bonusPts - ev.poorCost - ev.penaltyPts + (ev.driverPts || 0);
   }
 
-  const api = { VERSION: 1, QUALITY, SCENERY, PER_KM, SPANS, ALIASES, KIND_ALIASES, SOURCES, W, SPEED, gate, active, moment, channel, samples, evaluate, stats, rank, why,
+  const api = { VERSION: 1, QUALITY, SCENERY, PER_KM, SPANS, ALIASES, KIND_ALIASES, SOURCES, W, SPEED, gate, active, moment, channel, builtEvidence, samples, evaluate, stats, rank, why,
     placeTimes, corridorFor, stageCorridor, stageCorridors, connectorCosting, highwayCosting, rescoreStages, loopValue, ramp, decay };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   root.ApexRouteEngine = api;
