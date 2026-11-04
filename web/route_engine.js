@@ -171,6 +171,9 @@
     Q_FULL_CONF: 0.3, S_FULL_CONF: 0.2,            // the share of the weights known at which a sample's quality / scenery counts in full
     STAGE_UNKNOWN_GATE: 0.4,                        // a stage's samples with no road data: trusted this much
     GATE_LO: 0.25, GATE_HI: 0.6,                    // a corner on quality ≤ 0.25 counts nothing, ≥ 0.6 in full
+    // a corner between houses: built evidence (two signals agreeing) from BUILT_LO to BUILT_HI takes up to BUILT_CUT off
+    // its gate (fun_route.js BUILT: a road lined with houses, a house every 20 m, won a 12-minute detour on its corners)
+    BUILT_LO: FunRoute ? FunRoute.BUILT.lo : 0.4, BUILT_HI: FunRoute ? FunRoute.BUILT.hi : 0.85, BUILT_CUT: FunRoute ? FunRoute.BUILT.cut : 1,
     PENALTY_CAP: 40, BONUS_CAP: 15,
     DRIVER: 6,             // points for a route that fits the driver (driver_fit 1) vs one that doesn't (-1): ±6
     LOG_FLOOR: 0.05,
@@ -182,6 +185,10 @@
   const DAMNING = new Set(['speed', 'road', 'stops', 'access', 'business']);
   const RURAL_DENSITY = 2;
   const gate = (q) => (finite(q) ? clamp01((q - W.GATE_LO) / (W.GATE_HI - W.GATE_LO)) : 1);
+  /** How much of a corner's gate a built-up place keeps (fun_route.js builtKeep): 1 in open country or unknown. */
+  const builtKeep = (b) => (FunRoute && FunRoute.builtKeep ? FunRoute.builtKeep(b) : 1);
+  /** A corner's weight factor: the quality gate times what the built evidence there keeps of it. */
+  const cornerGate = (q, b) => gate(q) * builtKeep(b);
 
   // ---- time of day --------------------------------------------------------------------------------------------------
   const minutesOf = (s) => { const m = /^(\d{1,2}):(\d{2})$/.exec(s || ''); return m ? +m[1] * 60 + +m[2] : null; };
@@ -278,7 +285,7 @@
    * service road, businesses, housing, impervious ground, addresses, buildings, residential or urban land use); the most
    * built signal wins. null where none of them is known (then a low limit stays as damning as it reads).
    */
-  function builtEvidence(ctx) {
+  function builtEvidence(ctx, agree = false) {
     const f = [['density', (v) => clamp01((v - 2) / 5)], ['sidewalk', (v) => (v >= 0.5 ? 1 : 0)], ['road_class', (v) => (v >= 6 ? 0.8 : 0)],
       ['road_use', (v) => ([4, 5, 6, 8, 9, 10, 11].includes(Math.round(v)) ? 1 : 0)], ['business_per_km', (v) => clamp01(v / 8)],
       ['housing_per_km2', (v) => clamp01(v / 500)], ['impervious_pct', (v) => clamp01((v - 8) / 25)], ['address_per_km', (v) => clamp01(v / 50)],
@@ -286,15 +293,19 @@
       ['landuse_residential', (v) => clamp01(v / 0.6)], ['landuse_urban', (v) => clamp01(v / 0.4)]]
       .map(([k, fn]) => [channel(ctx, k), fn, k]).filter(([v]) => v);
     const dens = channel(ctx, 'density');
+    const xs = [];
     return (i) => {
       let b = null;
+      xs.length = 0;
       for (const [v, fn, k] of f) {
         if (!Number.isFinite(v[i])) continue;
         // a "residential" class in open country is the TIGER county road (samples() reads it as a lane): not built
         const x = k === 'road_class' && v[i] === 6 && dens && dens[i] <= RURAL_DENSITY ? 0 : fn(v[i]);
         b = b == null ? x : Math.max(b, x);
+        xs.push(x);
       }
-      return b;
+      // agree: what two signals say (the corner cut), not the most built one (the speed and driveway floors)
+      return agree ? (FunRoute && FunRoute.builtAgree ? FunRoute.builtAgree(xs) : null) : b;
     };
   }
   /**
@@ -416,13 +427,19 @@
     out.confidence = conf / n;
     out.samples = s;
     // corners worth driving: each corner's weight times the quality gate where it is
-    let gs = 0;
-    for (let i = 0; i < n; i++) if (Number.isFinite(s.quality[i])) gs += gate(s.quality[i]);
-    out.meanGate = qn ? gs / qn : null; out.knownKm = qn * step / 1000; out.km = total / 1000;
+    // (corners between houses count less: cornerGate; and the km of built-up road off the motorways, for the why line)
+    const bAt = builtEvidence(ctx, true), built = new Float32Array(n).fill(NaN);
+    let gs = 0, builtM = 0;
+    for (let i = 0; i < n; i++) {
+      const b = bAt(i);
+      if (b != null && !limitedQ(i)) { built[i] = b; if (b >= 0.5) builtM += step; }
+      if (Number.isFinite(s.quality[i])) gs += cornerGate(s.quality[i], built[i]);
+    }
+    out.meanGate = qn ? gs / qn : null; out.knownKm = qn * step / 1000; out.km = total / 1000; out.builtKm = builtM / 1000;
     out.poorPerKnownKm = qn ? out.poorCost / Math.max(0.1, Math.min(out.km, qn * step / 1000) - 2 * W.END_GRACE_M / 1000) : null;   // per km the cost could apply to
     // unknown samples take the pool's mean gate when rank() knows it (opts.unknownGate), else count in full as before
     const ug = finite(opts.unknownGate) ? opts.unknownGate : 1;
-    const scaleAt = qn || finite(opts.unknownGate) ? (m) => { const q = s.quality[at(c, m)]; return Number.isFinite(q) ? gate(q) : ug; } : null;
+    const scaleAt = qn || finite(opts.unknownGate) ? (m) => { const i = at(c, m), q = s.quality[i]; return Number.isFinite(q) ? cornerGate(q, built[i]) : ug; } : null;
     if (scaleAt && (cand.t || opts.score)) {
       const f = opts.score ? opts.score(cand, scaleAt) : FunRoute.score(cand.t, cand.turnsM || [], prefs, scaleAt);
       out.funGated = f || null;
@@ -724,6 +741,62 @@
     return { text: `${pick.join(' · ')}${extra >= 1 ? `, +${extra} min` : ''}`, factors: facts.slice(0, 3), extraMin: extra };
   }
 
+  /**
+   * Why the pick beat `other`, a route on the card that looks better on its numbers (FunRoute.dominates: no slower, more
+   * corners): the 1-2 parts of the value it wins by most, in words, e.g. "Over the 34 min route: less low sun". The card
+   * never shows a pick that looks strictly worse without saying this. null when nothing the pick wins by is a point.
+   */
+  const OVER = { fun: 'better corners', gain: 'more good corners', quality: 'better roads', poor: 'fewer side streets', business: 'fewer shops and businesses',
+    scenery: 'nicer country', glare: 'less low sun', towns: 'less in towns', weather: 'drier', measured: 'smoother, by members\' drives', taste: 'more your style',
+    prefer: 'roads you prefer', driver: 'suits your driving' };
+  function whyOver(best, other, o = {}) {
+    if (!best || !other || best === other || !best.parts || !other.parts) return null;
+    const b = best.ev || {}, x = other.ev || {};
+    const d = (k) => (best.parts[k] || 0) - (other.parts[k] || 0);
+    const facts = [];
+    const corners = d('fun') + d('gain');
+    if (corners > 0.5) {
+      // the other's extra corners are ones the gate counts little: on side streets or between houses
+      const more = FunRoute && FunRoute.shown ? FunRoute.shown(other).corners - FunRoute.shown(best).corners : 0;
+      facts.push({ w: corners, text: more > 0 ? 'its extra corners are on side streets or between houses' : OVER.gain });
+    }
+    for (const k of Object.keys(OVER)) {
+      if (k === 'fun' || k === 'gain' || !(d(k) > 0.5)) continue;
+      let text = OVER[k];
+      if (k === 'poor' && b.poorBy && x.poorBy) {
+        const by = Object.entries(x.poorBy).map(([kk, v]) => [kk, v - (b.poorBy[kk] || 0)]).sort((p, q) => q[1] - p[1])[0];
+        if (by && by[0] === 'business') text = 'fewer strip malls';
+        else if (by && by[0] === 'stops') text = 'fewer signals and stops';
+      }
+      facts.push({ w: d(k), text });
+    }
+    if (d('penalty') > 0.5 && x.penalties && x.penalties.length) {
+      const top = x.penalties.map((p) => [p, p.points - ((b.penalties || []).find((y) => y.label === p.label) || { points: 0 }).points]).sort((p, q) => q[1] - p[1])[0];
+      if (top && top[1] > 0.5) facts.push({ w: d('penalty'), text: `${/s$/.test(top[0].label) ? 'fewer' : 'less'} ${top[0].label}` });
+    }
+    if (d('bonus') > 0.5 && b.bonuses && b.bonuses.length) facts.push({ w: d('bonus'), text: b.bonuses[0].label });
+    // a lead made of many small parts: the largest of them, however small, so the card always has a reason to give
+    if (!facts.length && best.value > other.value) {
+      const top = Object.keys(OVER).map((k) => [k, k === 'fun' || k === 'gain' ? corners : d(k)]).sort((p, q) => q[1] - p[1])[0];
+      if (top && top[1] > 0) facts.push({ w: top[1], text: OVER[top[0]] });
+    }
+    if (!facts.length) return null;
+    facts.sort((p, q) => q.w - p.w);
+    const min = Number.isFinite(other.timeS) ? Math.round(other.timeS / 60) : null;
+    return { text: `Over the ${min != null ? `${min} min ` : 'other '}route: ${facts.slice(0, 2).map((f) => f.text).join(' · ')}`, factors: facts.slice(0, 2) };
+  }
+  /**
+   * The line for a Fun or Long way pick that is the quickest route itself: the router looked for better road within the
+   * level's time and found none worth it (a pick within a minute of it counts as it). "No great roads on this trip: Quick is the way", or, when the quickest is a
+   * good road already, that it is. null at Quick, or for a pick that isn't the quickest.
+   */
+  function whyQuickest(best, quick, level) {
+    if (!best || !quick || level === 'quick' || !level) return null;
+    if (best !== quick && !(best.route && quick.route && best.route === quick.route) && !(best.extraS < 60)) return null;
+    const good = best.ev && best.ev.funGated ? best.ev.funGated.good : best.fun ? best.fun.good : 0;
+    return { text: good >= 5 ? 'The quickest way is the best road here too' : 'No great roads on this trip: Quick is the way', factors: [] };
+  }
+
   // ---- candidates: corridors, costing, the road network --------------------------------------------------------------
   /** The router's maneuver clock ([lon, lat, seconds]) placed along its own line: [[metres, seconds]]. */
   function placeTimes(coords, times) {
@@ -776,9 +849,25 @@
   /** The share of a ranked route on motorway or trunk (0..1) where the context knew the road class; null where it didn't. */
   const highwayShare = (ev) => (ev && ev.stats && Number.isFinite(ev.stats.highwayKm) && ev.stats.classKm > 0 ? Math.min(1, ev.stats.highwayKm / ev.stats.classKm) : null);
   /**
+   * Is this stage a neighbourhood street (fun_route.js streetSample on each sample: residential class in built-up
+   * frontage)? { street: true / false / null (too little known), share, known } from the context's own channels.
+   */
+  function streetOf(ctx, n) {
+    if (!FunRoute || !FunRoute.streetShare || !ctx || !ctx.channels) return { street: null, share: null, known: 0 };
+    const rc = channel(ctx, 'road_class'), lim = channel(ctx, 'speed_limit_kph'), addr = channel(ctx, 'address_per_km'),
+      bldg = channel(ctx, 'bldg_per_km'), dens = channel(ctx, 'density');
+    const at = (a, i) => (a && i < a.length ? a[i] : NaN);
+    const answers = new Array(n);
+    for (let i = 0; i < n; i++) answers[i] = FunRoute.streetSample({ cls: at(rc, i), limit: at(lim, i), addr: at(addr, i), bldg: at(bldg, i), density: at(dens, i) });
+    return FunRoute.streetShare(answers);
+  }
+  /**
    * Stages re-scored by what the context says about the road (the network step: good roads, not just twisty lines): each
    * stage's geometry score times its corner gate (a curvy subdivision street falls to 40 %), plus scenery. Sorted best
    * first; stages with no context keep their score. Mutates s.score (s.mapScore keeps the original) and sets s.ev.
+   * A stage the context shows is mostly a neighbourhood street (streetOf) gets s.notRoad = 'street', one our tiles score
+   * poor on average s.notRoad = 'poor'; either sorts last and Best roads nearby never lists it (fun_route.js
+   * exploreShortlist), whatever its corners.
    */
   function rescoreStages(stages, ctxById) {
     const any = (stages || []).some((s) => ctxById && ctxById[s.__ctxId]);
@@ -798,8 +887,18 @@
       const g = (q + (smp.n - qn) * W.STAGE_UNKNOWN_GATE) / Math.max(1, smp.n), scen = sn ? sc / sn : 0.5, cov = sn / smp.n;
       s.score = s.mapScore * (0.4 + 0.6 * g) * (1 + 0.4 * (scen - 0.5) * cov);
       s.ev = { gate: g, scenery: sn ? scen : null, quality: qn ? smp.quality.reduce((a, v) => a + (Number.isFinite(v) ? v : 0), 0) / qn : null };
+      // not a road to list: mostly a neighbourhood street, or a road our own tiles' model (route_ctx/graph.js, every
+      // channel known at build time) scores poor on average, as Best roads nearby from our tiles never lists one
+      // (graph_router.js explore: quality 0.45 or more). The live context alone never drops a stage: it can know too little.
+      const st = streetOf(ctx, smp.n), gq = ctx.channels.graph_quality;
+      let gs = 0, gk = 0;
+      if (gq) for (let i = 0; i < smp.n && i < gq.length; i++) if (Number.isFinite(gq[i])) { gs += gq[i]; gk++; }
+      s.ev.street = st.share; s.ev.graphQuality = gk ? gs / gk : null;
+      delete s.notRoad;
+      if (st.street) s.notRoad = 'street';
+      else if (gk >= 0.5 * smp.n && gs / gk < W.POOR_Q_HI) s.notRoad = 'poor';
     }
-    return (stages || []).slice().sort((a, b) => b.score - a.score);
+    return (stages || []).slice().sort((a, b) => (a.notRoad ? 1 : 0) - (b.notRoad ? 1 : 0) || b.score - a.score);
   }
   /** Corridors for the stages worth asking about (the first `k`), tagged so rescoreStages finds their context. */
   function stageCorridors(stages, k = 8, o = {}) {
@@ -819,8 +918,8 @@
     return base + (ev.quality != null ? W.QUALITY * (ev.quality - 50) * ev.qWeight : 0) + ev.sceneryPts + ev.bonusPts - ev.poorCost - ev.penaltyPts + (ev.driverPts || 0);
   }
 
-  const api = { VERSION: 1, QUALITY, SCENERY, PER_KM, SPANS, ALIASES, KIND_ALIASES, SOURCES, W, SPEED, gate, active, moment, channel, builtEvidence, samples, evaluate, stats, rank, why,
-    placeTimes, corridorFor, stageCorridor, stageCorridors, connectorCosting, highwayCosting, loopCosting, LOOP_USE_HIGHWAYS, highwayShare, rescoreStages, loopValue, ramp, decay };
+  const api = { VERSION: 1, QUALITY, SCENERY, PER_KM, SPANS, ALIASES, KIND_ALIASES, SOURCES, W, SPEED, gate, builtKeep, cornerGate, active, moment, channel, builtEvidence, samples, evaluate, stats, rank, why, whyOver, whyQuickest,
+    placeTimes, corridorFor, stageCorridor, stageCorridors, connectorCosting, highwayCosting, loopCosting, LOOP_USE_HIGHWAYS, highwayShare, streetOf, rescoreStages, loopValue, ramp, decay };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   root.ApexRouteEngine = api;
 })(typeof window !== 'undefined' ? window : globalThis);

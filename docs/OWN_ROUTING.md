@@ -348,6 +348,9 @@ phone's reader); tests/test_graph_tiles.py round-trips through both. What a rout
     compresses them (brotli); coverage is read on the page from index.json.
   - Best roads nearby from our tiles (graph_router.js explore: quality x corners chained into stages, timed by one
     search); via-way restrictions applied in the search (v3 tiles' restrictionsVia).
+  - Best roads nearby is never a neighbourhood (2026-11-04): no neighbourhood-street edge (`streetEdge`: residential class
+    in built-up frontage, fun_route.js `streetSample`) or destination-only edge makes a stage, and a stage's dead-end end is
+    cut back to the last junction unless that run is 2 km or more of good road (`OUT_BACK_KM`, an out-and-back road). ROUTING.md "Explore" has the rule and the checks.
   - Preview, 10 runs (ms from Enter; first route drawn / final card; cold = a fresh profile's first plan):
 
     | case | cold | warm | ours | prod |
@@ -366,6 +369,12 @@ phone's reader); tests/test_graph_tiles.py round-trips through both. What a rout
     Cold first route under 1 s in all 10; every pick at least as good as production's. Not met: the final card under
     1 s warm (5 of 10) and under 1.5 s cold (0 of 10): the preload (17 MB, 5-6 s on this network) still loads during
     the first plans, and the context and track build wait on the page behind it.
+- 2026-11-06 (later): destination picks (branch claude/dest-picks): the objective's corner term keeps
+  `ApexFunRoute.builtKeep` of each edge's fun, from the built evidence two of the v2 tiles' road channels agree on
+  (`builtAgreeOf`, the engine's own readings), so the search no longer chases corners on streets lined with houses; and
+  after the bisection the plan tries `K.LOWER` (0.9, 0.75) of the weight found, so cheaper ways to the same good road
+  reach the ranking (live, a cross-suburb trip at Fun: the 29-minute way to a county road was missing, only a
+  31-minute I-275 loop came back). Plan time: two more searches, 50-200 ms on the 16 tiles in node.
 - 2026-11-06: loops off the highway, from the best roads (branch claude/loops-off-highway; CALL_SHEET 2026-11-06):
   - The owner: "it also seems to route mostly highway for loops". Live on production, the winner was 80-93 % motorway or
     trunk in 4 of 14 cases (Sharon Woods 1 h Fun 80 %, 1 h Long way 90 %; Fountain Square 30 mi Fun 93 %, 1 h Long way

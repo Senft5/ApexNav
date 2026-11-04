@@ -20,6 +20,20 @@
     max: { budget: 0.90, slackS: 600, perMin: 0.35, label: 'Long way' },     // ~0.7 a minute (was "Max fun": plain words, vocabulary.js)
   };
 
+  // Corners between houses (2026-11-04, the owner's report: 15 corners on a road lined with houses, a house every 20 m,
+  // won a 12-minute detour). The route engine's built evidence, where two of its signals agree (builtAgree), cuts a
+  // corner's weight from BUILT.lo, by BUILT.cut at BUILT.hi and above; open country keeps it in full. The route engine
+  // (W.BUILT_*) and our router (graph_router.js, from the tiles' road channels) use these same numbers.
+  const BUILT = { lo: 0.4, hi: 0.85, cut: 1 };
+  const builtKeep = (b) => (typeof b === 'number' && Number.isFinite(b) ? 1 - BUILT.cut * Math.max(0, Math.min(1, (b - BUILT.lo) / (BUILT.hi - BUILT.lo))) : 1);
+  /** Built evidence two signals agree on: the second highest of the 0..1 readings known (null under two: one map layer's
+   * outbuildings or one wide parking lot isn't a town). */
+  function builtAgree(xs) {
+    let a = -1, b = -1, n = 0;
+    for (const x of xs) { if (typeof x !== 'number' || !Number.isFinite(x)) continue; n++; if (x > a) { b = a; a = x; } else if (x > b) b = x; }
+    return n >= 2 ? b : null;
+  }
+
   const TURN_NEAR_M = 30;          // a corner whose apex is this close to a junction turn is the turn
   const FLOW_GAP_M = 250;          // corners closer than this run together
   const DULL_STRAIGHT_M = 1500;    // straights longer than this are dull
@@ -78,17 +92,20 @@
     const weighted = corners.reduce((s, c) => s + c.w, 0);
     const goodList = corners.filter(c => c.sev !== 'HP' && c.sev >= 2 && c.sev <= 5);
     const good = scaleAt ? Math.round(goodList.reduce((s, c) => s + c.g, 0)) : goodList.length;
-    // Flow: runs of 3+ corners each within FLOW_GAP_M of the last; their length over the route.
+    // Flow: runs of 3+ corners each within FLOW_GAP_M of the last; their length over the route. Gated (scaleAt), a run
+    // counts by its corners' mean gate: a wiggle through a subdivision or between houses is not flow (2026-11-04: it was
+    // counted in full, so Flow and Dull, half the fun score, ignored the gate)
     let flowM = 0;
     for (let i = 0; i < corners.length;) {
-      let j = i;
-      while (j + 1 < corners.length && corners[j + 1].start - corners[j].end <= FLOW_GAP_M) j++;
-      if (j - i + 1 >= 3) flowM += corners[j].end - corners[i].start;
+      let j = i, g = corners[i].g;
+      while (j + 1 < corners.length && corners[j + 1].start - corners[j].end <= FLOW_GAP_M) { j++; g += corners[j].g; }
+      if (j - i + 1 >= 3) flowM += (corners[j].end - corners[i].start) * g / (j - i + 1);
       i = j + 1;
     }
-    // Dull: straights (gaps between corners, and before the first / after the last) longer than DULL_STRAIGHT_M.
+    // Dull: straights (gaps between corners, and before the first / after the last) longer than DULL_STRAIGHT_M. Gated,
+    // only a corner the gate counts at least half breaks a straight.
     let dullM = 0, prev = 0;
-    for (const c of corners) { const gap = c.start - prev; if (gap > DULL_STRAIGHT_M) dullM += gap; prev = Math.max(prev, c.end); }
+    for (const c of corners) { if (c.g < 0.5) continue; const gap = c.start - prev; if (gap > DULL_STRAIGHT_M) dullM += gap; prev = Math.max(prev, c.end); }
     if (totalM - prev > DULL_STRAIGHT_M) dullM += totalM - prev;
     const clamp = (v) => Math.max(0, Math.min(100, v));
     const twist = clamp(weighted / km / TWIST_FULL_PER_KM * 100);
@@ -354,6 +371,7 @@
   function loopShortlist(start, stages, targetKm, k = 6) {
     const out = [];
     for (const s of stages || []) {
+      if (s.notRoad) continue;                                  // a neighbourhood street or a poor road (rescoreStages)
       if (2 * kmBetween(start, midOf(s)) + s.km > targetKm * 1.1) continue;
       if (out.some(t => overlap(s, t))) continue;
       out.push(s);
@@ -361,10 +379,39 @@
     }
     return out;
   }
+  // A neighbourhood street is not a road to drive (Best roads nearby: the owner's top pick was a residential neighbourhood).
+  // One 25 m sample (or one edge of our tiles) is a street when its class is residential, living street or service AND
+  // what is beside it is built up: houses (addresses or buildings) every 25 m or less, the area's density 6 or more
+  // (0-15, the tiles' and the router's scale), or a posted 25 mph (40 km/h) limit where there is any density at all.
+  // Class alone never decides: US TIGER imports tag county lanes "residential", and those are some of the best roads
+  // here (Second Creek Road, Big Cedar Road: no houses, density 1). Nothing known beside it: unknown (null), never a guess.
+  // A stage is a street when half of the samples whose answer is known are, and they cover a third of it (streetShare).
+  const STREET = { CLS: 6, ADDR_PER_KM: 40, BLDG_PER_KM: 60, DENSITY: 6, SLOW_KPH: 40, RURAL_DENSITY: 2, SHARE: 0.5, KNOWN: 0.33 };
+  const has = (v) => typeof v === 'number' && Number.isFinite(v);
+  /** x: { cls (0 motorway .. 5 unclassified, 6 residential, 7 service), limit (posted km/h), addr, bldg (per km), density }. */
+  function streetSample(x) {
+    if (!x || !has(x.cls)) return null;
+    if (x.cls < STREET.CLS) return false;
+    if ((has(x.addr) && x.addr >= STREET.ADDR_PER_KM) || (has(x.bldg) && x.bldg >= STREET.BLDG_PER_KM) || (has(x.density) && x.density >= STREET.DENSITY)) return true;
+    if (has(x.limit) && x.limit <= STREET.SLOW_KPH && has(x.density) && x.density > STREET.RURAL_DENSITY) return true;
+    return has(x.addr) || has(x.bldg) || has(x.density) ? false : null;
+  }
+  /** Per-sample answers (true / false / null) -> { street, share, known }: street is null when too little is known. */
+  function streetShare(answers) {
+    const n = answers ? answers.length : 0;
+    let k = 0, yes = 0;
+    for (let i = 0; i < n; i++) if (answers[i] != null) { k++; if (answers[i]) yes++; }
+    const known = n ? k / n : 0, share = k ? yes / k : null;
+    return { street: known >= STREET.KNOWN ? share >= STREET.SHARE : null, share, known };
+  }
   // Explore (R-10): the best stages near here, at most `k`, no two the same road (by place or by name). Stages arrive best first.
+  // A stage the route engine found to be a neighbourhood street or a poor road (rescoreStages: s.notRoad) is never listed,
+  // and once the engine has looked at any (it looks at the first 12, s.ev), one it never looked at isn't either: else the
+  // unchecked 13th fills the list when the checked ones were all streets.
   function exploreShortlist(here, stages, maxKm, k = 8) {
-    const out = [];
+    const out = [], looked = (stages || []).some((s) => s.ev);
     for (const s of stages || []) {
+      if (s.notRoad || (looked && !s.ev)) continue;
       const e = endsOf(s);
       if (Math.min(kmBetween(here, e.a), kmBetween(here, e.b)) > maxKm) continue;
       if (out.some(t => overlap(s, t) || (s.name && t.name === s.name))) continue;   // one entry per road
@@ -698,6 +745,25 @@
   const glareCost = (c) => Math.min(GLARE_COST_MAX, GLARE_COST_PER_MIN * ((c.glare && c.glare.minutes) || 0));
 
   /**
+   * What the route card shows of a route (route_card.js tiles): its minutes, rounded as the card rounds them, and its
+   * corners, every corner on its line (`c.t.events`, else `c.events`, else `c.corners`). null where unknown.
+   */
+  function shown(c) {
+    const ev = c && c.t && Array.isArray(c.t.events) ? c.t.events : c && Array.isArray(c.events) ? c.events : null;
+    return { minutes: c && Number.isFinite(c.timeS) ? Math.round(c.timeS / 60) : null,
+      corners: ev ? ev.filter(isCorner).length : c && Number.isFinite(c.corners) ? c.corners : null };
+  }
+  /**
+   * Does route `a` look strictly better than `b` on the numbers the card shows: no slower, at least as many corners, and
+   * better on one of them? Then nobody would pick `b` over it without a reason (shared by destination options and loops).
+   */
+  function dominates(a, b) {
+    const x = shown(a), y = shown(b);
+    if (x.minutes == null || y.minutes == null || x.corners == null || y.corners == null) return false;
+    return x.minutes <= y.minutes && x.corners >= y.corners && (x.minutes < y.minutes || x.corners > y.corners);
+  }
+
+  /**
    * Route options to show side by side (R-30): the ranked list's best and the next ones that are really different
    * (not within 30 s and 1 fun point of one already picked: a stage plan the router drew the same way). At most `k`.
    */
@@ -716,6 +782,6 @@
     return out;
   }
 
-  const api = { LEVELS, cornerWeight, townKm, townCost, exploreShortlist, exploreTargets, explorePicks, distinctOptions, glare, glareCost, LOOP_BY_TIME, LOOP_LEVEL, loopLevelAdjust, LOOP_HWY, loopHighwayCost, loopDominates, loopRank, AVOID_DEFAULT, AVOID_LABELS, STAGE_KEPT, stageCoverage, keptStages, CAMERA_BOX_DEG, camerasToExclude, costing, unavoided, keepAvoiding, why, geometry, alongPoints, insertVia, loopValue, loopShortlist, loopPlansFromMatrix, score, shortlist, matrixPoints, plansFromMatrix, sectionCount, sectionPoints, combineSections, planKey, searchArea, waypoints, rank, along, kmBetween, directionBonus, setList, SET_FINISH, SET_FATIGUE, MAX_TECH_PER_KM, carNote, stageSpans, stageAhead };
+  const api = { LEVELS, BUILT, builtKeep, builtAgree, shown, dominates, cornerWeight, townKm, townCost, STREET, streetSample, streetShare, exploreShortlist, exploreTargets, explorePicks, distinctOptions, glare, glareCost, LOOP_BY_TIME, LOOP_LEVEL, loopLevelAdjust, LOOP_HWY, loopHighwayCost, loopDominates, loopRank, AVOID_DEFAULT, AVOID_LABELS, STAGE_KEPT, stageCoverage, keptStages, CAMERA_BOX_DEG, camerasToExclude, costing, unavoided, keepAvoiding, why, geometry, alongPoints, insertVia, loopValue, loopShortlist, loopPlansFromMatrix, score, shortlist, matrixPoints, plansFromMatrix, sectionCount, sectionPoints, combineSections, planKey, searchArea, waypoints, rank, along, kmBetween, directionBonus, setList, SET_FINISH, SET_FATIGUE, MAX_TECH_PER_KM, carNote, stageSpans, stageAhead };
   if (typeof module !== 'undefined' && module.exports) module.exports = api; else root.ApexFunRoute = api;
 })(typeof window !== 'undefined' ? window : globalThis);

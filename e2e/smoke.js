@@ -777,13 +777,19 @@ flow('offline: plan a route and a loop from our tiles with no network', async (p
     await page.goto(base + '/index.html');
     await page.waitForFunction(() => window.apexDebug && window.apexDebug.map && window.ApexOwnRouting);
     const finished = () => page.waitForFunction(() => Array.isArray(window.apexDebug.lastFun) && window.apexDebug.lastOwn && !document.getElementById('planPanel').classList.contains('busy'), null, { timeout: 10000 });
+    // the card down and the route cleared, as a person would before planning again (whichever key is showing)
+    const clearPlan = async () => {
+      for (let k = 0; k < 2; k++) {
+        await page.evaluate(() => { for (const id of ['planCancel', 'planClear']) { const b = document.getElementById(id); if (b && b.offsetParent) b.click(); } });
+        await page.waitForTimeout(300);
+      }
+    };
     // one plan with the signal on (the tiles land in IndexedDB as they do on any first plan); then the signal goes
     await page.fill('#destInput', '39.2400, -84.5300');
     await page.press('#destInput', 'Enter');
     await finished();
     await page.waitForTimeout(500);
-    if (await page.isVisible('#planCancel')) await page.click('#planCancel');
-    await page.click('#planClear');
+    await clearPlan();
     offline = true;
     const read = async () => (await page.waitForFunction(() => !document.getElementById('routeCardWeather').hidden, null, { timeout: 3000 }).catch(() => null), page.evaluate(() => { const t = window.apexDebug.track; return { own: window.apexDebug.lastOwn, kinds: window.apexDebug.lastFun.map((c) => c.kind), kind: t && t.kind, funLevel: t && t.funLevel,
       steps: ((t && t.steps) || []).map((s) => s.type), instructions: t && t.instructions, weather: document.getElementById('routeCardWeather').hidden ? null : document.getElementById('routeCardWeather').textContent }; }));
@@ -813,8 +819,7 @@ flow('offline: plan a route and a loop from our tiles with no network', async (p
     }
     check(plans.every((p) => p.funLevel === p.level), 'each plan at its level: ' + JSON.stringify(plans.map((p) => [p.level, p.funLevel])));
     // 3. typed search can't work offline, and says so; a map tap's coordinates (what a tap puts in Where to?) do
-    if (await page.isVisible('#planCancel')) await page.click('#planCancel');
-    await page.click('#planClear');
+    await clearPlan();
     await page.click('#destInput');
     await page.fill('#destInput', 'Forest Park');
     await page.press('#destInput', 'Enter');
@@ -826,8 +831,7 @@ flow('offline: plan a route and a loop from our tiles with no network', async (p
     const tap = await read();
     check(tap.own.used && tap.kind === 'route', 'a map tap\'s place, routed offline: ' + JSON.stringify(tap.own));
     // 4. a loop from our tiles
-    if (await page.isVisible('#planCancel')) await page.click('#planCancel');
-    await page.click('#planClear');
+    await clearPlan();
     t0 = Date.now();
     await page.evaluate(() => { window.apexDebug.lastLoop = undefined; const b = [...document.querySelectorAll('#loopDetents [data-loop-mi]')][0]; b.click(); document.getElementById('findLoopBtn').click(); });
     await page.waitForFunction(() => Array.isArray(window.apexDebug.lastLoop) && !document.getElementById('planPanel').classList.contains('busy'), null, { timeout: 15000 });
@@ -836,8 +840,7 @@ flow('offline: plan a route and a loop from our tiles with no network', async (p
     check(won && won.kind === 'own' && /loop$/.test(loop.name || ''), 'a loop from our tiles, offline: ' + JSON.stringify(loop.loops));
     check(Date.now() - t0 < 12000, 'the loop: no hang (' + (Date.now() - t0) + ' ms)');
     // 5. the browser's own offline switch (the app's files refused too): still plans, from what's on the phone
-    if (await page.isVisible('#planCancel')) await page.click('#planCancel');
-    await page.click('#planClear');
+    await clearPlan();
     await page.context().setOffline(true);
     try {
       await page.evaluate(() => { window.apexDebug.lastFun = undefined; });
@@ -3897,6 +3900,61 @@ flow('3D terrain: the switch raises the map into relief and tilts it; off by def
   await page.waitForFunction(() => { const m = window.apexDebug.map; return m.getTerrain() && m.getTerrain().source === 'apex-dem' && m.getPitch() > 40; }, null, { timeout: 5000 });
   await page.evaluate(() => document.querySelector('[data-toggle="terrain"]').click());
   await page.waitForFunction(() => !window.apexDebug.map.getTerrain());
+});
+
+// The owner, 2026-11-04: "dev only satellite map layer access for troubleshooting". /api/me's developer flag (the owner and
+// the co-developer, backend/src/developers.ts) shows a Satellite switch in Layers; it draws USGS orthoimagery under our
+// road and route lines. Anyone else never sees the switch, and a switch left on in localStorage draws nothing.
+const satStyle = (route) => (route.request().url().includes('/styles/')
+  ? route.fulfill({ contentType: 'application/json', body: JSON.stringify({ version: 8, sources: {}, layers: [{ id: 'bg', type: 'background', paint: { 'background-color': '#eee' } }] }) })
+  : route.abort());
+const PNG1 = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==', 'base64');
+async function satPage(page, base, me, prefs) {
+  const tiles = [];
+  await page.route('https://tiles.openfreemap.org/**', satStyle);
+  await page.route('https://basemap.nationalmap.gov/**', (route) => { tiles.push(route.request().url()); return route.fulfill({ contentType: 'image/png', body: PNG1 }); });
+  await page.route('**/api/**', (route) => {
+    const u = new URL(route.request().url());
+    const json = (b, status = 200) => route.fulfill({ status, contentType: 'application/json', body: JSON.stringify(b) });
+    if (u.pathname === '/api/me') return json(me);
+    return json({ error: 'not_found' }, 404);
+  });
+  await page.addInitScript((p) => { try { localStorage.setItem('apex.onboarded', '1'); if (p) localStorage.setItem('apex.prefs', JSON.stringify(p)); } catch (_) {} }, prefs || null);
+  await page.goto(base + '/index.html');
+  await page.waitForFunction(() => window.apexDebug && window.apexDebug.map && window.apexDebug.map.getLayer('apex-twisty'), null, { timeout: 15000 });
+  await page.waitForTimeout(1500);                                     // /api/me has answered
+  return tiles;
+}
+flow('satellite: a developer gets a Satellite switch in Layers that lays USGS imagery under our roads and routes (the owner 2026-11-04)', async (page, base) => {
+  const tiles = await satPage(page, base, { signed_in: true, member: true, handle: 'me', developer: true });
+  check(await page.evaluate(() => !document.getElementById('satSwitch').hidden), 'the developer sees the switch');
+  check(!(await page.evaluate(() => !!window.apexDebug.map.getLayer('apex-satellite'))) && !tiles.length, 'off until turned on, and no tile asked for');
+  await page.evaluate(() => { if (!document.getElementById('swEdge').classList.contains('open')) document.getElementById('swTab').click(); });
+  await page.click('#satSwitch');
+  await page.waitForFunction(() => !!window.apexDebug.map.getLayer('apex-satellite'), null, { timeout: 5000 });
+  const r = await page.evaluate(() => {
+    const m = window.apexDebug.map, ids = m.getStyle().layers.map((l) => l.id), at = (id) => ids.indexOf(id);
+    return { below: ['apex-twisty', 'apex-coverage', 'apex-alt', 'apex-explore', 'apex-route-casing', 'apex-route'].every((id) => at(id) > at('apex-satellite')),
+      // the source as the style holds it (a raster source's own .tiles and .attribution are set only once it has loaded)
+      tiles: (m.getStyle().sources['apex-satellite-src'] || {}).tiles || [], attrib: (m.getStyle().sources['apex-satellite-src'] || {}).attribution || '',
+      on: document.getElementById('satSwitch').getAttribute('aria-checked') };
+  });
+  check(r.below && r.on === 'true', 'under our twisty and measured roads and every route line: ' + JSON.stringify(r));
+  check(r.tiles.length === 1 && r.tiles[0].startsWith('https://basemap.nationalmap.gov/arcgis/rest/services/USGSImageryOnly/MapServer/tile/') && /USGS/.test(r.attrib), 'USGS imagery, credited: ' + JSON.stringify(r));
+  // its tiles are asked for (stubbed above: the run reaches no real host), and the page policy lets them through
+  for (let t = 0; t < 80 && !tiles.length; t++) await page.waitForTimeout(100);
+  check(tiles.length > 0 && tiles.every((u) => u.startsWith('https://basemap.nationalmap.gov/')), 'its tiles are asked for: ' + tiles.length);
+  await page.click('#satSwitch');
+  await page.waitForFunction(() => !window.apexDebug.map.getLayer('apex-satellite') && !window.apexDebug.map.getSource('apex-satellite-src'));
+});
+flow('satellite: anyone else never sees the switch, and one left on in localStorage draws nothing (the owner 2026-11-04)', async (page, base) => {
+  const prefs = { toggles: { satellite: true, twisty: true } };
+  for (const me of [{ signed_in: true, member: true, handle: 'me' }, { signed_in: false }, { signed_in: true, member: false, handle: 'me', developer: true }]) {
+    const tiles = await satPage(page, base, me, prefs);
+    const r = await page.evaluate(() => ({ hidden: document.getElementById('satSwitch').hidden, shown: document.getElementById('satSwitch').offsetParent !== null, layer: !!window.apexDebug.map.getLayer('apex-satellite') }));
+    check(r.hidden && !r.layer && !tiles.length, `no switch, no layer, no tile for ${JSON.stringify(me)}: ${JSON.stringify(r)} ${tiles.length}`);
+    await page.unrouteAll({ behavior: 'ignoreErrors' });
+  }
 });
 
 flow('measured roads: the switch draws the roads members have measured around the view (IDEAS Q-14)', async (page, base) => {
