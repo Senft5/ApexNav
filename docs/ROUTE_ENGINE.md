@@ -29,7 +29,8 @@ quality and scenery, (3) penalties, bonuses and hard constraints, (4) a candidat
 why line. The weights in them are the code's; the tables in "Weights (checked against the code)" below are read back
 from `web/route_engine.js`, `web/fun_route.js` and the providers by tests/test_route_engine_doc.py. Providers marked
 All five builders' providers are merged and drawn with their real channel names; what isn't built is named in its box
-(snowplough positions, city event permits, live FEMA flood zones, NC and VA work zones, FCC mobile coverage).
+(snowplough positions, city event permits, NC and VA work zones, FCC mobile coverage; FEMA flood zones are in C's grid,
+only a live FEMA query isn't made).
 A rendered copy for a phone: docs/design/route_engine_flow.html (`python3 tools/route_engine_flow.py` rebuilds it from
 this page).
 
@@ -41,13 +42,13 @@ flowchart TD
   CAND --> COR["Corridor per candidate: samples every 25 m,<br>heading, bbox, etaAt from the router's<br>maneuver clock, else its total time by<br>distance, else 50 km/h; times the live pace<br>0.6 to 1.8 while driving; the Garage car"]
   COR --> RUN["ApexRouteCtx.run: every provider at once on<br>all corridors of the plan; one budget, 4 s<br>for candidates, 1.2 s for stages; each<br>provider gets min of its budgetMs and what<br>is left, and an AbortSignal at the deadline"]
   RUN --> PH["Two phases: D's conditions, wildlife,<br>hazards-live and events, and E's car, start<br>when the rest has landed or at half the<br>budget, with their land use, terrain,<br>density, coverage and schools as<br>opts.channels, peer, places"]
-  RUN --> A1["A router_edges.js, priority 10, 2.4 s,<br>stages too: one Valhalla trace_attributes<br>per candidate, walk_or_snap (map_snap on<br>2000 points for stages), 6 at a time, kept<br>30 min per line; at the deadline the lines<br>that answered. speed_limit_kph, speed_limit_est_kph<br>flagged, speed_kph, road_class, road_use,<br>density, lanes, surface, sidewalk,<br>truck_route, bridge, tunnel, toll, ramp,<br>roundabout, signals_per_km, access_per_km,<br>intersections_per_km; points signal,<br>junction, driveway"]
+  RUN --> A1["A router_edges.js, priority 10, 2.4 s,<br>stages too: one Valhalla trace_attributes<br>per candidate, walk_or_snap; stages map_snap<br>through our Worker's relay, kept 3 days per<br>shape; 6 in flight in all, kept 30 min per<br>line; at the deadline the lines that answered. speed_limit_kph, speed_limit_est_kph<br>flagged, speed_kph, road_class, road_use,<br>density, lanes, surface, sidewalk,<br>truck_route, bridge, tunnel, toll, ramp,<br>roundabout, signals_per_km, access_per_km,<br>intersections_per_km; points signal,<br>junction, driveway"]
   RUN --> A2["A dem.js, priority 20, 2 s, stages too: z12<br>Terrarium tiles, at most 64 a plan, shortest<br>corridors first. elev_m, grade_pct,<br>relief_m, tpi_m, aspect_rad, west_descent;<br>spans climb, descent"]
   RUN --> B1["B osm_tiles.js, 8 s:<br>lu_residential, lu_commercial, lu_retail,<br>lu_industrial, lu_forest, lu_farmland,<br>lu_open, lu_park, lu_mapped, water_near,<br>creek_follow, bldg_per_km, addr_per_km,<br>biz_per_km, junctions_per_km,<br>driveways_per_km, access_per_km, road_class<br>in map codes, on_bridge, in_tunnel, unpaved;<br>points school, worship, viewpoint, place,<br>rail_crossing, gate"]
-  RUN --> B2["B osm_overpass.js, off the plan's clock: its<br>tile cache only; the query, by 0.05° tiles,<br>never the route's line, runs on and fills<br>the cache for the next plan:<br>maxspeed_kph, lanes, divided, oneway,<br>surface_paved, smoothness, hgv,<br>access_level, guard_rail, cycle_route,<br>byway,<br>signals/stops/crossings/calming_per_km,<br>side_roads_per_km, driveway_joins_per_km;<br>points signal, stop, give_way, crossing,<br>calming, level_crossing, curve_sign,<br>animal_crossing, buggy, viewpoint, historic,<br>fuel; spans roundabout, one_lane_bridge,<br>covered_bridge, access_private,<br>access_destination, cycle_route, byway"]
+  RUN --> B2["B osm_overpass.js, its tile cache, then our<br>Worker's relay by 0.05° tile (Overpass<br>server-side, kept a week), never the<br>route's line:<br>maxspeed_kph, lanes, divided, oneway,<br>surface_paved, smoothness, hgv,<br>access_level, guard_rail, cycle_route,<br>byway,<br>signals/stops/crossings/calming_per_km,<br>side_roads_per_km, driveway_joins_per_km;<br>points signal, stop, give_way, crossing,<br>calming, level_crossing, curve_sign,<br>animal_crossing, buggy, viewpoint, historic,<br>fuel; spans roundabout, one_lane_bridge,<br>covered_bridge, access_private,<br>access_destination, cycle_route, byway"]
   RUN --> B3["B road_name_age.js: name_age"]
   RUN --> C1["C context_grid.js, 4 s, local bundles<br>web/data/ctx/v1 then the Worker's KV:<br>night_lights, impervious_pct, canopy_pct,<br>noise_db, housing_density,<br>population_density, address_density,<br>median_year_built, flood_zone,<br>cropland_class, park_visits, aadt, iri,<br>hpms_speed_limit, hpms_lanes, hpms_fclass,<br>crash_density; mobile_coverage not built<br>(always unknown); spans nps_unit; points<br>fatal_crash"]
-  RUN --> D1["D, second phase with the first's land use<br>and terrain: conditions.js, waits 0.8 s for<br>Open-Meteo then its cache: air_temp_c,<br>road_temp_c, visibility_m, fog_risk,<br>crosswind_mps, exposure, precip_6h/48h_mm,<br>wx_hazard, light, glare, golden_view;<br>wildlife.js deer_time_risk, deer_risk;<br>events.js event_crowd, school_zone,<br>school_bus_hour, church_window;<br>hazards_live.js flood_risk, works,<br>harvest_traffic, park_busy, foliage, spans<br>closure, works, flood, low-water, paving;<br>photos.js photo_score, sign_maxspeed_mps,<br>curve_sign. Not built: snowplough (no OHGO<br>endpoint), city permits, FEMA flood zones live,<br>NC and VA work zones"]
+  RUN --> D1["D, second phase with the first's land use<br>and terrain: conditions.js, waits 0.8 s for<br>Open-Meteo then its cache: air_temp_c,<br>road_temp_c, visibility_m, fog_risk,<br>crosswind_mps, exposure, precip_6h/48h_mm,<br>wx_hazard, light, glare, golden_view;<br>wildlife.js deer_time_risk, deer_risk;<br>events.js event_crowd, school_zone,<br>school_bus_hour, church_window;<br>hazards_live.js flood_risk, works,<br>harvest_traffic, park_busy, foliage, spans<br>closure, works, flood, low-water, paving;<br>photos.js photo_score, sign_maxspeed_mps,<br>curve_sign. Not built: snowplough (no OHGO<br>endpoint), city permits (no public source),<br>NC and VA work zones (need keys); FEMA<br>flood zones come from C's grid"]
   RUN --> E1["E crowd.js, 9 s, second phase: members' data<br>by 0.1° cells, ways from the router's edges:<br>crowd_rough_g, crowd_bank_deg,<br>crowd_curv, crowd_conf, crowd_flow, loved,<br>taste, crowd_busy (quiet_hours flag, off);<br>needs lookupCells /api/roads?cells=,<br>crewLines"]
   RUN --> E2["E driver.js, 8 s: passenger_cost, tech_level,<br>skill_fit, dark, lit, cyclist_route,<br>cyclist_time, tunnel, driver_fit; spans<br>hairpins, abrupt, unlit_dark, cycle_route,<br>tunnel; For this drive prefs passenger,<br>lit, cyclists, tunnels"]
   RUN --> E3["E car.js, 8 s, fuel stations from its cache,<br>the Overpass query runs on: fuel_since_km, fuel_margin,<br>signal; spans fuel_gap hard, fuel_check,<br>no_signal; points fuel_stop, share_eta,<br>ask_range; needs apiGet /api/chargers"]
@@ -391,23 +392,35 @@ the trip forecast (2.5 s, then nothing for anyone). trace_attributes asks `walk_
 walk answers 400 (error 443, "edge_walk algorithm failed to find exact route match") on every line routed through
 shaping points, so stage plans used to cost a failed request and a second one each.
 
-The first route and the page's thread (2026-11-04, the speed pass): the router's first answer goes up on its own (the
-highway-costed route, the weather and the context don't hold it), with 0.1 s for the land cover beside it (past that the
+The first route and the page's thread (2026-11-04, the speed passes): the router's first answer goes up on its own,
+whichever of the two requests lands first (the highway-costed one, with no alternates, is often 0.4 s ahead; the weather
+and the context don't hold it), with 0.1 s for the land cover beside it (past that the
 cautious sight lines, and the ranked route is built in full). Until it is up (1.8 s at most) the context runs and the
 stages' network step wait, so the page and the public router serve it first. Stage discovery (decoding the map tiles and
 scoring every stroke, 2-4 s) runs in `web/stages_worker.js`, off the page's thread, and is kept 10 minutes per area for
-re-plans; the whole trip and its sections are planned at the same time; each stage plan's context starts as it is routed;
+re-plans in the worker itself (the page never copies the list while it draws a route); the whole trip and its sections are planned at the same time; each stage plan's context starts as it is routed;
 the router's edges keep six requests in flight across all the plan's runs at once (ten made the public server slow every
 one of them); a map tile is fetched and decoded once however many runs want it, and the tiles along the straight line
-are fetched while the router routes; the stage ends' heights load alongside the network step; the leading router route's
-track is built while the stage plans are still being scored.
+are fetched while the router routes (bytes only: decoded when the context runs); the stage ends' heights load alongside the network step; the leading router route's
+track is built while the stage plans are still being scored. The stages' router edges come through our Worker
+(`GET /api/ctx/trace?shape=`, backend/src/trace_relay.ts), kept 3 days per shape: a stage is a stretch cut from the map
+tiles, the same for everyone near it, so the next plan nearby has its edges at once; the driver's own routes still go
+from the phone to the public router.
+
+Stopping early, checked (2026-11-04): a stage plan could be dropped before its context only if what that context can add
+can't close its gap to the leader. With nothing known, the context can add up to quality +15, scenery +10, bonuses +15,
+driver +6, and fun and gain at full share instead of scaled by it: 77-104 points on the live captures, against gaps of
+1.3-63 points (Colerain Max: Blue Rock leads the Cross County plan by 1.3). No plan is provably out, so every routed plan
+gets its context; capping each family's swing tighter would be a different model, not a bound.
 
 ### Overpass off the critical path: what a first plan in an area doesn't have
 
 From production the public Overpass servers answered 502 without CORS (overpass-api.de) or 504 (maps.mail.ru) on every
-run, so they no longer hold the plan (a relay through our Worker isn't built: off the clock, the servers' speed no longer
-matters to a plan, and the phone keeps asking by tile boxes only). What a plan in an area Overpass hasn't answered for
-yet lacks, and what covers it:
+run, so the phone could never read them. Since the relay (backend/src/osm_relay.ts) the phone asks our Worker for each
+0.05° tile on the plan's clock (`GET /api/ctx/osm?bbox=`); the Worker races the four mirrors server-side (9 s each),
+answers the elements with only the tags the phone reads, and keeps each tile a week (Cache API, and KV named OSM when
+bound). A tile it has answers at once; one it hasn't answers 504 after 3.5 s and is fetched and kept for the next plan
+(ctx.waitUntil). What a plan lacks for tiles the relay hasn't got yet, and what covers it:
 
 | Overpass channel | covered by |
 |---|---|
@@ -537,17 +550,20 @@ See the spans table under Weights. Shown, not ranked: `signal`, `junction`, `dri
 
 | item | why |
 |---|---|
-| live traffic in planning | Apple MapKit timing runs on the iPhone during a drive (traffic detours); no free keyless source times candidates before one |
+| live traffic in planning | no free source: Apple MapKit timing runs on the iPhone during a drive (traffic detours); no free keyless service times candidates before one |
 | VIIRS radiance (`night_light`) | C ships Black Marble brightness (`night_lights`, 0–1) instead: used |
 | buildings per hectare | B's `bldg_per_km` (within 60 m) is the building term |
 | Mapillary limits as their own channel | D's `sign_maxspeed_mps` is in the speed-limit chain (measured, after OSM, before HPMS) |
-| truck share (`hgv_share`) | no free per-road truck share; the router's `truck_route` and OSM `hgv` stand in |
-| all-crash rate | Ohio's crash data isn't in C's grid; FARS fatal crashes (`crash_density`) per vehicle are |
+| truck share (`hgv_share`) | no public source per road; the router's `truck_route` and OSM `hgv` stand in |
+| all-crash rate | not processed: state crash files (Ohio's OSHP records among them) are public but tools/ctx_etl builds only FARS fatal crashes into C's grid (`crash_density`, per vehicle), which are used |
 | photos per km | D's `photo_score` (from `photo_spots`, saturating) is the photo term; `photo_spots` itself is shown |
 | curve signs per km, `old_road` | D's `curve_sign` channel and B's `curve_sign` points; B's `name_age` replaces the old-road flag |
-| snow cover, snowplough positions | OHGO has no plough endpoint; snow and ice codes are the weather term, D's frost is the `ice` span |
-| waterfalls, unploughed spans, cameras as a ranking term | no provider emits the first two; cameras are avoided by the router on request (Avoid → Cameras) |
-| city event permits, live FEMA flood zones, NC/VA work zones, FCC coverage | not built (D's and C's notes); `mobile_coverage` stays unknown |
+| snow cover, snowplough positions | no public source: OHGO's public API has no plough endpoint (its v1 resources are cameras, construction, slowdowns, signs, incidents, delays, truck parking and weather sites); snow and ice codes are the weather term, D's frost is the `ice` span |
+| waterfalls, unploughed spans, cameras as a ranking term | waterfalls: no provider is built (OSM `waterway=waterfall` points would be one, not wired); unploughed spans: no public source; cameras: an owner decision kept as a router avoid (Avoid → Cameras), not a cost |
+| FEMA flood zones | built, not missing: C's grid carries FEMA's flood class (`flood_zone`, the NFHL in the bundles), costed only when D says it's wet (48 h rain ≥ 25 mm or `flood_risk` ≥ 0.5). Only a live query of FEMA's NFHL service per plan isn't made: the bundles are its copy |
+| city event permits | no public source: Cincinnati's open data has building and right-of-way permits but no street-closure or special-event permits, Columbus none (events.js) |
+| NC and VA work zones | needs owner keys: NCDOT's and VDOT's work-zone feeds take a registered key (hazards_live.js), and the provider isn't wired for them until there is one; KY comes through our server, OH with the owner's OHGO key |
+| FCC mobile coverage (`mobile_coverage`) | needs an owner account: the FCC National Broadband Map download API takes a registered account and token; until then the channel is NaN everywhere, so it never counts for or against a route |
 | `crowd_curv`, `crowd_conf`, `tech_level`, `free_min`, `intersections_per_km`, `fuel_since_km` | said or used elsewhere: members' curvature corrects corners on the drive, `tech_level` is inside `driver_fit`, `free_min` sizes loops (My free time), junctions are inside `access_per_km` |
 
 ### Other providers' names (builder B's OSM providers, mapped as they are)

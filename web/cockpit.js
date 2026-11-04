@@ -3068,9 +3068,10 @@
         const area = FunRoute.searchArea(a, b);
         const hls = state.hlOn ? await allHighlights(area.center) : [];
         const found = await (ApexStages.discoverAsync || ApexStages.discover)(area.center, area.radiusKm, null, state.hlOn ? { highlights: hls, strength: state.hlStrength } : {});
-        // the ends' heights (which way round each stage is driven) load alongside the network step, not after it
-        try { if (found && found.length && ApexStages.addElevations) ApexStages.addElevations(found.slice(0, 12)).catch(() => {}); } catch (_) { /* after, as before */ }
         await firstUp;
+        // the ends' heights (which way round each stage is driven) load alongside the network step, not after it (nor
+        // while the first route is drawn: decoding the height tiles takes the page's thread)
+        try { if (found && found.length && ApexStages.addElevations) ApexStages.addElevations(found.slice(0, 12)).catch(() => {}); } catch (_) { /* after, as before */ }
         return stagesWithContext(await measuredStages(found, area.center, area.radiusKm));
       };
       const crowKm = FunRoute.kmBetween(from, to);
@@ -3083,28 +3084,39 @@
       // business districts; so the highway-friendly quickest competes too (route_engine.js highwayCosting), unless avoided.
       const hwyCosting = window.ApexRouteEngine && FunRoute.kmBetween(from, to) >= 2 ? ApexRouteEngine.highwayCosting(avoid, routingCar()) : null;
       const hwyTry = hwyCosting ? valhallaRoutes([from, to], false, 0, hwyCosting).catch(() => []) : Promise.resolve([]);
-      try { direct = await valhallaRoutes([from, to], false, 2); }
-      catch (_) { try { direct = await osrmRoutes([from, to]); } catch (err) { toast('Couldn\'t build the route. Check signal and try again.'); return false; } }
-      const directCands = direct.map(r => ({ kind: 'router', route: r, timeS: r.timeS, via: [] }));
-      // Where to? stays instant (REVIEW_FEEL): the router's first answer goes up at once (not held for the highway-costed
-      // route, the weather or anything else) and the ranked routes replace it when they're ready, unless you've started
-      // driving it or planned something else.
+      // Where to? stays instant (REVIEW_FEEL): the router's FIRST answer goes up at once, whichever of the two requests
+      // lands first (live, the highway-costed one, with no alternates, often came back 0.4 s before the other), not held for
+      // the other, the weather or anything else; the ranked routes replace it when they're ready, unless you've started
+      // driving it or planned something else. A re-plan of the route on screen (level, avoid, Route around it) keeps that
+      // route up meanwhile: no early quickest.
       const early = { fired: false, shown: null };
-      const quickNow = FunRoute.keepAvoiding(directCands, avoid).filter(c => Number.isFinite(c.timeS)).reduce((x, y) => (!x || y.timeS < x.timeS ? y : x), null);
-      // a re-plan of the route on screen (level, avoid, Route around it) keeps that route up meanwhile: no early quickest
-      const earlyTimer = quickNow && opts.early !== false ? setTimeout(() => {
-        early.fired = true;
-        if (!quickNow.t) { quickNow.t = FunRoute.geometry(quickNow.route.coords, Core); quickNow.fun = funOf(quickNow.t, quickNow.route.turns); }
-        early.shown = useOption({ id, name, request, level, quickest: quickNow, list: [{ ...quickNow, extraS: 0 }] }, 0, EARLY_SIGHT_MS).catch(() => null);
-        early.shown.then(openGate);
-      }, Math.max(0, EARLY_MS - (Date.now() - planT0))) : null;
+      let quickNow = null;
+      const fireEarly = (list) => {
+        if (early.fired || opts.early === false) return;
+        const q = FunRoute.keepAvoiding(list, avoid).filter(c => Number.isFinite(c.timeS)).reduce((x, y) => (!x || y.timeS < x.timeS ? y : x), null);
+        if (!q) return;
+        early.fired = true; quickNow = q;
+        setTimeout(() => {
+          if (!q.t) { q.t = FunRoute.geometry(q.route.coords, Core); q.fun = funOf(q.t, q.route.turns); }
+          early.shown = useOption({ id, name, request, level, quickest: q, list: [{ ...q, extraS: 0 }] }, 0, EARLY_SIGHT_MS).catch(() => null);
+          early.shown.then(openGate);
+        }, Math.max(0, EARLY_MS - (Date.now() - planT0)));
+      };
+      const hwyCandsP = hwyTry.then((rs) => rs.filter(r => Number.isFinite(r.timeS)).map(r => ({ kind: 'router', highway: true, route: r, timeS: r.timeS, via: [] })));
+      hwyCandsP.then(fireEarly);
+      try { direct = await valhallaRoutes([from, to], false, 2); }
+      catch (_) { try { direct = await osrmRoutes([from, to]); } catch (err) { if (!early.fired) { toast('Couldn\'t build the route. Check signal and try again.'); return false; } direct = []; } }
+      const directCands = direct.map(r => ({ kind: 'router', route: r, timeS: r.timeS, via: [] }));
+      fireEarly(directCands);
       // the router's own routes get their context now, while the stages are found and timed (live: the context after the
       // plans added 3 s); the highway-costed route as soon as it lands; the stage plans each as it's routed
-      if (!earlyTimer) openGate();                                          // no early quickest: nothing to wait for
+      if (!early.fired) openGate();                                         // no early quickest: nothing to wait for
       const directCtx = firstUp.then(() => contextOn(directCands.slice(), CTX_BUDGET_MS, 'route'));
       const same = (a, b) => Math.abs((a.timeS || 0) - (b.timeS || 0)) < 1 && a.coords.length === b.coords.length;
-      const highway = (await hwyTry).filter(r => Number.isFinite(r.timeS) && !direct.some(d => same(d, r)));
-      const hwyCands = highway.map(r => ({ kind: 'router', highway: true, route: r, timeS: r.timeS, via: [] }));
+      // the highway-costed route the router also gave as its own is kept once (the one on screen, if it went up first)
+      const hwyCands = (await hwyCandsP).filter(h => h === quickNow || !direct.some(d => same(d, h.route)));
+      // ... and it is then the router's own route as well: not pinned with shaping points as a highway-costed one would be
+      for (let k = directCands.length - 1; k >= 0; k--) if (quickNow && quickNow.highway && hwyCands.includes(quickNow) && same(directCands[k].route, quickNow.route)) { directCands.splice(k, 1); quickNow.highway = false; }
       const cands = [...directCands, ...hwyCands];
       const routerCands = cands.slice(), planCtx = new Map();
       const routerCtx = Promise.all([directCtx, hwyCands.length ? firstUp.then(() => contextOn(hwyCands, CTX_BUDGET_MS, 'hwy')) : null]).then(([a, b]) => a || b);
@@ -3209,7 +3221,6 @@
       const best = ranked[0];
       const quickPool = pool.filter(c => Number.isFinite(c.timeS)).reduce((x, y) => (y.timeS < x.timeS ? y : x), best);
       const quickest = ranked.find(c => c.t === quickPool.t) || quickPool;   // with the engine's parts, for the why line
-      clearTimeout(earlyTimer);
       if (early.fired) {                                                   // the quickest is already up: replace it unless it's taken
         const shown = await early.shown;
         if (shown && (state.mode === 'live' || plannedRoute !== shown)) return true;

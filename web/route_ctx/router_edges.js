@@ -38,6 +38,7 @@
     culdesac: 9, living_street: 10, service_road: 11, cycleway: 20, mountain_bike: 21, footway: 25, steps: 26, path: 27, pedestrian: 28, ferry: 41 };
   const SURFACE = { paved_smooth: 0, paved: 1, paved_rough: 2, compacted: 3, dirt: 4, gravel: 5, path: 6, impassable: 7 };
   const MAX_KM = 200;            // the public server's trace limit
+  const RELAY = '/api/ctx/trace', RELAY_POINTS = 600;   // a stage's line through our Worker: at most 600 points (the relay takes 700)
   const TTL_MS = 30 * 60000;
   const kept = Ctx && Ctx.cache ? Ctx.cache(TTL_MS, 60) : null;
 
@@ -164,6 +165,16 @@
     if ((c.totalM || 0) > MAX_KM * 1000) return { status: 'unavailable', note: 'too long for the router' };
     const key = Ctx.keyOf(c.coords);
     let edges = kept && kept.get(key);
+    // a stage (a stretch cut from the map tiles, the same for everyone near it, never the driver's route) through our
+    // Worker's relay (backend/src/trace_relay.ts), kept there per shape: the next plan nearby has its edges at once
+    if (!edges && c.match === 'map_snap' && typeof opts.apiGet === 'function') {
+      try {
+        const j = await Promise.race([opts.apiGet(`${RELAY}?shape=${encodeURIComponent(encode6(thin(c.coords, RELAY_POINTS)))}`),
+          new Promise((r) => { if (!opts.signal) return; if (opts.signal.aborted) r(null); else opts.signal.addEventListener('abort', () => r(null), { once: true }); })]);
+        edges = j ? parse(j) : null;
+        if (edges) kept && kept.set(key, edges);
+      } catch (_) { edges = null; }
+    }
     if (!edges) {
       for (const match of c.match ? [c.match] : ['walk_or_snap', 'map_snap']) {     // a line from the map tiles (a stage) is snapped
         if (opts.signal && opts.signal.aborted) return { status: 'unavailable', note: 'out of time' };
@@ -217,7 +228,7 @@
     channels: ['speed_limit_kph', 'speed_limit_est_kph', 'speed_kph', 'road_class', 'road_use', 'density', 'lanes', 'surface', 'sidewalk', 'truck_route',
       'bridge', 'tunnel', 'toll', 'ramp', 'roundabout', 'signals_per_km', 'access_per_km', 'intersections_per_km'],
     fetch: fetchAll };
-  const api = { ...provider, PARALLEL, ATTRS, ROAD_CLASS, ROAD_USE, SURFACE, estimateLimit, encode6, request, parse, perKm, toChannels, thin };
+  const api = { ...provider, PARALLEL, RELAY, ATTRS, ROAD_CLASS, ROAD_USE, SURFACE, estimateLimit, encode6, request, parse, perKm, toChannels, thin };
   if (Ctx) Ctx.register(provider);
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   root.ApexRouteCtxRouter = api;
