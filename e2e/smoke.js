@@ -619,6 +619,27 @@ flow('Where to?: your own stages match by name, even with the map search offline
   check(/Tail of the Dragon \(US 129\)/.test(first) && /Your stage/.test(first), 'your stage first: ' + first);
 }, { geolocation: { latitude: 35.9606, longitude: -83.9207 }, permissions: ['geolocation'] });
 
+flow('a short trip with one route finishes: the plan ends, busy clears and Searching goes, within seconds (live check of PR #293)', async (page, base) => {
+  // under 3 km, so no stages; the router offers one route, which goes up at once as the quickest and is the only option
+  await page.route('https://photon.komoot.io/**', (route) => route.fulfill({ contentType: 'application/json', body: JSON.stringify({ features: [
+    { geometry: { coordinates: [-83.9700, 35.7565] }, properties: { name: 'Maryville', state: 'Tennessee' } }] }) }));
+  await page.route('https://valhalla1.openstreetmap.de/route', (route) => {
+    const req = JSON.parse(route.request().postData() || '{}');
+    route.fulfill({ contentType: 'application/json', body: JSON.stringify(stubTrip(req.locations)) });
+  });
+  await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); } catch (_) {} });
+  await page.goto(base + '/index.html');
+  await page.waitForFunction(() => window.apexDebug && window.apexDebug.map);
+  await page.click('#destInput');
+  await page.fill('#destInput', 'Maryville');
+  await page.waitForSelector('#placeList .place', { timeout: 10000 });
+  await page.click('#placeList .place');
+  await page.waitForFunction(() => { const t = window.apexDebug.track; return t && t.kind === 'route'; }, null, { timeout: 10000 });
+  const done = await page.waitForFunction(() => Array.isArray(window.apexDebug.lastFun) && !document.getElementById('planPanel').classList.contains('busy')
+    && !(document.getElementById('toast').classList.contains('show') && /Searching/.test(document.getElementById('toast').textContent)), null, { timeout: 12000 }).then(() => true, () => false);
+  check(done, 'the plan finished (ranked, busy cleared, Searching gone) within 12 s of the route going up');
+}, { geolocation: { latitude: 35.7400, longitude: -83.9700 }, permissions: ['geolocation'] });
+
 flow('Where to?: a suggestion builds a route with a card and a Start button (search and router stubbed)', async (page, base) => {
   // a road on the route closed at all hours by the map's conditional tags (IDEAS R-22)
   await page.route('https://overpass-api.de/**', (route) => route.fulfill({ contentType: 'application/json', body: JSON.stringify({ elements: [
