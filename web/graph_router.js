@@ -111,6 +111,10 @@
     const time = new Float32Array(E), len = new Float32Array(E), quality = new Uint8Array(E), scenery = new Uint8Array(E), conf = new Uint8Array(E);
     const fun = new Float32Array(E), flags = new Uint16Array(E), cls = new Uint8Array(E), speed = new Uint8Array(E), name = new Int32Array(E);
     const nflags = new Uint8Array(N), hIn = new Float32Array(E).fill(NaN), hOut = new Float32Array(E).fill(NaN);
+    // v2 tiles' road channels per edge (graph_tiles.js edges.ch: businesses, driveways, signals, sidewalks, density ...),
+    // one Float32Array per channel over the whole view, NaN where a tile doesn't carry it
+    const chNames = [...new Set(list.flatMap((t) => Object.keys((t.edges && t.edges.ch) || {})))];
+    const roadCh = Object.fromEntries(chNames.map((k) => [k, new Float32Array(E).fill(NaN)]));
     let vmax = 1;
     list.forEach((t, k) => {
       const nb = nodeBase[k], eb = edgeBase[k], n = t.nodes.lat.length, ed = t.edges;
@@ -138,6 +142,7 @@
         flags[g] = ed.flags[e]; cls[g] = ed.cls[e]; speed[g] = ed.speed ? ed.speed[e] : 0;
         name[g] = ed.name && ed.name[e] !== NO_NAME ? ed.name[e] : -1;
         if (ed.hIn && ed.hOut) { hIn[g] = ed.hIn[e] / 256 * 2 * Math.PI; hOut[g] = ed.hOut[e] / 256 * 2 * Math.PI; }
+        if (ed.ch) for (const k in ed.ch) roadCh[k][g] = ed.ch[k][e];
         const v = len[g] / time[g];
         if (v > vmax) vmax = v;
       }
@@ -190,7 +195,7 @@
       tiles: list, keys: list.map((t) => keyOf(t.tile.i, t.tile.j)), index, nodeBase, edgeBase, N, E, lat, lon, first, to, tail, eTile,
       time, len, quality, scenery, conf, fun, flags, cls, speed, name, nflags, vmax, rfirst, redge, deadEnd, restr, funFull,
       grid: { i0: gi0, j0: gj0, W: GW, H: GH, start: cellStart, nodes: cellNodes },
-      hIn, hOut, scratch: null, bits: flagBits(), nbits: nodeBits(), hasRestr: new Uint8Array(E), gcache: new Map(),
+      hIn, hOut, roadCh, scratch: null, bits: flagBits(), nbits: nodeBits(), hasRestr: new Uint8Array(E), gcache: new Map(),
     };
     for (const e of restr.keys()) v.hasRestr[e] = 1;
     return v;
@@ -313,7 +318,8 @@
     const n = lat.length, B = v.bits;
     const out = { quality: new Float32Array(n).fill(NaN), scenery: new Float32Array(n).fill(NaN), conf: new Float32Array(n).fill(NaN),
       limit: new Float32Array(n).fill(NaN), limitEst: new Float32Array(n).fill(NaN), cls: new Float32Array(n).fill(NaN), toll: new Float32Array(n).fill(NaN),
-      bridge: new Float32Array(n).fill(NaN), tunnel: new Float32Array(n).fill(NaN), signals: new Float32Array(n).fill(NaN) };
+      bridge: new Float32Array(n).fill(NaN), tunnel: new Float32Array(n).fill(NaN), signals: new Float32Array(n).fill(NaN), ch: {} };
+    for (const k in v.roadCh || {}) out.ch[k] = new Float32Array(n).fill(NaN);
     let last = -1;
     for (let i = 0; i < n; i++) {
       const a = Math.max(0, i - 1), b = Math.min(n - 1, i + 1);
@@ -338,6 +344,7 @@
       out.cls[i] = v.cls[e];
       out.toll[i] = v.flags[e] & B.toll ? 1 : 0; out.bridge[i] = v.flags[e] & B.bridge ? 1 : 0; out.tunnel[i] = v.flags[e] & B.tunnel ? 1 : 0;
       out.signals[i] = v.nflags[v.to[e]] & v.nbits.signal ? 1 : 0;
+      for (const k in out.ch) out.ch[k][i] = v.roadCh[k][e];
     }
     return out;
   }

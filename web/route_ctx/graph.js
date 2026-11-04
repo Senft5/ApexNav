@@ -8,13 +8,19 @@
 //                                       quality and scenery from these where its own channels don't say enough)
 //   graph_conf      0..1   share of the model's weight that was known on that edge (its qConf)
 //   speed_limit_kph, speed_limit_est_kph, road_class, toll, bridge, tunnel, signal_node (0/1 at the edge's end)
+//   v2 tiles' road channels under the engine's own names (business_per_km, access_per_km, signals_per_km, stops_per_km,
+//   crossings_per_km, calming_per_km, sidewalk, density, bldg_per_km, addr_per_km): the side-street, density and
+//   business evidence the live model reads, so the engine scores our corridors from them as it does live (the tiles'
+//   quality then only fills what they don't say)
 // Licence: road data (c) OpenStreetMap contributors, ODbL (About > Sources). Cadence: the tiles' build (index.json).
 // opts.graphScore(lines) -> Promise<[per line { quality, scenery, conf, limit, limitEst, cls, toll, bridge, tunnel, signals }]>
 // (cockpit.js passes the worker's); without it the provider says 'unavailable' and costs nothing.
 (function (root) {
   'use strict';
   const Ctx = root.ApexRouteCtx && root.ApexRouteCtx.register ? root.ApexRouteCtx : typeof require === 'function' ? (() => { try { return require('./registry.js'); } catch (_) { return null; } })() : null;
-  const CH = ['graph_quality', 'graph_scenery', 'graph_conf', 'speed_limit_kph', 'speed_limit_est_kph', 'road_class', 'toll', 'bridge', 'tunnel', 'signal_node'];
+  // the v2 road channels that are the engine's own (graph_tiles.js CHANNELS); schools, worship and `built` are the build's
+  const ROAD = ['business_per_km', 'access_per_km', 'signals_per_km', 'stops_per_km', 'crossings_per_km', 'calming_per_km', 'sidewalk', 'density', 'bldg_per_km', 'addr_per_km'];
+  const CH = ['graph_quality', 'graph_scenery', 'graph_conf', 'speed_limit_kph', 'speed_limit_est_kph', 'road_class', 'toll', 'bridge', 'tunnel', 'signal_node', ...ROAD];
   const FROM = { graph_quality: 'quality', graph_scenery: 'scenery', graph_conf: 'conf', speed_limit_kph: 'limit', speed_limit_est_kph: 'limitEst', road_class: 'cls', toll: 'toll', bridge: 'bridge', tunnel: 'tunnel', signal_node: 'signals' };
   const empty = (n, status, note) => ({ status, ...(note ? { note } : {}), channels: Object.fromEntries(CH.map((k) => [k, new Float32Array(n).fill(NaN)])), spans: [], points: [] });
 
@@ -23,7 +29,7 @@
     const channels = {};
     let known = 0;
     for (const k of CH) {
-      const src = ans && ans[FROM[k]], out = new Float32Array(n).fill(NaN);
+      const src = ans && (FROM[k] ? ans[FROM[k]] : ans.ch && ans.ch[k]), out = new Float32Array(n).fill(NaN);
       if (src) for (let i = 0; i < n && i < src.length; i++) out[i] = Number.isFinite(src[i]) ? src[i] : NaN;
       channels[k] = out;
     }
@@ -46,7 +52,7 @@
   // priority 15: after the router's own edges (10) where it answered, before the DEM and the map tiles
   const provider = { id: 'graph', version: 1, channels: CH, needs: { network: false }, budgetMs: 1000, priority: 15, fetch: fetchCtx };
   if (Ctx && Ctx.register) Ctx.register(provider);
-  const api = { provider, CH, channelsOf };
+  const api = { provider, CH, ROAD, channelsOf };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   root.ApexRouteGraph = api;
 })(typeof window !== 'undefined' ? window : globalThis);

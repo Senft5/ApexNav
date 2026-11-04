@@ -277,6 +277,8 @@ const CASES = {
   async fast() {
     const g = H.grid({ seed: 4, nx: 12, ny: 12, stepDeg: 0.004, lat0: 39.15, lon0: -84.62 });
     const T = H.tiles(g.nodes, g.edges);
+    // v2 road channels on every edge (graph_tiles.js edges.ch): carried through the view, the line scoring, the provider
+    for (const t of T.tiles) t.edges.ch = { business_per_km: new Float32Array(t.edges.count).fill(9), sidewalk: new Float32Array(t.edges.count).fill(1) };
     let loads = 0;
     const env = { load: async (i, j) => { loads++; return T.tiles.find((t) => t.tile.i === i && t.tile.j === j) || null; }, index: async () => ({ tiles: Object.fromEntries(T.tiles.map((t) => [`${t.tile.i}_${t.tile.j}`, {}])) }) };
     const h = R.host(env);
@@ -300,8 +302,11 @@ const CASES = {
       housing_density: new Float32Array(c.lat.length).fill(1200), impervious_pct: new Float32Array(c.lat.length).fill(60), lu_residential: new Float32Array(c.lat.length).fill(0.9) };
     const sm2 = Engine.samples(c, { channels: strong });
     const none = await Graph.provider.fetch([c], {});
+    const viaWorker = await Graph.provider.fetch([c], { graphScore: async (lines) => (await h.handle({ id: 9, type: 'score', lines })).result });
+    const biz = viaWorker.g.channels.business_per_km, walk = viaWorker.g.channels.sidewalk;
     return { preTiles: pre.result.tiles.length, loadsAfterPreload, loadsAfterPlan: loads, quickSame: JSON.stringify(q.result.route.edges) === JSON.stringify(quickest.edges), quickTiles: q.result.tiles.length,
-      known, outside: Array.from(sc.result[1].quality).every((x) => x == null || Number.isNaN(x)), fillQ: sm.quality[5], fillS: sm.scenery[5], fillC: sm.qConf[5], strongQ: sm2.quality[5], status: ch.status, none: none.g.status };
+      known, outside: Array.from(sc.result[1].quality).every((x) => x == null || Number.isNaN(x)), fillQ: sm.quality[5], fillS: sm.scenery[5], fillC: sm.qConf[5], strongQ: sm2.quality[5], status: ch.status, none: none.g.status,
+      roadCh: [Array.from(biz).filter((x) => x === 9).length / biz.length, Array.from(walk).filter((x) => x === 1).length / walk.length] };
   },
 
   // the Cincinnati-size synthetic network: 16 tiles, ~150k edges; per query and per full plan

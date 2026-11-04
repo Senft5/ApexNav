@@ -89,6 +89,7 @@ def test_fast_path_quick_score_preload_and_the_engine_fill():
     assert abs(r["fillQ"] - 0.7) < 1e-6 and abs(r["fillS"] - 0.6) < 1e-6 and abs(r["fillC"] - 0.8) < 1e-6, r
     assert r["strongQ"] < 0.4, r
     assert r["status"] == "ok" and r["none"] == "unavailable", r
+    assert r["roadCh"][0] > 0.9 and r["roadCh"][1] > 0.9, "v2 road channels reach the engine under its own names: " + str(r["roadCh"])
 
 
 def test_offline_maneuvers():
