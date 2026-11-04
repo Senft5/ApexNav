@@ -50,7 +50,7 @@
   }
 
   // priority 15: after the router's own edges (10) where it answered, before the DEM and the map tiles
-  const provider = { id: 'graph', version: 1, channels: CH, needs: { network: false }, budgetMs: 1000, priority: 15, fetch: fetchCtx };
+  const provider = { id: 'graph', version: 1, channels: CH, needs: { network: false }, budgetMs: 1000, priority: 15, stageOk: true, fetch: fetchCtx };
   if (Ctx && Ctx.register) Ctx.register(provider);
   const api = { provider, CH, ROAD, channelsOf };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;

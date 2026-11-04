@@ -873,6 +873,96 @@
     return { routes: out, ms: Date.now() - t0 };
   }
 
+  // ---- best roads nearby (Explore) ------------------------------------------------------------------------------------
+  /** Drive time (s) from a snap to every node, up to maxS (Dijkstra on edge times; no turn costs: a reach, not a route). */
+  function reach(v, src, maxS) {
+    const T = new Float64Array(v.N).fill(Infinity), heap = [];
+    const push = (k, n) => { heap.push([k, n]); let i = heap.length - 1; while (i > 0) { const p = (i - 1) >> 1; if (heap[p][0] <= heap[i][0]) break; [heap[p], heap[i]] = [heap[i], heap[p]]; i = p; } };
+    const pop = () => { const top = heap[0], last = heap.pop(); if (heap.length) { heap[0] = last; let i = 0; for (;;) { const l = 2 * i + 1, r = l + 1; let m = i; if (l < heap.length && heap[l][0] < heap[m][0]) m = l; if (r < heap.length && heap[r][0] < heap[m][0]) m = r; if (m === i) break; [heap[m], heap[i]] = [heap[i], heap[m]]; i = m; } } return top; };
+    for (const s of src) { const n = v.to[s.edge], k = (1 - s.frac) * v.time[s.edge]; if (n >= 0 && k < T[n]) { T[n] = k; push(k, n); } }
+    while (heap.length) {
+      const [k, n] = pop();
+      if (k > T[n] || k > maxS) continue;
+      for (let e = v.first[n]; e < v.first[n + 1]; e++) {
+        const b = v.to[e];
+        if (b < 0 || (v.flags[e] & (v.bits.private | v.bits.barrier))) continue;
+        const x = k + v.time[e];
+        if (x < T[b] && x <= maxS) { T[b] = x; push(x, b); }
+      }
+    }
+    return T;
+  }
+  /**
+   * Stages from our tiles (Best roads nearby): edges scored quality x corners (fun per km, only on road the engine calls
+   * good: quality 0.45 or more) are chained from the best down, each chain growing forward and back along the best
+   * continuing edge (a turn under 60°, at least a third of the seed's score, or the same road), until it runs out or
+   * reaches 15 km; chains of 2 km or more within reach (maxS) are the stages, as stages.js shapes them ({ lat, lon,
+   * name, km, score, good }) plus the drive time to each end (aS, bS). req: { start, maxKm, maxS, max }.
+   */
+  function explore(v, req) {
+    const t0 = Date.now(), B = v.bits, maxS = req.maxS || 1800, max = req.max || 12;
+    const s0 = snap(v, req.start.lat, req.start.lon);
+    if (!s0.length) throw new Error('no road near you');
+    const T = reach(v, s0, maxS);
+    const score = new Float32Array(v.E);
+    const seeds = [];
+    for (let e = 0; e < v.E; e++) {
+      if (v.to[e] < 0 || v.quality[e] === UNKNOWN_U8 || !Number.isFinite(v.fun[e]) || v.fun[e] <= 0) continue;
+      const q = v.quality[e] / 254;
+      if (q < K.POOR_HI || (v.flags[e] & (B.private | B.barrier | B.ramp)) || v.cls[e] === CLS.motorway || v.cls[e] >= CLS.service) continue;
+      score[e] = q * v.fun[e] / Math.max(0.05, v.len[e] / 1000);
+      if (Number.isFinite(T[v.tail[e]]) || Number.isFinite(T[v.to[e]])) seeds.push(e);
+    }
+    seeds.sort((a, b) => score[b] - score[a] || a - b);
+    const used = new Uint8Array(v.E), out = [];
+    const take = (e) => { used[e] = 1; const tw = twin(v, e); if (tw >= 0) used[tw] = 1; };
+    const ok = (p, e, seed) => {
+      if (used[e] || v.to[e] < 0 || score[e] <= 0) return false;
+      if (v.to[e] === v.tail[p]) return false;
+      headings(v, p); headings(v, e);
+      if (Math.abs(turnAngle(v.hOut[p], v.hIn[e])) > 1.05) return false;
+      return score[e] >= score[seed] / 3 || (v.name[e] >= 0 && v.name[e] === v.name[p] && v.eTile[e] === v.eTile[p]);
+    };
+    for (const seed of seeds) {
+      if (out.length >= max * 3) break;
+      if (used[seed]) continue;
+      const chain = [seed];
+      take(seed);
+      let km = v.len[seed] / 1000;
+      for (let p = seed; km < 15;) {                                 // forward
+        const n = v.to[p];
+        let best = -1;
+        for (let e = v.first[n]; e < v.first[n + 1]; e++) if (ok(p, e, seed) && (best < 0 || score[e] > score[best])) best = e;
+        if (best < 0) break;
+        chain.push(best); take(best); km += v.len[best] / 1000; p = best;
+      }
+      for (let q = seed; km < 15;) {                                 // back
+        const n = v.tail[q];
+        let best = -1;
+        for (let r = v.rfirst[n]; r < v.rfirst[n + 1]; r++) { const e = v.redge[r]; if (!used[e] && v.to[e] >= 0 && score[e] > 0 && v.tail[q] === v.to[e] && v.tail[e] !== v.to[q]) { headings(v, e); headings(v, q); if (Math.abs(turnAngle(v.hOut[e], v.hIn[q])) <= 1.05 && (score[e] >= score[seed] / 3 || v.name[e] === v.name[q]) && (best < 0 || score[e] > score[best])) best = e; } }
+        if (best < 0) break;
+        chain.unshift(best); take(best); km += v.len[best] / 1000; q = best;
+      }
+      if (km < 2) continue;
+      const aS = T[v.tail[chain[0]]], bS = T[v.to[chain[chain.length - 1]]];
+      if (!Number.isFinite(aS) && !Number.isFinite(bS)) continue;
+      const lat = [], lon = [], names = new Map();
+      let fun = 0, qs = 0;
+      for (const e of chain) {
+        const g = geom(v, e);
+        for (let i = lat.length ? 2 : 0; i < g.length; i += 2) { lat.push(g[i]); lon.push(g[i + 1]); }
+        fun += v.fun[e]; qs += (v.quality[e] / 254) * v.len[e];
+        const nm = nameOf(v, e);
+        if (nm) names.set(nm, (names.get(nm) || 0) + v.len[e]);
+      }
+      const name = [...names].sort((a, b) => b[1] - a[1])[0];
+      out.push({ lat, lon, name: name ? name[0] : null, km, good: Math.round(fun), quality: qs / (km * 1000), score: fun * (qs / (km * 1000)),
+        aS: Number.isFinite(aS) ? aS : null, bS: Number.isFinite(bS) ? bS : null, source: 'own' });
+    }
+    out.sort((a, b) => b.score - a.score);
+    return { stages: out.slice(0, max), ms: Date.now() - t0 };
+  }
+
   // ---- coverage -------------------------------------------------------------------------------------------------------
   /** Tile keys present, from the tiles' index.json ({ tiles: ["i_j" | [i, j] | {i, j}] }). */
   function indexKeys(idx) {
@@ -934,6 +1024,14 @@
           const s = pts.reduce((m, p) => ({ lat: Math.min(m.lat, p.lat), lon: Math.min(m.lon, p.lon) }), pts[0]), n = pts.reduce((m, p) => ({ lat: Math.max(m.lat, p.lat), lon: Math.max(m.lon, p.lon) }), pts[0]);
           const v = await viewFor(tilesFor(s, n, 'quick'));
           return { id, result: lines.map((l) => scoreLine(v, l.lat, l.lon)) };
+        }
+        if (type === 'explore') {
+          const c = msg.start, d = (msg.maxKm || 14) * 1000 + 2000;
+          const at = (dy, dx) => ({ lat: c.lat + dy / 110540, lon: c.lon + dx / (111320 * Math.cos(c.lat * RAD)) });
+          const sw = tileOf(at(-d, -d).lat, at(-d, -d).lon), ne = tileOf(at(d, d).lat, at(d, d).lon), box = [];
+          for (let i = sw.i; i <= ne.i; i++) for (let j = sw.j; j <= ne.j; j++) box.push({ i, j });
+          const v = await viewFor(box);
+          return { id, result: { ...explore(v, msg), tiles: v.keys } };
         }
         if (type === 'preload') {
           const t0 = Date.now(), c = { lat: msg.lat, lon: msg.lon }, d = (msg.km || 15) * 1000;
@@ -1021,12 +1119,13 @@
       quick: (req) => ask({ type: 'quick', ...req }).then((m) => m.result),
       score: (lines) => ask({ type: 'score', lines }, 3000).then((m) => m.result),
       preload: (at) => ask({ type: 'preload', ...at }, 20000).then((m) => m.result),
+      explore: (req) => ask({ type: 'explore', ...req }).then((m) => m.result),
       loop: (req) => ask({ type: 'loop', ...req }).then((m) => m.result),
       close: () => { try { if (w) w.terminate(); } catch (_) { /* gone */ } w = null; },
     };
   }
 
-  const api = { VERSION: 1, K, crowdOnto, project, quickest, scoreLine, TILE_DEG, FLAG_BITS, NODE_BITS, CLS, UNKNOWN_U8, UNKNOWN_FUN, NO_NAME, packedKey, nodeCost, LEVELS_COPY, levels, distM, bearing, turnAngle, tileOf, keyOf, view, geom, snap, objective, search,
+  const api = { VERSION: 1, K, crowdOnto, project, quickest, scoreLine, reach, explore, TILE_DEG, FLAG_BITS, NODE_BITS, CLS, UNKNOWN_U8, UNKNOWN_FUN, NO_NAME, packedKey, nodeCost, LEVELS_COPY, levels, distM, bearing, turnAngle, tileOf, keyOf, view, geom, snap, objective, search,
     assemble, overlap, sameRoute, tilesFor, loopTiles, plan, loop, indexKeys, covers, host, client, edgeId, twin, turnCost };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   root.ApexGraphRouter = api;

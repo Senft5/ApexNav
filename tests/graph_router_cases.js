@@ -273,6 +273,20 @@ const CASES = {
       clock: [same, scaled, other], onFlags: [Own.on({ flags, storage: store(null), router: R }), Own.on({ flags: { on: (n, d) => d }, storage: store('0'), router: R }), Own.on({ flags: { on: (n, d) => d }, storage: store(null), router: R })] };
   },
 
+  // Best roads nearby from our tiles: the twisty good road is the first stage, timed from here; the side streets aren't
+  explore() {
+    const g = H.grid({ seed: 6, nx: 12, ny: 12, stepDeg: 0.004, lat0: 39.15, lon0: -84.62 });
+    // make the grid plain (no corners on good road), then one road twisty and good along row 6
+    for (const e of g.edges) { e.fun = 0; e.quality = 0.5; }
+    for (const e of g.edges) if (e.name === 'Row 6') { e.fun = 3; e.quality = 0.85; e.name = 'Twisty Road'; }
+    for (const e of g.edges) if (e.name === 'Col 3') { e.fun = 3; e.quality = 0.2; e.name = 'Subdivision Lane'; }
+    const v = R.view(H.tiles(g.nodes, g.edges).tiles);
+    const res = R.explore(v, { start: { lat: 39.152, lon: -84.618 }, maxKm: 10, maxS: 1800 });
+    const s0 = res.stages[0];
+    return { n: res.stages.length, first: s0 && s0.name, km: s0 && s0.km, good: s0 && s0.good, timed: s0 && (Number.isFinite(s0.aS) || Number.isFinite(s0.bS)),
+      shape: s0 && s0.lat.length === s0.lon.length && s0.lat.length > 10, names: res.stages.map((x) => x.name), ms: res.ms };
+  },
+
   // the fast path: our quickest alone, the tiles' scores along any line, the preload, one view reused
   async fast() {
     const g = H.grid({ seed: 4, nx: 12, ny: 12, stepDeg: 0.004, lat0: 39.15, lon0: -84.62 });

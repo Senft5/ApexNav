@@ -92,6 +92,15 @@ def test_fast_path_quick_score_preload_and_the_engine_fill():
     assert r["roadCh"][0] > 0.9 and r["roadCh"][1] > 0.9, "v2 road channels reach the engine under its own names: " + str(r["roadCh"])
 
 
+def test_best_roads_nearby_from_our_tiles():
+    """Explore from the tiles: the best-scored edges (quality x corners) chained into stages, timed from here by one
+    search; corners on a side street (quality under 0.45) never make a stage."""
+    r = case("explore")
+    assert r["n"] >= 1 and r["first"] == "Twisty Road" and r["km"] >= 2 and r["good"] > 0, r
+    assert r["timed"] and r["shape"], r
+    assert "Subdivision Lane" not in r["names"], r
+
+
 def test_offline_maneuvers():
     r = case("maneuvers")
     assert r["steps"] == [[1, "First Street"], [15, "Second Street"], [10, "Third Street"], [4, None]] or \
