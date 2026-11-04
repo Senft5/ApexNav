@@ -59,6 +59,37 @@ work?"). The coordinator decided one control; these are the calls inside it.
   router's sparse lines was the whole loop. Lines are now made even (5 m) before spurs are cut. Undo: the
   `resamplePolyline` line in `buildLoop`.
 
+## 2026-11-04 (late): Best roads nearby never a neighbourhood; a Satellite layer for the two of you
+
+Your report: the top pick near you was a residential neighbourhood. On your point the map's stage search (what the app
+used before our tiles, and still uses where they find nothing) put Lafayette Avenue through Clifton first: residential all
+along, 57 addresses per km, posted 25 mph, our tiles' quality 0.10, but 10 good corners. Corners counted; what the road is
+didn't, unless the live context happened to answer in time.
+- **A neighbourhood street is never a best road.** Residential, living-street or service class with houses every 25 m,
+  density 6+, or a posted 25 mph among houses (fun_route.js `STREET`). Class alone never counts (county lanes tagged
+  residential stay: Second Creek Road, Big Cedar Road). Undo: `streetSample` returns null.
+- **Where our tiles cover a map stage, a road our model scores under 0.45 isn't listed** (the bar our own search already
+  had). Undo: the `'poor'` line in route_engine.js `rescoreStages`.
+- **Dead-end spurs are cut, long dead-end roads stay** (the coordinator's call over my first version, which dropped every
+  road that ends): a stage's end that runs into a dead end is cut back to the last junction, unless that dead-end run is
+  2 km or more of good road, the length a stage needs anyway. Cook Road (2.8 km), Mudlick Road and Second Creek Road
+  (2.3 km) stay as out-and-back roads. Streets, service and destination-only roads are never in a stage, so their dead
+  ends never count. 3 km was asked for "tunable"; at 3 km Cook and Second Creek still dropped, so 2 km. Tune:
+  `OUT_BACK_KM` in graph_router.js; undo the cut entirely: `cut` in `explore`.
+- **Loops take neither** (merged with #302, whose loops are built from these stages): a street is never a stage, and an
+  out-and-back road (`deadEnd`) is left out of loop chains, since a loop through it drives it twice; the map path's
+  loop shortlist skips `notRoad` stages too. Undo: `!s.deadEnd` in graph_router.js `loopCombos`, `s.notRoad` in
+  fun_route.js `loopShortlist`.
+- **The list shows only stages the engine checked** once it checked any (the first 12), so an unchecked 13th can't fill in.
+  Undo: `looked` in fun_route.js `exploreShortlist`.
+- Not fixed: outside our tiles, or with own routing off, when the live context is too slow to say, a neighbourhood is
+  unknown and can still be listed.
+- **Satellite in Layers, for you and @fish5spd only.** The server says `developer: true` in `/api/me` to the owner
+  (`OWNER_EMAIL`) and to his address's fingerprint (the same one tools/crash_logs.py follows his notes by). If his Google
+  or Apple sign-in address differs from his TestFlight one, he won't get it: add his sign-in address's fingerprint to the
+  Worker var `DEV_FINGERPRINTS` (OWNER_TODO). Imagery: USGS The National Map (public domain, US only, sharp to zoom 16),
+  under our roads and routes, the base map's labels on top. No migration. Undo: drop `developer` from `/api/me`.
+
 ## 2026-11-04 (evening): The weather word on the map
 
 - **"Dry" only when the last 3 hours are known to be dry; rain comes from a real weather station first.** You: "it's been

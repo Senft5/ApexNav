@@ -313,6 +313,103 @@ const CASES = {
       shape: s0 && s0.lat.length === s0.lon.length && s0.lat.length > 10, names: res.stages.map((x) => x.name), ms: res.ms };
   },
 
+  // Best roads nearby from our tiles never lists a neighbourhood street, even one the tile's quality calls good (a v1
+  // tile, a stale model), nor a road that only leads to its own dead end; a country lane tagged "residential" (TIGER) with
+  // no houses beside it stays. The owner's report: the top pick was a residential neighbourhood.
+  exploreRoads() {
+    const g = H.grid({ seed: 6, nx: 12, ny: 12, stepDeg: 0.004, lat0: 39.15, lon0: -84.62 });
+    for (const e of g.edges) { e.fun = 0; e.quality = 0.5; }
+    // the frontage of each road, per edge (v2 tiles' road channels): plain suburban by default
+    const ch = g.edges.map(() => ({ addr: 12, bldg: 20, density: 3 }));
+    g.edges.forEach((e, k) => {
+      if (e.name === 'Row 6') { e.fun = 3; e.quality = 0.85; e.cls = 4; e.name = 'Twisty Road'; ch[k] = { addr: 6, bldg: 10, density: 2 }; }
+      // a curvy subdivision street the model scored well: more corners than the back road, houses every 15 m
+      if (e.name === 'Col 3') { e.fun = 4; e.quality = 0.7; e.cls = 6; e.name = 'Maple Court'; ch[k] = { addr: 70, bldg: 90, density: 7 }; }
+      // a county lane tagged residential in open country
+      if (e.name === 'Col 8') { e.fun = 3; e.quality = 0.8; e.cls = 6; e.name = 'Creek Lane'; ch[k] = { addr: 0, bldg: 2, density: 1 }; }
+    });
+    // a good twisty road off the grid's east edge that goes nowhere: 3 legs of about 430 m (1.3 km) to a dead end; and the
+    // twisty road itself runs on past its last junction into a 900 m dead-end spur
+    const east = 11 + 2 * 12, base = g.nodes.length;
+    for (let k = 1; k <= 3; k++) g.nodes.push({ lat: g.nodes[east].lat + (k % 2 ? 0.0006 : -0.0006), lon: g.nodes[east].lon + k * 0.005, flags: 0 });
+    for (let k = 0; k < 3; k++) {
+      const a = k === 0 ? east : base + k - 1, b = base + k;
+      for (const [from, to] of [[a, b], [b, a]]) { g.edges.push({ from, to, fun: 3.5, quality: 0.9, cls: 4, name: 'Spur Road', scenery: 0.6, conf: 1 }); ch.push({ addr: 2, bldg: 4, density: 1 }); }
+    }
+    const end6 = 11 + 6 * 12, base3 = g.nodes.length;
+    for (let k = 1; k <= 2; k++) g.nodes.push({ lat: g.nodes[end6].lat + (k % 2 ? 0.0004 : 0), lon: g.nodes[end6].lon + k * 0.0052, flags: 0 });
+    for (let k = 0; k < 2; k++) {
+      const a = k === 0 ? end6 : base3 + k - 1, b = base3 + k;
+      for (const [from, to] of [[a, b], [b, a]]) { g.edges.push({ from, to, fun: 3, quality: 0.85, cls: 4, name: 'Twisty Road', scenery: 0.6, conf: 1 }); ch.push({ addr: 6, bldg: 10, density: 2 }); }
+    }
+    // a long twisty rural road off the west edge that also ends: 9 legs of about 430 m (3.9 km), worth driving there and back
+    const west = 0 + 9 * 12, base2 = g.nodes.length;
+    for (let k = 1; k <= 9; k++) g.nodes.push({ lat: g.nodes[west].lat + (k % 2 ? 0.0006 : -0.0006), lon: g.nodes[west].lon - k * 0.005, flags: 0 });
+    for (let k = 0; k < 9; k++) {
+      const a = k === 0 ? west : base2 + k - 1, b = base2 + k;
+      for (const [from, to] of [[a, b], [b, a]]) { g.edges.push({ from, to, fun: 2, quality: 0.8, cls: 5, name: 'Long Hollow Road', scenery: 0.6, conf: 1 }); ch.push({ addr: 2, bldg: 4, density: 1 }); }
+    }
+    const T = H.tiles(g.nodes, g.edges);
+    for (const t of T.tiles) t.edges.ch = { addr_per_km: new Float32Array(t.edges.count).fill(NaN), bldg_per_km: new Float32Array(t.edges.count).fill(NaN), density: new Float32Array(t.edges.count).fill(NaN) };
+    g.edges.forEach((e, k) => {
+      const [key, li] = T.edgeAt.get(k), t = T.tiles.find((x) => `${x.tile.i}_${x.tile.j}` === key);
+      t.edges.ch.addr_per_km[li] = ch[k].addr; t.edges.ch.bldg_per_km[li] = ch[k].bldg; t.edges.ch.density[li] = ch[k].density;
+    });
+    const v = R.view(T.tiles);
+    const res = R.explore(v, { start: { lat: 39.172, lon: -84.6 }, maxKm: 10, maxS: 1800 });
+    // the same subdivision in a v1 tile (no road channels): nothing known beside it, so only the tile's quality decides
+    const v1 = R.view(H.tiles(g.nodes, g.edges).tiles);
+    const res1 = R.explore(v1, { start: { lat: 39.172, lon: -84.6 }, maxKm: 10, maxS: 1800 });
+    const lh = res.stages.find((s) => s.name === 'Long Hollow Road');
+    // loops (graph_router.js loop, built from explore's stages) take neither the subdivision nor the out-and-back road
+    const lp = R.loop(v, { start: { lat: 39.172, lon: -84.6 }, km: 12, level: 'fun' }).routes;
+    const loopStages = [...new Set(lp.flatMap((r) => r.stages || []))];
+    const tw = res.stages.find((s) => s.name === 'Twisty Road'), lastLon = g.nodes[end6].lon;
+    const twEnds = tw ? [tw.lon[0], tw.lon[tw.lon.length - 1]] : [];
+    return { loopStages, loops: lp.length, spurCut: !!tw && Math.max(...twEnds) <= lastLon + 0.0005, twistyKm: tw && +tw.km.toFixed(2),
+      longHollow: lh ? { km: +lh.km.toFixed(2), deadEnd: !!lh.deadEnd } : null, names: res.stages.map((s) => s.name), first: res.stages[0] && res.stages[0].name, v1names: res1.stages.map((s) => s.name),
+      street: R.streetEdge && FunRoute.streetSample ? [R.streetEdge(v, v.name.findIndex((_, e) => v.cls[e] === 6 && v.roadCh.addr_per_km[e] === 70)), FunRoute.streetSample({ cls: 6, addr: 0, bldg: 2, density: 1 }), FunRoute.streetSample({ cls: 6 })] : null };
+  },
+
+  // Best roads nearby on the real Cincinnati tiles (web/data/graph/v1) at two public places: the map's own stage search
+  // (stages.js, saved in tests/fixtures/best_roads from OpenFreeMap) ranked by the route engine with our tiles' context,
+  // as cockpit.js exploreNear does where the tiles cover you, and our tiles' own search. A neighbourhood is told by our
+  // tiles along the stage: the area's density 6 or more and a house every 25 m (40 addresses per km), or mostly
+  // residential class with that many houses.
+  bestRoadsReal() {
+    globalThis.ApexFunRoute = FunRoute; globalThis.ApexCore = require('../web/apex_core.js');
+    const Graph = require('../web/route_ctx/graph.js'), Engine = require('../web/route_engine.js'), T = require('../web/graph_tiles.js');
+    const dir = path.join(ROOT, 'web/data/graph/v1');
+    const tiles = fs.readdirSync(dir).filter((f) => f.endsWith('.vgr')).map((f) => { const b = fs.readFileSync(path.join(dir, f)); return T.decode(b.buffer.slice(b.byteOffset, b.byteOffset + b.length)); });
+    const v = R.view(tiles);
+    const what = (s) => {
+      const sc = R.scoreLine(v, s.lat, s.lon);
+      let n = 0, res = 0, addr = 0, an = 0, dens = 0, dn = 0;
+      for (let i = 0; i < s.lat.length; i++) {
+        if (!Number.isFinite(sc.cls[i])) continue;
+        n++; if (sc.cls[i] >= 6) res++;
+        const a = sc.ch.addr_per_km[i], d = sc.ch.density[i];
+        if (Number.isFinite(a)) { addr += a; an++; }
+        if (Number.isFinite(d)) { dens += d; dn++; }
+      }
+      const A = an ? addr / an : null, D = dn ? dens / dn : null, R6 = n ? res / n : 0;
+      return { name: s.name, addr: A && Math.round(A), density: D && +D.toFixed(1), residential: +R6.toFixed(2),
+        neighbourhood: A != null && A >= 40 && ((D != null && D >= 6) || R6 >= 0.5) };
+    };
+    const out = {};
+    for (const place of ['devou_park', 'mount_airy_forest']) {
+      const fx = JSON.parse(fs.readFileSync(path.join(__dirname, 'fixtures', 'best_roads', `${place}.json`), 'utf8'));
+      const stages = fx.stages.map((s) => ({ ...s }));
+      const cs = Engine.stageCorridors(stages, 12, { departAt: Date.parse('2026-11-04T14:00:00-05:00') }), byId = {};
+      for (const c of cs) byId[c.id] = Graph.channelsOf(c.lat.length, R.scoreLine(v, Array.from(c.lat), Array.from(c.lon)));
+      const ranked = [...Engine.rescoreStages(stages.slice(0, 12), byId), ...stages.slice(12)];
+      const list = FunRoute.exploreShortlist(fx.start, ranked, fx.maxKm, 12).map(what);
+      const own = R.explore(v, { start: fx.start, maxKm: fx.maxKm, maxS: fx.minutes * 60, max: 12 }).stages.map(what);
+      out[place] = { list, own, dropped: ranked.filter((s) => s.notRoad).map((s) => [s.name, s.notRoad]) };
+    }
+    return out;
+  },
+
   // the fast path: our quickest alone, the tiles' scores along any line, the preload, one view reused
   async fast() {
     const g = H.grid({ seed: 4, nx: 12, ny: 12, stepDeg: 0.004, lat0: 39.15, lon0: -84.62 });

@@ -354,6 +354,7 @@
   function loopShortlist(start, stages, targetKm, k = 6) {
     const out = [];
     for (const s of stages || []) {
+      if (s.notRoad) continue;                                  // a neighbourhood street or a poor road (rescoreStages)
       if (2 * kmBetween(start, midOf(s)) + s.km > targetKm * 1.1) continue;
       if (out.some(t => overlap(s, t))) continue;
       out.push(s);
@@ -361,10 +362,39 @@
     }
     return out;
   }
+  // A neighbourhood street is not a road to drive (Best roads nearby: the owner's top pick was a residential neighbourhood).
+  // One 25 m sample (or one edge of our tiles) is a street when its class is residential, living street or service AND
+  // what is beside it is built up: houses (addresses or buildings) every 25 m or less, the area's density 6 or more
+  // (0-15, the tiles' and the router's scale), or a posted 25 mph (40 km/h) limit where there is any density at all.
+  // Class alone never decides: US TIGER imports tag county lanes "residential", and those are some of the best roads
+  // here (Second Creek Road, Big Cedar Road: no houses, density 1). Nothing known beside it: unknown (null), never a guess.
+  // A stage is a street when half of the samples whose answer is known are, and they cover a third of it (streetShare).
+  const STREET = { CLS: 6, ADDR_PER_KM: 40, BLDG_PER_KM: 60, DENSITY: 6, SLOW_KPH: 40, RURAL_DENSITY: 2, SHARE: 0.5, KNOWN: 0.33 };
+  const has = (v) => typeof v === 'number' && Number.isFinite(v);
+  /** x: { cls (0 motorway .. 5 unclassified, 6 residential, 7 service), limit (posted km/h), addr, bldg (per km), density }. */
+  function streetSample(x) {
+    if (!x || !has(x.cls)) return null;
+    if (x.cls < STREET.CLS) return false;
+    if ((has(x.addr) && x.addr >= STREET.ADDR_PER_KM) || (has(x.bldg) && x.bldg >= STREET.BLDG_PER_KM) || (has(x.density) && x.density >= STREET.DENSITY)) return true;
+    if (has(x.limit) && x.limit <= STREET.SLOW_KPH && has(x.density) && x.density > STREET.RURAL_DENSITY) return true;
+    return has(x.addr) || has(x.bldg) || has(x.density) ? false : null;
+  }
+  /** Per-sample answers (true / false / null) -> { street, share, known }: street is null when too little is known. */
+  function streetShare(answers) {
+    const n = answers ? answers.length : 0;
+    let k = 0, yes = 0;
+    for (let i = 0; i < n; i++) if (answers[i] != null) { k++; if (answers[i]) yes++; }
+    const known = n ? k / n : 0, share = k ? yes / k : null;
+    return { street: known >= STREET.KNOWN ? share >= STREET.SHARE : null, share, known };
+  }
   // Explore (R-10): the best stages near here, at most `k`, no two the same road (by place or by name). Stages arrive best first.
+  // A stage the route engine found to be a neighbourhood street or a poor road (rescoreStages: s.notRoad) is never listed,
+  // and once the engine has looked at any (it looks at the first 12, s.ev), one it never looked at isn't either: else the
+  // unchecked 13th fills the list when the checked ones were all streets.
   function exploreShortlist(here, stages, maxKm, k = 8) {
-    const out = [];
+    const out = [], looked = (stages || []).some((s) => s.ev);
     for (const s of stages || []) {
+      if (s.notRoad || (looked && !s.ev)) continue;
       const e = endsOf(s);
       if (Math.min(kmBetween(here, e.a), kmBetween(here, e.b)) > maxKm) continue;
       if (out.some(t => overlap(s, t) || (s.name && t.name === s.name))) continue;   // one entry per road
@@ -716,6 +746,6 @@
     return out;
   }
 
-  const api = { LEVELS, cornerWeight, townKm, townCost, exploreShortlist, exploreTargets, explorePicks, distinctOptions, glare, glareCost, LOOP_BY_TIME, LOOP_LEVEL, loopLevelAdjust, LOOP_HWY, loopHighwayCost, loopDominates, loopRank, AVOID_DEFAULT, AVOID_LABELS, STAGE_KEPT, stageCoverage, keptStages, CAMERA_BOX_DEG, camerasToExclude, costing, unavoided, keepAvoiding, why, geometry, alongPoints, insertVia, loopValue, loopShortlist, loopPlansFromMatrix, score, shortlist, matrixPoints, plansFromMatrix, sectionCount, sectionPoints, combineSections, planKey, searchArea, waypoints, rank, along, kmBetween, directionBonus, setList, SET_FINISH, SET_FATIGUE, MAX_TECH_PER_KM, carNote, stageSpans, stageAhead };
+  const api = { LEVELS, cornerWeight, townKm, townCost, STREET, streetSample, streetShare, exploreShortlist, exploreTargets, explorePicks, distinctOptions, glare, glareCost, LOOP_BY_TIME, LOOP_LEVEL, loopLevelAdjust, LOOP_HWY, loopHighwayCost, loopDominates, loopRank, AVOID_DEFAULT, AVOID_LABELS, STAGE_KEPT, stageCoverage, keptStages, CAMERA_BOX_DEG, camerasToExclude, costing, unavoided, keepAvoiding, why, geometry, alongPoints, insertVia, loopValue, loopShortlist, loopPlansFromMatrix, score, shortlist, matrixPoints, plansFromMatrix, sectionCount, sectionPoints, combineSections, planKey, searchArea, waypoints, rank, along, kmBetween, directionBonus, setList, SET_FINISH, SET_FATIGUE, MAX_TECH_PER_KM, carNote, stageSpans, stageAhead };
   if (typeof module !== 'undefined' && module.exports) module.exports = api; else root.ApexFunRoute = api;
 })(typeof window !== 'undefined' ? window : globalThis);

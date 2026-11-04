@@ -62,6 +62,7 @@
     LOOP_HWY_X: { quick: 2.5, fun: 3, max: 4 }, LOOP_REACH_MS: 15, LOOP_STAGES: 8, LOOP_TRIES: 6, LOOP_ALONG_M: 1500, LOOP_MAX_RETRACED: 0.4,
     LOOP_CONN_FACTOR: 1.7, LOOP_CONN_A: 3, LOOP_MAX_OFF: 0.6,   // a connector's road length over its crow line, the router's detours to good road in it (Cincinnati, 2026-11-04)
     SNAP_M: 1500, GRID_DEG: 0.01,
+    OUT_BACK_KM: 2,          // Best roads nearby: a dead-end run of good road this long stays (driven there and back); the stage minimum
   };
 
   // ---- geometry -------------------------------------------------------------------------------------------------------
@@ -943,7 +944,9 @@
     try { stages = explore(v, { start, maxS: reachS, max: 3 * K.LOOP_STAGES }).stages; } catch (_) { return []; }
     const crow = (a, b) => distM(a.lat, a.lon, b.lat, b.lon) / 1000;
     const near = (s) => Math.min(crow(start, { lat: s.lat[0], lon: s.lon[0] }), crow(start, { lat: s.lat[s.lat.length - 1], lon: s.lon[s.lon.length - 1] }));
-    const list = stages.filter((s) => s.km <= km * 0.8 && 2 * near(s) + s.km <= km * 1.2).slice(0, K.LOOP_STAGES);
+    // explore's out-and-back roads (deadEnd: a long good road that ends) are a Best road nearby, not a loop's link: a loop
+    // through one drives it twice. Its streets are never stages at all.
+    const list = stages.filter((s) => !s.deadEnd && s.km <= km * 0.8 && 2 * near(s) + s.km <= km * 1.2).slice(0, K.LOOP_STAGES);
     const ends = (s, rev) => { const L = s.lat.length - 1; return rev ? [{ lat: s.lat[L], lon: s.lon[L] }, { lat: s.lat[0], lon: s.lon[0] }] : [{ lat: s.lat[0], lon: s.lon[0] }, { lat: s.lat[L], lon: s.lon[L] }]; };
     const combos = [];
     const consider = (idx) => {
@@ -1097,10 +1100,36 @@
     return T;
   }
   /**
+   * Is edge e a neighbourhood street (fun_route.js streetSample: residential class in built-up frontage)? true / false /
+   * null (unknown: a v1 tile without the road channels, or no ApexFunRoute here).
+   */
+  function streetEdge(v, e) {
+    const F = FunRoute();
+    if (!F || !F.streetSample) return null;
+    const ch = v.roadCh || {}, at = (k) => (ch[k] ? ch[k][e] : NaN);
+    const limit = v.speed[e] && !(v.flags[e] & v.bits.speedEst) ? v.speed[e] : NaN;   // a posted limit, not the class's estimate
+    return F.streetSample({ cls: v.cls[e], limit, addr: at('addr_per_km'), bldg: at('bldg_per_km'), density: at('density') });
+  }
+  /** A real dead end at node n (one neighbour), not the edge of the tiles loaded (an edge into a tile not in the view). */
+  function deadEndAt(v, n) {
+    if (n < 0 || !v.deadEnd[n]) return false;
+    for (let e = v.first[n]; e < v.first[n + 1]; e++) if (v.to[e] < 0) return false;
+    return true;
+  }
+  /** A junction: three or more neighbouring nodes (or a way into tiles not loaded, which may be one). */
+  function junctionAt(v, n) {
+    if (n < 0) return false;
+    const nb = new Set();
+    for (let e = v.first[n]; e < v.first[n + 1]; e++) { if (v.to[e] < 0) return true; if (v.to[e] !== n) nb.add(v.to[e]); }
+    for (let r = v.rfirst[n]; r < v.rfirst[n + 1]; r++) { const a = v.tail[v.redge[r]]; if (a !== n) nb.add(a); }
+    return nb.size >= 3;
+  }
+  /**
    * Stages from our tiles (Best roads nearby): edges scored quality x corners (fun per km, only on road the engine calls
-   * good: quality 0.45 or more) are chained from the best down, each chain growing forward and back along the best
-   * continuing edge (a turn under 60°, at least a third of the seed's score, or the same road), until it runs out or
-   * reaches 15 km; chains of 2 km or more within reach (maxS) are the stages, as stages.js shapes them ({ lat, lon,
+   * good: quality 0.45 or more, and never a neighbourhood street: streetEdge) are chained from the best down, each chain
+   * growing forward and back along the best continuing edge (a turn under 60°, at least a third of the seed's score, or
+   * the same road), until it runs out or reaches 15 km; chains of 2 km or more within reach (maxS) that go somewhere
+   * (an end into a dead end is cut back to the last junction unless that run is OUT_BACK_KM of good road) are the stages, as stages.js shapes them ({ lat, lon,
    * name, km, score, good }) plus the drive time to each end (aS, bS). req: { start, maxKm, maxS, max }.
    */
   function explore(v, req) {
@@ -1113,7 +1142,8 @@
     for (let e = 0; e < v.E; e++) {
       if (v.to[e] < 0 || v.quality[e] === UNKNOWN_U8 || !Number.isFinite(v.fun[e]) || v.fun[e] <= 0) continue;
       const q = v.quality[e] / 254;
-      if (q < K.POOR_HI || (v.flags[e] & (B.private | B.barrier | B.ramp)) || v.cls[e] === CLS.motorway || v.cls[e] >= CLS.service) continue;
+      if (q < K.POOR_HI || (v.flags[e] & (B.private | B.barrier | B.ramp | B.destination)) || v.cls[e] === CLS.motorway || v.cls[e] >= CLS.service) continue;
+      if (streetEdge(v, e) === true) continue;
       score[e] = q * v.fun[e] / Math.max(0.05, v.len[e] / 1000);
       if (Number.isFinite(T[v.tail[e]]) || Number.isFinite(T[v.to[e]])) seeds.push(e);
     }
@@ -1147,7 +1177,22 @@
         if (best < 0) break;
         chain.unshift(best); take(best); km += v.len[best] / 1000; q = best;
       }
-      if (km < 2) continue;
+      // a through road, not a cul-de-sac: an end that runs into a dead end is cut back to the last junction on the way (a
+      // spur off a good road goes), unless the dead-end run itself is OUT_BACK_KM or more of good road: a long rural road
+      // that ends is still worth driving there and back (Cook Road, Mudlick Road). Streets, service and destination-only
+      // edges are never in a chain, so their dead ends never count as good road.
+      let outBack = false;
+      const cut = (atEnd) => {
+        const endNode = () => (atEnd ? v.to[chain[chain.length - 1]] : v.tail[chain[0]]);
+        if (!chain.length || !deadEndAt(v, endNode())) return;
+        let i = atEnd ? chain.length - 1 : 0, run = 0;
+        const step = atEnd ? -1 : 1, nodeOf = (k) => (atEnd ? v.tail[chain[k]] : v.to[chain[k]]);
+        for (; i >= 0 && i < chain.length; i += step) { run += v.len[chain[i]] / 1000; if (junctionAt(v, nodeOf(i))) break; }
+        if (run >= K.OUT_BACK_KM) { outBack = true; return; }
+        while (chain.length && !junctionAt(v, endNode())) km -= v.len[atEnd ? chain.pop() : chain.shift()] / 1000;
+      };
+      cut(true); cut(false);
+      if (!chain.length || km < 2) continue;
       const aS = T[v.tail[chain[0]]], bS = T[v.to[chain[chain.length - 1]]];
       if (!Number.isFinite(aS) && !Number.isFinite(bS)) continue;
       const lat = [], lon = [], names = new Map();
@@ -1161,7 +1206,7 @@
       }
       const name = [...names].sort((a, b) => b[1] - a[1])[0];
       out.push({ lat, lon, name: name ? name[0] : null, km, good: Math.round(fun), quality: qs / (km * 1000), score: fun * (qs / (km * 1000)),
-        aS: Number.isFinite(aS) ? aS : null, bS: Number.isFinite(bS) ? bS : null, source: 'own' });
+        aS: Number.isFinite(aS) ? aS : null, bS: Number.isFinite(bS) ? bS : null, source: 'own', ...(outBack ? { deadEnd: true } : {}) });
     }
     out.sort((a, b) => b.score - a.score);
     return { stages: out.slice(0, max), ms: Date.now() - t0 };
@@ -1372,7 +1417,7 @@
     };
   }
 
-  const api = { VERSION: 1, K, lineTiles, edgeTable, fromTable, crowdOnto, project, quickest, scoreLine, reach, explore, TILE_DEG, FLAG_BITS, NODE_BITS, CLS, UNKNOWN_U8, UNKNOWN_FUN, NO_NAME, packedKey, nodeCost, LEVELS_COPY, levels, distM, bearing, turnAngle, tileOf, keyOf, view, geom, snap, objective, search,
+  const api = { VERSION: 1, K, lineTiles, edgeTable, fromTable, crowdOnto, project, quickest, scoreLine, reach, explore, streetEdge, deadEndAt, junctionAt, TILE_DEG, FLAG_BITS, NODE_BITS, CLS, UNKNOWN_U8, UNKNOWN_FUN, NO_NAME, packedKey, nodeCost, LEVELS_COPY, levels, distM, bearing, turnAngle, tileOf, keyOf, view, geom, snap, objective, search,
     assemble, overlap, sameRoute, tilesFor, loopTiles, plan, loop, indexKeys, covers, host, client, edgeId, twin, turnCost };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   root.ApexGraphRouter = api;

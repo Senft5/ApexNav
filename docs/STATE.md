@@ -67,6 +67,23 @@
 - Exact next task: a stage-loop length search (route the best combos, then re-pick the stages by the routed length
   until one lands within 20 %); then the owner drives a Fun loop from home.
 
+## Session 2026-11-04 (late): best roads never a neighbourhood; developer Satellite layer (claude/best-roads-satellite)
+
+- [x] Best roads nearby: a neighbourhood street (fun_route.js `streetSample`: residential/living/service class in built-up
+  frontage; class alone never) never makes a stage from our tiles, nor a destination-only edge; a stage's dead-end end is
+  cut back to the last junction unless the dead-end run is 2 km+ of good road (`OUT_BACK_KM`, out-and-back roads stay). The map's stages (used where our tiles find none) are marked `notRoad` by
+  `rescoreStages` when the context shows a street or our tiles score them under 0.45; the list skips them and anything
+  unchecked. Root cause and checks: ROUTING.md "Explore". Tests: test_graph_router.py (synthetic + real tiles at Devou
+  Park and Mount Airy Forest, fixtures tests/fixtures/best_roads).
+- [x] Developers: `/api/me` `developer: true` for the owner (OWNER_EMAIL) and the co-developer's fingerprint
+  (backend/src/developers.ts, + var DEV_FINGERPRINTS); no migration. Layers → Satellite (USGS The National Map
+  orthoimagery) only then; tests backend/test/developers.test.ts, tests/test_developers.py, e2e "satellite: ...".
+- Open: outside our tiles (or own routing off) a neighbourhood is unknown when the live stage context (router edges in
+  1.2 s) comes back partial, and can still be listed. On a 144-start scan of the bundled tiles our search lists 281 stages instead of 293: dead-end spurs are cut off
+  (some through stages fall under 2 km and go); out-and-back roads of 2 km+ (Cook, Mudlick, Second Creek) stay.
+- Exact next task: the owner checks Best roads nearby at home and Layers → Satellite on TestFlight; if @fish5spd has no
+  switch, OWNER_TODO's DEV_FINGERPRINTS row.
+
 ## Session 2026-11-05 (night): own routing, the speed round (claude/own-routing-fast)
 
 - [x] Final card on the tile ranking + background refresh; Explore from tiles; via-way restrictions; first route from
