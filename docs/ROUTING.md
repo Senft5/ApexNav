@@ -16,8 +16,8 @@ The router's costing keeps off highways, which sent routes through subdivisions 
 quickest now competes on every trip (unless you avoid highways), connectors between good roads may use highways, and the
 best stages are re-scored on their real road before any connector is timed. Everything below (levels, budgets, avoid,
 towns, glare, weather, measured roads, taste, Prefer, set list, stage coverage, the car) feeds the engine's value as
-before; with no context at all the value is exactly the old one. If planning takes over 1.5 s the quickest route goes
-up at once and the ranked routes replace it.
+before; with no context at all the value is exactly the old one. The quickest route goes up as soon as the router
+answers and the ranked routes replace it.
 
 ## Levels
 

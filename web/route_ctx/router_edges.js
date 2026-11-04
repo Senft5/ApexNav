@@ -1,7 +1,10 @@
 // Route context provider: the router's own edge attributes (Valhalla trace_attributes), docs/ROUTE_ENGINE.md.
-// One request per candidate (its exact route line, `edge_walk`, so every edge is the one the router chose), attributes
-// filtered to what the model reads, two candidates at a time (the public server rate-limits bursts), each answer kept
-// 30 minutes per candidate. The router down or slow: 'unavailable', and the model ranks as if this source didn't exist.
+// One request per candidate (its exact route line, `walk_or_snap`: an exact edge walk, so every edge is the one the router
+// chose, falling back to map matching on the server where the walk fails: a line routed through shaping points, a stage
+// plan, turns back on itself at each point and an exact walk answers 400, error 443), attributes filtered to what the
+// model reads, six candidates at a time, each answer kept 30 minutes per candidate. At the deadline the candidates that
+// have answered are returned and the rest are 'unavailable' (out of time). The router down or slow: 'unavailable', and the
+// model ranks as if this source didn't exist.
 //
 // Channels (per 25 m sample; NaN = unknown, never 0 for unknown):
 //   speed_limit_kph      km/h   posted limit (OSM maxspeed as the router has it)
@@ -162,9 +165,10 @@
     const key = Ctx.keyOf(c.coords);
     let edges = kept && kept.get(key);
     if (!edges) {
-      for (const match of c.match ? [c.match] : ['edge_walk', 'map_snap']) {     // a line from the map tiles (a stage) is snapped
+      for (const match of c.match ? [c.match] : ['walk_or_snap', 'map_snap']) {     // a line from the map tiles (a stage) is snapped
+        if (opts.signal && opts.signal.aborted) return { status: 'unavailable', note: 'out of time' };
         try {
-          const body = match === 'edge_walk' ? request(c.coords, match) : request(thin(c.coords, 2000), match);
+          const body = match === 'edge_walk' || match === 'walk_or_snap' ? request(c.coords, match) : request(thin(c.coords, 2000), match);
           const r = await f(`${VALHALLA}/trace_attributes`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body), signal: opts.signal });
           if (!r.ok) continue;
           edges = parse(await r.json());
@@ -184,10 +188,16 @@
     for (let i = 0; i < max; i++) out.push(coords[Math.round(i * step)]);
     return out;
   }
+  const PARALLEL = 6;
+  /** Every corridor's edges, PARALLEL at a time; when opts.signal fires, what has answered (the rest out of time). */
   async function fetchAll(corridors, opts = {}) {
     const out = {}, queue = corridors.slice();
-    const worker = async () => { while (queue.length) { const c = queue.shift(); out[c.id] = await one(c, opts); } };
-    await Promise.all([worker(), worker()]);
+    const worker = async () => { while (queue.length) { const c = queue.shift(); const r = await one(c, opts); if (!(c.id in out)) out[c.id] = r; } };
+    const all = Promise.all(Array.from({ length: Math.min(PARALLEL, queue.length) }, worker));
+    const sig = opts.signal;
+    const stop = sig ? new Promise((resolve) => { if (sig.aborted) resolve(); else sig.addEventListener('abort', resolve, { once: true }); }) : null;
+    await (stop ? Promise.race([all, stop]) : all);
+    for (const c of corridors) if (!(c.id in out)) out[c.id] = { status: 'unavailable', note: 'out of time' };
     return out;
   }
 
@@ -195,7 +205,7 @@
     channels: ['speed_limit_kph', 'speed_limit_est_kph', 'speed_kph', 'road_class', 'road_use', 'density', 'lanes', 'surface', 'sidewalk', 'truck_route',
       'bridge', 'tunnel', 'toll', 'ramp', 'roundabout', 'signals_per_km', 'access_per_km', 'intersections_per_km'],
     fetch: fetchAll };
-  const api = { ...provider, ATTRS, ROAD_CLASS, ROAD_USE, SURFACE, estimateLimit, encode6, request, parse, perKm, toChannels, thin };
+  const api = { ...provider, PARALLEL, ATTRS, ROAD_CLASS, ROAD_USE, SURFACE, estimateLimit, encode6, request, parse, perKm, toChannels, thin };
   if (Ctx) Ctx.register(provider);
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   root.ApexRouteCtxRouter = api;

@@ -24,6 +24,17 @@ describe("context grid bundles (KV)", () => {
     expect((await api(null, "GET", "/api/ctx/v1/8/1/2.vcg")).status).toBe(404);
     expect((await api(null, "GET", "/api/ctx/v1/8/67/97.png")).status).toBe(404);
     expect((await api(null, "GET", "/api/ctx/v1/8/..%2F..%2Fsecret/1.vcg")).status).toBe(404);
-    await expect(ctxServe({ ...env, CTX: undefined }, "v1/index.json")).rejects.toThrow("ctx_off");
+    await expect(ctxServe({ ...env, CTX: undefined }, "v1/8/67/97.vcg")).rejects.toThrow("ctx_off");
+  });
+
+  it("no index yet (no KV, or nothing uploaded) is an empty index, not a 404 every phone logs", async () => {
+    const off = await ctxServe({ ...env, CTX: undefined }, "v1/index.json");
+    expect(off.status).toBe(200);
+    expect(await off.json()).toEqual({ v: 1, bundles: {} });
+    expect(off.headers.get("cache-control")).toBe("public, max-age=3600");
+    await env.CTX!.delete("v1/index.json");
+    const none = await api(null, "GET", "/api/ctx/v1/index.json");
+    expect(none.status).toBe(200);
+    expect(((await none.json()) as { bundles: Record<string, unknown> }).bundles).toEqual({});
   });
 });

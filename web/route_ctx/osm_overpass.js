@@ -454,6 +454,28 @@
     return json;
   }
 
+  // one query per set of tiles at a time, shared by the plans that need it; stored when it lands, however late
+  const WAIT_MS = 0, inflight = new Map();
+  function background(want, opts, storage, now) {
+    const key = want.join(','), stub = !!stubOf(opts);   // a stub answers at once and is never shared
+    if (stub || !inflight.has(key)) {
+      const p = ask(query(want), { ...opts, signal: undefined, budgetMs: TIMEOUT_MS }).then((json) => {
+        if (!json) return null;
+        const fresh = parse(json);
+        storeElements(storage, new Map(want.map((k) => [k, new Set(['*'])])), fresh, now);   // covered: the whole of each asked tile
+        return fresh;
+      }).catch(() => null);
+      if (stub) return p;
+      inflight.set(key, p.finally(() => inflight.delete(key)));
+    }
+    return inflight.get(key);
+  }
+  const wait = (ms, signal) => new Promise((resolve) => {
+    if (!(ms > 0)) { setTimeout(() => resolve(null), 0); return; }
+    const t = setTimeout(() => resolve(null), ms);
+    if (signal) signal.addEventListener('abort', () => { clearTimeout(t); resolve(null); }, { once: true });
+  });
+
   async function fetchCtx(corridors, opts = {}) {
     const out = {};
     const storage = opts.storage !== undefined ? opts.storage : (() => { try { return root.localStorage || null; } catch (_) { return null; } })();
@@ -486,12 +508,11 @@
       });
       const want = planTiles(corridors, covered);
       if (want.length) {
-        const json = await ask(query(want), opts);
-        if (json) {
-          const fresh = parse(json);
+        // off the critical path: the query runs on its own clock (live, the public servers answered 502 or 504 on every
+        // run), the plan waits WAIT_MS (0: not at all) and ranks with what the cache has; the answer is kept for the next plan
+        const fresh = await Promise.race([background(want, opts, storage, now), wait(stubOf(opts) ? 0 : WAIT_MS, opts.signal)]);
+        if (fresh) {
           for (const m of ['nodes', 'ways', 'rels']) for (const [k, v] of fresh[m]) els[m].set(k, v);
-          // covered: the whole of each asked tile ('*')
-          storeElements(storage, new Map(want.map((k) => [k, new Set(['*'])])), fresh, now);
           const asked = new Set(want);
           corridors.forEach((c, ci) => { for (let i = 0; i < c.lat.length; i++) if (asked.has(tileKey(c.lat[i], c.lon[i]))) covered[ci][i] = 1; });
         }
@@ -506,8 +527,8 @@
   }
 
   const provider = { id: 'osm_overpass', version: 1, channels: CHANNELS, needs: { network: true }, budgetMs: 15000, fetch: fetchCtx };
-  const api = { provider, CHANNELS, SERVERS, KEEP, TILE, COV, MAX_TILES, speedKph, metresOf, tonnesOf, planTiles, paved, hgvLevel, accessLevel, hazardOf, bywayLevel, simplify, query, parse,
-    aggregate, planPieces, piecesCells, tileKey, covKey, readTile, storeElements, _reset: () => { downUntil = 0; } };
+  const api = { provider, WAIT_MS, CHANNELS, SERVERS, KEEP, TILE, COV, MAX_TILES, speedKph, metresOf, tonnesOf, planTiles, paved, hgvLevel, accessLevel, hazardOf, bywayLevel, simplify, query, parse,
+    aggregate, planPieces, piecesCells, tileKey, covKey, readTile, storeElements, _reset: () => { downUntil = 0; inflight.clear(); } };
   root.ApexOsmOverpass = api;
   if (Ctx && Ctx.register) Ctx.register(provider);
   if (typeof module !== 'undefined' && module.exports) module.exports = api;

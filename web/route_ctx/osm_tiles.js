@@ -405,7 +405,7 @@
   }
 
   const provider = {
-    id: 'osm_tiles', version: 1, channels: CHANNELS, needs: { network: true }, budgetMs: 8000,
+    id: 'osm_tiles', version: 1, channels: CHANNELS, needs: { network: true }, budgetMs: 8000, stageOk: true,   // the map's own tiles: a stage's land use, shops and road class
     fetch: fetchCtx,
   };
   const api = { provider, CHANNELS, BUSINESS, isBusiness, ROAD_CODE, PLACE_RANK, tileOf, tileBounds, tilesFor, planTiles, decodeTile,

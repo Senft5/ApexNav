@@ -258,7 +258,8 @@
       try {
         const raw = await Promise.race([
           Promise.resolve().then(() => p.fetch(cs, { ...(opts.providerOpts || {}), ...inputs, signal: mine ? mine.signal : undefined, budgetMs: ms, departAt: opts.departAt, settings, ...(opts.fetch ? { fetch: opts.fetch } : {}) })),
-          sleep(ms + 50, mine ? mine.signal : undefined).then(() => null),
+          // at the deadline a provider that returns what has answered so far gets a moment to hand it over
+          sleep(ms + 50, mine ? mine.signal : undefined).then(() => sleep(60)).then(() => null),
         ]);
         if (!raw) { status[p.id] = { status: 'unavailable', ms: Date.now() - t, note: 'out of time' }; return; }
         const all = {};

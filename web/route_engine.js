@@ -163,9 +163,13 @@
   // ---- weights of the route value (points, the 0–100 fun scale) -----------------------------------------------------
   const W = {
     QUALITY: 0.3,          // points per quality point (0–100) above or below 50, times the share of the route known
-    POOR_Q_HI: 0.45, POOR_Q_LO: 0.25, POOR_PER_KM: 3, POOR_CAP: 60, END_GRACE_M: 1200,   // side streets and business districts
+    // side streets and business districts; no grace at the ends: every candidate starts in the same street, so the shared
+    // start costs them all the same, while a plan that drives 2 km of strip mall out of town pays for it (live, Northgate)
+    POOR_Q_HI: 0.45, POOR_Q_LO: 0.25, POOR_PER_KM: 10, POOR_CAP: 120, END_GRACE_M: 0,
+    BUSINESS_PER_KM: 4, BUSINESS_FROM: 4, BUSINESS_FULL: 14, BUSINESS_CAP: 40,   // the owner: more businesses = a worse road
     SCENERY: 20,           // points for scenery 1 vs 0.5 (so ±10), times how much of it is known
     Q_FULL_CONF: 0.3, S_FULL_CONF: 0.2,            // the share of the weights known at which a sample's quality / scenery counts in full
+    STAGE_UNKNOWN_GATE: 0.4,                        // a stage's samples with no road data: trusted this much
     GATE_LO: 0.25, GATE_HI: 0.6,                    // a corner on quality ≤ 0.25 counts nothing, ≥ 0.6 in full
     PENALTY_CAP: 40, BONUS_CAP: 15,
     DRIVER: 6,             // points for a route that fits the driver (driver_fit 1) vs one that doesn't (-1): ±6
@@ -371,7 +375,9 @@
     if (!c || !ctx) { cand.ev = out; return out; }
     const s = samples(c, ctx), n = s.n, step = c.distM.length > 1 ? c.distM[1] - c.distM[0] : 25, total = c.totalM || c.distM[n - 1];
     // quality: length-weighted mean of the known samples, and the side-street / business-district km
-    let qs = 0, qn = 0, qw = 0, poorM = 0, poorCost = 0, ss = 0, sn = 0, sp = 0, conf = 0;
+    let qs = 0, qn = 0, qw = 0, poorM = 0, poorCost = 0, ss = 0, sn = 0, sp = 0, conf = 0, bizCost = 0, bizM = 0;
+    const bizC = channel(ctx, 'business_per_km'), rcQ = channel(ctx, 'road_class'), useQ = channel(ctx, 'road_use');
+    const limitedQ = (i) => (rcQ && rcQ[i] === 0) || (useQ && useQ[i] === 1);
     const poorBy = { business: 0, residential: 0, stops: 0, other: 0 };
     const rc = channel(ctx, 'road_class'), use = channel(ctx, 'road_use'), biz = channel(ctx, 'business_per_km'), sig = channel(ctx, 'signals_per_km');
     for (let i = 0; i < n; i++) {
@@ -379,6 +385,9 @@
       conf += (s.qConf[i] * 2 + s.sConf[i]) / 3;
       if (Number.isFinite(q)) { qs += q; qn++; qw += Math.min(1, s.qConf[i] / W.Q_FULL_CONF); }
       if (Number.isFinite(s.scenery[i])) { ss += s.scenery[i]; sn++; sp += (s.scenery[i] - 0.5) * Math.min(1, s.sConf[i] / W.S_FULL_CONF); }
+      // business districts cost on their own (the owner, 2026-11-03: "more businesses = worse route generally"): shops,
+      // restaurants and offices beside the road (not fuel or cafés), never beside a motorway
+      if (bizC && Number.isFinite(bizC[i]) && !limitedQ(i)) { const b = clamp01((bizC[i] - W.BUSINESS_FROM) / (W.BUSINESS_FULL - W.BUSINESS_FROM)); if (b > 0) { bizCost += b * step / 1000 * W.BUSINESS_PER_KM; bizM += b * step; } }
       if (!Number.isFinite(q) || c.distM[i] < W.END_GRACE_M || total - c.distM[i] < W.END_GRACE_M) continue;
       const bad = clamp01((W.POOR_Q_HI - q) / (W.POOR_Q_HI - W.POOR_Q_LO));
       if (bad > 0) {
@@ -392,6 +401,7 @@
     out.qWeight = qw / n;           // how much the quality term counts: the share known, at full weight once a third of the weights is
     out.poorKm = poorM / 1000; out.poorBy = Object.fromEntries(Object.entries(poorBy).map(([k, v]) => [k, v / 1000]));
     out.poorCost = Math.min(W.POOR_CAP, poorCost);
+    out.businessCost = Math.min(W.BUSINESS_CAP, bizCost); out.businessKm = bizM / 1000;
     out.scenery = sn ? ss / sn : null; out.sCoverage = sn / n;
     out.sceneryPts = sn ? W.SCENERY * sp / n : 0;       // terrain alone (a fifth of the weights) moves it a little; the full picture ±10
     out.confidence = conf / n;
@@ -400,7 +410,7 @@
     let gs = 0;
     for (let i = 0; i < n; i++) if (Number.isFinite(s.quality[i])) gs += gate(s.quality[i]);
     out.meanGate = qn ? gs / qn : null; out.knownKm = qn * step / 1000; out.km = total / 1000;
-    out.poorPerKnownKm = qn ? out.poorCost / Math.max(0.1, qn * step / 1000 - 2 * W.END_GRACE_M / 1000) : null;   // per km the cost could apply to
+    out.poorPerKnownKm = qn ? out.poorCost / Math.max(0.1, Math.min(out.km, qn * step / 1000) - 2 * W.END_GRACE_M / 1000) : null;   // per km the cost could apply to
     // unknown samples take the pool's mean gate when rank() knows it (opts.unknownGate), else count in full as before
     const ug = finite(opts.unknownGate) ? opts.unknownGate : 1;
     const scaleAt = qn || finite(opts.unknownGate) ? (m) => { const q = s.quality[at(c, m)]; return Number.isFinite(q) ? gate(q) : ug; } : null;
@@ -588,7 +598,7 @@
       // corners and quality where unknown: the lowest of the known candidates (nothing vouches for them, so they can't beat a
       // road whose data is known), and side-street cost per unknown km: the highest of theirs
       const pool = { gate: Math.min(...known.map((c) => c.ev.meanGate)), quality: Math.min(...known.map((c) => c.ev.quality)),
-        poorPerKm: Math.max(...known.map((c) => c.ev.poorPerKnownKm || 0)), weight: Math.max(...known.map((c) => c.ev.qWeight)) };
+        poorPerKm: Math.max(...known.map((c) => c.ev.poorPerKnownKm || 0)), poorShare: Math.max(...known.map((c) => clamp01(c.ev.poorKm / c.ev.knownKm))), weight: Math.max(...known.map((c) => c.ev.qWeight)) };
       for (const c of cands) {
         if (!c.ev || !c.corridor || c.ev.knownKm >= c.ev.km - 0.05) continue;
         const k = c.ev.km > 0 ? c.ev.knownKm / c.ev.km : 0;
@@ -596,6 +606,7 @@
         c.ev.qualityFilled = (c.ev.quality != null ? c.ev.quality * k : 0) + pool.quality * (1 - k);
         c.ev.qWeightFilled = Math.max(c.ev.qWeight, pool.weight * (1 - k) + c.ev.qWeight);
         c.ev.poorFilled = Math.min(W.POOR_CAP, c.ev.poorCost + pool.poorPerKm * (c.ev.km - c.ev.knownKm));
+        c.ev.poorKmFilled = c.ev.poorKm + pool.poorShare * (c.ev.km - c.ev.knownKm);
       }
     }
     const timed = cands.filter((c) => Number.isFinite(c.timeS));
@@ -609,12 +620,16 @@
     const limit = quick.timeS * (1 + L.budget) + L.slackS;
     const valued = cands.map((c) => {
       const extraS = Number.isFinite(c.timeS) ? Math.max(0, c.timeS - quick.timeS) : Infinity;
-      const f = funOf(c), fun = f ? f.fun : 0, gain = f ? Math.min(60, Math.max(0, f.good - quickGood)) : 0;
       const ev = c.ev || null;
+      // a drive, not a stretch: corners count by the share of the route that isn't side streets or strip malls, so a plan
+      // that crawls 6 km of suburbs and shops to reach 3 km of back road doesn't outscore the highway (live, Northgate)
+      const share = ev && ev.poorKmFilled != null && ev.km > 0.5 ? 1 - clamp01(ev.poorKmFilled / ev.km)
+        : ev && ev.knownKm > 0.5 ? 1 - clamp01(ev.poorKm / ev.knownKm) : 1;
+      const f = funOf(c), fun = f ? f.fun * share : 0, gain = f ? Math.min(60, Math.max(0, f.good - quickGood)) * share : 0;
       const parts = {
         fun, gain: 0.5 * gain, time: -perMin * extraS / 60,
         quality: ev && ev.qualityFilled != null ? W.QUALITY * (ev.qualityFilled - 50) * ev.qWeightFilled : ev && ev.quality != null ? W.QUALITY * (ev.quality - 50) * ev.qWeight : 0,
-        poor: ev ? -(ev.poorFilled != null ? ev.poorFilled : ev.poorCost) : 0, scenery: ev ? ev.sceneryPts : 0, bonus: ev ? ev.bonusPts : 0, penalty: ev ? -ev.penaltyPts : 0,
+        poor: ev ? -(ev.poorFilled != null ? ev.poorFilled : ev.poorCost) : 0, business: ev ? -(ev.businessCost || 0) : 0, scenery: ev ? ev.sceneryPts : 0, bonus: ev ? ev.bonusPts : 0, penalty: ev ? -ev.penaltyPts : 0,
         glare: -glareCost(c), towns: -townCost(c), weather: -(c.weatherCost || 0), measured: c.adjust || 0, taste: c.tasteBonus != null ? c.tasteBonus : ev && ev.tastePts != null ? ev.tastePts : 0, prefer: c.preferBonus || 0,
         driver: ev ? ev.driverPts || 0 : 0,
       };
@@ -651,7 +666,8 @@
     // side streets and business districts the winner avoids (or the highway that avoids them)
     if (d('poor') > 0.5 && q.poorBy && b.poorBy) {
       const by = Object.entries(q.poorBy).map(([k, v]) => [k, v - (b.poorBy[k] || 0)]).sort((x, y) => y[1] - x[1])[0];
-      const km = Math.max(0, q.poorKm - b.poorKm);
+      // the kind it avoids most, in that kind's km (a route can carry more side street in all yet avoid the subdivision)
+      const km = by ? Math.max(0, by[1]) : Math.max(0, q.poorKm - b.poorKm);
       if (km >= 0.3) {
         const what = by && by[0] === 'business' ? 'strip malls' : by && by[0] === 'stops' ? 'stop-and-go streets' : 'side streets';
         const hwy = finite(bs.highwayKm) && finite(qs.highwayKm) && bs.highwayKm - qs.highwayKm >= 1;
@@ -666,7 +682,9 @@
       facts.push({ w: d('quality'), text: `${(bs.residentialKm || 0) < 1 && (bs.highwayKm || 0) < 0.5 * bs.km ? 'Back roads' : 'Open roads'} at ${speedText(bs.limitLoKph, bs.limitHiKph, metric)}` });
     }
     if (finite(bs.signals) && finite(qs.signals) && qs.signals - bs.signals >= 3) facts.push({ w: Math.max(0.6, d('quality') * 0.5), text: bs.signals === 0 ? 'no signals' : `${bs.signals} signal${bs.signals === 1 ? '' : 's'} (not ${qs.signals})` });
-    if (d('scenery') > 1) {
+    // never "through forest" on a plan that drives more strip mall than the quickest: scenery there isn't what you'd see
+    const shops = finite(b.businessKm) && b.businessKm - (q.businessKm || 0) >= 0.3;
+    if (d('scenery') > 1 && !shops) {
       const fk = (bs.forestKm || 0) - (qs.forestKm || 0), wk = (bs.waterKm || 0) - (qs.waterKm || 0), rk = (bs.ridgeKm || 0) - (qs.ridgeKm || 0);
       const top = [[fk, 'through forest'], [wk, 'along the water'], [rk, 'up on the ridges']].sort((x, y) => y[0] - x[0])[0];
       facts.push({ w: d('scenery'), text: top[0] >= 1 ? top[1] : 'nicer country' });
@@ -679,6 +697,9 @@
     if (d('towns') > 1 && finite(best.townKm) && finite(quick.townKm) && quick.townKm - best.townKm >= 0.5) facts.push({ w: d('towns'), text: `${mi(quick.townKm - best.townKm, metric)} less in towns` });
     if (d('weather') > 1) facts.push({ w: d('weather'), text: 'drier' });
     if (d('glare') > 1) facts.push({ w: d('glare'), text: 'less low sun' });
+    // nothing to name but the road itself is better on the whole (shallower side streets, a higher mean quality): say that,
+    // never the old line's raw corner count, which counts corners on side streets the engine gated to nothing
+    if (!facts.length && d('quality') + d('poor') > 1 && finite(b.quality) && finite(q.quality) && b.quality > q.quality) facts.push({ w: d('quality') + d('poor'), text: 'Better roads than the quickest' });
     if (!facts.length) return null;
     facts.sort((x, y) => y.w - x.w);
     const pick = facts.slice(0, 3).map((f, i) => (i ? f.text.charAt(0).toLowerCase() + f.text.slice(1) : f.text.charAt(0).toUpperCase() + f.text.slice(1)));
@@ -734,15 +755,21 @@
    * first; stages with no context keep their score. Mutates s.score (s.mapScore keeps the original) and sets s.ev.
    */
   function rescoreStages(stages, ctxById) {
+    const any = (stages || []).some((s) => ctxById && ctxById[s.__ctxId]);
     for (const s of stages || []) {
       const ctx = ctxById && ctxById[s.__ctxId];
-      if (!ctx || !s.__corridor) continue;
+      if (!s.__corridor) continue;
+      if (!ctx) {                                    // asked about but nothing came back while others' did: not trusted either
+        if (any) { if (s.mapScore == null) s.mapScore = s.score; s.score = s.mapScore * (0.4 + 0.6 * W.STAGE_UNKNOWN_GATE); s.ev = { gate: W.STAGE_UNKNOWN_GATE, scenery: null, quality: null }; }
+        continue;
+      }
       const smp = samples(s.__corridor, ctx);
       let q = 0, qn = 0, sc = 0, sn = 0;
       for (let i = 0; i < smp.n; i++) { if (Number.isFinite(smp.quality[i])) { q += gate(smp.quality[i]); qn++; } if (Number.isFinite(smp.scenery[i])) { sc += smp.scenery[i]; sn++; } }
-      if (!qn && !sn) continue;
       if (s.mapScore == null) s.mapScore = s.score;
-      const g = qn ? q / qn : 1, scen = sn ? sc / sn : 0.5, cov = sn / smp.n;
+      // a stage nothing vouches for isn't trusted: its unknown samples take STAGE_UNKNOWN_GATE, not a full gate (live, the
+      // router out of time: a stage on a strip-mall arterial kept its map score and was planned)
+      const g = (q + (smp.n - qn) * W.STAGE_UNKNOWN_GATE) / Math.max(1, smp.n), scen = sn ? sc / sn : 0.5, cov = sn / smp.n;
       s.score = s.mapScore * (0.4 + 0.6 * g) * (1 + 0.4 * (scen - 0.5) * cov);
       s.ev = { gate: g, scenery: sn ? scen : null, quality: qn ? smp.quality.reduce((a, v) => a + (Number.isFinite(v) ? v : 0), 0) / qn : null };
     }

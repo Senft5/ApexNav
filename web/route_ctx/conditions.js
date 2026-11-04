@@ -182,23 +182,32 @@
     return { want, have };
   }
 
-  async function fetchSeries(corridors, opts = {}) {
+  /** The cells' hourly series: { have (Map, filled as the batches land), done (Promise<[answered]>) }. */
+  function startSeries(corridors, opts = {}) {
     const { fetchFn, storage, now, signal } = U.env(opts);
     const { want, have } = plan(corridors, storage, now);
     const batches = [];
     for (let k = 0; k < want.length; k += MAX_PER_CALL) batches.push(want.slice(k, k + MAX_PER_CALL));
-    const results = await U.pool(batches.map((b) => async () => {
+    const done = U.pool(batches.map((b) => async () => {
       const json = await U.getJSON(fetchFn, url(b.map((key) => U.cellCentre(key, CELL))), { timeoutMs: BUDGET_MS - 500, signal });
       const list = json ? parse(json) : [];
       b.forEach((key, j) => { if (list[j]) { have.set(key, list[j]); U.cachePut(storage, 'om.' + key, list[j], now); } });
       return !!json;
     }), 2);
-    return { series: have, failed: results.some((r) => !r) };
+    return { have, done };
+  }
+  async function fetchSeries(corridors, opts = {}) {
+    const s = startSeries(corridors, opts), results = await s.done;
+    return { series: s.have, failed: results.some((r) => !r) };
   }
 
+  // the forecast on its own clock (live: Open-Meteo took 2-3.5 s or failed, and the whole context waited for it): the plan
+  // waits WAIT_MS at most and goes on with the cells cached and those landed; the rest land in the cache for the next plan
+  const WAIT_MS = 1500;
   async function fetch(corridors, opts = {}) {
-    const ctrl = U.linked(opts.signal);
-    const series = await U.within(fetchSeries(corridors, { ...opts, signal: ctrl ? ctrl.signal : opts.signal }), opts.budgetMs || BUDGET_MS, { series: new Map(), failed: true }, ctrl);
+    const s = startSeries(corridors, { ...opts, signal: undefined });
+    const wait = Math.min(opts.budgetMs || BUDGET_MS, finite(opts.waitMs) ? opts.waitMs : WAIT_MS);
+    const series = (await U.within(s.done.then((r) => ({ series: s.have, failed: r.some((x) => !x) })), wait, null)) || { series: new Map(s.have), failed: true };
     const out = {};
     for (const c of corridors) out[c.id] = evaluate(c, series.series, opts);
     return out;

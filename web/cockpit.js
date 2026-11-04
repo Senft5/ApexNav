@@ -2279,17 +2279,18 @@
     // exactly the old ranking (FunRoute.rank), so Where to? never waits on a slow source.
     // 4 s: the OSM, crowd, driver and car providers need more than the router does; Where to? shows the quickest at 1.5 s
     // (EARLY_MS) and never waits on this. What's late lands in each provider's cache for the next plan.
-    const CTX_BUDGET_MS = 4000, STAGE_CTX_MS = 1200;
+    // PLAN_CTX_MS: the stage plans' own run, once they're routed: what's late is unknown (and can't win)
+    const CTX_BUDGET_MS = 4000, STAGE_CTX_MS = 1200, PLAN_CTX_MS = 2500;
     // The driver's For this drive choices (route_ctx/driver.js: passenger, lit, cyclists, tunnels) join the road prefs.
     const engineOpts = (level) => ({ level, prefs: { ...roadPrefs, ...(window.ApexRouteDriver ? ApexRouteDriver.load(localStorage) : {}) }, car: routingCar(),
       score: (c, scaleAt) => funOf(c.t, (c.route && c.route.turns) || [], scaleAt) });
     function rankPool(pool, level) {
       return window.ApexRouteEngine ? ApexRouteEngine.rank(pool, engineOpts(level)) : FunRoute.rank(pool, level);
     }
-    async function contextOn(cands, budgetMs = CTX_BUDGET_MS) {
+    async function contextOn(cands, budgetMs = CTX_BUDGET_MS, prefix = 'cand') {
       if (!window.ApexRouteEngine || !window.ApexRouteCtx || !cands.length || (window.ApexFlags && !ApexFlags.on('route_engine'))) return null;
       const departAt = Date.now(), car = routingCar(), pace = state.mode === 'live' && etaPace.factors ? etaPace.factors.open : null;
-      const list = cands.filter((c) => (c.corridor = ApexRouteEngine.corridorFor(c, `cand${cands.indexOf(c)}`, { departAt, car, pace })));
+      const list = cands.filter((c) => (c.corridor = ApexRouteEngine.corridorFor(c, `${prefix}${cands.indexOf(c)}`, { departAt, car, pace })));
       for (const c of list) if (c.match) c.corridor.match = c.match;     // a loop's spur-cut line isn't the router's own: snap it
       try {
         const res = await ApexRouteCtx.run(list.map((c) => c.corridor), { budgetMs, settings: routeCtxSettings(), providerOpts: routeCtxOpts() });
@@ -3049,7 +3050,16 @@
     let funLevel = 'fun';
     try { funLevel = FunRoute.LEVELS[localStorage.getItem(FUN_LEVEL)] ? localStorage.getItem(FUN_LEVEL) : 'fun'; } catch (_) { /* storage off */ }
     async function funRoute(from, to, id, name, request, ui, opts = {}) {
-      const level = funLevel;
+      const level = funLevel, planT0 = Date.now();      // the early quickest counts from here, not from the router's answer
+      // The stages round the whole trip (the map tiles' roads, scored, then the network step) don't need the router's answer:
+      // they're found while it routes (live: 2 s of tile scoring after the routes came back)
+      const stagesFor = async (a, b) => {
+        const area = FunRoute.searchArea(a, b);
+        const hls = state.hlOn ? await allHighlights(area.center) : [];
+        return stagesWithContext(await measuredStages(await ApexStages.discover(area.center, area.radiusKm, null, state.hlOn ? { highlights: hls, strength: state.hlStrength } : {}), area.center, area.radiusKm));
+      };
+      const crowKm = FunRoute.kmBetween(from, to);
+      const stagesAhead = level !== 'quick' && crowKm >= 3 && crowKm <= 48 && window.ApexStages ? stagesFor(from, to).catch(() => null) : null;
       let direct;
       // The router's costing keeps off highways (use_highways 0.15), which is what sent routes through subdivisions and
       // business districts; so the highway-friendly quickest competes too (route_engine.js highwayCosting), unless avoided.
@@ -3069,7 +3079,10 @@
         early.fired = true;
         if (!quickNow.t) { quickNow.t = FunRoute.geometry(quickNow.route.coords, Core); quickNow.fun = funOf(quickNow.t, quickNow.route.turns); }
         early.shown = useOption({ id, name, request, level, quickest: quickNow, list: [{ ...quickNow, extraS: 0 }] }, 0).catch(() => null);
-      }, EARLY_MS) : null;
+      }, Math.max(0, EARLY_MS - (Date.now() - planT0))) : null;
+      // the router's own routes get their context now, while the stages are found and timed (live: the context after the
+      // plans added 3 s); the stage plans get theirs once routed
+      const routerCands = cands.slice(), routerCtx = contextOn(routerCands, CTX_BUDGET_MS, 'route');
       // The baseline is the quickest route that keeps to the avoid options (when one does), as the ranking's is.
       const allowed = FunRoute.keepAvoiding(cands, avoid);
       const quickS = Math.min(...allowed.map(c => c.timeS).filter(Number.isFinite));
@@ -3080,9 +3093,7 @@
           const stretch = async (a, b, stretchS, label, frac, slack) => {
             ui.step(label, frac);
             try {
-              const area = FunRoute.searchArea(a, b);
-              const hls = state.hlOn ? await allHighlights(area.center) : [];
-              const stages = await stagesWithContext(await measuredStages(await ApexStages.discover(area.center, area.radiusKm, null, state.hlOn ? { highlights: hls, strength: state.hlStrength } : {}), area.center, area.radiusKm));
+              const stages = (a === from && b === to && stagesAhead && await stagesAhead) || await stagesFor(a, b);
               const list = FunRoute.shortlist(a, b, stages, FunRoute.LEVELS[level].budget, 4, slack);
               if (!list.length) return [];
               try { await RouteLoading.optional(ApexStages.addElevations(list)); } catch (_) { /* no DEM: which way round each stage (R-11) stays the nearer end */ }
@@ -3135,10 +3146,15 @@
         c.glare = FunRoute.glare(c.t, c.timeS, leaving);                    // minutes driving into a low sun, if you leave now
         await RouteLoading.yieldToUI();
       }
-      const ctx = contextOn(pool);                                         // the route context, alongside the towns lookup
+      const ctx = (async () => {                                           // the route context, alongside the towns lookup
+        const rest = pool.filter((c) => !routerCands.includes(c));
+        const [a, b] = await Promise.all([routerCtx, rest.length ? contextOn(rest, PLAN_CTX_MS, 'plan') : null]);
+        return b || a;
+      })();
+      const forecasts = weatherFetch(pool);                                // and the forecasts, costed once the context is in
       await townsOn(pool.map(c => c.t), pool);
       await ctx;
-      await weatherOn(pool, level);
+      await weatherOn(pool, level, forecasts);
       tasteOn(pool);
       await applyMeasured(rankPool(pool, level).slice(0, 3).map(r => pool.find(c => c.t === r.t)), ui);   // the top few only
       await preferOn(pool, level);
@@ -3165,7 +3181,9 @@
         parts: c.parts || null, quality: c.ev ? c.ev.quality : null, confidence: c.ev ? c.ev.confidence : null, poorKm: c.ev ? c.ev.poorKm : null })));
       return true;
     }
-    const EARLY_MS = 1500;
+    // from the plan's start: the context alone takes 1.5-3 s, so the quickest goes up as soon as the router answers (live:
+    // on screen by about 1.5 s with its track built) and the ranking replaces it
+    const EARLY_MS = 0;
     // Router costing for the legs between good roads: highways welcome unless avoided (route_engine.js connectorCosting).
     const connectorCosting = () => (window.ApexRouteEngine ? ApexRouteEngine.connectorCosting(avoid, routingCar()) : null);
     async function useOption(o, i) {
@@ -6120,20 +6138,37 @@
     }
     // Weather in the ranking (route_weather.js cost, IDEAS R-21): the top few candidates' forecasts for when you'd drive
     // them; ice, snow, storms, rain and fog cost fun points, so a drier way can win. Offline or a failed forecast: no cost.
-    async function weatherOn(pool, level) {
+    // Each candidate's forecast along its line (Open-Meteo), asked for alongside the route context so the plan doesn't wait
+    // for it afterwards (live: 2-6 s on top of the context), WEATHER_MS at most. Map of candidate -> Promise<{ json, pts }|null>.
+    const WEATHER_MS = 2500, WEATHER_GRACE_MS = 400;
+    function forecastOf(c) {
+      const pts = ApexRouteWeather.samplePoints(c.t, Date.now(), Number.isFinite(c.timeS) ? (m) => c.timeS * m / Math.max(1, c.t.dist[c.t.dist.length - 1]) : null);
+      return (async () => {
+        const ac = new AbortController(), timer = setTimeout(() => ac.abort(), WEATHER_MS);
+        try { const r = await fetch(ApexRouteWeather.url(pts), { signal: ac.signal }); return r.ok ? { json: await r.json(), pts } : null; }
+        catch (_) { return null; } finally { clearTimeout(timer); }
+      })();
+    }
+    function weatherFetch(pool) {
+      const out = new Map();
+      if (!window.ApexRouteWeather || pool.length < 2) return out;
+      for (const c of pool.slice(0, 10)) out.set(c, forecastOf(c));
+      return out;
+    }
+    async function weatherOn(pool, level, forecasts) {
       if (!window.ApexRouteWeather || pool.length < 2) return;
       const top = rankPool(pool, level).slice(0, 4).map(r => pool.find(c => c.t === r.t)).filter(Boolean);
-      const now = Date.now();
+      const asked = forecasts || new Map();
+      // the plan doesn't wait on a slow forecast: what isn't in WEATHER_GRACE_MS after the context costs nothing for anyone
+      const grace = new Promise((r) => setTimeout(() => r(null), WEATHER_GRACE_MS));
       const costs = await Promise.all(top.map(async (c) => {
-        const pts = ApexRouteWeather.samplePoints(c.t, now, Number.isFinite(c.timeS) ? (m) => c.timeS * m / Math.max(1, c.t.dist[c.t.dist.length - 1]) : null);
+        const f = await Promise.race([asked.get(c) || forecastOf(c), grace]);   // a contender past the first ten: asked now
+        if (!f) return null;
         try {
-          const ac = new AbortController(), timer = setTimeout(() => ac.abort(), 6000);
-          const r = await fetch(ApexRouteWeather.url(pts), { signal: ac.signal });
-          clearTimeout(timer);
           // fog the route engine already costs per km (conditions' fog_risk / visibility) isn't costed again here
           const fogKnown = !!(c.ctx && c.ctx.channels && ['fog_risk', 'visibility_m', 'fog_vis_m'].some((k) => c.ctx.channels[k] && Array.from(c.ctx.channels[k]).some(Number.isFinite)));
           const iceKnown = !!(c.ctx && (c.ctx.spans || []).some((x) => x.kind === 'ice'));   // conditions.js frost spans, costed per km
-          return r.ok ? ApexRouteWeather.cost(ApexRouteWeather.atArrival(await r.json(), pts), [...(fogKnown ? ['fog'] : []), ...(iceKnown ? ['ice'] : [])]) : null;
+          return ApexRouteWeather.cost(ApexRouteWeather.atArrival(f.json, f.pts), [...(fogKnown ? ['fog'] : []), ...(iceKnown ? ['ice'] : [])]);
         } catch (_) { return null; }
       }));
       // only when every one came back, and only the difference: rain over the whole area changes nothing
