@@ -1,0 +1,287 @@
+"""The route engine's model (web/route_engine.js) on synthetic roads with stub channels for every catalogue item:
+no context = today's ranking exactly; unknown never helps or hurts; monotonic in speed limit, businesses, signals and the
+rest; time-dependent spans; hard constraints; the why line. Real roads are in test_route_engine_calibration.py."""
+import json
+import os
+import shutil
+import subprocess
+
+import pytest
+
+NODE = shutil.which("node")
+pytestmark = pytest.mark.skipif(NODE is None, reason="node not installed")
+
+RUNNER = r"""
+const root = process.argv[1];
+const Core = require(root + '/web/apex_core.js'); globalThis.ApexCore = Core;
+globalThis.ApexSun = require(root + '/web/sun.js');
+const F = require(root + '/web/fun_route.js'); globalThis.ApexFunRoute = F;
+const C = require(root + '/web/route_ctx/registry.js');
+const E = require(root + '/web/route_engine.js');
+const lat0 = 39.2, lon0 = -84.6, mLat = 1 / 110540, mLon = 1 / (111320 * Math.cos(lat0 * Math.PI / 180));
+const ll = (pts) => pts.map(([x, y]) => [lon0 + x * mLon, lat0 + y * mLat]);
+const straight = (len) => ll(Array.from({ length: len / 10 + 1 }, (_, i) => [i * 10, 0]));
+const wiggly = (len) => ll(Array.from({ length: len / 5 + 1 }, (_, i) => [i * 5, 60 * Math.sin(2 * Math.PI * i * 5 / 400)]));
+const DEPART = Date.parse('2026-11-04T12:00:00-05:00');          // a Wednesday noon
+let seq = 0;
+/** A candidate on `coords` taking timeS, with stub channels { name: value | fn(i, m) } and spans/points. */
+function cand(coords, timeS, chans = {}, extra = {}) {
+  const route = { coords, turns: [], times: [], names: new Map(), timeS };
+  const c = { id: 'c' + (seq++), route, timeS, ...extra.c };
+  c.t = F.geometry(coords, Core); c.turnsM = []; c.fun = F.score(c.t, []);
+  c.corridor = E.corridorFor(c, c.id, { departAt: extra.departAt || DEPART, car: extra.car || null });
+  if (chans === null) return c;
+  const n = c.corridor.distM.length, ch = {};
+  for (const [k, v] of Object.entries(chans)) ch[k] = Float32Array.from({ length: n }, (_, i) => (typeof v === 'function' ? v(i, c.corridor.distM[i]) : v));
+  c.ctx = { channels: ch, spans: extra.spans || [], points: extra.points || [] };
+  return c;
+}
+const rank = (cs, o = {}) => E.rank(cs, { level: 'fun', ...o, fresh: true });
+const value = (c, others = [], o = {}) => { const r = rank([c, ...others], o).find((x) => x.id === c.id); return r ? r.value : null; };
+const out = {};
+// 1. no context: exactly ApexFunRoute.rank
+{
+  const fun = (f, g) => ({ fun: f, good: g });
+  let same = true;
+  for (let k = 0; k < 200; k++) {
+    const cs = Array.from({ length: 4 }, (_, i) => ({ id: 'x' + i, timeS: 1500 + Math.round(Math.random() * 1500), fun: fun(Math.round(Math.random() * 100), Math.round(Math.random() * 80)),
+      adjust: Math.random() < 0.3 ? -5 : 0, glare: { minutes: Math.random() * 12 }, townKm: Math.random() < 0.5 ? Math.random() * 6 : null, weatherCost: Math.random() < 0.3 ? 4 : 0, tasteBonus: Math.random(), preferBonus: Math.random() }));
+    for (const lv of ['quick', 'fun', 'max']) {
+      const a = F.rank(cs, lv), b = E.rank(cs, { level: lv });
+      if (a.map((c) => c.id).join() !== b.map((c) => c.id).join() || a.some((c, i) => Math.abs(c.value - b[i].value) > 1e-9)) same = false;
+    }
+  }
+  out.noContextSame = same;
+}
+// a back road (wiggly, rural, 55 mph) and the same road as a subdivision (25 mph residential, driveways)
+const back = { speed_limit_kph: 89, road_class: 4, road_use: 0, density: 1, signals_per_km: 0, access_per_km: 4, surface: 0, sidewalk: 0 };
+const subdiv = { speed_limit_est_kph: 40, road_class: 6, road_use: 0, density: 7, signals_per_km: 0, access_per_km: 30, surface: 0, sidewalk: 1 };
+const hwy = { speed_limit_kph: 105, road_class: 0, road_use: 0, density: 4, signals_per_km: 0, access_per_km: 0, surface: 0, lanes: 2 };
+const arterial = { speed_limit_kph: 56, road_class: 2, road_use: 0, density: 9, signals_per_km: 3, access_per_km: 30, surface: 0, sidewalk: 1, business_per_km: 15, lanes: 2 };
+{
+  const s = (ch) => { const c = cand(wiggly(8000), 900, ch); E.evaluate(c, {}); return c.ev; };
+  const a = s(back), b = s(subdiv), h = s(hwy), m = s(arterial);
+  out.quality = { back: a.quality, subdiv: b.quality, hwy: h.quality, arterial: m.quality };
+  out.gated = { back: a.funGated.good, subdiv: b.funGated.good, raw: cand(wiggly(8000), 900, null).fun.good };
+  out.poorKm = { back: a.poorKm, subdiv: +b.poorKm.toFixed(2), arterial: +m.poorKm.toFixed(2), hwy: h.poorKm };
+}
+// 2. the highway beats a neighbourhood cut-through a minute quicker; a detour must buy real quality
+{
+  const h = cand(straight(10000), 600, hwy), n = cand(wiggly(8000), 540, subdiv);
+  out.hwyVsHood = ['quick', 'fun', 'max'].map((lv) => rank([h, n], { level: lv })[0].id === h.id);
+  const h2 = cand(straight(10000), 600, hwy), b = cand(wiggly(9000), 780, back);
+  out.backRoad = ['quick', 'fun', 'max'].map((lv) => rank([h2, b], { level: lv })[0].id === b.id);
+  const h3 = cand(straight(10000), 600, hwy), a = cand(straight(8000), 570, arterial);
+  out.hwyVsArterial = ['quick', 'fun', 'max'].map((lv) => rank([h3, a], { level: lv })[0].id === h3.id);
+}
+// 3. unknown never helps or hurts: an all-NaN channel, or a channel missing, changes nothing
+{
+  let ok = true;
+  const names = [...E.QUALITY, ...E.SCENERY, ...E.PER_KM].map((t) => t.ch);
+  for (const nm of names) {
+    const base = cand(wiggly(6000), 700, back), other = cand(straight(6000), 600, hwy);
+    const v0 = value(base, [other]);
+    const withNaN = cand(wiggly(6000), 700, { ...back, [nm]: NaN }), other2 = cand(straight(6000), 600, hwy);
+    if (Math.abs(value(withNaN, [other2]) - v0) > 1e-6 && !(nm in back)) { ok = false; out.unknownBad = nm; }
+  }
+  out.unknownNeutral = ok;
+  // half known: the known half counts, the unknown half neither helps nor hurts (confidence drops)
+  const full = cand(wiggly(6000), 700, back), half = cand(wiggly(6000), 700, Object.fromEntries(Object.entries(back).map(([k, v]) => [k, (i) => (i % 2 ? v : NaN)])));
+  E.evaluate(full, {}); E.evaluate(half, {});
+  out.halfConf = [+full.ev.confidence.toFixed(3), +half.ev.confidence.toFixed(3)];
+  out.halfQuality = [full.ev.quality, half.ev.quality];
+}
+// 4. monotonic: every quality term's goodness never moves the wrong way over its range, and the route value follows
+{
+  const dir = { speed_limit_kph: 1, speed_limit_est_kph: 1, speed_kph: 1, mapillary_limit_kph: 1, density: -1, signals_per_km: -1, stops_per_km: -1, crossings_per_km: -1, access_per_km: -1,
+    calming_per_km: -1, lanes: -1, business_per_km: -1, landuse_urban: -1, landuse_residential: -1, buildings_per_ha: -1, night_light: -1, impervious_pct: -1, address_per_km: -1,
+    housing_per_km2: -1, noise_db: -1, aadt: -1, traffic_ratio: 1, iri: -1, crowd_rough_g: -1, crowd_flow: 1, hgv_share: -1 };
+  const bad = [];
+  for (const t of E.QUALITY) {
+    if (!(t.ch in dir)) continue;
+    let prev = null;
+    for (let k = 0; k <= 200; k++) {
+      const v = t.ch.includes('kph') ? 10 + k * 0.6 : t.ch === 'aadt' ? k * 300 : t.ch === 'noise_db' ? 30 + k * 0.25 : t.ch.endsWith('_g') ? k * 0.003 : t.ch === 'iri' ? k * 1.5 : ['landuse_urban', 'landuse_residential', 'traffic_ratio', 'crowd_flow', 'hgv_share'].includes(t.ch) ? k / 200 : k * 0.3;
+      const g = t.g(v);
+      if (prev != null && dir[t.ch] * (g - prev) < -1e-9) { bad.push(t.ch); break; }
+      prev = g;
+    }
+  }
+  out.monotoneTerms = bad;
+  const vAt = (ch, v) => { const c = cand(wiggly(6000), 700, { ...back, [ch]: v }), o = cand(straight(6000), 650, hwy); return value(c, [o]); };
+  const series = (ch, vs) => vs.map((v) => vAt(ch, v));
+  const nondec = (xs) => xs.every((x, i) => i === 0 || x >= xs[i - 1] - 1e-9), noninc = (xs) => xs.every((x, i) => i === 0 || x <= xs[i - 1] + 1e-9);
+  out.monoLimit = nondec(series('speed_limit_kph', [24, 40, 56, 72, 89, 105, 120]));
+  out.monoBiz = noninc(series('business_per_km', [0, 1, 3, 6, 12, 25]));
+  out.monoSignals = noninc(series('signals_per_km', [0, 0.5, 1, 2, 4]));
+  out.monoAccess = noninc(series('access_per_km', [0, 5, 15, 30, 60]));
+  out.monoDensity = noninc(series('density', [0, 2, 5, 8, 12, 15]));
+  out.limitMatters = vAt('speed_limit_kph', 89) - vAt('speed_limit_kph', 40);
+  out.bizMatters = vAt('business_per_km', 0) - vAt('business_per_km', 20);
+}
+// 5. every catalogue channel changes the ranking the right way: the same road, "good" vs "bad" value of one channel
+{
+  const goodBad = { forest_share: [1, 0], canopy_pct: [80, 0], water_near: [1, 0], creek_follow: [1, 0], open_country: [1, 0], protected: [1, 0], photo_per_km: [10, 0],
+    tpi_m: [50, 0], relief_m: [200, 5], foliage: [1, 0], old_road: [1, 0], loved: [1, 0], guardrail: [1, 0], curve_signs_per_km: [4, 0], crowd_camber_deg: [4, -3],
+    divided: [0, 1], surface: [0, 5], sidewalk: [0, 1], truck_route: [0, 1], access_destination: [0, 1], road_class: [4, 6], road_use: [0, 4] };
+  const wrong = [];
+  const extraCh = { canopy_pct: 80 };                 // foliage counts where there are trees
+  for (const t of [...E.QUALITY, ...E.SCENERY]) {
+    let pair = goodBad[t.ch];
+    if (!pair) { const vs = t.ch.includes('kph') ? [100, 30] : t.ch === 'aadt' ? [300, 30000] : t.ch === 'noise_db' ? [45, 75] : t.ch.endsWith('_g') ? [0.03, 0.4] : t.ch === 'iri' ? [50, 220] : ['landuse_urban', 'landuse_residential', 'hgv_share'].includes(t.ch) ? [0, 1] : ['traffic_ratio', 'crowd_flow'].includes(t.ch) ? [1, 0] : [0, 30]; pair = vs; }
+    const base = { ...back }; delete base[t.ch];
+    if (t.unless) for (const u of t.unless) delete base[u];
+    const g = cand(wiggly(6000), 700, { ...base, ...(t.ch === 'foliage' ? extraCh : {}), [t.ch]: pair[0] }), b = cand(wiggly(6000), 700, { ...base, ...(t.ch === 'foliage' ? extraCh : {}), [t.ch]: pair[1] });
+    if (!(value(g, [b]) > value(b, [g]))) wrong.push(t.ch);
+  }
+  for (const t of E.PER_KM) {
+    const v = { deer_risk: 1, fog_vis_m: 100, crosswind_ms: 20, road_temp_c: -5, crash_rate: 5, cyclist_route: 1, buggy: 1, unlit: 1, snow_cover: 1 }[t.ch];
+    const when = t.ch === 'deer_risk' ? Date.parse('2026-11-04T17:20:00-05:00') : t.ch === 'cyclist_route' ? Date.parse('2026-11-07T08:30:00-05:00') : t.ch === 'unlit' ? Date.parse('2026-11-04T21:00:00-05:00') : DEPART;
+    const exposedCh = t.ch === 'crosswind_ms' ? { tpi_m: 40 } : {};
+    const prefs = t.pref ? { [t.pref]: true } : {};
+    const clean = cand(wiggly(6000), 700, { ...back, ...exposedCh }, { departAt: when }), dirty = cand(wiggly(6000), 700, { ...back, ...exposedCh, [t.ch]: v }, { departAt: when });
+    if (!(value(clean, [dirty], { prefs }) > value(dirty, [clean], { prefs }))) wrong.push(t.ch);
+  }
+  out.channelsWrong = wrong;
+  out.channelCount = E.QUALITY.length + E.SCENERY.length + E.PER_KM.length;
+}
+// 6. spans and points: time-dependent, bonuses, hard constraints
+{
+  const wed8 = Date.parse('2026-11-04T07:50:00-05:00'), sun8 = Date.parse('2026-11-08T07:50:00-05:00');
+  const school = [{ fromM: 1000, toM: 1400, kind: 'school' }];
+  const pen = (when, spans, points = [], prefs = {}) => { const c = cand(wiggly(6000), 700, back, { departAt: when, spans, points }); E.evaluate(c, { prefs }); return c.ev.penaltyPts; };
+  out.schoolWeekday = pen(wed8, school); out.schoolSunday = pen(sun8, school);
+  out.churchSunday = pen(Date.parse('2026-11-08T09:30:00-05:00'), [{ fromM: 500, toM: 600, kind: 'church' }]);
+  out.churchWednesday = pen(wed8 + 2 * 3600e3, [{ fromM: 500, toM: 600, kind: 'church' }]);
+  const ev = [{ fromM: 0, toM: 2000, kind: 'event', when: { windows: [[DEPART - 3600e3, DEPART + 3600e3]] } }];
+  out.eventOn = pen(DEPART, ev); out.eventOff = pen(DEPART + 6 * 3600e3, ev);
+  out.works = pen(DEPART, [{ fromM: 100, toM: 600, kind: 'works', value: 5 }]);
+  out.points = pen(DEPART, [], [{ atM: 900, kind: 'level_crossing' }, { atM: 1900, kind: 'one_lane_bridge' }, { atM: 2900, kind: 'animal_crossing' }]);
+  const bonus = (spans, points = [], prefs = {}) => { const c = cand(wiggly(6000), 700, back, { spans, points }); E.evaluate(c, { prefs }); return c.ev.bonusPts; };
+  out.byway = bonus([{ fromM: 0, toM: 5000, kind: 'byway' }]);
+  out.views = bonus([], [1, 2, 3, 4, 5, 6].map((k) => ({ atM: k * 500, kind: 'viewpoint' })));
+  out.tunnelNoPref = bonus([], [{ atM: 1000, kind: 'tunnel' }]); out.tunnelPref = bonus([], [{ atM: 1000, kind: 'tunnel' }], { tunnels: true });
+  // a closure when you'd get there drops the route; at another time it doesn't; all closed: they stay, flagged
+  const closed = cand(wiggly(6000), 600, back, { spans: [{ fromM: 2000, toM: 2100, kind: 'closure', when: { weekly: [{ from: '11:00', to: '13:00' }] } }] });
+  const open = cand(wiggly(6000), 900, back);
+  out.closedDropped = rank([closed, open]).map((c) => c.id).includes(closed.id) === false;
+  const closedLate = cand(wiggly(6000), 600, back, { departAt: DEPART + 4 * 3600e3, spans: [{ fromM: 2000, toM: 2100, kind: 'closure', when: { weekly: [{ from: '11:00', to: '13:00' }] } }] });
+  out.closedLaterKept = rank([closedLate, cand(wiggly(6000), 900, back)])[0].id === closedLate.id;
+  const only = rank([cand(wiggly(6000), 600, back, { spans: [{ fromM: 0, toM: 10, kind: 'no_access' }] })]);
+  out.allInfeasibleKept = only.length === 1 && only[0].infeasible;
+  // the car: a 2.1 m car on a 2.0 m road; a low car on gravel; 300 km range with no fuel on a 400 km route
+  const fit = (chans, car) => { const c = cand(wiggly(6000), 700, { ...back, ...chans }, { car }); E.evaluate(c, {}); return c.ev.hard.map((h) => h.kind); };
+  out.carWidth = fit({ maxwidth_m: 2.0 }, { width_cm: 210 }); out.carFits = fit({ maxwidth_m: 2.5 }, { width_cm: 210 });
+  out.lowCarGravel = fit({ surface: 5 }, { clearance: 'low' });
+  const fuelRoute = cand(straight(40000), 2400, back, { car: { range_km: 30 }, points: [{ atM: 5000, kind: 'fuel' }] });
+  E.evaluate(fuelRoute, {}); out.fuel = fuelRoute.ev.hard.map((h) => h.kind);
+  const fuelOk = cand(straight(40000), 2400, back, { car: { range_km: 30 }, points: [{ atM: 15000, kind: 'fuel' }, { atM: 28000, kind: 'fuel' }] });
+  E.evaluate(fuelOk, {}); out.fuelOk = fuelOk.ev.hard.length;
+}
+// 7. active(): windows, weekly (wrapping midnight), months
+out.active = [E.active(null, DEPART), E.active({ weekly: [{ from: '19:00', to: '07:00' }] }, Date.parse('2026-11-04T23:30:00-05:00')),
+  E.active({ weekly: [{ from: '19:00', to: '07:00' }] }, DEPART), E.active({ months: [6, 7] }, DEPART), E.active({ windows: [[0, 1]] }, DEPART)];
+// 8. the why line
+{
+  const q = cand(straight(10000), 600, arterial), w = cand(straight(10200), 640, hwy);
+  const r = rank([q, w], { level: 'quick' }), best = r[0], quick = r.find((c) => c.id === q.id);
+  out.whyHighway = E.why(best, quick).text;
+  const q2 = cand(straight(10000), 600, hwy), b2 = cand(wiggly(9000), 780, { ...back, forest_share: 1 });
+  const r2 = rank([q2, b2], { level: 'fun' });
+  out.whyBack = E.why(r2[0], r2.find((c) => c.id === q2.id), { metric: false }).text;
+  out.whyNone = E.why(r2[0], r2[0]);
+}
+// 9. stages: a curvy subdivision street falls behind a straighter country road once the network knows
+{
+  const st = (name, coords, score) => ({ name, score, km: 2, lat: coords.map((p) => p[1]), lon: coords.map((p) => p[0]) });
+  const s1 = st('subdiv', wiggly(2000), 30), s2 = st('country', wiggly(2000).map(([x, y]) => [x, y + 0.01]), 20);
+  const cs = E.stageCorridors([s1, s2], 8);
+  const ctx = {}; for (const c of cs) { const n = c.distM.length, ch = c.id === s1.__ctxId ? subdiv : back; ctx[c.id] = { channels: Object.fromEntries(Object.entries(ch).map(([k, v]) => [k, new Float32Array(n).fill(v)])), spans: [], points: [] }; }
+  out.stages = E.rescoreStages([s1, s2], ctx).map((s) => s.name);
+  out.stageKept = s1.mapScore;
+}
+// 10. connector costing: highways welcome between good roads unless avoided
+out.costing = [E.connectorCosting(F.AVOID_DEFAULT, null).costing_options.auto.use_highways, E.connectorCosting({ ...F.AVOID_DEFAULT, highways: true }, null).costing_options.auto.use_highways,
+  E.highwayCosting(F.AVOID_DEFAULT, null).costing_options.auto.use_highways, E.highwayCosting({ ...F.AVOID_DEFAULT, highways: true }, null), E.connectorCosting({ ...F.AVOID_DEFAULT, tolls: true }, { width_cm: 200 }).costing_options.auto];
+// 11. placeTimes: the router's maneuver clock lands on its own line
+{
+  const coords = straight(2000);
+  out.marks = E.placeTimes(coords, [[...coords[0], 0], [...coords[100], 60], [...coords[200], 130]]).map(([m, s]) => [Math.round(m), s]);
+}
+process.stdout.write(JSON.stringify(out));
+"""
+
+
+@pytest.fixture(scope="module")
+def r():
+    # the phone's local time decides school hours, Sunday mornings and dusk: the fixtures are Cincinnati's
+    res = subprocess.run([NODE, "-e", RUNNER, os.path.abspath(".")], capture_output=True, text=True, timeout=120, env={**os.environ, "TZ": "America/New_York"})
+    assert res.returncode == 0, res.stderr
+    return json.loads(res.stdout)
+
+
+def test_no_context_is_todays_ranking_exactly(r):
+    assert r["noContextSame"], "providers all down or slow: the ranking is ApexFunRoute.rank, value for value"
+
+
+def test_quality_separates_the_roads_a_driver_would(r):
+    q = r["quality"]
+    assert q["back"] > 75 and q["hwy"] > 55, q
+    assert q["subdiv"] < 25 and q["arterial"] < 25, q
+    assert r["gated"]["subdiv"] == 0 and r["gated"]["back"] == r["gated"]["raw"] > 20, "corners on a side street count nothing"
+    assert r["poorKm"]["back"] == 0 and r["poorKm"]["hwy"] == 0 and r["poorKm"]["subdiv"] > 5 and r["poorKm"]["arterial"] > 5
+
+
+def test_the_highway_beats_side_streets_and_detours_buy_quality(r):
+    assert r["hwyVsHood"] == [True, True, True], "a minute quicker through a subdivision: the highway still wins, at every level"
+    assert r["hwyVsArterial"] == [True, True, True], "the highway beats a strip-mall arterial"
+    assert r["backRoad"] == [False, True, True], "+3 min for a real back road: Fun and Max take it, Quick doesn't"
+
+
+def test_unknown_never_helps_or_hurts(r):
+    assert r["unknownNeutral"], r.get("unknownBad")
+    full, half = r["halfConf"]
+    assert half < full, "half known: less confident"
+    assert abs(r["halfQuality"][0] - r["halfQuality"][1]) < 0.5, "and the same quality from what is known"
+
+
+def test_monotonic(r):
+    assert r["monotoneTerms"] == []
+    assert r["monoLimit"] and r["monoBiz"] and r["monoSignals"] and r["monoAccess"] and r["monoDensity"]
+    assert r["limitMatters"] > 5 and r["bizMatters"] > 3, (r["limitMatters"], r["bizMatters"])
+
+
+def test_every_catalogue_channel_moves_the_ranking_the_right_way(r):
+    assert r["channelsWrong"] == [], r["channelsWrong"]
+    assert r["channelCount"] >= 55
+
+
+def test_time_dependent_spans_and_points(r):
+    assert r["schoolWeekday"] > 2 and r["schoolSunday"] == 0
+    assert r["churchSunday"] > 0 and r["churchWednesday"] == 0
+    assert r["eventOn"] > 5 and r["eventOff"] == 0
+    assert r["works"] >= 9, "works: 4 points and the delay at the level's minute"
+    assert abs(r["points"] - 1.5) < 0.01, "a level crossing, a one-lane bridge and a deer crossing at noon"
+    assert r["byway"] == 2 and r["views"] == 6, "a 5 km byway; six viewpoints capped at 6"
+    assert r["tunnelNoPref"] == 0 and r["tunnelPref"] == 1.5
+
+
+def test_hard_constraints(r):
+    assert r["closedDropped"] and r["closedLaterKept"] and r["allInfeasibleKept"]
+    assert r["carWidth"] == ["car_fit"] and r["carFits"] == [] and r["lowCarGravel"] == ["car_fit"]
+    assert r["fuel"] == ["fuel"] and r["fuelOk"] == 0
+    assert r["active"] == [True, True, False, False, False]
+
+
+def test_why_line_names_what_separated_them(r):
+    assert r["whyHighway"].startswith("Highway instead of") and "strip malls" in r["whyHighway"] and r["whyHighway"].endswith("+1 min"), r["whyHighway"]
+    assert "more good corners" in r["whyBack"] and "through forest" in r["whyBack"], r["whyBack"]
+    assert r["whyNone"] is None
+
+
+def test_the_road_network_and_connectors(r):
+    assert r["stages"] == ["country", "subdiv"] and r["stageKept"] == 30, "the twistier subdivision street falls behind"
+    hw, avoided, quickest, none, other = r["costing"]
+    assert hw == 0.6 and avoided == 0 and quickest == 1.0 and none is None
+    assert other["use_tolls"] == 0 and other["width"] == 2.0 and other["use_highways"] == 0.6
+    assert [s for _, s in r["marks"]] == [0, 60, 130] and all(abs(m - e) <= 3 for (m, _), e in zip(r["marks"], [0, 1000, 2000])), r["marks"]
