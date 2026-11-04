@@ -32,6 +32,13 @@
   <script src="road_page.js" defer></script>
   <script src="taste.js" defer></script>
   <script src="prefer.js" defer></script>
+  <!-- route context providers (builder E): the crowd, the driver, the car, the phone's time, crew meeting points -->
+  <script src="route_ctx/ctx_util.js" defer></script>
+  <script src="route_ctx/crowd.js" defer></script>
+  <script src="route_ctx/driver.js" defer></script>
+  <script src="route_ctx/car.js" defer></script>
+  <script src="route_ctx/ios_context.js" defer></script>
+  <script src="route_ctx/crew_meet.js" defer></script>
   <script src="track_mode.js" defer></script>
   <script src="flags.js" defer></script>
   <script src="save_file.js" defer></script>
@@ -1297,7 +1304,7 @@
                 <div class="switch" role="radiogroup" aria-label="Route style"><button data-fun="quick" role="radio" aria-checked="false">Quick</button><button data-fun="fun" role="radio" aria-checked="false">Fun</button><button data-fun="max" role="radio" aria-checked="false">Max fun</button></div>
 </div>
               <details class="plan-more" id="planMore">
-                <summary>More: avoid, corner mix, explore, start point</summary>
+                <summary>More: avoid, corner mix, who’s aboard, explore, start point</summary>
                 <div class="ctl"><div class="ctl-label">Start from</div>
                   <div class="from-row">
                 <input class="field" id="fromInput" autocorrect="off" autocapitalize="off" spellcheck="false" enterkeyhint="go" placeholder="From: current location" aria-label="From" autocomplete="off" />
@@ -1310,6 +1317,14 @@
                   <label class="balance"><span>Fewer sweepers</span><input type="range" min="-1" max="1" step="1" value="0" data-pref-range="fast" aria-label="Fast sweepers: fewer, any or more" /><span>More</span></label></div>
                 <div class="ctl"><div class="ctl-label">Prefer <small>stamped ranks higher</small></div>
                   <div class="stamps" role="group" aria-label="Prefer"><button data-prefer="measured" aria-pressed="false">Measured roads</button><button data-prefer="novel" aria-pressed="false">New to me</button><button data-prefer="crew" aria-pressed="false">Crew favourites</button></div></div>
+                <!-- route context (route_ctx/driver.js, vocabulary.js passenger / litRoads / cyclists / tunnels): who's aboard and how you drive -->
+                <div class="ctl"><div class="ctl-label">For this drive <small>stamped ranks routes for it</small></div>
+                  <div class="stamps" role="group" aria-label="For this drive"><button data-driver="passenger" aria-pressed="false">Passenger aboard</button><button data-driver="lit" aria-pressed="false">Lit roads at night</button><button data-driver="cyclists" aria-pressed="false">Cyclist courtesy</button><button data-driver="tunnels" aria-pressed="false">Tunnels</button></div>
+                  <p class="note" id="skillNote" hidden></p></div>
+                <!-- route context (route_ctx/ios_context.js): only in the app, only when tapped (the permission is asked then) -->
+                <div class="ctl" id="fitRow" hidden><div class="ctl-label">Loop to fit <small>asks the phone once you tap</small></div>
+                  <div class="detents"><button data-fit="calendar">My free time</button><button data-fit="album">This album</button></div>
+                  <p class="note" id="fitNote" role="status"></p></div>
                 <div class="ctl" role="group" aria-label="Explore: the best roads near you"><div class="ctl-label">Explore <small>the best roads within</small></div>
                   <div class="detents"><button data-explore-min="15">15 min</button><button data-explore-min="30">30 min</button></div></div>
                 <div class="place-list" id="exploreList" hidden></div>

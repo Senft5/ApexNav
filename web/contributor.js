@@ -36,12 +36,41 @@
   const mean = (a) => a.reduce((s, x) => s + x, 0) / a.length;
   const finite = (v) => typeof v === 'number' && Number.isFinite(v);
 
+  // Flow per bin (route context, crowd.js crowd_flow; backend road_bins.flow_mean): how steadily this pass drove it. fl is
+  // 1 - CV/FLOW_CV of the speed over the bin and FLOW_PAD samples each side (about 40 m), 0 when the pass crawled or stopped
+  // (mean under FLOW_STOP_MPS); hb is 1 when it braked at HARD_BRAKE_G or harder with no corner tighter than CORNER_R_M in
+  // the next CORNER_AHEAD samples (100 m) to explain it. Both are ratios and a yes/no: no speed leaves the phone. Either one
+  // unknown (no speed, or the g untrusted) sends both as unknown.
+  const FLOW_PAD = 4, FLOW_CV = 0.2, FLOW_STOP_MPS = 4, HARD_BRAKE_G = -0.35, CORNER_R_M = 150, CORNER_AHEAD = 20;
+  function binFlow(drive, ids) {
+    const sp = drive.speed, ax = drive.lon_g, k = drive.kappa;
+    if (!Array.isArray(sp) || !Array.isArray(ax) || !ids.length) return { fl: null, hb: null };
+    const lo = Math.max(0, ids[0] - FLOW_PAD), hi = Math.min(sp.length - 1, ids[ids.length - 1] + FLOW_PAD), w = [];
+    for (let i = lo; i <= hi; i++) if (finite(sp[i])) w.push(sp[i]);
+    const g = ids.map((i) => ax[i]).filter(finite);
+    if (w.length < 5 || !g.length) return { fl: null, hb: null };
+    const m = mean(w), sd = Math.sqrt(w.reduce((s, x) => s + (x - m) ** 2, 0) / (w.length - 1));
+    const fl = m < FLOW_STOP_MPS ? 0 : Math.max(0, Math.min(1, 1 - sd / m / FLOW_CV));
+    let explained = false;
+    if (Array.isArray(k)) for (let i = ids[0]; i < Math.min(k.length, ids[0] + CORNER_AHEAD); i++) if (finite(k[i]) && Math.abs(k[i]) >= 1 / CORNER_R_M) { explained = true; break; }
+    return { fl: +fl.toFixed(3), hb: Math.min(...g) <= HARD_BRAKE_G && !explained ? 1 : 0 };
+  }
+  /** The busy-time bucket of a moment (0..11): weekday 0..5 or weekend 6..11, by 4-hour block of local time. */
+  function hourBucket(date) {
+    const d = date instanceof Date ? date : new Date(date);
+    if (!Number.isFinite(d.getTime())) return null;
+    return (d.getDay() === 0 || d.getDay() === 6 ? 6 : 0) + Math.floor(d.getHours() / 4);
+  }
+
   /**
    * drive: { lat[], lon[], camber[] (deg or null), rough[], crest[], kappa[], cam_v } at 5 m spacing; camber is used only
    *        when cam_v === CAM_V (recorded by the fixed pipeline), otherwise every bin's cam is null
    * match: per-sample { way: number|null, cls: string|null } (null = unmatched)
    * ways:  { [wayId]: [[lat, lon], ...] } OSM geometry, bins count from the way's first node
    * Returns contributions in the /api/contribute shape. Samples within trimM of either end are dropped (hides where a trip starts and ends).
+   * Route context: drive.speed[] (m/s) and drive.lon_g[] (g) add flow per bin (binFlow); drive.rec marks a recorded drive
+   * (loved roads count members back on a road on a second recorded drive); drive.hr, a busy-time bucket, is sent only when
+   * the caller passed one (the quiet_hours flag on).
    */
   function buildContributions({ drive, match, ways, drivenOn, driveId, trimM = 1000 }) {
     const trim = Math.round(trimM / BIN_M), out = [], best = new Map(), camOk = drive.cam_v === CAM_V;
@@ -55,15 +84,18 @@
         const cam = camOk ? ids.map((i) => drive.camber && drive.camber[i]).filter((v) => finite(v) && Math.abs(v) <= 15) : [];
         const crest = ids.map((i) => drive.crest && drive.crest[i]).filter(finite);
         const k = ids.map((i) => drive.kappa && drive.kappa[i]).filter((v) => finite(v) && Math.abs(v) <= 0.2);
+        const flow = binFlow(drive, ids);
         bins.push({ i: b, cam: cam.length ? +mean(cam).toFixed(2) : null, rough: +Math.min(1.5, mean(rough)).toFixed(3),
                     // crest: the phone's signed vertical g (- = going light); the server keeps the peak unweighting, 0..3 g
-                    crest: crest.length ? +Math.min(3, Math.max(0, -Math.min(...crest))).toFixed(3) : null, k: k.length ? +mean(k).toFixed(5) : null });
+                    crest: crest.length ? +Math.min(3, Math.max(0, -Math.min(...crest))).toFixed(3) : null, k: k.length ? +mean(k).toFixed(5) : null,
+                    fl: flow.fl, hb: flow.hb });
       }
       if (bins.length < MIN_BINS) continue;
       const span = bins[bins.length - 1].i - bins[0].i + 1;
       if (bins.length / span < 0.6) continue;                          // scattered, not a run (5 m samples on 5 m bins can skip a bin now and then: about 75% is normal worst case)
       const key = `${run.way}|${run.dir}`;
-      if (!best.has(key) || best.get(key).bins.length < bins.length) best.set(key, { way_id: run.way, dir: run.dir, driven_on: drivenOn, drive_id: driveId, bins: bins.slice(0, MAX_BINS), shape: shapeOf(ways[run.way]), cls: run.cls, cam_v: camOk ? CAM_V : null });
+      if (!best.has(key) || best.get(key).bins.length < bins.length) best.set(key, { way_id: run.way, dir: run.dir, driven_on: drivenOn, drive_id: driveId, bins: bins.slice(0, MAX_BINS), shape: shapeOf(ways[run.way]), cls: run.cls, cam_v: camOk ? CAM_V : null,
+        rec: drive.rec ? 1 : 0, ...(Number.isInteger(drive.hr) ? { hr: drive.hr } : {}) });
     }
     return [...best.values()];
   }
@@ -175,8 +207,10 @@
   // The first and last stretch of every trip never leaves the phone. A random 0.5 to 1.5 km at each end (docs/BACKEND.md section 3),
   // drawn per trip: a fixed 1 km would put home exactly 1 km back along the road from where a person's data starts.
   const privateEdge = (rand = Math.random) => Math.round((500 + 1000 * rand()) / BIN_M);
-  function createLive({ Core, post, fetch: fetchFn, driveId, drivenOn, chunk = 100, lag = privateEdge(), skip = privateEdge(), ctx = 20, retryMs = 30000, maxRetryMs = 300000, now = Date.now, onStatus }) {
-    const A = { lat: [], lon: [], rough: [], camber: [], crest: [] };
+  // deliberate: a recorded drive (Start), not ambient sharing. hourBucket(): the busy-time bucket to send, or null (quiet_hours off).
+  function createLive({ Core, post, fetch: fetchFn, driveId, drivenOn, chunk = 100, lag = privateEdge(), skip = privateEdge(), ctx = 20, retryMs = 30000, maxRetryMs = 300000, now = Date.now, onStatus,
+    deliberate = false, hourBucket: bucketFn = null }) {
+    const A = { lat: [], lon: [], rough: [], camber: [], crest: [], speed: [], lon_g: [] };
     const wayCache = {}, HOLD = MIN_BINS + 5;
     let done = 0, busy = false, stopped = false, retryAt = 0, fails = 0, bins = 0, chunks = 0, error = null, pending = [];
     const status = () => { if (onStatus) onStatus({ state: stopped ? 'stopped' : error ? 'retrying' : 'on', km: bins * BIN_M / 1000, chunks, pending: pending.length, error }); };
@@ -200,7 +234,10 @@
       try {
         if (!pending.length) {
           const lo = Math.max(0, from - ctx), hi = Math.min(n, to + ctx);
-          const slice = { lat: A.lat.slice(lo, hi), lon: A.lon.slice(lo, hi), rough: A.rough.slice(lo, hi), camber: A.camber.slice(lo, hi), crest: A.crest.slice(lo, hi), cam_v: CAM_V };   // push() kept only fixed-pipeline camber
+          const slice = { lat: A.lat.slice(lo, hi), lon: A.lon.slice(lo, hi), rough: A.rough.slice(lo, hi), camber: A.camber.slice(lo, hi), crest: A.crest.slice(lo, hi), cam_v: CAM_V,   // push() kept only fixed-pipeline camber
+                          speed: A.speed.slice(lo, hi), lon_g: A.lon_g.slice(lo, hi), rec: deliberate };
+          const hb = typeof bucketFn === 'function' ? bucketFn() : null;
+          if (Number.isInteger(hb)) slice.hr = hb;
           slice.kappa = Array.from(Core.computeCurvature(slice.lat, slice.lon).kappa);
           const match = await matchDrive(slice, fetchFn);
           const end = final ? to : lo + settledEnd(match, from - lo, to - lo);
@@ -222,9 +259,10 @@
       finally { busy = false; status(); }
     }
     return {
-      /** One 5 m row from the recorder: { lat, lon, roughness_rms, camber_deg?, camber_v?, crest? }. Never blocks. */
+      /** One 5 m row from the recorder: { lat, lon, roughness_rms, camber_deg?, camber_v?, crest?, speed_mps?, lon_g? }. Never blocks. */
       push(row) {
         A.lat.push(row.lat); A.lon.push(row.lon);
+        A.speed.push(Number.isFinite(row.speed_mps) ? row.speed_mps : null); A.lon_g.push(Number.isFinite(row.lon_g) ? row.lon_g : null);
         A.rough.push(Number.isFinite(row.roughness_rms) ? row.roughness_rms : null);
         A.camber.push(row.camber_v === CAM_V && Number.isFinite(row.camber_deg) ? row.camber_deg : null);   // an older build's camber: unknown
         A.crest.push(Number.isFinite(row.crest) ? row.crest : null);
@@ -288,7 +326,7 @@
         trip.rec.add(fr);
         while (trip.idx < trip.rec.rows.length) {
           const x = trip.rec.rows[trip.idx++];
-          trip.live.push({ lat: x.lat, lon: x.lon, roughness_rms: x.roughness_rms, camber_deg: x.camber_deg, camber_v: x.camber_v, crest: x.crest_vertical_g });
+          trip.live.push({ lat: x.lat, lon: x.lon, roughness_rms: x.roughness_rms, camber_deg: x.camber_deg, camber_v: x.camber_v, crest: x.crest_vertical_g, speed_mps: x.speed_mps, lon_g: x.lon_g });
         }
         if (trip.live.stats().stopped) { end(); pausedUntil = t + pauseS * 1000; status(); }
       },
@@ -437,6 +475,6 @@
     return Math.round(100 * (1 - Math.max(0, Math.min(1, (m.roughness - 0.08) / 0.30))));
   }
 
-  const api = { CAM_V, shapeOf, createLive, privateEdge, createAmbient, driveIdFor, measuredSeries, seriesFrom, agreement, AGREE, measuredAdjust, surfaceScore, measuredAlong, summarize, locate, buildContributions, matchDrive, fetchWays, contributeDrive, eligible, project, cumulative, SKIP_CLASSES };
+  const api = { CAM_V, binFlow, hourBucket, shapeOf, createLive, privateEdge, createAmbient, driveIdFor, measuredSeries, seriesFrom, agreement, AGREE, measuredAdjust, surfaceScore, measuredAlong, summarize, locate, buildContributions, matchDrive, fetchWays, contributeDrive, eligible, project, cumulative, SKIP_CLASSES };
   if (typeof module !== 'undefined' && module.exports) module.exports = api; else root.ApexContributor = api;
 })(typeof window !== 'undefined' ? window : globalThis);

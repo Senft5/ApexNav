@@ -282,7 +282,7 @@
         const redoBoard = part((c2) => board(c2, redoBoard), () => boardSec, (n) => { boardSec = n; });
         driveSec = thisWeek(c, redoDrive); boardSec = board(c, redoBoard);
         // P-03: the run, the people, what they said, then the board; the livery last, as one line
-        box.replaceChildren(header(c, draw), el('div', { className: 'cp-body' }, titleBlock(c), driveSec, members(c), chat(c, draw), boardSec,
+        box.replaceChildren(header(c, draw), el('div', { className: 'cp-body' }, titleBlock(c), driveSec, members(c), meetShare(c), chat(c, draw), boardSec,
           ...(c.house ? [houseBoard(c)] : []), ...(c.pinned ? [pinnedRow(c)] : []), buildsRow(c), liveryFoot(c, draw)));
       };
       draw();
@@ -362,6 +362,29 @@
         }, 'linkbtn'));
       }
       return box;
+    }
+    /**
+     * Fair meeting points (route_ctx/crew_meet.js, backend crew_meet.ts): your rough area for THIS crew, off until you switch
+     * it on. It is your Home pin's 0.1-degree square, coarsened on the phone; crew-mates see the squares, never whose.
+     */
+    function meetShare(c) {
+      const M = root.ApexCrewMeet, Pin = root.ApexPinnedPlaces;
+      const sw = el('button', { type: 'button', className: 'sw' + (c.home_shared ? ' on' : '') }, el('i'), el('span', { textContent: 'Share my rough area for fair meeting points' }));
+      sw.setAttribute('role', 'switch'); sw.setAttribute('aria-checked', String(!!c.home_shared)); sw.dataset.crewHome = '';
+      sw.addEventListener('click', async () => {
+        const on = !sw.classList.contains('on');
+        let body = { on: false };
+        if (on) {
+          const cell = M && Pin ? M.homeCell(Pin.list(root.localStorage)) : null;
+          if (!cell) { toast('Pin Home in Where to? first, then switch this on.'); return; }
+          body = { on: true, lat: cell.lat, lon: cell.lon };
+        }
+        const r = await apiCall('PUT', `/api/crews/${encodeURIComponent(c.id)}/home`, body).catch(() => null);
+        if (!r || !r.ok) { toast('Couldn\u2019t change that. Try again.'); return; }
+        sw.classList.toggle('on', on); sw.setAttribute('aria-checked', String(on));
+      });
+      return el('section', { className: 'cp-meet stack-8' }, el('h3', { textContent: 'Meeting points' }), sw,
+        el('p', { className: 'note', textContent: 'Your Home pin\u2019s square, about 11 km across, never the address. Crew-mates see the squares, not whose, once two share. Used to pick a meeting point fair to everyone.' }));
     }
     function pinnedRow(c) {
       return el('div', { className: 'cp-pinned' }, el('span', { className: 'note', textContent: 'Pinned route' }), el('b', { textContent: c.pinned.name }),

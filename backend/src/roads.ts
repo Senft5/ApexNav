@@ -2,6 +2,7 @@
 // Members only. Nothing here says who contributed; `n` is how many passes were merged and `csd`/`rsd` how much they disagree
 // (sample standard deviation of camber and roughness, null under two measuring passes), so the phone can show confidence.
 import { Env, HttpError } from "./util";
+import { serverFlag } from "./flags";
 
 const MAX_WAYS = 50;
 /**
@@ -32,7 +33,13 @@ export const confLevel = (passes: number) => (passes >= 5 ? 3 : passes >= 2 ? 2 
 export interface RoadBinRow {
   way_id: number; dir: number; bin_idx: number; n: number; camber_mean: number | null; camber_m2: number | null; camber_n: number;
   rough_mean: number | null; rough_m2: number | null; crest_peak: number | null; changed_on: string | null; k_mean: number | null; k_n: number;
+  flow_mean: number | null; brake_mean: number | null; flow_n: number;
 }
+
+/** Busy times are shown only for a road+direction this many different people drove (the owner's Quiet hours option a). */
+export const HOURS_MIN_DRIVERS = 5;
+/** Loved roads: how many members came back to it, as a level (never the count): 0 under 2, 1 two, 2 three or four, 3 five or more. */
+export const loveLevel = (again: number) => (again >= 5 ? 3 : again >= 3 ? 2 : again >= 2 ? 1 : 0);
 
 /** Sample standard deviation from a Welford sum of squares over k passes; null when fewer than two passes measured it. */
 export function sampleSd(m2: number | null, k: number): number | null {
@@ -45,21 +52,46 @@ export async function roadBins(env: Env, url: URL) {
   if (!ids.length || ids.length > MAX_WAYS || ids.some((x) => !Number.isSafeInteger(x) || x < 1)) throw new HttpError(400, "bad_ways");
   const marks = ids.map(() => "?").join(",");
   const rows = (await env.DB.prepare(
-    `SELECT way_id, dir, bin_idx, n, camber_mean, camber_m2, camber_n, rough_mean, rough_m2, crest_peak, changed_on, k_mean, k_n FROM road_bins rb
+    `SELECT way_id, dir, bin_idx, n, camber_mean, camber_m2, camber_n, rough_mean, rough_m2, crest_peak, changed_on, k_mean, k_n, flow_mean, brake_mean, flow_n FROM road_bins rb
       WHERE way_id IN (${marks}) AND ${shownSql("rb.way_id", "rb.dir")}
       ORDER BY way_id, dir, bin_idx`,
   ).bind(...ids).all<RoadBinRow>()).results;
   // { [way]: { [dir]: { i:[bin], n:[], cam:[], cn:[], csd:[], rough:[], rsd:[], crest:[], ch:[] } } } keeps the payload small;
   // unknown stays null. ch: the month a step change (repaving, IDEAS Q-12) restarted the bin, never the day. k / kn: the
   // driven paths' mean curvature (1/m, + = left in the direction of travel) and how many passes measured it (IDEAS Q-04).
+  // fl / hb / fn: flow (members' mean speed steadiness 0..1, a ratio with no speed in it), the share of passes that braked hard
+  // with no corner ahead, and how many passes sent flow; null / 0 from passes that didn't. ag (per direction): loveLevel, how
+  // many members came back to it. hr (per direction, only with the quiet_hours flag on and 5+ drivers): 12 shares of passes.
   type Col = (number | null)[];
-  const out: Record<string, Record<string, { i: number[]; n: number[]; cam: Col; cn: number[]; csd: Col; rough: Col; rsd: Col; crest: Col; ch: (string | null)[]; k: Col; kn: number[] }>> = {};
+  type Dir = { i: number[]; n: number[]; cam: Col; cn: number[]; csd: Col; rough: Col; rsd: Col; crest: Col; ch: (string | null)[]; k: Col; kn: number[];
+               fl: Col; hb: Col; fn: number[]; ag?: number; hr?: number[] };
+  const out: Record<string, Record<string, Dir>> = {};
+  const r3 = (v: number | null) => (v == null ? null : Math.round(v * 1000) / 1000);
   for (const r of rows) {
-    const d = ((out[r.way_id] ??= {})[r.dir] ??= { i: [], n: [], cam: [], cn: [], csd: [], rough: [], rsd: [], crest: [], ch: [], k: [], kn: [] });
+    const d = ((out[r.way_id] ??= {})[r.dir] ??= { i: [], n: [], cam: [], cn: [], csd: [], rough: [], rsd: [], crest: [], ch: [], k: [], kn: [], fl: [], hb: [], fn: [] });
+    d.fl.push(r.flow_n > 0 ? r3(r.flow_mean) : null); d.hb.push(r.flow_n > 0 ? r3(r.brake_mean) : null); d.fn.push(r.flow_n ?? 0);
     d.k.push(r.k_n > 0 && r.k_mean != null ? Math.round(r.k_mean * 1e6) / 1e6 : null); d.kn.push(r.k_n);
     d.ch.push(r.changed_on ? r.changed_on.slice(0, 7) : null);
     d.i.push(r.bin_idx); d.n.push(r.n); d.cam.push(r.camber_mean); d.cn.push(r.camber_n); d.csd.push(sampleSd(r.camber_m2, r.camber_n));
     d.rough.push(r.rough_mean); d.rsd.push(sampleSd(r.rough_m2, r.n)); d.crest.push(r.crest_peak);
+  }
+  const shownIds = Object.keys(out).map(Number);
+  if (shownIds.length) {
+    const m2 = shownIds.map(() => "?").join(",");
+    const love = (await env.DB.prepare(`SELECT way_id, dir, again_n FROM road_love WHERE way_id IN (${m2})`).bind(...shownIds).all<{ way_id: number; dir: number; again_n: number }>()).results;
+    for (const l of love) { const d = out[l.way_id]?.[l.dir]; if (d && loveLevel(l.again_n)) d.ag = loveLevel(l.again_n); }
+    if (serverFlag(env, "quiet_hours")) {
+      const hours = (await env.DB.prepare(
+        `SELECT h.way_id, h.dir, h.bucket, h.n FROM road_hours h
+          WHERE h.way_id IN (${m2}) AND (SELECT COUNT(*) FROM road_hour_holders x WHERE x.way_id = h.way_id AND x.dir = h.dir) >= ${HOURS_MIN_DRIVERS}`,
+      ).bind(...shownIds).all<{ way_id: number; dir: number; bucket: number; n: number }>()).results;
+      const counts = new Map<string, number[]>();
+      for (const h of hours) { const k = `${h.way_id}:${h.dir}`; const a = counts.get(k) ?? new Array(12).fill(0); a[h.bucket] += h.n; counts.set(k, a); }
+      for (const [k, a] of counts) {
+        const [w, dir] = k.split(":"), d = out[w]?.[dir], tot = a.reduce((x, y) => x + y, 0);
+        if (d && tot > 0) d.hr = a.map((x) => Math.round((x / tot) * 1000) / 1000);
+      }
+    }
   }
   return out;
 }

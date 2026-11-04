@@ -22,7 +22,8 @@ export async function exportMyData(env: Env, v: Viewer) {
     crew_drives_planned: await q("SELECT title, starts_at, meet_name, meet_lat, meet_lon, notes, cancelled, created_at FROM crew_events WHERE created_by = ?"),
     crew_drive_rsvps: await q("SELECT e.title, e.starts_at, r.status, r.updated_at FROM crew_event_rsvps r JOIN crew_events e ON e.id = r.event_id WHERE r.user_id = ?"),
     crew_drives_came_to: await q("SELECT e.title, e.starts_at, a.created_at FROM crew_event_attendance a JOIN crew_events e ON e.id = a.event_id WHERE a.user_id = ?"),
-    crews: await q("SELECT c.name, m.role, m.joined_at FROM crew_members m JOIN crews c ON c.id = m.crew_id WHERE m.user_id = ?"),
+    // home_area: the 0.1-degree cell you share with that crew for fair meeting points (crew_meet.js), null when off
+    crews: await q("SELECT c.name, m.role, m.joined_at, m.home_cell AS home_area FROM crew_members m JOIN crews c ON c.id = m.crew_id WHERE m.user_id = ?"),
     segments: await q("SELECT id, name, length_m, geom, origin_id, created_at FROM segments WHERE owner = ?"),
     // audiences are named by what you see in the app (a friend's handle, a crew's name), never by someone else's internal id
     grants: await q(`SELECT g.audience_type, COALESCE(u.handle, c.name) AS audience, g.share_scores, g.share_times FROM grants g
@@ -41,7 +42,7 @@ export async function exportMyData(env: Env, v: Viewer) {
     sharing_on_map: await q("SELECT audience, delay_s, fuzz, updated_at FROM presence_settings WHERE user_id = ?"),
     build_chat: await q("SELECT body, created_at FROM build_chat WHERE author = ?"),
     crew_chat: await q("SELECT c.name AS crew, m.body, m.created_at FROM crew_chat m JOIN crews c ON c.id = m.crew_id WHERE m.author = ?"),
-    cars: await q("SELECT year, make, model, trim, nickname, color, power_hp, weight_kg, drivetrain, transmission, tyres, mods, shared, is_primary, created_at FROM cars WHERE owner = ?"),
+    cars: await q("SELECT year, make, model, trim, nickname, color, power_hp, weight_kg, drivetrain, transmission, tyres, mods, clearance, width_cm, fuel, range_km, shared, is_primary, created_at FROM cars WHERE owner = ?"),
     highlights: await q("SELECT id, name, category, note, lat, lon, status, created_at FROM highlights WHERE author_id = ?"),
     reports_you_made: await q("SELECT kind, note, status, created_at FROM reports WHERE reporter = ?"),
     highlight_ratings: await q("SELECT highlight_id, stars, visited, created_at FROM highlight_ratings WHERE user_id = ?"),

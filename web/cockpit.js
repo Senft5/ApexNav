@@ -2059,6 +2059,7 @@
     function setRoutingCars(list) {
       const c = Array.isArray(list) ? list.find(x => x.is_primary) || null : null;
       carForRouting = c ? { clearance: c.clearance || null, width_cm: c.width_cm || null, weight_kg: c.weight_kg || null, tyres: c.tyres || null,
+                            fuel: c.fuel || null, range_km: c.range_km || null,   // route_ctx/car.js: fuel-stop spacing
                             label: c.nickname || [c.make, c.model].filter(Boolean).join(' ') } : null;
       try { if (carForRouting) localStorage.setItem('apex.routingCar', JSON.stringify(carForRouting)); else localStorage.removeItem('apex.routingCar'); } catch (_) {}
     }
@@ -3872,6 +3873,36 @@
       if (!(await replanForLevel(what))) setRoadPrefs({ [k]: was });
     }));
     setRoadPrefs({});
+    // For this drive (route_ctx/driver.js; vocabulary.js passenger, litRoads, cyclists, tunnels): who's aboard and what to
+    // favour, saved on the phone (apex.driverPrefs) and read by the route engine's driver provider. A change re-plans the
+    // route on screen as Prefer does. The skill line says how technical a route is offered from your own drives (the Log).
+    let driverPrefs = window.ApexRouteDriver ? ApexRouteDriver.load(localStorage) : {};
+    const paintDriverPrefs = () => document.querySelectorAll('[data-driver]').forEach(b => { const on = !!driverPrefs[b.dataset.driver]; b.classList.toggle('on', on); b.setAttribute('aria-pressed', String(on)); });
+    document.querySelectorAll('[data-driver]').forEach(b => b.addEventListener('click', async () => {
+      if (!window.ApexRouteDriver || $('planPanel').classList.contains('busy') || loopBusy) return;
+      const k = b.dataset.driver, was = !!driverPrefs[k];
+      driverPrefs = ApexRouteDriver.save(localStorage, { ...driverPrefs, [k]: !was }); paintDriverPrefs();
+      if (!(await replanForLevel(`${ApexRouteDriver.LABELS[k]} ${was ? 'off' : 'on'}`))) { driverPrefs = ApexRouteDriver.save(localStorage, { ...driverPrefs, [k]: was }); paintDriverPrefs(); }
+    }));
+    paintDriverPrefs();
+    (async () => {
+      try {
+        const sums = window.ApexRouteDriver ? await ApexRecording.summaries(null) : null, k = sums && ApexRouteDriver.skillTrend(sums), n = $('skillNote');
+        if (k && n) { n.textContent = ApexRouteDriver.skillLine(k); n.hidden = false; }
+      } catch (_) { /* no Log yet: no line */ }
+    })();
+    // Loop to fit (route_ctx/ios_context.js): the next event's start or the album's length, from the phone, only in the app and
+    // only when tapped (iOS asks for the permission at that tap). The provider then marks routes that run past it.
+    if (window.ApexIosContext && ApexIosContext.available() && $('fitRow')) $('fitRow').hidden = false;
+    document.querySelectorAll('[data-fit]').forEach(b => b.addEventListener('click', async () => {
+      if (!window.ApexIosContext || loopBusy) return;
+      const op = b.dataset.fit === 'album' ? 'music' : 'calendar';
+      const p = ApexIosContext.plan(op, await ApexIosContext.ask(op));
+      if (op === 'calendar' && p.minutes) ApexIosContext.state.nextEventAt = p.next || null;
+      if (op === 'music' && p.minutes) ApexIosContext.state.albumEndsAt = p.endsAt;
+      toast(p.text); if ($('fitNote')) $('fitNote').textContent = p.text;   // the toast gives way to the loop's own; the note stays
+      if (p.minutes) loop({ minutes: p.minutes }, b);
+    }));
     // Presets (plan_presets.js): this setup under a name, a stamp at the top of the sheet; tapping one sets it all at once.
     function paintPresets() {
       const row = $('presetRow');
@@ -5766,7 +5797,7 @@
     // Camber and crest go up when the recorder kept them (calibrated mount).
     function feedLive() {
       const L = drive.live, r = drive.rec; if (!L || !r) return;
-      while (drive.liveIdx < r.rows.length) { const x = r.rows[drive.liveIdx++]; L.push({ lat: x.lat, lon: x.lon, roughness_rms: x.roughness_rms, camber_deg: x.camber_deg, camber_v: x.camber_v, crest: x.crest_vertical_g }); }
+      while (drive.liveIdx < r.rows.length) { const x = r.rows[drive.liveIdx++]; L.push({ lat: x.lat, lon: x.lon, roughness_rms: x.roughness_rms, camber_deg: x.camber_deg, camber_v: x.camber_v, crest: x.crest_vertical_g, speed_mps: x.speed_mps, lon_g: x.lon_g }); }
     }
     // The live Vetta Score (REVIEW.md 1.2, Driving; 4.3): the drive so far scored the way the end card scores it, every 30 s
     // while recording; null (shown "--") until there are enough clean corners.
@@ -6237,7 +6268,8 @@
         ambient.sharer = ApexContributor.createAmbient({
           makeRecorder: () => new ApexSensors.Recorder(),
           makeLive: () => { const day = new Date(); return ApexContributor.createLive({ Core, fetch: window.fetch.bind(window), post: countedContribute,
-            driveId: ApexContributor.driveIdFor({ id: `app_${Date.now()}`, date: day.toISOString() }), drivenOn: day.toISOString().slice(0, 10) }); },
+            driveId: ApexContributor.driveIdFor({ id: `app_${Date.now()}`, date: day.toISOString() }), drivenOn: day.toISOString().slice(0, 10),
+            hourBucket: () => (window.ApexFlags && ApexFlags.on('quiet_hours', false) ? ApexContributor.hourBucket(new Date()) : null) }); },
           onStatus: () => { paintAmbient(); if (state.mode === 'live') paintDriveStat(); },
         });
       }
@@ -6257,6 +6289,8 @@
           Core, fetch: window.fetch.bind(window), post: countedContribute,
           driveId: ApexContributor.driveIdFor({ id: `live_${Date.now()}`, date: day.toISOString() }),
           drivenOn: day.toISOString().slice(0, 10),
+          // route context: a recorded drive counts toward loved roads; busy times only with quiet_hours on (default off, OWNER_TODO)
+          deliberate: true, hourBucket: () => (window.ApexFlags && ApexFlags.on('quiet_hours', false) ? ApexContributor.hourBucket(new Date()) : null),
           onStatus: (s) => { drive.share = s.state === 'stopped' ? 'stopped' : 'on'; drive.shareKm = s.km; drive.shareErr = s.error; if (s.error) console.warn('road data sharing:', s.error); paintDriveStat(); },
         });
         drive.share = 'on'; feedLive(); paintDriveStat();
@@ -6775,6 +6809,8 @@
         const car = routingCar(), extra = {};
         if (ended) extra.ended = ended;
         if (car) extra.car = { label: car.label, mu: Core.carGrip(car) };
+        // Passenger aboard (For this drive) tags the drive 'Passenger' (drive_tags.js), so the Log knows it too
+        { const tags = window.ApexRouteDriver ? ApexRouteDriver.driveTags(ApexRouteDriver.load(localStorage)) : []; if (tags.length) extra.tags = tags; }
         if (laps.length) extra.laps = laps;
         if (battery) extra.battery = battery;
         // F-04: the card in the frame after End, from the recording as it stands; the drive is parsed, scored and saved in
@@ -7301,6 +7337,7 @@
         if (msg && msg.type === 'lifecycle') { if (driveActive) keepSave(); return; }   // going to the background: kept now
         if (msg && (msg.type === 'placeSuggestions' || msg.type === 'placeResolved' || msg.type === 'trafficProbe')) { nativePlaceReply(msg); return; }
         if (msg && msg.type === 'nudge') { nudgeAnswered(!!msg.granted); return; }
+        if (msg && msg.type === 'context') { if (window.ApexIosContext) ApexIosContext.receive(msg); return; }   // My free time / This album
         if (msg && msg.type === 'recordingSaved') toast(`Saved ${msg.segments} road segments to ${msg.file}`);
         // App sign-in finished in the native shell: keep the session token and redraw whatever shows account state.
         // the shell keeps the token in the Keychain and says signedIn (IDEAS Z-10); an older shell hands the token over
