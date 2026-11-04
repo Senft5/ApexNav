@@ -1,5 +1,13 @@
 # VETTA — CURRENT AGENT HANDOFF STATE
 
+## Session 2026-11-05 (night): own routing, the speed round (claude/own-routing-fast)
+
+- [x] Final card on the tile ranking + background refresh; Explore from tiles; via-way restrictions; first route from
+  the straight-line tiles; compressed tiles; preload yields to plans. Preview table in OWN_ROUTING.md §8.
+- Open: final card under 1 s warm in 5/10, cold 1.8-4.8 s (the preload's 17 MB competes on a first visit).
+- Exact next task: smaller first tiles (the region branch's per-tile Worker relay), or a preload of only the user's tile
+  before the rest; then merge claude/own-routing-region when it lands.
+
 ## Session 2026-11-05 (later): own routing on v2 tiles, profiled
 
 - [x] v2 tiles merged and mapped (route_ctx/graph.js); 10/10 live picks at least as good as production; warm ranked

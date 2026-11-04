@@ -39,18 +39,26 @@
 
   async function fetchCtx(corridors, opts = {}) {
     const out = {};
-    if (typeof opts.graphScore !== 'function') { for (const c of corridors) out[c.id] = empty(c.lat.length, 'unavailable', 'No graph tiles here'); return out; }
+    // our own routes carry their edges' scores (corridor.graph, graph_router.js edgeTable): laid on at once, no worker
+    const R = root.ApexGraphRouter || (typeof require === 'function' ? (() => { try { return require('../graph_router.js'); } catch (_) { return null; } })() : null);
+    const rest = [];
+    for (const c of corridors) {
+      if (c.graph && R && R.fromTable) out[c.id] = channelsOf(c.lat.length, R.fromTable(c.graph, c.distM));
+      else rest.push(c);
+    }
+    if (!rest.length) return out;
+    if (typeof opts.graphScore !== 'function') { for (const c of rest) out[c.id] = empty(c.lat.length, 'unavailable', 'No graph tiles here'); return out; }
     try {
-      const res = await opts.graphScore(corridors.map((c) => ({ lat: Array.from(c.lat), lon: Array.from(c.lon) })));
-      corridors.forEach((c, k) => { out[c.id] = channelsOf(c.lat.length, res && res[k]); });
+      const res = await opts.graphScore(rest.map((c) => ({ lat: Array.from(c.lat), lon: Array.from(c.lon) })));
+      rest.forEach((c, k) => { out[c.id] = channelsOf(c.lat.length, res && res[k]); });
     } catch (e) {
-      for (const c of corridors) out[c.id] = empty(c.lat.length, 'unavailable', String((e && e.message) || e));
+      for (const c of rest) out[c.id] = empty(c.lat.length, 'unavailable', String((e && e.message) || e));
     }
     return out;
   }
 
   // priority 15: after the router's own edges (10) where it answered, before the DEM and the map tiles
-  const provider = { id: 'graph', version: 1, channels: CH, needs: { network: false }, budgetMs: 1000, priority: 15, fetch: fetchCtx };
+  const provider = { id: 'graph', version: 1, channels: CH, needs: { network: false }, budgetMs: 1000, priority: 15, stageOk: true, fetch: fetchCtx };
   if (Ctx && Ctx.register) Ctx.register(provider);
   const api = { provider, CH, ROAD, channelsOf };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;

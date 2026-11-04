@@ -4,6 +4,14 @@ Decisions Claude made for you, newest first. Each one says what was decided, why
 you reach one you've seen. If you disagree with a call, say so and it gets reversed; nothing here is hard to undo unless
 it says so. Things only you can do are in docs/OWNER_TODO.md.
 
+## 2026-11-05 (night): Planning with our tiles, the speed round
+
+- **The route card is final as soon as our tiles have ranked the routes**, with the weather and events as last
+  fetched for the area; fresh weather and events arrive after and swap the route only when another is clearly better
+  (5 points), and the card says why. Undo: `ownRefine` and `OWN_SWAP_POINTS` in cockpit.js.
+- **Best roads nearby comes from our tiles** where they cover you (no map tile search, no Valhalla matrix).
+- **Graph tiles are served compressed** (as text: the edge only compresses text types). Undo: web/_headers.
+
 ## 2026-11-05 (later): Our tiles see side streets; planning under 1.5 s
 
 - **The new tiles carry businesses, driveways, signals, sidewalks and density per road**, and the ranking reads them as

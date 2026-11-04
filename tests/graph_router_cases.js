@@ -71,7 +71,14 @@ const CASES = {
     const uJunction = R.turnCost(v, gid(S, c), gid(c, S), obj), uDeadEnd = R.turnCost(v, gid(S, S2), gid(S2, S), obj);
     // a trip from the dead-end street's far side back: it has to turn at the dead end, not mid-street
     const left = R.turnCost(v, gid(S, c), gid(c, W), obj), right = R.turnCost(v, gid(S, c), gid(c, E), obj), straight = R.turnCost(v, gid(S, c), gid(c, N), obj);
-    return { free, noLeft, onlyStraight, ab, ba, uJunction: uJunction === Infinity ? 'forbidden' : uJunction, uDeadEnd, left, right, straight };
+    // a via-way rule: no straight on from South through the North arm to North Road beyond; the way round is the Loop
+    const nodesV = nodes.concat([at(C[0] + 2 * d, C[1])]), N2 = nodesV.length - 1, edgesV = edges.slice();
+    two(edgesV, N, N2, { ...st, name: 'North Road', t: 30 });
+    const ixV = (a, b) => edgesV.findIndex((x) => x.from === a && x.to === b);
+    const viaRoute = (rv) => { const vv = R.view(H.tiles(nodesV, edgesV, [], rv).tiles);
+      return R.plan(vv, { from: { lat: C[0] - 1.5 * d, lon: C[1] }, to: { lat: C[0] + 1.6 * d, lon: C[1] }, level: 'quick' }).quick.names.map((x) => x.name); };
+    const viaFree = viaRoute([]), viaNo = viaRoute([{ from: ixV(S, c), via: [ixV(c, N)], to: ixV(N, N2) }]);
+    return { free, noLeft, onlyStraight, ab, ba, viaFree, viaNo, uJunction: uJunction === Infinity ? 'forbidden' : uJunction, uDeadEnd, left, right, straight };
   },
 
   // the level budgets (fun_route.js LEVELS), alternates 30 % different, and the same answer every time
@@ -273,6 +280,20 @@ const CASES = {
       clock: [same, scaled, other], onFlags: [Own.on({ flags, storage: store(null), router: R }), Own.on({ flags: { on: (n, d) => d }, storage: store('0'), router: R }), Own.on({ flags: { on: (n, d) => d }, storage: store(null), router: R })] };
   },
 
+  // Best roads nearby from our tiles: the twisty good road is the first stage, timed from here; the side streets aren't
+  explore() {
+    const g = H.grid({ seed: 6, nx: 12, ny: 12, stepDeg: 0.004, lat0: 39.15, lon0: -84.62 });
+    // make the grid plain (no corners on good road), then one road twisty and good along row 6
+    for (const e of g.edges) { e.fun = 0; e.quality = 0.5; }
+    for (const e of g.edges) if (e.name === 'Row 6') { e.fun = 3; e.quality = 0.85; e.name = 'Twisty Road'; }
+    for (const e of g.edges) if (e.name === 'Col 3') { e.fun = 3; e.quality = 0.2; e.name = 'Subdivision Lane'; }
+    const v = R.view(H.tiles(g.nodes, g.edges).tiles);
+    const res = R.explore(v, { start: { lat: 39.152, lon: -84.618 }, maxKm: 10, maxS: 1800 });
+    const s0 = res.stages[0];
+    return { n: res.stages.length, first: s0 && s0.name, km: s0 && s0.km, good: s0 && s0.good, timed: s0 && (Number.isFinite(s0.aS) || Number.isFinite(s0.bS)),
+      shape: s0 && s0.lat.length === s0.lon.length && s0.lat.length > 10, names: res.stages.map((x) => x.name), ms: res.ms };
+  },
+
   // the fast path: our quickest alone, the tiles' scores along any line, the preload, one view reused
   async fast() {
     const g = H.grid({ seed: 4, nx: 12, ny: 12, stepDeg: 0.004, lat0: 39.15, lon0: -84.62 });
@@ -304,9 +325,16 @@ const CASES = {
     const none = await Graph.provider.fetch([c], {});
     const viaWorker = await Graph.provider.fetch([c], { graphScore: async (lines) => (await h.handle({ id: 9, type: 'score', lines })).result });
     const biz = viaWorker.g.channels.business_per_km, walk = viaWorker.g.channels.sidewalk;
+    // our own route's per-edge table (route.graph) laid on its corridor on the page, no worker: the same scores
+    const own = p.result.routes[0], oc = Ctx.corridor('o', Own.withCoords({ ...own.route }).coords, {});
+    oc.graph = own.route.graph;
+    const local = await Graph.provider.fetch([oc], {}), remote = await Graph.provider.fetch([{ ...oc, graph: null, id: 'o' }], { graphScore: async (lines) => (await h.handle({ id: 10, type: 'score', lines })).result });
+    const lq = local.o.channels.graph_quality, rq = remote.o.channels.graph_quality;
+    let agree = 0; for (let i = 0; i < lq.length; i++) if (Math.abs(lq[i] - rq[i]) < 1e-6) agree++;
+    const tableAgree = agree / lq.length;
     return { preTiles: pre.result.tiles.length, loadsAfterPreload, loadsAfterPlan: loads, quickSame: JSON.stringify(q.result.route.edges) === JSON.stringify(quickest.edges), quickTiles: q.result.tiles.length,
       known, outside: Array.from(sc.result[1].quality).every((x) => x == null || Number.isNaN(x)), fillQ: sm.quality[5], fillS: sm.scenery[5], fillC: sm.qConf[5], strongQ: sm2.quality[5], status: ch.status, none: none.g.status,
-      roadCh: [Array.from(biz).filter((x) => x === 9).length / biz.length, Array.from(walk).filter((x) => x === 1).length / walk.length] };
+      tableAgree, tableStatus: local.o.status, roadCh: [Array.from(biz).filter((x) => x === 9).length / biz.length, Array.from(walk).filter((x) => x === 1).length / walk.length] };
   },
 
   // the Cincinnati-size synthetic network: 16 tiles, ~150k edges; per query and per full plan
