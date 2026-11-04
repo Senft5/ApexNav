@@ -184,7 +184,7 @@
    * C's mobile_coverage) and `places` ({ schools, worship } as [{ lat, lon }] from the map providers' points).
    */
   function inputsFor(cs, res) {
-    const channels = {}, peer = {}, schools = [], worship = [];
+    const channels = {}, peer = {}, schools = [], worship = [], animal = [];
     const pick = (ch, names, f = (v) => v) => { for (const n of names) if (ch[n]) return Float32Array.from(ch[n], (v) => (Number.isFinite(v) ? f(v) : NaN)); return null; };
     for (const c of cs) {
       const r = res.byId[c.id];
@@ -196,16 +196,17 @@
       put('canopy_frac', pick(ch, ['canopy_pct'], (v) => v / 100));
       put('urban_density', pick(ch, ['density']));
       put('park', pick(ch, ['lu_park', 'protected']));
-      for (const k of ['elev_m', 'tpi_m', 'bridge', 'precip_48h_mm']) put(k, pick(ch, [k]));
+      for (const k of ['elev_m', 'tpi_m', 'bridge', 'precip_48h_mm', 'road_class', 'road_use']) put(k, pick(ch, [k]));
       channels[c.id] = out;
       peer[c.id] = { channels: ch };
       for (const pt of r.points || []) {
         const i = Math.max(0, Math.min(c.lat.length - 1, Math.round(pt.atM / STEP_M)));
         if (pt.kind === 'school') schools.push({ lat: c.lat[i], lon: c.lon[i], name: pt.label || null });
         if (pt.kind === 'worship') worship.push({ lat: c.lat[i], lon: c.lon[i], name: pt.label || null });
+        if (pt.kind === 'animal_crossing') animal.push({ lat: c.lat[i], lon: c.lon[i], name: pt.label || null });   // wildlife.js deer crossings
       }
     }
-    return { channels, peer, ...(schools.length || worship.length ? { places: { schools, worship } } : {}) };
+    return { channels, peer, ...(schools.length || worship.length || animal.length ? { places: { schools, worship, animal_crossing: animal } } : {}) };
   }
   const sleep = (ms, signal) => new Promise((resolve) => {
     if (signal && signal.aborted) { resolve(); return; }

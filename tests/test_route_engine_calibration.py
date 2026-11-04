@@ -19,6 +19,14 @@ for (const c of ['subdivision', 'northgate', 'colerain', 'harrison']) for (const
 // degraded: each source missing in turn, and all of them (the old ranking)
 for (const skip of [['router'], ['dem'], ['business'], ['router', 'dem', 'business']]) out['colerain:quick:-' + skip.join('+')] = H.compare('colerain', 'quick', { skip });
 out['harrison:fun:none'] = H.compare('harrison', 'fun', { noContext: true });
+// the real 35 mph country stretches on the Harrison back roads (posted 56 km/h, density 2 or less)
+{
+  const [c] = H.cands('harrison', { only: ['router0'] });
+  const smp = H.Engine.samples(c.corridor, c.ctx), lim = c.ctx.channels.speed_limit_kph, den = c.ctx.channels.density, biz = c.ctx.channels.business_per_km;
+  // open country: no more than a farm stand or two beside it (the last 300 m reach Harrison's edge: shops, 26 driveways a km)
+  const q = []; for (let i = 0; i < smp.n; i++) if (lim[i] === 56 && den[i] <= 2 && biz[i] < 3) q.push(smp.quality[i]);
+  out.rural35 = { n: q.length, min: Math.min(...q), gate: Math.min(...q.map(H.Engine.gate)) };
+}
 // the DEM along the real roads: Harrison's back roads are hill country beside the Great Miami and Whitewater valleys
 const fx = H.load('harrison');
 out.dem = Object.fromEntries(fx.candidates.map((c) => {
@@ -28,9 +36,9 @@ out.dem = Object.fromEntries(fx.candidates.map((c) => {
 (async () => {
   // with C's context grid (the real Cincinnati bundles in web/data/ctx/v1) on every candidate
   for (const c of ['subdivision', 'northgate', 'colerain', 'harrison']) for (const l of ['quick', 'fun', 'max']) out['grid:' + c + ':' + l] = await H.compareGrid(c, l);
-  const list = H.cands('colerain'); await H.addGrid(list);
-  for (const x of list) { delete x.ctx.channels.impervious_pct; x.ev = null; }
-  out['grid:colerain:fun:-impervious'] = H.compare('colerain', 'fun', { list });
+  const without = async (level, ch) => { const list = H.cands('colerain'); await H.addGrid(list); for (const x of list) { delete x.ctx.channels[ch]; x.ev = null; } return H.compare('colerain', level, { list }); };
+  out['grid:colerain:max:-impervious'] = await without('max', 'impervious_pct');
+  out['grid:colerain:fun:-noise'] = await without('fun', 'noise_db');
   process.stdout.write(JSON.stringify(out));
 })();
 """
@@ -113,8 +121,16 @@ def test_picks_hold_with_the_context_grid(r):
     assert all(s == "ok" for k, v in r.items() if k.startswith("grid:") and "gridStatus" in v for s in v["gridStatus"])
 
 
-def test_impervious_ground_changes_a_pick(r):
-    """Colerain at Fun: with the grid, Blue Rock Road (more canopy, less pavement and housing) beats Pippin and Struble; take
-    impervious surface away and Pippin wins again. Noise and AADT alone change no pick in the four cases."""
-    assert r["grid:colerain:fun"]["engine"][0] == "router2"
-    assert r["grid:colerain:fun:-impervious"]["engine"][0] == "router0"
+def test_grid_channels_change_close_picks(r):
+    """Colerain, Pippin and Struble Roads vs Blue Rock Road. Max fun: with the grid, Blue Rock (more canopy, less pavement)
+    wins; without impervious surface Pippin wins again. Fun: the road-noise map keeps Pippin (Blue Rock is louder: more
+    traffic) ahead; without it Blue Rock wins."""
+    assert r["grid:colerain:max"]["engine"][0] == "router2" and r["grid:colerain:max:-impervious"]["engine"][0] == "router0"
+    assert r["grid:colerain:fun"]["engine"][0] == "router0" and r["grid:colerain:fun:-noise"]["engine"][0] == "router2"
+
+
+def test_real_35_mph_country_road_keeps_its_corners(r):
+    """Lees Creek and Day Roads near Harrison are posted 35 mph in open country: a low limit there is the road's character."""
+    x = r["rural35"]
+    assert x["n"] > 50, x
+    assert x["min"] >= 0.55 and x["gate"] >= 0.85, x

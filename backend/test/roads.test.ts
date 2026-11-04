@@ -89,4 +89,20 @@ describe("sampleSd", () => {
     expect(sampleSd(1, 1)).toBeNull();
     expect(sampleSd(null, 4)).toBeNull();
   });
+
+  it("answers by 0.1-degree cells (VI-1): the measured ways there with their map lines, never by route", async () => {
+    await seed();
+    await env.DB.prepare("INSERT INTO road_ways (way_id, s, w, n, e, shape) VALUES (9, 39.21, -84.62, 39.23, -84.60, '[[39.21,-84.62],[39.23,-84.60]]')").run();
+    await env.DB.prepare("INSERT INTO road_ways (way_id, s, w, n, e, shape) VALUES (77, 39.51, -84.12, 39.52, -84.11, '[[39.51,-84.12],[39.52,-84.11]]')").run();
+    const r = await api(await makeUser("alice"), "GET", "/api/roads?cells=392_-847");
+    expect(r.status).toBe(200);
+    const j = await r.json() as { ways: Record<string, unknown>; lines: Record<string, unknown> };
+    expect(Object.keys(j.ways)).toEqual(["9"]);
+    expect(j.lines["9"]).toEqual([[39.21, -84.62], [39.23, -84.6]]);
+    expect(j.lines["77"]).toBeUndefined();
+    expect((await api(null, "GET", "/api/roads?cells=392_-847")).status).toBe(401);
+    for (const q of ["cells=", "cells=39.2_-84.6", `cells=${Array.from({ length: 17 }, (_, i) => `${i}_1`).join(",")}`, "cells=9000_1"]) {
+      expect((await api(await makeUser("bob" + q.length), "GET", "/api/roads?" + q)).status).toBe(400);
+    }
+  });
 });

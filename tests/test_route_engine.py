@@ -116,7 +116,9 @@ const arterial = { speed_limit_kph: 56, road_class: 2, road_use: 0, density: 9, 
   out.monoSignals = noninc(series('signals_per_km', [0, 0.5, 1, 2, 4]));
   out.monoAccess = noninc(series('access_per_km', [0, 5, 15, 30, 60]));
   out.monoDensity = noninc(series('density', [0, 2, 5, 8, 12, 15]));
-  out.limitMatters = vAt('speed_limit_kph', 89) - vAt('speed_limit_kph', 40);
+  const vTown = (lim) => { const c = cand(wiggly(6000), 700, { ...back, density: 7, sidewalk: 1, speed_limit_kph: lim }), o = cand(straight(6000), 650, hwy); return value(c, [o]); };
+  out.limitMatters = vTown(89) - vTown(40);
+  out.limitRural = vAt('speed_limit_kph', 89) - vAt('speed_limit_kph', 40);
   out.bizMatters = vAt('business_per_km', 0) - vAt('business_per_km', 20);
 }
 // 5. every catalogue channel changes the ranking the right way: the same road, "good" vs "bad" value of one channel
@@ -150,7 +152,7 @@ const arterial = { speed_limit_kph: 56, road_class: 2, road_use: 0, density: 9, 
 {
   const wed8 = Date.parse('2026-11-04T07:50:00-05:00'), sun8 = Date.parse('2026-11-08T07:50:00-05:00');
   const school = [{ fromM: 1000, toM: 1400, kind: 'school' }];
-  const pen = (when, spans, points = [], prefs = {}) => { const c = cand(wiggly(6000), 700, back, { departAt: when, spans, points }); E.evaluate(c, { prefs }); return c.ev.penaltyPts; };
+  const pen = (when, spans, points = [], prefs = {}) => { const c = cand(wiggly(6000), 700, back, { departAt: when, spans, points }); E.evaluate(c, { prefs }); return c.ev.penaltyRaw; };
   out.schoolWeekday = pen(wed8, school); out.schoolSunday = pen(sun8, school);
   out.churchSunday = pen(Date.parse('2026-11-08T09:30:00-05:00'), [{ fromM: 500, toM: 600, kind: 'church' }]);
   out.churchWednesday = pen(wed8 + 2 * 3600e3, [{ fromM: 500, toM: 600, kind: 'church' }]);
@@ -181,8 +183,11 @@ const arterial = { speed_limit_kph: 56, road_class: 2, road_use: 0, density: 9, 
   const fit = (chans, car) => { const c = cand(wiggly(6000), 700, { ...back, ...chans }, { car }); E.evaluate(c, {}); return c.ev.hard.map((h) => h.kind); };
   out.carWidth = fit({ maxwidth_m: 2.0 }, { width_cm: 210 }); out.carFits = fit({ maxwidth_m: 2.5 }, { width_cm: 210 });
   out.lowCarGravel = fit({ surface: 5 }, { clearance: 'low' });
+  // the engine leaves range to car.js: fuel points alone never make a route infeasible; car.js's fuel_gap span does
   const fuelRoute = cand(straight(40000), 2400, back, { car: { range_km: 30 }, points: [{ atM: 5000, kind: 'fuel' }] });
   E.evaluate(fuelRoute, {}); out.fuel = fuelRoute.ev.hard.map((h) => h.kind);
+  const gapRoute = cand(straight(40000), 2400, back, { car: { range_km: 30 }, spans: [{ fromM: 5000, toM: 40000, kind: 'fuel_gap', hard: true }] });
+  E.evaluate(gapRoute, {}); out.fuelGap = gapRoute.ev.hard.map((h) => h.kind);
   const fuelOk = cand(straight(40000), 2400, back, { car: { range_km: 30 }, points: [{ atM: 15000, kind: 'fuel' }, { atM: 28000, kind: 'fuel' }] });
   E.evaluate(fuelOk, {}); out.fuelOk = fuelOk.ev.hard.length;
 }
@@ -196,7 +201,7 @@ const arterial = { speed_limit_kph: 56, road_class: 2, road_use: 0, density: 9, 
   const unmapped = cand(straight(6000), 600, { ...back, lu_commercial: 0, lu_mapped: 0 }), plain = cand(straight(6000), 600, back);
   E.evaluate(unmapped, {}); E.evaluate(plain, {});
   out.unmappedLanduse = [unmapped.ev.quality, plain.ev.quality];
-  out.kindAliases = (() => { const c = cand(wiggly(6000), 700, back, { spans: [{ fromM: 0, toM: 10, kind: 'access_private' }], points: [{ atM: 500, kind: 'rail_crossing' }] }); E.evaluate(c, {}); return [c.ev.hard.map((h) => h.kind), c.ev.penaltyPts]; })();
+  out.kindAliases = (() => { const c = cand(wiggly(6000), 700, back, { spans: [{ fromM: 0, toM: 10, kind: 'access_private' }], points: [{ atM: 500, kind: 'rail_crossing' }] }); E.evaluate(c, {}); return [c.ev.hard.map((h) => h.kind), c.ev.penaltyRaw]; })();
 }
 // 6c. builder E's channels (crowd.js, driver.js, car.js, ios_context.js)
 {
@@ -209,7 +214,7 @@ const arterial = { speed_limit_kph: 56, road_class: 2, road_use: 0, density: 9, 
   out.eTasteRank = tasteRank[0].parts.taste > tasteRank[1].parts.taste;
   out.eTunnelOnce = ev({}, { spans: [{ fromM: 1000, toM: 1300, kind: 'tunnel' }], points: [{ atM: 1000, kind: 'tunnel' }] }, { tunnels: true }).bonusPts;
   out.eBank = ev({ crowd_bank_deg: 4 }).scenery > ev({ crowd_bank_deg: -3 }).scenery;
-  out.eLate = ev({}, { spans: [{ fromM: 3000, toM: 6000, kind: 'past_next_event', value: 12 }] }).penaltyPts;
+  out.eLate = ev({}, { spans: [{ fromM: 3000, toM: 6000, kind: 'past_next_event', value: 12 }] }).penaltyRaw;
   out.ePassenger = [ev({ passenger_cost: 0.8 }, {}, { passenger: true }).penaltyPts > 0, ev({ passenger_cost: 0.8 }).penaltyPts];
   out.eBusyAvg = ev({ crowd_busy: 1 }).penaltyPts;
 }
@@ -242,6 +247,50 @@ const arterial = { speed_limit_kph: 56, road_class: 2, road_use: 0, density: 9, 
   out.glareOnce = glareSame;
   const sc = (chans) => { const c = cand(wiggly(6000), 700, { ...back, ...chans }); E.evaluate(c, {}); return c.ev.scenery; };
   out.photoRural = [sc({ photo_score: 1 }) > sc({ photo_score: 0 }), sc({ photo_score: 1, density: 9 }) === sc({ photo_score: 0, density: 9 })];
+}
+// 6e. the review's cases: low-limit country roads, infeasible quickest, unknown data, penalty saturation, duplicates, time zones
+{
+  // a Dragon: 30 mph, a primary in the forest, no houses; a 55 mph straight; the same twisty road built up
+  const dragon = { speed_limit_kph: 48, road_class: 2, road_use: 0, density: 0, signals_per_km: 0, access_per_km: 3, surface: 0, sidewalk: 0, forest_share: 0.9 };
+  const straight55 = { speed_limit_kph: 89, road_class: 3, road_use: 0, density: 1, signals_per_km: 0, access_per_km: 6, surface: 0, sidewalk: 0 };
+  const townTwisty = { ...dragon, density: 7, sidewalk: 1, access_per_km: 30, housing_per_km2: 900 };
+  const hairpins = ll(Array.from({ length: 2401 }, (_, i) => [i * 5, 40 * Math.sin(2 * Math.PI * i * 5 / 260)]));
+  const d1 = cand(hairpins, 900, dragon), s1 = cand(straight(10000), 600, straight55), t1 = cand(hairpins, 900, townTwisty);
+  const rk = rank([d1, s1, t1], { level: 'fun' });
+  E.evaluate(d1, {});
+  out.dragon = { top: rk[0].id === d1.id, townBelow: rk.findIndex((c) => c.id === t1.id) > rk.findIndex((c) => c.id === d1.id),
+    q: d1.ev.quality, gate: d1.ev.meanGate, poor: d1.ev.poorKm, beatsStraight: rank([d1, s1], { level: 'fun' })[0].id === d1.id };
+  // stages: the 30 mph forest road isn't killed by the network step
+  const st = (name, coords, score) => ({ name, score, km: 6, lat: coords.map((p) => p[1]), lon: coords.map((p) => p[0]) });
+  const sD = st('dragon', hairpins, 30), sS = st('straight', straight(6000).map(([x, y]) => [x, y + 0.02]), 20);
+  const cs = E.stageCorridors([sD, sS], 8), sctx = {};
+  for (const c of cs) { const n = c.distM.length, ch = c.id === sD.__ctxId ? dragon : straight55; sctx[c.id] = { channels: Object.fromEntries(Object.entries(ch).map(([k, v]) => [k, new Float32Array(n).fill(v)])), spans: [], points: [] }; }
+  out.dragonStage = E.rescoreStages([sD, sS], sctx).map((s) => s.name)[0] === 'dragon' && sD.score >= 0.95 * sD.mapScore;
+  // country driveways on a 45 mph tertiary don't gate the corners
+  const farm = cand(hairpins, 900, { speed_limit_kph: 72, road_class: 4, road_use: 0, density: 1, access_per_km: 22, surface: 0, sidewalk: 0 });
+  E.evaluate(farm, {}); out.farmGate = farm.ev.meanGate;
+  // the quickest is closed and the rest over budget: the detour is kept (never an empty ranking); all closed: the least bad
+  const closed = cand(straight(10000), 600, back, { spans: [{ fromM: 4000, toM: 4100, kind: 'closure' }] }), detour = cand(straight(14000), 1500, back);
+  out.closedQuick = ['quick', 'fun'].map((lv) => rank([closed, detour], { level: lv }).map((c) => (c.id === detour.id ? 'detour' : 'closed')));
+  const c2 = cand(straight(10000), 600, back, { spans: [{ fromM: 4000, toM: 4100, kind: 'closure' }] }), c3 = cand(straight(10000), 700, back, { spans: [{ fromM: 1, toM: 2, kind: 'closure' }, { fromM: 3, toM: 4, kind: 'no_access' }] });
+  const allBad = rank([c2, c3]); out.allBad = [allBad.length, allBad[0].id === c2.id, allBad[0].infeasible];
+  // unknown data can't win: the same subdivision with and without the router's data
+  const known = cand(wiggly(8000), 900, subdiv), unknown = cand(wiggly(8000), 900, {}), quickHwy = cand(straight(8000), 700, hwy);
+  const ru = rank([known, unknown, quickHwy], { level: 'fun' });
+  out.unknownLoses = ru.findIndex((c) => c.id === unknown.id) >= ru.findIndex((c) => c.id === known.id);
+  // deer can't fill the total: ice still counts, and a longer deer road still costs more
+  const deer = (km, extra = {}) => { const c = cand(straight(km * 1000), km * 60, { ...back, deer_risk: 4, ...extra }, { departAt: Date.parse('2026-11-04T17:20:00-05:00') }); E.evaluate(c, {}); return c.ev.penaltyPts; };
+  out.deerSat = { d40: deer(40), d80: deer(80), d40ice: deer(40, { ice: 1 }) };
+  const hwDeer = (() => { const c = cand(straight(40000), 1500, { ...hwy, deer_risk: 4 }, { departAt: Date.parse('2026-11-04T17:20:00-05:00') }); E.evaluate(c, {}); return c.ev.penaltyPts; })();
+  out.deerMotorway = hwDeer < out.deerSat.d40;
+  // a signal from the router and the same one from OSM, a level crossing under two names: once each
+  const dup = cand(wiggly(6000), 700, { ...back, signals_per_km: 1 }, { points: [{ atM: 1000, kind: 'signal', source: 'router' }, { atM: 1012, kind: 'signal', source: 'osm' }, { atM: 3000, kind: 'signal' },
+    { atM: 2000, kind: 'rail_crossing' }, { atM: 2010, kind: 'level_crossing' }], spans: [{ fromM: 4000, toM: 4300, kind: 'tunnel' }, { fromM: 4140, toM: 4300, kind: 'tunnel' }] });
+  E.evaluate(dup, { prefs: { tunnels: true } }); out.dedupe = { signals: dup.ev.stats.signals, crossing: dup.ev.penaltyRaw, tunnel: dup.ev.bonusPts };
+  // time windows in the place's zone: a church at 9:30 Sunday in Cincinnati, whatever zone the phone is in
+  const sunday830 = Date.parse('2026-11-08T08:30:00-05:00');
+  out.tz = E.active({ weekly: [{ days: [0], from: '08:00', to: '12:30' }] }, sunday830, 39.1, -84.5);
+  out.tzDenver = E.active({ weekly: [{ days: [0], from: '08:00', to: '12:30' }] }, sunday830, 37.97, -87.57);   // Evansville, Central: 7:30 there
 }
 // 7. active(): windows, weekly (wrapping midnight), months
 out.active = [E.active(null, DEPART), E.active({ weekly: [{ from: '19:00', to: '07:00' }] }, Date.parse('2026-11-04T23:30:00-05:00')),
@@ -314,6 +363,7 @@ def test_monotonic(r):
     assert r["monotoneTerms"] == []
     assert r["monoLimit"] and r["monoBiz"] and r["monoSignals"] and r["monoAccess"] and r["monoDensity"]
     assert r["limitMatters"] > 5 and r["bizMatters"] > 3, (r["limitMatters"], r["bizMatters"])
+    assert 0 < r["limitRural"] < r["limitMatters"], "in open country a low limit counts, but far less than in town"
 
 
 def test_every_catalogue_channel_moves_the_ranking_the_right_way(r):
@@ -379,7 +429,7 @@ def test_builder_c_and_d_names_keep_their_meaning(r):
 def test_hard_constraints(r):
     assert r["closedDropped"] and r["closedLaterKept"] and r["allInfeasibleKept"]
     assert r["carWidth"] == ["car_fit"] and r["carFits"] == [] and r["lowCarGravel"] == ["car_fit"]
-    assert r["fuel"] == ["fuel"] and r["fuelOk"] == 0
+    assert r["fuel"] == [] and r["fuelOk"] == 0 and r["fuelGap"] == ["fuel_gap"], "range is car.js's fuel_gap, not a guess from OSM fuel points"
     assert r["active"] == [True, True, False, False, False]
 
 
@@ -395,3 +445,35 @@ def test_the_road_network_and_connectors(r):
     assert hw == 0.6 and avoided == 0 and quickest == 1.0 and none is None
     assert other["use_tolls"] == 0 and other["width"] == 2.0 and other["use_highways"] == 0.6
     assert [s for _, s in r["marks"]] == [0, 60, 130] and all(abs(m - e) <= 3 for (m, _), e in zip(r["marks"], [0, 1000, 2000])), r["marks"]
+
+
+def test_low_limit_country_roads_keep_their_corners(r):
+    d = r["dragon"]
+    assert d["q"] > 60 and d["gate"] > 0.9 and d["poor"] == 0, d
+    assert d["top"] and d["beatsStraight"] and d["townBelow"], "a 30 mph forest road beats a 55 mph straight, and its built-up twin loses"
+    assert r["dragonStage"], "the network step keeps it"
+    assert r["farmGate"] > 0.9, "country driveways don't gate the corners"
+
+
+def test_infeasible_quickest_never_empties_the_ranking(r):
+    assert r["closedQuick"] == [["detour"], ["detour"]]
+    assert r["allBad"] == [1, True, True], "all closed: the least bad, flagged"
+
+
+def test_unknown_data_cannot_win(r):
+    assert r["unknownLoses"]
+
+
+def test_penalties_saturate_per_kind(r):
+    s = r["deerSat"]
+    assert s["d40"] < 12.01 and s["d80"] > s["d40"] and s["d40ice"] > s["d40"] + 3, s
+    assert r["deerMotorway"]
+
+
+def test_duplicates_across_providers_count_once(r):
+    d = r["dedupe"]
+    assert d["signals"] == 2 and abs(d["crossing"] - 0.7) < 1e-6 and d["tunnel"] == 1.5, d
+
+
+def test_time_windows_use_the_places_zone(r):
+    assert r["tz"] is True and r["tzDenver"] is False

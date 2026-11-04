@@ -4,6 +4,7 @@ shared nodes. REAL Overpass answers (2026-11-03) to the provider's own query for
 (tests/fixtures/route_ctx/*.json `overpass`, cut by tools/route_ctx_fixtures.js), plus small synthetic cases for the
 rules. One query per plan, kept per tile a week, never blocks; unknown stays NaN."""
 import json
+import re
 import os
 import shutil
 import subprocess
@@ -107,7 +108,9 @@ const kinds = (pts) => { const o = {}; for (const p of pts) o[p.kind] = (o[p.kin
   const half = new Uint8Array(n); for (let i = 0; i < 20; i++) half[i] = 1;
   const hr = O.aggregate(syn, O.parse(els), half);
   out.half = { status: hr.status, nanMax: nan(hr.channels.maxspeed_kph), nanGuard: nan(hr.channels.guard_rail), pointsPast: hr.points.filter((p) => p.atM > 500).length };
-  out.query = O.query([[[39, -84.5], [39.01, -84.49]]]);
+  out.query = O.query(['780_-1690']);
+  out.lanesOneway = (() => { const e2 = JSON.parse(JSON.stringify(els)); e2.elements[0].tags.oneway = 'yes'; e2.elements[0].tags.lanes = '3'; return mean(O.aggregate(syn, O.parse(e2), new Uint8Array(n).fill(1)).channels.lanes); })();
+  out.limits = [O.metresOf('3.5'), O.metresOf("12'6\""), O.metresOf('default'), O.tonnesOf('20 st'), O.tonnesOf('10')];
   out.registered = (globalThis.ApexRouteCtx.providers || []).filter((p) => p.id === 'osm_overpass').map((p) => ({ channels: p.channels.length, budgetMs: p.budgetMs }));
   console.log(JSON.stringify(out));
 })().catch((e) => { console.error(e); process.exit(1); });
@@ -143,7 +146,8 @@ def test_one_query_kept_a_week(out):
     assert c["staleStatus"] == "unavailable" and c["staleAllNaN"], "after a week, with no server, unknown (never stale data as fresh)"
     assert c["keys"] >= 1 and c["bytes"] < 400000
     q = c["q"]
-    assert "around:70," in q and "node(w.r)" in q and "barrier=guard_rail" in q and "amenity=fuel" in q and "foreach.rels" in q
+    assert "node(w.r)" in q and "barrier=guard_rail" in q and "amenity=fuel" in q and "foreach.rels" in q
+    assert not re.search(r"around:\d+,-?\d", q) and not re.search(r"\d\.\d{5}", q), "the servers get tile boxes (4 decimals), never the route's line"
     assert out["reuse"] == {"asked": 0, "status": "ok"}, "the same road driven the other way reuses the kept stretch"
 
 
@@ -177,7 +181,9 @@ def test_stop_signs_that_apply_and_shared_node_joins(out):
     assert s["kinds"].get("signal") == 1 and s["kinds"].get("animal_crossing") == 1 and s["kinds"].get("fuel") == 1
     fuel = [p for p in s["points"] if p["kind"] == "fuel"][0]
     assert fuel["value"] == 1 and fuel["label"] == "Speedway" and 450 < fuel["offM"] < 550
-    assert round(s["maxspeed"], 1) == 72.4 and s["lanes"] == 2
+    assert round(s["maxspeed"], 1) == 72.4 and s["lanes"] == 1, "lanes=2 on a two-way road: one in your direction"
+    assert out["lanesOneway"] == 3
+    assert [round(x, 2) if x is not None else None for x in out["limits"]] == [3.5, 3.81, None, 18.14, 10.0]
     assert s["guard"] and min(s["guard"]) >= 31 and max(s["guard"]) <= 39
     assert s["side"] > 0 and s["drive"] == 0, "a driveway drawn beside the road without a shared node isn't a join"
 
@@ -194,5 +200,5 @@ def test_unknown_stays_unknown(out):
 
 def test_query_shape(out):
     q = out["query"]
-    assert q.startswith("[out:json][timeout:25]") and q.count("39.00000,-84.50000") == 3, "the polyline appears once per radius"
-    assert out["registered"] and out["registered"][0]["channels"] == 17
+    assert q.startswith("[out:json][timeout:25]") and q.count("39.0000,-84.5000,39.0500,-84.4500") == 3, "the tile's box once each for ways, POIs and fuel"
+    assert out["registered"] and out["registered"][0]["channels"] == 20

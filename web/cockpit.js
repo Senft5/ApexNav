@@ -3099,7 +3099,12 @@
       tasteOn(pool);
       await applyMeasured(rankPool(pool, level).slice(0, 3).map(r => pool.find(c => c.t === r.t)), ui);   // the top few only
       await preferOn(pool, level);
-      const ranked = rankPool(pool, level), best = ranked[0];
+      let ranked = rankPool(pool, level);
+      // never an empty ranking (route_engine.js keeps the least bad when all break a hard constraint); if a future change
+      // empties it anyway, today's ranking still gives a route
+      if (!ranked.length) ranked = FunRoute.rank(pool, level);
+      if (!ranked.length) { toast('Couldn\'t build the route. Check signal and try again.'); return false; }
+      const best = ranked[0];
       const quickPool = pool.filter(c => Number.isFinite(c.timeS)).reduce((x, y) => (y.timeS < x.timeS ? y : x), best);
       const quickest = ranked.find(c => c.t === quickPool.t) || quickPool;   // with the engine's parts, for the why line
       clearTimeout(earlyTimer);
@@ -3111,7 +3116,8 @@
       const offered = FunRoute.distinctOptions(ranked, 3);
       const t = await useOption({ id, name, request, level, quickest, list: offered }, 0);
       if (!t) return false;   // no toast: the route bar and card say it (REVIEW.md 1.2, Route bar: the bar is the toast)
-      if (window.ApexRouteCar) routeAftercare(offered[0]);
+      if (offered[0].infeasible && offered[0].ev && offered[0].ev.hard.length) toast(`No way round it: ${offered[0].ev.hard[0].label} on this route. Check before you go.`);   // every candidate broke a hard constraint
+      else if (window.ApexRouteCar) routeAftercare(offered[0]);
       window.apexDebug && (window.apexDebug.lastFun = rankPool(pool, level).map(c => ({ kind: c.kind, fun: c.fun, timeS: c.timeS, value: c.value, adjust: c.adjust || 0, glare: c.glare, townKm: c.townKm,
         parts: c.parts || null, quality: c.ev ? c.ev.quality : null, confidence: c.ev ? c.ev.confidence : null, poorKm: c.ev ? c.ev.poorKm : null })));
       return true;

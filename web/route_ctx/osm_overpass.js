@@ -57,12 +57,13 @@
   const PUBLIC_RE = /^(motorway|trunk|primary|secondary|tertiary|unclassified|residential|living_street|road)(_link)?$/;
   const RANK = { motorway: 1, trunk: 2, primary: 3, secondary: 4, tertiary: 5, unclassified: 6, residential: 7, living_street: 8, road: 7, service: 9 };
   const rankOf = (hw) => RANK[String(hw || '').replace('_link', '')] || 9;
-  const KEEP = new Set(['highway', 'name', 'ref', 'maxspeed', 'maxspeed:forward', 'maxspeed:backward', 'lanes', 'oneway', 'surface',
+  const KEEP = new Set(['highway', 'name', 'ref', 'maxspeed', 'maxspeed:forward', 'maxspeed:backward', 'lanes', 'oneway', 'surface', 'maxheight', 'maxwidth', 'maxweight',
     'smoothness', 'hgv', 'access', 'vehicle', 'motor_vehicle', 'motorcar', 'bridge', 'covered', 'junction', 'traffic_calming',
     'crossing', 'railway', 'hazard', 'animal', 'traffic_sign', 'barrier', 'tourism', 'historic', 'amenity', 'opening_hours', 'brand',
     'route', 'network', 'scenic', 'service', 'stop', 'dual_carriageway', 'memorial', 'bridge:name', 'tunnel']);
   const CHANNELS = ['maxspeed_kph', 'lanes', 'divided', 'oneway', 'surface_paved', 'smoothness', 'hgv', 'access_level', 'guard_rail',
-    'cycle_route', 'byway', 'signals_per_km', 'stops_per_km', 'crossings_per_km', 'calming_per_km', 'side_roads_per_km', 'driveway_joins_per_km'];
+    'cycle_route', 'byway', 'signals_per_km', 'stops_per_km', 'crossings_per_km', 'calming_per_km', 'side_roads_per_km', 'driveway_joins_per_km',
+    'maxheight_m', 'maxwidth_m', 'maxweight_t'];
 
   // ---- tag parsing (pure) ------------------------------------------------------------------------------------------
   /** maxspeed in km/h: "45 mph" -> 72.4, "50" -> 50, "50;40" -> 50; NaN for none/signals/walk/zones. */
@@ -87,6 +88,23 @@
   }
   const isOneway = (t) => t.oneway === 'yes' || t.oneway === '1' || t.oneway === '-1' || t.junction === 'roundabout' || /^motorway(_link)?$/.test(t.highway || '') && t.oneway !== 'no';
   const lanesOf = (t) => { const m = String(t.lanes || '').match(/\d+/); return m ? +m[0] : NaN; };
+  /** A posted height or width in metres: "3.5", "3.5 m", "12'6\"", "12 ft 6 in"; NaN for none, default or below_default. */
+  function metresOf(v) {
+    if (v == null) return NaN;
+    const s = String(v).trim();
+    let m = s.match(/^(\d+(?:\.\d+)?)\s*(m)?$/i);
+    if (m) return +m[1];
+    m = s.match(/^(\d+)\s*(?:'|ft)\s*(?:(\d+(?:\.\d+)?)\s*(?:"|in)?)?$/i);
+    return m ? +m[1] * 0.3048 + (m[2] ? +m[2] * 0.0254 : 0) : NaN;
+  }
+  /** A posted weight in metric tonnes: "10", "10 t", "20 st" (short tons), "6000 lbs". */
+  function tonnesOf(v) {
+    if (v == null) return NaN;
+    const m = String(v).trim().match(/^(\d+(?:\.\d+)?)\s*(t|st|lbs?|kg)?$/i);
+    if (!m) return NaN;
+    const n = +m[1], u = (m[2] || 't').toLowerCase();
+    return u === 'st' ? n * 0.90718 : u.startsWith('lb') ? n * 0.000453592 : u === 'kg' ? n / 1000 : n;
+  }
   /** What a sign / hazard node warns of: { kind, label } or null. */
   function hazardOf(t) {
     const s = String(t.traffic_sign || ''), h = String(t.hazard || ''), a = String(t.animal || '');
@@ -122,11 +140,16 @@
     return pts.filter((_, i) => keep[i]);
   }
   const polyArg = (piece) => piece.map(([la, lo]) => `${la.toFixed(5)},${lo.toFixed(5)}`).join(',');
-  /** The one query for these pieces ([[lat, lon], ...] each): ways near, the nodes on them, signs, POIs, fuel, routes. */
-  function query(pieces) {
-    const ways = pieces.map((p) => `way(around:${R_WAY},${polyArg(p)})[highway~"${DRIVABLE}"];`).join('');
-    const pois = pieces.map((p) => `nwr(around:${R_POI},${polyArg(p)})[~"^(tourism|historic)$"~"^(viewpoint|memorial|marker|monument|milestone|wayside_cross|wayside_shrine|ruins|fort|battlefield|mill|archaeological_site|boundary_stone|bridge|building|church|yes)$"];` +
-      `nwr(around:${R_FUEL},${polyArg(p)})[amenity=fuel];`).join('');
+  /**
+   * The one query for these tiles (the 0.05° boxes the cache keeps, "i_j" keys): every drivable way in them, the nodes on
+   * those ways, signs, POIs, fuel, routes. The servers get tile boxes, never the route's line (docs/APP_REVIEW.md); which
+   * ways the route uses is worked out on the phone.
+   */
+  function query(tiles) {
+    const bb = (k) => { const [i, j] = k.split('_').map(Number); return [i * TILE, j * TILE, (i + 1) * TILE, (j + 1) * TILE].map((v) => v.toFixed(4)).join(','); };
+    const ways = tiles.map((k) => `way(${bb(k)})[highway~"${DRIVABLE}"];`).join('');
+    const pois = tiles.map((k) => `nwr(${bb(k)})[~"^(tourism|historic)$"~"^(viewpoint|memorial|marker|monument|milestone|wayside_cross|wayside_shrine|ruins|fort|battlefield|mill|archaeological_site|boundary_stone|bridge|building|church|yes)$"];` +
+      `nwr(${bb(k)})[amenity=fuel];`).join('');
     return `[out:json][timeout:25][maxsize:67108864];(${ways})->.r;` +
       `(node(w.r)[highway~"^(traffic_signals|stop|give_way|crossing|mini_roundabout)$"];node(w.r)[traffic_calming];node(w.r)[railway=level_crossing];node(w.r)[crossing];)->.on;` +
       `node(around.r:${R_SIGN})[~"^(hazard|traffic_sign)$"~"."]->.signs;way(around.r:15)[barrier=guard_rail]->.rails;(${pois})->.poi;` +
@@ -212,8 +235,10 @@
       if (!w) continue;   // no way: the tag channels stay unknown
       const t = w.tags;
       ch.maxspeed_kph[i] = speedKph(t.maxspeed != null ? t.maxspeed : t['maxspeed:forward'] != null ? t['maxspeed:forward'] : t['maxspeed:backward']);
-      ch.lanes[i] = lanesOf(t);
       const ow = isOneway(t);
+      // OSM's lanes is the road's total; the model (and the router) read lanes in your direction
+      ch.lanes[i] = ow ? lanesOf(t) : Math.ceil(lanesOf(t) / 2);
+      ch.maxheight_m[i] = metresOf(t.maxheight); ch.maxwidth_m[i] = metresOf(t.maxwidth); ch.maxweight_t[i] = tonnesOf(t.maxweight);
       ch.oneway[i] = ow ? 1 : 0;
       ch.divided[i] = t.dual_carriageway === 'yes' ? 1 : ow && t.junction !== 'roundabout' && !/_link$/.test(t.highway) && partner(i, w) ? 1 : 0;
       ch.surface_paved[i] = paved(t.surface);
@@ -374,6 +399,14 @@
    * The pieces of route still to ask for: runs of samples whose cell isn't covered, joined across short covered gaps
    * (< 300 m), simplified, within the MAX_VERTS / MAX_PIECES budget. Returns { pieces: [[[lat, lon]]], asked: [[ci, from, to]] }.
    */
+  // the tiles a plan still needs (those its uncovered samples lie in), most-used first, at most MAX_TILES a plan; the rest
+  // stay unknown this time and come from the cache on a later plan
+  const MAX_TILES = 12;
+  function planTiles(corridors, covered) {
+    const count = new Map();
+    corridors.forEach((c, ci) => { for (let i = 0; i < c.lat.length; i++) if (!covered[ci][i]) { const k = tileKey(c.lat[i], c.lon[i]); count.set(k, (count.get(k) || 0) + 1); } });
+    return [...count.entries()].sort((a, b) => b[1] - a[1]).slice(0, MAX_TILES).map(([k]) => k);
+  }
   function planPieces(corridors, covered) {
     const runs = [];
     corridors.forEach((c, ci) => {
@@ -447,19 +480,20 @@
         const k = new Uint8Array(c.lat.length);
         for (let i = 0; i < c.lat.length; i++) {
           const e = load(tileKey(c.lat[i], c.lon[i]));
-          k[i] = e && e.cov.has(covKey(c.lat[i], c.lon[i])) ? 1 : 0;
+          k[i] = e && (e.cov.has('*') || e.cov.has(covKey(c.lat[i], c.lon[i]))) ? 1 : 0;
         }
         return k;
       });
-      const { pieces, asked } = planPieces(corridors, covered);
-      if (pieces.length) {
-        const json = await ask(query(pieces), opts);
+      const want = planTiles(corridors, covered);
+      if (want.length) {
+        const json = await ask(query(want), opts);
         if (json) {
           const fresh = parse(json);
           for (const m of ['nodes', 'ways', 'rels']) for (const [k, v] of fresh[m]) els[m].set(k, v);
-          // covered: the asked samples' own line (the query's simplified line is within SIMPLIFY_M of it)
-          storeElements(storage, piecesCells(asked.map(([ci, a, b]) => { const c = corridors[ci], p = []; for (let i = a; i <= b; i++) p.push([c.lat[i], c.lon[i]]); return p; })), fresh, now);
-          for (const [ci, a, b] of asked) for (let i = a; i <= b; i++) covered[ci][i] = 1;
+          // covered: the whole of each asked tile ('*')
+          storeElements(storage, new Map(want.map((k) => [k, new Set(['*'])])), fresh, now);
+          const asked = new Set(want);
+          corridors.forEach((c, ci) => { for (let i = 0; i < c.lat.length; i++) if (asked.has(tileKey(c.lat[i], c.lon[i]))) covered[ci][i] = 1; });
         }
       }
       corridors.forEach((c, ci) => {
@@ -472,7 +506,7 @@
   }
 
   const provider = { id: 'osm_overpass', version: 1, channels: CHANNELS, needs: { network: true }, budgetMs: 15000, fetch: fetchCtx };
-  const api = { provider, CHANNELS, SERVERS, KEEP, TILE, COV, speedKph, paved, hgvLevel, accessLevel, hazardOf, bywayLevel, simplify, query, parse,
+  const api = { provider, CHANNELS, SERVERS, KEEP, TILE, COV, MAX_TILES, speedKph, metresOf, tonnesOf, planTiles, paved, hgvLevel, accessLevel, hazardOf, bywayLevel, simplify, query, parse,
     aggregate, planPieces, piecesCells, tileKey, covKey, readTile, storeElements, _reset: () => { downUntil = 0; } };
   root.ApexOsmOverpass = api;
   if (Ctx && Ctx.register) Ctx.register(provider);

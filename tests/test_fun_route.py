@@ -452,6 +452,12 @@ async function run({ level, routes, osrm, discover, matrix, places, avoid = FunR
     routes: async (pts, alts, extra) => [{ coords: wiggly, turns: [], timeS: 560 }] });
   out.engineAvoidHighways = { timeS: r.built[0].timeS, highwayAsked: r.calls.extras.some((x) => x && x.costing_options && x.costing_options.auto.use_highways === 1) };
   Ctx.unregister('stub');
+  // every candidate crosses a closure: never an empty ranking, the least bad is built and says so
+  Ctx.register({ id: 'closed', channels: [], fetch: async (cs) => Object.fromEntries(cs.map((c) => [c.id, { status: 'ok', channels: {}, spans: [{ fromM: 100, toM: 200, kind: 'closure', label: 'Closed' }], points: [] }])) });
+  r = await run({ level: 'fun', win: engineWin, discover: async () => [],
+    routes: async (pts, alts, extra) => (extra && extra.costing_options && extra.costing_options.auto.use_highways === 1 ? [{ coords: straight, turns: [], timeS: 600 }] : [{ coords: wiggly, turns: [], timeS: 560 }]) });
+  out.allClosed = { built: r.built.length, hard: r.built[0] && r.built[0].engine ? r.built[0].engine.hard.map((h) => h.kind) : null, toasts: r.toasts };
+  Ctx.unregister('closed');
   process.stdout.write(JSON.stringify(out));
 })().catch(e => { console.error(e); process.exitCode = 1; });
 """
@@ -470,6 +476,7 @@ def test_app_ranks_with_the_route_engine():
         assert e["why"] and e["why"].startswith("Highway instead of") and "side streets" in e["why"], e["why"]
         assert e["quality"] > 50
     assert r["engineAvoidHighways"] == {"timeS": 560, "highwayAsked": False}, "the driver's avoid-highways choice is kept"
+    assert r["allClosed"]["built"] == 1 and r["allClosed"]["hard"] == ["closure"], r["allClosed"]
 
 
 def test_app_fun_route_picks_and_falls_back():

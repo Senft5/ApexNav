@@ -20,6 +20,13 @@
   const FunRoute = root.ApexFunRoute || (typeof require === 'function' ? require('./fun_route.js') : null);
   const Ctx = root.ApexRouteCtx && root.ApexRouteCtx.corridor ? root.ApexRouteCtx : typeof require === 'function' ? require('./route_ctx/registry.js') : root.ApexRouteCtx || null;
   const Sun = () => root.ApexSun || null;
+  // the time at the place you'd be (ctx_util.js localTime: the sample's own zone), not the phone's
+  const Util = () => root.ApexRouteCtxUtil || (typeof require === 'function' ? (() => { try { return require('./route_ctx/ctx_util.js'); } catch (_) { return null; } })() : null);
+  function local(ms, lat, lon) {
+    const U = Util();
+    if (U && U.localTime && Number.isFinite(lat) && Number.isFinite(lon)) { const t = U.localTime(ms, lat, lon); return { day: t.dow, min: Math.floor(t.hour * 60), month: t.m }; }
+    const d = new Date(ms); return { day: d.getDay(), min: d.getHours() * 60 + d.getMinutes(), month: d.getMonth() + 1 };
+  }
 
   const clamp01 = (v) => Math.max(0, Math.min(1, v));
   const finite = (v) => typeof v === 'number' && Number.isFinite(v);
@@ -98,7 +105,7 @@
   ];
   /** Per-sample penalty channels: points per km at full strength, `at` = how strong at that time (0–1). */
   const PER_KM = [
-    { ch: 'deer_risk', perKm: 1.5, label: 'deer', value: (v) => clamp01((v - 1) / 3), at: (ctx) => ctx.deerHour, timedBy: 'deer_time_risk' },   // D: a rate, 1 = the state's average hour
+    { ch: 'deer_risk', perKm: 1.5, label: 'deer', value: (v) => clamp01((v - 1) / 3), at: (ctx) => ctx.deerHour, timedBy: 'deer_time_risk', motorway: 0.25 },   // fenced, wide verges   // D: a rate, 1 = the state's average hour
     { ch: 'fog_vis_m', perKm: 1.2, label: 'fog', value: (v) => clamp01(1 - v / 1000), valley: true, skipIf: 'fog_risk' },   // worse in the valleys, lighter on ridges
     { ch: 'fog_risk', perKm: 1.2, label: 'fog', value: clamp01 },                                  // D: 0-1, valleys and ridges already in it
     { ch: 'crosswind_ms', perKm: 0.6, label: 'crosswind', value: (v) => clamp01((v - 8) / 10), exposed: true },   // D's crosswind_mps, × its exposure
@@ -175,6 +182,8 @@
     PENALTY_CAP: 40, BONUS_CAP: 15,
     DRIVER: 6,             // points for a route that fits the driver (driver_fit 1) vs one that doesn't (-1): ±6
     LOG_FLOOR: 0.05,
+    SPEED_FLOOR: 0.7, ACCESS_FLOOR: 0.75,           // a low limit / driveways in open country: at most this damning
+    KIND_CAP: 12,          // the most one kind of penalty costs (deer alone can't fill the total)
   };
   // The families one bad signal of which damns a road (the soft minimum in samples()), and the router density at or under
   // which a "residential" road with no sidewalk is taken for a country lane.
@@ -185,13 +194,13 @@
   // ---- time of day --------------------------------------------------------------------------------------------------
   const minutesOf = (s) => { const m = /^(\d{1,2}):(\d{2})$/.exec(s || ''); return m ? +m[1] * 60 + +m[2] : null; };
   /** Is a `when` ({ windows: [[startMs, endMs]], weekly: [{ days?, from, to }], months? (1–12) }) on at epoch ms? None = always. */
-  function active(when, ms) {
+  function active(when, ms, lat, lon) {
     if (!when) return true;
-    const d = new Date(ms);
     if (Array.isArray(when.windows) && when.windows.length && !when.windows.some(([a, b]) => ms >= a && ms < b)) return false;
-    if (Array.isArray(when.months) && !when.months.includes(d.getMonth() + 1)) return false;
+    const t = local(ms, lat, lon);
+    if (Array.isArray(when.months) && !when.months.includes(t.month)) return false;
     if (Array.isArray(when.weekly) && when.weekly.length) {
-      const day = d.getDay(), min = d.getHours() * 60 + d.getMinutes();
+      const day = t.day, min = t.min;
       return when.weekly.some((w) => {
         if (Array.isArray(w.days) && !w.days.includes(day)) return false;
         const a = minutesOf(w.from), b = minutesOf(w.to);
@@ -203,7 +212,7 @@
   }
   /** What time-dependent terms need at one sample: deer hour (sun −10°…+8°), dark (sun under −6°), weekend morning, golden light. */
   function moment(ms, lat, lon) {
-    const d = new Date(ms), day = d.getDay(), h = d.getHours();
+    const d = new Date(ms), t = local(ms, lat, lon), day = t.day, h = t.min / 60;
     const out = { weekendMorning: (day === 0 || day === 6) && h >= 7 && h < 11 ? 1 : 0, weekendDay: (day === 0 || day === 6) && h >= 9 && h < 18 ? 1 : 0, deerHour: null, dark: null, sun: null };
     const S = Sun();
     if (S && S.sunPosition) {
@@ -273,6 +282,30 @@
     return out;
   }
   /**
+   * How built-up a sample is, 0 open country … 1 town, from whatever says so (router density, sidewalks, a residential or
+   * service road, businesses, housing, impervious ground, addresses, buildings, residential or urban land use); the most
+   * built signal wins. null where none of them is known (then a low limit stays as damning as it reads).
+   */
+  function builtEvidence(ctx) {
+    const f = [['density', (v) => clamp01((v - 2) / 5)], ['sidewalk', (v) => (v >= 0.5 ? 1 : 0)], ['road_class', (v) => (v >= 6 ? 0.8 : 0)],
+      ['road_use', (v) => ([4, 5, 6, 8, 9, 10, 11].includes(Math.round(v)) ? 1 : 0)], ['business_per_km', (v) => clamp01(v / 8)],
+      ['housing_per_km2', (v) => clamp01(v / 500)], ['impervious_pct', (v) => clamp01((v - 8) / 25)], ['address_per_km', (v) => clamp01(v / 50)],
+      ['address_density', (v) => clamp01(v / 600)], ['buildings_per_ha', (v) => clamp01(v / 4)], ['bldg_per_km', (v) => clamp01(v / 50)],
+      ['landuse_residential', (v) => clamp01(v / 0.6)], ['landuse_urban', (v) => clamp01(v / 0.4)]]
+      .map(([k, fn]) => [channel(ctx, k), fn, k]).filter(([v]) => v);
+    const dens = channel(ctx, 'density');
+    return (i) => {
+      let b = null;
+      for (const [v, fn, k] of f) {
+        if (!Number.isFinite(v[i])) continue;
+        // a "residential" class in open country is the TIGER county road (samples() reads it as a lane): not built
+        const x = k === 'road_class' && v[i] === 6 && dens && dens[i] <= RURAL_DENSITY ? 0 : fn(v[i]);
+        b = b == null ? x : Math.max(b, x);
+      }
+      return b;
+    };
+  }
+  /**
    * Per-sample quality, scenery and their confidences (share of the possible weight that was known) for a corridor's
    * context. Pure. { n, quality, qConf, scenery, sConf, terms: { [channel]: known share } }.
    */
@@ -289,9 +322,10 @@
     const terms = {};
     for (const x of [...qs, ...ss]) { let k = 0; for (let i = 0; i < n; i++) if (Number.isFinite(x.v[i])) k++; terms[x.t.ch] = k / n; }
     const dens = channel(ctx, 'density'), walk = channel(ctx, 'sidewalk');
+    const builtAt = builtEvidence(ctx);
     for (let i = 0; i < n; i++) {
       let lw = 0, sw = 0;
-      const fam = {};
+      const fam = {}, built = builtAt(i);
       for (const x of qs) {
         let v = x.v[i];
         if (!Number.isFinite(v) || x.u.some((u) => u && Number.isFinite(u[i]))) continue;
@@ -299,8 +333,12 @@
         if ((x.t.family === 'built' || x.t.family === 'business' || (x.t.family === 'busy' && x.t.ch !== 'traffic_ratio')) && limited(i)) continue;
         // a "residential" road in open country with no sidewalk is a country lane (US TIGER imports tag county roads so)
         if (x.t.ch === 'road_class' && v === 6 && dens && dens[i] <= RURAL_DENSITY && !(walk && walk[i] >= 0.5)) v = 5;
-        const g = x.t.g(v);
+        let g = x.t.g(v);
         if (!finite(g)) continue;
+        // a 30 mph limit or driveways every 50 m on a twisty country road (no houses, shops, sidewalks or density around) is
+        // the road's character, not a town: the floor holds unless the built signals agree (built evidence, below)
+        if (x.t.family === 'speed' && built != null) g = Math.max(g, W.SPEED_FLOOR * (1 - built));
+        if (x.t.family === 'access' && built != null) g = Math.max(g, W.ACCESS_FLOOR * (1 - built));
         const lg = Math.log(Math.max(W.LOG_FLOOR, g));
         lw += x.t.w * lg; sw += x.t.w;
         if (DAMNING.has(x.t.family)) { const f = fam[x.t.family] || (fam[x.t.family] = [0, 0]); f[0] += x.t.w * lg; f[1] += x.t.w; }
@@ -371,8 +409,14 @@
     out.confidence = conf / n;
     out.samples = s;
     // corners worth driving: each corner's weight times the quality gate where it is
-    const scaleAt = qn ? (m) => gate(s.quality[at(c, m)]) : null;
-    if (scaleAt && cand.t) {
+    let gs = 0;
+    for (let i = 0; i < n; i++) if (Number.isFinite(s.quality[i])) gs += gate(s.quality[i]);
+    out.meanGate = qn ? gs / qn : null; out.knownKm = qn * step / 1000; out.km = total / 1000;
+    out.poorPerKnownKm = qn ? out.poorCost / Math.max(0.1, qn * step / 1000 - 2 * W.END_GRACE_M / 1000) : null;   // per km the cost could apply to
+    // unknown samples take the pool's mean gate when rank() knows it (opts.unknownGate), else count in full as before
+    const ug = finite(opts.unknownGate) ? opts.unknownGate : 1;
+    const scaleAt = qn || finite(opts.unknownGate) ? (m) => { const q = s.quality[at(c, m)]; return Number.isFinite(q) ? gate(q) : ug; } : null;
+    if (scaleAt && (cand.t || opts.score)) {
       const f = opts.score ? opts.score(cand, scaleAt) : FunRoute.score(cand.t, cand.turnsM || [], prefs, scaleAt);
       out.funGated = f || null;
     } else out.funGated = cand.fun || null;
@@ -396,7 +440,7 @@
       for (let i = 0; i < n; i++) {
         if (!Number.isFinite(v[i])) continue;
         const when = timed ? 1 : atCh && Number.isFinite(atCh[i]) ? atCh[i] : term.at ? (term.at(mom(i)) ?? 0) : 1;
-        const place = (term.rural ? (densCh && densCh[i] >= 4 ? 0 : 1) : 1) * (term.crop ? cropFactor(i) : 1) * (term.wet ? wet(i) : 1);
+        const place = (term.rural ? (densCh && densCh[i] >= 4 ? 0 : 1) : 1) * (term.crop ? cropFactor(i) : 1) * (term.wet ? wet(i) : 1) * (term.motorway && limited(i) ? term.motorway : 1);
         if (term.perVehicle) {
           // crashes per km follow traffic: with the road's AADT, the rate per 100 million vehicle-km against the US fatal rate
           // (~0.8 per 100 M vehicle-km); without it, a busy road's count says nothing (motorways) and a quiet road's counts as is
@@ -425,22 +469,19 @@
       }
       if (km >= 0.5) out.bonuses.push({ label: 'golden light', points: Math.min(4, 0.5 * km), km });
     }
-    const counted = {}, seenBonus = new Set();
+    const counted = {};
     const spanKm = (sp) => Math.max(0, (sp.toM - sp.fromM) / 1000);
-    for (const sp of [...(ctx.spans || []), ...(ctx.points || []).map((p) => ({ ...p, fromM: p.atM, toM: p.atM, point: true }))]) {
-      const kind = sp.kind in KIND_ALIASES ? KIND_ALIASES[sp.kind] : sp.kind, rule = kind && SPANS[kind];
+    for (const sp of features(ctx)) {
+      const kind = sp.kind, rule = kind && SPANS[kind];
       if (!rule) continue;
       if (rule.unlessChannel && [].concat(rule.unlessChannel).some((u) => channel(ctx, u))) continue;
       if (rule.pref && !prefs[rule.pref]) continue;
       const i = at(c, sp.fromM), when = sp.when || rule.when || null;
-      if (!active(when, c.etaAt[i])) continue;
+      if (!active(when, c.etaAt[i], c.lat[i], c.lon[i])) continue;
       const hard = sp.hard === true || (typeof rule.hard === 'function' ? rule.hard(sp) : rule.hard);
       if (hard) { out.hard.push({ kind, label: sp.label || rule.label, atM: sp.fromM }); continue; }
       if (!rule.each && !rule.perKm && !rule.bonus && !rule.bonusPerKm && !rule.perMinValue) continue;   // known, shown elsewhere, not ranked
       if (rule.bonus || rule.bonusPerKm) {
-        const key = `${kind}:${Math.round(sp.fromM / 150)}`;              // the same tunnel from two providers counts once
-        if (seenBonus.has(key)) continue;
-        seenBonus.add(key);
         const pts = rule.bonus || rule.bonusPerKm * spanKm(sp);
         counted[kind] = Math.min(rule.bonusCap || Infinity, (counted[kind] || 0) + pts);
         continue;
@@ -462,21 +503,18 @@
         if (!v || mine == null) continue;
         for (let i = 0; i < n; i++) if (Number.isFinite(v[i]) && (ch === 'surface' ? v[i] >= mine : v[i] < mine)) { out.hard.push({ kind: 'car_fit', label, atM: c.distM[i] }); break; }
       }
-      if (finite(car.range_km) && car.range_km > 0) {
-        const fuel = (ctx.points || []).filter((p) => p.kind === 'fuel').map((p) => p.atM).sort((a, b) => a - b);
-        if (fuel.length || ctx.fuelKnown) {
-          let last = 0, gap = 0;
-          for (const f of [...fuel, total]) { gap = Math.max(gap, f - last); last = f; }
-          if (gap / 1000 > 0.85 * car.range_km) out.hard.push({ kind: 'fuel', label: 'longer than your range without fuel', atM: 0 });
-        }
-      }
+      // fuel range: car.js's fuel_gap span (hard only where its station data covers the stretch), not a guess from here
     }
     if (prefs.passenger && !channel(ctx, 'passenger_cost') && cand.t && Array.isArray(cand.t.events)) {
       const tight = cand.t.events.filter((e) => e.type === 'corner' && (e.severity === 'HP' || e.severity === 1 || e.severity === 2)).length;
       if (tight) addPen('tight corners with a passenger', Math.min(15, 0.3 * tight), 0);
     }
-    out.penalties = [...pen.values()].map((p) => ({ ...p, points: Math.round(p.points * 10) / 10 })).filter((p) => p.points > 0).sort((a, b) => b.points - a.points);
-    out.penaltyPts = Math.min(W.PENALTY_CAP, out.penalties.reduce((a, p) => a + p.points, 0));
+    // each kind saturates softly at KIND_CAP (deer alone can't fill the total, and a longer deer road still costs more), then
+    // the total softly at PENALTY_CAP: monotonic all the way, so ice, a school zone or works always still count
+    const soft = (x, cap) => cap * (1 - Math.exp(-x / cap));
+    out.penalties = [...pen.values()].map((p) => ({ ...p, raw: p.points, points: Math.round(soft(p.points, W.KIND_CAP) * 10) / 10 })).filter((p) => p.points > 0).sort((a, b) => b.points - a.points);
+    out.penaltyPts = soft(out.penalties.reduce((a, p) => a + p.points, 0), W.PENALTY_CAP);
+    out.penaltyRaw = [...pen.values()].reduce((a, p) => a + p.points, 0);      // before saturation (tests, the card)
     out.bonusPts = Math.min(W.BONUS_CAP, out.bonuses.reduce((a, p) => a + p.points, 0));
     // the driver (driver.js): driver_fit, else skill_fit, -1..1 → ±6 points by the share known; the taste channel (crowd.js,
     // fun points over 2 km windows) is the taste term for candidates the cockpit's tasteOn didn't score
@@ -488,6 +526,26 @@
     out.stats = stats(c, ctx, s);
     cand.ev = out;
     return out;
+  }
+  /**
+   * A context's spans and points as one list, kinds normalised (KIND_ALIASES) and duplicates across providers dropped: the
+   * same kind within DEDUPE_M of one already kept (a signal from the router and from OSM, a level crossing as rail_crossing
+   * and level_crossing, a tunnel as a span and a point). Kept on the context; the why line counts from it too.
+   */
+  const DEDUPE_M = 40, DEDUPE_FEATURE_M = 150;
+  function features(ctx) {
+    if (ctx.__features) return ctx.__features;
+    const all = [...(ctx.spans || []), ...(ctx.points || []).map((p) => ({ ...p, fromM: p.atM, toM: p.atM, point: true }))]
+      .map((x) => ({ ...x, kind: x.kind in KIND_ALIASES ? KIND_ALIASES[x.kind] : x.kind })).filter((x) => x.kind)
+      .sort((a, b) => a.fromM - b.fromM || (a.point ? 1 : -1));
+    const kept = [];
+    for (const x of all) {
+      const near = ['signal', 'stop', 'crossing', 'junction', 'driveway'].includes(x.kind) ? DEDUPE_M : DEDUPE_FEATURE_M;
+      if (kept.some((k) => k.kind === x.kind && Math.abs(k.fromM - x.fromM) <= near && (x.point || k.point || Math.abs(k.toM - x.toM) <= near))) continue;
+      kept.push(x);
+    }
+    Object.defineProperty(ctx, '__features', { value: kept, enumerable: false, configurable: true });
+    return kept;
   }
   /** Plain facts for the why line and the card: limits off the highway, signals, km by kind of road, forest, climb. */
   function stats(c, ctx, s) {
@@ -511,7 +569,7 @@
     }
     let climb = null;
     if (elev) { climb = 0; let ref = null; for (let i = 0; i < n; i++) { const e = elev[i]; if (!Number.isFinite(e)) continue; if (ref == null) ref = e; else if (e > ref + 3) { climb += e - ref; ref = e; } else if (e < ref - 3) ref = e; } }
-    const signals = (ctx.points || []).filter((p) => p.kind === 'signal').length, stops = (ctx.points || []).filter((p) => p.kind === 'stop').length;
+    const fts = features(ctx), signals = fts.filter((p) => p.point && p.kind === 'signal').length, stops = fts.filter((p) => p.point && p.kind === 'stop').length;
     const km = (m) => m / 1000;
     return { limitLoKph: quantile(limits, 0.25), limitHiKph: quantile(limits, 0.75), limitMedKph: median(limits), signals: channel(ctx, 'signals_per_km') ? signals : null,
       stops: channel(ctx, 'stops_per_km') || stops ? stops : null, highwayKm: known.rc ? km(hwyM) : null, residentialKm: known.rc ? km(resM) : null,
@@ -534,9 +592,30 @@
     const level = opts.level || 'fun', L = (FunRoute && FunRoute.LEVELS[level]) || { budget: 0.35, slackS: 240, perMin: 1 };
     const perMin = Number.isFinite(opts.perMinOverride) ? opts.perMinOverride : L.perMin;
     for (const c of cands) if (c.corridor && c.ctx && (!c.ev || opts.fresh)) evaluate(c, { ...opts, perMin });
+    // Unknown data must not win: where some candidates' road quality is known and another's isn't (or only in part), the
+    // unknown stretches take the pool's known mean (gate, quality, side-street cost per km) instead of counting as perfect.
+    const known = cands.filter((c) => c.ev && c.ev.knownKm > 0);
+    if (known.length) {
+      const kkm = known.reduce((a, c) => a + c.ev.knownKm, 0);
+      // corners and quality where unknown: the lowest of the known candidates (nothing vouches for them, so they can't beat a
+      // road whose data is known), and side-street cost per unknown km: the highest of theirs
+      const pool = { gate: Math.min(...known.map((c) => c.ev.meanGate)), quality: Math.min(...known.map((c) => c.ev.quality)),
+        poorPerKm: Math.max(...known.map((c) => c.ev.poorPerKnownKm || 0)), weight: Math.max(...known.map((c) => c.ev.qWeight)) };
+      for (const c of cands) {
+        if (!c.ev || !c.corridor || c.ev.knownKm >= c.ev.km - 0.05) continue;
+        const k = c.ev.km > 0 ? c.ev.knownKm / c.ev.km : 0;
+        evaluate(c, { ...opts, perMin, unknownGate: pool.gate });
+        c.ev.qualityFilled = (c.ev.quality != null ? c.ev.quality * k : 0) + pool.quality * (1 - k);
+        c.ev.qWeightFilled = Math.max(c.ev.qWeight, pool.weight * (1 - k) + c.ev.qWeight);
+        c.ev.poorFilled = Math.min(W.POOR_CAP, c.ev.poorCost + pool.poorPerKm * (c.ev.km - c.ev.knownKm));
+      }
+    }
     const timed = cands.filter((c) => Number.isFinite(c.timeS));
     if (!timed.length) return cands.slice();
-    const quick = timed.reduce((a, b) => (b.timeS < a.timeS ? b : a));
+    // the quickest and the budget come from the candidates that can be driven; if none can, the least bad stays, flagged
+    const feasible = timed.filter((c) => !(c.ev && c.ev.hard.length));
+    const base = feasible.length ? feasible : timed;
+    const quick = base.reduce((a, b) => (b.timeS < a.timeS ? b : a));
     const funOf = (c) => (c.ev && c.ev.funGated) || c.fun || null;
     const quickGood = funOf(quick) ? funOf(quick).good : 0;
     const limit = quick.timeS * (1 + L.budget) + L.slackS;
@@ -546,8 +625,8 @@
       const ev = c.ev || null;
       const parts = {
         fun, gain: 0.5 * gain, time: -perMin * extraS / 60,
-        quality: ev && ev.quality != null ? W.QUALITY * (ev.quality - 50) * ev.qWeight : 0,
-        poor: ev ? -ev.poorCost : 0, scenery: ev ? ev.sceneryPts : 0, bonus: ev ? ev.bonusPts : 0, penalty: ev ? -ev.penaltyPts : 0,
+        quality: ev && ev.qualityFilled != null ? W.QUALITY * (ev.qualityFilled - 50) * ev.qWeightFilled : ev && ev.quality != null ? W.QUALITY * (ev.quality - 50) * ev.qWeight : 0,
+        poor: ev ? -(ev.poorFilled != null ? ev.poorFilled : ev.poorCost) : 0, scenery: ev ? ev.sceneryPts : 0, bonus: ev ? ev.bonusPts : 0, penalty: ev ? -ev.penaltyPts : 0,
         glare: -glareCost(c), towns: -townCost(c), weather: -(c.weatherCost || 0), measured: c.adjust || 0, taste: c.tasteBonus != null ? c.tasteBonus : ev && ev.tastePts != null ? ev.tastePts : 0, prefer: c.preferBonus || 0,
         driver: ev ? ev.driverPts || 0 : 0,
       };
@@ -555,8 +634,11 @@
       return { ...c, extraS, value, parts, infeasible: !!(ev && ev.hard.length) };
     });
     const ok = valued.filter((c) => !c.infeasible);
-    const pool = ok.length ? ok : valued;
-    return pool.filter((c) => c.extraS === 0 || c.timeS <= limit).sort((a, b) => b.value - a.value);
+    if (!ok.length) {                                                    // every one breaks a hard constraint: the least bad, flagged
+      const fewest = Math.min(...valued.map((c) => (c.ev ? c.ev.hard.length : 0)));
+      return valued.filter((c) => (c.ev ? c.ev.hard.length : 0) === fewest).sort((a, b) => b.value - a.value).slice(0, 1);
+    }
+    return ok.filter((c) => c.extraS === 0 || c.timeS <= limit).sort((a, b) => b.value - a.value);
   }
 
   // ---- the why line -------------------------------------------------------------------------------------------------

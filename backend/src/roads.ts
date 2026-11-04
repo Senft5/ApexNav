@@ -47,9 +47,49 @@ export function sampleSd(m2: number | null, k: number): number | null {
   return Math.round(Math.sqrt(Math.max(0, m2) / (k - 1)) * 1e4) / 1e4;
 }
 
+/** 0.1-degree cells ("i_j": floor(lat / 0.1), floor(lon / 0.1)) a cells query may name, at most (VI-1: no finer than 0.1°). */
+export const CELL_DEG = 0.1, MAX_CELLS = 16, MAX_CELL_WAYS = 300;
+/**
+ * GET /api/roads?cells=i_j,...: the measured ways in those 0.1° cells, for the route engine's crowd provider. The phone says
+ * which ~11 km cells a plan crosses, never its route or way ids (VI-1); answer { ways: <as ?ways=>, lines: { way: [[lat, lon]] } }
+ * with each way's public map line (road_ways) so the phone places the bins itself. Same open-road / two-driver rule.
+ */
+export async function roadCells(env: Env, url: URL) {
+  const cells = (url.searchParams.get("cells") ?? "").split(",").filter(Boolean);
+  if (!cells.length || cells.length > MAX_CELLS || cells.some((c) => !/^-?\d{1,4}_-?\d{1,4}$/.test(c))) throw new HttpError(400, "bad_cells");
+  const ids = new Set<number>();
+  const lines: Record<string, unknown> = {};
+  for (const c of cells) {
+    const [i, j] = c.split("_").map(Number), s = i * CELL_DEG, w = j * CELL_DEG, n = s + CELL_DEG, e = w + CELL_DEG;
+    if (s < -90 || n > 90 || w < -180 || e > 180) throw new HttpError(400, "bad_cells");
+    const rows = (await env.DB.prepare(
+      `SELECT way_id, shape FROM road_ways WHERE s <= ?3 AND n >= ?1 AND w <= ?4 AND e >= ?2 LIMIT ${MAX_CELL_WAYS}`,
+    ).bind(s, w, n, e).all<{ way_id: number; shape: string }>()).results;
+    for (const r of rows) { if (ids.size >= MAX_CELL_WAYS) break; ids.add(r.way_id); lines[r.way_id] = JSON.parse(r.shape); }
+  }
+  const ways = ids.size ? await binsFor(env, [...ids]) : {};
+  // only the lines of ways that are shown (a way with no shown direction says nothing, its line included)
+  for (const k of Object.keys(lines)) if (!(k in ways)) delete lines[k];
+  return { ways, lines };
+}
+
 export async function roadBins(env: Env, url: URL) {
+  if (url.searchParams.has("cells")) return roadCells(env, url);
   const ids = (url.searchParams.get("ways") ?? "").split(",").filter(Boolean).map(Number);
   if (!ids.length || ids.length > MAX_WAYS || ids.some((x) => !Number.isSafeInteger(x) || x < 1)) throw new HttpError(400, "bad_ways");
+  return binsFor(env, ids);
+}
+
+async function binsFor(env: Env, ids: number[]) {
+  const out = {} as Record<string, Record<string, Dir>>;
+  for (let k = 0; k < ids.length; k += MAX_WAYS) Object.assign(out, await binsChunk(env, ids.slice(k, k + MAX_WAYS)));
+  return out;
+}
+
+type Col = (number | null)[];
+type Dir = { i: number[]; n: number[]; cam: Col; cn: number[]; csd: Col; rough: Col; rsd: Col; crest: Col; ch: (string | null)[]; k: Col; kn: number[];
+             fl: Col; hb: Col; fn: number[]; ag?: number; hr?: number[] };
+async function binsChunk(env: Env, ids: number[]) {
   const marks = ids.map(() => "?").join(",");
   const rows = (await env.DB.prepare(
     `SELECT way_id, dir, bin_idx, n, camber_mean, camber_m2, camber_n, rough_mean, rough_m2, crest_peak, changed_on, k_mean, k_n, flow_mean, brake_mean, flow_n FROM road_bins rb
@@ -62,9 +102,6 @@ export async function roadBins(env: Env, url: URL) {
   // fl / hb / fn: flow (members' mean speed steadiness 0..1, a ratio with no speed in it), the share of passes that braked hard
   // with no corner ahead, and how many passes sent flow; null / 0 from passes that didn't. ag (per direction): loveLevel, how
   // many members came back to it. hr (per direction, only with the quiet_hours flag on and 5+ drivers): 12 shares of passes.
-  type Col = (number | null)[];
-  type Dir = { i: number[]; n: number[]; cam: Col; cn: number[]; csd: Col; rough: Col; rsd: Col; crest: Col; ch: (string | null)[]; k: Col; kn: number[];
-               fl: Col; hb: Col; fn: number[]; ag?: number; hr?: number[] };
   const out: Record<string, Record<string, Dir>> = {};
   const r3 = (v: number | null) => (v == null ? null : Math.round(v * 1000) / 1000);
   for (const r of rows) {

@@ -104,13 +104,18 @@
   function evaluate(corridor, opts = {}) {
     const n = corridor.lat.length, time = U.nanArray(n), risk = U.nanArray(n);
     const forest = U.chan(corridor, opts, ['forest_frac', 'canopy_frac']), farm = U.chan(corridor, opts, ['farmland_frac']), urban = U.chan(corridor, opts, ['urban_density']);
+    // motorways and their ramps (the router's class 0 / use 1, from the engine's first phase): fenced, wide verges, lit
+    // interchanges; deer still cross, at about a quarter of a country road's rate
+    const rc = U.chan(corridor, opts, ['road_class']), use = U.chan(corridor, opts, ['road_use']);
+    const MOTORWAY = 0.25;
     let land = 0, known = 0;
     for (let i = 0; i < n; i++) {
       const r = timeRisk(corridor.etaAt[i], corridor.lat[i], corridor.lon[i]);
       if (r === null) continue;
       known++; time[i] = r;
       const lf = landFactor(forest && forest[i], farm && farm[i], urban && urban[i]);
-      if (lf !== null) { risk[i] = Math.round(r * lf * 100) / 100; land++; }
+      const mw = (rc && rc[i] === 0) || (use && use[i] === 1) ? MOTORWAY : 1;
+      if (lf !== null) { risk[i] = Math.round(r * lf * mw * 100) / 100; land++; }
     }
     const d = corridor.distM;
     const spans = U.spansWhere(d, (i) => risk[i] >= 2.5 || (!finite(risk[i]) && time[i] >= 3), 'deer-hour',
