@@ -19,7 +19,11 @@ STEP_M = 25.0                      # the corridor's sample step (web/route_ctx/r
 WINDOW_M = 500.0                   # per-km counts: ±500 m (router_edges.js perKm)
 BLDG_WINDOW_M = 250.0              # buildings: a 500 m window (osm_tiles.js)
 MIN_WINDOW_M = 250.0               # at least 250 m (perKm): one signal at a dead end isn't "40 a km"
-BUSINESS_M, BUILDING_M = 40.0, 60.0
+# businesses within 80 m: what the live engine's business_per_km counts (ROUTE_ENGINE.md; a strip mall's shops sit
+# behind their car park, so 40 m missed half of Colerain Avenue's), buildings and addresses within 60 m (osm_tiles.js),
+# schools and churches within 150 m (osm_tiles.js points)
+BUSINESS_M, BUILDING_M, ADDRESS_M, CIVIC_M = 80.0, 60.0, 60.0, 150.0
+SIDEWALK_M, SIDEWALK_SHARE = 15.0, 0.4
 PROBES = (0, -50, 50, -100, 100, -150, 150)
 LU_CLASSES = ("residential", "commercial", "retail", "industrial", "forest", "farmland", "open", "park")
 EXT_M = 100.0                      # geometry either side of an edge for its corners (corners split across a join)
@@ -327,15 +331,54 @@ def water(raw: Raw, S: np.ndarray, H: np.ndarray):
     return near, follow
 
 
-def road_density(g: Graph, S: np.ndarray, scale_fn):
-    """Valhalla-style road density at each sample: drivable road km within 2 km per km² (scale_fn maps it to 0..15)."""
+def sidewalks(g: Graph, raw: Raw) -> np.ndarray:
+    """Per chain: 1 where mapped footway=sidewalk lines run within 15 m of it along at least 40 % of its length (either
+    side), else NaN (no separate sidewalk mapped: unknown, the way's own sidewalk tag decides)."""
+    out = np.full(len(g.chains), np.nan)
+    if not raw.sidewalks:
+        return out
+    sw = []
+    for line in raw.sidewalks:
+        if len(line) >= 2:
+            a = np.array(line)
+            x, y = xy(a[:, 0], a[:, 1])
+            sw.append(shapely.linestrings(np.column_stack([x, y])))
+    if not sw:
+        return out
+    sw = np.array(sw)
+    roads = []
+    for cs in g.coords:
+        a = np.array(cs)
+        x, y = xy(a[:, 0], a[:, 1])
+        roads.append(shapely.linestrings(np.column_stack([x, y])))
+    roads = np.array(roads)
+    ri, si = STRtree(sw).query(roads, predicate="dwithin", distance=SIDEWALK_M)
+    if not ri.size:
+        return out
+    inside = shapely.length(shapely.intersection(sw[si], shapely.buffer(roads[ri], SIDEWALK_M, cap_style="flat")))
+    cover = np.zeros(len(g.chains))
+    np.add.at(cover, ri, inside)
+    L = np.maximum(1.0, np.array(g.length))
+    # a sidewalk along one side for the whole length covers it once; both sides cap at 1
+    out[np.minimum(1.0, cover / L) >= SIDEWALK_SHARE] = 1.0
+    return out
+
+
+def road_density(g: Graph, S: np.ndarray, scale_fn, segs=None):
+    """Valhalla-style road density at each sample: road km within 2 km per km² (scale_fn maps it to 0..15). `segs`:
+    (mid lat, mid lon, metres) of every vehicle way, routable or not (Valhalla's graph has driveways and car-park lanes);
+    without it, the chains."""
     if len(S) == 0:
         return np.zeros(0), np.zeros(0)
     mids, lens = [], []
-    for cs in g.coords:
-        for a, b in zip(cs, cs[1:]):
-            mids.append(((a[0] + b[0]) / 2, (a[1] + b[1]) / 2))
-            lens.append(hav(a, b))
+    if segs:
+        mids = [(a, b) for a, b, _ in segs]
+        lens = [m for _, _, m in segs]
+    else:
+        for cs in g.coords:
+            for a, b in zip(cs, cs[1:]):
+                mids.append(((a[0] + b[0]) / 2, (a[1] + b[1]) / 2))
+                lens.append(hav(a, b))
     mids = np.array(mids)
     mx, my = xy(mids[:, 0], mids[:, 1])
     sx, sy = xy(S[:, 0], S[:, 1])

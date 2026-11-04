@@ -21,6 +21,13 @@ SPOT = [
     # (label, name regex, box (s, w, n, e) or None, test on the summary, what it should be). Blue Rock Road: the stretch
     # the calibration's Blue Rock route drives (north of the I-275 ring; inside it the road is a 35 mph suburban street)
     ("Colerain Avenue", r"^Colerain Avenue$", None, lambda r: r["quality"] < 0.40, "low quality (< 0.40)"),
+    # Springdale Road: the suburban stretch east of Blue Rock (the subdivision and Northgate cases); west of it, toward
+    # New Haven, it is a country road and scores 0.55
+    ("Springdale Road (east of -84.62)", r"^Springdale Road$", (39.2, -84.62, 39.35, -84.5), lambda r: r["quality"] < 0.40, "low quality (< 0.40): suburban"),
+    ("Hamilton Avenue", r"^Hamilton Avenue$", None, lambda r: r["quality"] < 0.40, "low quality (< 0.40): suburban"),
+    # Pippin Road is suburban too (houses along it, 670 homes/km²): the live engine rates it 0.33 on the router's own
+    # data; it wins the subdivision case only against worse streets. Reported, not gated.
+    ("Pippin Road", r"^Pippin Road$", None, lambda r: True, "reported (the live engine: 0.33)"),
     ("Blue Rock Road (north of I-275)", r"^Blue Rock Road$", (39.233, -84.75, 39.40, -84.55), lambda r: r["quality"] >= 0.55, "high quality (>= 0.55)"),
     ("East Miami River Road", r"^(East |E )?Miami River Road$", None, lambda r: r["quality"] >= 0.55, "high quality (>= 0.55)"),
     ("Lees Creek Road", r"^Lees Creek Road$", None, lambda r: r["quality"] >= 0.55, "high quality (>= 0.55)"),

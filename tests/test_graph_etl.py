@@ -220,6 +220,26 @@ def test_real_roads_score_as_a_driver_would(colerain):
     assert col["fun_per_km"] <= blue["fun_per_km"] + 0.5
 
 
+def test_real_road_channels_survive_into_the_tiles(colerain):
+    """The side-street evidence the router ranks with is in the decoded tiles: Colerain Avenue's businesses, signals,
+    driveways and density well above Blue Rock Road's."""
+    _, tiles = colerain
+
+    def mean(name, ch):
+        num = den = 0.0
+        for _, r in tiles.values():
+            e = r["edges"]
+            for k in range(len(e["to"])):
+                if e["name"][k] != T.NO_NAME and r["names"][e["name"][k]] == name and e["ch"][ch][k] is not None:
+                    num += e["ch"][ch][k] * e["len_dm"][k]
+                    den += e["len_dm"][k]
+        return num / den if den else None
+
+    for ch in ("business_per_km", "signals_per_km", "built", "density"):
+        assert mean("Colerain Avenue", ch) > mean("Blue Rock Road", ch), ch
+    assert mean("Colerain Avenue", "business_per_km") > 10
+
+
 def test_real_features_colerain_vs_blue_rock():
     raw = G.read(FIXTURE)
     chains, _ = G.build_chains(raw)

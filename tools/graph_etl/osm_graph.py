@@ -208,12 +208,18 @@ class Raw:
     landuse: list = field(default_factory=list)     # (class, [[(lat, lon), ...] outer], [[inner]...])
     water_areas: list = field(default_factory=list)  # [[(lat, lon)...]] outer rings
     waterways: list = field(default_factory=list)   # [(lat, lon), ...] river / stream / canal centre lines (open)
+    sidewalks: list = field(default_factory=list)   # [(lat, lon), ...] footway=sidewalk lines
+    road_segs: list = field(default_factory=list)   # (mid lat, mid lon, metres) of every vehicle way, routable or not
+    addresses: list = field(default_factory=list)   # (lat, lon) address points (addr:housenumber nodes and buildings)
+    schools: list = field(default_factory=list)     # (lat, lon) amenity=school / kindergarten / college
+    worship: list = field(default_factory=list)     # (lat, lon) amenity=place_of_worship
     restrictions: list = field(default_factory=list)  # (from way, via node, to way, only)
     via_way_restrictions: int = 0
     timestamp: str | None = None
 
 
 WATERWAY_LINES = {"river", "stream", "canal"}
+SCHOOLS = {"school", "kindergarten", "college"}
 
 
 def read(path: str, bbox=None) -> Raw:
@@ -236,6 +242,12 @@ def read(path: str, bbox=None) -> Raw:
             if not o.location.valid():
                 continue
             la, lo = o.location.lat, o.location.lon
+            if t.get("addr:housenumber"):
+                raw.addresses.append((la, lo))
+            if t.get("amenity") in SCHOOLS:
+                raw.schools.append((la, lo))
+            elif t.get("amenity") == "place_of_worship":
+                raw.worship.append((la, lo))
             if is_business(t):
                 raw.pois.append((la, lo))
             elif t.get("building") and o.id < 0:          # osm_api.py's building centres
@@ -247,6 +259,17 @@ def read(path: str, bbox=None) -> Raw:
                 refs = [nd.ref for nd in o.nodes]
                 for k_, r in enumerate(refs):
                     vdeg[r] = vdeg.get(r, 0) + (1 if k_ in (0, len(refs) - 1) else 2)
+                try:
+                    pts = [(nd.lat, nd.lon) for nd in o.nodes]
+                    for a_, b_ in zip(pts, pts[1:]):
+                        raw.road_segs.append(((a_[0] + b_[0]) / 2, (a_[1] + b_[1]) / 2, hav(a_, b_)))
+                except osmium.InvalidLocationError:
+                    pass
+            if hw == "footway" and t.get("footway") == "sidewalk":
+                try:
+                    raw.sidewalks.append([(nd.lat, nd.lon) for nd in o.nodes])
+                except osmium.InvalidLocationError:
+                    pass
             ww = t.get("waterway")
             if ww in WATERWAY_LINES and t.get("tunnel") not in ("culvert", "yes"):
                 try:
@@ -296,7 +319,8 @@ def read(path: str, bbox=None) -> Raw:
             water = is_water_area(t)
             bldg = t.get("building") not in (None, "no")
             biz = is_business(t)
-            if not (cls or water or bldg or biz):
+            school, church, addr = t.get("amenity") in SCHOOLS, t.get("amenity") == "place_of_worship", bool(t.get("addr:housenumber"))
+            if not (cls or water or bldg or biz or school or church or addr):
                 continue
             try:
                 rings = [([(p.lat, p.lon) for p in ring], [[(p.lat, p.lon) for p in inner] for inner in o.inner_rings(ring)])
@@ -304,14 +328,22 @@ def read(path: str, bbox=None) -> Raw:
             except osmium.InvalidLocationError:
                 continue
             outers = [r for r, _ in rings]
+            ring = outers[0] if outers else None
             if bldg or biz:
-                ring = outers[0] if outers else None
                 if ring:
                     c = (sum(p[0] for p in ring) / len(ring), sum(p[1] for p in ring) / len(ring))
                     if bldg:
                         raw.buildings.append(c)
                     if biz:
                         raw.pois.append(c)
+                if ring and (school or church or addr):
+                    c = (sum(p[0] for p in ring) / len(ring), sum(p[1] for p in ring) / len(ring))
+                    if school:
+                        raw.schools.append(c)
+                    if church:
+                        raw.worship.append(c)
+                    if addr:
+                        raw.addresses.append(c)
             if cls:
                 for ring, inners in rings:
                     raw.landuse.append((cls, ring, inners))

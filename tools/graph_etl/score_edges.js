@@ -168,9 +168,17 @@ function score(rec, src) {
       t += rec.delay_s || 0;
     }
   } else t = lenM / 10;
+  // stored beside the scores for the router's own ranking: how built-up (the engine's built evidence) and how dense
+  const bAt = Engine.builtEvidence(ctx);
+  let bs = 0, bn = 0, ds = 0, dn = 0;
+  for (let i = 0; i < n; i++) {
+    const x = bAt(i); if (x != null && Number.isFinite(x)) { bs += x; bn++; }
+    if (ch.density && Number.isFinite(ch.density[i])) { ds += ch.density[i]; dn++; }
+  }
   const mid = Math.floor(n / 2);
   const vv = posted != null ? posted : ch.speed_limit_est_kph ? ch.speed_limit_est_kph[mid] : NaN;
-  return { k: rec.k, q: qn ? +(qs / qn).toFixed(4) : null, s: sn ? +(ss / sn).toFixed(4) : null, c: +(conf / n).toFixed(4), f: +fun.toFixed(3), t: +t.toFixed(2), v: Number.isFinite(vv) ? Math.round(vv) : null, est: posted == null ? 1 : 0 };
+  return { k: rec.k, q: qn ? +(qs / qn).toFixed(4) : null, s: sn ? +(ss / sn).toFixed(4) : null, c: +(conf / n).toFixed(4), f: +fun.toFixed(3), t: +t.toFixed(2), v: Number.isFinite(vv) ? Math.round(vv) : null, est: posted == null ? 1 : 0,
+    built: bn ? +(bs / bn).toFixed(3) : null, dens: dn ? +(ds / dn).toFixed(2) : null };
 }
 
 async function main() {

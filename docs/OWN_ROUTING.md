@@ -85,6 +85,15 @@ phone's reader); tests/test_graph_tiles.py round-trips through both. What a rout
   65 535 nodes, u16 lengths and times: the ETL splits edges at 6 km; geometry in 5 µdeg steps, its ends put exactly on
   the nodes); `decode` gives the full-width arrays above either way. Not in the graph: unnamed service roads that meet
   no public road, and unnamed dead-end service stubs under 200 m (CALL_SHEET 2026-11-04).
+- **Format v2** (header version 2; `decode` reads v1 and v2): `edges.ch`, the road-side evidence per edge as
+  Float32Arrays (NaN unknown), so the router can rank side streets from the tiles alone: `business_per_km` (within
+  80 m, no fuel or cafes), `access_per_km` (every driveway, service and residential way joining, routable or not),
+  `signals_per_km`, `stops_per_km`, `crossings_per_km`, `calming_per_km`, `schools_per_km`, `worship_per_km` (within
+  150 m), all over the road's own ±500 m; `sidewalk` (the tag, else mapped footway=sidewalk lines within 15 m along
+  40 % of it); `built` (the engine's built evidence 0..1: density, sidewalks, businesses, housing, impervious,
+  addresses, buildings, land use); `density` (Valhalla's 0-15 from road km per km² of every vehicle way);
+  `bldg_per_km`, `addr_per_km`. Stored once per polyline (both directions share it), u8 with the scales in
+  `ApexGraphTiles.CHANNELS` / tiles.py `CHANNELS`. The same values already feed `quality`.
 - Tile i = floor((lon + 180) / 0.25), j = floor((lat + 90) / 0.25). A node lives in the tile its position is in; an edge
   in its from-node's tile. `toTile` is the packed key of the to-node's tile (the tile's own key for a local edge) and
   `to` the node's index there. Incoming edges are not stored: build the reverse adjacency from the loaded tiles.
@@ -253,3 +262,12 @@ phone's reader); tests/test_graph_tiles.py round-trips through both. What a rout
     router's own edges). Fix in the ETL: those channels, or a per-edge share of side-street samples, baked in.
   - Not met: the ranked route under 1.5 s warm (1.2-1.8 s; the time-dependent context is 0.15-0.9 s of it, building the
     track 0.05-0.3 s, the rest the pool's preparation).
+- 2026-11-04: the network half is built (branch claude/own-routing-graph): tile codec v1 (tools/graph_etl/tiles.py,
+  web/graph_tiles.js), the ETL (tools/graph_etl, scored by web/route_engine.js through score_edges.js), CI
+  (.github/workflows/graph.yml) committing web/data/graph/v1. Cincinnati tiles (CI, Geofabrik 2026-11-04): 16 tiles, 14.63 MB, 400,913 edges, 173,598 nodes, 4,225 turn
+  restrictions applied (2,273 skipped: via node outside the tiles or a removed lot lane; 259 via-way not applied).
+  Spot checks (web/data/graph/v1/CHECK.txt): Colerain Ave quality 0.25, Blue Rock Rd (north of I-275) 0.68, E Miami
+  River Rd 0.72, Lees Creek Rd 0.58, I-275 motorway 0.82 at 109 km/h. Local e2e: one reroute flow failed under load
+  (the known flake), unrelated (no page script changed).
+  Not yet: the phone router (§5), the region upload (owner's R2, §7), via-way restrictions, crowd channels (no
+  members' data is baked in; they stay query-time), Overpass-only channels beyond what OSM tags give directly.
