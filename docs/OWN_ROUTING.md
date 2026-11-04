@@ -1,0 +1,107 @@
+# Own routing: our own scored road network, routed on the phone
+
+The owner (2026-11-04), on why the route engine "doesn't feel too much better": today Vetta asks the public Valhalla
+server for 3-8 routes and only *ranks* them, so if the best road isn't among them no scoring can find it, and planning
+waits 5-7 s on a shared server. Goal: score every road in the region once, ahead of time; ship that scored network to the
+phone; find the route on the phone with our own pathfinding over our own scores. Valhalla stays only as a backup and for
+turn instructions until ours exist.
+
+This page is the plan and the contract. Every builder (and any later session) works from it; keep it current.
+
+## 1. What gets built
+
+| Part | Where | What |
+|---|---|---|
+| Graph ETL | `tools/graph_etl/` (Python, pyosmium) | OSM extract -> routable graph -> per-edge features -> per-edge scores -> tiles |
+| Scorer | `web/route_engine.js` run by node at build time | The SAME quality/fun/scenery model the app uses, applied once per edge (no second model) |
+| Tiles | `web/data/graph/v1/` (Cincinnati, shipped in the app) + Worker/R2 or KV for the region | Binary graph tiles, see 3 |
+| Phone router | `web/graph_router.js` + `web/graph_worker.js` (Web Worker) | Tile loader, bidirectional A*/Dijkstra, level-aware objective, turn restrictions, budgets |
+| Planner glue | `web/cockpit.js` / route engine candidate sources | Our router is the primary candidate source; Valhalla is the fallback and the instruction source |
+| CI | `.github/workflows/graph.yml` | Downloads Geofabrik extracts (the build container can't reach Geofabrik; GitHub runners can), builds tiles, uploads an artifact; with the owner's Cloudflare token, uploads the region |
+
+## 2. The graph
+
+- **Source:** Geofabrik `ohio`, `kentucky`, `indiana` `-latest.osm.pbf` (ODbL; attribution already in About > Sources).
+  Merge, clip nothing (trips cross state lines).
+- **Drivable ways:** `highway` in motorway..living_street plus `_link`, `unclassified`, `residential`, `service` (except
+  `service=parking_aisle|driveway|drive-through|emergency_access` and private access), `track` only with
+  `motor_vehicle=yes`. Respect `access`, `motor_vehicle`, `oneway` (incl. `-1`, `junction=roundabout`), `oneway:conditional`
+  ignored (unknown stays unknown).
+- **Nodes:** keep junctions (degree != 2), dead ends, barrier nodes (`barrier=gate|bollard` -> flag or cut), signals,
+  stops, crossings, calming, level crossings (as edge-point features, not graph nodes).
+- **Edges:** a chain of degree-2 OSM segments between kept nodes, one record per direction allowed. Geometry kept as a
+  polyline (delta-encoded int microdegrees, simplified to 2 m).
+- **Turn restrictions:** `type=restriction` relations (`no_*`, `only_*`), via-node only (via-way restrictions: listed,
+  applied when simple). U-turns: forbidden except at dead ends.
+- **Driveways and side roads:** counted from the `service` / `residential` ways that join an edge (the access-density
+  features the engine already uses), even when those service ways are not themselves routable.
+
+## 3. Features and scores per edge (the scoring contract)
+
+Each edge carries the channels the route engine already understands (docs/ROUTE_ENGINE.md), aggregated over the edge's
+length: `speed_limit_kph` (OSM `maxspeed`, else class estimate flagged), `road_class`, `road_use`, `lanes`, `divided`,
+`surface`, `signals_per_km`, `stops_per_km`, `crossings_per_km`, `calming_per_km`, `access_per_km` (driveways + side
+roads), `business_per_km` (shops/amenities/offices within 40 m, EXCLUDING fuel and cafes), land-use shares (from OSM
+landuse/natural polygons), context-grid channels (impervious, canopy, housing, night lights, noise, AADT, IRI, crash
+rate - read from `web/data/ctx/v1` / the grid the app already ships), DEM (elevation, grade, relief, ridge/valley),
+geometry (curvature, corners per km by `web/fun_route.js`), crowd data (roughness, banking, flow, loved) when present.
+
+Scores, computed by calling `web/route_engine.js` itself (node, at build time; no Python re-implementation):
+- `quality` 0..1 and `scenery` 0..1 per edge (the per-25 m model, length-weighted mean over the edge).
+- `fun` per edge: the gated corner score of the edge's geometry (corners only count on good road), plus the
+  corner-entry context across edge joins handled at query time (a corner split across two edges must still count:
+  edges keep their first/last 60 m heading so the router can score the join).
+- `t_s` travel time: from the speed model the engine uses (posted/estimated speed, class, curvature, signals, stops).
+- `conf` how much of the edge's weight was known (unknown stays unknown, never 0).
+Time-dependent things (deer hour, school hours, weather, works, events, sun glare) are NOT baked in: they are applied at
+query time from the existing providers along the chosen route and its alternatives.
+
+## 4. Tile format (v1)
+
+- Tiles on a fixed grid of 0.25 degrees (about 28 x 21 km here). An edge lives in the tile of its first node;
+  cross-tile edges reference the neighbour tile's node id.
+- One file per tile `web/data/graph/v1/<i>_<j>.vgr` (little-endian binary, gzip/brotli by the server):
+  header (magic `VGR1`, version, tile i/j, counts), node table (int32 lat/lon microdegrees, first-edge index), edge
+  table (to-node (tile-local or external ref), length dm, t_s ds, quality u8, scenery u8, fun u16, conf u8, flags u16
+  (oneway, toll, ferry, unpaved, tunnel, bridge, motorway, ramp, roundabout, private), class u8, speed u8, name index,
+  geometry offset), turn-restriction table, name table (UTF-8), geometry blob.
+- `index.json`: tiles present, build date, source timestamps, model version (the route_engine.js weights hash).
+- Size target: Cincinnati area (about 100 x 100 km, 16 tiles) under 15 MB uncompressed, shipped in the app. The region
+  (OH+KY+IN) is downloaded by tile on demand and kept for offline areas.
+
+## 5. Routing on the phone
+
+- Runs in a Web Worker (`graph_worker.js`) so the map never stutters; tiles loaded for the corridor (an ellipse around
+  start and end sized by the level's detour budget), cached in memory and IndexedDB.
+- **Quick:** minimise time (A* with an admissible time heuristic: straight-line distance / max speed).
+- **Fun / Max fun:** minimise `t_s * (1 + a*(1 - goodness))` where goodness blends quality, fun and scenery with the
+  driver's taste; `a` is found by bisection so the route's time stays within the level's budget over the quickest
+  (Quick 10 % + 60 s, Fun 35 % + 240 s, Max 90 % + 600 s, as today). Turn costs: left/right/U by angle, plus signals and
+  stops on the node.
+- **Alternatives:** penalty method (re-run with the chosen edges penalised) for 2 genuinely different alternates.
+- **Loops:** the same objective from start back to start through a ring of waypoints, then the same scoring.
+- **Final ranking:** our candidates go through the existing route engine (time-dependent penalties, weather, why line),
+  so everything already built keeps working; Valhalla's quickest stays in the pool as a sanity check.
+- **Turn instructions:** from Valhalla (`trace_route` on our shape) when online; offline, our own from the graph (name
+  changes and turn angles). Our own instructions become primary later.
+- **Fallback:** no tiles for the area, or our router fails -> today's Valhalla path, unchanged.
+
+## 6. Proof (before it replaces anything)
+
+- Unit tests for the parser, each feature, the scorer call, the tile codec (round trip), A* against brute-force Dijkstra
+  on small graphs, turn restrictions, oneways, budgets.
+- The live cases (`tests/test_route_engine_live.py`, the calibration cases) and the owner's own trips: our router's pick
+  must be at least as good as today's on the engine's own value, and must never be through a subdivision or strip mall
+  when a better road exists. Measured: planning time on the phone-size browser (target under 1 s for a Cincinnati trip
+  once tiles are loaded), memory, tile bytes.
+- A side-by-side page (both pickers on the same trips) for the owner.
+
+## 7. What the owner has to do
+
+- For the region beyond Cincinnati: turn on R2 in the Cloudflare dashboard (or give a Cloudflare API token as a GitHub
+  secret) so CI can upload the region's tiles. Cincinnati works without it.
+
+## 8. Status
+
+- 2026-11-04: plan written. Geofabrik is unreachable from the build container (proxy drops the connection); the ETL is
+  run in GitHub Actions and its artifact downloaded.
