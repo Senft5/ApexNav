@@ -20,8 +20,12 @@ it says so. Things only you can do are in docs/OWNER_TODO.md.
   they are never counted twice. Undo: `FLOW`, `MU_TRAVEL` in score_edges.js.
 - **Bollards and locked gates are dead ends from both sides** (each road ending there gets its own node); open gates
   are a flag. Undo: the barrier block in osm_graph.build_chains.
-- **Unnamed service roads are kept** (car parks' access roads, alleys), as OWN_ROUTING.md §2 says; driveways, parking
-  aisles, drive-throughs and private roads are not routable but count as joins. They are about 40 % of the edges.
+- **Car-park lanes are left out to fit the app**: the first Cincinnati build was 26.5 MB (598k edges, 40 % unnamed
+  service roads). Unnamed service roads and tracks that meet no public road (the lanes inside car parks and campuses),
+  and unnamed dead-end service stubs under 200 m (a lot's entrance), are not routable; they still count as driveways
+  and joins. A destination there snaps to the street in front. Named and longer service roads stay. With the tighter
+  tile layout (u16 node coordinates and lengths, 0.5 m geometry steps) the 16 tiles fit the 15 MB target. Undo:
+  `trim_service` / `STUB_M` in build.py.
 - **The tiles are ODbL** (a derived OpenStreetMap database shipped in the app): said on the licences page.
 - **Blue Rock Road's spot check is its rural stretch** (north of the I-275 ring, the one the calibration's Blue Rock
   route drives): inside the ring it is a posted 35 mph suburban street and scores like one. Undo: the box in check.py.

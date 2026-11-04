@@ -74,11 +74,15 @@ query time from the existing providers along the chosen route and its alternativ
 The byte layout is in `tools/graph_etl/tiles.py` (writer, plus a reader for checks) and `web/graph_tiles.js` (the
 phone's reader); tests/test_graph_tiles.py round-trips through both. What a router builder needs:
 
-- `ApexGraphTiles.decode(arrayBuffer)` -> `{ tile, nodes: { count, lat, lon (Int32 microdegrees), firstEdge (Uint32,
+- `ApexGraphTiles.decode(arrayBuffer)` -> `{ tile, nodes: { count, lat, lon (Int32 microdegrees, multiples of 5), firstEdge (Uint32,
   count + 1: CSR), flags }, edges: { count, from, to, toTile, len_dm, t_ds, quality, scenery, fun, conf, flags, cls,
   speed, name, geomOff, hIn, hOut }, restrictions, names, geom(edgeIdx) }`; `ApexGraphTiles.load(i, j)` (memory,
   IndexedDB `vetta-graph`, then `data/graph/v1/<i>_<j>.vgr`; null when index.json doesn't list the tile);
   `tileOf(lat, lon)`, `keyOf(i, j)` = `(i << 16) | j`, `tilesIn(s, w, n, e)`.
+- Storage is compact (u16 node coordinates in 5 µdeg steps from the tile corner, u16 `to` unless a tile has more than
+  65 535 nodes, u16 lengths and times: the ETL splits edges at 6 km; geometry in 5 µdeg steps, its ends put exactly on
+  the nodes); `decode` gives the full-width arrays above either way. Not in the graph: unnamed service roads that meet
+  no public road, and unnamed dead-end service stubs under 200 m (CALL_SHEET 2026-11-04).
 - Tile i = floor((lon + 180) / 0.25), j = floor((lat + 90) / 0.25). A node lives in the tile its position is in; an edge
   in its from-node's tile. `toTile` is the packed key of the to-node's tile (the tile's own key for a local edge) and
   `to` the node's index there. Incoming edges are not stored: build the reverse adjacency from the loaded tiles.

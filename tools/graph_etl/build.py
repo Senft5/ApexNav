@@ -51,6 +51,70 @@ def r6(p):
     return [round(p[1], 6), round(p[0], 6)]      # [lon, lat] as the corridor wants
 
 
+STUB_M = 200.0
+
+
+def trim_service(chains, coords=None):
+    """Unnamed service roads and tracks that meet no public road at either end (the lanes inside car parks, campuses
+    and trailer parks) are left out: a route only needs the entrance. They still count as joins (raw.vdeg). Entrances,
+    through service roads and named ones stay."""
+    minor = ("service", "track")
+    if coords is not None:
+        for c in chains:
+            c.attrs = dict(c.attrs, _len=F.cumulative([coords[r] for r in c.nodes])[-1]) if c.attrs["hw"] in minor else c.attrs
+    public = {}
+    for c in chains:
+        if c.attrs["hw"] not in minor:
+            public[c.nodes[0]] = public[c.nodes[-1]] = True
+    keep = [c for c in chains if c.attrs["hw"] not in minor or c.attrs["name"] or c.nodes[0] in public or c.nodes[-1] in public]
+    # and the short unnamed dead-end stubs left (a car park's entrance, under STUB_M): a destination there snaps to the
+    # street in front; longer ones (a farm lane, a park road) stay
+    deg = {}
+    for c in keep:
+        deg[c.nodes[0]] = deg.get(c.nodes[0], 0) + 1
+        deg[c.nodes[-1]] = deg.get(c.nodes[-1], 0) + 1
+    out = []
+    for c in keep:
+        if (c.attrs["hw"] in minor and not c.attrs["name"] and (deg[c.nodes[0]] == 1 or deg[c.nodes[-1]] == 1)
+                and c.attrs.get("_len", 0) < STUB_M):
+            continue
+        out.append(c)
+    return out, len(chains) - len(out)
+
+
+def split_long(raw, chains, max_m=T.MAX_EDGE_M):
+    """Chains longer than max_m cut at their interior nodes so no edge is longer (len_dm fits the tile's u16)."""
+    out = []
+    for c in chains:
+        cs = [raw.coords[r] for r in c.nodes]
+        cum = F.cumulative(cs)
+        if cum[-1] <= max_m:
+            out.append(c)
+            continue
+        # a single segment longer than half the limit gets points of its own (synthetic ids) so it can be cut
+        nodes = [c.nodes[0]]
+        for a, b, la, lb in zip(c.nodes, c.nodes[1:], cs, cs[1:]):
+            seg = G.hav(la, lb)
+            parts = int(seg // (max_m / 2))
+            for q in range(1, parts + 1):
+                f = q / (parts + 1)
+                syn = -(20_000_000_000 + len(raw.coords))
+                raw.coords[syn] = (la[0] + (lb[0] - la[0]) * f, la[1] + (lb[1] - la[1]) * f)
+                nodes.append(syn)
+            nodes.append(b)
+        c = G.Chain(nodes, c.attrs, c.way_first, c.way_last, c.ways)
+        cum = F.cumulative([raw.coords[r] for r in c.nodes])
+        start, base = 0, 0.0
+        for k in range(1, len(c.nodes)):
+            last = k == len(c.nodes) - 1
+            if last or cum[k + 1] - base > max_m:
+                piece = G.Chain(c.nodes[start:k + 1], c.attrs, c.way_first if start == 0 else c.ways[0],
+                                c.way_last if last else c.ways[-1], c.ways)
+                out.append(piece)
+                start, base = k, cum[k]
+    return out
+
+
 def features(raw, chains):
     g = F.Graph(raw, chains)
     log(f"graph: {len(chains)} chains, {round(sum(g.length) / 1000)} km")
@@ -288,6 +352,9 @@ def main(argv=None):
     log(f"{len(raw.ways)} drivable ways, {len(raw.pois)} businesses, {len(raw.buildings)} buildings, "
         f"{len(raw.landuse)} land-use polygons, {len(raw.restrictions)} restrictions")
     chains, _ = G.build_chains(raw)
+    chains, trimmed = trim_service(chains, raw.coords)
+    chains = split_long(raw, chains)
+    log(f"{trimmed} car-park / campus service chains left out")
     g, f = features(raw, chains)
     if a.dem_cache:
         tw = (i0 * T.TILE_DEG - 180, j0 * T.TILE_DEG - 90, (i1 + 1) * T.TILE_DEG - 180, (j1 + 1) * T.TILE_DEG - 90)

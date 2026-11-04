@@ -22,7 +22,7 @@
 // index doesn't list the tile or it can't be had. Unknown stays unknown: a 255 / 65535 is never read as 0.
 (function (root) {
   'use strict';
-  const VERSION = 1, HEADER = 64, TILE_DEG = 0.25, BASE = 'data/graph/v1/';
+  const VERSION = 1, HEADER = 64, TILE_DEG = 0.25, BASE = 'data/graph/v1/', GEOM_Q = 5;   // geometry in 5 µdeg steps
   const UNKNOWN_U8 = 255, UNKNOWN_FUN = 0xffff, NO_NAME = 0xffff;
   const FLAGS = { oneway: 1, toll: 2, ferry: 4, unpaved: 8, tunnel: 16, bridge: 32, motorway: 64, ramp: 128, roundabout: 256, private: 512,
     geomRev: 1024, speedEst: 2048, barrier: 4096, destination: 8192 };
@@ -48,16 +48,22 @@
     const hb = dv.getUint16(6, true), ti = dv.getInt32(8, true), tj = dv.getInt32(12, true);
     const n = dv.getUint32(16, true), e = dv.getUint32(20, true), r = dv.getUint32(24, true), nn = dv.getUint32(28, true);
     const nb = dv.getUint32(32, true), gb = dv.getUint32(36, true), nref = dv.getUint32(40, true);
-    const buildDay = dv.getUint32(44, true), modelHash = dv.getUint32(48, true);
+    const buildDay = dv.getUint32(44, true), modelHash = dv.getUint32(48, true), wide = dv.getUint8(52) & 1;
     let p = hb;
     const refs = [];
     for (let k = 0; k < nref; k++) refs.push(keyOf(dv.getUint16(p + 4 * k, true), dv.getUint16(p + 4 * k + 2, true)));
     p += 4 * nref;
     const take = (T, count) => { const a = new T(b.buffer, b.byteOffset + p, count); p += count * T.BYTES_PER_ELEMENT; return a; };
     const align = () => { p += (4 - (p % 4)) % 4; };
-    const lat = take(Int32Array, n), lon = take(Int32Array, n), firstEdge = take(Uint32Array, n + 1), nflags = take(Uint8Array, n);
+    const o = origin(ti, tj), qlat = take(Uint16Array, n), qlon = take(Uint16Array, n);
     align();
-    const to = take(Uint32Array, e), len_dm = take(Uint32Array, e), t_ds = take(Uint32Array, e), geomOff = take(Uint32Array, e);
+    const lat = new Int32Array(n), lon = new Int32Array(n);
+    for (let v = 0; v < n; v++) { lat[v] = o.lat + GEOM_Q * qlat[v]; lon[v] = o.lon + GEOM_Q * qlon[v]; }
+    const firstEdge = take(Uint32Array, n + 1), nflags = take(Uint8Array, n);
+    align();
+    const geomOff = take(Uint32Array, e), toRaw = take(wide ? Uint32Array : Uint16Array, e);
+    const len_dm = Uint32Array.from(take(Uint16Array, e)), t_ds = Uint32Array.from(take(Uint16Array, e));
+    const to = Uint32Array.from(toRaw);
     const fun = take(Uint16Array, e), flags = take(Uint16Array, e), name = take(Uint16Array, e);
     align();
     const quality = take(Uint8Array, e), scenery = take(Uint8Array, e), conf = take(Uint8Array, e), cls = take(Uint8Array, e);
@@ -79,19 +85,21 @@
     const toTile = new Uint32Array(e), from = new Uint32Array(e);
     for (let k = 0; k < e; k++) toTile[k] = toRef[k] ? refs[toRef[k] - 1] : self;
     for (let v = 0; v < n; v++) for (let k = firstEdge[v]; k < firstEdge[v + 1]; k++) from[k] = v;
-    const o = origin(ti, tj);
     function geom(k) {
       let q = geomOff[k];
       const rd = () => { let v = 0, s = 0, c; do { c = geo[q++]; v += (c & 0x7f) * 2 ** s; s += 7; } while (c >= 0x80); return v; };
       const zz = (v) => (v % 2 ? -(v + 1) / 2 : v / 2);
       const cnt = rd(), out = new Float64Array(cnt * 2);
-      let la = o.lat, lo = o.lon;
-      for (let m = 0; m < cnt; m++) { la += zz(rd()); lo += zz(rd()); out[2 * m] = la / 1e6; out[2 * m + 1] = lo / 1e6; }
+      let la = Math.floor(o.lat / GEOM_Q), lo = Math.floor(o.lon / GEOM_Q);
+      for (let m = 0; m < cnt; m++) { la += zz(rd()); lo += zz(rd()); out[2 * m] = la * GEOM_Q / 1e6; out[2 * m + 1] = lo * GEOM_Q / 1e6; }
       if (flags[k] & FLAGS.geomRev) {
         for (let a = 0, z = cnt - 1; a < z; a++, z--) {
           const x = out[2 * a], y = out[2 * a + 1]; out[2 * a] = out[2 * z]; out[2 * a + 1] = out[2 * z + 1]; out[2 * z] = x; out[2 * z + 1] = y;
         }
       }
+      // the ends exactly on their nodes (the to node when it is in this tile)
+      if (cnt) { out[0] = lat[from[k]] / 1e6; out[1] = lon[from[k]] / 1e6; }
+      if (cnt > 1 && toTile[k] === self) { out[2 * cnt - 2] = lat[to[k]] / 1e6; out[2 * cnt - 1] = lon[to[k]] / 1e6; }
       return out;
     }
     return {
