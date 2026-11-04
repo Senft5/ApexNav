@@ -54,13 +54,20 @@
       try { if (window.ApexRecce) ApexRecce.apply(ApexRecce.load(localStorage), t); } catch (_) {}   // your own recce notes again
       return true;
     }
-    async function trackFromPolyline(coords, id, name) {
+    async function trackFromPolyline(coords, id, name, sightMs = 4000) {
       await RouteLoading.yieldToUI();
       const rs = Core.resamplePolyline(coords.map(c => c[1]), coords.map(c => c[0]), 5);
       // what's beside the road (stages.js sightOffsets, IDEAS Q-09): open grass lets you see across a bend, woods don't;
-      // no tiles or a long trip: the cautious 4 m everywhere
-      let offsets = null;
-      try { offsets = window.ApexStages && ApexStages.sightOffsets ? await RouteLoading.optional(ApexStages.sightOffsets(rs.lat, rs.lon), 4000) : null; } catch (_) { offsets = null; }
+      // no tiles or a long trip: the cautious 4 m everywhere. sightMs: how long to wait for the land cover; past it the
+      // track is the cautious one, flagged sightPending (the early quickest: the land cover goes on loading for the ranked
+      // route, which is then built in full)
+      let offsets = null, pending = false;
+      try {
+        if (window.ApexStages && ApexStages.sightOffsets) {
+          const got = await Promise.race([ApexStages.sightOffsets(rs.lat, rs.lon).then((v) => ({ v }), () => ({ v: null })), new Promise((r) => setTimeout(() => r(null), sightMs))]);
+          pending = got === null; offsets = got ? got.v : null;
+        }
+      } catch (_) { offsets = null; }
       // curvature, sight, braking envelope and corners in a Web Worker (analysis_client.js, IDEAS P-05); inline without one
       // which side you drive on (driving_side.js, IDEAS U-22): bends toward it are the blind ones
       let side = null;
@@ -70,7 +77,7 @@
       const events = corners.map(c => cornerEventOf(c, rs.lat, rs.lon, dist));
       Core.linkNotes(events);
       return {
-        id, name, kind: 'route', subtitle: 'Map only · not yet driven',
+        id, name, kind: 'route', subtitle: 'Map only · not yet driven', sightPending: pending,
         lat: rs.lat, lon: rs.lon, dist, elev: null, speedMps: null, latG: null, lonG: null, camberDeg: null,
         envMps: Array.from(env), sightM: Array.from(sight), limitMps: null, kappa: Array.from(kappa), roughG: null,
         events, sectors: null, sectorM: 500, alpr: null
@@ -583,7 +590,7 @@
       if (!area) return;
       twisty.busy = true;
       try {
-        const stages = await ApexStages.discover({ lat: area.lat, lon: area.lon }, area.radiusKm);
+        const stages = await (ApexStages.discoverAsync || ApexStages.discover)({ lat: area.lat, lon: area.lon }, area.radiusKm);
         twisty.searched.push(area);
         if (twisty.searched.length > 40) twisty.searched.shift();
         if (ApexTwisty.add(twisty.cache, stages)) map.getSource('apex-twisty-src').setData(ApexTwisty.geojson(twisty.cache));
@@ -2280,7 +2287,7 @@
     // 4 s: the OSM, crowd, driver and car providers need more than the router does; Where to? shows the quickest at 1.5 s
     // (EARLY_MS) and never waits on this. What's late lands in each provider's cache for the next plan.
     // PLAN_CTX_MS: the stage plans' own run, once they're routed: what's late is unknown (and can't win)
-    const CTX_BUDGET_MS = 4000, STAGE_CTX_MS = 1200, PLAN_CTX_MS = 2500;
+    const CTX_BUDGET_MS = 4000, STAGE_CTX_MS = 1200, PLAN_CTX_MS = 1800;
     // The driver's For this drive choices (route_ctx/driver.js: passenger, lit, cyclists, tunnels) join the road prefs.
     const engineOpts = (level) => ({ level, prefs: { ...roadPrefs, ...(window.ApexRouteDriver ? ApexRouteDriver.load(localStorage) : {}) }, car: routingCar(),
       score: (c, scaleAt) => funOf(c.t, (c.route && c.route.turns) || [], scaleAt) });
@@ -3053,12 +3060,23 @@
       const level = funLevel, planT0 = Date.now();      // the early quickest counts from here, not from the router's answer
       // The stages round the whole trip (the map tiles' roads, scored, then the network step) don't need the router's answer:
       // they're found while it routes (live: 2 s of tile scoring after the routes came back)
+      // the first route has the page and the router to itself: the stages' network step and the routes' context wait for it
+      // to go up (FIRST_GATE_MS at most); stage discovery runs in its worker meanwhile
+      let openGate = null;
+      const firstUp = new Promise((r) => { openGate = r; setTimeout(r, FIRST_GATE_MS); });
       const stagesFor = async (a, b) => {
         const area = FunRoute.searchArea(a, b);
         const hls = state.hlOn ? await allHighlights(area.center) : [];
-        return stagesWithContext(await measuredStages(await ApexStages.discover(area.center, area.radiusKm, null, state.hlOn ? { highlights: hls, strength: state.hlStrength } : {}), area.center, area.radiusKm));
+        const found = await (ApexStages.discoverAsync || ApexStages.discover)(area.center, area.radiusKm, null, state.hlOn ? { highlights: hls, strength: state.hlStrength } : {});
+        // the ends' heights (which way round each stage is driven) load alongside the network step, not after it
+        try { if (found && found.length && ApexStages.addElevations) ApexStages.addElevations(found.slice(0, 12)).catch(() => {}); } catch (_) { /* after, as before */ }
+        await firstUp;
+        return stagesWithContext(await measuredStages(found, area.center, area.radiusKm));
       };
       const crowKm = FunRoute.kmBetween(from, to);
+      // the map tiles along the straight line, fetched and decoded while the router routes (the route context reads them
+      // next; the page is idle until the router answers)
+      try { if (window.ApexOsmTiles && window.ApexRouteCtx && ApexRouteCtx.corridor && (!window.ApexFlags || ApexFlags.on('route_engine'))) ApexOsmTiles.prefetch([ApexRouteCtx.corridor('ahead', [[from.lon, from.lat], [to.lon, to.lat]], {})]); } catch (_) { /* nothing ahead: fetched with the context */ }
       const stagesAhead = level !== 'quick' && crowKm >= 3 && crowKm <= 48 && window.ApexStages ? stagesFor(from, to).catch(() => null) : null;
       let direct;
       // The router's costing keeps off highways (use_highways 0.15), which is what sent routes through subdivisions and
@@ -3067,22 +3085,39 @@
       const hwyTry = hwyCosting ? valhallaRoutes([from, to], false, 0, hwyCosting).catch(() => []) : Promise.resolve([]);
       try { direct = await valhallaRoutes([from, to], false, 2); }
       catch (_) { try { direct = await osrmRoutes([from, to]); } catch (err) { toast('Couldn\'t build the route. Check signal and try again.'); return false; } }
-      const same = (a, b) => Math.abs((a.timeS || 0) - (b.timeS || 0)) < 1 && a.coords.length === b.coords.length;
-      const highway = (await hwyTry).filter(r => Number.isFinite(r.timeS) && !direct.some(d => same(d, r)));
-      const cands = [...direct.map(r => ({ kind: 'router', route: r, timeS: r.timeS, via: [] })), ...highway.map(r => ({ kind: 'router', highway: true, route: r, timeS: r.timeS, via: [] }))];
-      // Where to? stays instant (REVIEW_FEEL): if the rest takes longer than EARLY_MS, the quickest goes up at once and the
-      // ranked routes replace it when they're ready, unless you've started driving it or planned something else.
+      const directCands = direct.map(r => ({ kind: 'router', route: r, timeS: r.timeS, via: [] }));
+      // Where to? stays instant (REVIEW_FEEL): the router's first answer goes up at once (not held for the highway-costed
+      // route, the weather or anything else) and the ranked routes replace it when they're ready, unless you've started
+      // driving it or planned something else.
       const early = { fired: false, shown: null };
-      const quickNow = FunRoute.keepAvoiding(cands, avoid).filter(c => Number.isFinite(c.timeS)).reduce((x, y) => (!x || y.timeS < x.timeS ? y : x), null);
+      const quickNow = FunRoute.keepAvoiding(directCands, avoid).filter(c => Number.isFinite(c.timeS)).reduce((x, y) => (!x || y.timeS < x.timeS ? y : x), null);
       // a re-plan of the route on screen (level, avoid, Route around it) keeps that route up meanwhile: no early quickest
       const earlyTimer = quickNow && opts.early !== false ? setTimeout(() => {
         early.fired = true;
         if (!quickNow.t) { quickNow.t = FunRoute.geometry(quickNow.route.coords, Core); quickNow.fun = funOf(quickNow.t, quickNow.route.turns); }
-        early.shown = useOption({ id, name, request, level, quickest: quickNow, list: [{ ...quickNow, extraS: 0 }] }, 0).catch(() => null);
+        early.shown = useOption({ id, name, request, level, quickest: quickNow, list: [{ ...quickNow, extraS: 0 }] }, 0, EARLY_SIGHT_MS).catch(() => null);
+        early.shown.then(openGate);
       }, Math.max(0, EARLY_MS - (Date.now() - planT0))) : null;
       // the router's own routes get their context now, while the stages are found and timed (live: the context after the
-      // plans added 3 s); the stage plans get theirs once routed
-      const routerCands = cands.slice(), routerCtx = contextOn(routerCands, CTX_BUDGET_MS, 'route');
+      // plans added 3 s); the highway-costed route as soon as it lands; the stage plans each as it's routed
+      if (!earlyTimer) openGate();                                          // no early quickest: nothing to wait for
+      const directCtx = firstUp.then(() => contextOn(directCands.slice(), CTX_BUDGET_MS, 'route'));
+      const same = (a, b) => Math.abs((a.timeS || 0) - (b.timeS || 0)) < 1 && a.coords.length === b.coords.length;
+      const highway = (await hwyTry).filter(r => Number.isFinite(r.timeS) && !direct.some(d => same(d, r)));
+      const hwyCands = highway.map(r => ({ kind: 'router', highway: true, route: r, timeS: r.timeS, via: [] }));
+      const cands = [...directCands, ...hwyCands];
+      const routerCands = cands.slice(), planCtx = new Map();
+      const routerCtx = Promise.all([directCtx, hwyCands.length ? firstUp.then(() => contextOn(hwyCands, CTX_BUDGET_MS, 'hwy')) : null]).then(([a, b]) => a || b);
+      // once the router's routes have their context, the best of them is likely the pick: its track is built meanwhile
+      routerCtx.then(() => {
+        try {
+          const pool0 = FunRoute.keepAvoiding(routerCands, avoid);
+          for (const c of pool0) if (!c.t) { c.t = FunRoute.geometry(c.route.coords, Core); c.fun = funOf(c.t, c.route.turns); }
+          const lead = rankPool(pool0, level)[0];
+          const c = lead && pool0.find((x) => x.t === lead.t);
+          if (c && !(early.fired && c === quickNow)) buildAhead(c, id, name);
+        } catch (_) { /* nothing built ahead: built after the ranking, as before */ }
+      });
       // The baseline is the quickest route that keeps to the avoid options (when one does), as the ranking's is.
       const allowed = FunRoute.keepAvoiding(cands, avoid);
       const quickS = Math.min(...allowed.map(c => c.timeS).filter(Number.isFinite));
@@ -3106,31 +3141,39 @@
           // gives up on long connections. Up to 48 km crow fly the middle circle is planned too and both kinds compete; past
           // that it only costs requests (its connectors are too long for the matrix).
           const n = FunRoute.sectionCount(from, to, level === 'max' ? 3 : 2);
-          const plans = FunRoute.kmBetween(from, to) > 48 ? [] : await stretch(from, to, quickS, 'Finding fun roads…', 0.75);
+          // the whole trip and its sections are planned at the same time (live: the sections in turn after the whole trip
+          // added 2 s to Harrison); each is its own discovery (off the page's thread), network step and matrix
+          const wholeP = FunRoute.kmBetween(from, to) > 48 ? Promise.resolve([]) : stretch(from, to, quickS, 'Finding fun roads…', 0.75);
+          let sectionsP = null;
           if (n > 1) {
             try {
               const quick = allowed.reduce((x, y) => (y.timeS < x.timeS ? y : x));
               const cuts = FunRoute.sectionPoints(quick.route.coords, n);
               cuts[0] = from; cuts[n] = to;
-              const sections = [];
-              for (let k = 0; k < n; k++) {
-                sections.push((await stretch(cuts[k], cuts[k + 1], quickS / n, `Finding fun roads · ${k + 1} of ${n}`, 0.75 + 0.08 * k / n, 0))
-                  .filter(p => p.value > 0));                            // a section only detours when it pays
-              }
+              sectionsP = Promise.all(Array.from({ length: n }, (_, k) => stretch(cuts[k], cuts[k + 1], quickS / n, `Finding fun roads · ${k + 1} of ${n}`, 0.75 + 0.08 * k / n, 0)
+                .then((ps) => ps.filter(p => p.value > 0))));            // a section only detours when it pays
+            } catch (_) { sectionsP = null; }
+          }
+          const plans = await wholeP;
+          if (sectionsP) {
+            try {
+              const sections = await sectionsP;
               const seen = new Set(plans.map(FunRoute.planKey));
               for (const p of FunRoute.combineSections(sections, quickS, level, 2)) if (!seen.has(FunRoute.planKey(p))) { seen.add(FunRoute.planKey(p)); plans.push(p); }
             } catch (_) { /* no sections: the whole-trip plans still compete */ }
           }
           ui.step('Routing fun roads…', 0.85);
-          // Two at a time: the public router rate-limits bursts.
+          // Three at a time (the public router rate-limits bursts); each plan's context starts the moment it's routed
           const routed = [];
-          for (let i = 0; i < plans.length; i += 2) {
-            routed.push(...await Promise.allSettled(plans.slice(i, i + 2).map(async (plan) => {
+          for (let i = 0; i < plans.length; i += 3) {
+            routed.push(...await Promise.allSettled(plans.slice(i, i + 3).map(async (plan, j) => {
               const pts = FunRoute.waypoints(from, to, plan);
               const [r] = await valhallaRoutes(pts, false, 0, connectorCosting() || {});   // fast roads between the good ones
               // The router may join the shaping points by a shortcut that skips the stage (R-14): then the plan didn't happen.
               if (!FunRoute.keptStages(r.coords, plan)) throw new Error('stage skipped');
-              return { kind: 'stages', plan, route: r, timeS: r.timeS, via: pts.slice(1, -1) };
+              const cand = { kind: 'stages', plan, route: r, timeS: r.timeS, via: pts.slice(1, -1) };
+              planCtx.set(cand, contextOn([cand], PLAN_CTX_MS, `plan${i + j}_`));
+              return cand;
             })));
           }
           for (const r of routed) if (r.status === 'fulfilled') cands.push(r.value);
@@ -3147,8 +3190,8 @@
         await RouteLoading.yieldToUI();
       }
       const ctx = (async () => {                                           // the route context, alongside the towns lookup
-        const rest = pool.filter((c) => !routerCands.includes(c));
-        const [a, b] = await Promise.all([routerCtx, rest.length ? contextOn(rest, PLAN_CTX_MS, 'plan') : null]);
+        const rest = pool.filter((c) => !routerCands.includes(c) && !planCtx.has(c));
+        const [a, b] = await Promise.all([routerCtx, rest.length ? contextOn(rest, PLAN_CTX_MS, 'plan') : null, ...planCtx.values()]);
         return b || a;
       })();
       const forecasts = weatherFetch(pool);                                // and the forecasts, costed once the context is in
@@ -3175,8 +3218,15 @@
       const offered = FunRoute.distinctOptions(ranked, 3);
       // the quickest already up is the only option: keep it as it is (no second draw of the same route and card), but
       // finish the plan as any other (aftercare, the debug record): only the redraw is skipped
-      const kept = early.fired && offered.length === 1 && offered[0].t === quickNow.t ? await early.shown : null;
-      const t = kept || await useOption({ id, name, request, level, quickest, list: offered }, 0);
+      let kept = early.fired && offered.length === 1 && offered[0].t === quickNow.t ? await early.shown : null;
+      if (kept && kept.sightPending) kept = null;                         // drawn before its land cover: built in full now
+      let t = kept;
+      if (kept) {                                                          // the ranking's word on it, on the card already up
+        const o = { id, name, request, level, quickest, list: offered };
+        optionOnto(kept, offered[0], o);
+        routeOptions = Object.assign(o, { picked: 0, current: kept });
+        if (typeof renderRouteCard === 'function') { timeFromEnvelope(kept); renderRouteCard(kept); persistPlanned(kept); }
+      } else t = await useOption({ id, name, request, level, quickest, list: offered }, 0);
       if (!t) return false;   // no toast: the route bar and card say it (REVIEW.md 1.2, Route bar: the bar is the toast)
       if (offered[0].infeasible && offered[0].ev && offered[0].ev.hard.length) toast(`No way round it: ${offered[0].ev.hard[0].label} on this route. Check before you go.`);   // every candidate broke a hard constraint
       else if (window.ApexRouteCar) routeAftercare(offered[0]);
@@ -3186,14 +3236,30 @@
     }
     // from the plan's start: the context alone takes 1.5-3 s, so the quickest goes up as soon as the router answers (live:
     // on screen by about 1.5 s with its track built) and the ranking replaces it
-    const EARLY_MS = 0;
+    const EARLY_MS = 0, EARLY_SIGHT_MS = 100, FIRST_GATE_MS = 1800;
     // Router costing for the legs between good roads: highways welcome unless avoided (route_engine.js connectorCosting).
     const connectorCosting = () => (window.ApexRouteEngine ? ApexRouteEngine.connectorCosting(avoid, routingCar()) : null);
-    async function useOption(o, i) {
+    // Tracks built ahead for a likely winner while the plan still waits on the stage plans (live: building the winner's
+    // track after the ranking took 0.5-1 s): taken once, by the route line they were built from.
+    const builtAhead = new WeakMap();
+    function buildAhead(c, id, name) {
+      if (!c || !c.route || builtAhead.has(c.route.coords)) return;
+      builtAhead.set(c.route.coords, trackFromPolyline(c.route.coords, id, name).catch(() => null));
+    }
+    async function useOption(o, i, sightMs) {
       const c = o.list[i], was = o.current;
-      const t = await trackFromPolyline(c.route.coords, o.id, o.name);
+      const ahead = builtAhead.get(c.route.coords);
+      if (ahead) builtAhead.delete(c.route.coords);
+      const t = (ahead && await ahead) || await trackFromPolyline(c.route.coords, o.id, o.name, sightMs);
       // A pick (not the first build) is dropped if the route was cleared, replaced or driven meanwhile.
       if (was && (routeOptions !== o || plannedRoute !== was || state.mode === 'live')) return null;
+      optionOnto(t, c, o);
+      routeOptions = Object.assign(o, { picked: i, current: t });
+      await buildRoute(null, o.id, o.name, t);
+      return t;
+    }
+    /** What the ranking says about option c, onto its track t (the card reads these): times, the why line, the engine. */
+    function optionOnto(t, c, o) {
       // A winning alternate is pinned with shaping points along it, so a reroute stays on it; so is the highway-costed
       // route (the router's own costing would reroute it onto the side streets it avoided).
       const via = c.kind === 'router' && (c.extraS > 0 || c.highway) ? FunRoute.alongPoints(c.route.coords) : c.via;
@@ -3204,9 +3270,6 @@
                          unavoided: FunRoute.unavoided(avoid, c.route), why: (engineWhy && engineWhy.text) || whyText(FunRoute.why(c, o.quickest), fewerTownKm(c, o.quickest), c.extraS),
                          request: { ...o.request, via: via.map(p => ({ lat: p.lat, lon: p.lon, shaping: true })) } });
       if (c.plan) t.stageSpans = FunRoute.stageSpans(t, c.plan.legs);   // where its stages are (Siri: next / skip, IDEAS V-07)
-      routeOptions = Object.assign(o, { picked: i, current: t });
-      await buildRoute(null, o.id, o.name, t);
-      return t;
     }
     let optionBusy = false;
     async function pickOption(i) {

@@ -358,7 +358,7 @@ globalThis.ApexUnits = require(root + "/web/units.js");
 const FunRoute = require(root + '/web/fun_route.js');
 const html = ['index.html', 'cockpit.js', 'lazy.js'].map((f) => { try { return fs.readFileSync(root + '/web/' + f, 'utf8'); } catch (_) { return ''; } }).join('\n');
 const source = html.match(/async function funRoute\(.*?\n    }/s)[0];
-const useOptionSource = html.match(/async function useOption\(.*?\n    }/s)[0];
+const useOptionSource = html.match(/async function useOption\(.*?\n    }/s)[0] + '\n' + html.match(/function optionOnto\(.*?\n    }/s)[0] + '\n' + html.match(/const builtAhead = .*?;\n/s)[0] + html.match(/function buildAhead\(.*?\n    }/s)[0];
 const marksSource = html.match(/function timeMarksOf\(.*?\n    }/s)[0];
 const fewerSource = html.match(/const fewerTownKm = .*?;\n/s)[0];
 const townsOnSource = html.match(/async function townsOn\(.*?\n    }/s)[0];
@@ -374,7 +374,7 @@ const A = { lat: lat0, lon: lon0 }, B = { lat: lat0, lon: lon0 + 10000 * mLon };
 async function run({ level, routes, osrm, discover, matrix, places, avoid = FunRoute.AVOID_DEFAULT, win = {} }) {
   const built = [], toasts = [], calls = { matrix: 0, routes: 0, extras: [] };
   const funRoute = new Function('funLevel', 'valhallaRoutes', 'osrmRoutes', 'toast', 'FunRoute', 'ApexStages', 'state', 'allHighlights', 'valhallaMatrix',
-    'Core', 'RouteLoading', 'funOf', 'applyMeasured', 'trackFromPolyline', 'buildRoute', 'totalOf', 'window', 'whyText', 'avoid', 'let routeOptions = null; const routingCar = () => null; const roadPrefs = {}; const etaPace = {}; const plannedRoute = null; ' + engineSource + '; ' + useOptionSource + '; ' + townsOnSource + '; const weatherOn = async () => {}; const weatherFetch = () => new Map(); const tasteOn = () => {}; const preferOn = async () => {}; const measuredStages = async (s) => s; ' + fewerSource + '; ' + marksSource + '; const stepsOf = () => []; return (' + source + ')')(
+    'Core', 'RouteLoading', 'funOf', 'applyMeasured', 'trackFromPolyline', 'buildRouteStub', 'totalOf', 'window', 'whyText', 'avoid', 'let routeOptions = null; const routingCar = () => null; const roadPrefs = {}; const etaPace = {}; let plannedRoute = null; const buildRoute = async (p, i, n, t) => { plannedRoute = t; return buildRouteStub(p, i, n, t); }; ' + engineSource + '; ' + useOptionSource + '; ' + townsOnSource + '; const weatherOn = async () => {}; const weatherFetch = () => new Map(); const tasteOn = () => {}; const preferOn = async () => {}; const measuredStages = async (s) => s; ' + fewerSource + '; ' + marksSource + '; const stepsOf = () => []; return (' + source + ')')(
     level, async (pts, through, alts, extra) => { calls.routes++; calls.extras.push(extra || null); return routes(pts, alts, extra); }, osrm || (async () => { throw Error('down'); }),
     (m) => toasts.push(m), FunRoute, { discover, places }, { hlOn: false }, async () => [],
     async (s, t) => { calls.matrix++; return { times: await matrix(s, t) }; },
@@ -389,25 +389,25 @@ async function run({ level, routes, osrm, discover, matrix, places, avoid = FunR
   // 1. Quick: no stage search; the twistier alternate wins when it costs 1 minute.
   let r = await run({ level: 'quick', routes: async (pts, alts) => [{ coords: straight, turns: [], timeS: 600 }, { coords: wiggly, turns: [], timeS: 660, names: new Map([['Twisty Rd', 14]]), times: [[...wiggly[0], 0], [...wiggly[1200], 330]] }],
                       discover: async () => { throw Error('should not search'); } });
-  out.quick = { fun: r.built[0].fun.fun, extraS: r.built[0].extraS, via: r.built[0].request.via.length, shaping: r.built[0].request.via.every(v => v.shaping), matrix: r.calls.matrix, why: r.built[0].why, marks: r.built[0].timeMarks.map(([m, sec]) => [Math.round(m / 100) / 10, sec]) };
+  out.quick = { fun: r.built[r.built.length - 1].fun.fun, extraS: r.built[r.built.length - 1].extraS, via: r.built[r.built.length - 1].request.via.length, shaping: r.built[r.built.length - 1].request.via.every(v => v.shaping), matrix: r.calls.matrix, why: r.built[r.built.length - 1].why, marks: r.built[r.built.length - 1].timeMarks.map(([m, sec]) => [Math.round(m / 100) / 10, sec]) };
   // 2. No tiles: the router's own routes still compete, no error.
   r = await run({ level: 'fun', routes: async () => [{ coords: straight, turns: [], timeS: 600 }], discover: async () => { throw Error('no tiles'); } });
-  out.noTiles = { built: r.built.length, fun: r.built[0].fun.fun };
+  out.noTiles = { built: r.built.length, fun: r.built[r.built.length - 1].fun.fun };
   // 3. Valhalla down: OSRM's route.
   r = await run({ level: 'fun', routes: async () => { throw Error('down'); }, osrm: async () => [{ coords: straight, turns: [], timeS: 700 }], discover: async () => [] });
-  out.osrm = { built: r.built.length, timeS: r.built[0].timeS };
+  out.osrm = { built: r.built.length, timeS: r.built[r.built.length - 1].timeS };
   // 4. A stage on the way: shortlisted, timed by the matrix, routed, wins, and its points become shaping vias.
   const stage = { km: 5, score: 20, lat: wiggly.slice(0, 1001).map(p => p[1] + 300 * mLat), lon: wiggly.slice(0, 1001).map(p => p[0]) };
   const onStage = wiggly.map(p => [p[0], p[1] + 300 * mLat]);
   r = await run({ level: 'fun', discover: async () => [stage],
                   routes: async (pts) => pts.length === 2 ? [{ coords: straight, turns: [], timeS: 600 }] : [{ coords: onStage, turns: [], timeS: 720 }],
                   matrix: async (s, t) => s.map(() => t.map(() => 60)) });
-  out.stage = { fun: r.built[0].fun.fun, via: r.built[0].request.via.length, shaping: r.built[0].request.via.every(v => v.shaping), extraS: r.built[0].extraS, matrix: r.calls.matrix };
+  out.stage = { fun: r.built[r.built.length - 1].fun.fun, via: r.built[r.built.length - 1].request.via.length, shaping: r.built[r.built.length - 1].request.via.every(v => v.shaping), extraS: r.built[r.built.length - 1].extraS, matrix: r.calls.matrix };
   // 4b. The router's way through the stage points is a road 300 m away (a shortcut past it, R-14): the plan is dropped.
   r = await run({ level: 'fun', discover: async () => [stage],
                   routes: async (pts) => pts.length === 2 ? [{ coords: straight, turns: [], timeS: 600 }] : [{ coords: wiggly, turns: [], timeS: 720 }],
                   matrix: async (s, t) => s.map(() => t.map(() => 60)) });
-  out.shortcut = { timeS: r.built[0].timeS, via: r.built[0].request.via.length };
+  out.shortcut = { timeS: r.built[r.built.length - 1].timeS, via: r.built[r.built.length - 1].request.via.length };
   out.coverage = { kept: FunRoute.stageCoverage(onStage, { legs: [{ s: stage }] }), skipped: FunRoute.stageCoverage(wiggly, { legs: [{ s: stage }] }), none: FunRoute.stageCoverage(wiggly, { legs: [] }) };
   // 5. All down: one toast, nothing built.
   r = await run({ level: 'fun', routes: async () => { throw Error('down'); }, discover: async () => [] });
@@ -417,10 +417,10 @@ async function run({ level, routes, osrm, discover, matrix, places, avoid = FunR
   const tolls = { ...FunRoute.AVOID_DEFAULT, tolls: true };
   r = await run({ level: 'quick', avoid: tolls, discover: async () => [],
                   routes: async () => [{ coords: wiggly, turns: [], timeS: 500, has: { tolls: true } }, { coords: straight, turns: [], timeS: 600, has: { tolls: false } }] });
-  out.avoidTolls = { timeS: r.built[0].timeS, extraS: r.built[0].extraS, why: r.built[0].why, unavoided: r.built[0].unavoided };
+  out.avoidTolls = { timeS: r.built[r.built.length - 1].timeS, extraS: r.built[r.built.length - 1].extraS, why: r.built[r.built.length - 1].why, unavoided: r.built[r.built.length - 1].unavoided };
   r = await run({ level: 'quick', avoid: tolls, discover: async () => [],
                   routes: async () => [{ coords: straight, turns: [], timeS: 600, has: { tolls: true } }] });
-  out.tollOnly = r.built[0].unavoided;
+  out.tollOnly = r.built[r.built.length - 1].unavoided;
   // 7. Avoiding towns: the straight road through a town (1.5 km round a point 5 km out) loses to a 1 min longer bow round it;
   //    without the option the straight road wins; with no place data nothing is known and nothing changes.
   const bow = ll([...Array.from({ length: 501 }, (_, i) => [i * 10, i * 5]), ...Array.from({ length: 500 }, (_, i) => [5010 + i * 10, 2500 - (i + 1) * 5])]);
@@ -428,11 +428,11 @@ async function run({ level, routes, osrm, discover, matrix, places, avoid = FunR
   const town = [{ lat: lat0, lon: lon0 + 5000 * mLon, cls: 'town', name: 'Mid' }];
   const towns = { ...FunRoute.AVOID_DEFAULT, towns: true };
   r = await run({ level: 'quick', avoid: towns, discover: async () => [], places: async () => town, routes: two });
-  out.towns = { timeS: r.built[0].timeS, townKm: r.built[0].townKm, why: r.built[0].why, toast: r.toasts.at(-1) };
+  out.towns = { timeS: r.built[r.built.length - 1].timeS, townKm: r.built[r.built.length - 1].townKm, why: r.built[r.built.length - 1].why, toast: r.toasts.at(-1) };
   r = await run({ level: 'quick', discover: async () => [], places: async () => { throw Error('not asked'); }, routes: two });
-  out.townsOff = { timeS: r.built[0].timeS, townKm: r.built[0].townKm === undefined ? 'unset' : r.built[0].townKm };
+  out.townsOff = { timeS: r.built[r.built.length - 1].timeS, townKm: r.built[r.built.length - 1].townKm === undefined ? 'unset' : r.built[r.built.length - 1].townKm };
   r = await run({ level: 'quick', avoid: towns, discover: async () => [], places: async () => { throw Error('no tiles'); }, routes: two });
-  out.townsUnknown = { timeS: r.built[0].timeS, townKm: r.built[0].townKm };
+  out.townsUnknown = { timeS: r.built[r.built.length - 1].timeS, townKm: r.built[r.built.length - 1].townKm };
   globalThis.ApexFunRoute = FunRoute; globalThis.ApexSun = require(root + '/web/sun.js');
   const Ctx = require(root + '/web/route_ctx/registry.js'), Engine = require(root + '/web/route_engine.js');
   const hood = { speed_limit_est_kph: 40, road_class: 6, road_use: 0, density: 7, access_per_km: 30, sidewalk: 1 }, hwy = { speed_limit_kph: 105, road_class: 0, road_use: 0, density: 3, access_per_km: 0 };
@@ -444,19 +444,19 @@ async function run({ level, routes, osrm, discover, matrix, places, avoid = FunR
   for (const lv of ['quick', 'fun', 'max']) {
     r = await run({ level: lv, win: engineWin, discover: async () => [],
       routes: async (pts, alts, extra) => (extra && extra.costing_options && extra.costing_options.auto.use_highways === 1 ? [{ coords: straight, turns: [], timeS: 600 }] : [{ coords: wiggly, turns: [], timeS: 560 }]) });
-    out['engine_' + lv] = { timeS: r.built[0].timeS, via: r.built[0].request.via.length, why: r.built[0].why, quality: r.built[0].engine && r.built[0].engine.quality,
+    out['engine_' + lv] = { timeS: r.built[r.built.length - 1].timeS, via: r.built[r.built.length - 1].request.via.length, why: r.built[r.built.length - 1].why, quality: r.built[r.built.length - 1].engine && r.built[r.built.length - 1].engine.quality,
       highwayAsked: r.calls.extras.some((x) => x && x.costing_options && x.costing_options.auto.use_highways === 1) };
   }
   // avoiding highways: no highway request, the subdivision route it is (with what it is on the card)
   r = await run({ level: 'fun', win: engineWin, avoid: { ...FunRoute.AVOID_DEFAULT, highways: true }, discover: async () => [],
     routes: async (pts, alts, extra) => [{ coords: wiggly, turns: [], timeS: 560 }] });
-  out.engineAvoidHighways = { timeS: r.built[0].timeS, highwayAsked: r.calls.extras.some((x) => x && x.costing_options && x.costing_options.auto.use_highways === 1) };
+  out.engineAvoidHighways = { timeS: r.built[r.built.length - 1].timeS, highwayAsked: r.calls.extras.some((x) => x && x.costing_options && x.costing_options.auto.use_highways === 1) };
   Ctx.unregister('stub');
   // every candidate crosses a closure: never an empty ranking, the least bad is built and says so
   Ctx.register({ id: 'closed', channels: [], fetch: async (cs) => Object.fromEntries(cs.map((c) => [c.id, { status: 'ok', channels: {}, spans: [{ fromM: 100, toM: 200, kind: 'closure', label: 'Closed' }], points: [] }])) });
   r = await run({ level: 'fun', win: engineWin, discover: async () => [],
     routes: async (pts, alts, extra) => (extra && extra.costing_options && extra.costing_options.auto.use_highways === 1 ? [{ coords: straight, turns: [], timeS: 600 }] : [{ coords: wiggly, turns: [], timeS: 560 }]) });
-  out.allClosed = { built: r.built.length, hard: r.built[0] && r.built[0].engine ? r.built[0].engine.hard.map((h) => h.kind) : null, toasts: r.toasts };
+  out.allClosed = { built: r.built.length, hard: r.built[r.built.length - 1] && r.built[r.built.length - 1].engine ? r.built[r.built.length - 1].engine.hard.map((h) => h.kind) : null, toasts: r.toasts };
   Ctx.unregister('closed');
   process.stdout.write(JSON.stringify(out));
 })().catch(e => { console.error(e); process.exitCode = 1; });

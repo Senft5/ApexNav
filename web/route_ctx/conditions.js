@@ -203,7 +203,7 @@
 
   // the forecast on its own clock (live: Open-Meteo took 2-3.5 s or failed, and the whole context waited for it): the plan
   // waits WAIT_MS at most and goes on with the cells cached and those landed; the rest land in the cache for the next plan
-  const WAIT_MS = 1500;
+  const WAIT_MS = 800;
   async function fetch(corridors, opts = {}) {
     const s = startSeries(corridors, { ...opts, signal: undefined });
     const wait = Math.min(opts.budgetMs || BUDGET_MS, finite(opts.waitMs) ? opts.waitMs : WAIT_MS);

@@ -188,11 +188,23 @@
     for (let i = 0; i < max; i++) out.push(coords[Math.round(i * step)]);
     return out;
   }
+  // PARALLEL requests in flight in all, across the plan's context runs at once (the routes', the stages', each stage
+  // plan's): live, ten at a time made the public server answer each in 1.5 s and the stages' run came back empty
   const PARALLEL = 6;
+  let active = 0;
+  const waiting = [];
+  const slot = () => (active < PARALLEL ? (active++, Promise.resolve()) : new Promise((resolve) => waiting.push(resolve)));
+  const free = () => { const next = waiting.shift(); if (next) next(); else active--; };
   /** Every corridor's edges, PARALLEL at a time; when opts.signal fires, what has answered (the rest out of time). */
   async function fetchAll(corridors, opts = {}) {
     const out = {}, queue = corridors.slice();
-    const worker = async () => { while (queue.length) { const c = queue.shift(); const r = await one(c, opts); if (!(c.id in out)) out[c.id] = r; } };
+    const worker = async () => {
+      while (queue.length) {
+        const c = queue.shift();
+        await slot();
+        try { if (opts.signal && opts.signal.aborted) return; const r = await one(c, opts); if (!(c.id in out)) out[c.id] = r; } finally { free(); }
+      }
+    };
     const all = Promise.all(Array.from({ length: Math.min(PARALLEL, queue.length) }, worker));
     const sig = opts.signal;
     const stop = sig ? new Promise((resolve) => { if (sig.aborted) resolve(); else sig.addEventListener('abort', resolve, { once: true }); }) : null;
