@@ -6,7 +6,7 @@
   39.75
  ],
  "built": "2026-11-04",
- "bytes": 26524134,
+ "bytes": 14634184,
  "format": "VGR1 (tools/graph_etl/tiles.py)",
  "licence": "Road data (c) OpenStreetMap contributors, ODbL 1.0; elevation Mapzen Terrain Tiles; context grid: see web/data/ctx/v1",
  "model": "95960e6d3407394b870b5584c8831f9b9c9bd9c75930147c14dd21d40e97acce",
@@ -21,107 +21,107 @@
  "osm": null,
  "source": "Geofabrik ohio, kentucky, indiana (merged)",
  "stats": {
-  "restrictions_applied": 4975,
-  "restrictions_skipped": 1523,
+  "restrictions_applied": 4225,
+  "restrictions_skipped": 2273,
   "via_way_restrictions_not_applied": 259
  },
  "tile_deg": 0.25,
  "tiles": {
   "380_515": {
-   "bytes": 333426,
-   "edges": 6857,
-   "nodes": 2913,
+   "bytes": 207103,
+   "edges": 5241,
+   "nodes": 2211,
    "restrictions": 3
   },
   "380_516": {
-   "bytes": 771949,
-   "edges": 16907,
-   "nodes": 7200,
-   "restrictions": 33
+   "bytes": 442533,
+   "edges": 11758,
+   "nodes": 5140,
+   "restrictions": 30
   },
   "380_517": {
-   "bytes": 478600,
-   "edges": 10590,
-   "nodes": 4548,
-   "restrictions": 31
+   "bytes": 271461,
+   "edges": 7382,
+   "nodes": 3207,
+   "restrictions": 26
   },
   "380_518": {
-   "bytes": 296319,
-   "edges": 6656,
-   "nodes": 2678,
-   "restrictions": 12
+   "bytes": 169507,
+   "edges": 4680,
+   "nodes": 1855,
+   "restrictions": 9
   },
   "381_515": {
-   "bytes": 1348790,
-   "edges": 29483,
-   "nodes": 12884,
-   "restrictions": 141
+   "bytes": 761306,
+   "edges": 20060,
+   "nodes": 9169,
+   "restrictions": 113
   },
   "381_516": {
-   "bytes": 4410198,
-   "edges": 99646,
-   "nodes": 42627,
-   "restrictions": 1201
+   "bytes": 2391952,
+   "edges": 65696,
+   "nodes": 29037,
+   "restrictions": 1077
   },
   "381_517": {
-   "bytes": 2138349,
-   "edges": 49157,
-   "nodes": 19848,
-   "restrictions": 459
+   "bytes": 1153601,
+   "edges": 32353,
+   "nodes": 13502,
+   "restrictions": 371
   },
   "381_518": {
-   "bytes": 551030,
-   "edges": 12785,
-   "nodes": 5089,
+   "bytes": 318315,
+   "edges": 9155,
+   "nodes": 3577,
    "restrictions": 31
   },
   "382_515": {
-   "bytes": 553174,
-   "edges": 11566,
-   "nodes": 5087,
+   "bytes": 330601,
+   "edges": 8356,
+   "nodes": 3729,
    "restrictions": 12
   },
   "382_516": {
-   "bytes": 3825516,
-   "edges": 86218,
-   "nodes": 36856,
-   "restrictions": 974
+   "bytes": 2204675,
+   "edges": 60784,
+   "nodes": 26408,
+   "restrictions": 871
   },
   "382_517": {
-   "bytes": 4247200,
-   "edges": 96845,
-   "nodes": 40825,
-   "restrictions": 985
+   "bytes": 2041034,
+   "edges": 56070,
+   "nodes": 25551,
+   "restrictions": 784
   },
   "382_518": {
-   "bytes": 1529045,
-   "edges": 35186,
-   "nodes": 14094,
-   "restrictions": 227
+   "bytes": 920311,
+   "edges": 26010,
+   "nodes": 10573,
+   "restrictions": 203
   },
   "383_515": {
-   "bytes": 324780,
-   "edges": 6777,
-   "nodes": 2898,
-   "restrictions": 3
+   "bytes": 212709,
+   "edges": 5406,
+   "nodes": 2289,
+   "restrictions": 2
   },
   "383_516": {
-   "bytes": 916068,
-   "edges": 19991,
-   "nodes": 8833,
-   "restrictions": 74
+   "bytes": 567738,
+   "edges": 15132,
+   "nodes": 6801,
+   "restrictions": 69
   },
   "383_517": {
-   "bytes": 927670,
-   "edges": 20511,
-   "nodes": 8780,
-   "restrictions": 149
+   "bytes": 525153,
+   "edges": 14156,
+   "nodes": 6240,
+   "restrictions": 123
   },
   "383_518": {
-   "bytes": 3872020,
-   "edges": 88594,
-   "nodes": 35269,
-   "restrictions": 640
+   "bytes": 2116185,
+   "edges": 58674,
+   "nodes": 24309,
+   "restrictions": 501
   }
  },
  "version": 1
