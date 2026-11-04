@@ -71,7 +71,14 @@ const CASES = {
     const uJunction = R.turnCost(v, gid(S, c), gid(c, S), obj), uDeadEnd = R.turnCost(v, gid(S, S2), gid(S2, S), obj);
     // a trip from the dead-end street's far side back: it has to turn at the dead end, not mid-street
     const left = R.turnCost(v, gid(S, c), gid(c, W), obj), right = R.turnCost(v, gid(S, c), gid(c, E), obj), straight = R.turnCost(v, gid(S, c), gid(c, N), obj);
-    return { free, noLeft, onlyStraight, ab, ba, uJunction: uJunction === Infinity ? 'forbidden' : uJunction, uDeadEnd, left, right, straight };
+    // a via-way rule: no straight on from South through the North arm to North Road beyond; the way round is the Loop
+    const nodesV = nodes.concat([at(C[0] + 2 * d, C[1])]), N2 = nodesV.length - 1, edgesV = edges.slice();
+    two(edgesV, N, N2, { ...st, name: 'North Road', t: 30 });
+    const ixV = (a, b) => edgesV.findIndex((x) => x.from === a && x.to === b);
+    const viaRoute = (rv) => { const vv = R.view(H.tiles(nodesV, edgesV, [], rv).tiles);
+      return R.plan(vv, { from: { lat: C[0] - 1.5 * d, lon: C[1] }, to: { lat: C[0] + 1.6 * d, lon: C[1] }, level: 'quick' }).quick.names.map((x) => x.name); };
+    const viaFree = viaRoute([]), viaNo = viaRoute([{ from: ixV(S, c), via: [ixV(c, N)], to: ixV(N, N2) }]);
+    return { free, noLeft, onlyStraight, ab, ba, viaFree, viaNo, uJunction: uJunction === Infinity ? 'forbidden' : uJunction, uDeadEnd, left, right, straight };
   },
 
   // the level budgets (fun_route.js LEVELS), alternates 30 % different, and the same answer every time

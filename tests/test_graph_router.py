@@ -41,6 +41,8 @@ def test_restrictions_oneways_and_uturns():
     assert "Round" in r["ab"] and r["ba"] == ["Oneway"], r            # against the one-way: round; with it: straight
     assert r["uJunction"] == "forbidden" and r["uDeadEnd"] > 0, r     # U-turns only at a dead end
     assert r["left"] > r["right"] > r["straight"] == 0, r             # a left costs more than a right
+    assert r["viaFree"] == ["South", "North", "North Road"], r          # straight on, free
+    assert "Loop" in r["viaNo"] and r["viaNo"][-1] == "North Road" and r["viaNo"][:2] != ["South", "North"], r   # via-way: round
 
 
 def test_level_budgets_alternates_and_determinism():

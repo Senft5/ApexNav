@@ -198,6 +198,22 @@
       hIn, hOut, roadCh, scratch: null, bits: flagBits(), nbits: nodeBits(), hasRestr: new Uint8Array(E), gcache: new Map(),
     };
     for (const e of restr.keys()) v.hasRestr[e] = 1;
+    // via-way restrictions (v3 tiles: restrictionsVia [{ from, via: [edges], to, only }], tile-local edges; a packed
+    // tile key per part, fromTile / viaTile[] / toTile, where one lies in another tile), by their last via edge
+    v.restrVia = new Map(); v.hasVia = new Uint8Array(E);
+    list.forEach((t, k) => {
+      const at = (key) => (key != null && key !== t.tile.key ? index.get(packedKey(key)) : k);
+      const g = (tk, e) => { const x = at(tk); return x == null || e == null || e >= edgeBase[x + 1] - edgeBase[x] ? -1 : edgeBase[x] + e; };
+      for (const r of t.restrictionsVia || []) {
+        const vias = (r.via || []).map((e, i) => g(r.viaTile ? r.viaTile[i] : null, e));
+        const seq = [g(r.fromTile, r.from), ...vias], to = g(r.toTile, r.to);
+        if (!vias.length || to < 0 || seq.some((e) => e < 0)) continue;
+        const last = seq[seq.length - 1];
+        if (!v.restrVia.has(last)) v.restrVia.set(last, []);
+        v.restrVia.get(last).push({ seq, to, only: !!r.only });
+        v.hasVia[last] = 1;
+      }
+    });
     return v;
   }
 
@@ -510,7 +526,16 @@
     if (f & N.barrier) c += K.BARRIER_S;
     return c;
   }
-  function allowed(v, p, e) {
+  function allowed(v, p, e, back) {
+    // a via-way rule: the edges driven so far (back(k): the edge before k on the best way here) end with its from-and-via
+    // sequence; then only its to-edge (only_*), or anything but it (no_*)
+    if (back && v.hasVia && v.hasVia[p]) {
+      for (const r of v.restrVia.get(p)) {
+        let k = p, match = true;
+        for (let i = r.seq.length - 2; i >= 0 && match; i--) { k = back(k); match = k === r.seq[i]; }
+        if (match && (r.only ? e !== r.to : e === r.to)) return false;
+      }
+    }
     if (!v.hasRestr[p]) return true;
     const r = v.restr.get(p);
     if (!r) return true;
@@ -566,6 +591,7 @@
     }
     let settled = 0;
     const maxSettle = opts.maxSettle || 4e6;
+    const back = (k) => (k >= 0 && stamp[k] === qid ? pred[k] : -1);
     // the corridor ellipse (opts.ellipse { a, b, major } in degrees and metres): a node outside it is never entered, so a
     // weak heuristic (a large goodness weight) can't flood the whole loaded network
     const el = opts.ellipse || null, inS = S.inS || (S.inS = new Uint32Array(v.N)), inV = S.inV || (S.inV = new Uint8Array(v.N));
@@ -578,7 +604,7 @@
       if (++settled > maxSettle) break;
       for (let e = v.first[node]; e < v.first[node + 1]; e++) {
         const head = v.to[e];
-        if (head < 0 || !allowed(v, p, e) || (bound && !bound(head))) continue;
+        if (head < 0 || !allowed(v, p, e, back) || (bound && !bound(head))) continue;
         const tc = turnCost(v, p, e, obj);
         if (tc === Infinity) continue;
         const be = base(e), x = gp + tc + be;
