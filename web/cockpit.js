@@ -3225,7 +3225,7 @@
         const o = { id, name, request, level, quickest, list: offered };
         optionOnto(kept, offered[0], o);
         routeOptions = Object.assign(o, { picked: 0, current: kept });
-        if (typeof renderRouteCard === 'function') { timeFromEnvelope(kept); renderRouteCard(kept); persistPlanned(kept); }
+        if (typeof renderRouteCard === 'function') { timeFromEnvelope(kept); renderRouteCard(kept); }   // its saved copy stays the one drawn
       } else t = await useOption({ id, name, request, level, quickest, list: offered }, 0);
       if (!t) return false;   // no toast: the route bar and card say it (REVIEW.md 1.2, Route bar: the bar is the toast)
       if (offered[0].infeasible && offered[0].ev && offered[0].ev.hard.length) toast(`No way round it: ${offered[0].ev.hard[0].label} on this route. Check before you go.`);   // every candidate broke a hard constraint
