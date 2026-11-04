@@ -711,6 +711,24 @@ flow('own routing: where our graph tiles cover the trip, our route wins and Valh
   } finally { graphDir = null; }
 }, { geolocation: { latitude: 39.155, longitude: -84.615 }, permissions: ['geolocation'] });
 
+flow('own routing: best roads nearby from our tiles, timed by our router (no map stage search, no Valhalla matrix)', async (page, base) => {
+  graphDir = graphFixture();
+  try {
+    let matrix = 0, discovered = 0;
+    await page.route('https://valhalla1.openstreetmap.de/**', (route) => { if (route.request().url().includes('sources_to_targets')) matrix++; return route.abort(); });
+    await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); } catch (_) {} });
+    await page.goto(base + '/index.html');
+    await page.waitForFunction(() => window.apexDebug && window.apexDebug.map && window.ApexStages);
+    await page.evaluate(() => { const d = ApexStages.discover; ApexStages.discover = (...a) => { window.__discovered = (window.__discovered || 0) + 1; return d(...a); }; });
+    await page.click('#deckNearby');
+    await page.waitForFunction(() => window.apexDebug.lastExploreOwn != null && !document.getElementById('nearbyStatus').classList.contains('busy'), null, { timeout: 20000 });
+    const r = await page.evaluate(() => ({ own: window.apexDebug.lastExploreOwn, rows: document.querySelectorAll('#exploreList .nb-go').length, status: document.getElementById('nearbyStatus').textContent, discovered: window.__discovered || 0 }));
+    discovered = r.discovered;
+    check(r.own > 0 && r.rows > 0, 'roads from our tiles in the list: ' + JSON.stringify(r));
+    check(matrix === 0 && discovered === 0, `no Valhalla matrix (${matrix}) and no map stage search (${discovered})`);
+  } finally { graphDir = null; }
+}, { geolocation: { latitude: 39.205, longitude: -84.55 }, permissions: ['geolocation'] });
+
 flow('own routing: with no graph tiles for the trip, Valhalla plans it as before', async (page, base) => {
   graphDir = 'none';                                              // the shipped Cincinnati tiles cover this trip: hide them
   let out;
