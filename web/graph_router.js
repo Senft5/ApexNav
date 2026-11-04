@@ -1256,6 +1256,9 @@
       if (busy) inflight++;
       try { return await handleOne(msg); } finally { if (busy) inflight--; }
     }
+    // the first route's tiles being read: a plan asked at once loaded the whole corridor's alongside them and held the
+    // first route 0.1-0.3 s on a first visit (live 2026-11-07), so its own loading waits for them
+    let quickBusy = Promise.resolve();
     async function handleOne(msg) {
       const { id, type } = msg || {};
       try {
@@ -1263,8 +1266,12 @@
         if (type === 'quick') {
           // the first route: the tiles already in view when they cover the trip; else only those under the straight line
           // (the ends' and the ones between, loaded in parallel, a small view of their own), the rest come with the plan
+          // (the plan asked right behind it waits for these tiles first: quickBusy)
+          let done;
+          quickBusy = new Promise((r) => { done = r; });
           const t0 = Date.now(), line = lineTiles(msg.from, msg.to);
-          let v = last && line.every((t) => last.keys.has(keyOf(t.i, t.j))) ? last.v : await smallView(line);
+          let v;
+          try { v = last && line.every((t) => last.keys.has(keyOf(t.i, t.j))) ? last.v : await smallView(line); } finally { done(); }
           const t1 = Date.now();
           let r = null;
           try { r = quickest(v, msg); } catch (_) { r = null; }
@@ -1319,6 +1326,7 @@
         if (type === 'plan') {
           // scope 'first': with the corridor's tiles not all in yet, the plan is made on those under the straight line
           // (as the first route was) and says so (partial); the page asks again for the whole corridor meanwhile
+          await quickBusy;
           const corridor = tilesFor(msg.from, msg.to, msg.level), have = await keys();
           const notReady = () => corridor.filter((t) => (!have.size || have.has(keyOf(t.i, t.j))) && !ready.has(keyOf(t.i, t.j)));
           let missing = notReady();
