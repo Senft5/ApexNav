@@ -4894,7 +4894,8 @@ flow('plan flow (c) best roads nearby in 3 taps: the chip under Where to?, a roa
   await scan(page, 'Best roads nearby');
   await tap('#exploreList .nb-go', 'the road');
   await cardUp(page);
-  check(!(await page.isVisible('#nearbySheet')), 'the list goes when its road is planned');
+  check(await page.waitForFunction(() => { const n = document.getElementById('nearbySheet'); return !n.classList.contains('open') && getComputedStyle(n).visibility === 'hidden'; }, null, { timeout: 2000 }).then(() => true, () => false),
+    'the list goes when its road is planned (its slide down done)');
   await tap('#routeDriveBtn', 'Start');
   await page.waitForFunction(() => window.apexDebug.driveActive && apexDebug.track && apexDebug.track.id === 'explore', null, { timeout: 10000 });
   check(taps.n === 3, `best roads nearby in 3 taps: ${taps.log.join(' → ')}`);
