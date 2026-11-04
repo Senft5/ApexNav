@@ -783,6 +783,14 @@
     }
     return out;
   }
+  /** The tiles under the straight line from a to b (sampled every 2 km), the ends' first. */
+  function lineTiles(a, b) {
+    const n = Math.max(1, Math.ceil(distM(a.lat, a.lon, b.lat, b.lon) / 2000)), out = [], seen = new Set();
+    const add = (la, lo) => { const t = tileOf(la, lo), k = keyOf(t.i, t.j); if (!seen.has(k)) { seen.add(k); out.push(t); } };
+    add(a.lat, a.lon); add(b.lat, b.lon);
+    for (let k = 1; k < n; k++) add(a.lat + (b.lat - a.lat) * k / n, a.lon + (b.lon - a.lon) * k / n);
+    return out;
+  }
   function loopTiles(start, km) {
     const r = Math.max(3000, km * 1000 / (2 * Math.PI) * 2 + 2000);
     const p = (b) => ({ lat: start.lat + r * Math.cos(b) / 110540, lon: start.lon + r * Math.sin(b) / (111320 * Math.cos(start.lat * RAD)) });
@@ -1023,6 +1031,17 @@
     // the view is kept and grown: a plan inside the tiles already viewed (the preloaded area round you) reuses it; one
     // that needs more builds the union once (at most MAX_VIEW tiles, else just what it needs)
     const MAX_VIEW = 20;
+    // a view of just these tiles (the first route's), kept for the next ask of the same set
+    let small = null;
+    async function smallView(want) {
+      const have = await keys();
+      const need = want.filter((t) => !have.size || have.has(keyOf(t.i, t.j)));
+      const key = need.map((t) => keyOf(t.i, t.j)).sort().join(',');
+      if (small && small.key === key) return small.v;
+      const got = (await Promise.all(need.map(load))).filter(Boolean);
+      small = { key, v: view(got) };
+      return small.v;
+    }
     async function viewFor(want) {
       const have = await keys();
       const need = want.filter((t) => !have.size || have.has(keyOf(t.i, t.j)));
@@ -1039,8 +1058,14 @@
       try {
         if (type === 'covers') return { id, covers: covers(await keys(), msg.points || []) };
         if (type === 'quick') {
-          const t0 = Date.now(), v = await viewFor(tilesFor(msg.from, msg.to, msg.level)), t1 = Date.now();
-          const r = quickest(v, msg);
+          // the first route: the tiles already in view when they cover the trip; else only those under the straight line
+          // (the ends' and the ones between, loaded in parallel, a small view of their own), the rest come with the plan
+          const t0 = Date.now(), line = lineTiles(msg.from, msg.to);
+          let v = last && line.every((t) => last.keys.has(keyOf(t.i, t.j))) ? last.v : await smallView(line);
+          const t1 = Date.now();
+          let r = null;
+          try { r = quickest(v, msg); } catch (_) { r = null; }
+          if (!r) { v = await viewFor(tilesFor(msg.from, msg.to, msg.level)); r = quickest(v, msg); }   // the line alone had no way
           return { id, result: { route: plain(r), loadMs: t1 - t0, ms: Date.now() - t1, tiles: v.keys } };
         }
         if (type === 'score') {
@@ -1067,7 +1092,10 @@
           // the tiles fetched and decoded (each its own task, so a plan asked meanwhile is answered between them); the
           // view of them is built after, in a task of its own, unless a plan has built what it needs by then
           const have = await keys();
-          const got = (await Promise.all(box.filter((t) => !have.size || have.has(keyOf(t.i, t.j))).map(load))).filter(Boolean);
+          // one at a time, yours first, then the nearest: a plan asked meanwhile shares the bandwidth with one tile, not six
+          const mine = tileOf(c.lat, c.lon), near = (t) => Math.hypot(t.i - mine.i, t.j - mine.j);
+          const got = [];
+          for (const t of box.filter((x) => !have.size || have.has(keyOf(x.i, x.j))).sort((a, b) => near(a) - near(b))) { const x = await load(t); if (x) got.push(x); }
           await new Promise((r) => setTimeout(r, 0));
           const v = await viewFor(box);
           return { id, result: { tiles: v.keys, edges: v.E, loaded: got.length, ms: Date.now() - t0 } };
@@ -1156,7 +1184,7 @@
     };
   }
 
-  const api = { VERSION: 1, K, crowdOnto, project, quickest, scoreLine, reach, explore, TILE_DEG, FLAG_BITS, NODE_BITS, CLS, UNKNOWN_U8, UNKNOWN_FUN, NO_NAME, packedKey, nodeCost, LEVELS_COPY, levels, distM, bearing, turnAngle, tileOf, keyOf, view, geom, snap, objective, search,
+  const api = { VERSION: 1, K, lineTiles, crowdOnto, project, quickest, scoreLine, reach, explore, TILE_DEG, FLAG_BITS, NODE_BITS, CLS, UNKNOWN_U8, UNKNOWN_FUN, NO_NAME, packedKey, nodeCost, LEVELS_COPY, levels, distM, bearing, turnAngle, tileOf, keyOf, view, geom, snap, objective, search,
     assemble, overlap, sameRoute, tilesFor, loopTiles, plan, loop, indexKeys, covers, host, client, edgeId, twin, turnCost };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   root.ApexGraphRouter = api;

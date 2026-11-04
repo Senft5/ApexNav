@@ -20,6 +20,11 @@
 /data/*
   Cache-Control: public, max-age=3600
 
+# Our graph tiles (docs/OWN_ROUTING.md): served as text so the edge compresses them (gzip/brotli, about half the bytes;
+# binary types go out raw); the phone reads the bytes with arrayBuffer() whatever the type says
+/data/graph/v1/*.vgr
+  Content-Type: text/plain; charset=x-user-defined
+
 /g2p/*
   Cache-Control: public, max-age=604800
 
