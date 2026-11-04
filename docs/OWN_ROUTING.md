@@ -142,3 +142,12 @@ phone's reader); tests/test_graph_tiles.py round-trips through both. What a rout
 
 - 2026-11-04: plan written. Geofabrik is unreachable from the build container (proxy drops the connection); the ETL is
   run in GitHub Actions and its artifact downloaded.
+- 2026-11-04: the network half is built (branch claude/own-routing-graph): tile codec v1 (tools/graph_etl/tiles.py,
+  web/graph_tiles.js), the ETL (tools/graph_etl, scored by web/route_engine.js through score_edges.js), CI
+  (.github/workflows/graph.yml) committing web/data/graph/v1. Cincinnati tiles (CI, Geofabrik 2026-11-04): 16 tiles, 14.63 MB, 400,913 edges, 173,598 nodes, 4,225 turn
+  restrictions applied (2,273 skipped: via node outside the tiles or a removed lot lane; 259 via-way not applied).
+  Spot checks (web/data/graph/v1/CHECK.txt): Colerain Ave quality 0.25, Blue Rock Rd (north of I-275) 0.68, E Miami
+  River Rd 0.72, Lees Creek Rd 0.58, I-275 motorway 0.82 at 109 km/h. Local e2e: one reroute flow failed under load
+  (the known flake), unrelated (no page script changed).
+  Not yet: the phone router (§5), the region upload (owner's R2, §7), via-way restrictions, crowd channels (no
+  members' data is baked in; they stay query-time), Overpass-only channels beyond what OSM tags give directly.

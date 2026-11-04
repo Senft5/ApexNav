@@ -11,7 +11,11 @@
   on a toy network and a real Colerain Township piece (tests/fixtures/graph, from the OSM API).
 - [x] CI .github/workflows/graph.yml: Geofabrik OH+KY+IN, merged, Cincinnati's 16 tiles committed back to the branch;
   region build as an artifact, R2 upload gated on the owner's secrets (OWNER_TODO).
-- GRAPH_STATS_PLACEHOLDER
+- Cincinnati tiles (CI, Geofabrik 2026-11-04): 16 tiles, 14.63 MB, 400,913 edges, 173,598 nodes, 4,225 turn
+  restrictions applied (2,273 skipped: via node outside the tiles or a removed lot lane; 259 via-way not applied).
+  Spot checks (web/data/graph/v1/CHECK.txt): Colerain Ave quality 0.25, Blue Rock Rd (north of I-275) 0.68, E Miami
+  River Rd 0.72, Lees Creek Rd 0.58, I-275 motorway 0.82 at 109 km/h. Local e2e: one reroute flow failed under load
+  (the known flake), unrelated (no page script changed).
 - Exact next task: the phone router (web/graph_router.js + graph_worker.js) on these tiles (the parallel builder), then
   OWN_ROUTING.md §6's proof against today's picks.
 
