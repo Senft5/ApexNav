@@ -3517,10 +3517,18 @@
       const sw = () => { const e = document.getElementById('routeCardFun'); return e ? e.getBoundingClientRect().top : null; };
       const y0 = sw();
       const keep = () => { const y1 = sw(), b = $('planBody'); if (y0 != null && y1 != null && b && Math.abs(y1 - y0) > 0.5) b.scrollTop += y1 - y0; };
+      // the card keeps settling for a moment after the re-rank (the note, the tiles, the profile's slot), so the switch is
+      // held for 600 ms of frames, with the browser's own anchoring off for that moment so the two never fight
+      const hold = () => {
+        const b = $('planBody'); if (b) b.style.overflowAnchor = 'none';
+        const end = performance.now() + 600;
+        const step = () => { keep(); if (performance.now() < end) requestAnimationFrame(step); else if (b) b.style.overflowAnchor = ''; };
+        step();
+      };
       setFunLevel(level);
       if (t && o && o.current === t && state.mode !== 'live') {
-        if (o.kind === 'loop') { await relevelLoop(o, level); keep(); requestAnimationFrame(keep); return; }
-        if (o.pool && LEVEL_ORDER[level] <= LEVEL_ORDER[o.builtLevel || 'quick']) { if (!(await rerank(o, level))) setFunLevel(was); keep(); requestAnimationFrame(keep); return; }
+        if (o.kind === 'loop') { await relevelLoop(o, level); hold(); return; }
+        if (o.pool && LEVEL_ORDER[level] <= LEVEL_ORDER[o.builtLevel || 'quick']) { if (!(await rerank(o, level))) setFunLevel(was); hold(); return; }
       }
       if (!(await replanForLevel(FunRoute.LEVELS[level].label))) setFunLevel(was);
     }
