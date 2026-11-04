@@ -4911,6 +4911,8 @@ flow('plan flow (e, f) a level change and an alternative are one tap or swipe ea
   check(await page.evaluate(() => document.querySelectorAll('[data-fun]').length === 3 && !!document.querySelector('#routeCard [data-fun]')), 'the level has one home, the route card');
   const level = () => page.evaluate(() => [...document.querySelectorAll('[data-fun]')].find((b) => b.getAttribute('aria-checked') === 'true').textContent);
   check(await level() === 'Fun', 'planned at Fun');
+  // (the browser's own scroll anchoring off, as CI's Chromium in effect had it: only the app keeps the switch in place)
+  await page.addStyleTag({ content: '#planBody { overflow-anchor: none !important; }' });
   // a level change keeps the card's scroll and Start's place, and asks the router nothing
   await page.evaluate(() => { const b = document.getElementById('planBody'); b.scrollTop = Math.min(80, b.scrollHeight - b.clientHeight); });
   // (diagnostics for CI: where the scroller and the sheet are, and how tall the card is)
@@ -4934,6 +4936,19 @@ flow('plan flow (e, f) a level change and an alternative are one tap or swipe ea
   const geo1 = await geo();
   check(Math.abs(after.y - before.y) <= 1 && after.sc > 0 && Math.abs(after.sw - sw0) <= 2, `a level change keeps Start and the scroll where they were: ${JSON.stringify({ before, sc0, sw0, after, geo0, geo1 })}`);
   check(taps.n - t0 === 1, 'a level change is one tap');
+  // the same with the card shrinking late: 90 px above the switch go away 400 ms after the level change (as the card's
+  // slower parts settle on a slow machine); the switch must still stay under the finger
+  await page.evaluate(() => { const f = document.getElementById('routeCardFun'), sp = document.createElement('div'); sp.id = 'lateSpacer'; sp.style.height = '90px'; f.parentNode.insertBefore(sp, f); });
+  await page.evaluate(() => { const b = document.getElementById('planBody'); b.scrollTop = Math.min(160, b.scrollHeight - b.clientHeight); });
+  const swL0 = await page.evaluate(() => document.getElementById('routeCardFun').getBoundingClientRect().top);
+  await page.evaluate(() => setTimeout(() => { const sp = document.getElementById('lateSpacer'); if (sp) sp.remove(); }, 400));
+  await tap('#routeCardFun [data-fun="fun"]', 'Fun');
+  await page.waitForFunction(() => /^Fun: /.test(document.getElementById('routeProgress').textContent) && !document.getElementById('lateSpacer'), null, { timeout: 5000 });
+  await page.waitForTimeout(150);
+  const swL1 = await page.evaluate(() => document.getElementById('routeCardFun').getBoundingClientRect().top);
+  check(Math.abs(swL1 - swL0) <= 2, `the switch stays put when the card shrinks late: ${swL0} -> ${swL1}`);
+  await tap('#routeCardFun [data-fun="quick"]', 'Quick');
+  await page.waitForFunction(() => /^Quick: /.test(document.getElementById('routeProgress').textContent), null, { timeout: 5000 });
   await tap('#routeCardFun [data-fun="fun"]', 'Fun');
   await page.waitForFunction(() => /^Fun: /.test(document.getElementById('routeProgress').textContent), null, { timeout: 5000 });
   check(asked.length === routed, 'and back to Fun, again from what was found');

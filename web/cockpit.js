@@ -3558,17 +3558,22 @@
     // cover it (a plan at Fun holds the quick ones too; Long way's longer detours need a plan of their own), with the engine's
     // own ranking, why line and extra time: nothing is worked out again. Loops re-rank the loops already built.
     const LEVEL_ORDER = { quick: 0, fun: 1, max: 2 };
+    // how long a level change keeps the switch under your finger while the card settles (changeLevel's settle)
+    const SETTLE_MS = 3000;
+    let settleStop = null;
     var optChipsReady = false;                                           // eslint-disable-line no-var -- read before its line runs
     async function changeLevel(level) {
       if (!FunRoute.LEVELS[level] || level === funLevel || $('planPanel').classList.contains('busy') || loopBusy || optionBusy) return;
       const was = funLevel, t = plannedRoute, o = routeOptions;
       // the switch you tapped stays under your finger. The card above it is drawn again for the new route and can be far
-      // shorter (CI, 2026-11-05: 90 px, the sheet itself moved 4 px), so the scroll is set from where the switch now is in
-      // the content, not nudged by how far it moved: scrollTop = its content offset - where it was on screen relative to
-      // the scroller's top, clamped. Applied on every resize of the card or the scroller until neither has changed size
-      // for two frames, with the browser's own scroll anchoring off meanwhile so nothing else moves it.
+      // shorter, and parts of it settle later still (CI, 2026-11-05: 90 px, some of it after the first frames; the sheet
+      // itself moved 4-19 px). So the scroll is set from where the switch now is in the content, never nudged by how far
+      // it moved: scrollTop = its content offset - where it was on screen relative to the scroller's top, clamped. It is
+      // applied on every resize of the card or the scroller for SETTLE_MS, or until you touch, scroll or tap the card
+      // (then where you scroll is yours), with the browser's own scroll anchoring off meanwhile so nothing else moves it.
       const swEl = () => document.getElementById('routeCardFun');
       const y0 = swEl() ? swEl().getBoundingClientRect().top : null;
+      if (settleStop) settleStop();
       const settle = () => {
         const b = $('planBody'), card = $('routeCard');
         if (y0 == null || !b) return;
@@ -3576,19 +3581,21 @@
           const e = swEl(); if (!e) return;
           const top = b.getBoundingClientRect().top, offset = e.getBoundingClientRect().top - top + b.scrollTop;
           b.scrollTop = Math.max(0, Math.min(b.scrollHeight - b.clientHeight, offset - (y0 - top)));
+          lastSet = b.scrollTop;
         };
+        let lastSet = b.scrollTop;
+        // a scroll to anywhere but where this put it is someone else's (you, or the app on purpose): it stops here
+        const scrolled = () => { if (Math.abs(b.scrollTop - lastSet) > 1) stop(); };
         b.style.overflowAnchor = 'none';
         const ro = typeof ResizeObserver === 'function' ? new ResizeObserver(apply) : null;
-        if (ro) { ro.observe(b); if (card) ro.observe(card); }
-        let stable = 0, last = null;
-        const t1 = performance.now();
-        const tick = () => {
-          apply();
-          const size = `${b.scrollHeight}x${b.clientHeight}x${card ? card.scrollHeight : 0}`;
-          stable = size === last ? stable + 1 : 0; last = size;
-          if (stable >= 2 || performance.now() - t1 > 2000) { if (ro) ro.disconnect(); b.style.overflowAnchor = ''; } else requestAnimationFrame(tick);
-        };
-        apply(); requestAnimationFrame(tick);
+        if (ro) { ro.observe(b); if (card) { ro.observe(card); for (const k of card.children) ro.observe(k); } }
+        const yours = ['touchstart', 'wheel', 'pointerdown', 'keydown'];
+        const stop = () => { if (ro) ro.disconnect(); clearTimeout(timer); for (const k of yours) b.removeEventListener(k, stop, true); b.removeEventListener('scroll', scrolled); b.style.overflowAnchor = ''; if (settleStop === stop) settleStop = null; };
+        for (const k of yours) b.addEventListener(k, stop, true);
+        b.addEventListener('scroll', scrolled);
+        const timer = setTimeout(stop, SETTLE_MS);
+        settleStop = stop;
+        apply(); requestAnimationFrame(apply);
       };
       setFunLevel(level);
       if (t && o && o.current === t && state.mode !== 'live') {
