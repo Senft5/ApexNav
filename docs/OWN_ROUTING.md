@@ -332,3 +332,9 @@ phone's reader); tests/test_graph_tiles.py round-trips through both. What a rout
     Cold first route under 1 s in all 10; every pick at least as good as production's. Not met: the final card under
     1 s warm (5 of 10) and under 1.5 s cold (0 of 10): the preload (17 MB, 5-6 s on this network) still loads during
     the first plans, and the context and track build wait on the page behind it.
+- 2026-11-05 (late night): destination picks (branch claude/dest-picks): the objective's corner term keeps
+  `ApexFunRoute.builtKeep` of each edge's fun, from the built evidence two of the v2 tiles' road channels agree on
+  (`builtAgreeOf`, the engine's own readings), so the search no longer chases corners on streets lined with houses; and
+  after the bisection the plan tries `K.LOWER` (0.9, 0.75) of the weight found, so cheaper ways to the same good road
+  reach the ranking (live, a cross-suburb trip at Fun: the 29-minute way to a county road was missing, only a
+  31-minute I-275 loop came back). Plan time: two more searches, 50-200 ms on the 16 tiles in node.

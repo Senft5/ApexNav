@@ -3418,11 +3418,11 @@
       try {
         const t0 = Date.now();
         // the whole corridor's routes, when the first plan was made on the tiles in hand: the new ones join the pool
-        const full = fullP ? await fullP : null;
+        const full = fullP ? await fullP : null, added = new Set();
         if (full && full.cands && full.cands.length) {
           const same = (a, b) => a.own && b.own && a.own.edges.length === b.own.edges.length && a.own.edges.every((e, i) => e === b.own.edges[i]);
           const clockOf = pool.find((p) => p.own && p.own.clock), k = clockOf ? clockOf.own.clock : 1;   // the pool's one clock
-          for (const c of full.cands) if (!pool.some((p) => same(p, c))) { c.timeS *= k; c.route.timeS = c.timeS; c.t = FunRoute.geometry(c.route.coords, Core); c.fun = funOf(c.t, c.route.turns); c.glare = FunRoute.glare(c.t, c.timeS, new Date()); pool.push(c); }
+          for (const c of full.cands) if (!pool.some((p) => same(p, c))) { c.timeS *= k; c.route.timeS = c.timeS; c.t = FunRoute.geometry(c.route.coords, Core); c.fun = funOf(c.t, c.route.turns); c.glare = FunRoute.glare(c.t, c.timeS, new Date()); pool.push(c); added.add(c.t); }
         }
         await contextOn(pool, OWN_REFINE_MS, 'refine', OWN_REFINE);
         await weatherOn(pool, level, forecasts);
@@ -3432,7 +3432,8 @@
         if (window.apexDebug) window.apexDebug.lastRefine = { ms: Date.now() - t0, shown: now ? now.value : null, best: best ? best.value : null, swapped: false };
         if (!best || !now || best.t === now.t || !(best.value > now.value + OWN_SWAP_POINTS) || !still()) return;
         const d = (k) => ((best.parts && best.parts[k]) || 0) - ((now.parts && now.parts[k]) || 0);
-        const why = d('weather') + (d('penalty') > 0 ? d('penalty') : 0) >= 1 ? 'Weather ahead' : 'Conditions ahead';
+        // a route the wider search found only now isn't about the weather: say what it is
+        const why = added.has(best.t) ? 'Found a better way' : d('weather') + (d('penalty') > 0 ? d('penalty') : 0) >= 1 ? 'Weather ahead' : 'Conditions ahead';
         const list = FunRoute.distinctOptions(ranked, 3);
         const t = await useOption({ ...o, list, current: shown, quickest: ranked.find((c) => c.t === o.quickest.t) || o.quickest }, 0, OWN_SIGHT_MS);
         if (!t) return;
@@ -3499,9 +3500,15 @@
       const via = c.kind === 'own' || (c.kind === 'router' && (c.extraS > 0 || c.highway)) ? FunRoute.alongPoints(c.route.coords) : c.via;
       // The why line: the engine's 2-3 largest differences from the quickest, else the roads and corners it's for.
       const engineWhy = window.ApexRouteEngine && c.parts ? ApexRouteEngine.why(c, o.quickest, { metric: ApexUnits.metric() }) : null;
+      // the ranking's pick: a Fun or Long way pick that is the quickest says the trip has no road worth more time, and a
+      // pick another option on the card looks better than (quicker, more corners) says what it wins by
+      const isPick = o.list && o.list[0] === c && window.ApexRouteEngine && ApexRouteEngine.whyOver;
+      const quickLine = isPick && !engineWhy ? ApexRouteEngine.whyQuickest(c, o.quickest, o.level) : null;
+      const rival = isPick ? o.list.slice(1).find((x) => FunRoute.dominates(x, c)) : null;
+      const overLine = rival ? ApexRouteEngine.whyOver(c, rival) : null;
       Object.assign(t, { measured: c.t.measured, fun: c.fun, timeS: c.timeS, timeMarks: timeMarksOf(t, c.route), steps: stepsOf(t, c.route), extraS: c.extraS, funLevel: o.level, glareMin: c.glare ? Math.round(c.glare.minutes) : null, townKm: c.townKm,
                          engine: c.ev ? { quality: c.ev.quality, confidence: c.ev.confidence, poorKm: c.ev.poorKm, hard: c.ev.hard, penalties: c.ev.penalties } : null,
-                         unavoided: FunRoute.unavoided(avoid, c.route), why: (engineWhy && engineWhy.text) || whyText(FunRoute.why(c, o.quickest), fewerTownKm(c, o.quickest), c.extraS),
+                         unavoided: FunRoute.unavoided(avoid, c.route), why: [(engineWhy && engineWhy.text) || (quickLine && quickLine.text) || whyText(FunRoute.why(c, o.quickest), fewerTownKm(c, o.quickest), c.extraS), overLine && overLine.text].filter(Boolean).join('. ') || null,
                          request: { ...o.request, via: via.map(p => ({ lat: p.lat, lon: p.lon, shaping: true })) } });
       if (c.plan) t.stageSpans = FunRoute.stageSpans(t, c.plan.legs);   // where its stages are (Siri: next / skip, IDEAS V-07)
     }

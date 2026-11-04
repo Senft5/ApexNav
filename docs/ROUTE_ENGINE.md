@@ -127,7 +127,7 @@ flowchart TD
   SAMP --> POOR["poor cost: every sample, 10 per km times<br>clamp of 0.45 minus quality over 0.2; cap<br>120; split into business, residential,<br>stops, other for the why line"]
   SAMP --> BIZ["business cost: 4 per km times clamp of<br>businesses per km minus 4 over 10, not on<br>a motorway; cap 40"]
   SAMP --> SCN["scenery points = 20 x mean of scenery minus<br>0.5 times min 1, sConf over 0.35"]
-  GEO["5 m geometry, corners, the router's junction<br>turns dropped"] --> FUN["fun = ApexFunRoute.score with each corner<br>weight x gate: Twist 0.5, Flow 0.35, not<br>dull 0.15; good corners gated"]
+  GEO["5 m geometry, corners, the router's junction<br>turns dropped"] --> FUN["fun = ApexFunRoute.score with each corner<br>weight x gate x built-up cut (two built<br>signals agreeing: 0.4 none, 0.85 all): Twist<br>0.5, Flow 0.35 by its corners' gate, not dull<br>0.15 broken only by corners gated half;<br>good corners gated"]
   FUN --> GAIN["gain = 0.5 x gated good corners over the<br>quickest, cap 60; fun and gain x the share<br>of the drive that isn't side streets"]
   LVL["Level: Quick budget 10 % + 60 s, 3 per min;<br>Fun 35 % + 240 s, 1 per min; Max fun 90 % +<br>600 s, 0.35 per min"] --> TIME["time = minus perMin x extra minutes over the<br>quickest"]
   QR --> QT["quality term = 0.3 x quality - 50 x qWeight"]
@@ -168,7 +168,7 @@ flowchart TD
   OPT --> PIN["winner: an alternate or highway-costed route<br>is pinned with shaping points every 5-6 km<br>so a reroute keeps to it"]
   OPT ~~~ WHY
   PIN ~~~ LOOP ~~~ EXP
-  RANK --> WHY["why line: the 2-3 parts that differ most<br>from the quickest: side streets or strip<br>malls avoided, highway instead of, good<br>corners, back roads at 45-55 mph, signals,<br>through forest, along the water, ridges,<br>deer hour, less in towns, drier, less low<br>sun; else the old roads and corners line"]
+  RANK --> WHY["why line: the 2-3 parts that differ most<br>from the quickest: side streets or strip<br>malls avoided, highway instead of, good<br>corners, back roads at 45-55 mph, signals,<br>through forest, along the water, ridges,<br>deer hour, less in towns, drier, less low<br>sun; else the old roads and corners line.<br>A Fun or Long way pick that is the quickest:<br>no great roads on this trip. A pick another<br>option beats on the card's minutes and<br>corners: over that route, what it wins by"]
   LOOP["Loops: stage plans and a circle, routed;<br>same context run; value = loopValue on gated<br>fun - 2 per % retraced - 0.8 per % off<br>length + quality + scenery + bonuses - poor<br>- penalties - glare - towns + measured +<br>Prefer; a hard constraint -1000"] --> RANK2["best loop"]
   EXP["Explore: stages within reach, network step,<br>matrix times; listed best first"]
 ```
@@ -196,6 +196,9 @@ under "The channels" are checked the same way (channel and weight).
 | STAGE_UNKNOWN_GATE | 0.4 | the gate a stage's samples take where no provider knew the road (the network step) |
 | GATE_LO | 0.25 | quality at which a corner counts nothing |
 | GATE_HI | 0.6 | quality at which a corner counts in full |
+| BUILT_LO | 0.4 | built evidence (two signals agreeing) where a corner starts to count less: corners between houses |
+| BUILT_HI | 0.85 | built evidence where the cut is full |
+| BUILT_CUT | 1 | the share of a corner's gate the cut takes at BUILT_HI (a street lined with houses: none of it) |
 | PENALTY_CAP | 40 | the total penalties saturate softly toward this |
 | BONUS_CAP | 15 | the most bonuses add |
 | DRIVER | 6 | points for driver_fit (else skill_fit) 1 vs 0, times the share known |
@@ -293,7 +296,7 @@ under "The channels" are checked the same way (channel and weight).
 
 | term | what | points |
 |---|---|---|
-| fun | ApexFunRoute.score with each corner's weight times the **quality gate** where it is: 0 at quality ≤ 0.25, full at ≥ 0.6 | 0–100 |
+| fun | ApexFunRoute.score with each corner's weight times the **quality gate** where it is (0 at quality ≤ 0.25, full at ≥ 0.6) times the **built-up cut** (`builtEvidence(ctx, true)`, what two built signals agree on: full at 0.4 or less, nothing at 0.85 or more: a street lined with houses has no fun corners); Flow counts each run by its corners' mean gate and only a corner gated at least half breaks a dull straight | 0–100 |
 | gain | 0.5 × gated good corners gained over the quickest (cap 60), as before | ≤ 30 |
 | quality | 0.3 × (route quality − 50) × how much is known (full once a third of the weights is known) | ±15 |
 | scenery | 20 × mean(scenery − 0.5) weighted by how much of it is known (full at 35 %) | ±10 |
@@ -302,6 +305,13 @@ under "The channels" are checked the same way (channel and weight).
 | penalties | per km and per span at the time you'd be there (below); each kind saturates softly toward 12 (KIND_CAP: deer alone can't fill it, a longer deer road still costs more), the total toward 40 | ≥ −40 |
 | time | − the level's perMin × extra minutes (Quick 3, Fun 1, Max 0.35) | |
 | glare, towns, weather, measured, taste, prefer | today's terms, unchanged: glare 1/min (cap 20), towns 3/km (cap 60, when avoided), weather (ice 30, storms 15, rain 6, fog 4 by share, relative), members' roughness/banking −8…+5, taste ±8, the Prefer stamps | |
+
+The route card's why line (cockpit.js optionOnto) is `why(best, quick)`; for the ranking's pick it adds two more: a Fun or
+Long way pick that is the quickest (or within a minute of it) says so, `whyQuickest`: "No great roads on this trip: Quick
+is the way" (or "The quickest way is the best road here too" with 5 good corners or more); and a pick that another
+option on the card beats on its own numbers (`ApexFunRoute.dominates`: no slower in the card's minutes, more corners)
+says what it wins by, `whyOver`: "Over the 34 min route: less low sun". The card never shows a pick that looks strictly
+worse without a reason.
 
 `value` is their sum; `rank` takes the quickest and the budget from the candidates that can be driven, drops those past
 the budget and any with a hard constraint; if every candidate breaks one, the least bad (fewest) stays, flagged, and the
