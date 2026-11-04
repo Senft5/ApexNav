@@ -212,6 +212,26 @@ the name under at least 2 of 5 points along it), else "Road name unknown" (unkno
 30 min → Little River Gorge Road (42 good corners, 6.2 mi, 28 min away), Fence Rail Gap Road, Old Walland Highway; south of
 there, 15 min → Calderwood Highway (9 min away).
 
+**Never a neighbourhood** (the owner, 2026-11-04: the top pick was a residential neighbourhood). A road in the list is a
+through road worth driving, judged on the data, not the corners:
+- *Neighbourhood street* (`ApexFunRoute.streetSample`): residential, living-street or service class with built-up frontage
+  beside it (40+ addresses or 60+ buildings per km, density 6+, or a posted 25 mph where there is any density). Class
+  alone never decides: TIGER tags county lanes "residential" (Second Creek Road, Big Cedar Road: no houses, density 1),
+  and with nothing known beside it the answer is unknown, not a guess. A stage is a street when half of the samples whose
+  answer is known are, over a third of it.
+- *From our tiles* (graph_router.js `explore`): no neighbourhood edge seeds or extends a stage (edges with destination-only
+  access neither). An end that runs into a dead end is cut back to the last junction (a spur goes), unless the dead-end
+  run is 2 km or more of good road (`OUT_BACK_KM`): a long rural road that ends is still worth driving there and back
+  (Cook Road, Mudlick Road, Second Creek Road stay; such a stage carries `deadEnd: true`).
+- *From the map's stage search* (stages.js, used where our tiles found nothing): `rescoreStages` marks a stage `notRoad`
+  when the context shows it is a neighbourhood street, or when our tiles' own model (route_ctx/graph.js `graph_quality`,
+  where they cover it) scores it under 0.45 on average, the same bar our tiles' search uses. The list skips those, and
+  skips any stage the engine never looked at once it has looked at some (it looks at the first 12).
+- Checked (tests/test_graph_router.py, real tiles): from Devou Park the top pick was Parkway Avenue through Kenton Hills
+  (74 houses per km, density 10), now Petersburg Road; near Mount Airy Forest, Lafayette Avenue through Clifton (residential
+  class all along, 57 addresses per km, density 10, posted 25 mph on most of it) is no longer listed. Not fixed: outside our tiles, with the live
+  context too slow to say (the router's edges come back partial in 1.2 s), a neighbourhood is unknown and can still be listed.
+
 ## Loops
 
 Loops chain stages found around the start. Their length used to come from crow-fly connectors x 1.6,

@@ -3802,6 +3802,61 @@ flow('3D terrain: the switch raises the map into relief and tilts it; off by def
   await page.waitForFunction(() => !window.apexDebug.map.getTerrain());
 });
 
+// The owner, 2026-11-04: "dev only satellite map layer access for troubleshooting". /api/me's developer flag (the owner and
+// the co-developer, backend/src/developers.ts) shows a Satellite switch in Layers; it draws USGS orthoimagery under our
+// road and route lines. Anyone else never sees the switch, and a switch left on in localStorage draws nothing.
+const satStyle = (route) => (route.request().url().includes('/styles/')
+  ? route.fulfill({ contentType: 'application/json', body: JSON.stringify({ version: 8, sources: {}, layers: [{ id: 'bg', type: 'background', paint: { 'background-color': '#eee' } }] }) })
+  : route.abort());
+const PNG1 = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==', 'base64');
+async function satPage(page, base, me, prefs) {
+  const tiles = [];
+  await page.route('https://tiles.openfreemap.org/**', satStyle);
+  await page.route('https://basemap.nationalmap.gov/**', (route) => { tiles.push(route.request().url()); return route.fulfill({ contentType: 'image/png', body: PNG1 }); });
+  await page.route('**/api/**', (route) => {
+    const u = new URL(route.request().url());
+    const json = (b, status = 200) => route.fulfill({ status, contentType: 'application/json', body: JSON.stringify(b) });
+    if (u.pathname === '/api/me') return json(me);
+    return json({ error: 'not_found' }, 404);
+  });
+  await page.addInitScript((p) => { try { localStorage.setItem('apex.onboarded', '1'); if (p) localStorage.setItem('apex.prefs', JSON.stringify(p)); } catch (_) {} }, prefs || null);
+  await page.goto(base + '/index.html');
+  await page.waitForFunction(() => window.apexDebug && window.apexDebug.map && window.apexDebug.map.getLayer('apex-twisty'), null, { timeout: 15000 });
+  await page.waitForTimeout(1500);                                     // /api/me has answered
+  return tiles;
+}
+flow('satellite: a developer gets a Satellite switch in Layers that lays USGS imagery under our roads and routes (the owner 2026-11-04)', async (page, base) => {
+  const tiles = await satPage(page, base, { signed_in: true, member: true, handle: 'me', developer: true });
+  check(await page.evaluate(() => !document.getElementById('satSwitch').hidden), 'the developer sees the switch');
+  check(!(await page.evaluate(() => !!window.apexDebug.map.getLayer('apex-satellite'))) && !tiles.length, 'off until turned on, and no tile asked for');
+  await page.evaluate(() => { if (!document.getElementById('swEdge').classList.contains('open')) document.getElementById('swTab').click(); });
+  await page.click('#satSwitch');
+  await page.waitForFunction(() => !!window.apexDebug.map.getLayer('apex-satellite'), null, { timeout: 5000 });
+  const r = await page.evaluate(() => {
+    const m = window.apexDebug.map, ids = m.getStyle().layers.map((l) => l.id), at = (id) => ids.indexOf(id);
+    return { below: ['apex-twisty', 'apex-coverage', 'apex-alt', 'apex-explore', 'apex-route-casing', 'apex-route'].every((id) => at(id) > at('apex-satellite')),
+      // the source as the style holds it (a raster source's own .tiles and .attribution are set only once it has loaded)
+      tiles: (m.getStyle().sources['apex-satellite-src'] || {}).tiles || [], attrib: (m.getStyle().sources['apex-satellite-src'] || {}).attribution || '',
+      on: document.getElementById('satSwitch').getAttribute('aria-checked') };
+  });
+  check(r.below && r.on === 'true', 'under our twisty and measured roads and every route line: ' + JSON.stringify(r));
+  check(r.tiles.length === 1 && r.tiles[0].startsWith('https://basemap.nationalmap.gov/arcgis/rest/services/USGSImageryOnly/MapServer/tile/') && /USGS/.test(r.attrib), 'USGS imagery, credited: ' + JSON.stringify(r));
+  // its tiles are asked for (stubbed above: the run reaches no real host), and the page policy lets them through
+  for (let t = 0; t < 80 && !tiles.length; t++) await page.waitForTimeout(100);
+  check(tiles.length > 0 && tiles.every((u) => u.startsWith('https://basemap.nationalmap.gov/')), 'its tiles are asked for: ' + tiles.length);
+  await page.click('#satSwitch');
+  await page.waitForFunction(() => !window.apexDebug.map.getLayer('apex-satellite') && !window.apexDebug.map.getSource('apex-satellite-src'));
+});
+flow('satellite: anyone else never sees the switch, and one left on in localStorage draws nothing (the owner 2026-11-04)', async (page, base) => {
+  const prefs = { toggles: { satellite: true, twisty: true } };
+  for (const me of [{ signed_in: true, member: true, handle: 'me' }, { signed_in: false }, { signed_in: true, member: false, handle: 'me', developer: true }]) {
+    const tiles = await satPage(page, base, me, prefs);
+    const r = await page.evaluate(() => ({ hidden: document.getElementById('satSwitch').hidden, shown: document.getElementById('satSwitch').offsetParent !== null, layer: !!window.apexDebug.map.getLayer('apex-satellite') }));
+    check(r.hidden && !r.layer && !tiles.length, `no switch, no layer, no tile for ${JSON.stringify(me)}: ${JSON.stringify(r)} ${tiles.length}`);
+    await page.unrouteAll({ behavior: 'ignoreErrors' });
+  }
+});
+
 flow('measured roads: the switch draws the roads members have measured around the view (IDEAS Q-14)', async (page, base) => {
   await page.route('https://tiles.openfreemap.org/**', (route) => (route.request().url().includes('/styles/')
     ? route.fulfill({ contentType: 'application/json', body: JSON.stringify({ version: 8, sources: {}, layers: [{ id: 'bg', type: 'background', paint: { 'background-color': '#eee' } }] }) })

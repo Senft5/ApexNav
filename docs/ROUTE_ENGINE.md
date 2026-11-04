@@ -377,7 +377,9 @@ knew made the difference, the old line (the roads it's for and its corners) is s
   0.5)): a twisty subdivision street falls to 40 % and behind a real back road before any connector is timed. A sample
   no provider knew takes gate `STAGE_UNKNOWN_GATE` (0.4), and a stage with no answer at all while others have one the
   same: a stage is trusted only as far as something vouches for it (live, the router out of time left stages on their
-  map score and a Colerain Avenue stage was planned).
+  map score and a Colerain Avenue stage was planned). A stage the context shows is mostly a neighbourhood street
+  (`streetOf`, fun_route.js `streetSample`), or one our graph tiles' model scores under 0.45 on average, gets
+  `notRoad` and sorts last; Best roads nearby never lists it (ROUTING.md "Explore").
 - **Connectors**: the matrix and the stage plans' routes use `connectorCosting` (use_highways 0.6, avoid-highways kept):
   the good roads are pinned by shaping points, so this only changes how the plan gets between them: fast roads, not
   cut-throughs. A detour must then buy real quality: its gated corners, quality and scenery against its minutes.
