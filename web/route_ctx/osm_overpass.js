@@ -522,7 +522,9 @@
       let want = planTiles(corridors, covered);
       // our Worker's relay first (backend/src/osm_relay.ts, GET /api/ctx/osm?bbox= one tile box): Overpass server-side, where
       // CORS doesn't matter, kept a week per tile there; on the plan's clock (a kept tile answers in well under a second).
-      // A tile it doesn't have yet answers 504 and is fetched and kept there for the next plan.
+      // A tile it doesn't have (504, or any failure: on the preview of 2026-11-04 every public mirror refused or timed out
+      // from Cloudflare, ?diag=1) goes the way it went before the relay: the phone's own query, off the plan's clock, kept
+      // here for the next plan.
       const viaRelay = typeof opts.apiGet === 'function' && !stubOf(opts);
       if (want.length && viaRelay) {
         const got = await relayTiles(want, opts);
@@ -532,7 +534,7 @@
           storeElements(storage, new Map([...got.keys()].map((k) => [k, new Set(['*'])])), fresh, now);
           corridors.forEach((c, ci) => { for (let i = 0; i < c.lat.length; i++) if (got.has(tileKey(c.lat[i], c.lon[i]))) covered[ci][i] = 1; });
         }
-        want = [];                                    // the relay fills its own cache; the public servers can't be read from here
+        want = want.filter((k) => !got.has(k));
       }
       if (want.length) {
         // off the critical path: the query runs on its own clock (live, the public servers answered 502 or 504 on every
