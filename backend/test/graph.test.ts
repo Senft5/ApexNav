@@ -18,7 +18,7 @@ function mock(build: string, tiles: Record<string, Uint8Array>, upstreamOk = tru
     const url = typeof input === "string" ? input : input instanceof URL ? input.href : input.url;
     seen.push(url);
     if (!url.startsWith(RAW) || !upstreamOk) return new Response("no", { status: 404 });
-    const name = url.slice(RAW.length);
+    const name = url.slice(RAW.length).split("?")[0];
     if (name === "index.json") return new Response(JSON.stringify({ version: 3, build, tiles: Object.fromEntries(Object.keys(tiles).map((k) => [k.replace(".vgr", ""), { bytes: tiles[k].length }])) }));
     return tiles[name] ? new Response(tiles[name]) : new Response("no", { status: 404 });
   }) as typeof fetch;
@@ -40,6 +40,7 @@ describe("graph tiles relayed from the graph-data branch", () => {
     expect(r.headers.get("cache-control")).toBe("public, max-age=86400");
     expect(r.headers.get("etag")).toBe('"b1-382_516"');
     expect(new Uint8Array(await r.arrayBuffer())).toEqual(bytes);
+    expect(seen).toContain(RAW + "382_516.vgr?b=b1");          // the build in the query: one cache entry per build
     // again: from the edge cache, raw GitHub not asked a second time for the tile or the index
     const n = seen.length;
     const again = await api(null, "GET", "/api/graph/v1/382_516.vgr");
@@ -58,7 +59,7 @@ describe("graph tiles relayed from the graph-data branch", () => {
       "/api/graph/v1/12345_1.vgr", "/api/graph/v1/382_516.vgr.json"]) {
       expect((await api(null, "GET", p)).status, p).toBe(404);
     }
-    expect(seen.every((u) => u === RAW + "index.json")).toBe(true);
+    expect(seen.every((u) => u === RAW + "index.json")).toBe(true);   // no tile was asked for
     expect(TILE.test("382_516.vgr") && !TILE.test("../x.vgr") && !TILE.test("382_516.vgr/x")).toBe(true);
   });
 

@@ -10,6 +10,7 @@ export const TILE = /^(\d{1,4})_(\d{1,4})\.vgr$/;
 export const INDEX_S = 3600;          // the phone and the edge re-check the index hourly (a build is a new id)
 export const TILE_S = 86400;          // a tile is re-validated daily by the phone (ETag = build + tile), kept a year at the edge
 export const EDGE_TILE_S = 365 * 86400;
+export const SUBREQ_S = 7 * 86400;    // Cloudflare's cache of the raw GitHub fetch, per build
 
 type Index = { build?: string; built?: string; tiles?: Record<string, unknown> };
 const SEC = { "x-content-type-options": "nosniff", "content-security-policy": "default-src 'none'" };
@@ -61,9 +62,11 @@ export async function graphTile(req: Request, name: string, fetcher: typeof fetc
     if (hit) return new Response(hit.body, { headers: { ...headers, "x-cache": "hit" } });
   } catch { /* the cache is a speed-up */ }
   let r: Response;
-  // the Cache API is a no-op on *.workers.dev (it needs a custom domain); the subrequest cache hint helps where it applies
-  const init = { headers: { "user-agent": "Vetta-graph-relay/1.0" }, cf: { cacheTtl: TILE_S, cacheEverything: true } } as RequestInit;
-  try { r = await fetcher(RAW + name, init); } catch { r = new Response(null, { status: 502 }); }
+  // the Cache API is a no-op on *.workers.dev (it needs a custom domain), so the subrequest is cached by Cloudflare
+  // instead (cacheEverything, a week). The tile's URL is the same in every build, so the build id goes in the query
+  // (raw GitHub ignores it, the cache key keeps it): a new build is never answered from an old one's cache.
+  const init = { headers: { "user-agent": "Vetta-graph-relay/1.0" }, cf: { cacheTtl: SUBREQ_S, cacheEverything: true } } as RequestInit;
+  try { r = await fetcher(`${RAW}${name}?b=${encodeURIComponent(build)}`, init); } catch { r = new Response(null, { status: 502 }); }
   if (!r.ok) return new Response(JSON.stringify({ error: "graph_unavailable" }), { status: 502, headers: { "content-type": "application/json", ...SEC } });
   const bytes = await r.arrayBuffer();
   try { if (cache) await cache.put(ck, new Response(bytes, { headers: { "content-type": "application/octet-stream", "cache-control": `public, max-age=${EDGE_TILE_S}` } })); } catch { /* not kept */ }
