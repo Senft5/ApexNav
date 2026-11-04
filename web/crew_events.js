@@ -496,6 +496,18 @@
         if (meet.name && search.field) search.field.value = meet.name;
       };
       const search = placeField('Meet at', setMeet);
+      // the fairest meeting point for the crew's shared rough areas (route_ctx/crew_meet.js; opt-in on the crew page)
+      const fairBtn = root.ApexCrewMeet ? btn('Fair for the crew', async () => {
+        const r = await apiCall('GET', `/api/crews/${encodeURIComponent(crew.value)}/meet`).catch(() => null);
+        const j = r && r.ok ? await jsonOf(r) : null;
+        if (!j || !Array.isArray(j.cells)) { toast('Couldn\u2019t load the crew. Check signal.'); return; }
+        if (j.cells.length < root.ApexCrewMeet.MIN_CELLS) { meetNote.textContent = `A fair meeting point needs ${j.need} crew-mates sharing their rough area on the crew page; ${j.sharing} ${j.sharing === 1 ? 'does' : 'do'}.`; return; }
+        meetNote.textContent = 'Finding the fairest place\u2026';
+        const m = await root.ApexCrewMeet.fairMeet(j.cells);
+        if (!m) { meetNote.textContent = 'No place everyone sharing can reach by road. Pick one.'; return; }
+        setMeet({ name: m.name || null, lat: m.lat, lon: m.lon });
+        meetNote.textContent += ` Fair to everyone sharing: the longest drive there is ${m.estimated ? 'about ' : ''}${m.maxMin} min.`;
+      }, 'linkbtn') : null;
       // the planned route, only when there is one (P-29: no switch that cannot be switched)
       const route = page.plannedRoute();
       const withRoute = route ? sw(`Add the planned route (${route.name})`, true) : null;
@@ -503,7 +515,7 @@
         ...(page.openWhereTo ? [btn('Add a route', () => page.openWhereTo(), 'linkbtn')] : []));
       const label = (text) => el('p', { className: 'ctl-label', textContent: text });
       const head = crews.length > 1 ? [crew] : [];
-      form.append(...head, tplSel, title, label('When'), date, time, label('Meet'), search, meetNote, routeRow,
+      form.append(...head, tplSel, title, label('When'), date, time, label('Meet'), search, ...(fairBtn ? [el('div', { className: 'row' }, fairBtn)] : []), meetNote, routeRow,
         el('p', { className: 'note', textContent: 'Roles, regroup points and notes go on the drive\u2019s card, under More.' }),
         el('div', { className: 'row' }, btn('Plan it', async (ev) => {
           const b = ev && ev.currentTarget;

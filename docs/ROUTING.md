@@ -8,7 +8,7 @@ loops are sized (see Loops below; stage discovery itself is web/stages.js and do
 Every candidate (A→B, loops, Explore's stages) is now ranked by the route engine (web/route_engine.js; the reference is
 docs/ROUTE_ENGINE.md). Each candidate becomes a corridor of 25 m samples with the time you'd be at each; the route
 context providers (web/route_ctx: the router's edge attributes, the DEM, and the map-feature, national-grid, world and
-crowd providers as they land) answer for all candidates of a plan at once within 2.5 s; the engine scores each 25 m for
+crowd providers as they land) answer for all candidates of a plan at once within 4 s; the engine scores each 25 m for
 **quality** (is this a road worth driving: speed limit, class, density, signals, driveways, businesses …) and
 **scenery**, counts corners only where quality earns them, costs side streets and business districts per km, applies
 time-dependent penalties and hard constraints, and says why the winner beat the quickest from the largest differences.
@@ -316,6 +316,50 @@ These are map-derived, never measured road feel. When the winner is slower than 
 why (`FunRoute.why`, from the router's own road names): the roads it spends 2+ km more on (at most 3), the
 good corners it gains and the minutes it costs, e.g. "For SR 360 13 mi, Cold Spring Road 8.2 mi · 167 more
 good corners, +30 min".
+
+## Route context: the driver, the car, the crowd and the phone (web/route_ctx, builder E)
+
+Five providers of the route engine's context (the contract in the route engine's docs: `ApexRouteCtx.register`, channels per
+25 m sample with NaN for unknown, spans and points). Each file's header lists its channels with unit, meaning, source,
+licence and cadence; `ctx_util.js` queues them in `ApexRouteCtx.pending` until the engine's registry loads and adopts them.
+What each one is for, and how it should move a route:
+
+- **crowd.js** (`/api/roads`, members only): `crowd_rough_g`, `crowd_bank_deg`, `crowd_curv`, `crowd_conf` as the measured-roads
+  path had them, now per sample; **`crowd_flow`**, how smoothly members drive a road (each pass's speed steadiness over ~40 m
+  times the share that didn't brake hard with no corner ahead; computed on the phone, contributor.js `binFlow`, sent as a
+  ratio and a yes/no, never a speed; merged in `road_bins.flow_mean/brake_mean`): a quality term (stop-start roads lose to
+  ones members flow through) and the "Members drive it smoothly" span; **`loved`**, the most of members coming back to a road
+  on a second recorded drive (`road_love`, a level from two people), your crews' shared lines, your own "Which road was
+  better?" Elo by road name and roads you drove twice: a fun term with a "loved" span named for the road; **`taste`**, your
+  taste fit (taste.js) over 2 km windows in fun points; **`crowd_busy`**, the busy-time ratio at your ETA, only with the
+  `quiet_hours` flag on (the owner's open decision; default off: no hour is sent, stored or shown).
+- **driver.js** (phone only; Overpass tiles for OSM `lit`, `tunnel`, `route=bicycle`): settings in the plan sheet's More,
+  **For this drive** (vocabulary.js `passenger`, `litRoads`, `cyclists`, `tunnels`, apex.driverPrefs). `passenger_cost` (a
+  hairpin 1, a quick left-right 0.6, else the lateral load at the router's speed from 0.25 g to 0.45 g), `tech_level`,
+  `skill_fit` (how close the road's technicality is to what your last 12 scored drives' Smooth and Brakes offer, from 5
+  drives), `dark`, `lit`, `cyclist_route` and `cyclist_time` (weekend mornings 1), `tunnel`, and **`driver_fit`** (-1..1, the
+  preferences that are on; NaN when none is and the skill is unknown), which the engine adds to fun. Passenger aboard also tags
+  the recorded drive "Passenger".
+- **car.js**: the Garage car's **fuel** and **range** (new fields, migration 0045; "ask once" per car when a 150 km stationless
+  stretch meets a car with no range). Stations from OSM `amenity=fuel` (Overpass tiles) or, electric, NREL chargers through
+  `GET /api/chargers` (tile ids only; the owner's free key, OWNER_TODO; none = `no-key`). `fuel_since_km`, `fuel_margin`; a
+  **`fuel_gap` span with `hard: true`** when a stretch between stations is over the safe range (80 %, EV 75 %), greedy
+  `fuel_stop` points, `fuel_check` when the first fuel is past half the safe range (the tank at the start is unknown).
+  Signal: `signal` copies builder C's `mobile_coverage` from `opts.peer[id].channels` when the engine passes it; under 0.3 for
+  2 km is a `no_signal` span with a `share_eta` point 2 km before it, and `offlineAreas` / `prepareOffline` save those
+  stretches' map tiles through offline_tiles.js when the route is chosen. Width and ride height stay in the router costing.
+- **ios_context.js** (the app only, on a tap): **My free time** (EventKit, the next event's start only) and **This album**
+  (the Music app's now-playing album from the media library; iOS gives no queue) size a time loop (`buildLoop({ minutes })`,
+  15-minute steps, 15 min back before the event). Then `free_min` per sample and a `past_next_event` span mark routes that
+  would run late, and an `album_ends` point.
+- **crew_meet.js**: crew members' rough home areas (crew page switch, off by default, 0.1-degree cells; `GET /api/crews/:id/meet`
+  answers the cells without names once two share). **Fair for the crew** on the crew drive form picks the candidate (each
+  cell, their centroid and geometric median, and places the caller adds) with the least longest drive + 0.25 x the mean,
+  from one Valhalla matrix (crow-fly x 1.35 at 60 km/h when it fails, marked estimated). As a provider, `crew_start` points
+  give each candidate route's start its longest crew-mate drive, so a crew loop can start where it is fair.
+
+Every provider respects `budgetMs` and `opts.signal`, aborts its lookups past the budget, caches per tile, and returns
+`unavailable`, `partial` or `no-key` instead of throwing. Tests: tests/test_route_ctx_*.py and backend/test/route_context.test.ts.
 
 ## Checked
 

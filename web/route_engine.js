@@ -99,13 +99,15 @@
     { ch: 'crosswind_ms', perKm: 0.6, label: 'crosswind', value: (v) => clamp01((v - 8) / 10), exposed: true },
     { ch: 'road_temp_c', perKm: 0.25, label: 'cold road', value: (v) => clamp01((7 - v) / 10) },
     { ch: 'crash_rate', perKm: 0.6, label: 'crash history', value: (v) => clamp01(v / 5) },          // crashes per km per year
-    { ch: 'cyclist_route', perKm: 0.5, label: 'cyclists', value: clamp01, at: (ctx) => ctx.weekendMorning },
+    { ch: 'cyclist_route', perKm: 0.5, label: 'cyclists', value: clamp01, at: (ctx) => ctx.weekendMorning, atCh: 'cyclist_time', pref: 'cyclists' },   // Cyclist courtesy (driver.js)
     { ch: 'buggy', perKm: 0.8, label: 'buggies', value: clamp01 },
-    { ch: 'unlit', perKm: 0.6, label: 'unlit at night', value: clamp01, at: (ctx) => ctx.dark, pref: 'unlit' },
+    { ch: 'unlit', perKm: 0.6, label: 'unlit at night', value: clamp01, at: (ctx) => ctx.dark, atCh: 'dark', pref: 'lit' },             // Lit roads at night (driver.js)
     { ch: 'snow_cover', perKm: 2, label: 'snow', value: clamp01 },
-    { ch: 'crowd_busy', perKm: 0.6, label: 'busy at that hour', value: clamp01 },                    // members' counts for the hour you'd be there
+    { ch: 'crowd_busy', perKm: 0.6, label: 'busy at that hour', value: (v) => clamp01(v - 1) },      // crowd.js: 1 = the road's average hour, 2 = twice (quiet_hours flag, off)
     { ch: 'park_visitors', perKm: 0.5, label: 'park crowds', value: clamp01, at: (ctx) => ctx.weekendDay },
     { ch: 'signal_coverage', perKm: 0.15, label: 'no phone signal', value: (v) => 1 - clamp01(v) },
+    { ch: 'passenger_cost', perKm: 1.5, label: 'hard on your passenger', value: clamp01, pref: 'passenger' },   // driver.js, Passenger aboard
+    { ch: 'fuel_margin', perKm: 0.5, label: 'low on fuel', value: (v) => clamp01((0.25 - v) / 0.25) },          // car.js: the last quarter of the safe range
   ];
   // Spans and points: points each (+ per km), the default time they apply when the provider gives none, hard = no go.
   const DAY_MS = 864e5;
@@ -132,6 +134,8 @@
     tunnel: { bonus: 1.5, bonusCap: 4.5, pref: 'tunnels', label: 'tunnels' },
     resurfaced: { bonusPerKm: 0.3, bonusCap: 3, label: 'fresh asphalt' },
     camera: { label: 'cameras' },
+    fuel_gap: { hard: true, label: 'longer than your range without fuel' },        // car.js
+    past_next_event: { each: 0, perMinValue: true, label: 'past your next event' },  // ios_context.js: value = minutes late
     gate: { each: 1, label: 'gates' },
     buggy: { each: 0.5, label: 'buggies', unlessChannel: 'buggy' },
     curve_sign: { bonus: 0.2, bonusCap: 2, label: 'curve signs', unlessChannel: 'curve_signs_per_km' },
@@ -141,7 +145,7 @@
   // Channel names other builders may use for the same thing (the integrator's safety net; ROUTE_ENGINE.md is canonical).
   // Span and point kinds other providers name differently (osm_tiles.js, osm_overpass.js).
   const KIND_ALIASES = { worship: 'church', rail_crossing: 'level_crossing', give_way: 'stop', calming: 'speed_bump', access_private: 'no_access', old_road_name: null, subdivision_name: null };
-  const ALIASES = { businesses_per_km: 'business_per_km', maxspeed_kph: 'speed_limit_kph', viirs: 'night_light', canopy: 'canopy_pct',
+  const ALIASES = { crowd_bank_deg: 'crowd_camber_deg', mobile_coverage: 'signal_coverage', signal: 'signal_coverage', businesses_per_km: 'business_per_km', maxspeed_kph: 'speed_limit_kph', viirs: 'night_light', canopy: 'canopy_pct',
     impervious: 'impervious_pct', addresses_per_km: 'address_per_km', photos_per_km: 'photo_per_km', forest: 'forest_share', deer: 'deer_risk' };
 
   // ---- weights of the route value (points, the 0–100 fun scale) -----------------------------------------------------
@@ -152,6 +156,7 @@
     Q_FULL_CONF: 0.3, S_FULL_CONF: 0.35,            // the share of the weights known at which a sample's quality / scenery counts in full
     GATE_LO: 0.25, GATE_HI: 0.6,                    // a corner on quality ≤ 0.25 counts nothing, ≥ 0.6 in full
     PENALTY_CAP: 40, BONUS_CAP: 15,
+    DRIVER: 6,             // points for a route that fits the driver (driver_fit 1) vs one that doesn't (-1): ±6
     LOG_FLOOR: 0.05,
   };
   // The families one bad signal of which damns a road (the soft minimum in samples()), and the router density at or under
@@ -216,6 +221,7 @@
     access_destination: [MAP('access_level', (v) => (v >= 1 ? 1 : 0))],
     guardrail: [MAP('guard_rail', (v) => v)],
     cyclist_route: [MAP('cycle_route', (v) => (v > 0 ? 1 : 0))],
+    unlit: [(ch, i) => (ch.dark && ch.lit && Number.isFinite(ch.dark[i]) && Number.isFinite(ch.lit[i]) ? (ch.dark[i] >= 0.5 && ch.lit[i] < 0.5 ? 1 : 0) : NaN), MAP('lit', (v) => (v >= 0.5 ? 0 : 1))],
   };
   /** A context's channel by canonical name: its own values, gaps filled from the aliases and other providers' names. */
   function channel(ctx, name) {
@@ -347,11 +353,12 @@
     const exposed = (i) => { const b = channel(ctx, 'bridge'), t = channel(ctx, 'tpi_m'); return (b && b[i] >= 0.5) || (t && t[i] >= 20); };
     const tpiCh = channel(ctx, 'tpi_m'), valleyFactor = (i) => (!tpiCh || !Number.isFinite(tpiCh[i]) ? 1 : tpiCh[i] <= -10 ? 1.5 : tpiCh[i] >= 20 ? 0.5 : 1);
     for (const term of PER_KM) {
-      const v = channel(ctx, term.ch);
+      const v = channel(ctx, term.ch), atCh = term.atCh ? channel(ctx, term.atCh) : null;
       if (!v || (term.pref && !prefs[term.pref])) continue;
       for (let i = 0; i < n; i++) {
         if (!Number.isFinite(v[i])) continue;
-        const strength = (term.value ? term.value(v[i]) : clamp01(v[i])) * (term.at ? (term.at(mom(i)) ?? 0) : 1) * (term.exposed && !exposed(i) ? 0 : 1) * (term.valley ? valleyFactor(i) : 1);
+        const when = atCh && Number.isFinite(atCh[i]) ? atCh[i] : term.at ? (term.at(mom(i)) ?? 0) : 1;
+        const strength = (term.value ? term.value(v[i]) : clamp01(v[i])) * when * (term.exposed && !exposed(i) ? 0 : 1) * (term.valley ? valleyFactor(i) : 1);
         if (strength > 0) addPen(term.label, strength * term.perKm * step / 1000, strength * step / 1000);
       }
     }
@@ -367,7 +374,7 @@
       }
       if (km >= 0.5) out.bonuses.push({ label: 'golden light', points: Math.min(4, 0.5 * km), km });
     }
-    const counted = {};
+    const counted = {}, seenBonus = new Set();
     const spanKm = (sp) => Math.max(0, (sp.toM - sp.fromM) / 1000);
     for (const sp of [...(ctx.spans || []), ...(ctx.points || []).map((p) => ({ ...p, fromM: p.atM, toM: p.atM, point: true }))]) {
       const kind = sp.kind in KIND_ALIASES ? KIND_ALIASES[sp.kind] : sp.kind, rule = kind && SPANS[kind];
@@ -376,16 +383,19 @@
       if (rule.pref && !prefs[rule.pref]) continue;
       const i = at(c, sp.fromM), when = sp.when || rule.when || null;
       if (!active(when, c.etaAt[i])) continue;
-      const hard = typeof rule.hard === 'function' ? rule.hard(sp) : rule.hard;
+      const hard = sp.hard === true || (typeof rule.hard === 'function' ? rule.hard(sp) : rule.hard);
       if (hard) { out.hard.push({ kind, label: sp.label || rule.label, atM: sp.fromM }); continue; }
-      if (!rule.each && !rule.perKm && !rule.bonus && !rule.bonusPerKm) continue;   // known, shown elsewhere, not ranked
+      if (!rule.each && !rule.perKm && !rule.bonus && !rule.bonusPerKm && !rule.perMinValue) continue;   // known, shown elsewhere, not ranked
       if (rule.bonus || rule.bonusPerKm) {
+        const key = `${kind}:${Math.round(sp.fromM / 150)}`;              // the same tunnel from two providers counts once
+        if (seenBonus.has(key)) continue;
+        seenBonus.add(key);
         const pts = rule.bonus || rule.bonusPerKm * spanKm(sp);
         counted[kind] = Math.min(rule.bonusCap || Infinity, (counted[kind] || 0) + pts);
         continue;
       }
       let pts = (rule.each || 0) + (rule.perKm || 0) * spanKm(sp);
-      if (rule.perMinValue && finite(sp.value)) pts += (opts.perMin || 1) * sp.value;
+      if (rule.perMinValue && finite(sp.value)) pts += (opts.perMin || 1) * Math.max(0, sp.value);
       if (rule.dusk && mom(i).deerHour === 1) pts *= rule.dusk;
       addPen(rule.label, pts, spanKm(sp));
     }
@@ -410,13 +420,20 @@
         }
       }
     }
-    if (prefs.passenger && cand.t && Array.isArray(cand.t.events)) {
+    if (prefs.passenger && !channel(ctx, 'passenger_cost') && cand.t && Array.isArray(cand.t.events)) {
       const tight = cand.t.events.filter((e) => e.type === 'corner' && (e.severity === 'HP' || e.severity === 1 || e.severity === 2)).length;
       if (tight) addPen('tight corners with a passenger', Math.min(15, 0.3 * tight), 0);
     }
     out.penalties = [...pen.values()].map((p) => ({ ...p, points: Math.round(p.points * 10) / 10 })).filter((p) => p.points > 0).sort((a, b) => b.points - a.points);
     out.penaltyPts = Math.min(W.PENALTY_CAP, out.penalties.reduce((a, p) => a + p.points, 0));
     out.bonusPts = Math.min(W.BONUS_CAP, out.bonuses.reduce((a, p) => a + p.points, 0));
+    // the driver (driver.js): driver_fit, else skill_fit, -1..1 → ±6 points by the share known; the taste channel (crowd.js,
+    // fun points over 2 km windows) is the taste term for candidates the cockpit's tasteOn didn't score
+    const mean = (ch) => { if (!ch) return null; let a = 0, k = 0; for (let i = 0; i < n; i++) if (Number.isFinite(ch[i])) { a += ch[i]; k++; } return k ? { m: a / k, share: k / n } : null; };
+    const fit = mean(channel(ctx, 'driver_fit')) || mean(channel(ctx, 'skill_fit'));
+    out.driverPts = fit ? W.DRIVER * Math.max(-1, Math.min(1, fit.m)) * fit.share : 0;
+    const tc = mean(channel(ctx, 'taste'));
+    out.tastePts = tc ? Math.max(-8, Math.min(8, tc.m)) * tc.share : null;
     out.stats = stats(c, ctx, s);
     cand.ev = out;
     return out;
@@ -480,7 +497,8 @@
         fun, gain: 0.5 * gain, time: -perMin * extraS / 60,
         quality: ev && ev.quality != null ? W.QUALITY * (ev.quality - 50) * ev.qWeight : 0,
         poor: ev ? -ev.poorCost : 0, scenery: ev ? ev.sceneryPts : 0, bonus: ev ? ev.bonusPts : 0, penalty: ev ? -ev.penaltyPts : 0,
-        glare: -glareCost(c), towns: -townCost(c), weather: -(c.weatherCost || 0), measured: c.adjust || 0, taste: c.tasteBonus || 0, prefer: c.preferBonus || 0,
+        glare: -glareCost(c), towns: -townCost(c), weather: -(c.weatherCost || 0), measured: c.adjust || 0, taste: c.tasteBonus != null ? c.tasteBonus : ev && ev.tastePts != null ? ev.tastePts : 0, prefer: c.preferBonus || 0,
+        driver: ev ? ev.driverPts || 0 : 0,
       };
       const value = Object.values(parts).reduce((a, b) => a + b, 0);
       return { ...c, extraS, value, parts, infeasible: !!(ev && ev.hard.length) };
@@ -624,7 +642,7 @@
     const f = ev && ev.funGated ? ev.funGated : d.fun || (d.t && d.t.fun) || null;
     const base = FunRoute.loopValue(f, km, targetKm, retraced);
     if (!ev) return base;
-    return base + (ev.quality != null ? W.QUALITY * (ev.quality - 50) * ev.qWeight : 0) + ev.sceneryPts + ev.bonusPts - ev.poorCost - ev.penaltyPts;
+    return base + (ev.quality != null ? W.QUALITY * (ev.quality - 50) * ev.qWeight : 0) + ev.sceneryPts + ev.bonusPts - ev.poorCost - ev.penaltyPts + (ev.driverPts || 0);
   }
 
   const api = { VERSION: 1, QUALITY, SCENERY, PER_KM, SPANS, ALIASES, KIND_ALIASES, SOURCES, W, SPEED, gate, active, moment, channel, samples, evaluate, stats, rank, why,

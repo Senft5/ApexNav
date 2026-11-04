@@ -59,6 +59,8 @@ export async function crewPage(env: Env, v: Viewer, crewId: string) {
   const stages = c.owner === v.id ? (await env.DB.prepare(`SELECT DISTINCT COALESCE(s.origin_id, s.id) AS id, s.name FROM segment_shares sh JOIN segments s ON s.id = sh.segment_id
       WHERE sh.audience_type = 'crew' AND sh.audience_id = ? LIMIT 30`).bind(crewId).all<{ id: string; name: string }>()).results : undefined;
   const grant = await env.DB.prepare("SELECT share_scores FROM grants WHERE user_id = ? AND audience_type = 'crew' AND audience_id = ?").bind(v.id, crewId).first<{ share_scores: number }>();
+  // fair meeting points (crew_meet.ts): whether YOU share your rough home area with this crew; never anyone else's
+  const home = await env.DB.prepare("SELECT home_cell FROM crew_members WHERE crew_id = ? AND user_id = ?").bind(crewId, v.id).first<{ home_cell: string | null }>();
   return {
     id: c.id, name: c.name, motto: c.motto, about: c.about, visibility: c.visibility, area_name: c.area_name, members: c.members,
     is_owner: c.owner === v.id, crest: c.crest, stripe: c.stripe, cover_photo_id: c.cover_photo_id,
@@ -69,6 +71,7 @@ export async function crewPage(env: Env, v: Viewer, crewId: string) {
     hazard_kinds: atLeast(livery.tier, "factory") ? (JSON.parse(c.hazard_kinds) as string[]) : [],
     regroup_line: atLeast(livery.tier, "factory") ? c.regroup_line : null,
     voice_packs: atLeast(livery.tier, "factory") ? (await env.DB.prepare("SELECT pack FROM crew_voice WHERE crew_id = ?").bind(crewId).all<{ pack: string }>()).results.map((r) => r.pack) : [], templates_cap: templateCap(livery.tier), board: board.map((r) => ({ ...r, mine: !!r.mine, badge: works ? r.badge : null })), next, last, sharing_scores: !!grant?.share_scores,
+    home_shared: !!home?.home_cell,
   };
 }
 

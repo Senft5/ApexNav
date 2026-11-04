@@ -364,7 +364,7 @@ const fewerSource = html.match(/const fewerTownKm = .*?;\n/s)[0];
 const townsOnSource = html.match(/async function townsOn\(.*?\n    }/s)[0];
 // the route engine's glue in the cockpit (rankPool, contextOn, the stage network, connector costing), as written
 const engineSource = [/const CTX_BUDGET_MS = .*?;\n/s, /const engineOpts = .*?;\n/s, /function rankPool\(.*?\n    }/s, /async function contextOn\(.*?\n    }/s,
-  /async function stagesWithContext\(.*?\n    }/s, /function routeCtxSettings\(.*?\n    }/s, /const EARLY_MS = .*?;\n/s, /const connectorCosting = .*?;\n/s].map((re) => html.match(re)[0]).join('\n');
+  /async function stagesWithContext\(.*?\n    }/s, /function routeCtxSettings\(.*?\n    }/s, /function routeCtxOpts\(.*?\n    }/s, /const EARLY_MS = .*?;\n/s, /const connectorCosting = .*?;\n/s].map((re) => html.match(re)[0]).join('\n');
 const whyText = new Function('return (' + html.match(/function whyText\(w.*?\) \{.*?\n    }/s)[0] + ')')();
 const lat0 = 39.2, lon0 = -84.6, mLat = 1 / 110540, mLon = 1 / (111320 * Math.cos(lat0 * Math.PI / 180));
 const ll = (pts) => pts.map(([x, y]) => [lon0 + x * mLon, lat0 + y * mLat]);

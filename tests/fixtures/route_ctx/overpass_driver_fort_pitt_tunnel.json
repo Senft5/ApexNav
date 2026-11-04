@@ -1,0 +1,139 @@
+{
+  "version": 0.6,
+  "generator": "Overpass API 0.7.62.11 87bfad18",
+  "osm3s": {
+    "timestamp_osm_base": "2026-07-28T02:16:18Z",
+    "copyright": "The data included in this document is from www.openstreetmap.org. The data is made available under ODbL."
+  },
+  "elements": [
+
+{
+  "type": "way",
+  "id": 11965424,
+  "bounds": {
+    "minlat": 40.4319498,
+    "minlon": -80.0245294,
+    "maxlat": 40.4375986,
+    "maxlon": -80.0138754
+  },
+  "geometry": [
+    { "lat": 40.4375986, "lon": -80.0138754 },
+    { "lat": 40.4374119, "lon": -80.0142647 },
+    { "lat": 40.4373354, "lon": -80.0144219 },
+    { "lat": 40.4319498, "lon": -80.0245294 }
+  ],
+  "tags": {
+    "NHS": "Interstate",
+    "change:lanes": "no|no",
+    "hazmat": "no",
+    "hgv": "designated",
+    "hgv:national_network": "yes",
+    "highway": "motorway",
+    "incline": "2.5%",
+    "lanes": "2",
+    "layer": "-1",
+    "lit": "24/7",
+    "maxheight": "14'0\"",
+    "maxspeed": "50 mph",
+    "name": "Penn-Lincoln Parkway West",
+    "old_ref": "I 279",
+    "old_ref:legislative": "766",
+    "old_ref:penndot": "SR 0279",
+    "oneway": "yes",
+    "ref": "I 376;US 22;US 30",
+    "ref:penndot": "SR 0376",
+    "source:hgv:national_network": "https://www.ecfr.gov/current/title-23/chapter-I/subchapter-G/part-658;https://hepgis-usdot.hub.arcgis.com/apps/usdot::national-network-conventional-combination-trucks-map",
+    "surface": "asphalt",
+    "tunnel": "yes",
+    "tunnel:name": "Fort Pitt Tunnel",
+    "unsigned_ref": "US 19 Truck"
+  }
+},
+{
+  "type": "way",
+  "id": 28411466,
+  "bounds": {
+    "minlat": 40.4318128,
+    "minlon": -80.0244040,
+    "maxlat": 40.4374911,
+    "maxlon": -80.0137632
+  },
+  "geometry": [
+    { "lat": 40.4318128, "lon": -80.0244040 },
+    { "lat": 40.4374221, "lon": -80.0138766 },
+    { "lat": 40.4374911, "lon": -80.0137632 }
+  ],
+  "tags": {
+    "NHS": "Interstate",
+    "change:lanes": "no|no",
+    "hazmat": "no",
+    "hgv": "designated",
+    "hgv:national_network": "yes",
+    "highway": "motorway",
+    "incline": "-2.5%",
+    "lanes": "2",
+    "layer": "-1",
+    "lit": "24/7",
+    "maxheight": "14'0\"",
+    "maxspeed": "50 mph",
+    "maxspeed:hgv": "35 mph",
+    "name": "Penn-Lincoln Parkway West",
+    "old_ref": "I 279",
+    "old_ref:legislative": "766",
+    "old_ref:penndot": "SR 0279",
+    "oneway": "yes",
+    "ref": "I 376;US 22;US 30",
+    "ref:penndot": "SR 0376",
+    "source:hgv:national_network": "https://www.ecfr.gov/current/title-23/chapter-I/subchapter-G/part-658;https://hepgis-usdot.hub.arcgis.com/apps/usdot::national-network-conventional-combination-trucks-map",
+    "surface": "concrete",
+    "tunnel": "yes",
+    "tunnel:name": "Fort Pitt Tunnel",
+    "unsigned_ref": "US 19 Truck"
+  }
+},
+{
+  "type": "way",
+  "id": 54223854,
+  "bounds": {
+    "minlat": 40.4265530,
+    "minlon": -80.0173513,
+    "maxlat": 40.4345294,
+    "maxlon": -80.0093571
+  },
+  "geometry": [
+    { "lat": 40.4265530, "lon": -80.0173513 },
+    { "lat": 40.4266919, "lon": -80.0171815 },
+    { "lat": 40.4268393, "lon": -80.0170183 },
+    { "lat": 40.4271716, "lon": -80.0166873 },
+    { "lat": 40.4277551, "lon": -80.0161060 },
+    { "lat": 40.4289680, "lon": -80.0148977 },
+    { "lat": 40.4297528, "lon": -80.0141159 },
+    { "lat": 40.4306481, "lon": -80.0132240 },
+    { "lat": 40.4318268, "lon": -80.0120496 },
+    { "lat": 40.4328595, "lon": -80.0110208 },
+    { "lat": 40.4345294, "lon": -80.0093571 }
+  ],
+  "tags": {
+    "abandoned:railway": "rail",
+    "hazmat": "no",
+    "hgv": "no",
+    "highway": "tertiary",
+    "lanes": "2",
+    "layer": "-1",
+    "motor_vehicle": "no",
+    "motor_vehicle:backward:conditional": "yes @ (Mo-Fr 15:00-23:00; Sa-Su 06:00-23:00)",
+    "motor_vehicle:forward:conditional": "yes @ (Mo-Fr 06:00-14:00)",
+    "motorroad": "yes",
+    "name": "Wabash Tunnel",
+    "old_railway_operator": "P&WV",
+    "oneway": "no",
+    "railway": "abandoned",
+    "sidewalk": "no",
+    "surface": "concrete",
+    "tunnel": "yes",
+    "wikidata": "Q7958658"
+  }
+}
+
+  ]
+}

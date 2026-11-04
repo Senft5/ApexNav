@@ -2059,6 +2059,7 @@
     function setRoutingCars(list) {
       const c = Array.isArray(list) ? list.find(x => x.is_primary) || null : null;
       carForRouting = c ? { clearance: c.clearance || null, width_cm: c.width_cm || null, weight_kg: c.weight_kg || null, tyres: c.tyres || null,
+                            fuel: c.fuel || null, range_km: c.range_km || null,   // route_ctx/car.js: fuel-stop spacing
                             label: c.nickname || [c.make, c.model].filter(Boolean).join(' ') } : null;
       try { if (carForRouting) localStorage.setItem('apex.routingCar', JSON.stringify(carForRouting)); else localStorage.removeItem('apex.routingCar'); } catch (_) {}
     }
@@ -2234,8 +2235,12 @@
     // providers (web/route_ctx) answer for all of them at once within CTX_BUDGET_MS, and the engine ranks on road quality,
     // corners worth driving, scenery, time-dependent penalties and hard constraints. No engine, no answers or out of time:
     // exactly the old ranking (FunRoute.rank), so Where to? never waits on a slow source.
-    const CTX_BUDGET_MS = 2500, STAGE_CTX_MS = 1200;
-    const engineOpts = (level) => ({ level, prefs: roadPrefs, car: routingCar(), score: (c, scaleAt) => funOf(c.t, (c.route && c.route.turns) || [], scaleAt) });
+    // 4 s: the OSM, crowd, driver and car providers need more than the router does; Where to? shows the quickest at 1.5 s
+    // (EARLY_MS) and never waits on this. What's late lands in each provider's cache for the next plan.
+    const CTX_BUDGET_MS = 4000, STAGE_CTX_MS = 1200;
+    // The driver's For this drive choices (route_ctx/driver.js: passenger, lit, cyclists, tunnels) join the road prefs.
+    const engineOpts = (level) => ({ level, prefs: { ...roadPrefs, ...(window.ApexRouteDriver ? ApexRouteDriver.load(localStorage) : {}) }, car: routingCar(),
+      score: (c, scaleAt) => funOf(c.t, (c.route && c.route.turns) || [], scaleAt) });
     function rankPool(pool, level) {
       return window.ApexRouteEngine ? ApexRouteEngine.rank(pool, engineOpts(level)) : FunRoute.rank(pool, level);
     }
@@ -2245,7 +2250,7 @@
       const list = cands.filter((c) => (c.corridor = ApexRouteEngine.corridorFor(c, `cand${cands.indexOf(c)}`, { departAt, car, pace })));
       for (const c of list) if (c.match) c.corridor.match = c.match;     // a loop's spur-cut line isn't the router's own: snap it
       try {
-        const res = await ApexRouteCtx.run(list.map((c) => c.corridor), { budgetMs, settings: routeCtxSettings() });
+        const res = await ApexRouteCtx.run(list.map((c) => c.corridor), { budgetMs, settings: routeCtxSettings(), providerOpts: routeCtxOpts() });
         for (const c of list) { c.ctx = res.byId[c.corridor.id] || null; c.ev = null; }
         if (window.apexDebug) window.apexDebug.lastCtx = res.status;
         return res;
@@ -2257,13 +2262,41 @@
       if (!window.ApexRouteEngine || !window.ApexRouteCtx || !stages || !stages.length || (window.ApexFlags && !ApexFlags.on('route_engine'))) return stages;
       try {
         const cs = ApexRouteEngine.stageCorridors(stages, k, { departAt: Date.now(), car: routingCar() });
-        const res = await ApexRouteCtx.run(cs, { budgetMs: STAGE_CTX_MS, stage: true, settings: routeCtxSettings() });
+        const res = await ApexRouteCtx.run(cs, { budgetMs: STAGE_CTX_MS, stage: true, settings: routeCtxSettings(), providerOpts: routeCtxOpts() });
         return [...ApexRouteEngine.rescoreStages(stages.slice(0, k), res.byId), ...stages.slice(k)];
       } catch (_) { return stages; }
     }
     // Keys a provider may need (docs/OWNER_TODO.md lists them); none of them is required, a missing one is 'no-key'.
     function routeCtxSettings() {
       try { return JSON.parse(localStorage.getItem('apex.routeKeys') || '{}') || {}; } catch (_) { return {}; }
+    }
+    // What the crowd and car providers need from the app (route_ctx/crowd.js, car.js): members' road data (/api/roads,
+    // signed out: null and they say so), the Worker for chargers, the crews' shared lines when Prefer has them, your taste
+    // fit. `peer` would carry the national grid's mobile_coverage; the engine reads that channel itself (route_engine.js
+    // SOURCES), so the car provider's own signal stays unknown until the grid lands.
+    function routeCtxOpts() {
+      const get = async (path) => { try { const r = await apiCall('GET', path); return r && r.ok ? await r.json() : null; } catch (_) { return null; } };
+      let taste = null;
+      try { taste = window.ApexTaste ? ApexTaste.fit(ApexTaste.load(localStorage)) : null; } catch (_) { taste = null; }
+      return { lookup: window.ApexSync ? (ids) => get(`/api/roads?ways=${ids.join(',')}`) : undefined, apiGet: get,
+        crewLines: (typeof preferCache !== 'undefined' && preferCache.crewLines) || null, myTracks: null, taste, peer: {} };
+    }
+    // After a route is chosen (route_ctx/car.js): a car with no range meeting a long stretch without fuel is asked for it once;
+    // stretches without signal offer to save their maps, then to share the ETA before the signal goes.
+    function routeAftercare(c) {
+      if (!c || !c.ctx || !window.ApexRouteCar) return;
+      const pts = c.ctx.points || [], spans = c.ctx.spans || [];
+      const ask = pts.find((p) => p.kind === 'ask_range');
+      if (ask) { toast(ask.label, { label: 'Garage', ms: 8000, onClick: () => showView('garage') }); return; }
+      const share = pts.some((p) => p.kind === 'share_eta') && !etaShare.token;
+      const offerShare = () => { if (share) toast('No signal later on this route. Share your ETA now?', { label: 'Share ETA', ms: 8000, onClick: () => $('etaShareBtn').click() }); };
+      const areas = c.corridor ? ApexRouteCar.offlineAreas(c.corridor, spans) : [];
+      if (!areas.length) { offerShare(); return; }
+      toast(`No signal on ${areas.length === 1 ? 'part' : 'parts'} of this route. Save the maps there?`, { label: 'Save', ms: 8000, onClick: async () => {
+        const n = await ApexRouteCar.prepareOffline(areas, { styleUrl: MAP_STYLE });
+        toast(n ? `Saved the maps for ${n} stretch${n === 1 ? '' : 'es'} without signal.` : 'Couldn\'t save the maps. Try again with signal.');
+        setTimeout(offerShare, 4500);
+      } });
     }
     // OSM maxspeed per sample via Valhalla map matching (same as tools/export_web_profile.py).
     async function attachLimits(t) {
@@ -3074,8 +3107,10 @@
         if (shown && (state.mode === 'live' || plannedRoute !== shown)) return true;
       }
       // The best and up to two really different others stay on the card (and faint on the map) to pick from.
-      const t = await useOption({ id, name, request, level, quickest, list: FunRoute.distinctOptions(ranked, 3) }, 0);
+      const offered = FunRoute.distinctOptions(ranked, 3);
+      const t = await useOption({ id, name, request, level, quickest, list: offered }, 0);
       if (!t) return false;   // no toast: the route bar and card say it (REVIEW.md 1.2, Route bar: the bar is the toast)
+      if (window.ApexRouteCar) routeAftercare(offered[0]);
       window.apexDebug && (window.apexDebug.lastFun = rankPool(pool, level).map(c => ({ kind: c.kind, fun: c.fun, timeS: c.timeS, value: c.value, adjust: c.adjust || 0, glare: c.glare, townKm: c.townKm,
         parts: c.parts || null, quality: c.ev ? c.ev.quality : null, confidence: c.ev ? c.ev.confidence : null, poorKm: c.ev ? c.ev.poorKm : null })));
       return true;
@@ -3251,6 +3286,7 @@
       await townsOn(done.map(d => d.t), done);
       for (const d of done) { d.t.townKm = d.townKm; d.score -= FunRoute.townCost(d); }
       if (await lctx) done.forEach((d, i) => {
+        d.lc = lc[i];
         const [got, want] = targetS && Number.isFinite(d.t.timeS) ? [d.t.timeS, targetS] : [d.km, targetKm];
         d.score += ApexRouteEngine.loopValue(lc[i], got, want, d.retraced, engineOpts('fun')) - FunRoute.loopValue(d.t.fun, got, want, d.retraced);
         if (lc[i].ev) d.t.engine = { quality: lc[i].ev.quality, confidence: lc[i].ev.confidence, poorKm: lc[i].ev.poorKm, hard: lc[i].ev.hard, penalties: lc[i].ev.penalties };
@@ -3276,11 +3312,13 @@
         const gotMin = Math.round(best.t.timeS / 60), near = Math.abs(best.t.timeS - targetS) <= 0.2 * targetS;
         best.t.name = `${gotMin} min loop`;
         await buildRoute(null, loopId, best.t.name, best.t);
+        if (window.ApexRouteCar) routeAftercare(best.lc);
         if (!near) toast(`${gotMin} min: the closest good loop to ${asked}`);   // the bar says the rest
       } else {
         const near = Math.abs(gotMi - miles) <= 0.2 * miles;
         best.t.name = `${Math.max(1, Math.round(ApexUnits.longN(best.km * 1000)))} ${ApexUnits.longU()} loop`;
         await buildRoute(null, loopId, best.t.name, best.t);
+        if (window.ApexRouteCar) routeAftercare(best.lc);
         if (!near) toast(`${ApexUnits.long(best.km * 1000)}: the closest good loop to ${asked}`);
       }
       window.apexDebug && (window.apexDebug.lastLoop = done.map(d => ({ kind: d.job.kind, fun: d.t.fun && d.t.fun.fun, score: d.score, km: d.km, good: d.good, retraced: d.retraced })));
@@ -3948,6 +3986,36 @@
       if (!(await replanForLevel(what))) setRoadPrefs({ [k]: was });
     }));
     setRoadPrefs({});
+    // For this drive (route_ctx/driver.js; vocabulary.js passenger, litRoads, cyclists, tunnels): who's aboard and what to
+    // favour, saved on the phone (apex.driverPrefs) and read by the route engine's driver provider. A change re-plans the
+    // route on screen as Prefer does. The skill line says how technical a route is offered from your own drives (the Log).
+    let driverPrefs = window.ApexRouteDriver ? ApexRouteDriver.load(localStorage) : {};
+    const paintDriverPrefs = () => document.querySelectorAll('[data-driver]').forEach(b => { const on = !!driverPrefs[b.dataset.driver]; b.classList.toggle('on', on); b.setAttribute('aria-pressed', String(on)); });
+    document.querySelectorAll('[data-driver]').forEach(b => b.addEventListener('click', async () => {
+      if (!window.ApexRouteDriver || $('planPanel').classList.contains('busy') || loopBusy) return;
+      const k = b.dataset.driver, was = !!driverPrefs[k];
+      driverPrefs = ApexRouteDriver.save(localStorage, { ...driverPrefs, [k]: !was }); paintDriverPrefs();
+      if (!(await replanForLevel(`${ApexRouteDriver.LABELS[k]} ${was ? 'off' : 'on'}`))) { driverPrefs = ApexRouteDriver.save(localStorage, { ...driverPrefs, [k]: was }); paintDriverPrefs(); }
+    }));
+    paintDriverPrefs();
+    (async () => {
+      try {
+        const sums = window.ApexRouteDriver ? await ApexRecording.summaries(null) : null, k = sums && ApexRouteDriver.skillTrend(sums), n = $('skillNote');
+        if (k && n) { n.textContent = ApexRouteDriver.skillLine(k); n.hidden = false; }
+      } catch (_) { /* no Log yet: no line */ }
+    })();
+    // Loop to fit (route_ctx/ios_context.js): the next event's start or the album's length, from the phone, only in the app and
+    // only when tapped (iOS asks for the permission at that tap). The provider then marks routes that run past it.
+    if (window.ApexIosContext && ApexIosContext.available() && $('fitRow')) $('fitRow').hidden = false;
+    document.querySelectorAll('[data-fit]').forEach(b => b.addEventListener('click', async () => {
+      if (!window.ApexIosContext || loopBusy) return;
+      const op = b.dataset.fit === 'album' ? 'music' : 'calendar';
+      const p = ApexIosContext.plan(op, await ApexIosContext.ask(op));
+      if (op === 'calendar' && p.minutes) ApexIosContext.state.nextEventAt = p.next || null;
+      if (op === 'music' && p.minutes) ApexIosContext.state.albumEndsAt = p.endsAt;
+      toast(p.text); if ($('fitNote')) $('fitNote').textContent = p.text;   // the toast gives way to the loop's own; the note stays
+      if (p.minutes) loop({ minutes: p.minutes }, b);
+    }));
     // Presets (plan_presets.js): this setup under a name, a stamp at the top of the sheet; tapping one sets it all at once.
     function paintPresets() {
       const row = $('presetRow');
@@ -5842,7 +5910,7 @@
     // Camber and crest go up when the recorder kept them (calibrated mount).
     function feedLive() {
       const L = drive.live, r = drive.rec; if (!L || !r) return;
-      while (drive.liveIdx < r.rows.length) { const x = r.rows[drive.liveIdx++]; L.push({ lat: x.lat, lon: x.lon, roughness_rms: x.roughness_rms, camber_deg: x.camber_deg, camber_v: x.camber_v, crest: x.crest_vertical_g }); }
+      while (drive.liveIdx < r.rows.length) { const x = r.rows[drive.liveIdx++]; L.push({ lat: x.lat, lon: x.lon, roughness_rms: x.roughness_rms, camber_deg: x.camber_deg, camber_v: x.camber_v, crest: x.crest_vertical_g, speed_mps: x.speed_mps, lon_g: x.lon_g }); }
     }
     // The live Vetta Score (REVIEW.md 1.2, Driving; 4.3): the drive so far scored the way the end card scores it, every 30 s
     // while recording; null (shown "--") until there are enough clean corners.
@@ -6033,6 +6101,7 @@
           const list = (await apiCall('GET', '/api/routes/shared').then(jsonOf)) || [];
           const geoms = await Promise.all(list.filter(r => r.crew).slice(0, 12).map(r => apiCall('GET', `/api/routes/${encodeURIComponent(r.id)}`).then(jsonOf).then(x => (x && x.geom) || []).catch(() => [])));
           preferCache.crew = ApexPrefer.grid(geoms);
+          preferCache.crewLines = geoms;                                     // the crowd provider's crew-shared lines (loved roads)
         } catch (_) { preferCache.crew = new Set(); }
       }
       return preferCache;
@@ -6313,7 +6382,8 @@
         ambient.sharer = ApexContributor.createAmbient({
           makeRecorder: () => new ApexSensors.Recorder(),
           makeLive: () => { const day = new Date(); return ApexContributor.createLive({ Core, fetch: window.fetch.bind(window), post: countedContribute,
-            driveId: ApexContributor.driveIdFor({ id: `app_${Date.now()}`, date: day.toISOString() }), drivenOn: day.toISOString().slice(0, 10) }); },
+            driveId: ApexContributor.driveIdFor({ id: `app_${Date.now()}`, date: day.toISOString() }), drivenOn: day.toISOString().slice(0, 10),
+            hourBucket: () => (window.ApexFlags && ApexFlags.on('quiet_hours', false) ? ApexContributor.hourBucket(new Date()) : null) }); },
           onStatus: () => { paintAmbient(); if (state.mode === 'live') paintDriveStat(); },
         });
       }
@@ -6333,6 +6403,8 @@
           Core, fetch: window.fetch.bind(window), post: countedContribute,
           driveId: ApexContributor.driveIdFor({ id: `live_${Date.now()}`, date: day.toISOString() }),
           drivenOn: day.toISOString().slice(0, 10),
+          // route context: a recorded drive counts toward loved roads; busy times only with quiet_hours on (default off, OWNER_TODO)
+          deliberate: true, hourBucket: () => (window.ApexFlags && ApexFlags.on('quiet_hours', false) ? ApexContributor.hourBucket(new Date()) : null),
           onStatus: (s) => { drive.share = s.state === 'stopped' ? 'stopped' : 'on'; drive.shareKm = s.km; drive.shareErr = s.error; if (s.error) console.warn('road data sharing:', s.error); paintDriveStat(); },
         });
         drive.share = 'on'; feedLive(); paintDriveStat();
@@ -6851,6 +6923,8 @@
         const car = routingCar(), extra = {};
         if (ended) extra.ended = ended;
         if (car) extra.car = { label: car.label, mu: Core.carGrip(car) };
+        // Passenger aboard (For this drive) tags the drive 'Passenger' (drive_tags.js), so the Log knows it too
+        { const tags = window.ApexRouteDriver ? ApexRouteDriver.driveTags(ApexRouteDriver.load(localStorage)) : []; if (tags.length) extra.tags = tags; }
         if (laps.length) extra.laps = laps;
         if (battery) extra.battery = battery;
         // F-04: the card in the frame after End, from the recording as it stands; the drive is parsed, scored and saved in
@@ -7377,6 +7451,7 @@
         if (msg && msg.type === 'lifecycle') { if (driveActive) keepSave(); return; }   // going to the background: kept now
         if (msg && (msg.type === 'placeSuggestions' || msg.type === 'placeResolved' || msg.type === 'trafficProbe')) { nativePlaceReply(msg); return; }
         if (msg && msg.type === 'nudge') { nudgeAnswered(!!msg.granted); return; }
+        if (msg && msg.type === 'context') { if (window.ApexIosContext) ApexIosContext.receive(msg); return; }   // My free time / This album
         if (msg && msg.type === 'recordingSaved') toast(`Saved ${msg.segments} road segments to ${msg.file}`);
         // App sign-in finished in the native shell: keep the session token and redraw whatever shows account state.
         // the shell keeps the token in the Keychain and says signedIn (IDEAS Z-10); an older shell hands the token over

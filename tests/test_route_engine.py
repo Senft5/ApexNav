@@ -135,7 +135,7 @@ const arterial = { speed_limit_kph: 56, road_class: 2, road_use: 0, density: 9, 
     if (!(value(g, [b]) > value(b, [g]))) wrong.push(t.ch);
   }
   for (const t of E.PER_KM) {
-    const v = { deer_risk: 1, fog_vis_m: 100, crosswind_ms: 20, road_temp_c: -5, crash_rate: 5, cyclist_route: 1, buggy: 1, unlit: 1, snow_cover: 1, crowd_busy: 1, park_visitors: 1, signal_coverage: 0 }[t.ch];
+    const v = { deer_risk: 1, fog_vis_m: 100, crosswind_ms: 20, road_temp_c: -5, crash_rate: 5, cyclist_route: 1, buggy: 1, unlit: 1, snow_cover: 1, crowd_busy: 2, park_visitors: 1, signal_coverage: 0, passenger_cost: 1, fuel_margin: 0 }[t.ch];
     const when = t.ch === 'deer_risk' ? Date.parse('2026-11-04T17:20:00-05:00') : t.ch === 'cyclist_route' ? Date.parse('2026-11-07T08:30:00-05:00') : t.ch === 'park_visitors' ? Date.parse('2026-11-07T13:00:00-05:00') : t.ch === 'unlit' ? Date.parse('2026-11-04T21:00:00-05:00') : DEPART;
     const exposedCh = t.ch === 'crosswind_ms' ? { tpi_m: 40 } : {};
     const prefs = t.pref ? { [t.pref]: true } : {};
@@ -196,6 +196,21 @@ const arterial = { speed_limit_kph: 56, road_class: 2, road_use: 0, density: 9, 
   E.evaluate(unmapped, {}); E.evaluate(plain, {});
   out.unmappedLanduse = [unmapped.ev.quality, plain.ev.quality];
   out.kindAliases = (() => { const c = cand(wiggly(6000), 700, back, { spans: [{ fromM: 0, toM: 10, kind: 'access_private' }], points: [{ atM: 500, kind: 'rail_crossing' }] }); E.evaluate(c, {}); return [c.ev.hard.map((h) => h.kind), c.ev.penaltyPts]; })();
+}
+// 6c. builder E's channels (crowd.js, driver.js, car.js, ios_context.js)
+{
+  const ev = (chans, extra = {}, prefs = {}) => { const c = cand(wiggly(6000), 700, { ...back, ...chans }, extra); E.evaluate(c, { prefs }); return c.ev; };
+  out.eUnlit = [ev({ dark: 1, lit: 0 }, {}, { lit: true }).penaltyPts > 0, ev({ dark: 1, lit: 1 }, {}, { lit: true }).penaltyPts, ev({ dark: 1, lit: 0 }).penaltyPts];
+  out.eFuelGap = ev({}, { spans: [{ fromM: 100, toM: 5000, kind: 'fuel_gap', value: 300, hard: true }] }).hard.map((h) => h.kind);
+  out.eDriver = [ev({ driver_fit: 1 }).driverPts, ev({ driver_fit: -1 }).driverPts, ev({ skill_fit: 0.5 }).driverPts, ev({}).driverPts];
+  out.eTaste = ev({ taste: 4 }).tastePts;
+  const tasteRank = rank([cand(wiggly(6000), 700, { ...back, taste: 6 }), cand(wiggly(6000), 700, { ...back, taste: -6 })]);
+  out.eTasteRank = tasteRank[0].parts.taste > tasteRank[1].parts.taste;
+  out.eTunnelOnce = ev({}, { spans: [{ fromM: 1000, toM: 1300, kind: 'tunnel' }], points: [{ atM: 1000, kind: 'tunnel' }] }, { tunnels: true }).bonusPts;
+  out.eBank = ev({ crowd_bank_deg: 4 }).scenery > ev({ crowd_bank_deg: -3 }).scenery;
+  out.eLate = ev({}, { spans: [{ fromM: 3000, toM: 6000, kind: 'past_next_event', value: 12 }] }).penaltyPts;
+  out.ePassenger = [ev({ passenger_cost: 0.8 }, {}, { passenger: true }).penaltyPts > 0, ev({ passenger_cost: 0.8 }).penaltyPts];
+  out.eBusyAvg = ev({ crowd_busy: 1 }).penaltyPts;
 }
 // 7. active(): windows, weekly (wrapping midnight), months
 out.active = [E.active(null, DEPART), E.active({ weekly: [{ from: '19:00', to: '07:00' }] }, Date.parse('2026-11-04T23:30:00-05:00')),
@@ -295,6 +310,19 @@ def test_osm_provider_names_fill_the_model(r):
     u, p = r["unmappedLanduse"]
     assert u == p, "land use where the map has none is unknown, not 'no shops'"
     assert r["kindAliases"] == [["no_access"], 0.7]
+
+
+def test_builder_e_channels(r):
+    on, lit, off = r["eUnlit"]
+    assert on and lit == 0 and off == 0, "unlit after dark costs only with Lit roads at night on"
+    assert r["eFuelGap"] == ["fuel_gap"], "car.js marks a stretch past the safe range hard"
+    assert r["eDriver"] == [6, -6, 3, 0]
+    assert r["eTaste"] == 4 and r["eTasteRank"]
+    assert r["eTunnelOnce"] == 1.5, "the same tunnel from two providers counts once"
+    assert r["eBank"]
+    assert r["eLate"] == 12, "12 min past the next event at the Fun level's minute"
+    assert r["ePassenger"][0] and r["ePassenger"][1] == 0
+    assert r["eBusyAvg"] == 0, "an average hour costs nothing"
 
 
 def test_hard_constraints(r):

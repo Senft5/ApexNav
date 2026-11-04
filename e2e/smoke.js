@@ -437,6 +437,34 @@ flow('a route that doubles back on its own road: no "Wrong way", no "Back on rou
   check(fell < 30 && cursor[cursor.length - 1] > total - 40, `the cursor follows the route past the turnaround (fell ${Math.round(fell)} m, ended ${Math.round(cursor[cursor.length - 1])} of ${Math.round(total)})`);
 });
 
+flow('for this drive (route context): Passenger aboard and the rest are stamps in More, kept on the phone, the providers registered; Loop to fit is app-only', async (page, base) => {
+  await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); } catch (_) {} });
+  await page.goto(base + '/index.html?view=route');
+  await page.waitForSelector('#planPanel.open');
+  await page.evaluate(() => { document.getElementById('planMore').open = true; });
+  const before = await page.evaluate(() => [...document.querySelectorAll('[data-driver]')].map((b) => [b.dataset.driver, b.textContent, b.getAttribute('aria-pressed')]));
+  check(JSON.stringify(before) === JSON.stringify([['passenger', 'Passenger aboard', 'false'], ['lit', 'Lit roads at night', 'false'], ['cyclists', 'Cyclist courtesy', 'false'], ['tunnels', 'Tunnels', 'false']]),
+    'four stamps, all off by default: ' + JSON.stringify(before));
+  await page.click('[data-driver="passenger"]');
+  await page.click('[data-driver="tunnels"]');
+  await page.waitForFunction(() => document.querySelector('[data-driver="passenger"]').getAttribute('aria-pressed') === 'true');
+  const kept = await page.evaluate(() => JSON.parse(localStorage.getItem('apex.driverPrefs')));
+  check(kept.passenger === true && kept.tunnels === true && kept.lit === false && kept.cyclists === false, 'kept on the phone: ' + JSON.stringify(kept));
+  await page.click('[data-driver="tunnels"]');
+  await page.waitForFunction(() => document.querySelector('[data-driver="tunnels"]').getAttribute('aria-pressed') === 'false');
+  await page.reload();
+  await page.waitForSelector('#planPanel.open');
+  const after = await page.evaluate(() => ({ p: document.querySelector('[data-driver="passenger"]').getAttribute('aria-pressed'), t: document.querySelector('[data-driver="tunnels"]').getAttribute('aria-pressed'),
+    fit: document.getElementById('fitRow').hidden, skill: document.getElementById('skillNote').hidden,
+    providers: ((window.ApexRouteCtx && (window.ApexRouteCtx.pending || window.ApexRouteCtx.providers)) || []).map((x) => x.id || x),
+    tags: window.ApexRouteDriver.driveTags(window.ApexRouteDriver.load(localStorage)) }));
+  check(after.p === 'true' && after.t === 'false', 'the stamps come back as left: ' + JSON.stringify(after));
+  check(after.fit === true, 'My free time / This album are only in the app (no calendar or music on the web)');
+  check(after.skill === true, 'no drives in the Log: no skill line, never a guess');
+  for (const id of ['crowd', 'driver', 'car', 'ios_context', 'crew_meet']) check(JSON.stringify(after.providers).includes(id), `provider ${id} registered: ` + JSON.stringify(after.providers));
+  check(JSON.stringify(after.tags) === '["Passenger"]', 'a drive recorded now is tagged Passenger: ' + JSON.stringify(after.tags));
+});
+
 flow('a deliberate detour: one quiet "Rerouting", the new route goes the way the car is heading, and the swap is seamless (TestFlight: "it tweaks when finding a new route")', async (page, base) => {
   await page.route('https://tiles.openfreemap.org/**', (route) => (route.request().url().includes('/styles/')
     ? route.fulfill({ contentType: 'application/json', body: JSON.stringify({ version: 8, sources: {}, layers: [{ id: 'bg', type: 'background', paint: { 'background-color': '#eee' } }] }) })
@@ -1750,6 +1778,8 @@ flow('crew page: an old ?view=crew link opens People on Crews, at your crew; goi
   const liv = find('/api/crews/k1/page');
   check(liv && liv.m === 'PUT' && JSON.parse(liv.b).crest === 'peak' && JSON.parse(liv.b).stripe === '#1f5fa8', 'the livery saves the crest and stripe: ' + (liv && liv.b));
   check(!('stripe2' in JSON.parse(liv.b)) && !('pattern' in JSON.parse(liv.b)), 'a Plain crew sends nothing past the Plain livery');
+  // fair meeting points (crew_meet.js): your rough area is off until you switch it on, and nothing was sent about it
+  check(await page.getAttribute('.cp-meet [data-crew-home]', 'aria-checked') === 'false' && !find('/api/crews/k1/home'), 'Share my rough area is off by default');
   check(/Plain livery/.test(await page.textContent('.cp-livery-line')) && /Decals come from crew-mates with Vetta Pro/.test(await page.textContent('.cp-livery-line')), 'the livery line says Plain and where Decals come from');
 });
 
@@ -2800,6 +2830,7 @@ flow('crew drives: an upcoming drive shows on People, Crews, as the crew page’
         notes: null, by_handle: 'me', mine: true, can_cancel: true, my_rsvp: 'going', going: ['me'], maybe: 0, lead: 'me', sweep: null, regroup: [] }]);
     if (u.pathname === '/api/crews/CREW1/page') return json({ id: 'CREW1', name: 'Ridge Runners', visibility: 'private', members: 3, is_owner: false, livery: 'plain', board: [], sharing_scores: false, next: null, last: null });
     if (u.pathname === '/api/crews/CREW1/members') return json([{ handle: 'me', mine: true }, { handle: 'bob', mine: false }]);
+    if (u.pathname === '/api/crews/CREW1/meet') return json({ cells: [[35.35, -84.25], [35.55, -83.95]], sharing: 2, mine: false, need: 2 });   // fair meeting points (crew_meet.js)
     if (u.pathname === '/api/highlights' && m === 'GET') return json([{ id: 'HL1', name: 'Look Rock <b>view</b>', lat: 35.64, lon: -83.94, score: 4.5, ratings: 6, mine: false,
       category: 'overlook', note: 'Best at sunset', visits: 9, my_stars: null }, { id: 'HL2', name: 'Bean Stop', lat: 35.75, lon: -83.97, score: 3.9, ratings: 2, mine: true, category: 'cafe' }]);
     if (m === 'POST') { posted.push([u.pathname, JSON.parse(route.request().postData() || 'null')]); return u.pathname.endsWith('/rsvp') ? (mine = 'going', route.fulfill({ status: 204 })) : json({ id: 'NEWEVTAAAAAAAAAA' }, 201); }
@@ -2887,6 +2918,10 @@ flow('crew drives: an upcoming drive shows on People, Crews, as the crew page’
     'no route planned: an Add a route link, not a switch that can\'t be switched (P-29)');
   check(!(await page.$$(`${W} select:not(.row-pick-native), ${W} input[type=checkbox], ${W} input[type=date], ${W} input[type=time]`)).length, 'the form shows none of the browser\'s own controls');
   check(/Tmrw|Today/.test(await page.textContent(`${W} .detents.scroll [aria-checked="true"]`)), 'tomorrow is the day by default');
+  // Fair for the crew (route_ctx/crew_meet.js): the crew's shared squares, no names; the router is unreachable here, so a marked estimate
+  await page.click(`${W} button:has-text("Fair for the crew")`);
+  await page.waitForFunction((w) => /Fair to everyone sharing: the longest drive there is about \d+ min/.test(document.querySelector(w + ' .plan-drive').textContent), W, { timeout: 8000 });
+  check(!posted.some(([p]) => /\/home$/.test(p)), 'nothing about your own home was sent');
   await page.fill(`${W} input[aria-label="Meet at"]`, 'Tellico');
   await page.click(`${W} .meet-hits button:has-text("Tellico Plains Shell")`);
   check(/Meeting point: Tellico Plains Shell/.test(await page.textContent(`${W} .plan-drive`)), 'the meeting point by search');

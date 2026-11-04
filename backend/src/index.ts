@@ -43,6 +43,8 @@ import { STATS_SAMPLE, recordStat, statsSummary } from "./stats";
 import { etaStart, etaUpdate, etaView } from "./eta_share";
 import { highlightCreate, highlightDelete, highlightList, highlightRate } from "./highlights";
 export { ConvoyIndex, ConvoyRoom } from "./convoy";
+import { crewHomeSet, crewMeetCells } from "./crew_meet";
+import { chargers } from "./chargers";
 import { segmentAdopt, segmentCreate, segmentDelete, segmentList, segmentShare, segmentsSharedWithMe } from "./segments";
 
 type Handler = (req: Request, env: Env, m: RegExpMatchArray) => Promise<Response>;
@@ -113,6 +115,8 @@ on("PUT", "/api/me/contribute", async (req, env) => { await setContribute(env, a
 on("POST", "/api/contribute", async (req, env) => json(await contribute(env, await requireMember(req, env), req), 202));
 
 on("GET", "/api/roads", async (req, env) => { await requireMember(req, env); return json(await roadBins(env, new URL(req.url))); });
+// EV chargers by 0.25-degree tile for fuel-stop spacing (chargers.ts; route_ctx/car.js): members only, the key stays here
+on("GET", "/api/chargers", async (req, env) => { await requireMember(req, env); return json(await chargers(env, new URL(req.url))); });
 on("GET", "/api/coverage", async (req, env) => { await requireMember(req, env); return json(await coverage(env, new URL(req.url))); });
 // The road-data export (docs/ROAD_DATA.md): the owner only, for a pilot; anyone else gets a plain 404.
 on("GET", "/api/ops/roads.geojson", async (req, env) => {
@@ -170,6 +174,9 @@ on("GET", "/api/crews/:id/chat", async (req, env, m) => json(await chatList(env,
 on("POST", "/api/crews/:id/chat", async (req, env, m) => json(await chatPost(env, await requireMember(req, env), m.groups!.id, req), 201));
 on("DELETE", "/api/crews/:id/chat/:msg", async (req, env, m) => { await chatDelete(env, await requireMember(req, env), m.groups!.id, m.groups!.msg); return noContent(); });
 on("GET", "/api/crews/:id/members", async (req, env, m) => json(await crewMembers(env, await requireMember(req, env), m.groups!.id)));
+// fair meeting points (crew_meet.ts): your rough home area for this crew, opt-in; the crew's cells without names
+on("PUT", "/api/crews/:id/home", async (req, env, m) => json(await crewHomeSet(env, await requireMember(req, env), m.groups!.id, req)));
+on("GET", "/api/crews/:id/meet", async (req, env, m) => json(await crewMeetCells(env, await requireMember(req, env), m.groups!.id)));
 on("POST", "/api/crews/join", async (req, env) => json(await crewJoin(env, await requireMember(req, env), req)));
 on("POST", "/api/crews/invite/preview", async (req, env) => json(await crewInvitePreview(env, await requireMember(req, env), req)));
 on("POST", "/api/crews/:id/invite", async (req, env, m) => json(await crewInvite(env, await requireMember(req, env), m.groups!.id), 201));

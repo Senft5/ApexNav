@@ -10,6 +10,8 @@ import CryptoKit
 import ActivityKit
 import UserNotifications
 import ApexKit
+import EventKit
+import MediaPlayer
 
 // =====================================================================================
 // APEX NAV — iOS THIN SHELL
@@ -441,6 +443,12 @@ final class ApexScriptBridge: NSObject, WKScriptMessageHandler {
             ApexNudge.handle(dict, shell: shell)
             return
         }
+        // Route context (web/route_ctx/ios_context.js): the next event's start or the album's length, only when the driver taps
+        // "My free time" or "This album" on the plan sheet; the permission is asked at that tap (ApexContext).
+        if cmd == "context", let dict = body as? [String: Any] {
+            ApexContext.handle(dict, shell: shell)
+            return
+        }
         // Location (U-65): asked when the page says, after the welcome, not at launch. Once answered this shows nothing.
         if cmd == "requestLocation" {
             shell?.requestLocation()
@@ -541,6 +549,71 @@ enum ApexNudge {
         default:
             UNUserNotificationCenter.current().removePendingNotificationRequests(withIdentifiers: [id])
         }
+    }
+}
+
+/// Route context (web/route_ctx/ios_context.js): the driver's time, only when they ask, only on the phone.
+/// `calendar`: "My free time" on the plan sheet. Full read access is asked at that tap (iOS 17 EventKit), never at launch;
+/// only the START TIME of the next timed event in the next 24 h goes to the page: never its title, place, notes, calendar or
+/// attendees, and nothing goes further than the page (docs/APP_REVIEW.md 5.1.1).
+/// `music`: "This album". iOS lets an app read the Music app's now-playing item but not its queue, so the answer is the rest of
+/// that song's album from the media library (permission asked at that tap), or, for a song not in the library, the rest of the
+/// song alone (`scope: "song"`), and the page says which. Nothing playing: no `remainingS`.
+@MainActor
+enum ApexContext {
+    private static let store = EKEventStore()
+
+    static func handle(_ dict: [String: Any], shell: ApexSensorShell?) {
+        let id = (dict["id"] as? NSNumber)?.intValue ?? 0
+        switch dict["op"] as? String {
+        case "calendar":
+            Task { @MainActor [weak shell] in
+                var reply: [String: Any] = ["type": "context", "op": "calendar", "id": id]
+                let granted = (try? await store.requestFullAccessToEvents()) ?? false
+                reply["granted"] = granted
+                if granted, let start = nextEventStart() { reply["next"] = start.timeIntervalSince1970 * 1000 }
+                shell?.sendToPage(reply)
+            }
+        case "music":
+            Task { @MainActor [weak shell] in
+                var reply: [String: Any] = ["type": "context", "op": "music", "id": id]
+                let status = await withCheckedContinuation { (done: CheckedContinuation<MPMediaLibraryAuthorizationStatus, Never>) in
+                    MPMediaLibrary.requestAuthorization { done.resume(returning: $0) }
+                }
+                reply["granted"] = status == .authorized
+                for (k, v) in musicRemaining(libraryAllowed: status == .authorized) { reply[k] = v }
+                shell?.sendToPage(reply)
+            }
+        default:
+            break
+        }
+    }
+
+    /// The next timed (not all-day) event starting in the next 24 h: its start, nothing else.
+    private static func nextEventStart() -> Date? {
+        let now = Date()
+        let predicate = store.predicateForEvents(withStart: now, end: now.addingTimeInterval(24 * 3600), calendars: nil)
+        // EKEvent.startDate is implicitly unwrapped: compactMap keeps the type Date and skips a missing one
+        return store.events(matching: predicate).compactMap { (e: EKEvent) -> Date? in
+            guard !e.isAllDay, let start = e.startDate, start > now else { return nil }
+            return start
+        }.min()
+    }
+
+    /// Seconds of music left: the rest of the now-playing song, plus its album's later tracks when the library has them.
+    private static func musicRemaining(libraryAllowed: Bool) -> [String: Any] {
+        let player = MPMusicPlayerController.systemMusicPlayer
+        guard let item = player.nowPlayingItem, item.playbackDuration > 0 else { return [:] }
+        let songLeft = max(0, item.playbackDuration - player.currentPlaybackTime)
+        guard libraryAllowed, item.albumPersistentID != 0 else { return ["remainingS": songLeft, "scope": "song"] }
+        let query = MPMediaQuery.songs()
+        query.addFilterPredicate(MPMediaPropertyPredicate(value: NSNumber(value: item.albumPersistentID), forProperty: MPMediaItemPropertyAlbumPersistentID))
+        let later = (query.items ?? []).filter { $0.discNumber > item.discNumber || ($0.discNumber == item.discNumber && $0.albumTrackNumber > item.albumTrackNumber) }
+        guard !later.isEmpty else { return ["remainingS": songLeft, "scope": "song"] }
+        let total = later.reduce(songLeft) { $0 + $1.playbackDuration }
+        var out: [String: Any] = ["remainingS": total, "scope": "album"]
+        if let album = item.albumTitle { out["album"] = String(album.prefix(80)) }   // shown on this phone only
+        return out
     }
 }
 

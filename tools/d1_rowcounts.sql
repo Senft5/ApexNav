@@ -59,5 +59,8 @@ SELECT
   (SELECT COUNT(*) FROM livery_grants) AS livery_grants,
   (SELECT COUNT(*) FROM drive_scores) AS drive_scores,
   (SELECT COUNT(*) FROM theme_grants) AS theme_grants,
+  (SELECT COUNT(*) FROM road_love) AS road_love,
+  (SELECT COUNT(*) FROM road_hours) AS road_hours,
+  (SELECT COUNT(*) FROM road_hour_holders) AS road_hour_holders,
   (SELECT COUNT(*) FROM d1_migrations) AS d1_migrations
 ;

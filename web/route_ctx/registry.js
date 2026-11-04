@@ -30,7 +30,8 @@
   // the registry adopts that object rather than replacing it, so a provider holding the shim registers here too, in any
   // script order, and anything pushed onto `providers` directly is picked up when the list is read.
   const shared = root.ApexRouteCtx && typeof root.ApexRouteCtx === 'object' ? root.ApexRouteCtx : {};
-  const adopt = () => { for (const p of Array.isArray(shared.providers) ? shared.providers : []) if (p && p.id && !providers.has(p.id) && typeof p.fetch === 'function') { try { register(p); } catch (_) { /* a bad shape stays out */ } } };
+  // (builder E's shim, ctx_util.js, queues them on `pending` instead: both are adopted)
+  const adopt = () => { for (const p of [...(Array.isArray(shared.providers) ? shared.providers : []), ...(Array.isArray(shared.pending) ? shared.pending : [])]) if (p && p.id && !providers.has(p.id) && typeof p.fetch === 'function') { try { register(p); } catch (_) { /* a bad shape stays out */ } } };
   const list = () => { adopt(); return [...providers.values()].sort((a, b) => a.priority - b.priority || (a.id < b.id ? -1 : 1)); };
 
   // ---- corridors --------------------------------------------------------------------------------------------------
@@ -215,7 +216,7 @@
       if (ctrl) ctrl.signal.addEventListener('abort', off, { once: true });
       try {
         const raw = await Promise.race([
-          Promise.resolve().then(() => p.fetch(cs, { signal: mine ? mine.signal : undefined, budgetMs: ms, departAt: opts.departAt, settings, fetch: opts.fetch })),
+          Promise.resolve().then(() => p.fetch(cs, { ...(opts.providerOpts || {}), signal: mine ? mine.signal : undefined, budgetMs: ms, departAt: opts.departAt, settings, ...(opts.fetch ? { fetch: opts.fetch } : {}) })),
           sleep(ms + 50, mine ? mine.signal : undefined).then(() => null),
         ]);
         if (!raw) { status[p.id] = { status: 'unavailable', ms: Date.now() - t, note: 'out of time' }; return; }
@@ -240,6 +241,7 @@
   const api = { STEP_M, DEFAULT_BUDGET_MS, TRANSLATE, register, unregister, list, corridor, unionBox, indexAt, unknown, fillSpans, cache, keyOf, run, merge, clean, hav, bearing, cumulative };
   adopt();
   if (!Array.isArray(shared.providers)) shared.providers = [];
+  delete shared.shim;
   // providers registering later through the shim's own reference land here too (and stay visible on `providers`)
   Object.assign(shared, api, { register: (p) => { const e = register(p); if (!shared.providers.some((x) => x.id === p.id)) shared.providers.push(p); return e; } });
   if (typeof module !== 'undefined' && module.exports) module.exports = shared;

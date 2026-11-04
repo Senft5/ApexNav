@@ -95,12 +95,13 @@ const root = process.argv[1], first = process.argv[2];
 const shim = () => { globalThis.ApexRouteCtx = globalThis.ApexRouteCtx || { providers: [], register(p) { this.providers.push(p); return p; } }; return globalThis.ApexRouteCtx; };
 const p = (id) => ({ id, channels: ['x'], fetch: async () => ({}) });
 let held;
-if (first === 'shim') { held = shim(); held.register(p('early')); }
+if (first === 'shim') { held = shim(); held.register(p('early')); globalThis.ApexRouteCtx.pending = [p('queuedEarly')]; }
 const C = require(root + '/web/route_ctx/registry.js');
 if (first !== 'shim') { held = shim(); }
 held.register(p('late'));                       // a provider that kept the shim (or the registry) reference
 globalThis.ApexRouteCtx.register(p('global'));
 held.providers.push(p('pushed'));               // pushed straight onto the array
+(held.pending || (held.pending = [])).push(p('queued'));   // builder E's shim queues on `pending`
 process.stdout.write(JSON.stringify({ ids: C.list().map((x) => x.id).sort(), same: globalThis.ApexRouteCtx === C, run: typeof held.run }));
 """
 
@@ -111,6 +112,26 @@ def test_registry_adopts_a_shim_in_either_order(first):
     res = subprocess.run([NODE, "-e", ORDER, os.path.abspath("."), first], capture_output=True, text=True, timeout=30)
     assert res.returncode == 0, res.stderr
     r = json.loads(res.stdout)
-    want = ["global", "late", "pushed"] + (["early"] if first == "shim" else [])
+    want = ["global", "late", "pushed", "queued"] + (["early", "queuedEarly"] if first == "shim" else [])
     assert r["ids"] == sorted(want), r
     assert r["same"] and r["run"] == "function"
+
+
+REAL = r"""
+const root = process.argv[1], first = process.argv[2];
+globalThis.ApexCore = require(root + '/web/apex_core.js');
+const E = ['ctx_util', 'crowd', 'driver', 'car', 'ios_context', 'crew_meet'], B = ['osm_common', 'osm_tiles', 'osm_overpass', 'road_name_age'];
+const load = (names) => { for (const n of names) require(root + '/web/route_ctx/' + n + '.js'); };
+if (first === 'providers') { load(E); load(B); }
+const C = require(root + '/web/route_ctx/registry.js');
+require(root + '/web/route_ctx/router_edges.js'); require(root + '/web/route_ctx/dem.js');
+if (first !== 'providers') { load(E); load(B); }
+process.stdout.write(JSON.stringify(globalThis.ApexRouteCtx.list().map((p) => p.id).sort()));
+"""
+
+
+@pytest.mark.parametrize("first", ["providers", "registry"])
+def test_builder_b_and_e_providers_register_in_either_order(first):
+    res = subprocess.run([NODE, "-e", REAL, os.path.abspath("."), first], capture_output=True, text=True, timeout=30)
+    assert res.returncode == 0, res.stderr
+    assert json.loads(res.stdout) == sorted(["router", "dem", "osm_tiles", "osm_overpass", "road_name_age", "crowd", "driver", "car", "ios_context", "crew_meet"])

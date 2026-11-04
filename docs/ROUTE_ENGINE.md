@@ -28,7 +28,8 @@ How data becomes a ranking, as built (2026-11-04). Five linked diagrams: (1) sou
 quality and scenery, (3) penalties, bonuses and hard constraints, (4) a candidate's value, (5) candidates, ranking and the
 why line. The weights in them are the code's; the tables in "Weights (checked against the code)" below are read back
 from `web/route_engine.js`, `web/fun_route.js` and the providers by tests/test_route_engine_doc.py. Providers marked
-*(contract)* are another builder's and not merged on this branch: their channel names are the contract's and B's headers.
+*(contract)* are another builder's and not merged on this branch yet (C, D): their channel names are the contract's. B
+(map features) and E (driver, crowd, car, phone) are merged and drawn with their real channel names.
 A rendered copy for a phone: docs/design/route_engine_flow.html (`python3 tools/route_engine_flow.py` rebuilds it from
 this page).
 
@@ -38,22 +39,26 @@ this page).
 flowchart TD
   P["Plan: A to B, loop or Explore"] --> CAND["Candidates, see diagram 5"]
   CAND --> COR["Corridor per candidate: samples every 25 m,<br>heading, bbox, etaAt from the router's<br>maneuver clock, else its total time by<br>distance, else 50 km/h; times the live pace<br>0.6 to 1.8 while driving; the Garage car"]
-  COR --> RUN["ApexRouteCtx.run: every provider at once on<br>all corridors of the plan; one budget, 2.5 s<br>for candidates, 1.2 s for stages; each<br>provider gets min of its budgetMs and what<br>is left, and an AbortSignal at the deadline"]
+  COR --> RUN["ApexRouteCtx.run: every provider at once on<br>all corridors of the plan; one budget, 4 s<br>for candidates, 1.2 s for stages; each<br>provider gets min of its budgetMs and what<br>is left, and an AbortSignal at the deadline"]
   RUN --> A1["A router_edges.js, priority 10, 2.4 s,<br>stages too: one Valhalla trace_attributes<br>per candidate, edge_walk then map_snap on<br>2000 points, 2 at a time, kept 30 min per<br>line. speed_limit_kph, speed_limit_est_kph<br>flagged, speed_kph, road_class, road_use,<br>density, lanes, surface, sidewalk,<br>truck_route, bridge, tunnel, toll, ramp,<br>roundabout, signals_per_km, access_per_km,<br>intersections_per_km; points signal,<br>junction, driveway"]
   RUN --> A2["A dem.js, priority 20, 2 s, stages too: z12<br>Terrarium tiles, at most 64 a plan, shortest<br>corridors first. elev_m, grade_pct,<br>relief_m, tpi_m, aspect_rad, west_descent;<br>spans climb, descent"]
-  RUN --> B1["B osm_tiles.js, 8 s (other branch):<br>lu_residential, lu_commercial, lu_retail,<br>lu_industrial, lu_forest, lu_farmland,<br>lu_open, lu_park, lu_mapped, water_near,<br>creek_follow, bldg_per_km, addr_per_km,<br>biz_per_km, junctions_per_km,<br>driveways_per_km, access_per_km, road_class<br>in map codes, on_bridge, in_tunnel, unpaved;<br>points school, worship, viewpoint, place,<br>rail_crossing, gate"]
-  RUN --> B2["B osm_overpass.js, 15 s (other branch):<br>maxspeed_kph, lanes, divided, oneway,<br>surface_paved, smoothness, hgv,<br>access_level, guard_rail, cycle_route,<br>byway,<br>signals/stops/crossings/calming_per_km,<br>side_roads_per_km, driveway_joins_per_km;<br>points signal, stop, give_way, crossing,<br>calming, level_crossing, curve_sign,<br>animal_crossing, buggy, viewpoint, historic,<br>fuel; spans roundabout, one_lane_bridge,<br>covered_bridge, access_private,<br>access_destination, cycle_route, byway"]
-  RUN --> B3["B road_name_age.js (other branch): name_age"]
+  RUN --> B1["B osm_tiles.js, 8 s:<br>lu_residential, lu_commercial, lu_retail,<br>lu_industrial, lu_forest, lu_farmland,<br>lu_open, lu_park, lu_mapped, water_near,<br>creek_follow, bldg_per_km, addr_per_km,<br>biz_per_km, junctions_per_km,<br>driveways_per_km, access_per_km, road_class<br>in map codes, on_bridge, in_tunnel, unpaved;<br>points school, worship, viewpoint, place,<br>rail_crossing, gate"]
+  RUN --> B2["B osm_overpass.js, 15 s:<br>maxspeed_kph, lanes, divided, oneway,<br>surface_paved, smoothness, hgv,<br>access_level, guard_rail, cycle_route,<br>byway,<br>signals/stops/crossings/calming_per_km,<br>side_roads_per_km, driveway_joins_per_km;<br>points signal, stop, give_way, crossing,<br>calming, level_crossing, curve_sign,<br>animal_crossing, buggy, viewpoint, historic,<br>fuel; spans roundabout, one_lane_bridge,<br>covered_bridge, access_private,<br>access_destination, cycle_route, byway"]
+  RUN --> B3["B road_name_age.js: name_age"]
   RUN --> C1["C national grid (contract): night_light,<br>impervious_pct, address_per_km,<br>housing_per_km2, noise_db, aadt, iri,<br>hgv_share, canopy_pct, crash_rate,<br>built_year, signal_coverage"]
   RUN --> D1["D time and world (contract): deer_risk,<br>fog_vis_m, crosswind_ms, road_temp_c,<br>snow_cover, foliage, park_visitors,<br>photo_per_km; spans school, church, event,<br>works, closure, flood, harvest, unploughed"]
-  RUN --> E1["E driver, crowd, in car (contract):<br>crowd_rough_g, crowd_flow, crowd_camber_deg,<br>crowd_busy, loved, traffic_ratio; prefs<br>passenger; car range_km, width, height,<br>weight"]
-  A1 ~~~ A2 ~~~ B1 ~~~ B2 ~~~ B3 ~~~ C1 ~~~ D1 ~~~ E1
-  A1 & A2 & B1 & B2 & B3 & C1 & D1 & E1 --> CLEAN["clean: wrong-length channels dropped, NaN is<br>unknown never 0; osm_tiles road_class<br>translated to router codes"]
+  RUN --> E1["E crowd.js, 9 s: crowd_rough_g, crowd_bank_deg,<br>crowd_curv, crowd_conf, crowd_flow, loved,<br>taste, crowd_busy (quiet_hours flag, off);<br>needs lookup /api/roads, crewLines, myTracks"]
+  RUN --> E2["E driver.js, 8 s: passenger_cost, tech_level,<br>skill_fit, dark, lit, cyclist_route,<br>cyclist_time, tunnel, driver_fit; spans<br>hairpins, abrupt, unlit_dark, cycle_route,<br>tunnel; For this drive prefs passenger,<br>lit, cyclists, tunnels"]
+  RUN --> E3["E car.js, 8 s: fuel_since_km, fuel_margin,<br>signal; spans fuel_gap hard, fuel_check,<br>no_signal; points fuel_stop, share_eta,<br>ask_range; needs apiGet /api/chargers"]
+  RUN --> E4["E ios_context.js: free_min; span<br>past_next_event; point album_ends.<br>crew_meet.js: point crew_start"]
+  A1 ~~~ A2 ~~~ B1 ~~~ B2 ~~~ B3 ~~~ C1 ~~~ D1 ~~~ E1 ~~~ E2 ~~~ E3 ~~~ E4
+  A1 & A2 & B1 & B2 & B3 & C1 & D1 & E1 & E2 & E3 & E4 --> CLEAN["clean: wrong-length channels dropped, NaN is<br>unknown never 0; osm_tiles road_class<br>translated to router codes"]
   CLEAN --> MERGE["merge per channel per sample: lower priority<br>provider wins where it knows, the next fills<br>its gaps; spans and points pooled with their<br>source"]
   STAT ~~~ CANON
   MERGE --> STAT["status per provider: ok, partial,<br>unavailable, no-key, out of time; onUpdate<br>as each lands"]
   MERGE --> CANON["channel: canonical name, gaps filled from<br>aliases and other providers' names, e.g.<br>maxspeed_kph to speed_limit_kph, biz_per_km<br>to business_per_km, lu shares where<br>lu_mapped at least 0.3"]
   CANON --> S2["Diagram 2: per sample"]
+  CHOSEN["route chosen"] --> AFTER["car.js aftercare: ask_range asks once for<br>the car's range; no_signal stretches offer<br>to save their maps (offlineAreas,<br>prepareOffline), then share_eta offers<br>Share ETA"]
 ```
 
 ### 2. Per 25 m: quality, scenery, confidence
@@ -89,7 +94,7 @@ flowchart TD
   MOM --> PK["Per-km channels: strength = value curve<br>times time factor times exposure times<br>valley factor; points = strength times perKm<br>times km; see the Penalties table"]
   PK --> FOG["fog: x1.5 in a valley tpi -10 m or less,<br>x0.5 on a ridge 20 m or more"]
   PK --> WIND["crosswind: bridges and ridges only"]
-  PK --> UNLIT["unlit: only with the avoid unlit preference"]
+  PK --> UNLIT["unlit = dark and not lit, or lit 0: only<br>with Lit roads at night; cyclists only with<br>Cyclist courtesy, at cyclist_time;<br>passenger_cost only with Passenger aboard"]
   ETA --> WHEN{{"span or point active? when: windows, weekly<br>days and HH:MM incl. past midnight, months;<br>else the kind's default; none is always"}}
   WHEN -- no --> NONE["ignored"]
   WHEN -- yes --> KIND{{"rule for its kind, aliases worship to<br>church, rail_crossing to level_crossing,<br>give_way to stop, calming to speed_bump,<br>access_private to no_access"}}
@@ -98,7 +103,7 @@ flowchart TD
   KIND --> BON["bonus: each or perKm, each kind capped; see<br>the Spans table"]
   CAR["Garage car"] --> FIT["hard: maxwidth_m, maxheight_m, maxweight_t<br>under the car; surface 3 or more for a low<br>car; a gap between fuel points over 0.85 of<br>range_km"]
   ASP["aspect_rad and sun 0-12 degrees within 60<br>degrees of the slope's facing"] --> GOLD["golden light 0.5 per km from 0.5 km, cap 4"]
-  PASS["prefs passenger"] --> TIGHT["0.3 per hairpin or 1-2 corner, cap 15"]
+  PASS["prefs passenger, no passenger_cost channel"] --> TIGHT["0.3 per hairpin or 1-2 corner, cap 15"]
   FOG ~~~ WIND ~~~ UNLIT
   HARD ~~~ PEN ~~~ BON
   CAR ~~~ ASP ~~~ PASS
@@ -120,11 +125,12 @@ flowchart TD
   FUN --> GAIN["gain = 0.5 x gated good corners over the<br>quickest, cap 60"]
   LVL["Level: Quick budget 10 % + 60 s, 3 per min;<br>Fun 35 % + 240 s, 1 per min; Max fun 90 % +<br>600 s, 0.35 per min"] --> TIME["time = minus perMin x extra minutes over the<br>quickest"]
   QR --> QT["quality term = 0.3 x quality - 50 x qWeight"]
+  DRV["driver = 6 x mean driver_fit, else<br>skill_fit, x share known; taste = the<br>crowd's taste channel where tasteOn didn't<br>score the candidate"] --> V
   OLD["Today's terms: glare 1 per min cap 20; towns<br>3 per km cap 60 when avoided; weather ice<br>30, storms 15, rain 6, fog 4 by share, minus<br>the driest; members' measured roughness and<br>banking -8 to +5; taste up to +-8; Prefer<br>stamps"] --> V
   QR ~~~ POOR ~~~ SCN
   FUN ~~~ GAIN
   LVL ~~~ TIME ~~~ QT ~~~ OLD ~~~ BP
-  FUN & GAIN & TIME & QT & POOR & SCN --> V["value = fun + gain + time + quality + poor +<br>scenery + bonuses + penalties + glare +<br>towns + weather + measured + taste + prefer"]
+  FUN & GAIN & TIME & QT & POOR & SCN --> V["value = fun + gain + time + quality + poor +<br>scenery + bonuses + penalties + driver +<br>glare + towns + weather + measured + taste + prefer"]
   BP["bonuses, penalties, hard from diagram 3"] --> V
   V --> NOCTX["No context at all: every new term is 0,<br>value equals ApexFunRoute.rank exactly"]
   NOCTX ~~~ CONF
@@ -181,6 +187,7 @@ under "The channels" are checked the same way (channel and weight).
 | PENALTY_CAP | 40 | the most penalties cost |
 | BONUS_CAP | 15 | the most bonuses add |
 | LOG_FLOOR | 0.05 | the lowest goodness in the geometric mean |
+| DRIVER | 6 | points for driver_fit (else skill_fit) 1 vs 0, times the share known |
 
 | per-km penalty | points per km |
 |---|---|
@@ -196,6 +203,8 @@ under "The channels" are checked the same way (channel and weight).
 | crowd_busy | 0.6 |
 | park_visitors | 0.5 |
 | signal_coverage | 0.15 |
+| passenger_cost | 1.5 |
+| fuel_margin | 0.5 |
 
 | span or point | each | per km | bonus | bonus per km | cap | hard |
 |---|---|---|---|---|---|---|
@@ -226,6 +235,8 @@ under "The channels" are checked the same way (channel and weight).
 | curve_sign | | | 0.2 | | 2 | |
 | access_destination | 1 | 2 | | | | |
 | cycle_route | | 0.5 | | | | |
+| fuel_gap | | | | | | yes |
+| past_next_event | 0 | | | | | |
 
 | level | budget | slack s | points per extra minute |
 |---|---|---|---|
@@ -328,7 +339,7 @@ nothing the context knew made the difference, the old line (the roads it's for a
 
 ## Instant
 
-Where to? never waits on the context (REVIEW_FEEL budgets): the providers get 2.5 s together for a plan's candidates
+Where to? never waits on the context (REVIEW_FEEL budgets): the providers get 4 s together for a plan's candidates
 (1.2 s for stages), each provider within its own budget and an AbortSignal; what came back is used and the rest is
 unknown. If planning takes longer than 1.5 s the quickest route goes up at once and the ranked routes replace it when
 they're ready, unless you've started driving it or planned something else.
@@ -454,6 +465,22 @@ unmapped is unknown); `on_bridge`/`in_tunnel` → `bridge`/`tunnel`; `smoothness
 `access_private` → `no_access` (hard); `gate` (1 each), `buggy` and `curve_sign` points, `access_destination` and
 `cycle_route` spans are costed where the channel isn't known. The registry adopts a provider shim
 (`{ providers: [], register }`, osm_common.js) in either script order.
+
+### Builder E's names (crowd.js, driver.js, car.js, ios_context.js, crew_meet.js; merged)
+
+`crowd_rough_g`, `crowd_flow`, `loved` as above; `crowd_bank_deg` → `crowd_camber_deg`; `crowd_busy` is a ratio to the
+road's average hour (cost from 1 up) and stays NaN unless the quiet_hours flag is on. `taste` (points) is the taste term
+for candidates the cockpit's `tasteOn` didn't score. `passenger_cost` (0–1) costs 1.5/km with Passenger aboard (and
+replaces the hairpin count); `driver_fit`, else `skill_fit` (−1…1), is the **driver** term, ±6 points by the share known;
+`dark` + `lit` give `unlit` (with Lit roads at night); `cyclist_route` costs at `cyclist_time` with Cyclist courtesy;
+`tunnel` spans and points are the tunnel bonus (with Tunnels, counted once per tunnel); `fuel_margin` costs 0.5/km in the
+last quarter of the safe range; the `fuel_gap` span is hard; `signal` and C's `mobile_coverage` → `signal_coverage`;
+`past_next_event` (ios_context.js) costs its minutes late at the level's minute. Shown, not ranked: `tech_level`,
+`crowd_curv`, `crowd_conf`, `fuel_since_km`, `free_min`, `fuel_check`, `fuel_stop`, `no_signal`, `album_ends`,
+`crew_start`. When a route is chosen, `ask_range` asks for the car's range once, `no_signal` stretches offer to save
+their maps (`offlineAreas`, `prepareOffline`) and `share_eta` offers Share ETA (cockpit `routeAftercare`). The cockpit
+passes the crowd provider `lookup` (GET /api/roads), the crews' shared lines and the taste fit, and the car provider
+`apiGet` (GET /api/chargers); the Driver's For this drive prefs (`apex.driverPrefs`) join the engine's prefs.
 
 ### Built by A
 
