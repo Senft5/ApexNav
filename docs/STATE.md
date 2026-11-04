@@ -1,5 +1,27 @@
 # VETTA — CURRENT AGENT HANDOFF STATE
 
+## Session 2026-11-05 (after the speed round): level cards and the map's labels (claude/level-cards)
+
+- [x] The route card's level is one control: three cards (Quick, Fun, Long way), each its pick of the routes already
+  found (time, corners); a tap puts it up with nothing planned again, the card you tapped held under your finger
+  (changeLevel's settle). The tile row and the switch are gone. Two levels on one route: both lit, the line under the
+  cards says so; a level the plan didn't look at (Long way after Fun) says "Look further" and plans on a tap. The swipe
+  steps through the cards' routes then up to two others, and the line says "Swipe the card for the next route, 2 of 3".
+  cockpit.js `paintLevelCards`, `takeLevel`, `destLevels`, `loopLevels`, `withLevels`; route_card.js `levelCards`,
+  `levelNote` (tests/test_route_card.py).
+- [x] The viewpoint / café / fuel stamps along a route collide and hide as the map moves, the most useful few kept
+  (scenic.js `declutter`, tests/test_scenic.py; cockpit.js `declutterPois`).
+- [x] ownRefine's weather swap could never run (useOption refused the copy it was handed); fixed (CALL_SHEET).
+- [x] e2e: plan flows (a), (e, f), (b) on the cards; a new flow checks the cards on the four safe-area phone shapes for a
+  destination and a loop (no wrap, nothing cut, clear of the island); the Dynamic Type floor covers the cards; a flow
+  piles a fuel stamp on every km and checks none overlap, the viewpoint shown, at most four fuel, more when zoomed in.
+- Full local e2e: 121/122 (all new and changed flows pass); "drag to reshape" fails, and fails the same on this branch's
+  base (9368196) and on main (bf40b1b): not this change. Bug: the drag's re-plan reaches the router without the new stop.
+- Open: the e2e loop stub builds one loop, so the loop flows see all three levels on one route; a stub with distinct
+  loops would test a loop's level change moving the route.
+- Exact next task: the owner looks at the cards on a real 90 mi loop; then, if wanted, a loop stub with three distinct
+  loops in e2e/smoke.js planRouter.
+
 ## Session 2026-11-05 (night): own routing, the speed round (claude/own-routing-fast)
 
 - [x] Final card on the tile ranking + background refresh; Explore from tiles; via-way restrictions; first route from

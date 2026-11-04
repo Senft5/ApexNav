@@ -1117,7 +1117,7 @@ flow('Dynamic Type (IN-1, GR-2): the route card, plan sheet, end card and the dr
     return {
       factH: f.getBoundingClientRect().height, cols: getComputedStyle(s).gridTemplateColumns.split(' ').length }; });
   const one = await size();
-  const cardFloor = await page.evaluate(FLOOR('#routeCard', '.fact, .route-meta, p.note, .linkbtn, .rc-tile span, .rc-progress'));
+  const cardFloor = await page.evaluate(FLOOR('#routeCard', '.fact, .route-meta, p.note, .linkbtn, .rc-levels > button > b, .rc-levels-note, .rc-levels > button.further .rc-lv, .rc-progress'));
   check(!cardFloor.length, 'the route card\'s floor: ' + JSON.stringify(cardFloor));
   await page.evaluate(TYPE_AT(2));
   const two = await size();
@@ -4857,6 +4857,9 @@ async function startTrack(page, ms) {
 }
 const cardUp = (page, timeout = 20000) => page.waitForFunction(() => { const p = document.getElementById('planPanel'), b = document.getElementById('routeDriveBtn').getBoundingClientRect();
   return p.classList.contains('open') && p.classList.contains('routed') && b.height > 0 && b.bottom <= innerHeight; }, null, { timeout });
+// the level cards (the owner, 2026-11-04): each card's words as read, and whether it is on (its pick is the route on screen)
+const levelCards = (page) => page.evaluate(() => [...document.querySelectorAll('#routeCardFun [data-fun]')].map((b) => ({ level: b.dataset.fun,
+  text: b.innerText.replace(/\s+/g, ' ').trim(), on: b.classList.contains('on'), checked: b.getAttribute('aria-checked') === 'true', further: b.classList.contains('further') })));
 const planDone = (page, timeout = 25000) => page.waitForFunction(() => !document.getElementById('planPanel').classList.contains('busy') && /\S/.test(document.getElementById('routeProgress').textContent), null, { timeout });
 const scan = async (page, where) => {
   await page.evaluate(() => { const st = document.querySelector('.stage'); if (st) st.scrollLeft = 0; });   // headless Chromium scrolls the stage sideways on a click into a field (TYPE_AT)
@@ -4888,10 +4891,16 @@ flow('plan flow (a) a destination in 3 taps: Where to?, the place, Start; Start 
   const shown = ys.filter((y) => y != null);
   check(shown.length === ys.length && Math.max(...shown) - Math.min(...shown) <= 1, 'Start stays put while the card fills in and the ranking lands: ' + JSON.stringify([...new Set(ys)]));
   const card = await page.evaluate(() => ({ note: document.getElementById('routeProgress').textContent, found: document.getElementById('routeProgress').classList.contains('found'),
-    tiles: [...document.querySelectorAll('#routeCardOptions .rc-tile')].map((t) => t.innerText.replace(/\s+/g, ' ')), name: apexDebug.track.name, h: document.getElementById('planPanel').getBoundingClientRect().height,
+    note2: document.getElementById('routeCardLevelsNote').textContent, name: apexDebug.track.name, h: document.getElementById('planPanel').getBoundingClientRect().height,
     stage: document.querySelector('.stage').getBoundingClientRect().height, dials: document.getElementById('routeCardBars').innerText.replace(/\s+/g, ' ') }));
   check(card.found && /^Better route found: \+\d+ min, \d+ more corners$/.test(card.note), 'the card says the ranked route replaced the first one, and why: ' + JSON.stringify(card));
-  check(card.tiles.length === 2 && card.tiles.every((t) => /\d+ corners?$/.test(t)) && !card.tiles.some((t) => /good corners/.test(t)), 'the tiles count corners as the card does: ' + JSON.stringify(card.tiles));
+  // one control: the level cards are the choices, each its pick's time and corners, counted as the card counts them
+  const cards = await levelCards(page);
+  check(cards.length === 3 && cards.filter((c) => !c.further).every((c) => /^(Quick|Fun|Long way) (\d+:\d\d|\d+ min) \d+ corners?$/i.test(c.text)) && !cards.some((c) => /good corners/i.test(c.text))
+    && cards.find((c) => c.level === 'fun').on && cards.find((c) => c.level === 'fun').checked, 'the level cards: each its pick, Fun on: ' + JSON.stringify(cards));
+  check(cards.find((c) => c.level === 'max').further && /^Long way Look further$/i.test(cards.find((c) => c.level === 'max').text), 'a plan at Fun didn\'t look as far as Long way, and its card says so, no numbers: ' + JSON.stringify(cards));
+  check(/swipe the card for the next route, 2\u00a0of\u00a02/i.test(card.note2), 'the line under the cards says what a swipe does: ' + card.note2);
+  check(await page.evaluate(() => !document.getElementById('routeCardOptions') && !document.querySelector('#routeCard .switch')), 'no separate tile row or switch');
   check(card.h <= 0.52 * card.stage, `the card opens at half height, the map above it (finding 10): ${Math.round(card.h)} of ${Math.round(card.stage)} px`);
   check(/CURVY/.test(card.dials) && /FLOWING/.test(card.dials) && !/TWIST|FLOW\b/.test(card.dials), 'plain words on the dials: ' + card.dials);
   await scan(page, 'the route card');
@@ -4900,7 +4909,7 @@ flow('plan flow (a) a destination in 3 taps: Where to?, the place, Start; Start 
   check(taps.n === 3, `a destination in 3 taps: ${taps.log.join(' → ')}`);
 }, IPHONE);
 
-flow('plan flow (e, f) a level change and an alternative are one tap or swipe each: the level re-ranks what is found, nothing planned again (finding 4, 11)', async (page, base) => {
+flow('plan flow (e, f) a level change and an alternative are one tap or swipe each: the level cards are the routes found, nothing planned again (finding 4, 11)', async (page, base) => {
   const asked = [];
   await planRouter(page, asked);
   const { cdp, taps, tap } = await planPage(page, base);
@@ -4909,7 +4918,7 @@ flow('plan flow (e, f) a level change and an alternative are one tap or swipe ea
   await tap('#placeList .place');
   await cardUp(page); await planDone(page);
   check(await page.evaluate(() => document.querySelectorAll('[data-fun]').length === 3 && !!document.querySelector('#routeCard [data-fun]')), 'the level has one home, the route card');
-  const level = () => page.evaluate(() => [...document.querySelectorAll('[data-fun]')].find((b) => b.getAttribute('aria-checked') === 'true').textContent);
+  const level = () => page.evaluate(() => [...document.querySelectorAll('[data-fun]')].find((b) => b.getAttribute('aria-checked') === 'true').querySelector('b').textContent);
   check(await level() === 'Fun', 'planned at Fun');
   // (the browser's own scroll anchoring off, as CI's Chromium in effect had it: only the app keeps the switch in place)
   await page.addStyleTag({ content: '#planBody { overflow-anchor: none !important; }' });
@@ -4923,54 +4932,68 @@ flow('plan flow (e, f) a level change and an alternative are one tap or swipe ea
   const routed = asked.length, t0 = taps.n;
   await page.evaluate(() => document.querySelector('#routeCardFun [data-fun="quick"]').scrollIntoView({ block: 'nearest' }));
   const sc0 = await page.evaluate(() => document.getElementById('planBody').scrollTop);
-  const sw0 = await page.evaluate(() => document.getElementById('routeCardFun').getBoundingClientRect().top);
-  // where the switch is the moment the finger lands (CI's sheet can still be settling between the line above and the tap,
-  // and the tap itself may scroll the switch into view): that, not sw0, is where it must stay
-  await page.evaluate(() => { window.__swTap = null; window.addEventListener('pointerdown', () => { window.__swTap = document.getElementById('routeCardFun').getBoundingClientRect().top; }, { capture: true, once: true }); });
-  await tap('#routeCardFun [data-fun="quick"]', 'Quick');
+  const card = (k) => `#routeCardFun [data-fun="${k}"]`;
+  const sw0 = await page.evaluate((sel) => document.querySelector(sel).getBoundingClientRect().top, card('quick'));
+  // the Quick card before the tap: the route it says it is, is the route you get
+  const quickSays = (await levelCards(page)).find((c) => c.level === 'quick');
+  // where the card you tap is the moment the finger lands (CI's sheet can still be settling between the line above and
+  // the tap, and the tap itself may scroll it into view): that, not sw0, is where it must stay
+  await page.evaluate((sel) => { window.__swTap = null; window.addEventListener('pointerdown', () => { window.__swTap = document.querySelector(sel).getBoundingClientRect().top; }, { capture: true, once: true }); }, card('quick'));
+  await tap(card('quick'), 'Quick');
   await page.waitForFunction(() => /^Quick: /.test(document.getElementById('routeProgress').textContent), null, { timeout: 5000 });
-  const after = await page.evaluate(() => ({ sc: document.getElementById('planBody').scrollTop, y: document.getElementById('routeDriveBtn').getBoundingClientRect().top, n: apexDebug.track.lat.length,
+  const after = await page.evaluate((sel) => ({ sc: document.getElementById('planBody').scrollTop, y: document.getElementById('routeDriveBtn').getBoundingClientRect().top, n: apexDebug.track.lat.length,
     note: document.getElementById('routeProgress').textContent, busy: document.getElementById('planPanel').classList.contains('busy'),
-    max: document.getElementById('planBody').scrollHeight - document.getElementById('planBody').clientHeight, sw: document.getElementById('routeCardFun').getBoundingClientRect().top }));
+    max: document.getElementById('planBody').scrollHeight - document.getElementById('planBody').clientHeight, sw: document.querySelector(sel).getBoundingClientRect().top,
+    time: document.querySelectorAll('#routeCardStats > div b')[1].textContent, corners: document.querySelectorAll('#routeCardStats > div b')[2].textContent }), card('quick'));
+  const quickNow = (await levelCards(page)).find((c) => c.level === 'quick');
+  check(quickNow.on && quickNow.checked && quickNow.text === quickSays.text && after.time.replace(/\D/g, '') === quickSays.text.split(' ')[1].replace(/\D/g, '')
+    && quickSays.text.toLowerCase().includes(` ${after.corners} corner`), 'the Quick card is on, and the route on the card is the one it said: ' + JSON.stringify({ quickSays, quickNow, after }));
   check(asked.length === routed, `Quick re-ranked the routes already found: the router was asked nothing (${asked.length - routed} requests)`);
   check(/of the \d+ routes found\)$/.test(after.note) && after.n !== before.n, 'the straight road is Quick\'s pick, and the card says why: ' + JSON.stringify(after));
   // the scroll is kept, never back to the top: the switch you tapped stays under your finger (the card above it may be
   // shorter for the new route, and the scroll follows it), and Start doesn't move
   const geo1 = await geo();
   const swTap = await page.evaluate(() => window.__swTap);
-  check(Math.abs(after.y - before.y) <= 1 && after.sc > 0 && swTap != null && Math.abs(after.sw - swTap) <= 2, `a level change keeps Start and the scroll where they were: ${JSON.stringify({ before, sc0, sw0, swTap, after, geo0, geo1 })}`);
+  check(Math.abs(after.y - before.y) <= 1 && after.sc > 0 && swTap != null && Math.abs(after.sw - swTap) <= 2, `a level change keeps Start and the scroll where they were, the card you tapped under your finger: ${JSON.stringify({ before, sc0, sw0, swTap, after, geo0, geo1 })}`);
   check(taps.n - t0 === 1, 'a level change is one tap');
-  // the same with the card shrinking late: 90 px above the switch go away 400 ms after the level change (as the card's
-  // slower parts settle on a slow machine); the switch must still stay under the finger
+  // the same with the card shrinking late: 90 px above the cards go away 400 ms after the level change (as the card's
+  // slower parts settle on a slow machine); the card you tapped must still stay under the finger
   await page.evaluate(() => { const f = document.getElementById('routeCardFun'), sp = document.createElement('div'); sp.id = 'lateSpacer'; sp.style.height = '90px'; f.parentNode.insertBefore(sp, f); });
   // (you scroll: the wheel, then the scroll; that ends the last change's hold)
   await page.evaluate(() => { const b = document.getElementById('planBody'); b.dispatchEvent(new WheelEvent('wheel', { bubbles: true })); b.scrollTop = Math.min(160, b.scrollHeight - b.clientHeight); });
   // and the page scrolls the card on its own meanwhile, as CI's did: the hold puts it back
   await page.evaluate(() => setTimeout(() => { document.getElementById('planBody').scrollTop += 40; }, 250));
-  const swL0 = await page.evaluate(() => document.getElementById('routeCardFun').getBoundingClientRect().top);
+  const swL0 = await page.evaluate((sel) => document.querySelector(sel).getBoundingClientRect().top, card('fun'));
   await page.evaluate(() => setTimeout(() => { const sp = document.getElementById('lateSpacer'); if (sp) sp.remove(); }, 400));
-  await tap('#routeCardFun [data-fun="fun"]', 'Fun');
+  await tap(card('fun'), 'Fun');
   await page.waitForFunction(() => /^Fun: /.test(document.getElementById('routeProgress').textContent) && !document.getElementById('lateSpacer'), null, { timeout: 5000 });
   await page.waitForTimeout(150);
-  const swL1 = await page.evaluate(() => document.getElementById('routeCardFun').getBoundingClientRect().top);
-  check(Math.abs(swL1 - swL0) <= 2, `the switch stays put when the card shrinks late: ${swL0} -> ${swL1}`);
-  await tap('#routeCardFun [data-fun="quick"]', 'Quick');
+  const swL1 = await page.evaluate((sel) => document.querySelector(sel).getBoundingClientRect().top, card('fun'));
+  check(Math.abs(swL1 - swL0) <= 2, `the card you tapped stays put when the card shrinks late: ${swL0} -> ${swL1}`);
+  await tap(card('quick'), 'Quick');
   await page.waitForFunction(() => /^Quick: /.test(document.getElementById('routeProgress').textContent), null, { timeout: 5000 });
-  await tap('#routeCardFun [data-fun="fun"]', 'Fun');
+  await tap(card('fun'), 'Fun');
   await page.waitForFunction(() => /^Fun: /.test(document.getElementById('routeProgress').textContent), null, { timeout: 5000 });
   check(asked.length === routed, 'and back to Fun, again from what was found');
   // you scroll down to the options (the wheel first, as a hand would): that ends the level change's hold on the scroll
   await page.evaluate(() => document.getElementById('planBody').dispatchEvent(new WheelEvent('wheel', { bubbles: true })));
-  // an alternative: one swipe sideways on the card (finding 11), then back with a tap on its tile
-  const tiles = () => page.evaluate(() => [...document.querySelectorAll('#routeCardOptions .rc-tile')].map((t) => t.getAttribute('aria-checked')).join());
-  check(await tiles() === 'true,false', 'two routes offered, the first picked: ' + await tiles());
-  const box = await page.evaluate(() => { const o = document.getElementById('routeCardOptions'); o.scrollIntoView({ block: 'nearest' }); const r = o.getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height / 2 }; });
+  // an alternative: one swipe sideways on the card (finding 11) steps through the routes found, the cards' picks in
+  // their order; the line under the cards says so. Fun is the last of the two found (Long way wasn't looked at): a swipe
+  // to the right goes back to the one before it, Quick's
+  const ons = () => page.evaluate(() => [...document.querySelectorAll('#routeCardFun [data-fun]')].map((b) => b.classList.contains('on')).join());
+  check(await ons() === 'false,true,false', 'two routes found, Fun\'s on: ' + await ons());
+  const hint = await page.evaluate(() => document.getElementById('routeCardLevelsNote').textContent);
+  check(/^Swipe the card for the next route, 2\u00a0of\u00a02$/.test(hint), 'the line under the cards says what a swipe does: ' + hint);
+  const box = await page.evaluate(() => { const o = document.getElementById('routeCardStats'); o.scrollIntoView({ block: 'nearest' }); const r = o.getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height / 2 }; });
+  const startY = await page.evaluate(() => document.getElementById('routeDriveBtn').getBoundingClientRect().top);
   await page.evaluate(() => { window.__touches = []; for (const k of ['touchstart', 'touchend']) document.getElementById('routeCard').addEventListener(k, (e) => window.__touches.push(k + ':' + Math.round((e.touches[0] || e.changedTouches[0]).clientX)), { passive: true }); });
-  await swipe(cdp, box.x + 100, box.y, -200, 6);
-  await page.waitForFunction(() => document.querySelectorAll('#routeCardOptions .rc-tile')[1].getAttribute('aria-checked') === 'true', null, { timeout: 8000 })
-    .catch(() => page.evaluate(() => ({ t: window.__touches, tiles: [...document.querySelectorAll('#routeCardOptions .rc-tile')].map((x) => x.getAttribute('aria-checked')), box: document.getElementById('routeCardStats').getBoundingClientRect().toJSON(), busy: document.getElementById('planPanel').className }))
+  await swipe(cdp, box.x - 100, box.y, 200, 6);
+  await page.waitForFunction(() => /^Quick: /.test(document.getElementById('routeProgress').textContent) && document.querySelector('#routeCardFun [data-fun="quick"]').classList.contains('on'), null, { timeout: 8000 })
+    .catch(() => page.evaluate(() => ({ t: window.__touches, on: [...document.querySelectorAll('#routeCardFun [data-fun]')].map((x) => x.className), box: document.getElementById('routeCardStats').getBoundingClientRect().toJSON(), busy: document.getElementById('planPanel').className }))
       .then((d) => { throw new Error('a swipe sideways picks the next route: ' + JSON.stringify(d)); }));
-  check(asked.length === routed, 'a swipe picks the other route already found');
+  check(asked.length === routed && await level() === 'Quick', 'a swipe picks the other route already found, and its level with it');
+  check(Math.abs(await page.evaluate(() => document.getElementById('routeDriveBtn').getBoundingClientRect().top) - startY) <= 1, 'Start doesn\'t move on a swipe');
+  check(/1\u00a0of\u00a02$/.test(await page.evaluate(() => document.getElementById('routeCardLevelsNote').textContent)), 'the line counts along');
   await scan(page, 'the card after a swipe');
 }, IPHONE);
 
@@ -4987,15 +5010,106 @@ flow('plan flow (b) a loop in 2 taps: Plan on the map, then Start; its progress 
   const card = await page.evaluate(() => ({ name: apexDebug.track.name, lengths: [...document.querySelectorAll('#cardLoopDetents button')].map((b) => b.textContent), lengthShown: !document.getElementById('routeCardLoop').hidden,
     level: !document.getElementById('routeCardFun').hidden, dial: [...document.querySelectorAll('#loopDetents button')].map((b) => b.textContent), note: document.getElementById('routeProgress').textContent }));
   check(/loop$/.test(card.name) && card.lengthShown && card.level, 'the loop\'s card: its length and its level: ' + JSON.stringify(card));
+  // a loop's level cards: every level looked at (the loops are built), each its pick's time and corners
+  const lcards = await levelCards(page);
+  check(lcards.every((c) => !c.further && /^(Quick|Fun|Long way) (\d+:\d\d|\d+ min) \d+ corners?$/i.test(c.text)) && lcards.find((c) => c.level === 'fun').on, 'the loop\'s level cards: ' + JSON.stringify(lcards));
   check(JSON.stringify(card.lengths) === '["15 mi","30 mi","45 mi","60 mi","90 mi"]' && JSON.stringify(card.dial) === JSON.stringify(card.lengths), 'one unit, yours, on the dial and the card: ' + JSON.stringify(card));
   check(/loop/.test(card.note), 'the card says what the loop search found: ' + card.note);
   await scan(page, 'the loop card');
-  // the level on a loop re-ranks the loops built
+  // the level on a loop: its card's pick of the loops built
+  const maxSays = lcards.find((c) => c.level === 'max');
   await page.click('#routeCardFun [data-fun="max"]');
   await page.waitForFunction(() => /^Long way: /.test(document.getElementById('routeProgress').textContent), null, { timeout: 5000 });
+  const maxNow = (await levelCards(page)).find((c) => c.level === 'max');
+  check(maxNow.on && maxNow.checked && maxNow.text === maxSays.text, 'Long way\'s card is on, its loop the one it said: ' + JSON.stringify({ maxSays, maxNow }));
   await tap('#routeDriveBtn', 'Start');
   await page.waitForFunction(() => window.apexDebug.driveActive && apexDebug.track && /loop$/.test(apexDebug.track.name), null, { timeout: 10000 });
   check(taps.n === 2, `a loop in 2 taps: ${taps.log.join(' → ')}`);
+}, IPHONE);
+
+flow('level cards: one control on the four phone shapes, a destination and a loop: each card its level, time and corners, a line each, nothing cut or under the island (the owner, 2026-11-04)', async (page, base) => {
+  await planRouter(page);
+  const { cdp } = await planPage(page, base);
+  // every card inside the screen and its row, its name, time and corners each on one line (no "11 min / quicker ·")
+  const fit = () => page.evaluate(() => {
+    const out = [], row = document.getElementById('routeCardFun').getBoundingClientRect();
+    for (const b of document.querySelectorAll('#routeCardFun [data-fun]')) {
+      const r = b.getBoundingClientRect();
+      if (r.left < -0.5 || r.right > innerWidth + 0.5 || r.right > row.right + 0.5) out.push(`${b.dataset.fun} off its row: ${Math.round(r.left)}-${Math.round(r.right)}`);
+      if (b.scrollWidth > b.clientWidth + 1) out.push(`${b.dataset.fun} cut: ${b.scrollWidth}/${b.clientWidth}`);
+      for (const e of b.querySelectorAll(b.classList.contains('further') ? 'b' : 'b, .rc-lv > i')) {
+        const er = e.getBoundingClientRect(), fs = parseFloat(getComputedStyle(e).fontSize);
+        if (er.height > fs * 1.6) out.push(`${b.dataset.fun} wraps: "${e.textContent}" ${Math.round(er.height)} px at ${fs} px`);
+        if (er.right > r.right + 0.5) out.push(`${b.dataset.fun} spills: "${e.textContent}"`);
+      }
+    }
+    return out; });
+  const shapes = async (kind) => {
+    for (const [orient, d] of Object.entries(SAFE)) {
+      await page.setViewportSize({ width: d.w, height: d.h });
+      await cdp.send('Emulation.setSafeAreaInsetsOverride', { insets: d.i });
+      await page.waitForTimeout(500);
+      await page.evaluate(() => { document.querySelector('.stage') && (document.querySelector('.stage').scrollLeft = 0); document.getElementById('routeCardFun').scrollIntoView({ block: 'nearest' }); });
+      await page.waitForTimeout(200);
+      const bad = await fit();
+      check(!bad.length, `${kind}, ${orient}: the level cards read at a glance: ${JSON.stringify(bad)}`);
+      const under = (await unsafe(page, d)).filter((b) => /Quick|Fun|Long way|corners|Swipe/i.test(b));
+      check(!under.length, `${kind}, ${orient}: the level cards clear the island, the home bar and the corners:\n  ${under.join('\n  ')}`);
+      if (process.env.SHOTS) await page.screenshot({ path: `${process.env.SHOTS}/level-cards-${kind}-${orient.replace(/\W+/g, '-')}.png` });
+    }
+    await page.setViewportSize({ width: 390, height: 844 });
+    await cdp.send('Emulation.setSafeAreaInsetsOverride', { insets: SAFE.portrait.i });
+    await page.waitForTimeout(400);
+  };
+  // a destination: Quick and Fun found, Long way not looked at
+  await page.click('#destInput'); await page.fill('#destInput', 'Maryville');
+  await page.waitForSelector('#placeList .place', { timeout: 10000 });
+  await page.click('#placeList .place');
+  await page.setViewportSize({ width: 390, height: 844 });
+  await cardUp(page); await planDone(page); await page.waitForTimeout(600);
+  if (process.env.SHOTS) { require('fs').mkdirSync(process.env.SHOTS, { recursive: true }); await page.screenshot({ path: `${process.env.SHOTS}/destination-card.png` }); }
+  await shapes('destination');
+  // a loop: every level looked at
+  await page.evaluate(() => sessionStorage.clear());                    // (the planned route would come back on the reload)
+  await page.goto(base + '/index.html');
+  await page.waitForFunction(() => window.apexDebug && window.apexDebug.map && window.apex && !document.getElementById('boot'), null, { timeout: 20000 });
+  await page.waitForFunction(() => getComputedStyle(document.getElementById('loopSuggest')).display !== 'none', null, { timeout: 10000 });
+  await page.click('#loopSuggestGo');
+  await cardUp(page, 30000); await planDone(page, 30000); await page.waitForTimeout(600);
+  const cards = await levelCards(page);
+  check(cards.every((c) => !c.further), 'a loop\'s three levels are all looked at: ' + JSON.stringify(cards));
+  if (process.env.SHOTS) await page.screenshot({ path: `${process.env.SHOTS}/loop-card.png` });
+  await shapes('loop');
+}, IPHONE);
+
+flow('the map\'s viewpoint, café and fuel stamps along a route never pile up: overlapping ones hide, the most useful few kept (the owner, 2026-11-04)', async (page, base) => {
+  await planRouter(page);
+  await planPage(page, base);
+  // a fuel station at every km of the route (a pile at the whole route's zoom), a café and a named viewpoint mid-way
+  await page.evaluate(() => { ApexStages.pois = async (pts) => { const mid = pts[Math.floor(pts.length / 2)];
+    return [...pts.map((p) => ({ kind: 'fuel', name: null, lat: p.lat, lon: p.lon })), { kind: 'cafe', name: 'Bean', lat: mid.lat, lon: mid.lon }, { kind: 'view', name: 'Big Overlook', lat: mid.lat, lon: mid.lon }]; }; });
+  await page.click('#destInput'); await page.fill('#destInput', 'Maryville');
+  await page.waitForSelector('#placeList .place', { timeout: 10000 });
+  await page.click('#placeList .place');
+  await cardUp(page); await planDone(page);
+  await page.waitForFunction(() => document.querySelectorAll('.poi-pin.poi-fuel').length >= 10, null, { timeout: 10000 });
+  await page.evaluate(() => apexDebug.map.fitBounds([[Math.min(...apexDebug.track.lon), Math.min(...apexDebug.track.lat)], [Math.max(...apexDebug.track.lon), Math.max(...apexDebug.track.lat)]], { padding: 20, duration: 0 }));
+  const shown = () => page.evaluate(() => { const W = innerWidth, H = innerHeight;
+    return [...document.querySelectorAll('.poi-pin')].filter((e) => getComputedStyle(e).visibility !== 'hidden' && getComputedStyle(e).display !== 'none')
+      .map((e) => ({ kind: ['fuel', 'cafe', 'view'].find((k) => e.classList.contains('poi-' + k)), text: e.textContent, r: e.getBoundingClientRect().toJSON() })).filter((p) => p.r.right > 0 && p.r.left < W && p.r.bottom > 0 && p.r.top < H); });
+  await page.waitForTimeout(300);
+  const far = await shown();
+  const overlap = (a, b) => a.r.left < b.r.right && b.r.left < a.r.right && a.r.top < b.r.bottom && b.r.top < a.r.bottom;
+  const pairs = far.flatMap((a, i) => far.slice(i + 1).filter((b) => overlap(a, b)).map((b) => `${a.text} / ${b.text}`));
+  const total = await page.evaluate(() => document.querySelectorAll('.poi-pin.poi-fuel').length);
+  check(!pairs.length, 'no two stamps overlap: ' + JSON.stringify(pairs));
+  check(far.filter((p) => p.kind === 'fuel').length <= 4 && far.filter((p) => p.kind === 'fuel').length >= 1 && far.some((p) => p.text === 'Big Overlook'),
+    `the most useful few: the viewpoint, at most four of the ${total} fuel stamps: ` + JSON.stringify(far.map((p) => p.text)));
+  // closer in, the stamps that were hidden come back where there is room
+  await page.evaluate(() => apexDebug.map.jumpTo({ center: [apexDebug.track.lon[0], apexDebug.track.lat[0]], zoom: 15 }));
+  await page.waitForTimeout(300);
+  const near = await shown();
+  check(near.some((p) => p.kind === 'fuel'), 'zoomed in, a fuel stamp hidden at the whole route\'s zoom is shown: ' + JSON.stringify(near.map((p) => p.text)));
 }, IPHONE);
 
 flow('plan flow (c) best roads nearby in 3 taps: the chip under Where to?, a road in a list with named columns, Start (finding 7)', async (page, base) => {
