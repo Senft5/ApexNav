@@ -4,6 +4,7 @@
 import { Env, HttpError, body } from "./util";
 import type { Viewer } from "./auth";
 import { isoWeek } from "./points";
+import { serverFlag } from "./flags";
 
 export const LIMITS = { maxBins: 2000, minBins: 20, maxAgeDays: 14, kmPerDay: 600, kmPerWeek: 1500, uploadsPerHour: 300, minCoverage: 0.6 };
 const BIN_KM = 0.005;
@@ -14,9 +15,16 @@ const BIN_KM = 0.005;
  */
 export const CAM_V = 2;
 
-/** crest: the bin's peak unweighting in g (0 = none, 1 = weightless over the top), null when the phone did not measure it. */
-export interface Bin { i: number; cam: number | null; rough: number; crest: number | null; k: number | null }
-export interface Contribution { wayId: number; dir: 0 | 1; drivenOn: string; driveId: string; bins: Bin[]; km: number; shape: [number, number][] | null; cls: RoadClass | null; lenM: number | null }
+/**
+ * crest: the bin's peak unweighting in g (0 = none, 1 = weightless over the top), null when the phone did not measure it.
+ * fl: flow, the pass's speed steadiness over about 40 m (1 even, 0 stopped or stop-start), a ratio that holds no speed;
+ * hb: 1 when the pass braked hard there with no corner ahead to explain it. Both null from builds that don't send them.
+ */
+export interface Bin { i: number; cam: number | null; rough: number; crest: number | null; k: number | null; fl: number | null; hb: 0 | 1 | null }
+/** rec: from a recorded drive (the driver pressed Start), not ambient sharing. hr: the pass's busy-time bucket (0..11), only kept
+ *  while the quiet_hours flag is on (flags.ts); null otherwise. */
+export interface Contribution { wayId: number; dir: 0 | 1; drivenOn: string; driveId: string; bins: Bin[]; km: number; shape: [number, number][] | null; cls: RoadClass | null; lenM: number | null;
+  rec: boolean; hr: number | null }
 
 /** Valhalla's road classes (the phone's map match, `edge.road_class`); anything else is stored as unknown (null). */
 export const ROAD_CLASSES = ["motorway", "trunk", "primary", "secondary", "tertiary", "unclassified", "residential", "service_other", "track"] as const;
@@ -51,7 +59,11 @@ export function validateContribution(raw: Record<string, unknown>, nowMs = Date.
     const crest = b.crest === null || b.crest === undefined ? null : b.crest;        // a phone with no crest sensor says so
     if (crest !== null && !isNum(crest, 0, 3)) throw bad("bad_crest");
     if (b.k !== null && !isNum(b.k, -0.2, 0.2)) throw bad("bad_curvature");          // null = curvature unknown; radius under 5 m is not a road
-    out.push({ i, cam: camTrusted ? cam : null, rough: b.rough, crest, k: b.k });   // an old build's camber: validated, then unknown
+    const fl = b.fl === null || b.fl === undefined ? null : b.fl;                      // an older build sends no flow: unknown
+    if (fl !== null && !isNum(fl, 0, 1)) throw bad("bad_flow");
+    const hb = b.hb === null || b.hb === undefined ? null : b.hb;
+    if (hb !== null && hb !== 0 && hb !== 1) throw bad("bad_brake");
+    out.push({ i, cam: camTrusted ? cam : null, rough: b.rough, crest, k: b.k, fl: fl === null ? null : Math.round(fl * 1000) / 1000, hb: hb as 0 | 1 | null });   // an old build's camber: validated, then unknown
   }
   const lo = Math.min(...seen), hi = Math.max(...seen);
   if (out.length / (hi - lo + 1) < LIMITS.minCoverage) throw bad("not_contiguous");   // real drives cover a run of the road, not scattered bins
@@ -59,7 +71,9 @@ export function validateContribution(raw: Record<string, unknown>, nowMs = Date.
   // the way's length for the open-road rule (roads.ts): its line's, or at least as far along it as the bins reach (the
   // phone counts 5 m bins along the full OSM line; the line it sends is simplified, so a little shorter)
   const lenM = shape ? Math.round(Math.max(shapeLength(shape), (hi + 1) * 5)) : null;
-  return { wayId, dir, drivenOn: day, driveId, bins: out, km: out.length * BIN_KM, shape, cls: roadClass(raw.cls), lenM };
+  const hr = raw.hr === null || raw.hr === undefined ? null : raw.hr;
+  if (hr !== null && !(typeof hr === "number" && Number.isInteger(hr) && hr >= 0 && hr <= 11)) throw bad("bad_hour_bucket");
+  return { wayId, dir, drivenOn: day, driveId, bins: out, km: out.length * BIN_KM, shape, cls: roadClass(raw.cls), lenM, rec: raw.rec === 1 || raw.rec === true, hr: hr as number | null };
 }
 
 const MAX_SHAPE = 64;
@@ -132,9 +146,10 @@ function mergeBin(env: Env, wayId: number, dir: number, b: Bin, day: string): D1
   const reset = `(${smoother} AND smooth_run + 1 >= ${FRESH.repavePasses})`;
   const cam = meanSql("camber_mean", "camber_m2", "camber_n", "?4"), rough = meanSql("rough_mean", "rough_m2", "n", "?5");
   return env.DB.prepare(
-    `INSERT INTO road_bins (way_id, dir, bin_idx, n, camber_mean, camber_m2, camber_n, rough_mean, rough_m2, crest_peak, crest_n, last_on, smooth_run, k_mean, k_n)
+    `INSERT INTO road_bins (way_id, dir, bin_idx, n, camber_mean, camber_m2, camber_n, rough_mean, rough_m2, crest_peak, crest_n, last_on, smooth_run, k_mean, k_n,
+                            flow_mean, brake_mean, flow_n)
      VALUES (?1, ?2, ?3, 1, ?4, CASE WHEN ?4 IS NULL THEN NULL ELSE 0 END, CASE WHEN ?4 IS NULL THEN 0 ELSE 1 END, ?5, 0, ?6, CASE WHEN ?6 IS NULL THEN 0 ELSE 1 END, ?7, 0,
-             ?8, CASE WHEN ?8 IS NULL THEN 0 ELSE 1 END)
+             ?8, CASE WHEN ?8 IS NULL THEN 0 ELSE 1 END, ?9, CASE WHEN ?9 IS NULL THEN NULL ELSE ?10 END, CASE WHEN ?9 IS NULL THEN 0 ELSE 1 END)
      ON CONFLICT (way_id, dir, bin_idx) DO UPDATE SET
        camber_mean = CASE WHEN ${reset} THEN ?4 WHEN ?4 IS NULL THEN camber_mean WHEN camber_n = 0 OR camber_mean IS NULL THEN ?4 ELSE ${cam.mean} END,
        camber_m2   = CASE WHEN ${reset} THEN CASE WHEN ?4 IS NULL THEN NULL ELSE 0 END WHEN ?4 IS NULL THEN camber_m2 WHEN camber_n = 0 OR camber_mean IS NULL THEN 0 ELSE ${cam.m2} END,
@@ -148,10 +163,14 @@ function mergeBin(env: Env, wayId: number, dir: number, b: Bin, day: string): D1
        -- the road's shape (IDEAS Q-04) doesn't change when it's repaved: never reset
        k_mean      = CASE WHEN ?8 IS NULL THEN k_mean WHEN k_n = 0 OR k_mean IS NULL THEN ?8 ELSE k_mean + (?8 - k_mean) / (MIN(k_n, ${FRESH.memory}) + 1) END,
        k_n         = k_n + (?8 IS NOT NULL),
+       -- flow (how members drive it, not the pavement): like the road's shape, never reset by repaving
+       flow_mean   = CASE WHEN ?9 IS NULL THEN flow_mean WHEN flow_n = 0 OR flow_mean IS NULL THEN ?9 ELSE flow_mean + (?9 - flow_mean) / (MIN(flow_n, ${FRESH.memory}) + 1) END,
+       brake_mean  = CASE WHEN ?9 IS NULL THEN brake_mean WHEN flow_n = 0 OR brake_mean IS NULL THEN ?10 ELSE brake_mean + (?10 - brake_mean) / (MIN(flow_n, ${FRESH.memory}) + 1) END,
+       flow_n      = flow_n + (?9 IS NOT NULL),
        smooth_run  = CASE WHEN ${reset} THEN 0 WHEN ${smoother} THEN smooth_run + 1 ELSE 0 END,
        last_on     = MAX(COALESCE(last_on, ''), ?7),
        n           = CASE WHEN ${reset} THEN 1 ELSE n + 1 END`,
-  ).bind(wayId, dir, b.i, b.cam, b.rough, b.crest, day, b.k);
+  ).bind(wayId, dir, b.i, b.cam, b.rough, b.crest, day, b.k, b.fl, b.fl === null ? null : (b.hb ?? 0));
 }
 
 /**
@@ -159,13 +178,14 @@ function mergeBin(env: Env, wayId: number, dir: number, b: Bin, day: string): D1
  * Points are earned on a person's FIRST drive on a road only (later drives still improve the data, they just do not pay again).
  * A drive's later chunks keep the multiplier its first chunk earned. Returns 0 when nothing is owed.
  */
-async function multiplierFor(env: Env, userId: string, c: Contribution): Promise<number> {
+async function multiplierFor(env: Env, userId: string, c: Contribution): Promise<{ mult: number; again: boolean; holder: Uint8Array }> {
   const holder = await hmac(env, `p|${userId}|${c.wayId}|${c.dir}`), drive = await hmac(env, `d|${userId}|${c.driveId}`);
   const slot = await env.DB.prepare("SELECT slot FROM rank_slots WHERE way_id = ? AND dir = ? AND holder = ?").bind(c.wayId, c.dir, holder.buffer).first<{ slot: number }>();
   const seen = await env.DB.prepare("SELECT d FROM seen WHERE h = ?").bind(holder.buffer).first<{ d: ArrayBuffer | null }>();
   if (seen) {
     const same = seen.d && new Uint8Array(seen.d).every((v, i) => v === drive[i]) && new Uint8Array(seen.d).length === drive.length;
-    return same ? (slot ? MULTIPLIER[slot.slot - 1] : 1) : 0;                          // another drive of the same road already paid
+    // another drive of the same road already paid; on a recorded drive that is someone coming back to it (loved roads)
+    return same ? { mult: slot ? MULTIPLIER[slot.slot - 1] : 1, again: false, holder } : { mult: 0, again: c.rec, holder };
   }
   let mult = 1;
   for (let s = 1; s <= MULTIPLIER.length; s++) {                                       // the primary key makes the claim atomic
@@ -179,7 +199,33 @@ async function multiplierFor(env: Env, userId: string, c: Contribution): Promise
     }
   }
   await env.DB.prepare("INSERT OR IGNORE INTO seen (h, d) VALUES (?, ?)").bind(holder.buffer, drive.buffer).run();
-  return mult;
+  return { mult, again: false, holder };
+}
+
+/**
+ * Loved roads (crowd.js): a member back on a road+direction on another recorded drive counts once, ever (a `seen` marker per
+ * person and road), into road_love. No person, day or drive is stored with it.
+ */
+async function countAgain(env: Env, userId: string, c: Contribution): Promise<void> {
+  const mark = await hmac(env, `a|${userId}|${c.wayId}|${c.dir}`);
+  const r = await env.DB.prepare("INSERT OR IGNORE INTO seen (h) VALUES (?)").bind(mark.buffer).run();
+  if (!r.meta.changes) return;
+  await env.DB.prepare("INSERT INTO road_love (way_id, dir, again_n) VALUES (?, ?, 1) ON CONFLICT (way_id, dir) DO UPDATE SET again_n = again_n + 1").bind(c.wayId, c.dir).run();
+}
+
+/**
+ * Busy times (IDEAS R-36): only while the quiet_hours flag is on (default off, the owner's open decision). One count per drive
+ * per road+direction in its 4-hour bucket, and the person's hmac (never their id) so a road shows times only once 5+ drove it.
+ */
+async function countHour(env: Env, userId: string, c: Contribution, holder: Uint8Array): Promise<void> {
+  if (c.hr === null || !serverFlag(env, "quiet_hours")) return;
+  const once = await hmac(env, `h|${userId}|${c.driveId}|${c.wayId}|${c.dir}`);
+  const r = await env.DB.prepare("INSERT OR IGNORE INTO seen (h) VALUES (?)").bind(once.buffer).run();
+  if (!r.meta.changes) return;
+  await env.DB.batch([
+    env.DB.prepare("INSERT INTO road_hours (way_id, dir, bucket, n) VALUES (?, ?, ?, 1) ON CONFLICT (way_id, dir, bucket) DO UPDATE SET n = n + 1").bind(c.wayId, c.dir, c.hr),
+    env.DB.prepare("INSERT OR IGNORE INTO road_hour_holders (way_id, dir, holder) VALUES (?, ?, ?)").bind(c.wayId, c.dir, holder.buffer),
+  ]);
 }
 
 /**
@@ -219,7 +265,7 @@ export async function contribute(env: Env, v: Viewer, req: Request): Promise<{ a
   const week = await sum("SELECT 0 AS u, COALESCE(SUM(km), 0) AS k FROM upload_counts WHERE user_id = ? AND bucket >= ?", v.id, new Date(now.getTime() - 7 * 86400_000).toISOString().slice(0, 13));
   if ((week?.k ?? 0) + c.km > LIMITS.kmPerWeek) throw new HttpError(429, "weekly_km_cap");
 
-  const mult = await multiplierFor(env, v.id, c);
+  const { mult, again, holder } = await multiplierFor(env, v.id, c);
   const stmts: D1PreparedStatement[] = [
     env.DB.prepare("INSERT INTO seen (h) VALUES (?)").bind(chunk.buffer),                                  // fails (409 below) if a parallel copy won the race
     ...c.bins.map((b) => mergeBin(env, c.wayId, c.dir, b, c.drivenOn)),
@@ -248,5 +294,7 @@ export async function contribute(env: Env, v: Viewer, req: Request): Promise<{ a
     throw new HttpError(503, "contribution_temporarily_unavailable");
   }
   await payReferral(env, v.id, now);
+  if (again) await countAgain(env, v.id, c);
+  await countHour(env, v.id, c, holder);
   return { accepted: true, bins: c.bins.length };
 }

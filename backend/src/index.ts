@@ -25,11 +25,13 @@ import { decalsPlace } from "./livery";
 import { presencePublish, presenceSettingsGet, presenceSettingsPut, presenceView } from "./presence";
 import { buildChatDelete, buildChatList, buildChatPost, buildCreate, buildDelete, buildFind, buildFollow, buildGet, buildUpdate, buildsFollowing, postCreate, postDelete, replyCreate, replyDelete, replyTried } from "./builds";
 import { photoDelete, photoList, photoServe, photoUpload, photoUse } from "./photos";
+import { ctxServe } from "./context_grid";
 import { block, blockList, fileReport, isModerator, moderationQueue, moderationResolve, report, unblock } from "./safety";
 import { contribute, setContribute } from "./contribute";
 import { pointsFor } from "./points";
 import { redeem, shop } from "./redeem";
 import { flagsFor } from "./flags";
+import { ctxKeys, workzones } from "./route_feeds";
 import { grantedThemes } from "./themes";
 import { coverage, exportRoads, roadBins } from "./roads";
 import { crewStandings } from "./standings";
@@ -43,6 +45,8 @@ import { STATS_SAMPLE, recordStat, statsSummary } from "./stats";
 import { etaStart, etaUpdate, etaView } from "./eta_share";
 import { highlightCreate, highlightDelete, highlightList, highlightRate } from "./highlights";
 export { ConvoyIndex, ConvoyRoom } from "./convoy";
+import { crewHomeSet, crewMeetCells } from "./crew_meet";
+import { chargers } from "./chargers";
 import { segmentAdopt, segmentCreate, segmentDelete, segmentList, segmentShare, segmentsSharedWithMe } from "./segments";
 
 type Handler = (req: Request, env: Env, m: RegExpMatchArray) => Promise<Response>;
@@ -113,6 +117,8 @@ on("PUT", "/api/me/contribute", async (req, env) => { await setContribute(env, a
 on("POST", "/api/contribute", async (req, env) => json(await contribute(env, await requireMember(req, env), req), 202));
 
 on("GET", "/api/roads", async (req, env) => { await requireMember(req, env); return json(await roadBins(env, new URL(req.url))); });
+// EV chargers by 0.25-degree tile for fuel-stop spacing (chargers.ts; route_ctx/car.js): members only, the key stays here
+on("GET", "/api/chargers", async (req, env) => { await requireMember(req, env); return json(await chargers(env, new URL(req.url))); });
 on("GET", "/api/coverage", async (req, env) => { await requireMember(req, env); return json(await coverage(env, new URL(req.url))); });
 // The road-data export (docs/ROAD_DATA.md): the owner only, for a pilot; anyone else gets a plain 404.
 on("GET", "/api/ops/roads.geojson", async (req, env) => {
@@ -121,6 +127,9 @@ on("GET", "/api/ops/roads.geojson", async (req, env) => {
 });
 on("GET", "/api/points", async (req, env) => json(await pointsFor(env, (await requireMember(req, env)).id)));
 on("GET", "/api/flags", async (req, env) => json(await flagsFor(env, req)));
+// Work zones from state feeds without CORS (web/route_ctx/hazards_live.js); 0.5° tiles only, nothing kept.
+on("GET", "/api/ctx/workzones", async (req) => workzones(req));
+on("GET", "/api/ctx/keys", async (_req, env) => ctxKeys(env));
 on("GET", "/api/shop", async (req, env) => json(await shop(env, await requireMember(req, env))));
 on("POST", "/api/redeem", async (req, env) => json(await redeem(env, await requireMember(req, env), req)));
 
@@ -170,6 +179,9 @@ on("GET", "/api/crews/:id/chat", async (req, env, m) => json(await chatList(env,
 on("POST", "/api/crews/:id/chat", async (req, env, m) => json(await chatPost(env, await requireMember(req, env), m.groups!.id, req), 201));
 on("DELETE", "/api/crews/:id/chat/:msg", async (req, env, m) => { await chatDelete(env, await requireMember(req, env), m.groups!.id, m.groups!.msg); return noContent(); });
 on("GET", "/api/crews/:id/members", async (req, env, m) => json(await crewMembers(env, await requireMember(req, env), m.groups!.id)));
+// fair meeting points (crew_meet.ts): your rough home area for this crew, opt-in; the crew's cells without names
+on("PUT", "/api/crews/:id/home", async (req, env, m) => json(await crewHomeSet(env, await requireMember(req, env), m.groups!.id, req)));
+on("GET", "/api/crews/:id/meet", async (req, env, m) => json(await crewMeetCells(env, await requireMember(req, env), m.groups!.id)));
 on("POST", "/api/crews/join", async (req, env) => json(await crewJoin(env, await requireMember(req, env), req)));
 on("POST", "/api/crews/invite/preview", async (req, env) => json(await crewInvitePreview(env, await requireMember(req, env), req)));
 on("POST", "/api/crews/:id/invite", async (req, env, m) => json(await crewInvite(env, await requireMember(req, env), m.groups!.id), 201));
@@ -214,6 +226,9 @@ on("GET", "/api/presence/settings", async (req, env) => json(await presenceSetti
 on("PUT", "/api/presence/settings", async (req, env) => { await presenceSettingsPut(env, await requireMember(req, env), req); return noContent(); });
 on("GET", "/api/presence", async (req, env) => json(await presenceView(env, await requireMember(req, env))));
 on("POST", "/api/presence", async (req, env) => { await presencePublish(env, await requireMember(req, env), req); return noContent(); });
+// the context grid's wider region (src/context_grid.ts): public data, bundled per ~150 km tile
+on("GET", "/api/ctx/v1/index.json", (_req, env) => ctxServe(env, "v1/index.json"));
+on("GET", "/api/ctx/v1/8/:x/:y", (_req, env, m) => ctxServe(env, `v1/8/${m.groups!.x}/${m.groups!.y}`));
 // photos (src/photos.ts, REVIEW.md 5.2): JPEG in, metadata out; members only
 on("POST", "/api/photos", async (req, env) => json(await photoUpload(env, await requireMember(req, env), req), 201));
 on("GET", "/api/photos", async (req, env) => json(await photoList(env, await requireMember(req, env), new URL(req.url))));

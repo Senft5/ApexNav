@@ -1,0 +1,145 @@
+{
+ "version": 0.6,
+ "generator": "Overpass API 0.7.62.11 87bfad18",
+ "osm3s": {
+  "timestamp_osm_base": "2026-07-28T02:16:18Z",
+  "copyright": "The data included in this document is from www.openstreetmap.org. The data is made available under ODbL."
+ },
+ "elements": [
+  {
+   "type": "node",
+   "id": 11291172648,
+   "lat": 35.76536,
+   "lon": -83.9909381,
+   "tags": {
+    "amenity": "fuel",
+    "brand": "Weigel's",
+    "brand:wikidata": "Q7979844",
+    "name": "Weigel's",
+    "website": "https://weigels.com/store/store-92/"
+   }
+  },
+  {
+   "type": "node",
+   "id": 4440969927,
+   "lat": 35.7635785,
+   "lon": -83.9905569,
+   "tags": {
+    "amenity": "fuel"
+   }
+  },
+  {
+   "type": "node",
+   "id": 12696372118,
+   "lat": 35.7704307,
+   "lon": -83.9887968,
+   "tags": {
+    "amenity": "fuel",
+    "brand": "Murphy Express",
+    "brand:wikidata": "Q19604459",
+    "name": "Murphy Express"
+   }
+  },
+  {
+   "type": "node",
+   "id": 11293827841,
+   "lat": 35.7548653,
+   "lon": -83.9514719,
+   "tags": {
+    "amenity": "fuel"
+   }
+  },
+  {
+   "type": "node",
+   "id": 11293827896,
+   "lat": 35.7792582,
+   "lon": -83.9508659,
+   "tags": {
+    "amenity": "fuel",
+    "brand": "76",
+    "brand:wikidata": "Q1658320",
+    "name": "76",
+    "website": "https://www.76.com/station/U76-NEIGHBORHOOD-MARKET-0000892852/"
+   }
+  },
+  {
+   "type": "way",
+   "id": 747064525,
+   "center": {
+    "lat": 35.7517102,
+    "lon": -83.9862407
+   },
+   "nodes": [
+    6990411924,
+    6990411925,
+    6990411926,
+    6990411927,
+    14028638903,
+    6990411928,
+    14028635098,
+    6990411929,
+    6990411930,
+    14028635099,
+    14028635097,
+    14028635096,
+    14028635093,
+    6990411931,
+    6990411932,
+    14028635094,
+    14028635095,
+    6990411933,
+    14028638902,
+    6990411934,
+    6990411935,
+    6990411924
+   ],
+   "tags": {
+    "amenity": "fuel",
+    "brand": "Shell",
+    "brand:wikidata": "Q154950",
+    "name": "Shell",
+    "self_service": "yes"
+   }
+  },
+  {
+   "type": "way",
+   "id": 558845988,
+   "center": {
+    "lat": 35.7637807,
+    "lon": -83.970457
+   },
+   "nodes": [
+    5390166848,
+    5390166849,
+    5390166850,
+    5390166851,
+    5390166848
+   ],
+   "tags": {
+    "amenity": "fuel",
+    "compressed_air": "yes",
+    "name": "Kroger Fuel"
+   }
+  },
+  {
+   "type": "way",
+   "id": 1123940221,
+   "center": {
+    "lat": 35.7925154,
+    "lon": -83.9911878
+   },
+   "nodes": [
+    10278527247,
+    10278527248,
+    10278527249,
+    10278527250,
+    10278527251,
+    10278527252,
+    10278527247
+   ],
+   "tags": {
+    "amenity": "fuel"
+   }
+  }
+ ]
+}

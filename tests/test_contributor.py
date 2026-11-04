@@ -152,7 +152,7 @@ def test_eligibility_window(result):
 
 def test_payload_has_no_drive_coordinates_or_times(result):
     assert result["shape"] is True
-    assert result["keys"] == "bins,cam_v,cls,dir,drive_id,driven_on,shape,way_id|cam,crest,i,k,rough"
+    assert result["keys"] == "bins,cam_v,cls,dir,drive_id,driven_on,rec,shape,way_id|cam,crest,fl,hb,i,k,rough"
     assert result["cls"] == "tertiary", "the map match's road class goes with it (the server's open-road rule)"
 
 
@@ -173,7 +173,7 @@ def test_network_shell_matches_fetches_and_uploads_bins_only(result):
     sh = result["shell"]
     assert sh["res"] == {"built": 1, "sent": 1} and sh["posted"] == 1
     assert sh["valhalla"] == 1 and sh["overpass"] == 1
-    assert sh["keys"] == "bins,cam_v,cls,dir,drive_id,driven_on,shape,way_id"
+    assert sh["keys"] == "bins,cam_v,cls,dir,drive_id,driven_on,rec,shape,way_id"
 
 
 def test_server_refusal_stops_uploading(result):
@@ -339,7 +339,7 @@ def test_live_never_sends_first_or_last_km(live):
     n = live["normal"]
     assert n["lo"] >= 200 - 1 and n["hi"] <= 1200 - 200 + 1          # rows 0-199 and the last 200 rows never leave the phone
     assert n["n"] == n["unique"] and n["n"] >= 780                    # about 800 settled rows, none sent twice
-    assert n["ids"] == ["d_live_test_01"] and n["keys"] == "bins,cam_v,cls,dir,drive_id,driven_on,shape,way_id"
+    assert n["ids"] == ["d_live_test_01"] and n["keys"] == "bins,cam_v,cls,dir,drive_id,driven_on,rec,shape,way_id"
     assert n["overpass"] == 1 and n["firstState"] == "on"             # way geometry fetched once, then cached
 
 

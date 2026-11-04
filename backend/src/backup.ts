@@ -5,6 +5,7 @@ import { Env } from "./util";
 
 export const KEEP = 8;                         // weekly copies kept: two months
 export const MAX_BYTES = 24 * 1024 * 1024;     // under KV's 25 MiB value limit
+export const META_MAX = 1000;                   // under KV's 1024-byte metadata limit
 const PAGE = 1000;
 
 interface Column { name: string; pk: number }
@@ -86,7 +87,12 @@ export async function backupDatabase(env: Env, now = new Date()): Promise<string
     return null;
   }
   const key = `d1/apexnav-db/${day}.sql`;
-  await env.BACKUPS.put(key, sql, { metadata: { bytes, counts, at: now.toISOString() } });
+  // KV metadata holds at most 1024 bytes: the counts of every table outgrew it (migration 0045 added three, and the put failed),
+  // so only tables with rows are listed, and past META_MAX only the totals (the dump itself is whole either way).
+  const rows = Object.values(counts).reduce((a, b) => a + b, 0), tables = Object.keys(counts).length;
+  let metadata: Record<string, unknown> = { bytes, counts: Object.fromEntries(Object.entries(counts).filter(([, n]) => n > 0)), tables, rows, at: now.toISOString() };
+  if (JSON.stringify(metadata).length > META_MAX) metadata = { bytes, counts: {}, tables, rows, at: now.toISOString() };
+  await env.BACKUPS.put(key, sql, { metadata });
   const kept = (await env.BACKUPS.list({ prefix: "d1/apexnav-db/" })).keys.map((k) => k.name).sort().reverse();
   // A run killed for CPU time writes no log line, so the next run reports the hole it finds.
   const prev = kept.find((k) => k < key);

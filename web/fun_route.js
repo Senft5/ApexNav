@@ -53,9 +53,11 @@
   /**
    * Fun score of a routed track ({dist[], events[]}, as trackFromPolyline builds it).
    * turnsM: distances along the route of the router's turn maneuvers (left/right/sharp/U),
-   * used to drop junction turns. Returns null when the line is too short to judge.
+   * used to drop junction turns. Returns null when the line is too short to judge. scaleAt (optional, metres along → 0–1):
+   * how much a corner there counts, the route engine's quality gate (web/route_engine.js: a corner on a side street is
+   * worth nothing); `good` is then the gated count. Without it, every corner counts in full, as before.
    */
-  function score(track, turnsM = [], prefs = null) {
+  function score(track, turnsM = [], prefs = null, scaleAt = null) {
     const dist = track && track.dist;
     if (!Array.isArray(dist) || dist.length < 2) return null;
     const totalM = dist[dist.length - 1];
@@ -68,12 +70,14 @@
     };
     const corners = (track.events || []).filter(isCorner)
       .filter(c => Number.isFinite(c.dist_m) && !nearTurn(c.dist_m))
-      .map(c => ({ at: c.dist_m, start: Number.isFinite(c.start_m) ? c.start_m : c.dist_m, end: Number.isFinite(c.end_m) ? c.end_m : c.dist_m, w: cornerWeight(c.severity, prefs), sev: c.severity }))
+      .map(c => { const k = scaleAt ? scaleAt(c.dist_m) : 1, g = Number.isFinite(k) ? Math.max(0, Math.min(1, k)) : 1;
+        return { at: c.dist_m, start: Number.isFinite(c.start_m) ? c.start_m : c.dist_m, end: Number.isFinite(c.end_m) ? c.end_m : c.dist_m, w: cornerWeight(c.severity, prefs) * g, g, sev: c.severity }; })
       .filter(c => c.w > 0)
       .sort((a, b) => a.start - b.start);
     const km = totalM / 1000;
     const weighted = corners.reduce((s, c) => s + c.w, 0);
-    const good = corners.filter(c => c.sev !== 'HP' && c.sev >= 2 && c.sev <= 5).length;
+    const goodList = corners.filter(c => c.sev !== 'HP' && c.sev >= 2 && c.sev <= 5);
+    const good = scaleAt ? Math.round(goodList.reduce((s, c) => s + c.g, 0)) : goodList.length;
     // Flow: runs of 3+ corners each within FLOW_GAP_M of the last; their length over the route.
     let flowM = 0;
     for (let i = 0; i < corners.length;) {
@@ -638,11 +642,13 @@
    */
   function distinctOptions(ranked, k = 3) {
     const out = [];
+    // the route engine's fun (corners gated by road quality) when it ranked them: a subdivision's corners aren't fun
+    const funOf = (c) => (c.ev && c.ev.funGated ? c.ev.funGated : c.fun);
     for (const c of ranked || []) {
-      const f = c.fun ? c.fun.fun : null;
-      if (out.some(o => Math.abs(o.timeS - c.timeS) < 30 && Math.abs((o.fun ? o.fun.fun : null) - f) <= 1)) continue;
+      const f = funOf(c) ? funOf(c).fun : null;
+      if (out.some(o => Math.abs(o.timeS - c.timeS) < 30 && Math.abs((funOf(o) ? funOf(o).fun : null) - f) <= 1)) continue;
       // Never offer a route that is both slower and less fun than one already on the card: nobody would pick it.
-      if (out.some(o => o.fun && f != null && o.fun.fun >= f && o.timeS <= c.timeS)) continue;
+      if (out.some(o => funOf(o) && f != null && funOf(o).fun >= f && o.timeS <= c.timeS)) continue;
       out.push(c);
       if (out.length === k) break;
     }

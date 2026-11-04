@@ -605,5 +605,5 @@
     return pts;
   }
 
-  root.ApexStages = { decodeLayer, transportationAt, discover, nameStages, places, pois, addElevations, profile, fillProfile, climbM, sightOffsets, offsetsFrom, SIGHT_OPEN_M, stageDirection, terrarium, applyHighlights, plans, waypoints, strokes, bestWindow, roadPieces };
+  root.ApexStages = { demTile, DEM_Z, decodeLayer, transportationAt, discover, nameStages, places, pois, addElevations, profile, fillProfile, climbM, sightOffsets, offsetsFrom, SIGHT_OPEN_M, stageDirection, terrarium, applyHighlights, plans, waypoints, strokes, bestWindow, roadPieces };
 })(typeof window !== 'undefined' ? window : globalThis);

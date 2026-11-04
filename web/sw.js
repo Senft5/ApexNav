@@ -5,7 +5,8 @@
 const CACHE = 'apexnav-shell-v2';
 const SHELL = ['/index.html', '/analysis.html', '/manifest.webmanifest', '/brand/mark.svg', '/brand/icon-192.png', '/analysis_worker.js'];   // the worker has no <script> tag
 /** The pages' own scripts (read from their <script src>), so the cockpit works offline after the first visit. */
-const scriptsOf = (html) => [...html.matchAll(/<script src="([^"/:]+\.js)"/g)].map((m) => '/' + m[1]);
+// route_ctx/: the route-context providers' folder (builder E), kept offline like the rest
+const scriptsOf = (html) => [...html.matchAll(/<script src="((?:route_ctx\/)?[^"/:]+\.js)"/g)].map((m) => '/' + m[1]);
 /** The modules index.html loads on first use (lazy.js GROUPS, REVIEW_FEEL F-03) and its bundled fonts (F-12). */
 const lazyOf = (js) => [...js.matchAll(/'([a-z0-9_]+\.js)'/g)].map((m) => '/' + m[1]);
 const FONTS = ['/fonts/fonts.css', ...[600, 700, 800].map((w) => `/fonts/barlow-condensed-${w}.woff2`), '/fonts/inter-tight.woff2'];   // the latin files; -ext ones as used

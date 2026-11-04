@@ -2,6 +2,7 @@
 // Members only. Nothing here says who contributed; `n` is how many passes were merged and `csd`/`rsd` how much they disagree
 // (sample standard deviation of camber and roughness, null under two measuring passes), so the phone can show confidence.
 import { Env, HttpError } from "./util";
+import { serverFlag } from "./flags";
 
 const MAX_WAYS = 50;
 /**
@@ -32,7 +33,13 @@ export const confLevel = (passes: number) => (passes >= 5 ? 3 : passes >= 2 ? 2 
 export interface RoadBinRow {
   way_id: number; dir: number; bin_idx: number; n: number; camber_mean: number | null; camber_m2: number | null; camber_n: number;
   rough_mean: number | null; rough_m2: number | null; crest_peak: number | null; changed_on: string | null; k_mean: number | null; k_n: number;
+  flow_mean: number | null; brake_mean: number | null; flow_n: number;
 }
+
+/** Busy times are shown only for a road+direction this many different people drove (the owner's Quiet hours option a). */
+export const HOURS_MIN_DRIVERS = 5;
+/** Loved roads: how many members came back to it, as a level (never the count): 0 under 2, 1 two, 2 three or four, 3 five or more. */
+export const loveLevel = (again: number) => (again >= 5 ? 3 : again >= 3 ? 2 : again >= 2 ? 1 : 0);
 
 /** Sample standard deviation from a Welford sum of squares over k passes; null when fewer than two passes measured it. */
 export function sampleSd(m2: number | null, k: number): number | null {
@@ -40,26 +47,88 @@ export function sampleSd(m2: number | null, k: number): number | null {
   return Math.round(Math.sqrt(Math.max(0, m2) / (k - 1)) * 1e4) / 1e4;
 }
 
+/** 0.1-degree cells ("i_j": floor(lat / 0.1), floor(lon / 0.1)) a cells query may name, at most (VI-1: no finer than 0.1°). */
+export const CELL_DEG = 0.1, MAX_CELLS = 16, MAX_CELL_WAYS = 300;
+/**
+ * GET /api/roads?cells=i_j,...: the measured ways in those 0.1° cells, for the route engine's crowd provider. The phone says
+ * which ~11 km cells a plan crosses, never its route or way ids (VI-1); answer { ways: <as ?ways=>, lines: { way: [[lat, lon]] } }
+ * with each way's public map line (road_ways) so the phone places the bins itself. Same open-road / two-driver rule.
+ */
+export async function roadCells(env: Env, url: URL) {
+  const cells = (url.searchParams.get("cells") ?? "").split(",").filter(Boolean);
+  if (!cells.length || cells.length > MAX_CELLS || cells.some((c) => !/^-?\d{1,4}_-?\d{1,4}$/.test(c))) throw new HttpError(400, "bad_cells");
+  const ids = new Set<number>();
+  const lines: Record<string, unknown> = {};
+  for (const c of cells) {
+    const [i, j] = c.split("_").map(Number), s = i * CELL_DEG, w = j * CELL_DEG, n = s + CELL_DEG, e = w + CELL_DEG;
+    if (s < -90 || n > 90 || w < -180 || e > 180) throw new HttpError(400, "bad_cells");
+    const rows = (await env.DB.prepare(
+      `SELECT way_id, shape FROM road_ways WHERE s <= ?3 AND n >= ?1 AND w <= ?4 AND e >= ?2 LIMIT ${MAX_CELL_WAYS}`,
+    ).bind(s, w, n, e).all<{ way_id: number; shape: string }>()).results;
+    for (const r of rows) { if (ids.size >= MAX_CELL_WAYS) break; ids.add(r.way_id); lines[r.way_id] = JSON.parse(r.shape); }
+  }
+  const ways = ids.size ? await binsFor(env, [...ids]) : {};
+  // only the lines of ways that are shown (a way with no shown direction says nothing, its line included)
+  for (const k of Object.keys(lines)) if (!(k in ways)) delete lines[k];
+  return { ways, lines };
+}
+
 export async function roadBins(env: Env, url: URL) {
+  if (url.searchParams.has("cells")) return roadCells(env, url);
   const ids = (url.searchParams.get("ways") ?? "").split(",").filter(Boolean).map(Number);
   if (!ids.length || ids.length > MAX_WAYS || ids.some((x) => !Number.isSafeInteger(x) || x < 1)) throw new HttpError(400, "bad_ways");
+  return binsFor(env, ids);
+}
+
+async function binsFor(env: Env, ids: number[]) {
+  const out = {} as Record<string, Record<string, Dir>>;
+  for (let k = 0; k < ids.length; k += MAX_WAYS) Object.assign(out, await binsChunk(env, ids.slice(k, k + MAX_WAYS)));
+  return out;
+}
+
+type Col = (number | null)[];
+type Dir = { i: number[]; n: number[]; cam: Col; cn: number[]; csd: Col; rough: Col; rsd: Col; crest: Col; ch: (string | null)[]; k: Col; kn: number[];
+             fl: Col; hb: Col; fn: number[]; ag?: number; hr?: number[] };
+async function binsChunk(env: Env, ids: number[]) {
   const marks = ids.map(() => "?").join(",");
   const rows = (await env.DB.prepare(
-    `SELECT way_id, dir, bin_idx, n, camber_mean, camber_m2, camber_n, rough_mean, rough_m2, crest_peak, changed_on, k_mean, k_n FROM road_bins rb
+    `SELECT way_id, dir, bin_idx, n, camber_mean, camber_m2, camber_n, rough_mean, rough_m2, crest_peak, changed_on, k_mean, k_n, flow_mean, brake_mean, flow_n FROM road_bins rb
       WHERE way_id IN (${marks}) AND ${shownSql("rb.way_id", "rb.dir")}
       ORDER BY way_id, dir, bin_idx`,
   ).bind(...ids).all<RoadBinRow>()).results;
   // { [way]: { [dir]: { i:[bin], n:[], cam:[], cn:[], csd:[], rough:[], rsd:[], crest:[], ch:[] } } } keeps the payload small;
   // unknown stays null. ch: the month a step change (repaving, IDEAS Q-12) restarted the bin, never the day. k / kn: the
   // driven paths' mean curvature (1/m, + = left in the direction of travel) and how many passes measured it (IDEAS Q-04).
-  type Col = (number | null)[];
-  const out: Record<string, Record<string, { i: number[]; n: number[]; cam: Col; cn: number[]; csd: Col; rough: Col; rsd: Col; crest: Col; ch: (string | null)[]; k: Col; kn: number[] }>> = {};
+  // fl / hb / fn: flow (members' mean speed steadiness 0..1, a ratio with no speed in it), the share of passes that braked hard
+  // with no corner ahead, and how many passes sent flow; null / 0 from passes that didn't. ag (per direction): loveLevel, how
+  // many members came back to it. hr (per direction, only with the quiet_hours flag on and 5+ drivers): 12 shares of passes.
+  const out: Record<string, Record<string, Dir>> = {};
+  const r3 = (v: number | null) => (v == null ? null : Math.round(v * 1000) / 1000);
   for (const r of rows) {
-    const d = ((out[r.way_id] ??= {})[r.dir] ??= { i: [], n: [], cam: [], cn: [], csd: [], rough: [], rsd: [], crest: [], ch: [], k: [], kn: [] });
+    const d = ((out[r.way_id] ??= {})[r.dir] ??= { i: [], n: [], cam: [], cn: [], csd: [], rough: [], rsd: [], crest: [], ch: [], k: [], kn: [], fl: [], hb: [], fn: [] });
+    d.fl.push(r.flow_n > 0 ? r3(r.flow_mean) : null); d.hb.push(r.flow_n > 0 ? r3(r.brake_mean) : null); d.fn.push(r.flow_n ?? 0);
     d.k.push(r.k_n > 0 && r.k_mean != null ? Math.round(r.k_mean * 1e6) / 1e6 : null); d.kn.push(r.k_n);
     d.ch.push(r.changed_on ? r.changed_on.slice(0, 7) : null);
     d.i.push(r.bin_idx); d.n.push(r.n); d.cam.push(r.camber_mean); d.cn.push(r.camber_n); d.csd.push(sampleSd(r.camber_m2, r.camber_n));
     d.rough.push(r.rough_mean); d.rsd.push(sampleSd(r.rough_m2, r.n)); d.crest.push(r.crest_peak);
+  }
+  const shownIds = Object.keys(out).map(Number);
+  if (shownIds.length) {
+    const m2 = shownIds.map(() => "?").join(",");
+    const love = (await env.DB.prepare(`SELECT way_id, dir, again_n FROM road_love WHERE way_id IN (${m2})`).bind(...shownIds).all<{ way_id: number; dir: number; again_n: number }>()).results;
+    for (const l of love) { const d = out[l.way_id]?.[l.dir]; if (d && loveLevel(l.again_n)) d.ag = loveLevel(l.again_n); }
+    if (serverFlag(env, "quiet_hours")) {
+      const hours = (await env.DB.prepare(
+        `SELECT h.way_id, h.dir, h.bucket, h.n FROM road_hours h
+          WHERE h.way_id IN (${m2}) AND (SELECT COUNT(*) FROM road_hour_holders x WHERE x.way_id = h.way_id AND x.dir = h.dir) >= ${HOURS_MIN_DRIVERS}`,
+      ).bind(...shownIds).all<{ way_id: number; dir: number; bucket: number; n: number }>()).results;
+      const counts = new Map<string, number[]>();
+      for (const h of hours) { const k = `${h.way_id}:${h.dir}`; const a = counts.get(k) ?? new Array(12).fill(0); a[h.bucket] += h.n; counts.set(k, a); }
+      for (const [k, a] of counts) {
+        const [w, dir] = k.split(":"), d = out[w]?.[dir], tot = a.reduce((x, y) => x + y, 0);
+        if (d && tot > 0) d.hr = a.map((x) => Math.round((x / tot) * 1000) / 1000);
+      }
+    }
   }
   return out;
 }
