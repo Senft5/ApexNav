@@ -17,6 +17,7 @@
 - Unverified: Swift (ApexContext for calendar/album; CI compiles), the engine on a real drive, the Kentucky relay live.
 - [x] Route engine fixed on the live network (#293): live checks on five real trips pick the expected roads; planning
   4.4-6.6 s. tests/test_route_engine_live.py holds the live captures. Still slow-ish: first route 1.3-2.4 s (target 1.5).
+- [x] Route engine faster (stages in a Web Worker, parallel plans): live 3.1-6.9 s, first route 0.85-1.73 s.
 - Exact next task: a real drive with the engine (owner), the wider-region context grid once its storage is set up, then
   recording 8 / panel round 3.
 
