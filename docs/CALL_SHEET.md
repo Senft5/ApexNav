@@ -4,6 +4,17 @@ Decisions Claude made for you, newest first. Each one says what was decided, why
 you reach one you've seen. If you disagree with a call, say so and it gets reversed; nothing here is hard to undo unless
 it says so. Things only you can do are in docs/OWNER_TODO.md.
 
+## 2026-11-04 (later still): The route engine, faster
+
+- **Finding good-road stages runs off the main thread** (a Web Worker, web/stages_worker.js) and is cached 10 minutes
+  per area, so the map stays smooth while planning and a re-plan reuses it. Undo: the worker call in stages.js.
+- **The first route shows the moment the router answers** (it no longer waits for the highway candidate); the ranked
+  route replaces it when ready. Sections, stage plans and their road data now run side by side, with at most 6 road-data
+  requests in flight so the public router answers each quickly.
+- Live (real services): planning 3.1-6.9 s (was 4.8-11.4 s on production), first route 0.85-1.73 s. Picks unchanged.
+- Not done: stopping early once the winner is certain; the bounds on what unknown data could change are too loose to
+  drop a candidate safely, so every candidate is still scored.
+
 ## 2026-11-04 (later): The route engine, fixed on the live network
 
 A check of the live app on real trips (no saved data) found 4 of 6 wrong picks and 11-16 s planning: the router's road

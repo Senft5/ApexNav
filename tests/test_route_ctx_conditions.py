@@ -123,7 +123,7 @@ def test_fog_in_valleys_not_on_ridges(out):
 
 
 def test_a_slow_forecast_never_holds_the_plan():
-    """Open-Meteo took 2-3.5 s or failed on the live runs and the whole context waited for it: the plan waits 1.5 s at
+    """Open-Meteo took 2-3.5 s or failed on the live runs and the whole context waited for it: the plan waits 0.8 s at
     most (waitMs here), and the late answer lands in the cache, so the next plan has it with no new request."""
     js = r"""
 const root = process.argv[1];

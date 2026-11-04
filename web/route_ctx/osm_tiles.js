@@ -43,7 +43,7 @@
   const Ctx = root.ApexRouteCtx;
   const finite = G.finite;
   const TILEJSON = 'https://tiles.openfreemap.org/planet';
-  const Z = 14, PAD_M = 400, MAX_TILES = 220, CACHE_TILES = 240, PARALLEL = 8;
+  const Z = 14, PAD_M = 400, MAX_TILES = 220, CACHE_TILES = 240, PARALLEL = 12;
   const LU_BAND = 150, PROBES = [0, -50, 50, -100, 100, -150, 150];
 
   // ---- OpenMapTiles classes ------------------------------------------------------------------------------------------
@@ -320,6 +320,7 @@
 
   // ---- network --------------------------------------------------------------------------------------------------------
   const cache = new Map();   // 'x/y' -> decoded tile, newest last (session)
+  const inflight = new Map();   // 'x/y' -> Promise of the decoded tile being fetched
   let tileUrl = null;
   const remember = (k, t) => { cache.delete(k); cache.set(k, t); while (cache.size > CACHE_TILES) cache.delete(cache.keys().next().value); };
   async function readBytes(url, fetchFn, signal) {
@@ -359,8 +360,15 @@
           const k = want[next++];
           const [x, y] = k.split('/').map(Number);
           try {
-            const buf = await Promise.race([readBytes(tileUrl.replace('{z}', Z).replace('{x}', x).replace('{y}', y), fetchFn, opts.signal), stop]);
-            const t = decodeTile(buf, x, y); remember(k, t); out.set(k, t);
+            // one fetch and decode per tile however many runs want it at once (the routes', the highway's, the stages')
+            if (cache.has(k)) { out.set(k, cache.get(k)); continue; }
+            let p = inflight.get(k);
+            if (!p) {
+              p = readBytes(tileUrl.replace('{z}', Z).replace('{x}', x).replace('{y}', y), fetchFn, opts.signal).then((buf) => { const t = decodeTile(buf, x, y); remember(k, t); return t; });
+              inflight.set(k, p);
+              p.catch(() => {}).finally(() => inflight.delete(k));
+            }
+            out.set(k, await Promise.race([p, stop]));
           } catch (e) { if (/budget|aborted/.test(String(e && e.message))) return; }
         }
       };
@@ -408,7 +416,9 @@
     id: 'osm_tiles', version: 1, channels: CHANNELS, needs: { network: true }, budgetMs: 8000, stageOk: true,   // the map's own tiles: a stage's land use, shops and road class
     fetch: fetchCtx,
   };
-  const api = { provider, CHANNELS, BUSINESS, isBusiness, ROAD_CODE, PLACE_RANK, tileOf, tileBounds, tilesFor, planTiles, decodeTile,
+  /** The tiles round these corridors fetched and decoded ahead (the plan's straight line while the router routes): never throws. */
+  function prefetch(corridors, opts = {}) { try { return loadTiles(planTiles(corridors).keys, { budgetMs: 4000, ...opts }).catch(() => null); } catch (_) { return Promise.resolve(null); } }
+  const api = { provider, prefetch, CHANNELS, BUSINESS, isBusiness, ROAD_CODE, PLACE_RANK, tileOf, tileBounds, tilesFor, planTiles, decodeTile,
     aggregate, namesFrom, loadTiles, roadNames, _cache: cache };
   root.ApexOsmTiles = api;
   if (Ctx && Ctx.register) Ctx.register(provider);
