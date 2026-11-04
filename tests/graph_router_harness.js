@@ -99,12 +99,15 @@ function grid(o = {}) {
     if (r() < (o.holes || 0)) return;
     const pa = nodes[a], pb = nodes[b], wob = o.wobble !== false ? [[(pa.lat + pb.lat) / 2 + (r() - 0.5) * st * 0.15, (pa.lon + pb.lon) / 2 + (r() - 0.5) * st * 0.15]] : [];
     const len = R.distM(pa.lat, pa.lon, wob.length ? wob[0][0] : pb.lat, wob.length ? wob[0][1] : pb.lon) + (wob.length ? R.distM(wob[0][0], wob[0][1], pb.lat, pb.lon) : 0);
-    const v = art ? 20 + r() * 6 : 9 + r() * 8;
+    // o.motorway: the arterials are motorways instead (fast, good road, no corners: the tiles' I-275)
+    const mw = art && o.motorway;
+    const v = mw ? 31 : art ? 20 + r() * 6 : 9 + r() * 8;
     const unk = r() < 0.08;
-    const props = { quality: unk ? null : art ? 0.3 + r() * 0.25 : 0.4 + r() * 0.6, scenery: unk ? null : r(), fun: unk ? null : art ? 0 : r() * 4, conf: unk ? 0 : 0.8 + r() * 0.2, cls: art ? 2 : 5, name };
+    const props = { quality: unk ? null : mw ? 0.82 : art ? 0.3 + r() * 0.25 : 0.4 + r() * 0.6, scenery: unk ? null : mw ? 0.3 : r(), fun: unk ? null : art ? 0 : r() * 4, conf: unk ? 0 : 0.8 + r() * 0.2, cls: mw ? 0 : art ? 2 : 5, name };
     const one = r() < (o.oneway || 0) ? (r() < 0.5 ? 1 : -1) : 0;
-    if (one >= 0) edges.push({ from: a, to: b, t: len / v, geom: wob, ...props, flags: one ? 1 : 0 });
-    if (one <= 0) edges.push({ from: b, to: a, t: len / v, geom: wob.slice().reverse(), ...props, flags: one ? 1 : 0 });
+    const fl = (one ? 1 : 0) | (mw ? 64 : 0);
+    if (one >= 0) edges.push({ from: a, to: b, t: len / v, geom: wob, ...props, flags: fl });
+    if (one <= 0) edges.push({ from: b, to: a, t: len / v, geom: wob.slice().reverse(), ...props, flags: fl });
   };
   const ae = o.artEvery || 4;
   for (let y = 0; y < ny; y++) for (let x = 0; x + 1 < nx; x++) add(id(x, y), id(x + 1, y), y % ae === 0, `Row ${y}`);
