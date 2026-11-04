@@ -700,7 +700,7 @@ flow('own routing: where our graph tiles cover the trip, our route wins and Valh
     check(r.own.covered && r.own.used && r.own.n >= 2, 'our router planned it: ' + JSON.stringify(r.own));
     check(r.kinds[0] === 'own' && r.track === 'route', 'our route won the ranking: ' + JSON.stringify(r.kinds));
     // (its stand-in here takes 50 min, past every budget, so the ranking drops it)
-    check(calls.route.length === 1, "Valhalla's quickest was asked for once, as a check: " + calls.route.length);
+    check(calls.route.length >= 1 && calls.route.length <= 2, "Valhalla's quickest (and its highway-friendly one) asked for as a check: " + calls.route.length);
     check(calls.matrix === 0 && calls.route.every((q) => q.locations.length === 2), 'no stage plans or matrix: ' + calls.route.map((q) => q.locations.length));
     check(calls.trace.length >= 1 && calls.trace.every((q) => q.shape_match === 'map_snap' && q.encoded_polyline), 'instructions from trace_route on our line');
     check(r.steps.includes('Instruction Lane'), "the route's spoken directions are Valhalla's: " + JSON.stringify(r.steps));

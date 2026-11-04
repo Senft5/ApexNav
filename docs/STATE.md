@@ -1,5 +1,14 @@
 # VETTA — CURRENT AGENT HANDOFF STATE
 
+## Session 2026-11-04 (night): own routing on the real Cincinnati tiles
+
+- [x] Merged the 16 Cincinnati tiles (claude/own-routing-graph 2ff318b). Live comparison on the 7 cases plus owner1 at
+  three levels: our router produced every winner, at least as good as production's on the engine's value except
+  subdivision4 (the same route, scored at a different hour). Table in OWN_ROUTING.md §8.
+- [x] Objective `t x exp(a x bad)`, corners-led goodness, one clock with Valhalla, members' data in the search.
+- Gaps: via-way restrictions (not in the tiles), Explore on Valhalla, plan time still the context's ~4-7 s.
+- Exact next task: the owner drives owner1 at Fun; then a via-way table in the tile format (graph builder).
+
 ## Session 2026-11-04 (evening): own routing, the phone's router (branch claude/own-routing-router)
 
 - [x] web/graph_router.js (edge-based A*, turn restrictions, one-ways, U-turns at dead ends only, turn and node costs,

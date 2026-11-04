@@ -42,7 +42,7 @@ function tiles(nodes, edges, restrictions = []) {
       E.to[li] = tl;
       const [ti, tj] = tk.split('_').map(Number);
       E.toTile[li] = packed(ti, tj);
-      const r6 = (x) => Math.round(x * 1e6) / 1e6;
+      const r6 = (x) => Math.round(x * 2e5) * 5 / 1e6;                  // the tiles keep 5 µdeg steps (graph_tiles.js GEOM_Q)
       const pts = [[r6(a.lat), r6(a.lon)], ...(e.geom || []).map(([la, lo]) => [r6(la), r6(lo)]), [r6(b.lat), r6(b.lon)]];
       let L = 0;
       for (let q = 1; q < pts.length; q++) L += R.distM(pts[q - 1][0], pts[q - 1][1], pts[q][0], pts[q][1]);
@@ -64,7 +64,7 @@ function tiles(nodes, edges, restrictions = []) {
       while (z > 0 && R.distM(pts[z][0], pts[z][1], pts[pts.length - 1][0], pts[pts.length - 1][1]) < 60) z--;
       E.hOut[li] = turn(R.bearing(pts[z][0], pts[z][1], pts[pts.length - 1][0], pts[pts.length - 1][1]));
     });
-    const lat = Int32Array.from(t.nodes.map((q) => Math.round(nodes[q].lat * 1e6))), lon = Int32Array.from(t.nodes.map((q) => Math.round(nodes[q].lon * 1e6)));
+    const lat = Int32Array.from(t.nodes.map((q) => Math.round(nodes[q].lat * 2e5) * 5)), lon = Int32Array.from(t.nodes.map((q) => Math.round(nodes[q].lon * 2e5) * 5));
     const flags = Uint8Array.from(t.nodes.map((q) => nodes[q].flags || 0));
     out.set(k, { tile: { i, j, key: self, refs: [] }, nodes: { count: n, lat, lon, firstEdge, flags }, edges: E, restrictions: [], names, geom: (e) => geoms[e] });
   }
@@ -106,7 +106,7 @@ function grid(o = {}) {
 
 /** Brute-force edge-based Dijkstra (linear scan, no heuristic) with the router's own costs: the optimum A* must match. */
 function brute(v, obj, src, dst, a = 0, penal = null) {
-  const base = (e) => (v.time[e] * (1 + a * obj.bad[e]) * obj.mult[e] + obj.add[e]) * (penal ? penal[e] : 1);
+  const base = (e) => (v.time[e] * Math.exp(a * obj.bad[e]) * obj.mult[e] + obj.add[e]) * (penal ? penal[e] : 1);
   const g = new Float64Array(v.E).fill(Infinity), done = new Uint8Array(v.E);
   for (const s of src) g[s.edge] = Math.min(g[s.edge], (1 - s.frac) * base(s.edge));
   let best = Infinity;

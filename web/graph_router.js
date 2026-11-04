@@ -39,15 +39,20 @@
   const K = {
     UNKNOWN_G: 0.3,          // goodness of an edge nobody knew (conf 0): below the middle, so unknown road can't win
     GATE_LO: 0.25, GATE_HI: 0.6,   // the route engine's corner gate: corners count nothing on quality 0.25, in full from 0.6
-    W_QUALITY: 0.5, W_FUN: 0.3, W_SCENERY: 0.2,
-    FUN_FULL_PCT: 0.9,       // fun per km that counts as full: the loaded network's 90th percentile of edges with corners
+    // goodness = not a side street (the engine's poor cost: quality 0.25 -> 0.45) + quality + corners + scenery. Corners
+    // carry most of it: a motorway is good road (quality ~0.8) but no fun, and must not soak up the Fun objective
+    W_NOTPOOR: 0.2, W_QUALITY: 0.15, W_FUN: 0.45, W_SCENERY: 0.2, POOR_LO: 0.25, POOR_HI: 0.45,
+    FUN_FULL_PCT: 0.5,       // fun per km that counts as full: the loaded network's median of edges with corners
+    // members' data (crowd.js channels) per edge, with the route engine's own weights (route_engine.js QUALITY/SCENERY)
+    // against the share of the model the tile's score already knew (conf x the model's weight)
+    CROWD_W: { rough: 1, flow: 1, loved: 1.5, bank: 0.5 }, MODEL_WQ: 37.1, MODEL_WS: 12.8,
     TURN_RIGHT_S: 2, TURN_RIGHT_K: 4, TURN_LEFT_S: 5, TURN_LEFT_K: 8, STRAIGHT_RAD: 0.35, UTURN_S: 30,
     // passing a node with a signal, a stop sign, give way, a level crossing, calming or a crossing (the tiles' node flags;
     // the same seconds the ETL adds for those inside an edge, tools/graph_etl/build.py DELAY_S; end nodes are ours)
     SIGNAL_S: 15, STOP_S: 7, GIVE_WAY_S: 2, LEVEL_CROSSING_S: 4, CALMING_S: 3, CROSSING_S: 1, BARRIER_S: 120,
     PRIVATE_X: 10, PRIVATE_S: 600, DESTINATION_X: 2, DESTINATION_S: 60, FERRY_X: 2, UNPAVED_X: 1.5,
     AVOID_HWY_X: 4, AVOID_TOLL_X: 3, AVOID_FERRY_X: 5, AVOID_UNPAVED_X: 5,
-    A_MAX: 24, BISECT: 5,    // the goodness weight is searched in [0, A_MAX] (log steps), at most BISECT more routes
+    A_MAX: 40, BISECT: 6,    // the goodness weight is searched in [0, A_MAX] (log steps), at most BISECT more routes
     ALT_PENALTIES: [0.6, 1.5, 4], ALT_MIN_DIFF: 0.3, ALTS: 2,
     LOOP_A: { quick: 0.6, fun: 3, max: 8 }, LOOP_ROAD_FACTOR: 1.35, LOOP_RETRACE_X: 3,
     SNAP_M: 1500, GRID_DEG: 0.01,
@@ -287,6 +292,58 @@
     return out;
   }
 
+  // ---- members' data on the edges ------------------------------------------------------------------------------------
+  /**
+   * Members' road data (crowd.js: /api/roads by 0.1° cells, VI-1) laid on our edges. The tiles hold no OSM way ids, so
+   * each way's line is walked every 10 m in its measured direction (dir 0 along the line, 1 against it) and each point
+   * lands on the nearest edge within 15 m heading the same way (within 50°). Bins are 5 m along the line, as the server
+   * keeps them. An edge counts as measured where 40 % of it (or 150 m) was matched; its values are the matched points'
+   * means. items: [{ line: [[lat, lon]], dir, i: [bins], rough: [g], cam: [deg], flow: [0..1], loved }].
+   */
+  function crowdOnto(v, items) {
+    const E = v.E, n = new Float32Array(E), sum = { rough: new Float32Array(E), cam: new Float32Array(E), flow: new Float32Array(E) }, cnt = { rough: new Uint16Array(E), cam: new Uint16Array(E), flow: new Uint16Array(E) };
+    const loved = new Float32Array(E).fill(NaN);
+    let any = false;
+    for (const it of items || []) {
+      const L = it && it.line;
+      if (!Array.isArray(L) || L.length < 2) continue;
+      const bins = new Map((it.i || []).map((b, j) => [b, j]));
+      const cum = [0];
+      for (let k = 1; k < L.length; k++) cum.push(cum[k - 1] + distM(L[k - 1][0], L[k - 1][1], L[k][0], L[k][1]));
+      const total = cum[cum.length - 1];
+      let seg = 0;
+      for (let off = 5; off < total; off += 10) {
+        while (seg < L.length - 2 && cum[seg + 1] < off) seg++;
+        const u = cum[seg + 1] > cum[seg] ? (off - cum[seg]) / (cum[seg + 1] - cum[seg]) : 0;
+        const la = L[seg][0] + u * (L[seg + 1][0] - L[seg][0]), lo = L[seg][1] + u * (L[seg + 1][1] - L[seg][1]);
+        let h = bearing(L[seg][0], L[seg][1], L[seg + 1][0], L[seg + 1][1]);
+        if (it.dir === 1) h += Math.PI;
+        const s = snap(v, la, lo, (e) => {
+          const g = geom(v, e), pr = project(v, e, la, lo), m = g.length / 2;
+          // the heading of the edge's segment nearest the point
+          let best = 0, bd = Infinity;
+          for (let q = 0; q < m - 1; q++) { const d = distM(la, lo, (g[2 * q] + g[2 * q + 2]) / 2, (g[2 * q + 1] + g[2 * q + 3]) / 2); if (d < bd) { bd = d; best = q; } }
+          return pr.d <= 15 && Math.abs(turnAngle(h, bearing(g[2 * best], g[2 * best + 1], g[2 * best + 2], g[2 * best + 3]))) < 0.87;
+        }, 15);
+        if (!s.length) continue;
+        const e = s[0].edge;
+        n[e] += 10;
+        const j = bins.get(Math.floor(off / 5));
+        if (j != null) for (const k of ['rough', 'cam', 'flow']) { const x = it[k] && it[k][j]; if (Number.isFinite(x)) { sum[k][e] += x; cnt[k][e]++; } }
+        if (Number.isFinite(it.loved)) loved[e] = Number.isFinite(loved[e]) ? Math.max(loved[e], it.loved) : it.loved;
+      }
+    }
+    const has = new Uint8Array(E), rough = new Float32Array(E).fill(NaN), bank = new Float32Array(E).fill(NaN), flow = new Float32Array(E).fill(NaN);
+    for (let e = 0; e < E; e++) {
+      if (!(n[e] >= Math.min(150, 0.4 * v.len[e]))) { loved[e] = NaN; continue; }
+      if (cnt.rough[e]) rough[e] = sum.rough[e] / cnt.rough[e];
+      if (cnt.cam[e]) bank[e] = sum.cam[e] / cnt.cam[e];
+      if (cnt.flow[e]) flow[e] = sum.flow[e] / cnt.flow[e];
+      if (Number.isFinite(rough[e]) || Number.isFinite(bank[e]) || Number.isFinite(flow[e]) || Number.isFinite(loved[e])) { has[e] = 1; any = true; }
+    }
+    return any ? { has, rough, bank, flow, loved, edges: has.reduce((a, b) => a + b, 0) } : null;
+  }
+
   // ---- the objective ---------------------------------------------------------------------------------------------------
   /**
    * Per-edge goodness 0..1 (quality, gated fun and scenery blended with the driver's taste; unknown pulled to UNKNOWN_G by
@@ -296,21 +353,34 @@
   function objective(v, o = {}) {
     const prefs = o.prefs || {}, taste = o.taste || {}, avoid = o.avoid || {}, B = flagBits();
     const corner = 1 + 0.25 * ((Number(prefs.tight) || 0) + (Number(prefs.fast) || 0));
-    const wq = Number.isFinite(taste.quality) ? taste.quality : K.W_QUALITY;
+    const tq = Number.isFinite(taste.quality) ? taste.quality / (K.W_NOTPOOR + K.W_QUALITY) : 1;
+    const wp = K.W_NOTPOOR * tq, wq = K.W_QUALITY * tq;
     const wf = (Number.isFinite(taste.fun) ? taste.fun : K.W_FUN) * Math.max(0.3, corner);
     const ws = Number.isFinite(taste.scenery) ? taste.scenery : K.W_SCENERY;
-    const wsum = Math.max(1e-6, wq + wf + ws);
+    const crowd = v.crowd || null, CW = (o.crowdWeights) || K.CROWD_W;
     const E = v.E, bad = new Float32Array(E), mult = new Float32Array(E), add = new Float32Array(E);
     let minBad = 1;
     for (let e = 0; e < E; e++) {
       // unknown (255, 65535) is unknown: its weight drops out; nothing known at all is UNKNOWN_G
       const qk = v.quality[e] !== UNKNOWN_U8, sk = v.scenery[e] !== UNKNOWN_U8, fk = Number.isFinite(v.fun[e]);
-      const q = qk ? v.quality[e] / 254 : K.UNKNOWN_G, s = sk ? v.scenery[e] / 254 : 0, cf = qk ? v.conf[e] / 255 : 0;
+      let q = qk ? v.quality[e] / 254 : K.UNKNOWN_G, s = sk ? v.scenery[e] / 254 : 0, cf = qk ? v.conf[e] / 255 : 0;
+      // members' measurements on this edge: smooth and flowing raise its quality, loved and banked its scenery
+      if (crowd && crowd.has[e]) {
+        const c = crowd, kq = cf * K.MODEL_WQ, ks = (sk ? cf : 0) * K.MODEL_WS;
+        let nq = q * kq, dq = kq, ns = s * ks, ds = ks;
+        if (Number.isFinite(c.rough[e])) { nq += CW.rough * clamp01((0.38 - c.rough[e]) / 0.33); dq += CW.rough; }
+        if (Number.isFinite(c.flow[e])) { nq += CW.flow * clamp01(c.flow[e]); dq += CW.flow; }
+        if (Number.isFinite(c.loved[e])) { ns += CW.loved * clamp01(c.loved[e]); ds += CW.loved; }
+        if (Number.isFinite(c.bank[e])) { const b = c.bank[e]; ns += CW.bank * (b <= 0 ? clamp01((b + 3) / 3) * 0.5 : 0.5 + 0.5 * clamp01(b / 4)); ds += CW.bank; }
+        if (dq > kq) { q = nq / dq; cf = Math.max(cf, dq > 0 ? (kq + (dq - kq)) / (K.MODEL_WQ + (dq - kq)) : cf); }
+        if (ds > ks && ds > 0) s = ns / ds;
+      }
       const gate = clamp01((q - K.GATE_LO) / (K.GATE_HI - K.GATE_LO));
+      const notPoor = clamp01((q - K.POOR_LO) / (K.POOR_HI - K.POOR_LO));
       // fun is already gated by quality in the tiles (corners only count on good road); per km against the network's own
       const f = fk ? Math.min(1, v.fun[e] / Math.max(0.05, v.len[e] / 1000) / v.funFull) : 0;
-      const w = wq + (fk ? wf : 0) + (sk ? ws : 0);
-      const raw = (wq * q + (fk ? wf * f : 0) + (sk ? ws * s * (0.5 + 0.5 * gate) : 0)) / Math.max(1e-6, w);
+      const w = wp + wq + (fk ? wf : 0) + (sk ? ws : 0);
+      const raw = (wp * notPoor + wq * q + (fk ? wf * f : 0) + (sk ? ws * s * (0.5 + 0.5 * gate) : 0)) / Math.max(1e-6, w);
       const g = cf * raw + (1 - cf) * K.UNKNOWN_G;
       bad[e] = 1 - g;
       if (bad[e] < minBad) minBad = bad[e];
@@ -383,9 +453,9 @@
     const { stamp, g, pred, hs, h } = S;
     const { bad, mult, add, minBad } = obj;
     const tgt = dst[0];
-    const hMul = (1 + a * minBad) / v.vmax * 0.995;
+    const hMul = Math.exp(a * minBad) / v.vmax * 0.995;
     const H = (n) => { if (hs[n] !== S.qid) { hs[n] = S.qid; h[n] = distM(v.lat[n], v.lon[n], tgt.lat, tgt.lon) * hMul; } return h[n]; };
-    const base = (e) => (v.time[e] * (1 + a * bad[e]) * mult[e] + add[e]) * (penal ? penal[e] : 1);
+    const base = (e) => (v.time[e] * Math.exp(a * bad[e]) * mult[e] + add[e]) * (penal ? penal[e] : 1);
     const dstMap = new Map();
     for (const d of dst) if (!dstMap.has(d.edge) || dstMap.get(d.edge) > d.frac) dstMap.set(d.edge, d.frac);
     // heap
@@ -556,7 +626,7 @@
       times.push([end[1], end[0], Math.round(timeS)]);
     }
     const nameKm = new Map();
-    for (const n of names) if (n.name) nameKm.set(n.name, (nameKm.get(n.name) || 0) + (n.toM - n.fromM));
+    for (const n of names) if (n.name) nameKm.set(n.name, (nameKm.get(n.name) || 0) + (n.toM - n.fromM) / 1000);   // km, as routeOf has them (Valhalla lengths)
     const why = { source: 'own', level: meta.level || null, role: meta.role || null, a: meta.a != null ? meta.a : 0,
       quality: cf > 0 ? q / cf : null, scenery: sw > 0 ? s / sw : null, fun: f, conf: wsum > 0 ? cf / wsum : 0, junctions, signals,
       objective: meta.a ? 't*(1+a*(1-goodness))' : 'time' };
@@ -642,7 +712,7 @@
     const keep = (r) => { if (r && !found.some((x) => sameRoute(x, r))) found.push(r); return r; };
     // bisect the goodness weight (log steps): the largest a whose route is inside the budget
     let lo = 0, hi = K.A_MAX, best = quick, tries = 0;
-    let a = level === 'quick' ? 1 : level === 'fun' ? 3 : 8;
+    let a = level === 'quick' ? 1 : level === 'fun' ? 2 : 4;
     while (tries < K.BISECT) {
       tries++;
       const r = run(a);
@@ -663,10 +733,11 @@
       if (r.timeS > limitS) continue;
       if (chosen.every((c) => 1 - overlap(v, c, r) >= K.ALT_MIN_DIFF)) { alts.push(r); chosen.push(r); }
     }
-    const ordered = [best, ...alts];
-    if (!ordered.some((x) => sameRoute(x, quick))) ordered.push(quick);
-    for (const r of found) if (!ordered.some((x) => sameRoute(x, r))) ordered.push(r);
-    const max = req.max || 5;
+    // the pick, the quickest, every step of the bisection (a spectrum from quick to the most good road the budget buys:
+    // the route engine, not this objective, has the last word), then the alternates
+    const ordered = [best];
+    for (const r of [quick, ...found.slice().sort((x, y) => x.why.a - y.why.a), ...alts]) if (!ordered.some((x) => sameRoute(x, r))) ordered.push(r);
+    const max = req.max || 7;
     return { routes: ordered.slice(0, max), quick, limitS, a: lo, ms: Date.now() - t0 };
   }
   /**
@@ -765,8 +836,12 @@
         if (type === 'covers') return { id, covers: covers(await keys(), msg.points || []) };
         if (type === 'plan') {
           const v = await viewFor(tilesFor(msg.from, msg.to, msg.level));
-          const r = plan(v, msg);
-          return { id, result: { ...strip(r), tiles: v.keys } };
+          // members' data for this plan only (the view is kept for the next one, signed in or not)
+          v.crowd = msg.crowd ? crowdOnto(v, msg.crowd) : null;
+          try {
+            const r = plan(v, msg);
+            return { id, result: { ...strip(r), tiles: v.keys, crowdEdges: v.crowd ? v.crowd.edges : 0 } };
+          } finally { v.crowd = null; }
         }
         if (type === 'loop') {
           const v = await viewFor(loopTiles(msg.start, msg.km));
@@ -834,7 +909,7 @@
     };
   }
 
-  const api = { VERSION: 1, K, TILE_DEG, FLAG_BITS, NODE_BITS, CLS, UNKNOWN_U8, UNKNOWN_FUN, NO_NAME, packedKey, nodeCost, LEVELS_COPY, levels, distM, bearing, turnAngle, tileOf, keyOf, view, geom, snap, objective, search,
+  const api = { VERSION: 1, K, crowdOnto, project, TILE_DEG, FLAG_BITS, NODE_BITS, CLS, UNKNOWN_U8, UNKNOWN_FUN, NO_NAME, packedKey, nodeCost, LEVELS_COPY, levels, distM, bearing, turnAngle, tileOf, keyOf, view, geom, snap, objective, search,
     assemble, overlap, sameRoute, tilesFor, loopTiles, plan, loop, indexKeys, covers, host, client, edgeId, twin, turnCost };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   root.ApexGraphRouter = api;

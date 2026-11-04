@@ -68,6 +68,16 @@ def test_fun_never_takes_the_subdivision_or_the_strip_mall():
         assert r[lv]["timeS"] <= r[lv]["limitS"], r
 
 
+def test_members_data_steers_the_search():
+    """Members' data counts per stretch inside the search (not only in the final ranking): a loved, smooth, flowing lane
+    wins a near-tie it lost by 2 s; signed out (no data), the search is as before."""
+    r = case("crowd")
+    assert r["before"] == ["Plain Lane"] and r["none"] == ["Plain Lane"], r
+    assert r["after"] == ["Smooth Lane"] and r["afterA8"], r
+    assert r["smoothEdges"] >= 4 and r["items"] == 2, r
+    assert r["cells"] <= 16 and r["cell0"] == "392_-847", r
+
+
 def test_offline_maneuvers():
     r = case("maneuvers")
     assert r["steps"] == [[1, "First Street"], [15, "Second Street"], [10, "Third Street"], [4, None]] or \
@@ -135,6 +145,7 @@ def test_planner_glue():
     assert r["shapeMatch"] == "map_snap" and r["sameLine"], r
     assert r["offline"] == "own" and r["offlineSteps"] and r["slow"] == "own", r
     assert r["onFlags"] == [False, False, True], "the server flag and the phone's switch both turn it off"
+    assert abs(r["clock"][0] - 0.9) < 1e-9 and r["clock"][1] and r["clock"][2] is None, "one clock in the pool: " + str(r["clock"])
 
 
 def test_performance_on_a_cincinnati_size_network():

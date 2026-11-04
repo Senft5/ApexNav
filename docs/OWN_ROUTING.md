@@ -178,3 +178,41 @@ phone's reader); tests/test_graph_tiles.py round-trips through both. What a rout
     graph view built in about 100 ms. tests/test_graph_router.py; e2e: two flows in e2e/smoke.js.
   - Not yet: the live comparison with production on the 7 cases (no real Cincinnati tiles exist yet); Explore still
     uses Valhalla; corner entry across edge joins (hIn/hOut) is read for turn angles only, not yet scored as fun.
+- 2026-11-04 (later): the router on the real Cincinnati tiles (16 tiles, 14.6 MB), live against production:
+  - **Fixed, from the live run:** (1) `t x (1 + a x bad)` could never buy more time than the ratio of two roads'
+    badness (0.68 vs 0.74 here: any detour over 9 % lost at every `a`), so Fun and Max came back as the quickest. The
+    objective is now `t x exp(a x bad)` (same heuristic argument: exp(a x min bad) >= 1), `a` bisected in [0, 40].
+    (2) Goodness was quality-led, and the motorway has the network's best quality, so a large `a` pulled toward I-275:
+    goodness is now 0.2 not-a-side-street (quality 0.25-0.45, the engine's poor cost) + 0.15 quality + 0.45 corners
+    (per km against the network's median) + 0.2 scenery. (3) Our clock ran 12 % slow against Valhalla's on the same
+    roads, so at Quick our copy of the router's route lost to it on time alone: where Valhalla's route (default or
+    highway-friendly, both asked as checks) is the same way as our quickest, ours go on its clock (oneClock, 0.75-1.33).
+    (4) Route names in km, as routeOf has them. (5) Every bisection step goes to the engine (up to 7 routes).
+  - **Members' data in the search:** at plan time the corridor's `/api/roads?cells=` (0.1° cells, VI-1, at most 16, 1.5
+    s) is fetched alongside the coverage check; the tiles hold no OSM way ids, so each way's line is walked every 10 m in
+    its measured direction onto the nearest same-heading edge within 15 m (crowdOnto). Each measured edge's quality takes
+    roughness and flow, its scenery loved and banking, with the engine's own weights (rough 1, flow 1, loved 1.5,
+    camber 0.5) against the model weight the tile already knew (conf x 37.1 quality, 12.8 scenery). Signed out or no
+    data: unchanged. Test: a loved, smooth lane wins a 2 s near-tie in the search.
+  - **Gap:** via-way turn restrictions (259 in Cincinnati) are counted by the ETL and not in the tiles, so the router
+    can't apply them; the tile format needs a via-way table (from-edge, via edges, to-edge) first.
+  - **Live, 2026-11-04** (scratchpad live2/run_own.js on a local serve; production's pick scored by the same engine in
+    the same pool; values in engine points, higher is better):
+
+    | case | our pick (km) | vs quickest | ours | prod | plan / first route |
+    |---|---|---|---|---|---|
+    | owner1 quick | Blue Rock 6.4, Dry Ridge 3.7, Cheviot 1.9, Weik 1.0 | +1.1 min | -32.5 | -66.6 | 6.0 / 1.7 s |
+    | owner1 fun | Blue Rock 4.3, Dry Ridge 3.7, Jessup 3.6, Sheed 2.4 | +2.5 min | -24.1 | -33.0 | 6.9 / 1.8 s |
+    | owner1 max | Sheed 4.5, Thompson 4.3, Dry Ridge 3.7, Jessup 3.6 | +13.8 min | -1.6 | -30.6 | 7.3 / 1.9 s |
+    | subdivision fun | Pippin 2.4, Redharvest 0.4 (the same as prod) | 0 | -34.2 | -34.2 | 3.3 / 1.1 s |
+    | subdivision4 fun | Pippin, Miles, Hamilton, Struble (the same roads as prod) | +3.1 min | -55.5 | -53.8 | 4.3 / 1.6 s |
+    | northgate fun | Mill Road 3.3 | +1.4 min | -25.6 | -42.8 | 6.3 / 2.5 s |
+    | colerain quick | Cross County Hwy 6.0, Blue Rock 4.0, E Miami River 1.7 | +0.7 min | -5.1 | over budget | 5.3 / 1.7 s |
+    | colerain fun | the same, Weik and Dry Ridge | +0.7 min | -0.4 | -40.1 | 4.9 / 1.7 s |
+    | colerain max | the same, a longer way in | +1.5 min | 2.9 | -36.1 | 5.8 / 1.6 s |
+    | harrison fun | Cincinnati Brookville 6.3, California 4.0, Alert-New London 3.3 | +8.2 min | 30.3 | 13.6 | 7.3 / 1.8 s |
+
+    Our router produced every winner. subdivision4 is the same route as production's; the 1.7 points are the hour's
+    deer and low-sun penalties (the two captures were made at different times). Strip mall at most 0.6 km on any pick
+    (production up to 1.7 km). Tiles per plan 2-6 (3.6-8.5 MB); the router's own time 0.1-1.5 s in the browser.
+    Plan times are still the route context's 4 s budget (unchanged; the router is not the long pole).

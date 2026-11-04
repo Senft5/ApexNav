@@ -119,6 +119,39 @@ const CASES = {
     return out;
   },
 
+  // members' data in the search: a near-tie (the plain lane 2 s quicker) flips to the loved, smooth, flowing lane, and
+  // with no data (signed out) nothing changes
+  crowd() {
+    const A = [39.30, -84.70], nodes = [at(A[0], A[1] - 0.004), at(A[0], A[1]), at(A[0], A[1] + 0.03), at(A[0], A[1] + 0.034)];
+    const edges = [];
+    two(edges, 0, 1, { name: 'Start Lane', t: 30 }); two(edges, 2, 3, { name: 'End Lane', t: 30 });
+    const north = [[A[0] + 0.004, A[1] + 0.01], [A[0] + 0.004, A[1] + 0.02]], south = [[A[0] - 0.004, A[1] + 0.01], [A[0] - 0.004, A[1] + 0.02]];
+    const chain = (pts, props) => { const ids = pts.map((p) => { nodes.push(at(p[0], p[1])); return nodes.length - 1; }); const c = [1, ...ids, 2]; for (let k = 0; k + 1 < c.length; k++) two(edges, c[k], c[k + 1], props(k)); };
+    chain(north, (k) => ({ name: 'Smooth Lane', quality: 0.6, scenery: 0.5, fun: 0.5, conf: 0.8, cls: 4, t: k === 1 ? 61 : 60 }));
+    chain(south, (k) => ({ name: 'Plain Lane', quality: 0.6, scenery: 0.5, fun: 0.5, conf: 0.8, cls: 4, t: k === 1 ? 59 : 60 }));
+    const v = R.view(H.tiles(nodes, edges).tiles);
+    const from = { lat: A[0], lon: A[1] - 0.002 }, to = { lat: A[0], lon: A[1] + 0.032 };
+    const roads = (r) => r.names.map((n) => n.name).filter((n) => /Lane$/.test(n) && !/Start|End/.test(n));
+    const before = R.plan(v, { from, to, level: 'fun' });
+    // the north lane as members measured it, both ways: smooth (0.06 g), flowing, loved (came back to it 5+ times)
+    const line = [[A[0], A[1]], [A[0] + 0.004, A[1] + 0.01], [A[0] + 0.004, A[1] + 0.02], [A[0], A[1] + 0.03]];
+    let L = 0; for (let k = 1; k < line.length; k++) L += R.distM(line[k - 1][0], line[k - 1][1], line[k][0], line[k][1]);
+    const bins = Array.from({ length: Math.floor(L / 5) }, (_, b) => b);
+    const ways = { 77: { 0: { i: bins, n: bins.map(() => 6), rough: bins.map(() => 0.06), rsd: bins.map(() => 0.01), cam: bins.map(() => 1), csd: bins.map(() => 0.2),
+      fl: bins.map(() => 0.95), hb: bins.map(() => 0), fn: bins.map(() => 6), ag: 3 } } };
+    ways[77][1] = ways[77][0];
+    const items = Own.crowdItems({ ways, lines: { 77: line } });
+    v.crowd = R.crowdOnto(v, items);
+    const after = R.plan(v, { from, to, level: 'fun' });
+    const objOn = R.objective(v, {}), aOn = R.search(v, objOn, R.snap(v, from.lat, from.lon), R.snap(v, to.lat, to.lon), 8);
+    const smoothEdges = v.crowd ? v.crowd.edges : 0;
+    v.crowd = null;
+    const none = R.plan(v, { from, to, level: 'fun' });
+    const cells = Own.cellsFor({ lat: 39.25, lon: -84.6 }, { lat: 39.29, lon: -84.75 });
+    return { before: roads(before.routes[0]), after: roads(after.routes[0]), afterA8: R.assemble(v, aOn, objOn).names.map((n) => n.name).includes('Smooth Lane'),
+      none: roads(none.routes[0]), smoothEdges, items: items.length, cells: cells.length, cell0: cells[0] };
+  },
+
   // spoken directions offline: a left onto Second Street, a right onto Third, start and arrive
   maneuvers() {
     const nodes = [at(39.1, -84.5), at(39.1, -84.494), at(39.1045, -84.494), at(39.1045, -84.488), at(39.0955, -84.494), at(39.1, -84.488)];
@@ -226,13 +259,18 @@ const CASES = {
     // decode the encoded line back: it is our line
     const dec = (s) => { const pts = []; let i = 0, la = 0, lo = 0; while (i < s.length) { for (const k of [0, 1]) { let r = 0, sh = 0, b; do { b = s.charCodeAt(i++) - 63; r |= (b & 0x1f) << sh; sh += 5; } while (b >= 0x20); const d = r & 1 ? ~(r >> 1) : r >> 1; if (k) lo += d; else la += d; } pts.push([lo / 1e6, la / 1e6]); } return pts; };
     const back = dec(bodies[0].encoded_polyline);
+    // one clock: Valhalla's quickest the same way as ours puts every one of ours on its clock; another way, nothing
+    const cl = Own.candidates(inside.result), q0 = cl.find((x) => x.ownRole === 'quickest'), t0 = cl.map((x) => x.timeS);
+    const same = Own.oneClock(cl, { coords: q0.route.coords.slice(), timeS: q0.timeS * 0.9 });
+    const scaled = cl.every((x, i) => Math.abs(x.timeS - t0[i] * 0.9) < 1e-6);
+    const cl2 = Own.candidates(inside.result), other = Own.oneClock(cl2, { coords: q0.route.coords.map(([lo, la]) => [lo + 0.01, la]), timeS: 100 });
     const flags = { on: (n, d) => (n === 'own_routing' ? false : d) };
     const store = (v) => ({ getItem: (k) => (k === Own.OFF_KEY ? v : null) });
     return { inside: { reason: inside.reason, n: inside.cands.length, kinds: [...new Set(inside.cands.map((x) => x.kind))], names: c.route.names instanceof Map, timeS: c.timeS === c.own.timeS, via: c.via },
       out: out.reason, outN: out.cands.length, off: off.reason, broken: [broken.reason, broken.error],
       online, onlineSteps: onlineRoute.steps.map((s) => s.street), bodies: bodies.length, shapeMatch: bodies[0].shape_match, sameLine: back.length === c.route.coords.length && Math.abs(back[5][0] - c.route.coords[5][0]) < 2e-6,
       offline, offlineSteps: offlineRoute.steps.length === c.route.steps.length, slow,
-      onFlags: [Own.on({ flags, storage: store(null), router: R }), Own.on({ flags: { on: (n, d) => d }, storage: store('0'), router: R }), Own.on({ flags: { on: (n, d) => d }, storage: store(null), router: R })] };
+      clock: [same, scaled, other], onFlags: [Own.on({ flags, storage: store(null), router: R }), Own.on({ flags: { on: (n, d) => d }, storage: store('0'), router: R }), Own.on({ flags: { on: (n, d) => d }, storage: store(null), router: R })] };
   },
 
   // the Cincinnati-size synthetic network: 16 tiles, ~150k edges; per query and per full plan

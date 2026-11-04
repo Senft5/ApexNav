@@ -4,7 +4,20 @@ Decisions Claude made for you, newest first. Each one says what was decided, why
 you reach one you've seen. If you disagree with a call, say so and it gets reversed; nothing here is hard to undo unless
 it says so. Things only you can do are in docs/OWNER_TODO.md.
 
-<<<<<<< HEAD
+## 2026-11-04 (night): Our own routing on the real Cincinnati roads
+
+Live on 10 trips, our router's pick won the engine's ranking on all 10 and scored at least as well as production's
+on 9; the tenth is the same route as production's, scored at a different hour (OWN_ROUTING.md §8 has the table).
+- **Fun and Max now really trade time for road**: the cost is `time x exp(a x badness)` (the multiplicative form could
+  never buy more than about 9 % more time here), and corners carry most of the goodness, so the motorway's high
+  quality no longer pulls Fun onto it. Undo or tune: `K` in web/graph_router.js.
+- **One clock**: where Valhalla's route and ours are the same way, our times are put on Valhalla's clock (ours ran 12 %
+  slow), so a Quick plan doesn't lose a route to its own copy. Valhalla's highway-friendly route is asked again as a
+  check for this. Undo: `oneClock` in own_routing.js.
+- **Members' data counts per stretch inside the search**: measured roughness, flow, loved roads and banking change
+  each edge's goodness with the route engine's own weights. Signed out: no change. Undo: `crowd:` in cockpit.js funRoute.
+- **Via-way turn restrictions are not applied** (259 here): the tiles don't carry them yet (a gap in OWN_ROUTING.md).
+
 ## 2026-11-04 (evening): Our own routing on the phone (the router half)
 
 The phone can now find routes itself over our own scored road network (docs/OWN_ROUTING.md §5, §8). It does nothing
@@ -27,7 +40,6 @@ until the Cincinnati tiles ship: where no tiles cover a trip, planning is exactl
 - **Our routes are always pinned with shaping points**, so a reroute (still Valhalla's) keeps to them.
 - Not done: the live comparison against production (no real tiles yet), Explore on our router.
 
-=======
 ## 2026-11-04 (own routing): the scored road network (graph half)
 
 - **Every road is scored once, ahead of time, by the app's own model**: tools/graph_etl/score_edges.js runs
@@ -56,7 +68,6 @@ until the Cincinnati tiles ship: where no tiles cover a trip, planning is exactl
 - **Via-way turn restrictions are counted, not applied** (index.json `stats`). Undo: none needed; applying them is next.
 
 ## 2026-11-04 (later still): The route engine, faster
->>>>>>> 2ff318b59383eb558d2935515cd0bc703dcde38f
 
 - **Finding good-road stages runs off the main thread** (a Web Worker, web/stages_worker.js) and is cached 10 minutes
   per area, so the map stays smooth while planning and a re-plan reuses it. Undo: the worker call in stages.js.

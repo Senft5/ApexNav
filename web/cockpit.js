@@ -3083,21 +3083,24 @@
       // (the router's own request goes out first: the coverage answer is a lookup, but the worker may be starting)
       const valhallaP = valhallaRoutes([from, to], false, 2).catch(() => osrmRoutes([from, to])).catch(() => []);
       const ownCovered = ownOn() ? !!(await RouteLoading.optional(ownRouter().covers([from, to]), OWN_COVERS_MS)) : false;
-      const ownP = ownCovered ? ApexOwnRouting.plan(ownRouter(), { from, to, level, prefs: roadPrefs, avoid, heading: from.heading }) : null;
+      // members' measured roads round the trip go into our search itself (signed out or none: unchanged)
+      const ownP = ownCovered ? ApexOwnRouting.plan(ownRouter(), { from, to, level, prefs: roadPrefs, avoid, heading: from.heading,
+        crowd: ApexOwnRouting.crowdFor(routeCtxOpts().lookupCells, from, to) }) : null;
       const stagesAhead = !ownCovered && level !== 'quick' && crowKm >= 3 && crowKm <= 48 && window.ApexStages ? stagesFor(from, to).catch(() => null) : null;
       let direct;
       // The router's costing keeps off highways (use_highways 0.15), which is what sent routes through subdivisions and
       // business districts; so the highway-friendly quickest competes too (route_engine.js highwayCosting), unless avoided.
       const hwyCosting = window.ApexRouteEngine && FunRoute.kmBetween(from, to) >= 2 ? ApexRouteEngine.highwayCosting(avoid, routingCar()) : null;
-      let hwyTry = hwyCosting && !ownCovered ? valhallaRoutes([from, to], false, 0, hwyCosting).catch(() => []) : Promise.resolve([]);
+      // (asked with our routes too: Valhalla's highway-friendly quickest is the check, and the clock ours are put on)
+      let hwyTry = hwyCosting ? valhallaRoutes([from, to], false, 0, hwyCosting).catch(() => []) : Promise.resolve([]);
       const own = ownP ? await ownP : { cands: [], reason: ownOn() ? 'out' : 'off', ms: 0 };
       // with our routes up, Valhalla's answer is only a check: it doesn't hold the plan up past OWN_CHECK_MS
       direct = own.cands.length ? (await RouteLoading.optional(valhallaP, OWN_CHECK_MS)) || [] : await valhallaP;
       const ownUsed = own.cands.length > 0;
-      if (window.apexDebug) window.apexDebug.lastOwn = { covered: ownCovered, used: ownUsed, reason: own.reason, ms: own.ms, n: own.cands.length, error: own.error || null };
-      if (ownCovered && !ownUsed && hwyCosting) hwyTry = valhallaRoutes([from, to], false, 0, hwyCosting).catch(() => []);   // ours failed: today's candidates
+      if (window.apexDebug) window.apexDebug.lastOwn = { covered: ownCovered, used: ownUsed, reason: own.reason, ms: own.ms, n: own.cands.length, error: own.error || null, tiles: own.result ? own.result.tiles : null, routerMs: own.result ? own.result.ms : null };
       if (!direct.length && !ownUsed) { toast('Couldn\'t build the route. Check signal and try again.'); return false; }
       const vQuick = direct.filter(r => Number.isFinite(r.timeS)).reduce((x, y) => (!x || y.timeS < x.timeS ? y : x), null) || direct[0] || null;
+      // one clock in the pool: ours on Valhalla's where both quickest routes are the same way (own_routing.js oneClock)
       const directCands = [...own.cands, ...(ownUsed ? (vQuick ? [vQuick] : []) : direct).map(r => ({ kind: 'router', route: r, timeS: r.timeS, via: [] }))];
       // Where to? stays instant (REVIEW_FEEL): the router's first answer goes up at once (not held for the highway-costed
       // route, the weather or anything else) and the ranked routes replace it when they're ready, unless you've started
@@ -3116,7 +3119,10 @@
       if (!earlyTimer) openGate();                                          // no early quickest: nothing to wait for
       const directCtx = firstUp.then(() => contextOn(directCands.slice(), CTX_BUDGET_MS, 'route'));
       const same = (a, b) => Math.abs((a.timeS || 0) - (b.timeS || 0)) < 1 && a.coords.length === b.coords.length;
-      const highway = (await hwyTry).filter(r => Number.isFinite(r.timeS) && !direct.some(d => same(d, r)));
+      const highway = (await (ownUsed ? RouteLoading.optional(hwyTry, OWN_CHECK_MS).then((x) => x || []) : hwyTry)).filter(r => Number.isFinite(r.timeS) && !direct.some(d => same(d, r)));
+      // one clock in the pool: ours on Valhalla's where its route and our quickest are the same way (own_routing.js oneClock)
+      const ownClock = ownUsed ? ApexOwnRouting.oneClock(own.cands, [vQuick, ...highway].filter(Boolean)) : null;
+      if (window.apexDebug && window.apexDebug.lastOwn) window.apexDebug.lastOwn.clock = ownClock;
       const hwyCands = highway.map(r => ({ kind: 'router', highway: true, route: r, timeS: r.timeS, via: [] }));
       const cands = [...directCands, ...hwyCands];
       const routerCands = cands.slice(), planCtx = new Map();
