@@ -51,7 +51,9 @@ Scores, computed by calling `web/route_engine.js` itself (node, at build time; n
 - `fun` per edge: the gated corner score of the edge's geometry (corners only count on good road), plus the
   corner-entry context across edge joins handled at query time (a corner split across two edges must still count:
   edges keep their first/last 60 m heading so the router can score the join).
-- `t_s` travel time: from the speed model the engine uses (posted/estimated speed, class, curvature, signals, stops).
+- `t_s` travel time: from the speed model the engine uses (posted/estimated speed, class, curvature, and the signals,
+  stops and crossings inside the edge). Not those on its end nodes: they are node flags and the router adds them at
+  query time with the same seconds (§5, §8), so each is counted once.
 - `conf` how much of the edge's weight was known (unknown stays unknown, never 0).
 Time-dependent things (deer hour, school hours, weather, works, events, sun glare) are NOT baked in: they are applied at
 query time from the existing providers along the chosen route and its alternatives.
@@ -105,3 +107,37 @@ query time from the existing providers along the chosen route and its alternativ
 
 - 2026-11-04: plan written. Geofabrik is unreachable from the build container (proxy drops the connection); the ETL is
   run in GitHub Actions and its artifact downloaded.
+- 2026-11-04: the phone's router built (branch `claude/own-routing-router`, merged with the codec branch):
+  - `web/graph_router.js` (pure, node-tested): the loaded tiles as one flat graph, cross-tile edges stitched by the
+    tiles' packed keys; edge-based A* (the state is the edge you arrived on, so restrictions, U-turns and turn costs are
+    exact), heuristic straight-line distance over the network's top speed times the objective's smallest per-second
+    cost (admissible at every `a`). Snapping to the nearest edge and its other direction, part-way along.
+  - Costs: edge `t_s`; turns by angle (right 2-10 s, left 5-21 s, U 30 s), only at junctions or bends over 70°;
+    U-turns back the way you came only at dead ends; end-node flags signal 15 s, stop 7 s, give way 2 s, level
+    crossing 4 s, calming 3 s, crossing 1 s (build.py DELAY_S), barrier 120 s; private and barrier edges x10 + 600 s, destination-only x2 + 60 s, unpaved x1.5,
+    ferry x2; Avoid chips multiply (highways x4, tolls x3, ferries x5, unpaved x5).
+  - Goodness per edge: 0.5 quality + 0.3 fun (gated corner points per km against the loaded network's 90th
+    percentile) + 0.2 scenery (half-counted below the corner gate), the corner prefs scaling fun; unknown channels drop
+    out, and the whole blends to 0.3 by how little was known (`conf`), so unknown road can't win.
+  - Plans: the quickest, then `a` bisected in log steps (at most 5 more searches) for the largest `a` whose time is
+    inside the level's budget (fun_route.js LEVELS, the same numbers); every distinct route found inside the budget is
+    a candidate. Two alternates by the penalty method (x1.6, x2.5, x5 on the chosen edges) that differ by 30 % of
+    their length and stay inside the budget. At most 5 routes go to the route engine.
+  - Loops: 4 rings through the start (radius from the length / 2π / 1.35), 3 waypoints each snapped to through roads,
+    each leg on a fixed `a` (Quick 0.6, Fun 3, Max 8) with earlier legs' edges x3; they join the loop planner's pool.
+  - Output per route: `coords` [[lat, lon]] at the edges' geometry, `edges` ("i_j:local" ids), `timeS`, `distM`,
+    `names` per stretch, `why` (quality, scenery, fun, conf, a, role, signals, junctions) and `route` in the shape of
+    cockpit.js routeOf (coords [[lon, lat]], turns, times, steps as Valhalla maneuver types, names, has), so corridors,
+    the context run, the ranking and the why line take it unchanged.
+  - `web/graph_worker.js` hosts it (messages covers / plan / loop by id); `web/own_routing.js` is the planner's side.
+  - Planner glue (cockpit.js funRoute, buildLoop): where index.json covers start and end, our routes are the
+    candidates, the stage plans, matrix and highway-costed call are skipped, and Valhalla's quickest stays in the pool
+    as a check (waited for at most 2.5 s once ours are in). The chosen route gets Valhalla's maneuvers from one
+    `trace_route` (map_snap, our line as encoded_polyline, 3 s), else our own. Ours are always pinned with shaping
+    points so a Valhalla reroute keeps to them. Not covered, flag off, or any failure: today's path, unchanged.
+  - Flag `own_routing` (backend/src/flags.ts), on; it only acts where tiles exist. Off for everyone:
+    FLAGS {"own_routing":{"on":false}}; one phone: localStorage `apex.ownRouting` = "0".
+  - Measured (node, 16-tile synthetic network of 179k edges): one search 2-90 ms, a whole Fun plan 90-550 ms, the
+    graph view built in about 100 ms. tests/test_graph_router.py; e2e: two flows in e2e/smoke.js.
+  - Not yet: the live comparison with production on the 7 cases (no real Cincinnati tiles exist yet); Explore still
+    uses Valhalla; corner entry across edge joins (hIn/hOut) is read for turn angles only, not yet scored as fun.

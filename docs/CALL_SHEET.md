@@ -4,7 +4,28 @@ Decisions Claude made for you, newest first. Each one says what was decided, why
 you reach one you've seen. If you disagree with a call, say so and it gets reversed; nothing here is hard to undo unless
 it says so. Things only you can do are in docs/OWNER_TODO.md.
 
-## 2026-11-04 (later still): The route engine, faster
+## 2026-11-04 (evening): Our own routing on the phone (the router half)
+
+The phone can now find routes itself over our own scored road network (docs/OWN_ROUTING.md §5, §8). It does nothing
+until the Cincinnati tiles ship: where no tiles cover a trip, planning is exactly as before.
+- **Where our tiles cover the trip, our routes are the candidates** and the stage search, its matrix and the
+  highway-costed router call are skipped; Valhalla's quickest stays in the pool as a check, and is waited for at most
+  2.5 s once ours are in. Undo: `ownCovered` in cockpit.js funRoute, or the flag below.
+- **One switch:** the `own_routing` flag (on; it only acts where tiles exist). Off for everyone: FLAGS
+  {"own_routing":{"on":false}} in the Worker's variables; one phone: localStorage `apex.ownRouting` = "0".
+- **Fun and Max fun trade time for good road** as `time x (1 + a x (1 - goodness))`, `a` found so the route stays
+  inside the level's time budget (the same budgets as today); goodness is half quality, three tenths corners, a fifth
+  scenery, and unknown road counts as below average so it can't win. Every route found on the way is offered to the
+  route engine, which still picks. Undo or tune: `K` in web/graph_router.js.
+- **Signals and stop signs on a junction are added by the router** (15 s and 7 s, the graph builder's own numbers for
+  those inside an edge), so each is counted once; OWN_ROUTING.md §3 says so. Undo: `SIGNAL_S`, `STOP_S`.
+- **Turn instructions for our route come from Valhalla's trace_route** on our line when online (one request, 3 s at
+  most), our own from name changes and turn angles offline. That sends the route's line to the public router, as the
+  road-data provider (router_edges) already does for every candidate; nothing new leaves the phone. Undo:
+  `ownInstructions` in cockpit.js.
+- **Our routes are always pinned with shaping points**, so a reroute (still Valhalla's) keeps to them.
+- Not done: the live comparison against production (no real tiles yet), Explore on our router.
+
 
 - **Finding good-road stages runs off the main thread** (a Web Worker, web/stages_worker.js) and is cached 10 minutes
   per area, so the map stays smooth while planning and a re-plan reuses it. Undo: the worker call in stages.js.

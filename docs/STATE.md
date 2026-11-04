@@ -1,6 +1,19 @@
 # VETTA — CURRENT AGENT HANDOFF STATE
 
-## Session 2026-11-04: owner notes through #290; route engine being integrated
+## Session 2026-11-04 (evening): own routing, the phone's router (branch claude/own-routing-router)
+
+- [x] web/graph_router.js (edge-based A*, turn restrictions, one-ways, U-turns at dead ends only, turn and node costs,
+  Quick / Fun / Max with the goodness weight bisected to the level budget, 2 alternates 30 % different, loops),
+  web/graph_worker.js, web/own_routing.js, the planner glue in cockpit.js (funRoute, buildLoop), the `own_routing`
+  flag. Merged the codec branch (claude/own-routing-graph: web/graph_tiles.js, tools/graph_etl/tiles.py).
+- [x] tests/test_graph_router.py (A* = brute-force Dijkstra on 720 random queries, rules, budgets, alternates,
+  determinism, the worker on .vgr tiles from the real writer, client fallback, glue, performance), two e2e flows.
+  Performance (node, 16 tiles, 179k edges): a search 2-90 ms, a whole Fun plan 90-550 ms.
+- Not done: the live comparison with production on the 7 cases waits for the real Cincinnati tiles (the ETL branch has
+  only the codec so far); Explore stays on Valhalla; corners split across edge joins aren't scored by the router yet.
+- Exact next task: when web/data/graph/v1 has the Cincinnati tiles, serve locally and run the live harness
+  (scratchpad live2/run.js with BASE=) on the 7 cases; tune `K` in graph_router.js on what it finds.
+
 
 - [x] #286-#290: convoy line behind the car (@fish5spd), car-specific themes with any voice pack and red needles,
   End undo 1.7 s, a granted theme from a newer server falls back to a known renderer (#289), the drive page map zooms a

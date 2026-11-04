@@ -25,11 +25,15 @@
   };
   const levels = () => { const F = FunRoute(); return (F && F.LEVELS) || LEVELS_COPY; };
   const TILE_DEG = 0.25;
-  // edge flag bits (docs/OWN_ROUTING.md §4); the tile reader's own table wins when it has one
-  const FLAG_BITS = { oneway: 1, toll: 2, ferry: 4, unpaved: 8, tunnel: 16, bridge: 32, motorway: 64, ramp: 128, roundabout: 256, private: 512, signal: 1024, stop: 2048 };
+  // the tile format's tables (web/graph_tiles.js, tools/graph_etl/tiles.py): edge flags, node flags, classes, unknowns
+  const FLAG_BITS = { oneway: 1, toll: 2, ferry: 4, unpaved: 8, tunnel: 16, bridge: 32, motorway: 64, ramp: 128, roundabout: 256, private: 512,
+    geomRev: 1024, speedEst: 2048, barrier: 4096, destination: 8192 };
+  const NODE_BITS = { signal: 1, stop: 2, giveWay: 4, barrier: 8, levelCrossing: 16, deadEnd: 32, crossing: 64, calming: 128 };
   const flagBits = () => { const T = root.ApexGraphTiles; return (T && T.FLAGS) || FLAG_BITS; };
-  // road classes, Valhalla's codes (the route engine's road_class): 0 motorway .. 7 service
-  const CLS = { motorway: 0, trunk: 1, primary: 2, secondary: 3, tertiary: 4, unclassified: 5, residential: 6, service: 7 };
+  const nodeBits = () => { const T = root.ApexGraphTiles; return (T && T.NODE_FLAGS) || NODE_BITS; };
+  // road classes, the router's codes (the route engine's road_class) plus track and ferry
+  const CLS = { motorway: 0, trunk: 1, primary: 2, secondary: 3, tertiary: 4, unclassified: 5, residential: 6, service: 7, track: 8, ferry: 9 };
+  const UNKNOWN_U8 = 255, UNKNOWN_FUN = 0xffff, NO_NAME = 0xffff;
 
   // ---- the objective's knobs ------------------------------------------------------------------------------------------
   const K = {
@@ -38,8 +42,10 @@
     W_QUALITY: 0.5, W_FUN: 0.3, W_SCENERY: 0.2,
     FUN_FULL_PCT: 0.9,       // fun per km that counts as full: the loaded network's 90th percentile of edges with corners
     TURN_RIGHT_S: 2, TURN_RIGHT_K: 4, TURN_LEFT_S: 5, TURN_LEFT_K: 8, STRAIGHT_RAD: 0.35, UTURN_S: 30,
-    SIGNAL_S: 10, STOP_S: 5, // at the node an edge ends on, from its flags (only where the tiles mark them)
-    PRIVATE_X: 10, PRIVATE_S: 600, FERRY_X: 2, UNPAVED_X: 1.5,
+    // passing a node with a signal, a stop sign, give way, a level crossing, calming or a crossing (the tiles' node flags;
+    // the same seconds the ETL adds for those inside an edge, tools/graph_etl/build.py DELAY_S; end nodes are ours)
+    SIGNAL_S: 15, STOP_S: 7, GIVE_WAY_S: 2, LEVEL_CROSSING_S: 4, CALMING_S: 3, CROSSING_S: 1, BARRIER_S: 120,
+    PRIVATE_X: 10, PRIVATE_S: 600, DESTINATION_X: 2, DESTINATION_S: 60, FERRY_X: 2, UNPAVED_X: 1.5,
     AVOID_HWY_X: 4, AVOID_TOLL_X: 3, AVOID_FERRY_X: 5, AVOID_UNPAVED_X: 5,
     A_MAX: 24, BISECT: 5,    // the goodness weight is searched in [0, A_MAX] (log steps), at most BISECT more routes
     ALT_PENALTIES: [0.6, 1.5, 4], ALT_MIN_DIFF: 0.3, ALTS: 2,
@@ -66,13 +72,16 @@
     return d;
   }
   const clamp01 = (v) => (v < 0 ? 0 : v > 1 ? 1 : v);
-  const tileOf = (lat, lon) => ({ i: Math.floor(lat / TILE_DEG), j: Math.floor(lon / TILE_DEG) });
+  // the tiles' grid (graph_tiles.js tileOf): i from longitude, j from latitude; files and index keys are "i_j"
+  const tileOf = (lat, lon) => ({ i: Math.floor((lon + 180) / TILE_DEG), j: Math.floor((lat + 90) / TILE_DEG) });
   const keyOf = (i, j) => `${i}_${j}`;
+  const packedKey = (k) => `${k >>> 16}_${k & 0xffff}`;              // graph_tiles.js keyOf: (i << 16) | j
 
   // ---- the multi-tile view ---------------------------------------------------------------------------------------------
   function refKey(ref) {
     if (ref == null) return null;
     if (typeof ref === 'string') return ref;
+    if (typeof ref === 'number') return packedKey(ref);
     if (Array.isArray(ref)) return keyOf(ref[0], ref[1]);
     if (typeof ref === 'object' && Number.isFinite(ref.i)) return keyOf(ref.i, ref.j);
     return null;
@@ -95,25 +104,35 @@
     const lat = new Float64Array(N), lon = new Float64Array(N), first = new Int32Array(N + 1);
     const to = new Int32Array(E), tail = new Int32Array(E), eTile = new Uint16Array(E);
     const time = new Float32Array(E), len = new Float32Array(E), quality = new Uint8Array(E), scenery = new Uint8Array(E), conf = new Uint8Array(E);
-    const fun = new Float32Array(E), flags = new Uint16Array(E), cls = new Uint8Array(E), speed = new Uint8Array(E);
+    const fun = new Float32Array(E), flags = new Uint16Array(E), cls = new Uint8Array(E), speed = new Uint8Array(E), name = new Int32Array(E);
+    const nflags = new Uint8Array(N), hIn = new Float32Array(E).fill(NaN), hOut = new Float32Array(E).fill(NaN);
     let vmax = 1;
     list.forEach((t, k) => {
       const nb = nodeBase[k], eb = edgeBase[k], n = t.nodes.lat.length, ed = t.edges;
-      const refs = t.refs || (t.tile && t.tile.refs) || [];
-      const refIdx = refs.map((r) => { const key = refKey(r); return key != null && index.has(key) ? index.get(key) : -1; });
+      const self = t.tile.key != null ? t.tile.key : (((t.tile.i << 16) | t.tile.j) >>> 0);
+      const other = new Map();                                         // packed key -> view tile index (-1: not loaded)
       for (let a = 0; a < n; a++) {
         lat[nb + a] = t.nodes.lat[a] / 1e6; lon[nb + a] = t.nodes.lon[a] / 1e6;
+        if (t.nodes.flags) nflags[nb + a] = t.nodes.flags[a];
         first[nb + a] = eb + t.nodes.firstEdge[a];
         for (let e = t.nodes.firstEdge[a]; e < t.nodes.firstEdge[a + 1]; e++) tail[eb + e] = nb + a;
       }
       for (let e = 0; e < ed.to.length; e++) {
-        const g = eb + e, tt = ed.toTile ? ed.toTile[e] : -1;
-        if (tt < 0) to[g] = nb + ed.to[e];
-        else { const o = refIdx[tt]; to[g] = o >= 0 && o != null ? nodeBase[o] + ed.to[e] : -1; }
+        const g = eb + e, tt = ed.toTile ? ed.toTile[e] : self;
+        if (tt === self) to[g] = nb + ed.to[e];
+        else {
+          if (!other.has(tt)) other.set(tt, index.has(packedKey(tt)) ? index.get(packedKey(tt)) : -1);
+          const o = other.get(tt);
+          // an edge into a tile that isn't loaded can't be used; one naming a node the tile doesn't have, neither
+          to[g] = o >= 0 && ed.to[e] < nodeBase[o + 1] - nodeBase[o] ? nodeBase[o] + ed.to[e] : -1;
+        }
         eTile[g] = k;
         len[g] = ed.len_dm[e] / 10; time[g] = Math.max(0.1, ed.t_ds[e] / 10);
-        quality[g] = ed.quality[e]; scenery[g] = ed.scenery[e]; conf[g] = ed.conf[e]; fun[g] = ed.fun[e];
+        quality[g] = ed.quality[e]; scenery[g] = ed.scenery[e]; conf[g] = ed.conf[e];
+        fun[g] = ed.fun[e] === UNKNOWN_FUN ? NaN : ed.fun[e] / 100;     // gated corner points (x 100 in the tile)
         flags[g] = ed.flags[e]; cls[g] = ed.cls[e]; speed[g] = ed.speed ? ed.speed[e] : 0;
+        name[g] = ed.name && ed.name[e] !== NO_NAME ? ed.name[e] : -1;
+        if (ed.hIn && ed.hOut) { hIn[g] = ed.hIn[e] / 256 * 2 * Math.PI; hOut[g] = ed.hOut[e] / 256 * 2 * Math.PI; }
         const v = len[g] / time[g];
         if (v > vmax) vmax = v;
       }
@@ -133,12 +152,14 @@
       for (let r = rfirst[a]; r < rfirst[a + 1] && !many; r++) { const b = tail[redge[r]]; if (b === a) continue; if (nb < 0) nb = b; else if (b !== nb) many = true; }
       deadEnd[a] = many ? 0 : 1;
     }
-    // turn restrictions, by the edge they start from (tile-local ids in each tile's table)
+    // turn restrictions, by the edge they start from: each lives in its via node's tile (the to-edge local there), its
+    // from-edge in fromTile (a packed key; the same tile when absent)
     const restr = new Map();
     list.forEach((t, k) => {
       for (const r of t.restrictions || []) {
-        const from = edgeBase[k] + r.fromEdge, toE = r.toTile != null && r.toTile >= 0 ? null : edgeBase[k] + r.toEdge;
-        if (toE == null) continue;
+        const fk = r.fromTile != null && r.fromTile !== t.tile.key ? index.get(packedKey(r.fromTile)) : k;
+        if (fk == null || r.fromEdge >= edgeBase[fk + 1] - edgeBase[fk] || r.toEdge >= edgeBase[k + 1] - edgeBase[k]) continue;
+        const from = edgeBase[fk] + r.fromEdge, toE = edgeBase[k] + r.toEdge;
         let x = restr.get(from);
         if (!x) restr.set(from, (x = { only: [], no: [] }));
         (r.only ? x.only : x.no).push(toE);
@@ -162,10 +183,9 @@
     const funFull = dens.length ? Math.max(1e-6, dens[Math.min(dens.length - 1, Math.floor(K.FUN_FULL_PCT * dens.length))]) : 1;
     const v = {
       tiles: list, keys: list.map((t) => keyOf(t.tile.i, t.tile.j)), index, nodeBase, edgeBase, N, E, lat, lon, first, to, tail, eTile,
-      time, len, quality, scenery, conf, fun, flags, cls, speed, vmax, rfirst, redge, deadEnd, restr, funFull,
+      time, len, quality, scenery, conf, fun, flags, cls, speed, name, nflags, vmax, rfirst, redge, deadEnd, restr, funFull,
       grid: { i0: gi0, j0: gj0, W: GW, H: GH, start: cellStart, nodes: cellNodes },
-      hIn: new Float32Array(E).fill(NaN), hOut: new Float32Array(E).fill(NaN),
-      scratch: null, bits: flagBits(), hasRestr: new Uint8Array(E),
+      hIn, hOut, scratch: null, bits: flagBits(), nbits: nodeBits(), hasRestr: new Uint8Array(E),
     };
     for (const e of restr.keys()) v.hasRestr[e] = 1;
     return v;
@@ -198,8 +218,8 @@
   /** Stable edge id: "<tile i>_<tile j>:<local edge>". */
   const edgeId = (v, e) => `${v.keys[v.eTile[e]]}:${e - v.edgeBase[v.eTile[e]]}`;
   function nameOf(v, e) {
-    const k = v.eTile[e], t = v.tiles[k], ix = t.edges.name ? t.edges.name[e - v.edgeBase[k]] : null;
-    return ix != null && t.names && t.names[ix] ? t.names[ix] : null;
+    const ix = v.name[e], t = v.tiles[v.eTile[e]];
+    return ix >= 0 && t.names && t.names[ix] ? t.names[ix] : null;
   }
   /** The other direction of the same road (v -> u with about the same length), or -1. */
   function twin(v, e) {
@@ -283,17 +303,22 @@
     const E = v.E, bad = new Float32Array(E), mult = new Float32Array(E), add = new Float32Array(E);
     let minBad = 1;
     for (let e = 0; e < E; e++) {
-      const q = v.quality[e] / 255, s = v.scenery[e] / 255, cf = v.conf[e] / 255;
+      // unknown (255, 65535) is unknown: its weight drops out; nothing known at all is UNKNOWN_G
+      const qk = v.quality[e] !== UNKNOWN_U8, sk = v.scenery[e] !== UNKNOWN_U8, fk = Number.isFinite(v.fun[e]);
+      const q = qk ? v.quality[e] / 254 : K.UNKNOWN_G, s = sk ? v.scenery[e] / 254 : 0, cf = qk ? v.conf[e] / 255 : 0;
       const gate = clamp01((q - K.GATE_LO) / (K.GATE_HI - K.GATE_LO));
-      const f = Math.min(1, v.fun[e] / Math.max(0.05, v.len[e] / 1000) / v.funFull);
-      const raw = (wq * q + wf * f * gate + ws * s * (0.5 + 0.5 * gate)) / wsum;
+      // fun is already gated by quality in the tiles (corners only count on good road); per km against the network's own
+      const f = fk ? Math.min(1, v.fun[e] / Math.max(0.05, v.len[e] / 1000) / v.funFull) : 0;
+      const w = wq + (fk ? wf : 0) + (sk ? ws : 0);
+      const raw = (wq * q + (fk ? wf * f : 0) + (sk ? ws * s * (0.5 + 0.5 * gate) : 0)) / Math.max(1e-6, w);
       const g = cf * raw + (1 - cf) * K.UNKNOWN_G;
       bad[e] = 1 - g;
       if (bad[e] < minBad) minBad = bad[e];
       const fl = v.flags[e];
       let m = 1, ad = 0;
-      if (fl & B.private) { m *= K.PRIVATE_X; ad += K.PRIVATE_S; }
-      if (fl & B.ferry) m *= avoid.ferries ? K.AVOID_FERRY_X : K.FERRY_X;
+      if (fl & (B.private | B.barrier)) { m *= K.PRIVATE_X; ad += K.PRIVATE_S; }
+      else if (fl & B.destination) { m *= K.DESTINATION_X; ad += K.DESTINATION_S; }
+      if ((fl & B.ferry) || v.cls[e] === CLS.ferry) m *= avoid.ferries ? K.AVOID_FERRY_X : K.FERRY_X;
       if (fl & B.unpaved) m *= avoid.unpaved ? K.AVOID_UNPAVED_X : K.UNPAVED_X;
       if (avoid.highways && ((fl & B.motorway) || v.cls[e] === CLS.motorway)) m *= K.AVOID_HWY_X;
       if (avoid.tolls && (fl & B.toll)) m *= K.AVOID_TOLL_X;
@@ -326,11 +351,19 @@
       if (ad > 2.9) c = K.UTURN_S;
       else if (ad > K.STRAIGHT_RAD) c = d > 0 ? K.TURN_RIGHT_S + K.TURN_RIGHT_K * Math.min(2, ad / (Math.PI / 2)) : K.TURN_LEFT_S + K.TURN_LEFT_K * Math.min(2, ad / (Math.PI / 2));
     }
-    if (obj.nodeCosts && ways >= 2) {
-      const fl = v.flags[p];
-      if (fl & B.signal) c += K.SIGNAL_S;
-      else if (fl & B.stop) c += K.STOP_S;
-    }
+    if (obj.nodeCosts) c += nodeCost(v, node);
+    return c;
+  }
+  /** Seconds passing node n costs for what's on it (signal, stop, give way, level crossing, calming, a barrier). */
+  function nodeCost(v, n) {
+    const f = v.nflags[n];
+    if (!f) return 0;
+    const N = v.nbits;
+    let c = f & N.signal ? K.SIGNAL_S : f & N.stop ? K.STOP_S : f & N.giveWay ? K.GIVE_WAY_S : 0;
+    if (f & N.levelCrossing) c += K.LEVEL_CROSSING_S;
+    if (f & N.calming) c += K.CALMING_S;
+    if (f & N.crossing) c += K.CROSSING_S;
+    if (f & N.barrier) c += K.BARRIER_S;
     return c;
   }
   function allowed(v, p, e) {
@@ -378,7 +411,7 @@
       popK = k;
       return e;
     };
-    let popK = 0, bestGoal = Infinity, bestEdge = -1, direct = null;
+    let popK = 0, bestGoal = Infinity, bestEdge = -1, bestPred = -1, direct = null;
     for (const s of src) {
       const e = s.edge, x = (1 - s.frac) * base(e) + (opts.startCost ? opts.startCost(e) : 0);
       if (stamp[e] !== qid || x < g[e]) { stamp[e] = qid; g[e] = x; pred[e] = -1; if (v.to[e] >= 0) push(x + H(v.to[e]), e); }
@@ -401,13 +434,15 @@
         const tc = turnCost(v, p, e, obj);
         if (tc === Infinity) continue;
         const be = base(e), x = gp + tc + be;
+        // the goal is part way along a target edge: reached from p whatever the edge's own best (a start on the same
+        // edge, further on, has a lower g for its end but can't reach a point behind it)
+        if (dstMap.has(e)) {
+          const cand = gp + tc + dstMap.get(e) * be;
+          if (cand < bestGoal) { bestGoal = cand; bestEdge = e; bestPred = p; direct = null; }
+        }
         if (stamp[e] !== qid || x < g[e] - 1e-9) {
           stamp[e] = qid; g[e] = x; pred[e] = p;
           push(x + H(head), e);
-          if (dstMap.has(e)) {
-            const cand = x - (1 - dstMap.get(e)) * be;
-            if (cand < bestGoal) { bestGoal = cand; bestEdge = e; direct = null; }
-          }
         }
       }
     }
@@ -416,8 +451,8 @@
       const s = src.find((x) => x.edge === bestEdge && x.frac === direct);
       return { edges: [bestEdge], fs: s.frac, ft: dstMap.get(bestEdge), cost: bestGoal, settled };
     }
-    const edges = [];
-    for (let e = bestEdge; e >= 0; e = pred[e]) { edges.push(e); if (edges.length > v.E) return null; }
+    const edges = [bestEdge];
+    for (let e = bestPred; e >= 0; e = pred[e]) { edges.push(e); if (edges.length > v.E + 1) return null; }
     edges.reverse();
     const s0 = src.filter((x) => x.edge === edges[0]).reduce((m, x) => (!m || x.frac < m.frac ? x : m), null);
     return { edges, fs: s0 ? s0.frac : 0, ft: dstMap.get(bestEdge), cost: bestGoal, settled };
@@ -462,7 +497,7 @@
    */
   function assemble(v, res, obj, meta = {}) {
     const B = flagBits(), coords = [], names = [], steps = [], turns = [], times = [];
-    let timeS = 0, distM_ = 0, q = 0, s = 0, f = 0, cf = 0, wsum = 0, junctions = 0, signals = 0;
+    let timeS = 0, distM_ = 0, q = 0, s = 0, sw = 0, f = 0, cf = 0, wsum = 0, junctions = 0, signals = 0;
     const has = { highways: false, tolls: false, ferries: false, unpaved: false };
     let roundabout = null;
     const E = res.edges;
@@ -477,7 +512,7 @@
         let ways = 0;
         for (let x = v.first[node]; x < v.first[node + 1]; x++) if (v.to[x] >= 0 && v.to[x] !== v.tail[p]) ways++;
         const fl = v.flags[p];
-        if (ways >= 2 && (fl & B.signal)) signals++;
+        if (v.nflags[node] & v.nbits.signal) signals++;
         const n0 = nameOf(v, p), n1 = nameOf(v, e);
         const inR = !!(v.flags[e] & B.roundabout), wasR = !!(v.flags[p] & B.roundabout);
         if (ways >= 2) junctions++;
@@ -502,7 +537,10 @@
       if (k === 0) times.push([pts[0][1], pts[0][0], 0]);
       timeS += sec; distM_ += m;
       const cw = (v.conf[e] / 255) * m;
-      q += (v.quality[e] / 255) * cw; s += (v.scenery[e] / 255) * cw; f += v.fun[e] * share; cf += cw; wsum += m;
+      if (v.quality[e] !== UNKNOWN_U8) { q += (v.quality[e] / 254) * cw; cf += cw; }
+      if (v.scenery[e] !== UNKNOWN_U8) { s += (v.scenery[e] / 254) * m; sw += m; }
+      if (Number.isFinite(v.fun[e])) f += v.fun[e] * share;
+      wsum += m;
       const nm = nameOf(v, e), last = names[names.length - 1];
       if (last && last.name === nm) last.toM = distM_; else names.push({ name: nm, fromM: distM_ - m, toM: distM_ });
       const fl = v.flags[e];
@@ -520,7 +558,7 @@
     const nameKm = new Map();
     for (const n of names) if (n.name) nameKm.set(n.name, (nameKm.get(n.name) || 0) + (n.toM - n.fromM));
     const why = { source: 'own', level: meta.level || null, role: meta.role || null, a: meta.a != null ? meta.a : 0,
-      quality: cf > 0 ? q / cf : null, scenery: cf > 0 ? s / cf : null, fun: f, conf: wsum > 0 ? cf / wsum : 0, junctions, signals,
+      quality: cf > 0 ? q / cf : null, scenery: sw > 0 ? s / sw : null, fun: f, conf: wsum > 0 ? cf / wsum : 0, junctions, signals,
       objective: meta.a ? 't*(1+a*(1-goodness))' : 'time' };
     return {
       coords, edges: E.map((e) => edgeId(v, e)), edgeIdx: Int32Array.from(E), timeS, distM: distM_, names, why,
@@ -551,15 +589,16 @@
     const midLat = (from.lat + to.lat) / 2, dLat = pad / 110540, dLon = pad / (111320 * Math.cos(midLat * RAD));
     const s = Math.min(from.lat, to.lat) - dLat, n = Math.max(from.lat, to.lat) + dLat, w = Math.min(from.lon, to.lon) - dLon, e = Math.max(from.lon, to.lon) + dLon;
     const out = [];
-    for (let i = Math.floor(s / TILE_DEG); i <= Math.floor(n / TILE_DEG); i++) {
-      for (let j = Math.floor(w / TILE_DEG); j <= Math.floor(e / TILE_DEG); j++) {
-        // the tile's nearest point to the ellipse: sample its rectangle 6 × 6 (tiles are 25 km; the ellipse is wider)
+    const sw = tileOf(s, w), ne = tileOf(n, e), ci = tileOf(from.lat, from.lon), cj = tileOf(to.lat, to.lon);
+    for (let i = sw.i; i <= ne.i; i++) {
+      for (let j = sw.j; j <= ne.j; j++) {
+        // the tile's nearest point to the ellipse: sample its rectangle 6 × 6 (tiles are 25 km; the ellipse is wider);
+        // tile (i, j) spans longitude i × 0.25 − 180 and latitude j × 0.25 − 90
         let hit = false;
         for (let a = 0; a <= 5 && !hit; a++) for (let b = 0; b <= 5 && !hit; b++) {
-          const la = Math.min(n, Math.max(s, (i + a / 5) * TILE_DEG)), lo = Math.min(e, Math.max(w, (j + b / 5) * TILE_DEG));
+          const la = Math.min(n, Math.max(s, (j + a / 5) * TILE_DEG - 90)), lo = Math.min(e, Math.max(w, (i + b / 5) * TILE_DEG - 180));
           if (distM(la, lo, from.lat, from.lon) + distM(la, lo, to.lat, to.lon) <= major + 2000) hit = true;
         }
-        const ci = tileOf(from.lat, from.lon), cj = tileOf(to.lat, to.lon);
         if (hit || (i === ci.i && j === ci.j) || (i === cj.i && j === cj.j)) out.push({ i, j });
       }
     }
@@ -596,7 +635,7 @@
     const sc = startCostFor(v, req.from.heading != null ? req.from.heading : req.heading);
     const opts = sc ? { startCost: sc } : {};
     const run = (a, penal = null, role = 'step') => { const r = search(v, obj, src, dst, a, penal, opts); return r ? assemble(v, r, obj, { level, role, a }) : null; };
-    const quick = run(0, null, 'quick');
+    const quick = run(0, null, 'quickest');
     if (!quick) throw new Error('no route');
     const limitS = quick.timeS * (1 + L.budget) + L.slackS;
     const found = [quick];
@@ -611,7 +650,7 @@
       if (hi - lo < 0.15 * Math.max(lo, 0.25)) break;
       a = lo > 0 ? Math.sqrt(lo * hi) : hi / 4;
     }
-    best.why.role = best === quick ? 'quick' : level;
+    best.why.role = best === quick ? 'quickest' : 'best';
     // alternates by the penalty method: the chosen route's edges cost more, until a route differs by ALT_MIN_DIFF
     const alts = [], chosen = [best];
     const penal = new Float32Array(v.E).fill(1);
@@ -640,7 +679,7 @@
     const obj = objective(v, req), B = flagBits();
     const a = K.LOOP_A[level];
     const dirs = req.dirs || [0, 90, 180, 270];
-    const through = (e) => v.cls[e] <= CLS.unclassified && !(v.flags[e] & (B.ramp | B.private)) && v.cls[e] !== CLS.motorway;
+    const through = (e) => v.cls[e] <= CLS.unclassified && !(v.flags[e] & (B.ramp | B.private | B.destination)) && v.cls[e] !== CLS.motorway;
     const s0 = snap(v, req.start.lat, req.start.lon);
     if (!s0.length) throw new Error('no road near the start');
     const r = km * 1000 / (2 * Math.PI * K.LOOP_ROAD_FACTOR);
@@ -795,7 +834,7 @@
     };
   }
 
-  const api = { VERSION: 1, K, TILE_DEG, FLAG_BITS, CLS, LEVELS_COPY, levels, distM, bearing, turnAngle, tileOf, keyOf, view, geom, snap, objective, search,
+  const api = { VERSION: 1, K, TILE_DEG, FLAG_BITS, NODE_BITS, CLS, UNKNOWN_U8, UNKNOWN_FUN, NO_NAME, packedKey, nodeCost, LEVELS_COPY, levels, distM, bearing, turnAngle, tileOf, keyOf, view, geom, snap, objective, search,
     assemble, overlap, sameRoute, tilesFor, loopTiles, plan, loop, indexKeys, covers, host, client, edgeId, twin, turnCost };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   root.ApexGraphRouter = api;
