@@ -358,7 +358,9 @@ globalThis.ApexUnits = require(root + "/web/units.js");
 const FunRoute = require(root + '/web/fun_route.js');
 const html = ['index.html', 'cockpit.js', 'lazy.js'].map((f) => { try { return fs.readFileSync(root + '/web/' + f, 'utf8'); } catch (_) { return ''; } }).join('\n');
 const source = html.match(/async function funRoute\(.*?\n    }/s)[0];
-const useOptionSource = html.match(/async function useOption\(.*?\n    }/s)[0] + '\n' + html.match(/function optionOnto\(.*?\n    }/s)[0] + '\n' + html.match(/const builtAhead = .*?;\n/s)[0] + html.match(/function buildAhead\(.*?\n    }/s)[0];
+const useOptionSource = html.match(/async function useOption\(.*?\n    }/s)[0] + '\n' + html.match(/function optionOnto\(.*?\n    }/s)[0] + '\n' + html.match(/const builtAhead = .*?;\n/s)[0] + html.match(/function buildAhead\(.*?\n    }/s)[0]
+  // the level cards: each level's pick of the routes found (the owner, 2026-11-04)
+  + '\n' + html.match(/const LEVEL_ORDER = .*?;\n/s)[0] + html.match(/function destLevels\(.*?\n    }/s)[0] + '\n' + html.match(/function withLevels\(.*?\n    }/s)[0];
 const marksSource = html.match(/function timeMarksOf\(.*?\n    }/s)[0];
 const fewerSource = html.match(/const fewerTownKm = .*?;\n/s)[0];
 const townsOnSource = html.match(/async function townsOn\(.*?\n    }/s)[0];

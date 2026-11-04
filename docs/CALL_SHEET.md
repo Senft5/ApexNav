@@ -4,6 +4,31 @@ Decisions Claude made for you, newest first. Each one says what was decided, why
 you reach one you've seen. If you disagree with a call, say so and it gets reversed; nothing here is hard to undo unless
 it says so. Things only you can do are in docs/OWNER_TODO.md.
 
+## 2026-11-06 (later): The route card's levels are the choices (claude/level-cards)
+
+Your note on the 90 mi loop's card ("quick, fun and long way are separate from the cards above? how the hell does that
+work?"). The coordinator decided one control; these are the calls inside it.
+- **One control: three level cards, Quick, Fun and Long way**, each showing its own pick of the routes already found
+  (time and corners). A tap puts that route up straight away, nothing is planned again; the separate route tiles and
+  the Quick / Fun / Long way switch are gone. Undo: revert the branch (web/index.html `#routeCardFun`, cockpit.js
+  `paintLevelCards`, `takeLevel`, `destLevels`, `withLevels`, route_card.js `levelCards`).
+- **Two levels that pick the same route are both lit**, not merged into one card, and the line under the cards says so
+  ("Quick and Fun pick the same route", or "All three pick the same route"). Three cards that never change shape keep
+  the one you tapped under your finger; a merged card would move them sideways. Undo: `on` in route_card.js levelCards.
+- **Long way after a plan at Fun (or Fun after a plan at Quick) says "Look further"** with no numbers, and a tap on it
+  plans again, as the switch did. A Fun plan doesn't look for Long way's longer detours, so showing the Fun pool's best
+  as "Long way" would pass off a route nobody searched for. Loops always have all three (their loops are all built).
+  Undo: `destLevels` in cockpit.js (rank the pool at every level).
+- **The sideways swipe stays and now says what it does**: a line under the cards, "Swipe the card for the next route,
+  2 of 3". It steps through the cards' routes in their order, then up to two other good routes your level found
+  ("Another route found, 4 of 5"; no card is lit then). Swiping onto a level's route takes that level, as a tap does.
+- **Map labels no longer pile up**: viewpoint, café and fuel stamps that would overlap hide as the map moves, keeping
+  the most useful few (named viewpoints first, then viewpoints, cafés, fuel; each kind spread along the route; at most
+  6 viewpoints, 4 cafés and 4 fuel stops on screen at once). Undo: `declutter` in web/scenic.js (`KEEP`, `PAD_SAME`).
+- **Fixed on the way: the "weather ahead" swap on our own routes never happened** (ownRefine handed useOption a copy
+  of the options it always refused). It now swaps when the refined ranking finds a clearly better route (5 points), as
+  intended. Undo: the two `routeOptions = n` lines in cockpit.js ownRefine.
+
 ## 2026-11-06: Loops off the highway, from the best roads
 
 - **What a loop is (your words):** any route that starts and ends at the same place, keeps the distance driven twice

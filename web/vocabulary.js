@@ -60,7 +60,7 @@
     fun: { label: 'Fun', kind: 'setting', was: 'Max fun (the third stop)',
       meaning: 'A route style: how much of a detour for good roads a route may take. Quick, Fun or Long way. Never a number.',
       plain: 'Quick: the quick way. Fun: twistier roads, up to about a third longer. Long way: the twistiest roads, up to nearly twice the time.',
-      values: ['Quick', 'Fun', 'Long way'], set: 'the route card (a change re-ranks the routes already found when it can)', control: 'data-fun', homes: 1 },
+      values: ['Quick', 'Fun', 'Long way'], set: 'the route card, as three cards, each its pick of the routes already found (a tap takes it)', control: 'data-fun', homes: 1 },
     // Options (one bottom sheet, from the chips on the plan sheet and the route card): Avoid ✕, Prefer ✓, the kinds of corners
     avoid: { label: 'Avoid', kind: 'setting', meaning: 'Roads a route keeps off when it can: crossed out (✕) means avoided.',
       values: ['Highways', 'Tolls', 'Ferries', 'Unpaved', 'Towns', 'Cameras'], set: 'the Options sheet, under Avoid', control: 'data-avoid', homes: 1 },

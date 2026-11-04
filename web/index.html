@@ -618,12 +618,22 @@
     .f-ahead { --glyph: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2.2' stroke-linecap='round'%3E%3Cpath d='M8 22 V14 Q8 7 16 5'/%3E%3Cpath d='M12 2 L17 5 L13 9'/%3E%3Ccircle cx='8' cy='22' r='1.5' fill='black'/%3E%3C/svg%3E"); }
     .f-sky { --glyph: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round'%3E%3Ccircle cx='12' cy='12' r='4'/%3E%3Cpath d='M12 2v3M12 19v3M2 12h3M19 12h3M5 5l2 2M17 17l2 2M5 19l2-2M17 7l2-2'/%3E%3C/svg%3E"); }
     .f-closed { --glyph: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2'%3E%3Crect x='2' y='8' width='20' height='6'/%3E%3Cpath d='M6 8 L10 14 M12 8 L16 14 M18 8 L22 14 M5 14 V21 M19 14 V21'/%3E%3C/svg%3E"); }
-    .rc-tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(96px, 1fr)); gap: 8px; margin-top: 12px; }
-    .rc-tiles[hidden] { display: none; }
-    .rc-tile { text-align: left; padding: 10px; border: 1.5px solid var(--panel-ink); background: transparent; color: var(--panel-ink); min-height: 64px; }
-    .rc-tile b { display: block; font-size: 16px; font-weight: 800; line-height: 1.15; }
-    .rc-tile span { display: block; margin-top: 2px; font-size: 13px; color: var(--panel-dim); }
-    .rc-tile.on { background: var(--panel-ink); color: var(--panel); } .rc-tile.on span { color: var(--panel); opacity: 0.8; }
+    /* the level cards (the owner, 2026-11-04): Quick, Fun, Long way, each its pick's time and corners; on = the route on screen */
+    .rc-levels { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; margin-top: 10px; }
+    .rc-levels[hidden] { display: none; }
+    .rc-levels > button { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; min-width: 0; min-height: 76px; padding: 7px 9px 8px; text-align: left;
+      border: 1.5px solid var(--panel-ink); background: transparent; color: var(--panel-ink); font: inherit; transition: background-color 0.15s ease-out, color 0.15s ease-out; }
+    .rc-levels > button.on { background: var(--panel-ink); color: var(--panel); box-shadow: inset 0 -3px 0 rgba(0, 0, 0, 0.35); }
+    .rc-levels > button:active { box-shadow: inset 0 2px 0 rgba(0, 0, 0, 0.25); }
+    .rc-levels b { font-size: 17px; font-weight: 800; line-height: 1.1; white-space: nowrap; }
+    .rc-lv { display: grid; gap: 1px; font: 800 20px/1.05 var(--font-num); font-variant-numeric: tabular-nums; white-space: nowrap; }
+    .rc-lv i { font-style: normal; }
+    .rc-lv small { font: 600 11px var(--font-ui); letter-spacing: 0.06em; text-transform: uppercase; color: var(--panel-dim); }
+    .rc-lv .rc-lv-c { font-size: 17px; }
+    .rc-levels > button.on .rc-lv small { color: var(--panel); opacity: 0.8; }
+    .rc-levels > button.further .rc-lv { font: 600 15px/1.2 var(--font-ui); color: var(--panel-dim); white-space: normal; }
+    .rc-levels-note { margin: 6px 0 0; font-size: 15px; line-height: 1.3; color: var(--panel-dim); }
+    .rc-levels-note[hidden] { display: none; }
     .rc-go { display: grid; grid-template-columns: 1.4fr 1fr; gap: 10px; margin-top: 14px; }
     /* U-70 / the plan flow (finding 2): Start is the card's foot, outside its scroll, so nothing that loads above it (the
        profile, the facts, a re-rank) moves it; the card's body ends above it */
@@ -700,7 +710,6 @@
     .rc-loop[hidden] { display: none; }
     .rc-loop-label { font-size: 13px; font-weight: 700; color: var(--panel-dim); }
     .rc-loop .detents > button { min-width: 0; padding: 0 2px; font-size: 14px; }
-    #routeCardFun { margin-top: 8px; }
     /* finding 10: the card opens at half height over the map; dragged up it takes the full sheet */
     .plan.open.routed:not(.full) { height: min(50%, 440px); }
     .plan.routed { transition: transform 0.2s cubic-bezier(0.2, 0.8, 0.2, 1), height 0.2s cubic-bezier(0.2, 0.8, 0.2, 1); }
@@ -725,8 +734,6 @@
     .nb-cells > span small { font: 500 11px var(--font-ui); color: var(--panel-dim); margin-left: 2px; }
     .nb-head .nb-cells > span { font: inherit; text-align: right; }
     .nb-head .nb-cells > span:first-child { text-align: left; }
-    #routeCard .rc-tile { padding: 8px 10px; min-height: 56px; }
-    #routeCard .rc-tile b { font-size: 15px; }
     .nb-row .linkbtn { justify-self: end; font-size: 13px; }
     .place-all { display: block; margin: 6px 0 0; }
     /* ---------------- the drive-ended card (REVIEW.md roadmap 7) ---------------- */
@@ -1143,10 +1150,14 @@
     /* rows that cut their end off with an ellipsis wrap instead once the text is larger */
     html[data-type-size] .tc-head { flex-wrap: wrap; }
     html[data-type-size] .switch > button { white-space: normal; text-overflow: clip; line-height: 1.15; padding: 4px; }
+    /* the level cards one a row once the text is larger: the level, its time and its corners on one line */
+    html[data-type-size] .rc-levels { grid-template-columns: minmax(0, 1fr); }
+    html[data-type-size] .rc-levels > button { flex-direction: row; flex-wrap: wrap; align-items: baseline; column-gap: 12px; min-height: 52px; }
+    html[data-type-size] .rc-lv { display: flex; flex-wrap: wrap; column-gap: 12px; align-items: baseline; }
     html[data-type-size] :is(.place small, .place span, .friend-head b, .friend-head small, .crew-tile-head b, .your-road b, .your-road small, .stop-row span) { white-space: normal; overflow: visible; text-overflow: clip; max-width: none; }
     /* GR-2: a floor on the same pages. Prose and captions at least 17 px (the numerals' small-caps labels keep their size
        and grow with the scale); every key at least 44 pt each way. */
-    #planBody :is(.rc-facts .fact, .route-meta, p.note, .plan-status, .ctl-label small, .rc-tile span, .linkbtn, .place b, .place small, .place span, .plan-more > summary),
+    #planBody :is(.rc-facts .fact, .route-meta, p.note, .plan-status, .ctl-label small, .rc-levels-note, .rc-levels > button.further .rc-lv, .linkbtn, .place b, .place small, .place span, .plan-more > summary),
     .home-by .hb-label, #endCard :is(.end-meta, .end-line, .linkbtn, p:not(.end-kicker)) { font-size: 17px; }
     #planBody :is(.stamps > button, .switch > button, .detents > button, .linkbtn, .ink-btn, .chip), #endCard :is(.linkbtn, .ink-btn) { min-height: 44px; min-width: 44px; }
     /* the plan flow: the card's progress line, the Options sheet and Best roads nearby hold the same floor and grow with it */
@@ -1429,10 +1440,11 @@
               </div>
               <!-- finding 6: a loop's length, in your units, on its card -->
               <div class="rc-loop" id="routeCardLoop" role="group" aria-label="Loop length" hidden><span class="rc-loop-label">Length</span><div class="detents" id="cardLoopDetents"></div></div>
-              <!-- finding 11: the alternatives, a tap or a swipe sideways on the card -->
-              <div class="rc-tiles" id="routeCardOptions" role="radiogroup" aria-label="Route options" hidden></div>
-              <!-- finding 4: the level's one home; a change re-ranks the routes already found when it can -->
-              <div class="switch" id="routeCardFun" role="radiogroup" aria-label="Route style"><button data-fun="quick" role="radio" aria-checked="false">Quick</button><button data-fun="fun" role="radio" aria-checked="false">Fun</button><button data-fun="max" role="radio" aria-checked="false">Long way</button></div>
+              <!-- the owner, 2026-11-04: one control. The level cards are the choices, each with its own pick of the routes found
+                   (time, corners); a tap takes it, nothing planned again. A swipe sideways on the card steps through the routes
+                   found (finding 11), and the line under the cards says so. -->
+              <div class="rc-levels" id="routeCardFun" role="radiogroup" aria-label="Route style"><button data-fun="quick" role="radio" aria-checked="false"><b>Quick</b><span class="rc-lv"></span></button><button data-fun="fun" role="radio" aria-checked="false"><b>Fun</b><span class="rc-lv"></span></button><button data-fun="max" role="radio" aria-checked="false"><b>Long way</b><span class="rc-lv"></span></button></div>
+              <p class="rc-levels-note" id="routeCardLevelsNote" hidden></p>
               <p class="note rc-via" id="routeCardWhy" hidden></p>
               <div class="rc-stats" id="routeCardStats"></div>
               <!-- finding 2: the profile's room is kept before it loads, so nothing under it jumps -->

@@ -1,5 +1,5 @@
 """The route card as instruments (web/route_card.js, docs/design/REVIEW.md roadmap 5): three stamped numbers, the profile
-with a tick per corner, half-dials and option tiles. Unknown stays "--"."""
+with a tick per corner, half-dials and the level cards. Unknown stays "--"."""
 import json
 import os
 import shutil
@@ -34,8 +34,16 @@ const out = {
   noShape: [R.shape({ dist: [0, 10] }, (x) => F.score(x, [])), R.shape(null)],
   fact: R.factText('Ahead: Esses at 2.4 mi · Technical at 3.4 and 8.5 mi'),
   glyphs: ['1 café', '2 viewpoints · 1 café', 'No fuel for the first 40 mi', ''].map(R.alongGlyph),
-  tiles: R.tiles([{ fun: { fun: 98, good: 30 }, timeS: 10080, t: ev(80) }, { fun: { fun: 80, good: 73 }, timeS: 9360, t: ev(20) }, { fun: { fun: 100, good: 31 }, timeS: 12660, t: ev(1) },
-    { fun: null, timeS: null }, { fun: { fun: 70, good: 30 }, timeS: 10080, t: ev(80) }], 0),
+  // the level cards (the owner, 2026-11-04): Quick and Fun pick the same route, Long way another, one more found
+  levels: (() => { const o = { list: [{ timeS: 6780, t: ev(118) }, { timeS: 7920, t: ev(90) }, { timeS: 2880, t: ev(1) }, { timeS: null }], levels: { quick: 0, fun: 0, max: 1 }, picked: 0 };
+    return { cards: R.levelCards(o, 'fun'), note: R.levelNote(o), onMax: R.levelCards({ ...o, picked: 1 }, 'max').map((c) => c.on), noteMax: R.levelNote({ ...o, picked: 1 }),
+      other: R.levelCards({ ...o, picked: 2 }, 'fun').map((c) => c.on), noteOther: R.levelNote({ ...o, picked: 2 }),
+      unknown: R.levelCards({ ...o, list: [{ timeS: null }], levels: { quick: 0, fun: 0, max: 0 } }, 'fun')[0] }; })(),
+  // a plan at Fun didn't look as far as Long way: its card says so, with no numbers; all three the same: said once
+  further: R.levelCards({ list: [{ timeS: 3000, t: ev(4) }, { timeS: 3600, t: ev(30) }], levels: { quick: 0, fun: 1, max: null }, picked: 1 }, 'fun'),
+  furtherNote: R.levelNote({ list: [{ timeS: 3000, t: ev(4) }, { timeS: 3600, t: ev(30) }], levels: { quick: 0, fun: 1, max: null }, picked: 1 }),
+  allSame: R.levelNote({ list: [{ timeS: 3000, t: ev(4) }], levels: { quick: 0, fun: 0, max: 0 }, picked: 0 }),
+  planning: R.levelCards(null, 'max'),
   // the plan flow (finding 1): the card says the ranked swap in its own numbers
   swap: [R.swapNote({ timeS: 3540, events: ev(80).events }, { timeS: 3060, events: ev(28).events }), R.swapNote({ timeS: 3000, t: ev(10) }, { timeS: 3180, t: ev(11) }),
     R.swapNote({ timeS: 3000, t: ev(10) }, { timeS: 3000, t: ev(10) }, 'Avoids 2.2 mi of side streets'), R.swapNote({ timeS: 3000 }, { timeS: 3000 })],
@@ -69,15 +77,27 @@ def test_dials_show_unknown_honestly(out):
     assert "<b>0</b>" in out["count"] and "<b>--</b>" in out["countUnknown"]               # none found is 0; not checked is --
 
 
-def test_option_tiles_are_relative_to_the_pick(out):
-    # SO-1 (panel round 2): no "Fun 98" score on a tile (Fun is the route style); the time, and what differs from the pick.
-    # The plan flow (finding 9): each tile counts its own corners as the card's CORNERS number does (every corner, the bump
-    # not), never "53 fewer good corners" beside a card of 80 for a route that has 20
-    assert out["tiles"] == [{"title": "2:48", "sub": "this one · 80 corners"}, {"title": "2:36", "sub": "12 min quicker · 20 corners"},
-                            {"title": "3:31", "sub": "+43 min · 1 corner"}, {"title": "--", "sub": "--"},
-                            {"title": "2:48", "sub": "same time · 80 corners"}]
-    assert not any("Fun" in t["title"] + t["sub"] for t in out["tiles"])
-    assert not any("fewer good" in t["sub"] or "more good" in t["sub"] for t in out["tiles"])
+def test_the_levels_are_the_cards(out):
+    # the owner, 2026-11-04: one control. Each level is a card with its own pick's time and corners (every corner, as the
+    # card's CORNERS number counts them, the bump not); two levels on the same route are both on, and the line says so
+    lv = out["levels"]
+    assert [(c["label"], c["time"], c["corners"], c["on"], c["same"]) for c in lv["cards"]] == [
+        ("Quick", "1:53", "118 corners", True, ["Fun"]), ("Fun", "1:53", "118 corners", True, ["Quick"]), ("Long way", "2:12", "90 corners", False, [])]
+    assert lv["note"] == "Quick and Fun pick the same route · swipe the card for the next route, 1\u00a0of\u00a04"
+    assert lv["onMax"] == [False, False, True] and lv["noteMax"].endswith("2\u00a0of\u00a04")
+    # a swipe past the levels' picks: another route found, no card on, and the line says how to get back
+    assert lv["other"] == [False, False, False] and lv["noteOther"].endswith("another route found, 3\u00a0of\u00a04: swipe for the others")
+    assert lv["unknown"]["time"] == "--" and lv["unknown"]["corners"] == "--"                       # unknown stays "--"
+    assert not any("Fun " in (c["time"] or "") + (c["corners"] or "") for c in lv["cards"])          # never a Fun score
+
+
+def test_a_level_not_looked_at_says_so_and_planning_shows_no_numbers(out):
+    f = out["further"]
+    assert [(c["label"], c["on"], c["further"]) for c in f] == [("Quick", False, False), ("Fun", True, False), ("Long way", False, True)]
+    assert f[2]["time"] is None and f[2]["corners"] is None and f[0]["time"] == "50 min" and f[0]["corners"] == "4 corners"
+    assert out["furtherNote"] == "Swipe the card for the next route, 2\u00a0of\u00a02"
+    assert out["allSame"] == "All three pick the same route"
+    assert [(c["on"], c["time"]) for c in out["planning"]] == [(False, "--"), (False, "--"), (True, "--")]
 
 
 def test_the_card_says_the_ranked_swap_and_why(out):

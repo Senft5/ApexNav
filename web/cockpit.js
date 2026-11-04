@@ -562,7 +562,27 @@
       if (!fuelPins.length) return;                                        // (filled only once a route exists)
       const driving = state.mode === 'live', next = driving && track === plannedRoute ? fuelPins.find((f) => f.m > state.cursorM) : null;
       for (const f of fuelPins) f.el.style.display = !driving || f === next ? '' : 'none';
+      declutterSoon();
     }
+    // The owner, 2026-11-04: no pile of overlapping FUEL stamps along the route. The viewpoint, café and fuel pins
+    // (attachScenic) that would overlap on screen hide, the most useful few kept (scenic.js declutter), again as the map
+    // moves. Hidden by visibility, so a drive's "only the next fuel stop" (display) stays its own rule.
+    const poiDeclutter = { raf: 0, pins: [] };
+    function declutterSoon() {
+      if (!poiDeclutter.raf && poiDeclutter.pins.length) poiDeclutter.raf = requestAnimationFrame(declutterPois);
+    }
+    function declutterPois() {
+      poiDeclutter.raf = 0;
+      if (!window.ApexScenic || !ApexScenic.declutter) return;
+      const shown = poiDeclutter.pins.filter((p) => p.el.style.display !== 'none' && p.el.isConnected), c = map.getContainer();
+      const keep = ApexScenic.declutter(shown.map((p) => {
+        const xy = map.project(p.marker.getLngLat());
+        return { kind: p.kind, named: p.named, m: p.m, x: xy.x, y: xy.y, w: p.el.offsetWidth, h: p.el.offsetHeight };
+      }), { w: c.clientWidth, h: c.clientHeight });
+      shown.forEach((p, i) => { p.el.style.visibility = keep[i] ? '' : 'hidden'; });
+    }
+    map.on('move', declutterSoon);
+    map.on('resize', declutterSoon);
 
     map.on('load', () => {
       mapReady = true;
@@ -1949,7 +1969,7 @@
       state.mode = mode;
       etaPace.reset(); etaText = '';                                  // a drive starts (or ends): the pace starts over
       if (mode === 'live') { cancelHold(); closePin(); $('hlOverlay').classList.remove('show'); }
-      $('routeCardOptions').hidden = !optionsOffered(plannedRoute);
+      paintLevelCards();
       paintAlternates();
       if (mode === 'live' && explore) showExplore(null);           // its times were from where you were
       $('modePlate').textContent = { replay: `Replay${track && track.demo ? ' · Demo' : ''}${track && track.name ? ' · ' + track.name : ''} ×`, sim: 'Fly-through ×', live: 'Drive ● Rec' }[mode];
@@ -2571,28 +2591,13 @@
       $('routeCardSub').textContent = `${carLine ? carLine + ' · ' : ''}${missed}${towns}${sun}${cams}${feel}`;
       $('routeCardWhy').textContent = t.why || '';
       $('routeCardWhy').hidden = !t.why;
-      // finding 4: the level's one home is the card, for a destination route and (finding 6) a loop; a loop's length too
+      // finding 4: the level's one home is the card, for a destination route and (finding 6) a loop; a loop's length too.
+      // The owner, 2026-11-04: the levels are the choices, one card each with its own pick (paintLevelCards)
       const loopCard = isLoop(t);
       $('routeCardFun').hidden = !(t.id === 'route_dest' || loopCard);
       paintCardLoop(t);
       paintOptChips();
-      const o = routeOptions, box = $('routeCardOptions');
-      box.hidden = !optionsOffered(t);
-      // Built once per pick (not on every card refresh), so keyboard focus survives camera and measured updates.
-      if (o && o.current === t && box._t !== t) {
-        const refocus = box.contains(document.activeElement), tl = ApexRouteCard.tiles(o.list, o.picked);
-        box.replaceChildren(...o.list.map((c, i) => {
-          const b = document.createElement('button');
-          b.className = 'rc-tile' + (i === o.picked ? ' on' : '');
-          b.innerHTML = `<b></b><span></span>`; b.firstChild.textContent = tl[i].title; b.lastChild.textContent = tl[i].sub;
-          b.setAttribute('role', 'radio');
-          b.setAttribute('aria-checked', String(i === o.picked));
-          b.addEventListener('click', () => pickOption(i));
-          return b;
-        }));
-        box._t = t;
-        if (refocus) box.children[o.picked].focus();
-      }
+      paintLevelCards();
       paintAlternates();
     }
     // The planned route lives for this session only (sessionStorage): a reload after a lost map (WebGL, above) plans it
@@ -3374,20 +3379,22 @@
         if (shown && (state.mode === 'live' || plannedRoute !== shown)) return true;
         shownEarly = shown;
       }
-      // The best and up to two really different others stay on the card (and faint on the map) to pick from.
+      // The best and up to two really different others (the level cards: each level's pick, then the others) stay on the
+      // card (and faint on the map) to pick from.
       const offered = FunRoute.distinctOptions(ranked, 3);
+      const lv = destLevels({ id, name, request, level, quickest, pool, builtLevel: level }, level);
+      if (lv.levels[level] == null) Object.assign(lv, { list: offered, levels: null, picked: 0 });   // (never: the same ranking)
       // the quickest already up is the only option: keep it as it is (no second draw of the same route and card), but
       // finish the plan as any other (aftercare, the debug record): only the redraw is skipped
-      let kept = early.fired && offered.length === 1 && offered[0].t === quickNow.t ? await early.shown : null;
+      let kept = early.fired && lv.list.length === 1 && offered[0].t === quickNow.t ? await early.shown : null;
       if (kept && kept.sightPending) kept = null;                         // drawn before its land cover: built in full now
       let t = kept;
       if (kept) {                                                          // the ranking's word on it, on the card already up
         ownInstructions(offered[0]).then((src) => { if (src === 'valhalla') { kept.steps = stepsOf(kept, offered[0].route); kept.timeMarks = timeMarksOf(kept, offered[0].route); } }).catch(() => {});
-        const o = { id, name, request, level, quickest, list: offered, pool, builtLevel: level };
-        optionOnto(kept, offered[0], o);
-        routeOptions = Object.assign(o, { picked: 0, current: kept });
+        optionOnto(kept, offered[0], lv);
+        routeOptions = Object.assign(lv, { current: kept });
         if (typeof renderRouteCard === 'function') { timeFromEnvelope(kept); renderRouteCard(kept); }   // its saved copy stays the one drawn
-      } else t = await useOption({ id, name, request, level, quickest, list: offered, pool, builtLevel: level }, 0, ownUsed ? OWN_SIGHT_MS : undefined);
+      } else t = await useOption(lv, lv.picked, ownUsed ? OWN_SIGHT_MS : undefined);
       mark('built');
       if (!t) return false;   // no toast: the route bar and card say it (REVIEW.md 1.2, Route bar: the bar is the toast)
       // finding 1: the card says what the ranking did: kept the first route, or replaced it, and why, in the card's numbers
@@ -3462,9 +3469,12 @@
         if (!best || !now || best.t === now.t || !(best.value > now.value + OWN_SWAP_POINTS) || !still()) return;
         const d = (k) => ((best.parts && best.parts[k]) || 0) - ((now.parts && now.parts[k]) || 0);
         const why = d('weather') + (d('penalty') > 0 ? d('penalty') : 0) >= 1 ? 'Weather ahead' : 'Conditions ahead';
-        const list = FunRoute.distinctOptions(ranked, 3);
-        const t = await useOption({ ...o, list, current: shown, quickest: ranked.find((c) => c.t === o.quickest.t) || o.quickest }, 0, OWN_SIGHT_MS);
-        if (!t) return;
+        // the level cards again from the refined ranking (it used to pass a copy useOption always refused: routeOptions is it now)
+        const n = destLevels({ ...o, current: shown }, level);
+        if (n.levels[level] == null) return;
+        routeOptions = n;
+        const t = await useOption(n, n.picked, OWN_SIGHT_MS);
+        if (!t) { if (routeOptions === n) { routeOptions = o; paintLevelCards(); } return; }
         const road = best.route && best.route.names instanceof Map ? [...best.route.names].sort((x, y) => y[1] - x[1])[0] : null;
         if (typeof cardNote === 'function') cardNote(`${why}: switched to ${road ? `the way by ${road[0]}` : 'a better way'}`);
         if (window.apexDebug) window.apexDebug.lastRefine.swapped = true;
@@ -3498,7 +3508,7 @@
       builtAhead.set(c.route.coords, trackFromPolyline(c.route.coords, id, name, sightMs).catch(() => null));
     }
     async function useOption(o, i, sightMs) {
-      const c = o.list[i], was = o.current;
+      const c = (o.levels && o.levels[o.level] === i && o.picks[o.level]) || o.list[i], was = o.current;
       if (o.kind === 'loop') {                                             // a loop's options are whole tracks already
         if (was && (routeOptions !== o || plannedRoute !== was || state.mode === 'live')) return null;
         routeOptions = Object.assign(o, { picked: i, current: c.t });
@@ -3540,11 +3550,20 @@
     async function pickOption(i) {
       const o = routeOptions;
       if (!o || optionBusy || loopBusy || i === o.picked || !o.list[i] || plannedRoute !== o.current || state.mode === 'live' || $('planPanel').classList.contains('busy')) return;
+      // a level's pick (a swipe, the map or the car): as a tap on its card; two levels on it, the one nearer yours
+      const ls = o.levels ? LEVEL_KEYS.filter((k) => o.levels[k] === i) : [];
+      if (ls.length) {
+        const L = ls.sort((a, b) => Math.abs(LEVEL_ORDER[a] - LEVEL_ORDER[funLevel]) - Math.abs(LEVEL_ORDER[b] - LEVEL_ORDER[funLevel]))[0], was = funLevel;
+        setFunLevel(L);
+        if (!(await takeLevel(o, L))) setFunLevel(was);
+        return;
+      }
       optionBusy = true;
       cardNote('');                                                        // what the ranking said was about the other route
       try { await useOption(o, i); } catch (_) { toast('Couldn\'t switch to that route. Try again.'); } finally { optionBusy = false; }
     }
-    // finding 11: a swipe sideways on the card steps through its alternatives, as a tap on their tiles does (left: the next)
+    // finding 11: a swipe sideways on the card steps through the routes found (left: the next), the levels' picks in the
+    // cards' order, then the others; the line under the cards says so
     {
       let sx = null, sy = 0;
       const card = $('routeCard');
@@ -3578,31 +3597,66 @@
       if (!FunRoute.LEVELS[level]) return;
       funLevel = level;
       try { localStorage.setItem(FUN_LEVEL, level); } catch (_) { /* storage off: this session only */ }
-      document.querySelectorAll('[data-fun]').forEach(b => { const on = b.dataset.fun === level; b.classList.toggle('on', on); b.setAttribute('aria-checked', String(on)); });
       document.querySelectorAll('[data-fun]').forEach(b => b.title = FUN_NOTES[b.dataset.fun] || '');   // the sentence is the key's description, not prose under it
+      paintLevelCards();
       paintPresets();
+    }
+    // The level cards (the owner, 2026-11-04: "quick, fun and long way are separate from the cards above? how the hell does
+    // that work?"): one control. Each card is its level's own pick of the routes already found, its time and corners
+    // (route_card.js levelCards); on when that pick is the route on screen, so two levels that pick the same route are both
+    // on and the line under them says so. A level the plan didn't look at says "Look further"; a tap on it plans again.
+    // The cards are the page's own buttons, only their words change, so the one you tapped is still there under your finger.
+    function paintLevelCards() {
+      const box = $('routeCardFun');
+      if (!box || !window.ApexRouteCard) return;
+      const t = plannedRoute, o = routeOptions, mine = !!(t && o && o.current === t && state.mode !== 'live');
+      const cards = ApexRouteCard.levelCards(mine ? o : null, funLevel);
+      const part = (text, cls) => {
+        const i = document.createElement('i'), m = /^(\S+) (\S+)$/.exec(text || '');
+        if (cls) i.className = cls;
+        i.textContent = m ? m[1] : text;
+        if (m) { const sm = document.createElement('small'); sm.textContent = m[2]; i.append(' ', sm); }
+        return i;
+      };
+      for (const b of box.querySelectorAll('[data-fun]')) {
+        const k = cards.find((c) => c.level === b.dataset.fun), lv = b.querySelector('.rc-lv');
+        if (!k || !lv) continue;
+        if (k.further) lv.textContent = 'Look further';
+        else lv.replaceChildren(part(k.time), part(k.corners, 'rc-lv-c'));
+        b.classList.toggle('on', k.on);
+        b.classList.toggle('further', k.further);
+        b.setAttribute('aria-checked', String(k.level === funLevel));
+        b.setAttribute('aria-label', k.further ? `${k.label}: not looked at yet; plans again` : `${k.label}: ${k.time === '--' ? 'time --' : k.time}, ${k.corners === '--' ? 'corners --' : k.corners}${k.same.length ? `, the same route as ${k.same.join(' and ')}` : ''}`);
+      }
+      const line = mine && !box.hidden ? ApexRouteCard.levelNote(o) : '';
+      $('routeCardLevelsNote').textContent = line;
+      $('routeCardLevelsNote').hidden = !line;
     }
     // What each Roads position does, from fun_route.js LEVELS (the extra time each one may spend).
     const FUN_NOTES = { quick: 'Quick: the quickest way, or a better road that adds no more than about a tenth.',
       fun: 'Fun: twistier roads that add up to about a third to the trip.', max: 'Long way: the twistiest roads around, up to nearly twice the time.' };
-    // The plan flow (finding 4): the level lives on the card. A change re-ranks the routes the plan already found when they
-    // cover it (a plan at Fun holds the quick ones too; Long way's longer detours need a plan of their own), with the engine's
-    // own ranking, why line and extra time: nothing is worked out again. Loops re-rank the loops already built.
-    const LEVEL_ORDER = { quick: 0, fun: 1, max: 2 };
-    // how long a level change keeps the switch under your finger while the card settles (changeLevel's settle)
+    // The plan flow (finding 4): the level lives on the card, as its cards. Each card is its level's ranking of the routes
+    // the plan already found when they cover it (a plan at Fun holds the quick ones too; Long way's longer detours need a
+    // plan of their own), with the engine's own ranking, why line and extra time, worked out once with the plan: a tap only
+    // puts it up. Loops: each level's pick of the loops already built.
+    const LEVEL_ORDER = { quick: 0, fun: 1, max: 2 }, LEVEL_KEYS = ['quick', 'fun', 'max'];
+    // how long a level change keeps the card you tapped under your finger while the card settles (changeLevel's settle)
     const SETTLE_MS = 3000;
     let settleStop = null;
     var optChipsReady = false;                                           // eslint-disable-line no-var -- read before its line runs
     async function changeLevel(level) {
-      if (!FunRoute.LEVELS[level] || level === funLevel || $('planPanel').classList.contains('busy') || loopBusy || optionBusy) return;
-      const was = funLevel, t = plannedRoute, o = routeOptions;
-      // the switch you tapped stays under your finger. The card above it is drawn again for the new route and can be far
+      const t = plannedRoute, o = routeOptions, here = !!(t && o && o.current === t && o.levels && state.mode !== 'live');
+      if (!FunRoute.LEVELS[level] || $('planPanel').classList.contains('busy') || loopBusy || optionBusy) return;
+      // your level's card again, after a swipe to another route: back to its pick
+      if (level === funLevel && !(here && o.levels[level] != null && o.picked !== o.levels[level])) return;
+      const was = funLevel;
+      // the card you tapped stays under your finger. The card above it is drawn again for the new route and can be far
       // shorter, and parts of it settle later still (CI, 2026-11-05: 90 px, some of it after the first frames; the sheet
-      // itself moved 4-19 px). So the scroll is set from where the switch now is in the content, never nudged by how far
+      // itself moved 4-19 px). So the scroll is set from where that card now is in the content, never nudged by how far
       // it moved: scrollTop = its content offset - where it was on screen relative to the scroller's top, clamped. It is
       // applied every frame from the tap for SETTLE_MS, or until you touch, scroll or tap the card (then where you scroll
       // is yours), with the browser's own scroll anchoring off meanwhile so nothing else moves it.
-      const swEl = () => document.getElementById('routeCardFun');
+      const swEl = () => document.querySelector(`#routeCardFun [data-fun="${level}"]`);
       const y0 = swEl() ? swEl().getBoundingClientRect().top : null;
       if (settleStop) settleStop();
       const settle = () => {
@@ -3628,34 +3682,60 @@
         return stop;
       };
       setFunLevel(level);
-      if (t && o && o.current === t && state.mode !== 'live') {
-        // held from the tap on, so every redraw on the way (not just the last) keeps the switch where it was
-        if (o.kind === 'loop') { settle(); await relevelLoop(o, level); return; }
-        if (o.pool && LEVEL_ORDER[level] <= LEVEL_ORDER[o.builtLevel || 'quick']) { settle(); if (!(await rerank(o, level))) setFunLevel(was); return; }
-      }
+      // held from the tap on, so every redraw on the way (not just the last) keeps the card where it was
+      if (here && o.levels[level] != null) { settle(); if (!(await takeLevel(o, level))) setFunLevel(was); return; }
       if (!(await replanForLevel(FunRoute.LEVELS[level].label))) setFunLevel(was);
     }
-    async function rerank(o, level) {
-      const pool = o.pool, label = FunRoute.LEVELS[level].label, prev = plannedRoute;
-      let ranked = rankPool(pool, level);
-      if (!ranked.length) ranked = FunRoute.rank(pool, level);
-      if (!ranked.length) return false;
-      const offered = FunRoute.distinctOptions(ranked, 3);
-      const quickPool = pool.filter(c => Number.isFinite(c.timeS)).reduce((x, y) => (y.timeS < x.timeS ? y : x), ranked[0]);
-      const quickest = ranked.find(c => c.t === quickPool.t) || quickPool;
-      const n = { id: o.id, name: o.name, request: o.request, level, quickest, list: offered, pool, builtLevel: o.builtLevel, picked: 0, current: prev };
-      const cur = o.list[o.picked], same = !!cur && offered[0].route === cur.route;
+    // A level's card: its pick, already found and ranked (destLevels, loopLevels), goes up; nothing is ranked or planned again.
+    async function takeLevel(o, level) {
+      const i = o.levels[level], label = FunRoute.LEVELS[level].label, prev = plannedRoute, loop = o.kind === 'loop';
+      const n = { ...o, level, quickest: (o.quicks && o.quicks[level]) || o.quickest, picked: i, current: prev };
+      const same = !!o.list[o.picked] && o.list[o.picked].t === o.list[i].t;
       routeOptions = n;
-      $('routeCardOptions')._t = null;                                   // the tiles are drawn again for the new list
+      paintLevelCards();                                                   // the card you tapped is on at once
       let t = prev;
-      if (same) { optionOnto(prev, offered[0], n); persistPlanned(prev); renderRouteCard(prev); }
+      if (same) { if (!loop) { optionOnto(prev, n.picks[level], n); persistPlanned(prev); } renderRouteCard(prev); }
       else {
         optionBusy = true;
-        try { t = await useOption(n, 0); } finally { optionBusy = false; }
-        if (!t) return false;
+        try { t = await useOption(n, i); } catch (_) { t = null; } finally { optionBusy = false; }
+        if (!t) { if (routeOptions === n) { routeOptions = o; paintLevelCards(); } return false; }
       }
-      cardNote(same ? `${label}: this route is still the best of the ${pool.length} found` : `${ApexRouteCard.swapNote(t, prev, t.why, label)} (of the ${pool.length} routes found)`);
+      const found = loop ? o.done.length : o.pool.length;
+      cardNote(same ? `${label}: this ${loop ? 'loop' : 'route'} is still the best of the ${found} found`
+        : `${ApexRouteCard.swapNote(t, prev, loop ? null : t.why, label)} (of the ${found} ${loop ? 'loops' : 'routes'} found)`);
       return true;
+    }
+    // The level cards' routes for a destination: each level's ranking of the pool the plan found, as far as the plan
+    // looked (a plan at Fun holds the quick ones too; Long way's longer detours need a plan of their own).
+    function destLevels(base, level) {
+      const pool = base.pool, built = base.builtLevel || level;
+      return withLevels(base, level, (L) => {
+        if (LEVEL_ORDER[L] > LEVEL_ORDER[built]) return null;
+        let ranked = rankPool(pool, L);
+        if (!ranked.length) ranked = FunRoute.rank(pool, L);
+        if (!ranked.length) return null;
+        const quickPool = pool.filter(c => Number.isFinite(c.timeS)).reduce((x, y) => (y.timeS < x.timeS ? y : x), ranked[0]);
+        return { offered: FunRoute.distinctOptions(ranked, 3), quickest: ranked.find(c => c.t === quickPool.t) || quickPool };
+      });
+    }
+    // One list for the card: the levels' picks in the cards' order (one entry when two pick the same route), then up to two
+    // other good ones of your level; levels[L] = its pick's index (null: not looked at), picks[L] its pick as that level
+    // ranked it (time cost, why line), quicks[L] the quickest it was measured against.
+    function withLevels(base, level, rankFor) {
+      const list = [], levels = {}, picks = {}, quicks = {};
+      let own = null;
+      for (const L of LEVEL_KEYS) {
+        const r = rankFor(L);
+        if (!r || !r.offered.length) { levels[L] = null; continue; }
+        const c = r.offered[0];
+        let i = list.findIndex((x) => x.t === c.t);
+        if (i < 0) { list.push(c); i = list.length - 1; }
+        levels[L] = i; picks[L] = c; quicks[L] = r.quickest;
+        if (L === level) own = r;
+      }
+      const picksN = list.length;
+      for (const c of own ? own.offered.slice(1) : []) if (!list.some((x) => x.t === c.t) && list.length < picksN + 2) list.push(c);
+      return Object.assign(base, { level, list, levels, picks, quicks, quickest: quicks[level] || base.quickest, picked: levels[level] != null ? levels[level] : 0 });
     }
     function setAvoid(next) {
       avoid = { ...avoid, ...next };
@@ -3828,10 +3908,10 @@
         d.t.name = targetS && Number.isFinite(d.t.timeS) ? `${Math.round(d.t.timeS / 60)} min loop` : `${Math.max(1, Math.round(ApexUnits.longN(d.km * 1000)))} ${ApexUnits.longU()} loop`;
       }
       // the level (finding 6) picks among the loops built, and up to two really different others are offered beside it
-      const o = loopOptions({ id: loopId, done, miles, targetS, level: funLevel, asked });
-      const best = o.list[0].loop;
+      const o = loopLevels(loopOptions({ id: loopId, done, miles, targetS, level: funLevel, asked }), funLevel);
+      const best = o.list[o.picked].loop;
       ui.step('Building route', 0.92);
-      routeOptions = Object.assign(o, { picked: 0, current: best.t });
+      routeOptions = Object.assign(o, { current: best.t });
       await buildRoute(null, loopId, best.t.name, best.t);
       if (window.ApexRouteCar) routeAftercare(best.lc);
       const gotMi = best.km / 1.609344;
@@ -3860,19 +3940,9 @@
       }
       return { kind: 'loop', id, done, miles, targetS, asked, level, list, ranked: order };
     }
-    async function relevelLoop(o, level) {
-      const label = FunRoute.LEVELS[level].label, prev = plannedRoute;
-      const n = Object.assign(loopOptions({ ...o, level }), { picked: 0, current: prev });
-      routeOptions = n;
-      $('routeCardOptions')._t = null;
-      let t = prev;
-      if (n.list[0].t === prev) renderRouteCard(prev);
-      else {
-        optionBusy = true;
-        try { t = await useOption(n, 0); } finally { optionBusy = false; }
-        if (!t) return;
-      }
-      cardNote(t === prev ? `${label}: this loop is still the best of the ${o.done.length} found` : `${ApexRouteCard.swapNote(t, prev, null, label)} (of the ${o.done.length} loops found)`);
+    // The level cards' loops: each level's own pick among the loops built (finding 6), then the others.
+    function loopLevels(base, level) {
+      return withLevels(base, level, (L) => { const l = loopOptions({ ...base, level: L }).list; return l.length ? { offered: l, quickest: null } : null; });
     }
     // The loop card's length (finding 6): the dial's five lengths, in your units; a tap builds a loop of that length.
     function paintCardLoop(t) {
@@ -6938,7 +7008,7 @@
     }
     async function attachScenic(t) {
       for (const mk of scenicPins.splice(0)) mk.remove();
-      fuelPins.length = 0;
+      fuelPins.length = 0; poiDeclutter.pins = [];
       $('routeCardAlong').hidden = true;
       if (!t || !Array.isArray(t.lat) || t.lat.length < 2 || !window.ApexScenic) return;
       const pts = [];
@@ -6960,11 +7030,14 @@
           const label = p.name || SCENIC_LABEL[p.kind];
           toast(label, { label: 'Add as a stop', ms: 6000, onClick: () => { if (plannedRoute === t) addViaAt({ lat: p.lat, lon: p.lon, label }, p.m); } });
         });
-        scenicPins.push(new maplibregl.Marker({ element: el }).setLngLat([p.lon, p.lat]).addTo(map));
+        const mk = new maplibregl.Marker({ element: el }).setLngLat([p.lon, p.lat]).addTo(map);
+        scenicPins.push(mk);
+        poiDeclutter.pins.push({ marker: mk, el, kind: p.kind, named: !!p.name, m: p.m });
         if (p.kind === 'fuel' && Number.isFinite(p.m)) fuelPins.push({ m: p.m, el });
       }
       fuelPins.sort((a, b) => a.m - b.m);
       updatePins();
+      declutterSoon();
     }
     function paintReported() {
       const keep = new Set(reported.list.map(h => h.id));
