@@ -2792,12 +2792,10 @@
       if (link) { openMapsLink(link); return; }
       const ui = planBusy();
       ui.step('Finding…', 0.3);
-      const q0 = Date.now();
       try {
         toast('Searching…');
         const from = await resolvePlace(fromQ);
         const to = await resolvePlace(toQ);
-        if (window.apexDebug) window.apexDebug.resolveMs = Date.now() - q0;
         ui.step('Routing…', 0.7);
         // Kept on the track so a reroute can rebuild it; from: null = the phone's position.
         const request = { from: from.label === null ? null : { lat: from.lat, lon: from.lon }, to: { lat: to.lat, lon: to.lon }, via: [] };
