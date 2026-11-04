@@ -232,7 +232,7 @@ final class ReviewFlows: XCTestCase {
         if left > 0 { driveFor(left, every: every, tag) }
     }
     private func startDrive() {
-        tap("Drive it", "Start drive", "Start", wait: 20)
+        tap("Start", "Start drive", wait: 20)   // the plan flow (2026-11-04): the card's go key is Start
         if tap("Allow and start", wait: 5) { app.tap() }
         drivingSince = Date()
         pause(4)
@@ -410,8 +410,8 @@ final class ReviewFlows: XCTestCase {
                 XCTAssertTrue(until(45) { (bar.exists && bar.isHittable) || (go.exists && go.isHittable) }, "the route to Winton Woods never resolved")
                 pause(3); shot("route")                            // U-70: the card opens by itself
                 // REVIEW4_CHECK §4.5: the bar is a toggle, so tapping it on the open card closed it, and a swipe on the map
-                // never reached the bar's drag. The card's own Drive it key being on screen says it is open.
-                let driveIt = web.buttons["Drive it"]
+                // never reached the bar's drag. The card's own Start key (its foot) being on screen says it is open.
+                let driveIt = web.buttons["Start"]
                 let cardOpen = { driveIt.exists && driveIt.isHittable }
                 if !cardOpen(), bar.exists && bar.isHittable { bar.tap(); pause(2) }
                 shot("route-card"); scroll(3, "route-card")
@@ -440,11 +440,11 @@ final class ReviewFlows: XCTestCase {
         let again = web.searchFields.firstMatch
         if again.exists { again.tap(); pause(2) }
         shot("plan-sheet")
-        // the plan sheet's More (§6.3)
-        let more = web.descendants(matching: .any).matching(NSPredicate(format: "label BEGINSWITH %@", "More:")).firstMatch
+        // the plan sheet's Options (§6.3; the plan flow made More one bottom sheet, opened from its chip)
+        let more = web.descendants(matching: .any).matching(NSPredicate(format: "label BEGINSWITH %@", "Options")).firstMatch
         if until(4, { more.exists && more.isHittable }) {
-            more.tap(); pause(1.5); shot("plan-more"); scroll(2, "plan-more")
-            more.tap(); pause(1)
+            more.tap(); pause(1.5); shot("plan-options"); scroll(2, "plan-options")
+            tap("Done", wait: 2); pause(1)
         }
         if tap("Find a loop", wait: 6) { pause(30); shot("loop"); scroll(2, "loop") }
     }
@@ -596,7 +596,7 @@ final class ReviewFlows: XCTestCase {
             search.typeText("Winton Woods"); pause(6)
             if let place = findButton(startingWith: "Winton Woods", wait: 8) {
                 place.tap()
-                let driveIt = web.buttons["Drive it"]
+                let driveIt = web.buttons["Start"]
                 if until(45, { driveIt.exists && driveIt.isHittable }) { pause(2); shot("route-card"); scroll(2, "route-card") }
             }
         }

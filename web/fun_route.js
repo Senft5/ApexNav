@@ -17,7 +17,7 @@
   const LEVELS = {
     quick: { budget: 0.10, slackS: 60, perMin: 3.0, label: 'Quick' },        // a detour must add ~6 good corners a minute
     fun: { budget: 0.35, slackS: 240, perMin: 1.0, label: 'Fun' },           // ~2 a minute
-    max: { budget: 0.90, slackS: 600, perMin: 0.35, label: 'Max fun' },      // ~0.7 a minute
+    max: { budget: 0.90, slackS: 600, perMin: 0.35, label: 'Long way' },     // ~0.7 a minute (was "Max fun": plain words, vocabulary.js)
   };
 
   const TURN_NEAR_M = 30;          // a corner whose apex is this close to a junction turn is the turn
@@ -284,6 +284,17 @@
   function loopValue(fun, km, targetKm, retraced) {
     const f = fun && Number.isFinite(fun.fun) ? fun.fun : 0;
     return f - 200 * (retraced || 0) - 80 * Math.abs(km - targetKm) / targetKm;
+  }
+  /**
+   * A loop's level (the plan flow, finding 6), as a destination route has one: Quick keeps nearest the length you asked
+   * for, Long way gives more for corners and lets the length run. What it adds to a loop's value (loopValue's Fun level is
+   * 0), from the loop's fun score and how far off the asked length it is (a share: 0.1 is 10 % long or short). The card's
+   * level switch re-ranks the loops already built with it; nothing is planned again.
+   */
+  const LOOP_LEVEL = { quick: { fun: 0.6, len: 2.0 }, fun: { fun: 1, len: 1 }, max: { fun: 1.4, len: 0.5 } };
+  function loopLevelAdjust(fun, offShare, level) {
+    const L = LOOP_LEVEL[level] || LOOP_LEVEL.fun, f = fun && Number.isFinite(fun.fun) ? fun.fun : 0;
+    return (L.fun - 1) * f - 80 * (L.len - 1) * (Number.isFinite(offShare) ? Math.abs(offShare) : 0);
   }
   /**
    * Stages worth timing for a loop of targetKm from start: the best-scoring ones close enough to
@@ -655,6 +666,6 @@
     return out;
   }
 
-  const api = { LEVELS, cornerWeight, townKm, townCost, exploreShortlist, exploreTargets, explorePicks, distinctOptions, glare, glareCost, LOOP_BY_TIME, AVOID_DEFAULT, AVOID_LABELS, STAGE_KEPT, stageCoverage, keptStages, CAMERA_BOX_DEG, camerasToExclude, costing, unavoided, keepAvoiding, why, geometry, alongPoints, insertVia, loopValue, loopShortlist, loopPlansFromMatrix, score, shortlist, matrixPoints, plansFromMatrix, sectionCount, sectionPoints, combineSections, planKey, searchArea, waypoints, rank, along, kmBetween, directionBonus, setList, SET_FINISH, SET_FATIGUE, MAX_TECH_PER_KM, carNote, stageSpans, stageAhead };
+  const api = { LEVELS, cornerWeight, townKm, townCost, exploreShortlist, exploreTargets, explorePicks, distinctOptions, glare, glareCost, LOOP_BY_TIME, LOOP_LEVEL, loopLevelAdjust, AVOID_DEFAULT, AVOID_LABELS, STAGE_KEPT, stageCoverage, keptStages, CAMERA_BOX_DEG, camerasToExclude, costing, unavoided, keepAvoiding, why, geometry, alongPoints, insertVia, loopValue, loopShortlist, loopPlansFromMatrix, score, shortlist, matrixPoints, plansFromMatrix, sectionCount, sectionPoints, combineSections, planKey, searchArea, waypoints, rank, along, kmBetween, directionBonus, setList, SET_FINISH, SET_FATIGUE, MAX_TECH_PER_KM, carNote, stageSpans, stageAhead };
   if (typeof module !== 'undefined' && module.exports) module.exports = api; else root.ApexFunRoute = api;
 })(typeof window !== 'undefined' ? window : globalThis);

@@ -37,6 +37,30 @@
 - GRAPH_STATS_PLACEHOLDER
 - Exact next task: the phone router (web/graph_router.js + graph_worker.js) on these tiles (the parallel builder), then
   OWN_ROUTING.md §6's proof against today's picks.
+## Session 2026-11-04 (evening): the plan flow, simpler (branch claude/plan-flow)
+
+- [x] The planux audit's eleven findings are fixed (CALL_SHEET 2026-11-04 evening has each call and how to undo it):
+  - the card shows progress, then says "Better route found: +N min, M more corners", or that it kept the first route;
+  - Start is the card's pinned foot, the profile's space is kept, and a re-plan keeps the scroll;
+  - the main key follows the task;
+  - the level lives only on the route card, and switching re-ranks the routes already found;
+  - loops have a level and a length in your units;
+  - one Options sheet with chips that show what is on;
+  - Best roads nearby is a chip with a list sheet whose columns are named;
+  - one name for go: Start / Just drive / Fly-through;
+  - plain words (vocabulary.js);
+  - the card opens at half height and drags to full;
+  - swipe the card for the alternatives.
+- [x] New e2e journeys "plan flow (a)–(g)" at iPhone 15 geometry. They count taps (destination 3, loop 2, best roads
+  nearby 3, level 1, alternative 1 swipe), track Start's y over time, check the swap line, the option chips, and the
+  safe-area/overlap scanner. Old flows that tested More, Drive it or Preview now test the new path for the same
+  capability.
+- Unverified: the half-height drag and the sideways swipe on a real phone (headless touch only). UITests string changes
+  (Swift; CI compiles). The re-rank on live data: it uses the engine's own ranking of the pool kept from the plan.
+- Known: on the website in headless Chromium, the fresh GPS fix for a re-plan sometimes fails. It now falls back to the
+  last known position.
+- Exact next task: the owner tries the plan flow on TestFlight (half card, Options, Best roads nearby). Then a real
+  drive with the engine, and recording 8 / panel round 3.
 
 ## Session 2026-11-04: owner notes through #290; route engine being integrated
 

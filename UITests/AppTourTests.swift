@@ -124,7 +124,7 @@ final class AppTourTests: XCTestCase {
             search.typeText("Robbinsville"); pause(6)
             let place = web.staticTexts["Robbinsville"].firstMatch
             if place.exists { place.tap(); pause(25) }
-            let drive = web.buttons["Drive it"], start = web.buttons["Start"]
+            let drive = web.buttons["Start"], start = web.buttons["Start drive"]   // the plan flow: the card's key is Start
             if drive.exists { drive.tap() } else if start.exists { start.tap() }
             pause(3)
             if web.buttons["Allow and start"].exists { web.buttons["Allow and start"].tap(); app.tap() }

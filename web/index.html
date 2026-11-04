@@ -76,6 +76,7 @@
   <script src="hazard_reports.js" defer></script>
   <script src="route_card.js" defer></script>
   <script src="plan_presets.js" defer></script>
+  <script src="plan_options.js" defer></script>
   <script src="place_plate.js" defer></script>
   <script src="your_roads.js" defer></script>
   <script src="horizon.js" defer></script>
@@ -622,8 +623,11 @@
     .rc-tile span { display: block; margin-top: 2px; font-size: 13px; color: var(--panel-dim); }
     .rc-tile.on { background: var(--panel-ink); color: var(--panel); } .rc-tile.on span { color: var(--panel); opacity: 0.8; }
     .rc-go { display: grid; grid-template-columns: 1.4fr 1fr; gap: 10px; margin-top: 14px; }
-    /* U-70: Drive it stays on the card while it scrolls (the find bar's sticky foot), so the card that rises has Start on it */
-    .plan.open .rc-go { position: sticky; bottom: -20px; z-index: 2; margin: 14px -16px -6px; padding: 10px 16px calc(10px + var(--safe-bottom)); background: var(--panel); border-top: 1px solid var(--rule); }
+    /* U-70 / the plan flow (finding 2): Start is the card's foot, outside its scroll, so nothing that loads above it (the
+       profile, the facts, a re-rank) moves it; the card's body ends above it */
+    .plan-foot { display: none; flex: none; padding: 10px 16px calc(10px + var(--safe-bottom)); background: var(--panel); border-top: 1px solid var(--rule); zoom: var(--type-scale, 1); }
+    .plan.open.routed .plan-foot { display: block; }
+    .plan-foot .rc-go { margin: 0; }
     .rc-go .ink-btn { min-height: 52px; font-size: 17px; }
     /* ---------------- the plan sheet: basic level and More (REVIEW.md roadmap 6) ---------------- */
     /* the loop dial: one control, the value in its face, five lengths as ticks on an arc around it (REVIEW2.md U-31) */
@@ -656,6 +660,72 @@
     .find-key { width: 100%; min-height: 52px; background: var(--panel-ink); color: var(--panel); font-size: 17px; font-weight: 700; box-shadow: inset 0 -3px 0 rgba(0,0,0,0.35); }
     .find-key.busy { background: var(--panel-dim); }
     .plan-presets { margin: 10px 0 2px; }
+    /* ---------------- the plan flow (CALL_SHEET 2026-11-04) ---------------- */
+    /* finding 8: with no route the bar's key is Just drive, smaller and in ink (a free drive); the red Start is a route's */
+    .plan:not(.routed) #startDrive { background: transparent; color: var(--panel-ink); border: 1.5px solid var(--panel-ink); padding: 0 10px; font-size: 14px; font-weight: 600; gap: 6px; box-shadow: none; }
+    .plan:not(.routed) #startDrive i { width: 8px; height: 8px; background: var(--accent); }
+    .plan:not(.routed) .start-more { background: transparent; color: var(--panel-ink); border: 1.5px solid var(--panel-ink); border-left: 0; box-shadow: inset 1px 0 0 var(--rule); width: 30px; }
+    /* findings 4, 5, 7: Best roads nearby and Options as chips, what is on as small chips beside them */
+    .plan-chips, .deck-chips { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+    .plan-chips { margin: 2px 0 4px; }
+    .plan-chips .chip, .deck-chips .chip { height: auto; min-height: 36px; padding: 4px 12px; border: 1.5px solid var(--panel-ink); font-size: 14px; font-weight: 600; background: transparent; color: var(--panel-ink); }
+    .nearby-chip::before { content: ""; display: inline-block; width: 14px; height: 10px; margin-right: 6px; vertical-align: -1px; background: currentColor;
+      -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 14 10' fill='none' stroke='black' stroke-width='1.8' stroke-linecap='round'%3E%3Cpath d='M1 8 C4 8 4 2 7 2 S10 8 13 8'/%3E%3C/svg%3E") center / contain no-repeat;
+      mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 14 10' fill='none' stroke='black' stroke-width='1.8' stroke-linecap='round'%3E%3Cpath d='M1 8 C4 8 4 2 7 2 S10 8 13 8'/%3E%3C/svg%3E") center / contain no-repeat; }
+    .opt-on { display: contents; }
+    .opt-on .chip { height: auto; min-height: 30px; padding: 2px 8px; font-size: 12px; font-weight: 600; border: 1px solid var(--panel-dim); background: transparent; color: var(--panel-ink); }
+    .opt-chip[data-count] { background: var(--panel-ink); color: var(--panel); }
+    .deck-chips { display: none; padding: 8px 2px 0; }
+    #app.idle:not(.plan-open):not(.routed):not(.drive-today-on) .deck-chips { display: flex; }
+    .rc-chips { margin: 6px 0 0; }
+    /* finding 3: the main key follows the task: once you type, the loop gives way and the key goes to the place */
+    .plan.typing .plan-loop, .plan.typing .plan-links, .plan.typing #planSpots, .plan.typing #findLoopBtn { display: none; }
+    #findGoBtn { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    /* finding 1: the plan's progress on the card, then what the ranking did */
+    .rc-progress { display: flex; gap: 8px; align-items: center; margin: 4px 0 0; font-size: 14px; font-weight: 600; line-height: 1.3; color: var(--panel-dim); }
+    .rc-progress:empty { display: none; }
+    .rc-progress.busy::before { content: ""; flex: none; width: 12px; height: 12px; border: 2px solid var(--rule); border-top-color: var(--accent); border-radius: 50%; animation: rc-spin 0.9s linear infinite; }
+    .rc-progress.found { color: var(--panel-ink); }
+    .rc-progress.found::before { content: ""; flex: none; width: 4px; align-self: stretch; background: var(--accent); }
+    @keyframes rc-spin { to { transform: rotate(360deg); } }
+    @media (prefers-reduced-motion: reduce) { .rc-progress.busy::before { animation: none; } }
+    /* finding 2: the profile's room is kept before it loads */
+    .rc-profile-box { min-height: 102px; position: relative; }
+    /* heights that never came: the room stays (nothing below moves) and says so, unknown as -- */
+    .rc-profile-box.none::after { content: "Heights --"; position: absolute; left: 0; right: 0; top: 50%; border-top: 1px dashed var(--rule); padding-top: 4px; text-align: center; font-size: 13px; color: var(--panel-dim); }
+    /* finding 6: a loop's length on its card, in your units */
+    .rc-loop { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 10px; align-items: center; margin-top: 8px; }
+    .rc-loop[hidden] { display: none; }
+    .rc-loop-label { font-size: 13px; font-weight: 700; color: var(--panel-dim); }
+    .rc-loop .detents > button { min-width: 0; padding: 0 2px; font-size: 14px; }
+    #routeCardFun { margin-top: 8px; }
+    /* finding 10: the card opens at half height over the map; dragged up it takes the full sheet */
+    .plan.open.routed:not(.full) { height: min(50%, 440px); }
+    .plan.routed { transition: transform 0.2s cubic-bezier(0.2, 0.8, 0.2, 1), height 0.2s cubic-bezier(0.2, 0.8, 0.2, 1); }
+    .plan.routed.dragging { transition: none; }
+    /* finding 11: the alternatives answer a swipe sideways; the card says how many */
+    #routeCard { touch-action: pan-y; }
+    /* the Options sheet and Best roads nearby: bottom sheets (feedback 04), their keys at the 44 pt floor */
+    .opt-sheet :is(.stamps > button, .switch > button, .detents > button, .linkbtn, .ink-btn), .nearby-sheet :is(.detents > button, .linkbtn, .nb-go) { min-height: 44px; }
+    .opt-sheet .ctl { margin-top: 4px; }
+    .opt-sheet .opt-stamps > button { text-transform: none; letter-spacing: 0; font-size: 15px; }
+    .opt-avoid > button[aria-pressed="true"]::before { content: "✕ "; }
+    .opt-prefer > button[aria-pressed="true"]::before { content: "✓ "; }
+    .opt-mix { display: grid; grid-template-columns: 92px minmax(0, 1fr); gap: 10px; align-items: center; margin-top: 6px; }
+    .opt-mix > span { font-size: 15px; font-weight: 600; }
+    .nearby-list { display: grid; }
+    .nb-head, .nb-row { display: grid; grid-template-columns: minmax(0, 1fr) 54px; align-items: center; column-gap: 6px; border-top: 1px solid var(--hair, var(--panel-dim)); }
+    .nb-head { border-top: 0; font-size: 11px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--panel-dim); padding-bottom: 4px; }
+    .nb-cells { display: grid; grid-template-columns: minmax(0, 1fr) 64px 60px 58px; column-gap: 6px; align-items: center; text-align: left; }
+    .nb-go { width: 100%; padding: 8px 0; background: none; border: 0; color: inherit; font: inherit; }
+    .nb-cells > b { font-size: 15px; font-weight: 600; overflow-wrap: anywhere; }
+    .nb-cells > span { font: 700 15px var(--font-num); font-variant-numeric: tabular-nums; text-align: right; }
+    .nb-cells > span small { font: 500 11px var(--font-ui); color: var(--panel-dim); margin-left: 2px; }
+    .nb-head .nb-cells > span { font: inherit; text-align: right; }
+    .nb-head .nb-cells > span:first-child { text-align: left; }
+    #routeCard .rc-tile { padding: 8px 10px; min-height: 56px; }
+    #routeCard .rc-tile b { font-size: 15px; }
+    .nb-row .linkbtn { justify-self: end; font-size: 13px; }
     .place-all { display: block; margin: 6px 0 0; }
     /* ---------------- the drive-ended card (REVIEW.md roadmap 7) ---------------- */
     .end-card { text-align: left; }
@@ -1077,6 +1147,17 @@
     #planBody :is(.rc-facts .fact, .route-meta, p.note, .plan-status, .ctl-label small, .rc-tile span, .linkbtn, .place b, .place small, .place span, .plan-more > summary),
     .home-by .hb-label, #endCard :is(.end-meta, .end-line, .linkbtn, p:not(.end-kicker)) { font-size: 17px; }
     #planBody :is(.stamps > button, .switch > button, .detents > button, .linkbtn, .ink-btn, .chip), #endCard :is(.linkbtn, .ink-btn) { min-height: 44px; min-width: 44px; }
+    /* the plan flow: the card's progress line, the Options sheet and Best roads nearby hold the same floor and grow with it */
+    #planBody .rc-progress, :is(#optSheet, #nearbySheet) :is(p.note, .ctl-label small, .linkbtn, .rc-progress, .opt-mix > span, .nb-cells > b) { font-size: 17px; }
+    :is(#optSheet, #nearbySheet) :is(.stamps > button, .switch > button, .detents > button, .linkbtn, .ink-btn, .nb-go) { min-height: 44px; min-width: 44px; }
+    .opt-sheet > :not(.side-pop-head), .nearby-sheet > :not(.side-pop-head) { zoom: var(--type-scale, 1); }
+    .opt-sheet, .nearby-sheet { grid-template-columns: minmax(0, 1fr); }   /* one wide child wraps; the sheet never grows past the screen */
+    .opt-sheet .ctl-label { flex-wrap: wrap; row-gap: 2px; }
+    html[data-type-size] .opt-mix { grid-template-columns: minmax(0, 1fr); }
+    html[data-type-size] .nb-cells { grid-template-columns: repeat(3, minmax(0, 1fr)); row-gap: 2px; }
+    html[data-type-size] .nb-cells > :first-child { grid-column: 1 / -1; text-align: left; }
+    html[data-type-size] .nb-head, html[data-type-size] .nb-row { grid-template-columns: minmax(0, 1fr); }
+    html[data-type-size] .nb-row .linkbtn { justify-self: start; }
     .sheet h3, .plan h3, .side-pop h3 { font-size: 18px; font-weight: 700; font-family: var(--font-num); border-top: 1px solid var(--hair, var(--panel-dim)); padding-top: 12px; margin-bottom: 8px; }
     .sheet p.note.err, .plan p.note.err { color: var(--accent); }
     /* The sheet header already draws a rule: the first heading under it doesn't draw a second. */
@@ -1173,6 +1254,7 @@
       .plan { left: 16px; right: auto; top: 16px; bottom: auto; width: 440px; height: var(--plan-bar, 62px); transform: none; border: 1px solid var(--rule);
         transition: height 0.2s cubic-bezier(0.2, 0.8, 0.2, 1); box-shadow: 0 8px 24px rgba(0, 0, 0, 0.22); overflow: hidden; }
       .plan.open { height: calc(100% - 32px); transform: none; }
+      .plan.open.routed:not(.full) { height: calc(100% - 32px); }
       .plan-bar::before { display: none; }
     }
     /* Landscape on a phone (IDEAS U-16, a landscape mount): the notes stay across the top, the map takes the left and the
@@ -1241,6 +1323,8 @@
       html[data-theme="tapedeck"] .dial-g > .vfd-meters { grid-template-columns: 1fr 1fr; column-gap: 16px; }
       #app.idle:has(.edge.open) .loop-suggest { display: none; }                                                 /* 8: the panel is the task */
       .plan.open { height: calc(100% - var(--safe-bottom)); }                                                     /* 14 */
+      .plan.open.routed:not(.full) { height: calc(100% - var(--safe-bottom)); }                                   /* the plan flow: no half card on a short screen */
+      #app.idle .deck-chips { display: none !important; }
       /* 14: two columns, so the basic level fits without scrolling: places and the loop left, Roads, More and Find right */
       .plan.open .plan-search-section { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); column-gap: 24px; row-gap: 12px; grid-auto-flow: row dense; align-items: start; }
       .plan.open .plan-search-section > * { grid-column: 1; }
@@ -1295,71 +1379,62 @@
           <label class="plan-search"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6"/><path d="M15 15l5 5"/></svg>
             <input id="destInput" type="search" placeholder="Where to?" aria-label="Where to" aria-controls="planBody" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" enterkeyhint="go" /></label>
           <button class="route-bar" id="routeBar" aria-label="Route details"><b id="routeBarName">--</b><span id="routeBarMeta"></span><em class="rb-open" aria-hidden="true"><svg viewBox="0 0 12 12"><path d="M2 8 L6 4 L10 8"/></svg></em></button>
-          <button class="btn-start" id="startDrive" aria-label="Start drive"><i></i>Start</button>
-          <!-- P-11: the Start key's other way to go, a convoy now (no crew); a tap on Start itself still drives at once -->
-          <button class="btn-start start-more" id="startMore" aria-label="More ways to start: Drive, or Convoy now" aria-haspopup="dialog"><svg viewBox="0 0 12 12" aria-hidden="true"><path d="M2 4.5 L6 8.5 L10 4.5"/></svg></button>
+          <!-- the plan flow (finding 8): one name for go. With no route this is the smaller Just drive (a free drive); with a
+               route planned it reads Start (cockpit.js renderRouteCard), as the card's own key does -->
+          <button class="btn-start" id="startDrive" aria-label="Just drive: record a drive with no route"><i></i>Just drive</button>
+          <!-- P-11: the key's other way to go, a convoy now (no crew); a tap on the key itself still drives at once -->
+          <button class="btn-start start-more" id="startMore" aria-label="More ways to go: Just drive, or Convoy now" aria-haspopup="dialog"><svg viewBox="0 0 12 12" aria-hidden="true"><path d="M2 4.5 L6 8.5 L10 4.5"/></svg></button>
           <button class="plan-clear" id="planClear" aria-label="Clear route"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
           <button class="linkbtn plan-cancel" id="planCancel">Cancel</button>
         </div>
         <div class="plan-body" id="planBody">
             <section class="plan-search-section">
+              <!-- the plan flow (findings 4, 5, 7): Best roads nearby and the one Options sheet, with what is on as small chips -->
+              <div class="plan-chips" id="planChips" role="group" aria-label="Plan shortcuts">
+                <button class="chip nearby-chip" id="planNearbyChip" aria-haspopup="dialog">Best roads nearby</button>
+                <button class="chip opt-chip" id="planOptionsChip" aria-haspopup="dialog">Options</button>
+                <span class="opt-on" id="planOptsOn"></span>
+              </div>
               <p class="plan-status" id="planStatus" role="status" aria-live="polite"></p>
               <div class="place-list" id="placeList" hidden></div>
-              <div class="stamps plan-presets" id="presetRow" role="group" aria-label="Your presets" hidden></div>
               <div class="plan-links">
                 <button class="linkbtn" id="tapRouteBtn">Tap the map</button>
               </div>
-              <!-- the basic level (REVIEW.md roadmap 6, mockup 02-plan-basic.html): a loop dial, the Roads switch, More -->
+              <!-- the basic level (REVIEW.md roadmap 6, mockup 02-plan-basic.html): a loop dial in your units (finding 6) -->
               <div class="ctl plan-loop" role="group" aria-label="Loop from here"><div class="ctl-label">Or loop from here <small>back where you started</small></div>
                 <!-- one control (REVIEW2.md U-31): the dial, its five detents as ticks around it; tap a tick or turn the dial -->
                 <div class="loop-gauge" id="loopGauge">
                   <div class="loop-dial" aria-hidden="true"><svg class="loop-ticks" id="loopTicks" viewBox="0 0 120 120"></svg><i id="loopDialMark"></i><b id="loopDialVal">45</b><small id="loopDialUnit">mi</small></div>
-                  <div class="detents" id="loopDetents"><button data-loop-mi="15" aria-pressed="false">15 mi</button><button data-loop-mi="30" aria-pressed="false">30 mi</button><button data-loop-mi="45" aria-pressed="true">45 mi</button><button data-loop-min="60" aria-pressed="false">1 h</button><button data-loop-min="120" aria-pressed="false">2 h</button></div>
+                  <div class="detents" id="loopDetents"><button data-loop-mi="15" aria-pressed="false">15 mi</button><button data-loop-mi="30" aria-pressed="false">30 mi</button><button data-loop-mi="45" aria-pressed="true">45 mi</button><button data-loop-mi="60" aria-pressed="false">60 mi</button><button data-loop-mi="90" aria-pressed="false">90 mi</button></div>
                 </div>
               </div>
-              <div class="ctl"><div class="ctl-label">Roads <small>how much of the long way</small></div>
-                <div class="switch" role="radiogroup" aria-label="Route style"><button data-fun="quick" role="radio" aria-checked="false">Quick</button><button data-fun="fun" role="radio" aria-checked="false">Fun</button><button data-fun="max" role="radio" aria-checked="false">Max fun</button></div>
-</div>
-              <details class="plan-more" id="planMore">
-                <summary>More: avoid, corner mix, who’s aboard, explore, start point</summary>
-                <div class="ctl"><div class="ctl-label">Start from</div>
-                  <div class="from-row">
-                <input class="field" id="fromInput" autocorrect="off" autocapitalize="off" spellcheck="false" enterkeyhint="go" placeholder="From: current location" aria-label="From" autocomplete="off" />
-                <button class="icon-btn" id="swapBtn" aria-label="Swap From and To"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 4v16M4 8l4-4 4 4M16 20V4M12 16l4 4 4-4"/></svg></button>
-              </div></div>
-                <div class="ctl"><div class="ctl-label">Avoid <small>stamped means avoided</small></div>
-                  <div class="stamps" role="group" aria-label="Avoid"><button data-avoid="highways" aria-pressed="false">Highways</button><button data-avoid="tolls" aria-pressed="false">Tolls</button><button data-avoid="ferries" aria-pressed="false">Ferries</button><button data-avoid="unpaved" aria-pressed="false">Unpaved</button><button data-avoid="towns" aria-pressed="false">Towns</button><button data-avoid="cameras" aria-pressed="false">Cameras</button></div></div>
-                <div class="ctl" role="group" aria-label="Corner mix"><div class="ctl-label">Corner mix</div>
-                  <label class="balance"><span>Fewer hairpins</span><input type="range" min="-1" max="1" step="1" value="0" data-pref-range="tight" aria-label="Hairpins: fewer, any or more" /><span>More</span></label>
-                  <label class="balance"><span>Fewer sweepers</span><input type="range" min="-1" max="1" step="1" value="0" data-pref-range="fast" aria-label="Fast sweepers: fewer, any or more" /><span>More</span></label></div>
-                <div class="ctl"><div class="ctl-label">Prefer <small>stamped ranks higher</small></div>
-                  <div class="stamps" role="group" aria-label="Prefer"><button data-prefer="measured" aria-pressed="false">Measured roads</button><button data-prefer="novel" aria-pressed="false">New to me</button><button data-prefer="crew" aria-pressed="false">Crew favourites</button></div></div>
-                <!-- route context (route_ctx/driver.js, vocabulary.js passenger / litRoads / cyclists / tunnels): who's aboard and how you drive -->
-                <div class="ctl"><div class="ctl-label">For this drive <small>stamped ranks routes for it</small></div>
-                  <div class="stamps" role="group" aria-label="For this drive"><button data-driver="passenger" aria-pressed="false">Passenger aboard</button><button data-driver="lit" aria-pressed="false">Lit roads at night</button><button data-driver="cyclists" aria-pressed="false">Cyclist courtesy</button><button data-driver="tunnels" aria-pressed="false">Tunnels</button></div>
-                  <p class="note" id="skillNote" hidden></p></div>
-                <!-- route context (route_ctx/ios_context.js): only in the app, only when tapped (the permission is asked then) -->
-                <div class="ctl" id="fitRow" hidden><div class="ctl-label">Loop to fit <small>asks the phone once you tap</small></div>
-                  <div class="detents"><button data-fit="calendar">My free time</button><button data-fit="album">This album</button></div>
-                  <p class="note" id="fitNote" role="status"></p></div>
-                <div class="ctl" role="group" aria-label="Explore: the best roads near you"><div class="ctl-label">Explore <small>the best roads within</small></div>
-                  <div class="detents"><button data-explore-min="15">15 min</button><button data-explore-min="30">30 min</button></div></div>
-                <div class="place-list" id="exploreList" hidden></div>
-                <div class="ctl"><div class="ctl-label">Presets <small>this setup, one tap next time</small></div>
-                  <div class="row"><button class="ink-btn" id="presetSaveBtn">Save as a preset</button><label class="linkbtn" id="gpxImportBtn">Open GPX<input type="file" id="gpxFile" accept=".gpx,application/gpx+xml,application/xml,text/xml" hidden /></label></div></div>
-              </details>
               <!-- REVIEW_PEOPLE P-13: members' spots are a planning input, so they live here (they were a row on Friends) -->
               <details class="plan-more" id="planSpots" hidden>
                 <summary>Spots near you: overlooks, cafés, bridges</summary>
                 <div id="planSpotsBody"></div>
               </details>
-              <div class="find-bar"><button class="find-key" id="findLoopBtn">Find a loop</button></div>
+              <!-- finding 3: the main key follows the task: Find a loop with nothing typed, Go to the place once you type -->
+              <div class="find-bar"><button class="find-key" id="findLoopBtn">Find a loop</button><button class="find-key" id="findGoBtn" hidden>Search</button></div>
             </section>
             <section id="routeCard" hidden>
               <h3 id="routeCardName"></h3>
+              <!-- finding 1: the plan's progress, then what the ranking did ("Better route found: +8 min, 52 more corners") -->
+              <p class="rc-progress" id="routeProgress" role="status" aria-live="polite"></p>
+              <!-- finding 5: what is on, as small chips; any of them opens Options -->
+              <div class="plan-chips rc-chips" id="routeCardChips" role="group" aria-label="Options on this route">
+                <button class="chip opt-chip" id="cardOptionsChip" aria-haspopup="dialog">Options</button>
+                <span class="opt-on" id="cardOptsOn"></span>
+              </div>
+              <!-- finding 6: a loop's length, in your units, on its card -->
+              <div class="rc-loop" id="routeCardLoop" role="group" aria-label="Loop length" hidden><span class="rc-loop-label">Length</span><div class="detents" id="cardLoopDetents"></div></div>
+              <!-- finding 11: the alternatives, a tap or a swipe sideways on the card -->
+              <div class="rc-tiles" id="routeCardOptions" role="radiogroup" aria-label="Route options" hidden></div>
+              <!-- finding 4: the level's one home; a change re-ranks the routes already found when it can -->
+              <div class="switch" id="routeCardFun" role="radiogroup" aria-label="Route style"><button data-fun="quick" role="radio" aria-checked="false">Quick</button><button data-fun="fun" role="radio" aria-checked="false">Fun</button><button data-fun="max" role="radio" aria-checked="false">Long way</button></div>
               <p class="note rc-via" id="routeCardWhy" hidden></p>
               <div class="rc-stats" id="routeCardStats"></div>
-              <div id="routeCardProfile"></div>
+              <!-- finding 2: the profile's room is kept before it loads, so nothing under it jumps -->
+              <div class="rc-profile-box" id="routeCardProfile"></div>
               <p class="route-meta" id="routeCardMeta" hidden></p>
               <div class="rc-facts">
                 <p class="fact f-along" id="routeCardAlong" hidden></p>
@@ -1371,12 +1446,6 @@
               <div class="stack-8" id="routeStops" hidden></div>
               <div class="rc-dials" id="routeCardBars"></div>
               <p class="note" id="routeCardSub"></p>
-              <div class="rc-tiles" id="routeCardOptions" role="radiogroup" aria-label="Route options" hidden></div>
-              <div class="switch mt-8" id="routeCardFun" role="radiogroup" aria-label="Route style"><button data-fun="quick" role="radio" aria-checked="false">Quick</button><button data-fun="fun" role="radio" aria-checked="false">Fun</button><button data-fun="max" role="radio" aria-checked="false">Max fun</button></div>
-              <div class="rc-go">
-                <button class="rec-key" id="routeDriveBtn"><i></i>Drive it</button>
-                <button class="ink-btn" id="routePreviewBtn">Preview</button>
-              </div>
               <div class="rc-links">
                 <button class="linkbtn" id="routeSaveBtn" aria-pressed="false">Save</button>
                 <button class="linkbtn" id="routeShareBtn">Share</button>
@@ -1394,6 +1463,13 @@
             <section>
               <p class="note" id="measuredNote" hidden></p>
             </section>
+        </div>
+        <!-- finding 2: Start is the card's foot, outside its scroll: whatever loads above it, it stays where the thumb is -->
+        <div class="plan-foot" id="planFoot">
+          <div class="rc-go" id="routeGo">
+            <button class="rec-key" id="routeDriveBtn"><i></i>Start</button>
+            <button class="ink-btn" id="routePreviewBtn">Fly-through</button>
+          </div>
         </div>
       </section>
       <!-- the Layers key (REVIEW.md roadmap 10): map things with the map; co-driver settings live in the Garage, with
@@ -1671,6 +1747,8 @@
         <div class="scrubber" id="scrubber" role="slider" tabindex="0" aria-label="Replay position" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><canvas id="scrubCanvas" aria-hidden="true"></canvas></div>
       </div>
       <div id="cluster"></div>
+      <!-- the plan flow (finding 7): Best roads nearby, a chip under Where to?, opens its list sheet -->
+        <div class="deck-chips" id="deckChips"><button class="chip nearby-chip" id="deckNearby" aria-haspopup="dialog">Best roads nearby</button></div>
       <!-- one invitation on the idle map (REVIEW.md 3.1, mockup 01): a loop from here, drawn as a tulip -->
         <!-- DA-1 / KE-2 (panel round 2): the row's body draws its road on the map (its glyph is the road's own shape); the key
              routes it. A row with no road to draw (the loop, a crew's meeting point) does what its key does. -->
@@ -1680,7 +1758,7 @@
         <div class="your-roads" id="yourRoads"></div>
       <!-- the morning of a crew drive you're going to, it takes the invitation's place (REVIEW.md roadmap 21) -->
         <button class="loop-suggest drive-today" id="driveToday" hidden><span class="dt-date" aria-hidden="true"><b id="driveTodayDay"></b><small id="driveTodayMon"></small></span>
-          <span><b id="driveTodayTitle"></b><small id="driveTodayMeta"></small></span><em>Go</em></button>
+          <span><b id="driveTodayTitle"></b><small id="driveTodayMeta"></small></span><em>Plan</em></button>
       <nav class="tabbar" id="tabbar" aria-label="Views">
         <button class="tab on" data-view="map" aria-label="Map"><svg viewBox="0 0 24 24"><path d="M12 3l6 15-6-3-6 3z"/></svg><span>Map</span></button>
         <button class="tab" data-view="log" aria-label="Log"><svg viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h10"/></svg><span>Log</span></button>
@@ -1731,5 +1809,39 @@
 
   <script src="lazy.js" defer></script>     <!-- People, Garage, crews, convoy, g2p: loaded on first use (REVIEW_FEEL F-03) -->
   <script src="cockpit.js" defer></script>
+      <!-- the plan flow (findings 4, 5): the one Options sheet, a bottom sheet that swipes down to close (cockpit.js). What it
+           sets re-plans the route on the card once, when it closes. -->
+      <aside class="side-pop opt-sheet" id="optSheet" role="dialog" aria-modal="true" aria-labelledby="optTitle">
+        <div class="side-pop-head"><h3 id="optTitle">Options</h3><button class="linkbtn" id="optDone">Done</button></div>
+        <div class="ctl"><div class="ctl-label">Avoid <small>✕ keeps off it when it can</small></div>
+          <div class="stamps opt-stamps opt-avoid" role="group" aria-label="Avoid"><button data-avoid="highways" aria-pressed="false">Highways</button><button data-avoid="tolls" aria-pressed="false">Tolls</button><button data-avoid="ferries" aria-pressed="false">Ferries</button><button data-avoid="unpaved" aria-pressed="false">Unpaved</button><button data-avoid="towns" aria-pressed="false">Towns</button><button data-avoid="cameras" aria-pressed="false">Cameras</button></div></div>
+        <!-- Prefer: the roads (prefer.js) and this drive (route_ctx/driver.js; vocabulary.js passenger / litRoads / cyclists / tunnels) -->
+        <div class="ctl"><div class="ctl-label">Prefer <small>✓ ranks routes higher for it</small></div>
+          <div class="stamps opt-stamps opt-prefer" role="group" aria-label="Prefer"><button data-prefer="measured" aria-pressed="false">Measured roads</button><button data-prefer="novel" aria-pressed="false">New to me</button><button data-prefer="crew" aria-pressed="false">Crew favourites</button><button data-driver="passenger" aria-pressed="false">Passenger aboard</button><button data-driver="lit" aria-pressed="false">Lit roads at night</button><button data-driver="cyclists" aria-pressed="false">Cyclist courtesy</button><button data-driver="tunnels" aria-pressed="false">Tunnels</button></div>
+          <p class="note" id="skillNote" hidden></p></div>
+        <div class="ctl" role="group" aria-label="Kinds of corners"><div class="ctl-label">Kinds of corners <small>how many of each you want</small></div>
+          <div class="opt-mix"><span>Hairpins</span><div class="switch" role="radiogroup" aria-label="Hairpins"><button data-pref-tight="-1" role="radio" aria-checked="false">Fewer</button><button data-pref-tight="0" role="radio" aria-checked="true">Any</button><button data-pref-tight="1" role="radio" aria-checked="false">More</button></div></div>
+          <div class="opt-mix"><span>Fast bends</span><div class="switch" role="radiogroup" aria-label="Fast bends"><button data-pref-fast="-1" role="radio" aria-checked="false">Fewer</button><button data-pref-fast="0" role="radio" aria-checked="true">Any</button><button data-pref-fast="1" role="radio" aria-checked="false">More</button></div></div></div>
+        <div class="ctl"><div class="ctl-label">Start from</div>
+          <div class="from-row">
+            <input class="field" id="fromInput" autocorrect="off" autocapitalize="off" spellcheck="false" enterkeyhint="go" placeholder="From: current location" aria-label="From" autocomplete="off" />
+            <button class="icon-btn" id="swapBtn" aria-label="Swap From and To"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 4v16M4 8l4-4 4 4M16 20V4M12 16l4 4 4-4"/></svg></button>
+          </div></div>
+        <!-- a loop sized by time, not distance (the dial is one unit, yours): an hour, two, or the phone's own (app only) -->
+        <div class="ctl" id="fitCtl"><div class="ctl-label">Loop to fit <small>home again in time</small></div>
+          <div class="detents"><button data-loop-min="60">1 hour</button><button data-loop-min="120">2 hours</button></div>
+          <div class="detents mt-8" id="fitRow" hidden><button data-fit="calendar">My free time</button><button data-fit="album">This album</button></div>
+          <p class="note" id="fitNote" role="status"></p></div>
+        <div class="ctl"><div class="ctl-label">Presets <small>this setup, one tap next time</small></div>
+          <div class="stamps plan-presets" id="presetRow" role="group" aria-label="Your presets" hidden></div>
+          <div class="row"><button class="ink-btn" id="presetSaveBtn">Save as a preset</button><label class="linkbtn" id="gpxImportBtn">Open GPX<input type="file" id="gpxFile" accept=".gpx,application/gpx+xml,application/xml,text/xml" hidden /></label></div></div>
+      </aside>
+      <!-- the plan flow (finding 7): Best roads nearby, a list sheet with its columns named -->
+      <aside class="side-pop nearby-sheet" id="nearbySheet" role="dialog" aria-modal="true" aria-labelledby="nearbyTitle">
+        <div class="side-pop-head"><h3 id="nearbyTitle">Best roads nearby</h3><button class="linkbtn" id="nearbyClose">Close</button></div>
+        <div class="detents" role="group" aria-label="How far"><button data-explore-min="15" aria-pressed="true">Within 15 min</button><button data-explore-min="30" aria-pressed="false">Within 30 min</button></div>
+        <p class="rc-progress" id="nearbyStatus" role="status" aria-live="polite"></p>
+        <div class="nearby-list" id="exploreList" hidden></div>
+      </aside>
 </body>
 </html>
