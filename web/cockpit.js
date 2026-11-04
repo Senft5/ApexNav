@@ -3511,10 +3511,16 @@
     async function changeLevel(level) {
       if (!FunRoute.LEVELS[level] || level === funLevel || $('planPanel').classList.contains('busy') || loopBusy || optionBusy) return;
       const was = funLevel, t = plannedRoute, o = routeOptions;
+      // the switch you tapped stays under your finger: the card above it is drawn again for the new route (its lines can
+      // be fewer, or wrap otherwise), so the scroll is moved by however far the switch moved. The browser's own scroll
+      // anchoring picks some element of its choosing, and on CI it picked one above the change (#297's flow, 41 px)
+      const sw = () => { const e = document.getElementById('routeCardFun'); return e ? e.getBoundingClientRect().top : null; };
+      const y0 = sw();
+      const keep = () => { const y1 = sw(), b = $('planBody'); if (y0 != null && y1 != null && b && Math.abs(y1 - y0) > 0.5) b.scrollTop += y1 - y0; };
       setFunLevel(level);
       if (t && o && o.current === t && state.mode !== 'live') {
-        if (o.kind === 'loop') { await relevelLoop(o, level); return; }
-        if (o.pool && LEVEL_ORDER[level] <= LEVEL_ORDER[o.builtLevel || 'quick']) { if (!(await rerank(o, level))) setFunLevel(was); return; }
+        if (o.kind === 'loop') { await relevelLoop(o, level); keep(); requestAnimationFrame(keep); return; }
+        if (o.pool && LEVEL_ORDER[level] <= LEVEL_ORDER[o.builtLevel || 'quick']) { if (!(await rerank(o, level))) setFunLevel(was); keep(); requestAnimationFrame(keep); return; }
       }
       if (!(await replanForLevel(FunRoute.LEVELS[level].label))) setFunLevel(was);
     }
