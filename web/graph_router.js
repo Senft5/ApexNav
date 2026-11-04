@@ -1053,7 +1053,13 @@
       last = { keys: new Set(v.keys), v };
       return v;
     }
+    let inflight = 0;
     async function handle(msg) {
+      const busy = msg && msg.type !== 'preload' && msg.type !== 'covers';
+      if (busy) inflight++;
+      try { return await handleOne(msg); } finally { if (busy) inflight--; }
+    }
+    async function handleOne(msg) {
       const { id, type } = msg || {};
       try {
         if (type === 'covers') return { id, covers: covers(await keys(), msg.points || []) };
@@ -1095,7 +1101,12 @@
           // one at a time, yours first, then the nearest: a plan asked meanwhile shares the bandwidth with one tile, not six
           const mine = tileOf(c.lat, c.lon), near = (t) => Math.hypot(t.i - mine.i, t.j - mine.j);
           const got = [];
-          for (const t of box.filter((x) => !have.size || have.has(keyOf(x.i, x.j))).sort((a, b) => near(a) - near(b))) { const x = await load(t); if (x) got.push(x); }
+          // and it waits while a plan is being answered: the plan's own tiles get the bandwidth and the worker
+          for (const t of box.filter((x) => !have.size || have.has(keyOf(x.i, x.j))).sort((a, b) => near(a) - near(b))) {
+            while (inflight > 0) await new Promise((r) => setTimeout(r, 50));
+            const x = await load(t); if (x) got.push(x);
+          }
+          while (inflight > 0) await new Promise((r) => setTimeout(r, 50));
           await new Promise((r) => setTimeout(r, 0));
           const v = await viewFor(box);
           return { id, result: { tiles: v.keys, edges: v.E, loaded: got.length, ms: Date.now() - t0 } };
