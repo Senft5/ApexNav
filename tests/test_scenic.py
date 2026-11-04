@@ -25,7 +25,16 @@ const pois = [
 const list = S.along(pois, t), total = t.dist[n - 1];
 console.log(JSON.stringify({ list: list.map((p) => [p.kind, p.name, Math.round(p.m / 100) * 100]), gap: S.fuelGap(list, total), summary: S.summary(list, total),
   noFuelShort: S.summary(S.along(pois.filter((p) => p.kind !== 'fuel'), { ...t, lat: t.lat.slice(0, 4001), lon: t.lon.slice(0, 4001), dist: t.dist.slice(0, 4001) }), 20000),
-  none: S.summary([], 10000) }));
+  none: S.summary([], 10000),
+  // the owner, 2026-11-04: a pile of FUEL stamps in a town, two cafés and a viewpoint on top of them, one fuel far off,
+  // one off the screen; 40x16 px stamps
+  clutter: S.declutter([
+    ...Array.from({ length: 8 }, (_, k) => ({ kind: 'fuel', m: 1000 + k * 50, x: 100 + k * 6, y: 200 + k * 3, w: 40, h: 16 })),
+    { kind: 'cafe', m: 1100, x: 110, y: 205, w: 40, h: 16 }, { kind: 'view', named: true, m: 1200, x: 104, y: 202, w: 90, h: 16 },
+    { kind: 'cafe', m: 9000, x: 300, y: 500, w: 40, h: 16 }, { kind: 'fuel', m: 30000, x: 320, y: 700, w: 40, h: 16 },
+    { kind: 'fuel', m: 60000, x: 900, y: 100, w: 40, h: 16 }], { w: 390, h: 844 }),
+  // more fuel along the road than is useful: four kept, spread along it (the first, the farthest, then the middles)
+  spread: S.declutter(Array.from({ length: 9 }, (_, k) => ({ kind: 'fuel', m: k * 10000, x: 20 + k * 42, y: 100 + (k % 2) * 300, w: 36, h: 16 })), { w: 390, h: 844 }) }));
 """
 
 
@@ -43,3 +52,14 @@ def test_fuel_gap_and_summary(out):
     assert out["summary"] == "1 viewpoint · 1 café · no fuel from mi 9 to 68"
     assert out["noFuelShort"] == "1 viewpoint · 1 café"          # 20 km with no fuel isn't worth a warning
     assert out["none"] == ""
+
+
+def test_overlapping_pins_hide_keeping_the_most_useful(out):
+    # the named viewpoint wins the town's pile; one fuel stamp of the eight is left near it only if it doesn't touch it
+    c = out["clutter"]
+    assert c[9] is True and c[8] is False                         # the viewpoint over the café on top of it
+    assert sum(c[:8]) == 0                                        # every FUEL in the pile touches the viewpoint: none
+    assert c[10] is True and c[11] is True                        # the café and the fuel far off stay
+    assert c[12] is True                                          # off the screen: as it was
+    s = out["spread"]
+    assert sum(s) == 4 and s[0] and s[8]                          # four of nine, the first and the last among them

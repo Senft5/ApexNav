@@ -1,5 +1,5 @@
 // The route card as instruments (docs/design/REVIEW.md roadmap 5, mockup 04-route-card.html): three stamped numbers, the
-// elevation profile with a tick for every corner, small half-dials that show "--" honestly, and the route options as tiles.
+// elevation profile with a tick for every corner, small half-dials that show "--" honestly, and the levels as cards.
 // Pure: returns markup strings and numbers (tests/test_route_card.py); the page fills them in. Unknown stays "--".
 (function (root) {
   'use strict';
@@ -116,21 +116,45 @@
   const cornerWord = (n) => `${n} corner${n === 1 ? '' : 's'}`;
 
   /**
-   * Route options as tiles (panel round 2, SO-1): the time big, and under it how it differs in time from the picked one
-   * and its own corners ("8 min quicker · 27 corners"). No "Fun 45": Fun is the route style (Quick / Fun / Long way), never
-   * a number (web/vocabulary.js). The plan flow (finding 9): a tile counts its corners as the card's CORNERS number does,
-   * never a difference in good corners ("53 fewer good corners" beside a card of 80 corners, for a route with 20).
+   * The level cards (the owner, 2026-11-04: "quick, fun and long way are separate from the cards above? how the hell does
+   * that work?"): one control. Each level is a card with its own pick among the routes already found, its time and its
+   * corners, counted as the card's CORNERS number counts them (finding 9). `o` = { list, levels: { quick, fun, max }: the
+   * index in `list` of each level's pick, or null when the plan didn't look that far, picked: the index on screen }, or
+   * null while the plan is still running. A card is `on` when its pick is the route on screen, so two levels that pick the
+   * same route are both on, and `same` names the others. A level not looked at says so ("Look further"), no numbers.
+   * No "Fun 45": Fun is the route style, never a number (web/vocabulary.js).
    */
-  function tiles(list, picked) {
-    const p = list && list[picked];
-    return (list || []).map((c, i) => {
-      const t = duration(c && c.timeS), title = t ? (t.unit === 'h' ? t.value : `${t.value} min`) : '--';
-      const n = cornersOf(c), corners = n == null ? null : cornerWord(n);
-      if (i === picked) return { title, sub: ['this one', corners].filter(Boolean).join(' · ') };
-      const dm = p && finite(p.timeS) && finite(c && c.timeS) ? Math.round((c.timeS - p.timeS) / 60) : null;
-      const time = dm == null ? null : dm < 0 ? `${-dm} min quicker` : dm > 0 ? `+${dm} min` : 'same time';
-      return { title, sub: [time, corners].filter(Boolean).join(' · ') || '--' };
+  const LEVEL_KEYS = ['quick', 'fun', 'max'], LEVEL_LABEL = { quick: 'Quick', fun: 'Fun', max: 'Long way' };
+  function levelCards(o, level) {
+    const ready = !!(o && o.levels && Array.isArray(o.list));
+    return LEVEL_KEYS.map((k) => {
+      const card = { level: k, label: LEVEL_LABEL[k], time: '--', corners: '--', on: false, further: false, same: [] };
+      if (!ready) return Object.assign(card, { on: k === level });         // planning: the level asked for, no numbers yet
+      const i = o.levels[k];
+      if (i == null || !o.list[i]) return Object.assign(card, { time: null, corners: null, further: true });
+      const c = o.list[i], d = duration(c && c.timeS), n = cornersOf(c);
+      return Object.assign(card, { time: d ? (d.unit === 'h' ? d.value : `${d.value} min`) : '--', corners: n == null ? '--' : cornerWord(n),
+        on: i === o.picked, same: LEVEL_KEYS.filter((x) => x !== k && o.levels[x] === i).map((x) => LEVEL_LABEL[x]) });
     });
+  }
+
+  /**
+   * The line under the cards: that two levels pick the same route, and what a sideways swipe does (it steps through the
+   * routes found: the levels' picks, then any other good one). '' with one route and nothing shared.
+   */
+  function levelNote(o) {
+    if (!o || !o.levels || !Array.isArray(o.list)) return '';
+    const n = o.list.length, ks = LEVEL_KEYS.filter((k) => o.levels[k] != null);
+    const shared = [];
+    for (const k of ks) {
+      const g = ks.filter((x) => o.levels[x] === o.levels[k]);
+      if (g.length > 1 && g[0] === k) shared.push(g.length === 3 ? 'all three pick the same route' : `${LEVEL_LABEL[g[0]]} and ${LEVEL_LABEL[g[1]]} pick the same route`);
+    }
+    const level = ks.some((k) => o.levels[k] === o.picked);
+    const swipe = n < 2 ? null : level ? `swipe the card for the next route, ${o.picked + 1} of ${n}`
+      : `another route found, ${o.picked + 1} of ${n}: swipe for the others`;
+    const line = [...shared, swipe].filter(Boolean).join(' · ').replace(/(\d+) of (\d+)/g, '$1 of $2');
+    return line.charAt(0).toUpperCase() + line.slice(1);
   }
 
   /**
@@ -147,6 +171,6 @@
     return `${head}${bits.length ? `: ${bits.join(', ')}` : ''}`;
   }
 
-  const api = { duration, stats, profile, dial, count, tiles, cornersOf, swapNote, shape, factText, alongGlyph };
+  const api = { duration, stats, profile, dial, count, levelCards, levelNote, LEVEL_KEYS, cornersOf, swapNote, shape, factText, alongGlyph };
   if (typeof module !== 'undefined' && module.exports) module.exports = api; else root.ApexRouteCard = api;
 })(typeof window !== 'undefined' ? window : globalThis);
