@@ -4,6 +4,24 @@ Decisions Claude made for you, newest first. Each one says what was decided, why
 you reach one you've seen. If you disagree with a call, say so and it gets reversed; nothing here is hard to undo unless
 it says so. Things only you can do are in docs/OWNER_TODO.md.
 
+## 2026-11-04 (later): The route engine, fixed on the live network
+
+A check of the live app on real trips (no saved data) found 4 of 6 wrong picks and 11-16 s planning: the router's road
+data never arrived in time for the back-road plans, and the OpenStreetMap search servers fail from a phone. Fixed:
+- **Side streets and strip malls cost the whole way** (they were free for 1.2 km at each end) and businesses cost on
+  their own, so Colerain Ave loses at every level. Undo: `POOR_PER_KM`, `BIZ_PER_KM` in route_engine.js.
+- **Corners only count for the part of a drive that isn't side streets or strip malls**, so a plan that rides an arterial
+  to reach good corners can't beat I-275. Undo: the clean-share factor on fun and gain.
+- **A back-road plan the router couldn't describe in time is trusted at 40 %**, not in full, and is scored from map
+  tiles, land use and the national grid meanwhile. Undo: `STAGE_UNKNOWN_GATE`.
+- **The OpenStreetMap search no longer holds up planning**: a plan uses what earlier plans cached, and fills the cache
+  for next time. On a first plan in a new area, stop signs, crossings, calming, guard rails, byways and height/width/
+  weight limits are unknown (not guessed); ROUTE_ENGINE.md lists them. Undo: `CACHE_ONLY` in osm_overpass.js.
+- **Planning 4.4-6.6 s** (was 11-16 s); the first route shows in 1.3-2.4 s.
+- **The route card only says what's true**: scenery is never named for a route with more strip mall than the quickest,
+  "avoids X of strip malls" counts strip malls only, and a single viewpoint says "a viewpoint".
+- **The Log tab's frame was blocked** by the security policy since #267 (`frame-ancestors 'none'`); now same-origin.
+
 ## 2026-11-04: The route engine: every free data type in one ranking
 
 You asked for every free data type in the routing, meaningfully, best in class. Five builders made it; an independent review

@@ -31,3 +31,11 @@ def test_tag_goes_after_the_charset_and_is_idempotent():
     once = csp.with_tag(page)
     assert once.splitlines()[2].lstrip().startswith(csp.MARK)
     assert csp.with_tag(once) == once
+
+
+def test_the_cockpit_may_frame_its_own_log_and_nobody_else_may():
+    """The cockpit shows the Log (analysis.html?tab=log) in an iframe (#267); frame-ancestors 'none' blocked it live."""
+    headers = (ROOT / "web" / "_headers").read_text()
+    assert "Content-Security-Policy: frame-ancestors 'self'" in headers and "X-Frame-Options: SAMEORIGIN" in headers
+    assert "frame-ancestors 'none'" not in headers and "X-Frame-Options: DENY" not in headers
+    assert "el('iframe', { id: 'logFrame'" in (ROOT / "web" / "cockpit.js").read_text()

@@ -120,3 +120,28 @@ def test_fog_in_valleys_not_on_ridges(out):
     assert f["clear"] == 0 and f["model"] == 0.8 and f["unknown"] is None
     assert f["radValley"] > f["radFlat"] > f["radRidge"]
     assert f["ridgeInCloud"] == 0.6 and f["valleyByDem"] == f["radValley"]
+
+
+def test_a_slow_forecast_never_holds_the_plan():
+    """Open-Meteo took 2-3.5 s or failed on the live runs and the whole context waited for it: the plan waits 1.5 s at
+    most (waitMs here), and the late answer lands in the cache, so the next plan has it with no new request."""
+    js = r"""
+const root = process.argv[1];
+const K = require(root + '/web/route_ctx/conditions.js'), C = require(root + '/tests/fixtures/route_ctx/corridor.js');
+const json = require(root + '/tests/fixtures/route_ctx/openmeteo_cincinnati_2026-11-03.json');
+const m = new Map(), storage = { getItem: (k) => (m.has(k) ? m.get(k) : null), setItem: (k, v) => m.set(k, String(v)), removeItem: (k) => m.delete(k), key: (i) => [...m.keys()][i], get length() { return m.size; } };
+const line = [[39.0930, -84.5250], [39.0955, -84.5040], [39.1040, -84.4700], [39.0900, -84.4450], [39.0600, -84.4250], [39.0500, -84.4150], [39.0300, -84.3500], [38.9900, -84.3000]];
+const c = C.corridor('r', line, { departAt: Date.UTC(2026, 10, 3, 17, 0), speedMps: 20 });
+let calls = 0;
+const slow = (url) => { calls++; return new Promise((res) => setTimeout(() => res({ ok: true, json: async () => json }), 600)); };
+(async () => {
+  const t0 = Date.now(), a = await K.provider.fetch([c], { fetchFn: slow, storage, now: Date.UTC(2026, 10, 3, 16, 0), waitMs: 100 });
+  const ms = Date.now() - t0;
+  await new Promise((r) => setTimeout(r, 800));
+  const before = calls, b = await K.provider.fetch([c], { fetchFn: slow, storage, now: Date.UTC(2026, 10, 3, 16, 0), waitMs: 100 });
+  console.log(JSON.stringify({ ms, first: a.r.status, second: b.r.status, before, after: calls }));
+})();
+"""
+    out = json.loads(subprocess.run([NODE, "-e", js, ROOT], capture_output=True, text=True, check=True).stdout)
+    assert out["ms"] < 400 and out["first"] != "ok", out
+    assert out["second"] == "ok" and out["after"] == out["before"], out

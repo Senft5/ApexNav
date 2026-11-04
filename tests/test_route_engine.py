@@ -266,6 +266,14 @@ const arterial = { speed_limit_kph: 56, road_class: 2, road_use: 0, density: 9, 
   const cs = E.stageCorridors([sD, sS], 8), sctx = {};
   for (const c of cs) { const n = c.distM.length, ch = c.id === sD.__ctxId ? dragon : straight55; sctx[c.id] = { channels: Object.fromEntries(Object.entries(ch).map(([k, v]) => [k, new Float32Array(n).fill(v)])), spans: [], points: [] }; }
   out.dragonStage = E.rescoreStages([sD, sS], sctx).map((s) => s.name)[0] === 'dragon' && sD.score >= 0.95 * sD.mapScore;
+  // the network step trusts only what it knows: a stage on a strip-mall arterial (the map tiles' shops and class) and one
+  // with no road data at all (the router out of time, DEM only) or no answer both lose to a known back road scored lower
+  const line = (dy) => straight(6000).map(([x, y]) => [x, y + dy]);
+  const sA = st('arterial', line(0.04), 40), sU = st('unknown', line(0.06), 34), sN = st('none', line(0.08), 34), sB = st('back', line(0.1), 24);
+  const cs3 = E.stageCorridors([sA, sU, sN, sB], 8), ctx3 = {};
+  const fill = (c, ch) => ({ channels: Object.fromEntries(Object.entries(ch).map(([k, v]) => [k, new Float32Array(c.distM.length).fill(v)])), spans: [], points: [] });
+  for (const c of cs3) { if (c.id === sA.__ctxId) ctx3[c.id] = fill(c, arterial); else if (c.id === sU.__ctxId) ctx3[c.id] = fill(c, { elev_m: 240 }); else if (c.id === sB.__ctxId) ctx3[c.id] = fill(c, back); }
+  out.stageTrust = E.rescoreStages([sA, sU, sN, sB], ctx3).map((s) => s.name);
   // country driveways on a 45 mph tertiary don't gate the corners
   const farm = cand(hairpins, 900, { speed_limit_kph: 72, road_class: 4, road_use: 0, density: 1, access_per_km: 22, surface: 0, sidewalk: 0 });
   E.evaluate(farm, {}); out.farmGate = farm.ev.meanGate;
@@ -465,6 +473,7 @@ def test_low_limit_country_roads_keep_their_corners(r):
     assert d["q"] > 60 and d["gate"] > 0.9 and d["poor"] == 0, d
     assert d["top"] and d["beatsStraight"] and d["townBelow"], "a 30 mph forest road beats a 55 mph straight, and its built-up twin loses"
     assert r["dragonStage"], "the network step keeps it"
+    assert r["stageTrust"][0] == "back" and r["stageTrust"][-1] == "arterial", r["stageTrust"]
     assert r["farmGate"] > 0.9, "country driveways don't gate the corners"
 
 

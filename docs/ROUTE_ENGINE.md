@@ -41,16 +41,16 @@ flowchart TD
   CAND --> COR["Corridor per candidate: samples every 25 m,<br>heading, bbox, etaAt from the router's<br>maneuver clock, else its total time by<br>distance, else 50 km/h; times the live pace<br>0.6 to 1.8 while driving; the Garage car"]
   COR --> RUN["ApexRouteCtx.run: every provider at once on<br>all corridors of the plan; one budget, 4 s<br>for candidates, 1.2 s for stages; each<br>provider gets min of its budgetMs and what<br>is left, and an AbortSignal at the deadline"]
   RUN --> PH["Two phases: D's conditions, wildlife,<br>hazards-live and events, and E's car, start<br>when the rest has landed or at half the<br>budget, with their land use, terrain,<br>density, coverage and schools as<br>opts.channels, peer, places"]
-  RUN --> A1["A router_edges.js, priority 10, 2.4 s,<br>stages too: one Valhalla trace_attributes<br>per candidate, edge_walk then map_snap on<br>2000 points, 2 at a time, kept 30 min per<br>line. speed_limit_kph, speed_limit_est_kph<br>flagged, speed_kph, road_class, road_use,<br>density, lanes, surface, sidewalk,<br>truck_route, bridge, tunnel, toll, ramp,<br>roundabout, signals_per_km, access_per_km,<br>intersections_per_km; points signal,<br>junction, driveway"]
+  RUN --> A1["A router_edges.js, priority 10, 2.4 s,<br>stages too: one Valhalla trace_attributes<br>per candidate, walk_or_snap (map_snap on<br>2000 points for stages), 6 at a time, kept<br>30 min per line; at the deadline the lines<br>that answered. speed_limit_kph, speed_limit_est_kph<br>flagged, speed_kph, road_class, road_use,<br>density, lanes, surface, sidewalk,<br>truck_route, bridge, tunnel, toll, ramp,<br>roundabout, signals_per_km, access_per_km,<br>intersections_per_km; points signal,<br>junction, driveway"]
   RUN --> A2["A dem.js, priority 20, 2 s, stages too: z12<br>Terrarium tiles, at most 64 a plan, shortest<br>corridors first. elev_m, grade_pct,<br>relief_m, tpi_m, aspect_rad, west_descent;<br>spans climb, descent"]
   RUN --> B1["B osm_tiles.js, 8 s:<br>lu_residential, lu_commercial, lu_retail,<br>lu_industrial, lu_forest, lu_farmland,<br>lu_open, lu_park, lu_mapped, water_near,<br>creek_follow, bldg_per_km, addr_per_km,<br>biz_per_km, junctions_per_km,<br>driveways_per_km, access_per_km, road_class<br>in map codes, on_bridge, in_tunnel, unpaved;<br>points school, worship, viewpoint, place,<br>rail_crossing, gate"]
-  RUN --> B2["B osm_overpass.js, 15 s, by 0.05° tiles, never<br>the route's line:<br>maxspeed_kph, lanes, divided, oneway,<br>surface_paved, smoothness, hgv,<br>access_level, guard_rail, cycle_route,<br>byway,<br>signals/stops/crossings/calming_per_km,<br>side_roads_per_km, driveway_joins_per_km;<br>points signal, stop, give_way, crossing,<br>calming, level_crossing, curve_sign,<br>animal_crossing, buggy, viewpoint, historic,<br>fuel; spans roundabout, one_lane_bridge,<br>covered_bridge, access_private,<br>access_destination, cycle_route, byway"]
+  RUN --> B2["B osm_overpass.js, off the plan's clock: its<br>tile cache only; the query, by 0.05° tiles,<br>never the route's line, runs on and fills<br>the cache for the next plan:<br>maxspeed_kph, lanes, divided, oneway,<br>surface_paved, smoothness, hgv,<br>access_level, guard_rail, cycle_route,<br>byway,<br>signals/stops/crossings/calming_per_km,<br>side_roads_per_km, driveway_joins_per_km;<br>points signal, stop, give_way, crossing,<br>calming, level_crossing, curve_sign,<br>animal_crossing, buggy, viewpoint, historic,<br>fuel; spans roundabout, one_lane_bridge,<br>covered_bridge, access_private,<br>access_destination, cycle_route, byway"]
   RUN --> B3["B road_name_age.js: name_age"]
   RUN --> C1["C context_grid.js, 4 s, local bundles<br>web/data/ctx/v1 then the Worker's KV:<br>night_lights, impervious_pct, canopy_pct,<br>noise_db, housing_density,<br>population_density, address_density,<br>median_year_built, flood_zone,<br>cropland_class, park_visits, aadt, iri,<br>hpms_speed_limit, hpms_lanes, hpms_fclass,<br>crash_density; mobile_coverage not built<br>(always unknown); spans nps_unit; points<br>fatal_crash"]
-  RUN --> D1["D, second phase with the first's land use<br>and terrain: conditions.js air_temp_c,<br>road_temp_c, visibility_m, fog_risk,<br>crosswind_mps, exposure, precip_6h/48h_mm,<br>wx_hazard, light, glare, golden_view;<br>wildlife.js deer_time_risk, deer_risk;<br>events.js event_crowd, school_zone,<br>school_bus_hour, church_window;<br>hazards_live.js flood_risk, works,<br>harvest_traffic, park_busy, foliage, spans<br>closure, works, flood, low-water, paving;<br>photos.js photo_score, sign_maxspeed_mps,<br>curve_sign. Not built: snowplough (no OHGO<br>endpoint), city permits, FEMA flood zones live,<br>NC and VA work zones"]
+  RUN --> D1["D, second phase with the first's land use<br>and terrain: conditions.js, waits 1.5 s for<br>Open-Meteo then its cache: air_temp_c,<br>road_temp_c, visibility_m, fog_risk,<br>crosswind_mps, exposure, precip_6h/48h_mm,<br>wx_hazard, light, glare, golden_view;<br>wildlife.js deer_time_risk, deer_risk;<br>events.js event_crowd, school_zone,<br>school_bus_hour, church_window;<br>hazards_live.js flood_risk, works,<br>harvest_traffic, park_busy, foliage, spans<br>closure, works, flood, low-water, paving;<br>photos.js photo_score, sign_maxspeed_mps,<br>curve_sign. Not built: snowplough (no OHGO<br>endpoint), city permits, FEMA flood zones live,<br>NC and VA work zones"]
   RUN --> E1["E crowd.js, 9 s, second phase: members' data<br>by 0.1° cells, ways from the router's edges:<br>crowd_rough_g, crowd_bank_deg,<br>crowd_curv, crowd_conf, crowd_flow, loved,<br>taste, crowd_busy (quiet_hours flag, off);<br>needs lookupCells /api/roads?cells=,<br>crewLines"]
   RUN --> E2["E driver.js, 8 s: passenger_cost, tech_level,<br>skill_fit, dark, lit, cyclist_route,<br>cyclist_time, tunnel, driver_fit; spans<br>hairpins, abrupt, unlit_dark, cycle_route,<br>tunnel; For this drive prefs passenger,<br>lit, cyclists, tunnels"]
-  RUN --> E3["E car.js, 8 s: fuel_since_km, fuel_margin,<br>signal; spans fuel_gap hard, fuel_check,<br>no_signal; points fuel_stop, share_eta,<br>ask_range; needs apiGet /api/chargers"]
+  RUN --> E3["E car.js, 8 s, fuel stations from its cache,<br>the Overpass query runs on: fuel_since_km, fuel_margin,<br>signal; spans fuel_gap hard, fuel_check,<br>no_signal; points fuel_stop, share_eta,<br>ask_range; needs apiGet /api/chargers"]
   RUN --> E4["E ios_context.js: free_min; span<br>past_next_event; point album_ends.<br>crew_meet.js: point crew_start"]
   A1 ~~~ A2 ~~~ B1 ~~~ B2 ~~~ B3 ~~~ C1 ~~~ D1 ~~~ E1 ~~~ E2 ~~~ E3 ~~~ E4
   A1 & A2 & B1 & B2 & B3 & C1 & D1 & E1 & E2 & E3 & E4 --> CLEAN["clean: wrong-length channels dropped, NaN is<br>unknown never 0; osm_tiles road_class<br>translated to router codes"]
@@ -123,18 +123,19 @@ flowchart TD
 ```mermaid
 flowchart TD
   SAMP["per-sample quality, scenery, confidences,<br>gate"] --> QR["route quality = mean of known samples x 100;<br>qWeight = mean of min 1, qConf over 0.3"]
-  SAMP --> POOR["poor cost: each sample past the first and<br>last 1.2 km: 3 per km times clamp of 0.45<br>minus quality over 0.2; cap 60; split into<br>business, residential, stops, other for the<br>why line"]
+  SAMP --> POOR["poor cost: every sample, 10 per km times<br>clamp of 0.45 minus quality over 0.2; cap<br>120; split into business, residential,<br>stops, other for the why line"]
+  SAMP --> BIZ["business cost: 4 per km times clamp of<br>businesses per km minus 4 over 10, not on<br>a motorway; cap 40"]
   SAMP --> SCN["scenery points = 20 x mean of scenery minus<br>0.5 times min 1, sConf over 0.35"]
   GEO["5 m geometry, corners, the router's junction<br>turns dropped"] --> FUN["fun = ApexFunRoute.score with each corner<br>weight x gate: Twist 0.5, Flow 0.35, not<br>dull 0.15; good corners gated"]
-  FUN --> GAIN["gain = 0.5 x gated good corners over the<br>quickest, cap 60"]
+  FUN --> GAIN["gain = 0.5 x gated good corners over the<br>quickest, cap 60; fun and gain x the share<br>of the drive that isn't side streets"]
   LVL["Level: Quick budget 10 % + 60 s, 3 per min;<br>Fun 35 % + 240 s, 1 per min; Max fun 90 % +<br>600 s, 0.35 per min"] --> TIME["time = minus perMin x extra minutes over the<br>quickest"]
   QR --> QT["quality term = 0.3 x quality - 50 x qWeight"]
   DRV["driver = 6 x mean driver_fit, else<br>skill_fit, x share known; taste = the<br>crowd's taste channel where tasteOn didn't<br>score the candidate"] --> V
   OLD["Today's terms: glare 1 per min cap 20; towns<br>3 per km cap 60 when avoided; weather ice<br>30, storms 15, rain 6, fog 4 by share, minus<br>the driest; members' measured roughness and<br>banking -8 to +5; taste up to +-8; Prefer<br>stamps"] --> V
-  QR ~~~ POOR ~~~ SCN
+  QR ~~~ POOR ~~~ BIZ ~~~ SCN
   FUN ~~~ GAIN
   LVL ~~~ TIME ~~~ QT ~~~ OLD ~~~ BP
-  FUN & GAIN & TIME & QT & POOR & SCN --> V["value = fun + gain + time + quality + poor +<br>scenery + bonuses + penalties + driver +<br>glare + towns + weather + measured + taste + prefer"]
+  FUN & GAIN & TIME & QT & POOR & BIZ & SCN --> V["value = fun + gain + time + quality + poor +<br>business + scenery + bonuses + penalties + driver +<br>glare + towns + weather + measured + taste + prefer"]
   BP["bonuses, penalties, hard from diagram 3"] --> V
   UNK["unknown stretches: the lowest known<br>candidate's gate and quality, the highest<br>side-street cost per km: unknown can't win"] --> V
   V --> NOCTX["No context at all: every new term is 0,<br>value equals ApexFunRoute.rank exactly"]
@@ -150,14 +151,14 @@ flowchart TD
   WT --> HWY["Highway-friendly quickest use_highways 1.0,<br>unless Avoid Highways; trips of 2 km or more"]
   DEF -. "Valhalla down" .-> OSRM["OSRM fallback"]
   WT --> STG["Stages from the map tiles around the<br>corridor, sections on long trips"]
-  STG --> NET["Network step: top 8 stages, 12 for Explore,<br>get router edges and DEM in 1.2 s; score x<br>0.4 + 0.6 x mean gate x 1 + 0.4 x scenery -<br>0.5 x known share"]
+  STG --> NET["Network step: top 8 stages, 12 for Explore,<br>get router edges, map tiles, the grid and DEM<br>in 1.2 s; score x 0.4 + 0.6 x mean gate x 1 +<br>0.4 x scenery - 0.5 x known share; a sample<br>no source knew takes gate 0.4"]
   NET --> SL["shortlist in the level's ellipse, direction<br>by climb, set list"]
   SL --> MX["connector matrix with use_highways 0.6,<br>avoid kept"]
   MX --> PL["plans of 1-2 stages within the level's<br>budget, routed through shaping points with<br>use_highways 0.6; dropped if under 70 % of a<br>stage is driven"]
   DEF ~~~ HWY ~~~ STG
   DEF & HWY & OSRM & PL --> POOL["pool: keep avoided roads out when any<br>candidate can"]
-  POOL --> EARLY{{"over 1.5 s?"}}
-  EARLY -- yes --> SHOW["the quickest goes up at once, replaced when<br>the ranking is ready unless driven or<br>replaced"]
+  DEF --> EARLY{{"the router answered"}}
+  EARLY --> SHOW["the quickest goes up at once, replaced when<br>the ranking is ready unless driven or<br>replaced"]
   SHOW ~~~ CTXR
   POOL --> CTXR["context run, diagram 1, alongside the towns<br>lookup"]
   CTXR --> TOP["engine ranking picks the contenders for<br>weather (top 4), taste (top 4), members'<br>measurements (top 3), Prefer (top 4)"]
@@ -181,12 +182,17 @@ under "The channels" are checked the same way (channel and weight).
 | QUALITY | 0.3 | points per quality point above or below 50, times qWeight |
 | POOR_Q_HI | 0.45 | quality where the side-street cost starts |
 | POOR_Q_LO | 0.25 | quality where it is full |
-| POOR_PER_KM | 3 | points per km at full |
-| POOR_CAP | 60 | the most it costs |
-| END_GRACE_M | 1200 | metres free at each end |
+| POOR_PER_KM | 10 | points per km at full |
+| POOR_CAP | 120 | the most it costs |
+| END_GRACE_M | 0 | metres free at each end (none: a plan that drives 2 km of strip mall out of town pays for it) |
+| BUSINESS_PER_KM | 4 | points per km of business district at full, never beside a motorway or ramp |
+| BUSINESS_FROM | 4 | businesses per km where that cost starts |
+| BUSINESS_FULL | 14 | businesses per km where it is full |
+| BUSINESS_CAP | 40 | the most it costs |
 | SCENERY | 20 | points for scenery 1 vs 0.5, times how much is known |
 | Q_FULL_CONF | 0.3 | share of quality weight known for full weight |
 | S_FULL_CONF | 0.2 | share of scenery weight known for full weight (land use alone counts) |
+| STAGE_UNKNOWN_GATE | 0.4 | the gate a stage's samples take where no provider knew the road (the network step) |
 | GATE_LO | 0.25 | quality at which a corner counts nothing |
 | GATE_HI | 0.6 | quality at which a corner counts in full |
 | PENALTY_CAP | 40 | the total penalties saturate softly toward this |
@@ -343,8 +349,11 @@ points), with kinds normalised (`rail_crossing` = `level_crossing`).
 
 `why(best, quick)` takes the parts of the value that separate the winner from the quickest most and says the top 2–3:
 "Highway instead of 1.2 mi of side streets"; "Avoids 2.1 mi of strip malls · 6 signals (not 18), +1 min"; "14 more good
-corners · back roads at 45–55 mph · through forest, +4 min"; "Deer hour: open roads"; "1.9 mi less in towns". When
-nothing the context knew made the difference, the old line (the roads it's for and its corners) is said.
+corners · back roads at 45–55 mph · through forest, +4 min"; "Deer hour: open roads"; "1.9 mi less in towns". It never
+names scenery (forest, water, ridges) when the winner drives 0.3 km or more of business district beyond the quickest's,
+and "avoids X of strip malls" is in that kind's km. When the winner is simply the better road (shallower side streets,
+a higher mean quality) and nothing else separates them: "Better roads than the quickest". When nothing the context
+knew made the difference, the old line (the roads it's for and its corners) is said.
 
 ## The plan search
 
@@ -352,9 +361,12 @@ nothing the context knew made the difference, the old line (the roads it's for a
   quickest** (`highwayCosting`, use_highways 1.0) unless the driver avoids highways, which is what fixes routes through
   subdivisions and business districts; stage plans; loops; Explore.
 - **The network**: before plans are timed, the 8 best stages (12 for Explore) get the stage-capable providers (the
-  router's edges by map matching, the DEM) in 1.2 s, and `rescoreStages` multiplies each stage's map score by
-  (0.4 + 0.6 × its mean corner gate) × (1 + 0.4 × (scenery − 0.5)): a twisty subdivision street falls to 40 % and
-  behind a real back road before any connector is timed.
+  router's edges by map matching, the map tiles' land use, shops and road class, the context grid, the DEM) in 1.2 s,
+  and `rescoreStages` multiplies each stage's map score by (0.4 + 0.6 × its mean corner gate) × (1 + 0.4 × (scenery −
+  0.5)): a twisty subdivision street falls to 40 % and behind a real back road before any connector is timed. A sample
+  no provider knew takes gate `STAGE_UNKNOWN_GATE` (0.4), and a stage with no answer at all while others have one the
+  same: a stage is trusted only as far as something vouches for it (live, the router out of time left stages on their
+  map score and a Colerain Avenue stage was planned).
 - **Connectors**: the matrix and the stage plans' routes use `connectorCosting` (use_highways 0.6, avoid-highways kept):
   the good roads are pinned by shaping points, so this only changes how the plan gets between them: fast roads, not
   cut-throughs. A detour must then buy real quality: its gated corners, quality and scenery against its minutes.
@@ -364,10 +376,37 @@ nothing the context knew made the difference, the old line (the roads it's for a
 
 ## Instant
 
-Where to? never waits on the context (REVIEW_FEEL budgets): the providers get 4 s together for a plan's candidates
-(1.2 s for stages), each provider within its own budget and an AbortSignal; what came back is used and the rest is
-unknown. If planning takes longer than 1.5 s the quickest route goes up at once and the ranked routes replace it when
-they're ready, unless you've started driving it or planned something else.
+Where to? never waits on the context (REVIEW_FEEL budgets): the providers get 4 s together for the router's routes
+(1.2 s for stages, 2.5 s for the stage plans once routed), each provider within its own budget and an AbortSignal; what
+came back is used and the rest is unknown. The quickest route goes up as soon as the router answers (about 1.5 s with
+its track built) and the ranked routes replace it when they're ready, unless you've started driving it or planned
+something else.
+
+What runs alongside what (live, 2026-11-04; the 11-16 s plans of #292 came from waiting in turn): the stages round the
+trip are found while the router routes; the router's own routes get their context while the stages are scored, timed
+and routed; only the stage plans' context (2.5 s at most) and the forecasts (asked with it, waited on 0.4 s past it)
+follow the routing. Three public services never sit on the plan's clock: Overpass (map features and fuel stations, the
+cache only; the query runs on and fills it for the next plan), Open-Meteo for conditions (1.5 s, then the cache), and
+the trip forecast (2.5 s, then nothing for anyone). trace_attributes asks `walk_or_snap` in one request: an exact edge
+walk answers 400 (error 443, "edge_walk algorithm failed to find exact route match") on every line routed through
+shaping points, so stage plans used to cost a failed request and a second one each.
+
+### Overpass off the critical path: what a first plan in an area doesn't have
+
+From production the public Overpass servers answered 502 without CORS (overpass-api.de) or 504 (maps.mail.ru) on every
+run, so they no longer hold the plan (a relay through our Worker isn't built: off the clock, the servers' speed no longer
+matters to a plan, and the phone keeps asking by tile boxes only). What a plan in an area Overpass hasn't answered for
+yet lacks, and what covers it:
+
+| Overpass channel | covered by |
+|---|---|
+| maxspeed_kph, lanes, signals_per_km, side_roads_per_km, driveway_joins_per_km, roundabout, hgv | the router's edges (speed_limit_kph from the same OSM maxspeed, lanes, signals, intersections and access per km, truck_route) and osm_tiles (junctions, driveways and access per km) |
+| surface_paved | the router's surface and osm_tiles' unpaved |
+| level_crossing, viewpoint points | osm_tiles (rail_crossing, viewpoint) |
+| stops_per_km, stop and give_way points | not covered: stop signs are only in Overpass (unknown, so no cost and no credit) |
+| crossings_per_km, calming_per_km, guard_rail, smoothness, byway, cycle_route, divided, oneway | not covered (unknown) |
+| maxheight_m, maxwidth_m, maxweight_t | not covered: a car-fit limit is unknown, never enforced, until the cache has the tile |
+| one_lane_bridge, covered_bridge, access_private, access_destination spans; curve_sign, animal_crossing, historic, fuel points | not covered (photos.js has curve signs with a Mapillary key; car.js asks Overpass for fuel the same way, from its cache) |
 
 ## Calibration
 
@@ -383,6 +422,22 @@ each case as the app would):
 | northgate (Springdale and Mill Roads vs I-275) | 12.0 / 14.4 / 14.7 vs I-275 11.4 min | I-275 at every level | Pippin and Kemper at Fun and Max |
 | colerain (Colerain Avenue: 18 signals, 244 businesses beside it) | 17.6 vs Pippin and Struble 19.0, Blue Rock 21.2 | Pippin and Struble (Quick, Fun), Blue Rock (Max) | Colerain Avenue |
 | harrison (the fixture drive's country) | I-275/I-74 22.0 vs Lees Creek and Day Roads 26.1 | the highway at Quick, the back roads at Fun and Max | the same |
+
+Live captures (`tools/route_engine_live.js` in headless Chromium against the real services, FIXTURES=…) in
+`tests/fixtures/route_engine_live/`: the candidates the app's own planner ranked, the router's and the stage plans it
+routed, with the context every provider returned. `tests/test_route_engine_live.py` (all five fail on #292):
+
+| live case | #292 picked | now |
+|---|---|---|
+| northgate, Fun (stage plans incl. W Kemper, Colerain Avenue 3.7 km, Bank Road) | the Colerain Avenue stage plan at Fun and Max, "through forest" | I-275 at every level |
+| colerain, Quick and Fun captures (Colerain Avenue 3.6 km vs Pippin and Struble, Blue Rock) | Colerain Avenue at Quick; a Colerain Avenue route at Max | Pippin and Struble at Quick, Blue Rock Road at Fun and Max, "Avoids 1.5 mi of strip malls" |
+| harrison, Fun | the same | I-275 and I-74 at Quick, New Haven, Day and Lees Creek Roads at Fun and Max |
+| subdivision4 (4 km across Groesbeck, the router's quickest cuts through Cornwall and Comstock Drives) | | the cut-through at Quick only; Miles and Struble Roads at Fun and Max, "Better roads than the quickest" |
+
+What changed for them: the side-street cost has no grace at the ends and counts 10 a km (cap 120); business districts
+cost on their own (4 a km at 14 businesses a km and more, never beside a motorway); corners and their gain count by the
+share of the drive that isn't side streets, so 3 km of back road reached through 6 km of suburbs and shops doesn't
+outscore the highway.
 
 Property tests (tests/test_route_engine.py): no context = the old ranking exactly; a channel all unknown changes nothing;
 every quality term monotonic in the right direction and the route value with it (speed limit up never hurts; businesses,

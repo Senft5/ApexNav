@@ -117,6 +117,24 @@ def test_provider_ev_without_key_and_petrol_from_cache_never_block():
     assert out["slow"] in ("partial", "unavailable") and out["ms"] < 3000
 
 
+def test_fuel_query_off_the_critical_path():
+    """Overpass took 10 s or failed on every live run: the plan doesn't wait for it (the cache only), the query runs on, and its answer
+    serves the next plan with no new query."""
+    js = """(async () => {
+      const st = mem(); let calls = 0;
+      const answer = { elements: [] };
+      const slow = () => { calls++; return new Promise((res) => setTimeout(() => res({ ok: true, json: async () => answer }), 2000)); };
+      const t0 = Date.now(), first = await C.provider.fetch([corridor(40, 'f1')], { car: { fuel: 'petrol', range_km: 60 }, storage: st, fetch: slow });
+      const ms = Date.now() - t0;
+      await new Promise((r) => setTimeout(r, 2300));
+      const before = calls, second = await C.provider.fetch([corridor(40, 'f1')], { car: { fuel: 'petrol', range_km: 60 }, storage: st, fetch: slow });
+      return { first: first.f1.spans.map((s) => s.kind), ms, second: second.f1.spans.map((s) => s.kind), before, after: calls };
+    })()"""
+    out = run(js)
+    assert out["ms"] < 300 and "fuel_check" not in out["first"], out
+    assert out["second"] == ["fuel_check"] and out["after"] == out["before"], out
+
+
 def test_routing_car_carries_fuel_and_range_and_the_garage_has_the_fields():
     cockpit = (ROOT / "web" / "cockpit.js").read_text()
     assert "fuel: c.fuel || null, range_km: c.range_km || null" in cockpit

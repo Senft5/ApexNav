@@ -55,6 +55,22 @@ out.filter = R.request(coords).filters.attributes.length;
   const bad = await R.fetch([C.corridor('z', coords.slice(0, 40), {})], { fetch: async () => { throw new Error('down'); } });
   out.down = bad.z.status;
   out.tooLong = (await R.fetch([{ id: 'w', coords, totalM: 3e5, distM: c.distM }], { fetch: ok })).w.status;
+  // one request per line, walk_or_snap (an exact walk 400s on lines routed through shaping points, error 443)
+  const seen = [];
+  await R.fetch([C.corridor('m', coords.slice(0, 60), {})], { fetch: async (url, o) => { seen.push(JSON.parse(o.body).shape_match); return { ok: true, json: async () => fx.trace_attributes }; } });
+  out.matches = seen;
+  // at the deadline: the lines that answered come back, the rest are out of time (not the whole provider)
+  const ctrl = new AbortController(), t0 = Date.now();
+  const lines = [0, 1, 2, 3, 4, 5].map((k) => C.corridor('p' + k, coords.slice(k, 80 + k), {}));
+  const slowFor = (id) => /p[45]/.test(id);
+  const part = R.fetch(lines, { signal: ctrl.signal, fetch: (url, o) => new Promise((res, rej) => {
+    const enc = JSON.parse(o.body).encoded_polyline, id = lines.find((l) => R.encode6(l.coords) === enc).id;
+    if (!slowFor(id)) return setTimeout(() => res({ ok: true, json: async () => fx.trace_attributes }), 20);
+    o.signal.addEventListener('abort', () => rej(new Error('aborted')), { once: true });
+  }) });
+  setTimeout(() => ctrl.abort(), 200);
+  const pr = await part;
+  out.partial = Object.fromEntries(Object.entries(pr).map(([k, v]) => [k, v.status])); out.partialMs = Date.now() - t0;
   process.stdout.write(JSON.stringify(out));
 })();
 """
@@ -95,3 +111,12 @@ def test_estimates_and_request(r):
 def test_provider_caches_and_degrades(r):
     assert r["calls"] == 1 and r["cached"] == "ok", "the same candidate twice is one request"
     assert r["down"] == "unavailable" and r["tooLong"] == "unavailable"
+
+
+def test_walk_or_snap_and_partial_at_the_deadline(r):
+    """Stage plans are routed through shaping points: an exact edge walk answers 400 (error 443) on them, so every line
+    asks walk_or_snap (one request, the server falls back to map matching). At the deadline the lines that answered
+    count; only the slow ones are out of time."""
+    assert r["matches"] == ["walk_or_snap"]
+    assert r["partial"] == {"p0": "ok", "p1": "ok", "p2": "ok", "p3": "ok", "p4": "unavailable", "p5": "unavailable"}
+    assert r["partialMs"] < 400

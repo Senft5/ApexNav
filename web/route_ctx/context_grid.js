@@ -395,7 +395,8 @@
       try { return c ? JSON.parse(new TextDecoder().decode(c)) : null; } catch (_) { return null; }
     })();
     indexes.set(base, { at: Date.now(), p, ttl: INDEX_TTL });
-    p.then((v) => { if (!v) indexes.set(base, { at: Date.now(), p, ttl: MISS_TTL }); });   // none there: ask again in 10 min
+    // none there (or an empty index: the Worker's region isn't uploaded yet): ask again in 10 min
+    p.then((v) => { if (!v || !v.bundles || !Object.keys(v.bundles).length) indexes.set(base, { at: Date.now(), p, ttl: MISS_TTL }); });
     return p;
   }
   /** key -> the URL to load it from, or null where no base has it. With no index at all (first run offline) the shipped
@@ -458,7 +459,7 @@
     return out;
   }
 
-  const provider = { id: 'context_grid', version: VERSION, channels: CHANNELS, needs: { network: false }, budgetMs: 4000, fetch: fetchCorridors };
+  const provider = { id: 'context_grid', version: VERSION, channels: CHANNELS, needs: { network: false }, budgetMs: 4000, stageOk: true, fetch: fetchCorridors };
   const api = { VERSION, BASE, basesOf, RASTERS, CHANNELS, LINE_CHANNELS, project, bundlesFor, bundlesNear, urlsNear, urlOf, gunzip, parse, cell,
     sample, isCovered, undeltaLines, decode, matchLine, lineValue, crashes, cropGroup, headings, sampleCorridor, fetch: fetchCorridors, provider, _mem: mem };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;

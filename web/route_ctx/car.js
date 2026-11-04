@@ -223,6 +223,13 @@
     return { stations: [...have, ...got], status, covered };
   }
 
+  const FUEL_WAIT_MS = 0, fuelFlight = new Map();
+  /** One fuel query per set of tiles at a time, shared by the plans that ask while it runs; never tied to a plan's clock. */
+  function fuelInBackground(tiles, fetchFn, storage) {
+    const key = tiles.join(',');
+    if (!fuelFlight.has(key)) fuelFlight.set(key, stationsFor(tiles, { electric: false, fetch: fetchFn, storage }).catch(() => null).finally(() => fuelFlight.delete(key)));
+    return fuelFlight.get(key);
+  }
   /**
    * opts: { signal, budgetMs, fetch, apiGet (the app's apiCall GET, for /api/chargers), storage, car (else corridor.car,
    * else apex.routingCar), peer: { [corridorId]: { channels: { mobile_coverage } } } (builder C's result, when the engine has it) }.
@@ -231,11 +238,20 @@
     const out = {}, storage = opts.storage || (typeof root.localStorage !== 'undefined' ? root.localStorage : null);
     let stored = null; try { stored = JSON.parse((storage && storage.getItem('apex.routingCar')) || 'null'); } catch (_) {}
     const car = carOf(opts.car || (corridors[0] && corridors[0].car) || stored);
-    const ac = typeof AbortController === 'function' ? new AbortController() : null;   // called off past the budget
-    if (opts.signal && ac) opts.signal.addEventListener('abort', () => ac.abort(), { once: true });
-    const st = await U.within(stationsFor(tilesOf(corridors), { electric: !!(car && car.electric), fetch: opts.fetch || (root.fetch && root.fetch.bind(root)), apiGet: opts.apiGet, storage, signal: ac ? ac.signal : opts.signal }),
-      (opts.budgetMs || provider.budgetMs) - 500, opts.signal, { stations: null, status: 'unavailable' });
-    if (ac) ac.abort();
+    const tiles = tilesOf(corridors), electric = !!(car && car.electric), budget = (opts.budgetMs || provider.budgetMs) - 500;
+    let st;
+    if (electric) {                       // our Worker: called off past the budget
+      const ac = typeof AbortController === 'function' ? new AbortController() : null;
+      if (opts.signal && ac) opts.signal.addEventListener('abort', () => ac.abort(), { once: true });
+      st = await U.within(stationsFor(tiles, { electric, apiGet: opts.apiGet, storage, signal: ac ? ac.signal : opts.signal }), budget, opts.signal, null);
+      if (ac) ac.abort();
+    } else {
+      // fuel from Overpass, off the critical path: the public servers often take 10 s or fail, so the plan waits FUEL_WAIT_MS
+      // (0: not at all) and goes on with the stations kept from earlier plans; the query runs on and is kept (14 days)
+      st = await U.within(fuelInBackground(tiles, opts.fetch || (root.fetch && root.fetch.bind(root)), storage), Math.min(budget, FUEL_WAIT_MS), opts.signal, null);
+      if (!st) st = await stationsFor(tiles, { electric: false, storage });
+    }
+    if (!st) st = { stations: null, status: 'unavailable' };
     for (const c of corridors) {
       const n = c.lat.length, channels = Object.fromEntries(CH.map((k) => [k, U.nan(n)]));
       let spans = [], points = [], notes = [], status = 'ok';

@@ -62,6 +62,17 @@ const kinds = (pts) => { const o = {}; for (const p of pts) o[p.kind] = (o[p.kin
   const callsAfterFirst = calls;
   await O.provider.fetch([c], { fetchFn: hang, storage: mem(), budgetMs: 1200 });
   out.hang = { took, status: hung.dr.status, callsAfterFirst, callsAfterSecond: calls };
+  // off the critical path: a server that takes 2 s doesn't hold the plan (WAIT_MS), and its late answer serves the next one
+  O._reset();
+  const lateStore = mem(); let lateCalls = 0;
+  const slow = (u, o) => { lateCalls++; return new Promise((res) => setTimeout(() => res({ ok: true, json: async () => fx.overpass }), 2000)); };
+  const l0 = Date.now();
+  const l1 = await O.provider.fetch([c], { fetchFn: slow, storage: lateStore, now: 5000 });
+  const lateTook = Date.now() - l0;
+  await new Promise((r) => setTimeout(r, 2300));
+  const callsLate = lateCalls;
+  const l2 = await O.provider.fetch([c], { fetchFn: slow, storage: lateStore, now: 6000 });
+  out.late = { first: l1.dr.status, took: lateTook, second: l2.dr.status, calls: callsLate, callsAfter: lateCalls };
   O._reset();
   const stub = await O.provider.fetch([c], { stub: { overpass: fx.overpass }, storage: null });
   out.stub = { status: stub.dr.status, signals: stub.dr.points.filter((p) => p.kind === 'signal').length };
@@ -202,3 +213,11 @@ def test_query_shape(out):
     q = out["query"]
     assert q.startswith("[out:json][timeout:25]") and q.count("39.0000,-84.5000,39.0500,-84.4500") == 3, "the tile's box once each for ways, POIs and fuel"
     assert out["registered"] and out["registered"][0]["channels"] == 20
+
+
+def test_off_the_critical_path(out):
+    """The public Overpass servers took 10-20 s or failed on every live run: the plan doesn't wait for them (WAIT_MS 0: the cache only) and the
+    late answer is kept for the next plan, which asks nobody."""
+    x = out["late"]
+    assert x["first"] == "unavailable" and x["took"] < 300, x
+    assert x["second"] == "ok" and x["callsAfter"] == x["calls"], x
