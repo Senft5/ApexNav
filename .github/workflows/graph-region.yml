@@ -1,0 +1,171 @@
+name: Graph region (own routing, OH+KY+IN)
+
+# Vetta's own scored road network for all of Ohio, Kentucky and Indiana (docs/OWN_ROUTING.md), hosted for free: the
+# tiles are committed to this repository's `graph-data` branch (v1/<i>_<j>.vgr + v1/index.json; never main, never the
+# app bundle) and the Worker relays them at /api/graph/v1/ (backend/src/graph.ts) from raw.githubusercontent.com.
+# No R2, no KV, no secrets. Each rebuild is a new commit on graph-data (normal push, never forced).
+#
+# The region is cut into bands of latitude (one job each, in parallel) and each band into 1 degree blocks, each built
+# from its own extract with 0.4 degree round it (tools/graph_etl/region_blocks.py) so blocks agree on the tiles they
+# share an edge with. All bands share one build id (the extract's week + the model hash).
+#
+# Triggers: a manual run (once this file is on main), a call from graph.yml's "region" input, or a push to
+# claude/own-routing-region that changes tools/graph_etl/REGION_BUILD (the way to run it before it is on main).
+on:
+  workflow_dispatch:
+  workflow_call:
+  push:
+    branches: [claude/own-routing-region]
+    paths:
+      - "tools/graph_etl/REGION_BUILD"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: graph-region
+  cancel-in-progress: false
+
+env:
+  STATES: "ohio kentucky indiana"
+  REGION: "-89.75,36.5,-80.5,42.5"
+
+jobs:
+  download:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    outputs:
+      week: ${{ steps.week.outputs.w }}
+    steps:
+      - name: Week (cache key)
+        id: week
+        run: echo "w=$(date -u +%G-%V)" >> "$GITHUB_OUTPUT"
+      - name: Restore the download cache
+        id: cache
+        uses: actions/cache/restore@v4
+        with:
+          path: .graph_cache/osm
+          key: graph-osm-${{ steps.week.outputs.w }}
+      - name: Download the Geofabrik extracts
+        if: steps.cache.outputs.cache-hit != 'true'
+        run: |
+          mkdir -p .graph_cache/osm
+          for s in $STATES; do
+            curl -fSL --retry 5 --retry-delay 10 -o ".graph_cache/osm/$s.osm.pbf" "https://download.geofabrik.de/north-america/us/$s-latest.osm.pbf"
+          done
+          ls -la .graph_cache/osm
+      - name: Save the download cache
+        if: steps.cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: .graph_cache/osm
+          key: graph-osm-${{ steps.week.outputs.w }}
+
+  band:
+    needs: download
+    runs-on: ubuntu-latest
+    timeout-minutes: 345
+    strategy:
+      fail-fast: false
+      matrix:
+        band: ["36.5", "37.5", "38.5", "39.5", "40.5", "41.5"]
+    env:
+      WORK: /home/runner/graph_work
+    steps:
+      - uses: actions/checkout@v4
+      - name: Free disk
+        run: sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL || true
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Tools
+        run: |
+          sudo apt-get update -qq && sudo apt-get install -y -qq osmium-tool
+          pip install -r tools/graph_etl/requirements.txt
+      - name: Restore the extracts
+        uses: actions/cache/restore@v4
+        with:
+          path: .graph_cache/osm
+          key: graph-osm-${{ needs.download.outputs.week }}
+          fail-on-cache-miss: true
+      - name: Merge and cut the band's blocks
+        run: |
+          mkdir -p "$WORK/blocks"
+          osmium merge --overwrite -o "$WORK/region.osm.pbf" .graph_cache/osm/*.osm.pbf
+          python -m tools.graph_etl.region_blocks --region="$REGION" --band "${{ matrix.band }}" --dir "$WORK/blocks" > "$WORK/blocks.txt"
+          cat "$WORK/blocks.txt"
+          osmium extract --overwrite -s smart -c "$WORK/blocks/extract.json" "$WORK/region.osm.pbf"
+          rm -f "$WORK/region.osm.pbf"
+          ls -la "$WORK/blocks"
+      - name: Build the blocks
+        run: |
+          while read -r name box; do
+            echo "::group::$name $box"
+            python -m tools.graph_etl.build --pbf "$WORK/blocks/$name.osm.pbf" --tiles="$box" --out "out/$name/v1" \
+              --work "$WORK/w_$name" --dem-cache "$WORK/dem" --source "Geofabrik ohio, kentucky, indiana (merged)" \
+              --build "${{ needs.download.outputs.week }}"
+            rm -rf "$WORK/w_$name" "$WORK/blocks/$name.osm.pbf"
+            echo "::endgroup::"
+          done < "$WORK/blocks.txt"
+          du -sh out/* || true
+      - uses: actions/upload-artifact@v4
+        with:
+          name: graph-band-${{ matrix.band }}
+          path: out
+          retention-days: 7
+
+  publish:
+    needs: band
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: graph-band-*
+          path: bands
+          merge-multiple: true
+      - name: Merge the blocks
+        run: |
+          python -m tools.graph_etl.merge_index merged/v1 bands/*/v1 | tee -a "$GITHUB_STEP_SUMMARY"
+          du -sh merged/v1
+          find merged/v1 -size +49M -print -exec false {} + || { echo "::error::a file over 49 MB"; exit 1; }
+          python -m tools.graph_etl.check merged/v1 | tail -12 | tee -a "$GITHUB_STEP_SUMMARY" || true
+      - name: Commit to the graph-data branch
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -e
+          mkdir data && cd data
+          git init -q
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git remote add origin "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
+          if git ls-remote --exit-code --heads origin graph-data >/dev/null; then
+            git fetch -q --depth 1 origin graph-data
+            git checkout -q -b graph-data FETCH_HEAD
+          else
+            git checkout -q --orphan graph-data
+          fi
+          rm -rf v1
+          cp -r ../merged/v1 v1
+          cat > README.md <<'EOF'
+          # graph-data
+
+          Vetta's scored road network for Ohio, Kentucky and Indiana (docs/OWN_ROUTING.md on main): v1/<i>_<j>.vgr tiles
+          (format: tools/graph_etl/tiles.py) and v1/index.json. Built by .github/workflows/graph-region.yml; served to
+          the app by the Worker at /api/graph/v1/. Road data (c) OpenStreetMap contributors, ODbL 1.0: these tiles are a
+          derived database offered under the same licence. Elevation: Mapzen Terrain Tiles.
+          EOF
+          git add -A
+          n=$(python3 -c "import json; print(json.load(open('v1/index.json'))['tile_count'])")
+          mb=$(python3 -c "import json; print(round(json.load(open('v1/index.json'))['bytes']/1e6, 1))")
+          git commit -q -m "graph region: $(date -u +%F) ($n tiles, $mb MB)" || { echo "no change"; exit 0; }
+          git push -q origin graph-data
+          echo "graph-data: $n tiles, $mb MB" >> "$GITHUB_STEP_SUMMARY"

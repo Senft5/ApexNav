@@ -255,23 +255,23 @@ def assemble(raw, g, scores, keep_tiles, build_day, model_hash):
     # directed edges, in their final order per tile: by from node, then chain, forward first
     directed = {}
     for k, c in enumerate(chains):
-        sc = scores.get(k)
-        if sc is None:
-            continue
         a, b = c.nodes[0], c.nodes[-1]
         dirs = [(True, a, b)] + ([] if c.attrs["oneway"] else [(False, b, a)])
         for fwd, u, v in dirs:
-            if node_tile[u] in keep_tiles:
-                directed.setdefault(node_tile[u], []).append((local[u], k, 0 if fwd else 1, u, v, fwd))
+            # a canonical order (not the chain list's): blocks of a region build number a shared tile's edges alike
+            c_ = chains[k]
+            directed.setdefault(node_tile[u], []).append((local[u], node_tile[v], local[v], c_.way_first, c_.way_last, len(c_.nodes), 0 if fwd else 1, k, u, v, fwd))
     edge_index = {}       # (chain, fwd) -> (tile, index)
     for t, lst in directed.items():
         lst.sort()
-        for idx, (_, k, _, _, _, fwd) in enumerate(lst):
+        for idx, (*_, k, _u, _v, fwd) in enumerate(lst):
             edge_index[(k, fwd)] = (t, idx)
     for t, lst in directed.items():
+        if t not in tiles:
+            continue
         tl = tiles[t]
         geom_of = {}
-        for _, k, _, u, v, fwd in lst:
+        for *_, k, u, v, fwd in lst:
             c, sc = chains[k], scores[k]
             a = c.attrs
             if k not in geom_of:
@@ -330,8 +330,69 @@ def assemble(raw, g, scores, keep_tiles, build_day, model_hash):
                 tiles[tt].restrictions.append(T.Restriction(from_edge=fi, via=local[via], to_edge=ti, only=only,
                                                             from_tile=None if ft == tt else ft))
                 applied += 1
+    vapplied, vskipped, vmoot = via_way(raw, chains, edge_index, node_tile, tiles, by_end)
     return tiles, {"restrictions_applied": applied, "restrictions_skipped": skipped,
-                   "via_way_restrictions_not_applied": raw.via_way_restrictions}
+                   "via_way_restrictions_applied": vapplied, "via_way_restrictions_skipped": vskipped,
+                   "via_way_restrictions_not_drivable": vmoot}
+
+
+def via_way(raw, chains, edge_index, node_tile, tiles, by_end, max_steps=8):
+    """Via-way restrictions where the path is simple: the from way's edge arriving at a node of the via ways, ONE path of
+    edges along the via ways (at most max_steps), and the to way's edge leaving its end. Stored in the tile of the path's
+    first node. Ambiguous or broken ones are skipped (counted)."""
+    out_of = {}
+    for k, c in enumerate(chains):
+        a, b = c.nodes[0], c.nodes[-1]
+        if (k, True) in edge_index:
+            out_of.setdefault(a, []).append((k, True, b))
+        if (k, False) in edge_index:
+            out_of.setdefault(b, []).append((k, False, a))
+    first_way = lambda k, fwd: chains[k].way_first if fwd else chains[k].way_last  # noqa: E731
+    last_way = lambda k, fwd: chains[k].way_last if fwd else chains[k].way_first  # noqa: E731
+    way_chains = {}
+    for k, c in enumerate(chains):
+        for w in c.ways:
+            way_chains.setdefault(w, []).append(k)
+    applied = skipped = moot = 0
+    for frm_way, via_ways, to_way, only in raw.via_restrictions:
+        vs = set(via_ways)
+        # a via way that isn't drivable (a motorway's emergency crossover): nothing a car could do, nothing to apply
+        if any(w not in way_chains for w in vs):
+            moot += 1
+            continue
+        # arriving edges on the from way: look only at the ends of the via ways' chains
+        cand_nodes = {chains[k].nodes[e] for w in vs for k in way_chains.get(w, ()) for e in (0, -1)}
+        paths = []
+        for A in cand_nodes:
+            froms = [(k, fwd) for k, fwd in by_end.get(A, []) if (k, fwd) in edge_index and last_way(k, fwd) == frm_way]
+            if not froms:
+                continue
+            stack = [(A, [])]
+            while stack:
+                node, path = stack.pop()
+                if len(path) > max_steps:
+                    continue
+                if path:
+                    tos = [(k, fwd) for k, fwd, _ in out_of.get(node, []) if first_way(k, fwd) == to_way and (k, fwd) not in path]
+                    for t in tos:
+                        for f in froms:
+                            paths.append((f, list(path), t, A))
+                for k, fwd, nxt in out_of.get(node, []):
+                    if (k, fwd) in path or not (vs & set(chains[k].ways)) or not set(chains[k].ways) <= vs:
+                        continue
+                    stack.append((nxt, path + [(k, fwd)]))
+        if len(paths) != 1:
+            skipped += 1
+            continue
+        f, path, t, A = paths[0]
+        home = node_tile.get(A)
+        if home not in tiles:
+            skipped += 1
+            continue
+        tiles[home].via_restrictions.append(T.ViaRestriction(from_edge=edge_index[f], via=[edge_index[x] for x in path],
+                                                             to_edge=edge_index[t], only=only))
+        applied += 1
+    return applied, skipped, moot
 
 
 def run_scorer(records_path, scores_path, dem_cache, ctx_dir):
@@ -361,6 +422,8 @@ def main(argv=None):
     ap.add_argument("--dem-cache", default=None, help="Terrarium z12 tiles (fetched here if missing); omit for no DEM")
     ap.add_argument("--ctx", default=os.path.join(ROOT, "web", "data", "ctx", "v1"))
     ap.add_argument("--source", default="OpenStreetMap", help="the extract's name for index.json")
+    ap.add_argument("--build", default=None, help="the build id's stem (CI: the extract's week); the model hash is added. "
+                    "Tiles of one build index each other's nodes consistently; the phone never mixes two across an edge")
     a = ap.parse_args(argv)
     w, s, e, n = (float(x) for x in a.tiles.split(","))
     i0, j0 = T.tile_of(s, w)
@@ -373,6 +436,13 @@ def main(argv=None):
     raw = G.read(a.pbf)
     log(f"{len(raw.ways)} drivable ways, {len(raw.pois)} businesses, {len(raw.buildings)} buildings, "
         f"{len(raw.landuse)} land-use polygons, {len(raw.restrictions)} restrictions")
+    today = dt.date.today()
+    if not raw.ways:
+        # nothing drivable in this box (a lake, a state the extract doesn't cover): an empty index, no tiles
+        with open(os.path.join(a.out, "index.json"), "w") as fh:
+            json.dump({"version": T.VERSION, "build": None, "built": today.isoformat(), "bbox": [w, s, e, n], "tiles": {}, "bytes": 0}, fh)
+        log("no drivable ways here: nothing written")
+        return 0
     chains, _ = G.build_chains(raw)
     chains, trimmed = trim_service(chains, raw.coords)
     chains = split_long(raw, chains)
@@ -399,11 +469,11 @@ def main(argv=None):
     for k in scores:
         scores[k]["gate"] = bool(f["gates"][k])
         scores[k]["st"] = road_channels(g, f, k, scores[k])
-    today = dt.date.today()
     day = (today - dt.date(1970, 1, 1)).days
     mh = int(meta.get("model", "0")[:8] or "0", 16)
     tiles, rstats = assemble(raw, g, scores, keep, day, mh)
     index = {"version": T.VERSION, "format": "VGR1 (tools/graph_etl/tiles.py)", "built": today.isoformat(),
+             "build": f"{a.build or today.isoformat()}-{(meta.get('model') or '0')[:8]}",
              "osm": raw.timestamp, "source": a.source, "model": meta.get("model"), "model_files": meta.get("files"),
              "tile_deg": T.TILE_DEG, "bbox": [w, s, e, n], "tiles": {}, "stats": rstats,
              "licence": "Road data (c) OpenStreetMap contributors, ODbL 1.0; elevation Mapzen Terrain Tiles; context grid: see web/data/ctx/v1"}
@@ -419,6 +489,7 @@ def main(argv=None):
                                              "restrictions": len(tl.restrictions)}
         total += len(b)
     index["bytes"] = total
+    index["tile_count"] = len(index["tiles"])
     with open(os.path.join(a.out, "index.json"), "w") as fh:
         json.dump(index, fh, indent=1, sort_keys=True)
         fh.write("\n")

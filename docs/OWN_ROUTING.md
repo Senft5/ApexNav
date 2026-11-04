@@ -113,7 +113,16 @@ phone's reader); tests/test_graph_tiles.py round-trips through both. What a rout
   `cls`: 0 motorway .. 7 service, 8 track, 9 ferry. `speed`: km/h, posted or the estimate.
 - Restrictions (via node, in the via node's tile): `{ fromEdge, fromTile, via, toEdge, only }`. A via-way restriction is
   counted in index.json `stats` and not applied.
-- index.json: `{ version, built, osm (replication timestamp), source, model (sha256 of the engine's weights, the corner
+- **Format v3** adds the via-way restriction table (`restrictionsVia: [{ from, fromTile, via: [edges], viaTiles, to,
+  toTile, only }]`, every index in its own tile, keys packed); readers open v1, v2 and v3. A via-way restriction whose
+  via way isn't drivable (a motorway's emergency crossover) is counted in `stats`, nothing to apply.
+- **Where tiles come from** (`ApexGraphTiles.load`): memory, IndexedDB, then the shipped Cincinnati tiles
+  (data/graph/v1) or the region's (`<api>/api/graph/v1/`); `index()` is the union of both indexes (the region's asked
+  once a day, kept for offline). Every tile has a `build` id (the extract's week + the model hash) and the shipped copy is
+  used first only while the region holds the same build: a tile's edges into a neighbour index the neighbour's nodes as
+  their build numbered them, so a route never mixes two builds across a tile edge. `prefetchArea(bbox)` keeps an area's
+  tiles in IndexedDB; Save area (web/offline_tiles.js) calls it.
+- index.json: `{ version, build, tile_count, built, osm (replication timestamp), source, model (sha256 of the engine's weights, the corner
   weights and the time model), model_files (each scored file's hash), bbox, tiles: { "i_j": { bytes, nodes, edges,
   restrictions } }, bytes, stats }`. `CHECK.txt` beside it is the build's spot-check table.
 
@@ -146,8 +155,10 @@ phone's reader); tests/test_graph_tiles.py round-trips through both. What a rout
 
 ## 7. What the owner has to do
 
-- For the region beyond Cincinnati: turn on R2 in the Cloudflare dashboard (or give a Cloudflare API token as a GitHub
-  secret) so CI can upload the region's tiles. Cincinnati works without it.
+- Nothing. The region's tiles (OH+KY+IN) live on this repository's `graph-data` branch, built by
+  .github/workflows/graph-region.yml, and the Worker relays them at `/api/graph/v1/` (backend/src/graph.ts) from
+  raw.githubusercontent.com with the edge cache in front: free, no R2, no KV, no secrets (2026-11-04, the owner: free
+  tier, no new costs).
 
 ## 8. Status
 

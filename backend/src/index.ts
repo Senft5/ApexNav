@@ -26,6 +26,7 @@ import { presencePublish, presenceSettingsGet, presenceSettingsPut, presenceView
 import { buildChatDelete, buildChatList, buildChatPost, buildCreate, buildDelete, buildFind, buildFollow, buildGet, buildUpdate, buildsFollowing, postCreate, postDelete, replyCreate, replyDelete, replyTried } from "./builds";
 import { photoDelete, photoList, photoServe, photoUpload, photoUse } from "./photos";
 import { ctxServe } from "./context_grid";
+import { graphIndex, graphTile } from "./graph";
 import { block, blockList, fileReport, isModerator, moderationQueue, moderationResolve, report, unblock } from "./safety";
 import { contribute, setContribute } from "./contribute";
 import { pointsFor } from "./points";
@@ -235,6 +236,9 @@ on("POST", "/api/presence", async (req, env) => { await presencePublish(env, awa
 // the context grid's wider region (src/context_grid.ts): public data, bundled per ~150 km tile
 on("GET", "/api/ctx/v1/index.json", (_req, env) => ctxServe(env, "v1/index.json"));
 on("GET", "/api/ctx/v1/8/:x/:y", (_req, env, m) => ctxServe(env, `v1/8/${m.groups!.x}/${m.groups!.y}`));
+// Vetta's own scored road network beyond Cincinnati (src/graph.ts): tiles from the repository's graph-data branch
+on("GET", "/api/graph/v1/index.json", (req) => graphIndex(req));
+on("GET", "/api/graph/v1/:name", (req, _env, m) => graphTile(req, m.groups!.name));
 // photos (src/photos.ts, REVIEW.md 5.2): JPEG in, metadata out; members only
 on("POST", "/api/photos", async (req, env) => json(await photoUpload(env, await requireMember(req, env), req), 201));
 on("GET", "/api/photos", async (req, env) => json(await photoList(env, await requireMember(req, env), new URL(req.url))));
