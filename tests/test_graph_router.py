@@ -80,6 +80,16 @@ def test_members_data_steers_the_search():
     assert r["cells"] <= 16 and r["cell0"] == "392_-847", r
 
 
+def test_members_data_never_holds_the_search():
+    """Members' roads for the search come from the cells kept on the phone; a slow server gives the plan nothing within
+    its budget and the fresh answer after it (the planner plans again with it); the next plan over the same cells has it
+    at once and doesn't ask again. Signed out (no lookup): nothing."""
+    r = case("crowdSoon")
+    assert r["now"] is None and r["nowMs"] < 100 and r["late"] == 1, r
+    assert r["now2"] == 1 and r["now2Ms"] < 50 and r["late2"] is None and r["asks"] == 1, r
+    assert r["kept"] == [1, 1] and r["off"] is None, r
+
+
 def test_fast_path_quick_score_preload_and_the_engine_fill():
     """The first route is our quickest alone (the same route the plan calls quickest); the preloaded tiles serve the plan
     with no more loads; the tiles' scores lie along any line (and nothing off the tiles); route_engine.js takes them for
@@ -123,6 +133,11 @@ def test_points_routed_on_our_tiles():
     assert r["worker"], r
     assert r["page"] and r["page"]["source"] == "own" and r["page"]["n"] > 2 and r["page"]["steps"] >= 2 and r["page"]["timeS"], r
     assert r["off"] is None, r
+
+
+def test_the_worker_makes_each_routes_geometry_as_the_page_would():
+    r = case("geo")
+    assert r["bare"] and r["n"] >= 2 and r["same"], r
 
 
 def test_loops_come_back_round():

@@ -54,9 +54,11 @@
       try { if (window.ApexRecce) ApexRecce.apply(ApexRecce.load(localStorage), t); } catch (_) {}   // your own recce notes again
       return true;
     }
-    async function trackFromPolyline(coords, id, name, sightMs = 4000) {
+    async function trackFromPolyline(coords, id, name, sightMs = 4000, o = {}) {
       const tl = typeof tlSpan === 'function' && typeof performance !== 'undefined' ? tlSpan : null, t0 = tl ? performance.now() : 0;
-      await RouteLoading.yieldToUI();
+      // (a track built ahead skips the turn: the page's own work is a few ms of resampling, the rest is the worker's, and
+      // the turn waited behind the map's frames for 0.1-0.35 s, live 2026-11-07)
+      if (!o.ahead) await RouteLoading.yieldToUI();
       const t1 = tl ? performance.now() : 0;
       const rs = Core.resamplePolyline(coords.map(c => c[1]), coords.map(c => c[0]), 5);
       // what's beside the road (stages.js sightOffsets, IDEAS Q-09): open grass lets you see across a bend, woods don't;
@@ -3142,9 +3144,9 @@
       // members' measured roads round the trip go into our search itself (signed out or none: unchanged)
       // (scope first: on the tiles in hand when the corridor's aren't all in yet; then the whole corridor's plan follows,
       // and its new routes join the background refresh: ownRefine)
-      // (kept per cell and fetched round you at start, so the search doesn't wait on the network: what isn't in within
-      // OWN_CROWD_MS is planned without, and the whole corridor's plan after the card has it: ownRefine. Signed out the
-      // server has none to give: not asked)
+      // (kept per cell on the phone, so the search doesn't wait on the network: what isn't in within OWN_CROWD_MS is
+      // planned on what was kept, and the whole corridor's plan after the card has the fresh answer: ownRefine. Signed out
+      // the server has none to give: not asked)
       const crowdS = ownCovered && ownCrowdOn() ? ApexOwnRouting.crowdSoon(routeCtxOpts().lookupCells, from, to, OWN_CROWD_MS) : null;
       const ownReq = { from, to, level, prefs: roadPrefs, avoid, heading: from.heading, crowd: crowdS ? tlTime('crowd (members\' roads)', crowdS.now) : null };
       // (Long way's detours reach past the straight line's tiles: it waits for its corridor)
@@ -3176,7 +3178,7 @@
         early.fired = true; quickNow = q;
         if (window.apexDebug) window.apexDebug.earlyKind = q.kind;
         setTimeout(() => {
-          if (!q.t) { q.t = FunRoute.geometry(q.route.coords, Core); q.fun = funOf(q.t, q.route.turns); }
+          if (!q.t) { q.t = geometryOf(q); q.fun = funOf(q.t, q.route.turns); }
           early.shown = useOption({ id, name, request, level, quickest: q, list: [{ ...q, extraS: 0 }] }, 0, EARLY_SIGHT_MS).catch(() => null);
           early.shown.then(() => mark('firstUp'));
           early.shown.then(openGate);
@@ -3194,7 +3196,7 @@
         const k = own.cands.findIndex((c) => c.own && quickNow.own && c.own.edges.length === quickNow.own.edges.length && c.own.edges.every((e, i) => e === quickNow.own.edges[i]));
         if (k >= 0) { quickNow.ownRole = own.cands[k].ownRole; quickNow.own = own.cands[k].own; own.cands[k] = quickNow; }
       }
-      if (window.apexDebug) window.apexDebug.lastOwn = { covered: ownCovered, used: ownUsed, reason: own.reason, ms: own.ms, n: own.cands.length, error: own.error || null, tiles: own.result ? own.result.tiles : null, routerMs: own.result ? own.result.ms : null, viewMs: own.result ? own.result.viewMs : null, partial: own.result ? !!own.result.partial : null, quickMs: quickNow && quickNow.kind === 'own' ? quickNow.ownMs : null, quickLoadMs: quickNow && quickNow.kind === 'own' ? quickNow.ownLoadMs : null };
+      if (window.apexDebug) window.apexDebug.lastOwn = { covered: ownCovered, used: ownUsed, reason: own.reason, ms: own.ms, n: own.cands.length, error: own.error || null, tiles: own.result ? own.result.tiles : null, routerMs: own.result ? own.result.ms : null, viewMs: own.result ? own.result.viewMs : null, geoMs: own.result ? own.result.geoMs : null, partial: own.result ? !!own.result.partial : null, quickMs: quickNow && quickNow.kind === 'own' ? quickNow.ownMs : null, quickLoadMs: quickNow && quickNow.kind === 'own' ? quickNow.ownLoadMs : null };
       // with our routes in, Valhalla's answers are only checks, fetched alongside (below); without, today's path
       if (!ownUsed && !early.fired) openGate();                            // ours failed: Valhalla is asked now, not at the gate's time
       direct = ownUsed ? [] : await valhallaP;
@@ -3222,7 +3224,7 @@
         let ran = Date.now();
         const leaving = new Date();
         for (const c of directCands) {
-          if (!c.t) { c.t = FunRoute.geometry(c.route.coords, Core); c.fun = funOf(c.t, c.route.turns); }
+          if (!c.t) { c.t = geometryOf(c); c.fun = funOf(c.t, c.route.turns); }
           c.glare = FunRoute.glare(c.t, c.timeS, leaving);                // (as the pool's below: the lead ranking is the final one)
           if (Date.now() - ran > 40) { await RouteLoading.yieldToUI(); ran = Date.now(); }
         }
@@ -3264,7 +3266,7 @@
       (ownPrep ? Promise.all([routerCtx, ownPrep]) : routerCtx).then(() => {
         try {
           const pool0 = FunRoute.keepAvoiding(routerCands, avoid);
-          for (const c of pool0) if (!c.t) { c.t = FunRoute.geometry(c.route.coords, Core); c.fun = funOf(c.t, c.route.turns); }
+          for (const c of pool0) if (!c.t) { c.t = geometryOf(c); c.fun = funOf(c.t, c.route.turns); }
           const lead = rankPool(pool0, level)[0];
           const c = lead && pool0.find((x) => x.t === lead.t);
           if (c && !(early.fired && c === quickNow)) buildAhead(c, id, name, ownUsed ? OWN_SIGHT_MS : undefined);
@@ -3341,7 +3343,7 @@
       // 2026-11-05: 0.3-0.7 s for seven candidates whose scoring took a tenth of that)
       let ranFor = Date.now();
       for (const c of pool) {
-        if (!c.t) { c.t = FunRoute.geometry(c.route.coords, Core); c.fun = funOf(c.t, c.route.turns); }
+        if (!c.t) { c.t = geometryOf(c); c.fun = funOf(c.t, c.route.turns); }
         c.glare = FunRoute.glare(c.t, c.timeS, leaving);                    // minutes driving into a low sun, if you leave now
         if (Date.now() - ranFor > 40) { await RouteLoading.yieldToUI(); ranFor = Date.now(); }
       }
@@ -3427,6 +3429,14 @@
       // what's late lands in the tile cache for the next plan
       OWN_SIGHT_MS = 100;   // (at most EARLY_SIGHT_MS: not asked; the land cover is loaded for the next plan meanwhile)
     let ownClient = null;
+    // A candidate's light geometry (5 m samples and corners, fun_route.js geometry): ours come with it from the worker,
+    // made there with the same function on the same line (graph_router.js host 'plan'); else made here
+    function geometryOf(c) {
+      const g = c && c.own && c.own.geo;
+      if (!g || !g.lat || !g.lat.length) return FunRoute.geometry(c.route.coords, Core);
+      const lat = Array.from(g.lat), lon = Array.from(g.lon);
+      return { lat, lon, dist: lat.map((_, i) => i * 5), events: g.events };
+    }
     // The plan's timeline (apexDebug.timeline: [what, start ms, end ms] from the plan's start; the live harness reads it):
     // tiles, the worker's searches, each context provider, the checks, ranking, track building, drawing and the card
     function tlSpan(k, start, end) {
@@ -3490,7 +3500,7 @@
         if (full && full.cands && full.cands.length) {
           const same = (a, b) => a.own && b.own && a.own.edges.length === b.own.edges.length && a.own.edges.every((e, i) => e === b.own.edges[i]);
           const clockOf = pool.find((p) => p.own && p.own.clock), k = clockOf ? clockOf.own.clock : 1;   // the pool's one clock
-          for (const c of full.cands) if (!pool.some((p) => same(p, c))) { c.timeS *= k; c.route.timeS = c.timeS; c.t = FunRoute.geometry(c.route.coords, Core); c.fun = funOf(c.t, c.route.turns); c.glare = FunRoute.glare(c.t, c.timeS, new Date()); pool.push(c); }
+          for (const c of full.cands) if (!pool.some((p) => same(p, c))) { c.timeS *= k; c.route.timeS = c.timeS; c.t = geometryOf(c); c.fun = funOf(c.t, c.route.turns); c.glare = FunRoute.glare(c.t, c.timeS, new Date()); pool.push(c); }
         }
         await contextOn(pool, OWN_REFINE_MS, 'refine', OWN_REFINE);
         await weatherOn(pool, level, forecasts);
@@ -3525,7 +3535,7 @@
         if (!p || !Number.isFinite(p.lat) || !ownOn() || localStorage.getItem('apex.ownWarm') === '0' || (ownWarmAt && FunRoute.kmBetween(p, ownWarmAt) < 10)) return;
         ownWarmAt = { lat: p.lat, lon: p.lon };
         const t0 = Date.now();
-        if (ownCrowdOn()) ApexOwnRouting.crowdPrefetch(routeCtxOpts().lookupCells, p);   // members' roads round you, kept
+        try { if (window.ApexAnalysis && ApexAnalysis.prewarm) ApexAnalysis.prewarm(); } catch (_) { /* started on first use */ }   // the tracks' workers
         ownRouter().covers([p]).then((ok) => (ok ? ownRouter().preload({ lat: p.lat, lon: p.lon, km: 0 }) : null))
           .then((r) => { if (window.apexDebug) window.apexDebug.ownWarm = r ? { ...r, wallMs: Date.now() - t0 } : null; }).catch(() => { ownWarmAt = null; });
       } catch (_) { /* no position or no worker: the first plan loads its tiles */ }
@@ -3541,7 +3551,7 @@
     const builtAhead = new WeakMap();
     function buildAhead(c, id, name, sightMs) {
       if (!c || !c.route || builtAhead.has(c.route.coords)) return;
-      builtAhead.set(c.route.coords, trackFromPolyline(c.route.coords, id, name, sightMs).catch(() => null));
+      builtAhead.set(c.route.coords, trackFromPolyline(c.route.coords, id, name, sightMs, { ahead: true }).catch(() => null));
     }
     async function useOption(o, i, sightMs) {
       const c = (o.levels && o.levels[o.level] === i && o.picks[o.level]) || o.list[i], was = o.current;

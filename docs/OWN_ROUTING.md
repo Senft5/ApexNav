@@ -143,11 +143,19 @@ phone's reader); tests/test_graph_tiles.py round-trips through both. What a rout
   owner, 2026-11-06: not a circle): the tiles' best stages (explore) chained one to three at a time, each leg on the
   level's objective with motorway and trunk costed x2.5 / x3 / x4 (Quick / Fun / Long way); rings only where no stage
   loop exists. Then the same scoring, which charges a loop's highway share (fun_route.js loopHighwayCost) and never puts
-  a loop above one that beats it on corners and time (loopDominates).
+  a loop above one that beats it on corners and time (loopDominates). Ours go up first; the map's stage loops (Valhalla's
+  matrix and legs) are built after the card and replace ours only when the level ranks one of them first (2026-11-07).
 - **Final ranking:** our candidates go through the existing route engine (time-dependent penalties, weather, why line),
   so everything already built keeps working; Valhalla's quickest stays in the pool as a sanity check.
-- **Turn instructions:** from Valhalla (`trace_route` on our shape) when online; offline, our own from the graph (name
-  changes and turn angles). Our own instructions become primary later.
+- **Turn instructions:** ours from the graph (name changes and turn angles) go up with the route; Valhalla's
+  (`trace_route` on our shape) replace them on the track when they come, never waited for; offline ours stay.
+- **Points routed** (a reroute, a road from Best roads nearby, a suggestion, a road someone sent, Drive it again, a link's
+  or GPX file's stops): `through`, the quickest between the points on our tiles, each leg joined where the last arrived
+  (2026-11-07); Valhalla only where a point is off our tiles or ours fail. The traffic detour stays on Valhalla.
+- **Offline:** with the app and its tiles on the phone (the shipped Cincinnati tiles, and every region tile a plan or a
+  saved area fetched, kept in IndexedDB), routes at every level, loops, reroutes and our own turn instructions need no
+  network; typed search, the map's basemap (unless the area was saved), weather, events, live hazards, Valhalla's
+  maneuvers and the speed limits from map matching don't, and the card says the live data isn't known.
 - **Fallback:** no tiles for the area, or our router fails -> today's Valhalla path, unchanged.
 
 ## 6. Proof (before it replaces anything)

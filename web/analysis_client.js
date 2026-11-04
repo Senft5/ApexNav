@@ -44,6 +44,17 @@
     }
     return spare && (load.get(spare) || 0) < (load.get(w) || 0) ? spare : w;
   }
+  /** Both workers started ahead of the first plan (a worker's start is its scripts: 0.2-0.3 s, live 2026-11-07). */
+  function prewarm() {
+    const w = getWorker();
+    if (!w || spare || spareBroken || !((root.navigator && root.navigator.hardwareConcurrency) >= 4)) return !!w;
+    try {
+      spare = new root.Worker('analysis_worker.js');
+      spare.onmessage = answered;
+      spare.onerror = () => { spareBroken = true; const s0 = spare; spare = null; failAll(s0); try { s0.terminate(); } catch (_) {} };
+    } catch (_) { spareBroken = true; spare = null; }
+    return true;
+  }
   function post(w, id, msg) { sentTo.set(id, w); load.set(w, (load.get(w) || 0) + 1); w.postMessage(msg); }
 
   /**
@@ -293,6 +304,6 @@
   }
   stats.jobs = {}; stats.inlineJobs = {};
 
-  const api = { analyse, runInline, stats, job, jobs, monthOf };
+  const api = { analyse, prewarm, runInline, stats, job, jobs, monthOf };
   if (typeof module !== 'undefined' && module.exports) module.exports = api; else root.ApexAnalysis = api;
 })(typeof window !== 'undefined' ? window : globalThis);

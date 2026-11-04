@@ -73,11 +73,36 @@
     }
     return out.length ? out : null;
   }
-  // Kept per 0.1° cell (CROWD_TTL), so a plan needn't wait on the network for it: the server answers the ways whose box
-  // meets a cell, and the same test splits an answer back into its cells. The cells round you are fetched at start
-  // (crowdPrefetch, signed in), so a plan nearby has them in hand.
-  const CROWD_TTL = 30 * 60e3, cellMemo = new Map(), cellAsk = new Map();
+  // Kept per 0.1° cell, so a plan needn't wait on the network for it: the server answers the ways whose box meets a cell,
+  // and the same test splits an answer back into its cells. In memory and IndexedDB (vetta-crowd): a cell asked within
+  // CROWD_TTL isn't asked again; one kept within CROWD_KEEP_MS is used at once (offline too) and asked again behind the
+  // plan. Nothing new is asked: only the cells a plan crosses, as before (VI-1).
+  const CROWD_TTL = 30 * 60e3, CROWD_KEEP_MS = 24 * 3600e3, cellMemo = new Map(), cellAsk = new Map();
   const boxOfCell = (key) => { const [i, j] = key.split('_').map(Number); return [i * CELL, j * CELL, (i + 1) * CELL, (j + 1) * CELL]; };   // s w n e
+  let crowdDb = null;
+  function cdb(mode, key, val) {
+    try {
+      if (!root.indexedDB) return Promise.resolve(null);
+      if (!crowdDb) {
+        crowdDb = new Promise((ok) => {
+          try {
+            const rq = root.indexedDB.open('vetta-crowd', 1);
+            rq.onupgradeneeded = () => { try { rq.result.createObjectStore('cells'); } catch (_) {} };
+            rq.onsuccess = () => ok(rq.result);
+            rq.onerror = () => ok(null);
+            rq.onblocked = () => ok(null);
+          } catch (_) { ok(null); }
+        });
+      }
+      return crowdDb.then((d) => (d ? new Promise((ok) => {
+        try {
+          const st = d.transaction('cells', mode).objectStore('cells'), rq = mode === 'readonly' ? st.get(key) : st.put(val, key);
+          rq.onsuccess = () => ok(mode === 'readonly' ? rq.result || null : true);
+          rq.onerror = () => ok(null);
+        } catch (_) { ok(null); }
+      }) : null));
+    } catch (_) { return Promise.resolve(null); }
+  }
   function rememberCells(cells, got, at = Date.now()) {
     const per = new Map(cells.map((c) => [c, { at, ways: {}, lines: {} }]));
     for (const [way, line] of Object.entries((got && got.lines) || {})) {
@@ -86,15 +111,21 @@
       for (const p of line) { if (!Array.isArray(p)) continue; s = Math.min(s, p[0]); n = Math.max(n, p[0]); w = Math.min(w, p[1]); e = Math.max(e, p[1]); }
       for (const c of cells) { const b = boxOfCell(c); if (s <= b[2] && n >= b[0] && w <= b[3] && e >= b[1]) { per.get(c).ways[way] = got.ways[way]; per.get(c).lines[way] = line; } }
     }
-    for (const [c, v] of per) cellMemo.set(c, v);
+    for (const [c, v] of per) { cellMemo.set(c, v); cdb('readwrite', c, v); }
   }
   const freshCell = (c, now = Date.now()) => { const m = cellMemo.get(c); return !!m && now - m.at < CROWD_TTL; };
+  const keptCell = (c, now = Date.now()) => { const m = cellMemo.get(c); return !!m && now - m.at < CROWD_KEEP_MS; };
+  /** The cells kept on the phone (IndexedDB) that memory hasn't, read in. */
+  async function readKept(cells) {
+    const now = Date.now(), want = cells.filter((c) => !keptCell(c, now));
+    await Promise.all(want.map(async (c) => { const v = await cdb('readonly', c); if (v && v.ways && now - v.at < CROWD_KEEP_MS && !keptCell(c, now)) cellMemo.set(c, v); }));
+  }
   function mergedCells(cells) {
-    const ways = {}, lines = {};
-    for (const c of cells) { const m = cellMemo.get(c); if (m) { Object.assign(ways, m.ways); Object.assign(lines, m.lines); } }
+    const ways = {}, lines = {}, now = Date.now();
+    for (const c of cells) { const m = cellMemo.get(c); if (m && now - m.at < CROWD_KEEP_MS) { Object.assign(ways, m.ways); Object.assign(lines, m.lines); } }
     return { ways, lines };
   }
-  /** Fetch the cells not kept (or asked already), resolves true when every one of `cells` is kept fresh. */
+  /** Fetch the cells not asked within CROWD_TTL (or being asked); resolves true when every one of `cells` is fresh. */
   function fetchCells(lookupCells, cells, timeoutMs = CROWD_MS) {
     const now = Date.now(), need = cells.filter((c) => !freshCell(c, now) && !cellAsk.has(c));
     if (need.length) {
@@ -108,27 +139,28 @@
     return Promise.all(waits).then(() => cells.every((c) => freshCell(c)));
   }
   /**
-   * Members' data for a plan without waiting on the network: { now, late, cached }. `now` resolves at once from the cells
-   * kept when all of them are, else with what lands within budgetMs (else the cells kept, or null); `late` resolves the
-   * whole answer when `now` didn't have it (null otherwise), so the planner can plan again with it after the card.
+   * Members' data for a plan without waiting on the network: { now, late }. `now` resolves with the cells asked within
+   * CROWD_TTL when all of them are; else with what the network gives within budgetMs, or failing that the cells kept on
+   * the phone (a day at most), or null. `late` resolves the fresh answer when `now` didn't have it and it differs (null
+   * otherwise), so the planner can plan again with it after the card.
    */
   function crowdSoon(lookupCells, from, to, budgetMs = 250) {
-    const none = { now: Promise.resolve(null), late: Promise.resolve(null), cached: false };
-    if (typeof lookupCells !== 'function') return none;
+    if (typeof lookupCells !== 'function') return { now: Promise.resolve(null), late: Promise.resolve(null) };
     const cells = cellsFor(from, to);
-    if (cells.every((c) => freshCell(c))) return { now: Promise.resolve(crowdItems(mergedCells(cells))), late: Promise.resolve(null), cached: true };
-    const all = fetchCells(lookupCells, cells).catch(() => false);
-    let timer, inTime = false;
-    const now = Promise.race([all.then((ok) => { inTime = true; return ok; }), new Promise((r) => { timer = setTimeout(() => r(false), budgetMs); })])
-      .then(() => { clearTimeout(timer); return crowdItems(mergedCells(cells)); });
-    const late = now.then(() => (inTime ? null : all.then((ok) => (ok ? crowdItems(mergedCells(cells)) : null))));
-    return { now, late, cached: false };
-  }
-  /** The cells round a place, fetched and kept (the app's start: a plan nearby then has them). */
-  function crowdPrefetch(lookupCells, at, padDeg = 0.15) {
-    if (typeof lookupCells !== 'function' || !at || !Number.isFinite(at.lat)) return Promise.resolve(false);
-    const k = Math.cos(at.lat * Math.PI / 180) || 1;
-    return fetchCells(lookupCells, cellsFor({ lat: at.lat - padDeg, lon: at.lon - padDeg / k }, { lat: at.lat + padDeg, lon: at.lon + padDeg / k })).catch(() => false);
+    let lateP = Promise.resolve(null);
+    const now = (async () => {
+      if (cells.every((c) => freshCell(c))) return crowdItems(mergedCells(cells));
+      await readKept(cells);
+      if (cells.every((c) => freshCell(c))) return crowdItems(mergedCells(cells));
+      const before = JSON.stringify(mergedCells(cells));
+      const all = fetchCells(lookupCells, cells).catch(() => false);
+      let timer, inTime = false;
+      await Promise.race([all.then(() => { inTime = true; }), new Promise((r) => { timer = setTimeout(r, budgetMs); })]);
+      clearTimeout(timer);
+      if (!inTime) lateP = all.then((ok) => { const m = mergedCells(cells); return ok && JSON.stringify(m) !== before ? crowdItems(m) : null; });
+      return crowdItems(mergedCells(cells));
+    })();
+    return { now, late: now.then(() => lateP, () => null) };
   }
   /** Members' data round a trip for the search, or null (signed out, offline, nothing measured, slower than CROWD_MS). */
   async function crowdFor(lookupCells, from, to, timeoutMs = CROWD_MS) {
@@ -280,7 +312,7 @@
     return 'own';
   }
 
-  const api = { OFF_KEY, on, withCoords, candidates, plan, quick, through, loops, cellsFor, crowdItems, crowdFor, crowdSoon, crowdPrefetch, _cells: cellMemo, sharedShare, oneClock, polyline6, thin, traceBody, instruct };
+  const api = { OFF_KEY, on, withCoords, candidates, plan, quick, through, loops, cellsFor, crowdItems, crowdFor, crowdSoon, _cells: cellMemo, sharedShare, oneClock, polyline6, thin, traceBody, instruct };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   root.ApexOwnRouting = api;
 })(typeof window !== 'undefined' ? window : globalThis);

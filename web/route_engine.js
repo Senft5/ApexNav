@@ -613,7 +613,13 @@
       for (const c of cands) {
         if (!c.ev || !c.corridor || c.ev.knownKm >= c.ev.km - 0.05) continue;
         const k = c.ev.km > 0 ? c.ev.knownKm / c.ev.km : 0;
-        evaluate(c, { ...opts, perMin, unknownGate: pool.gate });
+        // the same candidate, context and inputs as a ranking before (the level cards rank the pool once per level, the
+        // lead and the Prefer stamps again): that evaluation, not a second one (live 2026-11-07: 0.1 s a ranking)
+        const key = `${perMin}|${pool.gate}|${JSON.stringify(opts.prefs || {})}|${JSON.stringify(opts.car || null)}`;
+        const memo = c.__fill && c.__fill.ctx === c.ctx && c.__fill.t === c.t && c.__fill.corridor === c.corridor ? c.__fill
+          : Object.defineProperty(c, '__fill', { value: { ctx: c.ctx, t: c.t, corridor: c.corridor, m: new Map() }, configurable: true, writable: true, enumerable: false }).__fill;
+        if (memo.m.has(key)) c.ev = memo.m.get(key);
+        else { evaluate(c, { ...opts, perMin, unknownGate: pool.gate }); memo.m.set(key, c.ev); }
         c.ev.qualityFilled = (c.ev.quality != null ? c.ev.quality * k : 0) + pool.quality * (1 - k);
         c.ev.qWeightFilled = Math.max(c.ev.qWeight, pool.weight * (1 - k) + c.ev.qWeight);
         c.ev.poorFilled = Math.min(W.POOR_CAP, c.ev.poorCost + pool.poorPerKm * (c.ev.km - c.ev.knownKm));

@@ -1336,8 +1336,14 @@
           // members' data for this plan only (the view is kept for the next one, signed in or not)
           v.crowd = msg.crowd ? crowdOnto(v, msg.crowd) : null;
           try {
-            const r = plan(v, msg);
-            return { id, result: { ...strip(r), tiles: v.keys, partial, viewMs, crowdEdges: v.crowd ? v.crowd.edges : 0 } };
+            const r = plan(v, msg), t1 = Date.now();
+            // each route's light geometry (fun_route.js geometry: 5 m samples and corners, what the ranking scores) made
+            // here, off the page, which is drawing the first route meanwhile (the worker imports apex_core.js for it)
+            const Core = root.ApexCore, F = FunRoute();
+            if (Core && F && F.geometry && msg.geometry !== false) for (const x of r.routes || []) {
+              try { const g = F.geometry(x.route.coords, Core); x.geo = { lat: Float64Array.from(g.lat), lon: Float64Array.from(g.lon), events: g.events }; } catch (_) { /* made on the page */ }
+            }
+            return { id, result: { ...strip(r), tiles: v.keys, partial, viewMs, geoMs: Date.now() - t1, crowdEdges: v.crowd ? v.crowd.edges : 0 } };
           } finally { v.crowd = null; }
         }
         if (type === 'loop') {
