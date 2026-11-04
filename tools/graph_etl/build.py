@@ -27,9 +27,10 @@ from . import osm_graph as G
 from . import tiles as T
 
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-# Valhalla's 0-15 road density from road km per km² within 2 km: medians on the calibration fixtures' router edges
-# (tests/fixtures/route_engine: the router's density on 2055 edges against this measure, r = 0.95)
-DENSITY_KNOTS = ([0.0, 1.9, 2.95, 3.75, 6.4, 8.3, 12.1, 20.0], [0, 1, 2, 3, 5, 7, 9, 15])
+# Valhalla's 0-15 road density from road km per km² within 2 km (every vehicle way, routable or not, as Valhalla's graph
+# has them): medians on the calibration fixtures' router edges (tests/fixtures/route_engine: the router's density on
+# 2055 edges against this measure, r = 0.94)
+DENSITY_KNOTS = ([0.0, 3.07, 4.46, 5.31, 8.63, 9.91, 15.1, 25.0], [0, 1, 2, 3, 5, 7, 9, 15])
 SIMPLIFY_M = 2.0
 # seconds lost at a point feature inside an edge (end nodes are the router's turn cost, OWN_ROUTING.md §5)
 DELAY_S = {"signal": 15.0, "stop": 7.0, "give_way": 2.0, "level_crossing": 4.0, "calming": 3.0, "crossing": 1.0}
@@ -122,15 +123,19 @@ def features(raw, chains):
     per = F.windowed(g, full, F.WINDOW_M)
     biz = F.windowed(g, F.near_counts(g, raw.pois, F.BUSINESS_M)[:, None], F.WINDOW_M)[:, 0]
     bldg = F.windowed(g, F.near_counts(g, raw.buildings, F.BUILDING_M)[:, None], F.BLDG_WINDOW_M)[:, 0]
+    addr = F.windowed(g, F.near_counts(g, raw.addresses, F.ADDRESS_M)[:, None], F.BLDG_WINDOW_M)[:, 0] if raw.addresses else None
+    civic = F.windowed(g, np.column_stack([F.near_counts(g, raw.schools, F.CIVIC_M), F.near_counts(g, raw.worship, F.CIVIC_M)]), F.WINDOW_M)
+    walk = F.sidewalks(g, raw)
     log("per-km counts done")
     S, H, owner = F.probes(g)
     lu, mapped = F.landuse_shares(raw, S, H)
     log(f"land use on {len(S)} samples")
     wnear, wfollow = F.water(raw, S, H)
-    _, dens = F.road_density(g, S, density_scale)
+    _, dens = F.road_density(g, S, density_scale, raw.road_segs)
     log("water and density done")
     starts = np.searchsorted(owner, np.arange(len(chains) + 1))
-    return g, dict(kinds=kinds, per=per, interior=interior, gates=gates, biz=biz, bldg=bldg, lu=lu, mapped=mapped,
+    return g, dict(kinds=kinds, per=per, interior=interior, gates=gates, biz=biz, bldg=bldg, addr=addr, civic=civic, walk=walk,
+                   lu=lu, mapped=mapped,
                    wnear=wnear, wfollow=wfollow, dens=dens, starts=starts)
 
 
@@ -142,9 +147,10 @@ def chain_record(g, f, k):
     per = f["per"][k]
     surface = a["surface"]
     ch = {
-        "road_class": a["rc"], "road_use": a["use"], "lanes": a["lanes"], "surface": surface, "sidewalk": a["sidewalk"],
+        "road_class": a["rc"], "road_use": a["use"], "lanes": a["lanes"], "surface": surface, "sidewalk": a["sidewalk"] if a["sidewalk"] is not None else nan(float(f["walk"][k])),
         "truck_route": a["truck"], "bridge": a["bridge"], "tunnel": a["tunnel"], "toll": a["toll"], "ramp": a["ramp"],
         "roundabout": a["roundabout"], "access_destination": a["destination"], "speed_limit_kph": a["maxspeed"],
+        "addr_per_km": f["addr"][k] if f["addr"] is not None else None,
         "signals_per_km": per[ki["signal"]], "stops_per_km": per[ki["stop"]], "crossings_per_km": per[ki["crossing"]],
         "calming_per_km": per[ki["calming"]], "access_per_km": per[-1], "business_per_km": f["biz"][k],
         "bldg_per_km": f["bldg"][k], "lit": a["lit"],
@@ -165,7 +171,22 @@ def chain_record(g, f, k):
             ferry_s = None
     return {"k": k, "c": [r6(p) for p in g.coords[k]], "pre": [r6(p) for p in g.ext_coords(k, 0)],
             "post": [r6(p) for p in g.ext_coords(k, 1)], "ch": {x: nan(float(v)) if v is not None else None for x, v in ch.items()},
-            "smp": smp, "delay_s": delay, "name": a["name"], "hw": a["hw"], "ferry_s": ferry_s}
+            "smp": smp, "delay_s": delay,
+            "store": {"schools_per_km": float(f["civic"][k][0]), "worship_per_km": float(f["civic"][k][1])}, "name": a["name"], "hw": a["hw"], "ferry_s": ferry_s}
+
+
+def road_channels(g, f, k, sc):
+    """The road-side evidence stored in the tile beside the scores (tiles.CHANNELS), for the router's own ranking."""
+    ki = {kd: i for i, kd in enumerate(f["kinds"])}
+    per = f["per"][k]
+    a = g.chains[k].attrs
+    walk = a["sidewalk"] if a["sidewalk"] is not None else f["walk"][k]
+    return {"business_per_km": float(f["biz"][k]), "access_per_km": float(per[-1]), "signals_per_km": float(per[ki["signal"]]),
+            "stops_per_km": float(per[ki["stop"]]), "crossings_per_km": float(per[ki["crossing"]]),
+            "calming_per_km": float(per[ki["calming"]]), "schools_per_km": float(f["civic"][k][0]),
+            "worship_per_km": float(f["civic"][k][1]), "sidewalk": None if walk is None or walk != walk else float(walk),
+            "built": sc.get("built"), "density": sc.get("dens"), "bldg_per_km": float(f["bldg"][k]),
+            "addr_per_km": float(f["addr"][k]) if f["addr"] is not None else None}
 
 
 def simplify(coords):
@@ -256,6 +277,7 @@ def assemble(raw, g, scores, keep_tiles, build_day, model_hash):
             if k not in geom_of:
                 geom_of[k] = len(tl.geoms)
                 tl.geoms.append([micro(p) for p in simplify(g.coords[k])])
+                tl.geom_ch.append(sc.get("st") or {})
             cs = g.coords[k] if fwd else list(reversed(g.coords[k]))
             cm = F.cumulative(cs)
             flags = 0
@@ -376,6 +398,7 @@ def main(argv=None):
     scores, meta = run_scorer(rec_path, sc_path, a.dem_cache, a.ctx)
     for k in scores:
         scores[k]["gate"] = bool(f["gates"][k])
+        scores[k]["st"] = road_channels(g, f, k, scores[k])
     today = dt.date.today()
     day = (today - dt.date(1970, 1, 1)).days
     mh = int(meta.get("model", "0")[:8] or "0", 16)

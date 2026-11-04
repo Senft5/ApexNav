@@ -17,7 +17,8 @@ Layout (little-endian; every section starts on a 4-byte boundary; counts from th
      40  u32 tile refs              44  u32 build day (days since 1970-01-01, UTC)
      48  u32 model hash (first 8 hex digits of the route_engine.js weights hash, as a number)
      52  u8 layout flags (bit 0: `to` is u32, else u16)
-     53  11 bytes reserved (0)
+     53  u8 road channels (v2: len(CHANNELS))      54  u16 reserved    56  u32 polylines (v2)
+     60  4 bytes reserved (0)
     tile refs     tile_refs x (u16 i, u16 j): the other tiles edges lead to; edge to_tile k >= 1 is ref k - 1
     nodes         u16 lat[n], u16 lon[n] (GEOM_Q microdegree steps from the tile's south-west corner: 0.25 degree is
                   50 000 steps; readers give microdegrees), u32 first_edge[n + 1] (CSR: node v's edges are
@@ -31,7 +32,12 @@ Layout (little-endian; every section starts on a 4-byte boundary; counts from th
     geometry      per polyline: varint count, then count x (zigzag varint dlat, zigzag varint dlon) in units of GEOM_Q
                   microdegrees (about 0.5 m); the first point is relative to the tile's south-west corner, the rest to
                   the point before. Readers put the end points exactly on their nodes (the from node always, the to
-                  node when it is in this tile). An edge with flag
+                  node when it is in this tile).
+    channels (v2) after the geometry, from a 4-byte boundary: per CHANNELS entry one u8 column over the polylines
+                  (both directions of a road share its polyline and its values): round(value x scale), 0..254, 255
+                  unknown. The road-side evidence the router ranks with: businesses, driveways and side roads,
+                  signals, stops, crossings, calming, schools, churches per km, sidewalk, built-up, density, buildings
+                  and addresses per km. Readers expand them per edge. An edge with flag
                   GEOM_REV reads its polyline backwards (both directions of a two-way road share one).
 
 Values: quality, scenery 0..254 = 0..1 (255 unknown); conf 0..255 = 0..1 (the share of the model's weight known; 0 is
@@ -47,7 +53,12 @@ import struct
 from dataclasses import dataclass, field
 
 MAGIC = b"VGR1"
-VERSION = 1
+VERSION = 2
+READS = (1, 2)
+# (name, scale): u8 = round(value * scale), capped at 254; 255 = unknown. Order is the file's.
+CHANNELS = (("business_per_km", 4), ("access_per_km", 2), ("signals_per_km", 20), ("stops_per_km", 20),
+            ("crossings_per_km", 10), ("calming_per_km", 20), ("schools_per_km", 20), ("worship_per_km", 20),
+            ("sidewalk", 1), ("built", 254), ("density", 16), ("bldg_per_km", 1), ("addr_per_km", 1))
 HEADER_BYTES = 64
 TILE_DEG = 0.25
 
@@ -132,6 +143,7 @@ class Tile:
     edges: list[tuple[int, Edge]] = field(default_factory=list)   # (from node, edge)
     restrictions: list[Restriction] = field(default_factory=list)
     geoms: list[list[tuple[int, int]]] = field(default_factory=list)   # polylines, microdegrees (lat, lon)
+    geom_ch: list[dict] = field(default_factory=list)   # per polyline: {channel: value | None}
     build_day: int = 0
     model_hash: int = 0
 
@@ -216,8 +228,9 @@ def write_tile(t: Tile) -> bytes:
     out = bytearray()
     out += MAGIC
     wide = any(e.to > 0xFFFF for _, e in edges)
-    out += struct.pack("<HHiiIIIIIIIIIB", VERSION, HEADER_BYTES, t.i, t.j, n, e_count, len(rest), len(names),
-                       len(name_bytes), len(geo), len(refs), t.build_day, t.model_hash & 0xFFFFFFFF, 1 if wide else 0)
+    out += struct.pack("<HHiiIIIIIIIIIBBHI", VERSION, HEADER_BYTES, t.i, t.j, n, e_count, len(rest), len(names),
+                       len(name_bytes), len(geo), len(refs), t.build_day, t.model_hash & 0xFFFFFFFF, 1 if wide else 0,
+                       len(CHANNELS), 0, len(t.geoms))
     out += b"\0" * (HEADER_BYTES - len(out))
     for ri, rj in refs:
         out += struct.pack("<HH", ri, rj)
@@ -260,6 +273,14 @@ def write_tile(t: Tile) -> bytes:
     out += name_bytes
     _pad4(out)
     out += geo
+    _pad4(out)
+    for name, scale in CHANNELS:
+        col = []
+        for k in range(len(t.geoms)):
+            v = t.geom_ch[k].get(name) if k < len(t.geom_ch) and t.geom_ch[k] else None
+            col.append(UNKNOWN_U8 if v is None or v != v else max(0, min(254, round(v * scale))))
+        out += bytes(col)
+    _pad4(out)
     return bytes(out)
 
 
@@ -278,8 +299,8 @@ def read_tile(b: bytes) -> dict:
     """v1 bytes -> plain dict (columns as lists): the checks' and tests' reader. The phone uses web/graph_tiles.js."""
     if b[:4] != MAGIC:
         raise ValueError("not a VGR1 tile")
-    (ver, hb, ti, tj, n, e, r, nn, nb, gb, nref, day, mh, layout) = struct.unpack_from("<HHiiIIIIIIIIIB", b, 4)
-    if ver != VERSION:
+    (ver, hb, ti, tj, n, e, r, nn, nb, gb, nref, day, mh, layout, nch, _r, ng) = struct.unpack_from("<HHiiIIIIIIIIIBBHI", b, 4)
+    if ver not in READS:
         raise ValueError(f"tile version {ver}")
     p = hb
     refs = [struct.unpack_from("<HH", b, p + 4 * k) for k in range(nref)]
@@ -321,6 +342,22 @@ def read_tile(b: bytes) -> dict:
     p += nb
     align()
     geo = b[p:p + gb]
+    p += gb
+    align()
+    ch = {}
+    if ver >= 2 and nch:
+        # polyline offsets in order: the edge's polyline index is the one its geom_off starts
+        offs_g, q = [], 0
+        for _ in range(ng):
+            offs_g.append(q)
+            cnt, q = _unvarint(geo, q)
+            for _ in range(2 * cnt):
+                _, q = _unvarint(geo, q)
+        gi = {o: k for k, o in enumerate(offs_g)}
+        for cname, scale in CHANNELS[:nch]:
+            colv = b[p:p + ng]
+            p += ng
+            ch[cname] = [None if colv[gi[goff[k]]] == UNKNOWN_U8 else colv[gi[goff[k]]] / scale for k in range(e)]
     olat, olon = tile_origin(ti, tj)
 
     frm = [0] * e
@@ -350,5 +387,5 @@ def read_tile(b: bytes) -> dict:
             "nodes": {"lat": lat, "lon": lon, "first_edge": first, "flags": nflags},
             "edges": {"to": to, "to_tile": [None if x == 0 else tuple(refs[x - 1]) for x in to_tile], "len_dm": len_dm,
                       "t_ds": t_ds, "quality": quality, "scenery": scenery, "fun": fun, "conf": conf, "flags": flags,
-                      "cls": cls, "speed": speed, "name": name, "geom_off": goff, "h_in": h_in, "h_out": h_out},
+                      "cls": cls, "speed": speed, "name": name, "geom_off": goff, "h_in": h_in, "h_out": h_out, "ch": ch},
             "restrictions": rest, "names": names, "geom": geom}

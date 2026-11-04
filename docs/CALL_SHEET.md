@@ -6,6 +6,14 @@ it says so. Things only you can do are in docs/OWNER_TODO.md.
 
 ## 2026-11-04 (own routing): the scored road network (graph half)
 
+- **Side-street evidence in the tiles (format v2)**, after the router builder found tile-only rankings rated suburban
+  streets too high. Against the live engine on the calibration roads (each sample matched to its tile edge) the tiles
+  read 0.04-0.10 high on suburban roads. Fixed: road density now counts every vehicle way, driveways and car-park
+  lanes too, as Valhalla's graph does (it had counted only the routable, trimmed graph); businesses within 80 m, as the
+  live engine counts them (40 m missed shops behind their car parks); footway=sidewalk lines give `sidewalk`; addresses
+  count. Springdale Rd now 0.31 vs the live engine's 0.30, Pippin 0.37 vs 0.33, W Kemper 0.28 vs 0.28. Pippin Road is
+  low in the live engine too (homes along it): it is reported, not gated. Undo: `DENSITY_KNOTS`, `BUSINESS_M`.
+
 - **Every road is scored once, ahead of time, by the app's own model**: tools/graph_etl/score_edges.js runs
   web/route_engine.js, fun_route.js, dem.js and context_grid.js in node on each edge; the Python side only measures
   (OSM tags, counts, land use, density). No second model to drift. Undo: delete tools/graph_etl and web/data/graph.

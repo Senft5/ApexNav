@@ -23,7 +23,8 @@ for (const f of process.argv.slice(2)) {
   const b = fs.readFileSync(f), t = G.decode(b.buffer.slice(b.byteOffset, b.byteOffset + b.length));
   const arr = (a) => Array.from(a);
   out.push({ tile: t.tile, nodes: { lat: arr(t.nodes.lat), lon: arr(t.nodes.lon), firstEdge: arr(t.nodes.firstEdge), flags: arr(t.nodes.flags) },
-    edges: Object.fromEntries(Object.entries(t.edges).map(([k, v]) => [k, typeof v === 'number' ? v : arr(v)])),
+    edges: Object.fromEntries(Object.entries(t.edges).map(([k, v]) => [k, typeof v === 'number' ? v : k === 'ch'
+      ? Object.fromEntries(Object.entries(v).map(([c, x]) => [c, Array.from(x, (y) => (Number.isNaN(y) ? null : y))])) : arr(v)])),
     restrictions: t.restrictions, names: t.names, geom: Array.from({ length: t.edges.count }, (_, k) => arr(t.geom(k))),
     tileOf: G.tileOf(39.1, -84.5) });
 }
@@ -109,6 +110,30 @@ def test_wide_node_indices_and_quantised_geometry(tmp_path):
     (j,) = js_decode([str(p)])
     assert j["edges"]["to"] == [70000, 0]
     assert j["geom"][1] == pytest.approx([x / 1e6 for pt in g1 for x in pt], abs=1e-9)
+
+
+@needs_node
+def test_v2_road_channels_round_trip(tmp_path):
+    """v2: the road-side evidence per polyline (both directions share it), unknown kept unknown, in both readers."""
+    a, _ = sample_tiles()
+    a.geom_ch = [{"business_per_km": 12.25, "access_per_km": 31, "signals_per_km": 1.5, "sidewalk": 1, "built": 0.8, "density": 7.5},
+                 {"schools_per_km": 0.7, "worship_per_km": 1.05, "sidewalk": None},
+                 {}]
+    p = tmp_path / "381_516.vgr"
+    p.write_bytes(T.write_tile(a))
+    r = T.read_tile(p.read_bytes())
+    ch = r["edges"]["ch"]
+    assert set(ch) == {n for n, _ in T.CHANNELS}
+    # edges 0 and 1 share polyline 0, edge 2 is polyline 1, edge 3 polyline 2
+    assert ch["business_per_km"][:2] == [12.25, 12.25] and ch["access_per_km"][1] == 31 and ch["sidewalk"][0] == 1
+    assert ch["built"][0] == pytest.approx(0.8, abs=0.004) and ch["density"][0] == 7.5
+    assert ch["schools_per_km"][2] == pytest.approx(0.7) and ch["worship_per_km"][2] == pytest.approx(1.05)
+    assert ch["sidewalk"][2] is None and ch["business_per_km"][3] is None and ch["business_per_km"][2] is None
+    (j,) = js_decode([str(p)])
+    for name, _ in T.CHANNELS:
+        want = [float("nan") if v is None else v for v in ch[name]]
+        got = [float("nan") if v is None else v for v in j["edges"]["ch"][name]]
+        assert got == pytest.approx(want, abs=1e-6, nan_ok=True), name
 
 
 @needs_node

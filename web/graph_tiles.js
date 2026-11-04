@@ -13,7 +13,10 @@
 //            Uint8Array (0..254 = 0..1, 255 unknown), fun: Uint16Array (gated corner points x 100, 65535 unknown), conf:
 //            Uint8Array (0..255 = share of the model's weight known), flags: Uint16Array (FLAGS), cls: Uint8Array (0
 //            motorway .. 7 service, 8 track, 9 ferry), speed: Uint8Array (km/h, 0 unknown), name: Uint16Array (0xFFFF none),
-//            geomOff: Uint32Array, hIn, hOut: Uint8Array (bearing over the first / last 60 m, 256ths of a turn, 0 north) },
+//            geomOff: Uint32Array, hIn, hOut: Uint8Array (bearing over the first / last 60 m, 256ths of a turn, 0 north),
+//            ch: { [CHANNELS name]: Float32Array, NaN unknown } (v2: businesses, driveways and side roads, signals, stops,
+//            crossings, calming, schools and churches per km, sidewalk 0/1, built 0..1, density 0..15, buildings and
+//            addresses per km; {} in a v1 tile) },
 //   restrictions: [{ fromEdge, fromTile (packed key), via (local node), toEdge (local edge), only }],
 //   names: [string],
 //   geom(edgeIdx) -> Float64Array [lat0, lon0, lat1, lon1, ...] in degrees, in the edge's direction of travel,
@@ -22,11 +25,14 @@
 // index doesn't list the tile or it can't be had. Unknown stays unknown: a 255 / 65535 is never read as 0.
 (function (root) {
   'use strict';
-  const VERSION = 1, HEADER = 64, TILE_DEG = 0.25, BASE = 'data/graph/v1/', GEOM_Q = 5;   // geometry in 5 µdeg steps
+  const VERSION = 2, READS = [1, 2], HEADER = 64, TILE_DEG = 0.25, BASE = 'data/graph/v1/', GEOM_Q = 5;   // geometry in 5 µdeg steps
   const UNKNOWN_U8 = 255, UNKNOWN_FUN = 0xffff, NO_NAME = 0xffff;
   const FLAGS = { oneway: 1, toll: 2, ferry: 4, unpaved: 8, tunnel: 16, bridge: 32, motorway: 64, ramp: 128, roundabout: 256, private: 512,
     geomRev: 1024, speedEst: 2048, barrier: 4096, destination: 8192 };
   const NODE_FLAGS = { signal: 1, stop: 2, giveWay: 4, barrier: 8, levelCrossing: 16, deadEnd: 32, crossing: 64, calming: 128 };
+  // the road channels a v2 tile carries per edge (tools/graph_etl/tiles.py CHANNELS: name, scale; the file's order)
+  const CHANNELS = [['business_per_km', 4], ['access_per_km', 2], ['signals_per_km', 20], ['stops_per_km', 20], ['crossings_per_km', 10],
+    ['calming_per_km', 20], ['schools_per_km', 20], ['worship_per_km', 20], ['sidewalk', 1], ['built', 254], ['density', 16], ['bldg_per_km', 1], ['addr_per_km', 1]];
   const CLASS = { motorway: 0, trunk: 1, primary: 2, secondary: 3, tertiary: 4, unclassified: 5, residential: 6, service: 7, track: 8, ferry: 9 };
 
   const tileOf = (lat, lon) => ({ i: Math.floor((lon + 180) / TILE_DEG), j: Math.floor((lat + 90) / TILE_DEG) });
@@ -44,11 +50,12 @@
     const b = u8.byteOffset % 4 === 0 ? u8 : u8.slice();
     const dv = new DataView(b.buffer, b.byteOffset, b.byteLength);
     const version = dv.getUint16(4, true);
-    if (version !== VERSION) throw new Error(`graph tile version ${version}`);
+    if (!READS.includes(version)) throw new Error(`graph tile version ${version}`);
     const hb = dv.getUint16(6, true), ti = dv.getInt32(8, true), tj = dv.getInt32(12, true);
     const n = dv.getUint32(16, true), e = dv.getUint32(20, true), r = dv.getUint32(24, true), nn = dv.getUint32(28, true);
     const nb = dv.getUint32(32, true), gb = dv.getUint32(36, true), nref = dv.getUint32(40, true);
     const buildDay = dv.getUint32(44, true), modelHash = dv.getUint32(48, true), wide = dv.getUint8(52) & 1;
+    const nch = version >= 2 ? dv.getUint8(53) : 0, ng = version >= 2 ? dv.getUint32(56, true) : 0;
     let p = hb;
     const refs = [];
     for (let k = 0; k < nref; k++) refs.push(keyOf(dv.getUint16(p + 4 * k, true), dv.getUint16(p + 4 * k + 2, true)));
@@ -82,6 +89,29 @@
     p += nb;
     align();
     const geo = b.subarray(p, p + gb);
+    p += gb;
+    align();
+    // the road channels (v2): one u8 column over the polylines each, expanded here per edge (NaN = unknown)
+    const ch = {};
+    if (nch && ng) {
+      const starts = new Uint32Array(ng);
+      let q = 0;
+      const skip = () => { while (geo[q++] >= 0x80); };
+      const rdc = () => { let v = 0, sh = 0, c; do { c = geo[q++]; v += (c & 0x7f) * 2 ** sh; sh += 7; } while (c >= 0x80); return v; };
+      for (let g = 0; g < ng; g++) { starts[g] = q; const cnt = rdc(); for (let m = 0; m < 2 * cnt; m++) skip(); }
+      const gIdx = new Uint32Array(e);
+      for (let k = 0; k < e; k++) {           // starts is ascending: binary search the edge's polyline
+        let lo = 0, hi = ng - 1; const x = geomOff[k];
+        while (lo < hi) { const mid = (lo + hi + 1) >> 1; if (starts[mid] <= x) lo = mid; else hi = mid - 1; }
+        gIdx[k] = lo;
+      }
+      for (let c = 0; c < Math.min(nch, CHANNELS.length); c++) {
+        const [name, scale] = CHANNELS[c], col = b.subarray(p, p + ng), out = new Float32Array(e);
+        for (let k = 0; k < e; k++) { const v = col[gIdx[k]]; out[k] = v === UNKNOWN_U8 ? NaN : v / scale; }
+        ch[name] = out;
+        p += ng;
+      }
+    }
     const toTile = new Uint32Array(e), from = new Uint32Array(e);
     for (let k = 0; k < e; k++) toTile[k] = toRef[k] ? refs[toRef[k] - 1] : self;
     for (let v = 0; v < n; v++) for (let k = firstEdge[v]; k < firstEdge[v + 1]; k++) from[k] = v;
@@ -105,7 +135,7 @@
     return {
       tile: { i: ti, j: tj, key: self, buildDay, modelHash, refs },
       nodes: { count: n, lat, lon, firstEdge, flags: nflags },
-      edges: { count: e, from, to, toTile, len_dm, t_ds, quality, scenery, fun, conf, flags, cls, speed, name, geomOff, hIn, hOut },
+      edges: { count: e, ch, from, to, toTile, len_dm, t_ds, quality, scenery, fun, conf, flags, cls, speed, name, geomOff, hIn, hOut },
       restrictions, names, geom,
     };
   }
@@ -176,7 +206,7 @@
     return out;
   }
 
-  const api = { VERSION, BASE, TILE_DEG, FLAGS, NODE_FLAGS, CLASS, UNKNOWN_U8, UNKNOWN_FUN, NO_NAME, tileOf, keyOf, unkey, origin, unq8, funPts, decode, index, load, tilesIn, _mem: mem };
+  const api = { VERSION, READS, CHANNELS, BASE, TILE_DEG, FLAGS, NODE_FLAGS, CLASS, UNKNOWN_U8, UNKNOWN_FUN, NO_NAME, tileOf, keyOf, unkey, origin, unq8, funPts, decode, index, load, tilesIn, _mem: mem };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   root.ApexGraphTiles = api;
 })(typeof window !== 'undefined' ? window : globalThis);

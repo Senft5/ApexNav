@@ -795,7 +795,7 @@
     return base + (ev.quality != null ? W.QUALITY * (ev.quality - 50) * ev.qWeight : 0) + ev.sceneryPts + ev.bonusPts - ev.poorCost - ev.penaltyPts + (ev.driverPts || 0);
   }
 
-  const api = { VERSION: 1, QUALITY, SCENERY, PER_KM, SPANS, ALIASES, KIND_ALIASES, SOURCES, W, SPEED, gate, active, moment, channel, samples, evaluate, stats, rank, why,
+  const api = { VERSION: 1, QUALITY, SCENERY, PER_KM, SPANS, ALIASES, KIND_ALIASES, SOURCES, W, SPEED, gate, active, moment, channel, builtEvidence, samples, evaluate, stats, rank, why,
     placeTimes, corridorFor, stageCorridor, stageCorridors, connectorCosting, highwayCosting, rescoreStages, loopValue, ramp, decay };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   root.ApexRouteEngine = api;

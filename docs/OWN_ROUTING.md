@@ -83,6 +83,15 @@ phone's reader); tests/test_graph_tiles.py round-trips through both. What a rout
   65 535 nodes, u16 lengths and times: the ETL splits edges at 6 km; geometry in 5 µdeg steps, its ends put exactly on
   the nodes); `decode` gives the full-width arrays above either way. Not in the graph: unnamed service roads that meet
   no public road, and unnamed dead-end service stubs under 200 m (CALL_SHEET 2026-11-04).
+- **Format v2** (header version 2; `decode` reads v1 and v2): `edges.ch`, the road-side evidence per edge as
+  Float32Arrays (NaN unknown), so the router can rank side streets from the tiles alone: `business_per_km` (within
+  80 m, no fuel or cafes), `access_per_km` (every driveway, service and residential way joining, routable or not),
+  `signals_per_km`, `stops_per_km`, `crossings_per_km`, `calming_per_km`, `schools_per_km`, `worship_per_km` (within
+  150 m), all over the road's own ±500 m; `sidewalk` (the tag, else mapped footway=sidewalk lines within 15 m along
+  40 % of it); `built` (the engine's built evidence 0..1: density, sidewalks, businesses, housing, impervious,
+  addresses, buildings, land use); `density` (Valhalla's 0-15 from road km per km² of every vehicle way);
+  `bldg_per_km`, `addr_per_km`. Stored once per polyline (both directions share it), u8 with the scales in
+  `ApexGraphTiles.CHANNELS` / tiles.py `CHANNELS`. The same values already feed `quality`.
 - Tile i = floor((lon + 180) / 0.25), j = floor((lat + 90) / 0.25). A node lives in the tile its position is in; an edge
   in its from-node's tile. `toTile` is the packed key of the to-node's tile (the tile's own key for a local edge) and
   `to` the node's index there. Incoming edges are not stored: build the reverse adjacency from the loaded tiles.
