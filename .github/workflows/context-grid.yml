@@ -10,7 +10,8 @@ name: Context grid (route data ETL)
 #
 # Runner budget (ubuntu-latest: 4 CPUs, 16 GB RAM, ~14 GB free disk, 6 h per job): the launch region downloads ~3.5 GB
 # (Census blocks 1.8 GB, OpenAddresses statewide files ~0.6 GB, FARS 0.2 GB, plus per-chunk NLCD/flood/HPMS queries and
-# ~12,400 noise-map tiles) and takes ~1-1.5 h cold. The downloads are cached between runs (restored and saved even when a
+# ~12,400 noise-map tiles) and took about 4 h cold on the build machine (8 threads; 10 of 68 bundles in 37 min,
+# 5.7 KB per z12 tile, so about 70 MB in all). A run that hits the limit saves its cache and the next one finishes it. The downloads are cached between runs (restored and saved even when a
 # run fails or times out, so a second run picks up where the first stopped).
 on:
   workflow_dispatch:
