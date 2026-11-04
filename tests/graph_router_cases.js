@@ -325,9 +325,16 @@ const CASES = {
     const none = await Graph.provider.fetch([c], {});
     const viaWorker = await Graph.provider.fetch([c], { graphScore: async (lines) => (await h.handle({ id: 9, type: 'score', lines })).result });
     const biz = viaWorker.g.channels.business_per_km, walk = viaWorker.g.channels.sidewalk;
+    // our own route's per-edge table (route.graph) laid on its corridor on the page, no worker: the same scores
+    const own = p.result.routes[0], oc = Ctx.corridor('o', Own.withCoords({ ...own.route }).coords, {});
+    oc.graph = own.route.graph;
+    const local = await Graph.provider.fetch([oc], {}), remote = await Graph.provider.fetch([{ ...oc, graph: null, id: 'o' }], { graphScore: async (lines) => (await h.handle({ id: 10, type: 'score', lines })).result });
+    const lq = local.o.channels.graph_quality, rq = remote.o.channels.graph_quality;
+    let agree = 0; for (let i = 0; i < lq.length; i++) if (Math.abs(lq[i] - rq[i]) < 1e-6) agree++;
+    const tableAgree = agree / lq.length;
     return { preTiles: pre.result.tiles.length, loadsAfterPreload, loadsAfterPlan: loads, quickSame: JSON.stringify(q.result.route.edges) === JSON.stringify(quickest.edges), quickTiles: q.result.tiles.length,
       known, outside: Array.from(sc.result[1].quality).every((x) => x == null || Number.isNaN(x)), fillQ: sm.quality[5], fillS: sm.scenery[5], fillC: sm.qConf[5], strongQ: sm2.quality[5], status: ch.status, none: none.g.status,
-      roadCh: [Array.from(biz).filter((x) => x === 9).length / biz.length, Array.from(walk).filter((x) => x === 1).length / walk.length] };
+      tableAgree, tableStatus: local.o.status, roadCh: [Array.from(biz).filter((x) => x === 9).length / biz.length, Array.from(walk).filter((x) => x === 1).length / walk.length] };
   },
 
   // the Cincinnati-size synthetic network: 16 tiles, ~150k edges; per query and per full plan

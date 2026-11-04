@@ -671,6 +671,8 @@
    */
   function assemble(v, res, obj, meta = {}) {
     const B = flagBits(), coords = [], names = [], steps = [], turns = [], times = [];
+    let lineM = 0;
+    const gEnd = [], gEdge = [];
     let timeS = 0, distM_ = 0, q = 0, s = 0, sw = 0, f = 0, cf = 0, wsum = 0, junctions = 0, signals = 0;
     const has = { highways: false, tolls: false, ferries: false, unpaved: false };
     let roundabout = null;
@@ -705,7 +707,9 @@
         }
       }
       const pts = cut(geom(v, e), f0, f1);
-      for (let i = coords.length ? 1 : 0; i < pts.length; i++) coords.push(pts[i]);
+      for (let i = coords.length ? 1 : 0; i < pts.length; i++) { if (coords.length) lineM += distM(coords[coords.length - 1][0], coords[coords.length - 1][1], pts[i][0], pts[i][1]); coords.push(pts[i]); }
+      // the tiles' own scores per edge, by where each ends along the line (route_ctx/graph.js reads them on the page)
+      gEnd.push(lineM); gEdge.push(e);
       const m = v.len[e] * share, sec = v.time[e] * share;
       // the first and last edge: their share of the time
       if (k === 0) times.push([pts[0][1], pts[0][0], 0]);
@@ -736,10 +740,38 @@
       objective: meta.a ? 't*(1+a*(1-goodness))' : 'time' };
     return {
       coords, edges: E.map((e) => edgeId(v, e)), edgeIdx: Int32Array.from(E), timeS, distM: distM_, names, why,
-      route: { coords: coords.map(([la, lo]) => [lo, la]), turns, times, steps, names: nameKm, has, timeS, source: 'own' },
+      route: { coords: coords.map(([la, lo]) => [lo, la]), turns, times, steps, names: nameKm, has, timeS, source: 'own', graph: edgeTable(v, gEdge, gEnd) },
     };
   }
 
+  /** The scores route_ctx/graph.js lays on a corridor, per edge of a route (Float32Arrays; `end` metres along its line). */
+  function edgeTable(v, edges, ends) {
+    const n = edges.length, B = v.bits, f = () => new Float32Array(n).fill(NaN);
+    const t = { end: Float32Array.from(ends), quality: f(), scenery: f(), conf: f(), limit: f(), limitEst: f(), cls: f(), toll: f(), bridge: f(), tunnel: f(), signals: f(), ch: {} };
+    for (const k in v.roadCh || {}) t.ch[k] = f();
+    edges.forEach((e, i) => {
+      if (v.quality[e] !== UNKNOWN_U8) { t.quality[i] = v.quality[e] / 254; t.conf[i] = v.conf[e] / 255; }
+      if (v.scenery[e] !== UNKNOWN_U8) t.scenery[i] = v.scenery[e] / 254;
+      if (v.speed[e]) { if (v.flags[e] & B.speedEst) t.limitEst[i] = v.speed[e]; else t.limit[i] = v.speed[e]; }
+      t.cls[i] = v.cls[e]; t.toll[i] = v.flags[e] & B.toll ? 1 : 0; t.bridge[i] = v.flags[e] & B.bridge ? 1 : 0; t.tunnel[i] = v.flags[e] & B.tunnel ? 1 : 0;
+      t.signals[i] = v.to[e] >= 0 && (v.nflags[v.to[e]] & v.nbits.signal) ? 1 : 0;
+      for (const k in t.ch) t.ch[k][i] = v.roadCh[k][e];
+    });
+    return t;
+  }
+  /** Per sample (metres along the line) from an edge table: the scoreLine shape, without the worker. */
+  function fromTable(t, distM) {
+    const n = distM.length, out = { ch: {} }, keys = ['quality', 'scenery', 'conf', 'limit', 'limitEst', 'cls', 'toll', 'bridge', 'tunnel', 'signals'];
+    for (const k of keys) out[k] = new Float32Array(n).fill(NaN);
+    for (const k in t.ch) out.ch[k] = new Float32Array(n).fill(NaN);
+    let j = 0;
+    for (let i = 0; i < n; i++) {
+      while (j < t.end.length - 1 && t.end[j] < distM[i]) j++;
+      for (const k of keys) out[k][i] = t[k][j];
+      for (const k in t.ch) out.ch[k][i] = t.ch[k][j];
+    }
+    return out;
+  }
   /** Share of route b's length on edges route a also uses (0: nothing shared, 1: all of it). */
   function overlap(v, a, b) {
     const set = new Set(a.edgeIdx);
@@ -1195,7 +1227,7 @@
     };
   }
 
-  const api = { VERSION: 1, K, lineTiles, crowdOnto, project, quickest, scoreLine, reach, explore, TILE_DEG, FLAG_BITS, NODE_BITS, CLS, UNKNOWN_U8, UNKNOWN_FUN, NO_NAME, packedKey, nodeCost, LEVELS_COPY, levels, distM, bearing, turnAngle, tileOf, keyOf, view, geom, snap, objective, search,
+  const api = { VERSION: 1, K, lineTiles, edgeTable, fromTable, crowdOnto, project, quickest, scoreLine, reach, explore, TILE_DEG, FLAG_BITS, NODE_BITS, CLS, UNKNOWN_U8, UNKNOWN_FUN, NO_NAME, packedKey, nodeCost, LEVELS_COPY, levels, distM, bearing, turnAngle, tileOf, keyOf, view, geom, snap, objective, search,
     assemble, overlap, sameRoute, tilesFor, loopTiles, plan, loop, indexKeys, covers, host, client, edgeId, twin, turnCost };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   root.ApexGraphRouter = api;

@@ -2303,6 +2303,7 @@
       const departAt = Date.now(), car = routingCar(), pace = state.mode === 'live' && etaPace.factors ? etaPace.factors.open : null;
       const list = cands.filter((c) => (c.corridor = ApexRouteEngine.corridorFor(c, `${prefix}${cands.indexOf(c)}`, { departAt, car, pace })));
       for (const c of list) if (c.match) c.corridor.match = c.match;     // a loop's spur-cut line isn't the router's own: snap it
+      for (const c of list) if (c.route && c.route.graph) c.corridor.graph = c.route.graph;   // ours: the tiles' scores per edge (route_ctx/graph.js)
       try {
         const res = await ApexRouteCtx.run(list.map((c) => c.corridor), { budgetMs, ...(only ? { only } : {}), settings: routeCtxSettings(), providerOpts: { ...routeCtxOpts(), ...(extra || {}) } });
         for (const c of list) { c.ctx = res.byId[c.corridor.id] || null; c.ev = null; }
@@ -3086,7 +3087,7 @@
       const level = funLevel, planT0 = Date.now();      // the early quickest counts from here, not from the router's answer
       // where the plan's time goes (apexDebug.planMarks: [step, ms from the plan's start]; the live harness reads them)
       const mark = (k) => { if (window.apexDebug) (window.apexDebug.planMarks = window.apexDebug.planMarks || []).push([k, Date.now() - planT0]); };
-      if (window.apexDebug) { window.apexDebug.planMarks = []; window.apexDebug.planStartAt = performance.now(); }
+      if (window.apexDebug) { window.apexDebug.planMarks = []; window.apexDebug.optMarks = []; window.apexDebug.planStartAt = performance.now(); }
       const before = opts.early === false ? plannedRoute : null;   // a re-plan of the route on screen: what it's measured against
       // The stages round the whole trip (the map tiles' roads, scored, then the network step) don't need the router's answer:
       // they're found while it routes (live: 2 s of tile scoring after the routes came back)
@@ -3188,6 +3189,7 @@
       const directCtx = (ownUsed ? firstSeen : firstUp).then(() => ctxRun(directCands.slice(), 'route'));
       // ours: the router's own pick's full track is built while the context runs (it is usually the engine's pick too)
       if (ownUsed && directCands[0] && directCands[0] !== quickNow) firstSeen.then(() => buildAhead(directCands[0], id, name, OWN_SIGHT_MS));
+      // ours: the router's own pick's full track is built while the context runs (it is usually the engine's pick too)
       // ours: their light geometry, corners and forecasts while the context runs (the page is idle meanwhile)
       // (after the first route is drawn: that build has the page to itself)
       const ownPrep = ownUsed ? (async () => {
@@ -3382,7 +3384,7 @@
     const OWN_CTX = ['graph', 'context_grid', 'conditions', 'wildlife', 'events', 'hazards-live', 'driver'], OWN_CTX_MS = 500, OWN_WEATHER_GRACE_MS = 0,
       // the ranked route's land cover (sight across bends): waited for this long on our plans, then the cautious 4 m;
       // what's late lands in the tile cache for the next plan
-      OWN_SIGHT_MS = 200;
+      OWN_SIGHT_MS = 100;   // (at most EARLY_SIGHT_MS: not asked; the land cover is loaded for the next plan meanwhile)
     let ownClient = null;
     const ownOn = () => !!(window.ApexOwnRouting && window.ApexGraphRouter && ApexOwnRouting.on());
     // Coverage is answered on the page from index.json (fetched once): asking the worker queued the question behind its
@@ -3426,8 +3428,9 @@
         if (window.apexDebug) window.apexDebug.lastRefine.swapped = true;
       } catch (_) { /* the card stays as it is */ }
     }
-    // Warm tiles (OWN_ROUTING.md §5): the tiles round you are read into the worker soon after start (the app's bundled
-    // files, kept in IndexedDB), and again when you've moved 10 km, so a plan's tiles are normally in memory already
+    // Warm tiles (OWN_ROUTING.md §5): the tile you are in is read into the worker soon after start (the app's bundled
+    // files, kept in IndexedDB), and again when you've moved 10 km; its neighbours load when a plan needs them (never
+    // the 17 MB round you up front: on a first visit that held the first plans' context and drawing up, 2026-11-05)
     let ownWarmAt = null;
     function warmOwnTiles() {
       try {
@@ -3435,7 +3438,7 @@
         if (!p || !Number.isFinite(p.lat) || !ownOn() || localStorage.getItem('apex.ownWarm') === '0' || (ownWarmAt && FunRoute.kmBetween(p, ownWarmAt) < 10)) return;
         ownWarmAt = { lat: p.lat, lon: p.lon };
         const t0 = Date.now();
-        ownRouter().covers([p]).then((ok) => (ok ? ownRouter().preload({ lat: p.lat, lon: p.lon, km: 15 }) : null))
+        ownRouter().covers([p]).then((ok) => (ok ? ownRouter().preload({ lat: p.lat, lon: p.lon, km: 0 }) : null))
           .then((r) => { if (window.apexDebug) window.apexDebug.ownWarm = r ? { ...r, wallMs: Date.now() - t0 } : null; }).catch(() => { ownWarmAt = null; });
       } catch (_) { /* no position or no worker: the first plan loads its tiles */ }
     }
@@ -3461,7 +3464,10 @@
       const ahead = builtAhead.get(c.route.coords);
       if (ahead) builtAhead.delete(c.route.coords);
       const instructed = ownInstructions(c);                  // ours: Valhalla's maneuvers, fetched while the track builds
+      const pm = (k) => { if (window.apexDebug && window.apexDebug.planStartAt != null) (window.apexDebug.optMarks = window.apexDebug.optMarks || []).push([k, Math.round(performance.now() - window.apexDebug.planStartAt)]); };
+      pm(ahead ? 'trackAhead' : 'trackStart');
       const t = (ahead && await ahead) || await trackFromPolyline(c.route.coords, o.id, o.name, sightMs);
+      pm('trackDone');
       // ours: the route goes up with our own maneuvers; Valhalla's replace them on the track when they land
       instructed.then((src) => { if (src === 'valhalla' && t && Array.isArray(t.lat)) { t.steps = stepsOf(t, c.route); t.timeMarks = timeMarksOf(t, c.route); } }).catch(() => {});
       // A pick (not the first build) is dropped if the route was cleared, replaced or driven meanwhile.
@@ -3469,6 +3475,7 @@
       optionOnto(t, c, o);
       routeOptions = Object.assign(o, { picked: i, current: t });
       await buildRoute(null, o.id, o.name, t);
+      pm('drawn');
       return t;
     }
     /** What the ranking says about option c, onto its track t (the card reads these): times, the why line, the engine. */
