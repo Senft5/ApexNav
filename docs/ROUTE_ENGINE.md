@@ -227,6 +227,23 @@ Hard: `closure`, `no_access`, `flood` (value ≥ 1). Penalties: `school`, `churc
 router), `signal`, `junction`, `driveway`, `climb`, `descent`, `bridge`, `tunnel`, `toll`, `roundabout`, `unpaved` (A).
 `fuel` points feed the range check. Other kinds are kept for the card and ignored by the ranking.
 
+### Other providers' names (builder B's OSM providers, mapped as they are)
+
+`route_engine.js` `SOURCES` fills a canonical channel, where it is unknown, from these (first known wins; the router's
+own values come first): `maxspeed_kph` → `speed_limit_kph`; `biz_per_km` → `business_per_km`; `addr_per_km` →
+`address_per_km`; `side_roads_per_km` + `driveway_joins_per_km` → `access_per_km`; `lu_residential` →
+`landuse_residential`; `lu_commercial` + `lu_retail` + `lu_industrial` → `landuse_urban`; `lu_forest` → `forest_share`;
+`lu_farmland` + `lu_open` → `open_country`; `lu_park` → `protected` (all land-use shares only where `lu_mapped` ≥ 0.3:
+unmapped is unknown); `on_bridge`/`in_tunnel` → `bridge`/`tunnel`; `smoothness`, `surface_paved`, `unpaved` →
+`surface`; `hgv` (2 designated) → `truck_route`; `access_level` (≥ 1) → `access_destination`; `guard_rail` →
+`guardrail`; `cycle_route` (> 0) → `cyclist_route`. Their own: `bldg_per_km` (quality, built, e^(−n/40)), `name_age`
+(scenery, weight 0.15, a weak prior). The map tiles' `road_class` (OpenMapTiles codes 1 motorway … 6 minor, 7 service,
+8 track) is translated to the router's codes in the registry before merging (`ApexRouteCtx.TRANSLATE`). Kinds:
+`worship` → `church`, `rail_crossing` → `level_crossing`, `give_way` → `stop`, `calming` → `speed_bump`,
+`access_private` → `no_access` (hard); `gate` (1 each), `buggy` and `curve_sign` points, `access_destination` and
+`cycle_route` spans are costed where the channel isn't known. The registry adopts a provider shim
+(`{ providers: [], register }`, osm_common.js) in either script order.
+
 ### Built by A
 
 `router_edges.js` (priority 10, budget 2.4 s, stages too): one trace_attributes per candidate on its exact line

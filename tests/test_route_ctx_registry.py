@@ -88,3 +88,29 @@ def test_one_budget_merge_and_statuses(r):
 def test_cache_and_keys(r):
     assert r["cacheHit"] == 1 and r["cacheExpired"]
     assert r["keySame"] and r["keyDiff"]
+
+
+ORDER = r"""
+const root = process.argv[1], first = process.argv[2];
+const shim = () => { globalThis.ApexRouteCtx = globalThis.ApexRouteCtx || { providers: [], register(p) { this.providers.push(p); return p; } }; return globalThis.ApexRouteCtx; };
+const p = (id) => ({ id, channels: ['x'], fetch: async () => ({}) });
+let held;
+if (first === 'shim') { held = shim(); held.register(p('early')); }
+const C = require(root + '/web/route_ctx/registry.js');
+if (first !== 'shim') { held = shim(); }
+held.register(p('late'));                       // a provider that kept the shim (or the registry) reference
+globalThis.ApexRouteCtx.register(p('global'));
+held.providers.push(p('pushed'));               // pushed straight onto the array
+process.stdout.write(JSON.stringify({ ids: C.list().map((x) => x.id).sort(), same: globalThis.ApexRouteCtx === C, run: typeof held.run }));
+"""
+
+
+@pytest.mark.parametrize("first", ["shim", "registry"])
+def test_registry_adopts_a_shim_in_either_order(first):
+    """Providers built to the contract may load before registry.js and register on a shim (web/route_ctx/osm_common.js)."""
+    res = subprocess.run([NODE, "-e", ORDER, os.path.abspath("."), first], capture_output=True, text=True, timeout=30)
+    assert res.returncode == 0, res.stderr
+    r = json.loads(res.stdout)
+    want = ["global", "late", "pushed"] + (["early"] if first == "shim" else [])
+    assert r["ids"] == sorted(want), r
+    assert r["same"] and r["run"] == "function"

@@ -123,7 +123,7 @@ const arterial = { speed_limit_kph: 56, road_class: 2, road_use: 0, density: 9, 
 {
   const goodBad = { forest_share: [1, 0], canopy_pct: [80, 0], water_near: [1, 0], creek_follow: [1, 0], open_country: [1, 0], protected: [1, 0], photo_per_km: [10, 0],
     tpi_m: [50, 0], relief_m: [200, 5], foliage: [1, 0], old_road: [1, 0], loved: [1, 0], guardrail: [1, 0], curve_signs_per_km: [4, 0], crowd_camber_deg: [4, -3],
-    divided: [0, 1], surface: [0, 5], sidewalk: [0, 1], truck_route: [0, 1], access_destination: [0, 1], road_class: [4, 6], road_use: [0, 4], built_year: [1900, 2010] };
+    divided: [0, 1], surface: [0, 5], sidewalk: [0, 1], truck_route: [0, 1], access_destination: [0, 1], road_class: [4, 6], road_use: [0, 4], built_year: [1900, 2010], name_age: [1, -1] };
   const wrong = [];
   const extraCh = { canopy_pct: 80 };                 // foliage counts where there are trees
   for (const t of [...E.QUALITY, ...E.SCENERY]) {
@@ -184,6 +184,18 @@ const arterial = { speed_limit_kph: 56, road_class: 2, road_use: 0, density: 9, 
   E.evaluate(fuelRoute, {}); out.fuel = fuelRoute.ev.hard.map((h) => h.kind);
   const fuelOk = cand(straight(40000), 2400, back, { car: { range_km: 30 }, points: [{ atM: 15000, kind: 'fuel' }, { atM: 28000, kind: 'fuel' }] });
   E.evaluate(fuelOk, {}); out.fuelOk = fuelOk.ev.hard.length;
+}
+// 6b. the OSM providers' own names (osm_tiles.js, osm_overpass.js) fill the model's channels
+{
+  const canon = { road_class: 2, density: 9, speed_limit_kph: 56, business_per_km: 30, landuse_urban: 0.8, access_per_km: 30, surface: 1, guardrail: 0 };
+  const osm = { road_class: 2, density: 9, maxspeed_kph: 56, biz_per_km: 30, lu_commercial: 0.5, lu_retail: 0.3, lu_mapped: 1, side_roads_per_km: 10, driveway_joins_per_km: 20, smoothness: 2, guard_rail: 0 };
+  const a = cand(straight(6000), 600, canon), b = cand(straight(6000), 600, osm);
+  E.evaluate(a, {}); E.evaluate(b, {});
+  out.osmNames = [a.ev.quality, b.ev.quality];
+  const unmapped = cand(straight(6000), 600, { ...back, lu_commercial: 0, lu_mapped: 0 }), plain = cand(straight(6000), 600, back);
+  E.evaluate(unmapped, {}); E.evaluate(plain, {});
+  out.unmappedLanduse = [unmapped.ev.quality, plain.ev.quality];
+  out.kindAliases = (() => { const c = cand(wiggly(6000), 700, back, { spans: [{ fromM: 0, toM: 10, kind: 'access_private' }], points: [{ atM: 500, kind: 'rail_crossing' }] }); E.evaluate(c, {}); return [c.ev.hard.map((h) => h.kind), c.ev.penaltyPts]; })();
 }
 // 7. active(): windows, weekly (wrapping midnight), months
 out.active = [E.active(null, DEPART), E.active({ weekly: [{ from: '19:00', to: '07:00' }] }, Date.parse('2026-11-04T23:30:00-05:00')),
@@ -275,6 +287,14 @@ def test_time_dependent_spans_and_points(r):
     assert r["passenger"][0] == 0 and r["passenger"][1] > 0
     assert r["fog"][0] > r["fog"][1] > r["fog"][2] > 0, "valley fog"
 
+
+
+def test_osm_provider_names_fill_the_model(r):
+    a, b = r["osmNames"]
+    assert abs(a - b) < 0.5, r["osmNames"]
+    u, p = r["unmappedLanduse"]
+    assert u == p, "land use where the map has none is unknown, not 'no shops'"
+    assert r["kindAliases"] == [["no_access"], 0.7]
 
 
 def test_hard_constraints(r):

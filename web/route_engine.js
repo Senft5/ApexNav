@@ -59,6 +59,7 @@
     { ch: 'landuse_urban', w: 1.5, g: (v) => 1 - clamp01(v), family: 'business' },    // share commercial / retail / industrial
     { ch: 'landuse_residential', w: 1, g: (v) => 1 - 0.8 * clamp01(v), family: 'built' },
     { ch: 'buildings_per_ha', w: 1, g: decay(3), family: 'built' },
+    { ch: 'bldg_per_km', w: 1, g: decay(40), family: 'built', unless: ['buildings_per_ha'] },        // map tiles: buildings within 60 m
     { ch: 'night_light', w: 1, g: (v) => 1 - clamp01(Math.log1p(Math.max(0, v)) / Math.log1p(50)), family: 'built' },   // VIIRS nW/cm²/sr
     { ch: 'impervious_pct', w: 1, g: ramp([[5, 1], [50, 0]]), family: 'built' },
     { ch: 'address_per_km', w: 1, g: decay(40), family: 'built' },
@@ -88,6 +89,7 @@
     { ch: 'guardrail', w: 0.3, g: yes(0.9, 0.5), family: 'drama' },
     { ch: 'curve_signs_per_km', w: 0.4, g: (v) => 1 - Math.exp(-Math.max(0, v) / 2), family: 'drama' },
     { ch: 'crowd_camber_deg', w: 0.5, g: ramp([[-3, 0], [0, 0.5], [4, 1]]), family: 'crowd' },
+    { ch: 'name_age', w: 0.15, g: (v) => 0.5 + 0.5 * Math.max(-1, Math.min(1, v)), family: 'history' },   // a weak prior from the name
     { ch: 'built_year', w: 0.3, g: ramp([[1900, 1], [1960, 0.6], [2000, 0.2]]), family: 'history' },   // county parcels: an old road's houses
   ];
   /** Per-sample penalty channels: points per km at full strength, `at` = how strong at that time (0–1). */
@@ -129,9 +131,16 @@
     waterfall: { bonus: 1, bonusCap: 3, label: 'a waterfall' },
     tunnel: { bonus: 1.5, bonusCap: 4.5, pref: 'tunnels', label: 'tunnels' },
     resurfaced: { bonusPerKm: 0.3, bonusCap: 3, label: 'fresh asphalt' },
-    camera: { label: 'cameras' },                     // counted on the card; avoided by the router when asked (Avoid → Cameras), never ranked
+    camera: { label: 'cameras' },
+    gate: { each: 1, label: 'gates' },
+    buggy: { each: 0.5, label: 'buggies', unlessChannel: 'buggy' },
+    curve_sign: { bonus: 0.2, bonusCap: 2, label: 'curve signs', unlessChannel: 'curve_signs_per_km' },
+    access_destination: { each: 1, perKm: 2, label: 'destination-only road', unlessChannel: 'access_destination' },
+    cycle_route: { perKm: 0.5, label: 'cyclists', unlessChannel: 'cyclist_route', when: { weekly: [{ days: [0, 6], from: '07:00', to: '11:00' }] } },                     // counted on the card; avoided by the router when asked (Avoid → Cameras), never ranked
   };
   // Channel names other builders may use for the same thing (the integrator's safety net; ROUTE_ENGINE.md is canonical).
+  // Span and point kinds other providers name differently (osm_tiles.js, osm_overpass.js).
+  const KIND_ALIASES = { worship: 'church', rail_crossing: 'level_crossing', give_way: 'stop', calming: 'speed_bump', access_private: 'no_access', old_road_name: null, subdivision_name: null };
   const ALIASES = { businesses_per_km: 'business_per_km', maxspeed_kph: 'speed_limit_kph', viirs: 'night_light', canopy: 'canopy_pct',
     impervious: 'impervious_pct', addresses_per_km: 'address_per_km', photos_per_km: 'photo_per_km', forest: 'forest_share', deer: 'deer_risk' };
 
@@ -184,11 +193,50 @@
 
   // ---- per-sample model ---------------------------------------------------------------------------------------------
   /** A context's channel by canonical name (aliases accepted). */
+  // Other providers' channels that fill a canonical one where it is unknown (first known wins, in this order after the
+  // canonical name itself): the OSM map-feature providers' names (osm_tiles.js, osm_overpass.js) mapped to the model's.
+  // Land-use shares count only where the map has land use at all (lu_mapped ≥ 0.3): unmapped is unknown, not "no shops".
+  const LU = (names) => (ch, i) => (ch.lu_mapped && !(ch.lu_mapped[i] >= 0.3) ? NaN : names.reduce((a, k) => (ch[k] && Number.isFinite(ch[k][i]) ? (Number.isNaN(a) ? 0 : a) + ch[k][i] : a), NaN));
+  const SUM = (names) => (ch, i) => (names.every((k) => ch[k] && Number.isFinite(ch[k][i])) ? names.reduce((a, k) => a + ch[k][i], 0) : NaN);
+  const MAP = (k, f) => (ch, i) => (ch[k] && Number.isFinite(ch[k][i]) ? f(ch[k][i]) : NaN);
+  const SOURCES = {
+    speed_limit_kph: [MAP('maxspeed_kph', (v) => v)],
+    business_per_km: [MAP('biz_per_km', (v) => v)],
+    address_per_km: [MAP('addr_per_km', (v) => v)],
+    access_per_km: [SUM(['side_roads_per_km', 'driveway_joins_per_km'])],
+    landuse_residential: [LU(['lu_residential'])],
+    landuse_urban: [(ch, i) => Math.min(1, LU(['lu_commercial', 'lu_retail', 'lu_industrial'])(ch, i))],
+    forest_share: [LU(['lu_forest'])],
+    open_country: [(ch, i) => Math.min(1, LU(['lu_farmland', 'lu_open'])(ch, i))],
+    protected: [LU(['lu_park'])],
+    bridge: [MAP('on_bridge', (v) => v)],
+    tunnel: [MAP('in_tunnel', (v) => v)],
+    surface: [MAP('smoothness', (v) => (v <= 1 ? 0 : v === 2 ? 1 : v === 3 ? 2 : v === 4 ? 3 : v === 5 ? 4 : 7)), MAP('surface_paved', (v) => (v >= 0.5 ? 1 : 5)), MAP('unpaved', (v) => (v >= 0.5 ? 5 : 1))],
+    truck_route: [MAP('hgv', (v) => (v >= 2 ? 1 : 0))],
+    access_destination: [MAP('access_level', (v) => (v >= 1 ? 1 : 0))],
+    guardrail: [MAP('guard_rail', (v) => v)],
+    cyclist_route: [MAP('cycle_route', (v) => (v > 0 ? 1 : 0))],
+  };
+  /** A context's channel by canonical name: its own values, gaps filled from the aliases and other providers' names. */
   function channel(ctx, name) {
     if (!ctx || !ctx.channels) return null;
-    if (ctx.channels[name]) return ctx.channels[name];
-    for (const [a, b] of Object.entries(ALIASES)) if (b === name && ctx.channels[a]) return ctx.channels[a];
-    return null;
+    const cache = ctx.__canon || (Object.defineProperty(ctx, '__canon', { value: new Map(), enumerable: false }), ctx.__canon);
+    if (cache.has(name)) return cache.get(name);
+    const ch = ctx.channels, own = ch[name] || null;
+    const fills = [...Object.entries(ALIASES).filter(([, b]) => b === name).map(([a]) => MAP(a, (v) => v)), ...(SOURCES[name] || [])];
+    const any = Object.values(ch)[0];
+    let out = own;
+    if (fills.length && any) {
+      const n = any.length, arr = own ? Float32Array.from(own) : new Float32Array(n).fill(NaN);
+      let used = false;
+      for (let i = 0; i < n; i++) {
+        if (Number.isFinite(arr[i])) continue;
+        for (const f of fills) { const v = f(ch, i); if (Number.isFinite(v)) { arr[i] = v; used = true; break; } }
+      }
+      if (used || own) out = arr;
+    }
+    cache.set(name, out);
+    return out;
   }
   /**
    * Per-sample quality, scenery and their confidences (share of the possible weight that was known) for a corridor's
@@ -322,18 +370,18 @@
     const counted = {};
     const spanKm = (sp) => Math.max(0, (sp.toM - sp.fromM) / 1000);
     for (const sp of [...(ctx.spans || []), ...(ctx.points || []).map((p) => ({ ...p, fromM: p.atM, toM: p.atM, point: true }))]) {
-      const rule = SPANS[sp.kind];
+      const kind = sp.kind in KIND_ALIASES ? KIND_ALIASES[sp.kind] : sp.kind, rule = kind && SPANS[kind];
       if (!rule) continue;
       if (rule.unlessChannel && channel(ctx, rule.unlessChannel)) continue;
       if (rule.pref && !prefs[rule.pref]) continue;
       const i = at(c, sp.fromM), when = sp.when || rule.when || null;
       if (!active(when, c.etaAt[i])) continue;
       const hard = typeof rule.hard === 'function' ? rule.hard(sp) : rule.hard;
-      if (hard) { out.hard.push({ kind: sp.kind, label: sp.label || rule.label, atM: sp.fromM }); continue; }
+      if (hard) { out.hard.push({ kind, label: sp.label || rule.label, atM: sp.fromM }); continue; }
       if (!rule.each && !rule.perKm && !rule.bonus && !rule.bonusPerKm) continue;   // known, shown elsewhere, not ranked
       if (rule.bonus || rule.bonusPerKm) {
         const pts = rule.bonus || rule.bonusPerKm * spanKm(sp);
-        counted[sp.kind] = Math.min(rule.bonusCap || Infinity, (counted[sp.kind] || 0) + pts);
+        counted[kind] = Math.min(rule.bonusCap || Infinity, (counted[kind] || 0) + pts);
         continue;
       }
       let pts = (rule.each || 0) + (rule.perKm || 0) * spanKm(sp);
@@ -579,7 +627,7 @@
     return base + (ev.quality != null ? W.QUALITY * (ev.quality - 50) * ev.qWeight : 0) + ev.sceneryPts + ev.bonusPts - ev.poorCost - ev.penaltyPts;
   }
 
-  const api = { VERSION: 1, QUALITY, SCENERY, PER_KM, SPANS, ALIASES, W, SPEED, gate, active, moment, channel, samples, evaluate, stats, rank, why,
+  const api = { VERSION: 1, QUALITY, SCENERY, PER_KM, SPANS, ALIASES, KIND_ALIASES, SOURCES, W, SPEED, gate, active, moment, channel, samples, evaluate, stats, rank, why,
     placeTimes, corridorFor, stageCorridor, stageCorridors, connectorCosting, highwayCosting, rescoreStages, loopValue, ramp, decay };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   root.ApexRouteEngine = api;

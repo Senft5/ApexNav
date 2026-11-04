@@ -25,8 +25,13 @@
     providers.set(p.id, entry);
     return entry;
   }
-  const unregister = (id) => providers.delete(id);
-  const list = () => [...providers.values()].sort((a, b) => a.priority - b.priority || (a.id < b.id ? -1 : 1));
+  const unregister = (id) => { providers.delete(id); if (Array.isArray(shared.providers)) shared.providers = shared.providers.filter((p) => p.id !== id); };
+  // Providers that loaded before this file register on a shim (`{ providers: [], register }`, web/route_ctx/osm_common.js);
+  // the registry adopts that object rather than replacing it, so a provider holding the shim registers here too, in any
+  // script order, and anything pushed onto `providers` directly is picked up when the list is read.
+  const shared = root.ApexRouteCtx && typeof root.ApexRouteCtx === 'object' ? root.ApexRouteCtx : {};
+  const adopt = () => { for (const p of Array.isArray(shared.providers) ? shared.providers : []) if (p && p.id && !providers.has(p.id) && typeof p.fetch === 'function') { try { register(p); } catch (_) { /* a bad shape stays out */ } } };
+  const list = () => { adopt(); return [...providers.values()].sort((a, b) => a.priority - b.priority || (a.id < b.id ? -1 : 1)); };
 
   // ---- corridors --------------------------------------------------------------------------------------------------
   const R = 6371008.8;
@@ -132,10 +137,19 @@
   // ---- running providers ------------------------------------------------------------------------------------------
   const STATUSES = new Set(['ok', 'partial', 'unavailable', 'no-key']);
   /** One provider's answer for one corridor, cleaned: channels the wrong length or type are dropped (never trusted). */
-  function clean(c, r) {
+  // Channels a provider gives under a name it shares with another but in its own codes, translated to the canonical codes
+  // (docs/ROUTE_ENGINE.md) before merging. The map tiles' class (OpenMapTiles: 1 motorway … 6 minor, 7 service, 8 track)
+  // becomes the router's (0 motorway … 6 residential, 7 service).
+  const TRANSLATE = { osm_tiles: { road_class: (v) => ({ 1: 0, 2: 1, 3: 2, 4: 3, 5: 4, 6: 6, 7: 7, 8: 7, 9: 7 }[v] ?? NaN) } };
+  function clean(c, r, id = null) {
     const out = { status: r && STATUSES.has(r.status) ? r.status : 'unavailable', note: r && r.note ? String(r.note) : undefined, channels: {}, spans: [], points: [] };
     if (!r) return out;
-    for (const [k, v] of Object.entries(r.channels || {})) if (v && v.length === c.distM.length && typeof v[Symbol.iterator] === 'function') out.channels[k] = v instanceof Float32Array ? v : Float32Array.from(v, (x) => (x == null ? NaN : x));
+    const tr = (id && TRANSLATE[id]) || {};
+    for (const [k, v] of Object.entries(r.channels || {})) {
+      if (!v || v.length !== c.distM.length || typeof v[Symbol.iterator] !== 'function') continue;
+      const f = tr[k];
+      out.channels[k] = f ? Float32Array.from(v, (x) => (x == null || Number.isNaN(x) ? NaN : f(x))) : v instanceof Float32Array ? v : Float32Array.from(v, (x) => (x == null ? NaN : x));
+    }
     for (const s of r.spans || []) if (s && Number.isFinite(s.fromM) && Number.isFinite(s.toM) && typeof s.kind === 'string') out.spans.push(s);
     for (const p of r.points || []) if (p && Number.isFinite(p.atM) && typeof p.kind === 'string') out.points.push(p);
     return out;
@@ -206,7 +220,7 @@
         ]);
         if (!raw) { status[p.id] = { status: 'unavailable', ms: Date.now() - t, note: 'out of time' }; return; }
         const all = {};
-        for (const c of cs) all[c.id] = clean(c, raw[c.id]);
+        for (const c of cs) all[c.id] = clean(c, raw[c.id], p.id);
         landed.set(p.id, all);
         status[p.id] = { status: overall(cs.map((c) => all[c.id].status)), ms: Date.now() - t };
         if (typeof opts.onUpdate === 'function') { try { opts.onUpdate(result()); } catch (_) { /* a listener's bug is not the provider's */ } }
@@ -223,7 +237,11 @@
     return result();
   }
 
-  const api = { STEP_M, DEFAULT_BUDGET_MS, register, unregister, list, corridor, unionBox, indexAt, unknown, fillSpans, cache, keyOf, run, merge, clean, hav, bearing, cumulative };
-  if (typeof module !== 'undefined' && module.exports) module.exports = api;
-  root.ApexRouteCtx = api;
+  const api = { STEP_M, DEFAULT_BUDGET_MS, TRANSLATE, register, unregister, list, corridor, unionBox, indexAt, unknown, fillSpans, cache, keyOf, run, merge, clean, hav, bearing, cumulative };
+  adopt();
+  if (!Array.isArray(shared.providers)) shared.providers = [];
+  // providers registering later through the shim's own reference land here too (and stay visible on `providers`)
+  Object.assign(shared, api, { register: (p) => { const e = register(p); if (!shared.providers.some((x) => x.id === p.id)) shared.providers.push(p); return e; } });
+  if (typeof module !== 'undefined' && module.exports) module.exports = shared;
+  root.ApexRouteCtx = shared;
 })(typeof window !== 'undefined' ? window : globalThis);
