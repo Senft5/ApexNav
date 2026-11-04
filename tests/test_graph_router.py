@@ -41,6 +41,8 @@ def test_restrictions_oneways_and_uturns():
     assert "Round" in r["ab"] and r["ba"] == ["Oneway"], r            # against the one-way: round; with it: straight
     assert r["uJunction"] == "forbidden" and r["uDeadEnd"] > 0, r     # U-turns only at a dead end
     assert r["left"] > r["right"] > r["straight"] == 0, r             # a left costs more than a right
+    assert r["viaFree"] == ["South", "North", "North Road"], r          # straight on, free
+    assert "Loop" in r["viaNo"] and r["viaNo"][-1] == "North Road" and r["viaNo"][:2] != ["South", "North"], r   # via-way: round
 
 
 def test_level_budgets_alternates_and_determinism():
@@ -90,6 +92,15 @@ def test_fast_path_quick_score_preload_and_the_engine_fill():
     assert r["strongQ"] < 0.4, r
     assert r["status"] == "ok" and r["none"] == "unavailable", r
     assert r["roadCh"][0] > 0.9 and r["roadCh"][1] > 0.9, "v2 road channels reach the engine under its own names: " + str(r["roadCh"])
+
+
+def test_best_roads_nearby_from_our_tiles():
+    """Explore from the tiles: the best-scored edges (quality x corners) chained into stages, timed from here by one
+    search; corners on a side street (quality under 0.45) never make a stage."""
+    r = case("explore")
+    assert r["n"] >= 1 and r["first"] == "Twisty Road" and r["km"] >= 2 and r["good"] > 0, r
+    assert r["timed"] and r["shape"], r
+    assert "Subdivision Lane" not in r["names"], r
 
 
 def test_offline_maneuvers():

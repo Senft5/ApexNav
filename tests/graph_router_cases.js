@@ -71,7 +71,14 @@ const CASES = {
     const uJunction = R.turnCost(v, gid(S, c), gid(c, S), obj), uDeadEnd = R.turnCost(v, gid(S, S2), gid(S2, S), obj);
     // a trip from the dead-end street's far side back: it has to turn at the dead end, not mid-street
     const left = R.turnCost(v, gid(S, c), gid(c, W), obj), right = R.turnCost(v, gid(S, c), gid(c, E), obj), straight = R.turnCost(v, gid(S, c), gid(c, N), obj);
-    return { free, noLeft, onlyStraight, ab, ba, uJunction: uJunction === Infinity ? 'forbidden' : uJunction, uDeadEnd, left, right, straight };
+    // a via-way rule: no straight on from South through the North arm to North Road beyond; the way round is the Loop
+    const nodesV = nodes.concat([at(C[0] + 2 * d, C[1])]), N2 = nodesV.length - 1, edgesV = edges.slice();
+    two(edgesV, N, N2, { ...st, name: 'North Road', t: 30 });
+    const ixV = (a, b) => edgesV.findIndex((x) => x.from === a && x.to === b);
+    const viaRoute = (rv) => { const vv = R.view(H.tiles(nodesV, edgesV, [], rv).tiles);
+      return R.plan(vv, { from: { lat: C[0] - 1.5 * d, lon: C[1] }, to: { lat: C[0] + 1.6 * d, lon: C[1] }, level: 'quick' }).quick.names.map((x) => x.name); };
+    const viaFree = viaRoute([]), viaNo = viaRoute([{ from: ixV(S, c), via: [ixV(c, N)], to: ixV(N, N2) }]);
+    return { free, noLeft, onlyStraight, ab, ba, viaFree, viaNo, uJunction: uJunction === Infinity ? 'forbidden' : uJunction, uDeadEnd, left, right, straight };
   },
 
   // the level budgets (fun_route.js LEVELS), alternates 30 % different, and the same answer every time
@@ -271,6 +278,20 @@ const CASES = {
       online, onlineSteps: onlineRoute.steps.map((s) => s.street), bodies: bodies.length, shapeMatch: bodies[0].shape_match, sameLine: back.length === c.route.coords.length && Math.abs(back[5][0] - c.route.coords[5][0]) < 2e-6,
       offline, offlineSteps: offlineRoute.steps.length === c.route.steps.length, slow,
       clock: [same, scaled, other], onFlags: [Own.on({ flags, storage: store(null), router: R }), Own.on({ flags: { on: (n, d) => d }, storage: store('0'), router: R }), Own.on({ flags: { on: (n, d) => d }, storage: store(null), router: R })] };
+  },
+
+  // Best roads nearby from our tiles: the twisty good road is the first stage, timed from here; the side streets aren't
+  explore() {
+    const g = H.grid({ seed: 6, nx: 12, ny: 12, stepDeg: 0.004, lat0: 39.15, lon0: -84.62 });
+    // make the grid plain (no corners on good road), then one road twisty and good along row 6
+    for (const e of g.edges) { e.fun = 0; e.quality = 0.5; }
+    for (const e of g.edges) if (e.name === 'Row 6') { e.fun = 3; e.quality = 0.85; e.name = 'Twisty Road'; }
+    for (const e of g.edges) if (e.name === 'Col 3') { e.fun = 3; e.quality = 0.2; e.name = 'Subdivision Lane'; }
+    const v = R.view(H.tiles(g.nodes, g.edges).tiles);
+    const res = R.explore(v, { start: { lat: 39.152, lon: -84.618 }, maxKm: 10, maxS: 1800 });
+    const s0 = res.stages[0];
+    return { n: res.stages.length, first: s0 && s0.name, km: s0 && s0.km, good: s0 && s0.good, timed: s0 && (Number.isFinite(s0.aS) || Number.isFinite(s0.bS)),
+      shape: s0 && s0.lat.length === s0.lon.length && s0.lat.length > 10, names: res.stages.map((x) => x.name), ms: res.ms };
   },
 
   // the fast path: our quickest alone, the tiles' scores along any line, the preload, one view reused

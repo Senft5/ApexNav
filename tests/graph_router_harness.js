@@ -18,7 +18,7 @@ const q8 = (v) => (v == null ? 255 : Math.max(0, Math.min(254, Math.round(v * 25
  * points) }]; restrictions: [{ from, via, to, only }] in edge and node indices. Returns the decoded tiles and where each
  * input node and edge went ([key, local]).
  */
-function tiles(nodes, edges, restrictions = []) {
+function tiles(nodes, edges, restrictions = [], restrictionsVia = []) {
   const key = (p) => { const t = R.tileOf(p.lat, p.lon); return `${t.i}_${t.j}`; };
   const byTile = new Map();
   nodes.forEach((p, n) => { const k = key(p); if (!byTile.has(k)) byTile.set(k, { nodes: [] }); byTile.get(k).nodes.push(n); });
@@ -73,6 +73,14 @@ function tiles(nodes, edges, restrictions = []) {
     if (kt !== kv) continue;                                   // the to-edge leaves the via node: always its tile
     const [fi, fj] = kf.split('_').map(Number);
     out.get(kv).restrictions.push({ fromEdge: lf, fromTile: packed(fi, fj), via: lv, toEdge: lt, only: !!r.only });
+  }
+  // via-way rules (v3 tiles' restrictionsVia), in the tile of the first via edge, tile keys on the parts elsewhere
+  for (const r of restrictionsVia) {
+    const parts = [r.from, ...r.via, r.to].map((ix) => edgeAt.get(ix)), home = parts[1][0];
+    const key = (k) => (k === home ? undefined : packed(...k.split('_').map(Number)));
+    const t = out.get(home);
+    (t.restrictionsVia = t.restrictionsVia || []).push({ from: parts[0][1], fromTile: key(parts[0][0]), via: parts.slice(1, -1).map((x) => x[1]),
+      viaTile: parts.slice(1, -1).map((x) => key(x[0])), to: parts[parts.length - 1][1], toTile: key(parts[parts.length - 1][0]), only: !!r.only });
   }
   return { tiles: [...out.values()], nodeAt, edgeAt };
 }
