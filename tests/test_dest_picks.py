@@ -159,8 +159,9 @@ def test_the_card_glue():
     """cockpit.js optionOnto: the pick's why line carries the over-line when another option on the card dominates it, and
     the no-great-roads line when a Fun or Long way pick is the quickest; ownRefine names a route the wider search found."""
     src = (ROOT / "web" / "cockpit.js").read_text()
-    body = src[src.index("function optionOnto(t, c, o)"):][:2600]
-    assert "FunRoute.dominates(x, c)" in body and "ApexRouteEngine.whyOver(c, rival)" in body, body
+    body = src[src.index("function optionOnto(t, c, o)"):][:3200]
+    assert "x.t !== c.t && FunRoute.dominates(x, c)" in body and "ApexRouteEngine.whyOver(c, rival)" in body, body
+    assert "o.picks && o.picks[o.level]" in body, "the level cards: your level's pick is the one that explains itself"
     assert "ApexRouteEngine.whyQuickest(c, o.quickest, o.level)" in body
     assert re.search(r"why: \[\(engineWhy && engineWhy\.text\) \|\| \(quickLine && quickLine\.text\)", body)
     assert "added.has(best.t) ? 'Found a better way'" in src
