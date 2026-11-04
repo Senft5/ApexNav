@@ -95,6 +95,14 @@ jobs:
           path: .graph_cache/osm
           key: graph-osm-${{ needs.download.outputs.week }}
           fail-on-cache-miss: true
+      - name: The region's context grid (graph-data ctx/v1), else Cincinnati's
+        run: |
+          if git fetch -q --depth 1 origin graph-data && git cat-file -e FETCH_HEAD:ctx/v1/index.json 2>/dev/null; then
+            mkdir -p "$WORK/ctx_dl" && git archive FETCH_HEAD ctx | tar -x -C "$WORK/ctx_dl"
+            echo "CTX_DIR=$WORK/ctx_dl/ctx/v1" >> "$GITHUB_ENV"
+          else
+            echo "CTX_DIR=${{ github.workspace }}/web/data/ctx/v1" >> "$GITHUB_ENV"
+          fi
       - name: Merge and cut the band's blocks
         run: |
           mkdir -p "$WORK/blocks"
@@ -110,7 +118,7 @@ jobs:
             free -m | head -2
             python -m tools.graph_etl.build --pbf "$WORK/blocks/$name.osm.pbf" --tiles="$box" --out "out/$name/v1" \
               --work "$WORK/w_$name" --dem-cache "$WORK/dem" --source "Geofabrik ohio, kentucky, indiana (merged)" \
-              --build "${{ needs.download.outputs.week }}"
+              --build "${{ needs.download.outputs.week }}" --ctx "$CTX_DIR"
             rm -rf "$WORK/w_$name" "$WORK/blocks/$name.osm.pbf"
             echo "::endgroup::"
           done < "$WORK/blocks.txt"
@@ -146,31 +154,29 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          set -e
-          mkdir data && cd data
-          git init -q
+          n=$(python3 -c "import json; print(json.load(open('merged/v1/index.json'))['tile_count'])")
+          mb=$(python3 -c "import json; print(round(json.load(open('merged/v1/index.json'))['bytes']/1e6, 1))")
+          bash tools/graph_etl/publish_data.sh merged/v1 v1 "graph region: $(date -u +%F) ($n tiles, $mb MB)"
+          echo "graph-data v1: $n tiles, $mb MB" >> "$GITHUB_STEP_SUMMARY"
+      # the tiles shipped in the app (Cincinnati) cut from this same build, so the two never diverge
+      - name: The bundled Cincinnati tiles from this build
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REF: ${{ github.ref_name }}
+        run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git remote add origin "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
-          if git ls-remote --exit-code --heads origin graph-data >/dev/null; then
-            git fetch -q --depth 1 origin graph-data
-            git checkout -q -b graph-data FETCH_HEAD
-          else
-            git checkout -q --orphan graph-data
-          fi
-          rm -rf v1
-          cp -r ../merged/v1 v1
-          cat > README.md <<'EOF'
-          # graph-data
-
-          Vetta's scored road network for Ohio, Kentucky and Indiana (docs/OWN_ROUTING.md on main): v1/<i>_<j>.vgr tiles
-          (format: tools/graph_etl/tiles.py) and v1/index.json. Built by .github/workflows/graph-region.yml; served to
-          the app by the Worker at /api/graph/v1/. Road data (c) OpenStreetMap contributors, ODbL 1.0: these tiles are a
-          derived database offered under the same licence. Elevation: Mapzen Terrain Tiles.
-          EOF
-          git add -A
-          n=$(python3 -c "import json; print(json.load(open('v1/index.json'))['tile_count'])")
-          mb=$(python3 -c "import json; print(round(json.load(open('v1/index.json'))['bytes']/1e6, 1))")
-          git commit -q -m "graph region: $(date -u +%F) ($n tiles, $mb MB)" || { echo "no change"; exit 0; }
-          git push -q origin graph-data
-          echo "graph-data: $n tiles, $mb MB" >> "$GITHUB_STEP_SUMMARY"
+          python -m tools.graph_etl.bundle merged/v1 web/data/graph/v1 | tee -a "$GITHUB_STEP_SUMMARY"
+          python -m tools.graph_etl.check web/data/graph/v1 > web/data/graph/v1/CHECK.txt || true
+          git add web/data/graph/v1
+          if git diff --cached --quiet; then echo "bundle unchanged"; exit 0; fi
+          build=$(python3 -c "import json; print(json.load(open('web/data/graph/v1/index.json'))['build'])")
+          git commit -q -m "graph tiles: the bundled Cincinnati set from region build $build"
+          # never main: on main the bundle goes to its own branch for a PR
+          target="$REF"; [ "$REF" = "main" ] && target="claude/graph-bundle-$build"
+          for k in 1 2 3; do
+            if [ "$target" = "$REF" ]; then git pull --rebase -q origin "$REF" || true; fi
+            git push -q origin "HEAD:refs/heads/$target" && { echo "bundle committed to $target" >> "$GITHUB_STEP_SUMMARY"; exit 0; }
+            sleep 10
+          done
+          exit 1

@@ -116,6 +116,9 @@ phone's reader); tests/test_graph_tiles.py round-trips through both. What a rout
 - **Format v3** adds the via-way restriction table (`restrictionsVia: [{ from, fromTile, via: [edges], viaTiles, to,
   toTile, only }]`, every index in its own tile, keys packed); readers open v1, v2 and v3. A via-way restriction whose
   via way isn't drivable (a motorway's emergency crossover) is counted in `stats`, nothing to apply.
+- **The shipped set is the region build's** (tools/graph_etl/bundle.py after every region build), so it is used first.
+- **The context grid region-wide**: tools/ctx_etl `--preset region` in six shards (ctx-region.yml) on graph-data
+  `ctx/v1/`, served by /api/ctx/v1/ (KV first, then the branch); the graph's band jobs score with it when present.
 - **Where tiles come from** (`ApexGraphTiles.load`): memory, IndexedDB, then the shipped Cincinnati tiles
   (data/graph/v1) or the region's (`<api>/api/graph/v1/`); `index()` is the union of both indexes (the region's asked
   once a day, kept for offline). Every tile has a `build` id (the extract's week + the model hash) and the shipped copy is

@@ -283,3 +283,16 @@ def test_shipped_tiles_decode_and_agree():
         olat, olon = T.tile_origin(r["i"], r["j"])
         assert all(olat <= la < olat + 250000 for la in r["nodes"]["lat"])
         assert all(olon <= lo < olon + 250000 for lo in r["nodes"]["lon"])
+
+
+@pytest.mark.skipif(not os.path.exists(os.path.join(SHIPPED, "index.json")), reason="no shipped graph tiles")
+def test_shipped_tiles_are_one_region_build(tmp_path):
+    """The shipped Cincinnati set is cut from a region build (tools/graph_etl/bundle.py): it names that build, so the
+    phone uses it first; bundle() cuts the same set again from a region directory."""
+    from tools.graph_etl import bundle
+    ix = json.load(open(os.path.join(SHIPPED, "index.json")))
+    assert ix.get("build") and ix["tile_count"] == len(ix["tiles"]) == 16
+    assert sorted(f[:-4] for f in os.listdir(SHIPPED) if f.endswith(".vgr")) == sorted(ix["tiles"])
+    assert sum(os.path.getsize(os.path.join(SHIPPED, f"{k}.vgr")) for k in ix["tiles"]) <= 20e6
+    again = bundle.bundle(SHIPPED, str(tmp_path / "b"))
+    assert again["build"] == ix["build"] and sorted(again["tiles"]) == sorted(ix["tiles"])

@@ -395,6 +395,16 @@ def via_way(raw, chains, edge_index, node_tile, tiles, by_end, max_steps=8):
     return applied, skipped, moot
 
 
+def ctx_tag(ctx_dir):
+    """The context grid the scores used, in the build id: '' for the bundles shipped in the app (web/data/ctx/v1), else
+    '-g' and 6 hex of its index (the region's from the graph-data branch), so a rescore with new grid data is a new build."""
+    import hashlib
+    p = os.path.join(ctx_dir or "", "index.json")
+    if not ctx_dir or not os.path.exists(p) or os.path.samefile(ctx_dir, os.path.join(ROOT, "web", "data", "ctx", "v1")):
+        return ""
+    return "-g" + hashlib.sha1(open(p, "rb").read()).hexdigest()[:6]
+
+
 def run_scorer(records_path, scores_path, dem_cache, ctx_dir):
     cmd = ["node", os.path.join(ROOT, "tools", "graph_etl", "score_edges.js"), "--in", records_path, "--out", scores_path]
     if dem_cache:
@@ -473,7 +483,7 @@ def main(argv=None):
     mh = int(meta.get("model", "0")[:8] or "0", 16)
     tiles, rstats = assemble(raw, g, scores, keep, day, mh)
     index = {"version": T.VERSION, "format": "VGR1 (tools/graph_etl/tiles.py)", "built": today.isoformat(),
-             "build": f"{a.build or today.isoformat()}-{(meta.get('model') or '0')[:8]}",
+             "build": f"{a.build or today.isoformat()}-{(meta.get('model') or '0')[:8]}{ctx_tag(a.ctx)}",
              "osm": raw.timestamp, "source": a.source, "model": meta.get("model"), "model_files": meta.get("files"),
              "tile_deg": T.TILE_DEG, "bbox": [w, s, e, n], "tiles": {}, "stats": rstats,
              "licence": "Road data (c) OpenStreetMap contributors, ODbL 1.0; elevation Mapzen Terrain Tiles; context grid: see web/data/ctx/v1"}

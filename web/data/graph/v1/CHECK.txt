@@ -8,20 +8,20 @@
 381_518:   0.38 MB     9155 edges     3577 nodes  31 restrictions
 382_515:   0.39 MB     8356 edges     3729 nodes  12 restrictions
 382_516:   2.63 MB    60784 edges    26408 nodes  871 restrictions
-382_517:   2.44 MB    56070 edges    25551 nodes  784 restrictions
+382_517:   2.45 MB    56070 edges    25551 nodes  784 restrictions
 382_518:   1.10 MB    26010 edges    10573 nodes  203 restrictions
 383_515:   0.25 MB     5406 edges     2289 nodes  2 restrictions
 383_516:   0.67 MB    15132 edges     6801 nodes  69 restrictions
 383_517:   0.62 MB    14156 edges     6240 nodes  123 restrictions
-383_518:   2.53 MB    58674 edges    24309 nodes  501 restrictions
+383_518:   2.53 MB    58674 edges    24309 nodes  503 restrictions
 total: 17.44 MB, 400913 edges, 173598 nodes, 16 tiles; model 95960e6d3407
 
 road | km | quality | scenery | fun/km | class | limit | km/h | check
-Colerain Avenue | 44.73 | 0.221 | 0.386 | 0.46 | 2 | 56 | 50.5 | ok: low quality (< 0.40)
-Springdale Road (east of -84.62) | 18.33 | 0.323 | 0.386 | 0.47 | 4 | 56 | 53.3 | ok: low quality (< 0.40): suburban
+Colerain Avenue | 44.73 | 0.222 | 0.386 | 0.47 | 2 | 56 | 50.5 | ok: low quality (< 0.40)
+Springdale Road (east of -84.62) | 18.33 | 0.323 | 0.386 | 0.47 | 4 | 56 | 53.4 | ok: low quality (< 0.40): suburban
 Hamilton Avenue | 37.0 | 0.205 | 0.35 | 0.04 | 2 | 72 | 53.4 | ok: low quality (< 0.40): suburban
-Pippin Road | 22.48 | 0.333 | 0.354 | 0.17 | 4 | 56 | 54.6 | ok: reported (the live engine: 0.33)
-Blue Rock Road (north of I-275) | 15.3 | 0.678 | 0.531 | 0.52 | 3 | 80 | 73.5 | ok: high quality (>= 0.55)
-East Miami River Road | 48.94 | 0.716 | 0.536 | 0.98 | 4 | 72 | 67.2 | ok: high quality (>= 0.55)
+Pippin Road | 22.48 | 0.328 | 0.354 | 0.17 | 4 | 56 | 54.2 | ok: reported (the live engine: 0.33)
+Blue Rock Road (north of I-275) | 15.3 | 0.676 | 0.531 | 0.52 | 3 | 80 | 73.2 | ok: high quality (>= 0.55)
+East Miami River Road | 48.94 | 0.715 | 0.536 | 0.98 | 4 | 72 | 67.2 | ok: high quality (>= 0.55)
 Lees Creek Road | 7.68 | 0.578 | 0.474 | 1.92 | 4 | 56 | 53.8 | ok: high quality (>= 0.55)
 I-275 (Circle Freeway) | 257.21 | 0.824 | 0.394 | 0.0 | 0 | 105 | 109.4 | ok: motorway at speed (class 0, >= 85 km/h)

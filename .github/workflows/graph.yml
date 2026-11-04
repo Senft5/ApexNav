@@ -4,7 +4,9 @@ name: Graph tiles (own routing ETL)
 # container can't reach Geofabrik; runners can), merged with osmium-tool, turned into the drivable graph, every edge
 # scored by web/route_engine.js itself (tools/graph_etl/score_edges.js, node) and packed as v1 tiles.
 #
-# - push to claude/own-routing-graph touching tools/graph_etl/** or this file, or a manual run: the Cincinnati area
+# Since 2026-11-04 every build is the region's (graph-region.yml): the Cincinnati tiles shipped in the app are cut from
+# it (tools/graph_etl/bundle.py), so the shipped copy and the region can never be two builds. Kept as the entry point.
+# Was: push to claude/own-routing-graph touching tools/graph_etl/** or this file, or a manual run: the Cincinnati area
 #   (the 16 tiles of 0.25 degrees covering lat 38.75-39.75, lon -85.0 to -84.0: the test cases' lat 38.9-39.6, lon -85.0
 #   to -84.1 and the rest of those tiles), committed back to the branch under web/data/graph/v1/ ("graph tiles: <date>").
 # - manual run with "region": all of OH+KY+IN (.github/workflows/graph-region.yml), committed to the `graph-data`
@@ -38,104 +40,5 @@ env:
   REGION_TILES: "-89.75,36.5,-80.5,42.5"
 
 jobs:
-  build:
-    if: ${{ !inputs.region }}
-    runs-on: ubuntu-latest
-    timeout-minutes: 330
-    env:
-      CACHE: ${{ github.workspace }}/.graph_cache
-      WORK: /home/runner/graph_work
-    steps:
-      - uses: actions/checkout@v4
-      - name: Free disk
-        run: |
-          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL || true
-          df -h / && free -g
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
-      - uses: actions/setup-node@v4
-        with:
-          node-version: "22"
-      - name: Tools
-        run: |
-          sudo apt-get update -qq && sudo apt-get install -y -qq osmium-tool
-          pip install -r tools/graph_etl/requirements.txt pytest
-          osmium --version | head -1
-      - name: Week (cache key)
-        id: week
-        run: echo "w=$(date -u +%G-%V)" >> "$GITHUB_OUTPUT"
-      - name: Restore the download cache
-        uses: actions/cache/restore@v4
-        with:
-          path: .graph_cache/osm
-          key: graph-osm-${{ steps.week.outputs.w }}-${{ github.run_id }}
-          restore-keys: |
-            graph-osm-${{ steps.week.outputs.w }}-
-            graph-osm-
-      - name: Download the Geofabrik extracts
-        run: |
-          mkdir -p "$CACHE/osm" "$CACHE/dem"
-          wk="${{ steps.week.outputs.w }}"
-          for s in $STATES; do
-            f="$CACHE/osm/$s-$wk.osm.pbf"
-            if [ ! -s "$f" ]; then
-              rm -f "$CACHE"/osm/$s-*.osm.pbf
-              curl -fSL --retry 5 --retry-delay 10 -o "$f.part" "https://download.geofabrik.de/north-america/us/$s-latest.osm.pbf"
-              mv "$f.part" "$f"
-            fi
-            ls -la "$f"
-          done
-      - name: Merge
-        run: |
-          wk="${{ steps.week.outputs.w }}"
-          mkdir -p "$WORK"
-          osmium merge --overwrite -o "$WORK/region.osm.pbf" $(for s in $STATES; do echo "$CACHE/osm/$s-$wk.osm.pbf"; done)
-          osmium fileinfo "$WORK/region.osm.pbf" | head -20
-      - name: Save the download cache
-        if: always()
-        uses: actions/cache/save@v4
-        with:
-          path: .graph_cache/osm
-          key: graph-osm-${{ steps.week.outputs.w }}-${{ github.run_id }}
-
-      # ---- Cincinnati: committed to the branch -------------------------------------------------------------------
-      - name: Build Cincinnati
-        if: ${{ !inputs.region }}
-        run: |
-          osmium extract --overwrite -s smart -b "$CINCY_CLIP" -o "$WORK/cincy.osm.pbf" "$WORK/region.osm.pbf"
-          rm -rf web/data/graph/v1
-          python -m tools.graph_etl.build --pbf "$WORK/cincy.osm.pbf" --tiles="$CINCY_TILES" --out web/data/graph/v1 \
-            --work "$WORK/cincy" --dem-cache "$CACHE/dem" --source "Geofabrik ohio, kentucky, indiana (merged)" \
-            --build "${{ steps.week.outputs.w }}"
-      - name: Check the tiles
-        if: ${{ !inputs.region }}
-        run: |
-          python -m tools.graph_etl.check web/data/graph/v1 --json "$WORK/check.json" | tee "$WORK/check.txt" || echo "::warning::a spot check failed (see the table)"
-          { echo '```'; cat "$WORK/check.txt"; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
-          python -m pytest tests/test_graph_tiles.py -q
-      - name: Commit the tiles to the branch
-        if: ${{ !inputs.region && github.ref == 'refs/heads/claude/own-routing-graph' }}
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          cp "$WORK/check.txt" web/data/graph/v1/CHECK.txt
-          git add web/data/graph/v1
-          if git diff --cached --quiet; then echo "no change"; exit 0; fi
-          git commit -q -m "graph tiles: $(date -u +%F)"
-          for k in 1 2 3; do
-            git pull --rebase -q origin claude/own-routing-graph && git push -q origin HEAD:claude/own-routing-graph && exit 0
-            sleep 10
-          done
-          exit 1
-      - uses: actions/upload-artifact@v4
-        if: ${{ !inputs.region }}
-        with:
-          name: graph-cincinnati
-          path: web/data/graph/v1
-          retention-days: 14
-
-
   region:
-    if: ${{ inputs.region }}
     uses: ./.github/workflows/graph-region.yml

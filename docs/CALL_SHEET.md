@@ -61,6 +61,14 @@ until the Cincinnati tiles ship: where no tiles cover a trip, planning is exactl
 
 ## 2026-11-04 (own routing): the region on the free tier
 
+- **The shipped Cincinnati tiles are cut from the region build** (tools/graph_etl/bundle.py, run by every region
+  build, committed to the triggering branch, or to `claude/graph-bundle-<build>` for a PR when that is main), so the
+  phone uses them first and offline works from first launch. graph.yml no longer builds Cincinnati on its own. Undo:
+  the bundle step in graph-region.yml.
+- **The context grid for OH+KY+IN is on the graph-data branch too** (ctx/v1, .github/workflows/ctx-region.yml, six
+  shards), and /api/ctx/v1/ reads KV first, then that branch. The graph build scores with it when it is there; the
+  build id says which grid (`-g<hash>`), so a rescore is a new build.
+
 - **The OH+KY+IN road network is hosted on a `graph-data` branch of this repository**, relayed by the Worker at
   /api/graph/v1/ from raw.githubusercontent.com behind the edge cache (no R2, no KV, no secrets: the owner wants no new
   costs). Each rebuild is a new commit on that branch (the repository grows by the region's size each time; old builds
