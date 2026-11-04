@@ -16,23 +16,27 @@ Layout (little-endian; every section starts on a 4-byte boundary; counts from th
      28  u32 names                  32  u32 name bytes          36  u32 geometry bytes
      40  u32 tile refs              44  u32 build day (days since 1970-01-01, UTC)
      48  u32 model hash (first 8 hex digits of the route_engine.js weights hash, as a number)
-     52  12 bytes reserved (0)
+     52  u8 layout flags (bit 0: `to` is u32, else u16)
+     53  11 bytes reserved (0)
     tile refs     tile_refs x (u16 i, u16 j): the other tiles edges lead to; edge to_tile k >= 1 is ref k - 1
-    nodes         i32 lat[n], i32 lon[n] (microdegrees), u32 first_edge[n + 1] (CSR: node v's edges are
+    nodes         u16 lat[n], u16 lon[n] (GEOM_Q microdegree steps from the tile's south-west corner: 0.25 degree is
+                  50 000 steps; readers give microdegrees), u32 first_edge[n + 1] (CSR: node v's edges are
                   first_edge[v] .. first_edge[v + 1] - 1), u8 node_flags[n]
-    edges         u32 to[e], u32 len_dm[e], u32 t_ds[e], u32 geom_off[e],
+    edges         u32 geom_off[e], (u32 if layout bit 0 else u16) to[e], u16 len_dm[e], u16 t_ds[e],
                   u16 fun[e], u16 flags[e], u16 name[e],
                   u8 quality[e], u8 scenery[e], u8 conf[e], u8 cls[e], u8 speed[e], u8 to_tile[e], u8 h_in[e], u8 h_out[e]
     restrictions  r x 16 bytes: u32 from_edge, u32 via (node, this tile), u32 to_edge (this tile), u8 from_tile (0 this,
                   k ref k - 1), u8 kind (0 no_*, 1 only_*), u16 reserved
     names         u32 offsets[names + 1] into the UTF-8 bytes that follow (name 0xFFFF on an edge = none)
-    geometry      per polyline: varint count, then count x (zigzag varint dlat, zigzag varint dlon) in microdegrees; the
-                  first point is relative to the tile's south-west corner, the rest to the point before. An edge with flag
+    geometry      per polyline: varint count, then count x (zigzag varint dlat, zigzag varint dlon) in units of GEOM_Q
+                  microdegrees (about 0.5 m); the first point is relative to the tile's south-west corner, the rest to
+                  the point before. Readers put the end points exactly on their nodes (the from node always, the to
+                  node when it is in this tile). An edge with flag
                   GEOM_REV reads its polyline backwards (both directions of a two-way road share one).
 
 Values: quality, scenery 0..254 = 0..1 (255 unknown); conf 0..255 = 0..1 (the share of the model's weight known; 0 is
-"nothing known", never a guess); fun u16 = gated corner points x 100 (65535 unknown); len_dm decimetres; t_ds
-deciseconds; speed km/h (0 unknown; flag SPEED_EST = a class estimate, not posted); cls 0 motorway, 1 trunk, 2 primary,
+"nothing known", never a guess); fun u16 = gated corner points x 100 (65535 unknown); len_dm decimetres (u16: the ETL splits
+edges at MAX_EDGE_M); t_ds deciseconds (u16, held at 65535 for a ferry longer than that); speed km/h (0 unknown; flag SPEED_EST = a class estimate, not posted); cls 0 motorway, 1 trunk, 2 primary,
 3 secondary, 4 tertiary, 5 unclassified, 6 residential, 7 service, 8 track, 9 ferry (the router's codes, 8 and 9 added);
 h_in, h_out the bearing over the edge's first and last 60 m in 256ths of a turn (0 north, clockwise) so the router can
 score a corner split across a join.
@@ -47,6 +51,8 @@ VERSION = 1
 HEADER_BYTES = 64
 TILE_DEG = 0.25
 
+GEOM_Q = 5              # geometry quantum, microdegrees
+MAX_EDGE_M = 6000.0     # longer chains are split (len_dm fits u16)
 UNKNOWN_U8 = 255
 UNKNOWN_FUN = 0xFFFF
 NO_NAME = 0xFFFF
@@ -189,11 +195,12 @@ def write_tile(t: Tile) -> bytes:
     for poly in t.geoms:
         goff.append(len(geo))
         _varint(geo, len(poly))
-        plat, plon = olat, olon
+        plat, plon = olat // GEOM_Q, olon // GEOM_Q
         for la, lo in poly:
-            _varint(geo, _zz(la - plat))
-            _varint(geo, _zz(lo - plon))
-            plat, plon = la, lo
+            qa, qo = round(la / GEOM_Q), round(lo / GEOM_Q)
+            _varint(geo, _zz(qa - plat))
+            _varint(geo, _zz(qo - plon))
+            plat, plon = qa, qo
     e_count = len(edges)
     to_tile = [ref(e.to_tile) for _, e in edges]
     rest = []
@@ -208,13 +215,18 @@ def write_tile(t: Tile) -> bytes:
 
     out = bytearray()
     out += MAGIC
-    out += struct.pack("<HHiiIIIIIIIII", VERSION, HEADER_BYTES, t.i, t.j, n, e_count, len(rest), len(names),
-                       len(name_bytes), len(geo), len(refs), t.build_day, t.model_hash & 0xFFFFFFFF)
+    wide = any(e.to > 0xFFFF for _, e in edges)
+    out += struct.pack("<HHiiIIIIIIIIIB", VERSION, HEADER_BYTES, t.i, t.j, n, e_count, len(rest), len(names),
+                       len(name_bytes), len(geo), len(refs), t.build_day, t.model_hash & 0xFFFFFFFF, 1 if wide else 0)
     out += b"\0" * (HEADER_BYTES - len(out))
     for ri, rj in refs:
         out += struct.pack("<HH", ri, rj)
-    out += struct.pack(f"<{n}i", *t.lat)
-    out += struct.pack(f"<{n}i", *t.lon)
+    lim = round(TILE_DEG * 1e6 / GEOM_Q) - 1
+    qlat = [max(0, min(lim, round((la - olat) / GEOM_Q))) for la in t.lat]
+    qlon = [max(0, min(lim, round((lo - olon) / GEOM_Q))) for lo in t.lon]
+    out += struct.pack(f"<{n}H", *qlat)
+    out += struct.pack(f"<{n}H", *qlon)
+    _pad4(out)
     out += struct.pack(f"<{n + 1}I", *first)
     out += bytes(t.node_flags) if t.node_flags else bytes(n)
     _pad4(out)
@@ -223,10 +235,12 @@ def write_tile(t: Tile) -> bytes:
         nonlocal out
         out += struct.pack(f"<{len(vals)}{fmt}", *vals)
 
-    col("I", [e.to for _, e in edges])
-    col("I", [e.len_dm for _, e in edges])
-    col("I", [e.t_ds for _, e in edges])
     col("I", [goff[e.geom] for _, e in edges])
+    col("I" if wide else "H", [e.to for _, e in edges])
+    if any(e.len_dm > 0xFFFF for _, e in edges):
+        raise ValueError("edge longer than 6.5 km: split it (MAX_EDGE_M)")
+    col("H", [e.len_dm for _, e in edges])
+    col("H", [min(0xFFFF, e.t_ds) for _, e in edges])
     col("H", [UNKNOWN_FUN if e.fun is None or e.fun != e.fun else max(0, min(65534, round(e.fun * 100))) for _, e in edges])
     col("H", [e.flags & 0xFFFF for _, e in edges])
     col("H", [name_of[e.name] if e.name else NO_NAME for _, e in edges])
@@ -264,7 +278,7 @@ def read_tile(b: bytes) -> dict:
     """v1 bytes -> plain dict (columns as lists): the checks' and tests' reader. The phone uses web/graph_tiles.js."""
     if b[:4] != MAGIC:
         raise ValueError("not a VGR1 tile")
-    (ver, hb, ti, tj, n, e, r, nn, nb, gb, nref, day, mh) = struct.unpack_from("<HHiiIIIIIIIII", b, 4)
+    (ver, hb, ti, tj, n, e, r, nn, nb, gb, nref, day, mh, layout) = struct.unpack_from("<HHiiIIIIIIIIIB", b, 4)
     if ver != VERSION:
         raise ValueError(f"tile version {ver}")
     p = hb
@@ -282,9 +296,15 @@ def read_tile(b: bytes) -> dict:
         nonlocal p
         p += (-p) % 4
 
-    lat, lon, first, nflags = take("i", n), take("i", n), take("I", n + 1), take("B", n)
+    olat, olon = tile_origin(ti, tj)
+    lat = [olat + GEOM_Q * v for v in take("H", n)]
+    lon = [olon + GEOM_Q * v for v in take("H", n)]
     align()
-    to, len_dm, t_ds, goff = take("I", e), take("I", e), take("I", e), take("I", e)
+    first, nflags = take("I", n + 1), take("B", n)
+    align()
+    goff = take("I", e)
+    to = take("I" if layout & 1 else "H", e)
+    len_dm, t_ds = take("H", e), take("H", e)
     fun, flags, name = take("H", e), take("H", e), take("H", e)
     align()
     quality, scenery, conf, cls, speed, to_tile, h_in, h_out = (take("B", e) for _ in range(8))
@@ -303,17 +323,28 @@ def read_tile(b: bytes) -> dict:
     geo = b[p:p + gb]
     olat, olon = tile_origin(ti, tj)
 
+    frm = [0] * e
+    for v in range(n):
+        for k in range(first[v], first[v + 1]):
+            frm[k] = v
+
     def geom(k):
         q = goff[k]
         cnt, q = _unvarint(geo, q)
-        pts, la, lo = [], olat, olon
+        pts, la, lo = [], olat // GEOM_Q, olon // GEOM_Q
         for _ in range(cnt):
             d, q = _unvarint(geo, q)
             la += (d >> 1) ^ -(d & 1)
             d, q = _unvarint(geo, q)
             lo += (d >> 1) ^ -(d & 1)
-            pts.append((la, lo))
-        return pts[::-1] if flags[k] & GEOM_REV else pts
+            pts.append((la * GEOM_Q, lo * GEOM_Q))
+        if flags[k] & GEOM_REV:
+            pts.reverse()
+        if pts:
+            pts[0] = (lat[frm[k]], lon[frm[k]])
+            if to_tile[k] == 0 and len(pts) > 1:
+                pts[-1] = (lat[to[k]], lon[to[k]])
+        return pts
 
     return {"i": ti, "j": tj, "build_day": day, "model_hash": mh, "refs": refs,
             "nodes": {"lat": lat, "lon": lon, "first_edge": first, "flags": nflags},

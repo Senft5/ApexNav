@@ -14,6 +14,22 @@
 - Exact next task: when web/data/graph/v1 has the Cincinnati tiles, serve locally and run the live harness
   (scratchpad live2/run.js with BASE=) on the 7 cases; tune `K` in graph_router.js on what it finds.
 
+## Session 2026-11-04: own routing, the road-network half (branch claude/own-routing-graph)
+
+- [x] docs/OWN_ROUTING.md (the plan and contract) committed; §4 "As built" has the exact tile interface, §8 the status.
+- [x] Tile codec v1: tools/graph_etl/tiles.py (writer + reader), web/graph_tiles.js (`ApexGraphTiles.decode`, `load`),
+  tests/test_graph_tiles.py round-trips through both.
+- [x] Graph ETL (tools/graph_etl): pyosmium reader, chains, oneways, access, via-node restrictions, barriers, point
+  features, joins, businesses (40 m, no fuel/cafes), buildings, land use, water, road density; score_edges.js scores
+  each edge with web/route_engine.js + fun_route.js + dem.js + context_grid.js (no second model). tests/test_graph_etl.py
+  on a toy network and a real Colerain Township piece (tests/fixtures/graph, from the OSM API).
+- [x] CI .github/workflows/graph.yml: Geofabrik OH+KY+IN, merged, Cincinnati's 16 tiles committed back to the branch;
+  region build as an artifact, R2 upload gated on the owner's secrets (OWNER_TODO).
+- GRAPH_STATS_PLACEHOLDER
+- Exact next task: the phone router (web/graph_router.js + graph_worker.js) on these tiles (the parallel builder), then
+  OWN_ROUTING.md §6's proof against today's picks.
+
+## Session 2026-11-04: owner notes through #290; route engine being integrated
 
 - [x] #286-#290: convoy line behind the car (@fish5spd), car-specific themes with any voice pack and red needles,
   End undo 1.7 s, a granted theme from a newer server falls back to a known renderer (#289), the drive page map zooms a

@@ -4,6 +4,7 @@ Decisions Claude made for you, newest first. Each one says what was decided, why
 you reach one you've seen. If you disagree with a call, say so and it gets reversed; nothing here is hard to undo unless
 it says so. Things only you can do are in docs/OWNER_TODO.md.
 
+<<<<<<< HEAD
 ## 2026-11-04 (evening): Our own routing on the phone (the router half)
 
 The phone can now find routes itself over our own scored road network (docs/OWN_ROUTING.md §5, §8). It does nothing
@@ -26,6 +27,36 @@ until the Cincinnati tiles ship: where no tiles cover a trip, planning is exactl
 - **Our routes are always pinned with shaping points**, so a reroute (still Valhalla's) keeps to them.
 - Not done: the live comparison against production (no real tiles yet), Explore on our router.
 
+=======
+## 2026-11-04 (own routing): the scored road network (graph half)
+
+- **Every road is scored once, ahead of time, by the app's own model**: tools/graph_etl/score_edges.js runs
+  web/route_engine.js, fun_route.js, dem.js and context_grid.js in node on each edge; the Python side only measures
+  (OSM tags, counts, land use, density). No second model to drift. Undo: delete tools/graph_etl and web/data/graph.
+- **Per-km counts use the road's own continuation, ±500 m**, across junctions (same name, else under 50° of turn), so a
+  60 m edge between two side streets reads like the road it belongs to, as the router's ±500 m windows do. Undo:
+  `WINDOW_M` / `Graph._continuation` in features.py.
+- **Road density is computed, not asked**: road km per km² within 2 km, mapped to Valhalla's 0-15 by the medians on the
+  calibration fixtures' 2055 router edges (r = 0.95). It decides when a "residential" road is a TIGER county lane.
+  Undo: `DENSITY_KNOTS` in build.py.
+- **Travel time is our own simple model** (posted limit or the app's class estimate x a class flow factor, corners at
+  0.3 g, signals and stops inside the edge); signals and stops at an edge's ends are left to the router's turn cost so
+  they are never counted twice. Undo: `FLOW`, `MU_TRAVEL` in score_edges.js.
+- **Bollards and locked gates are dead ends from both sides** (each road ending there gets its own node); open gates
+  are a flag. Undo: the barrier block in osm_graph.build_chains.
+- **Car-park lanes are left out to fit the app**: the first Cincinnati build was 26.5 MB (598k edges, 40 % unnamed
+  service roads). Unnamed service roads and tracks that meet no public road (the lanes inside car parks and campuses),
+  and unnamed dead-end service stubs under 200 m (a lot's entrance), are not routable; they still count as driveways
+  and joins. A destination there snaps to the street in front. Named and longer service roads stay. With the tighter
+  tile layout (u16 node coordinates and lengths, 0.5 m geometry steps) the 16 tiles fit the 15 MB target. Undo:
+  `trim_service` / `STUB_M` in build.py.
+- **The tiles are ODbL** (a derived OpenStreetMap database shipped in the app): said on the licences page.
+- **Blue Rock Road's spot check is its rural stretch** (north of the I-275 ring, the one the calibration's Blue Rock
+  route drives): inside the ring it is a posted 35 mph suburban street and scores like one. Undo: the box in check.py.
+- **Via-way turn restrictions are counted, not applied** (index.json `stats`). Undo: none needed; applying them is next.
+
+## 2026-11-04 (later still): The route engine, faster
+>>>>>>> 2ff318b59383eb558d2935515cd0bc703dcde38f
 
 - **Finding good-road stages runs off the main thread** (a Web Worker, web/stages_worker.js) and is cached 10 minutes
   per area, so the map stays smooth while planning and a re-plan reuses it. Undo: the worker call in stages.js.

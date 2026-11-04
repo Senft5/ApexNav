@@ -129,6 +129,44 @@ def merge(paths, out, bbox=None):
     return len(nodes), len(ways), len(rels)
 
 
+def clip(src, box, out):
+    """A small piece of an extract for a test fixture: the ways with a node in box (w, s, e, n), all their nodes, the
+    tagged nodes and building centres inside it, and the relations naming those ways."""
+    w, s, e, n = box
+    inside = lambda la, lo: s <= la <= n and w <= lo <= e  # noqa: E731
+    loc = {}
+    for o in osmium.FileProcessor(src, osmium.osm.NODE):
+        loc[o.id] = (o.version, o.location.lat, o.location.lon, dict(o.tags))
+    ways = {}
+    for o in osmium.FileProcessor(src, osmium.osm.WAY):
+        refs = [nd.ref for nd in o.nodes]
+        if any(r in loc and inside(loc[r][1], loc[r][2]) for r in refs):
+            ways[o.id] = (o.version, refs, dict(o.tags))
+    rels = {}
+    for o in osmium.FileProcessor(src, osmium.osm.RELATION):
+        mem = [(m.type, m.ref, m.role) for m in o.members]
+        if any(t == "w" and r in ways for t, r, _ in mem):
+            rels[o.id] = (o.version, [(t, r, ro) for t, r, ro in mem if t != "w" or r in ways], dict(o.tags))
+    need = {r for _, refs, _ in ways.values() for r in refs}
+    need |= {r for _, mem, _ in rels.values() for t, r, _ in mem if t == "n"}
+    keep = {k: v for k, v in loc.items() if k in need or (v[3] and inside(v[1], v[2]))}
+    if os.path.exists(out):
+        os.remove(out)
+    wr = osmium.SimpleWriter(out)
+    for k in sorted(keep):
+        v, la, lo, t = keep[k]
+        wr.add_node(osmium.osm.mutable.Node(id=k, version=v, location=(lo, la), tags=t))
+    for k in sorted(ways):
+        v, refs, t = ways[k]
+        if all(r in keep for r in refs):
+            wr.add_way(osmium.osm.mutable.Way(id=k, version=v, nodes=refs, tags=t))
+    for k in sorted(rels):
+        v, mem, t = rels[k]
+        wr.add_relation(osmium.osm.mutable.Relation(id=k, version=v, members=mem, tags=t))
+    wr.close()
+    return len(keep), len(ways), len(rels)
+
+
 def main(argv=None):
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--bbox", required=True, help="west,south,east,north")
