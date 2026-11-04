@@ -4913,7 +4913,11 @@ flow('plan flow (e, f) a level change and an alternative are one tap or swipe ea
   check(await level() === 'Fun', 'planned at Fun');
   // a level change keeps the card's scroll and Start's place, and asks the router nothing
   await page.evaluate(() => { const b = document.getElementById('planBody'); b.scrollTop = Math.min(80, b.scrollHeight - b.clientHeight); });
+  // (diagnostics for CI: where the scroller and the sheet are, and how tall the card is)
+  const geo = () => page.evaluate(() => { const b = document.getElementById('planBody'), p = document.getElementById('planPanel'), c = document.getElementById('routeCard'), r = b.getBoundingClientRect(), pr = p.getBoundingClientRect();
+    return { bodyTop: Math.round(r.top), bodyH: Math.round(r.height), panelTop: Math.round(pr.top), panelH: Math.round(pr.height), panelCls: p.className, cardH: c ? c.scrollHeight : null, bodySH: b.scrollHeight }; });
   const before = await page.evaluate(() => ({ sc: document.getElementById('planBody').scrollTop, y: document.getElementById('routeDriveBtn').getBoundingClientRect().top, n: apexDebug.track.lat.length }));
+  const geo0 = await geo();
   const routed = asked.length, t0 = taps.n;
   await page.evaluate(() => document.querySelector('#routeCardFun [data-fun="quick"]').scrollIntoView({ block: 'nearest' }));
   const sc0 = await page.evaluate(() => document.getElementById('planBody').scrollTop);
@@ -4927,7 +4931,8 @@ flow('plan flow (e, f) a level change and an alternative are one tap or swipe ea
   check(/of the \d+ routes found\)$/.test(after.note) && after.n !== before.n, 'the straight road is Quick\'s pick, and the card says why: ' + JSON.stringify(after));
   // the scroll is kept, never back to the top: the switch you tapped stays under your finger (the card above it may be
   // shorter for the new route, and the scroll follows it), and Start doesn't move
-  check(Math.abs(after.y - before.y) <= 1 && after.sc > 0 && Math.abs(after.sw - sw0) <= 2, `a level change keeps Start and the scroll where they were: ${JSON.stringify({ before, sc0, sw0, after })}`);
+  const geo1 = await geo();
+  check(Math.abs(after.y - before.y) <= 1 && after.sc > 0 && Math.abs(after.sw - sw0) <= 2, `a level change keeps Start and the scroll where they were: ${JSON.stringify({ before, sc0, sw0, after, geo0, geo1 })}`);
   check(taps.n - t0 === 1, 'a level change is one tap');
   await tap('#routeCardFun [data-fun="fun"]', 'Fun');
   await page.waitForFunction(() => /^Fun: /.test(document.getElementById('routeProgress').textContent), null, { timeout: 5000 });
