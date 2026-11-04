@@ -8,13 +8,15 @@
 - [x] e2e can run in WebKit (`BROWSER=webkit`), the app's own engine.
 - Deploy note: Workers Builds did not start a production build for #290's merge (no check on 6885631 after 35 min;
   earlier merges all built). The next merge to main deploys it; verify by curling `cockpit.js` for `SWIPE_CLOSE_PX`.
-- In progress (route intelligence): one route engine scoring every 25 m for road quality (speed limit, class, signals,
+- [x] Route engine merged in this PR (was: in progress). Route intelligence: one route engine scoring every 25 m for road quality (speed limit, class, signals,
   driveways, businesses, density, land use) and scenery, with time-dependent penalties and hard constraints, fed by five
   data families (router edges + DEM, OSM tiles/Overpass, national context grid, time/world, driver/crowd/car). Branches
   are being merged into the engine branch; calibrated on four real Cincinnati route choices. Flowchart:
   docs/ROUTE_ENGINE.md (lands with the engine PR).
 - Local e2e flakes under heavy machine load ("Where to?" suggestion, "car map glides"); green in CI. Re-check idle.
-- Exact next task: finish the route engine merge, full tests, one PR, then recording 8 / panel round 3.
+- Unverified: Swift (ApexContext for calendar/album; CI compiles), the engine on a real drive, the Kentucky relay live.
+- Exact next task: a real drive with the engine (owner), the wider-region context grid once its storage is set up, then
+  recording 8 / panel round 3.
 
 ## Session 2026-11-03 (later): road data, tester feedback, private themes (#285)
 

@@ -13,7 +13,18 @@ export const DEFAULT_FLAGS: Record<string, Rule> = {
   taste_ranking: { on: true },       // R-33 your taste nudging fun routes
   crowd_curvature: { on: true },     // Q-04 members' corners over the map's
   measured_stages: { on: true },     // R-04 measurements and hazards in stage discovery
+  // R-36 busy times of day per road: OFF until the owner answers Quiet hours (docs/OWNER_TODO.md). With it off the phone sends
+  // no hour and the server stores and shows none (contribute.ts, roads.ts check serverFlag too). Turn on: FLAGS {"quiet_hours":{"on":true}}
+  quiet_hours: { on: false },
 };
+
+/** A flag as the server itself obeys it (no build, platform or share: those pick phones, not the server's own behaviour). */
+export function serverFlag(env: Env, name: string): boolean {
+  let override: Record<string, Rule> = {};
+  try { override = env.FLAGS ? JSON.parse(env.FLAGS) : {}; } catch { override = {}; }
+  const r = { ...DEFAULT_FLAGS, ...override }[name];
+  return !!r && typeof r === "object" && r.on !== false;
+}
 
 const BUILD = /ApexNav\/[\d.]+ \((\d+)\)/;
 

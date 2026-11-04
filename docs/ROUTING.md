@@ -1,7 +1,23 @@
 # Fun routing
 
-How Vetta picks the way from A to B (web/fun_route.js, wired in web/index.html `funRoute`), and how
+How Vetta picks the way from A to B (web/fun_route.js, wired in web/cockpit.js `funRoute`), and how
 loops are sized (see Loops below; stage discovery itself is web/stages.js and docs/ROAD_INTELLIGENCE.md §7).
+
+## The route engine (2026-11-04)
+
+Every candidate (A→B, loops, Explore's stages) is now ranked by the route engine (web/route_engine.js; the reference is
+docs/ROUTE_ENGINE.md). Each candidate becomes a corridor of 25 m samples with the time you'd be at each; the route
+context providers (web/route_ctx: the router's edge attributes, the DEM, and the map-feature, national-grid, world and
+crowd providers as they land) answer for all candidates of a plan at once within 4 s; the engine scores each 25 m for
+**quality** (is this a road worth driving: speed limit, class, density, signals, driveways, businesses …) and
+**scenery**, counts corners only where quality earns them, costs side streets and business districts per km, applies
+time-dependent penalties and hard constraints, and says why the winner beat the quickest from the largest differences.
+The router's costing keeps off highways, which sent routes through subdivisions and strip malls: the highway-friendly
+quickest now competes on every trip (unless you avoid highways), connectors between good roads may use highways, and the
+best stages are re-scored on their real road before any connector is timed. Everything below (levels, budgets, avoid,
+towns, glare, weather, measured roads, taste, Prefer, set list, stage coverage, the car) feeds the engine's value as
+before; with no context at all the value is exactly the old one. If planning takes over 1.5 s the quickest route goes
+up at once and the ranked routes replace it.
 
 ## Levels
 
@@ -144,7 +160,9 @@ destination route on screen like the Avoid chips do.
 ## Candidates
 
 1. The router's route (Valhalla, highways and tolls de-prioritised) and up to 2 Valhalla alternates
-   (`alternates: 2`). OSRM is the fallback when Valhalla is down.
+   (`alternates: 2`), plus the highway-friendly quickest (use_highways 1.0, `ApexRouteEngine.highwayCosting`) unless
+   Avoid → Highways is on; a highway-costed winner is pinned with shaping points like an alternate. OSRM is the fallback
+   when Valhalla is down. Stage plans and the connector matrix use `connectorCosting` (use_highways 0.6).
 2. Quick stops there. Fun and Max fun also look for **stages** (web/stages.js: OpenFreeMap vector
    tiles, roads joined into strokes, each stroke's best 2–10 km window scored on corners and
    junctions) in a circle around the A→B midpoint (radius half the trip + 3 km, at most 64 tiles,
@@ -238,6 +256,30 @@ dull road beat a much better one (it keeps a 20-point lead). The route card adds
 ARCHITECTURE §1), hazards, and measured data during stage discovery itself (stages are still found on
 map geometry; measured data only re-ranks routed candidates).
 
+## Route context: time and the world (2026-11-03)
+
+Providers in `web/route_ctx/` (ROUTE_ENGINE_CONTRACT: `ApexRouteCtx.register`, one fetch for all candidates of a plan, per-sample
+channels with NaN for unknown, spans and points) evaluate each 25 m sample at its own eta. Each file's header documents its
+channels, sources, licences and cadence; the engine (builder A) weighs them.
+- `conditions.js`: Open-Meteo per 0.05° cell (an hour's cache): air and ground temperature, visibility and a fog risk raised in
+  valleys and cut on ridges (from `tpi_m` or the DEM against the cell's terrain), wind, gusts and the gust's crosswind against
+  the heading (with ridge/bridge exposure), rain in the last 6 and 48 h, route_weather.js's hazard per sample, light (day,
+  civil twilight, dark), glare (the R-13 cone) and a golden-hour view on descents that never rewards the glare cone. Spans fog,
+  crosswind, cold-tyres (< 7 °C), ice (frost or wet at ≤ 0.5 °C), dark, glare, golden-view.
+- `wildlife.js`: deer risk = sun-relative hour (fitted to OSHP's 26 % / 31 % dawn and dusk shares) x the state's month (each
+  state agency's Q4 and November shares) x land (forest edge high, towns low; unknown without land use). Span deer-hour.
+- `events.js`: MLB and Triple-A games (MLB Stats API), other sports and concerts with a SeatGeek id, sized by a venue table;
+  arrival 2.5 h before to the start, departure to 1 h after; school runs near schools on school days, bus hours, Sunday and
+  Saturday-vigil church hours (OSM places). City permit data for festivals and closures was checked (Cincinnati, Columbus,
+  Louisville, Lexington): none current and machine-readable.
+- `hazards_live.js`: NOAA flood categories and USGS 24 h rises near the route and at fords (with conditions' 48 h rain), WZDx
+  work zones and closures (Indiana direct, Kentucky via `/api/ctx/workzones`, Ohio with an OHGO key; paving labelled), harvest
+  (NASS weekly progress, else the USDA usual dates) x farmland, NPS monthly visits in the parks, typical fall-colour peak by
+  latitude and height x canopy. No snowplough feed exists in OHGO's public API.
+- `photos.js`: Wikimedia Commons photo spots within 250 m (and Flickr with a key) as a saturating scenic score; Mapillary
+  speed-limit signs (carried 2 km, fills missing maxspeed) and curve-warning signs with a token.
+Tests: `tests/test_route_ctx_*.py` on real answers for the Cincinnati area saved 2026-11-03 (`tests/fixtures/route_ctx/`).
+
 ## Sun glare
 
 Every candidate (A→B and loops) is driven in time from now over its router time, and each 100 m that heads within
@@ -286,7 +328,8 @@ parity-tested core):
 - **Fun** = 0.5 Twist + 0.35 Flow + 0.15 (1 − Dull) x 100.
 
 Ranking: `fun + 0.5 x good corners gained over the quickest route (capped at 60) − perMin x
-extra minutes + measured adjustment`, after dropping anything past the level's budget. Fun is a
+extra minutes + measured adjustment`, after dropping anything past the level's budget; the route engine adds quality,
+scenery, side-street, bonus and penalty terms and gates each corner by the road's quality (docs/ROUTE_ENGINE.md). Fun is a
 density, so a long route through a great stage barely moves it; the corner gain is what pays for
 the detour. For members, the top candidates also get what others measured on those roads
 (see Measured roads below).
@@ -297,6 +340,50 @@ These are map-derived, never measured road feel. When the winner is slower than 
 why (`FunRoute.why`, from the router's own road names): the roads it spends 2+ km more on (at most 3), the
 good corners it gains and the minutes it costs, e.g. "For SR 360 13 mi, Cold Spring Road 8.2 mi · 167 more
 good corners, +30 min".
+
+## Route context: the driver, the car, the crowd and the phone (web/route_ctx, builder E)
+
+Five providers of the route engine's context (the contract in the route engine's docs: `ApexRouteCtx.register`, channels per
+25 m sample with NaN for unknown, spans and points). Each file's header lists its channels with unit, meaning, source,
+licence and cadence; `ctx_util.js` queues them in `ApexRouteCtx.pending` until the engine's registry loads and adopts them.
+What each one is for, and how it should move a route:
+
+- **crowd.js** (`/api/roads`, members only): `crowd_rough_g`, `crowd_bank_deg`, `crowd_curv`, `crowd_conf` as the measured-roads
+  path had them, now per sample; **`crowd_flow`**, how smoothly members drive a road (each pass's speed steadiness over ~40 m
+  times the share that didn't brake hard with no corner ahead; computed on the phone, contributor.js `binFlow`, sent as a
+  ratio and a yes/no, never a speed; merged in `road_bins.flow_mean/brake_mean`): a quality term (stop-start roads lose to
+  ones members flow through) and the "Members drive it smoothly" span; **`loved`**, the most of members coming back to a road
+  on a second recorded drive (`road_love`, a level from two people), your crews' shared lines, your own "Which road was
+  better?" Elo by road name and roads you drove twice: a fun term with a "loved" span named for the road; **`taste`**, your
+  taste fit (taste.js) over 2 km windows in fun points; **`crowd_busy`**, the busy-time ratio at your ETA, only with the
+  `quiet_hours` flag on (the owner's open decision; default off: no hour is sent, stored or shown).
+- **driver.js** (phone only; Overpass tiles for OSM `lit`, `tunnel`, `route=bicycle`): settings in the plan sheet's More,
+  **For this drive** (vocabulary.js `passenger`, `litRoads`, `cyclists`, `tunnels`, apex.driverPrefs). `passenger_cost` (a
+  hairpin 1, a quick left-right 0.6, else the lateral load at the router's speed from 0.25 g to 0.45 g), `tech_level`,
+  `skill_fit` (how close the road's technicality is to what your last 12 scored drives' Smooth and Brakes offer, from 5
+  drives), `dark`, `lit`, `cyclist_route` and `cyclist_time` (weekend mornings 1), `tunnel`, and **`driver_fit`** (-1..1, the
+  preferences that are on; NaN when none is and the skill is unknown), which the engine adds to fun. Passenger aboard also tags
+  the recorded drive "Passenger".
+- **car.js**: the Garage car's **fuel** and **range** (new fields, migration 0045; "ask once" per car when a 150 km stationless
+  stretch meets a car with no range). Stations from OSM `amenity=fuel` (Overpass tiles) or, electric, NREL chargers through
+  `GET /api/chargers` (tile ids only; the owner's free key, OWNER_TODO; none = `no-key`). `fuel_since_km`, `fuel_margin`; a
+  **`fuel_gap` span with `hard: true`** when a stretch between stations is over the safe range (80 %, EV 75 %), greedy
+  `fuel_stop` points, `fuel_check` when the first fuel is past half the safe range (the tank at the start is unknown).
+  Signal: `signal` copies builder C's `mobile_coverage` from `opts.peer[id].channels` when the engine passes it; under 0.3 for
+  2 km is a `no_signal` span with a `share_eta` point 2 km before it, and `offlineAreas` / `prepareOffline` save those
+  stretches' map tiles through offline_tiles.js when the route is chosen. Width and ride height stay in the router costing.
+- **ios_context.js** (the app only, on a tap): **My free time** (EventKit, the next event's start only) and **This album**
+  (the Music app's now-playing album from the media library; iOS gives no queue) size a time loop (`buildLoop({ minutes })`,
+  15-minute steps, 15 min back before the event). Then `free_min` per sample and a `past_next_event` span mark routes that
+  would run late, and an `album_ends` point.
+- **crew_meet.js**: crew members' rough home areas (crew page switch, off by default, 0.1-degree cells; `GET /api/crews/:id/meet`
+  answers the cells without names once two share). **Fair for the crew** on the crew drive form picks the candidate (each
+  cell, their centroid and geometric median, and places the caller adds) with the least longest drive + 0.25 x the mean,
+  from one Valhalla matrix (crow-fly x 1.35 at 60 km/h when it fails, marked estimated). As a provider, `crew_start` points
+  give each candidate route's start its longest crew-mate drive, so a crew loop can start where it is fair.
+
+Every provider respects `budgetMs` and `opts.signal`, aborts its lookups past the budget, caches per tile, and returns
+`unavailable`, `partial` or `no-key` instead of throwing. Tests: tests/test_route_ctx_*.py and backend/test/route_context.test.ts.
 
 ## Checked
 

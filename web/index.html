@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self' apexnav:; script-src 'self' apexnav: https://cdn.jsdelivr.net 'wasm-unsafe-eval'; worker-src 'self' apexnav: blob:; child-src 'self' apexnav: blob:; style-src 'self' apexnav: 'unsafe-inline'; font-src 'self' apexnav: data:; img-src 'self' apexnav: data: blob: https://tiles.openfreemap.org https://s3.amazonaws.com; media-src 'self' apexnav: data: blob:; connect-src 'self' apexnav: data: blob: https://apexnav.senftns.workers.dev wss://apexnav.senftns.workers.dev https://tiles.openfreemap.org https://s3.amazonaws.com https://valhalla1.openstreetmap.de https://router.project-osrm.org https://overpass-api.de https://overpass.private.coffee https://overpass.kumi.systems https://nominatim.openstreetmap.org https://photon.komoot.io https://api.open-meteo.com https://vpic.nhtsa.dot.gov https://cdn.jsdelivr.net https://huggingface.co https://*.huggingface.co https://*.hf.co; object-src 'none'; base-uri 'none'; form-action 'self'" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self' apexnav:; script-src 'self' apexnav: https://cdn.jsdelivr.net 'wasm-unsafe-eval'; worker-src 'self' apexnav: blob:; child-src 'self' apexnav: blob:; style-src 'self' apexnav: 'unsafe-inline'; font-src 'self' apexnav: data:; img-src 'self' apexnav: data: blob: https://tiles.openfreemap.org https://s3.amazonaws.com; media-src 'self' apexnav: data: blob:; connect-src 'self' apexnav: data: blob: https://apexnav.senftns.workers.dev wss://apexnav.senftns.workers.dev https://tiles.openfreemap.org https://s3.amazonaws.com https://valhalla1.openstreetmap.de https://router.project-osrm.org https://overpass-api.de https://overpass.private.coffee https://overpass.kumi.systems https://maps.mail.ru https://nominatim.openstreetmap.org https://photon.komoot.io https://api.open-meteo.com https://statsapi.mlb.com https://api.seatgeek.com https://api.water.noaa.gov https://waterservices.usgs.gov https://in.carsprogram.org https://publicapi.ohgo.com https://quickstats.nass.usda.gov https://commons.wikimedia.org https://www.flickr.com https://graph.mapillary.com https://vpic.nhtsa.dot.gov https://cdn.jsdelivr.net https://huggingface.co https://*.huggingface.co https://*.hf.co; object-src 'none'; base-uri 'none'; form-action 'self'" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
   <title>Vetta</title>
   <!-- REVIEW4 U-80 (check): before the stylesheets and the hundred scripts below (seconds on a cold start), the page's very
@@ -32,6 +32,13 @@
   <script src="road_page.js" defer></script>
   <script src="taste.js" defer></script>
   <script src="prefer.js" defer></script>
+  <!-- route context providers (builder E): the crowd, the driver, the car, the phone's time, crew meeting points -->
+  <script src="route_ctx/ctx_util.js" defer></script>
+  <script src="route_ctx/crowd.js" defer></script>
+  <script src="route_ctx/driver.js" defer></script>
+  <script src="route_ctx/car.js" defer></script>
+  <script src="route_ctx/ios_context.js" defer></script>
+  <script src="route_ctx/crew_meet.js" defer></script>
   <script src="track_mode.js" defer></script>
   <script src="flags.js" defer></script>
   <script src="save_file.js" defer></script>
@@ -42,6 +49,16 @@
   <script src="route_loading.js" defer></script>
   <script src="stages.js" defer></script>
   <script src="fun_route.js" defer></script>
+  <script src="route_ctx/registry.js" defer></script>
+  <script src="route_ctx/router_edges.js" defer></script>
+  <script src="route_ctx/dem.js" defer></script>
+  <script src="route_engine.js" defer></script>
+  <script src="route_ctx/conditions.js" defer></script>
+  <script src="route_ctx/wildlife.js" defer></script>
+  <script src="route_ctx/events.js" defer></script>
+  <script src="route_ctx/hazards_live.js" defer></script>
+  <script src="route_ctx/photos.js" defer></script>
+  <script src="route_ctx/context_grid.js" defer></script>
   <script src="sync.js" defer></script>
   <script src="live_pipeline.js" defer></script>
   <script src="sensors.js" defer></script>
@@ -74,6 +91,10 @@
   <script src="directions.js" defer></script>
   <script src="carplay.js" defer></script>
   <script src="cameras.js" defer></script>
+  <script src="route_ctx/osm_common.js" defer></script>
+  <script src="route_ctx/osm_tiles.js" defer></script>
+  <script src="route_ctx/osm_overpass.js" defer></script>
+  <script src="route_ctx/road_name_age.js" defer></script>
   <script src="whats_new.js" defer></script>
   <script src="saved_routes.js" defer></script>
   <script src="row_select.js" defer></script>
@@ -1297,7 +1318,7 @@
                 <div class="switch" role="radiogroup" aria-label="Route style"><button data-fun="quick" role="radio" aria-checked="false">Quick</button><button data-fun="fun" role="radio" aria-checked="false">Fun</button><button data-fun="max" role="radio" aria-checked="false">Max fun</button></div>
 </div>
               <details class="plan-more" id="planMore">
-                <summary>More: avoid, corner mix, explore, start point</summary>
+                <summary>More: avoid, corner mix, who’s aboard, explore, start point</summary>
                 <div class="ctl"><div class="ctl-label">Start from</div>
                   <div class="from-row">
                 <input class="field" id="fromInput" autocorrect="off" autocapitalize="off" spellcheck="false" enterkeyhint="go" placeholder="From: current location" aria-label="From" autocomplete="off" />
@@ -1310,6 +1331,14 @@
                   <label class="balance"><span>Fewer sweepers</span><input type="range" min="-1" max="1" step="1" value="0" data-pref-range="fast" aria-label="Fast sweepers: fewer, any or more" /><span>More</span></label></div>
                 <div class="ctl"><div class="ctl-label">Prefer <small>stamped ranks higher</small></div>
                   <div class="stamps" role="group" aria-label="Prefer"><button data-prefer="measured" aria-pressed="false">Measured roads</button><button data-prefer="novel" aria-pressed="false">New to me</button><button data-prefer="crew" aria-pressed="false">Crew favourites</button></div></div>
+                <!-- route context (route_ctx/driver.js, vocabulary.js passenger / litRoads / cyclists / tunnels): who's aboard and how you drive -->
+                <div class="ctl"><div class="ctl-label">For this drive <small>stamped ranks routes for it</small></div>
+                  <div class="stamps" role="group" aria-label="For this drive"><button data-driver="passenger" aria-pressed="false">Passenger aboard</button><button data-driver="lit" aria-pressed="false">Lit roads at night</button><button data-driver="cyclists" aria-pressed="false">Cyclist courtesy</button><button data-driver="tunnels" aria-pressed="false">Tunnels</button></div>
+                  <p class="note" id="skillNote" hidden></p></div>
+                <!-- route context (route_ctx/ios_context.js): only in the app, only when tapped (the permission is asked then) -->
+                <div class="ctl" id="fitRow" hidden><div class="ctl-label">Loop to fit <small>asks the phone once you tap</small></div>
+                  <div class="detents"><button data-fit="calendar">My free time</button><button data-fit="album">This album</button></div>
+                  <p class="note" id="fitNote" role="status"></p></div>
                 <div class="ctl" role="group" aria-label="Explore: the best roads near you"><div class="ctl-label">Explore <small>the best roads within</small></div>
                   <div class="detents"><button data-explore-min="15">15 min</button><button data-explore-min="30">30 min</button></div></div>
                 <div class="place-list" id="exploreList" hidden></div>
@@ -1552,7 +1581,7 @@
             </ul>
           </section>
           <section class="sources" data-panel="garage" data-setting="about">
-            <details class="more"><summary>Sources and licences</summary><p class="note">Map &copy; OpenStreetMap contributors via OpenFreeMap. Terrain: AWS Terrarium DEM. Routing, map matching and posted limits: Valhalla (FOSSGIS). Geocoding: Nominatim. Search suggestions: Photon (Komoot). Plate-reading and speed cameras: OpenStreetMap (<code>surveillance:type=ALPR</code>, DeFlock; <code>highway=speed_camera</code>) via Overpass. Voices: Kokoro-82M (Apache-2.0).</p></details>
+            <details class="more"><summary>Sources and licences</summary><p class="note">Map &copy; OpenStreetMap contributors via OpenFreeMap. Terrain: AWS Terrarium DEM. Routing, map matching and posted limits: Valhalla (FOSSGIS). Geocoding: Nominatim. Search suggestions: Photon (Komoot). Plate-reading and speed cameras: OpenStreetMap (<code>surveillance:type=ALPR</code>, DeFlock; <code>highway=speed_camera</code>) via Overpass. Route ranking: land use, buildings, businesses, signals, stops, limits, lanes, signs, guard rails, cycle routes, byways and fuel from OpenStreetMap (ODbL) via OpenFreeMap tiles and Overpass, including the VK Maps Overpass server. Voices: Kokoro-82M (Apache-2.0). Route context (public domain unless noted): night lights, NASA Black Marble 2016 via NASA GIBS; impervious surface and tree canopy, NLCD 2021 (USGS/MRLC, USDA Forest Service); road noise, BTS National Transportation Noise Map; homes and people, 2020 Census and ACS (US Census Bureau); address points, OpenAddresses contributors and their county and state sources; traffic, roughness, limits and lanes, HPMS (FHWA and the state DOTs); fatal crashes, FARS (NHTSA); flood zones, FEMA NFHL; crops, USDA NASS Cropland Data Layer; parks and visits, National Park Service.</p></details>
             <p class="note mt-8"><a href="https://apexnav.senftns.workers.dev/privacy.html" target="_blank" rel="noopener">Privacy</a> · <a href="https://apexnav.senftns.workers.dev/terms.html" target="_blank" rel="noopener">Terms of use</a> · <a href="licenses.html">Licences</a></p>
           </section>
         </div>

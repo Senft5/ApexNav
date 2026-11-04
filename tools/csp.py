@@ -23,8 +23,14 @@ CONNECT = [
     "https://valhalla1.openstreetmap.de",             # routing, matrix, map matching
     "https://router.project-osrm.org",                # fallback router
     "https://overpass-api.de", "https://overpass.private.coffee", "https://overpass.kumi.systems",   # OSM lookups
+    "https://maps.mail.ru",                           # VK Maps' public Overpass (route context; answered when the others were full)
     "https://nominatim.openstreetmap.org", "https://photon.komoot.io",                               # search
     "https://api.open-meteo.com",                     # forecast along the route
+    # route context (web/route_ctx/): crowds, rivers, work zones, harvest, photo spots, traffic signs
+    "https://statsapi.mlb.com", "https://api.seatgeek.com",                                           # events.js
+    "https://api.water.noaa.gov", "https://waterservices.usgs.gov",                                   # hazards_live.js: gauges
+    "https://in.carsprogram.org", "https://publicapi.ohgo.com", "https://quickstats.nass.usda.gov",   # hazards_live.js: work zones, harvest
+    "https://commons.wikimedia.org", "https://www.flickr.com", "https://graph.mapillary.com",        # photos.js
     "https://vpic.nhtsa.dot.gov",                     # VIN lookup
     "https://cdn.jsdelivr.net",                       # the voice engine and its runtime
     "https://huggingface.co", "https://*.huggingface.co", "https://*.hf.co",                         # the voice model

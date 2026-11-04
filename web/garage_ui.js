@@ -4,6 +4,8 @@
   const LB = 2.20462;
   const DRIVE = { fwd: 'FWD', rwd: 'RWD', awd: 'AWD' }, TRANS = { manual: 'Manual', auto: 'Automatic', dct: 'DCT' };
   const HEIGHT = { low: 'Lowered', stock: 'Stock height', high: 'Lifted' }, IN = 2.54;
+  // fuel and range (route_ctx/car.js): fuel-stop spacing on long back-road stretches; never shown to friends
+  const FUEL = { petrol: 'Petrol', diesel: 'Diesel', electric: 'Electric', hybrid: 'Hybrid' }, MI = 1.609344;
   const metric = () => !!(root.ApexUnits && root.ApexUnits.metric());
   const CSS = `
     .garage-cards { display: grid; gap: 8px; }
@@ -27,7 +29,7 @@
   const FIELD_HINT = {
     bad_year: 'Year should be between 1886 and 2035.', bad_make: 'Check the make.', bad_model: 'Check the model.', bad_trim: 'Check the trim.',
     bad_nickname: 'Check the nickname.', bad_color: 'Check the colour.', bad_power_hp: 'Power should be 1 to 3,000 hp.',
-    bad_weight_kg: 'Weight should be 441 to 13,228 lb.', bad_width_cm: 'Width should be 47 to 118 in (120 to 300 cm).', bad_tyres: 'Check the tyres.', bad_mods: 'Check the mods (500 characters at most).',
+    bad_weight_kg: 'Weight should be 441 to 13,228 lb.', bad_width_cm: 'Width should be 47 to 118 in (120 to 300 cm).', bad_range_km: 'Range should be 20 to 1,240 mi (30 to 2,000 km).', bad_fuel: 'Pick the fuel from the list.', bad_tyres: 'Check the tyres.', bad_mods: 'Check the mods (500 characters at most).',
   };
 
   /** One line of who-has-what, e.g. "2003 BMW M3 E46 CSL". */
@@ -101,6 +103,8 @@
         tyres: f('tyres', 'Tyres', c.tyres, { maxLength: 80 }),
         clearance: sel('clearance', 'Ride height', HEIGHT, c.clearance),
         width: f('width', metric() ? 'Width with mirrors (cm)' : 'Width with mirrors (in)', c.width_cm ? (metric() ? c.width_cm : Math.round(c.width_cm / IN)) : '', { inputMode: 'numeric' }),
+        fuel: sel('fuel', 'Fuel', FUEL, c.fuel),
+        range: f('range', metric() ? 'Range on a full tank (km)' : 'Range on a full tank (mi)', c.range_km ? (metric() ? c.range_km : Math.round(c.range_km / MI)) : '', { inputMode: 'numeric' }),
         mods: el('textarea', { className: 'field', name: 'mods', placeholder: 'Mods', maxLength: 500, rows: 3, value: c.mods ?? '' }),
       };
       inputs.mods.setAttribute('aria-label', 'Mods');
@@ -160,9 +164,10 @@
         const body = { year: int(v('year')), make: v('make'), model: v('model'), trim: v('trim'), nickname: v('nickname'), color: v('color'),
                        power_hp: int(v('power_hp')), weight_kg: lb == null ? null : Math.round(lb / LB), drivetrain: v('drivetrain') || null,
                        transmission: v('transmission') || null, tyres: v('tyres'), mods: v('mods'), shared: share.checked, is_primary: !!c.is_primary,
-                       clearance: v('clearance') || null, width_cm: int(v('width')) == null ? null : Math.round(metric() ? int(v('width')) : int(v('width')) * IN) };
+                       clearance: v('clearance') || null, width_cm: int(v('width')) == null ? null : Math.round(metric() ? int(v('width')) : int(v('width')) * IN),
+                       fuel: v('fuel') || null, range_km: int(v('range')) == null ? null : Math.round(metric() ? int(v('range')) : int(v('range')) * MI) };
         if (!body.make.trim() || !body.model.trim()) { toast('A car needs a make and a model.'); return; }
-        for (const k of ['year', 'power_hp', 'weight_kg', 'width_cm']) if (body[k] !== null && !Number.isInteger(body[k])) { toast('Year, power, weight and width are whole numbers.'); return; }
+        for (const k of ['year', 'power_hp', 'weight_kg', 'width_cm', 'range_km']) if (body[k] !== null && !Number.isInteger(body[k])) { toast('Year, power, weight, width and range are whole numbers.'); return; }
         let r;
         try { r = await apiCall(c.id ? 'PUT' : 'POST', c.id ? `/api/garage/${encodeURIComponent(c.id)}` : '/api/garage', body); }
         catch (_) { toast('No signal. Your car wasn\'t saved.'); return; }
@@ -173,11 +178,12 @@
         lookups,
         el('div', { className: 'car-form' }, named('year', 'Year'), named('make', 'Make'), named('model', 'Model'), named('trim', 'Trim'), named('nickname', 'Nickname'), named('color', 'Colour'),
           named('power_hp', 'Power (hp)'), named('weight_lb', 'Weight (lb)'), named('drivetrain', 'Drive'), named('transmission', 'Gearbox'),
-          el('div', { className: 'wide' }, named('tyres', 'Tyres')), named('clearance', 'Ride height'), named('width', metric() ? 'Width with mirrors (cm)' : 'Width with mirrors (in)'), el('div', { className: 'wide' }, named('mods', 'Mods'))),
-        el('p', { className: 'note', textContent: 'Ride height and width plan your daily car\'s routes: a lowered car stays off unpaved roads.' }),
+          el('div', { className: 'wide' }, named('tyres', 'Tyres')), named('clearance', 'Ride height'), named('width', metric() ? 'Width with mirrors (cm)' : 'Width with mirrors (in)'),
+          named('fuel', 'Fuel'), named('range', metric() ? 'Range on a full tank (km)' : 'Range on a full tank (mi)'), el('div', { className: 'wide' }, named('mods', 'Mods'))),
+        el('p', { className: 'note', textContent: 'Ride height, width, fuel and range plan your daily car\'s routes: a lowered car stays off unpaved roads, and a long stretch without fuel gets a stop. Fuel and range are never shown to friends.' }),
         share,
         el('div', { className: 'row' }, btn(c.id ? 'Save' : 'Add car', save, 'ink-btn solid'), btn('Cancel', onDone, 'linkbtn')));
-      if (root.ApexRowSelect) for (const k of ['drivetrain', 'transmission', 'clearance']) root.ApexRowSelect.enhance(inputs[k]);   // the app's row lists (row_select.js)
+      if (root.ApexRowSelect) for (const k of ['drivetrain', 'transmission', 'clearance', 'fuel']) root.ApexRowSelect.enhance(inputs[k]);   // the app's row lists (row_select.js)
       return built;
     }
 

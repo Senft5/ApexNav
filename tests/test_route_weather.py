@@ -27,7 +27,7 @@ console.log(JSON.stringify({
   pts: pts.map((p) => [p.m, (p.atMs - leave) / 1000]), url: W.url(pts.slice(0, 2)),
   kinds: list.map(W.hazard), line: W.summary(list, fmt),
   fine: W.summary(W.atArrival(json.slice(0, 1), pts.slice(0, 1)), fmt), none: W.summary(W.atArrival([], pts), fmt),
-  cost: W.cost(list), dry: W.cost(W.atArrival(json.slice(0, 1), pts.slice(0, 1))), costNone: W.cost(W.atArrival([], pts)),
+  cost: W.cost(list), costNoFog: W.cost(list, ['fog']), dry: W.cost(W.atArrival(json.slice(0, 1), pts.slice(0, 1))), costNone: W.cost(W.atArrival([], pts)),
   snow: W.hazard({ prob: 0, mm: 0, tempC: -3, code: 73 }), heat: W.hazard({ prob: 0, mm: 0, tempC: 37, code: 0 }),
 }));
 """
@@ -57,4 +57,5 @@ def test_fine_unknown_and_more(out):
 def test_cost_in_the_ranking(out):
     # five known points: fine, rain 6, ice 30, fog 4, rain 6 → 46 / 5; the unknown sixth doesn't count
     assert out["cost"] == 9.2
+    assert out["costNoFog"] == 8.4, "fog the route engine already costs per km is not counted twice"
     assert out["dry"] == 0 and out["costNone"] == 0

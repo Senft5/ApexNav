@@ -1,0 +1,246 @@
+{
+ "bbox": [
+  -84.9,
+  38.7,
+  -83.95,
+  39.33
+ ],
+ "built": "2026-11-04",
+ "bundles": {
+  "67/97": {
+   "bytes": 720678,
+   "channels": [
+    "address_density",
+    "canopy_pct",
+    "cropland_class",
+    "flood_zone",
+    "housing_density",
+    "impervious_pct",
+    "median_year_built",
+    "night_lights",
+    "noise_db",
+    "park_unit",
+    "population_density"
+   ],
+   "lines": 38312,
+   "points": 469,
+   "tiles": 48
+  },
+  "67/98": {
+   "bytes": 86894,
+   "channels": [
+    "address_density",
+    "canopy_pct",
+    "cropland_class",
+    "flood_zone",
+    "housing_density",
+    "impervious_pct",
+    "median_year_built",
+    "night_lights",
+    "noise_db",
+    "park_unit",
+    "population_density"
+   ],
+   "lines": 1891,
+   "points": 24,
+   "tiles": 12
+  },
+  "68/97": {
+   "bytes": 385994,
+   "channels": [
+    "address_density",
+    "canopy_pct",
+    "cropland_class",
+    "flood_zone",
+    "housing_density",
+    "impervious_pct",
+    "median_year_built",
+    "night_lights",
+    "noise_db",
+    "park_unit",
+    "population_density"
+   ],
+   "lines": 14363,
+   "points": 157,
+   "tiles": 40
+  },
+  "68/98": {
+   "bytes": 71733,
+   "channels": [
+    "address_density",
+    "canopy_pct",
+    "cropland_class",
+    "flood_zone",
+    "housing_density",
+    "impervious_pct",
+    "median_year_built",
+    "night_lights",
+    "noise_db",
+    "park_unit",
+    "population_density"
+   ],
+   "lines": 1610,
+   "points": 11,
+   "tiles": 10
+  }
+ },
+ "bytes": 1265299,
+ "channels": {
+  "address_density": {
+   "meaning": "Address points per km2 (OpenAddresses county/state sources), 3x3-cell smoothed; unknown where no source covers the county",
+   "n": 32,
+   "source": "addresses",
+   "unit": "addresses/km2"
+  },
+  "canopy_pct": {
+   "meaning": "Tree canopy cover of the cell (NLCD / USFS Tree Canopy Cover 2021)",
+   "n": 32,
+   "source": "nlcd",
+   "unit": "%"
+  },
+  "cropland_class": {
+   "meaning": "Most common USDA Cropland Data Layer class in the cell (1 corn, 5 soybeans, 24 winter wheat, 36 alfalfa, 37 other hay, 61 fallow, 111 water, 121-124 developed, 141-143 forest, 176 grass/pasture)",
+   "n": 32,
+   "source": "cdl",
+   "unit": "CDL code"
+  },
+  "flood_zone": {
+   "meaning": "Highest FEMA flood class in the cell: 0 minimal (zone X), 1 0.2% annual chance, 2 1% annual chance (A, AE, AH, AO), 3 regulatory floodway, 4 coastal high hazard (V, VE); unknown where unmapped or zone D",
+   "n": 64,
+   "source": "flood",
+   "unit": "class"
+  },
+  "housing_density": {
+   "meaning": "Housing units per km2 (2020 Census blocks)",
+   "n": 32,
+   "source": "census",
+   "unit": "units/km2"
+  },
+  "impervious_pct": {
+   "meaning": "Impervious surface share of the cell (NLCD 2021)",
+   "n": 32,
+   "source": "nlcd",
+   "unit": "%"
+  },
+  "median_year_built": {
+   "meaning": "Median year the homes were built (ACS 5-year B25035, block group); 1939 means 1939 or earlier",
+   "n": 32,
+   "source": "census",
+   "unit": "year"
+  },
+  "night_lights": {
+   "meaning": "Relative night-time brightness, 0 dark to 1 brightest (NASA Black Marble 2016, VIIRS DNB; tone-mapped image, saturates in city cores; not radiance)",
+   "n": 16,
+   "source": "night",
+   "unit": "0-1"
+  },
+  "noise_db": {
+   "meaning": "Loudest modelled road-noise class within the cell, as the class floor in dB (BTS National Transportation Noise Map 2020, roads); 40 means below the map's 45 dB floor",
+   "n": 64,
+   "source": "noise",
+   "unit": "dB LAeq(24h)"
+  },
+  "park_unit": {
+   "meaning": "National Park Service unit the cell is in: 0 none, else an index into the bundle's park table",
+   "n": 64,
+   "source": "parks",
+   "unit": "index"
+  },
+  "population_density": {
+   "meaning": "Residents per km2 (2020 Census blocks)",
+   "n": 32,
+   "source": "census",
+   "unit": "people/km2"
+  }
+ },
+ "region": "cincinnati",
+ "sources": {
+  "addresses": {
+   "by": "OpenAddresses contributors and the source counties/states",
+   "licence": "Per source (mostly public domain or CC-BY/CC0); counts only are kept",
+   "name": "OpenAddresses (county and state address points)",
+   "sources": [
+    "us/oh/brown",
+    "us/oh/butler",
+    "us/oh/clermont",
+    "us/oh/clinton",
+    "us/oh/hamilton",
+    "us/oh/warren",
+    "us/ky/statewide",
+    "us/in/statewide"
+   ],
+   "url": "https://openaddresses.io/"
+  },
+  "cdl": {
+   "by": "USDA National Agricultural Statistics Service (via Microsoft Planetary Computer)",
+   "licence": "Public domain (US Government)",
+   "name": "Cropland Data Layer",
+   "url": "https://www.nass.usda.gov/Research_and_Science/Cropland/",
+   "year": 2021
+  },
+  "census": {
+   "acs_year": 2024,
+   "by": "US Census Bureau",
+   "licence": "Public domain (US Government)",
+   "name": "2020 Census blocks (TIGER/Line, POP20, HOUSING20); ACS 5-year B25035 median year built",
+   "url": "https://www.census.gov/"
+  },
+  "fars": {
+   "by": "US DOT National Highway Traffic Safety Administration",
+   "licence": "Public domain (US Government)",
+   "name": "Fatality Analysis Reporting System (FARS)",
+   "url": "https://www.nhtsa.gov/research-data/fatality-analysis-reporting-system-fars",
+   "years": [
+    2020,
+    2024
+   ]
+  },
+  "flood": {
+   "by": "FEMA",
+   "licence": "Public domain (US Government)",
+   "name": "National Flood Hazard Layer (NFHL), flood hazard zones",
+   "url": "https://www.fema.gov/flood-maps/national-flood-hazard-layer"
+  },
+  "hpms": {
+   "by": "US DOT Federal Highway Administration and the state DOTs",
+   "licence": "Public domain (US Government)",
+   "name": "Highway Performance Monitoring System (HPMS), full extent",
+   "url": "https://www.fhwa.dot.gov/policyinformation/hpms.cfm",
+   "years": {
+    "IN": 2025,
+    "KY": 2025,
+    "OH": 2025
+   }
+  },
+  "night": {
+   "by": "NASA Earth Observatory / NASA GIBS",
+   "licence": "Public domain (NASA); acknowledge NASA GIBS",
+   "name": "Black Marble 2016 (VIIRS Day/Night Band) via GIBS",
+   "url": "https://earthdata.nasa.gov/gibs"
+  },
+  "nlcd": {
+   "by": "USGS / MRLC; USDA Forest Service",
+   "licence": "Public domain (US Government)",
+   "name": "NLCD 2021 Impervious Surface; NLCD/USFS Tree Canopy Cover 2021 (v2021-4)",
+   "url": "https://www.mrlc.gov/"
+  },
+  "noise": {
+   "by": "US DOT Bureau of Transportation Statistics",
+   "licence": "Public domain (US Government)",
+   "name": "National Transportation Noise Map 2020 (road)",
+   "url": "https://www.bts.gov/geospatial/national-transportation-noise-map"
+  },
+  "parks": {
+   "by": "US National Park Service",
+   "licence": "Public domain (US Government)",
+   "name": "NPS unit boundaries; NPS visitor use statistics",
+   "url": "https://irma.nps.gov/Stats/"
+  }
+ },
+ "states": [
+  "OH",
+  "KY",
+  "IN"
+ ],
+ "v": 1
+}

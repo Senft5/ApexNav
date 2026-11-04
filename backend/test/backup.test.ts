@@ -90,6 +90,10 @@ describe("database backup", () => {
     expect(metadata!.counts.users).toBe(2);
     expect(new TextEncoder().encode(value!).byteLength).toBe(metadata!.bytes);
     expect(splitSql(value!).some((s) => s.startsWith('INSERT INTO "users"'))).toBe(true);
+    // KV metadata is capped at 1024 bytes: empty tables aren't listed, and the totals are always there
+    expect(JSON.stringify(metadata).length).toBeLessThanOrEqual(1000);
+    expect(Object.values(metadata!.counts).every((n) => n > 0)).toBe(true);
+    expect(metadata).toMatchObject({ tables: expect.any(Number), rows: expect.any(Number) });
   });
 
   it("runs from the scheduled handler and logs a line", async () => {

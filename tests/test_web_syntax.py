@@ -37,6 +37,6 @@ def test_inline_scripts_parse(page):
         _check(s, f"{page}.{i}.js")
 
 
-@pytest.mark.parametrize("js", sorted(p.name for p in WEB.glob("*.js")))
+@pytest.mark.parametrize("js", sorted(p.name for p in WEB.glob("*.js")) + sorted("route_ctx/" + p.name for p in (WEB / "route_ctx").glob("*.js")))
 def test_script_files_parse(js):
-    _check((WEB / js).read_text(), js)
+    _check((WEB / js).read_text(), js.replace("/", "_"))

@@ -105,6 +105,10 @@ targets:
         NSMotionUsageDescription: "Required to paint live G-load and surface feel onto the road map."
         # the spot dialog's photo picker offers Take Photo (IDEAS S-18); without this string iOS ends the app
         NSCameraUsageDescription: "Lets you take a photo of a spot you save. The photo stays on this phone."
+        # route context (web/route_ctx/ios_context.js, ApexContext): asked only when the driver taps My free time / This album
+        NSCalendarsFullAccessUsageDescription: "When you tap My free time, Vetta reads when your next event starts to size a drive that gets you back in time. Only the start time is used, on this phone."
+        NSCalendarsUsageDescription: "When you tap My free time, Vetta reads when your next event starts to size a drive that gets you back in time. Only the start time is used, on this phone."
+        NSAppleMusicUsageDescription: "When you tap This album, Vetta reads how long the album you're playing has left to size a drive as long as it. Nothing leaves this phone."
         UIBackgroundModes:
           - location
           - audio

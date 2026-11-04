@@ -89,6 +89,8 @@
     if (style.glyphs) for (const f of fonts) for (const range of ['0-255', '256-511', '8192-8447']) urls.push(style.glyphs.replace('{fontstack}', encodeURIComponent(f)).replace('{range}', range));
     for (const [z, x, y] of p.map) urls.push(template.replace('{z}', z).replace('{x}', x).replace('{y}', y));
     for (const [z, x, y] of p.dem) urls.push(DEM.replace('{z}', z).replace('{x}', x).replace('{y}', y));
+    // the route context bundles for the area (route_ctx/context_grid.js), so offline plans keep their traffic and land data
+    if (root.ApexContextGrid) { try { urls.push(...await root.ApexContextGrid.urlsNear(lat, lon, p.radiusKm)); } catch (_) {} }
     let done = 0, bytes = 0, k = 0;
     await Promise.all(Array.from({ length: concurrency }, async () => {
       while (k < urls.length) {

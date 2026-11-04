@@ -25,3 +25,7 @@ apexnav-db-*.sql
 /Info.plist
 /ApexNav.entitlements
 /LiveActivity/Info.plist
+
+# Context-grid ETL download cache (tools/ctx_etl)
+.ctx_cache/
+/ctx_out/

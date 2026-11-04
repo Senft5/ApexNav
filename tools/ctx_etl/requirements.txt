@@ -1,0 +1,7 @@
+# The context-grid ETL (python -m tools.ctx_etl.build). Wheels bundle GDAL/PROJ; nothing else to install.
+numpy>=1.26
+rasterio>=1.4
+pyproj>=3.6
+shapely>=2.0
+pyshp>=2.3
+pillow>=10

@@ -12,6 +12,9 @@ export interface Env {
   AUTH_LIMIT?: RateLimit;   // sign-in endpoints per IP
   BACKUPS?: KVNamespace;
   PHOTOS?: KVNamespace;     // photo bytes, key p/<id> (src/photos.ts)
+  NREL_API_KEY?: string;    // secret: NREL Alternative Fuel Stations key (src/chargers.ts); none = 503 no_key
+  CTX_KEYS?: string;        // secret: free client keys for the route-context sources, JSON (src/route_feeds.ts)
+  CTX?: KVNamespace;        // context-grid bundles, key v1/... (src/context_grid.ts); bound once the owner creates it
   FLAGS?: string;           // feature flags JSON (src/flags.ts), set in the dashboard to change a rollout without a release
   REVIEW_INVITE_HASH?: string;   // tests only: production uses the constant in auth.ts    // weekly database dumps (src/backup.ts); production only
 }

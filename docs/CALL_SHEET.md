@@ -4,6 +4,34 @@ Decisions Claude made for you, newest first. Each one says what was decided, why
 you reach one you've seen. If you disagree with a call, say so and it gets reversed; nothing here is hard to undo unless
 it says so. Things only you can do are in docs/OWNER_TODO.md.
 
+## 2026-11-04: The route engine: every free data type in one ranking
+
+You asked for every free data type in the routing, meaningfully, best in class. Five builders made it; an independent review
+found a crash, two ranking faults, two privacy gaps and about twenty dead channels, all fixed before this shipped. How it
+works, with every weight: docs/ROUTE_ENGINE.md (and the flowchart page).
+- **The highway competes again.** The app asks the router to keep off highways, which is why routes cut through
+  subdivisions and strip malls. Now a highway-friendly quickest route always competes (unless Avoid Highways is on) and
+  connector legs may use highways. Undo: `connectorCosting` and the highway candidate in route_engine.js.
+- **Each 25 m gets a road-quality score** from the speed limit, road class, signals, stops, driveways, side roads,
+  businesses (not fuel or coffee), land use, housing, built-up ground, night lights, traffic volume and noise. **Corners only count on
+  good road**, so a twisty subdivision earns nothing. Tuned on four real Cincinnati choices; undo or tune: `QUALITY`, `W`.
+- **A low speed limit only counts against a road when the road is built up.** A 30 mph road through the woods is a great
+  road; a 30 mph road with sidewalks and driveways is a side street. Undo: the built-evidence floor in route_engine.js.
+- **Unknown data never wins.** A stretch with no data takes the worst known score in the pool, not a free pass.
+- **Time matters.** Deer hour, school and church hours, game days, fog in valleys, crosswind on ridges, ice, works,
+  floods and harvest are charged for the time you'd be there, each capped on its own so one can't hide the rest; closures,
+  private roads and what your car can't fit drop a route.
+- **Privacy kept as written:** map-data servers get map squares, never the route line; our server gets 0.1° cells for
+  road data, never which roads you're planning. Weather goes by 0.05° cell centres.
+- **The planner waits up to 4 s for all the data**; if planning takes over 1.5 s the quickest route shows first and the
+  ranked one replaces it. Undo: `EARLY_MS` and the budget in registry.js.
+- **New Plan → More stamps:** Passenger aboard, Lit roads at night, Cyclist courtesy, Tunnels. **Garage car:** Fuel and
+  Range, for gaps between stations. Calendar and album length can size a loop (asked only at the tap).
+- **Busy hours per road** are built but switched off until you decide Quiet hours (OWNER_TODO).
+- **Migration 0045** (additive) applied to the preview and production databases before the merge.
+- **Keys** that add data when you make them (all free, all optional): OHGO, SeatGeek, Flickr, Mapillary, NREL, plus the
+  wider-region data grid's storage; see OWNER_TODO. Without them those sources say "unknown", never guessed.
+
 ## 2026-11-04: Sheets swipe down; the drive map zooms; a production deploy that never ran
 
 - **Menu sheets swipe down to close** (you: "i should be able to swipe this submenu out of the way"): a bottom sheet
