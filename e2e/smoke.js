@@ -33,7 +33,7 @@ function serve() {
     try { rel = decodeURIComponent(new URL(req.url, 'http://x').pathname).replace(/^\/+/, '') || 'index.html'; }
     catch (_) { res.writeHead(400); res.end(); return; }
     if (rel.startsWith(GRAPH) && (graphDir || !fs.existsSync(path.resolve(WEB, rel)))) {
-      const f = graphDir ? path.join(graphDir, path.basename(rel)) : null;
+      const f = graphDir && graphDir !== 'none' ? path.join(graphDir, path.basename(rel)) : null;   // 'none': a build without tiles
       if (f && fs.existsSync(f)) { res.writeHead(200, { 'content-type': TYPES[path.extname(f)] || 'application/octet-stream' }); fs.createReadStream(f).pipe(res); return; }
       if (rel === GRAPH + 'index.json') { res.writeHead(200, { 'content-type': 'application/json' }); res.end('{"tiles":{}}'); return; }
     }
@@ -709,7 +709,10 @@ flow('own routing: where our graph tiles cover the trip, our route wins and Valh
 }, { geolocation: { latitude: 39.155, longitude: -84.615 }, permissions: ['geolocation'] });
 
 flow('own routing: with no graph tiles for the trip, Valhalla plans it as before', async (page, base) => {
-  const { r, calls } = await ownTrip(page, base);
+  graphDir = 'none';                                              // the shipped Cincinnati tiles cover this trip: hide them
+  let out;
+  try { out = await ownTrip(page, base); } finally { graphDir = null; }
+  const { r, calls } = out;
   check(!r.own.covered && !r.own.used, 'not covered: ' + JSON.stringify(r.own));
   check(r.kinds.length >= 1 && !r.kinds.includes('own'), 'only the router\'s candidates: ' + JSON.stringify(r.kinds));
   check(calls.trace.length === 0 && calls.route.length >= 1, 'no instructions asked for: the router gave its own');
