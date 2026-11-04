@@ -3173,6 +3173,8 @@
       }
       // The best and up to two really different others stay on the card (and faint on the map) to pick from.
       const offered = FunRoute.distinctOptions(ranked, 3);
+      // the quickest already up is the only option: keep it as it is (no second draw of the same route and card)
+      if (early.fired && (await early.shown) && offered.length === 1 && offered[0].t === quickNow.t) return true;
       const t = await useOption({ id, name, request, level, quickest, list: offered }, 0);
       if (!t) return false;   // no toast: the route bar and card say it (REVIEW.md 1.2, Route bar: the bar is the toast)
       if (offered[0].infeasible && offered[0].ev && offered[0].ev.hard.length) toast(`No way round it: ${offered[0].ev.hard[0].label} on this route. Check before you go.`);   // every candidate broke a hard constraint

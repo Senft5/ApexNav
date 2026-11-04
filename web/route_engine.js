@@ -136,10 +136,10 @@
     animal_crossing: { each: 0.3, dusk: 3, label: 'deer crossings' },
     speed_bump: { each: 0.5, label: 'speed bumps', unlessChannel: 'calming_per_km' },
     stop: { each: 0.4, label: 'stop signs', unlessChannel: 'stops_per_km' },
-    viewpoint: { bonus: 1.5, bonusCap: 6, label: 'viewpoints' },
+    viewpoint: { bonus: 1.5, bonusCap: 6, label: 'viewpoints', one: 'a viewpoint' },
     covered_bridge: { bonus: 2, bonusCap: 4, label: 'a covered bridge' },
     historic: { bonus: 0.5, bonusCap: 3, label: 'history' },
-    tunnel: { bonus: 1.5, bonusCap: 4.5, pref: 'tunnels', label: 'tunnels' },
+    tunnel: { bonus: 1.5, bonusCap: 4.5, pref: 'tunnels', label: 'tunnels', one: 'a tunnel' },
     resurfaced: { bonusPerKm: 0.3, bonusCap: 3, label: 'fresh asphalt' },
     fuel_gap: { hard: true, label: 'longer than your range without fuel' },        // car.js
     past_next_event: { each: 0, perMinValue: true, label: 'past your next event' },  // ios_context.js: value = minutes late
@@ -467,7 +467,7 @@
       }
       if (km >= 0.5) out.bonuses.push({ label: 'golden light', points: Math.min(4, 0.5 * km), km });
     }
-    const counted = {};
+    const counted = {}, seen = {};
     const spanKm = (sp) => Math.max(0, (sp.toM - sp.fromM) / 1000);
     for (const sp of features(ctx)) {
       const kind = sp.kind, rule = kind && SPANS[kind];
@@ -482,6 +482,7 @@
       if (rule.bonus || rule.bonusPerKm) {
         const pts = rule.bonus || rule.bonusPerKm * spanKm(sp);
         counted[kind] = Math.min(rule.bonusCap || Infinity, (counted[kind] || 0) + pts);
+        seen[kind] = (seen[kind] || 0) + 1;
         continue;
       }
       let pts = (rule.each || 0) + (rule.perKm || 0) * spanKm(sp);
@@ -489,7 +490,8 @@
       if (rule.dusk && mom(i).deerHour === 1) pts *= rule.dusk;
       addPen(rule.label, pts, spanKm(sp));
     }
-    for (const [kind, pts] of Object.entries(counted)) if (pts > 0) out.bonuses.push({ label: SPANS[kind].label, points: pts });
+    // the why line says what's there: one viewpoint is "a viewpoint", not "viewpoints"
+    for (const [kind, pts] of Object.entries(counted)) if (pts > 0) out.bonuses.push({ label: seen[kind] === 1 && SPANS[kind].one ? SPANS[kind].one : SPANS[kind].label, points: pts, n: seen[kind] });
     // the car: width, height and weight limits, unpaved for a low car, and fuel range between stations
     const car = c.car || opts.car || null;
     if (car) {
