@@ -18,7 +18,7 @@ Layout (little-endian; every section starts on a 4-byte boundary; counts from th
      48  u32 model hash (first 8 hex digits of the route_engine.js weights hash, as a number)
      52  u8 layout flags (bit 0: `to` is u32, else u16)
      53  u8 road channels (v2: len(CHANNELS))      54  u16 reserved    56  u32 polylines (v2)
-     60  4 bytes reserved (0)
+     60  u32 via-way restrictions (v3)
     tile refs     tile_refs x (u16 i, u16 j): the other tiles edges lead to; edge to_tile k >= 1 is ref k - 1
     nodes         u16 lat[n], u16 lon[n] (GEOM_Q microdegree steps from the tile's south-west corner: 0.25 degree is
                   50 000 steps; readers give microdegrees), u32 first_edge[n + 1] (CSR: node v's edges are
@@ -37,7 +37,11 @@ Layout (little-endian; every section starts on a 4-byte boundary; counts from th
                   (both directions of a road share its polyline and its values): round(value x scale), 0..254, 255
                   unknown. The road-side evidence the router ranks with: businesses, driveways and side roads,
                   signals, stops, crossings, calming, schools, churches per km, sidewalk, built-up, density, buildings
-                  and addresses per km. Readers expand them per edge. An edge with flag
+                  and addresses per km. Readers expand them per edge.
+    via-way restrictions (v3) after the channels, in the tile of the via path's first node; each: u32 from_edge,
+                  u32 to_edge, u8 from_tile, u8 to_tile (0 this, k ref k - 1), u8 kind (0 no_*, 1 only_*), u8 n, then
+                  n x u32 via edges and n x u8 their tiles, padded to 4 bytes. Edge indices are final (the from edge's,
+                  the to edge's and each via edge's own tile). An edge with flag
                   GEOM_REV reads its polyline backwards (both directions of a two-way road share one).
 
 Values: quality, scenery 0..254 = 0..1 (255 unknown); conf 0..255 = 0..1 (the share of the model's weight known; 0 is
@@ -53,8 +57,8 @@ import struct
 from dataclasses import dataclass, field
 
 MAGIC = b"VGR1"
-VERSION = 2
-READS = (1, 2)
+VERSION = 3
+READS = (1, 2, 3)
 # (name, scale): u8 = round(value * scale), capped at 254; 255 = unknown. Order is the file's.
 CHANNELS = (("business_per_km", 4), ("access_per_km", 2), ("signals_per_km", 20), ("stops_per_km", 20),
             ("crossings_per_km", 10), ("calming_per_km", 20), ("schools_per_km", 20), ("worship_per_km", 20),
@@ -134,6 +138,15 @@ class Restriction:
 
 
 @dataclass
+class ViaRestriction:
+    """A via-way restriction: from edge, then the via edges in order, then the to edge (each (tile, final index))."""
+    from_edge: tuple[tuple[int, int], int]
+    via: list[tuple[tuple[int, int], int]]
+    to_edge: tuple[tuple[int, int], int]
+    only: bool = False
+
+
+@dataclass
 class Tile:
     i: int
     j: int
@@ -142,6 +155,7 @@ class Tile:
     node_flags: list[int] = field(default_factory=list)
     edges: list[tuple[int, Edge]] = field(default_factory=list)   # (from node, edge)
     restrictions: list[Restriction] = field(default_factory=list)
+    via_restrictions: list[ViaRestriction] = field(default_factory=list)
     geoms: list[list[tuple[int, int]]] = field(default_factory=list)   # polylines, microdegrees (lat, lon)
     geom_ch: list[dict] = field(default_factory=list)   # per polyline: {channel: value | None}
     build_day: int = 0
@@ -219,6 +233,14 @@ def write_tile(t: Tile) -> bytes:
     for r in t.restrictions:
         rest.append((r.from_edge if r.from_tile not in (None, (t.i, t.j)) else remap[r.from_edge], r.via, remap[r.to_edge],
                      ref(r.from_tile), 1 if r.only else 0))
+    vbytes = bytearray()
+    for vr in t.via_restrictions:
+        if len(vr.via) > 255:
+            continue
+        vbytes += struct.pack("<IIBBBB", vr.from_edge[1], vr.to_edge[1], ref(vr.from_edge[0]), ref(vr.to_edge[0]), 1 if vr.only else 0, len(vr.via))
+        vbytes += struct.pack(f"<{len(vr.via)}I", *[x[1] for x in vr.via])
+        vbytes += bytes(ref(x[0]) for x in vr.via)
+        _pad4(vbytes)
     name_bytes = bytearray()
     name_offs = [0]
     for s in names:
@@ -228,9 +250,9 @@ def write_tile(t: Tile) -> bytes:
     out = bytearray()
     out += MAGIC
     wide = any(e.to > 0xFFFF for _, e in edges)
-    out += struct.pack("<HHiiIIIIIIIIIBBHI", VERSION, HEADER_BYTES, t.i, t.j, n, e_count, len(rest), len(names),
+    out += struct.pack("<HHiiIIIIIIIIIBBHII", VERSION, HEADER_BYTES, t.i, t.j, n, e_count, len(rest), len(names),
                        len(name_bytes), len(geo), len(refs), t.build_day, t.model_hash & 0xFFFFFFFF, 1 if wide else 0,
-                       len(CHANNELS), 0, len(t.geoms))
+                       len(CHANNELS), 0, len(t.geoms), sum(1 for vr in t.via_restrictions if len(vr.via) <= 255))
     out += b"\0" * (HEADER_BYTES - len(out))
     for ri, rj in refs:
         out += struct.pack("<HH", ri, rj)
@@ -281,6 +303,7 @@ def write_tile(t: Tile) -> bytes:
             col.append(UNKNOWN_U8 if v is None or v != v else max(0, min(254, round(v * scale))))
         out += bytes(col)
     _pad4(out)
+    out += vbytes
     return bytes(out)
 
 
@@ -299,7 +322,7 @@ def read_tile(b: bytes) -> dict:
     """v1 bytes -> plain dict (columns as lists): the checks' and tests' reader. The phone uses web/graph_tiles.js."""
     if b[:4] != MAGIC:
         raise ValueError("not a VGR1 tile")
-    (ver, hb, ti, tj, n, e, r, nn, nb, gb, nref, day, mh, layout, nch, _r, ng) = struct.unpack_from("<HHiiIIIIIIIIIBBHI", b, 4)
+    (ver, hb, ti, tj, n, e, r, nn, nb, gb, nref, day, mh, layout, nch, _r, ng, nvr) = struct.unpack_from("<HHiiIIIIIIIIIBBHII", b, 4)
     if ver not in READS:
         raise ValueError(f"tile version {ver}")
     p = hb
@@ -358,6 +381,20 @@ def read_tile(b: bytes) -> dict:
             colv = b[p:p + ng]
             p += ng
             ch[cname] = [None if colv[gi[goff[k]]] == UNKNOWN_U8 else colv[gi[goff[k]]] / scale for k in range(e)]
+        align()
+    tref = lambda x: None if x == 0 else tuple(refs[x - 1])  # noqa: E731
+    via_r = []
+    if ver >= 3:
+        for _ in range(nvr):
+            fe, te, fr, tr, kind, nv = struct.unpack_from("<IIBBBB", b, p)
+            p += 12
+            ve = list(struct.unpack_from(f"<{nv}I", b, p))
+            p += 4 * nv
+            vt = list(b[p:p + nv])
+            p += nv
+            align()
+            via_r.append({"from_edge": fe, "from_tile": tref(fr), "via": ve, "via_tiles": [tref(x) for x in vt],
+                          "to_edge": te, "to_tile": tref(tr), "only": bool(kind)})
     olat, olon = tile_origin(ti, tj)
 
     frm = [0] * e
@@ -388,4 +425,4 @@ def read_tile(b: bytes) -> dict:
             "edges": {"to": to, "to_tile": [None if x == 0 else tuple(refs[x - 1]) for x in to_tile], "len_dm": len_dm,
                       "t_ds": t_ds, "quality": quality, "scenery": scenery, "fun": fun, "conf": conf, "flags": flags,
                       "cls": cls, "speed": speed, "name": name, "geom_off": goff, "h_in": h_in, "h_out": h_out, "ch": ch},
-            "restrictions": rest, "names": names, "geom": geom}
+            "restrictions": rest, "via_restrictions": via_r, "names": names, "geom": geom}

@@ -18,14 +18,17 @@
 //            crossings, calming, schools and churches per km, sidewalk 0/1, built 0..1, density 0..15, buildings and
 //            addresses per km; {} in a v1 tile) },
 //   restrictions: [{ fromEdge, fromTile (packed key), via (local node), toEdge (local edge), only }],
+//   restrictionsVia: [{ from, fromTile, via: [edge...], viaTiles: [key...], to, toTile, only }] (v3, via-way: no / only
+//            from edge `from` through the via edges in order onto `to`; every index is in its own tile, keys packed),
 //   names: [string],
 //   geom(edgeIdx) -> Float64Array [lat0, lon0, lat1, lon1, ...] in degrees, in the edge's direction of travel,
 // }
-// load(i, j, opts?) -> Promise<decoded | null>: memory, then IndexedDB ('vetta-graph'), then the network; null when the
-// index doesn't list the tile or it can't be had. Unknown stays unknown: a 255 / 65535 is never read as 0.
+// load(i, j, opts?) -> Promise<decoded | null>: memory, then IndexedDB ('vetta-graph'), then the shipped tiles
+// (data/graph/v1, Cincinnati) or the Worker's region (/api/graph/v1, OH+KY+IN); null when neither index lists the tile or
+// it can't be had. index() is the union of both indexes; prefetchArea(bbox) keeps a saved area's tiles for offline. Unknown stays unknown: a 255 / 65535 is never read as 0.
 (function (root) {
   'use strict';
-  const VERSION = 2, READS = [1, 2], HEADER = 64, TILE_DEG = 0.25, BASE = 'data/graph/v1/', GEOM_Q = 5;   // geometry in 5 µdeg steps
+  const VERSION = 3, READS = [1, 2, 3], HEADER = 64, TILE_DEG = 0.25, BASE = 'data/graph/v1/', GEOM_Q = 5;   // geometry in 5 µdeg steps
   const UNKNOWN_U8 = 255, UNKNOWN_FUN = 0xffff, NO_NAME = 0xffff;
   const FLAGS = { oneway: 1, toll: 2, ferry: 4, unpaved: 8, tunnel: 16, bridge: 32, motorway: 64, ramp: 128, roundabout: 256, private: 512,
     geomRev: 1024, speedEst: 2048, barrier: 4096, destination: 8192 };
@@ -55,7 +58,7 @@
     const n = dv.getUint32(16, true), e = dv.getUint32(20, true), r = dv.getUint32(24, true), nn = dv.getUint32(28, true);
     const nb = dv.getUint32(32, true), gb = dv.getUint32(36, true), nref = dv.getUint32(40, true);
     const buildDay = dv.getUint32(44, true), modelHash = dv.getUint32(48, true), wide = dv.getUint8(52) & 1;
-    const nch = version >= 2 ? dv.getUint8(53) : 0, ng = version >= 2 ? dv.getUint32(56, true) : 0;
+    const nch = version >= 2 ? dv.getUint8(53) : 0, ng = version >= 2 ? dv.getUint32(56, true) : 0, nvr = version >= 3 ? dv.getUint32(60, true) : 0;
     let p = hb;
     const refs = [];
     for (let k = 0; k < nref; k++) refs.push(keyOf(dv.getUint16(p + 4 * k, true), dv.getUint16(p + 4 * k + 2, true)));
@@ -112,6 +115,22 @@
         p += ng;
       }
     }
+    align();
+    // via-way restrictions (v3): from edge, the via edges in order, to edge; each with its tile's packed key
+    const restrictionsVia = [];
+    const refKey = (x) => (x ? refs[x - 1] : self);
+    for (let k = 0; k < nvr; k++) {
+      const from = dv.getUint32(p, true), to = dv.getUint32(p + 4, true), fr = dv.getUint8(p + 8), tr = dv.getUint8(p + 9);
+      const only = dv.getUint8(p + 10) === 1, nv = dv.getUint8(p + 11);
+      p += 12;
+      const via = [], viaTiles = [];
+      for (let m = 0; m < nv; m++) via.push(dv.getUint32(p + 4 * m, true));
+      p += 4 * nv;
+      for (let m = 0; m < nv; m++) viaTiles.push(refKey(dv.getUint8(p + m)));
+      p += nv;
+      align();
+      restrictionsVia.push({ from, fromTile: refKey(fr), via, viaTiles, to, toTile: refKey(tr), only });
+    }
     const toTile = new Uint32Array(e), from = new Uint32Array(e);
     for (let k = 0; k < e; k++) toTile[k] = toRef[k] ? refs[toRef[k] - 1] : self;
     for (let v = 0; v < n; v++) for (let k = firstEdge[v]; k < firstEdge[v + 1]; k++) from[k] = v;
@@ -136,7 +155,7 @@
       tile: { i: ti, j: tj, key: self, buildDay, modelHash, refs },
       nodes: { count: n, lat, lon, firstEdge, flags: nflags },
       edges: { count: e, ch, from, to, toTile, len_dm, t_ds, quality, scenery, fun, conf, flags, cls, speed, name, geomOff, hIn, hOut },
-      restrictions, names, geom,
+      restrictions, restrictionsVia, names, geom,
     };
   }
 
@@ -170,34 +189,96 @@
       } catch (_) { ok(null); }
     });
   }
+  // Two sources: the tiles shipped in the app (data/graph/v1: Cincinnati) and the region's from the Worker
+  // (/api/graph/v1: the rest of Ohio, Kentucky and Indiana, relayed from the repository's graph-data branch). The coverage
+  // is the union of their indexes; the region's index is asked once a day (kept in IndexedDB for offline). A tile comes
+  // from memory, then IndexedDB, then its source; one fetched from the Worker is kept in IndexedDB, so a road once
+  // planned (or an area saved, prefetchArea) works offline.
+  const REGION_PATH = '/api/graph/v1/', DAY = 864e5, WORKER = 'https://apexnav.senftns.workers.dev';
+  const apiBase = (o) => (o.apiBase !== undefined ? o.apiBase : root.ApexSync && root.ApexSync.apiBase != null ? root.ApexSync.apiBase
+    : root.location && root.location.protocol === 'apexnav:' ? WORKER : '');
+  const regionBase = (o) => (o.region === null ? null : o.region || apiBase(o) + REGION_PATH);
+  const fetchOf = (o) => o.fetchFn || (root.fetch && root.fetch.bind(root));
   const indexes = new Map();
-  /** The base's index.json ({ tiles: { "i_j": { bytes, nodes, edges } }, built, osm, model }), once per page; null if none. */
-  function index(opts = {}) {
-    const base = opts.base || BASE, fetchFn = opts.fetchFn || (root.fetch && root.fetch.bind(root));
-    if (indexes.has(base)) return indexes.get(base);
+  /** One base's index.json, null if none: memory, then (within ttl) IndexedDB, then the network, else the kept copy. */
+  function baseIndex(base, fetchFn, ttl, memoMs) {
+    const had = indexes.get(base);
+    if (had && Date.now() - had.at < had.ttl) return had.p;
     const p = (async () => {
-      try { const r = await fetchFn(base + 'index.json'); if (r.ok) { const j = await r.json(); if (j && j.tiles) { idb('readwrite', base + 'index.json', JSON.stringify(j)); return j; } } } catch (_) {}
-      try { const c = await idb('readonly', base + 'index.json'); return c ? JSON.parse(c) : null; } catch (_) { return null; }
+      let kept = null;
+      try { const c = await idb('readonly', `ix:${base}`); kept = c ? JSON.parse(c) : null; } catch (_) { kept = null; }
+      if (kept && kept.j && Date.now() - kept.at < ttl) return kept.j;
+      try {
+        const r = await fetchFn(base + 'index.json');
+        if (r.ok) { const j = await r.json(); if (j && j.tiles) { idb('readwrite', `ix:${base}`, JSON.stringify({ at: Date.now(), j })); return j; } }
+      } catch (_) {}
+      return kept ? kept.j : null;
     })();
-    indexes.set(base, p);
-    p.then((v) => { if (!v) indexes.delete(base); });
+    const memo = { at: Date.now(), p, ttl: memoMs };
+    indexes.set(base, memo);
+    p.then((v) => { if (!v) memo.ttl = 6e5; });          // none there (offline, or no region yet): ask again in 10 min
     return p;
   }
-  /** Tile (i, j): decoded, or null where the index doesn't have it or it can't be loaded (offline, never saved). */
-  async function load(i, j, opts = {}) {
-    const base = opts.base || BASE, fetchFn = opts.fetchFn || (root.fetch && root.fetch.bind(root));
-    const ix = await index({ base, fetchFn });
-    const name = `${i}_${j}`;
-    if (ix && ix.tiles && !ix.tiles[name]) return null;
-    const ver = ix && ix.built ? ix.built : '';
+  async function sources(o = {}) {
+    const fetchFn = fetchOf(o), bundled = o.base || BASE, region = regionBase(o);
+    const [b, r] = await Promise.all([baseIndex(bundled, fetchFn, 0, Infinity), region ? baseIndex(region, fetchFn, DAY, DAY) : Promise.resolve(null)]);
+    return { bundled, region, b, r };
+  }
+  const has = (ix, name) => !!(ix && ix.tiles && Object.prototype.hasOwnProperty.call(ix.tiles, name));
+  const buildOf = (ix) => (ix ? String(ix.build || ix.built || '') : '');
+  /**
+   * Where tile `name` comes from, in order. The shipped copy first; but a tile's edges into its neighbours index their
+   * nodes as THAT build numbered them, so where the region holds the tile from another build, its build wins (the shipped
+   * copy stays the fallback offline) and a route never mixes two builds across a tile edge.
+   */
+  function order(src, name) {
+    const inB = has(src.b, name), inR = has(src.r, name);
+    const same = !src.r || !buildOf(src.r) || buildOf(src.r) === 'none' || buildOf(src.r) === buildOf(src.b);
+    const B = [src.bundled, buildOf(src.b)], R = src.region ? [src.region, buildOf(src.r)] : null;
+    if (inB && (!inR || same)) return inR && R ? [B, R] : [B];
+    if (inR && R) return inB ? [R, B] : [R];
+    return [];
+  }
+  /** The union of both indexes ({ tiles: { "i_j": meta }, bundled, region }), what the router plans over; null if none. */
+  async function index(o = {}) {
+    const src = await sources(o);
+    if (!src.b && !src.r) return null;
+    const tiles = { ...((src.r && src.r.tiles) || {}), ...((src.b && src.b.tiles) || {}) };
+    return { version: VERSION, tiles, bundled: src.b ? { build: buildOf(src.b), tiles: Object.keys(src.b.tiles || {}).length } : null,
+      region: src.r ? { build: buildOf(src.r), tiles: Object.keys(src.r.tiles || {}).length } : null };
+  }
+  async function fetchTile(base, ver, name, fetchFn, keep) {
     const key = `${base}${name}.vgr@${ver}`;
     if (mem.has(key)) { const t = mem.get(key); remember(key, t); return t; }
     let bytes = await idb('readonly', key);
     if (!bytes && fetchFn) {
-      try { const r = await fetchFn(`${base}${name}.vgr`); if (r.ok) { bytes = await r.arrayBuffer(); idb('readwrite', key, bytes); } } catch (_) {}
+      try { const r = await fetchFn(`${base}${name}.vgr`); if (r.ok) { bytes = await r.arrayBuffer(); if (keep) idb('readwrite', key, bytes); } } catch (_) {}
     }
     if (!bytes) return null;
     try { const t = decode(bytes); remember(key, t); return t; } catch (_) { return null; }
+  }
+  /** Tile (i, j): decoded, or null where neither index has it or it can't be had (offline, never fetched). */
+  async function load(i, j, o = {}) {
+    const fetchFn = fetchOf(o), src = await sources(o), name = `${i}_${j}`;
+    for (const [base, ver] of order(src, name)) {
+      const t = await fetchTile(base, ver, name, fetchFn, true);
+      if (t) return t;
+    }
+    return null;
+  }
+  /**
+   * Keep every graph tile a box needs for offline use (web/offline_tiles.js calls it when an area is saved): bbox
+   * { s, w, n, e } or [s, w, n, e]. Resolves { tiles, kept }: the tiles in the box that either index has, and how many are
+   * now loadable without the network.
+   */
+  async function prefetchArea(bbox, o = {}) {
+    const [s, w, n, e] = Array.isArray(bbox) ? bbox : [bbox.s, bbox.w, bbox.n, bbox.e];
+    const src = await sources(o), want = tilesIn(s, w, n, e).map(({ i, j }) => `${i}_${j}`).filter((k) => has(src.b, k) || has(src.r, k));
+    let kept = 0, k = 0;
+    await Promise.all(Array.from({ length: Math.min(4, want.length) }, async () => {
+      while (k < want.length) { const [i, j] = want[k++].split('_').map(Number); if (await load(i, j, o)) kept++; }
+    }));
+    return { tiles: want.length, kept };
   }
   /** The tiles (i, j) a box touches (degrees). */
   function tilesIn(south, west, north, east) {
@@ -206,7 +287,7 @@
     return out;
   }
 
-  const api = { VERSION, READS, CHANNELS, BASE, TILE_DEG, FLAGS, NODE_FLAGS, CLASS, UNKNOWN_U8, UNKNOWN_FUN, NO_NAME, tileOf, keyOf, unkey, origin, unq8, funPts, decode, index, load, tilesIn, _mem: mem };
+  const api = { VERSION, READS, CHANNELS, BASE, TILE_DEG, FLAGS, NODE_FLAGS, CLASS, UNKNOWN_U8, UNKNOWN_FUN, NO_NAME, tileOf, keyOf, unkey, origin, unq8, funPts, decode, index, load, prefetchArea, tilesIn, _mem: mem, _indexes: indexes };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   root.ApexGraphTiles = api;
 })(typeof window !== 'undefined' ? window : globalThis);

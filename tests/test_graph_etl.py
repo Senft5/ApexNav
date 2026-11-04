@@ -88,7 +88,8 @@ def toy(tmp_path):
             4: ([7, 6], {"highway": "residential", "name": "Back Lane", "oneway": "-1"}), 5: ([6, 3], {"highway": "residential", "name": "Back Lane"}),
             6: ([20, 21, 22], {"highway": "residential", "name": "Dead End"}), 7: ([4, 20], {"highway": "residential", "name": "Dead End"}),
             8: ([2, 30], {"highway": "service", "service": "driveway"})}
-    rels = [([("w", 1, "from"), ("n", 3, "via"), ("w", 5, "to")], {"type": "restriction", "restriction": "no_right_turn"})]
+    rels = [([("w", 1, "from"), ("n", 3, "via"), ("w", 5, "to")], {"type": "restriction", "restriction": "no_right_turn"}),
+            ([("w", 1, "from"), ("w", 2, "via"), ("w", 7, "to")], {"type": "restriction", "restriction": "no_left_turn"})]
     p = tmp_path / "toy.osm.pbf"
     write_osm(p, nodes, ways, rels)
     return p
@@ -140,6 +141,11 @@ def test_full_build_on_the_toy_applies_the_restriction(tmp_path):
     assert len(bl) == 1
     # the restriction: from Main Street's west edge arriving at node 3, onto Back Lane leaving node 3
     assert len(r["restrictions"]) == 1
+    # the via-way one: Main Street west, along Main Street east (3 -> 4), onto Dead End (4 -> 20)
+    (vr,) = r["via_restrictions"]
+    assert names[e["name"][vr["from_edge"]]] == "Main Street" and e["to"][vr["from_edge"]] == via and not vr["only"]
+    assert len(vr["via"]) == 1 and names[e["name"][vr["via"][0]]] == "Main Street" and nd["first_edge"][via] <= vr["via"][0] < nd["first_edge"][via + 1]
+    assert names[e["name"][vr["to_edge"]]] == "Dead End"
     rs = r["restrictions"][0]
     frm = rs["from_edge"]
     assert e["to"][frm] == via and names[e["name"][frm]] == "Main Street" and rs["via"] == via and not rs["only"]

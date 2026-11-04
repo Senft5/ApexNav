@@ -113,7 +113,19 @@ phone's reader); tests/test_graph_tiles.py round-trips through both. What a rout
   `cls`: 0 motorway .. 7 service, 8 track, 9 ferry. `speed`: km/h, posted or the estimate.
 - Restrictions (via node, in the via node's tile): `{ fromEdge, fromTile, via, toEdge, only }`. A via-way restriction is
   counted in index.json `stats` and not applied.
-- index.json: `{ version, built, osm (replication timestamp), source, model (sha256 of the engine's weights, the corner
+- **Format v3** adds the via-way restriction table (`restrictionsVia: [{ from, fromTile, via: [edges], viaTiles, to,
+  toTile, only }]`, every index in its own tile, keys packed); readers open v1, v2 and v3. A via-way restriction whose
+  via way isn't drivable (a motorway's emergency crossover) is counted in `stats`, nothing to apply.
+- **The shipped set is the region build's** (tools/graph_etl/bundle.py after every region build), so it is used first.
+- **The context grid region-wide**: tools/ctx_etl `--preset region` in six shards (ctx-region.yml) on graph-data
+  `ctx/v1/`, served by /api/ctx/v1/ (KV first, then the branch); the graph's band jobs score with it when present.
+- **Where tiles come from** (`ApexGraphTiles.load`): memory, IndexedDB, then the shipped Cincinnati tiles
+  (data/graph/v1) or the region's (`<api>/api/graph/v1/`); `index()` is the union of both indexes (the region's asked
+  once a day, kept for offline). Every tile has a `build` id (the extract's week + the model hash) and the shipped copy is
+  used first only while the region holds the same build: a tile's edges into a neighbour index the neighbour's nodes as
+  their build numbered them, so a route never mixes two builds across a tile edge. `prefetchArea(bbox)` keeps an area's
+  tiles in IndexedDB; Save area (web/offline_tiles.js) calls it.
+- index.json: `{ version, build, tile_count, built, osm (replication timestamp), source, model (sha256 of the engine's weights, the corner
   weights and the time model), model_files (each scored file's hash), bbox, tiles: { "i_j": { bytes, nodes, edges,
   restrictions } }, bytes, stats }`. `CHECK.txt` beside it is the build's spot-check table.
 
@@ -150,8 +162,10 @@ phone's reader); tests/test_graph_tiles.py round-trips through both. What a rout
 
 ## 7. What the owner has to do
 
-- For the region beyond Cincinnati: turn on R2 in the Cloudflare dashboard (or give a Cloudflare API token as a GitHub
-  secret) so CI can upload the region's tiles. Cincinnati works without it.
+- Nothing. The region's tiles (OH+KY+IN) live on this repository's `graph-data` branch, built by
+  .github/workflows/graph-region.yml, and the Worker relays them at `/api/graph/v1/` (backend/src/graph.ts) from
+  raw.githubusercontent.com with the edge cache in front: free, no R2, no KV, no secrets (2026-11-04, the owner: free
+  tier, no new costs).
 
 ## 8. Status
 
@@ -310,6 +324,13 @@ phone's reader); tests/test_graph_tiles.py round-trips through both. What a rout
     Every pick at least as good as production's; warm ranked 0.8-1.5 s. Not met: the warm first route is still 20-70 ms
     slower than cold in 4 runs (the worker answers the first question 70-90 ms after Enter in a warm session, 5-100 ms
     cold; not found yet).
+- 2026-11-04 (region): OH+KY+IN built by .github/workflows/graph-region.yml (6 bands in parallel, 1 h 42 min) and
+  committed to the `graph-data` branch (ba6787a): 584 tiles, 228.9 MB (largest 4.5 MB), 5.26 M edges, 2.15 M nodes,
+  build 2026-45-95960e6d; 1,211 via-way restrictions applied (1,504 through undrivable crossovers). The preview Worker
+  serves them (/api/graph/v1/388_519.vgr, Columbus: 2.9 MB, decodes, 69,058 edges). Not yet: the Cache API is a no-op
+  on workers.dev, so each tile request goes to raw GitHub until the Worker has a custom domain; the context grid
+  covers only Cincinnati, so outside it those channels are unknown; the shipped Cincinnati tiles are an older build
+  than the region's, so the phone uses the region's there until both are rebuilt together.
 - 2026-11-05 (night): the speed round (branch claude/own-routing-fast):
   - The card is final on the tile ranking with the time-dependent context as cached for the area (the forecast not
     waited for); the fresh context (weather, events, works, deer) re-ranks afterwards and swaps the route only for a
@@ -349,9 +370,15 @@ phone's reader); tests/test_graph_tiles.py round-trips through both. What a rout
     singles, pairs and (25 km and up) triples, each way round; the length guessed as the stages plus 1.7 x each
     connector's crow line; the 6 best by stage score x length fit routed through a point every 1.5 km along each stage
     (snapped to the stage's road and heading), legs with motorway/trunk x LOOP_HWY_X and earlier legs x3; over 40 %
-    driven twice dropped; loops more than 60 % off the length dropped when one within 40 % exists. `hwyShare` per loop.
+    driven twice dropped; loops more than 60 % off the length dropped. `hwyShare` per loop.
   - Planner: loop legs and the loop matrix on `loopCosting` (use_highways 0.25 Quick, 0.1 Fun / Long way); the circle
     only when nothing else was built; the ranking is `FunRoute.loopRank` (Fun score + level adjustment - highway cost,
     then dominance); `apexDebug.lastLoop` lists every loop with its kind, value, highway share, corners, time and pick.
   - Live before and after (the real app in Playwright, production's Worker; table in STATE.md 2026-11-06).
 
+- 2026-11-04 (region grid): the context grid for OH+KY+IN on graph-data ctx/v1 (ctx-region.yml, 6 shards, 32 min):
+  33 bundles, 35.6 MB, 1.46 M HPMS road spans, 13,574 fatal crashes; served at /api/ctx/v1/ (KV first, then the branch).
+  The region graph was rebuilt with it (build 2026-45-95960e6d-gebab6b, 584 tiles, 228.9 MB; Columbus tile 388_519:
+  known share of the model's weight 0.65 -> 0.76), and the shipped Cincinnati set is that build's 16 tiles (17.4 MB),
+  committed by the workflow. The relay asks raw GitHub with Cloudflare's subrequest cache (a week, keyed by build);
+  timed on the preview, repeats were 0.3-0.8 s against 0.6-1.0 s first, too noisy from here to call a cache hit.
