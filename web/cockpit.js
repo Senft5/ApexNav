@@ -3396,7 +3396,10 @@
     // Coverage is answered on the page from index.json (fetched once): asking the worker queued the question behind its
     // tile loading, live on the preview 1.5 s, and the plan gave up on our tiles (2026-11-05)
     let ownIndexP = null;
-    const ownIndex = () => (ownIndexP || (ownIndexP = fetch('data/graph/v1/index.json').then((r) => (r.ok ? r.json() : null)).then((j) => ApexGraphRouter.indexKeys(j))
+    // the shipped tiles' index and the region's (graph_tiles.js index(): the union, the region's asked once a day), so a
+    // trip anywhere in OH+KY+IN is ours; without the reader, the shipped index alone
+    const ownIndex = () => (ownIndexP || (ownIndexP = (window.ApexGraphTiles && ApexGraphTiles.index ? ApexGraphTiles.index()
+      : fetch('data/graph/v1/index.json').then((r) => (r.ok ? r.json() : null))).then((j) => ApexGraphRouter.indexKeys(j))
       .catch(() => { ownIndexP = null; return new Set(); })));
     const ownRouter = () => (ownClient || (ownClient = Object.assign(ApexGraphRouter.client({ url: 'graph_worker.js', timeoutMs: OWN_PLAN_MS }),
       { covers: (points) => ownIndex().then((keys) => ApexGraphRouter.covers(keys, points)) })));
@@ -5778,8 +5781,19 @@
       placeAsk.at = Date.now(); placeAsk.lat = p.lat; placeAsk.lon = p.lon;
       const la = p.lat.toFixed(2), lo = p.lon.toFixed(2), d = {};
       try { const r = await RouteLoading.json(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${la}&lon=${lo}&zoom=12&addressdetails=1`, {}, 6000); d.place = ApexPlacePlate.town(r); } catch (_) {}
-      try { const w = await RouteLoading.json(`https://api.open-meteo.com/v1/forecast?latitude=${la}&longitude=${lo}&current=temperature_2m,weather_code`, {}, 6000);
-        if (w && w.current) { d.tempC = w.current.temperature_2m; d.code = w.current.weather_code; } } catch (_) {}
+      // the forecast's now and its last 3 hours of rain, and (US) the nearest NWS stations' latest observation, together
+      const om = RouteLoading.json(`https://api.open-meteo.com/v1/forecast?latitude=${la}&longitude=${lo}&current=temperature_2m,weather_code,precipitation&hourly=precipitation&past_hours=3&forecast_hours=1&timezone=GMT`, {}, 6000)
+        .then((w) => { if (w && w.current) { d.tempC = w.current.temperature_2m; d.code = w.current.weather_code; d.mmNow = w.current.precipitation; } d.mm3h = ApexPlacePlate.pastMm(w); }).catch(() => {});
+      const nws = (async () => {
+        const pt = await RouteLoading.json(`https://api.weather.gov/points/${la},${lo}`, {}, 6000);
+        const st = await RouteLoading.json(pt.properties.observationStations, {}, 6000);
+        const ids = ((st && st.features) || []).slice(0, 3).map((f) => f.properties && f.properties.stationIdentifier).filter(Boolean);
+        const got = await Promise.allSettled(ids.map((id) => RouteLoading.json(`https://api.weather.gov/stations/${id}/observations/latest`, {}, 6000)));
+        const obs = got.filter((g) => g.status === 'fulfilled').map((g) => ApexPlacePlate.obsOf(g.value && g.value.properties)).filter(Boolean);
+        obs.sort((a, b) => a.ageMin - b.ageMin);                         // the freshest of the nearest three
+        d.obs = obs[0] || null;
+      })().catch(() => {});
+      await Promise.all([om, nws]);
       placeAsk.data = d;
       $('placePlate').textContent = ApexPlacePlate.text(d, ApexUnits.metric());
       paintPlacePlate();

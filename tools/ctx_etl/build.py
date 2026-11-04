@@ -35,6 +35,8 @@ PRESETS = {
     "cincinnati": {"states": ["OH", "KY", "IN"], "bbox": [-84.90, 38.70, -83.95, 39.33], "out": "web/data/ctx/v1"},
     # The launch region: the owner's Cincinnati plus the Southern Appalachians.
     "launch": {"states": ["OH", "KY", "IN", "WV", "TN", "NC", "VA"], "bbox": None, "out": "ctx_out/v1"},
+    # Ohio, Kentucky and Indiana: the region Vetta's own routing covers (served from the graph-data branch)
+    "region": {"states": ["OH", "KY", "IN"], "bbox": None, "out": "ctx_out/v1"},
 }
 RASTERS = ["night_lights", "impervious_pct", "canopy_pct", "noise_db", "housing_density", "population_density",
            "address_density", "median_year_built", "flood_zone", "cropland_class", "park_unit"]
@@ -126,6 +128,12 @@ def build(args):
     for x, y in tiles:
         bundles.setdefault((x // 16, y // 16), []).append((x % 16, y % 16))
     ctx.log(f"region {states} {['%.3f' % v for v in rbox]}: {len(tiles)} z12 tiles in {len(bundles)} bundles")
+    if args.shard:
+        # one of n parallel jobs (.github/workflows/ctx-region.yml): every n-th bundle, the coverage still the whole region's
+        k, n = (int(v) for v in args.shard.split("/"))
+        mine = sorted(bundles)[k::n]
+        bundles = {b: bundles[b] for b in mine}
+        ctx.log(f"shard {k}/{n}: {len(bundles)} bundles {sorted(bundles)}")
 
     # region-wide sources, loaded once
     counties = sources.county_boundaries(ctx, states)
@@ -256,6 +264,7 @@ def main(argv=None):
     ap.add_argument("--out", help="output directory (default: the preset's)")
     ap.add_argument("--cache", default=os.environ.get("CTX_CACHE", ".ctx_cache"))
     ap.add_argument("--threads", type=int, default=8)
+    ap.add_argument("--shard", help="k/n: build only every n-th bundle starting at k (parallel jobs; merge_index joins them)")
     ap.add_argument("--only", help="comma-separated channels (plus 'hpms', 'fars') to build, for testing")
     args = ap.parse_args(argv)
     if not args.preset and not args.states:
@@ -263,5 +272,37 @@ def main(argv=None):
     build(args)
 
 
+def merge_index(out_dir, shard_dirs):
+    """Join parallel shards (--shard) into out_dir: python -m tools.ctx_etl.build --merge OUT SHARD_DIR..."""
+    import shutil
+    ix = None
+    for d in shard_dirs:
+        p = os.path.join(d, "index.json")
+        if not os.path.exists(p):
+            continue
+        j = json.load(open(p))
+        if ix is None:
+            ix = {k: v for k, v in j.items() if k not in ("bundles", "bytes")}
+            ix["bundles"], ix["bytes"] = {}, 0
+        for key, meta in j["bundles"].items():
+            bx, by = key.split("/")
+            dst = os.path.join(out_dir, str(grid.BUNDLE_Z), bx, f"{by}.vcg")
+            os.makedirs(os.path.dirname(dst), exist_ok=True)
+            shutil.copyfile(os.path.join(d, str(grid.BUNDLE_Z), bx, f"{by}.vcg"), dst)
+            ix["bundles"][key] = meta
+            ix["bytes"] += meta["bytes"]
+        ix.setdefault("channels", {}).update(j.get("channels", {}))
+        ix.setdefault("sources", {}).update(j.get("sources", {}))
+    os.makedirs(out_dir, exist_ok=True)
+    with open(os.path.join(out_dir, "index.json"), "w") as f:
+        json.dump(ix or {"v": VERSION, "bundles": {}}, f, indent=1, sort_keys=True)
+        f.write("\n")
+    return ix
+
+
 if __name__ == "__main__":
+    if len(sys.argv) > 2 and sys.argv[1] == "--merge":
+        r = merge_index(sys.argv[2], sys.argv[3:])
+        print(f"{len(r['bundles'])} bundles, {r['bytes'] / 1e6:.1f} MB")
+        sys.exit(0)
     sys.exit(main())

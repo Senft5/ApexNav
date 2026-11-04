@@ -28,3 +28,11 @@ def test_area_plan_and_protocol():
     assert out["big"]["n"] <= 2500 and out["big"]["r"] < 60, "too big an area shrinks to fit"
     assert out["tile"]["url"].startswith("apexc://https://tiles.openfreemap.org/") and out["style"]["url"].startswith("apexc://")
     assert out["sprite"] is None and out["other"] is None, "only map tiles, the style, its source and fonts"
+
+
+def test_saving_an_area_keeps_its_graph_tiles():
+    """Own routing offline (docs/OWN_ROUTING.md): Save area also keeps the area's road-network tiles
+    (web/graph_tiles.js prefetchArea, IndexedDB), and the page loads the tile reader for it."""
+    src = open(os.path.join(ROOT, "web", "offline_tiles.js")).read()
+    assert "root.ApexGraphTiles.prefetchArea({ s: lat - dLat, w: lon - dLon, n: lat + dLat, e: lon + dLon })" in src
+    assert '<script src="graph_tiles.js" defer></script>' in open(os.path.join(ROOT, "web", "index.html")).read()

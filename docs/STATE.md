@@ -61,6 +61,27 @@
 - Exact next task: when web/data/graph/v1 has the Cincinnati tiles, serve locally and run the live harness
   (scratchpad live2/run.js with BASE=) on the 7 cases; tune `K` in graph_router.js on what it finds.
 
+## Session 2026-11-04: own routing for OH+KY+IN on the free tier (branch claude/own-routing-region)
+
+- [x] Region tiles on the `graph-data` branch (graph-region.yml), relayed by the Worker (backend/src/graph.ts,
+  /api/graph/v1/), loaded by web/graph_tiles.js (shipped, IndexedDB, Worker; union index; prefetchArea from Save area);
+  format v3 via-way restrictions.
+- Region: OH+KY+IN built by .github/workflows/graph-region.yml (6 bands in parallel, 1 h 42 min) and
+  committed to the `graph-data` branch (ba6787a): 584 tiles, 228.9 MB (largest 4.5 MB), 5.26 M edges, 2.15 M nodes,
+  build 2026-45-95960e6d; 1,211 via-way restrictions applied (1,504 through undrivable crossovers). The preview Worker
+  serves them (/api/graph/v1/388_519.vgr, Columbus: 2.9 MB, decodes, 69,058 edges). Not yet: the Cache API is a no-op
+  on workers.dev, so each tile request goes to raw GitHub until the Worker has a custom domain; the context grid
+  covers only Cincinnati, so outside it those channels are unknown; the shipped Cincinnati tiles are an older build
+  than the region's, so the phone uses the region's there until both are rebuilt together.
+- [x] Region grid: the context grid for OH+KY+IN on graph-data ctx/v1 (ctx-region.yml, 6 shards, 32 min):
+  33 bundles, 35.6 MB, 1.46 M HPMS road spans, 13,574 fatal crashes; served at /api/ctx/v1/ (KV first, then the branch).
+  The region graph was rebuilt with it (build 2026-45-95960e6d-gebab6b, 584 tiles, 228.9 MB; Columbus tile 388_519:
+  known share of the model's weight 0.65 -> 0.76), and the shipped Cincinnati set is that build's 16 tiles (17.4 MB),
+  committed by the workflow. The relay asks raw GitHub with Cloudflare's subrequest cache (a week, keyed by build);
+  timed on the preview, repeats were 0.3-0.8 s against 0.6-1.0 s first, too noisy from here to call a cache hit.
+- Exact next task: merge main once #299 lands; a custom domain for the Worker (the Cache API works there);
+  re-run ctx-region.yml / graph-region.yml (edit tools/ctx_etl/REGION_BUILD, tools/graph_etl/REGION_BUILD) weekly.
+
 ## Session 2026-11-04: own routing, the road-network half (branch claude/own-routing-graph)
 
 - [x] docs/OWN_ROUTING.md (the plan and contract) committed; §4 "As built" has the exact tile interface, §8 the status.
