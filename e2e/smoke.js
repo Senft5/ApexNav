@@ -671,6 +671,8 @@ flow('Where to?: a suggestion builds a route with a card and a Start button (sea
   await page.waitForFunction(() => (JSON.parse(localStorage.getItem('apex.pinnedPlaces') || '[]') || []).length === 1);
   const pinned = await page.evaluate(() => JSON.parse(localStorage.getItem('apex.pinnedPlaces')));
   check(pinned.length === 1 && pinned[0].name === 'Home' && pinned[0].label === 'Maryville' && Math.abs(pinned[0].lat - 35.7565) < 1e-6, 'pinned: ' + JSON.stringify(pinned));
+  // the re-plan round the closure ranks with the route context (up to its 4 s budget): wait for it, then put its card down
+  await page.waitForFunction(() => !document.getElementById('planPanel').classList.contains('busy'), null, { timeout: 15000 });
   if (await page.isVisible('#planCancel')) await page.click('#planCancel');   // the rebuilt route's card is up (U-70)
   await page.click('#planClear');
   await page.click('#destInput');

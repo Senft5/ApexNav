@@ -3005,7 +3005,7 @@
     const FUN_LEVEL = 'apex.funLevel';
     let funLevel = 'fun';
     try { funLevel = FunRoute.LEVELS[localStorage.getItem(FUN_LEVEL)] ? localStorage.getItem(FUN_LEVEL) : 'fun'; } catch (_) { /* storage off */ }
-    async function funRoute(from, to, id, name, request, ui) {
+    async function funRoute(from, to, id, name, request, ui, opts = {}) {
       const level = funLevel;
       let direct;
       // The router's costing keeps off highways (use_highways 0.15), which is what sent routes through subdivisions and
@@ -3021,7 +3021,8 @@
       // ranked routes replace it when they're ready, unless you've started driving it or planned something else.
       const early = { fired: false, shown: null };
       const quickNow = FunRoute.keepAvoiding(cands, avoid).filter(c => Number.isFinite(c.timeS)).reduce((x, y) => (!x || y.timeS < x.timeS ? y : x), null);
-      const earlyTimer = quickNow ? setTimeout(() => {
+      // a re-plan of the route on screen (level, avoid, Route around it) keeps that route up meanwhile: no early quickest
+      const earlyTimer = quickNow && opts.early !== false ? setTimeout(() => {
         early.fired = true;
         if (!quickNow.t) { quickNow.t = FunRoute.geometry(quickNow.route.coords, Core); quickNow.fun = funOf(quickNow.t, quickNow.route.turns); }
         early.shown = useOption({ id, name, request, level, quickest: quickNow, list: [{ ...quickNow, extraS: 0 }] }, 0).catch(() => null);
@@ -3182,7 +3183,7 @@
       try {
         const from = t.request.from || await locate();
         if (!from) throw new Error(NO_FIX);
-        ok = await funRoute(from, t.request.to, t.id, t.name, { from: t.request.from, to: t.request.to, via: [] }, ui);
+        ok = await funRoute(from, t.request.to, t.id, t.name, { from: t.request.from, to: t.request.to, via: [] }, ui, { early: false });
       } catch (err) { toast(err.message); } finally { ui.done(); }
       if (!ok && t.funLevel) setFunLevel(t.funLevel);             // the chips show the level the route on screen was built with
       return ok;
