@@ -3559,7 +3559,7 @@
     // own ranking, why line and extra time: nothing is worked out again. Loops re-rank the loops already built.
     const LEVEL_ORDER = { quick: 0, fun: 1, max: 2 };
     // how long a level change keeps the switch under your finger while the card settles (changeLevel's settle)
-    const SETTLE_MS = 3000;
+    const SETTLE_MS = 3000, SETTLE_IDLE_MS = 600;
     let settleStop = null;
     var optChipsReady = false;                                           // eslint-disable-line no-var -- read before its line runs
     async function changeLevel(level) {
@@ -3584,18 +3584,22 @@
           lastSet = b.scrollTop;
         };
         let lastSet = b.scrollTop;
-        // a scroll to anywhere but where this put it is someone else's (you, or the app on purpose): it stops here
-        const scrolled = () => { if (Math.abs(b.scrollTop - lastSet) > 1) stop(); };
+        // a scroll the page does meanwhile (CI: the card's own scroll into view while the sheet was in its typing state,
+        // 2026-11-05) is put back; only you (a touch, the wheel, a tap, a key) end the hold
+        const scrolled = () => { if (Math.abs(b.scrollTop - lastSet) > 1) apply(); };
         b.style.overflowAnchor = 'none';
-        const ro = typeof ResizeObserver === 'function' ? new ResizeObserver(apply) : null;
+        // (the hold ends SETTLE_IDLE_MS after the card's last resize, at SETTLE_MS at most)
+        let idle = null;
+        const resized = () => { apply(); clearTimeout(idle); idle = setTimeout(() => stop(), SETTLE_IDLE_MS); };
+        const ro = typeof ResizeObserver === 'function' ? new ResizeObserver(resized) : null;
         if (ro) { ro.observe(b); if (card) { ro.observe(card); for (const k of card.children) ro.observe(k); } }
         const yours = ['touchstart', 'wheel', 'pointerdown', 'keydown'];
-        const stop = () => { if (ro) ro.disconnect(); clearTimeout(timer); for (const k of yours) b.removeEventListener(k, stop, true); b.removeEventListener('scroll', scrolled); b.style.overflowAnchor = ''; if (settleStop === stop) settleStop = null; };
+        const stop = () => { if (ro) ro.disconnect(); clearTimeout(timer); clearTimeout(idle); for (const k of yours) b.removeEventListener(k, stop, true); b.removeEventListener('scroll', scrolled); b.style.overflowAnchor = ''; if (settleStop === stop) settleStop = null; };
         for (const k of yours) b.addEventListener(k, stop, true);
         b.addEventListener('scroll', scrolled);
         const timer = setTimeout(stop, SETTLE_MS);
         settleStop = stop;
-        apply(); requestAnimationFrame(apply);
+        resized(); requestAnimationFrame(apply);
       };
       setFunLevel(level);
       if (t && o && o.current === t && state.mode !== 'live') {

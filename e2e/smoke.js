@@ -4939,7 +4939,10 @@ flow('plan flow (e, f) a level change and an alternative are one tap or swipe ea
   // the same with the card shrinking late: 90 px above the switch go away 400 ms after the level change (as the card's
   // slower parts settle on a slow machine); the switch must still stay under the finger
   await page.evaluate(() => { const f = document.getElementById('routeCardFun'), sp = document.createElement('div'); sp.id = 'lateSpacer'; sp.style.height = '90px'; f.parentNode.insertBefore(sp, f); });
-  await page.evaluate(() => { const b = document.getElementById('planBody'); b.scrollTop = Math.min(160, b.scrollHeight - b.clientHeight); });
+  // (you scroll: the wheel, then the scroll; that ends the last change's hold)
+  await page.evaluate(() => { const b = document.getElementById('planBody'); b.dispatchEvent(new WheelEvent('wheel', { bubbles: true })); b.scrollTop = Math.min(160, b.scrollHeight - b.clientHeight); });
+  // and the page scrolls the card on its own meanwhile, as CI's did: the hold puts it back
+  await page.evaluate(() => setTimeout(() => { document.getElementById('planBody').scrollTop += 40; }, 250));
   const swL0 = await page.evaluate(() => document.getElementById('routeCardFun').getBoundingClientRect().top);
   await page.evaluate(() => setTimeout(() => { const sp = document.getElementById('lateSpacer'); if (sp) sp.remove(); }, 400));
   await tap('#routeCardFun [data-fun="fun"]', 'Fun');
@@ -4952,6 +4955,7 @@ flow('plan flow (e, f) a level change and an alternative are one tap or swipe ea
   await tap('#routeCardFun [data-fun="fun"]', 'Fun');
   await page.waitForFunction(() => /^Fun: /.test(document.getElementById('routeProgress').textContent), null, { timeout: 5000 });
   check(asked.length === routed, 'and back to Fun, again from what was found');
+  await page.waitForTimeout(700);                                   // the level change's hold on the scroll has ended (SETTLE_IDLE_MS)
   // an alternative: one swipe sideways on the card (finding 11), then back with a tap on its tile
   const tiles = () => page.evaluate(() => [...document.querySelectorAll('#routeCardOptions .rc-tile')].map((t) => t.getAttribute('aria-checked')).join());
   check(await tiles() === 'true,false', 'two routes offered, the first picked: ' + await tiles());
@@ -5180,6 +5184,7 @@ flow('safe areas: the Dynamic Island, the home indicator and the rounded corners
     const newsId = require('../web/whats_new.js').NEWS.id;
     if (!ctxOpts.news) await ctx.addInitScript((id) => { try { if (!localStorage.getItem('apex.newsSeen')) localStorage.setItem('apex.newsSeen', id); } catch (_) {} }, newsId);
     const page = await ctx.newPage();
+    if (process.env.THROTTLE) { const c = await ctx.newCDPSession(page); await c.send('Emulation.setCPUThrottlingRate', { rate: Number(process.env.THROTTLE) }); }
     const errors = [];
     page.on('pageerror', (e) => errors.push(String(e && e.stack || e)));
     // Content-Security-Policy (tools/csp.py, IDEAS Z-11): anything the policy blocks is a failure, so a new host can't slip in.
