@@ -5,7 +5,9 @@
 const http = require('http');
 const fs = require('fs');
 const path = require('path');
-const { chromium } = require('playwright');
+const playwright = require('playwright');
+// BROWSER=webkit runs the flows in Safari's engine (the iOS app is a WKWebView); chromium by default, as CI runs
+const chromium = playwright[process.env.BROWSER || 'chromium'];
 
 const WEB = path.resolve(__dirname, '..', 'web');
 // The private themes' looks (migration 0044): the server sends them in /api/me only to a granted account; the stubs below do the same
