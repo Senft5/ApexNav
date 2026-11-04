@@ -1,0 +1,867 @@
+{
+ "bbox": [
+  -89.5715,
+  36.4971,
+  -80.5187,
+  41.9772
+ ],
+ "built": "2026-11-04",
+ "bundles": {
+  "64/100": {
+   "bytes": 90568,
+   "channels": [
+    "address_density",
+    "canopy_pct",
+    "cropland_class",
+    "flood_zone",
+    "housing_density",
+    "impervious_pct",
+    "median_year_built",
+    "night_lights",
+    "noise_db",
+    "park_unit",
+    "population_density"
+   ],
+   "lines": 2053,
+   "points": 7,
+   "tiles": 24
+  },
+  "64/99": {
+   "bytes": 337152,
+   "channels": [
+    "address_density",
+    "canopy_pct",
+    "cropland_class",
+    "flood_zone",
+    "housing_density",
+    "impervious_pct",
+    "median_year_built",
+    "night_lights",
+    "noise_db",
+    "park_unit",
+    "population_density"
+   ],
+   "lines": 10709,
+   "points": 80,
+   "tiles": 62
+  },
+  "65/100": {
+   "bytes": 72157,
+   "channels": [
+    "address_density",
+    "canopy_pct",
+    "cropland_class",
+    "flood_zone",
+    "housing_density",
+    "impervious_pct",
+    "median_year_built",
+    "night_lights",
+    "noise_db",
+    "park_unit",
+    "population_density"
+   ],
+   "lines": 1702,
+   "points": 13,
+   "tiles": 14
+  },
+  "65/95": {
+   "bytes": 397505,
+   "channels": [
+    "address_density",
+    "canopy_pct",
+    "cropland_class",
+    "flood_zone",
+    "housing_density",
+    "impervious_pct",
+    "median_year_built",
+    "night_lights",
+    "noise_db",
+    "park_unit",
+    "population_density"
+   ],
+   "lines": 27808,
+   "points": 300,
+   "tiles": 43
+  },
+  "65/96": {
+   "bytes": 254101,
+   "channels": [
+    "address_density",
+    "canopy_pct",
+    "cropland_class",
+    "flood_zone",
+    "housing_density",
+    "impervious_pct",
+    "median_year_built",
+    "night_lights",
+    "noise_db",
+    "park_unit",
+    "population_density"
+   ],
+   "lines": 13347,
+   "points": 52,
+   "tiles": 64
+  },
+  "65/97": {
+   "bytes": 423417,
+   "channels": [
+    "address_density",
+    "canopy_pct",
+    "cropland_class",
+    "flood_zone",
+    "housing_density",
+    "impervious_pct",
+    "median_year_built",
+    "night_lights",
+    "noise_db",
+    "park_unit",
+    "population_density"
+   ],
+   "lines": 20348,
+   "points": 108,
+   "tiles": 74
+  },
+  "65/98": {
+   "bytes": 838428,
+   "channels": [
+    "address_density",
+    "canopy_pct",
+    "cropland_class",
+    "flood_zone",
+    "housing_density",
+    "impervious_pct",
+    "median_year_built",
+    "night_lights",
+    "noise_db",
+    "park_unit",
+    "population_density"
+   ],
+   "lines": 39866,
+   "points": 236,
+   "tiles": 134
+  },
+  "65/99": {
+   "bytes": 1321396,
+   "channels": [
+    "address_density",
+    "canopy_pct",
+    "cropland_class",
+    "flood_zone",
+    "housing_density",
+    "impervious_pct",
+    "median_year_built",
+    "night_lights",
+    "noise_db",
+    "park_unit",
+    "population_density"
+   ],
+   "lines": 38704,
+   "points": 277,
+   "tiles": 238
+  },
+  "66/95": {
+   "bytes": 1268427,
+   "channels": [
+    "address_density",
+    "canopy_pct",
+    "cropland_class",
+    "flood_zone",
+    "housing_density",
+    "impervious_pct",
+    "median_year_built",
+    "night_lights",
+    "noise_db",
+    "park_unit",
+    "population_density"
+   ],
+   "lines": 76264,
+   "points": 559,
+   "tiles": 190
+  },
+  "66/96": {
+   "bytes": 1530460,
+   "channels": [
+    "address_density",
+    "canopy_pct",
+    "cropland_class",
+    "flood_zone",
+    "housing_density",
+    "impervious_pct",
+    "median_year_built",
+    "night_lights",
+    "noise_db",
+    "park_unit",
+    "population_density"
+   ],
+   "lines": 92279,
+   "points": 512,
+   "tiles": 256
+  },
+  "66/97": {
+   "bytes": 2033004,
+   "channels": [
+    "address_density",
+    "canopy_pct",
+    "cropland_class",
+    "flood_zone",
+    "housing_density",
+    "impervious_pct",
+    "median_year_built",
+    "night_lights",
+    "noise_db",
+    "park_unit",
+    "population_density"
+   ],
+   "lines": 110218,
+   "points": 1115,
+   "tiles": 256
+  },
+  "66/98": {
+   "bytes": 1665758,
+   "channels": [
+    "address_density",
+    "canopy_pct",
+    "cropland_class",
+    "housing_density",
+    "impervious_pct",
+    "median_year_built",
+    "night_lights",
+    "noise_db",
+    "park_unit",
+    "population_density"
+   ],
+   "lines": 69673,
+   "points": 611,
+   "tiles": 256
+  },
+  "66/99": {
+   "bytes": 1452509,
+   "channels": [
+    "address_density",
+    "canopy_pct",
+    "cropland_class",
+    "housing_density",
+    "impervious_pct",
+    "median_year_built",
+    "night_lights",
+    "noise_db",
+    "park_unit",
+    "population_density"
+   ],
+   "lines": 42181,
+   "points": 414,
+   "tiles": 256
+  },
+  "67/100": {
+   "bytes": 10728,
+   "channels": [
+    "address_density",
+    "canopy_pct",
+    "cropland_class",
+    "flood_zone",
+    "housing_density",
+    "impervious_pct",
+    "median_year_built",
+    "night_lights",
+    "noise_db",
+    "park_unit",
+    "population_density"
+   ],
+   "lines": 7,
+   "points": 0,
+   "tiles": 3
+  },
+  "67/95": {
+   "bytes": 1101613,
+   "channels": [
+    "address_density",
+    "canopy_pct",
+    "cropland_class",
+    "housing_density",
+    "impervious_pct",
+    "median_year_built",
+    "night_lights",
+    "noise_db",
+    "park_unit",
+    "population_density"
+   ],
+   "lines": 56794,
+   "points": 450,
+   "tiles": 189
+  },
+  "67/96": {
+   "bytes": 1280932,
+   "channels": [
+    "address_density",
+    "canopy_pct",
+    "cropland_class",
+    "flood_zone",
+    "housing_density",
+    "impervious_pct",
+    "median_year_built",
+    "night_lights",
+    "noise_db",
+    "park_unit",
+    "population_density"
+   ],
+   "lines": 68909,
+   "points": 486,
+   "tiles": 256
+  },
+  "67/97": {
+   "bytes": 1991535,
+   "channels": [
+    "address_density",
+    "canopy_pct",
+    "cropland_class",
+    "flood_zone",
+    "housing_density",
+    "impervious_pct",
+    "median_year_built",
+    "night_lights",
+    "noise_db",
+    "park_unit",
+    "population_density"
+   ],
+   "lines": 96174,
+   "points": 834,
+   "tiles": 256
+  },
+  "67/98": {
+   "bytes": 1824157,
+   "channels": [
+    "address_density",
+    "cropland_class",
+    "housing_density",
+    "impervious_pct",
+    "median_year_built",
+    "night_lights",
+    "noise_db",
+    "park_unit",
+    "population_density"
+   ],
+   "lines": 78916,
+   "points": 1102,
+   "tiles": 256
+  },
+  "67/99": {
+   "bytes": 1484983,
+   "channels": [
+    "address_density",
+    "canopy_pct",
+    "cropland_class",
+    "housing_density",
+    "impervious_pct",
+    "median_year_built",
+    "night_lights",
+    "noise_db",
+    "park_unit",
+    "population_density"
+   ],
+   "lines": 37555,
+   "points": 346,
+   "tiles": 256
+  },
+  "68/100": {
+   "bytes": 23254,
+   "channels": [
+    "address_density",
+    "canopy_pct",
+    "cropland_class",
+    "flood_zone",
+    "housing_density",
+    "impervious_pct",
+    "median_year_built",
+    "night_lights",
+    "noise_db",
+    "park_unit",
+    "population_density"
+   ],
+   "lines": 238,
+   "points": 2,
+   "tiles": 8
+  },
+  "68/95": {
+   "bytes": 1006766,
+   "channels": [
+    "address_density",
+    "canopy_pct",
+    "cropland_class",
+    "flood_zone",
+    "housing_density",
+    "impervious_pct",
+    "median_year_built",
+    "night_lights",
+    "noise_db",
+    "park_unit",
+    "population_density"
+   ],
+   "lines": 43223,
+   "points": 491,
+   "tiles": 186
+  },
+  "68/96": {
+   "bytes": 1492260,
+   "channels": [
+    "address_density",
+    "canopy_pct",
+    "cropland_class",
+    "housing_density",
+    "impervious_pct",
+    "median_year_built",
+    "night_lights",
+    "noise_db",
+    "park_unit",
+    "population_density"
+   ],
+   "lines": 63547,
+   "points": 726,
+   "tiles": 256
+  },
+  "68/97": {
+   "bytes": 1865697,
+   "channels": [
+    "address_density",
+    "canopy_pct",
+    "cropland_class",
+    "housing_density",
+    "impervious_pct",
+    "median_year_built",
+    "night_lights",
+    "noise_db",
+    "park_unit",
+    "population_density"
+   ],
+   "lines": 74289,
+   "points": 894,
+   "tiles": 256
+  },
+  "68/98": {
+   "bytes": 1590010,
+   "channels": [
+    "address_density",
+    "canopy_pct",
+    "cropland_class",
+    "flood_zone",
+    "housing_density",
+    "impervious_pct",
+    "median_year_built",
+    "night_lights",
+    "noise_db",
+    "park_unit",
+    "population_density"
+   ],
+   "lines": 46020,
+   "points": 349,
+   "tiles": 256
+  },
+  "68/99": {
+   "bytes": 1559900,
+   "channels": [
+    "address_density",
+    "canopy_pct",
+    "cropland_class",
+    "flood_zone",
+    "housing_density",
+    "impervious_pct",
+    "median_year_built",
+    "night_lights",
+    "noise_db",
+    "park_unit",
+    "population_density"
+   ],
+   "lines": 44704,
+   "points": 369,
+   "tiles": 248
+  },
+  "69/95": {
+   "bytes": 1077829,
+   "channels": [
+    "address_density",
+    "canopy_pct",
+    "cropland_class",
+    "housing_density",
+    "impervious_pct",
+    "median_year_built",
+    "night_lights",
+    "noise_db",
+    "park_unit",
+    "population_density"
+   ],
+   "lines": 53104,
+   "points": 750,
+   "tiles": 138
+  },
+  "69/96": {
+   "bytes": 1725466,
+   "channels": [
+    "address_density",
+    "canopy_pct",
+    "cropland_class",
+    "housing_density",
+    "impervious_pct",
+    "median_year_built",
+    "night_lights",
+    "noise_db",
+    "park_unit",
+    "population_density"
+   ],
+   "lines": 61373,
+   "points": 739,
+   "tiles": 256
+  },
+  "69/97": {
+   "bytes": 1429987,
+   "channels": [
+    "address_density",
+    "canopy_pct",
+    "cropland_class",
+    "housing_density",
+    "impervious_pct",
+    "median_year_built",
+    "night_lights",
+    "noise_db",
+    "park_unit",
+    "population_density"
+   ],
+   "lines": 36569,
+   "points": 373,
+   "tiles": 242
+  },
+  "69/98": {
+   "bytes": 796331,
+   "channels": [
+    "address_density",
+    "canopy_pct",
+    "cropland_class",
+    "flood_zone",
+    "housing_density",
+    "impervious_pct",
+    "median_year_built",
+    "night_lights",
+    "noise_db",
+    "park_unit",
+    "population_density"
+   ],
+   "lines": 24016,
+   "points": 125,
+   "tiles": 116
+  },
+  "69/99": {
+   "bytes": 551049,
+   "channels": [
+    "address_density",
+    "canopy_pct",
+    "cropland_class",
+    "flood_zone",
+    "housing_density",
+    "impervious_pct",
+    "median_year_built",
+    "night_lights",
+    "noise_db",
+    "park_unit",
+    "population_density"
+   ],
+   "lines": 16548,
+   "points": 154,
+   "tiles": 88
+  },
+  "70/95": {
+   "bytes": 1303672,
+   "channels": [
+    "address_density",
+    "canopy_pct",
+    "cropland_class",
+    "flood_zone",
+    "housing_density",
+    "impervious_pct",
+    "median_year_built",
+    "night_lights",
+    "noise_db",
+    "park_unit",
+    "population_density"
+   ],
+   "lines": 56677,
+   "points": 699,
+   "tiles": 164
+  },
+  "70/96": {
+   "bytes": 1365323,
+   "channels": [
+    "address_density",
+    "canopy_pct",
+    "cropland_class",
+    "flood_zone",
+    "housing_density",
+    "impervious_pct",
+    "median_year_built",
+    "night_lights",
+    "noise_db",
+    "park_unit",
+    "population_density"
+   ],
+   "lines": 46120,
+   "points": 353,
+   "tiles": 179
+  },
+  "70/97": {
+   "bytes": 399200,
+   "channels": [
+    "address_density",
+    "canopy_pct",
+    "cropland_class",
+    "flood_zone",
+    "housing_density",
+    "impervious_pct",
+    "median_year_built",
+    "night_lights",
+    "noise_db",
+    "park_unit",
+    "population_density"
+   ],
+   "lines": 7640,
+   "points": 48,
+   "tiles": 66
+  }
+ },
+ "bytes": 35565574,
+ "channels": {
+  "address_density": {
+   "meaning": "Address points per km2 (OpenAddresses county/state sources), 3x3-cell smoothed; unknown where no source covers the county",
+   "n": 32,
+   "source": "addresses",
+   "unit": "addresses/km2"
+  },
+  "canopy_pct": {
+   "meaning": "Tree canopy cover of the cell (NLCD / USFS Tree Canopy Cover 2021)",
+   "n": 32,
+   "source": "nlcd",
+   "unit": "%"
+  },
+  "cropland_class": {
+   "meaning": "Most common USDA Cropland Data Layer class in the cell (1 corn, 5 soybeans, 24 winter wheat, 36 alfalfa, 37 other hay, 61 fallow, 111 water, 121-124 developed, 141-143 forest, 176 grass/pasture)",
+   "n": 32,
+   "source": "cdl",
+   "unit": "CDL code"
+  },
+  "flood_zone": {
+   "meaning": "Highest FEMA flood class in the cell: 0 minimal (zone X), 1 0.2% annual chance, 2 1% annual chance (A, AE, AH, AO), 3 regulatory floodway, 4 coastal high hazard (V, VE); unknown where unmapped or zone D",
+   "n": 64,
+   "source": "flood",
+   "unit": "class"
+  },
+  "housing_density": {
+   "meaning": "Housing units per km2 (2020 Census blocks)",
+   "n": 32,
+   "source": "census",
+   "unit": "units/km2"
+  },
+  "impervious_pct": {
+   "meaning": "Impervious surface share of the cell (NLCD 2021)",
+   "n": 32,
+   "source": "nlcd",
+   "unit": "%"
+  },
+  "median_year_built": {
+   "meaning": "Median year the homes were built (ACS 5-year B25035, block group); 1939 means 1939 or earlier",
+   "n": 32,
+   "source": "census",
+   "unit": "year"
+  },
+  "night_lights": {
+   "meaning": "Relative night-time brightness, 0 dark to 1 brightest (NASA Black Marble 2016, VIIRS DNB; tone-mapped image, saturates in city cores; not radiance)",
+   "n": 16,
+   "source": "night",
+   "unit": "0-1"
+  },
+  "noise_db": {
+   "meaning": "Loudest modelled road-noise class within the cell, as the class floor in dB (BTS National Transportation Noise Map 2020, roads); 40 means below the map's 45 dB floor",
+   "n": 64,
+   "source": "noise",
+   "unit": "dB LAeq(24h)"
+  },
+  "park_unit": {
+   "meaning": "National Park Service unit the cell is in: 0 none, else an index into the bundle's park table",
+   "n": 64,
+   "source": "parks",
+   "unit": "index"
+  },
+  "population_density": {
+   "meaning": "Residents per km2 (2020 Census blocks)",
+   "n": 32,
+   "source": "census",
+   "unit": "people/km2"
+  }
+ },
+ "region": "region",
+ "sources": {
+  "addresses": {
+   "by": "OpenAddresses contributors and the source counties/states",
+   "licence": "Per source (mostly public domain or CC-BY/CC0); counts only are kept",
+   "name": "OpenAddresses (county and state address points)",
+   "sources": [
+    "us/oh/adams",
+    "us/oh/allen",
+    "us/oh/ashland",
+    "us/oh/ashtabula",
+    "us/oh/athens",
+    "us/oh/auglaize",
+    "us/oh/belmont",
+    "us/oh/brown",
+    "us/oh/butler",
+    "us/oh/carroll",
+    "us/oh/champaign",
+    "us/oh/clark",
+    "us/oh/clermont",
+    "us/oh/clinton",
+    "us/oh/columbiana",
+    "us/oh/coshocton",
+    "us/oh/crawford",
+    "us/oh/cuyahoga",
+    "us/oh/darke",
+    "us/oh/defiance",
+    "us/oh/delaware",
+    "us/oh/erie",
+    "us/oh/fairfield",
+    "us/oh/fayette",
+    "us/oh/franklin",
+    "us/oh/fulton",
+    "us/oh/gallia",
+    "us/oh/geauga",
+    "us/oh/greene",
+    "us/oh/guernsey",
+    "us/oh/hamilton",
+    "us/oh/hancock",
+    "us/oh/hardin",
+    "us/oh/harrison",
+    "us/oh/henry",
+    "us/oh/highland",
+    "us/oh/hocking",
+    "us/oh/holmes",
+    "us/oh/huron",
+    "us/oh/jackson",
+    "us/oh/jefferson",
+    "us/oh/knox",
+    "us/oh/lake",
+    "us/oh/lawrence",
+    "us/oh/licking",
+    "us/oh/logan",
+    "us/oh/lorain",
+    "us/oh/lucas",
+    "us/oh/madison",
+    "us/oh/mahoning",
+    "us/oh/marion",
+    "us/oh/medina",
+    "us/oh/meigs",
+    "us/oh/mercer",
+    "us/oh/miami",
+    "us/oh/monroe",
+    "us/oh/montgomery",
+    "us/oh/morgan",
+    "us/oh/morrow",
+    "us/oh/muskingum",
+    "us/oh/noble",
+    "us/oh/ottawa",
+    "us/oh/paulding",
+    "us/oh/perry",
+    "us/oh/pickaway",
+    "us/oh/pike",
+    "us/oh/portage",
+    "us/oh/preble",
+    "us/oh/putnam",
+    "us/oh/richland",
+    "us/oh/ross",
+    "us/oh/sandusky",
+    "us/oh/scioto",
+    "us/oh/seneca",
+    "us/oh/shelby",
+    "us/oh/stark",
+    "us/oh/summit",
+    "us/oh/trumbull",
+    "us/oh/tuscarawas",
+    "us/oh/union",
+    "us/oh/van_wert",
+    "us/oh/vinton",
+    "us/oh/warren",
+    "us/oh/washington",
+    "us/oh/wayne",
+    "us/oh/williams",
+    "us/oh/wood",
+    "us/oh/wyandot",
+    "us/ky/statewide",
+    "us/in/statewide"
+   ],
+   "url": "https://openaddresses.io/"
+  },
+  "cdl": {
+   "by": "USDA National Agricultural Statistics Service (via Microsoft Planetary Computer)",
+   "licence": "Public domain (US Government)",
+   "name": "Cropland Data Layer",
+   "url": "https://www.nass.usda.gov/Research_and_Science/Cropland/",
+   "year": 2021
+  },
+  "census": {
+   "acs_year": 2024,
+   "by": "US Census Bureau",
+   "licence": "Public domain (US Government)",
+   "name": "2020 Census blocks (TIGER/Line, POP20, HOUSING20); ACS 5-year B25035 median year built",
+   "url": "https://www.census.gov/"
+  },
+  "fars": {
+   "by": "US DOT National Highway Traffic Safety Administration",
+   "licence": "Public domain (US Government)",
+   "name": "Fatality Analysis Reporting System (FARS)",
+   "url": "https://www.nhtsa.gov/research-data/fatality-analysis-reporting-system-fars",
+   "years": [
+    2020,
+    2024
+   ]
+  },
+  "flood": {
+   "by": "FEMA",
+   "licence": "Public domain (US Government)",
+   "name": "National Flood Hazard Layer (NFHL), flood hazard zones",
+   "url": "https://www.fema.gov/flood-maps/national-flood-hazard-layer"
+  },
+  "hpms": {
+   "by": "US DOT Federal Highway Administration and the state DOTs",
+   "licence": "Public domain (US Government)",
+   "name": "Highway Performance Monitoring System (HPMS), full extent",
+   "url": "https://www.fhwa.dot.gov/policyinformation/hpms.cfm",
+   "years": {
+    "IN": 2025,
+    "KY": 2025
+   }
+  },
+  "night": {
+   "by": "NASA Earth Observatory / NASA GIBS",
+   "licence": "Public domain (NASA); acknowledge NASA GIBS",
+   "name": "Black Marble 2016 (VIIRS Day/Night Band) via GIBS",
+   "url": "https://earthdata.nasa.gov/gibs"
+  },
+  "nlcd": {
+   "by": "USGS / MRLC; USDA Forest Service",
+   "licence": "Public domain (US Government)",
+   "name": "NLCD 2021 Impervious Surface; NLCD/USFS Tree Canopy Cover 2021 (v2021-4)",
+   "url": "https://www.mrlc.gov/"
+  },
+  "noise": {
+   "by": "US DOT Bureau of Transportation Statistics",
+   "licence": "Public domain (US Government)",
+   "name": "National Transportation Noise Map 2020 (road)",
+   "url": "https://www.bts.gov/geospatial/national-transportation-noise-map"
+  },
+  "parks": {
+   "by": "US National Park Service",
+   "licence": "Public domain (US Government)",
+   "name": "NPS unit boundaries; NPS visitor use statistics",
+   "url": "https://irma.nps.gov/Stats/"
+  }
+ },
+ "states": [
+  "OH",
+  "KY",
+  "IN"
+ ],
+ "v": 1
+}
