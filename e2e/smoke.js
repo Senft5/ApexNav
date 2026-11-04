@@ -4955,7 +4955,8 @@ flow('plan flow (e, f) a level change and an alternative are one tap or swipe ea
   await tap('#routeCardFun [data-fun="fun"]', 'Fun');
   await page.waitForFunction(() => /^Fun: /.test(document.getElementById('routeProgress').textContent), null, { timeout: 5000 });
   check(asked.length === routed, 'and back to Fun, again from what was found');
-  await page.waitForTimeout(700);                                   // the level change's hold on the scroll has ended (SETTLE_IDLE_MS)
+  // you scroll down to the options (the wheel first, as a hand would): that ends the level change's hold on the scroll
+  await page.evaluate(() => document.getElementById('planBody').dispatchEvent(new WheelEvent('wheel', { bubbles: true })));
   // an alternative: one swipe sideways on the card (finding 11), then back with a tap on its tile
   const tiles = () => page.evaluate(() => [...document.querySelectorAll('#routeCardOptions .rc-tile')].map((t) => t.getAttribute('aria-checked')).join());
   check(await tiles() === 'true,false', 'two routes offered, the first picked: ' + await tiles());

@@ -3559,7 +3559,7 @@
     // own ranking, why line and extra time: nothing is worked out again. Loops re-rank the loops already built.
     const LEVEL_ORDER = { quick: 0, fun: 1, max: 2 };
     // how long a level change keeps the switch under your finger while the card settles (changeLevel's settle)
-    const SETTLE_MS = 3000, SETTLE_IDLE_MS = 600;
+    const SETTLE_MS = 3000;
     let settleStop = null;
     var optChipsReady = false;                                           // eslint-disable-line no-var -- read before its line runs
     async function changeLevel(level) {
@@ -3569,42 +3569,38 @@
       // shorter, and parts of it settle later still (CI, 2026-11-05: 90 px, some of it after the first frames; the sheet
       // itself moved 4-19 px). So the scroll is set from where the switch now is in the content, never nudged by how far
       // it moved: scrollTop = its content offset - where it was on screen relative to the scroller's top, clamped. It is
-      // applied on every resize of the card or the scroller for SETTLE_MS, or until you touch, scroll or tap the card
-      // (then where you scroll is yours), with the browser's own scroll anchoring off meanwhile so nothing else moves it.
+      // applied every frame from the tap for SETTLE_MS, or until you touch, scroll or tap the card (then where you scroll
+      // is yours), with the browser's own scroll anchoring off meanwhile so nothing else moves it.
       const swEl = () => document.getElementById('routeCardFun');
       const y0 = swEl() ? swEl().getBoundingClientRect().top : null;
       if (settleStop) settleStop();
       const settle = () => {
-        const b = $('planBody'), card = $('routeCard');
-        if (y0 == null || !b) return;
+        const b = $('planBody');
+        if (y0 == null || !b) return () => {};
         const apply = () => {
           const e = swEl(); if (!e) return;
           const top = b.getBoundingClientRect().top, offset = e.getBoundingClientRect().top - top + b.scrollTop;
-          b.scrollTop = Math.max(0, Math.min(b.scrollHeight - b.clientHeight, offset - (y0 - top)));
-          lastSet = b.scrollTop;
+          const want = Math.max(0, Math.min(b.scrollHeight - b.clientHeight, offset - (y0 - top)));
+          if (Math.abs(b.scrollTop - want) > 0.5) b.scrollTop = want;
         };
-        let lastSet = b.scrollTop;
-        // a scroll the page does meanwhile (CI: the card's own scroll into view while the sheet was in its typing state,
-        // 2026-11-05) is put back; only you (a touch, the wheel, a tap, a key) end the hold
-        const scrolled = () => { if (Math.abs(b.scrollTop - lastSet) > 1) apply(); };
-        b.style.overflowAnchor = 'none';
-        // (the hold ends SETTLE_IDLE_MS after the card's last resize, at SETTLE_MS at most)
-        let idle = null;
-        const resized = () => { apply(); clearTimeout(idle); idle = setTimeout(() => stop(), SETTLE_IDLE_MS); };
-        const ro = typeof ResizeObserver === 'function' ? new ResizeObserver(resized) : null;
-        if (ro) { ro.observe(b); if (card) { ro.observe(card); for (const k of card.children) ro.observe(k); } }
+        // every frame, not on resize events or scroll events: the card, its late rows and the sheet itself settle on
+        // their own schedules (and a scroll event can't tell the app's own clamps from yours), so only your touch ends it
+        let raf = 0, done = false;
+        const loop = () => { if (done) return; apply(); raf = requestAnimationFrame(loop); };
         const yours = ['touchstart', 'wheel', 'pointerdown', 'keydown'];
-        const stop = () => { if (ro) ro.disconnect(); clearTimeout(timer); clearTimeout(idle); for (const k of yours) b.removeEventListener(k, stop, true); b.removeEventListener('scroll', scrolled); b.style.overflowAnchor = ''; if (settleStop === stop) settleStop = null; };
+        const stop = () => { if (done) return; done = true; cancelAnimationFrame(raf); clearTimeout(timer); for (const k of yours) b.removeEventListener(k, stop, true); b.style.overflowAnchor = ''; if (settleStop === stop) settleStop = null; };
+        b.style.overflowAnchor = 'none';
         for (const k of yours) b.addEventListener(k, stop, true);
-        b.addEventListener('scroll', scrolled);
         const timer = setTimeout(stop, SETTLE_MS);
         settleStop = stop;
-        resized(); requestAnimationFrame(apply);
+        loop();
+        return stop;
       };
       setFunLevel(level);
       if (t && o && o.current === t && state.mode !== 'live') {
-        if (o.kind === 'loop') { await relevelLoop(o, level); settle(); return; }
-        if (o.pool && LEVEL_ORDER[level] <= LEVEL_ORDER[o.builtLevel || 'quick']) { if (!(await rerank(o, level))) setFunLevel(was); settle(); return; }
+        // held from the tap on, so every redraw on the way (not just the last) keeps the switch where it was
+        if (o.kind === 'loop') { settle(); await relevelLoop(o, level); return; }
+        if (o.pool && LEVEL_ORDER[level] <= LEVEL_ORDER[o.builtLevel || 'quick']) { settle(); if (!(await rerank(o, level))) setFunLevel(was); return; }
       }
       if (!(await replanForLevel(FunRoute.LEVELS[level].label))) setFunLevel(was);
     }
