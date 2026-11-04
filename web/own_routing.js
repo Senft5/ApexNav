@@ -88,6 +88,16 @@
       return { cands: [], reason: 'failed', error: String((err && err.message) || err), covered: true, ms: Date.now() - t0 };
     }
   }
+  /** Our quickest alone (one search in the worker), as a candidate for the first route on screen; null on any failure. */
+  async function quick(client, req) {
+    if (!client || typeof client.quick !== 'function') return null;
+    try {
+      const res = await client.quick(req);
+      const c = res && res.route ? candidates({ routes: [res.route] })[0] : null;
+      if (c) { c.ownRole = 'quickest'; c.ownMs = res.ms; c.ownLoadMs = res.loadMs; }
+      return c || null;
+    } catch (_) { return null; }
+  }
   /** Loops from our router, as routes in the shape the loop planner routes (coords [[lon, lat]], turns, times). */
   async function loops(client, req) {
     if (!client) return [];
@@ -183,7 +193,7 @@
     return 'own';
   }
 
-  const api = { OFF_KEY, on, candidates, plan, loops, cellsFor, crowdItems, crowdFor, sharedShare, oneClock, polyline6, thin, traceBody, instruct };
+  const api = { OFF_KEY, on, candidates, plan, quick, loops, cellsFor, crowdItems, crowdFor, sharedShare, oneClock, polyline6, thin, traceBody, instruct };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   root.ApexOwnRouting = api;
 })(typeof window !== 'undefined' ? window : globalThis);

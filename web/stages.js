@@ -622,22 +622,22 @@
     const id = ++seq;
     return new Promise((resolve, reject) => { waiting.set(id, { resolve, reject }); worker.postMessage({ id, c: { lat: c.lat, lon: c.lon }, radiusKm, opts }); });
   }
+  const discoverKey = (c, radiusKm, opts) => [c.lat.toFixed(4), c.lon.toFixed(4), radiusKm.toFixed(2), JSON.stringify(opts.highlights || []), opts.strength || 0].join('|');
   const copy = (stages) => (typeof structuredClone === 'function' ? structuredClone(stages) : JSON.parse(JSON.stringify(stages)));
   async function discoverAsync(c, radiusKm, onProgress, opts = {}) {
     const plain = !onProgress && !opts.names;
     if (!plain) return discover(c, radiusKm, onProgress, opts);
-    const key = [c.lat.toFixed(4), c.lon.toFixed(4), radiusKm.toFixed(2), JSON.stringify(opts.highlights || []), opts.strength || 0].join('|');
+    // the worker keeps its own answers (stages_worker.js), so the page never copies a large list while it draws a route
+    if (root.Worker && typeof root.document !== 'undefined') { try { return await viaWorker(c, radiusKm, opts); } catch (_) { /* the page does it */ } }
+    const key = discoverKey(c, radiusKm, opts);
     const had = kept.get(key);
     if (had && Date.now() - had.at < DISCOVER_KEEP_MS) return copy(await had.p);
-    const p = (async () => {
-      if (root.Worker && typeof root.document !== 'undefined') { try { return await viaWorker(c, radiusKm, opts); } catch (_) { /* the page does it */ } }
-      return discover(c, radiusKm, null, opts);
-    })();
+    const p = discover(c, radiusKm, null, opts);
     kept.set(key, { at: Date.now(), p });
     p.catch(() => kept.delete(key));
     for (const [k, v] of kept) if (Date.now() - v.at >= DISCOVER_KEEP_MS) kept.delete(k);
     return copy(await p);
   }
 
-  root.ApexStages = { demTile, DEM_Z, decodeLayer, transportationAt, discover, discoverAsync, nameStages, places, pois, addElevations, profile, fillProfile, climbM, sightOffsets, offsetsFrom, SIGHT_OPEN_M, stageDirection, terrarium, applyHighlights, plans, waypoints, strokes, bestWindow, roadPieces };
+  root.ApexStages = { demTile, DEM_Z, decodeLayer, transportationAt, discover, discoverAsync, discoverKey, DISCOVER_KEEP_MS, nameStages, places, pois, addElevations, profile, fillProfile, climbM, sightOffsets, offsetsFrom, SIGHT_OPEN_M, stageDirection, terrarium, applyHighlights, plans, waypoints, strokes, bestWindow, roadPieces };
 })(typeof window !== 'undefined' ? window : globalThis);

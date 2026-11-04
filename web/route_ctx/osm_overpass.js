@@ -476,6 +476,19 @@
     if (signal) signal.addEventListener('abort', () => { clearTimeout(t); resolve(null); }, { once: true });
   });
 
+  const RELAY = '/api/ctx/osm';
+  /** The relay's answers for these tiles, as they land, until the plan's signal: Map tile -> parsed elements. */
+  async function relayTiles(want, opts) {
+    const got = new Map();
+    const box = (k) => { const [i, j] = k.split('_').map(Number); return [i * TILE, j * TILE, (i + 1) * TILE, (j + 1) * TILE].map((v) => v.toFixed(4)).join(','); };
+    const all = Promise.all(want.map(async (k) => {
+      try { const j = await opts.apiGet(`${RELAY}?bbox=${box(k)}`); if (j && Array.isArray(j.elements)) got.set(k, parse(j)); } catch (_) { /* this tile stays unknown */ }
+    }));
+    const sig = opts.signal;
+    await (sig ? Promise.race([all, new Promise((r) => { if (sig.aborted) r(); else sig.addEventListener('abort', r, { once: true }); })]) : all);
+    return new Map(got);
+  }
+
   async function fetchCtx(corridors, opts = {}) {
     const out = {};
     const storage = opts.storage !== undefined ? opts.storage : (() => { try { return root.localStorage || null; } catch (_) { return null; } })();
@@ -506,7 +519,24 @@
         }
         return k;
       });
-      const want = planTiles(corridors, covered);
+      let want = planTiles(corridors, covered);
+      // our Worker's relay first (backend/src/osm_relay.ts, GET /api/ctx/osm?bbox= one tile box): Overpass server-side, where
+      // CORS doesn't matter, kept a week per tile there; on the plan's clock (a kept tile answers in well under a second).
+      // A tile it doesn't have (504, or any failure: on the preview of 2026-11-04 every public mirror refused or timed out
+      // from Cloudflare, ?diag=1) goes the way it went before the relay: the phone's own query, off the plan's clock, kept
+      // here for the next plan.
+      // only while the server's flag osm_relay is on (off by default: the mirrors refused the Worker); off, as before the relay
+      const viaRelay = opts.osmRelay === true && typeof opts.apiGet === 'function' && !stubOf(opts);
+      if (want.length && viaRelay) {
+        const got = await relayTiles(want, opts);
+        if (got.size) {
+          const fresh = { nodes: new Map(), ways: new Map(), rels: new Map() };
+          for (const p of got.values()) for (const m of ['nodes', 'ways', 'rels']) for (const [k, v] of p[m]) { fresh[m].set(k, v); els[m].set(k, v); }
+          storeElements(storage, new Map([...got.keys()].map((k) => [k, new Set(['*'])])), fresh, now);
+          corridors.forEach((c, ci) => { for (let i = 0; i < c.lat.length; i++) if (got.has(tileKey(c.lat[i], c.lon[i]))) covered[ci][i] = 1; });
+        }
+        want = want.filter((k) => !got.has(k));
+      }
       if (want.length) {
         // off the critical path: the query runs on its own clock (live, the public servers answered 502 or 504 on every
         // run), the plan waits WAIT_MS (0: not at all) and ranks with what the cache has; the answer is kept for the next plan
@@ -527,7 +557,7 @@
   }
 
   const provider = { id: 'osm_overpass', version: 1, channels: CHANNELS, needs: { network: true }, budgetMs: 15000, fetch: fetchCtx };
-  const api = { provider, WAIT_MS, CHANNELS, SERVERS, KEEP, TILE, COV, MAX_TILES, speedKph, metresOf, tonnesOf, planTiles, paved, hgvLevel, accessLevel, hazardOf, bywayLevel, simplify, query, parse,
+  const api = { provider, WAIT_MS, RELAY, relayTiles, CHANNELS, SERVERS, KEEP, TILE, COV, MAX_TILES, speedKph, metresOf, tonnesOf, planTiles, paved, hgvLevel, accessLevel, hazardOf, bywayLevel, simplify, query, parse,
     aggregate, planPieces, piecesCells, tileKey, covKey, readTile, storeElements, _reset: () => { downUntil = 0; inflight.clear(); } };
   root.ApexOsmOverpass = api;
   if (Ctx && Ctx.register) Ctx.register(provider);

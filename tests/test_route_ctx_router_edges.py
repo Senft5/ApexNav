@@ -70,6 +70,12 @@ out.filter = R.request(coords).filters.attributes.length;
   }) });
   setTimeout(() => ctrl.abort(), 200);
   const pr = await part;
+  // a stage (map_snap) goes through our Worker's relay with at most 600 points; a route the driver is offered never does
+  const relayed = [];
+  const stageC = C.corridor('st', coords.map(([x, y]) => [x + 2e-4, y]), {}); stageC.match = 'map_snap';
+  const viaRelay = await R.fetch([stageC, C.corridor('rt', coords.map(([x, y]) => [x - 2e-4, y]), {})], { apiGet: async (p) => { relayed.push(p); return fx.trace_attributes; }, fetch: ok });
+  out.relay = { stage: viaRelay.st.status, route: viaRelay.rt.status, asked: relayed.length, path: relayed[0] && relayed[0].startsWith('/api/ctx/trace?shape='),
+    points: relayed[0] ? R.encode6([]).length + decodeURIComponent(relayed[0].split('shape=')[1]).length > 0 : false };
   out.partial = Object.fromEntries(Object.entries(pr).map(([k, v]) => [k, v.status])); out.partialMs = Date.now() - t0;
   process.stdout.write(JSON.stringify(out));
 })();
@@ -120,3 +126,10 @@ def test_walk_or_snap_and_partial_at_the_deadline(r):
     assert r["matches"] == ["walk_or_snap"]
     assert r["partial"] == {"p0": "ok", "p1": "ok", "p2": "ok", "p3": "ok", "p4": "unavailable", "p5": "unavailable"}
     assert r["partialMs"] < 400
+
+
+def test_stages_through_the_relay(r):
+    """A stage's line (cut from the map tiles, never the driver's route) asks our Worker's relay, which keeps its edges per
+    shape for the next plan nearby; the driver's own routes still go to the public router from the phone."""
+    x = r["relay"]
+    assert x["stage"] == "ok" and x["route"] == "ok" and x["asked"] == 1 and x["path"], x

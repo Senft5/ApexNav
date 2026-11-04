@@ -32,6 +32,8 @@ import { pointsFor } from "./points";
 import { redeem, shop } from "./redeem";
 import { flagsFor } from "./flags";
 import { ctxKeys, workzones } from "./route_feeds";
+import { osmTile } from "./osm_relay";
+import { traceTile } from "./trace_relay";
 import { grantedThemes } from "./themes";
 import { coverage, exportRoads, roadBins } from "./roads";
 import { crewStandings } from "./standings";
@@ -49,7 +51,7 @@ import { crewHomeSet, crewMeetCells } from "./crew_meet";
 import { chargers } from "./chargers";
 import { segmentAdopt, segmentCreate, segmentDelete, segmentList, segmentShare, segmentsSharedWithMe } from "./segments";
 
-type Handler = (req: Request, env: Env, m: RegExpMatchArray) => Promise<Response>;
+type Handler = (req: Request, env: Env, m: RegExpMatchArray, ctx?: ExecutionContext) => Promise<Response>;
 const routes: [string, RegExp, Handler, string][] = [];
 const on = (method: string, path: string, h: Handler) =>
   routes.push([method, new RegExp(`^${path.replace(/:(\w+)/g, "(?<$1>[^/]+)")}$`), h, `${method} ${path}`]);
@@ -130,6 +132,10 @@ on("GET", "/api/flags", async (req, env) => json(await flagsFor(env, req)));
 // Work zones from state feeds without CORS (web/route_ctx/hazards_live.js); 0.5° tiles only, nothing kept.
 on("GET", "/api/ctx/workzones", async (req) => workzones(req));
 on("GET", "/api/ctx/keys", async (_req, env) => ctxKeys(env));
+// OpenStreetMap map features by one 0.05° tile (osm_relay.ts; route_ctx/osm_overpass.js): Overpass server-side, kept a week
+on("GET", "/api/ctx/osm", async (req, env, _m, ctx) => osmTile(new URL(req.url), env, ctx));
+// The router's edges for a stage cut from the map tiles (trace_relay.ts; route_ctx/router_edges.js), kept 3 days per shape
+on("GET", "/api/ctx/trace", async (req) => traceTile(new URL(req.url)));
 on("GET", "/api/shop", async (req, env) => json(await shop(env, await requireMember(req, env))));
 on("POST", "/api/redeem", async (req, env) => json(await redeem(env, await requireMember(req, env), req)));
 
@@ -309,7 +315,7 @@ export default {
     const fromApp = req.headers.get("origin") === APP_ORIGIN;
     if (req.method === "OPTIONS") return fromApp ? new Response(null, { status: 204, headers: APP_CORS }) : new Response(null, { status: 405 });
     const t0 = Date.now(), seen = { route: "" };
-    const res = await handle(req, env, seen);
+    const res = await handle(req, env, seen, ctx);
     // latency and error rates (IDEAS Y-17): sampled, 5xx always; written after the response
     const sampled = Math.random() < 1 / STATS_SAMPLE;
     if (ctx && (sampled || res.status >= 500)) ctx.waitUntil(recordStat(env, seen.route || "(none)", res.status, Date.now() - t0, sampled ? STATS_SAMPLE : 0));
@@ -325,7 +331,7 @@ export default {
   },
 };
 
-async function handle(req: Request, env: Env, seen: { route: string } = { route: "" }): Promise<Response> {
+async function handle(req: Request, env: Env, seen: { route: string } = { route: "" }, ctx?: ExecutionContext): Promise<Response> {
     let route = "";
     try {
       const url = new URL(req.url);
@@ -335,7 +341,7 @@ async function handle(req: Request, env: Env, seen: { route: string } = { route:
           route = name; seen.route = `${method} ${name}`;
           csrfCheck(req, env);
           await rateCheck(req, env, url.pathname);
-          return await handler(req, env, m);
+          return await handler(req, env, m, ctx);
         }
       }
       if (routes.some(([, re]) => re.test(url.pathname))) throw new HttpError(405, "method_not_allowed");

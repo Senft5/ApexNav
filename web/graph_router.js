@@ -190,7 +190,7 @@
       tiles: list, keys: list.map((t) => keyOf(t.tile.i, t.tile.j)), index, nodeBase, edgeBase, N, E, lat, lon, first, to, tail, eTile,
       time, len, quality, scenery, conf, fun, flags, cls, speed, name, nflags, vmax, rfirst, redge, deadEnd, restr, funFull,
       grid: { i0: gi0, j0: gj0, W: GW, H: GH, start: cellStart, nodes: cellNodes },
-      hIn, hOut, scratch: null, bits: flagBits(), nbits: nodeBits(), hasRestr: new Uint8Array(E),
+      hIn, hOut, scratch: null, bits: flagBits(), nbits: nodeBits(), hasRestr: new Uint8Array(E), gcache: new Map(),
     };
     for (const e of restr.keys()) v.hasRestr[e] = 1;
     return v;
@@ -198,6 +198,8 @@
 
   /** The edge's line, [lat, lon, ...] in degrees, from its tail node to its head node. */
   function geom(v, e) {
+    const hit = v.gcache && v.gcache.get(e);
+    if (hit) return hit;
     const k = v.eTile[e], t = v.tiles[k], local = e - v.edgeBase[k];
     let g = null;
     try { g = typeof t.geom === 'function' ? t.geom(local) : null; } catch (_) { g = null; }
@@ -206,6 +208,7 @@
     if (!g || g.length < 4 || distM(g[0], g[1], v.lat[a], v.lon[a]) > 1) pts.push(v.lat[a], v.lon[a]);
     if (g) for (let i = 0; i + 1 < g.length; i += 2) pts.push(g[i], g[i + 1]);
     if (b >= 0 && distM(pts[pts.length - 2], pts[pts.length - 1], v.lat[b], v.lon[b]) > 1) pts.push(v.lat[b], v.lon[b]);
+    if (v.gcache) { if (v.gcache.size > 200000) v.gcache.clear(); v.gcache.set(e, pts); }
     return pts;
   }
   /** Heading leaving the tail (first ~20 m) and arriving at the head (last ~20 m), cached. */
@@ -289,6 +292,53 @@
     const out = [{ edge: best.edge, frac: best.frac, d: best.d, lat: best.lat, lon: best.lon }];
     const tw = twin(v, best.edge);
     if (tw >= 0 && (!filter || filter(tw))) out.push({ edge: tw, frac: 1 - best.frac, d: best.d, lat: best.lat, lon: best.lon });
+    return out;
+  }
+
+  /** Our quickest alone (one search): the first route on screen. */
+  function quickest(v, req) {
+    const level = levels()[req.level] ? req.level : 'fun', obj = objective(v, req);
+    const { src, dst } = snapBoth(v, req.from, req.to);
+    const sc = startCostFor(v, req.from.heading != null ? req.from.heading : req.heading);
+    const r = search(v, obj, src, dst, 0, null, sc ? { startCost: sc } : {});
+    if (!r) throw new Error('no route');
+    return assemble(v, r, obj, { level, role: 'quickest', a: 0 });
+  }
+  /**
+   * The tiles' own scores along any line (ours, or the router's routes in the same pool): each sample lands on the
+   * nearest edge within 20 m heading the same way (within 60°). Per sample: quality, scenery and conf (0..1, NaN where
+   * no edge or unknown), the posted limit (or the class estimate, flagged apart), the road class and the edge's flags.
+   */
+  function scoreLine(v, lat, lon) {
+    const n = lat.length, B = v.bits;
+    const out = { quality: new Float32Array(n).fill(NaN), scenery: new Float32Array(n).fill(NaN), conf: new Float32Array(n).fill(NaN),
+      limit: new Float32Array(n).fill(NaN), limitEst: new Float32Array(n).fill(NaN), cls: new Float32Array(n).fill(NaN), toll: new Float32Array(n).fill(NaN),
+      bridge: new Float32Array(n).fill(NaN), tunnel: new Float32Array(n).fill(NaN), signals: new Float32Array(n).fill(NaN) };
+    let last = -1;
+    for (let i = 0; i < n; i++) {
+      const a = Math.max(0, i - 1), b = Math.min(n - 1, i + 1);
+      if (a === b) continue;
+      const h = bearing(lat[a], lon[a], lat[b], lon[b]);
+      const ok = (e) => { headings(v, e); const pr = project(v, e, lat[i], lon[i]); if (pr.d > 20) return false;
+        // the edge's heading where the sample is: its first, last or straight-line bearing, whichever is nearest
+        const g = geom(v, e), m = g.length / 2;
+        let best = 0, bd = Infinity;
+        for (let q = 0; q < m - 1; q++) { const d = distM(lat[i], lon[i], (g[2 * q] + g[2 * q + 2]) / 2, (g[2 * q + 1] + g[2 * q + 3]) / 2); if (d < bd) { bd = d; best = q; } }
+        return Math.abs(turnAngle(h, bearing(g[2 * best], g[2 * best + 1], g[2 * best + 2], g[2 * best + 3]))) < 1.05; };
+      // the edge the last sample was on, or the next one along it, first: a line is mostly the same edge for a while
+      let e = -1;
+      if (last >= 0 && ok(last)) e = last;
+      else if (last >= 0 && v.to[last] >= 0) for (let x = v.first[v.to[last]]; x < v.first[v.to[last] + 1] && e < 0; x++) if (v.to[x] >= 0 && ok(x)) e = x;
+      if (e < 0) { const s = snap(v, lat[i], lon[i], ok, 20); e = s.length ? s[0].edge : -1; }
+      if (e < 0) continue;
+      last = e;
+      if (v.quality[e] !== UNKNOWN_U8) { out.quality[i] = v.quality[e] / 254; out.conf[i] = v.conf[e] / 255; }
+      if (v.scenery[e] !== UNKNOWN_U8) out.scenery[i] = v.scenery[e] / 254;
+      if (v.speed[e]) { if (v.flags[e] & B.speedEst) out.limitEst[i] = v.speed[e]; else out.limit[i] = v.speed[e]; }
+      out.cls[i] = v.cls[e];
+      out.toll[i] = v.flags[e] & B.toll ? 1 : 0; out.bridge[i] = v.flags[e] & B.bridge ? 1 : 0; out.tunnel[i] = v.flags[e] & B.tunnel ? 1 : 0;
+      out.signals[i] = v.nflags[v.to[e]] & v.nbits.signal ? 1 : 0;
+    }
     return out;
   }
 
@@ -821,19 +871,45 @@
       }
       return tiles.get(k);
     };
+    // the view is kept and grown: a plan inside the tiles already viewed (the preloaded area round you) reuses it; one
+    // that needs more builds the union once (at most MAX_VIEW tiles, else just what it needs)
+    const MAX_VIEW = 20;
     async function viewFor(want) {
       const have = await keys();
-      const list = want.filter((t) => !have.size || have.has(keyOf(t.i, t.j)));
+      const need = want.filter((t) => !have.size || have.has(keyOf(t.i, t.j)));
+      if (last && need.every((t) => last.keys.has(keyOf(t.i, t.j)))) return last.v;
+      const union = last && last.keys.size + need.length <= MAX_VIEW ? [...need, ...[...last.keys].map((k) => { const [i, j] = k.split('_').map(Number); return { i, j }; })] : need;
+      const seen = new Set(), list = union.filter((t) => { const k = keyOf(t.i, t.j); if (seen.has(k)) return false; seen.add(k); return true; });
       const got = (await Promise.all(list.map(load))).filter(Boolean);
-      const key = got.map((t) => keyOf(t.tile.i, t.tile.j)).sort().join(',');
-      if (last && last.key === key) return last.v;
-      last = { key, v: view(got) };
-      return last.v;
+      const v = view(got);
+      last = { keys: new Set(v.keys), v };
+      return v;
     }
     async function handle(msg) {
       const { id, type } = msg || {};
       try {
         if (type === 'covers') return { id, covers: covers(await keys(), msg.points || []) };
+        if (type === 'quick') {
+          const t0 = Date.now(), v = await viewFor(tilesFor(msg.from, msg.to, msg.level)), t1 = Date.now();
+          const r = quickest(v, msg);
+          return { id, result: { route: plain(r), loadMs: t1 - t0, ms: Date.now() - t1, tiles: v.keys } };
+        }
+        if (type === 'score') {
+          const lines = msg.lines || [];
+          const pts = lines.flatMap((l) => (l.lat.length ? [{ lat: l.lat[0], lon: l.lon[0] }, { lat: l.lat[l.lat.length - 1], lon: l.lon[l.lon.length - 1] }] : []));
+          if (!pts.length) return { id, result: [] };
+          const s = pts.reduce((m, p) => ({ lat: Math.min(m.lat, p.lat), lon: Math.min(m.lon, p.lon) }), pts[0]), n = pts.reduce((m, p) => ({ lat: Math.max(m.lat, p.lat), lon: Math.max(m.lon, p.lon) }), pts[0]);
+          const v = await viewFor(tilesFor(s, n, 'quick'));
+          return { id, result: lines.map((l) => scoreLine(v, l.lat, l.lon)) };
+        }
+        if (type === 'preload') {
+          const t0 = Date.now(), c = { lat: msg.lat, lon: msg.lon }, d = (msg.km || 15) * 1000;
+          const at = (dy, dx) => ({ lat: c.lat + dy / 110540, lon: c.lon + dx / (111320 * Math.cos(c.lat * RAD)) });
+          const sw = tileOf(at(-d, -d).lat, at(-d, -d).lon), ne = tileOf(at(d, d).lat, at(d, d).lon), box = [];
+          for (let i = sw.i; i <= ne.i; i++) for (let j = sw.j; j <= ne.j; j++) box.push({ i, j });
+          const v = await viewFor(box);
+          return { id, result: { tiles: v.keys, edges: v.E, ms: Date.now() - t0 } };
+        }
         if (type === 'plan') {
           const v = await viewFor(tilesFor(msg.from, msg.to, msg.level));
           // members' data for this plan only (the view is kept for the next one, signed in or not)
@@ -904,12 +980,15 @@
     return {
       covers: (points) => ask({ type: 'covers', points }, 4000).then((m) => !!m.covers),
       plan: (req) => ask({ type: 'plan', ...req }).then((m) => m.result),
+      quick: (req) => ask({ type: 'quick', ...req }).then((m) => m.result),
+      score: (lines) => ask({ type: 'score', lines }, 3000).then((m) => m.result),
+      preload: (at) => ask({ type: 'preload', ...at }, 20000).then((m) => m.result),
       loop: (req) => ask({ type: 'loop', ...req }).then((m) => m.result),
       close: () => { try { if (w) w.terminate(); } catch (_) { /* gone */ } w = null; },
     };
   }
 
-  const api = { VERSION: 1, K, crowdOnto, project, TILE_DEG, FLAG_BITS, NODE_BITS, CLS, UNKNOWN_U8, UNKNOWN_FUN, NO_NAME, packedKey, nodeCost, LEVELS_COPY, levels, distM, bearing, turnAngle, tileOf, keyOf, view, geom, snap, objective, search,
+  const api = { VERSION: 1, K, crowdOnto, project, quickest, scoreLine, TILE_DEG, FLAG_BITS, NODE_BITS, CLS, UNKNOWN_U8, UNKNOWN_FUN, NO_NAME, packedKey, nodeCost, LEVELS_COPY, levels, distM, bearing, turnAngle, tileOf, keyOf, view, geom, snap, objective, search,
     assemble, overlap, sameRoute, tilesFor, loopTiles, plan, loop, indexKeys, covers, host, client, edgeId, twin, turnCost };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   root.ApexGraphRouter = api;
