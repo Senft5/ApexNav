@@ -15,6 +15,7 @@
   const TERMS = {
     sight: { label: 'Sight', kind: 'reading',
       meaning: 'The speed you could stop from within what you can see ahead.',
+      plain: 'How fast you could go and still stop within the road you can see.',
       format: 'In 5 mph (10 km/h) steps, rounded down; Open when nothing limits you; -- when unknown or under 5 mph.',
       shown: ['the tag under the arrow (phone and car)', 'the Sight cell in the binnacle'],
       source: 'One held value (carplay.js sightFilter) for the tag and the cell. The corner’s pace is its own mark on the speed dial.' },
@@ -28,32 +29,47 @@
     rhythm: { label: 'Rhythm', kind: 'score', meaning: 'How evenly you drove from corner to corner, part of the Score.' },
     bank: { label: 'Bank', kind: 'reading',
       meaning: 'How much the road leans into the corner (+) or away from it (−), as your phone measured it.',
+      plain: 'The road’s lean in a corner: + tilts you into the turn and helps, − tilts you out of it.',
       format: 'Degrees with a sign, one decimal; -- until the phone’s mount is known.' },
     gripCircle: { label: 'Grip circle', kind: 'reading',
       meaning: 'Each dot is a moment of the drive: up is speeding up, down is braking, left and right are turning. The outline is how far you went in each direction.',
       format: 'In g, two decimals; a gap in the outline where too few moments went that way.',
       shown: ['the drive page'],
       source: 'Core.ggEnvelope: in each of 16 directions, the reach of 95 in 100 of that direction’s moments (at least 8 of them, over 0.05 g).' },
-    twist: { label: 'Twist', kind: 'reading', meaning: 'How much of the route is corners, and how tight, from the map. 0 to 100.',
+    // the plan flow (CALL_SHEET 2026-11-04, finding 9): plain words for a new driver; `was` is the old word, never shown
+    twist: { label: 'Curvy', was: 'Twist', kind: 'reading', meaning: 'How curvy the route is: how many corners, and how tight, from the map. 0 to 100.',
       shown: ['the route card'] },
-    flow: { label: 'Flow', kind: 'reading', meaning: 'How much of the route is corners that run into one another, from the map. 0 to 100.',
+    flow: { label: 'Flowing', was: 'Flow', kind: 'reading', meaning: 'How much of the route is corners that lead straight into the next one, from the map. 0 to 100.',
       shown: ['the route card'] },
     surface: { label: 'Surface', kind: 'reading', meaning: 'How smooth the pavement is, measured by drivers’ phones. 0 to 100; -- until measured.',
       shown: ['the route card'] },
     corners: { label: 'corners', kind: 'count',
       meaning: 'Every corner a drive or a route found.',
-      format: '"3 corners" (format.js cornerCount), the same count on the end card, the drive page and the Log row.' },
+      format: '"3 corners" (format.js cornerCount), the same count on the end card, the drive page and the Log row.',
+      // the route options' tiles and the card's "Better route found" line count every corner too, as the card's CORNERS
+      // number does: a route with 20 corners never reads "53 fewer good corners" beside a card that says 80 (finding 9)
+      shown: ['the end card', 'the drive page', 'the Log row', 'the route card', 'the route options', 'the card’s Better route found line'] },
     cleanCorners: { label: 'clean corners', kind: 'count',
       meaning: 'The corners the Score counts: driven without a stop, with the phone’s g measured.' },
     goodCorners: { label: 'good corners', kind: 'count',
       meaning: 'Corners worth driving: neither a hairpin nor nearly straight (severity 2 to 5).',
-      shown: ['the deck’s suggestion', 'the route options', 'the car’s route choices'] },
+      shown: ['the deck’s suggestion', 'the car’s route choices', 'Best roads nearby'] },
     distance: { label: 'distance', kind: 'reading',
       meaning: 'How far a drive or a route goes.',
       format: 'One decimal under 10 (1.3 mi), whole from 10 (71 mi), in your units (format.js distance), on every surface and total.' },
-    fun: { label: 'Fun', kind: 'setting',
-      meaning: 'A route style: how much of the long way a route takes. Quick, Fun or Max fun. Never a number.',
-      values: ['Quick', 'Fun', 'Max fun'], set: 'the plan sheet’s Roads switch, and the route card’s for the route on it', control: 'data-fun', homes: 2 },
+    fun: { label: 'Fun', kind: 'setting', was: 'Max fun (the third stop)',
+      meaning: 'A route style: how much of a detour for good roads a route may take. Quick, Fun or Long way. Never a number.',
+      plain: 'Quick: the quick way. Fun: twistier roads, up to about a third longer. Long way: the twistiest roads, up to nearly twice the time.',
+      values: ['Quick', 'Fun', 'Long way'], set: 'the route card (a change re-ranks the routes already found when it can)', control: 'data-fun', homes: 1 },
+    // Options (one bottom sheet, from the chips on the plan sheet and the route card): Avoid ✕, Prefer ✓, the kinds of corners
+    avoid: { label: 'Avoid', kind: 'setting', meaning: 'Roads a route keeps off when it can: crossed out (✕) means avoided.',
+      values: ['Highways', 'Tolls', 'Ferries', 'Unpaved', 'Towns', 'Cameras'], set: 'the Options sheet, under Avoid', control: 'data-avoid', homes: 1 },
+    prefer: { label: 'Prefer', kind: 'setting', meaning: 'Roads a route is ranked higher for: ticked (✓) means preferred.',
+      values: ['Measured roads', 'New to me', 'Crew favourites'], set: 'the Options sheet, under Prefer', control: 'data-prefer', homes: 1 },
+    hairpins: { label: 'Hairpins', kind: 'setting', was: 'Corner mix: hairpins', meaning: 'Whether routes look for fewer, any or more very tight corners.',
+      values: ['Fewer', 'Any', 'More'], set: 'the Options sheet, under Kinds of corners', control: 'data-pref-tight', homes: 1 },
+    fastBends: { label: 'Fast bends', kind: 'setting', was: 'Corner mix: fast sweepers', meaning: 'Whether routes look for fewer, any or more long, quick bends.',
+      values: ['Fewer', 'Any', 'More'], set: 'the Options sheet, under Kinds of corners', control: 'data-pref-fast', homes: 1 },
     notes: { label: 'Notes', kind: 'setting',
       meaning: 'How much the co-driver calls: Quiet (bumps and cameras only), Auto (the twisty bits), Full (every corner).',
       values: ['Quiet', 'Auto', 'Full'], set: 'the map’s Layers, where a drive reaches it', control: 'data-notes', homes: 1 },
@@ -70,21 +86,26 @@
       values: ['Plain words', 'Rally notes'], set: 'the Garage', control: 'data-words', homes: 1 },
     night: { label: 'Night', kind: 'setting', meaning: 'The night look: Auto (after sunset), Day or Night.',
       values: ['Auto', 'Day', 'Night'], set: 'the Garage', control: 'data-night', homes: 1 },
-    // For this drive (route_ctx/driver.js): route preferences the route engine reads; each a stamp in the plan sheet's More
+    // For this drive (route_ctx/driver.js): route preferences the route engine reads; each a ✓ under Prefer in Options
     passenger: { label: 'Passenger aboard', kind: 'setting',
       meaning: 'Someone is riding with you: routes avoid hairpins, quick left-right sequences and hard cornering loads, and the drive is tagged Passenger.',
-      set: 'the plan sheet’s More, under For this drive', control: 'data-driver="passenger"', homes: 1 },
+      set: 'the Options sheet, under Prefer', control: 'data-driver="passenger"', homes: 1 },
     litRoads: { label: 'Lit roads at night', kind: 'setting',
       meaning: 'After dark, routes favour roads mapped as lit and avoid ones mapped as unlit. Roads with no lighting on the map count as unknown.',
-      set: 'the plan sheet’s More, under For this drive', control: 'data-driver="lit"', homes: 1 },
+      set: 'the Options sheet, under Prefer', control: 'data-driver="lit"', homes: 1 },
     cyclists: { label: 'Cyclist courtesy', kind: 'setting',
       meaning: 'Routes keep off mapped cycle routes when riders are likely, most on weekend mornings.',
-      set: 'the plan sheet’s More, under For this drive', control: 'data-driver="cyclists"', homes: 1 },
+      set: 'the Options sheet, under Prefer', control: 'data-driver="cyclists"', homes: 1 },
     tunnels: { label: 'Tunnels', kind: 'setting',
       meaning: 'Routes favour roads through tunnels.',
-      set: 'the plan sheet’s More, under For this drive', control: 'data-driver="tunnels"', homes: 1 },
-    start: { label: 'Start', kind: 'action', meaning: 'Start recording a drive now.', ids: ['startDrive'] },
-    driveIt: { label: 'Drive it', kind: 'action', meaning: 'Start the route on the card, with its notes.', ids: ['routeDriveBtn'] },
+      set: 'the Options sheet, under Prefer', control: 'data-driver="tunnels"', homes: 1 },
+    // one name for go (finding 8): Start starts the route on the card (and the bar's key once a route is planned); with no
+    // route the bar's key is the smaller Just drive. It was Drive it, Drive, Go and Start.
+    start: { label: 'Start', kind: 'action', was: 'Drive it', meaning: 'Start the route on the card, with its notes.', ids: ['routeDriveBtn'] },
+    justDrive: { label: 'Just drive', kind: 'action', was: 'Start (the map’s red key)', meaning: 'Record a drive now, with no route.', ids: ['startDrive'] },
+    flyThrough: { label: 'Fly-through', kind: 'action', was: 'Preview', meaning: 'Watch the route flown from start to end before you drive it.', ids: ['routePreviewBtn'] },
+    options: { label: 'Options', kind: 'action', meaning: 'Opens the one Options sheet: Avoid, Prefer, the kinds of corners, the start point, presets, GPX and loops to fit.', ids: ['planOptionsChip', 'cardOptionsChip'] },
+    nearby: { label: 'Best roads nearby', kind: 'action', was: 'Explore', meaning: 'The best roads within 15 or 30 minutes of here, as a list with what each number is.', ids: ['deckNearby', 'planNearbyChip'] },
   };
 
   /**
@@ -98,8 +119,23 @@
     Friends: 'your friends: shown on the map, or listed in People', 'Open in the Log': 'one action drawn as a key or a link (the end card)',
     'Share card': 'one action drawn as a key or a link (the end card)', 'Watch a replay': 'the same demo replay, from the welcome or a theme trial',
     '★': 'a rating’s stars',
+    Options: 'opens the one Options sheet, from the plan sheet or the route card', 'Best roads nearby': 'opens the one list sheet, from the map or the plan sheet',
+    Plan: 'plans what its row offers (a loop, your road, a crew’s drive) onto the card; Start drives it',
+    Fewer: 'a kind of corner’s first stop (Hairpins, Fast bends)', Any: 'a kind of corner’s middle stop', More: 'a kind of corner’s last stop',
   };
-  const KNOWN = { Start: 'the welcome’s key also reads Start (SO-2, next round): it closes the welcome, the map’s records a drive' };
+  const KNOWN = { Start: 'the welcome’s key also reads Start (SO-2, next round): it closes the welcome, the card’s starts the route' };
+
+  // ---- plain words for the road's own kinds (finding 9) -----------------------------------------------------------------
+  // apex_core.js archetype() names the kinds of road (its Python twin is held to them); the route card says them in words a
+  // new driver reads at a glance. Display only: the names inside stay the core's.
+  const ROAD_WORDS = { Esses: 'S-bends', Technical: 'Tight corners', Switchbacks: 'Hairpins', 'Flowing sweepers': 'Fast bends',
+    Rollercoaster: 'Up and down', 'Fast open': 'Open road', Connector: 'Link road', Town: 'Town' };
+  /** A line that names kinds of road ("Esses at 33.8 mi · Technical at 2 mi"), in plain words. */
+  function plainRoads(line) {
+    let out = String(line == null ? '' : line);
+    for (const [k, v] of Object.entries(ROAD_WORDS).sort((a, b) => b[0].length - a[0].length)) out = out.split(k).join(v);
+    return out;
+  }
 
   // ---- the words in the examples: generated, never typed (HE-3, SO-1) ---------------------------------------------------
   // One sample from the call grammar: a medium right that goes on, with "careful", and an easy left 400 m after it. The
@@ -157,6 +193,6 @@
     return words === 'plain' ? `For example "${call}".` : `Rally pace notes, 1 tightest to 6: "${call}".`;
   }
 
-  const api = { TERMS, SHARED, KNOWN, SAMPLE, sampleCall, sampleStrip, sampleQuote, wordsExample };
+  const api = { TERMS, SHARED, KNOWN, SAMPLE, ROAD_WORDS, plainRoads, sampleCall, sampleStrip, sampleQuote, wordsExample };
   if (typeof module !== 'undefined' && module.exports) module.exports = api; else root.ApexVocabulary = api;
 })(typeof window !== 'undefined' ? window : globalThis);

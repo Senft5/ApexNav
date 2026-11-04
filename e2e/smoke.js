@@ -439,11 +439,12 @@ flow('a route that doubles back on its own road: no "Wrong way", no "Back on rou
   check(fell < 30 && cursor[cursor.length - 1] > total - 40, `the cursor follows the route past the turnaround (fell ${Math.round(fell)} m, ended ${Math.round(cursor[cursor.length - 1])} of ${Math.round(total)})`);
 });
 
-flow('for this drive (route context): Passenger aboard and the rest are stamps in More, kept on the phone, the providers registered; Loop to fit is app-only', async (page, base) => {
+flow('for this drive (route context): Passenger aboard and the rest are ✓ stamps under Prefer in Options, kept on the phone, the providers registered; Loop to fit is app-only', async (page, base) => {
   await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); } catch (_) {} });
   await page.goto(base + '/index.html?view=route');
   await page.waitForSelector('#planPanel.open');
-  await page.evaluate(() => { document.getElementById('planMore').open = true; });
+  await page.click('#planOptionsChip');                                // the plan flow: Options is one bottom sheet
+  await page.waitForSelector('#optSheet.open [data-driver="passenger"]');
   const before = await page.evaluate(() => [...document.querySelectorAll('[data-driver]')].map((b) => [b.dataset.driver, b.textContent, b.getAttribute('aria-pressed')]));
   check(JSON.stringify(before) === JSON.stringify([['passenger', 'Passenger aboard', 'false'], ['lit', 'Lit roads at night', 'false'], ['cyclists', 'Cyclist courtesy', 'false'], ['tunnels', 'Tunnels', 'false']]),
     'four stamps, all off by default: ' + JSON.stringify(before));
@@ -456,6 +457,8 @@ flow('for this drive (route context): Passenger aboard and the rest are stamps i
   await page.waitForFunction(() => document.querySelector('[data-driver="tunnels"]').getAttribute('aria-pressed') === 'false');
   await page.reload();
   await page.waitForSelector('#planPanel.open');
+  // what is on stays in view once the sheet is shut (finding 5): a chip on the plan sheet
+  check(await page.evaluate(() => [...document.querySelectorAll('#planOptsOn .chip')].map((c) => c.textContent).includes('✓ Passenger aboard')), 'the stamp shows as a chip on the plan sheet');
   const after = await page.evaluate(() => ({ p: document.querySelector('[data-driver="passenger"]').getAttribute('aria-pressed'), t: document.querySelector('[data-driver="tunnels"]').getAttribute('aria-pressed'),
     fit: document.getElementById('fitRow').hidden, skill: document.getElementById('skillNote').hidden,
     providers: ((window.ApexRouteCtx && (window.ApexRouteCtx.pending || window.ApexRouteCtx.providers)) || []).map((x) => x.id || x),
@@ -669,12 +672,12 @@ flow('Where to?: a suggestion builds a route with a card and a Start button (sea
   await page.waitForFunction(() => { const t = window.apexDebug.track; return t && t.kind === 'route' && t.lat.length > 50; }, null, { timeout: 20000 });
   const name = await page.textContent('#routeBarName');
   check(/Maryville/.test(name), `route bar names the destination (got "${name}")`);
-  // U-70: the card rises with the route, Drive it on it; Cancel puts it down to the bar, where Start is
-  check(await page.isVisible('#routeDriveBtn') && await page.evaluate(() => document.getElementById('planPanel').classList.contains('open')), 'the route card is up with Drive it');
+  // U-70: the card rises with the route, Start on it; Cancel puts it down to the bar, where Start is
+  check(await page.isVisible('#routeDriveBtn') && await page.evaluate(() => document.getElementById('planPanel').classList.contains('open') && document.getElementById('routeDriveBtn').textContent.trim() === 'Start'), 'the route card is up with Start');
   // U-73: the place's name has the row, its town under it in pencil, the distance as the stamp
   check(await page.evaluate(() => { const r = document.querySelector('#placeList .place'); return !r || (r.querySelector('small') || {}).textContent === 'Tennessee'; }), 'the suggestion row: name, then town');
   await page.click('#planCancel');
-  check(await page.isVisible('#startDrive'), 'Start is offered');
+  check(await page.isVisible('#startDrive') && await page.evaluate(() => document.getElementById('startDrive').textContent.trim()) === 'Start', 'Start is offered');
   check(await page.evaluate(() => ApexAnalysis.stats.worker >= 1 && ApexAnalysis.stats.inline === 0), 'the route was analysed in the Web Worker (IDEAS P-05)');
   // the router's turn is on the track for spoken directions (IDEAS V-04): halfway along, onto Hollow Creek Road
   const steps = await page.evaluate(() => { const t = window.apexDebug.track; return { steps: t.steps, total: t.dist[t.dist.length - 1] }; });
@@ -856,7 +859,7 @@ flow('your roads (panel D-1, R-1, D-2): a road you drove is on the deck and its 
   await page.goto(base + '/index.html');
   await page.waitForSelector('#yourRoads .your-road', { timeout: 15000 });
   const deck = await page.evaluate(() => ({ first: document.getElementById('loopSuggest').innerText, rows: [...document.querySelectorAll('#yourRoads .your-road')].map((b) => b.innerText.replace(/\s+/g, ' ')) }));
-  check(/^Loop from here/.test(deck.first) && deck.rows.length === 1 && /^Cherohala Skyway 1\.2 mi · 1 run Drive$/.test(deck.rows[0]),
+  check(/^Loop from here/.test(deck.first) && deck.rows.length === 1 && /^Cherohala Skyway 1\.2 mi · 1 run Plan$/.test(deck.rows[0]),
     'the deck: the loop (no score, so no reason to name a road), then the road you drove: ' + JSON.stringify(deck));
   // DA-1 / KE-2 (panel round 2): the row's glyph is the road's own shape; its body draws the road on the map, fitted with you
   // in view, and a second tap clears it; the key routes it
@@ -993,13 +996,22 @@ flow('Dynamic Type (IN-1, GR-2): the route card, plan sheet, end card and the dr
   await page.waitForFunction(() => window.apexDebug && window.apexDebug.map);
   // the plan sheet: its floor at the normal size, nothing cut at 2x
   await page.click('#destInput');
-  await page.evaluate(() => { document.getElementById('planMore').open = true; });
   const planFloor = await page.evaluate(FLOOR('#planBody .plan-search-section', '.ctl-label small, p.note, .linkbtn, .plan-more > summary'));
   check(!planFloor.length, 'the plan sheet\'s floor: ' + JSON.stringify(planFloor));
   await page.evaluate(TYPE_AT(2));
   const planCut = await page.evaluate(CUT('#planBody'));
   check(!planCut.length, 'the plan sheet at 2x cuts nothing: ' + JSON.stringify(planCut));
   await page.evaluate(TYPE_AT(1));
+  // the plan flow: what was the plan sheet's More is the Options sheet, held to the same floor and growing the same way
+  await page.click('#planOptionsChip');
+  await page.waitForSelector('#optSheet.open');
+  const optFloor = await page.evaluate(FLOOR('#optSheet', '.ctl-label small, p.note, .linkbtn, .opt-mix > span'));
+  check(!optFloor.length, 'the Options sheet\'s floor: ' + JSON.stringify(optFloor));
+  await page.evaluate(TYPE_AT(2));
+  const optCut = await page.evaluate(CUT('#optSheet'));
+  check(!optCut.length, 'the Options sheet at 2x cuts nothing: ' + JSON.stringify(optCut));
+  await page.evaluate(TYPE_AT(1));
+  await page.click('#optDone');
   // the route card
   await page.fill('#destInput', 'Maryville');
   await page.waitForSelector('#placeList .place', { timeout: 10000 });
@@ -1009,14 +1021,14 @@ flow('Dynamic Type (IN-1, GR-2): the route card, plan sheet, end card and the dr
     return {
       factH: f.getBoundingClientRect().height, cols: getComputedStyle(s).gridTemplateColumns.split(' ').length }; });
   const one = await size();
-  const cardFloor = await page.evaluate(FLOOR('#routeCard', '.fact, .route-meta, p.note, .linkbtn, .rc-tile span'));
+  const cardFloor = await page.evaluate(FLOOR('#routeCard', '.fact, .route-meta, p.note, .linkbtn, .rc-tile span, .rc-progress'));
   check(!cardFloor.length, 'the route card\'s floor: ' + JSON.stringify(cardFloor));
   await page.evaluate(TYPE_AT(2));
   const two = await size();
   check(two.factH >= 1.5 * one.factH && two.cols === 2 && one.cols === 3, `the route card at 2x: its words at least 1.5x as big, the stats two a row: ${JSON.stringify({ one, two })}`);
   const cardCut = await page.evaluate(CUT('#routeCard'));
   check(!cardCut.length, 'the route card at 2x cuts nothing: ' + JSON.stringify(cardCut));
-  check(await page.evaluate(() => { const b = document.getElementById('routeDriveBtn').getBoundingClientRect(); return b.height >= 44 && b.bottom <= innerHeight + 1; }), 'Drive it is whole and on screen at 2x');
+  check(await page.evaluate(() => { const b = document.getElementById('routeDriveBtn').getBoundingClientRect(); return b.height >= 44 && b.bottom <= innerHeight + 1; }), 'Start is whole and on screen at 2x');
   // the cockpit keeps its size (IN-2's rule: it does not scale)
   check(await page.evaluate(() => getComputedStyle(document.getElementById('notes')).zoom === '1'), 'the road book strip is not zoomed');
   // the end card: 1.6x at most, scrolls to its last key
@@ -2387,7 +2399,7 @@ flow('convoy: the leader shows a QR code of the link (Worker stubbed, IDEAS S-22
   // P-11: an ad-hoc convoy is the map's Start key: Convoy now, and the sheet opens on the code for the car park
   await page.click('#startMore');
   await page.waitForSelector('.start-sheet .rec-key');
-  check(/Drive/.test(await page.textContent('.start-sheet .rec-key')), 'Start offers Drive and Convoy now');
+  check(/^Just drive$/.test((await page.textContent('.start-sheet .rec-key')).trim()), 'the key\'s chevron offers Just drive and Convoy now');
   await page.click('.start-sheet button:has-text("Convoy now")');
   await page.waitForSelector('.convoy-sheet canvas.cv-qr');
   check(/you are leading/.test(await page.textContent('.convoy-sheet')) && await page.isVisible('.convoy-sheet button:has-text("Start the drive")'), 'leading, the code up, the drive one key away');
@@ -3422,7 +3434,7 @@ flow('units: kilometres in Settings redraw the dial, the notes and the replay in
   check(await page.evaluate(() => window.__samePage === true), 'the page was not reloaded');
   check(await page.evaluate(() => localStorage.getItem('apex.units')) === 'metric', 'saved');
   check(await page.getAttribute('[data-units="metric"]', 'aria-checked') === 'true', 'the switch shows metric');
-  check((await page.$$eval('[data-loop-mi]', (b) => b.map((x) => x.textContent))).join() === '25 km,50 km,75 km', 'the loop lengths in km');
+  check((await page.$$eval('#loopDetents [data-loop-mi]', (b) => b.map((x) => x.textContent))).join() === '25 km,50 km,75 km,100 km,150 km', 'the loop lengths in km, the whole dial in one unit');
   const dial = await page.textContent('#cluster');
   check(/KM\/H/.test(dial) && /Trip km/.test(dial) && /200/.test(dial), 'the dial in km/h, redrawn in place: ' + dial.slice(0, 200));
   await page.goto(base + '/index.html?drive=dry_ridge');            // the replay again: the setting is kept
@@ -4398,7 +4410,8 @@ flow('REVIEW.md 1.2 screen by screen: first run, the map, planning, the route, d
   const idle = await page.evaluate(() => ({ tabs: [...document.querySelectorAll('#tabbar .tab')].map((t) => t.textContent), layers: document.getElementById('swTab').className,
     recenter: document.getElementById('recenterBtn').className, start: document.getElementById('startDrive').className, loop: document.getElementById('loopSuggest').innerText }));
   check(JSON.stringify(idle.tabs) === '["Map","Log","People","Garage"]', 'four tabs: ' + idle.tabs);
-  check(/map-key/.test(idle.layers) && /map-key/.test(idle.recenter) && /btn-start/.test(idle.start), 'Layers and Recenter are keys, Start the record key: ' + JSON.stringify(idle));
+  check(/map-key/.test(idle.layers) && /map-key/.test(idle.recenter) && /btn-start/.test(idle.start) && await page.evaluate(() => document.getElementById('startDrive').textContent.trim()) === 'Just drive',
+    'Layers and Recenter are keys, Just drive the record key: ' + JSON.stringify(idle));
   check(/^Loop from here · \d+ mi/.test(idle.loop) && /On the twistiest roads nearby\s*Plan$/.test(idle.loop), 'one suggested loop, one clause under it (U-87): ' + idle.loop);
   // U-71: a tap on the map leaves follow as it was (no key); a drag shows the key with its glyph, the countdown a bar on its foot
   const tapKey = await page.evaluate(() => { const c = apexDebug.map.getCanvasContainer();
@@ -4417,13 +4430,15 @@ flow('REVIEW.md 1.2 screen by screen: first run, the map, planning, the route, d
   const layers = await page.evaluate(async () => { const tab = document.getElementById('swTab'), was = tab.getAttribute('aria-expanded') === 'true';
     if (!was) tab.click(); await new Promise((r) => setTimeout(r, 50)); const t = document.getElementById('swPanel').innerText; if (!was) tab.click(); return t; });
   check(/Friends/.test(layers) && /Cameras/.test(layers) && /Twisty roads/.test(layers) && /3D terrain/.test(layers) && !/Night|Theme|Units|Look/.test(layers), 'Layers: ' + layers);
-  // Plan sheet: the loop dial (five detents), one Route style switch, and one "More" row, closed
+  // Plan sheet (the plan flow): the loop dial (five detents in one unit), Best roads nearby and Options as two chips (with
+  // what is on beside them), no level switch (its home is the route card) and no More
   await page.click('#destInput');
-  const plan = await page.evaluate(() => { const more = document.getElementById('planMore');
-    return { detents: document.querySelectorAll('#loopDetents button').length, open: more.open, more: more.querySelector('summary').textContent,
-      chips: [...document.getElementById('planBody').querySelectorAll('.chip')].filter((c) => c.offsetParent && !more.contains(c)).length }; });
-  check(plan.detents === 5 && !plan.open && /^More: avoid/.test(plan.more) && plan.chips === 0, 'Plan sheet: ' + JSON.stringify(plan));
-  // Route bar: no toast repeating it; Route card: three numbers, four dials with unknowns as --, Drive it and Preview, the rest text links
+  const plan = await page.evaluate(() => ({ detents: [...document.querySelectorAll('#loopDetents button')].map((b) => b.textContent), more: !!document.getElementById('planMore'),
+    level: [...document.querySelectorAll('#planBody .plan-search-section [data-fun]')].length,
+    chips: [...document.querySelectorAll('#planChips > .chip')].filter((c) => c.offsetParent).map((c) => c.textContent), on: [...document.querySelectorAll('#planOptsOn .chip')].map((c) => c.textContent) }));
+  check(plan.detents.length === 5 && plan.detents.every((d) => / mi$/.test(d)) && !plan.more && plan.level === 0 && JSON.stringify(plan.chips) === '["Best roads nearby","Options · 1"]'
+    && JSON.stringify(plan.on) === '["✕ Unpaved"]', 'Plan sheet: ' + JSON.stringify(plan));
+  // Route bar: no toast repeating it; Route card: three numbers, four dials with unknowns as --, Start and Fly-through, the rest text links
   await page.fill('#destInput', 'Maryville');
   await page.waitForSelector('#placeList .place', { timeout: 10000 });
   await page.click('#placeList .place');
@@ -4431,15 +4446,21 @@ flow('REVIEW.md 1.2 screen by screen: first run, the map, planning, the route, d
   await page.waitForTimeout(600);
   const card = await page.evaluate(() => ({ toast: document.getElementById('toast').textContent, bar: document.getElementById('routeBarName').textContent,
     stats: [...document.querySelectorAll('#routeCardStats > *')].length, dials: document.getElementById('routeCardBars').innerText.replace(/\s+/g, ' '),
-    keys: [...document.querySelectorAll('#routeCard button')].filter((b) => /Drive it|Preview|Save|Share|GPX|Pin/.test(b.textContent)).map((b) => b.textContent.trim() + ':' + b.className) }));
+    keys: [...document.querySelectorAll('#planPanel button')].filter((b) => b.offsetParent && /^(Start|Fly-through|Save|Share|GPX|Pin place)$/.test(b.textContent.trim())).map((b) => b.textContent.trim() + ':' + b.className) }));
   check(!card.toast.includes('Maryville'), 'the bar is the toast: ' + card.toast);
-  check(card.stats === 3 && /TWIST/.test(card.dials) && /FLOW/.test(card.dials) && /-- SURFACE/.test(card.dials) && /-- CAMERAS/.test(card.dials), 'Route card: ' + JSON.stringify(card));
-  check(card.keys[0] === 'Drive it:rec-key' && card.keys[1] === 'Preview:ink-btn' && card.keys.slice(2).every((k) => /:linkbtn$/.test(k)), 'Drive it and Preview, then text links: ' + card.keys);
-  // U-70: the resolved route opens its card with Drive it in view on it; down, the bar shows its chevron (U-101: the chevron
+  check(card.stats === 3 && /CURVY/.test(card.dials) && /FLOWING/.test(card.dials) && /-- SURFACE/.test(card.dials) && /-- CAMERAS/.test(card.dials), 'Route card: ' + JSON.stringify(card));
+  // the card's text links scroll with it; Start and Fly-through are its foot (the plan flow, finding 2): open the card full to see them all
+  await page.evaluate(() => { document.getElementById('planPanel').classList.add('full'); document.getElementById('planBody').scrollTop = 1e5; });
+  await page.waitForTimeout(300);
+  const keysAll = await page.evaluate(() => [...document.querySelectorAll('#planPanel button')].filter((b) => b.offsetParent && /^(Start|Fly-through|Save|Share|GPX|Pin place)$/.test(b.textContent.trim())).map((b) => b.textContent.trim() + ':' + b.className));
+  await page.evaluate(() => { document.getElementById('planPanel').classList.remove('full'); document.getElementById('planBody').scrollTop = 0; });
+  check(keysAll.indexOf('Start:rec-key') >= 0 && keysAll.indexOf('Fly-through:ink-btn') >= 0 && keysAll.filter((k) => !/^(Start|Fly-through):/.test(k)).length >= 4
+    && keysAll.filter((k) => !/^(Start|Fly-through):/.test(k)).every((k) => /:linkbtn$/.test(k)), 'Start and Fly-through, then text links: ' + keysAll);
+  // U-70: the resolved route opens its card with Start in view on it; down, the bar shows its chevron (U-101: the chevron
   // alone, so the name has the width) and the name whole
   const up = await page.evaluate(() => { const p = document.getElementById('planPanel'), k = document.getElementById('routeDriveBtn').getBoundingClientRect(), r = p.getBoundingClientRect();
     return { open: p.classList.contains('open'), drive: k.top >= r.top && k.bottom <= Math.min(r.bottom, innerHeight) + 1 && k.height > 0 }; });
-  check(up.open && up.drive, 'the route card rises with Drive it on it: ' + JSON.stringify(up));
+  check(up.open && up.drive, 'the route card rises with Start on it: ' + JSON.stringify(up));
   await page.click('#routeBar');
   await page.waitForTimeout(400);
   const down = await page.evaluate(() => { const m = document.querySelector('#routeBar .rb-open'), n = document.getElementById('routeBarName');
@@ -4679,6 +4700,290 @@ const unsafe = (page, d) => page.evaluate(({ d, R }) => {
     }
     return out;
   }, { d, R: d.R });
+// ---- the plan flow (CALL_SHEET 2026-11-04; the planux audit): seven journeys at iPhone 15 geometry ------------------------
+// Each counts its taps, and the route card's Start is measured over time (it never moves); the card says what the ranking
+// did; what is on in Options is shown; the safe-area and overlap scanner passes on every screen of the journey.
+const IPHONE = { viewport: { width: 393, height: 852 }, hasTouch: true, geolocation: { latitude: 35.9606, longitude: -83.9207 }, permissions: ['geolocation'] };
+// a line through the locations asked, a wiggle on it (amp in degrees, waves along the whole line), the time the router gives
+function stubLine(locs, { amp = 0, waves = 0, time = 600, name = 'Test Ridge Road' } = {}) {
+  const pts = [], per = 200;
+  for (let k = 0; k < locs.length - 1; k++) {
+    const a = locs[k], b = locs[k + 1];
+    for (let i = k ? 1 : 0; i <= per; i++) {
+      const t = (k + i / per) / (locs.length - 1), w = amp * Math.sin(t * Math.PI * waves) * Math.min(1, 6 * Math.min(t, 1 - t));
+      pts.push([a.lat + (b.lat - a.lat) * i / per + w, a.lon + (b.lon - a.lon) * i / per - w]);
+    }
+  }
+  const n = pts.length - 1;
+  return { trip: { legs: [{ shape: polyline6(pts), maneuvers: [
+    { type: 1, begin_shape_index: 0, length: 6, street_names: [name] }, { type: 10, begin_shape_index: n >> 1, length: 6, street_names: ['Hollow Creek Road'] },
+    { type: 4, begin_shape_index: n, length: 0 }] }], summary: { length: 12, time, has_highway: false, has_toll: false, has_ferry: false } } };
+}
+// The destination's router: the quickest is a straight road (up first); the alternate winds (more corners, +2:40), so the
+// ranking at Fun swaps to it and at Quick (its 10 % budget) keeps the straight one. Counts what the router is asked.
+async function planRouter(page, asked = []) {
+  await page.route('https://photon.komoot.io/**', (route) => route.fulfill({ contentType: 'application/json', body: JSON.stringify({ features: [
+    { geometry: { coordinates: [-83.80, 36.06] }, properties: { name: 'Maryville', state: 'Tennessee' } }] }) }));
+  await page.route('https://valhalla1.openstreetmap.de/route', (route) => {
+    const req = JSON.parse(route.request().postData() || '{}'), locs = req.locations;
+    asked.push(req);
+    const loop = locs.length > 2 && Math.abs(locs[0].lat - locs[locs.length - 1].lat) < 1e-4;
+    if (loop) return route.fulfill({ contentType: 'application/json', body: JSON.stringify(stubLine(locs, { amp: 0.0012, waves: 120, time: 5000, name: 'Loop Road' })) });
+    const body = stubLine(locs, { time: 600 });
+    if (locs.length === 2) body.alternates = [stubLine(locs, { amp: 0.0016, waves: 90, time: 760, name: 'Wiggle Road' })];
+    route.fulfill({ contentType: 'application/json', body: JSON.stringify(body) });
+  });
+  await page.route('https://valhalla1.openstreetmap.de/sources_to_targets', (route) => {
+    const req = JSON.parse(route.request().postData() || '{}');
+    route.fulfill({ contentType: 'application/json', body: JSON.stringify({ sources_to_targets: req.sources.map(() => req.targets.map((_, j) => ({ time: 240 + 60 * j, distance: 3 + j }))) }) });
+  });
+}
+async function planPage(page, base, store = {}) {
+  await page.addInitScript((store) => { try { localStorage.setItem('apex.onboarded', '1'); localStorage.setItem('apex.permsExplained', '1');
+    for (const [k, v] of Object.entries(store)) localStorage.setItem(k, v); } catch (_) {} }, store);
+  const cdp = await page.context().newCDPSession(page);
+  await cdp.send('Emulation.setSafeAreaInsetsOverride', { insets: SAFE.portrait.i });
+  await page.goto(base + '/index.html');
+  await page.waitForFunction(() => window.apexDebug && window.apexDebug.map && window.apex && !document.getElementById('boot'), null, { timeout: 20000 });
+  await page.waitForFunction(() => !!apexDebug.state.lastPosition, null, { timeout: 10000 }).catch(() => {});
+  const taps = { n: 0, log: [] };
+  const tap = async (sel, what) => { taps.n++; taps.log.push(what || sel); await page.click(sel); };
+  return { cdp, taps, tap };
+}
+// Start's place on the screen, every 100 ms for `ms` (null while it isn't shown)
+async function startTrack(page, ms) {
+  const ys = [];
+  for (const t0 = Date.now(); Date.now() - t0 < ms;) {
+    ys.push(await page.evaluate(() => { const b = document.getElementById('routeDriveBtn').getBoundingClientRect(); return b.height ? Math.round(b.top * 10) / 10 : null; }));
+    await page.waitForTimeout(100);
+  }
+  return ys;
+}
+const cardUp = (page, timeout = 20000) => page.waitForFunction(() => { const p = document.getElementById('planPanel'), b = document.getElementById('routeDriveBtn').getBoundingClientRect();
+  return p.classList.contains('open') && p.classList.contains('routed') && b.height > 0 && b.bottom <= innerHeight; }, null, { timeout });
+const planDone = (page, timeout = 25000) => page.waitForFunction(() => !document.getElementById('planPanel').classList.contains('busy') && /\S/.test(document.getElementById('routeProgress').textContent), null, { timeout });
+const scan = async (page, where) => {
+  await page.evaluate(() => { const st = document.querySelector('.stage'); if (st) st.scrollLeft = 0; });   // headless Chromium scrolls the stage sideways on a click into a field (TYPE_AT)
+  const bad = await unsafe(page, SAFE.portrait); check(!bad.length, `${where}: under the island, the home bar or a corner, or keys on keys:\n  ${bad.join('\n  ')}`); };
+async function swipe(cdp, x0, y0, dx, dy) {
+  await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x: x0, y: y0 }] });
+  for (let i = 1; i <= 10; i++) await cdp.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [{ x: x0 + dx * i / 10, y: y0 + dy * i / 10 }] });
+  await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+}
+
+flow('plan flow (a) a destination in 3 taps: Where to?, the place, Start; Start never moves, the card says the ranked swap (finding 1, 2, 3)', async (page, base) => {
+  const asked = [];
+  await planRouter(page, asked);
+  const { taps, tap } = await planPage(page, base);
+  // the main key follows the task (finding 3): Find a loop with nothing typed, the place once you type
+  await tap('#destInput', 'Where to?');
+  check(await page.isVisible('#findLoopBtn') && !(await page.isVisible('#findGoBtn')), 'nothing typed: Find a loop is the main key');
+  await page.fill('#destInput', 'Maryville');                         // typing is not a tap
+  await page.waitForSelector('#placeList .place', { timeout: 10000 });
+  await page.waitForFunction(() => /^Go to Maryville$/.test(document.getElementById('findGoBtn').textContent));
+  check(!(await page.isVisible('#findLoopBtn')) && !(await page.isVisible('.plan-loop')), 'typing: the loop gives way, the main key goes to the place');
+  await scan(page, 'Where to?, typed');
+  await tap('#placeList .place', 'the place');
+  await cardUp(page);
+  await page.waitForTimeout(300);                                     // the sheet's slide
+  const ys = await startTrack(page, 600);
+  await planDone(page);
+  ys.push(...await startTrack(page, 1500));                          // the profile, the facts and the ranking land meanwhile
+  const shown = ys.filter((y) => y != null);
+  check(shown.length === ys.length && Math.max(...shown) - Math.min(...shown) <= 1, 'Start stays put while the card fills in and the ranking lands: ' + JSON.stringify([...new Set(ys)]));
+  const card = await page.evaluate(() => ({ note: document.getElementById('routeProgress').textContent, found: document.getElementById('routeProgress').classList.contains('found'),
+    tiles: [...document.querySelectorAll('#routeCardOptions .rc-tile')].map((t) => t.innerText.replace(/\s+/g, ' ')), name: apexDebug.track.name, h: document.getElementById('planPanel').getBoundingClientRect().height,
+    stage: document.querySelector('.stage').getBoundingClientRect().height, dials: document.getElementById('routeCardBars').innerText.replace(/\s+/g, ' ') }));
+  check(card.found && /^Better route found: \+\d+ min, \d+ more corners$/.test(card.note), 'the card says the ranked route replaced the first one, and why: ' + JSON.stringify(card));
+  check(card.tiles.length === 2 && card.tiles.every((t) => /\d+ corners?$/.test(t)) && !card.tiles.some((t) => /good corners/.test(t)), 'the tiles count corners as the card does: ' + JSON.stringify(card.tiles));
+  check(card.h <= 0.52 * card.stage, `the card opens at half height, the map above it (finding 10): ${Math.round(card.h)} of ${Math.round(card.stage)} px`);
+  check(/CURVY/.test(card.dials) && /FLOWING/.test(card.dials) && !/TWIST|FLOW\b/.test(card.dials), 'plain words on the dials: ' + card.dials);
+  await scan(page, 'the route card');
+  await tap('#routeDriveBtn', 'Start');
+  await page.waitForFunction(() => window.apexDebug.driveActive && apexDebug.track && apexDebug.track.kind === 'route', null, { timeout: 10000 });
+  check(taps.n === 3, `a destination in 3 taps: ${taps.log.join(' → ')}`);
+}, IPHONE);
+
+flow('plan flow (e, f) a level change and an alternative are one tap or swipe each: the level re-ranks what is found, nothing planned again (finding 4, 11)', async (page, base) => {
+  const asked = [];
+  await planRouter(page, asked);
+  const { cdp, taps, tap } = await planPage(page, base);
+  await tap('#destInput'); await page.fill('#destInput', 'Maryville');
+  await page.waitForSelector('#placeList .place', { timeout: 10000 });
+  await tap('#placeList .place');
+  await cardUp(page); await planDone(page);
+  check(await page.evaluate(() => document.querySelectorAll('[data-fun]').length === 3 && !!document.querySelector('#routeCard [data-fun]')), 'the level has one home, the route card');
+  const level = () => page.evaluate(() => [...document.querySelectorAll('[data-fun]')].find((b) => b.getAttribute('aria-checked') === 'true').textContent);
+  check(await level() === 'Fun', 'planned at Fun');
+  // a level change keeps the card's scroll and Start's place, and asks the router nothing
+  await page.evaluate(() => { const b = document.getElementById('planBody'); b.scrollTop = Math.min(80, b.scrollHeight - b.clientHeight); });
+  const before = await page.evaluate(() => ({ sc: document.getElementById('planBody').scrollTop, y: document.getElementById('routeDriveBtn').getBoundingClientRect().top, n: apexDebug.track.lat.length }));
+  const routed = asked.length, t0 = taps.n;
+  await page.evaluate(() => document.querySelector('#routeCardFun [data-fun="quick"]').scrollIntoView({ block: 'nearest' }));
+  const sc0 = await page.evaluate(() => document.getElementById('planBody').scrollTop);
+  const sw0 = await page.evaluate(() => document.getElementById('routeCardFun').getBoundingClientRect().top);
+  await tap('#routeCardFun [data-fun="quick"]', 'Quick');
+  await page.waitForFunction(() => /^Quick: /.test(document.getElementById('routeProgress').textContent), null, { timeout: 5000 });
+  const after = await page.evaluate(() => ({ sc: document.getElementById('planBody').scrollTop, y: document.getElementById('routeDriveBtn').getBoundingClientRect().top, n: apexDebug.track.lat.length,
+    note: document.getElementById('routeProgress').textContent, busy: document.getElementById('planPanel').classList.contains('busy'),
+    max: document.getElementById('planBody').scrollHeight - document.getElementById('planBody').clientHeight, sw: document.getElementById('routeCardFun').getBoundingClientRect().top }));
+  check(asked.length === routed, `Quick re-ranked the routes already found: the router was asked nothing (${asked.length - routed} requests)`);
+  check(/of the \d+ routes found\)$/.test(after.note) && after.n !== before.n, 'the straight road is Quick\'s pick, and the card says why: ' + JSON.stringify(after));
+  // the scroll is kept, never back to the top: the switch you tapped stays under your finger (the card above it may be
+  // shorter for the new route, and the scroll follows it), and Start doesn't move
+  check(Math.abs(after.y - before.y) <= 1 && after.sc > 0 && Math.abs(after.sw - sw0) <= 2, `a level change keeps Start and the scroll where they were: ${JSON.stringify({ before, sc0, sw0, after })}`);
+  check(taps.n - t0 === 1, 'a level change is one tap');
+  await tap('#routeCardFun [data-fun="fun"]', 'Fun');
+  await page.waitForFunction(() => /^Fun: /.test(document.getElementById('routeProgress').textContent), null, { timeout: 5000 });
+  check(asked.length === routed, 'and back to Fun, again from what was found');
+  // an alternative: one swipe sideways on the card (finding 11), then back with a tap on its tile
+  const tiles = () => page.evaluate(() => [...document.querySelectorAll('#routeCardOptions .rc-tile')].map((t) => t.getAttribute('aria-checked')).join());
+  check(await tiles() === 'true,false', 'two routes offered, the first picked: ' + await tiles());
+  const box = await page.evaluate(() => { const o = document.getElementById('routeCardOptions'); o.scrollIntoView({ block: 'nearest' }); const r = o.getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height / 2 }; });
+  await page.evaluate(() => { window.__touches = []; for (const k of ['touchstart', 'touchend']) document.getElementById('routeCard').addEventListener(k, (e) => window.__touches.push(k + ':' + Math.round((e.touches[0] || e.changedTouches[0]).clientX)), { passive: true }); });
+  await swipe(cdp, box.x + 100, box.y, -200, 6);
+  await page.waitForFunction(() => document.querySelectorAll('#routeCardOptions .rc-tile')[1].getAttribute('aria-checked') === 'true', null, { timeout: 8000 })
+    .catch(() => page.evaluate(() => ({ t: window.__touches, tiles: [...document.querySelectorAll('#routeCardOptions .rc-tile')].map((x) => x.getAttribute('aria-checked')), box: document.getElementById('routeCardStats').getBoundingClientRect().toJSON(), busy: document.getElementById('planPanel').className }))
+      .then((d) => { throw new Error('a swipe sideways picks the next route: ' + JSON.stringify(d)); }));
+  check(asked.length === routed, 'a swipe picks the other route already found');
+  await scan(page, 'the card after a swipe');
+}, IPHONE);
+
+flow('plan flow (b) a loop in 2 taps: Plan on the map, then Start; its progress in view, its card has a length in your units and the level (finding 6)', async (page, base) => {
+  await planRouter(page);
+  const { taps, tap } = await planPage(page, base);
+  await page.waitForFunction(() => getComputedStyle(document.getElementById('loopSuggest')).display !== 'none');
+  await tap('#loopSuggestGo', 'Plan (the loop on the map)');
+  // never a lone toast: the plan sheet is up with the loop's progress on its key and its status line
+  await page.waitForFunction(() => document.getElementById('planPanel').classList.contains('open') && /\S/.test(document.getElementById('planStatus').textContent), null, { timeout: 5000 });
+  const progress = await page.evaluate(() => ({ status: document.getElementById('planStatus').textContent, key: document.getElementById('findLoopBtn').textContent, toast: document.getElementById('toast').classList.contains('show') ? document.getElementById('toast').textContent : '' }));
+  check(!/Finding roads ·/.test(progress.toast), 'the loop\'s progress is inline, not a toast: ' + JSON.stringify(progress));
+  await cardUp(page, 30000); await planDone(page, 30000);
+  const card = await page.evaluate(() => ({ name: apexDebug.track.name, lengths: [...document.querySelectorAll('#cardLoopDetents button')].map((b) => b.textContent), lengthShown: !document.getElementById('routeCardLoop').hidden,
+    level: !document.getElementById('routeCardFun').hidden, dial: [...document.querySelectorAll('#loopDetents button')].map((b) => b.textContent), note: document.getElementById('routeProgress').textContent }));
+  check(/loop$/.test(card.name) && card.lengthShown && card.level, 'the loop\'s card: its length and its level: ' + JSON.stringify(card));
+  check(JSON.stringify(card.lengths) === '["15 mi","30 mi","45 mi","60 mi","90 mi"]' && JSON.stringify(card.dial) === JSON.stringify(card.lengths), 'one unit, yours, on the dial and the card: ' + JSON.stringify(card));
+  check(/loop/.test(card.note), 'the card says what the loop search found: ' + card.note);
+  await scan(page, 'the loop card');
+  // the level on a loop re-ranks the loops built
+  await page.click('#routeCardFun [data-fun="max"]');
+  await page.waitForFunction(() => /^Long way: /.test(document.getElementById('routeProgress').textContent), null, { timeout: 5000 });
+  await tap('#routeDriveBtn', 'Start');
+  await page.waitForFunction(() => window.apexDebug.driveActive && apexDebug.track && /loop$/.test(apexDebug.track.name), null, { timeout: 10000 });
+  check(taps.n === 2, `a loop in 2 taps: ${taps.log.join(' → ')}`);
+}, IPHONE);
+
+flow('plan flow (c) best roads nearby in 3 taps: the chip under Where to?, a road in a list with named columns, Start (finding 7)', async (page, base) => {
+  await planRouter(page);
+  const { taps, tap } = await planPage(page, base);
+  // the tiles are blocked here: the roads come from a stand-in for the map's stage finder, near the phone
+  await page.evaluate(() => {
+    const road = (name, lat, lon, n, good) => { const la = [], lo = []; for (let i = 0; i < n; i++) { la.push(lat + i * 0.0004); lo.push(lon + Math.sin(i / 6) * 0.0006); } return { name, lat: la, lon: lo, km: n * 0.045, good, tight: 2, score: good }; };
+    ApexStages.discover = async (c, km, progress) => { if (progress) progress('tiles', 1); return [road('Test Ridge Road', c.lat + 0.02, c.lon + 0.01, 80, 14), road('Hollow Creek Road', c.lat - 0.03, c.lon + 0.02, 60, 9)]; };
+  });
+  check(await page.isVisible('#deckNearby'), 'Best roads nearby is a chip under Where to?');
+  await tap('#deckNearby', 'Best roads nearby');
+  await page.waitForSelector('#nearbySheet.open #exploreList .nb-go', { timeout: 15000 });
+  await page.waitForTimeout(300);
+  const list = await page.evaluate(() => ({ head: [...document.querySelectorAll('#exploreList .nb-head .nb-cells > span')].map((s) => s.textContent),
+    row: [...document.querySelectorAll('#exploreList .nb-row')[0].querySelectorAll('.nb-cells > *')].map((s) => s.textContent), label: document.querySelector('#exploreList .nb-go').getAttribute('aria-label'),
+    status: document.getElementById('nearbyStatus').textContent, sheetBottom: document.getElementById('nearbySheet').getBoundingClientRect().bottom }));
+  check(JSON.stringify(list.head) === '["Road","Good corners","Length","Drive there"]', 'the columns are named: ' + JSON.stringify(list));
+  check(list.row[0] === 'Test Ridge Road' && /^\d+$/.test(list.row[1]) && /^\d+(\.\d)?mi$/.test(list.row[2]) && /^\d+min$/.test(list.row[3]) && /good corners/.test(list.label), 'each number under its name, with its unit: ' + JSON.stringify(list));
+  check(Math.abs(list.sheetBottom - 852) <= 1, 'the list slides up from the bottom: ' + list.sheetBottom);
+  await scan(page, 'Best roads nearby');
+  await tap('#exploreList .nb-go', 'the road');
+  await cardUp(page);
+  check(await page.waitForFunction(() => { const n = document.getElementById('nearbySheet'); return !n.classList.contains('open') && getComputedStyle(n).visibility === 'hidden'; }, null, { timeout: 2000 }).then(() => true, () => false),
+    'the list goes when its road is planned (its slide down done)');
+  await tap('#routeDriveBtn', 'Start');
+  await page.waitForFunction(() => window.apexDebug.driveActive && apexDebug.track && apexDebug.track.id === 'explore', null, { timeout: 10000 });
+  check(taps.n === 3, `best roads nearby in 3 taps: ${taps.log.join(' → ')}`);
+}, IPHONE);
+
+flow('plan flow (d) one Options sheet: Avoid ✕ and Prefer ✓ in it, what is on stays in view as chips on the sheet and the card, it swipes down to close (finding 4, 5)', async (page, base) => {
+  const asked = [];
+  await planRouter(page, asked);
+  const { cdp } = await planPage(page, base, { 'apex.avoid': JSON.stringify({ unpaved: false }) });
+  await page.click('#destInput');
+  check(await page.evaluate(() => document.getElementById('planOptsOn').children.length === 0 && document.getElementById('planOptionsChip').textContent === 'Options'), 'nothing on: just Options');
+  await page.click('#planOptionsChip');
+  await page.waitForFunction(() => { const s = document.getElementById('optSheet'); return s.classList.contains('open') && Math.abs(s.getBoundingClientRect().bottom - innerHeight) < 2; });
+  await page.waitForTimeout(300);
+  const groups = await page.evaluate(() => [...document.querySelectorAll('#optSheet .ctl-label')].map((l) => l.firstChild.textContent.trim()));
+  check(JSON.stringify(groups) === '["Avoid","Prefer","Kinds of corners","Start from","Loop to fit","Presets"]', 'one sheet, in that order: ' + JSON.stringify(groups));
+  await scan(page, 'Options');
+  await page.click('[data-avoid="highways"]');
+  await page.click('[data-driver="passenger"]');
+  await page.click('[data-pref-tight="1"]');
+  check(await page.evaluate(() => getComputedStyle(document.querySelector('[data-avoid="highways"]'), '::before').content.includes('✕') && getComputedStyle(document.querySelector('[data-driver="passenger"]'), '::before').content.includes('✓')), 'avoided reads ✕, preferred ✓');
+  // a swipe down from the sheet's top closes it (the owner's rule: sheets swipe down to close)
+  const top = await page.evaluate(() => document.getElementById('optSheet').getBoundingClientRect().top + 20);
+  await swipe(cdp, 196, top, 0, 220);
+  await page.waitForFunction(() => !document.getElementById('optSheet').classList.contains('open'), null, { timeout: 3000 });
+  const chips = await page.evaluate(() => ({ sheet: [...document.querySelectorAll('#planOptsOn .chip')].map((c) => c.textContent), key: document.getElementById('planOptionsChip').textContent }));
+  check(JSON.stringify(chips.sheet) === '["✕ Highways","✓ Passenger aboard","More hairpins"]' && chips.key === 'Options · 3', 'what is on shows on the plan sheet once Options closes: ' + JSON.stringify(chips));
+  // the route planned with them shows them on its card; a chip opens the sheet again; closing with nothing changed plans nothing
+  await page.fill('#destInput', 'Maryville');
+  await page.waitForSelector('#placeList .place', { timeout: 10000 });
+  await page.click('#placeList .place');
+  await cardUp(page); await planDone(page);
+  const card = await page.evaluate(() => [...document.querySelectorAll('#cardOptsOn .chip')].map((c) => c.textContent));
+  check(JSON.stringify(card) === JSON.stringify(chips.sheet), 'and on the route card: ' + JSON.stringify(card));
+  check(asked.some((r) => r.costing_options && JSON.stringify(r.costing_options).includes('"use_highways":0')), 'the plan avoided highways');
+  const n = asked.length;
+  await page.click('#cardOptsOn .chip');
+  await page.waitForFunction(() => document.getElementById('optSheet').classList.contains('open'));
+  await page.click('#optDone');
+  await page.waitForTimeout(500);
+  check(asked.length === n && !(await page.evaluate(() => document.getElementById('planPanel').classList.contains('busy'))), 'nothing changed: nothing planned again');
+  // one change, then Done: the route on the card is planned again once, with it
+  await page.click('#cardOptionsChip');
+  await page.waitForFunction(() => document.getElementById('optSheet').classList.contains('open'));
+  await page.click('[data-avoid="highways"]');
+  await page.click('#optDone');
+  await page.waitForFunction(() => /^With your options/.test(document.getElementById('routeProgress').textContent) || /Checked/.test(document.getElementById('routeProgress').textContent), null, { timeout: 20000 });
+  check(asked.length > n && await page.evaluate(() => [...document.querySelectorAll('#cardOptsOn .chip')].map((c) => c.textContent).join()) === '✓ Passenger aboard,More hairpins', 'planned again with the change, the chips with it');
+  await scan(page, 'the card with its options');
+}, IPHONE);
+
+flow('plan flow (g) one name for go: Start on the card and the bar, Just drive with no route (a smaller key), Fly-through for the preview (finding 8, 9)', async (page, base) => {
+  await planRouter(page);
+  const { taps, tap } = await planPage(page, base);
+  const idle = await page.evaluate(() => { const k = document.getElementById('startDrive'), r = k.getBoundingClientRect(), cs = getComputedStyle(k);
+    return { text: k.textContent.trim(), w: r.width, bg: cs.backgroundColor, label: k.getAttribute('aria-label') }; });
+  check(idle.text === 'Just drive' && idle.bg === 'rgba(0, 0, 0, 0)' && idle.w < 150 && /no route/.test(idle.label), 'with no route the bar\'s key is the smaller Just drive, not the red Start: ' + JSON.stringify(idle));
+  await page.click('#startMore');
+  const sheet = await page.evaluate(() => [...document.querySelectorAll('.start-sheet button')].map((b) => b.textContent.trim()));
+  check(sheet[0] === 'Just drive' && !sheet.includes('Drive'), 'the start sheet says Just drive too: ' + JSON.stringify(sheet));
+  await page.click('.start-sheet .linkbtn');
+  await page.click('#destInput'); await page.fill('#destInput', 'Maryville');
+  await page.waitForSelector('#placeList .place', { timeout: 10000 });
+  await page.click('#placeList .place');
+  await cardUp(page); await planDone(page);
+  const keys = await page.evaluate(() => [...document.querySelectorAll('#planPanel button')].filter((b) => b.offsetParent && /^(Start|Fly-through|Drive it|Preview|Drive)$/.test(b.textContent.trim())).map((b) => b.textContent.trim()));
+  check(JSON.stringify(keys) === '["Start","Fly-through"]', 'the card: Start and Fly-through: ' + JSON.stringify(keys));
+  await page.click('#routeBar');                                      // down to the bar: its key is the route's Start
+  await page.waitForTimeout(400);
+  check(await page.evaluate(() => document.getElementById('startDrive').textContent.trim()) === 'Start', 'the bar\'s key with a route reads Start');
+  await page.click('#routeBar'); await cardUp(page);
+  await page.click('#routePreviewBtn');
+  await page.waitForFunction(() => /^Fly-through/.test(document.getElementById('modePlate').textContent), null, { timeout: 5000 })
+    .catch(() => page.evaluate(() => document.getElementById('modePlate').textContent).then((t) => { throw new Error('the preview is called Fly-through: ' + t); }));
+  await page.click('#replayDone');
+  // a free drive: one tap
+  await page.waitForFunction(() => !document.getElementById('app').classList.contains('replaying') && getComputedStyle(document.getElementById('planPanel')).display !== 'none', null, { timeout: 5000 });
+  if (await page.evaluate(() => document.getElementById('planPanel').classList.contains('open'))) await page.click('#planCancel');   // the card down to its bar
+  await page.waitForFunction(() => getComputedStyle(document.getElementById('planClear')).display !== 'none', null, { timeout: 5000 })
+    .catch(() => page.evaluate(() => [document.getElementById('planPanel').className, document.getElementById('app').className]).then((t) => { throw new Error('the bar\'s ✕: ' + JSON.stringify(t)); }));
+  await page.click('#planClear');
+  await page.waitForFunction(() => document.getElementById('startDrive').textContent.trim() === 'Just drive' && getComputedStyle(document.getElementById('startDrive')).display !== 'none', null, { timeout: 5000 })
+    .catch(() => page.evaluate(() => [document.getElementById('startDrive').textContent, getComputedStyle(document.getElementById('startDrive')).display, document.getElementById('planPanel').className]).then((t) => { throw new Error('Just drive again once the route is cleared: ' + JSON.stringify(t)); }));
+  await tap('#startDrive', 'Just drive');
+  await page.waitForFunction(() => window.apexDebug.driveActive, null, { timeout: 10000 });
+  check(taps.n === 1, 'a free drive is one tap');
+}, IPHONE);
+
 flow('safe areas: the Dynamic Island, the home indicator and the rounded corners clear every control, upright, on its side and on small phones', async (page, base) => {
   await page.route(base + '/api/**', (route) => { const p = new URL(route.request().url()).pathname;
     route.fulfill({ contentType: 'application/json', body: p === '/api/me' ? '{"signed_in":true,"member":true,"handle":"kit_r"}' : '[]' }); });
@@ -4690,7 +4995,9 @@ flow('safe areas: the Dynamic Island, the home indicator and the rounded corners
     ['onboarding', '/index.html', null, true],
     ['map idle', '/index.html', null],
     ['Layers open', '/index.html', 'document.getElementById("swTab").click()'],
-    ['plan sheet, More open', '/index.html', 'document.getElementById("destInput").focus(); document.getElementById("planMore").open = true;'],
+    ['plan sheet', '/index.html', 'document.getElementById("destInput").focus();'],
+    ['Options sheet', '/index.html', 'document.getElementById("destInput").focus(); document.getElementById("planOptionsChip").click();'],
+    ['Best roads nearby', '/index.html', 'document.getElementById("deckNearby").click();'],
     ['driving', '/index.html', live],
     ['hazard report', '/index.html', live + ' document.getElementById("hzReportBtn").click();'],
     ['drive ended', '/index.html', endCard],
