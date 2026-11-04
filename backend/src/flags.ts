@@ -16,6 +16,10 @@ export const DEFAULT_FLAGS: Record<string, Rule> = {
   // R-36 busy times of day per road: OFF until the owner answers Quiet hours (docs/OWNER_TODO.md). With it off the phone sends
   // no hour and the server stores and shows none (contribute.ts, roads.ts check serverFlag too). Turn on: FLAGS {"quiet_hours":{"on":true}}
   quiet_hours: { on: false },
+  // The phone asking our Worker's OSM relay (osm_relay.ts) for map features: OFF. On the preview of 2026-11-04 every public
+  // Overpass mirror refused the Worker or timed out (?diag=1), and the own-routing graph ETL takes the same features from the
+  // Geofabrik extract instead. Off, the phone does exactly what it did before the relay. Turn on: FLAGS {"osm_relay":{"on":true}}
+  osm_relay: { on: false },
 };
 
 /** A flag as the server itself obeys it (no build, platform or share: those pick phones, not the server's own behaviour). */

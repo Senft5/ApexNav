@@ -47,6 +47,18 @@ const kinds = (pts) => { const o = {}; for (const p of pts) o[p.kind] = (o[p.kin
     same: JSON.stringify([...first.dr.channels.side_roads_per_km]) === JSON.stringify([...again.dr.channels.side_roads_per_km]),
     staleStatus: stale.dr.status, staleAllNaN: Object.values(stale.dr.channels).every((a) => nan(a) === a.length),
     keys: [...store._m.keys()].length, bytes: [...store._m.values()].reduce((s, v) => s + v.length, 0), q: bodies[0] || '' };
+  // through our Worker's relay (GET /api/ctx/osm?bbox= one tile box each): on the plan's clock, the public servers never
+  // asked from the phone; a tile the relay hasn't got yet stays unknown this time
+  O._reset();
+  const relayAsked = [], direct = [];
+  const viaRelay = await O.provider.fetch([c], { osmRelay: true, apiGet: async (path) => { relayAsked.push(path); return fx.overpass; }, fetchFn: (u) => { direct.push(u); throw new Error('no'); }, storage: mem(), now: 1000 });
+  const relayMiss = await O.provider.fetch([c], { osmRelay: true, apiGet: async () => null, fetchFn: (u) => { direct.push(u); throw new Error('no'); }, storage: mem(), now: 1000 });
+  // the flag off (the default): the relay is never asked, exactly as before it
+  const offAsked = [];
+  await O.provider.fetch([c], { apiGet: async (p) => { offAsked.push(p); return fx.overpass; }, fetchFn: () => { throw new Error('no'); }, storage: mem(), now: 1000 });
+  out.relayOff = offAsked.length;
+  out.relay = { status: viaRelay.dr.status, asked: relayAsked.length, paths: relayAsked.every((p) => /^\/api\/ctx\/osm\?bbox=-?\d+\.\d{4},-?\d+\.\d{4},-?\d+\.\d{4},-?\d+\.\d{4}$/.test(p)),
+    same: JSON.stringify([...viaRelay.dr.channels.side_roads_per_km]) === JSON.stringify([...first.dr.channels.side_roads_per_km]), direct: direct.length, miss: relayMiss.dr.status };
   // a reversed copy of the route reuses the kept stretch (no second query)
   const rev = { id: 'rev', lat: Float64Array.from(c.lat).reverse(), lon: Float64Array.from(c.lon).reverse(), distM: c.distM };
   let asked = 0;
@@ -221,3 +233,18 @@ def test_off_the_critical_path(out):
     x = out["late"]
     assert x["first"] == "unavailable" and x["took"] < 300, x
     assert x["second"] == "ok" and x["callsAfter"] == x["calls"], x
+
+
+def test_through_the_relay(out):
+    """With the app's API (opts.apiGet) the tiles come from our Worker's relay, one tile box per request, on the plan's
+    clock, and they give the same channels as Overpass itself. When the relay fails (every mirror refused it from Cloudflare
+    on the preview), the tile goes the cache-fill way it went before: one raced query off the plan's clock."""
+    x = out["relay"]
+    assert x["status"] == "ok" and x["asked"] >= 1 and x["paths"] and x["same"], x
+    assert x["miss"] == "unavailable", x
+    assert x["direct"] == 4, "a tile the relay hasn't got goes the way it did before: the phone's own query, off the plan's clock"
+
+
+def test_relay_off_by_default(out):
+    """osm_relay is off on the server (backend/src/flags.ts): without opts.osmRelay the phone never asks the relay."""
+    assert out["relayOff"] == 0
