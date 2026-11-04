@@ -257,6 +257,16 @@ worth driving*; a commodity router (Valhalla) connects them.
 6. **Sun glare** — penalise headings within 20° of the sun's azimuth when it is below
    15° elevation (solar position is pure math).
 
+### 7.2b The route engine **[built 2026-11-04: web/route_engine.js, web/route_ctx; docs/ROUTE_ENGINE.md]**
+Stage discovery finds twisty lines; whether a line is a road worth driving is a separate question, and the one the old
+score couldn't ask (a curvy subdivision street beat a country road). Every candidate is now a corridor of 25 m samples;
+providers answer per sample (router edges: limits, class, density, signals, driveways; the DEM: grade, relief, ridge vs
+valley, aspect; map features, the national grid, weather and time, the crowd); the engine scores quality (a geometric
+mean with a soft minimum over the damning families) and scenery, gates corners by quality, costs side streets per km,
+reads time-dependent penalties at the time you'd be there and drops candidates that break a hard constraint. Stages are
+re-scored the same way before chaining (the network step), connectors may use highways, and the highway-friendly
+quickest always competes. Calibrated on real Cincinnati routes (tests/test_route_engine_calibration.py).
+
 ### 7.3 Later
 Our own routing graph with the fun score baked into edge costs (Valhalla/GraphHopper
 custom costing, self-hosted), so the optimiser sees every road, not just discovered

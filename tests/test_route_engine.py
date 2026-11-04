@@ -123,7 +123,7 @@ const arterial = { speed_limit_kph: 56, road_class: 2, road_use: 0, density: 9, 
 {
   const goodBad = { forest_share: [1, 0], canopy_pct: [80, 0], water_near: [1, 0], creek_follow: [1, 0], open_country: [1, 0], protected: [1, 0], photo_per_km: [10, 0],
     tpi_m: [50, 0], relief_m: [200, 5], foliage: [1, 0], old_road: [1, 0], loved: [1, 0], guardrail: [1, 0], curve_signs_per_km: [4, 0], crowd_camber_deg: [4, -3],
-    divided: [0, 1], surface: [0, 5], sidewalk: [0, 1], truck_route: [0, 1], access_destination: [0, 1], road_class: [4, 6], road_use: [0, 4] };
+    divided: [0, 1], surface: [0, 5], sidewalk: [0, 1], truck_route: [0, 1], access_destination: [0, 1], road_class: [4, 6], road_use: [0, 4], built_year: [1900, 2010] };
   const wrong = [];
   const extraCh = { canopy_pct: 80 };                 // foliage counts where there are trees
   for (const t of [...E.QUALITY, ...E.SCENERY]) {
@@ -135,8 +135,8 @@ const arterial = { speed_limit_kph: 56, road_class: 2, road_use: 0, density: 9, 
     if (!(value(g, [b]) > value(b, [g]))) wrong.push(t.ch);
   }
   for (const t of E.PER_KM) {
-    const v = { deer_risk: 1, fog_vis_m: 100, crosswind_ms: 20, road_temp_c: -5, crash_rate: 5, cyclist_route: 1, buggy: 1, unlit: 1, snow_cover: 1 }[t.ch];
-    const when = t.ch === 'deer_risk' ? Date.parse('2026-11-04T17:20:00-05:00') : t.ch === 'cyclist_route' ? Date.parse('2026-11-07T08:30:00-05:00') : t.ch === 'unlit' ? Date.parse('2026-11-04T21:00:00-05:00') : DEPART;
+    const v = { deer_risk: 1, fog_vis_m: 100, crosswind_ms: 20, road_temp_c: -5, crash_rate: 5, cyclist_route: 1, buggy: 1, unlit: 1, snow_cover: 1, crowd_busy: 1, park_visitors: 1, signal_coverage: 0 }[t.ch];
+    const when = t.ch === 'deer_risk' ? Date.parse('2026-11-04T17:20:00-05:00') : t.ch === 'cyclist_route' ? Date.parse('2026-11-07T08:30:00-05:00') : t.ch === 'park_visitors' ? Date.parse('2026-11-07T13:00:00-05:00') : t.ch === 'unlit' ? Date.parse('2026-11-04T21:00:00-05:00') : DEPART;
     const exposedCh = t.ch === 'crosswind_ms' ? { tpi_m: 40 } : {};
     const prefs = t.pref ? { [t.pref]: true } : {};
     const clean = cand(wiggly(6000), 700, { ...back, ...exposedCh }, { departAt: when }), dirty = cand(wiggly(6000), 700, { ...back, ...exposedCh, [t.ch]: v }, { departAt: when });
@@ -161,6 +161,13 @@ const arterial = { speed_limit_kph: 56, road_class: 2, road_use: 0, density: 9, 
   out.byway = bonus([{ fromM: 0, toM: 5000, kind: 'byway' }]);
   out.views = bonus([], [1, 2, 3, 4, 5, 6].map((k) => ({ atM: k * 500, kind: 'viewpoint' })));
   out.tunnelNoPref = bonus([], [{ atM: 1000, kind: 'tunnel' }]); out.tunnelPref = bonus([], [{ atM: 1000, kind: 'tunnel' }], { tunnels: true });
+  out.resurfaced = bonus([{ fromM: 0, toM: 4000, kind: 'resurfaced' }]); out.camera = bonus([], [{ atM: 100, kind: 'camera' }]) + pen(DEPART, [], [{ atM: 100, kind: 'camera' }]);
+  // a passenger aboard: the hairpins cost; fog weighs more in a valley than on a ridge
+  const hairpins = ll(Array.from({ length: 1201 }, (_, i) => [i * 5, 22 * Math.sin(2 * Math.PI * i * 5 / 130)]));
+  const pp = (prefs) => { const c = cand(hairpins, 700, back); E.evaluate(c, { prefs }); return c.ev.penaltyPts; };
+  out.passenger = [pp({}), pp({ passenger: true })];
+  const fogAt = (tpi) => { const c = cand(wiggly(6000), 700, { ...back, fog_vis_m: 200, tpi_m: tpi }); E.evaluate(c, {}); return c.ev.penaltyPts; };
+  out.fog = [fogAt(-30), fogAt(0), fogAt(40)];
   // a closure when you'd get there drops the route; at another time it doesn't; all closed: they stay, flagged
   const closed = cand(wiggly(6000), 600, back, { spans: [{ fromM: 2000, toM: 2100, kind: 'closure', when: { weekly: [{ from: '11:00', to: '13:00' }] } }] });
   const open = cand(wiggly(6000), 900, back);
@@ -264,6 +271,10 @@ def test_time_dependent_spans_and_points(r):
     assert abs(r["points"] - 1.5) < 0.01, "a level crossing, a one-lane bridge and a deer crossing at noon"
     assert r["byway"] == 2 and r["views"] == 6, "a 5 km byway; six viewpoints capped at 6"
     assert r["tunnelNoPref"] == 0 and r["tunnelPref"] == 1.5
+    assert abs(r["resurfaced"] - 1.2) < 0.01 and r["camera"] == 0, "cameras are counted on the card, never ranked"
+    assert r["passenger"][0] == 0 and r["passenger"][1] > 0
+    assert r["fog"][0] > r["fog"][1] > r["fog"][2] > 0, "valley fog"
+
 
 
 def test_hard_constraints(r):

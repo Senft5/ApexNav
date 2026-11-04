@@ -642,11 +642,13 @@
    */
   function distinctOptions(ranked, k = 3) {
     const out = [];
+    // the route engine's fun (corners gated by road quality) when it ranked them: a subdivision's corners aren't fun
+    const funOf = (c) => (c.ev && c.ev.funGated ? c.ev.funGated : c.fun);
     for (const c of ranked || []) {
-      const f = c.fun ? c.fun.fun : null;
-      if (out.some(o => Math.abs(o.timeS - c.timeS) < 30 && Math.abs((o.fun ? o.fun.fun : null) - f) <= 1)) continue;
+      const f = funOf(c) ? funOf(c).fun : null;
+      if (out.some(o => Math.abs(o.timeS - c.timeS) < 30 && Math.abs((funOf(o) ? funOf(o).fun : null) - f) <= 1)) continue;
       // Never offer a route that is both slower and less fun than one already on the card: nobody would pick it.
-      if (out.some(o => o.fun && f != null && o.fun.fun >= f && o.timeS <= c.timeS)) continue;
+      if (out.some(o => funOf(o) && f != null && funOf(o).fun >= f && o.timeS <= c.timeS)) continue;
       out.push(c);
       if (out.length === k) break;
     }

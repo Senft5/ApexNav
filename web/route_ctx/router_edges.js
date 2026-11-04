@@ -160,7 +160,7 @@
     const key = Ctx.keyOf(c.coords);
     let edges = kept && kept.get(key);
     if (!edges) {
-      for (const match of ['edge_walk', 'map_snap']) {
+      for (const match of c.match ? [c.match] : ['edge_walk', 'map_snap']) {     // a line from the map tiles (a stage) is snapped
         try {
           const body = match === 'edge_walk' ? request(c.coords, match) : request(thin(c.coords, 2000), match);
           const r = await f(`${VALHALLA}/trace_attributes`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body), signal: opts.signal });

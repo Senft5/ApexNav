@@ -1,7 +1,23 @@
 # Fun routing
 
-How Vetta picks the way from A to B (web/fun_route.js, wired in web/index.html `funRoute`), and how
+How Vetta picks the way from A to B (web/fun_route.js, wired in web/cockpit.js `funRoute`), and how
 loops are sized (see Loops below; stage discovery itself is web/stages.js and docs/ROAD_INTELLIGENCE.md §7).
+
+## The route engine (2026-11-04)
+
+Every candidate (A→B, loops, Explore's stages) is now ranked by the route engine (web/route_engine.js; the reference is
+docs/ROUTE_ENGINE.md). Each candidate becomes a corridor of 25 m samples with the time you'd be at each; the route
+context providers (web/route_ctx: the router's edge attributes, the DEM, and the map-feature, national-grid, world and
+crowd providers as they land) answer for all candidates of a plan at once within 2.5 s; the engine scores each 25 m for
+**quality** (is this a road worth driving: speed limit, class, density, signals, driveways, businesses …) and
+**scenery**, counts corners only where quality earns them, costs side streets and business districts per km, applies
+time-dependent penalties and hard constraints, and says why the winner beat the quickest from the largest differences.
+The router's costing keeps off highways, which sent routes through subdivisions and strip malls: the highway-friendly
+quickest now competes on every trip (unless you avoid highways), connectors between good roads may use highways, and the
+best stages are re-scored on their real road before any connector is timed. Everything below (levels, budgets, avoid,
+towns, glare, weather, measured roads, taste, Prefer, set list, stage coverage, the car) feeds the engine's value as
+before; with no context at all the value is exactly the old one. If planning takes over 1.5 s the quickest route goes
+up at once and the ranked routes replace it.
 
 ## Levels
 
@@ -144,7 +160,9 @@ destination route on screen like the Avoid chips do.
 ## Candidates
 
 1. The router's route (Valhalla, highways and tolls de-prioritised) and up to 2 Valhalla alternates
-   (`alternates: 2`). OSRM is the fallback when Valhalla is down.
+   (`alternates: 2`), plus the highway-friendly quickest (use_highways 1.0, `ApexRouteEngine.highwayCosting`) unless
+   Avoid → Highways is on; a highway-costed winner is pinned with shaping points like an alternate. OSRM is the fallback
+   when Valhalla is down. Stage plans and the connector matrix use `connectorCosting` (use_highways 0.6).
 2. Quick stops there. Fun and Max fun also look for **stages** (web/stages.js: OpenFreeMap vector
    tiles, roads joined into strokes, each stroke's best 2–10 km window scored on corners and
    junctions) in a circle around the A→B midpoint (radius half the trip + 3 km, at most 64 tiles,
@@ -286,7 +304,8 @@ parity-tested core):
 - **Fun** = 0.5 Twist + 0.35 Flow + 0.15 (1 − Dull) x 100.
 
 Ranking: `fun + 0.5 x good corners gained over the quickest route (capped at 60) − perMin x
-extra minutes + measured adjustment`, after dropping anything past the level's budget. Fun is a
+extra minutes + measured adjustment`, after dropping anything past the level's budget; the route engine adds quality,
+scenery, side-street, bonus and penalty terms and gates each corner by the road's quality (docs/ROUTE_ENGINE.md). Fun is a
 density, so a long route through a great stage barely moves it; the corner gain is what pays for
 the detour. For members, the top candidates also get what others measured on those roads
 (see Measured roads below).

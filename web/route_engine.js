@@ -88,11 +88,12 @@
     { ch: 'guardrail', w: 0.3, g: yes(0.9, 0.5), family: 'drama' },
     { ch: 'curve_signs_per_km', w: 0.4, g: (v) => 1 - Math.exp(-Math.max(0, v) / 2), family: 'drama' },
     { ch: 'crowd_camber_deg', w: 0.5, g: ramp([[-3, 0], [0, 0.5], [4, 1]]), family: 'crowd' },
+    { ch: 'built_year', w: 0.3, g: ramp([[1900, 1], [1960, 0.6], [2000, 0.2]]), family: 'history' },   // county parcels: an old road's houses
   ];
   /** Per-sample penalty channels: points per km at full strength, `at` = how strong at that time (0–1). */
   const PER_KM = [
     { ch: 'deer_risk', perKm: 1.5, label: 'deer', at: (ctx) => ctx.deerHour },
-    { ch: 'fog_vis_m', perKm: 1.2, label: 'fog', value: (v) => clamp01(1 - v / 1000) },
+    { ch: 'fog_vis_m', perKm: 1.2, label: 'fog', value: (v) => clamp01(1 - v / 1000), valley: true },   // worse in the valleys, lighter on ridges
     { ch: 'crosswind_ms', perKm: 0.6, label: 'crosswind', value: (v) => clamp01((v - 8) / 10), exposed: true },
     { ch: 'road_temp_c', perKm: 0.25, label: 'cold road', value: (v) => clamp01((7 - v) / 10) },
     { ch: 'crash_rate', perKm: 0.6, label: 'crash history', value: (v) => clamp01(v / 5) },          // crashes per km per year
@@ -100,6 +101,9 @@
     { ch: 'buggy', perKm: 0.8, label: 'buggies', value: clamp01 },
     { ch: 'unlit', perKm: 0.6, label: 'unlit at night', value: clamp01, at: (ctx) => ctx.dark, pref: 'unlit' },
     { ch: 'snow_cover', perKm: 2, label: 'snow', value: clamp01 },
+    { ch: 'crowd_busy', perKm: 0.6, label: 'busy at that hour', value: clamp01 },                    // members' counts for the hour you'd be there
+    { ch: 'park_visitors', perKm: 0.5, label: 'park crowds', value: clamp01, at: (ctx) => ctx.weekendDay },
+    { ch: 'signal_coverage', perKm: 0.15, label: 'no phone signal', value: (v) => 1 - clamp01(v) },
   ];
   // Spans and points: points each (+ per km), the default time they apply when the provider gives none, hard = no go.
   const DAY_MS = 864e5;
@@ -124,6 +128,8 @@
     historic: { bonus: 0.5, bonusCap: 3, label: 'history' },
     waterfall: { bonus: 1, bonusCap: 3, label: 'a waterfall' },
     tunnel: { bonus: 1.5, bonusCap: 4.5, pref: 'tunnels', label: 'tunnels' },
+    resurfaced: { bonusPerKm: 0.3, bonusCap: 3, label: 'fresh asphalt' },
+    camera: { label: 'cameras' },                     // counted on the card; avoided by the router when asked (Avoid → Cameras), never ranked
   };
   // Channel names other builders may use for the same thing (the integrator's safety net; ROUTE_ENGINE.md is canonical).
   const ALIASES = { businesses_per_km: 'business_per_km', maxspeed_kph: 'speed_limit_kph', viirs: 'night_light', canopy: 'canopy_pct',
@@ -167,7 +173,7 @@
   /** What time-dependent terms need at one sample: deer hour (sun −10°…+8°), dark (sun under −6°), weekend morning, golden light. */
   function moment(ms, lat, lon) {
     const d = new Date(ms), day = d.getDay(), h = d.getHours();
-    const out = { weekendMorning: (day === 0 || day === 6) && h >= 7 && h < 11 ? 1 : 0, deerHour: null, dark: null, sun: null };
+    const out = { weekendMorning: (day === 0 || day === 6) && h >= 7 && h < 11 ? 1 : 0, weekendDay: (day === 0 || day === 6) && h >= 9 && h < 18 ? 1 : 0, deerHour: null, dark: null, sun: null };
     const S = Sun();
     if (S && S.sunPosition) {
       const p = S.sunPosition(d, lat, lon), alt = p.altitude * 180 / Math.PI;
@@ -291,12 +297,13 @@
     const mom = (i) => moments[Math.min(moments.length - 1, Math.floor(i / every))];
     const pen = new Map(), addPen = (label, pts, km = 0) => { const p = pen.get(label) || { label, points: 0, km: 0 }; p.points += pts; p.km += km; pen.set(label, p); };
     const exposed = (i) => { const b = channel(ctx, 'bridge'), t = channel(ctx, 'tpi_m'); return (b && b[i] >= 0.5) || (t && t[i] >= 20); };
+    const tpiCh = channel(ctx, 'tpi_m'), valleyFactor = (i) => (!tpiCh || !Number.isFinite(tpiCh[i]) ? 1 : tpiCh[i] <= -10 ? 1.5 : tpiCh[i] >= 20 ? 0.5 : 1);
     for (const term of PER_KM) {
       const v = channel(ctx, term.ch);
       if (!v || (term.pref && !prefs[term.pref])) continue;
       for (let i = 0; i < n; i++) {
         if (!Number.isFinite(v[i])) continue;
-        const strength = (term.value ? term.value(v[i]) : clamp01(v[i])) * (term.at ? (term.at(mom(i)) ?? 0) : 1) * (term.exposed && !exposed(i) ? 0 : 1);
+        const strength = (term.value ? term.value(v[i]) : clamp01(v[i])) * (term.at ? (term.at(mom(i)) ?? 0) : 1) * (term.exposed && !exposed(i) ? 0 : 1) * (term.valley ? valleyFactor(i) : 1);
         if (strength > 0) addPen(term.label, strength * term.perKm * step / 1000, strength * step / 1000);
       }
     }
@@ -323,6 +330,7 @@
       if (!active(when, c.etaAt[i])) continue;
       const hard = typeof rule.hard === 'function' ? rule.hard(sp) : rule.hard;
       if (hard) { out.hard.push({ kind: sp.kind, label: sp.label || rule.label, atM: sp.fromM }); continue; }
+      if (!rule.each && !rule.perKm && !rule.bonus && !rule.bonusPerKm) continue;   // known, shown elsewhere, not ranked
       if (rule.bonus || rule.bonusPerKm) {
         const pts = rule.bonus || rule.bonusPerKm * spanKm(sp);
         counted[sp.kind] = Math.min(rule.bonusCap || Infinity, (counted[sp.kind] || 0) + pts);
@@ -353,6 +361,10 @@
           if (gap / 1000 > 0.85 * car.range_km) out.hard.push({ kind: 'fuel', label: 'longer than your range without fuel', atM: 0 });
         }
       }
+    }
+    if (prefs.passenger && cand.t && Array.isArray(cand.t.events)) {
+      const tight = cand.t.events.filter((e) => e.type === 'corner' && (e.severity === 'HP' || e.severity === 1 || e.severity === 2)).length;
+      if (tight) addPen('tight corners with a passenger', Math.min(15, 0.3 * tight), 0);
     }
     out.penalties = [...pen.values()].map((p) => ({ ...p, points: Math.round(p.points * 10) / 10 })).filter((p) => p.points > 0).sort((a, b) => b.points - a.points);
     out.penaltyPts = Math.min(W.PENALTY_CAP, out.penalties.reduce((a, p) => a + p.points, 0));
@@ -477,6 +489,7 @@
       if (top && top[1] > 1) facts.push({ w: d('penalty'), text: top[0].label === 'deer' ? 'Deer hour: open roads' : `less ${top[0].label}` });
     }
     if (d('bonus') > 1 && b.bonuses && b.bonuses.length) facts.push({ w: d('bonus'), text: b.bonuses[0].label === 'golden light' ? 'golden light on the hills' : `${b.bonuses[0].label}` });
+    if (d('towns') > 1 && finite(best.townKm) && finite(quick.townKm) && quick.townKm - best.townKm >= 0.5) facts.push({ w: d('towns'), text: `${mi(quick.townKm - best.townKm, metric)} less in towns` });
     if (d('weather') > 1) facts.push({ w: d('weather'), text: 'drier' });
     if (d('glare') > 1) facts.push({ w: d('glare'), text: 'less low sun' });
     if (!facts.length) return null;
@@ -511,7 +524,9 @@
   /** A stage (web/stages.js: lat[], lon[]) as a corridor, driven forward. */
   function stageCorridor(s, id, o = {}) {
     if (!Ctx || !s || !s.lat || s.lat.length < 2) return null;
-    return Ctx.corridor(id, s.lat.map((la, i) => [s.lon[i], la]), { departAt: o.departAt, car: o.car });
+    const c = Ctx.corridor(id, s.lat.map((la, i) => [s.lon[i], la]), { departAt: o.departAt, car: o.car });
+    if (c) c.match = 'map_snap';                     // map-tile geometry, not the router's own line: providers snap it
+    return c;
   }
   /**
    * Router costing for connector legs (stage plans, the matrix between stages, the plain highway candidate): highways are

@@ -362,22 +362,25 @@ const useOptionSource = html.match(/async function useOption\(.*?\n    }/s)[0];
 const marksSource = html.match(/function timeMarksOf\(.*?\n    }/s)[0];
 const fewerSource = html.match(/const fewerTownKm = .*?;\n/s)[0];
 const townsOnSource = html.match(/async function townsOn\(.*?\n    }/s)[0];
+// the route engine's glue in the cockpit (rankPool, contextOn, the stage network, connector costing), as written
+const engineSource = [/const CTX_BUDGET_MS = .*?;\n/s, /const engineOpts = .*?;\n/s, /function rankPool\(.*?\n    }/s, /async function contextOn\(.*?\n    }/s,
+  /async function stagesWithContext\(.*?\n    }/s, /function routeCtxSettings\(.*?\n    }/s, /const EARLY_MS = .*?;\n/s, /const connectorCosting = .*?;\n/s].map((re) => html.match(re)[0]).join('\n');
 const whyText = new Function('return (' + html.match(/function whyText\(w.*?\) \{.*?\n    }/s)[0] + ')')();
 const lat0 = 39.2, lon0 = -84.6, mLat = 1 / 110540, mLon = 1 / (111320 * Math.cos(lat0 * Math.PI / 180));
 const ll = (pts) => pts.map(([x, y]) => [lon0 + x * mLon, lat0 + y * mLat]);
 const straight = ll(Array.from({ length: 1001 }, (_, i) => [i * 10, 0]));
 const wiggly = ll(Array.from({ length: 2401 }, (_, i) => [i * 5, 60 * Math.sin(2 * Math.PI * i * 5 / 400)]));
 const A = { lat: lat0, lon: lon0 }, B = { lat: lat0, lon: lon0 + 10000 * mLon };
-async function run({ level, routes, osrm, discover, matrix, places, avoid = FunRoute.AVOID_DEFAULT }) {
-  const built = [], toasts = [], calls = { matrix: 0, routes: 0 };
+async function run({ level, routes, osrm, discover, matrix, places, avoid = FunRoute.AVOID_DEFAULT, win = {} }) {
+  const built = [], toasts = [], calls = { matrix: 0, routes: 0, extras: [] };
   const funRoute = new Function('funLevel', 'valhallaRoutes', 'osrmRoutes', 'toast', 'FunRoute', 'ApexStages', 'state', 'allHighlights', 'valhallaMatrix',
-    'Core', 'RouteLoading', 'funOf', 'applyMeasured', 'trackFromPolyline', 'buildRoute', 'totalOf', 'window', 'whyText', 'avoid', 'let routeOptions = null; ' + useOptionSource + '; ' + townsOnSource + '; const weatherOn = async () => {}; const tasteOn = () => {}; const preferOn = async () => {}; const measuredStages = async (s) => s; ' + fewerSource + '; ' + marksSource + '; const stepsOf = () => []; return (' + source + ')')(
-    level, async (pts, through, alts) => { calls.routes++; return routes(pts, alts); }, osrm || (async () => { throw Error('down'); }),
+    'Core', 'RouteLoading', 'funOf', 'applyMeasured', 'trackFromPolyline', 'buildRoute', 'totalOf', 'window', 'whyText', 'avoid', 'let routeOptions = null; const routingCar = () => null; const roadPrefs = {}; const etaPace = {}; const plannedRoute = null; ' + engineSource + '; ' + useOptionSource + '; ' + townsOnSource + '; const weatherOn = async () => {}; const tasteOn = () => {}; const preferOn = async () => {}; const measuredStages = async (s) => s; ' + fewerSource + '; ' + marksSource + '; const stepsOf = () => []; return (' + source + ')')(
+    level, async (pts, through, alts, extra) => { calls.routes++; calls.extras.push(extra || null); return routes(pts, alts, extra); }, osrm || (async () => { throw Error('down'); }),
     (m) => toasts.push(m), FunRoute, { discover, places }, { hlOn: false }, async () => [],
     async (s, t) => { calls.matrix++; return { times: await matrix(s, t) }; },
-    Core, { yieldToUI: async () => {} }, (t, turns) => FunRoute.score(t, []), async () => false,
+    Core, { yieldToUI: async () => {} }, (t, turns, scaleAt) => FunRoute.score(t, [], null, scaleAt), async () => false,
     async (coords, id, name) => ({ id, name, ...FunRoute.geometry(coords, Core) }),
-    async (pts, id, name, t) => built.push(t), (t) => t.dist[t.dist.length - 1], {}, whyText, avoid);
+    async (pts, id, name, t) => built.push(t), (t) => t.dist[t.dist.length - 1], win, whyText, avoid);
   await funRoute(A, B, 'route_dest', 'To B', { from: null, to: B, via: [] }, { step() {} });
   return { built, toasts, calls };
 }
@@ -430,9 +433,43 @@ async function run({ level, routes, osrm, discover, matrix, places, avoid = FunR
   out.townsOff = { timeS: r.built[0].timeS, townKm: r.built[0].townKm === undefined ? 'unset' : r.built[0].townKm };
   r = await run({ level: 'quick', avoid: towns, discover: async () => [], places: async () => { throw Error('no tiles'); }, routes: two });
   out.townsUnknown = { timeS: r.built[0].timeS, townKm: r.built[0].townKm };
+  globalThis.ApexFunRoute = FunRoute; globalThis.ApexSun = require(root + '/web/sun.js');
+  const Ctx = require(root + '/web/route_ctx/registry.js'), Engine = require(root + '/web/route_engine.js');
+  const hood = { speed_limit_est_kph: 40, road_class: 6, road_use: 0, density: 7, access_per_km: 30, sidewalk: 1 }, hwy = { speed_limit_kph: 105, road_class: 0, road_use: 0, density: 3, access_per_km: 0 };
+  Ctx.register({ id: 'stub', channels: Object.keys(hood), fetch: async (cs) => Object.fromEntries(cs.map((c) => {
+    const twisty = c.coords.length === wiggly.length, src = twisty ? hood : hwy;
+    return [c.id, { status: 'ok', channels: Object.fromEntries(Object.entries(src).map(([k, v]) => [k, new Float32Array(c.distM.length).fill(v)])), spans: [], points: [] }];
+  })) });
+  const engineWin = { ApexRouteEngine: Engine, ApexRouteCtx: Ctx };
+  for (const lv of ['quick', 'fun', 'max']) {
+    r = await run({ level: lv, win: engineWin, discover: async () => [],
+      routes: async (pts, alts, extra) => (extra && extra.costing_options && extra.costing_options.auto.use_highways === 1 ? [{ coords: straight, turns: [], timeS: 600 }] : [{ coords: wiggly, turns: [], timeS: 560 }]) });
+    out['engine_' + lv] = { timeS: r.built[0].timeS, via: r.built[0].request.via.length, why: r.built[0].why, quality: r.built[0].engine && r.built[0].engine.quality,
+      highwayAsked: r.calls.extras.some((x) => x && x.costing_options && x.costing_options.auto.use_highways === 1) };
+  }
+  // avoiding highways: no highway request, the subdivision route it is (with what it is on the card)
+  r = await run({ level: 'fun', win: engineWin, avoid: { ...FunRoute.AVOID_DEFAULT, highways: true }, discover: async () => [],
+    routes: async (pts, alts, extra) => [{ coords: wiggly, turns: [], timeS: 560 }] });
+  out.engineAvoidHighways = { timeS: r.built[0].timeS, highwayAsked: r.calls.extras.some((x) => x && x.costing_options && x.costing_options.auto.use_highways === 1) };
+  Ctx.unregister('stub');
   process.stdout.write(JSON.stringify(out));
 })().catch(e => { console.error(e); process.exitCode = 1; });
 """
+
+
+def test_app_ranks_with_the_route_engine():
+    """The cockpit's engine glue end to end: the highway costing is asked for, the context arrives, the engine ranks, the
+    winner is pinned so a reroute keeps to it, and the why line names what separated them (docs/ROUTE_ENGINE.md)."""
+    res = subprocess.run([NODE, "-e", APP, os.path.abspath(".")], capture_output=True, text=True)
+    assert res.returncode == 0, res.stderr
+    r = json.loads(res.stdout)
+    for lv in ("quick", "fun", "max"):
+        e = r["engine_" + lv]
+        assert e["highwayAsked"] and e["timeS"] == 600, (lv, e)
+        assert e["via"] >= 1, "the highway route is pinned with shaping points so a reroute doesn't fall back to the side streets"
+        assert e["why"] and e["why"].startswith("Highway instead of") and "side streets" in e["why"], e["why"]
+        assert e["quality"] > 50
+    assert r["engineAvoidHighways"] == {"timeS": 560, "highwayAsked": False}, "the driver's avoid-highways choice is kept"
 
 
 def test_app_fun_route_picks_and_falls_back():
