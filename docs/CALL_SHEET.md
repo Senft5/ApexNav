@@ -4,6 +4,36 @@ Decisions Claude made for you, newest first. Each one says what was decided, why
 you reach one you've seen. If you disagree with a call, say so and it gets reversed; nothing here is hard to undo unless
 it says so. Things only you can do are in docs/OWNER_TODO.md.
 
+## 2026-11-06 (later): Destination picks (your work-to-home report)
+
+What the card showed: the pick 35 min / 28 corners, a 34 min / 30 corner option that lost, the 22 min highway. Re-run
+live at all three levels (our tiles produced every candidate; the context was known on all of them). The 35 min pick is
+the Long way route, mostly the Cross County freeway, then two county roads; the 34 min option is the same roads by
+I-275. The pick won on the low sun (westbound at 4 pm: 1.6 minutes into it against 8), which is real, but
+the card never said so. And 13 of its 14 "good corners" were counted on streets lined with houses.
+- **Corners between houses count less, down to nothing on a street lined with houses.** Where two of the engine's built
+  signals agree (density, addresses, buildings, sidewalks, shops, class) on 0.4 a corner starts to lose its weight, at
+  0.85 it has none. One signal alone (a rural road's barns) doesn't count. Our router uses the same cut from the tiles.
+  On your trip: the Long way pick's good corners 14 -> 10, the Fun pick's 12 -> 9; on the trips with real back roads
+  (Harrison, Colerain) they barely move. Undo or tune: `BUILT` in web/fun_route.js (cut 0 turns it off).
+- **Flow and "not dull" now obey the corner gate too.** Half the fun score counted every corner on a side street in
+  full (only Twist was gated). Undo: the two gated lines in fun_route.js score().
+- **A pick another option beats on the card's own numbers says why**, on the why line: "Over the 34 min route: less low
+  sun". The card never shows a pick that looks strictly worse without a reason. Undo: `overLine` in cockpit.js optionOnto.
+- **Fun or Long way picking the quickest says so**: "No great roads on this trip: Quick is the way" (or "The quickest
+  way is the best road here too" when it has 5 good corners or more). Undo: `quickLine` in optionOnto.
+- **Our router offers cheaper ways to the same road**: after the search for the most good road the budget buys, it tries
+  0.9 and 0.75 of that weight, so the engine sees the 7-minute way to the same county road and not only a 9-minute
+  I-275 loop. Undo: `K.LOWER` in web/graph_router.js ([] off).
+- **A background refresh that switches to a route found only by the wider search says "Found a better way"**, not
+  "Conditions ahead". Undo: the `added` check in cockpit.js ownRefine.
+- **Kept: Fun and Long way still take the county-road way on that trip** (+8 and +12 min). Their parts: about 5 km of
+  rural road with real corners (quality 0.66-0.69, built 0.2-0.3), and skipping a signal, a strip and a dense stretch
+  at the quickest's end (quality 0.27). The why line now names them. If you'd rather Fun stayed
+  on the highway here, say so: the lever is the side-street cost per km against Fun's 1 point a minute.
+- **The live captures that reproduce your trip pass close to your addresses, so they stay out of the repo**; the regression
+  tests use synthetic roads at public coordinates (tests/test_dest_picks.py) and the existing public live fixtures.
+
 ## 2026-11-06 (later): The route card's levels are the choices (claude/level-cards)
 
 Your note on the 90 mi loop's card ("quick, fun and long way are separate from the cards above? how the hell does that

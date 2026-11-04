@@ -1,5 +1,19 @@
 # VETTA — CURRENT AGENT HANDOFF STATE
 
+## Session 2026-11-06 (later): destination picks (claude/dest-picks)
+
+- [x] The owner's work-to-home report: corners between houses cut by agreeing built evidence (fun_route.js BUILT,
+  route_engine.js cornerGate, graph_router.js objective); Flow and Dull gated; `whyOver` (a pick the card shows as beaten
+  says why) and `whyQuickest` ("No great roads on this trip") on the card's why line; router tries 0.9 / 0.75 of the
+  found goodness weight (K.LOWER); refine swap to a newly found route says "Found a better way". tests/test_dest_picks.py.
+- Live before/after (main vs branch served locally, back to back, 7 trips x 3 levels): no pick changed for the worse on
+  the engine's value; Fun on a public cross-suburb trip went from +11 min to the quickest with the no-great-roads line;
+  the owner's trip keeps its county-road way at Fun (+8) and Long way (+12) with honest corner counts (CALL_SHEET).
+- Open: Long way on the owner's trip still +12 min; whether avoiding the US-27 end is worth that is the owner's call.
+  The tiles' baked `fun` is gate-only (the router applies the cut at query time); a tile rebuild could bake it instead.
+- Exact next task: the owner checks the work-to-home card at Fun and Long way; loops keep their own loopDominates (its
+  own measures), destination options use FunRoute.dominates (the card's minutes and corners).
+
 ## Session 2026-11-06 (later): level cards and the map's labels (claude/level-cards)
 
 - [x] The route card's level is one control: three cards (Quick, Fun, Long way), each its pick of the routes already

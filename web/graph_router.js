@@ -53,6 +53,7 @@
     PRIVATE_X: 10, PRIVATE_S: 600, DESTINATION_X: 2, DESTINATION_S: 60, FERRY_X: 2, UNPAVED_X: 1.5,
     AVOID_HWY_X: 4, AVOID_TOLL_X: 3, AVOID_FERRY_X: 5, AVOID_UNPAVED_X: 5,
     A_MAX: 40, BISECT: 6,    // the goodness weight is searched in [0, A_MAX] (log steps), at most BISECT more routes
+    LOWER: [0.9, 0.75],      // then these fractions of the weight found: cheaper ways to the road the budget-filler found
     ALT_PENALTIES: [0.6, 1.5, 4], ALT_MIN_DIFF: 0.3, ALTS: 2,
     LOOP_A: { quick: 0.6, fun: 3, max: 8 }, LOOP_ROAD_FACTOR: 1.35, LOOP_RETRACE_X: 3,
     // loops (loop()): motorway and trunk cost x LOOP_HWY_X on every leg (a short link to good roads, never the bulk); the
@@ -438,6 +439,20 @@
    * how little was known) as `bad` = 1 − goodness, and the avoid/flag multiplier `mult` (≥ 1) and adder `add` (seconds).
    * prefs: { tight, fast } (−1..1, the corner prefs), taste: { quality, fun, scenery } weights; avoid: the Plan sheet's.
    */
+  /** Per edge, the built evidence two of the tiles' road channels agree on (route_engine.js builtEvidence's readings). */
+  const BUILT_READ = [['density', (x) => clamp01((x - 2) / 5)], ['sidewalk', (x) => (x >= 0.5 ? 1 : 0)], ['business_per_km', (x) => clamp01(x / 8)],
+    ['bldg_per_km', (x) => clamp01(x / 50)], ['addr_per_km', (x) => clamp01(x / 50)]];
+  function builtAgreeOf(v) {
+    const F = FunRoute(), ch = v.roadCh || {}, rd = BUILT_READ.filter(([k]) => ch[k]).map(([k, fn]) => [ch[k], fn]);
+    if (!F || !F.builtAgree || rd.length < 2) return null;
+    const dens = ch.density || null, cls = v.cls || null, xs = new Array(rd.length + 1);
+    return (e) => {
+      for (let k = 0; k < rd.length; k++) { const x = rd[k][0][e]; xs[k] = Number.isFinite(x) ? rd[k][1](x) : NaN; }
+      // the class: a residential or service road is built (0.8), but a "residential" county road in open country isn't
+      xs[rd.length] = !cls ? NaN : cls[e] >= 6 ? (cls[e] === 6 && dens && dens[e] <= 2 ? 0 : 0.8) : 0;
+      return F.builtAgree(xs);
+    };
+  }
   // the per-edge arrays are a pass over every edge in the view (400k+ with the preloaded area): kept per view for the
   // same driver choices, and rebuilt only when members' data is on the edges (that differs per plan)
   function objective(v, o = {}) {
@@ -456,6 +471,10 @@
     const ws = Number.isFinite(taste.scenery) ? taste.scenery : K.W_SCENERY;
     const crowd = v.crowd || null, CW = (o.crowdWeights) || K.CROWD_W;
     const E = v.E, bad = new Float32Array(E), mult = new Float32Array(E), add = new Float32Array(E);
+    // corners between houses (fun_route.js builtKeep, as the route engine): the tiles' fun was baked with the quality gate
+    // only, so the built-up cut is applied here from the v2 tiles' road channels, read as route_engine.js builtEvidence
+    // reads them (density, sidewalk, businesses, buildings, addresses: two agreeing)
+    const builtAt = builtAgreeOf(v), F = FunRoute();
     let minBad = 1;
     for (let e = 0; e < E; e++) {
       // unknown (255, 65535) is unknown: its weight drops out; nothing known at all is UNKNOWN_G
@@ -475,7 +494,8 @@
       const gate = clamp01((q - K.GATE_LO) / (K.GATE_HI - K.GATE_LO));
       const notPoor = clamp01((q - K.POOR_LO) / (K.POOR_HI - K.POOR_LO));
       // fun is already gated by quality in the tiles (corners only count on good road); per km against the network's own
-      const f = fk ? Math.min(1, v.fun[e] / Math.max(0.05, v.len[e] / 1000) / v.funFull) : 0;
+      const keep = builtAt && F && F.builtKeep ? F.builtKeep(builtAt(e)) : 1;
+      const f = fk ? Math.min(1, v.fun[e] * keep / Math.max(0.05, v.len[e] / 1000) / v.funFull) : 0;
       const w = wp + wq + (fk ? wf : 0) + (sk ? ws : 0);
       const raw = (wp * notPoor + wq * q + (fk ? wf * f : 0) + (sk ? ws * s * (0.5 + 0.5 * gate) : 0)) / Math.max(1e-6, w);
       const g = cf * raw + (1 - cf) * K.UNKNOWN_G;
@@ -876,6 +896,10 @@
       if (hi - lo < 0.15 * Math.max(lo, 0.25)) break;
       a = lo > 0 ? Math.sqrt(lo * hi) : hi / 4;
     }
+    // and the cheaper end of the spectrum: the bisection only tries weights from its first one up, so the routes that buy a
+    // little good road for a little time were never offered, only the one that spends the whole budget (live 2026-11-04,
+    // a cross-suburb trip at Fun: a 9-minute I-275 loop came back and the 7-minute way to the same county road didn't)
+    for (const k of K.LOWER) if (lo * k > 0.05) { const r = run(lo * k); if (r && r.timeS <= limitS) keep(r); }
     best.why.role = best === quick ? 'quickest' : 'best';
     // alternates by the penalty method: the chosen route's edges cost more, until a route differs by ALT_MIN_DIFF
     const alts = [], chosen = [best];
@@ -1417,7 +1441,7 @@
     };
   }
 
-  const api = { VERSION: 1, K, lineTiles, edgeTable, fromTable, crowdOnto, project, quickest, scoreLine, reach, explore, streetEdge, deadEndAt, junctionAt, TILE_DEG, FLAG_BITS, NODE_BITS, CLS, UNKNOWN_U8, UNKNOWN_FUN, NO_NAME, packedKey, nodeCost, LEVELS_COPY, levels, distM, bearing, turnAngle, tileOf, keyOf, view, geom, snap, objective, search,
+  const api = { VERSION: 1, K, BUILT_READ, builtAgreeOf, lineTiles, edgeTable, fromTable, crowdOnto, project, quickest, scoreLine, reach, explore, streetEdge, deadEndAt, junctionAt, TILE_DEG, FLAG_BITS, NODE_BITS, CLS, UNKNOWN_U8, UNKNOWN_FUN, NO_NAME, packedKey, nodeCost, LEVELS_COPY, levels, distM, bearing, turnAngle, tileOf, keyOf, view, geom, snap, objective, search,
     assemble, overlap, sameRoute, tilesFor, loopTiles, plan, loop, indexKeys, covers, host, client, edgeId, twin, turnCost };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   root.ApexGraphRouter = api;
