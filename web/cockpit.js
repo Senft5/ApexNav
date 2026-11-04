@@ -63,7 +63,11 @@
       // route, which is then built in full)
       let offsets = null, pending = false;
       try {
-        if (window.ApexStages && ApexStages.sightOffsets) {
+        // the early first route (sightMs at most EARLY_SIGHT_MS) doesn't ask at all: with the map tiles cached the land
+        // cover is decoded on the page at once, and that held the first route up (live 2026-11-05: the second plan's first
+        // route came up 0.1-0.2 s later than the first plan's)
+        if (sightMs <= 100) pending = true;
+        else if (window.ApexStages && ApexStages.sightOffsets) {
           const got = await Promise.race([ApexStages.sightOffsets(rs.lat, rs.lon).then((v) => ({ v }), () => ({ v: null })), new Promise((r) => setTimeout(() => r(null), sightMs))]);
           pending = got === null; offsets = got ? got.v : null;
         }
@@ -3092,6 +3096,9 @@
       // to go up (FIRST_GATE_MS at most); stage discovery runs in its worker meanwhile
       let openGate = null;
       const firstUp = new Promise((r) => { openGate = r; setTimeout(r, FIRST_GATE_MS); });
+      // ... and on screen: the work after it waits for the frame that shows it (live: the corridors and scoring that
+      // followed at once held the first paint 0.2-0.3 s)
+      const firstSeen = firstUp.then(() => new Promise((r) => { const go = () => setTimeout(r, 0); setTimeout(r, 100); if (typeof requestAnimationFrame === 'function') requestAnimationFrame(go); else go(); }));   // (a hidden page has no frames)
       const stagesFor = async (a, b) => {
         const area = FunRoute.searchArea(a, b);
         const hls = state.hlOn ? await allHighlights(area.center) : [];
@@ -3108,13 +3115,14 @@
       // Our own routing (own_routing.js, graph_router.js, docs/OWN_ROUTING.md): where the shipped graph tiles cover the
       // trip, the phone searches every road itself and our routes are the candidates (no stage plans needed); Valhalla's
       // quickest stays in the pool as a check. No tiles here, switched off, or our router failing: today's path, unchanged.
-      // (the router's own request goes out first: the coverage answer is a lookup, but the worker may be starting)
-      const valhallaP = valhallaRoutes([from, to], false, 2).catch(() => osrmRoutes([from, to])).catch(() => []);
       // our quickest is asked for first, with the coverage question behind it (the worker answers in order; a trip off
       // the tiles answers it with an error, and its answer is only used when the tiles cover the trip)
       const ownQuickAsk = ownOn() ? ApexOwnRouting.quick(ownRouter(), { from, to, level, avoid, heading: from.heading }) : null;
       const ownCovered = ownOn() ? !!(await RouteLoading.optional(ownRouter().covers([from, to]), OWN_COVERS_MS)) : false;
       mark('covers');
+      // Valhalla: today's router without our tiles; with them only a check, asked once our first route is drawn (its
+      // answers' decoding on the page held that first draw up, live 2026-11-05)
+      const valhallaP = (ownCovered ? firstSeen : Promise.resolve()).then(() => valhallaRoutes([from, to], false, 2)).catch(() => osrmRoutes([from, to])).catch(() => []);
       // (not with our tiles: the map tiles' road data is in them, and the context for our routes doesn't read it)
       try { if (!ownCovered && window.ApexOsmTiles && window.ApexRouteCtx && ApexRouteCtx.corridor && (!window.ApexFlags || ApexFlags.on('route_engine'))) ApexOsmTiles.prefetch([ApexRouteCtx.corridor('ahead', [[from.lon, from.lat], [to.lon, to.lat]], {})]); } catch (_) { /* nothing ahead: fetched with the context */ }
       // members' measured roads round the trip go into our search itself (signed out or none: unchanged)
@@ -3128,7 +3136,7 @@
       // business districts; so the highway-friendly quickest competes too (route_engine.js highwayCosting), unless avoided.
       const hwyCosting = window.ApexRouteEngine && FunRoute.kmBetween(from, to) >= 2 ? ApexRouteEngine.highwayCosting(avoid, routingCar()) : null;
       // (asked with our routes too: Valhalla's highway-friendly quickest is the check, and the clock ours are put on)
-      const hwyTry = hwyCosting ? valhallaRoutes([from, to], false, 0, hwyCosting).catch(() => []) : Promise.resolve([]);
+      const hwyTry = hwyCosting ? (ownCovered ? firstSeen : Promise.resolve()).then(() => valhallaRoutes([from, to], false, 0, hwyCosting)).catch(() => []) : Promise.resolve([]);
       // Where to? stays instant (REVIEW_FEEL): the FIRST answer goes up at once, not held for the other requests, the
       // weather or anything else; the ranked routes replace it when they're ready, unless you've started driving it or
       // planned something else. With our tiles that is our own quickest (one search in the worker, about 0.1 s once its
@@ -3165,6 +3173,7 @@
       }
       if (window.apexDebug) window.apexDebug.lastOwn = { covered: ownCovered, used: ownUsed, reason: own.reason, ms: own.ms, n: own.cands.length, error: own.error || null, tiles: own.result ? own.result.tiles : null, routerMs: own.result ? own.result.ms : null, quickMs: quickNow && quickNow.kind === 'own' ? quickNow.ownMs : null };
       // with our routes in, Valhalla's answers are only checks, fetched alongside (below); without, today's path
+      if (!ownUsed && !early.fired) openGate();                            // ours failed: Valhalla is asked now, not at the gate's time
       direct = ownUsed ? [] : await valhallaP;
       if (!direct.length && !ownUsed && !early.fired) { toast('Couldn\'t build the route. Check signal and try again.'); return false; }
       const directCands = ownUsed ? own.cands.slice() : direct.map(r => ({ kind: 'router', route: r, timeS: r.timeS, via: [] }));
@@ -3176,12 +3185,13 @@
       const ctxRun = (cs, prefix) => (ownUsed ? contextOn(cs, OWN_CTX_MS, prefix, OWN_CTX) : contextOn(cs, CTX_BUDGET_MS, prefix));
       // (ours too wait for the first route to be drawn: building their corridors is main-thread work, and done alongside
       // the first draw it made the second plan's first route slower than the first plan's, live 2026-11-05)
-      const directCtx = firstUp.then(() => ctxRun(directCands.slice(), 'route'));
+      const directCtx = (ownUsed ? firstSeen : firstUp).then(() => ctxRun(directCands.slice(), 'route'));
       // ours: their light geometry, corners and forecasts while the context runs (the page is idle meanwhile)
       // (after the first route is drawn: that build has the page to itself)
       const ownPrep = ownUsed ? (async () => {
-        await firstUp;
-        for (const c of directCands) { if (!c.t) { c.t = FunRoute.geometry(c.route.coords, Core); c.fun = funOf(c.t, c.route.turns); } await RouteLoading.yieldToUI(); }
+        await firstSeen;
+        let ran = Date.now();
+        for (const c of directCands) { if (!c.t) { c.t = FunRoute.geometry(c.route.coords, Core); c.fun = funOf(c.t, c.route.turns); } if (Date.now() - ran > 40) { await RouteLoading.yieldToUI(); ran = Date.now(); } }
         return weatherFetch(directCands);
       })().catch(() => new Map()) : null;
       const same = (a, b) => Math.abs((a.timeS || 0) - (b.timeS || 0)) < 1 && a.coords.length === b.coords.length;
@@ -3222,7 +3232,7 @@
           for (const c of pool0) if (!c.t) { c.t = FunRoute.geometry(c.route.coords, Core); c.fun = funOf(c.t, c.route.turns); }
           const lead = rankPool(pool0, level)[0];
           const c = lead && pool0.find((x) => x.t === lead.t);
-          if (c && !(early.fired && c === quickNow)) buildAhead(c, id, name);
+          if (c && !(early.fired && c === quickNow)) buildAhead(c, id, name, ownUsed ? OWN_SIGHT_MS : undefined);
         } catch (_) { /* nothing built ahead: built after the ranking, as before */ }
       });
       // The baseline is the quickest route that keeps to the avoid options (when one does), as the ranking's is.
@@ -3292,10 +3302,13 @@
       // Score on light geometry (corners only); the full track (envelope, sight lines, notes) is built for the winner.
       const leaving = new Date();
       mark('poolStart');
+      // (the page gets a turn only after 40 ms of this: a yield per candidate waited behind the map's own work, live
+      // 2026-11-05: 0.3-0.7 s for seven candidates whose scoring took a tenth of that)
+      let ranFor = Date.now();
       for (const c of pool) {
         if (!c.t) { c.t = FunRoute.geometry(c.route.coords, Core); c.fun = funOf(c.t, c.route.turns); }
         c.glare = FunRoute.glare(c.t, c.timeS, leaving);                    // minutes driving into a low sun, if you leave now
-        await RouteLoading.yieldToUI();
+        if (Date.now() - ranFor > 40) { await RouteLoading.yieldToUI(); ranFor = Date.now(); }
       }
       const ctx = (async () => {                                           // the route context, alongside the towns lookup
         const rest = pool.filter((c) => !routerCands.includes(c) && !planCtx.has(c));
@@ -3339,7 +3352,7 @@
         optionOnto(kept, offered[0], o);
         routeOptions = Object.assign(o, { picked: 0, current: kept });
         if (typeof renderRouteCard === 'function') { timeFromEnvelope(kept); renderRouteCard(kept); }   // its saved copy stays the one drawn
-      } else t = await useOption({ id, name, request, level, quickest, list: offered, pool, builtLevel: level }, 0);
+      } else t = await useOption({ id, name, request, level, quickest, list: offered, pool, builtLevel: level }, 0, ownUsed ? OWN_SIGHT_MS : undefined);
       mark('built');
       if (!t) return false;   // no toast: the route bar and card say it (REVIEW.md 1.2, Route bar: the bar is the toast)
       // finding 1: the card says what the ranking did: kept the first route, or replaced it, and why, in the card's numbers
@@ -3362,7 +3375,10 @@
     // Own-routed plans: the tiles carry the static road data (land use, density, businesses, signals, the grid, the DEM,
     // corners) as the engine's own scores (route_ctx/graph.js), so only the time-dependent providers run, in OWN_CTX_MS.
     // Members' data is in the search already (crowd), the driver's For this drive choices are local.
-    const OWN_CTX = ['graph', 'context_grid', 'conditions', 'wildlife', 'events', 'hazards-live', 'driver'], OWN_CTX_MS = 700, OWN_WEATHER_GRACE_MS = 0;
+    const OWN_CTX = ['graph', 'context_grid', 'conditions', 'wildlife', 'events', 'hazards-live', 'driver'], OWN_CTX_MS = 600, OWN_WEATHER_GRACE_MS = 0,
+      // the ranked route's land cover (sight across bends): waited for this long on our plans, then the cautious 4 m;
+      // what's late lands in the tile cache for the next plan
+      OWN_SIGHT_MS = 400;
     let ownClient = null;
     const ownOn = () => !!(window.ApexOwnRouting && window.ApexGraphRouter && ApexOwnRouting.on());
     const ownRouter = () => (ownClient || (ownClient = ApexGraphRouter.client({ url: 'graph_worker.js' })));
@@ -3395,9 +3411,9 @@
     // Tracks built ahead for a likely winner while the plan still waits on the stage plans (live: building the winner's
     // track after the ranking took 0.5-1 s): taken once, by the route line they were built from.
     const builtAhead = new WeakMap();
-    function buildAhead(c, id, name) {
+    function buildAhead(c, id, name, sightMs) {
       if (!c || !c.route || builtAhead.has(c.route.coords)) return;
-      builtAhead.set(c.route.coords, trackFromPolyline(c.route.coords, id, name).catch(() => null));
+      builtAhead.set(c.route.coords, trackFromPolyline(c.route.coords, id, name, sightMs).catch(() => null));
     }
     async function useOption(o, i, sightMs) {
       const c = o.list[i], was = o.current;

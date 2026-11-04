@@ -4,6 +4,15 @@ Decisions Claude made for you, newest first. Each one says what was decided, why
 you reach one you've seen. If you disagree with a call, say so and it gets reversed; nothing here is hard to undo unless
 it says so. Things only you can do are in docs/OWNER_TODO.md.
 
+## 2026-11-05 (later): Our tiles see side streets; planning under 1.5 s
+
+- **The new tiles carry businesses, driveways, signals, sidewalks and density per road**, and the ranking reads them as
+  the live model does: all 10 test trips now pick at least as well as production, the Pippin Road subdivision trip
+  included. Table in OWN_ROUTING.md §8.
+- **The ranked route is up in 0.8-1.5 s** in a warm session (was 1.2-1.8 s). The ranked route waits 0.4 s for the land
+  cover beside the road, then uses the cautious sight distance; the full one is there on the next plan. Undo:
+  `OWN_SIGHT_MS` in cockpit.js.
+
 ## 2026-11-05: Planning with our tiles, faster
 
 - **Our quickest route goes up first** (about half a second), before Valhalla answers; Valhalla's turn instructions

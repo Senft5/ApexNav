@@ -274,3 +274,34 @@ phone's reader); tests/test_graph_tiles.py round-trips through both. What a rout
 - 2026-11-04 (v2): side-street evidence per edge in the tiles (`edges.ch`); 17.44 MB for the 16 tiles. Spot checks:
   Colerain Ave 0.22, Springdale Rd east of -84.62 0.32 (was 0.39), Hamilton Ave 0.21 (0.24), Pippin Rd 0.33 (0.42; the
   live engine also 0.33), Blue Rock rural 0.68, E Miami River 0.72, Lees Creek 0.58, I-275 0.82.
+- 2026-11-05 (later): v2 tiles (17.4 MB, road channels per edge) and the plan profiled:
+  - route_ctx/graph.js passes the v2 channels under the engine's own names (business, access, signals, stops,
+    crossings, calming per km, sidewalk, density, buildings, addresses), so the ranking from tiles reads side streets,
+    density and businesses as the live model does; the subdivision pick is now production's route.
+  - Where the warm plan's time went, and the fixes: a fresh fix asked for again (0.2-0.5 s: a fix under 10 s old is
+    used); a timer per candidate and per check waiting behind the map's work (yield only after 40 ms; checks only when
+    already in); the per-edge objective rebuilt per request over 400k edges (cached per view); the A* flooding the
+    preloaded area at large `a` (bounded by the corridor ellipse: plans 340-1070 ms -> about 110 ms); the plan message
+    (nested coordinate arrays: now one Float64Array per route, coords built when read); corridors, scoring and
+    Valhalla's checks started alongside the first draw (now after the frame that shows it); the early route's land cover
+    decoded on the page (not asked for the early route); the ranked route's land cover waited up to 4 s (400 ms, then
+    the cautious 4 m; the tiles land in the cache); the context 600 ms.
+  - **Live, 10 runs, v2 tiles** (ms from Enter as the page gets it; cold = the session's first plan with the tiles
+    preloaded, warm = the second; values on the same full context for both picks):
+
+    | case | cold first / ranked | warm first / ranked | ours | prod |
+    |---|---|---|---|---|
+    | owner1 quick | 983 / 2532 | 434 / 907 | -26.0 | -64.8 |
+    | owner1 fun | 386 / 1989 | 453 / 1029 | -20.3 | -32.6 |
+    | owner1 max | 471 / 2199 | 373 / 1081 | -13.6 | -29.8 |
+    | subdivision fun | 269 / 1775 | 289 / 875 | -34.0 | -34.2 |
+    | subdivision4 fun | 281 / 1448 | 332 / 813 | -49.6 | -50.1 |
+    | northgate fun | 629 / 2082 | 451 / 1065 | -35.8 | -37.8 |
+    | colerain fun | 394 / 1920 | 463 / 1115 | -7.0 | -38.4 |
+    | harrison fun | 519 / 2498 | 479 / 1483 | 16.3 | 10.2 |
+    | colerain quick | 788 / 2107 | 548 / 1261 | -7.0 | over budget |
+    | colerain max | 501 / 1741 | 464 / 1022 | -4.4 | -34.2 |
+
+    Every pick at least as good as production's; warm ranked 0.8-1.5 s. Not met: the warm first route is still 20-70 ms
+    slower than cold in 4 runs (the worker answers the first question 70-90 ms after Enter in a warm session, 5-100 ms
+    cold; not found yet).

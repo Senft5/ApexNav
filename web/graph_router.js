@@ -332,10 +332,18 @@
         for (let q = 0; q < m - 1; q++) { const d = distM(lat[i], lon[i], (g[2 * q] + g[2 * q + 2]) / 2, (g[2 * q + 1] + g[2 * q + 3]) / 2); if (d < bd) { bd = d; best = q; } }
         return Math.abs(turnAngle(h, bearing(g[2 * best], g[2 * best + 1], g[2 * best + 2], g[2 * best + 3]))) < 1.05; };
       // the edge the last sample was on, or the next one along it, first: a line is mostly the same edge for a while
-      let e = -1;
-      if (last >= 0 && ok(last)) e = last;
-      else if (last >= 0 && v.to[last] >= 0) for (let x = v.first[v.to[last]]; x < v.first[v.to[last] + 1] && e < 0; x++) if (v.to[x] >= 0 && ok(x)) e = x;
-      if (e < 0) { const s = snap(v, lat[i], lon[i], ok, 20); e = s.length ? s[0].edge : -1; }
+      // the plan's candidates share most of their line: a sample already placed (same 5 m spot, same heading) is reused
+      const mk = `${Math.round(lat[i] * 2e4)},${Math.round(lon[i] * 2e4)},${Math.round(h * 4)}`;
+      const memo = v.scoreMemo || (v.scoreMemo = new Map());
+      let e = memo.has(mk) ? memo.get(mk) : -2;
+      if (e === -2) {
+        e = -1;
+        if (last >= 0 && ok(last)) e = last;
+        else if (last >= 0 && v.to[last] >= 0) for (let x = v.first[v.to[last]]; x < v.first[v.to[last] + 1] && e < 0; x++) if (v.to[x] >= 0 && ok(x)) e = x;
+        if (e < 0) { const s = snap(v, lat[i], lon[i], ok, 20); e = s.length ? s[0].edge : -1; }
+        if (memo.size > 300000) memo.clear();
+        memo.set(mk, e);
+      }
       if (e < 0) continue;
       last = e;
       if (v.quality[e] !== UNKNOWN_U8) { out.quality[i] = v.quality[e] / 254; out.conf[i] = v.conf[e] / 255; }
@@ -958,9 +966,13 @@
   // what crosses the worker boundary: plain arrays (structured clone keeps Maps, but edgeIdx is view-local)
   function plain(r) {
     if (!r) return r;
-    // (route.coords [[lon, lat]] only: the [[lat, lon]] copy doubled the message the page decodes while it draws)
+    // the line as one Float64Array [lon, lat, ...] (route.flat): a structured clone of thousands of little arrays is the
+    // page's work as the message lands, and it held the first route's draw up (own_routing.js gives route.coords back)
     const { edgeIdx, coords, ...rest } = r;
-    return { ...rest, route: { ...r.route, names: r.route.names } };
+    const { coords: line, ...route } = r.route;
+    const flat = new Float64Array(line.length * 2);
+    line.forEach(([lo, la], k) => { flat[2 * k] = lo; flat[2 * k + 1] = la; });
+    return { ...rest, route: { ...route, flat } };
   }
   function strip(res) {
     return { ...res, routes: (res.routes || []).map(plain), quick: res.quick ? plain(res.quick) : undefined };

@@ -16,10 +16,25 @@
     if (!(o.router || root.ApexGraphRouter)) return false;
     return !flags || typeof flags.on !== 'function' ? true : flags.on('own_routing', true);
   }
+  /** route.coords [[lon, lat]] from the worker's route.flat, built when first read (not as the message lands). */
+  function withCoords(route) {
+    if (!route || Array.isArray(route.coords) || !route.flat) return route;
+    const flat = route.flat;
+    let cache = null;
+    Object.defineProperty(route, 'coords', { configurable: true, enumerable: true,
+      get() { if (!cache) { cache = new Array(flat.length / 2); for (let k = 0; k < cache.length; k++) cache[k] = [flat[2 * k], flat[2 * k + 1]]; } return cache; },
+      set(v) { cache = v; } });
+    return route;
+  }
   /** Our routes as candidates, the router's best first (the route engine ranks them with everything else). */
   function candidates(result) {
-    return ((result && result.routes) || []).filter((r) => r && r.route && Array.isArray(r.route.coords) && r.route.coords.length >= 2 && Number.isFinite(r.timeS))
-      .map((r, i) => ({ kind: 'own', own: r, ownRole: (r.why && r.why.role) || (i ? 'alternate' : 'best'), route: { ...r.route, names: r.route.names instanceof Map ? r.route.names : new Map(Object.entries(r.route.names || {})) }, timeS: r.timeS, via: [] }));
+    const n = (r) => (r.route.flat ? r.route.flat.length / 2 : Array.isArray(r.route.coords) ? r.route.coords.length : 0);
+    return ((result && result.routes) || []).filter((r) => r && r.route && n(r) >= 2 && Number.isFinite(r.timeS))
+      .map((r, i) => {
+        const { coords, ...rest } = r.route;
+        const route = withCoords({ ...rest, ...(Array.isArray(coords) ? { coords } : {}), names: r.route.names instanceof Map ? r.route.names : new Map(Object.entries(r.route.names || {})) });
+        return { kind: 'own', own: r, ownRole: (r.why && r.why.role) || (i ? 'alternate' : 'best'), route, timeS: r.timeS, via: [] };
+      });
   }
   // ---- members' data for the search ------------------------------------------------------------------------------------
   const CELL = 0.1, MAX_CELLS = 16, LOVE_LEVEL = [NaN, 0.4, 0.7, 1.0], CROWD_MS = 1500;
@@ -104,7 +119,7 @@
     try {
       if (!(await client.covers([req.start]))) return [];
       const res = await client.loop(req);
-      return ((res && res.routes) || []).filter((r) => r && r.route && r.route.coords && r.route.coords.length > 2);
+      return ((res && res.routes) || []).map((r) => (r && r.route ? { ...r, route: withCoords(r.route) } : r)).filter((r) => r && r.route && r.route.coords && r.route.coords.length > 2);
     } catch (_) { return []; }
   }
 
@@ -193,7 +208,7 @@
     return 'own';
   }
 
-  const api = { OFF_KEY, on, candidates, plan, quick, loops, cellsFor, crowdItems, crowdFor, sharedShare, oneClock, polyline6, thin, traceBody, instruct };
+  const api = { OFF_KEY, on, withCoords, candidates, plan, quick, loops, cellsFor, crowdItems, crowdFor, sharedShare, oneClock, polyline6, thin, traceBody, instruct };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   root.ApexOwnRouting = api;
 })(typeof window !== 'undefined' ? window : globalThis);

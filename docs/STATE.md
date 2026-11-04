@@ -1,5 +1,12 @@
 # VETTA — CURRENT AGENT HANDOFF STATE
 
+## Session 2026-11-05 (later): own routing on v2 tiles, profiled
+
+- [x] v2 tiles merged and mapped (route_ctx/graph.js); 10/10 live picks at least as good as production; warm ranked
+  0.8-1.5 s, warm first 0.29-0.55 s (OWN_ROUTING.md §8).
+- Open: warm first route 20-70 ms slower than cold in 4 of 10 runs (worker's first answer later in a warm session).
+- Exact next task: find the warm worker's 70-90 ms first answer; then a real drive on owner1 at Fun.
+
 ## Session 2026-11-05: own routing, faster (merged main through #297)
 
 - [x] First route = our quickest from the worker (0.35-1.05 s); ranking on tile scores + time-dependent providers
