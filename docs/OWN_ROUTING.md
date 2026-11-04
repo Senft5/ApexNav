@@ -337,7 +337,7 @@ phone's reader); tests/test_graph_tiles.py round-trips through both. What a rout
     search); via-way restrictions applied in the search (v3 tiles' restrictionsVia).
   - Best roads nearby is never a neighbourhood (2026-11-04): no neighbourhood-street edge (`streetEdge`: residential class
     in built-up frontage, fun_route.js `streetSample`) or destination-only edge makes a stage, and a stage's dead-end end is
-    cut back to the last junction. ROUTING.md "Explore" has the rule and the checks.
+    cut back to the last junction unless that run is 2 km or more of good road (`OUT_BACK_KM`, an out-and-back road). ROUTING.md "Explore" has the rule and the checks.
   - Preview, 10 runs (ms from Enter; first route drawn / final card; cold = a fresh profile's first plan):
 
     | case | cold | warm | ours | prod |

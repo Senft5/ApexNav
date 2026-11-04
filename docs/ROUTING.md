@@ -220,8 +220,9 @@ through road worth driving, judged on the data, not the corners:
   and with nothing known beside it the answer is unknown, not a guess. A stage is a street when half of the samples whose
   answer is known are, over a third of it.
 - *From our tiles* (graph_router.js `explore`): no neighbourhood edge seeds or extends a stage (edges with destination-only
-  access neither), and a stage is a through road: an end that runs into a dead end is cut back to the last junction (a
-  road that only leads to its own dead end goes).
+  access neither). An end that runs into a dead end is cut back to the last junction (a spur goes), unless the dead-end
+  run is 2 km or more of good road (`OUT_BACK_KM`): a long rural road that ends is still worth driving there and back
+  (Cook Road, Mudlick Road, Second Creek Road stay; such a stage carries `deadEnd: true`).
 - *From the map's stage search* (stages.js, used where our tiles found nothing): `rescoreStages` marks a stage `notRoad`
   when the context shows it is a neighbourhood street, or when our tiles' own model (route_ctx/graph.js `graph_quality`,
   where they cover it) scores it under 0.45 on average, the same bar our tiles' search uses. The list skips those, and

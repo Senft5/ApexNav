@@ -106,12 +106,16 @@ def test_best_roads_nearby_from_our_tiles():
 
 def test_best_roads_nearby_never_a_neighbourhood_or_a_dead_end():
     """The owner's report: Best roads nearby's top pick was a residential neighbourhood. A curvy subdivision street with
-    more corners than the back road (and a tile quality that calls it good) is never a stage; nor is a twisty road that
-    only leads to its own dead end; a county lane tagged residential with no houses beside it stays a road."""
+    more corners than the back road (and a tile quality that calls it good) is never a stage; nor is a short twisty road
+    that only leads to its own dead end (under 3 km), while a long one stays; a county lane tagged residential with no
+    houses beside it stays a road."""
     r = case("exploreRoads")
     assert r["first"] == "Twisty Road", r
+    assert r["spurCut"], "the dead-end spur past the twisty road's last junction is cut back: " + str(r)
     assert "Maple Court" not in r["names"] and "Spur Road" not in r["names"], r
     assert "Creek Lane" in r["names"], "class alone never decides: " + str(r)
+    # a long good rural road that ends (3 km or more of it past the last junction) stays: worth driving there and back
+    assert r["longHollow"] and r["longHollow"]["deadEnd"] and r["longHollow"]["km"] >= 3, r
     assert r["street"] == [True, False, None], "the subdivision is a street, the lane isn't, and class alone is unknown"
     assert "Maple Court" in r["v1names"], "a v1 tile knows nothing beside the road: the tile's quality decides, no guess"
 

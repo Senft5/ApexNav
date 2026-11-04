@@ -56,6 +56,7 @@
     ALT_PENALTIES: [0.6, 1.5, 4], ALT_MIN_DIFF: 0.3, ALTS: 2,
     LOOP_A: { quick: 0.6, fun: 3, max: 8 }, LOOP_ROAD_FACTOR: 1.35, LOOP_RETRACE_X: 3,
     SNAP_M: 1500, GRID_DEG: 0.01,
+    OUT_BACK_KM: 2,          // Best roads nearby: a dead-end run of good road this long stays (driven there and back); the stage minimum
   };
 
   // ---- geometry -------------------------------------------------------------------------------------------------------
@@ -988,7 +989,7 @@
    * good: quality 0.45 or more, and never a neighbourhood street: streetEdge) are chained from the best down, each chain
    * growing forward and back along the best continuing edge (a turn under 60°, at least a third of the seed's score, or
    * the same road), until it runs out or reaches 15 km; chains of 2 km or more within reach (maxS) that go somewhere
-   * (neither end a dead end: a through road, not a cul-de-sac) are the stages, as stages.js shapes them ({ lat, lon,
+   * (an end into a dead end is cut back to the last junction unless that run is OUT_BACK_KM of good road) are the stages, as stages.js shapes them ({ lat, lon,
    * name, km, score, good }) plus the drive time to each end (aS, bS). req: { start, maxKm, maxS, max }.
    */
   function explore(v, req) {
@@ -1036,10 +1037,21 @@
         if (best < 0) break;
         chain.unshift(best); take(best); km += v.len[best] / 1000; q = best;
       }
-      // a through road, not a cul-de-sac: an end that runs into a dead end is cut back to the last junction on the way
-      // (a spur off a good road goes; a road that only leads to its own dead end goes entirely)
-      if (deadEndAt(v, v.to[chain[chain.length - 1]])) { while (chain.length && !junctionAt(v, v.to[chain[chain.length - 1]])) km -= v.len[chain.pop()] / 1000; }
-      if (chain.length && deadEndAt(v, v.tail[chain[0]])) { while (chain.length && !junctionAt(v, v.tail[chain[0]])) km -= v.len[chain.shift()] / 1000; }
+      // a through road, not a cul-de-sac: an end that runs into a dead end is cut back to the last junction on the way (a
+      // spur off a good road goes), unless the dead-end run itself is OUT_BACK_KM or more of good road: a long rural road
+      // that ends is still worth driving there and back (Cook Road, Mudlick Road). Streets, service and destination-only
+      // edges are never in a chain, so their dead ends never count as good road.
+      let outBack = false;
+      const cut = (atEnd) => {
+        const endNode = () => (atEnd ? v.to[chain[chain.length - 1]] : v.tail[chain[0]]);
+        if (!chain.length || !deadEndAt(v, endNode())) return;
+        let i = atEnd ? chain.length - 1 : 0, run = 0;
+        const step = atEnd ? -1 : 1, nodeOf = (k) => (atEnd ? v.tail[chain[k]] : v.to[chain[k]]);
+        for (; i >= 0 && i < chain.length; i += step) { run += v.len[chain[i]] / 1000; if (junctionAt(v, nodeOf(i))) break; }
+        if (run >= K.OUT_BACK_KM) { outBack = true; return; }
+        while (chain.length && !junctionAt(v, endNode())) km -= v.len[atEnd ? chain.pop() : chain.shift()] / 1000;
+      };
+      cut(true); cut(false);
       if (!chain.length || km < 2) continue;
       const aS = T[v.tail[chain[0]]], bS = T[v.to[chain[chain.length - 1]]];
       if (!Number.isFinite(aS) && !Number.isFinite(bS)) continue;
@@ -1054,7 +1066,7 @@
       }
       const name = [...names].sort((a, b) => b[1] - a[1])[0];
       out.push({ lat, lon, name: name ? name[0] : null, km, good: Math.round(fun), quality: qs / (km * 1000), score: fun * (qs / (km * 1000)),
-        aS: Number.isFinite(aS) ? aS : null, bS: Number.isFinite(bS) ? bS : null, source: 'own' });
+        aS: Number.isFinite(aS) ? aS : null, bS: Number.isFinite(bS) ? bS : null, source: 'own', ...(outBack ? { deadEnd: true } : {}) });
     }
     out.sort((a, b) => b.score - a.score);
     return { stages: out.slice(0, max), ms: Date.now() - t0 };
