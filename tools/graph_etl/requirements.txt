@@ -1,0 +1,6 @@
+# The graph ETL (python -m tools.graph_etl.build): pyosmium reads the OSM extract; node runs the scorer.
+osmium>=4.0
+numpy>=1.26
+shapely>=2.0
+scipy>=1.11
+pillow>=10
