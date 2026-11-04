@@ -208,7 +208,7 @@ const CASES = {
     const r0 = plan.result && plan.result.routes[0];
     return { covers, outside, planId: plan.id, planError: plan.error || null, n: plan.result ? plan.result.routes.length : 0, tiles: plan.result ? plan.result.tiles : null,
       sameAsMemory: !!r0 && JSON.stringify(plan.result.routes.map((r) => r.edges)) === JSON.stringify(mem.routes.map((r) => r.edges)) && Math.abs(r0.timeS - mem.routes[0].timeS) < 1e-6,
-      routeShape: r0 ? { coords: Array.isArray(r0.coords[0]), lonlat: r0.route.coords[0].length, names: r0.route.names instanceof Map, edgeIdx: 'edgeIdx' in r0, why: Object.keys(r0.why).sort() } : null,
+      routeShape: r0 ? { coords: !('coords' in r0) && Array.isArray(r0.route.coords[0]), lonlat: r0.route.coords[0].length, names: r0.route.names instanceof Map, edgeIdx: 'edgeIdx' in r0, why: Object.keys(r0.why).sort() } : null,
       loopN: loop.result ? loop.result.routes.length : -1, loopError: loop.error || null, unknown, nowhere: nowhere.error || null };
   },
 
@@ -288,7 +288,7 @@ const CASES = {
     const q = await h.handle({ id: 2, type: 'quick', from, to, level: 'fun' });
     const p = await h.handle({ id: 3, type: 'plan', from, to, level: 'fun' });
     const quickest = p.result.routes.find((r) => r.why.role === 'quickest');
-    const line = p.result.routes[0].coords;
+    const line = p.result.routes[0].route.coords.map(([lo, la]) => [la, lo]);
     const sc = await h.handle({ id: 4, type: 'score', lines: [{ lat: line.map((x) => x[0]), lon: line.map((x) => x[1]) }, { lat: [41, 41.001], lon: [-84, -84] }] });
     const known = Array.from(sc.result[0].quality).filter(Number.isFinite).length / line.length;
     // the graph provider and the engine: the tiles' scores fill quality and scenery where nothing else knows

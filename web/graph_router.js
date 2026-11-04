@@ -407,7 +407,16 @@
    * how little was known) as `bad` = 1 − goodness, and the avoid/flag multiplier `mult` (≥ 1) and adder `add` (seconds).
    * prefs: { tight, fast } (−1..1, the corner prefs), taste: { quality, fun, scenery } weights; avoid: the Plan sheet's.
    */
+  // the per-edge arrays are a pass over every edge in the view (400k+ with the preloaded area): kept per view for the
+  // same driver choices, and rebuilt only when members' data is on the edges (that differs per plan)
   function objective(v, o = {}) {
+    if (v.crowd) return objectiveOf(v, o);
+    const key = JSON.stringify([o.prefs || null, o.taste || null, o.avoid || null, o.crowdWeights || null, o.nodeCosts !== false]);
+    if (!v.objCache) v.objCache = new Map();
+    if (!v.objCache.has(key)) { if (v.objCache.size > 8) v.objCache.clear(); v.objCache.set(key, objectiveOf(v, o)); }
+    return v.objCache.get(key);
+  }
+  function objectiveOf(v, o = {}) {
     const prefs = o.prefs || {}, taste = o.taste || {}, avoid = o.avoid || {}, B = flagBits();
     const corner = 1 + 0.25 * ((Number(prefs.tight) || 0) + (Number(prefs.fast) || 0));
     const tq = Number.isFinite(taste.quality) ? taste.quality / (K.W_NOTPOOR + K.W_QUALITY) : 1;
@@ -949,7 +958,8 @@
   // what crosses the worker boundary: plain arrays (structured clone keeps Maps, but edgeIdx is view-local)
   function plain(r) {
     if (!r) return r;
-    const { edgeIdx, ...rest } = r;
+    // (route.coords [[lon, lat]] only: the [[lat, lon]] copy doubled the message the page decodes while it draws)
+    const { edgeIdx, coords, ...rest } = r;
     return { ...rest, route: { ...r.route, names: r.route.names } };
   }
   function strip(res) {

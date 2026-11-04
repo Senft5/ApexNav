@@ -3110,6 +3110,9 @@
       // quickest stays in the pool as a check. No tiles here, switched off, or our router failing: today's path, unchanged.
       // (the router's own request goes out first: the coverage answer is a lookup, but the worker may be starting)
       const valhallaP = valhallaRoutes([from, to], false, 2).catch(() => osrmRoutes([from, to])).catch(() => []);
+      // our quickest is asked for first, with the coverage question behind it (the worker answers in order; a trip off
+      // the tiles answers it with an error, and its answer is only used when the tiles cover the trip)
+      const ownQuickAsk = ownOn() ? ApexOwnRouting.quick(ownRouter(), { from, to, level, avoid, heading: from.heading }) : null;
       const ownCovered = ownOn() ? !!(await RouteLoading.optional(ownRouter().covers([from, to]), OWN_COVERS_MS)) : false;
       mark('covers');
       // (not with our tiles: the map tiles' road data is in them, and the context for our routes doesn't read it)
@@ -3118,7 +3121,7 @@
       const ownP = ownCovered ? ApexOwnRouting.plan(ownRouter(), { from, to, level, prefs: roadPrefs, avoid, heading: from.heading,
         crowd: ApexOwnRouting.crowdFor(routeCtxOpts().lookupCells, from, to) }) : null;
       // our quickest alone, first (one search): the first route on screen
-      const ownQuickP = ownCovered ? ApexOwnRouting.quick(ownRouter(), { from, to, level, avoid, heading: from.heading }) : null;
+      const ownQuickP = ownCovered ? ownQuickAsk : null;
       const stagesAhead = !ownCovered && level !== 'quick' && crowKm >= 3 && crowKm <= 48 && window.ApexStages ? stagesFor(from, to).catch(() => null) : null;
       let direct;
       // The router's costing keeps off highways (use_highways 0.15), which is what sent routes through subdivisions and
@@ -3171,7 +3174,9 @@
       // their static road data in the tiles: only the time-dependent providers run for them (OWN_CTX), at once
       if (!early.fired) openGate();                                         // no early quickest: nothing to wait for
       const ctxRun = (cs, prefix) => (ownUsed ? contextOn(cs, OWN_CTX_MS, prefix, OWN_CTX) : contextOn(cs, CTX_BUDGET_MS, prefix));
-      const directCtx = ownUsed ? ctxRun(directCands.slice(), 'route') : firstUp.then(() => ctxRun(directCands.slice(), 'route'));
+      // (ours too wait for the first route to be drawn: building their corridors is main-thread work, and done alongside
+      // the first draw it made the second plan's first route slower than the first plan's, live 2026-11-05)
+      const directCtx = firstUp.then(() => ctxRun(directCands.slice(), 'route'));
       // ours: their light geometry, corners and forecasts while the context runs (the page is idle meanwhile)
       // (after the first route is drawn: that build has the page to itself)
       const ownPrep = ownUsed ? (async () => {
@@ -3357,7 +3362,7 @@
     // Own-routed plans: the tiles carry the static road data (land use, density, businesses, signals, the grid, the DEM,
     // corners) as the engine's own scores (route_ctx/graph.js), so only the time-dependent providers run, in OWN_CTX_MS.
     // Members' data is in the search already (crowd), the driver's For this drive choices are local.
-    const OWN_CTX = ['graph', 'context_grid', 'conditions', 'wildlife', 'events', 'hazards-live', 'driver'], OWN_CTX_MS = 900, OWN_WEATHER_GRACE_MS = 0;
+    const OWN_CTX = ['graph', 'context_grid', 'conditions', 'wildlife', 'events', 'hazards-live', 'driver'], OWN_CTX_MS = 700, OWN_WEATHER_GRACE_MS = 0;
     let ownClient = null;
     const ownOn = () => !!(window.ApexOwnRouting && window.ApexGraphRouter && ApexOwnRouting.on());
     const ownRouter = () => (ownClient || (ownClient = ApexGraphRouter.client({ url: 'graph_worker.js' })));
