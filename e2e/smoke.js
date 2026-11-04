@@ -4924,6 +4924,9 @@ flow('plan flow (e, f) a level change and an alternative are one tap or swipe ea
   await page.evaluate(() => document.querySelector('#routeCardFun [data-fun="quick"]').scrollIntoView({ block: 'nearest' }));
   const sc0 = await page.evaluate(() => document.getElementById('planBody').scrollTop);
   const sw0 = await page.evaluate(() => document.getElementById('routeCardFun').getBoundingClientRect().top);
+  // where the switch is the moment the finger lands (CI's sheet can still be settling between the line above and the tap,
+  // and the tap itself may scroll the switch into view): that, not sw0, is where it must stay
+  await page.evaluate(() => { window.__swTap = null; window.addEventListener('pointerdown', () => { window.__swTap = document.getElementById('routeCardFun').getBoundingClientRect().top; }, { capture: true, once: true }); });
   await tap('#routeCardFun [data-fun="quick"]', 'Quick');
   await page.waitForFunction(() => /^Quick: /.test(document.getElementById('routeProgress').textContent), null, { timeout: 5000 });
   const after = await page.evaluate(() => ({ sc: document.getElementById('planBody').scrollTop, y: document.getElementById('routeDriveBtn').getBoundingClientRect().top, n: apexDebug.track.lat.length,
@@ -4934,7 +4937,8 @@ flow('plan flow (e, f) a level change and an alternative are one tap or swipe ea
   // the scroll is kept, never back to the top: the switch you tapped stays under your finger (the card above it may be
   // shorter for the new route, and the scroll follows it), and Start doesn't move
   const geo1 = await geo();
-  check(Math.abs(after.y - before.y) <= 1 && after.sc > 0 && Math.abs(after.sw - sw0) <= 2, `a level change keeps Start and the scroll where they were: ${JSON.stringify({ before, sc0, sw0, after, geo0, geo1 })}`);
+  const swTap = await page.evaluate(() => window.__swTap);
+  check(Math.abs(after.y - before.y) <= 1 && after.sc > 0 && swTap != null && Math.abs(after.sw - swTap) <= 2, `a level change keeps Start and the scroll where they were: ${JSON.stringify({ before, sc0, sw0, swTap, after, geo0, geo1 })}`);
   check(taps.n - t0 === 1, 'a level change is one tap');
   // the same with the card shrinking late: 90 px above the switch go away 400 ms after the level change (as the card's
   // slower parts settle on a slow machine); the switch must still stay under the finger
