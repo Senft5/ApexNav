@@ -113,9 +113,10 @@ def test_every_term_has_one_label_and_one_meaning(out):
         assert t["kind"] in ("reading", "score", "count", "setting", "action"), k
     for k in ("sight", "score", "bank", "flow", "twist", "fun", "notes", "corners", "distance"):
         assert k in out["terms"], k
-    # Fun is a route style: a setting with three stops, never a number
+    # Fun is a route style: a setting with three stops, never a number; one home, the route card
     fun = out["terms"]["fun"]
-    assert fun["kind"] == "setting" and fun["values"] == ["Quick", "Fun", "Max fun"] and "Never a number" in fun["meaning"]
+    # the plan flow (finding 9): the third stop in plain words, Long way (it was "Max fun")
+    assert fun["kind"] == "setting" and fun["values"] == ["Quick", "Fun", "Long way"] and "Never a number" in fun["meaning"]
 
 
 def test_every_setting_has_its_one_home():

@@ -142,10 +142,12 @@ const destination = new Function('$', 'planBusy', 'toast', 'resolvePlace', 'funR
   async () => ({ lat: 39, lon: -84, label: 'Place' }),
   async () => { throw Error('service deadline'); },
 );
-const loop = new Function('busy', 'toast', 'buildLoop', 'document', 'let loopBusy = false; return (' + loopSource + ')')(
+// the plan flow (finding 6): a loop's progress is on its key and on the plan's status line, and both are released
+const panel = { classList: { contains: (c) => c === 'open' } };
+const loop = new Function('busy', 'toast', 'buildLoop', 'document', '$', 'planBusy', 'state', 'driveActive', 'openPlan', 'let loopBusy = false; return (' + loopSource + ')')(
   busy, message => messages.push(message),
   async () => { loopAttempts++; throw Error('service deadline'); },
-  { querySelectorAll: () => [] },
+  { querySelectorAll: () => [] }, () => panel, busy, { mode: 'replay' }, false, () => {},
 );
 (async () => {
   await destination();
@@ -154,7 +156,7 @@ const loop = new Function('busy', 'toast', 'buildLoop', 'document', 'let loopBus
   await loop(20, button);
   await loop(20, button);
   assert.equal(loopAttempts, 2);
-  assert.equal(completed, 3);
+  assert.equal(completed, 5);                 // the destination's once; each loop's key and its status line, twice each
 })().catch(error => { console.error(error); process.exitCode = 1; });
 """)
 

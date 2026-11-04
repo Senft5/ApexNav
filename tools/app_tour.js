@@ -97,7 +97,7 @@ scene('plan', async ({ page, base, cap, fresh, ctx }) => {
     await cap('Route: the second option'); await opt(1).click(); await page.waitForTimeout(6000);
     await opt(0).click().catch(() => {}); await page.waitForTimeout(5000);
   }
-  await cap('Route: Preview (flyover)');
+  await cap('Route: Fly-through');
   if (await page.isVisible('#routePreviewBtn')) { await page.click('#routePreviewBtn'); await page.waitForTimeout(14000); await page.keyboard.press('Escape'); await page.waitForTimeout(1500); }
   if (!(await page.isVisible('#routeDriveBtn'))) await page.click('#routeBar').catch(() => {});
   await cap('Drive: start, permissions');
@@ -135,15 +135,14 @@ scene('loops', async ({ page, base, cap, fresh }) => {
   await page.goto(`${base}/index.html`);
   await page.waitForFunction(() => window.apexDebug && window.apexDebug.map);
   await page.waitForTimeout(2000);
-  await cap('Loops: a 30-minute loop');
+  await cap('Loops: a 30 mi loop');
   await page.click('#destInput'); await page.waitForTimeout(1500);
   const loop = await page.$('#planBody button:has-text("30")');
-  if (loop) { await loop.click(); await page.waitForFunction(() => { const t = window.apexDebug.track; return t && t.kind === 'route'; }, null, { timeout: 150000 }).catch(() => {}); await page.waitForTimeout(4000); await page.click('#routeBar').catch(() => {}); await page.waitForTimeout(5000); }
+  if (loop) { await loop.click(); await page.click('#findLoopBtn').catch(() => {}); await page.waitForFunction(() => { const t = window.apexDebug.track; return t && t.kind === 'route'; }, null, { timeout: 150000 }).catch(() => {}); await page.waitForTimeout(4000); await page.click('#routeBar').catch(() => {}); await page.waitForTimeout(5000); }
   await page.click('#planClear').catch(() => {}); await page.waitForTimeout(1500);
-  await cap('Explore: roads nearby');
-  await page.click('#destInput').catch(() => {}); await page.waitForTimeout(1000);
-  const ex = await page.$('#planBody button:has-text("15 min")');
-  if (ex) { await ex.click(); await page.waitForTimeout(20000); }
+  await cap('Best roads nearby');
+  const ex = await page.$('#deckNearby');                            // the plan flow: a chip under Where to?, its own list sheet
+  if (ex) { await ex.click().catch(() => {}); await page.waitForTimeout(20000); }
 });
 
 async function tab(page, cap, name, label) {

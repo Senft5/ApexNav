@@ -1842,9 +1842,9 @@
       if (label) label.textContent = on ? 'Again' : 'Play';
       if (on) b.setAttribute('aria-label', 'Play it again from the start'); else b.removeAttribute('aria-label');
       if (state.mode === 'replay' || state.mode === 'sim') {
-        const name = state.mode === 'sim' ? 'Preview' : 'Replay', score = state.mode === 'replay' && track && Number.isFinite(track.score) ? ` · ${track.score}` : '';
+        const name = state.mode === 'sim' ? 'Fly-through' : 'Replay', score = state.mode === 'replay' && track && Number.isFinite(track.score) ? ` · ${track.score}` : '';
         $('modePlate').textContent = on ? `${name} finished${score} ×`
-          : state.mode === 'sim' ? 'Preview ×' : `Replay${track && track.demo ? ' · Demo' : ''}${track && track.name ? ' · ' + track.name : ''} ×`;
+          : state.mode === 'sim' ? 'Fly-through ×' : `Replay${track && track.demo ? ' · Demo' : ''}${track && track.name ? ' · ' + track.name : ''} ×`;
       }
     }
     // U-128: a replay opens on the drive, never a void. The trail is drawn and the clock starts once the map has its tiles at
@@ -1922,7 +1922,7 @@
       $('routeCardOptions').hidden = !optionsOffered(plannedRoute);
       paintAlternates();
       if (mode === 'live' && explore) showExplore(null);           // its times were from where you were
-      $('modePlate').textContent = { replay: `Replay${track && track.demo ? ' · Demo' : ''}${track && track.name ? ' · ' + track.name : ''} ×`, sim: 'Preview ×', live: 'Drive ● Rec' }[mode];
+      $('modePlate').textContent = { replay: `Replay${track && track.demo ? ' · Demo' : ''}${track && track.name ? ' · ' + track.name : ''} ×`, sim: 'Fly-through ×', live: 'Drive ● Rec' }[mode];
       $('modePlate').classList.toggle('live', mode === 'live');
       paintIdle();
       updateTwisty();
@@ -2393,7 +2393,7 @@
         if (!navigator.geolocation) { resolve(null); return; }
         navigator.geolocation.getCurrentPosition(
           (p) => { state.lastPosition = { lat: p.coords.latitude, lon: p.coords.longitude }; refreshAutoNight(); resolve(state.lastPosition); },
-          () => resolve(null),
+          () => resolve(state.lastPosition || null),               // no fresh fix: the last one known (a re-plan's start), else none
           { enableHighAccuracy: true, timeout: 10000, maximumAge: 30000 });
       });
     }
@@ -2461,10 +2461,18 @@
       if (window.ResizeObserver) new ResizeObserver(() => { const w = $('routeBar').clientWidth; if (w && w !== barW) { barW = w; if ($('planPanel').classList.contains('routed')) fitRouteBarName(); } }).observe($('routeBar'));
       if (document.fonts && document.fonts.ready) document.fonts.ready.then(() => { if ($('planPanel').classList.contains('routed')) fitRouteBarName(); }).catch(() => {});
     }
+    // finding 9: the card's dials in plain words (vocabulary.js twist / flow), the road's kinds too (ROAD_WORDS)
+    const VOC = window.ApexVocabulary || null;
+    const TWIST_WORD = VOC ? VOC.TERMS.twist.label : 'Curvy', FLOW_WORD = VOC ? VOC.TERMS.flow.label : 'Flowing';
+    const isLoop = (t) => !!t && typeof t.id === 'string' && t.id.startsWith('loop_');
     function renderRouteCard(t = plannedRoute) {
       const card = $('routeCard');
       $('planPanel').classList.toggle('routed', !!t);
       $('app').classList.toggle('routed', !!t);
+      // finding 8: one name for go. The bar's key starts the planned route (Start, red); with none it's the smaller Just drive
+      { const k = $('startDrive'), label = t ? 'Start' : 'Just drive';
+        if (k.lastChild && k.lastChild.nodeType === 3 && k.lastChild.textContent !== label) k.lastChild.textContent = label;
+        k.setAttribute('aria-label', t ? `Start: drive ${t.name || 'the route'}` : 'Just drive: record a drive with no route'); }
       if (t) {
         const mi = Array.isArray(t.dist) && t.dist.length ? `${ApexUnits.long(t.dist[t.dist.length - 1], 1)}` : '--';
         $('routeBarName').textContent = t.name || 'Route';
@@ -2486,7 +2494,10 @@
       // the card as instruments (REVIEW.md roadmap 5): three stamped numbers and the profile with a tick per corner
       $('routeCardStats').innerHTML = ApexRouteCard.stats(t, (m) => ApexUnits.long(m, 1)).map((x) =>
         `<div><b>${x.value}${x.unit ? `<small>${x.unit}</small>` : ''}</b><span>${x.label}</span></div>`).join('');
-      $('routeCardProfile').innerHTML = ApexRouteCard.profile(t, 340, 92, heightLabel) || '';
+      // finding 2: the profile's room is kept until its heights are in (or known not to come), so nothing under it jumps
+      const prof = ApexRouteCard.profile(t, 340, 92, heightLabel) || '';
+      $('routeCardProfile').innerHTML = prof;
+      $('routeCardProfile').classList.toggle('none', !prof && !!t.profileDone);
       const avgSector = (k) => {
         if (!Array.isArray(t.sectors) || !t.sectors.length) return null;
         const vals = t.sectors.map(s => s && s[k]).filter(Number.isFinite);
@@ -2496,8 +2507,8 @@
       // U-115: Twist and Flow from the track's own corners when nothing better is known (a GPX, a loop), as for a searched route
       const geo = ApexRouteCard.shape(t, (x) => FunRoute.score(x, [], roadPrefs));
       const bars = Array.isArray(t.sectors) && t.sectors.length
-        ? [['Twist', avgSector('tech') ?? geo.twist], ['Flow', avgSector('flow') ?? geo.flow], ['Surface', avgSector('surf')]]
-        : [['Twist', geo.twist], ['Flow', geo.flow],
+        ? [[TWIST_WORD, avgSector('tech') ?? geo.twist], [FLOW_WORD, avgSector('flow') ?? geo.flow], ['Surface', avgSector('surf')]]
+        : [[TWIST_WORD, geo.twist], [FLOW_WORD, geo.flow],
            // Surface only once members have measured enough of it; map geometry can't know pavement.
            ...(window.ApexContributor && ApexContributor.surfaceScore(t.measured) != null ? [['Surface', ApexContributor.surfaceScore(t.measured)]] : [])];
       // small half-dials, "--" when unknown; Fun is the options' tile, so the card shows what makes it up. Surface only once
@@ -2523,7 +2534,11 @@
       $('routeCardSub').textContent = `${carLine ? carLine + ' · ' : ''}${missed}${towns}${sun}${cams}${feel}`;
       $('routeCardWhy').textContent = t.why || '';
       $('routeCardWhy').hidden = !t.why;
-      $('routeCardFun').hidden = t.id !== 'route_dest';           // the level re-plans destination routes only
+      // finding 4: the level's one home is the card, for a destination route and (finding 6) a loop; a loop's length too
+      const loopCard = isLoop(t);
+      $('routeCardFun').hidden = !(t.id === 'route_dest' || loopCard);
+      paintCardLoop(t);
+      paintOptChips();
       const o = routeOptions, box = $('routeCardOptions');
       box.hidden = !optionsOffered(t);
       // Built once per pick (not on every card refresh), so keyboard focus survives camera and measured updates.
@@ -2752,6 +2767,7 @@
       const f = e.target.files && e.target.files[0]; e.target.value = '';
       if (!f) return;
       if (f.size > 5e6) { toast('That file is too big for a route (5 MB at most).'); return; }
+      closeOptions(true);
       openGpx(await f.text(), f.name);
     });
     $('routeGpxBtn').addEventListener('click', () => {
@@ -3058,6 +3074,7 @@
     try { funLevel = FunRoute.LEVELS[localStorage.getItem(FUN_LEVEL)] ? localStorage.getItem(FUN_LEVEL) : 'fun'; } catch (_) { /* storage off */ }
     async function funRoute(from, to, id, name, request, ui, opts = {}) {
       const level = funLevel, planT0 = Date.now();      // the early quickest counts from here, not from the router's answer
+      const before = opts.early === false ? plannedRoute : null;   // a re-plan of the route on screen: what it's measured against
       // The stages round the whole trip (the map tiles' roads, scored, then the network step) don't need the router's answer:
       // they're found while it routes (live: 2 s of tile scoring after the routes came back)
       // the first route has the page and the router to itself: the stages' network step and the routes' context wait for it
@@ -3210,9 +3227,11 @@
       const quickPool = pool.filter(c => Number.isFinite(c.timeS)).reduce((x, y) => (y.timeS < x.timeS ? y : x), best);
       const quickest = ranked.find(c => c.t === quickPool.t) || quickPool;   // with the engine's parts, for the why line
       clearTimeout(earlyTimer);
+      let shownEarly = null;
       if (early.fired) {                                                   // the quickest is already up: replace it unless it's taken
         const shown = await early.shown;
         if (shown && (state.mode === 'live' || plannedRoute !== shown)) return true;
+        shownEarly = shown;
       }
       // The best and up to two really different others stay on the card (and faint on the map) to pick from.
       const offered = FunRoute.distinctOptions(ranked, 3);
@@ -3222,12 +3241,17 @@
       if (kept && kept.sightPending) kept = null;                         // drawn before its land cover: built in full now
       let t = kept;
       if (kept) {                                                          // the ranking's word on it, on the card already up
-        const o = { id, name, request, level, quickest, list: offered };
+        const o = { id, name, request, level, quickest, list: offered, pool, builtLevel: level };
         optionOnto(kept, offered[0], o);
         routeOptions = Object.assign(o, { picked: 0, current: kept });
         if (typeof renderRouteCard === 'function') { timeFromEnvelope(kept); renderRouteCard(kept); }   // its saved copy stays the one drawn
-      } else t = await useOption({ id, name, request, level, quickest, list: offered }, 0);
+      } else t = await useOption({ id, name, request, level, quickest, list: offered, pool, builtLevel: level }, 0);
       if (!t) return false;   // no toast: the route bar and card say it (REVIEW.md 1.2, Route bar: the bar is the toast)
+      // finding 1: the card says what the ranking did: kept the first route, or replaced it, and why, in the card's numbers
+      const was = shownEarly || before;
+      if (was && typeof cardNote === 'function') cardNote(kept || (was === t) || (was.lat && t.lat && was.lat.length === t.lat.length && was.timeS === t.timeS)
+        ? `Checked ${pool.length} route${pool.length === 1 ? '' : 's'}: this one is the best`
+        : window.ApexRouteCard ? ApexRouteCard.swapNote(t, was, t.why, opts.head || 'Better route found') : 'Better route found');
       if (offered[0].infeasible && offered[0].ev && offered[0].ev.hard.length) toast(`No way round it: ${offered[0].ev.hard[0].label} on this route. Check before you go.`);   // every candidate broke a hard constraint
       else if (window.ApexRouteCar) routeAftercare(offered[0]);
       window.apexDebug && (window.apexDebug.lastFun = rankPool(pool, level).map(c => ({ kind: c.kind, fun: c.fun, timeS: c.timeS, value: c.value, adjust: c.adjust || 0, glare: c.glare, townKm: c.townKm,
@@ -3248,6 +3272,12 @@
     }
     async function useOption(o, i, sightMs) {
       const c = o.list[i], was = o.current;
+      if (o.kind === 'loop') {                                             // a loop's options are whole tracks already
+        if (was && (routeOptions !== o || plannedRoute !== was || state.mode === 'live')) return null;
+        routeOptions = Object.assign(o, { picked: i, current: c.t });
+        await buildRoute(null, o.id, c.t.name, c.t);
+        return c.t;
+      }
       const ahead = builtAhead.get(c.route.coords);
       if (ahead) builtAhead.delete(c.route.coords);
       const t = (ahead && await ahead) || await trackFromPolyline(c.route.coords, o.id, o.name, sightMs);
@@ -3276,7 +3306,27 @@
       const o = routeOptions;
       if (!o || optionBusy || loopBusy || i === o.picked || !o.list[i] || plannedRoute !== o.current || state.mode === 'live' || $('planPanel').classList.contains('busy')) return;
       optionBusy = true;
+      cardNote('');                                                        // what the ranking said was about the other route
       try { await useOption(o, i); } catch (_) { toast('Couldn\'t switch to that route. Try again.'); } finally { optionBusy = false; }
+    }
+    // finding 11: a swipe sideways on the card steps through its alternatives, as a tap on their tiles does (left: the next)
+    {
+      let sx = null, sy = 0;
+      const card = $('routeCard');
+      card.addEventListener('touchstart', (e) => {
+        if (e.touches.length !== 1 || e.target.closest('input, textarea, .switch, .detents, .stepper, .plan-chips')) { sx = null; return; }
+        sx = e.touches[0].clientX; sy = e.touches[0].clientY;
+      }, { passive: true });
+      card.addEventListener('touchend', (e) => {
+        if (sx == null) return;
+        const t = e.changedTouches[0], dx = t.clientX - sx, dy = t.clientY - sy; sx = null;
+        if (Math.abs(dx) < 60 || Math.abs(dx) < 1.5 * Math.abs(dy)) return;
+        const o = routeOptions;
+        if (!o || !optionsOffered(plannedRoute)) return;
+        const i = o.picked + (dx < 0 ? 1 : -1);
+        if (i >= 0 && i < o.list.length) pickOption(i);
+      });
+      card.addEventListener('touchcancel', () => { sx = null; });
     }
     // The other options, faint on the map while the card offers them; nothing while driving or for any other route.
     function optionsOffered(t) {
@@ -3299,11 +3349,49 @@
     }
     // What each Roads position does, from fun_route.js LEVELS (the extra time each one may spend).
     const FUN_NOTES = { quick: 'Quick: the quickest way, or a better road that adds no more than about a tenth.',
-      fun: 'Fun: twistier roads that add up to about a third to the trip.', max: 'Max fun: the twistiest roads around, up to nearly twice the time.' };
+      fun: 'Fun: twistier roads that add up to about a third to the trip.', max: 'Long way: the twistiest roads around, up to nearly twice the time.' };
+    // The plan flow (finding 4): the level lives on the card. A change re-ranks the routes the plan already found when they
+    // cover it (a plan at Fun holds the quick ones too; Long way's longer detours need a plan of their own), with the engine's
+    // own ranking, why line and extra time: nothing is worked out again. Loops re-rank the loops already built.
+    const LEVEL_ORDER = { quick: 0, fun: 1, max: 2 };
+    var optChipsReady = false;                                           // eslint-disable-line no-var -- read before its line runs
+    async function changeLevel(level) {
+      if (!FunRoute.LEVELS[level] || level === funLevel || $('planPanel').classList.contains('busy') || loopBusy || optionBusy) return;
+      const was = funLevel, t = plannedRoute, o = routeOptions;
+      setFunLevel(level);
+      if (t && o && o.current === t && state.mode !== 'live') {
+        if (o.kind === 'loop') { await relevelLoop(o, level); return; }
+        if (o.pool && LEVEL_ORDER[level] <= LEVEL_ORDER[o.builtLevel || 'quick']) { if (!(await rerank(o, level))) setFunLevel(was); return; }
+      }
+      if (!(await replanForLevel(FunRoute.LEVELS[level].label))) setFunLevel(was);
+    }
+    async function rerank(o, level) {
+      const pool = o.pool, label = FunRoute.LEVELS[level].label, prev = plannedRoute;
+      let ranked = rankPool(pool, level);
+      if (!ranked.length) ranked = FunRoute.rank(pool, level);
+      if (!ranked.length) return false;
+      const offered = FunRoute.distinctOptions(ranked, 3);
+      const quickPool = pool.filter(c => Number.isFinite(c.timeS)).reduce((x, y) => (y.timeS < x.timeS ? y : x), ranked[0]);
+      const quickest = ranked.find(c => c.t === quickPool.t) || quickPool;
+      const n = { id: o.id, name: o.name, request: o.request, level, quickest, list: offered, pool, builtLevel: o.builtLevel, picked: 0, current: prev };
+      const cur = o.list[o.picked], same = !!cur && offered[0].route === cur.route;
+      routeOptions = n;
+      $('routeCardOptions')._t = null;                                   // the tiles are drawn again for the new list
+      let t = prev;
+      if (same) { optionOnto(prev, offered[0], n); persistPlanned(prev); renderRouteCard(prev); }
+      else {
+        optionBusy = true;
+        try { t = await useOption(n, 0); } finally { optionBusy = false; }
+        if (!t) return false;
+      }
+      cardNote(same ? `${label}: this route is still the best of the ${pool.length} found` : `${ApexRouteCard.swapNote(t, prev, t.why, label)} (of the ${pool.length} routes found)`);
+      return true;
+    }
     function setAvoid(next) {
       avoid = { ...avoid, ...next };
       try { localStorage.setItem(AVOID, JSON.stringify(avoid)); } catch (_) { /* storage off: this session only */ }
       document.querySelectorAll('[data-avoid]').forEach(b => { const on = !!avoid[b.dataset.avoid]; b.classList.toggle('on', on); b.setAttribute('aria-pressed', String(on)); });
+      paintOptChips();
     }
     // Changing the level (or what to avoid) re-plans a destination route that isn't being driven.
     async function replanForLevel(what = FunRoute.LEVELS[funLevel].label) {
@@ -3316,7 +3404,7 @@
       try {
         const from = t.request.from || await locate();
         if (!from) throw new Error(NO_FIX);
-        ok = await funRoute(from, t.request.to, t.id, t.name, { from: t.request.from, to: t.request.to, via: [] }, ui, { early: false });
+        ok = await funRoute(from, t.request.to, t.id, t.name, { from: t.request.from, to: t.request.to, via: [] }, ui, { early: false, head: what });
       } catch (err) { toast(err.message); } finally { ui.done(); }
       if (!ok && t.funLevel) setFunLevel(t.funLevel);             // the chips show the level the route on screen was built with
       return ok;
@@ -3355,10 +3443,16 @@
       };
     }
     let loopBusy = false;
+    // finding 6: a loop shows its progress where you are looking: on the Find a loop key and the plan sheet's status line
+    // when the sheet is up, on the card's progress line when a loop's card is (its length changed there); never a lone toast
     async function loop(miles, btn) {
-      if (loopBusy) return;
+      if (loopBusy || $('planPanel').classList.contains('busy')) return;
       loopBusy = true;
-      const ui = btn ? busy(btn, [...document.querySelectorAll('[data-loop-mi], [data-loop-min], [data-explore-min]')]) : { step() {}, done() {} };
+      // from the deck (or the car, or Options) the plan sheet comes up, so the loop's progress is in view
+      if (!$('planPanel').classList.contains('open') && !$('planPanel').classList.contains('routed') && state.mode !== 'live' && !driveActive) { openPlan(true); btn = btn || $('findLoopBtn'); }
+      const key = btn ? busy(btn, [...document.querySelectorAll('[data-loop-mi], [data-loop-min], [data-explore-min], [data-card-loop]')]) : null;
+      const panel = planBusy();
+      const ui = { step(text, f) { if (key) key.step(text, f); panel.step(text); }, done() { if (key) key.done(); panel.done(); } };
       try { await buildLoop(miles, ui); }
       catch (_) { toast('Couldn\'t build a loop. Check signal and try again.'); }
       finally { loopBusy = false; ui.done(); }
@@ -3373,7 +3467,7 @@
       const miles = minutes ? Math.round(minutes / 60 * LOOP_KMH / 1.609344) : want;
       const targetKm = miles * 1.609344, targetS = minutes ? minutes * 60 : null;
       const asked = minutes ? `${minutes / 60} h` : ApexUnits.long(miles * 1609.344, 0), loopId = minutes ? `loop_${minutes}min` : `loop_${miles}`;
-      toast(`Finding roads · ${asked} loop`);
+      ui.step(`Finding roads for a ${asked} loop…`, 0.02);
       // 1. Stage discovery: score every road around the start from the map's own vector tiles.
       let plans = [];
       try {
@@ -3429,6 +3523,10 @@
       // A time loop compares drive times: a route the router didn't time can't be judged with the others.
       if (targetS && done.some(d => Number.isFinite(d.t.timeS))) done = done.filter(d => Number.isFinite(d.t.timeS));
       if (!done.length) { toast('Couldn\'t build a loop. Check signal and try again.'); return; }
+      for (const d of done) {                                             // how far off the asked length: the level weighs it
+        const [got, want] = targetS && Number.isFinite(d.t.timeS) ? [d.t.timeS, targetS] : [d.km, targetKm];
+        d.off = want ? (got - want) / want : 0;
+      }
       done.sort((a, b) => b.score - a.score);
       // Members: let what others measured break ties among the top few (rough −8 … smooth +3, banked ±2 on the same fun scale, docs/ROUTING.md; unmeasured roads are neutral).
       if (await applyMeasured(done.slice(0, 3), ui)) {
@@ -3437,25 +3535,67 @@
       }
       await preferApply(done.slice(0, 4));                                   // the Prefer stamps (prefer.js)
       if (done.some(d => d.preferBonus)) { for (const d of done) d.score += d.preferBonus || 0; done.sort((a, b) => b.score - a.score); }
-      const best = done[0];
-      best.t.request = { from: null, to: { lat: c.lat, lon: c.lon }, via: best.job.pts.slice(1, -1).map(p => ({ lat: p.lat, lon: p.lon, planned: true })) };
+      // Name each loop by what it is, not what was asked: a "15 mi loop" that is 9.3 mi reads as a bug.
+      for (const d of done) {
+        d.t.request = { from: null, to: { lat: c.lat, lon: c.lon }, via: d.job.pts.slice(1, -1).map(p => ({ lat: p.lat, lon: p.lon, planned: true })) };
+        d.t.name = targetS && Number.isFinite(d.t.timeS) ? `${Math.round(d.t.timeS / 60)} min loop` : `${Math.max(1, Math.round(ApexUnits.longN(d.km * 1000)))} ${ApexUnits.longU()} loop`;
+      }
+      // the level (finding 6) picks among the loops built, and up to two really different others are offered beside it
+      const o = loopOptions({ id: loopId, done, miles, targetS, level: funLevel, asked });
+      const best = o.list[0].loop;
       ui.step('Building route', 0.92);
-      // Name the loop by what it is, not what was asked: a "15 mi loop" that is 9.3 mi reads as a bug.
+      routeOptions = Object.assign(o, { picked: 0, current: best.t });
+      await buildRoute(null, loopId, best.t.name, best.t);
+      if (window.ApexRouteCar) routeAftercare(best.lc);
       const gotMi = best.km / 1.609344;
       if (targetS && Number.isFinite(best.t.timeS)) {
         const gotMin = Math.round(best.t.timeS / 60), near = Math.abs(best.t.timeS - targetS) <= 0.2 * targetS;
-        best.t.name = `${gotMin} min loop`;
-        await buildRoute(null, loopId, best.t.name, best.t);
-        if (window.ApexRouteCar) routeAftercare(best.lc);
-        if (!near) toast(`${gotMin} min: the closest good loop to ${asked}`);   // the bar says the rest
+        cardNote(near ? `Best of ${done.length} loops found` : `${gotMin} min: the closest good loop to ${asked}`);
       } else {
         const near = Math.abs(gotMi - miles) <= 0.2 * miles;
-        best.t.name = `${Math.max(1, Math.round(ApexUnits.longN(best.km * 1000)))} ${ApexUnits.longU()} loop`;
-        await buildRoute(null, loopId, best.t.name, best.t);
-        if (window.ApexRouteCar) routeAftercare(best.lc);
-        if (!near) toast(`${ApexUnits.long(best.km * 1000)}: the closest good loop to ${asked}`);
+        cardNote(near ? `Best of ${done.length} loops found` : `${ApexUnits.long(best.km * 1000)}: the closest good loop to ${asked}`);
       }
       window.apexDebug && (window.apexDebug.lastLoop = done.map(d => ({ kind: d.job.kind, fun: d.t.fun && d.t.fun.fun, score: d.score, km: d.km, good: d.good, retraced: d.retraced })));
+    }
+
+    // The loops built, ranked for a level (fun_route.js loopLevelAdjust) and offered as up to three really different ones.
+    function loopOptions({ id, done, miles, targetS, level, asked }) {
+      const ranked = done.map((d) => ({ d, v: d.score + FunRoute.loopLevelAdjust(d.t.fun, d.off, level) })).sort((a, b) => b.v - a.v).map((x) => x.d);
+      const list = [];
+      for (const d of ranked) {
+        if (list.some((x) => Math.abs(x.loop.km - d.km) < 0.3 && Math.abs((x.timeS || 0) - (d.t.timeS || 0)) < 30)) continue;
+        list.push({ loop: d, t: d.t, timeS: d.t.timeS, fun: d.t.fun, route: { coords: d.t.lat.map((la, i) => [d.t.lon[i], la]) } });
+        if (list.length === 3) break;
+      }
+      return { kind: 'loop', id, done, miles, targetS, asked, level, list };
+    }
+    async function relevelLoop(o, level) {
+      const label = FunRoute.LEVELS[level].label, prev = plannedRoute;
+      const n = Object.assign(loopOptions({ ...o, level }), { picked: 0, current: prev });
+      routeOptions = n;
+      $('routeCardOptions')._t = null;
+      let t = prev;
+      if (n.list[0].t === prev) renderRouteCard(prev);
+      else {
+        optionBusy = true;
+        try { t = await useOption(n, 0); } finally { optionBusy = false; }
+        if (!t) return;
+      }
+      cardNote(t === prev ? `${label}: this loop is still the best of the ${o.done.length} found` : `${ApexRouteCard.swapNote(t, prev, null, label)} (of the ${o.done.length} loops found)`);
+    }
+    // The loop card's length (finding 6): the dial's five lengths, in your units; a tap builds a loop of that length.
+    function paintCardLoop(t) {
+      const box = $('routeCardLoop'), on = isLoop(t) && state.mode !== 'live';
+      box.hidden = !on;
+      if (!on) return;
+      const asked = routeOptions && routeOptions.kind === 'loop' && routeOptions.current === t && !routeOptions.targetS ? routeOptions.miles : null;
+      const keys = [...document.querySelectorAll('#loopDetents [data-loop-mi]')];
+      const row = $('cardLoopDetents');
+      if (row.children.length !== keys.length || keys.some((k, i) => row.children[i].textContent !== k.textContent)) {
+        row.replaceChildren(...keys.map((k) => { const b = document.createElement('button'); b.textContent = k.textContent; b.dataset.cardLoop = k.dataset.loopMi;
+          b.setAttribute('aria-label', `A ${k.textContent} loop`); b.addEventListener('click', () => { if (loopBusy) return; pickLoop(k); loop(parseFloat(k.dataset.loopMi), b); }); return b; }));
+      }
+      [...row.children].forEach((b) => b.setAttribute('aria-pressed', String(asked != null && Math.abs(parseFloat(b.dataset.cardLoop) - asked) < 0.01)));
     }
 
     // Explore (R-10): the best roads within N minutes of here, as a list and on the map; one tap drives one (to its far
@@ -3465,7 +3605,9 @@
       if (loopBusy || state.mode === 'live' || $('planPanel').classList.contains('busy')) return;
       loopBusy = true;
       const panel = planBusy(), was = plannedRoute;                 // a destination typed meanwhile waits, not races
-      const ui = busy(btn, [...document.querySelectorAll('[data-loop-mi], [data-loop-min], [data-explore-min]')]);
+      const key = busy(btn, [...document.querySelectorAll('[data-loop-mi], [data-loop-min], [data-explore-min]')]);
+      const ui = { step(text, f) { key.step(text, f); nearbyStatus(`${text}…`, true); }, done() { key.done(); } };
+      $('exploreList').hidden = true;
       try {
         const c = await locate();
         if (!c) { toast(NO_FIX); return; }
@@ -3480,9 +3622,9 @@
         if (state.mode === 'live') return;                            // driving now: too late
         if (plannedRoute && plannedRoute !== was) { toast('Explore cancelled: a route is up.'); return; }
         const picks = FunRoute.explorePicks(list, m.times, minutes * 60);
-        showExplore({ here: c, minutes, picks });
-        toast(picks.length ? `${picks.length} good ${picks.length === 1 ? 'road' : 'roads'} within ${minutes} min` : `No good roads within ${minutes} min`);   // heard by screen readers too
-      } catch (_) { toast('Couldn\'t explore here. Check signal and try again.'); }
+        showExplore({ here: c, minutes, picks, at: Date.now() });
+        nearbyStatus(picks.length ? `${picks.length} good ${picks.length === 1 ? 'road' : 'roads'} within ${minutes} min. Tap one to plan it.` : `No good roads within ${minutes} min of here.`);   // its own status line, heard by screen readers
+      } catch (_) { nearbyStatus('Couldn\'t look for roads here. Check signal and try again.'); }
       finally { loopBusy = false; ui.done(); panel.done(); }
     }
     // A bare route number from the tiles' ref reads as a count: "282" → "Route 282".
@@ -3492,32 +3634,56 @@
       const box = $('exploreList');
       paintExplore();
       if (!e) { box.hidden = true; box.replaceChildren(); return; }
-      const head = document.createElement('p'); head.className = 'note'; head.setAttribute('role', 'status');
-      head.textContent = e.picks.length ? `Best roads within ${e.minutes} min: good corners · length · drive to the start` : `No good roads within ${e.minutes} min of here.`;
-      box.replaceChildren(head, ...e.picks.map((p, i) => {
-        const b = document.createElement('button'); b.className = 'place';
+      lastExplore = e;
+      // finding 7: every number under a named column, its unit beside it: no bare "10 · 2.1 mi · 9 min"
+      const cells = (name, good, len, away) => { const g = document.createElement('span'); g.className = 'nb-cells'; g.append(name, good, len, away); return g; };
+      const span = (text, unit) => { const x = document.createElement('span'); x.textContent = text; if (unit) { const u = document.createElement('small'); u.textContent = unit; x.append(u); } return x; };
+      const head = document.createElement('div'); head.className = 'nb-head'; head.setAttribute('aria-hidden', 'true');
+      head.append(cells(span('Road'), span('Good corners'), span('Length'), span('Drive there')), span(''));
+      const rows = e.picks.map((p, i) => {
+        const b = document.createElement('button'); b.className = 'nb-go';
         const name = document.createElement('b'); name.textContent = roadLabel(p.s.name);
-        const info = document.createElement('span');
-        info.textContent = `${p.s.good} · ${ApexUnits.long((p.s.km) * 1000, 1)} · ${Math.max(1, Math.round(p.awayS / 60))} min`;
-        b.setAttribute('aria-label', `${name.textContent}: ${p.s.good} good corners, ${info.textContent.split(' · ')[1]}, ${Math.max(1, Math.round(p.awayS / 60))} minutes away`);
-        b.append(name, info); b.addEventListener('click', () => driveStage(i));
+        const [lv, ...lu] = ApexUnits.long((p.s.km) * 1000, 1).split(' '), away = Math.max(1, Math.round(p.awayS / 60));
+        b.append(cells(name, span(String(p.s.good)), span(lv, lu.join(' ')), span(String(away), 'min')));
+        b.setAttribute('aria-label', `${name.textContent}: ${p.s.good} good corners, ${lv} ${lu.join(' ')} long, ${away} minutes to drive there. Plan it.`);
+        b.addEventListener('click', () => driveStage(i));
         // what the road is like (road_page.js, IDEAS Q-13)
         const about = document.createElement('button'); about.className = 'linkbtn'; about.textContent = 'About';
         about.setAttribute('aria-label', `About ${name.textContent}`);
         about.addEventListener('click', () => openRoadPage(p.s));
-        const row = document.createElement('div'); row.className = 'row pinned-row'; row.append(b, about);
+        const row = document.createElement('div'); row.className = 'nb-row'; row.append(b, about);
         return row;
-      }));
-      box.hidden = false;
+      });
+      box.replaceChildren(...(e.picks.length ? [head, ...rows] : []));
+      box.hidden = !e.picks.length;
       if (e.picks.length && mapReady && state.mode !== 'live') {
         let w = e.here.lon, ea = e.here.lon, so = e.here.lat, n = e.here.lat;
         for (const p of e.picks) for (let i = 0; i < p.s.lat.length; i += 10) { w = Math.min(w, p.s.lon[i]); ea = Math.max(ea, p.s.lon[i]); so = Math.min(so, p.s.lat[i]); n = Math.max(n, p.s.lat[i]); }
         pauseFollow();
-        // Fit the roads into the map left above the plan sheet.
-        const top = $('planPanel').getBoundingClientRect().top, bottom = Math.max(24, Math.min(window.innerHeight - 160, window.innerHeight - top + 16));
+        // Fit the roads into the map left above the sheet (Best roads nearby's, or the plan's).
+        const top = $('nearbySheet').classList.contains('open') ? $('nearbySheet').getBoundingClientRect().top : $('planPanel').getBoundingClientRect().top, bottom = Math.max(24, Math.min(window.innerHeight - 160, window.innerHeight - top + 16));
         const sv = viewInsets();
         map.fitBounds([[w, so], [ea, n]], { padding: { top: sv.t + 40, left: sv.l + 30, right: sv.r + 30, bottom }, pitch: 0, bearing: 0, duration: 1000 });
       }
+    }
+    let lastExplore = null;
+    function nearbyStatus(text, busyNow = false) { const n = $('nearbyStatus'); n.textContent = text || ''; n.className = 'rc-progress' + (text ? (busyNow ? ' busy' : ' found') : ''); }
+    // finding 7: Best roads nearby opens its list sheet and looks at once (or shows the last look, from the last 10 minutes)
+    function openNearby() {
+      if (state.mode === 'live' || driveActive) return;
+      closeOptions(true);
+      const sheet = $('nearbySheet');
+      sheet.classList.add('open');
+      const pick = sheet.querySelector('[data-explore-min][aria-pressed="true"]') || sheet.querySelector('[data-explore-min]');
+      const fresh = lastExplore && Date.now() - lastExplore.at < 10 * 60000 && lastExplore.minutes === parseInt(pick.dataset.exploreMin, 10);
+      if (fresh) { if (!explore) showExplore(lastExplore); }
+      else if (!loopBusy) exploreNear(parseInt(pick.dataset.exploreMin, 10), pick);
+      requestAnimationFrame(() => $('nearbyClose').focus());
+    }
+    function closeNearby() {
+      const sheet = $('nearbySheet');
+      if (!sheet.classList.contains('open')) return;
+      sheet.classList.remove('open');
     }
     // Road page (road_page.js, IDEAS Q-13): the reference lap over the road's shape, the DEM's climb, members' measurements.
     let roadPop = null;
@@ -3564,6 +3730,7 @@
       const e = explore, p = e && e.picks[i];
       if (!p || loopBusy || optionBusy || state.mode === 'live' || $('planPanel').classList.contains('busy')) return;
       loopBusy = true;
+      closeNearby();
       const ui = planBusy();
       try {
         ui.step('Routing…');
@@ -3579,7 +3746,7 @@
         Object.assign(t, { fun: funOf(t, r.turns), timeS: r.timeS, timeMarks: timeMarksOf(t, r), steps: stepsOf(t, r), unavoided: FunRoute.unavoided(avoid, r), glareMin: glare ? Math.round(glare.minutes) : null,
                            request: { from: null, to: { lat: end.lat, lon: end.lon }, via: pts.slice(1, -1).map(q => ({ lat: q.lat, lon: q.lon, shaping: true })) } });
         await buildRoute(null, 'explore', name, t);
-        toast(`${name} · ${Math.max(1, Math.round(p.awayS / 60))} min to the start, then ${ApexUnits.long((p.s.km) * 1000, 1)}`);
+        cardNote(`${name}: ${Math.max(1, Math.round(p.awayS / 60))} min to the start, then ${ApexUnits.long((p.s.km) * 1000, 1)} of it`);
       } catch (_) { toast('Couldn\'t route to that road. Try another.'); }
       finally { loopBusy = false; ui.done(); }
     }
@@ -3748,24 +3915,43 @@
       if (opening && panel.classList.contains('routed') && !booting) requestAnimationFrame(() => { if (panel.classList.contains('open') && state.mode !== 'live') fitPlannedRoute(plannedRoute, true); });   // DA-2
       if (closing && panel.classList.contains('routed')) requestAnimationFrame(() => { let driving = false; try { driving = driveActive; } catch (_) {} if (!panel.classList.contains('open') && !$('app').classList.contains('sheet-open') && !driving) fitPlannedRoute(); });
       $('destInput').setAttribute('aria-expanded', String(open));
-      if (open) { refreshSavedDrives(); if (!panel.classList.contains('routed')) renderPlaces(); $('planBody').scrollTop = 0; closeEdge(); }
+      if (opening) { panel.classList.remove('full'); $('planBody').scrollTop = 0; }   // finding 2: a re-plan keeps the scroll
+      if (open) { refreshSavedDrives(); if (!panel.classList.contains('routed')) renderPlaces(); closeEdge(); }
       else { $('destInput').blur(); $('fromInput').blur(); }                 // closing puts the keyboard away
     }
     // Routing progress shows under From (the old Go button carried it).
     function planBusy() {
       const panel = $('planPanel'); panel.classList.add('busy');
-      return { step(text) { $('planStatus').textContent = text; }, done() { panel.classList.remove('busy'); $('planStatus').textContent = ''; } };
+      cardNote('');
+      return { step(text) { $('planStatus').textContent = text; cardProgress(text); },
+        done() { panel.classList.remove('busy'); $('planStatus').textContent = ''; cardProgress(''); } };
+    }
+    // finding 1: one line on the card for the plan: its progress while it works (a spinner), then what it found, which stays
+    // until the next plan, a pick or the route going
+    let cardNoteText = '';
+    function cardProgress(text) {
+      const p = $('routeProgress');
+      if (text) { p.textContent = text; p.className = 'rc-progress busy'; return; }
+      p.textContent = cardNoteText; p.className = cardNoteText ? 'rc-progress found' : 'rc-progress';
+    }
+    function cardNote(text) {
+      cardNoteText = text || '';
+      if (!$('planPanel').classList.contains('busy') || !text) cardProgress('');
+      if (text) announce(text);
     }
     // ✕ on the route bar: back to Where to? and the idle map.
     function clearPlanned() {
       plannedRoute = null;
       routeOptions = null;
+      cardNote('');
       showExplore(null);
       markDestination(null);
       try { sessionStorage.removeItem(PLANNED); localStorage.removeItem(PLANNED); } catch (_) {}
       paintEtaShareBtn();
       $('destInput').value = '';
+      $('planPanel').classList.remove('full');
       renderRouteCard(null);
+      paintTask();
       if (track && track.kind === 'route' && state.mode !== 'live') {
         setPlaying(false); replayOn = false; track = null;
         if (mapReady) { map.getSource('apex-route-src').setData(emptyFC()); map.getSource('apex-ribbon-src').setData(emptyFC()); ribbonKey = ''; }
@@ -3781,20 +3967,32 @@
       const panel = $('planPanel');
       let y0 = null, base = 0, moved = false, t0 = 0;
       const collapsedY = () => panel.offsetHeight - $('planBar').offsetHeight - 2;
-      $('planBar').addEventListener('pointerdown', (e) => { y0 = e.clientY; t0 = performance.now(); moved = false; base = panel.classList.contains('open') ? 0 : collapsedY(); });
+      // finding 10: the route card opens at half height; dragged up by its bar it takes the full sheet, down it goes to half,
+      // then to the bar. Its height follows the finger (the Start foot stays at the bottom, where the thumb is).
+      let h0 = 0, card = false;
+      $('planBar').addEventListener('pointerdown', (e) => { y0 = e.clientY; t0 = performance.now(); moved = false; base = panel.classList.contains('open') ? 0 : collapsedY();
+        card = panel.classList.contains('open') && panel.classList.contains('routed'); h0 = panel.offsetHeight; });
       window.addEventListener('pointermove', (e) => {
         if (y0 == null) return;
         const dy = e.clientY - y0;
         if (!moved && Math.abs(dy) < 8) return;                         // a tap, not a drag
         moved = true; panel.classList.add('dragging');
+        if (card) { panel.style.height = `${Math.max($('planBar').offsetHeight + 2, h0 - dy)}px`; return; }
         panel.style.transform = `translateY(${Math.max(0, Math.min(collapsedY(), base + dy))}px)`;
       });
       const release = (e) => {
         if (y0 == null) return;
         const dy = e.clientY - y0, fast = Math.abs(dy) / Math.max(1, performance.now() - t0) > 0.5; y0 = null;
-        panel.classList.remove('dragging'); panel.style.transform = '';
+        panel.classList.remove('dragging'); panel.style.transform = ''; panel.style.height = '';
         if (!moved) return;
         const open = panel.classList.contains('open');
+        if (card) {
+          const full = panel.classList.contains('full');
+          if (dy < -60 || (fast && dy < -20)) { panel.classList.add('full'); return; }                    // up: the whole card
+          if (full && (dy > 60 || (fast && dy > 20)) && h0 - dy > 0.35 * h0) { panel.classList.remove('full'); return; }   // down a step: half
+          if (dy > 80 || (fast && dy > 20)) openPlan(false);                                               // down: the bar
+          return;
+        }
         openPlan(open ? !(dy > 80 || (fast && dy > 20)) : (dy < -80 || (fast && dy < -20)));
       };
       window.addEventListener('pointerup', release);
@@ -3868,7 +4066,23 @@
       return reply && Number.isFinite(reply.lat) && Number.isFinite(reply.lon) ? { lat: reply.lat, lon: reply.lon } : null;
     }
     let suggestTimer = null, suggestSeq = 0, shownRows = { q: '', rows: [] }, allPlaces = false;
-    $('destInput').addEventListener('input', () => { clearTimeout(suggestTimer); suggestTimer = setTimeout(renderPlaces, 300); });
+    $('destInput').addEventListener('input', () => { clearTimeout(suggestTimer); suggestTimer = setTimeout(renderPlaces, 300); paintTask(); });
+    // finding 3: with something typed, the loop gives way and the main key goes to the place (as Enter does); with
+    // nothing typed it finds a loop
+    function paintTask() {
+      const q = $('destInput').value.trim(), typing = !!q && !$('planPanel').classList.contains('routed');
+      $('planPanel').classList.toggle('typing', typing);
+      $('findGoBtn').hidden = !typing;
+      const top = typing && shownRows.q === q && shownRows.rows[0];
+      $('findGoBtn').textContent = top ? `Go to ${top.label}` : 'Search';
+    }
+    $('findGoBtn').addEventListener('click', () => {
+      const q = $('destInput').value.trim();
+      if (!q) return;
+      const pasted = window.ApexRouteImport && ApexRouteImport.parseMapsLink(q);
+      const top = !pasted && shownRows.q === q && shownRows.rows[0];
+      if (top) { if (top.saved) openSaved(top.saved); else routeToPlace(top); } else routeToQuery();
+    });
     async function renderPlaces() {
       const q = $('destInput').value.trim(), seq = ++suggestSeq, box = $('placeList');
       let rows, empty = '';
@@ -3891,6 +4105,7 @@
       const more = !q && !allPlaces && rows.length > 3 ? rows.length - 3 : 0;
       if (more) rows = rows.slice(0, 3);
       shownRows = { q, rows: empty ? [] : rows };
+      paintTask();
       if (empty) { const n = document.createElement('p'); n.className = 'note'; n.textContent = empty; box.replaceChildren(n); box.hidden = false; return; }
       box.replaceChildren(...rows.map(p => {
         const b = document.createElement('button'); b.className = 'place';
@@ -4025,12 +4240,15 @@
       if ($('hlOverlay').classList.contains('show')) closeHighlightDialog();
       else if (explainOpen()) closeExplain();
       else if ($('pinOverlay').classList.contains('show')) closePin();
+      else if ($('optSheet').classList.contains('open')) closeOptions();
+      else if ($('nearbySheet').classList.contains('open')) closeNearby();
       else if (view) closeSheet();
     });
     ['fromInput', 'destInput'].forEach(id => {
       $(id).addEventListener('keydown', (e) => {
         if (e.key !== 'Enter') return;
         e.preventDefault(); e.target.blur();
+        if (id === 'fromInput' && $('optSheet').classList.contains('open')) { closeOptions(); if (!plannedRoute && $('destInput').value.trim()) routeToQuery(); return; }
         const pasted = id === 'destInput' && window.ApexRouteImport && ApexRouteImport.parseMapsLink($('destInput').value);   // a maps link beats the top suggestion
         const top = !pasted && id === 'destInput' && shownRows.q === $('destInput').value.trim() && shownRows.rows[0];
         if (top) routeToPlace(top); else routeToQuery();
@@ -4043,12 +4261,13 @@
       e.currentTarget.classList.toggle('on', state.tapToRoute);
       if (state.tapToRoute) { closeSheet(); openPlan(false); toast(state.planField === 'fromInput' ? 'Tap the map where you want to start.' : 'Tap the map where you want to go.'); }
     });
-    // Loop lengths in the chosen units (U-22): 25/50/75 km in metric, kept as miles inside.
+    // Loop lengths in the chosen units (U-22), one unit on the whole dial (finding 6): 15-90 mi or 25-150 km, kept as miles inside.
     function labelLoops() {
-      document.querySelectorAll('[data-loop-mi]').forEach((b, i) => {
-        const km = [25, 50, 75][i], mi = [15, 30, 45][i];
+      document.querySelectorAll('#loopDetents [data-loop-mi]').forEach((b, i) => {
+        const km = [25, 50, 75, 100, 150][i], mi = [15, 30, 45, 60, 90][i];
         b.dataset.loopMi = String(ApexUnits.metric() ? km / 1.609344 : mi); b.textContent = ApexUnits.metric() ? `${km} km` : `${mi} mi`;
       });
+      if (plannedRoute) paintCardLoop(plannedRoute);
     }
     labelLoops();
     // The loop dial (REVIEW.md roadmap 6): a detent picks the length, the dial shows it, Find a loop builds it.
@@ -4082,55 +4301,98 @@
       if (b.dataset.loopMin) loop({ minutes: parseInt(b.dataset.loopMin, 10) }, $('findLoopBtn'));
       else loop(parseFloat(b.dataset.loopMi), $('findLoopBtn'));
     });
-    document.querySelectorAll('[data-explore-min]').forEach(b => b.addEventListener('click', () => exploreNear(parseInt(b.dataset.exploreMin, 10), b)));
-    document.querySelectorAll('[data-fun]').forEach(b => b.addEventListener('click', () => {
-      if (b.dataset.fun === funLevel || $('planPanel').classList.contains('busy')) return;
-      setFunLevel(b.dataset.fun); replanForLevel();
+    document.querySelectorAll('[data-explore-min]').forEach(b => b.addEventListener('click', () => {
+      if (loopBusy || $('planPanel').classList.contains('busy')) return;
+      document.querySelectorAll('[data-explore-min]').forEach((x) => x.setAttribute('aria-pressed', String(x === b)));
+      exploreNear(parseInt(b.dataset.exploreMin, 10), b);
     }));
+    $('deckNearby').addEventListener('click', openNearby);
+    $('planNearbyChip').addEventListener('click', openNearby);
+    $('nearbyClose').addEventListener('click', closeNearby);
+    document.querySelectorAll('[data-fun]').forEach(b => b.addEventListener('click', () => changeLevel(b.dataset.fun)));
     setFunLevel(funLevel);
-    document.querySelectorAll('[data-avoid]').forEach(b => b.addEventListener('click', async () => {
-      if ($('planPanel').classList.contains('busy') || loopBusy) return;   // a build in flight reads `avoid` as it goes
-      const k = b.dataset.avoid, was = avoid[k];
-      setAvoid({ [k]: !was });
-      const label = FunRoute.AVOID_LABELS[k];
-      if (!(await replanForLevel(was ? `Allowing ${label}` : `Avoiding ${label}`))) setAvoid({ [k]: was });   // the chips show what the route on screen avoids
+    document.querySelectorAll('[data-avoid]').forEach(b => b.addEventListener('click', () => {
+      const k = b.dataset.avoid;
+      setAvoid({ [k]: !avoid[k] });                                       // planned with once the sheet closes
     }));
     setAvoid({});
     function setRoadPrefs(next) {
       roadPrefs = { ...roadPrefs, ...next };
       try { localStorage.setItem(ROAD_PREFS, JSON.stringify(roadPrefs)); } catch (_) { /* storage off: this session only */ }
-      document.querySelectorAll('[data-pref-range]').forEach(r => { r.value = String(roadPrefs[r.dataset.prefRange] || 0); });
+      for (const k of ['tight', 'fast']) document.querySelectorAll(`[data-pref-${k}]`).forEach(b => { const on = Number(b.getAttribute(`data-pref-${k}`)) === (roadPrefs[k] || 0); b.classList.toggle('on', on); b.setAttribute('aria-checked', String(on)); });
       document.querySelectorAll('[data-prefer]').forEach(b => { const on = !!roadPrefs[b.dataset.prefer]; b.classList.toggle('on', on); b.setAttribute('aria-pressed', String(on)); });
-      paintPresets();
+      paintPresets(); paintOptChips();
     }
     // Prefer stamps (prefer.js, REVIEW.md 3.3): rank what the router gave toward measured, new-to-you or crew-shared roads
-    document.querySelectorAll('[data-prefer]').forEach(b => b.addEventListener('click', async () => {
-      if ($('planPanel').classList.contains('busy') || loopBusy) return;
-      const k = b.dataset.prefer, was = !!roadPrefs[k];
-      setRoadPrefs({ [k]: !was });
-      if (!(await replanForLevel(`${was ? 'Not preferring' : 'Preferring'} ${ApexPrefer.LABELS[k].toLowerCase()}`))) setRoadPrefs({ [k]: was });
+    document.querySelectorAll('[data-prefer]').forEach(b => b.addEventListener('click', () => {
+      const k = b.dataset.prefer;
+      setRoadPrefs({ [k]: !roadPrefs[k] });
     }));
-    // corner mix as balance sliders with three detents: fewer, any, more (REVIEW.md mockup 03-plan-more.html)
-    document.querySelectorAll('[data-pref-range]').forEach(r => r.addEventListener('change', async () => {
-      const k = r.dataset.prefRange, was = roadPrefs[k] || 0, now = Math.max(-1, Math.min(1, Math.round(Number(r.value))));
-      if ($('planPanel').classList.contains('busy') || loopBusy) { r.value = String(was); return; }
-      if (now === was) return;
-      setRoadPrefs({ [k]: now });
-      const what = `${now === 0 ? 'Any' : now > 0 ? 'More' : 'Fewer'} ${k === 'tight' ? 'hairpins' : 'fast sweepers'}`;
-      if (!(await replanForLevel(what))) setRoadPrefs({ [k]: was });
+    // the kinds of corners (was Corner mix, finding 9): Fewer, Any or More hairpins and fast bends, each value named
+    for (const k of ['tight', 'fast']) document.querySelectorAll(`[data-pref-${k}]`).forEach(b => b.addEventListener('click', () => {
+      setRoadPrefs({ [k]: Math.max(-1, Math.min(1, Number(b.getAttribute(`data-pref-${k}`)) || 0)) });
     }));
     setRoadPrefs({});
     // For this drive (route_ctx/driver.js; vocabulary.js passenger, litRoads, cyclists, tunnels): who's aboard and what to
     // favour, saved on the phone (apex.driverPrefs) and read by the route engine's driver provider. A change re-plans the
     // route on screen as Prefer does. The skill line says how technical a route is offered from your own drives (the Log).
     let driverPrefs = window.ApexRouteDriver ? ApexRouteDriver.load(localStorage) : {};
-    const paintDriverPrefs = () => document.querySelectorAll('[data-driver]').forEach(b => { const on = !!driverPrefs[b.dataset.driver]; b.classList.toggle('on', on); b.setAttribute('aria-pressed', String(on)); });
-    document.querySelectorAll('[data-driver]').forEach(b => b.addEventListener('click', async () => {
-      if (!window.ApexRouteDriver || $('planPanel').classList.contains('busy') || loopBusy) return;
-      const k = b.dataset.driver, was = !!driverPrefs[k];
-      driverPrefs = ApexRouteDriver.save(localStorage, { ...driverPrefs, [k]: !was }); paintDriverPrefs();
-      if (!(await replanForLevel(`${ApexRouteDriver.LABELS[k]} ${was ? 'off' : 'on'}`))) { driverPrefs = ApexRouteDriver.save(localStorage, { ...driverPrefs, [k]: was }); paintDriverPrefs(); }
+    const paintDriverPrefs = () => { document.querySelectorAll('[data-driver]').forEach(b => { const on = !!driverPrefs[b.dataset.driver]; b.classList.toggle('on', on); b.setAttribute('aria-pressed', String(on)); }); paintOptChips(); };
+    document.querySelectorAll('[data-driver]').forEach(b => b.addEventListener('click', () => {
+      if (!window.ApexRouteDriver) return;
+      const k = b.dataset.driver;
+      driverPrefs = ApexRouteDriver.save(localStorage, { ...driverPrefs, [k]: !driverPrefs[k] }); paintDriverPrefs();
     }));
+    // findings 4, 5: one Options sheet. Its switches set what the next plan uses; closing it (Done, a swipe down, the dim
+    // behind it) plans the route on the card again once, if anything changed, and what is on stays in view as small chips
+    // on the plan sheet and the card. A change that can't be planned (no signal) is put back, as before.
+    const optState = () => ({ avoid, prefs: roadPrefs, driver: driverPrefs, from: $('fromInput').value });
+    let optOpenedWith = null;
+    function paintOptChips() {
+      if (!window.ApexPlanOptions || !optChipsReady) return;                // (painted once the switches above are read)
+      const on = ApexPlanOptions.active(optState());
+      for (const [chipId, boxId] of [['planOptionsChip', 'planOptsOn'], ['cardOptionsChip', 'cardOptsOn']]) {
+        const chip = $(chipId), box = $(boxId);
+        chip.textContent = ApexPlanOptions.chipLabel(on);
+        chip.setAttribute('aria-label', on.length ? `Options: ${on.map((x) => x.aria).join(', ')}` : 'Options');
+        box.replaceChildren(...on.map((x) => { const b = document.createElement('button'); b.className = 'chip'; b.textContent = x.text; b.dataset.opt = x.key;
+          b.setAttribute('aria-label', `${x.aria}. Change in Options`); b.setAttribute('aria-haspopup', 'dialog'); b.addEventListener('click', openOptions); return b; }));
+      }
+    }
+    function openOptions() {
+      if (state.mode === 'live') return;
+      closeNearby();
+      optOpenedWith = { snap: ApexPlanOptions.snapshot(optState()), avoid: { ...avoid }, prefs: { ...roadPrefs }, driver: { ...driverPrefs } };
+      $('optSheet').classList.add('open');
+      requestAnimationFrame(() => $('optDone').focus());
+    }
+    // quiet: closed for something else (a loop to fit, a preset, Best roads nearby): no re-plan from here
+    async function closeOptions(quiet = false) {
+      const sheet = $('optSheet');
+      if (!sheet.classList.contains('open')) return;
+      sheet.classList.remove('open');
+      const was = optOpenedWith; optOpenedWith = null;
+      if (quiet || !was || !ApexPlanOptions.changed(was.snap, ApexPlanOptions.snapshot(optState()))) return;
+      await replanWithOptions(was);
+    }
+    async function replanWithOptions(was) {
+      const t = plannedRoute;
+      if (!t || state.mode === 'live') return;
+      for (let k = 0; k < 100 && ($('planPanel').classList.contains('busy') || loopBusy); k++) await new Promise((r) => setTimeout(r, 200));   // the plan in flight first
+      if (plannedRoute !== t) return;
+      const o = routeOptions;
+      if (o && o.kind === 'loop' && o.current === t) { loop(o.targetS ? { minutes: Math.round(o.targetS / 60) } : o.miles); return; }   // the loop again, with them
+      const fromChanged = $('fromInput').value.trim() && t.request && t.request.to && t.id === 'route_dest';
+      if (fromChanged && JSON.parse(was.snap).from !== $('fromInput').value.trim()) { routeToPlace({ label: String(t.name || '').replace(/^To /, ''), lat: t.request.to.lat, lon: t.request.to.lon }); return; }
+      if (!(await replanForLevel('With your options'))) {                // couldn't plan it: the switches show the route on screen
+        setAvoid(was.avoid); setRoadPrefs(was.prefs);
+        if (window.ApexRouteDriver) { driverPrefs = ApexRouteDriver.save(localStorage, was.driver); paintDriverPrefs(); }
+      }
+    }
+    $('planOptionsChip').addEventListener('click', openOptions);
+    $('cardOptionsChip').addEventListener('click', openOptions);
+    $('optDone').addEventListener('click', () => closeOptions());
+    optChipsReady = true;
     paintDriverPrefs();
     (async () => {
       try {
@@ -4148,7 +4410,13 @@
       if (op === 'calendar' && p.minutes) ApexIosContext.state.nextEventAt = p.next || null;
       if (op === 'music' && p.minutes) ApexIosContext.state.albumEndsAt = p.endsAt;
       toast(p.text); if ($('fitNote')) $('fitNote').textContent = p.text;   // the toast gives way to the loop's own; the note stays
-      if (p.minutes) loop({ minutes: p.minutes }, b);
+      if (p.minutes) { closeOptions(true); loop({ minutes: p.minutes }); }
+    }));
+    // an hour or two of driving, home again (R-16): from Options, as the dial is one unit (finding 6)
+    document.querySelectorAll('#optSheet [data-loop-min]').forEach(b => b.addEventListener('click', () => {
+      if (loopBusy) return;
+      closeOptions(true);
+      loop({ minutes: parseInt(b.dataset.loopMin, 10) });
     }));
     // Presets (plan_presets.js): this setup under a name, a stamp at the top of the sheet; tapping one sets it all at once.
     function paintPresets() {
@@ -4166,6 +4434,7 @@
             return;
           }
           const was = { fun: funLevel, avoid: { ...avoid }, prefs: { ...roadPrefs } };
+          closeOptions(true);
           setFunLevel(p.fun); setAvoid(Object.fromEntries(Object.keys(FunRoute.AVOID_LABELS).map(k => [k, !!p.avoid[k]]))); setRoadPrefs(p.prefs);
           if (!(await replanForLevel(p.name))) { setFunLevel(was.fun); setAvoid(was.avoid); setRoadPrefs(was.prefs); }
         });
@@ -4176,7 +4445,7 @@
       const name = await ApexConfirm.prompt('Name this setup', { action: 'Save', placeholder: 'Sunday loop, Night run', maxLength: 40 });
       if (!name || !name.trim()) return;
       const r = ApexPlanPresets.save(localStorage, { name, fun: funLevel, avoid, prefs: roadPrefs });
-      toast(r === 'saved' ? `${name.trim()} is a preset: it's at the top of the plan sheet.` : r === 'full' ? `You have ${ApexPlanPresets.MAX} presets. Tap one that is set to remove it.` : 'Couldn\u2019t save that preset.');
+      toast(r === 'saved' ? `${name.trim()} is a preset: it's under Presets in Options.` : r === 'full' ? `You have ${ApexPlanPresets.MAX} presets. Tap one that is set to remove it.` : 'Couldn\u2019t save that preset.');
       paintPresets();
     });
     paintPresets();
@@ -5373,7 +5642,7 @@
           return deckRow(title, 'On the twistiest roads nearby', 'Plan', `${title}, on the twistiest roads nearby. Plan it.`, () => { if (!loopBusy) $('findLoopBtn').click(); });
         }
         const r = row.r, why = YR.roadLine(r, deckLong);
-        return deckRow(r.name, why, 'Drive', `${r.name}: ${why}. Drive it again.`, () => driveAgain(r.id, r.name), driveRoad(r.id));
+        return deckRow(r.name, why, 'Plan', `${r.name}: ${why}. Plan it again.`, () => driveAgain(r.id, r.name), driveRoad(r.id));
       });
       $('yourRoads').replaceChildren(...rows);
       scheduleNudge();
@@ -5397,7 +5666,7 @@
         if (glyph.dataset.road) { glyph.dataset.road = ''; glyph.innerHTML = LOOP_GLYPH; }
       }
       if (s) {
-        $('loopSuggestTitle').textContent = s.title; $('loopSuggestWhy').textContent = s.reason; $('loopSuggestKey').textContent = s.kind === 'crew' ? 'Go' : 'Drive';
+        $('loopSuggestTitle').textContent = s.title; $('loopSuggestWhy').textContent = s.reason; $('loopSuggestKey').textContent = 'Plan';   // finding 8: it plans; Start goes
         const label = `${s.title}. ${s.reason}. ${s.kind === 'crew' ? 'Directions to the meeting point.' : 'Route it.'}`;
         $('loopSuggestGo').setAttribute('aria-label', label); body.setAttribute('aria-label', road ? `${s.title}. ${s.reason}. Show it on the map.` : label);
         return;
@@ -6307,10 +6576,12 @@
     // and the card says how much it climbs. A long trip or no tiles: unknown, nothing shown.
     async function attachProfile(t) {
       $('routeCardClimb').hidden = true;
-      if (!t || t.elev || !window.ApexStages || !ApexStages.profile) { if (t && t.elev) paintClimb(t); return; }
+      const none = () => { if (!t) return; t.profileDone = true; if (plannedRoute === t && !t.elev) $('routeCardProfile').classList.add('none'); };
+      if (!t || t.elev || !window.ApexStages || !ApexStages.profile) { if (t && t.elev) paintClimb(t); else none(); return; }
       let elev = null;
       try { elev = await RouteLoading.optional(ApexStages.profile(t), 15000); } catch (_) { elev = null; }
-      if (!elev || plannedRoute !== t) return;
+      if (!elev) { none(); return; }
+      if (plannedRoute !== t) return;
       t.elev = elev;
       paintClimb(t);
       if (track === t) drawScrubber();
@@ -6323,7 +6594,8 @@
         const breaks = (Array.isArray(t.steps) ? t.steps : []).map(s => Math.round((s.m || 0) / 5));
         t.character = ApexRoadPage.character(Core, t, breaks);
         const line = ApexRoadPage.characterLine(t.character, (m) => ApexUnits.long(m, 1));
-        $('routeCardCharacter').textContent = line ? ApexRouteCard.factText(`Ahead: ${line}`) : '';   // U-134: no unit alone on a line
+        // U-134: no unit alone on a line; finding 9: the kinds of road in plain words ("S-bends", not "Esses")
+        $('routeCardCharacter').textContent = line ? ApexRouteCard.factText(`Ahead: ${VOC ? VOC.plainRoads(line) : line}`) : '';
         $('routeCardCharacter').hidden = !line;
       } catch (_) { /* unknown: nothing said */ }
     }
@@ -7218,13 +7490,13 @@
     $('startMore').addEventListener('click', () => {
       if (state.mode === 'live') return;
       const back = el('div', { className: 'overlay dim show start-sheet' });
-      back.setAttribute('role', 'dialog'); back.setAttribute('aria-modal', 'true'); back.setAttribute('aria-label', 'Start');
+      back.setAttribute('role', 'dialog'); back.setAttribute('aria-modal', 'true'); back.setAttribute('aria-label', 'Ways to go');
       const close = () => { back.remove(); document.removeEventListener('keydown', esc); };
       const esc = (e) => { if (e.key === 'Escape') close(); };
-      const drive = el('button', { className: 'rec-key', disabled: locDenied }, el('i'), 'Drive');
+      const drive = el('button', { className: 'rec-key', disabled: locDenied }, el('i'), 'Just drive');
       drive.addEventListener('click', () => { close(); startDrive(); });
       const name = (accountMe && accountMe.handle ? `@${accountMe.handle}'s convoy` : 'Convoy');
-      back.append(el('div', { className: 'card-sheet' }, el('h2', { textContent: 'Start' }), drive,
+      back.append(el('div', { className: 'card-sheet' }, el('h2', { textContent: 'Ways to go' }), drive,
         btn('Convoy now', () => { close(); needSocial().then(() => { if (convoy) convoy.now(name); else toast('The convoy isn\u2019t available here.'); }); }, 'ink-btn'),
         el('p', { textContent: 'A convoy: drive together, live, for up to two hours. Friends join with the code on your screen; nothing is kept. A crew\u2019s run starts its convoy from the drive\u2019s card.' }),
         btn('Cancel', close, 'linkbtn')));

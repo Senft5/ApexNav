@@ -4,6 +4,80 @@ Decisions Claude made for you, newest first. Each one says what was decided, why
 you reach one you've seen. If you disagree with a call, say so and it gets reversed; nothing here is hard to undo unless
 it says so. Things only you can do are in docs/OWNER_TODO.md.
 
+## 2026-11-04 (evening): The plan flow, simpler
+
+You said planning a route was "clunky and confusing". An audit on production (iPhone 15 size) found eleven problems; all
+are fixed. Nothing was removed: every option moved to one place. Before and after screenshots are in the session's
+scratchpad (planux/contact_sheet.png and planux/after/contact_sheet_after.png).
+- **The card says what the plan is doing.** A progress line ("Finding fun roads · 2 of 2") runs on the card. When the
+  ranked route replaces the first one, the card says so in its own numbers: "Better route found: +8 min, 52 more
+  corners". If it keeps the first one, it says "Checked 6 routes: this one is the best". Undo: `cardNote` in cockpit.js.
+- **Start doesn't move.** Start and Fly-through are the card's foot, outside its scroll. The elevation profile's space
+  is kept before it loads, and when no heights come it reads "Heights --". A re-plan keeps the card's scroll. Undo:
+  `.plan-foot` in index.html, then put `#routeGo` back inside `#routeCard`.
+- **The card opens at half height.** Drag it up for the full card, or down for half and then the bar. Undo: the
+  `.plan.open.routed:not(.full)` height rule, and the `card` branch of the bar's drag.
+- **The level (Quick / Fun / Long way) lives only on the route card.** Switching re-ranks the routes the plan already
+  found whenever they cover the new level. A plan at Fun covers Quick, and a plan at Long way covers both. Switching
+  up from Fun to Long way still plans again, because longer detours need routes of their own. The card says which it
+  did. Undo: `changeLevel`/`rerank`, and the Roads switch back in the plan sheet.
+- **Loops have a level too.** Quick favours the length you asked for. Long way gives more for corners and lets the
+  length run (fun_route.js `loopLevelAdjust`; Fun ranks loops exactly as before). The loop card shows its length in your
+  units and up to three loops to pick from. Undo: `LOOP_LEVEL`.
+- **One Options sheet** replaces More's four groups. It opens from the chip next to Best roads nearby, or from the card.
+  It holds:
+  - Avoid ✕;
+  - Prefer ✓ (the old Prefer and For this drive together);
+  - Kinds of corners (Hairpins and Fast bends: Fewer / Any / More);
+  - Start from;
+  - Loop to fit (1 hour, 2 hours, and in the app My free time and This album);
+  - Presets and Open GPX.
+
+  Switches no longer re-plan one by one. Closing the sheet re-plans once, and only if something changed. Undo:
+  `closeOptions`.
+- **What is on stays in view.** Small chips sit on the plan sheet and the card ("✕ Highways", "✓ Passenger aboard"),
+  and any chip opens Options. Undo: `paintOptChips`.
+- **Tunnels is under Prefer, not Avoid.** Your brief listed it under Avoid, but the route engine *favours* tunnels
+  (route_ctx/driver.js), so under Avoid it would have said the opposite of what it does. Undo: move the button.
+- **The 1 h / 2 h loop stops moved from the dial to Options.** The dial now uses one unit, yours: 15 to 90 mi or 25 to
+  150 km. Undo: the `#loopDetents` markup and `labelLoops`.
+- **The main key follows the task.** With nothing typed it reads Find a loop. Once you type, the loop dial gives way and
+  the key reads "Go to <the first place>".
+- **Best roads nearby (was Explore in More)** is a chip under Where to? on the map and on the plan sheet. It opens a
+  list sheet with named columns: Road, Good corners, Length, Drive there. It shows its last look for 10 minutes.
+- **One name for go: Start.**
+  - The card's "Drive it" is Start, and the bar's key with a route planned reads Start too.
+  - With no route, the bar's red key is a smaller ink "Just drive", and its sheet's Drive is Just drive.
+  - The map's deck keys that only plan (Drive, Go) read Plan.
+  - Preview is Fly-through.
+  - Undo: vocabulary.js `start`, `justDrive`, `flyThrough`.
+- **Plain words for a new driver** (vocabulary.js):
+  - Long way (was Max fun);
+  - Kinds of corners (was Corner mix);
+  - ✕ / ✓ (was "stamped");
+  - Curvy and Flowing on the dials (were TWIST and FLOW);
+  - S-bends, Tight corners, Fast bends and Hairpins in the card's Ahead line (were Esses, Technical, Flowing sweepers
+    and Switchbacks; apex_core's names inside are unchanged).
+
+  Sight and Bank keep their instrument names, because the CarPlay screens share them and their one-number test guards
+  them. The vocabulary gives each a plain sentence. The route options' tiles count every corner, as the card's CORNERS
+  number does ("8 min quicker · 20 corners"), so a route with 20 corners no longer reads "53 fewer good corners".
+- **Swipe the card sideways** to move between the alternatives (or tap their tiles).
+- **On the website, a re-plan whose fresh GPS fix fails starts from the last known position** instead of saying
+  "Couldn't get your location". The app already did this. Undo: the one line in `locate()`.
+- Taps (journeys measured in e2e/smoke.js "plan flow" (a)–(g)):
+
+  | Journey | Before | After |
+  |---|---|---|
+  | A destination | 3 | 3 |
+  | A loop | 2 from the map's card (4 through the sheet) | 2 |
+  | Best roads nearby | 5, with scrolling | 3 |
+  | Change level | 1, then a 10 s re-plan | 1, instant when the found routes cover it |
+  | Pick an alternative | 1 | 1 tap or 1 swipe |
+
+- The UI tests (UITests/*.swift) and tools/app_tour.js tap the new names. Only string literals changed. CarPlay
+  templates are unchanged; the car's route choices now also list a loop's alternatives.
+
 ## 2026-11-04 (later still): The route engine, faster
 
 - **Finding good-road stages runs off the main thread** (a Web Worker, web/stages_worker.js) and is cached 10 minutes

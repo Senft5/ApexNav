@@ -107,26 +107,46 @@
       + `<b>${finite(n) ? n : '--'}</b><span>${esc(label)}</span></div>`;
   }
 
+  /** Every corner on a candidate's track (its `t.events`), the count the card's CORNERS number shows; null when unknown. */
+  function cornersOf(c) {
+    if (c && c.t && Array.isArray(c.t.events)) return c.t.events.filter((e) => e && e.type === 'corner').length;
+    if (c && Array.isArray(c.events)) return c.events.filter((e) => e && e.type === 'corner').length;
+    return c && finite(c.corners) ? c.corners : null;
+  }
+  const cornerWord = (n) => `${n} corner${n === 1 ? '' : 's'}`;
+
   /**
-   * Route options as tiles (panel round 2, SO-1): the time big, and what differs from the picked one under it ("this one",
-   * "7 min quicker · 6 fewer good corners"). No "Fun 45": Fun is the route style (Quick / Fun / Max fun), never a number,
-   * and that score appeared on no dial (web/vocabulary.js). Good corners are the fun score's (fun_route.js `good`, the
-   * deck's "11 good corners"); a difference is said only when both are known.
+   * Route options as tiles (panel round 2, SO-1): the time big, and under it how it differs in time from the picked one
+   * and its own corners ("8 min quicker · 27 corners"). No "Fun 45": Fun is the route style (Quick / Fun / Long way), never
+   * a number (web/vocabulary.js). The plan flow (finding 9): a tile counts its corners as the card's CORNERS number does,
+   * never a difference in good corners ("53 fewer good corners" beside a card of 80 corners, for a route with 20).
    */
   function tiles(list, picked) {
     const p = list && list[picked];
-    const good = (c) => (c && c.fun && finite(c.fun.good) ? c.fun.good : null);
     return (list || []).map((c, i) => {
       const t = duration(c && c.timeS), title = t ? (t.unit === 'h' ? t.value : `${t.value} min`) : '--';
-      if (i === picked) return { title, sub: 'this one' };
+      const n = cornersOf(c), corners = n == null ? null : cornerWord(n);
+      if (i === picked) return { title, sub: ['this one', corners].filter(Boolean).join(' · ') };
       const dm = p && finite(p.timeS) && finite(c && c.timeS) ? Math.round((c.timeS - p.timeS) / 60) : null;
       const time = dm == null ? null : dm < 0 ? `${-dm} min quicker` : dm > 0 ? `+${dm} min` : 'same time';
-      const gc = good(c), gp = good(p), dg = gc != null && gp != null ? gc - gp : null;
-      const corners = !dg ? null : `${Math.abs(dg)} ${dg > 0 ? 'more' : 'fewer'} good corner${Math.abs(dg) === 1 ? '' : 's'}`;
       return { title, sub: [time, corners].filter(Boolean).join(' · ') || '--' };
     });
   }
 
-  const api = { duration, stats, profile, dial, count, tiles, shape, factText, alongGlyph };
+  /**
+   * The plan flow (finding 1): the card says so when the ranked route replaces the first one, and why, in the card's own
+   * numbers: "Better route found: +8 min, 52 more corners". `now` and `was` are the two routes on the card ({ timeS, events }
+   * or a candidate); `why` the engine's why line for the new one, said when time and corners don't tell the difference.
+   */
+  function swapNote(now, was, why = null, head = 'Better route found') {
+    const dm = finite(now && now.timeS) && finite(was && was.timeS) ? Math.round((now.timeS - was.timeS) / 60) : null;
+    const a = cornersOf(now), b = cornersOf(was), dc = a != null && b != null ? a - b : null;
+    const bits = [dm ? (dm > 0 ? `+${dm} min` : `${-dm} min quicker`) : null,
+      dc ? `${Math.abs(dc)} ${dc > 0 ? 'more' : 'fewer'} corner${Math.abs(dc) === 1 ? '' : 's'}` : null].filter(Boolean);
+    if (!bits.length && why) bits.push(String(why).charAt(0).toLowerCase() + String(why).slice(1));
+    return `${head}${bits.length ? `: ${bits.join(', ')}` : ''}`;
+  }
+
+  const api = { duration, stats, profile, dial, count, tiles, cornersOf, swapNote, shape, factText, alongGlyph };
   if (typeof module !== 'undefined' && module.exports) module.exports = api; else root.ApexRouteCard = api;
 })(typeof window !== 'undefined' ? window : globalThis);

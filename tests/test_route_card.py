@@ -13,6 +13,7 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 RUNNER = r"""
 const R = require(process.argv[1] + '/web/route_card.js');
+const ev = (n) => ({ events: Array.from({ length: n }, (_, k) => ({ type: 'corner', dist_m: k * 10 })).concat([{ type: 'bump', dist_m: 5 }]) });
 const F = require(process.argv[1] + '/web/fun_route.js');
 const mi = (m) => `${(m / 1609.344).toFixed(1)} mi`;
 const dist = [], elev = [];
@@ -33,7 +34,11 @@ const out = {
   noShape: [R.shape({ dist: [0, 10] }, (x) => F.score(x, [])), R.shape(null)],
   fact: R.factText('Ahead: Esses at 2.4 mi · Technical at 3.4 and 8.5 mi'),
   glyphs: ['1 café', '2 viewpoints · 1 café', 'No fuel for the first 40 mi', ''].map(R.alongGlyph),
-  tiles: R.tiles([{ fun: { fun: 98, good: 30 }, timeS: 10080 }, { fun: { fun: 80, good: 24 }, timeS: 9360 }, { fun: { fun: 100, good: 31 }, timeS: 12660 }, { fun: null, timeS: null }, { fun: { fun: 70, good: 30 }, timeS: 10080 }], 0),
+  tiles: R.tiles([{ fun: { fun: 98, good: 30 }, timeS: 10080, t: ev(80) }, { fun: { fun: 80, good: 73 }, timeS: 9360, t: ev(20) }, { fun: { fun: 100, good: 31 }, timeS: 12660, t: ev(1) },
+    { fun: null, timeS: null }, { fun: { fun: 70, good: 30 }, timeS: 10080, t: ev(80) }], 0),
+  // the plan flow (finding 1): the card says the ranked swap in its own numbers
+  swap: [R.swapNote({ timeS: 3540, events: ev(80).events }, { timeS: 3060, events: ev(28).events }), R.swapNote({ timeS: 3000, t: ev(10) }, { timeS: 3180, t: ev(11) }),
+    R.swapNote({ timeS: 3000, t: ev(10) }, { timeS: 3000, t: ev(10) }, 'Avoids 2.2 mi of side streets'), R.swapNote({ timeS: 3000 }, { timeS: 3000 })],
 };
 console.log(JSON.stringify(out));
 """
@@ -65,11 +70,20 @@ def test_dials_show_unknown_honestly(out):
 
 
 def test_option_tiles_are_relative_to_the_pick(out):
-    # SO-1 (panel round 2): no "Fun 98" score on a tile (Fun is the route style); the time, and what differs from the pick
-    assert out["tiles"] == [{"title": "2:48", "sub": "this one"}, {"title": "2:36", "sub": "12 min quicker · 6 fewer good corners"},
-                            {"title": "3:31", "sub": "+43 min · 1 more good corner"}, {"title": "--", "sub": "--"},
-                            {"title": "2:48", "sub": "same time"}]
+    # SO-1 (panel round 2): no "Fun 98" score on a tile (Fun is the route style); the time, and what differs from the pick.
+    # The plan flow (finding 9): each tile counts its own corners as the card's CORNERS number does (every corner, the bump
+    # not), never "53 fewer good corners" beside a card of 80 for a route that has 20
+    assert out["tiles"] == [{"title": "2:48", "sub": "this one · 80 corners"}, {"title": "2:36", "sub": "12 min quicker · 20 corners"},
+                            {"title": "3:31", "sub": "+43 min · 1 corner"}, {"title": "--", "sub": "--"},
+                            {"title": "2:48", "sub": "same time · 80 corners"}]
     assert not any("Fun" in t["title"] + t["sub"] for t in out["tiles"])
+    assert not any("fewer good" in t["sub"] or "more good" in t["sub"] for t in out["tiles"])
+
+
+def test_the_card_says_the_ranked_swap_and_why(out):
+    # finding 1: "Better route found: +8 min, 52 more corners", in the card's own numbers; the why line when they're equal
+    assert out["swap"] == ["Better route found: +8 min, 52 more corners", "Better route found: 3 min quicker, 1 fewer corner",
+                           "Better route found: avoids 2.2 mi of side streets", "Better route found"]
 
 
 def test_twist_and_flow_come_from_the_geometry_of_any_track(out):
