@@ -305,3 +305,30 @@ phone's reader); tests/test_graph_tiles.py round-trips through both. What a rout
     Every pick at least as good as production's; warm ranked 0.8-1.5 s. Not met: the warm first route is still 20-70 ms
     slower than cold in 4 runs (the worker answers the first question 70-90 ms after Enter in a warm session, 5-100 ms
     cold; not found yet).
+- 2026-11-05 (night): the speed round (branch claude/own-routing-fast):
+  - The card is final on the tile ranking with the time-dependent context as cached for the area (the forecast not
+    waited for); the fresh context (weather, events, works, deer) re-ranks afterwards and swaps the route only for a
+    gain of 5 points, the card saying "Weather ahead: switched to ..." (cockpit.js ownRefine).
+  - The first route comes from the tiles under the straight line only (a small view of its own); the preload loads
+    one tile at a time, nearest first, and waits while a plan is answered; tiles are served as text so the edge
+    compresses them (brotli); coverage is read on the page from index.json.
+  - Best roads nearby from our tiles (graph_router.js explore: quality x corners chained into stages, timed by one
+    search); via-way restrictions applied in the search (v3 tiles' restrictionsVia).
+  - Preview, 10 runs (ms from Enter; first route drawn / final card; cold = a fresh profile's first plan):
+
+    | case | cold | warm | ours | prod |
+    |---|---|---|---|---|
+    | owner1 quick | 839 / 2318 | 494 / 1096 | -26.0 | -64.8 |
+    | owner1 fun | 989 / 2312 | 459 / 1101 | -20.3 | -32.6 |
+    | owner1 max | 437 / 2623 | 673 / 2263 | -13.6 | -29.8 |
+    | subdivision fun | 587 / 2340 | 286 / 989 | -34.1 | -34.3 |
+    | subdivision4 fun | 411 / 1822 | 314 / 932 | -49.6 | -50.1 |
+    | northgate fun | 682 / 3286 | 753 / 1993 | -37.0 | -39.0 |
+    | colerain fun | 657 / 2426 | 552 / 1425 | -8.9 | -40.2 |
+    | harrison fun | 478 / 4824 | 1002 / 2911 | 20.0 | 13.7 |
+    | colerain quick | 614 / 2509 | 723 / 1695 | -8.9 | over budget |
+    | colerain max | 343 / 3011 | 498 / 1298 | -4.5 | -34.2 |
+
+    Cold first route under 1 s in all 10; every pick at least as good as production's. Not met: the final card under
+    1 s warm (5 of 10) and under 1.5 s cold (0 of 10): the preload (17 MB, 5-6 s on this network) still loads during
+    the first plans, and the context and track build wait on the page behind it.

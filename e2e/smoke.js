@@ -711,6 +711,24 @@ flow('own routing: where our graph tiles cover the trip, our route wins and Valh
   } finally { graphDir = null; }
 }, { geolocation: { latitude: 39.155, longitude: -84.615 }, permissions: ['geolocation'] });
 
+flow('own routing: best roads nearby from our tiles, timed by our router (no map stage search, no Valhalla matrix)', async (page, base) => {
+  graphDir = graphFixture();
+  try {
+    let matrix = 0, discovered = 0;
+    await page.route('https://valhalla1.openstreetmap.de/**', (route) => { if (route.request().url().includes('sources_to_targets')) matrix++; return route.abort(); });
+    await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); } catch (_) {} });
+    await page.goto(base + '/index.html');
+    await page.waitForFunction(() => window.apexDebug && window.apexDebug.map && window.ApexStages);
+    await page.evaluate(() => { const d = ApexStages.discover; ApexStages.discover = (...a) => { window.__discovered = (window.__discovered || 0) + 1; return d(...a); }; });
+    await page.click('#deckNearby');
+    await page.waitForFunction(() => window.apexDebug.lastExploreOwn != null && !document.getElementById('nearbyStatus').classList.contains('busy'), null, { timeout: 20000 });
+    const r = await page.evaluate(() => ({ own: window.apexDebug.lastExploreOwn, rows: document.querySelectorAll('#exploreList .nb-go').length, status: document.getElementById('nearbyStatus').textContent, discovered: window.__discovered || 0 }));
+    discovered = r.discovered;
+    check(r.own > 0 && r.rows > 0, 'roads from our tiles in the list: ' + JSON.stringify(r));
+    check(matrix === 0 && discovered === 0, `no Valhalla matrix (${matrix}) and no map stage search (${discovered})`);
+  } finally { graphDir = null; }
+}, { geolocation: { latitude: 39.205, longitude: -84.55 }, permissions: ['geolocation'] });
+
 flow('own routing: with no graph tiles for the trip, Valhalla plans it as before', async (page, base) => {
   graphDir = 'none';                                              // the shipped Cincinnati tiles cover this trip: hide them
   let out;
@@ -4893,13 +4911,22 @@ flow('plan flow (e, f) a level change and an alternative are one tap or swipe ea
   check(await page.evaluate(() => document.querySelectorAll('[data-fun]').length === 3 && !!document.querySelector('#routeCard [data-fun]')), 'the level has one home, the route card');
   const level = () => page.evaluate(() => [...document.querySelectorAll('[data-fun]')].find((b) => b.getAttribute('aria-checked') === 'true').textContent);
   check(await level() === 'Fun', 'planned at Fun');
+  // (the browser's own scroll anchoring off, as CI's Chromium in effect had it: only the app keeps the switch in place)
+  await page.addStyleTag({ content: '#planBody { overflow-anchor: none !important; }' });
   // a level change keeps the card's scroll and Start's place, and asks the router nothing
   await page.evaluate(() => { const b = document.getElementById('planBody'); b.scrollTop = Math.min(80, b.scrollHeight - b.clientHeight); });
+  // (diagnostics for CI: where the scroller and the sheet are, and how tall the card is)
+  const geo = () => page.evaluate(() => { const b = document.getElementById('planBody'), p = document.getElementById('planPanel'), c = document.getElementById('routeCard'), r = b.getBoundingClientRect(), pr = p.getBoundingClientRect();
+    return { bodyTop: Math.round(r.top), bodyH: Math.round(r.height), panelTop: Math.round(pr.top), panelH: Math.round(pr.height), panelCls: p.className, cardH: c ? c.scrollHeight : null, bodySH: b.scrollHeight }; });
   const before = await page.evaluate(() => ({ sc: document.getElementById('planBody').scrollTop, y: document.getElementById('routeDriveBtn').getBoundingClientRect().top, n: apexDebug.track.lat.length }));
+  const geo0 = await geo();
   const routed = asked.length, t0 = taps.n;
   await page.evaluate(() => document.querySelector('#routeCardFun [data-fun="quick"]').scrollIntoView({ block: 'nearest' }));
   const sc0 = await page.evaluate(() => document.getElementById('planBody').scrollTop);
   const sw0 = await page.evaluate(() => document.getElementById('routeCardFun').getBoundingClientRect().top);
+  // where the switch is the moment the finger lands (CI's sheet can still be settling between the line above and the tap,
+  // and the tap itself may scroll the switch into view): that, not sw0, is where it must stay
+  await page.evaluate(() => { window.__swTap = null; window.addEventListener('pointerdown', () => { window.__swTap = document.getElementById('routeCardFun').getBoundingClientRect().top; }, { capture: true, once: true }); });
   await tap('#routeCardFun [data-fun="quick"]', 'Quick');
   await page.waitForFunction(() => /^Quick: /.test(document.getElementById('routeProgress').textContent), null, { timeout: 5000 });
   const after = await page.evaluate(() => ({ sc: document.getElementById('planBody').scrollTop, y: document.getElementById('routeDriveBtn').getBoundingClientRect().top, n: apexDebug.track.lat.length,
@@ -4909,11 +4936,31 @@ flow('plan flow (e, f) a level change and an alternative are one tap or swipe ea
   check(/of the \d+ routes found\)$/.test(after.note) && after.n !== before.n, 'the straight road is Quick\'s pick, and the card says why: ' + JSON.stringify(after));
   // the scroll is kept, never back to the top: the switch you tapped stays under your finger (the card above it may be
   // shorter for the new route, and the scroll follows it), and Start doesn't move
-  check(Math.abs(after.y - before.y) <= 1 && after.sc > 0 && Math.abs(after.sw - sw0) <= 2, `a level change keeps Start and the scroll where they were: ${JSON.stringify({ before, sc0, sw0, after })}`);
+  const geo1 = await geo();
+  const swTap = await page.evaluate(() => window.__swTap);
+  check(Math.abs(after.y - before.y) <= 1 && after.sc > 0 && swTap != null && Math.abs(after.sw - swTap) <= 2, `a level change keeps Start and the scroll where they were: ${JSON.stringify({ before, sc0, sw0, swTap, after, geo0, geo1 })}`);
   check(taps.n - t0 === 1, 'a level change is one tap');
+  // the same with the card shrinking late: 90 px above the switch go away 400 ms after the level change (as the card's
+  // slower parts settle on a slow machine); the switch must still stay under the finger
+  await page.evaluate(() => { const f = document.getElementById('routeCardFun'), sp = document.createElement('div'); sp.id = 'lateSpacer'; sp.style.height = '90px'; f.parentNode.insertBefore(sp, f); });
+  // (you scroll: the wheel, then the scroll; that ends the last change's hold)
+  await page.evaluate(() => { const b = document.getElementById('planBody'); b.dispatchEvent(new WheelEvent('wheel', { bubbles: true })); b.scrollTop = Math.min(160, b.scrollHeight - b.clientHeight); });
+  // and the page scrolls the card on its own meanwhile, as CI's did: the hold puts it back
+  await page.evaluate(() => setTimeout(() => { document.getElementById('planBody').scrollTop += 40; }, 250));
+  const swL0 = await page.evaluate(() => document.getElementById('routeCardFun').getBoundingClientRect().top);
+  await page.evaluate(() => setTimeout(() => { const sp = document.getElementById('lateSpacer'); if (sp) sp.remove(); }, 400));
+  await tap('#routeCardFun [data-fun="fun"]', 'Fun');
+  await page.waitForFunction(() => /^Fun: /.test(document.getElementById('routeProgress').textContent) && !document.getElementById('lateSpacer'), null, { timeout: 5000 });
+  await page.waitForTimeout(150);
+  const swL1 = await page.evaluate(() => document.getElementById('routeCardFun').getBoundingClientRect().top);
+  check(Math.abs(swL1 - swL0) <= 2, `the switch stays put when the card shrinks late: ${swL0} -> ${swL1}`);
+  await tap('#routeCardFun [data-fun="quick"]', 'Quick');
+  await page.waitForFunction(() => /^Quick: /.test(document.getElementById('routeProgress').textContent), null, { timeout: 5000 });
   await tap('#routeCardFun [data-fun="fun"]', 'Fun');
   await page.waitForFunction(() => /^Fun: /.test(document.getElementById('routeProgress').textContent), null, { timeout: 5000 });
   check(asked.length === routed, 'and back to Fun, again from what was found');
+  // you scroll down to the options (the wheel first, as a hand would): that ends the level change's hold on the scroll
+  await page.evaluate(() => document.getElementById('planBody').dispatchEvent(new WheelEvent('wheel', { bubbles: true })));
   // an alternative: one swipe sideways on the card (finding 11), then back with a tap on its tile
   const tiles = () => page.evaluate(() => [...document.querySelectorAll('#routeCardOptions .rc-tile')].map((t) => t.getAttribute('aria-checked')).join());
   check(await tiles() === 'true,false', 'two routes offered, the first picked: ' + await tiles());
@@ -5142,6 +5189,7 @@ flow('safe areas: the Dynamic Island, the home indicator and the rounded corners
     const newsId = require('../web/whats_new.js').NEWS.id;
     if (!ctxOpts.news) await ctx.addInitScript((id) => { try { if (!localStorage.getItem('apex.newsSeen')) localStorage.setItem('apex.newsSeen', id); } catch (_) {} }, newsId);
     const page = await ctx.newPage();
+    if (process.env.THROTTLE) { const c = await ctx.newCDPSession(page); await c.send('Emulation.setCPUThrottlingRate', { rate: Number(process.env.THROTTLE) }); }
     const errors = [];
     page.on('pageerror', (e) => errors.push(String(e && e.stack || e)));
     // Content-Security-Policy (tools/csp.py, IDEAS Z-11): anything the policy blocks is a failure, so a new host can't slip in.
