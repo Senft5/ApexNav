@@ -332,6 +332,32 @@
     return assemble(v, r, obj, { level, role: 'quickest', a: 0 });
   }
   /**
+   * The quickest way from `from` through req.via (in order) to `to`: each leg's search starts on the edge the last one
+   * arrived on, driven on (no U-turn at a via), as the loops' legs are joined. A reroute along the planned route's points,
+   * a stage's or a shared road's points, or a drive again, on our tiles (offline as well as on). Throws when a point has
+   * no road near it or a leg has no way.
+   */
+  function through(v, req) {
+    const level = levels()[req.level] ? req.level : 'fun', obj = objective(v, req);
+    let prev = snap(v, req.from.lat, req.from.lon);
+    if (!prev.length) throw new Error('no road near the start');
+    const sc = startCostFor(v, req.from.heading != null ? req.from.heading : req.heading);
+    const legs = [], pts = [...(req.via || []), req.to];
+    let at = req.from;
+    for (const [k, p] of pts.entries()) {
+      const dst = snap(v, p.lat, p.lon);
+      if (!dst.length) { if (k === pts.length - 1) throw new Error('no road near the end'); continue; }   // a via off the network: passed by
+      const res = search(v, obj, prev, dst, 0, null, { ...(!legs.length && sc ? { startCost: sc } : {}), ellipse: ellipseFor(at, p, 'quick') });
+      if (!res) throw new Error('no route');
+      legs.push(res);
+      prev = [{ edge: res.edges[res.edges.length - 1], frac: res.ft, lat: 0, lon: 0 }];
+      at = p;
+    }
+    const edges = [];
+    for (const [k, l] of legs.entries()) for (const [m, e] of l.edges.entries()) if (!(k > 0 && m === 0 && edges[edges.length - 1] === e)) edges.push(e);
+    return assemble(v, { edges, fs: legs[0].fs, ft: legs[legs.length - 1].ft }, obj, { level, role: 'through', a: 0 });
+  }
+  /**
    * The tiles' own scores along any line (ours, or the router's routes in the same pool): each sample lands on the
    * nearest edge within 20 m heading the same way (within 60°). Per sample: quality, scenery and conf (0..1, NaN where
    * no edge or unknown), the posted limit (or the class estimate, flagged apart), the road class and the edge's flags.
@@ -1245,6 +1271,14 @@
           if (!r) { v = await viewFor(tilesFor(msg.from, msg.to, msg.level)); r = quickest(v, msg); }   // the line alone had no way
           return { id, result: { route: plain(r), loadMs: t1 - t0, ms: Date.now() - t1, tiles: v.keys } };
         }
+        if (type === 'through') {
+          const all = [msg.from, ...(msg.via || []), msg.to], pad = 3000;
+          const s = all.reduce((m, p) => ({ lat: Math.min(m.lat, p.lat), lon: Math.min(m.lon, p.lon) }), all[0]), n = all.reduce((m, p) => ({ lat: Math.max(m.lat, p.lat), lon: Math.max(m.lon, p.lon) }), all[0]);
+          const sw = tileOf(s.lat - pad / 110540, s.lon - pad / (111320 * Math.cos(s.lat * RAD))), ne = tileOf(n.lat + pad / 110540, n.lon + pad / (111320 * Math.cos(n.lat * RAD))), box = [];
+          for (let i = sw.i; i <= ne.i; i++) for (let j = sw.j; j <= ne.j; j++) box.push({ i, j });
+          const t0 = Date.now(), v = await viewFor(box);
+          return { id, result: { route: plain(through(v, msg)), ms: Date.now() - t0, tiles: v.keys } };
+        }
         if (type === 'score') {
           const lines = msg.lines || [];
           const pts = lines.flatMap((l) => (l.lat.length ? [{ lat: l.lat[0], lon: l.lon[0] }, { lat: l.lat[l.lat.length - 1], lon: l.lon[l.lon.length - 1] }] : []));
@@ -1286,15 +1320,24 @@
           // scope 'first': with the corridor's tiles not all in yet, the plan is made on those under the straight line
           // (as the first route was) and says so (partial); the page asks again for the whole corridor meanwhile
           const corridor = tilesFor(msg.from, msg.to, msg.level), have = await keys();
-          const missing = corridor.filter((t) => (!have.size || have.has(keyOf(t.i, t.j))) && !ready.has(keyOf(t.i, t.j)));
+          const notReady = () => corridor.filter((t) => (!have.size || have.has(keyOf(t.i, t.j))) && !ready.has(keyOf(t.i, t.j)));
+          let missing = notReady();
+          // (waitMs: the corridor's tiles get that long to come in first: the app's own and IndexedDB's are a few hundred ms
+          // away, and a plan on the line's tiles alone can miss the quickest way and so the level's budget)
+          if (msg.scope === 'first' && missing.length && msg.waitMs > 0) {
+            let timer;
+            await Promise.race([Promise.all(missing.map(load)), new Promise((r) => { timer = setTimeout(r, msg.waitMs); })]);
+            clearTimeout(timer);
+            missing = notReady();
+          }
           const partial = msg.scope === 'first' && missing.length > 0;
           if (partial) for (const t of missing) load(t);                 // fetched now, for the whole-corridor plan
-          const v = partial ? await smallView(lineTiles(msg.from, msg.to)) : await viewFor(corridor);
+          const t0 = Date.now(), v = partial ? await smallView(lineTiles(msg.from, msg.to)) : await viewFor(corridor), viewMs = Date.now() - t0;
           // members' data for this plan only (the view is kept for the next one, signed in or not)
           v.crowd = msg.crowd ? crowdOnto(v, msg.crowd) : null;
           try {
             const r = plan(v, msg);
-            return { id, result: { ...strip(r), tiles: v.keys, partial, crowdEdges: v.crowd ? v.crowd.edges : 0 } };
+            return { id, result: { ...strip(r), tiles: v.keys, partial, viewMs, crowdEdges: v.crowd ? v.crowd.edges : 0 } };
           } finally { v.crowd = null; }
         }
         if (type === 'loop') {
@@ -1364,6 +1407,7 @@
       covers: (points) => ask({ type: 'covers', points }, 4000).then((m) => !!m.covers),
       plan: (req) => ask({ type: 'plan', ...req }).then((m) => m.result),
       quick: (req) => ask({ type: 'quick', ...req }).then((m) => m.result),
+      through: (req) => ask({ type: 'through', ...req }).then((m) => m.result),
       score: (lines) => ask({ type: 'score', lines }, 3000).then((m) => m.result),
       preload: (at) => ask({ type: 'preload', ...at }, 20000).then((m) => m.result),
       explore: (req) => ask({ type: 'explore', ...req }).then((m) => m.result),
@@ -1373,7 +1417,7 @@
   }
 
   const api = { VERSION: 1, K, lineTiles, edgeTable, fromTable, crowdOnto, project, quickest, scoreLine, reach, explore, TILE_DEG, FLAG_BITS, NODE_BITS, CLS, UNKNOWN_U8, UNKNOWN_FUN, NO_NAME, packedKey, nodeCost, LEVELS_COPY, levels, distM, bearing, turnAngle, tileOf, keyOf, view, geom, snap, objective, search,
-    assemble, overlap, sameRoute, tilesFor, loopTiles, plan, loop, indexKeys, covers, host, client, edgeId, twin, turnCost };
+    assemble, through, overlap, sameRoute, tilesFor, loopTiles, plan, loop, indexKeys, covers, host, client, edgeId, twin, turnCost };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   root.ApexGraphRouter = api;
 })(typeof window !== 'undefined' ? window : globalThis);

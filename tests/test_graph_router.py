@@ -114,6 +114,17 @@ def test_offline_maneuvers():
     assert r["names"][:2] == ["First Street", "Second Street"], r
 
 
+def test_points_routed_on_our_tiles():
+    """A reroute (and a stage, a shared road, a drive again) routes through its points on our tiles, offline as well:
+    through each via in order, the quickest between them; no via is the quickest; off the tiles it's Valhalla's."""
+    r = case("through")
+    assert r["sameAsQuickest"], r
+    assert r["viaNear"] < 60 and r["toNear"] < 60 and r["longer"], r
+    assert r["worker"], r
+    assert r["page"] and r["page"]["source"] == "own" and r["page"]["n"] > 2 and r["page"]["steps"] >= 2 and r["page"]["timeS"], r
+    assert r["off"] is None, r
+
+
 def test_loops_come_back_round():
     r = case("loops")
     assert r["n"] >= 2, r

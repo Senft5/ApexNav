@@ -757,6 +757,103 @@ flow('own routing: a loop from our tiles is built from the best roads and keeps 
   } finally { graphDir = null; }
 }, { geolocation: { latitude: 39.205, longitude: -84.55 }, permissions: ['geolocation'] });
 
+// Offline (docs/OWN_ROUTING.md §5): once the app and its tiles are on the phone, planning needs no network at all. The
+// iOS app bundles web/, so "offline" here is every request but the app's own files refused (no /api, no Valhalla, no
+// search, no weather), as a phone with no signal; then the browser's own offline switch on top, which refuses those too.
+flow('offline: plan a route and a loop from our tiles with no network', async (page, base) => {
+  graphDir = graphFixture();
+  try {
+    let offline = false;
+    const refused = [];
+    await page.route('**/*', (route) => {
+      const u = route.request().url();
+      if (offline && !(u.startsWith(base) && !u.startsWith(base + '/api/'))) { refused.push(u.replace(base, '').slice(0, 80)); return route.abort('internetdisconnected'); }
+      return route.fallback();
+    });
+    await page.addInitScript(() => { try {
+      localStorage.setItem('apex.onboarded', '1'); localStorage.setItem('apex.permsExplained', '1'); localStorage.setItem('apex.funLevel', 'quick');
+      localStorage.setItem('apex.pinnedPlaces', JSON.stringify([{ name: 'Work', label: 'Work', lat: 39.19, lon: -84.57 }]));
+    } catch (_) {} });
+    await page.goto(base + '/index.html');
+    await page.waitForFunction(() => window.apexDebug && window.apexDebug.map && window.ApexOwnRouting);
+    const finished = () => page.waitForFunction(() => Array.isArray(window.apexDebug.lastFun) && window.apexDebug.lastOwn && !document.getElementById('planPanel').classList.contains('busy'), null, { timeout: 10000 });
+    // one plan with the signal on (the tiles land in IndexedDB as they do on any first plan); then the signal goes
+    await page.fill('#destInput', '39.2400, -84.5300');
+    await page.press('#destInput', 'Enter');
+    await finished();
+    await page.waitForTimeout(500);
+    if (await page.isVisible('#planCancel')) await page.click('#planCancel');
+    await page.click('#planClear');
+    offline = true;
+    const read = async () => (await page.waitForFunction(() => !document.getElementById('routeCardWeather').hidden, null, { timeout: 3000 }).catch(() => null), page.evaluate(() => { const t = window.apexDebug.track; return { own: window.apexDebug.lastOwn, kinds: window.apexDebug.lastFun.map((c) => c.kind), kind: t && t.kind, funLevel: t && t.funLevel,
+      steps: ((t && t.steps) || []).map((s) => s.type), instructions: t && t.instructions, weather: document.getElementById('routeCardWeather').hidden ? null : document.getElementById('routeCardWeather').textContent }; }));
+    const plans = [];
+    // 1. Quick, to a saved place (Where to?'s pinned row): no search needed
+    await page.click('#destInput');
+    await page.waitForSelector('#placeList .pinned-row');
+    let t0 = Date.now();
+    await page.evaluate(() => { window.apexDebug.lastFun = undefined; });
+    await page.click('#placeList .pinned-row .place');
+    await finished();
+    plans.push({ level: 'quick', ms: Date.now() - t0, ...(await read()) });
+    // 2. Fun and Long way, from the card's level switch (each a plan of its own: their detours reach past Quick's routes)
+    for (const level of ['fun', 'max']) {
+      await page.evaluate(() => { window.apexDebug.lastFun = undefined; });
+      t0 = Date.now();
+      await page.click(`#routeCardFun [data-fun="${level}"]`);
+      await finished();
+      await page.waitForTimeout(200);
+      plans.push({ level, ms: Date.now() - t0, ...(await read()) });
+    }
+    for (const p of plans) {
+      check(p.own.covered && p.own.used && p.kinds[0] === 'own' && p.kind === 'route', `${p.level}: our route, from our tiles: ` + JSON.stringify(p));
+      check(p.ms < 8000, `${p.level}: no hang (${p.ms} ms)`);
+      check(p.steps.length >= 1 && p.steps.includes(4), `${p.level}: our own turn instructions on the route: ` + JSON.stringify(p.steps));
+      check(p.weather && /aren't known|not known/i.test(p.weather), `${p.level}: the card says the weather isn't known, not a made-up forecast: ` + p.weather);
+    }
+    check(plans.every((p) => p.funLevel === p.level), 'each plan at its level: ' + JSON.stringify(plans.map((p) => [p.level, p.funLevel])));
+    // 3. typed search can't work offline, and says so; a map tap's coordinates (what a tap puts in Where to?) do
+    if (await page.isVisible('#planCancel')) await page.click('#planCancel');
+    await page.click('#planClear');
+    await page.click('#destInput');
+    await page.fill('#destInput', 'Forest Park');
+    await page.press('#destInput', 'Enter');
+    await page.waitForFunction(() => /offline|no signal|tap the map/i.test(document.getElementById('toast').textContent), null, { timeout: 12000 });
+    await page.evaluate(() => { window.apexDebug.lastFun = undefined; });
+    await page.fill('#destInput', '39.2100, -84.5500');
+    await page.press('#destInput', 'Enter');
+    await finished();
+    const tap = await read();
+    check(tap.own.used && tap.kind === 'route', 'a map tap\'s place, routed offline: ' + JSON.stringify(tap.own));
+    // 4. a loop from our tiles
+    if (await page.isVisible('#planCancel')) await page.click('#planCancel');
+    await page.click('#planClear');
+    t0 = Date.now();
+    await page.evaluate(() => { window.apexDebug.lastLoop = undefined; const b = [...document.querySelectorAll('#loopDetents [data-loop-mi]')][0]; b.click(); document.getElementById('findLoopBtn').click(); });
+    await page.waitForFunction(() => Array.isArray(window.apexDebug.lastLoop) && !document.getElementById('planPanel').classList.contains('busy'), null, { timeout: 15000 });
+    const loop = await page.evaluate(() => ({ loops: window.apexDebug.lastLoop, kind: apexDebug.track && apexDebug.track.kind, name: apexDebug.track && apexDebug.track.name }));
+    const won = loop.loops.find((d) => d.picked);
+    check(won && won.kind === 'own' && /loop$/.test(loop.name || ''), 'a loop from our tiles, offline: ' + JSON.stringify(loop.loops));
+    check(Date.now() - t0 < 12000, 'the loop: no hang (' + (Date.now() - t0) + ' ms)');
+    // 5. the browser's own offline switch (the app's files refused too): still plans, from what's on the phone
+    if (await page.isVisible('#planCancel')) await page.click('#planCancel');
+    await page.click('#planClear');
+    await page.context().setOffline(true);
+    try {
+      await page.evaluate(() => { window.apexDebug.lastFun = undefined; });
+      await page.click('#destInput');
+      await page.fill('#destInput', '39.1900, -84.5700');
+      t0 = Date.now();
+      await page.press('#destInput', 'Enter');
+      await finished();
+      const off = await read();
+      check(off.own.used && off.kind === 'route' && Date.now() - t0 < 8000, 'with the browser offline as well: ' + JSON.stringify(off.own));
+    } finally { await page.context().setOffline(false); }
+    check(refused.some((u) => /valhalla/.test(u)), 'Valhalla was asked and refused (no signal), and nothing waited on it: ' + refused.length);
+    if (process.env.OFFLINE_LOG) console.log(JSON.stringify({ plans: plans.map((p) => [p.level, p.ms, p.own.ms, p.steps.length]), loop: loop.loops.map((d) => [d.kind, d.picked]), refused: [...new Set(refused.map((u) => u.split('?')[0]))] }));
+  } finally { graphDir = null; }
+}, { geolocation: { latitude: 39.155, longitude: -84.615 }, permissions: ['geolocation'] });
+
 flow('own routing: with no graph tiles for the trip, Valhalla plans it as before', async (page, base) => {
   graphDir = 'none';                                              // the shipped Cincinnati tiles cover this trip: hide them
   let out;

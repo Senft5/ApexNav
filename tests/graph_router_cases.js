@@ -356,6 +356,27 @@ const CASES = {
       tableAgree, tableStatus: local.o.status, roadCh: [Array.from(biz).filter((x) => x === 9).length / biz.length, Array.from(walk).filter((x) => x === 1).length / walk.length] };
   },
 
+  // points routed on our tiles (a reroute along the planned route's points, a stage, a shared road; own_routing.js
+  // through): through every via in order, the quickest between them, joined where each leg arrived; no via = the quickest;
+  // the worker's 'through' message and the page's side (coverage first: a point off the tiles gives null, Valhalla's turn)
+  async through() {
+    const g = H.grid({ seed: 4, nx: 12, ny: 12, stepDeg: 0.004, lat0: 39.15, lon0: -84.62 });
+    const T = H.tiles(g.nodes, g.edges), v = R.view(T.tiles);
+    const from = { lat: 39.155, lon: -84.615 }, to = { lat: 39.19, lon: -84.57 }, via = { lat: 39.19, lon: -84.61 };
+    const direct = R.through(v, { from, to, level: 'quick' }), quick = R.quickest(v, { from, to, level: 'quick' });
+    const bent = R.through(v, { from, to, via: [via], level: 'quick' });
+    const near = (r, p) => Math.min(...r.coords.map(([la, lo]) => R.distM(la, lo, p.lat, p.lon)));
+    const env = { load: async (i, j) => T.tiles.find((t) => t.tile.i === i && t.tile.j === j) || null, index: async () => ({ tiles: Object.fromEntries(T.tiles.map((t) => [`${t.tile.i}_${t.tile.j}`, {}])) }) };
+    const h = R.host(env);
+    const msg = await h.handle({ id: 1, type: 'through', from, to, via: [via], level: 'quick' });
+    const keys = new Set(T.tiles.map((t) => `${t.tile.i}_${t.tile.j}`));
+    const client = { covers: async (pts) => R.covers(keys, pts), through: async (req) => (await h.handle({ id: 2, type: 'through', ...req })).result };
+    const page = await Own.through(client, [from, via, to]), off = await Own.through(client, [from, { lat: 41, lon: -84 }]);
+    return { sameAsQuickest: JSON.stringify(direct.edges) === JSON.stringify(quick.edges), viaNear: near(bent, via), toNear: near(bent, to), longer: bent.timeS > direct.timeS,
+      worker: msg.result && msg.result.route ? msg.result.route.edges.length === bent.edges.length : false,
+      page: page ? { source: page.source, n: page.coords.length, steps: page.steps.length, first: page.coords[0], timeS: page.timeS > 0 } : null, off };
+  },
+
   // the Cincinnati-size synthetic network: 16 tiles, ~150k edges; per query and per full plan
   perf() {
     const t0 = Date.now();

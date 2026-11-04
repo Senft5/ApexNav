@@ -73,6 +73,63 @@
     }
     return out.length ? out : null;
   }
+  // Kept per 0.1° cell (CROWD_TTL), so a plan needn't wait on the network for it: the server answers the ways whose box
+  // meets a cell, and the same test splits an answer back into its cells. The cells round you are fetched at start
+  // (crowdPrefetch, signed in), so a plan nearby has them in hand.
+  const CROWD_TTL = 30 * 60e3, cellMemo = new Map(), cellAsk = new Map();
+  const boxOfCell = (key) => { const [i, j] = key.split('_').map(Number); return [i * CELL, j * CELL, (i + 1) * CELL, (j + 1) * CELL]; };   // s w n e
+  function rememberCells(cells, got, at = Date.now()) {
+    const per = new Map(cells.map((c) => [c, { at, ways: {}, lines: {} }]));
+    for (const [way, line] of Object.entries((got && got.lines) || {})) {
+      if (!Array.isArray(line) || !got.ways || !got.ways[way]) continue;
+      let s = 90, n = -90, w = 180, e = -180;
+      for (const p of line) { if (!Array.isArray(p)) continue; s = Math.min(s, p[0]); n = Math.max(n, p[0]); w = Math.min(w, p[1]); e = Math.max(e, p[1]); }
+      for (const c of cells) { const b = boxOfCell(c); if (s <= b[2] && n >= b[0] && w <= b[3] && e >= b[1]) { per.get(c).ways[way] = got.ways[way]; per.get(c).lines[way] = line; } }
+    }
+    for (const [c, v] of per) cellMemo.set(c, v);
+  }
+  const freshCell = (c, now = Date.now()) => { const m = cellMemo.get(c); return !!m && now - m.at < CROWD_TTL; };
+  function mergedCells(cells) {
+    const ways = {}, lines = {};
+    for (const c of cells) { const m = cellMemo.get(c); if (m) { Object.assign(ways, m.ways); Object.assign(lines, m.lines); } }
+    return { ways, lines };
+  }
+  /** Fetch the cells not kept (or asked already), resolves true when every one of `cells` is kept fresh. */
+  function fetchCells(lookupCells, cells, timeoutMs = CROWD_MS) {
+    const now = Date.now(), need = cells.filter((c) => !freshCell(c, now) && !cellAsk.has(c));
+    if (need.length) {
+      let timer;
+      const p = Promise.race([Promise.resolve().then(() => lookupCells(need)), new Promise((r) => { timer = setTimeout(() => r(null), timeoutMs); })])
+        .then((got) => { if (got && got.ways && got.lines) rememberCells(need, got); }, () => {})
+        .finally(() => { clearTimeout(timer); for (const c of need) cellAsk.delete(c); });
+      for (const c of need) cellAsk.set(c, p);
+    }
+    const waits = [...new Set(cells.map((c) => cellAsk.get(c)).filter(Boolean))];
+    return Promise.all(waits).then(() => cells.every((c) => freshCell(c)));
+  }
+  /**
+   * Members' data for a plan without waiting on the network: { now, late, cached }. `now` resolves at once from the cells
+   * kept when all of them are, else with what lands within budgetMs (else the cells kept, or null); `late` resolves the
+   * whole answer when `now` didn't have it (null otherwise), so the planner can plan again with it after the card.
+   */
+  function crowdSoon(lookupCells, from, to, budgetMs = 250) {
+    const none = { now: Promise.resolve(null), late: Promise.resolve(null), cached: false };
+    if (typeof lookupCells !== 'function') return none;
+    const cells = cellsFor(from, to);
+    if (cells.every((c) => freshCell(c))) return { now: Promise.resolve(crowdItems(mergedCells(cells))), late: Promise.resolve(null), cached: true };
+    const all = fetchCells(lookupCells, cells).catch(() => false);
+    let timer, inTime = false;
+    const now = Promise.race([all.then((ok) => { inTime = true; return ok; }), new Promise((r) => { timer = setTimeout(() => r(false), budgetMs); })])
+      .then(() => { clearTimeout(timer); return crowdItems(mergedCells(cells)); });
+    const late = now.then(() => (inTime ? null : all.then((ok) => (ok ? crowdItems(mergedCells(cells)) : null))));
+    return { now, late, cached: false };
+  }
+  /** The cells round a place, fetched and kept (the app's start: a plan nearby then has them). */
+  function crowdPrefetch(lookupCells, at, padDeg = 0.15) {
+    if (typeof lookupCells !== 'function' || !at || !Number.isFinite(at.lat)) return Promise.resolve(false);
+    const k = Math.cos(at.lat * Math.PI / 180) || 1;
+    return fetchCells(lookupCells, cellsFor({ lat: at.lat - padDeg, lon: at.lon - padDeg / k }, { lat: at.lat + padDeg, lon: at.lon + padDeg / k })).catch(() => false);
+  }
   /** Members' data round a trip for the search, or null (signed out, offline, nothing measured, slower than CROWD_MS). */
   async function crowdFor(lookupCells, from, to, timeoutMs = CROWD_MS) {
     if (typeof lookupCells !== 'function') return null;
@@ -111,6 +168,21 @@
       const c = res && res.route ? candidates({ routes: [res.route] })[0] : null;
       if (c) { c.ownRole = 'quickest'; c.ownMs = res.ms; c.ownLoadMs = res.loadMs; }
       return c || null;
+    } catch (_) { return null; }
+  }
+  /**
+   * Our quickest way through `points` ([from, ...via, to], as the planner hands Valhalla), as a route in routeOf's shape
+   * (coords [[lon, lat]], turns, times, steps, names, timeS, source 'own'), or null where the tiles don't cover every
+   * point, or on any failure (the caller then asks Valhalla). Works offline: the tiles are on the phone.
+   */
+  async function through(client, points, o = {}) {
+    if (!client || typeof client.through !== 'function' || !Array.isArray(points) || points.length < 2) return null;
+    try {
+      if (!(await client.covers(points))) return null;
+      const from = points[0], to = points[points.length - 1];
+      const res = await client.through({ from, to, via: points.slice(1, -1).map((p) => ({ lat: p.lat, lon: p.lon })), level: o.level || 'quick', avoid: o.avoid, prefs: o.prefs, heading: from.heading });
+      const c = res && res.route ? candidates({ routes: [res.route] })[0] : null;
+      return c ? Object.assign(c.route, { timeS: c.timeS, own: c.own }) : null;
     } catch (_) { return null; }
   }
   /** Loops from our router, as routes in the shape the loop planner routes (coords [[lon, lat]], turns, times). */
@@ -208,7 +280,7 @@
     return 'own';
   }
 
-  const api = { OFF_KEY, on, withCoords, candidates, plan, quick, loops, cellsFor, crowdItems, crowdFor, sharedShare, oneClock, polyline6, thin, traceBody, instruct };
+  const api = { OFF_KEY, on, withCoords, candidates, plan, quick, through, loops, cellsFor, crowdItems, crowdFor, crowdSoon, crowdPrefetch, _cells: cellMemo, sharedShare, oneClock, polyline6, thin, traceBody, instruct };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   root.ApexOwnRouting = api;
 })(typeof window !== 'undefined' ? window : globalThis);
