@@ -12,6 +12,7 @@ export interface Env {
   AUTH_LIMIT?: RateLimit;   // sign-in endpoints per IP
   BACKUPS?: KVNamespace;
   PHOTOS?: KVNamespace;     // photo bytes, key p/<id> (src/photos.ts)
+  CTX_KEYS?: string;        // secret: free client keys for the route-context sources, JSON (src/route_feeds.ts)
   FLAGS?: string;           // feature flags JSON (src/flags.ts), set in the dashboard to change a rollout without a release
   REVIEW_INVITE_HASH?: string;   // tests only: production uses the constant in auth.ts    // weekly database dumps (src/backup.ts); production only
 }
