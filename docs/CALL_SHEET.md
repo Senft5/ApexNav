@@ -4,6 +4,18 @@ Decisions Claude made for you, newest first. Each one says what was decided, why
 you reach one you've seen. If you disagree with a call, say so and it gets reversed; nothing here is hard to undo unless
 it says so. Things only you can do are in docs/OWNER_TODO.md.
 
+## 2026-11-04 (evening): The weather word on the map
+
+- **"Dry" only when the last 3 hours are known to be dry; rain comes from a real weather station first.** You: "it's been
+  raining all day and is currently raining and it says it's dry out". The map's plate turned Open-Meteo's current
+  weather code into a word, and codes 0-3 (clear to overcast) all read "Dry"; at the time it said overcast with 0.0 mm
+  this quarter hour while its own past hours had 3.4, 0.2, 0.5 and 1.5 mm and the Lunken station reported light rain.
+  Now: the freshest of the nearest three NWS stations' observations (90 min at most) names falling weather first; then
+  the forecast's code when it names weather; then rain this quarter hour; then **"Wet roads"** after 0.2 mm or more in the
+  last 3 hours; "Dry" only when that is known; else nothing. NWS (api.weather.gov, public, no key) gets the position
+  rounded to about 1 km, as Open-Meteo already did; privacy.html and licenses.html say so. Undo: `weather` in
+  web/place_plate.js and the `nws` lookup in cockpit.js refreshPlacePlate.
+
 ## 2026-11-05 (night): Planning with our tiles, the speed round
 
 - **The route card is final as soon as our tiles have ranked the routes**, with the weather and events as last

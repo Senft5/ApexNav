@@ -26,6 +26,7 @@ CONNECT = [
     "https://maps.mail.ru",                           # VK Maps' public Overpass (route context; answered when the others were full)
     "https://nominatim.openstreetmap.org", "https://photon.komoot.io",                               # search
     "https://api.open-meteo.com",                     # forecast along the route
+    "https://api.weather.gov",                        # NWS station observations: the place plate's weather now
     # route context (web/route_ctx/): crowds, rivers, work zones, harvest, photo spots, traffic signs
     "https://statsapi.mlb.com", "https://api.seatgeek.com",                                           # events.js
     "https://api.water.noaa.gov", "https://waterservices.usgs.gov",                                   # hazards_live.js: gauges
