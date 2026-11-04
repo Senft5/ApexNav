@@ -22,6 +22,217 @@ So every 25 m of a candidate gets two separate scores, and the corners only coun
 - **scenery** (0–1): what it's like: forest and canopy, water and creeks, ridges and relief, open country, parks, photos,
   autumn colour, old roads, loved roads, guardrails and curve signs, banking.
 
+## Flowchart
+
+How data becomes a ranking, as built (2026-11-04). Five linked diagrams: (1) sources and the context run, (2) per-25 m
+quality and scenery, (3) penalties, bonuses and hard constraints, (4) a candidate's value, (5) candidates, ranking and the
+why line. The weights in them are the code's; the tables in "Weights (checked against the code)" below are read back
+from `web/route_engine.js`, `web/fun_route.js` and the providers by tests/test_route_engine_doc.py. Providers marked
+*(contract)* are another builder's and not merged on this branch: their channel names are the contract's and B's headers.
+A rendered copy for a phone: docs/design/route_engine_flow.html (`python3 tools/route_engine_flow.py` rebuilds it from
+this page).
+
+### 1. Sources, fetching and the context run
+
+```mermaid
+flowchart TD
+  P["Plan: A to B, loop or Explore"] --> CAND["Candidates, see diagram 5"]
+  CAND --> COR["Corridor per candidate: samples every 25 m,<br>heading, bbox, etaAt from the router's<br>maneuver clock, else its total time by<br>distance, else 50 km/h; times the live pace<br>0.6 to 1.8 while driving; the Garage car"]
+  COR --> RUN["ApexRouteCtx.run: every provider at once on<br>all corridors of the plan; one budget, 2.5 s<br>for candidates, 1.2 s for stages; each<br>provider gets min of its budgetMs and what<br>is left, and an AbortSignal at the deadline"]
+  RUN --> A1["A router_edges.js, priority 10, 2.4 s,<br>stages too: one Valhalla trace_attributes<br>per candidate, edge_walk then map_snap on<br>2000 points, 2 at a time, kept 30 min per<br>line. speed_limit_kph, speed_limit_est_kph<br>flagged, speed_kph, road_class, road_use,<br>density, lanes, surface, sidewalk,<br>truck_route, bridge, tunnel, toll, ramp,<br>roundabout, signals_per_km, access_per_km,<br>intersections_per_km; points signal,<br>junction, driveway"]
+  RUN --> A2["A dem.js, priority 20, 2 s, stages too: z12<br>Terrarium tiles, at most 64 a plan, shortest<br>corridors first. elev_m, grade_pct,<br>relief_m, tpi_m, aspect_rad, west_descent;<br>spans climb, descent"]
+  RUN --> B1["B osm_tiles.js, 8 s (other branch):<br>lu_residential, lu_commercial, lu_retail,<br>lu_industrial, lu_forest, lu_farmland,<br>lu_open, lu_park, lu_mapped, water_near,<br>creek_follow, bldg_per_km, addr_per_km,<br>biz_per_km, junctions_per_km,<br>driveways_per_km, access_per_km, road_class<br>in map codes, on_bridge, in_tunnel, unpaved;<br>points school, worship, viewpoint, place,<br>rail_crossing, gate"]
+  RUN --> B2["B osm_overpass.js, 15 s (other branch):<br>maxspeed_kph, lanes, divided, oneway,<br>surface_paved, smoothness, hgv,<br>access_level, guard_rail, cycle_route,<br>byway,<br>signals/stops/crossings/calming_per_km,<br>side_roads_per_km, driveway_joins_per_km;<br>points signal, stop, give_way, crossing,<br>calming, level_crossing, curve_sign,<br>animal_crossing, buggy, viewpoint, historic,<br>fuel; spans roundabout, one_lane_bridge,<br>covered_bridge, access_private,<br>access_destination, cycle_route, byway"]
+  RUN --> B3["B road_name_age.js (other branch): name_age"]
+  RUN --> C1["C national grid (contract): night_light,<br>impervious_pct, address_per_km,<br>housing_per_km2, noise_db, aadt, iri,<br>hgv_share, canopy_pct, crash_rate,<br>built_year, signal_coverage"]
+  RUN --> D1["D time and world (contract): deer_risk,<br>fog_vis_m, crosswind_ms, road_temp_c,<br>snow_cover, foliage, park_visitors,<br>photo_per_km; spans school, church, event,<br>works, closure, flood, harvest, unploughed"]
+  RUN --> E1["E driver, crowd, in car (contract):<br>crowd_rough_g, crowd_flow, crowd_camber_deg,<br>crowd_busy, loved, traffic_ratio; prefs<br>passenger; car range_km, width, height,<br>weight"]
+  A1 ~~~ A2 ~~~ B1 ~~~ B2 ~~~ B3 ~~~ C1 ~~~ D1 ~~~ E1
+  A1 & A2 & B1 & B2 & B3 & C1 & D1 & E1 --> CLEAN["clean: wrong-length channels dropped, NaN is<br>unknown never 0; osm_tiles road_class<br>translated to router codes"]
+  CLEAN --> MERGE["merge per channel per sample: lower priority<br>provider wins where it knows, the next fills<br>its gaps; spans and points pooled with their<br>source"]
+  STAT ~~~ CANON
+  MERGE --> STAT["status per provider: ok, partial,<br>unavailable, no-key, out of time; onUpdate<br>as each lands"]
+  MERGE --> CANON["channel: canonical name, gaps filled from<br>aliases and other providers' names, e.g.<br>maxspeed_kph to speed_limit_kph, biz_per_km<br>to business_per_km, lu shares where<br>lu_mapped at least 0.3"]
+  CANON --> S2["Diagram 2: per sample"]
+```
+
+### 2. Per 25 m: quality, scenery, confidence
+
+```mermaid
+flowchart TD
+  IN["Canonical channels at sample i"] --> SKIP{{"Known? NaN drops out of the mean, never<br>helps or hurts"}}
+  SKIP --> LIM{{"Motorway or ramp?"}}
+  LIM -- yes --> NOFR["built and business terms skipped: no<br>frontage"]
+  LIM -- no --> RUR{{"road_class residential, density 2 or less,<br>no sidewalk?"}}
+  RUR -- yes --> LANE["read as unclassified, a country lane"]
+  NOFR ~~~ LANE
+  NOFR & LANE & RUR --> G["Each quality term: goodness g 0 to 1 from<br>its curve, weight w, see the Quality table"]
+  G --> GM["Weighted geometric mean: exp of sum w ln max<br>0.05 g over sum w"]
+  G --> FAM["Damning families speed, road, stops, access,<br>business: each a weighted geometric mean;<br>take the worst"]
+  GM & FAM --> Q["quality = geometric mean times sqrt of the<br>worst family"]
+  GM ~~~ FAM
+  QC ~~~ SC
+  G --> QC["qConf = known weight over all quality weight"]
+  IN --> SC["Each scenery term: goodness and weight, see<br>the Scenery table; foliage only with canopy,<br>scaled by canopy over 70"]
+  SC --> S["scenery = weighted arithmetic mean"]
+  SC --> SCC["sConf = known weight over all scenery weight"]
+  Q --> GATE["corner gate = clamp of quality minus 0.25<br>over 0.35: 0 at 0.25 or less, 1 at 0.6 or<br>more; unknown quality gate 1"]
+  S ~~~ SCC
+  Q & QC & S & SCC & GATE --> D4["Diagram 4: the candidate's value"]
+```
+
+### 3. Time, penalties, bonuses, hard constraints
+
+```mermaid
+flowchart TD
+  ETA["etaAt of each sample, the phone's local time"] --> MOM["every 10th sample: sun position, deer hour:<br>sun from -10 to 8 degrees full, night 0.35,<br>day 0.1; dark: sun under -6; weekend morning<br>Sat/Sun 7-11; weekend day 9-18"]
+  MOM --> PK["Per-km channels: strength = value curve<br>times time factor times exposure times<br>valley factor; points = strength times perKm<br>times km; see the Penalties table"]
+  PK --> FOG["fog: x1.5 in a valley tpi -10 m or less,<br>x0.5 on a ridge 20 m or more"]
+  PK --> WIND["crosswind: bridges and ridges only"]
+  PK --> UNLIT["unlit: only with the avoid unlit preference"]
+  ETA --> WHEN{{"span or point active? when: windows, weekly<br>days and HH:MM incl. past midnight, months;<br>else the kind's default; none is always"}}
+  WHEN -- no --> NONE["ignored"]
+  WHEN -- yes --> KIND{{"rule for its kind, aliases worship to<br>church, rail_crossing to level_crossing,<br>give_way to stop, calming to speed_bump,<br>access_private to no_access"}}
+  KIND --> HARD["hard: closure, no_access, flood value 1 or<br>more"]
+  KIND --> PEN["penalty: each plus perKm times km, works<br>plus minutes times perMin, deer crossing x3<br>at dusk; see the Spans table"]
+  KIND --> BON["bonus: each or perKm, each kind capped; see<br>the Spans table"]
+  CAR["Garage car"] --> FIT["hard: maxwidth_m, maxheight_m, maxweight_t<br>under the car; surface 3 or more for a low<br>car; a gap between fuel points over 0.85 of<br>range_km"]
+  ASP["aspect_rad and sun 0-12 degrees within 60<br>degrees of the slope's facing"] --> GOLD["golden light 0.5 per km from 0.5 km, cap 4"]
+  PASS["prefs passenger"] --> TIGHT["0.3 per hairpin or 1-2 corner, cap 15"]
+  FOG ~~~ WIND ~~~ UNLIT
+  HARD ~~~ PEN ~~~ BON
+  CAR ~~~ ASP ~~~ PASS
+  PK & PEN & TIGHT --> PSUM["penalties, cap 40"]
+  BON & GOLD --> BSUM["bonuses, cap 15"]
+  HARD & FIT --> HSUM["hard list"]
+  PSUM ~~~ BSUM ~~~ HSUM
+  PSUM & BSUM & HSUM --> D4["Diagram 4"]
+```
+
+### 4. A candidate's value
+
+```mermaid
+flowchart TD
+  SAMP["per-sample quality, scenery, confidences,<br>gate"] --> QR["route quality = mean of known samples x 100;<br>qWeight = mean of min 1, qConf over 0.3"]
+  SAMP --> POOR["poor cost: each sample past the first and<br>last 1.2 km: 3 per km times clamp of 0.45<br>minus quality over 0.2; cap 60; split into<br>business, residential, stops, other for the<br>why line"]
+  SAMP --> SCN["scenery points = 20 x mean of scenery minus<br>0.5 times min 1, sConf over 0.35"]
+  GEO["5 m geometry, corners, the router's junction<br>turns dropped"] --> FUN["fun = ApexFunRoute.score with each corner<br>weight x gate: Twist 0.5, Flow 0.35, not<br>dull 0.15; good corners gated"]
+  FUN --> GAIN["gain = 0.5 x gated good corners over the<br>quickest, cap 60"]
+  LVL["Level: Quick budget 10 % + 60 s, 3 per min;<br>Fun 35 % + 240 s, 1 per min; Max fun 90 % +<br>600 s, 0.35 per min"] --> TIME["time = minus perMin x extra minutes over the<br>quickest"]
+  QR --> QT["quality term = 0.3 x quality - 50 x qWeight"]
+  OLD["Today's terms: glare 1 per min cap 20; towns<br>3 per km cap 60 when avoided; weather ice<br>30, storms 15, rain 6, fog 4 by share, minus<br>the driest; members' measured roughness and<br>banking -8 to +5; taste up to +-8; Prefer<br>stamps"] --> V
+  QR ~~~ POOR ~~~ SCN
+  FUN ~~~ GAIN
+  LVL ~~~ TIME ~~~ QT ~~~ OLD ~~~ BP
+  FUN & GAIN & TIME & QT & POOR & SCN --> V["value = fun + gain + time + quality + poor +<br>scenery + bonuses + penalties + glare +<br>towns + weather + measured + taste + prefer"]
+  BP["bonuses, penalties, hard from diagram 3"] --> V
+  V --> NOCTX["No context at all: every new term is 0,<br>value equals ApexFunRoute.rank exactly"]
+  NOCTX ~~~ CONF
+  V --> CONF["confidence = mean of 2 qConf + sConf over 3"]
+```
+
+### 5. Candidates, ranking, the why line
+
+```mermaid
+flowchart TD
+  WT["Where to?"] --> DEF["Valhalla, the app's costing use_highways<br>0.15, tolls 0.3, avoid chips, the car's<br>width and clearance; 2 alternates"]
+  WT --> HWY["Highway-friendly quickest use_highways 1.0,<br>unless Avoid Highways; trips of 2 km or more"]
+  DEF -. "Valhalla down" .-> OSRM["OSRM fallback"]
+  WT --> STG["Stages from the map tiles around the<br>corridor, sections on long trips"]
+  STG --> NET["Network step: top 8 stages, 12 for Explore,<br>get router edges and DEM in 1.2 s; score x<br>0.4 + 0.6 x mean gate x 1 + 0.4 x scenery -<br>0.5 x known share"]
+  NET --> SL["shortlist in the level's ellipse, direction<br>by climb, set list"]
+  SL --> MX["connector matrix with use_highways 0.6,<br>avoid kept"]
+  MX --> PL["plans of 1-2 stages within the level's<br>budget, routed through shaping points with<br>use_highways 0.6; dropped if under 70 % of a<br>stage is driven"]
+  DEF ~~~ HWY ~~~ STG
+  DEF & HWY & OSRM & PL --> POOL["pool: keep avoided roads out when any<br>candidate can"]
+  POOL --> EARLY{{"over 1.5 s?"}}
+  EARLY -- yes --> SHOW["the quickest goes up at once, replaced when<br>the ranking is ready unless driven or<br>replaced"]
+  SHOW ~~~ CTXR
+  POOL --> CTXR["context run, diagram 1, alongside the towns<br>lookup"]
+  CTXR --> TOP["engine ranking picks the contenders for<br>weather (top 4), taste (top 4), members'<br>measurements (top 3), Prefer (top 4)"]
+  TOP --> RANK["rank: value per candidate; drop past the<br>level's budget; drop any with a hard<br>constraint unless all have one"]
+  RANK --> OPT["up to 3 options, not within 30 s and 1<br>gated-fun point of one kept, none slower and<br>less fun"]
+  OPT --> PIN["winner: an alternate or highway-costed route<br>is pinned with shaping points every 5-6 km<br>so a reroute keeps to it"]
+  OPT ~~~ WHY
+  PIN ~~~ LOOP ~~~ EXP
+  RANK --> WHY["why line: the 2-3 parts that differ most<br>from the quickest: side streets or strip<br>malls avoided, highway instead of, good<br>corners, back roads at 45-55 mph, signals,<br>through forest, along the water, ridges,<br>deer hour, less in towns, drier, less low<br>sun; else the old roads and corners line"]
+  LOOP["Loops: stage plans and a circle, routed;<br>same context run; value = loopValue on gated<br>fun - 2 per % retraced - 0.8 per % off<br>length + quality + scenery + bonuses - poor<br>- penalties - glare - towns + measured +<br>Prefer; a hard constraint -1000"] --> RANK2["best loop"]
+  EXP["Explore: stages within reach, network step,<br>matrix times; listed best first"]
+```
+
+## Weights (checked against the code)
+
+tests/test_route_engine_doc.py reads these from the code and fails if a row here drifts. The Quality and Scenery tables
+under "The channels" are checked the same way (channel and weight).
+
+| constant | value | meaning |
+|---|---|---|
+| QUALITY | 0.3 | points per quality point above or below 50, times qWeight |
+| POOR_Q_HI | 0.45 | quality where the side-street cost starts |
+| POOR_Q_LO | 0.25 | quality where it is full |
+| POOR_PER_KM | 3 | points per km at full |
+| POOR_CAP | 60 | the most it costs |
+| END_GRACE_M | 1200 | metres free at each end |
+| SCENERY | 20 | points for scenery 1 vs 0.5, times how much is known |
+| Q_FULL_CONF | 0.3 | share of quality weight known for full weight |
+| S_FULL_CONF | 0.35 | share of scenery weight known for full weight |
+| GATE_LO | 0.25 | quality at which a corner counts nothing |
+| GATE_HI | 0.6 | quality at which a corner counts in full |
+| PENALTY_CAP | 40 | the most penalties cost |
+| BONUS_CAP | 15 | the most bonuses add |
+| LOG_FLOOR | 0.05 | the lowest goodness in the geometric mean |
+
+| per-km penalty | points per km |
+|---|---|
+| deer_risk | 1.5 |
+| fog_vis_m | 1.2 |
+| crosswind_ms | 0.6 |
+| road_temp_c | 0.25 |
+| crash_rate | 0.6 |
+| cyclist_route | 0.5 |
+| buggy | 0.8 |
+| unlit | 0.6 |
+| snow_cover | 2 |
+| crowd_busy | 0.6 |
+| park_visitors | 0.5 |
+| signal_coverage | 0.15 |
+
+| span or point | each | per km | bonus | bonus per km | cap | hard |
+|---|---|---|---|---|---|---|
+| closure | | | | | | yes |
+| no_access | | | | | | yes |
+| flood | 5 | | | | | value 1 or more |
+| school | 2 | 1 | | | | |
+| church | 1 | | | | | |
+| event | 6 | | | | | |
+| works | 4 | | | | | |
+| harvest | | 0.5 | | | | |
+| unploughed | | 2 | | | | |
+| byway | | | | 0.4 | 12 | |
+| level_crossing | 0.7 | | | | | |
+| one_lane_bridge | 0.5 | | | | | |
+| animal_crossing | 0.3 | | | | | |
+| speed_bump | 0.5 | | | | | |
+| stop | 0.4 | | | | | |
+| viewpoint | | | 1.5 | | 6 | |
+| covered_bridge | | | 2 | | 4 | |
+| historic | | | 0.5 | | 3 | |
+| waterfall | | | 1 | | 3 | |
+| tunnel | | | 1.5 | | 4.5 | |
+| resurfaced | | | | 0.3 | 3 | |
+| camera | | | | | | |
+| gate | 1 | | | | | |
+| buggy | 0.5 | | | | | |
+| curve_sign | | | 0.2 | | 2 | |
+| access_destination | 1 | 2 | | | | |
+| cycle_route | | 0.5 | | | | |
+
+| level | budget | slack s | points per extra minute |
+|---|---|---|---|
+| quick | 0.1 | 60 | 3 |
+| fun | 0.35 | 240 | 1 |
+| max | 0.9 | 600 | 0.35 |
+
 ## The model
 
 ### Per sample
