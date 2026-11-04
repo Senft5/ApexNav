@@ -32,6 +32,18 @@
     <li><b>Address search</b>: Nominatim (OpenStreetMap data, ODbL). <b>Search suggestions</b>: Photon by Komoot (OpenStreetMap data, ODbL).</li>
     <li><b>Elevation</b>: AWS Terrain Tiles (Terrarium), from the sources listed at registry.opendata.aws/terrain-tiles.</li>
     <li><b>Plate-reading cameras</b>: OpenStreetMap (<code>surveillance:type=ALPR</code>, DeFlock), ODbL.</li>
+    <li><b>Route context</b> (preprocessed into the app's context grid; US Government works are public domain):
+      night lights from NASA Black Marble 2016 (VIIRS Day/Night Band), courtesy of NASA Earth Observatory, served by NASA GIBS;
+      impervious surface (NLCD 2021) and tree canopy (NLCD/USFS Tree Canopy Cover 2021) from USGS and the MRLC consortium;
+      road noise from the US DOT Bureau of Transportation Statistics National Transportation Noise Map;
+      housing units and residents (2020 Census blocks) and median year built (American Community Survey 5-year) from the US Census Bureau;
+      address points from OpenAddresses contributors and the county and state agencies that publish them (each under its own terms; only counts per area are kept);
+      traffic volume, pavement roughness, speed limits, lanes and functional class from the FHWA Highway Performance Monitoring System and the state DOTs;
+      fatal crashes from the NHTSA Fatality Analysis Reporting System;
+      flood hazard zones from the FEMA National Flood Hazard Layer;
+      crop types from the USDA NASS Cropland Data Layer (via Microsoft Planetary Computer);
+      park boundaries and visitor counts from the National Park Service.
+      None of these agencies endorses Vetta.</li>
   </ul>
 
   <h2>Website only</h2>

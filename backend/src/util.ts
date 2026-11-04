@@ -12,6 +12,7 @@ export interface Env {
   AUTH_LIMIT?: RateLimit;   // sign-in endpoints per IP
   BACKUPS?: KVNamespace;
   PHOTOS?: KVNamespace;     // photo bytes, key p/<id> (src/photos.ts)
+  CTX?: KVNamespace;        // context-grid bundles, key v1/... (src/context_grid.ts); bound once the owner creates it
   FLAGS?: string;           // feature flags JSON (src/flags.ts), set in the dashboard to change a rollout without a release
   REVIEW_INVITE_HASH?: string;   // tests only: production uses the constant in auth.ts    // weekly database dumps (src/backup.ts); production only
 }

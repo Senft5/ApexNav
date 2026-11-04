@@ -25,6 +25,7 @@ import { decalsPlace } from "./livery";
 import { presencePublish, presenceSettingsGet, presenceSettingsPut, presenceView } from "./presence";
 import { buildChatDelete, buildChatList, buildChatPost, buildCreate, buildDelete, buildFind, buildFollow, buildGet, buildUpdate, buildsFollowing, postCreate, postDelete, replyCreate, replyDelete, replyTried } from "./builds";
 import { photoDelete, photoList, photoServe, photoUpload, photoUse } from "./photos";
+import { ctxServe } from "./context_grid";
 import { block, blockList, fileReport, isModerator, moderationQueue, moderationResolve, report, unblock } from "./safety";
 import { contribute, setContribute } from "./contribute";
 import { pointsFor } from "./points";
@@ -214,6 +215,9 @@ on("GET", "/api/presence/settings", async (req, env) => json(await presenceSetti
 on("PUT", "/api/presence/settings", async (req, env) => { await presenceSettingsPut(env, await requireMember(req, env), req); return noContent(); });
 on("GET", "/api/presence", async (req, env) => json(await presenceView(env, await requireMember(req, env))));
 on("POST", "/api/presence", async (req, env) => { await presencePublish(env, await requireMember(req, env), req); return noContent(); });
+// the context grid's wider region (src/context_grid.ts): public data, bundled per ~150 km tile
+on("GET", "/api/ctx/v1/index.json", (_req, env) => ctxServe(env, "v1/index.json"));
+on("GET", "/api/ctx/v1/8/:x/:y", (_req, env, m) => ctxServe(env, `v1/8/${m.groups!.x}/${m.groups!.y}`));
 // photos (src/photos.ts, REVIEW.md 5.2): JPEG in, metadata out; members only
 on("POST", "/api/photos", async (req, env) => json(await photoUpload(env, await requireMember(req, env), req), 201));
 on("GET", "/api/photos", async (req, env) => json(await photoList(env, await requireMember(req, env), new URL(req.url))));
