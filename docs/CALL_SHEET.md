@@ -67,6 +67,36 @@ until the Cincinnati tiles ship: where no tiles cover a trip, planning is exactl
 - **Our routes are always pinned with shaping points**, so a reroute (still Valhalla's) keeps to them.
 - Not done: the live comparison against production (no real tiles yet), Explore on our router.
 
+## 2026-11-04 (own routing): the region on the free tier
+
+- **Audit: the first region build (2026-45-95960e6d) was scored with the Cincinnati grid only** (its band logs: "grid
+  bundles 4"), so outside Cincinnati noise, night lights, canopy, housing, impervious, AADT/IRI and crashes were
+  unknown in the scores. The rebuild after ctx-region.yml (2026-45-95960e6d-gebab6b, "grid bundles 33") has them: on a
+  random 60 tiles (29,023 roads) the share with a known value went 0 -> 100 % for noise_db, night_lights,
+  impervious_pct and crash_density, 0 -> 99.5 % housing_density, 0 -> 28.2 % aadt (HPMS counts main roads only).
+  graph-region.yml now warns when it has to fall back. Order: ctx-region.yml, then graph-region.yml.
+
+- **The shipped Cincinnati tiles are cut from the region build** (tools/graph_etl/bundle.py, run by every region
+  build, committed to the triggering branch, or to `claude/graph-bundle-<build>` for a PR when that is main), so the
+  phone uses them first and offline works from first launch. graph.yml no longer builds Cincinnati on its own. Undo:
+  the bundle step in graph-region.yml.
+- **The context grid for OH+KY+IN is on the graph-data branch too** (ctx/v1, .github/workflows/ctx-region.yml, six
+  shards), and /api/ctx/v1/ reads KV first, then that branch. The graph build scores with it when it is there; the
+  build id says which grid (`-g<hash>`), so a rescore is a new build.
+
+- **The OH+KY+IN road network is hosted on a `graph-data` branch of this repository**, relayed by the Worker at
+  /api/graph/v1/ from raw.githubusercontent.com behind the edge cache (no R2, no KV, no secrets: the owner wants no new
+  costs). Each rebuild is a new commit on that branch (the repository grows by the region's size each time; old builds
+  can be dropped later by deleting and re-creating the branch, which only the owner may do). Undo: delete
+  backend/src/graph.ts's routes and the branch.
+- **The region is built in parallel bands of 1 degree blocks**, each from its own extract with 0.4 degree round it, and
+  edges in a tile are ordered canonically, so blocks agree on the tiles they share; one build id for all.
+- **The shipped Cincinnati tiles are used first only while the region has the same build** (else the region's, kept in
+  IndexedDB, with the shipped copy as the offline fallback): mixing two builds would join edges to the wrong nodes at a
+  tile edge. Undo: `order()` in web/graph_tiles.js.
+- **Via-way turn restrictions are applied** (format v3) where the path is simple; most in the data run through motorway
+  crossovers that aren't drivable and need nothing.
+
 ## 2026-11-04 (own routing): the scored road network (graph half)
 
 - **Side-street evidence in the tiles (format v2)**, after the router builder found tile-only rankings rated suburban

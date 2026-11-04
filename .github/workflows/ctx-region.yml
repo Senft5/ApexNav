@@ -1,0 +1,96 @@
+name: Context grid region (OH+KY+IN, graph-data branch)
+
+# The context grid (tools/ctx_etl: traffic counts, land cover, road noise, census, crashes, flood zones, crops, parks)
+# for Ohio, Kentucky and Indiana, hosted for free like the graph tiles: committed to the graph-data branch under
+# ctx/v1/ and served by the Worker at /api/ctx/v1/ (backend/src/context_grid.ts falls back to it where KV has
+# nothing). Six parallel shards of the region's bundles (--shard k/6; the coverage is the whole region's in each), then
+# one publish. A normal push, never forced; each build is a new commit. The graph build (graph-region.yml) scores its
+# edges with these bundles once they are there.
+#
+# Triggers: a manual run (once on main), or a push to claude/own-routing-region changing tools/ctx_etl/REGION_BUILD.
+on:
+  workflow_dispatch:
+  push:
+    branches: [claude/own-routing-region]
+    paths:
+      - "tools/ctx_etl/REGION_BUILD"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: ctx-region
+  cancel-in-progress: false
+
+jobs:
+  shard:
+    runs-on: ubuntu-latest
+    timeout-minutes: 340
+    strategy:
+      fail-fast: false
+      matrix:
+        k: [0, 1, 2, 3, 4, 5]
+    env:
+      CTX_CACHE: ${{ github.workspace }}/.ctx_cache
+    steps:
+      - uses: actions/checkout@v4
+      - name: Free disk
+        run: |
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL || true
+          df -h / && free -g
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install -r tools/ctx_etl/requirements.txt
+      - name: Restore the download cache
+        uses: actions/cache/restore@v4
+        with:
+          path: |
+            .ctx_cache
+            !.ctx_cache/split
+          key: ctx-region-${{ matrix.k }}-v1-${{ github.run_id }}
+          restore-keys: |
+            ctx-region-${{ matrix.k }}-v1-
+            ctx-launch-v1-
+      - name: Build the shard
+        run: python -m tools.ctx_etl.build --preset region --shard "${{ matrix.k }}/6" --out "shard/v1" --cache "$CTX_CACHE" --threads 8
+      - name: Save the download cache
+        if: always()
+        uses: actions/cache/save@v4
+        with:
+          path: |
+            .ctx_cache
+            !.ctx_cache/split
+          key: ctx-region-${{ matrix.k }}-v1-${{ github.run_id }}
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ctx-shard-${{ matrix.k }}
+          path: shard
+          retention-days: 7
+
+  publish:
+    needs: shard
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install -q -r tools/ctx_etl/requirements.txt
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: ctx-shard-*
+          path: shards
+      - name: Merge the shards
+        run: |
+          python -m tools.ctx_etl.build --merge merged/ctx/v1 shards/*/v1 | tee -a "$GITHUB_STEP_SUMMARY"
+          du -sh merged/ctx/v1
+      - name: Commit to the graph-data branch
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          n=$(python3 -c "import json; print(len(json.load(open('merged/ctx/v1/index.json'))['bundles']))")
+          mb=$(python3 -c "import json; print(round(json.load(open('merged/ctx/v1/index.json'))['bytes']/1e6, 1))")
+          bash tools/graph_etl/publish_data.sh merged/ctx/v1 ctx/v1 "context grid region: $(date -u +%F) ($n bundles, $mb MB)"
+          echo "graph-data ctx/v1: $n bundles, $mb MB" >> "$GITHUB_STEP_SUMMARY"

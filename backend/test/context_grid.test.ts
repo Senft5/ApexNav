@@ -1,9 +1,25 @@
 import { env } from "cloudflare:workers";
-import { beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { api, freshDb } from "./helpers";
-import { ctxServe } from "../src/context_grid";
+import { CTX_RAW, ctxServe } from "../src/context_grid";
 
-beforeEach(freshDb);
+const real = globalThis.fetch;
+let seen: string[] = [];
+let remote: Record<string, Uint8Array | string> = {};
+beforeEach(async () => {
+  await freshDb();
+  seen = []; remote = {};
+  // raw.githubusercontent.com (the graph-data branch) mocked: only what a test puts in `remote`
+  globalThis.fetch = (async (input: RequestInfo | URL) => {
+    const url = typeof input === "string" ? input : input instanceof URL ? input.href : input.url;
+    seen.push(url);
+    const k = url.startsWith(CTX_RAW) ? url.slice(CTX_RAW.length) : null;
+    return k && remote[k] !== undefined ? new Response(remote[k]) : new Response("no", { status: 404 });
+  }) as typeof fetch;
+  const c = (caches as unknown as { default: Cache }).default;
+  for (const k of ["v1/index.json", "v1/8/66/97.vcg", "v1/8/67/97.vcg"]) await c.delete(new Request(`https://apexnav.cache/ctx/${k}`));
+});
+afterEach(() => { globalThis.fetch = real; });
 
 describe("context grid bundles (KV)", () => {
   it("serves the index and a bundle to anyone, cached a day", async () => {
@@ -36,5 +52,25 @@ describe("context grid bundles (KV)", () => {
     const none = await api(null, "GET", "/api/ctx/v1/index.json");
     expect(none.status).toBe(200);
     expect(((await none.json()) as { bundles: Record<string, unknown> }).bundles).toEqual({});
+  });
+
+  it("falls back to the graph-data branch where KV has nothing, with the same validation", async () => {
+    const bytes = new Uint8Array([0x1f, 0x8b, 9, 9]);
+    remote["v1/8/66/97.vcg"] = bytes;
+    remote["v1/index.json"] = JSON.stringify({ v: 1, bundles: { "66/97": { bytes: 4 } } });
+    await env.CTX!.delete("v1/index.json");
+    const r = await api(null, "GET", "/api/ctx/v1/8/66/97.vcg");
+    expect(r.status).toBe(200);
+    expect(new Uint8Array(await r.arrayBuffer())).toEqual(bytes);
+    expect(r.headers.get("content-type")).toBe("application/octet-stream");
+    const ix = await api(null, "GET", "/api/ctx/v1/index.json");
+    expect(((await ix.json()) as { bundles: Record<string, unknown> }).bundles["66/97"]).toBeTruthy();
+    const off = await ctxServe({ ...env, CTX: undefined }, "v1/8/66/97.vcg");
+    expect(off.status).toBe(200);
+    // odd paths never reach GitHub
+    const n = seen.length;
+    expect((await api(null, "GET", "/api/ctx/v1/8/66/97.png")).status).toBe(404);
+    expect((await api(null, "GET", "/api/ctx/v1/8/..%2F..%2Fv1%2Findex.json/1.vcg")).status).toBe(404);
+    expect(seen.length).toBe(n);
   });
 });
