@@ -3077,15 +3077,27 @@
       // the map tiles along the straight line, fetched and decoded while the router routes (the route context reads them
       // next; the page is idle until the router answers)
       try { if (window.ApexOsmTiles && window.ApexRouteCtx && ApexRouteCtx.corridor && (!window.ApexFlags || ApexFlags.on('route_engine'))) ApexOsmTiles.prefetch([ApexRouteCtx.corridor('ahead', [[from.lon, from.lat], [to.lon, to.lat]], {})]); } catch (_) { /* nothing ahead: fetched with the context */ }
-      const stagesAhead = level !== 'quick' && crowKm >= 3 && crowKm <= 48 && window.ApexStages ? stagesFor(from, to).catch(() => null) : null;
+      // Our own routing (own_routing.js, graph_router.js, docs/OWN_ROUTING.md): where the shipped graph tiles cover the
+      // trip, the phone searches every road itself and our routes are the candidates (no stage plans needed); Valhalla's
+      // quickest stays in the pool as a check. No tiles here, switched off, or our router failing: today's path, unchanged.
+      const ownCovered = ownOn() ? await ownRouter().covers([from, to]).catch(() => false) : false;
+      const ownP = ownCovered ? ApexOwnRouting.plan(ownRouter(), { from, to, level, prefs: roadPrefs, avoid, heading: from.heading }) : null;
+      const stagesAhead = !ownCovered && level !== 'quick' && crowKm >= 3 && crowKm <= 48 && window.ApexStages ? stagesFor(from, to).catch(() => null) : null;
       let direct;
       // The router's costing keeps off highways (use_highways 0.15), which is what sent routes through subdivisions and
       // business districts; so the highway-friendly quickest competes too (route_engine.js highwayCosting), unless avoided.
       const hwyCosting = window.ApexRouteEngine && FunRoute.kmBetween(from, to) >= 2 ? ApexRouteEngine.highwayCosting(avoid, routingCar()) : null;
-      const hwyTry = hwyCosting ? valhallaRoutes([from, to], false, 0, hwyCosting).catch(() => []) : Promise.resolve([]);
-      try { direct = await valhallaRoutes([from, to], false, 2); }
-      catch (_) { try { direct = await osrmRoutes([from, to]); } catch (err) { toast('Couldn\'t build the route. Check signal and try again.'); return false; } }
-      const directCands = direct.map(r => ({ kind: 'router', route: r, timeS: r.timeS, via: [] }));
+      let hwyTry = hwyCosting && !ownCovered ? valhallaRoutes([from, to], false, 0, hwyCosting).catch(() => []) : Promise.resolve([]);
+      const valhallaP = valhallaRoutes([from, to], false, 2).catch(() => osrmRoutes([from, to])).catch(() => []);
+      const own = ownP ? await ownP : { cands: [], reason: ownOn() ? 'out' : 'off', ms: 0 };
+      // with our routes up, Valhalla's answer is only a check: it doesn't hold the plan up past OWN_CHECK_MS
+      direct = own.cands.length ? (await RouteLoading.optional(valhallaP, OWN_CHECK_MS)) || [] : await valhallaP;
+      const ownUsed = own.cands.length > 0;
+      if (window.apexDebug) window.apexDebug.lastOwn = { covered: ownCovered, used: ownUsed, reason: own.reason, ms: own.ms, n: own.cands.length, error: own.error || null };
+      if (ownCovered && !ownUsed && hwyCosting) hwyTry = valhallaRoutes([from, to], false, 0, hwyCosting).catch(() => []);   // ours failed: today's candidates
+      if (!direct.length && !ownUsed) { toast('Couldn\'t build the route. Check signal and try again.'); return false; }
+      const vQuick = direct.filter(r => Number.isFinite(r.timeS)).reduce((x, y) => (!x || y.timeS < x.timeS ? y : x), null) || direct[0] || null;
+      const directCands = [...own.cands, ...(ownUsed ? (vQuick ? [vQuick] : []) : direct).map(r => ({ kind: 'router', route: r, timeS: r.timeS, via: [] }))];
       // Where to? stays instant (REVIEW_FEEL): the router's first answer goes up at once (not held for the highway-costed
       // route, the weather or anything else) and the ranked routes replace it when they're ready, unless you've started
       // driving it or planned something else.
@@ -3122,7 +3134,7 @@
       const allowed = FunRoute.keepAvoiding(cands, avoid);
       const quickS = Math.min(...allowed.map(c => c.timeS).filter(Number.isFinite));
       // Under 3 km there is no detour worth taking to the shop round the corner.
-      if (level !== 'quick' && Number.isFinite(quickS) && FunRoute.kmBetween(from, to) >= 3) {
+      if (!ownUsed && level !== 'quick' && Number.isFinite(quickS) && FunRoute.kmBetween(from, to) >= 3) {
         try {
           // Stage plans for one stretch a→b whose quickest drive takes stretchS: search its corridor, time the connectors, plan.
           const stretch = async (a, b, stretchS, label, frac, slack) => {
@@ -3222,6 +3234,7 @@
       if (kept && kept.sightPending) kept = null;                         // drawn before its land cover: built in full now
       let t = kept;
       if (kept) {                                                          // the ranking's word on it, on the card already up
+        await ownInstructions(offered[0]);
         const o = { id, name, request, level, quickest, list: offered };
         optionOnto(kept, offered[0], o);
         routeOptions = Object.assign(o, { picked: 0, current: kept });
@@ -3237,6 +3250,22 @@
     // from the plan's start: the context alone takes 1.5-3 s, so the quickest goes up as soon as the router answers (live:
     // on screen by about 1.5 s with its track built) and the ranking replaces it
     const EARLY_MS = 0, EARLY_SIGHT_MS = 100, FIRST_GATE_MS = 1800;
+    // Our own router (graph_worker.js), started on the first plan; the Valhalla check waits at most OWN_CHECK_MS once
+    // our routes are in, and the chosen route's instructions at most OWN_INSTRUCT_MS (else our own maneuvers)
+    const OWN_CHECK_MS = 2500, OWN_INSTRUCT_MS = 3000;
+    let ownClient = null;
+    const ownOn = () => !!(window.ApexOwnRouting && window.ApexGraphRouter && ApexOwnRouting.on());
+    const ownRouter = () => (ownClient || (ownClient = ApexGraphRouter.client({ url: 'graph_worker.js' })));
+    // Turn instructions for one of our routes: Valhalla's maneuvers on our line (trace_route), offline our own
+    // (one request per route, however often it's asked for)
+    const ownInstructed = new WeakMap();
+    function ownInstructions(c) {
+      if (!c || c.kind !== 'own' || !window.ApexOwnRouting) return Promise.resolve(null);
+      if (!ownInstructed.has(c.route)) ownInstructed.set(c.route, ApexOwnRouting.instruct(c.route,
+        (body) => RouteLoading.json(`${VALHALLA}/trace_route`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }, OWN_INSTRUCT_MS),
+        routeOf, FunRoute.costing(avoid, routingCar()), OWN_INSTRUCT_MS).catch(() => 'own'));
+      return ownInstructed.get(c.route);
+    }
     // Router costing for the legs between good roads: highways welcome unless avoided (route_engine.js connectorCosting).
     const connectorCosting = () => (window.ApexRouteEngine ? ApexRouteEngine.connectorCosting(avoid, routingCar()) : null);
     // Tracks built ahead for a likely winner while the plan still waits on the stage plans (live: building the winner's
@@ -3250,7 +3279,9 @@
       const c = o.list[i], was = o.current;
       const ahead = builtAhead.get(c.route.coords);
       if (ahead) builtAhead.delete(c.route.coords);
+      const instructed = ownInstructions(c);                  // ours: Valhalla's maneuvers, fetched while the track builds
       const t = (ahead && await ahead) || await trackFromPolyline(c.route.coords, o.id, o.name, sightMs);
+      if (!sightMs) await instructed;                         // the early route doesn't wait: the ranked one (or its card) does
       // A pick (not the first build) is dropped if the route was cleared, replaced or driven meanwhile.
       if (was && (routeOptions !== o || plannedRoute !== was || state.mode === 'live')) return null;
       optionOnto(t, c, o);
@@ -3262,7 +3293,8 @@
     function optionOnto(t, c, o) {
       // A winning alternate is pinned with shaping points along it, so a reroute stays on it; so is the highway-costed
       // route (the router's own costing would reroute it onto the side streets it avoided).
-      const via = c.kind === 'router' && (c.extraS > 0 || c.highway) ? FunRoute.alongPoints(c.route.coords) : c.via;
+      // Ours always is: a reroute goes to Valhalla, which would otherwise take its own way.
+      const via = c.kind === 'own' || (c.kind === 'router' && (c.extraS > 0 || c.highway)) ? FunRoute.alongPoints(c.route.coords) : c.via;
       // The why line: the engine's 2-3 largest differences from the quickest, else the roads and corners it's for.
       const engineWhy = window.ApexRouteEngine && c.parts ? ApexRouteEngine.why(c, o.quickest, { metric: ApexUnits.metric() }) : null;
       Object.assign(t, { measured: c.t.measured, fun: c.fun, timeS: c.timeS, timeMarks: timeMarksOf(t, c.route), steps: stepsOf(t, c.route), extraS: c.extraS, funLevel: o.level, glareMin: c.glare ? Math.round(c.glare.minutes) : null, townKm: c.townKm,
@@ -3374,6 +3406,8 @@
       const targetKm = miles * 1.609344, targetS = minutes ? minutes * 60 : null;
       const asked = minutes ? `${minutes / 60} h` : ApexUnits.long(miles * 1609.344, 0), loopId = minutes ? `loop_${minutes}min` : `loop_${miles}`;
       toast(`Finding roads · ${asked} loop`);
+      // 0. Our own router's rings (graph_router.js loop), where the tiles cover the start: they compete with the rest
+      const ownLoopsP = ownOn() ? ApexOwnRouting.loops(ownRouter(), { start: { lat: c.lat, lon: c.lon }, km: targetKm, level: funLevel, prefs: roadPrefs, avoid }) : Promise.resolve([]);
       // 1. Stage discovery: score every road around the start from the map's own vector tiles.
       let plans = [];
       try {
@@ -3396,10 +3430,11 @@
       // 2. Route each stage plan, plus one circle loop as a baseline, and keep the best result.
       const jobs = plans.map(p => ({ kind: 'stages', plan: p, pts: ApexStages.waypoints(c, p), through: false, extra: connectorCosting() || {} }));
       jobs.push({ kind: 'circle', pts: loopWaypoints(c, miles, Math.random() * 2 * Math.PI), through: true });
+      for (const r of await ownLoopsP) jobs.push({ kind: 'own', route: r.route, pts: [c, ...FunRoute.alongPoints(r.route.coords), c] });
       let settled = 0;
       ui.step(`Routing · 0 of ${jobs.length}`, 0.38);
       const tries = jobs.map(async (job) => {
-        const [r] = await valhallaRoutes(job.pts, job.through, 0, job.extra || {})
+        const [r] = await (job.route ? Promise.resolve([job.route]) : valhallaRoutes(job.pts, job.through, 0, job.extra || {}))
           .finally(() => { settled++; ui.step(`Routing · ${settled} of ${jobs.length}`, 0.38 + 0.5 * settled / jobs.length); });
         if (job.plan && !FunRoute.keptStages(r.coords, job.plan)) throw new Error('stage skipped');   // a shortcut past the stage (R-14)
         const rs = Core.removeSpurs(r.coords.map(p => p[1]), r.coords.map(p => p[0]));

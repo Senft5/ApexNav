@@ -13,6 +13,10 @@ export const DEFAULT_FLAGS: Record<string, Rule> = {
   taste_ranking: { on: true },       // R-33 your taste nudging fun routes
   crowd_curvature: { on: true },     // Q-04 members' corners over the map's
   measured_stages: { on: true },     // R-04 measurements and hazards in stage discovery
+  // Our own routing on the phone (docs/OWN_ROUTING.md): on, but it only acts where the shipped graph tiles cover the
+  // trip (web/data/graph/v1/index.json); everywhere else, and with this off, Valhalla routes as before.
+  // Turn off: FLAGS {"own_routing":{"on":false}} (or on one phone: localStorage apex.ownRouting = "0").
+  own_routing: { on: true },
   // R-36 busy times of day per road: OFF until the owner answers Quiet hours (docs/OWNER_TODO.md). With it off the phone sends
   // no hour and the server stores and shows none (contribute.ts, roads.ts check serverFlag too). Turn on: FLAGS {"quiet_hours":{"on":true}}
   quiet_hours: { on: false },

@@ -25,6 +25,12 @@ describe("feature flags (IDEAS Y-06)", () => {
     expect((await get("?install=x")).flags.half).toBe(false);      // no install id: not in a partial rollout
   });
 
+  it("own routing ships on and FLAGS turns it off (docs/OWN_ROUTING.md)", async () => {
+    expect((await get()).flags.own_routing).toBe(true);
+    (env as { FLAGS?: string }).FLAGS = JSON.stringify({ own_routing: { on: false } });
+    expect((await get()).flags.own_routing).toBe(false);
+  });
+
   it("a broken FLAGS leaves the defaults", async () => {
     (env as { FLAGS?: string }).FLAGS = "{ not json";
     expect((await get()).flags.track_mode).toBe(true);
