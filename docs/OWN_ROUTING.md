@@ -160,3 +160,6 @@ phone's reader); tests/test_graph_tiles.py round-trips through both. What a rout
   (the known flake), unrelated (no page script changed).
   Not yet: the phone router (§5), the region upload (owner's R2, §7), via-way restrictions, crowd channels (no
   members' data is baked in; they stay query-time), Overpass-only channels beyond what OSM tags give directly.
+- 2026-11-04 (v2): side-street evidence per edge in the tiles (`edges.ch`); 17.44 MB for the 16 tiles. Spot checks:
+  Colerain Ave 0.22, Springdale Rd east of -84.62 0.32 (was 0.39), Hamilton Ave 0.21 (0.24), Pippin Rd 0.33 (0.42; the
+  live engine also 0.33), Blue Rock rural 0.68, E Miami River 0.72, Lees Creek 0.58, I-275 0.82.

@@ -16,6 +16,9 @@
   Spot checks (web/data/graph/v1/CHECK.txt): Colerain Ave quality 0.25, Blue Rock Rd (north of I-275) 0.68, E Miami
   River Rd 0.72, Lees Creek Rd 0.58, I-275 motorway 0.82 at 109 km/h. Local e2e: one reroute flow failed under load
   (the known flake), unrelated (no page script changed).
+- [x] Tiles v2: side-street evidence per edge in the tiles (`edges.ch`); 17.44 MB for the 16 tiles. Spot checks:
+  Colerain Ave 0.22, Springdale Rd east of -84.62 0.32 (was 0.39), Hamilton Ave 0.21 (0.24), Pippin Rd 0.33 (0.42; the
+  live engine also 0.33), Blue Rock rural 0.68, E Miami River 0.72, Lees Creek 0.58, I-275 0.82.
 - Exact next task: the phone router (web/graph_router.js + graph_worker.js) on these tiles (the parallel builder), then
   OWN_ROUTING.md §6's proof against today's picks.
 
