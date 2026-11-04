@@ -180,6 +180,25 @@ const CASES = {
     return { n: res.routes.length, ms: res.ms, loops: res.routes.map((r) => ({ km: r.distM / 1000, retraced: r.retraced, d0: R.distM(start.lat, start.lon, r.coords[0][0], r.coords[0][1]), dN: R.distM(start.lat, start.lon, r.coords[r.coords.length - 1][0], r.coords[r.coords.length - 1][1]) })) };
   },
 
+  // loops off the highway (the owner, 2026-11-04: "it also seems to route mostly highway for loops"): a grid whose every
+  // fourth row and column is a motorway, fast and good road with no corners; each level's loops, their motorway share
+  // and how they were built (from the best roads, not a ring)
+  loopsOffHighway() {
+    const g = H.grid({ seed: 11, nx: 40, ny: 40, holes: 0.03, stepDeg: 0.004, lat0: 39.15, lon0: -84.62, motorway: true });
+    const v = R.view(H.tiles(g.nodes, g.edges).tiles);
+    const start = { lat: 39.23, lon: -84.52 };
+    const out = {};
+    for (const level of ['quick', 'fun', 'max']) {
+      const res = R.loop(v, { start, km: 24, level });
+      out[level] = res.routes.map((r) => {
+        let hw = 0, all = 0;
+        for (const e of r.edgeIdx) { all += v.len[e]; if (v.cls[e] <= 1) hw += v.len[e]; }
+        return { hwy: hw / all, km: r.distM / 1000, kind: r.kind || null, retraced: r.retraced, d0: R.distM(start.lat, start.lon, r.coords[0][0], r.coords[0][1]), dN: R.distM(start.lat, start.lon, r.coords[r.coords.length - 1][0], r.coords[r.coords.length - 1][1]) };
+      });
+    }
+    return out;
+  },
+
   // the tiles' corridor: the ellipse grows with the level's budget, and covers() reads index.json
   corridor() {
     const a = { lat: 39.25, lon: -84.6 }, b = { lat: 39.29, lon: -84.75 };
@@ -342,9 +361,12 @@ const CASES = {
     const v1 = R.view(H.tiles(g.nodes, g.edges).tiles);
     const res1 = R.explore(v1, { start: { lat: 39.172, lon: -84.6 }, maxKm: 10, maxS: 1800 });
     const lh = res.stages.find((s) => s.name === 'Long Hollow Road');
+    // loops (graph_router.js loop, built from explore's stages) take neither the subdivision nor the out-and-back road
+    const lp = R.loop(v, { start: { lat: 39.172, lon: -84.6 }, km: 12, level: 'fun' }).routes;
+    const loopStages = [...new Set(lp.flatMap((r) => r.stages || []))];
     const tw = res.stages.find((s) => s.name === 'Twisty Road'), lastLon = g.nodes[end6].lon;
     const twEnds = tw ? [tw.lon[0], tw.lon[tw.lon.length - 1]] : [];
-    return { spurCut: !!tw && Math.max(...twEnds) <= lastLon + 0.0005, twistyKm: tw && +tw.km.toFixed(2),
+    return { loopStages, loops: lp.length, spurCut: !!tw && Math.max(...twEnds) <= lastLon + 0.0005, twistyKm: tw && +tw.km.toFixed(2),
       longHollow: lh ? { km: +lh.km.toFixed(2), deadEnd: !!lh.deadEnd } : null, names: res.stages.map((s) => s.name), first: res.stages[0] && res.stages[0].name, v1names: res1.stages.map((s) => s.name),
       street: R.streetEdge && FunRoute.streetSample ? [R.streetEdge(v, v.name.findIndex((_, e) => v.cls[e] === 6 && v.roadCh.addr_per_km[e] === 70)), FunRoute.streetSample({ cls: 6, addr: 0, bldg: 2, density: 1 }), FunRoute.streetSample({ cls: 6 })] : null };
   },

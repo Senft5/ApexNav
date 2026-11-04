@@ -20,11 +20,13 @@ const TYPES = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/cs
 // tests/graph_fixture.py with the real writer); with none here, an empty index, as a build without tiles answers.
 let graphDir = null;
 const GRAPH = 'data/graph/v1/';
-function graphFixture() {
-  if (graphFixture.dir) return graphFixture.dir;
+function graphFixture(motorway = false) {
+  const key = motorway ? 'motorwayDir' : 'dir';
+  if (graphFixture[key]) return graphFixture[key];
   const dir = fs.mkdtempSync(path.join(require('os').tmpdir(), 'vetta-graph-'));
-  require('child_process').execFileSync('python3', [path.resolve(__dirname, '..', 'tests', 'graph_fixture.py'), dir]);
-  return (graphFixture.dir = dir);
+  // motorway: the same grid with its arterials as motorways (tests/graph_fixture.py)
+  require('child_process').execFileSync('python3', [path.resolve(__dirname, '..', 'tests', 'graph_fixture.py'), dir, ...(motorway ? ['3', '30', '30', '0.004', '39.15', '-84.62', '1'] : [])]);
+  return (graphFixture[key] = dir);
 }
 
 function serve() {
@@ -730,6 +732,28 @@ flow('own routing: best roads nearby from our tiles, timed by our router (no map
     discovered = r.discovered;
     check(r.own > 0 && r.rows > 0, 'roads from our tiles in the list: ' + JSON.stringify(r));
     check(matrix === 0 && discovered === 0, `no Valhalla matrix (${matrix}) and no map stage search (${discovered})`);
+  } finally { graphDir = null; }
+}, { geolocation: { latitude: 39.205, longitude: -84.55 }, permissions: ['geolocation'] });
+
+flow('own routing: a loop from our tiles is built from the best roads and keeps off the motorway (the owner, 2026-11-04: "mostly highway for loops")', async (page, base) => {
+  graphDir = graphFixture(true);
+  try {
+    await page.route('https://valhalla1.openstreetmap.de/**', (route) => route.abort());   // our tiles alone
+    await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); localStorage.setItem('apex.permsExplained', '1'); localStorage.setItem('apex.funLevel', 'fun'); } catch (_) {} });
+    await page.goto(base + '/index.html');
+    await page.waitForFunction(() => window.apexDebug && window.apexDebug.map && window.ApexStages, null, { timeout: 20000 });
+    await page.evaluate(() => {
+      const b = [...document.querySelectorAll('#loopDetents [data-loop-mi]')][0];      // 15 mi
+      b.click(); document.getElementById('findLoopBtn').click();
+    });
+    await page.waitForFunction(() => Array.isArray(window.apexDebug.lastLoop) && !document.getElementById('planPanel').classList.contains('busy'), null, { timeout: 60000 });
+    const r = await page.evaluate(() => ({ loops: window.apexDebug.lastLoop, name: apexDebug.track && apexDebug.track.name,
+      ends: apexDebug.track ? [[apexDebug.track.lat[0], apexDebug.track.lon[0]], [apexDebug.track.lat[apexDebug.track.lat.length - 1], apexDebug.track.lon[apexDebug.track.lon.length - 1]]] : null }));
+    const own = r.loops.filter((d) => d.kind === 'own'), won = r.loops.find((d) => d.picked);
+    check(own.length >= 1 && won && won.kind === 'own' && /loop$/.test(r.name), 'a loop from our tiles won: ' + JSON.stringify(r.loops));
+    check(own.every((d) => Number.isFinite(d.hwyShare) && d.hwyShare <= 0.1), 'every loop of ours keeps motorway to a short link (at most a tenth at Fun): ' + JSON.stringify(own.map((d) => d.hwyShare)));
+    check(!r.loops.some((d) => d.kind === 'circle'), 'no circle drawn round the start when real loops exist: ' + JSON.stringify(r.loops.map((d) => d.kind)));
+    check(Math.hypot(r.ends[0][0] - r.ends[1][0], r.ends[0][1] - r.ends[1][1]) < 0.003, 'it ends where it starts: ' + JSON.stringify(r.ends));
   } finally { graphDir = null; }
 }, { geolocation: { latitude: 39.205, longitude: -84.55 }, permissions: ['geolocation'] });
 

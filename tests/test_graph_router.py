@@ -111,6 +111,7 @@ def test_best_roads_nearby_never_a_neighbourhood_or_a_dead_end():
     houses beside it stays a road."""
     r = case("exploreRoads")
     assert r["first"] == "Twisty Road", r
+    assert r["loops"] >= 1 and not {"Maple Court", "Long Hollow Road"} & set(r["loopStages"]), r
     assert r["spurCut"], "the dead-end spur past the twisty road's last junction is cut back: " + str(r)
     assert "Maple Court" not in r["names"] and "Spur Road" not in r["names"], r
     assert "Creek Lane" in r["names"], "class alone never decides: " + str(r)
@@ -155,6 +156,22 @@ def test_loops_come_back_round():
         assert 8 <= lp["km"] <= 26, lp                                # about the 16 km asked
         assert lp["retraced"] < 0.35, lp
         assert lp["d0"] < 300 and lp["dN"] < 300, lp                  # from the start and back to it
+
+
+def test_loops_keep_off_the_highway_and_come_from_the_best_roads():
+    """The owner (2026-11-04): "it also seems to route mostly highway for loops". On a grid whose arterials are motorways
+    (fast, good road, no corners), every loop at every level is built from the best roads (not a ring round the start) and
+    keeps motorway to a short link: at most a fifth at Quick, a tenth at Fun and Long way (the old rings: 73-84 % at
+    Quick, 11-19 % at Fun)."""
+    r = case("loopsOffHighway")
+    for level, cap in (("quick", 0.2), ("fun", 0.1), ("max", 0.1)):
+        loops = r[level]
+        assert len(loops) >= 2, (level, loops)
+        for lp in loops:
+            assert lp["kind"] == "stages", (level, lp)
+            assert lp["hwy"] <= cap, (level, lp)
+            assert lp["retraced"] < 0.4, (level, lp)
+            assert lp["d0"] < 300 and lp["dN"] < 300, (level, lp)
 
 
 def test_corridor_tiles_and_coverage():

@@ -32,6 +32,34 @@ const out = {
     return loops.map((d) => ({ name: d.name, v: d.score + F.loopLevelAdjust(d.fun, d.off, l) })).sort((a, b) => b.v - a.v)[0].name;
   }),
   levels: Object.fromEntries(Object.entries(F.LEVELS).map(([k, v]) => [k, v.label])),
+  // the owner's 90 mi Long way loops (2026-11-04): A 1:53 and 118 corners, B 2:12 and 90, C 2:03 and 89; C nearest the
+  // length and on better-scored road, so the old value ranked it first
+  owner90: (() => {
+    const loops = [{ name: 'A', fun: { fun: 20 }, off: -0.12, score: -150, corners: 118, timeS: 6780, retraced: 0.02, hwyShare: 0.05 },
+      { name: 'B', fun: { fun: 14 }, off: 0.04, score: -160, corners: 90, timeS: 7920, retraced: 0.02, hwyShare: 0.04 },
+      { name: 'C', fun: { fun: 15 }, off: 0, score: -120, corners: 89, timeS: 7380, retraced: 0.03, hwyShare: 0.06 }];
+    const old = (l) => loops.map((d) => ({ name: d.name, v: d.score + F.loopLevelAdjust(d.fun, d.off, l) })).sort((a, b) => b.v - a.v).map((x) => x.name);
+    const now = (l) => F.loopRank(loops, l).map((x) => x.item.name);
+    return { old: ['quick', 'fun', 'max'].map(old), now: ['quick', 'fun', 'max'].map(now) };
+  })(),
+  // most of a loop on the highway: it scored better (no side streets, good road) and won; now the level charges it
+  highway: (() => {
+    const loops = [{ name: 'highway', fun: { fun: 12 }, off: 0, score: -60, corners: 40, timeS: 3000, retraced: 0, hwyShare: 0.8 },
+      { name: 'back roads', fun: { fun: 14 }, off: 0.05, score: -100, corners: 35, timeS: 3300, retraced: 0.02, hwyShare: 0.02 },
+      { name: 'unknown', fun: { fun: 5 }, off: 0, score: -140, corners: 20, timeS: 3600, retraced: 0, hwyShare: null }];
+    return ['quick', 'fun', 'max'].map((l) => F.loopRank(loops, l).map((x) => x.item.name));
+  })(),
+  hwyCost: [[0.08, 'fun'], [0.3, 'quick'], [0.3, 'fun'], [0.3, 'max'], [null, 'max'], [0.8, 'fun']].map(([s, l]) => F.loopHighwayCost(s, l)),
+  dominates: [
+    F.loopDominates({ corners: 118, timeS: 6780 }, { corners: 89, timeS: 7380 }),
+    F.loopDominates({ corners: 89, timeS: 7380 }, { corners: 118, timeS: 6780 }),
+    F.loopDominates({ corners: 118, timeS: 6780, hwyShare: 0.6 }, { corners: 89, timeS: 7380, hwyShare: 0.05 }),
+    F.loopDominates({ corners: 118, timeS: 6780, retraced: 0.3 }, { corners: 89, timeS: 7380, retraced: 0.02 }),
+    F.loopDominates({ corners: 118, timeS: 6780, hard: true }, { corners: 89, timeS: 7380 }),
+    F.loopDominates({ corners: 90, timeS: 7380 }, { corners: 90, timeS: 7380 }),
+    F.loopDominates({ corners: null, timeS: 6000 }, { corners: 89, timeS: 7380 }),
+    F.loopDominates({ corners: 60, timeS: 2340, off: 0.75 }, { corners: 40, timeS: 2400, off: 0.05 }),
+  ],
 };
 console.log(JSON.stringify(out));
 """
@@ -114,3 +142,22 @@ def test_plain_words_for_a_new_driver():
     for word in ("Max fun", "Corner mix", "stamped means", "stamped ranks"):
         assert word not in html, word
     assert "['Twist'," not in js and "['Flow'," not in js
+
+
+def test_a_loop_beaten_on_corners_and_time_never_wins(out):
+    """The owner's 90 mi Long way case: C (2:03, 89 corners) was picked over A (1:53, 118 corners). A loop another one
+    beats on both of the card's numbers, without more of it retraced or on highway, never ranks above it, at any level."""
+    assert out["owner90"]["old"][2][0] == "C"                       # the old ranking: C at Long way
+    for order in out["owner90"]["now"]:
+        assert order.index("A") < order.index("C") and order.index("A") < order.index("B"), order
+    assert out["dominates"] == [True, False, False, False, False, False, False, False]
+
+
+def test_a_loop_pays_for_its_highway_share(out):
+    """Motorway or trunk on a loop costs 1.5 points per % over a tenth at Fun (a twentieth at Long way, a quarter at a
+    lower rate at Quick); a short link costs nothing, and an unknown road class costs nothing either."""
+    assert out["hwyCost"][0] == 0 and out["hwyCost"][4] == 0
+    assert abs(out["hwyCost"][1] - 5) < 1e-9 and abs(out["hwyCost"][2] - 30) < 1e-9 and abs(out["hwyCost"][3] - 37.5) < 1e-9
+    assert abs(out["hwyCost"][5] - 105) < 1e-9
+    for order in out["highway"]:                                    # the mostly-highway loop no longer wins at any level
+        assert order[0] == "back roads", order
