@@ -2392,10 +2392,13 @@
           }, 200);
         });
       }
+      // the web: the idle map's watchPosition keeps lastPosition fresh; a fix under 10 s old is used as it is (asking again
+      // cost a plan 0.2-0.5 s, live 2026-11-05: the second plan's first route came up later than the first's)
+      if (state.lastPosition && performance.now() - (state.lastPositionAt || 0) < 10000) return Promise.resolve(state.lastPosition);
       return new Promise((resolve) => {
         if (!navigator.geolocation) { resolve(null); return; }
         navigator.geolocation.getCurrentPosition(
-          (p) => { state.lastPosition = { lat: p.coords.latitude, lon: p.coords.longitude }; refreshAutoNight(); resolve(state.lastPosition); },
+          (p) => { state.lastPosition = { lat: p.coords.latitude, lon: p.coords.longitude }; state.lastPositionAt = performance.now(); refreshAutoNight(); resolve(state.lastPosition); },
           () => resolve(state.lastPosition || null),               // no fresh fix: the last one known (a re-plan's start), else none
           { enableHighAccuracy: true, timeout: 10000, maximumAge: 30000 });
       });
@@ -2785,10 +2788,12 @@
       if (link) { openMapsLink(link); return; }
       const ui = planBusy();
       ui.step('Finding…', 0.3);
+      const q0 = Date.now();
       try {
         toast('Searching…');
         const from = await resolvePlace(fromQ);
         const to = await resolvePlace(toQ);
+        if (window.apexDebug) window.apexDebug.resolveMs = Date.now() - q0;
         ui.step('Routing…', 0.7);
         // Kept on the track so a reroute can rebuild it; from: null = the phone's position.
         const request = { from: from.label === null ? null : { lat: from.lat, lon: from.lon }, to: { lat: to.lat, lon: to.lon }, via: [] };
@@ -3077,6 +3082,9 @@
     try { funLevel = FunRoute.LEVELS[localStorage.getItem(FUN_LEVEL)] ? localStorage.getItem(FUN_LEVEL) : 'fun'; } catch (_) { /* storage off */ }
     async function funRoute(from, to, id, name, request, ui, opts = {}) {
       const level = funLevel, planT0 = Date.now();      // the early quickest counts from here, not from the router's answer
+      // where the plan's time goes (apexDebug.planMarks: [step, ms from the plan's start]; the live harness reads them)
+      const mark = (k) => { if (window.apexDebug) (window.apexDebug.planMarks = window.apexDebug.planMarks || []).push([k, Date.now() - planT0]); };
+      if (window.apexDebug) { window.apexDebug.planMarks = []; window.apexDebug.planStartAt = performance.now(); }
       const before = opts.early === false ? plannedRoute : null;   // a re-plan of the route on screen: what it's measured against
       // The stages round the whole trip (the map tiles' roads, scored, then the network step) don't need the router's answer:
       // they're found while it routes (live: 2 s of tile scoring after the routes came back)
@@ -3103,6 +3111,7 @@
       // (the router's own request goes out first: the coverage answer is a lookup, but the worker may be starting)
       const valhallaP = valhallaRoutes([from, to], false, 2).catch(() => osrmRoutes([from, to])).catch(() => []);
       const ownCovered = ownOn() ? !!(await RouteLoading.optional(ownRouter().covers([from, to]), OWN_COVERS_MS)) : false;
+      mark('covers');
       // (not with our tiles: the map tiles' road data is in them, and the context for our routes doesn't read it)
       try { if (!ownCovered && window.ApexOsmTiles && window.ApexRouteCtx && ApexRouteCtx.corridor && (!window.ApexFlags || ApexFlags.on('route_engine'))) ApexOsmTiles.prefetch([ApexRouteCtx.corridor('ahead', [[from.lon, from.lat], [to.lon, to.lat]], {})]); } catch (_) { /* nothing ahead: fetched with the context */ }
       // members' measured roads round the trip go into our search itself (signed out or none: unchanged)
@@ -3135,14 +3144,16 @@
         setTimeout(() => {
           if (!q.t) { q.t = FunRoute.geometry(q.route.coords, Core); q.fun = funOf(q.t, q.route.turns); }
           early.shown = useOption({ id, name, request, level, quickest: q, list: [{ ...q, extraS: 0 }] }, 0, EARLY_SIGHT_MS).catch(() => null);
+          early.shown.then(() => mark('firstUp'));
           early.shown.then(openGate);
         }, Math.max(0, EARLY_MS - (Date.now() - planT0)));
       };
-      if (ownQuickP) ownQuickP.then((c) => { if (c) fireEarly([c]); });
+      if (ownQuickP) ownQuickP.then((c) => { mark('quick'); if (c) fireEarly([c]); });
       const hwyCandsP = hwyTry.then((rs) => rs.filter(r => Number.isFinite(r.timeS)).map(r => ({ kind: 'router', highway: true, route: r, timeS: r.timeS, via: [] })));
       hwyCandsP.then((h) => { if (!ownCovered) fireEarly(h); });
       const own = ownP ? await ownP : { cands: [], reason: ownOn() ? 'out' : 'off', ms: 0 };
       const ownUsed = own.cands.length > 0;
+      mark('own');
       // our quickest already on screen is the same route as the plan's quickest: the plan keeps that very candidate, so
       // the ranking can keep the route drawn (and the card says it was checked, not "Better route found")
       if (ownUsed && quickNow && quickNow.kind === 'own') {
@@ -3162,7 +3173,9 @@
       const ctxRun = (cs, prefix) => (ownUsed ? contextOn(cs, OWN_CTX_MS, prefix, OWN_CTX) : contextOn(cs, CTX_BUDGET_MS, prefix));
       const directCtx = ownUsed ? ctxRun(directCands.slice(), 'route') : firstUp.then(() => ctxRun(directCands.slice(), 'route'));
       // ours: their light geometry, corners and forecasts while the context runs (the page is idle meanwhile)
+      // (after the first route is drawn: that build has the page to itself)
       const ownPrep = ownUsed ? (async () => {
+        await firstUp;
         for (const c of directCands) { if (!c.t) { c.t = FunRoute.geometry(c.route.coords, Core); c.fun = funOf(c.t, c.route.turns); } await RouteLoading.yieldToUI(); }
         return weatherFetch(directCands);
       })().catch(() => new Map()) : null;
@@ -3170,7 +3183,7 @@
       let hwyCands;
       if (ownUsed) {
         // Valhalla's checks (its quickest and its highway-friendly route) with their own context: they join the ranking
-        // when they're in by the time ours is ready (OWN_CHECK_GRACE_MS after our context), else ours rank alone, on our
+        // when they're in by the time ours is ready (already landed when our context is), else ours rank alone, on our
         // own clock; when they're in, ours go on Valhalla's clock where both are the same way (own_routing.js oneClock)
         const checksP = (async () => {
           const [vr, hw] = await Promise.all([RouteLoading.optional(valhallaP, OWN_CHECK_MS), RouteLoading.optional(hwyCandsP, OWN_CHECK_MS)]);
@@ -3182,8 +3195,11 @@
           if (list.length) await ctxRun(list, 'check');
           return list;
         })().catch(() => []);
-        await directCtx;
-        hwyCands = (await RouteLoading.optional(checksP, OWN_CHECK_GRACE_MS)) || [];
+        let checksIn = null;
+        checksP.then((l) => { checksIn = l; });
+        await directCtx; mark('ownCtx');
+        // in already, or not at all: a timer here waits on a busy page (live: 150 ms asked, 310 ms waited)
+        hwyCands = checksIn || []; mark('checks');
         if (window.apexDebug && window.apexDebug.lastOwn) window.apexDebug.lastOwn.checks = hwyCands.length;
       } else {
         // the highway-costed route the router also gave as its own is kept once (the one on screen, if it went up first)
@@ -3270,6 +3286,7 @@
       const pool = FunRoute.keepAvoiding(cands, avoid);
       // Score on light geometry (corners only); the full track (envelope, sight lines, notes) is built for the winner.
       const leaving = new Date();
+      mark('poolStart');
       for (const c of pool) {
         if (!c.t) { c.t = FunRoute.geometry(c.route.coords, Core); c.fun = funOf(c.t, c.route.turns); }
         c.glare = FunRoute.glare(c.t, c.timeS, leaving);                    // minutes driving into a low sun, if you leave now
@@ -3283,8 +3300,6 @@
       // and the forecasts, costed once the context is in (ours asked for theirs already)
       const forecasts = ownPrep ? await ownPrep : weatherFetch(pool);
       if (ownPrep) for (const c of pool) if (!forecasts.has(c) && c.t && window.ApexRouteWeather) forecasts.set(c, forecastOf(c));
-      const mark = (k) => { if (window.apexDebug) (window.apexDebug.planMarks = window.apexDebug.planMarks || []).push([k, Date.now() - planT0]); };
-      if (window.apexDebug) window.apexDebug.planMarks = [];
       mark('pool');
       await townsOn(pool.map(c => c.t), pool); mark('towns');
       await ctx; mark('ctx');
@@ -3292,7 +3307,7 @@
       tasteOn(pool);
       await applyMeasured(rankPool(pool, level).slice(0, 3).map(r => pool.find(c => c.t === r.t)), ui); mark('measured');   // the top few only
       await preferOn(pool, level); mark('prefer');
-      let ranked = rankPool(pool, level);
+      let ranked = rankPool(pool, level); mark('ranked');
       // never an empty ranking (route_engine.js keeps the least bad when all break a hard constraint); if a future change
       // empties it anyway, today's ranking still gives a route
       if (!ranked.length) ranked = FunRoute.rank(pool, level);
@@ -3302,7 +3317,7 @@
       const quickest = ranked.find(c => c.t === quickPool.t) || quickPool;   // with the engine's parts, for the why line
       let shownEarly = null;                                               // the early first route (#294/#295), for the swap line
       if (early.fired) {                                                   // the quickest is already up: replace it unless it's taken
-        const shown = await early.shown;
+        const shown = await early.shown; mark('earlyAwaited');
         if (shown && (state.mode === 'live' || plannedRoute !== shown)) return true;
         shownEarly = shown;
       }
@@ -3338,11 +3353,11 @@
     const EARLY_MS = 0, EARLY_SIGHT_MS = 100, FIRST_GATE_MS = 1800;
     // Our own router (graph_worker.js), started on the first plan; the Valhalla check waits at most OWN_CHECK_MS once
     // our routes are in, and the chosen route's instructions at most OWN_INSTRUCT_MS (else our own maneuvers)
-    const OWN_CHECK_MS = 2500, OWN_INSTRUCT_MS = 3000, OWN_COVERS_MS = 1500, OWN_CHECK_GRACE_MS = 150;
+    const OWN_CHECK_MS = 2500, OWN_INSTRUCT_MS = 3000, OWN_COVERS_MS = 1500;
     // Own-routed plans: the tiles carry the static road data (land use, density, businesses, signals, the grid, the DEM,
     // corners) as the engine's own scores (route_ctx/graph.js), so only the time-dependent providers run, in OWN_CTX_MS.
     // Members' data is in the search already (crowd), the driver's For this drive choices are local.
-    const OWN_CTX = ['graph', 'context_grid', 'conditions', 'wildlife', 'events', 'hazards-live', 'driver'], OWN_CTX_MS = 900, OWN_WEATHER_GRACE_MS = 100;
+    const OWN_CTX = ['graph', 'context_grid', 'conditions', 'wildlife', 'events', 'hazards-live', 'driver'], OWN_CTX_MS = 900, OWN_WEATHER_GRACE_MS = 0;
     let ownClient = null;
     const ownOn = () => !!(window.ApexOwnRouting && window.ApexGraphRouter && ApexOwnRouting.on());
     const ownRouter = () => (ownClient || (ownClient = ApexGraphRouter.client({ url: 'graph_worker.js' })));
@@ -4363,6 +4378,7 @@
     ['fromInput', 'destInput'].forEach(id => {
       $(id).addEventListener('keydown', (e) => {
         if (e.key !== 'Enter') return;
+        if (window.apexDebug) window.apexDebug.enterAt = performance.now();
         e.preventDefault(); e.target.blur();
         if (id === 'fromInput' && $('optSheet').classList.contains('open')) { closeOptions(); if (!plannedRoute && $('destInput').value.trim()) routeToQuery(); return; }
         const pasted = id === 'destInput' && window.ApexRouteImport && ApexRouteImport.parseMapsLink($('destInput').value);   // a maps link beats the top suggestion

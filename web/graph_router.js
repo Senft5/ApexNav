@@ -300,7 +300,7 @@
     const level = levels()[req.level] ? req.level : 'fun', obj = objective(v, req);
     const { src, dst } = snapBoth(v, req.from, req.to);
     const sc = startCostFor(v, req.from.heading != null ? req.from.heading : req.heading);
-    const r = search(v, obj, src, dst, 0, null, sc ? { startCost: sc } : {});
+    const r = search(v, obj, src, dst, 0, null, { ...(sc ? { startCost: sc } : {}), ellipse: ellipseFor(req.from, req.to, level) });
     if (!r) throw new Error('no route');
     return assemble(v, r, obj, { level, role: 'quickest', a: 0 });
   }
@@ -542,6 +542,10 @@
     }
     let settled = 0;
     const maxSettle = opts.maxSettle || 4e6;
+    // the corridor ellipse (opts.ellipse { a, b, major } in degrees and metres): a node outside it is never entered, so a
+    // weak heuristic (a large goodness weight) can't flood the whole loaded network
+    const el = opts.ellipse || null, inS = S.inS || (S.inS = new Uint32Array(v.N)), inV = S.inV || (S.inV = new Uint8Array(v.N));
+    const bound = el ? (n) => { if (inS[n] !== qid) { inS[n] = qid; inV[n] = distM(v.lat[n], v.lon[n], el.a.lat, el.a.lon) + distM(v.lat[n], v.lon[n], el.b.lat, el.b.lon) <= el.major ? 1 : 0; } return inV[n] === 1; } : null;
     while (S.hn > 0) {
       const p = pop();
       if (popK >= bestGoal) break;
@@ -550,7 +554,7 @@
       if (++settled > maxSettle) break;
       for (let e = v.first[node]; e < v.first[node + 1]; e++) {
         const head = v.to[e];
-        if (head < 0 || !allowed(v, p, e)) continue;
+        if (head < 0 || !allowed(v, p, e) || (bound && !bound(head))) continue;
         const tc = turnCost(v, p, e, obj);
         if (tc === Infinity) continue;
         const be = base(e), x = gp + tc + be;
@@ -701,6 +705,11 @@
    * both ends at most crow × (1 + budget) × ROAD + 4 km (a road is about 1.25-1.4 × the crow line; the slack lets a short
    * trip reach a good road). A loop: the circle its length can reach.
    */
+  /** The corridor ellipse a level's budget can reach (as tilesFor sizes it): foci at the ends, the sum of distances. */
+  function ellipseFor(from, to, level = 'fun') {
+    const L = levels()[level] || levels().fun, crow = distM(from.lat, from.lon, to.lat, to.lon);
+    return { a: from, b: to, major: Math.max(crow * (1 + L.budget) * 1.3 + 4000, crow + 6000) };
+  }
   function tilesFor(from, to, level = 'fun', o = {}) {
     const L = levels()[level] || levels().fun;
     const crow = distM(from.lat, from.lon, to.lat, to.lon);
@@ -753,7 +762,7 @@
     const obj = objective(v, req);
     const { src, dst } = snapBoth(v, req.from, req.to);
     const sc = startCostFor(v, req.from.heading != null ? req.from.heading : req.heading);
-    const opts = sc ? { startCost: sc } : {};
+    const opts = { ...(sc ? { startCost: sc } : {}), ellipse: ellipseFor(req.from, req.to, level) };
     const run = (a, penal = null, role = 'step') => { const r = search(v, obj, src, dst, a, penal, opts); return r ? assemble(v, r, obj, { level, role, a }) : null; };
     const quick = run(0, null, 'quickest');
     if (!quick) throw new Error('no route');
