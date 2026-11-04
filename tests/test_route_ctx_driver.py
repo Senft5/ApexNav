@@ -152,9 +152,9 @@ def test_query_is_tiles_only_and_provider_never_blocks():
     assert out["quiet"] == "ok"                                       # no OSM preference on: nothing fetched
 
 
-def test_overpass_fixture_parses_when_present():
-    fx = ROOT / "tests" / "fixtures" / "route_ctx" / "overpass_driver_pittsburgh.json"
-    if not fx.exists():
-        pytest.skip("fixture not saved")
-    out = run(f"(() => {{ const f = D.parseOsm({fx.read_text()}); return f.reduce((o, x) => (o[x.kind] = (o[x.kind] || 0) + 1, o), {{}}); }})()")
-    assert out.get("lit", 0) > 0
+
+def test_real_overpass_answer_fort_pitt_tunnel():
+    """A real Overpass answer for the driver query (Fort Pitt Tunnel, Pittsburgh): the tunnel ways, lit=24/7 counts as lit."""
+    fx = ROOT / "tests" / "fixtures" / "route_ctx" / "overpass_driver_fort_pitt_tunnel.json"
+    out = run(f"(() => {{ const f = D.parseOsm({fx.read_text()}); return f.map((x) => [x.kind, x.value]); }})()")
+    assert out.count(["tunnel", 1]) == 3 and out.count(["lit", 1]) == 2 and ["lit", 0] not in out

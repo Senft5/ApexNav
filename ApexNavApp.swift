@@ -593,7 +593,11 @@ enum ApexContext {
     private static func nextEventStart() -> Date? {
         let now = Date()
         let predicate = store.predicateForEvents(withStart: now, end: now.addingTimeInterval(24 * 3600), calendars: nil)
-        return store.events(matching: predicate).filter { !$0.isAllDay && $0.startDate > now }.map { $0.startDate }.min()
+        // EKEvent.startDate is implicitly unwrapped: compactMap keeps the type Date and skips a missing one
+        return store.events(matching: predicate).compactMap { (e: EKEvent) -> Date? in
+            guard !e.isAllDay, let start = e.startDate, start > now else { return nil }
+            return start
+        }.min()
     }
 
     /// Seconds of music left: the rest of the now-playing song, plus its album's later tracks when the library has them.

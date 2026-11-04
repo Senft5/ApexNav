@@ -19,7 +19,7 @@
 //   skill_fit      -1..1   how well tech_level suits the technicality offered from the driver's skill trend (skillTrend);
 //                          NaN until SKILL_MIN_DRIVES scored drives
 //   dark            0/1    after dusk at the sample's ETA (sun.js isDark); NaN without an ETA
-//   lit             0/1    OSM lit=yes 1 / lit=no 0; NaN untagged or not fetched (most back roads are untagged: unknown)
+//   lit             0/1    OSM lit=yes (or 24/7, automatic...) 1 / lit=no 0; NaN untagged or not fetched (most back roads are untagged: unknown)
 //   cyclist_route   0/1    on a mapped bicycle route (OSM route=bicycle) 1, not on one 0; NaN when OSM didn't answer
 //   cyclist_time    0..1   how many riders to expect then: weekend morning 1, other daylight 0.5, dark 0.2; NaN no ETA
 //   tunnel          0/1    in a tunnel (OSM tunnel=yes); NaN when OSM didn't answer
@@ -160,6 +160,7 @@
       // a cycle route's roads inside the tiles only: a national route's relation spans states
       + `(${bs.map((b) => `relation["route"="bicycle"](${b});`).join('')})->.r;(${bs.map((b) => `way(r.r)["highway"](${b});`).join('')});out ids geom qt;`;
   }
+  const LIT = { yes: 1, '24/7': 1, automatic: 1, 'sunset-sunrise': 1, interval: 1, limited: 1, no: 0, disused: 0 };
   /** Overpass elements as features: [{ kind: 'lit'|'tunnel'|'cycle', value, geom }]. A way without tags is a bicycle route's. */
   function parseOsm(json) {
     const out = [];
@@ -167,7 +168,8 @@
       if (!x || x.type !== 'way' || !Array.isArray(x.geometry)) continue;
       const g = x.geometry.map((p) => [p.lat, p.lon]);
       if (!x.tags) { out.push({ kind: 'cycle', value: 1, geom: g }); continue; }
-      if (x.tags.lit === 'yes' || x.tags.lit === 'no') out.push({ kind: 'lit', value: x.tags.lit === 'yes' ? 1 : 0, geom: g });
+      const lit = LIT[x.tags.lit];                                      // 24/7, automatic, sunset-sunrise... are lit; no and disused are not
+      if (lit !== undefined) out.push({ kind: 'lit', value: lit, geom: g });
       if (x.tags.tunnel === 'yes') out.push({ kind: 'tunnel', value: 1, geom: g });
     }
     return out;

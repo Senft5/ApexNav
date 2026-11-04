@@ -282,8 +282,8 @@
         const redoBoard = part((c2) => board(c2, redoBoard), () => boardSec, (n) => { boardSec = n; });
         driveSec = thisWeek(c, redoDrive); boardSec = board(c, redoBoard);
         // P-03: the run, the people, what they said, then the board; the livery last, as one line
-        box.replaceChildren(header(c, draw), el('div', { className: 'cp-body' }, titleBlock(c), driveSec, members(c), meetShare(c), chat(c, draw), boardSec,
-          ...(c.house ? [houseBoard(c)] : []), ...(c.pinned ? [pinnedRow(c)] : []), buildsRow(c), liveryFoot(c, draw)));
+        box.replaceChildren(header(c, draw), el('div', { className: 'cp-body' }, titleBlock(c), driveSec, members(c), chat(c, draw), boardSec,
+          ...(c.house ? [houseBoard(c)] : []), ...(c.pinned ? [pinnedRow(c)] : []), buildsRow(c), meetShare(c), liveryFoot(c, draw)));
       };
       draw();
       return box;
