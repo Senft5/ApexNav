@@ -137,6 +137,42 @@ def test_v2_road_channels_round_trip(tmp_path):
 
 
 @needs_node
+def test_v3_via_way_restrictions_round_trip(tmp_path):
+    """v3: a via-way restriction (from edge, via edges in order, to edge, each in its own tile) in both readers."""
+    a, _ = sample_tiles()
+    A, B = (381, 516), (382, 516)
+    a.via_restrictions = [T.ViaRestriction(from_edge=(A, 0), via=[(A, 2), (A, 3), (B, 0)], to_edge=(A, 1), only=False),
+                          T.ViaRestriction(from_edge=(B, 0), via=[(A, 3)], to_edge=(A, 2), only=True)]
+    p = tmp_path / "381_516.vgr"
+    p.write_bytes(T.write_tile(a))
+    r = T.read_tile(p.read_bytes())
+    assert r["via_restrictions"] == [
+        {"from_edge": 0, "from_tile": None, "via": [2, 3, 0], "via_tiles": [None, None, B], "to_edge": 1, "to_tile": None, "only": False},
+        {"from_edge": 0, "from_tile": B, "via": [3], "via_tiles": [None], "to_edge": 2, "to_tile": None, "only": True}]
+    assert r["restrictions"][0]["to_edge"] == 2          # the via-node table is untouched
+    js = r"""
+const G = require(process.argv[1] + '/web/graph_tiles.js'), fs = require('fs');
+const b = fs.readFileSync(process.argv[2]), t = G.decode(b.buffer.slice(b.byteOffset, b.byteOffset + b.length));
+console.log(JSON.stringify({ v: t.restrictionsVia, n: t.restrictions.length, e: t.edges.count }));
+"""
+    j = json.loads(subprocess.run([NODE, "-e", js, ROOT, str(p)], capture_output=True, text=True, check=True).stdout)
+    key = lambda t: (t[0] << 16) | t[1]  # noqa: E731
+    assert j["v"] == [{"from": 0, "fromTile": key(A), "via": [2, 3, 0], "viaTiles": [key(A), key(A), key(B)], "to": 1, "toTile": key(A), "only": False},
+                      {"from": 0, "fromTile": key(B), "via": [3], "viaTiles": [key(A)], "to": 2, "toTile": key(A), "only": True}]
+    assert j["n"] == 1 and j["e"] == 4
+
+
+def test_older_versions_still_read(tmp_path):
+    """A v2 tile (no via-way table) reads in v3 readers: patch a written tile's version to 2 with no via table."""
+    a, _ = sample_tiles()
+    b = bytearray(T.write_tile(a))
+    import struct
+    struct.pack_into("<H", b, 4, 2)
+    r = T.read_tile(bytes(b))
+    assert r["via_restrictions"] == [] and len(r["edges"]["to"]) == 4
+
+
+@needs_node
 def test_js_reads_what_python_wrote(tmp_path):
     a, b = sample_tiles()
     pa, pb = tmp_path / "381_516.vgr", tmp_path / "382_516.vgr"
@@ -182,7 +218,49 @@ const fetchFn = async (url) => { asked.push(url); const p = path.join(dir, url);
 """
     r = json.loads(subprocess.run([NODE, "-e", js, ROOT, str(tmp_path)], capture_output=True, text=True, check=True).stdout)
     assert r["edges"] == 4 and r["none"] is None and r["same"]
-    assert r["asked"] == ["data/graph/v1/index.json", "data/graph/v1/382_516.vgr"]   # tile 1_1 not in the index: never fetched
+    # the region's index asked once (none here), tile 1_1 in neither index: never fetched
+    assert sorted(r["asked"]) == sorted(["data/graph/v1/index.json", "/api/graph/v1/index.json", "data/graph/v1/382_516.vgr"])
+
+
+@needs_node
+def test_js_load_unions_the_shipped_and_region_tiles(tmp_path):
+    """Coverage is the union of both indexes; the shipped copy wins for the same build, the region's for another build
+    (a route never mixes two builds across a tile edge); prefetchArea keeps a box's tiles."""
+    a, b = sample_tiles()
+    ship, reg = tmp_path / "data" / "graph" / "v1", tmp_path / "api" / "graph" / "v1"
+    ship.mkdir(parents=True)
+    reg.mkdir(parents=True)
+    (ship / "381_516.vgr").write_bytes(T.write_tile(a))
+    (reg / "381_516.vgr").write_bytes(T.write_tile(a))
+    (reg / "382_516.vgr").write_bytes(T.write_tile(b))
+    js = r"""
+const G = require(process.argv[1] + '/web/graph_tiles.js'), fs = require('fs'), path = require('path');
+const dir = process.argv[2], asked = [];
+const fetchFn = async (url) => { asked.push(url); const p = path.join(dir, url); if (!fs.existsSync(p)) return { ok: false };
+  const b = fs.readFileSync(p); return { ok: true, json: async () => JSON.parse(b), arrayBuffer: async () => b.buffer.slice(b.byteOffset, b.byteOffset + b.length) }; };
+const write = (f, j) => fs.writeFileSync(path.join(dir, f), JSON.stringify(j));
+(async () => {
+  const out = {};
+  for (const [label, regionBuild] of [['same', 'w45-aa'], ['other', 'w46-bb']]) {
+    G._indexes.clear(); G._mem.clear(); asked.length = 0;
+    write('data/graph/v1/index.json', { build: 'w45-aa', tiles: { '381_516': {} } });
+    write('api/graph/v1/index.json', { build: regionBuild, tiles: { '381_516': {}, '382_516': {} } });
+    const ix = await G.index({ fetchFn });
+    const t1 = await G.load(381, 516, { fetchFn }), t2 = await G.load(382, 516, { fetchFn });
+    out[label] = { tiles: Object.keys(ix.tiles).sort(), t1: !!t1, t2: !!t2, asked: asked.filter((u) => u.endsWith('.vgr')) };
+  }
+  G._indexes.clear(); G._mem.clear(); asked.length = 0;
+  out.prefetch = await G.prefetchArea({ s: 39.0, w: -84.6, n: 39.2, e: -84.4 }, { fetchFn });
+  out.prefetchAsked = asked.filter((u) => u.endsWith('.vgr')).sort();
+  console.log(JSON.stringify(out));
+})();
+"""
+    r = json.loads(subprocess.run([NODE, "-e", js, ROOT, str(tmp_path)], capture_output=True, text=True, check=True).stdout)
+    assert r["same"]["tiles"] == ["381_516", "382_516"] and r["same"]["t1"] and r["same"]["t2"]
+    assert r["same"]["asked"] == ["data/graph/v1/381_516.vgr", "/api/graph/v1/382_516.vgr"]       # shipped first
+    assert r["other"]["asked"] == ["/api/graph/v1/381_516.vgr", "/api/graph/v1/382_516.vgr"]      # one build across the edge
+    assert r["prefetch"] == {"tiles": 2, "kept": 2}
+    assert r["prefetchAsked"] == ["/api/graph/v1/381_516.vgr", "/api/graph/v1/382_516.vgr"]   # the region build still differs
 
 
 SHIPPED = os.path.join(ROOT, "web", "data", "graph", "v1")
@@ -205,3 +283,16 @@ def test_shipped_tiles_decode_and_agree():
         olat, olon = T.tile_origin(r["i"], r["j"])
         assert all(olat <= la < olat + 250000 for la in r["nodes"]["lat"])
         assert all(olon <= lo < olon + 250000 for lo in r["nodes"]["lon"])
+
+
+@pytest.mark.skipif(not os.path.exists(os.path.join(SHIPPED, "index.json")), reason="no shipped graph tiles")
+def test_shipped_tiles_are_one_region_build(tmp_path):
+    """The shipped Cincinnati set is cut from a region build (tools/graph_etl/bundle.py): it names that build, so the
+    phone uses it first; bundle() cuts the same set again from a region directory."""
+    from tools.graph_etl import bundle
+    ix = json.load(open(os.path.join(SHIPPED, "index.json")))
+    assert ix.get("build") and ix["tile_count"] == len(ix["tiles"]) == 16
+    assert sorted(f[:-4] for f in os.listdir(SHIPPED) if f.endswith(".vgr")) == sorted(ix["tiles"])
+    assert sum(os.path.getsize(os.path.join(SHIPPED, f"{k}.vgr")) for k in ix["tiles"]) <= 20e6
+    again = bundle.bundle(SHIPPED, str(tmp_path / "b"))
+    assert again["build"] == ix["build"] and sorted(again["tiles"]) == sorted(ix["tiles"])

@@ -37,6 +37,10 @@ function serve() {
       if (f && fs.existsSync(f)) { res.writeHead(200, { 'content-type': TYPES[path.extname(f)] || 'application/octet-stream' }); fs.createReadStream(f).pipe(res); return; }
       if (rel === GRAPH + 'index.json') { res.writeHead(200, { 'content-type': 'application/json' }); res.end('{"tiles":{}}'); return; }
     }
+    // the Worker's region routes (backend/src/graph.ts, context_grid.ts): offline here, as on a phone with no region yet
+    if (rel === 'api/graph/v1/index.json') { res.writeHead(200, { 'content-type': 'application/json' }); res.end('{"version":3,"build":"none","tiles":{}}'); return; }
+    if (rel === 'api/ctx/v1/index.json') { res.writeHead(200, { 'content-type': 'application/json' }); res.end('{"v":1,"bundles":{}}'); return; }
+    if (rel.startsWith('api/graph/') || rel.startsWith('api/ctx/')) { res.writeHead(404); res.end(); return; }
     const file = path.resolve(WEB, rel);
     if (!file.startsWith(WEB + path.sep) || !fs.existsSync(file) || fs.statSync(file).isDirectory()) { res.writeHead(404); res.end(); return; }
     res.writeHead(200, { 'content-type': TYPES[path.extname(file)] || 'application/octet-stream' });

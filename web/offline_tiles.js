@@ -91,6 +91,12 @@
     for (const [z, x, y] of p.dem) urls.push(DEM.replace('{z}', z).replace('{x}', x).replace('{y}', y));
     // the route context bundles for the area (route_ctx/context_grid.js), so offline plans keep their traffic and land data
     if (root.ApexContextGrid) { try { urls.push(...await root.ApexContextGrid.urlsNear(lat, lon, p.radiusKm)); } catch (_) {} }
+    // Vetta's own road network for the area (web/graph_tiles.js), kept in its IndexedDB store so own routing works offline
+    let graph = null;
+    if (root.ApexGraphTiles && root.ApexGraphTiles.prefetchArea) {
+      const dLat = p.radiusKm / 110.54, dLon = p.radiusKm / (111.32 * Math.cos(lat * Math.PI / 180));
+      graph = root.ApexGraphTiles.prefetchArea({ s: lat - dLat, w: lon - dLon, n: lat + dLat, e: lon + dLon }).catch(() => null);
+    }
     let done = 0, bytes = 0, k = 0;
     await Promise.all(Array.from({ length: concurrency }, async () => {
       while (k < urls.length) {
@@ -99,7 +105,9 @@
         onProgress && onProgress(++done, urls.length);
       }
     }));
-    const area = { id, name: name || 'Saved area', lat, lon, radiusKm: p.radiusKm, tiles: urls.length, bytes, at: new Date().toISOString() };
+    const g = graph ? await graph : null;
+    const area = { id, name: name || 'Saved area', lat, lon, radiusKm: p.radiusKm, tiles: urls.length, bytes, at: new Date().toISOString(),
+      graphTiles: g ? g.kept : 0 };
     saveAreas([...areas(), area]);
     return area;
   }
