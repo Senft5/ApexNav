@@ -1,0 +1,3537 @@
+{
+ "bbox": null,
+ "build": "2026-45-95960e6d",
+ "built": "2026-11-04",
+ "bytes": 228854484,
+ "edges": 5261932,
+ "format": "VGR1 (tools/graph_etl/tiles.py)",
+ "licence": "Road data (c) OpenStreetMap contributors, ODbL 1.0; elevation Mapzen Terrain Tiles; context grid: see web/data/ctx/v1",
+ "model": "95960e6d3407394b870b5584c8831f9b9c9bd9c75930147c14dd21d40e97acce",
+ "model_files": {
+  "tools/graph_etl/score_edges.js": "9923af50e9a0",
+  "web/apex_core.js": "81fcedabfbfb",
+  "web/fun_route.js": "284458e45d7a",
+  "web/route_ctx/context_grid.js": "cb00f890ec00",
+  "web/route_ctx/dem.js": "c6f6a695745b",
+  "web/route_engine.js": "61ddae3571ad"
+ },
+ "nodes": 2145153,
+ "osm": null,
+ "source": "Geofabrik ohio, kentucky, indiana (merged)",
+ "stats": {
+  "restrictions_applied": 20519,
+  "restrictions_skipped": 67599,
+  "via_way_restrictions_applied": 1211,
+  "via_way_restrictions_not_drivable": 1504,
+  "via_way_restrictions_skipped": 2463
+ },
+ "tile_count": 584,
+ "tile_deg": 0.25,
+ "tiles": {
+  "361_506": {
+   "bytes": 22040,
+   "edges": 529,
+   "nodes": 193,
+   "restrictions": 0
+  },
+  "362_506": {
+   "bytes": 10460,
+   "edges": 183,
+   "nodes": 74,
+   "restrictions": 0
+  },
+  "363_506": {
+   "bytes": 88808,
+   "edges": 1922,
+   "nodes": 764,
+   "restrictions": 12
+  },
+  "363_507": {
+   "bytes": 85088,
+   "edges": 1830,
+   "nodes": 730,
+   "restrictions": 0
+  },
+  "363_508": {
+   "bytes": 67716,
+   "edges": 1511,
+   "nodes": 602,
+   "restrictions": 0
+  },
+  "364_506": {
+   "bytes": 162380,
+   "edges": 3571,
+   "nodes": 1414,
+   "restrictions": 11
+  },
+  "364_507": {
+   "bytes": 99608,
+   "edges": 2054,
+   "nodes": 837,
+   "restrictions": 0
+  },
+  "364_508": {
+   "bytes": 146560,
+   "edges": 3315,
+   "nodes": 1313,
+   "restrictions": 0
+  },
+  "365_506": {
+   "bytes": 201796,
+   "edges": 4498,
+   "nodes": 1734,
+   "restrictions": 10
+  },
+  "365_507": {
+   "bytes": 159704,
+   "edges": 3351,
+   "nodes": 1437,
+   "restrictions": 5
+  },
+  "365_508": {
+   "bytes": 578632,
+   "edges": 13535,
+   "nodes": 5336,
+   "restrictions": 11
+  },
+  "365_509": {
+   "bytes": 1216,
+   "edges": 13,
+   "nodes": 8,
+   "restrictions": 0
+  },
+  "366_506": {
+   "bytes": 332772,
+   "edges": 7554,
+   "nodes": 2958,
+   "restrictions": 6
+  },
+  "366_507": {
+   "bytes": 286076,
+   "edges": 6119,
+   "nodes": 2614,
+   "restrictions": 2
+  },
+  "366_508": {
+   "bytes": 185816,
+   "edges": 3964,
+   "nodes": 1698,
+   "restrictions": 22
+  },
+  "366_509": {
+   "bytes": 81708,
+   "edges": 1737,
+   "nodes": 695,
+   "restrictions": 0
+  },
+  "367_506": {
+   "bytes": 227276,
+   "edges": 4810,
+   "nodes": 1959,
+   "restrictions": 0
+  },
+  "367_507": {
+   "bytes": 207408,
+   "edges": 4231,
+   "nodes": 1780,
+   "restrictions": 0
+  },
+  "367_508": {
+   "bytes": 257044,
+   "edges": 5403,
+   "nodes": 2299,
+   "restrictions": 0
+  },
+  "367_509": {
+   "bytes": 142480,
+   "edges": 2942,
+   "nodes": 1203,
+   "restrictions": 0
+  },
+  "367_510": {
+   "bytes": 57836,
+   "edges": 1216,
+   "nodes": 507,
+   "restrictions": 0
+  },
+  "367_511": {
+   "bytes": 19896,
+   "edges": 396,
+   "nodes": 186,
+   "restrictions": 0
+  },
+  "367_512": {
+   "bytes": 4492,
+   "edges": 87,
+   "nodes": 46,
+   "restrictions": 0
+  },
+  "368_506": {
+   "bytes": 39496,
+   "edges": 721,
+   "nodes": 321,
+   "restrictions": 0
+  },
+  "368_507": {
+   "bytes": 257200,
+   "edges": 5390,
+   "nodes": 2242,
+   "restrictions": 0
+  },
+  "368_508": {
+   "bytes": 200684,
+   "edges": 4250,
+   "nodes": 1780,
+   "restrictions": 0
+  },
+  "368_509": {
+   "bytes": 148136,
+   "edges": 3102,
+   "nodes": 1252,
+   "restrictions": 0
+  },
+  "368_510": {
+   "bytes": 219116,
+   "edges": 4984,
+   "nodes": 1841,
+   "restrictions": 0
+  },
+  "368_511": {
+   "bytes": 278116,
+   "edges": 6566,
+   "nodes": 2474,
+   "restrictions": 0
+  },
+  "368_512": {
+   "bytes": 217680,
+   "edges": 4974,
+   "nodes": 2043,
+   "restrictions": 12
+  },
+  "368_513": {
+   "bytes": 37864,
+   "edges": 847,
+   "nodes": 373,
+   "restrictions": 0
+  },
+  "369_506": {
+   "bytes": 29316,
+   "edges": 587,
+   "nodes": 262,
+   "restrictions": 0
+  },
+  "369_507": {
+   "bytes": 201612,
+   "edges": 4325,
+   "nodes": 1864,
+   "restrictions": 0
+  },
+  "369_508": {
+   "bytes": 128596,
+   "edges": 2589,
+   "nodes": 1082,
+   "restrictions": 0
+  },
+  "369_509": {
+   "bytes": 222628,
+   "edges": 4835,
+   "nodes": 1956,
+   "restrictions": 0
+  },
+  "369_510": {
+   "bytes": 195044,
+   "edges": 4284,
+   "nodes": 1840,
+   "restrictions": 0
+  },
+  "369_511": {
+   "bytes": 1325268,
+   "edges": 31957,
+   "nodes": 12368,
+   "restrictions": 32
+  },
+  "369_512": {
+   "bytes": 674944,
+   "edges": 15707,
+   "nodes": 6605,
+   "restrictions": 7
+  },
+  "369_513": {
+   "bytes": 421232,
+   "edges": 10015,
+   "nodes": 4008,
+   "restrictions": 0
+  },
+  "369_514": {
+   "bytes": 260032,
+   "edges": 6270,
+   "nodes": 2232,
+   "restrictions": 0
+  },
+  "369_515": {
+   "bytes": 13872,
+   "edges": 288,
+   "nodes": 129,
+   "restrictions": 0
+  },
+  "369_516": {
+   "bytes": 75996,
+   "edges": 1750,
+   "nodes": 711,
+   "restrictions": 0
+  },
+  "369_517": {
+   "bytes": 41004,
+   "edges": 877,
+   "nodes": 395,
+   "restrictions": 0
+  },
+  "369_518": {
+   "bytes": 41156,
+   "edges": 939,
+   "nodes": 344,
+   "restrictions": 0
+  },
+  "369_519": {
+   "bytes": 17348,
+   "edges": 365,
+   "nodes": 171,
+   "restrictions": 0
+  },
+  "369_520": {
+   "bytes": 19824,
+   "edges": 434,
+   "nodes": 175,
+   "restrictions": 0
+  },
+  "369_521": {
+   "bytes": 25068,
+   "edges": 591,
+   "nodes": 219,
+   "restrictions": 0
+  },
+  "369_522": {
+   "bytes": 15204,
+   "edges": 351,
+   "nodes": 146,
+   "restrictions": 0
+  },
+  "369_523": {
+   "bytes": 15880,
+   "edges": 356,
+   "nodes": 150,
+   "restrictions": 0
+  },
+  "369_524": {
+   "bytes": 13060,
+   "edges": 292,
+   "nodes": 128,
+   "restrictions": 0
+  },
+  "369_525": {
+   "bytes": 110784,
+   "edges": 2554,
+   "nodes": 1085,
+   "restrictions": 5
+  },
+  "369_526": {
+   "bytes": 533104,
+   "edges": 12999,
+   "nodes": 4932,
+   "restrictions": 58
+  },
+  "370_506": {
+   "bytes": 220132,
+   "edges": 5055,
+   "nodes": 2135,
+   "restrictions": 16
+  },
+  "370_507": {
+   "bytes": 319548,
+   "edges": 7119,
+   "nodes": 2998,
+   "restrictions": 0
+  },
+  "370_508": {
+   "bytes": 149040,
+   "edges": 3045,
+   "nodes": 1341,
+   "restrictions": 0
+  },
+  "370_509": {
+   "bytes": 244188,
+   "edges": 5312,
+   "nodes": 2251,
+   "restrictions": 2
+  },
+  "370_510": {
+   "bytes": 135420,
+   "edges": 2887,
+   "nodes": 1219,
+   "restrictions": 0
+  },
+  "370_511": {
+   "bytes": 635620,
+   "edges": 14693,
+   "nodes": 6328,
+   "restrictions": 58
+  },
+  "370_512": {
+   "bytes": 444644,
+   "edges": 10383,
+   "nodes": 4353,
+   "restrictions": 24
+  },
+  "370_513": {
+   "bytes": 350504,
+   "edges": 8259,
+   "nodes": 3258,
+   "restrictions": 16
+  },
+  "370_514": {
+   "bytes": 245524,
+   "edges": 5524,
+   "nodes": 2263,
+   "restrictions": 10
+  },
+  "370_515": {
+   "bytes": 239932,
+   "edges": 5629,
+   "nodes": 2112,
+   "restrictions": 0
+  },
+  "370_516": {
+   "bytes": 322736,
+   "edges": 7670,
+   "nodes": 2884,
+   "restrictions": 4
+  },
+  "370_517": {
+   "bytes": 1099716,
+   "edges": 26685,
+   "nodes": 9757,
+   "restrictions": 13
+  },
+  "370_518": {
+   "bytes": 436728,
+   "edges": 10383,
+   "nodes": 3806,
+   "restrictions": 0
+  },
+  "370_519": {
+   "bytes": 250488,
+   "edges": 5844,
+   "nodes": 2212,
+   "restrictions": 0
+  },
+  "370_520": {
+   "bytes": 220804,
+   "edges": 5192,
+   "nodes": 1982,
+   "restrictions": 0
+  },
+  "370_521": {
+   "bytes": 196464,
+   "edges": 4710,
+   "nodes": 1787,
+   "restrictions": 0
+  },
+  "370_522": {
+   "bytes": 193036,
+   "edges": 4724,
+   "nodes": 1712,
+   "restrictions": 0
+  },
+  "370_523": {
+   "bytes": 193936,
+   "edges": 4679,
+   "nodes": 1772,
+   "restrictions": 0
+  },
+  "370_524": {
+   "bytes": 199588,
+   "edges": 4670,
+   "nodes": 1915,
+   "restrictions": 0
+  },
+  "370_525": {
+   "bytes": 1281368,
+   "edges": 30318,
+   "nodes": 12739,
+   "restrictions": 165
+  },
+  "370_526": {
+   "bytes": 2168616,
+   "edges": 53474,
+   "nodes": 20154,
+   "restrictions": 170
+  },
+  "371_506": {
+   "bytes": 69832,
+   "edges": 1554,
+   "nodes": 647,
+   "restrictions": 1
+  },
+  "371_507": {
+   "bytes": 135268,
+   "edges": 2818,
+   "nodes": 1218,
+   "restrictions": 0
+  },
+  "371_508": {
+   "bytes": 233016,
+   "edges": 4908,
+   "nodes": 2093,
+   "restrictions": 0
+  },
+  "371_509": {
+   "bytes": 240984,
+   "edges": 5244,
+   "nodes": 2148,
+   "restrictions": 0
+  },
+  "371_510": {
+   "bytes": 319800,
+   "edges": 7125,
+   "nodes": 3002,
+   "restrictions": 2
+  },
+  "371_511": {
+   "bytes": 604188,
+   "edges": 14263,
+   "nodes": 5682,
+   "restrictions": 14
+  },
+  "371_512": {
+   "bytes": 191352,
+   "edges": 4336,
+   "nodes": 1804,
+   "restrictions": 11
+  },
+  "371_513": {
+   "bytes": 235172,
+   "edges": 5384,
+   "nodes": 2209,
+   "restrictions": 7
+  },
+  "371_514": {
+   "bytes": 372460,
+   "edges": 8833,
+   "nodes": 3399,
+   "restrictions": 24
+  },
+  "371_515": {
+   "bytes": 193080,
+   "edges": 4590,
+   "nodes": 1740,
+   "restrictions": 0
+  },
+  "371_516": {
+   "bytes": 311008,
+   "edges": 7503,
+   "nodes": 2753,
+   "restrictions": 27
+  },
+  "371_517": {
+   "bytes": 200396,
+   "edges": 4659,
+   "nodes": 1789,
+   "restrictions": 3
+  },
+  "371_518": {
+   "bytes": 373328,
+   "edges": 8848,
+   "nodes": 3330,
+   "restrictions": 0
+  },
+  "371_519": {
+   "bytes": 209928,
+   "edges": 4898,
+   "nodes": 1916,
+   "restrictions": 0
+  },
+  "371_520": {
+   "bytes": 177200,
+   "edges": 4197,
+   "nodes": 1616,
+   "restrictions": 0
+  },
+  "371_521": {
+   "bytes": 205128,
+   "edges": 4868,
+   "nodes": 1877,
+   "restrictions": 0
+  },
+  "371_522": {
+   "bytes": 153264,
+   "edges": 3734,
+   "nodes": 1506,
+   "restrictions": 0
+  },
+  "371_523": {
+   "bytes": 243124,
+   "edges": 5909,
+   "nodes": 2241,
+   "restrictions": 2
+  },
+  "371_524": {
+   "bytes": 269160,
+   "edges": 6473,
+   "nodes": 2651,
+   "restrictions": 7
+  },
+  "371_525": {
+   "bytes": 736312,
+   "edges": 17303,
+   "nodes": 7150,
+   "restrictions": 51
+  },
+  "371_526": {
+   "bytes": 958384,
+   "edges": 22452,
+   "nodes": 9379,
+   "restrictions": 197
+  },
+  "372_506": {
+   "bytes": 83316,
+   "edges": 1811,
+   "nodes": 760,
+   "restrictions": 0
+  },
+  "372_507": {
+   "bytes": 243132,
+   "edges": 5307,
+   "nodes": 2265,
+   "restrictions": 4
+  },
+  "372_508": {
+   "bytes": 108448,
+   "edges": 2052,
+   "nodes": 909,
+   "restrictions": 0
+  },
+  "372_509": {
+   "bytes": 233808,
+   "edges": 5107,
+   "nodes": 2166,
+   "restrictions": 0
+  },
+  "372_510": {
+   "bytes": 117848,
+   "edges": 2361,
+   "nodes": 997,
+   "restrictions": 0
+  },
+  "372_511": {
+   "bytes": 264276,
+   "edges": 5961,
+   "nodes": 2242,
+   "restrictions": 0
+  },
+  "372_512": {
+   "bytes": 343236,
+   "edges": 7810,
+   "nodes": 3313,
+   "restrictions": 9
+  },
+  "372_513": {
+   "bytes": 525104,
+   "edges": 12358,
+   "nodes": 5019,
+   "restrictions": 0
+  },
+  "372_514": {
+   "bytes": 227404,
+   "edges": 5106,
+   "nodes": 2086,
+   "restrictions": 3
+  },
+  "372_515": {
+   "bytes": 266424,
+   "edges": 5861,
+   "nodes": 2571,
+   "restrictions": 4
+  },
+  "372_516": {
+   "bytes": 170400,
+   "edges": 3750,
+   "nodes": 1442,
+   "restrictions": 0
+  },
+  "372_517": {
+   "bytes": 244408,
+   "edges": 5437,
+   "nodes": 2178,
+   "restrictions": 1
+  },
+  "372_518": {
+   "bytes": 336924,
+   "edges": 7741,
+   "nodes": 3222,
+   "restrictions": 12
+  },
+  "372_519": {
+   "bytes": 200240,
+   "edges": 4715,
+   "nodes": 1837,
+   "restrictions": 2
+  },
+  "372_520": {
+   "bytes": 382772,
+   "edges": 9245,
+   "nodes": 3582,
+   "restrictions": 16
+  },
+  "372_521": {
+   "bytes": 1243500,
+   "edges": 29186,
+   "nodes": 12064,
+   "restrictions": 96
+  },
+  "372_522": {
+   "bytes": 337904,
+   "edges": 7983,
+   "nodes": 3234,
+   "restrictions": 5
+  },
+  "372_523": {
+   "bytes": 268020,
+   "edges": 6404,
+   "nodes": 2497,
+   "restrictions": 2
+  },
+  "372_524": {
+   "bytes": 200620,
+   "edges": 4880,
+   "nodes": 1823,
+   "restrictions": 0
+  },
+  "372_525": {
+   "bytes": 189172,
+   "edges": 4549,
+   "nodes": 1781,
+   "restrictions": 4
+  },
+  "372_526": {
+   "bytes": 741444,
+   "edges": 17651,
+   "nodes": 6885,
+   "restrictions": 73
+  },
+  "372_527": {
+   "bytes": 32884,
+   "edges": 770,
+   "nodes": 280,
+   "restrictions": 0
+  },
+  "373_506": {
+   "bytes": 221056,
+   "edges": 5118,
+   "nodes": 2068,
+   "restrictions": 1
+  },
+  "373_507": {
+   "bytes": 254612,
+   "edges": 5660,
+   "nodes": 2418,
+   "restrictions": 0
+  },
+  "373_508": {
+   "bytes": 150408,
+   "edges": 3032,
+   "nodes": 1353,
+   "restrictions": 0
+  },
+  "373_509": {
+   "bytes": 118056,
+   "edges": 2212,
+   "nodes": 996,
+   "restrictions": 5
+  },
+  "373_510": {
+   "bytes": 103268,
+   "edges": 1915,
+   "nodes": 843,
+   "restrictions": 0
+  },
+  "373_511": {
+   "bytes": 152800,
+   "edges": 3152,
+   "nodes": 1349,
+   "restrictions": 0
+  },
+  "373_512": {
+   "bytes": 131556,
+   "edges": 2674,
+   "nodes": 1206,
+   "restrictions": 16
+  },
+  "373_513": {
+   "bytes": 178232,
+   "edges": 3777,
+   "nodes": 1587,
+   "restrictions": 0
+  },
+  "373_514": {
+   "bytes": 179324,
+   "edges": 3738,
+   "nodes": 1540,
+   "restrictions": 3
+  },
+  "373_515": {
+   "bytes": 224176,
+   "edges": 4784,
+   "nodes": 2041,
+   "restrictions": 3
+  },
+  "373_516": {
+   "bytes": 930476,
+   "edges": 21289,
+   "nodes": 8894,
+   "restrictions": 57
+  },
+  "373_517": {
+   "bytes": 251196,
+   "edges": 5598,
+   "nodes": 2375,
+   "restrictions": 3
+  },
+  "373_518": {
+   "bytes": 251860,
+   "edges": 5821,
+   "nodes": 2460,
+   "restrictions": 0
+  },
+  "373_519": {
+   "bytes": 280712,
+   "edges": 6643,
+   "nodes": 2668,
+   "restrictions": 7
+  },
+  "373_520": {
+   "bytes": 209084,
+   "edges": 4952,
+   "nodes": 1916,
+   "restrictions": 0
+  },
+  "373_521": {
+   "bytes": 422524,
+   "edges": 10363,
+   "nodes": 3780,
+   "restrictions": 6
+  },
+  "373_522": {
+   "bytes": 303504,
+   "edges": 7194,
+   "nodes": 2727,
+   "restrictions": 0
+  },
+  "373_523": {
+   "bytes": 190384,
+   "edges": 4579,
+   "nodes": 1684,
+   "restrictions": 0
+  },
+  "373_524": {
+   "bytes": 227856,
+   "edges": 5459,
+   "nodes": 2037,
+   "restrictions": 0
+  },
+  "373_525": {
+   "bytes": 249384,
+   "edges": 6031,
+   "nodes": 2288,
+   "restrictions": 0
+  },
+  "373_526": {
+   "bytes": 472640,
+   "edges": 11192,
+   "nodes": 4344,
+   "restrictions": 62
+  },
+  "373_527": {
+   "bytes": 14316,
+   "edges": 323,
+   "nodes": 142,
+   "restrictions": 0
+  },
+  "374_506": {
+   "bytes": 80700,
+   "edges": 1689,
+   "nodes": 722,
+   "restrictions": 0
+  },
+  "374_507": {
+   "bytes": 840192,
+   "edges": 19322,
+   "nodes": 8088,
+   "restrictions": 24
+  },
+  "374_508": {
+   "bytes": 300648,
+   "edges": 6672,
+   "nodes": 2879,
+   "restrictions": 0
+  },
+  "374_509": {
+   "bytes": 188748,
+   "edges": 3918,
+   "nodes": 1720,
+   "restrictions": 8
+  },
+  "374_510": {
+   "bytes": 200252,
+   "edges": 4035,
+   "nodes": 1822,
+   "restrictions": 0
+  },
+  "374_511": {
+   "bytes": 175012,
+   "edges": 3672,
+   "nodes": 1618,
+   "restrictions": 0
+  },
+  "374_512": {
+   "bytes": 116736,
+   "edges": 2277,
+   "nodes": 1003,
+   "restrictions": 16
+  },
+  "374_513": {
+   "bytes": 176288,
+   "edges": 3723,
+   "nodes": 1563,
+   "restrictions": 0
+  },
+  "374_514": {
+   "bytes": 295616,
+   "edges": 6937,
+   "nodes": 2620,
+   "restrictions": 3
+  },
+  "374_515": {
+   "bytes": 264680,
+   "edges": 6100,
+   "nodes": 2319,
+   "restrictions": 1
+  },
+  "374_516": {
+   "bytes": 265376,
+   "edges": 5673,
+   "nodes": 2516,
+   "restrictions": 7
+  },
+  "374_517": {
+   "bytes": 535828,
+   "edges": 12281,
+   "nodes": 5068,
+   "restrictions": 48
+  },
+  "374_518": {
+   "bytes": 1166820,
+   "edges": 26555,
+   "nodes": 11555,
+   "restrictions": 73
+  },
+  "374_519": {
+   "bytes": 1737212,
+   "edges": 39623,
+   "nodes": 17028,
+   "restrictions": 200
+  },
+  "374_520": {
+   "bytes": 412636,
+   "edges": 10091,
+   "nodes": 3803,
+   "restrictions": 6
+  },
+  "374_521": {
+   "bytes": 219908,
+   "edges": 5290,
+   "nodes": 1996,
+   "restrictions": 3
+  },
+  "374_522": {
+   "bytes": 214060,
+   "edges": 5087,
+   "nodes": 1895,
+   "restrictions": 8
+  },
+  "374_523": {
+   "bytes": 361112,
+   "edges": 8734,
+   "nodes": 3185,
+   "restrictions": 9
+  },
+  "374_524": {
+   "bytes": 229368,
+   "edges": 5473,
+   "nodes": 2049,
+   "restrictions": 0
+  },
+  "374_525": {
+   "bytes": 451960,
+   "edges": 10837,
+   "nodes": 4210,
+   "restrictions": 13
+  },
+  "374_526": {
+   "bytes": 857920,
+   "edges": 20614,
+   "nodes": 7668,
+   "restrictions": 137
+  },
+  "374_527": {
+   "bytes": 27496,
+   "edges": 602,
+   "nodes": 265,
+   "restrictions": 0
+  },
+  "375_506": {
+   "bytes": 115484,
+   "edges": 2403,
+   "nodes": 1005,
+   "restrictions": 0
+  },
+  "375_507": {
+   "bytes": 212264,
+   "edges": 4442,
+   "nodes": 1818,
+   "restrictions": 0
+  },
+  "375_508": {
+   "bytes": 138420,
+   "edges": 2814,
+   "nodes": 1193,
+   "restrictions": 0
+  },
+  "375_509": {
+   "bytes": 199432,
+   "edges": 4044,
+   "nodes": 1749,
+   "restrictions": 0
+  },
+  "375_510": {
+   "bytes": 110064,
+   "edges": 2152,
+   "nodes": 948,
+   "restrictions": 0
+  },
+  "375_511": {
+   "bytes": 355892,
+   "edges": 7895,
+   "nodes": 3392,
+   "restrictions": 6
+  },
+  "375_512": {
+   "bytes": 303464,
+   "edges": 6738,
+   "nodes": 2907,
+   "restrictions": 6
+  },
+  "375_513": {
+   "bytes": 274328,
+   "edges": 6025,
+   "nodes": 2586,
+   "restrictions": 10
+  },
+  "375_514": {
+   "bytes": 255304,
+   "edges": 5841,
+   "nodes": 2297,
+   "restrictions": 4
+  },
+  "375_515": {
+   "bytes": 174884,
+   "edges": 3862,
+   "nodes": 1478,
+   "restrictions": 0
+  },
+  "375_516": {
+   "bytes": 218008,
+   "edges": 4661,
+   "nodes": 2032,
+   "restrictions": 3
+  },
+  "375_517": {
+   "bytes": 502876,
+   "edges": 11674,
+   "nodes": 4862,
+   "restrictions": 17
+  },
+  "375_518": {
+   "bytes": 2456668,
+   "edges": 57030,
+   "nodes": 23978,
+   "restrictions": 352
+  },
+  "375_519": {
+   "bytes": 4545228,
+   "edges": 106246,
+   "nodes": 43877,
+   "restrictions": 1340
+  },
+  "375_520": {
+   "bytes": 1157960,
+   "edges": 26826,
+   "nodes": 10971,
+   "restrictions": 98
+  },
+  "375_521": {
+   "bytes": 718736,
+   "edges": 17419,
+   "nodes": 6352,
+   "restrictions": 28
+  },
+  "375_522": {
+   "bytes": 327564,
+   "edges": 7832,
+   "nodes": 2863,
+   "restrictions": 16
+  },
+  "375_523": {
+   "bytes": 320920,
+   "edges": 7719,
+   "nodes": 2838,
+   "restrictions": 8
+  },
+  "375_524": {
+   "bytes": 330288,
+   "edges": 8065,
+   "nodes": 2908,
+   "restrictions": 12
+  },
+  "375_525": {
+   "bytes": 367392,
+   "edges": 9011,
+   "nodes": 3341,
+   "restrictions": 8
+  },
+  "375_526": {
+   "bytes": 1634508,
+   "edges": 39292,
+   "nodes": 14654,
+   "restrictions": 218
+  },
+  "375_527": {
+   "bytes": 101272,
+   "edges": 2255,
+   "nodes": 991,
+   "restrictions": 6
+  },
+  "376_506": {
+   "bytes": 80556,
+   "edges": 1554,
+   "nodes": 674,
+   "restrictions": 0
+  },
+  "376_507": {
+   "bytes": 194620,
+   "edges": 3940,
+   "nodes": 1644,
+   "restrictions": 2
+  },
+  "376_508": {
+   "bytes": 263188,
+   "edges": 5716,
+   "nodes": 2359,
+   "restrictions": 26
+  },
+  "376_509": {
+   "bytes": 162156,
+   "edges": 3288,
+   "nodes": 1419,
+   "restrictions": 6
+  },
+  "376_510": {
+   "bytes": 613488,
+   "edges": 13804,
+   "nodes": 6098,
+   "restrictions": 26
+  },
+  "376_511": {
+   "bytes": 558684,
+   "edges": 12702,
+   "nodes": 5488,
+   "restrictions": 24
+  },
+  "376_512": {
+   "bytes": 1645420,
+   "edges": 38737,
+   "nodes": 15889,
+   "restrictions": 173
+  },
+  "376_513": {
+   "bytes": 1419240,
+   "edges": 33219,
+   "nodes": 13710,
+   "restrictions": 118
+  },
+  "376_514": {
+   "bytes": 286188,
+   "edges": 6424,
+   "nodes": 2644,
+   "restrictions": 11
+  },
+  "376_515": {
+   "bytes": 383040,
+   "edges": 9024,
+   "nodes": 3514,
+   "restrictions": 43
+  },
+  "376_516": {
+   "bytes": 819628,
+   "edges": 19449,
+   "nodes": 7587,
+   "restrictions": 39
+  },
+  "376_517": {
+   "bytes": 353120,
+   "edges": 8335,
+   "nodes": 3305,
+   "restrictions": 18
+  },
+  "376_518": {
+   "bytes": 550344,
+   "edges": 13106,
+   "nodes": 5212,
+   "restrictions": 28
+  },
+  "376_519": {
+   "bytes": 1575472,
+   "edges": 36077,
+   "nodes": 15218,
+   "restrictions": 157
+  },
+  "376_520": {
+   "bytes": 430920,
+   "edges": 10150,
+   "nodes": 4065,
+   "restrictions": 25
+  },
+  "376_521": {
+   "bytes": 349252,
+   "edges": 8762,
+   "nodes": 2979,
+   "restrictions": 0
+  },
+  "376_522": {
+   "bytes": 181456,
+   "edges": 4385,
+   "nodes": 1584,
+   "restrictions": 2
+  },
+  "376_523": {
+   "bytes": 392228,
+   "edges": 9504,
+   "nodes": 3595,
+   "restrictions": 0
+  },
+  "376_524": {
+   "bytes": 534936,
+   "edges": 12858,
+   "nodes": 4757,
+   "restrictions": 4
+  },
+  "376_525": {
+   "bytes": 424896,
+   "edges": 10122,
+   "nodes": 3943,
+   "restrictions": 8
+  },
+  "376_526": {
+   "bytes": 1481048,
+   "edges": 35982,
+   "nodes": 13763,
+   "restrictions": 100
+  },
+  "376_527": {
+   "bytes": 26292,
+   "edges": 579,
+   "nodes": 255,
+   "restrictions": 0
+  },
+  "377_506": {
+   "bytes": 115100,
+   "edges": 2373,
+   "nodes": 995,
+   "restrictions": 0
+  },
+  "377_507": {
+   "bytes": 172352,
+   "edges": 3394,
+   "nodes": 1473,
+   "restrictions": 0
+  },
+  "377_508": {
+   "bytes": 153588,
+   "edges": 2897,
+   "nodes": 1285,
+   "restrictions": 0
+  },
+  "377_509": {
+   "bytes": 178272,
+   "edges": 3555,
+   "nodes": 1572,
+   "restrictions": 0
+  },
+  "377_510": {
+   "bytes": 187872,
+   "edges": 4038,
+   "nodes": 1743,
+   "restrictions": 3
+  },
+  "377_511": {
+   "bytes": 354616,
+   "edges": 7827,
+   "nodes": 3557,
+   "restrictions": 12
+  },
+  "377_512": {
+   "bytes": 2823892,
+   "edges": 65058,
+   "nodes": 28234,
+   "restrictions": 415
+  },
+  "377_513": {
+   "bytes": 1867900,
+   "edges": 43206,
+   "nodes": 18368,
+   "restrictions": 165
+  },
+  "377_514": {
+   "bytes": 200404,
+   "edges": 4517,
+   "nodes": 1929,
+   "restrictions": 0
+  },
+  "377_515": {
+   "bytes": 205352,
+   "edges": 4536,
+   "nodes": 1917,
+   "restrictions": 0
+  },
+  "377_516": {
+   "bytes": 308436,
+   "edges": 7159,
+   "nodes": 2857,
+   "restrictions": 11
+  },
+  "377_517": {
+   "bytes": 225600,
+   "edges": 5247,
+   "nodes": 2122,
+   "restrictions": 3
+  },
+  "377_518": {
+   "bytes": 212228,
+   "edges": 5108,
+   "nodes": 1997,
+   "restrictions": 1
+  },
+  "377_519": {
+   "bytes": 345096,
+   "edges": 8322,
+   "nodes": 3235,
+   "restrictions": 3
+  },
+  "377_520": {
+   "bytes": 1035028,
+   "edges": 25082,
+   "nodes": 9579,
+   "restrictions": 14
+  },
+  "377_521": {
+   "bytes": 447936,
+   "edges": 11050,
+   "nodes": 3912,
+   "restrictions": 0
+  },
+  "377_522": {
+   "bytes": 642248,
+   "edges": 15718,
+   "nodes": 5703,
+   "restrictions": 11
+  },
+  "377_523": {
+   "bytes": 260860,
+   "edges": 6193,
+   "nodes": 2433,
+   "restrictions": 0
+  },
+  "377_524": {
+   "bytes": 260592,
+   "edges": 6266,
+   "nodes": 2390,
+   "restrictions": 5
+  },
+  "377_525": {
+   "bytes": 448236,
+   "edges": 10564,
+   "nodes": 4082,
+   "restrictions": 1
+  },
+  "377_526": {
+   "bytes": 367252,
+   "edges": 8912,
+   "nodes": 3548,
+   "restrictions": 9
+  },
+  "377_527": {
+   "bytes": 18308,
+   "edges": 410,
+   "nodes": 185,
+   "restrictions": 2
+  },
+  "378_506": {
+   "bytes": 78064,
+   "edges": 1455,
+   "nodes": 663,
+   "restrictions": 0
+  },
+  "378_507": {
+   "bytes": 141720,
+   "edges": 2739,
+   "nodes": 1209,
+   "restrictions": 0
+  },
+  "378_508": {
+   "bytes": 269364,
+   "edges": 5558,
+   "nodes": 2420,
+   "restrictions": 1
+  },
+  "378_509": {
+   "bytes": 292844,
+   "edges": 6339,
+   "nodes": 2562,
+   "restrictions": 8
+  },
+  "378_510": {
+   "bytes": 208580,
+   "edges": 4429,
+   "nodes": 1939,
+   "restrictions": 0
+  },
+  "378_511": {
+   "bytes": 411772,
+   "edges": 9259,
+   "nodes": 4013,
+   "restrictions": 10
+  },
+  "378_512": {
+   "bytes": 491036,
+   "edges": 10875,
+   "nodes": 4893,
+   "restrictions": 17
+  },
+  "378_513": {
+   "bytes": 623248,
+   "edges": 13951,
+   "nodes": 6173,
+   "restrictions": 30
+  },
+  "378_514": {
+   "bytes": 277288,
+   "edges": 6071,
+   "nodes": 2528,
+   "restrictions": 4
+  },
+  "378_515": {
+   "bytes": 203860,
+   "edges": 4516,
+   "nodes": 1857,
+   "restrictions": 0
+  },
+  "378_516": {
+   "bytes": 194676,
+   "edges": 4452,
+   "nodes": 1774,
+   "restrictions": 7
+  },
+  "378_517": {
+   "bytes": 319360,
+   "edges": 7587,
+   "nodes": 2889,
+   "restrictions": 17
+  },
+  "378_518": {
+   "bytes": 253064,
+   "edges": 6178,
+   "nodes": 2271,
+   "restrictions": 0
+  },
+  "378_519": {
+   "bytes": 475368,
+   "edges": 11556,
+   "nodes": 4278,
+   "restrictions": 9
+  },
+  "378_520": {
+   "bytes": 951964,
+   "edges": 22982,
+   "nodes": 8297,
+   "restrictions": 5
+  },
+  "378_521": {
+   "bytes": 384932,
+   "edges": 9369,
+   "nodes": 3391,
+   "restrictions": 0
+  },
+  "378_522": {
+   "bytes": 195756,
+   "edges": 4754,
+   "nodes": 1749,
+   "restrictions": 2
+  },
+  "378_523": {
+   "bytes": 375136,
+   "edges": 9030,
+   "nodes": 3486,
+   "restrictions": 13
+  },
+  "378_524": {
+   "bytes": 607060,
+   "edges": 14116,
+   "nodes": 5804,
+   "restrictions": 6
+  },
+  "378_525": {
+   "bytes": 355480,
+   "edges": 8459,
+   "nodes": 3253,
+   "restrictions": 8
+  },
+  "378_526": {
+   "bytes": 291684,
+   "edges": 6995,
+   "nodes": 2666,
+   "restrictions": 0
+  },
+  "378_527": {
+   "bytes": 12220,
+   "edges": 253,
+   "nodes": 127,
+   "restrictions": 2
+  },
+  "379_506": {
+   "bytes": 132652,
+   "edges": 2765,
+   "nodes": 1182,
+   "restrictions": 20
+  },
+  "379_507": {
+   "bytes": 195708,
+   "edges": 3995,
+   "nodes": 1723,
+   "restrictions": 4
+  },
+  "379_508": {
+   "bytes": 252976,
+   "edges": 5230,
+   "nodes": 2285,
+   "restrictions": 0
+  },
+  "379_509": {
+   "bytes": 115736,
+   "edges": 2196,
+   "nodes": 970,
+   "restrictions": 0
+  },
+  "379_510": {
+   "bytes": 184004,
+   "edges": 3842,
+   "nodes": 1693,
+   "restrictions": 0
+  },
+  "379_511": {
+   "bytes": 138116,
+   "edges": 2603,
+   "nodes": 1155,
+   "restrictions": 0
+  },
+  "379_512": {
+   "bytes": 298752,
+   "edges": 6510,
+   "nodes": 2898,
+   "restrictions": 5
+  },
+  "379_513": {
+   "bytes": 182424,
+   "edges": 4048,
+   "nodes": 1757,
+   "restrictions": 0
+  },
+  "379_514": {
+   "bytes": 239212,
+   "edges": 5143,
+   "nodes": 2111,
+   "restrictions": 2
+  },
+  "379_515": {
+   "bytes": 148620,
+   "edges": 2979,
+   "nodes": 1308,
+   "restrictions": 0
+  },
+  "379_516": {
+   "bytes": 239912,
+   "edges": 5342,
+   "nodes": 2239,
+   "restrictions": 9
+  },
+  "379_517": {
+   "bytes": 315328,
+   "edges": 7159,
+   "nodes": 2915,
+   "restrictions": 19
+  },
+  "379_518": {
+   "bytes": 347892,
+   "edges": 8230,
+   "nodes": 3127,
+   "restrictions": 0
+  },
+  "379_519": {
+   "bytes": 265492,
+   "edges": 6397,
+   "nodes": 2428,
+   "restrictions": 6
+  },
+  "379_520": {
+   "bytes": 250728,
+   "edges": 6142,
+   "nodes": 2401,
+   "restrictions": 0
+  },
+  "379_521": {
+   "bytes": 308104,
+   "edges": 7605,
+   "nodes": 2720,
+   "restrictions": 0
+  },
+  "379_522": {
+   "bytes": 270152,
+   "edges": 6677,
+   "nodes": 2361,
+   "restrictions": 0
+  },
+  "379_523": {
+   "bytes": 266228,
+   "edges": 6340,
+   "nodes": 2575,
+   "restrictions": 2
+  },
+  "379_524": {
+   "bytes": 2504792,
+   "edges": 58639,
+   "nodes": 24097,
+   "restrictions": 169
+  },
+  "379_525": {
+   "bytes": 537736,
+   "edges": 13016,
+   "nodes": 4994,
+   "restrictions": 0
+  },
+  "379_526": {
+   "bytes": 379344,
+   "edges": 8712,
+   "nodes": 3491,
+   "restrictions": 17
+  },
+  "379_527": {
+   "bytes": 20540,
+   "edges": 427,
+   "nodes": 193,
+   "restrictions": 0
+  },
+  "380_506": {
+   "bytes": 33532,
+   "edges": 565,
+   "nodes": 274,
+   "restrictions": 0
+  },
+  "380_507": {
+   "bytes": 294040,
+   "edges": 6223,
+   "nodes": 2706,
+   "restrictions": 0
+  },
+  "380_508": {
+   "bytes": 166196,
+   "edges": 3244,
+   "nodes": 1431,
+   "restrictions": 0
+  },
+  "380_509": {
+   "bytes": 169376,
+   "edges": 3393,
+   "nodes": 1485,
+   "restrictions": 0
+  },
+  "380_510": {
+   "bytes": 359940,
+   "edges": 7985,
+   "nodes": 3371,
+   "restrictions": 0
+  },
+  "380_511": {
+   "bytes": 285928,
+   "edges": 6214,
+   "nodes": 2735,
+   "restrictions": 0
+  },
+  "380_512": {
+   "bytes": 631128,
+   "edges": 14191,
+   "nodes": 6058,
+   "restrictions": 28
+  },
+  "380_513": {
+   "bytes": 123076,
+   "edges": 2352,
+   "nodes": 1043,
+   "restrictions": 0
+  },
+  "380_514": {
+   "bytes": 169544,
+   "edges": 3486,
+   "nodes": 1540,
+   "restrictions": 2
+  },
+  "380_515": {
+   "bytes": 242024,
+   "edges": 5241,
+   "nodes": 2211,
+   "restrictions": 3
+  },
+  "380_516": {
+   "bytes": 522824,
+   "edges": 11758,
+   "nodes": 5140,
+   "restrictions": 30
+  },
+  "380_517": {
+   "bytes": 321020,
+   "edges": 7382,
+   "nodes": 3207,
+   "restrictions": 26
+  },
+  "380_518": {
+   "bytes": 200812,
+   "edges": 4680,
+   "nodes": 1855,
+   "restrictions": 9
+  },
+  "380_519": {
+   "bytes": 618648,
+   "edges": 14830,
+   "nodes": 5782,
+   "restrictions": 11
+  },
+  "380_520": {
+   "bytes": 371456,
+   "edges": 9208,
+   "nodes": 3357,
+   "restrictions": 10
+  },
+  "380_521": {
+   "bytes": 287912,
+   "edges": 7165,
+   "nodes": 2539,
+   "restrictions": 2
+  },
+  "380_522": {
+   "bytes": 272800,
+   "edges": 6719,
+   "nodes": 2468,
+   "restrictions": 0
+  },
+  "380_523": {
+   "bytes": 303692,
+   "edges": 7377,
+   "nodes": 2733,
+   "restrictions": 4
+  },
+  "380_524": {
+   "bytes": 276112,
+   "edges": 6605,
+   "nodes": 2711,
+   "restrictions": 0
+  },
+  "380_525": {
+   "bytes": 221996,
+   "edges": 5380,
+   "nodes": 2039,
+   "restrictions": 0
+  },
+  "380_526": {
+   "bytes": 228392,
+   "edges": 5291,
+   "nodes": 2080,
+   "restrictions": 9
+  },
+  "380_527": {
+   "bytes": 11428,
+   "edges": 237,
+   "nodes": 102,
+   "restrictions": 0
+  },
+  "381_506": {
+   "bytes": 60700,
+   "edges": 1011,
+   "nodes": 476,
+   "restrictions": 0
+  },
+  "381_507": {
+   "bytes": 229076,
+   "edges": 4504,
+   "nodes": 1998,
+   "restrictions": 0
+  },
+  "381_508": {
+   "bytes": 575144,
+   "edges": 12515,
+   "nodes": 5447,
+   "restrictions": 6
+  },
+  "381_509": {
+   "bytes": 190984,
+   "edges": 3861,
+   "nodes": 1648,
+   "restrictions": 8
+  },
+  "381_510": {
+   "bytes": 294452,
+   "edges": 6335,
+   "nodes": 2790,
+   "restrictions": 0
+  },
+  "381_511": {
+   "bytes": 796384,
+   "edges": 17964,
+   "nodes": 7740,
+   "restrictions": 29
+  },
+  "381_512": {
+   "bytes": 1233612,
+   "edges": 28420,
+   "nodes": 12077,
+   "restrictions": 86
+  },
+  "381_513": {
+   "bytes": 226756,
+   "edges": 4689,
+   "nodes": 2142,
+   "restrictions": 13
+  },
+  "381_514": {
+   "bytes": 233256,
+   "edges": 4894,
+   "nodes": 2201,
+   "restrictions": 7
+  },
+  "381_515": {
+   "bytes": 901468,
+   "edges": 20060,
+   "nodes": 9169,
+   "restrictions": 113
+  },
+  "381_516": {
+   "bytes": 2858592,
+   "edges": 65696,
+   "nodes": 29037,
+   "restrictions": 1077
+  },
+  "381_517": {
+   "bytes": 1377168,
+   "edges": 32353,
+   "nodes": 13502,
+   "restrictions": 371
+  },
+  "381_518": {
+   "bytes": 379300,
+   "edges": 9155,
+   "nodes": 3577,
+   "restrictions": 31
+  },
+  "381_519": {
+   "bytes": 311292,
+   "edges": 7553,
+   "nodes": 2855,
+   "restrictions": 8
+  },
+  "381_520": {
+   "bytes": 349492,
+   "edges": 8485,
+   "nodes": 3158,
+   "restrictions": 8
+  },
+  "381_521": {
+   "bytes": 194696,
+   "edges": 4753,
+   "nodes": 1749,
+   "restrictions": 1
+  },
+  "381_522": {
+   "bytes": 303184,
+   "edges": 7441,
+   "nodes": 2707,
+   "restrictions": 15
+  },
+  "381_523": {
+   "bytes": 318944,
+   "edges": 7736,
+   "nodes": 2971,
+   "restrictions": 30
+  },
+  "381_524": {
+   "bytes": 238488,
+   "edges": 5783,
+   "nodes": 2191,
+   "restrictions": 0
+  },
+  "381_525": {
+   "bytes": 259032,
+   "edges": 6297,
+   "nodes": 2272,
+   "restrictions": 0
+  },
+  "381_526": {
+   "bytes": 221208,
+   "edges": 5371,
+   "nodes": 2030,
+   "restrictions": 0
+  },
+  "381_527": {
+   "bytes": 848,
+   "edges": 12,
+   "nodes": 8,
+   "restrictions": 0
+  },
+  "382_506": {
+   "bytes": 209676,
+   "edges": 4345,
+   "nodes": 1882,
+   "restrictions": 0
+  },
+  "382_507": {
+   "bytes": 140924,
+   "edges": 2639,
+   "nodes": 1169,
+   "restrictions": 0
+  },
+  "382_508": {
+   "bytes": 120588,
+   "edges": 2163,
+   "nodes": 957,
+   "restrictions": 0
+  },
+  "382_509": {
+   "bytes": 200516,
+   "edges": 3942,
+   "nodes": 1719,
+   "restrictions": 0
+  },
+  "382_510": {
+   "bytes": 560360,
+   "edges": 12620,
+   "nodes": 5451,
+   "restrictions": 22
+  },
+  "382_511": {
+   "bytes": 617068,
+   "edges": 13732,
+   "nodes": 6029,
+   "restrictions": 32
+  },
+  "382_512": {
+   "bytes": 928104,
+   "edges": 21368,
+   "nodes": 9366,
+   "restrictions": 76
+  },
+  "382_513": {
+   "bytes": 261520,
+   "edges": 5743,
+   "nodes": 2508,
+   "restrictions": 8
+  },
+  "382_514": {
+   "bytes": 194028,
+   "edges": 4017,
+   "nodes": 1735,
+   "restrictions": 9
+  },
+  "382_515": {
+   "bytes": 387688,
+   "edges": 8356,
+   "nodes": 3729,
+   "restrictions": 12
+  },
+  "382_516": {
+   "bytes": 2631164,
+   "edges": 60784,
+   "nodes": 26408,
+   "restrictions": 871
+  },
+  "382_517": {
+   "bytes": 2445028,
+   "edges": 56070,
+   "nodes": 25551,
+   "restrictions": 784
+  },
+  "382_518": {
+   "bytes": 1101012,
+   "edges": 26010,
+   "nodes": 10573,
+   "restrictions": 203
+  },
+  "382_519": {
+   "bytes": 777252,
+   "edges": 18333,
+   "nodes": 7452,
+   "restrictions": 105
+  },
+  "382_520": {
+   "bytes": 345936,
+   "edges": 8384,
+   "nodes": 2991,
+   "restrictions": 2
+  },
+  "382_521": {
+   "bytes": 242028,
+   "edges": 5872,
+   "nodes": 2217,
+   "restrictions": 1
+  },
+  "382_522": {
+   "bytes": 338632,
+   "edges": 8180,
+   "nodes": 3109,
+   "restrictions": 11
+  },
+  "382_523": {
+   "bytes": 296272,
+   "edges": 7241,
+   "nodes": 2640,
+   "restrictions": 0
+  },
+  "382_524": {
+   "bytes": 188448,
+   "edges": 4549,
+   "nodes": 1667,
+   "restrictions": 0
+  },
+  "382_525": {
+   "bytes": 322744,
+   "edges": 7741,
+   "nodes": 2971,
+   "restrictions": 11
+  },
+  "382_526": {
+   "bytes": 233696,
+   "edges": 5691,
+   "nodes": 2151,
+   "restrictions": 0
+  },
+  "382_527": {
+   "bytes": 248,
+   "edges": 3,
+   "nodes": 2,
+   "restrictions": 0
+  },
+  "383_506": {
+   "bytes": 162520,
+   "edges": 3315,
+   "nodes": 1491,
+   "restrictions": 1
+  },
+  "383_507": {
+   "bytes": 428552,
+   "edges": 9117,
+   "nodes": 3973,
+   "restrictions": 6
+  },
+  "383_508": {
+   "bytes": 467756,
+   "edges": 9944,
+   "nodes": 4347,
+   "restrictions": 25
+  },
+  "383_509": {
+   "bytes": 141720,
+   "edges": 2527,
+   "nodes": 1118,
+   "restrictions": 0
+  },
+  "383_510": {
+   "bytes": 200700,
+   "edges": 4157,
+   "nodes": 1871,
+   "restrictions": 0
+  },
+  "383_511": {
+   "bytes": 344260,
+   "edges": 7554,
+   "nodes": 3285,
+   "restrictions": 5
+  },
+  "383_512": {
+   "bytes": 240472,
+   "edges": 5346,
+   "nodes": 2361,
+   "restrictions": 3
+  },
+  "383_513": {
+   "bytes": 231640,
+   "edges": 4956,
+   "nodes": 2150,
+   "restrictions": 0
+  },
+  "383_514": {
+   "bytes": 154044,
+   "edges": 2969,
+   "nodes": 1319,
+   "restrictions": 0
+  },
+  "383_515": {
+   "bytes": 248632,
+   "edges": 5406,
+   "nodes": 2289,
+   "restrictions": 2
+  },
+  "383_516": {
+   "bytes": 670460,
+   "edges": 15132,
+   "nodes": 6801,
+   "restrictions": 69
+  },
+  "383_517": {
+   "bytes": 622580,
+   "edges": 14156,
+   "nodes": 6240,
+   "restrictions": 123
+  },
+  "383_518": {
+   "bytes": 2530392,
+   "edges": 58674,
+   "nodes": 24309,
+   "restrictions": 503
+  },
+  "383_519": {
+   "bytes": 2347556,
+   "edges": 56000,
+   "nodes": 22263,
+   "restrictions": 447
+  },
+  "383_520": {
+   "bytes": 477200,
+   "edges": 11527,
+   "nodes": 4354,
+   "restrictions": 24
+  },
+  "383_521": {
+   "bytes": 420716,
+   "edges": 10223,
+   "nodes": 3972,
+   "restrictions": 4
+  },
+  "383_522": {
+   "bytes": 774992,
+   "edges": 18853,
+   "nodes": 7136,
+   "restrictions": 13
+  },
+  "383_523": {
+   "bytes": 430856,
+   "edges": 10405,
+   "nodes": 4080,
+   "restrictions": 9
+  },
+  "383_524": {
+   "bytes": 217848,
+   "edges": 5316,
+   "nodes": 1914,
+   "restrictions": 0
+  },
+  "383_525": {
+   "bytes": 237952,
+   "edges": 5720,
+   "nodes": 2176,
+   "restrictions": 7
+  },
+  "383_526": {
+   "bytes": 214780,
+   "edges": 5218,
+   "nodes": 1989,
+   "restrictions": 0
+  },
+  "383_527": {
+   "bytes": 508,
+   "edges": 7,
+   "nodes": 5,
+   "restrictions": 0
+  },
+  "384_506": {
+   "bytes": 85576,
+   "edges": 1642,
+   "nodes": 783,
+   "restrictions": 0
+  },
+  "384_507": {
+   "bytes": 236676,
+   "edges": 4701,
+   "nodes": 2129,
+   "restrictions": 0
+  },
+  "384_508": {
+   "bytes": 201404,
+   "edges": 3913,
+   "nodes": 1773,
+   "restrictions": 11
+  },
+  "384_509": {
+   "bytes": 176140,
+   "edges": 3283,
+   "nodes": 1433,
+   "restrictions": 0
+  },
+  "384_510": {
+   "bytes": 201128,
+   "edges": 3975,
+   "nodes": 1769,
+   "restrictions": 5
+  },
+  "384_511": {
+   "bytes": 238580,
+   "edges": 4901,
+   "nodes": 2242,
+   "restrictions": 2
+  },
+  "384_512": {
+   "bytes": 276164,
+   "edges": 5907,
+   "nodes": 2640,
+   "restrictions": 4
+  },
+  "384_513": {
+   "bytes": 158464,
+   "edges": 3192,
+   "nodes": 1428,
+   "restrictions": 2
+  },
+  "384_514": {
+   "bytes": 271144,
+   "edges": 5845,
+   "nodes": 2487,
+   "restrictions": 44
+  },
+  "384_515": {
+   "bytes": 232596,
+   "edges": 5172,
+   "nodes": 2189,
+   "restrictions": 3
+  },
+  "384_516": {
+   "bytes": 288308,
+   "edges": 6741,
+   "nodes": 2803,
+   "restrictions": 11
+  },
+  "384_517": {
+   "bytes": 341928,
+   "edges": 7980,
+   "nodes": 3319,
+   "restrictions": 35
+  },
+  "384_518": {
+   "bytes": 434816,
+   "edges": 10011,
+   "nodes": 4145,
+   "restrictions": 61
+  },
+  "384_519": {
+   "bytes": 1112568,
+   "edges": 26495,
+   "nodes": 10435,
+   "restrictions": 121
+  },
+  "384_520": {
+   "bytes": 275328,
+   "edges": 6536,
+   "nodes": 2578,
+   "restrictions": 8
+  },
+  "384_521": {
+   "bytes": 392232,
+   "edges": 9370,
+   "nodes": 3485,
+   "restrictions": 4
+  },
+  "384_522": {
+   "bytes": 227008,
+   "edges": 5471,
+   "nodes": 2089,
+   "restrictions": 4
+  },
+  "384_523": {
+   "bytes": 275648,
+   "edges": 6704,
+   "nodes": 2536,
+   "restrictions": 0
+  },
+  "384_524": {
+   "bytes": 241492,
+   "edges": 5968,
+   "nodes": 2113,
+   "restrictions": 0
+  },
+  "384_525": {
+   "bytes": 195760,
+   "edges": 4773,
+   "nodes": 1802,
+   "restrictions": 4
+  },
+  "384_526": {
+   "bytes": 329032,
+   "edges": 7693,
+   "nodes": 3161,
+   "restrictions": 23
+  },
+  "384_527": {
+   "bytes": 1132,
+   "edges": 17,
+   "nodes": 12,
+   "restrictions": 0
+  },
+  "385_506": {
+   "bytes": 211044,
+   "edges": 4526,
+   "nodes": 2010,
+   "restrictions": 3
+  },
+  "385_507": {
+   "bytes": 155008,
+   "edges": 3097,
+   "nodes": 1413,
+   "restrictions": 0
+  },
+  "385_508": {
+   "bytes": 103628,
+   "edges": 1756,
+   "nodes": 819,
+   "restrictions": 0
+  },
+  "385_509": {
+   "bytes": 124060,
+   "edges": 2180,
+   "nodes": 993,
+   "restrictions": 0
+  },
+  "385_510": {
+   "bytes": 248100,
+   "edges": 4779,
+   "nodes": 2159,
+   "restrictions": 5
+  },
+  "385_511": {
+   "bytes": 153128,
+   "edges": 2899,
+   "nodes": 1346,
+   "restrictions": 0
+  },
+  "385_512": {
+   "bytes": 186092,
+   "edges": 3707,
+   "nodes": 1674,
+   "restrictions": 0
+  },
+  "385_513": {
+   "bytes": 179160,
+   "edges": 3704,
+   "nodes": 1657,
+   "restrictions": 11
+  },
+  "385_514": {
+   "bytes": 188732,
+   "edges": 3981,
+   "nodes": 1637,
+   "restrictions": 0
+  },
+  "385_515": {
+   "bytes": 245312,
+   "edges": 5430,
+   "nodes": 2288,
+   "restrictions": 14
+  },
+  "385_516": {
+   "bytes": 194188,
+   "edges": 4325,
+   "nodes": 1726,
+   "restrictions": 1
+  },
+  "385_517": {
+   "bytes": 212200,
+   "edges": 5021,
+   "nodes": 2010,
+   "restrictions": 0
+  },
+  "385_518": {
+   "bytes": 197884,
+   "edges": 4607,
+   "nodes": 1911,
+   "restrictions": 2
+  },
+  "385_519": {
+   "bytes": 195044,
+   "edges": 4481,
+   "nodes": 1918,
+   "restrictions": 2
+  },
+  "385_520": {
+   "bytes": 254976,
+   "edges": 6009,
+   "nodes": 2363,
+   "restrictions": 1
+  },
+  "385_521": {
+   "bytes": 217184,
+   "edges": 5003,
+   "nodes": 2073,
+   "restrictions": 5
+  },
+  "385_522": {
+   "bytes": 278928,
+   "edges": 6864,
+   "nodes": 2482,
+   "restrictions": 4
+  },
+  "385_523": {
+   "bytes": 222860,
+   "edges": 5405,
+   "nodes": 2045,
+   "restrictions": 0
+  },
+  "385_524": {
+   "bytes": 639692,
+   "edges": 15651,
+   "nodes": 5688,
+   "restrictions": 18
+  },
+  "385_525": {
+   "bytes": 318752,
+   "edges": 7546,
+   "nodes": 2917,
+   "restrictions": 13
+  },
+  "385_526": {
+   "bytes": 3033940,
+   "edges": 72169,
+   "nodes": 28513,
+   "restrictions": 418
+  },
+  "385_527": {
+   "bytes": 260,
+   "edges": 2,
+   "nodes": 2,
+   "restrictions": 0
+  },
+  "386_506": {
+   "bytes": 19052,
+   "edges": 351,
+   "nodes": 174,
+   "restrictions": 0
+  },
+  "386_507": {
+   "bytes": 291068,
+   "edges": 6143,
+   "nodes": 2806,
+   "restrictions": 0
+  },
+  "386_508": {
+   "bytes": 163172,
+   "edges": 2985,
+   "nodes": 1446,
+   "restrictions": 2
+  },
+  "386_509": {
+   "bytes": 176072,
+   "edges": 3237,
+   "nodes": 1552,
+   "restrictions": 1
+  },
+  "386_510": {
+   "bytes": 175628,
+   "edges": 3419,
+   "nodes": 1623,
+   "restrictions": 1
+  },
+  "386_511": {
+   "bytes": 216240,
+   "edges": 4250,
+   "nodes": 1921,
+   "restrictions": 0
+  },
+  "386_512": {
+   "bytes": 271192,
+   "edges": 5602,
+   "nodes": 2504,
+   "restrictions": 2
+  },
+  "386_513": {
+   "bytes": 112980,
+   "edges": 2153,
+   "nodes": 1023,
+   "restrictions": 0
+  },
+  "386_514": {
+   "bytes": 116484,
+   "edges": 2248,
+   "nodes": 985,
+   "restrictions": 2
+  },
+  "386_515": {
+   "bytes": 146636,
+   "edges": 2959,
+   "nodes": 1277,
+   "restrictions": 9
+  },
+  "386_516": {
+   "bytes": 142836,
+   "edges": 2943,
+   "nodes": 1183,
+   "restrictions": 0
+  },
+  "386_517": {
+   "bytes": 189068,
+   "edges": 4362,
+   "nodes": 1661,
+   "restrictions": 3
+  },
+  "386_518": {
+   "bytes": 366948,
+   "edges": 8888,
+   "nodes": 3354,
+   "restrictions": 12
+  },
+  "386_519": {
+   "bytes": 289156,
+   "edges": 6765,
+   "nodes": 2779,
+   "restrictions": 20
+  },
+  "386_520": {
+   "bytes": 377404,
+   "edges": 8903,
+   "nodes": 3612,
+   "restrictions": 14
+  },
+  "386_521": {
+   "bytes": 203776,
+   "edges": 4822,
+   "nodes": 1920,
+   "restrictions": 12
+  },
+  "386_522": {
+   "bytes": 128276,
+   "edges": 3064,
+   "nodes": 1130,
+   "restrictions": 0
+  },
+  "386_523": {
+   "bytes": 241496,
+   "edges": 5780,
+   "nodes": 2147,
+   "restrictions": 2
+  },
+  "386_524": {
+   "bytes": 290920,
+   "edges": 7104,
+   "nodes": 2570,
+   "restrictions": 4
+  },
+  "386_525": {
+   "bytes": 270156,
+   "edges": 6519,
+   "nodes": 2449,
+   "restrictions": 3
+  },
+  "386_526": {
+   "bytes": 558648,
+   "edges": 13362,
+   "nodes": 5245,
+   "restrictions": 26
+  },
+  "387_506": {
+   "bytes": 2296,
+   "edges": 33,
+   "nodes": 16,
+   "restrictions": 0
+  },
+  "387_507": {
+   "bytes": 217204,
+   "edges": 4427,
+   "nodes": 1981,
+   "restrictions": 0
+  },
+  "387_508": {
+   "bytes": 199680,
+   "edges": 3808,
+   "nodes": 1813,
+   "restrictions": 0
+  },
+  "387_509": {
+   "bytes": 230064,
+   "edges": 4521,
+   "nodes": 2140,
+   "restrictions": 1
+  },
+  "387_510": {
+   "bytes": 132028,
+   "edges": 2421,
+   "nodes": 1184,
+   "restrictions": 0
+  },
+  "387_511": {
+   "bytes": 176820,
+   "edges": 3356,
+   "nodes": 1585,
+   "restrictions": 0
+  },
+  "387_512": {
+   "bytes": 185496,
+   "edges": 3471,
+   "nodes": 1605,
+   "restrictions": 0
+  },
+  "387_513": {
+   "bytes": 208800,
+   "edges": 3994,
+   "nodes": 1800,
+   "restrictions": 0
+  },
+  "387_514": {
+   "bytes": 154508,
+   "edges": 2996,
+   "nodes": 1342,
+   "restrictions": 3
+  },
+  "387_515": {
+   "bytes": 146800,
+   "edges": 2979,
+   "nodes": 1221,
+   "restrictions": 0
+  },
+  "387_516": {
+   "bytes": 172528,
+   "edges": 3582,
+   "nodes": 1560,
+   "restrictions": 4
+  },
+  "387_517": {
+   "bytes": 270108,
+   "edges": 6064,
+   "nodes": 2581,
+   "restrictions": 17
+  },
+  "387_518": {
+   "bytes": 99300,
+   "edges": 2267,
+   "nodes": 880,
+   "restrictions": 0
+  },
+  "387_519": {
+   "bytes": 2035356,
+   "edges": 47845,
+   "nodes": 19471,
+   "restrictions": 542
+  },
+  "387_520": {
+   "bytes": 2612488,
+   "edges": 59780,
+   "nodes": 25141,
+   "restrictions": 754
+  },
+  "387_521": {
+   "bytes": 481880,
+   "edges": 11299,
+   "nodes": 4565,
+   "restrictions": 105
+  },
+  "387_522": {
+   "bytes": 421736,
+   "edges": 10073,
+   "nodes": 3823,
+   "restrictions": 10
+  },
+  "387_523": {
+   "bytes": 161944,
+   "edges": 3850,
+   "nodes": 1508,
+   "restrictions": 5
+  },
+  "387_524": {
+   "bytes": 397684,
+   "edges": 9722,
+   "nodes": 3614,
+   "restrictions": 4
+  },
+  "387_525": {
+   "bytes": 406880,
+   "edges": 9684,
+   "nodes": 3768,
+   "restrictions": 6
+  },
+  "387_526": {
+   "bytes": 129140,
+   "edges": 3092,
+   "nodes": 1227,
+   "restrictions": 4
+  },
+  "388_507": {
+   "bytes": 85576,
+   "edges": 1845,
+   "nodes": 786,
+   "restrictions": 0
+  },
+  "388_508": {
+   "bytes": 245768,
+   "edges": 4777,
+   "nodes": 2237,
+   "restrictions": 0
+  },
+  "388_509": {
+   "bytes": 185668,
+   "edges": 3572,
+   "nodes": 1703,
+   "restrictions": 7
+  },
+  "388_510": {
+   "bytes": 250328,
+   "edges": 4940,
+   "nodes": 2300,
+   "restrictions": 4
+  },
+  "388_511": {
+   "bytes": 277608,
+   "edges": 5675,
+   "nodes": 2603,
+   "restrictions": 0
+  },
+  "388_512": {
+   "bytes": 135304,
+   "edges": 2476,
+   "nodes": 1171,
+   "restrictions": 0
+  },
+  "388_513": {
+   "bytes": 255392,
+   "edges": 5118,
+   "nodes": 2289,
+   "restrictions": 7
+  },
+  "388_514": {
+   "bytes": 495200,
+   "edges": 11007,
+   "nodes": 4540,
+   "restrictions": 4
+  },
+  "388_515": {
+   "bytes": 268796,
+   "edges": 5715,
+   "nodes": 2442,
+   "restrictions": 5
+  },
+  "388_516": {
+   "bytes": 194152,
+   "edges": 4206,
+   "nodes": 1736,
+   "restrictions": 6
+  },
+  "388_517": {
+   "bytes": 368512,
+   "edges": 8523,
+   "nodes": 3514,
+   "restrictions": 31
+  },
+  "388_518": {
+   "bytes": 419268,
+   "edges": 10016,
+   "nodes": 3932,
+   "restrictions": 66
+  },
+  "388_519": {
+   "bytes": 2909604,
+   "edges": 69058,
+   "nodes": 27728,
+   "restrictions": 711
+  },
+  "388_520": {
+   "bytes": 2536868,
+   "edges": 58671,
+   "nodes": 24380,
+   "restrictions": 793
+  },
+  "388_521": {
+   "bytes": 307020,
+   "edges": 7268,
+   "nodes": 3036,
+   "restrictions": 23
+  },
+  "388_522": {
+   "bytes": 337172,
+   "edges": 8119,
+   "nodes": 3021,
+   "restrictions": 1
+  },
+  "388_523": {
+   "bytes": 287340,
+   "edges": 6963,
+   "nodes": 2618,
+   "restrictions": 10
+  },
+  "388_524": {
+   "bytes": 126620,
+   "edges": 3077,
+   "nodes": 1119,
+   "restrictions": 0
+  },
+  "388_525": {
+   "bytes": 248716,
+   "edges": 5786,
+   "nodes": 2337,
+   "restrictions": 2
+  },
+  "388_526": {
+   "bytes": 272008,
+   "edges": 6350,
+   "nodes": 2622,
+   "restrictions": 5
+  },
+  "389_508": {
+   "bytes": 100972,
+   "edges": 1983,
+   "nodes": 901,
+   "restrictions": 5
+  },
+  "389_509": {
+   "bytes": 252480,
+   "edges": 5007,
+   "nodes": 2360,
+   "restrictions": 4
+  },
+  "389_510": {
+   "bytes": 241988,
+   "edges": 4834,
+   "nodes": 2255,
+   "restrictions": 2
+  },
+  "389_511": {
+   "bytes": 173276,
+   "edges": 3263,
+   "nodes": 1578,
+   "restrictions": 0
+  },
+  "389_512": {
+   "bytes": 158932,
+   "edges": 3130,
+   "nodes": 1395,
+   "restrictions": 6
+  },
+  "389_513": {
+   "bytes": 582376,
+   "edges": 12773,
+   "nodes": 5260,
+   "restrictions": 7
+  },
+  "389_514": {
+   "bytes": 390280,
+   "edges": 8580,
+   "nodes": 3451,
+   "restrictions": 5
+  },
+  "389_515": {
+   "bytes": 177612,
+   "edges": 3653,
+   "nodes": 1471,
+   "restrictions": 0
+  },
+  "389_516": {
+   "bytes": 398344,
+   "edges": 9092,
+   "nodes": 3503,
+   "restrictions": 5
+  },
+  "389_517": {
+   "bytes": 162096,
+   "edges": 3392,
+   "nodes": 1405,
+   "restrictions": 0
+  },
+  "389_518": {
+   "bytes": 675840,
+   "edges": 15673,
+   "nodes": 6403,
+   "restrictions": 67
+  },
+  "389_519": {
+   "bytes": 556292,
+   "edges": 12951,
+   "nodes": 5406,
+   "restrictions": 64
+  },
+  "389_520": {
+   "bytes": 499204,
+   "edges": 11700,
+   "nodes": 4962,
+   "restrictions": 77
+  },
+  "389_521": {
+   "bytes": 371988,
+   "edges": 8907,
+   "nodes": 3617,
+   "restrictions": 4
+  },
+  "389_522": {
+   "bytes": 433708,
+   "edges": 10183,
+   "nodes": 4145,
+   "restrictions": 1
+  },
+  "389_523": {
+   "bytes": 600968,
+   "edges": 14641,
+   "nodes": 5534,
+   "restrictions": 30
+  },
+  "389_524": {
+   "bytes": 314520,
+   "edges": 7552,
+   "nodes": 2831,
+   "restrictions": 5
+  },
+  "389_525": {
+   "bytes": 461524,
+   "edges": 10831,
+   "nodes": 4393,
+   "restrictions": 13
+  },
+  "389_526": {
+   "bytes": 48112,
+   "edges": 1124,
+   "nodes": 455,
+   "restrictions": 0
+  },
+  "389_527": {
+   "bytes": 176,
+   "edges": 1,
+   "nodes": 1,
+   "restrictions": 0
+  },
+  "390_508": {
+   "bytes": 2728,
+   "edges": 46,
+   "nodes": 24,
+   "restrictions": 0
+  },
+  "390_509": {
+   "bytes": 147216,
+   "edges": 2807,
+   "nodes": 1327,
+   "restrictions": 22
+  },
+  "390_510": {
+   "bytes": 173556,
+   "edges": 3322,
+   "nodes": 1607,
+   "restrictions": 13
+  },
+  "390_511": {
+   "bytes": 77680,
+   "edges": 1482,
+   "nodes": 697,
+   "restrictions": 0
+  },
+  "390_512": {
+   "bytes": 556,
+   "edges": 7,
+   "nodes": 5,
+   "restrictions": 0
+  },
+  "390_513": {
+   "bytes": 155520,
+   "edges": 3403,
+   "nodes": 1497,
+   "restrictions": 12
+  },
+  "390_514": {
+   "bytes": 148956,
+   "edges": 2652,
+   "nodes": 1118,
+   "restrictions": 0
+  },
+  "390_515": {
+   "bytes": 178096,
+   "edges": 3524,
+   "nodes": 1457,
+   "restrictions": 4
+  },
+  "390_516": {
+   "bytes": 143592,
+   "edges": 2879,
+   "nodes": 1168,
+   "restrictions": 0
+  },
+  "390_517": {
+   "bytes": 147796,
+   "edges": 2895,
+   "nodes": 1228,
+   "restrictions": 0
+  },
+  "390_518": {
+   "bytes": 368536,
+   "edges": 8334,
+   "nodes": 3413,
+   "restrictions": 0
+  },
+  "390_519": {
+   "bytes": 412548,
+   "edges": 9521,
+   "nodes": 3957,
+   "restrictions": 6
+  },
+  "390_520": {
+   "bytes": 958208,
+   "edges": 22681,
+   "nodes": 9287,
+   "restrictions": 48
+  },
+  "390_521": {
+   "bytes": 534036,
+   "edges": 12750,
+   "nodes": 4999,
+   "restrictions": 10
+  },
+  "390_522": {
+   "bytes": 236224,
+   "edges": 5298,
+   "nodes": 2168,
+   "restrictions": 0
+  },
+  "390_523": {
+   "bytes": 537288,
+   "edges": 12809,
+   "nodes": 5112,
+   "restrictions": 15
+  },
+  "390_524": {
+   "bytes": 159368,
+   "edges": 3827,
+   "nodes": 1502,
+   "restrictions": 0
+  },
+  "390_525": {
+   "bytes": 264672,
+   "edges": 6204,
+   "nodes": 2636,
+   "restrictions": 7
+  },
+  "391_509": {
+   "bytes": 29576,
+   "edges": 469,
+   "nodes": 235,
+   "restrictions": 0
+  },
+  "391_510": {
+   "bytes": 70720,
+   "edges": 1373,
+   "nodes": 631,
+   "restrictions": 0
+  },
+  "391_511": {
+   "bytes": 380,
+   "edges": 2,
+   "nodes": 3,
+   "restrictions": 0
+  },
+  "391_514": {
+   "bytes": 27512,
+   "edges": 473,
+   "nodes": 211,
+   "restrictions": 0
+  },
+  "391_515": {
+   "bytes": 145352,
+   "edges": 3079,
+   "nodes": 1278,
+   "restrictions": 0
+  },
+  "391_516": {
+   "bytes": 216904,
+   "edges": 4496,
+   "nodes": 1907,
+   "restrictions": 0
+  },
+  "391_517": {
+   "bytes": 447716,
+   "edges": 9843,
+   "nodes": 4142,
+   "restrictions": 5
+  },
+  "391_518": {
+   "bytes": 284964,
+   "edges": 6114,
+   "nodes": 2440,
+   "restrictions": 1
+  },
+  "391_519": {
+   "bytes": 695660,
+   "edges": 16341,
+   "nodes": 6451,
+   "restrictions": 23
+  },
+  "391_520": {
+   "bytes": 261328,
+   "edges": 5690,
+   "nodes": 2362,
+   "restrictions": 2
+  },
+  "391_521": {
+   "bytes": 132020,
+   "edges": 2635,
+   "nodes": 1033,
+   "restrictions": 0
+  },
+  "391_522": {
+   "bytes": 232636,
+   "edges": 5254,
+   "nodes": 1995,
+   "restrictions": 2
+  },
+  "391_523": {
+   "bytes": 245100,
+   "edges": 5747,
+   "nodes": 2349,
+   "restrictions": 2
+  },
+  "391_524": {
+   "bytes": 284592,
+   "edges": 6882,
+   "nodes": 2826,
+   "restrictions": 7
+  },
+  "391_525": {
+   "bytes": 1440104,
+   "edges": 34231,
+   "nodes": 13826,
+   "restrictions": 166
+  },
+  "391_526": {
+   "bytes": 25968,
+   "edges": 616,
+   "nodes": 235,
+   "restrictions": 0
+  },
+  "392_510": {
+   "bytes": 744,
+   "edges": 8,
+   "nodes": 6,
+   "restrictions": 0
+  },
+  "392_515": {
+   "bytes": 123840,
+   "edges": 2808,
+   "nodes": 1108,
+   "restrictions": 0
+  },
+  "392_516": {
+   "bytes": 235044,
+   "edges": 4948,
+   "nodes": 2139,
+   "restrictions": 6
+  },
+  "392_517": {
+   "bytes": 169856,
+   "edges": 3331,
+   "nodes": 1421,
+   "restrictions": 2
+  },
+  "392_518": {
+   "bytes": 246072,
+   "edges": 5058,
+   "nodes": 2026,
+   "restrictions": 0
+  },
+  "392_519": {
+   "bytes": 291520,
+   "edges": 6377,
+   "nodes": 2612,
+   "restrictions": 0
+  },
+  "392_520": {
+   "bytes": 156820,
+   "edges": 3258,
+   "nodes": 1310,
+   "restrictions": 0
+  },
+  "392_521": {
+   "bytes": 335164,
+   "edges": 7518,
+   "nodes": 2849,
+   "restrictions": 12
+  },
+  "392_522": {
+   "bytes": 337684,
+   "edges": 7837,
+   "nodes": 3202,
+   "restrictions": 0
+  },
+  "392_523": {
+   "bytes": 660848,
+   "edges": 15774,
+   "nodes": 6325,
+   "restrictions": 44
+  },
+  "392_524": {
+   "bytes": 769900,
+   "edges": 17956,
+   "nodes": 7564,
+   "restrictions": 125
+  },
+  "392_525": {
+   "bytes": 2315452,
+   "edges": 54458,
+   "nodes": 22640,
+   "restrictions": 631
+  },
+  "392_526": {
+   "bytes": 15044,
+   "edges": 342,
+   "nodes": 123,
+   "restrictions": 0
+  },
+  "393_515": {
+   "bytes": 916,
+   "edges": 7,
+   "nodes": 7,
+   "restrictions": 0
+  },
+  "393_516": {
+   "bytes": 23624,
+   "edges": 494,
+   "nodes": 231,
+   "restrictions": 0
+  },
+  "393_517": {
+   "bytes": 351800,
+   "edges": 7918,
+   "nodes": 3450,
+   "restrictions": 40
+  },
+  "393_518": {
+   "bytes": 264220,
+   "edges": 5630,
+   "nodes": 2301,
+   "restrictions": 2
+  },
+  "393_519": {
+   "bytes": 294696,
+   "edges": 6370,
+   "nodes": 2548,
+   "restrictions": 9
+  },
+  "393_520": {
+   "bytes": 289564,
+   "edges": 6370,
+   "nodes": 2443,
+   "restrictions": 2
+  },
+  "393_521": {
+   "bytes": 273508,
+   "edges": 5909,
+   "nodes": 2319,
+   "restrictions": 0
+  },
+  "393_522": {
+   "bytes": 479972,
+   "edges": 11236,
+   "nodes": 4431,
+   "restrictions": 6
+  },
+  "393_523": {
+   "bytes": 941212,
+   "edges": 21971,
+   "nodes": 8801,
+   "restrictions": 77
+  },
+  "393_524": {
+   "bytes": 1969588,
+   "edges": 46925,
+   "nodes": 18849,
+   "restrictions": 333
+  },
+  "393_525": {
+   "bytes": 2698948,
+   "edges": 63992,
+   "nodes": 25964,
+   "restrictions": 603
+  },
+  "393_526": {
+   "bytes": 977640,
+   "edges": 23326,
+   "nodes": 9258,
+   "restrictions": 219
+  },
+  "394_517": {
+   "bytes": 390912,
+   "edges": 8933,
+   "nodes": 3903,
+   "restrictions": 40
+  },
+  "394_518": {
+   "bytes": 180400,
+   "edges": 3359,
+   "nodes": 1411,
+   "restrictions": 0
+  },
+  "394_519": {
+   "bytes": 211988,
+   "edges": 4329,
+   "nodes": 1810,
+   "restrictions": 0
+  },
+  "394_520": {
+   "bytes": 155268,
+   "edges": 3009,
+   "nodes": 1248,
+   "restrictions": 0
+  },
+  "394_521": {
+   "bytes": 505256,
+   "edges": 11497,
+   "nodes": 4299,
+   "restrictions": 7
+  },
+  "394_522": {
+   "bytes": 603704,
+   "edges": 14182,
+   "nodes": 5388,
+   "restrictions": 19
+  },
+  "394_523": {
+   "bytes": 2489308,
+   "edges": 58710,
+   "nodes": 23211,
+   "restrictions": 439
+  },
+  "394_524": {
+   "bytes": 1769872,
+   "edges": 42281,
+   "nodes": 17062,
+   "restrictions": 376
+  },
+  "394_525": {
+   "bytes": 1107088,
+   "edges": 25352,
+   "nodes": 10676,
+   "restrictions": 412
+  },
+  "394_526": {
+   "bytes": 1367688,
+   "edges": 31918,
+   "nodes": 13413,
+   "restrictions": 400
+  },
+  "394_527": {
+   "bytes": 13872,
+   "edges": 322,
+   "nodes": 126,
+   "restrictions": 0
+  },
+  "395_517": {
+   "bytes": 45340,
+   "edges": 919,
+   "nodes": 397,
+   "restrictions": 1
+  },
+  "395_518": {
+   "bytes": 137344,
+   "edges": 2356,
+   "nodes": 967,
+   "restrictions": 2
+  },
+  "395_519": {
+   "bytes": 299764,
+   "edges": 6398,
+   "nodes": 2615,
+   "restrictions": 0
+  },
+  "395_520": {
+   "bytes": 277508,
+   "edges": 5979,
+   "nodes": 2495,
+   "restrictions": 0
+  },
+  "395_521": {
+   "bytes": 196560,
+   "edges": 4006,
+   "nodes": 1579,
+   "restrictions": 0
+  },
+  "395_522": {
+   "bytes": 340188,
+   "edges": 7607,
+   "nodes": 2988,
+   "restrictions": 9
+  },
+  "395_523": {
+   "bytes": 679844,
+   "edges": 16493,
+   "nodes": 6218,
+   "restrictions": 66
+  },
+  "395_524": {
+   "bytes": 368316,
+   "edges": 8836,
+   "nodes": 3716,
+   "restrictions": 31
+  },
+  "395_525": {
+   "bytes": 300944,
+   "edges": 7058,
+   "nodes": 2932,
+   "restrictions": 42
+  },
+  "395_526": {
+   "bytes": 343616,
+   "edges": 7880,
+   "nodes": 3318,
+   "restrictions": 30
+  },
+  "395_527": {
+   "bytes": 198956,
+   "edges": 4727,
+   "nodes": 1908,
+   "restrictions": 30
+  },
+  "396_518": {
+   "bytes": 80720,
+   "edges": 1556,
+   "nodes": 681,
+   "restrictions": 1
+  },
+  "396_519": {
+   "bytes": 323092,
+   "edges": 6969,
+   "nodes": 3097,
+   "restrictions": 1
+  },
+  "396_520": {
+   "bytes": 501724,
+   "edges": 11100,
+   "nodes": 4647,
+   "restrictions": 12
+  },
+  "396_521": {
+   "bytes": 225968,
+   "edges": 4683,
+   "nodes": 1878,
+   "restrictions": 0
+  },
+  "396_522": {
+   "bytes": 153120,
+   "edges": 3114,
+   "nodes": 1219,
+   "restrictions": 6
+  },
+  "396_523": {
+   "bytes": 491548,
+   "edges": 11845,
+   "nodes": 4575,
+   "restrictions": 20
+  },
+  "396_524": {
+   "bytes": 911212,
+   "edges": 21594,
+   "nodes": 8707,
+   "restrictions": 78
+  },
+  "396_525": {
+   "bytes": 366176,
+   "edges": 8710,
+   "nodes": 3588,
+   "restrictions": 20
+  },
+  "396_526": {
+   "bytes": 148072,
+   "edges": 3481,
+   "nodes": 1369,
+   "restrictions": 2
+  },
+  "396_527": {
+   "bytes": 320736,
+   "edges": 7515,
+   "nodes": 2965,
+   "restrictions": 43
+  },
+  "397_519": {
+   "bytes": 26752,
+   "edges": 623,
+   "nodes": 256,
+   "restrictions": 0
+  },
+  "397_520": {
+   "bytes": 270088,
+   "edges": 6315,
+   "nodes": 2471,
+   "restrictions": 2
+  },
+  "397_521": {
+   "bytes": 462696,
+   "edges": 10484,
+   "nodes": 4228,
+   "restrictions": 26
+  },
+  "397_522": {
+   "bytes": 447736,
+   "edges": 10236,
+   "nodes": 4091,
+   "restrictions": 23
+  },
+  "397_523": {
+   "bytes": 518644,
+   "edges": 12159,
+   "nodes": 4961,
+   "restrictions": 44
+  },
+  "397_524": {
+   "bytes": 1770048,
+   "edges": 42224,
+   "nodes": 16789,
+   "restrictions": 205
+  },
+  "397_525": {
+   "bytes": 231228,
+   "edges": 5447,
+   "nodes": 2226,
+   "restrictions": 5
+  },
+  "397_526": {
+   "bytes": 139696,
+   "edges": 3312,
+   "nodes": 1307,
+   "restrictions": 0
+  },
+  "397_527": {
+   "bytes": 173848,
+   "edges": 4006,
+   "nodes": 1585,
+   "restrictions": 13
+  }
+ },
+ "version": 3
+}
