@@ -357,7 +357,9 @@
       }
       if (b > 0) { scenery[i] = a / b; sConf[i] = Math.min(1, b / sTotal); }
       const gConf = gc && finite(gc[i]) ? gc[i] : 0.5;
-      if (gq && finite(gq[i]) && !(sw >= GRAPH_OVER * qTotal)) { quality[i] = gq[i]; qConf[i] = Math.max(qConf[i], gConf); }
+      // (the tiles' score is an edge's mean: where the few live channels here (the national grid, the class and limit)
+      // say worse, the worse stands, so a built-up street the edge mean smooths over still pays as one)
+      if (gq && finite(gq[i]) && !(sw >= GRAPH_OVER * qTotal)) { quality[i] = Number.isFinite(quality[i]) ? Math.min(quality[i], gq[i]) : gq[i]; qConf[i] = Math.max(qConf[i], gConf); }
       if (gs && finite(gs[i]) && !(b >= GRAPH_OVER * sTotal)) { scenery[i] = gs[i]; sConf[i] = Math.max(sConf[i], gConf); }
     }
     return { n, quality, qConf, scenery, sConf, terms };

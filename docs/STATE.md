@@ -1,5 +1,14 @@
 # VETTA — CURRENT AGENT HANDOFF STATE
 
+## Session 2026-11-05: own routing, faster (merged main through #297)
+
+- [x] First route = our quickest from the worker (0.35-1.05 s); ranking on tile scores + time-dependent providers
+  (route_ctx/graph.js); warm tiles at start. Table in OWN_ROUTING.md §8.
+- Open: ranked route 1.2-1.8 s warm (target 1.5); subdivision fun pick worse on full data (ETL lacks router density /
+  driveways).
+- Exact next task: graph builder bakes router-like density, sidewalks and driveways (or a per-edge side-street share)
+  into the tiles; then re-run live2/run_own.js and judge.js.
+
 ## Session 2026-11-04 (night): own routing on the real Cincinnati tiles
 
 - [x] Merged the 16 Cincinnati tiles (claude/own-routing-graph 2ff318b). Live comparison on the 7 cases plus owner1 at

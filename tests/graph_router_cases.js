@@ -273,6 +273,37 @@ const CASES = {
       clock: [same, scaled, other], onFlags: [Own.on({ flags, storage: store(null), router: R }), Own.on({ flags: { on: (n, d) => d }, storage: store('0'), router: R }), Own.on({ flags: { on: (n, d) => d }, storage: store(null), router: R })] };
   },
 
+  // the fast path: our quickest alone, the tiles' scores along any line, the preload, one view reused
+  async fast() {
+    const g = H.grid({ seed: 4, nx: 12, ny: 12, stepDeg: 0.004, lat0: 39.15, lon0: -84.62 });
+    const T = H.tiles(g.nodes, g.edges);
+    let loads = 0;
+    const env = { load: async (i, j) => { loads++; return T.tiles.find((t) => t.tile.i === i && t.tile.j === j) || null; }, index: async () => ({ tiles: Object.fromEntries(T.tiles.map((t) => [`${t.tile.i}_${t.tile.j}`, {}])) }) };
+    const h = R.host(env);
+    const pre = await h.handle({ id: 1, type: 'preload', lat: 39.17, lon: -84.6, km: 3 });
+    const loadsAfterPreload = loads;
+    const from = { lat: 39.155, lon: -84.615 }, to = { lat: 39.19, lon: -84.57 };
+    const q = await h.handle({ id: 2, type: 'quick', from, to, level: 'fun' });
+    const p = await h.handle({ id: 3, type: 'plan', from, to, level: 'fun' });
+    const quickest = p.result.routes.find((r) => r.why.role === 'quickest');
+    const line = p.result.routes[0].coords;
+    const sc = await h.handle({ id: 4, type: 'score', lines: [{ lat: line.map((x) => x[0]), lon: line.map((x) => x[1]) }, { lat: [41, 41.001], lon: [-84, -84] }] });
+    const known = Array.from(sc.result[0].quality).filter(Number.isFinite).length / line.length;
+    // the graph provider and the engine: the tiles' scores fill quality and scenery where nothing else knows
+    globalThis.ApexFunRoute = FunRoute; globalThis.ApexCore = require('../web/apex_core.js');
+    const Ctx = require('../web/route_ctx/registry.js'), Graph = require('../web/route_ctx/graph.js'), Engine = require('../web/route_engine.js');
+    const c = Ctx.corridor('g', line.map(([la, lo]) => [lo, la]), {});
+    const ch = Graph.channelsOf(c.lat.length, { quality: new Float32Array(c.lat.length).fill(0.7), scenery: new Float32Array(c.lat.length).fill(0.6), conf: new Float32Array(c.lat.length).fill(0.8) });
+    const sm = Engine.samples(c, { channels: ch.channels });
+    const strong = { ...ch.channels, speed_limit_kph: new Float32Array(c.lat.length).fill(40), density: new Float32Array(c.lat.length).fill(9), sidewalk: new Float32Array(c.lat.length).fill(1),
+      road_class: new Float32Array(c.lat.length).fill(6), business_per_km: new Float32Array(c.lat.length).fill(20), access_per_km: new Float32Array(c.lat.length).fill(40), signals_per_km: new Float32Array(c.lat.length).fill(4),
+      housing_density: new Float32Array(c.lat.length).fill(1200), impervious_pct: new Float32Array(c.lat.length).fill(60), lu_residential: new Float32Array(c.lat.length).fill(0.9) };
+    const sm2 = Engine.samples(c, { channels: strong });
+    const none = await Graph.provider.fetch([c], {});
+    return { preTiles: pre.result.tiles.length, loadsAfterPreload, loadsAfterPlan: loads, quickSame: JSON.stringify(q.result.route.edges) === JSON.stringify(quickest.edges), quickTiles: q.result.tiles.length,
+      known, outside: Array.from(sc.result[1].quality).every((x) => x == null || Number.isNaN(x)), fillQ: sm.quality[5], fillS: sm.scenery[5], fillC: sm.qConf[5], strongQ: sm2.quality[5], status: ch.status, none: none.g.status };
+  },
+
   // the Cincinnati-size synthetic network: 16 tiles, ~150k edges; per query and per full plan
   perf() {
     const t0 = Date.now();

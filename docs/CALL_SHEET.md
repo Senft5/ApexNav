@@ -4,6 +4,16 @@ Decisions Claude made for you, newest first. Each one says what was decided, why
 you reach one you've seen. If you disagree with a call, say so and it gets reversed; nothing here is hard to undo unless
 it says so. Things only you can do are in docs/OWNER_TODO.md.
 
+## 2026-11-05: Planning with our tiles, faster
+
+- **Our quickest route goes up first** (about half a second), before Valhalla answers; Valhalla's turn instructions
+  replace ours on it when they arrive. Undo: `ownQuickP` in cockpit.js funRoute.
+- **Our routes are ranked with the tiles' own road scores** plus the time-dependent data only (weather, wildlife,
+  events, live hazards, the national grid), in 0.9 s instead of 4 s. This moved 5 of 10 test picks; on full data 9 of
+  10 are still at least as good as production, one (a short trip by the Pippin Road subdivision) is worse until the
+  graph builder bakes in the router's density and driveway data (OWN_ROUTING.md §8). Undo: `OWN_CTX` in cockpit.js.
+- **The tiles round you load at start** (bundled, kept in IndexedDB). Off on one phone: localStorage `apex.ownWarm` = "0".
+
 ## 2026-11-04 (night): Our own routing on the real Cincinnati roads
 
 Live on 10 trips, our router's pick won the engine's ranking on all 10 and scored at least as well as production's

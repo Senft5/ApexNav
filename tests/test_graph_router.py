@@ -78,6 +78,19 @@ def test_members_data_steers_the_search():
     assert r["cells"] <= 16 and r["cell0"] == "392_-847", r
 
 
+def test_fast_path_quick_score_preload_and_the_engine_fill():
+    """The first route is our quickest alone (the same route the plan calls quickest); the preloaded tiles serve the plan
+    with no more loads; the tiles' scores lie along any line (and nothing off the tiles); route_engine.js takes them for
+    quality and scenery where nothing else knows, and its own channels win where they say enough."""
+    r = case("fast")
+    assert r["quickSame"] and r["preTiles"] >= 1, r
+    assert r["loadsAfterPlan"] == r["loadsAfterPreload"], r
+    assert r["known"] > 0.9 and r["outside"], r
+    assert abs(r["fillQ"] - 0.7) < 1e-6 and abs(r["fillS"] - 0.6) < 1e-6 and abs(r["fillC"] - 0.8) < 1e-6, r
+    assert r["strongQ"] < 0.4, r
+    assert r["status"] == "ok" and r["none"] == "unavailable", r
+
+
 def test_offline_maneuvers():
     r = case("maneuvers")
     assert r["steps"] == [[1, "First Street"], [15, "Second Street"], [10, "Third Street"], [4, None]] or \

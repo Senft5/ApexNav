@@ -216,3 +216,40 @@ phone's reader); tests/test_graph_tiles.py round-trips through both. What a rout
     deer and low-sun penalties (the two captures were made at different times). Strip mall at most 0.6 km on any pick
     (production up to 1.7 km). Tiles per plan 2-6 (3.6-8.5 MB); the router's own time 0.1-1.5 s in the browser.
     Plan times are still the route context's 4 s budget (unchanged; the router is not the long pole).
+- 2026-11-05: faster planning with our tiles (merged main through #297, the planning flow):
+  - **First route:** our quickest alone (one search, the worker's `quick`) goes up the moment it lands; Valhalla's
+    answers are checks and its trace_route maneuvers replace ours on the track when they come (nothing waits for them).
+    The plan keeps that same candidate when it is the plan's quickest, so the card says "Checked N routes" rather than
+    "Better route found" for an unchanged route.
+  - **Ranking:** own-routed plans run only `graph` (new, route_ctx/graph.js: the tiles' quality and scenery on any
+    corridor by the nearest same-heading edge), `context_grid` (local bundles), conditions, wildlife, events,
+    hazards-live and driver, in 0.9 s, at once (no first-route gate). route_engine.js fills a sample's quality and
+    scenery from the tiles where its live channels know under 30 % of the model's weight, and keeps the lower of the
+    two where it knows some (an edge mean can smooth over a built-up stretch). Valhalla's checks join only if they are in
+    150 ms after our context; geometry and forecasts are prepared while the context runs.
+  - **Warm tiles:** the tiles within 15 km of you load into the worker 1.5 s after start (bundled files, then IndexedDB)
+    and again after 10 km; one view is kept and grown (up to 20 tiles), so a plan nearby builds nothing.
+  - **Live, 10 runs** (first route / ranked route built, ms; warm = the second plan in the session; values on the SAME
+    full context for both picks, scratchpad live2/judge.js):
+
+    | case | cold first | warm first | warm ranked | ours | prod |
+    |---|---|---|---|---|---|
+    | owner1 quick | 421 | 840 | 1699 | -48.4 | -66.5 |
+    | owner1 fun | 641 | 863 | 1199 | -25.2 | -35.6 |
+    | owner1 max | 570 | 1053 | 1588 | -21.5 | -34.1 |
+    | subdivision fun | 349 | 481 | 1604 | -44.6 | -34.2 |
+    | subdivision4 fun | 411 | 659 | 1293 | -52.7 | -53.3 |
+    | northgate fun | 457 | 766 | 1635 | -41.1 | -41.0 (same route) |
+    | colerain fun | 536 | 865 | 1834 | -7.0 | -40.1 |
+    | harrison fun | 481 | 956 | 1565 | 23.9 | 12.2 |
+    | colerain quick | 590 | 993 | 1533 | -9.3 | over budget |
+    | colerain max | 1313 | 945 | 1547 | -7.0 | -36.1 |
+
+    Picks changed against the full-context round in 5 runs (owner1 quick and max, harrison, colerain fun and max): the
+    ranking now sees the tiles' edge scores instead of the live per-25 m channels (no business cost, no OSM points such
+    as schools or crossings). On the same full data 9 of 10 are at least as good as production; **subdivision fun is
+    worse** (Pippin, Springdale, Struble +3.6 min, -44.6 against -34.2): the tiles score Springdale Road and Hamilton
+    Avenue higher than the live model does, because the build has no router density, sidewalks or driveways (the
+    router's own edges). Fix in the ETL: those channels, or a per-edge share of side-street samples, baked in.
+  - Not met: the ranked route under 1.5 s warm (1.2-1.8 s; the time-dependent context is 0.15-0.9 s of it, building the
+    track 0.05-0.3 s, the rest the pool's preparation).
