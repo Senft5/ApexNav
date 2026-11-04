@@ -73,8 +73,12 @@ jobs:
       WORK: /home/runner/graph_work
     steps:
       - uses: actions/checkout@v4
-      - name: Free disk
-        run: sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL || true
+      - name: Free disk, add swap
+        run: |
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL || true
+          sudo swapoff -a || true
+          sudo fallocate -l 12G /swapfile2 && sudo chmod 600 /swapfile2 && sudo mkswap /swapfile2 && sudo swapon /swapfile2
+          free -m && df -h /
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
@@ -97,19 +101,20 @@ jobs:
           osmium merge --overwrite -o "$WORK/region.osm.pbf" .graph_cache/osm/*.osm.pbf
           python -m tools.graph_etl.region_blocks --region="$REGION" --band "${{ matrix.band }}" --dir "$WORK/blocks" > "$WORK/blocks.txt"
           cat "$WORK/blocks.txt"
-          osmium extract --overwrite -s smart -c "$WORK/blocks/extract.json" "$WORK/region.osm.pbf"
-          rm -f "$WORK/region.osm.pbf"
-          ls -la "$WORK/blocks"
       - name: Build the blocks
         run: |
-          while read -r name box; do
+          while read -r name box clip; do
             echo "::group::$name $box"
+            # one block at a time (all of a band in one osmium pass ran the runner out of memory)
+            osmium extract --overwrite -s smart -b "$clip" -o "$WORK/blocks/$name.osm.pbf" "$WORK/region.osm.pbf"
+            free -m | head -2
             python -m tools.graph_etl.build --pbf "$WORK/blocks/$name.osm.pbf" --tiles="$box" --out "out/$name/v1" \
               --work "$WORK/w_$name" --dem-cache "$WORK/dem" --source "Geofabrik ohio, kentucky, indiana (merged)" \
               --build "${{ needs.download.outputs.week }}"
             rm -rf "$WORK/w_$name" "$WORK/blocks/$name.osm.pbf"
             echo "::endgroup::"
           done < "$WORK/blocks.txt"
+          rm -f "$WORK/region.osm.pbf"
           du -sh out/* || true
       - uses: actions/upload-artifact@v4
         with:

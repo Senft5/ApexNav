@@ -6,7 +6,8 @@ block edge agree.
     python -m tools.graph_etl.region_blocks --region=-89.75,36.5,-80.5,42.5 --band 39.5 --dir DIR
 
 writes DIR/extract.json (osmium extract --config: one pass for the band's blocks) and prints one line per block:
-"<name> <west,south,east,north of its tiles>".
+"<name> <west,south,east,north of its tiles> <its extract box>" (extracted one at a time: all of a
+band in one osmium pass ran the runner out of memory).
 """
 from __future__ import annotations
 
@@ -45,7 +46,7 @@ def main(argv=None):
     with open(os.path.join(a.dir, "extract.json"), "w") as fh:
         json.dump(cfg, fh, indent=1)
     for name, b in bl:
-        print(name, ",".join(f"{x:.2f}" for x in b))
+        print(name, ",".join(f"{x:.2f}" for x in b), ",".join(f"{x:.2f}" for x in (b[0] - MARGIN, b[1] - MARGIN, b[2] + MARGIN, b[3] + MARGIN)))
     return 0
 
 
