@@ -61,7 +61,9 @@ export async function graphTile(req: Request, name: string, fetcher: typeof fetc
     if (hit) return new Response(hit.body, { headers: { ...headers, "x-cache": "hit" } });
   } catch { /* the cache is a speed-up */ }
   let r: Response;
-  try { r = await fetcher(RAW + name, { headers: { "user-agent": "Vetta-graph-relay/1.0" } }); } catch { r = new Response(null, { status: 502 }); }
+  // the Cache API is a no-op on *.workers.dev (it needs a custom domain); the subrequest cache hint helps where it applies
+  const init = { headers: { "user-agent": "Vetta-graph-relay/1.0" }, cf: { cacheTtl: TILE_S, cacheEverything: true } } as RequestInit;
+  try { r = await fetcher(RAW + name, init); } catch { r = new Response(null, { status: 502 }); }
   if (!r.ok) return new Response(JSON.stringify({ error: "graph_unavailable" }), { status: 502, headers: { "content-type": "application/json", ...SEC } });
   const bytes = await r.arrayBuffer();
   try { if (cache) await cache.put(ck, new Response(bytes, { headers: { "content-type": "application/octet-stream", "cache-control": `public, max-age=${EDGE_TILE_S}` } })); } catch { /* not kept */ }

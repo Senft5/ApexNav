@@ -316,3 +316,10 @@ phone's reader); tests/test_graph_tiles.py round-trips through both. What a rout
     Every pick at least as good as production's; warm ranked 0.8-1.5 s. Not met: the warm first route is still 20-70 ms
     slower than cold in 4 runs (the worker answers the first question 70-90 ms after Enter in a warm session, 5-100 ms
     cold; not found yet).
+- 2026-11-04 (region): OH+KY+IN built by .github/workflows/graph-region.yml (6 bands in parallel, 1 h 42 min) and
+  committed to the `graph-data` branch (ba6787a): 584 tiles, 228.9 MB (largest 4.5 MB), 5.26 M edges, 2.15 M nodes,
+  build 2026-45-95960e6d; 1,211 via-way restrictions applied (1,504 through undrivable crossovers). The preview Worker
+  serves them (/api/graph/v1/388_519.vgr, Columbus: 2.9 MB, decodes, 69,058 edges). Not yet: the Cache API is a no-op
+  on workers.dev, so each tile request goes to raw GitHub until the Worker has a custom domain; the context grid
+  covers only Cincinnati, so outside it those channels are unknown; the shipped Cincinnati tiles are an older build
+  than the region's, so the phone uses the region's there until both are rebuilt together.
