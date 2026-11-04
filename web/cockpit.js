@@ -3369,7 +3369,7 @@
     const EARLY_MS = 0, EARLY_SIGHT_MS = 100, FIRST_GATE_MS = 1800;
     // Our own router (graph_worker.js), started on the first plan; the Valhalla check waits at most OWN_CHECK_MS once
     // our routes are in, and the chosen route's instructions at most OWN_INSTRUCT_MS (else our own maneuvers)
-    const OWN_CHECK_MS = 2500, OWN_INSTRUCT_MS = 3000, OWN_COVERS_MS = 1500;
+    const OWN_CHECK_MS = 2500, OWN_INSTRUCT_MS = 3000, OWN_COVERS_MS = 1500, OWN_PLAN_MS = 6000;
     // Own-routed plans: the tiles carry the static road data (land use, density, businesses, signals, the grid, the DEM,
     // corners) as the engine's own scores (route_ctx/graph.js), so only the time-dependent providers run, in OWN_CTX_MS.
     // Members' data is in the search already (crowd), the driver's For this drive choices are local.
@@ -3379,7 +3379,13 @@
       OWN_SIGHT_MS = 400;
     let ownClient = null;
     const ownOn = () => !!(window.ApexOwnRouting && window.ApexGraphRouter && ApexOwnRouting.on());
-    const ownRouter = () => (ownClient || (ownClient = ApexGraphRouter.client({ url: 'graph_worker.js' })));
+    // Coverage is answered on the page from index.json (fetched once): asking the worker queued the question behind its
+    // tile loading, live on the preview 1.5 s, and the plan gave up on our tiles (2026-11-05)
+    let ownIndexP = null;
+    const ownIndex = () => (ownIndexP || (ownIndexP = fetch('data/graph/v1/index.json').then((r) => (r.ok ? r.json() : null)).then((j) => ApexGraphRouter.indexKeys(j))
+      .catch(() => { ownIndexP = null; return new Set(); })));
+    const ownRouter = () => (ownClient || (ownClient = Object.assign(ApexGraphRouter.client({ url: 'graph_worker.js', timeoutMs: OWN_PLAN_MS }),
+      { covers: (points) => ownIndex().then((keys) => ApexGraphRouter.covers(keys, points)) })));
     // Turn instructions for one of our routes: Valhalla's maneuvers on our line (trace_route), offline our own
     // (one request per route, however often it's asked for)
     const ownInstructed = new WeakMap();
