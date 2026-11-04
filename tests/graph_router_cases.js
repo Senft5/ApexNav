@@ -180,6 +180,25 @@ const CASES = {
     return { n: res.routes.length, ms: res.ms, loops: res.routes.map((r) => ({ km: r.distM / 1000, retraced: r.retraced, d0: R.distM(start.lat, start.lon, r.coords[0][0], r.coords[0][1]), dN: R.distM(start.lat, start.lon, r.coords[r.coords.length - 1][0], r.coords[r.coords.length - 1][1]) })) };
   },
 
+  // loops off the highway (the owner, 2026-11-04: "it also seems to route mostly highway for loops"): a grid whose every
+  // fourth row and column is a motorway, fast and good road with no corners; each level's loops, their motorway share
+  // and how they were built (from the best roads, not a ring)
+  loopsOffHighway() {
+    const g = H.grid({ seed: 11, nx: 40, ny: 40, holes: 0.03, stepDeg: 0.004, lat0: 39.15, lon0: -84.62, motorway: true });
+    const v = R.view(H.tiles(g.nodes, g.edges).tiles);
+    const start = { lat: 39.23, lon: -84.52 };
+    const out = {};
+    for (const level of ['quick', 'fun', 'max']) {
+      const res = R.loop(v, { start, km: 24, level });
+      out[level] = res.routes.map((r) => {
+        let hw = 0, all = 0;
+        for (const e of r.edgeIdx) { all += v.len[e]; if (v.cls[e] <= 1) hw += v.len[e]; }
+        return { hwy: hw / all, km: r.distM / 1000, kind: r.kind || null, retraced: r.retraced, d0: R.distM(start.lat, start.lon, r.coords[0][0], r.coords[0][1]), dN: R.distM(start.lat, start.lon, r.coords[r.coords.length - 1][0], r.coords[r.coords.length - 1][1]) };
+      });
+    }
+    return out;
+  },
+
   // the tiles' corridor: the ellipse grows with the level's budget, and covers() reads index.json
   corridor() {
     const a = { lat: 39.25, lon: -84.6 }, b = { lat: 39.29, lon: -84.75 };

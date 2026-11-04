@@ -123,6 +123,22 @@ def test_loops_come_back_round():
         assert lp["d0"] < 300 and lp["dN"] < 300, lp                  # from the start and back to it
 
 
+def test_loops_keep_off_the_highway_and_come_from_the_best_roads():
+    """The owner (2026-11-04): "it also seems to route mostly highway for loops". On a grid whose arterials are motorways
+    (fast, good road, no corners), every loop at every level is built from the best roads (not a ring round the start) and
+    keeps motorway to a short link: at most a fifth at Quick, a tenth at Fun and Long way (the old rings: 73-84 % at
+    Quick, 11-19 % at Fun)."""
+    r = case("loopsOffHighway")
+    for level, cap in (("quick", 0.2), ("fun", 0.1), ("max", 0.1)):
+        loops = r[level]
+        assert len(loops) >= 2, (level, loops)
+        for lp in loops:
+            assert lp["kind"] == "stages", (level, lp)
+            assert lp["hwy"] <= cap, (level, lp)
+            assert lp["retraced"] < 0.4, (level, lp)
+            assert lp["d0"] < 300 and lp["dN"] < 300, (level, lp)
+
+
 def test_corridor_tiles_and_coverage():
     r = case("corridor")
     assert r["start"] == {"i": 381, "j": 516}, "the tiles' own grid (graph_tiles.js tileOf)"

@@ -3462,6 +3462,8 @@
     (function warmLoop() { warmOwnTiles(); setTimeout(warmLoop, ownWarmAt ? 15000 : 1000); })();
     // Router costing for the legs between good roads: highways welcome unless avoided (route_engine.js connectorCosting).
     const connectorCosting = () => (window.ApexRouteEngine ? ApexRouteEngine.connectorCosting(avoid, routingCar()) : null);
+    // A loop's legs: highways a short link at most (route_engine.js loopCosting, by the level)
+    const loopCosting = () => (window.ApexRouteEngine ? ApexRouteEngine.loopCosting(avoid, routingCar(), funLevel) : null);
     // Tracks built ahead for a likely winner while the plan still waits on the stage plans (live: building the winner's
     // track after the ranking took 0.5-1 s): taken once, by the route line they were built from.
     const builtAhead = new WeakMap();
@@ -3652,9 +3654,9 @@
       return ok;
     }
 
-    // Loops: three candidate circles through the start, waypoints snapped to through roads,
-    // spurs cut, then the candidate with the best road character wins (a first step toward
-    // stage chaining, docs/ROAD_INTELLIGENCE.md section 7).
+    // A loop is any route from the start back to it with little driven twice, built from the best roads within reach
+    // (the owner, 2026-11-04; CALL_SHEET): never a circle for its own sake. This circle through the start is only the last
+    // resort, when neither the stage plans nor our own router found a loop.
     function loopWaypoints(c, miles, heading) {
       const rKm = (miles * 1.609344) / (2 * Math.PI * 1.35);
       const kmLat = 110.54, kmLon = 111.32 * Math.cos(c.lat * Math.PI / 180);
@@ -3725,23 +3727,28 @@
           try { await RouteLoading.optional(ApexStages.addElevations(list)); } catch (_) { /* no DEM: which way round each stage (R-11) stays the nearer end */ }
           if (list.length) {
             ui.step('Measuring roads', 0.36);
-            const mp = FunRoute.matrixPoints(c, c, list), m = await valhallaMatrix(mp.sources, mp.targets, connectorCosting());
+            const mp = FunRoute.matrixPoints(c, c, list), m = await valhallaMatrix(mp.sources, mp.targets, loopCosting());
             plans = targetS ? FunRoute.loopPlansFromMatrix(list, m.times, targetS, 3, FunRoute.LOOP_BY_TIME) : FunRoute.loopPlansFromMatrix(list, m.km, targetKm, 3);
           }
         } catch (_) { plans = []; }
         if (!plans.length) plans = ApexStages.plans(c, stages, targetKm, 3);
       } catch (_) { /* no tiles: fall back to circle loops below */ }
-      // 2. Route each stage plan, plus one circle loop as a baseline, and keep the best result.
-      const jobs = plans.map(p => ({ kind: 'stages', plan: p, pts: ApexStages.waypoints(c, p), through: false, extra: connectorCosting() || {} }));
-      jobs.push({ kind: 'circle', pts: loopWaypoints(c, miles, Math.random() * 2 * Math.PI), through: true });
-      for (const r of await ownLoopsP) jobs.push({ kind: 'own', route: r.route, pts: [c, ...FunRoute.alongPoints(r.route.coords), c] });
+      // 2. Route each stage plan on the loop's costing (highways a short link at most), add our own router's loops, and
+      // keep the best result; the circle only when nothing else came
+      const jobs = plans.map(p => ({ kind: 'stages', plan: p, pts: ApexStages.waypoints(c, p), through: false, extra: loopCosting() || {} }));
+      for (const r of await ownLoopsP) jobs.push({ kind: 'own', route: r.route, hwyShare: r.hwyShare, pts: [c, ...FunRoute.alongPoints(r.route.coords), c] });
+      const circle = () => ({ kind: 'circle', pts: loopWaypoints(c, miles, Math.random() * 2 * Math.PI), through: true, extra: loopCosting() || {} });
+      if (!jobs.length) jobs.push(circle());
       let settled = 0;
       ui.step(`Routing · 0 of ${jobs.length}`, 0.38);
-      const tries = jobs.map(async (job) => {
+      const routeJob = async (job) => {
         const [r] = await (job.route ? Promise.resolve([job.route]) : valhallaRoutes(job.pts, job.through, 0, job.extra || {}))
           .finally(() => { settled++; ui.step(`Routing · ${settled} of ${jobs.length}`, 0.38 + 0.5 * settled / jobs.length); });
         if (job.plan && !FunRoute.keptStages(r.coords, job.plan)) throw new Error('stage skipped');   // a shortcut past the stage (R-14)
-        const rs = Core.removeSpurs(r.coords.map(p => p[1]), r.coords.map(p => p[0]));
+        // spurs on an even 5 m line: removeSpurs looks 400 points ahead, which on our router's sparse edge geometry was the
+        // whole loop (it cut every one of them to nothing, live 2026-11-04)
+        const even = Core.resamplePolyline(r.coords.map(p => p[1]), r.coords.map(p => p[0]), 5);
+        const rs = Core.removeSpurs(even.lat, even.lon);
         const t = await trackFromPolyline(rs.lat.map((la, i) => [rs.lon[i], la]), loopId, `${asked} loop`);
         t.fun = funOf(t, r.turns);
         t.unavoided = FunRoute.unavoided(avoid, r);
@@ -3750,9 +3757,13 @@
         const glare = FunRoute.glare(t, r.timeS, new Date());
         t.glareMin = glare ? Math.round(glare.minutes) : null;
         const s = scoreLoop(t, miles, targetS && Number.isFinite(r.timeS) ? { timeS: r.timeS, targetS } : null);
-        return { t, job, route: r, ...s, score: s.score - FunRoute.glareCost({ glare }), spursCut: rs.removed };
-      });
-      let done = FunRoute.keepAvoiding((await Promise.allSettled(tries)).filter(r => r.status === 'fulfilled').map(r => r.value), avoid);
+        // a loop whose spurs were most of it (an out-and-back cut to nothing) isn't a loop (live: a 0 km "loop" won)
+        if (s.km < 0.3 * targetKm) throw new Error('not a loop');
+        return { t, job, route: r, ...s, hwyShare: Number.isFinite(job.hwyShare) ? job.hwyShare : null, score: s.score - FunRoute.glareCost({ glare }), spursCut: rs.removed };
+      };
+      const built = async (list) => FunRoute.keepAvoiding((await Promise.allSettled(list.map(routeJob))).filter(r => r.status === 'fulfilled').map(r => r.value), avoid);
+      let done = await built(jobs);
+      if (!done.length && !jobs.some((j) => j.kind === 'circle')) done = await built([circle()]);   // every plan failed: the last resort
       // The route engine on loops: quality, scenery, side streets and penalties on the same scale (route_engine.js loopValue).
       const lc = done.map(d => ({ route: { coords: d.t.lat.map((la, i) => [d.t.lon[i], la]), turns: d.route.turns, times: d.route.times }, timeS: d.t.timeS, t: d.t, fun: d.t.fun, match: 'map_snap' }));
       const lctx = contextOn(lc);
@@ -3763,7 +3774,10 @@
         const [got, want] = targetS && Number.isFinite(d.t.timeS) ? [d.t.timeS, targetS] : [d.km, targetKm];
         d.score += ApexRouteEngine.loopValue(lc[i], got, want, d.retraced, engineOpts('fun')) - FunRoute.loopValue(d.t.fun, got, want, d.retraced);
         if (lc[i].ev) d.t.engine = { quality: lc[i].ev.quality, confidence: lc[i].ev.confidence, poorKm: lc[i].ev.poorKm, hard: lc[i].ev.hard, penalties: lc[i].ev.penalties };
-        if (lc[i].ev && lc[i].ev.hard.length) d.score -= 1000;            // a closed or private road: only if nothing else exists
+        if (lc[i].ev && lc[i].ev.hard.length) { d.score -= 1000; d.hard = true; }   // a closed or private road: only if nothing else exists
+        // how much of it is motorway or trunk, where the road class was known (the level charges it, FunRoute.loopHighwayCost)
+        const hs = ApexRouteEngine.highwayShare(lc[i].ev);
+        if (hs != null) d.hwyShare = hs;
       });
       // A time loop compares drive times: a route the router didn't time can't be judged with the others.
       if (targetS && done.some(d => Number.isFinite(d.t.timeS))) done = done.filter(d => Number.isFinite(d.t.timeS));
@@ -3772,14 +3786,16 @@
         const [got, want] = targetS && Number.isFinite(d.t.timeS) ? [d.t.timeS, targetS] : [d.km, targetKm];
         d.off = want ? (got - want) / want : 0;
       }
-      done.sort((a, b) => b.score - a.score);
+      // best first as the level ranks them (highway share charged, a dominated loop never ahead: FunRoute.loopRank)
+      const byLevel = () => { done = FunRoute.loopRank(done.map(loopItem), funLevel).map((x) => x.item.d); };
+      byLevel();
       // Members: let what others measured break ties among the top few (rough −8 … smooth +3, banked ±2 on the same fun scale, docs/ROUTING.md; unmeasured roads are neutral).
       if (await applyMeasured(done.slice(0, 3), ui)) {
         for (const d of done) d.score += d.adjust || 0;
-        done.sort((a, b) => b.score - a.score);
+        byLevel();
       }
       await preferApply(done.slice(0, 4));                                   // the Prefer stamps (prefer.js)
-      if (done.some(d => d.preferBonus)) { for (const d of done) d.score += d.preferBonus || 0; done.sort((a, b) => b.score - a.score); }
+      if (done.some(d => d.preferBonus)) { for (const d of done) d.score += d.preferBonus || 0; byLevel(); }
       // Name each loop by what it is, not what was asked: a "15 mi loop" that is 9.3 mi reads as a bug.
       for (const d of done) {
         d.t.request = { from: null, to: { lat: c.lat, lon: c.lon }, via: d.job.pts.slice(1, -1).map(p => ({ lat: p.lat, lon: p.lon, planned: true })) };
@@ -3800,19 +3816,23 @@
         const near = Math.abs(gotMi - miles) <= 0.2 * miles;
         cardNote(near ? `Best of ${done.length} loops found` : `${ApexUnits.long(best.km * 1000)}: the closest good loop to ${asked}`);
       }
-      window.apexDebug && (window.apexDebug.lastLoop = done.map(d => ({ kind: d.job.kind, fun: d.t.fun && d.t.fun.fun, score: d.score, km: d.km, good: d.good, retraced: d.retraced })));
+      window.apexDebug && (window.apexDebug.lastLoop = o.ranked.map(({ item, v }) => ({ kind: item.d.job.kind, fun: item.d.t.fun && item.d.t.fun.fun, score: item.d.score, v, km: item.d.km, good: item.d.good,
+        retraced: item.d.retraced, hwyShare: item.hwyShare, corners: item.corners, timeS: item.timeS, picked: item.d === best })));
     }
+    // A built loop as FunRoute.loopRank reads it: the Fun score, the length off, highway share, the card's corners and time.
+    const loopItem = (d) => ({ d, score: d.score, fun: d.t.fun, off: d.off, hwyShare: d.hwyShare, retraced: d.retraced, hard: !!d.hard,
+      corners: Array.isArray(d.t.events) ? d.t.events.filter((e) => e && e.type === 'corner').length : null, timeS: d.t.timeS });
 
     // The loops built, ranked for a level (fun_route.js loopLevelAdjust) and offered as up to three really different ones.
     function loopOptions({ id, done, miles, targetS, level, asked }) {
-      const ranked = done.map((d) => ({ d, v: d.score + FunRoute.loopLevelAdjust(d.t.fun, d.off, level) })).sort((a, b) => b.v - a.v).map((x) => x.d);
+      const order = FunRoute.loopRank(done.map(loopItem), level), ranked = order.map((x) => x.item.d);
       const list = [];
       for (const d of ranked) {
         if (list.some((x) => Math.abs(x.loop.km - d.km) < 0.3 && Math.abs((x.timeS || 0) - (d.t.timeS || 0)) < 30)) continue;
         list.push({ loop: d, t: d.t, timeS: d.t.timeS, fun: d.t.fun, route: { coords: d.t.lat.map((la, i) => [d.t.lon[i], la]) } });
         if (list.length === 3) break;
       }
-      return { kind: 'loop', id, done, miles, targetS, asked, level, list };
+      return { kind: 'loop', id, done, miles, targetS, asked, level, list, ranked: order };
     }
     async function relevelLoop(o, level) {
       const label = FunRoute.LEVELS[level].label, prev = plannedRoute;
