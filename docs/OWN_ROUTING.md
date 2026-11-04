@@ -127,7 +127,11 @@ phone's reader); tests/test_graph_tiles.py round-trips through both. What a rout
   (Quick 10 % + 60 s, Fun 35 % + 240 s, Max 90 % + 600 s, as today). Turn costs: left/right/U by angle, plus signals and
   stops on the node.
 - **Alternatives:** penalty method (re-run with the chosen edges penalised) for 2 genuinely different alternates.
-- **Loops:** the same objective from start back to start through a ring of waypoints, then the same scoring.
+- **Loops:** any route from the start back to it with little driven twice, built from the best roads within reach (the
+  owner, 2026-11-06: not a circle): the tiles' best stages (explore) chained one to three at a time, each leg on the
+  level's objective with motorway and trunk costed x2.5 / x3 / x4 (Quick / Fun / Long way); rings only where no stage
+  loop exists. Then the same scoring, which charges a loop's highway share (fun_route.js loopHighwayCost) and never puts
+  a loop above one that beats it on corners and time (loopDominates).
 - **Final ranking:** our candidates go through the existing route engine (time-dependent penalties, weather, why line),
   so everything already built keeps working; Valhalla's quickest stays in the pool as a sanity check.
 - **Turn instructions:** from Valhalla (`trace_route` on our shape) when online; offline, our own from the graph (name
@@ -171,6 +175,7 @@ phone's reader); tests/test_graph_tiles.py round-trips through both. What a rout
     their length and stay inside the budget. At most 5 routes go to the route engine.
   - Loops: 4 rings through the start (radius from the length / 2π / 1.35), 3 waypoints each snapped to through roads,
     each leg on a fixed `a` (Quick 0.6, Fun 3, Max 8) with earlier legs' edges x3; they join the loop planner's pool.
+    (Replaced 2026-11-06 by loops from the best roads; see the end of this section.)
   - Output per route: `coords` [[lat, lon]] at the edges' geometry, `edges` ("i_j:local" ids), `timeS`, `distM`,
     `names` per stretch, `why` (quality, scenery, fun, conf, a, role, signals, junctions) and `route` in the shape of
     cockpit.js routeOf (coords [[lon, lat]], turns, times, steps as Valhalla maneuver types, names, has), so corridors,
@@ -332,3 +337,21 @@ phone's reader); tests/test_graph_tiles.py round-trips through both. What a rout
     Cold first route under 1 s in all 10; every pick at least as good as production's. Not met: the final card under
     1 s warm (5 of 10) and under 1.5 s cold (0 of 10): the preload (17 MB, 5-6 s on this network) still loads during
     the first plans, and the context and track build wait on the page behind it.
+- 2026-11-06: loops off the highway, from the best roads (branch claude/loops-off-highway; CALL_SHEET 2026-11-06):
+  - The owner: "it also seems to route mostly highway for loops". Live on production, the winner was 80-93 % motorway or
+    trunk in 4 of 14 cases (Sharon Woods 1 h Fun 80 %, 1 h Long way 90 %; Fountain Square 30 mi Fun 93 %, 1 h Long way
+    89 %), and 56 % in two more (stage plans). The causes: (1) our ring legs had no highway cost, and the objective
+    reads a motorway as good road (quality 0.82), fast; (2) Valhalla's stage legs asked `use_highways` 0.6
+    (connectorCosting, "highways welcome"); (3) the ranking had no highway term, and the engine's quality and side-street
+    terms favour a motorway (no driveways, no businesses), so a highway loop outscored back roads by 50-100 points;
+    (4) removeSpurs looked 400 points ahead, the whole of a sparse own-routed loop, so some came out 0 km and won.
+  - graph_router.js `loop`: explore's stages within reach (a loop's half length at 15 m/s), at most 8, chained as
+    singles, pairs and (25 km and up) triples, each way round; the length guessed as the stages plus 1.7 x each
+    connector's crow line; the 6 best by stage score x length fit routed through a point every 1.5 km along each stage
+    (snapped to the stage's road and heading), legs with motorway/trunk x LOOP_HWY_X and earlier legs x3; over 40 %
+    driven twice dropped; loops more than 60 % off the length dropped when one within 40 % exists. `hwyShare` per loop.
+  - Planner: loop legs and the loop matrix on `loopCosting` (use_highways 0.25 Quick, 0.1 Fun / Long way); the circle
+    only when nothing else was built; the ranking is `FunRoute.loopRank` (Fun score + level adjustment - highway cost,
+    then dominance); `apexDebug.lastLoop` lists every loop with its kind, value, highway share, corners, time and pick.
+  - Live before and after (the real app in Playwright, production's Worker; table in STATE.md 2026-11-06).
+
