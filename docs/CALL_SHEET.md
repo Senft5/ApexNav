@@ -4,6 +4,19 @@ Decisions Claude made for you, newest first. Each one says what was decided, why
 you reach one you've seen. If you disagree with a call, say so and it gets reversed; nothing here is hard to undo unless
 it says so. Things only you can do are in docs/OWNER_TODO.md.
 
+## 2026-11-04 (evening): OpenStreetMap through our server; a little faster
+
+- **An OpenStreetMap relay on our server is built but OFF** (`/api/ctx/osm`, one 0.05° map square per request, cached a
+  week; server flag `osm_relay`, default off). On the preview every public Overpass mirror refused the Worker or timed
+  out (`?diag=1`: overpass-api.de 521, kumi and private.coffee timeouts, maps.mail.ru 504), and the own-routing graph ETL
+  takes the same features from the Geofabrik extract. With the flag off, phones do exactly what they did before. Turn on:
+  FLAGS {"osm_relay":{"on":true}} if Overpass recovers. Undo: delete the endpoint and the osmRelay option.
+- **Back-road stage lines are traced through our server too** (`/api/ctx/trace`, cached 3 days): these are map lines,
+  never the driver's route. Undo: the relay call in router_edges.js.
+- **The first route shows on whichever router answer lands first.** Local live: 2.6-6.5 s, first route 0.8-1.6 s.
+- **No early stop**: unknown data could still swing a plan by 77-104 points while the closest real gap is 1.3 points, so
+  no plan can be dropped safely.
+
 ## 2026-11-04 (later still): The route engine, faster
 
 - **Finding good-road stages runs off the main thread** (a Web Worker, web/stages_worker.js) and is cached 10 minutes

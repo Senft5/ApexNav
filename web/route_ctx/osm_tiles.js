@@ -364,7 +364,10 @@
             if (cache.has(k)) { out.set(k, cache.get(k)); continue; }
             let p = inflight.get(k);
             if (!p) {
-              p = readBytes(tileUrl.replace('{z}', Z).replace('{x}', x).replace('{y}', y), fetchFn, opts.signal).then((buf) => { const t = decodeTile(buf, x, y); remember(k, t); return t; });
+              const pre = bytesAhead.get(k);
+              if (pre) bytesAhead.delete(k);
+              p = (pre ? pre.then((b) => b || readBytes(tileUrl.replace('{z}', Z).replace('{x}', x).replace('{y}', y), fetchFn, opts.signal))
+                : readBytes(tileUrl.replace('{z}', Z).replace('{x}', x).replace('{y}', y), fetchFn, opts.signal)).then((buf) => { const t = decodeTile(buf, x, y); remember(k, t); return t; });
               inflight.set(k, p);
               p.catch(() => {}).finally(() => inflight.delete(k));
             }
@@ -416,8 +419,25 @@
     id: 'osm_tiles', version: 1, channels: CHANNELS, needs: { network: true }, budgetMs: 8000, stageOk: true,   // the map's own tiles: a stage's land use, shops and road class
     fetch: fetchCtx,
   };
-  /** The tiles round these corridors fetched and decoded ahead (the plan's straight line while the router routes): never throws. */
-  function prefetch(corridors, opts = {}) { try { return loadTiles(planTiles(corridors).keys, { budgetMs: 4000, ...opts }).catch(() => null); } catch (_) { return Promise.resolve(null); } }
+  /**
+   * The tiles round these corridors fetched ahead, bytes only (the plan's straight line while the router routes): decoding
+   * waits for the context run, so the page's thread stays free to draw the first route. Never throws.
+   */
+  const bytesAhead = new Map();   // 'x/y' -> Promise<ArrayBuffer | null>
+  async function prefetch(corridors, opts = {}) {
+    try {
+      const fetchFn = opts.fetchFn || (root.fetch && root.fetch.bind(root));
+      if (!fetchFn) return null;
+      if (!tileUrl) tileUrl = opts.tileUrl || (await (await fetchFn(TILEJSON)).json()).tiles[0];
+      for (const k of planTiles(corridors).keys.slice(0, 120)) {
+        if (cache.has(k) || inflight.has(k) || bytesAhead.has(k)) continue;
+        const [x, y] = k.split('/').map(Number);
+        bytesAhead.set(k, readBytes(tileUrl.replace('{z}', Z).replace('{x}', x).replace('{y}', y), fetchFn).catch(() => null));
+      }
+      while (bytesAhead.size > CACHE_TILES) bytesAhead.delete(bytesAhead.keys().next().value);
+    } catch (_) { /* nothing ahead */ }
+    return null;
+  }
   const api = { provider, prefetch, CHANNELS, BUSINESS, isBusiness, ROAD_CODE, PLACE_RANK, tileOf, tileBounds, tilesFor, planTiles, decodeTile,
     aggregate, namesFrom, loadTiles, roadNames, _cache: cache };
   root.ApexOsmTiles = api;
