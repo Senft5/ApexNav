@@ -639,6 +639,48 @@
         if (p.classList.contains('open')) p.classList.remove('open');
       });
     });
+    // The owner, 2026-11-03: "i should be able to swipe this submenu out of the way". A menu sheet (.side-pop) that rises from
+    // the bottom (it shows the grab handle) follows a finger dragged down from its top and, past 80 px or a quick flick,
+    // closes through its own head key ("‹ Settings" back to the list, or Done), as a tap on the scrim does. Only the sheet
+    // under the finger moves, so a sheet over the Settings list goes back to the list. The sheet's own scroll wins while it
+    // isn't at its top, and fields, switches and sliders keep their touches. A desk's side panel (no handle) is left alone.
+    (() => {
+      const SWIPE_CLOSE_PX = 80, FLICK_PX_PER_MS = 0.5;
+      const closeKey = (p) => { const keys = [...p.querySelectorAll('.side-pop-head button')]; return keys.find((b) => /^(‹|Done|Close|Cancel)/.test(b.textContent.trim())) || keys[0] || null; };
+      const fromBottom = (p) => { const r = p.getBoundingClientRect(); return r.left <= 1 && Math.abs(window.innerHeight - r.bottom) <= 2; };
+      let drag = null;
+      document.addEventListener('touchstart', (e) => {
+        const p = e.target.closest && e.target.closest('.side-pop.open');
+        if (!p || e.touches.length !== 1 || !fromBottom(p) || p.scrollTop > 0) { drag = null; return; }
+        if (e.target.closest('input, textarea, select, [role="slider"], .scrubber, .detents')) { drag = null; return; }
+        drag = { p, y0: e.touches[0].clientY, x0: e.touches[0].clientX, t0: performance.now(), dy: 0, on: false };
+      }, { passive: true });
+      document.addEventListener('touchmove', (e) => {
+        if (!drag) return;
+        const dy = e.touches[0].clientY - drag.y0, dx = e.touches[0].clientX - drag.x0;
+        if (!drag.on) {
+          if (Math.abs(dx) > Math.abs(dy) || dy < -4 || drag.p.scrollTop > 0) { drag = null; return; }   // sideways, up, or a scroll
+          if (dy < 8) return;
+          drag.on = true; drag.p.style.transition = 'none';
+        }
+        drag.dy = Math.max(0, dy);
+        drag.p.style.transform = `translateY(${drag.dy}px)`;
+        if (e.cancelable) e.preventDefault();
+      }, { passive: false });
+      const end = () => {
+        if (!drag) return;
+        const { p, dy, t0, on } = drag; drag = null;
+        if (!on) return;
+        p.style.transition = ''; p.style.transform = '';
+        if (dy > SWIPE_CLOSE_PX || dy / Math.max(1, performance.now() - t0) > FLICK_PX_PER_MS) {
+          const key = closeKey(p);
+          if (key) key.click();
+          if (p.classList.contains('open')) p.classList.remove('open');
+        }
+      };
+      document.addEventListener('touchend', end);
+      document.addEventListener('touchcancel', end);
+    })();
     const attribWatch = new MutationObserver((ms) => {
       for (const m of ms) {
         const a = m.target;

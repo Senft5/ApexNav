@@ -4478,6 +4478,24 @@ flow('REVIEW5 §2: the Garage leads with you, your cars, Look and voice and the 
   await page.fill('#crashName', 'Sam'); await page.fill('#crashPhone', '+1 555 010 2030');
   check(/text Sam where you are\.$/.test(await page.textContent('#crashState')), 'crash, with Sam: ' + await page.textContent('#crashState'));
   await page.click('.garage-pop.open[data-setting="crash"] .side-pop-head button');
+  // The owner (2026-11-03): "i should be able to swipe this submenu out of the way". A short drag springs back; a long one
+  // closes the sheet under the finger and leaves the Settings list under it open.
+  const swipe = (dy) => page.evaluate(async (dy) => {
+    const p = document.querySelector('.garage-pop.open[data-setting="crash"]'), r = p.getBoundingClientRect();
+    const at = (y) => { const t = new Touch({ identifier: 7, target: p, clientX: r.left + r.width / 2, clientY: y }); return { touches: [t], targetTouches: [t], changedTouches: [t], bubbles: true, cancelable: true }; };
+    const y0 = r.top + 40;
+    p.dispatchEvent(new TouchEvent('touchstart', at(y0)));
+    for (let i = 1; i <= 6; i++) { p.dispatchEvent(new TouchEvent('touchmove', at(y0 + dy * i / 6))); await new Promise((f) => setTimeout(f, 40)); }
+    p.dispatchEvent(new TouchEvent('touchend', { ...at(y0 + dy), touches: [], targetTouches: [] }));
+    await new Promise((f) => setTimeout(f, 300));
+    return { crash: !!document.querySelector('.garage-pop.open[data-setting="crash"]'), list: document.getElementById('garageSettings').classList.contains('open'), t: p.style.transform };
+  }, dy);
+  await page.click('#garageSettings .nav-row[data-setting="crash"]');
+  await page.waitForSelector('.garage-pop.open[data-setting="crash"]');
+  const short = await swipe(30);
+  check(short.crash && short.list && !short.t, 'a short drag springs back: ' + JSON.stringify(short));
+  const long = await swipe(220);
+  check(!long.crash && long.list, 'a long swipe closes the sheet back to the Settings list: ' + JSON.stringify(long));
   // U-135: the default-on switch says anonymous on the row
   await page.click('#garageSettings .nav-row[data-setting="data"]');
   check(await page.isVisible('.garage-pop.open [data-toggle="health"] >> text=Share app health (anonymous counts)'), 'Share app health says anonymous on the row');
