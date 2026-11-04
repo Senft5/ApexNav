@@ -69,6 +69,39 @@ query time from the existing providers along the chosen route and its alternativ
 - Size target: Cincinnati area (about 100 x 100 km, 16 tiles) under 15 MB uncompressed, shipped in the app. The region
   (OH+KY+IN) is downloaded by tile on demand and kept for offline areas.
 
+### As built (2026-11-04): the exact v1 layout and what the router reads
+
+The byte layout is in `tools/graph_etl/tiles.py` (writer, plus a reader for checks) and `web/graph_tiles.js` (the
+phone's reader); tests/test_graph_tiles.py round-trips through both. What a router builder needs:
+
+- `ApexGraphTiles.decode(arrayBuffer)` -> `{ tile, nodes: { count, lat, lon (Int32 microdegrees), firstEdge (Uint32,
+  count + 1: CSR), flags }, edges: { count, from, to, toTile, len_dm, t_ds, quality, scenery, fun, conf, flags, cls,
+  speed, name, geomOff, hIn, hOut }, restrictions, names, geom(edgeIdx) }`; `ApexGraphTiles.load(i, j)` (memory,
+  IndexedDB `vetta-graph`, then `data/graph/v1/<i>_<j>.vgr`; null when index.json doesn't list the tile);
+  `tileOf(lat, lon)`, `keyOf(i, j)` = `(i << 16) | j`, `tilesIn(s, w, n, e)`.
+- Tile i = floor((lon + 180) / 0.25), j = floor((lat + 90) / 0.25). A node lives in the tile its position is in; an edge
+  in its from-node's tile. `toTile` is the packed key of the to-node's tile (the tile's own key for a local edge) and
+  `to` the node's index there. Incoming edges are not stored: build the reverse adjacency from the loaded tiles.
+- Unknown stays unknown: `quality`/`scenery` 255 and `fun` 65535 are unknown (`unq8`, `funPts` give NaN); `conf` 0..255
+  is the share of the engine's weight that was known.
+- `quality`, `scenery`: 0..254 = 0..1, the engine's per-25 m values, mean over the edge. `fun`: gated corner points x
+  100 (sum over the corners whose apex is on the edge of `fun_route.js` cornerWeight x the engine's quality gate there;
+  corners are detected on the edge plus 100 m of its road's continuation each way, so a corner across a join is seen
+  whole and counted once). `hIn`/`hOut`: bearing over the first/last 60 m (256ths of a turn, 0 north) for a corner made
+  by a turn at a join.
+- `t_ds`: the time model in score_edges.js (posted limit, else the app's class estimate, times a class flow factor;
+  corners at 0.3 g lateral, braking 2.5 / accelerating 1.5 m/s²; signals, stops, crossings, calming and level crossings
+  *inside* the edge). The edge's end nodes are NOT in `t_ds`: their `nodes.flags` (signal, stop, give way, barrier,
+  level crossing, crossing, calming, dead end) are the router's turn cost.
+- `flags` (`ApexGraphTiles.FLAGS`): oneway, toll, ferry, unpaved, tunnel, bridge, motorway, ramp, roundabout, private,
+  geomRev (internal), speedEst (no posted limit), barrier (a gate inside), destination (access=destination/customers).
+  `cls`: 0 motorway .. 7 service, 8 track, 9 ferry. `speed`: km/h, posted or the estimate.
+- Restrictions (via node, in the via node's tile): `{ fromEdge, fromTile, via, toEdge, only }`. A via-way restriction is
+  counted in index.json `stats` and not applied.
+- index.json: `{ version, built, osm (replication timestamp), source, model (sha256 of the engine's weights, the corner
+  weights and the time model), model_files (each scored file's hash), bbox, tiles: { "i_j": { bytes, nodes, edges,
+  restrictions } }, bytes, stats }`. `CHECK.txt` beside it is the build's spot-check table.
+
 ## 5. Routing on the phone
 
 - Runs in a Web Worker (`graph_worker.js`) so the map never stutters; tiles loaded for the corridor (an ellipse around
