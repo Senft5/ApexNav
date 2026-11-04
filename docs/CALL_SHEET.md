@@ -6,9 +6,11 @@ it says so. Things only you can do are in docs/OWNER_TODO.md.
 
 ## 2026-11-04 (evening): OpenStreetMap through our server; a little faster
 
-- **The OpenStreetMap search now goes through our server** (`/api/ctx/osm`, one 0.05° map square per request, cached a
-  week), so even the first plan in a new area knows stop signs, crossings, guard rails, byways and height/width/weight
-  limits. Phones no longer call the public servers that failed from a browser. Undo: osm_overpass.js back to direct.
+- **An OpenStreetMap relay on our server is built but OFF** (`/api/ctx/osm`, one 0.05° map square per request, cached a
+  week; server flag `osm_relay`, default off). On the preview every public Overpass mirror refused the Worker or timed
+  out (`?diag=1`: overpass-api.de 521, kumi and private.coffee timeouts, maps.mail.ru 504), and the own-routing graph ETL
+  takes the same features from the Geofabrik extract. With the flag off, phones do exactly what they did before. Turn on:
+  FLAGS {"osm_relay":{"on":true}} if Overpass recovers. Undo: delete the endpoint and the osmRelay option.
 - **Back-road stage lines are traced through our server too** (`/api/ctx/trace`, cached 3 days): these are map lines,
   never the driver's route. Undo: the relay call in router_edges.js.
 - **The first route shows on whichever router answer lands first.** Local live: 2.6-6.5 s, first route 0.8-1.6 s.

@@ -45,7 +45,7 @@ flowchart TD
   RUN --> A1["A router_edges.js, priority 10, 2.4 s,<br>stages too: one Valhalla trace_attributes<br>per candidate, walk_or_snap; stages map_snap<br>through our Worker's relay, kept 3 days per<br>shape; 6 in flight in all, kept 30 min per<br>line; at the deadline the lines that answered. speed_limit_kph, speed_limit_est_kph<br>flagged, speed_kph, road_class, road_use,<br>density, lanes, surface, sidewalk,<br>truck_route, bridge, tunnel, toll, ramp,<br>roundabout, signals_per_km, access_per_km,<br>intersections_per_km; points signal,<br>junction, driveway"]
   RUN --> A2["A dem.js, priority 20, 2 s, stages too: z12<br>Terrarium tiles, at most 64 a plan, shortest<br>corridors first. elev_m, grade_pct,<br>relief_m, tpi_m, aspect_rad, west_descent;<br>spans climb, descent"]
   RUN --> B1["B osm_tiles.js, 8 s:<br>lu_residential, lu_commercial, lu_retail,<br>lu_industrial, lu_forest, lu_farmland,<br>lu_open, lu_park, lu_mapped, water_near,<br>creek_follow, bldg_per_km, addr_per_km,<br>biz_per_km, junctions_per_km,<br>driveways_per_km, access_per_km, road_class<br>in map codes, on_bridge, in_tunnel, unpaved;<br>points school, worship, viewpoint, place,<br>rail_crossing, gate"]
-  RUN --> B2["B osm_overpass.js, its tile cache, then our<br>Worker's relay by 0.05° tile (Overpass<br>server-side, kept a week), never the<br>route's line:<br>maxspeed_kph, lanes, divided, oneway,<br>surface_paved, smoothness, hgv,<br>access_level, guard_rail, cycle_route,<br>byway,<br>signals/stops/crossings/calming_per_km,<br>side_roads_per_km, driveway_joins_per_km;<br>points signal, stop, give_way, crossing,<br>calming, level_crossing, curve_sign,<br>animal_crossing, buggy, viewpoint, historic,<br>fuel; spans roundabout, one_lane_bridge,<br>covered_bridge, access_private,<br>access_destination, cycle_route, byway"]
+  RUN --> B2["B osm_overpass.js, its tile cache; the<br>query by 0.05° tiles, never the route's<br>line, fills it off the plan's clock (our<br>Worker's relay built, flag osm_relay off):<br>maxspeed_kph, lanes, divided, oneway,<br>surface_paved, smoothness, hgv,<br>access_level, guard_rail, cycle_route,<br>byway,<br>signals/stops/crossings/calming_per_km,<br>side_roads_per_km, driveway_joins_per_km;<br>points signal, stop, give_way, crossing,<br>calming, level_crossing, curve_sign,<br>animal_crossing, buggy, viewpoint, historic,<br>fuel; spans roundabout, one_lane_bridge,<br>covered_bridge, access_private,<br>access_destination, cycle_route, byway"]
   RUN --> B3["B road_name_age.js: name_age"]
   RUN --> C1["C context_grid.js, 4 s, local bundles<br>web/data/ctx/v1 then the Worker's KV:<br>night_lights, impervious_pct, canopy_pct,<br>noise_db, housing_density,<br>population_density, address_density,<br>median_year_built, flood_zone,<br>cropland_class, park_visits, aadt, iri,<br>hpms_speed_limit, hpms_lanes, hpms_fclass,<br>crash_density; mobile_coverage not built<br>(always unknown); spans nps_unit; points<br>fatal_crash"]
   RUN --> D1["D, second phase with the first's land use<br>and terrain: conditions.js, waits 0.8 s for<br>Open-Meteo then its cache: air_temp_c,<br>road_temp_c, visibility_m, fog_risk,<br>crosswind_mps, exposure, precip_6h/48h_mm,<br>wx_hazard, light, glare, golden_view;<br>wildlife.js deer_time_risk, deer_risk;<br>events.js event_crowd, school_zone,<br>school_bus_hour, church_window;<br>hazards_live.js flood_risk, works,<br>harvest_traffic, park_busy, foliage, spans<br>closure, works, flood, low-water, paving;<br>photos.js photo_score, sign_maxspeed_mps,<br>curve_sign. Not built: snowplough (no OHGO<br>endpoint), city permits (no public source),<br>NC and VA work zones (need keys); FEMA<br>flood zones come from C's grid"]
@@ -416,11 +416,13 @@ gets its context; capping each family's swing tighter would be a different model
 ### Overpass off the critical path: what a first plan in an area doesn't have
 
 From production the public Overpass servers answered 502 without CORS (overpass-api.de) or 504 (maps.mail.ru) on every
-run, so the phone could never read them. Since the relay (backend/src/osm_relay.ts) the phone asks our Worker for each
-0.05° tile on the plan's clock (`GET /api/ctx/osm?bbox=`); the Worker races the four mirrors server-side (9 s each),
-answers the elements with only the tags the phone reads, and keeps each tile a week (Cache API, and KV named OSM when
-bound). A tile it has answers at once; one it hasn't answers 504 after 3.5 s and is fetched and kept for the next plan
-(ctx.waitUntil). What a plan lacks for tiles the relay hasn't got yet, and what covers it:
+run, so the phone could rarely read them. A relay on our Worker is built but OFF (backend/src/osm_relay.ts, server flag
+`osm_relay`): `GET /api/ctx/osm?bbox=` takes one 0.05° tile, races the four mirrors server-side (9 s each), answers only
+the tags the phone reads and keeps each tile a week; `?diag=1` reports each mirror's status and time. On the preview
+(2026-11-04) every mirror refused the Worker or timed out (overpass-api.de 521 in 0.25 s, kumi and private.coffee 9 s
+timeouts, maps.mail.ru 504 in 1.5 s), and the own-routing graph ETL takes the same features from the Geofabrik extract.
+With the flag off (the default) the phone asks Overpass itself off the plan's clock, from its tile cache; with it on, it
+asks the relay first and falls back to that. What a plan lacks for tiles not cached yet, and what covers it:
 
 | Overpass channel | covered by |
 |---|---|

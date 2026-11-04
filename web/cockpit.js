@@ -2330,7 +2330,8 @@
       try { taste = window.ApexTaste ? ApexTaste.fit(ApexTaste.load(localStorage)) : null; } catch (_) { taste = null; }
       // members' road data by the 0.1° cells a plan crosses (VI-1), never by the route's way ids
       return { lookupCells: window.ApexSync ? (cells) => get(`/api/roads?cells=${cells.join(',')}`) : undefined, apiGet: get,
-        crewLines: (typeof preferCache !== 'undefined' && preferCache.crewLines) || null, myTracks: null, taste, peer: {} };
+        crewLines: (typeof preferCache !== 'undefined' && preferCache.crewLines) || null, myTracks: null, taste, peer: {},
+        osmRelay: !!(window.ApexFlags && ApexFlags.on('osm_relay', false)) };   // the OSM relay: off unless the server says on
     }
     // After a route is chosen (route_ctx/car.js): a car with no range meeting a long stretch without fuel is asked for it once;
     // stretches without signal offer to save their maps, then to share the ETA before the signal goes.

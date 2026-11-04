@@ -525,7 +525,8 @@
       // A tile it doesn't have (504, or any failure: on the preview of 2026-11-04 every public mirror refused or timed out
       // from Cloudflare, ?diag=1) goes the way it went before the relay: the phone's own query, off the plan's clock, kept
       // here for the next plan.
-      const viaRelay = typeof opts.apiGet === 'function' && !stubOf(opts);
+      // only while the server's flag osm_relay is on (off by default: the mirrors refused the Worker); off, as before the relay
+      const viaRelay = opts.osmRelay === true && typeof opts.apiGet === 'function' && !stubOf(opts);
       if (want.length && viaRelay) {
         const got = await relayTiles(want, opts);
         if (got.size) {
