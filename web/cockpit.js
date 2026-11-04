@@ -3382,7 +3382,10 @@
     // Coverage is answered on the page from index.json (fetched once): asking the worker queued the question behind its
     // tile loading, live on the preview 1.5 s, and the plan gave up on our tiles (2026-11-05)
     let ownIndexP = null;
-    const ownIndex = () => (ownIndexP || (ownIndexP = fetch('data/graph/v1/index.json').then((r) => (r.ok ? r.json() : null)).then((j) => ApexGraphRouter.indexKeys(j))
+    // the shipped tiles' index and the region's (graph_tiles.js index(): the union, the region's asked once a day), so a
+    // trip anywhere in OH+KY+IN is ours; without the reader, the shipped index alone
+    const ownIndex = () => (ownIndexP || (ownIndexP = (window.ApexGraphTiles && ApexGraphTiles.index ? ApexGraphTiles.index()
+      : fetch('data/graph/v1/index.json').then((r) => (r.ok ? r.json() : null))).then((j) => ApexGraphRouter.indexKeys(j))
       .catch(() => { ownIndexP = null; return new Set(); })));
     const ownRouter = () => (ownClient || (ownClient = Object.assign(ApexGraphRouter.client({ url: 'graph_worker.js', timeoutMs: OWN_PLAN_MS }),
       { covers: (points) => ownIndex().then((keys) => ApexGraphRouter.covers(keys, points)) })));

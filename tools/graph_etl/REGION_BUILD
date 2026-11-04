@@ -1,2 +1,2 @@
 Change this file on claude/own-routing-region to run .github/workflows/graph-region.yml (the region build) before
-the workflow is on main. Run: 2
+the workflow is on main. Run: 3 (with the region context grid)
