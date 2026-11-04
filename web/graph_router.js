@@ -959,10 +959,36 @@
     return T;
   }
   /**
+   * Is edge e a neighbourhood street (fun_route.js streetSample: residential class in built-up frontage)? true / false /
+   * null (unknown: a v1 tile without the road channels, or no ApexFunRoute here).
+   */
+  function streetEdge(v, e) {
+    const F = FunRoute();
+    if (!F || !F.streetSample) return null;
+    const ch = v.roadCh || {}, at = (k) => (ch[k] ? ch[k][e] : NaN);
+    const limit = v.speed[e] && !(v.flags[e] & v.bits.speedEst) ? v.speed[e] : NaN;   // a posted limit, not the class's estimate
+    return F.streetSample({ cls: v.cls[e], limit, addr: at('addr_per_km'), bldg: at('bldg_per_km'), density: at('density') });
+  }
+  /** A real dead end at node n (one neighbour), not the edge of the tiles loaded (an edge into a tile not in the view). */
+  function deadEndAt(v, n) {
+    if (n < 0 || !v.deadEnd[n]) return false;
+    for (let e = v.first[n]; e < v.first[n + 1]; e++) if (v.to[e] < 0) return false;
+    return true;
+  }
+  /** A junction: three or more neighbouring nodes (or a way into tiles not loaded, which may be one). */
+  function junctionAt(v, n) {
+    if (n < 0) return false;
+    const nb = new Set();
+    for (let e = v.first[n]; e < v.first[n + 1]; e++) { if (v.to[e] < 0) return true; if (v.to[e] !== n) nb.add(v.to[e]); }
+    for (let r = v.rfirst[n]; r < v.rfirst[n + 1]; r++) { const a = v.tail[v.redge[r]]; if (a !== n) nb.add(a); }
+    return nb.size >= 3;
+  }
+  /**
    * Stages from our tiles (Best roads nearby): edges scored quality x corners (fun per km, only on road the engine calls
-   * good: quality 0.45 or more) are chained from the best down, each chain growing forward and back along the best
-   * continuing edge (a turn under 60°, at least a third of the seed's score, or the same road), until it runs out or
-   * reaches 15 km; chains of 2 km or more within reach (maxS) are the stages, as stages.js shapes them ({ lat, lon,
+   * good: quality 0.45 or more, and never a neighbourhood street: streetEdge) are chained from the best down, each chain
+   * growing forward and back along the best continuing edge (a turn under 60°, at least a third of the seed's score, or
+   * the same road), until it runs out or reaches 15 km; chains of 2 km or more within reach (maxS) that go somewhere
+   * (neither end a dead end: a through road, not a cul-de-sac) are the stages, as stages.js shapes them ({ lat, lon,
    * name, km, score, good }) plus the drive time to each end (aS, bS). req: { start, maxKm, maxS, max }.
    */
   function explore(v, req) {
@@ -975,7 +1001,8 @@
     for (let e = 0; e < v.E; e++) {
       if (v.to[e] < 0 || v.quality[e] === UNKNOWN_U8 || !Number.isFinite(v.fun[e]) || v.fun[e] <= 0) continue;
       const q = v.quality[e] / 254;
-      if (q < K.POOR_HI || (v.flags[e] & (B.private | B.barrier | B.ramp)) || v.cls[e] === CLS.motorway || v.cls[e] >= CLS.service) continue;
+      if (q < K.POOR_HI || (v.flags[e] & (B.private | B.barrier | B.ramp | B.destination)) || v.cls[e] === CLS.motorway || v.cls[e] >= CLS.service) continue;
+      if (streetEdge(v, e) === true) continue;
       score[e] = q * v.fun[e] / Math.max(0.05, v.len[e] / 1000);
       if (Number.isFinite(T[v.tail[e]]) || Number.isFinite(T[v.to[e]])) seeds.push(e);
     }
@@ -1009,7 +1036,11 @@
         if (best < 0) break;
         chain.unshift(best); take(best); km += v.len[best] / 1000; q = best;
       }
-      if (km < 2) continue;
+      // a through road, not a cul-de-sac: an end that runs into a dead end is cut back to the last junction on the way
+      // (a spur off a good road goes; a road that only leads to its own dead end goes entirely)
+      if (deadEndAt(v, v.to[chain[chain.length - 1]])) { while (chain.length && !junctionAt(v, v.to[chain[chain.length - 1]])) km -= v.len[chain.pop()] / 1000; }
+      if (chain.length && deadEndAt(v, v.tail[chain[0]])) { while (chain.length && !junctionAt(v, v.tail[chain[0]])) km -= v.len[chain.shift()] / 1000; }
+      if (!chain.length || km < 2) continue;
       const aS = T[v.tail[chain[0]]], bS = T[v.to[chain[chain.length - 1]]];
       if (!Number.isFinite(aS) && !Number.isFinite(bS)) continue;
       const lat = [], lon = [], names = new Map();
@@ -1234,7 +1265,7 @@
     };
   }
 
-  const api = { VERSION: 1, K, lineTiles, edgeTable, fromTable, crowdOnto, project, quickest, scoreLine, reach, explore, TILE_DEG, FLAG_BITS, NODE_BITS, CLS, UNKNOWN_U8, UNKNOWN_FUN, NO_NAME, packedKey, nodeCost, LEVELS_COPY, levels, distM, bearing, turnAngle, tileOf, keyOf, view, geom, snap, objective, search,
+  const api = { VERSION: 1, K, lineTiles, edgeTable, fromTable, crowdOnto, project, quickest, scoreLine, reach, explore, streetEdge, deadEndAt, junctionAt, TILE_DEG, FLAG_BITS, NODE_BITS, CLS, UNKNOWN_U8, UNKNOWN_FUN, NO_NAME, packedKey, nodeCost, LEVELS_COPY, levels, distM, bearing, turnAngle, tileOf, keyOf, view, geom, snap, objective, search,
     assemble, overlap, sameRoute, tilesFor, loopTiles, plan, loop, indexKeys, covers, host, client, edgeId, twin, turnCost };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   root.ApexGraphRouter = api;

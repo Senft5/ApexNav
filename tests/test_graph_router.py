@@ -104,6 +104,36 @@ def test_best_roads_nearby_from_our_tiles():
     assert "Subdivision Lane" not in r["names"], r
 
 
+def test_best_roads_nearby_never_a_neighbourhood_or_a_dead_end():
+    """The owner's report: Best roads nearby's top pick was a residential neighbourhood. A curvy subdivision street with
+    more corners than the back road (and a tile quality that calls it good) is never a stage; nor is a twisty road that
+    only leads to its own dead end; a county lane tagged residential with no houses beside it stays a road."""
+    r = case("exploreRoads")
+    assert r["first"] == "Twisty Road", r
+    assert "Maple Court" not in r["names"] and "Spur Road" not in r["names"], r
+    assert "Creek Lane" in r["names"], "class alone never decides: " + str(r)
+    assert r["street"] == [True, False, None], "the subdivision is a street, the lane isn't, and class alone is unknown"
+    assert "Maple Court" in r["v1names"], "a v1 tile knows nothing beside the road: the tile's quality decides, no guess"
+
+
+@pytest.mark.parametrize("place", ["devou_park", "mount_airy_forest"])
+def test_best_roads_nearby_on_the_real_tiles(place):
+    """Two public places on the Cincinnati tiles: the map's stage search ranked with our tiles' context (cockpit.js where
+    the tiles cover you and our own search found nothing) and our own search. Neither lists a neighbourhood (our tiles:
+    density 6+ or residential class, with 40+ houses per km), at the top or anywhere. Before the fix Devou Park's top pick
+    was Parkway Avenue through Kenton Hills (74 houses per km, density 10) and Mount Airy's list had Lafayette Avenue
+    through Clifton, the road the owner was shown."""
+    r = case("bestRoadsReal")[place]
+    assert r["list"], r
+    assert not [s for s in r["list"] if s["neighbourhood"]], r["list"]
+    assert not [s for s in r["own"] if s["neighbourhood"]], r["own"]
+    if place == "devou_park":
+        assert r["list"][0]["name"] == "Petersburg Road", r["list"]
+    else:
+        assert ["Lafayette Avenue", "street"] in r["dropped"] and "Lafayette Avenue" not in [s["name"] for s in r["list"]], r
+        assert r["list"][0]["name"] == "Miles Road", r["list"]
+
+
 def test_offline_maneuvers():
     r = case("maneuvers")
     assert r["steps"] == [[1, "First Street"], [15, "Second Street"], [10, "Third Street"], [4, None]] or \

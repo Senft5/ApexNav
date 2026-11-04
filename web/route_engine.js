@@ -761,9 +761,25 @@
   }
   const highwayCosting = (avoid, car) => (avoid && avoid.highways ? null : connectorCosting(avoid, car, 1.0));
   /**
+   * Is this stage a neighbourhood street (fun_route.js streetSample on each sample: residential class in built-up
+   * frontage)? { street: true / false / null (too little known), share, known } from the context's own channels.
+   */
+  function streetOf(ctx, n) {
+    if (!FunRoute || !FunRoute.streetShare || !ctx || !ctx.channels) return { street: null, share: null, known: 0 };
+    const rc = channel(ctx, 'road_class'), lim = channel(ctx, 'speed_limit_kph'), addr = channel(ctx, 'address_per_km'),
+      bldg = channel(ctx, 'bldg_per_km'), dens = channel(ctx, 'density');
+    const at = (a, i) => (a && i < a.length ? a[i] : NaN);
+    const answers = new Array(n);
+    for (let i = 0; i < n; i++) answers[i] = FunRoute.streetSample({ cls: at(rc, i), limit: at(lim, i), addr: at(addr, i), bldg: at(bldg, i), density: at(dens, i) });
+    return FunRoute.streetShare(answers);
+  }
+  /**
    * Stages re-scored by what the context says about the road (the network step: good roads, not just twisty lines): each
    * stage's geometry score times its corner gate (a curvy subdivision street falls to 40 %), plus scenery. Sorted best
    * first; stages with no context keep their score. Mutates s.score (s.mapScore keeps the original) and sets s.ev.
+   * A stage the context shows is mostly a neighbourhood street (streetOf) gets s.notRoad = 'street', one our tiles score
+   * poor on average s.notRoad = 'poor'; either sorts last and Best roads nearby never lists it (fun_route.js
+   * exploreShortlist), whatever its corners.
    */
   function rescoreStages(stages, ctxById) {
     const any = (stages || []).some((s) => ctxById && ctxById[s.__ctxId]);
@@ -783,8 +799,18 @@
       const g = (q + (smp.n - qn) * W.STAGE_UNKNOWN_GATE) / Math.max(1, smp.n), scen = sn ? sc / sn : 0.5, cov = sn / smp.n;
       s.score = s.mapScore * (0.4 + 0.6 * g) * (1 + 0.4 * (scen - 0.5) * cov);
       s.ev = { gate: g, scenery: sn ? scen : null, quality: qn ? smp.quality.reduce((a, v) => a + (Number.isFinite(v) ? v : 0), 0) / qn : null };
+      // not a road to list: mostly a neighbourhood street, or a road our own tiles' model (route_ctx/graph.js, every
+      // channel known at build time) scores poor on average, as Best roads nearby from our tiles never lists one
+      // (graph_router.js explore: quality 0.45 or more). The live context alone never drops a stage: it can know too little.
+      const st = streetOf(ctx, smp.n), gq = ctx.channels.graph_quality;
+      let gs = 0, gk = 0;
+      if (gq) for (let i = 0; i < smp.n && i < gq.length; i++) if (Number.isFinite(gq[i])) { gs += gq[i]; gk++; }
+      s.ev.street = st.share; s.ev.graphQuality = gk ? gs / gk : null;
+      delete s.notRoad;
+      if (st.street) s.notRoad = 'street';
+      else if (gk >= 0.5 * smp.n && gs / gk < W.POOR_Q_HI) s.notRoad = 'poor';
     }
-    return (stages || []).slice().sort((a, b) => b.score - a.score);
+    return (stages || []).slice().sort((a, b) => (a.notRoad ? 1 : 0) - (b.notRoad ? 1 : 0) || b.score - a.score);
   }
   /** Corridors for the stages worth asking about (the first `k`), tagged so rescoreStages finds their context. */
   function stageCorridors(stages, k = 8, o = {}) {
@@ -805,7 +831,7 @@
   }
 
   const api = { VERSION: 1, QUALITY, SCENERY, PER_KM, SPANS, ALIASES, KIND_ALIASES, SOURCES, W, SPEED, gate, active, moment, channel, builtEvidence, samples, evaluate, stats, rank, why,
-    placeTimes, corridorFor, stageCorridor, stageCorridors, connectorCosting, highwayCosting, rescoreStages, loopValue, ramp, decay };
+    placeTimes, corridorFor, stageCorridor, stageCorridors, connectorCosting, highwayCosting, streetOf, rescoreStages, loopValue, ramp, decay };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   root.ApexRouteEngine = api;
 })(typeof window !== 'undefined' ? window : globalThis);
