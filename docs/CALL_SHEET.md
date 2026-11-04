@@ -69,6 +69,13 @@ until the Cincinnati tiles ship: where no tiles cover a trip, planning is exactl
 
 ## 2026-11-04 (own routing): the region on the free tier
 
+- **Audit: the first region build (2026-45-95960e6d) was scored with the Cincinnati grid only** (its band logs: "grid
+  bundles 4"), so outside Cincinnati noise, night lights, canopy, housing, impervious, AADT/IRI and crashes were
+  unknown in the scores. The rebuild after ctx-region.yml (2026-45-95960e6d-gebab6b, "grid bundles 33") has them: on a
+  random 60 tiles (29,023 roads) the share with a known value went 0 -> 100 % for noise_db, night_lights,
+  impervious_pct and crash_density, 0 -> 99.5 % housing_density, 0 -> 28.2 % aadt (HPMS counts main roads only).
+  graph-region.yml now warns when it has to fall back. Order: ctx-region.yml, then graph-region.yml.
+
 - **The shipped Cincinnati tiles are cut from the region build** (tools/graph_etl/bundle.py, run by every region
   build, committed to the triggering branch, or to `claude/graph-bundle-<build>` for a PR when that is main), so the
   phone uses them first and offline works from first launch. graph.yml no longer builds Cincinnati on its own. Undo:

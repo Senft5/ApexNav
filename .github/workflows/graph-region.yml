@@ -101,6 +101,9 @@ jobs:
             mkdir -p "$WORK/ctx_dl" && git archive FETCH_HEAD ctx | tar -x -C "$WORK/ctx_dl"
             echo "CTX_DIR=$WORK/ctx_dl/ctx/v1" >> "$GITHUB_ENV"
           else
+            # no region grid yet: run ctx-region.yml first. Scored with Cincinnati's bundles only, every edge outside it
+            # has the grid's channels unknown (the build id then has no -g suffix)
+            echo "::warning::no context grid on graph-data (ctx/v1): edges outside Cincinnati are scored without it"
             echo "CTX_DIR=${{ github.workspace }}/web/data/ctx/v1" >> "$GITHUB_ENV"
           fi
       - name: Merge and cut the band's blocks
