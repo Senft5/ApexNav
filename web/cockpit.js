@@ -3128,7 +3128,8 @@
       // (scope first: on the tiles in hand when the corridor's aren't all in yet; then the whole corridor's plan follows,
       // and its new routes join the background refresh: ownRefine)
       const ownReq = { from, to, level, prefs: roadPrefs, avoid, heading: from.heading, crowd: ownCovered ? ApexOwnRouting.crowdFor(routeCtxOpts().lookupCells, from, to) : null };
-      const ownP = ownCovered ? ApexOwnRouting.plan(ownRouter(), { ...ownReq, scope: 'first' }) : null;
+      // (Long way's detours reach past the straight line's tiles: it waits for its corridor)
+      const ownP = ownCovered ? ApexOwnRouting.plan(ownRouter(), { ...ownReq, scope: level === 'max' ? 'full' : 'first' }) : null;
       const ownFullP = ownP ? ownP.then((r) => (r && r.result && r.result.partial ? ApexOwnRouting.plan(ownRouter(), ownReq) : null)).catch(() => null) : Promise.resolve(null);
       // our quickest alone, first (one search): the first route on screen
       const ownQuickP = ownCovered ? ownQuickAsk : null;
@@ -3384,7 +3385,9 @@
     // Own-routed plans: the tiles carry the static road data (land use, density, businesses, signals, the grid, the DEM,
     // corners) as the engine's own scores (route_ctx/graph.js), so only the time-dependent providers run, in OWN_CTX_MS.
     // Members' data is in the search already (crowd), the driver's For this drive choices are local.
-    const OWN_CTX = ['graph', 'context_grid', 'conditions', 'wildlife', 'events', 'hazards-live', 'driver'], OWN_CTX_MS = 500, OWN_WEATHER_GRACE_MS = 0,
+    // (the national grid is the background refresh's: the v2 tiles carry its built-up evidence already, and its bundles
+    // cost a first plan a second to fetch)
+    const OWN_CTX = ['graph', 'conditions', 'wildlife', 'events', 'hazards-live', 'driver'], OWN_CTX_MS = 500, OWN_WEATHER_GRACE_MS = 0,
       // the ranked route's land cover (sight across bends): waited for this long on our plans, then the cautious 4 m;
       // what's late lands in the tile cache for the next plan
       OWN_SIGHT_MS = 100;   // (at most EARLY_SIGHT_MS: not asked; the land cover is loaded for the next plan meanwhile)
