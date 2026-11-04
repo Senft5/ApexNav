@@ -3125,8 +3125,11 @@
       // (not with our tiles: the map tiles' road data is in them, and the context for our routes doesn't read it)
       try { if (!ownCovered && window.ApexOsmTiles && window.ApexRouteCtx && ApexRouteCtx.corridor && (!window.ApexFlags || ApexFlags.on('route_engine'))) ApexOsmTiles.prefetch([ApexRouteCtx.corridor('ahead', [[from.lon, from.lat], [to.lon, to.lat]], {})]); } catch (_) { /* nothing ahead: fetched with the context */ }
       // members' measured roads round the trip go into our search itself (signed out or none: unchanged)
-      const ownP = ownCovered ? ApexOwnRouting.plan(ownRouter(), { from, to, level, prefs: roadPrefs, avoid, heading: from.heading,
-        crowd: ApexOwnRouting.crowdFor(routeCtxOpts().lookupCells, from, to) }) : null;
+      // (scope first: on the tiles in hand when the corridor's aren't all in yet; then the whole corridor's plan follows,
+      // and its new routes join the background refresh: ownRefine)
+      const ownReq = { from, to, level, prefs: roadPrefs, avoid, heading: from.heading, crowd: ownCovered ? ApexOwnRouting.crowdFor(routeCtxOpts().lookupCells, from, to) : null };
+      const ownP = ownCovered ? ApexOwnRouting.plan(ownRouter(), { ...ownReq, scope: 'first' }) : null;
+      const ownFullP = ownP ? ownP.then((r) => (r && r.result && r.result.partial ? ApexOwnRouting.plan(ownRouter(), ownReq) : null)).catch(() => null) : Promise.resolve(null);
       // our quickest alone, first (one search): the first route on screen
       const ownQuickP = ownCovered ? ownQuickAsk : null;
       const stagesAhead = !ownCovered && level !== 'quick' && crowKm >= 3 && crowKm <= 48 && window.ApexStages ? stagesFor(from, to).catch(() => null) : null;
@@ -3367,7 +3370,7 @@
         : window.ApexRouteCard ? ApexRouteCard.swapNote(t, was, t.why, opts.head || 'Better route found') : 'Better route found');
       if (offered[0].infeasible && offered[0].ev && offered[0].ev.hard.length) toast(`No way round it: ${offered[0].ev.hard[0].label} on this route. Check before you go.`);   // every candidate broke a hard constraint
       else if (window.ApexRouteCar) routeAftercare(offered[0]);
-      if (ownUsed) ownRefine(pool, level, routeOptions, t, forecasts);
+      if (ownUsed) ownRefine(pool, level, routeOptions, t, forecasts, ownFullP);
       window.apexDebug && (window.apexDebug.lastFun = rankPool(pool, level).map(c => ({ kind: c.kind, fun: c.fun, timeS: c.timeS, value: c.value, adjust: c.adjust || 0, glare: c.glare, townKm: c.townKm,
         parts: c.parts || null, quality: c.ev ? c.ev.quality : null, confidence: c.ev ? c.ev.confidence : null, poorKm: c.ev ? c.ev.poorKm : null })));
       return true;
@@ -3408,9 +3411,16 @@
     // is ranked again with it, and the route on screen is swapped only when another now beats it by OWN_SWAP_POINTS, the
     // card saying why. Driving, a pick, another plan or a cleared route meanwhile: nothing changes.
     const OWN_REFINE = ['graph', 'context_grid', 'conditions', 'wildlife', 'events', 'hazards-live', 'driver'], OWN_REFINE_MS = 3000, OWN_SWAP_POINTS = 5;
-    async function ownRefine(pool, level, o, shown, forecasts) {
+    async function ownRefine(pool, level, o, shown, forecasts, fullP) {
       try {
         const t0 = Date.now();
+        // the whole corridor's routes, when the first plan was made on the tiles in hand: the new ones join the pool
+        const full = fullP ? await fullP : null;
+        if (full && full.cands && full.cands.length) {
+          const same = (a, b) => a.own && b.own && a.own.edges.length === b.own.edges.length && a.own.edges.every((e, i) => e === b.own.edges[i]);
+          const clockOf = pool.find((p) => p.own && p.own.clock), k = clockOf ? clockOf.own.clock : 1;   // the pool's one clock
+          for (const c of full.cands) if (!pool.some((p) => same(p, c))) { c.timeS *= k; c.route.timeS = c.timeS; c.t = FunRoute.geometry(c.route.coords, Core); c.fun = funOf(c.t, c.route.turns); c.glare = FunRoute.glare(c.t, c.timeS, new Date()); pool.push(c); }
+        }
         await contextOn(pool, OWN_REFINE_MS, 'refine', OWN_REFINE);
         await weatherOn(pool, level, forecasts);
         const ranked = rankPool(pool, level);

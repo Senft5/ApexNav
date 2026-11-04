@@ -1052,10 +1052,11 @@
     const tiles = new Map();
     let keysP = null, last = null;
     const keys = () => (keysP || (keysP = Promise.resolve(env.index ? env.index() : null).then(indexKeys).catch(() => { keysP = null; return new Set(); })));
+    const ready = new Set();                                          // tiles loaded and decoded (or known missing)
     const load = (t) => {
       const k = keyOf(t.i, t.j);
       if (!tiles.has(k)) {
-        tiles.set(k, Promise.resolve(env.load(t.i, t.j)).catch(() => null));
+        tiles.set(k, Promise.resolve(env.load(t.i, t.j)).catch(() => null).then((x) => { ready.add(k); return x; }));
         if (tiles.size > 64) tiles.delete(tiles.keys().next().value);
       }
       return tiles.get(k);
@@ -1144,12 +1145,18 @@
           return { id, result: { tiles: v.keys, edges: v.E, loaded: got.length, ms: Date.now() - t0 } };
         }
         if (type === 'plan') {
-          const v = await viewFor(tilesFor(msg.from, msg.to, msg.level));
+          // scope 'first': with the corridor's tiles not all in yet, the plan is made on those under the straight line
+          // (as the first route was) and says so (partial); the page asks again for the whole corridor meanwhile
+          const corridor = tilesFor(msg.from, msg.to, msg.level), have = await keys();
+          const missing = corridor.filter((t) => (!have.size || have.has(keyOf(t.i, t.j))) && !ready.has(keyOf(t.i, t.j)));
+          const partial = msg.scope === 'first' && missing.length > 0;
+          if (partial) for (const t of missing) load(t);                 // fetched now, for the whole-corridor plan
+          const v = partial ? await smallView(lineTiles(msg.from, msg.to)) : await viewFor(corridor);
           // members' data for this plan only (the view is kept for the next one, signed in or not)
           v.crowd = msg.crowd ? crowdOnto(v, msg.crowd) : null;
           try {
             const r = plan(v, msg);
-            return { id, result: { ...strip(r), tiles: v.keys, crowdEdges: v.crowd ? v.crowd.edges : 0 } };
+            return { id, result: { ...strip(r), tiles: v.keys, partial, crowdEdges: v.crowd ? v.crowd.edges : 0 } };
           } finally { v.crowd = null; }
         }
         if (type === 'loop') {
