@@ -44,7 +44,7 @@ jobs:
     timeout-minutes: 330
     env:
       CACHE: ${{ github.workspace }}/.graph_cache
-      WORK: ${{ runner.temp }}/graph_work
+      WORK: /home/runner/graph_work
     steps:
       - uses: actions/checkout@v4
       - name: Free disk
@@ -145,7 +145,7 @@ jobs:
         if: ${{ inputs.region }}
         with:
           name: graph-region
-          path: ${{ runner.temp }}/graph_work/region_out
+          path: /home/runner/graph_work/region_out
           retention-days: 30
       - name: Upload the region to R2 (owner's Cloudflare secrets)
         if: ${{ inputs.region }}
