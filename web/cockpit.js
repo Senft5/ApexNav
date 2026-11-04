@@ -3369,7 +3369,7 @@
     const EARLY_MS = 0, EARLY_SIGHT_MS = 100, FIRST_GATE_MS = 1800;
     // Our own router (graph_worker.js), started on the first plan; the Valhalla check waits at most OWN_CHECK_MS once
     // our routes are in, and the chosen route's instructions at most OWN_INSTRUCT_MS (else our own maneuvers)
-    const OWN_CHECK_MS = 2500, OWN_INSTRUCT_MS = 3000, OWN_COVERS_MS = 1500;
+    const OWN_CHECK_MS = 2500, OWN_INSTRUCT_MS = 3000, OWN_COVERS_MS = 1500, OWN_PLAN_MS = 6000;
     // Own-routed plans: the tiles carry the static road data (land use, density, businesses, signals, the grid, the DEM,
     // corners) as the engine's own scores (route_ctx/graph.js), so only the time-dependent providers run, in OWN_CTX_MS.
     // Members' data is in the search already (crowd), the driver's For this drive choices are local.
@@ -3379,7 +3379,13 @@
       OWN_SIGHT_MS = 400;
     let ownClient = null;
     const ownOn = () => !!(window.ApexOwnRouting && window.ApexGraphRouter && ApexOwnRouting.on());
-    const ownRouter = () => (ownClient || (ownClient = ApexGraphRouter.client({ url: 'graph_worker.js' })));
+    // Coverage is answered on the page from index.json (fetched once): asking the worker queued the question behind its
+    // tile loading, live on the preview 1.5 s, and the plan gave up on our tiles (2026-11-05)
+    let ownIndexP = null;
+    const ownIndex = () => (ownIndexP || (ownIndexP = fetch('data/graph/v1/index.json').then((r) => (r.ok ? r.json() : null)).then((j) => ApexGraphRouter.indexKeys(j))
+      .catch(() => { ownIndexP = null; return new Set(); })));
+    const ownRouter = () => (ownClient || (ownClient = Object.assign(ApexGraphRouter.client({ url: 'graph_worker.js', timeoutMs: OWN_PLAN_MS }),
+      { covers: (points) => ownIndex().then((keys) => ApexGraphRouter.covers(keys, points)) })));
     // Turn instructions for one of our routes: Valhalla's maneuvers on our line (trace_route), offline our own
     // (one request per route, however often it's asked for)
     const ownInstructed = new WeakMap();
@@ -3505,10 +3511,24 @@
     async function changeLevel(level) {
       if (!FunRoute.LEVELS[level] || level === funLevel || $('planPanel').classList.contains('busy') || loopBusy || optionBusy) return;
       const was = funLevel, t = plannedRoute, o = routeOptions;
+      // the switch you tapped stays under your finger: the card above it is drawn again for the new route (its lines can
+      // be fewer, or wrap otherwise), so the scroll is moved by however far the switch moved. The browser's own scroll
+      // anchoring picks some element of its choosing, and on CI it picked one above the change (#297's flow, 41 px)
+      const sw = () => { const e = document.getElementById('routeCardFun'); return e ? e.getBoundingClientRect().top : null; };
+      const y0 = sw();
+      const keep = () => { const y1 = sw(), b = $('planBody'); if (y0 != null && y1 != null && b && Math.abs(y1 - y0) > 0.5) b.scrollTop += y1 - y0; };
+      // the card keeps settling for a moment after the re-rank (the note, the tiles, the profile's slot), so the switch is
+      // held for 600 ms of frames, with the browser's own anchoring off for that moment so the two never fight
+      const hold = () => {
+        const b = $('planBody'); if (b) b.style.overflowAnchor = 'none';
+        const end = performance.now() + 600;
+        const step = () => { keep(); if (performance.now() < end) requestAnimationFrame(step); else if (b) b.style.overflowAnchor = ''; };
+        step();
+      };
       setFunLevel(level);
       if (t && o && o.current === t && state.mode !== 'live') {
-        if (o.kind === 'loop') { await relevelLoop(o, level); return; }
-        if (o.pool && LEVEL_ORDER[level] <= LEVEL_ORDER[o.builtLevel || 'quick']) { if (!(await rerank(o, level))) setFunLevel(was); return; }
+        if (o.kind === 'loop') { await relevelLoop(o, level); hold(); return; }
+        if (o.pool && LEVEL_ORDER[level] <= LEVEL_ORDER[o.builtLevel || 'quick']) { if (!(await rerank(o, level))) setFunLevel(was); hold(); return; }
       }
       if (!(await replanForLevel(FunRoute.LEVELS[level].label))) setFunLevel(was);
     }

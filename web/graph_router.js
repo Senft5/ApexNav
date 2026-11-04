@@ -940,8 +940,13 @@
           const at = (dy, dx) => ({ lat: c.lat + dy / 110540, lon: c.lon + dx / (111320 * Math.cos(c.lat * RAD)) });
           const sw = tileOf(at(-d, -d).lat, at(-d, -d).lon), ne = tileOf(at(d, d).lat, at(d, d).lon), box = [];
           for (let i = sw.i; i <= ne.i; i++) for (let j = sw.j; j <= ne.j; j++) box.push({ i, j });
+          // the tiles fetched and decoded (each its own task, so a plan asked meanwhile is answered between them); the
+          // view of them is built after, in a task of its own, unless a plan has built what it needs by then
+          const have = await keys();
+          const got = (await Promise.all(box.filter((t) => !have.size || have.has(keyOf(t.i, t.j))).map(load))).filter(Boolean);
+          await new Promise((r) => setTimeout(r, 0));
           const v = await viewFor(box);
-          return { id, result: { tiles: v.keys, edges: v.E, ms: Date.now() - t0 } };
+          return { id, result: { tiles: v.keys, edges: v.E, loaded: got.length, ms: Date.now() - t0 } };
         }
         if (type === 'plan') {
           const v = await viewFor(tilesFor(msg.from, msg.to, msg.level));
