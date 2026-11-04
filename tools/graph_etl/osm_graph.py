@@ -215,6 +215,7 @@ class Raw:
     worship: list = field(default_factory=list)     # (lat, lon) amenity=place_of_worship
     restrictions: list = field(default_factory=list)  # (from way, via node, to way, only)
     via_way_restrictions: int = 0
+    via_restrictions: list = field(default_factory=list)   # (from way, [via ways], to way, only)
     timestamp: str | None = None
 
 
@@ -310,6 +311,8 @@ def read(path: str, bbox=None) -> Raw:
             via_w = [m.ref for m in o.members if m.type == "w" and m.role == "via"]
             if via_w:
                 raw.via_way_restrictions += 1
+                if len(frm) == 1 and len(to) == 1 and not via_n and (r.startswith("no_") or r.startswith("only_")):
+                    raw.via_restrictions.append((frm[0], via_w, to[0], r.startswith("only_")))
                 continue
             if len(frm) == 1 and len(to) == 1 and len(via_n) == 1 and (r.startswith("no_") or r.startswith("only_")):
                 raw.restrictions.append((frm[0], via_n[0], to[0], r.startswith("only_")))

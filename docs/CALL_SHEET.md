@@ -15,9 +15,12 @@ didn't, unless the live context happened to answer in time.
   residential stay: Second Creek Road, Big Cedar Road). Undo: `streetSample` returns null.
 - **Where our tiles cover a map stage, a road our model scores under 0.45 isn't listed** (the bar our own search already
   had). Undo: the `'poor'` line in route_engine.js `rescoreStages`.
-- **Through roads only**: a stage's end that runs into a dead end is cut back to the last junction; a road that only
-  leads to its own dead end (Cook Road, Mudlick Road, Second Creek Road) is no longer listed. Undo: the two cut-back
-  lines in graph_router.js `explore`.
+- **Dead-end spurs are cut, long dead-end roads stay** (the coordinator's call over my first version, which dropped every
+  road that ends): a stage's end that runs into a dead end is cut back to the last junction, unless that dead-end run is
+  2 km or more of good road, the length a stage needs anyway. Cook Road (2.8 km), Mudlick Road and Second Creek Road
+  (2.3 km) stay as out-and-back roads. Streets, service and destination-only roads are never in a stage, so their dead
+  ends never count. 3 km was asked for "tunable"; at 3 km Cook and Second Creek still dropped, so 2 km. Tune:
+  `OUT_BACK_KM` in graph_router.js; undo the cut entirely: `cut` in `explore`.
 - **The list shows only stages the engine checked** once it checked any (the first 12), so an unchecked 13th can't fill in.
   Undo: `looked` in fun_route.js `exploreShortlist`.
 - Not fixed: outside our tiles, or with own routing off, when the live context is too slow to say, a neighbourhood is
@@ -27,6 +30,18 @@ didn't, unless the live context happened to answer in time.
   or Apple sign-in address differs from his TestFlight one, he won't get it: add his sign-in address's fingerprint to the
   Worker var `DEV_FINGERPRINTS` (OWNER_TODO). Imagery: USGS The National Map (public domain, US only, sharp to zoom 16),
   under our roads and routes, the base map's labels on top. No migration. Undo: drop `developer` from `/api/me`.
+
+## 2026-11-04 (evening): The weather word on the map
+
+- **"Dry" only when the last 3 hours are known to be dry; rain comes from a real weather station first.** You: "it's been
+  raining all day and is currently raining and it says it's dry out". The map's plate turned Open-Meteo's current
+  weather code into a word, and codes 0-3 (clear to overcast) all read "Dry"; at the time it said overcast with 0.0 mm
+  this quarter hour while its own past hours had 3.4, 0.2, 0.5 and 1.5 mm and the Lunken station reported light rain.
+  Now: the freshest of the nearest three NWS stations' observations (90 min at most) names falling weather first; then
+  the forecast's code when it names weather; then rain this quarter hour; then **"Wet roads"** after 0.2 mm or more in the
+  last 3 hours; "Dry" only when that is known; else nothing. NWS (api.weather.gov, public, no key) gets the position
+  rounded to about 1 km, as Open-Meteo already did; privacy.html and licenses.html say so. Undo: `weather` in
+  web/place_plate.js and the `nws` lookup in cockpit.js refreshPlacePlate.
 
 ## 2026-11-05 (night): Planning with our tiles, the speed round
 
@@ -90,6 +105,36 @@ until the Cincinnati tiles ship: where no tiles cover a trip, planning is exactl
   `ownInstructions` in cockpit.js.
 - **Our routes are always pinned with shaping points**, so a reroute (still Valhalla's) keeps to them.
 - Not done: the live comparison against production (no real tiles yet), Explore on our router.
+
+## 2026-11-04 (own routing): the region on the free tier
+
+- **Audit: the first region build (2026-45-95960e6d) was scored with the Cincinnati grid only** (its band logs: "grid
+  bundles 4"), so outside Cincinnati noise, night lights, canopy, housing, impervious, AADT/IRI and crashes were
+  unknown in the scores. The rebuild after ctx-region.yml (2026-45-95960e6d-gebab6b, "grid bundles 33") has them: on a
+  random 60 tiles (29,023 roads) the share with a known value went 0 -> 100 % for noise_db, night_lights,
+  impervious_pct and crash_density, 0 -> 99.5 % housing_density, 0 -> 28.2 % aadt (HPMS counts main roads only).
+  graph-region.yml now warns when it has to fall back. Order: ctx-region.yml, then graph-region.yml.
+
+- **The shipped Cincinnati tiles are cut from the region build** (tools/graph_etl/bundle.py, run by every region
+  build, committed to the triggering branch, or to `claude/graph-bundle-<build>` for a PR when that is main), so the
+  phone uses them first and offline works from first launch. graph.yml no longer builds Cincinnati on its own. Undo:
+  the bundle step in graph-region.yml.
+- **The context grid for OH+KY+IN is on the graph-data branch too** (ctx/v1, .github/workflows/ctx-region.yml, six
+  shards), and /api/ctx/v1/ reads KV first, then that branch. The graph build scores with it when it is there; the
+  build id says which grid (`-g<hash>`), so a rescore is a new build.
+
+- **The OH+KY+IN road network is hosted on a `graph-data` branch of this repository**, relayed by the Worker at
+  /api/graph/v1/ from raw.githubusercontent.com behind the edge cache (no R2, no KV, no secrets: the owner wants no new
+  costs). Each rebuild is a new commit on that branch (the repository grows by the region's size each time; old builds
+  can be dropped later by deleting and re-creating the branch, which only the owner may do). Undo: delete
+  backend/src/graph.ts's routes and the branch.
+- **The region is built in parallel bands of 1 degree blocks**, each from its own extract with 0.4 degree round it, and
+  edges in a tile are ordered canonically, so blocks agree on the tiles they share; one build id for all.
+- **The shipped Cincinnati tiles are used first only while the region has the same build** (else the region's, kept in
+  IndexedDB, with the shipped copy as the offline fallback): mixing two builds would join edges to the wrong nodes at a
+  tile edge. Undo: `order()` in web/graph_tiles.js.
+- **Via-way turn restrictions are applied** (format v3) where the path is simple; most in the data run through motorway
+  crossovers that aren't drivable and need nothing.
 
 ## 2026-11-04 (own routing): the scored road network (graph half)
 

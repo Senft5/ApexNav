@@ -4,12 +4,13 @@ name: Graph tiles (own routing ETL)
 # container can't reach Geofabrik; runners can), merged with osmium-tool, turned into the drivable graph, every edge
 # scored by web/route_engine.js itself (tools/graph_etl/score_edges.js, node) and packed as v1 tiles.
 #
-# - push to claude/own-routing-graph touching tools/graph_etl/** or this file, or a manual run: the Cincinnati area
+# Since 2026-11-04 every build is the region's (graph-region.yml): the Cincinnati tiles shipped in the app are cut from
+# it (tools/graph_etl/bundle.py), so the shipped copy and the region can never be two builds. Kept as the entry point.
+# Was: push to claude/own-routing-graph touching tools/graph_etl/** or this file, or a manual run: the Cincinnati area
 #   (the 16 tiles of 0.25 degrees covering lat 38.75-39.75, lon -85.0 to -84.0: the test cases' lat 38.9-39.6, lon -85.0
 #   to -84.1 and the rest of those tiles), committed back to the branch under web/data/graph/v1/ ("graph tiles: <date>").
-# - manual run with "region": all of OH+KY+IN as an artifact (too big to commit); uploaded to Cloudflare R2 only when
-#   the owner's secrets exist (CLOUDFLARE_API_TOKEN, CLOUDFLARE_ACCOUNT_ID, and the GRAPH_R2_BUCKET variable;
-#   docs/OWNER_TODO.md). Without them the upload step says so and is skipped.
+# - manual run with "region": all of OH+KY+IN (.github/workflows/graph-region.yml), committed to the `graph-data`
+#   branch, which the Worker relays at /api/graph/v1/ (free: no R2, no KV, no secrets).
 #
 # Runner budget (ubuntu-latest: 4 CPUs, 16 GB RAM, ~14 GB free disk): the three extracts are ~1.1 GB, cached a week.
 on:
@@ -21,7 +22,7 @@ on:
   workflow_dispatch:
     inputs:
       region:
-        description: "Build all of OH+KY+IN as an artifact (and upload it if the Cloudflare secrets are set)"
+        description: "Build all of OH+KY+IN and commit it to the graph-data branch (graph-region.yml)"
         type: boolean
         default: false
 
@@ -39,126 +40,5 @@ env:
   REGION_TILES: "-89.75,36.5,-80.5,42.5"
 
 jobs:
-  build:
-    runs-on: ubuntu-latest
-    timeout-minutes: 330
-    env:
-      CACHE: ${{ github.workspace }}/.graph_cache
-      WORK: /home/runner/graph_work
-    steps:
-      - uses: actions/checkout@v4
-      - name: Free disk
-        run: |
-          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL || true
-          df -h / && free -g
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
-      - uses: actions/setup-node@v4
-        with:
-          node-version: "22"
-      - name: Tools
-        run: |
-          sudo apt-get update -qq && sudo apt-get install -y -qq osmium-tool
-          pip install -r tools/graph_etl/requirements.txt pytest
-          osmium --version | head -1
-      - name: Week (cache key)
-        id: week
-        run: echo "w=$(date -u +%G-%V)" >> "$GITHUB_OUTPUT"
-      - name: Restore the download cache
-        uses: actions/cache/restore@v4
-        with:
-          path: .graph_cache
-          key: graph-osm-${{ steps.week.outputs.w }}-${{ github.run_id }}
-          restore-keys: |
-            graph-osm-${{ steps.week.outputs.w }}-
-            graph-osm-
-      - name: Download the Geofabrik extracts
-        run: |
-          mkdir -p "$CACHE/osm" "$CACHE/dem"
-          wk="${{ steps.week.outputs.w }}"
-          for s in $STATES; do
-            f="$CACHE/osm/$s-$wk.osm.pbf"
-            if [ ! -s "$f" ]; then
-              rm -f "$CACHE"/osm/$s-*.osm.pbf
-              curl -fSL --retry 5 --retry-delay 10 -o "$f.part" "https://download.geofabrik.de/north-america/us/$s-latest.osm.pbf"
-              mv "$f.part" "$f"
-            fi
-            ls -la "$f"
-          done
-      - name: Merge
-        run: |
-          wk="${{ steps.week.outputs.w }}"
-          mkdir -p "$WORK"
-          osmium merge --overwrite -o "$WORK/region.osm.pbf" $(for s in $STATES; do echo "$CACHE/osm/$s-$wk.osm.pbf"; done)
-          osmium fileinfo "$WORK/region.osm.pbf" | head -20
-      - name: Save the download cache
-        if: always()
-        uses: actions/cache/save@v4
-        with:
-          path: .graph_cache/osm
-          key: graph-osm-${{ steps.week.outputs.w }}-${{ github.run_id }}
-
-      # ---- Cincinnati: committed to the branch -------------------------------------------------------------------
-      - name: Build Cincinnati
-        if: ${{ !inputs.region }}
-        run: |
-          osmium extract --overwrite -s smart -b "$CINCY_CLIP" -o "$WORK/cincy.osm.pbf" "$WORK/region.osm.pbf"
-          rm -rf web/data/graph/v1
-          python -m tools.graph_etl.build --pbf "$WORK/cincy.osm.pbf" --tiles="$CINCY_TILES" --out web/data/graph/v1 \
-            --work "$WORK/cincy" --dem-cache "$CACHE/dem" --source "Geofabrik ohio, kentucky, indiana (merged)"
-      - name: Check the tiles
-        if: ${{ !inputs.region }}
-        run: |
-          python -m tools.graph_etl.check web/data/graph/v1 --json "$WORK/check.json" | tee "$WORK/check.txt" || echo "::warning::a spot check failed (see the table)"
-          { echo '```'; cat "$WORK/check.txt"; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
-          python -m pytest tests/test_graph_tiles.py -q
-      - name: Commit the tiles to the branch
-        if: ${{ !inputs.region && github.ref == 'refs/heads/claude/own-routing-graph' }}
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          cp "$WORK/check.txt" web/data/graph/v1/CHECK.txt
-          git add web/data/graph/v1
-          if git diff --cached --quiet; then echo "no change"; exit 0; fi
-          git commit -q -m "graph tiles: $(date -u +%F)"
-          for k in 1 2 3; do
-            git pull --rebase -q origin claude/own-routing-graph && git push -q origin HEAD:claude/own-routing-graph && exit 0
-            sleep 10
-          done
-          exit 1
-      - uses: actions/upload-artifact@v4
-        if: ${{ !inputs.region }}
-        with:
-          name: graph-cincinnati
-          path: web/data/graph/v1
-          retention-days: 14
-
-      # ---- the region (OH+KY+IN): an artifact, uploaded when the owner has set up Cloudflare ------------------------
-      - name: Build the region
-        if: ${{ inputs.region }}
-        run: |
-          python -m tools.graph_etl.build --pbf "$WORK/region.osm.pbf" --tiles="$REGION_TILES" --out "$WORK/region_out/v1" \
-            --work "$WORK/region" --dem-cache "$CACHE/dem" --source "Geofabrik ohio, kentucky, indiana (merged)"
-          python -m tools.graph_etl.check "$WORK/region_out/v1" | tee -a "$GITHUB_STEP_SUMMARY" || true
-      - uses: actions/upload-artifact@v4
-        if: ${{ inputs.region }}
-        with:
-          name: graph-region
-          path: /home/runner/graph_work/region_out
-          retention-days: 30
-      - name: Upload the region to R2 (owner's Cloudflare secrets)
-        if: ${{ inputs.region }}
-        env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          GRAPH_R2_BUCKET: ${{ vars.GRAPH_R2_BUCKET }}
-        run: |
-          if [ -z "$CLOUDFLARE_API_TOKEN" ] || [ -z "$CLOUDFLARE_ACCOUNT_ID" ] || [ -z "$GRAPH_R2_BUCKET" ]; then
-            echo "::notice::Region tiles left as the artifact: set CLOUDFLARE_API_TOKEN, CLOUDFLARE_ACCOUNT_ID and the GRAPH_R2_BUCKET variable to upload (docs/OWNER_TODO.md)"
-            exit 0
-          fi
-          cd "$WORK/region_out/v1"
-          # tiles first, the index last: a phone never sees an index naming a tile that isn't there yet
-          for f in *.vgr; do npx --yes wrangler@4 r2 object put "$GRAPH_R2_BUCKET/graph/v1/$f" --file "$f" --content-type application/octet-stream --remote; done
-          npx --yes wrangler@4 r2 object put "$GRAPH_R2_BUCKET/graph/v1/index.json" --file index.json --content-type application/json --remote
+  region:
+    uses: ./.github/workflows/graph-region.yml
