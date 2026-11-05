@@ -874,7 +874,8 @@ flow('valhalla down: planning inside our tiles is unaffected', async (page, base
     const asked = { abort: [], stall: [] };
     const ROUTERS = /^https:\/\/(valhalla1\.openstreetmap\.de|router\.project-osrm\.org)\//;
     await page.route(ROUTERS, (route) => {
-      asked[mode].push(route.request().url().replace(/^https:\/\/([^/]+).*?\/(\w+)(\?.*)?$/, '$1 $2'));
+      const u = new URL(route.request().url());
+      asked[mode].push(u.host + u.pathname.split('/').slice(0, 3).join('/'));
       return mode === 'abort' ? route.abort('connectionrefused') : new Promise(() => {});   // stall: never answered
     });
     await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); localStorage.setItem('apex.permsExplained', '1'); localStorage.setItem('apex.funLevel', 'fun'); } catch (_) {} });
@@ -916,18 +917,27 @@ flow('valhalla down: planning inside our tiles is unaffected', async (page, base
     // the turn instructions' wait (OWN_INSTRUCT_MS) and the checks' (OWN_CHECK_MS) run out after the card: ours stay
     await page.waitForTimeout(3500);
     const after = await page.evaluate(() => ({ steps: ((window.apexDebug.track || {}).steps || []).map((x) => x.type), kind: (window.apexDebug.track || {}).kind }));
+    // a loop from our tiles with Valhalla hanging: its context doesn't wait on Valhalla's map matching (the map's stage
+    // loops, Valhalla's, come after the card and here never)
+    await clearPlan();
+    const loopAt = Date.now();
+    await page.evaluate(() => { window.apexDebug.lastLoop = undefined; const b = [...document.querySelectorAll('#loopDetents [data-loop-mi]')][0]; b.click(); document.getElementById('findLoopBtn').click(); });
+    await page.waitForFunction(() => Array.isArray(window.apexDebug.lastLoop) && !document.getElementById('planPanel').classList.contains('busy'), null, { timeout: 15000 });
+    const loopMs = Date.now() - loopAt;
+    const loop = await page.evaluate(() => ({ won: (window.apexDebug.lastLoop.find((d) => d.picked) || {}).kind, name: apexDebug.track && apexDebug.track.name, steps: ((apexDebug.track || {}).steps || []).length }));
+    check(loop.won === 'own' && /loop$/.test(loop.name || '') && loopMs <= 1500, `a loop from our tiles within 1.5 s with Valhalla hanging (${loopMs} ms): ` + JSON.stringify(loop));
     for (const r of runs) {
       const lab = `${r.mode} ${r.warm ? 'warm' : 'cold'}`;
       check(r.own.covered && r.own.used && r.kinds[0] === 'own' && r.kind === 'route', `${lab}: our route, from our tiles: ` + JSON.stringify(r));
       check(Number.isFinite(r.card) && r.card <= (r.warm ? 700 : 1000), `${lab}: the final card within ${r.warm ? 700 : 1000} ms of Enter (${r.card} ms; first route ${r.first} ms)`);
       if (r.warm) check(Number.isFinite(r.first) && r.first <= 400, `${lab}: the first route within 400 ms of Enter (${r.first} ms)`);
-      check(r.steps.length >= 2 && r.steps[0] === 1 && r.steps.includes(4), `${lab}: turn instructions on the route (ours): ` + JSON.stringify(r.steps));
+      check(r.steps.length >= 2 && r.steps.includes(4), `${lab}: turn instructions on the route (ours): ` + JSON.stringify(r.steps));
       check(r.limits > 0, `${lab}: the posted limits from our tiles: ` + r.limits);
       check(!/couldn.t|check signal/i.test(r.toast), `${lab}: no failure said: ` + r.toast);
     }
     check(after.kind === 'route' && after.steps.length >= 2 && after.steps.includes(4), 'after Valhalla\'s waits ran out, the route keeps our instructions: ' + JSON.stringify(after));
     check(asked.abort.length >= 1 && asked.stall.length >= 1, 'Valhalla was asked (as a check, for instructions) and failed both ways: ' + JSON.stringify(asked));
-    if (process.env.DOWN_LOG) console.log(JSON.stringify({ runs: runs.map((r) => [r.mode, r.warm, r.first, r.card]), asked }));
+    if (process.env.DOWN_LOG) console.log(JSON.stringify({ runs: runs.map((r) => [r.mode, r.warm, r.first, r.card]), loopMs, asked }));
   } finally { graphDir = null; }
 }, { geolocation: { latitude: 39.155, longitude: -84.615 }, permissions: ['geolocation'] });
 

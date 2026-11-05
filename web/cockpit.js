@@ -2360,7 +2360,7 @@
     function rankPool(pool, level) {
       return window.ApexRouteEngine ? ApexRouteEngine.rank(pool, engineOpts(level)) : FunRoute.rank(pool, level);
     }
-    async function contextOn(cands, budgetMs = CTX_BUDGET_MS, prefix = 'cand', only = null, extra = null) {
+    async function contextOn(cands, budgetMs = CTX_BUDGET_MS, prefix = 'cand', only = null, extra = null, skip = null) {
       if (!window.ApexRouteEngine || !window.ApexRouteCtx || !cands.length || (window.ApexFlags && !ApexFlags.on('route_engine'))) return null;
       const departAt = Date.now(), car = routingCar(), pace = state.mode === 'live' && etaPace.factors ? etaPace.factors.open : null;
       const list = cands.filter((c) => (c.corridor = ApexRouteEngine.corridorFor(c, `${prefix}${cands.indexOf(c)}`, { departAt, car, pace })));
@@ -2368,7 +2368,7 @@
       for (const c of list) if (c.route && c.route.graph) c.corridor.graph = c.route.graph;   // ours: the tiles' scores per edge (route_ctx/graph.js)
       try {
         const at = typeof performance !== 'undefined' ? performance.now() : 0;
-        const res = await ApexRouteCtx.run(list.map((c) => c.corridor), { budgetMs, ...(only ? { only } : {}), settings: routeCtxSettings(), providerOpts: { ...routeCtxOpts(), ...(extra || {}) } });
+        const res = await ApexRouteCtx.run(list.map((c) => c.corridor), { budgetMs, ...(only ? { only } : {}), ...(skip ? { skip } : {}), settings: routeCtxSettings(), providerOpts: { ...routeCtxOpts(), ...(extra || {}) } });
         for (const c of list) { c.ctx = res.byId[c.corridor.id] || null; c.ev = null; }
         if (window.apexDebug) window.apexDebug.lastCtx = res.status;
         if (typeof tlSpan === 'function' && at) { tlSpan(`context ${prefix}`, at); for (const [k, v] of Object.entries(res.status || {})) if (v && v.ms) tlSpan(`context ${prefix}: ${k} ${v.status}`, at, at + v.ms); }
@@ -3966,6 +3966,7 @@
       const own = (await ownLoopsP).map((r) => ({ kind: 'own', route: r.route, hwyShare: r.hwyShare, pts: [c, ...FunRoute.alongPoints(r.route.coords), c] }));
       if (window.apexDebug) window.apexDebug.lastLoopRefine = null;
       if (own.length) {
+        L.ownTiles = true;
         const first = await loopRound(L, own, ui, false);
         if (first) loopRefine(L, first, stageJobs(false));
         else await loopRound(L, await stageJobs(true), ui, true);         // ours all failed to build: as without them
@@ -4004,7 +4005,10 @@
     async function loopScored(L, done, ui) {
       // The route engine on loops: quality, scenery, side streets and penalties on the same scale (route_engine.js loopValue).
       const lc = done.map(d => ({ route: { coords: d.t.lat.map((la, i) => [d.t.lon[i], la]), turns: d.route.turns, times: d.route.times }, timeS: d.t.timeS, t: d.t, fun: d.t.fun, match: 'map_snap' }));
-      const lctx = contextOn(lc);
+      // where our tiles have loops here, the tiles carry the road data Valhalla's map matching gave (route_ctx/graph.js
+      // scores any line from the worker): its provider is skipped for every loop of the plan, ours and the map's stage
+      // loops alike, so they're scored the same way and a slow or missing Valhalla doesn't hold the card (its 2.4 s)
+      const lctx = contextOn(lc, CTX_BUDGET_MS, 'cand', null, null, L.ownTiles ? ['router'] : null);
       await townsOn(done.map(d => d.t), done);
       for (const d of done) { d.t.townKm = d.townKm; d.score -= FunRoute.townCost(d); }
       if (await lctx) done.forEach((d, i) => {

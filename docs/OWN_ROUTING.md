@@ -499,7 +499,10 @@ phone's reader); tests/test_graph_tiles.py round-trips through both. What a rout
   - **Valhalla down** (e2e "valhalla down: planning inside our tiles is unaffected": every Valhalla and OSRM request
     refused for two plans, then left hanging for two more): the card within 1.0 s cold and 0.7 s warm, the first route
     within 0.4 s warm, our own turn instructions, the tiles' limits, no failure said; after Valhalla's waits run out
-    (the instructions' 3 s, the checks' 2.5 s) the route keeps ours. Nothing on the planning path waited on it.
+    (the instructions' 3 s, the checks' 2.5 s) the route keeps ours; a loop within 1.5 s. Fixed: a loop from our tiles
+    waited for the route context's `router` provider (Valhalla `trace_attributes` map matching, its 2.4 s budget): 2.9 s
+    with Valhalla hanging, now 0.6 s; that provider is skipped for the loops of a plan where our tiles have loops (the
+    graph provider scores any line from the tiles), ours and the map's stage loops alike.
   - **What still uses Valhalla where our tiles cover the trip** (the complete list):
 
     | call | where | when | for |
@@ -511,7 +514,8 @@ phone's reader); tests/test_graph_tiles.py round-trips through both. What a rout
     | `trace_attributes` | contributor.js | an upload | contributions' OSM way lines |
     | `sources_to_targets` | crew_meet.js (Fair for the crew) | on a tap, opt-in | the crew's fair meeting point (not planning) |
 
-    Off our tiles (no tiles for the area, or our router failing) every call is as before: Valhalla plans (stage plans,
+    Loops have no turn instructions from either router (as on main). Off our tiles (no tiles for the area, or our
+    router failing) every call is as before: Valhalla plans (stage plans,
     matrix, legs), Explore's matrix, points routed, reroutes, map-matched limits (attachLimits) and router_edges' context.
 
 - 2026-11-04 (region grid): the context grid for OH+KY+IN on graph-data ctx/v1 (ctx-region.yml, 6 shards, 32 min):

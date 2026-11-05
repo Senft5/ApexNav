@@ -11,7 +11,8 @@
   trace_attributes only off our tiles and for contributions. Unit test graph_router_cases limits; the offline e2e
   flow asserts a known posted limit on every plan and no trace_attributes asked.
 - [x] Valhalla down: e2e "valhalla down: planning inside our tiles is unaffected" (refused, then hanging); nothing on
-  the planning path waited on Valhalla. The remaining Valhalla uses are listed in OWN_ROUTING.md §8 2026-11-08.
+  the planning path of a route waited on Valhalla; a loop did (the context's router provider, 2.9 s with Valhalla
+  hanging), fixed: 0.6 s. The remaining Valhalla uses are listed in OWN_ROUTING.md §8 2026-11-08.
 - Tests: see the PR (pytest, the own routing / offline / valhalla down flows, the full e2e run).
 - Open: on a loaded box the long trips are 2x slower (2026-11-07's numbers); the context's page work (graph, driver,
   conditions, 0.1-0.15 s) and the lead ranking (0.05-0.08 s) are what's left; the worker's plan 0.2-0.3 s.

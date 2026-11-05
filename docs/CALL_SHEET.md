@@ -20,6 +20,10 @@ down or go away. Valhalla would stay only as a backup and for turn instructions.
   that join later are looked up on their own. Undo: `ownTowns` in cockpit.js funRoute.
 - **The speed limits are laid on the route just after the card shows**, in their own step, not before it.
   Undo: the `setTimeout` await in attachLimits.
+- **Loops where our tiles have them no longer ask Valhalla's map matching for their road data** (the tiles carry it, as
+  for routes since 2026-11-04). With Valhalla hanging, a loop's card waited for it: 2.9 s, now 0.6 s. The map's stage
+  loops in the same plan are scored the same way, so the two kinds compare fairly. Undo: `L.ownTiles` in buildLoop
+  (cockpit.js), or drop the `['router']` skip in loopScored.
 - **A new test plans with Valhalla and OSRM down** (every request refused, then every request left hanging) and fails
   if the card is slower than 1.0 s on the first plan or 0.7 s after, the first route slower than 0.4 s, or the turn
   instructions or limits are missing. A loaded test machine could trip the times. Undo or loosen: the `700 : 1000` and
