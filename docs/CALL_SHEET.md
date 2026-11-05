@@ -4,6 +4,42 @@ Decisions Claude made for you, newest first. Each one says what was decided, why
 you reach one you've seen. If you disagree with a call, say so and it gets reversed; nothing here is hard to undo unless
 it says so. Things only you can do are in docs/OWNER_TODO.md.
 
+## 2026-11-07: Own routing, instant and offline; Valhalla only as backup (claude/own-routing-instant)
+
+Your goal: "Planning in well under a second. Routing that works offline. No dependence on a free server that can slow
+down or go away. Valhalla would stay only as a backup and for turn instructions until we build our own."
+- **The card no longer waits for members' measured roads.** Our search used to wait up to 1.5 s for them (signed out it
+  still asked, and the server said "sign in" 0.2-0.3 s later on every plan). Now: signed out, not asked; signed in, kept
+  per 0.1° cell on the phone (asked again after 30 min, used for a day, offline too), and what isn't in within 0.25 s
+  is planned on what was kept; the fresh answer goes into the whole-corridor plan after the card, which can then swap
+  the route (the 5-point rule below). Nothing new is sent: still only the cells a plan crosses. Undo: `OWN_CROWD_MS`
+  (cockpit.js) to 1500 and `ownCrowdOn` to always true.
+- **When our quickest is the pick, the route already on screen is the final one** (no second build and draw of the
+  same track), with its alternates on the card. Undo: the `kept` line in cockpit.js funRoute.
+- **The first plan gives the corridor's tiles 0.7 s to load** before it plans on the straight line's tiles alone (a
+  plan on too few tiles can miss the quickest way, and so judge the level's budget wrong: Harrison cold picked a 37 min
+  route against a 27 min one). Undo: `OWN_FIRST_WAIT_MS` = 0.
+- **The refine after the card may now replace a route that the whole-corridor plan shows is over the level's budget**
+  ("Quicker way found: switched to ..."), whatever the 5-point margin. Undo: the `gone` line in ownRefine.
+- **Loops: ours go up first.** Where our tiles have loops, the card is built from them alone; the map's stage loops
+  (Valhalla's matrix and legs: seconds on the public server, nothing offline) are built after the card and replace ours
+  only when the level ranks one of them first ("Better loop found on the map's roads"); otherwise they join the other
+  levels' cards. Undo: in buildLoop, `await loopRound(L, [...own, ...await stageJobs(true)], ui, true)`.
+- **A reroute, a road from Best roads nearby, a suggestion, a road someone sent, Drive it again and a link's or GPX
+  file's stops are routed on our tiles** where they cover every point (quickest between the points, offline too);
+  Valhalla only off our tiles or when ours fail. Valhalla's spoken maneuvers still swap in when they come. The traffic
+  detour stays on Valhalla (it needs Valhalla's "avoid these jams" polygons; it needs the network for traffic anyway).
+  Undo: `routePoints` back to `valhallaRoutes` (cockpit.js).
+- **No signal, the card says so:** "No signal: the weather and live road events on this route aren't known." (it used
+  to hide the weather line, which read as "no weather worth saying"). A forecast server that answered with nothing:
+  "Weather: not known (no forecast came back)". Undo: the `!json` block in attachWeather.
+- **A second route-analysis worker** (curvature, sight, braking for a route's track), started with the first, on phones
+  with 4+ cores: a track built ahead that the ranking didn't pick no longer queues the pick behind it. A few MB of
+  memory. Undo: `prewarm` / `routeWorker` in analysis_client.js.
+- **Pure speed-ups with the same answers:** local time cached to the minute (it was 75 ms of every ranking on a 30 km
+  trip), an engine evaluation reused when the same candidate is ranked again with the same inputs (the level cards rank
+  the pool three times), each route's light geometry made in the routing worker, and a track built ahead skips the
+  page's turn.
 ## 2026-11-06 (later): Destination picks (your work-to-home report)
 
 What the card showed: the pick 35 min / 28 corners, a 34 min / 30 corner option that lost, the 22 min highway. Re-run

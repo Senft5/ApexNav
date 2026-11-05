@@ -1,5 +1,28 @@
 # VETTA — CURRENT AGENT HANDOFF STATE
 
+## Session 2026-11-07: own routing, instant and offline; Valhalla only as backup (claude/own-routing-instant)
+
+- [x] The owner's goal: "Planning in well under a second. Routing that works offline. No dependence on a free server that
+  can slow down or go away. Valhalla would stay only as a backup and for turn instructions until we build our own."
+- [x] A timeline per plan (`apexDebug.timeline`); nine items removed from the critical path between the first route and
+  the final card (OWN_ROUTING.md §8 2026-11-07): members' roads kept per cell, our quickest kept when picked, localTime
+  per minute, engine evaluations reused, a second analysis worker started early, no page turn before a track built
+  ahead, geometry in the routing worker, the plan's tile loading behind the first route's, the corridor's tiles first.
+- [x] Live, 8 cases on #305's main (first route / final card, ms): warm card 463-1174 (was 662-1500), cold card
+  517-1291 (was 873-1510), first route warm 230-422; same pick as main's in 16/16 runs. Table in OWN_ROUTING.md §8.
+- [x] Offline: e2e "offline: plan a route and a loop from our tiles with no network" (Quick, Fun, Long way, our own
+  instructions, the card says live data isn't known, typed search says offline, a map tap's place, a loop, the browser
+  offline too). Fixed: the card's weather line hid instead of saying "not known".
+- [x] Valhalla off the critical path where our tiles cover: loops (ours first, the map's stage loops after the card),
+  reroute and every points route (`through` on our tiles, offline too). The audit table is in OWN_ROUTING.md §8.
+- Tests: pytest 1332 passed; e2e 123/124 on the full run before the last merge (the one failure was the new offline
+  flow clicking a hidden Clear, fixed: 4/4 after), own routing, level and loop flows re-run after it.
+- Open: the warm card over 1 s on the two longest trips (harrison 1.17 s, northgate 0.99 s): the context's main-thread
+  work, the first ranking and sight distance in the pick's track; posted limits offline (our tiles carry them).
+- Exact next task: lay the tiles' speed limits on our routes (route.graph limit) so the strip and card have limits
+  offline, and a faster exact sightDistanceM (or the pick's analysis started from a ranking on the tiles' scores alone
+  while the time-dependent context runs); then measure on production after deploy.
+
 ## Session 2026-11-06 (later): destination picks (claude/dest-picks)
 
 - [x] The owner's work-to-home report: corners between houses cut by agreeing built evidence (fun_route.js BUILT,

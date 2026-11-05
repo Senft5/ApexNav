@@ -161,9 +161,20 @@
     return 'America/New_York';
   }
   const fmtCache = new Map();
+  // the answer to the minute, per zone (a corridor's samples are seconds apart: formatToParts once a minute, not per
+  // sample; live 2026-11-07 it was 75 ms of every ranking on a 30 km trip). Same answer as uncached: the clock is to the
+  // minute and the seconds never enter it.
+  const minuteCache = new Map(), MINUTE_MAX = 4096;
   /** Local calendar and clock at an instant: { y, m (1-12), d, dow (0 Sun), hour (fractional), doy, zone }. */
   function localTime(ms, lat, lon) {
-    const zone = zoneAt(lat, lon);
+    const zone = zoneAt(lat, lon), mk = Number.isFinite(ms) ? `${zone}|${Math.floor(ms / 60000)}` : null;
+    const hit = mk && minuteCache.get(mk);
+    if (hit) return { ...hit };
+    const out = localTimeOf(ms, zone);
+    if (mk) { if (minuteCache.size >= MINUTE_MAX) minuteCache.clear(); minuteCache.set(mk, out); }
+    return { ...out };
+  }
+  function localTimeOf(ms, zone) {
     let f = fmtCache.get(zone);
     if (!f) {
       try { f = new Intl.DateTimeFormat('en-US', { timeZone: zone, year: 'numeric', month: 'numeric', day: 'numeric', hour: 'numeric', minute: 'numeric', hourCycle: 'h23', weekday: 'short' }); }

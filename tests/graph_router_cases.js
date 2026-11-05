@@ -159,6 +159,22 @@ const CASES = {
       none: roads(none.routes[0]), smoothEdges, items: items.length, cells: cells.length, cell0: cells[0] };
   },
 
+  // members' data without waiting on the network (own_routing.js crowdSoon): a slow server gives the plan nothing within
+  // the budget and the whole answer after (to plan again with); the cells are then kept, and the next plan over them
+  // has the data at once without asking; a way is kept in each cell its line meets
+  async crowdSoon() {
+    const line = [[39.255, -84.62], [39.262, -84.58]];                 // crosses cells 392_-847 and 392_-846
+    const answer = { ways: { 9: { 0: { i: [0, 1], n: [3, 3], rough: [0.05, 0.05], fl: [0.9, 0.9], hb: [0, 0], fn: [3, 3], ag: 2 } } }, lines: { 9: line } };
+    const asked = [];
+    const slow = (cells) => { asked.push(cells.slice()); return new Promise((r) => setTimeout(() => r(answer), 120)); };
+    const from = { lat: 39.25, lon: -84.63 }, to = { lat: 39.27, lon: -84.57 };
+    const t0 = Date.now(), a = Own.crowdSoon(slow, from, to, 30), now = await a.now, nowMs = Date.now() - t0, late = await a.late;
+    const t1 = Date.now(), b = Own.crowdSoon(slow, from, to, 30), now2 = await b.now, now2Ms = Date.now() - t1, late2 = await b.late;
+    const kept = ['392_-847', '392_-846'].map((c) => Object.keys((Own._cells.get(c) || { ways: {} }).ways).length);
+    const off = Own.crowdSoon(undefined, from, to);
+    return { now, nowMs, late: late ? late.length : null, now2: now2 ? now2.length : null, now2Ms, late2, asks: asked.length, kept, off: await off.now };
+  },
+
   // spoken directions offline: a left onto Second Street, a right onto Third, start and arrive
   maneuvers() {
     const nodes = [at(39.1, -84.5), at(39.1, -84.494), at(39.1045, -84.494), at(39.1045, -84.488), at(39.0955, -84.494), at(39.1, -84.488)];
@@ -451,6 +467,45 @@ const CASES = {
     return { preTiles: pre.result.tiles.length, loadsAfterPreload, loadsAfterPlan: loads, quickSame: JSON.stringify(q.result.route.edges) === JSON.stringify(quickest.edges), quickTiles: q.result.tiles.length,
       known, outside: Array.from(sc.result[1].quality).every((x) => x == null || Number.isNaN(x)), fillQ: sm.quality[5], fillS: sm.scenery[5], fillC: sm.qConf[5], strongQ: sm2.quality[5], status: ch.status, none: none.g.status,
       tableAgree, tableStatus: local.o.status, roadCh: [Array.from(biz).filter((x) => x === 9).length / biz.length, Array.from(walk).filter((x) => x === 1).length / walk.length] };
+  },
+
+  // points routed on our tiles (a reroute along the planned route's points, a stage, a shared road; own_routing.js
+  // through): through every via in order, the quickest between them, joined where each leg arrived; no via = the quickest;
+  // the worker's 'through' message and the page's side (coverage first: a point off the tiles gives null, Valhalla's turn)
+  async through() {
+    const g = H.grid({ seed: 4, nx: 12, ny: 12, stepDeg: 0.004, lat0: 39.15, lon0: -84.62 });
+    const T = H.tiles(g.nodes, g.edges), v = R.view(T.tiles);
+    const from = { lat: 39.155, lon: -84.615 }, to = { lat: 39.19, lon: -84.57 }, via = { lat: 39.19, lon: -84.61 };
+    const direct = R.through(v, { from, to, level: 'quick' }), quick = R.quickest(v, { from, to, level: 'quick' });
+    const bent = R.through(v, { from, to, via: [via], level: 'quick' });
+    const near = (r, p) => Math.min(...r.coords.map(([la, lo]) => R.distM(la, lo, p.lat, p.lon)));
+    const env = { load: async (i, j) => T.tiles.find((t) => t.tile.i === i && t.tile.j === j) || null, index: async () => ({ tiles: Object.fromEntries(T.tiles.map((t) => [`${t.tile.i}_${t.tile.j}`, {}])) }) };
+    const h = R.host(env);
+    const msg = await h.handle({ id: 1, type: 'through', from, to, via: [via], level: 'quick' });
+    const keys = new Set(T.tiles.map((t) => `${t.tile.i}_${t.tile.j}`));
+    const client = { covers: async (pts) => R.covers(keys, pts), through: async (req) => (await h.handle({ id: 2, type: 'through', ...req })).result };
+    const page = await Own.through(client, [from, via, to]), off = await Own.through(client, [from, { lat: 41, lon: -84 }]);
+    return { sameAsQuickest: JSON.stringify(direct.edges) === JSON.stringify(quick.edges), viaNear: near(bent, via), toNear: near(bent, to), longer: bent.timeS > direct.timeS,
+      worker: msg.result && msg.result.route ? msg.result.route.edges.length === bent.edges.length : false,
+      page: page ? { source: page.source, n: page.coords.length, steps: page.steps.length, first: page.coords[0], timeS: page.timeS > 0 } : null, off };
+  },
+
+  // each planned route's light geometry made in the worker (graph_router.js host 'plan'): the page's own function on the
+  // same line, so the ranking scores the same corners; without apex_core.js in the worker, none (made on the page)
+  async geo() {
+    const g = H.grid({ seed: 4, nx: 12, ny: 12, stepDeg: 0.004, lat0: 39.15, lon0: -84.62 });
+    const T = H.tiles(g.nodes, g.edges);
+    const env = { load: async (i, j) => T.tiles.find((t) => t.tile.i === i && t.tile.j === j) || null, index: async () => ({ tiles: Object.fromEntries(T.tiles.map((t) => [`${t.tile.i}_${t.tile.j}`, {}])) }) };
+    const from = { lat: 39.155, lon: -84.615 }, to = { lat: 39.19, lon: -84.57 };
+    const bare = await R.host(env).handle({ id: 1, type: 'plan', from, to, level: 'fun' });
+    globalThis.ApexCore = require('../web/apex_core.js');
+    const res = await R.host(env).handle({ id: 2, type: 'plan', from, to, level: 'fun' });
+    const same = res.result.routes.map((r) => {
+      const page = FunRoute.geometry(Own.withCoords({ ...r.route }).coords, globalThis.ApexCore);
+      return r.geo && r.geo.lat.length === page.lat.length && Array.from(r.geo.lat).every((x, i) => x === page.lat[i]) && Array.from(r.geo.lon).every((x, i) => x === page.lon[i])
+        && JSON.stringify(r.geo.events) === JSON.stringify(page.events);
+    });
+    return { bare: bare.result.routes.every((r) => !r.geo), n: same.length, same: same.every(Boolean), corners: res.result.routes[0].geo.events.length };
   },
 
   // the Cincinnati-size synthetic network: 16 tiles, ~150k edges; per query and per full plan

@@ -15,16 +15,47 @@
     return { kappa, ds, sight, env, corners };
   }
 
+  // what each worker has in hand (its answers outstanding), and which worker each waiting id was sent to
+  const load = new Map(), sentTo = new Map();
+  const answered = (e) => { const id = e.data && e.data.id, w = waiting.get(id); const to = sentTo.get(id); if (to) { load.set(to, Math.max(0, (load.get(to) || 1) - 1)); sentTo.delete(id); } if (w) { waiting.delete(id); w(e.data); } };
+  const failAll = (wk) => { for (const [id, to] of [...sentTo]) if (to === wk) { sentTo.delete(id); const w = waiting.get(id); if (w) { waiting.delete(id); w({ error: 'worker failed' }); } } load.delete(wk); };
   function getWorker() {
     if (broken || typeof root.Worker !== 'function') return null;
     if (worker) return worker;
     try {
       worker = new root.Worker('analysis_worker.js');
-      worker.onmessage = (e) => { const w = waiting.get(e.data && e.data.id); if (w) { waiting.delete(e.data.id); w(e.data); } };
-      worker.onerror = () => { broken = true; for (const w of waiting.values()) w({ error: 'worker failed' }); waiting.clear(); try { worker.terminate(); } catch (_) {} worker = null; };
+      worker.onmessage = answered;
+      worker.onerror = () => { broken = true; const w0 = worker; for (const w of waiting.values()) w({ error: 'worker failed' }); waiting.clear(); sentTo.clear(); load.clear(); try { w0.terminate(); } catch (_) {} worker = null; };
     } catch (_) { broken = true; worker = null; }
     return worker;
   }
+  // A second worker for routes only, when the first already has work in hand (a route built ahead that the ranking then
+  // didn't pick, or a drive job at start): the plan's pick isn't queued behind it (live 2026-11-07: 0.1-0.25 s)
+  let spare = null, spareBroken = false;
+  function routeWorker() {
+    const w = getWorker();
+    if (!w || !(load.get(w) > 0)) return w;
+    if (!spare && !spareBroken) {
+      try {
+        spare = new root.Worker('analysis_worker.js');
+        spare.onmessage = answered;
+        spare.onerror = () => { spareBroken = true; const s0 = spare; spare = null; failAll(s0); try { s0.terminate(); } catch (_) {} };
+      } catch (_) { spareBroken = true; spare = null; }
+    }
+    return spare && (load.get(spare) || 0) < (load.get(w) || 0) ? spare : w;
+  }
+  /** Both workers started ahead of the first plan (a worker's start is its scripts: 0.2-0.3 s, live 2026-11-07). */
+  function prewarm() {
+    const w = getWorker();
+    if (!w || spare || spareBroken || !((root.navigator && root.navigator.hardwareConcurrency) >= 4)) return !!w;
+    try {
+      spare = new root.Worker('analysis_worker.js');
+      spare.onmessage = answered;
+      spare.onerror = () => { spareBroken = true; const s0 = spare; spare = null; failAll(s0); try { s0.terminate(); } catch (_) {} };
+    } catch (_) { spareBroken = true; spare = null; }
+    return true;
+  }
+  function post(w, id, msg) { sentTo.set(id, w); load.set(w, (load.get(w) || 0) + 1); w.postMessage(msg); }
 
   /**
    * { kappa, ds, sight, env, corners } for a resampled route (arrays of lat/lon at 5 m); offsets: per-sample sight offsets or
@@ -32,14 +63,14 @@
    */
   async function analyse(lat, lon, offsets, opts = {}) {
     const Core = opts.Core || root.ApexCore;
-    const w = opts.inline ? null : getWorker();
+    const w = opts.inline ? null : routeWorker();
     if (!w) { stats.inline++; return runInline(Core, lat, lon, offsets, opts.side || null); }
     const id = ++seq;
     const answer = await new Promise((done) => {
       waiting.set(id, done);
       setTimeout(() => { if (waiting.delete(id)) done({ error: 'timeout' }); }, opts.timeoutMs || 15000);
-      try { w.postMessage({ id, lat: Float64Array.from(lat), lon: Float64Array.from(lon), offsets: offsets ? Float64Array.from(offsets) : null, side: opts.side || null }); }
-      catch (e) { waiting.delete(id); done({ error: String(e) }); }
+      try { post(w, id, { id, lat: Float64Array.from(lat), lon: Float64Array.from(lon), offsets: offsets ? Float64Array.from(offsets) : null, side: opts.side || null }); }
+      catch (e) { waiting.delete(id); sentTo.delete(id); done({ error: String(e) }); }
     });
     if (answer.error) { stats.inline++; return runInline(Core, lat, lon, offsets, opts.side || null); }
     stats.worker++;
@@ -264,7 +295,7 @@
       const answer = await new Promise((done) => {
         waiting.set(id, done);
         setTimeout(() => { if (waiting.delete(id)) done({ error: 'timeout' }); }, opts.timeoutMs || 60000);
-        try { w.postMessage({ id, job: name, args }); } catch (e) { waiting.delete(id); done({ error: String(e) }); }
+        try { post(w, id, { id, job: name, args }); } catch (e) { waiting.delete(id); sentTo.delete(id); done({ error: String(e) }); }
       });
       if (!answer.error) { stats.jobs[name] = (stats.jobs[name] || 0) + 1; const { id: _, ...out } = answer; return out; }
     }
@@ -273,6 +304,6 @@
   }
   stats.jobs = {}; stats.inlineJobs = {};
 
-  const api = { analyse, runInline, stats, job, jobs, monthOf };
+  const api = { analyse, prewarm, runInline, stats, job, jobs, monthOf };
   if (typeof module !== 'undefined' && module.exports) module.exports = api; else root.ApexAnalysis = api;
 })(typeof window !== 'undefined' ? window : globalThis);
