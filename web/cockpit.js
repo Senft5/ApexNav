@@ -54,6 +54,7 @@
       try { if (window.ApexRecce) ApexRecce.apply(ApexRecce.load(localStorage), t); } catch (_) {}   // your own recce notes again
       return true;
     }
+    const ownRouteOfTrack = new WeakMap();                            // a track built from one of our routes -> that route
     async function trackFromPolyline(coords, id, name, sightMs = 4000, o = {}) {
       const tl = typeof tlSpan === 'function' && typeof performance !== 'undefined' ? tlSpan : null, t0 = tl ? performance.now() : 0;
       // (a track built ahead skips the turn: the page's own work is a few ms of resampling, the rest is the worker's, and
@@ -89,12 +90,17 @@
       const events = corners.map(c => cornerEventOf(c, rs.lat, rs.lon, dist));
       Core.linkNotes(events);
       if (tl) { tl(`track ${id}: yield`, t0, t1); tl(`track ${id}: resample+sight`, t1, t2); tl(`track ${id}: analyse (worker)`, t2, t3); tl(`track ${id}: corners`, t3); }
-      return {
+      const t = {
         id, name, kind: 'route', subtitle: 'Map only · not yet driven', sightPending: pending,
         lat: rs.lat, lon: rs.lon, dist, elev: null, speedMps: null, latG: null, lonG: null, camberDeg: null,
         envMps: Array.from(env), sightM: Array.from(sight), limitMps: null, kappa: Array.from(kappa), roughG: null,
         events, sectors: null, sectorM: 500, alpr: null
       };
+      // one of our routes: attachLimits lays its posted limits from the tiles it was planned on (offline too, after the
+      // card); Valhalla's map matching only for lines off our tiles
+      const own = o.route || (window.ApexOwnRouting && ApexOwnRouting.routeOfLine ? ApexOwnRouting.routeOfLine(coords) : null);
+      if (own) ownRouteOfTrack.set(t, own);
+      return t;
     }
 
     // Bundled recordings are demos (Watch a replay), never the person's own drives. They are 1.8 MB of script, so they load
@@ -2416,6 +2422,20 @@
     }
     // OSM maxspeed per sample via Valhalla map matching (same as tools/export_web_profile.py).
     async function attachLimits(t) {
+      // ours: the posted limits from the tiles the route was planned on (OWN_ROUTING.md §5), offline too and without
+      // Valhalla; an edge the tiles have no posted limit for stays null (an unposted road, as map matching would say)
+      const own = ownRouteOfTrack.get(t);
+      if (own && t.limitSource !== 'tiles') {
+        let limits = null;
+        try { limits = ApexOwnRouting.limitsAlong(t.lat, t.lon, own); } catch (_) { limits = null; }
+        if (limits) {
+          t.limitMps = limits; t.limitSource = 'tiles';
+          if (timeFromEnvelope(t) && plannedRoute === t) renderRouteCard(t);
+          if (track === t) render(false);
+          return;
+        }
+      }
+      if (t && t.limitSource === 'tiles') return;
       const stride = 4, idx = [];
       for (let i = 0; i < t.lat.length; i += stride) idx.push(i);
       if (idx[idx.length - 1] !== t.lat.length - 1) idx.push(t.lat.length - 1);
@@ -3956,7 +3976,7 @@
         // whole loop (it cut every one of them to nothing, live 2026-11-04)
         const even = Core.resamplePolyline(r.coords.map(p => p[1]), r.coords.map(p => p[0]), 5);
         const rs = Core.removeSpurs(even.lat, even.lon);
-        const t = await trackFromPolyline(rs.lat.map((la, i) => [rs.lon[i], la]), L.loopId, `${L.asked} loop`);
+        const t = await trackFromPolyline(rs.lat.map((la, i) => [rs.lon[i], la]), L.loopId, `${L.asked} loop`, undefined, { route: r.graph ? r : null });
         t.fun = funOf(t, r.turns);
         t.unavoided = FunRoute.unavoided(avoid, r);
         t.timeS = r.timeS;
