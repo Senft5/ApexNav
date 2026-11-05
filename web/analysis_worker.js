@@ -9,7 +9,7 @@ self.onmessage = async (e) => {
   const { id, job, args, lat, lon, offsets, side } = e.data || {};
   try {
     if (job) self.postMessage({ ...(await ApexAnalysis.jobs[job](args || {})), id });   // the message's id last: it always wins
-    else self.postMessage({ id, ...ApexAnalysis_run(ApexCore, lat, lon, offsets, side || null) });
+    else { const t0 = performance.now(); const out = ApexAnalysis_run(ApexCore, lat, lon, offsets, side || null); self.postMessage({ id, ...out, workMs: performance.now() - t0, doneAt: performance.timeOrigin + performance.now() }); }
   } catch (err) {
     self.postMessage({ id, error: String((err && err.message) || err) });
   }

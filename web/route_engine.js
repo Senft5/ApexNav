@@ -226,9 +226,12 @@
   // Other providers' channels that fill a canonical one where it is unknown (first known wins, in this order after the
   // canonical name itself): the OSM map-feature providers' names (osm_tiles.js, osm_overpass.js) mapped to the model's.
   // Land-use shares count only where the map has land use at all (lu_mapped ≥ 0.3): unmapped is unknown, not "no shops".
-  const LU = (names) => (ch, i) => (ch.lu_mapped && !(ch.lu_mapped[i] >= 0.3) ? NaN : names.reduce((a, k) => (ch[k] && Number.isFinite(ch[k][i]) ? (Number.isNaN(a) ? 0 : a) + ch[k][i] : a), NaN));
-  const SUM = (names) => (ch, i) => (names.every((k) => ch[k] && Number.isFinite(ch[k][i])) ? names.reduce((a, k) => a + ch[k][i], 0) : NaN);
-  const MAP = (k, f) => (ch, i) => (ch[k] && Number.isFinite(ch[k][i]) ? f(ch[k][i]) : NaN);
+  // (each fill says which channels it reads, `anyOf`: with none of them in a context it is NaN everywhere, and channel()
+  // skips it; the answers are the same, without a call per sample for a source the context doesn't have)
+  const reads = (f, anyOf) => Object.assign(f, { anyOf });
+  const LU = (names) => reads((ch, i) => (ch.lu_mapped && !(ch.lu_mapped[i] >= 0.3) ? NaN : names.reduce((a, k) => (ch[k] && Number.isFinite(ch[k][i]) ? (Number.isNaN(a) ? 0 : a) + ch[k][i] : a), NaN)), names);
+  const SUM = (names) => reads((ch, i) => (names.every((k) => ch[k] && Number.isFinite(ch[k][i])) ? names.reduce((a, k) => a + ch[k][i], 0) : NaN), names);
+  const MAP = (k, f) => reads((ch, i) => (ch[k] && Number.isFinite(ch[k][i]) ? f(ch[k][i]) : NaN), [k]);
   const SOURCES = {
     // the speed-limit chain: router → OSM → Mapillary signs (D) → HPMS (C, mph); all measured, ahead of the class estimate
     speed_limit_kph: [MAP('maxspeed_kph', (v) => v), MAP('sign_maxspeed_mps', (v) => v * 3.6), MAP('hpms_speed_limit', (v) => v * 1.609344)],
@@ -245,9 +248,9 @@
     address_per_km: [MAP('addr_per_km', (v) => v)],
     access_per_km: [SUM(['side_roads_per_km', 'driveway_joins_per_km'])],
     landuse_residential: [LU(['lu_residential'])],
-    landuse_urban: [(ch, i) => Math.min(1, LU(['lu_commercial', 'lu_retail', 'lu_industrial'])(ch, i))],
+    landuse_urban: [reads((ch, i) => Math.min(1, LU(['lu_commercial', 'lu_retail', 'lu_industrial'])(ch, i)), ['lu_commercial', 'lu_retail', 'lu_industrial'])],
     forest_share: [LU(['lu_forest'])],
-    open_country: [(ch, i) => Math.min(1, LU(['lu_farmland', 'lu_open'])(ch, i))],
+    open_country: [reads((ch, i) => Math.min(1, LU(['lu_farmland', 'lu_open'])(ch, i)), ['lu_farmland', 'lu_open'])],
     protected: [LU(['lu_park'])],
     bridge: [MAP('on_bridge', (v) => v)],
     tunnel: [MAP('in_tunnel', (v) => v)],
@@ -256,7 +259,7 @@
     access_destination: [MAP('access_level', (v) => (v >= 1 ? 1 : 0))],
     guardrail: [MAP('guard_rail', (v) => v)],
     cyclist_route: [MAP('cycle_route', (v) => (v > 0 ? 1 : 0))],
-    unlit: [(ch, i) => (ch.dark && ch.lit && Number.isFinite(ch.dark[i]) && Number.isFinite(ch.lit[i]) ? (ch.dark[i] >= 0.5 && ch.lit[i] < 0.5 ? 1 : 0) : NaN), MAP('lit', (v) => (v >= 0.5 ? 0 : 1)),
+    unlit: [reads((ch, i) => (ch.dark && ch.lit && Number.isFinite(ch.dark[i]) && Number.isFinite(ch.lit[i]) ? (ch.dark[i] >= 0.5 && ch.lit[i] < 0.5 ? 1 : 0) : NaN), ['dark', 'lit']), MAP('lit', (v) => (v >= 0.5 ? 0 : 1)),
       MAP('night_lights', (v) => (v < 0.15 ? 1 : 0))],                                           // C: dark country vs lit
   };
   /** A context's channel by canonical name: its own values, gaps filled from the aliases and other providers' names. */
@@ -265,13 +268,14 @@
     const cache = ctx.__canon || (Object.defineProperty(ctx, '__canon', { value: new Map(), enumerable: false }), ctx.__canon);
     if (cache.has(name)) return cache.get(name);
     const ch = ctx.channels, own = ch[name] || null;
-    const fills = [...Object.entries(ALIASES).filter(([, b]) => b === name).map(([a]) => MAP(a, (v) => v)), ...(SOURCES[name] || [])];
+    const all = [...Object.entries(ALIASES).filter(([, b]) => b === name).map(([a]) => MAP(a, (v) => v)), ...(SOURCES[name] || [])];
+    const fills = all.filter((f) => !f.anyOf || f.anyOf.some((k) => ch[k]));
     const any = Object.values(ch)[0];
     let out = own;
-    if (fills.length && any) {
+    if (all.length && any) {
       const n = any.length, arr = own ? Float32Array.from(own) : new Float32Array(n).fill(NaN);
       let used = false;
-      for (let i = 0; i < n; i++) {
+      for (let i = 0; i < n && fills.length; i++) {
         if (Number.isFinite(arr[i])) continue;
         for (const f of fills) { const v = f(ch, i); if (Number.isFinite(v)) { arr[i] = v; used = true; break; } }
       }
@@ -313,7 +317,17 @@
    * context. Pure. { n, quality, qConf, scenery, sConf, terms: { [channel]: known share } }.
    */
   const GRAPH_OVER = 0.3;
+  // kept per context and corridor (both are read only, as channel() already assumes): a candidate whose road is partly
+  // unknown is evaluated twice in a ranking (rank's unknownGate), and the samples are the same both times
+  const sampleMemo = new WeakMap();
   function samples(c, ctx) {
+    const kept = ctx && typeof ctx === 'object' ? sampleMemo.get(ctx) : null;
+    if (kept && kept.c === c) return kept.s;
+    const s = samplesOf(c, ctx);
+    if (ctx && typeof ctx === 'object') sampleMemo.set(ctx, { c, s });
+    return s;
+  }
+  function samplesOf(c, ctx) {
     const n = c.distM.length;
     const quality = new Float32Array(n).fill(NaN), scenery = new Float32Array(n).fill(NaN), qConf = new Float32Array(n), sConf = new Float32Array(n);
     const qTotal = QUALITY.filter((t) => !t.unless).reduce((s, t) => s + t.w, 0), sTotal = SCENERY.reduce((s, t) => s + t.w, 0);
@@ -335,7 +349,10 @@
       const fam = {}, built = builtAt(i);
       for (const x of qs) {
         let v = x.v[i];
-        if (!Number.isFinite(v) || x.u.some((u) => u && Number.isFinite(u[i]))) continue;
+        if (!Number.isFinite(v)) continue;
+        let over = false;
+        for (let k = 0; k < x.u.length; k++) { const u = x.u[k]; if (u && Number.isFinite(u[i])) { over = true; break; } }
+        if (over) continue;
         // a motorway carries its traffic by design: its volume, noise and trucks say nothing against it (live traffic still does)
         if ((x.t.family === 'built' || x.t.family === 'business' || (x.t.family === 'busy' && x.t.ch !== 'traffic_ratio')) && limited(i)) continue;
         // a "residential" road in open country with no sidewalk is a country lane (US TIGER imports tag county roads so)

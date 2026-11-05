@@ -81,8 +81,10 @@
       let side = null;
       try { side = ApexDrivingSide.forRoute(rs.lat[0], rs.lon[0]); } catch (_) { side = null; }
       const t2 = tl ? performance.now() : 0;
-      const { kappa, sight, env, corners } = await ApexAnalysis.analyse(rs.lat, rs.lon, offsets, { side });
+      let took = null;
+      const { kappa, sight, env, corners } = await ApexAnalysis.analyse(rs.lat, rs.lon, offsets, { side, timing: tl ? (x) => { took = x; } : null });
       const t3 = tl ? performance.now() : 0;
+      if (tl && took && Number.isFinite(took.workMs) && took.doneAt != null) tl(`track ${id}: the worker's own work`, took.doneAt - took.workMs, took.doneAt);
       const dist = rs.lat.map((_, i) => i * 5);
       const events = corners.map(c => cornerEventOf(c, rs.lat, rs.lon, dist));
       Core.linkNotes(events);
@@ -3239,9 +3241,9 @@
       // (ours too wait for the first route to be drawn: building their corridors is main-thread work, and done alongside
       // the first draw it made the second plan's first route slower than the first plan's, live 2026-11-05)
       const directCtx = (ownUsed ? firstSeen : firstUp).then(() => ctxRun(directCands.slice(), 'route'));
-      // ours: the router's own pick's full track is built while the context runs (it is usually the engine's pick too)
-      if (ownUsed && directCands[0] && directCands[0] !== quickNow) firstSeen.then(() => buildAhead(directCands[0], id, name, OWN_SIGHT_MS));
-      // ours: the router's own pick's full track is built while the context runs (it is usually the engine's pick too)
+      // ours: every one's full track is built while the context runs, in both analysis workers (the engine picked the
+      // router's own first choice in 2 of 8 live cases, 2026-11-08; a track is 0.05 s of a worker's time on 30 km)
+      if (ownUsed) firstSeen.then(() => { for (const c of directCands) if (c !== quickNow) buildAhead(c, id, name, OWN_SIGHT_MS); });
       // ours: their light geometry, corners and forecasts while the context runs (the page is idle meanwhile)
       // (after the first route is drawn: that build has the page to itself)
       const ownPrep = ownUsed ? (async () => {
