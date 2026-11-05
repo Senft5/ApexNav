@@ -2424,8 +2424,10 @@
     async function attachLimits(t) {
       // ours: the posted limits from the tiles the route was planned on (OWN_ROUTING.md §5), offline too and without
       // Valhalla; an edge the tiles have no posted limit for stays null (an unposted road, as map matching would say)
+      // (in a task of its own, after the card has painted)
       const own = ownRouteOfTrack.get(t);
       if (own && t.limitSource !== 'tiles') {
+        await new Promise((r) => setTimeout(r, 0));
         let limits = null;
         try { limits = ApexOwnRouting.limitsAlong(t.lat, t.lon, own); } catch (_) { limits = null; }
         if (limits) {
@@ -3266,6 +3268,7 @@
       if (ownUsed) firstSeen.then(() => { for (const c of directCands) if (c !== quickNow) buildAhead(c, id, name, OWN_SIGHT_MS); });
       // ours: their light geometry, corners and forecasts while the context runs (the page is idle meanwhile)
       // (after the first route is drawn: that build has the page to itself)
+      let ownTowns = null;                                                  // (ownPrep: the towns along ours)
       const ownPrep = ownUsed ? (async () => {
         await firstSeen;
         const prepAt = performance.now();
@@ -3277,6 +3280,10 @@
           if (Date.now() - ran > 40) { await RouteLoading.yieldToUI(); ran = Date.now(); }
         }
         tlSpan('geometry of our routes', prepAt);
+        // the towns along them (the map tiles' places, fetched and decoded) while the context runs: they were 50-60 ms of
+        // the critical path after it (live 2026-11-08); the checks that join later get theirs at the towns step
+        const townsAt = performance.now();
+        ownTowns = townsOn(directCands.map((c) => c.t), directCands).then(() => tlSpan('towns (ours, with the context)', townsAt)).catch(() => {});
         return weatherFetch(directCands);
       })().catch(() => new Map()) : null;
       const same = (a, b) => Math.abs((a.timeS || 0) - (b.timeS || 0)) < 1 && a.coords.length === b.coords.length;
@@ -3405,7 +3412,9 @@
       if (ownPrep) for (const c of pool) if (!forecasts.has(c) && c.t && window.ApexRouteWeather) forecasts.set(c, forecastOf(c));
       mark('pool');
       const townsAt = performance.now();
-      await townsOn(pool.map(c => c.t), pool); mark('towns'); tlSpan('towns', townsAt);
+      if (ownTowns) await ownTowns;
+      const townsLeft = ownTowns ? pool.filter((c) => !directCands.includes(c)) : pool;
+      await townsOn(townsLeft.map(c => c.t), townsLeft); mark('towns'); tlSpan('towns', townsAt);
       await ctx; mark('ctx');
       if (!ownUsed) await weatherOn(pool, level, forecasts); mark('weather');   // ours: the forecast refines it after (ownRefine)
       tasteOn(pool);

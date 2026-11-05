@@ -50,30 +50,38 @@
   function limitsAlong(lat, lon, route) {
     const g = route && route.graph, line = route && route.coords;
     if (!g || !g.limit || !g.end || !g.end.length || !Array.isArray(line) || line.length < 2 || !lat || !lat.length) return null;
-    const n = line.length, cum = new Float64Array(n);
-    for (let k = 1; k < n; k++) cum[k] = cum[k - 1] + lineM(line[k - 1][1], line[k - 1][0], line[k][1], line[k][0]);
-    const kx = 111320 * Math.cos(lat[0] * RAD), ky = 110540;
-    // the nearest point on segments [a, b): its distance and metres along the line
-    const near = (la, lo, a, b) => {
-      let best = { d: Infinity, k: a, m: 0 };
+    const n = line.length, cum = new Float64Array(n), x = new Float64Array(n), y = new Float64Array(n);
+    const kx = 111320 * Math.cos(lat[0] * RAD), ky = 110540, lo0 = line[0][0], la0 = line[0][1];
+    for (let k = 0; k < n; k++) {
+      x[k] = (line[k][0] - lo0) * kx; y[k] = (line[k][1] - la0) * ky;
+      if (k) cum[k] = cum[k - 1] + lineM(line[k - 1][1], line[k - 1][0], line[k][1], line[k][0]);
+    }
+    // the nearest point on segments [a, b) to (px, py): its distance into bestD, its segment and metres along the line
+    let bestD = Infinity, bestK = 0, bestM = 0;
+    const near = (px, py, a, b) => {
+      bestD = Infinity;
       for (let k = a; k < b; k++) {
-        const ax = (line[k][0] - lo) * kx, ay = (line[k][1] - la) * ky, bx = (line[k + 1][0] - lo) * kx, by = (line[k + 1][1] - la) * ky;
-        const dx = bx - ax, dy = by - ay, L2 = dx * dx + dy * dy;
+        const ax = x[k] - px, ay = y[k] - py, dx = x[k + 1] - x[k], dy = y[k + 1] - y[k], L2 = dx * dx + dy * dy;
         const t = L2 > 0 ? Math.max(0, Math.min(1, -(ax * dx + ay * dy) / L2)) : 0;
-        const d = Math.hypot(ax + t * dx, ay + t * dy);
-        if (d < best.d) best = { d, k, m: cum[k] + t * (cum[k + 1] - cum[k]) };
+        const ex = ax + t * dx, ey = ay + t * dy, d = ex * ex + ey * ey;
+        if (d < bestD) { bestD = d; bestK = k; bestM = cum[k] + t * (cum[k + 1] - cum[k]); }
       }
-      return best;
+      bestD = Math.sqrt(bestD);
     };
     const out = new Array(lat.length).fill(null);
     let seg = 0;
     for (let i = 0; i < lat.length; i++) {
-      let b = near(lat[i], lon[i], seg, Math.min(n - 1, seg + LIMIT_LOOK));
-      if (b.d > LIMIT_OFF_M) { const w = near(lat[i], lon[i], 0, n - 1); if (w.d < b.d) b = w; }
-      if (b.d > LIMIT_OFF_M) continue;
-      seg = b.k;
+      const px = (lon[i] - lo0) * kx, py = (lat[i] - la0) * ky;
+      near(px, py, seg, Math.min(n - 1, seg + LIMIT_LOOK));
+      if (bestD > LIMIT_OFF_M) {                                       // lost the line (a stretch cut out): the whole of it
+        const d0 = bestD, k0 = bestK, m0 = bestM;
+        near(px, py, 0, n - 1);
+        if (bestD >= d0) { bestD = d0; bestK = k0; bestM = m0; }
+      }
+      if (bestD > LIMIT_OFF_M) continue;
+      seg = bestK;
       let lo = 0, hi = g.end.length - 1;                             // the first edge ending at or past here
-      while (lo < hi) { const mid = (lo + hi) >> 1; if (g.end[mid] < b.m - 0.01) lo = mid + 1; else hi = mid; }
+      while (lo < hi) { const mid = (lo + hi) >> 1; if (g.end[mid] < bestM - 0.01) lo = mid + 1; else hi = mid; }
       const v = g.limit[lo];
       out[i] = Number.isFinite(v) && v > 0 ? v / 3.6 : null;
     }
