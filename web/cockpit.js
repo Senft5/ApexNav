@@ -98,7 +98,8 @@
       };
       // one of our routes: attachLimits lays its posted limits from the tiles it was planned on (offline too, after the
       // card); Valhalla's map matching only for lines off our tiles
-      const own = o.route || (window.ApexOwnRouting && ApexOwnRouting.routeOfLine ? ApexOwnRouting.routeOfLine(coords) : null);
+      const OR = typeof window !== 'undefined' ? window.ApexOwnRouting : null;
+      const own = o.route || (OR && OR.routeOfLine ? OR.routeOfLine(coords) : null);
       if (own) ownRouteOfTrack.set(t, own);
       return t;
     }
