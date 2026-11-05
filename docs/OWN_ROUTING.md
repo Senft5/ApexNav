@@ -149,13 +149,19 @@ phone's reader); tests/test_graph_tiles.py round-trips through both. What a rout
   so everything already built keeps working; Valhalla's quickest stays in the pool as a sanity check.
 - **Turn instructions:** ours from the graph (name changes and turn angles) go up with the route; Valhalla's
   (`trace_route` on our shape) replace them on the track when they come, never waited for; offline ours stay.
+- **Posted limits** (the limit sign, the strip, the ETA's envelope where a route has no router time): on our routes from
+  the tiles the route was planned on (each edge's `speed`, not when flagged `speed_est`, a class estimate; route.graph
+  `limit` by metres along the line), each 5 m sample matched to the line in order (own_routing.js `limitsAlong`, in a
+  task after the card; 2026-11-08). An edge with no posted limit is null, an unposted road, as map matching says it.
+  Valhalla's `trace_attributes` only for lines off our tiles (a GPX file, a route Valhalla planned, a saved route).
 - **Points routed** (a reroute, a road from Best roads nearby, a suggestion, a road someone sent, Drive it again, a link's
   or GPX file's stops): `through`, the quickest between the points on our tiles, each leg joined where the last arrived
   (2026-11-07); Valhalla only where a point is off our tiles or ours fail. The traffic detour stays on Valhalla.
 - **Offline:** with the app and its tiles on the phone (the shipped Cincinnati tiles, and every region tile a plan or a
   saved area fetched, kept in IndexedDB), routes at every level, loops, reroutes and our own turn instructions need no
-  network; typed search, the map's basemap (unless the area was saved), weather, events, live hazards, Valhalla's
-  maneuvers and the speed limits from map matching don't, and the card says the live data isn't known.
+  network, and nor do the posted limits on them (below); typed search, the map's basemap (unless the area was saved),
+  weather, events, live hazards and Valhalla's maneuvers (lanes, exits) don't, and the card says the live data isn't
+  known.
 - **Fallback:** no tiles for the area, or our router fails -> today's Valhalla path, unchanged.
 
 ## 6. Proof (before it replaces anything)
@@ -454,8 +460,59 @@ phone's reader); tests/test_graph_tiles.py round-trips through both. What a rout
     | `valhallaRoutes(pts)` | Best roads nearby's road, a suggestion, Drive it again, a road link, buildRoute(points) (Home, a link's or GPX file's stops) | **was**; now our `through` | the same, off our tiles |
     | `valhallaMatrix` | Explore (Best roads nearby list) | skipped with our tiles (already) | off our tiles |
     | `valhallaRoutes` + `exclude_polygons` | trafficDetour (iOS, Apple traffic) | not planning: during a drive, after a jam | needs Valhalla's jam polygons; needs the network for traffic anyway |
-    | `trace_attributes` | attachLimits (posted limits on the card and the strip) | no (after the card) | limits; offline they stay unknown (our tiles carry limits: a next step) |
+    | `trace_attributes` | attachLimits (posted limits on the card and the strip) | no (after the card) | limits; offline they stay unknown (2026-11-08: ours from the tiles, below) |
     | `trace_attributes` | contributor.js (an upload's OSM way lines) | no | contributions (online anyway) |
+
+- 2026-11-08: instant, offline limits, Valhalla down (branch claude/own-routing-instant-2; CALL_SHEET 2026-11-08):
+  - **Removed from the critical path** (after #306's nine): (10) sight distance in the pick's track: an exact faster
+    `sightDistanceM` (a sightline well inside what every point between allows skips the point-by-point test; the same
+    answers, randomized parity test against road_dna.py), 5x on 30 km; (11) every one of our candidates' tracks built
+    ahead in both analysis workers while the context runs, not only the lead's; (12) the engine's samples kept per
+    context and corridor; (13) the plan's time-only search is the first route's when asked on the same view for the
+    same trip (graph_router.js `quickKey`; the same routes, 60-80 ms of the worker's time warm); (14) the towns along our
+    routes looked up while the context runs; (15) the posted limits laid in a task after the card.
+  - **Live, 8 cases** (local serve of web/ with /api relayed to production, the same session back to back; before =
+    main at #306, after = this branch; ms from Enter: first route drawn / final card):
+
+    | case | main cold | branch cold | main warm | branch warm |
+    |---|---|---|---|---|
+    | subdivision fun | 113 / 291 | 109 / 278 | 109 / 223 | 116 / 249 |
+    | subdivision4 fun | 128 / 364 | 152 / 378 | 152 / 382 | 134 / 387 |
+    | northgate fun | 145 / 511 | 147 / 440 | 199 / 516 | 131 / 515 |
+    | harrison fun | 226 / 686 | 185 / 577 | 263 / 694 | 198 / 588 |
+    | colerain quick | 181 / 368 | 175 / 391 | 208 / 417 | 180 / 297 |
+    | colerain fun | 166 / 531 | 168 / 459 | 208 / 495 | 183 / 463 |
+    | colerain max | 184 / 593 | 177 / 541 | 179 / 466 | 162 / 518 |
+    | owner1 fun | 176 / 450 | 156 / 398 | 159 / 441 | 146 / 418 |
+
+    The pick is main's in 16 of 16 runs (judge2.js), and in 16 of 16 for 2d41b40 against main earlier in the session.
+    Met in every case and run: the card under 0.7 s warm and 1.0 s cold, the first route under 0.4 s warm. This box was
+    much less loaded than on 2026-11-07 (main's own harrison warm card 0.69 s against 1.17-1.5 s then), so the gain over
+    main is the smaller number here: 0.05-0.1 s on the long trips, within the noise on the short ones. What is left
+    between the first route and the card, warm harrison: the worker's plan to 0.28 s, the context 0.14 s (graph, driver,
+    conditions on the page), the lead ranking 0.05-0.08 s, a map frame and the track's message 0.04 s, draw and card
+    0.05 s (the card's road character line 0.02 s of it).
+  - **Posted limits offline:** on our routes the limit sign, the strip and the ETA's envelope take each edge's posted
+    limit from the tiles (§5 Posted limits); the offline e2e flow asserts a posted limit is known on every plan (Quick,
+    Fun, Long way, a map tap) and that no `trace_attributes` was asked. `trace_attributes` stays for lines off our tiles
+    and for contributions.
+  - **Valhalla down** (e2e "valhalla down: planning inside our tiles is unaffected": every Valhalla and OSRM request
+    refused for two plans, then left hanging for two more): the card within 1.0 s cold and 0.7 s warm, the first route
+    within 0.4 s warm, our own turn instructions, the tiles' limits, no failure said; after Valhalla's waits run out
+    (the instructions' 3 s, the checks' 2.5 s) the route keeps ours. Nothing on the planning path waited on it.
+  - **What still uses Valhalla where our tiles cover the trip** (the complete list):
+
+    | call | where | when | for |
+    |---|---|---|---|
+    | `route` (its quickest, its highway-friendly one), OSRM after it | funRoute checks | after the first route, joined only when in by our context | a sanity check and the one clock (oneClock) |
+    | `trace_route` | ownInstructions, ownInstructLater | after the card, 3 s cap; offline or down ours stay | lane, exit and roundabout wording (optional) |
+    | `sources_to_targets` + stage legs (`route`) | loopRefine | after a loop's card | the map's stage loops, which replace ours only when ranked first |
+    | `route` + `exclude_polygons` | trafficDetour (iOS, Apple traffic) | during a drive, after a jam | the live traffic detour (needs the network for traffic anyway) |
+    | `trace_attributes` | contributor.js | an upload | contributions' OSM way lines |
+    | `sources_to_targets` | crew_meet.js (Fair for the crew) | on a tap, opt-in | the crew's fair meeting point (not planning) |
+
+    Off our tiles (no tiles for the area, or our router failing) every call is as before: Valhalla plans (stage plans,
+    matrix, legs), Explore's matrix, points routed, reroutes, map-matched limits (attachLimits) and router_edges' context.
 
 - 2026-11-04 (region grid): the context grid for OH+KY+IN on graph-data ctx/v1 (ctx-region.yml, 6 shards, 32 min):
   33 bundles, 35.6 MB, 1.46 M HPMS road spans, 13,574 fatal crashes; served at /api/ctx/v1/ (KV first, then the branch).
