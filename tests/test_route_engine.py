@@ -285,7 +285,8 @@ const arterial = { speed_limit_kph: 56, road_class: 2, road_use: 0, density: 9, 
   // unknown data can't win: the same subdivision with and without the router's data
   const known = cand(wiggly(8000), 900, subdiv), unknown = cand(wiggly(8000), 900, {}), quickHwy = cand(straight(8000), 700, hwy);
   const ru = rank([known, unknown, quickHwy], { level: 'fun' });
-  out.unknownLoses = ru.findIndex((c) => c.id === unknown.id) >= ru.findIndex((c) => c.id === known.id);
+  // (at Fun a candidate whose road class isn't known isn't known to keep off the highway: out, or below the known one)
+  out.unknownLoses = ru.findIndex((c) => c.id === known.id) >= 0 && (ru.findIndex((c) => c.id === unknown.id) < 0 || ru.findIndex((c) => c.id === unknown.id) >= ru.findIndex((c) => c.id === known.id));
   // deer can't fill the total: ice still counts, and a longer deer road still costs more
   const deer = (km, spans = []) => { const c = cand(straight(km * 1000), km * 60, { ...back, deer_risk: 4 }, { departAt: Date.parse('2026-11-04T17:20:00-05:00'), spans }); E.evaluate(c, {}); return c.ev.penaltyPts; };
   out.deerSat = { d40: deer(40), d80: deer(80), d40ice: deer(40, [{ fromM: 1000, toM: 4000, kind: 'ice' }]) };
@@ -323,7 +324,7 @@ out.active = [E.active(null, DEPART), E.active({ weekly: [{ from: '19:00', to: '
   out.whyHighway = E.why(best, quick).text;
   const q2 = cand(straight(10000), 600, hwy), b2 = cand(wiggly(9000), 780, { ...back, forest_share: 1 });
   const r2 = rank([q2, b2], { level: 'fun' });
-  out.whyBack = E.why(r2[0], r2.find((c) => c.id === q2.id), { metric: false }).text;
+  out.whyBack = E.why(r2[0], (r2.find((c) => c.id === q2.id) || r2.quickest), { metric: false }).text;
   out.whyNone = E.why(r2[0], r2[0]);
 }
 // 9. stages: a curvy subdivision street falls behind a straighter country road once the network knows
@@ -368,8 +369,10 @@ def test_quality_separates_the_roads_a_driver_would(r):
 
 
 def test_the_highway_beats_side_streets_and_detours_buy_quality(r):
-    assert r["hwyVsHood"] == [True, True, True], "a minute quicker through a subdivision: the highway still wins, at every level"
-    assert r["hwyVsArterial"] == [True, True, True], "the highway beats a strip-mall arterial"
+    # Quick: the highway beats a cut-through a minute quicker and a strip-mall arterial. Fun and Long way never drive a
+    # highway (the owner, 2026-11-08: "fun should never go on the highway"): the only other way is theirs
+    assert r["hwyVsHood"] == [True, False, False], "a minute quicker through a subdivision: the highway wins at Quick"
+    assert r["hwyVsArterial"] == [True, False, False], "the highway beats a strip-mall arterial at Quick"
     assert r["backRoad"] == [False, True, True], "+3 min for a real back road: Fun and Max take it, Quick doesn't"
 
 

@@ -1,5 +1,55 @@
 # VETTA — CURRENT AGENT HANDOFF STATE
 
+## Session 2026-11-08 (later): what the levels mean (claude/level-rules, off claude/own-routing-instant-2)
+
+- [x] The owner: "fun should never go on the highway. Quick should essentially be a normal route i suppose". Quick is the
+  quickest way, highways welcome, a nicer road only within a minute (LEVELS quick budget 0 + 60 s). Fun and Long way
+  never drive a motorway, trunk road or their links: a hard filter in graph_router.js (`K.NO_HWY`, `opts.ban`: plan,
+  quickest, alternates, through, loop legs) and in the ranking (fun_route.js `levelHighways` / `applyHighways`, used by
+  route_engine.js rank and FunRoute.rank; loopRank for loops); Valhalla use_highways 0 at Fun and Long way
+  (`levelCosting`, `loopCosting`, the default route, a reroute). The exception (no highway-free way in the corridor: a
+  river crossed only by an interstate bridge, a start or end on a ramp): the shortest link, "Uses 0.4 mi of I-275 (no
+  other way across)" on the card. A highway-free way over 2x Quick's time: still none, "No highway-free way in a sensible
+  time; Quick is the way" (route_engine.js `whyHighway`). CALL_SHEET 2026-11-08 (later); OWN_ROUTING.md §5, §8.
+- [x] Live (the real app in Playwright on this branch's web/, production's Worker for /api; highway km = the shown
+  track's 5 m samples on our tiles' motorway/trunk edges; before = claude/own-routing-instant-2 at e5e8453):
+
+  | case | level | before: highway km, min over Quick | after: highway km, min over Quick | after: the why line |
+  |---|---|---|---|---|
+  | work to home | Quick | 22.4, +0.2 | 22.4, +0.2 | (none) |
+  | work to home | Fun | 25.5, +7.9 | 0, +22.7 | No highway-free way in a sensible time; Quick is the way |
+  | work to home | Long way | 31.2, +13.1 | 0, +22.7 | the same (the same 44 min route) |
+  | owner1 | Quick | 0, +4.7 | 4.0, 0 | (none: the quickest) |
+  | owner1 | Fun | 0, +6.4 | 0, +4.2 | Avoids 1.7 mi of strip malls · 9 more good corners · nicer country, +4 min |
+  | owner1 | Long way | 0, +16.6 | 0, +14.4 | 16 more good corners · avoids 1.7 mi of strip malls · nicer country, +14 min |
+  | colerain | Quick | 6.6, 0 | 6.6, 0 | (none) |
+  | colerain | Fun | 6.6, +0.5 | 0, +2.2 | The quickest way off the highway is a good road too. Over the 17 min route: fewer side streets · its extra corners are on side streets or between houses |
+  | colerain | Long way | 6.6, 0 | 0, +2.2 | the same |
+  | northgate | Quick | 8.5, +1.1 | 4.6, 0 | (none: the quickest) |
+  | northgate | Fun | 8.5, +1.1 | 0, +1.5 | Nicer country, +1 min |
+  | northgate | Long way | 8.5, +1.1 | 0, +3.8 | Nicer country, +4 min |
+  | harrison | Quick | 0, +2.7 | 21.7, 0 | (none: I-275 and I-74, the quickest) |
+  | harrison | Fun | 9.9, +7.5 | 0, +9.7 | 27 more good corners · avoids 0.8 mi of strip malls · open roads at 45 mph, +10 min |
+  | harrison | Long way | 9.9, +7.5 | 0, +16.1 | 38 more good corners · avoids 0.8 mi of strip malls · back roads at 45 mph, +16 min |
+  | subdivision | all three | 0, 0 | 0, 0 | Fun, Long way: No great roads on this trip: Quick is the way |
+  | loop Winton Woods 30 mi | Fun | 0 of 69.2 km | 0 of 69.2 km (the same loop) | |
+  | loop Sharon Woods 30 mi | Long way | 0 of 61.8 km | 0 of 61.8 km (the same loop) | |
+  | loop Fountain Square 30 mi | Fun | 7.3 of 66.8 km | 0 of 44.1 km | |
+  | loop Fountain Square 30 mi | Long way | 1.5 of 56.4 km | 0 of 65.7 km | |
+  | loop Miami Whitewater 1 h | Long way | 0 of 40.7 km | 0 of 40.7 km (the same loop) | |
+
+- Tests: pytest 1339 passed, 2 skipped (new: graph_router levelsHighway cases for the motorway and trunk beside a back
+  road, the river bridge, the absurd detour and Quick within a minute; loops on the motorway grid 0 highway where they can;
+  engine, calibration and live tests moved to the rule); e2e "levels:" (3 new flows, Quick / Fun / Long way on the
+  motorway grid, the Fun flow taps the Quick and Fun cards), own routing (4), offline, valhalla down, plan flow (6),
+  level cards, a road someone sent, a suggestion, a short trip: all pass.
+- Open: the owner's work to home trip is the "absurd" case (the highway-free quickest 44 min, 2.07x Quick's 21): Fun and
+  Long way both show it with the Quick-is-the-way line; whether that, or Quick's route, or a 2.5x limit is wanted is the
+  owner's call (CALL_SHEET). Colerain at Quick now takes Colerain Avenue (the quickest; Pippin and Struble are 1.4 min
+  more). Expressways tagged `primary` + `motorroad=yes` aren't in the tiles' flags yet.
+- Exact next task: the owner checks the work-to-home card at Fun; then, if wanted, keep `motorroad=yes` as a tile flag in
+  tools/graph_etl (osm_graph.py, build.py) and treat it as a highway in graph_router.js isHwyEdge.
+
 ## Session 2026-11-08: the owner's TestFlight notes of 2026-11-05, build 592.1 (claude/feedback-1105)
 
 - [x] Screenshots from the `feedback-screenshots` artifact of run 42432318127 (gh run download), each looked at first.

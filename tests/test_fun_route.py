@@ -42,7 +42,8 @@ out.short = F.score(g(straight(300)));
 const fun = (f, good) => ({ fun: f, good });
 const cands = [
   { id: 'quick', timeS: 1800, fun: fun(30, 20) },
-  { id: 'alt', timeS: 1920, fun: fun(45, 30) },          // +2 min, a better road
+  { id: 'alt', timeS: 1860, fun: fun(45, 30) },          // +1 min, a better road
+  { id: 'alt2', timeS: 1950, fun: fun(50, 34) },         // +2.5 min, a little better again: past Quick's minute
   { id: 'detour', timeS: 2600, fun: fun(70, 120) },      // +13 min through a great stage
   { id: 'huge', timeS: 3900, fun: fun(95, 300) },        // +35 min: past every budget but Max
 ];
@@ -205,7 +206,8 @@ def test_junction_turns_are_not_corners(r):
 
 
 def test_rank_respects_each_levels_budget(r):
-    assert r["rank_quick"] == ["alt", "quick"], "quick: +2 min for a better road is fine; +13 is past the budget"
+    # Quick is the normal route (the owner, 2026-11-08): a nicer road only in a near-tie, a minute at most
+    assert r["rank_quick"] == ["alt", "quick"], "quick: +1 min for a better road is fine; +2.5 and +13 are past it"
     assert r["rank_fun"][0] == "detour" and "huge" not in r["rank_fun"]
     assert r["rank_max"][0] == "huge"
     assert r["rankAdjust"] == ["a", "b"], "a measured rough road loses a near tie"
@@ -471,12 +473,16 @@ def test_app_ranks_with_the_route_engine():
     res = subprocess.run([NODE, "-e", APP, os.path.abspath(".")], capture_output=True, text=True)
     assert res.returncode == 0, res.stderr
     r = json.loads(res.stdout)
-    for lv in ("quick", "fun", "max"):
+    e = r["engine_quick"]
+    assert e["highwayAsked"] and e["timeS"] == 600, e
+    assert e["via"] >= 1, "the highway route is pinned with shaping points so a reroute doesn't fall back to the side streets"
+    assert e["why"] and e["why"].startswith("Highway instead of") and "side streets" in e["why"], e["why"]
+    assert e["quality"] > 50
+    # Fun and Long way never drive a highway (the owner, 2026-11-08): the only highway-free way is theirs, though the
+    # highway quickest is still asked for (Quick's card and the level's measure)
+    for lv in ("fun", "max"):
         e = r["engine_" + lv]
-        assert e["highwayAsked"] and e["timeS"] == 600, (lv, e)
-        assert e["via"] >= 1, "the highway route is pinned with shaping points so a reroute doesn't fall back to the side streets"
-        assert e["why"] and e["why"].startswith("Highway instead of") and "side streets" in e["why"], e["why"]
-        assert e["quality"] > 50
+        assert e["highwayAsked"] and e["timeS"] == 560, (lv, e)
     assert r["engineAvoidHighways"] == {"timeS": 560, "highwayAsked": False}, "the driver's avoid-highways choice is kept"
     assert r["allClosed"]["built"] == 1 and r["allClosed"]["hard"] == ["closure"], r["allClosed"]
 

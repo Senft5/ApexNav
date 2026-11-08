@@ -692,7 +692,14 @@
       const fewest = Math.min(...valued.map((c) => (c.ev ? c.ev.hard.length : 0)));
       return valued.filter((c) => (c.ev ? c.ev.hard.length : 0) === fewest).sort((a, b) => b.value - a.value).slice(0, 1);
     }
-    return ok.filter((c) => c.extraS === 0 || c.timeS <= limit).sort((a, b) => b.value - a.value);
+    // Fun and Long way never drive a highway (the owner, 2026-11-08): only the highway-free candidates, when any exists
+    // (else the least highway: the exception), measured against the quickest all the same (fun_route.js applyHighways)
+    const h = FunRoute && FunRoute.applyHighways ? FunRoute.applyHighways(ok, level, quick.timeS, limit) : { list: ok, limit };
+    const out = h.list.filter((c) => (c.extraS === 0 && h.list === ok) || c.timeS <= h.limit).sort((a, b) => b.value - a.value);
+    // the quickest as valued, for the why line, when the level keeps it out (its parts are what the pick is told against)
+    const vq = valued[cands.indexOf(quick)];
+    if (vq) Object.defineProperty(out, 'quickest', { value: vq, enumerable: false });
+    return out;
   }
 
   // ---- the why line -------------------------------------------------------------------------------------------------
@@ -809,9 +816,26 @@
    */
   function whyQuickest(best, quick, level) {
     if (!best || !quick || level === 'quick' || !level) return null;
-    if (best !== quick && !(best.route && quick.route && best.route === quick.route) && !(best.extraS < 60)) return null;
     const good = best.ev && best.ev.funGated ? best.ev.funGated.good : best.fun ? best.fun.good : 0;
+    // Fun and Long way off the highway: the pick is the quickest way without one (within a minute of it)
+    if (best.hwyRule === 'free' && Number.isFinite(best.hwyFreeS) && best.timeS - best.hwyFreeS < 60 && best.timeS - quick.timeS >= 60) {
+      return { text: good >= 5 ? 'The quickest way off the highway is a good road too' : 'No great roads on this trip: this is the quickest way off the highway', factors: [] };
+    }
+    if (best !== quick && !(best.route && quick.route && best.route === quick.route) && !(best.extraS < 60)) return null;
     return { text: good >= 5 ? 'The quickest way is the best road here too' : 'No great roads on this trip: Quick is the way', factors: [] };
+  }
+  /**
+   * The card's highway line at Fun and Long way (the owner, 2026-11-08: "fun should never go on the highway"): the
+   * exception says how much it uses and why, "Uses 0.4 mi of I-275 (no other way across)"; a highway-free way more than
+   * twice the quickest's time says "No highway-free way in a sensible time; Quick is the way". null otherwise.
+   */
+  function whyHighway(best, o = {}) {
+    if (!best) return null;
+    if (best.hwyAbsurd) return { text: 'No highway-free way in a sensible time; Quick is the way', kind: 'absurd' };
+    if (best.hwyRule !== 'link' || !(best.hwyKm > 0)) return null;
+    const r = best.route || {}, name = r.hwyName && r.hwyName !== 'the highway' ? r.hwyName : 'highway';
+    const why = r.hwyReason === 'start' ? 'you start on it' : r.hwyReason === 'end' ? 'the end is on it' : r.hwyReason === 'across' ? 'no other way across' : 'no other way';
+    return { text: `Uses ${mi(best.hwyKm, !!o.metric)} of ${name} (${why})`, kind: 'link' };
   }
 
   // ---- candidates: corridors, costing, the road network --------------------------------------------------------------
@@ -857,12 +881,20 @@
   }
   const highwayCosting = (avoid, car) => (avoid && avoid.highways ? null : connectorCosting(avoid, car, 1.0));
   /**
-   * Router costing for a loop's legs (stage plans, the matrix between a loop's stages): a loop is a drive for fun, so
-   * highways are a short link at most, never welcome (connectorCosting's 0.6 let them carry half a loop, live 2026-11-04).
-   * Quick 0.25, Fun and Long way 0.1 (Valhalla's default is 0.5); avoided highways stay at FunRoute.costing's 0.
+   * Valhalla's costing for a level's own routes when our tiles don't cover the trip (the default route, the stage plans'
+   * legs and their matrix): Fun and Long way never drive a highway (the owner, 2026-11-08), so use_highways 0 (Valhalla's
+   * strongest "keep off", not a hard ban: the ranking drops a route that still uses one when another doesn't); Quick
+   * the connectors' 0.6.
    */
-  const LOOP_USE_HIGHWAYS = { quick: 0.25, fun: 0.1, max: 0.1 };
-  const loopCosting = (avoid, car, level = 'fun') => connectorCosting(avoid, car, LOOP_USE_HIGHWAYS[level] != null ? LOOP_USE_HIGHWAYS[level] : 0.1);
+  const LEVEL_USE_HIGHWAYS = { quick: 0.6, fun: 0, max: 0 };
+  const levelCosting = (avoid, car, level = 'fun') => connectorCosting(avoid, car, LEVEL_USE_HIGHWAYS[level] != null ? LEVEL_USE_HIGHWAYS[level] : 0);
+  /**
+   * Router costing for a loop's legs (stage plans, the matrix between a loop's stages): a loop is a drive for fun, so
+   * highways are a short link at most at Quick (0.25; connectorCosting's 0.6 let them carry half a loop, live 2026-11-04)
+   * and never at Fun and Long way (0, as their routes; Valhalla's default is 0.5); avoided highways stay at 0.
+   */
+  const LOOP_USE_HIGHWAYS = { quick: 0.25, fun: 0, max: 0 };
+  const loopCosting = (avoid, car, level = 'fun') => connectorCosting(avoid, car, LOOP_USE_HIGHWAYS[level] != null ? LOOP_USE_HIGHWAYS[level] : 0);
   /** The share of a ranked route on motorway or trunk (0..1) where the context knew the road class; null where it didn't. */
   const highwayShare = (ev) => (ev && ev.stats && Number.isFinite(ev.stats.highwayKm) && ev.stats.classKm > 0 ? Math.min(1, ev.stats.highwayKm / ev.stats.classKm) : null);
   /**
@@ -935,8 +967,8 @@
     return base + (ev.quality != null ? W.QUALITY * (ev.quality - 50) * ev.qWeight : 0) + ev.sceneryPts + ev.bonusPts - ev.poorCost - ev.penaltyPts + (ev.driverPts || 0);
   }
 
-  const api = { VERSION: 1, QUALITY, SCENERY, PER_KM, SPANS, ALIASES, KIND_ALIASES, SOURCES, W, SPEED, gate, builtKeep, cornerGate, active, moment, channel, builtEvidence, samples, evaluate, stats, rank, why, whyOver, whyQuickest,
-    placeTimes, corridorFor, stageCorridor, stageCorridors, connectorCosting, highwayCosting, loopCosting, LOOP_USE_HIGHWAYS, highwayShare, streetOf, rescoreStages, loopValue, ramp, decay };
+  const api = { VERSION: 1, QUALITY, SCENERY, PER_KM, SPANS, ALIASES, KIND_ALIASES, SOURCES, W, SPEED, gate, builtKeep, cornerGate, active, moment, channel, builtEvidence, samples, evaluate, stats, rank, why, whyOver, whyQuickest, whyHighway,
+    placeTimes, corridorFor, stageCorridor, stageCorridors, connectorCosting, highwayCosting, levelCosting, LEVEL_USE_HIGHWAYS, loopCosting, LOOP_USE_HIGHWAYS, highwayShare, streetOf, rescoreStages, loopValue, ramp, decay };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   root.ApexRouteEngine = api;
 })(typeof window !== 'undefined' ? window : globalThis);
