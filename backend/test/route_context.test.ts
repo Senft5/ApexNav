@@ -158,6 +158,7 @@ describe("EV chargers by tile (NREL, the key stays on the server)", () => {
         { latitude: 35.81, longitude: -83.9, ev_dc_fast_num: 2 }, { latitude: 35.9, longitude: -83.95, ev_dc_fast_num: null }, { latitude: 36.4, longitude: -83.9 }] })); }) as unknown as typeof fetch;
       const j = await chargers(env, new URL("https://x/api/chargers?tiles=143_-336"), fake);
       expect(asked).toHaveLength(1);
+      expect(asked[0].startsWith("https://developer.nlr.gov/api/alt-fuel-stations/v1/nearest.json?")).toBe(true);
       expect(asked[0]).toContain("latitude=35.875"); expect(asked[0]).toContain("longitude=-83.875"); expect(asked[0]).toContain("fuel_type=ELEC");
       expect(j.stations).toEqual([{ lat: 35.81, lon: -83.9, dc: true }, { lat: 35.9, lon: -83.95, dc: false }]);
       expect(JSON.stringify(j)).not.toContain("test-key");

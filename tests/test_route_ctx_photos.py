@@ -1,5 +1,6 @@
 """Route context `photos` (web/route_ctx/photos.js): photo spots from a real Wikimedia Commons geosearch along Kellogg Avenue
-by Riverbend (2026-11-03), and Flickr and Mapillary in their documented answer shapes (no keys here, so no live answers):
+by Riverbend (2026-11-03), and Mapillary in its documented answer shape (no token here, so no live answers; Flickr was
+dropped 2026-11-08, its keys no longer offered to free accounts):
 speed-limit signs fill a missing limit for 2 km in the direction they face, curve signs mark 250 m."""
 import json
 import os
@@ -27,9 +28,8 @@ const full = P.evaluate(c, { spots: cm.spots, cellsHad: had }), part = P.evaluat
 const busy = Array.from({ length: 30 }, (_, k) => [c.lat[20] + (k % 6) * 0.0002, c.lon[20] + Math.floor(k / 6) * 0.0002]);
 const batch = P.parseCommons({ query: { geosearch: [...busy, ...Array(30).fill(busy[0])].map(([lat, lon]) => ({ lat, lon })) } });
 const hot = P.evaluate(c, { spots: batch.spots, cellsHad: had });
-// Flickr's documented flickr.photos.search answer (extras=geo): two photos by one owner at one spot count once
-const fl = P.parseFlickr({ stat: 'ok', photos: { page: 1, photo: [{ id: '1', owner: 'a@N0', latitude: '39.05', longitude: '-84.42' }, { id: '2', owner: 'a@N0', latitude: '39.0501', longitude: '-84.4201' }, { id: '3', owner: 'b@N0', latitude: '39.05', longitude: '-84.42' }, { id: '4', owner: 'c@N0', latitude: 0, longitude: 0 }] } });
-const flBad = P.parseFlickr({ stat: 'fail', code: 100, message: 'Invalid API Key' });
+// Flickr is gone: no URL builder, no parser, and a key left in the keys does nothing
+const flickrGone = !('flickrUrl' in P) && !('parseFlickr' in P);
 // Mapillary's documented map_features answer: a 45 mph sign facing eastbound traffic (it faces west), one facing the other
 // way, a curve warning, and an unrelated sign
 const h = c.heading[5] * 180 / Math.PI;
@@ -47,9 +47,9 @@ console.log(JSON.stringify({
   partNull: nan(part.channels.photo_spots).filter((v) => v === null).length, n: c.lat.length,
   none: { status: none.status, note: none.note, spots: [...new Set(nan(none.channels.photo_spots))], sign: [...new Set(nan(none.channels.sign_maxspeed_mps))] },
   batch: batch.spots.length, hot: { max: Math.max(...nan(hot.channels.photo_spots)), score: Math.max(...nan(hot.channels.photo_score)), spans: hot.spans.map((s) => s.kind) },
-  fl: fl.spots.length, flBad, signs: signs.map((s) => [s.kind, s.mph || null]),
+  flickrGone, signs: signs.map((s) => [s.kind, s.mph || null]),
   sg: { limit: nan(sg.channels.sign_maxspeed_mps), curve: nan(sg.channels.curve_sign), points: sg.points.map((p) => [p.kind, p.label]) },
-  urls: [P.commonsUrl([39.04, -84.44, 39.06, -84.42]), P.flickrUrl([39.0, -84.5, 39.05, -84.45], 'K'), P.mapillaryUrl([39.0, -84.5, 39.05, -84.45], 'MLY|t')],
+  urls: [P.commonsUrl([39.04, -84.44, 39.06, -84.42]), P.mapillaryUrl([39.0, -84.5, 39.05, -84.45], 'MLY|t')],
 }));
 """
 
@@ -77,8 +77,9 @@ def test_a_photographed_spot_scores_high(out):
     assert h["max"] == 30 and h["score"] > 0.95 and h["spans"] == ["photo-spot"]
 
 
-def test_flickr_counts_owner_spots(out):
-    assert out["fl"] == 2 and out["flBad"] is None
+def test_flickr_is_not_a_source(out):
+    assert out["flickrGone"] is True
+    assert "Flickr" not in (out["none"]["note"] or "")
 
 
 def test_mapillary_signs(out):
@@ -92,6 +93,6 @@ def test_mapillary_signs(out):
 
 
 def test_requests_carry_only_a_cell(out):
-    cmn, fl, mp = out["urls"]
+    cmn, mp = out["urls"]
     assert "gsbbox=39.0600|-84.4400|39.0400|-84.4200" in cmn and "origin=*" in cmn
-    assert "bbox=-84.5000,39.0000,-84.4500,39.0500" in fl and "bbox=-84.5000,39.0000,-84.4500,39.0500" in mp
+    assert "bbox=-84.5000,39.0000,-84.4500,39.0500" in mp

@@ -296,7 +296,7 @@ channels, sources, licences and cadence; the engine (builder A) weighs them.
   work zones and closures (Indiana direct, Kentucky via `/api/ctx/workzones`, Ohio with an OHGO key; paving labelled), harvest
   (NASS weekly progress, else the USDA usual dates) x farmland, NPS monthly visits in the parks, typical fall-colour peak by
   latitude and height x canopy. No snowplough feed exists in OHGO's public API.
-- `photos.js`: Wikimedia Commons photo spots within 250 m (and Flickr with a key) as a saturating scenic score; Mapillary
+- `photos.js`: Wikimedia Commons photo spots within 250 m as a saturating scenic score; Mapillary
   speed-limit signs (carried 2 km, fills missing maxspeed) and curve-warning signs with a token.
 Tests: `tests/test_route_ctx_*.py` on real answers for the Cincinnati area saved 2026-11-03 (`tests/fixtures/route_ctx/`).
 
@@ -385,7 +385,7 @@ What each one is for, and how it should move a route:
   preferences that are on; NaN when none is and the skill is unknown), which the engine adds to fun. Passenger aboard also tags
   the recorded drive "Passenger".
 - **car.js**: the Garage car's **fuel** and **range** (new fields, migration 0045; "ask once" per car when a 150 km stationless
-  stretch meets a car with no range). Stations from OSM `amenity=fuel` (Overpass tiles) or, electric, NREL chargers through
+  stretch meets a car with no range). Stations from OSM `amenity=fuel` (Overpass tiles) or, electric, NLR (ex-NREL, developer.nlr.gov) chargers through
   `GET /api/chargers` (tile ids only; the owner's free key, OWNER_TODO; none = `no-key`). `fuel_since_km`, `fuel_margin`; a
   **`fuel_gap` span with `hard: true`** when a stretch between stations is over the safe range (80 %, EV 75 %), greedy
   `fuel_stop` points, `fuel_check` when the first fuel is past half the safe range (the tank at the start is unknown).

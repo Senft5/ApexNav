@@ -8,10 +8,10 @@
 import { Env, HttpError, json } from "./util";
 
 // Free client keys for the route-context sources (docs/OWNER_TODO.md): the owner sets the Worker secret CTX_KEYS to JSON such
-// as {"seatgeekClientId": "...", "mapillaryToken": "MLY|...", "ohgoApiKey": "...", "nassApiKey": "...", "flickrApiKey": "..."}.
+// as {"seatgeekClientId": "...", "mapillaryToken": "MLY|...", "ohgoApiKey": "...", "nassApiKey": "..."}.
 // GET /api/ctx/keys hands the known names to the app (they are client keys, the kind each service expects inside an app; the
 // code never holds one). Unknown names are dropped; no secret is set → {}.
-export const CTX_KEY_NAMES = ["seatgeekClientId", "mapillaryToken", "ohgoApiKey", "nassApiKey", "flickrApiKey"];
+export const CTX_KEY_NAMES = ["seatgeekClientId", "mapillaryToken", "ohgoApiKey", "nassApiKey"];
 export function ctxKeys(env: Env): Response {
   let all: Record<string, unknown> = {};
   try { all = env.CTX_KEYS ? JSON.parse(env.CTX_KEYS) : {}; } catch { all = {}; }

@@ -52,10 +52,10 @@ const shape = (r, c, channels) => r && ['ok', 'partial', 'unavailable', 'no-key'
   const c2 = await K.fetch([ca], { fetchFn: om, storage: cst, now: Date.UTC(2026, 10, 3, 23, 55) + 30 * 60e3 });
   const c3 = await K.fetch([ca], { fetchFn: om, storage: cst, now: Date.UTC(2026, 10, 3, 23, 55) + 61 * 60e3 });
   out.conditions = { shape: shape(cr.a, ca, K.CHANNELS) && shape(cr.b, cb, K.CHANNELS), status: [cr.a.status, cr.b.status, c2.a.status], calls: log.length, url: log[0] };
-  // photos: one Commons call per 0.02° cell (2 at a time), each kept 30 days; no Flickr key, no Mapillary token
+  // photos: one Commons call per 0.02° cell (2 at a time), each kept 30 days; no Mapillary token (and a Flickr key in the keys is ignored)
   log = [];
   const pst = T.memoryStorage(), pf = T.fakeFetch([['commons.wikimedia.org', F('commons_geosearch_riverbend.json')]], log);
-  const pr = await Ph.fetch([a, b], { fetchFn: pf, storage: pst, now: depart });
+  const pr = await Ph.fetch([a, b], { fetchFn: pf, storage: pst, now: depart, keys: { flickrApiKey: 'old' } });
   const firstCalls = log.length;
   await Ph.fetch([a], { fetchFn: pf, storage: pst, now: depart + 864e5 });
   out.photos = { shape: shape(pr.a, a, Ph.CHANNELS), firstCalls, again: log.length - firstCalls, note: pr.a.note, hosts: [...new Set(log.map((u) => new URL(u).host))] };
@@ -119,7 +119,7 @@ def test_conditions_one_call_then_cached_for_an_hour(out):
 def test_photos_cells_once_and_keys_missing_said(out):
     p = out["photos"]
     assert p["shape"] and p["firstCalls"] > 3 and p["again"] == 0 and p["hosts"] == ["commons.wikimedia.org"]
-    assert "Mapillary token" in p["note"] and "Flickr" in p["note"]
+    assert "Mapillary token" in p["note"] and "Flickr" not in p["note"]
 
 
 def test_wildlife_needs_no_network(out):

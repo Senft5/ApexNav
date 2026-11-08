@@ -217,3 +217,146 @@ def undelta_lines(counts, x0, y0, dx, dy):
         a += c
         k += c - 1
     return out
+
+
+# ------------------------------------------------------------------------------------- NASA Black Marble VNP46A4 (annual)
+# VNP46A4 (Collection 2, LAADS DAAC archive 5200): one HDF5 file per 10 x 10 degree tile hHHvVV of a linear lat/lon grid,
+# 2400 x 2400 pixels of 15 arc-seconds (~460 m), h00 starting at 180 W and v00 at 90 N (Black Marble User Guide v2).
+BM_TILE_DEG = 10.0
+BM_PIXELS = 2400
+BM_FIELDS = "HDFEOS/GRIDS/VIIRS_Grid_DNB_2d/Data Fields/"
+BM_LAYER = "AllAngle_Composite_Snow_Free"           # the annual snow-free composite over all view angles: the one the
+                                                    # guide recommends for year-on-year use
+BM_QUALITY_OK = (0, 1)                              # 0 good, 1 poor (few nights); 2 gap-filled (another year), 255 none
+# Radiance (nW cm-2 sr-1) -> the grid's 0..1 night_lights: v = min(1, (r / NIGHT_SAT) ** NIGHT_GAMMA). Chosen to keep the
+# scale of the Black Marble 2016 image the channel held before (a tone-mapped picture that saturates in the suburbs, read
+# as dark below 0.15 by route_engine.js): 20 nW (a lit suburb) and brighter is 1, 10 nW about 0.62, a village's 3 nW about
+# 0.27, farmland's ~1 nW about 0.12 and dark forest's 0.3 nW about 0.05. The build logs its agreement with the 2016 image
+# over the same cells (sources.NIGHT_CHECK), so the two numbers can be tuned from a real run.
+NIGHT_SAT = 20.0
+NIGHT_GAMMA = 0.7
+
+
+def bm_tiles_for_box(w, s, e, n):
+    """The Black Marble tiles (h, v) a lon/lat box touches."""
+    h0, h1 = int(math.floor((w + 180) / BM_TILE_DEG)), int(math.floor((e + 180 - 1e-9) / BM_TILE_DEG))
+    v0, v1 = int(math.floor((90 - n) / BM_TILE_DEG)), int(math.floor((90 - s - 1e-9) / BM_TILE_DEG))
+    return [(h, v) for v in range(max(0, v0), min(17, v1) + 1) for h in range(max(0, h0), min(35, h1) + 1)]
+
+
+def bm_tile_origin(h, v):
+    """A tile's north-west corner (lon, lat) and its pixel size in degrees."""
+    return -180.0 + h * BM_TILE_DEG, 90.0 - v * BM_TILE_DEG, BM_TILE_DEG / BM_PIXELS
+
+
+def bm_tile_name(h, v):
+    return f"h{h:02d}v{v:02d}"
+
+
+def vnp46_radiance(dn, quality=None, fill=65535, scale=0.1, offset=0.0):
+    """VNP46A4 stored integers -> radiance in nW cm-2 sr-1; NaN for fill, and for pixels whose quality isn't good or poor
+    (gap-filled from another year, or no retrieval): unknown, never a guess."""
+    dn = np.asarray(dn)
+    r = dn.astype(np.float64) * float(scale) + float(offset)
+    bad = dn == fill
+    if quality is not None:
+        bad = bad | ~np.isin(np.asarray(quality), BM_QUALITY_OK)
+    r[bad] = np.nan
+    return r
+
+
+def night_from_radiance(r):
+    """Radiance (nW cm-2 sr-1, NaN unknown) -> the night_lights channel's 0..1 (see NIGHT_SAT)."""
+    r = np.asarray(r, dtype=np.float64)
+    with np.errstate(invalid="ignore"):
+        out = np.power(np.clip(r, 0, None) / NIGHT_SAT, NIGHT_GAMMA)
+    return np.where(np.isnan(r), np.nan, np.minimum(out, 1.0))
+
+
+def bm_file_for(names, h, v):
+    """The file in a day directory for tile hHHvVV (the newest production if several), or None."""
+    tag = "." + bm_tile_name(h, v) + "."
+    hits = sorted(n for n in names if tag in n and n.endswith(".h5"))
+    return hits[-1] if hits else None
+
+
+# ------------------------------------------------------------------------------------- FCC National Broadband Map (mobile)
+FCC_TECH = {"400": "4G", "500": "5G"}               # BDC mobile technology codes (300, 3G, is not counted)
+
+
+def _fcc_text(e):
+    return " ".join(str(e.get(k) or "") for k in ("technology_code_desc", "technology_type", "subcategory", "file_name",
+                                                  "speed_tier", "environment")).lower()
+
+
+def fcc_tech(e):
+    """'4G' or '5G' for a listed mobile-broadband file, else None (3G, voice, fixed)."""
+    code = str(e.get("technology_code") or "").strip()
+    if code in FCC_TECH:
+        return FCC_TECH[code]
+    if code:
+        return None
+    t = _fcc_text(e)
+    if "5g" in t:
+        return "5G"
+    if "4g" in t or "lte" in t:
+        return "4G"
+    return None
+
+
+def fcc_env(e):
+    """'in-vehicle', 'outdoor' or None (not said) for a listed mobile-broadband file."""
+    t = _fcc_text(e).replace("_", " ").replace("-", " ")
+    if "in vehicle" in t or "invehicle" in t:
+        return "in-vehicle"
+    if "outdoor" in t or "stationary" in t:
+        return "outdoor"
+    return None
+
+
+def fcc_pick_files(entries, state_fips):
+    """A state's FCC availability listing -> ({provider_id: {"name", "files": [file entries]}}, environment).
+
+    Mobile broadband (never voice or fixed) 4G LTE and 5G-NR coverage GIS files of that state. One environment for the
+    whole state, so every provider is counted the same way: in-vehicle mobile where the listing has it (what a driver
+    gets), else outdoor stationary; files saying neither are used only when no file says either. CSV twins are skipped."""
+    mine = []
+    for e in entries or []:
+        if str(e.get("state_fips") or "").zfill(2) != str(state_fips).zfill(2):
+            continue
+        kind = " ".join(str(e.get(k) or "") for k in ("technology_type", "subcategory")).lower()
+        if "mobile" not in kind or "voice" in kind or "fixed" in kind:
+            continue
+        if str(e.get("file_type") or "").lower() == "csv" or not e.get("file_id") or fcc_tech(e) is None:
+            continue
+        mine.append(e)
+    envs = {fcc_env(e) for e in mine}
+    env = "in-vehicle" if "in-vehicle" in envs else "outdoor" if "outdoor" in envs else None
+    out = {}
+    for e in mine:
+        if fcc_env(e) != env:
+            continue
+        pid = str(e.get("provider_id") or e.get("provider_name") or "?")
+        out.setdefault(pid, {"name": e.get("provider_name"), "files": []})["files"].append(e)
+    return out, env
+
+
+def provider_count(covered, known):
+    """covered: (providers, h, w), 1 where that provider reports coverage, 0 where it doesn't, NaN where its file couldn't
+    be read; known: (h, w) bool, the cells inside a state whose listing was read. -> providers covering each cell (0 is the
+    FCC's "none reported"), NaN outside the known states or where a provider's coverage is unknown. Never guessed."""
+    known = np.asarray(known, dtype=bool)
+    if len(covered) == 0:
+        out = np.zeros(known.shape)
+    else:
+        c = np.asarray(covered, dtype=np.float64)
+        out = np.sum(np.where(c >= 0.5, 1.0, 0.0), axis=0)
+        out[np.isnan(c).any(axis=0)] = np.nan
+    return np.where(known, out, np.nan)
+
+
+def latest_as_of(listing):
+    """The newest availability as-of date (YYYY-MM-DD) in /listAsOfDates' answer, or None."""
+    rows = (listing or {}).get("data") or []
+    dates = [str(d.get("as_of_date"))[:10] for d in rows if d.get("as_of_date") and (d.get("data_type") or "availability") == "availability"]
+    return max(dates) if dates else None

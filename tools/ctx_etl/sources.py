@@ -1,9 +1,12 @@
 """The datasets: one function each, every download cached under the cache directory (the workflow keeps it between runs).
 
-Every source here is free and needs no key or account. What each gives, its licence and its URL are in SOURCES (written
-into every bundle's header and shown in About > Sources). Not built yet: the FCC mobile-coverage map (its download API
-needs a free FCC account and was blocked from the build machine) and NASA's VNL radiance composites (an EOG/Earthdata
-login); NASA's Black Marble 2016 image stands in for night lights.
+Every source here is free. What each gives, its licence and its URL are in SOURCES (written into every bundle's header
+and shown in About > Sources). Two use the owner's free accounts, read from the environment (GitHub Actions secrets,
+never in the repo or the logs), and are skipped without them:
+- EARTHDATA_TOKEN (urs.earthdata.nasa.gov -> Generate Token): night lights from NASA Black Marble VNP46A4, the newest
+  annual radiance composite on LAADS DAAC; without it, the Black Marble 2016 image through GIBS, as before.
+- FCC_USERNAME + FCC_API_TOKEN (broadbandmap.fcc.gov -> Manage API access): mobile_coverage, the 4G/5G providers per
+  cell from the FCC National Broadband Map; without them the channel isn't built (unknown on the phone).
 GDAL-backed libraries (rasterio, pyproj, shapely, pyshp) are imported inside the functions that need them, so the pure
 parts of the pipeline (transforms.py, vcg.py) import without them.
 """
@@ -42,6 +45,17 @@ SOURCES = {
               "licence": "Public domain (US Government)", "url": "https://www.bts.gov/geospatial/national-transportation-noise-map"},
     "night": {"name": "Black Marble 2016 (VIIRS Day/Night Band) via GIBS", "by": "NASA Earth Observatory / NASA GIBS",
               "licence": "Public domain (NASA); acknowledge NASA GIBS", "url": "https://earthdata.nasa.gov/gibs"},
+    "night_viirs": {"name": "NASA Black Marble VNP46A4 annual night-time lights (VIIRS DNB, Collection 2, AllAngle snow-free)",
+                    "by": "NASA Black Marble (Roman et al. 2018) via the Level-1 and Atmosphere Archive & Distribution System "
+                          "(LAADS) DAAC",
+                    "licence": "Public domain (NASA); cite: Roman, M.O. et al. (2018), NASA's Black Marble nighttime lights "
+                               "product suite, Remote Sensing of Environment 210, 113-143; doi:10.5067/VIIRS/VNP46A4.002",
+                    "url": "https://ladsweb.modaps.eosdis.nasa.gov/missions-and-measurements/products/VNP46A4/",
+                    "mapping": "min(1, (radiance / 20 nW cm-2 sr-1) ** 0.7)"},
+    "fcc": {"name": "FCC National Broadband Map, mobile broadband coverage (4G LTE and 5G-NR), Broadband Data Collection",
+            "by": "Federal Communications Commission (providers' filings)",
+            "licence": "Public domain (US Government); the FCC does not endorse Vetta",
+            "url": "https://broadbandmap.fcc.gov/data-download"},
     "census": {"name": "2020 Census blocks (TIGER/Line, POP20, HOUSING20); ACS 5-year B25035 median year built", "by": "US Census Bureau",
                "licence": "Public domain (US Government)", "url": "https://www.census.gov/"},
     "addresses": {"name": "OpenAddresses (county and state address points)", "by": "OpenAddresses contributors and the source counties/states",
@@ -80,6 +94,19 @@ OA_LIST = "https://batch.openaddresses.io/api/data"
 OA_JOB = "https://v2.openaddresses.io/batch-prod/job/{job}/source.geojson.gz"
 PC_STAC = "https://planetarycomputer.microsoft.com/api/stac/v1/search"
 PC_TOKEN = "https://planetarycomputer.microsoft.com/api/sas/v1/token/usda-cdl"
+LAADS_VNP46A4 = "https://ladsweb.modaps.eosdis.nasa.gov/archive/allData/5200/VNP46A4"
+FCC_API = "https://broadbandmap.fcc.gov/api/public/map"
+
+
+def earthdata_token():
+    """The owner's Earthdata bearer token (GitHub secret EARTHDATA_TOKEN), or None."""
+    return (os.environ.get("EARTHDATA_TOKEN") or "").strip() or None
+
+
+def fcc_creds():
+    """(username, token) for the FCC's public data API (secrets FCC_USERNAME, FCC_API_TOKEN), or None unless both are set."""
+    u, t = (os.environ.get("FCC_USERNAME") or "").strip(), (os.environ.get("FCC_API_TOKEN") or "").strip()
+    return (u, t) if u and t else None
 
 
 class Ctx:
@@ -94,15 +121,16 @@ class Ctx:
         return p
 
 
-def http(url, data=None, timeout=120, tries=4):
-    """GET (or POST data) with retries and backoff; returns bytes. Raises after the last try."""
+def http(url, data=None, timeout=120, tries=4, headers=None):
+    """GET (or POST data) with retries and backoff; returns bytes. Raises after the last try. `headers` (credentials) are
+    sent but never logged: errors name the URL only."""
     last = None
     for k in range(tries):
         try:
-            headers = {"User-Agent": UA}
+            h = {"User-Agent": UA, **(headers or {})}
             if data is not None:
-                headers["Content-Type"] = "application/json"
-            req = urllib.request.Request(url, data=data, headers=headers)
+                h["Content-Type"] = "application/json"
+            req = urllib.request.Request(url, data=data, headers=h)
             with urllib.request.urlopen(req, timeout=timeout) as r:
                 return r.read()
         except Exception as e:  # noqa: BLE001 - network: retry anything
@@ -137,19 +165,19 @@ def _cached(ctx, key, url, **kw):
     return b
 
 
-def cached_file(ctx, key, url, timeout=1800):
+def cached_file(ctx, key, url, timeout=1800, headers=None):
     """Download a large file to cache/key (streamed) and return its path. One download per file across threads."""
     with _lock(key):
-        return _cached_file(ctx, key, url, timeout)
+        return _cached_file(ctx, key, url, timeout, headers)
 
 
-def _cached_file(ctx, key, url, timeout):
+def _cached_file(ctx, key, url, timeout, headers=None):
     p = ctx.path(key)
     if os.path.exists(p) and os.path.getsize(p) > 0:
         return p
     for k in range(4):
         try:
-            req = urllib.request.Request(url, headers={"User-Agent": UA})
+            req = urllib.request.Request(url, headers={"User-Agent": UA, **(headers or {})})
             with urllib.request.urlopen(req, timeout=timeout) as r, open(p + ".part", "wb") as f:
                 while True:
                     b = r.read(1 << 20)
@@ -281,8 +309,36 @@ def noise(ctx, win):
     return out
 
 
-# ------------------------------------------------------------------------------------------------------- night lights (GIBS)
+# ------------------------------------------------------------------------------------------------------- night lights
+NIGHT_MODE = {"viirs": None}       # set once per run by night_prepare: True VNP46A4, False the 2016 image
+
+
+def night_prepare(ctx, bbox):
+    """Decide the run's night-lights source before any bundle is made, so every bundle says the same: VNP46A4 when there
+    is a token and the region's tiles download and read (an expired or refused token must not cost the channel), else the
+    2016 image as before. Returns True for VNP46A4."""
+    ok = False
+    if earthdata_token():
+        try:
+            for h, v in transforms.bm_tiles_for_box(*bbox):
+                bm_tile(ctx, h, v)
+            ok = True
+        except Exception as e:  # noqa: BLE001
+            ctx.log(f"::warning::night lights: VNP46A4 unavailable ({e}); using the Black Marble 2016 image. A refused "
+                    f"download usually means EARTHDATA_TOKEN expired (docs/OWNER_TODO.md)")
+    NIGHT_MODE["viirs"] = ok
+    return ok
+
+
 def night_lights(ctx, win):
+    """The night_lights channel (0..1): Black Marble VNP46A4 annual radiance with an Earthdata token, else the 2016 image."""
+    viirs = NIGHT_MODE["viirs"] if NIGHT_MODE["viirs"] is not None else bool(earthdata_token())
+    if viirs:
+        return night_lights_viirs(ctx, win)
+    return night_lights_2016(ctx, win)
+
+
+def night_lights_2016(ctx, win):
     """NASA Black Marble 2016 at GIBS's level 8 (one 256 px tile per bundle, ~470 m pixels = the n = 16 cells): the red
     channel (city light is warm white; the unlit ground is dark blue) as 0..254."""
     from PIL import Image
@@ -291,6 +347,133 @@ def night_lights(ctx, win):
     red = np.asarray(Image.open(io.BytesIO(b)).convert("RGB"))[..., 0].astype(np.float64)
     red = np.minimum(red, 254) / 254.0
     return red[win.j0 * 16:(win.j1 + 1) * 16, win.i0 * 16:(win.i1 + 1) * 16]
+
+
+# VNP46A4 against the 2016 image over the same cells, summed across the run (build.py logs it), so NIGHT_SAT and
+# NIGHT_GAMMA (transforms.py) can be tuned from a real build.
+NIGHT_CHECK = {"n": 0, "x": 0.0, "y": 0.0, "xx": 0.0, "yy": 0.0, "xy": 0.0, "dark_both": 0, "dark_2016": 0, "dark_new": 0}
+_night_lock = threading.Lock()
+_bm_listing = {}
+_bm_tiles = {}
+
+
+def _bearer():
+    return {"Authorization": "Bearer " + earthdata_token()}
+
+
+def _laads_json(ctx, path, key):
+    return json.loads(cached(ctx, key, f"{LAADS_VNP46A4}{path}.json", timeout=120, headers=_bearer()))
+
+
+def bm_year(ctx):
+    """(year, file names in its day-001 directory) for the newest VNP46A4 year LAADS lists with files; once per run."""
+    with _night_lock:
+        if "year" not in _bm_listing:
+            years = [c["name"] for c in _laads_json(ctx, "", "night_viirs/years.json").get("content", [])]
+            for y in sorted((v for v in years if str(v).isdigit()), key=int, reverse=True):
+                try:
+                    names = [c["name"] for c in _laads_json(ctx, f"/{y}/001", f"night_viirs/{y}_001.json").get("content", [])]
+                except RuntimeError:
+                    names = []
+                if any(n.endswith(".h5") for n in names):
+                    _bm_listing.update(year=int(y), names=names)
+                    break
+            else:
+                raise RuntimeError("LAADS lists no VNP46A4 year with files")
+            SOURCES["night_viirs"]["year"] = _bm_listing["year"]
+            ctx.log(f"  night lights: VNP46A4 {_bm_listing['year']} (LAADS)")
+        return _bm_listing["year"], _bm_listing["names"]
+
+
+def read_vnp46a4(path):
+    """A VNP46A4 HDF5 tile -> radiance (float64, 2400 x 2400, NaN unknown). Needs h5py (tools/ctx_etl/requirements.txt)."""
+    import h5py
+
+    def attr(d, k, default):
+        v = d.attrs.get(k, default)
+        return np.asarray(v).ravel()[0] if np.size(v) else default
+
+    with h5py.File(path, "r") as f:
+        d = f[transforms.BM_FIELDS + transforms.BM_LAYER]
+        q = f.get(transforms.BM_FIELDS + transforms.BM_LAYER + "_Quality")
+        return transforms.vnp46_radiance(d[()], q[()] if q is not None else None, fill=attr(d, "_FillValue", 65535),
+                                         scale=attr(d, "scale_factor", 0.1), offset=attr(d, "add_offset", 0.0))
+
+
+def bm_tile(ctx, h, v):
+    """One tile's radiance, kept in memory (a bundle's chunks share it), or None where LAADS has no file (open ocean)."""
+    key = (h, v)
+    with _lock(("bm", h, v)):
+        if key not in _bm_tiles:
+            year, names = bm_year(ctx)
+            name = transforms.bm_file_for(names, h, v)
+            if name is None:
+                rad = None
+            else:
+                p = cached_file(ctx, f"night_viirs/{year}/{name}", f"{LAADS_VNP46A4}/{year}/001/{name}", timeout=1800,
+                                headers=_bearer())
+                with open(p, "rb") as f:
+                    sig = f.read(8)
+                if sig != b"\x89HDF\r\n\x1a\n":   # a login page after a refused token: not kept in the cache
+                    os.remove(p)
+                    raise RuntimeError(f"{name}: not an HDF5 file (download refused?)")
+                rad = read_vnp46a4(p).astype(np.float32)
+            with _night_lock:
+                if len(_bm_tiles) >= 4:                # 2400 x 2400 float32 is 23 MB: keep the few a region needs
+                    _bm_tiles.pop(next(iter(_bm_tiles)))
+                _bm_tiles[key] = rad
+        return _bm_tiles[key]
+
+
+def night_lights_viirs(ctx, win):
+    """VNP46A4 annual radiance averaged into the window's ~470 m cells and mapped to 0..1 (transforms.night_from_radiance);
+    cells with no good pixel stay unknown. Each chunk is compared with the 2016 image (NIGHT_CHECK) when that loads."""
+    from affine import Affine
+    w, s, e, n = win.lonlat_box(0.01)
+    out = np.full((win.height, win.width), np.nan)
+    for h, v in transforms.bm_tiles_for_box(w, s, e, n):
+        rad = bm_tile(ctx, h, v)
+        if rad is None:
+            continue
+        x0, y0, px = transforms.bm_tile_origin(h, v)
+        c0, c1 = max(0, int((w - x0) / px) - 2), min(rad.shape[1], int((e - x0) / px) + 3)
+        r0, r1 = max(0, int((y0 - n) / px) - 2), min(rad.shape[0], int((y0 - s) / px) + 3)
+        if c0 >= c1 or r0 >= r1:
+            continue
+        part = warp_array(rad[r0:r1, c0:c1], Affine(px, 0, x0 + c0 * px, 0, -px, y0 - r0 * px), "EPSG:4326", win, "average")
+        out = np.where(np.isnan(out), part, out)
+    new = transforms.night_from_radiance(out)
+    try:
+        old = night_lights_2016(ctx, win)
+        ok = np.isfinite(old) & np.isfinite(new)
+        a, b = old[ok], new[ok]
+        with _night_lock:
+            c = NIGHT_CHECK
+            c["n"] += int(a.size)
+            c["x"] += float(a.sum())
+            c["y"] += float(b.sum())
+            c["xx"] += float((a * a).sum())
+            c["yy"] += float((b * b).sum())
+            c["xy"] += float((a * b).sum())
+            c["dark_both"] += int(((a < 0.15) & (b < 0.15)).sum())
+            c["dark_2016"] += int((a < 0.15).sum())
+            c["dark_new"] += int((b < 0.15).sum())
+    except Exception:  # noqa: BLE001 - the comparison is a log line, never a reason to lose the channel
+        pass
+    return new
+
+
+def night_check_summary(c=None):
+    """One line comparing the run's VNP46A4 night lights with the 2016 image, or None when nothing was compared."""
+    c = c or NIGHT_CHECK
+    if not c["n"]:
+        return None
+    n = c["n"]
+    mx, my = c["x"] / n, c["y"] / n
+    vx, vy = c["xx"] / n - mx * mx, c["yy"] / n - my * my
+    r = (c["xy"] / n - mx * my) / math.sqrt(vx * vy) if vx > 0 and vy > 0 else float("nan")
+    return (f"night lights vs 2016 over {n} cells: mean {mx:.3f} (2016) / {my:.3f} (VNP46A4), r = {r:.2f}; dark (< 0.15) "
+            f"{c['dark_2016']} / {c['dark_new']} cells, both {c['dark_both']}")
 
 
 # ------------------------------------------------------------------------------------------------------------ flood (FEMA)
@@ -744,3 +927,113 @@ def fars_points(ctx, states, years):
                     out.append((lo, la, int(row.get("YEAR") or y), int(row.get("FATALS") or 1), hour if hour < 24 else 255))
     SOURCES["fars"]["years"] = [min(years), max(years)]
     return np.asarray(out, dtype=np.float64).reshape(-1, 5)
+
+
+# ----------------------------------------------------------------------------------------------- mobile coverage (FCC BDC)
+def _fcc_headers():
+    u, t = fcc_creds()
+    return {"username": u, "hash_value": t, "user_agent": UA}
+
+
+def fcc_json(ctx, path, key, params=None):
+    """The FCC public data API's JSON answer for path (cached under key). Credentials go in headers, never the URL."""
+    url = FCC_API + path + ("?" + urllib.parse.urlencode(params) if params else "")
+    d = json.loads(cached(ctx, key, url, timeout=180, headers=_fcc_headers()))
+    if str(d.get("status_code", 200)) not in ("200", "") and d.get("status") not in (None, "success", "successful"):
+        raise RuntimeError(f"FCC {path}: {d.get('status_code')} {d.get('message')}")
+    return d
+
+
+class MobileCoverage:
+    """Providers reporting 4G LTE or 5G-NR mobile coverage per cell, from the FCC National Broadband Map (Broadband Data
+    Collection, the newest as-of date). For each region state: the state's availability listing, its mobile-broadband
+    coverage files (transforms.fcc_pick_files: one environment for the state, in-vehicle where listed), each provider's
+    shapefiles split by bundle (ShapeStore). A cell counts a provider when the provider's 4G or 5G coverage reaches any of
+    its four quarter-cell points; cells outside a state whose listing was read, or where a provider's file couldn't be
+    read, are unknown (NaN), never 0."""
+
+    def __init__(self, ctx, states, bbox, bundles):
+        from shapely.ops import transform as stransform
+        self.as_of = transforms.latest_as_of(fcc_json(ctx, "/listAsOfDates", "fcc/as_of_dates.json"))
+        if not self.as_of:
+            raise RuntimeError("FCC lists no availability as-of date")
+        self.providers = {}          # provider id -> {"name", "stores": [ShapeStore]}
+        self.failed = set()          # provider ids with a file that couldn't be read
+        self.known = []              # mercator state geometries whose listing was read
+        envs = {}
+        shapes = state_boundaries(ctx, states)
+        for st in states:
+            fips = STATE_FIPS[st]
+            try:
+                listing = fcc_json(ctx, f"/downloads/listAvailabilityData/{self.as_of}", f"fcc/{self.as_of}/list_{fips}.json",
+                                   {"category": "State", "technology_type": "Mobile Broadband", "state_fips": fips})
+            except RuntimeError as e:
+                ctx.log(f"  ! FCC listing {st}: {e}")
+                continue
+            picked, env = transforms.fcc_pick_files(listing.get("data") or [], fips)
+            if not picked:
+                ctx.log(f"  ! FCC {st}: no 4G/5G mobile coverage files listed")
+                continue
+            envs[st] = env
+            for pid, p in picked.items():
+                prov = self.providers.setdefault(pid, {"name": p["name"], "stores": []})
+                for e in p["files"]:
+                    try:
+                        shp = self._shapefile(ctx, e)
+                        prov["stores"].append(ShapeStore(ctx, f"fcc_{self.as_of}_{e['file_id']}", shp, [], bbox, bundles))
+                    except Exception as err:  # noqa: BLE001 - this provider is unknown here, the rest still count
+                        ctx.log(f"  ! FCC {st} {p['name']} file {e['file_id']}: {err}")
+                        self.failed.add(pid)
+            if st in shapes:
+                self.known.append(stransform(lambda X, Y, Z=None: _merc_xy(X, Y), shapes[st]))
+        SOURCES["fcc"].update(as_of=self.as_of, environment=envs, providers=len(self.providers))
+        ctx.log(f"  FCC mobile coverage {self.as_of}: {len(self.providers)} providers in {sorted(envs)} ({envs})")
+
+    @staticmethod
+    def _shapefile(ctx, e):
+        """A listed GIS file -> the path of its .shp (downloaded as a shapefile zip, extracted once)."""
+        d = os.path.join(ctx.cache, "fcc", "files", str(e["file_id"]))
+        os.makedirs(d, exist_ok=True)
+        done = os.path.join(d, ".done")
+        if not os.path.exists(done):
+            z = cached_file(ctx, f"fcc/files/{e['file_id']}.zip", f"{FCC_API}/downloads/downloadFile/availability/{e['file_id']}/1",
+                            timeout=1800, headers=_fcc_headers())
+            with zipfile.ZipFile(z) as zf:
+                for m in zf.namelist():
+                    if m.endswith("/") or ".." in m or m.startswith("/"):
+                        continue
+                    zf.extract(m, d)
+            open(done, "w").close()
+        shps = sorted(os.path.join(r, f) for r, _ds, fs in os.walk(d) for f in fs if f.lower().endswith(".shp"))
+        if not shps:
+            raise RuntimeError("no shapefile in the download")
+        prj = shps[0][:-4] + ".prj"
+        if os.path.exists(prj) and "PROJCS" in open(prj).read().upper():
+            raise RuntimeError("projected shapefile (lon/lat expected)")
+        return shps[0]
+
+    def raster(self, win):
+        from rasterio.features import rasterize
+        from shapely.geometry import box
+        k = 2
+        known = np.zeros((win.height, win.width), dtype=bool)
+        wbox = box(win.west, win.south, win.east, win.north)
+        for g in self.known:
+            part = g.intersection(wbox)
+            if not part.is_empty:
+                known |= rasterize([(part, 1)], out_shape=known.shape, transform=win.transform(), fill=0, dtype="uint8") > 0
+        if not known.any():
+            return np.full(known.shape, np.nan)
+        covered = []
+        for pid, p in self.providers.items():
+            items = [t for st in p["stores"] for t in in_window(win, st.get(win.bx, win.by))]
+            if items:
+                fine = rasterize([(geojson(polys), 1) for polys, _b, _a in items], out_shape=(win.height * k, win.width * k),
+                                 transform=win.transform(k), fill=0, dtype="uint8").astype(np.float64)
+                c = transforms.block_reduce(fine, k, "max")
+            else:
+                c = np.zeros(known.shape)
+            if pid in self.failed:
+                c = np.where(c >= 0.5, 1.0, np.nan)    # what it does report counts; where it doesn't, unknown
+            covered.append(c)
+        return transforms.provider_count(covered, known)
