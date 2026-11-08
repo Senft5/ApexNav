@@ -39,7 +39,7 @@ PRESETS = {
     "region": {"states": ["OH", "KY", "IN"], "bbox": None, "out": "ctx_out/v1"},
 }
 RASTERS = ["night_lights", "impervious_pct", "canopy_pct", "noise_db", "housing_density", "population_density",
-           "address_density", "median_year_built", "flood_zone", "cropland_class", "park_unit"]
+           "address_density", "median_year_built", "flood_zone", "cropland_class", "park_unit", "mobile_coverage"]
 FARS_YEARS = list(range(2020, 2025))
 
 
@@ -142,6 +142,19 @@ def build(args):
     yb = sources.YearBuilt(ctx, states, rbox, bset) if want("median_year_built") else None
     addr = sources.Addresses(ctx, states, rbox, counties) if want("address_density") else None
     parks = sources.Parks(ctx, rbox) if want("park_unit") else None
+    # the owner's accounts (GitHub secrets; sources.py): without them night lights are the 2016 image and mobile coverage
+    # isn't built, exactly as before they existed
+    night_src = "night_viirs" if want("night_lights") and sources.night_prepare(ctx, rbox) else "night"
+    ctx.log(f"  night lights: {'NASA Black Marble VNP46A4 (Earthdata token)' if night_src == 'night_viirs' else 'Black Marble 2016 (GIBS)'}")
+    fcc = None
+    if want("mobile_coverage"):
+        if not sources.fcc_creds():
+            ctx.log("  mobile coverage: skipped (no FCC_USERNAME / FCC_API_TOKEN)")
+        else:
+            try:
+                fcc = sources.MobileCoverage(ctx, states, rbox, bset)
+            except Exception as e:  # noqa: BLE001 - the FCC down must not sink the rest
+                ctx.log(f"  ! mobile coverage failed: {e}")
     state_shapes = sources.state_boundaries(ctx, states)
 
     def hpms_for(bx, by):
@@ -172,10 +185,12 @@ def build(args):
         "flood_zone": lambda w: sources.flood(ctx, w),
         "cropland_class": lambda w: sources.cdl(ctx, w),
         "park_unit": lambda w: parks.raster(w),
+        "mobile_coverage": lambda w: fcc.raster(w),
     }
-    src_of = {"night_lights": "night", "impervious_pct": "nlcd", "canopy_pct": "nlcd", "noise_db": "noise",
+    src_of = {"night_lights": night_src, "impervious_pct": "nlcd", "canopy_pct": "nlcd", "noise_db": "noise",
               "housing_density": "census", "population_density": "census", "address_density": "addresses",
-              "median_year_built": "census", "flood_zone": "flood", "cropland_class": "cdl", "park_unit": "parks"}
+              "median_year_built": "census", "flood_zone": "flood", "cropland_class": "cdl", "park_unit": "parks",
+              "mobile_coverage": "fcc"}
 
     os.makedirs(out_dir, exist_ok=True)
     index = {"v": VERSION, "built": dt.date.today().isoformat(), "region": args.preset or "custom", "states": states,
@@ -188,7 +203,7 @@ def build(args):
                   "coverage": [list(t) for t in btiles], "states": states, "channels": {}, "sources": {}}
         w = vcg.Writer(header)
         for name in RASTERS:
-            if not want(name):
+            if not want(name) or (name == "mobile_coverage" and fcc is None):
                 continue
             n, dtype, scale, offset, nodata, unit, _how, meaning = grid.CHANNELS[name]
             try:
@@ -249,6 +264,8 @@ def build(args):
                 f"{header.get('lines', {}).get('count', 0)} road spans, {header.get('points', {}).get('count', 0)} crashes, "
                 f"{len(data) / 1e6:.2f} MB, {time.time() - tb:.0f} s")
     index["bytes"] = total
+    if sources.night_check_summary():
+        ctx.log("  " + sources.night_check_summary())
     with open(os.path.join(out_dir, "index.json"), "w") as f:
         json.dump(index, f, indent=1, sort_keys=True)
         f.write("\n")

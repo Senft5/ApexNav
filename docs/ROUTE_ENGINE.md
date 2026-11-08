@@ -47,7 +47,7 @@ flowchart TD
   RUN --> B1["B osm_tiles.js, 8 s:<br>lu_residential, lu_commercial, lu_retail,<br>lu_industrial, lu_forest, lu_farmland,<br>lu_open, lu_park, lu_mapped, water_near,<br>creek_follow, bldg_per_km, addr_per_km,<br>biz_per_km, junctions_per_km,<br>driveways_per_km, access_per_km, road_class<br>in map codes, on_bridge, in_tunnel, unpaved;<br>points school, worship, viewpoint, place,<br>rail_crossing, gate"]
   RUN --> B2["B osm_overpass.js, its tile cache; the<br>query by 0.05° tiles, never the route's<br>line, fills it off the plan's clock (our<br>Worker's relay built, flag osm_relay off):<br>maxspeed_kph, lanes, divided, oneway,<br>surface_paved, smoothness, hgv,<br>access_level, guard_rail, cycle_route,<br>byway,<br>signals/stops/crossings/calming_per_km,<br>side_roads_per_km, driveway_joins_per_km;<br>points signal, stop, give_way, crossing,<br>calming, level_crossing, curve_sign,<br>animal_crossing, buggy, viewpoint, historic,<br>fuel; spans roundabout, one_lane_bridge,<br>covered_bridge, access_private,<br>access_destination, cycle_route, byway"]
   RUN --> B3["B road_name_age.js: name_age"]
-  RUN --> C1["C context_grid.js, 4 s, local bundles<br>web/data/ctx/v1 then the Worker's KV:<br>night_lights, impervious_pct, canopy_pct,<br>noise_db, housing_density,<br>population_density, address_density,<br>median_year_built, flood_zone,<br>cropland_class, park_visits, aadt, iri,<br>hpms_speed_limit, hpms_lanes, hpms_fclass,<br>crash_density; mobile_coverage not built<br>(always unknown); spans nps_unit; points<br>fatal_crash"]
+  RUN --> C1["C context_grid.js, 4 s, local bundles<br>web/data/ctx/v1 then the Worker's KV:<br>night_lights, impervious_pct, canopy_pct,<br>noise_db, housing_density,<br>population_density, address_density,<br>median_year_built, flood_zone,<br>cropland_class, park_visits, aadt, iri,<br>hpms_speed_limit, hpms_lanes, hpms_fclass,<br>crash_density; mobile_coverage (FCC, only<br>once built with the owner's token); spans nps_unit; points<br>fatal_crash"]
   RUN --> D1["D, second phase with the first's land use<br>and terrain: conditions.js, waits 0.8 s for<br>Open-Meteo then its cache: air_temp_c,<br>road_temp_c, visibility_m, fog_risk,<br>crosswind_mps, exposure, precip_6h/48h_mm,<br>wx_hazard, light, glare, golden_view;<br>wildlife.js deer_time_risk, deer_risk;<br>events.js event_crowd, school_zone,<br>school_bus_hour, church_window;<br>hazards_live.js flood_risk, works,<br>harvest_traffic, park_busy, foliage, spans<br>closure, works, flood, low-water, paving;<br>photos.js photo_score, sign_maxspeed_mps,<br>curve_sign. Not built: snowplough (no OHGO<br>endpoint), city permits (no public source),<br>NC and VA work zones (need keys); FEMA<br>flood zones come from C's grid"]
   RUN --> E1["E crowd.js, 9 s, second phase: members' data<br>by 0.1° cells, ways from the router's edges:<br>crowd_rough_g, crowd_bank_deg,<br>crowd_curv, crowd_conf, crowd_flow, loved,<br>taste, crowd_busy (quiet_hours flag, off);<br>needs lookupCells /api/roads?cells=,<br>crewLines"]
   RUN --> E2["E driver.js, 8 s: passenger_cost, tech_level,<br>skill_fit, dark, lit, cyclist_route,<br>cyclist_time, tunnel, driver_fit; spans<br>hairpins, abrupt, unlit_dark, cycle_route,<br>tunnel; For this drive prefs passenger,<br>lit, cyclists, tunnels"]
@@ -553,7 +553,7 @@ lights, impervious, addresses, housing, residential land use.
 | `creek_follow` | 0/1 (a stream within 150 m, parallel) | B | 1 | 1 / 0.35 |
 | `open_country` | farmland/grass share | B | 0.6 | 0.4 + 0.45 v |
 | `protected` | 0/1 park or protected area | B | 1 | 1 / 0.4 |
-| `photo_score` | 0–1 (Commons + Flickr spots) | D | 1 | v, only where router density < 4 (towns are photographed too) |
+| `photo_score` | 0–1 (Commons spots) | D | 1 | v, only where router density < 4 (towns are photographed too) |
 | `curve_sign` | 0/1 after a curve-warning sign | D (Mapillary) | 0.6 | 1 / 0.5 |
 | `grade_pct` | % along travel | A | 0.6 | \|v\|: 0 → 0.3, 6 → 1 (climbs and descents) |
 | `tpi_m` | m (+ ridge, − valley) | A | 0.8 | \|v\|: 0 → 0.25, 40 → 1 |
@@ -580,7 +580,7 @@ See the spans table under Weights. Shown, not ranked: `signal`, `junction`, `dri
 | item | why |
 |---|---|
 | live traffic in planning | no free source: Apple MapKit timing runs on the iPhone during a drive (traffic detours); no free keyless service times candidates before one |
-| VIIRS radiance (`night_light`) | C ships Black Marble brightness (`night_lights`, 0–1) instead: used |
+| VIIRS radiance (`night_light`) | C ships Black Marble brightness (`night_lights`, 0–1) instead: used. With the owner's Earthdata token the ETL builds it from VNP46A4 annual radiance as min(1, (r / 20) ** 0.7), on the 2016 image's scale (tools/ctx_etl/transforms.py NIGHT_SAT) |
 | buildings per hectare | B's `bldg_per_km` (within 60 m) is the building term |
 | Mapillary limits as their own channel | D's `sign_maxspeed_mps` is in the speed-limit chain (measured, after OSM, before HPMS) |
 | truck share (`hgv_share`) | no public source per road; the router's `truck_route` and OSM `hgv` stand in |
@@ -592,7 +592,7 @@ See the spans table under Weights. Shown, not ranked: `signal`, `junction`, `dri
 | FEMA flood zones | built, not missing: C's grid carries FEMA's flood class (`flood_zone`, the NFHL in the bundles), costed only when D says it's wet (48 h rain ≥ 25 mm or `flood_risk` ≥ 0.5). Only a live query of FEMA's NFHL service per plan isn't made: the bundles are its copy |
 | city event permits | no public source: Cincinnati's open data has building and right-of-way permits but no street-closure or special-event permits, Columbus none (events.js) |
 | NC and VA work zones | needs owner keys: NCDOT's and VDOT's work-zone feeds take a registered key (hazards_live.js), and the provider isn't wired for them until there is one; KY comes through our server, OH with the owner's OHGO key |
-| FCC mobile coverage (`mobile_coverage`) | needs an owner account: the FCC National Broadband Map download API takes a registered account and token; until then the channel is NaN everywhere, so it never counts for or against a route |
+| FCC mobile coverage (`mobile_coverage`) | built by tools/ctx_etl (sources.MobileCoverage) when the workflow has the owner's FCC_USERNAME + FCC_API_TOKEN secrets (2026-11-08); until a grid is rebuilt with them the channel is NaN everywhere, so it never counts for or against a route |
 | `crowd_curv`, `crowd_conf`, `tech_level`, `free_min`, `intersections_per_km`, `fuel_since_km` | said or used elsewhere: members' curvature corrects corners on the drive, `tech_level` is inside `driver_fit`, `free_min` sizes loops (My free time), junctions are inside `access_per_km` |
 
 ### Other providers' names (builder B's OSM providers, mapped as they are)
@@ -642,7 +642,7 @@ C: `night_lights` (0–1, saturates in suburbs) is a quality term and the dark-v
 motorway; `flood_zone` (0–4) costs only when D says it's wet (48 h rain ≥ 25 mm or flood_risk ≥ 0.5) and is never hard;
 `cropland_class` limits D's harvest cost to crops and hay (others ×0.2); `park_visits` and D's `park_busy` are one term
 (`park_visitors`); `hpms_speed_limit` (mph), `hpms_lanes` (both directions, halved) and `hpms_fclass` fill gaps;
-`mobile_coverage` is not built and stays unknown. `canopy_pct`, `impervious_pct`, `noise_db`, `aadt`, `iri` are the
+`mobile_coverage` (FCC providers with 4G/5G per cell) is unknown until the grid is rebuilt with the owner's FCC token. `canopy_pct`, `impervious_pct`, `noise_db`, `aadt`, `iri` are the
 model's names; volume, noise and trucks say nothing against a motorway. D: the speed-limit chain is router → OSM →
 Mapillary `sign_maxspeed_mps` → HPMS → class estimate (all but the last measured); `visibility_m` → `fog_vis_m`, and
 `fog_risk` (valleys and ridges already in it) replaces it when present; `crosswind_mps` → `crosswind_ms`, scaled by

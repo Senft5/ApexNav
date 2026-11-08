@@ -1,5 +1,36 @@
 # VETTA — CURRENT AGENT HANDOFF STATE
 
+## Session 2026-11-08 (keys): the owner's answers on the free keys (claude/keys-1108, off origin/main)
+
+- [x] NREL is now NLR: backend/src/chargers.ts asks developer.nlr.gov (developer.nrel.gov no longer resolves; nlr.gov
+  answers 200 with DEMO_KEY, checked from the build container). Secret name `NREL_API_KEY` kept. Vitest asserts the host.
+- [x] Flickr dropped (no free keys): photos.js, `flickrApiKey` in route_feeds.ts CTX_KEY_NAMES, www.flickr.com in
+  tools/csp.py CONNECT (pages regenerated), licences, privacy, APP_REVIEW.md, ROUTING.md, ROUTE_ENGINE.md. Tests now
+  assert Flickr isn't asked or mentioned (test_route_ctx_photos, test_route_ctx_fetch).
+- [x] Night lights from NASA Black Marble VNP46A4 with `EARTHDATA_TOKEN` (tools/ctx_etl: transforms.vnp46_radiance,
+  night_from_radiance = min(1, (r / 20) ** 0.7); sources.night_prepare / night_lights_viirs / read_vnp46a4 with h5py; the
+  newest year LAADS lists, AllAngle_Composite_Snow_Free, quality 0-1 only). No token, or a refused one: the 2016 GIBS path
+  for the whole run, unchanged (a Cincinnati rebuild without secrets is identical to the committed bundles). LAADS
+  listings answer without a token from this container; file downloads redirect to the Earthdata login (303), so the HDF5
+  read is tested on a synthetic file only.
+- [x] FCC mobile coverage with `FCC_USERNAME` + `FCC_API_TOKEN` (sources.MobileCoverage: listAsOfDates →
+  listAvailabilityData per state → 4G/5G mobile-broadband shapefiles per provider, in-vehicle where listed →
+  mobile_coverage = providers per 32-cell, NaN outside the states read). Without both: skipped, as before. The FCC API
+  answered 401 without credentials here, so the listing's field names and the downloadFile path (`/1` = shapefile) are
+  from the API spec, not seen live.
+- [x] Consumer: route_engine.js already reads mobile_coverage (signal_coverage); car.js `signalFromProviders` turns the
+  count into its 0..1 signal (0 / 0.5 / 1) for the no-signal stretch, Share-your-ETA point and offline areas.
+- [x] Both secrets passed in .github/workflows/context-grid.yml and ctx-region.yml; h5py in tools/ctx_etl/requirements.txt.
+- Tests: pytest 1352 passed, 2 skipped (new: tests/test_ctx_etl_accounts.py, 11 tests on labelled synthetic
+  fixtures incl. tests/fixtures/ctx_etl/fcc_listing_synthetic.json; test_route_ctx_car fcc count); backend tsc clean,
+  vitest 357 passed; e2e: route context, offline plan, levels (3), garage photos, spot photo, plan flow (6) all pass.
+- Open: NIGHT_SAT / NIGHT_GAMMA are estimates; the first run with the token logs "night lights vs 2016 over N cells"
+  (means, r, dark counts): tune from that line. The FCC request shapes are unverified until a run with the secrets.
+- Exact next task: once the owner has added the secrets and run "Context grid (route data ETL)" (preset launch, upload),
+  read the run's log: the night-lights comparison line, "FCC mobile coverage <date>: N providers ... (environment)",
+  any "! FCC" lines; fix the FCC listing filter / download path if the live answer differs, tune the night mapping, then
+  rebuild the committed Cincinnati bundles (preset cincinnati) so the app's shipped grid has both.
+
 ## Session 2026-11-08 (later): what the levels mean (claude/level-rules, off claude/own-routing-instant-2)
 
 - [x] The owner: "fun should never go on the highway. Quick should essentially be a normal route i suppose". Quick is the

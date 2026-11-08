@@ -4,6 +4,39 @@ Decisions Claude made for you, newest first. Each one says what was decided, why
 you reach one you've seen. If you disagree with a call, say so and it gets reversed; nothing here is hard to undo unless
 it says so. Things only you can do are in docs/OWNER_TODO.md.
 
+## 2026-11-08: Your four key answers: NREL is now NLR, Flickr dropped, Earthdata night lights, FCC coverage (claude/keys-1108)
+
+Your answers: "flickr api unavailable for free users", "nrel link doesn't work", "earth data is made", "fcc account made".
+- **EV chargers: NREL is now NLR.** The lab was renamed (National Laboratory of the Rockies); developer.nrel.gov no
+  longer resolves, the same API answers at developer.nlr.gov. Our Worker now asks developer.nlr.gov
+  (backend/src/chargers.ts). The secret keeps its old name `NREL_API_KEY`, so nothing to rename; the OWNER_TODO row points
+  at developer.nlr.gov/signup (any api.data.gov key works too). Undo: the `NREL` const.
+- **Flickr is gone, not parked.** With no free keys there is nothing to wait for: photos.js no longer has a Flickr path,
+  `flickrApiKey` is out of the CTX_KEYS list, www.flickr.com out of the Content-Security-Policy, the Flickr line out of
+  Sources and licences and the privacy page. Photo spots come from Wikimedia Commons (Mapillary still reads signs). A
+  `flickrApiKey` already in CTX_KEYS is simply ignored. Undo: git revert of the Flickr commit.
+- **Night lights from NASA's newest yearly Black Marble (VNP46A4) when the ETL has `EARTHDATA_TOKEN`.** Radiance r is
+  turned into the 0..1 the grid already uses as min(1, (r / 20 nW) ** 0.7), picked so the old 2016 image's reading is
+  kept (lit suburbs 1, a village about 0.27, farmland about 0.12, forest about 0.05; the engine calls under 0.15 dark).
+  Those two numbers are my estimate, not fitted: the first real run logs how the new values compare with the 2016 image
+  over the same cells ("night lights vs 2016 ..."), and they get tuned from that. Gap-filled pixels (from another year)
+  count as unknown. If the token is missing, expired or refused, the whole run uses the 2016 image exactly as before
+  (checked: the rebuilt Cincinnati bundles are identical to the committed ones). Tune: `NIGHT_SAT`, `NIGHT_GAMMA` in
+  tools/ctx_etl/transforms.py. Undo: delete the secret.
+- **Phone signal: the FCC's in-vehicle coverage, not outdoor.** You asked for 4G/5G outdoor; the FCC also publishes
+  "in-vehicle mobile" coverage for 4G and 5G, which is what a phone in a moving car gets, and the grid's contract already
+  said in-vehicle. So a state is read in-vehicle where the FCC lists those files, outdoor stationary only where it lists
+  none (the bundle's sources say which, per state). Counted per ~240 m cell: how many providers report 4G LTE or 5G there
+  (3G not counted). 0 means the FCC has no provider there; outside the states read it is unknown, and where one provider's
+  file couldn't be read the count is unknown rather than one short. Undo: `fcc_pick_files` in transforms.py (prefer
+  "outdoor").
+- **What the phone does with it:** it already read the channel (the route engine's signal term, the car provider's
+  no-signal stretch → "Share your ETA before the signal goes" → save the map for offline). The car provider now turns the
+  provider count into its 0..1 signal as none 0, one provider 0.5 (it may not be yours), two or more 1, so a one-carrier
+  valley isn't called "no signal". Undo: `signalFromProviders` in web/route_ctx/car.js.
+- **Both secrets are passed to both grid workflows** ("Context grid (route data ETL)" and the OH+KY+IN region build), so
+  the region's graph-data copy gets the same fields. h5py is added to the ETL's requirements only, not the app.
+
 ## 2026-11-08: What the levels mean: Quick is the normal route, Fun never on the highway (claude/level-rules)
 
 Your words: "fun should never go on the highway. Quick should essentially be a normal route i suppose". On your work to

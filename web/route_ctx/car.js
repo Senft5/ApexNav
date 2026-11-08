@@ -2,7 +2,7 @@
 // follows from it. The car's width and ride height already shape the router's costing (fun_route.js costing, carNote); this
 // adds what the router can't know. Sources: the Garage's daily car (fuel, range_km; kept on the phone as apex.routingCar),
 // fuel stations from OpenStreetMap (amenity=fuel via Overpass, ODbL, 0.25-degree tiles cached FUEL_MS), EV chargers from
-// NREL's Alternative Fuel Stations API (public domain, US DOE; through our Worker, GET /api/chargers, which holds the free
+// the Alternative Fuel Stations API of NLR, ex-NREL (developer.nlr.gov; public domain, US DOE; through our Worker, GET /api/chargers, which holds the free
 // key the owner creates: docs/OWNER_TODO.md; no key = status 'no-key'), and builder C's `mobile_coverage` channel when the
 // engine passes it in opts.peer (FCC coverage). Overpass and our Worker get tile ids/boxes, never the route.
 //
@@ -11,7 +11,8 @@
 //                         before the first one (the tank at the start is not known) and when stations couldn't be loaded
 //   fuel_margin    0..1   1 - fuel_since_km / safe range (SAFE_SHARE of the car's range, EV_SAFE_SHARE electric); NaN
 //                         without a range
-//   signal         0..1   phone coverage along the route, from C's mobile_coverage when present; else NaN
+//   signal         0..1   phone coverage along the route from C's mobile_coverage (FCC providers with 4G/5G: none 0, one
+//                         0.5, two or more 1; signalFromProviders) when the grid has it; else NaN
 // Spans: fuel_gap (hard: true) a stretch between stations longer than the safe range, value km; fuel_check the first
 //   stretch from the start beyond half the safe range (fill up before you go); no_signal coverage under NO_SIGNAL for 2+ km.
 // Points: fuel_stop (the last station before a fuel_gap: fill up here), share_eta (before the first no_signal stretch),
@@ -124,6 +125,21 @@
   }
 
   /** Signal: C's coverage channel copied, no_signal spans, and the share_eta point before the first. */
+  /**
+   * C's mobile_coverage (providers reporting 4G/5G in the cell, FCC) -> signal 0..1: none reported 0, one provider 0.5 (you
+   * may not be on it), two or more 1. NaN stays unknown; null (no channel, or no known sample at all) stays null.
+   */
+  function signalFromProviders(count) {
+    if (!count || !count.length) return null;
+    const out = new Float32Array(count.length);
+    let known = false;
+    for (let i = 0; i < count.length; i++) {
+      const v = count[i];
+      out[i] = finite(v) ? Math.min(1, Math.max(0, v) / 2) : NaN;
+      if (finite(v)) known = true;
+    }
+    return known ? out : null;
+  }
   function signalPlan(t, coverage) {
     const n = t.lat.length, sig = U.nan(n);
     if (coverage && coverage.length === n) for (let i = 0; i < n; i++) sig[i] = finite(coverage[i]) ? coverage[i] : NaN;
@@ -264,7 +280,7 @@
         if (!safeKm(car)) { status = 'partial'; notes.push('No range for your car'); if (askRangeOnce(storage, car || { label: 'car' }, f.longestKm)) points.push({ atM: 0, kind: 'ask_range', label: `${f.longestKm} km without ${car && car.electric ? 'a charger' : 'fuel'} on this route. How far does your car go on a full ${car && car.electric ? 'charge' : 'tank'}? Add it in the Garage.` }); }
         if (st.status !== 'ok') status = 'partial';
       } else { status = st.status === 'no-key' ? 'no-key' : 'partial'; notes.push(st.status === 'no-key' ? 'Chargers need the NREL key' : 'Couldn’t load fuel stations'); }
-      const cov = opts.peer && opts.peer[c.id] && opts.peer[c.id].channels ? opts.peer[c.id].channels.mobile_coverage : null;
+      const cov = signalFromProviders(opts.peer && opts.peer[c.id] && opts.peer[c.id].channels ? opts.peer[c.id].channels.mobile_coverage : null);
       const sg = signalPlan(c, cov);
       channels.signal = sg.signal; spans.push(...sg.spans); points.push(...sg.points);
       if (!cov) notes.push('No coverage data');
@@ -277,7 +293,7 @@
   const provider = { id: 'car', version: 1, channels: CH, needs: { network: true }, budgetMs: 8000, fetch: fetchCtx };
   U.registry().register(provider);
 
-  const api = { provider, CH, carOf, safeKm, tilesOf, gapCovered, fuelQuery, parseFuel, parseChargers, stationsAlong, fuelPlan, signalPlan, offlineAreas, prepareOffline,
+  const api = { provider, CH, carOf, safeKm, tilesOf, gapCovered, fuelQuery, parseFuel, parseChargers, stationsAlong, fuelPlan, signalFromProviders, signalPlan, offlineAreas, prepareOffline,
     askRangeOnce, stationsFor, SAFE_SHARE, EV_SAFE_SHARE, ASK_KM };
   if (typeof module !== 'undefined' && module.exports) module.exports = api; else root.ApexRouteCar = api;
 })(typeof window !== 'undefined' ? window : globalThis);

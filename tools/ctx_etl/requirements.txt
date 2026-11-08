@@ -5,3 +5,4 @@ pyproj>=3.6
 shapely>=2.0
 pyshp>=2.3
 pillow>=10
+h5py>=3.10        # NASA Black Marble VNP46A4 tiles (HDF5), read only with EARTHDATA_TOKEN

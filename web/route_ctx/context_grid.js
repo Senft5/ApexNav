@@ -6,9 +6,11 @@
 // Worker's /api/ctx/v1/ (the launch region, from KV); each has an index.json. Format: tools/ctx_etl/vcg.py.
 //
 // Channels (per 25 m sample; NaN = unknown: outside the bundles' coverage, or the source has no value there):
-//   night_lights        0-1     Relative night brightness, 0 dark .. 1 brightest. NASA Black Marble 2016 (VIIRS Day/Night
-//                               Band) via NASA GIBS, ~470 m. A tone-mapped image, not radiance: lit suburbs and city cores
-//                               both read near 1; the useful split is dark (< 0.15) vs lit. Public domain; static (2016).
+//   night_lights        0-1     Relative night brightness, 0 dark .. 1 brightest, ~470 m. Built with the owner's Earthdata
+//                               token: NASA Black Marble VNP46A4, the newest annual radiance r (nW/cm2/sr), as
+//                               min(1, (r / 20) ** 0.7); without it, the Black Marble 2016 tone-mapped image via NASA
+//                               GIBS. Either way lit suburbs and city cores both read near 1; the useful split is dark
+//                               (< 0.15) vs lit. Public domain; VNP46A4 yearly, the 2016 image static.
 //   impervious_pct      %       Impervious surface in the ~240 m cell. NLCD 2021 (USGS/MRLC), 30 m averaged. Public domain;
 //                               NLCD updates every 2-3 years.
 //   canopy_pct          %       Tree canopy cover in the ~240 m cell. NLCD/USFS Tree Canopy Cover 2021. Public domain.
@@ -28,8 +30,10 @@
 //                               (via Planetary Computer). Public domain; yearly.
 //   park_visits         /yr     Recreation visits a year to the NPS unit the sample is in; 0 = not in an NPS unit (known).
 //                               NPS boundaries + NPS Visitor Use Statistics. Public domain; yearly.
-//   mobile_coverage     count   Providers with 4G LTE+ in-vehicle coverage (FCC National Broadband Map). Not built yet (the
-//                               FCC download API needs an account): always NaN, so it never counts for or against a route.
+//   mobile_coverage     count   Providers reporting 4G LTE or 5G-NR coverage in the ~240 m cell (FCC National Broadband
+//                               Map; in-vehicle where the FCC lists it, else outdoor stationary). 0 = none reported.
+//                               Built only with the owner's FCC token (tools/ctx_etl): until then absent, NaN, so it never
+//                               counts for or against a route. Public domain; twice a year.
 //   aadt                veh/day Annual average daily traffic of the road under the sample (HPMS, FHWA + state DOTs),
 //                               matched to the route within 20 m and 35 degrees of heading; a divided road's count is read
 //                               from its other carriageway (up to 90 m away) when this one has none. Public domain; yearly.

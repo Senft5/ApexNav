@@ -27,8 +27,10 @@ LOG_SCALE = math.log1p(20000) / 254            # raw 254 = 20,000 per km2 (dense
 # name: (n, dtype, scale, offset, nodata, unit, reduce, meaning)
 CHANNELS = {
     "night_lights": (16, "u8", 1 / 254, 0.0, 255, "0-1",
-                     "copy", "Relative night-time brightness, 0 dark to 1 brightest (NASA Black Marble 2016, VIIRS DNB; "
-                     "tone-mapped image, saturates in city cores; not radiance)"),
+                     "copy", "Relative night-time brightness, 0 dark to 1 brightest: NASA Black Marble VNP46A4 annual "
+                     "radiance r (nW/cm2/sr) as min(1, (r / 20) ** 0.7) when built with an Earthdata token, else the Black "
+                     "Marble 2016 tone-mapped image (VIIRS DNB); either way it saturates in the suburbs; the bundle's "
+                     "sources say which"),
     "impervious_pct": (32, "u8", 1.0, 0.0, 255, "%", "mean", "Impervious surface share of the cell (NLCD 2021)"),
     "canopy_pct": (32, "u8", 1.0, 0.0, 255, "%", "mean", "Tree canopy cover of the cell (NLCD / USFS Tree Canopy Cover 2021)"),
     "noise_db": (64, "u8", 1.0, 0.0, 255, "dB LAeq(24h)", "max",
@@ -50,8 +52,10 @@ CHANNELS = {
     "park_unit": (64, "u8", 1.0, 0.0, 255, "index", "max",
                   "National Park Service unit the cell is in: 0 none, else an index into the bundle's park table"),
     "mobile_coverage": (32, "u8", 1.0, 0.0, 255, "providers", "max",
-                        "Mobile providers reporting 4G LTE or better in-vehicle coverage (FCC National Broadband Map); "
-                        "not built yet (needs an FCC account), so absent from every bundle"),
+                        "Mobile providers reporting 4G LTE or 5G-NR coverage in the cell (FCC National Broadband Map, "
+                        "in-vehicle mobile where the FCC lists it for the state, else outdoor stationary: the bundle's "
+                        "sources say which); 0 = none reported; unknown outside the states read. Built only with the "
+                        "owner's FCC API token"),
 }
 
 DTYPE_BYTES = {"u8": 1, "u16": 2, "u32": 4}

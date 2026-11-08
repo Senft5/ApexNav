@@ -2391,8 +2391,8 @@
     }
     // What the crowd and car providers need from the app (route_ctx/crowd.js, car.js): members' road data (/api/roads?cells=,
     // signed out: null and they say so), the Worker for chargers, the crews' shared lines when Prefer has them, your taste
-    // fit. `peer` would carry the national grid's mobile_coverage; the engine reads that channel itself (route_engine.js
-    // SOURCES), so the car provider's own signal stays unknown until the grid lands.
+    // fit. `peer` is filled by the registry with the first phase's channels (the grid's mobile_coverage, FCC, once a bundle
+    // has it); the engine also reads that channel itself (route_engine.js SOURCES).
     function routeCtxOpts() {
       const get = async (path) => { try { const r = await apiCall('GET', path); return r && r.ok ? await r.json() : null; } catch (_) { return null; } };
       let taste = null;
