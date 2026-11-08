@@ -3481,7 +3481,9 @@
       if (ownUsed) ownRefine(pool, level, routeOptions, t, forecasts, ownFullP);
       if (window.apexDebug) window.apexDebug.lastQuickS = Math.min(...pool.map((c) => c.timeS).filter(Number.isFinite));
       window.apexDebug && (window.apexDebug.lastFun = rankPool(pool, level).map(c => ({ kind: c.kind, fun: c.fun, timeS: c.timeS, value: c.value, adjust: c.adjust || 0, glare: c.glare, townKm: c.townKm, hwyKm: FunRoute.highwayKm(c), hwyRule: c.hwyRule || null,
-        parts: c.parts || null, quality: c.ev ? c.ev.quality : null, confidence: c.ev ? c.ev.confidence : null, poorKm: c.ev ? c.ev.poorKm : null })));
+        parts: c.parts || null, quality: c.ev ? c.ev.quality : null, confidence: c.ev ? c.ev.confidence : null, poorKm: c.ev ? c.ev.poorKm : null,
+        ev: c.ev ? { km: c.ev.km, knownKm: c.ev.knownKm, poorBy: c.ev.poorBy, poorKmFilled: c.ev.poorKmFilled, businessKm: c.ev.businessKm, goodKm: c.ev.goodKm, builtKm: c.ev.builtKm, meanGate: c.ev.meanGate, qWeight: c.ev.qWeight,
+          fun: c.ev.funGated ? { fun: c.ev.funGated.fun, good: c.ev.funGated.good } : null, penalties: c.ev.penalties, bonuses: c.ev.bonuses, signals: c.ev.stats && c.ev.stats.signals } : null })));
       return true;
     }
     // from the plan's start: the context alone takes 1.5-3 s, so the quickest goes up as soon as the router answers (live:

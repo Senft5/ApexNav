@@ -165,6 +165,28 @@ const CASES = {
     return { spread, none };
   },
 
+  // the pick weighs the road's length as the route engine does (2026-11-08, engine-rank): route summaries shaped like the
+  // levels audit's public trips (minutes, km, G, km of side street and of good road on the tiles' quality)
+  levelRoad() {
+    const r = (name, min, km, G, poorKm, goodKm) => ({ name, timeS: min * 60, distM: km * 1000, why: { goodness: G, poorKm, goodKm } });
+    const trips = {
+      // the 17 and 22 min ways have the higher G, bought with more subdivision than the 12 min way drives
+      subdivisionLike: { limit: { fun: 16.6, max: 27.8 }, routes: [r('base', 9.4, 6.8, 0.204, 4.74, 0.1), r('A', 12.0, 9.1, 0.262, 3.26, 0.5),
+        r('B', 17.2, 13.2, 0.323, 5.79, 2.66), r('C', 22.1, 17.8, 0.339, 5.48, 4.21)] },
+      // B's G is a strip mall's; C is 11 km more of the best road for no more side street than the quickest's
+      colerainLike: { limit: { fun: 24.5, max: 38.8 }, routes: [r('base', 16.7, 12.8, 0.301, 4.40, 3.8), r('A', 17.4, 13.8, 0.313, 3.40, 4.17),
+        r('B', 19.6, 15.2, 0.340, 4.46, 7.46), r('C', 31.6, 27.0, 0.403, 4.47, 14.57)] },
+      // at Long way D's 10 more min buy little G but 10 km more good road
+      harrisonLike: { limit: { fun: 32.8, max: 50.6 }, routes: [r('base', 24.1, 22.8, 0.414, 0.77, 17.61), r('A', 31.1, 30.3, 0.454, 0.76, 27.74),
+        r('B', 31.6, 31.2, 0.469, 1.48, 24.70), r('D', 41.9, 41.4, 0.478, 0.75, 37.52)] },
+      // no good road: the longer ways are hardly better
+      noGoodRoad: { limit: { fun: 11.2, max: 20.1 }, routes: [r('base', 5.3, 3.2, 0.2, 2.32, 0), r('A', 8.7, 5.8, 0.253, 2.40, 0.36), r('B', 11.6, 8.0, 0.263, 2.90, 0.40)] },
+    };
+    const out = {};
+    for (const [k, t] of Object.entries(trips)) out[k] = Object.fromEntries(['fun', 'max'].map((lv) => [lv, R.pick(t.routes[0], t.routes, t.limit[lv] * 60, R.K.BUY[lv]).name]));
+    return out;
+  },
+
   // members' data in the search: a near-tie (the plain lane 2 s quicker) flips to the loved, smooth, flowing lane, and
   // with no data (signed out) nothing changes
   crowd() {

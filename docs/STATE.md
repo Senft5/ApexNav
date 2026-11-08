@@ -1,5 +1,31 @@
 # VETTA — CURRENT AGENT HANDOFF STATE
 
+## Session 2026-11-08 (engine-rank): the engine and the router agree on what a longer way buys (claude/engine-rank, off claude/level-spread = main fdbf363)
+
+- [x] The engine's value broken into its parts (tools/live_speed.js dumps lastFun[].parts and ev). On colerain and subdivision4
+  Long way, `poor` (10 a km of side street) decides. Time doesn't (Long way's -4.9 for 14 min), and nor do the corners
+  (fully gated on the good road).
+- [x] colerain: the engine was wrong. It charged side street by the km but counted good road only in a mean, so the 31.6
+  min route's 11 km more of the best road gave +3 against -16 for 3 km more suburb. New part `road`
+  (route_engine.js `W.GOOD_PER_KM` 1.5 per km of good road gained over the quickest: quality 0.5 -> 0.65, never a
+  motorway or ramp, cap 30; why line "N mi more good road"; ROUTE_ENGINE.md weights, flowchart regenerated).
+  App's colerain Long way: 17.4 -> 31.6 min (+5.1).
+- [x] subdivision4: the engine was right. The router's G (a mean) rewarded 2.6 km of good road bought with 3 km more
+  subdivision, and colerain Fun's 19.6 min pick was a strip mall's G. graph_router.js `pick()` adds `K.ROAD.w` 0.003 x
+  the engine's per-km road points over the level's quickest (`why.poorKm`, `why.goodKm`). The router's picks now equal
+  the app's on all 15 trip-levels.
+- [x] App picks before/after (live, warm): changed only colerain Long way (31.6) and northgate Fun (12.1 -> 14.4, 1.1 km
+  more good road, a 0.3-point near-tie before). Quick, subdivision and the other levels are unchanged.
+  OWN_ROUTING.md §5, §8 2026-11-08 (engine-rank); CALL_SHEET 2026-11-08 (engine-rank).
+- [x] Planning time unchanged (node, 5 trips warm, best of 4: Quick 186/185, Fun 148/152, Long way 173/173 ms).
+- Tests: new test_the_good_road_a_longer_way_buys_has_a_length, test_the_pick_weighs_the_road_length_as_the_engine_does
+  (both fail without the change); pytest 1358 passed, 2 skipped; e2e level (6), own routing (4), plan flow (6),
+  offline (6) all pass.
+- Open: the GOOD_PER_KM 1.5 and ROAD.w 0.003 values are fitted on the 5 public trips (colerain flips at 1.0). The
+  owner's own trips weren't re-run here.
+- Exact next task: run tools/live_speed.js on the owner's trips (work to home, owner1) at Fun and Long way and check the
+  "more good road" lines read right; then production after the deploy.
+
 ## Session 2026-11-08 (levels): each level spends its budget on better road (claude/level-spread, off origin/main 744e516)
 
 - [x] The levels audit (route_quality.js, 5 public trips): Long way = Fun on every trip (bisection capped at A_MAX 40

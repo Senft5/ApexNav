@@ -126,6 +126,7 @@ flowchart TD
   SAMP["per-sample quality, scenery, confidences,<br>gate"] --> QR["route quality = mean of known samples x 100;<br>qWeight = mean of min 1, qConf over 0.3"]
   SAMP --> POOR["poor cost: every sample, 10 per km times<br>clamp of 0.45 minus quality over 0.2; cap<br>120; split into business, residential,<br>stops, other for the why line"]
   SAMP --> BIZ["business cost: 4 per km times clamp of<br>businesses per km minus 4 over 10, not on<br>a motorway; cap 40"]
+  SAMP --> GOOD["road: 1.5 per km of good road gained<br>over the quickest, clamp of quality minus<br>0.5 over 0.15, not on a motorway; cap 30"]
   SAMP --> SCN["scenery points = 20 x mean of scenery minus<br>0.5 times min 1, sConf over 0.35"]
   GEO["5 m geometry, corners, the router's junction<br>turns dropped"] --> FUN["fun = ApexFunRoute.score with each corner<br>weight x gate x built-up cut (two built<br>signals agreeing: 0.4 none, 0.85 all): Twist<br>0.5, Flow 0.35 by its corners' gate, not dull<br>0.15 broken only by corners gated half;<br>good corners gated"]
   FUN --> GAIN["gain = 0.5 x gated good corners over the<br>quickest, cap 60; fun and gain x the share<br>of the drive that isn't side streets"]
@@ -133,10 +134,10 @@ flowchart TD
   QR --> QT["quality term = 0.3 x quality - 50 x qWeight"]
   DRV["driver = 6 x mean driver_fit, else<br>skill_fit, x share known; taste = the<br>crowd's taste channel where tasteOn didn't<br>score the candidate"] --> V
   OLD["Today's terms: glare 1 per min cap 20; towns<br>3 per km cap 60 when avoided; weather ice<br>30, storms 15, rain 6, fog 4 by share, minus<br>the driest; members' measured roughness and<br>banking -8 to +5; taste up to +-8; Prefer<br>stamps"] --> V
-  QR ~~~ POOR ~~~ BIZ ~~~ SCN
+  QR ~~~ POOR ~~~ GOOD ~~~ BIZ ~~~ SCN
   FUN ~~~ GAIN
   LVL ~~~ TIME ~~~ QT ~~~ OLD ~~~ BP
-  FUN & GAIN & TIME & QT & POOR & BIZ & SCN --> V["value = fun + gain + time + quality + poor +<br>business + scenery + bonuses + penalties + driver +<br>glare + towns + weather + measured + taste + prefer"]
+  FUN & GAIN & TIME & QT & POOR & GOOD & BIZ & SCN --> V["value = fun + gain + time + quality + poor +<br>road + business + scenery + bonuses + penalties + driver +<br>glare + towns + weather + measured + taste + prefer"]
   BP["bonuses, penalties, hard from diagram 3"] --> V
   UNK["unknown stretches: the lowest known<br>candidate's gate and quality, the highest<br>side-street cost per km: unknown can't win"] --> V
   V --> NOCTX["No context at all: every new term is 0,<br>value equals ApexFunRoute.rank exactly"]
@@ -168,7 +169,7 @@ flowchart TD
   OPT --> PIN["winner: an alternate or highway-costed route<br>is pinned with shaping points every 5-6 km<br>so a reroute keeps to it"]
   OPT ~~~ WHY
   PIN ~~~ LOOP ~~~ EXP
-  RANK --> WHY["why line: the 2-3 parts that differ most<br>from the quickest: side streets or strip<br>malls avoided, highway instead of, good<br>corners, back roads at 45-55 mph, signals,<br>through forest, along the water, ridges,<br>deer hour, less in towns, drier, less low<br>sun; else the old roads and corners line.<br>A Fun or Long way pick that is the quickest:<br>no great roads on this trip. A pick another<br>option beats on the card's minutes and<br>corners: over that route, what it wins by"]
+  RANK --> WHY["why line: the 2-3 parts that differ most<br>from the quickest: side streets or strip<br>malls avoided, highway instead of, good<br>corners, more good road, back roads at 45-55 mph, signals,<br>through forest, along the water, ridges,<br>deer hour, less in towns, drier, less low<br>sun; else the old roads and corners line.<br>A Fun or Long way pick that is the quickest:<br>no great roads on this trip. A pick another<br>option beats on the card's minutes and<br>corners: over that route, what it wins by"]
   LOOP["Loops: stage plans and a circle, routed;<br>same context run; value = loopValue on gated<br>fun - 2 per % retraced - 0.8 per % off<br>length + quality + scenery + bonuses - poor<br>- penalties - glare - towns + measured +<br>Prefer; a hard constraint -1000"] --> RANK2["best loop"]
   EXP["Explore: stages within reach, network step,<br>matrix times; listed best first"]
 ```
@@ -190,6 +191,10 @@ under "The channels" are checked the same way (channel and weight).
 | BUSINESS_FROM | 4 | businesses per km where that cost starts |
 | BUSINESS_FULL | 14 | businesses per km where it is full |
 | BUSINESS_CAP | 40 | the most it costs |
+| GOOD_Q_LO | 0.5 | quality where good road starts to count (the good road gained) |
+| GOOD_Q_HI | 0.65 | quality where it counts in full |
+| GOOD_PER_KM | 1.5 | points per km of good road gained over the quickest, never a motorway or ramp |
+| GOOD_CAP | 30 | the most it adds |
 | SCENERY | 20 | points for scenery 1 vs 0.5, times how much is known |
 | Q_FULL_CONF | 0.3 | share of quality weight known for full weight |
 | S_FULL_CONF | 0.2 | share of scenery weight known for full weight (land use alone counts) |
@@ -300,7 +305,8 @@ under "The channels" are checked the same way (channel and weight).
 | gain | 0.5 × gated good corners gained over the quickest (cap 60), as before | ≤ 30 |
 | quality | 0.3 × (route quality − 50) × how much is known (full once a third of the weights is known) | ±15 |
 | scenery | 20 × mean(scenery − 0.5) weighted by how much of it is known (full at 35 %) | ±10 |
-| poor | −3 per km of side street or business district: smooth from quality 0.45 down, full at 0.25; the first and last 1.2 km are free (every trip starts in a street); cap 60 | ≤ 0 |
+| poor | −10 per km of side street or business district: smooth from quality 0.45 down, full at 0.25; cap 120 | ≤ 0 |
+| road | +1.5 per km of good road gained over the quickest (smooth from quality 0.5, full at 0.65; never a motorway or ramp; cap 30). The side street's cost has a length, so the good road a longer way buys has one too (2026-11-08: 11 km more of the best road counted only as a higher mean, and 3 km more suburb outweighed it at Long way) | 0–30 |
 | bonuses | byways 0.4/km (cap 12), viewpoints 1.5 (cap 6), a covered bridge 2, history 0.5, a waterfall 1, tunnels 1.5 (if preferred), fresh asphalt 0.3/km, golden light on west-facing ground (0.5/km, cap 4); all bonuses cap 15 | ≤ 15 |
 | penalties | per km and per span at the time you'd be there (below); each kind saturates softly toward 12 (KIND_CAP: deer alone can't fill it, a longer deer road still costs more), the total toward 40 | ≥ −40 |
 | time | − the level's perMin × extra minutes (Quick 3, Fun 1, Max 0.35) | |
@@ -368,7 +374,8 @@ points), with kinds normalised (`rail_crossing` = `level_crossing`).
 
 `why(best, quick)` takes the parts of the value that separate the winner from the quickest most and says the top 2–3:
 "Highway instead of 1.2 mi of side streets"; "Avoids 2.1 mi of strip malls · 6 signals (not 18), +1 min"; "14 more good
-corners · back roads at 45–55 mph · through forest, +4 min"; "Deer hour: open roads"; "1.9 mi less in towns". It never
+corners · back roads at 45–55 mph · through forest, +4 min"; "6.6 mi more good road" (the road part); "Deer hour: open
+roads"; "1.9 mi less in towns". It never
 names scenery (forest, water, ridges) when the winner drives 0.3 km or more of business district beyond the quickest's,
 and "avoids X of strip malls" is in that kind's km. When the winner is simply the better road (shallower side streets,
 a higher mean quality) and nothing else separates them: "Better roads than the quickest". When nothing the context

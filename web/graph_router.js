@@ -57,6 +57,12 @@
     // never under BUY_MIN), among those routes and the spread's (SPREAD: penalty alternates of the first step's route)
     A_MAX: { quick: 40, fun: 40, max: 80 }, A_FIRST: { quick: 1, fun: 5, max: 5 }, BISECT: 6,
     SPREAD: { fun: [0.6], max: [1.5] }, BUY: { fun: 0.12, max: 0.03 }, BUY_MIN: 0.1,
+    // and the road's length, as the route engine counts it (route_engine.js W): ROAD.poor points per km of side street
+    // (quality 0.45 -> 0.25), ROAD.good per km of good road (quality 0.5 -> 0.65, never a motorway or ramp), each point over
+    // the level's quickest worth ROAD.w of G. G is a mean: a longer way's extra suburb thins out in it, as does its extra
+    // good road, while the engine pays for every km of both (2026-11-08, engine-rank: subdivision4's 17 min Long way and
+    // colerain's 20 min Fun drove more side street for their G; harrison's 42 min Long way more good road)
+    ROAD: { poor: 10, good: 1.5, goodLo: 0.5, goodHi: 0.65, w: 0.003 },
     LOWER: [0.9, 0.75],      // then these fractions of the weight found: cheaper ways to the road the budget-filler found
     ALT_PENALTIES: [0.6, 1.5, 4], ALT_MIN_DIFF: 0.3, ALTS: 2,
     LOOP_A: { quick: 0.6, fun: 3, max: 8 }, LOOP_ROAD_FACTOR: 1.35, LOOP_RETRACE_X: 3,
@@ -773,7 +779,7 @@
     const B = flagBits(), coords = [], names = [], steps = [], turns = [], times = [];
     let lineM = 0;
     const gEnd = [], gEdge = [];
-    let timeS = 0, distM_ = 0, q = 0, s = 0, sw = 0, f = 0, cf = 0, wsum = 0, junctions = 0, signals = 0, hwyM = 0, gm = 0;
+    let timeS = 0, distM_ = 0, q = 0, s = 0, sw = 0, f = 0, cf = 0, wsum = 0, junctions = 0, signals = 0, hwyM = 0, gm = 0, poorM = 0, goodM = 0;
     const hwyBy = new Map();                                            // metres per highway name (the card's "Uses 0.4 mi of I-275")
     const has = { highways: false, tolls: false, ferries: false, unpaved: false };
     let roundabout = null;
@@ -816,7 +822,12 @@
       if (k === 0) times.push([pts[0][1], pts[0][0], 0]);
       timeS += sec; distM_ += m;
       const cw = (v.conf[e] / 255) * m;
-      if (v.quality[e] !== UNKNOWN_U8) { q += (v.quality[e] / 254) * cw; cf += cw; }
+      if (v.quality[e] !== UNKNOWN_U8) {
+        const qe = v.quality[e] / 254;
+        q += qe * cw; cf += cw;
+        poorM += clamp01((K.POOR_HI - qe) / (K.POOR_HI - K.POOR_LO)) * m;
+        if (v.cls[e] !== CLS.motorway && !(v.flags[e] & B.ramp)) goodM += clamp01((qe - K.ROAD.goodLo) / (K.ROAD.goodHi - K.ROAD.goodLo)) * m;
+      }
       if (v.scenery[e] !== UNKNOWN_U8) { s += (v.scenery[e] / 254) * m; sw += m; }
       if (Number.isFinite(v.fun[e])) f += v.fun[e] * share;
       if (obj && obj.bad) gm += (1 - obj.bad[e]) * m;
@@ -840,7 +851,7 @@
     const nameKm = new Map();
     for (const n of names) if (n.name) nameKm.set(n.name, (nameKm.get(n.name) || 0) + (n.toM - n.fromM) / 1000);   // km, as routeOf has them (Valhalla lengths)
     const why = { source: 'own', level: meta.level || null, role: meta.role || null, a: meta.a != null ? meta.a : 0,
-      quality: cf > 0 ? q / cf : null, scenery: sw > 0 ? s / sw : null, fun: f, conf: wsum > 0 ? cf / wsum : 0, goodness: wsum > 0 ? gm / wsum : null, junctions, signals,
+      quality: cf > 0 ? q / cf : null, scenery: sw > 0 ? s / sw : null, fun: f, conf: wsum > 0 ? cf / wsum : 0, goodness: wsum > 0 ? gm / wsum : null, poorKm: poorM / 1000, goodKm: goodM / 1000, junctions, signals,
       objective: meta.a ? 't*(1+a*(1-goodness))' : 'time', hwyKm: hwyM / 1000 };
     // motorway, trunk and their links driven (km) and the one most of it is on, by name (NO_HWY levels report it)
     const hwyName = hwyM > 0 ? [...hwyBy].sort((x, y) => y[1] - x[1])[0][0] : null;
@@ -1099,18 +1110,21 @@
   }
   /**
    * The pick among a level's routes inside its budget: each route's length-weighted goodness G less `price` x its extra time
-   * over the level's own quickest (`base`) as a share of that time, the largest wins; a route whose extra time buys less
+   * over the level's own quickest (`base`) as a share of that time, plus ROAD.w x the road points it gains over `base` (the
+   * route engine's per-km terms: good road gained, side street avoided), the largest wins; a route whose extra time buys less
    * than BUY_MIN of goodness per 100 % more time (on average, over the quickest) is never the pick. So Fun takes good road
    * that's near (price 0.12: 10 % more time must buy 0.012 of goodness), Long way also the good road further off (0.03),
    * and neither lengthens a trip for road no better than the quickest's (2026-11-08, the levels audit).
    */
   function pick(base, routes, limitS, price) {
     const rel = (r) => (r.timeS - base.timeS) / Math.max(1, base.timeS);
-    const u = (r) => r.why.goodness - price * rel(r);
+    const road = (r) => K.ROAD.good * (r.why.goodKm || 0) - K.ROAD.poor * (r.why.poorKm || 0);
+    const g = (r) => r.why.goodness + K.ROAD.w * (road(r) - road(base));
+    const u = (r) => g(r) - price * rel(r);
     let best = base;
     for (const r of routes) {
       if (r === base || r.timeS > limitS || !Number.isFinite(r.why.goodness)) continue;
-      const x = rel(r), dg = r.why.goodness - base.why.goodness;
+      const x = rel(r), dg = g(r) - base.why.goodness;
       if (x > 0 && dg < K.BUY_MIN * x) continue;
       if (x <= 0 && dg <= 0) continue;
       if (u(r) > u(best) + 1e-9) best = r;
@@ -1709,7 +1723,7 @@
   }
 
   const api = { VERSION: 1, K, BUILT_READ, builtAgreeOf, lineTiles, edgeTable, fromTable, crowdOnto, project, quickest, scoreLine, reach, explore, streetEdge, deadEndAt, junctionAt, TILE_DEG, FLAG_BITS, NODE_BITS, CLS, UNKNOWN_U8, UNKNOWN_FUN, NO_NAME, packedKey, nodeCost, LEVELS_COPY, levels, distM, bearing, turnAngle, tileOf, keyOf, view, geom, snap, objective, search,
-    assemble, through, overlap, sameRoute, tilesFor, loopTiles, plan, loop, hwyOf, isHwyEdge, snapOff, freeQuickest, indexKeys, covers, host, client, edgeId, twin, turnCost };
+    assemble, through, overlap, sameRoute, tilesFor, loopTiles, plan, pick, loop, hwyOf, isHwyEdge, snapOff, freeQuickest, indexKeys, covers, host, client, edgeId, twin, turnCost };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   root.ApexGraphRouter = api;
 })(typeof window !== 'undefined' ? window : globalThis);

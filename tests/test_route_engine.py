@@ -339,6 +339,21 @@ out.active = [E.active(null, DEPART), E.active({ weekly: [{ from: '19:00', to: '
 // 10. connector costing: highways welcome between good roads unless avoided
 out.costing = [E.connectorCosting(F.AVOID_DEFAULT, null).costing_options.auto.use_highways, E.connectorCosting({ ...F.AVOID_DEFAULT, highways: true }, null).costing_options.auto.use_highways,
   E.highwayCosting(F.AVOID_DEFAULT, null).costing_options.auto.use_highways, E.highwayCosting({ ...F.AVOID_DEFAULT, highways: true }, null), E.connectorCosting({ ...F.AVOID_DEFAULT, tolls: true }, { width_cm: 200 }).costing_options.auto];
+// 12. the good road a longer way buys has a length (2026-11-08, engine-rank): straight roads (no corners), so only the
+// road's quality, side streets and good road count. A: 2 km of subdivision then 2 km of back road; B: 3 km of subdivision
+// then 12 km of back road, 12 min more; C: 5 km of subdivision then 3.6 km of back road, 7 min more
+{
+  const mix = (parts) => Object.fromEntries([...new Set(parts.flatMap(([, ch]) => Object.keys(ch)))].map((k) => [k, (i, m) => { const p = parts.find(([upTo]) => m < upTo) || parts[parts.length - 1]; return k in p[1] ? p[1][k] : NaN; }]));
+  const A = () => cand(straight(4000), 360, mix([[2000, subdiv], [Infinity, back]]));
+  const B = () => cand(straight(15000), 360 + 720, mix([[3000, subdiv], [Infinity, back]]));
+  const C = () => cand(straight(8600), 360 + 420, mix([[5000, subdiv], [Infinity, back]]));
+  out.goodRoad = {};
+  for (const lv of ['fun', 'max']) {
+    const a = A(), b = B(), c = C(), ab = rank([a, b], { level: lv }), ac = rank([a, c], { level: lv });
+    out.goodRoad[lv] = { ab: ab[0].id === b.id ? 'B' : 'A', ac: ac[0].id === c.id ? 'C' : 'A', road: +((ab.find((x) => x.id === b.id) || { parts: {} }).parts.road || 0).toFixed(2),
+      why: ab[0].id === b.id ? E.why(ab[0], ab.find((x) => x.id === a.id)).text : null };
+  }
+}
 // 11. placeTimes: the router's maneuver clock lands on its own line
 {
   const coords = straight(2000);
@@ -509,3 +524,15 @@ def test_small_terms_decide_near_ties_never_blowouts(r):
     deficit (a minute at Fun) around, and none moves a route by more than 10 points on its own (6 km)."""
     for ch, x in r["nearTie"].items():
         assert x["flips"] and 1 < x["swing"] < 10, (ch, x)
+
+
+def test_the_good_road_a_longer_way_buys_has_a_length(r):
+    """The side street's cost is per km, and since 2026-11-08 (engine-rank) so is the good road gained over the quickest:
+    on the colerain trip 11 km more of the best road counted only as a higher mean, and 3 km more suburb outweighed it at
+    Long way. Long way now takes 12 min more for 10 km more back road through 1 km more subdivision (past Fun's budget); and
+    neither level takes 1.6 km more back road bought with 3 km more subdivision."""
+    g = r["goodRoad"]
+    assert g["max"]["ab"] == "B" and g["fun"]["ab"] == "A", g
+    assert g["max"]["ac"] == "A" and g["fun"]["ac"] == "A", g
+    assert 14 < g["max"]["road"] <= 30, g
+    assert "more good road" in g["max"]["why"], g
