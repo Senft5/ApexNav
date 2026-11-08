@@ -1,11 +1,13 @@
-// EV chargers for fuel-stop spacing (web/route_ctx/car.js): NREL's Alternative Fuel Stations API (US DOE, public domain),
-// asked by tile so the key the owner creates (free, api.data.gov; secret NREL_API_KEY, docs/OWNER_TODO.md) never ships in
-// the app. The phone sends 0.25-degree tile ids its route passes through, never the route or a position; each tile is one
-// NREL "nearest" call from the tile's centre, cached a day at Cloudflare's edge. No key: 503 no_key, and the phone says so.
+// EV chargers for fuel-stop spacing (web/route_ctx/car.js): the Alternative Fuel Stations API (US DOE, public domain) of the
+// lab once called NREL, renamed the National Laboratory of the Rockies (NLR): developer.nrel.gov no longer resolves, the API
+// is at developer.nlr.gov (same paths, same api.data.gov keys; the secret keeps its old name NREL_API_KEY). Asked by tile so
+// the key the owner creates (free, api.data.gov; docs/OWNER_TODO.md) never ships in the app. The phone sends 0.25-degree
+// tile ids its route passes through, never the route or a position; each tile is one "nearest" call from the tile's
+// centre, cached a day at Cloudflare's edge. No key: 503 no_key, and the phone says so.
 import { Env, HttpError } from "./util";
 
 export const TILE = 0.25, MAX_TILES = 40, RADIUS_MI = 11;
-const NREL = "https://developer.nrel.gov/api/alt-fuel-stations/v1/nearest.json";
+const NREL = "https://developer.nlr.gov/api/alt-fuel-stations/v1/nearest.json";
 
 /** Tile ids "i_j" (0.25-degree indices) from the query, validated; throws 400. */
 export function parseTiles(raw: string | null): [number, number][] {

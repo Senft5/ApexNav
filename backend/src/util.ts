@@ -12,7 +12,7 @@ export interface Env {
   AUTH_LIMIT?: RateLimit;   // sign-in endpoints per IP
   BACKUPS?: KVNamespace;
   PHOTOS?: KVNamespace;     // photo bytes, key p/<id> (src/photos.ts)
-  NREL_API_KEY?: string;    // secret: NREL Alternative Fuel Stations key (src/chargers.ts); none = 503 no_key
+  NREL_API_KEY?: string;    // secret: NLR (ex-NREL) Alternative Fuel Stations key (src/chargers.ts); none = 503 no_key
   CTX_KEYS?: string;        // secret: free client keys for the route-context sources, JSON (src/route_feeds.ts)
   OSM?: KVNamespace;        // optional: the OSM relay's tiles (src/osm_relay.ts), a week each; the Cache API does without it
   CTX?: KVNamespace;        // context-grid bundles, key v1/... (src/context_grid.ts); bound once the owner creates it

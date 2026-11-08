@@ -84,7 +84,7 @@
     { ch: 'creek_follow', w: 1, g: yes(1, 0.35), family: 'water' },
     { ch: 'open_country', w: 0.6, g: (v) => 0.4 + 0.45 * clamp01(v), family: 'open' },
     { ch: 'protected', w: 1, g: yes(1, 0.4), family: 'park' },
-    { ch: 'photo_score', w: 1, g: clamp01, family: 'photos', rural: true },   // D: Commons + Flickr; towns are photographed too
+    { ch: 'photo_score', w: 1, g: clamp01, family: 'photos', rural: true },   // D: Commons photo spots; towns are photographed too
     { ch: 'curve_sign', w: 0.6, g: yes(1, 0.5), family: 'drama' },      // D: Mapillary curve-warning signs
     { ch: 'tpi_m', w: 0.8, g: (v) => ramp([[0, 0.25], [40, 1]])(Math.abs(v)), family: 'terrain' },   // a ridge or a valley, not a plain
     { ch: 'grade_pct', w: 0.6, g: (v) => ramp([[0, 0.3], [6, 1]])(Math.abs(v)), family: 'terrain' },   // climbs and descents
