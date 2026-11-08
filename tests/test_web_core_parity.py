@@ -588,6 +588,42 @@ def test_sight_knows_which_side_you_drive_on():
     assert (right <= both + 1e-9).all() and (left <= both + 1e-9).all(), "never more sight than before"
 
 
+
+def test_sight_fast_search_is_the_full_search():
+    """apex_core.js sightDistanceM skips the point-by-point test for sightlines well inside the directions every point
+    between allows; the answers must stay those of the full search (road_dna.py's) on winding roads with hairpins, stops
+    (repeated points), per-sample clearances with gaps, and either driving side."""
+    rng = np.random.default_rng(11)
+    roads = []
+    for t in range(12):
+        n = int(rng.integers(150, 400))
+        h, k, x, y, xy = rng.uniform(0, 6.28), 0.0, 0.0, 0.0, []
+        for i in range(n):
+            if rng.random() < 0.06:
+                k = rng.uniform(-0.5, 0.5) * (0.3 if t % 3 == 0 else 0.05)
+            h += k * 5
+            step = 0.0 if (t % 4 == 1 and rng.random() < 0.05) else 5.0
+            x, y = x + step * math.cos(h), y + step * math.sin(h)
+            xy.append((x, y))
+        lat = [39.0 + p[1] / 111320.0 for p in xy]
+        lon = [-84.0 + p[0] / (111320.0 * math.cos(math.radians(39.0))) for p in xy]
+        offsets = [None if rng.random() < 0.15 else float(rng.uniform(1, 30)) for _ in range(n)] if t % 2 else None
+        roads.append({"lat": lat, "lon": lon, "offsets": offsets})
+    runner = ("const c=require(process.argv[1]);const roads=JSON.parse(require('fs').readFileSync(0,'utf8'));"
+              "process.stdout.write(JSON.stringify(roads.map(r=>[null,'right','left'].map(s=>Array.from(c.sightDistanceM(r.lat,r.lon,null,"
+              "r.offsets?r.offsets.map(v=>v===null?NaN:v):undefined,s))))));")
+    out = subprocess.run([NODE, "-e", runner, os.path.abspath("web/apex_core.js")], input=json.dumps(roads),
+                         capture_output=True, text=True, check=True)
+    js = json.loads(out.stdout)
+    blocked = 0
+    for r, per_side in zip(roads, js):
+        offs = rd.SIGHT_OFFSET_M if r["offsets"] is None else np.array([np.nan if v is None else v for v in r["offsets"]])
+        for side, a in zip((None, "right", "left"), per_side):
+            py = rd.sight_distance_m(r["lat"], r["lon"], None, offs, side)
+            np.testing.assert_allclose(a, py, atol=1e-9)
+            blocked += int((py < rd.SIGHT_MAX_M).sum())
+    assert blocked > 1000, "the roads must bend enough to block sight"
+
 def test_crowd_curvature_blends_the_same():
     """IDEAS Q-04: members' driven curvature replaces the map's in runs of 6+ samples with 2+ passes; JS = Python."""
     km = [0.0] * 30

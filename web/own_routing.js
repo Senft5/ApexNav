@@ -16,15 +16,76 @@
     if (!(o.router || root.ApexGraphRouter)) return false;
     return !flags || typeof flags.on !== 'function' ? true : flags.on('own_routing', true);
   }
+  // our routes' lines, each to its route (a track built from the line finds its posted limits in the tiles: routeOfLine)
+  const lines = new WeakMap();
+  const own = (line, route) => { if (Array.isArray(line) && route && route.graph) lines.set(line, route); return line; };
   /** route.coords [[lon, lat]] from the worker's route.flat, built when first read (not as the message lands). */
   function withCoords(route) {
-    if (!route || Array.isArray(route.coords) || !route.flat) return route;
+    if (!route) return route;
+    if (Array.isArray(route.coords) || !route.flat) { own(route.coords, route); return route; }
     const flat = route.flat;
     let cache = null;
     Object.defineProperty(route, 'coords', { configurable: true, enumerable: true,
-      get() { if (!cache) { cache = new Array(flat.length / 2); for (let k = 0; k < cache.length; k++) cache[k] = [flat[2 * k], flat[2 * k + 1]]; } return cache; },
-      set(v) { cache = v; } });
+      get() { if (!cache) { cache = new Array(flat.length / 2); for (let k = 0; k < cache.length; k++) cache[k] = [flat[2 * k], flat[2 * k + 1]]; own(cache, route); } return cache; },
+      set(v) { cache = v; own(v, route); } });
     return route;
+  }
+  /** The route of ours a line ([[lon, lat]], route.coords) is, or null (a line from Valhalla, a GPX file, a drive). */
+  const routeOfLine = (line) => (line && typeof line === 'object' ? lines.get(line) || null : null);
+
+  // ---- posted limits from our tiles (OWN_ROUTING.md §5) ----------------------------------------------------------------
+  const RAD = Math.PI / 180, EARTH_M = 6371008.8, LIMIT_OFF_M = 30, LIMIT_LOOK = 60;
+  const lineM = (la1, lo1, la2, lo2) => {                             // graph_router.js distM: how the router measured `end`
+    const p = (la1 + la2) * 0.5 * RAD, x = (lo2 - lo1) * RAD * Math.cos(p), y = (la2 - la1) * RAD;
+    return EARTH_M * Math.sqrt(x * x + y * y);
+  };
+  /**
+   * The posted limit (m/s) at each sample of a track along one of our routes, from the tiles the route was planned on
+   * (route.graph: graph_router.js edgeTable, each edge's posted limit and where it ends along the line), so the limit sign
+   * and the ETA have limits offline and without Valhalla's map matching. null where the tiles have no posted limit for
+   * the edge (an estimate from the road's class is not a posted limit) or the sample is off the line (over 30 m); the
+   * whole answer null when the route carries no table. Samples are matched to the line in order, so a track with a spur
+   * cut out (a loop) still finds its place.
+   */
+  function limitsAlong(lat, lon, route) {
+    const g = route && route.graph, line = route && route.coords;
+    if (!g || !g.limit || !g.end || !g.end.length || !Array.isArray(line) || line.length < 2 || !lat || !lat.length) return null;
+    const n = line.length, cum = new Float64Array(n), x = new Float64Array(n), y = new Float64Array(n);
+    const kx = 111320 * Math.cos(lat[0] * RAD), ky = 110540, lo0 = line[0][0], la0 = line[0][1];
+    for (let k = 0; k < n; k++) {
+      x[k] = (line[k][0] - lo0) * kx; y[k] = (line[k][1] - la0) * ky;
+      if (k) cum[k] = cum[k - 1] + lineM(line[k - 1][1], line[k - 1][0], line[k][1], line[k][0]);
+    }
+    // the nearest point on segments [a, b) to (px, py): its distance into bestD, its segment and metres along the line
+    let bestD = Infinity, bestK = 0, bestM = 0;
+    const near = (px, py, a, b) => {
+      bestD = Infinity;
+      for (let k = a; k < b; k++) {
+        const ax = x[k] - px, ay = y[k] - py, dx = x[k + 1] - x[k], dy = y[k + 1] - y[k], L2 = dx * dx + dy * dy;
+        const t = L2 > 0 ? Math.max(0, Math.min(1, -(ax * dx + ay * dy) / L2)) : 0;
+        const ex = ax + t * dx, ey = ay + t * dy, d = ex * ex + ey * ey;
+        if (d < bestD) { bestD = d; bestK = k; bestM = cum[k] + t * (cum[k + 1] - cum[k]); }
+      }
+      bestD = Math.sqrt(bestD);
+    };
+    const out = new Array(lat.length).fill(null);
+    let seg = 0;
+    for (let i = 0; i < lat.length; i++) {
+      const px = (lon[i] - lo0) * kx, py = (lat[i] - la0) * ky;
+      near(px, py, seg, Math.min(n - 1, seg + LIMIT_LOOK));
+      if (bestD > LIMIT_OFF_M) {                                       // lost the line (a stretch cut out): the whole of it
+        const d0 = bestD, k0 = bestK, m0 = bestM;
+        near(px, py, 0, n - 1);
+        if (bestD >= d0) { bestD = d0; bestK = k0; bestM = m0; }
+      }
+      if (bestD > LIMIT_OFF_M) continue;
+      seg = bestK;
+      let lo = 0, hi = g.end.length - 1;                             // the first edge ending at or past here
+      while (lo < hi) { const mid = (lo + hi) >> 1; if (g.end[mid] < bestM - 0.01) lo = mid + 1; else hi = mid; }
+      const v = g.limit[lo];
+      out[i] = Number.isFinite(v) && v > 0 ? v / 3.6 : null;
+    }
+    return out;
   }
   /** Our routes as candidates, the router's best first (the route engine ranks them with everything else). */
   function candidates(result) {
@@ -312,7 +373,7 @@
     return 'own';
   }
 
-  const api = { OFF_KEY, on, withCoords, candidates, plan, quick, through, loops, cellsFor, crowdItems, crowdFor, crowdSoon, _cells: cellMemo, sharedShare, oneClock, polyline6, thin, traceBody, instruct };
+  const api = { OFF_KEY, on, withCoords, routeOfLine, limitsAlong, candidates, plan, quick, through, loops, cellsFor, crowdItems, crowdFor, crowdSoon, _cells: cellMemo, sharedShare, oneClock, polyline6, thin, traceBody, instruct };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   root.ApexOwnRouting = api;
 })(typeof window !== 'undefined' ? window : globalThis);

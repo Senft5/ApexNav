@@ -331,7 +331,16 @@
     const sc = startCostFor(v, req.from.heading != null ? req.from.heading : req.heading);
     const r = search(v, obj, src, dst, 0, null, { ...(sc ? { startCost: sc } : {}), ellipse: ellipseFor(req.from, req.to, level) });
     if (!r) throw new Error('no route');
+    v.quickMemo = { key: quickKey(req, level, obj), r };
     return assemble(v, r, obj, { level, role: 'quickest', a: 0 });
+  }
+  // The time-only search (a = 0) reads only the trip, the start heading, the level's ellipse and the objective's per-edge
+  // multipliers and adds (the avoid choices) and node costs: goodness and members' data weigh nothing at a = 0. So the
+  // first route's search (quickest) is the plan's own a = 0 search when the view and these are the same (the plan asked
+  // right behind it, on the tiles already in view: 60-80 ms of the worker's critical path, live 2026-11-08); same answer.
+  function quickKey(req, level, obj) {
+    const h = req.from.heading != null ? req.from.heading : req.heading;
+    return JSON.stringify([req.from.lat, req.from.lon, req.to.lat, req.to.lon, Number.isFinite(h) ? h : null, level, req.avoid || null, obj.nodeCosts]);
   }
   /**
    * The quickest way from `from` through req.via (in order) to `to`: each leg's search starts on the edge the last one
@@ -907,7 +916,8 @@
     const sc = startCostFor(v, req.from.heading != null ? req.from.heading : req.heading);
     const opts = { ...(sc ? { startCost: sc } : {}), ellipse: ellipseFor(req.from, req.to, level) };
     const run = (a, penal = null, role = 'step') => { const r = search(v, obj, src, dst, a, penal, opts); return r ? assemble(v, r, obj, { level, role, a }) : null; };
-    const quick = run(0, null, 'quickest');
+    const memo = v.quickMemo && v.quickMemo.key === quickKey(req, level, obj) ? v.quickMemo.r : null;
+    const quick = memo ? assemble(v, memo, obj, { level, role: 'quickest', a: 0 }) : run(0, null, 'quickest');
     if (!quick) throw new Error('no route');
     const limitS = quick.timeS * (1 + L.budget) + L.slackS;
     const found = [quick];

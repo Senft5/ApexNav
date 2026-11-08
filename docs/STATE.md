@@ -28,6 +28,28 @@
   holds everything in it).
 - Exact next task: the owner checks the dashboard with real crews on the next TestFlight build, and the deck fold gesture.
 
+## Session 2026-11-08: own routing instant (2): limits offline, Valhalla down (claude/own-routing-instant-2)
+
+- [x] Speed: exact faster sightDistanceM, every candidate's track built ahead, the engine's samples kept (2d41b40); the
+  plan reuses the first route's search (graph_router.js quickKey), towns with the context, limits after the card.
+  Live, 8 cases, main (#306) / branch back to back: warm card 223-694 / 249-588 ms, cold card 291-686 / 278-577 ms,
+  first route warm 109-263 / 116-198 ms; same pick as main 16/16 (OWN_ROUTING.md §8 2026-11-08). Targets met in every
+  run (card 0.7 s warm, 1.0 s cold; first route 0.4 s warm) on a lightly loaded box.
+- [x] Posted limits offline: our routes' limits from the tiles (own_routing.js limitsAlong, cockpit.js attachLimits);
+  trace_attributes only off our tiles and for contributions. Unit test graph_router_cases limits; the offline e2e
+  flow asserts a known posted limit on every plan and no trace_attributes asked.
+- [x] Valhalla down: e2e "valhalla down: planning inside our tiles is unaffected" (refused, then hanging); nothing on
+  the planning path of a route waited on Valhalla; a loop did (the context's router provider, 2.9 s with Valhalla
+  hanging), fixed: 0.6 s. The remaining Valhalla uses are listed in OWN_ROUTING.md §8 2026-11-08.
+- Re-measured on a box shared with another agent (load 4-6): main and branch both over 0.7 s warm on the long trips
+  (harrison branch 536-1300, main 617-1254); branch no worse than main; same pick 34/34 (OWN_ROUTING.md §8).
+- Tests: pytest 1335 passed, 2 skipped; e2e 127/127 (full run, after fixing the offline flow's weather-line read race:
+  a 126/127 run under load read the line between a route's replace and its refused forecast).
+- Open: on a loaded box the long trips are 2x slower (2026-11-07's numbers); the context's page work (graph, driver,
+  conditions, 0.1-0.15 s) and the lead ranking (0.05-0.08 s) are what's left; the worker's plan 0.2-0.3 s.
+- Exact next task: measure on production after deploy (the tiles over the network, cold); if the long trips' card is
+  over 0.7 s warm there, move the graph provider's fromTable and the driver provider into the routing worker.
+
 ## Session 2026-11-07: own routing, instant and offline; Valhalla only as backup (claude/own-routing-instant)
 
 - [x] The owner's goal: "Planning in well under a second. Routing that works offline. No dependence on a free server that

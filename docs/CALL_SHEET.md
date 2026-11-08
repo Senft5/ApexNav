@@ -44,6 +44,31 @@ Your six screenshot notes, each fixed; the calls made on the way:
   lost when folded: Best roads nearby, the loop and your roads are all in Where to?. Undo: the `2` back to `3` in
   paintDeck's YR.deck call; `setDeckMin` and its two lines in the bar's release.
 
+## 2026-11-08: Own routing, instant: speed limits offline, Valhalla down (claude/own-routing-instant-2)
+
+Your goal: "Planning in well under a second. Routing that works offline. No dependence on a free server that can slow
+down or go away. Valhalla would stay only as a backup and for turn instructions."
+- **On our routes the speed limits come from our tiles, not Valhalla's map matching.** The limit sign, the strip and
+  the arrival time read each road's posted limit from the tiles the route was planned on, so they work offline and with
+  Valhalla down. A road the tiles have no posted limit for (or only a guess from the road's class) shows no limit, the
+  same as map matching says for it. Routes off our tiles (a GPX file, a route Valhalla planned) still ask Valhalla.
+  Undo: the `ownRouteOfTrack` block at the top of attachLimits (cockpit.js).
+- **The plan reuses the first route's search** when it is asked for the same trip on the same roads (the quickest is the
+  same search either way; members' data and your taste don't change it). Same routes, about 0.07 s sooner. Undo: the
+  `memo` line in graph_router.js plan().
+- **The towns along our routes are looked up while the route context loads**, not after it; Valhalla's check routes
+  that join later are looked up on their own. Undo: `ownTowns` in cockpit.js funRoute.
+- **The speed limits are laid on the route just after the card shows**, in their own step, not before it.
+  Undo: the `setTimeout` await in attachLimits.
+- **Loops where our tiles have them no longer ask Valhalla's map matching for their road data** (the tiles carry it, as
+  for routes since 2026-11-04). With Valhalla hanging, a loop's card waited for it: 2.9 s, now 0.6 s. The map's stage
+  loops in the same plan are scored the same way, so the two kinds compare fairly. Undo: `L.ownTiles` in buildLoop
+  (cockpit.js), or drop the `['router']` skip in loopScored.
+- **A new test plans with Valhalla and OSRM down** (every request refused, then every request left hanging) and fails
+  if the card is slower than 1.0 s on the first plan or 0.7 s after, the first route slower than 0.4 s, or the turn
+  instructions or limits are missing. A loaded test machine could trip the times. Undo or loosen: the `700 : 1000` and
+  `400` in e2e/smoke.js "valhalla down".
+
 ## 2026-11-07: Own routing, instant and offline; Valhalla only as backup (claude/own-routing-instant)
 
 Your goal: "Planning in well under a second. Routing that works offline. No dependence on a free server that can slow

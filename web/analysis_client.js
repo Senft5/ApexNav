@@ -74,7 +74,8 @@
     });
     if (answer.error) { stats.inline++; return runInline(Core, lat, lon, offsets, opts.side || null); }
     stats.worker++;
-    const { id: _, ...out } = answer;
+    const { id: _, workMs, doneAt, ...out } = answer;
+    if (opts.timing) opts.timing({ workMs, doneAt: Number.isFinite(doneAt) && root.performance ? doneAt - root.performance.timeOrigin : null });
     return out;
   }
 

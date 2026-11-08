@@ -791,8 +791,13 @@ flow('offline: plan a route and a loop from our tiles with no network', async (p
     await page.waitForTimeout(500);
     await clearPlan();
     offline = true;
-    const read = async () => (await page.waitForFunction(() => !document.getElementById('routeCardWeather').hidden, null, { timeout: 3000 }).catch(() => null), page.evaluate(() => { const t = window.apexDebug.track; return { own: window.apexDebug.lastOwn, kinds: window.apexDebug.lastFun.map((c) => c.kind), kind: t && t.kind, funLevel: t && t.funLevel,
-      steps: ((t && t.steps) || []).map((s) => s.type), instructions: t && t.instructions, weather: document.getElementById('routeCardWeather').hidden ? null : document.getElementById('routeCardWeather').textContent }; }));
+    // (the weather line is read the moment it shows, within 6 s: a route replaced meanwhile hides it again until its own
+    // forecast is refused, and under a loaded full run a read between the two saw it hidden)
+    const read = async () => page.evaluate(async () => { const w = document.getElementById('routeCardWeather');
+      for (let k = 0; k < 120 && w.hidden; k++) await new Promise((r) => setTimeout(r, 50));
+      const t = window.apexDebug.track; return { own: window.apexDebug.lastOwn, kinds: window.apexDebug.lastFun.map((c) => c.kind), kind: t && t.kind, funLevel: t && t.funLevel,
+      steps: ((t && t.steps) || []).map((s) => s.type), instructions: t && t.instructions,
+      limits: t && Array.isArray(t.limitMps) ? [t.limitMps.filter((x) => x > 0).length, t.limitMps.length, t.limitSource || null] : null, weather: w.hidden ? null : w.textContent }; });
     const plans = [];
     // 1. Quick, to a saved place (Where to?'s pinned row): no search needed
     await page.click('#destInput');
@@ -816,6 +821,8 @@ flow('offline: plan a route and a loop from our tiles with no network', async (p
       check(p.ms < 8000, `${p.level}: no hang (${p.ms} ms)`);
       check(p.steps.length >= 1 && p.steps.includes(4), `${p.level}: our own turn instructions on the route: ` + JSON.stringify(p.steps));
       check(p.weather && /aren't known|not known/i.test(p.weather), `${p.level}: the card says the weather isn't known, not a made-up forecast: ` + p.weather);
+      // the limit sign and the ETA: the posted limits from our tiles, with no map matching (offline it never could)
+      check(p.limits && p.limits[2] === 'tiles' && p.limits[0] > p.limits[1] / 2, `${p.level}: a posted limit is known on the planned route, from our tiles: ` + JSON.stringify(p.limits));
     }
     check(plans.every((p) => p.funLevel === p.level), 'each plan at its level: ' + JSON.stringify(plans.map((p) => [p.level, p.funLevel])));
     // 3. typed search can't work offline, and says so; a map tap's coordinates (what a tap puts in Where to?) do
@@ -853,7 +860,88 @@ flow('offline: plan a route and a loop from our tiles with no network', async (p
       check(off.own.used && off.kind === 'route' && Date.now() - t0 < 8000, 'with the browser offline as well: ' + JSON.stringify(off.own));
     } finally { await page.context().setOffline(false); }
     check(refused.some((u) => /valhalla/.test(u)), 'Valhalla was asked and refused (no signal), and nothing waited on it: ' + refused.length);
+    check(!refused.some((u) => /trace_attributes/.test(u)), "no map matching asked for our routes' limits: " + JSON.stringify(refused.filter((u) => /trace_attributes/.test(u))));
+    check(tap.limits && tap.limits[0] > 0, "the map tap's route has its posted limits: " + JSON.stringify(tap.limits));
     if (process.env.OFFLINE_LOG) console.log(JSON.stringify({ plans: plans.map((p) => [p.level, p.ms, p.own.ms, p.steps.length]), loop: loop.loops.map((d) => [d.kind, d.picked]), refused: [...new Set(refused.map((u) => u.split('?')[0]))] }));
+  } finally { graphDir = null; }
+}, { geolocation: { latitude: 39.155, longitude: -84.615 }, permissions: ['geolocation'] });
+
+// The owner (2026-11-07): "No dependence on a free server that can slow down or go away." Valhalla and OSRM down, two
+// ways: first every request refused at once, then every request left hanging (a server that has slowed to nothing, the
+// harder case: nothing errors, so anything that waits on it waits). Planning inside our tiles must not notice: the first
+// route and the final card within the targets (OWN_ROUTING.md §8: the card 1.0 s cold and 0.7 s warm, the first route
+// 0.4 s warm, from Enter), our own turn instructions on the route, the posted limits from the tiles.
+flow('valhalla down: planning inside our tiles is unaffected', async (page, base) => {
+  graphDir = graphFixture();
+  try {
+    let mode = 'abort';
+    const asked = { abort: [], stall: [] };
+    const ROUTERS = /^https:\/\/(valhalla1\.openstreetmap\.de|router\.project-osrm\.org)\//;
+    await page.route(ROUTERS, (route) => {
+      const u = new URL(route.request().url());
+      asked[mode].push(u.host + u.pathname.split('/').slice(0, 3).join('/'));
+      return mode === 'abort' ? route.abort('connectionrefused') : new Promise(() => {});   // stall: never answered
+    });
+    await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); localStorage.setItem('apex.permsExplained', '1'); localStorage.setItem('apex.funLevel', 'fun'); } catch (_) {} });
+    await page.goto(base + '/index.html');
+    await page.waitForFunction(() => window.apexDebug && window.apexDebug.map && window.ApexOwnRouting);
+    await page.waitForTimeout(1500);                                   // a person opens the app and taps Where to?
+    const clearPlan = async () => {
+      for (let k = 0; k < 2; k++) {
+        await page.evaluate(() => { for (const id of ['planCancel', 'planClear']) { const b = document.getElementById(id); if (b && b.offsetParent) b.click(); } });
+        await page.waitForTimeout(300);
+      }
+    };
+    const planTo = async (to) => {
+      await page.click('#destInput');
+      await page.fill('#destInput', to);
+      await page.evaluate(() => { window.apexDebug.lastFun = undefined; window.apexDebug.planMarks = []; window.apexDebug.optMarks = []; });
+      await page.press('#destInput', 'Enter');
+      await page.waitForFunction(() => Array.isArray(window.apexDebug.lastFun) && window.apexDebug.lastOwn && !document.getElementById('planPanel').classList.contains('busy'), null, { timeout: 10000 });
+      return page.evaluate(() => {
+        const D = window.apexDebug, t = D.track, lag = D.planStartAt - D.enterAt;
+        const at = (marks, k) => { const m = (marks || []).find((x) => x[0] === k); return m ? Math.round(m[1] + lag) : null; };
+        return { first: at(D.optMarks, 'drawn'), card: at(D.planMarks, 'built'), own: D.lastOwn, kinds: D.lastFun.map((c) => c.kind), kind: t && t.kind,
+          steps: ((t && t.steps) || []).map((x) => x.type), limits: t && Array.isArray(t.limitMps) ? t.limitMps.filter((x) => x > 0).length : null,
+          toast: document.getElementById('toast').classList.contains('show') ? document.getElementById('toast').textContent : '' };
+      });
+    };
+    const runs = [];
+    runs.push({ mode, warm: false, ...(await planTo('39.2400, -84.5300')) });   // cold: the tiles fetched for the first time
+    await page.waitForTimeout(600);
+    await clearPlan();
+    runs.push({ mode, warm: true, ...(await planTo('39.2500, -84.5500')) });
+    await page.waitForTimeout(600);
+    await clearPlan();
+    mode = 'stall';
+    runs.push({ mode, warm: true, ...(await planTo('39.2300, -84.5200')) });
+    await page.waitForTimeout(600);
+    await clearPlan();
+    runs.push({ mode, warm: true, ...(await planTo('39.2600, -84.5400')) });
+    // the turn instructions' wait (OWN_INSTRUCT_MS) and the checks' (OWN_CHECK_MS) run out after the card: ours stay
+    await page.waitForTimeout(3500);
+    const after = await page.evaluate(() => ({ steps: ((window.apexDebug.track || {}).steps || []).map((x) => x.type), kind: (window.apexDebug.track || {}).kind }));
+    // a loop from our tiles with Valhalla hanging: its context doesn't wait on Valhalla's map matching (the map's stage
+    // loops, Valhalla's, come after the card and here never)
+    await clearPlan();
+    const loopAt = Date.now();
+    await page.evaluate(() => { window.apexDebug.lastLoop = undefined; const b = [...document.querySelectorAll('#loopDetents [data-loop-mi]')][0]; b.click(); document.getElementById('findLoopBtn').click(); });
+    await page.waitForFunction(() => Array.isArray(window.apexDebug.lastLoop) && !document.getElementById('planPanel').classList.contains('busy'), null, { timeout: 15000 });
+    const loopMs = Date.now() - loopAt;
+    const loop = await page.evaluate(() => ({ won: (window.apexDebug.lastLoop.find((d) => d.picked) || {}).kind, name: apexDebug.track && apexDebug.track.name, steps: ((apexDebug.track || {}).steps || []).length }));
+    check(loop.won === 'own' && /loop$/.test(loop.name || '') && loopMs <= 1500, `a loop from our tiles within 1.5 s with Valhalla hanging (${loopMs} ms): ` + JSON.stringify(loop));
+    for (const r of runs) {
+      const lab = `${r.mode} ${r.warm ? 'warm' : 'cold'}`;
+      check(r.own.covered && r.own.used && r.kinds[0] === 'own' && r.kind === 'route', `${lab}: our route, from our tiles: ` + JSON.stringify(r));
+      check(Number.isFinite(r.card) && r.card <= (r.warm ? 700 : 1000), `${lab}: the final card within ${r.warm ? 700 : 1000} ms of Enter (${r.card} ms; first route ${r.first} ms)`);
+      if (r.warm) check(Number.isFinite(r.first) && r.first <= 400, `${lab}: the first route within 400 ms of Enter (${r.first} ms)`);
+      check(r.steps.length >= 2 && r.steps.includes(4), `${lab}: turn instructions on the route (ours): ` + JSON.stringify(r.steps));
+      check(r.limits > 0, `${lab}: the posted limits from our tiles: ` + r.limits);
+      check(!/couldn.t|check signal/i.test(r.toast), `${lab}: no failure said: ` + r.toast);
+    }
+    check(after.kind === 'route' && after.steps.length >= 2 && after.steps.includes(4), 'after Valhalla\'s waits ran out, the route keeps our instructions: ' + JSON.stringify(after));
+    check(asked.abort.length >= 1 && asked.stall.length >= 1, 'Valhalla was asked (as a check, for instructions) and failed both ways: ' + JSON.stringify(asked));
+    if (process.env.DOWN_LOG) console.log(JSON.stringify({ runs: runs.map((r) => [r.mode, r.warm, r.first, r.card]), loopMs, asked }));
   } finally { graphDir = null; }
 }, { geolocation: { latitude: 39.155, longitude: -84.615 }, permissions: ['geolocation'] });
 

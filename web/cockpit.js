@@ -54,6 +54,7 @@
       try { if (window.ApexRecce) ApexRecce.apply(ApexRecce.load(localStorage), t); } catch (_) {}   // your own recce notes again
       return true;
     }
+    const ownRouteOfTrack = new WeakMap();                            // a track built from one of our routes -> that route
     async function trackFromPolyline(coords, id, name, sightMs = 4000, o = {}) {
       const tl = typeof tlSpan === 'function' && typeof performance !== 'undefined' ? tlSpan : null, t0 = tl ? performance.now() : 0;
       // (a track built ahead skips the turn: the page's own work is a few ms of resampling, the rest is the worker's, and
@@ -81,18 +82,26 @@
       let side = null;
       try { side = ApexDrivingSide.forRoute(rs.lat[0], rs.lon[0]); } catch (_) { side = null; }
       const t2 = tl ? performance.now() : 0;
-      const { kappa, sight, env, corners } = await ApexAnalysis.analyse(rs.lat, rs.lon, offsets, { side });
+      let took = null;
+      const { kappa, sight, env, corners } = await ApexAnalysis.analyse(rs.lat, rs.lon, offsets, { side, timing: tl ? (x) => { took = x; } : null });
       const t3 = tl ? performance.now() : 0;
+      if (tl && took && Number.isFinite(took.workMs) && took.doneAt != null) tl(`track ${id}: the worker's own work`, took.doneAt - took.workMs, took.doneAt);
       const dist = rs.lat.map((_, i) => i * 5);
       const events = corners.map(c => cornerEventOf(c, rs.lat, rs.lon, dist));
       Core.linkNotes(events);
       if (tl) { tl(`track ${id}: yield`, t0, t1); tl(`track ${id}: resample+sight`, t1, t2); tl(`track ${id}: analyse (worker)`, t2, t3); tl(`track ${id}: corners`, t3); }
-      return {
+      const t = {
         id, name, kind: 'route', subtitle: 'Map only · not yet driven', sightPending: pending,
         lat: rs.lat, lon: rs.lon, dist, elev: null, speedMps: null, latG: null, lonG: null, camberDeg: null,
         envMps: Array.from(env), sightM: Array.from(sight), limitMps: null, kappa: Array.from(kappa), roughG: null,
         events, sectors: null, sectorM: 500, alpr: null
       };
+      // one of our routes: attachLimits lays its posted limits from the tiles it was planned on (offline too, after the
+      // card); Valhalla's map matching only for lines off our tiles
+      const OR = typeof window !== 'undefined' ? window.ApexOwnRouting : null;
+      const own = o.route || (OR && OR.routeOfLine ? OR.routeOfLine(coords) : null);
+      if (own) ownRouteOfTrack.set(t, own);
+      return t;
     }
 
     // Bundled recordings are demos (Watch a replay), never the person's own drives. They are 1.8 MB of script, so they load
@@ -2351,7 +2360,7 @@
     function rankPool(pool, level) {
       return window.ApexRouteEngine ? ApexRouteEngine.rank(pool, engineOpts(level)) : FunRoute.rank(pool, level);
     }
-    async function contextOn(cands, budgetMs = CTX_BUDGET_MS, prefix = 'cand', only = null, extra = null) {
+    async function contextOn(cands, budgetMs = CTX_BUDGET_MS, prefix = 'cand', only = null, extra = null, skip = null) {
       if (!window.ApexRouteEngine || !window.ApexRouteCtx || !cands.length || (window.ApexFlags && !ApexFlags.on('route_engine'))) return null;
       const departAt = Date.now(), car = routingCar(), pace = state.mode === 'live' && etaPace.factors ? etaPace.factors.open : null;
       const list = cands.filter((c) => (c.corridor = ApexRouteEngine.corridorFor(c, `${prefix}${cands.indexOf(c)}`, { departAt, car, pace })));
@@ -2359,7 +2368,7 @@
       for (const c of list) if (c.route && c.route.graph) c.corridor.graph = c.route.graph;   // ours: the tiles' scores per edge (route_ctx/graph.js)
       try {
         const at = typeof performance !== 'undefined' ? performance.now() : 0;
-        const res = await ApexRouteCtx.run(list.map((c) => c.corridor), { budgetMs, ...(only ? { only } : {}), settings: routeCtxSettings(), providerOpts: { ...routeCtxOpts(), ...(extra || {}) } });
+        const res = await ApexRouteCtx.run(list.map((c) => c.corridor), { budgetMs, ...(only ? { only } : {}), ...(skip ? { skip } : {}), settings: routeCtxSettings(), providerOpts: { ...routeCtxOpts(), ...(extra || {}) } });
         for (const c of list) { c.ctx = res.byId[c.corridor.id] || null; c.ev = null; }
         if (window.apexDebug) window.apexDebug.lastCtx = res.status;
         if (typeof tlSpan === 'function' && at) { tlSpan(`context ${prefix}`, at); for (const [k, v] of Object.entries(res.status || {})) if (v && v.ms) tlSpan(`context ${prefix}: ${k} ${v.status}`, at, at + v.ms); }
@@ -2414,6 +2423,22 @@
     }
     // OSM maxspeed per sample via Valhalla map matching (same as tools/export_web_profile.py).
     async function attachLimits(t) {
+      // ours: the posted limits from the tiles the route was planned on (OWN_ROUTING.md §5), offline too and without
+      // Valhalla; an edge the tiles have no posted limit for stays null (an unposted road, as map matching would say)
+      // (in a task of its own, after the card has painted)
+      const own = ownRouteOfTrack.get(t);
+      if (own && t.limitSource !== 'tiles') {
+        await new Promise((r) => setTimeout(r, 0));
+        let limits = null;
+        try { limits = ApexOwnRouting.limitsAlong(t.lat, t.lon, own); } catch (_) { limits = null; }
+        if (limits) {
+          t.limitMps = limits; t.limitSource = 'tiles';
+          if (timeFromEnvelope(t) && plannedRoute === t) renderRouteCard(t);
+          if (track === t) render(false);
+          return;
+        }
+      }
+      if (t && t.limitSource === 'tiles') return;
       const stride = 4, idx = [];
       for (let i = 0; i < t.lat.length; i += stride) idx.push(i);
       if (idx[idx.length - 1] !== t.lat.length - 1) idx.push(t.lat.length - 1);
@@ -3239,11 +3264,12 @@
       // (ours too wait for the first route to be drawn: building their corridors is main-thread work, and done alongside
       // the first draw it made the second plan's first route slower than the first plan's, live 2026-11-05)
       const directCtx = (ownUsed ? firstSeen : firstUp).then(() => ctxRun(directCands.slice(), 'route'));
-      // ours: the router's own pick's full track is built while the context runs (it is usually the engine's pick too)
-      if (ownUsed && directCands[0] && directCands[0] !== quickNow) firstSeen.then(() => buildAhead(directCands[0], id, name, OWN_SIGHT_MS));
-      // ours: the router's own pick's full track is built while the context runs (it is usually the engine's pick too)
+      // ours: every one's full track is built while the context runs, in both analysis workers (the engine picked the
+      // router's own first choice in 2 of 8 live cases, 2026-11-08; a track is 0.05 s of a worker's time on 30 km)
+      if (ownUsed) firstSeen.then(() => { for (const c of directCands) if (c !== quickNow) buildAhead(c, id, name, OWN_SIGHT_MS); });
       // ours: their light geometry, corners and forecasts while the context runs (the page is idle meanwhile)
       // (after the first route is drawn: that build has the page to itself)
+      let ownTowns = null;                                                  // (ownPrep: the towns along ours)
       const ownPrep = ownUsed ? (async () => {
         await firstSeen;
         const prepAt = performance.now();
@@ -3255,6 +3281,10 @@
           if (Date.now() - ran > 40) { await RouteLoading.yieldToUI(); ran = Date.now(); }
         }
         tlSpan('geometry of our routes', prepAt);
+        // the towns along them (the map tiles' places, fetched and decoded) while the context runs: they were 50-60 ms of
+        // the critical path after it (live 2026-11-08); the checks that join later get theirs at the towns step
+        const townsAt = performance.now();
+        ownTowns = townsOn(directCands.map((c) => c.t), directCands).then(() => tlSpan('towns (ours, with the context)', townsAt)).catch(() => {});
         return weatherFetch(directCands);
       })().catch(() => new Map()) : null;
       const same = (a, b) => Math.abs((a.timeS || 0) - (b.timeS || 0)) < 1 && a.coords.length === b.coords.length;
@@ -3383,7 +3413,9 @@
       if (ownPrep) for (const c of pool) if (!forecasts.has(c) && c.t && window.ApexRouteWeather) forecasts.set(c, forecastOf(c));
       mark('pool');
       const townsAt = performance.now();
-      await townsOn(pool.map(c => c.t), pool); mark('towns'); tlSpan('towns', townsAt);
+      if (ownTowns) await ownTowns;
+      const townsLeft = ownTowns ? pool.filter((c) => !directCands.includes(c)) : pool;
+      await townsOn(townsLeft.map(c => c.t), townsLeft); mark('towns'); tlSpan('towns', townsAt);
       await ctx; mark('ctx');
       if (!ownUsed) await weatherOn(pool, level, forecasts); mark('weather');   // ours: the forecast refines it after (ownRefine)
       tasteOn(pool);
@@ -3934,6 +3966,7 @@
       const own = (await ownLoopsP).map((r) => ({ kind: 'own', route: r.route, hwyShare: r.hwyShare, pts: [c, ...FunRoute.alongPoints(r.route.coords), c] }));
       if (window.apexDebug) window.apexDebug.lastLoopRefine = null;
       if (own.length) {
+        L.ownTiles = true;
         const first = await loopRound(L, own, ui, false);
         if (first) loopRefine(L, first, stageJobs(false));
         else await loopRound(L, await stageJobs(true), ui, true);         // ours all failed to build: as without them
@@ -3954,7 +3987,7 @@
         // whole loop (it cut every one of them to nothing, live 2026-11-04)
         const even = Core.resamplePolyline(r.coords.map(p => p[1]), r.coords.map(p => p[0]), 5);
         const rs = Core.removeSpurs(even.lat, even.lon);
-        const t = await trackFromPolyline(rs.lat.map((la, i) => [rs.lon[i], la]), L.loopId, `${L.asked} loop`);
+        const t = await trackFromPolyline(rs.lat.map((la, i) => [rs.lon[i], la]), L.loopId, `${L.asked} loop`, undefined, { route: r.graph ? r : null });
         t.fun = funOf(t, r.turns);
         t.unavoided = FunRoute.unavoided(avoid, r);
         t.timeS = r.timeS;
@@ -3972,7 +4005,10 @@
     async function loopScored(L, done, ui) {
       // The route engine on loops: quality, scenery, side streets and penalties on the same scale (route_engine.js loopValue).
       const lc = done.map(d => ({ route: { coords: d.t.lat.map((la, i) => [d.t.lon[i], la]), turns: d.route.turns, times: d.route.times }, timeS: d.t.timeS, t: d.t, fun: d.t.fun, match: 'map_snap' }));
-      const lctx = contextOn(lc);
+      // where our tiles have loops here, the tiles carry the road data Valhalla's map matching gave (route_ctx/graph.js
+      // scores any line from the worker): its provider is skipped for every loop of the plan, ours and the map's stage
+      // loops alike, so they're scored the same way and a slow or missing Valhalla doesn't hold the card (its 2.4 s)
+      const lctx = contextOn(lc, CTX_BUDGET_MS, 'cand', null, null, L.ownTiles ? ['router'] : null);
       await townsOn(done.map(d => d.t), done);
       for (const d of done) { d.t.townKm = d.townKm; d.score -= FunRoute.townCost(d); }
       if (await lctx) done.forEach((d, i) => {

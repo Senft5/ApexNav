@@ -170,6 +170,25 @@ def test_points_routed_on_our_tiles():
     assert r["off"] is None, r
 
 
+def test_plan_reuses_the_first_routes_search_with_the_same_answer():
+    """The plan asked right behind the first route, on the same view, reuses its time-only search: the routes are the
+    same as a plan made from scratch, with a heading, avoid choices and prefs; another trip doesn't reuse it."""
+    r = case("quickMemo")
+    assert all(x["same"] and x["memo"] for x in r["out"]), r
+    assert r["other"], r
+
+
+def test_posted_limits_on_our_routes_from_the_tiles():
+    """The limit sign and the ETA's limits on one of our routes come from the tiles it was planned on (offline too, no
+    Valhalla map matching): each sample gets its edge's posted limit, an edge with none (or only the class's estimate)
+    is null, a loop with a spur cut out still lines up, and a line that isn't ours gets nothing (Valhalla's turn)."""
+    r = case("limits")
+    assert r["n"] > 100 and r["agree"] == r["n"], r
+    assert r["posted"] > 0 and r["wantNull"] > 0 and r["nulls"] > 0, r
+    assert r["sameCut"], r
+    assert r["noTable"] is None and r["ofLine"] and r["notOurs"] is None, r
+
+
 def test_the_worker_makes_each_routes_geometry_as_the_page_would():
     r = case("geo")
     assert r["bare"] and r["n"] >= 2 and r["same"], r
