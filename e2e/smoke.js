@@ -791,9 +791,13 @@ flow('offline: plan a route and a loop from our tiles with no network', async (p
     await page.waitForTimeout(500);
     await clearPlan();
     offline = true;
-    const read = async () => (await page.waitForFunction(() => !document.getElementById('routeCardWeather').hidden, null, { timeout: 3000 }).catch(() => null), page.evaluate(() => { const t = window.apexDebug.track; return { own: window.apexDebug.lastOwn, kinds: window.apexDebug.lastFun.map((c) => c.kind), kind: t && t.kind, funLevel: t && t.funLevel,
+    // (the weather line is read the moment it shows, within 6 s: a route replaced meanwhile hides it again until its own
+    // forecast is refused, and under a loaded full run a read between the two saw it hidden)
+    const read = async () => page.evaluate(async () => { const w = document.getElementById('routeCardWeather');
+      for (let k = 0; k < 120 && w.hidden; k++) await new Promise((r) => setTimeout(r, 50));
+      const t = window.apexDebug.track; return { own: window.apexDebug.lastOwn, kinds: window.apexDebug.lastFun.map((c) => c.kind), kind: t && t.kind, funLevel: t && t.funLevel,
       steps: ((t && t.steps) || []).map((s) => s.type), instructions: t && t.instructions,
-      limits: t && Array.isArray(t.limitMps) ? [t.limitMps.filter((x) => x > 0).length, t.limitMps.length, t.limitSource || null] : null, weather: document.getElementById('routeCardWeather').hidden ? null : document.getElementById('routeCardWeather').textContent }; }));
+      limits: t && Array.isArray(t.limitMps) ? [t.limitMps.filter((x) => x > 0).length, t.limitMps.length, t.limitSource || null] : null, weather: w.hidden ? null : w.textContent }; });
     const plans = [];
     // 1. Quick, to a saved place (Where to?'s pinned row): no search needed
     await page.click('#destInput');
