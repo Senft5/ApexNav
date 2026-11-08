@@ -4,6 +4,30 @@ Decisions Claude made for you, newest first. Each one says what was decided, why
 you reach one you've seen. If you disagree with a call, say so and it gets reversed; nothing here is hard to undo unless
 it says so. Things only you can do are in docs/OWNER_TODO.md.
 
+## 2026-11-08 (levels): Fun and Long way each spend their time on better road (claude/level-spread)
+
+An audit of our phone router found Long way came back with exactly Fun's route on every test trip: the search for how
+much to weigh good road stopped at its cap with time left, so Long way's bigger budget was never spent. And Fun on the
+colerain trip took a road no better than one it could have had in the same 19.6 minutes.
+- **The router now picks by how much better road the extra time buys**, not by "the most weight that still fits the
+  budget". Each route it finds inside the level's time is scored by its average road goodness, minus a price for each
+  extra minute over the level's quickest (as a share of that trip's time). Fun's price is 4x Long way's, so Fun takes good
+  road that's near, Long way also the good road further off. Why: the old rule's routes avoid the worst stretches rather
+  than seek the best ones. Measured on the 5 public trips: Long way now differs from Fun on 3 of them (subdivision4
+  17 min, average goodness 0.32 against 0.26; northgate 29 min on 0.40 road against 14 min on 0.25; colerain 32 min, 0.40
+  against 0.34), and Fun on colerain reaches 0.34 (from 0.30) and on harrison 0.47 (from 0.45) in about the same time.
+  Undo: `K.BUY` = {} in web/graph_router.js (the old pick), `K.A_MAX` back to 40, `K.A_FIRST` back to 1 / 2 / 4.
+- **One extra search finds those roads** (the "spread": a second route avoiding the first moderate route's roads).
+  Planning on the phone costs about +10 % at Fun and +13 % at Long way (3-4 ms a plan in node). Undo: `K.SPREAD` = {}.
+- **A longer route that isn't better is not offered as the pick.** If the extra time buys less than 0.1 of goodness
+  per doubling of the trip's time, the quickest stays. So on the subdivision trip Fun and Long way now take the
+  quickest (5.3 min) instead of 8.7 min on road almost as poor, and northgate's Fun the highway-free quickest (12 min)
+  instead of 14. The longer routes stay in the list the route engine ranks. Tune: `K.BUY_MIN`.
+- **Harrison: Long way = Fun (31.6 min, 0.47).** The best Long way road the audit found (42 min, 0.48) buys 0.01 for
+  10 more minutes; at Long way's price that isn't worth it. If you'd rather Long way take every last bit of better
+  road, lower `K.BUY.max` (0.01 takes it).
+- Quick, the highway rules and loops are unchanged.
+
 ## 2026-11-08: Your four key answers: NREL is now NLR, Flickr dropped, Earthdata night lights, FCC coverage (claude/keys-1108)
 
 Your answers: "flickr api unavailable for free users", "nrel link doesn't work", "earth data is made", "fcc account made".

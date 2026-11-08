@@ -154,10 +154,18 @@ phone's reader); tests/test_graph_tiles.py round-trips through both. What a rout
   absurd, quickS, freeS }`. The ranking keeps the same rule (ROUTE_ENGINE.md, fun_route.js `applyHighways`). Not in the
   tiles: an expressway mapped as `primary` with `motorroad=yes` (the ETL doesn't keep the tag yet; a tile rebuild would).
 - **Quick:** minimise time (A* with an admissible time heuristic: straight-line distance / max speed).
-- **Fun / Max fun:** minimise `t_s * (1 + a*(1 - goodness))` where goodness blends quality, fun and scenery with the
-  driver's taste; `a` is found by bisection so the route's time stays within the level's budget over the quickest
-  (Quick 60 s, Fun 35 % + 240 s, Max 90 % + 600 s; at Fun and Long way the search is the highway-free one above). Turn costs: left/right/U by angle, plus signals and
-  stops on the node.
+- **Fun / Max fun:** minimise `t_s * exp(a*(1 - goodness))` where goodness blends quality, fun and scenery with the
+  driver's taste; `a` is bisected (log steps, from `K.A_FIRST` 5, up to `K.A_MAX` 40 at Fun, 80 at Long way) for the
+  largest weight inside the level's budget over the quickest (Quick 60 s, Fun 35 % + 240 s, Max 90 % + 600 s; at Fun and
+  Long way the search is the highway-free one above). Turn costs: left/right/U by angle, plus signals and stops on the
+  node. **The pick at Fun and Long way is not the largest weight** (2026-11-08, the levels audit: at the 40 cap Long way
+  was Fun's route on every trip, with budget left): every route found inside the budget (the bisection's steps, `K.LOWER`,
+  the alternates, and the **spread**: penalty alternates x1.6 at Fun, x2.5 at Long way of the first step's route, which
+  find the next good road over, where the large weights shun a short rough stretch instead of seeking the best road) is
+  scored as its length-weighted goodness G less `K.BUY` (Fun 0.12, Long way 0.03) x its extra time over the level's own
+  quickest as a share of that time, the largest wins (`pick()`); a route whose extra time buys less than `K.BUY_MIN`
+  0.1 of G per 100 % more time is never the pick, so neither level lengthens a trip for road no better than the
+  quickest's. Each route carries `why.goodness` (G). Quick is unchanged (the largest weight inside its 60 s).
 - **Alternatives:** penalty method (re-run with the chosen edges penalised) for 2 genuinely different alternates.
 - **Loops:** any route from the start back to it with little driven twice, built from the best roads within reach (the
   owner, 2026-11-06: not a circle): the tiles' best stages (explore) chained one to three at a time, each leg on the
@@ -641,6 +649,57 @@ phone's reader); tests/test_graph_tiles.py round-trips through both. What a rout
     by build anyway. The website's shipped tiles (`/data/graph/v1`) are max-age 3600 with the assets' ETag.
   - Not measurable here: a real iPhone's WKWebView (its JavaScript speed, its HTTP cache), a phone's radio (an LTE
     round trip to Cloudflare's edge is tens of ms, not this proxy's 0.2-0.3 s), Apple's place search.
+
+- 2026-11-08 (levels): each level spends its budget on better road (branch claude/level-spread; CALL_SHEET 2026-11-08
+  (levels)). The audit (route_quality.js over the 5 public trips, the shipped tiles, G = the router's own length-weighted
+  goodness, the ceiling a dense sweep of `a`, a top-20 % seeker and penalty alternates inside the level's limit) found
+  Long way = Fun on every trip (the bisection stopped at 36.4 / 37.2 under the cap of 40, Fun using 8.7 of 11.2 min on
+  subdivision) and Fun short of the ceiling on colerain (0.304 against 0.340 at the same 19.6 min). The objective
+  `t x exp(a x bad)` at a large weight shuns the worst stretches rather than seeking the best mean. Tried: a binary
+  top-road seeker (goodness >= 0.4 at cost t, else e^a t) with its alternate found the same roads but cost 2 slow searches
+  (+40 % plan time); penalty alternates of the moderate-weight route (a = 5) found them in one cheap search per level, so
+  that is the spread; Long way's cap 80 finds colerain's 31.6 min road (a 55-73). Before / after (the pick):
+
+  | trip | level | before: min (limit), G, top-5 % km | after: min, G, top-5 % km | the audit's ceiling (before) |
+  |---|---|---|---|---|
+  | subdivision | Quick | 5.3 (6.3), 0.200, 0 % | the same | |
+  | subdivision | Fun | 8.7 (11.2), 0.253, 3 % | 5.3, 0.200, 0 % (the quickest: +3.4 min bought 0.053) | 0.253 / 8.7 |
+  | subdivision | Long way | 8.7 (20.1), 0.253, 3 % | 5.3, 0.200, 0 % | 0.263 / 11.6 |
+  | subdivision4 | Quick | 9.4 (10.4), 0.204, 2 % | the same | |
+  | subdivision4 | Fun | 12.0 (16.6), 0.262, 3 % | the same | 0.262 / 12.0 |
+  | subdivision4 | Long way | 12.0 (27.8), 0.262, 3 % | 17.2, 0.323, 26 % | 0.323 / 17.2 |
+  | northgate | Quick | 11.1 (11.7), 0.261, 38 % | the same | |
+  | northgate | Fun | 14.4 (18.4), 0.251, 6 % | 12.1, 0.232, 0 % (the highway-free quickest) | 0.251 / 14.4 |
+  | northgate | Long way | 14.4 (30.3), 0.251, 6 % | 29.1, 0.398, 66 % | 0.251 / 14.4 |
+  | colerain | Quick | 15.2 (16.2), 0.379, 15 % | the same | |
+  | colerain | Fun | 19.7 (24.5), 0.304, 8 % | 19.6, 0.340, 18 % | 0.340 / 19.6 |
+  | colerain | Long way | 19.7 (38.8), 0.304, 8 % | 31.6, 0.403, 33 % | 0.403 / 31.6 |
+  | harrison | Quick | 21.4 (22.4), 0.342, 0 % | the same | |
+  | harrison | Fun | 31.1 (32.8), 0.454, 17 % | 31.6, 0.469, 28 % | 0.454 / 31.1 |
+  | harrison | Long way | 31.1 (50.6), 0.454, 17 % | 31.6, 0.469, 28 % (Fun's: 41.9 min buys only 0.009 more) | 0.478 / 41.9 |
+
+  Long way now differs from Fun on 3 of 5 trips and meets or beats the audit's ceiling on all but harrison (0.469 against
+  0.478, 10 min less); Fun meets or beats it on colerain, subdivision4 and harrison; on subdivision and northgate Fun takes
+  the (highway-free) quickest, the extra minutes there buying under 0.1 of G per 100 % more time. Planning time (node, the
+  5 trips warm, 3 interleaved runs, sum per level): Quick 183 / 185 ms, Fun 137 / 151 ms (+10 %), Long way 156 / 177 ms
+  (+13 %). **In the app the route engine still has the last word** (tools/live_speed.js, this branch's web/ and main's
+  served locally, /api from production, warm; the card's route, min and why line):
+
+  | trip | level | main | this branch |
+  |---|---|---|---|
+  | subdivision | Fun, Long way | 5.3, Quick is the way | the same |
+  | subdivision4 | Fun, Long way | 12.0, avoids strip malls | the same (17.2 / 22.1 offered, ranked below) |
+  | northgate | Fun | 12.1, nicer country | the same |
+  | northgate | Long way | 14.4, nicer country | 29.1, 19 more good corners |
+  | colerain | Fun, Long way | 17.4, the quickest way off the highway is a good road too | the same (31.6 ranked second at Long way, -41.9 against -37.6) |
+  | harrison | Fun | 31.1, 27 more good corners | the same |
+  | harrison | Long way | 37.5, 38 more good corners | 41.9, 46 more good corners |
+
+  So the router now offers the better roads, and where the engine's value agrees (northgate, harrison) the app takes
+  them; on colerain and subdivision4 the engine's own value prefers the shorter route (its corners on side streets, more
+  strip mall). FunRoute.rank on geometry alone (no route context) ranks the highway-free quickest first on every trip,
+  before and after. Tests: test_each_level_spends_its_budget_on_better_road,
+  test_no_level_lengthens_a_trip_with_no_good_road (both fail on main).
 
 - 2026-11-04 (region grid): the context grid for OH+KY+IN on graph-data ctx/v1 (ctx-region.yml, 6 shards, 32 min):
   33 bundles, 35.6 MB, 1.46 M HPMS road spans, 13,574 fatal crashes; served at /api/ctx/v1/ (KV first, then the branch).
