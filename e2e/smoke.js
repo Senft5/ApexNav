@@ -945,6 +945,76 @@ flow('valhalla down: planning inside our tiles is unaffected', async (page, base
   } finally { graphDir = null; }
 }, { geolocation: { latitude: 39.155, longitude: -84.615 }, permissions: ['geolocation'] });
 
+flow('weak signal: with every request off the app hanging, nothing on the network sits before our first route or the card', async (page, base) => {
+  // (prod-speed, 2026-11-08) the app's own files answer; everything else (our Worker's /api, weather, search, Valhalla,
+  // the map) is left hanging, as on a phone with one bar. Avoid towns is on (the towns are the map's tiles: network).
+  graphDir = graphFixture();
+  try {
+    let hang = false;
+    const held = new Set();
+    await page.route('**/*', (route) => {
+      const u = route.request().url();
+      if (hang && !(u.startsWith(base) && !u.startsWith(base + '/api/'))) { held.add(u.replace(base, '').split('?')[0].slice(0, 60)); return new Promise(() => {}); }
+      return route.fallback();
+    });
+    await page.addInitScript(() => { try {
+      localStorage.setItem('apex.onboarded', '1'); localStorage.setItem('apex.permsExplained', '1'); localStorage.setItem('apex.funLevel', 'fun');
+      localStorage.setItem('apex.avoid', JSON.stringify({ towns: true }));
+    } catch (_) {} });
+    const finished = () => page.waitForFunction(() => Array.isArray(window.apexDebug.lastFun) && window.apexDebug.lastOwn && !document.getElementById('planPanel').classList.contains('busy'), null, { timeout: 12000 })
+      .catch(async (e) => { if (process.env.DOWN_LOG) console.log(JSON.stringify(await page.evaluate(() => ({ marks: window.apexDebug.planMarks, opt: window.apexDebug.optMarks, tl: (window.apexDebug.timeline || []).filter((x) => !/track route_dest/.test(x[0])), own: window.apexDebug.lastOwn, busy: document.getElementById('planPanel').className, toast: document.getElementById('toast').textContent })))); throw e; });
+    const clearPlan = async () => {
+      for (let k = 0; k < 2; k++) {
+        await page.evaluate(() => { for (const id of ['planCancel', 'planClear']) { const b = document.getElementById(id); if (b && b.offsetParent) b.click(); } });
+        await page.waitForTimeout(300);
+      }
+    };
+    const planTo = async (to) => {
+      await page.fill('#destInput', to);
+      await page.evaluate(() => { window.apexDebug.lastFun = undefined; window.apexDebug.planMarks = []; window.apexDebug.optMarks = []; });
+      await page.press('#destInput', 'Enter');
+      await finished();
+      return page.evaluate(() => {
+        const D = window.apexDebug, t = D.track, lag = D.planStartAt - D.enterAt;
+        const at = (marks, k) => { const m = (marks || []).find((x) => x[0] === k); return m ? Math.round(m[1] + lag) : null; };
+        return { first: at(D.optMarks, 'drawn'), card: at(D.planMarks, 'built'), own: D.lastOwn, kinds: D.lastFun.map((c) => c.kind), kind: t && t.kind,
+          steps: ((t && t.steps) || []).length, townKm: (D.lastFun[0] || {}).townKm };
+      });
+    };
+    const open = async () => {
+      await page.goto(base + '/index.html');
+      await page.waitForFunction(() => window.apexDebug && window.apexDebug.map && window.ApexOwnRouting);
+      await page.waitForTimeout(1500);
+    };
+    // an earlier launch with the signal on: the tiles and their index kept on the phone, as after any plan
+    await open();
+    await planTo('39.2400, -84.5300');
+    // then one bar: the app opened again, two plans
+    hang = true;
+    await open();
+    const runs = [{ warm: false, ...(await planTo('39.2500, -84.5500')) }];
+    await page.waitForTimeout(600);
+    await clearPlan();
+    runs.push({ warm: true, ...(await planTo('39.2300, -84.5200')) });
+    for (const r of runs) {
+      const lab = r.warm ? 'warm' : 'reopened';
+      check(r.own.covered && r.own.used && r.kinds[0] === 'own' && r.kind === 'route' && r.steps >= 2, `${lab}: our route with our instructions: ` + JSON.stringify(r));
+      check(Number.isFinite(r.card) && r.card <= (r.warm ? 700 : 1000), `${lab}: the card within ${r.warm ? 700 : 1000} ms of Enter with the network hanging (${r.card} ms; first route ${r.first} ms)`);
+      check(Number.isFinite(r.first) && r.first <= (r.warm ? 400 : 600), `${lab}: the first route within ${r.warm ? 400 : 600} ms (${r.first} ms)`);
+    }
+    // a first launch (nothing kept) with one bar: the region's index is given INDEX_WAIT_MS (3 s, from launch), then
+    // the app's own tiles plan alone; before, every tile load waited on it for as long as the request hung
+    await page.evaluate(() => new Promise((ok) => { const rq = indexedDB.deleteDatabase('vetta-graph'); rq.onsuccess = rq.onerror = rq.onblocked = () => ok(); }));
+    await page.goto(base + '/index.html');
+    await page.waitForFunction(() => window.apexDebug && window.apexDebug.map && window.ApexOwnRouting);
+    await page.waitForTimeout(3500);
+    const fresh = await planTo('39.2450, -84.5350');
+    check(fresh.own.used && fresh.kind === 'route' && Number.isFinite(fresh.card) && fresh.card <= 1500, 'a first launch with the network hanging still plans on our tiles: ' + JSON.stringify(fresh));
+    check(held.has('/api/graph/v1/index.json'), 'the region index was asked and left hanging: ' + [...held].join(' '));
+    if (process.env.DOWN_LOG) console.log(JSON.stringify({ runs: runs.map((r) => [r.warm, r.first, r.card]), fresh: [fresh.first, fresh.card], held: [...held] }));
+  } finally { graphDir = null; }
+}, { geolocation: { latitude: 39.155, longitude: -84.615 }, permissions: ['geolocation'] });
+
 flow('own routing: with no graph tiles for the trip, Valhalla plans it as before', async (page, base) => {
   graphDir = 'none';                                              // the shipped Cincinnati tiles cover this trip: hide them
   let out;

@@ -2492,14 +2492,17 @@
     let plannedRoute = null;
     // Avoid towns (R-15): km of each candidate near a city, town or village (FunRoute.townKm), which ranking then costs.
     // Only when the driver asked; unknown (no tiles) stays unknown and costs nothing.
-    async function townsOn(tracks, cands) {
+    async function townsOn(tracks, cands, ms = TOWNS_MS) {
       if (!avoid.towns || !tracks.length) return;
       const pts = [];
       for (const t of tracks) for (let i = 0, next = 0; i < t.lat.length; i++) if (t.dist[i] >= next) { pts.push({ lat: t.lat[i], lon: t.lon[i] }); next = t.dist[i] + 1000; }
       let places = null;
-      try { places = await ApexStages.places(pts); } catch (_) { /* no tiles, or a trip too big: unknown (the card says so) */ }
+      // (the map's place tiles: on a weak signal the card waited for them; TOWNS_MS, then unknown, and what lands is kept
+      // for the next plan: stages.js placeTiles)
+      try { places = await RouteLoading.optional(ApexStages.places(pts), ms); } catch (_) { /* no tiles, or a trip too big: unknown (the card says so) */ }
       cands.forEach((c, i) => { c.townKm = places ? FunRoute.townKm(tracks[i], places) : null; });
     }
+    const TOWNS_MS = 400;
     const fewerTownKm = (c, quick) => (c && quick && Number.isFinite(c.townKm) && Number.isFinite(quick.townKm) ? quick.townKm - c.townKm : 0);
     // Route options of the last fun plan: { id, name, request, level, quickest, list (ranked candidates), picked, current (its track) }.
     let routeOptions = null;
@@ -2670,7 +2673,11 @@
       }
       if (!saved || !Array.isArray(saved.coords) || saved.coords.length < 2) return;
       if (resumed) setTimeout(() => toast(`Back on ${saved.name || 'your route'}: the drive you were on when the app closed.`), 1200);
-      await buildRoute(null, saved.id, saved.name, await trackFromPacked(saved));
+      const t = await trackFromPacked(saved);
+      // a route planned (or being planned) meanwhile stays: on a weak signal the land cover's wait put the old route back
+      // over a new plan's seconds later (2026-11-08)
+      if (plannedRoute || $('planPanel').classList.contains('busy')) return;
+      await buildRoute(null, saved.id, saved.name, t);
     }
     // Saved for offline (IDEAS F-03): the route card's Save keeps it on the phone; Where to? lists it under Saved.
     async function openSaved(p) {
@@ -3472,7 +3479,7 @@
     // from the plan's start: the context alone takes 1.5-3 s, so the quickest goes up as soon as the router answers (live:
     // on screen by about 1.5 s with its track built) and the ranking replaces it
     const EARLY_MS = 0, EARLY_SIGHT_MS = 100, FIRST_GATE_MS = 1800;
-    // Our own router (graph_worker.js), started on the first plan; the Valhalla check waits at most OWN_CHECK_MS once
+    // Our own router (graph_worker.js), started at launch; the Valhalla check waits at most OWN_CHECK_MS once
     // our routes are in, and the chosen route's instructions at most OWN_INSTRUCT_MS (else our own maneuvers)
     const OWN_CHECK_MS = 2500, OWN_INSTRUCT_MS = 3000, OWN_COVERS_MS = 1500, OWN_PLAN_MS = 6000, OWN_CROWD_MS = 250, OWN_FIRST_WAIT_MS = 700;
     // members' measured roads for our search: only signed in (the server answers sign_in_required otherwise)
@@ -3560,7 +3567,9 @@
           const clockOf = pool.find((p) => p.own && p.own.clock), k = clockOf ? clockOf.own.clock : 1;   // the pool's one clock
           for (const c of full.cands) if (!pool.some((p) => same(p, c))) { c.timeS *= k; c.route.timeS = c.timeS; c.t = geometryOf(c); c.fun = funOf(c.t, c.route.turns); c.glare = FunRoute.glare(c.t, c.timeS, new Date()); pool.push(c); added.add(c.t); }
         }
-        await contextOn(pool, OWN_REFINE_MS, 'refine', OWN_REFINE);
+        // the towns the card couldn't wait for (Avoid towns on a weak signal: TOWNS_MS) looked up again, given longer
+        const noTowns = avoid.towns ? pool.filter((c) => c.townKm == null && c.t) : [];
+        await Promise.all([contextOn(pool, OWN_REFINE_MS, 'refine', OWN_REFINE), noTowns.length ? townsOn(noTowns.map((c) => c.t), noTowns, OWN_REFINE_MS) : null]);
         await weatherOn(pool, level, forecasts);
         const ranked = rankPool(pool, level);
         const still = () => routeOptions === o && plannedRoute === shown && state.mode !== 'live';
@@ -3596,9 +3605,20 @@
         const t0 = Date.now();
         try { if (window.ApexAnalysis && ApexAnalysis.prewarm) ApexAnalysis.prewarm(); } catch (_) { /* started on first use */ }   // the tracks' workers
         ownRouter().covers([p]).then((ok) => (ok ? ownRouter().preload({ lat: p.lat, lon: p.lon, km: 0 }) : null))
-          .then((r) => { if (window.apexDebug) window.apexDebug.ownWarm = r ? { ...r, wallMs: Date.now() - t0 } : null; }).catch(() => { ownWarmAt = null; });
+          .then((r) => {
+            if (window.apexDebug) window.apexDebug.ownWarm = r ? { ...r, wallMs: Date.now() - t0 } : null;
+            // then the region's tiles within OWN_KEEP_KM kept on the phone (the app's own are there already): a plan
+            // round you never waits on the network for its tiles, and works offline (bytes only, one at a time, after
+            // any plan: graph_router.js host 'keep')
+            if (r) ownRouter().keep({ lat: p.lat, lon: p.lon, km: OWN_KEEP_KM }).then((k) => { if (window.apexDebug) window.apexDebug.ownKept = k; }).catch(() => {});
+          }).catch(() => { ownWarmAt = null; });
       } catch (_) { /* no position or no worker: the first plan loads its tiles */ }
     }
+    const OWN_KEEP_KM = 15;
+    // at launch, before any position: the tiles' index (the region's is asked once a day, kept for offline) and the
+    // routing worker with its scripts, so a first plan never waits for either (2026-11-08: on the website the worker was
+    // started by the first plan when the map had no fix yet, its four scripts fetched after Enter: 0.8 s)
+    try { if (ownOn()) { ownIndex(); ownRouter().ready().catch(() => {}); } } catch (_) { /* started by the first plan */ }
     // every second until the first fix is in (a fresh install has no saved position), then every 15 s
     (function warmLoop() { warmOwnTiles(); setTimeout(warmLoop, ownWarmAt ? 15000 : 1000); })();
     // Router costing for the legs between good roads: highways welcome unless avoided (route_engine.js connectorCosting).
@@ -4418,6 +4438,10 @@
     // F-15: the Log is loaded while nothing else is happening (the map idle, no drive), so its first open is a show
     function prewarmLog() {
       if (logFrame.el || state.mode === 'live' || driveActive || document.hidden) return;
+      // never while a route is planned or just after (its 40 scripts are parsed on the page's thread: live 2026-11-08 the
+      // frame loaded 1.5 s into a plan): again once the plan is over
+      const planAt = window.apexDebug && window.apexDebug.planStartAt, busy = $('planPanel').classList.contains('busy');
+      if (busy || (planAt != null && performance.now() - planAt < 4000)) { setTimeout(() => idle(prewarmLog), 3000); return; }
       logFrameEl('analysis.html?tab=log');
     }
     window.addEventListener('resize', () => { if (logFrame.el && !logFrame.el.hidden) logInsets(); });
@@ -4633,31 +4657,60 @@
     $('findGoBtn').addEventListener('click', () => {
       const q = $('destInput').value.trim();
       if (!q) return;
-      const pasted = window.ApexRouteImport && ApexRouteImport.parseMapsLink(q);
-      const top = !pasted && shownRows.q === q && shownRows.rows[0];
-      if (top) { if (top.saved) openSaved(top.saved); else routeToPlace(top); } else routeToQuery();
+      if (window.ApexRouteImport && ApexRouteImport.parseMapsLink(q)) routeToQuery(); else goTyped();
     });
+    // Go (or Enter) on what's typed in Where to?: the list's top row when it's up; else your place by that name, or the map
+    // search's top row when it lands (placesFor), before a full geocode (routeToQuery). A start typed too: routeToQuery.
+    function goTyped() {
+      const q = $('destInput').value.trim(), top = shownRows.q === q && shownRows.rows[0];
+      const take = (p) => { if (p.saved) openSaved(p.saved); else routeToPlace(p); };
+      if (top) { take(top); return; }
+      if ($('fromInput').value.trim() || $('planPanel').classList.contains('busy')) { routeToQuery(); return; }
+      clearTimeout(suggestTimer);
+      if (placesAsk.q === q) toast('Searching…');
+      placesFor(q).then((p) => { if ($('destInput').value.trim() !== q) return; if (p) take(p); else routeToQuery(); }).catch(() => routeToQuery());
+    }
+    // Your places by name while typing (pinned first, then recent; tests/test_place_search.py): on the phone, so the list's
+    // top row, and Enter, need no network for a place you've been (2026-11-08)
+    const yourPlaces = () => [...ApexPinnedPlaces.list(localStorage).map((p) => ({ label: p.name, lat: p.lat, lon: p.lon, kind: p.label && p.label !== p.name ? p.label : 'Pinned' })),
+      ...recentPlaces().map((p) => ({ ...p, kind: 'Recent' }))];
+    function mineFor(q) {
+      let segs = [];
+      try { segs = JSON.parse(localStorage.getItem('apex.segments') || '[]'); } catch (_) {}
+      return ApexPlaceSearch.localMatches(q, segs, loadHighlights(), 4, yourPlaces());
+    }
+    // the map search asked for what's typed (Enter pressed before its rows are up waits for them: placesFor)
+    let placesAsk = { q: null, p: null };
     async function renderPlaces() {
-      const q = $('destInput').value.trim(), seq = ++suggestSeq, box = $('placeList');
+      const q = $('destInput').value.trim(), seq = ++suggestSeq;
       let rows, empty = '';
       if (q.length >= 3 && !COORDS.test(q)) {
-        // your own stages and spots by name first (U-19), then the map search
-        let segs = [];
-        try { segs = JSON.parse(localStorage.getItem('apex.segments') || '[]'); } catch (_) {}
-        const mine = ApexPlaceSearch.localMatches(q, segs, loadHighlights());
-        try { rows = (IN_APP_SHELL && await appleSuggest(q)) || await photonSuggest(q); } catch (_) { rows = []; if (!mine.length) empty = 'No suggestions offline. Press Go to search.'; }
-        if (seq !== suggestSeq) return;                                  // a newer keystroke won
-        rows = [...mine, ...rows.filter((r) => !mine.some((m) => ApexPlaceSearch.norm(m.label) === ApexPlaceSearch.norm(r.label)))];
-        if (!rows.length && !empty) empty = 'No matches nearby. Press Go to search everywhere.';
-      } else {
-        rows = [...ApexPinnedPlaces.list(localStorage).map(p => ({ label: p.name, lat: p.lat, lon: p.lon, kind: p.label, pinned: p })),
-                ...ApexSavedRoutes.list(localStorage).slice(0, 4).map(p => ({ label: p.name, kind: Number.isFinite(p.miles) ? `Saved · ${ApexUnits.long(p.miles * 1609.344)}` : 'Saved', saved: p })),
-                ...recentPlaces().map(p => ({ ...p, kind: 'Recent' })),
-                ...loadHighlights().filter(h => Number.isFinite(h.lat) && Number.isFinite(h.lon)).map(h => ({ label: h.name || 'Spot', lat: h.lat, lon: h.lon, kind: 'Spot' }))].slice(0, 10 + ApexPinnedPlaces.MAX);
+        // your own places, stages and spots by name first (U-19), at once; then the map search's rows below them
+        const mine = mineFor(q);
+        if (mine.length) paintPlaces(q, mine, '', 0);
+        let done;
+        placesAsk = { q, p: new Promise((r) => { done = r; }) };
+        try {
+          try { rows = (IN_APP_SHELL && await appleSuggest(q)) || await photonSuggest(q); } catch (_) { rows = []; if (!mine.length) empty = 'No suggestions offline. Press Go to search.'; }
+          if (seq !== suggestSeq) return;                                // a newer keystroke won
+          rows = [...mine, ...rows.filter((r) => !mine.some((m) => ApexPlaceSearch.norm(m.label) === ApexPlaceSearch.norm(r.label)))];
+          if (!rows.length && !empty) empty = 'No matches nearby. Press Go to search everywhere.';
+          paintPlaces(q, rows, empty, 0);
+          warmPlace(rows[0]);
+        } finally { done(); }
+        return;
       }
+      rows = [...ApexPinnedPlaces.list(localStorage).map(p => ({ label: p.name, lat: p.lat, lon: p.lon, kind: p.label, pinned: p })),
+              ...ApexSavedRoutes.list(localStorage).slice(0, 4).map(p => ({ label: p.name, kind: Number.isFinite(p.miles) ? `Saved · ${ApexUnits.long(p.miles * 1609.344)}` : 'Saved', saved: p })),
+              ...recentPlaces().map(p => ({ ...p, kind: 'Recent' })),
+              ...loadHighlights().filter(h => Number.isFinite(h.lat) && Number.isFinite(h.lon)).map(h => ({ label: h.name || 'Spot', lat: h.lat, lon: h.lon, kind: 'Spot' }))].slice(0, 10 + ApexPinnedPlaces.MAX);
       // with nothing typed, three places and a row for the rest (REVIEW.md: search and three recents, the default first)
       const more = !q && !allPlaces && rows.length > 3 ? rows.length - 3 : 0;
       if (more) rows = rows.slice(0, 3);
+      paintPlaces(q, rows, empty, more);
+    }
+    function paintPlaces(q, rows, empty, more) {
+      const box = $('placeList');
       shownRows = { q, rows: empty ? [] : rows };
       paintTask();
       if (empty) { const n = document.createElement('p'); n.className = 'note'; n.textContent = empty; box.replaceChildren(n); box.hidden = false; return; }
@@ -4681,6 +4734,28 @@
         box.append(all);
       }
       box.hidden = !rows.length;
+    }
+    // The top suggestion's graph tile read into the routing worker while you choose (the region's fetched and kept): the
+    // plan to it starts with its tiles in hand. Once per tile.
+    const warmedPlaces = new Set();
+    function warmPlace(p) {
+      try {
+        if (!p || !Number.isFinite(p.lat) || !Number.isFinite(p.lon) || !ownOn() || !window.ApexGraphTiles) return;
+        const t = ApexGraphTiles.tileOf(p.lat, p.lon), k = `${t.i}_${t.j}`;
+        if (warmedPlaces.has(k)) return;
+        warmedPlaces.add(k);
+        ownRouter().covers([p]).then((ok) => (ok ? ownRouter().preload({ lat: p.lat, lon: p.lon, km: 0 }) : null)).catch(() => warmedPlaces.delete(k));
+      } catch (_) { /* the plan loads it */ }
+    }
+    // Enter before the list is up (2026-11-08): your own place by that name at once; else the map search already asked
+    // for what's typed, given PLACES_WAIT_MS (it is the list's top row Enter takes once it's up); else the full geocode
+    const PLACES_WAIT_MS = 2500;
+    async function placesFor(q) {
+      if (q.length < 3 || COORDS.test(q)) return null;
+      const mine = mineFor(q);
+      if (mine.length) return mine[0];
+      if (placesAsk.q === q && placesAsk.p) await RouteLoading.optional(placesAsk.p, PLACES_WAIT_MS);
+      return shownRows.q === q ? shownRows.rows[0] || null : null;
     }
     async function routeToPlace(p) {
       if ($('planPanel').classList.contains('busy')) return;
@@ -4805,8 +4880,7 @@
         e.preventDefault(); e.target.blur();
         if (id === 'fromInput' && $('optSheet').classList.contains('open')) { closeOptions(); if (!plannedRoute && $('destInput').value.trim()) routeToQuery(); return; }
         const pasted = id === 'destInput' && window.ApexRouteImport && ApexRouteImport.parseMapsLink($('destInput').value);   // a maps link beats the top suggestion
-        const top = !pasted && id === 'destInput' && shownRows.q === $('destInput').value.trim() && shownRows.rows[0];
-        if (top) routeToPlace(top); else routeToQuery();
+        if (pasted || id !== 'destInput') routeToQuery(); else goTyped();
       });
       $(id).addEventListener('focus', () => { state.planField = id; });
     });
@@ -7091,18 +7165,25 @@
     // The Prefer stamps (prefer.js): the share of each contender that members measured (applyMeasured), that you haven't
     // driven (your Log, on this phone) and that your crews shared (their routes, members only), as a few fun points each.
     const preferCache = { driven: null, crew: null, at: 0 };
+    const PREFER_CREW_MS = 300;
     async function preferGrids(want) {
       if (Date.now() - preferCache.at > 10 * 60000) { preferCache.driven = null; preferCache.crew = null; preferCache.at = Date.now(); }
       if (want.novel && !preferCache.driven && window.ApexRecording) {
         try { preferCache.driven = new Set((await ApexAnalysis.job('drivenGrid')).cells); } catch (_) { preferCache.driven = new Set(); }   // in the worker (F-08)
       }
       if (want.crew && !preferCache.crew) {
-        try {
-          const list = (await apiCall('GET', '/api/routes/shared').then(jsonOf)) || [];
-          const geoms = await Promise.all(list.filter(r => r.crew).slice(0, 12).map(r => apiCall('GET', `/api/routes/${encodeURIComponent(r.id)}`).then(jsonOf).then(x => (x && x.geom) || []).catch(() => [])));
-          preferCache.crew = ApexPrefer.grid(geoms);
-          preferCache.crewLines = geoms;                                     // the crowd provider's crew-shared lines (loved roads)
-        } catch (_) { preferCache.crew = new Set(); }
+        // your crews' shared routes (13 requests): asked once per 10 min, and the card waits PREFER_CREW_MS for them at
+        // most (before, without a limit: on a weak signal the card waited for the network); late, they land for the next plan
+        const ask = preferCache.crewP || (preferCache.crewP = (async () => {
+          try {
+            const list = (await apiCall('GET', '/api/routes/shared').then(jsonOf)) || [];
+            const geoms = await Promise.all(list.filter(r => r.crew).slice(0, 12).map(r => apiCall('GET', `/api/routes/${encodeURIComponent(r.id)}`).then(jsonOf).then(x => (x && x.geom) || []).catch(() => [])));
+            preferCache.crew = ApexPrefer.grid(geoms);
+            preferCache.crewLines = geoms;                                   // the crowd provider's crew-shared lines (loved roads)
+          } catch (_) { preferCache.crew = new Set(); }
+          preferCache.crewP = null;
+        })());
+        await RouteLoading.optional(ask, PREFER_CREW_MS);
       }
       return preferCache;
     }
