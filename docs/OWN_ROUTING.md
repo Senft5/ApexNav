@@ -133,6 +133,12 @@ phone's reader); tests/test_graph_tiles.py round-trips through both. What a rout
 
 - Runs in a Web Worker (`graph_worker.js`) so the map never stutters; tiles loaded for the corridor (an ellipse around
   start and end sized by the level's detour budget), cached in memory and IndexedDB.
+- **Nothing on the network before the first route** where the tiles are on the phone (the app's own, or kept in
+  IndexedDB; 2026-11-08): the worker and both indexes start at launch; the region's index is used from its kept copy
+  however old and asked again behind it (none kept: 3 s, then the shipped tiles alone); at launch the tile you're in is
+  read and the region's tiles within 15 km kept (bytes only); the top place suggestion's tile is read while you choose.
+  Before the card only bounded waits: members' roads 0.25 s, the context 0.5 s, Avoid towns' map places 0.4 s, crew
+  routes 0.3 s; everything later refines after the card.
 - **The levels** (the owner, 2026-11-08: "fun should never go on the highway. Quick should essentially be a normal
   route"): Quick is the quickest way as any nav app drives it, highways welcome, a nicer road only inside a minute (budget
   0 + 60 s). Fun and Long way never drive a motorway, a trunk road or their links (`cls` 0-1, or the `motorway` flag;
@@ -569,6 +575,72 @@ phone's reader); tests/test_graph_tiles.py round-trips through both. What a rout
   | loop Fountain Square 30 mi | Fun | 7.3 of 66.8 km | 0 of 44.1 km | |
   | loop Fountain Square 30 mi | Long way | 1.5 of 56.4 km | 0 of 65.7 km | |
   | loop Miami Whitewater 1 h | Long way | 0 of 40.7 km | 0 of 40.7 km (the same loop) | |
+
+- 2026-11-08 (night): planning speed on production and a weak signal (branch claude/prod-speed; CALL_SHEET 2026-11-08,
+  "Planning speed"). The live harness (tools/live_speed.js: a fresh profile cold, the same profile reopened warm,
+  a second plan in that page "again"; every request of the page and its workers logged with its start and length, and
+  apexDebug.timeline dumped) against production, #307 deployed, ms from Enter, first route / card:
+
+  | case | cold | warm | again | cold: the routing worker's scripts in, graph tiles fetched before the first route |
+  |---|---|---|---|---|
+  | subdivision fun | 867 / 967 | 197 / 234 | 119 / 143 | 0.26 s, 3 tiles |
+  | northgate fun | 4218 / 5025 | 241 / 396 | 134 / 190 | 3.65 s, 4 tiles |
+  | colerain fun | 2221 / 3071 | 449 / 838 | 257 / 449 | 2.52 s, 4 tiles |
+  | harrison fun | 3283 / 4260 | 276 / 507 | 209 / 403 | 2.73 s, 6 tiles |
+  | colerain quick | 592 / 712 | 309 / 438 | 150 / 295 | (in before Enter), 2 tiles |
+  | colerain max | 483 / 1527 | 1638 / 2047 | 280 / 503 | (in before Enter), 5 tiles |
+
+  - **Where the cold seconds went: the harness and the website, not planning.** Each case opens a fresh browser profile
+    (no HTTP cache, no IndexedDB), every request goes through the container's TLS-intercepting proxy (0.2-0.3 s each
+    from here, one at a time per connection; curl: our Worker's files 0.2-0.5 s, /api 0.2-0.4 s, a 2.9 MB tile 0.3-1.4 s,
+    Photon 0.83-0.91 s, Nominatim 0.2-0.8 s, Open-Meteo 0.28-0.68 s, Valhalla 0.49-0.54 s), and the website (unlike the
+    app) fetches the app's own files and the shipped Cincinnati tiles from the Worker. The routing worker was started by
+    the first plan, so its four scripts were fetched after Enter, behind the page's own (the Log frame's 40 scripts
+    loading 1.5 s into the plan among them): 2.5-3.7 s; then 2-6 tiles of 0.2-2.9 MB. The typed coordinates are parsed,
+    not geocoded. The same plans warm (tiles in IndexedDB, files in the HTTP cache): 0.23-0.84 s, again 0.14-0.5 s,
+    except where the worker again started at Enter (colerain max warm 1.6 s: the map had no fix yet, so no warm start).
+  - **What a phone pays:** the app has its files and the Cincinnati tiles inside it, so the cold website numbers don't
+    apply; the local serve below (web/ local, /api relayed) is the app's case. There the plan is compute: warm, the
+    worker's quickest 65-100 ms, the track and first draw 20-60 ms, the worker's plan 0.2-0.4 s (in parallel), the
+    context 20-110 ms, towns 15-50 ms, the ranking under 1 ms, the card's draw 0-45 ms; nothing on the network before
+    the card in any case (the checks, instructions, forecast and refine come after it). What could reach the network
+    before the first route or the card, and now can't (or only within a short budget):
+    (1) the region's index.json, asked once a day by both the page and the worker, with every tile load waiting on it
+    (on one bar seconds; a hanging request held planning for good): the kept copy now, asked again behind it; none kept,
+    3 s from launch (graph_tiles.js INDEX_WAIT_MS); (2) the worker's start and its index on the first plan: at launch now
+    (client.ready); (3) the region's tiles round you: kept at launch within 15 km (graph_tiles.js keepArea, worker
+    'keep', bytes only; none inside Cincinnati); (4) Avoid towns' map place tiles: unbounded before, 0.4 s now (the
+    refine looks again); (5) the crew preference's 13 requests: unbounded, 0.3 s now; (6) a route restored after a reload
+    (its land cover's wait) replacing a new plan seconds later on a weak signal: never now. Also off the page's thread
+    during a plan: the Log frame's prewarm.
+  - **Address search:** typing searches after 0.3 s (in the app Apple's completer, else Photon 0.85 s from here); a
+    suggestion's row carries its coordinates (Photon; Apple's are resolved on the tap), so picking one starts planning at
+    once, and Enter with the list up takes its top row. Now: your pinned and recent places match as you type and show at
+    once; Enter before the list is up takes your place by that name, else waits up to 1.5 s for the map search already
+    asked, else the full geocode (Nominatim, 0.2-0.8 s here); the top suggestion's tile is read into the worker while
+    you choose. Not measurable here: Apple's completer and resolve on a phone.
+  - **Local, the app's case** (web/ served locally, /api relayed to production; main at #309 / this branch, back to
+    back; first route / card): the same within the noise, as expected with a good network:
+
+    | case | main cold | branch cold | main warm | branch warm | main again | branch again |
+    |---|---|---|---|---|---|---|
+    | subdivision fun | 195 / 302 | 178 / 268 | 187 / 220 | 199 / 247 | 101 / 115 | 90 / 103 |
+    | northgate fun | 351 / 532 | 265 / 474 | 153 / 454 | 254 / 402 | 171 / 223 | 57 / 187 |
+    | colerain fun | 270 / 458 | 245 / 410 | 280 / 470 | 254 / 435 | 193 / 382 | 190 / 367 |
+    | harrison fun | 246 / 553 | 256 / 452 | 224 / 480 | 262 / 554 | 192 / 366 | 239 / 391 |
+    | colerain quick | 225 / 315 | 270 / 369 | 239 / 335 | 239 / 342 | 144 / 228 | 145 / 225 |
+    | colerain max | 217 / 637 | 164 / 575 | 226 / 588 | 309 / 643 | 130 / 440 | 312 / 494 |
+
+  - **A weak signal from launch** (the same, every request off the app's own files left hanging from the page's load):
+    main never showed a route in 60 s, cold or warm (`covers` gave up on the hanging region index after 1.5 s, Valhalla
+    hung too); the branch, cold / warm: subdivision 216 / 285 and 197 / 259, colerain fun 355 / 667 and 253 / 567,
+    harrison fun 256 / 718 and 282 / 629 (with pytest running alongside).
+    e2e "weak signal" checks it on every run (reopened 0.11 / 0.54 s, warm 0.04 / 0.49 s, a first launch 0.17 / 0.63 s).
+  - **The Worker's tile route** was right already: `/api/graph/v1/<tile>.vgr` Cache-Control public, max-age 86400 and
+    ETag build-tile (304 on If-None-Match), the index max-age 3600 with ETag build; the phone keeps tiles in IndexedDB
+    by build anyway. The website's shipped tiles (`/data/graph/v1`) are max-age 3600 with the assets' ETag.
+  - Not measurable here: a real iPhone's WKWebView (its JavaScript speed, its HTTP cache), a phone's radio (an LTE
+    round trip to Cloudflare's edge is tens of ms, not this proxy's 0.2-0.3 s), Apple's place search.
 
 - 2026-11-04 (region grid): the context grid for OH+KY+IN on graph-data ctx/v1 (ctx-region.yml, 6 shards, 32 min):
   33 bundles, 35.6 MB, 1.46 M HPMS road spans, 13,574 fatal crashes; served at /api/ctx/v1/ (KV first, then the branch).

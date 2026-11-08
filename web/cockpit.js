@@ -2492,17 +2492,22 @@
     let plannedRoute = null;
     // Avoid towns (R-15): km of each candidate near a city, town or village (FunRoute.townKm), which ranking then costs.
     // Only when the driver asked; unknown (no tiles) stays unknown and costs nothing.
-    async function townsOn(tracks, cands, ms = TOWNS_MS) {
+    // (ms: the card waits that long for the map's place tiles, 0.4 s; the refine after it, longer)
+    async function townsOn(tracks, cands, ms = 400) {
       if (!avoid.towns || !tracks.length) return;
       const pts = [];
       for (const t of tracks) for (let i = 0, next = 0; i < t.lat.length; i++) if (t.dist[i] >= next) { pts.push({ lat: t.lat[i], lon: t.lon[i] }); next = t.dist[i] + 1000; }
       let places = null;
-      // (the map's place tiles: on a weak signal the card waited for them; TOWNS_MS, then unknown, and what lands is kept
-      // for the next plan: stages.js placeTiles)
-      try { places = await RouteLoading.optional(ApexStages.places(pts), ms); } catch (_) { /* no tiles, or a trip too big: unknown (the card says so) */ }
+      // (the map's place tiles: on a weak signal the card waited for them; ms, then unknown, and what lands is kept for
+      // the next plan: stages.js placeTiles)
+      try {
+        const asked = Promise.resolve().then(() => ApexStages.places(pts));
+        asked.catch(() => {});
+        let timer;
+        places = await Promise.race([asked, new Promise((r) => { timer = setTimeout(() => r(null), ms); })]).finally(() => clearTimeout(timer));
+      } catch (_) { /* no tiles, or a trip too big: unknown (the card says so) */ }
       cands.forEach((c, i) => { c.townKm = places ? FunRoute.townKm(tracks[i], places) : null; });
     }
-    const TOWNS_MS = 400;
     const fewerTownKm = (c, quick) => (c && quick && Number.isFinite(c.townKm) && Number.isFinite(quick.townKm) ? quick.townKm - c.townKm : 0);
     // Route options of the last fun plan: { id, name, request, level, quickest, list (ranked candidates), picked, current (its track) }.
     let routeOptions = null;
@@ -3574,7 +3579,7 @@
           const clockOf = pool.find((p) => p.own && p.own.clock), k = clockOf ? clockOf.own.clock : 1;   // the pool's one clock
           for (const c of full.cands) if (!pool.some((p) => same(p, c))) { c.timeS *= k; c.route.timeS = c.timeS; c.t = geometryOf(c); c.fun = funOf(c.t, c.route.turns); c.glare = FunRoute.glare(c.t, c.timeS, new Date()); pool.push(c); added.add(c.t); }
         }
-        // the towns the card couldn't wait for (Avoid towns on a weak signal: TOWNS_MS) looked up again, given longer
+        // the towns the card couldn't wait for (Avoid towns on a weak signal: townsOn's 0.4 s) looked up again, given longer
         const noTowns = avoid.towns ? pool.filter((c) => c.townKm == null && c.t) : [];
         await Promise.all([contextOn(pool, OWN_REFINE_MS, 'refine', OWN_REFINE), noTowns.length ? townsOn(noTowns.map((c) => c.t), noTowns, OWN_REFINE_MS) : null]);
         await weatherOn(pool, level, forecasts);
@@ -4766,7 +4771,7 @@
     }
     // Enter before the list is up (2026-11-08): your own place by that name at once; else the map search already asked
     // for what's typed, given PLACES_WAIT_MS (it is the list's top row Enter takes once it's up); else the full geocode
-    const PLACES_WAIT_MS = 2500;
+    const PLACES_WAIT_MS = 1500;
     async function placesFor(q) {
       if (q.length < 3 || COORDS.test(q)) return null;
       const mine = mineFor(q);
