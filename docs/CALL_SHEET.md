@@ -4,6 +4,38 @@ Decisions Claude made for you, newest first. Each one says what was decided, why
 you reach one you've seen. If you disagree with a call, say so and it gets reversed; nothing here is hard to undo unless
 it says so. Things only you can do are in docs/OWNER_TODO.md.
 
+## 2026-11-08: Planning speed on production and a weak signal (claude/prod-speed)
+
+Your goal: "planning in well under a second" for you, on the phone, with production. The slow numbers measured on
+production (1.7-4.2 s) came almost entirely from how the test reaches it (a fresh browser each time, every request
+through a slow proxy, the website loading the app's files and road tiles that the app has inside it); the same plans in
+the same browser a second time took 0.2-0.8 s. What a phone could also pay was the network on a weak signal, so these:
+- **The road tiles' index is never waited for when the phone has a copy.** Once a day the region's index (which tiles
+  exist outside Cincinnati) was asked again, and every tile load, so every plan, waited for the answer; on one bar that
+  could be seconds, and a request that hung held planning for as long as it hung. Now the kept copy is used at once and
+  the new one is asked behind it; on a first launch with no copy, it gets 3 s, then the app's own tiles plan alone.
+  Undo: the `ttl > 0` line and `INDEX_WAIT_MS` in graph_tiles.js baseIndex.
+- **The routing worker starts when the app opens**, not with the first plan (it reads its tiles' index then). Costs a
+  little memory while idle. Undo: the `ownRouter().ready()` line in cockpit.js (after warmOwnTiles).
+- **At launch the region's tiles within 15 km of you are kept on the phone** (once; none inside Cincinnati, whose tiles
+  ship in the app; a few MB elsewhere), so a plan near home never waits for its tiles and works offline. Undo:
+  `OWN_KEEP_KM` = 0 (cockpit.js).
+- **The Log's page no longer loads in the background while you plan** (it loaded 5 s after launch, often mid-plan,
+  parsing 40 scripts on the planner's thread); it waits until the plan is over. Undo: the `busy` line in prewarmLog.
+- **Avoid towns: the card waits 0.4 s at most for the map's town data**, then says towns aren't known; the check after
+  the card looks again with more time and can still swap the route. **Prefer crew roads: 0.3 s** for your crews'
+  routes, then the plan goes on; they're used from the next plan. Undo: townsOn's `ms = 400` and `PREFER_CREW_MS` (cockpit.js).
+- **A route put back after the page reloads never replaces one you planned meanwhile.** On a weak signal the old route
+  came back seconds later, over your new one. Undo: the `plannedRoute ||` line in restorePlanned.
+- **Where to? matches your pinned and recent places as you type, first and at once** (no network). **Enter before the
+  list is up** goes to your place by that name if there is one, else waits up to 1.5 s for the map search already asked
+  for what you typed and takes its top row (as Enter does when the list is up), and only then the full address search.
+  Enter on a saved route at the top opens it, as Go did. Undo: `goTyped` back to `routeToQuery` (cockpit.js).
+- **The top suggestion's road tile is read while you choose**, so the plan starts with it. Undo: `warmPlace`.
+- **A new test plans with every request off the app hanging** (a weak signal) and fails if the card takes more than
+  1.0 s after reopening the app or 0.7 s after, or a first launch can't plan. Loosen: the numbers in e2e/smoke.js
+  "weak signal".
+
 ## 2026-11-08: What the levels mean: Quick is the normal route, Fun never on the highway (claude/level-rules)
 
 Your words: "fun should never go on the highway. Quick should essentially be a normal route i suppose". On your work to

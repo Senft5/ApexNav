@@ -1469,7 +1469,7 @@
     }
     let inflight = 0;
     async function handle(msg) {
-      const busy = msg && msg.type !== 'preload' && msg.type !== 'covers';
+      const busy = msg && msg.type !== 'preload' && msg.type !== 'covers' && msg.type !== 'keep';
       if (busy) inflight++;
       try { return await handleOne(msg); } finally { if (busy) inflight--; }
     }
@@ -1539,6 +1539,15 @@
           await new Promise((r) => setTimeout(r, 0));
           const v = await viewFor(box);
           return { id, result: { tiles: v.keys, edges: v.E, loaded: got.length, ms: Date.now() - t0 } };
+        }
+        if (type === 'keep') {
+          // the region's tiles round you kept on the phone (bytes only, not decoded: graph_tiles.js keepArea), after the
+          // tile you're in is read, and never while a plan is answered (the app starting, 2026-11-08)
+          if (!env.keep) return { id, result: null };
+          while (inflight > 0) await new Promise((r) => setTimeout(r, 100));
+          const c = { lat: msg.lat, lon: msg.lon }, d = (msg.km || 15) * 1000;
+          const dLat = d / 110540, dLon = d / (111320 * Math.cos(c.lat * RAD));
+          return { id, result: await env.keep([c.lat - dLat, c.lon - dLon, c.lat + dLat, c.lon + dLon]) };
         }
         if (type === 'plan') {
           // scope 'first': with the corridor's tiles not all in yet, the plan is made on those under the straight line
@@ -1636,11 +1645,14 @@
     }
     return {
       covers: (points) => ask({ type: 'covers', points }, 4000).then((m) => !!m.covers),
+      // the worker reads its tiles' index now (the app starting), so a first plan doesn't wait for it
+      ready: () => ask({ type: 'covers', points: [] }, 10000).then(() => true),
       plan: (req) => ask({ type: 'plan', ...req }).then((m) => m.result),
       quick: (req) => ask({ type: 'quick', ...req }).then((m) => m.result),
       through: (req) => ask({ type: 'through', ...req }).then((m) => m.result),
       score: (lines) => ask({ type: 'score', lines }, 3000).then((m) => m.result),
       preload: (at) => ask({ type: 'preload', ...at }, 20000).then((m) => m.result),
+      keep: (at) => ask({ type: 'keep', ...at }, 120000).then((m) => m.result),
       explore: (req) => ask({ type: 'explore', ...req }).then((m) => m.result),
       loop: (req) => ask({ type: 'loop', ...req }).then((m) => m.result),
       close: () => { try { if (w) w.terminate(); } catch (_) { /* gone */ } w = null; },
