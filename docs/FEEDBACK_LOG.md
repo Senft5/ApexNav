@@ -29,3 +29,9 @@ from any tester are fixed when they are an app bug.
 | 2026-11-03T17:10:38Z | co-developer note | "Shits in my way when I lead" (convoy card over the road ahead) | #286 (one line behind the car; calls from Report or a tap) |
 | 2026-11-03T22:00:11Z | owner note | "I want to see the rest of the map here not just my path" (drive page) | #290 (map zooms and pans; the map itself was build lag) |
 | 2026-11-03T22:59:22Z | owner note | "i should be able to swipe this submenu out of the way" (Crash check sheet) | #290 (sheets swipe down to close) |
+| 2026-11-05T03:21:09Z | owner note | "takes up so much screen" (the idle map's deck: Where to?, Best roads nearby, three rows) | claude/feedback-1105 (the suggestion and one road; a swipe down on the bar folds it to the bar alone, kept) |
+| 2026-11-05T03:21:38Z | owner note | "glitched animation when opening this menu" (Ways to go) | claude/feedback-1105 (the sheet was scrolled for its focused key mid-slide; never now, keyboard.js) |
+| 2026-11-05T03:22:31Z | owner note | "bad text spacing" (a stage's Board and Runs in the Log) | claude/feedback-1105 (a run is a line with its components under it; the empty board a sentence; no "@null") |
+| 2026-11-05T03:24:54Z | owner note | "unnecessary note and button, tapping your own pfp should let you change/remove it" (Garage, You) | claude/feedback-1105 (the photo is the key: pick, or Choose a new photo / Remove photo / Cancel) |
+| 2026-11-05T03:25:36Z | owner note | "bad when typing new crew info" (Find or start a crew behind the keyboard) | claude/feedback-1105 (sheets stand on the keyboard, the field in view; the form in the order it is filled) |
+| 2026-11-05T03:26:33Z | owner note | "a dashboard like the facebook groups you're in, with a feed and the option to pin crews?" (Crews) | claude/feedback-1105 (in 2+ crews: the dashboard, pins, Latest from your crews; GET /api/crews/feed) |

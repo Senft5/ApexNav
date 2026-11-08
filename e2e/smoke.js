@@ -4868,6 +4868,54 @@ flow('Your records: unknown dates and unscored drives never make a "new best", a
   check(r.overflow <= 1, `the records table fits a 390 px screen (overflows by ${r.overflow} px)`);
 });
 
+flow('a stage\'s Board and Runs fit the phone: an empty board is a sentence, a friend with no handle is never "@null", a run is its line and its components under it, nothing sideways (TestFlight 2026-11-05 "bad text spacing")', async (page, base) => {
+  await page.setViewportSize({ width: SAFE.portrait.w, height: SAFE.portrait.h });
+  const cdp = await page.context().newCDPSession(page);
+  await cdp.send('Emulation.setSafeAreaInsetsOverride', { insets: SAFE.portrait.i });
+  await page.route(base + '/api/**', (route) => { const p = new URL(route.request().url()).pathname, m = route.request().method();
+    const json = (b) => route.fulfill({ contentType: 'application/json', body: JSON.stringify(b) });
+    if (m !== 'GET') return json({});
+    if (p === '/api/me') return json({ signed_in: true, member: true, handle: 'natesenft', id: 'U1' });
+    if (p === '/api/friends') return json([{ id: 'F1', handle: null, status: 'accepted' }]);   // a friend who hasn't picked a handle
+    if (p === '/api/crews') return json([{ id: 'k1', name: 'VETTA', role: 'owner', members: 1, visibility: 'public' }]);
+    return json([]); });
+  await page.goto(base + '/analysis.html');
+  await page.waitForFunction(() => window.apexLogDebug && window.apexLogDebug.loaded() && window.ApexRecording && window.ApexCore);
+  // the real drive twice (web/data/dry_ridge.js), and a stage over its middle, backed up
+  await page.evaluate(async () => {
+    await new Promise((ok, fail) => { const s = document.createElement('script'); s.src = 'data/dry_ridge.js'; s.onload = ok; s.onerror = fail; document.head.append(s); });
+    const src = window.APEX_DRIVES.find((x) => x.id === 'dry_ridge'), f = src.fields, c = (k) => f.indexOf(k);
+    const want = ['distance_m', 'lat', 'lon', 'elevation_m', 'speed_mph', 'lon_g', 'lat_g', 'camber_deg', 'roughness_rms', 'crest_vertical_g', 'vert_peak_g'];
+    const csv = [want.join(','), ...src.rows.map((r) => want.map((k) => (r[c(k)] == null ? '' : r[c(k)])).join(','))].join('\n');
+    for (const at of ['20261101_064500', '20261103_071500']) await ApexRecording.store(ApexRecording.parse(ApexCore, csv, `web_${at}.csv`, { source: 'web-gps', name: 'Dry Ridge Rd' }));
+    const r = src.rows, a = r[Math.floor(r.length * 0.2)], b = r[Math.floor(r.length * 0.8)];
+    localStorage.setItem('apex.segments', JSON.stringify([{ id: 'S1', name: 'Dry Ridge Rd', lat0: a[c('lat')], lon0: a[c('lon')], lat1: b[c('lat')], lon1: b[c('lon')],
+      length_m: b[c('distance_m')] - a[c('distance_m')], synced: true }]));
+  });
+  await page.goto(base + '/analysis.html?tab=stages');
+  await page.waitForSelector('#segList button.seg', { timeout: 15000 });
+  await page.click('#segList button.seg');
+  await page.waitForSelector('#segTable tr.run-parts .bars', { timeout: 15000 });
+  await page.waitForFunction(() => /No friends on this stage yet/.test(document.getElementById('segLegend').textContent) && document.querySelector('#segShareRow select'), null, { timeout: 15000 });
+  const r = await page.evaluate(() => {
+    const t = document.getElementById('segTable'), box = t.closest('.scroll'), legend = document.getElementById('segLegend');
+    const bars = [...t.querySelectorAll('tr.run-parts .bars')].map((g) => [...g.querySelectorAll('.bar')].map((b) => ({ r: b.getBoundingClientRect(), cut: b.scrollWidth > b.clientWidth + 1, t: b.textContent })));
+    const clash = bars.flatMap((row) => row.slice(1).filter((b, i) => b.r.left < row[i].r.right - 0.5).map((b, i) => row[i].t + ' / ' + b.t));
+    return { overflow: box.scrollWidth - box.clientWidth, runs: t.querySelectorAll('tr.run').length, heads: [...t.querySelectorAll('th')].map((h) => h.textContent),
+      clash, cut: bars.flat().filter((b) => b.cut).map((b) => b.t), comps: bars.flat().map((b) => b.t), legendLines: Math.round(legend.getBoundingClientRect().height / parseFloat(getComputedStyle(legend).lineHeight)),
+      legendFont: getComputedStyle(legend).fontFamily, boardRows: document.querySelectorAll('#segBoard tr').length,
+      opts: [...document.querySelectorAll('#segShareRow option')].map((o) => o.textContent), shareText: document.getElementById('segShareRow').innerText,
+      boardOverflow: (() => { const s = document.getElementById('segBoard').closest('.scroll'); return s.scrollWidth - s.clientWidth; })() };
+  });
+  check(r.overflow <= 1 && r.boardOverflow <= 1, 'nothing on the stage scrolls sideways: ' + JSON.stringify(r));
+  check(r.runs === 2 && JSON.stringify(r.heads) === '["#","Run","Score","Time (private)"]', 'a run a line, four columns: ' + JSON.stringify(r.heads));
+  check(r.comps.length === 8 && r.comps.every((t) => /^(Pace|Smooth|Brakes|Rhythm) \d+$/.test(t.trim())) && !r.clash.length && !r.cut.length, 'each run\'s four components whole, side by side, none on another: ' + JSON.stringify(r));
+  check(r.boardRows === 0 && r.legendLines >= 2, 'an empty board is a sentence that wraps, not a cut table cell: ' + JSON.stringify(r));
+  check(!r.opts.some((o) => /null|undefined/.test(o)) && r.opts.includes('A friend with no handle yet') && /Share this stage with a friend/.test(r.shareText), 'a friend with no handle is named, never "@null": ' + JSON.stringify(r.opts));
+  const bad = await unsafe(page, SAFE.portrait);
+  check(!bad.length, 'the stage page under the island, the home bar or a corner, or keys on keys:\n  ' + bad.join('\n  '));
+});
+
 // REVIEW.md 1.2, screen by screen: each row's "what it should be", checked on the running app. Rows with a flow of
 // their own are named there (Driving: the theme contract; Drive ended; Crew member: crew page; Hazard plate colours).
 flow('REVIEW.md 1.2 screen by screen: first run, the map, planning, the route, driving, the hazard report and replay', async (page, base) => {
@@ -5667,6 +5715,276 @@ flow('safe areas: the Dynamic Island, the home indicator and the rounded corners
   }
   check(!bad.length, 'under the island, the home indicator or a corner:\n  ' + bad.join('\n  '));
 }, { hasTouch: true });
+
+// ---- the owner's TestFlight notes of 2026-11-05 (build 592.1): each at iPhone geometry and the four safe-area shapes ----
+const T1105 = { at: (min) => new Date(Date.now() - min * 60e3).toISOString().replace('T', ' ').slice(0, 19), soon: new Date(Date.now() + 3 * 86400e3).toISOString() };
+// the owner's crews (VETTA and test, both his), and two he's in; `n` more to fill up to the 10 a person can be in
+function crewsStub(page, { n = 0, sent = [], feed = true } = {}) {
+  const crews = [{ id: 'k1', name: 'VETTA', role: 'owner', visibility: 'public', area_name: 'Cincinnati, OH', members: 1 },
+    { id: 'k2', name: 'test', role: 'owner', visibility: 'private', members: 1 },
+    { id: 'k3', name: 'Ridge Runners', role: 'member', visibility: 'private', members: 7 },
+    { id: 'k4', name: 'Blue Ridge Breakfast Club', role: 'member', visibility: 'public', area_name: 'Asheville', members: 23 },
+    ...Array.from({ length: n }, (_, i) => ({ id: 'x' + i, name: `Sunday Crew ${i + 1}`, role: 'member', visibility: 'private', members: 3 + i }))];
+  const page0 = (c) => ({ id: c.id, name: c.name, motto: null, visibility: c.visibility, area_name: c.area_name || null, members: c.members, is_owner: c.role === 'owner',
+    crest: null, crest_photo_id: null, stripe: null, cover_photo_id: null, livery: 'plain', sharing_scores: false, board: [], next: null });
+  return page.route('**/api/**', (route) => {
+    const u = new URL(route.request().url()), m = route.request().method(), p = u.pathname;
+    const json = (b, status = 200) => route.fulfill({ status, contentType: 'application/json', body: JSON.stringify(b) });
+    if (m !== 'GET') { sent.push({ m, p, b: route.request().postData() }); return m === 'POST' ? json({ id: 'x' }, 201) : route.fulfill({ status: 204 }); }
+    if (p === '/api/me') return json({ signed_in: true, member: true, handle: 'natesenft', id: 'U1' });
+    if (p === '/api/crews') return json(crews);
+    if (p === '/api/crews/feed') return feed ? json({ crews: crews.map((c) => ({ id: c.id, crest: c.id === 'k3' ? 'peak' : null, stripe: c.id === 'k3' ? '#1f5fa8' : null,
+      last: c.id === 'k3' ? { handle: 'sam', body: 'Fog by 7? Meet at the Hardee\'s.', at: T1105.at(20), mine: false } : c.id === 'k4' ? { handle: 'tilly', body: '<b>Pancakes</b> after the run', at: T1105.at(300), mine: false } : null,
+      next: c.id === 'k3' ? { id: 'e1', title: 'Dawn run', starts_at: T1105.soon } : null })),
+    items: [{ kind: 'chat', id: 'm1', crew_id: 'k3', handle: 'sam', photo_id: null, body: 'Fog by 7? Meet at the Hardee\'s.', at: T1105.at(20), mine: false },
+      { kind: 'drive', id: 'e1', crew_id: 'k3', handle: 'sam', title: 'Dawn run', starts_at: T1105.soon, at: T1105.at(90), mine: false },
+      { kind: 'chat', id: 'm2', crew_id: 'k4', handle: 'tilly', photo_id: null, body: '<b>Pancakes</b> after the run', at: T1105.at(300), mine: false },
+      { kind: 'chat', id: 'm3', crew_id: 'k1', handle: 'natesenft', photo_id: null, body: 'Welcome to the crew', at: T1105.at(2000), mine: true }] }) : json({ error: 'x' }, 500);
+    const cm = /^\/api\/crews\/([\w]+)\/page$/.exec(p); if (cm) return json(page0(crews.find((c) => c.id === cm[1]) || crews[0]));
+    if (/\/board$/.test(p)) return json({ period: 'month', rows: [] });
+    if (p === '/api/crews/discover') return json([]);
+    if (p === '/api/points') return json({ total: 0 });
+    return json([]);
+  });
+}
+async function peopleCrews(page, base) {
+  await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); } catch (_) {} });
+  await page.goto(base + '/index.html?view=people');
+  await page.click('[data-people="crews"]');
+}
+async function eachShape(page, cdp, fn) {
+  const bad = [];
+  for (const [orient, d] of Object.entries(SAFE)) {
+    await page.setViewportSize({ width: d.w, height: d.h });
+    await cdp.send('Emulation.setSafeAreaInsetsOverride', { insets: d.i });
+    await page.waitForTimeout(250);
+    for (const b of await fn(orient, d)) bad.push(`${orient}: ${b}`);
+  }
+  return bad;
+}
+
+flow('TestFlight 2026-11-05 note 1: in several crews the Crews side is a dashboard: a row a crew with its next drive or last message, pins first, the latest from all of them; a crew opens and comes back; ten crews stay one list', async (page, base) => {
+  const cdp = await page.context().newCDPSession(page);
+  await cdp.send('Emulation.setSafeAreaInsetsOverride', { insets: SAFE.portrait.i });
+  await crewsStub(page);
+  await peopleCrews(page, base);
+  await page.waitForSelector('.crew-dash .cd-row');
+  await page.waitForFunction(() => document.querySelectorAll('.crew-dash .cd-item').length === 4);
+  const dash = () => page.evaluate(() => ({ rows: [...document.querySelectorAll('.cd-row')].map((r) => [r.querySelector('.cd-text b').textContent, r.querySelector('.cd-text small').textContent, r.querySelector('.cd-pin').getAttribute('aria-pressed')]),
+    feed: [...document.querySelectorAll('.cd-item')].map((b) => b.querySelector('small').textContent + ' | ' + b.querySelector('.cd-what').textContent),
+    head: !document.querySelector('#crewsBody .crew-head') || document.querySelector('#crewsBody .crew-head').hidden, switcher: !!document.querySelector('.cp-switch'),
+    page: !!document.querySelector('#crewsBody .crew-page'), count: document.querySelector('.cd-head .note').textContent }));
+  let d = await dash();
+  check(!d.page && !d.switcher && d.head, 'several crews: a dashboard, no crew page and no row of name chips: ' + JSON.stringify(d));
+  check(JSON.stringify(d.rows.map((r) => r[0])) === '["Ridge Runners","Blue Ridge Breakfast Club","test","VETTA"]', 'the latest active first, the quiet ones by name: ' + JSON.stringify(d.rows));
+  check(/^Next drive: Dawn run · /.test(d.rows[0][1]) && d.rows[1][1] === '@tilly: <b>Pancakes</b> after the run' && d.rows[3][1] === '1 member · Public · Cincinnati, OH',
+    'each row says its next drive, else its last message (as text), else what it is: ' + JSON.stringify(d.rows));
+  check(d.count === '4 crews' && d.feed.length === 4 && /^Ridge Runners · 20 min \| @sam: Fog by 7\?/.test(d.feed[0]) && /^Ridge Runners · 1 h \| @sam planned Dawn run · /.test(d.feed[1]) && /\| You: Welcome to the crew$/.test(d.feed[3]),
+    'the feed: the latest from every crew, newest first, each with its crew and when: ' + JSON.stringify(d.feed));
+  // pin VETTA: it goes to the top, filled, and stays there on this phone
+  await page.click('.cd-row[data-crew="k1"] .cd-pin');
+  d = await dash();
+  check(d.rows[0][0] === 'VETTA' && d.rows[0][2] === 'true' && d.count === '4 crews · 1 pinned' && await page.evaluate(() => localStorage.getItem('apex.crewPins')) === '["k1"]', 'a pin puts the crew first: ' + JSON.stringify(d));
+  check(await page.evaluate(() => document.activeElement && document.activeElement.matches('.cd-row[data-crew="k1"] .cd-pin')), 'the pin keeps the focus');
+  await page.reload(); await page.click('[data-people="crews"]');
+  await page.waitForSelector('.crew-dash .cd-row');
+  check((await dash()).rows[0][0] === 'VETTA', 'pins are kept');
+  // the feed's message opens its crew; the key back is the dashboard again
+  await page.click('.cd-item:has-text("Pancakes")');
+  await page.waitForSelector('#crewsBody .crew-page .cp-title h2');
+  check(await page.textContent('.crew-page .cp-title h2') === 'Blue Ridge Breakfast Club' && await page.isVisible('#crewsBody .crew-head .cd-back') && await page.isVisible('#crewsBody .crew-head .gear-key'),
+    'a crew opens with the key back and its gear');
+  check(!(await page.$('.crew-dash')), 'and the dashboard gives way to it');
+  await page.click('#crewsBody .cd-back');
+  await page.waitForSelector('.crew-dash .cd-row');
+  check(await page.waitForFunction(() => document.activeElement && document.activeElement.classList.contains('cd-open'), null, { timeout: 3000 }).then(() => true, () => false), 'back on the dashboard, the focus on its first crew');
+  // nothing under the island, the home bar or a corner, no key on a key, in the four phone shapes
+  const bad = await eachShape(page, cdp, (orient, d) => unsafe(page, d));
+  check(!bad.length, 'the dashboard:\n  ' + bad.join('\n  '));
+  // ten crews (the most a person can be in): one list, every name whole, nothing sideways; the feed still under it
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.unrouteAll({ behavior: 'ignoreErrors' });
+  await crewsStub(page, { n: 6 });
+  await page.reload(); await page.click('[data-people="crews"]');
+  await page.waitForFunction(() => document.querySelectorAll('.cd-row').length === 10 && document.querySelectorAll('.cd-item').length === 4);
+  const ten = await page.evaluate(() => ({ cut: [...document.querySelectorAll('.cd-text b')].filter((b) => b.scrollWidth > b.clientWidth + 1).map((b) => b.textContent),
+    side: document.documentElement.scrollWidth - innerWidth, rowH: Math.max(...[...document.querySelectorAll('.cd-row')].map((r) => r.getBoundingClientRect().height)), feedAfter: !!document.querySelector('.cd-list ~ .cd-head') }));
+  check(!ten.cut.length && ten.side <= 0 && ten.rowH <= 90 && ten.feedAfter, 'ten crews are ten short rows, names whole, the feed after: ' + JSON.stringify(ten));
+  // the feed can't be had: it says so, and the crews are still there to open
+  await page.unrouteAll({ behavior: 'ignoreErrors' });
+  await crewsStub(page, { feed: false });
+  await page.reload(); await page.click('[data-people="crews"]');
+  await page.waitForSelector('.cd-feed .note:has-text("Couldn’t load the latest")');
+  check((await page.$$('.cd-row')).length === 4, 'no feed: the crews still listed');
+}, { hasTouch: true, viewport: { width: 393, height: 852 } });
+
+flow('TestFlight 2026-11-05 note 2: typing a new crew\'s name, the sheet stands on the keyboard and the field is in view; a name asked on the confirm sheet too, in the four phone shapes', async (page, base) => {
+  const cdp = await page.context().newCDPSession(page);
+  await crewsStub(page);
+  await peopleCrews(page, base);
+  await page.waitForSelector('#crewsBody .nav-row:has-text("Find or start a crew")');
+  // the keyboard's height on each phone shape (iOS 27, English), as the shell reports it (ApexNavApp.swift keyboardMoved)
+  const KB = { portrait: 336, landscape: 209, 'mini on its side': 209, SE: 260 };
+  const bad = await eachShape(page, cdp, async (orient, d) => {
+    const out = [];
+    await page.evaluate(() => { document.activeElement && document.activeElement.blur && document.activeElement.blur(); ApexKeyboard.native(0); document.querySelectorAll('.side-pop.open').forEach((p) => p.classList.remove('open')); });
+    await page.waitForTimeout(250);
+    await page.click('#crewsBody .nav-row:has-text("Find or start a crew")');
+    await page.waitForTimeout(300);
+    await page.evaluate((kb) => ApexKeyboard.native(kb), KB[orient]);
+    await page.focus('input[aria-label="Crew name"]');
+    await page.keyboard.type('Ridge');
+    await page.waitForTimeout(400);
+    const r = await page.evaluate((kb) => { const f = document.querySelector('input[aria-label="Crew name"]').getBoundingClientRect(), s = document.querySelector('.side-pop.open').getBoundingClientRect();
+      return { open: document.documentElement.classList.contains('kb-open'), top: f.top, bottom: f.bottom, sheetBottom: s.bottom, sheetTop: s.top, above: innerHeight - kb }; }, KB[orient]);
+    if (!r.open) out.push('the page never knew the keyboard was up');
+    if (r.bottom > r.above + 0.5) out.push(`the field is under the keyboard (${Math.round(r.bottom)} > ${r.above})`);
+    if (r.sheetBottom > r.above + 1) out.push(`the sheet runs on under the keyboard (${Math.round(r.sheetBottom)})`);
+    if (r.top < d.i.top) out.push(`the field is under the island (${Math.round(r.top)})`);
+    if (r.sheetTop < d.i.top - 0.5) out.push(`the sheet's top is under the island (${Math.round(r.sheetTop)})`);
+    if (orient === 'portrait') {
+      // the form in the order it is filled in: the name, who can join with its words on their own line, then Create crew
+      const order = await page.evaluate(() => { const sec = document.querySelector('input[aria-label="Crew name"]').parentElement;
+        return [...sec.children].filter((n) => !n.hidden).map((n) => n.matches('input') ? 'name' : n.classList.contains('new-crew-who') ? 'who' : n.classList.contains('switch') ? 'switch' : n.matches('button') ? n.textContent : n.tagName); });
+      if (JSON.stringify(order) !== '["H3","name","who","switch","Create crew"]') out.push('the form\'s order: ' + JSON.stringify(order));
+    }
+    // a name asked for on the app's own sheet (pin a place, name a setup): its field above the keyboard too
+    await page.evaluate(() => { document.activeElement.blur(); document.querySelectorAll('.side-pop.open').forEach((p) => p.classList.remove('open')); window.__asked = ApexConfirm.prompt('Pin this place as', { action: 'Pin', value: 'Home' }); });
+    await page.waitForSelector('.confirm-sheet .cs-field');
+    await page.focus('.confirm-sheet .cs-field');
+    await page.waitForTimeout(400);
+    const c = await page.evaluate((kb) => { const f = document.querySelector('.confirm-sheet .cs-field').getBoundingClientRect(), k = document.querySelector('.confirm-sheet .cs-ok').getBoundingClientRect(); return { f: f.bottom, k: k.bottom, above: innerHeight - kb }; }, KB[orient]);
+    if (c.f > c.above + 0.5 || c.k > c.above + 0.5) out.push(`the confirm sheet's field or key is under the keyboard (${Math.round(c.f)}, ${Math.round(c.k)} > ${c.above})`);
+    await page.click('.confirm-sheet .cs-no');
+    return out;
+  });
+  check(!bad.length, 'typing in a sheet:\n  ' + bad.join('\n  '));
+}, { hasTouch: true, viewport: { width: 393, height: 852 } });
+
+flow('TestFlight 2026-11-05 note 3: your own photo is the key: no photo, a tap picks one; with one, a tap offers Choose a new photo, Remove photo, Cancel; no note and no separate keys', async (page, base) => {
+  const cdp = await page.context().newCDPSession(page);
+  await cdp.send('Emulation.setSafeAreaInsetsOverride', { insets: SAFE.portrait.i });
+  let me = { signed_in: true, member: true, handle: 'natesenft', id: 'U1', photo_id: null };
+  const sent = [];
+  await page.route(base + '/api/**', (route) => { const p = new URL(route.request().url()).pathname, m = route.request().method();
+    const json = (b, status = 200) => route.fulfill({ status, contentType: 'application/json', body: JSON.stringify(b) });
+    if (m !== 'GET') { sent.push({ m, p }); if (m === 'DELETE') me = { ...me, photo_id: null }; if (m === 'POST' && p === '/api/photos') me = { ...me, photo_id: 'P2' }; return m === 'POST' ? json({ id: 'P2' }, 201) : route.fulfill({ status: 204 }); }
+    if (p === '/api/me') return json(me);
+    if (p.startsWith('/api/photos/')) return route.fulfill({ status: 404 });
+    if (p === '/api/me/export') return json({ member: { contribute: false } });
+    return json([]); });
+  await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); } catch (_) {} });
+  await page.goto(base + '/index.html?view=garage');
+  await page.waitForFunction(() => !document.getElementById('boot') && document.querySelector('.my-photo'), null, { timeout: 10000 });
+  await page.waitForTimeout(400);
+  const you = () => page.evaluate(() => { const sec = document.querySelector('.my-photo').closest('.stack-8');
+    return { text: sec.innerText, keys: [...sec.querySelectorAll('button, label')].filter((b) => b.offsetParent).map((b) => b.getAttribute('aria-label') || b.textContent.trim()) }; });
+  let y = await you();
+  check(!/Change photo|Remove photo|Add a photo|location data/.test(y.text) && y.keys[0] === 'Add your profile photo', 'no photo: the face is the key, no other key, no note: ' + JSON.stringify(y));
+  // a tap with no photo goes straight to the picker
+  const [chooser] = await Promise.all([page.waitForEvent('filechooser', { timeout: 5000 }), page.click('.my-photo')]);
+  check(!!chooser && !(await page.$('.my-photo-sheet')), 'no photo: a tap opens the photo picker');
+  // with a photo: a tap is a small sheet of three
+  me = { ...me, photo_id: 'P1' };
+  await page.goto(base + '/index.html?view=garage');
+  await page.waitForFunction(() => !document.getElementById('boot') && document.querySelector('.my-photo[aria-label="Change or remove your profile photo"]'), null, { timeout: 10000 });
+  await page.waitForTimeout(400);
+  y = await you();
+  check(!/Change photo|Remove photo|location data/.test(y.text), 'with a photo, still no keys or note under it: ' + y.text);
+  await page.click('.my-photo');
+  await page.waitForSelector('.my-photo-sheet .cs-list');
+  const opts = await page.$$eval('.my-photo-sheet .cs-list > *', (n) => n.map((x) => x.textContent.trim()));
+  check(JSON.stringify(opts) === '["Choose a new photo","Remove photo","Cancel"]', 'Choose a new photo, Remove photo, Cancel: ' + JSON.stringify(opts));
+  check(await page.evaluate(() => document.activeElement && document.activeElement.textContent === 'Cancel'), 'the focus on Cancel, never on Remove');
+  const bad = await unsafe(page, SAFE.portrait);
+  check(!bad.length, 'the photo sheet:\n  ' + bad.join('\n  '));
+  const [pick2] = await Promise.all([page.waitForEvent('filechooser', { timeout: 5000 }), page.click('.my-photo-sheet label.cs-opt')]);
+  check(!!pick2, 'Choose a new photo opens the picker from the tap itself');
+  await page.click('.my-photo-sheet .cs-no');
+  check(!(await page.$('.my-photo-sheet')), 'Cancel closes it');
+  await page.click('.my-photo');
+  await page.click('.my-photo-sheet .cs-yes');
+  await page.waitForFunction(() => !document.querySelector('.my-photo-sheet'));
+  for (let i = 0; i < 30 && !sent.some((x) => x.m === 'DELETE'); i++) await page.waitForTimeout(100);
+  check(sent.some((x) => x.m === 'DELETE' && x.p === '/api/photos/P1'), 'Remove photo deletes it: ' + JSON.stringify(sent));
+  await page.waitForSelector('.my-photo[aria-label="Add your profile photo"]');
+}, { hasTouch: true, viewport: { width: 393, height: 852 } });
+
+flow('TestFlight 2026-11-05 note 5: Ways to go slides up to its place and stays: the sheet never scrolls up past it for its focused key, in WebKit\'s order too; any sliding sheet the same', async (page, base) => {
+  await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); localStorage.setItem('apex.permsExplained', '1'); } catch (_) {} });
+  await page.goto(base + '/index.html');
+  await page.waitForFunction(() => window.apexDebug && !document.getElementById('boot'));
+  // each frame of the slide: the overlay's scroll, the sheet's top and its resting place
+  const slide = (open) => page.evaluate(async (open) => {
+    document.querySelectorAll('.overlay.show:not(#onboard)').forEach((o) => o.classList.remove('show'));
+    const ov = new Function(open)(), frames = [];
+    for (let i = 0; i < 18; i++) { await new Promise((r) => requestAnimationFrame(r)); const s = ov.firstElementChild.getBoundingClientRect(); frames.push({ scroll: ov.scrollTop, top: Math.round(s.top), bottom: Math.round(s.bottom) }); }
+    const rest = frames[frames.length - 1]; ov.remove();
+    return { frames, rest, H: innerHeight };
+  }, open);
+  const start = await slide('document.getElementById("startMore").click(); return document.querySelector(".start-sheet");');
+  check(start.frames.every((f) => f.scroll === 0) && start.frames.every((f) => f.top >= start.rest.top - 1) && start.rest.bottom === start.H,
+    'Ways to go comes up from the bottom to its place, never above it, never scrolled: ' + JSON.stringify(start));
+  // any sheet that slides up and focuses a key in it (not only this one), and WebKit's order: the scroll lands after the focus
+  const any = await slide('const ov = document.createElement("div"); ov.className = "overlay dim show"; const c = document.createElement("div"); c.className = "card-sheet"; c.style.height = "360px"; const k = document.createElement("button"); k.textContent = "Go"; c.append(k); ov.append(c); document.body.append(ov); k.focus(); Promise.resolve().then(() => { ov.scrollTop = 300; }); return ov;');
+  check(any.frames.every((f) => f.scroll === 0) && any.frames.every((f) => f.top >= any.rest.top - 1), 'a sliding sheet is never scrolled past its place: ' + JSON.stringify(any.frames.slice(0, 6)));
+  // after the slide a tall sheet scrolls as before (a landscape phone)
+  const after = await page.evaluate(async () => { const ov = document.createElement('div'); ov.className = 'overlay dim show'; const c = document.createElement('div'); c.className = 'card-sheet'; c.style.cssText = 'height:1600px;flex:none'; ov.append(c); document.body.append(ov);
+    await new Promise((r) => setTimeout(r, 400)); ov.scrollTop = 200; await new Promise((r) => requestAnimationFrame(r)); await new Promise((r) => requestAnimationFrame(r)); const s = ov.scrollTop; ov.remove(); return s; });
+  check(after === 200, 'once up, a tall sheet still scrolls: ' + after);
+}, { hasTouch: true, viewport: { width: 393, height: 852 } });
+
+flow('TestFlight 2026-11-05 note 6: the idle map\'s deck is the suggestion and one road; a swipe down on the bar folds it to the bar alone (kept), a swipe up brings it back, the next opens Where to?', async (page, base) => {
+  await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); localStorage.setItem('apex.permsExplained', '1'); } catch (_) {} });
+  const cdp = await page.context().newCDPSession(page);
+  await cdp.send('Emulation.setSafeAreaInsetsOverride', { insets: SAFE.portrait.i });
+  await page.goto(base + '/index.html');
+  await page.waitForFunction(() => window.apexDebug && window.ApexRecording && !document.getElementById('boot'));
+  await page.evaluate(async () => { for (const [id, name] of [['yr1', 'Cheviot Road'], ['yr2', 'Colerain Avenue'], ['yr3', 'Bank Road']]) { const lat = [], lon = []; for (let i = 0; i < 400; i++) { lat.push(35.96 + i * 5 / 110540); lon.push(-83.92 + Math.sin(i / 20) * 0.0005); }
+    await ApexRecording.store({ id, name, date: new Date(Date.now() - 86400e3).toISOString(), lat, lon, dist: lat.map((_, i) => i * 5), speed_mps: lat.map(() => 15), lon_g: lat.map(() => 0), lat_g: lat.map((_, i) => Math.sin(i / 20) * 3), g_known: null, events: [], elev: null, hz: 1, source: 'web-gps', corners: [] }); } });
+  await page.reload();
+  await page.waitForSelector('#yourRoads .your-road', { timeout: 15000 });
+  await page.waitForFunction(() => !document.getElementById('boot'), null, { timeout: 5000 });
+  const deck = () => page.evaluate(() => { const vis = (n) => !!n && n.getClientRects().length > 0 && getComputedStyle(n).display !== 'none';
+    return { rows: [...document.querySelectorAll('#loopSuggest, #yourRoads .your-road')].filter(vis).length, chips: vis(document.getElementById('deckChips')),
+      top: Math.round(document.getElementById('planBar').getBoundingClientRect().top), min: document.getElementById('app').classList.contains('deck-min'), open: document.getElementById('planPanel').classList.contains('open'),
+      kept: localStorage.getItem('apex.deckMin'), H: innerHeight }; });
+  let d = await deck();
+  check(d.rows === 2 && d.chips && !d.min, 'the deck: Best roads nearby, the suggestion and one road (it was three rows): ' + JSON.stringify(d));
+  const unfolded = d.top;
+  let bad = await unsafe(page, SAFE.portrait);
+  check(!bad.length, 'the deck:\n  ' + bad.join('\n  '));
+  // a point on the bar itself (its edge beside Where to?), as a thumb drags it
+  const onBar = () => page.evaluate(() => { const bar = document.getElementById('planBar'), r = bar.getBoundingClientRect();
+    for (const [x, y] of [[r.left + 5, r.top + r.height / 2], [r.left + r.width / 2, r.top + 4], [r.left + 20, r.top + 6]]) { const t = document.elementFromPoint(x, y); if (t && bar.contains(t)) return { x, y, hit: t.id || t.className }; }
+    const t = document.elementFromPoint(r.left + 5, r.top + r.height / 2); return { x: r.left + 5, y: r.top + r.height / 2, hit: 'none: ' + (t ? t.id || t.className : '') }; });
+  const bar = await onBar();
+  check(!/^none/.test(bar.hit), 'nothing over the bar: ' + JSON.stringify(bar));
+  await swipe(cdp, bar.x, bar.y, 0, 120);
+  await page.waitForTimeout(300);
+  d = await deck();
+  check(d.min && d.rows === 0 && !d.chips && !d.open && d.kept === '1' && d.top - unfolded > 150 && d.H - d.top < 170, 'a swipe down folds the deck to the bar alone: ' + JSON.stringify(d) + ' unfolded at ' + unfolded);
+  bad = await unsafe(page, SAFE.portrait);
+  check(!bad.length, 'the folded deck:\n  ' + bad.join('\n  '));
+  await page.reload();
+  await page.waitForFunction(() => window.apexDebug && !document.getElementById('boot'));
+  check((await deck()).min, 'folded is kept on this phone');
+  const bar2 = await onBar();
+  await swipe(cdp, bar2.x, bar2.y, 0, -120);
+  await page.waitForTimeout(300);
+  d = await deck();
+  check(!d.min && !d.open && d.rows === 2 && d.kept === null, 'a swipe up brings the deck back first: ' + JSON.stringify(d));
+  const bar3 = await onBar();
+  await swipe(cdp, bar3.x, bar3.y, 0, -160);
+  await page.waitForTimeout(400);
+  check((await deck()).open, 'the next swipe up opens Where to?');
+  // the four phone shapes, folded and not
+  for (const fold of [false, true]) {
+    await page.evaluate((f) => { if (f) localStorage.setItem('apex.deckMin', '1'); else localStorage.removeItem('apex.deckMin'); }, fold);
+    const all = await eachShape(page, cdp, async (orient, s) => { await page.reload(); await page.waitForFunction(() => window.apexDebug && !document.getElementById('boot')); await page.waitForTimeout(500); return unsafe(page, s); });
+    check(!all.length, `the deck${fold ? ', folded' : ''}, in the four shapes:\n  ` + all.join('\n  '));
+  }
+}, { hasTouch: true, viewport: { width: 393, height: 852 }, geolocation: { latitude: 35.9606, longitude: -83.9207 }, permissions: ['geolocation'] });
 
 
 (async () => {

@@ -71,6 +71,34 @@
 - Exact next task: the owner checks the work-to-home card at Fun; then, if wanted, keep `motorroad=yes` as a tile flag in
   tools/graph_etl (osm_graph.py, build.py) and treat it as a highway in graph_router.js isHwyEdge.
 
+## Session 2026-11-08: the owner's TestFlight notes of 2026-11-05, build 592.1 (claude/feedback-1105)
+
+- [x] Screenshots from the `feedback-screenshots` artifact of run 42432318127 (gh run download), each looked at first.
+- [x] Note 1 (Crews, "a dashboard like the groups you're in, with a feed, pin crews"): in 2+ crews the Crews side is a
+  dashboard (crew_page.js `dashboard`, `dashOrder`, `dashLine`): a row a crew (crest, next drive / last message, pin), pins
+  first (on the phone, `apex.crewPins`), then "Latest from your crews"; a crew opens with "‹ Your crews". New Worker route
+  `GET /api/crews/feed` (crew_page.ts `crewFeed`, same block/report rules as chat and drives; no migration). One crew: its
+  page as before. The old name-chip switcher is gone.
+- [x] Note 2 ("bad when typing new crew info"): bottom sheets (`.side-pop`, the confirm sheet) stand on the keyboard with
+  the field in view (index.html, controls.css `html.kb-open`); Start a crew in fill-in order, Create crew last.
+- [x] Note 3 (your photo): the Garage photo is the key (photos.js `mine`): picker, or Choose a new photo / Remove photo /
+  Cancel; the note and the two keys gone. APP_REVIEW.md updated (photos, the crews feed).
+- [x] Note 4 ("bad text spacing", a stage's Board and Runs): runs are a line with components under it (no sideways scroll;
+  it was 469 px in 335), the empty board is a sentence, no "@null" for a friend with no handle.
+- [x] Note 5 (Ways to go "glitched animation"): focusing the first key mid-slide scrolled the overlay (WebKit held the sheet
+  ~360 pt up for the whole slide). keyboard.js undoes a sliding sheet's scroll; Ways to go focuses with preventScroll.
+- [x] Note 6 ("takes up so much screen", the idle deck): suggestion + one road; swipe down on the bar folds the deck to the
+  bar alone (kept, `apex.deckMin`), swipe up brings it back, the next opens Where to?.
+- e2e: six new flows ("TestFlight 2026-11-05 note 1..6" and "a stage's Board and Runs"), at 393x852 and the four safe-area
+  shapes; note 2 with the keyboard height the shell reports per shape. Backend: crew_page.test.ts feed test. pytest:
+  test_crews_dashboard_order_and_line.
+- Tests: pytest 1332 passed + the new one; backend tsc clean, crew_page/crews/events vitest 34 passed; full e2e 131/132
+  (the one failure a focus race in the new note 1 flow, fixed: 3/3 repeated, and every crew flow 9/9 after).
+- Open: pins don't follow you to a second phone (a server column if wanted); the feed needs the Worker deployed (until
+  then the dashboard says the latest couldn't be loaded); the folded deck has no VoiceOver action of its own (Where to?
+  holds everything in it).
+- Exact next task: the owner checks the dashboard with real crews on the next TestFlight build, and the deck fold gesture.
+
 ## Session 2026-11-08: own routing instant (2): limits offline, Valhalla down (claude/own-routing-instant-2)
 
 - [x] Speed: exact faster sightDistanceM, every candidate's track built ahead, the engine's samples kept (2d41b40); the

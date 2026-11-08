@@ -4,6 +4,38 @@ Decisions Claude made for you, newest first. Each one says what was decided, why
 you reach one you've seen. If you disagree with a call, say so and it gets reversed; nothing here is hard to undo unless
 it says so. Things only you can do are in docs/OWNER_TODO.md.
 
+## 2026-11-08: Planning speed on production and a weak signal (claude/prod-speed)
+
+Your goal: "planning in well under a second" for you, on the phone, with production. The slow numbers measured on
+production (1.7-4.2 s) came almost entirely from how the test reaches it (a fresh browser each time, every request
+through a slow proxy, the website loading the app's files and road tiles that the app has inside it); the same plans in
+the same browser a second time took 0.2-0.8 s. What a phone could also pay was the network on a weak signal, so these:
+- **The road tiles' index is never waited for when the phone has a copy.** Once a day the region's index (which tiles
+  exist outside Cincinnati) was asked again, and every tile load, so every plan, waited for the answer; on one bar that
+  could be seconds, and a request that hung held planning for as long as it hung. Now the kept copy is used at once and
+  the new one is asked behind it; on a first launch with no copy, it gets 3 s, then the app's own tiles plan alone.
+  Undo: the `ttl > 0` line and `INDEX_WAIT_MS` in graph_tiles.js baseIndex.
+- **The routing worker starts when the app opens**, not with the first plan (it reads its tiles' index then). Costs a
+  little memory while idle. Undo: the `ownRouter().ready()` line in cockpit.js (after warmOwnTiles).
+- **At launch the region's tiles within 15 km of you are kept on the phone** (once; none inside Cincinnati, whose tiles
+  ship in the app; a few MB elsewhere), so a plan near home never waits for its tiles and works offline. Undo:
+  `OWN_KEEP_KM` = 0 (cockpit.js).
+- **The Log's page no longer loads in the background while you plan** (it loaded 5 s after launch, often mid-plan,
+  parsing 40 scripts on the planner's thread); it waits until the plan is over. Undo: the `busy` line in prewarmLog.
+- **Avoid towns: the card waits 0.4 s at most for the map's town data**, then says towns aren't known; the check after
+  the card looks again with more time and can still swap the route. **Prefer crew roads: 0.3 s** for your crews'
+  routes, then the plan goes on; they're used from the next plan. Undo: townsOn's `ms = 400` and `PREFER_CREW_MS` (cockpit.js).
+- **A route put back after the page reloads never replaces one you planned meanwhile.** On a weak signal the old route
+  came back seconds later, over your new one. Undo: the `plannedRoute ||` line in restorePlanned.
+- **Where to? matches your pinned and recent places as you type, first and at once** (no network). **Enter before the
+  list is up** goes to your place by that name if there is one, else waits up to 1.5 s for the map search already asked
+  for what you typed and takes its top row (as Enter does when the list is up), and only then the full address search.
+  Enter on a saved route at the top opens it, as Go did. Undo: `goTyped` back to `routeToQuery` (cockpit.js).
+- **The top suggestion's road tile is read while you choose**, so the plan starts with it. Undo: `warmPlace`.
+- **A new test plans with every request off the app hanging** (a weak signal) and fails if the card takes more than
+  1.0 s after reopening the app or 0.7 s after, or a first launch can't plan. Loosen: the numbers in e2e/smoke.js
+  "weak signal".
+
 ## 2026-11-08: What the levels mean: Quick is the normal route, Fun never on the highway (claude/level-rules)
 
 Your words: "fun should never go on the highway. Quick should essentially be a normal route i suppose". On your work to
@@ -38,37 +70,45 @@ home trip Fun was +8 min and Long way +13, most of both on the Cross County free
 - Not covered yet: expressways mapped as ordinary `primary` roads with `motorroad=yes` (our tiles don't keep that tag; a
   tile rebuild would). Trunk roads are covered.
 
-## 2026-11-08: Planning speed on production and a weak signal (claude/prod-speed)
+## 2026-11-08: TestFlight notes of 2026-11-05 (build 592.1): crews dashboard, typing in sheets, your photo, the stage page, Ways to go, the deck (claude/feedback-1105)
 
-Your goal: "planning in well under a second" for you, on the phone, with production. The slow numbers measured on
-production (1.7-4.2 s) came almost entirely from how the test reaches it (a fresh browser each time, every request
-through a slow proxy, the website loading the app's files and road tiles that the app has inside it); the same plans in
-the same browser a second time took 0.2-0.8 s. What a phone could also pay was the network on a weak signal, so these:
-- **The road tiles' index is never waited for when the phone has a copy.** Once a day the region's index (which tiles
-  exist outside Cincinnati) was asked again, and every tile load, so every plan, waited for the answer; on one bar that
-  could be seconds, and a request that hung held planning for as long as it hung. Now the kept copy is used at once and
-  the new one is asked behind it; on a first launch with no copy, it gets 3 s, then the app's own tiles plan alone.
-  Undo: the `ttl > 0` line and `INDEX_WAIT_MS` in graph_tiles.js baseIndex.
-- **The routing worker starts when the app opens**, not with the first plan (it reads its tiles' index then). Costs a
-  little memory while idle. Undo: the `ownRouter().ready()` line in cockpit.js (after warmOwnTiles).
-- **At launch the region's tiles within 15 km of you are kept on the phone** (once; none inside Cincinnati, whose tiles
-  ship in the app; a few MB elsewhere), so a plan near home never waits for its tiles and works offline. Undo:
-  `OWN_KEEP_KM` = 0 (cockpit.js).
-- **The Log's page no longer loads in the background while you plan** (it loaded 5 s after launch, often mid-plan,
-  parsing 40 scripts on the planner's thread); it waits until the plan is over. Undo: the `busy` line in prewarmLog.
-- **Avoid towns: the card waits 0.4 s at most for the map's town data**, then says towns aren't known; the check after
-  the card looks again with more time and can still swap the route. **Prefer crew roads: 0.3 s** for your crews'
-  routes, then the plan goes on; they're used from the next plan. Undo: townsOn's `ms = 400` and `PREFER_CREW_MS` (cockpit.js).
-- **A route put back after the page reloads never replaces one you planned meanwhile.** On a weak signal the old route
-  came back seconds later, over your new one. Undo: the `plannedRoute ||` line in restorePlanned.
-- **Where to? matches your pinned and recent places as you type, first and at once** (no network). **Enter before the
-  list is up** goes to your place by that name if there is one, else waits up to 1.5 s for the map search already asked
-  for what you typed and takes its top row (as Enter does when the list is up), and only then the full address search.
-  Enter on a saved route at the top opens it, as Go did. Undo: `goTyped` back to `routeToQuery` (cockpit.js).
-- **The top suggestion's road tile is read while you choose**, so the plan starts with it. Undo: `warmPlace`.
-- **A new test plans with every request off the app hanging** (a weak signal) and fails if the card takes more than
-  1.0 s after reopening the app or 0.7 s after, or a first launch can't plan. Loosen: the numbers in e2e/smoke.js
-  "weak signal".
+Your six screenshot notes, each fixed; the calls made on the way:
+- **In two or more crews the Crews side is a dashboard** ("Shouldn't it maybe just be a dashboard like the facebook groups
+  you're in, with a feed and the option to pin crews?"). A row a crew: its crest and stripe, its name, its next drive, or
+  else its last message, or else what it is, and how long ago; a pin key on each. Pinned crews first, in the order pinned;
+  the rest by latest activity, then by name. Under the list, "Latest from your crews": the newest messages and drives
+  planned across all of them (two weeks, 8 shown, then Show more); a tap opens that crew. A crew opens with "‹ Your crews"
+  to go back, and its gear. The old row of crew-name chips is gone. Undo: in cockpit.js renderPeople, `many` to false (the
+  crew page then shows alone, without the chips; reverting the commit brings the chips back).
+- **In one crew the Crews side is still that crew's page** (a dashboard of one is a step for nothing). Undo: `many` to
+  `myCrews.length > 0`.
+- **Pins are kept on the phone only** (localStorage `apex.crewPins`): no migration, nothing new on the server, and a pin is
+  your own sorting, not something the crew sees. They don't follow you to a second phone. Upgrade: a `pinned` column on
+  crew_members and a PUT, if you want them everywhere.
+- **The feed is one new read-only Worker route, `GET /api/crews/feed`** (backend/src/crew_page.ts crewFeed), with the same
+  rules as each crew's chat and drives: members only, blocked people left out both ways, reported items down, cancelled
+  drives out; nothing new collected or kept. Until the Worker deploys, the dashboard lists the crews and says the latest
+  couldn't be loaded. Undo: drop the route; the dashboard falls back to that line.
+- **Sheets with a text field stand on the keyboard** (Find or start a crew, Invite, every Garage setting, the confirm
+  sheet's name field): they end at the keyboard's top and may grow to just below the island; the field scrolls into view.
+  Start a crew is now in the order it is filled in: the name (full width), Who can join with its explanation on its own
+  line, then a solid Create crew. Undo: the `html.kb-open .side-pop.open` rule (index.html) and `html.kb-open
+  .confirm-sheet` (controls.css).
+- **Your photo is the key** (Garage, You): no photo, a tap opens the picker; with one, a tap opens Choose a new photo /
+  Remove photo / Cancel (the focus on Cancel, never on Remove), with a small pencil on the photo's edge so it reads as
+  tappable. The "Photos lose their location data" line is gone from there; the toast after an upload still says it ("Photo
+  added. Its location data stayed on your phone.") and the privacy policy is unchanged. Undo: `ApexPhotos.mine` in
+  cockpit.js back to the picker row.
+- **A stage's runs: a run is a line (#, run, Score, time) with its four components under it**, so nothing scrolls sideways
+  on a phone; an empty board is a sentence above the table, not a cut table cell; a friend with no handle is "A friend with
+  no handle yet" (it was "@null"), under "Share this stage with a friend". Undo: analysis.html renderSegments / drawBoard.
+- **A sheet sliding up is never scrolled for its focused key while it slides** (keyboard.js): that scroll was the "glitched
+  animation" on Ways to go (WebKit held the sheet about 360 pt above its place for the whole slide, then dropped it). Ways
+  to go also focuses with preventScroll. Undo: the `settle` listeners in keyboard.js.
+- **The idle map's deck is the suggestion and one road** (it was two roads), and **a swipe down on the bar folds it to the
+  bar alone** (kept on the phone, `apex.deckMin`); a swipe up brings it back, the next opens Where to? as before. Nothing is
+  lost when folded: Best roads nearby, the loop and your roads are all in Where to?. Undo: the `2` back to `3` in
+  paintDeck's YR.deck call; `setDeckMin` and its two lines in the bar's release.
 
 ## 2026-11-08: Own routing, instant: speed limits offline, Valhalla down (claude/own-routing-instant-2)
 

@@ -107,6 +107,45 @@
     return l;
   }
 
-  const apiOut = { fitSize, initial, prepare, upload, remove, list, url, img, avatar, view, picker, MAX_SIDE, MAX_BYTES };
+  /** Your own photo as a key (TestFlight 2026-11-05: "tapping your own pfp should let you change/remove it like every
+   *  other app"): `face` (an avatar) wrapped in a button. With no photo a tap opens the photo picker; with one it opens a
+   *  sheet: Choose a new photo (the picker, a real <label> so the tap itself opens it in a web view), Remove photo, Cancel.
+   *  `done()` after a change or a removal. */
+  function mine(face, id, kind, done, { toast = null, name = 'your photo' } = {}) {
+    const d = root.document, say = toast || (() => {});
+    const key = d.createElement('button'); key.type = 'button'; key.className = 'my-photo';
+    key.setAttribute('aria-label', id ? `Change or remove ${name}` : `Add ${name}`);
+    const badge = d.createElement('i'); badge.className = 'my-photo-edit'; badge.setAttribute('aria-hidden', 'true');
+    const NS = 'http://www.w3.org/2000/svg', pen = d.createElementNS(NS, 'svg'), nib = d.createElementNS(NS, 'path');   // a pencil
+    pen.setAttribute('viewBox', '0 0 16 16'); nib.setAttribute('d', 'M2.5 13.5l.6-3 7.4-7.4 2.4 2.4-7.4 7.4zM9.8 3.8l2.4 2.4'); pen.append(nib); badge.append(pen);
+    key.append(face, badge);
+    const pick = picker('Choose a new photo', kind, null, (r) => done(r), { toast });
+    pick.hidden = true;
+    const wrap = d.createElement('span'); wrap.className = 'my-photo-wrap'; wrap.append(key, pick);
+    key.addEventListener('click', () => {
+      if (!id) { pick.querySelector('input').click(); return; }
+      const back = d.createElement('div'); back.className = 'confirm-sheet my-photo-sheet';
+      back.setAttribute('role', 'dialog'); back.setAttribute('aria-modal', 'true'); back.setAttribute('aria-label', name);
+      const box = d.createElement('div'); box.className = 'cs-box cs-choose';
+      const p = d.createElement('p'); p.textContent = name.charAt(0).toUpperCase() + name.slice(1);
+      const list = d.createElement('div'); list.className = 'cs-list';
+      const close = () => { back.remove(); d.removeEventListener('keydown', esc); key.focus({ preventScroll: true }); };
+      const esc = (ev) => { if (ev.key === 'Escape') close(); };
+      const change = picker('Choose a new photo', kind, null, (r) => { close(); done(r); }, { toast });
+      change.className = 'cs-opt';
+      for (const ev of ['change', 'cancel']) change.querySelector('input').addEventListener(ev, () => setTimeout(close, 0));   // picked (it uploads) or not
+      const rm = d.createElement('button'); rm.type = 'button'; rm.className = 'cs-yes'; rm.textContent = 'Remove photo';
+      rm.addEventListener('click', async () => { rm.disabled = true; const ok = await remove(id).catch(() => false); close(); if (ok) done(null); else say('Couldn’t remove it. Try again.'); });
+      const no = d.createElement('button'); no.type = 'button'; no.className = 'cs-no'; no.textContent = 'Cancel'; no.addEventListener('click', close);
+      list.append(change, rm, no); box.append(p, list); back.append(box);
+      back.addEventListener('click', (ev) => { if (ev.target === back) close(); });
+      d.addEventListener('keydown', esc);
+      d.body.append(back);
+      no.focus({ preventScroll: true });
+    });
+    return wrap;
+  }
+
+  const apiOut = { fitSize, initial, prepare, upload, remove, list, url, img, avatar, view, picker, mine, MAX_SIDE, MAX_BYTES };
   if (typeof module !== 'undefined' && module.exports) module.exports = apiOut; else root.ApexPhotos = apiOut;
 })(typeof window !== 'undefined' ? window : globalThis);

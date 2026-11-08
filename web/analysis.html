@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self' apexnav:; script-src 'self' apexnav: 'sha256-aDsztmavQKAwsp2EFkUNgdLGbPOWjDvEd1mDZHgac0Q=' 'sha256-G7s/ZI+Hqrfc4DqbB6EANJJLmUmhNK06PizQ1LlsG84=' https://cdn.jsdelivr.net 'wasm-unsafe-eval'; worker-src 'self' apexnav: blob:; child-src 'self' apexnav: blob:; style-src 'self' apexnav: 'unsafe-inline'; font-src 'self' apexnav: data:; img-src 'self' apexnav: data: blob: https://tiles.openfreemap.org https://s3.amazonaws.com https://basemap.nationalmap.gov; media-src 'self' apexnav: data: blob:; connect-src 'self' apexnav: data: blob: https://apexnav.senftns.workers.dev wss://apexnav.senftns.workers.dev https://tiles.openfreemap.org https://basemap.nationalmap.gov https://s3.amazonaws.com https://valhalla1.openstreetmap.de https://router.project-osrm.org https://overpass-api.de https://overpass.private.coffee https://overpass.kumi.systems https://maps.mail.ru https://nominatim.openstreetmap.org https://photon.komoot.io https://api.open-meteo.com https://api.weather.gov https://statsapi.mlb.com https://api.seatgeek.com https://api.water.noaa.gov https://waterservices.usgs.gov https://in.carsprogram.org https://publicapi.ohgo.com https://quickstats.nass.usda.gov https://commons.wikimedia.org https://www.flickr.com https://graph.mapillary.com https://vpic.nhtsa.dot.gov https://cdn.jsdelivr.net https://huggingface.co https://*.huggingface.co https://*.hf.co; object-src 'none'; base-uri 'none'; form-action 'self'" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self' apexnav:; script-src 'self' apexnav: 'sha256-GybQ7lyBshkD0GwlWHAS6tR+6o+mUgnFmM/VezXCquo=' 'sha256-G7s/ZI+Hqrfc4DqbB6EANJJLmUmhNK06PizQ1LlsG84=' https://cdn.jsdelivr.net 'wasm-unsafe-eval'; worker-src 'self' apexnav: blob:; child-src 'self' apexnav: blob:; style-src 'self' apexnav: 'unsafe-inline'; font-src 'self' apexnav: data:; img-src 'self' apexnav: data: blob: https://tiles.openfreemap.org https://s3.amazonaws.com https://basemap.nationalmap.gov; media-src 'self' apexnav: data: blob:; connect-src 'self' apexnav: data: blob: https://apexnav.senftns.workers.dev wss://apexnav.senftns.workers.dev https://tiles.openfreemap.org https://basemap.nationalmap.gov https://s3.amazonaws.com https://valhalla1.openstreetmap.de https://router.project-osrm.org https://overpass-api.de https://overpass.private.coffee https://overpass.kumi.systems https://maps.mail.ru https://nominatim.openstreetmap.org https://photon.komoot.io https://api.open-meteo.com https://api.weather.gov https://statsapi.mlb.com https://api.seatgeek.com https://api.water.noaa.gov https://waterservices.usgs.gov https://in.carsprogram.org https://publicapi.ohgo.com https://quickstats.nass.usda.gov https://commons.wikimedia.org https://www.flickr.com https://graph.mapillary.com https://vpic.nhtsa.dot.gov https://cdn.jsdelivr.net https://huggingface.co https://*.huggingface.co https://*.hf.co; object-src 'none'; base-uri 'none'; form-action 'self'" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
   <title>Vetta · Log</title>
   <link rel="icon" href="brand/mark.svg" type="image/svg+xml" />
@@ -129,6 +129,17 @@
     .gain { color: var(--gain); } .loss { color: var(--signal); }
     .tul { width: 34px; height: 34px; display: inline-block; vertical-align: middle; }
     .scroll { overflow-x: auto; }
+    /* a stage's runs (TestFlight 2026-11-05): a run is its line and its components under it, never wider than the phone */
+    table.runs { table-layout: fixed; } table.runs th:first-child, table.runs td:first-child { width: 22px; }
+    table.runs th:nth-child(3) { width: 64px; } table.runs th:nth-child(4) { width: 72px; } table.runs th small { font-weight: 400; }
+    table.runs .run-name { white-space: normal; overflow-wrap: anywhere; font-family: var(--font-ui); }
+    table.runs tr.run td { border-bottom: 0; padding-bottom: 2px; }
+    table.runs tr.run-parts td { padding-top: 2px; }
+    table.runs .bars { grid-template-columns: repeat(4, minmax(0, 1fr)); min-width: 0; gap: 8px; }
+    table.runs .bar { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    table.runs tr.best td:first-child { box-shadow: none; } table.runs tr.run.best td:first-child, table.runs tr.run-parts.best td:first-child { box-shadow: inset 3px 0 0 var(--accent); }
+    #segLegend:empty { display: none; }
+    #segShareRow .share-with { flex-basis: 100%; margin: 0; }
     .seg-map { border: 1px solid var(--rule); margin: 8px 0; padding: 4px; }
     .seg-map svg, .vote-map svg { display: block; width: 100%; height: auto; max-height: 260px; }
     .seg-end { display: grid; grid-template-columns: 4.5em 1fr; align-items: center; gap: 8px; font-size: 14px; color: var(--panel-dim); }
@@ -911,7 +922,8 @@
             filtered = rows.filter(r => r.mine || (r.user_id && fIds.has(r.user_id)) || (r.handle && fHandles.has(String(r.handle).toLowerCase())));
           }
           if (!filtered.some(r => !r.mine) && filtered.length < 2) {
-            bt.innerHTML = '<tr><td class="l"><span class="note">No friends on this stage yet. Friends appear once they share scores with you (Account) and have driven it.</span></td></tr>';
+            // TestFlight 2026-11-05 ("bad text spacing"): an empty board is a sentence that wraps, not one cut in a table cell
+            bt.innerHTML = ''; $('segLegend').textContent = 'No friends on this stage yet. Friends appear once they share scores with you (Account) and have driven it.';
             return;
           }
         } else {
@@ -931,7 +943,7 @@
           }
           filtered = rows.filter(r => (r.handle && handles.has(String(r.handle).toLowerCase())) || (r.user_id && ids.has(r.user_id)) || (r.mine && (mems || []).some(m => m && m.mine)));
           if (!filtered.some(r => !r.mine)) {
-            bt.innerHTML = '<tr><td class="l"><span class="note">No runs from this crew yet</span></td></tr>';
+            bt.innerHTML = ''; $('segLegend').textContent = 'No runs from this crew on this stage yet.';
             return;
           }
         }
@@ -945,8 +957,10 @@
       const seg = segs.find(s => s.id === activeSeg);
       if (seg && seg.synced) {
         if (fr.length) {
-          const sel2 = document.createElement('select'); fr.forEach(f => sel2.add(new Option('@' + f.handle, f.id)));
+          // a friend who hasn't picked a handle yet was "@null" here (TestFlight 2026-11-05)
+          const sel2 = document.createElement('select'); fr.forEach(f => sel2.add(new Option(f.handle ? '@' + f.handle : 'A friend with no handle yet', f.id)));
           const go = document.createElement('button'); go.className = 'btn'; go.textContent = 'Share stage';
+          row.append(Object.assign(document.createElement('p'), { className: 'note share-with', textContent: 'Share this stage with a friend' }));
           go.onclick = async () => { go.textContent = (await ApexSync.shareSegment(seg.id, 'friend', sel2.value)) ? 'Shared' : 'Failed. Try again'; };
           sel2.setAttribute('aria-label', 'Share with'); row.append(sel2, go); ApexRowSelect.enhance(sel2);
         }
@@ -1019,11 +1033,17 @@
       $('segTitle').textContent = `Runs · ${seg.name}`;
       const passes = passesFor(seg).sort((a, b) => (b.p.score ?? -1) - (a.p.score ?? -1));
       const bestTime = Math.min(...passes.map(x => x.p.time_s));
-      $('segTable').innerHTML = `<tr><th class="l">#</th><th class="l">Run</th><th>Score</th><th class="l">Components</th><th>Time (private)</th></tr>` +
-        passes.map((x, i) => `<tr class="${i === 0 ? 'best' : ''}"><td class="l">${i + 1}</td><td class="l"><b>${x.d.name}</b><span class="sub">${dateLabel(x.d)}</span></td>
-          <td><span class="score">${x.p.score ?? UNK}</span></td><td class="l">${bars(x.p.components)}</td>
-          <td>${mmss(x.p.time_s)}<span class="sub">${x.p.time_s === bestTime ? 'quickest' : '+' + (x.p.time_s - bestTime).toFixed(1) + ' s'}</span></td></tr>`).join('') +
-        (passes.length ? '' : '<tr><td class="l" colspan="5"><span class="note">No drive covers this stage in its direction yet.</span></td></tr>');
+      // TestFlight 2026-11-05 ("bad text spacing"): five columns were wider than a phone, so the table scrolled sideways (the
+      // Score cut to "ore", the components' words run together). Now a run is its line (#, run, Score, time) and its four
+      // components under it, the whole width; nothing scrolls sideways.
+      $('segTable').className = 'runs';
+      $('segTable').innerHTML = `<tr><th class="l">#</th><th class="l">Run</th><th>Score</th><th>Time <small>(private)</small></th></tr>` +
+        passes.map((x, i) => `<tr class="run${i === 0 ? ' best' : ''}"><td class="l">${i + 1}</td><td class="l run-name"><b></b><span class="sub">${dateLabel(x.d)}</span></td>
+          <td><span class="score">${x.p.score ?? UNK}</span></td>
+          <td>${mmss(x.p.time_s)}<span class="sub">${x.p.time_s === bestTime ? 'quickest' : '+' + (x.p.time_s - bestTime).toFixed(1) + ' s'}</span></td></tr>
+          <tr class="run-parts${i === 0 ? ' best' : ''}"><td></td><td class="l" colspan="3">${bars(x.p.components)}</td></tr>`).join('') +
+        (passes.length ? '' : '<tr><td class="l" colspan="4"><span class="note">No drive covers this stage in its direction yet.</span></td></tr>');
+      $('segTable').querySelectorAll('tr.run .run-name b').forEach((b, i) => { b.textContent = passes[i].d.name; });   // a drive's name is text
       const byDate = passes.slice().sort((a, b) => (a.d.date < b.d.date ? -1 : 1)).filter(x => x.p.score != null);
       const W = 600, H = 120, L = 34, T = 10, B = 22;
       const pts = byDate.map((x, i) => [L + (byDate.length < 2 ? 0.5 : i / (byDate.length - 1)) * (W - L - 10), T + (1 - x.p.score / 1000) * (H - T - B), x]);
