@@ -49,6 +49,34 @@
     return { faces, more: Math.max(0, list.length - max), n: list.length };
   }
   const stripeOk = (s) => typeof s === 'string' && /^#[0-9a-f]{6}$/i.test(s);
+  /** Your crews in the dashboard's order (TestFlight 2026-11-05): the pinned ones first, in the order you pinned them;
+   *  then the rest by their latest activity (a message or a drive planned), newest first; crews with none by name.
+   *  `info` maps a crew id to its feed entry ({ last: { at }, next }). */
+  function dashOrder(crews, pins, info) {
+    const pinned = (pins || []).map((id) => (crews || []).find((c) => c && c.id === id)).filter(Boolean);
+    const at = (c) => { const f = info && info[c.id]; return (f && f.last && f.last.at) || ''; };
+    const rest = (crews || []).filter((c) => c && !pinned.includes(c))
+      .sort((a, b) => (at(a) < at(b) ? 1 : at(a) > at(b) ? -1 : String(a.name).localeCompare(String(b.name))));
+    return { pinned, rest };
+  }
+  /** The line under a crew's name on the dashboard: its next drive, else its last message, else what it is. */
+  function dashLine(c, f, now = Date.now()) {
+    if (f && f.next && f.next.title) {
+      const t = new Date(f.next.starts_at), ok = Number.isFinite(t.getTime());
+      const day = ok ? (t.toDateString() === new Date(now).toDateString() ? 'today' : t.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' })) : '';
+      return `Next drive: ${f.next.title}${day ? ` · ${day}` : ''}`;
+    }
+    const said = (t) => (root.ApexFormat && root.ApexFormat.noEmoji ? root.ApexFormat.noEmoji(t) : t);   // as the chat sets it
+    if (f && f.last && f.last.body) return `${f.last.mine ? 'You' : '@' + (f.last.handle || '?')}: ${said(f.last.body)}`;
+    const n = typeof c.members === 'number' ? c.members : null;
+    return [n == null ? '' : `${n} member${n === 1 ? '' : 's'}`, c.visibility === 'public' ? `Public${c.area_name ? ' · ' + c.area_name : ''}` : 'Private'].filter(Boolean).join(' · ');
+  }
+  /** Pinned crew ids, kept on this phone; a crew you left drops out. */
+  function readPins(have) {
+    let p = []; try { p = JSON.parse(root.localStorage.getItem('apex.crewPins') || '[]'); } catch (_) {}
+    return Array.isArray(p) ? p.filter((id) => typeof id === 'string' && (!have || have.includes(id))) : [];
+  }
+  function writePins(p) { try { root.localStorage.setItem('apex.crewPins', JSON.stringify(p)); } catch (_) {} }
   /** The members strip (P-06): the owner first, then who is on the road now (`liveSet`, handles), then the rest by handle;
    *  and how many are out. */
   function outNow(members, liveSet) {
@@ -158,10 +186,6 @@
     .cp-msg .cp-dots { margin-left: auto; min-width: 44px; min-height: 32px; border: 0; background: none; color: var(--panel-dim); font: 700 18px var(--font-ui); letter-spacing: 0.1em; }
     /* P-03: the livery at the foot, one line */
     .cp-livery-foot { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; border-top: 1px solid var(--rule); padding-top: 10px; }
-    /* P-16: the crew switcher in the text face, one line that scrolls, the gear fixed beside it */
-    .crew-head .cp-switch { flex: 1 1 auto; scrollbar-width: none; }
-    .crew-head .cp-switch::-webkit-scrollbar { display: none; }
-    .cp-switch.stamps > button { flex: none; font: 600 15px var(--font-ui); letter-spacing: 0; text-transform: none; white-space: nowrap; max-width: 14em; overflow: hidden; text-overflow: ellipsis; }
     .cp-msg { display: grid; grid-template-columns: 40px 1fr; gap: 10px; padding: 8px 0; border-top: 1px solid var(--rule); }
     .cp-msg p { margin: 2px 0 0; white-space: pre-wrap; overflow-wrap: anywhere; }
     .cp-msg .row { gap: 10px; align-items: baseline; }
@@ -173,7 +197,6 @@
     .cp-swatches { display: flex; flex-wrap: wrap; gap: 8px; }
     .cp-swatches button { width: 40px; height: 40px; border: 2px solid var(--panel); outline: 1.5px solid var(--rule); }
     .cp-swatches button[aria-pressed="true"] { outline: 3px solid var(--panel-ink); }
-    .cp-switch { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 10px; }
     .cp-livery { border: 1.5px solid var(--panel-ink); padding: 12px 14px; display: grid; gap: 8px; }
     .cp-livery h3 { margin: 0; font-size: 22px; border: 0; padding: 0; }
     .cp-meter { position: relative; height: 12px; border: 1.5px solid var(--panel-ink); }
@@ -196,6 +219,30 @@
     .cp-patterns { display: flex; flex-wrap: wrap; gap: 8px; }
     .cp-patterns button { width: 72px; height: 30px; border: 1.5px solid var(--rule); }
     .cp-patterns button[aria-pressed="true"] { outline: 3px solid var(--panel-ink); }
+    /* The crews dashboard (TestFlight 2026-11-05): a row a crew, pinned first; the latest from all of them under it */
+    .crew-dash { display: grid; gap: 8px; }
+    .crew-dash .cd-head { margin-top: 4px; } .crew-dash .cd-head h3 { margin: 0; font-size: 22px; border: 0; padding: 0; }
+    .cd-list { display: grid; }
+    .cd-row { display: grid; grid-template-columns: minmax(0, 1fr) 44px; align-items: center; gap: 4px; border-top: 1px solid var(--rule); }
+    .cd-row:last-child { border-bottom: 1px solid var(--rule); }
+    .cd-open, .cd-item { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 12px; width: 100%; min-height: 64px; padding: 10px 0;
+      background: none; border: 0; color: var(--panel-ink); font: inherit; text-align: left; }
+    .cd-text { display: grid; gap: 2px; min-width: 0; }
+    .cd-text b { font-size: 17px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .cd-text small { font-size: 14px; line-height: 1.35; color: var(--panel-dim); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; overflow-wrap: anywhere; }
+    .cd-when { font-size: 13px; color: var(--panel-dim); white-space: nowrap; align-self: start; padding-top: 3px; }
+    .cd-crest { width: var(--cd, 44px); height: var(--cd, 44px); display: grid; place-items: center; flex: none; background: var(--panel); color: var(--panel-ink);
+      border: 1.5px solid var(--panel-ink); box-shadow: inset 0 -4px 0 var(--cp-stripe, var(--accent)); }
+    .cd-pin { width: 44px; height: 44px; display: grid; place-items: center; background: none; border: 0; color: var(--panel-dim); }
+    .cd-pin svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linejoin: round; transform: rotate(35deg); }
+    .cd-pin[aria-pressed="true"] { color: var(--panel-ink); } .cd-pin[aria-pressed="true"] svg { fill: currentColor; transform: none; }
+    .cd-feed { display: grid; }
+    .cd-item { grid-template-columns: 36px minmax(0, 1fr); min-height: 56px; padding: 8px 0; border-top: 1px solid var(--rule); align-items: start; }
+    .cd-item .cd-text small { font-size: 13px; -webkit-line-clamp: 1; }
+    .cd-what { font-size: 15px; line-height: 1.4; overflow-wrap: anywhere; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+    .cd-more { justify-self: start; }
+    .crew-head .cd-back { flex: 0 1 auto; min-height: 44px; padding: 0 8px 0 0; font-size: 16px; font-weight: 600; text-decoration: none; color: var(--panel-ink); }
+    .crew-head .cd-back::before { content: "\\2039"; font-size: 24px; margin-right: 6px; line-height: 1; }
   `;
 
   // The board's periods (the owner's TestFlight note 06); the pick is remembered on this phone.
@@ -692,22 +739,83 @@
       motto.focus();
     }
 
-    /** Several crews: a row of their names to switch between; `pick(id)` opens one. */
-    function switcher(crews, current, pick) {
-      const row = el('div', { className: 'cp-switch stamps', role: 'group' });
-      row.setAttribute('aria-label', 'Your crews');
-      for (const c of crews) {
-        const b = btn(c.name, () => pick(c.id), 'chip');
-        b.setAttribute('aria-pressed', String(c.id === current));
-        if (c.id === current) b.classList.add('on');
-        row.append(b);
-      }
-      return row;
+    /** The Crews side when you're in more than one (TestFlight 2026-11-05: "a dashboard like looking at the groups you're
+     *  in, with a feed, and the option to pin crews"): your crews as rows (pinned first, then the latest active), each
+     *  with its crest, its next drive or last message, and a pin; then the latest from all of them. `open(id)` opens one. */
+    function pinSvg() {
+      const d = root.document, svg = d.createElementNS(SVG, 'svg'); svg.setAttribute('viewBox', '0 0 24 24'); svg.setAttribute('aria-hidden', 'true');
+      for (const p of ['M9 3h6l-1 6 4 4H6l4-4z', 'M12 13v8']) { const n = d.createElementNS(SVG, 'path'); n.setAttribute('d', p); svg.append(n); }
+      return svg;
+    }
+    function dashboard(crews, open) {
+      const box = el('div', { className: 'crew-dash' });
+      const list = el('div', { className: 'cd-list', role: 'list' }), feedBox = el('div', { className: 'cd-feed' });
+      feedBox.setAttribute('aria-live', 'polite');
+      let info = {}, pins = readPins(crews.map((c) => c.id)), shown = 8;
+      const head = el('div', { className: 'cp-sec cd-head' }, el('h3', { textContent: 'Your crews' }), el('span', { className: 'note' }));
+      const crestBox = (c, px) => {
+        const f = info[c.id] || {}, b = el('span', { className: 'cd-crest' });
+        b.style.setProperty('--cd', `${px}px`); if (stripeOk(f.stripe)) b.style.setProperty('--cp-stripe', f.stripe);
+        b.append(crestSvg(f.crest || 'apex', Math.round(px * 0.78))); return b;
+      };
+      const paintList = () => {
+        // a repaint (a pin, the feed arriving) keeps the focus on the same crew's same key
+        const a = root.document.activeElement, kept = a && list.contains(a) ? [a.closest('.cd-row').dataset.crew, a.classList.contains('cd-pin') ? '.cd-pin' : '.cd-open'] : null;
+        const { pinned, rest } = dashOrder(crews, pins, info);
+        head.lastChild.textContent = `${crews.length} crews${pinned.length ? ` · ${pinned.length} pinned` : ''}`;
+        list.replaceChildren(...[...pinned, ...rest].map((c) => {
+          const f = info[c.id], on = pins.includes(c.id);
+          const go = el('button', { type: 'button', className: 'cd-open' }, crestBox(c, 44),
+            el('span', { className: 'cd-text' }, el('b', { textContent: c.name }), el('small', { textContent: dashLine(c, f) })),
+            el('span', { className: 'cd-when', textContent: f && f.last ? ago(f.last.at) : '' }));
+          go.setAttribute('aria-label', `${c.name}. ${dashLine(c, f)}. Open the crew.`);
+          go.addEventListener('click', () => open(c.id));
+          const pin = el('button', { type: 'button', className: 'cd-pin' });
+          pin.append(pinSvg());
+          pin.setAttribute('aria-pressed', String(on)); pin.setAttribute('aria-label', `${on ? 'Unpin' : 'Pin'} ${c.name}`);
+          pin.addEventListener('click', () => {
+            pins = on ? pins.filter((x) => x !== c.id) : [...pins, c.id]; writePins(pins); paintList();
+          });
+          const row = el('div', { className: 'cd-row' + (on ? ' pinned' : ''), role: 'listitem' }, go, pin);
+          row.dataset.crew = c.id;
+          return row;
+        }));
+        if (kept) { const k = [...list.children].find((r) => r.dataset.crew === kept[0]); if (k) k.querySelector(kept[1]).focus({ preventScroll: true }); }
+      };
+      const paintFeed = (items) => {
+        if (!items) { feedBox.replaceChildren(el('p', { className: 'note', textContent: 'Couldn’t load the latest from your crews. Check signal.' })); return; }
+        if (!items.length) { feedBox.replaceChildren(el('p', { className: 'note', textContent: 'Nothing new in your crews in the last two weeks.' })); return; }
+        const name = (id) => (crews.find((c) => c.id === id) || {}).name || 'A crew';
+        const rows = items.slice(0, shown).map((it) => {
+          const who = it.mine ? 'You' : `@${it.handle || '?'}`;
+          let what;
+          if (it.kind === 'drive') {
+            const t = new Date(it.starts_at), day = Number.isFinite(t.getTime()) ? t.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' }) : '';
+            what = `${who} planned ${it.title}${day ? ` · ${day}` : ''}`;
+          } else what = `${who}: ${plain(it.body)}`;
+          const b = el('button', { type: 'button', className: 'cd-item' + (it.kind === 'drive' ? ' drive' : '') },
+            P() ? P().avatar(it.photo_id, it.handle, 36) : el('span'),
+            el('span', { className: 'cd-text' }, el('small', { textContent: `${name(it.crew_id)} · ${ago(it.at)}` }), el('span', { className: 'cd-what', textContent: what })));
+          b.setAttribute('aria-label', `${name(it.crew_id)}, ${ago(it.at)}: ${what}. Open the crew.`);
+          b.addEventListener('click', () => open(it.crew_id));
+          return b;
+        });
+        if (items.length > shown) rows.push(btn('Show more', () => { shown += 12; paintFeed(items); }, 'linkbtn cd-more'));
+        feedBox.replaceChildren(...rows);
+      };
+      box.append(head, list, el('div', { className: 'cp-sec cd-head' }, el('h3', { textContent: 'Latest from your crews' })), feedBox);
+      paintList();
+      feedBox.replaceChildren(el('p', { className: 'note', textContent: 'Loading…' }));
+      apiCall('GET', '/api/crews/feed').then((r) => (r && r.ok ? r.json() : null)).catch(() => null).then((j) => {
+        if (j && Array.isArray(j.crews)) { info = Object.fromEntries(j.crews.map((c) => [c.id, c])); paintList(); }
+        paintFeed(j && Array.isArray(j.items) ? j.items : null);
+      });
+      return box;
     }
 
-    return { view, switcher };
+    return { view, dashboard };
   }
 
-  const api = { mount, dateBlock, ago, goingFaces, stripeOk, outNow, liveryShort, crestSvg, liveryLine, stripeCss, atLeast, dayOf, drivesToSend, publishDrives, CRESTS: Object.keys(CRESTS), STRIPES, PATTERNS };
+  const api = { mount, dateBlock, ago, goingFaces, stripeOk, dashOrder, dashLine, readPins, outNow, liveryShort, crestSvg, liveryLine, stripeCss, atLeast, dayOf, drivesToSend, publishDrives, CRESTS: Object.keys(CRESTS), STRIPES, PATTERNS };
   if (typeof module !== 'undefined' && module.exports) module.exports = api; else root.ApexCrewPage = api;
 })(typeof window !== 'undefined' ? window : globalThis);
