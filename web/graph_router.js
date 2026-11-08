@@ -19,9 +19,9 @@
   const FunRoute = () => root.ApexFunRoute || (typeof require === 'function' ? (() => { try { return require('./fun_route.js'); } catch (_) { return null; } })() : null);
   // the same budgets as the route engine (fun_route.js LEVELS); this copy only when that file isn't loaded (the worker)
   const LEVELS_COPY = {
-    quick: { budget: 0.10, slackS: 60, perMin: 3.0 },
-    fun: { budget: 0.35, slackS: 240, perMin: 1.0 },
-    max: { budget: 0.90, slackS: 600, perMin: 0.35 },
+    quick: { budget: 0, slackS: 60, perMin: 3.0 },
+    fun: { budget: 0.35, slackS: 240, perMin: 1.0, noHighway: true },
+    max: { budget: 0.90, slackS: 600, perMin: 0.35, noHighway: true },
   };
   const levels = () => { const F = FunRoute(); return (F && F.LEVELS) || LEVELS_COPY; };
   const TILE_DEG = 0.25;
@@ -56,11 +56,20 @@
     LOWER: [0.9, 0.75],      // then these fractions of the weight found: cheaper ways to the road the budget-filler found
     ALT_PENALTIES: [0.6, 1.5, 4], ALT_MIN_DIFF: 0.3, ALTS: 2,
     LOOP_A: { quick: 0.6, fun: 3, max: 8 }, LOOP_ROAD_FACTOR: 1.35, LOOP_RETRACE_X: 3,
-    // loops (loop()): motorway and trunk cost x LOOP_HWY_X on every leg (a short link to good roads, never the bulk); the
+    // levels (the owner, 2026-11-08: "fun should never go on the highway. Quick should essentially be a normal route"):
+    // at Fun and Long way (NO_HWY) a motorway, trunk or one of their links is never driven: a hard filter in the search, not a
+    // cost. Only where no way without one exists in the level's corridor (a river crossed only by an interstate bridge, a
+    // start or end on a ramp) is one used, each highway second x HWY_LINK_X so the link is the shortest there is; a
+    // highway-free way over HWY_ABSURD x the quickest's time is still the level's way (the card says Quick is the way); the
+    // budget never shuts out the highway-free quickest (+ HWY_FREE_SLACK_S). A point snapped onto a highway moves to the
+    // nearest other road within HWY_SNAP_M (a car on the highway, heading given and within HWY_ON_M of it, stays on it)
+    NO_HWY: { fun: true, max: true }, HWY_LINK_X: 25, HWY_ABSURD: 2, HWY_FREE_SLACK_S: 60, HWY_SNAP_M: 150, HWY_ON_M: 25,
+    // loops (loop()): at Quick motorway and trunk cost x LOOP_HWY_X on every leg (a short link to good roads, never the
+    // bulk), at Fun and Long way they are never driven (NO_HWY, the same exception); the
     // stages within reach of half the length at LOOP_REACH_MS; at most LOOP_STAGES of them chained, LOOP_TRIES loops
     // routed, each stage driven through a point every LOOP_ALONG_M; a loop with more than LOOP_MAX_RETRACED driven twice
     // is dropped
-    LOOP_HWY_X: { quick: 2.5, fun: 3, max: 4 }, LOOP_REACH_MS: 15, LOOP_STAGES: 8, LOOP_TRIES: 6, LOOP_ALONG_M: 1500, LOOP_MAX_RETRACED: 0.4,
+    LOOP_HWY_X: { quick: 2.5 }, LOOP_REACH_MS: 15, LOOP_STAGES: 8, LOOP_TRIES: 6, LOOP_ALONG_M: 1500, LOOP_MAX_RETRACED: 0.4,
     LOOP_CONN_FACTOR: 1.7, LOOP_CONN_A: 3, LOOP_MAX_OFF: 0.6,   // a connector's road length over its crow line, the router's detours to good road in it (Cincinnati, 2026-11-04)
     SNAP_M: 1500, GRID_DEG: 0.01,
     OUT_BACK_KM: 2,          // Best roads nearby: a dead-end run of good road this long stays (driven there and back); the stage minimum
@@ -324,12 +333,24 @@
     return out;
   }
 
-  /** Our quickest alone (one search): the first route on screen. */
+  /**
+   * Our quickest alone (one search): the first route on screen. At a level that never drives a highway (NO_HWY), the
+   * quickest way without one (freeQuickest), so the first route up is already the level's kind of route.
+   */
   function quickest(v, req) {
     const level = levels()[req.level] ? req.level : 'fun', obj = objective(v, req);
     const { src, dst } = snapBoth(v, req.from, req.to);
     const sc = startCostFor(v, req.from.heading != null ? req.from.heading : req.heading);
-    const r = search(v, obj, src, dst, 0, null, { ...(sc ? { startCost: sc } : {}), ellipse: ellipseFor(req.from, req.to, level) });
+    const opts = { ...(sc ? { startCost: sc } : {}), ellipse: ellipseFor(req.from, req.to, level) };
+    if (noHighway(level)) {
+      const f = freeQuickest(v, obj, req, src, dst, opts);
+      if (!f) throw new Error('no route');
+      v.quickMemo = { key: quickKey(req, level, obj, 'free'), f };
+      const out = assemble(v, f.r, obj, { level, role: 'quickest', a: 0 });
+      if (f.mode === 'link') out.route.hwyReason = hwyReason(v, out);
+      return out;
+    }
+    const r = search(v, obj, src, dst, 0, null, opts);
     if (!r) throw new Error('no route');
     v.quickMemo = { key: quickKey(req, level, obj), r };
     return assemble(v, r, obj, { level, role: 'quickest', a: 0 });
@@ -338,27 +359,33 @@
   // multipliers and adds (the avoid choices) and node costs: goodness and members' data weigh nothing at a = 0. So the
   // first route's search (quickest) is the plan's own a = 0 search when the view and these are the same (the plan asked
   // right behind it, on the tiles already in view: 60-80 ms of the worker's critical path, live 2026-11-08); same answer.
-  function quickKey(req, level, obj) {
+  function quickKey(req, level, obj, kind = 'any') {
     const h = req.from.heading != null ? req.from.heading : req.heading;
-    return JSON.stringify([req.from.lat, req.from.lon, req.to.lat, req.to.lon, Number.isFinite(h) ? h : null, level, req.avoid || null, obj.nodeCosts]);
+    return JSON.stringify([req.from.lat, req.from.lon, req.to.lat, req.to.lon, Number.isFinite(h) ? h : null, level, req.avoid || null, obj.nodeCosts, kind]);
   }
   /**
    * The quickest way from `from` through req.via (in order) to `to`: each leg's search starts on the edge the last one
    * arrived on, driven on (no U-turn at a via), as the loops' legs are joined. A reroute along the planned route's points,
-   * a stage's or a shared road's points, or a drive again, on our tiles (offline as well as on). Throws when a point has
-   * no road near it or a leg has no way.
+   * a stage's or a shared road's points, or a drive again, on our tiles (offline as well as on). At Fun and Long way (a
+   * reroute of a route planned there) no leg drives a highway unless it has no other way (each leg as freeQuickest).
+   * Throws when a point has no road near it or a leg has no way.
    */
   function through(v, req) {
-    const level = levels()[req.level] ? req.level : 'fun', obj = objective(v, req);
+    const level = levels()[req.level] ? req.level : 'fun', obj = objective(v, req), free = noHighway(level), is = free ? hwyOf(v) : null;
+    const h0 = req.from.heading != null ? req.from.heading : req.heading;
     let prev = snap(v, req.from.lat, req.from.lon);
     if (!prev.length) throw new Error('no road near the start');
-    const sc = startCostFor(v, req.from.heading != null ? req.from.heading : req.heading);
+    if (free) prev = snapOff(v, req.from, prev, h0);
+    const sc = startCostFor(v, h0);
     const legs = [], pts = [...(req.via || []), req.to];
     let at = req.from;
     for (const [k, p] of pts.entries()) {
-      const dst = snap(v, p.lat, p.lon);
+      let dst = snap(v, p.lat, p.lon);
       if (!dst.length) { if (k === pts.length - 1) throw new Error('no road near the end'); continue; }   // a via off the network: passed by
-      const res = search(v, obj, prev, dst, 0, null, { ...(!legs.length && sc ? { startCost: sc } : {}), ellipse: ellipseFor(at, p, 'quick') });
+      if (free) dst = snapOff(v, p, dst);
+      const o = { ...(!legs.length && sc ? { startCost: sc } : {}), ellipse: ellipseFor(at, p, 'quick') };
+      let res = search(v, obj, prev, dst, 0, null, free ? { ...o, ban: is } : o);
+      if (!res && free) res = search(v, obj, prev, dst, 0, null, { ...o, hwyX: { is, x: K.HWY_LINK_X } });
       if (!res) throw new Error('no route');
       legs.push(res);
       prev = [{ edge: res.edges[res.edges.length - 1], frac: res.ft, lat: 0, lon: 0 }];
@@ -366,7 +393,9 @@
     }
     const edges = [];
     for (const [k, l] of legs.entries()) for (const [m, e] of l.edges.entries()) if (!(k > 0 && m === 0 && edges[edges.length - 1] === e)) edges.push(e);
-    return assemble(v, { edges, fs: legs[0].fs, ft: legs[legs.length - 1].ft }, obj, { level, role: 'through', a: 0 });
+    const out = assemble(v, { edges, fs: legs[0].fs, ft: legs[legs.length - 1].ft }, obj, { level, role: 'through', a: 0 });
+    if (free && out.hwyKm > 0) out.route.hwyReason = hwyReason(v, out);
+    return out;
   }
   /**
    * The tiles' own scores along any line (ours, or the router's routes in the same pool): each sample lands on the
@@ -606,7 +635,9 @@
   }
   /**
    * Edge-based A*. src/dst: snaps ([{ edge, frac }]). a: the goodness weight (0: time only). penal: optional Float32Array of
-   * extra cost factors per edge (alternates, loops). Returns { edges, fs, ft, cost, settled } or null.
+   * extra cost factors per edge (alternates, loops). opts.ban: a Uint8Array, edges never driven (Fun's highways);
+   * opts.hwyX: { is, x }, edges with is[e] cost x times more (the highway exception). Returns { edges, fs, ft, cost,
+   * settled } or null.
    */
   function search(v, obj, src, dst, a = 0, penal = null, opts = {}) {
     const S = scratch(v), qid = ++S.qid;
@@ -616,7 +647,9 @@
     const tgt = dst[0];
     const hMul = Math.exp(a * minBad) / v.vmax * 0.995;
     const H = (n) => { if (hs[n] !== S.qid) { hs[n] = S.qid; h[n] = distM(v.lat[n], v.lon[n], tgt.lat, tgt.lon) * hMul; } return h[n]; };
-    const base = (e) => (v.time[e] * Math.exp(a * bad[e]) * mult[e] + add[e]) * (penal ? penal[e] : 1);
+    const ban = opts.ban || null, hx = opts.hwyX || null;
+    const base = hx ? (e) => (v.time[e] * Math.exp(a * bad[e]) * mult[e] + add[e]) * (penal ? penal[e] : 1) * (hx.is[e] ? hx.x : 1)
+      : (e) => (v.time[e] * Math.exp(a * bad[e]) * mult[e] + add[e]) * (penal ? penal[e] : 1);
     const dstMap = new Map();
     for (const d of dst) if (!dstMap.has(d.edge) || dstMap.get(d.edge) > d.frac) dstMap.set(d.edge, d.frac);
     // heap
@@ -644,6 +677,7 @@
     };
     let popK = 0, bestGoal = Infinity, bestEdge = -1, bestPred = -1, direct = null;
     for (const s of src) {
+      if (ban && ban[s.edge]) continue;
       const e = s.edge, x = (1 - s.frac) * base(e) + (opts.startCost ? opts.startCost(e) : 0);
       if (stamp[e] !== qid || x < g[e]) { stamp[e] = qid; g[e] = x; pred[e] = -1; if (v.to[e] >= 0) push(x + H(v.to[e]), e); }
       if (dstMap.has(e) && dstMap.get(e) >= s.frac) {
@@ -666,7 +700,7 @@
       if (++settled > maxSettle) break;
       for (let e = v.first[node]; e < v.first[node + 1]; e++) {
         const head = v.to[e];
-        if (head < 0 || !allowed(v, p, e, back) || (bound && !bound(head))) continue;
+        if (head < 0 || (ban && ban[e]) || !allowed(v, p, e, back) || (bound && !bound(head))) continue;
         const tc = turnCost(v, p, e, obj);
         if (tc === Infinity) continue;
         const be = base(e), x = gp + tc + be;
@@ -735,7 +769,8 @@
     const B = flagBits(), coords = [], names = [], steps = [], turns = [], times = [];
     let lineM = 0;
     const gEnd = [], gEdge = [];
-    let timeS = 0, distM_ = 0, q = 0, s = 0, sw = 0, f = 0, cf = 0, wsum = 0, junctions = 0, signals = 0;
+    let timeS = 0, distM_ = 0, q = 0, s = 0, sw = 0, f = 0, cf = 0, wsum = 0, junctions = 0, signals = 0, hwyM = 0;
+    const hwyBy = new Map();                                            // metres per highway name (the card's "Uses 0.4 mi of I-275")
     const has = { highways: false, tolls: false, ferries: false, unpaved: false };
     let roundabout = null;
     const E = res.edges;
@@ -785,6 +820,8 @@
       if (last && last.name === nm) last.toM = distM_; else names.push({ name: nm, fromM: distM_ - m, toM: distM_ });
       const fl = v.flags[e];
       if (fl & B.motorway || v.cls[e] === CLS.motorway) has.highways = true;
+      // (named by the highway itself, not its ramps: a ramp's metres count a thousandth, so they only name an all-ramp link)
+      if (isHwyEdge(v, e)) { hwyM += m; const hn = nm || 'the highway'; hwyBy.set(hn, (hwyBy.get(hn) || 0) + (fl & B.ramp ? m / 1000 : m)); }
       if (fl & B.toll) has.tolls = true;
       if (fl & B.ferry) has.ferries = true;
       if (fl & B.unpaved) has.unpaved = true;
@@ -799,10 +836,12 @@
     for (const n of names) if (n.name) nameKm.set(n.name, (nameKm.get(n.name) || 0) + (n.toM - n.fromM) / 1000);   // km, as routeOf has them (Valhalla lengths)
     const why = { source: 'own', level: meta.level || null, role: meta.role || null, a: meta.a != null ? meta.a : 0,
       quality: cf > 0 ? q / cf : null, scenery: sw > 0 ? s / sw : null, fun: f, conf: wsum > 0 ? cf / wsum : 0, junctions, signals,
-      objective: meta.a ? 't*(1+a*(1-goodness))' : 'time' };
+      objective: meta.a ? 't*(1+a*(1-goodness))' : 'time', hwyKm: hwyM / 1000 };
+    // motorway, trunk and their links driven (km) and the one most of it is on, by name (NO_HWY levels report it)
+    const hwyName = hwyM > 0 ? [...hwyBy].sort((x, y) => y[1] - x[1])[0][0] : null;
     return {
-      coords, edges: E.map((e) => edgeId(v, e)), edgeIdx: Int32Array.from(E), timeS, distM: distM_, names, why,
-      route: { coords: coords.map(([la, lo]) => [lo, la]), turns, times, steps, names: nameKm, has, timeS, source: 'own', graph: edgeTable(v, gEdge, gEnd) },
+      coords, edges: E.map((e) => edgeId(v, e)), edgeIdx: Int32Array.from(E), timeS, distM: distM_, names, why, hwyKm: hwyM / 1000,
+      route: { coords: coords.map(([la, lo]) => [lo, la]), turns, times, steps, names: nameKm, has, timeS, source: 'own', graph: edgeTable(v, gEdge, gEnd), hwyKm: hwyM / 1000, hwyName },
     };
   }
 
@@ -852,12 +891,12 @@
   /** The corridor ellipse a level's budget can reach (as tilesFor sizes it): foci at the ends, the sum of distances. */
   function ellipseFor(from, to, level = 'fun') {
     const L = levels()[level] || levels().fun, crow = distM(from.lat, from.lon, to.lat, to.lon);
-    return { a: from, b: to, major: Math.max(crow * (1 + L.budget) * 1.3 + 4000, crow + 6000) };
+    return { a: from, b: to, major: Math.max(crow * (1 + Math.max(0.1, L.budget)) * 1.3 + 4000, crow + 6000) };
   }
   function tilesFor(from, to, level = 'fun', o = {}) {
     const L = levels()[level] || levels().fun;
     const crow = distM(from.lat, from.lon, to.lat, to.lon);
-    const major = o.majorM || Math.max(crow * (1 + L.budget) * 1.3 + 4000, crow + 6000);
+    const major = o.majorM || Math.max(crow * (1 + Math.max(0.1, L.budget)) * 1.3 + 4000, crow + 6000);   // (Quick's 0 budget: the quickest's own corridor)
     const pad = (major - crow) / 2 + 1000;
     const midLat = (from.lat + to.lat) / 2, dLat = pad / 110540, dLon = pad / (111320 * Math.cos(midLat * RAD));
     const s = Math.min(from.lat, to.lat) - dLat, n = Math.max(from.lat, to.lat) + dLat, w = Math.min(from.lon, to.lon) - dLon, e = Math.max(from.lon, to.lon) + dLon;
@@ -891,6 +930,53 @@
     return tilesFor(p(-Math.PI / 4), p(3 * Math.PI / 4), 'quick', { majorM: 2 * r * 1.5 });
   }
 
+  // ---- highways (NO_HWY levels) ---------------------------------------------------------------------------------------
+  /** A motorway, trunk or one of their links (the tiles give a link its road's class; the ETL's motorway flag too). */
+  function isHwyEdge(v, e) { return v.cls[e] <= CLS.trunk || !!(v.flags[e] & (v.bits || flagBits()).motorway); }
+  /** Per edge, 1 on a highway (kept per view). */
+  function hwyOf(v) {
+    if (v.isHwy) return v.isHwy;
+    const h = new Uint8Array(v.E);
+    for (let e = 0; e < v.E; e++) if (isHwyEdge(v, e)) h[e] = 1;
+    v.isHwy = h;
+    return h;
+  }
+  const noHighway = (level) => !!K.NO_HWY[level];
+  /**
+   * A snap for a level that never drives a highway: the nearest road when it isn't one; else the nearest other road within
+   * HWY_SNAP_M (a house beside the interstate is reached by its own street). A moving car (a heading) within HWY_ON_M of
+   * the highway is on it: that snap stays (the route then leaves it by the shortest way: the exception).
+   */
+  function snapOff(v, p, s, heading = null) {
+    if (!s.length) return s;
+    const is = hwyOf(v);
+    if (!is[s[0].edge]) return s;
+    if (Number.isFinite(heading) && s[0].d <= K.HWY_ON_M) return s;
+    const f = snap(v, p.lat, p.lon, (e) => !is[e], Math.max(K.HWY_SNAP_M, s[0].d * 3 + 50));
+    return f.length ? f : s;
+  }
+  /**
+   * The quickest way that never drives a highway (search opts with `ban`), else, where none exists in the corridor, the one
+   * with the least highway (each highway second x HWY_LINK_X: `hwyX`). { r, mode: 'free' | 'link', src, dst, xo } (xo: the
+   * opts every later search of this plan adds), or null when there is no way at all.
+   */
+  function freeQuickest(v, obj, req, src, dst, opts) {
+    const is = hwyOf(v), h = req.from.heading != null ? req.from.heading : req.heading;
+    const fs = snapOff(v, req.from, src, h), ft = snapOff(v, req.to, dst);
+    const xf = { ban: is };
+    const r = search(v, obj, fs, ft, 0, null, { ...opts, ...xf });
+    if (r) return { r, mode: 'free', src: fs, dst: ft, xo: xf };
+    const xl = { hwyX: { is, x: K.HWY_LINK_X } };
+    const l = search(v, obj, src, dst, 0, null, { ...opts, ...xl });
+    return l ? { r: l, mode: 'link', src, dst, xo: xl } : null;
+  }
+  /** Why a route with the exception drives a highway: it starts on one, ends on one, or there is no other way across. */
+  function hwyReason(v, r) {
+    const E = r.edgeIdx;
+    if (!E || !E.length || !(r.hwyKm > 0)) return null;
+    return isHwyEdge(v, E[0]) ? 'start' : isHwyEdge(v, E[E.length - 1]) ? 'end' : 'across';
+  }
+
   // ---- plans -----------------------------------------------------------------------------------------------------------
   function snapBoth(v, from, to) {
     const src = snap(v, from.lat, from.lon), dst = snap(v, to.lat, to.lon);
@@ -906,25 +992,49 @@
   }
   /**
    * Routes from `from` to `to` at a level: { routes: [best, alternates..., quickest, other steps], quick, limitS, ms }.
-   * Quick also bisects (inside its 10 % + 60 s), so a better road at no real cost is offered; the route engine ranks them.
+   * Quick also bisects (inside its 60 s), so a better road at no real cost is offered; the route engine ranks them.
+   * At Fun and Long way (NO_HWY) every route but `quick` keeps off the highways (freeQuickest: the hard filter, or the
+   * exception's shortest highway link), and `quick` stays in the pool as the level's measure and Quick's card;
+   * `hwy` says which: { mode: 'any' | 'free' | 'link', absurd, quickS, freeS }.
    * req: { from, to, level, prefs, taste, avoid, heading, max }.
    */
   function plan(v, req) {
     const t0 = Date.now(), level = levels()[req.level] ? req.level : 'fun', L = levels()[level];
     const obj = objective(v, req);
-    const { src, dst } = snapBoth(v, req.from, req.to);
+    const snaps = snapBoth(v, req.from, req.to);
+    let { src, dst } = snaps;
     const sc = startCostFor(v, req.from.heading != null ? req.from.heading : req.heading);
-    const opts = { ...(sc ? { startCost: sc } : {}), ellipse: ellipseFor(req.from, req.to, level) };
+    const opts0 = { ...(sc ? { startCost: sc } : {}), ellipse: ellipseFor(req.from, req.to, level) };
+    let opts = opts0;
     const run = (a, penal = null, role = 'step') => { const r = search(v, obj, src, dst, a, penal, opts); return r ? assemble(v, r, obj, { level, role, a }) : null; };
-    const memo = v.quickMemo && v.quickMemo.key === quickKey(req, level, obj) ? v.quickMemo.r : null;
-    const quick = memo ? assemble(v, memo, obj, { level, role: 'quickest', a: 0 }) : run(0, null, 'quickest');
+    const free = noHighway(level);
+    const memoOf = (kind) => (v.quickMemo && v.quickMemo.key === quickKey(req, level, obj, kind) ? v.quickMemo : null);
+    const memo = free ? null : memoOf('any');
+    const quick = memo ? assemble(v, memo.r, obj, { level, role: 'quickest', a: 0 }) : run(0, null, 'quickest');
     if (!quick) throw new Error('no route');
-    const limitS = quick.timeS * (1 + L.budget) + L.slackS;
-    const found = [quick];
+    // the level's own quickest: at Fun and Long way the quickest way off the highways (the first route's search when it
+    // was the same: quickest() made it), else `quick` itself
+    let base = quick, hwy = { mode: 'any', absurd: false, quickS: quick.timeS, freeS: null };
+    if (free) {
+      const is = hwyOf(v);
+      let f = quick.hwyKm > 0 ? (memoOf('free') || {}).f : { r: null, mode: 'free', src, dst, xo: { ban: is } };
+      if (!f) f = freeQuickest(v, obj, req, src, dst, opts0);
+      if (!f) throw new Error('no route');
+      ({ src, dst } = f);
+      opts = { ...opts0, ...f.xo };
+      base = f.r ? assemble(v, f.r, obj, { level, role: 'quickest', a: 0 }) : quick;
+      if (base !== quick) quick.why.role = 'quickest-highway';
+      hwy = { mode: f.mode, absurd: f.mode === 'free' && base.timeS > K.HWY_ABSURD * quick.timeS, quickS: quick.timeS, freeS: f.mode === 'free' ? base.timeS : null };
+    }
+    // the budget over the quickest; never so tight it shuts out the level's own quickest (a highway-free way)
+    const limitS = Math.max(quick.timeS * (1 + L.budget) + L.slackS, base === quick ? 0 : base.timeS + K.HWY_FREE_SLACK_S);
+    const found = [base];
     const keep = (r) => { if (r && !found.some((x) => sameRoute(x, r))) found.push(r); return r; };
     // bisect the goodness weight (log steps): the largest a whose route is inside the budget
-    let lo = 0, hi = K.A_MAX, best = quick, tries = 0;
+    let lo = 0, hi = K.A_MAX, best = base, tries = 0;
     let a = level === 'quick' ? 1 : level === 'fun' ? 2 : 4;
+    // no highway-free way in a sensible time: that way alone (and the quickest, for Quick's card); nothing longer
+    if (hwy.absurd) tries = K.BISECT;
     while (tries < K.BISECT) {
       tries++;
       const r = run(a);
@@ -936,11 +1046,11 @@
     // little good road for a little time were never offered, only the one that spends the whole budget (live 2026-11-04,
     // a cross-suburb trip at Fun: a 9-minute I-275 loop came back and the 7-minute way to the same county road didn't)
     for (const k of K.LOWER) if (lo * k > 0.05) { const r = run(lo * k); if (r && r.timeS <= limitS) keep(r); }
-    best.why.role = best === quick ? 'quickest' : 'best';
+    best.why.role = best === quick ? 'quickest' : best === base ? 'quickest-free' : 'best';
     // alternates by the penalty method: the chosen route's edges cost more, until a route differs by ALT_MIN_DIFF
     const alts = [], chosen = [best];
     const penal = new Float32Array(v.E).fill(1);
-    for (const p of K.ALT_PENALTIES) {
+    for (const p of hwy.absurd ? [] : K.ALT_PENALTIES) {
       if (alts.length >= K.ALTS) break;
       for (const r of chosen) for (const e of r.edgeIdx) penal[e] = Math.max(penal[e], 1 + p);
       const r = run(lo, penal, 'alternate');
@@ -954,7 +1064,9 @@
     const ordered = [best];
     for (const r of [quick, ...found.slice().sort((x, y) => x.why.a - y.why.a), ...alts]) if (!ordered.some((x) => sameRoute(x, r))) ordered.push(r);
     const max = req.max || 7;
-    return { routes: ordered.slice(0, max), quick, limitS, a: lo, ms: Date.now() - t0 };
+    // the exception's routes say why they drive a highway (the card: "Uses 0.4 mi of I-275 (no other way across)")
+    if (hwy.mode === 'link') for (const r of ordered) if (r !== quick && r.hwyKm > 0) r.route.hwyReason = hwyReason(v, r);
+    return { routes: ordered.slice(0, max), quick, limitS, a: lo, hwy, ms: Date.now() - t0 };
   }
   // ---- loops ----------------------------------------------------------------------------------------------------------
   /**
@@ -963,15 +1075,17 @@
    * roads within reach of the length. Out on good road, back on other good road: one stage (out on one connector, back on
    * another), two or three chained (a lollipop, a figure-eight through the start, two parallel roads out and back). The
    * stages are the tiles' best roads (explore: quality x corners); nothing rewards roundness. Each leg is the level's
-   * goodness search with motorway and trunk costing LOOP_HWY_X (a short link to the good roads, never the bulk) and what
-   * earlier legs drove costing LOOP_RETRACE_X. Rings round the start only where no stage loop can be built.
+   * goodness search, with motorway and trunk costing LOOP_HWY_X at Quick (a short link to the good roads, never the bulk)
+   * and never driven at Fun and Long way (NO_HWY: a leg with no other way takes the shortest highway link, as a route
+   * does), and what earlier legs drove costing LOOP_RETRACE_X. Rings round the start only where no stage loop can be built.
    * { routes: [{ ...route, retraced, hwyShare, kind: 'stages' | 'ring', stages: [names] }], ms }.
    */
   function loop(v, req) {
     const t0 = Date.now(), level = levels()[req.level] ? req.level : 'fun', km = Math.max(3, Number(req.km) || 30);
     const obj = objective(v, req);
-    const s0 = snap(v, req.start.lat, req.start.lon);
+    let s0 = snap(v, req.start.lat, req.start.lon);
     if (!s0.length) throw new Error('no road near the start');
+    if (noHighway(level)) s0 = snapOff(v, req.start, s0, req.start.heading);
     const hwy = loopBase(v, level);
     const out = [];
     for (const c of loopCombos(v, req.start, km, req.max || K.LOOP_TRIES)) {
@@ -985,11 +1099,34 @@
     const routes = out.filter((r) => Math.abs(r.distM / 1000 - km) / km <= K.LOOP_MAX_OFF);
     return { routes, ms: Date.now() - t0 };
   }
-  /** Per-edge cost factors a loop starts from: motorway and trunk (and their ramps) x LOOP_HWY_X at the level. */
+  /**
+   * Per-edge cost factors a loop starts from: motorway and trunk (and their ramps) x LOOP_HWY_X at Quick; 1 at Fun and
+   * Long way, whose legs never drive them (loopLeg's ban).
+   */
   function loopBase(v, level) {
-    const x = K.LOOP_HWY_X[level] || K.LOOP_HWY_X.fun, B = v.bits || flagBits(), p = new Float32Array(v.E).fill(1);
-    for (let e = 0; e < v.E; e++) if (v.cls[e] <= CLS.trunk || (v.flags[e] & B.motorway)) p[e] = x;
+    const p = new Float32Array(v.E).fill(1), x = K.LOOP_HWY_X[level];
+    if (noHighway(level) || !x) return p;
+    const is = hwyOf(v);
+    for (let e = 0; e < v.E; e++) if (is[e]) p[e] = x;
     return p;
+  }
+  /**
+   * One leg of a loop: at Fun and Long way off the highways; where the last leg's arrival leaves only a highway ahead (a
+   * street that meets the motorway and nothing else), turned round there first (a U-turn's seconds); else (no other way)
+   * the shortest highway link.
+   */
+  function loopLeg(v, obj, prev, dst, a, penal, o, level) {
+    if (!noHighway(level)) return search(v, obj, prev, dst, a, penal, o);
+    const is = hwyOf(v);
+    const free = search(v, obj, prev, dst, a, penal, { ...o, ban: is });
+    if (free) return free;
+    const back = prev.map((x) => ({ x, tw: twin(v, x.edge) })).filter((y) => y.tw >= 0 && !is[y.tw]);
+    if (back.length) {
+      const tws = new Set(back.map((y) => y.tw));
+      const round = search(v, obj, back.map((y) => ({ edge: y.tw, frac: 1 - y.x.frac, lat: 0, lon: 0 })), dst, a, penal, { ...o, ban: is, startCost: (e) => (tws.has(e) ? K.UTURN_S : 0) });
+      if (round) return round;
+    }
+    return search(v, obj, prev, dst, a, penal, { ...o, hwyX: { is, x: K.HWY_LINK_X } });
   }
   /**
    * The best roads within reach, chained into loops: explore's stages that a loop of `km` can reach and come back from
@@ -1073,12 +1210,12 @@
    * length on road driven twice) and `hwyShare` (on motorway or trunk), or null.
    */
   function loopAlong(v, obj, s0, start, pts, hwy, level) {
-    const a = K.LOOP_A[level], penal = Float32Array.from(hwy);
+    const a = K.LOOP_A[level], penal = Float32Array.from(hwy), is = hwyOf(v);
     const snaps = [];
     for (const p of pts) {
       // the stage's own road, the way it is driven (never a motorway beside it)
-      let x = Number.isFinite(p.h) ? snap(v, p.lat, p.lon, (e) => hwy[e] === 1 && Math.abs(turnAngle(p.h, headingNear(v, e, p.lat, p.lon))) < 0.87, 60) : [];
-      if (!x.length) x = snap(v, p.lat, p.lon, null, 200);
+      let x = Number.isFinite(p.h) ? snap(v, p.lat, p.lon, (e) => !is[e] && Math.abs(turnAngle(p.h, headingNear(v, e, p.lat, p.lon))) < 0.87, 60) : [];
+      if (!x.length) x = snap(v, p.lat, p.lon, noHighway(level) ? (e) => !is[e] : null, 200);
       if (x.length) snaps.push({ s: x, lat: p.lat, lon: p.lon, conn: !!p.conn });
     }
     if (!snaps.length) return null;
@@ -1088,7 +1225,7 @@
     for (const nx of snaps) {
       // a connector (to a stage, back to the start) at most LOOP_CONN_A: at Long way's weight it wandered 100 km of back
       // roads to reach the next stage (a 175 mi loop for 90 asked, live 2026-11-06); the stages themselves at the level's
-      const res = search(v, obj, prev, nx.s, nx.conn ? Math.min(a, K.LOOP_CONN_A) : a, penal, { ellipse: ellipseFor(at, nx, nx.conn ? 'fun' : 'max') });
+      const res = loopLeg(v, obj, prev, nx.s, nx.conn ? Math.min(a, K.LOOP_CONN_A) : a, penal, { ellipse: ellipseFor(at, nx, nx.conn ? 'fun' : 'max') }, level);
       if (!res) return null;
       legs.push(res);
       for (const e of res.edges) { penal[e] = hwy[e] * K.LOOP_RETRACE_X; const tw = twin(v, e); if (tw >= 0) penal[tw] = hwy[tw] * K.LOOP_RETRACE_X; }
@@ -1110,6 +1247,7 @@
     for (const e of edges) { if (used.get(key(e)) > 1) retr += v.len[e]; all += v.len[e]; if (v.cls[e] <= CLS.trunk || (v.flags[e] & B.motorway)) hw += v.len[e]; }
     route.retraced = route.distM > 0 ? Math.min(1, retr / route.distM) : 0;
     route.hwyShare = all > 0 ? hw / all : 0;
+    if (noHighway(level) && route.hwyKm > 0) route.route.hwyReason = hwyReason(v, route);
     return route;
   }
   /** The fallback where no stage loop exists: rings through the start, 3 waypoints each snapped to through roads. */
@@ -1121,12 +1259,12 @@
       const th = deg * RAD, c = Math.cos(req.start.lat * RAD);
       const cen = { lat: req.start.lat + r * Math.cos(th) / 110540, lon: req.start.lon + r * Math.sin(th) / (111320 * c) };
       const pts = [1, 2, 3].map((k) => { const b = th + Math.PI + k * Math.PI / 2; return { lat: cen.lat + r * Math.cos(b) / 110540, lon: cen.lon + r * Math.sin(b) / (111320 * c) }; });
-      const snaps = pts.map((p) => { const x = snap(v, p.lat, p.lon, through, 3000); return x.length ? x : snap(v, p.lat, p.lon); });
+      const snaps = pts.map((p) => { const x = snap(v, p.lat, p.lon, through, 3000); return x.length ? x : snap(v, p.lat, p.lon, noHighway(level) ? (e) => !hwyOf(v)[e] : null); });
       if (snaps.some((x) => !x.length)) continue;
       const penal = Float32Array.from(hwy), legs = [];
       let prev = s0, ok = true;
       for (const nx of [...snaps, s0]) {
-        const res = search(v, obj, prev, nx, a, penal);
+        const res = loopLeg(v, obj, prev, nx, a, penal, {}, level);
         if (!res) { ok = false; break; }
         legs.push(res);
         for (const e of res.edges) { penal[e] = hwy[e] * K.LOOP_RETRACE_X; const tw = twin(v, e); if (tw >= 0) penal[tw] = hwy[tw] * K.LOOP_RETRACE_X; }
@@ -1510,7 +1648,7 @@
   }
 
   const api = { VERSION: 1, K, BUILT_READ, builtAgreeOf, lineTiles, edgeTable, fromTable, crowdOnto, project, quickest, scoreLine, reach, explore, streetEdge, deadEndAt, junctionAt, TILE_DEG, FLAG_BITS, NODE_BITS, CLS, UNKNOWN_U8, UNKNOWN_FUN, NO_NAME, packedKey, nodeCost, LEVELS_COPY, levels, distM, bearing, turnAngle, tileOf, keyOf, view, geom, snap, objective, search,
-    assemble, through, overlap, sameRoute, tilesFor, loopTiles, plan, loop, indexKeys, covers, host, client, edgeId, twin, turnCost };
+    assemble, through, overlap, sameRoute, tilesFor, loopTiles, plan, loop, hwyOf, isHwyEdge, snapOff, freeQuickest, indexKeys, covers, host, client, edgeId, twin, turnCost };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   root.ApexGraphRouter = api;
 })(typeof window !== 'undefined' ? window : globalThis);

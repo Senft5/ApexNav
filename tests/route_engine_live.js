@@ -48,7 +48,7 @@ function cands(fx, o = {}) {
 function rank(fx, level, o = {}) {
   const list = o.list || cands(fx, o);
   const r = Engine.rank(list, { level: level || fx.level, fresh: true, score: (c, scaleAt) => FunRoute.score(c.t, c.turnsM, null, scaleAt) });
-  const quick = r.find((c) => c.extraS === 0) || r[0];
+  const quick = r.find((c) => c.extraS === 0) || r.quickest || r[0];   // (Fun and Long way rank no highway quickest: r.quickest)
   const w = r.length ? Engine.why(r[0], quick, { metric: false }) : null;
   const roads = (c) => Object.entries(Object.fromEntries(c.route.names)).sort((a, b) => b[1] - a[1]).slice(0, 4).map(([n, km]) => `${n} ${km.toFixed(1)}`);
   return { order: r.map((c) => c.label), quick: quick ? quick.label : null, why: w ? w.text : null, top: r[0] ? roads(r[0]) : null,
