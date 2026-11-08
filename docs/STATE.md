@@ -14,7 +14,7 @@
   in 60 s, the branch 0.26-0.72 s (e2e "weak signal").
 - [x] Where to?: your pinned and recent places match as you type, at once; Enter before the list waits for the map
   search already asked (1.5 s) before a full geocode; the top suggestion's tile read while you choose.
-- Tests: pytest 1341 passed, 2 skipped; the touched e2e flows pass (full e2e: see the next line).
+- Tests: pytest 1342 passed, 2 skipped; e2e 137/137 (full run, after merging #308 and #309).
 - Open: production after the deploy, cold and warm (tools/live_speed.js, BASE defaults to production); a phone's own numbers
   (WKWebView, LTE, Apple's place search) can't be measured from here.
 - Exact next task: after the deploy, `OUT=<dir> AGAIN=1 node tools/live_speed.js subdivision:fun northgate:fun colerain:fun
