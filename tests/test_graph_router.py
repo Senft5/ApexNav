@@ -70,6 +70,34 @@ def test_fun_never_takes_the_subdivision_or_the_strip_mall():
         assert r[lv]["timeS"] <= r[lv]["limitS"], r
 
 
+def test_each_level_spends_its_budget_on_better_road():
+    """The levels audit (2026-11-08): Long way returned Fun's route on every trip, the bisection capped at A_MAX with
+    budget left. Now a level picks by the goodness its extra time buys: Fun the good road near the quickest way, Long way
+    the better road further off (here reached over a short rough stretch that t x exp(a x bad) shuns at every weight)."""
+    r = case("levelSpread")["spread"]
+    assert r["quick"]["best"] == ["Main Street"], r["quick"]
+    assert r["fun"]["best"] == ["Mill Road"], r["fun"]
+    assert "Ridge Road" in r["max"]["best"] and "Mill Road" not in r["max"]["best"], r["max"]
+    assert r["max"]["best"] != r["fun"]["best"], "Long way is not Fun's route where a better road is inside its budget"
+    assert r["max"]["goodness"] > r["fun"]["goodness"] + 0.02, (r["fun"], r["max"])
+    for lv in ("fun", "max"):
+        assert r[lv]["timeS"] <= r[lv]["limitS"], r[lv]
+    assert r["fun"]["limitS"] < r["max"]["timeS"], "the far road is outside Fun's budget"
+
+
+def test_no_level_lengthens_a_trip_with_no_good_road():
+    """A longer way that's hardly better (a plain street for +35 % time) is not worth the time at Fun or Long way: the
+    quickest stays the pick, and the longer way stays in the pool for the ranking."""
+    r = case("levelSpread")["none"]
+    for lv in ("fun", "max"):
+        x = r[lv]
+        assert x["best"] == ["Main Street"], x
+        assert x["timeS"] == x["quickS"] and x["role"] == "quickest", x
+        assert "Elm Drive" in x["all"], x                           # found, offered to the ranking, not the pick
+        k = x["all"].index("Elm Drive")
+        assert x["goods"][k] > x["goodness"], x                      # it is a little better, only not enough for its time
+
+
 def test_members_data_steers_the_search():
     """Members' data counts per stretch inside the search (not only in the final ranking): a loved, smooth, flowing lane
     wins a near-tie it lost by 2 s; signed out (no data), the search is as before."""

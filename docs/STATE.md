@@ -1,5 +1,31 @@
 # VETTA — CURRENT AGENT HANDOFF STATE
 
+## Session 2026-11-08 (levels): each level spends its budget on better road (claude/level-spread, off origin/main 744e516)
+
+- [x] The levels audit (route_quality.js, 5 public trips): Long way = Fun on every trip (bisection capped at A_MAX 40
+  with time left), Fun short of the in-budget best on colerain (G 0.304 against 0.340). web/graph_router.js: Fun and Long
+  way now pick by `pick()` (length-weighted goodness G less `K.BUY` 0.12 / 0.03 per 100 % extra time over the level's
+  quickest; under `K.BUY_MIN` 0.1 never the pick), among the bisection's steps, LOWER, the alternates and the new
+  **spread** (penalty alternates x1.6 / x2.5 of the first step's route, `K.SPREAD`, one search); `K.A_FIRST` 5,
+  `K.A_MAX` 80 at Long way; `why.goodness` on every route. Quick, the highway rules and loops unchanged.
+- [x] Router picks after (min, G): subdivision Fun / Long way 5.3, 0.200 (was 8.7, 0.253); subdivision4 Long way 17.2,
+  0.323 (was 12.0, 0.262 = the audit's ceiling); northgate Fun 12.1 (was 14.4), Long way 29.1, 0.398 (was 14.4, 0.251;
+  above the audit's ceiling); colerain Fun 19.6, 0.340, Long way 31.6, 0.403 (both = ceiling); harrison Fun and Long way
+  31.6, 0.469 (Fun's ceiling was 0.454; Long way's 0.478 at 41.9 min buys 0.009 for 10 min, not taken at 0.03).
+  OWN_ROUTING.md §5, §8 2026-11-08 (levels); CALL_SHEET 2026-11-08 (levels).
+- [x] Plan time (node, 5 trips warm, sum): Fun 137 -> 151 ms (+10 %), Long way 156 -> 177 ms (+13 %), Quick the same.
+- [x] In the app (tools/live_speed.js, local web/ of each, warm) the engine's ranking has the last word: Long way now
+  differs on northgate (29.1 min, 19 more good corners; was 14.4) and harrison (41.9, was 37.5); colerain (17.4 at both
+  levels) and subdivision4 (12.0) unchanged because the engine values the shorter route higher.
+- Tests: new test_each_level_spends_its_budget_on_better_road, test_no_level_lengthens_a_trip_with_no_good_road
+  (levelSpread case, synthetic; both fail on main); pytest 1356 passed, 2 skipped; e2e levels (3), own routing (4),
+  plan flow (6), offline (6) all pass.
+- Open: the router's G and the route engine's value disagree on colerain (31.6 min G 0.403 ranked -41.9 against 17.4's
+  -37.6) and subdivision4 (17.2 min G 0.323 at -62.5 against 12.0's -40.3).
+- Exact next task: find why route_engine.js rank values colerain's 31.6 min and subdivision4's 17.2 min Long way routes
+  below the shorter ones (per-term breakdown of the value: corners on side streets, strip mall, time cost at perMin 0.35)
+  and decide whether the engine or the router's goodness is wrong; then re-run route_quality.js and tools/live_speed.js.
+
 ## Session 2026-11-08 (keys): the owner's answers on the free keys (claude/keys-1108, off origin/main)
 
 - [x] NREL is now NLR: backend/src/chargers.ts asks developer.nlr.gov (developer.nrel.gov no longer resolves; nlr.gov

@@ -126,6 +126,45 @@ const CASES = {
     return out;
   },
 
+  // the levels spend their budgets on better road (the levels audit, 2026-11-08): (1) a plain main road (the quickest), a
+  // good road a little way off (inside Fun's budget) and a great road further off (inside Long way's only): Fun takes the
+  // near one, Long way the far one. (2) a plain main road and a longer way that's hardly better: neither level lengthens it
+  levelSpread() {
+    const build = (roads) => {
+      const S = [39.35, -84.65], nodes = [at(S[0], S[1]), at(S[0], S[1] + 0.06)], edges = [];
+      const via = (pts, props) => { const ids = pts.map((p) => { nodes.push(at(p[0], p[1])); return nodes.length - 1; }); const c = [0, ...ids, 1]; for (let k = 0; k + 1 < c.length; k++) two(edges, c[k], c[k + 1], props(k)); };
+      const wig = (dLat, n, w) => Array.from({ length: n }, (_, k) => [S[0] + dLat + (k % 2 ? w : -w), S[1] + 0.06 * (k + 1) / (n + 1)]);
+      for (const r of roads) via(wig(r.dLat, r.n, r.w), (k) => ({ name: r.name, quality: r.quality, scenery: r.scenery, fun: r.fun, conf: 1, cls: r.cls, t: r.t, ...(r.seg ? r.seg(k) : {}) }));
+      nodes.push(at(S[0], S[1] - 0.004), at(S[0], S[1] + 0.064));
+      two(edges, nodes.length - 2, 0, { name: 'Start Lane', t: 30 }); two(edges, 1, nodes.length - 1, { name: 'End Lane', t: 30 });
+      const v = R.view(H.tiles(nodes, edges).tiles);
+      const from = { lat: S[0], lon: S[1] - 0.002 }, to = { lat: S[0], lon: S[1] + 0.062 };
+      const out = {};
+      for (const level of ['quick', 'fun', 'max']) {
+        const p = R.plan(v, { from, to, level }), b = p.routes[0];
+        out[level] = { best: [...new Set(b.names.map((n) => n.name).filter((n) => n && !/Lane$/.test(n)))], timeS: b.timeS, quickS: p.quick.timeS, limitS: p.limitS,
+          goodness: b.why.goodness, role: b.why.role, all: p.routes.map((r) => [...new Set(r.names.map((n) => n.name).filter((n) => n && !/Lane$/.test(n)))].join('+')),
+          goods: p.routes.map((r) => r.why.goodness) };
+      }
+      return out;
+    };
+    // (1) Main Street 600 s; Mill Road 830 s (+38 %, inside Fun's 1090 s); Ridge Road 1350 s (inside Long way's 1797 s
+    // only), the best road here but reached over 15 s of rough lane (Ridge Gap), the stretch t x exp(a x bad) shuns at
+    // every weight: before the spread and the pick, Long way came back with Fun's Mill Road
+    const spread = build([
+      { name: 'Main Street', dLat: 0, n: 9, w: 0.0001, quality: 0.3, scenery: 0.2, fun: 0, cls: 3, t: 60 },
+      { name: 'Mill Road', dLat: 0.008, n: 9, w: 0.0008, quality: 0.65, scenery: 0.55, fun: 1, cls: 4, t: 83 },
+      { name: 'Ridge Road', dLat: -0.02, n: 9, w: 0.0015, quality: 0.9, scenery: 0.85, fun: 3, cls: 4, t: 145,
+        seg: (k) => (k === 4 ? { name: 'Ridge Gap', quality: 0.1, scenery: 0.2, fun: 0, cls: 6, t: 15 } : {}) },
+    ]);
+    // (2) Main Street 600 s; Elm Drive 800 s (+33 %), a plain residential street hardly better
+    const none = build([
+      { name: 'Main Street', dLat: 0, n: 9, w: 0.0001, quality: 0.3, scenery: 0.2, fun: 0, cls: 3, t: 60 },
+      { name: 'Elm Drive', dLat: 0.008, n: 9, w: 0.0008, quality: 0.31, scenery: 0.25, fun: 0, cls: 5, t: 80 },
+    ]);
+    return { spread, none };
+  },
+
   // members' data in the search: a near-tie (the plain lane 2 s quicker) flips to the loved, smooth, flowing lane, and
   // with no data (signed out) nothing changes
   crowd() {

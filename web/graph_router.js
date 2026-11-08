@@ -52,7 +52,11 @@
     SIGNAL_S: 15, STOP_S: 7, GIVE_WAY_S: 2, LEVEL_CROSSING_S: 4, CALMING_S: 3, CROSSING_S: 1, BARRIER_S: 120,
     PRIVATE_X: 10, PRIVATE_S: 600, DESTINATION_X: 2, DESTINATION_S: 60, FERRY_X: 2, UNPAVED_X: 1.5,
     AVOID_HWY_X: 4, AVOID_TOLL_X: 3, AVOID_FERRY_X: 5, AVOID_UNPAVED_X: 5,
-    A_MAX: 40, BISECT: 6,    // the goodness weight is searched in [0, A_MAX] (log steps), at most BISECT more routes
+    // the goodness weight is searched in [0, A_MAX] (log steps from A_FIRST), at most BISECT more routes. At Fun and Long
+    // way the pick is then by the goodness the extra time buys (pick(): BUY per 100 % more time over the level's quickest,
+    // never under BUY_MIN), among those routes and the spread's (SPREAD: penalty alternates of the first step's route)
+    A_MAX: { quick: 40, fun: 40, max: 80 }, A_FIRST: { quick: 1, fun: 5, max: 5 }, BISECT: 6,
+    SPREAD: { fun: [0.6], max: [1.5] }, BUY: { fun: 0.12, max: 0.03 }, BUY_MIN: 0.1,
     LOWER: [0.9, 0.75],      // then these fractions of the weight found: cheaper ways to the road the budget-filler found
     ALT_PENALTIES: [0.6, 1.5, 4], ALT_MIN_DIFF: 0.3, ALTS: 2,
     LOOP_A: { quick: 0.6, fun: 3, max: 8 }, LOOP_ROAD_FACTOR: 1.35, LOOP_RETRACE_X: 3,
@@ -769,7 +773,7 @@
     const B = flagBits(), coords = [], names = [], steps = [], turns = [], times = [];
     let lineM = 0;
     const gEnd = [], gEdge = [];
-    let timeS = 0, distM_ = 0, q = 0, s = 0, sw = 0, f = 0, cf = 0, wsum = 0, junctions = 0, signals = 0, hwyM = 0;
+    let timeS = 0, distM_ = 0, q = 0, s = 0, sw = 0, f = 0, cf = 0, wsum = 0, junctions = 0, signals = 0, hwyM = 0, gm = 0;
     const hwyBy = new Map();                                            // metres per highway name (the card's "Uses 0.4 mi of I-275")
     const has = { highways: false, tolls: false, ferries: false, unpaved: false };
     let roundabout = null;
@@ -815,6 +819,7 @@
       if (v.quality[e] !== UNKNOWN_U8) { q += (v.quality[e] / 254) * cw; cf += cw; }
       if (v.scenery[e] !== UNKNOWN_U8) { s += (v.scenery[e] / 254) * m; sw += m; }
       if (Number.isFinite(v.fun[e])) f += v.fun[e] * share;
+      if (obj && obj.bad) gm += (1 - obj.bad[e]) * m;
       wsum += m;
       const nm = nameOf(v, e), last = names[names.length - 1];
       if (last && last.name === nm) last.toM = distM_; else names.push({ name: nm, fromM: distM_ - m, toM: distM_ });
@@ -835,7 +840,7 @@
     const nameKm = new Map();
     for (const n of names) if (n.name) nameKm.set(n.name, (nameKm.get(n.name) || 0) + (n.toM - n.fromM) / 1000);   // km, as routeOf has them (Valhalla lengths)
     const why = { source: 'own', level: meta.level || null, role: meta.role || null, a: meta.a != null ? meta.a : 0,
-      quality: cf > 0 ? q / cf : null, scenery: sw > 0 ? s / sw : null, fun: f, conf: wsum > 0 ? cf / wsum : 0, junctions, signals,
+      quality: cf > 0 ? q / cf : null, scenery: sw > 0 ? s / sw : null, fun: f, conf: wsum > 0 ? cf / wsum : 0, goodness: wsum > 0 ? gm / wsum : null, junctions, signals,
       objective: meta.a ? 't*(1+a*(1-goodness))' : 'time', hwyKm: hwyM / 1000 };
     // motorway, trunk and their links driven (km) and the one most of it is on, by name (NO_HWY levels report it)
     const hwyName = hwyM > 0 ? [...hwyBy].sort((x, y) => y[1] - x[1])[0][0] : null;
@@ -1031,13 +1036,14 @@
     const found = [base];
     const keep = (r) => { if (r && !found.some((x) => sameRoute(x, r))) found.push(r); return r; };
     // bisect the goodness weight (log steps): the largest a whose route is inside the budget
-    let lo = 0, hi = K.A_MAX, best = base, tries = 0;
-    let a = level === 'quick' ? 1 : level === 'fun' ? 2 : 4;
+    let lo = 0, hi = typeof K.A_MAX === 'number' ? K.A_MAX : (K.A_MAX[level] || 40), best = base, tries = 0;
+    let a = K.A_FIRST[level] || 1, first = null;
     // no highway-free way in a sensible time: that way alone (and the quickest, for Quick's card); nothing longer
     if (hwy.absurd) tries = K.BISECT;
     while (tries < K.BISECT) {
       tries++;
       const r = run(a);
+      if (!first) first = r;
       if (r && r.timeS <= limitS) { lo = a; best = r; keep(r); } else hi = a;
       if (hi - lo < 0.15 * Math.max(lo, 0.25)) break;
       a = lo > 0 ? Math.sqrt(lo * hi) : hi / 4;
@@ -1059,6 +1065,29 @@
       if (r.timeS > limitS) continue;
       if (chosen.every((c) => 1 - overlap(v, c, r) >= K.ALT_MIN_DIFF)) { alts.push(r); chosen.push(r); }
     }
+    // the spread (Fun and Long way): penalty alternates of the first step's route (a moderate weight, the good road near
+    // the quickest way), which find the next good road over: the bisection's large weights shun the worst stretches
+    // rather than seek the best, so they leave this road unfound (2026-11-08, the levels audit)
+    const free2 = free && !hwy.absurd;
+    if (free2 && first && first.timeS <= limitS) {
+      for (const p of K.SPREAD[level] || []) {
+        const pen = new Float32Array(v.E).fill(1);
+        for (const e of first.edgeIdx) pen[e] = 1 + p;
+        const r = run(first.why.a, pen, 'spread');
+        if (r && r.timeS <= limitS) keep(r);
+      }
+    }
+    // the pick at Fun and Long way: the goodness the extra time buys (pick()), not the largest weight inside the budget
+    if (free2 && K.BUY[level] != null) {
+      const was = best;
+      best = pick(base, [...found, ...alts], limitS, K.BUY[level]);
+      if (best !== was) {
+        if (was.why.role === 'best') was.why.role = 'step';
+        // an alternate is a route that differs from the pick (ALT_MIN_DIFF); one that doesn't any more is a step
+        for (const r of alts) if (r !== best && 1 - overlap(v, best, r) < K.ALT_MIN_DIFF) r.why.role = 'step';
+      }
+      best.why.role = best === quick ? 'quickest' : best === base ? 'quickest-free' : 'best';
+    }
     // the pick, the quickest, every step of the bisection (a spectrum from quick to the most good road the budget buys:
     // the route engine, not this objective, has the last word), then the alternates
     const ordered = [best];
@@ -1067,6 +1096,26 @@
     // the exception's routes say why they drive a highway (the card: "Uses 0.4 mi of I-275 (no other way across)")
     if (hwy.mode === 'link') for (const r of ordered) if (r !== quick && r.hwyKm > 0) r.route.hwyReason = hwyReason(v, r);
     return { routes: ordered.slice(0, max), quick, limitS, a: lo, hwy, ms: Date.now() - t0 };
+  }
+  /**
+   * The pick among a level's routes inside its budget: each route's length-weighted goodness G less `price` x its extra time
+   * over the level's own quickest (`base`) as a share of that time, the largest wins; a route whose extra time buys less
+   * than BUY_MIN of goodness per 100 % more time (on average, over the quickest) is never the pick. So Fun takes good road
+   * that's near (price 0.12: 10 % more time must buy 0.012 of goodness), Long way also the good road further off (0.03),
+   * and neither lengthens a trip for road no better than the quickest's (2026-11-08, the levels audit).
+   */
+  function pick(base, routes, limitS, price) {
+    const rel = (r) => (r.timeS - base.timeS) / Math.max(1, base.timeS);
+    const u = (r) => r.why.goodness - price * rel(r);
+    let best = base;
+    for (const r of routes) {
+      if (r === base || r.timeS > limitS || !Number.isFinite(r.why.goodness)) continue;
+      const x = rel(r), dg = r.why.goodness - base.why.goodness;
+      if (x > 0 && dg < K.BUY_MIN * x) continue;
+      if (x <= 0 && dg <= 0) continue;
+      if (u(r) > u(best) + 1e-9) best = r;
+    }
+    return best;
   }
   // ---- loops ----------------------------------------------------------------------------------------------------------
   /**
