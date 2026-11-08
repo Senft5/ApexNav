@@ -490,6 +490,66 @@ const CASES = {
       page: page ? { source: page.source, n: page.coords.length, steps: page.steps.length, first: page.coords[0], timeS: page.timeS > 0 } : null, off };
   },
 
+  // the plan reuses the first route's time-only search when it is asked on the same view for the same trip (graph_router.js
+  // quickKey): the same routes as a plan on a fresh view, and a different trip or avoid choice doesn't reuse it
+  quickMemo() {
+    const g = H.grid({ seed: 7, nx: 14, ny: 14, holes: 0.1, oneway: 0.1, signals: 0.2, stepDeg: 0.004, lat0: 39.15, lon0: -84.62 });
+    const T = H.tiles(g.nodes, g.edges);
+    const key = (p) => JSON.stringify(p.routes.map((r) => [r.edges, +r.timeS.toFixed(6), r.why.role, r.why.a]));
+    const reqs = [{ from: { lat: 39.152, lon: -84.617 }, to: { lat: 39.2, lon: -84.57 }, level: 'fun' },
+      { from: { lat: 39.152, lon: -84.617, heading: 90 }, to: { lat: 39.2, lon: -84.57 }, level: 'max', avoid: { highways: true } },
+      { from: { lat: 39.19, lon: -84.6 }, to: { lat: 39.155, lon: -84.575 }, level: 'quick', prefs: { tight: 1 } }];
+    const out = reqs.map((req) => {
+      const v = R.view(T.tiles);
+      R.quickest(v, req);
+      const hit = v.quickMemo && v.quickMemo.key;
+      const reused = key(R.plan(v, req)), fresh = key(R.plan(R.view(T.tiles), req));
+      return { same: reused === fresh, memo: !!hit };
+    });
+    // another trip on the same view: not the memo's
+    const v = R.view(T.tiles);
+    R.quickest(v, reqs[0]);
+    const other = key(R.plan(v, { ...reqs[0], avoid: { highways: true } })) === key(R.plan(R.view(T.tiles), { ...reqs[0], avoid: { highways: true } }));
+    return { out, other };
+  },
+
+  // posted limits on our routes from the tiles they were planned on (own_routing.js limitsAlong: the limit sign and the
+  // ETA offline, no map matching): each 5 m sample of the track gets its edge's posted limit; an edge with no posted limit
+  // (unknown, or only the class's estimate) is null; a track with a stretch cut out (a loop's spur) still finds its place;
+  // a route without the table (Valhalla's) gets nothing
+  limits() {
+    const Core = require('../web/apex_core.js');
+    const g = H.grid({ seed: 4, nx: 12, ny: 12, stepDeg: 0.004, lat0: 39.15, lon0: -84.62 });
+    const T = H.tiles(g.nodes, g.edges);
+    for (const t of T.tiles) for (let e = 0; e < t.edges.count; e++) {
+      t.edges.speed[e] = e % 7 === 0 ? 0 : 30 + 10 * (e % 5);
+      if (e % 11 === 0 && t.edges.speed[e]) t.edges.flags[e] |= R.FLAG_BITS.speedEst;
+    }
+    const v = R.view(T.tiles);
+    const r = R.quickest(v, { from: { lat: 39.155, lon: -84.615 }, to: { lat: 39.19, lon: -84.57 }, level: 'quick' });
+    const route = Own.withCoords({ ...r.route });
+    const rs = Core.resamplePolyline(route.coords.map((c) => c[1]), route.coords.map((c) => c[0]), 5);
+    const got = Own.limitsAlong(rs.lat, rs.lon, route);
+    // the truth: each sample's edge by metres along the router's own line, away from the edges' ends
+    const g2 = route.graph, along = rs.lat.map((_, i) => i * 5);
+    let agree = 0, n = 0, posted = 0, nulls = 0, wantNull = 0;
+    along.forEach((m, i) => {
+      let k = 0; while (k < g2.end.length - 1 && g2.end[k] < m) k++;
+      if (Math.abs(g2.end[k] - m) < 15 || (k > 0 && Math.abs(g2.end[k - 1] - m) < 15)) return;
+      const want = Number.isFinite(g2.limit[k]) && g2.limit[k] > 0 ? g2.limit[k] / 3.6 : null;
+      n++; if (want == null) wantNull++;
+      if ((want == null && got[i] == null) || (want != null && got[i] != null && Math.abs(want - got[i]) < 1e-6)) agree++;
+    });
+    got.forEach((x) => { if (x == null) nulls++; else posted++; });
+    // a stretch cut out of the middle, as removeSpurs does to a loop
+    const cut = [...rs.lat.keys()].filter((i) => i < 100 || i > 160);
+    const got2 = Own.limitsAlong(cut.map((i) => rs.lat[i]), cut.map((i) => rs.lon[i]), route);
+    const sameCut = cut.every((i, k) => got2[k] === got[i]);
+    const est = Array.from(g2.limitEst).filter(Number.isFinite).length;
+    return { samples: rs.lat.length, n, agree, posted, nulls, wantNull, est, sameCut, noTable: Own.limitsAlong(rs.lat, rs.lon, { coords: route.coords }),
+      ofLine: Own.routeOfLine(route.coords) === route, notOurs: Own.routeOfLine([[0, 0], [1, 1]]) };
+  },
+
   // each planned route's light geometry made in the worker (graph_router.js host 'plan'): the page's own function on the
   // same line, so the ranking scores the same corners; without apex_core.js in the worker, none (made on the page)
   async geo() {
