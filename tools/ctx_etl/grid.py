@@ -52,10 +52,8 @@ CHANNELS = {
     "park_unit": (64, "u8", 1.0, 0.0, 255, "index", "max",
                   "National Park Service unit the cell is in: 0 none, else an index into the bundle's park table"),
     "mobile_coverage": (32, "u8", 1.0, 0.0, 255, "providers", "max",
-                        "Mobile providers reporting 4G LTE or 5G-NR coverage in the cell (FCC National Broadband Map, "
-                        "in-vehicle mobile where the FCC lists it for the state, else outdoor stationary: the bundle's "
-                        "sources say which); 0 = none reported; unknown outside the states read. Built only with the "
-                        "owner's FCC API token"),
+                        "Mobile providers with coverage in the cell; no source (the FCC download was dropped, "
+                        "2026-11-08), so never built and absent from every bundle"),
 }
 
 DTYPE_BYTES = {"u8": 1, "u16": 2, "u32": 4}

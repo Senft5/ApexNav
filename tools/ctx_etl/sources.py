@@ -1,12 +1,11 @@
 """The datasets: one function each, every download cached under the cache directory (the workflow keeps it between runs).
 
 Every source here is free. What each gives, its licence and its URL are in SOURCES (written into every bundle's header
-and shown in About > Sources). Two use the owner's free accounts, read from the environment (GitHub Actions secrets,
-never in the repo or the logs), and are skipped without them:
+and shown in About > Sources). One uses the owner's free account, read from the environment (a GitHub Actions secret,
+never in the repo or the logs), and is skipped without it:
 - EARTHDATA_TOKEN (urs.earthdata.nasa.gov -> Generate Token): night lights from NASA Black Marble VNP46A4, the newest
   annual radiance composite on LAADS DAAC; without it, the Black Marble 2016 image through GIBS, as before.
-- FCC_USERNAME + FCC_API_TOKEN (broadbandmap.fcc.gov -> Manage API access): mobile_coverage, the 4G/5G providers per
-  cell from the FCC National Broadband Map; without them the channel isn't built (unknown on the phone).
+The mobile_coverage channel has no source (the FCC download was dropped, 2026-11-08) and is never built.
 GDAL-backed libraries (rasterio, pyproj, shapely, pyshp) are imported inside the functions that need them, so the pure
 parts of the pipeline (transforms.py, vcg.py) import without them.
 """
@@ -52,10 +51,6 @@ SOURCES = {
                                "product suite, Remote Sensing of Environment 210, 113-143; doi:10.5067/VIIRS/VNP46A4.002",
                     "url": "https://ladsweb.modaps.eosdis.nasa.gov/missions-and-measurements/products/VNP46A4/",
                     "mapping": "min(1, (radiance / 20 nW cm-2 sr-1) ** 0.7)"},
-    "fcc": {"name": "FCC National Broadband Map, mobile broadband coverage (4G LTE and 5G-NR), Broadband Data Collection",
-            "by": "Federal Communications Commission (providers' filings)",
-            "licence": "Public domain (US Government); the FCC does not endorse Vetta",
-            "url": "https://broadbandmap.fcc.gov/data-download"},
     "census": {"name": "2020 Census blocks (TIGER/Line, POP20, HOUSING20); ACS 5-year B25035 median year built", "by": "US Census Bureau",
                "licence": "Public domain (US Government)", "url": "https://www.census.gov/"},
     "addresses": {"name": "OpenAddresses (county and state address points)", "by": "OpenAddresses contributors and the source counties/states",
@@ -95,18 +90,11 @@ OA_JOB = "https://v2.openaddresses.io/batch-prod/job/{job}/source.geojson.gz"
 PC_STAC = "https://planetarycomputer.microsoft.com/api/stac/v1/search"
 PC_TOKEN = "https://planetarycomputer.microsoft.com/api/sas/v1/token/usda-cdl"
 LAADS_VNP46A4 = "https://ladsweb.modaps.eosdis.nasa.gov/archive/allData/5200/VNP46A4"
-FCC_API = "https://broadbandmap.fcc.gov/api/public/map"
 
 
 def earthdata_token():
     """The owner's Earthdata bearer token (GitHub secret EARTHDATA_TOKEN), or None."""
     return (os.environ.get("EARTHDATA_TOKEN") or "").strip() or None
-
-
-def fcc_creds():
-    """(username, token) for the FCC's public data API (secrets FCC_USERNAME, FCC_API_TOKEN), or None unless both are set."""
-    u, t = (os.environ.get("FCC_USERNAME") or "").strip(), (os.environ.get("FCC_API_TOKEN") or "").strip()
-    return (u, t) if u and t else None
 
 
 class Ctx:
@@ -927,113 +915,3 @@ def fars_points(ctx, states, years):
                     out.append((lo, la, int(row.get("YEAR") or y), int(row.get("FATALS") or 1), hour if hour < 24 else 255))
     SOURCES["fars"]["years"] = [min(years), max(years)]
     return np.asarray(out, dtype=np.float64).reshape(-1, 5)
-
-
-# ----------------------------------------------------------------------------------------------- mobile coverage (FCC BDC)
-def _fcc_headers():
-    u, t = fcc_creds()
-    return {"username": u, "hash_value": t, "user_agent": UA}
-
-
-def fcc_json(ctx, path, key, params=None):
-    """The FCC public data API's JSON answer for path (cached under key). Credentials go in headers, never the URL."""
-    url = FCC_API + path + ("?" + urllib.parse.urlencode(params) if params else "")
-    d = json.loads(cached(ctx, key, url, timeout=180, headers=_fcc_headers()))
-    if str(d.get("status_code", 200)) not in ("200", "") and d.get("status") not in (None, "success", "successful"):
-        raise RuntimeError(f"FCC {path}: {d.get('status_code')} {d.get('message')}")
-    return d
-
-
-class MobileCoverage:
-    """Providers reporting 4G LTE or 5G-NR mobile coverage per cell, from the FCC National Broadband Map (Broadband Data
-    Collection, the newest as-of date). For each region state: the state's availability listing, its mobile-broadband
-    coverage files (transforms.fcc_pick_files: one environment for the state, in-vehicle where listed), each provider's
-    shapefiles split by bundle (ShapeStore). A cell counts a provider when the provider's 4G or 5G coverage reaches any of
-    its four quarter-cell points; cells outside a state whose listing was read, or where a provider's file couldn't be
-    read, are unknown (NaN), never 0."""
-
-    def __init__(self, ctx, states, bbox, bundles):
-        from shapely.ops import transform as stransform
-        self.as_of = transforms.latest_as_of(fcc_json(ctx, "/listAsOfDates", "fcc/as_of_dates.json"))
-        if not self.as_of:
-            raise RuntimeError("FCC lists no availability as-of date")
-        self.providers = {}          # provider id -> {"name", "stores": [ShapeStore]}
-        self.failed = set()          # provider ids with a file that couldn't be read
-        self.known = []              # mercator state geometries whose listing was read
-        envs = {}
-        shapes = state_boundaries(ctx, states)
-        for st in states:
-            fips = STATE_FIPS[st]
-            try:
-                listing = fcc_json(ctx, f"/downloads/listAvailabilityData/{self.as_of}", f"fcc/{self.as_of}/list_{fips}.json",
-                                   {"category": "State", "technology_type": "Mobile Broadband", "state_fips": fips})
-            except RuntimeError as e:
-                ctx.log(f"  ! FCC listing {st}: {e}")
-                continue
-            picked, env = transforms.fcc_pick_files(listing.get("data") or [], fips)
-            if not picked:
-                ctx.log(f"  ! FCC {st}: no 4G/5G mobile coverage files listed")
-                continue
-            envs[st] = env
-            for pid, p in picked.items():
-                prov = self.providers.setdefault(pid, {"name": p["name"], "stores": []})
-                for e in p["files"]:
-                    try:
-                        shp = self._shapefile(ctx, e)
-                        prov["stores"].append(ShapeStore(ctx, f"fcc_{self.as_of}_{e['file_id']}", shp, [], bbox, bundles))
-                    except Exception as err:  # noqa: BLE001 - this provider is unknown here, the rest still count
-                        ctx.log(f"  ! FCC {st} {p['name']} file {e['file_id']}: {err}")
-                        self.failed.add(pid)
-            if st in shapes:
-                self.known.append(stransform(lambda X, Y, Z=None: _merc_xy(X, Y), shapes[st]))
-        SOURCES["fcc"].update(as_of=self.as_of, environment=envs, providers=len(self.providers))
-        ctx.log(f"  FCC mobile coverage {self.as_of}: {len(self.providers)} providers in {sorted(envs)} ({envs})")
-
-    @staticmethod
-    def _shapefile(ctx, e):
-        """A listed GIS file -> the path of its .shp (downloaded as a shapefile zip, extracted once)."""
-        d = os.path.join(ctx.cache, "fcc", "files", str(e["file_id"]))
-        os.makedirs(d, exist_ok=True)
-        done = os.path.join(d, ".done")
-        if not os.path.exists(done):
-            z = cached_file(ctx, f"fcc/files/{e['file_id']}.zip", f"{FCC_API}/downloads/downloadFile/availability/{e['file_id']}/1",
-                            timeout=1800, headers=_fcc_headers())
-            with zipfile.ZipFile(z) as zf:
-                for m in zf.namelist():
-                    if m.endswith("/") or ".." in m or m.startswith("/"):
-                        continue
-                    zf.extract(m, d)
-            open(done, "w").close()
-        shps = sorted(os.path.join(r, f) for r, _ds, fs in os.walk(d) for f in fs if f.lower().endswith(".shp"))
-        if not shps:
-            raise RuntimeError("no shapefile in the download")
-        prj = shps[0][:-4] + ".prj"
-        if os.path.exists(prj) and "PROJCS" in open(prj).read().upper():
-            raise RuntimeError("projected shapefile (lon/lat expected)")
-        return shps[0]
-
-    def raster(self, win):
-        from rasterio.features import rasterize
-        from shapely.geometry import box
-        k = 2
-        known = np.zeros((win.height, win.width), dtype=bool)
-        wbox = box(win.west, win.south, win.east, win.north)
-        for g in self.known:
-            part = g.intersection(wbox)
-            if not part.is_empty:
-                known |= rasterize([(part, 1)], out_shape=known.shape, transform=win.transform(), fill=0, dtype="uint8") > 0
-        if not known.any():
-            return np.full(known.shape, np.nan)
-        covered = []
-        for pid, p in self.providers.items():
-            items = [t for st in p["stores"] for t in in_window(win, st.get(win.bx, win.by))]
-            if items:
-                fine = rasterize([(geojson(polys), 1) for polys, _b, _a in items], out_shape=(win.height * k, win.width * k),
-                                 transform=win.transform(k), fill=0, dtype="uint8").astype(np.float64)
-                c = transforms.block_reduce(fine, k, "max")
-            else:
-                c = np.zeros(known.shape)
-            if pid in self.failed:
-                c = np.where(c >= 0.5, 1.0, np.nan)    # what it does report counts; where it doesn't, unknown
-            covered.append(c)
-        return transforms.provider_count(covered, known)

@@ -1,5 +1,20 @@
 # VETTA — CURRENT AGENT HANDOFF STATE
 
+## Session 2026-11-08 (drop-fcc): FCC coverage removed at the owner's word (claude/drop-fcc, off origin/main 77db807)
+
+- [x] Owner: "we can just drop fcc it's confusing". Removed #311's FCC path: tools/ctx_etl sources.py (MobileCoverage,
+  fcc_json, fcc_creds, SOURCES["fcc"], FCC_API), transforms.py (fcc_pick_files, fcc_tech, fcc_env, provider_count,
+  latest_as_of), build.py (mobile_coverage no longer in RASTERS, no FCC step); FCC_USERNAME / FCC_API_TOKEN out of
+  context-grid.yml and ctx-region.yml; FCC tests and tests/fixtures/ctx_etl/fcc_listing_synthetic.json deleted;
+  car.js `signalFromProviders` and its test removed; FCC out of licenses.html, index.html (About sources),
+  OWNER_TODO, ROUTE_ENGINE.md (flow page regenerated). privacy.html and APP_REVIEW.md had no FCC text.
+- [x] Signal as before #311: car.js passes `opts.peer[id].channels.mobile_coverage` straight to signalPlan (code identical
+  to 744e516^); route_engine.js `signal_coverage` untouched; grid.py / context_grid.js keep the channel, marked no source.
+- [x] Earthdata (VNP46A4 night lights, EARTHDATA_TOKEN, h5py, the headers on http/cached_file) unchanged.
+- Tests: pytest 1353 passed, 2 skipped (1358 before, less the 5 FCC-only tests); `python tools/csp.py` all pages up to
+  date. Backend untouched.
+- Exact next task: unchanged from engine-rank below (tools/live_speed.js on the owner's trips at Fun and Long way).
+
 ## Session 2026-11-08 (engine-rank): the engine and the router agree on what a longer way buys (claude/engine-rank, off claude/level-spread = main fdbf363)
 
 - [x] The engine's value broken into its parts (tools/live_speed.js dumps lastFun[].parts and ev). On colerain and subdivision4

@@ -1,21 +1,16 @@
-"""The context-grid ETL's two account-backed sources (tools/ctx_etl, 2026-11-08): NASA Black Marble VNP46A4 night lights
-(EARTHDATA_TOKEN) and FCC mobile coverage (FCC_USERNAME + FCC_API_TOKEN).
+"""The context-grid ETL's account-backed source (tools/ctx_etl, 2026-11-08): NASA Black Marble VNP46A4 night lights
+(EARTHDATA_TOKEN). (FCC mobile coverage was here too until the owner dropped it, 2026-11-08.)
 
-Every input here is a SYNTHETIC TEST FIXTURE (made-up radiance tiles, a hand-written FCC listing, invented polygons), never
-real measured data: the real downloads need the owner's accounts and run in .github/workflows/context-grid.yml. The pure
-parts need numpy only; the HDF5 read and the rasterising parts skip without h5py / rasterio (CI's core tests have neither).
+Every input here is a SYNTHETIC TEST FIXTURE (made-up radiance tiles), never real measured data: the real downloads need
+the owner's account and run in .github/workflows/context-grid.yml. The pure parts need numpy only; the HDF5 read and the
+rasterising parts skip without h5py / rasterio (CI's core tests have neither).
 """
-import json
 import math
-import os
 
 import numpy as np
 import pytest
 
 from tools.ctx_etl import grid, sources, transforms
-
-ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-FCC_LISTING = os.path.join(ROOT, "tests", "fixtures", "ctx_etl", "fcc_listing_synthetic.json")
 
 
 # ------------------------------------------------------------------------------------------------------- Black Marble
@@ -110,67 +105,8 @@ def test_a_refused_token_falls_back_to_the_2016_image_for_the_whole_run(monkeypa
     assert sources.night_prepare(ctx, (-84.9, 38.7, -83.95, 39.33)) is False   # no token: never asks LAADS
 
 
-# ------------------------------------------------------------------------------------------------------------------ FCC
-def test_fcc_listing_picks_4g_5g_mobile_gis_files_one_environment_per_state():
-    data = json.load(open(FCC_LISTING))["data"]
-    oh, env = transforms.fcc_pick_files(data, "39")
-    assert env == "in-vehicle"
-    assert {pid: [f["file_id"] for f in p["files"]] for pid, p in oh.items()} == {"900001": [101, 103], "900002": [201]}
-    # outdoor twin (102), CSV twin (104), 3G (202), voice (301) and fixed (401) are not counted
-    ky, env_ky = transforms.fcc_pick_files(data, 21)
-    assert env_ky == "outdoor" and list(ky) == ["900005"]                # KY lists no in-vehicle file: outdoor for all
-    assert transforms.fcc_pick_files(data, "18") == ({}, None)          # nothing listed for IN
-    assert transforms.fcc_tech({"technology_code": "300", "technology_code_desc": "3G"}) is None
-    assert transforms.fcc_tech({"file_name": "x_5G-NR_y"}) == "5G" and transforms.fcc_env({"file_name": "a_In-Vehicle_b"}) == "in-vehicle"
-
-
-def test_latest_as_of_date():
-    ans = {"data": [{"data_type": "availability", "as_of_date": "2024-06-30T00:00:00"}, {"data_type": "challenge", "as_of_date": "2025-12-31"},
-                    {"data_type": "availability", "as_of_date": "2025-06-30"}]}
-    assert transforms.latest_as_of(ans) == "2025-06-30" and transforms.latest_as_of({"data": []}) is None
-
-
-def test_provider_count_is_unknown_outside_the_states_read_and_never_guessed():
-    known = np.array([[True, True, True, False]])
-    a = np.array([[1.0, 0.0, 1.0, 1.0]])
-    b = np.array([[1.0, 0.0, np.nan, 1.0]])            # provider b's file failed: where it reports nothing, unknown
-    out = transforms.provider_count([a, b], known)
-    assert out[0, 0] == 2 and out[0, 1] == 0 and math.isnan(out[0, 2]) and math.isnan(out[0, 3])
-    assert transforms.provider_count([], known)[0, :3].tolist() == [0, 0, 0]
-
-
-def test_credentials_only_from_the_environment(monkeypatch):
-    for k in ("FCC_USERNAME", "FCC_API_TOKEN", "EARTHDATA_TOKEN"):
-        monkeypatch.delenv(k, raising=False)
-    assert sources.fcc_creds() is None and sources.earthdata_token() is None
-    monkeypatch.setenv("FCC_USERNAME", "owner@example.com")
-    assert sources.fcc_creds() is None                                   # both or nothing: skipped exactly as before
-    monkeypatch.setenv("FCC_API_TOKEN", "  t  ")
-    assert sources.fcc_creds() == ("owner@example.com", "t")
-
-
-def test_mobile_coverage_raster_counts_providers(monkeypatch):
-    pytest.importorskip("rasterio")
-    from shapely.geometry import box
-    win = sources.Window(67, 97, 0, 0, 3, 3, 32)
-
-    def rect(fx0, fx1):                       # a synthetic polygon spanning a share of the window's width, full height
-        x0, x1 = win.west + fx0 * (win.east - win.west), win.west + fx1 * (win.east - win.west)
-        ring = np.array([[x0, win.south], [x0, win.north], [x1, win.north], [x1, win.south], [x0, win.south]])
-        return ([[ring]], (x0, win.south, x1, win.north), {})
-
-    class Store:
-        def __init__(self, items):
-            self.items = items
-
-        def get(self, bx, by):
-            return self.items
-
-    mc = sources.MobileCoverage.__new__(sources.MobileCoverage)
-    mc.providers = {"a": {"name": "A", "stores": [Store([rect(0.0, 0.5)])]}, "b": {"name": "B", "stores": [Store([rect(0.25, 0.75)])]}}
-    mc.failed = set()
-    mc.known = [box(win.west, win.south, win.west + 0.875 * (win.east - win.west), win.north)]   # the state ends at 7/8
-    out = mc.raster(win)
-    assert out.shape == (128, 128)
-    row = out[64]
-    assert row[10] == 1 and row[50] == 2 and row[80] == 1 and row[100] == 0 and np.isnan(row[120])
+def test_earthdata_token_only_from_the_environment(monkeypatch):
+    monkeypatch.delenv("EARTHDATA_TOKEN", raising=False)
+    assert sources.earthdata_token() is None
+    monkeypatch.setenv("EARTHDATA_TOKEN", "  t  ")
+    assert sources.earthdata_token() == "t"

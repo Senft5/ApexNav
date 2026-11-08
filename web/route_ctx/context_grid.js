@@ -30,10 +30,8 @@
 //                               (via Planetary Computer). Public domain; yearly.
 //   park_visits         /yr     Recreation visits a year to the NPS unit the sample is in; 0 = not in an NPS unit (known).
 //                               NPS boundaries + NPS Visitor Use Statistics. Public domain; yearly.
-//   mobile_coverage     count   Providers reporting 4G LTE or 5G-NR coverage in the ~240 m cell (FCC National Broadband
-//                               Map; in-vehicle where the FCC lists it, else outdoor stationary). 0 = none reported.
-//                               Built only with the owner's FCC token (tools/ctx_etl): until then absent, NaN, so it never
-//                               counts for or against a route. Public domain; twice a year.
+//   mobile_coverage     count   Mobile providers in the cell. No source (the FCC download was dropped, 2026-11-08), so
+//                               never built: always NaN, so it never counts for or against a route.
 //   aadt                veh/day Annual average daily traffic of the road under the sample (HPMS, FHWA + state DOTs),
 //                               matched to the route within 20 m and 35 degrees of heading; a divided road's count is read
 //                               from its other carriageway (up to 90 m away) when this one has none. Public domain; yearly.

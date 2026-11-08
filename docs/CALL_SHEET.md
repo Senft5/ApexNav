@@ -4,6 +4,25 @@ Decisions Claude made for you, newest first. Each one says what was decided, why
 you reach one you've seen. If you disagree with a call, say so and it gets reversed; nothing here is hard to undo unless
 it says so. Things only you can do are in docs/OWNER_TODO.md.
 
+## 2026-11-08 (drop-fcc): FCC phone coverage removed, as you asked (claude/drop-fcc)
+
+You said: "we can just drop fcc it's confusing". Everything #311 added for the FCC National Broadband Map is gone; the
+Earthdata night lights from the same PR are untouched.
+- **Removed:** the FCC download in tools/ctx_etl (`MobileCoverage`, `fcc_json`, `fcc_creds` and the `fcc` source in
+  sources.py; `fcc_pick_files`, `fcc_tech`, `fcc_env`, `provider_count`, `latest_as_of` in transforms.py; the
+  mobile_coverage step in build.py), the `FCC_USERNAME` / `FCC_API_TOKEN` passthrough in context-grid.yml and
+  ctx-region.yml, the FCC tests in tests/test_ctx_etl_accounts.py, the fixture
+  tests/fixtures/ctx_etl/fcc_listing_synthetic.json, the provider-count mapping `signalFromProviders` in
+  web/route_ctx/car.js and its test, the FCC line in licenses.html and in About's sources (index.html), and the FCC row
+  in OWNER_TODO.
+- **The phone's signal is as it was before #311:** car.js copies the grid's `mobile_coverage` as it comes (no grid
+  builds it, so it stays unknown and the card says "No coverage data"), and route_engine.js's own `signal_coverage` from
+  that channel is unchanged. The channel's name stays in grid.py and context_grid.js, marked as having no source, so old
+  and new bundles read the same.
+- **If you added the FCC secrets in GitHub**, nothing reads them now; delete them whenever you like (Settings → Secrets
+  and variables → Actions).
+- Undo: revert this commit.
+
 ## 2026-11-08 (engine-rank): the good road a longer way buys now counts by its length (claude/engine-rank)
 
 After the levels change, the router offered better roads but the app's final ranking still chose the shorter route on two
