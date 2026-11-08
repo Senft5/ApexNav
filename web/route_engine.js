@@ -167,6 +167,10 @@
     // start costs them all the same, while a plan that drives 2 km of strip mall out of town pays for it (live, Northgate)
     POOR_Q_HI: 0.45, POOR_Q_LO: 0.25, POOR_PER_KM: 10, POOR_CAP: 120, END_GRACE_M: 0,
     BUSINESS_PER_KM: 4, BUSINESS_FROM: 4, BUSINESS_FULL: 14, BUSINESS_CAP: 40,   // the owner: more businesses = a worse road
+    // good road gained over the quickest, per km (smooth from quality 0.5, full at 0.65; never a motorway or ramp): the side
+    // street's cost has a length, so the good road a longer way buys has one too (2026-11-08, engine-rank: 11 km more of
+    // the best road on the colerain trip counted only as a higher mean, so 3 km more suburb outweighed it at Long way)
+    GOOD_Q_LO: 0.5, GOOD_Q_HI: 0.65, GOOD_PER_KM: 1.5, GOOD_CAP: 30,
     SCENERY: 20,           // points for scenery 1 vs 0.5 (so ±10), times how much of it is known
     Q_FULL_CONF: 0.3, S_FULL_CONF: 0.2,            // the share of the weights known at which a sample's quality / scenery counts in full
     STAGE_UNKNOWN_GATE: 0.4,                        // a stage's samples with no road data: trusted this much
@@ -412,7 +416,7 @@
     if (!c || !ctx) { cand.ev = out; return out; }
     const s = samples(c, ctx), n = s.n, step = c.distM.length > 1 ? c.distM[1] - c.distM[0] : 25, total = c.totalM || c.distM[n - 1];
     // quality: length-weighted mean of the known samples, and the side-street / business-district km
-    let qs = 0, qn = 0, qw = 0, poorM = 0, poorCost = 0, ss = 0, sn = 0, sp = 0, conf = 0, bizCost = 0, bizM = 0;
+    let qs = 0, qn = 0, qw = 0, poorM = 0, poorCost = 0, ss = 0, sn = 0, sp = 0, conf = 0, bizCost = 0, bizM = 0, goodM = 0;
     const bizC = channel(ctx, 'business_per_km'), rcQ = channel(ctx, 'road_class'), useQ = channel(ctx, 'road_use');
     const limitedQ = (i) => (rcQ && rcQ[i] === 0) || (useQ && useQ[i] === 1);
     const poorBy = { business: 0, residential: 0, stops: 0, other: 0 };
@@ -425,6 +429,7 @@
       // business districts cost on their own (the owner, 2026-11-03: "more businesses = worse route generally"): shops,
       // restaurants and offices beside the road (not fuel or cafés), never beside a motorway
       if (bizC && Number.isFinite(bizC[i]) && !limitedQ(i)) { const b = clamp01((bizC[i] - W.BUSINESS_FROM) / (W.BUSINESS_FULL - W.BUSINESS_FROM)); if (b > 0) { bizCost += b * step / 1000 * W.BUSINESS_PER_KM; bizM += b * step; } }
+      if (Number.isFinite(q) && !limitedQ(i)) goodM += clamp01((q - W.GOOD_Q_LO) / (W.GOOD_Q_HI - W.GOOD_Q_LO)) * step;
       if (!Number.isFinite(q) || c.distM[i] < W.END_GRACE_M || total - c.distM[i] < W.END_GRACE_M) continue;
       const bad = clamp01((W.POOR_Q_HI - q) / (W.POOR_Q_HI - W.POOR_Q_LO));
       if (bad > 0) {
@@ -439,6 +444,7 @@
     out.poorKm = poorM / 1000; out.poorBy = Object.fromEntries(Object.entries(poorBy).map(([k, v]) => [k, v / 1000]));
     out.poorCost = Math.min(W.POOR_CAP, poorCost);
     out.businessCost = Math.min(W.BUSINESS_CAP, bizCost); out.businessKm = bizM / 1000;
+    out.goodKm = goodM / 1000;
     out.scenery = sn ? ss / sn : null; out.sCoverage = sn / n;
     out.sceneryPts = sn ? W.SCENERY * sp / n : 0;       // terrain alone (a fifth of the weights) moves it a little; the full picture ±10
     out.confidence = conf / n;
@@ -628,7 +634,8 @@
    * why). With no context this is exactly ApexFunRoute.rank. opts: { level, prefs, score, perMinOverride }.
    *   value = fun (corners gated by quality) + 0.5 × good corners gained over the quickest (cap 60)
    *         + 0.3 × (quality − 50) × known share + 20 × (scenery − 0.5) × known share + bonuses (≤ 15)
-   *         − 3 per km of side street / business district (smooth below quality 0.45, full at 0.25; cap 60; not the first/last 1.2 km)
+   *         − 10 per km of side street / business district (smooth below quality 0.45, full at 0.25; cap 120)
+   *         + 1.5 per km of good road gained over the quickest (smooth from quality 0.5, full at 0.65; cap 30)
    *         − perMin × extra minutes − penalties (≤ 40) − glare − towns − weather + measured + taste + prefer
    */
   function rank(cands, opts = {}) {
@@ -668,6 +675,7 @@
     const quick = base.reduce((a, b) => (b.timeS < a.timeS ? b : a));
     const funOf = (c) => (c.ev && c.ev.funGated) || c.fun || null;
     const quickGood = funOf(quick) ? funOf(quick).good : 0;
+    const quickRoad = quick.ev && finite(quick.ev.goodKm) ? quick.ev.goodKm : 0;
     const limit = quick.timeS * (1 + L.budget) + L.slackS;
     const valued = cands.map((c) => {
       const extraS = Number.isFinite(c.timeS) ? Math.max(0, c.timeS - quick.timeS) : Infinity;
@@ -679,6 +687,7 @@
       const f = funOf(c), fun = f ? f.fun * share : 0, gain = f ? Math.min(60, Math.max(0, f.good - quickGood)) * share : 0;
       const parts = {
         fun, gain: 0.5 * gain, time: -perMin * extraS / 60,
+        road: ev && finite(ev.goodKm) ? Math.min(W.GOOD_CAP, W.GOOD_PER_KM * Math.max(0, ev.goodKm - quickRoad)) : 0,
         quality: ev && ev.qualityFilled != null ? W.QUALITY * (ev.qualityFilled - 50) * ev.qWeightFilled : ev && ev.quality != null ? W.QUALITY * (ev.quality - 50) * ev.qWeight : 0,
         poor: ev ? -(ev.poorFilled != null ? ev.poorFilled : ev.poorCost) : 0, business: ev ? -(ev.businessCost || 0) : 0, scenery: ev ? ev.sceneryPts : 0, bonus: ev ? ev.bonusPts : 0, penalty: ev ? -ev.penaltyPts : 0,
         glare: -glareCost(c), towns: -townCost(c), weather: -(c.weatherCost || 0), measured: c.adjust || 0, taste: c.tasteBonus != null ? c.tasteBonus : ev && ev.tastePts != null ? ev.tastePts : 0, prefer: c.preferBonus || 0,
@@ -736,6 +745,8 @@
       const g = Math.round(best.ev.funGated.good - quick.ev.funGated.good);
       if (g >= 3) facts.push({ w: d('gain') + d('fun'), text: `${g} more good corners` });
     }
+    // the good road a longer way buys, in its km (the road part: good road gained over the quickest)
+    if (d('road') > 1 && finite(b.goodKm) && finite(q.goodKm) && b.goodKm - q.goodKm >= 1) facts.push({ w: d('road'), text: `${mi(b.goodKm - q.goodKm, metric)} more good road` });
     if (d('quality') > 1 && finite(bs.limitLoKph) && finite(bs.limitHiKph) && bs.limitLoKph >= 64) {
       facts.push({ w: d('quality'), text: `${(bs.residentialKm || 0) < 1 && (bs.highwayKm || 0) < 0.5 * bs.km ? 'Back roads' : 'Open roads'} at ${speedText(bs.limitLoKph, bs.limitHiKph, metric)}` });
     }
@@ -770,7 +781,7 @@
    * corners): the 1-2 parts of the value it wins by most, in words, e.g. "Over the 34 min route: less low sun". The card
    * never shows a pick that looks strictly worse without saying this. null when nothing the pick wins by is a point.
    */
-  const OVER = { fun: 'better corners', gain: 'more good corners', quality: 'better roads', poor: 'fewer side streets', business: 'fewer shops and businesses',
+  const OVER = { fun: 'better corners', gain: 'more good corners', quality: 'better roads', poor: 'fewer side streets', road: 'more good road', business: 'fewer shops and businesses',
     scenery: 'nicer country', glare: 'less low sun', towns: 'less in towns', weather: 'drier', measured: 'smoother, by members\' drives', taste: 'more your style',
     prefer: 'roads you prefer', driver: 'suits your driving' };
   function whyOver(best, other, o = {}) {

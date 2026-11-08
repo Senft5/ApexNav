@@ -98,6 +98,19 @@ def test_no_level_lengthens_a_trip_with_no_good_road():
         assert x["goods"][k] > x["goodness"], x                      # it is a little better, only not enough for its time
 
 
+def test_the_pick_weighs_the_road_length_as_the_engine_does():
+    """G is a length-weighted mean, so a longer way's extra side street thins out in it, and so does its extra good road;
+    the route engine pays for every km of both (2026-11-08, engine-rank). On route summaries shaped like the audit's
+    trips: Long way doesn't buy G with more subdivision than a shorter way drives (subdivision4's 17 min), Fun doesn't
+    take a strip mall's G (colerain's 20 min), Long way does take 11 km more of the best road (colerain's 32 min) and
+    10 km more good road for 10 min (harrison's 42 min), and a trip with no good road stays the quickest."""
+    r = case("levelRoad")
+    assert r["subdivisionLike"] == {"fun": "A", "max": "A"}, r
+    assert r["colerainLike"] == {"fun": "A", "max": "C"}, r
+    assert r["harrisonLike"] == {"fun": "A", "max": "D"}, r
+    assert r["noGoodRoad"] == {"fun": "base", "max": "base"}, r
+
+
 def test_members_data_steers_the_search():
     """Members' data counts per stretch inside the search (not only in the final ranking): a loved, smooth, flowing lane
     wins a near-tie it lost by 2 s; signed out (no data), the search is as before."""

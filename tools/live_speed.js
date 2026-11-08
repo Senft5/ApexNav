@@ -1,7 +1,8 @@
 // Live planning speed (docs/OWN_ROUTING.md §8 2026-11-08 night). Cold (a fresh profile) then warm (the same profile
 // reopened: tiles in IndexedDB) plan per case, against BASE: production by default, or a local serve of a worktree's web/
 // (the app's case: its files and shipped tiles local) with /api relayed to production. Dumps apexDebug.timeline, planMarks,
-// lastOwn, and EVERY request (page and its workers) with its start (ms from Enter) and duration, so network and compute
+// lastOwn, the ranked pool (lastFun: each candidate's value and its parts, the engine's terms) and EVERY request (page
+// and its workers) with its start (ms from Enter) and duration, so network and compute
 // can be told apart. Usage: [BASE=...] OUT=dir [AGAIN=1] node tools/live_speed.js case:level ...
 // AGAIN=1 also plans a second time in the warm page without a reload (memory warm). HANG=ms holds every request off the
 // app's own files from Enter that long, then refuses it (HANGALL=1: from the page's load: a weak signal from launch).
@@ -35,7 +36,7 @@ async function planOnce(page, c, reqs, again) {
     return { first: window.__first != null ? Math.round(window.__first - enter) : null, card: built != null ? Math.round(ps - enter + built) : null, startLag: Math.round(ps - enter),
       planMarks: D.planMarks, optMarks: D.optMarks, timeline: D.timeline || null, lastCtx: D.lastCtx, lastOwn: D.lastOwn, refine: D.lastRefine || null, warm: D.ownWarm || null,
       track: t ? { timeS: t.timeS, km: +(t.dist[t.dist.length - 1] / 1000).toFixed(2), why: t.why } : null,
-      lastFun: (D.lastFun || []).map((y) => ({ kind: y.kind, timeS: y.timeS, value: y.value })) };
+      lastFun: (D.lastFun || []).map((y) => ({ kind: y.kind, timeS: y.timeS, value: y.value, parts: y.parts || null, quality: y.quality, poorKm: y.poorKm, hwyKm: y.hwyKm, townKm: y.townKm, ev: y.ev || null })) };
   });
   const net = reqs.slice().map((r) => ({ ...r, t: r.t - wall0 })).sort((a, b) => a.t - b.t);
   return { timedOut, ...d, net };

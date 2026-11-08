@@ -4,6 +4,28 @@ Decisions Claude made for you, newest first. Each one says what was decided, why
 you reach one you've seen. If you disagree with a call, say so and it gets reversed; nothing here is hard to undo unless
 it says so. Things only you can do are in docs/OWNER_TODO.md.
 
+## 2026-11-08 (engine-rank): the good road a longer way buys now counts by its length (claude/engine-rank)
+
+After the levels change, the router offered better roads but the app's final ranking still chose the shorter route on two
+trips. I broke each route's score into its parts to see why.
+- **Colerain, Long way: the ranking was wrong.** The 32 min route has 11 km more of the best road here, and it was
+  beaten by the 17 min route only because it also drives about 3 km more suburb on the way out (-16 points). The ranking
+  charged side streets per km but counted good road only as an average, so 11 km of the best road was worth about +3 in
+  quality. Its 19 more good corners (+15) and Long way's low time price (-5) couldn't make up the difference. Now each km
+  of good road gained over the quickest is worth 1.5 points (side streets still cost 10 a km), capped at 30.
+  Colerain's Long way is now the 32 min route ("17 more good corners", +16 min). Undo: `GOOD_PER_KM: 0` in
+  web/route_engine.js. Tune: the same number (1.0 already flips colerain).
+- **Subdivision4, Long way: the ranking was right and the router was wrong.** The 17 min route reaches 2.6 km of good
+  road by driving 3 km more subdivision than the 12 min route. The router's goodness is an average, so the extra
+  subdivision barely showed in it. The router now weighs its picks with the ranking's own per-km terms (side street
+  avoided, good road gained), so its Long way pick there is the 12 min route, the same as the app's. The same rule fixed
+  colerain's Fun pick, which had been a 20 min route through 2 km of strip mall: it is now the app's 17 min route. Undo:
+  `K.ROAD.w = 0` in web/graph_router.js.
+- **Side effects, all measured in the app:** northgate Fun is now 14.4 min ("nicer country", 1.1 km more good road) instead
+  of 12.1; the two had been within 0.3 points. The router's own picks now match the app's on harrison (Fun 31.1 min, Long
+  way 41.9 min); the app's picks there didn't change. Quick, the highway rule and trips with no good road are unchanged.
+  Planning speed is unchanged.
+
 ## 2026-11-08 (levels): Fun and Long way each spend their time on better road (claude/level-spread)
 
 An audit of our phone router found Long way came back with exactly Fun's route on every test trip: the search for how
