@@ -200,7 +200,22 @@
   const regionBase = (o) => (o.region === null ? null : o.region || apiBase(o) + REGION_PATH);
   const fetchOf = (o) => o.fetchFn || (root.fetch && root.fetch.bind(root));
   const indexes = new Map();
-  /** One base's index.json, null if none: memory, then (within ttl) IndexedDB, then the network, else the kept copy. */
+  // an index asked of the network with no copy kept (a first launch) gets this long, then the plan goes on without it
+  // (asked again in 10 min): a hanging request held every tile load, and so every plan, behind it
+  const INDEX_WAIT_MS = 3000;
+  const within = (p, ms) => new Promise((ok) => { const t = setTimeout(() => ok(null), ms); p.then((v) => { clearTimeout(t); ok(v); }, () => { clearTimeout(t); ok(null); }); });
+  async function fetchIndex(base, fetchFn) {
+    try {
+      const r = await fetchFn(base + 'index.json');
+      if (r.ok) { const j = await r.json(); if (j && j.tiles) { idb('readwrite', `ix:${base}`, JSON.stringify({ at: Date.now(), j })); return j; } }
+    } catch (_) {}
+    return null;
+  }
+  /**
+   * One base's index.json, null if none: memory, then IndexedDB, then the network. A kept copy older than ttl is used as
+   * it is and asked again behind it (the next session reads the new one): the plan never waits on the network for an
+   * index it has (once a day the region's index used to sit between Enter and the first route).
+   */
   function baseIndex(base, fetchFn, ttl, memoMs) {
     const had = indexes.get(base);
     if (had && Date.now() - had.at < had.ttl) return had.p;
@@ -208,11 +223,10 @@
       let kept = null;
       try { const c = await idb('readonly', `ix:${base}`); kept = c ? JSON.parse(c) : null; } catch (_) { kept = null; }
       if (kept && kept.j && Date.now() - kept.at < ttl) return kept.j;
-      try {
-        const r = await fetchFn(base + 'index.json');
-        if (r.ok) { const j = await r.json(); if (j && j.tiles) { idb('readwrite', `ix:${base}`, JSON.stringify({ at: Date.now(), j })); return j; } }
-      } catch (_) {}
-      return kept ? kept.j : null;
+      if (kept && kept.j && ttl > 0) { fetchIndex(base, fetchFn); return kept.j; }
+      // (the app's own index, ttl 0, is a local file: asked every launch, the kept copy only offline)
+      const j = ttl > 0 ? await within(fetchIndex(base, fetchFn), INDEX_WAIT_MS) : await fetchIndex(base, fetchFn);
+      return j || (kept ? kept.j : null);
     })();
     const memo = { at: Date.now(), p, ttl: memoMs };
     indexes.set(base, memo);
@@ -280,6 +294,25 @@
     }));
     return { tiles: want.length, kept };
   }
+  /**
+   * The bytes of a box's tiles kept in IndexedDB, not decoded (the app starting: the tiles round you, so a plan there
+   * reads them from the phone, never the network). Only tiles that come from the network (the region's); the app's own
+   * are on the phone already. One at a time. Resolves { tiles, fetched }.
+   */
+  async function keepArea(bbox, o = {}) {
+    const [s, w, n, e] = Array.isArray(bbox) ? bbox : [bbox.s, bbox.w, bbox.n, bbox.e];
+    const fetchFn = fetchOf(o), src = await sources(o);
+    let tiles = 0, fetched = 0;
+    for (const { i, j } of tilesIn(s, w, n, e)) {
+      const name = `${i}_${j}`, first = order(src, name)[0];
+      if (!first || first[0] === src.bundled) continue;
+      tiles++;
+      const key = `${first[0]}${name}.vgr@${first[1]}`;
+      if (mem.has(key) || await idb('readonly', key)) continue;
+      try { const r = await fetchFn(`${first[0]}${name}.vgr`); if (r.ok && await idb('readwrite', key, await r.arrayBuffer())) fetched++; } catch (_) { /* the next launch */ }
+    }
+    return { tiles, fetched };
+  }
   /** The tiles (i, j) a box touches (degrees). */
   function tilesIn(south, west, north, east) {
     const a = tileOf(south, west), z = tileOf(north, east), out = [];
@@ -287,7 +320,7 @@
     return out;
   }
 
-  const api = { VERSION, READS, CHANNELS, BASE, TILE_DEG, FLAGS, NODE_FLAGS, CLASS, UNKNOWN_U8, UNKNOWN_FUN, NO_NAME, tileOf, keyOf, unkey, origin, unq8, funPts, decode, index, load, prefetchArea, tilesIn, _mem: mem, _indexes: indexes };
+  const api = { VERSION, READS, CHANNELS, BASE, TILE_DEG, FLAGS, NODE_FLAGS, CLASS, UNKNOWN_U8, UNKNOWN_FUN, NO_NAME, tileOf, keyOf, unkey, origin, unq8, funPts, decode, index, load, prefetchArea, keepArea, tilesIn, _mem: mem, _indexes: indexes };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   root.ApexGraphTiles = api;
 })(typeof window !== 'undefined' ? window : globalThis);

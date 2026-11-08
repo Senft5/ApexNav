@@ -31,6 +31,27 @@
   any "! FCC" lines; fix the FCC listing filter / download path if the live answer differs, tune the night mapping, then
   rebuild the committed Cincinnati bundles (preset cincinnati) so the app's shipped grid has both.
 
+## Session 2026-11-08 (night): planning speed on production and a weak signal (claude/prod-speed)
+
+- [x] Measured production (#307) with a harness that logs every request of the page and its workers and dumps
+  apexDebug.timeline (tools/live_speed.js): cold 0.97-5.0 s card, warm 0.23-0.84 s, a second plan 0.14-0.5 s.
+  The cold seconds were the harness and the website: a fresh profile, a 0.2-0.3 s proxy per request, the website
+  fetching the app's files and shipped tiles, and the routing worker started at Enter (its scripts in 2.5-3.7 s later).
+  The app's case (web/ local, /api relayed): 0.1-0.65 s card, nothing on the network before it (OWN_ROUTING.md §8).
+- [x] No network before the first route or the card where our tiles are on the phone: the region index's kept copy used
+  however old, refreshed behind (none kept: 3 s from launch); the worker and both indexes at launch; the region's tiles
+  within 15 km kept at launch; Avoid towns 0.4 s and crew roads 0.3 s before the card; the Log's prewarm never mid-plan;
+  a restored route never replaces a new plan. With every request off the app hanging from launch, main showed no route
+  in 60 s, the branch 0.26-0.72 s (e2e "weak signal").
+- [x] Where to?: your pinned and recent places match as you type, at once; Enter before the list waits for the map
+  search already asked (1.5 s) before a full geocode; the top suggestion's tile read while you choose.
+- Tests: pytest 1342 passed, 2 skipped; e2e 137/137 (full run, after merging #308 and #309).
+- Open: production after the deploy, cold and warm (tools/live_speed.js, BASE defaults to production); a phone's own numbers
+  (WKWebView, LTE, Apple's place search) can't be measured from here.
+- Exact next task: after the deploy, `OUT=<dir> AGAIN=1 node tools/live_speed.js subdivision:fun northgate:fun colerain:fun
+  harrison:fun colerain:quick colerain:max` against production; warm should match the local numbers (card 0.25-0.65 s)
+  and colerain max warm should drop from 1.6 s (the worker now starts at launch).
+
 ## Session 2026-11-08 (later): what the levels mean (claude/level-rules, off claude/own-routing-instant-2)
 
 - [x] The owner: "fun should never go on the highway. Quick should essentially be a normal route i suppose". Quick is the

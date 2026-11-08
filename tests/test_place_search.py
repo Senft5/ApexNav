@@ -18,6 +18,8 @@ const f = (key, value) => ({ properties: { osm_key: key, osm_value: value } });
 console.log(JSON.stringify({
   dragon: S.localMatches('tail dragon', stages, spots), any: S.localMatches('DRAGON', stages, spots).map((p) => p.label),
   accent: S.localMatches('cafe creme', stages, spots).map((p) => p.label), short: S.localMatches('e', stages, spots),
+  yours: S.localMatches('dragon', stages, spots, 4, [{ label: 'Dragon shop', lat: 3, lon: 3, kind: 'Recent' }, { label: 'Home', lat: 4, lon: 4, kind: 'Pinned' }, { label: 'Dragon x', lat: NaN, lon: 1 }]).map((p) => [p.label, p.kind]),
+  home: S.localMatches('hom', stages, spots, 4, [{ label: 'Home', lat: 4, lon: 4, kind: 'Pinned' }]),
   drivable: [f('highway', 'cycleway'), f('highway', 'secondary'), f('shop', 'clothes'), f('highway', 'path'), {}].map(S.drivable),
   addr: ['1231 W Kemper Rd, Cincinnati, OH  45240, United States', 'Cincinnati, OH, United States', '10 Downing St, London, SW1A 2AA, United Kingdom',
          'Winton Woods, Cincinnati, OH 45231', '', null, 'Search Nearby'].map(S.shortAddress),
@@ -34,6 +36,13 @@ def test_local_names(out):
     assert out["dragon"] == [{"label": "Tail of the Dragon (US 129)", "lat": 35.47, "lon": -83.92, "kind": "Your stage"}]
     assert out["any"] == ["Tail of the Dragon (US 129)", "Dragon overlook"]
     assert out["accent"] == ["Café Crème"] and out["short"] == []
+
+
+def test_your_places_first(out):
+    """2026-11-08 (prod-speed): your pinned and recent places match what's typed first, on the phone (no network for the
+    list's top row or Enter); a place with no coordinates is left out."""
+    assert out["yours"] == [["Dragon shop", "Recent"], ["Tail of the Dragon (US 129)", "Your stage"], ["Dragon overlook", "Spot"]]
+    assert out["home"] == [{"label": "Home", "lat": 4, "lon": 4, "kind": "Pinned"}]
 
 
 def test_drivable(out):

@@ -263,6 +263,50 @@ const write = (f, j) => fs.writeFileSync(path.join(dir, f), JSON.stringify(j));
     assert r["prefetchAsked"] == ["/api/graph/v1/381_516.vgr", "/api/graph/v1/382_516.vgr"]   # the region build still differs
 
 
+@needs_node
+def test_js_index_never_waits_on_a_hanging_network(tmp_path):
+    """The region's index (2026-11-08, prod-speed): a kept copy older than a day is used at once and asked again behind
+    it; with no copy kept, a hanging request is given INDEX_WAIT_MS, then the shipped tiles plan alone. Before, a tile
+    load waited on the region's index.json every day's first plan, and forever when the request hung."""
+    a, _ = sample_tiles()
+    ship = tmp_path / "data" / "graph" / "v1"
+    ship.mkdir(parents=True)
+    (ship / "381_516.vgr").write_bytes(T.write_tile(a))
+    (ship / "index.json").write_text(json.dumps({"build": "w45-aa", "tiles": {"381_516": {}}}))
+    js = r"""
+// a minimal IndexedDB (one store, get / put) so the kept copies are exercised
+const store = new Map();
+const req = (fn) => { const r = {}; setTimeout(() => { r.result = fn(); r.onsuccess && r.onsuccess(); }, 0); return r; };
+const dbo = { transaction: () => ({ objectStore: () => ({ get: (k) => req(() => store.get(k)), put: (v, k) => req(() => { store.set(k, v); return k; }) }) }), createObjectStore() {} };
+globalThis.indexedDB = { open: () => { const r = {}; setTimeout(() => { r.result = dbo; r.onupgradeneeded && r.onupgradeneeded(); r.onsuccess && r.onsuccess(); }, 0); return r; } };
+const G = require(process.argv[1] + '/web/graph_tiles.js'), fs = require('fs'), path = require('path');
+const dir = process.argv[2], asked = [];
+const hang = () => new Promise(() => {});
+const fetchFn = async (url) => { asked.push(url); if (url.startsWith('/api/')) return hang(); const p = path.join(dir, url); if (!fs.existsSync(p)) return { ok: false };
+  const b = fs.readFileSync(p); return { ok: true, json: async () => JSON.parse(b), arrayBuffer: async () => b.buffer.slice(b.byteOffset, b.byteOffset + b.length) }; };
+(async () => {
+  const out = {};
+  // a copy of the region's index kept two days ago
+  store.set('ix:/api/graph/v1/', JSON.stringify({ at: Date.now() - 2 * 864e5, j: { build: 'w45-aa', tiles: { '381_516': {}, '382_516': {} } } }));
+  let t0 = Date.now();
+  const ix = await G.index({ fetchFn }), t = await G.load(381, 516, { fetchFn });
+  out.stale = { ms: Date.now() - t0, tiles: Object.keys(ix.tiles).sort(), loaded: !!t, askedRegion: asked.includes('/api/graph/v1/index.json') };
+  // none kept (a first launch), the request hanging
+  G._indexes.clear(); G._mem.clear(); store.clear(); asked.length = 0;
+  t0 = Date.now();
+  const ix2 = await G.index({ fetchFn }), t2 = await G.load(381, 516, { fetchFn });
+  out.none = { ms: Date.now() - t0, tiles: Object.keys(ix2.tiles).sort(), loaded: !!t2, region: ix2.region };
+  console.log(JSON.stringify(out));
+  process.exit(0);
+})();
+"""
+    r = json.loads(subprocess.run([NODE, "-e", js, ROOT, str(tmp_path)], capture_output=True, text=True, check=True, timeout=30).stdout)
+    assert r["stale"]["ms"] < 500, r            # the kept copy, not the network
+    assert r["stale"]["tiles"] == ["381_516", "382_516"] and r["stale"]["loaded"] and r["stale"]["askedRegion"]
+    assert 2500 <= r["none"]["ms"] < 4500, r    # INDEX_WAIT_MS, then the shipped tiles alone
+    assert r["none"]["tiles"] == ["381_516"] and r["none"]["loaded"] and r["none"]["region"] is None
+
+
 SHIPPED = os.path.join(ROOT, "web", "data", "graph", "v1")
 
 
