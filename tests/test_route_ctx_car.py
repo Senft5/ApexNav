@@ -94,29 +94,6 @@ def test_signal_from_coverage_and_offline_areas():
     assert out["none"] == [0, None]
 
 
-def test_signal_from_the_grids_fcc_provider_count():
-    # synthetic counts (a test input, not FCC data): providers reporting 4G/5G per sample from the context grid
-    js = """(async () => {
-      const t = corridor(30), n = t.lat.length, count = new Float32Array(n).fill(3);
-      for (let i = 400; i < 800; i++) count[i] = 0;                    // 10 km where no provider reports coverage
-      for (let i = 900; i < 940; i++) count[i] = 1;                    // one provider: maybe not yours
-      for (let i = 1000; i < 1040; i++) count[i] = NaN;                // outside the FCC states read: unknown
-      const sig = C.signalFromProviders(count);
-      const r = await C.provider.fetch([t], { car: { fuel: 'petrol', range_km: 600 }, storage: mem(), fetch: () => { throw new Error('offline'); },
-        peer: { c1: { channels: { mobile_coverage: count } } } });
-      const unknown = await C.provider.fetch([t], { car: { fuel: 'petrol', range_km: 600 }, storage: mem(), fetch: () => { throw new Error('offline'); },
-        peer: { c1: { channels: { mobile_coverage: new Float32Array(n).fill(NaN) } } } });
-      return { s: [sig[0], sig[500], sig[920], sig[1020]], none: C.signalFromProviders(null), allNaN: C.signalFromProviders(new Float32Array(4).fill(NaN)),
-        spans: r.c1.spans.filter((x) => x.kind === 'no_signal').map((x) => [Math.round(x.fromM / 1000), Math.round(x.toM / 1000)]),
-        note: r.c1.note || '', unknownNote: unknown.c1.note || '', unknownSig: unknown.c1.channels.signal[5] };
-    })()"""
-    out = run(js)
-    assert out["s"] == [1, 0, 0.5, None]                             # NaN (JSON null): unknown
-    assert out["none"] is None and out["allNaN"] is None              # no known sample: no coverage data, never "no signal"
-    assert out["spans"] == [[10, 20]]
-    assert "No coverage data" not in out["note"] and "No coverage data" in out["unknownNote"] and out["unknownSig"] is None
-
-
 def test_ask_range_once_per_car():
     js = """(() => { const st = mem(), car = C.carOf({ fuel: 'petrol', label: 'MX-5' });
       return [C.askRangeOnce(st, car, 200), C.askRangeOnce(st, car, 200), C.askRangeOnce(st, C.carOf({ label: 'Golf' }), 100),

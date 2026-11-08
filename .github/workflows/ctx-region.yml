@@ -53,10 +53,8 @@ jobs:
             ctx-region-${{ matrix.k }}-v1-
             ctx-launch-v1-
       - name: Build the shard
-        env:                                        # optional (docs/OWNER_TODO.md); without them as before
+        env:                                        # optional (docs/OWNER_TODO.md); without it as before
           EARTHDATA_TOKEN: ${{ secrets.EARTHDATA_TOKEN }}
-          FCC_USERNAME: ${{ secrets.FCC_USERNAME }}
-          FCC_API_TOKEN: ${{ secrets.FCC_API_TOKEN }}
         run: python -m tools.ctx_etl.build --preset region --shard "${{ matrix.k }}/6" --out "shard/v1" --cache "$CTX_CACHE" --threads 8
       - name: Save the download cache
         if: always()

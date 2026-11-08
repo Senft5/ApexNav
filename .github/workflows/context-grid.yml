@@ -5,9 +5,8 @@ name: Context grid (route data ETL)
 #
 # - preset "cincinnati" (Hamilton, Clermont, Boone, Kenton, Campbell): ~1.3 MB, ~5 min. These bundles are committed in
 #   web/data/ctx/v1 (they ship inside the app); download the artifact and commit it to refresh them.
-# - optional secrets (docs/OWNER_TODO.md): EARTHDATA_TOKEN switches night lights from the 2016 GIBS image to NASA Black
-#   Marble VNP46A4 (the newest annual radiance, LAADS DAAC); FCC_USERNAME + FCC_API_TOKEN add mobile_coverage (FCC
-#   National Broadband Map, 4G/5G providers per cell). Without them both are built exactly as before.
+# - optional secret (docs/OWNER_TODO.md): EARTHDATA_TOKEN switches night lights from the 2016 GIBS image to NASA Black
+#   Marble VNP46A4 (the newest annual radiance, LAADS DAAC). Without it night lights are built exactly as before.
 # - preset "launch" (OH, KY, IN, WV, TN, NC, VA): too big to commit, so with "upload" ticked and the Cloudflare secrets set
 #   (docs/OWNER_TODO.md) the bundles go to the Worker's CTX KV namespace, served at /api/ctx/v1/... (backend/src/context_grid.ts).
 #
@@ -69,11 +68,9 @@ jobs:
           PRESET: ${{ inputs.preset }}
           STATES: ${{ inputs.states }}
           BBOX: ${{ inputs.bbox }}
-          # the owner's free accounts (docs/OWNER_TODO.md); each is optional: without EARTHDATA_TOKEN night lights are the
-          # 2016 image, without both FCC secrets mobile coverage isn't built. tools/ctx_etl/sources.py never logs them.
+          # the owner's free account (docs/OWNER_TODO.md), optional: without EARTHDATA_TOKEN night lights are the 2016
+          # image. tools/ctx_etl/sources.py never logs it.
           EARTHDATA_TOKEN: ${{ secrets.EARTHDATA_TOKEN }}
-          FCC_USERNAME: ${{ secrets.FCC_USERNAME }}
-          FCC_API_TOKEN: ${{ secrets.FCC_API_TOKEN }}
         run: |
           args=(--preset "$PRESET" --out "$OUT" --cache "$CTX_CACHE" --threads 8)
           [ -n "$STATES" ] && args+=(--states "$STATES")
