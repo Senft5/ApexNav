@@ -129,7 +129,7 @@ flowchart TD
   SAMP --> SCN["scenery points = 20 x mean of scenery minus<br>0.5 times min 1, sConf over 0.35"]
   GEO["5 m geometry, corners, the router's junction<br>turns dropped"] --> FUN["fun = ApexFunRoute.score with each corner<br>weight x gate x built-up cut (two built<br>signals agreeing: 0.4 none, 0.85 all): Twist<br>0.5, Flow 0.35 by its corners' gate, not dull<br>0.15 broken only by corners gated half;<br>good corners gated"]
   FUN --> GAIN["gain = 0.5 x gated good corners over the<br>quickest, cap 60; fun and gain x the share<br>of the drive that isn't side streets"]
-  LVL["Level: Quick budget 10 % + 60 s, 3 per min;<br>Fun 35 % + 240 s, 1 per min; Max fun 90 % +<br>600 s, 0.35 per min"] --> TIME["time = minus perMin x extra minutes over the<br>quickest"]
+  LVL["Level: Quick budget 60 s, 3 per min; Fun<br>35 % + 240 s, 1 per min; Long way 90 % + 600<br>s, 0.35 per min; Fun and Long way never on<br>a highway"] --> TIME["time = minus perMin x extra minutes over the<br>quickest"]
   QR --> QT["quality term = 0.3 x quality - 50 x qWeight"]
   DRV["driver = 6 x mean driver_fit, else<br>skill_fit, x share known; taste = the<br>crowd's taste channel where tasteOn didn't<br>score the candidate"] --> V
   OLD["Today's terms: glare 1 per min cap 20; towns<br>3 per km cap 60 when avoided; weather ice<br>30, storms 15, rain 6, fog 4 by share, minus<br>the driest; members' measured roughness and<br>banking -8 to +5; taste up to +-8; Prefer<br>stamps"] --> V
@@ -148,14 +148,14 @@ flowchart TD
 
 ```mermaid
 flowchart TD
-  WT["Where to?"] --> DEF["Valhalla, the app's costing use_highways<br>0.15, tolls 0.3, avoid chips, the car's<br>width and clearance; 2 alternates"]
+  WT["Where to?"] --> DEF["Valhalla, the app's costing use_highways<br>0.15 (0 at Fun and Long way), tolls 0.3,<br>avoid chips, the car's width and clearance;<br>2 alternates"]
   WT --> HWY["Highway-friendly quickest use_highways 1.0,<br>unless Avoid Highways; trips of 2 km or more"]
   DEF -. "Valhalla down" .-> OSRM["OSRM fallback"]
   WT --> STG["Stages from the map tiles around the<br>corridor, sections on long trips"]
   STG --> NET["Network step: top 8 stages, 12 for Explore,<br>get router edges, map tiles, the grid and DEM<br>in 1.2 s; score x 0.4 + 0.6 x mean gate x 1 +<br>0.4 x scenery - 0.5 x known share; a sample<br>no source knew takes gate 0.4"]
   NET --> SL["shortlist in the level's ellipse, direction<br>by climb, set list"]
-  SL --> MX["connector matrix with use_highways 0.6,<br>avoid kept"]
-  MX --> PL["plans of 1-2 stages within the level's<br>budget, routed through shaping points with<br>use_highways 0.6; dropped if under 70 % of a<br>stage is driven"]
+  SL --> MX["connector matrix with use_highways 0 at<br>Fun and Long way, avoid kept"]
+  MX --> PL["plans of 1-2 stages within the level's<br>budget, routed through shaping points with<br>use_highways 0; dropped if under 70 % of a<br>stage is driven"]
   DEF ~~~ HWY ~~~ STG
   DEF & HWY & OSRM & PL --> POOL["pool: keep avoided roads out when any<br>candidate can"]
   DEF --> EARLY{{"the router answered"}}
@@ -163,7 +163,7 @@ flowchart TD
   SHOW ~~~ CTXR
   POOL --> CTXR["context run, diagram 1, alongside the towns<br>lookup"]
   CTXR --> TOP["engine ranking picks the contenders for<br>weather (top 4), taste (top 4), members'<br>measurements (top 3), Prefer (top 4)"]
-  TOP --> RANK["rank: value per candidate; drop past the<br>level's budget; drop any with a hard<br>constraint unless all have one"]
+  TOP --> RANK["rank: value per candidate; drop past the<br>level's budget; Fun and Long way: only the<br>highway-free, else the least highway; drop<br>any with a hard constraint unless all have<br>one"]
   RANK --> OPT["up to 3 options, not within 30 s and 1<br>gated-fun point of one kept, none slower and<br>less fun"]
   OPT --> PIN["winner: an alternate or highway-costed route<br>is pinned with shaping points every 5-6 km<br>so a reroute keeps to it"]
   OPT ~~~ WHY
@@ -262,7 +262,7 @@ under "The channels" are checked the same way (channel and weight).
 
 | level | budget | slack s | points per extra minute |
 |---|---|---|---|
-| quick | 0.1 | 60 | 3 |
+| quick | 0 | 60 | 3 |
 | fun | 0.35 | 240 | 1 |
 | max | 0.9 | 600 | 0.35 |
 
@@ -306,15 +306,23 @@ under "The channels" are checked the same way (channel and weight).
 | time | − the level's perMin × extra minutes (Quick 3, Fun 1, Max 0.35) | |
 | glare, towns, weather, measured, taste, prefer | today's terms, unchanged: glare 1/min (cap 20), towns 3/km (cap 60, when avoided), weather (ice 30, storms 15, rain 6, fog 4 by share, relative), members' roughness/banking −8…+5, taste ±8, the Prefer stamps | |
 
-The route card's why line (cockpit.js optionOnto) is `why(best, quick)`; for the ranking's pick it adds two more: a Fun or
-Long way pick that is the quickest (or within a minute of it) says so, `whyQuickest`: "No great roads on this trip: Quick
-is the way" (or "The quickest way is the best road here too" with 5 good corners or more); and a pick that another
+The route card's why line (cockpit.js optionOnto) is `why(best, quick)`; for the ranking's pick it adds more: at Fun and
+Long way the highway line first, `whyHighway` ("Uses 0.4 mi of I-275 (no other way across)" for the exception; "No
+highway-free way in a sensible time; Quick is the way" alone when the highway-free way is over twice the quickest's time);
+a Fun or Long way pick that is the quickest (or within a minute of it) says so, `whyQuickest`: "No great roads on this
+trip: Quick is the way" (or "The quickest way is the best road here too" with 5 good corners or more), and one that is the
+quickest way off the highway: "No great roads on this trip: this is the quickest way off the highway"; and a pick that another
 option on the card beats on its own numbers (`ApexFunRoute.dominates`: no slower in the card's minutes, more corners)
 says what it wins by, `whyOver`: "Over the 34 min route: less low sun". The card never shows a pick that looks strictly
 worse without a reason.
 
 `value` is their sum; `rank` takes the quickest and the budget from the candidates that can be driven, drops those past
-the budget and any with a hard constraint; if every candidate breaks one, the least bad (fewest) stays, flagged, and the
+the budget and any with a hard constraint; **at Fun and Long way it keeps only the candidates with no motorway or trunk
+road** (fun_route.js `applyHighways`: at most 0.1 km by `highwayKm`, our router's own count, else the context's road
+class; the owner, 2026-11-08: "fun should never go on the highway"), else, where none is highway-free, those within 0.3
+km of the least highway (the exception); the budget then opens to the quickest of them + 60 s, the quickest it is measured
+against stays the true quickest (`ranked.quickest`, for the why line), and the picks carry `hwyRule`, `hwyKm`,
+`hwyAbsurd` (the highway-free quickest over 2x the quickest's time) and `hwyFreeS`; if every candidate breaks one, the least bad (fewest) stays, flagged, and the
 route card says what (never an empty ranking). **Unknown data can't win:** where a candidate's road quality is unknown
 (or only in part) and others' is known, its unknown stretches take the lowest known candidate's corner gate and quality
 and the highest side-street cost per km. **With no context at all the value is
@@ -368,9 +376,15 @@ knew made the difference, the old line (the roads it's for and its corners) is s
 
 ## The plan search
 
-- **Candidates**: the router's route and two alternates (its costing keeps off highways); **the highway-friendly
-  quickest** (`highwayCosting`, use_highways 1.0) unless the driver avoids highways, which is what fixes routes through
-  subdivisions and business districts; stage plans; loops; Explore.
+- **Levels** (the owner, 2026-11-08: "fun should never go on the highway. Quick should essentially be a normal route"):
+  Quick is the quickest way, highways welcome, a nicer road only within a minute (budget 0 + 60 s); Fun and Long way never
+  drive a motorway or trunk road (or their links): a hard rule in our router (graph_router.js `K.NO_HWY`, OWN_ROUTING.md
+  §5) and in the ranking (above), with the one exception where no way without one exists (a river crossed only by an
+  interstate bridge, a start or end on a ramp): the shortest highway link, said on the card.
+- **Candidates**: the router's route and two alternates (its costing keeps off highways, use_highways 0 at Fun and Long
+  way: `levelCosting`); **the highway-friendly quickest** (`highwayCosting`, use_highways 1.0) unless the driver avoids
+  highways, which is what fixes routes through subdivisions and business districts at Quick, and is every level's measure;
+  stage plans; loops; Explore.
 - **The network**: before plans are timed, the 8 best stages (12 for Explore) get the stage-capable providers (the
   router's edges by map matching, the map tiles' land use, shops and road class, the context grid, the DEM) in 1.2 s,
   and `rescoreStages` multiplies each stage's map score by (0.4 + 0.6 × its mean corner gate) × (1 + 0.4 × (scenery −
@@ -380,7 +394,8 @@ knew made the difference, the old line (the roads it's for and its corners) is s
   map score and a Colerain Avenue stage was planned). A stage the context shows is mostly a neighbourhood street
   (`streetOf`, fun_route.js `streetSample`), or one our graph tiles' model scores under 0.45 on average, gets
   `notRoad` and sorts last; Best roads nearby never lists it (ROUTING.md "Explore").
-- **Connectors**: the matrix and the stage plans' routes use `connectorCosting` (use_highways 0.6, avoid-highways kept):
+- **Connectors**: the matrix and the stage plans' routes use `levelCosting` (use_highways 0 at Fun and Long way, where
+  they are made; `connectorCosting`'s 0.6 at Quick; avoid-highways kept); loops `loopCosting` (0.25 Quick, 0 Fun and Long way):
   the good roads are pinned by shaping points, so this only changes how the plan gets between them: fast roads, not
   cut-throughs. A detour must then buy real quality: its gated corners, quality and scenery against its minutes.
 - **The quickest always competes**; if the alternatives are worse roads, it wins.
@@ -457,8 +472,8 @@ each case as the app would):
 | case | candidates | engine | old ranking |
 |---|---|---|---|
 | subdivision (Pippin Road vs Menominee Drive, 5 good corners in 1.3 km) | 5.6 min vs 9.2 min | Pippin Road at every level | Menominee at Fun and Max |
-| northgate (Springdale and Mill Roads vs I-275) | 12.0 / 14.4 / 14.7 vs I-275 11.4 min | I-275 at every level | Pippin and Kemper at Fun and Max |
-| colerain (Colerain Avenue: 18 signals, 244 businesses beside it) | 17.6 vs Pippin and Struble 19.0, Blue Rock 21.2 | Pippin and Struble (Quick, Fun), Blue Rock (Max) | Colerain Avenue |
+| northgate (Springdale and Mill Roads vs I-275) | 12.0 / 14.4 / 14.7 vs I-275 11.4 min | I-275 at Quick; Springdale and Mill Roads at Fun and Long way (never the highway, 2026-11-08) | Pippin and Kemper at Fun and Max |
+| colerain (Colerain Avenue: 18 signals, 244 businesses beside it) | 17.6 vs Pippin and Struble 19.0, Blue Rock 21.2 | Colerain Avenue at Quick (the quickest: Quick is the normal route since 2026-11-08), Pippin and Struble or Blue Rock at Fun and Long way | Colerain Avenue |
 | harrison (the fixture drive's country) | I-275/I-74 22.0 vs Lees Creek and Day Roads 26.1 | the highway at Quick, the back roads at Fun and Max | the same |
 
 Live captures (`tools/route_engine_live.js` in headless Chromium against the real services, FIXTURES=…) in
@@ -467,8 +482,8 @@ routed, with the context every provider returned. `tests/test_route_engine_live.
 
 | live case | #292 picked | now |
 |---|---|---|
-| northgate, Fun (stage plans incl. W Kemper, Colerain Avenue 3.7 km, Bank Road) | the Colerain Avenue stage plan at Fun and Max, "through forest" | I-275 at every level |
-| colerain, Quick and Fun captures (Colerain Avenue 3.6 km vs Pippin and Struble, Blue Rock) | Colerain Avenue at Quick; a Colerain Avenue route at Max | Pippin and Struble at Quick, Blue Rock Road at Fun and Max, "Avoids 1.5 mi of strip malls" |
+| northgate, Fun (stage plans incl. W Kemper, Colerain Avenue 3.7 km, Bank Road) | the Colerain Avenue stage plan at Fun and Max, "through forest" | I-275 at Quick; Springdale and Mill Roads at Fun and Long way (2026-11-08) |
+| colerain, Quick and Fun captures (Colerain Avenue 3.6 km vs Pippin and Struble, Blue Rock) | Colerain Avenue at Quick; a Colerain Avenue route at Max | Colerain Avenue at Quick (the quickest, 2026-11-08; Pippin and Struble are 1.4 min more), Blue Rock Road at Fun and Max, "Avoids 1.5 mi of strip malls" |
 | harrison, Fun | the same | I-275 and I-74 at Quick, New Haven, Day and Lees Creek Roads at Fun and Max |
 | subdivision4 (4 km across Groesbeck, the router's quickest cuts through Cornwall and Comstock Drives) | | the cut-through at Quick only; Miles and Struble Roads at Fun and Max, "Better roads than the quickest" |
 
