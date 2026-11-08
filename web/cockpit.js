@@ -4534,6 +4534,17 @@
     $('routeBar').addEventListener('click', () => openPlan(!$('planPanel').classList.contains('open')));
     $('destInput').addEventListener('focus', () => { if (!$('planPanel').classList.contains('open')) openPlan(true); });
     $('planCancel').addEventListener('click', () => openPlan(false));
+    // TestFlight 2026-11-05 ("takes up so much screen"): on the idle map the deck under Where to? (Best roads nearby, the
+    // suggestion, your road) folds away with a swipe down on the bar, like a sheet's lowest detent, and comes back with a swipe
+    // up; the next swipe up opens Where to? as before. Kept on this phone. Nothing is lost folded: all of it is in Where to?.
+    let deckMin = false;
+    try { deckMin = localStorage.getItem('apex.deckMin') === '1'; } catch (_) {}
+    function setDeckMin(on, say = true) {
+      deckMin = !!on; $('app').classList.toggle('deck-min', deckMin);
+      try { if (deckMin) localStorage.setItem('apex.deckMin', '1'); else localStorage.removeItem('apex.deckMin'); } catch (_) {}
+      if (say) announce(deckMin ? 'Suggestions folded away. Swipe up on Where to? to bring them back.' : 'Suggestions shown.');
+    }
+    setDeckMin(deckMin, false);
     {
       const panel = $('planPanel');
       let y0 = null, base = 0, moved = false, t0 = 0;
@@ -4563,6 +4574,10 @@
           if (full && (dy > 60 || (fast && dy > 20)) && h0 - dy > 0.35 * h0) { panel.classList.remove('full'); return; }   // down a step: half
           if (dy > 80 || (fast && dy > 20)) openPlan(false);                                               // down: the bar
           return;
+        }
+        if (!open && $('app').classList.contains('idle') && !panel.classList.contains('routed')) {
+          if (dy > 40 || (fast && dy > 15)) { if (!deckMin) setDeckMin(true); return; }                      // down: fold the deck
+          if (deckMin && (dy < -40 || (fast && dy < -15))) { setDeckMin(false); return; }                    // up, folded: unfold it first
         }
         openPlan(open ? !(dy > 80 || (fast && dy > 20)) : (dy < -80 || (fast && dy < -20)));
       };
@@ -5351,7 +5366,7 @@
     onSocial(() => { try { garage = window.ApexGarageUI ? ApexGarageUI.mount({ el, btn, toast, apiCall, jsonOf, report: safety && safety.report, onCars: setRoutingCars, onPhotos: () => renderAccount(), builds }) : null; } catch (e) { console.error('garage', e); } });
     // an on/off setting is the slide switch (U-44), the label beside it, never a key that reads "Off"
     const switchRow = (label, on, change) => { const b = el('button', { className: 'sw' + (on ? ' on' : ''), onclick: change }, el('i'), el('span', { textContent: label })); b.setAttribute('role', 'switch'); b.setAttribute('aria-checked', String(!!on)); return b; };
-    let openCrewId = null, openFriendId = null;   // the crew tile and the friend row left open across a redraw
+    let openCrewId = null, openFriendId = null, crewOpen = null;   // crewOpen: the crew open over the crews dashboard (this visit)   // the crew tile and the friend row left open across a redraw
     const crewNear = () => { if (state.lastPosition) return state.lastPosition; const c = map.getCenter(); return { lat: c.lat, lon: c.lng }; };
     // Links people share open the website (in the app the page's own origin is apexnav://app, which no one else can open).
     const shareOrigin = () => (ApexSync.inApp ? ApexSync.apiBase : location.origin);
@@ -5489,11 +5504,11 @@
       // you (in the Garage: REVIEW.md 3.2, your own identity lives with your cars)
       const you = section('You');
       // your profile photo (REVIEW.md 5.2): a round face beside your handle, or your initial until you add one
+      // TestFlight 2026-11-05: the photo itself is the key, as in every other app: a tap adds one, or changes or removes it
+      // on a small sheet; no separate keys and no note (the toast after an upload says its location data stayed on the phone)
       const face = window.ApexPhotos ? ApexPhotos.avatar(me.photo_id, me.handle, 72) : null;
-      you.append(el('div', { className: 'row', style: 'align-items:center;gap:12px' }, ...(face ? [face] : []), el('b', { textContent: `@${me.handle}`, style: 'font-size:22px;font-family:var(--font-num)' })));   // no "points": a number with no unit (REVIEW2.md U-41)
-      if (face && me.member) you.append(el('div', { className: 'row' }, ApexPhotos.picker(me.photo_id ? 'Change photo' : 'Add a photo', 'profile', null, redo, { toast }),
-        ...(me.photo_id ? [btn('Remove photo', async () => { if (await ApexPhotos.remove(me.photo_id)) redo(); else toast('Couldn’t remove it. Try again.'); }, 'linkbtn')] : [])),
-        el('p', { className: 'note', textContent: 'Photos lose their location data before they leave your phone.' }));
+      const faceKey = face && me.member && ApexPhotos.mine ? ApexPhotos.mine(face, me.photo_id, 'profile', redo, { toast, name: 'your profile photo' }) : face;
+      you.append(el('div', { className: 'row', style: 'align-items:center;gap:12px' }, ...(faceKey ? [faceKey] : []), el('b', { textContent: `@${me.handle}`, style: 'font-size:22px;font-family:var(--font-num)' })));   // no "points": a number with no unit (REVIEW2.md U-41)
       // Who sees what (P-09): under You, every audience and what it gets
       if (whoSees) you.append(el('div', { className: 'nav-rows' }, whoSees.row()));
       gbody.append(you);
@@ -5762,17 +5777,31 @@
           }, 'ink-btn solid'), btn('Not now', () => { unstash('apex.crew'); redo(); }, 'linkbtn'));
       }
       if (inCrew) {
-        let cur = null; try { cur = localStorage.getItem('apex.crewPage'); } catch (_) {}
-        if (!myCrews.some((c) => c.id === cur)) cur = myCrews[0].id;
+        // TestFlight 2026-11-05 ("will this menu get convoluted if people are in a lot of crews?"): in two or more, the
+        // Crews side is a dashboard of them (pinned first, a feed of the latest from all of them, crew_page.js dashboard);
+        // a crew opens from it, with a key back. In one, its page is the side, as before.
+        const many = myCrews.length > 1 && !!crewPage.dashboard;
+        if (openCrewId && myCrews.some((c) => c.id === openCrewId)) { crewOpen = openCrewId; openCrewId = null; }   // just joined: that crew
+        if (!many) crewOpen = myCrews[0].id;
+        else if (!myCrews.some((c) => c.id === crewOpen)) crewOpen = null;
         const holder = el('div', { className: 'stack-8' }), chead = el('div', { className: 'crew-head' });
         const gear = el('button', { className: 'gear-key', type: 'button', 'aria-label': 'Crew settings', innerHTML: '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"/><circle cx="12" cy="12" r="6.5"/><circle cx="12" cy="12" r="8" stroke-width="3.2" stroke-dasharray="3.1 3.18"/></svg>' });
         gear.addEventListener('click', () => crewSettings.classList.add('open'));
-        const openCrew = (id) => { try { localStorage.setItem('apex.crewPage', id); } catch (_) {}
-          const cur = myCrews.find((c) => c.id === id);
-          chead.replaceChildren(myCrews.length > 1 ? crewPage.switcher(myCrews, id, openCrew) : el('b', { textContent: cur ? cur.name : '' }), gear);
-          holder.replaceChildren(crewPage.view(id));
-          if (cur) crewSettings.replaceChildren(crewSettings.firstElementChild, crewSettingsFor(cur)); };
-        openCrew(cur);
+        const openCrew = (id) => {
+          crewOpen = id || null;
+          const cur = myCrews.find((c) => c.id === crewOpen);
+          if (!cur) { chead.replaceChildren(); chead.hidden = true; holder.replaceChildren(crewPage.dashboard(myCrews, openCrew)); }
+          else {
+            chead.hidden = false;
+            const back = many ? btn('Your crews', () => { openCrew(null); const k = holder.querySelector('.cd-open'); if (k) k.focus({ preventScroll: true }); }, 'linkbtn cd-back') : el('b', { textContent: cur.name });
+            if (many) back.setAttribute('aria-label', 'Back to your crews');
+            chead.replaceChildren(back, gear);
+            holder.replaceChildren(crewPage.view(cur.id));
+            crewSettings.replaceChildren(crewSettings.firstElementChild, crewSettingsFor(cur));
+          }
+          const sc = cbody.closest('.body') || cbody.parentElement; if (sc && sc.scrollTop) sc.scrollTop = 0;
+        };
+        openCrew(crewOpen);
         cbody.append(chead, holder);
       }
       // not in a crew yet: what one is (in one, its settings are the gear's, above)
@@ -5792,12 +5821,16 @@
         b.setAttribute('aria-checked', String(v === 'private'));
         cvis.append(b);
       }
-      newSec.append(el('p', { className: 'ctl-label', textContent: 'Who can join' }, el('small', { textContent: 'private is by invite link; public, people nearby can find it' })), cvis, carea);
-      newSec.append(el('div', { className: 'row' }, cname, btn('Create', async () => {
-        if (!cname.value.trim()) return;
+      // TestFlight 2026-11-05 ("bad when typing new crew info"): in the order it is filled in, the name first and full width,
+      // who can join under its own label with the explanation on its own line, then Create
+      cname.classList.add('new-crew-name'); carea.classList.add('new-crew-area');
+      const create = btn('Create crew', async () => {
+        if (!cname.value.trim()) { cname.focus(); return; }
         const pub = cvis.value === 'public', near = crewNear();
         if (pub && carea.value.trim().length < 2) { toast('Name the area people nearby will see.'); return; }
-        const r = await apiCall('POST', '/api/crews', pub ? { name: cname.value.trim(), visibility: 'public', area: { name: carea.value.trim(), lat: near.lat, lon: near.lon } } : { name: cname.value.trim() }); if (r.ok) redo(); else toast('Couldn\'t create the crew.'); })));
+        const r = await apiCall('POST', '/api/crews', pub ? { name: cname.value.trim(), visibility: 'public', area: { name: carea.value.trim(), lat: near.lat, lon: near.lon } } : { name: cname.value.trim() }); if (r.ok) redo(); else toast('Couldn\'t create the crew.'); }, 'ink-btn solid');
+      cname.enterKeyHint = 'next';
+      newSec.append(cname, el('div', { className: 'new-crew-who' }, el('b', { textContent: 'Who can join' }), el('small', { textContent: 'Private: by invite link. Public: people nearby can find it.' })), cvis, carea, create);
 
       // public crews near you: tiles with Join (only name, area and size are shown; members stay private)
       let nearbyRow = null;
@@ -6220,7 +6253,9 @@
       const sugg = YR.suggest({ crew: deckState.crew, untried: deckState.untried, mine: deckState.all, long: deckLong });
       deckState.sugg = sugg;
       paintLoopSuggest();
-      const rows = YR.deck(sugg, deckState.all.slice(0, 3), 3).slice(1).map((row) => {
+      // TestFlight 2026-11-05 ("takes up so much screen"): the suggestion and one row under it (it was two); the rest are a
+      // tap away in Where to?, and a swipe down on the bar folds the deck to the bar alone (setDeckMin)
+      const rows = YR.deck(sugg, deckState.all.slice(0, 3), 2).slice(1).map((row) => {
         if (row.kind === 'loop') {
           const b = document.querySelector('#loopDetents button[aria-pressed="true"]'), title = `Loop from here · ${b ? b.textContent : '45 mi'}`;
           return deckRow(title, 'On the twistiest roads nearby', 'Plan', `${title}, on the twistiest roads nearby. Plan it.`, () => { if (!loopBusy) $('findLoopBtn').click(); });
@@ -8107,7 +8142,7 @@
       back.addEventListener('click', (e) => { if (e.target === back) close(); });
       document.addEventListener('keydown', esc);
       document.body.append(back);
-      drive.focus();
+      drive.focus({ preventScroll: true });   // TestFlight 2026-11-05: focusing mid-slide scrolled the sheet up past its place (keyboard.js)
     });
     $('trialStop').addEventListener('click', () => endThemeTrial(false));
     $('trialWatch').addEventListener('click', () => { watchDryRidge().then(paintTrial); });

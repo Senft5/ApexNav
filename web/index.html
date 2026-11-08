@@ -814,6 +814,8 @@
     .loop-suggest svg circle { fill: var(--panel-ink); }
     .loop-suggest b { display: block; font-size: 16px; } .loop-suggest small { display: block; font-size: 13px; color: var(--panel-dim); }
     .drive-today[hidden], #app.drive-today-on .loop-suggest:not(.drive-today) { display: none !important; }
+    /* TestFlight 2026-11-05: the deck folded (a swipe down on the bar) is the bar alone; a crew drive's morning still shows */
+    #app.deck-min .deck-chips, #app.deck-min .loop-suggest:not(.drive-today), #app.deck-min .your-roads { display: none !important; }
     .drive-today .dt-date { width: 40px; height: 40px; background: var(--panel-ink); color: var(--panel); display: grid; place-content: center; text-align: center; font-family: var(--font-num); line-height: 1; }
     .drive-today .dt-date b { font-size: 18px; } .drive-today .dt-date small { font-size: 10px; letter-spacing: 0.06em; color: var(--panel); }
     .loop-suggest em { font-style: normal; font-weight: 600; text-decoration: underline; text-underline-offset: 3px; }
@@ -963,6 +965,11 @@
     .crew-tile-head b { font-size: 16px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .crew-tile-head span { font-size: 12px; color: var(--panel-dim); }
     .crew-tile-head em { font-style: normal; font-size: 12px; color: var(--panel-dim); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+    /* Start a crew (TestFlight 2026-11-05): the name full width, then who can join with its explanation under the label */
+    .new-crew-name, .new-crew-area { width: 100%; box-sizing: border-box; }
+    .new-crew-who { display: grid; gap: 2px; margin-top: 4px; } .new-crew-who b { font-size: 15px; }
+    .new-crew-who small { font-size: 13px; line-height: 1.4; color: var(--panel-dim); }
+    .new-crew-who + .switch { margin-top: 2px; }
     /* Friends: a side pop-up over the Crew sheet. */
     .side-pop { position: fixed; top: 0; right: 0; bottom: 0; width: min(360px, 88vw); z-index: 30; background: var(--panel); color: var(--panel-ink);
       border-left: 1px solid var(--rule); box-shadow: -12px 0 32px rgba(0, 0, 0, 0.3); padding: calc(14px + var(--safe-top)) calc(16px + var(--safe-right)) calc(24px + var(--safe-bottom)) 16px;
@@ -1119,9 +1126,10 @@
     .people-tabs > button[aria-selected="true"] { color: var(--panel-ink); }
     .people-tabs > button::after { content: ""; position: absolute; left: 0; right: 0; bottom: -1px; height: 3px; background: var(--panel-ink); transform: scaleX(0); transition: transform 0.18s ease-out; }
     .people-tabs > button[aria-selected="true"]::after { transform: none; }
-    /* In a crew, the Crews side opens on it: its switcher (or name) and the gear for its settings (REVIEW2.md U-30) */
+    /* In a crew, the Crews side opens on it: its name (in several, the key back to your crews) and the gear for its
+       settings (REVIEW2.md U-30; TestFlight 2026-11-05) */
     .crew-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; min-width: 0; }
-    .crew-head .cp-switch { margin: 0; flex-wrap: nowrap; overflow-x: auto; min-width: 0; }
+    .crew-head[hidden] { display: none; }
     .crew-head > b { font: 700 22px var(--font-num); min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .gear-key { flex: none; width: 44px; height: 44px; display: grid; place-items: center; border: 1.5px solid var(--panel-ink); background: transparent; color: var(--panel-ink); box-shadow: 0 3px 0 var(--rule); }
     .gear-key svg { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width: 1.8; }
@@ -1213,6 +1221,11 @@
     /* feedback 02: with the keyboard up the sheet takes the height above it but stops below the Dynamic Island (and a gap),
        so focusing Where to? never snaps the field under the island */
     html.kb-open .plan.open { height: calc(100% - max(var(--safe-top), 20px) - 12px); }
+    /* TestFlight 2026-11-05 ("bad when typing new crew info"): a sheet from the bottom (Find or start a crew, a Garage setting,
+       Invite) stood behind the keyboard with the field being typed in under it. With the keyboard up the sheet stands on the
+       keyboard and may grow to just below the island; keyboard.js scrolls the field into view inside it. */
+    html.kb-open .side-pop.open { bottom: calc(100% - var(--kb-h)); min-height: 0; max-height: calc(var(--kb-h) - max(var(--safe-top), 20px) - 12px);
+      padding-bottom: 16px; box-shadow: none; }
     /* the bar already names the route while the sheet is open */
     .plan.open #routeCardName { display: none; }
     .plan-search:focus-within { border-color: var(--panel-ink); }

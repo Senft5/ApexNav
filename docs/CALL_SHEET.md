@@ -38,6 +38,46 @@ home trip Fun was +8 min and Long way +13, most of both on the Cross County free
 - Not covered yet: expressways mapped as ordinary `primary` roads with `motorroad=yes` (our tiles don't keep that tag; a
   tile rebuild would). Trunk roads are covered.
 
+## 2026-11-08: TestFlight notes of 2026-11-05 (build 592.1): crews dashboard, typing in sheets, your photo, the stage page, Ways to go, the deck (claude/feedback-1105)
+
+Your six screenshot notes, each fixed; the calls made on the way:
+- **In two or more crews the Crews side is a dashboard** ("Shouldn't it maybe just be a dashboard like the facebook groups
+  you're in, with a feed and the option to pin crews?"). A row a crew: its crest and stripe, its name, its next drive, or
+  else its last message, or else what it is, and how long ago; a pin key on each. Pinned crews first, in the order pinned;
+  the rest by latest activity, then by name. Under the list, "Latest from your crews": the newest messages and drives
+  planned across all of them (two weeks, 8 shown, then Show more); a tap opens that crew. A crew opens with "‹ Your crews"
+  to go back, and its gear. The old row of crew-name chips is gone. Undo: in cockpit.js renderPeople, `many` to false (the
+  crew page then shows alone, without the chips; reverting the commit brings the chips back).
+- **In one crew the Crews side is still that crew's page** (a dashboard of one is a step for nothing). Undo: `many` to
+  `myCrews.length > 0`.
+- **Pins are kept on the phone only** (localStorage `apex.crewPins`): no migration, nothing new on the server, and a pin is
+  your own sorting, not something the crew sees. They don't follow you to a second phone. Upgrade: a `pinned` column on
+  crew_members and a PUT, if you want them everywhere.
+- **The feed is one new read-only Worker route, `GET /api/crews/feed`** (backend/src/crew_page.ts crewFeed), with the same
+  rules as each crew's chat and drives: members only, blocked people left out both ways, reported items down, cancelled
+  drives out; nothing new collected or kept. Until the Worker deploys, the dashboard lists the crews and says the latest
+  couldn't be loaded. Undo: drop the route; the dashboard falls back to that line.
+- **Sheets with a text field stand on the keyboard** (Find or start a crew, Invite, every Garage setting, the confirm
+  sheet's name field): they end at the keyboard's top and may grow to just below the island; the field scrolls into view.
+  Start a crew is now in the order it is filled in: the name (full width), Who can join with its explanation on its own
+  line, then a solid Create crew. Undo: the `html.kb-open .side-pop.open` rule (index.html) and `html.kb-open
+  .confirm-sheet` (controls.css).
+- **Your photo is the key** (Garage, You): no photo, a tap opens the picker; with one, a tap opens Choose a new photo /
+  Remove photo / Cancel (the focus on Cancel, never on Remove), with a small pencil on the photo's edge so it reads as
+  tappable. The "Photos lose their location data" line is gone from there; the toast after an upload still says it ("Photo
+  added. Its location data stayed on your phone.") and the privacy policy is unchanged. Undo: `ApexPhotos.mine` in
+  cockpit.js back to the picker row.
+- **A stage's runs: a run is a line (#, run, Score, time) with its four components under it**, so nothing scrolls sideways
+  on a phone; an empty board is a sentence above the table, not a cut table cell; a friend with no handle is "A friend with
+  no handle yet" (it was "@null"), under "Share this stage with a friend". Undo: analysis.html renderSegments / drawBoard.
+- **A sheet sliding up is never scrolled for its focused key while it slides** (keyboard.js): that scroll was the "glitched
+  animation" on Ways to go (WebKit held the sheet about 360 pt above its place for the whole slide, then dropped it). Ways
+  to go also focuses with preventScroll. Undo: the `settle` listeners in keyboard.js.
+- **The idle map's deck is the suggestion and one road** (it was two roads), and **a swipe down on the bar folds it to the
+  bar alone** (kept on the phone, `apex.deckMin`); a swipe up brings it back, the next opens Where to? as before. Nothing is
+  lost when folded: Best roads nearby, the loop and your roads are all in Where to?. Undo: the `2` back to `3` in
+  paintDeck's YR.deck call; `setDeckMin` and its two lines in the bar's release.
+
 ## 2026-11-08: Own routing, instant: speed limits offline, Valhalla down (claude/own-routing-instant-2)
 
 Your goal: "Planning in well under a second. Routing that works offline. No dependence on a free server that can slow

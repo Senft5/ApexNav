@@ -116,3 +116,21 @@ def test_drive_scores_to_send_are_the_logs_scores_on_the_phones_day():
         {"id": "e", "score": 610, "driven_on": "2026-11-03"},   # its Score changed since it was sent
     ]
     assert run("C.dayOf('nope')") is None
+
+
+@needs_node
+def test_crews_dashboard_order_and_line():
+    """The crews dashboard (TestFlight 2026-11-05): pinned first in pin order, then the latest active, the quiet ones by
+    name; each row's line is its next drive, else its last message, else what the crew is."""
+    crews = "[{id:'a',name:'Zed'},{id:'b',name:'alpha'},{id:'c',name:'Mid'},{id:'d',name:'Busy'}]"
+    info = "{d:{last:{at:'2026-11-05 03:00:00'}}, c:{last:{at:'2026-11-04 09:00:00'}}}"
+    order = run(f"(() => {{ const o = C.dashOrder({crews}, ['a','gone'], {info}); return [o.pinned.map(c => c.id), o.rest.map(c => c.id)]; }})()")
+    assert order == [["a"], ["d", "c", "b"]]
+    assert run("C.dashLine({members: 3, visibility: 'public', area_name: 'Asheville'}, null)") == "3 members · Public · Asheville"
+    assert run("C.dashLine({members: 1, visibility: 'private'}, {})") == "1 member · Private"
+    assert run("C.dashLine({members: 1}, {last: {handle: 'sam', body: 'Fog by 7?'}})") == "@sam: Fog by 7?"
+    assert run("C.dashLine({members: 1}, {last: {handle: 'me', body: 'In', mine: true}})") == "You: In"
+    line = run("C.dashLine({}, {last: {handle: 'sam', body: 'x'}, next: {title: 'Dawn run', starts_at: '2026-11-07T13:00:00Z'}}, Date.parse('2026-11-05T12:00:00Z'))")
+    assert line.startswith("Next drive: Dawn run · ") and "Nov" in line
+    assert run("C.dashLine({}, {next: {title: 'Dawn run', starts_at: '2026-11-05T20:00:00Z'}}, Date.parse('2026-11-05T15:00:00Z'))") == "Next drive: Dawn run · today"
+    assert run("C.dashLine({}, {next: {title: 'Dawn run', starts_at: 'nope'}})") == "Next drive: Dawn run"

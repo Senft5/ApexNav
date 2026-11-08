@@ -46,4 +46,16 @@
   if (vv) { vv.addEventListener('resize', soon); vv.addEventListener('scroll', soon); }
   doc.addEventListener('focusin', () => root.setTimeout(soon, 60));
   doc.addEventListener('focusout', () => root.setTimeout(soon, 60));
+  // A sheet sliding up (index.html sheet-up) that focuses its first key as it opens (TestFlight 2026-11-05, "glitched
+  // animation when opening this menu"): mid-slide the key is still below the screen, so the browser scrolled the overlay to
+  // bring it into view; the sheet flew up past its place and dropped back when the slide ended (WebKit keeps the scroll for
+  // the whole slide). The sheet comes up to the key anyway, so while it slides its overlay is not scrolled for focus.
+  // WebKit scrolls after the focus event, so the overlay's scroll is undone where it lands, before the frame is drawn.
+  const sliding = (ov) => { const s = ov.firstElementChild; return !!(s && s.getAnimations && s.getAnimations().some((a) => a.animationName === 'sheet-up' && a.playState !== 'finished')); };
+  const settle = (e) => {
+    const t = e.target, ov = t && t.closest ? (e.type === 'scroll' ? (t.matches && t.matches('.overlay.dim') ? t : null) : t.closest('.overlay.dim')) : null;
+    if (ov && ov.scrollTop && sliding(ov)) ov.scrollTop = 0;
+  };
+  doc.addEventListener('focusin', settle, true);
+  doc.addEventListener('scroll', settle, true);
 })(typeof window !== 'undefined' ? window : globalThis);

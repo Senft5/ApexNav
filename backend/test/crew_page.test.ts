@@ -76,6 +76,40 @@ describe("crew page", () => {
     expect((await sweepExpired(env as any)).crew_chat).toBe(1);
   });
 
+  it("the crews feed: each of your crews with its last message and next drive, and the newest across them; members only, blocks and reports kept", async () => {
+    const [a, b, c, out] = [await makeUser("alice"), await makeUser("bob"), await makeUser("carol"), await makeUser("outsider")];
+    const k1 = await crewOf(a, b, c);
+    const k2 = ((await (await ok(api(a, "POST", "/api/crews", { name: "Breakfast Club" }))).json()) as { id: string }).id;
+    const k3 = ((await (await ok(api(out, "POST", "/api/crews", { name: "Not yours" }))).json()) as { id: string }).id;
+    const feed = async (u: TestUser) => (await (await ok(api(u, "GET", "/api/crews/feed"))).json()) as { crews: any[]; items: any[] };
+    expect(await feed(await makeUser("nobody"))).toEqual({ crews: [], items: [] });
+    await ok(api(b, "POST", `/api/crews/${k1}/chat`, { body: "Fog by 7?" }));
+    await ok(api(a, "POST", `/api/crews/${k2}/chat`, { body: "Pancakes after" }));
+    await ok(api(out, "POST", `/api/crews/${k3}/chat`, { body: "secret" }));
+    const soon = new Date(Date.now() + 2 * 86400e3).toISOString();
+    await ok(api(c, "POST", `/api/crews/${k1}/events`, { title: "Dawn run", starts_at: soon, meet: { lat: 35.36, lon: -84.29 } }));
+    await env.DB.prepare("UPDATE crew_chat SET created_at = datetime('now', '-1 hour') WHERE body = 'Fog by 7?'").run();
+    await env.DB.prepare("UPDATE crew_events SET created_at = datetime('now', '-10 minutes')").run();
+    const f = await feed(a);
+    expect(f.crews.map((x) => x.id).sort()).toEqual([k1, k2].sort());
+    const one = f.crews.find((x) => x.id === k1);
+    expect(one).toMatchObject({ crest: null, last: { handle: "bob", body: "Fog by 7?", mine: false }, next: { title: "Dawn run" } });
+    expect(f.crews.find((x) => x.id === k2)).toMatchObject({ last: { handle: "alice", body: "Pancakes after", mine: true }, next: null });
+    expect(f.items.map((i) => [i.kind, i.crew_id, i.handle, i.body ?? i.title])).toEqual([
+      ["chat", k2, "alice", "Pancakes after"], ["drive", k1, "carol", "Dawn run"], ["chat", k1, "bob", "Fog by 7?"]]);   // newest first
+    expect(JSON.stringify(f)).not.toContain("secret");
+    expect((await api(await makeUser("guest"), "GET", "/api/crews/feed")).status).not.toBe(500);
+    // someone you blocked drops out of it, as from the crew's own chat and drives
+    await ok(api(a, "POST", "/api/blocks", { handle: "bob" }));
+    await ok(api(a, "POST", "/api/blocks", { handle: "carol" }));
+    const g = await feed(a);
+    expect(g.items.map((i) => i.handle)).toEqual(["alice"]);
+    expect(g.crews.find((x) => x.id === k1)).toMatchObject({ last: null, next: null });
+    // older than two weeks is not news
+    await env.DB.prepare("UPDATE crew_chat SET created_at = datetime('now', '-15 days')").run();
+    expect((await feed(b)).items.filter((i) => i.kind === "chat")).toEqual([]);
+  });
+
   it("chat is capped at 30 an hour a person", async () => {
     const [a] = [await makeUser("alice")];
     const crew = await crewOf(a);

@@ -5,7 +5,7 @@ import type { Viewer } from "./auth";
 import { Env, HttpError, body, num } from "./util";
 import { cleanText } from "./convoy";
 import { isCrewMember } from "./social";
-import { RECORD_AFTER_H, eventsList, lastEvent } from "./events";
+import { RECORD_AFTER_H, SHOW_AFTER_START_H, eventsList, lastEvent } from "./events";
 import { reportedSql } from "./reports_sql";
 import { PATTERNS, atLeast, liveryOf, myDecals, templateCap, type Tier } from "./livery";
 
@@ -161,6 +161,49 @@ export async function crewPageUpdate(env: Env, v: Viewer, crewId: string, req: R
 }
 
 /** GET /api/crews/:id/chat[?before=<iso>]: up to CHAT_PAGE messages, oldest first; none from blocked people or hidden by reports. */
+export const FEED_DAYS = 14, FEED_ITEMS = 30;
+interface FeedChat { id: string; crew_id: string; body: string; created_at: string; handle: string | null; photo_id: string | null; mine: number }
+interface FeedDrive { id: string; crew_id: string; title: string; starts_at: string; created_at: string; handle: string | null; mine: number }
+/** GET /api/crews/feed: your crews at a glance (TestFlight 2026-11-05: "a dashboard like the groups you're in, with a feed").
+ *  Each crew you're in: its crest and stripe, its last message and its next drive; and the feed: the newest messages and
+ *  drives planned across your crews in the last FEED_DAYS, newest first. The same rules as each crew's own chat and drives:
+ *  members only, no one you blocked or who blocked you, nothing reported down, no cancelled drive. */
+export async function crewFeed(env: Env, v: Viewer) {
+  const crews = (await env.DB.prepare(`SELECT c.id, c.crest, c.stripe FROM crews c JOIN crew_members m ON m.crew_id = c.id AND m.user_id = ?1 ORDER BY c.name`)
+    .bind(v.id).all<{ id: string; crest: string | null; stripe: string | null }>()).results;
+  if (!crews.length) return { crews: [], items: [] };
+  const chat = (await env.DB.prepare(
+    `SELECT c.id, c.crew_id, c.body, c.created_at, u.handle, u.photo_id, (c.author = ?1) AS mine
+       FROM crew_chat c JOIN users u ON u.id = c.author JOIN crew_members me ON me.crew_id = c.crew_id AND me.user_id = ?1
+      WHERE c.created_at > datetime('now', '-${FEED_DAYS} days')
+        AND (c.author = ?1 OR (${NOT_BLOCKED("c.author")} AND NOT ${reportedSql("chat", "c.id")}))
+        AND EXISTS (SELECT 1 FROM crew_members m WHERE m.crew_id = c.crew_id AND m.user_id = c.author)
+      ORDER BY c.created_at DESC, c.rowid DESC LIMIT ${FEED_ITEMS * 2}`).bind(v.id).all<FeedChat>()).results;
+  const drives = (await env.DB.prepare(
+    `SELECT e.id, e.crew_id, e.title, e.starts_at, e.created_at, u.handle, (e.created_by = ?1) AS mine
+       FROM crew_events e JOIN crew_members me ON me.crew_id = e.crew_id AND me.user_id = ?1 LEFT JOIN users u ON u.id = e.created_by
+      WHERE e.cancelled = 0 AND NOT ${reportedSql("event", "e.id")} AND e.starts_at > datetime('now', '-${SHOW_AFTER_START_H} hours')
+        AND (e.created_by = ?1 OR ${NOT_BLOCKED("e.created_by")})
+      ORDER BY e.starts_at LIMIT 50`).bind(v.id).all<FeedDrive>()).results;
+  const iso = (t: string) => t.replace(" ", "T") + "Z";
+  const lastBy = new Map<string, FeedChat>(), nextBy = new Map<string, FeedDrive>();
+  for (const m of chat) if (!lastBy.has(m.crew_id)) lastBy.set(m.crew_id, m);                 // newest first
+  for (const e of drives) if (!nextBy.has(e.crew_id) && Date.parse(iso(e.starts_at)) > Date.now()) nextBy.set(e.crew_id, e);   // soonest first
+  const items = [
+    ...chat.map((m) => ({ kind: "chat", id: m.id, crew_id: m.crew_id, handle: m.handle, photo_id: m.photo_id, body: m.body, at: m.created_at, mine: !!m.mine })),
+    ...drives.filter((e) => e.created_at > new Date(Date.now() - FEED_DAYS * 86400_000).toISOString().replace("T", " ").slice(0, 19))
+      .map((e) => ({ kind: "drive", id: e.id, crew_id: e.crew_id, handle: e.handle, title: e.title, starts_at: iso(e.starts_at), at: e.created_at, mine: !!e.mine })),
+  ].sort((a, b) => (a.at < b.at ? 1 : a.at > b.at ? -1 : 0)).slice(0, FEED_ITEMS);
+  return {
+    crews: crews.map((c) => {
+      const m = lastBy.get(c.id), e = nextBy.get(c.id);
+      return { id: c.id, crest: c.crest, stripe: c.stripe, last: m ? { handle: m.handle, body: m.body, at: m.created_at, mine: !!m.mine } : null,
+        next: e ? { id: e.id, title: e.title, starts_at: iso(e.starts_at) } : null };
+    }),
+    items,
+  };
+}
+
 export async function chatList(env: Env, v: Viewer, crewId: string, url: URL) {
   if (!(await isCrewMember(env, crewId, v.id))) throw new HttpError(404, "no_crew");
   const before = url.searchParams.get("before");
