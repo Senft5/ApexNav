@@ -43,27 +43,31 @@ def km(x, road):
     return (x["names"] or {}).get(road, 0)
 
 
-def test_northgate_takes_i275_at_every_level(r):
-    """Northgate to the I-275 / Winton Road side: the highway at every level. The stage plan out along Colerain Avenue
-    (2 km of strip mall, then suburbs, for 3 km of Bank Road) took Fun and Max on main."""
+def test_northgate_takes_i275_at_quick_never_at_fun(r):
+    """Northgate to the I-275 / Winton Road side: the highway at Quick; Fun and Long way never drive it (the owner,
+    2026-11-08: "fun should never go on the highway"). The stage plan out along Colerain Avenue (2 km of strip mall, then
+    suburbs, for 3 km of Bank Road) took Fun and Max on main and stays below."""
+    assert km(r["northgate_fun:quick"], "I 275") >= 5, r["northgate_fun:quick"]["names"]
     for lv in LEVELS:
         x = r[f"northgate_fun:{lv}"]
-        assert km(x, "I 275") >= 5, (lv, x["order"], x["names"])
+        if lv != "quick":
+            assert km(x, "I 275") == 0 and not any(n.startswith("I ") for n in x["names"]), (lv, x["order"], x["names"])
         bad = [p["label"] for p in x["plans"] if p["colerain"] >= 2]
         assert bad and all(x["order"].index(b) > x["order"].index(x["order"][0]) for b in bad if b in x["order"]), (lv, x["order"])
         assert not x["why"] or "forest" not in x["why"], (lv, x["why"])
 
 
-def test_colerain_never_takes_colerain_avenue(r):
+def test_colerain_avenue_only_at_quick(r):
     """Colerain Avenue (16 signals, the strip malls by Northgate) against Pippin and Struble Roads or Blue Rock Road: never
-    Colerain Avenue, at any level, from either capture. At Quick: Pippin and Struble, 1.5 min longer."""
+    Colerain Avenue at Fun or Long way, from either capture. Quick is the normal route (the owner, 2026-11-08): the
+    quickest, Colerain Avenue, since Pippin and Struble are 1.5 min longer (over Quick's minute)."""
     for name in ("colerain_quick", "colerain_fun"):
-        for lv in LEVELS:
+        for lv in ("fun", "max"):
             x = r[f"{name}:{lv}"]
             assert km(x, "Colerain Avenue") < 0.5, (name, lv, x["order"], x["names"])
             assert x["order"][0] != "router1", (name, lv)
         q = r[f"{name}:quick"]
-        assert km(q, "Pippin Road") >= 3 and km(q, "Struble Road") >= 2, q["names"]
+        assert q["order"][0] == q["quick"] == "router1", (name, q["order"])
 
 
 def test_harrison_highway_quick_back_roads_fun(r):

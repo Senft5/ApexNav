@@ -64,7 +64,8 @@ function compare(name, level, o = {}) {
   const list = o.list || cands(name, o);
   const opts = { level, prefs: o.prefs || {}, score: (cand, scaleAt) => FunRoute.score(cand.t, cand.turnsM, o.prefs || null, scaleAt) };
   const ranked = Engine.rank(list, { ...opts, fresh: true });
-  const quick = ranked.find((c) => c.extraS === 0) || ranked.reduce((a, b) => (b.timeS < a.timeS ? b : a), ranked[0]);
+  // (Fun and Long way rank no highway quickest: the engine hands it back as ranked.quickest)
+  const quick = ranked.find((c) => c.extraS === 0) || ranked.quickest || ranked.reduce((a, b) => (b.timeS < a.timeS ? b : a), ranked[0]);
   const old = FunRoute.rank(list.map((c) => ({ ...c })), level);
   const w = Engine.why(ranked[0], quick, { metric: false });
   return {

@@ -217,6 +217,61 @@ def test_loops_keep_off_the_highway_and_come_from_the_best_roads():
             assert lp["hwy"] <= cap, (level, lp)
             assert lp["retraced"] < 0.4, (level, lp)
             assert lp["d0"] < 300 and lp["dN"] < 300, (level, lp)
+    # Fun and Long way (the owner, 2026-11-08): never a motorway where a loop can keep off it; a stage only reachable over
+    # the motorway (a pocket the grid's holes cut off) takes the one shortest link, never more
+    for level in ("fun", "max"):
+        assert sum(lp["hwy"] == 0 for lp in r[level]) >= 3, (level, r[level])
+        assert all(lp["hwy"] * lp["km"] <= 0.6 for lp in r[level]), (level, r[level])
+
+
+def test_fun_and_long_way_never_take_the_highway():
+    """The owner, 2026-11-08: "fun should never go on the highway. Quick should essentially be a normal route". A motorway
+    and a trunk road beside a curvy back road: Quick drives the motorway; Fun and Long way the back road, in the plan, its
+    first route (quickest) and a reroute (through), with the highway quickest still in the pool as the measure."""
+    r = case("levelsHighway")["one"]
+    q = r["quick"]
+    assert q["bestHwyM"] > 9000 and q["mode"] == "any" and q["quickestHwyM"] > 9000 and q["throughHwyM"] > 9000, q
+    assert abs(q["limitS"] - (q["quickS"] + 60)) < 1e-6, "Quick: the quickest, a nicer road within a minute at most"
+    for lv in ("fun", "max"):
+        x = r[lv]
+        assert x["mode"] == "free" and x["bestHwyM"] == 0 and x["hwyKm"] == 0, (lv, x)
+        assert x["best"] == ["Start Lane", "Back Road", "End Lane"] and "US-52" not in x["best"], (lv, x["best"])
+        assert all(m == 0 for m in x["others"]), "no route of the level's drives a motorway or trunk road"
+        assert x["quickestHwyM"] == 0 and x["throughHwyM"] == 0, x
+        assert x["hasQuick"] and x["quickHwyM"] > 9000, "the highway quickest stays in the pool: Quick's card, the level's measure"
+        assert x["limitS"] >= x["timeS"], "the budget never shuts out the highway-free way"
+
+
+def test_the_highway_exception_takes_the_shortest_link_and_says_why():
+    """A river crossed only by I-275's bridge: Fun and Long way drive River Road to the bridge's ramp, the bridge and the
+    ramp off (1.7 km), not I-275 from the start (5.3 km, Quick's way), and the card says so; a car on I-275 rerouted at
+    Fun leaves it by the shortest way ("you start on it")."""
+    r = case("levelsHighway")["river"]
+    assert r["quick"]["mode"] == "any" and r["quick"]["hwyKm"] > 5, r["quick"]
+    for lv in ("fun", "max"):
+        x = r[lv]
+        assert x["mode"] == "link" and x["reason"] == "across" and x["hwyName"] == "I-275", (lv, x)
+        assert 1.5 < x["hwyKm"] < 1.8 and "River Road" in x["names"], (lv, x)
+        assert all(k <= x["hwyKm"] + 1e-6 for k in x["others"]), (lv, x)
+    assert r["onIt"]["reason"] == "start", r["onIt"]
+    assert r["why"] == "Uses 1.1 mi of I-275 (no other way across)", r["why"]
+
+
+def test_no_highway_free_way_in_a_sensible_time():
+    """The only way without the motorway is three times as long: Fun still keeps off it (the hard rule), plans nothing
+    longer, and the card says Quick is the way; Quick takes the motorway."""
+    r = case("levelsHighway")["absurd"]
+    assert r["absurd"] and r["mode"] == "free" and r["hwyKm"] == 0 and r["ratio"] > 2, r
+    assert r["names"] == ["Start Lane", "Loop Road", "End Lane"] and r["routes"] == 2, r
+    assert r["rankHwy"] == [0] and r["rankAbsurd"] == [True], r
+    assert r["why"] == "No highway-free way in a sensible time; Quick is the way", r["why"]
+    assert r["quickPick"] > 8, "Quick: the motorway"
+
+
+def test_quick_is_the_quickest():
+    """Quick is the normal route: on the city grid its budget is the quickest + 60 s and nothing it offers is slower."""
+    r = case("levelsHighway")["quick"]
+    assert abs(r["limitS"] - (r["quickS"] + 60)) < 1e-6 and r["over"] <= 60 + 1e-6 and r["mode"] == "any", r
 
 
 def test_corridor_tiles_and_coverage():

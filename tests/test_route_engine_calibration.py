@@ -18,6 +18,7 @@ const out = {};
 for (const c of ['subdivision', 'northgate', 'colerain', 'harrison']) for (const l of ['quick', 'fun', 'max']) out[c + ':' + l] = H.compare(c, l);
 // degraded: each source missing in turn, and all of them (the old ranking)
 for (const skip of [['router'], ['dem'], ['business'], ['router', 'dem', 'business']]) out['colerain:quick:-' + skip.join('+')] = H.compare('colerain', 'quick', { skip });
+out['colerain:fun:-router'] = H.compare('colerain', 'fun', { skip: ['router'] });
 out['harrison:fun:none'] = H.compare('harrison', 'fun', { noContext: true });
 // the real 35 mph country stretches on the Harrison back roads (posted 56 km/h, density 2 or less)
 {
@@ -61,27 +62,31 @@ def test_subdivision_cut_through_never_wins(r):
 
 
 def test_highway_beats_the_suburban_arterial(r):
-    """Northgate → NE: Springdale and Mill Roads (the router's own costing) vs I-275, quicker and far fewer driveways."""
-    for lv in ("quick", "fun", "max"):
-        assert r[f"northgate:{lv}"]["engine"][0] == "highway", (lv, r[f"northgate:{lv}"]["engine"])
+    """Northgate → NE: Springdale and Mill Roads (the router's own costing) vs I-275, quicker and far fewer driveways.
+    I-275 at Quick; Fun and Long way never drive a highway (the owner, 2026-11-08): Springdale and Mill Roads."""
+    assert r["northgate:quick"]["engine"][0] == "highway", r["northgate:quick"]["engine"]
+    for lv in ("fun", "max"):
+        assert r[f"northgate:{lv}"]["engine"][0] == "router0" and "highway" not in r[f"northgate:{lv}"]["engine"], (lv, r[f"northgate:{lv}"]["engine"])
     assert r["northgate:fun"]["old"][0] == "router1", "the old ranking took Pippin and Kemper Roads for 3 corners"
 
 
 def test_strip_mall_arterial_loses_to_quieter_roads(r):
-    """Colerain Avenue (18 signals, 244 businesses beside it) vs Pippin and Struble Roads, 1.4 min longer."""
-    for lv in ("quick", "fun", "max"):
-        assert r[f"colerain:{lv}"]["engine"][0] in ("router0", "router2"), (lv, r[f"colerain:{lv}"]["engine"])
+    """Colerain Avenue (18 signals, 244 businesses beside it) vs Pippin and Struble Roads, 1.4 min longer. Quick is the
+    normal route (the owner, 2026-11-08): the quickest, Colerain Avenue, as any nav app; a nicer road only within a
+    minute. Fun and Long way: the quieter roads, never Colerain Avenue."""
+    assert r["colerain:quick"]["engine"][0] == "router1", r["colerain:quick"]["engine"]
+    for lv in ("fun", "max"):
         e = r[f"colerain:{lv}"]["engine"]
-        assert e.index("router1") > e.index("router0"), "Colerain Avenue (also the highway costing's answer) ranks below Pippin Road"
+        assert e[0] in ("router0", "router2"), (lv, e)
+        assert "router1" not in e or e.index("router1") > e.index("router0"), "Colerain Avenue (also the highway costing's answer) ranks below Pippin Road"
     assert r["colerain:quick"]["old"][0] in ("router1", "highway")
-    assert "signals" in r["colerain:quick"]["why"] or "strip malls" in r["colerain:quick"]["why"], r["colerain:quick"]["why"]
 
 
 def test_back_roads_at_fun_highway_at_quick(r):
     """Harrison (the fixture drive's country): I-275/I-74 22 min vs Lees Creek and Day Roads 26 min."""
     assert r["harrison:quick"]["engine"][0] == "highway"
     assert r["harrison:fun"]["engine"][0] == "router0" and r["harrison:max"]["engine"][0] == "router0"
-    assert r["harrison:fun"]["engine"][-1] == "highway"
+    assert "highway" not in r["harrison:fun"]["engine"], "Fun never drives the highway (it is the quickest, measured against)"
     w = r["harrison:fun"]["why"]
     assert "more good corners" in w and w.endswith("+4 min"), w
 
@@ -90,8 +95,8 @@ def test_each_source_missing_degrades_gracefully(r):
     for skip in ("router", "dem", "business"):
         d = r[f"colerain:quick:-{skip}"]
         assert d["engine"], skip
-    # without the router's edges the businesses alone still keep Colerain Avenue off the top
-    assert r["colerain:quick:-router"]["engine"][0] != "router1"
+    # without the router's edges the businesses alone still keep Colerain Avenue off the top (at Fun: Quick takes it)
+    assert r["colerain:fun:-router"]["engine"][0] != "router1"
     allgone = r["colerain:quick:-router+dem+business"]
     assert allgone["engine"] == allgone["old"], "no context at all: exactly the old ranking"
     assert r["harrison:fun:none"]["engine"] == r["harrison:fun:none"]["old"]
@@ -114,9 +119,13 @@ def test_picks_hold_with_the_context_grid(r):
     """C's national grid (night lights, impervious, canopy, noise, AADT, IRI, HPMS limits, fatal crashes, flood zones…) on."""
     for lv in ("quick", "fun", "max"):
         assert r[f"grid:subdivision:{lv}"]["engine"][0] == "router0"
-        assert r[f"grid:northgate:{lv}"]["engine"][0] == "highway", "AADT, noise and crashes per km don't count against a motorway"
+        if lv == "quick":
+            assert r[f"grid:northgate:{lv}"]["engine"][0] == "highway", "AADT, noise and crashes per km don't count against a motorway"
+            assert r[f"grid:colerain:{lv}"]["engine"][0] == "router1", "Quick: the quickest"
+            continue
+        assert r[f"grid:northgate:{lv}"]["engine"][0] == "router0", "Fun and Long way never drive the highway"
         e = r[f"grid:colerain:{lv}"]["engine"]
-        assert e[0] in ("router0", "router2") and e.index("router1") > e.index("router0")
+        assert e[0] in ("router0", "router2") and ("router1" not in e or e.index("router1") > e.index("router0"))
     assert r["grid:harrison:quick"]["engine"][0] == "highway" and r["grid:harrison:fun"]["engine"][0] == "router0"
     assert all(s == "ok" for k, v in r.items() if k.startswith("grid:") and "gridStatus" in v for s in v["gridStatus"])
 

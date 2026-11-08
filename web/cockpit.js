@@ -3014,7 +3014,7 @@
       const ahead = req.via.filter(v => v.distM == null || v.distM > routeWatch.bestM).map(v => ({ lat: v.lat, lon: v.lon, ...(v.shaping ? { shaping: true } : {}), ...(v.planned ? { planned: true } : {}), ...(v.label ? { label: v.label } : {}) }));
       const points = [{ lat: L.lat, lon: L.lon, heading: headingOf(L) }, ...ahead, req.to];
       let r;
-      try { [r] = await routePoints(points, { osrm: true }); } catch (_) { failed(); return; }
+      try { [r] = await routePoints(points, { osrm: true, level: t.funLevel || (isLoop(t) ? funLevel : 'quick') }); } catch (_) { failed(); return; }
       if (track !== t || state.mode !== 'live') return;           // the driver loaded something else meanwhile
       if (!rerouter.off) return;                                  // back on the planned route meanwhile: it stays
       const nt = await trackFromPolyline(r.coords, t.id, t.name);
@@ -3196,7 +3196,8 @@
       mark('covers');
       // Valhalla: today's router without our tiles; with them only a check, asked once our first route is drawn (its
       // answers' decoding on the page held that first draw up, live 2026-11-05)
-      const valhallaP = (ownCovered ? firstSeen : Promise.resolve()).then(() => tlTime('valhalla: route', valhallaRoutes([from, to], false, 2))).catch(() => osrmRoutes([from, to])).catch(() => []);
+      // (Fun and Long way never drive a highway: Valhalla is asked to keep off them too, route_engine.js levelCosting)
+      const valhallaP = (ownCovered ? firstSeen : Promise.resolve()).then(() => tlTime('valhalla: route', valhallaRoutes([from, to], false, 2, FunRoute.LEVELS[level].noHighway ? (connectorCosting() || {}) : {}))).catch(() => osrmRoutes([from, to])).catch(() => []);
       // (not with our tiles: the map tiles' road data is in them, and the context for our routes doesn't read it)
       try { if (!ownCovered && window.ApexOsmTiles && window.ApexRouteCtx && ApexRouteCtx.corridor && (!window.ApexFlags || ApexFlags.on('route_engine'))) ApexOsmTiles.prefetch([ApexRouteCtx.corridor('ahead', [[from.lon, from.lat], [to.lon, to.lat]], {})]); } catch (_) { /* nothing ahead: fetched with the context */ }
       // members' measured roads round the trip go into our search itself (signed out or none: unchanged)
@@ -3437,7 +3438,8 @@
       if (!ranked.length) { toast('Couldn\'t build the route. Check signal and try again.'); return false; }
       const best = ranked[0];
       const quickPool = pool.filter(c => Number.isFinite(c.timeS)).reduce((x, y) => (y.timeS < x.timeS ? y : x), best);
-      const quickest = ranked.find(c => c.t === quickPool.t) || quickPool;   // with the engine's parts, for the why line
+      // with the engine's parts, for the why line (at Fun and Long way a highway quickest isn't in the ranking: its value is)
+      const quickest = ranked.find(c => c.t === quickPool.t) || (ranked.quickest && ranked.quickest.t === quickPool.t ? ranked.quickest : null) || quickPool;
       let shownEarly = null;                                               // the early first route (#294/#295), for the swap line
       if (early.fired) {                                                   // the quickest is already up: replace it unless it's taken
         const shown = await early.shown; mark('earlyAwaited');
@@ -3472,7 +3474,8 @@
       if (offered[0].infeasible && offered[0].ev && offered[0].ev.hard.length) toast(`No way round it: ${offered[0].ev.hard[0].label} on this route. Check before you go.`);   // every candidate broke a hard constraint
       else if (window.ApexRouteCar) routeAftercare(offered[0]);
       if (ownUsed) ownRefine(pool, level, routeOptions, t, forecasts, ownFullP);
-      window.apexDebug && (window.apexDebug.lastFun = rankPool(pool, level).map(c => ({ kind: c.kind, fun: c.fun, timeS: c.timeS, value: c.value, adjust: c.adjust || 0, glare: c.glare, townKm: c.townKm,
+      if (window.apexDebug) window.apexDebug.lastQuickS = Math.min(...pool.map((c) => c.timeS).filter(Number.isFinite));
+      window.apexDebug && (window.apexDebug.lastFun = rankPool(pool, level).map(c => ({ kind: c.kind, fun: c.fun, timeS: c.timeS, value: c.value, adjust: c.adjust || 0, glare: c.glare, townKm: c.townKm, hwyKm: FunRoute.highwayKm(c), hwyRule: c.hwyRule || null,
         parts: c.parts || null, quality: c.ev ? c.ev.quality : null, confidence: c.ev ? c.ev.confidence : null, poorKm: c.ev ? c.ev.poorKm : null })));
       return true;
     }
@@ -3540,13 +3543,17 @@
     // a file's stops): on our tiles where they cover every point (no network needed: offline as well), else Valhalla (and
     // OSRM after it where the caller had that), as before. Ours get Valhalla's maneuvers later (ownInstructLater).
     const OWN_THROUGH_MS = 3000;
+    // o.level: a reroute of a route planned at Fun or Long way keeps off the highways as it did (graph_router.js through;
+    // Valhalla asked with use_highways 0); everything else is the quickest way between the points ('quick')
     async function routePoints(points, o = {}) {
+      const level = FunRoute.LEVELS[o.level] ? o.level : 'quick';
       if (ownOn()) {
-        const r = await RouteLoading.optional(ApexOwnRouting.through(ownRouter(), points, { level: 'quick', avoid, prefs: roadPrefs }), OWN_THROUGH_MS);
+        const r = await RouteLoading.optional(ApexOwnRouting.through(ownRouter(), points, { level, avoid, prefs: roadPrefs }), OWN_THROUGH_MS);
         if (r) { tlSpan('own through (worker)', performance.now()); return [r]; }
       }
-      if (o.osrm) { try { return await valhallaRoutes(points); } catch (_) { return osrmRoutes(points); } }
-      return valhallaRoutes(points);
+      const extra = FunRoute.LEVELS[level].noHighway && window.ApexRouteEngine ? ApexRouteEngine.levelCosting(avoid, routingCar(), level) : {};
+      if (o.osrm) { try { return await valhallaRoutes(points, false, 0, extra); } catch (_) { return osrmRoutes(points); } }
+      return valhallaRoutes(points, false, 0, extra);
     }
     /** One of our routes on track t: Valhalla's spoken maneuvers replace ours when they come (never waited for). */
     function ownInstructLater(t, r) {
@@ -3621,8 +3628,9 @@
     try { if (ownOn()) { ownIndex(); ownRouter().ready().catch(() => {}); } } catch (_) { /* started by the first plan */ }
     // every second until the first fix is in (a fresh install has no saved position), then every 15 s
     (function warmLoop() { warmOwnTiles(); setTimeout(warmLoop, ownWarmAt ? 15000 : 1000); })();
-    // Router costing for the legs between good roads: highways welcome unless avoided (route_engine.js connectorCosting).
-    const connectorCosting = () => (window.ApexRouteEngine ? ApexRouteEngine.connectorCosting(avoid, routingCar()) : null);
+    // Router costing for the legs between good roads and the level's own Valhalla routes: Fun and Long way keep off the
+    // highways (use_highways 0), Quick welcomes them (route_engine.js levelCosting; stage plans are only made at Fun and up)
+    const connectorCosting = () => (window.ApexRouteEngine ? ApexRouteEngine.levelCosting(avoid, routingCar(), funLevel) : null);
     // A loop's legs: highways a short link at most (route_engine.js loopCosting, by the level)
     const loopCosting = () => (window.ApexRouteEngine ? ApexRouteEngine.loopCosting(avoid, routingCar(), funLevel) : null);
     // Tracks built ahead for a likely winner while the plan still waits on the stage plans (live: building the winner's
@@ -3672,12 +3680,16 @@
       const lvPick = o.picks && o.picks[o.level];
       const isPick = (lvPick ? lvPick.t === c.t : o.list && o.list[0] === c) && window.ApexRouteEngine && ApexRouteEngine.whyOver;
       const quickLine = isPick && !engineWhy ? ApexRouteEngine.whyQuickest(c, o.quickest, o.level) : null;
-      let rival = isPick && o.list ? o.list.find((x) => x.t !== c.t && FunRoute.dominates(x, c)) : null;
+      // (at Fun and Long way a route on the highway is no rival: the pick keeps off it by the rule, which the line says)
+      const offHwy = (x) => !c.hwyRule || c.hwyRule === 'any' || !(FunRoute.highwayKm(x) > FunRoute.HWY.FREE_KM);
+      let rival = isPick && o.list ? o.list.find((x) => x.t !== c.t && offHwy(x) && FunRoute.dominates(x, c)) : null;
       if (rival && o.pool) rival = rankPool(o.pool, o.level).find((x) => x.t === rival.t) || rival;
       const overLine = rival ? ApexRouteEngine.whyOver(c, rival) : null;
+      // Fun and Long way: the exception's highway, or no highway-free way in a sensible time (first: it's what you'd ask)
+      const hwyLine = window.ApexRouteEngine && ApexRouteEngine.whyHighway ? ApexRouteEngine.whyHighway(c, { metric: ApexUnits.metric() }) : null;
       Object.assign(t, { measured: c.t.measured, fun: c.fun, timeS: c.timeS, timeMarks: timeMarksOf(t, c.route), steps: stepsOf(t, c.route), extraS: c.extraS, funLevel: o.level, glareMin: c.glare ? Math.round(c.glare.minutes) : null, townKm: c.townKm,
                          engine: c.ev ? { quality: c.ev.quality, confidence: c.ev.confidence, poorKm: c.ev.poorKm, hard: c.ev.hard, penalties: c.ev.penalties } : null,
-                         unavoided: FunRoute.unavoided(avoid, c.route), why: [(engineWhy && engineWhy.text) || (quickLine && quickLine.text) || whyText(FunRoute.why(c, o.quickest), fewerTownKm(c, o.quickest), c.extraS), overLine && overLine.text].filter(Boolean).join('. ') || null,
+                         unavoided: FunRoute.unavoided(avoid, c.route), why: (hwyLine && hwyLine.kind === 'absurd' ? [hwyLine.text] : [hwyLine && hwyLine.text, (engineWhy && engineWhy.text) || (quickLine && quickLine.text) || whyText(FunRoute.why(c, o.quickest), fewerTownKm(c, o.quickest), c.extraS), overLine && overLine.text]).filter(Boolean).join('. ') || null,
                          request: { ...o.request, via: via.map(p => ({ lat: p.lat, lon: p.lon, shaping: true })) } });
       if (c.plan) t.stageSpans = FunRoute.stageSpans(t, c.plan.legs);   // where its stages are (Siri: next / skip, IDEAS V-07)
     }
@@ -3768,8 +3780,8 @@
       $('routeCardLevelsNote').hidden = !line;
     }
     // What each Roads position does, from fun_route.js LEVELS (the extra time each one may spend).
-    const FUN_NOTES = { quick: 'Quick: the quickest way, or a better road that adds no more than about a tenth.',
-      fun: 'Fun: twistier roads that add up to about a third to the trip.', max: 'Long way: the twistiest roads around, up to nearly twice the time.' };
+    const FUN_NOTES = { quick: 'Quick: the quickest way, highways and all; a nicer road only if it costs a minute or less.',
+      fun: 'Fun: twistier roads that add up to about a third to the trip, never on the highway.', max: 'Long way: the twistiest roads around, up to nearly twice the time, never on the highway.' };
     // The plan flow (finding 4): the level lives on the card, as its cards. Each card is its level's ranking of the routes
     // the plan already found when they cover it (a plan at Fun holds the quick ones too; Long way's longer detours need a
     // plan of their own), with the engine's own ranking, why line and extra time, worked out once with the plan: a tap only
@@ -3850,7 +3862,7 @@
         if (!ranked.length) ranked = FunRoute.rank(pool, L);
         if (!ranked.length) return null;
         const quickPool = pool.filter(c => Number.isFinite(c.timeS)).reduce((x, y) => (y.timeS < x.timeS ? y : x), ranked[0]);
-        return { offered: FunRoute.distinctOptions(ranked, 3), quickest: ranked.find(c => c.t === quickPool.t) || quickPool };
+        return { offered: FunRoute.distinctOptions(ranked, 3), quickest: ranked.find(c => c.t === quickPool.t) || (ranked.quickest && ranked.quickest.t === quickPool.t ? ranked.quickest : null) || quickPool };
       });
     }
     // One list for the card: the levels' picks in the cards' order (one entry when two pick the same route), then up to two
@@ -4086,10 +4098,15 @@
       const gotMi = best.km / 1.609344;
       if (L.targetS && Number.isFinite(best.t.timeS)) {
         const gotMin = Math.round(best.t.timeS / 60), near = Math.abs(best.t.timeS - L.targetS) <= 0.2 * L.targetS;
-        return near ? `Best of ${n} loops found` : `${gotMin} min: the closest good loop to ${L.asked}`;
+        return (near ? `Best of ${n} loops found` : `${gotMin} min: the closest good loop to ${L.asked}`) + loopHwyNote(best);
       }
       const near = Math.abs(gotMi - L.miles) <= 0.2 * L.miles;
-      return near ? `Best of ${n} loops found` : `${ApexUnits.long(best.km * 1000)}: the closest good loop to ${L.asked}`;
+      return (near ? `Best of ${n} loops found` : `${ApexUnits.long(best.km * 1000)}: the closest good loop to ${L.asked}`) + loopHwyNote(best);
+    }
+    // Fun and Long way loops keep off the highways; the exception (no loop here without one) says how much it uses
+    function loopHwyNote(best) {
+      const km = Number.isFinite(best.hwyShare) && Number.isFinite(best.km) ? best.hwyShare * best.km : null;
+      return FunRoute.LEVELS[funLevel].noHighway && km != null && km > FunRoute.HWY.FREE_KM ? ` · uses ${ApexUnits.long(km * 1000, 1)} of highway (no loop here without it)` : '';
     }
     function loopDebug(o, best) {
       window.apexDebug && (window.apexDebug.lastLoop = o.ranked.map(({ item, v }) => ({ kind: item.d.job.kind, fun: item.d.t.fun && item.d.t.fun.fun, score: item.d.score, v, km: item.d.km, good: item.d.good,
@@ -4123,7 +4140,7 @@
       } catch (_) { /* our loop stays */ }
     }
     // A built loop as FunRoute.loopRank reads it: the Fun score, the length off, highway share, the card's corners and time.
-    const loopItem = (d) => ({ d, score: d.score, fun: d.t.fun, off: d.off, hwyShare: d.hwyShare, retraced: d.retraced, hard: !!d.hard,
+    const loopItem = (d) => ({ d, score: d.score, fun: d.t.fun, off: d.off, hwyShare: d.hwyShare, km: d.km, retraced: d.retraced, hard: !!d.hard,
       corners: Array.isArray(d.t.events) ? d.t.events.filter((e) => e && e.type === 'corner').length : null, timeS: d.t.timeS });
 
     // The loops built, ranked for a level (fun_route.js loopLevelAdjust) and offered as up to three really different ones.

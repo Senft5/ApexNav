@@ -666,7 +666,7 @@ flow('a short trip with one route finishes: the plan ends, busy clears and Searc
 }, { geolocation: { latitude: 35.7400, longitude: -83.9700 }, permissions: ['geolocation'] });
 
 // Our own routing (docs/OWN_ROUTING.md §5): the same trip with our graph tiles and without them.
-async function ownTrip(page, base) {
+async function ownTrip(page, base, level = null) {
   const calls = { route: [], trace: [], matrix: 0 };
   await page.route('https://photon.komoot.io/**', (route) => route.fulfill({ contentType: 'application/json', body: JSON.stringify({ features: [
     { geometry: { coordinates: [-84.57, 39.19] }, properties: { name: 'Forest Park', state: 'Ohio' } }] }) }));
@@ -689,7 +689,7 @@ async function ownTrip(page, base) {
     if (u.includes('sources_to_targets')) calls.matrix++;
     return route.abort();
   });
-  await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); } catch (_) {} });
+  await page.addInitScript((lv) => { try { localStorage.setItem('apex.onboarded', '1'); if (lv) localStorage.setItem('apex.funLevel', lv); } catch (_) {} }, level);
   await page.goto(base + '/index.html');
   await page.waitForFunction(() => window.apexDebug && window.apexDebug.map);
   await page.click('#destInput');
@@ -716,6 +716,47 @@ flow('own routing: where our graph tiles cover the trip, our route wins and Valh
     check(r.via >= 1, 'pinned with shaping points, so a reroute keeps to it: ' + r.via);
   } finally { graphDir = null; }
 }, { geolocation: { latitude: 39.155, longitude: -84.615 }, permissions: ['geolocation'] });
+
+// The levels (the owner, 2026-11-08: "fun should never go on the highway. Quick should essentially be a normal route"): on
+// the grid whose arterials are motorways, Quick drives them; Fun and Long way never do, in the plan, the card's pick and
+// the level cards; the shown route's samples on our tiles carry no motorway at Fun
+async function hwyOfTrack(page) {
+  return page.evaluate(async () => {
+    const t = window.apexDebug.track, c = ApexGraphRouter.client({ url: 'graph_worker.js', timeoutMs: 20000 });
+    try { const [s] = await c.score([{ lat: Array.from(t.lat), lon: Array.from(t.lon) }]); let n = 0; for (let i = 0; i < s.cls.length; i++) if (s.cls[i] <= 1) n++; return n * 5 / 1000; } finally { c.close(); }
+  });
+}
+for (const level of ['quick', 'fun', 'max']) {
+  flow(`levels: ${level === 'quick' ? 'Quick drives the motorway, the quickest way' : `${level === 'fun' ? 'Fun' : 'Long way'} never drives the motorway`} (the owner, 2026-11-08)`, async (page, base) => {
+    graphDir = graphFixture(true);
+    try {
+      const { r } = await ownTrip(page, base, level);
+      check(r.own.covered && r.own.used, 'our router planned it: ' + JSON.stringify(r.own));
+      const x = await page.evaluate(() => ({ pick: window.apexDebug.lastFun[0], all: window.apexDebug.lastFun.map((c) => [c.kind, c.hwyKm, Math.round(c.timeS)]), quickS: window.apexDebug.lastQuickS,
+        timeS: window.apexDebug.track.timeS, why: (document.getElementById('routeCardWhy') || {}).textContent || '', cards: (document.getElementById('routeCardFun') || {}).innerText || '' }));
+      const km = await hwyOfTrack(page);
+      if (level === 'quick') {
+        check(km > 1 && x.pick.hwyKm > 1, `Quick takes the motorway: ${km} km on the track, ${JSON.stringify(x.all)}`);
+        check(x.timeS - x.quickS <= 61, `Quick is the quickest, a minute at most for a nicer road: ${x.timeS} vs ${x.quickS}`);
+      } else {
+        check(km === 0 && x.pick.hwyKm === 0 && x.pick.hwyRule === 'free', `no motorway on the ${level} route: ${km} km on the track, ${JSON.stringify(x.all)}`);
+        check(x.all.every(([, k]) => k === 0), 'nothing the level ranks drives a motorway: ' + JSON.stringify(x.all));
+        check(x.quickS < x.timeS, 'measured against the quickest (the motorway): ' + JSON.stringify([x.quickS, x.timeS]));
+        check(!/Uses .* of /.test(x.why) && !/No highway-free way/.test(x.why), 'no exception on a grid with other ways: ' + x.why);
+      }
+      if (level === 'fun') {
+        // the Quick card puts the motorway route up; the Fun card brings the highway-free one back
+        await page.click('#routeCardFun [data-fun="quick"]');
+        await page.waitForFunction(() => window.apexDebug.track && window.apexDebug.track.funLevel === 'quick' && !document.getElementById('planPanel').classList.contains('busy'), null, { timeout: 20000 });
+        const kq = await hwyOfTrack(page);
+        await page.click('#routeCardFun [data-fun="fun"]');
+        await page.waitForFunction(() => window.apexDebug.track && window.apexDebug.track.funLevel === 'fun' && !document.getElementById('planPanel').classList.contains('busy'), null, { timeout: 20000 });
+        const kf = await hwyOfTrack(page);
+        check(kq > 1 && kf === 0, `the cards: Quick ${kq} km of motorway, Fun ${kf}`);
+      }
+    } finally { graphDir = null; }
+  }, { geolocation: { latitude: 39.155, longitude: -84.615 }, permissions: ['geolocation'] });
+}
 
 flow('own routing: best roads nearby from our tiles, timed by our router (no map stage search, no Valhalla matrix)', async (page, base) => {
   graphDir = graphFixture();
@@ -752,6 +793,7 @@ flow('own routing: a loop from our tiles is built from the best roads and keeps 
     const own = r.loops.filter((d) => d.kind === 'own'), won = r.loops.find((d) => d.picked);
     check(own.length >= 1 && won && won.kind === 'own' && /loop$/.test(r.name), 'a loop from our tiles won: ' + JSON.stringify(r.loops));
     check(own.every((d) => Number.isFinite(d.hwyShare) && d.hwyShare <= 0.1), 'every loop of ours keeps motorway to a short link (at most a tenth at Fun): ' + JSON.stringify(own.map((d) => d.hwyShare)));
+    check(won.hwyShare === 0, 'the Fun pick drives no motorway (the owner, 2026-11-08: "fun should never go on the highway"): ' + won.hwyShare);
     check(!r.loops.some((d) => d.kind === 'circle'), 'no circle drawn round the start when real loops exist: ' + JSON.stringify(r.loops.map((d) => d.kind)));
     check(Math.hypot(r.ends[0][0] - r.ends[1][0], r.ends[0][1] - r.ends[1][1]) < 0.003, 'it ends where it starts: ' + JSON.stringify(r.ends));
   } finally { graphDir = null; }

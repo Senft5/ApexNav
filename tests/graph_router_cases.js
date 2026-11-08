@@ -215,6 +215,99 @@ const CASES = {
     return out;
   },
 
+  // the levels (the owner, 2026-11-08: "fun should never go on the highway. Quick should essentially be a normal route"):
+  // (1) a motorway and a trunk road beside a back road: Quick on the highway, Fun and Long way never (plan, quickest,
+  // through); (2) a river crossed only by an interstate bridge: the shortest highway link, said why; (3) a highway-free
+  // way over twice the quickest's time: still no highway, flagged absurd; (4) Quick's plan inside a minute of the quickest
+  levelsHighway() {
+    const MW = 64 | 1, RAMP = 128 | 1;
+    const hwyM = (v, r) => { let m = 0; for (const e of r.edgeIdx) if (v.cls[e] <= 1) m += v.len[e]; return m; };
+    const names = (r) => [...new Set(r.names.map((n) => n.name).filter(Boolean))];
+    const out = {};
+    // (1) S -> T 9 km east: I-74 (motorway, ramps at both ends), US-52 (trunk, north), Back Road (curvy, good, slower)
+    {
+      const S = [39.40, -84.70], nodes = [at(S[0], S[1] - 0.004), at(S[0], S[1]), at(S[0], S[1] + 0.105), at(S[0], S[1] + 0.109)], edges = [];
+      const [s0, A, B, t0] = [0, 1, 2, 3];
+      two(edges, s0, A, { name: 'Start Lane', t: 30, cls: 5 }); two(edges, B, t0, { name: 'End Lane', t: 30, cls: 5 });
+      const chain = (pts, props) => { const ids = pts.map((p) => { nodes.push(at(p[0], p[1])); return nodes.length - 1; }); const c = [A, ...ids, B];
+        for (let k = 0; k + 1 < c.length; k++) { const pr = props(k, c.length - 1); edges.push({ from: c[k], to: c[k + 1], ...pr }); if (!(pr.flags & 1)) edges.push({ from: c[k + 1], to: c[k], ...pr }); } };
+      // the motorway one-way eastbound (a ramp on, the motorway, a ramp off), at 31 m/s
+      chain([[S[0] - 0.003, S[1] + 0.004], [S[0] - 0.003, S[1] + 0.101]], (k, n) => (k === 0 || k === n - 1 ? { name: 'I-74 ramp', cls: 0, flags: RAMP, quality: 0.7, fun: 0, t: 25 } : { name: 'I-74', cls: 0, flags: MW, quality: 0.82, fun: 0, t: 270 }));
+      chain([[S[0] + 0.01, S[1] + 0.02], [S[0] + 0.01, S[1] + 0.085]], (k) => ({ name: 'US-52', cls: 1, quality: 0.75, fun: 0, t: k === 1 ? 300 : 70 }));
+      const wig = Array.from({ length: 9 }, (_, k) => [S[0] - 0.012 + (k % 2 ? 0.0012 : -0.0012), S[1] + 0.105 * (k + 1) / 10]);
+      chain(wig, () => ({ name: 'Back Road', cls: 4, quality: 0.85, scenery: 0.8, fun: 2.5, t: 60 }));
+      const v = R.view(H.tiles(nodes, edges).tiles);
+      const from = { lat: S[0], lon: S[1] - 0.002 }, to = { lat: S[0], lon: S[1] + 0.107 };
+      out.one = {};
+      for (const level of ['quick', 'fun', 'max']) {
+        const p = R.plan(v, { from, to, level }), q = R.quickest(v, { from, to, level }), th = R.through(v, { from, to, level });
+        out.one[level] = { best: names(p.routes[0]), bestHwyM: hwyM(v, p.routes[0]), hwyKm: p.routes[0].hwyKm, quickHwyM: hwyM(v, p.quick), mode: p.hwy.mode,
+          others: p.routes.filter((r) => r !== p.quick).map((r) => hwyM(v, r)), hasQuick: p.routes.includes(p.quick), quickest: names(q), quickestHwyM: hwyM(v, q), throughHwyM: hwyM(v, th),
+          timeS: p.routes[0].timeS, quickS: p.quick.timeS, limitS: p.limitS, times: p.routes.map((r) => r.timeS) };
+      }
+    }
+    // (2) a river at lon -84.65: the only way across is I-275's bridge (ramp, bridge, ramp). I-275 also runs on from the
+    // start to the bridge (quicker than River Road): Quick drives it all; Fun only the bridge and its ramps
+    {
+      const y = 39.50, nodes = [], edges = [];
+      const n = (lat, lon) => { nodes.push(at(lat, lon)); return nodes.length - 1; };
+      const s0 = n(y, -84.704), S = n(y, -84.70), W1 = n(y + 0.004, -84.66), MW = n(y + 0.004, -84.655), ME = n(y + 0.004, -84.645), E1 = n(y + 0.004, -84.64), T = n(y, -84.60), t0 = n(y, -84.596);
+      const MS = n(y + 0.002, -84.698);
+      two(edges, s0, S, { name: 'Start Lane', t: 30, cls: 5 }); two(edges, T, t0, { name: 'End Lane', t: 30, cls: 5 });
+      two(edges, S, W1, { name: 'River Road', cls: 4, quality: 0.8, fun: 1, t: 300 });
+      two(edges, E1, T, { name: 'Ridge Road', cls: 4, quality: 0.8, fun: 1, t: 300 });
+      // ramps and the bridge both ways
+      for (const [a, b] of [[W1, MW], [ME, E1]]) two(edges, a, b, { name: 'I-275 ramp', cls: 0, flags: 128, quality: 0.7, fun: 0, t: 20 });
+      two(edges, MW, ME, { name: 'I-275', cls: 0, flags: 64, quality: 0.82, fun: 0, t: 30 });
+      // I-275 from near the start to the bridge: quicker than River Road
+      two(edges, S, MS, { name: 'I-275 ramp', cls: 0, flags: 128, quality: 0.7, fun: 0, t: 15 });
+      two(edges, MS, MW, { name: 'I-275', cls: 0, flags: 64, quality: 0.82, fun: 0, t: 120 });
+      const v = R.view(H.tiles(nodes, edges).tiles);
+      const from = { lat: y, lon: -84.702 }, to = { lat: y, lon: -84.598 };
+      out.river = {};
+      for (const level of ['quick', 'fun', 'max']) {
+        const p = R.plan(v, { from, to, level }), b = p.routes[0];
+        out.river[level] = { mode: p.hwy.mode, hwyKm: b.hwyKm, hwyName: b.route.hwyName, reason: b.route.hwyReason || null, names: names(b), quickHwyKm: p.quick.hwyKm,
+          others: p.routes.filter((r) => r !== p.quick).map((r) => +r.hwyKm.toFixed(3)) };
+      }
+      // a car on I-275 (heading east, on the motorway before the bridge) rerouted at Fun: off it by the shortest way
+      const th = R.through(v, { from: { lat: y + 0.0025, lon: -84.69, heading: 75 }, to, level: 'fun' });
+      out.river.onIt = { reason: th.route.hwyReason || null, hwyKm: th.hwyKm };
+      // what the card says, from the ranking's marks on the pick (route_engine.js whyHighway)
+      const F = FunRoute, E = require('../web/route_engine.js');
+      const pf = R.plan(v, { from, to, level: 'fun' });
+      const cands = pf.routes.map((r, i) => ({ id: i, timeS: r.timeS, route: r.route, extraS: 0 }));
+      const ranked = F.rank(cands, 'fun');
+      out.river.rankHwy = ranked.map((c) => +c.route.hwyKm.toFixed(3));
+      out.river.why = (E.whyHighway(ranked[0], { metric: false }) || {}).text || null;
+    }
+    // (3) the only highway-free way is a long way round (Loop Road, about 2.6 x the motorway's time)
+    {
+      const y = 39.60, nodes = [], edges = [];
+      const n = (lat, lon) => { nodes.push(at(lat, lon)); return nodes.length - 1; };
+      const s0 = n(y, -84.704), S = n(y, -84.70), T = n(y, -84.60), t0 = n(y, -84.596), L1 = n(y + 0.03, -84.68), L2 = n(y + 0.03, -84.62);
+      two(edges, s0, S, { name: 'Start Lane', t: 30, cls: 5 }); two(edges, T, t0, { name: 'End Lane', t: 30, cls: 5 });
+      two(edges, S, T, { name: 'I-71', cls: 0, flags: 64, quality: 0.82, fun: 0, t: 280 });
+      two(edges, S, L1, { name: 'Loop Road', cls: 4, quality: 0.7, fun: 1, t: 300 }); two(edges, L1, L2, { name: 'Loop Road', cls: 4, quality: 0.7, fun: 1, t: 300 }); two(edges, L2, T, { name: 'Loop Road', cls: 4, quality: 0.7, fun: 1, t: 300 });
+      const v = R.view(H.tiles(nodes, edges).tiles);
+      const from = { lat: y, lon: -84.702 }, to = { lat: y, lon: -84.598 };
+      const p = R.plan(v, { from, to, level: 'fun' }), b = p.routes[0];
+      const cands = p.routes.map((r, i) => ({ id: i, timeS: r.timeS, route: r.route }));
+      const ranked = FunRoute.rank(cands, 'fun'), E = require('../web/route_engine.js');
+      out.absurd = { absurd: p.hwy.absurd, mode: p.hwy.mode, hwyKm: b.hwyKm, names: names(b), ratio: b.timeS / p.quick.timeS, routes: p.routes.length,
+        rankHwy: ranked.map((c) => c.route.hwyKm), rankAbsurd: ranked.map((c) => !!c.hwyAbsurd), why: (E.whyHighway(ranked[0]) || {}).text || null,
+        quickPick: FunRoute.rank(cands, 'quick')[0].route.hwyKm };
+    }
+    // (4) Quick on the city grid: the plan's budget is the quickest + 60 s, every route inside it
+    {
+      const g = H.grid({ seed: 3, nx: 30, ny: 30, holes: 0.05, oneway: 0.05, signals: 0.15, stepDeg: 0.004, lat0: 39.15, lon0: -84.62 });
+      const v = R.view(H.tiles(g.nodes, g.edges).tiles);
+      const p = R.plan(v, { from: { lat: 39.152, lon: -84.618 }, to: { lat: 39.262, lon: -84.48 }, level: 'quick' });
+      out.quick = { limitS: p.limitS, quickS: p.quick.timeS, over: Math.max(...p.routes.map((r) => r.timeS)) - p.quick.timeS, mode: p.hwy.mode };
+    }
+    return out;
+  },
+
   // the tiles' corridor: the ellipse grows with the level's budget, and covers() reads index.json
   corridor() {
     const a = { lat: 39.25, lon: -84.6 }, b = { lat: 39.29, lon: -84.75 };

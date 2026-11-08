@@ -45,7 +45,8 @@ const out = {};
 // as the tiles score such a road), and a highway
 const back = { speed_limit_kph: 72, road_class: 4, road_use: 0, density: 2, signals_per_km: 0, access_per_km: 8, surface: 0, sidewalk: 0, bldg_per_km: 8, addr_per_km: 4 };
 const lined = { ...back, density: 4, access_per_km: 12, bldg_per_km: 60, addr_per_km: 45 };
-const hwy = { speed_limit_kph: 105, road_class: 0, road_use: 0, density: 4, signals_per_km: 0, access_per_km: 0, surface: 0, lanes: 2 };
+// (the quickest here is a plain fast road, not a motorway: Fun and Long way never drive a highway, 2026-11-08)
+const hwy = { speed_limit_kph: 89, road_class: 2, road_use: 0, density: 3, signals_per_km: 0, access_per_km: 2, surface: 0, lanes: 2 };
 {
   const a = cand(wiggly(8000), 900, back), b = cand(wiggly(8000), 900, lined);
   E.evaluate(a, {}); E.evaluate(b, {});
@@ -149,7 +150,7 @@ def test_a_pick_that_looks_worse_says_why(r):
 
 def test_no_great_roads_said_plainly(r):
     q = r["quickest"]
-    assert q["pick"], "Fun keeps the highway over a street of houses"
+    assert q["pick"], "Fun keeps the quickest (a plain fast road) over a street of houses"
     assert q["fun"]["text"] == "No great roads on this trip: Quick is the way"
     assert q["quick"] is None and q["other"] is None
     assert r["quickestGood"]["text"] == "The quickest way is the best road here too"
@@ -160,9 +161,10 @@ def test_the_card_glue():
     the no-great-roads line when a Fun or Long way pick is the quickest; ownRefine names a route the wider search found."""
     src = (ROOT / "web" / "cockpit.js").read_text()
     body = src[src.index("function optionOnto(t, c, o)"):][:3200]
-    assert "x.t !== c.t && FunRoute.dominates(x, c)" in body and "ApexRouteEngine.whyOver(c, rival)" in body, body
+    assert "x.t !== c.t && offHwy(x) && FunRoute.dominates(x, c)" in body and "ApexRouteEngine.whyOver(c, rival)" in body, body
     assert "o.picks && o.picks[o.level]" in body, "the level cards: your level's pick is the one that explains itself"
     assert "ApexRouteEngine.whyQuickest(c, o.quickest, o.level)" in body
-    assert re.search(r"why: \[\(engineWhy && engineWhy\.text\) \|\| \(quickLine && quickLine\.text\)", body)
+    assert re.search(r"\[hwyLine && hwyLine\.text, \(engineWhy && engineWhy\.text\) \|\| \(quickLine && quickLine\.text\)", body)
+    assert "ApexRouteEngine.whyHighway(c," in body, "Fun and Long way: the highway exception or no highway-free way, said first"
     assert "added.has(best.t) ? 'Found a better way'" in src
 
