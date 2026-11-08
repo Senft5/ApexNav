@@ -63,7 +63,10 @@
 - [x] Valhalla down: e2e "valhalla down: planning inside our tiles is unaffected" (refused, then hanging); nothing on
   the planning path of a route waited on Valhalla; a loop did (the context's router provider, 2.9 s with Valhalla
   hanging), fixed: 0.6 s. The remaining Valhalla uses are listed in OWN_ROUTING.md §8 2026-11-08.
-- Tests: see the PR (pytest, the own routing / offline / valhalla down flows, the full e2e run).
+- Re-measured on a box shared with another agent (load 4-6): main and branch both over 0.7 s warm on the long trips
+  (harrison branch 536-1300, main 617-1254); branch no worse than main; same pick 34/34 (OWN_ROUTING.md §8).
+- Tests: pytest 1335 passed, 2 skipped; e2e 127/127 (full run, after fixing the offline flow's weather-line read race:
+  a 126/127 run under load read the line between a route's replace and its refused forecast).
 - Open: on a loaded box the long trips are 2x slower (2026-11-07's numbers); the context's page work (graph, driver,
   conditions, 0.1-0.15 s) and the lead ranking (0.05-0.08 s) are what's left; the worker's plan 0.2-0.3 s.
 - Exact next task: measure on production after deploy (the tiles over the network, cold); if the long trips' card is

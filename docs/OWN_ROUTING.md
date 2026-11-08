@@ -507,6 +507,12 @@ phone's reader); tests/test_graph_tiles.py round-trips through both. What a rout
     between the first route and the card, warm harrison: the worker's plan to 0.28 s, the context 0.14 s (graph, driver,
     conditions on the page), the lead ranking 0.05-0.08 s, a map frame and the track's message 0.04 s, draw and card
     0.05 s (the card's road character line 0.02 s of it).
+    Re-measured after a container restart on a box shared with another agent's e2e run (load 4-6 on 4 cores): 8 cases
+    plus 3 more pairs of harrison, owner1 and northgate, main and branch interleaved. Neither meets the targets on the
+    long trips there: warm card harrison main 694/785/1254/617 against branch 880/1300/750/536 ms, owner1 943/765/721/575
+    against 345/707/568/366, northgate 661/832/738/518 against 565/639/516/760; cold harrison main 1159/1253/767/932
+    against 611/946/773/1151. The branch is no worse than main under load and better on most runs; the pick is main's
+    in 34 of 34 runs. Under contention the context's page work and the 5 tracks' analysis (two workers) share the cores.
   - **Posted limits offline:** on our routes the limit sign, the strip and the ETA's envelope take each edge's posted
     limit from the tiles (§5 Posted limits); the offline e2e flow asserts a posted limit is known on every plan (Quick,
     Fun, Long way, a map tap) and that no `trace_attributes` was asked. `trace_attributes` stays for lines off our tiles
