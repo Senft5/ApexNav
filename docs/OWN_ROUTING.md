@@ -133,16 +133,31 @@ phone's reader); tests/test_graph_tiles.py round-trips through both. What a rout
 
 - Runs in a Web Worker (`graph_worker.js`) so the map never stutters; tiles loaded for the corridor (an ellipse around
   start and end sized by the level's detour budget), cached in memory and IndexedDB.
+- **The levels** (the owner, 2026-11-08: "fun should never go on the highway. Quick should essentially be a normal
+  route"): Quick is the quickest way as any nav app drives it, highways welcome, a nicer road only inside a minute (budget
+  0 + 60 s). Fun and Long way never drive a motorway, a trunk road or their links (`cls` 0-1, or the `motorway` flag;
+  `K.NO_HWY`): a hard filter in the search (`opts.ban`), not a cost, in the plan, its first route (`quickest`), every
+  alternate, `through` (a reroute of a route planned there) and every loop leg. A point snapped onto a highway moves to the
+  nearest other road within 150 m (`snapOff`; a moving car within 25 m of one stays on it). The exception, only where no
+  way without one exists in the level's corridor (a river crossed only by an interstate bridge, a start or end on a ramp):
+  each highway second x25 (`hwyX`), so the link is the shortest there is; the routes carry `hwyKm`, `hwyName` and
+  `hwyReason` ('across', 'start', 'end') and the card says "Uses 0.4 mi of I-275 (no other way across)". A highway-free way
+  over 2x the quickest's time is still the level's way, alone (no bisection), `hwy.absurd`; the card: "No highway-free way
+  in a sensible time; Quick is the way". The highway quickest stays in the pool as Quick's card and the level's measure;
+  the budget never shuts out the highway-free quickest (+ 60 s). `plan()` returns `hwy: { mode: 'any' | 'free' | 'link',
+  absurd, quickS, freeS }`. The ranking keeps the same rule (ROUTE_ENGINE.md, fun_route.js `applyHighways`). Not in the
+  tiles: an expressway mapped as `primary` with `motorroad=yes` (the ETL doesn't keep the tag yet; a tile rebuild would).
 - **Quick:** minimise time (A* with an admissible time heuristic: straight-line distance / max speed).
 - **Fun / Max fun:** minimise `t_s * (1 + a*(1 - goodness))` where goodness blends quality, fun and scenery with the
   driver's taste; `a` is found by bisection so the route's time stays within the level's budget over the quickest
-  (Quick 10 % + 60 s, Fun 35 % + 240 s, Max 90 % + 600 s, as today). Turn costs: left/right/U by angle, plus signals and
+  (Quick 60 s, Fun 35 % + 240 s, Max 90 % + 600 s; at Fun and Long way the search is the highway-free one above). Turn costs: left/right/U by angle, plus signals and
   stops on the node.
 - **Alternatives:** penalty method (re-run with the chosen edges penalised) for 2 genuinely different alternates.
 - **Loops:** any route from the start back to it with little driven twice, built from the best roads within reach (the
   owner, 2026-11-06: not a circle): the tiles' best stages (explore) chained one to three at a time, each leg on the
-  level's objective with motorway and trunk costed x2.5 / x3 / x4 (Quick / Fun / Long way); rings only where no stage
-  loop exists. Then the same scoring, which charges a loop's highway share (fun_route.js loopHighwayCost) and never puts
+  level's objective with motorway and trunk costed x2.5 at Quick and never driven at Fun and Long way (2026-11-08: a
+  leg whose start leaves only a highway ahead turns round first, `loopLeg`; else the exception's shortest link); rings
+  only where no stage loop exists; a loop on a highway never ranks above one off them at Fun and Long way (loopRank). Then the same scoring, which charges a loop's highway share (fun_route.js loopHighwayCost) and never puts
   a loop above one that beats it on corners and time (loopDominates). Ours go up first; the map's stage loops (Valhalla's
   matrix and legs) are built after the card and replace ours only when the level ranks one of them first (2026-11-07).
 - **Final ranking:** our candidates go through the existing route engine (time-dependent penalties, weather, why line),
@@ -517,6 +532,37 @@ phone's reader); tests/test_graph_tiles.py round-trips through both. What a rout
     Loops have no turn instructions from either router (as on main). Off our tiles (no tiles for the area, or our
     router failing) every call is as before: Valhalla plans (stage plans,
     matrix, legs), Explore's matrix, points routed, reroutes, map-matched limits (attachLimits) and router_edges' context.
+
+- 2026-11-08 (later): the levels' highway rule (branch claude/level-rules; CALL_SHEET 2026-11-08 (later)): the owner,
+  "fun should never go on the highway. Quick should essentially be a normal route". §5 "The levels". Our router at Fun
+  and Long way: `freeQuickest` (the hard filter, `ban`), else the exception's `hwyX` x25; `quickest()` gives the
+  highway-free quickest at those levels (memoised as `free`, so the plan reuses it), the plan keeps the true quickest in
+  the pool, `hwy.absurd` skips the bisection; `through` per leg; loops per leg (`loopLeg`, turning round where an arrival
+  leaves only a highway ahead). Live before and after (highway km on the shown track, minutes over Quick):
+
+  | case | level | before: highway km, min over Quick | after: highway km, min over Quick | after: the why line |
+  |---|---|---|---|---|
+  | work to home | Quick | 22.4, +0.2 | 22.4, +0.2 | (none) |
+  | work to home | Fun | 25.5, +7.9 | 0, +22.7 | No highway-free way in a sensible time; Quick is the way |
+  | work to home | Long way | 31.2, +13.1 | 0, +22.7 | the same (the same 44 min route) |
+  | owner1 | Quick | 0, +4.7 | 4.0, 0 | (none: the quickest) |
+  | owner1 | Fun | 0, +6.4 | 0, +4.2 | Avoids 1.7 mi of strip malls · 9 more good corners · nicer country, +4 min |
+  | owner1 | Long way | 0, +16.6 | 0, +14.4 | 16 more good corners · avoids 1.7 mi of strip malls · nicer country, +14 min |
+  | colerain | Quick | 6.6, 0 | 6.6, 0 | (none) |
+  | colerain | Fun | 6.6, +0.5 | 0, +2.2 | The quickest way off the highway is a good road too. Over the 17 min route: fewer side streets · its extra corners are on side streets or between houses |
+  | colerain | Long way | 6.6, 0 | 0, +2.2 | the same |
+  | northgate | Quick | 8.5, +1.1 | 4.6, 0 | (none: the quickest) |
+  | northgate | Fun | 8.5, +1.1 | 0, +1.5 | Nicer country, +1 min |
+  | northgate | Long way | 8.5, +1.1 | 0, +3.8 | Nicer country, +4 min |
+  | harrison | Quick | 0, +2.7 | 21.7, 0 | (none: I-275 and I-74, the quickest) |
+  | harrison | Fun | 9.9, +7.5 | 0, +9.7 | 27 more good corners · avoids 0.8 mi of strip malls · open roads at 45 mph, +10 min |
+  | harrison | Long way | 9.9, +7.5 | 0, +16.1 | 38 more good corners · avoids 0.8 mi of strip malls · back roads at 45 mph, +16 min |
+  | subdivision | all three | 0, 0 | 0, 0 | Fun, Long way: No great roads on this trip: Quick is the way |
+  | loop Winton Woods 30 mi | Fun | 0 of 69.2 km | 0 of 69.2 km (the same loop) | |
+  | loop Sharon Woods 30 mi | Long way | 0 of 61.8 km | 0 of 61.8 km (the same loop) | |
+  | loop Fountain Square 30 mi | Fun | 7.3 of 66.8 km | 0 of 44.1 km | |
+  | loop Fountain Square 30 mi | Long way | 1.5 of 56.4 km | 0 of 65.7 km | |
+  | loop Miami Whitewater 1 h | Long way | 0 of 40.7 km | 0 of 40.7 km (the same loop) | |
 
 - 2026-11-04 (region grid): the context grid for OH+KY+IN on graph-data ctx/v1 (ctx-region.yml, 6 shards, 32 min):
   33 bundles, 35.6 MB, 1.46 M HPMS road spans, 13,574 fatal crashes; served at /api/ctx/v1/ (KV first, then the branch).

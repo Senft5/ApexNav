@@ -4,6 +4,40 @@ Decisions Claude made for you, newest first. Each one says what was decided, why
 you reach one you've seen. If you disagree with a call, say so and it gets reversed; nothing here is hard to undo unless
 it says so. Things only you can do are in docs/OWNER_TODO.md.
 
+## 2026-11-08: What the levels mean: Quick is the normal route, Fun never on the highway (claude/level-rules)
+
+Your words: "fun should never go on the highway. Quick should essentially be a normal route i suppose". On your work to
+home trip Fun was +8 min and Long way +13, most of both on the Cross County freeway.
+- **Quick is the quickest way, highways and all, as any nav app drives it.** A nicer road only when it costs a minute or
+  less (it was a tenth of the trip plus a minute). One visible change: Colerain at Quick now takes Colerain Avenue, the
+  quickest, where it used to take Pippin and Struble Roads for 1.4 min more. Undo or widen: `quick: { budget: 0, slackS:
+  60 }` in web/fun_route.js LEVELS (and LEVELS_COPY in graph_router.js); slackS 90 brings Pippin and Struble back.
+- **Fun and Long way never drive a motorway, a trunk road or their ramps.** A hard rule, not a cost: our router never
+  enters one (the plan, the first route on screen, the alternates, a reroute of the route, every loop leg), and the
+  ranking drops any route that uses one when one that doesn't exists. Valhalla, where our tiles don't reach, is asked
+  with use_highways 0. Long way is the same with its bigger budget. Undo: `K.NO_HWY` in graph_router.js and `noHighway`
+  in fun_route.js LEVELS.
+- **The one exception:** where no way without a highway exists in the level's reach (a river crossed only by an
+  interstate bridge, a start or end on a ramp, a car on the highway being rerouted), the shortest highway link (each
+  highway second costs 25), and the card says it first: "Uses 0.4 mi of I-275 (no other way across)" ("(you start on
+  it)", "(the end is on it)"). Loops say "· uses 0.3 mi of highway (no loop here without it)". Tune: `K.HWY_LINK_X`.
+- **No highway-free way in a sensible time** (more than twice Quick's time): still no highway; the card says "No
+  highway-free way in a sensible time; Quick is the way" and the Quick card is one tap. **Your work to home trip is this
+  case**: the quickest way without the Cross County and I-275 is 44 min against Quick's 21 (2.07x, Sharon, Dry Ridge, Day
+  and Struble Roads), so Fun and Long way both show that 44 min route with that line. If you'd rather it showed Quick's
+  route there, or the limit was 2.5x, say so. Tune: `K.HWY_ABSURD` and fun_route.js `HWY.ABSURD`.
+- **A point next to a highway is reached by its own street** (snapped to the nearest other road within 150 m), unless
+  it's a moving car within 25 m of the highway: that car is on it. Undo: `snapOff` in graph_router.js.
+- **Fun's budget is still measured from Quick's time**, and never so tight it shuts out the quickest way off the highway
+  (that way + 1 min is always allowed). So Fun can't take more than about a third over Quick unless the highway-free way
+  itself does.
+- **A loop leg that arrives on a street meeting only the motorway turns round there** (a U-turn's 30 s) rather than
+  taking the motorway one junction. Undo: the `back` block in `loopLeg`.
+- **The "Over the 15 min route" line no longer names a highway route** as the one that beats a Fun pick: the pick keeps
+  off it by the rule. Undo: `offHwy` in cockpit.js optionOnto.
+- Not covered yet: expressways mapped as ordinary `primary` roads with `motorroad=yes` (our tiles don't keep that tag; a
+  tile rebuild would). Trunk roads are covered.
+
 ## 2026-11-08: Own routing, instant: speed limits offline, Valhalla down (claude/own-routing-instant-2)
 
 Your goal: "Planning in well under a second. Routing that works offline. No dependence on a free server that can slow
