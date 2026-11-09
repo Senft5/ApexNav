@@ -4302,6 +4302,77 @@ flow('dev mode: a developer opens the Dev panel from the Garage, changes a const
   } finally { graphDir = null; }
 }, { geolocation: { latitude: 39.155, longitude: -84.615 }, permissions: ['geolocation'] });
 
+// Tune your routes (the owner, 2026-11-09: "every parameter with a slider for premium users"; Pro is open to everyone
+// until it goes on sale): Garage → Settings → Route tuning, plain sliders over the routing's numbers (web/route_tuning.js).
+// Fun's extra time up re-plans the trip on screen to a longer way, the card says "Your tuning", Reset brings the route back.
+flow('route tuning: Fun\'s extra time slider re-plans a longer Fun route, the card says so, Reset brings it back (the owner 2026-11-09)', async (page, base) => {
+  graphDir = graphFixture();
+  try {
+    await ownTrip(page, base, 'fun');
+    // a plan of ours is ranked again once the fresh context is in (ownRefine) and may swap the route on screen: each route
+    // is read after that, so the before and the after are judged alike
+    const settled = () => page.waitForFunction(() => !!window.apexDebug.lastRefine, null, { timeout: 8000 }).catch(() => {}).then(() => page.waitForTimeout(300));
+    await settled();
+    // the plan's Fun pick (its ranking's first: apexDebug.lastFun) and the card's route; the fresh context may swap the card's
+    // afterwards on this synthetic grid (real time-of-day context over made-up roads), so the pick is what the levels judge
+    const route = () => page.evaluate(() => { const t = window.apexDebug.track, p = window.apexDebug.lastFun[0]; return { pick: Math.round(p.timeS), pickParts: p.parts, timeS: Math.round(t.timeS), n: t.lat.length, end: t.dist[t.dist.length - 1], chip: !document.getElementById('cardTuneChip').hidden, chipLabel: document.getElementById('cardTuneChip').getAttribute('aria-label'),
+      level: t.funLevel, tuned: t.tuned || null }; });
+    const before = await route();
+    check(before.level === 'fun' && !before.chip && !before.tuned, 'Fun, planned with the defaults, no note: ' + JSON.stringify(before));
+    // the screen: Garage → the gear → Route tuning
+    await page.click('.tab[data-view="garage"]');
+    await page.click('#garageGear');
+    await page.waitForSelector('#garageSettings.open');
+    await page.click('#garageSettings .nav-row[data-setting="tuning"]');
+    await page.waitForSelector('.garage-pop.open[data-setting="tuning"] input[data-tune="funTime"]');
+    const screen = await page.evaluate(() => ({ sliders: document.querySelectorAll('#garageTuneBody input[type=range]').length, hints: [...document.querySelectorAll('#garageTuneBody .tune-hint')].filter((h) => h.textContent.length > 10).length,
+      groups: [...document.querySelectorAll('#garageTuneBody .tune-group h4')].map((h) => h.textContent), affects: document.getElementById('tuneAffects').textContent, status: document.getElementById('tuneStatus').textContent,
+      fun: document.querySelector('#garageTuneBody input[data-tune="funTime"]').value, replan: !document.getElementById('tuneReplan').hidden, reset: document.getElementById('tuneReset').disabled, locked: !document.getElementById('tuneLock').hidden }));
+    check(screen.sliders >= 12 && screen.hints === screen.sliders && screen.groups.join() === 'Time,Roads,Avoid,Data' && /Best roads nearby/.test(screen.affects) && screen.fun === '35'
+      && /^Standard/.test(screen.status) && screen.replan && screen.reset && !screen.locked, 'the screen, open to everyone, at the defaults: ' + JSON.stringify(screen));
+    // Fun: extra time for better road, all the way up, and spent readily; then Use on the route on screen
+    const slide = (id, v) => page.evaluate(([i, x]) => { const n = document.querySelector(`#garageTuneBody input[data-tune="${i}"]`); n.value = String(x); n.dispatchEvent(new Event('input', { bubbles: true })); n.dispatchEvent(new Event('change', { bubbles: true })); }, [id, v]);
+    await slide('funTime', 100);
+    await slide('funEager', 4);
+    const saved = await page.evaluate(() => ({ kept: JSON.parse(localStorage.getItem('apex.routeTuning')), status: document.getElementById('tuneStatus').textContent, out: document.querySelector('#tune_funTime').closest('.tune-row').querySelector('output').textContent }));
+    check(saved.kept.values.funTime === 100 && saved.kept.values.funEager === 4 && /2 settings changed/.test(saved.status) && /100 %/.test(saved.out), 'kept on this phone: ' + JSON.stringify(saved));
+    const replanned = () => page.waitForFunction(() => /Planned again|Couldn't/.test(document.getElementById('tuneStatus').textContent) && !document.getElementById('planPanel').classList.contains('busy'), null, { timeout: 30000 });
+    await page.evaluate(() => { window.apexDebug.lastRefine = null; });
+    await page.click('#tuneReplan');
+    await replanned();
+    await settled();
+    const tuned = await route();
+    check(/Planned again/.test(await page.evaluate(() => document.getElementById('tuneStatus').textContent)), 'planned again');
+    check(tuned.level === 'fun' && tuned.pick > before.pick, `a longer Fun route: ${JSON.stringify(before)} -> ${JSON.stringify(tuned)}`);
+    check(tuned.chip && /Fun: extra time/.test(tuned.chipLabel) && Array.isArray(tuned.tuned), 'the card says the route was planned with your tuning: ' + JSON.stringify(tuned));
+    // Reset to defaults: nothing kept, the route as before once planned again, no note
+    await page.click('#tuneReset');
+    check(await page.evaluate(() => localStorage.getItem('apex.routeTuning') === null && document.querySelector('#garageTuneBody input[data-tune="funTime"]').value === '35'), 'Reset: the defaults, nothing kept');
+    await page.evaluate(() => { window.apexDebug.lastRefine = null; });
+    await page.click('#tuneReplan');
+    await replanned();
+    await settled();
+    const after = await route();
+    check(after.pick === before.pick && !after.chip && !after.tuned, `Reset brings the route back: ${JSON.stringify(before)} -> ${JSON.stringify(after)}`);
+    check(await page.evaluate(() => ApexFunRoute.LEVELS.fun.budget === 0.35 && ApexRouteEngine.W.FUN === 1), 'the code\'s numbers back on the page');
+  } finally { graphDir = null; }
+}, { geolocation: { latitude: 39.155, longitude: -84.615 }, permissions: ['geolocation'] });
+flow('route tuning: once Pro is on sale, the screen asks for Pro and settings left on this phone change no plan (the owner 2026-11-09)', async (page, base) => {
+  graphDir = graphFixture();
+  try {
+    // the server's flags as the phone keeps them (flags.js): Pro on sale; no entitlement on this phone
+    await page.addInitScript(() => { try { localStorage.setItem('apex.flags', JSON.stringify({ at: Date.now(), flags: { pro: true, proOnSale: true } }));
+      localStorage.setItem('apex.routeTuning', JSON.stringify({ v: 1, values: { funTime: 100, funEager: 4, corners: 2 } })); } catch (_) {} });
+    await ownTrip(page, base, 'fun');
+    const x = await page.evaluate(() => ({ onSale: window.ApexFlags ? ApexFlags.on('proOnSale', false) : null, chip: !document.getElementById('cardTuneChip').hidden, budget: ApexFunRoute.LEVELS.fun.budget, fun: ApexRouteEngine.W.FUN,
+      locked: !document.getElementById('tuneLock').hidden, lock: document.getElementById('tuneLock').textContent, disabled: document.querySelector('#garageTuneBody input[data-tune="funTime"]').disabled,
+      kept: JSON.parse(localStorage.getItem('apex.routeTuning')).values.funTime }));
+    check(x.onSale === true, 'Pro on sale: ' + JSON.stringify(x));
+    check(!x.chip && x.budget === 0.35 && x.fun === 1, 'on sale without Pro: the defaults plan it: ' + JSON.stringify(x));
+    check(x.locked && /comes with Vetta Pro/.test(x.lock) && x.disabled && x.kept === 100, 'the screen says Pro, the sliders are off, the settings kept: ' + JSON.stringify(x));
+  } finally { graphDir = null; }
+}, { geolocation: { latitude: 39.155, longitude: -84.615 }, permissions: ['geolocation'] });
+
 flow('measured roads: the switch draws the roads members have measured around the view (IDEAS Q-14)', async (page, base) => {
   await page.route('https://tiles.openfreemap.org/**', (route) => (route.request().url().includes('/styles/')
     ? route.fulfill({ contentType: 'application/json', body: JSON.stringify({ version: 8, sources: {}, layers: [{ id: 'bg', type: 'background', paint: { 'background-color': '#eee' } }] }) })
@@ -5261,7 +5332,7 @@ flow('REVIEW5 §2: the Garage leads with you, your cars, Look and voice and the 
   await page.click('#garageGear');
   await page.waitForSelector('#garageSettings.open');
   const rows = await page.$$eval('#garageSettings .nav-row', (r) => r.filter((x) => !x.hidden).map((x) => x.querySelector('span').textContent));
-  check(JSON.stringify(rows) === '["Road feel","Privacy zones","Crash check","Reminder","Units","Map motion","Spots","Your data","Account","Feedback","About Vetta"]', 'the rows behind the gear: ' + rows);
+  check(JSON.stringify(rows) === '["Road feel","Privacy zones","Crash check","Reminder","Units","Map motion","Route tuning","Spots","Your data","Account","Feedback","About Vetta"]', 'the rows behind the gear: ' + rows);
   // U-116: a member with the switch off is told to turn it on above, never to sign in
   await page.click('#garageSettings .nav-row[data-setting="roadfeel"]');
   await page.waitForSelector('.garage-pop.open[data-setting="roadfeel"]');

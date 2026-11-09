@@ -23,6 +23,35 @@
   routing (4), plan flow (6) pass.
 - Exact next task: unchanged (tools/live_speed.js on the owner's trips at Fun and Long way); a "Graph region" run picks
   this up together with the expressway flag.
+## Session 2026-11-09 (route-sliders): Tune your routes, Pro open to everyone until on sale (claude/route-sliders, off origin/main 1d97979)
+
+- [x] Owner: "every parameter with a slider for premium users"; "remember everyone has pro if they are an early user. Once
+  we launch app store we will restrict to paid users and anyone who had the beta". New web/route_tuning.js: 14 plain
+  sliders in four groups (Time, Roads, Avoid, Data), each a one-line hint, a default equal to today's number (a test holds
+  each to the code) and bounds; at defaults no tune at all. They build the Dev panel's tune ({ router, engine, levels,
+  hwy }) and ride its plumbing (graph_router.js withTune, route_engine.js setTune); a developer's numbers lay on top
+  (`merge`). Garage → Settings → Route tuning (garage_settings.js ORDER 'tuning'); saved as moved (apex.routeTuning, this
+  phone only: no account settings sync exists); "Use on the route on screen" re-plans; Reset to defaults.
+- [x] Pro: pro.js kind `tuning`, item `route_tuning`, `TUNING_OPEN` / `tuningOpen()` like the themes; on sale without Pro
+  the sliders grey out with Pro's line, settings kept, plans use the defaults. test_pro.py: kinds theme, livery, tuning.
+- [x] Reach: destination plans (router + engine; Valhalla path engine + levels), loops (our router's search: cockpit.js
+  buildLoop sends the tune, graph_router.js `loop` now wrapped in withTune; also the Dev panel's), not Best roads nearby.
+- [x] Route card: `#cardTuneChip` "Your tuning" beside Options when the route was planned with a slider moved
+  (`t.tuned`, the sliders' names; set through optionOnto `o.tuned`, loops through `loopTuned`); a tap opens the screen.
+- [x] New knobs: graph_router.js `K.STOP_AVOID_X` 1 (search-only weight on signal/stop/give-way seconds; route time stays
+  real), route_engine.js `W.FUN` 1, `W.GAIN` 0.5 (identical ranking at defaults; ROUTE_ENGINE.md table, flow page rebuilt).
+- [x] Bug fixed: graph_router.js `objective()` cached per view without the K weights it read, so a tune of W_FUN /
+  W_QUALITY (Dev panel too) did nothing on a warm view and could leak into a later plan; key now includes them.
+- docs: CALL_SHEET 2026-11-09 (route-sliders), MONETIZATION.md 3 (row, Founders quote) and 8, APP_REVIEW.md 3.1.1,
+  ROUTE_ENGINE.md "Route tuning", OWN_ROUTING.md §5. No inline script changed (`python tools/csp.py`: up to date).
+- Tests: new tests/test_route_tuning.py (6) and graph_router_cases.js `routeTuning`; test_pro.py updated (+1). e2e: new
+  "route tuning" (2: Fun's time sliders re-plan a longer Fun pick, the chip, Reset brings the pick back; on sale without
+  Pro the screen locks and plans use the defaults). Results in the session report.
+- Open: on the synthetic e2e grid the fresh-context re-rank (ownRefine, real time-of-day context over made-up roads) swaps
+  the card back to the quickest, so the e2e judges the plan's pick (apexDebug.lastFun[0]); not tried on a phone; the
+  slider ranges are judgment, not fitted on the owner's trips.
+- Exact next task: on the phone, plan the owner's trips at Fun with the time sliders up and check the picks and the chip
+  read right; then the engine-rank task below (tools/live_speed.js on the owner's trips).
 
 ## Session 2026-11-09 (dev-mode): a Dev panel for the owner and the co-developer (claude/dev-mode, off origin/main 01a0423)
 
