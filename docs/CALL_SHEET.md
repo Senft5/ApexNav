@@ -4,6 +4,14 @@ Decisions Claude made for you, newest first. Each one says what was decided, why
 you reach one you've seen. If you disagree with a call, say so and it gets reversed; nothing here is hard to undo unless
 it says so. Things only you can do are in docs/OWNER_TODO.md.
 
+## 2026-11-09: NASA night lights taken off your to-do list
+
+You said the Earthdata steps were confusing. Night lights already work from NASA's 2016 Black Marble image, which is
+fine for telling lit towns from dark country roads; the newer yearly image would only refresh it. So the two Earthdata
+rows are gone from OWNER_TODO and you don't need to do anything. The code stays: if an `EARTHDATA_TOKEN` secret is ever
+added, the next "Context grid region" run uses the newer image by itself, and without one it keeps the 2016 image.
+Undo: put the two rows back from git history (docs/OWNER_TODO.md before this commit).
+
 ## 2026-11-09 (drive-overview): "What this drive is like" on the route card (claude/drive-overview)
 
 You asked for a plain-English overview of the type of drive a route will be. The card now has up to five lines, built
