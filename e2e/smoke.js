@@ -4192,6 +4192,116 @@ flow('satellite: anyone else never sees the switch, and one left on in localStor
   }
 });
 
+// Dev mode (the owner, 2026-11-09: "a dev mode in the app that shows all routing parameters and other debug info for only me
+// and my codev to mess with"): the Satellite layer's gate. A developer gets a Developer row in the Garage's settings that
+// opens the Dev panel (web/dev_panel.js, lazy); anyone else gets no row, no panel script, and settings left in localStorage
+// change nothing.
+const DEV_LEFT = { tune: { router: { BUY_MIN: 50 }, levels: { 'fun.slackS': 900 } }, forceValhalla: true, offline: true, lines: true };
+async function devMe(page, me, asked) {
+  page.on('request', (r) => { if (r.url().includes('dev_panel.js')) asked.push(r.url()); });
+  await page.route('**/api/**', (route) => {
+    const u = new URL(route.request().url());
+    return route.fulfill(u.pathname === '/api/me' ? { contentType: 'application/json', body: JSON.stringify(me) } : { status: 404, contentType: 'application/json', body: '{"error":"not_found"}' });
+  });
+}
+async function devRow(page) {
+  await page.click('.tab[data-view="garage"]');
+  await page.waitForTimeout(1200);                                     // /api/me has answered (renderAccount)
+  await page.click('#garageGear');
+  await page.waitForSelector('#garageSettings.open');
+  return page.evaluate(() => { const r = document.querySelector('#garageSettings .nav-row[data-setting="dev"]'); return { row: !!r, hidden: !r || r.hidden, filled: document.getElementById('garageDevBody').children.length }; });
+}
+flow('dev mode: anyone else sees no Dev entry, loads no panel, and settings left on this phone change no plan (the owner 2026-11-09)', async (page, base) => {
+  graphDir = graphFixture();
+  try {
+    const asked = [];
+    await devMe(page, { signed_in: true, member: true, handle: 'me' }, asked);
+    await page.addInitScript((d) => { try { localStorage.setItem('apex.dev', JSON.stringify(d)); } catch (_) {} }, DEV_LEFT);
+    const { r } = await ownTrip(page, base, 'fun');
+    // Force Valhalla left on: ignored, our router planned it; the tune and offline switch did nothing
+    check(r.own.covered && r.own.used && r.kinds[0] === 'own', 'our router planned it as for anyone: ' + JSON.stringify(r.own));
+    const x = await page.evaluate(() => ({ devPlan: window.apexDebug.devPlan === undefined, panel: !window.ApexDevPanel, online: navigator.onLine, fetchOwn: !Object.prototype.hasOwnProperty.call(navigator, 'onLine'),
+      lines: !window.apexDebug.map.getSource('apex-dev-cands'), bud: ApexFunRoute.LEVELS.fun.slackS, W: ApexRouteEngine.W.POOR_PER_KM }));
+    check(x.devPlan && x.panel && x.online && x.fetchOwn && x.lines && x.bud === 240 && x.W === 10, 'nothing of dev mode ran: ' + JSON.stringify(x));
+    const row = await devRow(page);
+    check(row.row && row.hidden && row.filled === 0, 'no Developer row: ' + JSON.stringify(row));
+    check(!asked.length, 'the panel\'s code is never fetched: ' + asked.join());
+  } finally { graphDir = null; }
+  // signed out, and a developer flag without membership: no row either
+  for (const me of [{ signed_in: false }, { signed_in: true, member: false, handle: 'me', developer: true }]) {
+    await page.unrouteAll({ behavior: 'ignoreErrors' });
+    const asked = [];
+    await devMe(page, me, asked);
+    await page.goto(base + '/index.html');
+    await page.waitForFunction(() => window.apexDebug && window.apexDebug.map);
+    const row = await devRow(page);
+    check(row.hidden && row.filled === 0 && !asked.length && (await page.evaluate(() => !window.ApexDevPanel)), `no Developer row for ${JSON.stringify(me)}: ${JSON.stringify(row)} ${asked.join()}`);
+  }
+}, { geolocation: { latitude: 39.155, longitude: -84.615 }, permissions: ['geolocation'] });
+
+flow('dev mode: a developer opens the Dev panel from the Garage, changes a constant, re-plans and sees it, then resets (the owner 2026-11-09)', async (page, base) => {
+  graphDir = graphFixture();
+  try {
+    const asked = [];
+    await devMe(page, { signed_in: true, member: true, handle: 'me', developer: true }, asked);
+    await ownTrip(page, base, 'fun');
+    check(!asked.length, 'the panel loads only when opened: ' + asked.join());
+    const row = await devRow(page);
+    check(row.row && !row.hidden && row.filled > 0, 'the Developer row: ' + JSON.stringify(row));
+    await page.click('#garageSettings .nav-row[data-setting="dev"]');
+    await page.waitForSelector('.garage-pop.open[data-setting="dev"]');
+    await page.click('#devOpenBtn');
+    await page.waitForSelector('#devPanel:not([hidden])', { timeout: 10000 });
+    check(asked.length === 1, 'the panel\'s code, once: ' + asked.join());
+    // the plan before this opened may have been made before /api/me answered: Re-plan with the defaults first
+    const done = (tuned) => page.waitForFunction((t) => { const p = window.apexDebug.devPlan; return p && !!p.tune === t && !document.getElementById('planPanel').classList.contains('busy') && /Re-planned|re-planned/.test(document.getElementById('devStatus').textContent); }, tuned, { timeout: 30000 });
+    await page.click('#devReplan');
+    await done(false);
+    const before = await page.evaluate(() => ({ head: document.getElementById('devPlanHead').textContent, cands: document.querySelectorAll('#devPanel .dv-c').length,
+      tune: document.getElementById('devPlanTune').textContent, own: apexDebug.devPlan.own.limitS, limit: apexDebug.devPlan.ranked.limitS, why: [...document.querySelectorAll('#devPanel .dv-why')].map((n) => n.textContent),
+      text: document.getElementById('devPanel').textContent }));
+    check(before.cands >= 2 && /level fun/.test(before.head) && before.tune === 'planned with the defaults', 'the plan, each candidate: ' + JSON.stringify(before).slice(0, 600));
+    check(before.why.filter((w) => /^picked: /.test(w)).length === 1 && /own router/.test(before.text) && /router: /.test(before.text) && / G /.test(before.text) && /hwy /.test(before.text) && /fun /.test(before.text),
+      'source, G, highway km, parts and why: ' + JSON.stringify(before.why));
+    check(/Timeline \(\d+ steps/.test(before.text) && /BUY_MIN/.test(before.text) && /POOR_PER_KM/.test(before.text) && /fun\.budget/.test(before.text), 'the timeline and the tunables are listed');
+    // a constant changed on the phone: Fun's slack 240 -> 900 s, in the router's budget (the worker) and the engine's
+    await page.fill('#devPanel input[data-table="levels"][data-path="fun.slackS"]', '900');
+    await page.click('#devReplan');
+    await done(true);
+    const after = await page.evaluate(() => ({ tune: document.getElementById('devPlanTune').textContent, own: apexDebug.devPlan.own.limitS, limit: apexDebug.devPlan.ranked.limitS, slack: ApexFunRoute.LEVELS.fun.slackS,
+      kept: JSON.parse(localStorage.getItem('apex.dev')).tune }));
+    check(after.tune === 'planned with levels.fun.slackS=900' && after.slack === 900 && after.kept.levels['fun.slackS'] === 900, 'the override is on, kept on this phone: ' + JSON.stringify(after));
+    check(Math.abs(after.own - before.own - 660) < 1 && after.limit > before.limit + 600, `the router's and the engine's budgets moved by 660 s: ${before.own} -> ${after.own}, ${before.limit} -> ${after.limit}`);
+    // Copy debug JSON: the plan's dump (the clipboard, or the box to copy from)
+    await page.click('#devCopy');
+    await page.waitForFunction(() => /Copied|Select the text/.test(document.getElementById('devStatus').textContent));
+    const dump = await page.evaluate(() => JSON.parse(document.getElementById('devJSON').value));
+    check(dump.plan && dump.plan.cands.length >= 2 && dump.plan.cands.every((c) => 'parts' in c && 'router' in c && 'why' in c && 'source' in c) && dump.tune.levels['fun.slackS'] === 900 && dump.versions && dump.versions.graph,
+      'the dump: ' + JSON.stringify(dump).slice(0, 400));
+    // Reset: the code's values back, re-planned with them
+    await page.click('#devReset');
+    await done(false);
+    const reset = await page.evaluate(() => ({ tune: document.getElementById('devPlanTune').textContent, own: apexDebug.devPlan.own.limitS, slack: ApexFunRoute.LEVELS.fun.slackS,
+      input: document.querySelector('#devPanel input[data-table="levels"][data-path="fun.slackS"]').value }));
+    check(reset.tune === 'planned with the defaults' && reset.slack === 240 && Math.abs(reset.own - before.own) < 1 && reset.input === '240', 'Reset: the defaults again: ' + JSON.stringify(reset));
+    // Force Valhalla: our router off for the next plan
+    await page.click('#devPanel input[data-dev="forceValhalla"]');
+    await page.click('#devReplan');
+    await page.waitForFunction(() => { const p = window.apexDebug.devPlan; return p && p.switches.forceValhalla && !document.getElementById('planPanel').classList.contains('busy') && /Re-planned|failed/.test(document.getElementById('devStatus').textContent); }, null, { timeout: 30000 });
+    const fv = await page.evaluate(() => ({ own: apexDebug.devPlan.own, kinds: apexDebug.devPlan.pool.map((c) => c.kind) }));
+    check(!fv.own.used && fv.own.reason === 'off' && fv.kinds.every((k) => k !== 'own'), 'Force Valhalla: none of ours: ' + JSON.stringify(fv));
+    await page.click('#devPanel input[data-dev="forceValhalla"]');
+    // Offline simulation: other hosts fail and the page reads as offline; off again, as it was
+    await page.click('#devPanel input[data-dev="offline"]');
+    const off = await page.evaluate(async () => ({ online: navigator.onLine, err: await fetch('https://valhalla1.openstreetmap.de/route').then(() => 'answered', (e) => String(e.message)), own: (await fetch('index.html')).ok }));
+    check(off.online === false && /Dev offline/.test(off.err) && off.own, 'offline simulation: ' + JSON.stringify(off));
+    await page.click('#devPanel input[data-dev="offline"]');
+    check(await page.evaluate(() => navigator.onLine && !Object.prototype.hasOwnProperty.call(navigator, 'onLine')), 'back online');
+    await page.click('#devClose');
+    check(await page.evaluate(() => document.getElementById('devPanel').hidden), 'Close hides it');
+  } finally { graphDir = null; }
+}, { geolocation: { latitude: 39.155, longitude: -84.615 }, permissions: ['geolocation'] });
+
 flow('measured roads: the switch draws the roads members have measured around the view (IDEAS Q-14)', async (page, base) => {
   await page.route('https://tiles.openfreemap.org/**', (route) => (route.request().url().includes('/styles/')
     ? route.fulfill({ contentType: 'application/json', body: JSON.stringify({ version: 8, sources: {}, layers: [{ id: 'bg', type: 'background', paint: { 'background-color': '#eee' } }] }) })

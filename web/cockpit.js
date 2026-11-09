@@ -487,7 +487,76 @@
       $('satSwitch').hidden = !devAccess;
       if (!devAccess && state.toggles.satellite) { state.toggles.satellite = false; savePrefs(); paintSwitches(); }
       applySatellite();
+      devCache = undefined;                                              // read again for this account (or none)
+      applyDevTune();
+      paintDevRow();
+      if (devAccess) { const d = devSettings(); if (d && (d.offline || d.lines)) devPanel().catch(() => {}); }   // their switches, without the panel open
+      else if (window.ApexDevPanel) ApexDevPanel.unmount();
     }
+    // Dev mode (the owner, 2026-11-09: "a dev mode in the app that shows all routing parameters and other debug info for only
+    // me and my codev to mess with"), behind the Satellite layer's gate: a fresh /api/me with developer true. Its settings
+    // (localStorage apex.dev: the routing overrides and four switches, on this phone only) are read only then: for anyone
+    // else, and before /api/me has answered, devSettings() is null and no plan changes. Its panel (web/dev_panel.js, lazy)
+    // loads only for a developer. docs/CALL_SHEET.md 2026-11-09 (dev-mode).
+    const DEV_KEY = 'apex.dev';
+    let devCache, devPanelP = null;
+    function devSettings() {
+      if (!devAccess) return null;
+      if (devCache === undefined) { try { devCache = JSON.parse(localStorage.getItem(DEV_KEY) || 'null'); } catch (_) { devCache = null; } }
+      return devCache && typeof devCache === 'object' ? devCache : null;
+    }
+    const devTune = () => { const d = devSettings(); return d && FunRoute.tuned && FunRoute.tuned(d.tune) ? d.tune : null; };
+    function devTuneReq() { const t = devTune(); return t ? { tune: t } : {}; }
+    function applyDevTune() { try { if (window.ApexRouteEngine && ApexRouteEngine.setTune) ApexRouteEngine.setTune(devTune()); } catch (e) { console.error('dev tune', e); } }
+    const devOn = (k) => { const d = devSettings(); return !!(d && d[k]); };
+    function devPanel() {
+      if (!devAccess || !window.ApexLazy) return Promise.resolve(null);
+      return devPanelP || (devPanelP = ApexLazy.load('dev').then(() => (window.ApexDevPanel ? ApexDevPanel.mount(devHost) : null)).catch((e) => { devPanelP = null; throw e; }));
+    }
+    // the Garage's Settings row (index.html section data-setting="dev"): empty, so hidden, unless this is a developer
+    function paintDevRow() {
+      const b = $('garageDevBody');
+      if (!b) return;
+      b.textContent = '';
+      if (devAccess) {
+        const p = document.createElement('p'); p.className = 'note'; p.textContent = 'Routing parameters, live overrides and the last plan\'s dump. Only you and the co-developer see this; overrides stay on this phone.';
+        const o = document.createElement('button'); o.type = 'button'; o.className = 'ink-btn'; o.id = 'devOpenBtn'; o.textContent = 'Open the Dev panel';
+        o.addEventListener('click', () => { if (window.ApexGarageSettings && ApexGarageSettings.ui) ApexGarageSettings.ui.close(); showView('map');
+          devPanel().then((p) => p && p.open()).catch((e) => { console.error('dev panel', e); toast('Couldn\'t load the Dev panel.'); }); });
+        b.append(p, o);
+      }
+      try { if (window.ApexGarageSettings && ApexGarageSettings.ui) ApexGarageSettings.ui.refresh(); } catch (_) { /* drawn at the next open */ }
+    }
+    // what the panel reads and does (web/dev_panel.js mount(host)): nothing here runs unless it is open or its switches are on
+    const devHost = {
+      allowed: () => devAccess,
+      settings: () => JSON.parse(JSON.stringify(devSettings() || {})),
+      save(s) {
+        if (!devAccess) return false;
+        devCache = s && typeof s === 'object' ? s : null;
+        try { if (devCache) localStorage.setItem(DEV_KEY, JSON.stringify(devCache)); else localStorage.removeItem(DEV_KEY); } catch (_) { /* this session only */ }
+        applyDevTune();
+        return true;
+      },
+      defaults: () => ({ router: window.ApexGraphRouter ? FunRoute.tuneKnobs(ApexGraphRouter.K) : {}, ...((window.ApexRouteEngine && ApexRouteEngine.tuneDefaults && ApexRouteEngine.tuneDefaults()) || {}) }),
+      replan: () => replanForLevel('Dev re-plan'),
+      plan: () => (window.apexDebug && apexDebug.devPlan) || null,
+      planned: () => !!(plannedRoute && plannedRoute.id === 'route_dest' && plannedRoute.request),
+      versions: async () => {
+        const out = { router: window.ApexGraphRouter ? ApexGraphRouter.VERSION : null, engine: window.ApexRouteEngine ? ApexRouteEngine.VERSION : null,
+          contextGrid: window.ApexContextGrid ? ApexContextGrid.VERSION : null, app: ($('aboutVersion') || {}).textContent || null };
+        try { const ix = window.ApexGraphTiles && ApexGraphTiles.index ? await ApexGraphTiles.index() : null; out.graph = ix ? { format: ix.version, bundled: ix.bundled, region: ix.region, tiles: Object.keys(ix.tiles || {}).length } : null; } catch (_) { out.graph = null; }
+        // the context grid's shipped index (the Worker's region index is the grid's own business: route_ctx/context_grid.js)
+        try { const r = await fetch(((window.ApexContextGrid && ApexContextGrid.BASE) || 'data/ctx/v1/') + 'index.json'); const j = r.ok ? await r.json() : null;
+          out.contextIndex = j ? { v: j.v, built: j.built, region: j.region, bundles: Object.keys(j.bundles || {}).length } : null; } catch (_) { out.contextIndex = null; }
+        return out;
+      },
+      map, toast,
+    };
+    // the planner's side (funRoute, ownOn, ownRefine read it as window.apexDebug.dev, so the plan's code stands on its own):
+    // every answer is "off" or nothing unless /api/me said developer
+    window.apexDebug.dev = Object.freeze({ allowed: () => devAccess, on: devOn, settings: devSettings, tune: devTune, tuneReq: devTuneReq,
+      planned: () => { if (devAccess && window.ApexDevPanel) ApexDevPanel.planned(); } });
 
     function mixHex(a, b, t) {
       const p = (h) => [1, 3, 5].map(i => parseInt(h.slice(i, i + 2), 16));
@@ -3166,6 +3235,7 @@
     try { funLevel = FunRoute.LEVELS[localStorage.getItem(FUN_LEVEL)] ? localStorage.getItem(FUN_LEVEL) : 'fun'; } catch (_) { /* storage off */ }
     async function funRoute(from, to, id, name, request, ui, opts = {}) {
       const level = funLevel, planT0 = Date.now();      // the early quickest counts from here, not from the router's answer
+      const dev = (window.apexDebug && window.apexDebug.dev) || null;   // dev mode (devPlanner): off but for a developer
       // where the plan's time goes (apexDebug.planMarks: [step, ms from the plan's start]; the live harness reads them)
       const mark = (k) => { if (window.apexDebug) (window.apexDebug.planMarks = window.apexDebug.planMarks || []).push([k, Date.now() - planT0]); };
       if (window.apexDebug) { window.apexDebug.planMarks = []; window.apexDebug.optMarks = []; window.apexDebug.timeline = []; window.apexDebug.planStartAt = performance.now(); }
@@ -3197,13 +3267,13 @@
       // quickest stays in the pool as a check. No tiles here, switched off, or our router failing: today's path, unchanged.
       // our quickest is asked for first, with the coverage question behind it (the worker answers in order; a trip off
       // the tiles answers it with an error, and its answer is only used when the tiles cover the trip)
-      const ownQuickAsk = ownOn() ? tlTime('worker: quickest', ApexOwnRouting.quick(ownRouter(), { from, to, level, avoid, heading: from.heading })) : null;
+      const ownQuickAsk = ownOn() ? tlTime('worker: quickest', ApexOwnRouting.quick(ownRouter(), { from, to, level, avoid, heading: from.heading, ...(dev ? dev.tuneReq() : {}) })) : null;
       const ownCovered = ownOn() ? !!(await RouteLoading.optional(ownRouter().covers([from, to]), OWN_COVERS_MS)) : false;
       mark('covers');
       // Valhalla: today's router without our tiles; with them only a check, asked once our first route is drawn (its
       // answers' decoding on the page held that first draw up, live 2026-11-05)
       // (Fun and Long way never drive a highway: Valhalla is asked to keep off them too, route_engine.js levelCosting)
-      const valhallaP = (ownCovered ? firstSeen : Promise.resolve()).then(() => tlTime('valhalla: route', valhallaRoutes([from, to], false, 2, FunRoute.LEVELS[level].noHighway ? (connectorCosting() || {}) : {}))).catch(() => osrmRoutes([from, to])).catch(() => []);
+      const valhallaP = dev && dev.on('forceOwn') ? Promise.resolve([]) : (ownCovered ? firstSeen : Promise.resolve()).then(() => tlTime('valhalla: route', valhallaRoutes([from, to], false, 2, FunRoute.LEVELS[level].noHighway ? (connectorCosting() || {}) : {}))).catch(() => osrmRoutes([from, to])).catch(() => []);
       // (not with our tiles: the map tiles' road data is in them, and the context for our routes doesn't read it)
       try { if (!ownCovered && window.ApexOsmTiles && window.ApexRouteCtx && ApexRouteCtx.corridor && (!window.ApexFlags || ApexFlags.on('route_engine'))) ApexOsmTiles.prefetch([ApexRouteCtx.corridor('ahead', [[from.lon, from.lat], [to.lon, to.lat]], {})]); } catch (_) { /* nothing ahead: fetched with the context */ }
       // members' measured roads round the trip go into our search itself (signed out or none: unchanged)
@@ -3213,7 +3283,7 @@
       // planned on what was kept, and the whole corridor's plan after the card has the fresh answer: ownRefine. Signed out
       // the server has none to give: not asked)
       const crowdS = ownCovered && ownCrowdOn() ? ApexOwnRouting.crowdSoon(routeCtxOpts().lookupCells, from, to, OWN_CROWD_MS) : null;
-      const ownReq = { from, to, level, prefs: roadPrefs, avoid, heading: from.heading, crowd: crowdS ? tlTime('crowd (members\' roads)', crowdS.now) : null };
+      const ownReq = { from, to, level, prefs: roadPrefs, avoid, heading: from.heading, crowd: crowdS ? tlTime('crowd (members\' roads)', crowdS.now) : null, ...(dev ? dev.tuneReq() : {}) };
       // (Long way's detours reach past the straight line's tiles: it waits for its corridor)
       const ownP = ownCovered ? tlTime('own plan (worker)', ApexOwnRouting.plan(ownRouter(), { ...ownReq, scope: level === 'max' ? 'full' : 'first', waitMs: OWN_FIRST_WAIT_MS })) : null;
       const ownFullP = ownP ? Promise.all([ownP, crowdS ? crowdS.late.catch(() => null) : null])
@@ -3224,7 +3294,7 @@
       let direct;
       // The router's costing keeps off highways (use_highways 0.15), which is what sent routes through subdivisions and
       // business districts; so the highway-friendly quickest competes too (route_engine.js highwayCosting), unless avoided.
-      const hwyCosting = window.ApexRouteEngine && FunRoute.kmBetween(from, to) >= 2 ? ApexRouteEngine.highwayCosting(avoid, routingCar()) : null;
+      const hwyCosting = window.ApexRouteEngine && FunRoute.kmBetween(from, to) >= 2 && !(dev && dev.on('forceOwn')) ? ApexRouteEngine.highwayCosting(avoid, routingCar()) : null;
       // (asked with our routes too: Valhalla's highway-friendly quickest is the check, and the clock ours are put on)
       const hwyTry = hwyCosting ? (ownCovered ? firstSeen : Promise.resolve()).then(() => tlTime('valhalla: highway route', valhallaRoutes([from, to], false, 0, hwyCosting))).catch(() => []) : Promise.resolve([]);
       // Where to? stays instant (REVIEW_FEEL): the FIRST answer goes up at once, not held for the other requests, the
@@ -3485,6 +3555,16 @@
         parts: c.parts || null, quality: c.ev ? c.ev.quality : null, confidence: c.ev ? c.ev.confidence : null, poorKm: c.ev ? c.ev.poorKm : null,
         ev: c.ev ? { km: c.ev.km, knownKm: c.ev.knownKm, poorBy: c.ev.poorBy, poorKmFilled: c.ev.poorKmFilled, businessKm: c.ev.businessKm, goodKm: c.ev.goodKm, builtKm: c.ev.builtKm, meanGate: c.ev.meanGate, qWeight: c.ev.qWeight,
           fun: c.ev.funGated ? { fun: c.ev.funGated.fun, good: c.ev.funGated.good } : null, penalties: c.ev.penalties, bonuses: c.ev.bonuses, signals: c.ev.stats && c.ev.stats.signals } : null })));
+      // dev mode: the whole plan as it was ranked, for the Dev panel and its Copy debug JSON (developers only; web/dev_panel.js
+      // summarises it when asked, so a plan pays for nothing but this object)
+      if (dev && dev.allowed() && window.apexDebug) {
+        const r = own.result || null;
+        window.apexDebug.devPlan = { at: new Date().toISOString(), level, from: { lat: from.lat, lon: from.lon }, to: { lat: to.lat, lon: to.lon }, pool, ranked, picked: offered[0], quickest,
+          own: { covered: ownCovered, used: ownUsed, reason: own.reason, ms: own.ms, error: own.error || null, limitS: r ? r.limitS : null, a: r ? r.a : null, hwy: r ? r.hwy : null,
+            routerMs: r ? r.ms : null, viewMs: r ? r.viewMs : null, geoMs: r ? r.geoMs : null, partial: r ? !!r.partial : null, tiles: r ? r.tiles : null, crowdEdges: r ? r.crowdEdges : null },
+          timeline: window.apexDebug.timeline, planMarks: window.apexDebug.planMarks, tune: dev.tune(), switches: { ...(dev.settings() || {}), tune: undefined } };
+        dev.planned();
+      }
       return true;
     }
     // from the plan's start: the context alone takes 1.5-3 s, so the quickest goes up as soon as the router answers (live:
@@ -3526,7 +3606,9 @@
       p.then(() => tlSpan(k, s), () => tlSpan(k + ' (failed)', s));
       return p;
     }
-    const ownOn = () => !!(window.ApexOwnRouting && window.ApexGraphRouter && ApexOwnRouting.on());
+    // (dev mode: Force Valhalla turns ours off, Force own router turns it on whatever the flag or apex.ownRouting say)
+    const ownOn = () => { const d = window.apexDebug && window.apexDebug.dev ? window.apexDebug.dev.settings() : null; if (d && d.forceValhalla) return false;
+      return !!(window.ApexOwnRouting && window.ApexGraphRouter && ((d && d.forceOwn) || ApexOwnRouting.on())); };
     // Coverage is answered on the page from index.json (fetched once): asking the worker queued the question behind its
     // tile loading, live on the preview 1.5 s, and the plan gave up on our tiles (2026-11-05)
     let ownIndexP = null;
@@ -3590,6 +3672,10 @@
         const still = () => routeOptions === o && plannedRoute === shown && state.mode !== 'live';
         const now = ranked.find((c) => c.t === (o.list[o.picked] || {}).t), best = ranked[0];
         if (window.apexDebug) window.apexDebug.lastRefine = { ms: Date.now() - t0, shown: now ? now.value : null, best: best ? best.value : null, swapped: false, full: !!(full && full.cands && full.cands.length) };
+        // dev mode: the panel shows this ranking (the one the card is now judged by), and the swap if there is one
+        const dev = (window.apexDebug && window.apexDebug.dev) || null;
+        const dp = dev && dev.allowed() && window.apexDebug.devPlan && window.apexDebug.devPlan.pool === pool ? window.apexDebug.devPlan : null;
+        if (dp) { dp.ranked = ranked; dp.refined = window.apexDebug.lastRefine; dev.planned(); }
         // (the route shown can drop out of the ranking altogether: the whole corridor's plan found a quicker way, and the
         // level's budget over it leaves the shown one too long; then the best goes up whatever the margin)
         const gone = !now && !!best;
@@ -3606,6 +3692,7 @@
         const road = best.route && best.route.names instanceof Map ? [...best.route.names].sort((x, y) => y[1] - x[1])[0] : null;
         if (typeof cardNote === 'function') cardNote(`${why}: switched to ${road ? `the way by ${road[0]}` : 'a better way'}`);
         if (window.apexDebug) window.apexDebug.lastRefine.swapped = true;
+        if (dp) { dp.picked = best; dev.planned(); }
       } catch (_) { /* the card stays as it is */ }
     }
     // Warm tiles (OWN_ROUTING.md §5): the tile you are in is read into the worker soon after start (the app's bundled

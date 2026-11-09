@@ -1681,6 +1681,11 @@
             <button class="sw mt-8" id="liveVoiceBtn" role="switch" aria-checked="false"><i></i><span>Speak road names</span></button>
             <p class="note" id="liveNote" role="status" aria-live="polite"></p>
           </section>
+          <!-- dev mode (the owner, 2026-11-09): filled only while /api/me says this account is a developer (cockpit.js
+               paintDevRow), so for everyone else the row is empty and not offered (data-empty-hides) -->
+          <section data-panel="garage" data-setting="dev" data-title="Developer" data-empty-hides>
+            <div id="garageDevBody" class="stack-8" data-fill></div>
+          </section>
           <section data-panel="garage" data-setting="motion" data-title="Map motion">
             <h3>Map motion</h3>
             <div class="switch" id="camList">

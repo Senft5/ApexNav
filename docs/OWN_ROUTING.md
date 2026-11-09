@@ -196,6 +196,12 @@ phone's reader); tests/test_graph_tiles.py round-trips through both. What a rout
   weather, events, live hazards and Valhalla's maneuvers (lanes, exits) don't, and the card says the live data isn't
   known.
 - **Fallback:** no tiles for the area, or our router fails -> today's Valhalla path, unchanged.
+- **Dev mode overrides (2026-11-09, the owner and the co-developer only):** a `plan` or `quick` message may carry
+  `tune: { router: { 'A_MAX.fun': 60, … }, levels: { 'fun.budget': 0.5, … } }` (dotted paths into `K` and the levels'
+  budgets). `withTune` lays it on for that one call and puts every value back after; only numbers that already exist are
+  set (fun_route.js `tuneOnto`). The page's ranking takes `{ engine, levels, hwy }` the same way (route_engine.js
+  `setTune`). No `tune`, the code as written: cockpit.js sends one only while `/api/me` says developer (web/dev_panel.js,
+  Garage → Settings → Developer). tests/test_dev_mode.py.
 
 ## 6. Proof (before it replaces anything)
 

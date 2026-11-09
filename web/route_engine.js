@@ -638,7 +638,31 @@
    *         + 1.5 per km of good road gained over the quickest (smooth from quality 0.5, full at 0.65; cap 30)
    *         − perMin × extra minutes − penalties (≤ 40) − glare − towns − weather + measured + taste + prefer
    */
-  function rank(cands, opts = {}) {
+  function rank(cands, opts = {}) { return opts.tune ? withTune(opts.tune, () => rankNow(cands, opts)) : rankNow(cands, opts); }
+  // ---- developer overrides (dev mode, web/dev_panel.js) ---------------------------------------------------------------
+  // The owner's and the co-developer's phones only (cockpit.js applyDevFlags: /api/me's developer flag): a tune
+  // ({ engine, levels, hwy }, fun_route.js tuneOnto) laid on W, the levels' budgets (fun_route.js LEVELS) and the highway
+  // rule (HWY) until setTune(null) puts the defaults back. No tune set: nothing here runs, the weights are the code's.
+  const TUNE_DEFAULTS = FunRoute && FunRoute.tuneKnobs ? { engine: FunRoute.tuneKnobs(W), levels: FunRoute.tuneKnobs(FunRoute.LEVELS), hwy: FunRoute.tuneKnobs(FunRoute.HWY) } : null;
+  let tuneUndo = null;
+  function layTune(t, undo = []) {
+    FunRoute.tuneOnto(W, t.engine, undo); FunRoute.tuneOnto(FunRoute.LEVELS, t.levels, undo); FunRoute.tuneOnto(FunRoute.HWY, t.hwy, undo);
+    return undo;
+  }
+  function setTune(t) {
+    if (tuneUndo) { FunRoute.untune(tuneUndo); tuneUndo = null; }
+    if (!FunRoute || !FunRoute.tuned || !FunRoute.tuned(t)) return 0;
+    tuneUndo = layTune(t);
+    return tuneUndo.length;
+  }
+  function withTune(t, fn) {
+    if (!FunRoute || !FunRoute.tuned || !FunRoute.tuned(t)) return fn();
+    const undo = layTune(t);
+    try { return fn(); } finally { FunRoute.untune(undo); }
+  }
+  /** The knobs a tune can set here, with the code's values: { engine, levels, hwy } of { 'dotted.path': number }. */
+  const tuneDefaults = () => (TUNE_DEFAULTS ? JSON.parse(JSON.stringify(TUNE_DEFAULTS)) : null);
+  function rankNow(cands, opts = {}) {
     const level = opts.level || 'fun', L = (FunRoute && FunRoute.LEVELS[level]) || { budget: 0.35, slackS: 240, perMin: 1 };
     const perMin = Number.isFinite(opts.perMinOverride) ? opts.perMinOverride : L.perMin;
     for (const c of cands) if (c.corridor && c.ctx && (!c.ev || opts.fresh)) evaluate(c, { ...opts, perMin });
@@ -708,6 +732,9 @@
     // the quickest as valued, for the why line, when the level keeps it out (its parts are what the pick is told against)
     const vq = valued[cands.indexOf(quick)];
     if (vq) Object.defineProperty(out, 'quickest', { value: vq, enumerable: false });
+    // every candidate as valued, the dropped ones too, and the budget the level kept to (the dev panel's why each lost)
+    Object.defineProperty(out, 'valued', { value: valued, enumerable: false });
+    Object.defineProperty(out, 'limitS', { value: h.limit, enumerable: false });
     return out;
   }
 
@@ -978,7 +1005,7 @@
     return base + (ev.quality != null ? W.QUALITY * (ev.quality - 50) * ev.qWeight : 0) + ev.sceneryPts + ev.bonusPts - ev.poorCost - ev.penaltyPts + (ev.driverPts || 0);
   }
 
-  const api = { VERSION: 1, QUALITY, SCENERY, PER_KM, SPANS, ALIASES, KIND_ALIASES, SOURCES, W, SPEED, gate, builtKeep, cornerGate, active, moment, channel, builtEvidence, samples, evaluate, stats, rank, why, whyOver, whyQuickest, whyHighway,
+  const api = { VERSION: 1, QUALITY, SCENERY, PER_KM, SPANS, ALIASES, KIND_ALIASES, SOURCES, W, SPEED, gate, builtKeep, cornerGate, active, moment, channel, builtEvidence, samples, evaluate, stats, rank, setTune, withTune, tuneDefaults, why, whyOver, whyQuickest, whyHighway,
     placeTimes, corridorFor, stageCorridor, stageCorridors, connectorCosting, highwayCosting, levelCosting, LEVEL_USE_HIGHWAYS, loopCosting, LOOP_USE_HIGHWAYS, highwayShare, streetOf, rescoreStages, loopValue, ramp, decay };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   root.ApexRouteEngine = api;

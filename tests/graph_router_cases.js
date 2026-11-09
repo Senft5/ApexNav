@@ -187,6 +187,43 @@ const CASES = {
     return out;
   },
 
+  // dev mode's overrides (web/dev_panel.js, the owner 2026-11-09): req.tune on levelSpread's network. No tune, an empty
+  // one or one naming no real knob plans exactly as before and leaves K alone; a real override changes the pick, for that
+  // plan only, in the page and through the worker's host
+  async tune() {
+    const S = [39.35, -84.65], nodes = [at(S[0], S[1]), at(S[0], S[1] + 0.06)], edges = [];
+    const via = (pts, props) => { const ids = pts.map((p) => { nodes.push(at(p[0], p[1])); return nodes.length - 1; }); const c = [0, ...ids, 1]; for (let k = 0; k + 1 < c.length; k++) two(edges, c[k], c[k + 1], props(k)); };
+    const wig = (dLat, n, w) => Array.from({ length: n }, (_, k) => [S[0] + dLat + (k % 2 ? w : -w), S[1] + 0.06 * (k + 1) / (n + 1)]);
+    for (const r of [
+      { name: 'Main Street', dLat: 0, n: 9, w: 0.0001, quality: 0.3, scenery: 0.2, fun: 0, cls: 3, t: 60 },
+      { name: 'Mill Road', dLat: 0.008, n: 9, w: 0.0008, quality: 0.65, scenery: 0.55, fun: 1, cls: 4, t: 83 },
+      { name: 'Ridge Road', dLat: -0.02, n: 9, w: 0.0015, quality: 0.9, scenery: 0.85, fun: 3, cls: 4, t: 145,
+        seg: (k) => (k === 4 ? { name: 'Ridge Gap', quality: 0.1, scenery: 0.2, fun: 0, cls: 6, t: 15 } : {}) },
+    ]) via(wig(r.dLat, r.n, r.w), (k) => ({ name: r.name, quality: r.quality, scenery: r.scenery, fun: r.fun, conf: 1, cls: r.cls, t: r.t, ...(r.seg ? r.seg(k) : {}) }));
+    nodes.push(at(S[0], S[1] - 0.004), at(S[0], S[1] + 0.064));
+    two(edges, nodes.length - 2, 0, { name: 'Start Lane', t: 30 }); two(edges, 1, nodes.length - 1, { name: 'End Lane', t: 30 });
+    const T = H.tiles(nodes, edges), v = R.view(T.tiles);
+    const from = { lat: S[0], lon: S[1] - 0.002 }, to = { lat: S[0], lon: S[1] + 0.062 };
+    const roads = (r) => [...new Set(r.names.map((n) => n.name).filter((n) => n && !/Lane$/.test(n)))];
+    const dump = (p) => JSON.stringify({ routes: p.routes.map(plain), quick: plain(p.quick), limitS: p.limitS, a: p.a, hwy: p.hwy });
+    const K0 = JSON.stringify(R.K), L0 = JSON.stringify(FunRoute.LEVELS);
+    const planned = (tune) => R.plan(v, { from, to, level: 'fun', ...(tune !== undefined ? { tune } : {}) });
+    const base = planned(undefined);
+    const same = [null, {}, { router: {}, levels: {} }, { router: { NOPE: 3, A_MAX: 5, BUY_MIN: 'x', '__proto__.polluted': 1, 'constructor.x': 2 }, levels: { 'fun.noHighway': 0, 'fun.label': 1 } }]
+      .map((t) => dump(planned(t)) === dump(base));
+    const strict = planned({ router: { BUY_MIN: 50 } });
+    const far = planned({ router: { 'BUY.fun': 0.03, 'A_MAX.fun': 80, 'SPREAD.fun.0': 1.5 }, levels: { 'fun.budget': 0.9, 'fun.slackS': 600 } });
+    const after = planned(undefined);
+    const quickT = R.quickest(v, { from, to, level: 'quick', tune: { router: { SIGNAL_S: 99 } } }), quick0 = R.quickest(v, { from, to, level: 'quick' });
+    // through the worker's message protocol (graph_worker.js: host.onmessage): the tune rides in the plan message
+    const host = R.host({ load: (i, j) => T.tiles.find((t) => t.tile.i === i && t.tile.j === j) || null, index: null });
+    const viaHost = async (tune) => { const m = await host.handle({ id: 1, type: 'plan', from, to, level: 'fun', geometry: false, ...(tune ? { tune } : {}) }); return m.result ? roads(m.result.routes[0]) : m.error; };
+    return { base: roads(base.routes[0]), same, strict: roads(strict.routes[0]), strictRole: strict.routes[0].why.role, far: roads(far.routes[0]), farLimitS: far.limitS, baseLimitS: base.limitS,
+      after: dump(after) === dump(base), kSame: JSON.stringify(R.K) === K0, levelsSame: JSON.stringify(FunRoute.LEVELS) === L0, polluted: ({}).polluted !== undefined,
+      quickSame: plain(quickT).timeS === plain(quick0).timeS && JSON.stringify(plain(quickT).edges) === JSON.stringify(plain(quick0).edges),
+      hostBase: await viaHost(null), hostStrict: await viaHost({ router: { BUY_MIN: 50 } }), hostAfter: await viaHost(null) };
+  },
+
   // members' data in the search: a near-tie (the plain lane 2 s quicker) flips to the loved, smooth, flowing lane, and
   // with no data (signed out) nothing changes
   crowd() {
