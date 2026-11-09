@@ -1,5 +1,23 @@
 # VETTA — CURRENT AGENT HANDOFF STATE
 
+## Session 2026-11-09 (fable-expressway): expressways below trunk class are highways to Fun and Long way (claude/fable-expressway, off origin/main 1d97979)
+
+- [x] The gap STATE and OWN_ROUTING listed: an expressway mapped as `primary` (or lower) with `motorroad=yes` wasn't a
+  highway to the levels' rule. tools/graph_etl: osm_graph.py `drivable` keeps `expressway` (`motorroad=yes` or the US
+  tagging `expressway=yes`, never on a link; a MERGE_KEY, so a chain never merges across the tag), tiles.py edge flag
+  `EXPRESSWAY` (bit 14, 16384; no format bump), build.py sets it. web/graph_tiles.js `FLAGS.expressway`,
+  graph_router.js `isHwyEdge` (so the ban at Fun and Long way, `hwyKm`, the exception's link, loops' highway share and
+  Quick loops' x2.5 all count it) and `explore` (never a Best road nearby).
+- [x] The shipped and region tiles are NOT rebuilt here (the build container can't reach Geofabrik): the bit is clear in
+  them, so nothing changes on a phone until the next "Graph region" run (Actions, manual; it also re-bundles
+  web/data/graph/v1). With old tiles the router behaves exactly as before (test: the `plain` half of the case).
+- Tests: new test_an_expressway_below_trunk_class_is_a_highway_to_the_levels (graph_router_cases.js `expressway`),
+  test_an_expressway_keeps_its_flag_into_the_tiles (a real build through pyosmium, both readers' flag tables),
+  drivable() tag asserts; pytest 1372 passed, 2 skipped; e2e levels (3), own routing (4) pass.
+- Open: how many roads in OH+KY+IN carry either tag isn't measured (no extract here). The route engine's own class
+  (Valhalla-planned routes off our tiles) still knows only motorway/trunk.
+- Exact next task: after merge, run Actions → "Graph region (own routing, OH+KY+IN)" so the flag reaches the tiles; then
+  unchanged (tools/live_speed.js on the owner's trips at Fun and Long way).
 ## Session 2026-11-09 (fable-hpms-limits): a "not reported" speed limit was read as 254 mph (claude/fable-hpms-limits, off origin/main 1d97979)
 
 - [x] Found while measuring posted limits for the overview: the context grid's HPMS `speed_limit` (u8 mph) clamped a state's

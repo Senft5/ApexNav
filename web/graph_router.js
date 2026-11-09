@@ -27,7 +27,7 @@
   const TILE_DEG = 0.25;
   // the tile format's tables (web/graph_tiles.js, tools/graph_etl/tiles.py): edge flags, node flags, classes, unknowns
   const FLAG_BITS = { oneway: 1, toll: 2, ferry: 4, unpaved: 8, tunnel: 16, bridge: 32, motorway: 64, ramp: 128, roundabout: 256, private: 512,
-    geomRev: 1024, speedEst: 2048, barrier: 4096, destination: 8192 };
+    geomRev: 1024, speedEst: 2048, barrier: 4096, destination: 8192, expressway: 16384 };
   const NODE_BITS = { signal: 1, stop: 2, giveWay: 4, barrier: 8, levelCrossing: 16, deadEnd: 32, crossing: 64, calming: 128 };
   const flagBits = () => { const T = root.ApexGraphTiles; return (T && T.FLAGS) || FLAG_BITS; };
   const nodeBits = () => { const T = root.ApexGraphTiles; return (T && T.NODE_FLAGS) || NODE_BITS; };
@@ -977,8 +977,9 @@
   }
 
   // ---- highways (NO_HWY levels) ---------------------------------------------------------------------------------------
-  /** A motorway, trunk or one of their links (the tiles give a link its road's class; the ETL's motorway flag too). */
-  function isHwyEdge(v, e) { return v.cls[e] <= CLS.trunk || !!(v.flags[e] & (v.bits || flagBits()).motorway); }
+  /** A motorway, trunk or one of their links (the tiles give a link its road's class; the ETL's motorway flag too), or an
+   *  expressway of a lower class (`motorroad=yes` / `expressway=yes`: the tiles' expressway flag, in builds from 2026-11-09). */
+  function isHwyEdge(v, e) { const B = v.bits || flagBits(); return v.cls[e] <= CLS.trunk || !!(v.flags[e] & (B.motorway | B.expressway)); }
   /** Per edge, 1 on a highway (kept per view). */
   function hwyOf(v) {
     if (v.isHwy) return v.isHwy;
@@ -1339,7 +1340,7 @@
     const key = (e) => Math.min(e, twin(v, e) >= 0 ? twin(v, e) : e);
     let retr = 0, hw = 0, all = 0;
     for (const e of edges) used.set(key(e), (used.get(key(e)) || 0) + 1);
-    for (const e of edges) { if (used.get(key(e)) > 1) retr += v.len[e]; all += v.len[e]; if (v.cls[e] <= CLS.trunk || (v.flags[e] & B.motorway)) hw += v.len[e]; }
+    for (const e of edges) { if (used.get(key(e)) > 1) retr += v.len[e]; all += v.len[e]; if (isHwyEdge(v, e)) hw += v.len[e]; }
     route.retraced = route.distM > 0 ? Math.min(1, retr / route.distM) : 0;
     route.hwyShare = all > 0 ? hw / all : 0;
     if (noHighway(level) && route.hwyKm > 0) route.route.hwyReason = hwyReason(v, route);
@@ -1435,7 +1436,7 @@
     for (let e = 0; e < v.E; e++) {
       if (v.to[e] < 0 || v.quality[e] === UNKNOWN_U8 || !Number.isFinite(v.fun[e]) || v.fun[e] <= 0) continue;
       const q = v.quality[e] / 254;
-      if (q < K.POOR_HI || (v.flags[e] & (B.private | B.barrier | B.ramp | B.destination)) || v.cls[e] === CLS.motorway || v.cls[e] >= CLS.service) continue;
+      if (q < K.POOR_HI || (v.flags[e] & (B.private | B.barrier | B.ramp | B.destination | B.expressway)) || v.cls[e] === CLS.motorway || v.cls[e] >= CLS.service) continue;
       if (streetEdge(v, e) === true) continue;
       score[e] = q * v.fun[e] / Math.max(0.05, v.len[e] / 1000);
       if (Number.isFinite(T[v.tail[e]]) || Number.isFinite(T[v.to[e]])) seeds.push(e);

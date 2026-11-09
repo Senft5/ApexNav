@@ -4,6 +4,19 @@ Decisions Claude made for you, newest first. Each one says what was decided, why
 you reach one you've seen. If you disagree with a call, say so and it gets reversed; nothing here is hard to undo unless
 it says so. Things only you can do are in docs/OWNER_TODO.md.
 
+## 2026-11-09 (fable-expressway): an expressway counts as a highway at Fun and Long way (claude/fable-expressway)
+
+"Fun should never go on the highway" covered motorways and trunk roads. Some divided, limited-access expressways are
+mapped one class lower (`primary`), marked only by a tag. The calls:
+- **Both tags count**: `motorroad=yes` (the one our notes named) and `expressway=yes` (how US mappers mark these
+  roads). Either on a primary or smaller road makes it a highway to the levels' rule: never driven at Fun or Long way
+  unless there is no other way, counted in "Uses 0.4 mi of ..." and never offered as a Best road nearby. Quick is
+  unchanged. Undo one tag: osm_graph.py `drivable`, the `expressway` line.
+- **It needs a tile rebuild to take effect, and I didn't run one** (it is a CI workflow that commits to the data
+  branch; yours or the reviewer's to start: Actions → "Graph region (own routing, OH+KY+IN)" → Run workflow). Until
+  then nothing changes on any phone: today's tiles don't carry the mark and the router treats them as before.
+- **A new flag bit, not a new tile version**: old apps ignore the bit, new apps read old tiles as "not an expressway".
+- Undo all of it: revert the branch's commits (tiles built with the flag still read fine in the old code).
 ## 2026-11-09 (fable-hpms-limits): a speed limit of "254 mph" is no limit (claude/fable-hpms-limits)
 
 The government road inventory we read speed limits from (HPMS) marks "not reported" with a code. Our data build stored

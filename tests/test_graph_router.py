@@ -309,6 +309,21 @@ def test_no_highway_free_way_in_a_sensible_time():
     assert r["quickPick"] > 8, "Quick: the motorway"
 
 
+def test_an_expressway_below_trunk_class_is_a_highway_to_the_levels():
+    """A limited-access expressway mapped as `primary` (motorroad=yes / expressway=yes: the tiles' expressway flag) beside
+    a plain back road. Flagged: Quick drives it, Fun and Long way never (the plan, its first route, every route of the
+    level's), and the route's highway km count it. Unflagged (tiles built before the flag): a road like any other."""
+    r = case("expressway")
+    f, p = r["flagged"], r["plain"]
+    assert f["isHwy"] == 6 and p["isHwy"] == 0, (f["isHwy"], p["isHwy"])
+    assert "OH-126" in f["quick"]["best"] and f["quick"]["mode"] == "any" and f["quick"]["hwyKm"] > 9, f["quick"]
+    for lv in ("fun", "max"):
+        x = f[lv]
+        assert x["mode"] == "free" and x["hwyKm"] == 0 and "OH-126" not in x["best"] and "OH-126" not in x["quickest"], (lv, x)
+        assert all(k == 0 for k in x["others"]) and x["quickHwyKm"] > 9, (lv, x)
+        assert "OH-126" in p[lv]["quickest"] and p[lv]["hwyKm"] == 0 and p[lv]["mode"] == "free", (lv, p[lv])
+
+
 def test_quick_is_the_quickest():
     """Quick is the normal route: on the city grid its budget is the quickest + 60 s and nothing it offers is slower."""
     r = case("levelsHighway")["quick"]
