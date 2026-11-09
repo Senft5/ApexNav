@@ -50,6 +50,10 @@
     // passing a node with a signal, a stop sign, give way, a level crossing, calming or a crossing (the tiles' node flags;
     // the same seconds the ETL adds for those inside an edge, tools/graph_etl/build.py DELAY_S; end nodes are ours)
     SIGNAL_S: 15, STOP_S: 7, GIVE_WAY_S: 2, LEVEL_CROSSING_S: 4, CALMING_S: 3, CROSSING_S: 1, BARRIER_S: 120,
+    // the search's weight on a signal's, stop's and give way's seconds (Route tuning's "Traffic lights and stops",
+    // web/route_tuning.js): 1 counts their wait as it is; above it the search keeps off them, while the route's time (the
+    // card's, the ETA's) still counts only the real wait
+    STOP_AVOID_X: 1,
     PRIVATE_X: 10, PRIVATE_S: 600, DESTINATION_X: 2, DESTINATION_S: 60, FERRY_X: 2, UNPAVED_X: 1.5,
     AVOID_HWY_X: 4, AVOID_TOLL_X: 3, AVOID_FERRY_X: 5, AVOID_UNPAVED_X: 5,
     // the goodness weight is searched in [0, A_MAX] (log steps from A_FIRST), at most BISECT more routes. At Fun and Long
@@ -349,8 +353,9 @@
    */
   function quickest(v, req) { return withTune(req && req.tune, () => quickestNow(v, req)); }
   /**
-   * A developer's overrides (dev mode, web/dev_panel.js: req.tune, sent only from the owner's and the co-developer's phones)
-   * laid on K and the levels' budgets for this one call, and put back after, whatever happens. No tune: fn() as written.
+   * A tune (req.tune: the driver's Route tuning, web/route_tuning.js, and a developer's Dev panel overrides on top,
+   * web/dev_panel.js) laid on K and the levels' budgets for this one call (a plan, a quickest, a loop), and put back after,
+   * whatever happens. No tune: fn() as written.
    */
   function withTune(tune, fn) {
     const F = FunRoute();
@@ -544,11 +549,15 @@
   // same driver choices, and rebuilt only when members' data is on the edges (that differs per plan)
   function objective(v, o = {}) {
     if (v.crowd) return objectiveOf(v, o);
-    const key = JSON.stringify([o.prefs || null, o.taste || null, o.avoid || null, o.crowdWeights || null, o.nodeCosts !== false]);
+    // (and the weights it reads from K: a tune, Route tuning's or the Dev panel's, changes them for its plan only, and the
+    // view is kept for the next plan, so an objective made under one tune must not be served to a plan under another)
+    const key = JSON.stringify([o.prefs || null, o.taste || null, o.avoid || null, o.crowdWeights || null, o.nodeCosts !== false, OBJ_KNOBS.map((k) => K[k])]);
     if (!v.objCache) v.objCache = new Map();
     if (!v.objCache.has(key)) { if (v.objCache.size > 8) v.objCache.clear(); v.objCache.set(key, objectiveOf(v, o)); }
     return v.objCache.get(key);
   }
+  const OBJ_KNOBS = ['W_NOTPOOR', 'W_QUALITY', 'W_FUN', 'W_SCENERY', 'POOR_LO', 'POOR_HI', 'GATE_LO', 'GATE_HI', 'UNKNOWN_G', 'MODEL_WQ', 'MODEL_WS', 'PRIVATE_X', 'PRIVATE_S',
+    'DESTINATION_X', 'DESTINATION_S', 'FERRY_X', 'UNPAVED_X', 'AVOID_HWY_X', 'AVOID_TOLL_X', 'AVOID_FERRY_X', 'AVOID_UNPAVED_X'];
   function objectiveOf(v, o = {}) {
     const prefs = o.prefs || {}, taste = o.taste || {}, avoid = o.avoid || {}, B = flagBits();
     const corner = 1 + 0.25 * ((Number(prefs.tight) || 0) + (Number(prefs.fast) || 0));
@@ -640,6 +649,13 @@
     if (f & N.barrier) c += K.BARRIER_S;
     return c;
   }
+  /** The seconds of a node's signal, stop sign or give way alone (what STOP_AVOID_X weighs in the search). */
+  function stopCost(v, n) {
+    const f = v.nflags[n];
+    if (!f) return 0;
+    const N = v.nbits;
+    return f & N.signal ? K.SIGNAL_S : f & N.stop ? K.STOP_S : f & N.giveWay ? K.GIVE_WAY_S : 0;
+  }
   function allowed(v, p, e, back) {
     // a via-way rule: the edges driven so far (back(k): the edge before k on the best way here) end with its from-and-via
     // sequence; then only its to-edge (only_*), or anything but it (no_*)
@@ -670,7 +686,7 @@
     const tgt = dst[0];
     const hMul = Math.exp(a * minBad) / v.vmax * 0.995;
     const H = (n) => { if (hs[n] !== S.qid) { hs[n] = S.qid; h[n] = distM(v.lat[n], v.lon[n], tgt.lat, tgt.lon) * hMul; } return h[n]; };
-    const ban = opts.ban || null, hx = opts.hwyX || null;
+    const ban = opts.ban || null, hx = opts.hwyX || null, stopX = Math.max(-1, (Number.isFinite(K.STOP_AVOID_X) ? K.STOP_AVOID_X : 1) - 1);
     const base = hx ? (e) => (v.time[e] * Math.exp(a * bad[e]) * mult[e] + add[e]) * (penal ? penal[e] : 1) * (hx.is[e] ? hx.x : 1)
       : (e) => (v.time[e] * Math.exp(a * bad[e]) * mult[e] + add[e]) * (penal ? penal[e] : 1);
     const dstMap = new Map();
@@ -724,8 +740,9 @@
       for (let e = v.first[node]; e < v.first[node + 1]; e++) {
         const head = v.to[e];
         if (head < 0 || (ban && ban[e]) || !allowed(v, p, e, back) || (bound && !bound(head))) continue;
-        const tc = turnCost(v, p, e, obj);
+        let tc = turnCost(v, p, e, obj);
         if (tc === Infinity) continue;
+        if (stopX !== 0 && obj.nodeCosts) tc += stopX * stopCost(v, node);
         const be = base(e), x = gp + tc + be;
         // the goal is part way along a target edge: reached from p whatever the edge's own best (a start on the same
         // edge, further on, has a lower g for its end but can't reach a point behind it)
@@ -1157,7 +1174,8 @@
    * does), and what earlier legs drove costing LOOP_RETRACE_X. Rings round the start only where no stage loop can be built.
    * { routes: [{ ...route, retraced, hwyShare, kind: 'stages' | 'ring', stages: [names] }], ms }.
    */
-  function loop(v, req) {
+  function loop(v, req) { return withTune(req && req.tune, () => loopNow(v, req)); }
+  function loopNow(v, req) {
     const t0 = Date.now(), level = levels()[req.level] ? req.level : 'fun', km = Math.max(3, Number(req.km) || 30);
     const obj = objective(v, req);
     let s0 = snap(v, req.start.lat, req.start.lon);

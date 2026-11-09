@@ -4,6 +4,47 @@ Decisions Claude made for you, newest first. Each one says what was decided, why
 you reach one you've seen. If you disagree with a call, say so and it gets reversed; nothing here is hard to undo unless
 it says so. Things only you can do are in docs/OWNER_TODO.md.
 
+## 2026-11-09 (route-sliders): Tune your routes, a Pro screen open to everyone until Pro goes on sale (claude/route-sliders)
+
+You asked for "every parameter with a slider for premium users", then: "remember everyone has pro if they are an early
+user. Once we launch app store we will restrict to paid users and anyone who had the beta." The calls I made:
+- **Pro now has a third kind, `tuning`** (web/pro.js `route_tuning`, `TUNING_OPEN`, `tuningOpen()`), with the themes'
+  rule: open to everyone while Pro isn't on sale; once `proOnSale` is on, it needs Pro, which beta and early users have
+  as the founding lifetime grant (MONETIZATION.md 3). tests/test_pro.py now allows exactly theme, livery and tuning;
+  every other guard stays (nothing safety-related, nothing you made, no privacy control, no export). The routes everyone
+  gets are unchanged: the sliders only move away from today's tuned values. Undo: `TUNING_OPEN = false` closes it now;
+  dropping the item and kind takes it out of Pro.
+- **Where it lives: Garage → Settings → Route tuning** (a row after Map motion). The route card gets a "Your tuning" chip
+  beside Options when the route was planned with any slider moved (its label names them); a tap opens the screen.
+- **14 sliders in four groups**, named for drivers: Time (Fun's extra time, how readily Fun spends it, the same two for
+  Long way, how far Quick strays for a nicer road, when Fun and Long way say "take the highway"), Roads (corners, road
+  quality and smoothness, scenery), Avoid (towns and businesses, traffic lights and stops, side streets and
+  subdivisions), Data (members' road data, fits how you drive). Each default is today's number exactly (a test holds
+  every one to the code), so an untouched screen is no tune at all. Bounds: time 10–100 % (Fun), 30–200 % (Long way),
+  0–5 min (Quick), 1.25–4× (highway limit); weights 0–2× or 0–3×; lights 0.5–4×.
+- **Fun's extra time moves more than the budget**: a bigger budget alone rarely changed the route (the router's price of
+  extra time and its search reach decided), so the time slider also makes each minute cheaper (time / default) and lets
+  the search look as far (the spread's detour weight and the goodness ceiling, never below today's). "How readily it
+  spends it" scales that price again on its own. Undo: drop `price` / `reach` from those sliders in web/route_tuning.js.
+- **The highway rule stays fixed** (Fun and Long way never drive highways); only its "too long, use Quick" limit slides.
+- **Traffic lights and stops is a new router weight, `STOP_AVOID_X` (1)**: it weighs a signal's, stop's and give way's
+  seconds in the search only, so a route can go round them while its ETA still counts only the real wait. Corners in
+  the engine needed two new knobs, `W.FUN` (1) and `W.GAIN` (0.5); at those values the ranking is identical.
+- **A bug fixed on the way**: the router kept each view's per-edge objective cached without the weights it was made
+  with, so on a warm view a tune of `W_FUN` or `W_QUALITY` (the Dev panel's too) did nothing, and a tuned objective could
+  have been served to a later untuned plan. The cache key now includes those weights.
+- **What it reaches**: plans to a place in full (our router and the engine; on Valhalla's path the engine's and the levels'
+  sliders), loops through our router's search (the road and avoid sliders; a loop's length is yours, so not the time
+  ones), not Best roads nearby. The screen says so.
+- **Kept on this phone only** (`apex.routeTuning`): there is no settings sync with the account to join (sync.js syncs
+  drives and road data, not preferences), and a new one would be server work for one screen. Undo: add it to a
+  preferences endpoint if one is ever made.
+- **Saved as each slider moves; the next plan uses it.** "Use on the route on screen" re-plans the trip on the card, rather
+  than re-planning while you slide. Reset to defaults puts every slider back.
+- **When Pro is on sale and you don't have it**, the sliders are greyed with the Pro line, your settings are kept, and
+  plans use the defaults. A developer's Dev panel numbers lay on top of the sliders, path by path.
+- **For you**: a beta tester who never made an account has no founding grant to find at launch (MONETIZATION.md 3).
+
 ## 2026-11-09 (dev-mode): a Dev panel for you and @fish5spd (claude/dev-mode)
 
 You asked for "a dev mode in the app that shows all routing parameters and other debug info for only me and my codev to
