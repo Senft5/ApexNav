@@ -83,6 +83,7 @@
   <script src="your_roads.js" defer></script>
   <script src="horizon.js" defer></script>
   <script src="pro.js" defer></script>
+  <script src="route_tuning.js" defer></script>
   <script src="theme_sounds.js" defer></script>
   <script src="week_digest.js" defer></script>
   <script src="drive_card.js" defer></script>
@@ -1460,6 +1461,8 @@
               <div class="plan-chips rc-chips" id="routeCardChips" role="group" aria-label="Options on this route">
                 <button class="chip opt-chip" id="cardOptionsChip" aria-haspopup="dialog">Options</button>
                 <span class="opt-on" id="cardOptsOn"></span>
+                <!-- planned with Route tuning's settings (route_tuning.js): says so, so a surprising route is explainable -->
+                <button class="chip tune-chip" id="cardTuneChip" hidden>Your tuning</button>
               </div>
               <!-- finding 6: a loop's length, in your units, on its card -->
               <div class="rc-loop" id="routeCardLoop" role="group" aria-label="Loop length" hidden><span class="rc-loop-label">Length</span><div class="detents" id="cardLoopDetents"></div></div>
@@ -1628,6 +1631,11 @@
             <p class="note">Your account (friends, crews, shared spots, routes and results) is deleted from the server in Settings → Account → Delete account.</p>
             <button class="sw mt-8" data-toggle="health"><i></i><span>Share app health (anonymous counts)</span></button>
             <p class="note">Once a day, totals like "3 routes found, 1 failed" go to Vetta with no account, phone or place in them, so problems get fixed. Off: nothing is counted or sent.</p>
+          </section>
+          <!-- Tune your routes (the owner, 2026-11-09; web/route_tuning.js): sliders over the routing's weights, Pro (open to
+               everyone until Pro goes on sale), kept on this phone; cockpit.js paintTuning fills it -->
+          <section data-panel="garage" data-setting="tuning" data-title="Route tuning">
+            <div id="garageTuneBody" class="stack-8"></div>
           </section>
         <section data-panel="garage" data-setting="spots" data-title="Spots">
             <h3>Spots</h3>
