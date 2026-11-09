@@ -4,6 +4,28 @@ Decisions Claude made for you, newest first. Each one says what was decided, why
 you reach one you've seen. If you disagree with a call, say so and it gets reversed; nothing here is hard to undo unless
 it says so. Things only you can do are in docs/OWNER_TODO.md.
 
+## 2026-11-09 (fable-road-carry): road data from roads with no signal is kept on the phone and sent later (claude/fable-road-carry)
+
+Found while looking for what matters most: matching a drive to the map needs the network, and a trip that ended with no
+signal (or an app closed while it was retrying) lost every road section it had not sent. The roads worth measuring are
+the ones with no coverage, so the best roads' data was the data being lost. The calls I made:
+- **What is kept**: only what the trip would still have sent (the 5 m rows between the trip's private ends, never the
+  first or last 0.5 to 1.5 km, and built chunks not yet posted). On the phone, in IndexedDB (web/road_carry.js).
+- **How long**: 13 days (the server takes a drive for 14), at most 40,000 rows (200 km) in all; over that the oldest
+  trip goes first.
+- **When it is sent**: when the phone is back online, when the app is shown again, 8 s after launch and every 5 min while
+  something waits. Only with Road data still switched on (checked before anything is matched) and never in a review
+  recording. A refusal from the server drops it.
+- **Backlogs go in 10 km pieces** (`maxRun` 2000 rows in contributor.js createLive), during a drive too, so a second
+  drop-out costs one piece. This is the only change to a trip that has signal all the way: none, unless 10 km is waiting.
+- **Erase everything removes it**, without a new line in cockpit.js: the index is the localStorage key `apex.roadCarry`,
+  which Erase already clears, and a missing index empties the store on the next load. Your data says "road data from
+  N mi waiting for signal" while something waits. privacy.html says all of this in the Road data paragraph.
+- Not done: a signed-out phone keeps what waits until it expires (it is sent under whoever is signed in with Road data
+  on by then); no line on the drive bar says what waits.
+Undo: remove `<script src="road_carry.js">` from web/index.html (createLive then has no carry and behaves as before,
+apart from the 10 km pieces; set `maxRun` to Infinity for that).
+
 ## 2026-11-09 (route-sliders): Tune your routes, a Pro screen open to everyone until Pro goes on sale (claude/route-sliders)
 
 You asked for "every parameter with a slider for premium users", then: "remember everyone has pro if they are an early

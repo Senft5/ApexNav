@@ -1,5 +1,28 @@
 # VETTA — CURRENT AGENT HANDOFF STATE
 
+## Session 2026-11-09 (fable-road-carry): road data survives no signal and a closed app (claude/fable-road-carry, off origin/main 3a74cc3)
+
+- [x] Found: contributor.js createLive `finish()` gave up when the last try had failed, so a trip that ended with no
+  signal sent nothing, and an app closed mid-retry lost its rows (IDEAS Q-06, F-05). Now a `carry` (web/road_carry.js,
+  `window.ApexRoadCarry`, found by createLive as its default) holds `leftover()`: after each failed try, when the page is
+  hidden (checkpoint), and at the trip's end. `flush()` resumes each kept item through createLive itself (`rows`,
+  `pending0`, skip 0, lag 0), so the same bins go, once, under the trip's own drive id and day.
+- [x] Kept: only the rows between the private ends; 13 days; 40,000 rows; IndexedDB `vetta-road-carry`, index in
+  localStorage `apex.roadCarry` (Erase everything clears it, and a missing index empties the store). Sent only online,
+  signed in, Road data on (`contributionEnabled`), never under APEX_REVIEW. Nothing is asked while nothing waits.
+- [x] createLive `maxRun` 2000: a backlog is matched 10 km a try. my_data.js: "road data from N mi waiting for signal".
+  privacy.html Road data paragraph; APP_REVIEW.md 5.1.2; IDEAS Q-06 / F-05; CALL_SHEET 2026-11-09 (fable-road-carry).
+- No cockpit.js edit (open PRs #320-#322 touch it); web/index.html gains one script tag before contributor.js.
+- Tests: new tests/test_road_carry.py (14); pytest 1393 passed, 2 skipped (no existing test changed); `python tools/csp.py`
+  up to date; e2e first run (2), spot photo with Erase, your data: pass.
+- Open: no e2e drives the real IndexedDB store end to end (the store is 15 lines over the injected interface the tests
+  cover, but it has not run in WebKit); not tried on a phone; a signed-out phone keeps what waits until it expires;
+  health counters (`road_upload_ok`) don't count what is sent later; the drive bar doesn't say what waits.
+- Exact next task: an e2e flow that seeds `ApexRoadCarry.hold(item, true)` in the page, stubs Valhalla, Overpass and
+  /api/contribute, fires `online`, and checks the posts and an empty store (BROWSER=webkit too). Then the deferred
+  round-1 items: HPMS posted limits in the graph ETL edge time (after #321 merges), Sharon Woods to Winton Woods at Fun,
+  Hamilton Ave quality 0.47-0.54.
+
 ## Session 2026-11-09 (route-sliders): Tune your routes, Pro open to everyone until on sale (claude/route-sliders, off origin/main 1d97979)
 
 - [x] Owner: "every parameter with a slider for premium users"; "remember everyone has pro if they are an early user. Once
