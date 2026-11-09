@@ -1,5 +1,29 @@
 # VETTA — CURRENT AGENT HANDOFF STATE
 
+## Session 2026-11-09 (fable-hpms-limits): a "not reported" speed limit was read as 254 mph (claude/fable-hpms-limits, off origin/main 1d97979)
+
+- [x] Found while measuring posted limits for the overview: the context grid's HPMS `speed_limit` (u8 mph) clamped a state's
+  "not reported" code (999 and the like) to 254 instead of nodata, and the phone read it as a measured limit: 409 km/h at
+  the head of the engine's speed-limit chain (route_engine.js SOURCES `hpms_speed_limit`), on 281 of the 17,611 spans
+  with a limit in the shipped Cincinnati bundles (Boone County KY roads: Nelson Road, Salem Ridge Road, Bellview Lane).
+  Unknown shown as measured (rule 3).
+- [x] Reader: web/route_ctx/context_grid.js `rawLine` gives NaN for a limit outside 5-85 mph (`LIMIT_MPH`), so today's
+  shipped and region bundles read right at once. Writer: tools/ctx_etl/build.py `limit_or` writes nodata for the same.
+- [x] Not rebuilt here: the graph tiles' baked quality on those roads was scored with the 409 km/h limit; the next "Graph
+  region" build scores them again (context_grid.js is one of the model files, so the build id changes). The context
+  bundles need no rebuild for this (the reader refuses the value).
+- Measured on the way, NOT changed (tools/graph_etl/score_edges.js, for whoever takes the time model next): on a 5 %
+  sample of the shipped tiles' edges, HPMS knows a posted limit on 52 % of the primary and 44 % of the secondary km where
+  the tile has only a class estimate (11 % of tertiary); where OSM and HPMS both post one they agree within 5 mph on
+  80-93 %. The tiles' times use OSM's limit or the class estimate, never HPMS's; the estimate is off by more than 5 mph on
+  32 % (primary) to 78 % (secondary) of those km. Using the engine's own chain for the time is the candidate fix; a wrong
+  match (a 15 mph reading on a county road, a road under an interstate) is the risk to check first.
+- Tests: test_an_hpms_limit_that_is_no_limit_is_unknown (ETL), test_an_hpms_limit_that_is_no_limit_reads_as_unknown
+  (the reader: a unit table and every span of the shipped bundles); pytest 1372 passed, 2 skipped; e2e route overview (1), own
+  routing (4), plan flow (6) pass.
+- Exact next task: unchanged (tools/live_speed.js on the owner's trips at Fun and Long way); a "Graph region" run picks
+  this up together with the expressway flag.
+
 ## Session 2026-11-09 (dev-mode): a Dev panel for the owner and the co-developer (claude/dev-mode, off origin/main 01a0423)
 
 - [x] Owner: "a dev mode in the app that shows all routing parameters and other debug info for only me and my codev to
