@@ -390,13 +390,18 @@ only what the ranking already holds: the corridor's samples, `channel()` of its 
 `ev.penalties` and `ev.hard` (already at the hour you'd be there), `ev.poorBy`, the track's corners and its steps' street
 names. In order, each only when its data is known well enough (`ApexRouteStory.T`):
 - **character**: each sample's setting (highway: class 0-1 or a ramp; town: built and busy; suburban: built; country: two
-  or more place signals, none built; else unknown) and the posted limits' quartiles; "Mostly two-lane country roads
+  or more place signals, none built; else unknown; how built is the **second-highest** of the place signals known there,
+  so no one signal decides: night lights glow past a city's edge, buildings per km count barns) and the posted limits' quartiles; "Mostly two-lane country roads
   through woods and farmland, 45–55 mph" (setting known on 60 %, "Mostly" from 60 %, land cover named from 25 % where it
-  is known on half the country). A class estimate is never said as a limit; the road class alone never makes "country".
+  is known on half the country; "two-lane" where `lanes`, lanes in your direction, is 1 on 80 % of what is known). A class
+  estimate is never said as a limit; the road class alone never makes "country".
 - **highlight**: the best run of good road (quality 0.65, else 0.55; gaps to 100 m; 1.5 km or more; length x goodness
-  plus 25 m a corner), its street names (25 % each, names known on half of it), corners and tight ones (severity 1-2) or
+  plus 25 m a corner), its street names (25 % each, names known on half of it; "6 miles of Chapel and California Road"
+  only when those roads carry 75 % of it, else "7 miles of good road, including A and B Road", its two longest of 800 m
+  or more), corners and tight ones (severity 1-2) or
   hairpins; quality must be known on half the route.
-- **slow**: town and suburbs (800 m, or 8 % and 400 m) with where (start, end, both, middle) and the traffic lights in
+- **slow**: town, and suburbs the engine doesn't score as good road (quality under 0.55: houses beside a good river road
+  are not a slow part) (800 m, or 8 % and 400 m) with where (start, end, both, middle) and the traffic lights in
   them where a source places signals; a mostly-town route says only its lights; else side streets (`poorBy.residential`).
 - **members**: the crowd channels per named road with 500 m measured: smooth or rough, flows well or stop-start, banking,
   loved.
@@ -405,7 +410,16 @@ names. In order, each only when its data is known well enough (`ApexRouteStory.T
   3 min; "after dark" when half the drive is dark. At most three.
 
 The cockpit (`paintStory`) builds it after the card is up from the candidate `optionOnto` keeps on the track (`t.ranked`)
-and shows the first line as the summary of a closed `<details>` under the profile, the rest a tap away.
+and shows the first line as the summary of a closed `<details>` under the profile, the rest a tap away. The road you set
+off on is named from the router's depart maneuver (the track's steps start at the first turn). On our own routes the first
+ranking holds only the tiles' channels, so when the refined ranking (`ownRefine`: the context grid's land cover, lanes,
+housing, lights) keeps the route, the overview is built again from it and replaced in place (`paintStory(t, true)`).
+
+Read against the roads on ten public Cincinnati trips (2026-11-09, `tools/story_live.js`, which prints the lines beside
+each route's settings, quality and streets): before, Harrison at Fun read "A mix of suburbs and country roads" and "About
+10 miles through suburbs" of a drive that is 19 of 30 km open country; now "Mostly two-lane country roads through
+farmland" / "6 miles of good road, including Chapel and California Road: 24 good corners, seven of them tight" / "About
+1 mile through town at the start, with one set of lights".
 
 ## The plan search
 

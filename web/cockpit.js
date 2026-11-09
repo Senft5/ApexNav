@@ -3679,7 +3679,12 @@
         // (the route shown can drop out of the ranking altogether: the whole corridor's plan found a quicker way, and the
         // level's budget over it leaves the shown one too long; then the best goes up whatever the margin)
         const gone = !now && !!best;
-        if (!best || (!now && !gone) || (now && (best.t === now.t || !(best.value > now.value + OWN_SWAP_POINTS))) || !still()) return;
+        if (!best || (!now && !gone) || (now && (best.t === now.t || !(best.value > now.value + OWN_SWAP_POINTS))) || !still()) {
+          // the route stays: its overview again from the fuller context (land cover, lanes, housing: the first ranking of our
+          // own routes holds only the tiles' channels), in place, only where the words change
+          if (now && still() && now.ctx && now.corridor) { Object.defineProperty(shown, 'ranked', { value: now, configurable: true, writable: true, enumerable: false }); paintStory(shown, true); }
+          return;
+        }
         const d = (k) => ((best.parts && best.parts[k]) || 0) - ((now && now.parts && now.parts[k]) || 0);
         // a route the wider search found only now isn't about the weather: say what it is
         const why = gone ? 'Quicker way found' : added.has(best.t) ? 'Found a better way' : d('weather') + (d('penalty') > 0 ? d('penalty') : 0) >= 1 ? 'Weather ahead' : 'Conditions ahead';
@@ -7415,9 +7420,10 @@
     // What this drive is like (route_story.js, the owner 2026-11-09): a few plain lines from what the ranking already holds
     // for the route (its samples, context, corners, steps), worked out after the card is up and kept on the track; the
     // first line in view, the rest under it. A route with no ranking behind it (restored, a GPX, a loop): nothing said.
-    function paintStory(t) {
+    function paintStory(t, again) {
       const box = $('routeCardStory');
       if (!box) return;
+      if (again && (plannedRoute !== t || !t.__story)) return;         // only a card already painted for this route is refreshed
       const c = t && t.ranked, metric = ApexUnits.metric();
       const show = (s) => {
         const lines = s && Array.isArray(s.lines) ? s.lines : [];
@@ -7428,13 +7434,16 @@
         box.classList.toggle('one', lines.length === 1);
       };
       const kept = t && t.__story;
-      if (kept && kept.steps === t.steps && kept.metric === metric) { show(kept.s); return; }
-      box.hidden = true;
+      if (!again && kept && kept.steps === t.steps && kept.metric === metric) { show(kept.s); return; }
+      if (!again) box.hidden = true;                                   // a refresh keeps the lines up until the new ones are built
       if (!c || !window.ApexRouteStory) return;
       setTimeout(() => {
         if (plannedRoute !== t) return;
         let s = null;
-        try { s = ApexRouteStory.build(c, { metric, steps: t.steps, track: t, glareMin: t.glareMin }); } catch (_) { s = null; }   // unknown: nothing said
+        // the road you set off on: the router's depart maneuver names it, and the track's steps start at the first turn
+        const dep = c.route && Array.isArray(c.route.steps) && c.route.steps[0] && c.route.steps[0].type >= 1 && c.route.steps[0].type <= 3 ? c.route.steps[0].street : null;
+        const steps = dep && Array.isArray(t.steps) && !(t.steps[0] && t.steps[0].m <= 0) ? [{ m: 0, street: dep }, ...t.steps] : t.steps;
+        try { s = ApexRouteStory.build(c, { metric, steps, track: t, glareMin: t.glareMin }); } catch (_) { s = null; }   // unknown: nothing said
         Object.defineProperty(t, '__story', { value: { steps: t.steps, metric, s }, configurable: true, writable: true, enumerable: false });
         if (plannedRoute === t) show(s);
       }, 0);

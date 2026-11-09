@@ -4,6 +4,26 @@ Decisions Claude made for you, newest first. Each one says what was decided, why
 you reach one you've seen. If you disagree with a call, say so and it gets reversed; nothing here is hard to undo unless
 it says so. Things only you can do are in docs/OWNER_TODO.md.
 
+## 2026-11-09 (fable-overview): "What this drive is like", read against real roads (claude/fable-overview)
+
+I planned ten public trips round Cincinnati in the app and read each overview against the road it described. The calls:
+- **The overview now updates once, a second or two after the card**, on routes from our own router. The first words come
+  from the road tiles alone; the fuller data (woods, farmland, lanes, housing) arrives with the second ranking, and the
+  lines are rebuilt from it in place. So "Mostly country roads." can become "Mostly two-lane country roads through
+  farmland." while you look. Undo: the `paintStory(shown, true)` line in cockpit.js `ownRefine` (then own routes never
+  mention land or lanes, as before).
+- **Open ground needs more than one sign of building to be called suburbs.** Night lights alone were turning ten miles of
+  the Harrison drive into "suburbs". Now the second-strongest sign decides. Undo: `settings` in web/route_story.js.
+- **The "through town / suburbs" line leaves out stretches the engine scores as good road**, so houses along a river
+  road aren't reported as a slow part. Harrison at Fun now says "About 1 mile through town at the start" instead of
+  "About 7 miles through suburbs in places". Undo: `built` in `slowLine`.
+- **A best part spread over many roads says "including"**: "7 miles of good road, including Morgan Ross and Millville
+  Shandon Road", not "7 miles of Millville Shandon Road" (which is 3 miles long). Two roads that carry three quarters of
+  it are still named outright. Tune: `T.NAMES_WHOLE`.
+- **"Two-lane" means one lane each way.** It was also being said of four-lane roads.
+- Not done: your own trips (their addresses aren't in the repo, by rule). `node tools/story_live.js colerain:fun` prints
+  the lines for the public ones.
+
 ## 2026-11-09 (dev-mode): a Dev panel for you and @fish5spd (claude/dev-mode)
 
 You asked for "a dev mode in the app that shows all routing parameters and other debug info for only me and my codev to

@@ -1,5 +1,31 @@
 # VETTA — CURRENT AGENT HANDOFF STATE
 
+## Session 2026-11-09 (fable-overview): the drive overview read against real trips (claude/fable-overview, off origin/main 1d97979)
+
+- [x] The overview's "exact next task" (read it on real routes, tune `ApexRouteStory.T`), on ten public trips planned in
+  the app's own page offline (new tools/story_live.js: the card's lines beside each route's setting, quality and street
+  per 400 m; the owner's own trips are not in the repo and weren't run). Found and fixed:
+  - **Our own routes' overview never saw the context grid** (land cover, lanes, housing, lights): `t.ranked` was the first
+    ranking's candidate (tiles' channels only) and the refined ranking never rebuilt it, so no own route ever said "two-lane"
+    or "through woods". cockpit.js `ownRefine`: when the route stays, `t.ranked` becomes the refined candidate and
+    `paintStory(t, true)` rebuilds the lines in place (no hide, after the card, off the plan's path).
+  - **The first road had no name** (the track's steps start at the first turn; names known on 63 % of northgate):
+    `paintStory` puts the router's depart street at 0 m. Names now 99 % on all ten.
+  - **One signal made open ground suburbs** (night lights near the city: 10 of harrison's 30 km): `settings` takes the
+    second-highest place signal, sidewalks a signal like the rest.
+  - **"two-lane" was said of two lanes each way**: `lanes` is lanes in your direction; now 1 (the test fixture said 2).
+  - **"7 miles of Millville Shandon Road"** of a stretch that road carried 3 miles of: `namesFor`, "N miles of A and B"
+    only when they carry 75 % of it, else "of good road, including A and B" (`T.NAMES_WHOLE`, `T.INCLUDE_MIN_M`).
+  - **"About 7 miles through suburbs"** on a country drive: the slow line counts town, and suburbs only where the engine's
+    quality is under 0.55.
+- Tests: tests/test_route_story.py 15 (4 new: two lanes each way, one signal, many roads, houses beside good road; the
+  country fixture's `lanes` 2 -> 1, the channel's unit); pytest 1374 passed, 2 skipped; e2e route overview (1), own
+  routing (4), plan flow (6), level (6) pass. `python tools/csp.py` not needed (no inline script changed).
+- Open: the in-place refresh has no e2e flow of its own (e2e/smoke.js is being changed by #319; seen working in
+  tools/story_live.js runs: the grid's channels and the new lines 1-3 s after the card). Posted limits are known on few
+  of these roads, so most leads say no speed. The owner's own trips still unread.
+- Exact next task: an e2e flow for the overview's refresh once #319 is merged; the owner reads the overview on his trips.
+
 ## Session 2026-11-09 (dev-mode): a Dev panel for the owner and the co-developer (claude/dev-mode, off origin/main 01a0423)
 
 - [x] Owner: "a dev mode in the app that shows all routing parameters and other debug info for only me and my codev to
