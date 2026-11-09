@@ -76,6 +76,7 @@
   <script src="plain_notes.js" defer></script>
   <script src="hazard_reports.js" defer></script>
   <script src="route_card.js" defer></script>
+  <script src="route_story.js" defer></script>
   <script src="plan_presets.js" defer></script>
   <script src="plan_options.js" defer></script>
   <script src="place_plate.js" defer></script>
@@ -606,6 +607,15 @@
     .rc-dial b { display: block; font: 800 26px/1 var(--font-num); font-variant-numeric: tabular-nums; }
     .rc-dial span { display: block; margin-top: 3px; font-size: 11px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: var(--panel-dim); }
     .rc-facts { display: grid; gap: 6px; margin-top: 10px; }
+    /* What this drive is like: the lead line as the summary, a chevron for the rest (the plan-more chevron, smaller) */
+    .rc-story { margin-top: 10px; }
+    .rc-story > summary { list-style: none; cursor: pointer; display: flex; justify-content: space-between; align-items: flex-start; gap: 10px; font-size: 15px; font-weight: 600; line-height: 1.3; color: var(--panel-ink); }
+    .rc-story > summary::-webkit-details-marker { display: none; }
+    .rc-story > summary::after { content: ""; flex: none; width: 7px; height: 7px; margin: 5px 4px 0 0; border-right: 2px solid currentColor; border-bottom: 2px solid currentColor; transform: rotate(45deg); transition: transform 0.15s; }
+    .rc-story[open] > summary::after { transform: rotate(-135deg); }
+    .rc-story.one > summary { cursor: default; } .rc-story.one > summary::after { display: none; }
+    .rc-story p { margin: 6px 0 0; font-size: 15px; line-height: 1.3; color: var(--panel-ink); }
+    html[data-type-size] #planBody .rc-story :is(summary, p) { font-size: 17px; }
     .rc-facts .fact { margin: 0; display: flex; gap: 10px; align-items: flex-start; font-size: 15px; font-weight: 600; color: var(--panel-ink); line-height: 1.3; }
     .rc-facts .fact[hidden] { display: none; }
     .rc-facts .fact::before { content: ""; flex: none; width: 18px; height: 18px; margin-top: 1px; background: currentColor;
@@ -1463,6 +1473,8 @@
               <!-- finding 2: the profile's room is kept before it loads, so nothing under it jumps -->
               <div class="rc-profile-box" id="routeCardProfile"></div>
               <p class="route-meta" id="routeCardMeta" hidden></p>
+              <!-- What this drive is like (route_story.js, the owner 2026-11-09): its first line in view, the rest a tap away -->
+              <details class="rc-story" id="routeCardStory" hidden><summary id="routeCardStoryLead"></summary><div id="routeCardStoryMore"></div></details>
               <div class="rc-facts">
                 <p class="fact f-along" id="routeCardAlong" hidden></p>
                 <p class="fact f-climb" id="routeCardClimb" hidden></p>

@@ -381,6 +381,32 @@ and "avoids X of strip malls" is in that kind's km. When the winner is simply th
 a higher mean quality) and nothing else separates them: "Better roads than the quickest". When nothing the context
 knew made the difference, the old line (the roads it's for and its corners) is said.
 
+### What this drive is like (the overview)
+
+`web/route_story.js` `build(ranked, { metric, steps, track, glareMin })` (2026-11-09, the owner: "some kind of route
+overview for the type of drive it will be, in plain english") turns one ranked candidate into up to five lines, each with
+the facts behind it (`{ lines: [{ kind, text, facts }], coverage }`). Pure, no network; about 4 ms for 80 km. It reads
+only what the ranking already holds: the corridor's samples, `channel()` of its context, `ev.samples.quality`,
+`ev.penalties` and `ev.hard` (already at the hour you'd be there), `ev.poorBy`, the track's corners and its steps' street
+names. In order, each only when its data is known well enough (`ApexRouteStory.T`):
+- **character**: each sample's setting (highway: class 0-1 or a ramp; town: built and busy; suburban: built; country: two
+  or more place signals, none built; else unknown) and the posted limits' quartiles; "Mostly two-lane country roads
+  through woods and farmland, 45–55 mph" (setting known on 60 %, "Mostly" from 60 %, land cover named from 25 % where it
+  is known on half the country). A class estimate is never said as a limit; the road class alone never makes "country".
+- **highlight**: the best run of good road (quality 0.65, else 0.55; gaps to 100 m; 1.5 km or more; length x goodness
+  plus 25 m a corner), its street names (25 % each, names known on half of it), corners and tight ones (severity 1-2) or
+  hairpins; quality must be known on half the route.
+- **slow**: town and suburbs (800 m, or 8 % and 400 m) with where (start, end, both, middle) and the traffic lights in
+  them where a source places signals; a mostly-town route says only its lights; else side streets (`poorBy.residential`).
+- **members**: the crowd channels per named road with 500 m measured: smooth or rough, flows well or stop-start, banking,
+  loved.
+- **conditions**: a closure, wet roads (6 h rain known on half, 1 mm on 30 %), the weather code, the engine's time-of-day
+  costs of 0.5 points or more (deer, fog, cold roads, ice, school zones, works, events, farm traffic ...), low sun from
+  3 min; "after dark" when half the drive is dark. At most three.
+
+The cockpit (`paintStory`) builds it after the card is up from the candidate `optionOnto` keeps on the track (`t.ranked`)
+and shows the first line as the summary of a closed `<details>` under the profile, the rest a tap away.
+
 ## The plan search
 
 - **Levels** (the owner, 2026-11-08: "fun should never go on the highway. Quick should essentially be a normal route"):

@@ -35,6 +35,28 @@
 - Exact next task: unchanged from engine-rank below (tools/live_speed.js on the owner's trips at Fun and Long way); the
   owner can now do the same on the phone with the Dev panel and paste its JSON.
 
+## Session 2026-11-09 (drive-overview): "What this drive is like" on the route card (claude/drive-overview, off origin/main 01a0423)
+
+- [x] Owner: "can we compile the data used to give some kind of route overview for the type of drive it will be? in plain
+  english for the user." New pure module web/route_story.js (`ApexRouteStory.build(ranked, { metric, steps, track,
+  glareMin })` -> `{ lines: [{ kind, text, facts }], coverage }`): character (setting share and posted limits), the best
+  stretch (names from the track's steps, corners and tight ones), town / suburbs / lights / side streets, members' crowd
+  data per named road, today's conditions (the engine's time-of-day costs, rain, weather code, low sun, closures). Each line
+  only with its data known over enough of the route (`T`); unknown is never said. ROUTE_ENGINE.md "What this drive is like".
+- [x] Card: `#routeCardStory` (web/index.html) under the profile, the first line as a closed `<details>` summary, the rest a
+  tap away. cockpit.js: `optionOnto` keeps the ranked candidate on the track (`t.ranked`, non-enumerable), `renderRouteCard`
+  calls `paintStory`, which builds it in a setTimeout after the card is up and keeps it on the track (`t.__story`). Three
+  additive edits only (claude/dev-mode also touches cockpit.js). Not on loops, GPX or restored routes. CALL_SHEET 2026-11-09.
+- [x] No inline script changed (`python tools/csp.py`: all pages up to date). No iOS shell, sign-in, social or data
+  collection change, so APP_REVIEW.md is untouched.
+- Tests: new tests/test_route_story.py (11: country, suburban, mixed, a highlight with names and without, units, thin data,
+  unknown data, an estimated limit, members without names, conditions); new e2e "route overview" (plans on the graph
+  fixture: "Mostly suburban roads, 35–55 mph." / "2 sets of lights on the way."). pytest 1365 passed, 2 skipped; e2e route
+  overview (1), levels (3), plan flow (6), own routing (4), level cards (2), offline (6) all pass. Build ~4 ms for 80 km.
+- Open: thresholds are judgment, not fitted on real trips; the wording hasn't been read on the owner's routes.
+- Exact next task: plan the owner's trips (work to home, colerain, harrison) at Fun and Long way in the app and read the
+  overview against the roads; tune `ApexRouteStory.T` (the 0.65 highlight mark, the setting signals) where a line reads wrong.
+
 ## Session 2026-11-08 (drop-fcc): FCC coverage removed at the owner's word (claude/drop-fcc, off origin/main 77db807)
 
 - [x] Owner: "we can just drop fcc it's confusing". Removed #311's FCC path: tools/ctx_etl sources.py (MobileCoverage,

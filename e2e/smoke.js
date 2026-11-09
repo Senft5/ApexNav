@@ -717,6 +717,41 @@ flow('own routing: where our graph tiles cover the trip, our route wins and Valh
   } finally { graphDir = null; }
 }, { geolocation: { latitude: 39.155, longitude: -84.615 }, permissions: ['geolocation'] });
 
+// What this drive is like (web/route_story.js, the owner 2026-11-09): a planned route's card carries a few plain lines
+// built from the ranking's own data, in your units, after the card is up; nothing it says is unknown to the data.
+flow('route overview: the card says what the drive is like in plain words, from the route\'s own data', async (page, base) => {
+  graphDir = graphFixture();
+  try {
+    await ownTrip(page, base, 'fun');
+    await page.waitForFunction(() => !document.getElementById('routeCardStory').hidden, null, { timeout: 5000 });
+    const r = await page.evaluate(() => {
+      const t = window.apexDebug.track, s = t.__story && t.__story.s, box = document.getElementById('routeCardStory');
+      return { lines: s ? s.lines : [], coverage: s && s.coverage, lead: document.getElementById('routeCardStoryLead').textContent,
+        more: [...document.querySelectorAll('#routeCardStoryMore p')].map((p) => p.textContent), open: box.open, one: box.classList.contains('one'),
+        streets: (t.steps || []).map((x) => x.street).filter(Boolean), cardW: document.getElementById('routeCard').scrollWidth - document.getElementById('routeCard').clientWidth };
+    });
+    const texts = r.lines.map((l) => l.text);
+    if (process.env.STORY_LOG) console.log(JSON.stringify({ texts, coverage: r.coverage, streets: [...new Set(r.streets)] }));
+    check(texts.length >= 1 && texts.length <= 5, 'one to five lines: ' + JSON.stringify(texts));
+    check(r.lead === texts[0] && JSON.stringify(r.more) === JSON.stringify(texts.slice(1)), 'the first line in view, the rest under it: ' + JSON.stringify([r.lead, r.more]));
+    check(!r.open, 'the rest is a tap away, not open by default');
+    check(texts.every((x) => /^[A-Z0-9]/.test(x) && /\.$/.test(x) && !/goodness|NaN|undefined|null|\bG\b/.test(x)), 'plain sentences, no jargon or unknowns: ' + JSON.stringify(texts));
+    check(!texts.some((x) => /\bkm\b|km\/h/.test(x)), 'in the default units (miles): ' + JSON.stringify(texts));
+    // every name it says is a street the route drives; every highlight lies on the route
+    for (const l of r.lines) for (const n of (l.facts && l.facts.names) || []) check(r.streets.includes(n), `"${n}" is on the route: ` + JSON.stringify(r.streets));
+    const hl = r.lines.find((l) => l.kind === 'highlight');
+    if (hl) check(hl.facts.m >= 1500 && hl.facts.toM <= r.coverage.km * 1000 + 30, 'the best part is a real stretch of this route: ' + JSON.stringify(hl.facts));
+    // the grid's tiles carry no weather, deer or members' data here: nothing said about them
+    check(!r.lines.some((l) => l.kind === 'members' || l.kind === 'conditions'), 'no members\' or conditions line without their data: ' + JSON.stringify(texts));
+    check(r.cardW <= 1, 'the card does not grow sideways: ' + r.cardW);
+    // a tap opens the rest
+    if (texts.length > 1) {
+      await page.click('#routeCardStoryLead');
+      check(await page.evaluate(() => document.getElementById('routeCardStory').open), 'a tap on the line opens the rest');
+    }
+  } finally { graphDir = null; }
+}, { geolocation: { latitude: 39.155, longitude: -84.615 }, permissions: ['geolocation'] });
+
 // The levels (the owner, 2026-11-08: "fun should never go on the highway. Quick should essentially be a normal route"): on
 // the grid whose arterials are motorways, Quick drives them; Fun and Long way never do, in the plan, the card's pick and
 // the level cards; the shown route's samples on our tiles carry no motorway at Fun

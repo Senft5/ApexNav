@@ -2707,6 +2707,7 @@
       const loopCard = isLoop(t);
       $('routeCardFun').hidden = !(t.id === 'route_dest' || loopCard);
       paintCardLoop(t);
+      paintStory(t);
       paintOptChips();
       paintLevelCards();
       paintAlternates();
@@ -3786,6 +3787,7 @@
                          unavoided: FunRoute.unavoided(avoid, c.route), why: (hwyLine && hwyLine.kind === 'absurd' ? [hwyLine.text] : [hwyLine && hwyLine.text, (engineWhy && engineWhy.text) || (quickLine && quickLine.text) || whyText(FunRoute.why(c, o.quickest), fewerTownKm(c, o.quickest), c.extraS), overLine && overLine.text]).filter(Boolean).join('. ') || null,
                          request: { ...o.request, via: via.map(p => ({ lat: p.lat, lon: p.lon, shaping: true })) } });
       if (c.plan) t.stageSpans = FunRoute.stageSpans(t, c.plan.legs);   // where its stages are (Siri: next / skip, IDEAS V-07)
+      Object.defineProperty(t, 'ranked', { value: c, configurable: true, writable: true, enumerable: false });   // the card's overview reads it (paintStory)
     }
     let optionBusy = false;
     async function pickOption(i) {
@@ -7409,6 +7411,33 @@
         $('routeCardCharacter').textContent = line ? ApexRouteCard.factText(`Ahead: ${VOC ? VOC.plainRoads(line) : line}`) : '';
         $('routeCardCharacter').hidden = !line;
       } catch (_) { /* unknown: nothing said */ }
+    }
+    // What this drive is like (route_story.js, the owner 2026-11-09): a few plain lines from what the ranking already holds
+    // for the route (its samples, context, corners, steps), worked out after the card is up and kept on the track; the
+    // first line in view, the rest under it. A route with no ranking behind it (restored, a GPX, a loop): nothing said.
+    function paintStory(t) {
+      const box = $('routeCardStory');
+      if (!box) return;
+      const c = t && t.ranked, metric = ApexUnits.metric();
+      const show = (s) => {
+        const lines = s && Array.isArray(s.lines) ? s.lines : [];
+        box.hidden = !lines.length;
+        if (!lines.length) return;
+        $('routeCardStoryLead').textContent = lines[0].text;
+        $('routeCardStoryMore').replaceChildren(...lines.slice(1).map((l) => { const p = document.createElement('p'); p.textContent = l.text; return p; }));
+        box.classList.toggle('one', lines.length === 1);
+      };
+      const kept = t && t.__story;
+      if (kept && kept.steps === t.steps && kept.metric === metric) { show(kept.s); return; }
+      box.hidden = true;
+      if (!c || !window.ApexRouteStory) return;
+      setTimeout(() => {
+        if (plannedRoute !== t) return;
+        let s = null;
+        try { s = ApexRouteStory.build(c, { metric, steps: t.steps, track: t, glareMin: t.glareMin }); } catch (_) { s = null; }   // unknown: nothing said
+        Object.defineProperty(t, '__story', { value: { steps: t.steps, metric, s }, configurable: true, writable: true, enumerable: false });
+        if (plannedRoute === t) show(s);
+      }, 0);
     }
     // Said to screen readers only, for what the screen already shows (the route bar after a route is found).
     function announce(text) { const a = $('announcer'); a.textContent = ''; setTimeout(() => { a.textContent = text; }, 50); }
