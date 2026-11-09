@@ -110,6 +110,8 @@ phone's reader); tests/test_graph_tiles.py round-trips through both. What a rout
   level crossing, crossing, calming, dead end) are the router's turn cost.
 - `flags` (`ApexGraphTiles.FLAGS`): oneway, toll, ferry, unpaved, tunnel, bridge, motorway, ramp, roundabout, private,
   geomRev (internal), speedEst (no posted limit), barrier (a gate inside), destination (access=destination/customers).
+  expressway (16384, builds from 2026-11-09: `motorroad=yes` or `expressway=yes` on a road that isn't a link; no format
+  bump, older tiles leave the bit clear).
   `cls`: 0 motorway .. 7 service, 8 track, 9 ferry. `speed`: km/h, posted or the estimate.
 - Restrictions (via node, in the via node's tile): `{ fromEdge, fromTile, via, toEdge, only }`. A via-way restriction is
   counted in index.json `stats` and not applied.
@@ -151,8 +153,10 @@ phone's reader); tests/test_graph_tiles.py round-trips through both. What a rout
   over 2x the quickest's time is still the level's way, alone (no bisection), `hwy.absurd`; the card: "No highway-free way
   in a sensible time; Quick is the way". The highway quickest stays in the pool as Quick's card and the level's measure;
   the budget never shuts out the highway-free quickest (+ 60 s). `plan()` returns `hwy: { mode: 'any' | 'free' | 'link',
-  absurd, quickS, freeS }`. The ranking keeps the same rule (ROUTE_ENGINE.md, fun_route.js `applyHighways`). Not in the
-  tiles: an expressway mapped as `primary` with `motorroad=yes` (the ETL doesn't keep the tag yet; a tile rebuild would).
+  absurd, quickS, freeS }`. The ranking keeps the same rule (ROUTE_ENGINE.md, fun_route.js `applyHighways`). An
+  expressway mapped below trunk class (`primary` or lower with `motorroad=yes`, or the US tagging `expressway=yes`) is a
+  highway to this rule too (2026-11-09: the tiles' `expressway` flag, `isHwyEdge`; never a Best road nearby). Tiles built
+  before the flag don't carry it: there such a road is still an ordinary road until the next region build.
 - **Quick:** minimise time (A* with an admissible time heuristic: straight-line distance / max speed).
 - **Fun / Max fun:** minimise `t_s * exp(a*(1 - goodness))` where goodness blends quality, fun and scenery with the
   driver's taste; `a` is bisected (log steps, from `K.A_FIRST` 5, up to `K.A_MAX` 40 at Fun, 80 at Long way) for the
