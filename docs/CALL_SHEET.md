@@ -12,6 +12,29 @@ rows are gone from OWNER_TODO and you don't need to do anything. The code stays:
 added, the next "Context grid region" run uses the newer image by itself, and without one it keeps the 2016 image.
 Undo: put the two rows back from git history (docs/OWNER_TODO.md before this commit).
 
+## 2026-11-09 (drive-overview): "What this drive is like" on the route card (claude/drive-overview)
+
+You asked for a plain-English overview of the type of drive a route will be. The card now has up to five lines, built
+from what the ranking already knows about that route (web/route_story.js, no network, after the card is up):
+"Mostly two-lane country roads through woods and farmland, 45–55 mph." / "The best part is 3 miles of Struble and Day
+Road: 41 good corners, five of them tight." / "About 3 miles through town at the start, with 4 sets of lights." /
+"Members' drives say Day Road is smooth and flows well." / "Wet roads and deer likely after dark."
+- **Placement:** under the elevation profile, above the facts (Along, Climbs, Ahead, Weather). Only the first line shows;
+  a tap on it opens the rest (a closed `<details>`), so the card is one line longer, not five. The why line and the
+  level cards are untouched. Undo the placement: move `#routeCardStory` in web/index.html, or add `open` to show it all.
+- **When a line is said:** each needs its data over enough of the route (docs/ROUTE_ENGINE.md "What this drive is
+  like"; the numbers are `ApexRouteStory.T`). Thin data drops lines; with nothing known well enough the overview is
+  hidden. "Country" needs two place signals (houses, density, buildings, addresses, land use, lights...) saying open
+  ground, never the road class alone; speeds are posted or measured limits only, never the class estimate.
+- **The best part** looks first for the engine's full mark for good road (quality 0.65) and only then 0.55, so a
+  merely decent road either side doesn't swallow the highlight; each corner in a run counts as 25 m when runs are
+  compared, so a twisty good stretch beats an equally good straight one. Undo: `T.GOOD_Q_HI` = 0.55, `T.CORNER_M` = 0.
+- **Conditions** are the engine's own costs at the hour you'd be there (0.5 points or more), plus rain in the last 6 h,
+  the forecast code, low sun and closures; never more than three. The Weather fact line can say rain too; both stay
+  (one is the forecast at six points, the other the engine's per-sample data). Undo: drop `conditionsLine` from build.
+- **Not on:** loops, GPX imports and a route restored after a reload (no ranking behind them: nothing said rather than
+  a guess). Undo all of it: revert the commit.
+
 ## 2026-11-08 (drop-fcc): FCC phone coverage removed, as you asked (claude/drop-fcc)
 
 You said: "we can just drop fcc it's confusing". Everything #311 added for the FCC National Broadband Map is gone; the
