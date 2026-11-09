@@ -206,6 +206,16 @@ phone's reader); tests/test_graph_tiles.py round-trips through both. What a rout
   set (fun_route.js `tuneOnto`). The page's ranking takes `{ engine, levels, hwy }` the same way (route_engine.js
   `setTune`). No `tune`, the code as written: cockpit.js sends one only while `/api/me` says developer (web/dev_panel.js,
   Garage → Settings → Developer). tests/test_dev_mode.py.
+- **Route tuning (2026-11-09, everyone while Pro isn't on sale; then Pro):** web/route_tuning.js builds the same `tune`
+  from plain sliders (Garage → Settings → Route tuning) and cockpit.js sends it with every `plan`, `quick` and now `loop`
+  message, a developer's Dev panel numbers laid on top (`ApexRouteTuning.merge`). Router knobs: Corners `W_FUN`; Road
+  quality `W_QUALITY`, `ROAD.good`; Scenery `W_SCENERY`; Side streets `ROAD.poor`, `W_NOTPOOR`; Members' road data
+  `CROWD_W.*`; Fun's and Long way's time `SPREAD.<level>.0` and `A_MAX.<level>` (the search reaches as far as the budget)
+  and `BUY.<level>`; the highway limit `HWY_ABSURD`; Traffic lights and stops `STOP_AVOID_X` (new, 1: the search's weight
+  on a signal's, stop's and give way's seconds; the route's own time stays the real wait). `objective()`'s per-view cache
+  is now keyed on the `K` weights it reads too, so a tuned plan never reuses (or leaves behind) an untuned objective (it
+  did before: a tune of `W_FUN` or `W_QUALITY` was ignored on a warm view). Best roads nearby (`explore`) take no tune.
+  tests/test_route_tuning.py, graph_router_cases.js `routeTuning`.
 
 ## 6. Proof (before it replaces anything)
 

@@ -224,6 +224,54 @@ const CASES = {
       hostBase: await viaHost(null), hostStrict: await viaHost({ router: { BUY_MIN: 50 } }), hostAfter: await viaHost(null) };
   },
 
+  // Route tuning (web/route_tuning.js, the owner 2026-11-09): the driver's sliders as a tune on tune()'s network. At their
+  // defaults no tune at all (the plan as before); Fun's extra time up takes the longer, better road; the goodness weights
+  // a tune sets reach the search even on a view whose objective was made (and kept) under none, and the other way round;
+  // Traffic lights and stops keeps the search off signals while the route's time stays the real wait
+  async routeTuning() {
+    const T0 = require('../web/route_tuning.js');
+    const S = [39.35, -84.65], nodes = [at(S[0], S[1]), at(S[0], S[1] + 0.06)], edges = [];
+    const via = (pts, props, flags = 0) => { const ids = pts.map((p) => { nodes.push(at(p[0], p[1], flags)); return nodes.length - 1; }); const c = [0, ...ids, 1]; for (let k = 0; k + 1 < c.length; k++) two(edges, c[k], c[k + 1], props(k)); };
+    const wig = (dLat, n, w) => Array.from({ length: n }, (_, k) => [S[0] + dLat + (k % 2 ? w : -w), S[1] + 0.06 * (k + 1) / (n + 1)]);
+    const network = (signals) => {
+      nodes.length = 2; edges.length = 0;
+      for (const r of [
+        { name: 'Main Street', dLat: 0, n: 9, w: 0.0001, quality: 0.3, scenery: 0.2, fun: 0, cls: 3, t: 60, flags: signals ? 1 : 0 },
+        { name: 'Mill Road', dLat: 0.008, n: 9, w: 0.0008, quality: 0.65, scenery: 0.55, fun: 1, cls: 4, t: 83 },
+        { name: 'Ridge Road', dLat: -0.02, n: 9, w: 0.0015, quality: 0.9, scenery: 0.85, fun: 3, cls: 4, t: 145,
+          seg: (k) => (k === 4 ? { name: 'Ridge Gap', quality: 0.1, scenery: 0.2, fun: 0, cls: 6, t: 15 } : {}) },
+      ]) via(wig(r.dLat, r.n, r.w), (k) => ({ name: r.name, quality: r.quality, scenery: r.scenery, fun: r.fun, conf: 1, cls: r.cls, t: r.t, ...(r.seg ? r.seg(k) : {}) }), r.flags || 0);
+      nodes.push(at(S[0], S[1] - 0.004), at(S[0], S[1] + 0.064));
+      two(edges, nodes.length - 2, 0, { name: 'Start Lane', t: 30 }); two(edges, 1, nodes.length - 1, { name: 'End Lane', t: 30 });
+      return R.view(H.tiles(nodes.map((n) => ({ ...n })), edges.map((e) => ({ ...e }))).tiles);
+    };
+    const from = { lat: S[0], lon: S[1] - 0.002 }, to = { lat: S[0], lon: S[1] + 0.062 };
+    const roads = (r) => [...new Set(r.names.map((n) => n.name).filter((n) => n && !/Lane$/.test(n)))];
+    const dump = (p) => JSON.stringify({ routes: p.routes.map(plain), quick: plain(p.quick), limitS: p.limitS, a: p.a });
+    const K0 = JSON.stringify(R.K);
+    let v = network(false);
+    const planned = (level, tune) => R.plan(v, { from, to, level, ...(tune ? { tune } : {}) });
+    const base = planned('fun');
+    const neutral = T0.tune(T0.DEFAULTS);
+    const same = dump(planned('fun', neutral)) === dump(base);
+    const far = planned('fun', T0.tune({ funTime: 100, funEager: 2 }));
+    const back = dump(planned('fun')) === dump(base);
+    // the objective kept on the view: a corners-off tune after an untuned plan, and on a fresh view, plan the same
+    const off = T0.tune({ corners: 0, quality: 0, scenery: 0 });
+    const offWarm = dump(planned('max', off));
+    v = network(false);
+    const offCold = dump(planned('max', off));
+    const max0 = dump(planned('max'));
+    // lights: Main Street's nodes all signals; Quick at x4 keeps off them, its time the real one
+    v = network(true);
+    const q0 = planned('quick'), q4 = planned('quick', T0.tune({ lights: 4 }));
+    const realS = (r) => r.timeS;   // (the route's own time: the real wait at each node, not the search's weight on it)
+    return { base: roads(base.routes[0]), baseLimitS: base.limitS, neutral, same, far: roads(far.routes[0]), farLimitS: far.limitS, back,
+      cacheSafe: offWarm === offCold, offDiffers: offWarm !== max0, kSame: JSON.stringify(R.K) === K0,
+      quick0: roads(q0.routes[0]), quick4: roads(q4.routes[0]), quick4S: realS(q4.routes[0]), millS: base.routes[0].timeS,
+      noSignals: (() => { v = network(false); return dump(R.plan(v, { from, to, level: 'quick', tune: T0.tune({ lights: 4 }) })) === dump(R.plan(v, { from, to, level: 'quick' })); })() };
+  },
+
   // members' data in the search: a near-tie (the plain lane 2 s quicker) flips to the loved, smooth, flowing lane, and
   // with no data (signed out) nothing changes
   crowd() {

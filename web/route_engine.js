@@ -180,6 +180,7 @@
     BUILT_LO: FunRoute ? FunRoute.BUILT.lo : 0.4, BUILT_HI: FunRoute ? FunRoute.BUILT.hi : 0.85, BUILT_CUT: FunRoute ? FunRoute.BUILT.cut : 1,
     PENALTY_CAP: 40, BONUS_CAP: 15,
     DRIVER: 6,             // points for a route that fits the driver (driver_fit 1) vs one that doesn't (-1): ±6
+    FUN: 1, GAIN: 0.5,     // the corners' weight (fun points as they are) and the good corners gained over the quickest's (Route tuning's "Corners")
     LOG_FLOOR: 0.05,
     SPEED_FLOOR: 0.7, ACCESS_FLOOR: 0.75,           // a low limit / driveways in open country: at most this damning
     KIND_CAP: 12,          // the most one kind of penalty costs (deer alone can't fill the total)
@@ -632,15 +633,15 @@
    * The value of each candidate (points; higher is better) and the ranking, best first, with candidates past the level's
    * time budget or failing a hard constraint dropped (unless every one fails: then they stay, flagged, and the card says
    * why). With no context this is exactly ApexFunRoute.rank. opts: { level, prefs, score, perMinOverride }.
-   *   value = fun (corners gated by quality) + 0.5 × good corners gained over the quickest (cap 60)
+   *   value = FUN × fun (corners gated by quality) + GAIN × good corners gained over the quickest (cap 60)
    *         + 0.3 × (quality − 50) × known share + 20 × (scenery − 0.5) × known share + bonuses (≤ 15)
    *         − 10 per km of side street / business district (smooth below quality 0.45, full at 0.25; cap 120)
    *         + 1.5 per km of good road gained over the quickest (smooth from quality 0.5, full at 0.65; cap 30)
    *         − perMin × extra minutes − penalties (≤ 40) − glare − towns − weather + measured + taste + prefer
    */
   function rank(cands, opts = {}) { return opts.tune ? withTune(opts.tune, () => rankNow(cands, opts)) : rankNow(cands, opts); }
-  // ---- developer overrides (dev mode, web/dev_panel.js) ---------------------------------------------------------------
-  // The owner's and the co-developer's phones only (cockpit.js applyDevFlags: /api/me's developer flag): a tune
+  // ---- tunes: the driver's Route tuning (web/route_tuning.js) and the developers' overrides (web/dev_panel.js) -------
+  // Route tuning's sliders, and on the owner's and the co-developer's phones the Dev panel's numbers on top: a tune
   // ({ engine, levels, hwy }, fun_route.js tuneOnto) laid on W, the levels' budgets (fun_route.js LEVELS) and the highway
   // rule (HWY) until setTune(null) puts the defaults back. No tune set: nothing here runs, the weights are the code's.
   const TUNE_DEFAULTS = FunRoute && FunRoute.tuneKnobs ? { engine: FunRoute.tuneKnobs(W), levels: FunRoute.tuneKnobs(FunRoute.LEVELS), hwy: FunRoute.tuneKnobs(FunRoute.HWY) } : null;
@@ -710,7 +711,7 @@
         : ev && ev.knownKm > 0.5 ? 1 - clamp01(ev.poorKm / ev.knownKm) : 1;
       const f = funOf(c), fun = f ? f.fun * share : 0, gain = f ? Math.min(60, Math.max(0, f.good - quickGood)) * share : 0;
       const parts = {
-        fun, gain: 0.5 * gain, time: -perMin * extraS / 60,
+        fun: W.FUN * fun, gain: W.GAIN * gain, time: -perMin * extraS / 60,
         road: ev && finite(ev.goodKm) ? Math.min(W.GOOD_CAP, W.GOOD_PER_KM * Math.max(0, ev.goodKm - quickRoad)) : 0,
         quality: ev && ev.qualityFilled != null ? W.QUALITY * (ev.qualityFilled - 50) * ev.qWeightFilled : ev && ev.quality != null ? W.QUALITY * (ev.quality - 50) * ev.qWeight : 0,
         poor: ev ? -(ev.poorFilled != null ? ev.poorFilled : ev.poorCost) : 0, business: ev ? -(ev.businessCost || 0) : 0, scenery: ev ? ev.sceneryPts : 0, bonus: ev ? ev.bonusPts : 0, penalty: ev ? -ev.penaltyPts : 0,
