@@ -505,7 +505,15 @@
       if (devCache === undefined) { try { devCache = JSON.parse(localStorage.getItem(DEV_KEY) || 'null'); } catch (_) { devCache = null; } }
       return devCache && typeof devCache === 'object' ? devCache : null;
     }
-    const devTune = () => { const d = devSettings(); return d && FunRoute.tuned && FunRoute.tuned(d.tune) ? d.tune : null; };
+    const devOnlyTune = () => { const d = devSettings(); return d && FunRoute.tuned && FunRoute.tuned(d.tune) ? d.tune : null; };
+    // Route tuning (web/route_tuning.js, the owner 2026-11-09): the driver's sliders, a tune of the same shape; Pro (pro.js
+    // 'route_tuning': open to everyone until Pro goes on sale). Untouched sliders are no tune. A plan's tune is theirs with a
+    // developer's Dev panel numbers on top; the planner reads it as before (dev.tune / dev.tuneReq, applyDevTune).
+    const tuningFlags = () => (window.ApexFlags ? { pro: ApexFlags.on('pro', false), proOnSale: ApexFlags.on('proOnSale', false) } : {});
+    const userTune = () => { try { return window.ApexRouteTuning ? ApexRouteTuning.active(localStorage, tuningFlags()) : null; } catch (_) { return null; } };
+    /** The sliders a plan made now is tuned by (the route card's "Your tuning"), or null. */
+    const userTuned = () => { try { return userTune() ? ApexRouteTuning.labels(ApexRouteTuning.load(localStorage)) : null; } catch (_) { return null; } };
+    const devTune = () => (window.ApexRouteTuning ? ApexRouteTuning.merge(userTune(), devOnlyTune()) : devOnlyTune());
     function devTuneReq() { const t = devTune(); return t ? { tune: t } : {}; }
     function applyDevTune() { try { if (window.ApexRouteEngine && ApexRouteEngine.setTune) ApexRouteEngine.setTune(devTune()); } catch (e) { console.error('dev tune', e); } }
     const devOn = (k) => { const d = devSettings(); return !!(d && d[k]); };
@@ -526,6 +534,21 @@
         b.append(p, o);
       }
       try { if (window.ApexGarageSettings && ApexGarageSettings.ui) ApexGarageSettings.ui.refresh(); } catch (_) { /* drawn at the next open */ }
+    }
+    // Garage → Settings → Route tuning (index.html section data-setting="tuning"): the sliders, saved as they move; the
+    // engine's global tune follows at once, a plan's router tune at its next plan (or Use on the route on screen)
+    function paintTuning() {
+      const b = $('garageTuneBody');
+      if (!b || !window.ApexRouteTuning) return null;
+      b.textContent = '';
+      const ui = ApexRouteTuning.mountScreen(b, {
+        store: localStorage, flags: tuningFlags, changed: () => applyDevTune(),
+        planned: () => !!(plannedRoute && plannedRoute.id === 'route_dest' && plannedRoute.request && state.mode !== 'live'),
+        replan: () => replanForLevel('Your tuning'), proLine: () => (window.ApexPro ? ApexPro.line('route_tuning', tuningFlags()) : null),
+      });
+      // (repainted when its row opens: Pro's flags and the route on screen may have changed since)
+      document.addEventListener('click', (e) => { const r = e.target && e.target.closest && e.target.closest('.nav-row[data-setting="tuning"]'); if (r) ui.paint(); }, true);
+      return ui;
     }
     // what the panel reads and does (web/dev_panel.js mount(host)): nothing here runs unless it is open or its switches are on
     const devHost = {
@@ -556,7 +579,13 @@
     // the planner's side (funRoute, ownOn, ownRefine read it as window.apexDebug.dev, so the plan's code stands on its own):
     // every answer is "off" or nothing unless /api/me said developer
     window.apexDebug.dev = Object.freeze({ allowed: () => devAccess, on: devOn, settings: devSettings, tune: devTune, tuneReq: devTuneReq,
-      planned: () => { if (devAccess && window.ApexDevPanel) ApexDevPanel.planned(); } });
+      planned: () => { if (devAccess && window.ApexDevPanel) ApexDevPanel.planned(); },
+      // Route tuning's side, for everyone (route_tuning.js): lay the tune on the page's engine now; the sliders a plan uses
+      apply: () => applyDevTune(), tuned: () => userTuned() });
+    // (once the page's state below is set up: the screen asks whether a route is on screen)
+    let tuningUi = null;
+    try { applyDevTune(); } catch (e) { console.error('route tuning', e); }
+    setTimeout(() => { try { tuningUi = paintTuning(); } catch (e) { console.error('route tuning', e); } }, 0);
 
     function mixHex(a, b, t) {
       const p = (h) => [1, 3, 5].map(i => parseInt(h.slice(i, i + 2), 16));
@@ -2653,6 +2682,9 @@
       plannedRoute = t;
       card.hidden = false;
       $('routeCardName').textContent = t.name || '--';
+      // planned with Route tuning's sliders moved: says so (and which), so a surprising route is explainable; a tap opens them
+      { const k = $('cardTuneChip'), on = Array.isArray(t.tuned) && t.tuned.length > 0;
+        if (k) { k.hidden = !on; k.title = on ? `Planned with your route tuning: ${t.tuned.join(', ')}` : ''; k.setAttribute('aria-label', on ? `Your tuning: ${t.tuned.join(', ')}. Open Route tuning` : 'Your tuning'); } }
       const hasDist = Array.isArray(t.dist) && t.dist.length > 0 && Number.isFinite(t.dist[t.dist.length - 1]);
       const mi = hasDist ? `${ApexUnits.long(t.dist[t.dist.length - 1], 1)}` : '--';
       const corners = Array.isArray(t.events) ? `${t.events.filter(e => e.type === 'corner').length} corners` : '--';
@@ -3236,6 +3268,8 @@
     async function funRoute(from, to, id, name, request, ui, opts = {}) {
       const level = funLevel, planT0 = Date.now();      // the early quickest counts from here, not from the router's answer
       const dev = (window.apexDebug && window.apexDebug.dev) || null;   // dev mode (devPlanner): off but for a developer
+      if (dev && dev.apply) dev.apply();                                    // Route tuning's and the Dev panel's tune, as of now
+      const tunedNow = dev && dev.tuned ? dev.tuned() : null;              // (the card says a plan was made with your tuning)
       // where the plan's time goes (apexDebug.planMarks: [step, ms from the plan's start]; the live harness reads them)
       const mark = (k) => { if (window.apexDebug) (window.apexDebug.planMarks = window.apexDebug.planMarks || []).push([k, Date.now() - planT0]); };
       if (window.apexDebug) { window.apexDebug.planMarks = []; window.apexDebug.optMarks = []; window.apexDebug.timeline = []; window.apexDebug.planStartAt = performance.now(); }
@@ -3526,6 +3560,7 @@
       // card (and faint on the map) to pick from.
       const offered = FunRoute.distinctOptions(ranked, 3);
       const lv = destLevels({ id, name, request, level, quickest, pool, builtLevel: level }, level);
+      lv.tuned = tunedNow;
       if (lv.levels[level] == null) Object.assign(lv, { list: offered, levels: null, picked: 0 });   // (never: the same ranking)
       // the quickest already up is the only option: keep it as it is (no second draw of the same route and card), but
       // finish the plan as any other (aftercare, the debug record): only the redraw is skipped. Ours: whenever it is the
@@ -3785,7 +3820,7 @@
       Object.assign(t, { measured: c.t.measured, fun: c.fun, timeS: c.timeS, timeMarks: timeMarksOf(t, c.route), steps: stepsOf(t, c.route), extraS: c.extraS, funLevel: o.level, glareMin: c.glare ? Math.round(c.glare.minutes) : null, townKm: c.townKm,
                          engine: c.ev ? { quality: c.ev.quality, confidence: c.ev.confidence, poorKm: c.ev.poorKm, hard: c.ev.hard, penalties: c.ev.penalties } : null,
                          unavoided: FunRoute.unavoided(avoid, c.route), why: (hwyLine && hwyLine.kind === 'absurd' ? [hwyLine.text] : [hwyLine && hwyLine.text, (engineWhy && engineWhy.text) || (quickLine && quickLine.text) || whyText(FunRoute.why(c, o.quickest), fewerTownKm(c, o.quickest), c.extraS), overLine && overLine.text]).filter(Boolean).join('. ') || null,
-                         request: { ...o.request, via: via.map(p => ({ lat: p.lat, lon: p.lon, shaping: true })) } });
+                         request: { ...o.request, via: via.map(p => ({ lat: p.lat, lon: p.lon, shaping: true })) }, tuned: o.tuned || null });
       if (c.plan) t.stageSpans = FunRoute.stageSpans(t, c.plan.legs);   // where its stages are (Siri: next / skip, IDEAS V-07)
       Object.defineProperty(t, 'ranked', { value: c, configurable: true, writable: true, enumerable: false });   // the card's overview reads it (paintStory)
     }
@@ -4063,7 +4098,10 @@
       const L = { c, miles, targetKm, targetS, asked, loopId };
       ui.step(`Finding roads for a ${asked} loop…`, 0.02);
       // 0. Our own router's loops (graph_router.js loop), where the tiles cover the start: from the best roads in reach
-      const ownLoopsP = ownOn() ? ApexOwnRouting.loops(ownRouter(), { start: { lat: c.lat, lon: c.lon }, km: targetKm, level: funLevel, prefs: roadPrefs, avoid }) : Promise.resolve([]);
+      // (Route tuning's road and avoid sliders shape its search: the tune rides with it, as with a plan's)
+      applyDevTune();
+      loopTuned = ownOn() ? userTuned() : null;
+      const ownLoopsP = ownOn() ? ApexOwnRouting.loops(ownRouter(), { start: { lat: c.lat, lon: c.lon }, km: targetKm, level: funLevel, prefs: roadPrefs, avoid, ...devTuneReq() }) : Promise.resolve([]);
       // 1. Stage discovery: score every road around the start from the map's own vector tiles; Valhalla's matrix times
       // the best of them and routes each plan (the map's stage loops)
       const stageJobs = async (progress) => {
@@ -4240,7 +4278,9 @@
       corners: Array.isArray(d.t.events) ? d.t.events.filter((e) => e && e.type === 'corner').length : null, timeS: d.t.timeS });
 
     // The loops built, ranked for a level (fun_route.js loopLevelAdjust) and offered as up to three really different ones.
+    let loopTuned = null;                                                  // the sliders the last loop's search used (buildLoop)
     function loopOptions({ id, done, miles, targetS, level, asked }) {
+      for (const d of done) if (d && d.t && d.t.tuned === undefined) d.t.tuned = loopTuned;
       const order = FunRoute.loopRank(done.map(loopItem), level), ranked = order.map((x) => x.item.d);
       const list = [];
       for (const d of ranked) {
@@ -5148,6 +5188,7 @@
     }
     $('planOptionsChip').addEventListener('click', openOptions);
     $('cardOptionsChip').addEventListener('click', openOptions);
+    $('cardTuneChip').addEventListener('click', () => { showView('garage'); if (window.ApexGarageSettings && ApexGarageSettings.ui) { if (tuningUi) tuningUi.paint(); ApexGarageSettings.ui.open('tuning'); } });
     $('optDone').addEventListener('click', () => closeOptions());
     optChipsReady = true;
     paintDriverPrefs();

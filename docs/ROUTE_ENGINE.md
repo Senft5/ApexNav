@@ -207,6 +207,8 @@ under "The channels" are checked the same way (channel and weight).
 | PENALTY_CAP | 40 | the total penalties saturate softly toward this |
 | BONUS_CAP | 15 | the most bonuses add |
 | DRIVER | 6 | points for driver_fit (else skill_fit) 1 vs 0, times the share known |
+| FUN | 1 | the weight on the corners' fun points (Route tuning's Corners) |
+| GAIN | 0.5 | points per good corner gained over the quickest (cap 60; Route tuning's Corners) |
 | LOG_FLOOR | 0.05 | the lowest goodness in the geometric mean |
 | SPEED_FLOOR | 0.7 | speed goodness floor in open country (× 1 − built evidence) |
 | ACCESS_FLOOR | 0.75 | driveway goodness floor in open country (× 1 − built evidence) |
@@ -302,7 +304,7 @@ under "The channels" are checked the same way (channel and weight).
 | term | what | points |
 |---|---|---|
 | fun | ApexFunRoute.score with each corner's weight times the **quality gate** where it is (0 at quality ≤ 0.25, full at ≥ 0.6) times the **built-up cut** (`builtEvidence(ctx, true)`, what two built signals agree on: full at 0.4 or less, nothing at 0.85 or more: a street lined with houses has no fun corners); Flow counts each run by its corners' mean gate and only a corner gated at least half breaks a dull straight | 0–100 |
-| gain | 0.5 × gated good corners gained over the quickest (cap 60), as before | ≤ 30 |
+| gain | 0.5 × gated good corners gained over the quickest (cap 60), as before (`W.GAIN`; `fun` is × `W.FUN`, 1) | ≤ 30 |
 | quality | 0.3 × (route quality − 50) × how much is known (full once a third of the weights is known) | ±15 |
 | scenery | 20 × mean(scenery − 0.5) weighted by how much of it is known (full at 35 %) | ±10 |
 | poor | −10 per km of side street or business district: smooth from quality 0.45 down, full at 0.25; cap 120 | ≤ 0 |
@@ -380,6 +382,17 @@ names scenery (forest, water, ridges) when the winner drives 0.3 km or more of b
 and "avoids X of strip malls" is in that kind's km. When the winner is simply the better road (shallower side streets,
 a higher mean quality) and nothing else separates them: "Better roads than the quickest". When nothing the context
 knew made the difference, the old line (the roads it's for and its corners) is said.
+
+### Route tuning (the driver's sliders)
+
+`web/route_tuning.js` (2026-11-09, the owner: "every parameter with a slider for premium users") turns plain sliders
+(Garage → Settings → Route tuning) into a tune of the Dev panel's shape, `{ router, engine, levels, hwy }`, laid on `W`,
+the levels and `HWY` with `setTune` on the page and sent to the router as `req.tune`. A slider at its default adds nothing,
+so untouched settings rank exactly as above. Engine knobs reached: Corners `FUN` and `GAIN`; Road quality `QUALITY` and
+`GOOD_PER_KM`; Scenery `SCENERY`; Towns and businesses `BUSINESS_PER_KM` and `BUSINESS_CAP`; Side streets `POOR_PER_KM`
+and `POOR_CAP`; Fits how you drive `DRIVER`; Fun's and Long way's time `budget`, `slackS` and `perMin`; Quick's `slackS`;
+the highway limit `HWY.ABSURD`. The no-highway rule at Fun and Long way is fixed. Pro (pro.js kind `tuning`): open to
+everyone until Pro goes on sale. tests/test_route_tuning.py; docs/OWN_ROUTING.md §5 for the router's side.
 
 ### What this drive is like (the overview)
 

@@ -41,6 +41,7 @@ score that teaches, crew convoys with hazard relay, and (with the adapter) the c
 |---|---|---|
 | Navigation, pace notes, directions, hazards, closures, crash check, CarPlay | all | — |
 | Routes: fun routes, loops, Explore, stops, drag to reshape, GPX in and out, saved routes | all | — |
+| Route tuning (the owner, 2026-11-09: "every parameter with a slider for premium users") | the routes everyone gets: the tuned defaults, every level, every Avoid and Prefer | **Route tuning**: Garage → Settings → Route tuning, plain sliders over the routing's weights (extra time at Fun and Long way, corners, road quality, scenery, towns, lights, side streets, members' data). **Open to everyone until Pro goes on sale** (pro.js `tuningOpen`, as themes are); then Pro, and beta and early users keep it with their lifetime Pro |
 | Measured roads (crowd road feel) on the map and in routing | all | — |
 | Convoys, crews, friends, kudos, spots, meets | all | — |
 | Log: every drive, its map and corners, Driver Score, drive card, exports | all | — |
@@ -58,7 +59,11 @@ Small Business Program commission (15%) makes those about $5.09, $33.99 and $84.
 
 **Founders (the early-customer incentive):**
 - Everyone with an account before the App Store launch (TestFlight testers, the beta crews in MARKETING.md) gets
-  **Lifetime Pro free**, and a Founder mark on their profile that can't be bought later.
+  **Lifetime Pro free**, and a Founder mark on their profile that can't be bought later. The owner, 2026-11-09:
+  "remember everyone has pro if they are an early user. Once we launch app store we will restrict to paid users and anyone
+  who had the beta." Until then every Pro-open item (themes, Route tuning) is open to all; on sale, a beta user's Pro is
+  the founding grant, verified like any purchase. A beta tester who never made an account has no grant to find: the
+  founding grant needs an account made before launch (the beta's last builds should say so).
 - The **first 1,000 Lifetime buyers** after launch pay **$69.99** and get the Founder mark too. The count is shown
   honestly ("612 of 1,000 left"), never a fake timer.
 - Both are server-side grants or prices, not something bought with Octane (Apple guideline 3.1.1).
@@ -135,7 +140,9 @@ subscribed, lifetime bought, restored, cancelled. App Store Connect gives conver
    App Store Server Notifications v2.
 2. **StoreKit 2 in the shell**: products, purchase, `Transaction.currentEntitlements`, `Transaction.updates`, Restore.
 3. **`web/pro.js`**: one table of Pro tools (section 3), gates as single calls, the Pro sheet, and tests that fail if a
-   safety feature, an export or road data is ever behind a gate, or if the sheet can open while the car moves.
+   safety feature, an export or road data is ever behind a gate, or if the sheet can open while the car moves. Its kinds
+   are `theme`, `livery` and (2026-11-09, the owner's call) `tuning`, Route tuning (web/route_tuning.js), open until
+   `proOnSale` like the themes; tests/test_pro.py holds the list to those three.
 4. **App Store Connect**: products `com.senft.ApexNav.pro.monthly`, `.pro.yearly`, `.pro.lifetime`, and the Founder
    price. Needs the owner's Paid Applications Agreement first.
 5. APP_REVIEW.md 3.1.1/3.1.2 rows, LISTING.md ("In-App Purchases"), privacy page, all in the PR that turns the flag on.
