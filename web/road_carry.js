@@ -6,13 +6,17 @@
 // ends, never the ends themselves, and the built chunks that were waiting. It stays on the phone (IndexedDB) for at most
 // MAX_AGE_DAYS (the server takes a drive for 14), goes only with Road data still switched on, and is removed by "Erase
 // everything on this phone": the index lives in localStorage under an apex.* key, which Erase clears, and a missing index
-// empties the store when the page next loads.
+// empties the store when the page next loads. Signing out, deleting the account and switching Road data off empty it at
+// once (cockpit.js clearCarry), so nothing measured under one account is ever sent under another.
 // Pure over an injected store, storage and resume (tests/test_road_carry.py); the browser part at the bottom wires it up.
 (function (root) {
   'use strict';
   const KEY = 'apex.roadCarry', MAX_AGE_DAYS = 13, MAX_ROWS = 40000, BIN_M = 5, DAY = 86400_000;
   const COLS = ['lat', 'lon', 'rough', 'camber', 'crest', 'speed', 'lon_g'];
   const okId = (id) => typeof id === 'string' && /^[A-Za-z0-9_-]{8,64}$/.test(id);
+
+  /** The metres of road a trip's item holds (createLive leftover()): its unsent rows and the bins of its built chunks. */
+  const itemM = (item) => (item ? ((item.rows && Array.isArray(item.rows.lat) ? item.rows.lat.length : 0) + (Array.isArray(item.pending) ? item.pending : []).reduce((s, c) => s + (c && Array.isArray(c.bins) ? c.bins.length : 0), 0)) * BIN_M : 0);
 
   /** The metres of road waiting, from the index alone (my_data.js shows it; no IndexedDB read). */
   function waitingM(storage) {
@@ -58,6 +62,8 @@
       if (n > maxRows) { const rows = {}; for (const k of COLS) rows[k] = Array.isArray(item.rows[k]) ? item.rows[k].slice(0, maxRows) : []; item = { ...item, rows }; n = maxRows; }
       await store.put(item.driveId, item);
       const ix = index();
+      // n: the 5 m sections waiting, rows and the bins of chunks already built (Your data counts both)
+      n = Math.round(itemM(item) / BIN_M);
       ix[item.driveId] = { at: ix[item.driveId] ? ix[item.driveId].at : at, n, day: item.drivenOn };
       // over the cap: the oldest trips that are not being driven now make room
       const ids = Object.keys(ix).sort((a, b) => ix[a].at - ix[b].at);
@@ -127,7 +133,7 @@
       put: (id, item) => tx('readwrite', (s) => s.put(item, id)), del: (id) => tx('readwrite', (s) => s.delete(id)), clear: () => tx('readwrite', (s) => s.clear()) };
   }
 
-  const api = { KEY, MAX_AGE_DAYS, MAX_ROWS, createCarry, resumeItem, idbStore, waitingM };
+  const api = { KEY, MAX_AGE_DAYS, MAX_ROWS, createCarry, resumeItem, idbStore, waitingM, itemM };
   if (typeof module !== 'undefined' && module.exports) { module.exports = api; return; }
 
   // ---- browser -----------------------------------------------------------------------------------------------------------
@@ -143,7 +149,10 @@
           if (root.navigator.onLine === false || root.APEX_REVIEW || !sync() || !contributor() || !core()) return false;
           return !!(await sync().member()) && !!(await sync().contributionEnabled());      // Road data switched off since: nothing is matched or sent
         },
-        resume: (item) => resumeItem(item, { Contributor: contributor(), Core: core(), post: (c) => sync().contribute(c), fetch: root.fetch.bind(root) }),
+        // the page may listen (cockpit.js): onPost(result) for each upload tried (app health), onSent(km) when a flush sent some
+        resume: (item) => resumeItem(item, { Contributor: contributor(), Core: core(), fetch: root.fetch.bind(root),
+          post: async (c) => { const r = await sync().contribute(c); try { if (carry.onPost) carry.onPost(r); } catch (_) {} return r; } }),
+        onSent: (km) => { if (carry.onSent) carry.onSent(km); },
       });
       let last = 0;
       const flush = () => { if (!carry.size()) return; last = Date.now(); carry.flush().catch(() => {}); };

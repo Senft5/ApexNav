@@ -237,3 +237,80 @@ def test_the_page_loads_it_before_the_contributor_and_the_privacy_page_says_so()
     assert "root.APEX_REVIEW" in src and "contributionEnabled()" in src
     privacy = (ROOT / "web" / "privacy.html").read_text(encoding="utf-8")
     assert "wait on the phone" in privacy and "13 days" in privacy
+
+
+# ---- what the upload says, and a drive begun with no signal (web/sync.js) -------------------------------------------------
+SHARE = r"""
+const store = new Map();
+globalThis.localStorage = { getItem: (k) => (store.has(k) ? store.get(k) : null), setItem: (k, v) => store.set(k, String(v)), removeItem: (k) => store.delete(k) };
+let net = { status: 200, body: { member: { contribute: 1 } } };
+const posted = [];
+globalThis.fetch = async (url, init) => {
+  if (init && init.method === 'POST') { posted.push(JSON.parse(init.body)); return { ok: true, status: 202, json: async () => ({}) }; }
+  if (!net) throw new TypeError('Load failed');
+  return { ok: net.status === 200, status: net.status, json: async () => net.body };
+};
+const S = require(process.argv[1] + '/web/sync.js'), R = require(process.argv[1] + '/web/road_carry.js');
+(async () => {
+  const out = {};
+  out.signedOutNoSignal = await (async () => { const was = net; net = null; const r = await S.roadShare(); net = was; return r; })();
+  S.setSession('tok_test');
+  out.on = await S.roadShare();
+  net = null; out.remembered = await S.roadShare();
+  net = { status: 200, body: { member: { contribute: 0 } } }; out.off = await S.roadShare();
+  net = null; out.offRemembered = await S.roadShare();
+  net = { status: 200, body: { member: null } }; out.notMember = await S.roadShare();
+  net = { status: 200, body: { member: { contribute: 1 } } }; await S.roadShare();
+  net = { status: 401, body: {} }; out.signedOut = await S.roadShare();
+  net = null; out.afterSignedOut = await S.roadShare();
+  const c = { way_id: 77, dir: 0, driven_on: '2026-11-09', drive_id: 'd_payload_02', bins: [{ i: 1, rough: 0.1 }], shape: null, cls: 'secondary', cam_v: 2 };
+  await S.contribute({ ...c, rec: 1, hr: 7 }); await S.contribute({ ...c, rec: 0 }); await S.contribute({ ...c, rec: 1, hr: null });
+  out.posted = posted.map((b) => ({ rec: b.rec ?? null, hr: b.hr ?? null, hasRec: 'rec' in b, hasHr: 'hr' in b }));
+  // a trip whose map matching worked but whose uploads didn't leaves built chunks and few rows: Your data counts those too
+  { const m = new Map(), st = { keys: async () => [...m.keys()], get: async (id) => m.get(id), put: async (id, v) => { m.set(id, v); }, del: async (id) => { m.delete(id); }, clear: async () => { m.clear(); } };
+    const carry = R.createCarry({ store: st, storage: globalThis.localStorage, resume: async () => ({ km: 0, stopped: false, left: null }) });
+    carry.hold({ driveId: 'd_chunks_only_01', drivenOn: '2026-11-09', rows: { lat: [1, 2], lon: [1, 2] }, pending: [{ bins: Array.from({ length: 398 }, (_, i) => ({ i })) }] }, true);
+    await carry.idle(); out.waitingM = carry.waitingM(); await carry.clear(); await carry.idle(); out.afterClear = carry.waitingM(); }
+  out.itemM = [R.itemM(null), R.itemM({ rows: { lat: [1, 2, 3] }, pending: [] }), R.itemM({ rows: { lat: [] }, pending: [{ bins: [1, 2] }, { bins: [3] }] })];
+  console.log(JSON.stringify(out));
+})();
+"""
+
+
+@pytest.fixture(scope="module")
+def share():
+    p = subprocess.run([NODE, "-e", SHARE, str(ROOT)], capture_output=True, text=True, timeout=60)
+    assert p.returncode == 0, p.stderr
+    return json.loads(p.stdout)
+
+
+def test_the_upload_says_a_recorded_drive_is_one(share):
+    """contributor.js built `rec` (and `hr` under the quiet_hours flag), the server read them and the privacy page described
+    them, but sync.js sent neither: no road was ever counted as loved (backend contribute.ts `again: c.rec`)."""
+    assert share["posted"] == [{"rec": 1, "hr": 7, "hasRec": True, "hasHr": True}, {"rec": None, "hr": None, "hasRec": False, "hasHr": False},
+                               {"rec": 1, "hr": None, "hasRec": True, "hasHr": False}]
+
+
+def test_a_drive_begun_with_no_signal_shares_on_the_last_answer_only_while_signed_in(share):
+    """startLiveSharing asked the server before it shared, so a drive begun where there is no signal never shared and had
+    nothing to carry. roadShare() remembers the last answer; what is measured on it waits, and is sent only once the server
+    says Road data is still on (road_carry.js ready())."""
+    assert share["signedOutNoSignal"] == {"on": False, "known": False, "member": False}
+    assert share["on"] == {"on": True, "known": True, "member": True}
+    assert share["remembered"] == {"on": True, "known": False, "member": True}
+    assert share["off"] == {"on": False, "known": True, "member": True} and share["offRemembered"]["on"] is False
+    assert share["notMember"] == {"on": False, "known": True, "member": False}
+    assert share["signedOut"] == {"on": False, "known": True, "member": False} and share["afterSignedOut"]["on"] is False
+
+
+def test_the_page_empties_it_on_sign_out_and_says_what_waits(share):
+    assert share["itemM"] == [0, 15, 15]
+    assert share["waitingM"] == 2000 and share["afterClear"] == 0          # 2 rows + 398 built bins, 5 m each
+    js = (ROOT / "web" / "cockpit.js").read_text(encoding="utf-8")
+    # Road data switched off (both switches), both Sign outs, the account deleted: emptied at once
+    assert js.count("clearCarry()") == 5 and "if (!on) clearCarry();" in js and "if (contribOn && r && r.ok) clearCarry();" in js
+    assert js.count("ApexSync.setSession(null); clearCarry();") == 3
+    assert "const sh = await ApexSync.roadShare();" in js and "await ApexSync.member())) return;\n        if (!(await ApexSync.contributionEnabled()))" not in js
+    assert "ApexRoadCarry.onPost = (r) => health.bump(" in js and "more waits for signal." in js
+    carry = (ROOT / "web" / "road_carry.js").read_text(encoding="utf-8")
+    assert "!!(await sync().member()) && !!(await sync().contributionEnabled())" in carry, "a remembered yes never sends: the server is asked first"

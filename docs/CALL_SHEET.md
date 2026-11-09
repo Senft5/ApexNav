@@ -21,8 +21,20 @@ the ones with no coverage, so the best roads' data was the data being lost. The 
 - **Erase everything removes it**, without a new line in cockpit.js: the index is the localStorage key `apex.roadCarry`,
   which Erase already clears, and a missing index empties the store on the next load. Your data says "road data from
   N mi waiting for signal" while something waits. privacy.html says all of this in the Road data paragraph.
-- Not done: a signed-out phone keeps what waits until it expires (it is sent under whoever is signed in with Road data
-  on by then); no line on the drive bar says what waits.
+- **Signing out, deleting the account and switching Road data off empty it at once** (cockpit.js `clearCarry`), so
+  nothing measured under one account is sent under another. Undo: drop the `clearCarry()` calls.
+- **A drive begun with no signal shares on the last answer the server gave** (sync.js `roadShare`, kept in
+  `apex.roadShare` only while signed in). Before, such a drive never shared (the "may I?" check needs the server), so it
+  had nothing to carry: the trip from a trailhead car park was the one always lost. Nothing is sent on a remembered yes:
+  it waits, and goes only after the server says Road data is still on. Undo: `member()` and `contributionEnabled()`
+  again in `startLiveSharing` and `checkAmbientAllowed`.
+- **The end of a drive says what waits**: "Shared 3.1 mi of road feel. 4.0 mi more waits for signal.", and later "Sent
+  4.0 mi of road feel that waited for signal." Uploads sent later count in app health like the live ones.
+- **A bug found on the way: recorded drives never said they were recorded.** contributor.js built `rec` (and `hr` under
+  the quiet-hours flag), the server read them, the privacy page described them, and web/sync.js sent neither, so no road
+  has ever been counted as loved (the routing's "members come back to this road" signal). It sends them now. Nothing to
+  migrate: loved counts start from here.
+- Not done: no line on the drive bar says what waits while driving.
 Undo: remove `<script src="road_carry.js">` from web/index.html (createLive then has no carry and behaves as before,
 apart from the 10 km pieces; set `maxRun` to Infinity for that).
 

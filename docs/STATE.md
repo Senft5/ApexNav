@@ -12,16 +12,30 @@
   signed in, Road data on (`contributionEnabled`), never under APEX_REVIEW. Nothing is asked while nothing waits.
 - [x] createLive `maxRun` 2000: a backlog is matched 10 km a try. my_data.js: "road data from N mi waiting for signal".
   privacy.html Road data paragraph; APP_REVIEW.md 5.1.2; IDEAS Q-06 / F-05; CALL_SHEET 2026-11-09 (fable-road-carry).
-- No cockpit.js edit (open PRs #320-#322 touch it); web/index.html gains one script tag before contributor.js.
-- Tests: new tests/test_road_carry.py (14); pytest 1393 passed, 2 skipped (no existing test changed); `python tools/csp.py`
-  up to date; e2e first run (2), spot photo with Erase, your data: pass.
-- Open: no e2e drives the real IndexedDB store end to end (the store is 15 lines over the injected interface the tests
-  cover, but it has not run in WebKit); not tried on a phone; a signed-out phone keeps what waits until it expires;
-  health counters (`road_upload_ok`) don't count what is sent later; the drive bar doesn't say what waits.
-- Exact next task: an e2e flow that seeds `ApexRoadCarry.hold(item, true)` in the page, stubs Valhalla, Overpass and
-  /api/contribute, fires `online`, and checks the posts and an empty store (BROWSER=webkit too). Then the deferred
-  round-1 items: HPMS posted limits in the graph ETL edge time (after #321 merges), Sharon Woods to Winton Woods at Fun,
-  Hamilton Ave quality 0.47-0.54.
+- [x] Finished in a second session (2026-11-09, thread "Run autonomous Vetta improvement"; origin/main de537a6 merged in):
+  web/sync.js `contribute` now sends `rec` and `hr` (built by contributor.js, read by contribute.ts, never sent: no road
+  was ever counted loved); `roadShare()` -> { on, known, member } remembers the server's last answer (`apex.roadShare`,
+  only while signed in) so `startLiveSharing` and `checkAmbientAllowed` share on a drive begun with no signal (it never
+  shared before, so nothing was carried); cockpit.js `clearCarry` on Road data off (both switches), both Sign outs and
+  Delete account; `ApexRoadCarry.onPost` (app health counts late uploads) and `onSent` (a toast, Your data redrawn);
+  the end-of-drive toast says what waits (`ApexRoadCarry.itemM(live.leftover())`); the index's `n` counts the bins of
+  built chunks as well as rows (Your data said nothing waited for a trip whose uploads failed after matching: the e2e's catch).
+- cockpit.js edits are in the account, Your data and sharing code only (#322 touches paintStory / ownRefine);
+  web/index.html gains one script tag before contributor.js.
+- Tests: tests/test_road_carry.py (17: the first session's 14, plus `rec` on the wire, the remembered answer, the page's
+  clearing and wiring); pytest 1387 passed, 5 skipped (no existing test changed); `python tools/csp.py` up to date. e2e: new "road
+  feel that waited for signal" (the real IndexedDB store in Chromium: seeded with `hold(item, true)`, kept while the account
+  can't be confirmed, sent once on `online`, Your data counts it and stops), plus your data, drive ended (4), the app comes back whole, no signal hazard, spot photo with Erase, REVIEW5 §2, REVIEW.md 1.2 (2), review mode, People new account, first run (2), plan flow (g): all pass.
+- Open: not run in WebKit (no WebKit in the cloud container) or on a phone; the drive bar doesn't say what waits while
+  driving; a carried trip sent later doesn't mark its drive `contributed` in the Log.
+- Looked at and left (deferred finding 2, Sharon Woods to Winton Woods at Fun): reproduced on the shipped tiles. The one
+  good road is Lakeview Drive at the end; the engine prefers 29.8 min over a 23.8 min way that also drives it because
+  `poor` (10 a km) outweighs 6 minutes (1 a minute). A small-weight search step (a = 1.5) finds the 23.8 min way but
+  changed no router pick on 80 random trips, so it was not shipped. Halving `POOR_PER_KM` breaks no calibration test:
+  the fixtures do not pin it, so that weight needs a driven judgment (or the owner's word) before it moves. Also seen
+  live: the fresh-context re-rank swapped the card to a 26.0 min way under "Conditions ahead" (#322's area).
+- Exact next task: the deferred round-1 items: HPMS posted limits in the graph ETL edge time (after #321 merges and the
+  region rebuild), then Hamilton Ave quality 0.47-0.54.
 
 ## Session 2026-11-09 (fable-hpms-limits): a "not reported" speed limit was read as 254 mph (claude/fable-hpms-limits, off origin/main 1d97979)
 
