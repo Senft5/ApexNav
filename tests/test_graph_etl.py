@@ -43,6 +43,11 @@ def test_what_is_drivable():
     assert G.drivable({"highway": "motorway", "oneway": "no"})["oneway"] == 0
     a = G.drivable({"highway": "secondary", "maxspeed": "45 mph", "lanes": "4", "surface": "gravel", "sidewalk": "both"})
     assert a["maxspeed"] == pytest.approx(72.4, abs=0.1) and a["lanes"] == 2 and a["surface"] == 5 and a["sidewalk"] == 1
+    # a limited-access expressway below trunk class (motorroad=yes, or the US tagging expressway=yes); never its ramps
+    assert G.drivable({"highway": "primary", "motorroad": "yes"})["expressway"] == 1
+    assert G.drivable({"highway": "secondary", "expressway": "yes"})["expressway"] == 1
+    assert G.drivable({"highway": "primary", "motorroad": "no", "expressway": "no"})["expressway"] == 0
+    assert G.drivable({"highway": "primary"})["expressway"] == 0 and G.drivable({"highway": "primary_link", "expressway": "yes"})["expressway"] == 0
     b = G.drivable({"highway": "secondary"})
     assert b["maxspeed"] is None and b["lanes"] is None and b["surface"] is None and b["sidewalk"] is None   # unknown stays unknown
 
@@ -159,6 +164,32 @@ def test_full_build_on_the_toy_applies_the_restriction(tmp_path):
         assert g[0] == (nd["lat"][frm_node], nd["lon"][frm_node])
         if e["to_tile"][k] is None:
             assert g[-1] == (nd["lat"][e["to"][k]], nd["lon"][e["to"][k]])
+
+
+def test_an_expressway_keeps_its_flag_into_the_tiles(tmp_path):
+    """`primary` + `expressway=yes` (Bypass) joined end to end with a plain `primary` of the same name: two edges, not one
+    merged chain, and only the expressway's carry the tiles' EXPRESSWAY flag, which web/graph_tiles.js names the same."""
+    d = 0.001
+    nodes = {k: (39.1, -84.5 + (k - 1) * d, {}) for k in range(1, 6)}
+    nodes[9] = (39.1 + d, -84.5 + 2 * d, {})
+    P = {"highway": "primary", "name": "Bypass"}
+    ways = {1: ([1, 2, 3], {**P, "expressway": "yes"}), 2: ([3, 4, 5], P), 3: ([3, 9], {"highway": "tertiary", "name": "Side Road"})}
+    p = tmp_path / "x.osm.pbf"
+    write_osm(p, nodes, ways)
+    out = tmp_path / "v1"
+    from tools.graph_etl import build
+    build.main(["--pbf", str(p), "--tiles=-84.51,39.09,-84.49,39.11", "--out", str(out), "--work", str(tmp_path / "w"), "--ctx", ""])
+    r = T.read_tile(open(out / "382_516.vgr", "rb").read())
+    e, nd = r["edges"], r["nodes"]
+    west = [k for k in range(len(e["to"])) if e["flags"][k] & T.EXPRESSWAY]
+    assert len(west) == 2 and all(r["names"][e["name"][k]] == "Bypass" for k in west), west
+    lon = lambda k: [nd["lon"][v] for v in range(len(nd["lon"])) if nd["first_edge"][v] <= k < nd["first_edge"][v + 1]][0]  # noqa: E731
+    assert all(min(lon(k), nd["lon"][e["to"][k]]) < -84.4985 for k in west), "the flagged edges are the expressway's half"
+    assert sum(1 for k in range(len(e["to"])) if r["names"][e["name"][k]] == "Bypass") == 4
+    assert T.EXPRESSWAY == 16384 and T.EDGE_FLAGS["expressway"] == T.EXPRESSWAY
+    js = subprocess.run([NODE, "-e", "console.log(require(process.argv[1] + '/web/graph_tiles.js').FLAGS.expressway)", ROOT],
+                        capture_output=True, text=True, timeout=30) if NODE else None
+    assert js is None or js.stdout.strip() == "16384", js
 
 
 # ---- the scorer ---------------------------------------------------------------------------------------------------
