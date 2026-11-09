@@ -161,12 +161,15 @@ def drivable(t: dict) -> dict | None:
         "name": t.get("name") or t.get("ref") or None, "ref": t.get("ref") or None,
         "lit": None if t.get("lit") is None else (1 if t.get("lit") == "yes" else 0),
         "duration": t.get("duration") if ferry else None,
+        # a limited-access expressway below trunk class (`motorroad=yes`, or the US tagging `expressway=yes`): a highway to
+        # the levels' rule (tiles.py EXPRESSWAY). Not a link: a ramp carries its own class, and the tag is the road's.
+        "expressway": 1 if hw not in LINKS and not ferry and "yes" in (t.get("motorroad"), t.get("expressway")) else 0,
     }
 
 
 # attributes that must match for two ways to merge into one edge at a degree-2 joint
 MERGE_KEYS = ("hw", "rc", "use", "oneway", "maxspeed", "lanes", "surface", "sidewalk", "bridge", "tunnel", "toll",
-              "roundabout", "destination", "ferry", "name", "truck")
+              "roundabout", "destination", "ferry", "name", "truck", "expressway")
 
 # ---- node features ------------------------------------------------------------------------------------------------
 def node_kind(t: dict) -> set[str]:

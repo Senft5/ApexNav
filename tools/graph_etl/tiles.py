@@ -73,11 +73,12 @@ UNKNOWN_FUN = 0xFFFF
 NO_NAME = 0xFFFF
 
 # edge flags
-ONEWAY, TOLL, FERRY, UNPAVED, TUNNEL, BRIDGE, MOTORWAY, RAMP, ROUNDABOUT, PRIVATE, GEOM_REV, SPEED_EST, BARRIER, DESTINATION = (
-    1 << k for k in range(14))
+# EXPRESSWAY (2026-11-09): `motorroad=yes` or `expressway=yes` on a road of any class; tiles built before it never set it
+ONEWAY, TOLL, FERRY, UNPAVED, TUNNEL, BRIDGE, MOTORWAY, RAMP, ROUNDABOUT, PRIVATE, GEOM_REV, SPEED_EST, BARRIER, DESTINATION, EXPRESSWAY = (
+    1 << k for k in range(15))
 EDGE_FLAGS = {"oneway": ONEWAY, "toll": TOLL, "ferry": FERRY, "unpaved": UNPAVED, "tunnel": TUNNEL, "bridge": BRIDGE,
               "motorway": MOTORWAY, "ramp": RAMP, "roundabout": ROUNDABOUT, "private": PRIVATE, "geom_rev": GEOM_REV,
-              "speed_est": SPEED_EST, "barrier": BARRIER, "destination": DESTINATION}
+              "speed_est": SPEED_EST, "barrier": BARRIER, "destination": DESTINATION, "expressway": EXPRESSWAY}
 # node flags
 N_SIGNAL, N_STOP, N_GIVE_WAY, N_BARRIER, N_LEVEL_CROSSING, N_DEAD_END, N_CROSSING, N_CALMING = (1 << k for k in range(8))
 NODE_FLAGS = {"signal": N_SIGNAL, "stop": N_STOP, "give_way": N_GIVE_WAY, "barrier": N_BARRIER,

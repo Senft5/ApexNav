@@ -284,7 +284,7 @@ def assemble(raw, g, scores, keep_tiles, build_day, model_hash):
             if a["oneway"]:
                 flags |= T.ONEWAY
             for key, bit in (("toll", T.TOLL), ("ferry", T.FERRY), ("tunnel", T.TUNNEL), ("bridge", T.BRIDGE), ("ramp", T.RAMP),
-                             ("roundabout", T.ROUNDABOUT), ("destination", T.DESTINATION)):
+                             ("roundabout", T.ROUNDABOUT), ("destination", T.DESTINATION), ("expressway", T.EXPRESSWAY)):
                 if a.get(key):
                     flags |= bit
             if a["surface"] is not None and a["surface"] >= 3:

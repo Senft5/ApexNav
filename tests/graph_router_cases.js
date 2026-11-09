@@ -406,6 +406,33 @@ const CASES = {
     return out;
   },
 
+  // an expressway mapped below trunk class (primary with motorroad=yes / expressway=yes: the tiles' expressway flag,
+  // 16384) beside a back road: a highway to the levels' rule. The same road without the flag (older tiles) is a road.
+  expressway() {
+    const out = {};
+    for (const [key, flag] of [['flagged', 16384], ['plain', 0]]) {
+      const S = [39.40, -84.70], nodes = [at(S[0], S[1] - 0.004), at(S[0], S[1]), at(S[0], S[1] + 0.105), at(S[0], S[1] + 0.109)], edges = [];
+      const [s0, A, B, t0] = [0, 1, 2, 3];
+      two(edges, s0, A, { name: 'Start Lane', t: 30, cls: 5 }); two(edges, B, t0, { name: 'End Lane', t: 30, cls: 5 });
+      const chain = (pts, props) => { const ids = pts.map((p) => { nodes.push(at(p[0], p[1])); return nodes.length - 1; }); const c = [A, ...ids, B];
+        for (let k = 0; k + 1 < c.length; k++) two(edges, c[k], c[k + 1], props(k)); };
+      chain([[S[0] + 0.004, S[1] + 0.02], [S[0] + 0.004, S[1] + 0.085]], (k) => ({ name: 'OH-126', cls: 2, flags: flag, quality: 0.78, fun: 0, t: k === 1 ? 200 : 60 }));
+      const wig = Array.from({ length: 9 }, (_, k) => [S[0] - 0.012 + (k % 2 ? 0.0012 : -0.0012), S[1] + 0.105 * (k + 1) / 10]);
+      chain(wig, () => ({ name: 'Back Road', cls: 4, quality: 0.6, scenery: 0.5, fun: 0.2, t: 60 }));
+      const v = R.view(H.tiles(nodes, edges).tiles);
+      const from = { lat: S[0], lon: S[1] - 0.002 }, to = { lat: S[0], lon: S[1] + 0.107 };
+      const names = (r) => [...new Set(r.names.map((n) => n.name).filter(Boolean))];
+      out[key] = {};
+      for (const level of ['quick', 'fun', 'max']) {
+        const p = R.plan(v, { from, to, level }), q = R.quickest(v, { from, to, level });
+        out[key][level] = { best: names(p.routes[0]), hwyKm: p.routes[0].hwyKm, mode: p.hwy.mode, quickest: names(q), quickHwyKm: p.quick.hwyKm,
+          others: p.routes.filter((r) => r !== p.quick).map((r) => r.hwyKm) };
+      }
+      out[key].isHwy = [...R.hwyOf(v)].reduce((a, b) => a + b, 0);
+    }
+    return out;
+  },
+
   // the tiles' corridor: the ellipse grows with the level's budget, and covers() reads index.json
   corridor() {
     const a = { lat: 39.25, lon: -84.6 }, b = { lat: 39.29, lon: -84.75 };
