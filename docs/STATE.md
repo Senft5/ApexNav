@@ -1,5 +1,40 @@
 # VETTA — CURRENT AGENT HANDOFF STATE
 
+## Session 2026-11-09 (dev-mode): a Dev panel for the owner and the co-developer (claude/dev-mode, off origin/main 01a0423)
+
+- [x] Owner: "a dev mode in the app that shows all routing parameters and other debug info for only me and my codev to
+  mess with". Garage → Settings → Developer → Open the Dev panel (web/dev_panel.js, lazy.js group `dev`). The gate is
+  Satellite's: cockpit.js `applyDevFlags` (a fresh `/api/me` with `developer: true`) fills `#garageDevBody`; anyone else
+  gets an empty, hidden row, no panel script, and `apex.dev` in localStorage is never read.
+- [x] The panel: each candidate of the last plan (source own/Valhalla, minutes, km, highway km, the router's G, role, a,
+  side-street and good-road km, the engine's value in its parts, why it was picked, ranked lower or dropped: hard
+  constraint, highway rule, over budget), the plan head (budget, own router used, router/view ms, the fresh-context
+  re-rank and whether it swapped), the timeline and plan marks, the versions (router, engine, context grid, graph index
+  bundled/region builds, ctx index). Raw record: `apexDebug.devPlan` (developers only), summarised by the panel.
+- [x] Tunables: graph_router.js `K` (router), route_engine.js `W` (engine), fun_route.js `LEVELS` (levels) and `HWY`
+  (hwy), the owner's list first, every other number under "All". Re-plan saves (`apex.dev`) and re-plans the trip on
+  screen (`replanForLevel`); Reset restores and re-plans. Plumbing: fun_route.js `tuneOnto` / `untune` / `tuned` /
+  `tuneKnobs`; graph_router.js `withTune` around `plan` and `quickest` (`req.tune`, also through the worker's host;
+  `quickKey` includes the tune); route_engine.js `setTune` (global, page), `rank(…, { tune })`, `tuneDefaults`, and
+  `rank` now leaves `valued` and `limitS` on its answer (non-enumerable). With no tune nothing is touched.
+- [x] Switches: Force own router (no Valhalla routes or checks), Force Valhalla (ours off), Offline simulation (the
+  page's other-host fetches fail, `navigator.onLine` false), Candidate lines (`apex-dev-cands` under the route casing,
+  a colour per candidate, the pick wider). Copy debug JSON (clipboard, else a box to copy from).
+- [x] The planner reads dev mode through `window.apexDebug.dev` (frozen; every answer off unless `devAccess`), so
+  funRoute's extracted source in tests/test_fun_route.py runs as before.
+- Tests: new tests/test_dev_mode.py (4: router tune changes Fun's pick and nothing without one, through the host too;
+  engine tune changes the ranking, setTune(null) restores; the gate and lazy load; the knobs listed) and the
+  graph_router_cases.js `tune` case; pytest 1358 passed, 2 skipped (no existing test changed). e2e: "dev mode" (2:
+  non-developers see no row and stored settings change no plan; a developer opens the panel, re-plans with defaults,
+  sets levels fun.slackS 900, re-plans, both budgets move by 660 s, Copy debug JSON, Reset, Force Valhalla, Offline
+  simulation), levels (3), plan flow (6), own routing (4), offline plan, valhalla down, satellite (2), REVIEW5 §2,
+  your data, first run (2), a short trip: all pass. `python tools/csp.py`: up to date (no inline script).
+- [x] docs: CALL_SHEET 2026-11-09 (dev-mode), APP_REVIEW.md 2.3.1 developer Dev panel row, OWN_ROUTING.md §5 overrides.
+- Open: not tried on a phone (WKWebView clipboard from `apexnav://`, the panel's height under the notch); overrides
+  apply to destination plans only (not loops, reroutes or Best roads nearby).
+- Exact next task: unchanged from engine-rank below (tools/live_speed.js on the owner's trips at Fun and Long way); the
+  owner can now do the same on the phone with the Dev panel and paste its JSON.
+
 ## Session 2026-11-08 (drop-fcc): FCC coverage removed at the owner's word (claude/drop-fcc, off origin/main 77db807)
 
 - [x] Owner: "we can just drop fcc it's confusing". Removed #311's FCC path: tools/ctx_etl sources.py (MobileCoverage,

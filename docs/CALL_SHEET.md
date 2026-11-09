@@ -4,6 +4,37 @@ Decisions Claude made for you, newest first. Each one says what was decided, why
 you reach one you've seen. If you disagree with a call, say so and it gets reversed; nothing here is hard to undo unless
 it says so. Things only you can do are in docs/OWNER_TODO.md.
 
+## 2026-11-09 (dev-mode): a Dev panel for you and @fish5spd (claude/dev-mode)
+
+You asked for "a dev mode in the app that shows all routing parameters and other debug info for only me and my codev to
+mess with". The calls I made building it:
+- **Where it opens: Garage → Settings (the gear) → Developer → Open the Dev panel**, not a long-press. A row behind the
+  gear can't be found by accident or by a reviewer poking at the map, and the Settings list already hides a row whose
+  sheet is empty, so for anyone else there is simply no row. The panel slides over the top of the map (up to 62 % of the
+  screen) so the route card and the map stay in view while you change things. Undo: a long-press instead means moving
+  the button in cockpit.js `paintDevRow`.
+- **The gate is the Satellite layer's**: only a fresh `/api/me` with `developer: true` (you by OWNER_EMAIL, @fish5spd
+  by fingerprint, plus DEV_FINGERPRINTS). The panel's code (web/dev_panel.js) is fetched only for a developer; overrides
+  and switches saved on a phone are ignored until `/api/me` says developer, and dropped (the panel closed, the offline
+  simulation and lines removed) when it says otherwise. No URL parameter or stored setting turns it on.
+- **Overrides are dotted paths** into the code's own tables: `router` = graph_router.js `K` (`A_MAX.fun`, `BUY.max`,
+  `SPREAD.fun.0`, `ROAD.poor`…), `engine` = route_engine.js `W`, `levels` = fun_route.js `LEVELS` (budget, slackS,
+  perMin), `hwy` = fun_route.js `HWY`. The panel lists the ones you named first and every other number under "All". Only
+  numbers that already exist can be set, so a typo does nothing. They apply to plans to a destination (the first route
+  and the plan); loops, reroutes and Best roads nearby still use the code's values. Re-plan saves and re-plans the trip
+  on screen; Reset puts the code's values back and re-plans.
+- **Force own router also stops asking Valhalla for routes** (its turn instructions are still asked for); a trip off our
+  tiles then fails to plan, which is the point of the switch. Force Valhalla turns our router off.
+- **Offline simulation** makes the page's requests to any other host fail and the page read as offline. The map's own
+  tile reads and the routing worker's tile reads are separate and aren't blocked (the routing worker's tiles are on the
+  phone anyway). For a real test, airplane mode is still the truth.
+- **"Picked" shows the route the card ends on**: our plans are ranked again with the fresh context after the card is up
+  (ownRefine), so the panel takes that second ranking and says whether it swapped the route.
+- **Copy debug JSON** puts the summary on the clipboard: each candidate's minutes, km, router G and role, the engine's
+  parts, why it lost, highway km and source, plus the timeline, the overrides and the versions. If the clipboard is
+  refused, the text appears in a box to copy by hand.
+- Undo: revert this commit; nothing on the server changed.
+
 ## 2026-11-08 (drop-fcc): FCC phone coverage removed, as you asked (claude/drop-fcc)
 
 You said: "we can just drop fcc it's confusing". Everything #311 added for the FCC National Broadband Map is gone; the

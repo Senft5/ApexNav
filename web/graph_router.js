@@ -347,7 +347,19 @@
    * Our quickest alone (one search): the first route on screen. At a level that never drives a highway (NO_HWY), the
    * quickest way without one (freeQuickest), so the first route up is already the level's kind of route.
    */
-  function quickest(v, req) {
+  function quickest(v, req) { return withTune(req && req.tune, () => quickestNow(v, req)); }
+  /**
+   * A developer's overrides (dev mode, web/dev_panel.js: req.tune, sent only from the owner's and the co-developer's phones)
+   * laid on K and the levels' budgets for this one call, and put back after, whatever happens. No tune: fn() as written.
+   */
+  function withTune(tune, fn) {
+    const F = FunRoute();
+    if (!tune || !F || !F.tuned || !F.tuned(tune)) return fn();
+    const undo = F.tuneOnto(K, tune.router);
+    F.tuneOnto(levels(), tune.levels, undo);
+    try { return fn(); } finally { F.untune(undo); }
+  }
+  function quickestNow(v, req) {
     const level = levels()[req.level] ? req.level : 'fun', obj = objective(v, req);
     const { src, dst } = snapBoth(v, req.from, req.to);
     const sc = startCostFor(v, req.from.heading != null ? req.from.heading : req.heading);
@@ -371,7 +383,8 @@
   // right behind it, on the tiles already in view: 60-80 ms of the worker's critical path, live 2026-11-08); same answer.
   function quickKey(req, level, obj, kind = 'any') {
     const h = req.from.heading != null ? req.from.heading : req.heading;
-    return JSON.stringify([req.from.lat, req.from.lon, req.to.lat, req.to.lon, Number.isFinite(h) ? h : null, level, req.avoid || null, obj.nodeCosts, kind]);
+    // (a developer's tune changes the turn and node costs: a quickest made under another one isn't this plan's)
+    return JSON.stringify([req.from.lat, req.from.lon, req.to.lat, req.to.lon, Number.isFinite(h) ? h : null, level, req.avoid || null, obj.nodeCosts, kind, req.tune || null]);
   }
   /**
    * The quickest way from `from` through req.via (in order) to `to`: each leg's search starts on the edge the last one
@@ -1014,7 +1027,8 @@
    * `hwy` says which: { mode: 'any' | 'free' | 'link', absurd, quickS, freeS }.
    * req: { from, to, level, prefs, taste, avoid, heading, max }.
    */
-  function plan(v, req) {
+  function plan(v, req) { return withTune(req && req.tune, () => planNow(v, req)); }
+  function planNow(v, req) {
     const t0 = Date.now(), level = levels()[req.level] ? req.level : 'fun', L = levels()[level];
     const obj = objective(v, req);
     const snaps = snapBoth(v, req.from, req.to);
@@ -1722,7 +1736,7 @@
     };
   }
 
-  const api = { VERSION: 1, K, BUILT_READ, builtAgreeOf, lineTiles, edgeTable, fromTable, crowdOnto, project, quickest, scoreLine, reach, explore, streetEdge, deadEndAt, junctionAt, TILE_DEG, FLAG_BITS, NODE_BITS, CLS, UNKNOWN_U8, UNKNOWN_FUN, NO_NAME, packedKey, nodeCost, LEVELS_COPY, levels, distM, bearing, turnAngle, tileOf, keyOf, view, geom, snap, objective, search,
+  const api = { VERSION: 1, K, withTune, BUILT_READ, builtAgreeOf, lineTiles, edgeTable, fromTable, crowdOnto, project, quickest, scoreLine, reach, explore, streetEdge, deadEndAt, junctionAt, TILE_DEG, FLAG_BITS, NODE_BITS, CLS, UNKNOWN_U8, UNKNOWN_FUN, NO_NAME, packedKey, nodeCost, LEVELS_COPY, levels, distM, bearing, turnAngle, tileOf, keyOf, view, geom, snap, objective, search,
     assemble, through, overlap, sameRoute, tilesFor, loopTiles, plan, pick, loop, hwyOf, isHwyEdge, snapOff, freeQuickest, indexKeys, covers, host, client, edgeId, twin, turnCost };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   root.ApexGraphRouter = api;

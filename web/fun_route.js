@@ -845,6 +845,39 @@
     return out;
   }
 
-  const api = { LEVELS, HWY, highwayKm, levelHighways, applyHighways, BUILT, builtKeep, builtAgree, shown, dominates, cornerWeight, townKm, townCost, STREET, streetSample, streetShare, exploreShortlist, exploreTargets, explorePicks, distinctOptions, glare, glareCost, LOOP_BY_TIME, LOOP_LEVEL, loopLevelAdjust, LOOP_HWY, loopHighwayCost, loopDominates, loopRank, AVOID_DEFAULT, AVOID_LABELS, STAGE_KEPT, stageCoverage, keptStages, CAMERA_BOX_DEG, camerasToExclude, costing, unavoided, keepAvoiding, why, geometry, alongPoints, insertVia, loopValue, loopShortlist, loopPlansFromMatrix, score, shortlist, matrixPoints, plansFromMatrix, sectionCount, sectionPoints, combineSections, planKey, searchArea, waypoints, rank, along, kmBetween, directionBonus, setList, SET_FINISH, SET_FATIGUE, MAX_TECH_PER_KM, carNote, stageSpans, stageAhead };
+  // ---- developer overrides (dev mode, the owner 2026-11-09; web/dev_panel.js) -------------------------------------------
+  // A tune is { router: { 'A_MAX.fun': 60, … }, engine: { POOR_PER_KM: 8, … }, levels: { 'fun.budget': 0.5, … }, hwy: { … } },
+  // each a flat map of dotted paths to numbers. tuneOnto sets only knobs that exist and are numbers already (an own
+  // property at every step of the path), so a tune can't add keys, change a type or reach a prototype, and returns what it
+  // changed for untune to put back. With no tune nothing is touched: the default behaviour is the code as written.
+  const ownKey = (o, k) => o != null && typeof o === 'object' && Object.prototype.hasOwnProperty.call(o, k);
+  function tuneOnto(target, flat, undo = []) {
+    if (!target || !flat || typeof flat !== 'object') return undo;
+    for (const [path, val] of Object.entries(flat)) {
+      if (typeof val !== 'number' || !Number.isFinite(val)) continue;
+      const ks = String(path).split('.');
+      let o = target;
+      for (let i = 0; i < ks.length - 1 && o; i++) o = ownKey(o, ks[i]) && typeof o[ks[i]] === 'object' ? o[ks[i]] : null;
+      const k = ks[ks.length - 1];
+      if (!o || !ownKey(o, k) || typeof o[k] !== 'number') continue;
+      undo.push([o, k, o[k]]);
+      o[k] = val;
+    }
+    return undo;
+  }
+  function untune(undo) { for (let i = (undo || []).length - 1; i >= 0; i--) { const [o, k, v] = undo[i]; o[k] = v; } }
+  /** Every number in an object as { 'dotted.path': value } (the knobs a tune can set, with their values now). */
+  function tuneKnobs(obj, pre = '', out = {}) {
+    for (const k of Object.keys(obj || {})) {
+      const v = obj[k], p = pre ? `${pre}.${k}` : k;
+      if (typeof v === 'number' && Number.isFinite(v)) out[p] = v;
+      else if (v && typeof v === 'object' && !ArrayBuffer.isView(v)) tuneKnobs(v, p, out);
+    }
+    return out;
+  }
+  /** Whether a tune changes anything at all (an empty or absent one is no tune). */
+  const tuned = (t) => !!(t && typeof t === 'object' && Object.values(t).some((m) => m && typeof m === 'object' && Object.keys(m).length));
+
+  const api = { tuneOnto, untune, tuned, tuneKnobs, LEVELS, HWY, highwayKm, levelHighways, applyHighways, BUILT, builtKeep, builtAgree, shown, dominates, cornerWeight, townKm, townCost, STREET, streetSample, streetShare, exploreShortlist, exploreTargets, explorePicks, distinctOptions, glare, glareCost, LOOP_BY_TIME, LOOP_LEVEL, loopLevelAdjust, LOOP_HWY, loopHighwayCost, loopDominates, loopRank, AVOID_DEFAULT, AVOID_LABELS, STAGE_KEPT, stageCoverage, keptStages, CAMERA_BOX_DEG, camerasToExclude, costing, unavoided, keepAvoiding, why, geometry, alongPoints, insertVia, loopValue, loopShortlist, loopPlansFromMatrix, score, shortlist, matrixPoints, plansFromMatrix, sectionCount, sectionPoints, combineSections, planKey, searchArea, waypoints, rank, along, kmBetween, directionBonus, setList, SET_FINISH, SET_FATIGUE, MAX_TECH_PER_KM, carNote, stageSpans, stageAhead };
   if (typeof module !== 'undefined' && module.exports) module.exports = api; else root.ApexFunRoute = api;
 })(typeof window !== 'undefined' ? window : globalThis);
