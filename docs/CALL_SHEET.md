@@ -4,6 +4,19 @@ Decisions Claude made for you, newest first. Each one says what was decided, why
 you reach one you've seen. If you disagree with a call, say so and it gets reversed; nothing here is hard to undo unless
 it says so. Things only you can do are in docs/OWNER_TODO.md.
 
+## 2026-11-09 (fable-hpms-limits): a speed limit of "254 mph" is no limit (claude/fable-hpms-limits)
+
+The government road inventory we read speed limits from (HPMS) marks "not reported" with a code. Our data build stored
+that code as 254 mph, and the app took it as a real posted limit on 281 stretches round Cincinnati (mostly Boone County
+back roads), which nudged how those roads scored. The calls:
+- **Only 5 to 85 mph counts as a posted limit** (85 is the highest posted anywhere in the US). Anything else is
+  unknown. The app now refuses such values in the data it already has, and the data build no longer writes them.
+  Undo or widen: `LIMIT_MPH` in web/route_ctx/context_grid.js and tools/ctx_etl/build.py.
+- **I did not rebuild the road tiles.** Their scores on those 281 stretches still carry the bad limit until the next
+  "Graph region" run in Actions (the same run the expressway change needs).
+- **I left the tiles' travel times alone.** The inventory knows the posted limit on about half the main-road miles where
+  our tiles only guess from the road's class, and using it would make times truer, but a mismatched stretch would make
+  them wrong in a new way. The numbers are in STATE for whoever takes it on.
 ## 2026-11-09 (route-sliders): Tune your routes, a Pro screen open to everyone until Pro goes on sale (claude/route-sliders)
 
 You asked for "every parameter with a slider for premium users", then: "remember everyone has pro if they are an early

@@ -37,6 +37,7 @@
 //                               from its other carriageway (up to 90 m away) when this one has none. Public domain; yearly.
 //   iri                 in/mi   International Roughness Index of that road section (HPMS; reported on main roads only).
 //   hpms_speed_limit    mph     Posted speed limit HPMS holds for that section (not all sections report it).
+//                               Only 5-85 mph is a limit (LIMIT_MPH); a "not reported" code is unknown.
 //   hpms_lanes          lanes   Through lanes (both directions, as HPMS counts them).
 //   hpms_fclass         1-7     FHWA functional system: 1 interstate, 2 freeway/expressway, 3 principal arterial, 4 minor
 //                               arterial, 5 major collector, 6 minor collector, 7 local.
@@ -230,10 +231,15 @@
     const alts = order.slice(1).filter(([t]) => t !== s && twin(t)).map(([t]) => t);       // not a 1-lane ramp beside it
     return { s, d: dU * mPerU, bundle: b, alts };
   }
+  // A posted limit HPMS can hold, mph (85 is the highest posted in the US). Bundles built before 2026-11-09 carry a state's
+  // "not reported" code clamped to 254 mph (281 spans round Cincinnati): that is unknown, never a limit (tools/ctx_etl
+  // build.py LIMIT_MPH writes nodata from then on).
+  const LIMIT_MPH = [5, 85];
   function rawLine(b, attr, s) {
     const A = b.header.lines.attrs[attr];
     if (!A) return NaN;
     const raw = b.arrays[A.array][s];
+    if (attr === 'speed_limit' && (raw < LIMIT_MPH[0] || raw > LIMIT_MPH[1])) return NaN;
     return raw === A.nodata ? NaN : raw;
   }
   /** An HPMS item of the matched span, or of its parallel twin when the span doesn't report it; NaN when neither does. */
@@ -462,7 +468,7 @@
   }
 
   const provider = { id: 'context_grid', version: VERSION, channels: CHANNELS, needs: { network: false }, budgetMs: 4000, stageOk: true, fetch: fetchCorridors };
-  const api = { VERSION, BASE, basesOf, RASTERS, CHANNELS, LINE_CHANNELS, project, bundlesFor, bundlesNear, urlsNear, urlOf, gunzip, parse, cell,
+  const api = { VERSION, BASE, basesOf, RASTERS, CHANNELS, LINE_CHANNELS, LIMIT_MPH, project, bundlesFor, bundlesNear, urlsNear, urlOf, gunzip, parse, cell,
     sample, isCovered, undeltaLines, decode, matchLine, lineValue, crashes, cropGroup, headings, sampleCorridor, fetch: fetchCorridors, provider, _mem: mem };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.ApexContextGrid = api;

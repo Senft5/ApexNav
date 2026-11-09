@@ -113,6 +113,19 @@ def int_or(v, nodata, top):
     return int(min(round(f), top))
 
 
+# A posted limit HPMS can hold: 5 to 85 mph (the highest posted in the US). Anything else is a state's "not reported"
+# code (999 and the like), which the u8 used to clamp to 254 mph and the phone read as a measured limit (281 spans of
+# the Cincinnati bundles, 2026-11-09). web/route_ctx/context_grid.js LIMIT_MPH refuses the same range in bundles built
+# before this.
+LIMIT_MPH = (5, 85)
+
+
+def limit_or(v, nodata=255):
+    """A posted limit in mph as stored (u8), or nodata when it isn't one."""
+    x = int_or(v, nodata, 254)
+    return x if x != nodata and LIMIT_MPH[0] <= x <= LIMIT_MPH[1] else nodata
+
+
 def build(args):
     t0 = time.time()
     ctx = sources.Ctx(args.cache)
@@ -221,7 +234,7 @@ def build(args):
                                    "dx": w.add("line_dx", dx, "u16"), "dy": w.add("line_dy", dy, "u16"), "attrs": {
                                        "aadt": {"array": w.add("line_aadt", [int_or(v, 0xFFFFFFFF, 0xFFFFFFFE) for v in attrs["aadt"]], "u32"), "nodata": 0xFFFFFFFF, "unit": "vehicles/day"},
                                        "iri": {"array": w.add("line_iri", [int_or(v, 65535, 65534) for v in attrs["iri"]], "u16"), "nodata": 65535, "unit": "in/mi"},
-                                       "speed_limit": {"array": w.add("line_speed", [int_or(v, 255, 254) for v in attrs["speed_limit"]], "u8"), "nodata": 255, "unit": "mph"},
+                                       "speed_limit": {"array": w.add("line_speed", [limit_or(v) for v in attrs["speed_limit"]], "u8"), "nodata": 255, "unit": "mph"},
                                        "lanes": {"array": w.add("line_lanes", [int_or(v, 255, 254) for v in attrs["lanes"]], "u8"), "nodata": 255, "unit": "through lanes"},
                                        "fclass": {"array": w.add("line_fclass", [int_or(v, 255, 254) for v in attrs["fclass"]], "u8"), "nodata": 255, "unit": "FHWA F_SYSTEM"}}}
                 header["sources"]["hpms"] = sources.SOURCES["hpms"]
