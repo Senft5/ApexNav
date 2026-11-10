@@ -26,6 +26,17 @@
 - [x] .github/workflows/core-tests.yml e2e `timeout-minutes` 25 → 35: 152 flows take ~24 min and were cancelled on the
   last flow. Next: split e2e into two jobs if it passes ~30 min.
 
+## Session 2026-11-10 (fable-message-sentences): every message is a sentence (claude/fable-message-sentences, off origin/main 948cb4b)
+
+- `web/cockpit.js`: the eight toasts that were label-style are sentences like the other 185: "Spot saved: name.",
+  "Saved 12 mi round here for offline, 48 MB.", "Map display lost. Your drive is still recording.", "Map graphics reset.
+  Restoring…", "Regroup at the overlook.", "… from your next route. This one has your added stop.", the dev shell's
+  "Saved N road segments to file.", and the two traffic ones as the voice says them ("Traffic ahead. 4 min slower.",
+  "Traffic ahead. Switching to Route 9, 4 min longer.").
+- `tests/test_message_sentences.py` (4) reads every `toast('…')` in web/*.js: each ends ". ! ? …", none joins labels with "·".
+- pytest whole suite passed. No e2e flow reads these eight texts (grepped), so none was run for them.
+- Next: messages whose text is built before the call (a variable) are not read by the test.
+
 ## Session 2026-11-10 (fable-loop-time): the loop dial by distance or time (claude/fable-loop-time, off origin/main 1a38381)
 
 - [x] web/index.html `#loopBy` (two radio words over the dial, `.loop-by`). web/cockpit.js: `LOOP_BY` ('apex.loopBy'),

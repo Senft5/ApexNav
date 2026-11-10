@@ -48,6 +48,16 @@ Also: a time loop's note said "the closest good loop to 1.5 h"; times now read "
 
 Not changed: Options keeps its 1 hour / 2 hours keys and My free time. Undo: revert the PR.
 
+## 2026-11-10 (fable-message-sentences): every message is a sentence (claude/fable-message-sentences)
+
+185 of the app's 193 messages are sentences ("Saved to your Log.", "Couldn't reach the server. Try again."). Eight were
+two labels with a dot between them ("Spot saved · Overlook", "Traffic ahead · 4 min"), which reads like a different
+app. They are sentences now. The two traffic ones say what the voice says at the same moment ("Traffic ahead. 4 min
+slower.", "Traffic ahead. Switching to Route 9, 4 min longer."), so the screen and the speaker agree. A test reads every
+message written in web/*.js and fails on one that doesn't end as a sentence or joins labels with "·".
+
+Undo: revert the PR; nothing else depends on the wording.
+
 ## 2026-11-10 (fable-layers): design pass 8: the Layers panel is the map's legend (claude/fable-layers)
 
 Layers was a column of names and switches: "Cameras" (which cameras?), "Measured roads" (three colours on the map and
