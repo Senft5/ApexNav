@@ -63,6 +63,21 @@
   of these roads, so most leads say no speed. The owner's own trips still unread.
 - Exact next task: an e2e flow for the overview's refresh once #319 is merged; the owner reads the overview on his trips.
 
+## Session 2026-11-10 (fable-hazard-alive): a repeated "still there" keeps a hazard alive (claude/fable-hazard-alive, off origin/main f27a1fe)
+
+- [x] Found reading backend/src/hazards.ts `vote`: a person's second "still there" on the same report returned early
+  ("the same vote twice counts once") without moving `expires_at`, and the reporter's own (a repeat report within
+  SAME_M lands in `vote`) moved nothing either. The page asks again on every drive (hazard_reports.js createPassWatch
+  keeps `asked` per page), so those answers were thrown away: a report lived only as long as NEW people kept arriving.
+- [x] Now any "still" sets `expires_at = MAX(expires_at, now + the kind's life)`; `confirms` moves only on a person's
+  first "still" (never for the reporter, whose report is the first confirmation). "Gone" and the ending rule are
+  unchanged. No migration, no client change.
+- Tests: backend/test/hazards.test.ts "seen again by the same person" (second vote, the reporter's repeat report, a
+  doubled "gone", an ended report stays ended); backend vitest 358 passed, tsc clean.
+- Seen, not changed: the reporter is never asked about their own report and can't take it back; their "gone" through
+  the API leaves their own confirmation counted. No screen reaches that path today.
+- Exact next task: unchanged.
+
 ## Session 2026-11-09 (fable-expressway): expressways below trunk class are highways to Fun and Long way (claude/fable-expressway, off origin/main 1d97979)
 
 - [x] The gap STATE and OWN_ROUTING listed: an expressway mapped as `primary` (or lower) with `motorroad=yes` wasn't a
@@ -81,20 +96,6 @@
   (Valhalla-planned routes off our tiles) still knows only motorway/trunk.
 - Exact next task: after merge, run Actions → "Graph region (own routing, OH+KY+IN)" so the flag reaches the tiles; then
   unchanged (tools/live_speed.js on the owner's trips at Fun and Long way).
-## Session 2026-11-10 (fable-hazard-alive): a repeated "still there" keeps a hazard alive (claude/fable-hazard-alive, off origin/main f27a1fe)
-
-- [x] Found reading backend/src/hazards.ts `vote`: a person's second "still there" on the same report returned early
-  ("the same vote twice counts once") without moving `expires_at`, and the reporter's own (a repeat report within
-  SAME_M lands in `vote`) moved nothing either. The page asks again on every drive (hazard_reports.js createPassWatch
-  keeps `asked` per page), so those answers were thrown away: a report lived only as long as NEW people kept arriving.
-- [x] Now any "still" sets `expires_at = MAX(expires_at, now + the kind's life)`; `confirms` moves only on a person's
-  first "still" (never for the reporter, whose report is the first confirmation). "Gone" and the ending rule are
-  unchanged. No migration, no client change.
-- Tests: backend/test/hazards.test.ts "seen again by the same person" (second vote, the reporter's repeat report, a
-  doubled "gone", an ended report stays ended); backend vitest 358 passed, tsc clean.
-- Seen, not changed: the reporter is never asked about their own report and can't take it back; their "gone" through
-  the API leaves their own confirmation counted. No screen reaches that path today.
-- Exact next task: unchanged.
 ## Session 2026-11-09 (fable-hpms-limits): a "not reported" speed limit was read as 254 mph (claude/fable-hpms-limits, off origin/main 1d97979)
 
 - [x] Found while measuring posted limits for the overview: the context grid's HPMS `speed_limit` (u8 mph) clamped a state's
