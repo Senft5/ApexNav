@@ -1,13 +1,5 @@
 # VETTA — CURRENT AGENT HANDOFF STATE
 
-## Session 2026-11-10 (fable-layers): design pass 8, the Layers panel as the map's legend (claude/fable-layers, off origin/main 1a38381)
-
-- web/index.html only (markup and CSS, no script): `#switchRow` rows are `.sw.ly` = switch, name over a `<small>` line,
-  and an inline `svg.ly-key` drawn with the look's tokens (`--amber`, `--gain`, `--signal`). Order: Twisty, Measured,
-  Cameras, 3D terrain, (Satellite, developers), Friends, then "Who sees me". `.edge` owns `--edge-w` (panel width and
-  the closed panel's offset: change one and the Layers key leaves its column, which "REVIEW.md 1.2 screen by screen" catches).
-- e2e: that flow checks every row has a key and a line, the three surface words, Who sees me under Friends, panel on screen.
-- Next: the drive screen has not had a design pass.
 ## Session 2026-11-10 (fable-loop-time): the loop dial by distance or time (claude/fable-loop-time, off origin/main 1a38381)
 
 - [x] web/index.html `#loopBy` (two radio words over the dial, `.loop-by`). web/cockpit.js: `LOOP_BY` ('apex.loopBy'),
@@ -19,6 +11,15 @@
   across a reload, back to distance).
 - Next: Options' "Loop to fit" 1 hour / 2 hours keys now duplicate the dial; remove them once the owner has used the
   dial (My free time stays).
+
+## Session 2026-11-10 (fable-layers): design pass 8, the Layers panel as the map's legend (claude/fable-layers, off origin/main 1a38381)
+
+- web/index.html only (markup and CSS, no script): `#switchRow` rows are `.sw.ly` = switch, name over a `<small>` line,
+  and an inline `svg.ly-key` drawn with the look's tokens (`--amber`, `--gain`, `--signal`). Order: Twisty, Measured,
+  Cameras, 3D terrain, (Satellite, developers), Friends, then "Who sees me". `.edge` owns `--edge-w` (panel width and
+  the closed panel's offset: change one and the Layers key leaves its column, which "REVIEW.md 1.2 screen by screen" catches).
+- e2e: that flow checks every row has a key and a line, the three surface words, Who sees me under Friends, panel on screen.
+- Next: the drive screen has not had a design pass.
 
 ## Session 2026-11-10 (fable-polish-7): the Settings list in groups, with values (claude/fable-polish-7, off origin/main 1a38381)
 
