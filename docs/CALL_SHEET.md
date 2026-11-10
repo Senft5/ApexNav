@@ -4,6 +4,14 @@ Decisions Claude made for you, newest first. Each one says what was decided, why
 you reach one you've seen. If you disagree with a call, say so and it gets reversed; nothing here is hard to undo unless
 it says so. Things only you can do are in docs/OWNER_TODO.md.
 
+## 2026-11-10 (fable-no-orphan-key): a friend's third key takes the row (claude/fable-no-orphan-key)
+
+On People, a friend's row opens on two columns of keys. A friend who shares no position has three (Share a route,
+Invite to a drive, Profile), so Profile sat in the left half of a second row beside a hole. An odd last key now takes
+the whole row; two and four keys are unchanged. One CSS rule.
+
+Undo: revert the PR.
+
 ## 2026-11-10 (fable-one-corner): "1 corners" is "1 corner"; a Best roads nearby key keeps its word while it searches (claude/fable-one-corner)
 
 A road with one corner read "1 corners" on its card's line, under its big number, aloud to a screen reader, in "1 more

@@ -1129,7 +1129,9 @@
     .request-card p { margin: 0; font-size: 16px; } .request-card small { display: block; color: var(--panel-dim); font-size: 13px; margin-top: 2px; }
     #accountBody > .you-row { border-bottom: 1px solid var(--hair, var(--panel-dim)); margin-top: -8px; }
     #accountBody > .you-row + .friend-list { border-top: 0; }
-    .row.friend-keys { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; } .friend-keys .ink-btn, .friend-keys .ink-btn.solid { height: 44px; padding: 0 8px; }
+    .row.friend-keys { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+    .friend-keys > :last-child:nth-child(odd) { grid-column: 1 / -1; }   /* three keys: the third takes the row, not half of it beside a hole */
+    .friend-keys .ink-btn, .friend-keys .ink-btn.solid { height: 44px; padding: 0 8px; }
     #accountBody > .you-row .chev { transform: rotate(-45deg); }   /* it opens a page, it does not unfold */
     .nav-row.quiet { min-height: 44px; font-size: 14px; font-weight: 500; color: var(--panel-dim); border-top: 1px solid var(--hair, var(--panel-dim)); }
     .nav-row.quiet[aria-expanded="true"] { border-bottom: 0; } .nav-row.quiet[aria-expanded="true"] i { transform: rotate(45deg); }
