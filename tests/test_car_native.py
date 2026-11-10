@@ -116,7 +116,7 @@ def test_the_motion_pipeline_and_the_live_frame_are_off_the_main_thread():
     # the page reads the same keys as before
     for key in ("lat", "lon", "accuracy_m", "speed_mps", "course_deg", "elevation_m", "grade_pct", "lat_g", "lon_g", "camber_deg",
                 "crest_vertical_g", "roughness_rms", "vert_peak_g", "impact_g", "recording", "calibration", "thermal", "low_power_mode",
-                "battery", "charging", "has_fix", "segments", "at", "seq"):
+                "battery", "charging", "has_fix", "location_off", "segments", "at", "seq"):
         assert re.search(rf'(\b{key}\b(,|\s*$)|= "{key}")', swift[swift.index("enum CodingKeys"):swift.index("static func r(")], re.M), key
 
 
@@ -170,3 +170,19 @@ def test_plates_stay_clear_of_the_card():
     gap_j = float(re.search(r"const CARD_GAP = (\d+)", js).group(1))
     assert gap_s >= 12 and gap_j >= 12
     assert "width: 1e4 + inset + Self.cardGap" in native and "state.inset + CARD_GAP" in js
+
+
+def test_location_turned_off_is_said_and_settings_is_one_key_away():
+    """2026-11-10: with Location denied the app said nothing: a drive sat on "Finding GPS…" for ever. The shell now tells the
+    page (a live frame's location_off), forgets the stale fix, and opens its own page in Settings when the page asks."""
+    swift = read("ApexNavApp.swift")
+    assert "private static func isOff(_ status: CLAuthorizationStatus) -> Bool { status == .denied || status == .restricted }" in swift
+    change = swift[swift.index("nonisolated func locationManagerDidChangeAuthorization"):swift.index("private static func isOff")]
+    assert "self.locationOff = Self.isOff(self.locManager.authorizationStatus)" in change and "if self.locationOff { self.hasFix = false }" in change
+    assert "locationOff = Self.isOff(locManager.authorizationStatus)" in swift[swift.index("override init()"):swift.index("configureVoiceSession()")]
+    assert "locationOff: locationOff && !replaying" in swift, "a review replay is never 'off'"
+    assert 'if cmd == "openSettings"' in swift and "UIApplication.openSettingsURLString" in swift
+    page = read("web/cockpit.js")
+    assert "if (frame && NATIVE_SHELL && typeof frame.location_off === 'boolean') setLocOff(frame.location_off);" in page
+    assert "postMessage({ cmd: 'openSettings' })" in page
+    assert "$('startDrive').disabled" not in page and "disabled: locDenied" not in page, "no key greyed out without a word"
