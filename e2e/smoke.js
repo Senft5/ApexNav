@@ -4352,6 +4352,37 @@ async function devRow(page) {
   await page.waitForSelector('#garageSettings.open');
   return page.evaluate(() => { const r = document.querySelector('#garageSettings .nav-row[data-setting="dev"]'); return { row: !!r, hidden: !r || r.hidden, filled: document.getElementById('garageDevBody').children.length }; });
 }
+flow('Settings behind the gear: three short lists, each row saying what it is set to; a change made in a sheet shows on the row when you come back (design pass 7)', async (page, base) => {
+  await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); localStorage.setItem('apex.permsExplained', '1'); } catch (_) {} });
+  await page.route('**/api/me', (r) => r.fulfill({ status: 200, contentType: 'application/json', body: '{"signed_in":false}' }));
+  await page.goto(base + '/index.html?view=garage');
+  await page.waitForFunction(() => window.apexDebug && !document.getElementById('boot') && document.getElementById('garageGear'), null, { timeout: 20000 });
+  await page.waitForTimeout(800);
+  await page.click('#garageGear');
+  await page.waitForSelector('#garageSettings.open');
+  await page.waitForTimeout(400);
+  const list = () => page.evaluate(() => { const box = document.getElementById('garageSettings');
+    return [...box.querySelectorAll('.nav-rows > *')].filter((e) => !e.hidden).map((e) => { const r = e.getBoundingClientRect(), sm = e.querySelector('small');
+      return e.classList.contains('nav-group') ? { group: e.textContent } : { row: e.querySelector('span').textContent, says: sm.textContent, label: e.getAttribute('aria-label'), h: Math.round(r.height),
+        cut: sm.scrollWidth > sm.clientWidth + 1, wide: r.right > innerWidth + 0.5 }; }); });
+  const a = await list();
+  const groups = a.filter((x) => x.group).map((x) => x.group), rows = a.filter((x) => x.row), say = Object.fromEntries(rows.map((r) => [r.row, r.says]));
+  check(groups.join('|') === 'Sharing and safety|How the app reads|You and Vetta' && a[0].group, 'three lists, each under its name: ' + JSON.stringify(a.map((x) => x.group || x.row)));
+  check(say['Units'] === 'Miles and feet' && say['Map motion'] === 'Lean' && say['Privacy zones'] === 'None' && /^(On|Off)$/.test(say['Crash check']) && say['Reminder'] === 'Off', 'each row says what it is set to: ' + JSON.stringify(say));
+  check(say['Feedback'] === '' && say['About Vetta'] === '', 'a row with nothing to say says nothing: ' + JSON.stringify(say));
+  check(rows.every((r) => r.h >= 44 && !r.cut && !r.wide), 'every row a thumb tall, its value whole: ' + JSON.stringify(rows.filter((r) => r.h < 44 || r.cut || r.wide)));
+  check(rows.find((r) => r.row === 'Units').label === 'Units: Miles and feet' && rows.find((r) => r.row === 'Feedback').label === 'Feedback', 'read aloud with its value: ' + JSON.stringify(rows.map((r) => r.label)));
+  // change one in its sheet, come back: the row has it
+  await page.click('#garageSettings .nav-row[data-setting="units"]');
+  await page.waitForSelector('.garage-pop[data-setting="units"].open');
+  await page.click('.garage-pop[data-setting="units"] [data-units="metric"]');
+  await page.click('.garage-pop[data-setting="units"] .side-pop-head .linkbtn');
+  await page.waitForFunction(() => !document.querySelector('.garage-pop[data-setting="units"]').classList.contains('open'));
+  const b = Object.fromEntries((await list()).filter((x) => x.row).map((r) => [r.row, r.says]));
+  check(b['Units'] === 'Kilometres and metres', 'back on the list, Units says what you just chose: ' + JSON.stringify(b));
+  await page.evaluate(() => document.querySelector('[data-units="imperial"]').click());
+}, { viewport: { width: 393, height: 852 }, hasTouch: true });
+
 flow('dev mode: anyone else sees no Dev entry, loads no panel, and settings left on this phone change no plan (the owner 2026-11-09)', async (page, base) => {
   graphDir = graphFixture();
   try {

@@ -17,6 +17,16 @@ Also: a time loop's note said "the closest good loop to 1.5 h"; times now read "
 
 Not changed: Options keeps its 1 hour / 2 hours keys and My free time. Undo: revert the PR.
 
+## 2026-11-10 (fable-polish-7): design pass 7: Settings is three short lists, and each row says what it is set to (claude/fable-polish-7)
+
+Behind the Garage's gear was one list of eleven rows that said nothing: to learn whether Crash check was on or which
+units you were in, you opened each sheet. Now the list is three short ones under their names (Sharing and safety, How
+the app reads, You and Vetta), and a row says its setting on the right: Privacy zones "None" or "2 places", Crash
+check and Reminder "On" / "Off", Units "Miles and feet", Map motion "Lean". Change one in its sheet and the row has it
+when you come back. A row with nothing to say (Feedback, About) says nothing; a row never guesses.
+
+The order of the rows is unchanged. Undo: revert the PR.
+
 ## 2026-11-10 (fable-loops): a loop has no Quick / Fun / Long way; its card offers its length and which way to head (claude/fable-loops)
 
 You asked: "why do loops need a long way a fun and a quick? the whole point is aimless driving". They don't. On a

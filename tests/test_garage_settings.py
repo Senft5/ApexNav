@@ -80,3 +80,27 @@ def test_road_data_line_follows_the_account_state():
     assert "'Off. Turn on Share road feel above.' : 'Off. Sign in to share road feel.'" in js
     assert "Sign in and turn on Share road feel in the Garage" not in js
     assert "earns 3×" not in js                                         # U-126: no multiplier of nothing
+
+
+@pytest.mark.skipif(NODE is None, reason="node not installed")
+def test_a_row_says_what_its_setting_is_set_to_and_never_guesses():
+    """Design pass 7 (2026-11-10): the settings list said nothing until each sheet was opened. A row reads its value from
+    the control its section names; with nothing to read it says nothing."""
+    js = r"""
+const G = require(process.argv[1]);
+const btn = (text, o = {}) => ({ textContent: text, classList: { contains: (c) => c === 'on' && !!o.on || c === 'note' && !!o.note }, getAttribute: (a) => o[a] || null, matches: (q) => q === 'button', children: [] });
+const group = (...bs) => ({ matches: () => false, querySelectorAll: () => bs, children: bs, classList: { contains: () => false } });
+process.stdout.write(JSON.stringify({
+  sw: [G.summaryOf(btn('Crash check', { on: true })), G.summaryOf(btn('Crash check')), G.summaryOf(btn('x', { 'aria-checked': 'true' }))],
+  pick: [G.summaryOf(group(btn('Miles and feet', { on: true }), btn('Kilometres and metres'))), G.summaryOf(group(btn('Steady'), btn(' Lean ', { 'aria-pressed': 'true' }))), G.summaryOf(group(btn('a'), btn('b')))],
+  count: [G.summaryOf(group(btn('No zones yet.', { note: true })), 'place,places'), G.summaryOf(group(btn('Home')), 'place,places'), G.summaryOf(group(btn('Home'), btn('Work')), 'place,places')],
+  none: G.summaryOf(null), groups: G.GROUPS, order: G.ORDER }));
+"""
+    out = json.loads(subprocess.run([NODE, "-e", js, str(WEB / "garage_settings.js")], capture_output=True, text=True, check=True, timeout=30).stdout)
+    assert out["sw"] == ["On", "Off", "On"]
+    assert out["pick"] == ["Miles and feet", "Lean", ""]                 # nothing on: nothing said
+    assert out["count"] == ["None", "1 place", "2 places"]               # the list's own "none yet" line is not an entry
+    assert out["none"] == ""
+    assert all(k in out["order"] for k in out["groups"]) and len(out["groups"]) == 3
+    for key, sel in (("zones", "#zoneList"), ("crash", "[data-toggle=&quot;crash&quot;]"), ("nudge", "[data-toggle=&quot;nudge&quot;]"), ("units", "#unitsRow"), ("motion", "#camList")):
+        assert f'data-setting="{key}"' in HTML and f'data-summary="{sel}"' in HTML, key
