@@ -4,6 +4,20 @@ Decisions Claude made for you, newest first. Each one says what was decided, why
 you reach one you've seen. If you disagree with a call, say so and it gets reversed; nothing here is hard to undo unless
 it says so. Things only you can do are in docs/OWNER_TODO.md.
 
+## 2026-11-10 (fable-crew-settings): Crew settings in the Settings list's shape (claude/fable-crew-settings)
+
+For "cohesiveness" (and the first look at a crew's page in this run): the sheet behind a crew's gear had three sizes
+of heading, "Who can invite" broken over two lines because its explanation was set beside it, "Turn off invite links"
+centred while everything else started at the left, and an area field whose hint was cut off ("Area people nearby will
+see, like"). It now reads like the Garage's Settings: a small-caps name over each part (What it sees of yours, Who
+can invite, Who can find it), each explanation a pencil line under its keys, text keys at the left edge, and the
+field's hint short enough to read ("Area, like Robbinsville"; a screen reader still hears "Area people nearby will
+see"). Who can find it now says what Private and Public mean before asking for an area.
+
+Every control does what it did and the Worker calls are unchanged.
+
+Undo: revert the PR (`crewSettingsFor` in web/cockpit.js, four CSS lines in web/index.html).
+
 ## 2026-11-10 (fable-one-corner): "1 corners" is "1 corner"; a Best roads nearby key keeps its word while it searches (claude/fable-one-corner)
 
 A road with one corner read "1 corners" on its card's line, under its big number, aloud to a screen reader, in "1 more

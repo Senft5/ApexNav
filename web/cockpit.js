@@ -6034,16 +6034,22 @@
             });
             by.append(b);
           }
-          ownerBox.append(el('p', { className: 'ctl-label', textContent: 'Who can invite' }, el('small', { textContent: 'whoever opens a crew link joins and is friends with the sender' })), by);
+          // 2026-11-10: the sheet in the Settings list's shape (a small-caps name over each part). "Who can invite" had its
+          // explanation set beside it, so the label broke over two lines; the explanation is a line of its own under the keys.
+          ownerBox.append(el('h4', { className: 'nav-group', textContent: 'Who can invite' }), by,
+            el('p', { className: 'note', textContent: 'Whoever opens a crew link joins, and is friends with the sender.' }));
           ownerBox.append(btn('Turn off invite links', async () => {
             if (!(await ApexConfirm.ask(`Turn off every invite link to ${c.name}? People already in stay in.`, 'Turn off'))) return;
             const r = await apiCall('DELETE', `/api/crews/${c.id}/invites`); const j = await jsonOf(r);
             toast(r.ok ? (j.revoked ? `Old links to ${c.name} no longer work.` : `${c.name} had no open links.`) : 'Couldn\'t change that. Try again.');
           }, 'linkbtn'));
-          if (c.visibility === 'public') ownerBox.append(btn('Make private', async () => { const r = await apiCall('PUT', `/api/crews/${c.id}`, { visibility: 'private', about: c.about || '' }); if (r.ok) redo(); else toast('Couldn\'t change that. Try again.'); }, 'linkbtn'));
+          ownerBox.append(el('h4', { className: 'nav-group', textContent: 'Who can find it' }));
+          if (c.visibility === 'public') ownerBox.append(el('p', { className: 'note', textContent: c.area_name ? `Public: people near ${c.area_name} can find and join it.` : 'Public: people nearby can find and join it.' }), btn('Make private', async () => { const r = await apiCall('PUT', `/api/crews/${c.id}`, { visibility: 'private', about: c.about || '' }); if (r.ok) redo(); else toast('Couldn\'t change that. Try again.'); }, 'linkbtn'));
           else {
-            const areaIn = el('input', { className: 'field', placeholder: 'Area people nearby will see, like Robbinsville', maxLength: 60, autocomplete: 'off' });
-            ownerBox.append(el('div', { className: 'row' }, areaIn, btn('Make public', async () => {
+            const areaIn = el('input', { className: 'field', placeholder: 'Area, like Robbinsville', maxLength: 60, autocomplete: 'off' });
+            areaIn.setAttribute('aria-label', 'Area people nearby will see');
+            ownerBox.append(el('p', { className: 'note', textContent: 'Private: only people with a link. Public lets people nearby find and join it, under the area you name.' }),
+              el('div', { className: 'row' }, areaIn, btn('Make public', async () => {
               const near = crewNear(), name = areaIn.value.trim();
               if (name.length < 2) { toast('Name the area people nearby will see.'); return; }
               const r = await apiCall('PUT', `/api/crews/${c.id}`, { visibility: 'public', about: c.about || '', area: { name, lat: near.lat, lon: near.lon } });
@@ -6052,10 +6058,10 @@
           }
         }
         box.append(el('div', { className: 'stack-8' }, el('b', { textContent: c.name }), el('span', { className: 'note', textContent: `${count} ${count === 1 ? 'member' : 'members'} · ${kind}${c.role === 'owner' ? ' · you run it' : ''}` })),
-          el('div', { className: 'stack-8' }, el('p', { className: 'ctl-label', textContent: 'What it sees of yours' }),
+          el('div', { className: 'stack-8' }, el('h4', { className: 'nav-group', textContent: 'What it sees of yours' }),
             el('div', { className: 'row' }, switchRow('Scores', g.share_scores, () => putGrant('crew', c.id, !g.share_scores, g.share_scores ? g.share_times : false)),
               switchRow('Times', g.share_times, () => putGrant('crew', c.id, true, !g.share_times))),
-            el('span', { textContent: g.share_scores ? (g.share_times ? `${c.name} sees your scores and times.` : `${c.name} sees your scores.`) : `${c.name} sees nothing of yours yet.` })),
+            el('p', { className: 'note', textContent: g.share_scores ? (g.share_times ? `${c.name} sees your scores and times.` : `${c.name} sees your scores.`) : `${c.name} sees nothing of yours yet.` })),
           ownerBox,
           // P-07: the crew page's Invite is the one invite key; the gear keeps who can invite, and Leave
           el('div', { className: 'row' },

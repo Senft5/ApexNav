@@ -1,5 +1,16 @@
 # VETTA — CURRENT AGENT HANDOFF STATE
 
+## Session 2026-11-10 (fable-crew-settings): the crew gear's sheet has named parts (claude/fable-crew-settings, off origin/main 51c8c4c)
+
+- [x] web/cockpit.js `crewSettingsFor`: `h4.nav-group` names, notes as `p.note`, the area field's placeholder and
+  aria-label. web/index.html `.crew-settings` rules (headings without a rule, text keys `justify-self: start`, notes
+  13 px pencil, the field takes the row's free width).
+- [x] tests/test_crew_settings_sheet.py (4); e2e "crew page" measures the three names on one line, the keys' left
+  edge and the hint's fit. Also run: "one link in", "TestFlight 2026-11-05 note 1", "crew drives", "Dynamic Type",
+  "REVIEW.md 1.2", "safe areas".
+- Next on a crew's page: the chat row and the Score board were looked at and left; Meeting points and what is under it
+  were not reached.
+
 ## Session 2026-11-10 (fable-one-corner): singular corners, and the nearby key keeps its label (claude/fable-one-corner, off origin/main e76f1bb)
 
 - cockpit.js: the route bar and card lines use `ApexFormat.cornerCount`; `buildRoute`'s announce pluralises inline
