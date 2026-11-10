@@ -6,6 +6,14 @@
   ids are the same (`myGpxBtn` … `myEraseBtn`), so cockpit.js and the tests reach them as before. `.nav-row.danger`.
 - Cohesion pass notes (Nate 2026-11-10 15:12): compared Options, Best roads nearby, Ways to go, About a road, Settings
   and its eleven sheets side by side. Left alone: Done (a sheet that sets things) vs Close (a sheet that shows things).
+## Session 2026-11-10 (fable-one-corner): singular corners, and the nearby key keeps its label (claude/fable-one-corner, off origin/main e76f1bb)
+
+- cockpit.js: the route bar and card lines use `ApexFormat.cornerCount`; `buildRoute`'s announce pluralises inline
+  (tests/test_route_loading.py evals it with no ApexFormat); `busy().progress(frac)` moves a key's bar without changing
+  its text, used by `exploreNear`. route_card.js `stats` label "corner" for one; drive_view.js habits; analysis.html `segInfo`.
+- Tests: tests/test_route_card.py; e2e "plan flow (c)".
+- Next: CarPlay has not had a design pass in this run (Swift, not visible from the cloud).
+
 ## Session 2026-11-10 (merger): e2e time limit 35 min (claude/project-thread-er8kzz)
 
 - [x] .github/workflows/core-tests.yml e2e `timeout-minutes` 25 → 35: 152 flows take ~24 min and were cancelled on the
