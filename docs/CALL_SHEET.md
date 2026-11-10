@@ -145,6 +145,18 @@ I planned ten public trips round Cincinnati in the app and read each overview ag
 - Not done: your own trips (their addresses aren't in the repo, by rule). `node tools/story_live.js colerain:fun` prints
   the lines for the public ones.
 
+## 2026-11-10 (fable-glide-flake): the car map test that failed now and then was measuring wrongly, not the map (claude/fable-glide-flake)
+
+The "car map glides" e2e flow failed twice in CI with "a frame leaps ahead", on PRs that don't touch the car map.
+The map was fine. The test read the map's position from its own frame callback, which can run before the car map's
+in the same frame, so it saw each move one frame late. After one long frame (a busy CI machine), a long frame's
+travel was divided by the short frame after it and read as a leap. The calls:
+- **The test now reads the shift when the camera actually moves and times it by the frame it moved in.** The limits
+  are the same numbers as before. A real lurch (the map jumping further than the time allows) still fails.
+- Shown both ways: with 140 ms stalls injected every 0.9 s the old measure fails (rateMax 0.139 against a median of
+  0.011) and the new one passes with the same map.
+- No app code changed. Undo: revert the PR.
+
 ## 2026-11-10 (fable-design-route-card): the route card says "swipe" with page marks, not a sentence (claude/fable-design-route-card)
 
 Design pass 3b. Under the Quick / Fun / Long way cards the route card had two grey sentences stacked: "Swipe the card

@@ -155,6 +155,17 @@
   of these roads, so most leads say no speed. The owner's own trips still unread.
 - Exact next task: an e2e flow for the overview's refresh once #319 is merged; the owner reads the overview on his trips.
 
+## Session 2026-11-10 (fable-glide-flake): the flaky "car map glides" flow measured one frame late (claude/fable-glide-flake, off origin/main e6ddea2)
+
+- [x] Root cause: the flow's `tick` (requestAnimationFrame) sampled `map.unproject` and paired it with `ts - last.ts`.
+  web/carmap.js `frame(ts)` sets the camera for the frame's own time in its own callback; when `tick` runs first in a
+  frame it sees the previous frame's camera, so every step is one frame late. With even frames that cancels; after a
+  long frame its travel lands in the next short frame (px doubles at 33 ms then 17 ms locally; 10x on a busy runner).
+- [x] e2e/smoke.js: steps come from the map's `move` event, timed by `document.timeline.currentTime` (the frame the
+  camera was set in; two moves in one frame add up). `frames` and `moving` count real frames. Limits unchanged.
+- [x] Checked: 140 ms stalls every 0.9 s (a temporary hook, not committed): old measure fails "no frame leaps ahead"
+  (rateMax 0.139, median 0.011), new passes. Without stalls both pass.
+
 ## Session 2026-11-10 (fable-design-route-card): page marks under the level cards (claude/fable-design-route-card, off origin/main 2fda3f8)
 
 - [x] Design pass 3b. web/route_card.js `pager(o)` ({ n, at, label } or null under two routes) and `levelNote(o,
