@@ -37,6 +37,8 @@
     CORNER_M: 25,           // a corner in a run counts as this many metres of good road when runs are compared
     NAME_SHARE: 0.25,       // a road named in a stretch carries this share of it
     NAMES_KNOWN: 0.5,       // names known over this share of a stretch before any is said
+    NAMES_WHOLE: 0.75,      // "N miles of A and B Road" only when those roads carry this share of the stretch ...
+    INCLUDE_MIN_M: 800,     // ... else "N miles of good road, including A": a road with at least this much of it
     SLOW_MIN_M: 800,        // town and suburbs said from this long ...
     SLOW_MIN_SHARE: 0.08,   // ... or this share of the route (and 400 m)
     SIDE_MIN_KM: 0.4,       // side streets said from this long
@@ -107,6 +109,29 @@
     if (known < T.NAMES_KNOWN * len) return [];
     return [...by.values()].filter((x) => x.m >= T.NAME_SHARE * len).sort((x, y) => y.m - x.m).slice(0, 2).sort((x, y) => x.first - y.first).map((x) => x.name);
   }
+  /**
+   * How a stretch is named: { names, whole }. `whole`: the one or two roads with NAME_SHARE each carry NAMES_WHOLE of it
+   * ("6 miles of Chapel and California Road"). Else the stretch runs over more roads than can be said: its one or two
+   * longest (INCLUDE_MIN_M each), for "7 miles of good road, including Millville Shandon Road" (on the public Oxford
+   * trip the 7 miles were five roads and the one named carried 3 of them). [] when too few names are known.
+   */
+  function namesFor(names, a, b) {
+    const len = Math.max(1, b - a), by = new Map();
+    let known = 0;
+    for (const n of names) {
+      const o = Math.max(0, Math.min(b, n.toM) - Math.max(a, n.fromM));
+      if (!o || !n.name) continue;
+      known += o;
+      const x = by.get(n.name) || { name: n.name, m: 0, first: n.fromM };
+      x.m += o; by.set(n.name, x);
+    }
+    if (known < T.NAMES_KNOWN * len) return { names: [], whole: false };
+    const order = (xs) => xs.sort((x, y) => x.first - y.first).map((x) => x.name);
+    const big = [...by.values()].filter((x) => x.m >= T.NAME_SHARE * len).sort((x, y) => y.m - x.m).slice(0, 2);
+    if (big.length && big.reduce((s, x) => s + x.m, 0) >= T.NAMES_WHOLE * len) return { names: order(big), whole: true };
+    const top = [...by.values()].filter((x) => x.m >= T.INCLUDE_MIN_M).sort((x, y) => y.m - x.m).slice(0, 2);
+    return { names: order(top), whole: false };
+  }
   const isTight = (e) => e.severity === 'HP' || (Number(e.severity) >= 1 && Number(e.severity) <= 2);
   function cornersIn(events, a, b) {
     const cs = (events || []).filter((e) => e && e.type === 'corner' && finite(e.dist_m) && e.dist_m >= a && e.dist_m <= b);
@@ -131,9 +156,14 @@
     const out = new Array(n).fill(null);
     for (let i = 0; i < n; i++) {
       if ((rc && rc[i] <= 1) || (use && use[i] === 1)) { out[i] = 'highway'; continue; }
-      let b = -1, k = 0;
-      for (const [v, f] of place) if (finite(v[i])) { b = Math.max(b, f(v[i])); k++; }
-      if (walk && walk[i] >= 0.5) b = Math.max(b, 0.6);
+      // how built it reads: the second-highest of the signals known there, so no one signal decides alone (night lights
+      // glow a mile past a city's edge, buildings per km count a farm's barns; fitted on the public Cincinnati trips,
+      // 2026-11-09). With one signal known, that one: it can say built, never country (which needs two).
+      let b1 = -1, b2 = -1, k = 0;
+      const see = (x) => { if (x > b1) { b2 = b1; b1 = x; } else if (x > b2) b2 = x; k++; };
+      for (const [v, f] of place) if (finite(v[i])) see(f(v[i]));
+      if (walk && finite(walk[i])) see(walk[i] >= 0.5 ? 0.6 : 0);
+      const b = k >= 2 ? b2 : b1;
       if (b >= 0.5) {
         const busy = (biz && biz[i] >= 4) || (urb && urb[i] >= 0.3) || (dens && dens[i] >= 8) || (imp && imp[i] >= 40) || (sig && sig[i] >= 2);
         out[i] = busy ? 'town' : 'suburban';
@@ -217,7 +247,7 @@
     if (!rs.length) rs = runsAt(T.GOOD_Q);
     if (!rs.length) return null;
     const best = rs.sort((a, b) => b.score - a.score)[0];
-    const names = namesIn(S.names, best.fromM, best.toM);
+    const named = namesFor(S.names, best.fromM, best.toM), names = named.names;
     const c = best.corners;
     let corners = '';
     if (c.n === 1) corners = `one good corner${c.hairpins ? ', a hairpin' : c.tight ? ', a tight one' : ''}`;
@@ -228,20 +258,23 @@
       corners = `${c.n} good corners${sub.length ? `, ${sub.join(' and ')}` : ''}`;
     }
     let text;
-    if (best.m >= T.HIGHLIGHT_ALL * total) text = `Good road nearly all the way${names.length ? ` on ${roadNames(names)}` : ''}${corners ? `: ${corners}` : ''}.`;
+    if (best.m >= T.HIGHLIGHT_ALL * total) text = `Good road nearly all the way${names.length && named.whole ?` on ${roadNames(names)}` : ''}${corners ? `: ${corners}` : ''}.`;
     else {
-      const where = names.length ? `of ${roadNames(names)}` : `of good road${best.fromM < T.END_SHARE * total ? ' from the start' : `, starting ${dist(best.fromM, metric)} in`}`;
+      const where = names.length && named.whole ? `of ${roadNames(names)}` : names.length ? `of good road, including ${roadNames(names)}`
+        : `of good road${best.fromM < T.END_SHARE * total ? ' from the start' : `, starting ${dist(best.fromM, metric)} in`}`;
       text = `The best part is ${dist(best.m, metric)} ${where}${corners ? `: ${corners}` : ''}.`;
     }
-    return { kind: 'highlight', text, facts: { fromM: best.fromM, toM: best.toM, m: best.m, names, corners: c, qualityKnown: qk / n } };
+    return { kind: 'highlight', text, facts: { fromM: best.fromM, toM: best.toM, m: best.m, names, namesWhole: named.whole, corners: c, qualityKnown: qk / n } };
   }
 
   function slowLine(S, o, lead) {
-    const { set, n, step, ch, metric, total, ctx, ev } = S;
-    const built = (i) => set[i] === 'town' || set[i] === 'suburban';
+    const { set, n, step, ch, metric, total, ctx, ev, Q } = S;
+    // town, and suburbs the engine doesn't score as good road: houses beside a road it marks GOOD_Q or better (a river
+    // road past a hamlet) are not a slow part (the public Harrison trip said "7 miles through suburbs" of a country drive)
+    const built = (i) => set[i] === 'town' || (set[i] === 'suburban' && !(finite(Q[i]) && Q[i] >= T.GOOD_Q));
     const rs = runs(n, step, built).map((r) => ({ fromM: S.distM[r.a], toM: Math.min(total, S.distM[r.b] + step), a: r.a, b: r.b }));
     let townM = 0, subM = 0;
-    for (let i = 0; i < n; i++) { if (set[i] === 'town') townM += step; else if (set[i] === 'suburban') subM += step; }
+    for (let i = 0; i < n; i++) { if (!built(i)) continue; if (set[i] === 'town') townM += step; else subM += step; }
     const builtM = townM + subM;
     // traffic lights: counted only where a source says where they are (OSM or the router's signals, our tiles' nodes)
     const sigCh = ch('signals_per_km'), node = ch('signal_node');
@@ -384,7 +417,7 @@
         for (let i = 0; i < n; i++) {
           if (set[i] !== 'country') continue;
           kc++;
-          if (lanes && finite(lanes[i])) { k++; if (lanes[i] <= 2) two++; }
+          if (lanes && finite(lanes[i])) { k++; if (lanes[i] <= 1) two++; }   // the channel is lanes in your direction: one each way
           if (rc && rc[i] >= 5) minor++;
           if (lim && finite(lim[i])) { kl++; if (lim[i] <= 56) slow++; }
         }
@@ -422,7 +455,7 @@
     return out;
   }
 
-  const api = { VERSION: 1, T, build, settings, namesAlong, namesIn, dist, speed, roadNames };
+  const api = { VERSION: 1, T, build, settings, namesAlong, namesIn, namesFor, dist, speed, roadNames };
   if (NODE) module.exports = api;
   root.ApexRouteStory = api;
 })(typeof window !== 'undefined' ? window : globalThis);
