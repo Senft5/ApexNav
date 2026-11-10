@@ -4,6 +4,21 @@ Decisions Claude made for you, newest first. Each one says what was decided, why
 you reach one you've seen. If you disagree with a call, say so and it gets reversed; nothing here is hard to undo unless
 it says so. Things only you can do are in docs/OWNER_TODO.md.
 
+## 2026-11-10 (fable-design-route-card): the route card says "swipe" with page marks, not a sentence (claude/fable-design-route-card)
+
+Design pass 3b. Under the Quick / Fun / Long way cards the route card had two grey sentences stacked: "Swipe the card
+for the next route, 2 of 3" and the route's why line. The calls:
+- **The routes found are page marks**: one short stroke per route, the one on screen long and inked, then "2 / 3".
+  It is the sign a phone already uses for "swipe sideways", and it moves when you swipe.
+- **The words "Swipe the card for the next route" sit beside the marks until your first swipe, then go for good**
+  (remembered on the phone as `apex.cardSwiped`; Erase my data clears it, and the words come back). A screen reader
+  always hears "Route 2 of 3. Swipe the card for the next."
+- **The line under the marks only speaks when the marks can't**: "Quick and Fun pick the same route", or "Another
+  route found" for a route no level picked. Most of the time it is gone, and the card is one line shorter.
+- You asked on 2026-11-04 that the card say what a swipe does. It still does, on the same row as the marks; it just
+  stops repeating itself once you have done it. Say so if you want the sentence to stay forever.
+- Undo: revert the PR.
+
 ## 2026-11-10 (fable-tile-limits): posted limits from the government road inventory: junk out, good ones into travel times (claude/fable-tile-limits)
 
 Where the map has no speed-limit sign, the app knows a second source: the government road inventory (HPMS). I
