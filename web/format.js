@@ -30,6 +30,14 @@
     }
     return m[4] === undefined ? day : `${day}, ${clock12(d.getHours(), d.getMinutes())}`;
   }
+  /** A day for a chart's axis: "30 Oct" in the phone's own order ("Oct 30"), never "10-30"; '' when it isn't a date. */
+  function dayShort(iso, locale) {
+    const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(typeof iso === 'string' ? iso : '');
+    if (!m) return '';
+    const d = new Date(+m[1], +m[2] - 1, +m[3]);
+    if (Number.isNaN(d.getTime()) || d.getMonth() !== +m[2] - 1) return '';
+    try { return d.toLocaleDateString(typeof locale === 'string' ? locale : undefined, { day: 'numeric', month: 'short' }); } catch (_) { return `${m[2]}-${m[3]}`; }
+  }
   /** Drive names saved with a 24-hour time ("Drive 10/26/2026 17:03") read in 12-hour; a recorder file name
    *  ("web_20261027_080000", how an exported drive comes back on import) reads like an app drive; any other name is unchanged. */
   function driveName(name) {
@@ -119,6 +127,6 @@
     const out = { distance: finite(f.len_m) ? distance(f.len_m) : null, time: minutes(f.secs), corners: cornerCount(f.corners) };
     return parts.map((p) => out[p]).filter(Boolean).join(' · ');
   }
-  const api = { clock12, dateTime, driveName, typeScale, typeScales, applyTypeScale, noEmoji, distance, minutes, cornerCount, driveFacts, factsLine };
+  const api = { clock12, dateTime, dayShort, driveName, typeScale, typeScales, applyTypeScale, noEmoji, distance, minutes, cornerCount, driveFacts, factsLine };
   if (typeof module !== 'undefined' && module.exports) module.exports = api; else root.ApexFormat = api;
 })(typeof window !== 'undefined' ? window : globalThis);

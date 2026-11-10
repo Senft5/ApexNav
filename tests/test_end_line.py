@@ -62,3 +62,18 @@ def test_every_pack_has_the_clips_the_lines_need():
         for t in ["sys:end", "end:best", "n:h7", "n:2", "n:82", "n:99", "n:k1"]:
             assert t in v, (pack, t)
     assert "end:score" in vb.codriver_vocabulary("marguerite") and "end:score" not in vb.codriver_vocabulary("kit")
+
+
+@needs_node
+def test_the_score_against_your_usual():
+    """Design pass 9: the card's number had nothing to stand against. "33 over your usual" is the median of your last ten
+    scored drives before this one; with fewer than three the card says nothing (a usual is not two drives)."""
+    assert run("E.usual(673, [640, 655, 612, 649, 630])") == {"usual": 640, "diff": 33, "text": "33 over your usual"}
+    assert run("E.usual(600, [640, 655, 612, 649])")["text"] == "45 under your usual"       # an even count: the middle two, averaged (645)
+    assert run("E.usual(644, [640, 655, 612, 649, 630])")["text"] == "About your usual"     # within five points
+    assert run("[E.usual(673, [640, 655]), E.usual(673, []), E.usual(null, [1, 2, 3]), E.usual(673, null)]") == [None, None, None, None]
+    # drives with no score are skipped, never counted as zero; only the last ten count
+    assert run("E.usual(673, [640, null, 655, undefined, NaN, 612])")["usual"] == 640
+    assert run("E.usual(700, [100, 100, 100, 100, 100].concat(Array(10).fill(650)))")["usual"] == 650
+    page = (ROOT / "web" / "cockpit.js").read_text(encoding="utf-8")
+    assert "ApexEndLine.usual(c.ds.score, before)" in page and "String(o.date || '') <= String(me.date || '')" in page   # only drives before this one

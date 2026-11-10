@@ -212,6 +212,62 @@ flow('the strip never cuts where the meaning is: a three-word call keeps its dir
   }
 });
 
+// Location off (2026-11-10): the app never said it. A drive sat on "Finding GPS…" for ever, and in a browser the sheet said
+// "Location is off. Settings → …" twice over a greyed-out key, and Just drive went grey with no word.
+flow('Location off, in the app: Just drive says so once and opens Settings, and the sheet goes away by itself when Location comes on', async (page, base) => {
+  await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); localStorage.setItem('apex.permsExplained', '1'); } catch (_) {}
+    window.__posted = []; window.webkit = { messageHandlers: { apex: { postMessage(m) { window.__posted.push(m); } } } }; });
+  await page.route(base + '/api/**', (route) => route.fulfill({ status: 401, contentType: 'application/json', body: '{"error":"signed_out"}' }));
+  await page.goto(base + '/index.html');
+  await page.waitForFunction(() => window.apex && typeof window.apex.live === 'function' && window.apexDebug && window.apexDebug.map);
+  await page.evaluate(() => window.apex.live({ has_fix: false, location_off: true, thermal: 0 }));
+  const key = await page.evaluate(() => { const b = document.getElementById('startDrive'); return { disabled: b.disabled, text: b.textContent.trim() }; });
+  check(!key.disabled && key.text === 'Just drive', 'Just drive stays a key (never greyed out without a word): ' + JSON.stringify(key));
+  await page.evaluate(() => document.getElementById('startDrive').click());
+  await page.waitForSelector('#permSheet.show');
+  const off = await page.evaluate(() => { const s = document.getElementById('permSheet'), go = document.getElementById('permGo');
+    return { title: document.getElementById('permTitle').textContent, label: s.getAttribute('aria-label'), text: s.innerText, go: go.textContent, goDisabled: go.disabled,
+      rows: getComputedStyle(s.querySelector('.perm')).display, mode: window.apexDebug.state.mode }; });
+  check(off.title === 'Location is off' && off.label === 'Location is off' && off.rows === 'none' && off.mode !== 'live', 'the sheet is "Location is off", the first-drive list put away, no drive started: ' + JSON.stringify(off));
+  check((off.text.match(/In Settings, set Location to While Using the App\./g) || []).length === 1 && (off.text.match(/Location is off/g) || []).length === 1, 'it is said once, with the way back: ' + JSON.stringify(off.text));
+  check(off.go === 'Open Settings' && !off.goDisabled, 'the key is Open Settings, alive: ' + JSON.stringify(off));
+  await page.evaluate(() => document.getElementById('permGo').click());
+  check(await page.evaluate(() => window.__posted.some((m) => m && m.cmd === 'openSettings')) && await page.isVisible('#permSheet.show'), 'the key asks the app for Settings; the sheet waits');
+  // back from Settings with Location on: the next frame says so, the sheet goes by itself and a drive starts as ever
+  await page.evaluate(() => window.apex.live({ has_fix: true, location_off: false, lat: 35.96, lon: -83.92, accuracy_m: 5, speed_mps: 0, course_deg: 0, calibration: 'locked', thermal: 0 }));
+  await page.waitForFunction(() => !document.getElementById('permSheet').classList.contains('show'), null, { timeout: 3000 }).catch(() => {});
+  check(!(await page.isVisible('#permSheet.show')), 'the sheet closes itself once Location is on');
+  await page.evaluate(() => document.getElementById('startDrive').click());
+  await page.waitForFunction(() => window.apexDebug.state.mode === 'live', null, { timeout: 3000 }).catch(() => {});
+  check(await page.evaluate(() => window.apexDebug.state.mode === 'live'), 'and Just drive starts the drive');
+  // turned off mid-drive (left for Settings and came back): the drive's line says it, once, with the way back
+  await page.evaluate(() => window.apex.live({ has_fix: false, location_off: true, thermal: 0 }));
+  const line = await page.evaluate(() => document.getElementById('dsMain').textContent + ' | ' + document.getElementById('dsWarn').textContent);
+  check(/^Location is off/.test(line) && /\| Settings → Vetta → Location → Allow$/.test(line) && (line.match(/Location is off/g) || []).length === 1, 'a drive with Location turned off says so, not "Finding GPS": ' + line);
+});
+
+flow('Location off, in a browser: the sheet says it once and its key tries again; nothing is greyed out', async (page, base) => {
+  await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); localStorage.setItem('apex.permsExplained', '1'); } catch (_) {}
+    window.__geo = 0; const deny = (ok, err) => { window.__geo++; setTimeout(() => err && err({ code: 1, message: 'denied' }), 0); return 1; };
+    Object.defineProperty(navigator, 'geolocation', { configurable: true, value: { watchPosition: deny, getCurrentPosition: deny, clearWatch() {} } }); });
+  await page.route(base + '/api/**', (route) => route.fulfill({ status: 401, contentType: 'application/json', body: '{"error":"signed_out"}' }));
+  await page.goto(base + '/index.html');
+  await page.waitForFunction(() => window.apex && window.apexDebug && window.apexDebug.map);
+  await page.evaluate(() => document.getElementById('startDrive').click());
+  await page.waitForSelector('#permSheet.show.loc-off', { timeout: 8000 }).catch(() => {});
+  const off = await page.evaluate(() => { const s = document.getElementById('permSheet'), go = document.getElementById('permGo');
+    return { title: document.getElementById('permTitle').textContent, text: s.innerText, go: go.textContent, goDisabled: go.disabled, mode: window.apexDebug.state.mode, start: document.getElementById('startDrive').disabled }; });
+  check(off.title === 'Location is off' && (off.text.match(/Settings → Safari → Location → Allow/g) || []).length === 1 && (off.text.match(/Location is off/g) || []).length === 1 && off.mode !== 'live',
+    'a browser that says no gets the sheet, said once: ' + JSON.stringify(off));
+  check(off.go === 'Try again' && !off.goDisabled && !off.start, 'its key is Try again, alive, and Just drive is not greyed out: ' + JSON.stringify(off));
+  const before = await page.evaluate(() => window.__geo);
+  await page.evaluate(() => document.getElementById('permGo').click());
+  await page.waitForFunction((n) => window.__geo > n && document.getElementById('permSheet').classList.contains('show'), before, { timeout: 8000 }).catch(() => {});
+  check(await page.evaluate((n) => window.__geo > n, before) && await page.isVisible('#permSheet.show.loc-off'), 'Try again asks the browser again, and the sheet comes back while it still says no');
+  await page.click('#permNo');
+  check(!(await page.isVisible('#permSheet.show')), 'Not now puts it away');
+});
+
 flow('returning driver: live frames switch to the cockpit, big targets and no keyboard while moving', async (page, base) => {
   await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); } catch (_) {} });
   await page.goto(base + '/index.html');
@@ -2534,6 +2590,23 @@ flow('drive ended: the card and the Log give the same score and time for the rec
     return { id: d.id, score: document.getElementById('endScore').textContent, meta: document.getElementById('endMeta').textContent,
       line: document.getElementById('endLine').textContent, share: !!document.getElementById('endShare').offsetParent };
   });
+  // design pass 9: with one drive in the Log the number stands alone (a usual is not one drive); the keys are a solid row
+  // over Mark a stage and Drive it again, side by side, and nothing left on a row by itself
+  const alone = await page.evaluate(async () => { await new Promise((r) => setTimeout(r, 400)); const R = (id) => { const e = document.getElementById(id), r = e.getBoundingClientRect(); return e.offsetParent ? [Math.round(r.left), Math.round(r.top), Math.round(r.width)] : null; };
+    return { usual: document.getElementById('endUsual').hidden, share: R('endShare'), stage: R('endStage'), again: R('endAgain'), acts: Math.round(document.querySelector('.end-acts').getBoundingClientRect().width) }; });
+  check(alone.usual && alone.share && alone.stage && alone.again && alone.share[2] === alone.acts && alone.stage[1] === alone.again[1] && alone.stage[1] > alone.share[1] && Math.abs(alone.stage[2] - alone.again[2]) <= 1,
+    'one drive: no "usual"; Share card is the row, Mark a stage and Drive it again share the next: ' + JSON.stringify(alone));
+  // with a few scored drives before it in the Log, the number is set against them (the Log's own summaries, read on the phone)
+  const usual = await page.evaluate(async (id) => {
+    const real = ApexRecording.summaries;
+    ApexRecording.summaries = async (...x) => [640, 655, 612, 649, 630].map((score, i) => ({ id: 'old' + i, name: 'Other Rd', date: '2026-10-0' + (i + 1), ds: { score } })).concat(await real(...x));
+    const d = await ApexRecording.get(id); apexDebug.showEndCard(d, Date.now() - 600e3, { quiet: true });
+    for (let i = 0; i < 100 && document.getElementById('endUsual').hidden; i++) await new Promise((r) => setTimeout(r, 50));
+    ApexRecording.summaries = real;
+    const u = document.getElementById('endUsual'), l = document.querySelector('.end-score span'), a = u.getBoundingClientRect(), b = l.getBoundingClientRect(), box = document.querySelector('.end-score').getBoundingClientRect();
+    return { text: u.textContent, score: +document.getElementById('endScore').textContent, sameLine: Math.abs(a.bottom - b.bottom) < 6, clear: a.left > b.right + 8, inside: a.right <= box.right + 1 };
+  }, card.id);
+  check(usual.text === `${usual.score - 640} over your usual` && usual.sameLine && usual.clear && usual.inside, 'the score against your usual, on the label\'s line: ' + JSON.stringify(usual));
   check(/^\d+$/.test(card.score) && card.share && !/Not enough clean corners/.test(card.line), 'the card scores the drive and offers Share: ' + JSON.stringify(card));
   await page.goto(`${base}/analysis.html?tab=drive&drive=${encodeURIComponent(card.id)}`);
   await page.waitForSelector('.dv-score b', { timeout: 15000 });
@@ -5277,6 +5350,7 @@ flow('Your records: unknown dates and unscored drives never make a "new best", a
   check(r.rows[0][0] === 'b2' && /a new best/.test(r.rows[0][1]), `the dated latest best is new (got\n${text})`);
   check(r.rows[1][0] === 'a4' && !/new best/.test(r.rows[1][1]) && /date unknown/.test(r.rows[1][1]) && /of 3 scored drives/.test(r.rows[1][1]), `an undated import is no "latest" (got\n${text})`);
   check(r.rows[2][0] === 'm2' && /Smoothest drive this month, of 2/.test(r.rows[2][1]), `braking measured once is no record (got\n${text})`);
+  check(!/\d{4}-\d{2}-\d{2}/.test(text) && /1 Sept? 2020|Sep 1, 2020/.test(r.rows[0][1]), `a record's day reads as a day ("1 Sep 2020"), never 2020-09-01 (got\n${text})`);
   check(r.overflow <= 1, `the records table fits a 390 px screen (overflows by ${r.overflow} px)`);
 });
 
@@ -5321,6 +5395,12 @@ flow('a stage\'s Board and Runs fit the phone: an empty board is a sentence, a f
   });
   check(r.overflow <= 1 && r.boardOverflow <= 1, 'nothing on the stage scrolls sideways: ' + JSON.stringify(r));
   check(r.runs === 2 && JSON.stringify(r.heads) === '["#","Run","Score","Time (private)"]', 'a run a line, four columns: ' + JSON.stringify(r.heads));
+  // a run's name is when it was driven; the drive's name is under it only when it isn't the stage's own; lengths to a tenth
+  const names = await page.evaluate(() => ({ runs: [...document.querySelectorAll('#segTable tr.run .run-name')].map((c) => [c.querySelector('b').textContent, c.querySelector('.sub').hidden ? null : c.querySelector('.sub').textContent]),
+    title: document.getElementById('segTitle').textContent, len: document.querySelector('#segList button.seg span:nth-of-type(2)').textContent }));
+  check(names.runs.length === 2 && names.runs.every(([when, name]) => /^Nov [13], \d/.test(when) && name === null) && names.runs[0][0] !== names.runs[1][0] && /Dry Ridge Rd/.test(names.title),
+    'each run is named by its date, and the stage\'s name is not repeated on every line: ' + JSON.stringify(names));
+  check(/^\d+\.\d (mi|km) · 2 runs$/.test(names.len), 'a stage\'s length to a tenth: ' + names.len);
   check(r.comps.length === 8 && r.comps.every((t) => /^(Pace|Smooth|Brakes|Rhythm) \d+$/.test(t.trim())) && !r.clash.length && !r.cut.length, 'each run\'s four components whole, side by side, none on another: ' + JSON.stringify(r));
   check(r.boardRows === 0 && r.legendLines >= 2, 'an empty board is a sentence that wraps, not a cut table cell: ' + JSON.stringify(r));
   check(!r.opts.some((o) => /null|undefined/.test(o)) && r.opts.includes('A friend with no handle yet') && /Share this stage with a friend/.test(r.shareText), 'a friend with no handle is named, never "@null": ' + JSON.stringify(r.opts));
