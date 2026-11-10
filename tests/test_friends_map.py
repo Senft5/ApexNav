@@ -78,3 +78,41 @@ def test_layer_is_off_by_default_and_nothing_is_shared_by_default():
     assert re.search(r"toggles: \{[^}]*friends: false", html)
     src = (ROOT / "backend" / "src" / "presence.ts").read_text()
     assert 'audience: "nobody"' in src                      # no row means Nobody
+
+
+@needs_node
+def test_home_zones_go_to_the_server_when_they_change_and_at_each_launch():
+    """The server drops a position inside a home zone and forgets what it held when the zones change, but only the
+    settings save carries them: a zone added in Settings has to go up then, not at the next change of who sees you."""
+    js = r"""
+    (async () => {
+      globalThis.document = { getElementById: () => ({}) };
+      const mk = (audience, ok = true) => {
+        const calls = [], toasts = [], zones = [{ id: 'a', name: 'Home', lat: 39.1, lon: -84.5, r: 500 }];
+        const apiCall = async (m, path, body) => { calls.push([m, body || null]); if (m === 'PUT' && !ok) return { ok: false };
+          return { ok: true, json: async () => ({ audience, delay_s: 600, fuzz: true }) }; };
+        const fm = F.mount({ el: () => ({}), btn: () => ({}), toast: (t) => toasts.push(t), apiCall, map: null, zones: () => zones });
+        return { fm, calls, toasts, zones };
+      };
+      const a = mk('friends'), r1 = await a.fm.syncZones();
+      a.zones.push({ id: 'b', name: 'Work', lat: 39.2, lon: -84.4, r: 1000 });
+      const r2 = await a.fm.syncZones();
+      const b = mk('nobody'), r3 = await b.fm.syncZones();
+      const c = mk('crew', false), r4 = await c.fm.syncZones();
+      return { r1, r2, r3, r4, a: a.calls, b: b.calls, toasts: c.toasts };
+    })().then((o) => console.log(JSON.stringify(o)))
+    """
+    src = f"const F = require({json.dumps(str(ROOT / 'web' / 'friends_map.js'))}); {js}"
+    o = json.loads(subprocess.run([NODE, "-e", src], capture_output=True, text=True, check=True).stdout)
+    assert (o["r1"], o["r2"], o["r3"], o["r4"]) == (True, True, False, False)
+    home, work = {"lat": 39.1, "lon": -84.5, "r": 500}, {"lat": 39.2, "lon": -84.4, "r": 1000}
+    assert o["a"] == [["GET", None],                                      # what you chose is read once, never guessed
+                      ["PUT", {"audience": "friends", "delay_s": 600, "fuzz": True, "zones": [home]}],
+                      ["PUT", {"audience": "friends", "delay_s": 600, "fuzz": True, "zones": [home, work]}]]   # no names
+    assert o["b"] == [["GET", None]]                                      # nobody sees you: the zones stay on the phone
+    assert o["toasts"] == []                                              # a background save says nothing when it fails
+    fm, html = (ROOT / "web" / "friends_map.js").read_text(), cockpit_source()
+    assert "function start() { syncZones();" in fm                        # each launch heals a save that failed
+    assert html.count("zonesChanged();") == 2                             # zone added, zone removed
+    ts = (ROOT / "backend" / "src" / "presence.ts").read_text()
+    assert "prev.zones !== zonesJson" in ts

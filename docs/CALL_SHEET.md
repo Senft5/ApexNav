@@ -16,6 +16,30 @@ Design pass 4. The three look cards were stacked: 750 px of the Garage before yo
 - **Your cars, signed out, is an empty bay**: a pencil outline where a car will stand, "No car parked here yet",
   and a Sign in key that opens People. It was a grey paragraph telling you to go to "(People)".
 - Undo: revert the PR.
+## 2026-11-10 (fable-fix-join-scope): my mistake in #332, fixed: the signed-out People page also showed at the top of the Garage (claude/fable-fix-join-scope)
+
+The rule that lets the new signed-out People page fill the sheet named the People panel by its id, and an id outranks
+the rule that hides the other tabs' panels. So, signed out, the whole "Drive with friends." page stood at the top of
+the Garage as well. Both rules now apply on the People tab only. I had read the page on People and never opened the
+Garage signed out after the change; the screen-by-screen flow now checks that the Garage shows no People page.
+- Undo: not something to undo; reverting #332 would also remove it.
+
+## 2026-11-10 (fable-design-signed-out): People, signed out, is a page instead of a form (claude/fable-design-signed-out)
+
+Design pass 3, after your "designed by an artist not a programmer". Signed out, People was a logo, a small heading,
+three boxed icons and a button, with two thirds of the phone left blank under them. The calls:
+- **A drawing leads each side.** A road drawn the way a printed map draws one, with pucks on it: two roads meeting
+  for Friends, one road with three in file behind a red lead for Crews. It is decoration, drawn by hand in the page,
+  never a map of real people.
+- **The name is set large** ("Drive with friends.", "Drive as a crew.") in the app's number face, and each of the
+  three things it gets you is a row with one plain line saying what it is, shaped like the friends list that will
+  stand there after sign-in.
+- **The sign-in keys stand at the foot of the page**, under the thumb, 52 pt tall. Apple's key is square-cornered
+  now so it matches every other key in the app (Apple's rules let the corner match); it is still first and the same
+  size as Google's.
+- **The Vetta logo is gone from this page.** It sat above Friends only, and the first-run screen already shows it.
+- **A waiting friend or crew link is a boxed line** above the keys, so it reads as the reason to sign in.
+- Undo: revert the PR; nothing is stored and no behaviour changed.
 
 ## 2026-11-10 (fable-tile-limits): posted limits from the government road inventory: junk out, good ones into travel times (claude/fable-tile-limits)
 
@@ -168,6 +192,19 @@ back roads), which nudged how those roads scored. The calls:
 - **I left the tiles' travel times alone.** The inventory knows the posted limit on about half the main-road miles where
   our tiles only guess from the road's class, and using it would make times truer, but a mismatched stretch would make
   them wrong in a new way. The numbers are in STATE for whoever takes it on.
+## 2026-11-10 (fable-zone-samples): a new home zone hides you from friends at once (claude/fable-zone-samples)
+
+Friends on the map keeps your home zones on the server too, so it can refuse a position inside one. Two gaps:
+the zones only went up when you changed who sees you, so a zone added later in Settings never reached the server; and
+the last position stored before the zone existed (a drive that ended at home) stayed visible until it aged out.
+- **A zone added or removed goes up at once**, and the app sends its zones again at each launch while you share
+  (one small request; nothing is sent while Nobody sees you). A failed background save says nothing and heals at the
+  next launch. Undo: friends_map.js `syncZones` and cockpit.js `zonesChanged`.
+- **The server forgets the position it held whenever the zones change** (added, moved, grown or removed), the same way
+  it already does when you switch between Exact and Within a mile. Friends see you again from your next position
+  outside a zone. Removing a zone also forgets it: simpler than working out whether the old sample was inside, and it
+  costs at most one sample. Undo: presence.ts `presenceSettingsPut`, the `prev.zones !== zonesJson` half.
+
 ## 2026-11-09 (route-sliders): Tune your routes, a Pro screen open to everyone until Pro goes on sale (claude/route-sliders)
 
 You asked for "every parameter with a slider for premium users", then: "remember everyone has pro if they are an early
@@ -311,6 +348,18 @@ trips. I broke each route's score into its parts to see why.
   of 12.1; the two had been within 0.3 points. The router's own picks now match the app's on harrison (Fun 31.1 min, Long
   way 41.9 min); the app's picks there didn't change. Quick, the highway rule and trips with no good road are unchanged.
   Planning speed is unchanged.
+
+## 2026-11-10 (fable-design-people): design pass 2, the route card's last row and the map's credit (claude/fable-design-people)
+
+Second cut of the owner's "designed by an artist" pass, on the two screens people look at most. The calls:
+- **The route card's last row is one ruled strip of keys** (Save, Share, Share ETA, GPX, Pin place). It was five
+  underlined words centred on the page, "Pin place" alone on a second line. REVIEW2's two weights stay (Save and
+  Share in ink, the rest in pencil); a key that is on (Saved, an ETA being shared) is inked in. With large text it
+  goes two a row. Undo: index.html `.rc-links`.
+- **The map's credit is a plate in the look's own style** (IDEAS U-53): a square paper plate ruled in ink with the "i"
+  in the number face, where MapLibre's white pill and round black "i" sat on every map. It follows the look's tokens,
+  so it is dark in the dark looks. The credit's text and links are unchanged. Undo: index.html, the
+  `.maplibregl-ctrl-attrib` rules.
 
 ## 2026-11-08 (levels): Fun and Long way each spend their time on better road (claude/level-spread)
 

@@ -702,6 +702,28 @@ async function ownTrip(page, base, level = null) {
     steps: (window.apexDebug.track.steps || []).map((s) => s.street), via: ((window.apexDebug.track.request || {}).via || []).length }));
   return { r, calls };
 }
+flow('design pass 2: the route card\'s last row is one ruled strip of keys, and the map\'s credit is a plate on the look\'s own tokens (IDEAS U-53)', async (page, base) => {
+  graphDir = graphFixture();
+  try {
+    await ownTrip(page, base);
+    const k = await page.evaluate(() => { const row = document.querySelector('.rc-links'), keys = [...row.querySelectorAll('.linkbtn')].filter((b) => !b.hidden).map((b) => { const r = b.getBoundingClientRect(), c = getComputedStyle(b);
+        return { t: b.textContent, w: Math.round(r.width), h: Math.round(r.height), top: Math.round(r.top), u: c.textDecorationLine, over: b.scrollWidth > b.clientWidth + 1 }; });
+      return { keys, row: Math.round(row.getBoundingClientRect().width) }; });
+    check(k.keys.length >= 4 && new Set(k.keys.map((x) => x.top)).size === 1 && Math.abs(k.keys.reduce((n, x) => n + x.w, 0) - k.row) <= 3, 'one row of keys, edge to edge: ' + JSON.stringify(k));
+    check(k.keys.every((x) => x.h >= 44 && x.u === 'none' && !x.over), '44 pt keys, no underlines, every word whole: ' + JSON.stringify(k.keys));
+    await page.click('#routeSaveBtn');
+    const saved = await page.evaluate(() => { const b = document.getElementById('routeSaveBtn'), c = getComputedStyle(b), ink = getComputedStyle(document.documentElement).getPropertyValue('--panel-ink').trim();
+      const probe = document.createElement('i'); probe.style.color = ink; document.body.append(probe); const want = getComputedStyle(probe).color; probe.remove();
+      return { t: b.textContent, pressed: b.getAttribute('aria-pressed'), bg: c.backgroundColor, want }; });
+    check(saved.t === 'Saved' && saved.pressed === 'true' && saved.bg === saved.want, 'a key that is on is inked in: ' + JSON.stringify(saved));
+    const credit = await page.evaluate(() => { const a = document.querySelector('.maplibregl-ctrl-attrib'); if (!a) return null;
+      a.classList.remove('maplibregl-attrib-empty', 'maplibregl-compact-show'); a.classList.add('maplibregl-compact');
+      const c = getComputedStyle(a), b = a.querySelector('.maplibregl-ctrl-attrib-button'), cb = getComputedStyle(b), panel = getComputedStyle(document.querySelector('.plan')).backgroundColor;
+      return { radius: c.borderTopLeftRadius, bg: c.backgroundColor, panel, border: c.borderTopWidth, img: cb.backgroundImage, i: getComputedStyle(b, '::before').content, bradius: cb.borderTopLeftRadius }; });
+    check(credit && credit.radius === '0px' && credit.bradius === '0px' && credit.bg === credit.panel && parseFloat(credit.border) >= 1 && credit.img === 'none' && credit.i === '"i"', 'the credit is a square plate on the page\'s paper with its own "i": ' + JSON.stringify(credit));
+  } finally { graphDir = null; }
+}, { geolocation: { latitude: 39.155, longitude: -84.615 }, permissions: ['geolocation'] });
+
 flow('own routing: where our graph tiles cover the trip, our route wins and Valhalla only gives the turn instructions (docs/OWN_ROUTING.md)', async (page, base) => {
   graphDir = graphFixture();
   try {
@@ -5350,17 +5372,28 @@ flow('REVIEW.md 1.2 screen by screen: the Log, drive detail, Stages, People sign
   check(dv.first && /solid/.test(dv.replay) && /stamps/.test(dv.tags) && !dv.wide.length, 'Drive detail: ' + JSON.stringify(dv));
   // People signed out: the same Friends | Crews switch, each side what it gets you in three glyphs, then sign-in (the owner, 2026-10-30)
   await page.goto(base + '/index.html?view=people');
-  await page.waitForSelector('#accountBody .crew-gets');
-  const gets = (pane) => page.$$eval(`${pane} .crew-gets span`, (s) => s.map((x) => x.textContent + ':' + !!x.querySelector('svg')));
+  await page.waitForSelector('#accountBody .join-gets');
+  const gets = (pane) => page.$$eval(`${pane} .join-gets li`, (s) => s.map((x) => x.querySelector('b').textContent + ':' + !!x.querySelector('svg')));
   const fg = await gets('#accountBody');
   check(JSON.stringify(fg) === '["Who’s out driving:true","Crew drives:true","Shared routes:true"]', 'People signed out, Friends: ' + fg);
   check(await page.isVisible('#accountBody >> text=Sign in with Google') && !(await page.isVisible('#crewsBody')), 'Friends first, with sign-in');
+  // a page, not a form (the owner, 2026-11-10): a drawing, the name set large, each promise said in a line, the sign-in at the foot
+  const jp = await page.evaluate(() => { const b = document.getElementById('accountBody'), r = (q) => b.querySelector(q).getBoundingClientRect(), head = b.querySelector('.join-head');
+    const body = document.querySelector('.sheet .body').getBoundingClientRect(), key = r('.join-sign a.ink-btn'), art = r('.join-art');
+    return { head: head.textContent, size: parseFloat(getComputedStyle(head).fontSize), face: getComputedStyle(head).fontFamily, pucks: b.querySelectorAll('.join-art .jr-puck').length, lead: b.querySelectorAll('.join-art .jr-puck.lead').length,
+      artW: Math.round(art.width), w: innerWidth, said: [...b.querySelectorAll('.join-gets small')].every((x) => x.textContent.length > 12), keyH: Math.round(key.height),
+      foot: Math.round(body.bottom - r('.join-sign').bottom), wide: [...b.querySelectorAll('*')].filter((e) => e instanceof HTMLElement && e.getBoundingClientRect().right > body.right + 1).length, logo: !!b.querySelector('img') }; });
+  check(jp.head === 'Drive with friends.' && jp.size >= 30 && /Barlow/.test(jp.face) && jp.pucks === 2 && jp.lead === 1 && jp.artW === jp.w && jp.said && jp.keyH >= 52 && jp.foot >= 0 && jp.foot <= 40 && !jp.wide && !jp.logo,
+    'People signed out is a page: ' + JSON.stringify(jp));
   await page.click('[data-people="crews"]');
   const cg = await gets('#crewsBody');
   check(JSON.stringify(cg) === '["Your crew’s page:true","Crew drives:true","Convoys:true"]' && await page.isVisible('#crewsBody >> text=Sign in with Google'), 'People signed out, Crews: ' + cg);
   // Settings are the Garage: the theme picker, help folded under "How this works", no Octane, Erase is red text behind a confirm sheet
   await page.goto(base + '/index.html?view=garage');
   await page.waitForSelector('#garageGear', { state: 'visible' });
+  // signed out, the Garage is the Garage: People's page stays on People (it showed here, above Your cars)
+  const stray = await page.evaluate(() => ({ join: !!document.querySelector('.join-page') && document.querySelector('.join-page').getBoundingClientRect().height, acc: getComputedStyle(document.getElementById('accountSection')).display }));
+  check(stray.join === 0 && stray.acc === 'none', 'People\'s signed-out page is not in the Garage: ' + JSON.stringify(stray));
   await openSetting(page, 'data');
   const g = await page.evaluate(() => { const s = document.getElementById('sheet'), e = getComputedStyle(document.getElementById('myEraseBtn'));
     return { title: s.querySelector('h2').textContent, themes: document.querySelectorAll('#themeCards > *').length, how: document.querySelectorAll('[data-panel~="garage"] details.how').length, octane: /Octane/.test(document.body.innerText), erase: e.color + '/' + e.textDecorationLine + '/' + e.borderTopStyle }; });
