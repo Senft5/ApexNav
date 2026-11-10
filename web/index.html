@@ -559,6 +559,11 @@
     .sw span { font-size: 11px; font-weight: 600; color: var(--panel-dim); }
     @media (prefers-reduced-motion: reduce) { .sw i, .sw i::after { transition: none; } }
     .sheet .sw, .edge-panel .sw, .side-pop .sw { display: flex; flex-direction: row-reverse; justify-content: space-between; align-items: center; width: 100%; min-height: 48px; padding: 0; border-top: 1px solid var(--hair, var(--panel-dim)); }
+    /* Garage rows under a section's head (design pass 2026-11-10): a control's label is a row label, the size and weight of the
+       switches beside it. "Night" at 18/800 outranked its own section head, "Co-driver". */
+    .sheet section[data-panel="garage"] .ctl-label { font-size: 15px; font-weight: 500; }
+    .co-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin: 0; min-height: 44px; font-size: 15px; font-weight: 500; }
+    .co-row .linkbtn { flex: 0 0 auto; }
     .sheet .sw span, .edge-panel .sw span, .side-pop .sw span { font-size: 15px; font-weight: 500; color: var(--panel-ink); text-align: left; }
     .sw.on span { color: var(--panel-ink); }
     .sw[hidden], .sheet .sw[hidden], .edge-panel .sw[hidden], .side-pop .sw[hidden] { display: none; }   /* a switch only some accounts get (Satellite) */
@@ -1668,7 +1673,9 @@
           <section data-panel="garage">
             <h3>Co-driver</h3>
             <!-- SO-1 (panel round 2): one setting, one home. Notes and Voice live in the map's Layers, where a drive reaches them -->
-            <p class="note" id="coNotesHere"><span id="coNotesNow">Notes: Auto</span>. Notes and Voice are on the map, under Layers. <button class="linkbtn" id="coNotesLink">Open Layers</button></p>
+            <!-- design pass 2026-11-10: a row like the ones under it (what it is now on the left, where to change it on the right); the
+                 sentence broke over two lines with the link dropped under its own full stop -->
+            <p class="co-row" id="coNotesHere"><span id="coNotesNow">Notes: Auto</span><button class="linkbtn" id="coNotesLink">Change in Layers</button></p>
             <div class="switches">
               <button class="sw" data-toggle="haptics"><i></i><span>Haptics</span></button>
               <button class="sw" data-toggle="keys"><i></i><span>Key sounds</span></button>

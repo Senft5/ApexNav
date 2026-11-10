@@ -4,6 +4,23 @@ Decisions Claude made for you, newest first. Each one says what was decided, why
 you reach one you've seen. If you disagree with a call, say so and it gets reversed; nothing here is hard to undo unless
 it says so. Things only you can do are in docs/OWNER_TODO.md.
 
+## 2026-11-10 (fable-design-pass): the empty Log and Stages pages are drawn; two Garage rows fall into line (claude/fable-design-pass)
+
+The owner asked for the app to feel designed by an artist, not a programmer. I captured every main screen on a phone
+shape and read them as a designer would. The populated screens hold together; the tells were at the edges. The calls:
+- **An empty Log is the first page of the book**, not a sentence on a blank sheet: the page's own furniture in pencil
+  (three dashed places for the score's figures, a dashed date stamp, an empty corner strip), a head ("Your first drive
+  goes here."), one line, one full-width key (Start a drive) and a link (Watch a replay first). Nothing in the sketch
+  is a figure: unknown stays "--". Undo: analysis.html `#historyEmpty` and the `.first-page` rules.
+- **An empty Stages tab says what a stage is**, with a stretch of road drawn between its start and finish boards, and
+  the one way to make one. Undo: analysis.html `renderSegments`, the `first-page` block.
+- **The Log's Drives / Stages switch was set in Arial** beside Inter Tight everywhere else (a button doesn't inherit
+  the page's face by itself). Found by scanning every page's controls for a system font; it was the only one.
+- **Garage, Co-driver**: "Night" and "Co-driver's voice" were 18 px extra-bold labels under a 17 px section head, so a
+  row outranked its own heading; they are row labels now, like the switches beside them. The sentence that told you
+  Notes and Voice live in Layers broke over two lines with its link dropped under a full stop; it is a row: what they
+  are set to on the left, "Change in Layers" on the right. Undo: index.html `.co-row` and the `.ctl-label` rule.
+
 ## 2026-11-09 (fable-road-carry): road data from roads with no signal is kept on the phone and sent later (claude/fable-road-carry)
 
 Found while looking for what matters most: matching a drive to the map needs the network, and a trip that ended with no

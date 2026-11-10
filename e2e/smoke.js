@@ -4978,6 +4978,22 @@ async function storeDashDrive(page, id = 'dc1', name = 'Dashcam road') {
   }, [id, name]);
 }
 
+flow('the empty Log is a first page: the book\'s furniture in pencil, one key, and its switch in the page\'s own typeface (design pass 2026-11-10)', async (page, base) => {
+  await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); } catch (_) {} });
+  await page.goto(base + '/analysis.html');
+  await page.waitForFunction(() => window.apexLogDebug && window.apexLogDebug.loaded());
+  await page.waitForSelector('#historyEmpty:not([hidden])');
+  const f = await page.evaluate(() => { const fam = (e) => getComputedStyle(e).fontFamily, go = document.querySelector('#historyEmpty .fp-go').getBoundingClientRect(), alt = document.querySelector('#historyEmpty .fp-alt').getBoundingClientRect();
+    return { body: fam(document.body), sw: [...document.querySelectorAll('.log-seg button')].map(fam), go: [Math.round(go.height), Math.round(go.width)], alt: Math.round(alt.height),
+      over: document.documentElement.scrollWidth > innerWidth, head: document.querySelector('#historyEmpty .fp-head').textContent, table: document.getElementById('historyPanel').hidden }; });
+  check(f.sw.every((x) => x === f.body), 'Drives and Stages are set in the page\'s typeface: ' + JSON.stringify(f));
+  check(f.go[0] >= 44 && f.go[1] > 300 && f.alt >= 44 && !f.over && f.head === 'Your first drive goes here.' && f.table, 'one full-width key, a 44 pt link, nothing off the page, no empty table under it: ' + JSON.stringify(f));
+  await page.click('[data-seg="segments"]');
+  await page.waitForSelector('#segList .first-page');
+  const s = await page.evaluate(() => ({ head: document.querySelector('#segList .fp-head').textContent, go: document.querySelector('#segList .fp-go').textContent, mark: !!document.querySelector('#segList .fp-mark') }));
+  check(s.head === 'No stages yet.' && s.go === 'Start a drive' && s.mark, 'Stages: what a stage is, drawn, and the way to one: ' + JSON.stringify(s));
+});
+
 flow('the drive page\'s map: with no map to be had the picture keeps its blank panel; MapLibre loads only for it (TestFlight 15)', async (page, base) => {
   await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); } catch (_) {} });
   await page.goto(base + '/analysis.html');
