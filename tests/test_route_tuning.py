@@ -181,7 +181,7 @@ process.stdout.write(JSON.stringify({ now, onSaleNoPro, withPro, kept, allowedNo
 def test_the_page_wiring():
     js, html = read("cockpit.js"), read("index.html")
     assert '<script src="route_tuning.js" defer></script>' in html
-    assert re.search(r'<section data-panel="garage" data-setting="tuning" data-title="Route tuning">\s*<div id="garageTuneBody"', html)
+    assert re.search(r'<section data-panel="garage" data-setting="tuning" data-title="Route tuning" data-summary="#garageTuneBody">\s*<div id="garageTuneBody"', html)
     assert 'id="cardTuneChip"' in html
     gs = read("garage_settings.js")
     assert "'tuning'" in gs
