@@ -6792,7 +6792,9 @@
     function nudgeAnswered(granted) {
       if (granted) { scheduleNudge(); return; }
       state.toggles.nudge = false; paintSwitches(); savePrefs(); scheduleNudge();
-      toast('Notifications are off for Vetta. Turn them on in the iPhone’s Settings, then here.');
+      // Only the shell answers here, so the key can open Vetta's own page in the iPhone's Settings (the `openSettings` the
+      // "Location is off" sheet uses).
+      toast('Notifications are off for Vetta. Turn them on in Settings, then here.', { label: 'Settings', onClick: () => { try { nudgeShell().postMessage({ cmd: 'openSettings' }); } catch (_) {} } });
     }
     // The morning of a crew drive you said you're going to (REVIEW.md roadmap 21, crew_events.js todayDrive): from 4 AM until an
     // hour after it starts, the idle map offers directions to the meeting point instead of the loop. Members only, every 10 min.

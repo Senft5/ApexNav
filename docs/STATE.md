@@ -6,7 +6,8 @@
   drive `driveNote` only. Used for measured roads (coverage), share ETA, the Friends switch, hazard reports; handed to
   web/friends_map.js (`page.askSignIn`, falls back to a plain toast). The route share note reads "No friends or crews
   to share with yet. Add them in People."
-- [x] tests/test_sign_in_key.py (3); e2e flow "sign-in key".
+- [x] `nudgeAnswered(false)`: the notifications-off toast has a Settings key (`openSettings`); docs/APP_REVIEW.md 4.5.4.
+- [x] tests/test_sign_in_key.py (4); e2e flow "sign-in key".
 - Next: the same look for other messages that point somewhere without taking you ("Find it in Where to?").
 
 ## Session 2026-11-10 (fable-loop-time): the loop dial by distance or time (claude/fable-loop-time, off origin/main 1a38381)

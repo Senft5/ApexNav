@@ -26,3 +26,10 @@ def test_the_message_carries_the_key_and_a_drive_only_hears_it():
 def test_sharing_a_route_with_nobody_to_share_with_says_so_like_the_convoy():
     src = cockpit_source()
     assert "'No friends or crews to share with yet. Add them in People.'" in src
+
+
+def test_notifications_off_has_the_key_to_settings():
+    src = cockpit_source()
+    fn = src[src.index("function nudgeAnswered(granted)"):src.index("function nudgeAnswered(granted)") + 700]
+    assert "{ label: 'Settings', onClick:" in fn and "postMessage({ cmd: 'openSettings' })" in fn
+    assert 'if cmd == "openSettings"' in (ROOT / "ApexNavApp.swift").read_text(encoding="utf-8")

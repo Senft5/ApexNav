@@ -15,6 +15,9 @@ only said on the drive's message row, with no key, so no sheet opens over the ro
 Also: sharing a route with nobody to share it with read "Sign in and add friends or a crew (People) to share routes."
 It now reads like the convoy's: "No friends or crews to share with yet. Add them in People."
 
+The same for notifications: "Notifications are off for Vetta. Turn them on in the iPhone's Settings, then here."
+now has a **Settings** key that opens Vetta's page there (the shell's `openSettings`, already used by Location is off).
+
 Undo: revert the PR (`askSignIn` in web/cockpit.js, one line in web/friends_map.js).
 
 ## 2026-11-10 (fable-loop-time): a loop can be set by time on the dial (claude/fable-loop-time)
