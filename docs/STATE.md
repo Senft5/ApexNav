@@ -1,5 +1,13 @@
 # VETTA — CURRENT AGENT HANDOFF STATE
 
+## Session 2026-11-10 (fable-carplay-loops): CarPlay's Loops list matches the dial (claude/fable-carplay-loops, off origin/main dc9caf9)
+
+- [x] CarPlay/ApexCarPlay.swift `openLoops()`: 30, 60, 90, 120, 180 minutes (web/cockpit.js `LOOP_MINUTES`).
+  tests/test_carplay.py `test_the_car_offers_the_same_loop_times_as_the_phones_dial`. docs/APP_REVIEW.md needs no
+  change (the CarPlay row already says "Loops from here"; no new template or data).
+- Next: CarPlay has not been looked at on a screen in this run; its three identical detail lines under each loop
+  ("A twisty loop from here, back where you started") could become one section header once someone can see it.
+
 ## Session 2026-11-10 (merger): e2e time limit 35 min (claude/project-thread-er8kzz)
 
 - [x] .github/workflows/core-tests.yml e2e `timeout-minutes` 25 → 35: 152 flows take ~24 min and were cancelled on the

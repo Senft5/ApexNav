@@ -4,6 +4,15 @@ Decisions Claude made for you, newest first. Each one says what was decided, why
 you reach one you've seen. If you disagree with a call, say so and it gets reversed; nothing here is hard to undo unless
 it says so. Things only you can do are in docs/OWNER_TODO.md.
 
+## 2026-11-10 (fable-carplay-loops): the car offers the same loop times as the phone (claude/fable-carplay-loops)
+
+For "cohesiveness": the phone's loop dial has five times (30 min, 1 h, 1½ h, 2 h, 3 h) since #342, but CarPlay's Loops
+list still had its own three (30 minutes, 1 hour, 2 hours). The car now lists the same five, spelled out for a glance
+("1½ hours", "3 hours"). The message to the page is unchanged (`loop` with `minutes`), and a test holds the two lists
+equal. Not seen on a car screen: this is a list of five rows where there were three, built by CI only.
+
+Undo: revert the PR (one line in CarPlay/ApexCarPlay.swift).
+
 ## 2026-11-10 (merger): e2e may run 35 minutes, not 25 (claude/project-thread-er8kzz)
 
 The e2e suite is 152 flows now and takes about 24 minutes, so GitHub cut it off at its 25-minute limit on the last flow
