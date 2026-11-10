@@ -1,11 +1,5 @@
 # VETTA — CURRENT AGENT HANDOFF STATE
 
-## Session 2026-11-10 (fable-your-data): Your data as Settings-style rows (claude/fable-your-data, off origin/main 3f2f315)
-
-- `web/index.html` only: the Your data section's keys are `.nav-rows.data-rows` with three `.nav-group` headings; the
-  ids are the same (`myGpxBtn` … `myEraseBtn`), so cockpit.js and the tests reach them as before. `.nav-row.danger`.
-- Cohesion pass notes (Nate 2026-11-10 15:12): compared Options, Best roads nearby, Ways to go, About a road, Settings
-  and its eleven sheets side by side. Left alone: Done (a sheet that sets things) vs Close (a sheet that shows things).
 ## Session 2026-11-10 (fable-pin-names): pins and tapped places by name; the spot dialog's stars (claude/fable-pin-names, off origin/main e76f1bb)
 
 - `web/cockpit.js`: `setFieldPin(field, point, name)` / `pinIn` / `fieldPin` beside `resolvePlace(q, field)`: Go here,
@@ -26,6 +20,13 @@
   its text, used by `exploreNear`. route_card.js `stats` label "corner" for one; drive_view.js habits; analysis.html `segInfo`.
 - Tests: tests/test_route_card.py; e2e "plan flow (c)".
 - Next: CarPlay has not had a design pass in this run (Swift, not visible from the cloud).
+
+## Session 2026-11-10 (fable-your-data): Your data as Settings-style rows (claude/fable-your-data, off origin/main 3f2f315)
+
+- `web/index.html` only: the Your data section's keys are `.nav-rows.data-rows` with three `.nav-group` headings; the
+  ids are the same (`myGpxBtn` … `myEraseBtn`), so cockpit.js and the tests reach them as before. `.nav-row.danger`.
+- Cohesion pass notes (Nate 2026-11-10 15:12): compared Options, Best roads nearby, Ways to go, About a road, Settings
+  and its eleven sheets side by side. Left alone: Done (a sheet that sets things) vs Close (a sheet that shows things).
 
 ## Session 2026-11-10 (merger): e2e time limit 35 min (claude/project-thread-er8kzz)
 
