@@ -1,13 +1,16 @@
 # VETTA — CURRENT AGENT HANDOFF STATE
 
-## Session 2026-11-10 (fable-loop-names): no two loop cards the same way and the same length (claude/fable-loop-names, off origin/main 1a38381)
+## Session 2026-11-10 (fable-loop-time): the loop dial by distance or time (claude/fable-loop-time, off origin/main 1a38381)
 
-- web/fun_route.js `loopOffer`: the fill pass takes a loop only if it heads elsewhere than every card already offered
-  (60 degrees) or differs from it by `LOOP_OFFER.differs` (0.2) in km or time. Before, the fill took any lookalike, so
-  two "Southeast" cards a couple of minutes apart came up.
-- Tests: tests/test_loop_ways.py (`oneWay`, `twins`); e2e "a loop's choices are which way to head" checks no two cards
-  share a name with times within a fifth.
-- Next: the Layers panel and the drive screen have not had a design pass.
+- [x] web/index.html `#loopBy` (two radio words over the dial, `.loop-by`). web/cockpit.js: `LOOP_BY` ('apex.loopBy'),
+  `LOOP_MINUTES = [30, 60, 90, 120, 180]`, `labelLoops()` relabels the same five `#loopDetents` buttons
+  (`data-loop-mi` or `data-loop-min`), `setLoopBy(by)`; `buildLoop` calls `setLoopBy(minutes ? 'time' : 'distance')`;
+  `paintCardLoop` draws the row from the dial's buttons in either unit (label Length / Time, pressed by `targetS`).
+  web/route_card.js `loopTime(minutes)` ("1½ h"), used for the dial, the card and the loop's note.
+- [x] Tests: tests/test_loop_ways.py (+2); e2e "a loop by time…" (dial turns, 1 h loop built, card row by time, kept
+  across a reload, back to distance).
+- Next: Options' "Loop to fit" 1 hour / 2 hours keys now duplicate the dial; remove them once the owner has used the
+  dial (My free time stays).
 
 ## Session 2026-11-10 (fable-loops): loops lose Quick / Fun / Long way; the card offers which way to head (claude/fable-loops, off origin/main 7dee309)
 
@@ -48,6 +51,15 @@
   by screen: the Log…" checks the Garage signed out has no People page (fails on main's CSS, passes here).
 - Lesson: a rule that sets `display` on a tab's panel must carry the tab (`.sheet[data-view=…]`); after changing one
   tab signed out, open the other three.
+
+## Session 2026-11-10 (fable-loop-names): no two loop cards the same way and the same length (claude/fable-loop-names, off origin/main 1a38381)
+
+- web/fun_route.js `loopOffer`: the fill pass takes a loop only if it heads elsewhere than every card already offered
+  (60 degrees) or differs from it by `LOOP_OFFER.differs` (0.2) in km or time. Before, the fill took any lookalike, so
+  two "Southeast" cards a couple of minutes apart came up.
+- Tests: tests/test_loop_ways.py (`oneWay`, `twins`); e2e "a loop's choices are which way to head" checks no two cards
+  share a name with times within a fifth.
+- Next: the Layers panel and the drive screen have not had a design pass.
 
 ## Session 2026-11-10 (fable-quiet-news): What's new waits for a quiet launch (claude/fable-quiet-news, off origin/main 7dee309)
 
