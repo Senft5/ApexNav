@@ -1,5 +1,10 @@
 # VETTA — CURRENT AGENT HANDOFF STATE
 
+## Session 2026-11-10 (fable-suggest-follows-dial): the loop suggestion follows the dial (claude/fable-suggest-follows-dial, off origin/main 1a38381)
+
+- [x] web/cockpit.js `pickLoop` ends with `paintLoopSuggest()` (in a try: at launch the deck isn't set up yet).
+- [x] Tests: tests/test_loop_ways.py (+1); e2e "plan flow (b)" picks 15 mi and 45 mi on the dial and reads the row.
+
 ## Session 2026-11-10 (fable-loops): loops lose Quick / Fun / Long way; the card offers which way to head (claude/fable-loops, off origin/main 7dee309)
 
 - [x] The owner: "why do loops need a long way a fun and a quick? the whole point is aimless driving". web/cockpit.js:

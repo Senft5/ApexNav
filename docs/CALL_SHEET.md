@@ -4,6 +4,12 @@ Decisions Claude made for you, newest first. Each one says what was decided, why
 you reach one you've seen. If you disagree with a call, say so and it gets reversed; nothing here is hard to undo unless
 it says so. Things only you can do are in docs/OWNER_TODO.md.
 
+## 2026-11-10 (fable-suggest-follows-dial): the idle map's "Loop from here" says the length the dial is on (claude/fable-suggest-follows-dial)
+
+The row under Where to? read "Loop from here · 45 mi" from launch on, whatever you had turned the dial to, while its
+Plan key built the dial's loop: turn the dial to 15 mi, cancel, and the row still promised 45. It now says the dial's
+length (or time, once #342 is in) the moment you pick it. Undo: revert the PR.
+
 ## 2026-11-10 (fable-loops): a loop has no Quick / Fun / Long way; its card offers its length and which way to head (claude/fable-loops)
 
 You asked: "why do loops need a long way a fun and a quick? the whole point is aimless driving". They don't. On a

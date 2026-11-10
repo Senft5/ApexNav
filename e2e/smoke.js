@@ -5929,6 +5929,11 @@ flow('plan flow (b) a loop in 2 taps: Plan on the map, then Start; its progress 
   await planRouter(page);
   const { taps, tap } = await planPage(page, base);
   await page.waitForFunction(() => getComputedStyle(document.getElementById('loopSuggest')).display !== 'none');
+  // the suggestion is the dial's loop: pick another length on the dial and it says that one (it kept the length from launch)
+  const said = await page.evaluate(() => { const t = () => document.getElementById('loopSuggestTitle').textContent, was = t();
+    document.querySelector('#loopDetents button:nth-child(1)').click(); const short = t();
+    document.querySelector('#loopDetents button:nth-child(3)').click(); return { was, short, back: t() }; });
+  check(said.was === 'Loop from here · 45 mi' && said.short === 'Loop from here · 15 mi' && said.back === said.was, 'the suggestion follows the dial: ' + JSON.stringify(said));
   await tap('#loopSuggestGo', 'Plan (the loop on the map)');
   // never a lone toast: the plan sheet is up with the loop's progress on its key and its status line
   await page.waitForFunction(() => document.getElementById('planPanel').classList.contains('open') && /\S/.test(document.getElementById('planStatus').textContent), null, { timeout: 5000 });

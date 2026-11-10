@@ -106,3 +106,11 @@ def test_a_loop_is_planned_one_way_whatever_the_level_is():
     ways = html[html.index('id="routeCardWays"') - 60:html.index('id="routeCardWays"') + 120]
     assert 'role="radiogroup"' in ways and "hidden" in ways
     assert html.index('id="routeCardLoop"') < html.index('id="routeCardWays"') < html.index('id="routeCardFun"')
+
+
+def test_the_idle_maps_loop_suggestion_follows_the_dial():
+    """It said "Loop from here · 45 mi" from launch on, whatever the dial was turned to, while Plan built the dial's loop."""
+    src = cockpit_source()
+    pick = src[src.index("function pickLoop(b) {"):]
+    pick = pick[:pick.index("\n    }\n") ]
+    assert "paintLoopSuggest()" in pick
