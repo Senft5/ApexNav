@@ -1,5 +1,14 @@
 # VETTA — CURRENT AGENT HANDOFF STATE
 
+## Session 2026-11-10 (fable-layers): design pass 8, the Layers panel as the map's legend (claude/fable-layers, off origin/main 1a38381)
+
+- web/index.html only (markup and CSS, no script): `#switchRow` rows are `.sw.ly` = switch, name over a `<small>` line,
+  and an inline `svg.ly-key` drawn with the look's tokens (`--amber`, `--gain`, `--signal`). Order: Twisty, Measured,
+  Cameras, 3D terrain, (Satellite, developers), Friends, then "Who sees me". `.edge` owns `--edge-w` (panel width and
+  the closed panel's offset: change one and the Layers key leaves its column, which "REVIEW.md 1.2 screen by screen" catches).
+- e2e: that flow checks every row has a key and a line, the three surface words, Who sees me under Friends, panel on screen.
+- Next: the drive screen has not had a design pass.
+
 ## Session 2026-11-10 (fable-loops): loops lose Quick / Fun / Long way; the card offers which way to head (claude/fable-loops, off origin/main 7dee309)
 
 - [x] The owner: "why do loops need a long way a fun and a quick? the whole point is aimless driving". web/cockpit.js:

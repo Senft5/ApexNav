@@ -4,6 +4,20 @@ Decisions Claude made for you, newest first. Each one says what was decided, why
 you reach one you've seen. If you disagree with a call, say so and it gets reversed; nothing here is hard to undo unless
 it says so. Things only you can do are in docs/OWNER_TODO.md.
 
+## 2026-11-10 (fable-layers): design pass 8: the Layers panel is the map's legend (claude/fable-layers)
+
+Layers was a column of names and switches: "Cameras" (which cameras?), "Measured roads" (three colours on the map and
+nothing saying what they mean), and "Who sees me" hanging under 3D terrain. Now each layer is drawn beside its name the
+way the map draws it, in the look's own colours (so it matches by day, by night and in every look), over one line of what
+it is: Twisty roads "From the map's shape" (it is not measured, and now says so), Measured roads with its three colours
+named (Smooth, Fair, Rough), Cameras "Plate and speed cameras", 3D terrain, Friends "Sharing where they are". A layer that
+is off has its key dimmed. Friends moved to the end so "Who sees me" sits directly under it. The panel is 52 px wider
+(288 px, less on a narrow phone) so each line fits on one row.
+
+Not changed: what any switch does, the Co-driver half (Notes, Voice, music).
+
+Undo: revert the PR.
+
 ## 2026-11-10 (fable-loops): a loop has no Quick / Fun / Long way; its card offers its length and which way to head (claude/fable-loops)
 
 You asked: "why do loops need a long way a fun and a quick? the whole point is aimless driving". They don't. On a
