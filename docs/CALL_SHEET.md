@@ -14,6 +14,12 @@ only a plain sentence: "To text someone from here, add an emergency contact in S
 
 Left for after #358 (it rewrites the same lines): Your data's "deleted from the server in Settings → Account → Delete
 account".
+## 2026-11-10 (fable-one-corner): "1 corners" is "1 corner"; a Best roads nearby key keeps its word while it searches (claude/fable-one-corner)
+
+A road with one corner read "1 corners" on its card's line, under its big number, aloud to a screen reader, in "1 more
+good corners", in a stage's line in the Log and in a coach's sentence. All say "1 corner" now. And in Best roads nearby
+the key you tapped ("Within 15 min") turned into "Finding roads" over a line that already said "Finding roads…"; it
+keeps its own word and only its progress bar moves.
 
 Undo: revert the PR.
 

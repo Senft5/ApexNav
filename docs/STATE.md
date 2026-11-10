@@ -6,6 +6,13 @@
   `addSpot` (`showView('garage')`, `ApexGarageSettings.ui.open('spots')`). web/incident.js: the note without arrows.
 - [x] tests/test_paths_are_keys.py (3); e2e flow "a path is a key".
 - Next: Your data's "Settings → Account → Delete account" note as a key, once #358 is in.
+## Session 2026-11-10 (fable-one-corner): singular corners, and the nearby key keeps its label (claude/fable-one-corner, off origin/main e76f1bb)
+
+- cockpit.js: the route bar and card lines use `ApexFormat.cornerCount`; `buildRoute`'s announce pluralises inline
+  (tests/test_route_loading.py evals it with no ApexFormat); `busy().progress(frac)` moves a key's bar without changing
+  its text, used by `exploreNear`. route_card.js `stats` label "corner" for one; drive_view.js habits; analysis.html `segInfo`.
+- Tests: tests/test_route_card.py; e2e "plan flow (c)".
+- Next: CarPlay has not had a design pass in this run (Swift, not visible from the cloud).
 
 ## Session 2026-11-10 (merger): e2e time limit 35 min (claude/project-thread-er8kzz)
 
