@@ -1,11 +1,5 @@
 # VETTA — CURRENT AGENT HANDOFF STATE
 
-## Session 2026-11-10 (fable-paths-are-keys): the empty Spots list has an Add one key (claude/fable-paths-are-keys, off origin/main dc9caf9)
-
-- [x] web/spots_feed.js: the empty note is text plus `btn('Add one', page.addSpot, 'linkbtn')`; web/cockpit.js hands
-  `addSpot` (`showView('garage')`, `ApexGarageSettings.ui.open('spots')`). web/incident.js: the note without arrows.
-- [x] tests/test_paths_are_keys.py (3); e2e flow "a path is a key".
-- Next: Your data's "Settings → Account → Delete account" note as a key, once #358 is in.
 ## Session 2026-11-10 (fable-pin-names): pins and tapped places by name; the spot dialog's stars (claude/fable-pin-names, off origin/main e76f1bb)
 
 - `web/cockpit.js`: `setFieldPin(field, point, name)` / `pinIn` / `fieldPin` beside `resolvePlace(q, field)`: Go here,
@@ -91,6 +85,13 @@
   reached by the app (tests/test_plan_options.py still covers them); remove them if loops never get a style back.
 - Next: two cards can share a name (both "Southeast"); a finer name (16 points, or the road it is built on) if it reads
   badly on real roads. The 1 hour / 2 hours loops sit in Options; the card's Length row is miles only.
+
+## Session 2026-11-10 (fable-paths-are-keys): the empty Spots list has an Add one key (claude/fable-paths-are-keys, off origin/main dc9caf9)
+
+- [x] web/spots_feed.js: the empty note is text plus `btn('Add one', page.addSpot, 'linkbtn')`; web/cockpit.js hands
+  `addSpot` (`showView('garage')`, `ApexGarageSettings.ui.open('spots')`). web/incident.js: the note without arrows.
+- [x] tests/test_paths_are_keys.py (3); e2e flow "a path is a key".
+- Next: Your data's "Settings → Account → Delete account" note as a key, once #358 is in.
 
 ## Session 2026-11-10 (fable-one-loop-home): Options' duplicate loop-by-time keys removed (claude/fable-one-loop-home, off origin/main 01fa773)
 
