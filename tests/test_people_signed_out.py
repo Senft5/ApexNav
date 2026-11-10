@@ -36,7 +36,11 @@ def test_sign_in_stands_at_the_foot_and_apple_matches_the_other_keys():
     assert re.search(r"\.join-sign \{[^}]*margin-top: auto", html)
     assert re.search(r"\.join-sign \.apple-btn \{[^}]*min-height: 52px[^}]*border-radius: 0", html)
     assert re.search(r"\.join-sign a\.ink-btn \{[^}]*min-height: 52px", html)
-    assert ".sheet .body:has(.join-page) { flex: 1 1 auto; }" in html     # only while this page is drawn
+    # only while this page is drawn, and only on People: never a bare #accountSection { display }, which would show the
+    # page on every tab (it did, at the top of the Garage)
+    assert '.sheet[data-view="people"] .body:has(.join-page) { flex: 1 1 auto; }' in html
+    assert '.sheet[data-view="people"] #accountSection:has(.join-page) { display: grid; }' in html
+    assert not re.search(r"(?<!\] )#accountSection:has\(\.join-page\)", html)
 
 
 def test_the_drawing_is_ink_on_paper_with_one_accent():

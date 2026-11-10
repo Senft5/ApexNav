@@ -4,6 +4,14 @@ Decisions Claude made for you, newest first. Each one says what was decided, why
 you reach one you've seen. If you disagree with a call, say so and it gets reversed; nothing here is hard to undo unless
 it says so. Things only you can do are in docs/OWNER_TODO.md.
 
+## 2026-11-10 (fable-fix-join-scope): my mistake in #332, fixed: the signed-out People page also showed at the top of the Garage (claude/fable-fix-join-scope)
+
+The rule that lets the new signed-out People page fill the sheet named the People panel by its id, and an id outranks
+the rule that hides the other tabs' panels. So, signed out, the whole "Drive with friends." page stood at the top of
+the Garage as well. Both rules now apply on the People tab only. I had read the page on People and never opened the
+Garage signed out after the change; the screen-by-screen flow now checks that the Garage shows no People page.
+- Undo: not something to undo; reverting #332 would also remove it.
+
 ## 2026-11-10 (fable-design-signed-out): People, signed out, is a page instead of a form (claude/fable-design-signed-out)
 
 Design pass 3, after your "designed by an artist not a programmer". Signed out, People was a logo, a small heading,
