@@ -692,6 +692,10 @@
     .loop-dial i::before { content: ""; position: absolute; left: 0; top: 4px; width: 4px; height: 18px; background: var(--accent); }
     .loop-dial b { font: 800 40px/1 var(--font-num); font-variant-numeric: tabular-nums; }
     .loop-dial small { font-size: 13px; font-weight: 600; color: var(--panel-dim); margin-left: 3px; }
+    /* distance or time (2026-11-10): two words over the dial, the one in use underlined in red as the dial's detent is */
+    .loop-by { display: flex; justify-content: center; gap: 22px; margin: 6px 0 0; }
+    .loop-by > button { min-height: 44px; min-width: 44px; padding: 0 4px; border: 0; background: transparent; color: var(--panel-dim); font: 600 15px var(--font-ui); }
+    .loop-by > button[aria-checked="true"] { color: var(--panel-ink); font-weight: 700; text-decoration: underline 2px var(--accent); text-underline-offset: 6px; }
     .plan-loop .detents { display: block; }
     .plan-loop .detents > button { position: absolute; width: 56px; min-width: 0; min-height: 36px; padding: 0; border: 0; background: transparent; color: var(--panel-dim); font-size: 17px; }
     .plan-loop .detents > button::after { display: none; }
@@ -1525,6 +1529,7 @@
               </div>
               <!-- the basic level (REVIEW.md roadmap 6, mockup 02-plan-basic.html): a loop dial in your units (finding 6) -->
               <div class="ctl plan-loop" role="group" aria-label="Loop from here"><div class="ctl-label">Or loop from here <small>back where you started</small></div>
+                <div class="loop-by" id="loopBy" role="radiogroup" aria-label="Set the loop by"><button type="button" role="radio" data-loop-by="distance" aria-checked="true">Distance</button><button type="button" role="radio" data-loop-by="time" aria-checked="false">Time</button></div>
                 <!-- one control (REVIEW2.md U-31): the dial, its five detents as ticks around it; tap a tick or turn the dial -->
                 <div class="loop-gauge" id="loopGauge">
                   <div class="loop-dial" aria-hidden="true"><svg class="loop-ticks" id="loopTicks" viewBox="0 0 120 120"></svg><i id="loopDialMark"></i><b id="loopDialVal">45</b><small id="loopDialUnit">mi</small></div>
