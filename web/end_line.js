@@ -1,6 +1,6 @@
 // The end of a drive (docs/design/REVIEW.md 4.4): each voice pack says its own closing line around the Vetta Score, and
 // "your best on this road" when it is. The score is spoken from the pack's own clips (tools/voicebank.py renders the
-// numbers), never in a second voice. bestOnRoad compares with your earlier drives named after the same road. Pure
+// numbers), never in a second voice. bestOnRoad compares with your earlier drives named after the same road; usual sets the score against your last few. Pure
 // (tests/test_end_line.py).
 (function (root) {
   'use strict';
@@ -67,6 +67,21 @@
     return same.length > 0 && same.every((o) => drive.score > o.score);
   }
 
-  const api = { scoreTokens, endLine, pickSignOff, bestOnRoad, under100, WORDS };
+  /**
+   * The score against your usual: the median of your last USUAL_N scored drives before this one (`earlier`: their scores,
+   * oldest first; anything not a number is skipped). { usual, diff, text } or null with fewer than USUAL_MIN of them: a
+   * usual needs a few drives, and until then the card says nothing. Within USUAL_NEAR points is "About your usual".
+   */
+  const USUAL_N = 10, USUAL_MIN = 3, USUAL_NEAR = 5;
+  function usual(score, earlier) {
+    if (!Number.isFinite(score)) return null;
+    const last = (earlier || []).filter((x) => typeof x === 'number' && Number.isFinite(x)).slice(-USUAL_N);
+    if (last.length < USUAL_MIN) return null;
+    const sorted = last.slice().sort((a, b) => a - b), mid = sorted.length >> 1;
+    const med = Math.round(sorted.length % 2 ? sorted[mid] : (sorted[mid - 1] + sorted[mid]) / 2), diff = Math.round(score) - med;
+    return { usual: med, diff, text: Math.abs(diff) <= USUAL_NEAR ? 'About your usual' : `${Math.abs(diff)} ${diff > 0 ? 'over' : 'under'} your usual` };
+  }
+
+  const api = { scoreTokens, endLine, pickSignOff, bestOnRoad, usual, under100, WORDS, USUAL_N, USUAL_MIN, USUAL_NEAR };
   if (typeof module !== 'undefined' && module.exports) module.exports = api; else root.ApexEndLine = api;
 })(typeof window !== 'undefined' ? window : globalThis);
