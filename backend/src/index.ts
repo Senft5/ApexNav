@@ -294,6 +294,7 @@ on("POST", "/api/convoy/:id/ticket", async (req, env, m) => {
 });
 on("POST", "/api/convoy/:id/invite-people", async (req, env, m) => json(await convoyInvitePeople(env, await requireMember(req, env), m.groups!.id, req)));
 on("POST", "/api/convoy/:id/accept", async (req, env, m) => json(await convoyAccept(env, await requireMember(req, env), m.groups!.id, req)));
+on("POST", "/api/convoy/:id/keep", async (req, env, m) => json(await convoyRoom(env, m.groups!.id).keepGoing((await requireMember(req, env)).id).then(unwrap)));
 on("POST", "/api/convoy/:id/leave", async (req, env, m) => json(await convoyRoom(env, m.groups!.id).leave((await requireMember(req, env)).id).then(unwrap)));
 on("POST", "/api/convoy/:id/remove", async (req, env, m) => {
   const v = await requireMember(req, env), { member } = await body<{ member?: unknown }>(req);

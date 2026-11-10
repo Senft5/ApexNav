@@ -137,7 +137,7 @@ partway, check the database's metrics in the dashboard before blaming the export
 ## 6. Keeping this current
 
 - `tools/d1_rowcounts.sql` lists every table. `tests/test_backups.py` fails when a migration adds a table that is not in it.
-- Durable Objects (convoy rooms) hold only live, short-lived state (2 h drives, nothing personal kept) and are not backed up.
+- Durable Objects (convoy rooms) hold only live, short-lived state (2 h drives, 6 h at most, nothing personal kept) and are not backed up.
 - Workers Logs (crash reports, `client_error`) are not data to keep and are not backed up. `error_counts` (anonymous daily crash counts) is in the export like any table, but losing it costs nothing.
 
 ## 6a. What Claude can reach (Cloudflare connector, checked 2026-10-28)

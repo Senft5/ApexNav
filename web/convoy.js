@@ -118,6 +118,28 @@
     if (min < 1) return 'Ending';
     return min < 60 ? `${min} min left` : `${Math.floor(min / 60)} h${min % 60 ? ` ${min % 60} min` : ''} left`;
   }
+  /**
+   * May this driver keep the convoy going now? The leader, in its last half hour, until it is six hours old: the server's
+   * rule (backend convoy.ts keepGoing), from the two numbers it sends in the context. An older server sends neither: false.
+   */
+  function canKeep(ctx, now = Date.now()) {
+    if (!ctx || ctx.role !== 'leader' || !Number.isFinite(ctx.expiresAtMs) || !Number.isFinite(ctx.maxExpiresAtMs) || !Number.isFinite(ctx.keepWindowMs)) return false;
+    return ctx.expiresAtMs > now && ctx.expiresAtMs - now <= ctx.keepWindowMs && ctx.expiresAtMs < ctx.maxExpiresAtMs;
+  }
+  /**
+   * The heads-up before a convoy ends, once per end time (`said`: a Set of the end times already told): in its last
+   * ENDING_MS, { text, keep } (keep: this driver can keep it going), else null. Nobody should find out by losing the map.
+   */
+  const ENDING_MS = 10 * 60000;
+  function endingNote(ctx, now, said) {
+    if (!ctx || !Number.isFinite(ctx.expiresAtMs)) return null;
+    const left = ctx.expiresAtMs - now;
+    if (!(left > 0 && left <= ENDING_MS) || (said && said.has(ctx.expiresAtMs))) return null;
+    if (said) said.add(ctx.expiresAtMs);
+    const keep = canKeep(ctx, now), more = Number.isFinite(ctx.maxExpiresAtMs) && ctx.expiresAtMs < ctx.maxExpiresAtMs;
+    const head = `Convoy ends in ${Math.max(1, Math.ceil(left / 60000))} min.`;
+    return { text: keep ? head : ctx.role === 'leader' ? (more ? head : `${head} It has run as long as one can.`) : more ? `${head} The leader can keep it going.` : head, keep };
+  }
   function distText(m) {
     if (root.ApexUnits && root.ApexUnits.metric()) {          // metres and km (units.js, U-22)
       return m < 1000 ? `${Math.max(100, Math.round(m / 100) * 100)} m` : `${(m / 1000).toFixed(m < 10000 ? 1 : 0)} km`;
@@ -148,11 +170,12 @@
    * One live convoy connection. `apiFetch(path, init)` is ApexSync.apiFetch; `wsUrl(id)` builds the socket URL.
    * `onChange(snapshot, what)` after anything changes: what = 'structure' (members, status, role, route, regroup) or 'motion'
    * (positions only), so the page can rebuild buttons rarely and move text often. `onHazard(event)` once per new hazard,
-   * `onRetract(event)` when the leader takes one back, `onError(code, eventId)` when the server refused something.
+   * `onRetract(event)` when the leader takes one back, `onError(code, eventId)` when the server refused something,
+   * `onExtended({ expiresAtMs })` when the leader kept the convoy going.
    */
   class ConvoyClient {
-    constructor({ apiFetch, wsUrl, WebSocketImpl, onChange = () => {}, onHazard = () => {}, onRetract = () => {}, onError = () => {}, now = () => Date.now(), setTimer = (f, ms) => setTimeout(f, ms), clearTimer = (t) => clearTimeout(t) }) {
-      Object.assign(this, { apiFetch, wsUrl, WS: WebSocketImpl || root.WebSocket, onChange, onHazard, onRetract, onError, now, setTimer, clearTimer });
+    constructor({ apiFetch, wsUrl, WebSocketImpl, onChange = () => {}, onHazard = () => {}, onRetract = () => {}, onError = () => {}, onExtended = () => {}, now = () => Date.now(), setTimer = (f, ms) => setTimeout(f, ms), clearTimer = (t) => clearTimeout(t) }) {
+      Object.assign(this, { apiFetch, wsUrl, WS: WebSocketImpl || root.WebSocket, onChange, onHazard, onRetract, onError, onExtended, now, setTimer, clearTimer });
       this.reset();
     }
     reset() {
@@ -228,6 +251,12 @@
       const id = this.id;
       this.stop('left');
       if (id) await this.post(`/api/convoy/${id}/leave`);
+    }
+    /** Leader: another hour (canKeep says when). The new end comes back here and, to everyone connected, as 'extended'. */
+    async keepGoing() {
+      const id = this.id, r = await this.post(`/api/convoy/${id}/keep`);
+      if (r.ok && r.body && this.id === id && this.ctx) { this.ctx = { ...this.ctx, expiresAtMs: r.body.expiresAtMs, maxExpiresAtMs: r.body.maxExpiresAtMs }; this.changed(); }
+      return r;
     }
     async removeMember(key) { return (await this.post(`/api/convoy/${this.id}/remove`, { member: key })).ok; }
     stop(status = 'off') {
@@ -307,6 +336,13 @@
         case 'event': this.takeEvent(m.event); break;
         case 'route': this.setRoute(m.route); break;
         case 'regroup': this.regroup = m.regroup; break;
+        case 'extended': {                                                  // the leader kept it going: a later end, for everyone
+          if (!this.ctx || !Number.isFinite(m.expiresAtMs)) return;
+          const was = this.ctx.expiresAtMs;
+          this.ctx = { ...this.ctx, expiresAtMs: m.expiresAtMs, ...(Number.isFinite(m.maxExpiresAtMs) ? { maxExpiresAtMs: m.maxExpiresAtMs } : {}) };
+          if (m.expiresAtMs !== was) { try { this.onExtended(m); } catch (_) { /* UI */ } }
+          break;
+        }
         case 'ack': {
           // The server does not echo a leader's own call back to them: keep it locally so it shows on their map too.
           const sent = this.sent.get(m.eventId);
@@ -401,6 +437,6 @@
     clearRegroup() { return this.send({ type: 'regroup', at: null }); }
   }
 
-  const api = { ConvoyClient, KINDS, encodePolyline, decodePolyline, thin, routeIndex, project, hazardAhead, gap, gapText, distText, leftText, hazardPhrase, haversineM, bearingDeg };
+  const api = { ConvoyClient, KINDS, encodePolyline, decodePolyline, thin, routeIndex, project, hazardAhead, gap, gapText, distText, leftText, canKeep, endingNote, ENDING_MS, hazardPhrase, haversineM, bearingDeg };
   if (typeof module !== 'undefined' && module.exports) module.exports = api; else root.ApexConvoy = api;
 })(typeof window !== 'undefined' ? window : globalThis);
