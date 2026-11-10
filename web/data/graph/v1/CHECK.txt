@@ -14,14 +14,14 @@
 383_516:   0.67 MB    15118 edges     6795 nodes  69 restrictions
 383_517:   0.62 MB    14172 edges     6251 nodes  123 restrictions
 383_518:   2.53 MB    58697 edges    24320 nodes  503 restrictions
-total: 17.44 MB, 400978 edges, 173631 nodes, 16 tiles; model b50ef601c2e3
+total: 17.44 MB, 400978 edges, 173631 nodes, 16 tiles; model 0a3822dcf199
 
 road | km | quality | scenery | fun/km | class | limit | km/h | check
-Colerain Avenue | 44.73 | 0.222 | 0.386 | 0.47 | 2 | 56 | 50.5 | ok: low quality (< 0.40)
+Colerain Avenue | 44.73 | 0.222 | 0.386 | 0.47 | 2 | 56 | 50.3 | ok: low quality (< 0.40)
 Springdale Road (east of -84.62) | 18.33 | 0.323 | 0.386 | 0.47 | 4 | 56 | 53.4 | ok: low quality (< 0.40): suburban
 Hamilton Avenue | 37.0 | 0.204 | 0.351 | 0.04 | 2 | 72 | 53.4 | ok: low quality (< 0.40): suburban
 Pippin Road | 22.48 | 0.328 | 0.354 | 0.17 | 4 | 56 | 54.2 | ok: reported (the live engine: 0.33)
 Blue Rock Road (north of I-275) | 15.3 | 0.676 | 0.531 | 0.52 | 3 | 80 | 73.2 | ok: high quality (>= 0.55)
-East Miami River Road | 48.94 | 0.715 | 0.536 | 0.98 | 4 | 72 | 67.2 | ok: high quality (>= 0.55)
+East Miami River Road | 48.94 | 0.715 | 0.536 | 0.98 | 4 | 72 | 67.1 | ok: high quality (>= 0.55)
 Lees Creek Road | 7.68 | 0.578 | 0.474 | 1.92 | 4 | 56 | 53.8 | ok: high quality (>= 0.55)
 I-275 (Circle Freeway) | 257.21 | 0.824 | 0.394 | 0.0 | 0 | 105 | 109.4 | ok: motorway at speed (class 0, >= 85 km/h)

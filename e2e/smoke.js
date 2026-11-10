@@ -5819,7 +5819,7 @@ flow('plan flow (e, f) a level change and an alternative are one tap or swipe ea
   await scan(page, 'the card after a swipe');
 }, IPHONE);
 
-flow('plan flow (b) a loop in 2 taps: Plan on the map, then Start; its progress in view, its card has a length in your units and the level (finding 6)', async (page, base) => {
+flow('plan flow (b) a loop in 2 taps: Plan on the map, then Start; its progress in view, its card has a length in your units and no Quick / Fun / Long way (the owner, 2026-11-10)', async (page, base) => {
   await planRouter(page);
   const { taps, tap } = await planPage(page, base);
   await page.waitForFunction(() => getComputedStyle(document.getElementById('loopSuggest')).display !== 'none');
@@ -5831,25 +5831,22 @@ flow('plan flow (b) a loop in 2 taps: Plan on the map, then Start; its progress 
   await cardUp(page, 30000); await planDone(page, 30000);
   const card = await page.evaluate(() => ({ name: apexDebug.track.name, lengths: [...document.querySelectorAll('#cardLoopDetents button')].map((b) => b.textContent), lengthShown: !document.getElementById('routeCardLoop').hidden,
     level: !document.getElementById('routeCardFun').hidden, dial: [...document.querySelectorAll('#loopDetents button')].map((b) => b.textContent), note: document.getElementById('routeProgress').textContent }));
-  check(/loop$/.test(card.name) && card.lengthShown && card.level, 'the loop\'s card: its length and its level: ' + JSON.stringify(card));
-  // a loop's level cards: every level looked at (the loops are built), each its pick's time and corners
-  const lcards = await levelCards(page);
-  check(lcards.every((c) => !c.further && /^(Quick|Fun|Long way) (\d+:\d\d|\d+ min) \d+ corners?$/i.test(c.text)) && lcards.find((c) => c.level === 'fun').on, 'the loop\'s level cards: ' + JSON.stringify(lcards));
+  // a loop is aimless driving: its card has its length, and no route style (the owner, 2026-11-10)
+  check(/loop$/.test(card.name) && card.lengthShown && !card.level, 'the loop\'s card: its length, no Quick / Fun / Long way: ' + JSON.stringify(card));
+  const seen = await page.evaluate(() => [...document.querySelectorAll('#routeCard *')].filter((e) => e.getClientRects().length && !e.children.length && /^(Quick|Fun|Long way)$/.test(e.textContent.trim())).map((e) => e.textContent));
+  check(!seen.length, 'no level is shown anywhere on a loop\'s card: ' + JSON.stringify(seen));
+  // one loop found here (the circle): nothing to choose between, so no "which way" cards
+  const ways = await page.evaluate(() => ({ hidden: document.getElementById('routeCardWays').hidden, n: document.querySelectorAll('#routeCardWays [data-way]').length }));
+  check(ways.hidden && ways.n === 0, 'one loop found: no cards to choose from: ' + JSON.stringify(ways));
   check(JSON.stringify(card.lengths) === '["15 mi","30 mi","45 mi","60 mi","90 mi"]' && JSON.stringify(card.dial) === JSON.stringify(card.lengths), 'one unit, yours, on the dial and the card: ' + JSON.stringify(card));
   check(/loop/.test(card.note), 'the card says what the loop search found: ' + card.note);
   await scan(page, 'the loop card');
-  // the level on a loop: its card's pick of the loops built
-  const maxSays = lcards.find((c) => c.level === 'max');
-  await page.click('#routeCardFun [data-fun="max"]');
-  await page.waitForFunction(() => /^Long way: /.test(document.getElementById('routeProgress').textContent), null, { timeout: 5000 });
-  const maxNow = (await levelCards(page)).find((c) => c.level === 'max');
-  check(maxNow.on && maxNow.checked && maxNow.text === maxSays.text, 'Long way\'s card is on, its loop the one it said: ' + JSON.stringify({ maxSays, maxNow }));
   await tap('#routeDriveBtn', 'Start');
   await page.waitForFunction(() => window.apexDebug.driveActive && apexDebug.track && /loop$/.test(apexDebug.track.name), null, { timeout: 10000 });
   check(taps.n === 2, `a loop in 2 taps: ${taps.log.join(' → ')}`);
 }, IPHONE);
 
-flow('level cards: one control on the four phone shapes, a destination and a loop: each card its level, time and corners, a line each, nothing cut or under the island (the owner, 2026-11-04)', async (page, base) => {
+flow('level cards: one control on the four phone shapes, a destination: each card its level, time and corners, a line each, nothing cut or under the island (the owner, 2026-11-04); a loop has none', async (page, base) => {
   await planRouter(page);
   const { cdp } = await planPage(page, base);
   // every card inside the screen and its row, its name, time and corners each on one line (no "11 min / quicker ·")
@@ -5898,11 +5895,70 @@ flow('level cards: one control on the four phone shapes, a destination and a loo
   await page.waitForFunction(() => getComputedStyle(document.getElementById('loopSuggest')).display !== 'none', null, { timeout: 10000 });
   await page.click('#loopSuggestGo');
   await cardUp(page, 30000); await planDone(page, 30000); await page.waitForTimeout(600);
-  const cards = await levelCards(page);
-  check(cards.every((c) => !c.further), 'a loop\'s three levels are all looked at: ' + JSON.stringify(cards));
+  check(await page.evaluate(() => document.getElementById('routeCardFun').hidden && !document.getElementById('routeCardLoop').hidden), 'a loop\'s card has its length and no level cards');
   if (process.env.SHOTS) await page.screenshot({ path: `${process.env.SHOTS}/loop-card.png` });
-  await shapes('loop');
+  for (const [orient, d] of Object.entries(SAFE)) {
+    await page.setViewportSize({ width: d.w, height: d.h });
+    await cdp.send('Emulation.setSafeAreaInsetsOverride', { insets: d.i });
+    await page.waitForTimeout(500);
+    await page.evaluate(() => { document.querySelector('.stage') && (document.querySelector('.stage').scrollLeft = 0); document.getElementById('routeCardLoop').scrollIntoView({ block: 'nearest' }); });
+    await page.waitForTimeout(200);
+    const under = (await unsafe(page, d)).filter((b) => /\d+ mi\b|Length/i.test(b));
+    check(!under.length, `loop, ${orient}: the loop's length clears the island, the home bar and the corners:\n  ${under.join('\n  ')}`);
+  }
 }, IPHONE);
+
+flow('a loop\'s choices are which way to head, not Quick / Fun / Long way: the loops found as cards, each its outline, way, time and corners; a tap puts that loop up (the owner, 2026-11-10)', async (page, base) => {
+  graphDir = graphFixture(true);
+  try {
+    await page.route('https://valhalla1.openstreetmap.de/**', (route) => route.abort());   // our tiles alone
+    // a destination's level left on Quick: a loop takes no notice of it
+    await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); localStorage.setItem('apex.permsExplained', '1'); localStorage.setItem('apex.funLevel', 'quick'); } catch (_) {} });
+    const cdp = await page.context().newCDPSession(page);
+    await cdp.send('Emulation.setSafeAreaInsetsOverride', { insets: SAFE.portrait.i });
+    await page.goto(base + '/index.html');
+    await page.waitForFunction(() => window.apexDebug && window.apexDebug.map && window.ApexStages && !document.getElementById('boot'), null, { timeout: 20000 });
+    await page.evaluate(() => { const b = [...document.querySelectorAll('#loopDetents [data-loop-mi]')][0]; b.click(); document.getElementById('findLoopBtn').click(); });
+    await page.waitForFunction(() => Array.isArray(window.apexDebug.lastLoop) && !document.getElementById('planPanel').classList.contains('busy'), null, { timeout: 60000 });
+    await cardUp(page, 30000); await page.waitForTimeout(600);
+    const read = () => page.evaluate(() => {
+      const box = document.getElementById('routeCardWays'), row = box.getBoundingClientRect(), t = apexDebug.track;
+      return { hidden: box.hidden, levels: !document.getElementById('routeCardFun').hidden, pager: !document.getElementById('routeCardPager').hidden, name: t && t.name, km: t && t.dist ? Math.round(t.dist[t.dist.length - 1]) : null,
+        won: (apexDebug.lastLoop.find((d) => d.picked) || {}).hwyShare,
+        cards: [...box.querySelectorAll('[data-way]')].map((b) => { const r = b.getBoundingClientRect(), p = b.querySelector('svg path'), a = b.querySelector('svg');
+          return { text: b.innerText.replace(/\s+/g, ' ').trim(), on: b.classList.contains('on'), checked: b.getAttribute('aria-checked') === 'true', label: b.getAttribute('aria-label'),
+            line: p ? p.getAttribute('d').split('L').length : 0, art: a ? Math.round(a.getBoundingClientRect().width) : 0,
+            fits: r.left >= row.left - 0.5 && r.right <= row.right + 0.5 && r.right <= innerWidth && b.scrollWidth <= b.clientWidth + 1, h: Math.round(r.height) }; }) }; });
+    const a = await read();
+    check(!a.levels, 'no Quick / Fun / Long way on a loop: ' + JSON.stringify(a));
+    check(a.won === 0, 'with the level left on Quick, the loop still keeps off the motorway: a loop has one style: ' + a.won);
+    check(!a.hidden && a.cards.length >= 2 && a.cards.length <= 3, 'the loops found are the choices, two or three of them: ' + JSON.stringify(a.cards));
+    const WAY = /^(North|Northeast|East|Southeast|South|Southwest|West|Northwest|Around here) (\d+:\d\d|\d+ min) \d+ corners?$/i;
+    check(a.cards.every((c) => WAY.test(c.text)), 'each card: the way it heads, its time and its corners: ' + JSON.stringify(a.cards.map((c) => c.text)));
+    check(a.cards.every((c) => c.line >= 8 && c.art >= 30), 'each card draws its own loop: ' + JSON.stringify(a.cards.map((c) => [c.line, c.art])));
+    check(a.cards.every((c) => /^Loop (to the \w+|around here): /.test(c.label)), 'each card says what it is aloud: ' + JSON.stringify(a.cards.map((c) => c.label)));
+    check(a.cards[0].on && a.cards[0].checked && a.cards.filter((c) => c.on).length === 1, 'the loop on the map is the card that is on, the best first: ' + JSON.stringify(a.cards.map((c) => c.on)));
+    check(a.cards.every((c) => c.fits), 'every card inside its row, nothing cut: ' + JSON.stringify(a.cards));
+    check(!a.pager, 'the cards are the choices: no page marks beside them');
+    const bad = await unsafe(page, SAFE.portrait);
+    check(!bad.length, `the loop's card: under the island, the home bar or a corner, or keys on keys:\n  ${bad.join('\n  ')}`);
+    if (process.env.SHOTS) { require('fs').mkdirSync(process.env.SHOTS, { recursive: true }); await page.screenshot({ path: `${process.env.SHOTS}/loop-ways.png` }); }
+    // a tap on another way: that loop goes up, its card on; nothing is planned again (the network is off)
+    const wasShape = await page.evaluate(() => apexDebug.track.lat.length + ':' + apexDebug.track.lat[Math.floor(apexDebug.track.lat.length / 2)]);
+    await page.click('#routeCardWays [data-way="1"]');
+    await page.waitForFunction((was) => apexDebug.track && apexDebug.track.lat.length + ':' + apexDebug.track.lat[Math.floor(apexDebug.track.lat.length / 2)] !== was
+      && document.querySelector('#routeCardWays [data-way="1"]') && document.querySelector('#routeCardWays [data-way="1"]').classList.contains('on'), wasShape, { timeout: 10000 });
+    const b = await read();
+    check(/loop$/.test(b.name) && b.cards[1].on && !b.cards[0].on && b.cards.length === a.cards.length, 'the other loop is up and its card is on: ' + JSON.stringify(b.cards.map((c) => c.on)));
+    check(JSON.stringify(b.cards.map((c) => c.text)) === JSON.stringify(a.cards.map((c) => c.text)), 'the cards keep their places and their numbers: ' + JSON.stringify([a.cards.map((c) => c.text), b.cards.map((c) => c.text)]));
+    if (process.env.SHOTS) { await page.evaluate(() => document.getElementById('routeCardWays').scrollIntoView({ block: 'center' })); await page.waitForTimeout(300); await page.screenshot({ path: `${process.env.SHOTS}/loop-ways-2.png` }); }
+    // at the largest text the cards stack, each still whole
+    await page.evaluate(TYPE_AT(2));
+    await page.waitForTimeout(300);
+    const big = await read();
+    check(big.cards.every((c) => c.fits), 'at the largest text every card is still whole: ' + JSON.stringify(big.cards));
+  } finally { graphDir = null; }
+}, { ...IPHONE, geolocation: { latitude: 39.205, longitude: -84.55 }, permissions: ['geolocation'] });
 
 flow('the map\'s viewpoint, café and fuel stamps along a route never pile up: overlapping ones hide, the most useful few kept (the owner, 2026-11-04)', async (page, base) => {
   await planRouter(page);

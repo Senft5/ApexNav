@@ -4,6 +4,34 @@ Decisions Claude made for you, newest first. Each one says what was decided, why
 you reach one you've seen. If you disagree with a call, say so and it gets reversed; nothing here is hard to undo unless
 it says so. Things only you can do are in docs/OWNER_TODO.md.
 
+## 2026-11-10 (fable-loops): a loop has no Quick / Fun / Long way; its card offers its length and which way to head (claude/fable-loops)
+
+You asked: "why do loops need a long way a fun and a quick? the whole point is aimless driving". They don't. On a
+loop's card the three level cards are gone (on the test loop they were three copies of the same loop). A loop is now
+found one way whatever the destination level is set to: good roads, about the length you asked for, off the highways
+(the engine's Fun; someone whose level was Quick used to get loops that could be a quarter highway).
+
+What a loop's card offers instead is the loop's own: its length (as before), and which way to head. When the search
+finds really different loops, up to three are cards, each drawn as its own outline (north up, a dot where you start),
+named by where it goes (North, Southeast…; "Around here" when it circles the start), with its time and corners. A tap
+puts that loop on the map; nothing is planned again, so planning takes no longer. The second and third cards are loops
+that head somewhere else when one is within reach of the best (60 degrees apart, within 100 points), before any
+lookalike. With one loop found there are no cards: nothing to choose. Two loops can share a name (both Southeast);
+their outlines tell them apart.
+
+Not changed: the 1 hour / 2 hours loops and "My free time" in Options, and the ranking functions' Quick and Long way
+weights in fun_route.js (unused by the app now, still tested).
+
+Undo: revert the PR. To bring a level back for loops only, set `LOOP_STYLE` in web/cockpit.js.
+
+## 2026-11-10 (fable-fix-join-scope): my mistake in #332, fixed: the signed-out People page also showed at the top of the Garage (claude/fable-fix-join-scope)
+
+The rule that lets the new signed-out People page fill the sheet named the People panel by its id, and an id outranks
+the rule that hides the other tabs' panels. So, signed out, the whole "Drive with friends." page stood at the top of
+the Garage as well. Both rules now apply on the People tab only. I had read the page on People and never opened the
+Garage signed out after the change; the screen-by-screen flow now checks that the Garage shows no People page.
+- Undo: not something to undo; reverting #332 would also remove it.
+
 ## 2026-11-10 (fable-quiet-news): What's new never comes up over something you have started (claude/fable-quiet-news)
 
 After an update the "What's new" sheet came up 1.2 seconds into the launch whatever you were doing: I caught it
@@ -13,14 +41,6 @@ a tab, or are driving, it leaves this launch alone and is there the next time th
 marked as seen until you close it).
 
 Cost: someone who always taps within the first second sees the news a launch or two later. Undo: revert the PR.
-
-## 2026-11-10 (fable-fix-join-scope): my mistake in #332, fixed: the signed-out People page also showed at the top of the Garage (claude/fable-fix-join-scope)
-
-The rule that lets the new signed-out People page fill the sheet named the People panel by its id, and an id outranks
-the rule that hides the other tabs' panels. So, signed out, the whole "Drive with friends." page stood at the top of
-the Garage as well. Both rules now apply on the People tab only. I had read the page on People and never opened the
-Garage signed out after the change; the screen-by-screen flow now checks that the Garage shows no People page.
-- Undo: not something to undo; reverting #332 would also remove it.
 
 ## 2026-11-10 (fable-design-signed-out): People, signed out, is a page instead of a form (claude/fable-design-signed-out)
 
