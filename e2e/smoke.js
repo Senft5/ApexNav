@@ -2534,6 +2534,23 @@ flow('drive ended: the card and the Log give the same score and time for the rec
     return { id: d.id, score: document.getElementById('endScore').textContent, meta: document.getElementById('endMeta').textContent,
       line: document.getElementById('endLine').textContent, share: !!document.getElementById('endShare').offsetParent };
   });
+  // design pass 9: with one drive in the Log the number stands alone (a usual is not one drive); the keys are a solid row
+  // over Mark a stage and Drive it again, side by side, and nothing left on a row by itself
+  const alone = await page.evaluate(async () => { await new Promise((r) => setTimeout(r, 400)); const R = (id) => { const e = document.getElementById(id), r = e.getBoundingClientRect(); return e.offsetParent ? [Math.round(r.left), Math.round(r.top), Math.round(r.width)] : null; };
+    return { usual: document.getElementById('endUsual').hidden, share: R('endShare'), stage: R('endStage'), again: R('endAgain'), acts: Math.round(document.querySelector('.end-acts').getBoundingClientRect().width) }; });
+  check(alone.usual && alone.share && alone.stage && alone.again && alone.share[2] === alone.acts && alone.stage[1] === alone.again[1] && alone.stage[1] > alone.share[1] && Math.abs(alone.stage[2] - alone.again[2]) <= 1,
+    'one drive: no "usual"; Share card is the row, Mark a stage and Drive it again share the next: ' + JSON.stringify(alone));
+  // with a few scored drives before it in the Log, the number is set against them (the Log's own summaries, read on the phone)
+  const usual = await page.evaluate(async (id) => {
+    const real = ApexRecording.summaries;
+    ApexRecording.summaries = async (...x) => [640, 655, 612, 649, 630].map((score, i) => ({ id: 'old' + i, name: 'Other Rd', date: '2026-10-0' + (i + 1), ds: { score } })).concat(await real(...x));
+    const d = await ApexRecording.get(id); apexDebug.showEndCard(d, Date.now() - 600e3, { quiet: true });
+    for (let i = 0; i < 100 && document.getElementById('endUsual').hidden; i++) await new Promise((r) => setTimeout(r, 50));
+    ApexRecording.summaries = real;
+    const u = document.getElementById('endUsual'), l = document.querySelector('.end-score span'), a = u.getBoundingClientRect(), b = l.getBoundingClientRect(), box = document.querySelector('.end-score').getBoundingClientRect();
+    return { text: u.textContent, score: +document.getElementById('endScore').textContent, sameLine: Math.abs(a.bottom - b.bottom) < 6, clear: a.left > b.right + 8, inside: a.right <= box.right + 1 };
+  }, card.id);
+  check(usual.text === `${usual.score - 640} over your usual` && usual.sameLine && usual.clear && usual.inside, 'the score against your usual, on the label\'s line: ' + JSON.stringify(usual));
   check(/^\d+$/.test(card.score) && card.share && !/Not enough clean corners/.test(card.line), 'the card scores the drive and offers Share: ' + JSON.stringify(card));
   await page.goto(`${base}/analysis.html?tab=drive&drive=${encodeURIComponent(card.id)}`);
   await page.waitForSelector('.dv-score b', { timeout: 15000 });

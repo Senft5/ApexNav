@@ -17,6 +17,19 @@ Also: a time loop's note said "the closest good loop to 1.5 h"; times now read "
 
 Not changed: Options keeps its 1 hour / 2 hours keys and My free time. Undo: revert the PR.
 
+## 2026-11-10 (fable-end-card): design pass 9: the drive's score is set against your usual; the card's keys sit evenly (claude/fable-end-card)
+
+The drive-ended card's big number had nothing to stand against: is 673 good? Now, on the label's line, it says "33 over
+your usual" (or "12 under your usual", or "About your usual" within five points). Your usual is the middle score of your
+last ten scored drives before this one, read from the Log on the phone. With fewer than three there is no usual, and the
+card says nothing rather than guess. It compares across roads: the score is the driver's, not the road's. If you would
+rather it compared only the same road, say so (that already has its own line, "Your best on this road").
+
+The keys: Share card is a row of its own; Mark a stage and Drive it again share the row under it (it was two keys and an
+orphan on a second row). Nothing changes place when the score lands.
+
+Undo: revert the PR. The numbers are `USUAL_N`, `USUAL_MIN`, `USUAL_NEAR` in web/end_line.js.
+
 ## 2026-11-10 (fable-loops): a loop has no Quick / Fun / Long way; its card offers its length and which way to head (claude/fable-loops)
 
 You asked: "why do loops need a long way a fun and a quick? the whole point is aimless driving". They don't. On a

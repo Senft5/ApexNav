@@ -8164,6 +8164,7 @@
       // scoring: no number yet, never "--" (that means "no score"), and no key that needs the score
       $('endScore').textContent = '…'; $('endScore').classList.add('unk'); $('endScore').setAttribute('aria-busy', 'true');
       $('endScore').parentElement.classList.remove('no-score');
+      $('endUsual').textContent = ''; $('endUsual').hidden = true;
       $('endLog').href = $('endLogKey').href = `analysis.html?tab=drive&drive=${encodeURIComponent(c.id)}`;
       // U-118: the keys are the scored layout from the first frame (Share card solid, Open in the Log the link), so nothing
       // swaps under a reaching finger when the score lands; Share waits for it. Only a drive with no score changes them.
@@ -8186,6 +8187,17 @@
       $('endScore').textContent = none ? [Number.isFinite(c.len_m) ? ApexFormat.distance(c.len_m) : null, noScoreWords(c.corners)].filter(Boolean).join(' · ') : String(c.ds.score);
       $('endScore').classList.remove('unk');                         // the words are the answer; "--" never shows as a score here
       $('endScore').parentElement.classList.toggle('no-score', none);
+      // the number against your usual (design pass 9): "31 over your usual", from your last few scored drives in the Log.
+      // Read after the card is painted (the Log's summaries, on the phone), and only said with three or more to go by.
+      if (!none && window.ApexEndLine && ApexEndLine.usual) (async () => {
+        try {
+          const all = await ApexRecording.summaries(null), me = all.find((o) => o.id === c.id);
+          const before = all.filter((o) => o.id !== c.id && (!me || String(o.date || '') <= String(me.date || ''))).map((o) => (o.ds && o.ds.score != null ? Math.round(o.ds.score) : null));
+          const u = ApexEndLine.usual(c.ds.score, before);
+          if (!u || !endDrive || endDrive.id !== c.id) return;
+          $('endUsual').textContent = u.text; $('endUsual').hidden = false;
+        } catch (_) { /* no Log to read: nothing said */ }
+      })();
       // U-111: one coaching sentence, the Log's (analysis_client.js coachLineOf, written in the job that scored the drive)
       const tip = none ? '' : typeof c.coach === 'string' ? c.coach : '';
       const ended = window.ApexDriveKeep ? ApexDriveKeep.endNote(c) : null;
