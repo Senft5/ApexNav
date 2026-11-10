@@ -5416,7 +5416,14 @@
       let friends = [], crews = [];
       try { [friends, crews] = await Promise.all([apiCall('GET', '/api/friends').then(jsonOf), apiCall('GET', '/api/crews').then(jsonOf)]); } catch (_) {}
       const fr = (friends || []).filter(f => f.status === 'accepted' && f.handle), cr = crews || [];
-      if (!fr.length && !cr.length) { box.replaceChildren(el('p', { className: 'note', textContent: 'Sign in and add friends or a crew (People) to share routes.' })); return; }
+      // the road can also go into one of your roadbooks (roadbooks.js addPart), friends or none
+      const bookPart = () => { const p = roadbooks && accountMe && accountMe.member ? roadbooks.addPart(() => box.replaceChildren()) : null; return p ? [p] : []; };
+      if (!fr.length && !cr.length) {
+        const books = bookPart();                                        // signed in with nobody to send it to yet: the roadbook is the way to keep it
+        box.replaceChildren(el('p', { className: 'note', textContent: books.length ? 'Add friends or a crew (People) to send routes to them.' : 'Sign in and add friends or a crew (People) to share routes.' }), ...books);
+        if (books.length) box.scrollIntoView({ block: 'nearest' });
+        return;
+      }
       const picked = { friends: new Set(), crews: new Set() };
       if (shareTo && fr.some(f => f.handle === shareTo)) picked.friends.add(shareTo);
       shareTo = null;
@@ -5430,7 +5437,8 @@
           const j = await jsonOf(r);
           if (!r.ok) { toast(r.status === 429 ? 'That\'s a lot of shares today.' : 'Couldn\'t share it. Try again.'); return; }
           toast(j && j.shared ? `Shared. They'll find it in People.` : 'Nobody to share it with.'); box.replaceChildren();
-        }, 'ink-btn solid'), btn('Cancel', () => box.replaceChildren(), 'linkbtn')));
+        }, 'ink-btn solid'), btn('Cancel', () => box.replaceChildren(), 'linkbtn')), ...bookPart());
+      box.scrollIntoView({ block: 'nearest' });
     });
     // From friends (REVIEW_PEOPLE P-13/P-14): what friends shared with you, newest first, with when; `list` is the render's read.
     const sharedWhen = (at) => { const t = Date.parse(String(at || '').replace(' ', 'T') + 'Z'); return Number.isFinite(t) && window.ApexFriendsMap ? ApexFriendsMap.spokenAgo(t) : ''; };
@@ -5642,6 +5650,27 @@
       const d = $('planSpots'); d.hidden = false;
       d.addEventListener('toggle', () => { if (!d.open) return; const sec = spotsFeed.section(); const h = sec.querySelector(':scope > h3'); if (h) h.remove(); $('planSpotsBody').replaceChildren(sec); });
     } });
+    // Roadbooks (web/roadbooks.js, docs/SOCIAL.md 2.6): collections of great roads, yours, followed and public ones near you;
+    // a road you drive is stamped from your own Log. In People (Friends), in Where to?, on a route card's Share, and by link.
+    let roadbooks = null;
+    onSocial(() => { try { roadbooks = window.ApexRoadbooks ? ApexRoadbooks.mount({ el, btn, toast, apiCall, jsonOf, copyText,
+      me: () => accountMe, here: () => state.lastPosition || (() => { const c = map.getCenter(); return { lat: c.lat, lon: c.lng }; })(), mayLookUp: nearLookupOk,
+      cellQuery: (lat, lon) => ApexPrivacyZones.cellQuery(lat, lon), fmtLen: (m) => ApexUnits.long(m, 1, true), origin: () => shareOrigin(),
+      zones: () => privacyZones, planned: () => (plannedRoute && Array.isArray(plannedRoute.lat) && plannedRoute.lat.length > 1 ? plannedRoute : null),
+      report: (o) => safety && safety.report(o), changed: () => { if (booksRowCount) booksRowCount(); },
+      driveRoad: async (road, book) => {
+        closeSheet();
+        const t = await trackFromPolyline(road.geom, `roadbook_${road.id}`, road.name);
+        await buildRoute(null, t.id, road.name, t);
+        toast(`${road.name}, from ${book.name}: ${ApexUnits.long(totalM(), 1)}.`);
+      },
+    }) : null; } catch (e) { console.error('roadbooks', e); } });
+    let booksRowCount = null;
+    onSocial(() => { if (roadbooks) {
+      const d = $('planBooks'); d.hidden = false;
+      d.addEventListener('toggle', () => { if (d.open) $('planBooksBody').replaceChildren(roadbooks.nearSection()); });
+    } });
+    function openRoadbookLink(id) { needSocial().then(() => { if (roadbooks) { closeSheet(); roadbooks.open(id); } }); }
     let garage = null;
     // Build threads (web/builds.js, REVIEW.md 5.3): from a car card, the crew page and Builds you follow.
     let builds = null;
@@ -6006,11 +6035,23 @@
 
       // P-13, P-14, P-19: what friends shared with you is the one row left; spots went to Where to?, the points to the Garage,
       // who sees you to the You row above
+      // Roadbooks (roadbooks.js) sit under it in the same list: yours, followed, near you. P-08: a new account with no friends
+      // and no book yet keeps its one sentence and one key; its first roadbook starts from a route card's Share.
+      const friendRows = el('div', { className: 'nav-rows' });
       if (shared.length || accepted.length) {
         let sharedRow = null;
         sharedRow = navRow('From friends', sharedRoutesSection((n) => { if (sharedRow) sharedRow._count.textContent = n ? `${n} route${n === 1 ? '' : 's'}` : ''; }, Promise.resolve(sharedList)));   // U-125: the count says what it counts
-        body.append(el('div', { className: 'nav-rows' }, sharedRow));
+        friendRows.append(sharedRow);
       }
+      booksRowCount = null;
+      if (roadbooks && (shared.length || accepted.length || roadbooks.hasAny())) {
+        let booksRow = null;
+        const say = (t) => { if (booksRow) booksRow._count.textContent = t; };
+        booksRow = navRow('Roadbooks', roadbooks.section(say));
+        booksRowCount = () => { const l = roadbooks.lists(); if (l) say([l.mine.length ? `${l.mine.length} yours` : '', l.following.length ? `${l.following.length} followed` : ''].filter(Boolean).join(' \u00b7 ')); };
+        friendRows.append(booksRow);
+      }
+      if (friendRows.children.length) body.append(friendRows);
       if (stash('apex.add') && add.value && !accepted.some(f => f.handle === add.value)) add.focus();
 
       // ---- Crews: your crew's page, its drives, the convoy, crews near you and a new one; crew invites live in a crew ----
@@ -8203,6 +8244,7 @@
     function endCardScored(c, others, opts = {}) {
       if (!endDrive || endDrive.id !== c.id) return;                   // another card since
       endDrive = { ...endDrive, ...c };
+      if (roadbooks) roadbooks.afterDrive(c.id).catch(() => {});      // a road of one of your roadbooks this drive covered is stamped
       $('endMeta').textContent = ApexFormat.factsLine(c);
       $('endScore').removeAttribute('aria-busy');
       // D-6 / R-5 (panel round 1): a drive with no score still reads as a drive. The score's slot says what it was, "3.1 mi ·
@@ -8719,7 +8761,7 @@
       const ios = /iPhone|iPad|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
       if (window.APEX_EMBED || !ios) return;
       const q = new URLSearchParams();
-      for (const k of ['invite', 'crew', 'add', 'convoy']) { const v = params.get(k); if (v && /^[A-Za-z0-9._-]{1,200}$/.test(v)) q.set(k, v); }
+      for (const k of ['invite', 'crew', 'add', 'convoy', 'roadbook']) { const v = params.get(k); if (v && /^[A-Za-z0-9._-]{1,200}$/.test(v)) q.set(k, v); }
       try { if (![...q.keys()].length || sessionStorage.getItem('apex.stayInBrowser')) return; } catch (_) { if (![...q.keys()].length) return; }
       const bar = document.createElement('div');
       bar.id = 'openInApp';
@@ -8752,6 +8794,7 @@
         if (ok(p.add)) sessionStorage.setItem('apex.add', p.add.toLowerCase());
       } catch (_) {}
       if (ok(p.convoy)) needSocial().then(() => { if (convoy && convoy.takeInvite) convoy.takeInvite(p.convoy); });
+      if (ok(p.roadbook)) { openRoadbookLink(p.roadbook); return; }      // a roadbook someone sent: its page
       if (ok(p.road)) { closeSheet(); openRoadLink(p.road); return; }   // DA-4: a road someone sent, as a route card
       // apexnav://open?go=drive (a Shortcuts automation, IDEAS C-05); go=report and go=end from Siri (IDEAS V-07), during a drive only
       if (p.go) {
@@ -9026,6 +9069,7 @@
       if (params.get('book') === '1' || params.get('view') === 'route' || params.get('view') === 'drives') openPlan(true);
       if (VIEW_TITLES[params.get('view')] || PEOPLE_SIDES[params.get('view')] || params.get('view') === 'setup') openSheet(params.get('view'));
       if (params.get('go') === 'drive') driveFromLink();
+      if (/^[A-Za-z0-9_-]{16}$/.test(params.get('roadbook') || '')) openRoadbookLink(params.get('roadbook'));   // ?roadbook=: a roadbook's link
       roadFromLocation(location.search);                               // DA-4: ?road= (the app), #road= (the website)
       if (params.get('again')) driveAgain(params.get('again'));      // panel D-1: Drive it again from a Log page opened on its own   // the app opened from apexnav://open?go=drive (IDEAS C-05)
       recoverKept().catch((e) => console.error('recover drives', e));   // Round 3: a drive never ended goes to the Log
@@ -9042,7 +9086,7 @@
     // F-15: the Log's frame loads while the map is idle after launch (not in a drive or a hidden page: then its first open loads it)
     setTimeout(() => idle(prewarmLog), 5000);
     // F-03: the social modules once the launch is over; a link that needs them, or People, asks for them at once
-    if (['convoy', 'crew', 'invite', 'add'].some((k) => params.has(k))) needSocial();
+    if (['convoy', 'crew', 'invite', 'add', 'roadbook'].some((k) => params.has(k))) needSocial();
     else { let asked = false; const go = () => { if (!asked) { asked = true; idle(needSocial); } }; map.once('idle', () => setTimeout(go, 300)); setTimeout(go, 6000); }
     if (document.fonts) document.fonts.ready.then(() => render(true));
   })();

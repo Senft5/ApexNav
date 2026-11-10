@@ -17,6 +17,7 @@ const HIDES: Record<ReportKind, string | null> = {
   user: null, car: "1",
   crew: "(SELECT visibility FROM crews WHERE id = r.target_id) = 'public'",
   highlight: "1", event: "1", photo: "1", chat: "1", post: "1", reply: "1", build_chat: "1",
+  roadbook: "(SELECT visibility FROM roadbooks WHERE id = r.target_id) = 'public'",
 };
 
 const first = <T>(env: Env, sql: string, ...args: unknown[]) => env.DB.prepare(sql).bind(...args).first<T>();
@@ -117,6 +118,13 @@ async function resolveTarget(env: Env, v: Viewer, kind: ReportKind, target: unkn
     if (!m) throw new HttpError(404, "no_message");
     return { id, person: m.author };
   }
+  if (kind === "roadbook") {   // a roadbook someone else shows you: a public one, or a friend's (roadbooks.ts)
+    const b = await first<{ owner: string }>(env,
+      `SELECT b.owner FROM roadbooks b WHERE b.id = ?1 AND b.owner != ?2 AND (b.visibility = 'public' OR (b.visibility = 'friends'
+          AND EXISTS (SELECT 1 FROM friendships f WHERE f.status = 'accepted' AND f.user_a = MIN(b.owner, ?2) AND f.user_b = MAX(b.owner, ?2))))`, id, v.id);
+    if (!b) throw new HttpError(404, "no_roadbook");
+    return { id, person: b.owner };
+  }
   const h = await first<{ author_id: string | null }>(env, "SELECT author_id FROM highlights WHERE id = ? AND status = 'active'", id);
   if (!h) throw new HttpError(404, "no_highlight");
   return { id, person: h.author_id };
@@ -191,6 +199,8 @@ export async function moderationQueue(env: Env, v: Viewer) {
     (r) => `build chat "${String(r.body).slice(0, 120)}" · @${r.handle ?? "?"}`);
   await each("event", (q) => `SELECT e.id, e.title, c.name AS crew, u.handle FROM crew_events e JOIN crews c ON c.id = e.crew_id LEFT JOIN users u ON u.id = e.created_by WHERE e.id IN (${q})`,
     (r) => `${r.title} · ${r.crew} · @${r.handle ?? "?"}`);
+  await each("roadbook", (q) => `SELECT b.id, b.name, b.visibility, b.roads_n, u.handle FROM roadbooks b JOIN users u ON u.id = b.owner WHERE b.id IN (${q})`,
+    (r) => `roadbook "${String(r.name).slice(0, 80)}" (${r.visibility}, ${r.roads_n} roads) · @${r.handle ?? "?"}`);
   return rows.map((r) => {
     const label = labels.get(`${r.kind}:${r.target_id}`) ?? null;
     return { kind: r.kind, target: r.target_id, label, gone: label === null, reporters: r.reporters, latest: r.latest,
@@ -229,6 +239,7 @@ export async function moderationResolve(env: Env, v: Viewer, req: Request): Prom
       env.DB.prepare("DELETE FROM crew_invites WHERE created_by = ?").bind(id),
       env.DB.prepare("UPDATE crews SET visibility = 'private' WHERE owner = ?").bind(id),
       env.DB.prepare("UPDATE cars SET shared = 0 WHERE owner = ?").bind(id),
+      env.DB.prepare("UPDATE roadbooks SET visibility = 'private' WHERE owner = ?").bind(id),
     ],
     crew: [env.DB.prepare("UPDATE crews SET visibility = 'private' WHERE id = ?").bind(id)],
     car: [env.DB.prepare("UPDATE cars SET shared = 0 WHERE id = ?").bind(id)],
@@ -238,6 +249,8 @@ export async function moderationResolve(env: Env, v: Viewer, req: Request): Prom
     post: [env.DB.prepare("DELETE FROM build_posts WHERE id = ?").bind(id)],
     reply: [env.DB.prepare("DELETE FROM build_replies WHERE id = ?").bind(id)],
     build_chat: [env.DB.prepare("DELETE FROM build_chat WHERE id = ?").bind(id)],
+    // back to private, its followers let go; a removed book can't be made public again (roadbooks.ts mayShow)
+    roadbook: [env.DB.prepare("UPDATE roadbooks SET visibility = 'private' WHERE id = ?").bind(id), env.DB.prepare("DELETE FROM roadbook_follows WHERE book_id = ?").bind(id)],
     photo: [],                                                        // stays down: removed reports hide it for good (photos.ts)
   }[kind];
   await env.DB.batch([mark, ...act]);

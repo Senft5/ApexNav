@@ -3440,6 +3440,118 @@ flow('shared routes: one a friend shared shows on People, Friends, under From fr
   check(/corners/.test(await page.textContent('#routeCardMeta')), 'the route card has its corners (notes rebuilt from the shape)');
 });
 
+flow('roadbooks: a planned road goes into a new roadbook from Share; People lists it; it is made public; one near you is followed; a road your Log covers is stamped; a link opens one signed out (Worker stubbed, SOCIAL 2.6)', async (page, base) => {
+  await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); } catch (_) {} });
+  const geom = Array.from({ length: 240 }, (_, i) => [-83.9 + i * 4e-4 + Math.sin(i / 6) * 3e-4, 35.6 + i * 3e-4]);
+  const other = Array.from({ length: 200 }, (_, i) => [-83.7 + i * 3e-4, 35.7 + Math.sin(i / 9) * 4e-4]);
+  let signedIn = true, n = 0;
+  const books = new Map(), calls = [];
+  books.set('NNNNNNNNNNNNNNNN', { id: 'NNNNNNNNNNNNNNNN', name: 'Foothills Parkway set', about: 'Three for a clear evening', visibility: 'public', by: 'cara', mine: false, followers: 4, following: false,
+    road_list: [{ id: 'far1', name: 'Foothills west', note: 'Best at dusk', geom: other, length_m: 5400, stamps: 2, stamped: false }] });
+  const card = (b) => ({ ...b, roads: b.road_list.length, length_m: b.road_list.reduce((a, r) => a + r.length_m, 0), lat: 35.6, lon: -83.8, road_list: undefined });
+  const boxed = (b) => ({ ...card(b), road_list: b.road_list.map((r) => ({ id: r.id, name: r.name, length_m: r.length_m, stamped: r.stamped,
+    box: [Math.min(...r.geom.map((p) => p[1])), Math.max(...r.geom.map((p) => p[1])), Math.min(...r.geom.map((p) => p[0])), Math.max(...r.geom.map((p) => p[0]))] })) });
+  await page.route('**/api/**', (route) => {
+    const u = new URL(route.request().url()), m = route.request().method(), body = () => JSON.parse(route.request().postData() || '{}');
+    const json = (b, status = 200) => route.fulfill({ status, contentType: 'application/json', body: JSON.stringify(b) });
+    const none = () => route.fulfill({ status: 204, body: '' });
+    let x;
+    if (u.pathname === '/api/me') return json(signedIn ? { signed_in: true, member: true, handle: 'me' } : { signed_in: false });
+    if (u.pathname === '/api/routes/shared') return json(signedIn ? [{ id: 'RRRRRRRRRRRRRRRR', name: 'Cherohala loop', created_at: '2026-10-28 05:00:00', from_handle: 'alice' }] : []);
+    if (u.pathname === '/api/routes/RRRRRRRRRRRRRRRR') return json({ id: 'RRRRRRRRRRRRRRRR', name: 'Cherohala loop', geom, from_handle: 'alice' });
+    if (u.pathname.startsWith('/api/roadbooks')) calls.push(`${m} ${u.pathname}${u.search}`);
+    if (u.pathname === '/api/roadbooks/near') return json([...books.values()].filter((b) => !b.mine && b.visibility === 'public').map((b) => ({ ...card(b), km: 14 })));
+    if (u.pathname === '/api/roadbooks' && m === 'GET') return signedIn ? json({ mine: [...books.values()].filter((b) => b.mine).map(boxed), following: [...books.values()].filter((b) => b.following).map(boxed) }) : json({ error: 'sign_in_required' }, 401);
+    if (u.pathname === '/api/roadbooks' && m === 'POST') { const id = 'MMMMMMMMMMMMMMM' + (n++); books.set(id, { id, name: body().name, about: null, visibility: 'private', by: 'me', mine: true, followers: 0, following: false, road_list: [] }); return json({ id }, 201); }
+    if ((x = /^\/api\/roadbooks\/roads\/([^/]+)\/stamp$/.exec(u.pathname))) { for (const b of books.values()) for (const r of b.road_list) if (r.id === x[1]) { r.stamped = m === 'PUT'; r.stamps += m === 'PUT' ? 1 : -1; return json({ stamped: r.stamped, stamps: r.stamps }); } return json({}, 404); }
+    if ((x = /^\/api\/roadbooks\/([^/]+)\/roads$/.exec(u.pathname)) && m === 'POST') { const b = books.get(x[1]), r = body(); b.road_list.push({ id: 'road' + (n++), name: r.name, note: null, geom: r.geom, length_m: 9000, stamps: 0, stamped: false }); return json({ id: 'x', length_m: 9000 }, 201); }
+    if ((x = /^\/api\/roadbooks\/([^/]+)\/follow$/.exec(u.pathname))) { const b = books.get(x[1]); b.following = m === 'PUT'; b.followers += m === 'PUT' ? 1 : -1; return none(); }
+    if ((x = /^\/api\/roadbooks\/([^/]+)$/.exec(u.pathname))) {
+      const b = books.get(x[1]);
+      if (!b || (!signedIn && b.visibility !== 'public')) return json({ error: 'no_roadbook' }, 404);
+      if (m === 'PUT') { Object.assign(b, body()); return none(); }
+      return json({ ...card(b), mine: signedIn && b.mine, road_list: b.road_list });
+    }
+    if (m === 'GET') return json([]);
+    return json({}, 404);
+  });
+  await page.goto(base + '/index.html');
+  await page.waitForFunction(() => window.apex && typeof window.apex.live === 'function');
+  // a planned road (one a friend shared), then Share on its card: the roadbook part is under the friends
+  await page.evaluate(() => document.querySelector('.tab[data-view="people"]').click());
+  await page.click('#accountBody .nav-row:has-text("From friends")');
+  await page.click('.side-pop.open button:has-text("Open")');
+  await page.waitForFunction(() => /Cherohala loop/.test(document.getElementById('routeCardName').textContent), null, { timeout: 8000 });
+  await page.click('#routeShareBtn');
+  await page.waitForSelector('#routeSharePick .rb-add');
+  check(/first 400 m and anything inside your privacy zones are left out/.test(await page.textContent('#routeSharePick .rb-add')), 'the part says what is left out');
+  await page.fill('#routeSharePick .rb-add input', 'Smokies classics');
+  await page.click('#routeSharePick .rb-add button:has-text("New roadbook")');
+  await page.waitForFunction(() => /Added to Smokies classics\./.test(document.getElementById('toast').textContent));
+  const mine = [...books.values()].find((b) => b.mine);
+  check(mine && mine.road_list.length === 1 && mine.road_list[0].name === 'Cherohala loop', 'the book has the road, under the route\'s name');
+  const sent = mine.road_list[0].geom;
+  check(sent.length >= 2 && sent.length <= 600 && Math.hypot((sent[0][1] - geom[0][1]) * 110540, (sent[0][0] - geom[0][0]) * 90500) > 350, 'its shape went without the first 400 m: ' + JSON.stringify(sent[0]));
+  check((await page.locator('#routeSharePick').innerText()).trim() === '', 'the Share box closes once it is added');
+  // People, Friends: the Roadbooks row counts it; its sheet lists it, and what is public near here
+  await page.evaluate(() => document.querySelector('.tab[data-view="people"]').click());
+  await page.waitForFunction(() => [...document.querySelectorAll('#accountBody .nav-row')].some((r) => /Roadbooks/.test(r.textContent) && r.querySelector('small').textContent === '1 yours'));
+  await page.click('#accountBody .nav-row:has-text("Roadbooks")');
+  await page.waitForSelector('.side-pop.open .rb-row:has-text("Smokies classics")');
+  check(/Only you · 1 road · /.test(await page.textContent('.side-pop.open .rb-row:has-text("Smokies classics")')), 'your book says who sees it and what is in it');
+  await page.waitForSelector('.side-pop.open .rb-row:has-text("Foothills Parkway set")');
+  check(/@cara · 1 road · .* · 4 following · .* away/.test(await page.textContent('.side-pop.open .rb-row:has-text("Foothills Parkway set")')), 'a public book near you says whose, how big, who follows and how far');
+  check(calls.some((c) => /^GET \/api\/roadbooks\/near\?lat=-?\d+\.\d&lon=-?\d+\.\d$/.test(c)), 'near you is asked by the coarse cell only: ' + calls.filter((c) => /near/.test(c)));
+  // your book's page: the map, the road with its thumbnail and Drive it; Edit makes it public
+  await page.click('.side-pop.open .rb-row:has-text("Smokies classics")');
+  await page.waitForSelector('.rb-pop.open .rb-road:has-text("Cherohala loop")');
+  check(await page.locator('.rb-pop.open .rb-map svg path').count() === 1 && await page.locator('.rb-pop.open .rb-road .rb-thumb svg').count() === 1, 'the book draws its road on a map, and the road has its thumbnail');
+  check(/0 of 1 driven/.test(await page.textContent('.rb-pop.open')), 'progress starts at none driven');
+  await page.click('.rb-pop.open button:has-text("Edit")');
+  await page.waitForSelector('.rb-pop.open [role="radio"]:has-text("Public")');
+  await page.locator('.rb-pop.open [role="radio"]:has-text("Public")').last().click();
+  check(/Your handle is on it/.test(await page.locator('.rb-pop.open').last().textContent()), 'going public says your handle goes on it');
+  await page.locator('.rb-pop.open button:has-text("Save")').last().click();
+  await page.waitForFunction(() => /is public\. Share its link/.test(document.getElementById('toast').textContent));
+  check(mine.visibility === 'public', 'the server was told');
+  await page.waitForSelector('.rb-pop.open button:has-text("Share")');
+  // sizes: every key on the book's page is a full target, nothing runs off the sheet
+  const small = await page.evaluate(() => [...document.querySelectorAll('.rb-pop.open button')].filter((b) => b.getClientRects().length).map((b) => { const r = b.getBoundingClientRect(); return { t: b.textContent, h: Math.round(r.height), off: r.right > innerWidth + 1 || r.left < -1 }; }).filter((b) => b.h < 44 || b.off));
+  check(!small.length, 'keys under 44 px or off the sheet: ' + JSON.stringify(small));
+  await page.evaluate(() => document.querySelectorAll('.rb-pop.open .side-pop-head button').forEach((b) => b.click()));
+  // the one near you: follow it; then a drive in the Log that covers its road stamps it when the page opens
+  await page.click('.side-pop.open .rb-row:has-text("Foothills Parkway set")');
+  await page.waitForSelector('.rb-pop.open .rb-road:has-text("Foothills west")');
+  check(/By @cara/.test(await page.textContent('.rb-pop.open')) && /2 members have driven it/.test(await page.textContent('.rb-pop.open .rb-road')) && /Best at dusk/.test(await page.textContent('.rb-pop.open .rb-road')), 'someone else\'s book: whose, the note, how many have driven the road');
+  check(!(await page.$('.rb-pop.open .rb-stamp')), 'no stamp before you have driven it');
+  await page.click('.rb-pop.open button:has-text("Follow")');
+  await page.waitForSelector('.rb-pop.open button[aria-pressed="true"]:has-text("Following")');
+  check(books.get('NNNNNNNNNNNNNNNN').following, 'the follow reached the server');
+  await page.evaluate(() => document.querySelectorAll('.rb-pop.open .side-pop-head button').forEach((b) => b.click()));
+  await page.evaluate(async (g) => {
+    const lat = g.map((p) => p[1] + 6 / 110540), lon = g.map((p) => p[0]);
+    await ApexRecording.store({ id: 'rb1', name: 'Evening run', date: '2026-11-08T23:10:00.000Z', lat, lon, dist: lat.map((_, i) => i * 27), speed_mps: lat.map(() => 15),
+      lon_g: lat.map(() => 0), lat_g: lat.map(() => 0), g_known: null, events: [], elev: null, hz: 1, source: 'web-gps', corners: [] });
+  }, other);
+  await page.waitForTimeout(350);
+  await page.click('.side-pop.open .rb-row:has-text("Foothills Parkway set")');
+  await page.waitForSelector('.rb-pop.open .rb-stamp', { timeout: 8000 });
+  await page.waitForFunction(() => /Stamped: Foothills west\. Your Log has you on it\./.test(document.getElementById('toast').textContent));
+  check(/3 members have driven it · you on (8 Nov|Nov 8)/.test(await page.textContent('.rb-pop.open .rb-road')), 'the road says you drove it, and when your Log says: ' + await page.textContent('.rb-pop.open .rb-road'));
+  check(/Driven/.test(await page.textContent('.rb-pop.open .rb-meter + *, .rb-pop.open b')) && calls.includes('PUT /api/roadbooks/roads/far1/stamp'), 'the stamp was sent once the Log showed the road');
+  check(calls.filter((c) => /stamp/.test(c)).length === 1, 'and only that one');
+  // Drive it plans the road
+  await page.click('.rb-pop.open .rb-road button:has-text("Drive it")');
+  await page.waitForFunction(() => /Foothills west/.test(document.getElementById('routeCardName').textContent), null, { timeout: 8000 });
+  // signed out, a public book's link opens its page; a private one says so
+  signedIn = false;
+  await page.goto(base + '/index.html?roadbook=NNNNNNNNNNNNNNNN');
+  await page.waitForSelector('.rb-pop.open .rb-road:has-text("Foothills west")', { timeout: 15000 });
+  check(!(await page.$('.rb-pop.open .rb-meter')) && !(await page.$('.rb-pop.open button:has-text("Report")')), 'signed out: no progress of yours, no Report');
+  await page.click('.rb-pop.open button:has-text("Follow")');
+  await page.waitForFunction(() => /Sign in \(People\) to follow a roadbook/.test(document.getElementById('toast').textContent));
+}, { geolocation: { latitude: 35.6, longitude: -83.8 }, permissions: ['geolocation'] });
+
 flow('crash check: a hard impact then a stop asks "Are you OK?"; no answer offers a call and a text to the contact (IDEAS D-17)', async (page, base) => {
   await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); localStorage.setItem('apex.crashContact', JSON.stringify({ name: 'Sam', phone: '+1 555 010 2030' })); } catch (_) {} });
   await page.goto(base + '/index.html');
@@ -3991,7 +4103,8 @@ flow('People: two tabs; a request is a card on top, then you, then friends with 
   const keys = await page.$$eval('#accountBody > .row button', (b) => b.map((x) => x.textContent));
   check(JSON.stringify(keys) === '["Invite or add a friend"]', 'one Invite key on Friends: ' + JSON.stringify(keys));
   const navs = await page.$$eval('#accountBody > .nav-rows .nav-row > span', (s) => s.map((x) => x.textContent));
-  check(JSON.stringify(navs) === '["From friends"]', 'then what friends shared, and nothing else: ' + JSON.stringify(navs));
+  // Roadbooks (SOCIAL 2.6, 2026-11-10) join From friends in the one list under the friends; nothing else does
+  check(JSON.stringify(navs) === '["From friends","Roadbooks"]', 'then what friends shared and the roadbooks, nothing else: ' + JSON.stringify(navs));
   // P-04: the friend row is about the friend; the grants are one quiet row
   await page.click('#accountBody .friend-head:has-text("@cara")');
   const acts = await page.$$eval('#accountBody .friend:has-text("@cara") .friend-keys button', (b) => b.map((x) => x.textContent));

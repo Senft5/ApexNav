@@ -48,6 +48,7 @@ Applied to both `apexnav-db` and `apexnav-preview-db`: **0001_init.sql**, **0002
 | Segments & boards | `segments` (+`origin_id`), `segment_shares`, `grants` (**opt-in, one row per friend or crew**), `board_entries` (+`canon_id`), `shared_routes` |
 | Crowd road data | `road_bins`, `hazard_obs`, `ingest_pending`, `rank_slots`, `seen`, `points_ledger` (private tables: no API route reads or writes them directly) |
 | Road map lines | `road_ways` (a measured way's public OSM line, box, and since 0029 its road class `cls` and map length `len_m`: the open-road rule, docs/ROAD_DATA.md) |
+| Roadbooks | `roadbooks` (private / friends / public), `roadbook_roads` (planned shapes, never drives), `roadbook_follows`, `roadbook_stamps` (a keyed hash of the member, no user id) |
 | Highlights | `highlights` (author hidden), `highlight_ratings` (1–5, `visited` proved on the phone), `reports` |
 
 ## 6. Authorization model (what the tests prove)

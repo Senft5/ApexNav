@@ -46,6 +46,19 @@ and in random batches so a trace cannot be re-assembled.
 - Share a planned route (geometry + pace notes) to friends or publish a stage list.
   Never a recorded drive.
 
+### 2.6 Roadbooks (built 2026-11-10)
+- A roadbook is a member's named collection of roads: each a planned shape with a name and a note, never a recorded
+  drive. Private by default; Friends; or Public (opens by its link with no account, found near its roads, signed with
+  the owner's handle). Followed by other members; every road has Drive it.
+- A road enters a book from a route card's Share box, without the route's first 400 m, a loop's last 400 m, or anything
+  inside a privacy zone.
+- **Stamps are found, not tapped**: the phone marks a road driven when a drive in its own Log covers 85% of it within
+  45 m (web/roadbooks.js `coverage`). The server learns only that this member drove this road, stored under a keyed
+  hash (no user id in `roadbook_stamps`); it shows each road's count and the member's own progress through a book.
+- Which of your books' roads a new drive might cover is decided on the phone from each road's box, so the server is
+  never asked "what is near where I just drove".
+- Reports and blocks as for public crews (kind `roadbook`).
+
 ## 3. Drive analysis (private)
 Compare passes of the same road — yours, or a friend's ghost they chose to send you.
 
