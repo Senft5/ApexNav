@@ -19,6 +19,17 @@
 - Next: two cards can share a name (both "Southeast"); a finer name (16 points, or the road it is built on) if it reads
   badly on real roads. The 1 hour / 2 hours loops sit in Options; the card's Length row is miles only.
 
+## Session 2026-11-10 (fable-design-offline): design pass 5: People with no connection (claude/fable-design-offline, off origin/main 7dee309)
+
+- [x] web/cockpit.js renderAccount `if (!me)`: `.join-page.lost-page` on both sides (the `gets` / `roads` / `pucks` /
+  `drawing` helpers moved above it from the signed-out branch), head by `navigator.onLine === false`, three rows of
+  what works offline, `again()` key ("Trying…", disabled) in `.join-sign`; the Garage's `#garageMeBody` gets "Your
+  cars" + a line + Try again. `online` / `offline` window events redraw while a `.lost-page` is up.
+- [x] web/index.html: `.jr-ghost` (the dotted way on), `.join-sign button.ink-btn`.
+- [x] Tests: tests/test_people_no_connection.py (5); e2e "no connection: People is a page…" (/api aborted: both phone
+  sizes, both sides, the Garage, offline event, Try again, online event brings People back).
+- Next design pass candidates: the lower Garage blocks (How this works, Pro), the Options sheet's long list.
+
 ## Session 2026-11-10 (fable-fix-join-scope): #332's page showed in the Garage too; scoped to People (claude/fable-fix-join-scope, off origin/main 6412cb5)
 
 - [x] Bug from #332 (live on main): `#accountSection:has(.join-page) { display: grid }` outranked `.sheet [data-panel]

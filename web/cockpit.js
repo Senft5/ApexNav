@@ -5634,6 +5634,9 @@
     const shareOrigin = () => (ApexSync.inApp ? ApexSync.apiBase : location.origin);
     const crewPreview = { token: null, data: null };   // what the crew link is for, fetched once per link
     let renderGen = 0;   // two renders at once (a link while one runs): only the newest one draws
+    // The no-connection page (renderAccount) follows the phone: it asks again by itself when the connection is back, and
+    // says "offline" when it goes; nobody should have to press Try again to find out the signal returned.
+    for (const ev of ['online', 'offline']) window.addEventListener(ev, () => { if (document.querySelector('.lost-page')) renderAccount(); });
     async function renderAccount() {
       // People (the owner, 2026-10-30): the Friends side (accountBody) and the Crews side (crewsBody), one switch between them
       const body = $('accountBody'), cbody = $('crewsBody'), gen = ++renderGen;
@@ -5660,8 +5663,31 @@
       const redo = () => renderAccount();
       const badge = $('crewTab').querySelector('.badge'); if (badge) badge.remove();
       const params2 = new URLSearchParams(location.search);
+      // The People pages' parts (signed out, and no connection): what a side gets you as rows shaped like its list, and its drawing.
+      const gets = (...items) => el('ul', { className: 'join-gets' }, ...items.map(([path, label, what]) => el('li', {},
+        el('span', { className: 'jg-glyph', innerHTML: `<svg viewBox="0 0 24 24" aria-hidden="true">${path}</svg>` }), el('b', { textContent: label }), el('small', { textContent: what }))));
+      // A road drawn as a printed map draws one (ink casing, paper fill), the people on it as pucks; the red one is the logo's dot.
+      const roads = (...ds) => ds.map((d) => `<path class="jr-case" d="${d}"/>`).join('') + ds.map((d) => `<path class="jr-fill" d="${d}"/>`).join('');   // casings first: roads that meet, join
+      const pucks = (...at) => at.map(([x, y, lead]) => `<circle class="jr-puck${lead ? ' lead' : ''}" cx="${x}" cy="${y}" r="7"/>`).join('');
+      const drawing = (inner) => el('div', { className: 'join-art', innerHTML: `<svg viewBox="0 0 360 128" preserveAspectRatio="xMidYMid slice" aria-hidden="true">${inner}</svg>` });
       if (!me) {
-        for (const b of [body, cbody]) b.append(el('h3', { textContent: 'Can\'t reach Vetta' }), el('p', { className: 'note', textContent: 'Friends, crews and boards need a connection. Driving, notes and your Log work offline.' }), btn('Try again', redo, 'ink-btn'));
+        // No answer from the server is a page too (design pass 5, 2026-11-10; it was a heading, a grey line and a key at the
+        // top of an empty sheet): the road stops where the signal does, you are still on it, and what works without a
+        // connection is listed as the rows that will come back. It says which it is: the phone is offline, or Vetta didn't answer.
+        const offline = navigator.onLine === false;
+        const again = (cls = 'ink-btn solid') => { const b = btn('Try again', () => { b.disabled = true; b.textContent = 'Trying…'; redo(); }, cls); return b; };
+        const works = () => gets(['<circle cx="12" cy="12" r="8.5"/><path d="M12 7.5v9M8.5 11l3.5-3.5 3.5 3.5"/>', 'Driving and notes', 'Navigation and the notes for the road ahead.'],
+          ['<path d="M5 6h14M5 12h14M5 18h9"/>', 'Your Log', 'Every drive you recorded is on this phone.'],
+          ['<path d="M7 4h10v16l-5-4-5 4z"/>', 'Saved routes', 'Routes you saved for offline, in Where to?']);
+        const lost = (side) => el('div', { className: 'join-page lost-page' },
+          drawing(roads('M-12 88 C 50 88 78 40 146 44 S 196 70 214 66') + '<path class="jr-ghost" d="M214 66 C 262 54 300 30 372 46"/>' + pucks([214, 66, true])),
+          el('h3', { className: 'join-head', textContent: offline ? 'You’re offline.' : 'Can’t reach Vetta.' }),
+          el('p', { className: 'join-line', textContent: offline ? `${side} need a connection. These don’t:` : `${side} will be back when it answers. These don’t need it:` }),
+          works(), el('div', { className: 'join-sign' }, again()));
+        body.append(lost('Friends and who’s out driving'));
+        cbody.append(lost('Crews, their drives and boards'));
+        // the Garage's own corner said nothing (an empty band over Look and voice): it says what is missing and what isn't
+        gbody.append(el('h3', { textContent: 'Your cars' }), el('p', { className: 'note', textContent: `${offline ? 'Your cars and profile need a connection.' : 'Your cars and profile will be back when Vetta answers.'} Looks, voices and settings work without it.` }), again('ink-btn'));
         return;
       }
       const inviteFromLink = params2.get('invite'), crewFromLink = params2.get('crew'), addFromLink = params2.get('add');
@@ -5682,12 +5708,6 @@
       if (!me.signed_in) {
         // Signed out is a page, not a form (the owner, 2026-11-10): a drawing of the side, its name set large, what it gets you as
         // three rows shaped like the list that will stand here, and the sign-in at the foot, under the thumb (REVIEW.md 1.2, P-32).
-        const gets = (...items) => el('ul', { className: 'join-gets' }, ...items.map(([path, label, what]) => el('li', {},
-          el('span', { className: 'jg-glyph', innerHTML: `<svg viewBox="0 0 24 24" aria-hidden="true">${path}</svg>` }), el('b', { textContent: label }), el('small', { textContent: what }))));
-        // A road drawn as a printed map draws one (ink casing, paper fill), the people on it as pucks; the red one is the logo's dot.
-        const roads = (...ds) => ds.map((d) => `<path class="jr-case" d="${d}"/>`).join('') + ds.map((d) => `<path class="jr-fill" d="${d}"/>`).join('');   // casings first: roads that meet, join
-        const pucks = (...at) => at.map(([x, y, lead]) => `<circle class="jr-puck${lead ? ' lead' : ''}" cx="${x}" cy="${y}" r="7"/>`).join('');
-        const drawing = (inner) => el('div', { className: 'join-art', innerHTML: `<svg viewBox="0 0 360 128" preserveAspectRatio="xMidYMid slice" aria-hidden="true">${inner}</svg>` });
         const signIn = () => el('div', { className: 'join-sign' }, appleButton(),
           el('a', { className: 'ink-btn solid', href: '/api/auth/google/start', textContent: 'Sign in with Google' }),
           legalNote('By signing in you agree to the '));
