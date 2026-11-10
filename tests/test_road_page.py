@@ -24,7 +24,11 @@ const rs = Core.resamplePolyline(lat, lon, 5);
 const elev = rs.lat.map((_, i) => 600 + i * 0.6);
 const d = P.describe(Core, s, { elev, measured: { coverage: 0.7, avgPasses: 3 }, surf: 82 });
 const bare = P.describe(Core, { lat, lon }, {});
-console.log(JSON.stringify({ d, bare, head: P.headline(d), rows: P.rows(bare) }));
+const U = require(process.argv[1] + '/web/units.js');
+console.log(JSON.stringify({ d, bare, head: P.headline(d), meters: P.meters(d), bareMeters: P.meters(bare), facts: P.facts(d), bareFacts: P.facts(bare),
+  one: P.facts({ ...d, corners: 5, hairpins: 1 }), some: P.facts({ ...d, corners: 9, hairpins: 3 }), none: P.facts({ ...d, hairpins: 0 }),
+  // what the sheet used to pass for the climb: ApexUnits.short is an object, and the line read "climbing [object Object]"
+  objHead: P.headline(d, undefined, (m) => U.short(m)), ftHead: P.headline(d, undefined, (m) => `${Math.round(m * 3.28084)} ft`) }));
 """
 
 
@@ -45,8 +49,33 @@ def test_a_switchback_climb(out):
 def test_unknown_stays_unknown(out):
     b = out["bare"]
     assert b["confidence"] == "L0" and b["surf"] is None and b["clear"] is None and b["climb"] is None
-    rows = dict(out["rows"])
-    assert rows["SURF"] == "--" and rows["CLEAR"] == "--" and rows["Confidence"].startswith("L0")
+    m = {x["key"]: x for x in out["bareMeters"]}
+    assert m["surf"]["value"] is None and m["clear"]["value"] is None        # drawn "--" with an empty bar, never a guess
+    assert "not measured" in m["surf"]["hint"] and "aren't counted" in m["clear"]["hint"]
+    assert isinstance(m["tech"]["value"], int) and isinstance(m["flow"]["value"], int)
+    assert dict(out["bareFacts"])["How sure"] == "From the map only"
+
+
+def test_the_sheet_speaks_plainly(out):
+    # 2026-11-10: the sheet said TECH, FLOW, SURF, CLEAR and "Confidence: L0 · From the map only"
+    m = out["meters"]
+    assert [x["label"] for x in m] == ["Technical", "Flow", "Surface", "Clear road"]
+    assert all(x["hint"] and 0 <= x["value"] <= 100 for x in m)
+    assert {x["key"]: x["value"] for x in m}["surf"] == 82
+    f = dict(out["facts"])
+    assert f["How sure"] == "Measured by members on most of it"
+    assert not any("L0" in v or "L1" in v or "L2" in v for v in f.values())
+    assert f["Corners"].endswith(", all hairpins") or " · " in f["Corners"]
+    assert dict(out["one"])["Corners"] == "5 · 1 hairpin" and dict(out["some"])["Corners"] == "9 · 3 hairpins"
+    assert "hairpin" not in dict(out["none"])["Corners"]
+
+
+def test_the_climb_is_a_height_in_words(out):
+    assert "[object Object]" in out["objHead"]                               # why the formatter must return text
+    assert out["ftHead"].endswith(" ft") and "object" not in out["ftHead"]
+    import pathlib
+    js = (pathlib.Path(ROOT) / "web" / "cockpit.js").read_text(encoding="utf-8")
+    assert "ApexRoadPage.headline(d, (km) => ApexUnits.long(km * 1000, 1), heightLabel)" in js
 
 
 CHAR_RUNNER = r"""

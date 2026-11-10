@@ -1094,6 +1094,17 @@
     .pop-scrim { position: fixed; inset: 0; z-index: 29; background: rgba(0, 0, 0, 0.45); opacity: 0; pointer-events: none; transition: opacity 0.2s ease-out; }
     body:has(.side-pop.open) .pop-scrim { opacity: 1; pointer-events: auto; }
     .side-pop-head { display: flex; justify-content: space-between; align-items: center; }
+    /* About a road (road_page.js): what kind of road it is, four scores as bars with their meaning, then the facts */
+    .road-page .rp-head { margin: 0; font-size: 16px; font-weight: 600; color: var(--panel-ink); }
+    .rp-meter { display: grid; grid-template-columns: minmax(0, 1fr) auto; column-gap: 12px; align-items: baseline; padding-top: 6px; }
+    .rp-meter .rp-name { font-size: 15px; font-weight: 600; }
+    .rp-meter b { font-size: 17px; font-variant-numeric: tabular-nums; }
+    .rp-meter .rp-bar { grid-column: 1 / -1; display: block; height: 4px; margin: 5px 0 4px; background: color-mix(in srgb, var(--panel-ink) 14%, transparent); }
+    .rp-meter .rp-bar i { display: block; height: 100%; background: var(--panel-ink); }
+    .rp-meter small { grid-column: 1 / -1; font-size: 13px; line-height: 1.35; color: var(--panel-dim); }
+    .rp-fact { display: flex; justify-content: space-between; gap: 12px; padding-top: 8px; border-top: 1px solid color-mix(in srgb, var(--panel-ink) 14%, transparent); font-size: 15px; }
+    .rp-fact b { text-align: right; }
+    .road-page p.note:not(.rp-head) { margin: 2px 0 0; font-size: 13px; line-height: 1.45; color: var(--panel-dim); }
     .side-pop .side-pop-head h3 { border: 0; padding: 0; margin: 0; }
     /* The Garage's settings (REVIEW5 §2, web/garage_settings.js): one gear in the header, a sheet of rows, each row a sheet over
        it. Tall enough that a setting's sheet covers the list under it; hidden when shut, so nothing off screen takes focus. */
