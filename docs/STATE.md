@@ -1,5 +1,12 @@
 # VETTA — CURRENT AGENT HANDOFF STATE
 
+## Session 2026-11-10 (fable-no-leftovers): the e2e runner checks every flow's last screen for "[object Object]", "undefined", "NaN" (claude/fable-no-leftovers, off origin/main 51c8c4c)
+
+- [x] e2e/smoke.js `leftovers(page)` (visible text nodes and aria-label / placeholder / title / alt, in every open page
+  of the flow), checked in the runner after each flow's body; flow "leftovers: the check every flow ends with…" seeds
+  the three and two hidden ones. Whole suite: 154/154 with the check on (about 80 min in the cloud container).
+- Next: call `leftovers(page)` mid-flow in the long screen-by-screen flows (REVIEW.md 1.2) so more screens are read.
+
 ## Session 2026-11-10 (fable-one-corner): singular corners, and the nearby key keeps its label (claude/fable-one-corner, off origin/main e76f1bb)
 
 - cockpit.js: the route bar and card lines use `ApexFormat.cornerCount`; `buildRoute`'s announce pluralises inline

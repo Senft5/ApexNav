@@ -5345,6 +5345,21 @@ flow('the drive page\'s map: when the map can draw it sits under the path, fitte
   check(Math.abs(z.again[0] - z.before[0]) < 1 && Math.abs(z.again[1] - z.before[1]) < 1 && /^matrix\(1 0 0 1 /.test(z.back || 'matrix(1 0 0 1 '), 'and the picture is back where it was: ' + JSON.stringify([z.before, z.again, z.back]));
 });
 
+flow('leftovers: the check every flow ends with sees "[object Object]", "undefined" and "NaN" in text and in a spoken label, and not in what is hidden', async (page, base) => {
+  await page.goto(base + '/analysis.html');
+  await page.waitForSelector('[data-seg="segments"]');
+  check((await leftovers(page)).length === 0, 'a clean page has none: ' + JSON.stringify(await leftovers(page)));
+  await page.evaluate(() => {
+    const add = (html) => { const d = document.createElement('div'); d.className = 'lo-test'; d.innerHTML = html; document.body.append(d); };
+    add('<p>descending [object Object]</p>'); add('<p>Best undefined mph</p>'); add('<p>NaN mi</p>');
+    add('<button aria-label="Remove undefined">×</button>');
+    add('<p hidden>undefined</p>'); add('<p style="display:none">NaN</p>'); add('<p>Undefined roads are fine, and so is a Nanny</p>');
+  });
+  const found = await leftovers(page);
+  check(found.length === 4 && found.some((f) => f.includes('[object Object]')) && found.some((f) => f.includes('aria-label="Remove undefined"')), 'four seen, the hidden and the innocent left alone: ' + JSON.stringify(found));
+  await page.evaluate(() => document.querySelectorAll('.lo-test').forEach((d) => d.remove()));
+});
+
 flow('the Log page opens', async (page, base) => {
   await page.goto(base + '/analysis.html');
   await page.waitForLoadState('load');
