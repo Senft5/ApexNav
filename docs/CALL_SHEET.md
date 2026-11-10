@@ -19,6 +19,11 @@ The same for notifications: "Notifications are off for Vetta. Turn them on in th
 now has a **Settings** key that opens Vetta's page there (the shell's `openSettings`, already used by Location is off).
 
 Undo: revert the PR (`askSignIn` in web/cockpit.js, one line in web/friends_map.js).
+## 2026-11-10 (merger): e2e may run 35 minutes, not 25 (claude/project-thread-er8kzz)
+
+The e2e suite is 152 flows now and takes about 24 minutes, so GitHub cut it off at its 25-minute limit on the last flow
+(twice on #349, once on #344) with every flow before it passing. The limit is 35 minutes. No test is skipped or
+shortened. Undo: set `timeout-minutes` back to 25 in `.github/workflows/core-tests.yml`, or better, split the suite.
 
 ## 2026-11-10 (fable-loop-time): a loop can be set by time on the dial (claude/fable-loop-time)
 

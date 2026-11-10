@@ -9,6 +9,10 @@
 - [x] `nudgeAnswered(false)`: the notifications-off toast has a Settings key (`openSettings`); docs/APP_REVIEW.md 4.5.4.
 - [x] tests/test_sign_in_key.py (4); e2e flow "sign-in key".
 - Next: the same look for other messages that point somewhere without taking you ("Find it in Where to?").
+## Session 2026-11-10 (merger): e2e time limit 35 min (claude/project-thread-er8kzz)
+
+- [x] .github/workflows/core-tests.yml e2e `timeout-minutes` 25 → 35: 152 flows take ~24 min and were cancelled on the
+  last flow. Next: split e2e into two jobs if it passes ~30 min.
 
 ## Session 2026-11-10 (fable-loop-time): the loop dial by distance or time (claude/fable-loop-time, off origin/main 1a38381)
 
