@@ -8,6 +8,17 @@
 - Tests: tests/test_loop_ways.py (`oneWay`, `twins`); e2e "a loop's choices are which way to head" checks no two cards
   share a name with times within a fifth.
 - Next: the Layers panel and the drive screen have not had a design pass.
+## Session 2026-11-10 (fable-loop-time): the loop dial by distance or time (claude/fable-loop-time, off origin/main 1a38381)
+
+- [x] web/index.html `#loopBy` (two radio words over the dial, `.loop-by`). web/cockpit.js: `LOOP_BY` ('apex.loopBy'),
+  `LOOP_MINUTES = [30, 60, 90, 120, 180]`, `labelLoops()` relabels the same five `#loopDetents` buttons
+  (`data-loop-mi` or `data-loop-min`), `setLoopBy(by)`; `buildLoop` calls `setLoopBy(minutes ? 'time' : 'distance')`;
+  `paintCardLoop` draws the row from the dial's buttons in either unit (label Length / Time, pressed by `targetS`).
+  web/route_card.js `loopTime(minutes)` ("1½ h"), used for the dial, the card and the loop's note.
+- [x] Tests: tests/test_loop_ways.py (+2); e2e "a loop by time…" (dial turns, 1 h loop built, card row by time, kept
+  across a reload, back to distance).
+- Next: Options' "Loop to fit" 1 hour / 2 hours keys now duplicate the dial; remove them once the owner has used the
+  dial (My free time stays).
 
 ## Session 2026-11-10 (fable-loops): loops lose Quick / Fun / Long way; the card offers which way to head (claude/fable-loops, off origin/main 7dee309)
 
