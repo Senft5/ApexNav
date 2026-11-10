@@ -5797,7 +5797,7 @@
       const driveWith = async (f) => {
         if (!convoy) return;
         if (convoy.active) { toast(`You're in a convoy: invite @${f.handle} from its Invite friends.`); return; }
-        if (!(await ApexConfirm.ask(`Start a convoy now and invite @${f.handle}? You see each other on the map while you drive, for up to two hours. Nothing is kept.`, 'Start convoy'))) return;
+        if (!(await ApexConfirm.ask(`Start a convoy now and invite @${f.handle}? You see each other on the map while you drive, for two hours unless you keep it going. Nothing is kept.`, 'Start convoy'))) return;
         const r = await convoy.startFor(`@${me.handle} and @${f.handle}`, [f.handle]);
         toast(r.ok ? (r.invited ? `Convoy started. @${f.handle} has the invite in the app.` : `Convoy started, but @${f.handle} couldn't be invited. Share its link.`) : 'Couldn\'t start a convoy. Check signal.');
         if (r.ok) closeSheet();
@@ -8414,7 +8414,7 @@
       const name = (accountMe && accountMe.handle ? `@${accountMe.handle}'s convoy` : 'Convoy');
       back.append(el('div', { className: 'card-sheet' }, el('h2', { textContent: 'Ways to go' }), drive,
         btn('Convoy now', () => { close(); needSocial().then(() => { if (convoy) convoy.now(name); else toast('The convoy isn\u2019t available here.'); }); }, 'ink-btn'),
-        el('p', { textContent: 'A convoy: drive together, live, for up to two hours. Friends join with the code on your screen; nothing is kept. A crew\u2019s run starts its convoy from the drive\u2019s card.' }),
+        el('p', { textContent: 'A convoy: drive together, live, for two hours (the leader can keep it going, up to six). Friends join with the code on your screen; nothing is kept. A crew\u2019s run starts its convoy from the drive\u2019s card.' }),
         btn('Cancel', close, 'linkbtn')));
       back.addEventListener('click', (e) => { if (e.target === back) close(); });
       document.addEventListener('keydown', esc);

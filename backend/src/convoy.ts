@@ -13,6 +13,8 @@ export const LIMITS = {
   frameBytes: 32 * 1024, smallFrameBytes: 2048, framesPerS: 20, positionMinMs: 400, positionKeepMs: 120_000,
   socketsPerMember: 2, pendingSockets: 32, pendingPerIp: 4, hazards: 256, hazardDefaultMs: 3 * 60_000, hazardMaxMs: 5 * 60_000, checkMs: 15_000,
   ledAtOnce: 2, createdPerHour: 10,
+  // Keep going: in its last keepWindowMs the leader can add keepMs, until the convoy is roomMaxMs old in all.
+  keepMs: 3600_000, keepWindowMs: 30 * 60_000, roomMaxMs: 6 * 3600_000,
 };
 /** What a leader can call out. bump and hard_braking can come from the phone's sensors; the rest are taps. */
 export const HAZARD_KINDS = ["bump", "hard_braking", "gravel", "debris", "animal", "police", "camera", "stopped"] as const;
@@ -183,6 +185,28 @@ export class ConvoyRoom extends DurableObject<Env> {
     const ticket = randomToken(24), expiresAt = now + LIMITS.ticketMs;
     this.tickets.set(await sha256hex(ticket), { userId, sessionHash, expiresAt });
     return okR({ ticket, expiresAtMs: expiresAt });
+  }
+
+  /**
+   * Leader only: keep the convoy going another hour (a drive with a stop in it runs past two). Only in its last half hour,
+   * so it is someone there and driving who asks, never a convoy parked open in advance; never past roomMaxMs from its
+   * start. Everyone connected is told at once, and can leave as before.
+   */
+  keepGoing(leaderId: string): Promise<Result<{ expiresAtMs: number; maxExpiresAtMs: number }>> {
+    return this.serial(async () => {
+      const room = await this.live();
+      if (!room || this.members[leaderId]?.role !== "leader") return fail(404, "no_convoy");
+      const now = Date.now(), max = room.createdAt + LIMITS.roomMaxMs;
+      if (room.expiresAt >= max) return fail(409, "convoy_at_limit");
+      if (room.expiresAt - now > LIMITS.keepWindowMs) return fail(409, "too_early");
+      room.expiresAt = Math.min(room.expiresAt + LIMITS.keepMs, max);
+      await this.save();
+      await this.ctx.storage.setAlarm(room.expiresAt);
+      // each member's index holds the convoy's end (a block or a sign-out finds the convoy through it): moved with it
+      await Promise.all(Object.keys(this.members).map((u) => this.index(u, (ix) => ix.add(room.id, room.expiresAt))));
+      this.broadcast({ type: "extended", expiresAtMs: room.expiresAt, maxExpiresAtMs: max });
+      return okR({ expiresAtMs: room.expiresAt, maxExpiresAtMs: max });
+    });
   }
 
   async status(userId: string): Promise<Result<Context>> {
@@ -387,6 +411,7 @@ export class ConvoyRoom extends DurableObject<Env> {
     const room = this.room!, me = this.members[userId];
     return {
       sessionId: room.id, name: room.name, leaderEpoch: room.epoch, role: me.role, you: me.key, expiresAtMs: room.expiresAt, seq: this.seq,
+      maxExpiresAtMs: room.createdAt + LIMITS.roomMaxMs, keepWindowMs: LIMITS.keepWindowMs,   // keepGoing: how late it can run, and from when the leader may ask
       leaderKey: this.members[room.leaderId].key,
       members: Object.keys(this.members).map((id) => ({ ...this.pub(id), online: this.online(this.members[id].key) })),
     };

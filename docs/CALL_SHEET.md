@@ -125,6 +125,23 @@ mapped one class lower (`primary`), marked only by a tag. The calls:
   then nothing changes on any phone: today's tiles don't carry the mark and the router treats them as before.
 - **A new flag bit, not a new tile version**: old apps ignore the bit, new apps read old tiles as "not an expressway".
 - Undo all of it: revert the branch's commits (tiles built with the flag still read fine in the old code).
+## 2026-11-10 (fable-convoy-keep): a convoy can run past two hours, and says when it is about to end (claude/fable-convoy-keep)
+
+A convoy ended two hours after it started, whatever was happening: a Sunday drive with a coffee stop lost its map
+mid-road, with no warning, and the leader had to start a new one and invite everyone again. The calls:
+- **The leader can keep it going, an hour at a time.** In its last half hour the convoy card has "Keep going 1 h".
+  Only then, so it is someone there and driving who asks; a convoy can't be opened for six hours up front.
+- **Six hours is the most one runs.** Longer than a full day's drive with stops needs a new convoy. Change:
+  backend/src/convoy.ts `LIMITS.roomMaxMs` (and `keepMs`, `keepWindowMs`).
+- **Everyone is told ten minutes before it ends**, on screen and aloud in a drive; the leader's notice has the Keep
+  going key on it. Nobody finds out by losing the map.
+- **Everyone is told at once when it is kept going** ("Convoy kept going: 1 h 9 min left"), because they joined a
+  two-hour convoy and their position is shared for longer now. Leaving works as before. The privacy page and the
+  convoy's own words say two hours unless the leader keeps it going, six at most.
+- Nothing more is kept: positions stay in memory only, and the convoy still ends when the leader leaves.
+- Undo: remove the `/api/convoy/:id/keep` route in backend/src/index.ts (the key never shows without the server's two
+  numbers), and put "up to two hours" back in convoy_ui.js, cockpit.js and privacy.html.
+
 ## 2026-11-09 (fable-hpms-limits): a speed limit of "254 mph" is no limit (claude/fable-hpms-limits)
 
 The government road inventory we read speed limits from (HPMS) marks "not reported" with a code. Our data build stored

@@ -142,6 +142,26 @@
   (Valhalla-planned routes off our tiles) still knows only motorway/trunk.
 - Exact next task: after merge, run Actions → "Graph region (own routing, OH+KY+IN)" so the flag reaches the tiles; then
   unchanged (tools/live_speed.js on the owner's trips at Fun and Long way).
+## Session 2026-11-10 (fable-convoy-keep): the leader keeps a convoy going; a heads-up before it ends (claude/fable-convoy-keep, off origin/main f27a1fe)
+
+- [x] A room lived `LIMITS.roomMs` (2 h, "draft operational bounds" in CONVOY_TRANSPORT.md) and ended by alarm with no
+  way on and no warning. backend/src/convoy.ts `keepGoing(leaderId)`: leader only, in the last `keepWindowMs` (30 min),
+  `expiresAt += keepMs` (1 h) capped at `createdAt + roomMaxMs` (6 h); saves, moves the alarm, updates every member's
+  ConvoyIndex entry (a block or sign-out finds the convoy through it), broadcasts `extended`. Route
+  `POST /api/convoy/:id/keep`. The context carries `maxExpiresAtMs` and `keepWindowMs`.
+- [x] web/convoy.js: `canKeep(ctx, now)`, `endingNote(ctx, now, said)` (once per end time, last 10 min),
+  `ConvoyClient.keepGoing()`, the `extended` frame (`onExtended`). web/convoy_ui.js: "Keep going 1 h" on the card while
+  `canKeep`, the heads-up toast (spoken in a drive; the leader's has the key), "Convoy kept going: ..." to everyone.
+  An old app ignores `extended` and reads the new end at its next connect; an old server sends no numbers, so no key.
+- [x] Words: convoy_ui.js, cockpit.js (two places), privacy.html (Convoys), APP_REVIEW.md 5.1.2 row, BACKEND.md,
+  CONVOY_TRANSPORT.md, BACKUPS.md.
+- Not done: the car's screen (carplay.js) shows no heads-up of its own; the phone speaks it. In-app invites sent before
+  a keep still expire at their own time.
+- Tests: backend/test/convoy.test.ts "the leader keeps it going ..." (window, leader only, broadcast, alarm, index,
+  restart, the six-hour cap); tests/test_convoy_client.py test_keep_going_and_the_heads_up_before_the_end; e2e "convoy:
+  ten minutes before it ends ..."; backend vitest and pytest counts below in the PR.
+- Exact next task: unchanged.
+
 ## Session 2026-11-09 (fable-hpms-limits): a "not reported" speed limit was read as 254 mph (claude/fable-hpms-limits, off origin/main 1d97979)
 
 - [x] Found while measuring posted limits for the overview: the context grid's HPMS `speed_limit` (u8 mph) clamped a state's
