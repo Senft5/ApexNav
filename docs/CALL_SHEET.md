@@ -4,6 +4,19 @@ Decisions Claude made for you, newest first. Each one says what was decided, why
 you reach one you've seen. If you disagree with a call, say so and it gets reversed; nothing here is hard to undo unless
 it says so. Things only you can do are in docs/OWNER_TODO.md.
 
+## 2026-11-10 (fable-sign-in-key): a message that asks you to sign in carries the key (claude/fable-sign-in-key)
+
+Following your "reducing any clunky feelings": five things that need an account answered "Sign in (People) to see
+friends on the map." and the like: a direction to go and find a tab, in brackets. The Garage's empty bay had already
+dropped that wording for a Sign in key. Now the message itself has the key: "Sign in to see friends on the map." with
+**Sign in** on it, which opens People where signing in lives. In a drive (sharing an ETA, reporting a hazard) it is
+only said on the drive's message row, with no key, so no sheet opens over the road.
+
+Also: sharing a route with nobody to share it with read "Sign in and add friends or a crew (People) to share routes."
+It now reads like the convoy's: "No friends or crews to share with yet. Add them in People."
+
+Undo: revert the PR (`askSignIn` in web/cockpit.js, one line in web/friends_map.js).
+
 ## 2026-11-10 (fable-loop-time): a loop can be set by time on the dial (claude/fable-loop-time)
 
 Following your "the whole point is aimless driving": "I have an hour" is how a loop is usually asked for, and time

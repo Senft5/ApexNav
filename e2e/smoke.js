@@ -655,6 +655,25 @@ flow('a deliberate detour: one quiet "Rerouting", the new route goes the way the
   check(etas.every(Boolean), 'the arrival never blanks during the reroute: ' + JSON.stringify(seen.slice(12).map((s) => s.eta)));
 }, { geolocation: { latitude: 35.96, longitude: -83.92 }, permissions: ['geolocation'] });
 
+flow('sign-in key: turning Friends on signed out says why and the message carries "Sign in", which opens People', async (page, base) => {
+  await page.route('**/api/**', (r) => r.fulfill({ status: 200, contentType: 'application/json', body: '{"signed_in":false}' }));
+  await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); } catch (_) {} });
+  await page.goto(base + '/index.html');
+  await page.waitForFunction(() => window.apexDebug && window.apexDebug.map && !document.getElementById('boot'));
+  await page.click('#swTab');
+  await page.click('.sw[data-toggle="friends"]');
+  await page.waitForSelector('#toast.show a');
+  const said = await page.evaluate(() => { const t = document.getElementById('toast'); return { all: t.textContent, key: t.querySelector('a').textContent,
+    on: document.querySelector('.sw[data-toggle="friends"]').classList.contains('on') }; });
+  check(said.all === 'Sign in to see friends on the map.Sign in' && said.key === 'Sign in', 'the message and its key: ' + JSON.stringify(said));
+  check(!said.all.includes('(People)') && !said.on, 'no direction to a tab, and the switch stays off');
+  await page.click('#toast a');
+  await page.waitForFunction(() => document.querySelector('.tab[data-view="friends"], .tab[data-view="people"]') && document.getElementById('sheet').classList.contains('open'));
+  const there = await page.evaluate(() => ({ toast: document.getElementById('toast').classList.contains('show'),
+    signIn: [...document.querySelectorAll('#sheet button, #sheet a')].some((b) => b.offsetParent && /sign in/i.test(b.textContent)) }));
+  check(!there.toast && there.signIn, 'People is open on its way to sign in, the message gone: ' + JSON.stringify(there));
+});
+
 flow('while Vetta speaks: Lower music or Pause music, beside Voice in Layers, kept and sent to the shell (TestFlight: "my music played a little too loud over it")', async (page, base) => {
   // a plain browser can't touch other apps' audio: no such switch there
   await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); } catch (_) {} });

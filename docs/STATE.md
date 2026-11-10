@@ -1,5 +1,14 @@
 # VETTA — CURRENT AGENT HANDOFF STATE
 
+## Session 2026-11-10 (fable-sign-in-key): "Sign in" is a key on the message, not a direction (claude/fable-sign-in-key, off origin/main 3f2f315)
+
+- [x] web/cockpit.js `askSignIn(why)`: toast "Sign in to <why>." with the action `Sign in` (`showView('friends')`); in a
+  drive `driveNote` only. Used for measured roads (coverage), share ETA, the Friends switch, hazard reports; handed to
+  web/friends_map.js (`page.askSignIn`, falls back to a plain toast). The route share note reads "No friends or crews
+  to share with yet. Add them in People."
+- [x] tests/test_sign_in_key.py (3); e2e flow "sign-in key".
+- Next: the same look for other messages that point somewhere without taking you ("Find it in Where to?").
+
 ## Session 2026-11-10 (fable-loop-time): the loop dial by distance or time (claude/fable-loop-time, off origin/main 1a38381)
 
 - [x] web/index.html `#loopBy` (two radio words over the dial, `.loop-by`). web/cockpit.js: `LOOP_BY` ('apex.loopBy'),
