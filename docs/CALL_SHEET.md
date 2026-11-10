@@ -68,6 +68,14 @@ The row under Where to? read "Loop from here · 45 mi" from launch on, whatever 
 Plan key built the dial's loop: turn the dial to 15 mi, cancel, and the row still promised 45. It now says the dial's
 length (or time, once #342 is in) the moment you pick it. Undo: revert the PR.
 
+## 2026-11-10 (fable-stages): on a stage's page a run is named by when it was driven (claude/fable-stages)
+
+Under "Runs · Dry Ridge Rd" every run was titled "Dry Ridge Rd" again (a drive is named after its road), with the one
+thing that tells runs apart, the date, in small grey under it. The date is now the run's name; the drive's own name is
+under it only when it isn't the stage's. And a stage's length is to a tenth like everywhere else (it said 21.34 mi).
+
+Undo: revert the PR.
+
 ## 2026-11-10 (fable-fix-join-scope): my mistake in #332, fixed: the signed-out People page also showed at the top of the Garage (claude/fable-fix-join-scope)
 
 The rule that lets the new signed-out People page fill the sheet named the People panel by its id, and an id outranks
