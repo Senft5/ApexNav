@@ -31,6 +31,13 @@
 - Tests: tests/test_route_card.py; e2e "plan flow (c)".
 - Next: CarPlay has not had a design pass in this run (Swift, not visible from the cloud).
 
+## Session 2026-11-10 (fable-your-data): Your data as Settings-style rows (claude/fable-your-data, off origin/main 3f2f315)
+
+- `web/index.html` only: the Your data section's keys are `.nav-rows.data-rows` with three `.nav-group` headings; the
+  ids are the same (`myGpxBtn` … `myEraseBtn`), so cockpit.js and the tests reach them as before. `.nav-row.danger`.
+- Cohesion pass notes (Nate 2026-11-10 15:12): compared Options, Best roads nearby, Ways to go, About a road, Settings
+  and its eleven sheets side by side. Left alone: Done (a sheet that sets things) vs Close (a sheet that shows things).
+
 ## Session 2026-11-10 (merger): e2e time limit 35 min (claude/project-thread-er8kzz)
 
 - [x] .github/workflows/core-tests.yml e2e `timeout-minutes` 25 → 35: 152 flows take ~24 min and were cancelled on the

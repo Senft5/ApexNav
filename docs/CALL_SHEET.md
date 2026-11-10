@@ -43,6 +43,16 @@ keeps its own word and only its progress bar moves.
 
 Undo: revert the PR.
 
+## 2026-11-10 (fable-your-data): Your data is three short lists, like Settings (claude/fable-your-data)
+
+For your "cohesiveness, less clunky": Your data was eight keys of eight widths in two wrapped rows, one of them a link
+and two of them red text. It is now the same rows as the Settings list it opens from, in three groups: Take a copy
+(Download drives, Download account data, Import a drive), Offline (Save the map here, Delete offline data), Remove
+(Delete drives on this phone, Erase everything on this phone, both in red). Each row does what it did; the confirm
+sheets are unchanged. A row acts when touched, so it has no chevron; the file type sits at the row's end in pencil.
+
+Undo: revert the PR.
+
 ## 2026-11-10 (merger): e2e may run 35 minutes, not 25 (claude/project-thread-er8kzz)
 
 The e2e suite is 152 flows now and takes about 24 minutes, so GitHub cut it off at its 25-minute limit on the last flow
