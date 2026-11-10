@@ -95,6 +95,14 @@
 - Lesson: a rule that sets `display` on a tab's panel must carry the tab (`.sheet[data-view=…]`); after changing one
   tab signed out, open the other three.
 
+## Session 2026-11-10 (fable-your-units): fixed sizes labelled in the driver's units (claude/fable-your-units, off origin/main e76f1bb)
+
+- web/units.js `size(m)` ("200 m" / "1 km"; "650 ft" / "0.3 mi"); cockpit.js `renderZones` labels `#zoneRadius` keys,
+  the list and the toast with it and runs again on a units change; crew_page.js meeting-points note; the too-short toast.
+- Tests: tests/test_units.py; e2e "privacy zones" expects "Home · 650 ft".
+- Reviewed and left as they are: People signed in (friends), a crew's page.
+- Next: CarPlay has not had a design pass in this run.
+
 ## Session 2026-11-10 (fable-loop-names): no two loop cards the same way and the same length (claude/fable-loop-names, off origin/main 1a38381)
 
 - web/fun_route.js `loopOffer`: the fill pass takes a loop only if it heads elsewhere than every card already offered

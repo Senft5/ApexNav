@@ -114,6 +114,16 @@ the Garage as well. Both rules now apply on the People tab only. I had read the 
 Garage signed out after the change; the screen-by-screen flow now checks that the Garage shows no People page.
 - Undo: not something to undo; reverting #332 would also remove it.
 
+## 2026-11-10 (fable-your-units): sizes that were always metric are in your units (claude/fable-your-units)
+
+Three places spoke metric to a driver in miles: a privacy zone's size ("200 m / 500 m / 1 km", and the list and the
+toast after), a crew page's "about 11 km across", and "Drives under 0.2 mi are dropped" the other way round for a driver
+in kilometres. A zone's size now reads 650 ft / 0.3 mi / 0.6 mi in miles (the zones themselves are unchanged: 200, 500
+and 1000 m), the crew line says "about 7 miles", and the short-drive toast follows the unit. The privacy page
+(privacy.html) still says 11 km: it is one text for everyone.
+
+Undo: revert the PR.
+
 ## 2026-11-10 (fable-loop-names): a loop's cards are never two of the same way at the same length (claude/fable-loop-names)
 
 A loop's "which way" cards could come up as two Southeasts, 39 and 37 minutes: the same choice twice, told apart only by

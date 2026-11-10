@@ -58,6 +58,13 @@
   /** The speed dial's top: 140 mph or 220 km/h. */
   const speedMax = () => (metric() ? 220 : 140);
 
-  const api = { KEY, choose, system, set, metric, long, longN, longU, short, spokenShort, speed, speedU, speedMax, _reset: () => { current = null; } };
+  /** A size set in metres, in the driver's units, for a label: "200 m" / "1 km"; "650 ft" / "0.3 mi" (a zone's radius, a square's side). */
+  function size(m) {
+    if (!Number.isFinite(m)) return '--';
+    if (metric()) return m >= 1000 ? `${Math.round(m / 100) / 10} km` : `${Math.round(m)} m`;
+    const s = short(m);
+    return `${s.n} ${s.u.toLowerCase()}`;
+  }
+  const api = { KEY, choose, system, set, metric, long, longN, longU, short, size, spokenShort, speed, speedU, speedMax, _reset: () => { current = null; } };
   if (typeof module !== 'undefined' && module.exports) module.exports = api; else root.ApexUnits = api;
 })(typeof window !== 'undefined' ? window : globalThis);
