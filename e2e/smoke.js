@@ -2870,6 +2870,37 @@ flow('convoy: the leader shows a QR code of the link (Worker stubbed, IDEAS S-22
 // @fish5spd, 2026-11-03 ("Shits in my way when I lead"): leading a convoy on a drive, a card over the road just ahead of the
 // arrow held the convoy's line and a row of calls cut off under the Layers key. Now the convoy is one line behind the car,
 // clear of the right-hand keys and the safe areas, upright and on its side; the calls come from the Report key or the line.
+flow('convoy: ten minutes before it ends the leader is told and can keep it going another hour (Worker stubbed)', async (page, base) => {
+  await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); localStorage.setItem('apex.permsExplained', '1'); } catch (_) {} });
+  const id = 'KKKKKKKKKKKKKKKKKKKKKK', t0 = Date.now(), keeps = [];
+  const ctx = { sessionId: id, name: 'Sunday run', role: 'leader', you: 'k1', leaderKey: 'k1', expiresAtMs: t0 + 9 * 60000 + 30000, maxExpiresAtMs: t0 + 4 * 3600000, keepWindowMs: 30 * 60000, seq: 0, leaderEpoch: 1,
+                members: [{ key: 'k1', handle: 'lead', role: 'leader', online: true }, { key: 'k2', handle: 'mate', role: 'member', online: true }] };
+  await page.route('**/api/**', (route) => {
+    const u = new URL(route.request().url()), m = route.request().method();
+    const json = (b, status = 200) => route.fulfill({ status, contentType: 'application/json', body: JSON.stringify(b) });
+    if (u.pathname === '/api/me') return json({ signed_in: true, member: true, handle: 'lead' });
+    if (u.pathname === '/api/convoy' && m === 'POST') return json({ invite: `${id}.${'s'.repeat(32)}`, context: ctx }, 201);
+    if (u.pathname === `/api/convoy/${id}/keep` && m === 'POST') { keeps.push(1); ctx.expiresAtMs += 3600000; return json({ expiresAtMs: ctx.expiresAtMs, maxExpiresAtMs: ctx.maxExpiresAtMs }); }
+    if (u.pathname === `/api/convoy/${id}/ticket`) return json({ error: 'unavailable' }, 503);   // no socket here: the card's own words are under test
+    if (u.pathname === `/api/convoy/${id}`) return json(ctx);
+    if (m === 'GET') return json([]);
+    return json({}, 404);
+  });
+  await page.goto(base + '/index.html');
+  await page.waitForFunction(() => window.apex && typeof window.apex.live === 'function');
+  await page.evaluate(() => document.getElementById('startMore').click());
+  await page.click('.start-sheet button:has-text("Convoy now")');
+  await page.waitForSelector('.convoy-sheet button:has-text("Keep going 1 h")');
+  check(/\b[89] min left/.test(await page.locator('.convoy-sheet').innerText()), 'the card says how long is left');
+  // the heads-up, once, with the key on it
+  await page.waitForFunction(() => /Convoy ends in (9|10) min\./.test(document.getElementById('toast').textContent) && /Keep going/.test(document.getElementById('toast').textContent), null, { timeout: 5000 });
+  await page.click('.convoy-sheet button:has-text("Keep going 1 h")');
+  await page.waitForFunction(() => /Convoy kept going: 1 h [89] min left\./.test(document.getElementById('toast').textContent), null, { timeout: 5000 });
+  check(keeps.length === 1, 'asked the server once');
+  await page.waitForFunction(() => !/Keep going 1 h/.test(document.querySelector('.convoy-sheet').innerText) && /1 h [89] min left/.test(document.querySelector('.convoy-sheet').innerText), null, { timeout: 5000 });
+  check(true, 'with over half an hour left again the key is gone and the card shows the new time');
+});
+
 flow('convoy: leading a drive, the convoy is one line behind the car and the calls come when asked (Worker stubbed, @fish5spd 2026-11-03)', async (page, base) => {
   await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); localStorage.setItem('apex.permsExplained', '1'); } catch (_) {} });
   const id = 'CCCCCCCCCCCCCCCCCCCCCC', until = Date.now() + 120 * 60000;

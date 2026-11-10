@@ -119,6 +119,29 @@ const ev = (id, seq, action = 'hazard', epoch = 1) => ({ eventId: id, seq, actio
   const c2 = new C.ConvoyClient({ apiFetch: async () => resp(404, {}), wsUrl: () => '', WebSocketImpl: FakeWS });
   const c3 = new C.ConvoyClient({ apiFetch: async () => { throw new Error('offline'); }, wsUrl: () => '', WebSocketImpl: FakeWS });
   out.resume404 = await c2.resume('ROOM'); out.resumeOffline = await c3.resume('ROOM');
+  // keep going: the leader's, in its last half hour, until six hours; everyone is told ten minutes before the end
+  const H = 3600000, M = 60000, k = (role, left, toMax) => ({ role, expiresAtMs: 1e6 + left, maxExpiresAtMs: 1e6 + left + toMax, keepWindowMs: 30 * M });
+  out.canKeep = [C.canKeep(k('leader', 20 * M, H), 1e6), C.canKeep(k('leader', 31 * M, H), 1e6), C.canKeep(k('member', 20 * M, H), 1e6),
+    C.canKeep(k('leader', 20 * M, 0), 1e6), C.canKeep({ role: 'leader', expiresAtMs: 1e6 + 20 * M }, 1e6), C.canKeep(k('leader', -1, H), 1e6), C.canKeep(null, 1e6)];
+  const said = new Set();
+  out.ending = [C.endingNote(k('leader', 11 * M, H), 1e6, said), C.endingNote(k('leader', 10 * M, H), 1e6, said), C.endingNote(k('leader', 10 * M, H), 1e6 + M, said),
+    C.endingNote(k('member', 9.5 * M, H), 1e6, new Set()), C.endingNote(k('member', 3 * M, 0), 1e6, new Set()), C.endingNote(k('leader', 30000, 0), 1e6, new Set()),
+    C.endingNote(k('leader', -5, H), 1e6, new Set()), C.endingNote({ role: 'member' }, 1e6, new Set())];
+  out.endingAgain = C.endingNote(k('leader', 10 * M + H, H), 1e6 + H, said);              // kept going: a new end, told again
+  const posts = [], told = [];
+  const kc = new C.ConvoyClient({ apiFetch: async (path) => { posts.push(path); return path.endsWith('/keep') ? resp(200, { expiresAtMs: 7777, maxExpiresAtMs: 9999 }) : resp(200, { ...ctx(1), expiresAtMs: 5000 }); },
+    wsUrl: () => 'wss://x', WebSocketImpl: FakeWS, setTimer: () => 0, clearTimer: () => {}, onExtended: (m) => told.push(m.expiresAtMs) });
+  await kc.resume('ROOM');
+  const kept = await kc.keepGoing();
+  out.keep = { path: posts[posts.length - 1], ok: kept.ok, end: kc.ctx.expiresAtMs, max: kc.ctx.maxExpiresAtMs };
+  kc.onMessage({ type: 'extended', expiresAtMs: 7777, maxExpiresAtMs: 9999 });             // the leader's own copy of the news: nothing new
+  kc.onMessage({ type: 'extended', expiresAtMs: 8888, maxExpiresAtMs: 9999 });
+  kc.onMessage({ type: 'extended' });
+  out.extended = { end: kc.ctx.expiresAtMs, told };
+  const refused = new C.ConvoyClient({ apiFetch: async (path) => (path.endsWith('/keep') ? resp(409, { error: 'too_early' }) : resp(200, { ...ctx(1), expiresAtMs: 5000 })), wsUrl: () => 'wss://x', WebSocketImpl: FakeWS, setTimer: () => 0, clearTimer: () => {} });
+  await refused.resume('ROOM');
+  const no = await refused.keepGoing();
+  out.keepRefused = { status: no.status, error: no.body.error, end: refused.ctx.expiresAtMs };
   console.log(JSON.stringify(out));
 })();
 """
@@ -189,3 +212,21 @@ def test_leader_calls_undo_and_routes(out):
     assert out["share1"] == "sent" and out["share2"] == "sent" and out["versions"] == [1, 2]
     assert out["retractOffline"] == "queued" and out["pendingAfter"] == ["retract"]
     assert out["flushedRetract"] == ["retract"]
+
+
+def test_keep_going_and_the_heads_up_before_the_end(out):
+    """A convoy ran two hours and stopped, mid-drive, with no warning. The leader can give it another hour in its last
+    half hour (the server's rule, from the numbers in the context), and everyone is told ten minutes before it ends."""
+    assert out["canKeep"] == [True, False, False, False, False, False, False], "leader, last half hour, under the limit, a server that knows how"
+    e = out["ending"]
+    assert e[0] is None, "eleven minutes out: not yet"
+    assert e[1] == {"text": "Convoy ends in 10 min.", "keep": True}
+    assert e[2] is None, "told once per end time"
+    assert e[3] == {"text": "Convoy ends in 10 min. The leader can keep it going.", "keep": False}
+    assert e[4] == {"text": "Convoy ends in 3 min.", "keep": False}, "at the limit nobody can"
+    assert e[5] == {"text": "Convoy ends in 1 min. It has run as long as one can.", "keep": False}
+    assert e[6] is None and e[7] is None
+    assert out["endingAgain"] == {"text": "Convoy ends in 10 min.", "keep": True}, "a new end is told again"
+    assert out["keep"] == {"path": "/api/convoy/ROOM/keep", "ok": True, "end": 7777, "max": 9999}
+    assert out["extended"] == {"end": 8888, "told": [8888]}, "the news a phone already has isn't news"
+    assert out["keepRefused"] == {"status": 409, "error": "too_early", "end": 5000}
