@@ -83,4 +83,25 @@ describe("friends on the map", () => {
       { audience: "crew", delay_s: 0, fuzz: true, zones: Array(11).fill({ lat: 1, lon: 1, r: 200 }) }])
       expect((await api(a, "PUT", "/api/presence/settings", bad)).status).toBe(400);
   });
+  it("a home zone added or moved hides what was stored before it, at once; the same zones again keep it", async () => {
+    const [a, b] = [await makeUser("sam"), await makeUser("nate")];
+    await befriend(a, b);
+    const home = { lat: 35.36, lon: -84.29, r: 400 }, share = { audience: "friends", delay_s: 0, fuzz: false };
+    await set(a, { ...share, zones: [] });
+    await pub(a, 35.3601, -84.2901);                                    // the drive ended at home, before the zone existed
+    expect((await json(api(b, "GET", "/api/presence"))).length).toBe(1);
+    await set(a, { ...share, zones: [home] });
+    expect(await count()).toBe(0);
+    expect(await json(api(b, "GET", "/api/presence"))).toEqual([]);
+    await pub(a, 35.3601, -84.2901);                                    // inside it now: never stored
+    expect(await count()).toBe(0);
+    await pub(a, 35.40, -84.29);
+    expect(await count()).toBe(1);
+    await set(a, { ...share, zones: [home] });                          // saved again unchanged (the app sends its zones each time)
+    expect(await count()).toBe(1);
+    await set(a, { ...share, delay_s: 600, zones: [home] });            // a longer delay hides it by its age, nothing to delete
+    expect(await count()).toBe(1);
+    await set(a, { ...share, zones: [{ ...home, r: 5000 }] });          // the zone grown over where the sample is
+    expect(await count()).toBe(0);
+  });
 });

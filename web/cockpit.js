@@ -6884,15 +6884,17 @@
       if (!privacyZones.length) { list.append(el('p', { className: 'note', textContent: 'No zones yet.' })); return; }
       for (const z of privacyZones) {
         list.append(el('div', { className: 'row' }, el('span', { textContent: `${z.name} · ${z.r >= 1000 ? `${z.r / 1000} km` : `${z.r} m`}` }),
-          btn('Remove', () => { privacyZones = ApexPrivacyZones.remove(privacyZones, z.id); ApexPrivacyZones.save(localStorage, privacyZones); renderZones(); paintDriveStat(); }, 'linkbtn')));
+          btn('Remove', () => { privacyZones = ApexPrivacyZones.remove(privacyZones, z.id); ApexPrivacyZones.save(localStorage, privacyZones); renderZones(); paintDriveStat(); zonesChanged(); }, 'linkbtn')));
       }
     }
+    // friends on the map keeps a copy of the zones on the server: it goes up now, not at the next change of who sees you
+    const zonesChanged = () => { if (friendsMap && accountMe && accountMe.member) friendsMap.syncZones().catch(() => {}); };
     async function addZone(p) {
       const name = await ApexConfirm.prompt('Name this place', { action: 'Add zone', value: privacyZones.length ? '' : 'Home', placeholder: 'Home, Work', maxLength: 40 });
       if (name === null) return;
       const next = ApexPrivacyZones.add(privacyZones, { lat: p.lat, lon: p.lon, r: zoneR, name });
       if (!next) { toast(`Up to ${ApexPrivacyZones.MAX_ZONES} zones.`); return; }
-      privacyZones = next; ApexPrivacyZones.save(localStorage, privacyZones); renderZones(); paintDriveStat();
+      privacyZones = next; ApexPrivacyZones.save(localStorage, privacyZones); renderZones(); paintDriveStat(); zonesChanged();
       toast(`${privacyZones.at(-1).name}: nothing is recorded or shared within ${zoneR >= 1000 ? `${zoneR / 1000} km` : `${zoneR} m`}.`);
     }
     document.querySelectorAll('#zoneRadius [data-zone-r]').forEach(b => b.addEventListener('click', () => { zoneR = Number(b.dataset.zoneR); renderZones(); }));

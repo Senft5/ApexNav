@@ -197,6 +197,18 @@
   routing (4), plan flow (6) pass.
 - Exact next task: unchanged (tools/live_speed.js on the owner's trips at Fun and Long way); a "Graph region" run picks
   this up together with the expressway flag.
+## Session 2026-11-10 (fable-zone-samples): a home zone added later reaches the server and hides the stored position (claude/fable-zone-samples, off origin/main f27a1fe)
+
+- [x] Found by reading backend/src/presence.ts against the app: home zones were only sent with a change of "Show me
+  to", so a zone added or removed in Settings never reached the server's copy (the phone still dropped positions inside
+  it), and the last sample stored before the zone existed stayed on friends' maps until it aged out.
+- [x] web/friends_map.js `syncZones()` (loads settings if needed, nothing while Nobody, a quiet save with the current
+  zones); `start()` calls it at each launch; cockpit.js `zonesChanged()` calls it on zone add and remove.
+  backend/src/presence.ts `presenceSettingsPut` deletes the user's presence_samples when the zones JSON changes.
+- Tests: backend presence.test.ts "a home zone added or moved hides what was stored before it..." (vitest, tsc clean);
+  tests/test_friends_map.py test_home_zones_go_to_the_server_when_they_change_and_at_each_launch. No migration.
+- Next: nothing owed here. Deploys with the Worker on merge.
+
 ## Session 2026-11-09 (route-sliders): Tune your routes, Pro open to everyone until on sale (claude/route-sliders, off origin/main 1d97979)
 
 - [x] Owner: "every parameter with a slider for premium users"; "remember everyone has pro if they are an early user. Once
@@ -350,6 +362,19 @@
 - Exact next task: find why route_engine.js rank values colerain's 31.6 min and subdivision4's 17.2 min Long way routes
   below the shorter ones (per-term breakdown of the value: corners on side streets, strip mall, time cost at perMin 0.35)
   and decide whether the engine or the router's goodness is wrong; then re-run route_quality.js and tools/live_speed.js.
+
+## Session 2026-11-10 (fable-design-people): design pass 2, the route card's action strip and the map's credit (claude/fable-design-people, off origin/main ad4f1e4)
+
+- [x] web/index.html `.rc-links`: a flex strip ruled top, bottom and between keys, 48 px keys sized to their words, no
+  underlines, `[aria-pressed="true"]` inked in; two a row under `html[data-type-size]`.
+- [x] web/index.html `.maplibregl-ctrl-attrib` on the look's tokens (IDEAS U-53 done): square, `--panel` paper,
+  `--panel-ink` rule, the button's stock image replaced by an "i" in `--font-num`; the accent outline on keyboard focus.
+- Tests: e2e "design pass 2..." (one row edge to edge, 44 pt, no underline, no cut word, Saved inked in, the credit's
+  computed style); tests/test_design_pass.py (source rules).
+- Seen and not yet done: the signed-out People page (a logo and a button over blank paper); the route card stacks two
+  pencil help lines under the levels ("Swipe the card for the next route", "For Fields Ertel Road..."); the Garage is
+  a long settings page (U-49).
+- Exact next task: the signed-out People page, then the route card's help lines.
 
 ## Session 2026-11-08 (keys): the owner's answers on the free keys (claude/keys-1108, off origin/main)
 

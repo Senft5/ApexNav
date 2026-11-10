@@ -44,13 +44,16 @@ export async function presenceSettingsPut(env: Env, v: Viewer, req: Request): Pr
     const o = (z && typeof z === "object" ? z : {}) as { lat?: unknown; lon?: unknown; r?: unknown };
     return { lat: num(o.lat, "zones", -85, 85), lon: num(o.lon, "zones", -180, 180), r: num(o.r, "zones", 100, 5000) };
   });
-  const prev = await env.DB.prepare("SELECT fuzz FROM presence_settings WHERE user_id = ?").bind(v.id).first<{ fuzz: number }>();
+  const prev = await env.DB.prepare("SELECT fuzz, zones FROM presence_settings WHERE user_id = ?").bind(v.id).first<{ fuzz: number; zones: string }>();
+  const zonesJson = JSON.stringify(clean);
   await env.DB.batch([
     env.DB.prepare(`INSERT INTO presence_settings (user_id, audience, delay_s, fuzz, zones) VALUES (?1, ?2, ?3, ?4, ?5)
       ON CONFLICT (user_id) DO UPDATE SET audience = ?2, delay_s = ?3, fuzz = ?4, zones = ?5, updated_at = datetime('now')`)
-      .bind(v.id, b.audience, delay, b.fuzz ? 1 : 0, JSON.stringify(clean)),
-    // samples stored under other choices go: an exact one must never be shown once you chose "within a mile"
-    ...(prev && prev.fuzz !== (b.fuzz ? 1 : 0) ? [env.DB.prepare("DELETE FROM presence_samples WHERE user_id = ?").bind(v.id)] : []),
+      .bind(v.id, b.audience, delay, b.fuzz ? 1 : 0, zonesJson),
+    // samples stored under other choices go: an exact one must never be shown once you chose "within a mile", and a new
+    // or moved home zone must hide the place at once (a drive's last sample is where it ended: often that home), not
+    // once the sample has aged out half an hour later
+    ...(prev && (prev.fuzz !== (b.fuzz ? 1 : 0) || prev.zones !== zonesJson) ? [env.DB.prepare("DELETE FROM presence_samples WHERE user_id = ?").bind(v.id)] : []),
   ]);
 }
 

@@ -170,6 +170,19 @@ back roads), which nudged how those roads scored. The calls:
 - **I left the tiles' travel times alone.** The inventory knows the posted limit on about half the main-road miles where
   our tiles only guess from the road's class, and using it would make times truer, but a mismatched stretch would make
   them wrong in a new way. The numbers are in STATE for whoever takes it on.
+## 2026-11-10 (fable-zone-samples): a new home zone hides you from friends at once (claude/fable-zone-samples)
+
+Friends on the map keeps your home zones on the server too, so it can refuse a position inside one. Two gaps:
+the zones only went up when you changed who sees you, so a zone added later in Settings never reached the server; and
+the last position stored before the zone existed (a drive that ended at home) stayed visible until it aged out.
+- **A zone added or removed goes up at once**, and the app sends its zones again at each launch while you share
+  (one small request; nothing is sent while Nobody sees you). A failed background save says nothing and heals at the
+  next launch. Undo: friends_map.js `syncZones` and cockpit.js `zonesChanged`.
+- **The server forgets the position it held whenever the zones change** (added, moved, grown or removed), the same way
+  it already does when you switch between Exact and Within a mile. Friends see you again from your next position
+  outside a zone. Removing a zone also forgets it: simpler than working out whether the old sample was inside, and it
+  costs at most one sample. Undo: presence.ts `presenceSettingsPut`, the `prev.zones !== zonesJson` half.
+
 ## 2026-11-09 (route-sliders): Tune your routes, a Pro screen open to everyone until Pro goes on sale (claude/route-sliders)
 
 You asked for "every parameter with a slider for premium users", then: "remember everyone has pro if they are an early
@@ -313,6 +326,18 @@ trips. I broke each route's score into its parts to see why.
   of 12.1; the two had been within 0.3 points. The router's own picks now match the app's on harrison (Fun 31.1 min, Long
   way 41.9 min); the app's picks there didn't change. Quick, the highway rule and trips with no good road are unchanged.
   Planning speed is unchanged.
+
+## 2026-11-10 (fable-design-people): design pass 2, the route card's last row and the map's credit (claude/fable-design-people)
+
+Second cut of the owner's "designed by an artist" pass, on the two screens people look at most. The calls:
+- **The route card's last row is one ruled strip of keys** (Save, Share, Share ETA, GPX, Pin place). It was five
+  underlined words centred on the page, "Pin place" alone on a second line. REVIEW2's two weights stay (Save and
+  Share in ink, the rest in pencil); a key that is on (Saved, an ETA being shared) is inked in. With large text it
+  goes two a row. Undo: index.html `.rc-links`.
+- **The map's credit is a plate in the look's own style** (IDEAS U-53): a square paper plate ruled in ink with the "i"
+  in the number face, where MapLibre's white pill and round black "i" sat on every map. It follows the look's tokens,
+  so it is dark in the dark looks. The credit's text and links are unchanged. Undo: index.html, the
+  `.maplibregl-ctrl-attrib` rules.
 
 ## 2026-11-08 (levels): Fun and Long way each spend their time on better road (claude/level-spread)
 

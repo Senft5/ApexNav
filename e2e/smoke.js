@@ -702,6 +702,28 @@ async function ownTrip(page, base, level = null) {
     steps: (window.apexDebug.track.steps || []).map((s) => s.street), via: ((window.apexDebug.track.request || {}).via || []).length }));
   return { r, calls };
 }
+flow('design pass 2: the route card\'s last row is one ruled strip of keys, and the map\'s credit is a plate on the look\'s own tokens (IDEAS U-53)', async (page, base) => {
+  graphDir = graphFixture();
+  try {
+    await ownTrip(page, base);
+    const k = await page.evaluate(() => { const row = document.querySelector('.rc-links'), keys = [...row.querySelectorAll('.linkbtn')].filter((b) => !b.hidden).map((b) => { const r = b.getBoundingClientRect(), c = getComputedStyle(b);
+        return { t: b.textContent, w: Math.round(r.width), h: Math.round(r.height), top: Math.round(r.top), u: c.textDecorationLine, over: b.scrollWidth > b.clientWidth + 1 }; });
+      return { keys, row: Math.round(row.getBoundingClientRect().width) }; });
+    check(k.keys.length >= 4 && new Set(k.keys.map((x) => x.top)).size === 1 && Math.abs(k.keys.reduce((n, x) => n + x.w, 0) - k.row) <= 3, 'one row of keys, edge to edge: ' + JSON.stringify(k));
+    check(k.keys.every((x) => x.h >= 44 && x.u === 'none' && !x.over), '44 pt keys, no underlines, every word whole: ' + JSON.stringify(k.keys));
+    await page.click('#routeSaveBtn');
+    const saved = await page.evaluate(() => { const b = document.getElementById('routeSaveBtn'), c = getComputedStyle(b), ink = getComputedStyle(document.documentElement).getPropertyValue('--panel-ink').trim();
+      const probe = document.createElement('i'); probe.style.color = ink; document.body.append(probe); const want = getComputedStyle(probe).color; probe.remove();
+      return { t: b.textContent, pressed: b.getAttribute('aria-pressed'), bg: c.backgroundColor, want }; });
+    check(saved.t === 'Saved' && saved.pressed === 'true' && saved.bg === saved.want, 'a key that is on is inked in: ' + JSON.stringify(saved));
+    const credit = await page.evaluate(() => { const a = document.querySelector('.maplibregl-ctrl-attrib'); if (!a) return null;
+      a.classList.remove('maplibregl-attrib-empty', 'maplibregl-compact-show'); a.classList.add('maplibregl-compact');
+      const c = getComputedStyle(a), b = a.querySelector('.maplibregl-ctrl-attrib-button'), cb = getComputedStyle(b), panel = getComputedStyle(document.querySelector('.plan')).backgroundColor;
+      return { radius: c.borderTopLeftRadius, bg: c.backgroundColor, panel, border: c.borderTopWidth, img: cb.backgroundImage, i: getComputedStyle(b, '::before').content, bradius: cb.borderTopLeftRadius }; });
+    check(credit && credit.radius === '0px' && credit.bradius === '0px' && credit.bg === credit.panel && parseFloat(credit.border) >= 1 && credit.img === 'none' && credit.i === '"i"', 'the credit is a square plate on the page\'s paper with its own "i": ' + JSON.stringify(credit));
+  } finally { graphDir = null; }
+}, { geolocation: { latitude: 39.155, longitude: -84.615 }, permissions: ['geolocation'] });
+
 flow('own routing: where our graph tiles cover the trip, our route wins and Valhalla only gives the turn instructions (docs/OWN_ROUTING.md)', async (page, base) => {
   graphDir = graphFixture();
   try {
