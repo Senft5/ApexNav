@@ -4,6 +4,13 @@ Decisions Claude made for you, newest first. Each one says what was decided, why
 you reach one you've seen. If you disagree with a call, say so and it gets reversed; nothing here is hard to undo unless
 it says so. Things only you can do are in docs/OWNER_TODO.md.
 
+## 2026-11-10 (fable-log-dates): the Log's records and charts say "30 Oct", not "2026-10-30" (claude/fable-log-dates)
+
+The Log's list stamps each drive "30 OCT", but Your records under it printed 2026-10-30 and the two score charts
+labelled their dots 10-30, like database fields. Records now read as the rest of the Log does (Today, Yesterday,
+"30 Oct", with the year when it isn't this one) and the charts' days read "30 Oct" (in the phone's own order, so
+"Oct 30" on a US phone). Undo: revert the PR.
+
 ## 2026-11-10 (fable-loops): a loop has no Quick / Fun / Long way; its card offers its length and which way to head (claude/fable-loops)
 
 You asked: "why do loops need a long way a fun and a quick? the whole point is aimless driving". They don't. On a

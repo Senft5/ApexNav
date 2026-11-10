@@ -55,3 +55,14 @@ def test_chat_and_replies_render_emoji_as_text():
     assert json.loads(p.stdout)["plain"] == ["Same plan meet 6:15", "Fog gone by 7", "", "no emoji here", "", "Sticker \u00a9 2026, Bilstein\u00ae B6, GR86\u2122"]
     for f, needle in (("web/crew_page.js", "textContent: plain(m.body)"), ("web/builds.js", "textContent: plain(r.body)")):
         assert needle in (root / f).read_text(encoding="utf-8"), f
+
+
+def test_a_chart_day_reads_as_a_day():
+    """The Log's charts and records said "10-30" and "2026-10-30" beside list stamps that say "30 OCT" (2026-11-10)."""
+    root = Path(__file__).resolve().parents[1]
+    js = "const F=require('./web/format.js');console.log(JSON.stringify([['2026-10-30','2026-11-02T09:00:00','2026-02-30','10-30','',null].map((x)=>F.dayShort(x,'en-GB')),F.dayShort('2026-10-30','en-US')]))"
+    gb, us = json.loads(subprocess.run([NODE, "-e", js], cwd=root, capture_output=True, text=True, encoding="utf-8", check=True, timeout=30).stdout)
+    assert gb == ["30 Oct", "2 Nov", "", "", "", ""] and us == "Oct 30"      # a day that doesn't exist is no day
+    page = (root / "web" / "analysis.html").read_text(encoding="utf-8")
+    assert ".slice(5, 10)}</text>" not in page
+    assert "ApexFormat.dateTime(d.date.slice(0, 10))" in page and page.count("ApexFormat.dayShort(") == 2

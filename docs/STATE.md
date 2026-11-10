@@ -1,5 +1,11 @@
 # VETTA — CURRENT AGENT HANDOFF STATE
 
+## Session 2026-11-10 (fable-log-dates): readable days in the Log's records and charts (claude/fable-log-dates, off origin/main 1a38381)
+
+- [x] web/format.js `dayShort(iso, locale)`; web/analysis.html: Your records' day through `ApexFormat.dateTime`, the
+  Score over time and road charts' labels through `dayShort` (CSP hashes regenerated).
+- [x] Tests: tests/test_format.py `test_a_chart_day_reads_as_a_day`; e2e "Your records…" refuses an ISO date in a row.
+
 ## Session 2026-11-10 (fable-loops): loops lose Quick / Fun / Long way; the card offers which way to head (claude/fable-loops, off origin/main 7dee309)
 
 - [x] The owner: "why do loops need a long way a fun and a quick? the whole point is aimless driving". web/cockpit.js:
