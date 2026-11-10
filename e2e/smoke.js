@@ -212,6 +212,62 @@ flow('the strip never cuts where the meaning is: a three-word call keeps its dir
   }
 });
 
+// Location off (2026-11-10): the app never said it. A drive sat on "Finding GPS…" for ever, and in a browser the sheet said
+// "Location is off. Settings → …" twice over a greyed-out key, and Just drive went grey with no word.
+flow('Location off, in the app: Just drive says so once and opens Settings, and the sheet goes away by itself when Location comes on', async (page, base) => {
+  await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); localStorage.setItem('apex.permsExplained', '1'); } catch (_) {}
+    window.__posted = []; window.webkit = { messageHandlers: { apex: { postMessage(m) { window.__posted.push(m); } } } }; });
+  await page.route(base + '/api/**', (route) => route.fulfill({ status: 401, contentType: 'application/json', body: '{"error":"signed_out"}' }));
+  await page.goto(base + '/index.html');
+  await page.waitForFunction(() => window.apex && typeof window.apex.live === 'function' && window.apexDebug && window.apexDebug.map);
+  await page.evaluate(() => window.apex.live({ has_fix: false, location_off: true, thermal: 0 }));
+  const key = await page.evaluate(() => { const b = document.getElementById('startDrive'); return { disabled: b.disabled, text: b.textContent.trim() }; });
+  check(!key.disabled && key.text === 'Just drive', 'Just drive stays a key (never greyed out without a word): ' + JSON.stringify(key));
+  await page.evaluate(() => document.getElementById('startDrive').click());
+  await page.waitForSelector('#permSheet.show');
+  const off = await page.evaluate(() => { const s = document.getElementById('permSheet'), go = document.getElementById('permGo');
+    return { title: document.getElementById('permTitle').textContent, label: s.getAttribute('aria-label'), text: s.innerText, go: go.textContent, goDisabled: go.disabled,
+      rows: getComputedStyle(s.querySelector('.perm')).display, mode: window.apexDebug.state.mode }; });
+  check(off.title === 'Location is off' && off.label === 'Location is off' && off.rows === 'none' && off.mode !== 'live', 'the sheet is "Location is off", the first-drive list put away, no drive started: ' + JSON.stringify(off));
+  check((off.text.match(/In Settings, set Location to While Using the App\./g) || []).length === 1 && (off.text.match(/Location is off/g) || []).length === 1, 'it is said once, with the way back: ' + JSON.stringify(off.text));
+  check(off.go === 'Open Settings' && !off.goDisabled, 'the key is Open Settings, alive: ' + JSON.stringify(off));
+  await page.evaluate(() => document.getElementById('permGo').click());
+  check(await page.evaluate(() => window.__posted.some((m) => m && m.cmd === 'openSettings')) && await page.isVisible('#permSheet.show'), 'the key asks the app for Settings; the sheet waits');
+  // back from Settings with Location on: the next frame says so, the sheet goes by itself and a drive starts as ever
+  await page.evaluate(() => window.apex.live({ has_fix: true, location_off: false, lat: 35.96, lon: -83.92, accuracy_m: 5, speed_mps: 0, course_deg: 0, calibration: 'locked', thermal: 0 }));
+  await page.waitForFunction(() => !document.getElementById('permSheet').classList.contains('show'), null, { timeout: 3000 }).catch(() => {});
+  check(!(await page.isVisible('#permSheet.show')), 'the sheet closes itself once Location is on');
+  await page.evaluate(() => document.getElementById('startDrive').click());
+  await page.waitForFunction(() => window.apexDebug.state.mode === 'live', null, { timeout: 3000 }).catch(() => {});
+  check(await page.evaluate(() => window.apexDebug.state.mode === 'live'), 'and Just drive starts the drive');
+  // turned off mid-drive (left for Settings and came back): the drive's line says it, once, with the way back
+  await page.evaluate(() => window.apex.live({ has_fix: false, location_off: true, thermal: 0 }));
+  const line = await page.evaluate(() => document.getElementById('dsMain').textContent + ' | ' + document.getElementById('dsWarn').textContent);
+  check(/^Location is off/.test(line) && /\| Settings → Vetta → Location → Allow$/.test(line) && (line.match(/Location is off/g) || []).length === 1, 'a drive with Location turned off says so, not "Finding GPS": ' + line);
+});
+
+flow('Location off, in a browser: the sheet says it once and its key tries again; nothing is greyed out', async (page, base) => {
+  await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); localStorage.setItem('apex.permsExplained', '1'); } catch (_) {}
+    window.__geo = 0; const deny = (ok, err) => { window.__geo++; setTimeout(() => err && err({ code: 1, message: 'denied' }), 0); return 1; };
+    Object.defineProperty(navigator, 'geolocation', { configurable: true, value: { watchPosition: deny, getCurrentPosition: deny, clearWatch() {} } }); });
+  await page.route(base + '/api/**', (route) => route.fulfill({ status: 401, contentType: 'application/json', body: '{"error":"signed_out"}' }));
+  await page.goto(base + '/index.html');
+  await page.waitForFunction(() => window.apex && window.apexDebug && window.apexDebug.map);
+  await page.evaluate(() => document.getElementById('startDrive').click());
+  await page.waitForSelector('#permSheet.show.loc-off', { timeout: 8000 }).catch(() => {});
+  const off = await page.evaluate(() => { const s = document.getElementById('permSheet'), go = document.getElementById('permGo');
+    return { title: document.getElementById('permTitle').textContent, text: s.innerText, go: go.textContent, goDisabled: go.disabled, mode: window.apexDebug.state.mode, start: document.getElementById('startDrive').disabled }; });
+  check(off.title === 'Location is off' && (off.text.match(/Settings → Safari → Location → Allow/g) || []).length === 1 && (off.text.match(/Location is off/g) || []).length === 1 && off.mode !== 'live',
+    'a browser that says no gets the sheet, said once: ' + JSON.stringify(off));
+  check(off.go === 'Try again' && !off.goDisabled && !off.start, 'its key is Try again, alive, and Just drive is not greyed out: ' + JSON.stringify(off));
+  const before = await page.evaluate(() => window.__geo);
+  await page.evaluate(() => document.getElementById('permGo').click());
+  await page.waitForFunction((n) => window.__geo > n && document.getElementById('permSheet').classList.contains('show'), before, { timeout: 8000 }).catch(() => {});
+  check(await page.evaluate((n) => window.__geo > n, before) && await page.isVisible('#permSheet.show.loc-off'), 'Try again asks the browser again, and the sheet comes back while it still says no');
+  await page.click('#permNo');
+  check(!(await page.isVisible('#permSheet.show')), 'Not now puts it away');
+});
+
 flow('returning driver: live frames switch to the cockpit, big targets and no keyboard while moving', async (page, base) => {
   await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); } catch (_) {} });
   await page.goto(base + '/index.html');

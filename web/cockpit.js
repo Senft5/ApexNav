@@ -867,7 +867,7 @@
       }
     });
     map.getContainer().querySelectorAll('.maplibregl-ctrl-attrib').forEach((a) => attribWatch.observe(a, { attributes: true, attributeFilter: ['class'], attributeOldValue: true }));
-    $('recenterBtn').addEventListener('click', () => { resumeFollow(); render(false); });
+    $('recenterBtn').addEventListener('click', () => { if (locDenied && !track && $('app').classList.contains('idle')) { showPerms(); return; } resumeFollow(); render(false); });   // the idle map with Location off has nowhere to come back to: say so
 
     // =======================================================================
     // 4b. CAMERA RIG — a chase cam that reacts to the car and the road, on its own 60 fps loop.
@@ -7198,17 +7198,29 @@
       if (on !== drawDetail.edges) { drawDetail.edges = on; setDriveEdges(on); }   // F-02/F-05: once per start and end
     }
     // In the iOS app the switch lives under the app, not Safari.
-    const LOC_DENIED_TEXT = `Location is off. Settings → ${window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.apex ? 'Vetta' : 'Safari'} → Location → Allow`;
+    const LOC_HOW_TEXT = `Settings → ${window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.apex ? 'Vetta' : 'Safari'} → Location → Allow`;
     const MOT_DENIED_TEXT = 'No motion · surface not recorded';
     let locDenied = false, motDenied = false;
+    // The sheet before a drive has two faces. Before the first drive: what the drive uses, and Allow and start. With Location
+    // off (the driver said no, in the app or the browser): that, said once, why it matters and the way back: the app's key
+    // opens its own page in Settings; a browser has no such door, so its key tries again once the driver has allowed it.
+    // No key is ever greyed out without a word: Just drive stays a key and opens this.
     function paintPerms() {
-      $('startDrive').disabled = locDenied;
-      $('permGo').disabled = locDenied;
-      $('permLoc').textContent = locDenied ? LOC_DENIED_TEXT : 'to call corners ahead';
-      $('permLoc').style.color = locDenied ? 'var(--accent)' : '';
+      const sheet = $('permSheet');
+      sheet.classList.toggle('loc-off', locDenied);
+      sheet.setAttribute('aria-label', locDenied ? 'Location is off' : 'Before your first drive');
+      $('permTitle').textContent = locDenied ? 'Location is off' : 'Before your first drive';
       $('permMot').textContent = motDenied ? MOT_DENIED_TEXT : 'to feel bumps and surface';
-      $('permNote').textContent = locDenied ? LOC_DENIED_TEXT : motDenied ? MOT_DENIED_TEXT : 'Your drive stays on this phone.';
-      $('permNote').style.color = locDenied ? 'var(--accent)' : '';
+      $('permNote').textContent = locDenied ? `Vetta can\u2019t record a drive or call the corners ahead without it. ${NATIVE_SHELL ? 'In Settings, set Location to While Using the App.' : `Turn it on: ${LOC_HOW_TEXT}.`}` : 'Your drive stays on this phone.';
+      $('permGo').textContent = locDenied ? (NATIVE_SHELL ? 'Open Settings' : 'Try again') : 'Allow and start';
+    }
+    /** The app's own word on Location (a live frame's location_off): the system sheet answered no, or turned off since. */
+    function setLocOff(off) {
+      if (off === locDenied) return;
+      locDenied = off;
+      if (drive.native && drive.status) drive.status.gps = off ? 'denied' : 'waiting';
+      if (!off && $('permSheet').classList.contains('loc-off')) $('permSheet').classList.remove('show');   // back from Settings with it on
+      paintPerms(); paintDriveStat();
     }
     if (navigator.permissions && navigator.permissions.query) {
       navigator.permissions.query({ name: 'geolocation' }).then((p) => {
@@ -7232,7 +7244,7 @@
       else if (drive.share === 'on') main.push(drive.shareErr ? 'Sharing · retrying' : `Sharing ${ApexUnits.long((drive.shareKm) * 1000, 1)}`);
       else if (drive.share === 'stopped') main.push('Sharing paused');
       else if (drive.share === 'zone' && !zoned) main.push('Sharing off after a privacy zone');
-      if (s.gps === 'denied') warn.push(LOC_DENIED_TEXT);
+      if (s.gps === 'denied') warn.push(LOC_HOW_TEXT);
       else if (s.message) warn.push(s.message);                                       // weak or lost GPS, in the sensor's words
       else if (s.gps === 'weak') warn.push('Weak GPS · keep the sky in view');
       else if (s.gps === 'error') warn.push('GPS error');
@@ -8450,7 +8462,7 @@
       carOfferUntil = 0; t._holdUntil = 0; t.classList.remove('show'); t.querySelectorAll('a').forEach(x => x.remove());
     }
     // A go=drive link (a Shortcuts automation) can't start without location: say so rather than do nothing.
-    function driveFromLink() { if (locDenied) toast(LOC_DENIED_TEXT); else startDrive(); }
+    function driveFromLink() { startDrive(); }   // with Location off, startDrive says so and shows the way back
     // From the car's screen (CarPlay/ApexCarPlay.swift). Nothing here asks the driver to use the phone: no explainer sheet
     // (the system's own location prompt is the only one, and only if it was never answered).
     function carAction(m) {
@@ -8478,15 +8490,21 @@
     }
     carPost(ApexCarPlay.placesMessage(recentPlaces()));
     function startDrive() {
-      if (state.mode === 'live' || locDenied) return;
+      if (state.mode === 'live') return;
       askLocation();                                                   // never asked (a welcome skipped by a link): ask now
-      if (flag('apex.permsExplained')) { enterDrive(); return; }
+      if (flag('apex.permsExplained') && !locDenied) { enterDrive(); return; }
+      showPerms();
+    }
+    function showPerms() {
       paintPerms();
       // The app calibrates the mount (ApexKit); a browser has no mount calibration, so the tip is app-only
       document.querySelectorAll('.mount-row').forEach(n => { n.hidden = !NATIVE_SHELL; });
       const sheet = $('permSheet'); sheet.classList.add('show'); $('permGo').focus();
     }
-    $('permGo').addEventListener('click', () => { if (locDenied) return; flag('apex.permsExplained', '1'); $('permSheet').classList.remove('show'); enterDrive(); });
+    $('permGo').addEventListener('click', () => {
+      if (locDenied && NATIVE_SHELL) { try { window.webkit.messageHandlers.apex.postMessage({ cmd: 'openSettings' }); } catch (_) {} return; }   // the sheet stays: it closes itself when Location comes on
+      flag('apex.permsExplained', '1'); $('permSheet').classList.remove('show'); enterDrive();   // a browser asks again: on if it was allowed since, this sheet again if not
+    });
     $('permNo').addEventListener('click', () => $('permSheet').classList.remove('show'));
     $('startDrive').addEventListener('click', startDrive);
     // P-11: Start's other way to go. A crew's convoy starts from its drive's card; this is the one for two friends met at a
@@ -8497,7 +8515,7 @@
       back.setAttribute('role', 'dialog'); back.setAttribute('aria-modal', 'true'); back.setAttribute('aria-label', 'Ways to go');
       const close = () => { back.remove(); document.removeEventListener('keydown', esc); };
       const esc = (e) => { if (e.key === 'Escape') close(); };
-      const drive = el('button', { className: 'rec-key', disabled: locDenied }, el('i'), 'Just drive');
+      const drive = el('button', { className: 'rec-key' }, el('i'), 'Just drive');
       drive.addEventListener('click', () => { close(); startDrive(); });
       const name = (accountMe && accountMe.handle ? `@${accountMe.handle}'s convoy` : 'Convoy');
       back.append(el('div', { className: 'card-sheet' }, el('h2', { textContent: 'Ways to go' }), drive,
@@ -8850,6 +8868,7 @@
     window.apex = {
       live(frame) {
         if (frame) feedPower({ thermal: frame.thermal, lowPowerMode: frame.low_power_mode });
+        if (frame && NATIVE_SHELL && typeof frame.location_off === 'boolean') setLocOff(frame.location_off);
         if (frame && !frame.has_fix && drive.native && drive.rec) keepFrame(frame);   // Round 3: a stop with no sky (a garage) still ends it
         if (!frame || !frame.has_fix || !Number.isFinite(frame.lat) || !Number.isFinite(frame.lon)) return;
         feedMotion(frame.speed_mps);
@@ -8922,7 +8941,7 @@
     setInterval(() => {
       // A native drive keeps going through a GPS gap (tunnel): say so instead of dropping back to the replay.
       if (drive.native && performance.now() - state.liveAt > 5000) {
-        if (drive.status && drive.status.gps !== 'waiting') { drive.status.gps = 'waiting'; paintDriveStat(); }
+        if (drive.status && drive.status.gps !== 'waiting' && !locDenied) { drive.status.gps = 'waiting'; paintDriveStat(); }
         return;
       }
       if (state.mode === 'live' && !drive.sensors && performance.now() - state.liveAt > 5000) {
