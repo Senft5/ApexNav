@@ -35,6 +35,12 @@ The e2e suite is 152 flows now and takes about 24 minutes, so GitHub cut it off 
 (twice on #349, once on #344) with every flow before it passing. The limit is 35 minutes. No test is skipped or
 shortened. Undo: set `timeout-minutes` back to 25 in `.github/workflows/core-tests.yml`, or better, split the suite.
 
+## 2026-11-10 (fable-sheet-races): e2e waits for a sheet to be still before tapping its keys (claude/fable-sheet-races)
+
+Nine PRs were red on CI-only races: a click aimed at a sheet that was still sliding up landed on its backdrop, which
+closes the sheet. The two flows now wait until the sheet is open and still, and check it is still open after the tap.
+No app code changed; every check is as strict as before. Undo: revert the PR.
+
 ## 2026-11-10 (fable-loop-time): a loop can be set by time on the dial (claude/fable-loop-time)
 
 Following your "the whole point is aimless driving": "I have an hour" is how a loop is usually asked for, and time

@@ -21,6 +21,18 @@
 - Tests: tests/test_route_card.py; e2e "plan flow (c)".
 - Next: CarPlay has not had a design pass in this run (Swift, not visible from the cloud).
 
+## Session 2026-11-10 (fable-sheet-races): two e2e flows clicked a sheet's key while it slid up (claude/fable-sheet-races, off origin/main 948cb4b)
+
+- `e2e/smoke.js` `sheetSettled(page, id)`: a `.overlay.dim` sheet is shown, nothing in it animating, and in the same place
+  two frames running. "a pin has a name" waits for it before the star, then checks the spot dialog is still open;
+  "Location off, in a browser" waits for it after Try again brings the sheet back, before Not now. On CI the star click
+  landed on the backdrop mid-slide and the backdrop closed the dialog (stars 0 px tall); nine PRs were red on it.
+- Found while tracing, not changed here: run alone in this container, "a pin has a name" fails later at Tap the map, on
+  main too, because Playwright's scroll-into-view scrolled `.stage` (overflow: hidden) by ~420 px, which stands the plan
+  sheet over the map. It passed in the whole-suite run and on CI. `overflow: clip` on `.stage` fixes the scroll but the
+  sheet still came up in the isolated run, so I left both out of this PR. Next: find what else holds the sheet up there.
+- Location flow 5 of 5 here (also at THROTTLE=6); pin flow passes the star step every run.
+
 ## Session 2026-11-10 (merger): e2e time limit 35 min (claude/project-thread-er8kzz)
 
 - [x] .github/workflows/core-tests.yml e2e `timeout-minutes` 25 → 35: 152 flows take ~24 min and were cancelled on the
