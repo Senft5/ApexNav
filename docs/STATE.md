@@ -185,6 +185,18 @@
   routing (4), plan flow (6) pass.
 - Exact next task: unchanged (tools/live_speed.js on the owner's trips at Fun and Long way); a "Graph region" run picks
   this up together with the expressway flag.
+## Session 2026-11-10 (fable-zone-samples): a home zone added later reaches the server and hides the stored position (claude/fable-zone-samples, off origin/main f27a1fe)
+
+- [x] Found by reading backend/src/presence.ts against the app: home zones were only sent with a change of "Show me
+  to", so a zone added or removed in Settings never reached the server's copy (the phone still dropped positions inside
+  it), and the last sample stored before the zone existed stayed on friends' maps until it aged out.
+- [x] web/friends_map.js `syncZones()` (loads settings if needed, nothing while Nobody, a quiet save with the current
+  zones); `start()` calls it at each launch; cockpit.js `zonesChanged()` calls it on zone add and remove.
+  backend/src/presence.ts `presenceSettingsPut` deletes the user's presence_samples when the zones JSON changes.
+- Tests: backend presence.test.ts "a home zone added or moved hides what was stored before it..." (vitest, tsc clean);
+  tests/test_friends_map.py test_home_zones_go_to_the_server_when_they_change_and_at_each_launch. No migration.
+- Next: nothing owed here. Deploys with the Worker on merge.
+
 ## Session 2026-11-09 (route-sliders): Tune your routes, Pro open to everyone until on sale (claude/route-sliders, off origin/main 1d97979)
 
 - [x] Owner: "every parameter with a slider for premium users"; "remember everyone has pro if they are an early user. Once
