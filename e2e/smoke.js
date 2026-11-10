@@ -6110,6 +6110,10 @@ flow('a loop\'s choices are which way to head, not Quick / Fun / Long way: the l
     check(!a.hidden && a.cards.length >= 2 && a.cards.length <= 3, 'the loops found are the choices, two or three of them: ' + JSON.stringify(a.cards));
     const WAY = /^(North|Northeast|East|Southeast|South|Southwest|West|Northwest|Around here) (\d+:\d\d|\d+ min) \d+ corners?$/i;
     check(a.cards.every((c) => WAY.test(c.text)), 'each card: the way it heads, its time and its corners: ' + JSON.stringify(a.cards.map((c) => c.text)));
+    // two cards that head the same way are a choice only when they are a different drive (a fifth longer or shorter)
+    const mins = (c) => { const m = /(\d+):(\d\d)|(\d+) min/.exec(c.text); return m[3] ? +m[3] : 60 * +m[1] + +m[2]; }, way = (c) => c.text.replace(/ (\d+:\d\d|\d+ min) .*$/, '');
+    const twins = a.cards.flatMap((c, i) => a.cards.slice(i + 1).filter((d) => way(d) === way(c) && Math.abs(mins(c) - mins(d)) / Math.max(mins(c), mins(d)) < 0.15).map((d) => [c.text, d.text]));
+    check(!twins.length, 'no two cards are the same way and near the same time: ' + JSON.stringify(twins));
     check(a.cards.every((c) => c.line >= 8 && c.art >= 30), 'each card draws its own loop: ' + JSON.stringify(a.cards.map((c) => [c.line, c.art])));
     check(a.cards.every((c) => /^Loop (to the \w+|around here): /.test(c.label)), 'each card says what it is aloud: ' + JSON.stringify(a.cards.map((c) => c.label)));
     check(a.cards[0].on && a.cards[0].checked && a.cards.filter((c) => c.on).length === 1, 'the loop on the map is the card that is on, the best first: ' + JSON.stringify(a.cards.map((c) => c.on)));

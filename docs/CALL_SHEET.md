@@ -70,6 +70,16 @@ the Garage as well. Both rules now apply on the People tab only. I had read the 
 Garage signed out after the change; the screen-by-screen flow now checks that the Garage shows no People page.
 - Undo: not something to undo; reverting #332 would also remove it.
 
+## 2026-11-10 (fable-loop-names): a loop's cards are never two of the same way at the same length (claude/fable-loop-names)
+
+A loop's "which way" cards could come up as two Southeasts, 39 and 37 minutes: the same choice twice, told apart only by
+squinting at the outlines. A second loop that heads the same way as one already offered is now a card only when it is
+a really different drive: a fifth longer or shorter, in distance or in time (`LOOP_OFFER.differs` in web/fun_route.js).
+Loops that head somewhere else are offered as before. So there can be fewer cards than three (or none, when every other
+loop found is a lookalike); the best loop is always the first one.
+
+Undo: revert the PR, or set `differs: 0` in `LOOP_OFFER`.
+
 ## 2026-11-10 (fable-quiet-news): What's new never comes up over something you have started (claude/fable-quiet-news)
 
 After an update the "What's new" sheet came up 1.2 seconds into the launch whatever you were doing: I caught it

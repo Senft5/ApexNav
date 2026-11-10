@@ -58,14 +58,17 @@ def test_the_loops_offered_head_different_ways_before_any_lookalike():
         around: pick([it('N', 90, 0, 40, 3000), it('N again', 89, 0, 40.1, 3010), it('around', 85, null, 40, 3200)]),
         // one that heads elsewhere but ranks far below (its rule broken: 1000 off) never jumps the queue
         far: pick([it('N', 90, 0, 40, 3000), it('N long', 80, 5, 50, 3600), it('S on the highway', -920, 180, 40, 2400)], 2),
-        // all one way (a river on the other side): still up to three, the really different ones
-        oneWay: pick([it('a', 90, 0, 40, 3000), it('b', 80, 10, 45, 3300), it('c', 70, 20, 50, 3700), it('d', 60, 5, 55, 4000)]),
+        // all one way (a river on the other side): only loops that are a different drive, a fifth longer or shorter
+        oneWay: pick([it('a', 90, 0, 40, 3000), it('b', 80, 10, 45, 3300), it('c', 70, 20, 50, 3700), it('d', 60, 5, 55, 4000), it('e', 50, 15, 70, 5200)]),
+        // the owner's card: two "Southeast", 39 and 37 min, was no choice; the lookalike is not offered
+        twins: pick([it('SE', 90, 135, 24.8, 2340), it('NE', 85, 45, 20.6, 1800), it('SE again', 60, 140, 23.9, 2220)]),
         none: pick([]), one: pick([it('only', 1, 0, 40, 3000)]),
       }; })()""")
     assert out["ways"] == ["best N", "E", "SW"]
     assert out["around"] == ["N", "around"]
     assert out["far"] == ["N", "N long"]
-    assert out["oneWay"] == ["a", "b", "c"]
+    assert out["oneWay"] == ["a", "c", "e"]
+    assert out["twins"] == ["SE", "NE"]
     assert out["none"] == [] and out["one"] == ["only"]
 
 

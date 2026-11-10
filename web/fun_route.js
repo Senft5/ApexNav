@@ -424,10 +424,12 @@
   /**
    * The loops to offer, of the ranked ones (loopRank's order: [{ item, v }], item { km, timeS, way }): the best first,
    * then loops that head another way (60 degrees or more from every one offered, or one circles the start and the
-   * other doesn't) while they are within LOOP_OFFER.within points of the best, then any other really different one
-   * (not the same length and time), up to `max`. The choices on a loop's card are these, named by their way.
+   * other doesn't) while they are within LOOP_OFFER.within points of the best, then a loop that heads the same way as
+   * one offered only when it is a different drive (its length or time LOOP_OFFER.differs of the way off: two cards
+   * both named "Southeast", 39 and 37 min, were no choice), up to `max`. The choices on a loop's card are these, named
+   * by their way.
    */
-  const LOOP_OFFER = { apartDeg: 60, within: 100 };
+  const LOOP_OFFER = { apartDeg: 60, within: 100, differs: 0.2 };
   function loopOffer(order, max = 3) {
     const all = (order || []).filter((x) => x && x.item), out = [];
     const same = (a, b) => Math.abs(a.km - b.km) < 0.3 && Math.abs((a.timeS || 0) - (b.timeS || 0)) < 30;
@@ -439,9 +441,11 @@
       if (out.includes(x) || !(x.v >= all[0].v - LOOP_OFFER.within)) continue;
       if (out.every((y) => apart(x.item, y.item) && !same(x.item, y.item))) out.push(x);
     }
+    const off = (a, b) => (Number.isFinite(a) && Number.isFinite(b) && Math.max(a, b) > 0 ? Math.abs(a - b) / Math.max(a, b) : 0);
+    const differs = (a, b) => off(a.km, b.km) >= LOOP_OFFER.differs || off(a.timeS, b.timeS) >= LOOP_OFFER.differs;
     for (const x of all) {
       if (out.length >= max) break;
-      if (!out.includes(x) && out.every((y) => !same(x.item, y.item))) out.push(x);
+      if (!out.includes(x) && out.every((y) => !same(x.item, y.item) && (apart(x.item, y.item) || differs(x.item, y.item)))) out.push(x);
     }
     return out;
   }
