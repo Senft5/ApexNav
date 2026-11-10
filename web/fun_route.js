@@ -398,6 +398,54 @@
     return true;
   }
   /**
+   * Which way a loop heads (the owner, 2026-11-10: "why do loops need a long way a fun and a quick? the whole point is
+   * aimless driving"): a loop's own choice is where it goes, not a route style. The compass bearing from its start to the
+   * middle of its road (each stretch weighed by its length), as { deg: 0..360 clockwise from north, name } with one of
+   * eight names; null when it circles its start (the middle within a tenth of its furthest reach) or has no shape.
+   */
+  const WAYS = ['North', 'Northeast', 'East', 'Southeast', 'South', 'Southwest', 'West', 'Northwest'];
+  function loopWay(t) {
+    const la = t && t.lat, lo = t && t.lon;
+    if (!Array.isArray(la) || !Array.isArray(lo) || la.length < 3 || la.length !== lo.length) return null;
+    const k = Math.cos(la[0] * Math.PI / 180);
+    let x = 0, y = 0, w = 0, far = 0, px = 0, py = 0;
+    for (let i = 1; i < la.length; i++) {
+      const dx = (lo[i] - lo[0]) * k, dy = la[i] - la[0], seg = Math.hypot(dx - px, dy - py);
+      if (!Number.isFinite(seg)) return null;
+      x += seg * (dx + px) / 2; y += seg * (dy + py) / 2; w += seg;
+      far = Math.max(far, Math.hypot(dx, dy)); px = dx; py = dy;
+    }
+    if (!(w > 0) || !(far > 0)) return null;
+    x /= w; y /= w;
+    if (Math.hypot(x, y) < 0.1 * far) return null;
+    const deg = (Math.atan2(x, y) * 180 / Math.PI + 360) % 360;
+    return { deg, name: WAYS[Math.round(deg / 45) % 8] };
+  }
+  /**
+   * The loops to offer, of the ranked ones (loopRank's order: [{ item, v }], item { km, timeS, way }): the best first,
+   * then loops that head another way (60 degrees or more from every one offered, or one circles the start and the
+   * other doesn't) while they are within LOOP_OFFER.within points of the best, then any other really different one
+   * (not the same length and time), up to `max`. The choices on a loop's card are these, named by their way.
+   */
+  const LOOP_OFFER = { apartDeg: 60, within: 100 };
+  function loopOffer(order, max = 3) {
+    const all = (order || []).filter((x) => x && x.item), out = [];
+    const same = (a, b) => Math.abs(a.km - b.km) < 0.3 && Math.abs((a.timeS || 0) - (b.timeS || 0)) < 30;
+    const apart = (a, b) => (a.way && b.way ? Math.abs(((a.way.deg - b.way.deg + 540) % 360) - 180) >= LOOP_OFFER.apartDeg : !!a.way !== !!b.way);
+    if (!all.length) return out;
+    out.push(all[0]);
+    for (const x of all) {
+      if (out.length >= max) break;
+      if (out.includes(x) || !(x.v >= all[0].v - LOOP_OFFER.within)) continue;
+      if (out.every((y) => apart(x.item, y.item) && !same(x.item, y.item))) out.push(x);
+    }
+    for (const x of all) {
+      if (out.length >= max) break;
+      if (!out.includes(x) && out.every((y) => !same(x.item, y.item))) out.push(x);
+    }
+    return out;
+  }
+  /**
    * The loops built, best first for a level: value = score (the Fun ranking, no highway cost in it) + the level's
    * adjustment (loopLevelAdjust) - the level's highway cost (loopHighwayCost); then no loop stays above one that
    * dominates it (loopDominates). items: [{ score, fun, off, hwyShare, corners, timeS, retraced, hard }]. Returns
@@ -878,6 +926,6 @@
   /** Whether a tune changes anything at all (an empty or absent one is no tune). */
   const tuned = (t) => !!(t && typeof t === 'object' && Object.values(t).some((m) => m && typeof m === 'object' && Object.keys(m).length));
 
-  const api = { tuneOnto, untune, tuned, tuneKnobs, LEVELS, HWY, highwayKm, levelHighways, applyHighways, BUILT, builtKeep, builtAgree, shown, dominates, cornerWeight, townKm, townCost, STREET, streetSample, streetShare, exploreShortlist, exploreTargets, explorePicks, distinctOptions, glare, glareCost, LOOP_BY_TIME, LOOP_LEVEL, loopLevelAdjust, LOOP_HWY, loopHighwayCost, loopDominates, loopRank, AVOID_DEFAULT, AVOID_LABELS, STAGE_KEPT, stageCoverage, keptStages, CAMERA_BOX_DEG, camerasToExclude, costing, unavoided, keepAvoiding, why, geometry, alongPoints, insertVia, loopValue, loopShortlist, loopPlansFromMatrix, score, shortlist, matrixPoints, plansFromMatrix, sectionCount, sectionPoints, combineSections, planKey, searchArea, waypoints, rank, along, kmBetween, directionBonus, setList, SET_FINISH, SET_FATIGUE, MAX_TECH_PER_KM, carNote, stageSpans, stageAhead };
+  const api = { tuneOnto, untune, tuned, tuneKnobs, LEVELS, HWY, highwayKm, levelHighways, applyHighways, BUILT, builtKeep, builtAgree, shown, dominates, cornerWeight, townKm, townCost, STREET, streetSample, streetShare, exploreShortlist, exploreTargets, explorePicks, distinctOptions, glare, glareCost, LOOP_BY_TIME, LOOP_LEVEL, loopLevelAdjust, LOOP_HWY, loopHighwayCost, loopDominates, loopRank, loopWay, loopOffer, LOOP_OFFER, AVOID_DEFAULT, AVOID_LABELS, STAGE_KEPT, stageCoverage, keptStages, CAMERA_BOX_DEG, camerasToExclude, costing, unavoided, keepAvoiding, why, geometry, alongPoints, insertVia, loopValue, loopShortlist, loopPlansFromMatrix, score, shortlist, matrixPoints, plansFromMatrix, sectionCount, sectionPoints, combineSections, planKey, searchArea, waypoints, rank, along, kmBetween, directionBonus, setList, SET_FINISH, SET_FATIGUE, MAX_TECH_PER_KM, carNote, stageSpans, stageAhead };
   if (typeof module !== 'undefined' && module.exports) module.exports = api; else root.ApexFunRoute = api;
 })(typeof window !== 'undefined' ? window : globalThis);
