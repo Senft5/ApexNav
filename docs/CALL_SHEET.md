@@ -4,6 +4,28 @@ Decisions Claude made for you, newest first. Each one says what was decided, why
 you reach one you've seen. If you disagree with a call, say so and it gets reversed; nothing here is hard to undo unless
 it says so. Things only you can do are in docs/OWNER_TODO.md.
 
+## 2026-11-10 (fable-tile-limits): posted limits from the government road inventory: junk out, good ones into travel times (claude/fable-tile-limits)
+
+Where the map has no speed-limit sign, the app knows a second source: the government road inventory (HPMS). I
+measured it against the signs the map does have, on every road of the Cincinnati tiles. The calls:
+- **A limit under 25 mph from the inventory is unknown.** Its 30 mph and up agree with the map's signs on 76 to 99 %
+  of the km; its 20 mph on 63 %, its 15 mph on none. One Indiana county (Switzerland) reports 15 mph for every county
+  road, so Bryants Creek Drive and Wade Hill Road (12 and 9 km of the back roads this app is for) were "posted at 15"
+  and took the engine's worst speed mark: about 64 km of such roads here score 0.03 to 0.05 better without it. A real
+  20 mph street loses nothing: the estimate that stands in is as slow to the engine. Takes effect on phones at once
+  (the reader refuses the value) and in the baked tile scores at the next "Graph region" build. Undo:
+  context_grid.js and tools/ctx_etl/build.py `LIMIT_MPH` back to 5.
+- **Tile travel times use the inventory's limit where the map has no sign**, instead of a guess from the road's class.
+  It posts one on 41 % of the unsigned primary and 36 % of the unsigned secondary km, where the guess is off by more
+  than 5 mph on a third to four fifths of them. Expect primary roads about 3 % slower and secondary about 1 % slower
+  in the tiles' times after the next build (the guess was 55 where 45 is posted). OSM's own sign still wins.
+- **Guards against a wrong match**: the inventory must cover half the edge and six tenths of that must be one value;
+  a ramp keeps its estimate; a freeway's limit never goes to the road beside or under it. Numbers: score_edges.js
+  `INVENTORY`. Undo the whole time change: `inventoryLimit` returns null.
+- **It needs the tile rebuild, which I didn't run** (Actions → "Graph region (own routing, OH+KY+IN)" → Run
+  workflow; the same run the expressway change is waiting for). The build id changes with it.
+- **Left alone, for a driven check**: a few Indiana roads the inventory posts at 25 to 30 mph look low too (State Line
+  Road, 11 km at 25). They can't be told from real town limits by the number, so they stay.
 ## 2026-11-09 (fable-expressway): an expressway counts as a highway at Fun and Long way (claude/fable-expressway)
 
 "Fun should never go on the highway" covered motorways and trunk roads. Some divided, limited-access expressways are
