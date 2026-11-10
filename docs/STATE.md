@@ -12,13 +12,6 @@
 - Next: Options' "Loop to fit" 1 hour / 2 hours keys now duplicate the dial; remove them once the owner has used the
   dial (My free time stays).
 
-## Session 2026-11-10 (fable-one-loop-home): Options' duplicate loop-by-time keys removed (claude/fable-one-loop-home, off origin/main 01fa773)
-
-- web/index.html: `#fitCtl` holds only `#fitRow` (My free time, This album) and is `hidden` until cockpit.js finds
-  `ApexIosContext.available()`; the `[data-loop-min]` keys and their handler in Options are gone (the dial's Time unit, #342).
-- Tests: tests/test_plan_options.py; e2e "one sheet, in that order" expects no Loop to fit group in a browser.
-- Reviewed and left as it is: the drive screen (free drive, day, night, landscape).
-- Next: the drive-ended card has not had a design pass in this run.
 ## Session 2026-11-10 (fable-polish-7): the Settings list in groups, with values (claude/fable-polish-7, off origin/main 1a38381)
 
 - [x] web/garage_settings.js: `GROUPS` (a group's name goes before its first key, hidden while all its rows are),
@@ -46,6 +39,14 @@
   reached by the app (tests/test_plan_options.py still covers them); remove them if loops never get a style back.
 - Next: two cards can share a name (both "Southeast"); a finer name (16 points, or the road it is built on) if it reads
   badly on real roads. The 1 hour / 2 hours loops sit in Options; the card's Length row is miles only.
+
+## Session 2026-11-10 (fable-one-loop-home): Options' duplicate loop-by-time keys removed (claude/fable-one-loop-home, off origin/main 01fa773)
+
+- web/index.html: `#fitCtl` holds only `#fitRow` (My free time, This album) and is `hidden` until cockpit.js finds
+  `ApexIosContext.available()`; the `[data-loop-min]` keys and their handler in Options are gone (the dial's Time unit, #342).
+- Tests: tests/test_plan_options.py; e2e "one sheet, in that order" expects no Loop to fit group in a browser.
+- Reviewed and left as it is: the drive screen (free drive, day, night, landscape).
+- Next: the drive-ended card has not had a design pass in this run.
 
 ## Session 2026-11-10 (fable-design-offline): design pass 5: People with no connection (claude/fable-design-offline, off origin/main 7dee309)
 
