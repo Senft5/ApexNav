@@ -1,16 +1,18 @@
 # VETTA — CURRENT AGENT HANDOFF STATE
 
-## Session 2026-11-10 (fable-toast-key): toasts are as wide as their words; a toast's key ends its row (claude/fable-toast-key, off origin/main 51c8c4c)
+## Session 2026-11-10 (fable-pin-names): pins and tapped places by name; the spot dialog's stars (claude/fable-pin-names, off origin/main e76f1bb)
 
-- [x] web/cockpit.js `toast()`: the action is `a.toast-key`, `#toast.has-key` while it has one. web/index.html:
-  `.toast.show { width: max-content }`, `.toast.show.has-key` (flex row), `.toast .toast-key` (ink, underlined, 44 px
-  hit area by padding and negative margin). The saved-for-offline sentence.
-- [x] tests/test_toast_key.py (4); e2e "the car connects" measures the row, the ink, the hit height and a 320 px phone.
-- Found on the way, not a bug in use: `scrollIntoView()` on a key inside the closed Layers panel scrolls `.stage`
-  (overflow: hidden) sideways. Nothing in the app does that (the closed panel can't take focus); a test script that
-  clicks a Layers key before the panel has slid in will. `overflow: clip` on `.stage` would rule it out.
-- Next: the drive screen proper (the status row beside Report and End).
-
+- `web/cockpit.js`: `setFieldPin(field, point, name)` / `pinIn` / `fieldPin` beside `resolvePlace(q, field)`: Go here,
+  Start from here and Tap the map put a name in the field ("Dropped pin" when unknown) and keep the point beside it;
+  `resolvePlace` returns it while the text is unchanged (`routeName` for the route's name; `routeToQuery` is evaluated
+  alone by tests/test_route_loading.py, so it uses no helper). `rememberPlace` skips "Dropped pin". Swap swaps the points.
+  Suggestions are not asked for a pinned text. Search notes say "Press Search…".
+- `web/index.html`: "Save as a spot"; `#hlRating` stars fill up to the rating (no boxes); `.spot-photo`, `.spot-acts`.
+- Tests: tests/test_pin_names.py; e2e "a pin has a name…" (needs a stub style with `glyphs`, or the map's load handler
+  stops before the tap is wired: a style with no glyphs throws at the app's labelled layers. Production styles have them).
+- Checked: pytest full; e2e "a pin has a name", "Where to?" 9/9, "plan flow" 6/6, "spot photo", "Dynamic Type",
+  "REVIEW.md 1.2" 2/2, "routes from elsewhere", "saved for offline", "drag to reshape", "safe areas".
+- Next: a tapped place could take the road's name once the lookup lands (rename the planned route after the fact).
 ## Session 2026-11-10 (fable-one-corner): singular corners, and the nearby key keeps its label (claude/fable-one-corner, off origin/main e76f1bb)
 
 - cockpit.js: the route bar and card lines use `ApexFormat.cornerCount`; `buildRoute`'s announce pluralises inline
@@ -35,6 +37,26 @@
   across a reload, back to distance).
 - Next: Options' "Loop to fit" 1 hour / 2 hours keys now duplicate the dial; remove them once the owner has used the
   dial (My free time stays).
+
+## Session 2026-11-10 (fable-toast-key): toasts are as wide as their words; a toast's key ends its row (claude/fable-toast-key, off origin/main 51c8c4c)
+
+- [x] web/cockpit.js `toast()`: the action is `a.toast-key`, `#toast.has-key` while it has one. web/index.html:
+  `.toast.show { width: max-content }`, `.toast.show.has-key` (flex row), `.toast .toast-key` (ink, underlined, 44 px
+  hit area by padding and negative margin). The saved-for-offline sentence.
+- [x] tests/test_toast_key.py (4); e2e "the car connects" measures the row, the ink, the hit height and a 320 px phone.
+- Found on the way, not a bug in use: `scrollIntoView()` on a key inside the closed Layers panel scrolls `.stage`
+  (overflow: hidden) sideways. Nothing in the app does that (the closed panel can't take focus); a test script that
+  clicks a Layers key before the panel has slid in will. `overflow: clip` on `.stage` would rule it out.
+- Next: the drive screen proper (the status row beside Report and End).
+
+## Session 2026-11-10 (fable-layers): design pass 8, the Layers panel as the map's legend (claude/fable-layers, off origin/main 1a38381)
+
+- web/index.html only (markup and CSS, no script): `#switchRow` rows are `.sw.ly` = switch, name over a `<small>` line,
+  and an inline `svg.ly-key` drawn with the look's tokens (`--amber`, `--gain`, `--signal`). Order: Twisty, Measured,
+  Cameras, 3D terrain, (Satellite, developers), Friends, then "Who sees me". `.edge` owns `--edge-w` (panel width and
+  the closed panel's offset: change one and the Layers key leaves its column, which "REVIEW.md 1.2 screen by screen" catches).
+- e2e: that flow checks every row has a key and a line, the three surface words, Who sees me under Friends, panel on screen.
+- Next: the drive screen has not had a design pass.
 
 ## Session 2026-11-10 (fable-polish-7): the Settings list in groups, with values (claude/fable-polish-7, off origin/main 1a38381)
 
@@ -74,6 +96,14 @@
   reached by the app (tests/test_plan_options.py still covers them); remove them if loops never get a style back.
 - Next: two cards can share a name (both "Southeast"); a finer name (16 points, or the road it is built on) if it reads
   badly on real roads. The 1 hour / 2 hours loops sit in Options; the card's Length row is miles only.
+
+## Session 2026-11-10 (fable-one-loop-home): Options' duplicate loop-by-time keys removed (claude/fable-one-loop-home, off origin/main 01fa773)
+
+- web/index.html: `#fitCtl` holds only `#fitRow` (My free time, This album) and is `hidden` until cockpit.js finds
+  `ApexIosContext.available()`; the `[data-loop-min]` keys and their handler in Options are gone (the dial's Time unit, #342).
+- Tests: tests/test_plan_options.py; e2e "one sheet, in that order" expects no Loop to fit group in a browser.
+- Reviewed and left as it is: the drive screen (free drive, day, night, landscape).
+- Next: the drive-ended card has not had a design pass in this run.
 
 ## Session 2026-11-10 (fable-design-offline): design pass 5: People with no connection (claude/fable-design-offline, off origin/main 7dee309)
 

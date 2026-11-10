@@ -745,7 +745,7 @@
         if ($('planPanel').classList.contains('busy')) { toast('Still finding roads. Tap again in a moment.'); return; }
         state.tapToRoute = false;
         $('tapRouteBtn').classList.remove('on');
-        $(state.planField || 'destInput').value = `${e.lngLat.lat.toFixed(5)}, ${e.lngLat.lng.toFixed(5)}`;
+        setFieldPin(state.planField || 'destInput', { lat: e.lngLat.lat, lon: e.lngLat.lng });
         routeToQuery();
       });
     });
@@ -2921,7 +2921,20 @@
     // Plan fields: empty = the phone's position (locate()), "lat, lon" = that point, anything else =
     // the first Nominatim match. Errors carry the toast text.
     const COORDS = /^\s*(-?\d+(?:\.\d+)?)\s*,\s*(-?\d+(?:\.\d+)?)\s*$/;
-    async function resolvePlace(q) {
+    // A place pinned or tapped on the map is in its field by name (the road's, when the lookup knew it; else "Dropped
+    // pin"), never as coordinates (2026-11-10). The exact point rides beside the field and holds while its text is unchanged.
+    const PIN_WORD = 'Dropped pin', fieldPin = {};
+    function setFieldPin(field, p, name) {
+      const text = name && name !== '--' ? name : PIN_WORD;
+      fieldPin[field] = { text, lat: p.lat, lon: p.lon };
+      $(field).value = text;
+    }
+    const pinIn = (field, q) => { const pin = fieldPin[field]; return pin && pin.text === String(q || '').trim() ? pin : null; };
+    const toName = (label) => (label === PIN_WORD ? 'To a dropped pin' : `To ${label}`);
+    const fromToName = (name) => { const l = String(name || '').replace(/^To /, ''); return l === 'a dropped pin' ? PIN_WORD : l; };
+    async function resolvePlace(q, field) {
+      const pin = field && pinIn(field, q);
+      if (pin) return { lat: pin.lat, lon: pin.lon, label: pin.text, routeName: toName(pin.text) };
       if (!q.trim()) {
         const p = await locate();
         if (!p) throw new Error(NO_FIX);
@@ -2984,12 +2997,12 @@
       ui.step('Finding…', 0.3);
       try {
         toast('Searching…');
-        const from = await resolvePlace(fromQ);
-        const to = await resolvePlace(toQ);
+        const from = await resolvePlace(fromQ, 'fromInput');
+        const to = await resolvePlace(toQ, 'destInput');
         ui.step('Routing…', 0.7);
         // Kept on the track so a reroute can rebuild it; from: null = the phone's position.
         const request = { from: from.label === null ? null : { lat: from.lat, lon: from.lon }, to: { lat: to.lat, lon: to.lon }, via: [] };
-        await funRoute(from, to, 'route_dest', `To ${to.label || 'current location'}`, request, ui);
+        await funRoute(from, to, 'route_dest', to.routeName || `To ${to.label || 'current location'}`, request, ui);
         if (to.label && !to.label.startsWith('Pin ')) rememberPlace(to);
       } catch (err) { toast(err.message); } finally { ui.done(); }
     }
@@ -4823,7 +4836,7 @@
     const RECENT_PLACES = 'apex.recentPlaces';
     function recentPlaces() { try { return JSON.parse(localStorage.getItem(RECENT_PLACES) || '[]'); } catch (_) { return []; } }
     function rememberPlace(p) {
-      if (!p || !p.label || !Number.isFinite(p.lat) || !Number.isFinite(p.lon)) return;
+      if (!p || !p.label || p.label === PIN_WORD || !Number.isFinite(p.lat) || !Number.isFinite(p.lon)) return;
       try { localStorage.setItem(RECENT_PLACES, JSON.stringify([{ label: p.label, lat: p.lat, lon: p.lon }, ...recentPlaces().filter(q => q.label !== p.label)].slice(0, 6))); } catch (_) {}
       carPost(ApexCarPlay.placesMessage(recentPlaces()));   // the car's Places list
     }
@@ -4913,17 +4926,17 @@
     async function renderPlaces() {
       const q = $('destInput').value.trim(), seq = ++suggestSeq;
       let rows, empty = '';
-      if (q.length >= 3 && !COORDS.test(q)) {
+      if (q.length >= 3 && !COORDS.test(q) && !pinIn('destInput', q)) {
         // your own places, stages and spots by name first (U-19), at once; then the map search's rows below them
         const mine = mineFor(q);
         if (mine.length) paintPlaces(q, mine, '', 0);
         let done;
         placesAsk = { q, p: new Promise((r) => { done = r; }) };
         try {
-          try { rows = (IN_APP_SHELL && await appleSuggest(q)) || await photonSuggest(q); } catch (_) { rows = []; if (!mine.length) empty = 'No suggestions offline. Press Go to search.'; }
+          try { rows = (IN_APP_SHELL && await appleSuggest(q)) || await photonSuggest(q); } catch (_) { rows = []; if (!mine.length) empty = (navigator.onLine === false ? 'No suggestions offline.' : 'Suggestions didn\'t load.') + ' Press Search to try.'; }
           if (seq !== suggestSeq) return;                                // a newer keystroke won
           rows = [...mine, ...rows.filter((r) => !mine.some((m) => ApexPlaceSearch.norm(m.label) === ApexPlaceSearch.norm(r.label)))];
-          if (!rows.length && !empty) empty = 'No matches nearby. Press Go to search everywhere.';
+          if (!rows.length && !empty) empty = 'No matches nearby. Press Search to look everywhere.';
           paintPlaces(q, rows, empty, 0);
           warmPlace(rows[0]);
         } finally { done(); }
@@ -4980,7 +4993,7 @@
     // for what's typed, given PLACES_WAIT_MS (it is the list's top row Enter takes once it's up); else the full geocode
     const PLACES_WAIT_MS = 1500;
     async function placesFor(q) {
-      if (q.length < 3 || COORDS.test(q)) return null;
+      if (q.length < 3 || COORDS.test(q) || pinIn('destInput', q)) return null;
       const mine = mineFor(q);
       if (mine.length) return mine[0];
       if (placesAsk.q === q && placesAsk.p) await RouteLoading.optional(placesAsk.p, PLACES_WAIT_MS);
@@ -4997,9 +5010,9 @@
           if (!at) throw new Error('Couldn\'t find that place. Try another.');
           p = { ...p, ...at };
         }
-        const from = await resolvePlace($('fromInput').value);
+        const from = await resolvePlace($('fromInput').value, 'fromInput');
         const request = { from: from.label === null ? null : { lat: from.lat, lon: from.lon }, to: { lat: p.lat, lon: p.lon }, via: [] };
-        await funRoute(from, { lat: p.lat, lon: p.lon }, 'route_dest', `To ${p.label}`, request, ui);
+        await funRoute(from, { lat: p.lat, lon: p.lon }, 'route_dest', toName(p.label), request, ui);
         rememberPlace(p);
       } catch (err) { toast(err.message); } finally { ui.done(); }
     }
@@ -5019,13 +5032,13 @@
     $('pinGoBtn').addEventListener('click', () => {
       if (!droppedPin) return;
       $('fromInput').value = '';
-      $('destInput').value = `${droppedPin.lat.toFixed(6)}, ${droppedPin.lon.toFixed(6)}`;
+      setFieldPin('destInput', droppedPin, $('pinPlace').textContent);   // by the name the sheet showed
       closePin();
       routeToQuery();
     });
     $('pinFromBtn').addEventListener('click', () => {
       if (!droppedPin) return;
-      $('fromInput').value = `${droppedPin.lat.toFixed(6)}, ${droppedPin.lon.toFixed(6)}`;
+      setFieldPin('fromInput', droppedPin, $('pinPlace').textContent);
       state.planField = 'fromInput';
       closePin(); openPlan(true);
     });
@@ -5114,7 +5127,7 @@
       });
       $(id).addEventListener('focus', () => { state.planField = id; });
     });
-    $('swapBtn').addEventListener('click', () => { const f = $('fromInput'), t = $('destInput'); [f.value, t.value] = [t.value, f.value]; });
+    $('swapBtn').addEventListener('click', () => { const f = $('fromInput'), t = $('destInput'); [f.value, t.value] = [t.value, f.value]; [fieldPin.fromInput, fieldPin.destInput] = [fieldPin.destInput, fieldPin.fromInput]; });
     $('tapRouteBtn').addEventListener('click', (e) => {
       state.tapToRoute = !state.tapToRoute;
       e.currentTarget.classList.toggle('on', state.tapToRoute);
@@ -5262,7 +5275,7 @@
       const o = routeOptions;
       if (o && o.kind === 'loop' && o.current === t) { loop(o.targetS ? { minutes: Math.round(o.targetS / 60) } : o.miles); return; }   // the loop again, with them
       const fromChanged = $('fromInput').value.trim() && t.request && t.request.to && t.id === 'route_dest';
-      if (fromChanged && JSON.parse(was.snap).from !== $('fromInput').value.trim()) { routeToPlace({ label: String(t.name || '').replace(/^To /, ''), lat: t.request.to.lat, lon: t.request.to.lon }); return; }
+      if (fromChanged && JSON.parse(was.snap).from !== $('fromInput').value.trim()) { routeToPlace({ label: fromToName(t.name), lat: t.request.to.lat, lon: t.request.to.lon }); return; }
       if (!(await replanForLevel('With your options'))) {                // couldn't plan it: the switches show the route on screen
         setAvoid(was.avoid); setRoadPrefs(was.prefs);
         if (window.ApexRouteDriver) { driverPrefs = ApexRouteDriver.save(localStorage, was.driver); paintDriverPrefs(); }
@@ -5282,7 +5295,7 @@
     })();
     // Loop to fit (route_ctx/ios_context.js): the next event's start or the album's length, from the phone, only in the app and
     // only when tapped (iOS asks for the permission at that tap). The provider then marks routes that run past it.
-    if (window.ApexIosContext && ApexIosContext.available() && $('fitRow')) $('fitRow').hidden = false;
+    if (window.ApexIosContext && ApexIosContext.available() && $('fitRow')) { $('fitRow').hidden = false; $('fitCtl').hidden = false; }
     document.querySelectorAll('[data-fit]').forEach(b => b.addEventListener('click', async () => {
       if (!window.ApexIosContext || loopBusy) return;
       const op = b.dataset.fit === 'album' ? 'music' : 'calendar';
@@ -5292,12 +5305,7 @@
       toast(p.text); if ($('fitNote')) $('fitNote').textContent = p.text;   // the toast gives way to the loop's own; the note stays
       if (p.minutes) { closeOptions(true); loop({ minutes: p.minutes }); }
     }));
-    // an hour or two of driving, home again (R-16): from Options, as the dial is one unit (finding 6)
-    document.querySelectorAll('#optSheet [data-loop-min]').forEach(b => b.addEventListener('click', () => {
-      if (loopBusy) return;
-      closeOptions(true);
-      loop({ minutes: parseInt(b.dataset.loopMin, 10) });
-    }));
+    // (an hour or two of driving, home again, R-16: the dial's own once it could be set by time; Options had a second copy)
     // Presets (plan_presets.js): this setup under a name, a stamp at the top of the sheet; tapping one sets it all at once.
     function paintPresets() {
       const row = $('presetRow');
@@ -6317,8 +6325,8 @@
     function selectHighlightRating(value) {
       highlightRating = value;
       document.querySelectorAll('#hlRating button').forEach(b => {
-        const on = Number(b.dataset.rating) === value;
-        b.classList.toggle('on', on); b.setAttribute('aria-pressed', String(on));
+        const n = Number(b.dataset.rating);                              // four stars is four stars filled, not the fourth
+        b.classList.toggle('on', n <= value); b.setAttribute('aria-pressed', String(n === value));
       });
     }
     function openHighlightDialog(point) {
