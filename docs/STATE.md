@@ -1,5 +1,13 @@
 # VETTA — CURRENT AGENT HANDOFF STATE
 
+## Session 2026-11-10 (fable-quiet-news): What's new waits for a quiet launch (claude/fable-quiet-news, off origin/main 7dee309)
+
+- [x] web/whats_new.js `moment({ touched, driving, splash, open })` → 'show' | 'wait' | 'skip'; web/cockpit.js asks it
+  at 1.2 s and every 0.4 s while the splash (`#boot`) is up (40 tries), with `touched` from the first pointerdown or
+  keydown and `open` = any `.overlay.show`, `.side-pop.open`, `#planPanel.open`, `.sheet.open` or live mode.
+- [x] Tests: tests/test_whats_new.py `test_it_never_interrupts`; e2e "what's new…" first touches the screen and opens
+  Options (no sheet, not marked seen), then a hands-off launch shows it after the splash.
+
 ## Session 2026-11-10 (fable-fix-join-scope): #332's page showed in the Garage too; scoped to People (claude/fable-fix-join-scope, off origin/main 6412cb5)
 
 - [x] Bug from #332 (live on main): `#accountSection:has(.join-page) { display: grid }` outranked `.sheet [data-panel]

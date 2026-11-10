@@ -4,6 +4,16 @@ Decisions Claude made for you, newest first. Each one says what was decided, why
 you reach one you've seen. If you disagree with a call, say so and it gets reversed; nothing here is hard to undo unless
 it says so. Things only you can do are in docs/OWNER_TODO.md.
 
+## 2026-11-10 (fable-quiet-news): What's new never comes up over something you have started (claude/fable-quiet-news)
+
+After an update the "What's new" sheet came up 1.2 seconds into the launch whatever you were doing: I caught it
+covering the Options sheet while choosing roads, and it could also land on the splash. Now it shows only on a still,
+empty map. While the splash is up it waits for the map. Once you have touched the screen, opened Where to?, a sheet or
+a tab, or are driving, it leaves this launch alone and is there the next time the app opens untouched (it is not
+marked as seen until you close it).
+
+Cost: someone who always taps within the first second sees the news a launch or two later. Undo: revert the PR.
+
 ## 2026-11-10 (fable-fix-join-scope): my mistake in #332, fixed: the signed-out People page also showed at the top of the Garage (claude/fable-fix-join-scope)
 
 The rule that lets the new signed-out People page fill the sheet named the People panel by its id, and an id outranks
