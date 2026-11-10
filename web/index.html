@@ -1255,6 +1255,9 @@
     .nav-group { margin: 0; padding: 22px 2px 8px; border-bottom: 1px solid var(--hair, var(--panel-dim)); font: 700 12px var(--font-ui); letter-spacing: 0.08em; text-transform: uppercase; color: var(--panel-dim); }
     .nav-group:first-child { padding-top: 6px; }
     .nav-group[hidden] { display: none; }
+    .nav-row.danger { color: var(--accent); }                       /* a row that removes something (Your data) */
+    label.nav-row { cursor: pointer; } .nav-row:disabled { color: var(--panel-dim); }
+    .data-rows { margin-top: 4px; }
     .nav-rows:has(> .nav-group:first-child) { border-top: 0; }
     .garage-pop .nav-row small { max-width: 55%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-align: right; }
     .sheet .body { overflow-y: auto; padding: 14px 16px 24px; display: grid; gap: 20px; }
@@ -1728,16 +1731,19 @@
             <p class="note" id="myDataNote" role="status">--</p>
             <p class="note" id="myOfflineNote">--</p>
             <div class="stack-8" id="myAreas"></div>
-            <div class="row" style="flex-wrap:wrap">
-              <button class="ink-btn" id="myGpxBtn">Download drives (GPX)</button>
-              <label class="ink-btn" id="importCsvBtn">Import a drive (.csv)<input type="file" id="importFile" accept=".csv,text/csv" aria-label="Import a recording" hidden /></label>
-              <button class="ink-btn" id="myAccountBtn">Download account data</button>
-            </div>
-            <div class="row mt-8" style="flex-wrap:wrap">
-              <button class="ink-btn" id="myAreaBtn">Save the map here for offline</button>
-              <button class="linkbtn" id="myOfflineDelBtn">Delete offline data</button>
-              <button class="danger-btn" id="myDrivesDelBtn">Delete drives on this phone</button>
-              <button class="danger-btn" id="myEraseBtn">Erase everything on this phone</button>
+            <!-- 2026-11-10: the same rows as the Settings list (it was eight keys of eight widths, two of them red links): what
+                 you can take, what is kept for offline, what you can remove; a row acts when touched, so it has no chevron -->
+            <div class="nav-rows data-rows">
+              <h4 class="nav-group">Take a copy</h4>
+              <button class="nav-row" id="myGpxBtn"><span>Download drives</span><small>GPX</small></button>
+              <button class="nav-row" id="myAccountBtn"><span>Download account data</span></button>
+              <label class="nav-row" id="importCsvBtn"><span>Import a drive</span><small>.csv</small><input type="file" id="importFile" accept=".csv,text/csv" aria-label="Import a recording" hidden /></label>
+              <h4 class="nav-group">Offline</h4>
+              <button class="nav-row" id="myAreaBtn">Save the map here for offline</button>
+              <button class="nav-row" id="myOfflineDelBtn">Delete offline data</button>
+              <h4 class="nav-group">Remove</h4>
+              <button class="nav-row danger" id="myDrivesDelBtn">Delete drives on this phone</button>
+              <button class="nav-row danger" id="myEraseBtn">Erase everything on this phone</button>
             </div>
             <p class="note">Your account (friends, crews, shared spots, routes and results) is deleted from the server in Settings → Account → Delete account.</p>
             <button class="sw mt-8" data-toggle="health"><i></i><span>Share app health (anonymous counts)</span></button>

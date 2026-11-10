@@ -4,6 +4,16 @@ Decisions Claude made for you, newest first. Each one says what was decided, why
 you reach one you've seen. If you disagree with a call, say so and it gets reversed; nothing here is hard to undo unless
 it says so. Things only you can do are in docs/OWNER_TODO.md.
 
+## 2026-11-10 (fable-your-data): Your data is three short lists, like Settings (claude/fable-your-data)
+
+For your "cohesiveness, less clunky": Your data was eight keys of eight widths in two wrapped rows, one of them a link
+and two of them red text. It is now the same rows as the Settings list it opens from, in three groups: Take a copy
+(Download drives, Download account data, Import a drive), Offline (Save the map here, Delete offline data), Remove
+(Delete drives on this phone, Erase everything on this phone, both in red). Each row does what it did; the confirm
+sheets are unchanged. A row acts when touched, so it has no chevron; the file type sits at the row's end in pencil.
+
+Undo: revert the PR.
+
 ## 2026-11-10 (fable-loop-time): a loop can be set by time on the dial (claude/fable-loop-time)
 
 Following your "the whole point is aimless driving": "I have an hour" is how a loop is usually asked for, and time
