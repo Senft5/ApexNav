@@ -47,13 +47,6 @@ weights in fun_route.js (unused by the app now, still tested).
 
 Undo: revert the PR. To bring a level back for loops only, set `LOOP_STYLE` in web/cockpit.js.
 
-## 2026-11-10 (fable-log-dates): the Log's records and charts say "30 Oct", not "2026-10-30" (claude/fable-log-dates)
-
-The Log's list stamps each drive "30 OCT", but Your records under it printed 2026-10-30 and the two score charts
-labelled their dots 10-30, like database fields. Records now read as the rest of the Log does (Today, Yesterday,
-"30 Oct", with the year when it isn't this one) and the charts' days read "30 Oct" (in the phone's own order, so
-"Oct 30" on a US phone). Undo: revert the PR.
-
 ## 2026-11-10 (fable-design-offline): design pass 5: People with no connection is a page, and comes back by itself (claude/fable-design-offline)
 
 With no answer from the server, People was a heading ("Can't reach Vetta"), a grey line and a small key at the top of
@@ -102,6 +95,13 @@ a tab, or are driving, it leaves this launch alone and is there the next time th
 marked as seen until you close it).
 
 Cost: someone who always taps within the first second sees the news a launch or two later. Undo: revert the PR.
+
+## 2026-11-10 (fable-log-dates): the Log's records and charts say "30 Oct", not "2026-10-30" (claude/fable-log-dates)
+
+The Log's list stamps each drive "30 OCT", but Your records under it printed 2026-10-30 and the two score charts
+labelled their dots 10-30, like database fields. Records now read as the rest of the Log does (Today, Yesterday,
+"30 Oct", with the year when it isn't this one) and the charts' days read "30 Oct" (in the phone's own order, so
+"Oct 30" on a US phone). Undo: revert the PR.
 
 ## 2026-11-10 (fable-design-signed-out): People, signed out, is a page instead of a form (claude/fable-design-signed-out)
 
