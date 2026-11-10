@@ -5153,6 +5153,8 @@
       $('loopDialMark').style.transform = `rotate(${-120 + 240 * i / Math.max(1, all.length - 1)}deg)`;
       document.querySelectorAll('#loopTicks line').forEach((l, k) => l.classList.toggle('on', k === i));
       try { localStorage.setItem(LOOP_PICK, String(i)); } catch (_) {}
+      // the idle map's "Loop from here · 45 mi" is this dial's loop: it says the length now picked, not the one at launch
+      try { paintLoopSuggest(); } catch (_) { /* at launch the deck isn't set up yet; it paints itself */ }
     }
     document.querySelectorAll('#loopDetents button').forEach(b => b.addEventListener('click', () => pickLoop(b)));
     // the ticks on the dial's rim, and turning it: drag round the dial and it clicks to the nearest length

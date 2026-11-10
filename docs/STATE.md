@@ -20,6 +20,15 @@
 - Next: Options' "Loop to fit" 1 hour / 2 hours keys now duplicate the dial; remove them once the owner has used the
   dial (My free time stays).
 
+## Session 2026-11-10 (fable-polish-7): the Settings list in groups, with values (claude/fable-polish-7, off origin/main 1a38381)
+
+- [x] web/garage_settings.js: `GROUPS` (a group's name goes before its first key, hidden while all its rows are),
+  `summaryOf(node, count)` and `refresh()` fill each row's `<small>` and `aria-label`; closing a setting's sheet
+  refreshes the list. A section opts in with `data-summary="<selector>"` (+ `data-summary-count="one,many"` for a
+  list) in web/index.html: zones, crash, nudge, units, motion. `.nav-group` CSS.
+- [x] Tests: tests/test_garage_settings.py (+1); e2e "Settings behind the gear…".
+- Next: Road feel, Route tuning and Spots rows have no value yet (Road feel's is drawn by who_sees.js).
+
 ## Session 2026-11-10 (fable-loops): loops lose Quick / Fun / Long way; the card offers which way to head (claude/fable-loops, off origin/main 7dee309)
 
 - [x] The owner: "why do loops need a long way a fun and a quick? the whole point is aimless driving". web/cockpit.js:
@@ -50,6 +59,11 @@
   sizes, both sides, the Garage, offline event, Try again, online event brings People back).
 - Next design pass candidates: the lower Garage blocks (How this works, Pro), the Options sheet's long list.
 
+## Session 2026-11-10 (fable-suggest-follows-dial): the loop suggestion follows the dial (claude/fable-suggest-follows-dial, off origin/main 1a38381)
+
+- [x] web/cockpit.js `pickLoop` ends with `paintLoopSuggest()` (in a try: at launch the deck isn't set up yet).
+- [x] Tests: tests/test_loop_ways.py (+1); e2e "plan flow (b)" picks 15 mi and 45 mi on the dial and reads the row.
+
 ## Session 2026-11-10 (fable-fix-join-scope): #332's page showed in the Garage too; scoped to People (claude/fable-fix-join-scope, off origin/main 6412cb5)
 
 - [x] Bug from #332 (live on main): `#accountSection:has(.join-page) { display: grid }` outranked `.sheet [data-panel]
@@ -59,6 +73,15 @@
   by screen: the Log…" checks the Garage signed out has no People page (fails on main's CSS, passes here).
 - Lesson: a rule that sets `display` on a tab's panel must carry the tab (`.sheet[data-view=…]`); after changing one
   tab signed out, open the other three.
+
+## Session 2026-11-10 (fable-loop-names): no two loop cards the same way and the same length (claude/fable-loop-names, off origin/main 1a38381)
+
+- web/fun_route.js `loopOffer`: the fill pass takes a loop only if it heads elsewhere than every card already offered
+  (60 degrees) or differs from it by `LOOP_OFFER.differs` (0.2) in km or time. Before, the fill took any lookalike, so
+  two "Southeast" cards a couple of minutes apart came up.
+- Tests: tests/test_loop_ways.py (`oneWay`, `twins`); e2e "a loop's choices are which way to head" checks no two cards
+  share a name with times within a fifth.
+- Next: the Layers panel and the drive screen have not had a design pass.
 
 ## Session 2026-11-10 (fable-quiet-news): What's new waits for a quiet launch (claude/fable-quiet-news, off origin/main 7dee309)
 
