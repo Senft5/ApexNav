@@ -13,6 +13,11 @@ and two of them red text. It is now the same rows as the Settings list it opens 
 sheets are unchanged. A row acts when touched, so it has no chevron; the file type sits at the row's end in pencil.
 
 Undo: revert the PR.
+## 2026-11-10 (merger): e2e may run 35 minutes, not 25 (claude/project-thread-er8kzz)
+
+The e2e suite is 152 flows now and takes about 24 minutes, so GitHub cut it off at its 25-minute limit on the last flow
+(twice on #349, once on #344) with every flow before it passing. The limit is 35 minutes. No test is skipped or
+shortened. Undo: set `timeout-minutes` back to 25 in `.github/workflows/core-tests.yml`, or better, split the suite.
 
 ## 2026-11-10 (fable-loop-time): a loop can be set by time on the dial (claude/fable-loop-time)
 
