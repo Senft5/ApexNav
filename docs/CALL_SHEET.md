@@ -4,6 +4,15 @@ Decisions Claude made for you, newest first. Each one says what was decided, why
 you reach one you've seen. If you disagree with a call, say so and it gets reversed; nothing here is hard to undo unless
 it says so. Things only you can do are in docs/OWNER_TODO.md.
 
+## 2026-11-10 (fable-one-corner): "1 corners" is "1 corner"; a Best roads nearby key keeps its word while it searches (claude/fable-one-corner)
+
+A road with one corner read "1 corners" on its card's line, under its big number, aloud to a screen reader, in "1 more
+good corners", in a stage's line in the Log and in a coach's sentence. All say "1 corner" now. And in Best roads nearby
+the key you tapped ("Within 15 min") turned into "Finding roads" over a line that already said "Finding roads…"; it
+keeps its own word and only its progress bar moves.
+
+Undo: revert the PR.
+
 ## 2026-11-10 (merger): e2e may run 35 minutes, not 25 (claude/project-thread-er8kzz)
 
 The e2e suite is 152 flows now and takes about 24 minutes, so GitHub cut it off at its 25-minute limit on the last flow
