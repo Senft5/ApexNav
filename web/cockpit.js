@@ -2742,11 +2742,12 @@
       $('routeCardSub').textContent = `${carLine ? carLine + ' · ' : ''}${missed}${towns}${sun}${cams}${feel}`;
       $('routeCardWhy').textContent = t.why || '';
       $('routeCardWhy').hidden = !t.why;
-      // finding 4: the level's one home is the card, for a destination route and (finding 6) a loop; a loop's length too.
+      // finding 4: the level's one home is the card, for a destination route; a loop's card has its length (finding 6).
       // The owner, 2026-11-04: the levels are the choices, one card each with its own pick (paintLevelCards)
-      const loopCard = isLoop(t);
-      $('routeCardFun').hidden = !(t.id === 'route_dest' || loopCard);
+      // (a loop has no level: its card offers its length and which way to head, paintLoopWays)
+      $('routeCardFun').hidden = t.id !== 'route_dest';
       paintCardLoop(t);
+      paintLoopWays(t);
       paintStory(t);
       paintOptChips();
       paintLevelCards();
@@ -3129,7 +3130,7 @@
       const ahead = req.via.filter(v => v.distM == null || v.distM > routeWatch.bestM).map(v => ({ lat: v.lat, lon: v.lon, ...(v.shaping ? { shaping: true } : {}), ...(v.planned ? { planned: true } : {}), ...(v.label ? { label: v.label } : {}) }));
       const points = [{ lat: L.lat, lon: L.lon, heading: headingOf(L) }, ...ahead, req.to];
       let r;
-      try { [r] = await routePoints(points, { osrm: true, level: t.funLevel || (isLoop(t) ? funLevel : 'quick') }); } catch (_) { failed(); return; }
+      try { [r] = await routePoints(points, { osrm: true, level: t.funLevel || (isLoop(t) ? LOOP_STYLE : 'quick') }); } catch (_) { failed(); return; }
       if (track !== t || state.mode !== 'live') return;           // the driver loaded something else meanwhile
       if (!rerouter.off) return;                                  // back on the planned route meanwhile: it stays
       const nt = await trackFromPolyline(r.coords, t.id, t.name);
@@ -3774,8 +3775,12 @@
     // Router costing for the legs between good roads and the level's own Valhalla routes: Fun and Long way keep off the
     // highways (use_highways 0), Quick welcomes them (route_engine.js levelCosting; stage plans are only made at Fun and up)
     const connectorCosting = () => (window.ApexRouteEngine ? ApexRouteEngine.levelCosting(avoid, routingCar(), funLevel) : null);
-    // A loop's legs: highways a short link at most (route_engine.js loopCosting, by the level)
-    const loopCosting = () => (window.ApexRouteEngine ? ApexRouteEngine.loopCosting(avoid, routingCar(), funLevel) : null);
+    // A loop has no route style (the owner, 2026-11-10: "why do loops need a long way a fun and a quick? the whole point
+    // is aimless driving"): every loop is found and ranked one way, the engine's Fun (good roads, about the length you
+    // asked for, off the highways), whatever a destination's level is set to. Its card offers which way to head instead.
+    const LOOP_STYLE = 'fun';
+    // A loop's legs: highways a short link at most (route_engine.js loopCosting)
+    const loopCosting = () => (window.ApexRouteEngine ? ApexRouteEngine.loopCosting(avoid, routingCar(), LOOP_STYLE) : null);
     // Tracks built ahead for a likely winner while the plan still waits on the stage plans (live: building the winner's
     // track after the ranking took 0.5-1 s): taken once, by the route line they were built from.
     const builtAhead = new WeakMap();
@@ -3941,7 +3946,7 @@
     // The plan flow (finding 4): the level lives on the card, as its cards. Each card is its level's ranking of the routes
     // the plan already found when they cover it (a plan at Fun holds the quick ones too; Long way's longer detours need a
     // plan of their own), with the engine's own ranking, why line and extra time, worked out once with the plan: a tap only
-    // puts it up. Loops: each level's pick of the loops already built.
+    // puts it up. A loop has no level (LOOP_STYLE).
     const LEVEL_ORDER = { quick: 0, fun: 1, max: 2 }, LEVEL_KEYS = ['quick', 'fun', 'max'];
     // how long a level change keeps the card you tapped under your finger while the card settles (changeLevel's settle)
     const SETTLE_MS = 3000;
@@ -3989,23 +3994,23 @@
       if (here && o.levels[level] != null) { settle(); if (!(await takeLevel(o, level))) setFunLevel(was); return; }
       if (!(await replanForLevel(FunRoute.LEVELS[level].label))) setFunLevel(was);
     }
-    // A level's card: its pick, already found and ranked (destLevels, loopLevels), goes up; nothing is ranked or planned again.
+    // A level's card: its pick, already found and ranked (destLevels), goes up; nothing is ranked or planned again.
     async function takeLevel(o, level) {
-      const i = o.levels[level], label = FunRoute.LEVELS[level].label, prev = plannedRoute, loop = o.kind === 'loop';
+      const i = o.levels[level], label = FunRoute.LEVELS[level].label, prev = plannedRoute;
       const n = { ...o, level, quickest: (o.quicks && o.quicks[level]) || o.quickest, picked: i, current: prev };
       const same = !!o.list[o.picked] && o.list[o.picked].t === o.list[i].t;
       routeOptions = n;
       paintLevelCards();                                                   // the card you tapped is on at once
       let t = prev;
-      if (same) { if (!loop) { optionOnto(prev, n.picks[level], n); persistPlanned(prev); } renderRouteCard(prev); }
+      if (same) { optionOnto(prev, n.picks[level], n); persistPlanned(prev); renderRouteCard(prev); }
       else {
         optionBusy = true;
         try { t = await useOption(n, i); } catch (_) { t = null; } finally { optionBusy = false; }
         if (!t) { if (routeOptions === n) { routeOptions = o; paintLevelCards(); } return false; }
       }
-      const found = loop ? o.done.length : o.pool.length;
-      cardNote(same ? `${label}: this ${loop ? 'loop' : 'route'} is still the best of the ${found} found`
-        : `${ApexRouteCard.swapNote(t, prev, loop ? null : t.why, label)} (of the ${found} ${loop ? 'loops' : 'routes'} found)`);
+      const found = o.pool.length;
+      cardNote(same ? `${label}: this route is still the best of the ${found} found`
+        : `${ApexRouteCard.swapNote(t, prev, t.why, label)} (of the ${found} routes found)`);
       return true;
     }
     // The level cards' routes for a destination: each level's ranking of the pool the plan found, as far as the plan
@@ -4126,7 +4131,7 @@
       // (Route tuning's road and avoid sliders shape its search: the tune rides with it, as with a plan's)
       applyDevTune();
       loopTuned = ownOn() ? userTuned() : null;
-      const ownLoopsP = ownOn() ? ApexOwnRouting.loops(ownRouter(), { start: { lat: c.lat, lon: c.lon }, km: targetKm, level: funLevel, prefs: roadPrefs, avoid, ...devTuneReq() }) : Promise.resolve([]);
+      const ownLoopsP = ownOn() ? ApexOwnRouting.loops(ownRouter(), { start: { lat: c.lat, lon: c.lon }, km: targetKm, level: LOOP_STYLE, prefs: roadPrefs, avoid, ...devTuneReq() }) : Promise.resolve([]);
       // 1. Stage discovery: score every road around the start from the map's own vector tiles; Valhalla's matrix times
       // the best of them and routes each plan (the map's stage loops)
       const stageJobs = async (progress) => {
@@ -4219,7 +4224,7 @@
         d.off = want ? (got - want) / want : 0;
       }
       // best first as the level ranks them (highway share charged, a dominated loop never ahead: FunRoute.loopRank)
-      const byLevel = () => { done = FunRoute.loopRank(done.map(loopItem), funLevel).map((x) => x.item.d); };
+      const byLevel = () => { done = FunRoute.loopRank(done.map(loopItem), LOOP_STYLE).map((x) => x.item.d); };
       byLevel();
       // Members: let what others measured break ties among the top few (rough −8 … smooth +3, banked ±2 on the same fun scale, docs/ROUTING.md; unmeasured roads are neutral).
       if (await applyMeasured(done.slice(0, 3), ui || { step() {} })) {
@@ -4242,8 +4247,8 @@
       if (!done.length && circleLast && !jobs.some((j) => j.kind === 'circle')) done = await loopBuilt(L, [loopCircle(L)], ui);   // every plan failed: the last resort
       if (done.length) done = await loopScored(L, done, ui);
       if (!done.length) { if (circleLast) toast('Couldn\'t build a loop. Check signal and try again.'); return null; }
-      // the level (finding 6) picks among the loops built, and up to two really different others are offered beside it
-      const o = loopLevels(loopOptions({ id: L.loopId, done, miles: L.miles, targetS: L.targetS, level: funLevel, asked: L.asked }), funLevel);
+      // the best loop goes up; up to two others that head another way are offered beside it on the card (paintLoopWays)
+      const o = loopOptions({ id: L.loopId, done, miles: L.miles, targetS: L.targetS, asked: L.asked });
       const best = o.list[o.picked].loop;
       ui.step('Building route', 0.92);
       routeOptions = Object.assign(o, { current: best.t });
@@ -4262,10 +4267,10 @@
       const near = Math.abs(gotMi - L.miles) <= 0.2 * L.miles;
       return (near ? `Best of ${n} loops found` : `${ApexUnits.long(best.km * 1000)}: the closest good loop to ${L.asked}`) + loopHwyNote(best);
     }
-    // Fun and Long way loops keep off the highways; the exception (no loop here without one) says how much it uses
+    // Loops keep off the highways; the exception (no loop here without one) says how much it uses
     function loopHwyNote(best) {
       const km = Number.isFinite(best.hwyShare) && Number.isFinite(best.km) ? best.hwyShare * best.km : null;
-      return FunRoute.LEVELS[funLevel].noHighway && km != null && km > FunRoute.HWY.FREE_KM ? ` · uses ${ApexUnits.long(km * 1000, 1)} of highway (no loop here without it)` : '';
+      return FunRoute.LEVELS[LOOP_STYLE].noHighway && km != null && km > FunRoute.HWY.FREE_KM ? ` · uses ${ApexUnits.long(km * 1000, 1)} of highway (no loop here without it)` : '';
     }
     function loopDebug(o, best) {
       window.apexDebug && (window.apexDebug.lastLoop = o.ranked.map(({ item, v }) => ({ kind: item.d.job.kind, fun: item.d.t.fun && item.d.t.fun.fun, score: item.d.score, v, km: item.d.km, good: item.d.good,
@@ -4273,7 +4278,7 @@
     }
     /**
      * The map's stage loops (Valhalla's), after our loops' card is up: built and scored, then ranked with ours. The loop on
-     * screen is replaced only when the level now ranks another first, and only while it is still the one shown (a pick,
+     * screen is replaced only when another now ranks first, and only while it is still the one shown (a pick,
      * another plan, a cleared route or a drive meanwhile: nothing changes). Offline they fail at once and nothing changes.
      */
     async function loopRefine(L, first, jobsP) {
@@ -4285,10 +4290,10 @@
         const still = () => routeOptions === first.o && plannedRoute === first.best.t && state.mode !== 'live';
         if (window.apexDebug) window.apexDebug.lastLoopRefine = { ms: Date.now() - t0, stages: scored.length, swapped: false };
         if (!scored.length || !still()) return;
-        const done = FunRoute.loopRank([...first.done, ...scored].map(loopItem), funLevel).map((x) => x.item.d);
-        const o = loopLevels(loopOptions({ id: L.loopId, done, miles: L.miles, targetS: L.targetS, level: funLevel, asked: L.asked }), funLevel);
+        const done = FunRoute.loopRank([...first.done, ...scored].map(loopItem), LOOP_STYLE).map((x) => x.item.d);
+        const o = loopOptions({ id: L.loopId, done, miles: L.miles, targetS: L.targetS, asked: L.asked });
         const best = o.list[o.picked].loop;
-        // ours stays: the stage loops join the pool, so the other levels' cards are their picks of all of them
+        // ours stays: the stage loops join the pool, so the other ways on the card are the best of all of them
         if (best === first.best) { routeOptions = Object.assign(o, { current: first.best.t }); renderRouteCard(first.best.t); return; }
         routeOptions = Object.assign(o, { current: best.t });
         await buildRoute(null, L.loopId, best.t.name, best.t);
@@ -4302,22 +4307,43 @@
     const loopItem = (d) => ({ d, score: d.score, fun: d.t.fun, off: d.off, hwyShare: d.hwyShare, km: d.km, retraced: d.retraced, hard: !!d.hard,
       corners: Array.isArray(d.t.events) ? d.t.events.filter((e) => e && e.type === 'corner').length : null, timeS: d.t.timeS });
 
-    // The loops built, ranked for a level (fun_route.js loopLevelAdjust) and offered as up to three really different ones.
+    // The loops built, ranked (fun_route.js loopRank) and offered as up to three really different ones: the best, then
+    // loops that head another way (loopOffer). No level on a loop (LOOP_STYLE).
     let loopTuned = null;                                                  // the sliders the last loop's search used (buildLoop)
-    function loopOptions({ id, done, miles, targetS, level, asked }) {
+    function loopOptions({ id, done, miles, targetS, asked }) {
       for (const d of done) if (d && d.t && d.t.tuned === undefined) d.t.tuned = loopTuned;
-      const order = FunRoute.loopRank(done.map(loopItem), level), ranked = order.map((x) => x.item.d);
-      const list = [];
-      for (const d of ranked) {
-        if (list.some((x) => Math.abs(x.loop.km - d.km) < 0.3 && Math.abs((x.timeS || 0) - (d.t.timeS || 0)) < 30)) continue;
-        list.push({ loop: d, t: d.t, timeS: d.t.timeS, fun: d.t.fun, route: { coords: d.t.lat.map((la, i) => [d.t.lon[i], la]) } });
-        if (list.length === 3) break;
-      }
-      return { kind: 'loop', id, done, miles, targetS, asked, level, list, ranked: order };
+      const order = FunRoute.loopRank(done.map((d) => ({ ...loopItem(d), way: FunRoute.loopWay(d.t) })), LOOP_STYLE);
+      const list = FunRoute.loopOffer(order, 3).map(({ item }) => { const d = item.d;
+        return { loop: d, t: d.t, timeS: d.t.timeS, fun: d.t.fun, way: item.way, route: { coords: d.t.lat.map((la, i) => [d.t.lon[i], la]) } }; });
+      return { kind: 'loop', id, done, miles, targetS, asked, level: LOOP_STYLE, list, ranked: order, picked: 0 };
     }
-    // The level cards' loops: each level's own pick among the loops built (finding 6), then the others.
-    function loopLevels(base, level) {
-      return withLevels(base, level, (L) => { const l = loopOptions({ ...base, level: L }).list; return l.length ? { offered: l, quickest: null } : null; });
+    // Which way (the owner, 2026-11-10: a loop is aimless driving, not Quick / Fun / Long way): the loops found as cards,
+    // each its outline, the way it heads, its time and corners (route_card.js loopCards). A tap puts that loop up; the
+    // loops are built already, nothing is planned again. Hidden with one loop: nothing to choose.
+    function paintLoopWays(t) {
+      const box = $('routeCardWays'), o = routeOptions;
+      if (!box || !window.ApexRouteCard) return;
+      const cards = isLoop(t) && o && o.kind === 'loop' && o.current === t && state.mode !== 'live' ? ApexRouteCard.loopCards(o) : [];
+      box.hidden = !cards.length;
+      box.dataset.n = String(cards.length);
+      const NS = 'http://www.w3.org/2000/svg';
+      const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; };
+      const part = (text, cls) => { const i = el('i', cls), m = /^(\S+) (\S+)$/.exec(text || ''); i.textContent = m ? m[1] : text; if (m) i.append(' ', el('small', '', m[2])); return i; };
+      box.replaceChildren(...cards.map((k) => {
+        const b = el('button'); b.type = 'button'; b.dataset.way = String(k.i); b.setAttribute('role', 'radio');
+        b.setAttribute('aria-checked', String(k.on)); b.classList.toggle('on', k.on);
+        b.setAttribute('aria-label', `Loop ${k.label === 'Around here' ? 'around here' : `to the ${k.label.toLowerCase()}`}: ${k.time === '--' ? 'time --' : k.time}, ${k.corners === '--' ? 'corners --' : k.corners}`);
+        if (k.outline) {
+          const svg = document.createElementNS(NS, 'svg'), path = document.createElementNS(NS, 'path'), dot = document.createElementNS(NS, 'circle');
+          svg.setAttribute('viewBox', `0 0 ${k.outline.w} ${k.outline.h}`); svg.setAttribute('aria-hidden', 'true'); svg.setAttribute('class', 'rc-way-art');
+          path.setAttribute('d', k.outline.d); dot.setAttribute('cx', k.outline.start[0]); dot.setAttribute('cy', k.outline.start[1]); dot.setAttribute('r', '2.6');
+          svg.append(path, dot); b.append(svg);
+        }
+        const lv = el('span', 'rc-lv'); lv.append(part(k.time), part(k.corners, 'rc-lv-c'));
+        b.append(el('b', '', k.label), lv);
+        b.addEventListener('click', () => pickOption(k.i));
+        return b;
+      }));
     }
     // The loop card's length (finding 6): the dial's five lengths, in your units; a tap builds a loop of that length.
     function paintCardLoop(t) {

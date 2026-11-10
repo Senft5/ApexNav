@@ -4,6 +4,26 @@ Decisions Claude made for you, newest first. Each one says what was decided, why
 you reach one you've seen. If you disagree with a call, say so and it gets reversed; nothing here is hard to undo unless
 it says so. Things only you can do are in docs/OWNER_TODO.md.
 
+## 2026-11-10 (fable-loops): a loop has no Quick / Fun / Long way; its card offers its length and which way to head (claude/fable-loops)
+
+You asked: "why do loops need a long way a fun and a quick? the whole point is aimless driving". They don't. On a
+loop's card the three level cards are gone (on the test loop they were three copies of the same loop). A loop is now
+found one way whatever the destination level is set to: good roads, about the length you asked for, off the highways
+(the engine's Fun; someone whose level was Quick used to get loops that could be a quarter highway).
+
+What a loop's card offers instead is the loop's own: its length (as before), and which way to head. When the search
+finds really different loops, up to three are cards, each drawn as its own outline (north up, a dot where you start),
+named by where it goes (North, Southeast…; "Around here" when it circles the start), with its time and corners. A tap
+puts that loop on the map; nothing is planned again, so planning takes no longer. The second and third cards are loops
+that head somewhere else when one is within reach of the best (60 degrees apart, within 100 points), before any
+lookalike. With one loop found there are no cards: nothing to choose. Two loops can share a name (both Southeast);
+their outlines tell them apart.
+
+Not changed: the 1 hour / 2 hours loops and "My free time" in Options, and the ranking functions' Quick and Long way
+weights in fun_route.js (unused by the app now, still tested).
+
+Undo: revert the PR. To bring a level back for loops only, set `LOOP_STYLE` in web/cockpit.js.
+
 ## 2026-11-10 (fable-fix-join-scope): my mistake in #332, fixed: the signed-out People page also showed at the top of the Garage (claude/fable-fix-join-scope)
 
 The rule that lets the new signed-out People page fill the sheet named the People panel by its id, and an id outranks

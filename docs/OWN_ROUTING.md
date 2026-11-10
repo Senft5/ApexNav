@@ -449,7 +449,7 @@ phone's reader); tests/test_graph_tiles.py round-trips through both. What a rout
     (snapped to the stage's road and heading), legs with motorway/trunk x LOOP_HWY_X and earlier legs x3; over 40 %
     driven twice dropped; loops more than 60 % off the length dropped. `hwyShare` per loop.
   - Planner: loop legs and the loop matrix on `loopCosting` (use_highways 0.25 Quick, 0.1 Fun / Long way); the circle
-    only when nothing else was built; the ranking is `FunRoute.loopRank` (Fun score + level adjustment - highway cost,
+    only when nothing else was built; the ranking is `FunRoute.loopRank` at the one loop style (`LOOP_STYLE`, Fun; 2026-11-10: a loop has no level) (Fun score + level adjustment - highway cost,
     then dominance); `apexDebug.lastLoop` lists every loop with its kind, value, highway share, corners, time and pick.
   - Live before and after (the real app in Playwright, production's Worker; table in STATE.md 2026-11-06).
 
