@@ -2167,7 +2167,7 @@ flow('privacy zones: add one at the map centre, kept on the phone only, then rem
   await page.click('#zoneRadius [data-zone-r="200"]');
   await page.click('#zoneMapBtn');
   await page.fill('.confirm-sheet .cs-field', 'Home'); await page.click('.confirm-sheet .cs-ok');
-  await page.waitForFunction(() => /Home · 200 m/.test(document.getElementById('zoneList').textContent));
+  await page.waitForFunction(() => /Home · 650 ft/.test(document.getElementById('zoneList').textContent));
   const saved = await page.evaluate(() => JSON.parse(localStorage.getItem('apex.privacyZones')));
   check(saved.length === 1 && saved[0].name === 'Home' && saved[0].r === 200, 'the zone is saved on the phone');
   await page.click('#zoneList .linkbtn');

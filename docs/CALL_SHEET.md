@@ -4,6 +4,16 @@ Decisions Claude made for you, newest first. Each one says what was decided, why
 you reach one you've seen. If you disagree with a call, say so and it gets reversed; nothing here is hard to undo unless
 it says so. Things only you can do are in docs/OWNER_TODO.md.
 
+## 2026-11-10 (fable-your-units): sizes that were always metric are in your units (claude/fable-your-units)
+
+Three places spoke metric to a driver in miles: a privacy zone's size ("200 m / 500 m / 1 km", and the list and the
+toast after), a crew page's "about 11 km across", and "Drives under 0.2 mi are dropped" the other way round for a driver
+in kilometres. A zone's size now reads 650 ft / 0.3 mi / 0.6 mi in miles (the zones themselves are unchanged: 200, 500
+and 1000 m), the crew line says "about 7 miles", and the short-drive toast follows the unit. The privacy page
+(privacy.html) still says 11 km: it is one text for everyone.
+
+Undo: revert the PR.
+
 ## 2026-11-10 (fable-loop-time): a loop can be set by time on the dial (claude/fable-loop-time)
 
 Following your "the whole point is aimless driving": "I have an hour" is how a loop is usually asked for, and time

@@ -5594,7 +5594,7 @@
         if (state.mode === 'live') { toast('Change units when the drive has ended.'); return; }
         ApexUnits.set(b.dataset.units); paintUnits(); ApexLogHost.changed('units'); carLook();
         cluster = Inst.mountCluster($('cluster'), look.theme);
-        labelLoops();
+        labelLoops(); renderZones();
         if (plannedRoute && !$('routeCard').hidden) { try { renderRouteCard(); } catch (_) {} }
         renderMyData();                                                    // and the offline areas with it
         render(true);
@@ -6972,11 +6972,11 @@
     // Privacy zones (Settings): a circle at where you are or at the map's centre; remove any. Phone only.
     let zoneR = 500;
     function renderZones() {
-      document.querySelectorAll('#zoneRadius [data-zone-r]').forEach(b => b.classList.toggle('on', Number(b.dataset.zoneR) === zoneR));
+      document.querySelectorAll('#zoneRadius [data-zone-r]').forEach(b => { b.classList.toggle('on', Number(b.dataset.zoneR) === zoneR); b.textContent = ApexUnits.size(Number(b.dataset.zoneR)); });   // in your units (it said metres to a driver in miles)
       const list = $('zoneList'); list.innerHTML = '';
       if (!privacyZones.length) { list.append(el('p', { className: 'note', textContent: 'No zones yet.' })); return; }
       for (const z of privacyZones) {
-        list.append(el('div', { className: 'row' }, el('span', { textContent: `${z.name} · ${z.r >= 1000 ? `${z.r / 1000} km` : `${z.r} m`}` }),
+        list.append(el('div', { className: 'row' }, el('span', { textContent: `${z.name} · ${ApexUnits.size(z.r)}` }),
           btn('Remove', () => { privacyZones = ApexPrivacyZones.remove(privacyZones, z.id); ApexPrivacyZones.save(localStorage, privacyZones); renderZones(); paintDriveStat(); zonesChanged(); }, 'linkbtn')));
       }
     }
@@ -6988,7 +6988,7 @@
       const next = ApexPrivacyZones.add(privacyZones, { lat: p.lat, lon: p.lon, r: zoneR, name });
       if (!next) { toast(`Up to ${ApexPrivacyZones.MAX_ZONES} zones.`); return; }
       privacyZones = next; ApexPrivacyZones.save(localStorage, privacyZones); renderZones(); paintDriveStat(); zonesChanged();
-      toast(`${privacyZones.at(-1).name}: nothing is recorded or shared within ${zoneR >= 1000 ? `${zoneR / 1000} km` : `${zoneR} m`}.`);
+      toast(`${privacyZones.at(-1).name}: nothing is recorded or shared within ${ApexUnits.size(zoneR)}.`);
     }
     document.querySelectorAll('#zoneRadius [data-zone-r]').forEach(b => b.addEventListener('click', () => { zoneR = Number(b.dataset.zoneR); renderZones(); }));
     $('zoneHereBtn').addEventListener('click', async () => { const p = await locate(); if (!p) { toast(NO_FIX); return; } addZone(p); });
@@ -8411,7 +8411,7 @@
         }
       } else if (save && rec && rec.samples > 0) {
         keepDone(kept);
-        if (!ended) toast('Too short to save. Drives under 0.2 mi are dropped.');
+        if (!ended) toast(`Too short to save. Drives under ${ApexUnits.metric() ? '0.3 km' : '0.2 mi'} are dropped.`);
         if (live) live.finish().catch(() => {});
       } else {
         keepDone(kept);
