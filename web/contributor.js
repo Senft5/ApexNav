@@ -203,16 +203,37 @@
    * Privacy: the first `skip` rows (about 1 km) are never sent and the last `lag` rows (about 1 km) are never sent, so where a trip starts and ends
    * stays on the phone; the server never receives your position (only roads' public map lines, no more than their way ids already say). Failures (matching, offline, server errors) keep the rows or the built
    * chunks and resend the same payloads later with backoff; only a refusal (signed out, opted out) stops it.
+   *
+   * No signal (IDEAS Q-06): the best roads are where there is none, and matching needs the network. With a `carry`
+   * (web/road_carry.js; { hold(item, final), drop(driveId), attach(driveId, checkpoint) }) what could not be sent is kept on
+   * the phone: after each failed try, when the page is hidden, and when the trip ends. leftover() is exactly the rows this
+   * stream would still have sent (never the private ends) and the built chunks waiting, so a later resume (`rows`,
+   * `pending0`, skip 0, lag 0) sends the same thing. A refusal drops it. `maxRun` rows at most are matched in one try, so a
+   * long stretch without signal goes up in pieces once it is back and a second drop-out costs one piece, not all of it.
    */
   // The first and last stretch of every trip never leaves the phone. A random 0.5 to 1.5 km at each end (docs/BACKEND.md section 3),
   // drawn per trip: a fixed 1 km would put home exactly 1 km back along the road from where a person's data starts.
   const privateEdge = (rand = Math.random) => Math.round((500 + 1000 * rand()) / BIN_M);
   // deliberate: a recorded drive (Start), not ambient sharing. hourBucket(): the busy-time bucket to send, or null (quiet_hours off).
   function createLive({ Core, post, fetch: fetchFn, driveId, drivenOn, chunk = 100, lag = privateEdge(), skip = privateEdge(), ctx = 20, retryMs = 30000, maxRetryMs = 300000, now = Date.now, onStatus,
-    deliberate = false, hourBucket: bucketFn = null }) {
+    deliberate = false, hourBucket: bucketFn = null, carry = root.ApexRoadCarry || null, rows = null, pending0 = null, maxRun = 2000 }) {
     const A = { lat: [], lon: [], rough: [], camber: [], crest: [], speed: [], lon_g: [] };
+    if (rows) for (const k of Object.keys(A)) A[k] = Array.isArray(rows[k]) ? rows[k].slice(0, rows.lat.length) : rows.lat.map(() => null);
     const wayCache = {}, HOLD = MIN_BINS + 5;
-    let done = 0, busy = false, stopped = false, retryAt = 0, fails = 0, bins = 0, chunks = 0, error = null, pending = [];
+    let done = 0, busy = false, stopped = false, retryAt = 0, fails = 0, bins = 0, chunks = 0, error = null, pending = Array.isArray(pending0) ? pending0.slice() : [];
+    let held = false, detach = null;
+    if (!carry || typeof carry.hold !== 'function' || typeof carry.drop !== 'function') carry = null;
+    const bucket = () => { const hb = typeof bucketFn === 'function' ? bucketFn() : null; return Number.isInteger(hb) ? hb : null; };
+    /** What is still to send, as a resume needs it; null when there is nothing (or the server refused: nothing is kept then). */
+    function leftover() {
+      if (stopped) return null;
+      const from = Math.max(done, skip), to = A.lat.length - lag, n = to - from;
+      if (!pending.length && n < MIN_BINS) return null;
+      const cut = {}; for (const k of Object.keys(A)) cut[k] = n > 0 ? A[k].slice(from, to) : [];
+      return { driveId, drivenOn, deliberate, hr: bucket(), rows: cut, pending: pending.slice() };
+    }
+    const keep = (final = false) => { if (!carry) return; const item = leftover(); try { if (item) { carry.hold(item, final); held = true; } else if (held || final) { carry.drop(driveId); held = false; } } catch (_) {} };
+    if (carry && typeof carry.attach === 'function' && !rows) { try { detach = carry.attach(driveId, () => keep(false)); } catch (_) {} }
     const status = () => { if (onStatus) onStatus({ state: stopped ? 'stopped' : error ? 'retrying' : 'on', km: bins * BIN_M / 1000, chunks, pending: pending.length, error }); };
     /**
      * Where this chunk should end so no road piece is cut too short to send (the server needs 20 bins per piece). A road that is still
@@ -228,7 +249,8 @@
     /** final: the drive ended, so send whatever is settled (at least a short road piece) without holding rows back for a next chunk. */
     async function run(final = false) {
       if (busy || stopped || now() < retryAt) return;
-      const n = A.lat.length, from = Math.max(done, skip), to = n - lag;
+      const n = A.lat.length, from = Math.max(done, skip), to = Math.min(n - lag, from + maxRun);
+      if (to < n - lag) final = false;                                   // a piece of a backlog: its last road waits for the next piece
       if (!pending.length && to - from < (final ? MIN_BINS : chunk)) return;
       busy = true;
       try {
@@ -236,8 +258,8 @@
           const lo = Math.max(0, from - ctx), hi = Math.min(n, to + ctx);
           const slice = { lat: A.lat.slice(lo, hi), lon: A.lon.slice(lo, hi), rough: A.rough.slice(lo, hi), camber: A.camber.slice(lo, hi), crest: A.crest.slice(lo, hi), cam_v: CAM_V,   // push() kept only fixed-pipeline camber
                           speed: A.speed.slice(lo, hi), lon_g: A.lon_g.slice(lo, hi), rec: deliberate };
-          const hb = typeof bucketFn === 'function' ? bucketFn() : null;
-          if (Number.isInteger(hb)) slice.hr = hb;
+          const hb = bucket();
+          if (hb != null) slice.hr = hb;
           slice.kappa = Array.from(Core.computeCurvature(slice.lat, slice.lon).kappa);
           const match = await matchDrive(slice, fetchFn);
           const end = final ? to : lo + settledEnd(match, from - lo, to - lo);
@@ -255,7 +277,10 @@
           pending.shift();
         }
         error = null; fails = 0;
-      } catch (e) { error = e.message || String(e); fails++; retryAt = now() + Math.min(maxRetryMs, retryMs * 2 ** (fails - 1)); }
+        if (held) {                                                      // signal is back: a backlog still to send stays kept, otherwise nothing does
+          if (A.lat.length - lag - Math.max(done, skip) >= chunk) keep(false); else { try { carry.drop(driveId); } catch (_) {} held = false; }
+        }
+      } catch (e) { error = e.message || String(e); fails++; retryAt = now() + Math.min(maxRetryMs, retryMs * 2 ** (fails - 1)); keep(false); }
       finally { busy = false; status(); }
     }
     return {
@@ -277,8 +302,11 @@
           if (stopped || error || (!pending.length && rest < MIN_BINS)) break;
           await run(!pending.length && rest < chunk);
         }
+        keep(true);                                                       // what never went (no signal to the end) waits on the phone
+        if (detach) { try { detach(); } catch (_) {} detach = null; }
         return this.stats();
       },
+      leftover,
       /** For tests and for retrying after reconnecting. */
       run,
     };

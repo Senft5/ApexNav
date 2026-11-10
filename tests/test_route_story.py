@@ -52,7 +52,7 @@ const between = (a, b, v, w = NaN) => (k) => (k >= a && k < b ? v : w);
 
 const country = {
   // the twisty middle (3-8 km) a quiet back road; either side a busy one (a driveway every 25 m, 15 000 a day)
-  road_class: () => 4, lanes: () => 2, speed_limit_kph: (k) => (k < 3 || k > 8 ? 56 : k < 5 ? 88.5 : 80.5), density: () => 1, access_per_km: (k) => (k < 3 || k > 8 ? 40 : 4), aadt: (k) => (k < 3 || k > 8 ? 15000 : 600), housing_per_km2: () => 15, impervious_pct: () => 2,
+  road_class: () => 4, lanes: () => 1, speed_limit_kph: (k) => (k < 3 || k > 8 ? 56 : k < 5 ? 88.5 : 80.5), density: () => 1, access_per_km: (k) => (k < 3 || k > 8 ? 40 : 4), aadt: (k) => (k < 3 || k > 8 ? 15000 : 600), housing_per_km2: () => 15, impervious_pct: () => 2,
   address_per_km: () => 3, business_per_km: () => 0, canopy_pct: () => 65, open_country: (k) => (k < 6 ? 0.7 : 0.2), signals_per_km: () => 0,
   stops_per_km: (k) => (k < 3 || k > 8 ? 1.5 : 0),
 };
@@ -85,6 +85,15 @@ out.glare = story(cand(10, [3, 8], country, { spans: [{ kind: 'closure', fromM: 
 out.estimate = story(cand(10, [0.5, 9.5], { ...country, speed_limit_kph: NaN_, speed_limit_est_kph: () => 88, stops_per_km: () => 0, access_per_km: () => 4, aadt: () => 600 }), { steps });
 // members measured 2 km with no street names known
 out.crowdNoName = story(cand(10, [3, 8], { ...country, crowd_rough_g: between(4, 6, 0.3) }));
+// fitted on the public Cincinnati trips (2026-11-09): two lanes each way is not a two-lane road; a city's glow over open
+// ground is not suburbs; a best part over five roads names none as the whole of it; houses beside good road aren't slow
+out.fourLane = story(cand(10, [3, 8], { ...country, lanes: () => 2 }), { steps });
+out.glow = story(cand(10, [3, 8], { ...country, night_lights: () => 0.6 }), { steps });
+out.oneSignal = Story.settings({ channels: { night_lights: Float32Array.from({ length: 8 }, () => 0.9), road_class: Float32Array.from({ length: 8 }, () => 4) } }, 8);
+const five = ['Willey Road', 'Paddys Run Road', 'Morgan Ross Road', 'Brookville Road', 'Shandon Road'].map((street, k) => ({ m: 3000 + k * 1000, street }));
+out.manyRoads = story(cand(10, [3, 8], country), { steps: [{ m: 0, street: 'Start Road' }, ...five, { m: 8000, street: 'End Road' }] });
+out.manyRoadsAll = story(cand(10, [0.5, 9.5], { ...country, stops_per_km: () => 0, access_per_km: () => 4, aadt: () => 600 }), { steps: [{ m: 0, street: 'Start Road' }, ...five.map((x, k) => ({ ...x, m: 500 + k * 1800 }))] });
+out.hamlet = story(cand(10, [0.5, 9.5], { ...country, stops_per_km: () => 0, access_per_km: () => 4, aadt: () => 600, address_per_km: between(4, 6, 35, 3), bldg_per_km: between(4, 6, 40, 5) }), { steps });
 out.none = [Story.build(null), Story.build({}), Story.build({ corridor: null, ctx: null })];
 out.words = { dist: [Story.dist(800, false), Story.dist(2400, false), Story.dist(9700, false), Story.dist(1609, false), Story.dist(4200, true)],
   names: [Story.roadNames(['Struble Road', 'Day Road']), Story.roadNames(['Struble Road', 'Day Lane']), Story.roadNames(['US 27', 'Day Road'])] };
@@ -204,3 +213,42 @@ def test_an_estimated_limit_is_never_said(out):
 def test_members_without_names(out):
     m = [x for x in out["crowdNoName"]["lines"] if x["kind"] == "members"]
     assert m and m[0]["text"] == "Members' drives say the 1 mile they've measured is rough.", m
+
+
+def test_two_lanes_each_way_is_not_a_two_lane_road(out):
+    """`lanes` is lanes in your direction (route_ctx/router_edges.js, the tiles, HPMS halved): 1 is the two-lane road."""
+    assert texts(out["country"])[0].startswith("Mostly two-lane country roads"), texts(out["country"])
+    lead = texts(out["fourLane"])[0]
+    assert lead.startswith("Mostly country roads through ") and "two-lane" not in lead, lead
+
+
+def test_one_signal_never_makes_open_ground_suburbs(out):
+    """Night lights glow well past a city's edge (the public Harrison trip read 10 of its 19 country miles as suburbs on
+    them alone): with every other place signal saying open ground the road is country. Alone, a signal can say built but
+    the ground is never called country on one signal."""
+    lead = texts(out["glow"])[0]
+    assert lead.startswith("Mostly two-lane country roads"), lead
+    assert not any(x["kind"] == "slow" for x in out["glow"]["lines"]), texts(out["glow"])
+    assert set(out["oneSignal"]) == {"suburban"}, out["oneSignal"]
+
+
+def test_a_best_part_over_many_roads_names_none_as_the_whole(out):
+    """5 km of good road over five roads of 1 km each (the public Oxford trip said "7 miles of Millville Shandon Road" of a
+    stretch that road carried 3 miles of): "of good road, including" its two longest, never "3 miles of X". Nearly all
+    the way over many roads: no road named as the whole of it."""
+    hl = [x for x in out["manyRoads"]["lines"] if x["kind"] == "highlight"][0]
+    f = hl["facts"]
+    assert f["namesWhole"] is False and len(f["names"]) == 2 and 4000 <= f["m"] <= 6000, f
+    assert hl["text"].startswith("The best part is 3 miles of good road, including ") and " and " in hl["text"], hl["text"]
+    assert all(n in ("Willey Road", "Paddys Run Road", "Morgan Ross Road", "Brookville Road", "Shandon Road") for n in f["names"]), f
+    al = [x for x in out["manyRoadsAll"]["lines"] if x["kind"] == "highlight"][0]
+    assert al["text"].startswith("Good road nearly all the way: "), al["text"]
+    assert out["country"]["lines"][1]["facts"]["namesWhole"] is True       # two roads carrying it all: named as before
+
+
+def test_houses_beside_good_road_are_not_a_slow_part(out):
+    """2 km of a good road with houses along it (a hamlet): the lead may count it, the slow line doesn't call it suburbs."""
+    s = out["hamlet"]
+    built = sum(1 for x in s["lines"] if x["kind"] == "slow")
+    assert built == 0, texts(s)
+    assert any(x["kind"] == "highlight" for x in s["lines"]), texts(s)

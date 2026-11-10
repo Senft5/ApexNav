@@ -4,18 +4,59 @@ Decisions Claude made for you, newest first. Each one says what was decided, why
 you reach one you've seen. If you disagree with a call, say so and it gets reversed; nothing here is hard to undo unless
 it says so. Things only you can do are in docs/OWNER_TODO.md.
 
-## 2026-11-10 (fable-zone-samples): a new home zone hides you from friends at once (claude/fable-zone-samples)
+## 2026-11-09 (fable-road-carry): road data from roads with no signal is kept on the phone and sent later (claude/fable-road-carry)
 
-Friends on the map keeps your home zones on the server too, so it can refuse a position inside one. Two gaps:
-the zones only went up when you changed who sees you, so a zone added later in Settings never reached the server; and
-the last position stored before the zone existed (a drive that ended at home) stayed visible until it aged out.
-- **A zone added or removed goes up at once**, and the app sends its zones again at each launch while you share
-  (one small request; nothing is sent while Nobody sees you). A failed background save says nothing and heals at the
-  next launch. Undo: friends_map.js `syncZones` and cockpit.js `zonesChanged`.
-- **The server forgets the position it held whenever the zones change** (added, moved, grown or removed), the same way
-  it already does when you switch between Exact and Within a mile. Friends see you again from your next position
-  outside a zone. Removing a zone also forgets it: simpler than working out whether the old sample was inside, and it
-  costs at most one sample. Undo: presence.ts `presenceSettingsPut`, the `prev.zones !== zonesJson` half.
+Found while looking for what matters most: matching a drive to the map needs the network, and a trip that ended with no
+signal (or an app closed while it was retrying) lost every road section it had not sent. The roads worth measuring are
+the ones with no coverage, so the best roads' data was the data being lost. The calls I made:
+- **What is kept**: only what the trip would still have sent (the 5 m rows between the trip's private ends, never the
+  first or last 0.5 to 1.5 km, and built chunks not yet posted). On the phone, in IndexedDB (web/road_carry.js).
+- **How long**: 13 days (the server takes a drive for 14), at most 40,000 rows (200 km) in all; over that the oldest
+  trip goes first.
+- **When it is sent**: when the phone is back online, when the app is shown again, 8 s after launch and every 5 min while
+  something waits. Only with Road data still switched on (checked before anything is matched) and never in a review
+  recording. A refusal from the server drops it.
+- **Backlogs go in 10 km pieces** (`maxRun` 2000 rows in contributor.js createLive), during a drive too, so a second
+  drop-out costs one piece. This is the only change to a trip that has signal all the way: none, unless 10 km is waiting.
+- **Erase everything removes it**, without a new line in cockpit.js: the index is the localStorage key `apex.roadCarry`,
+  which Erase already clears, and a missing index empties the store on the next load. Your data says "road data from
+  N mi waiting for signal" while something waits. privacy.html says all of this in the Road data paragraph.
+- **Signing out, deleting the account and switching Road data off empty it at once** (cockpit.js `clearCarry`), so
+  nothing measured under one account is sent under another. Undo: drop the `clearCarry()` calls.
+- **A drive begun with no signal shares on the last answer the server gave** (sync.js `roadShare`, kept in
+  `apex.roadShare` only while signed in). Before, such a drive never shared (the "may I?" check needs the server), so it
+  had nothing to carry: the trip from a trailhead car park was the one always lost. Nothing is sent on a remembered yes:
+  it waits, and goes only after the server says Road data is still on. Undo: `member()` and `contributionEnabled()`
+  again in `startLiveSharing` and `checkAmbientAllowed`.
+- **The end of a drive says what waits**: "Shared 3.1 mi of road feel. 4.0 mi more waits for signal.", and later "Sent
+  4.0 mi of road feel that waited for signal." Uploads sent later count in app health like the live ones.
+- **A bug found on the way: recorded drives never said they were recorded.** contributor.js built `rec` (and `hr` under
+  the quiet-hours flag), the server read them, the privacy page described them, and web/sync.js sent neither, so no road
+  has ever been counted as loved (the routing's "members come back to this road" signal). It sends them now. Nothing to
+  migrate: loved counts start from here.
+- Not done: no line on the drive bar says what waits while driving.
+Undo: remove `<script src="road_carry.js">` from web/index.html (createLive then has no carry and behaves as before,
+apart from the 10 km pieces; set `maxRun` to Infinity for that).
+
+## 2026-11-09 (fable-overview): "What this drive is like", read against real roads (claude/fable-overview)
+
+I planned ten public trips round Cincinnati in the app and read each overview against the road it described. The calls:
+- **The overview now updates once, a second or two after the card**, on routes from our own router. The first words come
+  from the road tiles alone; the fuller data (woods, farmland, lanes, housing) arrives with the second ranking, and the
+  lines are rebuilt from it in place. So "Mostly country roads." can become "Mostly two-lane country roads through
+  farmland." while you look. Undo: the `paintStory(shown, true)` line in cockpit.js `ownRefine` (then own routes never
+  mention land or lanes, as before).
+- **Open ground needs more than one sign of building to be called suburbs.** Night lights alone were turning ten miles of
+  the Harrison drive into "suburbs". Now the second-strongest sign decides. Undo: `settings` in web/route_story.js.
+- **The "through town / suburbs" line leaves out stretches the engine scores as good road**, so houses along a river
+  road aren't reported as a slow part. Harrison at Fun now says "About 1 mile through town at the start" instead of
+  "About 7 miles through suburbs in places". Undo: `built` in `slowLine`.
+- **A best part spread over many roads says "including"**: "7 miles of good road, including Morgan Ross and Millville
+  Shandon Road", not "7 miles of Millville Shandon Road" (which is 3 miles long). Two roads that carry three quarters of
+  it are still named outright. Tune: `T.NAMES_WHOLE`.
+- **"Two-lane" means one lane each way.** It was also being said of four-lane roads.
+- Not done: your own trips (their addresses aren't in the repo, by rule). `node tools/story_live.js colerain:fun` prints
+  the lines for the public ones.
 
 ## 2026-11-09 (fable-expressway): an expressway counts as a highway at Fun and Long way (claude/fable-expressway)
 
@@ -43,6 +84,19 @@ back roads), which nudged how those roads scored. The calls:
 - **I left the tiles' travel times alone.** The inventory knows the posted limit on about half the main-road miles where
   our tiles only guess from the road's class, and using it would make times truer, but a mismatched stretch would make
   them wrong in a new way. The numbers are in STATE for whoever takes it on.
+## 2026-11-10 (fable-zone-samples): a new home zone hides you from friends at once (claude/fable-zone-samples)
+
+Friends on the map keeps your home zones on the server too, so it can refuse a position inside one. Two gaps:
+the zones only went up when you changed who sees you, so a zone added later in Settings never reached the server; and
+the last position stored before the zone existed (a drive that ended at home) stayed visible until it aged out.
+- **A zone added or removed goes up at once**, and the app sends its zones again at each launch while you share
+  (one small request; nothing is sent while Nobody sees you). A failed background save says nothing and heals at the
+  next launch. Undo: friends_map.js `syncZones` and cockpit.js `zonesChanged`.
+- **The server forgets the position it held whenever the zones change** (added, moved, grown or removed), the same way
+  it already does when you switch between Exact and Within a mile. Friends see you again from your next position
+  outside a zone. Removing a zone also forgets it: simpler than working out whether the old sample was inside, and it
+  costs at most one sample. Undo: presence.ts `presenceSettingsPut`, the `prev.zones !== zonesJson` half.
+
 ## 2026-11-09 (route-sliders): Tune your routes, a Pro screen open to everyone until Pro goes on sale (claude/route-sliders)
 
 You asked for "every parameter with a slider for premium users", then: "remember everyone has pro if they are an early

@@ -3147,6 +3147,42 @@ flow('your data: Settings counts what the phone holds and downloads drives as GP
   check((await page.evaluate(() => localStorage.getItem('apex.savedRoutes'))) === null, 'saved routes gone');
 });
 
+flow('road feel that waited for signal: counted in Your data, kept while Road data can\'t be confirmed, sent once when the phone is back online (IDEAS Q-06)', async (page, base) => {
+  await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); localStorage.setItem('apex.signedIn', '1'); } catch (_) {} });
+  // the Worker: at first it can't be reached for the account (kept, nothing asked of /api/contribute), then a member with Road data on
+  const posted = []; let member = false;
+  await page.route(base + '/api/me', (route) => (member ? route.fulfill({ contentType: 'application/json', body: JSON.stringify({ signed_in: true, member: true, handle: 'e2e' }) }) : route.fulfill({ status: 503, body: '' })));
+  await page.route(base + '/api/me/export', (route) => (member ? route.fulfill({ contentType: 'application/json', body: JSON.stringify({ member: { contribute: 1 } }) }) : route.fulfill({ status: 503, body: '' })));
+  await page.route(base + '/api/contribute', (route) => { posted.push(JSON.parse(route.request().postData())); return route.fulfill({ status: 202, contentType: 'application/json', body: '{}' }); });
+  await page.goto(base + '/index.html');
+  await page.waitForFunction(() => window.ApexRoadCarry && ApexRoadCarry.flush && window.ApexMyData && window.apexDebug);
+  // a trip that ended with no signal left one built chunk of 2 km (as createLive's leftover() hands it over), in the real store
+  await page.evaluate(async () => {
+    const day = new Date().toISOString().slice(0, 10), id = 'd_e2e_carry_0001';
+    ApexRoadCarry.hold({ driveId: id, drivenOn: day, deliberate: true, hr: null, rows: { lat: [], lon: [], rough: [], camber: [], crest: [], speed: [], lon_g: [] },
+      pending: [{ way_id: 4242, dir: 0, driven_on: day, drive_id: id, bins: Array.from({ length: 400 }, (_, i) => ({ i, cam: null, rough: 0.12, crest: null, k: 0.001, fl: null, hb: null })), shape: null, cls: 'secondary', cam_v: 2, rec: 1 }] }, true);
+    await ApexRoadCarry.idle();
+  });
+  check((await page.evaluate(() => ApexRoadCarry.size())) === 1 && (await page.evaluate(() => ApexRoadCarry.itemM({ rows: { lat: [1, 2] }, pending: [{ bins: [1, 2, 3] }] }))) === 25, 'one trip waits in the store');
+  await page.click('.tab[data-view="garage"]');
+  await openSetting(page, 'data');
+  await page.waitForFunction(() => /road data from 1\.2 mi waiting for signal/.test(document.getElementById('myDataNote').textContent));
+  await page.evaluate(() => window.dispatchEvent(new Event('online')));
+  await page.waitForTimeout(700);
+  check(posted.length === 0 && (await page.evaluate(() => ApexRoadCarry.size())) === 1, 'the account can\'t be confirmed: nothing sent, nothing lost');
+  // back online, a member with Road data on: the chunk goes as built, once, and the phone says so
+  member = true;
+  await page.evaluate(() => window.dispatchEvent(new Event('online')));
+  await page.waitForFunction(() => /Sent 1\.2 mi of road feel that waited for signal\./.test(document.getElementById('toast').textContent));
+  check(posted.length === 1 && posted[0].way_id === 4242 && posted[0].drive_id === 'd_e2e_carry_0001' && posted[0].bins.length === 400 && posted[0].rec === 1 && posted[0].cls === 'secondary', 'the chunk went as built, marked as a recorded drive');
+  await page.evaluate(() => ApexRoadCarry.idle());
+  check((await page.evaluate(() => ApexRoadCarry.size())) === 0 && (await page.evaluate(() => localStorage.getItem('apex.roadCarry'))) === null, 'and it is gone from the phone');
+  await page.waitForFunction(() => !/waiting for signal/.test(document.getElementById('myDataNote').textContent));   // Your data stops counting it
+  await page.evaluate(() => window.dispatchEvent(new Event('online')));
+  await page.waitForTimeout(400);
+  check(posted.length === 1, 'never twice');
+});
+
 flow('shared routes: one a friend shared shows on People, Friends, under From friends, and opens as a planned route with notes (Worker stubbed, IDEAS S-05)', async (page, base) => {
   await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); } catch (_) {} });
   const geom = Array.from({ length: 120 }, (_, i) => [-83.9 + i * 4e-4 + Math.sin(i / 6) * 3e-4, 35.6 + i * 3e-4]);

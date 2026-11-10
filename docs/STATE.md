@@ -1,16 +1,67 @@
 # VETTA — CURRENT AGENT HANDOFF STATE
 
-## Session 2026-11-10 (fable-zone-samples): a home zone added later reaches the server and hides the stored position (claude/fable-zone-samples, off origin/main f27a1fe)
+## Session 2026-11-09 (fable-road-carry): road data survives no signal and a closed app (claude/fable-road-carry, off origin/main 3a74cc3)
 
-- [x] Found by reading backend/src/presence.ts against the app: home zones were only sent with a change of "Show me
-  to", so a zone added or removed in Settings never reached the server's copy (the phone still dropped positions inside
-  it), and the last sample stored before the zone existed stayed on friends' maps until it aged out.
-- [x] web/friends_map.js `syncZones()` (loads settings if needed, nothing while Nobody, a quiet save with the current
-  zones); `start()` calls it at each launch; cockpit.js `zonesChanged()` calls it on zone add and remove.
-  backend/src/presence.ts `presenceSettingsPut` deletes the user's presence_samples when the zones JSON changes.
-- Tests: backend presence.test.ts "a home zone added or moved hides what was stored before it..." (vitest, tsc clean);
-  tests/test_friends_map.py test_home_zones_go_to_the_server_when_they_change_and_at_each_launch. No migration.
-- Next: nothing owed here. Deploys with the Worker on merge.
+- [x] Found: contributor.js createLive `finish()` gave up when the last try had failed, so a trip that ended with no
+  signal sent nothing, and an app closed mid-retry lost its rows (IDEAS Q-06, F-05). Now a `carry` (web/road_carry.js,
+  `window.ApexRoadCarry`, found by createLive as its default) holds `leftover()`: after each failed try, when the page is
+  hidden (checkpoint), and at the trip's end. `flush()` resumes each kept item through createLive itself (`rows`,
+  `pending0`, skip 0, lag 0), so the same bins go, once, under the trip's own drive id and day.
+- [x] Kept: only the rows between the private ends; 13 days; 40,000 rows; IndexedDB `vetta-road-carry`, index in
+  localStorage `apex.roadCarry` (Erase everything clears it, and a missing index empties the store). Sent only online,
+  signed in, Road data on (`contributionEnabled`), never under APEX_REVIEW. Nothing is asked while nothing waits.
+- [x] createLive `maxRun` 2000: a backlog is matched 10 km a try. my_data.js: "road data from N mi waiting for signal".
+  privacy.html Road data paragraph; APP_REVIEW.md 5.1.2; IDEAS Q-06 / F-05; CALL_SHEET 2026-11-09 (fable-road-carry).
+- [x] Finished in a second session (2026-11-09, thread "Run autonomous Vetta improvement"; origin/main de537a6 merged in):
+  web/sync.js `contribute` now sends `rec` and `hr` (built by contributor.js, read by contribute.ts, never sent: no road
+  was ever counted loved); `roadShare()` -> { on, known, member } remembers the server's last answer (`apex.roadShare`,
+  only while signed in) so `startLiveSharing` and `checkAmbientAllowed` share on a drive begun with no signal (it never
+  shared before, so nothing was carried); cockpit.js `clearCarry` on Road data off (both switches), both Sign outs and
+  Delete account; `ApexRoadCarry.onPost` (app health counts late uploads) and `onSent` (a toast, Your data redrawn);
+  the end-of-drive toast says what waits (`ApexRoadCarry.itemM(live.leftover())`); the index's `n` counts the bins of
+  built chunks as well as rows (Your data said nothing waited for a trip whose uploads failed after matching: the e2e's catch).
+- cockpit.js edits are in the account, Your data and sharing code only (#322 touches paintStory / ownRefine);
+  web/index.html gains one script tag before contributor.js.
+- Tests: tests/test_road_carry.py (17: the first session's 14, plus `rec` on the wire, the remembered answer, the page's
+  clearing and wiring); pytest 1387 passed, 5 skipped (no existing test changed); `python tools/csp.py` up to date. e2e: new "road
+  feel that waited for signal" (the real IndexedDB store in Chromium: seeded with `hold(item, true)`, kept while the account
+  can't be confirmed, sent once on `online`, Your data counts it and stops), plus your data, drive ended (4), the app comes back whole, no signal hazard, spot photo with Erase, REVIEW5 §2, REVIEW.md 1.2 (2), review mode, People new account, first run (2), plan flow (g): all pass.
+- Open: not run in WebKit (no WebKit in the cloud container) or on a phone; the drive bar doesn't say what waits while
+  driving; a carried trip sent later doesn't mark its drive `contributed` in the Log.
+- Looked at and left (deferred finding 2, Sharon Woods to Winton Woods at Fun): reproduced on the shipped tiles. The one
+  good road is Lakeview Drive at the end; the engine prefers 29.8 min over a 23.8 min way that also drives it because
+  `poor` (10 a km) outweighs 6 minutes (1 a minute). A small-weight search step (a = 1.5) finds the 23.8 min way but
+  changed no router pick on 80 random trips, so it was not shipped. Halving `POOR_PER_KM` breaks no calibration test:
+  the fixtures do not pin it, so that weight needs a driven judgment (or the owner's word) before it moves. Also seen
+  live: the fresh-context re-rank swapped the card to a 26.0 min way under "Conditions ahead" (#322's area).
+- Exact next task: the deferred round-1 items: HPMS posted limits in the graph ETL edge time (after #321 merges and the
+  region rebuild), then Hamilton Ave quality 0.47-0.54.
+
+## Session 2026-11-09 (fable-overview): the drive overview read against real trips (claude/fable-overview, off origin/main 1d97979)
+
+- [x] The overview's "exact next task" (read it on real routes, tune `ApexRouteStory.T`), on ten public trips planned in
+  the app's own page offline (new tools/story_live.js: the card's lines beside each route's setting, quality and street
+  per 400 m; the owner's own trips are not in the repo and weren't run). Found and fixed:
+  - **Our own routes' overview never saw the context grid** (land cover, lanes, housing, lights): `t.ranked` was the first
+    ranking's candidate (tiles' channels only) and the refined ranking never rebuilt it, so no own route ever said "two-lane"
+    or "through woods". cockpit.js `ownRefine`: when the route stays, `t.ranked` becomes the refined candidate and
+    `paintStory(t, true)` rebuilds the lines in place (no hide, after the card, off the plan's path).
+  - **The first road had no name** (the track's steps start at the first turn; names known on 63 % of northgate):
+    `paintStory` puts the router's depart street at 0 m. Names now 99 % on all ten.
+  - **One signal made open ground suburbs** (night lights near the city: 10 of harrison's 30 km): `settings` takes the
+    second-highest place signal, sidewalks a signal like the rest.
+  - **"two-lane" was said of two lanes each way**: `lanes` is lanes in your direction; now 1 (the test fixture said 2).
+  - **"7 miles of Millville Shandon Road"** of a stretch that road carried 3 miles of: `namesFor`, "N miles of A and B"
+    only when they carry 75 % of it, else "of good road, including A and B" (`T.NAMES_WHOLE`, `T.INCLUDE_MIN_M`).
+  - **"About 7 miles through suburbs"** on a country drive: the slow line counts town, and suburbs only where the engine's
+    quality is under 0.55.
+- Tests: tests/test_route_story.py 15 (4 new: two lanes each way, one signal, many roads, houses beside good road; the
+  country fixture's `lanes` 2 -> 1, the channel's unit); pytest 1374 passed, 2 skipped; e2e route overview (1), own
+  routing (4), plan flow (6), level (6) pass. `python tools/csp.py` not needed (no inline script changed).
+- Open: the in-place refresh has no e2e flow of its own (e2e/smoke.js is being changed by #319; seen working in
+  tools/story_live.js runs: the grid's channels and the new lines 1-3 s after the card). Posted limits are known on few
+  of these roads, so most leads say no speed. The owner's own trips still unread.
+- Exact next task: an e2e flow for the overview's refresh once #319 is merged; the owner reads the overview on his trips.
 
 ## Session 2026-11-09 (fable-expressway): expressways below trunk class are highways to Fun and Long way (claude/fable-expressway, off origin/main 1d97979)
 
@@ -53,6 +104,18 @@
   routing (4), plan flow (6) pass.
 - Exact next task: unchanged (tools/live_speed.js on the owner's trips at Fun and Long way); a "Graph region" run picks
   this up together with the expressway flag.
+## Session 2026-11-10 (fable-zone-samples): a home zone added later reaches the server and hides the stored position (claude/fable-zone-samples, off origin/main f27a1fe)
+
+- [x] Found by reading backend/src/presence.ts against the app: home zones were only sent with a change of "Show me
+  to", so a zone added or removed in Settings never reached the server's copy (the phone still dropped positions inside
+  it), and the last sample stored before the zone existed stayed on friends' maps until it aged out.
+- [x] web/friends_map.js `syncZones()` (loads settings if needed, nothing while Nobody, a quiet save with the current
+  zones); `start()` calls it at each launch; cockpit.js `zonesChanged()` calls it on zone add and remove.
+  backend/src/presence.ts `presenceSettingsPut` deletes the user's presence_samples when the zones JSON changes.
+- Tests: backend presence.test.ts "a home zone added or moved hides what was stored before it..." (vitest, tsc clean);
+  tests/test_friends_map.py test_home_zones_go_to_the_server_when_they_change_and_at_each_launch. No migration.
+- Next: nothing owed here. Deploys with the Worker on merge.
+
 ## Session 2026-11-09 (route-sliders): Tune your routes, Pro open to everyone until on sale (claude/route-sliders, off origin/main 1d97979)
 
 - [x] Owner: "every parameter with a slider for premium users"; "remember everyone has pro if they are an early user. Once
