@@ -387,8 +387,17 @@
     .pin-actions .ink-btn { width: 100%; text-align: left; }
     .spot-chips, .spot-stars { display: flex; flex-wrap: wrap; gap: 6px; }
     .spot-chips button { min-height: 44px; padding: 0 12px; border: 1.5px solid var(--panel-ink); font-size: 15px; font-weight: 600; }
-    .spot-chips button.on, .spot-stars button.on { background: var(--panel-ink); color: var(--panel); }
-    .spot-stars button { width: 44px; height: 44px; border: 1.5px solid var(--panel-ink); font-size: 24px; line-height: 1; }
+    .spot-chips button.on { background: var(--panel-ink); color: var(--panel); }
+    /* a rating is stars filled up to yours, pale after it, as on the spots list (spots_feed.js); no boxes */
+    #hlRating { gap: 0; margin-left: -8px; }
+    #hlRating button { width: 44px; height: 44px; padding: 0; border: 0; background: none; font-size: 30px; line-height: 1; color: var(--panel-dim); opacity: 0.4; }
+    #hlRating button.on { color: var(--panel-ink); opacity: 1; }
+    /* the photo key with its note beside it in pencil; Save the wide key, Cancel beside it at the same height */
+    .spot-photo { display: flex; align-items: center; gap: 12px; }
+    .spot-photo .ink-btn { display: inline-flex; align-items: center; flex: none; cursor: pointer; }
+    .spot-photo .note { flex: 1; min-width: 0; margin: 0; font-size: 13px; font-weight: 400; line-height: 1.35; color: var(--panel-dim); }
+    .spot-acts { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; }
+    .spot-acts .ink-btn { height: 48px; }
     .spot-dialog-field { display: grid; gap: 8px; font-size: 15px; font-weight: 600; }
     .spot-thumb { width: 44px; height: 44px; padding: 0; border: 1px solid var(--rule); overflow: hidden; flex: none; }
     .spot-thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
@@ -1865,7 +1874,7 @@
             <button class="ink-btn solid" id="pinGoBtn">Go here</button>
             <button class="ink-btn" id="pinFromBtn">Start from here</button>
             <button class="ink-btn" id="pinViaBtn" hidden>Add via</button>
-            <button class="ink-btn" id="pinSaveBtn">Save as highlight</button>
+            <button class="ink-btn" id="pinSaveBtn">Save as a spot</button>
             <button class="linkbtn" id="pinCancelBtn">Cancel</button>
           </div>
         </div>
@@ -1880,9 +1889,9 @@
           <div class="spot-dialog-field">Rating<div class="spot-stars" id="hlRating" role="group" aria-label="Rating">
             <button type="button" data-rating="1" aria-label="1 star">★</button><button type="button" data-rating="2" aria-label="2 stars">★</button><button type="button" data-rating="3" aria-label="3 stars">★</button><button type="button" data-rating="4" aria-label="4 stars">★</button><button type="button" data-rating="5" aria-label="5 stars">★</button>
           </div></div>
-          <div class="spot-dialog-field">Photo<div class="row" style="align-items:center"><label class="ink-btn" id="hlPhotoBtn">Add photo<input type="file" id="hlPhoto" accept="image/*" hidden /></label>
+          <div class="spot-dialog-field">Photo<div class="spot-photo"><label class="ink-btn" id="hlPhotoBtn">Add photo<input type="file" id="hlPhoto" accept="image/*" hidden /></label>
             <span class="note" id="hlPhotoNote">Stays on this phone, without its location data.</span></div></div>
-          <div class="row"><button class="ink-btn solid" id="hlAddBtn">Save</button><button class="ink-btn" id="hlCancelBtn">Cancel</button></div>
+          <div class="spot-acts"><button class="ink-btn solid" id="hlAddBtn">Save</button><button class="ink-btn" id="hlCancelBtn">Cancel</button></div>
         </div>
       </div>
     </section>

@@ -1,5 +1,19 @@
 # VETTA — CURRENT AGENT HANDOFF STATE
 
+## Session 2026-11-10 (fable-pin-names): pins and tapped places by name; the spot dialog's stars (claude/fable-pin-names, off origin/main e76f1bb)
+
+- `web/cockpit.js`: `setFieldPin(field, point, name)` / `pinIn` / `fieldPin` beside `resolvePlace(q, field)`: Go here,
+  Start from here and Tap the map put a name in the field ("Dropped pin" when unknown) and keep the point beside it;
+  `resolvePlace` returns it while the text is unchanged (`routeName` for the route's name; `routeToQuery` is evaluated
+  alone by tests/test_route_loading.py, so it uses no helper). `rememberPlace` skips "Dropped pin". Swap swaps the points.
+  Suggestions are not asked for a pinned text. Search notes say "Press Search…".
+- `web/index.html`: "Save as a spot"; `#hlRating` stars fill up to the rating (no boxes); `.spot-photo`, `.spot-acts`.
+- Tests: tests/test_pin_names.py; e2e "a pin has a name…" (needs a stub style with `glyphs`, or the map's load handler
+  stops before the tap is wired: a style with no glyphs throws at the app's labelled layers. Production styles have them).
+- Checked: pytest full; e2e "a pin has a name", "Where to?" 9/9, "plan flow" 6/6, "spot photo", "Dynamic Type",
+  "REVIEW.md 1.2" 2/2, "routes from elsewhere", "saved for offline", "drag to reshape", "safe areas".
+- Next: a tapped place could take the road's name once the lookup lands (rename the planned route after the fact).
+
 ## Session 2026-11-10 (fable-loop-time): the loop dial by distance or time (claude/fable-loop-time, off origin/main 1a38381)
 
 - [x] web/index.html `#loopBy` (two radio words over the dial, `.loop-by`). web/cockpit.js: `LOOP_BY` ('apex.loopBy'),

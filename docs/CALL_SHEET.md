@@ -4,6 +4,23 @@ Decisions Claude made for you, newest first. Each one says what was decided, why
 you reach one you've seen. If you disagree with a call, say so and it gets reversed; nothing here is hard to undo unless
 it says so. Things only you can do are in docs/OWNER_TODO.md.
 
+## 2026-11-10 (fable-pin-names): a place you pin or tap goes by its name, never by coordinates (claude/fable-pin-names)
+
+Hold the map on Foothills Parkway and the pin's sheet said "Foothills Parkway", but Go here then filled Where to? with
+"35.667000, -83.812000" and named the route "To Pin 35.667, -83.812". Tap the map did the same. Now the field and the
+route carry the name the sheet showed ("To Foothills Parkway"); a place tapped with no lookup is "Dropped pin" and its
+route "To a dropped pin". The exact point still goes to the router (it rides beside the field and holds while the text
+is unchanged; the swap key takes it across). A named pin becomes a recent place; an unnamed one never does. I did not
+make Tap the map wait for the road's name: that would put a network lookup in front of planning.
+
+Three smaller things on the same screens: the pin's third key said "Save as highlight" and opened "Add a spot", so it
+now says "Save as a spot". A spot's rating lit only the star you chose (five stars looked like one); it now fills up
+to it, pale after, the way the spots list already draws stars, and Save and Cancel sit in one row at one height. The
+notes under a search that finds nothing said "Press Go" while the key under them says "Search"; they say Search, and
+"offline" is only said when the phone is offline.
+
+Undo: revert the PR. Typed coordinates still work as before and are still named "Pin lat, lon".
+
 ## 2026-11-10 (fable-loop-time): a loop can be set by time on the dial (claude/fable-loop-time)
 
 Following your "the whole point is aimless driving": "I have an hour" is how a loop is usually asked for, and time

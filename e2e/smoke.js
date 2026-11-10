@@ -633,6 +633,73 @@ flow('Where to?: with the search and routing services unreachable, a search fail
   await page.waitForFunction(() => /Search is offline/.test(document.getElementById('toast').textContent), null, { timeout: 15000 });
 }, { geolocation: { latitude: 35.9606, longitude: -83.9207 }, permissions: ['geolocation'] });
 
+// 2026-11-10: a place you pin or tap on the map is called by its name, in the field and on the route, never by coordinates
+flow('a pin has a name: Go here routes "To <the road>", a tap on the map is a "Dropped pin", neither is coordinates; a spot rating fills its stars; the notes name the Search key', async (page, base) => {
+  // the real map style is offline here: a bare one (with a glyphs address, so the app's own labelled layers are taken and its
+  // load handler runs to the end, where the map's tap is wired), so the map loads and takes a tap
+  await page.route('https://tiles.openfreemap.org/**', (route) => (route.request().url().includes('/styles/')
+    ? route.fulfill({ contentType: 'application/json', body: JSON.stringify({ version: 8, glyphs: 'https://tiles.openfreemap.org/fonts/{fontstack}/{range}.pbf', sources: {}, layers: [{ id: 'bg', type: 'background', paint: { 'background-color': '#eee' } }] }) })
+    : route.abort()));
+  await page.route('https://nominatim.openstreetmap.org/reverse**', (route) => route.fulfill({ contentType: 'application/json', body: JSON.stringify({ name: '', address: { road: 'Foothills Parkway' } }) }));
+  let found = 'none';
+  await page.route('https://photon.komoot.io/**', (route) => (found === 'fail' ? route.abort() : route.fulfill({ contentType: 'application/json', body: '{"features":[]}' })));
+  const asked = [];
+  await page.route('https://valhalla1.openstreetmap.de/route', (route) => {
+    const req = JSON.parse(route.request().postData() || '{}');
+    asked.push(req);
+    route.fulfill({ contentType: 'application/json', body: JSON.stringify(stubTrip(req.locations)) });
+  });
+  await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); } catch (_) {} });
+  await page.goto(base + '/index.html');
+  await page.waitForFunction(() => window.apexDebug && window.apexDebug.map && !document.getElementById('boot'), null, { timeout: 20000 });
+  await page.waitForTimeout(1500);                                   // the camera goes to the fix; a hold while it moves is no hold
+  await page.waitForFunction(() => !window.apexDebug.map.isMoving());
+  const box = await page.locator('#map').boundingBox(), x = box.x + box.width / 2, y = box.y + box.height * 0.3;
+  const routed = () => page.waitForFunction(() => { const t = window.apexDebug.track; return t && t.kind === 'route' && t.lat.length > 50 && !document.getElementById('planPanel').classList.contains('busy'); }, null, { timeout: 20000 });
+  // hold the map: the pin's sheet names the road; Save is "as a spot", the word the rest of the app uses
+  await page.mouse.move(x, y); await page.mouse.down(); await page.waitForTimeout(800); await page.mouse.up();
+  await page.waitForFunction(() => document.getElementById('pinOverlay').classList.contains('show') && document.getElementById('pinPlace').textContent === 'Foothills Parkway', null, { timeout: 10000 });
+  check((await page.textContent('#pinSaveBtn')).trim() === 'Save as a spot', 'the pin saves "as a spot"');
+  // the spot dialog: a rating is stars filled up to it
+  await page.click('#pinSaveBtn');
+  await page.waitForFunction(() => document.getElementById('hlOverlay').classList.contains('show'));
+  await page.click('#hlRating [data-rating="3"]');
+  const stars = await page.evaluate(() => [...document.querySelectorAll('#hlRating button')].map((b) => [b.classList.contains('on'), b.getAttribute('aria-pressed'), Math.round(b.getBoundingClientRect().height)]));
+  check(stars.map((s) => s[0]).join() === 'true,true,true,false,false' && stars.map((s) => s[1]).join() === 'false,false,true,false,false' && stars.every((s) => s[2] >= 44), 'three stars: three filled, the third pressed, 44 pt each: ' + JSON.stringify(stars));
+  const keys = await page.evaluate(() => ['hlAddBtn', 'hlCancelBtn'].map((id) => { const r = document.getElementById(id).getBoundingClientRect(); return [Math.round(r.top), Math.round(r.height), Math.round(r.width)]; }));
+  check(keys[0][0] === keys[1][0] && keys[0][1] === keys[1][1] && keys[0][2] > keys[1][2], 'Save and Cancel are one row at one height, Save the wide one: ' + JSON.stringify(keys));
+  await page.click('#hlCancelBtn');
+  // Go here: the field and the route carry the name the sheet showed, and the router got the pin's own point
+  await page.mouse.move(x, y); await page.mouse.down(); await page.waitForTimeout(800); await page.mouse.up();
+  await page.waitForFunction(() => document.getElementById('pinOverlay').classList.contains('show') && document.getElementById('pinPlace').textContent === 'Foothills Parkway', null, { timeout: 10000 });
+  const pin = await page.evaluate(([px, py]) => { const r = document.getElementById('map').getBoundingClientRect(), ll = window.apexDebug.map.unproject([px - r.left, py - r.top]); return { lat: ll.lat, lon: ll.lng }; }, [x, y]);
+  await page.click('#pinGoBtn');
+  await routed();
+  let got = await page.evaluate(() => ({ field: document.getElementById('destInput').value, name: window.apexDebug.track.name, bar: document.getElementById('routeBarName').textContent, recent: localStorage.getItem('apex.recentPlaces') || '' }));
+  check(got.name === 'To Foothills Parkway' && /Foothills Parkway/.test(got.bar) && !/\d\.\d{3}/.test(got.field + got.name + got.bar), 'the route is "To Foothills Parkway", no coordinates: ' + JSON.stringify(got));
+  const last = asked[asked.length - 1].locations, end = last[last.length - 1];
+  check(Math.abs(end.lat - pin.lat) < 1e-3 && Math.abs(end.lon - pin.lon) < 1e-3, 'the router was asked for the pin itself: ' + JSON.stringify([end, pin]));
+  check(/Foothills Parkway/.test(got.recent), 'a named pin is a recent place');
+  // Tap the map: no lookup is waited for, so it is a "Dropped pin"; never kept as a recent place
+  const again = async () => { await page.click('#planCancel'); await page.click('#planClear'); await page.click('#destInput'); };   // the card down, the route cleared
+  await again();
+  await page.click('#tapRouteBtn');
+  await page.waitForTimeout(800);
+  await page.mouse.click(x + 40, y + 30);
+  await page.waitForFunction(() => window.apexDebug.track && window.apexDebug.track.name === 'To a dropped pin', null, { timeout: 20000 });
+  await routed();
+  got = await page.evaluate(() => ({ field: document.getElementById('destInput').value, name: window.apexDebug.track.name, recent: localStorage.getItem('apex.recentPlaces') || '' }));
+  check(got.name === 'To a dropped pin' && !/\d\.\d{3}/.test(got.field) && !/ropped pin/.test(got.recent), 'a tapped place is a dropped pin, not a recent place: ' + JSON.stringify(got));
+  // the notes under what is typed name the key that is on the screen (it says Search)
+  await again();
+  await page.fill('#destInput', 'Zzyzxqq');
+  await page.waitForFunction(() => /Press Search to look everywhere/.test(document.getElementById('placeList').textContent), null, { timeout: 10000 });
+  check((await page.textContent('#findGoBtn')).trim() === 'Search', 'the key under the note says Search');
+  found = 'fail';
+  await page.fill('#destInput', 'Zzyzxqqq');
+  await page.waitForFunction(() => /Suggestions didn't load\. Press Search to try\./.test(document.getElementById('placeList').textContent), null, { timeout: 10000 });
+}, { geolocation: { latitude: 35.9606, longitude: -83.9207 }, permissions: ['geolocation'] });
+
 flow('Where to?: your own stages match by name, even with the map search offline (IDEAS U-19)', async (page, base) => {
   await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1');
     localStorage.setItem('apex.segments', JSON.stringify([{ id: 's1', name: 'Tail of the Dragon (US 129)', lat0: 35.47, lon0: -83.92, lat1: 35.52, lon1: -83.95, length_m: 17000 }])); } catch (_) {} });
