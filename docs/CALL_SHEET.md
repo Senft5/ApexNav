@@ -62,6 +62,13 @@ Not changed: what any switch does, the Co-driver half (Notes, Voice, music).
 
 Undo: revert the PR.
 
+## 2026-11-10 (fable-story-flake): the "route overview" e2e flow waits for the settled card (claude/fable-story-flake)
+
+The e2e check went red on PRs that touch nothing near it. The flow compared the overview's lines with the route's
+streets while the app was between two sets of steps. I changed the flow to read once the lines belong to the steps the
+route has now; the app is unchanged, and the check ("every name it says is a street the route drives") is as strict
+as before. Undo: revert the PR.
+
 ## 2026-11-10 (fable-polish-7): design pass 7: Settings is three short lists, and each row says what it is set to (claude/fable-polish-7)
 
 Behind the Garage's gear was one list of eleven rows that said nothing: to learn whether Crash check was on or which
