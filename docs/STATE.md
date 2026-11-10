@@ -31,6 +31,17 @@
 - Tests: tests/test_route_card.py; e2e "plan flow (c)".
 - Next: CarPlay has not had a design pass in this run (Swift, not visible from the cloud).
 
+## Session 2026-11-10 (fable-ten-hz-g): every live frame's g reaches the recording (IDEAS D-26; claude/fable-ten-hz-g, off origin/main ac6c6c6)
+
+- `web/sensors.js Recorder`: `gs` (each frame's [lat_g, lon_g] or null since the last move, up to 31) and `g0` ([g or
+  null] of the last frame placed). On a move, frame k of n sits at (k + 1) / n of the stretch and `g0` at its start; a
+  5 m sample interpolates between the frames either side (null if either is unknown). No placement (first fix, more
+  than 30 frames waiting, a stretch over 100 m) falls back to the fix's g as before. `snapshot`/`restore` carry both,
+  and `pause`, `truncate` and a stray fix clear them.
+- Tests: tests/test_ten_hz_g.py (error vs truth, a 12 m correction, blanks, checkpoint mid-fix, 1 Hz browser frames).
+- Checked: `pytest tests` full; e2e recording and Log flows.
+- Next: IDEAS D-26 in docs/IDEAS.md is added by claude/fable-driver-profile (#373); mark it done when both are merged.
+  Then the driver profile's "touch" skills (brake application and release rates, turn-in rate) from this finer g.
 ## Session 2026-11-10 (fable-your-data): Your data as Settings-style rows (claude/fable-your-data, off origin/main 3f2f315)
 
 - `web/index.html` only: the Your data section's keys are `.nav-rows.data-rows` with three `.nav-group` headings; the
