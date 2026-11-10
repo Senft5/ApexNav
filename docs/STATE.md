@@ -1,5 +1,12 @@
 # VETTA — CURRENT AGENT HANDOFF STATE
 
+## Session 2026-11-10 (fable-log-units): the Log's small lengths in the driver's units (claude/fable-log-units, off origin/main 3f2f315)
+
+- `web/units.js` `fine(m)`: "12 m" or feet to the nearest 5 ("40 ft"). Used in `web/analysis.html` (stage marking's
+  climb and minimum length, the steadiness chart's scale, dots and note) and `web/drive_view.js` (repeatability list,
+  grip circle notes; `size(100)` for "before turn-in"). drive_view falls back to metres with no units module (its tests).
+- Tests: tests/test_units.py (new case); e2e "a whole road as a stage" now expects "up 65 ft".
+
 ## Session 2026-11-10 (fable-loop-time): the loop dial by distance or time (claude/fable-loop-time, off origin/main 1a38381)
 
 - [x] web/index.html `#loopBy` (two radio words over the dial, `.loop-by`). web/cockpit.js: `LOOP_BY` ('apex.loopBy'),

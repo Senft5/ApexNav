@@ -4,6 +4,16 @@ Decisions Claude made for you, newest first. Each one says what was decided, why
 you reach one you've seen. If you disagree with a call, say so and it gets reversed; nothing here is hard to undo unless
 it says so. Things only you can do are in docs/OWNER_TODO.md.
 
+## 2026-11-10 (fable-log-units): the Log's last metre-only lines are in your units (claude/fable-log-units)
+
+After #352 a driver in miles still read metres in the Log: a stage being marked said "up 34 m" and "Make it at least
+200 m long"; the repeatability list said "braking point typically within 6 m"; the steadiness chart's scale, its dots
+and its note were in metres; the grip circle's notes said "every 5 m" and "100 m before turn-in". These now follow
+Settings, Units. Small lengths in feet are said to the nearest 5 ft ("within 20 ft"), since a finer figure would
+claim more than the phone measured. Metric drivers see what they saw before.
+
+Undo: revert the PR. Nothing stored changes; this is only how lengths are written.
+
 ## 2026-11-10 (fable-loop-time): a loop can be set by time on the dial (claude/fable-loop-time)
 
 Following your "the whole point is aimless driving": "I have an hour" is how a loop is usually asked for, and time

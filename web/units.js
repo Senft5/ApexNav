@@ -65,6 +65,15 @@
     const s = short(m);
     return `${s.n} ${s.u.toLowerCase()}`;
   }
-  const api = { KEY, choose, system, set, metric, long, longN, longU, short, size, spokenShort, speed, speedU, speedMax, _reset: () => { current = null; } };
+  /**
+   * A small length said exactly, for the Log's notes on braking points and samples: "12 m", or feet to the nearest 5
+   * ("40 ft"; a figure that fine in feet would claim more than the phone measured). Heights and short spreads, not road
+   * distances (those are short() and size()).
+   */
+  function fine(m) {
+    if (!Number.isFinite(m)) return '--';
+    return metric() ? `${Math.round(m)} m` : `${Math.round(m / FT / 5) * 5} ft`;
+  }
+  const api = { KEY, choose, system, set, metric, long, longN, longU, short, size, fine, spokenShort, speed, speedU, speedMax, _reset: () => { current = null; } };
   if (typeof module !== 'undefined' && module.exports) module.exports = api; else root.ApexUnits = api;
 })(typeof window !== 'undefined' ? window : globalThis);
