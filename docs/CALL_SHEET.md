@@ -14,6 +14,9 @@ can invite, Who can find it), each explanation a pencil line under its keys, tex
 field's hint short enough to read ("Area, like Robbinsville"; a screen reader still hears "Area people nearby will
 see"). Who can find it now says what Private and Public mean before asking for an area.
 
+Also on the crew's page: Meeting points was the one small heading under a rule; it is named like Members, Chat and
+the Score board now.
+
 Every control does what it did and the Worker calls are unchanged.
 
 Undo: revert the PR (`crewSettingsFor` in web/cockpit.js, four CSS lines in web/index.html).

@@ -430,7 +430,7 @@
         if (!r || !r.ok) { toast('Couldn\u2019t change that. Try again.'); return; }
         sw.classList.toggle('on', on); sw.setAttribute('aria-checked', String(on));
       });
-      return el('section', { className: 'cp-meet stack-8' }, el('h3', { textContent: 'Meeting points' }), sw,
+      return el('section', { className: 'cp-meet stack-8' }, el('div', { className: 'cp-sec' }, el('h3', { textContent: 'Meeting points' })), sw,   // named like Members, Chat and the board (it was the one small heading under a rule)
         el('p', { className: 'note', textContent: `Your Home pin\u2019s square, about ${root.ApexUnits && !root.ApexUnits.metric() ? '7 miles' : '11 km'} across, never the address. Crew-mates see the squares, not whose, once two share. Used to pick a meeting point fair to everyone.` }));
     }
     function pinnedRow(c) {

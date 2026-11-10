@@ -5,7 +5,8 @@
 - [x] web/cockpit.js `crewSettingsFor`: `h4.nav-group` names, notes as `p.note`, the area field's placeholder and
   aria-label. web/index.html `.crew-settings` rules (headings without a rule, text keys `justify-self: start`, notes
   13 px pencil, the field takes the row's free width).
-- [x] tests/test_crew_settings_sheet.py (4); e2e "crew page" measures the three names on one line, the keys' left
+- [x] web/crew_page.js: Meeting points' heading sits in `.cp-sec` like its neighbours.
+- [x] tests/test_crew_settings_sheet.py (5); e2e "crew page" measures the three names on one line, the keys' left
   edge and the hint's fit. Also run: "one link in", "TestFlight 2026-11-05 note 1", "crew drives", "Dynamic Type",
   "REVIEW.md 1.2", "safe areas".
 - Next on a crew's page: the chat row and the Score board were looked at and left; Meeting points and what is under it

@@ -41,3 +41,10 @@ def test_text_keys_start_at_the_left_and_notes_are_pencil():
     assert re.search(r"\.crew-settings \.linkbtn, \.crew-settings \.danger-btn \{ justify-self: start; \}", HTML)
     assert re.search(r"\.crew-settings p\.note \{ font-size: 13px; color: var\(--panel-dim\)", HTML)
     assert re.search(r"\.crew-settings \.row > \.field \{ flex: 1 1 0; min-width: 0; \}", HTML)
+
+
+def test_meeting_points_is_named_like_the_rest_of_the_crews_page():
+    js = (Path(__file__).resolve().parents[1] / "web" / "crew_page.js").read_text(encoding="utf-8")
+    assert "el('div', { className: 'cp-sec' }, el('h3', { textContent: 'Meeting points' }))" in js
+    for name in ("Members", "Vetta Score board", "Chat"):
+        assert re.search(r"className: 'cp-sec' \}, el\('h3', \{ textContent: '" + name + "'", js), name
