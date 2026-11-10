@@ -14,6 +14,14 @@ a row never guesses. Route tuning also says nothing if the tuning is not this ph
 for a phone without it), since its sliders are kept but the routes are the defaults.
 
 Undo: revert the PR (three `data-summary` attributes in web/index.html, `data-summary-text` in web/garage_settings.js).
+## 2026-11-10 (fable-one-corner): "1 corners" is "1 corner"; a Best roads nearby key keeps its word while it searches (claude/fable-one-corner)
+
+A road with one corner read "1 corners" on its card's line, under its big number, aloud to a screen reader, in "1 more
+good corners", in a stage's line in the Log and in a coach's sentence. All say "1 corner" now. And in Best roads nearby
+the key you tapped ("Within 15 min") turned into "Finding roads" over a line that already said "Finding roads…"; it
+keeps its own word and only its progress bar moves.
+
+Undo: revert the PR.
 
 ## 2026-11-10 (merger): e2e may run 35 minutes, not 25 (claude/project-thread-er8kzz)
 

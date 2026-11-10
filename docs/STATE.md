@@ -9,6 +9,13 @@
 - [x] tests/test_garage_settings.py (summaryText case, the three selectors, the tuning source test); e2e "Settings
   behind the gear" checks Spots None, Route tuning Standard, 1 changed after a slider, Standard after Reset.
 - Next: Your data, Feedback and About have nothing to say, which is right; nothing queued here.
+## Session 2026-11-10 (fable-one-corner): singular corners, and the nearby key keeps its label (claude/fable-one-corner, off origin/main e76f1bb)
+
+- cockpit.js: the route bar and card lines use `ApexFormat.cornerCount`; `buildRoute`'s announce pluralises inline
+  (tests/test_route_loading.py evals it with no ApexFormat); `busy().progress(frac)` moves a key's bar without changing
+  its text, used by `exploreNear`. route_card.js `stats` label "corner" for one; drive_view.js habits; analysis.html `segInfo`.
+- Tests: tests/test_route_card.py; e2e "plan flow (c)".
+- Next: CarPlay has not had a design pass in this run (Swift, not visible from the cloud).
 
 ## Session 2026-11-10 (merger): e2e time limit 35 min (claude/project-thread-er8kzz)
 

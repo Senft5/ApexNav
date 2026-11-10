@@ -2646,7 +2646,7 @@
       if (!w && !(fewer && extraS >= 60)) return null;
       const mi = (km) => ApexUnits.long(km * 1000, 1, true);
       const roads = w ? w.roads.map(r => `${r.name} ${mi(r.km)}`).join(', ') : '';
-      const gain = w && w.gained ? `${w.gained} more good corners` : '';
+      const gain = w && w.gained ? `${w.gained} more good corner${w.gained === 1 ? '' : 's'}` : '';
       const towns = fewer ? `${mi(fewerKm)} less in towns` : '';
       const extraMin = w ? w.extraMin : Math.round(extraS / 60);
       return `For ${[roads, gain, towns].filter(Boolean).join(' · ')}${extraMin >= 1 ? `, +${extraMin} min` : ''}`;
@@ -2690,7 +2690,7 @@
         $('routeBarName').textContent = t.name || 'Route';
         fitRouteBarName();
         // U-64: the time too, the router's or the route's own envelope (timeFromEnvelope): "35.4 mi · 1 h 05 · 32 corners"
-        $('routeBarMeta').textContent = [mi, routeTimeText(t.timeS), Array.isArray(t.events) ? `${t.events.filter(e => e.type === 'corner').length} corners` : ''].filter(Boolean).join(' · ');
+        $('routeBarMeta').textContent = [mi, routeTimeText(t.timeS), Array.isArray(t.events) ? ApexFormat.cornerCount(t.events.filter(e => e.type === 'corner').length) : ''].filter(Boolean).join(' · ');
       }
       carRoute(t);
       if (!t) { card.hidden = true; paintAlternates(); return; }
@@ -2702,7 +2702,7 @@
         if (k) { k.hidden = !on; k.title = on ? `Planned with your route tuning: ${t.tuned.join(', ')}` : ''; k.setAttribute('aria-label', on ? `Your tuning: ${t.tuned.join(', ')}. Open Route tuning` : 'Your tuning'); } }
       const hasDist = Array.isArray(t.dist) && t.dist.length > 0 && Number.isFinite(t.dist[t.dist.length - 1]);
       const mi = hasDist ? `${ApexUnits.long(t.dist[t.dist.length - 1], 1)}` : '--';
-      const corners = Array.isArray(t.events) ? `${t.events.filter(e => e.type === 'corner').length} corners` : '--';
+      const corners = Array.isArray(t.events) ? ApexFormat.cornerCount(t.events.filter(e => e.type === 'corner').length) : '--';   // "1 corner", never "1 corners"
       const min = routeTimeText(t.timeS);
       const extra = Number.isFinite(t.extraS) && t.extraS >= 60 ? ` (+${Math.round(t.extraS / 60)} for fun)` : '';
       $('routeCardMeta').textContent = [mi, min && min + extra, corners, roadTypeOf(t)].filter(v => v && v !== '--').join(' · ');
@@ -2874,7 +2874,7 @@
       attachWeather(t);
       attachClosures(t);
       // the route bar shows this; screen readers hear it (REVIEW.md: the bar is the toast)
-      if (!prebuilt) announce(`${name} · ${ApexUnits.long(totalM(), 1)} · ${t.events.filter(e => e.type === 'corner').length} corners`);
+      if (!prebuilt) announce(`${name} · ${ApexUnits.long(totalM(), 1)} · ${((n) => `${n} corner${n === 1 ? '' : 's'}`)(t.events.filter(e => e.type === 'corner').length)}`);
     }
     // A route just found: pin its destination and show it, so you can check you are routing to the right place. FOLLOW
     // (or Start drive) goes back to your position. A loop has no destination: show the whole loop instead.
@@ -4104,6 +4104,7 @@
       group.forEach(b => { if (b !== btn) b.disabled = true; });
       return {
         step(text, frac) { btn.textContent = text; btn.style.setProperty('--progress', `${Math.round(frac * 100)}%`); },
+        progress(frac) { btn.style.setProperty('--progress', `${Math.round(frac * 100)}%`); },   // the bar only: the key keeps its own word
         done() { btn.classList.remove('busy'); btn.textContent = label; btn.style.removeProperty('--progress'); group.forEach(b => { b.disabled = false; }); },
       };
     }
@@ -4380,7 +4381,8 @@
       loopBusy = true;
       const panel = planBusy(), was = plannedRoute;                 // a destination typed meanwhile waits, not races
       const key = busy(btn, [...document.querySelectorAll('[data-loop-mi], [data-loop-min], [data-explore-min]')]);
-      const ui = { step(text, f) { key.step(text, f); nearbyStatus(`${text}…`, true); }, done() { key.done(); } };
+      // the key you chose stays "Within 15 min" while it works (it turned into "Finding roads" over a line saying the same)
+      const ui = { step(text, f) { key.progress(f); nearbyStatus(`${text}…`, true); }, done() { key.done(); } };
       $('exploreList').hidden = true;
       try {
         const c = await locate();
