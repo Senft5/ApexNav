@@ -1,20 +1,20 @@
 380_515:   0.24 MB     5241 edges     2211 nodes  3 restrictions
-380_516:   0.52 MB    11758 edges     5140 nodes  30 restrictions
+380_516:   0.52 MB    11760 edges     5141 nodes  30 restrictions
 380_517:   0.32 MB     7382 edges     3207 nodes  26 restrictions
 380_518:   0.20 MB     4680 edges     1855 nodes  9 restrictions
-381_515:   0.90 MB    20060 edges     9169 nodes  113 restrictions
-381_516:   2.86 MB    65696 edges    29037 nodes  1077 restrictions
-381_517:   1.38 MB    32353 edges    13502 nodes  371 restrictions
+381_515:   0.90 MB    20062 edges     9170 nodes  113 restrictions
+381_516:   2.86 MB    65693 edges    29036 nodes  1077 restrictions
+381_517:   1.38 MB    32353 edges    13501 nodes  371 restrictions
 381_518:   0.38 MB     9155 edges     3577 nodes  31 restrictions
 382_515:   0.39 MB     8356 edges     3729 nodes  12 restrictions
-382_516:   2.63 MB    60784 edges    26408 nodes  871 restrictions
-382_517:   2.45 MB    56070 edges    25551 nodes  784 restrictions
-382_518:   1.10 MB    26010 edges    10573 nodes  203 restrictions
+382_516:   2.63 MB    60801 edges    26417 nodes  869 restrictions
+382_517:   2.45 MB    56074 edges    25552 nodes  784 restrictions
+382_518:   1.10 MB    26028 edges    10580 nodes  203 restrictions
 383_515:   0.25 MB     5406 edges     2289 nodes  2 restrictions
-383_516:   0.67 MB    15132 edges     6801 nodes  69 restrictions
-383_517:   0.62 MB    14156 edges     6240 nodes  123 restrictions
-383_518:   2.53 MB    58674 edges    24309 nodes  503 restrictions
-total: 17.44 MB, 400913 edges, 173598 nodes, 16 tiles; model 95960e6d3407
+383_516:   0.67 MB    15118 edges     6795 nodes  69 restrictions
+383_517:   0.62 MB    14172 edges     6251 nodes  123 restrictions
+383_518:   2.53 MB    58697 edges    24320 nodes  503 restrictions
+total: 17.44 MB, 400978 edges, 173631 nodes, 16 tiles; model b50ef601c2e3
 
 road | km | quality | scenery | fun/km | class | limit | km/h | check
 Colerain Avenue | 44.73 | 0.222 | 0.386 | 0.47 | 2 | 56 | 50.5 | ok: low quality (< 0.40)
