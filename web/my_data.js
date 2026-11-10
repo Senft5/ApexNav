@@ -28,11 +28,15 @@
   function phoneSummary(drives, storage) {
     const read = (k, fallback) => { try { return JSON.parse(storage.getItem(k) || fallback); } catch (_) { return JSON.parse(fallback); } };
     const miles = (drives || []).reduce((s, d) => s + (Array.isArray(d.dist) && d.dist.length ? d.dist[d.dist.length - 1] : 0), 0) / 1609.344;
-    return {
+    const sum = {
       drives: (drives || []).length, miles: Math.round(miles * 10) / 10,
       spots: read('apex.highlights', '[]').length, zones: read('apex.privacyZones', '[]').length,
       places: read('apex.recentPlaces', '[]').length, signedIn: !!(storage.getItem('apex.session') || storage.getItem('apex.signedIn')),
     };
+    // road data that had no signal to go with (road_carry.js keeps its index here): metres of road still waiting, when any
+    const waitingM = Object.values(read('apex.roadCarry', '{}') || {}).reduce((t, e) => t + (e && e.n > 0 ? e.n : 0), 0) * 5;
+    if (waitingM > 0) sum.waitingM = waitingM;
+    return sum;
   }
 
   /**
@@ -41,7 +45,8 @@
    */
   function phoneText(s, long = (m) => `${(m / 1609.344).toFixed(1)} mi`) {
     const n = (k, word) => (k > 0 ? `${k} ${word}${k === 1 ? '' : 's'}` : '');
-    const parts = [s.drives > 0 ? `${n(s.drives, 'drive')} (${long(s.miles * 1609.344)})` : '', n(s.spots, 'spot'), n(s.zones, 'privacy zone'), n(s.places, 'recent place')].filter(Boolean);
+    const parts = [s.drives > 0 ? `${n(s.drives, 'drive')} (${long(s.miles * 1609.344)})` : '', n(s.spots, 'spot'), n(s.zones, 'privacy zone'), n(s.places, 'recent place'),
+      s.waitingM > 0 ? `road data from ${long(s.waitingM)} waiting for signal` : ''].filter(Boolean);
     if (!parts.length) return s.signedIn ? 'Nothing on this phone yet. Friends, crews and what you shared are on the server.' : 'Nothing on this phone yet, and nothing of yours on the server.';
     return `On this phone: ${parts.join(', ')}. ` + (s.signedIn ? 'Signed in: friends, crews and what you shared are on the server.' : 'Not signed in: nothing of yours is on the server.');
   }
