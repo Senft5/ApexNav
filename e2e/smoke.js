@@ -5079,6 +5079,22 @@ async function storeDashDrive(page, id = 'dc1', name = 'Dashcam road') {
   }, [id, name]);
 }
 
+flow('the empty Log is a first page: the book\'s furniture in pencil, one key, and its switch in the page\'s own typeface (design pass 2026-11-10)', async (page, base) => {
+  await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); } catch (_) {} });
+  await page.goto(base + '/analysis.html');
+  await page.waitForFunction(() => window.apexLogDebug && window.apexLogDebug.loaded());
+  await page.waitForSelector('#historyEmpty:not([hidden])');
+  const f = await page.evaluate(() => { const fam = (e) => getComputedStyle(e).fontFamily, go = document.querySelector('#historyEmpty .fp-go').getBoundingClientRect(), alt = document.querySelector('#historyEmpty .fp-alt').getBoundingClientRect();
+    return { body: fam(document.body), sw: [...document.querySelectorAll('.log-seg button')].map(fam), go: [Math.round(go.height), Math.round(go.width)], alt: Math.round(alt.height),
+      over: document.documentElement.scrollWidth > innerWidth, head: document.querySelector('#historyEmpty .fp-head').textContent, table: document.getElementById('historyPanel').hidden }; });
+  check(f.sw.every((x) => x === f.body), 'Drives and Stages are set in the page\'s typeface: ' + JSON.stringify(f));
+  check(f.go[0] >= 44 && f.go[1] > 300 && f.alt >= 44 && !f.over && f.head === 'Your first drive goes here.' && f.table, 'one full-width key, a 44 pt link, nothing off the page, no empty table under it: ' + JSON.stringify(f));
+  await page.click('[data-seg="segments"]');
+  await page.waitForSelector('#segList .first-page');
+  const s = await page.evaluate(() => ({ head: document.querySelector('#segList .fp-head').textContent, go: document.querySelector('#segList .fp-go').textContent, mark: !!document.querySelector('#segList .fp-mark') }));
+  check(s.head === 'No stages yet.' && s.go === 'Start a drive' && s.mark, 'Stages: what a stage is, drawn, and the way to one: ' + JSON.stringify(s));
+});
+
 flow('the drive page\'s map: with no map to be had the picture keeps its blank panel; MapLibre loads only for it (TestFlight 15)', async (page, base) => {
   await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); } catch (_) {} });
   await page.goto(base + '/analysis.html');
@@ -5431,6 +5447,9 @@ flow('REVIEW.md 1.2 screen by screen: the Log, drive detail, Stages, People sign
   // Settings are the Garage: the theme picker, help folded under "How this works", no Octane, Erase is red text behind a confirm sheet
   await page.goto(base + '/index.html?view=garage');
   await page.waitForSelector('#garageGear', { state: 'visible' });
+  // signed out, the Garage is the Garage: People's page stays on People (it showed here, above Your cars)
+  const stray = await page.evaluate(() => ({ join: !!document.querySelector('.join-page') && document.querySelector('.join-page').getBoundingClientRect().height, acc: getComputedStyle(document.getElementById('accountSection')).display }));
+  check(stray.join === 0 && stray.acc === 'none', 'People\'s signed-out page is not in the Garage: ' + JSON.stringify(stray));
   await openSetting(page, 'data');
   const g = await page.evaluate(() => { const s = document.getElementById('sheet'), e = getComputedStyle(document.getElementById('myEraseBtn'));
     return { title: s.querySelector('h2').textContent, themes: document.querySelectorAll('#themeCards > *').length, how: document.querySelectorAll('[data-panel~="garage"] details.how').length, octane: /Octane/.test(document.body.innerText), erase: e.color + '/' + e.textDecorationLine + '/' + e.borderTopStyle }; });
@@ -5683,7 +5702,7 @@ flow('plan flow (a) a destination in 3 taps: Where to?, the place, Start; Start 
   const shown = ys.filter((y) => y != null);
   check(shown.length === ys.length && Math.max(...shown) - Math.min(...shown) <= 1, 'Start stays put while the card fills in and the ranking lands: ' + JSON.stringify([...new Set(ys)]));
   const card = await page.evaluate(() => ({ note: document.getElementById('routeProgress').textContent, found: document.getElementById('routeProgress').classList.contains('found'),
-    note2: document.getElementById('routeCardLevelsNote').textContent, name: apexDebug.track.name, h: document.getElementById('planPanel').getBoundingClientRect().height,
+    note2: document.getElementById('routeCardPager').textContent.replace(/\s/g, ' '), name: apexDebug.track.name, h: document.getElementById('planPanel').getBoundingClientRect().height,
     stage: document.querySelector('.stage').getBoundingClientRect().height, dials: document.getElementById('routeCardBars').innerText.replace(/\s+/g, ' ') }));
   check(card.found && /^Better route found: \+\d+ min, \d+ more corners$/.test(card.note), 'the card says the ranked route replaced the first one, and why: ' + JSON.stringify(card));
   // one control: the level cards are the choices, each its pick's time and corners, counted as the card counts them
@@ -5691,7 +5710,7 @@ flow('plan flow (a) a destination in 3 taps: Where to?, the place, Start; Start 
   check(cards.length === 3 && cards.filter((c) => !c.further).every((c) => /^(Quick|Fun|Long way) (\d+:\d\d|\d+ min) \d+ corners?$/i.test(c.text)) && !cards.some((c) => /good corners/i.test(c.text))
     && cards.find((c) => c.level === 'fun').on && cards.find((c) => c.level === 'fun').checked, 'the level cards: each its pick, Fun on: ' + JSON.stringify(cards));
   check(cards.find((c) => c.level === 'max').further && /^Long way Look further$/i.test(cards.find((c) => c.level === 'max').text), 'a plan at Fun didn\'t look as far as Long way, and its card says so, no numbers: ' + JSON.stringify(cards));
-  check(/swipe the card for the next route, 2\u00a0of\u00a02/i.test(card.note2), 'the line under the cards says what a swipe does: ' + card.note2);
+  check(/^2 \/ 2Swipe the card for the next route$/.test(card.note2), 'the marks under the cards say which route and what a swipe does: ' + card.note2);
   check(await page.evaluate(() => !document.getElementById('routeCardOptions') && !document.querySelector('#routeCard .switch')), 'no separate tile row or switch');
   check(card.h <= 0.52 * card.stage, `the card opens at half height, the map above it (finding 10): ${Math.round(card.h)} of ${Math.round(card.stage)} px`);
   check(/CURVY/.test(card.dials) && /FLOWING/.test(card.dials) && !/TWIST|FLOW\b/.test(card.dials), 'plain words on the dials: ' + card.dials);
@@ -5774,8 +5793,14 @@ flow('plan flow (e, f) a level change and an alternative are one tap or swipe ea
   // to the right goes back to the one before it, Quick's
   const ons = () => page.evaluate(() => [...document.querySelectorAll('#routeCardFun [data-fun]')].map((b) => b.classList.contains('on')).join());
   check(await ons() === 'false,true,false', 'two routes found, Fun\'s on: ' + await ons());
-  const hint = await page.evaluate(() => document.getElementById('routeCardLevelsNote').textContent);
-  check(/^Swipe the card for the next route, 2\u00a0of\u00a02$/.test(hint), 'the line under the cards says what a swipe does: ' + hint);
+  // page marks under the cards (design pass, 2026-11-10): one per route found, the one on screen inked, the count, and
+  // the words for what a swipe does until the first swipe
+  const marks = () => page.evaluate(() => { const p = document.getElementById('routeCardPager'), n = document.getElementById('routeCardLevelsNote');
+    return { shown: !p.hidden, on: [...p.querySelectorAll('i')].map((i) => +i.classList.contains('on')).join(''), count: p.querySelector('span').textContent.replace(/\s/g, ''),
+      words: (p.querySelector('small') || {}).textContent || '', label: p.getAttribute('aria-label'), note: n.hidden ? '' : n.textContent, h: Math.round(p.getBoundingClientRect().height) }; });
+  const hint = await marks();
+  check(hint.shown && hint.on === '01' && hint.count === '2/2' && hint.words === 'Swipe the card for the next route' && /^Route 2 of 2\. Swipe/.test(hint.label) && !hint.note && hint.h <= 24,
+    'the marks under the cards say which route and what a swipe does, on one row: ' + JSON.stringify(hint));
   const box = await page.evaluate(() => { const o = document.getElementById('routeCardStats'); o.scrollIntoView({ block: 'nearest' }); const r = o.getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height / 2 }; });
   const startY = await page.evaluate(() => document.getElementById('routeDriveBtn').getBoundingClientRect().top);
   await page.evaluate(() => { window.__touches = []; for (const k of ['touchstart', 'touchend']) document.getElementById('routeCard').addEventListener(k, (e) => window.__touches.push(k + ':' + Math.round((e.touches[0] || e.changedTouches[0]).clientX)), { passive: true }); });
@@ -5785,7 +5810,9 @@ flow('plan flow (e, f) a level change and an alternative are one tap or swipe ea
       .then((d) => { throw new Error('a swipe sideways picks the next route: ' + JSON.stringify(d)); }));
   check(asked.length === routed && await level() === 'Quick', 'a swipe picks the other route already found, and its level with it');
   check(Math.abs(await page.evaluate(() => document.getElementById('routeDriveBtn').getBoundingClientRect().top) - startY) <= 1, 'Start doesn\'t move on a swipe');
-  check(/1\u00a0of\u00a02$/.test(await page.evaluate(() => document.getElementById('routeCardLevelsNote').textContent)), 'the line counts along');
+  const swiped = await marks();
+  check(swiped.on === '10' && swiped.count === '1/2' && /^Route 1 of 2\./.test(swiped.label), 'the marks count along: ' + JSON.stringify(swiped));
+  check(!swiped.words && !swiped.note, 'once you have swiped, the words go and the marks stay: ' + JSON.stringify(swiped));
   await scan(page, 'the card after a swipe');
 }, IPHONE);
 

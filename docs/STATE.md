@@ -1,15 +1,14 @@
 # VETTA — CURRENT AGENT HANDOFF STATE
 
-## Session 2026-11-10 (fable-glide-flake): the flaky "car map glides" flow measured one frame late (claude/fable-glide-flake, off origin/main e6ddea2)
+## Session 2026-11-10 (fable-fix-join-scope): #332's page showed in the Garage too; scoped to People (claude/fable-fix-join-scope, off origin/main 6412cb5)
 
-- [x] Root cause: the flow's `tick` (requestAnimationFrame) sampled `map.unproject` and paired it with `ts - last.ts`.
-  web/carmap.js `frame(ts)` sets the camera for the frame's own time in its own callback; when `tick` runs first in a
-  frame it sees the previous frame's camera, so every step is one frame late. With even frames that cancels; after a
-  long frame its travel lands in the next short frame (px doubles at 33 ms then 17 ms locally; 10x on a busy runner).
-- [x] e2e/smoke.js: steps come from the map's `move` event, timed by `document.timeline.currentTime` (the frame the
-  camera was set in; two moves in one frame add up). `frames` and `moving` count real frames. Limits unchanged.
-- [x] Checked: 140 ms stalls every 0.9 s (a temporary hook, not committed): old measure fails "no frame leaps ahead"
-  (rateMax 0.139, median 0.011), new passes. Without stalls both pass.
+- [x] Bug from #332 (live on main): `#accountSection:has(.join-page) { display: grid }` outranked `.sheet [data-panel]
+  { display: none }`, so signed out the People page (543 px) stood at the top of the Garage. web/index.html: both
+  `:has(.join-page)` rules now start `.sheet[data-view="people"]`.
+- [x] Tests: tests/test_people_signed_out.py refuses a bare `#accountSection:has(.join-page)`; e2e "REVIEW.md 1.2 screen
+  by screen: the Log…" checks the Garage signed out has no People page (fails on main's CSS, passes here).
+- Lesson: a rule that sets `display` on a tab's panel must carry the tab (`.sheet[data-view=…]`); after changing one
+  tab signed out, open the other three.
 
 ## Session 2026-11-10 (fable-design-signed-out): People signed out, redrawn as a page (claude/fable-design-signed-out, off origin/main 2fda3f8)
 
@@ -136,6 +135,29 @@
   tools/story_live.js runs: the grid's channels and the new lines 1-3 s after the card). Posted limits are known on few
   of these roads, so most leads say no speed. The owner's own trips still unread.
 - Exact next task: an e2e flow for the overview's refresh once #319 is merged; the owner reads the overview on his trips.
+
+## Session 2026-11-10 (fable-glide-flake): the flaky "car map glides" flow measured one frame late (claude/fable-glide-flake, off origin/main e6ddea2)
+
+- [x] Root cause: the flow's `tick` (requestAnimationFrame) sampled `map.unproject` and paired it with `ts - last.ts`.
+  web/carmap.js `frame(ts)` sets the camera for the frame's own time in its own callback; when `tick` runs first in a
+  frame it sees the previous frame's camera, so every step is one frame late. With even frames that cancels; after a
+  long frame its travel lands in the next short frame (px doubles at 33 ms then 17 ms locally; 10x on a busy runner).
+- [x] e2e/smoke.js: steps come from the map's `move` event, timed by `document.timeline.currentTime` (the frame the
+  camera was set in; two moves in one frame add up). `frames` and `moving` count real frames. Limits unchanged.
+- [x] Checked: 140 ms stalls every 0.9 s (a temporary hook, not committed): old measure fails "no frame leaps ahead"
+  (rateMax 0.139, median 0.011), new passes. Without stalls both pass.
+
+## Session 2026-11-10 (fable-design-route-card): page marks under the level cards (claude/fable-design-route-card, off origin/main 2fda3f8)
+
+- [x] Design pass 3b. web/route_card.js `pager(o)` ({ n, at, label } or null under two routes) and `levelNote(o,
+  learned)` (learned: no swipe sentence, no count; "another route found" stays). web/cockpit.js `paintLevelCards` draws
+  `#routeCardPager` (an `i` per route, `.on` the one on screen, a `span` count, a `small` with the swipe words until
+  `apex.cardSwiped` is set by a real swipe in the card's touchend) and calls `levelNote(o, true)`.
+- [x] web/index.html `.rc-pager` rules (one 22 px row, the marks ease between widths, still under reduced motion).
+- [x] Tests: tests/test_route_pager.py (3); e2e "plan flow (a)" and "(e, f)" read the marks (which is on, the count,
+  the words before a swipe and gone after). All six "plan flow" flows pass.
+- Next design chunks: search says a plain "Routing…" while it waits; the Garage is a long page (IDEAS U-49); "Can't
+  reach Vetta" on People is a heading and a button on blank paper.
 
 ## Session 2026-11-10 (fable-hazard-alive): a repeated "still there" keeps a hazard alive (claude/fable-hazard-alive, off origin/main f27a1fe)
 
@@ -289,6 +311,20 @@
   apply to destination plans only (not loops, reroutes or Best roads nearby).
 - Exact next task: unchanged from engine-rank below (tools/live_speed.js on the owner's trips at Fun and Long way); the
   owner can now do the same on the phone with the Dev panel and paste its JSON.
+
+## Session 2026-11-10 (fable-design-pass): design pass 1, the empty Log and Stages pages and two Garage rows (claude/fable-design-pass, off origin/main ad4f1e4)
+
+- [x] Owner 2026-11-10: UI and UX polish is a main focus of the run ("designed by an artist, not a programmer").
+  Captured onboarding, the idle map, Layers, Garage, Settings, People (signed out), Log, Stages at 393x852 and read them.
+- [x] web/analysis.html: `#historyEmpty` is a `.first-page` (pencil sketch of the hero and one row, head, line, Start a
+  drive, Watch a replay first); the empty Stages list the same shape with a drawn stage; `.switch > button
+  { font-family: inherit; }` (Drives / Stages were Arial).
+- [x] web/index.html: Garage `.ctl-label` rows at 15/500; `#coNotesHere` is a `.co-row` with "Change in Layers".
+- Tests: tests/test_log_first_page.py (3), e2e "the empty Log is a first page..." (computed typeface, key sizes).
+- Seen and not yet done (next design chunks, in the order I would take them): the signed-out People page is a logo and
+  a button over two thirds of blank paper; the search sheet says "Routing..." in plain text where the route card will
+  be; MapLibre's attribution is the stock control (IDEAS U-53); the Garage is still a long settings page (U-49).
+- Exact next task: the signed-out People page and the search sheet's waiting state, then U-49.
 
 ## Session 2026-11-09 (drive-overview): "What this drive is like" on the route card (claude/drive-overview, off origin/main 01a0423)
 
