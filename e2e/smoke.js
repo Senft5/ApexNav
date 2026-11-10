@@ -4385,7 +4385,7 @@ flow('measured roads: the switch draws the roads members have measured around th
     if (u.pathname === '/api/coverage') {
       boxes.push(u.searchParams.get('bbox'));
       const [s, w, n, e] = u.searchParams.get('bbox').split(',').map(Number), lat = (s + n) / 2, lon = (w + e) / 2;
-      return json({ ways: [{ way: 1, line: [[lat, lon], [lat + 0.01, lon]], conf: [2, 3] }] });
+      return json({ ways: [{ way: 1, line: [[lat, lon], [lat + 0.01, lon]], conf: [2, 3], rough: [0.3, 0.071], banked: [null, 0.3], offCamber: [null, 0] }] });
     }
     return json({ error: 'not_found' }, 404);
   });
@@ -4399,6 +4399,14 @@ flow('measured roads: the switch draws the roads members have measured around th
   const [s, w, n, e] = boxes[0].split(',').map(Number);
   check(n - s <= 0.5 && e - w <= 0.5 && s < 35.5 && n > 35.5, 'a small box around the view: ' + boxes[0]);
   check(await page.evaluate(() => window.apexDebug.map.getLayoutProperty('apex-coverage', 'visibility')) === 'visible', 'drawn');
+  // IDEAS U-13: the line's colour is the pavement measured there (its surer direction), and a tap says it in words
+  const drawn = await page.evaluate(() => { const m = window.apexDebug.map; return { p: m.getSource('apex-coverage-src')._data.features[0].properties, paint: JSON.stringify(m.getPaintProperty('apex-coverage', 'line-color')) }; });
+  check(drawn.p.s === 1 && drawn.p.t === 2, 'smooth, from the surer direction: ' + JSON.stringify(drawn.p));
+  check(/^\["match",\["get","s"\],1,"#[0-9A-Fa-f]{6}",2,"#[0-9A-Fa-f]{6}",3,"#[0-9A-Fa-f]{6}","#[0-9A-Fa-f]{6}"\]$/.test(drawn.paint) && new Set(drawn.paint.match(/#[0-9A-Fa-f]{6}/g)).size === 4, 'four colours: smooth, fair, rough, unknown: ' + drawn.paint);
+  await page.evaluate(() => { const m = window.apexDebug.map, f = m.getSource('apex-coverage-src')._data.features[0], c = f.geometry.coordinates; m.jumpTo({ center: [(c[0][0] + c[1][0]) / 2, (c[0][1] + c[1][1]) / 2], zoom: 14 }); });
+  await page.waitForFunction(() => { const m = window.apexDebug.map; return m.loaded() && m.queryRenderedFeatures([m.getCanvas().clientWidth / 2, m.getCanvas().clientHeight / 2], { layers: ['apex-coverage'] }).length > 0; }, null, { timeout: 8000 });
+  await page.evaluate(() => { const m = window.apexDebug.map, c = m.getCenter(); m.fire('click', { point: m.project(c), lngLat: c, originalEvent: {} }); });
+  await page.waitForFunction(() => /Smooth pavement \(0\.07 g\) · many passes · 30% of it banked/.test(document.getElementById('toast').textContent), null, { timeout: 4000 });
   await page.evaluate(() => document.querySelector('[data-toggle="coverage"]').click());
   check(await page.evaluate(() => window.apexDebug.map.getLayoutProperty('apex-coverage', 'visibility')) === 'none', 'hidden when off');
 });

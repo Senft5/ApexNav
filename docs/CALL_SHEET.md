@@ -4,6 +4,24 @@ Decisions Claude made for you, newest first. Each one says what was decided, why
 you reach one you've seen. If you disagree with a call, say so and it gets reversed; nothing here is hard to undo unless
 it says so. Things only you can do are in docs/OWNER_TODO.md.
 
+## 2026-11-10 (fable-surface-map): the Measured roads map shows how the pavement is (claude/fable-surface-map)
+
+While you drive → Measured roads drew every measured road in one green, so the one thing only Vetta knows about a road,
+what members' phones felt there, wasn't on the map. The server already sent it. The calls:
+- **Colour is the pavement**: green smooth, amber fair, red rough; thickness still says how sure (one pass faint, five
+  or more bold). A road sent without roughness is drawn in ink, never as smooth. Undo: cockpit.js, the `apex-coverage`
+  `line-color` line back to `C.gain`.
+- **One scale for the words**: smooth is under 0.10 g and rough over 0.22 g of mean roughness, the same two numbers
+  the route overview already words a road with (a test holds the two together). Change them in coverage.js
+  `SMOOTH_G` / `ROUGH_G` and route_story.js at once.
+- **A two-way road shows its better-measured direction** (both averaged when equally sure), since one line can only be
+  one colour.
+- **Tap a measured road and it says it in words**: "Smooth pavement (0.07 g) · many passes · 30% of it banked". How
+  sure stays a level ("one pass so far", "a few passes", "many passes"), never a count of passes or people. A route or
+  option drawn over the road still wins the tap. Undo: the `apex-coverage` click handler in cockpit.js.
+- **Red is the app's one "act on this" colour**, used here for rough pavement on purpose. If it fights the route line
+  for you on a phone, say so and rough moves to another colour.
+- No server, privacy or data change: same request, same two-driver / open-road rule, nothing new stored or sent.
 ## 2026-11-09 (fable-expressway): an expressway counts as a highway at Fun and Long way (claude/fable-expressway)
 
 "Fun should never go on the highway" covered motorways and trunk roads. Some divided, limited-access expressways are
