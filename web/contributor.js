@@ -212,7 +212,11 @@
     deliberate = false, hourBucket: bucketFn = null }) {
     const A = { lat: [], lon: [], rough: [], camber: [], crest: [], speed: [], lon_g: [] };
     const wayCache = {}, HOLD = MIN_BINS + 5;
-    let done = 0, busy = false, stopped = false, retryAt = 0, fails = 0, bins = 0, chunks = 0, error = null, pending = [];
+    // deliberate may be asked each time (the app's one stream runs through Start and End): what is built during a recorded drive says so
+    // from its first row of a recorded drive on; what is built or kept after that row says so, also once End was pressed
+    let wasRec = false;
+    const recorded = () => wasRec || (wasRec = !!(typeof deliberate === 'function' ? deliberate() : deliberate));
+    let done = 0, busy = false, stopped = false, retryAt = 0, fails = 0, bins = 0, chunks = 0, error = null, pending = [], closed = false;
     const status = () => { if (onStatus) onStatus({ state: stopped ? 'stopped' : error ? 'retrying' : 'on', km: bins * BIN_M / 1000, chunks, pending: pending.length, error }); };
     /**
      * Where this chunk should end so no road piece is cut too short to send (the server needs 20 bins per piece). A road that is still
@@ -227,7 +231,7 @@
     }
     /** final: the drive ended, so send whatever is settled (at least a short road piece) without holding rows back for a next chunk. */
     async function run(final = false) {
-      if (busy || stopped || now() < retryAt) return;
+      if (busy || stopped || closed || now() < retryAt) return;
       const n = A.lat.length, from = Math.max(done, skip), to = n - lag;
       if (!pending.length && to - from < (final ? MIN_BINS : chunk)) return;
       busy = true;
@@ -235,19 +239,21 @@
         if (!pending.length) {
           const lo = Math.max(0, from - ctx), hi = Math.min(n, to + ctx);
           const slice = { lat: A.lat.slice(lo, hi), lon: A.lon.slice(lo, hi), rough: A.rough.slice(lo, hi), camber: A.camber.slice(lo, hi), crest: A.crest.slice(lo, hi), cam_v: CAM_V,   // push() kept only fixed-pipeline camber
-                          speed: A.speed.slice(lo, hi), lon_g: A.lon_g.slice(lo, hi), rec: deliberate };
+                          speed: A.speed.slice(lo, hi), lon_g: A.lon_g.slice(lo, hi), rec: recorded() };
           const hb = typeof bucketFn === 'function' ? bucketFn() : null;
           if (Number.isInteger(hb)) slice.hr = hb;
           slice.kappa = Array.from(Core.computeCurvature(slice.lat, slice.lon).kappa);
           const match = await matchDrive(slice, fetchFn);
+          if (closed) return;                                            // leftover() took these rows while the matcher was out
           const end = final ? to : lo + settledEnd(match, from - lo, to - lo);
           for (let i = 0; i < match.length; i++) if (i < from - lo || i >= end - lo) match[i] = null;     // context only helps the matcher
           const need = [...new Set(match.filter((m) => m && m.way != null).map((m) => m.way))].filter((id) => !wayCache[id]);
           if (need.length) Object.assign(wayCache, await fetchWays(need, fetchFn));
+          if (closed) return;
           pending = buildContributions({ drive: slice, match, ways: wayCache, drivenOn, driveId, trimM: 0 });
           done = end;
         }
-        while (pending.length) {                                         // a failed post keeps the exact payload, so a resend is merged once
+        while (pending.length && !closed) {                              // a failed post keeps the exact payload, so a resend is merged once
           const r = await post(pending[0]);
           if (r === 'stop') { stopped = true; pending = []; break; }
           if (r === 'retry') throw new Error('upload failed · will retry');
@@ -261,6 +267,7 @@
     return {
       /** One 5 m row from the recorder: { lat, lon, roughness_rms, camber_deg?, camber_v?, crest?, speed_mps?, lon_g? }. Never blocks. */
       push(row) {
+        recorded();
         A.lat.push(row.lat); A.lon.push(row.lon);
         A.speed.push(Number.isFinite(row.speed_mps) ? row.speed_mps : null); A.lon_g.push(Number.isFinite(row.lon_g) ? row.lon_g : null);
         A.rough.push(Number.isFinite(row.roughness_rms) ? row.roughness_rms : null);
@@ -279,9 +286,67 @@
         }
         return this.stats();
       },
+      /**
+       * After finish(): what this drive still owes the map, to keep on the phone and send when there is signal again
+       * (sendLeftover), or null when everything settled went or sharing was refused. The built chunks that didn't go, as
+       * they are (a resend of the same payload is merged once), and the settled rows not yet matched, with the same
+       * few rows of context the matcher gets live. The first `skip` and last `lag` rows are in neither. Closes the
+       * stream: nothing more is sent from it.
+       */
+      leftover() {
+        closed = true;
+        if (stopped) return null;
+        const n = A.lat.length, from = Math.max(done, skip), to = n - lag;
+        let rows = null, at = {};
+        if (to - from >= MIN_BINS) {
+          const lo = Math.max(0, from - ctx), hi = Math.min(n, to + ctx), cut = (a) => a.slice(lo, hi);   // as recorded: a rounded position can fall in the next 5 m bin
+          rows = { lat: cut(A.lat), lon: cut(A.lon), rough: cut(A.rough), camber: cut(A.camber), crest: cut(A.crest), speed: cut(A.speed), lon_g: cut(A.lon_g) };
+          at = { from: from - lo, to: to - lo };
+        }
+        if (!pending.length && !rows) return null;
+        const hb = rows && typeof bucketFn === 'function' ? bucketFn() : null;
+        return { v: 1, drive_id: driveId, driven_on: drivenOn, rec: recorded() ? 1 : 0, ...(Number.isInteger(hb) ? { hr: hb } : {}), pending: pending.slice(), rows, ...at };
+      },
       /** For tests and for retrying after reconnecting. */
       run,
     };
+  }
+
+  /**
+   * Sends what a drive couldn't (createLive's leftover(), kept on the phone): the built chunks first, then the rows still
+   * to match, built once into chunks and sent. Resolves { state, item, changed, km, chunks }:
+   *   'done'    all of it went (or was refused as bad data: never resent);
+   *   'retry'   no signal or a busy server: keep `item` (when `changed`, it is smaller than what came in) and try later;
+   *   'stop'    signed out or Share road feel is off: the person's choice, so drop it;
+   *   'expired' older than the server takes (drives of the last two weeks): drop it.
+   * The first and last stretch of the drive were never in the leftover, so they stay private here too.
+   */
+  async function sendLeftover(item, { Core, post, fetch: fetchFn, now = Date.now() } = {}) {
+    let it = item && item.v === 1 ? { ...item, pending: Array.isArray(item.pending) ? item.pending.slice() : [] } : null, bins = 0, chunks = 0, changed = false;
+    const out = (state) => ({ state, item: state === 'retry' ? it : null, changed, km: bins * BIN_M / 1000, chunks });
+    if (!it || !/^\d{4}-\d{2}-\d{2}$/.test(it.driven_on || '') || ageDays(it.driven_on + 'T00:00:00Z', now) > MAX_AGE_DAYS + 1) return out('expired');
+    for (;;) {
+      while (it.pending.length) {
+        const r = await post(it.pending[0]);
+        if (r === 'stop') return out('stop');
+        if (r === 'retry') return out('retry');
+        if (r === true) { bins += it.pending[0].bins.length; chunks++; }
+        it.pending = it.pending.slice(1); changed = true;
+      }
+      const R = it.rows;
+      if (!R || !Array.isArray(R.lat)) return out('done');
+      let built;
+      try {
+        const slice = { lat: R.lat, lon: R.lon, rough: R.rough, camber: R.camber, crest: R.crest, cam_v: CAM_V, speed: R.speed, lon_g: R.lon_g, rec: !!it.rec };
+        if (Number.isInteger(it.hr)) slice.hr = it.hr;
+        slice.kappa = Array.from(Core.computeCurvature(slice.lat, slice.lon).kappa);
+        const match = await matchDrive(slice, fetchFn);
+        for (let i = 0; i < match.length; i++) if (i < it.from || i >= it.to) match[i] = null;            // context only helps the matcher
+        const ids = [...new Set(match.filter((m) => m && m.way != null).map((m) => m.way))];
+        built = buildContributions({ drive: slice, match, ways: ids.length ? await fetchWays(ids, fetchFn) : {}, drivenOn: it.driven_on, driveId: it.drive_id, trimM: 0 });
+      } catch (_) { return out('retry'); }
+      it = { ...it, rows: null, pending: built }; delete it.from; delete it.to; changed = true;   // kept as chunks from here: a resend is the same payload
+    }
   }
 
   /**
@@ -290,7 +355,7 @@
    * the phone: a trip ends after stopS stopped, a gap in frames over gapS (app in the background), a jump over jumpM, or the mount
    * losing its lock. A refusal (signed out, sharing off) pauses new trips for pauseS.
    */
-  function createAmbient({ makeRecorder, makeLive, now = Date.now, stopS = 180, gapS = 10, jumpM = 150, pauseS = 600, onStatus }) {
+  function createAmbient({ makeRecorder, makeLive, now = Date.now, stopS = 180, gapS = 10, jumpM = 150, pauseS = 600, onStatus, onLeftover }) {
     let trip = null, doneKm = 0, trips = 0, lastT = null, lastFix = null, stoppedSince = null, pausedUntil = 0;
     const status = () => { if (onStatus) onStatus(stats()); };
     function stats() {
@@ -300,7 +365,12 @@
     function end() {
       if (!trip) return;
       const t = trip; trip = null; stoppedSince = null;
-      t.live.finish().then((s) => { doneKm += s.km; if (s.stopped) pausedUntil = now() + pauseS * 1000; status(); }).catch(() => {});
+      t.live.finish().then((s) => {
+        doneKm += s.km; if (s.stopped) pausedUntil = now() + pauseS * 1000; status();
+        // what the trip couldn't send (no signal on the road) is handed over to be kept and sent later (sendLeftover)
+        const left = t.live.leftover ? t.live.leftover() : null;
+        if (left && onLeftover) onLeftover(left);
+      }).catch(() => {});
     }
     const metres = (a, b) => Math.hypot((b.lat - a.lat) * M_LAT, (b.lon - a.lon) * 111320 * Math.cos(a.lat * Math.PI / 180));
     return {
@@ -347,7 +417,8 @@
     for (const c of list) {
       const r = await post(c);
       if (r === 'stop') break;
-      if (r) sent++;
+      if (r === 'retry') throw new Error('upload failed');             // no signal or a busy server: not shared (it was counted as sent)
+      if (r === true) sent++;
     }
     return { built: list.length, sent };
   }
@@ -475,6 +546,6 @@
     return Math.round(100 * (1 - Math.max(0, Math.min(1, (m.roughness - 0.08) / 0.30))));
   }
 
-  const api = { CAM_V, binFlow, hourBucket, shapeOf, createLive, privateEdge, createAmbient, driveIdFor, measuredSeries, seriesFrom, agreement, AGREE, measuredAdjust, surfaceScore, measuredAlong, summarize, locate, buildContributions, matchDrive, fetchWays, contributeDrive, eligible, project, cumulative, SKIP_CLASSES };
+  const api = { CAM_V, binFlow, hourBucket, shapeOf, createLive, sendLeftover, privateEdge, createAmbient, driveIdFor, measuredSeries, seriesFrom, agreement, AGREE, measuredAdjust, surfaceScore, measuredAlong, summarize, locate, buildContributions, matchDrive, fetchWays, contributeDrive, eligible, project, cumulative, SKIP_CLASSES };
   if (typeof module !== 'undefined' && module.exports) module.exports = api; else root.ApexContributor = api;
 })(typeof window !== 'undefined' ? window : globalThis);

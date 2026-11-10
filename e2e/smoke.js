@@ -2127,6 +2127,62 @@ flow('the car connects: CarPlay offers Start drive, and an apexnav://open?go=dri
   } finally { await fresh.close(); }
 }, { geolocation: { latitude: 35.9606, longitude: -83.9207 }, permissions: ['geolocation'] });
 
+flow('road feel with no signal: what a trip couldn\'t send is kept on the phone and goes once when the connection is back (the app\'s mounted sharing, Worker stubbed, IDEAS Q-06)', async (page, base) => {
+  await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); localStorage.setItem('apex.permsExplained', '1'); } catch (_) {}
+    window.webkit = { messageHandlers: { apex: { postMessage: () => {} } } }; });
+  const posts = [], net = { up: false, matched: 0 }, lat0 = 35.5, lon0 = -83.9, BEFORE = 0.01 * 110540;   // the way starts 1.1 km before the drive
+  await page.route('**/api/**', (route) => {
+    const u = new URL(route.request().url()), m = route.request().method(), p = u.pathname;
+    const json = (b, status = 200) => route.fulfill({ status, contentType: 'application/json', body: JSON.stringify(b) });
+    if (p === '/api/contribute' && m === 'POST') { posts.push(JSON.parse(route.request().postData())); return json({ accepted: true }, 202); }
+    if (m !== 'GET') return route.fulfill({ status: 204 });
+    if (p === '/api/me') return json({ signed_in: true, member: true, handle: 'me' });
+    if (p === '/api/me/export') return json({ member: { contribute: 1 } });
+    return json([]);
+  });
+  const cors = { 'access-control-allow-origin': '*' };
+  // the map matcher and the way lookup: out of reach on the road, back afterwards
+  await page.route('**/trace_attributes', (route) => { if (!net.up) return route.abort('internetdisconnected');
+    const sh = JSON.parse(route.request().postData()).shape; net.matched++;
+    route.fulfill({ status: 200, contentType: 'application/json', headers: cors, body: JSON.stringify({ edges: [{ way_id: 77, road_class: 'tertiary' }], matched_points: sh.map(() => ({ type: 'matched', edge_index: 0 })) }) }); });
+  await page.route('**/api/interpreter', (route) => (net.up ? route.fulfill({ status: 200, contentType: 'application/json', headers: cors,
+    body: JSON.stringify({ elements: [{ type: 'way', id: 77, geometry: [{ lat: lat0 - 0.01, lon: lon0 }, { lat: lat0 + 0.09, lon: lon0 }] }] }) }) : route.abort('internetdisconnected')));
+  await page.goto(base + '/index.html');
+  await page.waitForFunction(() => window.apexDebug && window.apex && window.ApexAnalysis && window.ApexContributor && window.ApexRecording);
+  const frame = ([j, lat0, lon0]) => window.apex.live({ lat: lat0 + j * 1e-4, lon: lon0, accuracy_m: 4, speed_mps: 15, course_deg: 0, lat_g: 0, lon_g: 0, has_fix: true, calibration: 'locked', roughness_rms: 0.1 });
+  await page.evaluate(frame, [0, lat0, lon0]);                                            // mounted: the app asks whether sharing is on
+  await page.waitForFunction(() => localStorage.getItem('apex.roadFeelOn') === '1', null, { timeout: 10000 });   // and keeps the answer for a launch with no signal
+  await page.evaluate(() => window.apex.onNative({ type: 'link', params: { go: 'drive' } }));
+  await page.waitForFunction(() => window.apexDebug.driveActive);
+  for (let burst = 0; burst < 7; burst++) {                                               // 7.7 km due north, a frame every 11 m
+    await page.evaluate(([b, lat0, lon0]) => { for (let j = b * 100; j < (b + 1) * 100; j++) window.apex.live({ lat: lat0 + j * 1e-4, lon: lon0, accuracy_m: 4, speed_mps: 15, course_deg: 0, lat_g: 0, lon_g: 0, has_fix: true, calibration: 'locked', roughness_rms: 0.1 }); }, [burst, lat0, lon0]);
+    await page.waitForTimeout(250);
+  }
+  await page.evaluate(() => { document.getElementById('driveEnd').click(); window.apexDebug.endNow(); });
+  const until = (fn) => page.evaluate(async (src) => { const f = (0, eval)(src); for (let i = 0; i < 150; i++) { if (await f()) return true; await new Promise((r) => setTimeout(r, 100)); } return false; }, String(fn));
+  check(await until(async () => (await ApexRecording.summaries(null)).length === 1), 'the drive is saved');
+  await page.evaluate(([lat0, lon0]) => window.apex.live({ lat: lat0 + 0.07, lon: lon0, accuracy_m: 4, speed_mps: 0, has_fix: true, calibration: 'default' }), [lat0, lon0]);   // the phone leaves its mount: the trip ends
+  check(await until(async () => (await ApexRecording.unsentAll()).length === 1), 'the trip kept what it could not send');
+  const kept = await page.evaluate(async () => { const w = await ApexRecording.unsentAll(), u = w[0].item, sum = (await ApexAnalysis.job('summaries')).list[0];
+    return { rows: u.rows.lat.length, pending: u.pending.length, keys: Object.keys(u).sort().join(), id: u.drive_id, rec: u.rec, contributed: sum.contributed, inProgress: (await ApexRecording.keepAll()).length }; });
+  check(posts.length === 0 && kept.rows > 900 && kept.rows < 1400 && kept.pending === 0 && kept.rec === 1 && kept.keys === 'drive_id,driven_on,from,pending,rec,rows,to,v' && kept.inProgress === 0,
+    'nothing went; the settled rows wait on the phone, apart from any drive in progress: ' + JSON.stringify(kept));
+  check(kept.contributed === true, 'the saved drive is not offered again by hand in the Log: ' + JSON.stringify(kept));
+  await page.click('#endDone').catch(() => {});
+  net.up = true;
+  await page.evaluate(() => window.dispatchEvent(new Event('online')));
+  await page.waitForFunction(() => /of road feel from when you had no signal/.test(document.getElementById('toast').textContent), null, { timeout: 20000 });
+  const bins = posts.flatMap((c) => c.bins.map((b) => b.i)), lo = Math.round(Math.min(...bins) * 5 - BEFORE), hi = Math.round(7700 - (Math.max(...bins) * 5 - BEFORE));   // metres from the drive's start and end
+  check(posts.length === 1 && net.matched === 1 && posts[0].drive_id === kept.id && posts[0].way_id === 77 && posts[0].rec === 1 && new Set(bins).size === bins.length
+    && lo >= 480 && lo <= 1600 && hi >= 480 && hi <= 1700, 'the settled road went once, as a recorded drive, without its first and last stretch: ' + JSON.stringify({ n: posts.length, bins: bins.length, lo, hi }));
+  check(/^Sent [\d.]+ (mi|km) of road feel from when you had no signal\.$/.test(await page.textContent('#toast')), 'says how much went: ' + await page.textContent('#toast'));
+  check(await page.evaluate(async () => (await ApexRecording.unsentAll()).length) === 0, 'nothing waits afterwards');
+  await page.reload();
+  await page.waitForFunction(() => window.apex && typeof window.apex.live === 'function');
+  await page.waitForTimeout(10500);                                                       // past the launch's own try
+  check(posts.length === 1, 'nothing goes twice at the next launch');
+});
+
 flow('privacy zones: add one at the map centre, kept on the phone only, then remove it (IDEAS Z-02)', async (page, base) => {
   await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); } catch (_) {} });
   await page.goto(base + '/index.html');

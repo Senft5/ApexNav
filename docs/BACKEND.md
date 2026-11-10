@@ -29,6 +29,7 @@ drive → phone profiles it (core/ApexKit, offline) → [opt-in + online] → bi
 ```
 - Contributing is opt-in per account (default off). Without it nothing leaves the phone.
 - **Real time (owner decision 2026-10-25):** no holding period and no nightly job. A drive streams as chunks (a run of 5 m bins on one road); each chunk is merged into `road_bins` and paid in the same request. A retried chunk is recognised and merged once.
+- **No signal (2026-11-10):** what a trip could not send (built chunks as they are, settled rows not yet matched) is kept on the phone (`contributor.js` `leftover()`, `recording.js` `unsent*`: 12 trips, 60,000 rows, 13 days) and sent later by `sendLeftover` under the trip's own `drive_id`, so the chunk receipt merges a resend once. The upload carries `rec` (a recorded drive) and `hr` (only with `quiet_hours` on) since the same change; before it `web/sync.js` dropped both and `road_love` got nothing.
 - Client trims a random 0.5–1.5 km at each end of a trip, skips residential/service ways, spreads one trip's upload over days.
 - **Small-group caveat:** with under 20 users, "at least k contributors" hides little. `min_contributors` is a setting (friends phase: 1,
   data visible to signed-in members only). Raise to 3 before any public launch.

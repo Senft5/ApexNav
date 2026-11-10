@@ -148,11 +148,39 @@
       const recs = await new Promise((res) => { const q = db.transaction('keep').objectStore('keep').getAll(); q.onsuccess = () => res(q.result || []); q.onerror = () => res([]); });
       const by = new Map();
       for (const r of recs) {
+        if (r.kind === 'unsent') continue;                              // road feel waiting for signal: not a drive in progress
         if (!by.has(r.id)) by.set(r.id, { id: r.id, head: null, chunks: [] });
         if (r.kind === 'head') by.get(r.id).head = r; else by.get(r.id).chunks.push(r);
       }
       return [...by.values()];
     } catch (_) { return []; }
+  }
+  // Road feel that waits for signal (contributor.js leftover() / sendLeftover): what a trip couldn't send, in the same
+  // store, apart from the drive in progress. Bounded: the newest UNSENT_MAX trips and UNSENT_ROWS rows (about 300 km);
+  // the oldest go first. It never leaves the phone from here; the page sends it and removes it.
+  const UNSENT_MAX = 12, UNSENT_ROWS = 60000;
+  const unsentRows = (x) => (x.item && x.item.rows && Array.isArray(x.item.rows.lat) ? x.item.rows.lat.length : 0);
+  async function unsentAll() {
+    try {
+      const db = await idb(), recs = await req(db.transaction('keep').objectStore('keep').getAll(IDBKeyRange.bound('unsent:', 'unsent:\uffff')));
+      return (recs || []).filter((r) => r && r.kind === 'unsent' && r.item).sort((a, b) => (a.key < b.key ? -1 : 1)).map((r) => ({ key: r.key, item: r.item }));
+    } catch (_) { return []; }
+  }
+  /** Keeps one (a new key), or writes back a smaller one under its key. Resolves the key. */
+  async function unsentPut(item, key = `unsent:${String(Date.now()).padStart(15, '0')}:${Math.random().toString(36).slice(2, 8)}`) {
+    const db = await idb(), t = db.transaction('keep', 'readwrite'), s = t.objectStore('keep');
+    s.put({ key, kind: 'unsent', item });
+    s.getAll(IDBKeyRange.bound('unsent:', 'unsent:\uffff')).onsuccess = (e) => {
+      const all = (e.target.result || []).sort((a, b) => (a.key < b.key ? -1 : 1));
+      let rows = all.reduce((n, x) => n + unsentRows(x), 0);
+      while (all.length > 1 && (all.length > UNSENT_MAX || rows > UNSENT_ROWS)) { const x = all.shift(); rows -= unsentRows(x); s.delete(x.key); }
+    };
+    await done(t);
+    return key;
+  }
+  /** Removes one by key, or all of them (no key): sent, refused, too old, or sharing switched off. */
+  async function unsentRemove(key) {
+    try { const db = await idb(), t = db.transaction('keep', 'readwrite'); t.objectStore('keep').delete(key || IDBKeyRange.bound('unsent:', 'unsent:\uffff')); await done(t); } catch (_) {}
   }
   async function keepRemove(id) {
     const db = await idb();
@@ -321,6 +349,6 @@
     return `${s.hits >= 2 ? 'Confirmed' : 'Seen'} on ${s.hits} of ${s.passes} drives`;
   }
 
-  const api = { all, get, ids, store, patch, summaries, summarize, remove, keepPut, keepAll, keepRemove, parse, repair, scorableCorners, toTrack, corroborate, seenLabel, cornersOf, scoreOf, DB_VERSION, SUMMARY_VERSION };
+  const api = { all, get, ids, store, patch, summaries, summarize, remove, keepPut, keepAll, keepRemove, unsentAll, unsentPut, unsentRemove, UNSENT_MAX, UNSENT_ROWS, parse, repair, scorableCorners, toTrack, corroborate, seenLabel, cornersOf, scoreOf, DB_VERSION, SUMMARY_VERSION };
   if (typeof module !== 'undefined' && module.exports) module.exports = api; else root.ApexRecording = api;
 })(typeof window !== 'undefined' ? window : globalThis);

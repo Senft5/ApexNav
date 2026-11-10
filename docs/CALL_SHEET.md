@@ -4,6 +4,32 @@ Decisions Claude made for you, newest first. Each one says what was decided, why
 you reach one you've seen. If you disagree with a call, say so and it gets reversed; nothing here is hard to undo unless
 it says so. Things only you can do are in docs/OWNER_TODO.md.
 
+## 2026-11-10 (fable-road-later): road feel from a road with no signal is kept and sent later (claude/fable-road-later)
+
+The best roads are the ones with no signal, and that is where the app lost what it measured: a trip retried in memory
+while it lasted, and whatever hadn't gone when it ended was dropped. The calls:
+- **What a trip couldn't send waits on the phone and goes once when the connection is back.** The chunks already built
+  go as they are (the server recognises a resend), the rest is matched then. Kept at most 13 days (the server's own
+  window), 12 trips and about 300 km, oldest dropped first. Undo: cockpit.js `keepUnsentRoads` / `sendUnsentRoads`,
+  contributor.js `leftover` / `sendLeftover`, recording.js `unsent*`.
+- **Privacy is the same as live**: the first and last 0.5 to 1.5 km of the trip and anything in a home zone are never
+  in what is kept. Switching Share road feel off, signing out or deleting the account deletes what is waiting, and the
+  server's refusal does too. privacy.html says so.
+- **A launch with no signal still measures.** The app asked the server whether sharing is on and read no answer as
+  "signed out", so a drive that began out of coverage measured nothing. Now the server's last answer stands until it
+  can be asked again (a minute later); the server still refuses the upload if the answer has changed. Undo:
+  cockpit.js `roadFeelWasOn`.
+- **Only a kilometre or more is announced** ("Sent 2.5 mi of road feel from when you had no signal."): a short blip
+  sent a minute later says nothing.
+- **Found on the way, fixed here: the upload never said a pass came from a recorded drive.** contributor.js built
+  `rec` and the server counted loved roads from it (a member back on a road on another recorded drive), but sync.js
+  dropped the field, and in the iPhone app the stream never set it. So `road_love` has had nothing. Both fixed; the
+  privacy page already described it. Loved roads start counting from this build. Undo: sync.js `contribute`, the
+  `rec` line.
+- **Sharing a saved drive by hand counted a busy server as "shared"** (and marked the drive so): it now says it
+  couldn't. In the app, a drive the mounted sharing covered is marked shared, so the Log doesn't offer it by hand and
+  count the pass twice.
+
 ## 2026-11-09 (fable-overview): "What this drive is like", read against real roads (claude/fable-overview)
 
 I planned ten public trips round Cincinnati in the app and read each overview against the road it described. The calls:

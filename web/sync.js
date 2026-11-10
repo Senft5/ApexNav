@@ -168,7 +168,10 @@
     try {
       r = await apiFetch('/api/contribute', { method: 'POST', headers: { 'content-type': 'application/json' },
         body: JSON.stringify({ way_id: c.way_id, dir: c.dir, driven_on: c.driven_on, drive_id: c.drive_id, bins: c.bins,
-                               shape: c.shape ?? null, cls: c.cls ?? null, cam_v: c.cam_v ?? null }) });
+                               shape: c.shape ?? null, cls: c.cls ?? null, cam_v: c.cam_v ?? null,
+                               // rec: a recorded drive (loved roads count a member back on a road); hr: the busy-time bucket, when
+                               // the phone made one. Both were built and never sent before 2026-11-10: the server saw every pass as ambient.
+                               ...(c.rec ? { rec: 1 } : {}), ...(Number.isInteger(c.hr) ? { hr: c.hr } : {}) }) });
     } catch (_) { return 'retry'; }
     return r.status === 202 ? true : r.status === 401 || r.status === 403 ? 'stop' : r.status === 429 || r.status >= 500 ? 'retry' : false;
   }

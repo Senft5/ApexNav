@@ -27,6 +27,8 @@ const chunk = { way_id: 77, dir: 0, driven_on: '2026-11-03', drive_id: 'd_payloa
   const r = await S.contribute(chunk);
   const { cam_v, ...old } = chunk;
   await S.contribute({ ...old, shape: undefined, cls: undefined });            // an older chunk without them: null, not dropped silently
+  await S.contribute({ ...chunk, rec: 1, hr: 7 });                              // a recorded drive, with a busy-time bucket
+  await S.contribute({ ...chunk, rec: 0 });                                      // ambient sharing: no flag, no bucket
   // parse: a CSV with the camber_v column (the current app) carries cam_v 2; one without it (an older build), or a drive
   // whose camber rows are not all marked (kept across an update), does not
   const csv = (mark) => ['segment_index,distance_m,lat,lon,elevation_m,speed_mph,lon_g,lat_g,camber_deg,roughness_rms,source' + (mark ? ',camber_v' : '')]
@@ -52,6 +54,17 @@ def test_the_upload_carries_the_ways_line_and_class(out):
                              "shape": [[35, -83], [35.01, -83]], "cls": "secondary", "cam_v": 2}
     second = out["posted"][1]["body"]
     assert second["shape"] is None and second["cls"] is None and second["cam_v"] is None
+
+
+def test_a_recorded_drive_says_so(out):
+    """contributor.js built `rec` and `hr` and the server read them (loved roads: a member back on a road on another
+    recorded drive), but sync.js dropped both until 2026-11-10, so every pass arrived as ambient and road_love stayed empty."""
+    rec, ambient = out["posted"][2]["body"], out["posted"][3]["body"]
+    assert rec["rec"] == 1 and rec["hr"] == 7
+    assert "rec" not in ambient and "hr" not in ambient
+    assert "extra" not in rec
+    src = open(os.path.join(ROOT, "backend", "src", "contribute.ts"), encoding="utf-8").read()
+    assert "rec: raw.rec === 1 || raw.rec === true" in src and "raw.hr" in src
 
 
 def test_only_drives_from_the_fixed_pipeline_say_so(out):

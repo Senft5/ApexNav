@@ -1,5 +1,29 @@
 # VETTA — CURRENT AGENT HANDOFF STATE
 
+## Session 2026-11-10 (fable-road-later): road feel from a road with no signal is kept and sent later; `rec` reaches the server (claude/fable-road-later, off origin/main 39b124f)
+
+- [x] IDEAS Q-06, the part that loses data. web/contributor.js: `createLive().leftover()` (built chunks as they are and
+  the settled rows not yet matched, never the first `skip` or last `lag` rows; closes the stream), `sendLeftover(item)`
+  ('done' | 'retry' with the smaller item | 'stop' | 'expired'), `createAmbient({ onLeftover })`. web/recording.js
+  `unsentAll/unsentPut/unsentRemove` in the `keep` store (kind `unsent`, no DB version change; keepAll skips them),
+  12 trips / 60,000 rows. web/cockpit.js `keepUnsentRoads`, `sendUnsentRoads` (90 s after keeping, launch + 8 s,
+  `online`, shown again; never during a recorded drive; one try a minute while something waits), `forgetUnsentRoads`
+  (both Share road feel switches, both Sign out keys, Delete account).
+- [x] A launch with no signal: `checkAmbientAllowed` reads an unreachable server as "the last answer stands"
+  (`apex.roadFeelOn`), asked again in a minute.
+- [x] Found by the new e2e flow: web/sync.js `contribute` dropped `rec` and `hr`; the app's mounted stream never set
+  `deliberate`. Both fixed (`deliberate: () => !!(drive.native && drive.rec)`; a stream says `rec` from its first
+  recorded row on). `road_love` gets data from this build on.
+- [x] `contributeDrive` (the Log's Share by hand) throws on 'retry' instead of counting it sent; a native drive the
+  mounted sharing covered is saved `contributed` so the Log doesn't offer it by hand (it would merge the pass twice).
+- Tests: tests/test_road_later.py (8), test_road_upload_payload.py (+1), e2e "road feel with no signal" (a real
+  7.7 km native drive with the matcher unreachable, then back).
+- Open: a trip in progress when the app is killed loses what it hadn't sent (the stream is in memory; the drive
+  itself is kept by drive_keep.js). The Garage's road feel line doesn't say how much is waiting. docs/WORKER_QUEUE.md
+  road-queue names a web/road_queue.js that is not in the repo.
+- Exact next task: checkpoint the mounted stream's rows with the drive in progress (drive_keep.js) so a kill loses
+  nothing; then the owner drives a no-signal road and checks Garage → Road feel and the coverage layer afterwards.
+
 ## Session 2026-11-09 (fable-overview): the drive overview read against real trips (claude/fable-overview, off origin/main 1d97979)
 
 - [x] The overview's "exact next task" (read it on real routes, tune `ApexRouteStory.T`), on ten public trips planned in
