@@ -1,16 +1,21 @@
 # VETTA — CURRENT AGENT HANDOFF STATE
 
-## Session 2026-11-10 (fable-design-route-card): page marks under the level cards (claude/fable-design-route-card, off origin/main 2fda3f8)
+## Session 2026-11-10 (fable-design-signed-out): People signed out, redrawn as a page (claude/fable-design-signed-out, off origin/main 2fda3f8)
 
-- [x] Design pass 3b. web/route_card.js `pager(o)` ({ n, at, label } or null under two routes) and `levelNote(o,
-  learned)` (learned: no swipe sentence, no count; "another route found" stays). web/cockpit.js `paintLevelCards` draws
-  `#routeCardPager` (an `i` per route, `.on` the one on screen, a `span` count, a `small` with the swipe words until
-  `apex.cardSwiped` is set by a real swipe in the card's touchend) and calls `levelNote(o, true)`.
-- [x] web/index.html `.rc-pager` rules (one 22 px row, the marks ease between widths, still under reduced motion).
-- [x] Tests: tests/test_route_pager.py (3); e2e "plan flow (a)" and "(e, f)" read the marks (which is on, the count,
-  the words before a swipe and gone after). All six "plan flow" flows pass.
-- Next design chunks: search says a plain "Routing…" while it waits; the Garage is a long page (IDEAS U-49); "Can't
-  reach Vetta" on People is a heading and a button on blank paper.
+- [x] Design pass 3 (the owner, 2026-11-10: "designed by an artist not a programmer"). web/cockpit.js `renderAccount`,
+  signed out: `page(art, head, line, list, waiting)` builds `.join-page` for both sides: `.join-art` (an inline SVG,
+  roads as casing + fill, `.jr-puck` people, one `.lead` in the accent), `h3.join-head`, `.join-line`, `ul.join-gets`
+  (glyph in a dashed circle, `b` name, `small` one line), `.join-wait` for a stashed link, `.join-sign` (Apple, Google,
+  legal) pushed to the foot. The logo `img` and `.crew-gets` are gone.
+- [x] web/index.html: the `.join-*` rules; `.sheet .body:has(.join-page) { flex: 1 1 auto }` lets the page fill the
+  sheet (only while that page is drawn, so the signed-in lists are untouched); a short phone (max-height 720px) gets a
+  shorter drawing and rows so both keys stay on the first screen (checked at 375x667 with the Apple key shown).
+- [x] Tests: tests/test_people_signed_out.py; e2e "REVIEW.md 1.2 screen by screen: the Log…" now measures the page
+  (the head's face and size, two pucks and one lead, a line per row, 52 px key, keys at the foot, nothing wider than
+  the sheet). Also run: "one link in…", "Billet: a primary key…". docs/APP_REVIEW.md 5.1.1 row updated.
+- Next design chunks, from reading the screens: the route card stacks two pencil help lines under the levels; search
+  says a plain "Routing…" while it waits; the Garage is a long page (IDEAS U-49); "Can't reach Vetta" on People is a
+  heading and a button on blank paper.
 
 ## Session 2026-11-10 (fable-tile-limits): HPMS limits under 25 mph are unknown; tile times take HPMS's posted limit (claude/fable-tile-limits, off origin/main f27a1fe)
 
@@ -120,6 +125,18 @@
   tools/story_live.js runs: the grid's channels and the new lines 1-3 s after the card). Posted limits are known on few
   of these roads, so most leads say no speed. The owner's own trips still unread.
 - Exact next task: an e2e flow for the overview's refresh once #319 is merged; the owner reads the overview on his trips.
+
+## Session 2026-11-10 (fable-design-route-card): page marks under the level cards (claude/fable-design-route-card, off origin/main 2fda3f8)
+
+- [x] Design pass 3b. web/route_card.js `pager(o)` ({ n, at, label } or null under two routes) and `levelNote(o,
+  learned)` (learned: no swipe sentence, no count; "another route found" stays). web/cockpit.js `paintLevelCards` draws
+  `#routeCardPager` (an `i` per route, `.on` the one on screen, a `span` count, a `small` with the swipe words until
+  `apex.cardSwiped` is set by a real swipe in the card's touchend) and calls `levelNote(o, true)`.
+- [x] web/index.html `.rc-pager` rules (one 22 px row, the marks ease between widths, still under reduced motion).
+- [x] Tests: tests/test_route_pager.py (3); e2e "plan flow (a)" and "(e, f)" read the marks (which is on, the count,
+  the words before a swipe and gone after). All six "plan flow" flows pass.
+- Next design chunks: search says a plain "Routing…" while it waits; the Garage is a long page (IDEAS U-49); "Can't
+  reach Vetta" on People is a heading and a button on blank paper.
 
 ## Session 2026-11-10 (fable-hazard-alive): a repeated "still there" keeps a hazard alive (claude/fable-hazard-alive, off origin/main f27a1fe)
 

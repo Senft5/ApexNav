@@ -5372,11 +5372,19 @@ flow('REVIEW.md 1.2 screen by screen: the Log, drive detail, Stages, People sign
   check(dv.first && /solid/.test(dv.replay) && /stamps/.test(dv.tags) && !dv.wide.length, 'Drive detail: ' + JSON.stringify(dv));
   // People signed out: the same Friends | Crews switch, each side what it gets you in three glyphs, then sign-in (the owner, 2026-10-30)
   await page.goto(base + '/index.html?view=people');
-  await page.waitForSelector('#accountBody .crew-gets');
-  const gets = (pane) => page.$$eval(`${pane} .crew-gets span`, (s) => s.map((x) => x.textContent + ':' + !!x.querySelector('svg')));
+  await page.waitForSelector('#accountBody .join-gets');
+  const gets = (pane) => page.$$eval(`${pane} .join-gets li`, (s) => s.map((x) => x.querySelector('b').textContent + ':' + !!x.querySelector('svg')));
   const fg = await gets('#accountBody');
   check(JSON.stringify(fg) === '["Who’s out driving:true","Crew drives:true","Shared routes:true"]', 'People signed out, Friends: ' + fg);
   check(await page.isVisible('#accountBody >> text=Sign in with Google') && !(await page.isVisible('#crewsBody')), 'Friends first, with sign-in');
+  // a page, not a form (the owner, 2026-11-10): a drawing, the name set large, each promise said in a line, the sign-in at the foot
+  const jp = await page.evaluate(() => { const b = document.getElementById('accountBody'), r = (q) => b.querySelector(q).getBoundingClientRect(), head = b.querySelector('.join-head');
+    const body = document.querySelector('.sheet .body').getBoundingClientRect(), key = r('.join-sign a.ink-btn'), art = r('.join-art');
+    return { head: head.textContent, size: parseFloat(getComputedStyle(head).fontSize), face: getComputedStyle(head).fontFamily, pucks: b.querySelectorAll('.join-art .jr-puck').length, lead: b.querySelectorAll('.join-art .jr-puck.lead').length,
+      artW: Math.round(art.width), w: innerWidth, said: [...b.querySelectorAll('.join-gets small')].every((x) => x.textContent.length > 12), keyH: Math.round(key.height),
+      foot: Math.round(body.bottom - r('.join-sign').bottom), wide: [...b.querySelectorAll('*')].filter((e) => e instanceof HTMLElement && e.getBoundingClientRect().right > body.right + 1).length, logo: !!b.querySelector('img') }; });
+  check(jp.head === 'Drive with friends.' && jp.size >= 30 && /Barlow/.test(jp.face) && jp.pucks === 2 && jp.lead === 1 && jp.artW === jp.w && jp.said && jp.keyH >= 52 && jp.foot >= 0 && jp.foot <= 40 && !jp.wide && !jp.logo,
+    'People signed out is a page: ' + JSON.stringify(jp));
   await page.click('[data-people="crews"]');
   const cg = await gets('#crewsBody');
   check(JSON.stringify(cg) === '["Your crew’s page:true","Crew drives:true","Convoys:true"]' && await page.isVisible('#crewsBody >> text=Sign in with Google'), 'People signed out, Crews: ' + cg);

@@ -5654,27 +5654,35 @@
       // A step only the Friends side can take (joining, a handle): the Crews side says so and has the key across.
       const acrossToFriends = (title, text, key) => [el('h3', { textContent: title }), el('p', { className: 'note', textContent: text }), btn(key, () => setPeopleSide('friends'), 'ink-btn solid')];
       if (!me.signed_in) {
-        // what each side gets you, in three glyphs (REVIEW.md 1.2, signed out), then the same sign-in on both sides
-        const gets = (...items) => el('div', { className: 'crew-gets' }, ...items.map(([path, label]) => el('span', { innerHTML: `<svg viewBox="0 0 24 24" aria-hidden="true">${path}</svg>${label}` })));
-        const signIn = () => [appleButton(),
-          el('a', { className: 'ink-btn solid', href: '/api/auth/google/start', textContent: 'Sign in with Google', style: 'display:flex;align-items:center;justify-content:center;text-decoration:none' }),
-          legalNote('By signing in you agree to the ')];
+        // Signed out is a page, not a form (the owner, 2026-11-10): a drawing of the side, its name set large, what it gets you as
+        // three rows shaped like the list that will stand here, and the sign-in at the foot, under the thumb (REVIEW.md 1.2, P-32).
+        const gets = (...items) => el('ul', { className: 'join-gets' }, ...items.map(([path, label, what]) => el('li', {},
+          el('span', { className: 'jg-glyph', innerHTML: `<svg viewBox="0 0 24 24" aria-hidden="true">${path}</svg>` }), el('b', { textContent: label }), el('small', { textContent: what }))));
+        // A road drawn as a printed map draws one (ink casing, paper fill), the people on it as pucks; the red one is the logo's dot.
+        const roads = (...ds) => ds.map((d) => `<path class="jr-case" d="${d}"/>`).join('') + ds.map((d) => `<path class="jr-fill" d="${d}"/>`).join('');   // casings first: roads that meet, join
+        const pucks = (...at) => at.map(([x, y, lead]) => `<circle class="jr-puck${lead ? ' lead' : ''}" cx="${x}" cy="${y}" r="7"/>`).join('');
+        const drawing = (inner) => el('div', { className: 'join-art', innerHTML: `<svg viewBox="0 0 360 128" preserveAspectRatio="xMidYMid slice" aria-hidden="true">${inner}</svg>` });
+        const signIn = () => el('div', { className: 'join-sign' }, appleButton(),
+          el('a', { className: 'ink-btn solid', href: '/api/auth/google/start', textContent: 'Sign in with Google' }),
+          legalNote('By signing in you agree to the '));
+        const page = (art, head, line, list, waiting) => el('div', { className: 'join-page' }, drawing(art), el('h3', { className: 'join-head', textContent: head }),
+          el('p', { className: 'join-line', textContent: line }), list, ...(waiting ? [el('p', { className: 'join-wait', textContent: waiting })] : []), signIn());
         // P-02: anyone who signs in is in; a link waiting here says what signing in will do with it
         const waiting = stash('apex.invite') ? 'You have a friend link. Sign in and you’re friends.' : stash('apex.add') ? `Sign in to ask @${stash('apex.add')} to be your friend.` : '';
-        body.append(el('img', { src: 'brand/logo.svg', alt: 'Vetta', width: 200, style: 'max-width:60%' }),
-          el('h3', { textContent: 'Drive with friends' }),
-          // P-32: what a newcomer with no friends yet can look forward to, not the board they can't have
-          gets(['<path d="M12 21s-6-6.2-6-11a6 6 0 0 1 12 0c0 4.8-6 11-6 11z"/><circle cx="12" cy="10" r="2.2"/>', 'Who’s out driving'],
-            ['<rect x="3" y="5" width="18" height="15"/><path d="M3 10h18M8 3v4M16 3v4"/>', 'Crew drives'],
-            ['<path d="M6 20c0-5 12-3 12-9 0-3-3-4-6-6"/><circle cx="6" cy="20" r="1.4"/><circle cx="12" cy="5" r="1.4"/>', 'Shared routes']),
-          ...(waiting ? [el('p', { textContent: waiting })] : []),
-          el('p', { className: 'note', textContent: 'Nothing is shared unless you switch it on.' }), ...signIn());
-        cbody.append(el('h3', { textContent: 'Drive as a crew' }),
-          gets(['<path d="M12 3l7 3v5c0 5-3.5 8-7 10-3.5-2-7-5-7-10V6z"/>', 'Your crew’s page'],
-            ['<rect x="3" y="5" width="18" height="15"/><path d="M3 10h18M8 3v4M16 3v4"/>', 'Crew drives'],
-            ['<path d="M8 21l3-18M16 21l-3-18"/><circle cx="12" cy="16" r="1.6"/><circle cx="12" cy="9" r="1.6"/>', 'Convoys']),
-          ...(stash('apex.crew') ? [el('p', { textContent: 'You have a crew link. Sign in to see which crew, then join it.' })] : []),
-          el('p', { className: 'note', textContent: 'A crew is a group for a club or a weekend run: its own page, drives you plan together and a live convoy.' }), ...signIn());
+        const crewDrives = ['<rect x="3" y="5" width="18" height="15"/><path d="M3 10h18M8 3v4M16 3v4"/>', 'Crew drives', 'A time, a meeting point and who’s going.'];
+        // Friends: two roads that meet, someone on each. P-32: what a newcomer with no friends yet can look forward to, not the board.
+        body.append(page(roads('M-12 34 C 70 34 96 96 176 92 S 300 24 372 50', 'M92 140 C 108 112 148 98 176 92') + pucks([116, 115], [277, 60, true]),
+          'Drive with friends.', 'Nothing is shared unless you switch it on.',
+          gets(['<path d="M12 21s-6-6.2-6-11a6 6 0 0 1 12 0c0 4.8-6 11-6 11z"/><circle cx="12" cy="10" r="2.2"/>', 'Who’s out driving', 'On your map, on the road they’re driving, when they share it.'],
+            crewDrives,
+            ['<path d="M6 20c0-5 12-3 12-9 0-3-3-4-6-6"/><circle cx="6" cy="20" r="1.4"/><circle cx="12" cy="5" r="1.4"/>', 'Shared routes', 'A route you planned, sent to a friend to drive.']), waiting));
+        // Crews: one road, three in file behind the lead.
+        cbody.append(page(roads('M-12 96 C 60 96 84 36 156 36 S 262 98 372 70') + pucks([72, 66], [98, 50], [128, 39], [173, 37, true]),
+          'Drive as a crew.', 'A group for a club or a weekend run.',
+          gets(['<path d="M12 3l7 3v5c0 5-3.5 8-7 10-3.5-2-7-5-7-10V6z"/>', 'Your crew’s page', 'Its crest, its next drive, its board and its chat.'],
+            crewDrives,
+            ['<path d="M8 21l3-18M16 21l-3-18"/><circle cx="12" cy="16" r="1.6"/><circle cx="12" cy="9" r="1.6"/>', 'Convoys', 'Everyone on one map while you drive together.']),
+          stash('apex.crew') ? 'You have a crew link. Sign in to see which crew, then join it.' : ''));
         gbody.append(el('h3', { textContent: 'Your cars' }), el('p', { className: 'note', textContent: 'Sign in (People) to keep your cars, a profile and build threads here. Everything else in the Garage works without it.' }));
         ambientFromAccount(false, false);                                     // U-116
         return;

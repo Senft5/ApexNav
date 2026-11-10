@@ -4,20 +4,22 @@ Decisions Claude made for you, newest first. Each one says what was decided, why
 you reach one you've seen. If you disagree with a call, say so and it gets reversed; nothing here is hard to undo unless
 it says so. Things only you can do are in docs/OWNER_TODO.md.
 
-## 2026-11-10 (fable-design-route-card): the route card says "swipe" with page marks, not a sentence (claude/fable-design-route-card)
+## 2026-11-10 (fable-design-signed-out): People, signed out, is a page instead of a form (claude/fable-design-signed-out)
 
-Design pass 3b. Under the Quick / Fun / Long way cards the route card had two grey sentences stacked: "Swipe the card
-for the next route, 2 of 3" and the route's why line. The calls:
-- **The routes found are page marks**: one short stroke per route, the one on screen long and inked, then "2 / 3".
-  It is the sign a phone already uses for "swipe sideways", and it moves when you swipe.
-- **The words "Swipe the card for the next route" sit beside the marks until your first swipe, then go for good**
-  (remembered on the phone as `apex.cardSwiped`; Erase my data clears it, and the words come back). A screen reader
-  always hears "Route 2 of 3. Swipe the card for the next."
-- **The line under the marks only speaks when the marks can't**: "Quick and Fun pick the same route", or "Another
-  route found" for a route no level picked. Most of the time it is gone, and the card is one line shorter.
-- You asked on 2026-11-04 that the card say what a swipe does. It still does, on the same row as the marks; it just
-  stops repeating itself once you have done it. Say so if you want the sentence to stay forever.
-- Undo: revert the PR.
+Design pass 3, after your "designed by an artist not a programmer". Signed out, People was a logo, a small heading,
+three boxed icons and a button, with two thirds of the phone left blank under them. The calls:
+- **A drawing leads each side.** A road drawn the way a printed map draws one, with pucks on it: two roads meeting
+  for Friends, one road with three in file behind a red lead for Crews. It is decoration, drawn by hand in the page,
+  never a map of real people.
+- **The name is set large** ("Drive with friends.", "Drive as a crew.") in the app's number face, and each of the
+  three things it gets you is a row with one plain line saying what it is, shaped like the friends list that will
+  stand there after sign-in.
+- **The sign-in keys stand at the foot of the page**, under the thumb, 52 pt tall. Apple's key is square-cornered
+  now so it matches every other key in the app (Apple's rules let the corner match); it is still first and the same
+  size as Google's.
+- **The Vetta logo is gone from this page.** It sat above Friends only, and the first-run screen already shows it.
+- **A waiting friend or crew link is a boxed line** above the keys, so it reads as the reason to sign in.
+- Undo: revert the PR; nothing is stored and no behaviour changed.
 
 ## 2026-11-10 (fable-tile-limits): posted limits from the government road inventory: junk out, good ones into travel times (claude/fable-tile-limits)
 
@@ -114,6 +116,21 @@ I planned ten public trips round Cincinnati in the app and read each overview ag
 - **"Two-lane" means one lane each way.** It was also being said of four-lane roads.
 - Not done: your own trips (their addresses aren't in the repo, by rule). `node tools/story_live.js colerain:fun` prints
   the lines for the public ones.
+
+## 2026-11-10 (fable-design-route-card): the route card says "swipe" with page marks, not a sentence (claude/fable-design-route-card)
+
+Design pass 3b. Under the Quick / Fun / Long way cards the route card had two grey sentences stacked: "Swipe the card
+for the next route, 2 of 3" and the route's why line. The calls:
+- **The routes found are page marks**: one short stroke per route, the one on screen long and inked, then "2 / 3".
+  It is the sign a phone already uses for "swipe sideways", and it moves when you swipe.
+- **The words "Swipe the card for the next route" sit beside the marks until your first swipe, then go for good**
+  (remembered on the phone as `apex.cardSwiped`; Erase my data clears it, and the words come back). A screen reader
+  always hears "Route 2 of 3. Swipe the card for the next."
+- **The line under the marks only speaks when the marks can't**: "Quick and Fun pick the same route", or "Another
+  route found" for a route no level picked. Most of the time it is gone, and the card is one line shorter.
+- You asked on 2026-11-04 that the card say what a swipe does. It still does, on the same row as the marks; it just
+  stops repeating itself once you have done it. Say so if you want the sentence to stay forever.
+- Undo: revert the PR.
 
 ## 2026-11-10 (fable-hazard-alive): a hazard you keep confirming stays on the map (claude/fable-hazard-alive)
 
