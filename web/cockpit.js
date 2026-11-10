@@ -4124,8 +4124,9 @@
       const minutes = typeof want === 'object' && want ? want.minutes : null;
       const miles = minutes ? Math.round(minutes / 60 * LOOP_KMH / 1.609344) : want;
       const targetKm = miles * 1.609344, targetS = minutes ? minutes * 60 : null;
-      const asked = minutes ? `${minutes / 60} h` : ApexUnits.long(miles * 1609.344, 0), loopId = minutes ? `loop_${minutes}min` : `loop_${miles}`;
+      const asked = minutes ? ApexRouteCard.loopTime(minutes) : ApexUnits.long(miles * 1609.344, 0), loopId = minutes ? `loop_${minutes}min` : `loop_${miles}`;
       const L = { c, miles, targetKm, targetS, asked, loopId };
+      setLoopBy(minutes ? 'time' : 'distance');                            // a loop asked for by time (Options, Siri) is changed by time on its card
       ui.step(`Finding roads for a ${asked} loop…`, 0.02);
       // 0. Our own router's loops (graph_router.js loop), where the tiles cover the start: from the best roads in reach
       // (Route tuning's road and avoid sliders shape its search: the tune rides with it, as with a plan's)
@@ -4350,14 +4351,18 @@
       const box = $('routeCardLoop'), on = isLoop(t) && state.mode !== 'live';
       box.hidden = !on;
       if (!on) return;
-      const asked = routeOptions && routeOptions.kind === 'loop' && routeOptions.current === t && !routeOptions.targetS ? routeOptions.miles : null;
-      const keys = [...document.querySelectorAll('#loopDetents [data-loop-mi]')];
-      const row = $('cardLoopDetents');
-      if (row.children.length !== keys.length || keys.some((k, i) => row.children[i].textContent !== k.textContent)) {
-        row.replaceChildren(...keys.map((k) => { const b = document.createElement('button'); b.textContent = k.textContent; b.dataset.cardLoop = k.dataset.loopMi;
-          b.setAttribute('aria-label', `A ${k.textContent} loop`); b.addEventListener('click', () => { if (loopBusy) return; pickLoop(k); loop(parseFloat(k.dataset.loopMi), b); }); return b; }));
+      const o = routeOptions && routeOptions.kind === 'loop' && routeOptions.current === t ? routeOptions : null;
+      const time = loopBy === 'time';
+      box.setAttribute('aria-label', time ? 'Loop time' : 'Loop length');
+      box.querySelector('.rc-loop-label').textContent = time ? 'Time' : 'Length';
+      const keys = [...document.querySelectorAll('#loopDetents button')];
+      const row = $('cardLoopDetents'), id = (k) => (k.dataset.loopMin ? `${k.dataset.loopMin}min` : k.dataset.loopMi);
+      if (row.children.length !== keys.length || keys.some((k, i) => row.children[i].textContent !== k.textContent || row.children[i].dataset.cardLoop !== id(k))) {
+        row.replaceChildren(...keys.map((k) => { const b = document.createElement('button'); b.textContent = k.textContent; b.dataset.cardLoop = id(k);
+          b.setAttribute('aria-label', `A ${k.textContent} loop`);
+          b.addEventListener('click', () => { if (loopBusy) return; pickLoop(k); loop(k.dataset.loopMin ? { minutes: parseInt(k.dataset.loopMin, 10) } : parseFloat(k.dataset.loopMi), b); }); return b; }));
       }
-      [...row.children].forEach((b) => b.setAttribute('aria-pressed', String(asked != null && Math.abs(parseFloat(b.dataset.cardLoop) - asked) < 0.01)));
+      keys.forEach((k, i) => row.children[i].setAttribute('aria-pressed', String(!!o && (k.dataset.loopMin ? o.targetS === parseInt(k.dataset.loopMin, 10) * 60 : !o.targetS && Math.abs(parseFloat(k.dataset.loopMi) - o.miles) < 0.01))));
     }
 
     // Explore (R-10): the best roads within N minutes of here, as a list and on the map; one tap drives one (to its far
@@ -5111,14 +5116,32 @@
       if (state.tapToRoute) { closeSheet(); openPlan(false); toast(state.planField === 'fromInput' ? 'Tap the map where you want to start.' : 'Tap the map where you want to go.'); }
     });
     // Loop lengths in the chosen units (U-22), one unit on the whole dial (finding 6): 15-90 mi or 25-150 km, kept as miles inside.
+    // By time (2026-11-10: a loop is aimless driving, and "I have an hour" is how it is asked for; 1 hour and 2 hours sat
+    // in Options): the same dial, its five detents half an hour to three hours. LOOP_BY keeps which the dial is set to.
+    const LOOP_BY = 'apex.loopBy', LOOP_MINUTES = [30, 60, 90, 120, 180];
+    let loopBy = 'distance';
+    try { if (localStorage.getItem(LOOP_BY) === 'time') loopBy = 'time'; } catch (_) { /* storage off */ }
     function labelLoops() {
-      document.querySelectorAll('#loopDetents [data-loop-mi]').forEach((b, i) => {
+      document.querySelectorAll('#loopDetents button').forEach((b, i) => {
+        if (loopBy === 'time') { delete b.dataset.loopMi; b.dataset.loopMin = String(LOOP_MINUTES[i]); b.textContent = ApexRouteCard.loopTime(LOOP_MINUTES[i]); return; }
         const km = [25, 50, 75, 100, 150][i], mi = [15, 30, 45, 60, 90][i];
+        delete b.dataset.loopMin;
         b.dataset.loopMi = String(ApexUnits.metric() ? km / 1.609344 : mi); b.textContent = ApexUnits.metric() ? `${km} km` : `${mi} mi`;
       });
+      document.querySelectorAll('#loopBy [data-loop-by]').forEach((b) => b.setAttribute('aria-checked', String(b.dataset.loopBy === loopBy)));
       if (plannedRoute) paintCardLoop(plannedRoute);
     }
     labelLoops();
+    // the dial set to distance or time: its detents and its face change, the detent picked keeps its place
+    function setLoopBy(by) {
+      by = by === 'time' ? 'time' : 'distance';
+      if (by === loopBy) return;
+      loopBy = by;
+      try { localStorage.setItem(LOOP_BY, by); } catch (_) { /* storage off: this session only */ }
+      labelLoops();
+      pickLoop(document.querySelector('#loopDetents button[aria-pressed="true"]'));
+    }
+    document.querySelectorAll('#loopBy [data-loop-by]').forEach((b) => b.addEventListener('click', () => { if (!loopBusy) setLoopBy(b.dataset.loopBy); }));
     // The loop dial (REVIEW.md roadmap 6): a detent picks the length, the dial shows it, Find a loop builds it.
     const LOOP_PICK = 'apex.loopPick';
     function pickLoop(b) {
