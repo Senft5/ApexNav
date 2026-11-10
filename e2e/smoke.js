@@ -5977,6 +5977,35 @@ flow('plan flow (a) a destination in 3 taps: Where to?, the place, Start; Start 
   check(taps.n === 3, `a destination in 3 taps: ${taps.log.join(' → ')}`);
 }, IPHONE);
 
+flow('there and back: a trip to a place comes home another way in one tap, the destination a stop, the way out kept off the way home (graph_router.js roundTrip; Valhalla where our tiles don\'t reach)', async (page, base) => {
+  const asked = [];
+  await planRouter(page, asked);
+  const { tap } = await planPage(page, base);
+  await tap('#destInput', 'Where to?');
+  await page.fill('#destInput', 'Maryville');
+  await page.waitForSelector('#placeList .place', { timeout: 10000 });
+  await tap('#placeList .place', 'the place');
+  await cardUp(page);
+  await planDone(page);
+  await page.waitForFunction(() => !document.getElementById('routeRoundBtn').hidden, null, { timeout: 10000 });
+  const before = asked.length;
+  await page.evaluate(() => document.getElementById('routeRoundBtn').scrollIntoView({ block: 'center' }));
+  await tap('#routeRoundBtn', 'There and back');
+  await page.waitForFunction(() => window.apexDebug.lastRound && /and back$/.test(document.getElementById('routeCardName').textContent), null, { timeout: 25000 });
+  await planDone(page);
+  const r = await page.evaluate(() => ({ name: document.getElementById('routeCardName').textContent, round: apexDebug.lastRound, note: document.getElementById('routeProgress').textContent,
+    stops: document.getElementById('routeStops').innerText.replace(/\s+/g, ' '), key: document.getElementById('routeRoundBtn').hidden, kind: apexDebug.track && apexDebug.track.kind }));
+  check(r.name === 'To Maryville and back' && r.round.how === 'valhalla' && r.round.via >= 1, 'the trip home is planned, named for it: ' + JSON.stringify(r));
+  check(/^There and back/.test(r.note), 'the card says how much of the way home is new road: ' + JSON.stringify(r));
+  check(/Maryville/.test(r.stops), 'the destination is a stop on the trip, as one you added: ' + JSON.stringify(r));
+  check(r.key === true, 'a round trip offers no second round trip: ' + JSON.stringify(r));
+  const back = asked.slice(before).find((q) => q.locations.length === 2 && Math.abs(q.locations[0].lat - 36.06) < 0.01);
+  check(back && Array.isArray(back.exclude_locations) && back.exclude_locations.length >= 3, 'the way back was asked around the way out: ' + JSON.stringify(back && { n: (back.exclude_locations || []).length }));
+  const whole = asked.slice(before).find((q) => q.locations.length > 2);
+  check(whole && Math.abs(whole.locations[0].lat - whole.locations[whole.locations.length - 1].lat) < 1e-4, 'the whole trip starts and ends at home: ' + JSON.stringify(whole && whole.locations.length));
+  await scan(page, 'there and back');
+}, IPHONE);
+
 flow('no connection: People is a page that says which it is (offline, or Vetta not answering) and what still works, Try again under the thumb; the Garage says so in its own corner (design pass 5)', async (page, base) => {
   let down = true;
   await page.route(/\/api\//, (route) => (down ? route.abort() : route.fulfill({ status: 200, contentType: 'application/json', body: '{"signed_in":false}' })));
