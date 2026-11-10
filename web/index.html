@@ -593,7 +593,8 @@
     .ly-legend b { font-weight: 500; white-space: nowrap; }
     .ly-legend b::before { content: ""; display: inline-block; width: 8px; height: 3px; margin-right: 4px; vertical-align: middle; border-radius: 2px; background: var(--amber); }
     .ly-legend b.k-smooth::before { background: var(--gain); } .ly-legend b.k-rough::before { background: var(--signal); }
-    .edge-panel .ly-who { margin: -6px 0 2px 38px; min-height: 44px; }
+    /* its 44 pt box starts where the Friends row ends: pulled up into it, two controls shared 6 pt (the safe-areas flow) */
+    .edge-panel .ly-who { margin: 0 0 2px 38px; min-height: 44px; }
     .sw[hidden], .sheet .sw[hidden], .edge-panel .sw[hidden], .side-pop .sw[hidden] { display: none; }   /* a switch only some accounts get (Satellite) */
     .sw-cycle { min-height: 44px; }
     .edge-panel .notes-ctl { margin: 0; padding: 8px 0 8px; border-top: 1px solid var(--hair, var(--panel-dim)); }
