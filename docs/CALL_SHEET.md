@@ -44,6 +44,23 @@ when you come back. A row with nothing to say (Feedback, About) says nothing; a 
 
 The order of the rows is unchanged. Undo: revert the PR.
 
+## 2026-11-10 (fable-drive): Location turned off is said, and Settings is one key away (claude/fable-drive)
+
+Found while looking over the drive screen. In the iPhone app, a driver who tapped "Don't Allow" on the location sheet (or
+turned Location off later) was told nothing: the map had no arrow and a drive sat on "Finding GPS…" for ever. In a browser
+the sheet said "Location is off. Settings → Safari → Location → Allow" twice, in red, under the heading "Before your first
+drive", over a greyed-out "Allow and start", and Just drive went grey with no word.
+
+Now: the app tells its page when Location is off (and forgets the stale position). Just drive, a route's Start and
+Recenter stay keys; with Location off they open one sheet: "Location is off", why it matters, and Open Settings (the
+app's own page in Settings). Back from Settings with it on, the sheet goes away by itself. In a browser the key is "Try
+again" (a page can't open Settings). A drive whose Location is turned off mid-way says "Location is off", not "Finding GPS".
+
+Swift changed (ApexNavApp.swift: a `location_off` field on the live frame, an `openSettings` command); I can't compile
+Swift here, so CI's build is the check. Not changed: when Location is first asked (after the welcome's Start).
+
+Undo: revert the PR.
+
 ## 2026-11-10 (fable-loops): a loop has no Quick / Fun / Long way; its card offers its length and which way to head (claude/fable-loops)
 
 You asked: "why do loops need a long way a fun and a quick? the whole point is aimless driving". They don't. On a
@@ -79,11 +96,32 @@ cars and profile will be back, and that looks, voices and settings work without 
 
 Undo: revert the PR.
 
+## 2026-11-10 (fable-end-card): design pass 9: the drive's score is set against your usual; the card's keys sit evenly (claude/fable-end-card)
+
+The drive-ended card's big number had nothing to stand against: is 673 good? Now, on the label's line, it says "33 over
+your usual" (or "12 under your usual", or "About your usual" within five points). Your usual is the middle score of your
+last ten scored drives before this one, read from the Log on the phone. With fewer than three there is no usual, and the
+card says nothing rather than guess. It compares across roads: the score is the driver's, not the road's. If you would
+rather it compared only the same road, say so (that already has its own line, "Your best on this road").
+
+The keys: Share card is a row of its own; Mark a stage and Drive it again share the row under it (it was two keys and an
+orphan on a second row). Nothing changes place when the score lands.
+
+Undo: revert the PR. The numbers are `USUAL_N`, `USUAL_MIN`, `USUAL_NEAR` in web/end_line.js.
+
 ## 2026-11-10 (fable-suggest-follows-dial): the idle map's "Loop from here" says the length the dial is on (claude/fable-suggest-follows-dial)
 
 The row under Where to? read "Loop from here · 45 mi" from launch on, whatever you had turned the dial to, while its
 Plan key built the dial's loop: turn the dial to 15 mi, cancel, and the row still promised 45. It now says the dial's
 length (or time, once #342 is in) the moment you pick it. Undo: revert the PR.
+
+## 2026-11-10 (fable-stages): on a stage's page a run is named by when it was driven (claude/fable-stages)
+
+Under "Runs · Dry Ridge Rd" every run was titled "Dry Ridge Rd" again (a drive is named after its road), with the one
+thing that tells runs apart, the date, in small grey under it. The date is now the run's name; the drive's own name is
+under it only when it isn't the stage's. And a stage's length is to a tenth like everywhere else (it said 21.34 mi).
+
+Undo: revert the PR.
 
 ## 2026-11-10 (fable-fix-join-scope): my mistake in #332, fixed: the signed-out People page also showed at the top of the Garage (claude/fable-fix-join-scope)
 
@@ -92,6 +130,16 @@ the rule that hides the other tabs' panels. So, signed out, the whole "Drive wit
 the Garage as well. Both rules now apply on the People tab only. I had read the page on People and never opened the
 Garage signed out after the change; the screen-by-screen flow now checks that the Garage shows no People page.
 - Undo: not something to undo; reverting #332 would also remove it.
+
+## 2026-11-10 (fable-your-units): sizes that were always metric are in your units (claude/fable-your-units)
+
+Three places spoke metric to a driver in miles: a privacy zone's size ("200 m / 500 m / 1 km", and the list and the
+toast after), a crew page's "about 11 km across", and "Drives under 0.2 mi are dropped" the other way round for a driver
+in kilometres. A zone's size now reads 650 ft / 0.3 mi / 0.6 mi in miles (the zones themselves are unchanged: 200, 500
+and 1000 m), the crew line says "about 7 miles", and the short-drive toast follows the unit. The privacy page
+(privacy.html) still says 11 km: it is one text for everyone.
+
+Undo: revert the PR.
 
 ## 2026-11-10 (fable-loop-names): a loop's cards are never two of the same way at the same length (claude/fable-loop-names)
 
@@ -112,6 +160,13 @@ a tab, or are driving, it leaves this launch alone and is there the next time th
 marked as seen until you close it).
 
 Cost: someone who always taps within the first second sees the news a launch or two later. Undo: revert the PR.
+
+## 2026-11-10 (fable-log-dates): the Log's records and charts say "30 Oct", not "2026-10-30" (claude/fable-log-dates)
+
+The Log's list stamps each drive "30 OCT", but Your records under it printed 2026-10-30 and the two score charts
+labelled their dots 10-30, like database fields. Records now read as the rest of the Log does (Today, Yesterday,
+"30 Oct", with the year when it isn't this one) and the charts' days read "30 Oct" (in the phone's own order, so
+"Oct 30" on a US phone). Undo: revert the PR.
 
 ## 2026-11-10 (fable-design-signed-out): People, signed out, is a page instead of a form (claude/fable-design-signed-out)
 

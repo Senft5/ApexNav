@@ -35,6 +35,17 @@
 - [x] Tests: tests/test_garage_settings.py (+1); e2e "Settings behind the gear…".
 - Next: Road feel, Route tuning and Spots rows have no value yet (Road feel's is drawn by who_sees.js).
 
+## Session 2026-11-10 (fable-drive): Location off is said, in the app too (claude/fable-drive, off origin/main 1a38381)
+
+- ApexNavApp.swift: `LiveFrame.locationOff` (`location_off`: authorization denied or restricted; never during a review
+  replay), set at init and in `locationManagerDidChangeAuthorization` (which also clears `hasFix`); bridge command
+  `openSettings`.
+- web/cockpit.js: `setLocOff` (from `window.apex.live`), `paintPerms` gives `#permSheet` a second face (`.loc-off`:
+  title, one line, Open Settings in the app / Try again in a browser), `showPerms`; `startDrive` and Recenter (idle, no
+  route) open it when `locDenied`; no key is disabled for it any more. The drive line: "Location is off" + `LOC_HOW_TEXT`.
+- Tests: e2e "Location off, in the app" and "Location off, in a browser"; tests/test_car_native.py.
+- Active: none known. The Swift is uncompiled until CI. Next: the drive screen's design pass proper (this was found on the way in).
+
 ## Session 2026-11-10 (fable-loops): loops lose Quick / Fun / Long way; the card offers which way to head (claude/fable-loops, off origin/main 7dee309)
 
 - [x] The owner: "why do loops need a long way a fun and a quick? the whole point is aimless driving". web/cockpit.js:
@@ -65,10 +76,28 @@
   sizes, both sides, the Garage, offline event, Try again, online event brings People back).
 - Next design pass candidates: the lower Garage blocks (How this works, Pro), the Options sheet's long list.
 
+## Session 2026-11-10 (fable-end-card): design pass 9, the drive-ended card (claude/fable-end-card, off origin/main 01fa773)
+
+- web/end_line.js `usual(score, earlier)`: median of the last 10 scored drives (3 at least), `{ usual, diff, text }`.
+  web/cockpit.js `endCardScored` reads `ApexRecording.summaries(null)` after painting and fills `#endUsual` (drives dated
+  up to this one's, not itself). web/index.html: `#endUsual` in `.end-score`; `.end-acts` solid key spans the row,
+  `#endStage` spans it too until `#endAgain` shows.
+- Tests: tests/test_end_line.py; e2e "drive ended: the card and the Log give the same score and time".
+- Next: nothing queued from this pass. Not yet looked at in this run: the Log's Stages page, a crew's page, CarPlay.
+
 ## Session 2026-11-10 (fable-suggest-follows-dial): the loop suggestion follows the dial (claude/fable-suggest-follows-dial, off origin/main 1a38381)
 
 - [x] web/cockpit.js `pickLoop` ends with `paintLoopSuggest()` (in a try: at launch the deck isn't set up yet).
 - [x] Tests: tests/test_loop_ways.py (+1); e2e "plan flow (b)" picks 15 mi and 45 mi on the dial and reads the row.
+
+## Session 2026-11-10 (fable-stages): the Stages page's runs are named by date (claude/fable-stages, off origin/main e76f1bb)
+
+- web/analysis.html `renderSegments`: `.run-name b` is `dateLabel(x.d)`, `.sub` the drive's name only when it differs
+  from the stage's (hidden otherwise); the list's length is `ApexUnits.long(s.length_m, 1)`. CSP hashes regenerated.
+- e2e "a stage's Board and Runs fit the phone" checks both.
+- After every merge to main, each open PR conflicts in this file and CALL_SHEET.md and gets no Actions run until
+  origin/main is merged into it (both notes kept).
+- Next: a crew's page and CarPlay have not had a design pass in this run.
 
 ## Session 2026-11-10 (fable-fix-join-scope): #332's page showed in the Garage too; scoped to People (claude/fable-fix-join-scope, off origin/main 6412cb5)
 
@@ -79,6 +108,14 @@
   by screen: the Log…" checks the Garage signed out has no People page (fails on main's CSS, passes here).
 - Lesson: a rule that sets `display` on a tab's panel must carry the tab (`.sheet[data-view=…]`); after changing one
   tab signed out, open the other three.
+
+## Session 2026-11-10 (fable-your-units): fixed sizes labelled in the driver's units (claude/fable-your-units, off origin/main e76f1bb)
+
+- web/units.js `size(m)` ("200 m" / "1 km"; "650 ft" / "0.3 mi"); cockpit.js `renderZones` labels `#zoneRadius` keys,
+  the list and the toast with it and runs again on a units change; crew_page.js meeting-points note; the too-short toast.
+- Tests: tests/test_units.py; e2e "privacy zones" expects "Home · 650 ft".
+- Reviewed and left as they are: People signed in (friends), a crew's page.
+- Next: CarPlay has not had a design pass in this run.
 
 ## Session 2026-11-10 (fable-loop-names): no two loop cards the same way and the same length (claude/fable-loop-names, off origin/main 1a38381)
 
@@ -96,6 +133,12 @@
   keydown and `open` = any `.overlay.show`, `.side-pop.open`, `#planPanel.open`, `.sheet.open` or live mode.
 - [x] Tests: tests/test_whats_new.py `test_it_never_interrupts`; e2e "what's new…" first touches the screen and opens
   Options (no sheet, not marked seen), then a hands-off launch shows it after the splash.
+
+## Session 2026-11-10 (fable-log-dates): readable days in the Log's records and charts (claude/fable-log-dates, off origin/main 1a38381)
+
+- [x] web/format.js `dayShort(iso, locale)`; web/analysis.html: Your records' day through `ApexFormat.dateTime`, the
+  Score over time and road charts' labels through `dayShort` (CSP hashes regenerated).
+- [x] Tests: tests/test_format.py `test_a_chart_day_reads_as_a_day`; e2e "Your records…" refuses an ISO date in a row.
 
 ## Session 2026-11-10 (fable-design-signed-out): People signed out, redrawn as a page (claude/fable-design-signed-out, off origin/main 2fda3f8)
 
