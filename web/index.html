@@ -1519,6 +1519,7 @@
     @media (prefers-reduced-motion: reduce) { #boot { transition: none; } }
 </style>
   <link rel="stylesheet" href="controls.css" />
+  <link rel="stylesheet" href="signature.css" />
 </head>
 <body>
   <!-- U-80: the launch screen's lockup (Assets.xcassets/LaunchLogo, 184 x 50 pt, centred) drawn again at the same size and
@@ -1950,6 +1951,9 @@
         <div class="scrubber" id="scrubber" role="slider" tabindex="0" aria-label="Replay position" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><canvas id="scrubCanvas" aria-hidden="true"></canvas></div>
       </div>
       <div id="cluster"></div>
+      <!-- Vetta Line (signature.css): the idle deck's invitations stand on one shelf you turn sideways, each a card with its
+           road drawn on it; on a phone on its side the shelf is not a box and they lie where they always did -->
+      <div class="deck-shelf" id="deckShelf">
       <!-- the plan flow (finding 7): Best roads nearby, a chip under Where to?, opens its list sheet -->
         <div class="deck-chips" id="deckChips"><button class="chip nearby-chip" id="deckNearby" aria-haspopup="dialog">Best roads nearby</button></div>
       <!-- one invitation on the idle map (REVIEW.md 3.1, mockup 01): a loop from here, drawn as a tulip -->
@@ -1962,6 +1966,7 @@
       <!-- the morning of a crew drive you're going to, it takes the invitation's place (REVIEW.md roadmap 21) -->
         <button class="loop-suggest drive-today" id="driveToday" hidden><span class="dt-date" aria-hidden="true"><b id="driveTodayDay"></b><small id="driveTodayMon"></small></span>
           <span><b id="driveTodayTitle"></b><small id="driveTodayMeta"></small></span><em>Plan</em></button>
+      </div>
       <nav class="tabbar" id="tabbar" aria-label="Views">
         <button class="tab on" data-view="map" aria-label="Map"><svg viewBox="0 0 24 24"><path d="M12 3l6 15-6-3-6 3z"/></svg><span>Map</span></button>
         <button class="tab" data-view="log" aria-label="Log"><svg viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h10"/></svg><span>Log</span></button>

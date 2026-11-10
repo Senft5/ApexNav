@@ -35,6 +35,14 @@ The e2e suite is 152 flows now and takes about 24 minutes, so GitHub cut it off 
 (twice on #349, once on #344) with every flow before it passing. The limit is 35 minutes. No test is skipped or
 shortened. Undo: set `timeout-minutes` back to 25 in `.github/workflows/core-tests.yml`, or better, split the suite.
 
+## 2026-11-10 · Vetta Line: the home screen is a masthead over the map and a shelf of road cards (claude/fable-signature)
+
+- What: web/signature.css, a new last stylesheet, restyles the idle map: the place as a masthead in type, the deck as one
+  sheet with a red Just drive and the invitations side by side as cards, soft lift instead of ink boxes, the apex dot on
+  the open tab, a short arrival.
+- Why: the owner asked for big moves toward one cohesive, artist-made look; the home was boxes in 1.5 px ink stacked in rows.
+- Undo: remove the `signature.css` link in web/index.html (the shelf wrapper is harmless without it), or revert the PR.
+
 ## 2026-11-10 (fable-loop-time): a loop can be set by time on the dial (claude/fable-loop-time)
 
 Following your "the whole point is aimless driving": "I have an hour" is how a loop is usually asked for, and time

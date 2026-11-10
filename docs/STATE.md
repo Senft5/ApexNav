@@ -26,6 +26,20 @@
 - [x] .github/workflows/core-tests.yml e2e `timeout-minutes` 25 → 35: 152 flows take ~24 min and were cancelled on the
   last flow. Next: split e2e into two jobs if it passes ~30 min.
 
+## Session 2026-11-10 (fable-signature): Vetta Line, the home screen (claude/fable-signature, off origin/main 948cb4b)
+
+- web/signature.css (new, loaded after controls.css): the signature layer (docs/design/SIGNATURE.md). Map keys and the deck
+  lift on soft shadows instead of ink boxes; the place plate is a masthead (place in Barlow 30 px, the sky under it after a
+  red apex dot) on a paper wash down from the top; Where to? is a 52 px well and Just drive the one red key; the deck's
+  invitations (`#loopSuggest`, `#yourRoads` rows, `#driveToday`, `#deckChips`) stand on one sideways shelf `#deckShelf`
+  (new wrapper in index.html, ids unchanged; `display: contents` on a phone on its side, so landscape is as before); the
+  tab bar marks the open tab with the apex dot. Arrival: bar, shelf cards and masthead rise once (none under reduced motion).
+- web/place_plate.js `parts()` (head / rest); cockpit.js fills `#placePlate` as `<b>` + hidden ` · ` + `<span>` (textContent
+  unchanged) and `apexDebug.placePlate()` (e2e). `--plan-bar` starts at 76 px (the bar's new height).
+- Tests: tests/test_place_plate.py (+1); e2e "Vetta Line home"; "note 6" fold thresholds follow the shorter deck
+  (folds by > 80 px, was 150; the folded bar + tabs under 182 px, was 170: the bar is 12 px taller).
+- Parallel agents on their own branches: claude/fable-drive-hud, claude/fable-first-last, claude/fable-route-reveal.
+
 ## Session 2026-11-10 (fable-loop-time): the loop dial by distance or time (claude/fable-loop-time, off origin/main 1a38381)
 
 - [x] web/index.html `#loopBy` (two radio words over the dial, `.loop-by`). web/cockpit.js: `LOOP_BY` ('apex.loopBy'),
