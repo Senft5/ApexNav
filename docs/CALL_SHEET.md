@@ -29,6 +29,15 @@ The keys: Share card is a row of its own; Mark a stage and Drive it again share 
 orphan on a second row). Nothing changes place when the score lands.
 
 Undo: revert the PR. The numbers are `USUAL_N`, `USUAL_MIN`, `USUAL_NEAR` in web/end_line.js.
+## 2026-11-10 (fable-polish-7): design pass 7: Settings is three short lists, and each row says what it is set to (claude/fable-polish-7)
+
+Behind the Garage's gear was one list of eleven rows that said nothing: to learn whether Crash check was on or which
+units you were in, you opened each sheet. Now the list is three short ones under their names (Sharing and safety, How
+the app reads, You and Vetta), and a row says its setting on the right: Privacy zones "None" or "2 places", Crash
+check and Reminder "On" / "Off", Units "Miles and feet", Map motion "Lean". Change one in its sheet and the row has it
+when you come back. A row with nothing to say (Feedback, About) says nothing; a row never guesses.
+
+The order of the rows is unchanged. Undo: revert the PR.
 
 ## 2026-11-10 (fable-loops): a loop has no Quick / Fun / Long way; its card offers its length and which way to head (claude/fable-loops)
 
@@ -65,6 +74,12 @@ cars and profile will be back, and that looks, voices and settings work without 
 
 Undo: revert the PR.
 
+## 2026-11-10 (fable-suggest-follows-dial): the idle map's "Loop from here" says the length the dial is on (claude/fable-suggest-follows-dial)
+
+The row under Where to? read "Loop from here · 45 mi" from launch on, whatever you had turned the dial to, while its
+Plan key built the dial's loop: turn the dial to 15 mi, cancel, and the row still promised 45. It now says the dial's
+length (or time, once #342 is in) the moment you pick it. Undo: revert the PR.
+
 ## 2026-11-10 (fable-fix-join-scope): my mistake in #332, fixed: the signed-out People page also showed at the top of the Garage (claude/fable-fix-join-scope)
 
 The rule that lets the new signed-out People page fill the sheet named the People panel by its id, and an id outranks
@@ -72,6 +87,16 @@ the rule that hides the other tabs' panels. So, signed out, the whole "Drive wit
 the Garage as well. Both rules now apply on the People tab only. I had read the page on People and never opened the
 Garage signed out after the change; the screen-by-screen flow now checks that the Garage shows no People page.
 - Undo: not something to undo; reverting #332 would also remove it.
+
+## 2026-11-10 (fable-loop-names): a loop's cards are never two of the same way at the same length (claude/fable-loop-names)
+
+A loop's "which way" cards could come up as two Southeasts, 39 and 37 minutes: the same choice twice, told apart only by
+squinting at the outlines. A second loop that heads the same way as one already offered is now a card only when it is
+a really different drive: a fifth longer or shorter, in distance or in time (`LOOP_OFFER.differs` in web/fun_route.js).
+Loops that head somewhere else are offered as before. So there can be fewer cards than three (or none, when every other
+loop found is a lookalike); the best loop is always the first one.
+
+Undo: revert the PR, or set `differs: 0` in `LOOP_OFFER`.
 
 ## 2026-11-10 (fable-quiet-news): What's new never comes up over something you have started (claude/fable-quiet-news)
 
