@@ -65,6 +65,24 @@
   says a plain "Routing…" while it waits; the Garage is a long page (IDEAS U-49); "Can't reach Vetta" on People is a
   heading and a button on blank paper.
 
+## Session 2026-11-10 (fable-design-garage): the looks' shelf and the empty bay (claude/fable-design-garage, off origin/main 2fda3f8)
+
+- [x] Design pass 4 (part of IDEAS U-49, "the Garage is a long page"). web/index.html: under `(hover: none) and
+  (pointer: coarse)` and not `html[data-type-size]`, `.theme-cards` is a sideways scroll-snap grid (88 % columns, edge
+  to edge, the preview tightened so each call stays on one line). Signed out the page went from 1861 to 1373 px.
+- [x] web/cockpit.js: `shelveLooks()` (after `renderThemePicker`) opens the shelf on the look in use and turns it only
+  when the look changes; the sheet's swipe-right-to-close ignores touches that start in `.theme-cards`. Signed out,
+  Your cars is `.empty-bay` (a dashed slot, a line, `Sign in` → `showView('friends')`).
+- [x] Tests: tests/test_garage_shelf.py (3); e2e "the Garage on a phone…" (isMobile: the shelf's geometry, one line per
+  call, a real touch turn and back with the sheet still open, Use keeps the card in view, large text stacks, the bay's
+  key opens sign-in). Also run: every flow matching "theme", "Garage", "Dynamic Type", "REVIEW.md 1.2".
+- e2e note: a flow that swipes must wait for the splash (`#boot`) to lift; `elementFromPoint` under the finger says so.
+- Next design chunks: "Can't reach Vetta" on People; the Co-driver / Night / The words blocks lower in the Garage.
+- [x] CI red on cdbd25a ("a turn of the thumb brings the next look": the shelf ended two cards on). Not main: the
+  e2e swipe has no pauses, so on a fast runner it is a fling, and a fling passed the next snap point (reproduced
+  locally with a 300 px drag in 4 moves; fails before, passes after). Fix in the product: `.theme-card
+  { scroll-snap-stop: always }`. The check is unchanged.
+
 ## Session 2026-11-10 (fable-tile-limits): HPMS limits under 25 mph are unknown; tile times take HPMS's posted limit (claude/fable-tile-limits, off origin/main f27a1fe)
 
 - [x] Deferred finding 1 (the fable-hpms-limits entry below: "the tiles' times use OSM's limit or the class estimate,

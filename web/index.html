@@ -911,6 +911,26 @@
     .theme-cards { display: grid; gap: 12px; margin-top: 8px; }
     .theme-card { border: 1.5px solid var(--panel-ink); padding: 0 0 12px; }
     .theme-card.in-use { border-width: 2.5px; }
+    /* the Garage signed out: an empty bay where a car will stand */
+    .empty-bay { display: grid; grid-template-columns: 56px minmax(0, 1fr) auto; gap: 12px; align-items: center; }
+    .empty-bay .eb-slot { display: grid; place-items: center; width: 56px; height: 56px; border: 1.5px dashed var(--panel-dim); }
+    .empty-bay svg { width: 30px; height: 30px; fill: none; stroke: var(--panel-dim); stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
+    .empty-bay p { margin: 0; } .empty-bay b { display: block; font-size: 16px; font-weight: 600; }
+    .empty-bay small { display: block; margin-top: 2px; font-size: 13px; line-height: 1.35; color: var(--panel-dim); }
+    .empty-bay .ink-btn { min-height: 44px; padding: 0 14px; }
+    html[data-type-size] .empty-bay { grid-template-columns: minmax(0, 1fr); } html[data-type-size] .empty-bay .eb-slot { display: none; }
+    /* On a phone the looks stand side by side on a shelf, one in view and the edge of the next showing; a turn of the thumb
+       brings the next (design pass, 2026-11-10: three stacked cards were 750 px of the Garage). A mouse, or large text, keeps
+       the stack: a wheel can't turn a shelf, and a wide card of big words reads better whole. */
+    @media (hover: none) and (pointer: coarse) {
+      html:not([data-type-size]) .theme-cards { grid-template-columns: none; grid-auto-flow: column; grid-auto-columns: 88%; gap: 10px; margin: 8px -16px 0; padding: 0 16px;
+        overflow-x: auto; overscroll-behavior-x: contain; scroll-snap-type: x mandatory; scroll-padding-inline: 16px; scrollbar-width: none; }
+      html:not([data-type-size]) .theme-cards::-webkit-scrollbar { display: none; }
+      html:not([data-type-size]) .theme-card { scroll-snap-align: start; scroll-snap-stop: always; display: flex; flex-direction: column; min-width: 0; }
+      html:not([data-type-size]) .theme-card .tc-voice { margin-top: auto; padding-top: 8px; }
+      html:not([data-type-size]) .theme-cards .theme-preview { grid-template-columns: 36px minmax(0, 1fr) auto; gap: 8px; padding: 14px 10px; }   /* the call stays on one line in the narrower card */
+      html:not([data-type-size]) .theme-cards .tp-tulip svg { width: 36px; height: 36px; }
+    }
     .theme-preview.tc-pick { cursor: pointer; -webkit-tap-highlight-color: transparent; }   /* U-69: touch the preview to use it */
     .theme-preview.tc-pick:active { filter: brightness(0.92); }
     .theme-preview { display: grid; grid-template-columns: 44px minmax(0, 1fr) auto; gap: 10px; align-items: center; padding: 14px 14px; margin-bottom: 10px;

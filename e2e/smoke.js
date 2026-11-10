@@ -5879,6 +5879,52 @@ flow('plan flow (e, f) a level change and an alternative are one tap or swipe ea
   await scan(page, 'the card after a swipe');
 }, IPHONE);
 
+// Design pass 4 (2026-11-10): on a phone the looks stand on a shelf you turn sideways, so the Garage is a third shorter and
+// the voice picker is on the first screen; signed out, Your cars is an empty bay with the key that gets you signed in.
+flow('the Garage on a phone: the looks are a shelf turned sideways (one in view, the next one\'s edge showing), a turn doesn\'t close the sheet; Your cars signed out is an empty bay', async (page, base) => {
+  await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); localStorage.setItem('apex.permsExplained', '1'); } catch (_) {} });
+  await page.route('**/api/me', (r) => r.fulfill({ status: 200, contentType: 'application/json', body: '{"signed_in":false}' }));
+  await page.goto(base + '/index.html?view=garage');
+  await page.waitForFunction(() => window.apexDebug && document.querySelectorAll('#themeCards .theme-card').length === 3 && document.querySelector('.empty-bay')
+    && Math.abs(document.getElementById('sheet').getBoundingClientRect().left) < 0.5);   // the sheet has slid in
+  const shelf = () => page.evaluate(() => { const c = document.getElementById('themeCards'), b = c.getBoundingClientRect(), body = document.querySelector('.sheet .body');
+    const cards = [...c.children].map((k) => { const r = k.getBoundingClientRect(); return { l: Math.round(r.left), r: Math.round(r.right), h: Math.round(r.height), name: k.querySelector('.tc-head b').textContent, use: !!k.classList.contains('in-use') }; });
+    const call = [...c.querySelectorAll('.tp-call b')].map((x) => Math.round(x.getBoundingClientRect().height / parseFloat(getComputedStyle(x).lineHeight)));
+    return { coarse: matchMedia('(hover: none) and (pointer: coarse)').matches, w: innerWidth, box: [Math.round(b.left), Math.round(b.right)], scroll: c.scrollWidth > c.clientWidth, left: Math.round(c.scrollLeft), cards, call,
+      wide: body.scrollWidth > body.clientWidth + 1, voiceTop: Math.round(document.getElementById('packSwitch').getBoundingClientRect().top), open: document.getElementById('sheet').classList.contains('open') }; });
+  const s0 = await shelf();
+  check(s0.coarse && s0.scroll && s0.box[0] === 0 && s0.box[1] === s0.w && !s0.wide, 'the shelf runs edge to edge and the page itself never scrolls sideways: ' + JSON.stringify(s0));
+  check(s0.cards[0].use && s0.cards[0].l === 16 && s0.cards[0].r < s0.w && s0.cards[1].l < s0.w - 20 && s0.cards[1].r > s0.w, 'the look in use is in view, the next one\'s edge shows: ' + JSON.stringify(s0.cards));
+  check(new Set(s0.cards.map((k) => k.h)).size === 1 && s0.call.every((n) => n === 1), 'the cards are one height and each call is on one line: ' + JSON.stringify([s0.cards, s0.call]));
+  check(s0.voiceTop < 852 - 80, 'the voice picker is on the first screen: ' + s0.voiceTop);
+  // a turn of the thumb brings the next look, and the sheet stays (a sideways drag elsewhere closes it)
+  const cdp = await page.context().newCDPSession(page);
+  const y = await page.evaluate(() => { const r = document.querySelector('#themeCards .tc-head').getBoundingClientRect(); return r.top + r.height / 2; });
+  await page.waitForFunction((y) => { const e = document.elementFromPoint(300, y); return !!(e && e.closest('#themeCards')); }, y, { timeout: 8000 });   // the splash has lifted
+  await swipe(cdp, 300, y, -260, 4);
+  await page.waitForFunction(() => { const c = document.getElementById('themeCards'); return c.scrollLeft > 100 && Math.abs(c.children[1].getBoundingClientRect().left - 16) <= 2; }, null, { timeout: 5000 })
+    .catch(async () => { throw new Error('a turn of the thumb brings the next look: ' + JSON.stringify(await shelf())); });
+  await swipe(cdp, 80, y, 260, 4);
+  await page.waitForFunction(() => document.getElementById('themeCards').scrollLeft < 4, null, { timeout: 5000 });
+  check((await shelf()).open, 'turning the shelf back to the right does not close the Garage');
+  // Use on the second look: it is in use, and the shelf stays where the thumb left it
+  await page.evaluate(() => { const c = document.getElementById('themeCards'); c.scrollLeft = c.children[1].offsetLeft - c.children[0].offsetLeft; });
+  await page.click('#themeCards .theme-card:nth-child(2) .tc-head .ink-btn');
+  await page.waitForFunction(() => /tapedeck/.test(document.documentElement.dataset.theme || ''));
+  const s1 = await shelf();
+  check(s1.cards[1].l === 16 && s1.left > 100, 'the look you chose stays in view: ' + JSON.stringify(s1.cards));
+  // large text keeps the stack: every word of a card whole
+  await page.evaluate(() => { document.documentElement.dataset.typeSize = 'large'; });
+  const s2 = await shelf();
+  check(!s2.scroll && s2.cards.every((k) => k.l >= 0 && k.r <= s2.w), 'large text keeps the stack: ' + JSON.stringify(s2.cards));
+  await page.evaluate(() => { delete document.documentElement.dataset.typeSize; });
+  // Your cars, signed out: the empty bay and its key, which opens People's sign-in
+  const bay = await page.evaluate(() => { const b = document.querySelector('.empty-bay'); b.scrollIntoView(); return { text: b.innerText.replace(/\s+/g, ' '), dashed: getComputedStyle(b.querySelector('.eb-slot')).borderTopStyle, key: Math.round(b.querySelector('.ink-btn').getBoundingClientRect().height) }; });
+  check(/^No car parked here yet Sign in to keep your cars/.test(bay.text) && bay.dashed === 'dashed' && bay.key >= 44, 'Your cars signed out is an empty bay: ' + JSON.stringify(bay));
+  await page.click('.empty-bay .ink-btn');
+  await page.waitForSelector('#accountBody >> text=Sign in with Google', { state: 'visible', timeout: 5000 });
+}, { ...IPHONE, isMobile: true });
+
 flow('plan flow (b) a loop in 2 taps: Plan on the map, then Start; its progress in view, its card has a length in your units and no Quick / Fun / Long way (the owner, 2026-11-10)', async (page, base) => {
   await planRouter(page);
   const { taps, tap } = await planPage(page, base);
