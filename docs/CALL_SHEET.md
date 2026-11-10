@@ -4,6 +4,20 @@ Decisions Claude made for you, newest first. Each one says what was decided, why
 you reach one you've seen. If you disagree with a call, say so and it gets reversed; nothing here is hard to undo unless
 it says so. Things only you can do are in docs/OWNER_TODO.md.
 
+## 2026-11-10 (fable-road-page): About a road says its climb, and speaks in words (claude/fable-road-page)
+
+A bug first: on any road with 40 m or more of climb, the sheet's first line read "Switchbacks · 0.8 mi · descending
+[object Object]". The climb was given to the formatter for short distances, which returns a number and a unit as a
+pair. It now uses the height formatter the route card uses: "descending 308 ft", or metres.
+
+Then the words. The sheet listed TECH, FLOW, SURF, CLEAR and "Confidence: L0 · From the map only", which are the
+code's names. They are now Technical, Flow, Surface and Clear road, each with a few words on what it measures, its
+score, and a bar as long as the score. An unknown score is "--" with an empty bar and says why ("not measured by
+members yet"); nothing is guessed. "How sure" is said in words with no L0/L1/L2. The closing note read "scored by a
+simulated sane driver"; it reads "as a careful driver would take it. Never a speed to aim for."
+
+Undo: revert the PR. The scores themselves and how they are worked out are unchanged.
+
 ## 2026-11-10 (fable-pin-names): a place you pin or tap goes by its name, never by coordinates (claude/fable-pin-names)
 
 Hold the map on Foothills Parkway and the pin's sheet said "Foothills Parkway", but Go here then filled Where to? with

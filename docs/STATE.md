@@ -1,5 +1,15 @@
 # VETTA — CURRENT AGENT HANDOFF STATE
 
+## Session 2026-11-10 (fable-road-page): About a road: the climb's "[object Object]" fixed; scores as named bars (claude/fable-road-page, off origin/main 3f2f315)
+
+- Bug: `openRoadPage` passed `ApexUnits.short` (returns `{ n, u }`) as the headline's height formatter, so a road with a
+  climb read "descending [object Object]". Now `heightLabel` (feet or metres).
+- `web/road_page.js`: `rows()` is gone; `meters(d)` (Technical, Flow, Surface, Clear road: label, hint, value or null)
+  and `facts(d)` (Corners, Blind corners, How sure in words). `web/cockpit.js` draws `.rp-meter` (name, number, bar,
+  hint) and `.rp-fact` rows; CSS in `web/index.html`.
+- Tests: tests/test_road_page.py (plain words, unknown stays null, the climb formatter); e2e "road page…" (names, the
+  empty bar for an unknown score, bar length = score, the climb in feet with a stubbed terrain profile).
+
 ## Session 2026-11-10 (fable-pin-names): pins and tapped places by name; the spot dialog's stars (claude/fable-pin-names, off origin/main e76f1bb)
 
 - `web/cockpit.js`: `setFieldPin(field, point, name)` / `pinIn` / `fieldPin` beside `resolvePlace(q, field)`: Go here,

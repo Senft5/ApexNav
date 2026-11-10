@@ -4736,8 +4736,24 @@ flow('road page: About a road shows its archetype, axes and how sure it is (IDEA
   await page.waitForSelector('aside.side-pop.open[aria-label="About this road"]');
   const text = await page.textContent('aside.side-pop.open');
   check(/Test Pass/.test(text) && /Switchbacks/.test(text), 'name and archetype: ' + text.slice(0, 200));
-  check(/TECH/.test(text) && /FLOW/.test(text) && /L0 · From the map only/.test(text), 'axes and confidence');
-  check(/SURF--/.test(text.replace(/\s+/g, '')), 'no member data: SURF unknown');
+  // 2026-11-10: plain names with what they mean, a bar each, and how sure in words (it said TECH, FLOW, SURF, CLEAR and "L0")
+  check(/Technical/.test(text) && /Flow/.test(text) && /How sure\s*From the map only/.test(text) && !/TECH|SURF|\bL0\b/.test(text), 'the scores by name, how sure in words: ' + text.slice(0, 300));
+  const meters = await page.evaluate(() => [...document.querySelectorAll('aside.side-pop.open .rp-meter')].map((m) => ({ name: m.querySelector('.rp-name').textContent, v: m.querySelector('b').textContent, fill: m.querySelector('.rp-bar i').getBoundingClientRect().width, bar: m.querySelector('.rp-bar').getBoundingClientRect().width, hint: m.querySelector('small').textContent })));
+  const surf = meters.find((m) => m.name === 'Surface'), tech = meters.find((m) => m.name === 'Technical');
+  check(meters.length === 4 && surf.v === '--' && surf.fill === 0 && /not measured/.test(surf.hint), 'no member data: Surface is --, its bar empty: ' + JSON.stringify(surf));
+  check(Math.abs(tech.fill / tech.bar - Number(tech.v) / 100) < 0.02, 'a bar is as long as its score: ' + JSON.stringify(tech));
+  // with the terrain known the first line says the climb as a height in the driver's units (it read "climbing [object Object]")
+  await page.click('aside.side-pop.open button:has-text("Close")');
+  await page.evaluate(() => {
+    ApexStages.profile = async (t) => t.lat.map((_, i) => 300 + i * 0.5);
+    const lat = [], lon = []; let x = 0, y = 0, h = Math.PI / 2;
+    const step = (n, turn) => { for (let i = 0; i < n; i++) { h += turn; x += 5 * Math.cos(h); y += 5 * Math.sin(h); lat.push(35 + y / 110540); lon.push(-83 + x / 91190); } };
+    step(20, 0); for (let k = 0; k < 8; k++) { step(10, (k % 2 ? 1 : -1) * Math.PI / 10); step(16, 0); } step(20, 0);
+    window.apexDebug.openRoadPage({ lat, lon, name: 'Test Pass', km: lat.length * 5 / 1000, junctionsPerKm: 0.2 });
+  });
+  await page.waitForFunction(() => /climbing/.test(document.querySelector('aside.side-pop.open .rp-head').textContent), null, { timeout: 10000 });
+  const head = await page.textContent('aside.side-pop.open .rp-head');
+  check(/climbing [\d,]+ ft$/.test(head) && !/object/i.test(head), 'the climb in feet: ' + head);
   await page.click('aside.side-pop.open button:has-text("Close")');
   check(!(await page.isVisible('aside.side-pop.open[aria-label="About this road"]')), 'closes');
 });
