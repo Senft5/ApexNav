@@ -1,5 +1,33 @@
 # VETTA — CURRENT AGENT HANDOFF STATE
 
+## Session 2026-11-10 (fable-tile-limits): HPMS limits under 25 mph are unknown; tile times take HPMS's posted limit (claude/fable-tile-limits, off origin/main f27a1fe)
+
+- [x] Deferred finding 1 (the fable-hpms-limits entry below: "the tiles' times use OSM's limit or the class estimate,
+  never HPMS's"). Measured first, every edge of the shipped tiles (169k of 100 m or more) against the shipped bundles:
+  where OSM and HPMS both post a limit they agree within 5 mph on 93 % (motorway), 98 % (trunk), 88 % (primary), 75 %
+  (secondary), 76 % (tertiary) of the km. A cover / one-value / class guard barely moves those numbers: the misses are
+  the two sources disagreeing (HPMS 55 where OSM signs 45, 38 km of secondary), not wrong matches.
+- [x] By HPMS value: 30 mph and up agree on 76-99 %, 25 on 77 %, 20 on 63 %, 15 on 0 %. Asked HPMS itself
+  (geo.dot.gov, HPMS_FULL_IN_2024): Switzerland County, Indiana reports 15 mph on every county road (f_system 6 and
+  7). web/route_ctx/context_grid.js `LIMIT_MPH` and tools/ctx_etl/build.py `LIMIT_MPH` are now 25-85: the reader
+  refuses the value in today's bundles, the writer stops storing it.
+- [x] tools/graph_etl/score_edges.js `inventoryLimit(limit, fclass, rc, use)`: for an edge OSM has no sign on, HPMS's
+  modal limit when it is matched on `INVENTORY.COVER` (0.5) of the 25 m samples and `SAME` (0.6) of those agree; never
+  for a ramp; a freeway section (fclass 1-2) only for a motorway or trunk edge. It feeds the time model and the tile's
+  `speed` (flag `speed_est` clear: the phone already reads HPMS as posted in the engine's chain). In the model hash.
+- Not done: the "Graph region" rebuild (owner or coordinator: it commits to the data branch; the expressway flag waits
+  for the same run). Until then tiles keep today's times and baked quality; the reader's floor works at once.
+- Seen, not changed: Indiana HPMS 25-30 mph on rural roads (State Line Road 10.7 km at 25, Johnson Fork, Seeley,
+  Pinhook at 30) look low against OSM where both exist (Georgetown, Pribble: HPMS 25, OSM 35), but can't be told from
+  real town limits by value. A density-aware rule (a limit of 30 or less in open country) is the candidate; it needs
+  ground truth first.
+- Tests: test_travel_time_takes_the_road_inventorys_posted_limit_where_the_map_has_no_sign (unit cases and a real
+  shipped secondary edge, with and without the bundles), the two "no limit" tests extended to the 25 floor (the
+  shipped bundles hold over 100 such spans); pytest 1370 passed, 5 skipped. No web flow touched (no phone code path
+  but the reader's range): e2e own routing flows run below.
+- Exact next task: run "Graph region", then tools/live_speed.js on the owner's trips at Fun and Long way against the
+  new tiles (times on primary roads move about 3 %).
+
 ## Session 2026-11-09 (fable-road-carry): road data survives no signal and a closed app (claude/fable-road-carry, off origin/main 3a74cc3)
 
 - [x] Found: contributor.js createLive `finish()` gave up when the last try had failed, so a trip that ended with no
@@ -81,33 +109,6 @@
   (Valhalla-planned routes off our tiles) still knows only motorway/trunk.
 - Exact next task: after merge, run Actions → "Graph region (own routing, OH+KY+IN)" so the flag reaches the tiles; then
   unchanged (tools/live_speed.js on the owner's trips at Fun and Long way).
-## Session 2026-11-10 (fable-tile-limits): HPMS limits under 25 mph are unknown; tile times take HPMS's posted limit (claude/fable-tile-limits, off origin/main f27a1fe)
-
-- [x] Deferred finding 1 (the fable-hpms-limits entry below: "the tiles' times use OSM's limit or the class estimate,
-  never HPMS's"). Measured first, every edge of the shipped tiles (169k of 100 m or more) against the shipped bundles:
-  where OSM and HPMS both post a limit they agree within 5 mph on 93 % (motorway), 98 % (trunk), 88 % (primary), 75 %
-  (secondary), 76 % (tertiary) of the km. A cover / one-value / class guard barely moves those numbers: the misses are
-  the two sources disagreeing (HPMS 55 where OSM signs 45, 38 km of secondary), not wrong matches.
-- [x] By HPMS value: 30 mph and up agree on 76-99 %, 25 on 77 %, 20 on 63 %, 15 on 0 %. Asked HPMS itself
-  (geo.dot.gov, HPMS_FULL_IN_2024): Switzerland County, Indiana reports 15 mph on every county road (f_system 6 and
-  7). web/route_ctx/context_grid.js `LIMIT_MPH` and tools/ctx_etl/build.py `LIMIT_MPH` are now 25-85: the reader
-  refuses the value in today's bundles, the writer stops storing it.
-- [x] tools/graph_etl/score_edges.js `inventoryLimit(limit, fclass, rc, use)`: for an edge OSM has no sign on, HPMS's
-  modal limit when it is matched on `INVENTORY.COVER` (0.5) of the 25 m samples and `SAME` (0.6) of those agree; never
-  for a ramp; a freeway section (fclass 1-2) only for a motorway or trunk edge. It feeds the time model and the tile's
-  `speed` (flag `speed_est` clear: the phone already reads HPMS as posted in the engine's chain). In the model hash.
-- Not done: the "Graph region" rebuild (owner or coordinator: it commits to the data branch; the expressway flag waits
-  for the same run). Until then tiles keep today's times and baked quality; the reader's floor works at once.
-- Seen, not changed: Indiana HPMS 25-30 mph on rural roads (State Line Road 10.7 km at 25, Johnson Fork, Seeley,
-  Pinhook at 30) look low against OSM where both exist (Georgetown, Pribble: HPMS 25, OSM 35), but can't be told from
-  real town limits by value. A density-aware rule (a limit of 30 or less in open country) is the candidate; it needs
-  ground truth first.
-- Tests: test_travel_time_takes_the_road_inventorys_posted_limit_where_the_map_has_no_sign (unit cases and a real
-  shipped secondary edge, with and without the bundles), the two "no limit" tests extended to the 25 floor (the
-  shipped bundles hold over 100 such spans); pytest 1370 passed, 5 skipped. No web flow touched (no phone code path
-  but the reader's range): e2e own routing flows run below.
-- Exact next task: run "Graph region", then tools/live_speed.js on the owner's trips at Fun and Long way against the
-  new tiles (times on primary roads move about 3 %).
 ## Session 2026-11-09 (fable-hpms-limits): a "not reported" speed limit was read as 254 mph (claude/fable-hpms-limits, off origin/main 1d97979)
 
 - [x] Found while measuring posted limits for the overview: the context grid's HPMS `speed_limit` (u8 mph) clamped a state's
