@@ -17,6 +17,23 @@ members yet"); nothing is guessed. "How sure" is said in words with no L0/L1/L2.
 simulated sane driver"; it reads "as a careful driver would take it. Never a speed to aim for."
 
 Undo: revert the PR. The scores themselves and how they are worked out are unchanged.
+
+## 2026-11-10 (fable-pin-names): a place you pin or tap goes by its name, never by coordinates (claude/fable-pin-names)
+
+Hold the map on Foothills Parkway and the pin's sheet said "Foothills Parkway", but Go here then filled Where to? with
+"35.667000, -83.812000" and named the route "To Pin 35.667, -83.812". Tap the map did the same. Now the field and the
+route carry the name the sheet showed ("To Foothills Parkway"); a place tapped with no lookup is "Dropped pin" and its
+route "To a dropped pin". The exact point still goes to the router (it rides beside the field and holds while the text
+is unchanged; the swap key takes it across). A named pin becomes a recent place; an unnamed one never does. I did not
+make Tap the map wait for the road's name: that would put a network lookup in front of planning.
+
+Three smaller things on the same screens: the pin's third key said "Save as highlight" and opened "Add a spot", so it
+now says "Save as a spot". A spot's rating lit only the star you chose (five stars looked like one); it now fills up
+to it, pale after, the way the spots list already draws stars, and Save and Cancel sit in one row at one height. The
+notes under a search that finds nothing said "Press Go" while the key under them says "Search"; they say Search, and
+"offline" is only said when the phone is offline.
+
+Undo: revert the PR. Typed coordinates still work as before and are still named "Pin lat, lon".
 ## 2026-11-10 (fable-one-corner): "1 corners" is "1 corner"; a Best roads nearby key keeps its word while it searches (claude/fable-one-corner)
 
 A road with one corner read "1 corners" on its card's line, under its big number, aloud to a screen reader, in "1 more
@@ -91,6 +108,14 @@ Not changed: the 1 hour / 2 hours loops and "My free time" in Options, and the r
 weights in fun_route.js (unused by the app now, still tested).
 
 Undo: revert the PR. To bring a level back for loops only, set `LOOP_STYLE` in web/cockpit.js.
+
+## 2026-11-10 (fable-one-loop-home): Options loses its "1 hour / 2 hours" loop keys; a loop by time is the dial's (claude/fable-one-loop-home)
+
+Since the loop dial can be set by time (30 min to 3 h), Options' "Loop to fit: 1 hour, 2 hours" was a second, smaller
+copy of it in another place. It is gone: one setting, one home. "Loop to fit" keeps My free time and This album, which
+only the app can answer, so in a browser the group is put away rather than left as an empty heading.
+
+Undo: revert the PR.
 
 ## 2026-11-10 (fable-design-offline): design pass 5: People with no connection is a page, and comes back by itself (claude/fable-design-offline)
 
