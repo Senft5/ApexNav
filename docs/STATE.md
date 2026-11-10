@@ -12,6 +12,14 @@
 - Next: Options' "Loop to fit" 1 hour / 2 hours keys now duplicate the dial; remove them once the owner has used the
   dial (My free time stays).
 
+## Session 2026-11-10 (fable-one-loop-home): Options' duplicate loop-by-time keys removed (claude/fable-one-loop-home, off origin/main 01fa773)
+
+- web/index.html: `#fitCtl` holds only `#fitRow` (My free time, This album) and is `hidden` until cockpit.js finds
+  `ApexIosContext.available()`; the `[data-loop-min]` keys and their handler in Options are gone (the dial's Time unit, #342).
+- Tests: tests/test_plan_options.py; e2e "one sheet, in that order" expects no Loop to fit group in a browser.
+- Reviewed and left as it is: the drive screen (free drive, day, night, landscape).
+- Next: the drive-ended card has not had a design pass in this run.
+
 ## Session 2026-11-10 (fable-loops): loops lose Quick / Fun / Long way; the card offers which way to head (claude/fable-loops, off origin/main 7dee309)
 
 - [x] The owner: "why do loops need a long way a fun and a quick? the whole point is aimless driving". web/cockpit.js:

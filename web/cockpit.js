@@ -5275,7 +5275,7 @@
     })();
     // Loop to fit (route_ctx/ios_context.js): the next event's start or the album's length, from the phone, only in the app and
     // only when tapped (iOS asks for the permission at that tap). The provider then marks routes that run past it.
-    if (window.ApexIosContext && ApexIosContext.available() && $('fitRow')) $('fitRow').hidden = false;
+    if (window.ApexIosContext && ApexIosContext.available() && $('fitRow')) { $('fitRow').hidden = false; $('fitCtl').hidden = false; }
     document.querySelectorAll('[data-fit]').forEach(b => b.addEventListener('click', async () => {
       if (!window.ApexIosContext || loopBusy) return;
       const op = b.dataset.fit === 'album' ? 'music' : 'calendar';
@@ -5285,12 +5285,7 @@
       toast(p.text); if ($('fitNote')) $('fitNote').textContent = p.text;   // the toast gives way to the loop's own; the note stays
       if (p.minutes) { closeOptions(true); loop({ minutes: p.minutes }); }
     }));
-    // an hour or two of driving, home again (R-16): from Options, as the dial is one unit (finding 6)
-    document.querySelectorAll('#optSheet [data-loop-min]').forEach(b => b.addEventListener('click', () => {
-      if (loopBusy) return;
-      closeOptions(true);
-      loop({ minutes: parseInt(b.dataset.loopMin, 10) });
-    }));
+    // (an hour or two of driving, home again, R-16: the dial's own once it could be set by time; Options had a second copy)
     // Presets (plan_presets.js): this setup under a name, a stamp at the top of the sheet; tapping one sets it all at once.
     function paintPresets() {
       const row = $('presetRow');
