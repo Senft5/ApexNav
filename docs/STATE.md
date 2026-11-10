@@ -103,6 +103,13 @@
 - Next: two cards can share a name (both "Southeast"); a finer name (16 points, or the road it is built on) if it reads
   badly on real roads. The 1 hour / 2 hours loops sit in Options; the card's Length row is miles only.
 
+## Session 2026-11-10 (fable-paths-are-keys): the empty Spots list has an Add one key (claude/fable-paths-are-keys, off origin/main dc9caf9)
+
+- [x] web/spots_feed.js: the empty note is text plus `btn('Add one', page.addSpot, 'linkbtn')`; web/cockpit.js hands
+  `addSpot` (`showView('garage')`, `ApexGarageSettings.ui.open('spots')`). web/incident.js: the note without arrows.
+- [x] tests/test_paths_are_keys.py (3); e2e flow "a path is a key".
+- Next: Your data's "Settings → Account → Delete account" note as a key, once #358 is in.
+
 ## Session 2026-11-10 (fable-one-loop-home): Options' duplicate loop-by-time keys removed (claude/fable-one-loop-home, off origin/main 01fa773)
 
 - web/index.html: `#fitCtl` holds only `#fitRow` (My free time, This album) and is `hidden` until cockpit.js finds

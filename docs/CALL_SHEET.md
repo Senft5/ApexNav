@@ -133,6 +133,17 @@ weights in fun_route.js (unused by the app now, still tested).
 
 Undo: revert the PR. To bring a level back for loops only, set `LOOP_STYLE` in web/cockpit.js.
 
+## 2026-11-10 (fable-paths-are-keys): "Garage → Settings → Spots" is a key, not a path to walk (claude/fable-paths-are-keys)
+
+For "reducing any clunky feelings": Where to?'s Spots near you, when empty, read "No shared spots near here yet. Add
+one in Garage → Settings → Spots." It now reads "No shared spots near here yet. **Add one**", and the key opens
+Settings on Spots. The crash sheet's note had the same arrows ("Add an emergency contact in Garage → Settings → Crash
+check to text someone from here."); nothing in that sheet should lead away from Call and I'm OK, so it gets no key,
+only a plain sentence: "To text someone from here, add an emergency contact in Settings, under Crash check."
+
+Left for after #358 (it rewrites the same lines): Your data's "deleted from the server in Settings → Account → Delete
+account".
+
 ## 2026-11-10 (fable-one-loop-home): Options loses its "1 hour / 2 hours" loop keys; a loop by time is the dial's (claude/fable-one-loop-home)
 
 Since the loop dial can be set by time (30 min to 3 h), Options' "Loop to fit: 1 hour, 2 hours" was a second, smaller
