@@ -38,6 +38,15 @@
 - Next: Options' "Loop to fit" 1 hour / 2 hours keys now duplicate the dial; remove them once the owner has used the
   dial (My free time stays).
 
+## Session 2026-11-10 (fable-whats-new): What's new says what changed since October (claude/fable-whats-new, off origin/main 948cb4b)
+
+- `web/whats_new.js`: `NEWS.id` '2026-11-10' with four lines: Quick / Fun / Long way, the drive overview on the route
+  card, loops by distance or time with a way to head, Route tuning. The last news was 2026-10-28 (Siri, landscape, stops,
+  kilometres), so everyone who updated since saw none of the routing work announced.
+- `tests/test_whats_new.py::test_it_names_what_is_really_there`: each name in the news is on a screen under that name.
+- Looked at on 393 and 320 px wide screens: one screen, nothing cut. pytest whole suite and the e2e "What's new" flow passed.
+- Next: when a PR adds something a driver would notice, it edits NEWS and its id in the same PR (the file's own rule).
+
 ## Session 2026-11-10 (fable-layers): design pass 8, the Layers panel as the map's legend (claude/fable-layers, off origin/main 1a38381)
 
 - web/index.html only (markup and CSS, no script): `#switchRow` rows are `.sw.ly` = switch, name over a `<small>` line,

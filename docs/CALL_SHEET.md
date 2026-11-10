@@ -29,6 +29,16 @@ keeps its own word and only its progress bar moves.
 
 Undo: revert the PR.
 
+## 2026-11-10 (fable-whats-new): What's new tells of the routing work (claude/fable-whats-new)
+
+The What's new sheet still showed the news of 2026-10-28 (Siri, landscape, stops of the day, kilometres), which every
+tester has already seen, so the biggest changes since (three levels for every route, the plain-words overview, loops
+on a dial, Route tuning) were never said to anyone. It now says those four, once, on a quiet launch as before. I left
+out "routes are planned on the phone, with no signal" because that is only true inside the region our tiles cover.
+I wrote "highway" (the app's own word on its keys). Places in the app are named in words, not with arrows.
+
+Undo: set `NEWS` back in web/whats_new.js. A phone that has seen '2026-11-10' will not be shown it again.
+
 ## 2026-11-10 (merger): e2e may run 35 minutes, not 25 (claude/project-thread-er8kzz)
 
 The e2e suite is 152 flows now and takes about 24 minutes, so GitHub cut it off at its 25-minute limit on the last flow
