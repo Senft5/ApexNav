@@ -5350,6 +5350,7 @@ flow('Your records: unknown dates and unscored drives never make a "new best", a
   check(r.rows[0][0] === 'b2' && /a new best/.test(r.rows[0][1]), `the dated latest best is new (got\n${text})`);
   check(r.rows[1][0] === 'a4' && !/new best/.test(r.rows[1][1]) && /date unknown/.test(r.rows[1][1]) && /of 3 scored drives/.test(r.rows[1][1]), `an undated import is no "latest" (got\n${text})`);
   check(r.rows[2][0] === 'm2' && /Smoothest drive this month, of 2/.test(r.rows[2][1]), `braking measured once is no record (got\n${text})`);
+  check(!/\d{4}-\d{2}-\d{2}/.test(text) && /1 Sept? 2020|Sep 1, 2020/.test(r.rows[0][1]), `a record's day reads as a day ("1 Sep 2020"), never 2020-09-01 (got\n${text})`);
   check(r.overflow <= 1, `the records table fits a 390 px screen (overflows by ${r.overflow} px)`);
 });
 

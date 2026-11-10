@@ -120,6 +120,12 @@
 - [x] Tests: tests/test_whats_new.py `test_it_never_interrupts`; e2e "what's new…" first touches the screen and opens
   Options (no sheet, not marked seen), then a hands-off launch shows it after the splash.
 
+## Session 2026-11-10 (fable-log-dates): readable days in the Log's records and charts (claude/fable-log-dates, off origin/main 1a38381)
+
+- [x] web/format.js `dayShort(iso, locale)`; web/analysis.html: Your records' day through `ApexFormat.dateTime`, the
+  Score over time and road charts' labels through `dayShort` (CSP hashes regenerated).
+- [x] Tests: tests/test_format.py `test_a_chart_day_reads_as_a_day`; e2e "Your records…" refuses an ISO date in a row.
+
 ## Session 2026-11-10 (fable-design-signed-out): People signed out, redrawn as a page (claude/fable-design-signed-out, off origin/main 2fda3f8)
 
 - [x] Design pass 3 (the owner, 2026-11-10: "designed by an artist not a programmer"). web/cockpit.js `renderAccount`,

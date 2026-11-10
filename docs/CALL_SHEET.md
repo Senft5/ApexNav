@@ -144,6 +144,13 @@ marked as seen until you close it).
 
 Cost: someone who always taps within the first second sees the news a launch or two later. Undo: revert the PR.
 
+## 2026-11-10 (fable-log-dates): the Log's records and charts say "30 Oct", not "2026-10-30" (claude/fable-log-dates)
+
+The Log's list stamps each drive "30 OCT", but Your records under it printed 2026-10-30 and the two score charts
+labelled their dots 10-30, like database fields. Records now read as the rest of the Log does (Today, Yesterday,
+"30 Oct", with the year when it isn't this one) and the charts' days read "30 Oct" (in the phone's own order, so
+"Oct 30" on a US phone). Undo: revert the PR.
+
 ## 2026-11-10 (fable-design-signed-out): People, signed out, is a page instead of a form (claude/fable-design-signed-out)
 
 Design pass 3, after your "designed by an artist not a programmer". Signed out, People was a logo, a small heading,
