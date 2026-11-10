@@ -1,5 +1,22 @@
 # VETTA — CURRENT AGENT HANDOFF STATE
 
+## Session 2026-11-10 (fable-design-signed-out): People signed out, redrawn as a page (claude/fable-design-signed-out, off origin/main 2fda3f8)
+
+- [x] Design pass 3 (the owner, 2026-11-10: "designed by an artist not a programmer"). web/cockpit.js `renderAccount`,
+  signed out: `page(art, head, line, list, waiting)` builds `.join-page` for both sides: `.join-art` (an inline SVG,
+  roads as casing + fill, `.jr-puck` people, one `.lead` in the accent), `h3.join-head`, `.join-line`, `ul.join-gets`
+  (glyph in a dashed circle, `b` name, `small` one line), `.join-wait` for a stashed link, `.join-sign` (Apple, Google,
+  legal) pushed to the foot. The logo `img` and `.crew-gets` are gone.
+- [x] web/index.html: the `.join-*` rules; `.sheet .body:has(.join-page) { flex: 1 1 auto }` lets the page fill the
+  sheet (only while that page is drawn, so the signed-in lists are untouched); a short phone (max-height 720px) gets a
+  shorter drawing and rows so both keys stay on the first screen (checked at 375x667 with the Apple key shown).
+- [x] Tests: tests/test_people_signed_out.py; e2e "REVIEW.md 1.2 screen by screen: the Log…" now measures the page
+  (the head's face and size, two pucks and one lead, a line per row, 52 px key, keys at the foot, nothing wider than
+  the sheet). Also run: "one link in…", "Billet: a primary key…". docs/APP_REVIEW.md 5.1.1 row updated.
+- Next design chunks, from reading the screens: the route card stacks two pencil help lines under the levels; search
+  says a plain "Routing…" while it waits; the Garage is a long page (IDEAS U-49); "Can't reach Vetta" on People is a
+  heading and a button on blank paper.
+
 ## Session 2026-11-10 (fable-tile-limits): HPMS limits under 25 mph are unknown; tile times take HPMS's posted limit (claude/fable-tile-limits, off origin/main f27a1fe)
 
 - [x] Deferred finding 1 (the fable-hpms-limits entry below: "the tiles' times use OSM's limit or the class estimate,

@@ -4,6 +4,23 @@ Decisions Claude made for you, newest first. Each one says what was decided, why
 you reach one you've seen. If you disagree with a call, say so and it gets reversed; nothing here is hard to undo unless
 it says so. Things only you can do are in docs/OWNER_TODO.md.
 
+## 2026-11-10 (fable-design-signed-out): People, signed out, is a page instead of a form (claude/fable-design-signed-out)
+
+Design pass 3, after your "designed by an artist not a programmer". Signed out, People was a logo, a small heading,
+three boxed icons and a button, with two thirds of the phone left blank under them. The calls:
+- **A drawing leads each side.** A road drawn the way a printed map draws one, with pucks on it: two roads meeting
+  for Friends, one road with three in file behind a red lead for Crews. It is decoration, drawn by hand in the page,
+  never a map of real people.
+- **The name is set large** ("Drive with friends.", "Drive as a crew.") in the app's number face, and each of the
+  three things it gets you is a row with one plain line saying what it is, shaped like the friends list that will
+  stand there after sign-in.
+- **The sign-in keys stand at the foot of the page**, under the thumb, 52 pt tall. Apple's key is square-cornered
+  now so it matches every other key in the app (Apple's rules let the corner match); it is still first and the same
+  size as Google's.
+- **The Vetta logo is gone from this page.** It sat above Friends only, and the first-run screen already shows it.
+- **A waiting friend or crew link is a boxed line** above the keys, so it reads as the reason to sign in.
+- Undo: revert the PR; nothing is stored and no behaviour changed.
+
 ## 2026-11-10 (fable-tile-limits): posted limits from the government road inventory: junk out, good ones into travel times (claude/fable-tile-limits)
 
 Where the map has no speed-limit sign, the app knows a second source: the government road inventory (HPMS). I
