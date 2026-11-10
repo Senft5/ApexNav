@@ -79,6 +79,14 @@ weights in fun_route.js (unused by the app now, still tested).
 
 Undo: revert the PR. To bring a level back for loops only, set `LOOP_STYLE` in web/cockpit.js.
 
+## 2026-11-10 (fable-one-loop-home): Options loses its "1 hour / 2 hours" loop keys; a loop by time is the dial's (claude/fable-one-loop-home)
+
+Since the loop dial can be set by time (30 min to 3 h), Options' "Loop to fit: 1 hour, 2 hours" was a second, smaller
+copy of it in another place. It is gone: one setting, one home. "Loop to fit" keeps My free time and This album, which
+only the app can answer, so in a browser the group is put away rather than left as an empty heading.
+
+Undo: revert the PR.
+
 ## 2026-11-10 (fable-design-offline): design pass 5: People with no connection is a page, and comes back by itself (claude/fable-design-offline)
 
 With no answer from the server, People was a heading ("Can't reach Vetta"), a grey line and a small key at the top of

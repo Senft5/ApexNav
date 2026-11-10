@@ -1994,10 +1994,10 @@
             <input class="field" id="fromInput" autocorrect="off" autocapitalize="off" spellcheck="false" enterkeyhint="go" placeholder="From: current location" aria-label="From" autocomplete="off" />
             <button class="icon-btn" id="swapBtn" aria-label="Swap From and To"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 4v16M4 8l4-4 4 4M16 20V4M12 16l4 4 4-4"/></svg></button>
           </div></div>
-        <!-- a loop sized by time, not distance (the dial is one unit, yours): an hour, two, or the phone's own (app only) -->
-        <div class="ctl" id="fitCtl"><div class="ctl-label">Loop to fit <small>home again in time</small></div>
-          <div class="detents"><button data-loop-min="60">1 hour</button><button data-loop-min="120">2 hours</button></div>
-          <div class="detents mt-8" id="fitRow" hidden><button data-fit="calendar">My free time</button><button data-fit="album">This album</button></div>
+        <!-- a loop sized by what the phone knows (app only: the page shows this group when the app can answer). An hour or two
+             is the dial's own since it can be set by time: one setting, one home -->
+        <div class="ctl" id="fitCtl" hidden><div class="ctl-label">Loop to fit <small>home again in time</small></div>
+          <div class="detents" id="fitRow" hidden><button data-fit="calendar">My free time</button><button data-fit="album">This album</button></div>
           <p class="note" id="fitNote" role="status"></p></div>
         <div class="ctl"><div class="ctl-label">Presets <small>this setup, one tap next time</small></div>
           <div class="stamps plan-presets" id="presetRow" role="group" aria-label="Your presets" hidden></div>

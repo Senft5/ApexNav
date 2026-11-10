@@ -6298,8 +6298,9 @@ flow('plan flow (d) one Options sheet: Avoid ✕ and Prefer ✓ in it, what is o
   await page.click('#planOptionsChip');
   await page.waitForFunction(() => { const s = document.getElementById('optSheet'); return s.classList.contains('open') && Math.abs(s.getBoundingClientRect().bottom - innerHeight) < 2; });
   await page.waitForTimeout(300);
-  const groups = await page.evaluate(() => [...document.querySelectorAll('#optSheet .ctl-label')].map((l) => l.firstChild.textContent.trim()));
-  check(JSON.stringify(groups) === '["Avoid","Prefer","Kinds of corners","Start from","Loop to fit","Presets"]', 'one sheet, in that order: ' + JSON.stringify(groups));
+  const groups = await page.evaluate(() => [...document.querySelectorAll('#optSheet .ctl-label')].filter((l) => l.offsetParent).map((l) => l.firstChild.textContent.trim()));
+  // (Loop to fit is the app's: My free time and This album. An hour or two is the dial's own, so a browser has no such group)
+  check(JSON.stringify(groups) === '["Avoid","Prefer","Kinds of corners","Start from","Presets"]' && !(await page.$('#optSheet [data-loop-min]')), 'one sheet, in that order, with no second home for a loop by time: ' + JSON.stringify(groups));
   await scan(page, 'Options');
   await page.click('[data-avoid="highways"]');
   await page.click('[data-driver="passenger"]');
