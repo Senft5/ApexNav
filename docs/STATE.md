@@ -1,5 +1,14 @@
 # VETTA — CURRENT AGENT HANDOFF STATE
 
+## Session 2026-11-10 (fable-polish-7): the Settings list in groups, with values (claude/fable-polish-7, off origin/main 1a38381)
+
+- [x] web/garage_settings.js: `GROUPS` (a group's name goes before its first key, hidden while all its rows are),
+  `summaryOf(node, count)` and `refresh()` fill each row's `<small>` and `aria-label`; closing a setting's sheet
+  refreshes the list. A section opts in with `data-summary="<selector>"` (+ `data-summary-count="one,many"` for a
+  list) in web/index.html: zones, crash, nudge, units, motion. `.nav-group` CSS.
+- [x] Tests: tests/test_garage_settings.py (+1); e2e "Settings behind the gear…".
+- Next: Road feel, Route tuning and Spots rows have no value yet (Road feel's is drawn by who_sees.js).
+
 ## Session 2026-11-10 (fable-loops): loops lose Quick / Fun / Long way; the card offers which way to head (claude/fable-loops, off origin/main 7dee309)
 
 - [x] The owner: "why do loops need a long way a fun and a quick? the whole point is aimless driving". web/cockpit.js:

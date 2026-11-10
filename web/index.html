@@ -1235,6 +1235,12 @@
     .nav-row small { font-size: 14px; font-weight: 500; color: var(--panel-dim); margin-left: auto; }
     .nav-row i { flex: none; width: 9px; height: 9px; margin-right: 6px; border-right: 2px solid currentColor; border-bottom: 2px solid currentColor; transform: rotate(-45deg); }
     .nav-rows { display: grid; border-top: 1px solid var(--hair, var(--panel-dim)); }
+    /* Settings as three short lists (design pass 7): a group's name over its rows, each row saying what it is set to */
+    .nav-group { margin: 0; padding: 22px 2px 8px; border-bottom: 1px solid var(--hair, var(--panel-dim)); font: 700 12px var(--font-ui); letter-spacing: 0.08em; text-transform: uppercase; color: var(--panel-dim); }
+    .nav-group:first-child { padding-top: 6px; }
+    .nav-group[hidden] { display: none; }
+    .nav-rows:has(> .nav-group:first-child) { border-top: 0; }
+    .garage-pop .nav-row small { max-width: 55%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-align: right; }
     .sheet .body { overflow-y: auto; padding: 14px 16px 24px; display: grid; gap: 20px; }
     .sheet .body { zoom: var(--type-scale, 1); }   /* the phone's text size (format.js applyTypeScale) */
     /* IN-1 (panel round 2): the pages that carry the drive scale too. The plan sheet and the route card (each section of
@@ -1656,7 +1662,7 @@
           <section data-panel="garage" data-setting="account" data-title="Account" data-empty-hides>
             <div id="garageAccountBody" class="stack-12" data-fill></div>
           </section>
-          <section data-panel="garage" data-setting="zones" data-title="Privacy zones">
+          <section data-panel="garage" data-setting="zones" data-title="Privacy zones" data-summary="#zoneList" data-summary-count="place,places">
             <h3>Privacy zones</h3>
             <p class="note" style="margin:0 0 8px">Places like home and work. Inside one, nothing is recorded or shared, and convoys don't see you. Kept on this phone only.</p>
             <div class="detents" id="zoneRadius" role="group" aria-label="Zone size">
@@ -1667,7 +1673,7 @@
             <div class="row mt-8"><button class="ink-btn" id="zoneHereBtn">Add where I am</button><button class="ink-btn" id="zoneMapBtn">Add at map centre</button></div>
             <div id="zoneList" class="stack-8 mt-8"></div>
           </section>
-          <section data-panel="garage" data-setting="crash" data-title="Crash check">
+          <section data-panel="garage" data-setting="crash" data-title="Crash check" data-summary="[data-toggle=&quot;crash&quot;]">
             <h3>Crash check</h3>
             <p class="note" style="margin:0 0 8px">After a hard impact and a stop, Vetta asks if you're OK. If you don't answer within a minute it shows buttons to call emergency services or text this person your location. Your phone never calls or texts by itself. This is a backup to your phone's own crash detection, not a replacement for it. The contact stays on this phone.</p>
             <div class="row" style="flex-wrap:wrap">
@@ -1681,7 +1687,7 @@
             </div>
           </section>
           <!-- panel round 1 R-1: one reminder, off until you turn it on, at most once a week; no streaks, no nag -->
-          <section data-panel="garage" data-setting="nudge" data-title="Reminder">
+          <section data-panel="garage" data-setting="nudge" data-title="Reminder" data-summary="[data-toggle=&quot;nudge&quot;]">
             <h3>Reminder</h3>
             <p class="note" style="margin:0 0 8px">One notification at most once a week, the evening before the day you usually drive (or before a crew drive you said you're going to), naming the road the map suggests. Off until you turn it on.</p>
             <div class="row" style="flex-wrap:wrap">
@@ -1689,7 +1695,7 @@
             </div>
             <p class="note" id="nudgeState" role="status" aria-live="polite"></p>
           </section>
-          <section data-panel="garage" data-setting="units" data-title="Units">
+          <section data-panel="garage" data-setting="units" data-title="Units" data-summary="#unitsRow">
             <h3>Units</h3>
             <div class="switch" role="radiogroup" aria-label="Units" id="unitsRow"><button data-units="imperial" role="radio">Miles and feet</button><button data-units="metric" role="radio">Kilometres and metres</button></div>
             <p class="note" style="margin:8px 0 4px">Driving side: bends toward your own side of the road get more caution, since you see less round them.</p>
@@ -1784,7 +1790,7 @@
           <section data-panel="garage" data-setting="dev" data-title="Developer" data-empty-hides>
             <div id="garageDevBody" class="stack-8" data-fill></div>
           </section>
-          <section data-panel="garage" data-setting="motion" data-title="Map motion">
+          <section data-panel="garage" data-setting="motion" data-title="Map motion" data-summary="#camList">
             <h3>Map motion</h3>
             <div class="switch" id="camList">
               <button data-cam="steady">Steady</button>

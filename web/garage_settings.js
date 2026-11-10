@@ -10,6 +10,23 @@
   'use strict';
   // The rows, in the order a driver looks for them: what you share and keep, how the app reads, then the account and help.
   const ORDER = ['roadfeel', 'zones', 'crash', 'nudge', 'units', 'motion', 'tuning', 'spots', 'data', 'account', 'feedback', 'about', 'dev'];
+  // The list reads as three short lists, not one of twelve (design pass 7, 2026-11-10): each starts at its first key here.
+  const GROUPS = { roadfeel: 'Sharing and safety', units: 'How the app reads', data: 'You and Vetta' };
+  /**
+   * What a setting is set to, for its row (design pass 7: the list said nothing until each sheet was opened). A section
+   * names the control that says it, `data-summary="#unitsRow"`: a switch key reads On / Off, a group of keys reads the
+   * key that is on, and a list (`data-summary-count="place,places"`) its count, "None" when empty. '' when it can't tell:
+   * a row never guesses.
+   */
+  function summaryOf(node, count) {
+    if (!node) return '';
+    const on = (b) => b.classList.contains('on') || b.getAttribute('aria-checked') === 'true' || b.getAttribute('aria-pressed') === 'true';
+    if (count) { const n = [...node.children].filter((c) => !c.classList.contains('note')).length,   // (a list's own "none yet" line is not an entry)
+       [one, many] = String(count).split(','); return n === 0 ? 'None' : `${n} ${n === 1 ? one : many || one}`; }
+    if (node.matches('button')) return on(node) ? 'On' : 'Off';
+    const b = [...node.querySelectorAll('button')].find(on);
+    return b ? b.textContent.trim() : '';
+  }
   const GEAR = '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3.2"/><path d="M12 2.5v2.6M12 18.9v2.6M21.5 12h-2.6M5.1 12H2.5M18.7 5.3l-1.8 1.8M7.1 16.9l-1.8 1.8M18.7 18.7l-1.8-1.8M7.1 7.1L5.3 5.3"/><circle cx="12" cy="12" r="6.6"/></svg>';
 
   function mount(opts = {}) {
@@ -27,7 +44,7 @@
       const p = make('aside', { className: 'side-pop garage-pop', tabIndex: -1 });
       p.setAttribute('role', 'dialog'); p.setAttribute('aria-label', label);
       const close = make('button', { type: 'button', className: 'linkbtn', textContent: back ? '‹ Settings' : 'Done' });
-      close.addEventListener('click', () => { p.classList.remove('open'); if (back && list.classList.contains('open')) list.focus({ preventScroll: true }); });
+      close.addEventListener('click', () => { p.classList.remove('open'); if (back && list.classList.contains('open')) { refresh(); list.focus({ preventScroll: true }); } });   // back on the list, its rows say what you just set
       p.append(make('div', { className: 'side-pop-head' }, make('h3', { textContent: label }), close));
       return p;
     };
@@ -52,13 +69,25 @@
       r.dataset.setting = k;
       r.addEventListener('click', () => open(k));
       rowFor.set(k, r);
+      if (GROUPS[k]) rows.append(make('h4', { className: 'nav-group', textContent: GROUPS[k] }));
       rows.append(r);
     }
     doc.body.append(list, ...pops.values());
 
     // A row whose sheet has nothing in it right now (Account while signed out) is not offered.
     const isEmpty = (k) => byKey.get(k).every((s) => s.hasAttribute('data-empty-hides') && ![...s.querySelectorAll('[data-fill]')].some((f) => f.children.length));
-    function refresh() { for (const [k, r] of rowFor) r.hidden = isEmpty(k); }
+    function refresh() {
+      for (const [k, r] of rowFor) {
+        r.hidden = isEmpty(k);
+        const s = byKey.get(k).find((x) => x.dataset.summary);
+        let text = '';
+        try { text = s ? summaryOf(pops.get(k).querySelector(s.dataset.summary), s.dataset.summaryCount) : ''; } catch (_) { text = ''; }
+        r.querySelector('small').textContent = text;
+        r.setAttribute('aria-label', text ? `${r.querySelector('span').textContent}: ${text}` : r.querySelector('span').textContent);
+      }
+      // a group's name shows while any of its rows does
+      for (const h of rows.querySelectorAll('.nav-group')) { let n = h.nextElementSibling, any = false; while (n && !n.classList.contains('nav-group')) { if (!n.hidden) any = true; n = n.nextElementSibling; } h.hidden = !any; }
+    }
 
     function openList() { refresh(); list.classList.add('open'); list.focus({ preventScroll: true }); }
     /** Opens the list and one setting's sheet over it. */
@@ -89,7 +118,7 @@
     return { open, openList, reveal, close, refresh, keys: () => keys.slice(), pop: (k) => pops.get(k) || null };
   }
 
-  const api = { mount, ORDER };
+  const api = { mount, ORDER, GROUPS, summaryOf };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else {
     root.ApexGarageSettings = api;
