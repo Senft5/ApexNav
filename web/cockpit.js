@@ -542,8 +542,15 @@
       const b = $('garageTuneBody');
       if (!b || !window.ApexRouteTuning) return null;
       b.textContent = '';
+      // Its row in the Settings list says what the sheet's own status line says: "Standard", or how many sliders were moved.
+      // Nothing while the tuning isn't this phone's to use (the sliders are kept, the routes are the defaults).
+      const summary = () => { try {
+        if (!ApexRouteTuning.allowed(localStorage, tuningFlags())) { delete b.dataset.summaryText; return; }
+        const n = ApexRouteTuning.changed(ApexRouteTuning.load(localStorage)).length; b.dataset.summaryText = n ? `${n} changed` : 'Standard';
+      } catch (_) { delete b.dataset.summaryText; } };
+      summary();
       const ui = ApexRouteTuning.mountScreen(b, {
-        store: localStorage, flags: tuningFlags, changed: () => applyDevTune(),
+        store: localStorage, flags: tuningFlags, changed: () => { applyDevTune(); summary(); },
         planned: () => !!(plannedRoute && plannedRoute.id === 'route_dest' && plannedRoute.request && state.mode !== 'live'),
         replan: () => replanForLevel('Your tuning'), proLine: () => (window.ApexPro ? ApexPro.line('route_tuning', tuningFlags()) : null),
       });

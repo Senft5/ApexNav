@@ -1,5 +1,15 @@
 # VETTA — CURRENT AGENT HANDOFF STATE
 
+## Session 2026-11-10 (fable-settings-values): Road feel, Route tuning and Spots rows have values (claude/fable-settings-values, off origin/main dc9caf9)
+
+- [x] web/garage_settings.js `summaryOf`: a node with `data-summary-text` says it itself. web/cockpit.js `paintTuning`
+  sets it on `#garageTuneBody` ("Standard" / "N changed"; removed when `ApexRouteTuning.allowed` is false), again on
+  every change. web/index.html: `data-summary` on roadfeel (`#garageRoadFeelBody .sw`), tuning, spots (`#hlList`,
+  count "spot,spots").
+- [x] tests/test_garage_settings.py (summaryText case, the three selectors, the tuning source test); e2e "Settings
+  behind the gear" checks Spots None, Route tuning Standard, 1 changed after a slider, Standard after Reset.
+- Next: Your data, Feedback and About have nothing to say, which is right; nothing queued here.
+
 ## Session 2026-11-10 (merger): e2e time limit 35 min (claude/project-thread-er8kzz)
 
 - [x] .github/workflows/core-tests.yml e2e `timeout-minutes` 25 → 35: 152 flows take ~24 min and were cancelled on the

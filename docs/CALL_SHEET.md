@@ -4,6 +4,17 @@ Decisions Claude made for you, newest first. Each one says what was decided, why
 you reach one you've seen. If you disagree with a call, say so and it gets reversed; nothing here is hard to undo unless
 it says so. Things only you can do are in docs/OWNER_TODO.md.
 
+## 2026-11-10 (fable-settings-values): the last three Settings rows say what they are set to (claude/fable-settings-values)
+
+Design pass 7 gave each Settings row its value, but Road feel, Route tuning and Spots still said nothing (noted then as
+next). Now: **Spots** counts yours ("2 spots", "None"); **Route tuning** says "Standard", or "1 changed" once a slider
+has moved (the words of its own status line), and goes back to Standard after Reset; **Road feel** says On or Off from
+its Share road feel switch when you are signed in. Signed out there is no switch to read, so the row says nothing:
+a row never guesses. Route tuning also says nothing if the tuning is not this phone's to use (after Pro goes on sale,
+for a phone without it), since its sliders are kept but the routes are the defaults.
+
+Undo: revert the PR (three `data-summary` attributes in web/index.html, `data-summary-text` in web/garage_settings.js).
+
 ## 2026-11-10 (merger): e2e may run 35 minutes, not 25 (claude/project-thread-er8kzz)
 
 The e2e suite is 152 flows now and takes about 24 minutes, so GitHub cut it off at its 25-minute limit on the last flow
