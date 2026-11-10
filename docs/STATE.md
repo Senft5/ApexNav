@@ -1,5 +1,14 @@
 # VETTA — CURRENT AGENT HANDOFF STATE
 
+## Session 2026-11-10 (fable-stages): the Stages page's runs are named by date (claude/fable-stages, off origin/main e76f1bb)
+
+- web/analysis.html `renderSegments`: `.run-name b` is `dateLabel(x.d)`, `.sub` the drive's name only when it differs
+  from the stage's (hidden otherwise); the list's length is `ApexUnits.long(s.length_m, 1)`. CSP hashes regenerated.
+- e2e "a stage's Board and Runs fit the phone" checks both.
+- After every merge to main, each open PR conflicts in this file and CALL_SHEET.md and gets no Actions run until
+  origin/main is merged into it (both notes kept).
+- Next: a crew's page and CarPlay have not had a design pass in this run.
+
 ## Session 2026-11-10 (fable-loop-time): the loop dial by distance or time (claude/fable-loop-time, off origin/main 1a38381)
 
 - [x] web/index.html `#loopBy` (two radio words over the dial, `.loop-by`). web/cockpit.js: `LOOP_BY` ('apex.loopBy'),

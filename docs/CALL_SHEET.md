@@ -4,6 +4,14 @@ Decisions Claude made for you, newest first. Each one says what was decided, why
 you reach one you've seen. If you disagree with a call, say so and it gets reversed; nothing here is hard to undo unless
 it says so. Things only you can do are in docs/OWNER_TODO.md.
 
+## 2026-11-10 (fable-stages): on a stage's page a run is named by when it was driven (claude/fable-stages)
+
+Under "Runs · Dry Ridge Rd" every run was titled "Dry Ridge Rd" again (a drive is named after its road), with the one
+thing that tells runs apart, the date, in small grey under it. The date is now the run's name; the drive's own name is
+under it only when it isn't the stage's. And a stage's length is to a tenth like everywhere else (it said 21.34 mi).
+
+Undo: revert the PR.
+
 ## 2026-11-10 (fable-loop-time): a loop can be set by time on the dial (claude/fable-loop-time)
 
 Following your "the whole point is aimless driving": "I have an hour" is how a loop is usually asked for, and time
