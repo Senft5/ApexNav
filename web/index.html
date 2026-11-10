@@ -1722,7 +1722,7 @@
           </section>
           <!-- REVIEW5 §2, U-49: the settings below sit behind the Garage's one gear (web/garage_settings.js moves each
                data-setting section into its own sheet); the page keeps you, your cars, Look and voice and the co-driver -->
-          <section data-panel="garage" data-setting="roadfeel" data-title="Road feel">
+          <section data-panel="garage" data-setting="roadfeel" data-title="Road feel" data-summary="#garageRoadFeelBody .sw">
             <div id="garageRoadFeelBody" class="stack-8"></div>
             <p class="note" id="ambientNote" role="status" aria-live="polite">--</p>
           </section>
@@ -1798,10 +1798,10 @@
           </section>
           <!-- Tune your routes (the owner, 2026-11-09; web/route_tuning.js): sliders over the routing's weights, Pro (open to
                everyone until Pro goes on sale), kept on this phone; cockpit.js paintTuning fills it -->
-          <section data-panel="garage" data-setting="tuning" data-title="Route tuning">
+          <section data-panel="garage" data-setting="tuning" data-title="Route tuning" data-summary="#garageTuneBody">
             <div id="garageTuneBody" class="stack-8"></div>
           </section>
-        <section data-panel="garage" data-setting="spots" data-title="Spots">
+        <section data-panel="garage" data-setting="spots" data-title="Spots" data-summary="#hlList" data-summary-count="spot,spots">
             <h3>Spots</h3>
             <p class="note" style="margin:0 0 8px">Loops lean toward spots you rate 3★ or more. Your spots stay on this phone until you share one.</p>
             <div class="detents" id="detourList" role="group" aria-label="Detour">

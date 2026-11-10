@@ -167,6 +167,17 @@ cars and profile will be back, and that looks, voices and settings work without 
 
 Undo: revert the PR.
 
+## 2026-11-10 (fable-settings-values): the last three Settings rows say what they are set to (claude/fable-settings-values)
+
+Design pass 7 gave each Settings row its value, but Road feel, Route tuning and Spots still said nothing (noted then as
+next). Now: **Spots** counts yours ("2 spots", "None"); **Route tuning** says "Standard", or "1 changed" once a slider
+has moved (the words of its own status line), and goes back to Standard after Reset; **Road feel** says On or Off from
+its Share road feel switch when you are signed in. Signed out there is no switch to read, so the row says nothing:
+a row never guesses. Route tuning also says nothing if the tuning is not this phone's to use (after Pro goes on sale,
+for a phone without it), since its sliders are kept but the routes are the defaults.
+
+Undo: revert the PR (three `data-summary` attributes in web/index.html, `data-summary-text` in web/garage_settings.js).
+
 ## 2026-11-10 (fable-end-card): design pass 9: the drive's score is set against your usual; the card's keys sit evenly (claude/fable-end-card)
 
 The drive-ended card's big number had nothing to stand against: is 673 good? Now, on the label's line, it says "33 over

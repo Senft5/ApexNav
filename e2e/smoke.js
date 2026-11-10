@@ -4529,6 +4529,9 @@ flow('Settings behind the gear: three short lists, each row saying what it is se
   check(groups.join('|') === 'Sharing and safety|How the app reads|You and Vetta' && a[0].group, 'three lists, each under its name: ' + JSON.stringify(a.map((x) => x.group || x.row)));
   check(say['Units'] === 'Miles and feet' && say['Map motion'] === 'Lean' && say['Privacy zones'] === 'None' && /^(On|Off)$/.test(say['Crash check']) && say['Reminder'] === 'Off', 'each row says what it is set to: ' + JSON.stringify(say));
   check(say['Feedback'] === '' && say['About Vetta'] === '', 'a row with nothing to say says nothing: ' + JSON.stringify(say));
+  // the three that said nothing: Spots counts yours, Route tuning says Standard until a slider moves; Road feel has no
+  // switch to read while signed out, so it still says nothing
+  check(say['Spots'] === 'None' && say['Route tuning'] === 'Standard' && say['Road feel'] === '', 'Spots, Route tuning and Road feel: ' + JSON.stringify(say));
   check(rows.every((r) => r.h >= 44 && !r.cut && !r.wide), 'every row a thumb tall, its value whole: ' + JSON.stringify(rows.filter((r) => r.h < 44 || r.cut || r.wide)));
   check(rows.find((r) => r.row === 'Units').label === 'Units: Miles and feet' && rows.find((r) => r.row === 'Feedback').label === 'Feedback', 'read aloud with its value: ' + JSON.stringify(rows.map((r) => r.label)));
   // change one in its sheet, come back: the row has it
@@ -4539,6 +4542,19 @@ flow('Settings behind the gear: three short lists, each row saying what it is se
   await page.waitForFunction(() => !document.querySelector('.garage-pop[data-setting="units"]').classList.contains('open'));
   const b = Object.fromEntries((await list()).filter((x) => x.row).map((r) => [r.row, r.says]));
   check(b['Units'] === 'Kilometres and metres', 'back on the list, Units says what you just chose: ' + JSON.stringify(b));
+  // a slider moved in Route tuning is counted on its row
+  await page.click('#garageSettings .nav-row[data-setting="tuning"]');
+  await page.waitForSelector('.garage-pop[data-setting="tuning"].open input[type="range"]');
+  await page.evaluate(() => { const s = document.querySelector('.garage-pop[data-setting="tuning"] input[type="range"]'); s.value = String(Number(s.value) === Number(s.max) ? s.min : s.max);
+    s.dispatchEvent(new Event('input', { bubbles: true })); s.dispatchEvent(new Event('change', { bubbles: true })); });
+  await page.click('.garage-pop[data-setting="tuning"] .side-pop-head .linkbtn');
+  const c0 = Object.fromEntries((await list()).filter((x) => x.row).map((r) => [r.row, r.says]));
+  check(c0['Route tuning'] === '1 changed', 'Route tuning counts the slider you moved: ' + JSON.stringify(c0));
+  await page.click('#garageSettings .nav-row[data-setting="tuning"]');
+  await page.click('#tuneReset');
+  await page.click('.garage-pop[data-setting="tuning"] .side-pop-head .linkbtn');
+  const c1 = Object.fromEntries((await list()).filter((x) => x.row).map((r) => [r.row, r.says]));
+  check(c1['Route tuning'] === 'Standard', 'and says Standard again after Reset: ' + JSON.stringify(c1));
   await page.evaluate(() => document.querySelector('[data-units="imperial"]').click());
 }, { viewport: { width: 393, height: 852 }, hasTouch: true });
 
