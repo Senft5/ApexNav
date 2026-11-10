@@ -12,14 +12,6 @@
 - Next: Options' "Loop to fit" 1 hour / 2 hours keys now duplicate the dial; remove them once the owner has used the
   dial (My free time stays).
 
-## Session 2026-11-10 (fable-end-card): design pass 9, the drive-ended card (claude/fable-end-card, off origin/main 01fa773)
-
-- web/end_line.js `usual(score, earlier)`: median of the last 10 scored drives (3 at least), `{ usual, diff, text }`.
-  web/cockpit.js `endCardScored` reads `ApexRecording.summaries(null)` after painting and fills `#endUsual` (drives dated
-  up to this one's, not itself). web/index.html: `#endUsual` in `.end-score`; `.end-acts` solid key spans the row,
-  `#endStage` spans it too until `#endAgain` shows.
-- Tests: tests/test_end_line.py; e2e "drive ended: the card and the Log give the same score and time".
-- Next: nothing queued from this pass. Not yet looked at in this run: the Log's Stages page, a crew's page, CarPlay.
 ## Session 2026-11-10 (fable-polish-7): the Settings list in groups, with values (claude/fable-polish-7, off origin/main 1a38381)
 
 - [x] web/garage_settings.js: `GROUPS` (a group's name goes before its first key, hidden while all its rows are),
@@ -58,6 +50,15 @@
 - [x] Tests: tests/test_people_no_connection.py (5); e2e "no connection: People is a page…" (/api aborted: both phone
   sizes, both sides, the Garage, offline event, Try again, online event brings People back).
 - Next design pass candidates: the lower Garage blocks (How this works, Pro), the Options sheet's long list.
+
+## Session 2026-11-10 (fable-end-card): design pass 9, the drive-ended card (claude/fable-end-card, off origin/main 01fa773)
+
+- web/end_line.js `usual(score, earlier)`: median of the last 10 scored drives (3 at least), `{ usual, diff, text }`.
+  web/cockpit.js `endCardScored` reads `ApexRecording.summaries(null)` after painting and fills `#endUsual` (drives dated
+  up to this one's, not itself). web/index.html: `#endUsual` in `.end-score`; `.end-acts` solid key spans the row,
+  `#endStage` spans it too until `#endAgain` shows.
+- Tests: tests/test_end_line.py; e2e "drive ended: the card and the Log give the same score and time".
+- Next: nothing queued from this pass. Not yet looked at in this run: the Log's Stages page, a crew's page, CarPlay.
 
 ## Session 2026-11-10 (fable-suggest-follows-dial): the loop suggestion follows the dial (claude/fable-suggest-follows-dial, off origin/main 1a38381)
 
