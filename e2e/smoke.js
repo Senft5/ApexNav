@@ -2223,7 +2223,7 @@ flow('privacy zones: add one at the map centre, kept on the phone only, then rem
   await page.click('#zoneRadius [data-zone-r="200"]');
   await page.click('#zoneMapBtn');
   await page.fill('.confirm-sheet .cs-field', 'Home'); await page.click('.confirm-sheet .cs-ok');
-  await page.waitForFunction(() => /Home · 200 m/.test(document.getElementById('zoneList').textContent));
+  await page.waitForFunction(() => /Home · 650 ft/.test(document.getElementById('zoneList').textContent));
   const saved = await page.evaluate(() => JSON.parse(localStorage.getItem('apex.privacyZones')));
   check(saved.length === 1 && saved[0].name === 'Home' && saved[0].r === 200, 'the zone is saved on the phone');
   await page.click('#zoneList .linkbtn');
@@ -2590,6 +2590,23 @@ flow('drive ended: the card and the Log give the same score and time for the rec
     return { id: d.id, score: document.getElementById('endScore').textContent, meta: document.getElementById('endMeta').textContent,
       line: document.getElementById('endLine').textContent, share: !!document.getElementById('endShare').offsetParent };
   });
+  // design pass 9: with one drive in the Log the number stands alone (a usual is not one drive); the keys are a solid row
+  // over Mark a stage and Drive it again, side by side, and nothing left on a row by itself
+  const alone = await page.evaluate(async () => { await new Promise((r) => setTimeout(r, 400)); const R = (id) => { const e = document.getElementById(id), r = e.getBoundingClientRect(); return e.offsetParent ? [Math.round(r.left), Math.round(r.top), Math.round(r.width)] : null; };
+    return { usual: document.getElementById('endUsual').hidden, share: R('endShare'), stage: R('endStage'), again: R('endAgain'), acts: Math.round(document.querySelector('.end-acts').getBoundingClientRect().width) }; });
+  check(alone.usual && alone.share && alone.stage && alone.again && alone.share[2] === alone.acts && alone.stage[1] === alone.again[1] && alone.stage[1] > alone.share[1] && Math.abs(alone.stage[2] - alone.again[2]) <= 1,
+    'one drive: no "usual"; Share card is the row, Mark a stage and Drive it again share the next: ' + JSON.stringify(alone));
+  // with a few scored drives before it in the Log, the number is set against them (the Log's own summaries, read on the phone)
+  const usual = await page.evaluate(async (id) => {
+    const real = ApexRecording.summaries;
+    ApexRecording.summaries = async (...x) => [640, 655, 612, 649, 630].map((score, i) => ({ id: 'old' + i, name: 'Other Rd', date: '2026-10-0' + (i + 1), ds: { score } })).concat(await real(...x));
+    const d = await ApexRecording.get(id); apexDebug.showEndCard(d, Date.now() - 600e3, { quiet: true });
+    for (let i = 0; i < 100 && document.getElementById('endUsual').hidden; i++) await new Promise((r) => setTimeout(r, 50));
+    ApexRecording.summaries = real;
+    const u = document.getElementById('endUsual'), l = document.querySelector('.end-score span'), a = u.getBoundingClientRect(), b = l.getBoundingClientRect(), box = document.querySelector('.end-score').getBoundingClientRect();
+    return { text: u.textContent, score: +document.getElementById('endScore').textContent, sameLine: Math.abs(a.bottom - b.bottom) < 6, clear: a.left > b.right + 8, inside: a.right <= box.right + 1 };
+  }, card.id);
+  check(usual.text === `${usual.score - 640} over your usual` && usual.sameLine && usual.clear && usual.inside, 'the score against your usual, on the label\'s line: ' + JSON.stringify(usual));
   check(/^\d+$/.test(card.score) && card.share && !/Not enough clean corners/.test(card.line), 'the card scores the drive and offers Share: ' + JSON.stringify(card));
   await page.goto(`${base}/analysis.html?tab=drive&drive=${encodeURIComponent(card.id)}`);
   await page.waitForSelector('.dv-score b', { timeout: 15000 });
@@ -5333,6 +5350,7 @@ flow('Your records: unknown dates and unscored drives never make a "new best", a
   check(r.rows[0][0] === 'b2' && /a new best/.test(r.rows[0][1]), `the dated latest best is new (got\n${text})`);
   check(r.rows[1][0] === 'a4' && !/new best/.test(r.rows[1][1]) && /date unknown/.test(r.rows[1][1]) && /of 3 scored drives/.test(r.rows[1][1]), `an undated import is no "latest" (got\n${text})`);
   check(r.rows[2][0] === 'm2' && /Smoothest drive this month, of 2/.test(r.rows[2][1]), `braking measured once is no record (got\n${text})`);
+  check(!/\d{4}-\d{2}-\d{2}/.test(text) && /1 Sept? 2020|Sep 1, 2020/.test(r.rows[0][1]), `a record's day reads as a day ("1 Sep 2020"), never 2020-09-01 (got\n${text})`);
   check(r.overflow <= 1, `the records table fits a 390 px screen (overflows by ${r.overflow} px)`);
 });
 
@@ -5377,6 +5395,12 @@ flow('a stage\'s Board and Runs fit the phone: an empty board is a sentence, a f
   });
   check(r.overflow <= 1 && r.boardOverflow <= 1, 'nothing on the stage scrolls sideways: ' + JSON.stringify(r));
   check(r.runs === 2 && JSON.stringify(r.heads) === '["#","Run","Score","Time (private)"]', 'a run a line, four columns: ' + JSON.stringify(r.heads));
+  // a run's name is when it was driven; the drive's name is under it only when it isn't the stage's own; lengths to a tenth
+  const names = await page.evaluate(() => ({ runs: [...document.querySelectorAll('#segTable tr.run .run-name')].map((c) => [c.querySelector('b').textContent, c.querySelector('.sub').hidden ? null : c.querySelector('.sub').textContent]),
+    title: document.getElementById('segTitle').textContent, len: document.querySelector('#segList button.seg span:nth-of-type(2)').textContent }));
+  check(names.runs.length === 2 && names.runs.every(([when, name]) => /^Nov [13], \d/.test(when) && name === null) && names.runs[0][0] !== names.runs[1][0] && /Dry Ridge Rd/.test(names.title),
+    'each run is named by its date, and the stage\'s name is not repeated on every line: ' + JSON.stringify(names));
+  check(/^\d+\.\d (mi|km) · 2 runs$/.test(names.len), 'a stage\'s length to a tenth: ' + names.len);
   check(r.comps.length === 8 && r.comps.every((t) => /^(Pace|Smooth|Brakes|Rhythm) \d+$/.test(t.trim())) && !r.clash.length && !r.cut.length, 'each run\'s four components whole, side by side, none on another: ' + JSON.stringify(r));
   check(r.boardRows === 0 && r.legendLines >= 2, 'an empty board is a sentence that wraps, not a cut table cell: ' + JSON.stringify(r));
   check(!r.opts.some((o) => /null|undefined/.test(o)) && r.opts.includes('A friend with no handle yet') && /Share this stage with a friend/.test(r.shareText), 'a friend with no handle is named, never "@null": ' + JSON.stringify(r.opts));

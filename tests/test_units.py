@@ -56,3 +56,21 @@ def test_other_modules_in_metric(out):
     assert m["convoy"] == ["300 m", "4.2 km", "Bump ahead, 400 metres.", "Bump ahead, 1 kilometre.", "Bump ahead, 3.0 kilometres."]
     assert m["scenic"] == "No fuel on the way"
     assert m["week"] == "16 km in 2 drives"                 # RA-3: whole from 10, as every distance (format.js distance)
+
+
+def test_a_size_set_in_metres_is_labelled_in_the_drivers_units():
+    """2026-11-10: privacy zones offered "200 m / 500 m / 1 km" to a driver in miles, and a crew's page said "11 km across"."""
+    js = r"""
+const store = {}; globalThis.localStorage = { getItem: (k) => store[k] ?? null, setItem: (k, v) => { store[k] = v; } };
+const U = require(process.argv[1] + '/web/units.js');
+U.set('metric'); const m = [200, 500, 1000, 1500, NaN].map(U.size);
+U.set('imperial'); const i = [200, 500, 1000].map(U.size);
+console.log(JSON.stringify({ m, i }));
+"""
+    out = json.loads(subprocess.run([NODE, "-e", js, ROOT], capture_output=True, text=True, check=True).stdout)
+    assert out["m"] == ["200 m", "500 m", "1 km", "1.5 km", "--"]
+    assert out["i"] == ["650 ft", "0.3 mi", "0.6 mi"]
+    page = open(os.path.join(ROOT, "web", "cockpit.js"), encoding="utf-8").read()
+    assert "b.textContent = ApexUnits.size(Number(b.dataset.zoneR));" in page and "labelLoops(); renderZones();" in page
+    assert "`${zoneR} m`" not in page and "under 0.2 mi are dropped.'" not in page
+    assert "'7 miles' : '11 km'" in open(os.path.join(ROOT, "web", "crew_page.js"), encoding="utf-8").read()
