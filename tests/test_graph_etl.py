@@ -232,6 +232,75 @@ def test_scorer_gates_corners_by_quality_and_keeps_unknown_unknown():
     assert s["f"] == 0 and s["t"] < a["t"]
 
 
+INVENTORY = r"""
+const path = require('path'), fs = require('fs'), ROOT = process.argv[1];
+const S = require(ROOT + '/tools/graph_etl/score_edges.js');
+const N = NaN, f = (a) => Float32Array.from(a), rep = (v, k) => new Array(k).fill(v);
+const L = (limit, fclass, rc, use) => { const v = S.inventoryLimit(f(limit), fclass ? f(fclass) : null, rc, use); return v == null ? null : Math.round(v); };
+const unit = {
+  whole: L(rep(45, 10), rep(4, 10), 3, 0),
+  gaps: L([45, N, 45, 45, N, 45, 45, N, N, 45], null, 3, 0),             // matched on 6 of 10 samples
+  thin: L([45, N, N, N, N, 45, 45, N, N, 45], null, 3, 0),               // on 4 of 10: a road it only runs beside for a bit
+  crossing: L([N, N, N, 65, N, N, N, N, N, N], rep(1, 10), 3, 0),
+  changes: L([...rep(55, 5), ...rep(35, 5)], null, 3, 0),                // half and half: the estimate stands
+  mostly: L([...rep(55, 7), ...rep(35, 3)], null, 3, 0),
+  ramp: L(rep(65, 10), rep(1, 10), 0, 1),
+  beside: L(rep(65, 10), rep(1, 10), 4, 0),                              // a frontage road matched to the interstate
+  motorway: L(rep(65, 10), rep(1, 10), 0, 0),
+  trunk: L(rep(60, 10), rep(2, 10), 1, 0),
+  arterial: L(rep(55, 10), rep(3, 10), 4, 0),
+  none: L([], null, 3, 0), missing: S.inventoryLimit(undefined, undefined, 3, 0),
+};
+// a real road: the first long secondary edge of a shipped tile that the map has no sign for and the shipped bundles
+// post one limit along; scored with and without the bundles
+global.self = global;
+const T = require(ROOT + '/web/graph_tiles.js'); global.ApexGraphTiles = T;
+const R = require(ROOT + '/web/graph_router.js');
+const Ctx = require(ROOT + '/web/route_ctx/registry.js'), Grid = require(ROOT + '/web/route_ctx/context_grid.js');
+const grid = S.gridBundles(ROOT + '/web/data/ctx/v1');
+const b = fs.readFileSync(ROOT + '/web/data/graph/v1/381_516.vgr');
+const v = R.view([T.decode(b.buffer.slice(b.byteOffset, b.byteOffset + b.byteLength))]);
+let real = null;
+for (let e = 0; e < v.len.length && !real; e++) {
+  if (v.cls[e] !== 3 || !(v.flags[e] & v.bits.speedEst) || v.len[e] < 800) continue;
+  const g = R.geom(v, e), c = []; for (let i = 0; i + 1 < g.length; i += 2) c.push([g[i + 1], g[i]]);
+  const cor = Ctx.corridor('t', c, { departAt: Date.UTC(2026, 5, 10, 16) }); if (!cor) continue;
+  const lim = Grid.sampleCorridor(grid, cor).channels.hpms_speed_limit, vals = [...new Set([...lim].filter(Number.isFinite))];
+  if (vals.length !== 1 || [...lim].filter(Number.isFinite).length < 0.9 * lim.length || Math.abs(vals[0] * 1.609344 - v.speed[e]) < 12) continue;
+  const rec = { k: 0, c, ch: { road_class: 3, road_use: 0 }, smp: {} };
+  real = { mph: vals[0], tileKph: v.speed[e], withGrid: S.score(rec, { dem: null, grid }), without: S.score(rec, { dem: null, grid: new Map() }),
+    ramp: S.score({ ...rec, ch: { road_class: 3, road_use: 1 } }, { dem: null, grid }), signed: S.score({ ...rec, ch: { road_class: 3, road_use: 0, speed_limit_kph: 72 } }, { dem: null, grid }) };
+}
+console.log(JSON.stringify({ unit, real, rule: S.INVENTORY, floor: Grid.LIMIT_MPH }));
+"""
+
+
+@needs_node
+def test_travel_time_takes_the_road_inventorys_posted_limit_where_the_map_has_no_sign():
+    """Tile times used OSM's sign or the class estimate, never the limit HPMS posts (which the engine's quality already
+    reads). It is used where it covers the edge with one value; a crossing, a ramp, and a road beside a freeway keep the
+    estimate; OSM's own sign always wins."""
+    r = subprocess.run([NODE, "-e", INVENTORY, ROOT], capture_output=True, text=True, timeout=120)
+    assert r.returncode == 0, r.stderr
+    o = json.loads(r.stdout)
+    u = o["unit"]
+    assert u["whole"] == 72 and u["gaps"] == 72 and u["mostly"] == 89
+    assert u["thin"] is None and u["crossing"] is None and u["changes"] is None
+    assert u["ramp"] is None and u["beside"] is None, "a freeway's limit never goes to the ramp or the road beside it"
+    assert u["motorway"] == 105 and u["trunk"] == 97 and u["arterial"] == 89
+    assert u["none"] is None and u["missing"] is None
+    assert o["rule"]["COVER"] == 0.5 and o["rule"]["SAME"] == 0.6
+    real = o["real"]
+    assert real, "a shipped secondary edge with an inventory limit unlike its estimate"
+    kph = round(real["mph"] * 1.609344)
+    assert real["withGrid"]["v"] == kph and real["withGrid"]["est"] == 0
+    assert real["without"]["est"] == 1 and real["without"]["v"] != kph
+    faster = kph > real["without"]["v"]
+    assert (real["withGrid"]["t"] < real["without"]["t"]) == faster, "the time follows the posted limit"
+    assert real["ramp"]["est"] == 1
+    assert real["signed"]["v"] == 72 and real["signed"]["est"] == 0, "OSM's sign wins"
+
+
 # ---- a real piece of Colerain Township --------------------------------------------------------------------------
 @pytest.fixture(scope="module")
 def colerain(tmp_path_factory):

@@ -104,7 +104,8 @@ phone's reader); tests/test_graph_tiles.py round-trips through both. What a rout
   corners are detected on the edge plus 100 m of its road's continuation each way, so a corner across a join is seen
   whole and counted once). `hIn`/`hOut`: bearing over the first/last 60 m (256ths of a turn, 0 north) for a corner made
   by a turn at a join.
-- `t_ds`: the time model in score_edges.js (posted limit, else the app's class estimate, times a class flow factor;
+- `t_ds`: the time model in score_edges.js (posted limit: OSM's sign, else the road inventory's where HPMS posts one
+  value along the edge, `inventoryLimit`; else the app's class estimate; times a class flow factor;
   corners at 0.3 g lateral, braking 2.5 / accelerating 1.5 m/s²; signals, stops, crossings, calming and level crossings
   *inside* the edge). The edge's end nodes are NOT in `t_ds`: their `nodes.flags` (signal, stop, give way, barrier,
   level crossing, crossing, calming, dead end) are the router's turn cost.

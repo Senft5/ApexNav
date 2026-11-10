@@ -1,7 +1,7 @@
 // Hazards reported by hand (IDEAS Q-15) and "still there?" votes (Q-16). Waze-style, without the identity: members see a
 // report's kind, place, heading and how many people confirmed it, never who reported it. A report of the same kind within
 // SAME_M of a live one confirms that one instead of adding another. Each kind lives for its own time from the last
-// confirmation; enough "gone" votes end it early. The daily sweep (sweep.ts) deletes reports a day after they expire.
+// time anyone said it was there; enough "gone" votes end it early. The daily sweep (sweep.ts) deletes reports a day after they expire.
 import type { Viewer } from "./auth";
 import { CELL_COVER_KM, Env, HttpError, body, nearCell, num, randomToken } from "./util";
 import { atLeast, tierOf } from "./livery";
@@ -82,19 +82,28 @@ export async function hazardsNear(env: Env, url: URL, v?: Viewer) {
   }).filter((r) => r.m <= km * 1000).sort((a, b) => a.m - b.m).slice(0, MAX_LISTED);
 }
 
-/** Still there (true): pushes the expiry out by the kind's life. Gone (false): two or more "gone" outvoting the confirmations end it. */
+/** Still there (true): pushes the expiry out by the kind's life, every time anyone says it (one confirmation a person).
+ *  Gone (false): two or more "gone" outvoting the confirmations end it. */
 export async function vote(env: Env, v: Viewer, id: string, still: boolean) {
   if (isReview(v)) return { ok: true };                     // U-94: the review account's answer counts for nothing
   const h = await env.DB.prepare("SELECT kind FROM hazard_reports WHERE id = ? AND expires_at > datetime('now')").bind(id).first<{ kind: Kind }>();
   if (!h) throw new HttpError(404, "no_hazard");
   const prev = await env.DB.prepare("SELECT still FROM hazard_votes WHERE hazard_id = ? AND user_id = ?").bind(id, v.id).first<{ still: number }>();
-  if (prev && !!prev.still === still) return { ok: true };   // the same vote twice counts once
+  const seenAgain = env.DB.prepare(`UPDATE hazard_reports SET expires_at = MAX(expires_at, ${until(h.kind)}) WHERE id = ?`).bind(id);
+  if (prev && !!prev.still === still) {
+    // The same vote twice counts once. But "still there" again is fresh sight of it: it lives on from now, with the count
+    // as it was. (Before 2026-11-10 only a NEW person kept a report alive, so where few members drive, the pothole one of
+    // them passes and confirms every day went off the map after a week.)
+    if (still) await seenAgain.run();
+    return { ok: true };
+  }
   const reporter = await env.DB.prepare("SELECT 1 FROM hazard_reports WHERE id = ? AND reported_by = ?").bind(id, v.id).first();
   const stmts = [env.DB.prepare("INSERT INTO hazard_votes (hazard_id, user_id, still) VALUES (?, ?, ?) ON CONFLICT (hazard_id, user_id) DO UPDATE SET still = excluded.still, at = datetime('now')")
     .bind(id, v.id, still ? 1 : 0)];
   // a changed mind moves one count from one side to the other; the reporter's own report already counts as a confirmation
   if (prev) stmts.push(env.DB.prepare(`UPDATE hazard_reports SET ${prev.still ? "confirms = MAX(0, confirms - 1)" : "clears = MAX(0, clears - 1)"} WHERE id = ?`).bind(id));
-  if (still) { if (!reporter) stmts.push(env.DB.prepare(`UPDATE hazard_reports SET confirms = confirms + 1, expires_at = MAX(expires_at, ${until(h.kind)}) WHERE id = ?`).bind(id)); }
+  // the reporter seeing their own again (a second report of it within SAME_M lands here) keeps it alive too, uncounted
+  if (still) stmts.push(reporter ? seenAgain : env.DB.prepare(`UPDATE hazard_reports SET confirms = confirms + 1, expires_at = MAX(expires_at, ${until(h.kind)}) WHERE id = ?`).bind(id));
   else stmts.push(env.DB.prepare("UPDATE hazard_reports SET clears = clears + 1 WHERE id = ?").bind(id),
     env.DB.prepare("UPDATE hazard_reports SET expires_at = datetime('now') WHERE id = ? AND clears >= 2 AND clears > confirms").bind(id));
   await env.DB.batch(stmts);

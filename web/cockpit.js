@@ -420,7 +420,8 @@
       if (has('apex-alt')) map.setPaintProperty('apex-alt', 'line-color', C.route);
       if (has('apex-explore')) map.setPaintProperty('apex-explore', 'line-color', C.route);
       if (has('apex-twisty')) map.setPaintProperty('apex-twisty', 'line-color', C.amber);
-      if (has('apex-coverage')) map.setPaintProperty('apex-coverage', 'line-color', C.gain);
+      // Measured roads by the pavement measured there (coverage.js surface): smooth, fair, rough; ink where roughness is unknown
+      if (has('apex-coverage')) map.setPaintProperty('apex-coverage', 'line-color', ['match', ['get', 's'], 1, C.gain, 2, C.amber, 3, C.signal, C.dim]);
     }
 
     function addApexLayers() {
@@ -725,6 +726,13 @@
         if (map.queryRenderedFeatures(e.point, { layers: ['apex-route'] }).length) return;   // a shared stretch: the drawn route wins
         suppressMapClickUntil = Date.now() + 400;
         pickOption(e.features[0].properties.i);
+      });
+      // Tap a measured road for what members measured there, in words (the colour is never the only way to read it).
+      map.on('click', 'apex-coverage', (e) => {
+        if (state.tapToRoute || Date.now() < suppressMapClickUntil || !e.features || !e.features.length) return;
+        if (map.queryRenderedFeatures(e.point, { layers: ['apex-route', 'apex-alt', 'apex-explore'].filter((id) => map.getLayer(id)) }).length) return;   // a route drawn over it wins the tap
+        const say = ApexCoverage.describe(coverage.cache.get(e.features[0].properties.way));
+        if (say) toast(say);
       });
       map.on('click', 'apex-explore', (e) => {
         if (state.tapToRoute || !e.features || !e.features.length) return;
@@ -5789,7 +5797,7 @@
       const driveWith = async (f) => {
         if (!convoy) return;
         if (convoy.active) { toast(`You're in a convoy: invite @${f.handle} from its Invite friends.`); return; }
-        if (!(await ApexConfirm.ask(`Start a convoy now and invite @${f.handle}? You see each other on the map while you drive, for up to two hours. Nothing is kept.`, 'Start convoy'))) return;
+        if (!(await ApexConfirm.ask(`Start a convoy now and invite @${f.handle}? You see each other on the map while you drive, for two hours unless you keep it going. Nothing is kept.`, 'Start convoy'))) return;
         const r = await convoy.startFor(`@${me.handle} and @${f.handle}`, [f.handle]);
         toast(r.ok ? (r.invited ? `Convoy started. @${f.handle} has the invite in the app.` : `Convoy started, but @${f.handle} couldn't be invited. Share its link.`) : 'Couldn\'t start a convoy. Check signal.');
         if (r.ok) closeSheet();
@@ -7051,7 +7059,7 @@
       }
       if (k === 'coverage') {
         updateCoverage();
-        if (state.toggles.coverage) toast(mapReady && map.getZoom() < ApexCoverage.MIN_ZOOM ? 'Zoom in to see measured roads.' : 'Green: measured roads, bolder the surer. A road without a line is waiting for a pioneer: the first drivers to map it earn extra points.');
+        if (state.toggles.coverage) toast(mapReady && map.getZoom() < ApexCoverage.MIN_ZOOM ? 'Zoom in to see measured roads.' : 'Measured roads: green smooth, amber fair, red rough, bolder the surer. Tap one for what was measured. A road without a line is waiting for a pioneer: the first drivers to map it earn extra points.');
       }
       if (k === 'nudge') nudgeSwitched();                              // panel R-1: asks for notifications only now
       if (k === 'twisty') {
@@ -8408,7 +8416,7 @@
       const name = (accountMe && accountMe.handle ? `@${accountMe.handle}'s convoy` : 'Convoy');
       back.append(el('div', { className: 'card-sheet' }, el('h2', { textContent: 'Ways to go' }), drive,
         btn('Convoy now', () => { close(); needSocial().then(() => { if (convoy) convoy.now(name); else toast('The convoy isn\u2019t available here.'); }); }, 'ink-btn'),
-        el('p', { textContent: 'A convoy: drive together, live, for up to two hours. Friends join with the code on your screen; nothing is kept. A crew\u2019s run starts its convoy from the drive\u2019s card.' }),
+        el('p', { textContent: 'A convoy: drive together, live, for two hours (the leader can keep it going, up to six). Friends join with the code on your screen; nothing is kept. A crew\u2019s run starts its convoy from the drive\u2019s card.' }),
         btn('Cancel', close, 'linkbtn')));
       back.addEventListener('click', (e) => { if (e.target === back) close(); });
       document.addEventListener('keydown', esc);

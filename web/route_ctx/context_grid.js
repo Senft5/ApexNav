@@ -37,7 +37,8 @@
 //                               from its other carriageway (up to 90 m away) when this one has none. Public domain; yearly.
 //   iri                 in/mi   International Roughness Index of that road section (HPMS; reported on main roads only).
 //   hpms_speed_limit    mph     Posted speed limit HPMS holds for that section (not all sections report it).
-//                               Only 5-85 mph is a limit (LIMIT_MPH); a "not reported" code is unknown.
+//                               Only 25-85 mph is a limit (LIMIT_MPH); a "not reported" code, or a value under
+//                               25 (a county's filler, not a sign), is unknown.
 //   hpms_lanes          lanes   Through lanes (both directions, as HPMS counts them).
 //   hpms_fclass         1-7     FHWA functional system: 1 interstate, 2 freeway/expressway, 3 principal arterial, 4 minor
 //                               arterial, 5 major collector, 6 minor collector, 7 local.
@@ -234,7 +235,12 @@
   // A posted limit HPMS can hold, mph (85 is the highest posted in the US). Bundles built before 2026-11-09 carry a state's
   // "not reported" code clamped to 254 mph (281 spans round Cincinnati): that is unknown, never a limit (tools/ctx_etl
   // build.py LIMIT_MPH writes nodata from then on).
-  const LIMIT_MPH = [5, 85];
+  // Under 25 mph is unknown too (2026-11-10): against the signs OSM holds on the same roads round Cincinnati, HPMS's 30 mph
+  // and up agree on 76-99 % of the km, its 20 mph on 63 % and its 15 mph on none, and one Indiana county reports 15 mph
+  // for every county road (Bryants Creek Drive, Wade Hill Road: 12 and 9 km "posted" at 15). The engine's speed term gives
+  // such a road its worst mark at its heaviest weight. A real 20 mph street loses nothing by it: the class estimate that
+  // stands in is as slow to the engine.
+  const LIMIT_MPH = [25, 85];
   function rawLine(b, attr, s) {
     const A = b.header.lines.attrs[attr];
     if (!A) return NaN;
