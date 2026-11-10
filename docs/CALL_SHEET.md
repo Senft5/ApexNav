@@ -38,6 +38,39 @@ the ones with no coverage, so the best roads' data was the data being lost. The 
 Undo: remove `<script src="road_carry.js">` from web/index.html (createLive then has no carry and behaves as before,
 apart from the 10 km pieces; set `maxRun` to Infinity for that).
 
+## 2026-11-09 (fable-overview): "What this drive is like", read against real roads (claude/fable-overview)
+
+I planned ten public trips round Cincinnati in the app and read each overview against the road it described. The calls:
+- **The overview now updates once, a second or two after the card**, on routes from our own router. The first words come
+  from the road tiles alone; the fuller data (woods, farmland, lanes, housing) arrives with the second ranking, and the
+  lines are rebuilt from it in place. So "Mostly country roads." can become "Mostly two-lane country roads through
+  farmland." while you look. Undo: the `paintStory(shown, true)` line in cockpit.js `ownRefine` (then own routes never
+  mention land or lanes, as before).
+- **Open ground needs more than one sign of building to be called suburbs.** Night lights alone were turning ten miles of
+  the Harrison drive into "suburbs". Now the second-strongest sign decides. Undo: `settings` in web/route_story.js.
+- **The "through town / suburbs" line leaves out stretches the engine scores as good road**, so houses along a river
+  road aren't reported as a slow part. Harrison at Fun now says "About 1 mile through town at the start" instead of
+  "About 7 miles through suburbs in places". Undo: `built` in `slowLine`.
+- **A best part spread over many roads says "including"**: "7 miles of good road, including Morgan Ross and Millville
+  Shandon Road", not "7 miles of Millville Shandon Road" (which is 3 miles long). Two roads that carry three quarters of
+  it are still named outright. Tune: `T.NAMES_WHOLE`.
+- **"Two-lane" means one lane each way.** It was also being said of four-lane roads.
+- Not done: your own trips (their addresses aren't in the repo, by rule). `node tools/story_live.js colerain:fun` prints
+  the lines for the public ones.
+
+## 2026-11-09 (fable-expressway): an expressway counts as a highway at Fun and Long way (claude/fable-expressway)
+
+"Fun should never go on the highway" covered motorways and trunk roads. Some divided, limited-access expressways are
+mapped one class lower (`primary`), marked only by a tag. The calls:
+- **Both tags count**: `motorroad=yes` (the one our notes named) and `expressway=yes` (how US mappers mark these
+  roads). Either on a primary or smaller road makes it a highway to the levels' rule: never driven at Fun or Long way
+  unless there is no other way, counted in "Uses 0.4 mi of ..." and never offered as a Best road nearby. Quick is
+  unchanged. Undo one tag: osm_graph.py `drivable`, the `expressway` line.
+- **It needs a tile rebuild to take effect, and I didn't run one** (it is a CI workflow that commits to the data
+  branch; yours or the reviewer's to start: Actions → "Graph region (own routing, OH+KY+IN)" → Run workflow). Until
+  then nothing changes on any phone: today's tiles don't carry the mark and the router treats them as before.
+- **A new flag bit, not a new tile version**: old apps ignore the bit, new apps read old tiles as "not an expressway".
+- Undo all of it: revert the branch's commits (tiles built with the flag still read fine in the old code).
 ## 2026-11-09 (fable-hpms-limits): a speed limit of "254 mph" is no limit (claude/fable-hpms-limits)
 
 The government road inventory we read speed limits from (HPMS) marks "not reported" with a code. Our data build stored

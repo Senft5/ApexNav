@@ -37,6 +37,50 @@
 - Exact next task: the deferred round-1 items: HPMS posted limits in the graph ETL edge time (after #321 merges and the
   region rebuild), then Hamilton Ave quality 0.47-0.54.
 
+## Session 2026-11-09 (fable-overview): the drive overview read against real trips (claude/fable-overview, off origin/main 1d97979)
+
+- [x] The overview's "exact next task" (read it on real routes, tune `ApexRouteStory.T`), on ten public trips planned in
+  the app's own page offline (new tools/story_live.js: the card's lines beside each route's setting, quality and street
+  per 400 m; the owner's own trips are not in the repo and weren't run). Found and fixed:
+  - **Our own routes' overview never saw the context grid** (land cover, lanes, housing, lights): `t.ranked` was the first
+    ranking's candidate (tiles' channels only) and the refined ranking never rebuilt it, so no own route ever said "two-lane"
+    or "through woods". cockpit.js `ownRefine`: when the route stays, `t.ranked` becomes the refined candidate and
+    `paintStory(t, true)` rebuilds the lines in place (no hide, after the card, off the plan's path).
+  - **The first road had no name** (the track's steps start at the first turn; names known on 63 % of northgate):
+    `paintStory` puts the router's depart street at 0 m. Names now 99 % on all ten.
+  - **One signal made open ground suburbs** (night lights near the city: 10 of harrison's 30 km): `settings` takes the
+    second-highest place signal, sidewalks a signal like the rest.
+  - **"two-lane" was said of two lanes each way**: `lanes` is lanes in your direction; now 1 (the test fixture said 2).
+  - **"7 miles of Millville Shandon Road"** of a stretch that road carried 3 miles of: `namesFor`, "N miles of A and B"
+    only when they carry 75 % of it, else "of good road, including A and B" (`T.NAMES_WHOLE`, `T.INCLUDE_MIN_M`).
+  - **"About 7 miles through suburbs"** on a country drive: the slow line counts town, and suburbs only where the engine's
+    quality is under 0.55.
+- Tests: tests/test_route_story.py 15 (4 new: two lanes each way, one signal, many roads, houses beside good road; the
+  country fixture's `lanes` 2 -> 1, the channel's unit); pytest 1374 passed, 2 skipped; e2e route overview (1), own
+  routing (4), plan flow (6), level (6) pass. `python tools/csp.py` not needed (no inline script changed).
+- Open: the in-place refresh has no e2e flow of its own (e2e/smoke.js is being changed by #319; seen working in
+  tools/story_live.js runs: the grid's channels and the new lines 1-3 s after the card). Posted limits are known on few
+  of these roads, so most leads say no speed. The owner's own trips still unread.
+- Exact next task: an e2e flow for the overview's refresh once #319 is merged; the owner reads the overview on his trips.
+
+## Session 2026-11-09 (fable-expressway): expressways below trunk class are highways to Fun and Long way (claude/fable-expressway, off origin/main 1d97979)
+
+- [x] The gap STATE and OWN_ROUTING listed: an expressway mapped as `primary` (or lower) with `motorroad=yes` wasn't a
+  highway to the levels' rule. tools/graph_etl: osm_graph.py `drivable` keeps `expressway` (`motorroad=yes` or the US
+  tagging `expressway=yes`, never on a link; a MERGE_KEY, so a chain never merges across the tag), tiles.py edge flag
+  `EXPRESSWAY` (bit 14, 16384; no format bump), build.py sets it. web/graph_tiles.js `FLAGS.expressway`,
+  graph_router.js `isHwyEdge` (so the ban at Fun and Long way, `hwyKm`, the exception's link, loops' highway share and
+  Quick loops' x2.5 all count it) and `explore` (never a Best road nearby).
+- [x] The shipped and region tiles are NOT rebuilt here (the build container can't reach Geofabrik): the bit is clear in
+  them, so nothing changes on a phone until the next "Graph region" run (Actions, manual; it also re-bundles
+  web/data/graph/v1). With old tiles the router behaves exactly as before (test: the `plain` half of the case).
+- Tests: new test_an_expressway_below_trunk_class_is_a_highway_to_the_levels (graph_router_cases.js `expressway`),
+  test_an_expressway_keeps_its_flag_into_the_tiles (a real build through pyosmium, both readers' flag tables),
+  drivable() tag asserts; pytest 1372 passed, 2 skipped; e2e levels (3), own routing (4) pass.
+- Open: how many roads in OH+KY+IN carry either tag isn't measured (no extract here). The route engine's own class
+  (Valhalla-planned routes off our tiles) still knows only motorway/trunk.
+- Exact next task: after merge, run Actions → "Graph region (own routing, OH+KY+IN)" so the flag reaches the tiles; then
+  unchanged (tools/live_speed.js on the owner's trips at Fun and Long way).
 ## Session 2026-11-09 (fable-hpms-limits): a "not reported" speed limit was read as 254 mph (claude/fable-hpms-limits, off origin/main 1d97979)
 
 - [x] Found while measuring posted limits for the overview: the context grid's HPMS `speed_limit` (u8 mph) clamped a state's

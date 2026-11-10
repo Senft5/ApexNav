@@ -31,7 +31,7 @@
   const VERSION = 3, READS = [1, 2, 3], HEADER = 64, TILE_DEG = 0.25, BASE = 'data/graph/v1/', GEOM_Q = 5;   // geometry in 5 µdeg steps
   const UNKNOWN_U8 = 255, UNKNOWN_FUN = 0xffff, NO_NAME = 0xffff;
   const FLAGS = { oneway: 1, toll: 2, ferry: 4, unpaved: 8, tunnel: 16, bridge: 32, motorway: 64, ramp: 128, roundabout: 256, private: 512,
-    geomRev: 1024, speedEst: 2048, barrier: 4096, destination: 8192 };
+    geomRev: 1024, speedEst: 2048, barrier: 4096, destination: 8192, expressway: 16384 };
   const NODE_FLAGS = { signal: 1, stop: 2, giveWay: 4, barrier: 8, levelCrossing: 16, deadEnd: 32, crossing: 64, calming: 128 };
   // the road channels a v2 tile carries per edge (tools/graph_etl/tiles.py CHANNELS: name, scale; the file's order)
   const CHANNELS = [['business_per_km', 4], ['access_per_km', 2], ['signals_per_km', 20], ['stops_per_km', 20], ['crossings_per_km', 10],
