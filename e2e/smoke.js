@@ -6286,7 +6286,9 @@ flow('plan flow (c) best roads nearby in 3 taps: the chip under Where to?, a roa
   // the tiles are blocked here: the roads come from a stand-in for the map's stage finder, near the phone
   await page.evaluate(() => {
     const road = (name, lat, lon, n, good) => { const la = [], lo = []; for (let i = 0; i < n; i++) { la.push(lat + i * 0.0004); lo.push(lon + Math.sin(i / 6) * 0.0006); } return { name, lat: la, lon: lo, km: n * 0.045, good, tight: 2, score: good }; };
-    ApexStages.discover = async (c, km, progress) => { if (progress) progress('tiles', 1); return [road('Test Ridge Road', c.lat + 0.02, c.lon + 0.01, 80, 14), road('Hollow Creek Road', c.lat - 0.03, c.lon + 0.02, 60, 9)]; };
+    ApexStages.discover = async (c, km, progress) => { if (progress) progress('tiles', 1);
+      window.__keyBusy = [...document.querySelectorAll('#nearbySheet [data-explore-min]')].map((b) => b.textContent.trim());   // the keys' words while the search runs
+      return [road('Test Ridge Road', c.lat + 0.02, c.lon + 0.01, 80, 14), road('Hollow Creek Road', c.lat - 0.03, c.lon + 0.02, 60, 9)]; };
   });
   check(await page.isVisible('#deckNearby'), 'Best roads nearby is a chip under Where to?');
   await tap('#deckNearby', 'Best roads nearby');
@@ -6303,6 +6305,11 @@ flow('plan flow (c) best roads nearby in 3 taps: the chip under Where to?, a roa
   await cardUp(page);
   check(await page.waitForFunction(() => { const n = document.getElementById('nearbySheet'); return !n.classList.contains('open') && getComputedStyle(n).visibility === 'hidden'; }, null, { timeout: 2000 }).then(() => true, () => false),
     'the list goes when its road is planned (its slide down done)');
+  // the key you chose keeps its word while it works, and a count of one is "1 corner" (it read "1 corners", three times over)
+  const words = await page.evaluate(() => ({ keys: window.__keyBusy, n: apexDebug.track.events.filter((e) => e.type === 'corner').length, card: (document.getElementById('routeCard').innerText + ' ' + document.getElementById('routeBarMeta').textContent).replace(/\s+/g, ' '),
+    stat: [...document.querySelectorAll('#routeCardStats > div')].map((d) => d.innerText.replace(/\s+/g, ' ').trim().toLowerCase()).pop() }));
+  check(JSON.stringify(words.keys) === '["Within 15 min","Within 30 min"]', 'the search keeps the keys\' words: ' + JSON.stringify(words.keys));
+  check(!/\b1 corners\b/i.test(words.card) && (words.n !== 1 || (/\b1 corner\b/i.test(words.card) && words.stat === '1 corner')), 'one corner is "1 corner": ' + JSON.stringify({ n: words.n, stat: words.stat }));
   await tap('#routeDriveBtn', 'Start');
   await page.waitForFunction(() => window.apexDebug.driveActive && apexDebug.track && apexDebug.track.id === 'explore', null, { timeout: 10000 });
   check(taps.n === 3, `best roads nearby in 3 taps: ${taps.log.join(' → ')}`);
