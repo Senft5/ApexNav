@@ -204,6 +204,14 @@
     });
   }
 
+  /** A loop's asked time as the dial says it: "30 min", "1 h", "1½ h", "2 h"; other lengths as "1 h 20". '' when unknown. */
+  function loopTime(minutes) {
+    if (!finite(minutes) || minutes <= 0) return '';
+    const m = Math.round(minutes), h = Math.floor(m / 60), r = m % 60;
+    if (h === 0) return `${m} min`;
+    return r === 0 ? `${h} h` : r === 30 ? `${h}½ h` : `${h} h ${r}`;
+  }
+
   /**
    * The plan flow (finding 1): the card says so when the ranked route replaces the first one, and why, in the card's own
    * numbers: "Better route found: +8 min, 52 more corners". `now` and `was` are the two routes on the card ({ timeS, events }
@@ -218,6 +226,6 @@
     return `${head}${bits.length ? `: ${bits.join(', ')}` : ''}`;
   }
 
-  const api = { duration, stats, profile, dial, count, levelCards, levelNote, pager, loopCards, loopOutline, LEVEL_KEYS, cornersOf, swapNote, shape, factText, alongGlyph };
+  const api = { duration, stats, profile, dial, count, levelCards, levelNote, pager, loopCards, loopOutline, loopTime, LEVEL_KEYS, cornersOf, swapNote, shape, factText, alongGlyph };
   if (typeof module !== 'undefined' && module.exports) module.exports = api; else root.ApexRouteCard = api;
 })(typeof window !== 'undefined' ? window : globalThis);

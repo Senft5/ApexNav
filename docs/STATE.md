@@ -1,10 +1,16 @@
 # VETTA — CURRENT AGENT HANDOFF STATE
 
-## Session 2026-11-10 (fable-log-dates): readable days in the Log's records and charts (claude/fable-log-dates, off origin/main 1a38381)
+## Session 2026-11-10 (fable-loop-time): the loop dial by distance or time (claude/fable-loop-time, off origin/main 1a38381)
 
-- [x] web/format.js `dayShort(iso, locale)`; web/analysis.html: Your records' day through `ApexFormat.dateTime`, the
-  Score over time and road charts' labels through `dayShort` (CSP hashes regenerated).
-- [x] Tests: tests/test_format.py `test_a_chart_day_reads_as_a_day`; e2e "Your records…" refuses an ISO date in a row.
+- [x] web/index.html `#loopBy` (two radio words over the dial, `.loop-by`). web/cockpit.js: `LOOP_BY` ('apex.loopBy'),
+  `LOOP_MINUTES = [30, 60, 90, 120, 180]`, `labelLoops()` relabels the same five `#loopDetents` buttons
+  (`data-loop-mi` or `data-loop-min`), `setLoopBy(by)`; `buildLoop` calls `setLoopBy(minutes ? 'time' : 'distance')`;
+  `paintCardLoop` draws the row from the dial's buttons in either unit (label Length / Time, pressed by `targetS`).
+  web/route_card.js `loopTime(minutes)` ("1½ h"), used for the dial, the card and the loop's note.
+- [x] Tests: tests/test_loop_ways.py (+2); e2e "a loop by time…" (dial turns, 1 h loop built, card row by time, kept
+  across a reload, back to distance).
+- Next: Options' "Loop to fit" 1 hour / 2 hours keys now duplicate the dial; remove them once the owner has used the
+  dial (My free time stays).
 
 ## Session 2026-11-10 (fable-loops): loops lose Quick / Fun / Long way; the card offers which way to head (claude/fable-loops, off origin/main 7dee309)
 
@@ -24,6 +30,12 @@
   reached by the app (tests/test_plan_options.py still covers them); remove them if loops never get a style back.
 - Next: two cards can share a name (both "Southeast"); a finer name (16 points, or the road it is built on) if it reads
   badly on real roads. The 1 hour / 2 hours loops sit in Options; the card's Length row is miles only.
+
+## Session 2026-11-10 (fable-log-dates): readable days in the Log's records and charts (claude/fable-log-dates, off origin/main 1a38381)
+
+- [x] web/format.js `dayShort(iso, locale)`; web/analysis.html: Your records' day through `ApexFormat.dateTime`, the
+  Score over time and road charts' labels through `dayShort` (CSP hashes regenerated).
+- [x] Tests: tests/test_format.py `test_a_chart_day_reads_as_a_day`; e2e "Your records…" refuses an ISO date in a row.
 
 ## Session 2026-11-10 (fable-design-offline): design pass 5: People with no connection (claude/fable-design-offline, off origin/main 7dee309)
 

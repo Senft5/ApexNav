@@ -4,12 +4,18 @@ Decisions Claude made for you, newest first. Each one says what was decided, why
 you reach one you've seen. If you disagree with a call, say so and it gets reversed; nothing here is hard to undo unless
 it says so. Things only you can do are in docs/OWNER_TODO.md.
 
-## 2026-11-10 (fable-log-dates): the Log's records and charts say "30 Oct", not "2026-10-30" (claude/fable-log-dates)
+## 2026-11-10 (fable-loop-time): a loop can be set by time on the dial (claude/fable-loop-time)
 
-The Log's list stamps each drive "30 OCT", but Your records under it printed 2026-10-30 and the two score charts
-labelled their dots 10-30, like database fields. Records now read as the rest of the Log does (Today, Yesterday,
-"30 Oct", with the year when it isn't this one) and the charts' days read "30 Oct" (in the phone's own order, so
-"Oct 30" on a US phone). Undo: revert the PR.
+Following your "the whole point is aimless driving": "I have an hour" is how a loop is usually asked for, and time
+loops were two keys (1 hour, 2 hours) at the bottom of Options. The loop dial now has two words over it, Distance and
+Time. On Time its five detents are 30 min, 1 h, 1½ h, 2 h and 3 h; Find a loop builds a loop of that driving time
+(the search that already existed for the Options keys), the loop is named by its own time, and its card's row reads
+Time with the same five keys. The dial remembers which you used. A time loop asked for from Options or Siri turns the
+dial to Time as well, so the card always changes the loop in the unit it was asked in.
+
+Also: a time loop's note said "the closest good loop to 1.5 h"; times now read "1½ h" everywhere.
+
+Not changed: Options keeps its 1 hour / 2 hours keys and My free time. Undo: revert the PR.
 
 ## 2026-11-10 (fable-loops): a loop has no Quick / Fun / Long way; its card offers its length and which way to head (claude/fable-loops)
 
@@ -30,6 +36,13 @@ Not changed: the 1 hour / 2 hours loops and "My free time" in Options, and the r
 weights in fun_route.js (unused by the app now, still tested).
 
 Undo: revert the PR. To bring a level back for loops only, set `LOOP_STYLE` in web/cockpit.js.
+
+## 2026-11-10 (fable-log-dates): the Log's records and charts say "30 Oct", not "2026-10-30" (claude/fable-log-dates)
+
+The Log's list stamps each drive "30 OCT", but Your records under it printed 2026-10-30 and the two score charts
+labelled their dots 10-30, like database fields. Records now read as the rest of the Log does (Today, Yesterday,
+"30 Oct", with the year when it isn't this one) and the charts' days read "30 Oct" (in the phone's own order, so
+"Oct 30" on a US phone). Undo: revert the PR.
 
 ## 2026-11-10 (fable-design-offline): design pass 5: People with no connection is a page, and comes back by itself (claude/fable-design-offline)
 
