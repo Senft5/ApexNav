@@ -4,22 +4,6 @@ Decisions Claude made for you, newest first. Each one says what was decided, why
 you reach one you've seen. If you disagree with a call, say so and it gets reversed; nothing here is hard to undo unless
 it says so. Things only you can do are in docs/OWNER_TODO.md.
 
-## 2026-11-10 (fable-drive): Location turned off is said, and Settings is one key away (claude/fable-drive)
-
-Found while looking over the drive screen. In the iPhone app, a driver who tapped "Don't Allow" on the location sheet (or
-turned Location off later) was told nothing: the map had no arrow and a drive sat on "Finding GPS…" for ever. In a browser
-the sheet said "Location is off. Settings → Safari → Location → Allow" twice, in red, under the heading "Before your first
-drive", over a greyed-out "Allow and start", and Just drive went grey with no word.
-
-Now: the app tells its page when Location is off (and forgets the stale position). Just drive, a route's Start and
-Recenter stay keys; with Location off they open one sheet: "Location is off", why it matters, and Open Settings (the
-app's own page in Settings). Back from Settings with it on, the sheet goes away by itself. In a browser the key is "Try
-again" (a page can't open Settings). A drive whose Location is turned off mid-way says "Location is off", not "Finding GPS".
-
-Swift changed (ApexNavApp.swift: a `location_off` field on the live frame, an `openSettings` command); I can't compile
-Swift here, so CI's build is the check. Not changed: when Location is first asked (after the welcome's Start).
-
-Undo: revert the PR.
 ## 2026-11-10 (fable-loop-time): a loop can be set by time on the dial (claude/fable-loop-time)
 
 Following your "the whole point is aimless driving": "I have an hour" is how a loop is usually asked for, and time
@@ -42,6 +26,23 @@ check and Reminder "On" / "Off", Units "Miles and feet", Map motion "Lean". Chan
 when you come back. A row with nothing to say (Feedback, About) says nothing; a row never guesses.
 
 The order of the rows is unchanged. Undo: revert the PR.
+
+## 2026-11-10 (fable-drive): Location turned off is said, and Settings is one key away (claude/fable-drive)
+
+Found while looking over the drive screen. In the iPhone app, a driver who tapped "Don't Allow" on the location sheet (or
+turned Location off later) was told nothing: the map had no arrow and a drive sat on "Finding GPS…" for ever. In a browser
+the sheet said "Location is off. Settings → Safari → Location → Allow" twice, in red, under the heading "Before your first
+drive", over a greyed-out "Allow and start", and Just drive went grey with no word.
+
+Now: the app tells its page when Location is off (and forgets the stale position). Just drive, a route's Start and
+Recenter stay keys; with Location off they open one sheet: "Location is off", why it matters, and Open Settings (the
+app's own page in Settings). Back from Settings with it on, the sheet goes away by itself. In a browser the key is "Try
+again" (a page can't open Settings). A drive whose Location is turned off mid-way says "Location is off", not "Finding GPS".
+
+Swift changed (ApexNavApp.swift: a `location_off` field on the live frame, an `openSettings` command); I can't compile
+Swift here, so CI's build is the check. Not changed: when Location is first asked (after the welcome's Start).
+
+Undo: revert the PR.
 
 ## 2026-11-10 (fable-loops): a loop has no Quick / Fun / Long way; its card offers its length and which way to head (claude/fable-loops)
 
