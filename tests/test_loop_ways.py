@@ -106,3 +106,21 @@ def test_a_loop_is_planned_one_way_whatever_the_level_is():
     ways = html[html.index('id="routeCardWays"') - 60:html.index('id="routeCardWays"') + 120]
     assert 'role="radiogroup"' in ways and "hidden" in ways
     assert html.index('id="routeCardLoop"') < html.index('id="routeCardWays"') < html.index('id="routeCardFun"')
+
+
+@needs_node
+def test_a_loops_time_reads_as_the_dial_says_it():
+    """By time (2026-11-10): half hours are "1½ h", never "1.5 h"; an odd length is hours and minutes; unknown is empty."""
+    assert run("[30, 60, 90, 120, 180, 80, 45, 0, null, NaN].map((m) => R.loopTime(m))") == ["30 min", "1 h", "1½ h", "2 h", "3 h", "1 h 20", "45 min", "", "", ""]
+
+
+def test_the_dial_is_set_by_distance_or_time():
+    src = cockpit_source()
+    assert "const LOOP_BY = 'apex.loopBy', LOOP_MINUTES = [30, 60, 90, 120, 180];" in src
+    assert "setLoopBy(minutes ? 'time' : 'distance');" in src           # a time loop from Options or Siri turns the dial too
+    assert "`${minutes / 60} h`" not in src
+    html = (ROOT / "web" / "index.html").read_text(encoding="utf-8")
+    by = html[html.index('id="loopBy"'):html.index("</div>", html.index('id="loopBy"'))]
+    assert 'role="radiogroup"' in html[html.index('id="loopBy"') - 40:html.index('id="loopBy"') + 80]
+    assert by.count('role="radio"') == 2 and 'data-loop-by="distance" aria-checked="true"' in by and 'data-loop-by="time"' in by
+    assert html.index('id="loopBy"') < html.index('id="loopGauge"')
