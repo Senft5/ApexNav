@@ -279,7 +279,7 @@ accessible switches and focus (#81), honest empty states (#79), drive detail (#8
 | U-50 | The "along the way" fact on the route card uses the viewpoint glyph for a café (and a fuel stop): one glyph per kind | L | S | todo | REVIEW3.md §2 Route card |
 | U-51 | Motion from the mockups: the theme picker's preview speed breathes 38 to 42 on a 4 s loop, the onboarding strip cycles three calls every 3 s; both still under Reduce Motion | M | M | todo | REVIEW2.md §2 Theme picker, Onboarding |
 | U-52 | The crew page header repeats the crew's name over the page's own title: the header in pencil at 15 px (a breadcrumb), or the name only once | L | S | todo | REVIEW3.md §2 Crew page |
-| U-53 | MapLibre's attribution control is the stock white round "i": square it on the app's tokens, dark in the dark themes | L | S | todo | REVIEW3.md §2 Tapedeck live |
+| U-53 | MapLibre's attribution control is the stock white round "i": square it on the app's tokens, dark in the dark themes | L | S | done (2026-11-10, design pass 2: a square paper plate ruled in ink, the "i" in the number face, on the look's own tokens) | REVIEW3.md §2 Tapedeck live |
 | U-54 | One `ApexControls.switch(label, on)` for the slide switch, replacing the four copies in crew_events, garage_ui, feedback and safety_ui | L | S | todo | REVIEW3.md §3.1 |
 | U-55 | "Road: Connector" on the binnacle prints an archetype name; say what the driver sees ("Ramp") or drop the type while it is a connector | L | S | todo | REVIEW3.md §3.2 |
 | U-56 | On an SE in Tapedeck a toast lands on the Replay and trial plates at the top of a short map; toasts below the plates, or the plates aside while a toast shows | L | S | todo | REVIEW3.md captures |

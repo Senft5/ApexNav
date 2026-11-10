@@ -1,5 +1,18 @@
 # VETTA — CURRENT AGENT HANDOFF STATE
 
+## Session 2026-11-10 (fable-design-people): design pass 2, the route card's action strip and the map's credit (claude/fable-design-people, off origin/main ad4f1e4)
+
+- [x] web/index.html `.rc-links`: a flex strip ruled top, bottom and between keys, 48 px keys sized to their words, no
+  underlines, `[aria-pressed="true"]` inked in; two a row under `html[data-type-size]`.
+- [x] web/index.html `.maplibregl-ctrl-attrib` on the look's tokens (IDEAS U-53 done): square, `--panel` paper,
+  `--panel-ink` rule, the button's stock image replaced by an "i" in `--font-num`; the accent outline on keyboard focus.
+- Tests: e2e "design pass 2..." (one row edge to edge, 44 pt, no underline, no cut word, Saved inked in, the credit's
+  computed style); tests/test_design_pass.py (source rules).
+- Seen and not yet done: the signed-out People page (a logo and a button over blank paper); the route card stacks two
+  pencil help lines under the levels ("Swipe the card for the next route", "For Fields Ertel Road..."); the Garage is
+  a long settings page (U-49).
+- Exact next task: the signed-out People page, then the route card's help lines.
+
 ## Session 2026-11-09 (fable-road-carry): road data survives no signal and a closed app (claude/fable-road-carry, off origin/main 3a74cc3)
 
 - [x] Found: contributor.js createLive `finish()` gave up when the last try had failed, so a trip that ended with no

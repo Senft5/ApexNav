@@ -4,6 +4,18 @@ Decisions Claude made for you, newest first. Each one says what was decided, why
 you reach one you've seen. If you disagree with a call, say so and it gets reversed; nothing here is hard to undo unless
 it says so. Things only you can do are in docs/OWNER_TODO.md.
 
+## 2026-11-10 (fable-design-people): design pass 2, the route card's last row and the map's credit (claude/fable-design-people)
+
+Second cut of the owner's "designed by an artist" pass, on the two screens people look at most. The calls:
+- **The route card's last row is one ruled strip of keys** (Save, Share, Share ETA, GPX, Pin place). It was five
+  underlined words centred on the page, "Pin place" alone on a second line. REVIEW2's two weights stay (Save and
+  Share in ink, the rest in pencil); a key that is on (Saved, an ETA being shared) is inked in. With large text it
+  goes two a row. Undo: index.html `.rc-links`.
+- **The map's credit is a plate in the look's own style** (IDEAS U-53): a square paper plate ruled in ink with the "i"
+  in the number face, where MapLibre's white pill and round black "i" sat on every map. It follows the look's tokens,
+  so it is dark in the dark looks. The credit's text and links are unchanged. Undo: index.html, the
+  `.maplibregl-ctrl-attrib` rules.
+
 ## 2026-11-09 (fable-road-carry): road data from roads with no signal is kept on the phone and sent later (claude/fable-road-carry)
 
 Found while looking for what matters most: matching a drive to the map needs the network, and a trip that ended with no
