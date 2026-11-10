@@ -3413,10 +3413,22 @@ flow("friends' activity: the Log lists who drove your stages lately and where yo
   check(/@dan gave you kudos for Esses <i>x<\/i>/.test(await page.textContent('#kudosList')), 'kudos for you, as text');
 });
 
-flow("what's new: shown once after an update, not on a first install, not over a link that opened the app (IDEAS O-10)", async (page, base) => {
+flow("what's new: shown once after an update, not on a first install, not over a link that opened the app (IDEAS O-10), and never over something you have started", async (page, base) => {
   await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); if (!localStorage.getItem('apex.newsSeen')) localStorage.setItem('apex.newsSeen', 'an-older-release'); } catch (_) {} });
+  // straight to Where to? and its Options as the app opens (it came up over Options, 2026-11-10): no news this launch
+  await page.goto(base + '/index.html', { waitUntil: 'commit' });
+  await page.waitForFunction(() => !!window.apexDebug, null, { timeout: 20000, polling: 20 });
+  await page.mouse.click(200, 300);                                      // a thumb on the screen as it opens, splash or not
+  await page.waitForFunction(() => !document.getElementById('boot'), null, { timeout: 20000 });
+  await page.evaluate(() => document.getElementById('planOptionsChip').click());
+  await page.waitForFunction(() => document.getElementById('optSheet').classList.contains('open'), null, { timeout: 5000 });
+  await page.waitForTimeout(2500);
+  check(!(await page.$('#newsSheet')), 'nothing comes up over what you are doing');
+  check(await page.evaluate(() => localStorage.getItem('apex.newsSeen')) === 'an-older-release', 'and it is not marked seen: it waits for a quiet launch');
+  // the next launch, hands off: it shows once the splash has lifted, never over it
   await page.goto(base + '/index.html');
-  await page.waitForSelector('#newsSheet', { timeout: 5000 });
+  await page.waitForSelector('#newsSheet', { timeout: 20000 });
+  check(await page.evaluate(() => !document.getElementById('boot')), 'it waits for the map, not over the splash');
   check(/What's new/.test(await page.textContent('#newsSheet')) && (await page.$$('#newsSheet p')).length <= 4, 'one screen, at most four lines');
   await page.click('#newsSheet button');
   const id = await page.evaluate(() => localStorage.getItem('apex.newsSeen'));

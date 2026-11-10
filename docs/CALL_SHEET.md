@@ -47,6 +47,16 @@ the Garage as well. Both rules now apply on the People tab only. I had read the 
 Garage signed out after the change; the screen-by-screen flow now checks that the Garage shows no People page.
 - Undo: not something to undo; reverting #332 would also remove it.
 
+## 2026-11-10 (fable-quiet-news): What's new never comes up over something you have started (claude/fable-quiet-news)
+
+After an update the "What's new" sheet came up 1.2 seconds into the launch whatever you were doing: I caught it
+covering the Options sheet while choosing roads, and it could also land on the splash. Now it shows only on a still,
+empty map. While the splash is up it waits for the map. Once you have touched the screen, opened Where to?, a sheet or
+a tab, or are driving, it leaves this launch alone and is there the next time the app opens untouched (it is not
+marked as seen until you close it).
+
+Cost: someone who always taps within the first second sees the news a launch or two later. Undo: revert the PR.
+
 ## 2026-11-10 (fable-design-signed-out): People, signed out, is a page instead of a form (claude/fable-design-signed-out)
 
 Design pass 3, after your "designed by an artist not a programmer". Signed out, People was a logo, a small heading,

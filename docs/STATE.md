@@ -40,6 +40,14 @@
 - Lesson: a rule that sets `display` on a tab's panel must carry the tab (`.sheet[data-view=…]`); after changing one
   tab signed out, open the other three.
 
+## Session 2026-11-10 (fable-quiet-news): What's new waits for a quiet launch (claude/fable-quiet-news, off origin/main 7dee309)
+
+- [x] web/whats_new.js `moment({ touched, driving, splash, open })` → 'show' | 'wait' | 'skip'; web/cockpit.js asks it
+  at 1.2 s and every 0.4 s while the splash (`#boot`) is up (40 tries), with `touched` from the first pointerdown or
+  keydown and `open` = any `.overlay.show`, `.side-pop.open`, `#planPanel.open`, `.sheet.open` or live mode.
+- [x] Tests: tests/test_whats_new.py `test_it_never_interrupts`; e2e "what's new…" first touches the screen and opens
+  Options (no sheet, not marked seen), then a hands-off launch shows it after the splash.
+
 ## Session 2026-11-10 (fable-design-signed-out): People signed out, redrawn as a page (claude/fable-design-signed-out, off origin/main 2fda3f8)
 
 - [x] Design pass 3 (the owner, 2026-11-10: "designed by an artist not a programmer"). web/cockpit.js `renderAccount`,

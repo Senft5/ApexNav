@@ -8616,7 +8616,22 @@
       if (!wasOnboarded) { ApexWhatsNew.markSeen(localStorage); return; }
       const busy = ['invite', 'crew', 'add', 'convoy', 'drive', 'play', 'at', 'theme', 'go', 'view'].some(k => params.has(k));
       const news = ApexWhatsNew.pending(ApexWhatsNew.seen(localStorage), wasOnboarded, busy);
-      if (news) setTimeout(() => { if (!driveActive && !document.querySelector('.overlay.show')) ApexWhatsNew.show(el, news, () => ApexWhatsNew.markSeen(localStorage)); }, 1200);
+      if (!news) return;
+      // never over something you've started (whats_new.js moment): a touch or a key before it is up, a sheet, the plan
+      // panel or a drive, and it waits for the next launch; while the splash is up it waits for the map
+      let touched = false, tries = 0;
+      const mark = () => { touched = true; };
+      const KEYS = ['pointerdown', 'keydown'];
+      for (const k of KEYS) window.addEventListener(k, mark, { capture: true, once: true });
+      const stop = () => { for (const k of KEYS) window.removeEventListener(k, mark, { capture: true }); };
+      const anythingOpen = () => !!document.querySelector('.overlay.show, .side-pop.open, #planPanel.open, .sheet.open') || state.mode === 'live';
+      const tryNow = () => {
+        const m = ApexWhatsNew.moment({ touched, driving: driveActive, splash: !!$('boot'), open: anythingOpen() });
+        if (m === 'wait' && ++tries < 40) { setTimeout(tryNow, 400); return; }
+        stop();
+        if (m === 'show') ApexWhatsNew.show(el, news, () => ApexWhatsNew.markSeen(localStorage));
+      };
+      setTimeout(tryNow, 1200);
     })();
 
     // An invite, crew, friend or convoy link opened in iPhone Safari: offer to open it in the app instead (apexnav://open?...).
