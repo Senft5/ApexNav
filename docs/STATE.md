@@ -1,5 +1,13 @@
 # VETTA — CURRENT AGENT HANDOFF STATE
 
+## Session 2026-11-10 (fable-one-corner): singular corners, and the nearby key keeps its label (claude/fable-one-corner, off origin/main e76f1bb)
+
+- cockpit.js: the route bar and card lines use `ApexFormat.cornerCount`; `buildRoute`'s announce pluralises inline
+  (tests/test_route_loading.py evals it with no ApexFormat); `busy().progress(frac)` moves a key's bar without changing
+  its text, used by `exploreNear`. route_card.js `stats` label "corner" for one; drive_view.js habits; analysis.html `segInfo`.
+- Tests: tests/test_route_card.py; e2e "plan flow (c)".
+- Next: CarPlay has not had a design pass in this run (Swift, not visible from the cloud).
+
 ## Session 2026-11-10 (fable-loop-time): the loop dial by distance or time (claude/fable-loop-time, off origin/main 1a38381)
 
 - [x] web/index.html `#loopBy` (two radio words over the dial, `.loop-by`). web/cockpit.js: `LOOP_BY` ('apex.loopBy'),
