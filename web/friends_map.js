@@ -89,12 +89,20 @@
       return loaded;
     }
     const zones = () => (page.zones ? page.zones() : []).map((z) => ({ lat: z.lat, lon: z.lon, r: z.r })).slice(0, 10);
-    async function saveSettings(next) {
+    async function saveSettings(next, quiet) {
       const body = next.audience === 'nobody' ? { audience: 'nobody' } : { audience: next.audience, delay_s: next.delay_s, fuzz: next.fuzz, zones: zones() };
       const r = await apiCall('PUT', '/api/presence/settings', body).catch(() => null);
-      if (!r || !r.ok) { toast('Couldn’t change who sees you. Check signal.'); return false; }
+      if (!r || !r.ok) { if (!quiet) toast('Couldn’t change who sees you. Check signal.'); return false; }
       settings = { ...settings, ...next };
       return true;
+    }
+    // The server keeps its own copy of the home zones (it drops a position inside one, and forgets what it held when
+    // they change), and only this save carries them. So a zone added or removed in Settings goes up at once, and each
+    // launch sends them again: a save that failed without signal heals on the next one. Nothing to do while nobody sees you.
+    async function syncZones() {
+      if (!loaded && !(await loadSettings())) return false;
+      if (settings.audience === 'nobody') return false;
+      return saveSettings(settings, true);
     }
 
     // ---- the layer: friends' pucks, refreshed every minute while it's on ----
@@ -171,7 +179,7 @@
       const road = settings.delay_s === 0 && !settings.fuzz && page.roadName ? page.roadName(p.lat, p.lon) : null;
       apiCall('POST', '/api/presence', { lat: p.lat, lon: p.lon, road: road || undefined }).catch(() => {});
     }
-    function start() { loadSettings(); clearInterval(sendTimer); sendTimer = setInterval(tick, 5000); }
+    function start() { syncZones(); clearInterval(sendTimer); sendTimer = setInterval(tick, 5000); }
 
     // ---- the sheet: both choices, one paragraph ----
     function sheet(onDone) {   // onDone: after it closes (the People row repaints its line)
@@ -227,7 +235,7 @@
       return Array.isArray(list) ? list : null;
     }
 
-    return { start, setLayer, sheet, poll, loadSettings, save: saveSettings, sharing, get onlyDriving() { return onlyDriving; }, get layerOn() { return layerOn; }, get settings() { return settings; }, get loaded() { return loaded; } };
+    return { start, setLayer, sheet, poll, loadSettings, save: saveSettings, syncZones, sharing, get onlyDriving() { return onlyDriving; }, get layerOn() { return layerOn; }, get settings() { return settings; }, get loaded() { return loaded; } };
   }
 
   const api = { mount, tag, minutesAgo, shouldSend, explainer, friendState, spokenAgo, DELAYS, AUDIENCES };

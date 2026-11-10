@@ -4,6 +4,19 @@ Decisions Claude made for you, newest first. Each one says what was decided, why
 you reach one you've seen. If you disagree with a call, say so and it gets reversed; nothing here is hard to undo unless
 it says so. Things only you can do are in docs/OWNER_TODO.md.
 
+## 2026-11-10 (fable-zone-samples): a new home zone hides you from friends at once (claude/fable-zone-samples)
+
+Friends on the map keeps your home zones on the server too, so it can refuse a position inside one. Two gaps:
+the zones only went up when you changed who sees you, so a zone added later in Settings never reached the server; and
+the last position stored before the zone existed (a drive that ended at home) stayed visible until it aged out.
+- **A zone added or removed goes up at once**, and the app sends its zones again at each launch while you share
+  (one small request; nothing is sent while Nobody sees you). A failed background save says nothing and heals at the
+  next launch. Undo: friends_map.js `syncZones` and cockpit.js `zonesChanged`.
+- **The server forgets the position it held whenever the zones change** (added, moved, grown or removed), the same way
+  it already does when you switch between Exact and Within a mile. Friends see you again from your next position
+  outside a zone. Removing a zone also forgets it: simpler than working out whether the old sample was inside, and it
+  costs at most one sample. Undo: presence.ts `presenceSettingsPut`, the `prev.zones !== zonesJson` half.
+
 ## 2026-11-09 (fable-expressway): an expressway counts as a highway at Fun and Long way (claude/fable-expressway)
 
 "Fun should never go on the highway" covered motorways and trunk roads. Some divided, limited-access expressways are
