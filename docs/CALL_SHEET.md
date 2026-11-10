@@ -17,6 +17,10 @@ Design pass 4. The three look cards were stacked: 750 px of the Garage before yo
   and a Sign in key that opens People. It was a grey paragraph telling you to go to "(People)".
 - Undo: revert the PR.
 
+Added after CI went red: a quick flick could fly the shelf past the next look to the last one (a turn of 260 px
+ended on Billet, not Tapedeck). Each look now stops the shelf (`scroll-snap-stop: always`): one look a turn, however
+fast the thumb. A drag of more than a whole card still goes as far as you drag it.
+
 ## 2026-11-10 (fable-fix-join-scope): my mistake in #332, fixed: the signed-out People page also showed at the top of the Garage (claude/fable-fix-join-scope)
 
 The rule that lets the new signed-out People page fill the sheet named the People panel by its id, and an id outranks

@@ -19,6 +19,7 @@ def test_the_shelf_is_for_touch_at_the_normal_text_size_only():
     rules = [l.strip() for l in css.splitlines()[1:] if l.strip() and not l.strip().startswith("overflow-x")]
     assert all(l.startswith("html:not([data-type-size]) ") for l in rules), rules   # large text keeps the stack
     assert "scroll-snap-type: x mandatory" in css and "scroll-snap-align: start" in css
+    assert "scroll-snap-stop: always" in css        # one look a turn: a quick flick never flies past the next one (CI, 2026-11-10)
     assert "overscroll-behavior-x: contain" in css                                   # the page behind never slides with it
     assert re.search(r"grid-auto-columns: (8\d)%", css)                              # the next look's edge shows
 

@@ -918,7 +918,7 @@
       html:not([data-type-size]) .theme-cards { grid-template-columns: none; grid-auto-flow: column; grid-auto-columns: 88%; gap: 10px; margin: 8px -16px 0; padding: 0 16px;
         overflow-x: auto; overscroll-behavior-x: contain; scroll-snap-type: x mandatory; scroll-padding-inline: 16px; scrollbar-width: none; }
       html:not([data-type-size]) .theme-cards::-webkit-scrollbar { display: none; }
-      html:not([data-type-size]) .theme-card { scroll-snap-align: start; display: flex; flex-direction: column; min-width: 0; }
+      html:not([data-type-size]) .theme-card { scroll-snap-align: start; scroll-snap-stop: always; display: flex; flex-direction: column; min-width: 0; }
       html:not([data-type-size]) .theme-card .tc-voice { margin-top: auto; padding-top: 8px; }
       html:not([data-type-size]) .theme-cards .theme-preview { grid-template-columns: 36px minmax(0, 1fr) auto; gap: 8px; padding: 14px 10px; }   /* the call stays on one line in the narrower card */
       html:not([data-type-size]) .theme-cards .tp-tulip svg { width: 36px; height: 36px; }

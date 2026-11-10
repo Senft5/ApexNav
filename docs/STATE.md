@@ -13,6 +13,10 @@
   key opens sign-in). Also run: every flow matching "theme", "Garage", "Dynamic Type", "REVIEW.md 1.2".
 - e2e note: a flow that swipes must wait for the splash (`#boot`) to lift; `elementFromPoint` under the finger says so.
 - Next design chunks: "Can't reach Vetta" on People; the Co-driver / Night / The words blocks lower in the Garage.
+- [x] CI red on cdbd25a ("a turn of the thumb brings the next look": the shelf ended two cards on). Not main: the
+  e2e swipe has no pauses, so on a fast runner it is a fling, and a fling passed the next snap point (reproduced
+  locally with a 300 px drag in 4 moves; fails before, passes after). Fix in the product: `.theme-card
+  { scroll-snap-stop: always }`. The check is unchanged.
 
 ## Session 2026-11-10 (fable-fix-join-scope): #332's page showed in the Garage too; scoped to People (claude/fable-fix-join-scope, off origin/main 6412cb5)
 
