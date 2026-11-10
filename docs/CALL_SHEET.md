@@ -4,19 +4,22 @@ Decisions Claude made for you, newest first. Each one says what was decided, why
 you reach one you've seen. If you disagree with a call, say so and it gets reversed; nothing here is hard to undo unless
 it says so. Things only you can do are in docs/OWNER_TODO.md.
 
-## 2026-11-10 (fable-no-leftovers): every e2e flow ends by checking the screen for the code's own leftovers (claude/fable-no-leftovers)
+## 2026-11-10 (fable-pin-names): a place you pin or tap goes by its name, never by coordinates (claude/fable-pin-names)
 
-About a road read "descending [object Object]" for weeks (#356) and no test saw it, because no test read that line. So
-the e2e runner now ends every flow with one more check: on whatever screens the flow left open, no text in view and no
-spoken label (aria-label, placeholder, title, alt) says "[object Something]", "undefined" or "NaN". Hidden nodes are
-left alone, and whole words only ("Undefined roads" would pass, lower-case "undefined" would not). All 154 flows pass
-with it, so nothing else like #356 is on the screens the flows end on. A flow of its own proves the check sees each of
-the three and ignores what is hidden.
+Hold the map on Foothills Parkway and the pin's sheet said "Foothills Parkway", but Go here then filled Where to? with
+"35.667000, -83.812000" and named the route "To Pin 35.667, -83.812". Tap the map did the same. Now the field and the
+route carry the name the sheet showed ("To Foothills Parkway"); a place tapped with no lookup is "Dropped pin" and its
+route "To a dropped pin". The exact point still goes to the router (it rides beside the field and holds while the text
+is unchanged; the swap key takes it across). A named pin becomes a recent place; an unnamed one never does. I did not
+make Tap the map wait for the road's name: that would put a network lookup in front of planning.
 
-Its limit: it reads the screen a flow ends on, not every screen it passed through.
+Three smaller things on the same screens: the pin's third key said "Save as highlight" and opened "Add a spot", so it
+now says "Save as a spot". A spot's rating lit only the star you chose (five stars looked like one); it now fills up
+to it, pale after, the way the spots list already draws stars, and Save and Cancel sit in one row at one height. The
+notes under a search that finds nothing said "Press Go" while the key under them says "Search"; they say Search, and
+"offline" is only said when the phone is offline.
 
-Undo: revert the PR (e2e/smoke.js only; no app code).
-
+Undo: revert the PR. Typed coordinates still work as before and are still named "Pin lat, lon".
 ## 2026-11-10 (fable-one-corner): "1 corners" is "1 corner"; a Best roads nearby key keeps its word while it searches (claude/fable-one-corner)
 
 A road with one corner read "1 corners" on its card's line, under its big number, aloud to a screen reader, in "1 more
@@ -44,6 +47,20 @@ dial to Time as well, so the card always changes the loop in the unit it was ask
 Also: a time loop's note said "the closest good loop to 1.5 h"; times now read "1½ h" everywhere.
 
 Not changed: Options keeps its 1 hour / 2 hours keys and My free time. Undo: revert the PR.
+
+## 2026-11-10 (fable-layers): design pass 8: the Layers panel is the map's legend (claude/fable-layers)
+
+Layers was a column of names and switches: "Cameras" (which cameras?), "Measured roads" (three colours on the map and
+nothing saying what they mean), and "Who sees me" hanging under 3D terrain. Now each layer is drawn beside its name the
+way the map draws it, in the look's own colours (so it matches by day, by night and in every look), over one line of what
+it is: Twisty roads "From the map's shape" (it is not measured, and now says so), Measured roads with its three colours
+named (Smooth, Fair, Rough), Cameras "Plate and speed cameras", 3D terrain, Friends "Sharing where they are". A layer that
+is off has its key dimmed. Friends moved to the end so "Who sees me" sits directly under it. The panel is 52 px wider
+(288 px, less on a narrow phone) so each line fits on one row.
+
+Not changed: what any switch does, the Co-driver half (Notes, Voice, music).
+
+Undo: revert the PR.
 
 ## 2026-11-10 (fable-polish-7): design pass 7: Settings is three short lists, and each row says what it is set to (claude/fable-polish-7)
 
@@ -91,6 +108,14 @@ Not changed: the 1 hour / 2 hours loops and "My free time" in Options, and the r
 weights in fun_route.js (unused by the app now, still tested).
 
 Undo: revert the PR. To bring a level back for loops only, set `LOOP_STYLE` in web/cockpit.js.
+
+## 2026-11-10 (fable-one-loop-home): Options loses its "1 hour / 2 hours" loop keys; a loop by time is the dial's (claude/fable-one-loop-home)
+
+Since the loop dial can be set by time (30 min to 3 h), Options' "Loop to fit: 1 hour, 2 hours" was a second, smaller
+copy of it in another place. It is gone: one setting, one home. "Loop to fit" keeps My free time and This album, which
+only the app can answer, so in a browser the group is put away rather than left as an empty heading.
+
+Undo: revert the PR.
 
 ## 2026-11-10 (fable-design-offline): design pass 5: People with no connection is a page, and comes back by itself (claude/fable-design-offline)
 
@@ -141,6 +166,19 @@ the rule that hides the other tabs' panels. So, signed out, the whole "Drive wit
 the Garage as well. Both rules now apply on the People tab only. I had read the page on People and never opened the
 Garage signed out after the change; the screen-by-screen flow now checks that the Garage shows no People page.
 - Undo: not something to undo; reverting #332 would also remove it.
+
+## 2026-11-10 (fable-no-leftovers): every e2e flow ends by checking the screen for the code's own leftovers (claude/fable-no-leftovers)
+
+About a road read "descending [object Object]" for weeks (#356) and no test saw it, because no test read that line. So
+the e2e runner now ends every flow with one more check: on whatever screens the flow left open, no text in view and no
+spoken label (aria-label, placeholder, title, alt) says "[object Something]", "undefined" or "NaN". Hidden nodes are
+left alone, and whole words only ("Undefined roads" would pass, lower-case "undefined" would not). All 154 flows pass
+with it, so nothing else like #356 is on the screens the flows end on. A flow of its own proves the check sees each of
+the three and ignores what is hidden.
+
+Its limit: it reads the screen a flow ends on, not every screen it passed through.
+
+Undo: revert the PR (e2e/smoke.js only; no app code).
 
 ## 2026-11-10 (fable-your-units): sizes that were always metric are in your units (claude/fable-your-units)
 
