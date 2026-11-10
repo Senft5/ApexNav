@@ -1,29 +1,29 @@
 {
  "bbox": null,
- "build": "2026-45-95960e6d-gebab6b",
- "built": "2026-11-04",
- "bytes": 228854484,
- "edges": 5261932,
+ "build": "2026-46-b50ef601-gebab6b",
+ "built": "2026-11-10",
+ "bytes": 228885816,
+ "edges": 5262635,
  "format": "VGR1 (tools/graph_etl/tiles.py)",
  "licence": "Road data (c) OpenStreetMap contributors, ODbL 1.0; elevation Mapzen Terrain Tiles; context grid: see web/data/ctx/v1",
- "model": "95960e6d3407394b870b5584c8831f9b9c9bd9c75930147c14dd21d40e97acce",
+ "model": "b50ef601c2e3147e23560358f6dfe1198a09624a669d222b80253c24bec23751",
  "model_files": {
   "tools/graph_etl/score_edges.js": "9923af50e9a0",
-  "web/apex_core.js": "81fcedabfbfb",
-  "web/fun_route.js": "284458e45d7a",
-  "web/route_ctx/context_grid.js": "cb00f890ec00",
+  "web/apex_core.js": "5110dbc731ae",
+  "web/fun_route.js": "a6173c12d675",
+  "web/route_ctx/context_grid.js": "ef4b162e1183",
   "web/route_ctx/dem.js": "c6f6a695745b",
-  "web/route_engine.js": "61ddae3571ad"
+  "web/route_engine.js": "ee5758b0f5b3"
  },
- "nodes": 2145153,
+ "nodes": 2145532,
  "osm": null,
  "source": "Geofabrik ohio, kentucky, indiana (merged)",
  "stats": {
-  "restrictions_applied": 20519,
-  "restrictions_skipped": 67599,
-  "via_way_restrictions_applied": 1211,
+  "restrictions_applied": 20524,
+  "restrictions_skipped": 67642,
+  "via_way_restrictions_applied": 1212,
   "via_way_restrictions_not_drivable": 1504,
-  "via_way_restrictions_skipped": 2463
+  "via_way_restrictions_skipped": 2466
  },
  "tile_count": 584,
  "tile_deg": 0.25,
@@ -41,7 +41,7 @@
    "restrictions": 0
   },
   "363_506": {
-   "bytes": 88808,
+   "bytes": 88812,
    "edges": 1922,
    "nodes": 764,
    "restrictions": 12
@@ -59,7 +59,7 @@
    "restrictions": 0
   },
   "364_506": {
-   "bytes": 162380,
+   "bytes": 162400,
    "edges": 3571,
    "nodes": 1414,
    "restrictions": 11
@@ -245,9 +245,9 @@
    "restrictions": 0
   },
   "369_511": {
-   "bytes": 1325268,
-   "edges": 31957,
-   "nodes": 12368,
+   "bytes": 1327836,
+   "edges": 32021,
+   "nodes": 12397,
    "restrictions": 32
   },
   "369_512": {
@@ -329,15 +329,15 @@
    "restrictions": 0
   },
   "369_525": {
-   "bytes": 110784,
-   "edges": 2554,
+   "bytes": 110872,
+   "edges": 2556,
    "nodes": 1085,
    "restrictions": 5
   },
   "369_526": {
-   "bytes": 533104,
+   "bytes": 533144,
    "edges": 12999,
-   "nodes": 4932,
+   "nodes": 4933,
    "restrictions": 58
   },
   "370_506": {
@@ -347,9 +347,9 @@
    "restrictions": 16
   },
   "370_507": {
-   "bytes": 319548,
-   "edges": 7119,
-   "nodes": 2998,
+   "bytes": 320020,
+   "edges": 7131,
+   "nodes": 3001,
    "restrictions": 0
   },
   "370_508": {
@@ -371,10 +371,10 @@
    "restrictions": 0
   },
   "370_511": {
-   "bytes": 635620,
+   "bytes": 635636,
    "edges": 14693,
    "nodes": 6328,
-   "restrictions": 58
+   "restrictions": 59
   },
   "370_512": {
    "bytes": 444644,
@@ -407,15 +407,15 @@
    "restrictions": 4
   },
   "370_517": {
-   "bytes": 1099716,
-   "edges": 26685,
-   "nodes": 9757,
+   "bytes": 1099796,
+   "edges": 26687,
+   "nodes": 9758,
    "restrictions": 13
   },
   "370_518": {
-   "bytes": 436728,
-   "edges": 10383,
-   "nodes": 3806,
+   "bytes": 436964,
+   "edges": 10389,
+   "nodes": 3808,
    "restrictions": 0
   },
   "370_519": {
@@ -455,16 +455,16 @@
    "restrictions": 0
   },
   "370_525": {
-   "bytes": 1281368,
-   "edges": 30318,
-   "nodes": 12739,
+   "bytes": 1281444,
+   "edges": 30320,
+   "nodes": 12740,
    "restrictions": 165
   },
   "370_526": {
-   "bytes": 2168616,
-   "edges": 53474,
-   "nodes": 20154,
-   "restrictions": 170
+   "bytes": 2169292,
+   "edges": 53488,
+   "nodes": 20164,
+   "restrictions": 171
   },
   "371_506": {
    "bytes": 69832,
@@ -479,27 +479,27 @@
    "restrictions": 0
   },
   "371_508": {
-   "bytes": 233016,
+   "bytes": 233020,
    "edges": 4908,
    "nodes": 2093,
    "restrictions": 0
   },
   "371_509": {
-   "bytes": 240984,
+   "bytes": 240980,
    "edges": 5244,
    "nodes": 2148,
    "restrictions": 0
   },
   "371_510": {
-   "bytes": 319800,
-   "edges": 7125,
+   "bytes": 319724,
+   "edges": 7123,
    "nodes": 3002,
    "restrictions": 2
   },
   "371_511": {
-   "bytes": 604188,
-   "edges": 14263,
-   "nodes": 5682,
+   "bytes": 604496,
+   "edges": 14271,
+   "nodes": 5686,
    "restrictions": 14
   },
   "371_512": {
@@ -587,9 +587,9 @@
    "restrictions": 51
   },
   "371_526": {
-   "bytes": 958384,
-   "edges": 22452,
-   "nodes": 9379,
+   "bytes": 958912,
+   "edges": 22466,
+   "nodes": 9384,
    "restrictions": 197
   },
   "372_506": {
@@ -683,9 +683,9 @@
    "restrictions": 16
   },
   "372_521": {
-   "bytes": 1243500,
-   "edges": 29186,
-   "nodes": 12064,
+   "bytes": 1243348,
+   "edges": 29182,
+   "nodes": 12063,
    "restrictions": 96
   },
   "372_522": {
@@ -695,9 +695,9 @@
    "restrictions": 5
   },
   "372_523": {
-   "bytes": 268020,
-   "edges": 6404,
-   "nodes": 2497,
+   "bytes": 269272,
+   "edges": 6434,
+   "nodes": 2512,
    "restrictions": 2
   },
   "372_524": {
@@ -731,9 +731,9 @@
    "restrictions": 1
   },
   "373_507": {
-   "bytes": 254612,
-   "edges": 5660,
-   "nodes": 2418,
+   "bytes": 254972,
+   "edges": 5668,
+   "nodes": 2423,
    "restrictions": 0
   },
   "373_508": {
@@ -767,9 +767,9 @@
    "restrictions": 16
   },
   "373_513": {
-   "bytes": 178232,
-   "edges": 3777,
-   "nodes": 1587,
+   "bytes": 178308,
+   "edges": 3779,
+   "nodes": 1588,
    "restrictions": 0
   },
   "373_514": {
@@ -845,7 +845,7 @@
    "restrictions": 0
   },
   "373_526": {
-   "bytes": 472640,
+   "bytes": 472644,
    "edges": 11192,
    "nodes": 4344,
    "restrictions": 62
@@ -863,19 +863,19 @@
    "restrictions": 0
   },
   "374_507": {
-   "bytes": 840192,
-   "edges": 19322,
+   "bytes": 840072,
+   "edges": 19318,
    "nodes": 8088,
    "restrictions": 24
   },
   "374_508": {
-   "bytes": 300648,
-   "edges": 6672,
-   "nodes": 2879,
+   "bytes": 300744,
+   "edges": 6674,
+   "nodes": 2880,
    "restrictions": 0
   },
   "374_509": {
-   "bytes": 188748,
+   "bytes": 188752,
    "edges": 3918,
    "nodes": 1720,
    "restrictions": 8
@@ -923,21 +923,21 @@
    "restrictions": 7
   },
   "374_517": {
-   "bytes": 535828,
-   "edges": 12281,
-   "nodes": 5068,
-   "restrictions": 48
+   "bytes": 536084,
+   "edges": 12289,
+   "nodes": 5072,
+   "restrictions": 47
   },
   "374_518": {
-   "bytes": 1166820,
-   "edges": 26555,
-   "nodes": 11555,
+   "bytes": 1167084,
+   "edges": 26561,
+   "nodes": 11556,
    "restrictions": 73
   },
   "374_519": {
-   "bytes": 1737212,
-   "edges": 39623,
-   "nodes": 17028,
+   "bytes": 1737436,
+   "edges": 39629,
+   "nodes": 17031,
    "restrictions": 200
   },
   "374_520": {
@@ -971,15 +971,15 @@
    "restrictions": 0
   },
   "374_525": {
-   "bytes": 451960,
-   "edges": 10837,
-   "nodes": 4210,
+   "bytes": 452012,
+   "edges": 10838,
+   "nodes": 4211,
    "restrictions": 13
   },
   "374_526": {
-   "bytes": 857920,
-   "edges": 20614,
-   "nodes": 7668,
+   "bytes": 858160,
+   "edges": 20620,
+   "nodes": 7671,
    "restrictions": 137
   },
   "374_527": {
@@ -1043,39 +1043,39 @@
    "restrictions": 4
   },
   "375_515": {
-   "bytes": 174884,
+   "bytes": 174860,
    "edges": 3862,
    "nodes": 1478,
    "restrictions": 0
   },
   "375_516": {
-   "bytes": 218008,
+   "bytes": 218024,
    "edges": 4661,
    "nodes": 2032,
    "restrictions": 3
   },
   "375_517": {
-   "bytes": 502876,
+   "bytes": 502888,
    "edges": 11674,
    "nodes": 4862,
    "restrictions": 17
   },
   "375_518": {
-   "bytes": 2456668,
-   "edges": 57030,
+   "bytes": 2456900,
+   "edges": 57037,
    "nodes": 23978,
    "restrictions": 352
   },
   "375_519": {
-   "bytes": 4545228,
-   "edges": 106246,
-   "nodes": 43877,
+   "bytes": 4544376,
+   "edges": 106228,
+   "nodes": 43871,
    "restrictions": 1340
   },
   "375_520": {
-   "bytes": 1157960,
-   "edges": 26826,
-   "nodes": 10971,
+   "bytes": 1158076,
+   "edges": 26828,
+   "nodes": 10973,
    "restrictions": 98
   },
   "375_521": {
@@ -1085,9 +1085,9 @@
    "restrictions": 28
   },
   "375_522": {
-   "bytes": 327564,
-   "edges": 7832,
-   "nodes": 2863,
+   "bytes": 327664,
+   "edges": 7834,
+   "nodes": 2864,
    "restrictions": 16
   },
   "375_523": {
@@ -1097,9 +1097,9 @@
    "restrictions": 8
   },
   "375_524": {
-   "bytes": 330288,
-   "edges": 8065,
-   "nodes": 2908,
+   "bytes": 330372,
+   "edges": 8067,
+   "nodes": 2910,
    "restrictions": 12
   },
   "375_525": {
@@ -1109,9 +1109,9 @@
    "restrictions": 8
   },
   "375_526": {
-   "bytes": 1634508,
-   "edges": 39292,
-   "nodes": 14654,
+   "bytes": 1634656,
+   "edges": 39296,
+   "nodes": 14655,
    "restrictions": 218
   },
   "375_527": {
@@ -1157,33 +1157,33 @@
    "restrictions": 24
   },
   "376_512": {
-   "bytes": 1645420,
-   "edges": 38737,
-   "nodes": 15889,
-   "restrictions": 173
+   "bytes": 1646060,
+   "edges": 38753,
+   "nodes": 15897,
+   "restrictions": 174
   },
   "376_513": {
-   "bytes": 1419240,
-   "edges": 33219,
-   "nodes": 13710,
+   "bytes": 1418860,
+   "edges": 33210,
+   "nodes": 13706,
    "restrictions": 118
   },
   "376_514": {
-   "bytes": 286188,
+   "bytes": 286180,
    "edges": 6424,
    "nodes": 2644,
    "restrictions": 11
   },
   "376_515": {
-   "bytes": 383040,
-   "edges": 9024,
-   "nodes": 3514,
+   "bytes": 383184,
+   "edges": 9028,
+   "nodes": 3516,
    "restrictions": 43
   },
   "376_516": {
-   "bytes": 819628,
-   "edges": 19449,
-   "nodes": 7587,
+   "bytes": 819472,
+   "edges": 19445,
+   "nodes": 7585,
    "restrictions": 39
   },
   "376_517": {
@@ -1199,15 +1199,15 @@
    "restrictions": 28
   },
   "376_519": {
-   "bytes": 1575472,
-   "edges": 36077,
-   "nodes": 15218,
+   "bytes": 1575704,
+   "edges": 36082,
+   "nodes": 15223,
    "restrictions": 157
   },
   "376_520": {
-   "bytes": 430920,
-   "edges": 10150,
-   "nodes": 4065,
+   "bytes": 430988,
+   "edges": 10152,
+   "nodes": 4067,
    "restrictions": 25
   },
   "376_521": {
@@ -1229,9 +1229,9 @@
    "restrictions": 0
   },
   "376_524": {
-   "bytes": 534936,
-   "edges": 12858,
-   "nodes": 4757,
+   "bytes": 535016,
+   "edges": 12860,
+   "nodes": 4758,
    "restrictions": 4
   },
   "376_525": {
@@ -1241,9 +1241,9 @@
    "restrictions": 8
   },
   "376_526": {
-   "bytes": 1481048,
-   "edges": 35982,
-   "nodes": 13763,
+   "bytes": 1481100,
+   "edges": 35983,
+   "nodes": 13764,
    "restrictions": 100
   },
   "376_527": {
@@ -1289,15 +1289,15 @@
    "restrictions": 12
   },
   "377_512": {
-   "bytes": 2823892,
-   "edges": 65058,
-   "nodes": 28234,
+   "bytes": 2825444,
+   "edges": 65093,
+   "nodes": 28252,
    "restrictions": 415
   },
   "377_513": {
-   "bytes": 1867900,
-   "edges": 43206,
-   "nodes": 18368,
+   "bytes": 1868280,
+   "edges": 43216,
+   "nodes": 18372,
    "restrictions": 165
   },
   "377_514": {
@@ -1337,9 +1337,9 @@
    "restrictions": 3
   },
   "377_520": {
-   "bytes": 1035028,
-   "edges": 25082,
-   "nodes": 9579,
+   "bytes": 1035264,
+   "edges": 25088,
+   "nodes": 9583,
    "restrictions": 14
   },
   "377_521": {
@@ -1349,8 +1349,8 @@
    "restrictions": 0
   },
   "377_522": {
-   "bytes": 642248,
-   "edges": 15718,
+   "bytes": 642200,
+   "edges": 15716,
    "nodes": 5703,
    "restrictions": 11
   },
@@ -1385,9 +1385,9 @@
    "restrictions": 2
   },
   "378_506": {
-   "bytes": 78064,
-   "edges": 1455,
-   "nodes": 663,
+   "bytes": 78224,
+   "edges": 1459,
+   "nodes": 665,
    "restrictions": 0
   },
   "378_507": {
@@ -1403,7 +1403,7 @@
    "restrictions": 1
   },
   "378_509": {
-   "bytes": 292844,
+   "bytes": 292848,
    "edges": 6339,
    "nodes": 2562,
    "restrictions": 8
@@ -1427,9 +1427,9 @@
    "restrictions": 17
   },
   "378_513": {
-   "bytes": 623248,
-   "edges": 13951,
-   "nodes": 6173,
+   "bytes": 623564,
+   "edges": 13959,
+   "nodes": 6175,
    "restrictions": 30
   },
   "378_514": {
@@ -1457,27 +1457,27 @@
    "restrictions": 17
   },
   "378_518": {
-   "bytes": 253064,
+   "bytes": 253052,
    "edges": 6178,
-   "nodes": 2271,
+   "nodes": 2272,
    "restrictions": 0
   },
   "378_519": {
-   "bytes": 475368,
-   "edges": 11556,
+   "bytes": 475296,
+   "edges": 11554,
    "nodes": 4278,
    "restrictions": 9
   },
   "378_520": {
-   "bytes": 951964,
-   "edges": 22982,
-   "nodes": 8297,
+   "bytes": 952440,
+   "edges": 22994,
+   "nodes": 8301,
    "restrictions": 5
   },
   "378_521": {
-   "bytes": 384932,
-   "edges": 9369,
-   "nodes": 3391,
+   "bytes": 385016,
+   "edges": 9371,
+   "nodes": 3392,
    "restrictions": 0
   },
   "378_522": {
@@ -1487,21 +1487,21 @@
    "restrictions": 2
   },
   "378_523": {
-   "bytes": 375136,
-   "edges": 9030,
-   "nodes": 3486,
+   "bytes": 375240,
+   "edges": 9032,
+   "nodes": 3488,
    "restrictions": 13
   },
   "378_524": {
-   "bytes": 607060,
-   "edges": 14116,
-   "nodes": 5804,
+   "bytes": 607008,
+   "edges": 14112,
+   "nodes": 5807,
    "restrictions": 6
   },
   "378_525": {
-   "bytes": 355480,
-   "edges": 8459,
-   "nodes": 3253,
+   "bytes": 355564,
+   "edges": 8461,
+   "nodes": 3254,
    "restrictions": 8
   },
   "378_526": {
@@ -1625,9 +1625,9 @@
    "restrictions": 2
   },
   "379_524": {
-   "bytes": 2504792,
-   "edges": 58639,
-   "nodes": 24097,
+   "bytes": 2507456,
+   "edges": 58700,
+   "nodes": 24125,
    "restrictions": 169
   },
   "379_525": {
@@ -1673,9 +1673,9 @@
    "restrictions": 0
   },
   "380_510": {
-   "bytes": 359940,
-   "edges": 7985,
-   "nodes": 3371,
+   "bytes": 361176,
+   "edges": 8015,
+   "nodes": 3385,
    "restrictions": 0
   },
   "380_511": {
@@ -1709,9 +1709,9 @@
    "restrictions": 3
   },
   "380_516": {
-   "bytes": 522824,
-   "edges": 11758,
-   "nodes": 5140,
+   "bytes": 522964,
+   "edges": 11760,
+   "nodes": 5141,
    "restrictions": 30
   },
   "380_517": {
@@ -1757,8 +1757,8 @@
    "restrictions": 4
   },
   "380_524": {
-   "bytes": 276112,
-   "edges": 6605,
+   "bytes": 276104,
+   "edges": 6604,
    "nodes": 2711,
    "restrictions": 0
   },
@@ -1781,9 +1781,9 @@
    "restrictions": 0
   },
   "381_506": {
-   "bytes": 60700,
-   "edges": 1011,
-   "nodes": 476,
+   "bytes": 60556,
+   "edges": 1008,
+   "nodes": 475,
    "restrictions": 0
   },
   "381_507": {
@@ -1817,39 +1817,39 @@
    "restrictions": 29
   },
   "381_512": {
-   "bytes": 1233612,
+   "bytes": 1233620,
    "edges": 28420,
-   "nodes": 12077,
+   "nodes": 12078,
    "restrictions": 86
   },
   "381_513": {
-   "bytes": 226756,
-   "edges": 4689,
-   "nodes": 2142,
+   "bytes": 226676,
+   "edges": 4687,
+   "nodes": 2141,
    "restrictions": 13
   },
   "381_514": {
-   "bytes": 233256,
-   "edges": 4894,
-   "nodes": 2201,
+   "bytes": 233412,
+   "edges": 4898,
+   "nodes": 2203,
    "restrictions": 7
   },
   "381_515": {
-   "bytes": 901468,
-   "edges": 20060,
-   "nodes": 9169,
+   "bytes": 901548,
+   "edges": 20062,
+   "nodes": 9170,
    "restrictions": 113
   },
   "381_516": {
-   "bytes": 2858592,
-   "edges": 65696,
-   "nodes": 29037,
+   "bytes": 2858436,
+   "edges": 65693,
+   "nodes": 29036,
    "restrictions": 1077
   },
   "381_517": {
    "bytes": 1377168,
    "edges": 32353,
-   "nodes": 13502,
+   "nodes": 13501,
    "restrictions": 371
   },
   "381_518": {
@@ -1883,10 +1883,10 @@
    "restrictions": 15
   },
   "381_523": {
-   "bytes": 318944,
-   "edges": 7736,
-   "nodes": 2971,
-   "restrictions": 30
+   "bytes": 319148,
+   "edges": 7740,
+   "nodes": 2972,
+   "restrictions": 33
   },
   "381_524": {
    "bytes": 238488,
@@ -1919,7 +1919,7 @@
    "restrictions": 0
   },
   "382_507": {
-   "bytes": 140924,
+   "bytes": 140920,
    "edges": 2639,
    "nodes": 1169,
    "restrictions": 0
@@ -1949,9 +1949,9 @@
    "restrictions": 32
   },
   "382_512": {
-   "bytes": 928104,
-   "edges": 21368,
-   "nodes": 9366,
+   "bytes": 928180,
+   "edges": 21370,
+   "nodes": 9367,
    "restrictions": 76
   },
   "382_513": {
@@ -1973,21 +1973,21 @@
    "restrictions": 12
   },
   "382_516": {
-   "bytes": 2631164,
-   "edges": 60784,
-   "nodes": 26408,
-   "restrictions": 871
+   "bytes": 2631832,
+   "edges": 60801,
+   "nodes": 26417,
+   "restrictions": 869
   },
   "382_517": {
-   "bytes": 2445028,
-   "edges": 56070,
-   "nodes": 25551,
+   "bytes": 2445216,
+   "edges": 56074,
+   "nodes": 25552,
    "restrictions": 784
   },
   "382_518": {
-   "bytes": 1101012,
-   "edges": 26010,
-   "nodes": 10573,
+   "bytes": 1101756,
+   "edges": 26028,
+   "nodes": 10580,
    "restrictions": 203
   },
   "382_519": {
@@ -1997,8 +1997,8 @@
    "restrictions": 105
   },
   "382_520": {
-   "bytes": 345936,
-   "edges": 8384,
+   "bytes": 345864,
+   "edges": 8382,
    "nodes": 2991,
    "restrictions": 2
   },
@@ -2051,7 +2051,7 @@
    "restrictions": 1
   },
   "383_507": {
-   "bytes": 428552,
+   "bytes": 428532,
    "edges": 9117,
    "nodes": 3973,
    "restrictions": 6
@@ -2093,9 +2093,9 @@
    "restrictions": 0
   },
   "383_514": {
-   "bytes": 154044,
-   "edges": 2969,
-   "nodes": 1319,
+   "bytes": 154120,
+   "edges": 2971,
+   "nodes": 1320,
    "restrictions": 0
   },
   "383_515": {
@@ -2105,27 +2105,27 @@
    "restrictions": 2
   },
   "383_516": {
-   "bytes": 670460,
-   "edges": 15132,
-   "nodes": 6801,
+   "bytes": 669920,
+   "edges": 15118,
+   "nodes": 6795,
    "restrictions": 69
   },
   "383_517": {
-   "bytes": 622580,
-   "edges": 14156,
-   "nodes": 6240,
+   "bytes": 623408,
+   "edges": 14172,
+   "nodes": 6251,
    "restrictions": 123
   },
   "383_518": {
-   "bytes": 2530392,
-   "edges": 58674,
-   "nodes": 24309,
+   "bytes": 2531312,
+   "edges": 58697,
+   "nodes": 24320,
    "restrictions": 503
   },
   "383_519": {
-   "bytes": 2347556,
-   "edges": 56000,
-   "nodes": 22263,
+   "bytes": 2347656,
+   "edges": 56002,
+   "nodes": 22264,
    "restrictions": 447
   },
   "383_520": {
@@ -2141,15 +2141,15 @@
    "restrictions": 4
   },
   "383_522": {
-   "bytes": 774992,
-   "edges": 18853,
-   "nodes": 7136,
+   "bytes": 775732,
+   "edges": 18867,
+   "nodes": 7146,
    "restrictions": 13
   },
   "383_523": {
-   "bytes": 430856,
-   "edges": 10405,
-   "nodes": 4080,
+   "bytes": 431004,
+   "edges": 10409,
+   "nodes": 4081,
    "restrictions": 9
   },
   "383_524": {
@@ -2159,9 +2159,9 @@
    "restrictions": 0
   },
   "383_525": {
-   "bytes": 237952,
-   "edges": 5720,
-   "nodes": 2176,
+   "bytes": 238064,
+   "edges": 5722,
+   "nodes": 2178,
    "restrictions": 7
   },
   "383_526": {
@@ -2201,9 +2201,9 @@
    "restrictions": 0
   },
   "384_510": {
-   "bytes": 201128,
-   "edges": 3975,
-   "nodes": 1769,
+   "bytes": 200392,
+   "edges": 3957,
+   "nodes": 1760,
    "restrictions": 5
   },
   "384_511": {
@@ -2237,9 +2237,9 @@
    "restrictions": 3
   },
   "384_516": {
-   "bytes": 288308,
-   "edges": 6741,
-   "nodes": 2803,
+   "bytes": 287672,
+   "edges": 6722,
+   "nodes": 2797,
    "restrictions": 11
   },
   "384_517": {
@@ -2255,15 +2255,15 @@
    "restrictions": 61
   },
   "384_519": {
-   "bytes": 1112568,
-   "edges": 26495,
-   "nodes": 10435,
+   "bytes": 1112796,
+   "edges": 26501,
+   "nodes": 10437,
    "restrictions": 121
   },
   "384_520": {
-   "bytes": 275328,
-   "edges": 6536,
-   "nodes": 2578,
+   "bytes": 275620,
+   "edges": 6543,
+   "nodes": 2581,
    "restrictions": 8
   },
   "384_521": {
@@ -2333,9 +2333,9 @@
    "restrictions": 0
   },
   "385_510": {
-   "bytes": 248100,
-   "edges": 4779,
-   "nodes": 2159,
+   "bytes": 248152,
+   "edges": 4780,
+   "nodes": 2160,
    "restrictions": 5
   },
   "385_511": {
@@ -2345,8 +2345,8 @@
    "restrictions": 0
   },
   "385_512": {
-   "bytes": 186092,
-   "edges": 3707,
+   "bytes": 185920,
+   "edges": 3703,
    "nodes": 1674,
    "restrictions": 0
   },
@@ -2393,9 +2393,9 @@
    "restrictions": 2
   },
   "385_520": {
-   "bytes": 254976,
-   "edges": 6009,
-   "nodes": 2363,
+   "bytes": 255096,
+   "edges": 6012,
+   "nodes": 2364,
    "restrictions": 1
   },
   "385_521": {
@@ -2417,9 +2417,9 @@
    "restrictions": 0
   },
   "385_524": {
-   "bytes": 639692,
-   "edges": 15651,
-   "nodes": 5688,
+   "bytes": 640036,
+   "edges": 15659,
+   "nodes": 5691,
    "restrictions": 18
   },
   "385_525": {
@@ -2429,9 +2429,9 @@
    "restrictions": 13
   },
   "385_526": {
-   "bytes": 3033940,
-   "edges": 72169,
-   "nodes": 28513,
+   "bytes": 3034408,
+   "edges": 72181,
+   "nodes": 28518,
    "restrictions": 418
   },
   "385_527": {
@@ -2519,21 +2519,21 @@
    "restrictions": 12
   },
   "386_519": {
-   "bytes": 289156,
-   "edges": 6765,
-   "nodes": 2779,
+   "bytes": 289004,
+   "edges": 6761,
+   "nodes": 2777,
    "restrictions": 20
   },
   "386_520": {
-   "bytes": 377404,
-   "edges": 8903,
-   "nodes": 3612,
+   "bytes": 377328,
+   "edges": 8901,
+   "nodes": 3611,
    "restrictions": 14
   },
   "386_521": {
-   "bytes": 203776,
-   "edges": 4822,
-   "nodes": 1920,
+   "bytes": 205296,
+   "edges": 4858,
+   "nodes": 1936,
    "restrictions": 12
   },
   "386_522": {
@@ -2561,9 +2561,9 @@
    "restrictions": 3
   },
   "386_526": {
-   "bytes": 558648,
-   "edges": 13362,
-   "nodes": 5245,
+   "bytes": 558952,
+   "edges": 13370,
+   "nodes": 5248,
    "restrictions": 26
   },
   "387_506": {
@@ -2579,15 +2579,15 @@
    "restrictions": 0
   },
   "387_508": {
-   "bytes": 199680,
+   "bytes": 199684,
    "edges": 3808,
    "nodes": 1813,
    "restrictions": 0
   },
   "387_509": {
-   "bytes": 230064,
-   "edges": 4521,
-   "nodes": 2140,
+   "bytes": 230824,
+   "edges": 4538,
+   "nodes": 2148,
    "restrictions": 1
   },
   "387_510": {
@@ -2609,8 +2609,8 @@
    "restrictions": 0
   },
   "387_513": {
-   "bytes": 208800,
-   "edges": 3994,
+   "bytes": 208776,
+   "edges": 3993,
    "nodes": 1800,
    "restrictions": 0
   },
@@ -2639,27 +2639,27 @@
    "restrictions": 17
   },
   "387_518": {
-   "bytes": 99300,
-   "edges": 2267,
-   "nodes": 880,
+   "bytes": 98180,
+   "edges": 2239,
+   "nodes": 868,
    "restrictions": 0
   },
   "387_519": {
-   "bytes": 2035356,
+   "bytes": 2035436,
    "edges": 47845,
-   "nodes": 19471,
+   "nodes": 19470,
    "restrictions": 542
   },
   "387_520": {
-   "bytes": 2612488,
-   "edges": 59780,
-   "nodes": 25141,
+   "bytes": 2613456,
+   "edges": 59800,
+   "nodes": 25152,
    "restrictions": 754
   },
   "387_521": {
-   "bytes": 481880,
-   "edges": 11299,
-   "nodes": 4565,
+   "bytes": 481932,
+   "edges": 11300,
+   "nodes": 4566,
    "restrictions": 105
   },
   "387_522": {
@@ -2729,9 +2729,9 @@
    "restrictions": 0
   },
   "388_513": {
-   "bytes": 255392,
-   "edges": 5118,
-   "nodes": 2289,
+   "bytes": 255628,
+   "edges": 5124,
+   "nodes": 2291,
    "restrictions": 7
   },
   "388_514": {
@@ -2741,9 +2741,9 @@
    "restrictions": 4
   },
   "388_515": {
-   "bytes": 268796,
-   "edges": 5715,
-   "nodes": 2442,
+   "bytes": 268900,
+   "edges": 5717,
+   "nodes": 2444,
    "restrictions": 5
   },
   "388_516": {
@@ -2759,26 +2759,26 @@
    "restrictions": 31
   },
   "388_518": {
-   "bytes": 419268,
-   "edges": 10016,
-   "nodes": 3932,
+   "bytes": 419032,
+   "edges": 10011,
+   "nodes": 3930,
    "restrictions": 66
   },
   "388_519": {
-   "bytes": 2909604,
-   "edges": 69058,
-   "nodes": 27728,
+   "bytes": 2910720,
+   "edges": 69086,
+   "nodes": 27742,
    "restrictions": 711
   },
   "388_520": {
-   "bytes": 2536868,
-   "edges": 58671,
-   "nodes": 24380,
-   "restrictions": 793
+   "bytes": 2537008,
+   "edges": 58673,
+   "nodes": 24382,
+   "restrictions": 792
   },
   "388_521": {
-   "bytes": 307020,
-   "edges": 7268,
+   "bytes": 306940,
+   "edges": 7266,
    "nodes": 3036,
    "restrictions": 23
   },
@@ -2807,9 +2807,9 @@
    "restrictions": 2
   },
   "388_526": {
-   "bytes": 272008,
-   "edges": 6350,
-   "nodes": 2622,
+   "bytes": 272160,
+   "edges": 6354,
+   "nodes": 2624,
    "restrictions": 5
   },
   "389_508": {
@@ -2819,7 +2819,7 @@
    "restrictions": 5
   },
   "389_509": {
-   "bytes": 252480,
+   "bytes": 252548,
    "edges": 5007,
    "nodes": 2360,
    "restrictions": 4
@@ -2873,21 +2873,21 @@
    "restrictions": 0
   },
   "389_518": {
-   "bytes": 675840,
-   "edges": 15673,
-   "nodes": 6403,
+   "bytes": 675888,
+   "edges": 15674,
+   "nodes": 6404,
    "restrictions": 67
   },
   "389_519": {
-   "bytes": 556292,
-   "edges": 12951,
-   "nodes": 5406,
-   "restrictions": 64
+   "bytes": 556872,
+   "edges": 12961,
+   "nodes": 5416,
+   "restrictions": 60
   },
   "389_520": {
-   "bytes": 499204,
-   "edges": 11700,
-   "nodes": 4962,
+   "bytes": 499332,
+   "edges": 11703,
+   "nodes": 4964,
    "restrictions": 77
   },
   "389_521": {
@@ -2897,9 +2897,9 @@
    "restrictions": 4
   },
   "389_522": {
-   "bytes": 433708,
-   "edges": 10183,
-   "nodes": 4145,
+   "bytes": 433952,
+   "edges": 10188,
+   "nodes": 4148,
    "restrictions": 1
   },
   "389_523": {
@@ -2939,15 +2939,15 @@
    "restrictions": 0
   },
   "390_509": {
-   "bytes": 147216,
-   "edges": 2807,
-   "nodes": 1327,
+   "bytes": 147556,
+   "edges": 2811,
+   "nodes": 1329,
    "restrictions": 22
   },
   "390_510": {
-   "bytes": 173556,
-   "edges": 3322,
-   "nodes": 1607,
+   "bytes": 173824,
+   "edges": 3324,
+   "nodes": 1609,
    "restrictions": 13
   },
   "390_511": {
@@ -2963,9 +2963,9 @@
    "restrictions": 0
   },
   "390_513": {
-   "bytes": 155520,
-   "edges": 3403,
-   "nodes": 1497,
+   "bytes": 155904,
+   "edges": 3413,
+   "nodes": 1501,
    "restrictions": 12
   },
   "390_514": {
@@ -3005,15 +3005,15 @@
    "restrictions": 6
   },
   "390_520": {
-   "bytes": 958208,
+   "bytes": 958216,
    "edges": 22681,
-   "nodes": 9287,
+   "nodes": 9288,
    "restrictions": 48
   },
   "390_521": {
-   "bytes": 534036,
-   "edges": 12750,
-   "nodes": 4999,
+   "bytes": 534116,
+   "edges": 12752,
+   "nodes": 5000,
    "restrictions": 10
   },
   "390_522": {
@@ -3071,14 +3071,14 @@
    "restrictions": 0
   },
   "391_516": {
-   "bytes": 216904,
-   "edges": 4496,
-   "nodes": 1907,
+   "bytes": 217212,
+   "edges": 4504,
+   "nodes": 1910,
    "restrictions": 0
   },
   "391_517": {
-   "bytes": 447716,
-   "edges": 9843,
+   "bytes": 447652,
+   "edges": 9841,
    "nodes": 4142,
    "restrictions": 5
   },
@@ -3089,9 +3089,9 @@
    "restrictions": 1
   },
   "391_519": {
-   "bytes": 695660,
-   "edges": 16341,
-   "nodes": 6451,
+   "bytes": 695740,
+   "edges": 16343,
+   "nodes": 6452,
    "restrictions": 23
   },
   "391_520": {
@@ -3119,15 +3119,15 @@
    "restrictions": 2
   },
   "391_524": {
-   "bytes": 284592,
-   "edges": 6882,
-   "nodes": 2826,
+   "bytes": 284668,
+   "edges": 6884,
+   "nodes": 2827,
    "restrictions": 7
   },
   "391_525": {
-   "bytes": 1440104,
-   "edges": 34231,
-   "nodes": 13826,
+   "bytes": 1441220,
+   "edges": 34259,
+   "nodes": 13839,
    "restrictions": 166
   },
   "391_526": {
@@ -3149,9 +3149,9 @@
    "restrictions": 0
   },
   "392_516": {
-   "bytes": 235044,
-   "edges": 4948,
-   "nodes": 2139,
+   "bytes": 235124,
+   "edges": 4950,
+   "nodes": 2140,
    "restrictions": 6
   },
   "392_517": {
@@ -3173,27 +3173,27 @@
    "restrictions": 0
   },
   "392_520": {
-   "bytes": 156820,
-   "edges": 3258,
-   "nodes": 1310,
+   "bytes": 158360,
+   "edges": 3296,
+   "nodes": 1328,
    "restrictions": 0
   },
   "392_521": {
-   "bytes": 335164,
+   "bytes": 335148,
    "edges": 7518,
    "nodes": 2849,
    "restrictions": 12
   },
   "392_522": {
-   "bytes": 337684,
-   "edges": 7837,
+   "bytes": 337756,
+   "edges": 7838,
    "nodes": 3202,
    "restrictions": 0
   },
   "392_523": {
-   "bytes": 660848,
-   "edges": 15774,
-   "nodes": 6325,
+   "bytes": 661476,
+   "edges": 15789,
+   "nodes": 6331,
    "restrictions": 44
   },
   "392_524": {
@@ -3203,9 +3203,9 @@
    "restrictions": 125
   },
   "392_525": {
-   "bytes": 2315452,
+   "bytes": 2315588,
    "edges": 54458,
-   "nodes": 22640,
+   "nodes": 22643,
    "restrictions": 631
   },
   "392_526": {
@@ -3245,7 +3245,7 @@
    "restrictions": 9
   },
   "393_520": {
-   "bytes": 289564,
+   "bytes": 289464,
    "edges": 6370,
    "nodes": 2443,
    "restrictions": 2
@@ -3269,21 +3269,21 @@
    "restrictions": 77
   },
   "393_524": {
-   "bytes": 1969588,
-   "edges": 46925,
-   "nodes": 18849,
-   "restrictions": 333
+   "bytes": 1969428,
+   "edges": 46915,
+   "nodes": 18852,
+   "restrictions": 332
   },
   "393_525": {
-   "bytes": 2698948,
-   "edges": 63992,
-   "nodes": 25964,
-   "restrictions": 603
+   "bytes": 2700196,
+   "edges": 64020,
+   "nodes": 25978,
+   "restrictions": 604
   },
   "393_526": {
-   "bytes": 977640,
-   "edges": 23326,
-   "nodes": 9258,
+   "bytes": 977800,
+   "edges": 23330,
+   "nodes": 9260,
    "restrictions": 219
   },
   "394_517": {
@@ -3317,21 +3317,21 @@
    "restrictions": 7
   },
   "394_522": {
-   "bytes": 603704,
-   "edges": 14182,
-   "nodes": 5388,
+   "bytes": 603552,
+   "edges": 14178,
+   "nodes": 5386,
    "restrictions": 19
   },
   "394_523": {
-   "bytes": 2489308,
-   "edges": 58710,
-   "nodes": 23211,
-   "restrictions": 439
+   "bytes": 2489344,
+   "edges": 58709,
+   "nodes": 23210,
+   "restrictions": 445
   },
   "394_524": {
-   "bytes": 1769872,
-   "edges": 42281,
-   "nodes": 17062,
+   "bytes": 1770040,
+   "edges": 42284,
+   "nodes": 17063,
    "restrictions": 376
   },
   "394_525": {
@@ -3341,7 +3341,7 @@
    "restrictions": 412
   },
   "394_526": {
-   "bytes": 1367688,
+   "bytes": 1367676,
    "edges": 31918,
    "nodes": 13413,
    "restrictions": 400
@@ -3353,9 +3353,9 @@
    "restrictions": 0
   },
   "395_517": {
-   "bytes": 45340,
-   "edges": 919,
-   "nodes": 397,
+   "bytes": 45108,
+   "edges": 913,
+   "nodes": 395,
    "restrictions": 1
   },
   "395_518": {
@@ -3377,9 +3377,9 @@
    "restrictions": 0
   },
   "395_521": {
-   "bytes": 196560,
-   "edges": 4006,
-   "nodes": 1579,
+   "bytes": 197696,
+   "edges": 4032,
+   "nodes": 1591,
    "restrictions": 0
   },
   "395_522": {
@@ -3389,9 +3389,9 @@
    "restrictions": 9
   },
   "395_523": {
-   "bytes": 679844,
-   "edges": 16493,
-   "nodes": 6218,
+   "bytes": 679804,
+   "edges": 16491,
+   "nodes": 6217,
    "restrictions": 66
   },
   "395_524": {
@@ -3407,7 +3407,7 @@
    "restrictions": 42
   },
   "395_526": {
-   "bytes": 343616,
+   "bytes": 343628,
    "edges": 7880,
    "nodes": 3318,
    "restrictions": 30
@@ -3437,8 +3437,8 @@
    "restrictions": 12
   },
   "396_521": {
-   "bytes": 225968,
-   "edges": 4683,
+   "bytes": 225888,
+   "edges": 4681,
    "nodes": 1878,
    "restrictions": 0
   },
@@ -3455,15 +3455,15 @@
    "restrictions": 20
   },
   "396_524": {
-   "bytes": 911212,
-   "edges": 21594,
-   "nodes": 8707,
-   "restrictions": 78
+   "bytes": 910980,
+   "edges": 21588,
+   "nodes": 8704,
+   "restrictions": 79
   },
   "396_525": {
-   "bytes": 366176,
-   "edges": 8710,
-   "nodes": 3588,
+   "bytes": 366564,
+   "edges": 8720,
+   "nodes": 3592,
    "restrictions": 20
   },
   "396_526": {
@@ -3485,9 +3485,9 @@
    "restrictions": 0
   },
   "397_520": {
-   "bytes": 270088,
-   "edges": 6315,
-   "nodes": 2471,
+   "bytes": 270204,
+   "edges": 6317,
+   "nodes": 2473,
    "restrictions": 2
   },
   "397_521": {
@@ -3503,13 +3503,13 @@
    "restrictions": 23
   },
   "397_523": {
-   "bytes": 518644,
-   "edges": 12159,
-   "nodes": 4961,
+   "bytes": 518540,
+   "edges": 12157,
+   "nodes": 4959,
    "restrictions": 44
   },
   "397_524": {
-   "bytes": 1770048,
+   "bytes": 1770044,
    "edges": 42224,
    "nodes": 16789,
    "restrictions": 205
