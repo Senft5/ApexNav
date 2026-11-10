@@ -9,6 +9,10 @@
   hint) and `.rp-fact` rows; CSS in `web/index.html`.
 - Tests: tests/test_road_page.py (plain words, unknown stays null, the climb formatter); e2e "road page…" (names, the
   empty bar for an unknown score, bar length = score, the climb in feet with a stubbed terrain profile).
+## Session 2026-11-10 (merger): e2e time limit 35 min (claude/project-thread-er8kzz)
+
+- [x] .github/workflows/core-tests.yml e2e `timeout-minutes` 25 → 35: 152 flows take ~24 min and were cancelled on the
+  last flow. Next: split e2e into two jobs if it passes ~30 min.
 
 ## Session 2026-11-10 (fable-loop-time): the loop dial by distance or time (claude/fable-loop-time, off origin/main 1a38381)
 
