@@ -3200,6 +3200,37 @@ flow('your data: Settings counts what the phone holds and downloads drives as GP
   check((await page.evaluate(() => localStorage.getItem('apex.savedRoutes'))) === null, 'saved routes gone');
 });
 
+flow('loved roads: in the app a recorded drive\'s road feel says it was recorded, and the saved drive is not offered again by hand (Worker stubbed)', async (page, base) => {
+  await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); localStorage.setItem('apex.permsExplained', '1'); } catch (_) {}
+    window.webkit = { messageHandlers: { apex: { postMessage: () => {} } } }; });
+  const posts = [], lat0 = 35.5, lon0 = -83.9, cors = { 'access-control-allow-origin': '*' };
+  await page.route('**/api/**', (route) => {
+    const u = new URL(route.request().url()), m = route.request().method(), p = u.pathname;
+    const json = (b, status = 200) => route.fulfill({ status, contentType: 'application/json', body: JSON.stringify(b) });
+    if (p === '/api/contribute' && m === 'POST') { posts.push(JSON.parse(route.request().postData())); return json({ accepted: true }, 202); }
+    if (m !== 'GET') return route.fulfill({ status: 204 });
+    if (p === '/api/me') return json({ signed_in: true, member: true, handle: 'me' });
+    if (p === '/api/me/export') return json({ member: { contribute: 1 } });
+    return json([]);
+  });
+  await page.route('**/trace_attributes', (route) => { const sh = JSON.parse(route.request().postData()).shape;
+    route.fulfill({ status: 200, contentType: 'application/json', headers: cors, body: JSON.stringify({ edges: [{ way_id: 77, road_class: 'tertiary' }], matched_points: sh.map(() => ({ type: 'matched', edge_index: 0 })) }) }); });
+  await page.route('**/api/interpreter', (route) => route.fulfill({ status: 200, contentType: 'application/json', headers: cors,
+    body: JSON.stringify({ elements: [{ type: 'way', id: 77, geometry: [{ lat: lat0 - 0.01, lon: lon0 }, { lat: lat0 + 0.09, lon: lon0 }] }] }) }));
+  await page.goto(base + '/index.html');
+  await page.waitForFunction(() => window.apexDebug && window.apex && window.ApexAnalysis && window.ApexContributor && window.ApexRecording);
+  const frames = ([a, b, lat0, lon0]) => { for (let j = a; j < b; j++) window.apex.live({ lat: lat0 + j * 1e-4, lon: lon0, accuracy_m: 4, speed_mps: 15, course_deg: 0, lat_g: 0, lon_g: 0, has_fix: true, calibration: 'locked', roughness_rms: 0.1 }); };
+  await page.evaluate(frames, [0, 1, lat0, lon0]);                                        // mounted: the app asks whether sharing is on
+  await page.waitForTimeout(1500);
+  await page.evaluate(() => window.apex.onNative({ type: 'link', params: { go: 'drive' } }));
+  await page.waitForFunction(() => window.apexDebug.driveActive);
+  for (let burst = 0; burst < 7; burst++) { await page.evaluate(frames, [burst * 100 + 1, (burst + 1) * 100 + 1, lat0, lon0]); await page.waitForTimeout(400); }   // 7.7 km due north
+  check(posts.length >= 1 && posts.every((c) => c.rec === 1 && c.way_id === 77), 'what went during the recorded drive says it was recorded: ' + JSON.stringify(posts.map((c) => [c.bins.length, c.rec])));
+  await page.evaluate(() => { document.getElementById('driveEnd').click(); window.apexDebug.endNow(); });
+  const saved = await page.evaluate(async () => { for (let i = 0; i < 150; i++) { const l = (await ApexAnalysis.job('summaries')).list; if (l.length && l[0].contributed) return l[0].contributed; await new Promise((r) => setTimeout(r, 100)); } return (await ApexAnalysis.job('summaries')).list.map((x) => x.contributed); });
+  check(saved === true, 'the saved drive is marked shared, so the Log does not offer it by hand: ' + JSON.stringify(saved));
+});
+
 flow('road feel that waited for signal: counted in Your data, kept while Road data can\'t be confirmed, sent once when the phone is back online (IDEAS Q-06)', async (page, base) => {
   await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); localStorage.setItem('apex.signedIn', '1'); } catch (_) {} });
   // the Worker: at first it can't be reached for the account (kept, nothing asked of /api/contribute), then a member with Road data on

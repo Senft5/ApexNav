@@ -224,13 +224,17 @@
     let held = false, detach = null;
     if (!carry || typeof carry.hold !== 'function' || typeof carry.drop !== 'function') carry = null;
     const bucket = () => { const hb = typeof bucketFn === 'function' ? bucketFn() : null; return Number.isInteger(hb) ? hb : null; };
+    // deliberate may be asked as it goes: the app's one mounted stream runs through Start and End, so it says "recorded" from
+    // its first row of a recorded drive on (what is built or kept after that row says so too, also once End was pressed)
+    let wasRec = false;
+    const recorded = () => wasRec || (wasRec = !!(typeof deliberate === 'function' ? deliberate() : deliberate));
     /** What is still to send, as a resume needs it; null when there is nothing (or the server refused: nothing is kept then). */
     function leftover() {
       if (stopped) return null;
       const from = Math.max(done, skip), to = A.lat.length - lag, n = to - from;
       if (!pending.length && n < MIN_BINS) return null;
       const cut = {}; for (const k of Object.keys(A)) cut[k] = n > 0 ? A[k].slice(from, to) : [];
-      return { driveId, drivenOn, deliberate, hr: bucket(), rows: cut, pending: pending.slice() };
+      return { driveId, drivenOn, deliberate: recorded(), hr: bucket(), rows: cut, pending: pending.slice() };
     }
     const keep = (final = false) => { if (!carry) return; const item = leftover(); try { if (item) { carry.hold(item, final); held = true; } else if (held || final) { carry.drop(driveId); held = false; } } catch (_) {} };
     if (carry && typeof carry.attach === 'function' && !rows) { try { detach = carry.attach(driveId, () => keep(false)); } catch (_) {} }
@@ -257,7 +261,7 @@
         if (!pending.length) {
           const lo = Math.max(0, from - ctx), hi = Math.min(n, to + ctx);
           const slice = { lat: A.lat.slice(lo, hi), lon: A.lon.slice(lo, hi), rough: A.rough.slice(lo, hi), camber: A.camber.slice(lo, hi), crest: A.crest.slice(lo, hi), cam_v: CAM_V,   // push() kept only fixed-pipeline camber
-                          speed: A.speed.slice(lo, hi), lon_g: A.lon_g.slice(lo, hi), rec: deliberate };
+                          speed: A.speed.slice(lo, hi), lon_g: A.lon_g.slice(lo, hi), rec: recorded() };
           const hb = bucket();
           if (hb != null) slice.hr = hb;
           slice.kappa = Array.from(Core.computeCurvature(slice.lat, slice.lon).kappa);
@@ -286,6 +290,7 @@
     return {
       /** One 5 m row from the recorder: { lat, lon, roughness_rms, camber_deg?, camber_v?, crest?, speed_mps?, lon_g? }. Never blocks. */
       push(row) {
+        recorded();
         A.lat.push(row.lat); A.lon.push(row.lon);
         A.speed.push(Number.isFinite(row.speed_mps) ? row.speed_mps : null); A.lon_g.push(Number.isFinite(row.lon_g) ? row.lon_g : null);
         A.rough.push(Number.isFinite(row.roughness_rms) ? row.roughness_rms : null);
@@ -375,7 +380,8 @@
     for (const c of list) {
       const r = await post(c);
       if (r === 'stop') break;
-      if (r) sent++;
+      if (r === 'retry') throw new Error('upload failed');             // no signal or a busy server: not shared ('retry' was counted as sent)
+      if (r === true) sent++;
     }
     return { built: list.length, sent };
   }
