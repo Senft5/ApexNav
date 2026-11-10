@@ -73,9 +73,9 @@
   const PRAISE = { smoothness: 'Smooth, unhurried steering', braking: 'Braking finished by the middle of each corner', consistency: 'An even rhythm from corner to corner',
     pace: 'Good use of the grip you had' };
   const HABIT = {
-    coast: (n) => `in ${n} corners you rolled with neither brake nor gas between slowing down and speeding up; go straight from one to the other`,
-    brake_after_apex: (n) => `in ${n} corners you were still braking past the middle; finish your braking by the middle of the corner`,
-    early_apex: (n) => `in ${n} corners your slowest point came well before the middle; wait a moment longer before you turn in`,
+    coast: (n) => `in ${n} corner${n === 1 ? '' : 's'} you rolled with neither brake nor gas between slowing down and speeding up; go straight from one to the other`,
+    brake_after_apex: (n) => `in ${n} corner${n === 1 ? '' : 's'} you were still braking past the middle; finish your braking by the middle of the corner`,
+    early_apex: (n) => `in ${n} corner${n === 1 ? '' : 's'} your slowest point came well before the middle; wait a moment longer before you turn in`,
   };
   const WEAK = { smoothness: 'steer more gently, with fewer quick corrections in the middle of corners', braking: 'finish your braking by the middle of the corner',
     consistency: 'aim for the same calm rhythm in every corner; you took some much nearer their limit than others' };
