@@ -114,6 +114,8 @@ def test_the_idle_maps_loop_suggestion_follows_the_dial():
     pick = src[src.index("function pickLoop(b) {"):]
     pick = pick[:pick.index("\n    }\n") ]
     assert "paintLoopSuggest()" in pick
+
+
 @needs_node
 def test_a_loops_time_reads_as_the_dial_says_it():
     """By time (2026-11-10): half hours are "1½ h", never "1.5 h"; an odd length is hours and minutes; unknown is empty."""
