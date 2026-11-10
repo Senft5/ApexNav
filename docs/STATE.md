@@ -1,13 +1,5 @@
 # VETTA — CURRENT AGENT HANDOFF STATE
 
-## Session 2026-11-10 (fable-your-units): fixed sizes labelled in the driver's units (claude/fable-your-units, off origin/main e76f1bb)
-
-- web/units.js `size(m)` ("200 m" / "1 km"; "650 ft" / "0.3 mi"); cockpit.js `renderZones` labels `#zoneRadius` keys,
-  the list and the toast with it and runs again on a units change; crew_page.js meeting-points note; the too-short toast.
-- Tests: tests/test_units.py; e2e "privacy zones" expects "Home · 650 ft".
-- Reviewed and left as they are: People signed in (friends), a crew's page.
-- Next: CarPlay has not had a design pass in this run.
-
 ## Session 2026-11-10 (fable-loop-time): the loop dial by distance or time (claude/fable-loop-time, off origin/main 1a38381)
 
 - [x] web/index.html `#loopBy` (two radio words over the dial, `.loop-by`). web/cockpit.js: `LOOP_BY` ('apex.loopBy'),
@@ -73,6 +65,14 @@
   by screen: the Log…" checks the Garage signed out has no People page (fails on main's CSS, passes here).
 - Lesson: a rule that sets `display` on a tab's panel must carry the tab (`.sheet[data-view=…]`); after changing one
   tab signed out, open the other three.
+
+## Session 2026-11-10 (fable-your-units): fixed sizes labelled in the driver's units (claude/fable-your-units, off origin/main e76f1bb)
+
+- web/units.js `size(m)` ("200 m" / "1 km"; "650 ft" / "0.3 mi"); cockpit.js `renderZones` labels `#zoneRadius` keys,
+  the list and the toast with it and runs again on a units change; crew_page.js meeting-points note; the too-short toast.
+- Tests: tests/test_units.py; e2e "privacy zones" expects "Home · 650 ft".
+- Reviewed and left as they are: People signed in (friends), a crew's page.
+- Next: CarPlay has not had a design pass in this run.
 
 ## Session 2026-11-10 (fable-loop-names): no two loop cards the same way and the same length (claude/fable-loop-names, off origin/main 1a38381)
 
