@@ -1,12 +1,5 @@
 # VETTA — CURRENT AGENT HANDOFF STATE
 
-## Session 2026-11-10 (fable-no-leftovers): the e2e runner checks every flow's last screen for "[object Object]", "undefined", "NaN" (claude/fable-no-leftovers, off origin/main 51c8c4c)
-
-- [x] e2e/smoke.js `leftovers(page)` (visible text nodes and aria-label / placeholder / title / alt, in every open page
-  of the flow), checked in the runner after each flow's body; flow "leftovers: the check every flow ends with…" seeds
-  the three and two hidden ones. Whole suite: 154/154 with the check on (about 80 min in the cloud container).
-- Next: call `leftovers(page)` mid-flow in the long screen-by-screen flows (REVIEW.md 1.2) so more screens are read.
-
 ## Session 2026-11-10 (fable-pin-names): pins and tapped places by name; the spot dialog's stars (claude/fable-pin-names, off origin/main e76f1bb)
 
 - `web/cockpit.js`: `setFieldPin(field, point, name)` / `pinIn` / `fieldPin` beside `resolvePlace(q, field)`: Go here,
@@ -144,6 +137,13 @@
   by screen: the Log…" checks the Garage signed out has no People page (fails on main's CSS, passes here).
 - Lesson: a rule that sets `display` on a tab's panel must carry the tab (`.sheet[data-view=…]`); after changing one
   tab signed out, open the other three.
+
+## Session 2026-11-10 (fable-no-leftovers): the e2e runner checks every flow's last screen for "[object Object]", "undefined", "NaN" (claude/fable-no-leftovers, off origin/main 51c8c4c)
+
+- [x] e2e/smoke.js `leftovers(page)` (visible text nodes and aria-label / placeholder / title / alt, in every open page
+  of the flow), checked in the runner after each flow's body; flow "leftovers: the check every flow ends with…" seeds
+  the three and two hidden ones. Whole suite: 154/154 with the check on (about 80 min in the cloud container).
+- Next: call `leftovers(page)` mid-flow in the long screen-by-screen flows (REVIEW.md 1.2) so more screens are read.
 
 ## Session 2026-11-10 (fable-your-units): fixed sizes labelled in the driver's units (claude/fable-your-units, off origin/main e76f1bb)
 
