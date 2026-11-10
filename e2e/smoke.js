@@ -2041,24 +2041,33 @@ flow('the car map glides between fixes and no message holds a frame, on a slow C
     ];
     // each frame: how far the ground moved under a point on the screen, and in what time; and (F-01) how far the drawn
     // arrow is from the true car, which drives the route at 20 m/s, read once the frame's own callbacks have run
-    const steps = [], lagM = []; let last = null;
+    const steps = [], lagM = []; let last = null, frames = 0;
+    // The ground's shift is read when the camera moves (the car map sets it in its own frame callback, for that frame's
+    // time), and timed by the frame it was set in. Read from this flow's own frame callback instead, it is one frame late
+    // whenever that callback runs before the car map's: after a long frame, a long frame's travel was divided by the short
+    // frame after it, which read as a leap (it failed twice on a busy CI machine).
+    const onMove = () => { const ts = document.timeline.currentTime;
+      if (last) { const p = map.project(last.ll), px = Math.hypot(p.x - 560, p.y - 300);
+        if (ts === last.ts && steps.length) steps[steps.length - 1].px += px; else steps.push({ px, dt: ts - last.ts }); }
+      last = { ll: map.unproject([560, 300]), ts }; };
+    map.on('move', onMove);
     const truth = (ts) => { const m = (ts - t0) / 1000 * 20, k = Math.min(route.length - 2, Math.floor(m / 10)), f = Math.min(1, m / 10 - k);
       return [route[k][0] + (route[k + 1][0] - route[k][0]) * f, route[k][1] + (route[k + 1][1] - route[k][1]) * f]; };
     await new Promise((done) => {
       const tick = (ts) => {
-        if (last) { const p = map.project(last.ll); steps.push({ px: Math.hypot(p.x - 560, p.y - 300), dt: ts - last.ts }); }
-        last = { ll: map.unproject([560, 300]), ts };
+        frames++;
         if (ts - t0 > 3000) { const want = truth(ts); setTimeout(() => { const s = car.shown; if (s) lagM.push(Math.hypot((s.lon - want[1]) * 111320 * Math.cos(want[0] * Math.PI / 180), (s.lat - want[0]) * 110540)); }, 0); }
         if (ts - t0 < 30000) requestAnimationFrame(tick); else done();
       };
       requestAnimationFrame(tick);
     });
     timers.forEach(clearInterval);
-    const run = steps.slice(Math.floor(steps.length * 0.1)), rate = run.map((s) => s.px / Math.max(1, s.dt)).sort((a, b) => a - b);
+    map.off('move', onMove);
+    const run = steps.slice(Math.floor(steps.length * 0.1)), rate = run.map((s) => s.px / Math.max(1, s.dt)).sort((a, b) => a - b), ran = frames * 0.9;
     const plates = [...document.querySelectorAll('.car-plate')].map((e) => e.getBoundingClientRect());
     lagM.sort((a, b) => a - b);
     const q = (f) => (lagM.length ? +lagM[Math.floor((lagM.length - 1) * f)].toFixed(1) : null);
-    return { lagP50: q(0.5), lagP95: q(0.95), frames: run.length, moving: run.filter((s) => s.px > 0.05).length / run.length, rateMed: rate[rate.length >> 1], rateP95: rate[Math.floor(rate.length * 0.95)], rateMax: rate[rate.length - 1],
+    return { lagP50: q(0.5), lagP95: q(0.95), frames: Math.round(ran), moving: run.filter((s) => s.px > 0.05).length / ran, rateMed: rate[rate.length >> 1], rateP95: rate[Math.floor(rate.length * 0.95)], rateMax: rate[rate.length - 1],
       msgP95: +msgMs.sort((a, b) => a - b)[Math.floor(msgMs.length * 0.95)].toFixed(1), msgMax: +msgMs[msgMs.length - 1].toFixed(1), loaf: window.__loaf.slice(), plates: plates.length,
       offScreen: plates.filter((b) => b.right < 0 || b.left > innerWidth || b.bottom < 0 || b.top > innerHeight).length };
   });

@@ -4,6 +4,18 @@ Decisions Claude made for you, newest first. Each one says what was decided, why
 you reach one you've seen. If you disagree with a call, say so and it gets reversed; nothing here is hard to undo unless
 it says so. Things only you can do are in docs/OWNER_TODO.md.
 
+## 2026-11-10 (fable-glide-flake): the car map test that failed now and then was measuring wrongly, not the map (claude/fable-glide-flake)
+
+The "car map glides" e2e flow failed twice in CI with "a frame leaps ahead", on PRs that don't touch the car map.
+The map was fine. The test read the map's position from its own frame callback, which can run before the car map's
+in the same frame, so it saw each move one frame late. After one long frame (a busy CI machine), a long frame's
+travel was divided by the short frame after it and read as a leap. The calls:
+- **The test now reads the shift when the camera actually moves and times it by the frame it moved in.** The limits
+  are the same numbers as before. A real lurch (the map jumping further than the time allows) still fails.
+- Shown both ways: with 140 ms stalls injected every 0.9 s the old measure fails (rateMax 0.139 against a median of
+  0.011) and the new one passes with the same map.
+- No app code changed. Undo: revert the PR.
+
 ## 2026-11-10 (fable-design-signed-out): People, signed out, is a page instead of a form (claude/fable-design-signed-out)
 
 Design pass 3, after your "designed by an artist not a programmer". Signed out, People was a logo, a small heading,
