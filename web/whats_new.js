@@ -1,7 +1,7 @@
 // "What's new" after an update (IDEAS O-10): one screen, at most four lines, once per release, never on a first install
 // (onboarding is the first screen) and never over a drive or a link that opened the app for something else.
 // NEWS is edited with each release that adds something a driver would notice; `id` changes when it does.
-// pending() is pure (tests/test_whats_new.py); show() draws the sheet.
+// pending() and moment() are pure (tests/test_whats_new.py); show() draws the sheet.
 (function (root) {
   'use strict';
   const KEY = 'apex.newsSeen';
@@ -24,6 +24,16 @@
     return news;
   }
 
+  /**
+   * Is this the moment for it (2026-11-10: it came up over Options, 1.2 s into a launch, on someone already choosing
+   * roads)? 'show' on a still, empty map; 'wait' while the splash is up (it lifts by itself); 'skip' this launch once
+   * the person has touched the app, opened anything, or is driving: news never interrupts, it is there next launch.
+   */
+  function moment({ touched = false, driving = false, splash = false, open = false } = {}) {
+    if (touched || driving || open) return 'skip';
+    return splash ? 'wait' : 'show';
+  }
+
   /** Stores the id so it isn't shown again; a first install calls it too, so the next release is the first news it sees. */
   function markSeen(storage, news = NEWS) { try { storage.setItem(KEY, news.id); } catch (_) {} }
   function seen(storage) { try { return storage.getItem(KEY); } catch (_) { return null; } }
@@ -42,6 +52,6 @@
     ok.focus();
   }
 
-  const api = { pending, markSeen, seen, show, NEWS, KEY };
+  const api = { pending, moment, markSeen, seen, show, NEWS, KEY };
   if (typeof module !== 'undefined' && module.exports) module.exports = api; else root.ApexWhatsNew = api;
 })(typeof window !== 'undefined' ? window : globalThis);

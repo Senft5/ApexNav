@@ -19,6 +19,7 @@ console.log(JSON.stringify({
   update: has(W.pending('older', true, false)), never: has(W.pending(null, true, false)),
   again: has(W.pending(id, true, false)), firstInstall: has(W.pending(null, false, false)), busy: has(W.pending('older', true, true)),
   empty: has(W.pending('older', true, false, { id: 'x', items: [] })), items: W.NEWS.items,
+  moment: [{}, { splash: true }, { touched: true }, { open: true }, { driving: true }, { splash: true, touched: true }].map((x) => W.moment(x)), bare: W.moment(),
 }));
 """
 
@@ -39,3 +40,12 @@ def test_one_screen(out):
         assert len(title) <= 20 and len(text) <= 140, title
         for banned in ("faster", "speed", "race"):
             assert banned not in text.lower()
+
+
+def test_it_never_interrupts(out):
+    """2026-11-10: it came up over the Options sheet. A still, empty map shows it; the splash makes it wait; a touch, an
+    open sheet or a drive puts it off to the next launch (it is not marked seen)."""
+    assert out["moment"] == ["show", "wait", "skip", "skip", "skip", "skip"] and out["bare"] == "show"
+    src = open(os.path.join(ROOT, "web", "cockpit.js"), encoding="utf-8").read()
+    assert "ApexWhatsNew.moment({ touched, driving: driveActive, splash: !!$('boot'), open: anythingOpen() })" in src
+    assert ".side-pop.open, #planPanel.open, .sheet.open" in src
