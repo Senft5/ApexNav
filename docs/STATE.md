@@ -165,23 +165,6 @@
   routing (4), plan flow (6) pass.
 - Exact next task: unchanged (tools/live_speed.js on the owner's trips at Fun and Long way); a "Graph region" run picks
   this up together with the expressway flag.
-## Session 2026-11-10 (fable-loved-roads): the app's recorded drives count toward loved roads; by-hand sharing is honest (claude/fable-loved-roads, off origin/main ad4f1e4)
-
-- [x] web/contributor.js `createLive`: `deliberate` may be a function, asked as rows arrive; `recorded()` latches from
-  the first recorded row (slices' `rec`, and `leftover().deliberate` as a plain boolean for road_carry.js).
-  web/cockpit.js feedAmbient passes `deliberate: () => !!(drive.native && drive.rec)`.
-- [x] cockpit.js End: `nativeShared` (the mounted stream ran during this native drive) and `|| waits` (the browser's
-  drive whose road feel waits for signal) save the drive `contributed`, so analysis.html's Share by hand doesn't
-  offer a pass that went or will go by itself. `contributeDrive` throws on 'retry' instead of counting it sent.
-- Tests: tests/test_loved_roads.py (5), e2e "loved roads: in the app..." (a real native drive, `rec` on every chunk,
-  the saved drive marked shared).
-- Not shipped: I rebuilt road feel waiting for signal on a branch (`claude/fable-road-later`) before seeing #323 had
-  merged the same thing (road_carry.js). No PR was opened; the branch can be deleted. This entry is what was new in it.
-- Open: `road_love` on production has no rows from before this build. docs/WORKER_QUEUE.md road-queue names a
-  web/road_queue.js that is not in the repo.
-- Exact next task: after a TestFlight drive on a road driven before, check `road_love` has a row
-  (`SELECT COUNT(*) FROM road_love`) and the route card's "members come back to this road" line shows.
-
 ## Session 2026-11-09 (route-sliders): Tune your routes, Pro open to everyone until on sale (claude/route-sliders, off origin/main 1d97979)
 
 - [x] Owner: "every parameter with a slider for premium users"; "remember everyone has pro if they are an early user. Once
@@ -283,6 +266,23 @@
 - Tests: pytest 1353 passed, 2 skipped (1358 before, less the 5 FCC-only tests); `python tools/csp.py` all pages up to
   date. Backend untouched.
 - Exact next task: unchanged from engine-rank below (tools/live_speed.js on the owner's trips at Fun and Long way).
+
+## Session 2026-11-10 (fable-loved-roads): the app's recorded drives count toward loved roads; by-hand sharing is honest (claude/fable-loved-roads, off origin/main ad4f1e4)
+
+- [x] web/contributor.js `createLive`: `deliberate` may be a function, asked as rows arrive; `recorded()` latches from
+  the first recorded row (slices' `rec`, and `leftover().deliberate` as a plain boolean for road_carry.js).
+  web/cockpit.js feedAmbient passes `deliberate: () => !!(drive.native && drive.rec)`.
+- [x] cockpit.js End: `nativeShared` (the mounted stream ran during this native drive) and `|| waits` (the browser's
+  drive whose road feel waits for signal) save the drive `contributed`, so analysis.html's Share by hand doesn't
+  offer a pass that went or will go by itself. `contributeDrive` throws on 'retry' instead of counting it sent.
+- Tests: tests/test_loved_roads.py (5), e2e "loved roads: in the app..." (a real native drive, `rec` on every chunk,
+  the saved drive marked shared).
+- Not shipped: I rebuilt road feel waiting for signal on a branch (`claude/fable-road-later`) before seeing #323 had
+  merged the same thing (road_carry.js). No PR was opened; the branch can be deleted. This entry is what was new in it.
+- Open: `road_love` on production has no rows from before this build. docs/WORKER_QUEUE.md road-queue names a
+  web/road_queue.js that is not in the repo.
+- Exact next task: after a TestFlight drive on a road driven before, check `road_love` has a row
+  (`SELECT COUNT(*) FROM road_love`) and the route card's "members come back to this road" line shows.
 
 ## Session 2026-11-08 (engine-rank): the engine and the router agree on what a longer way buys (claude/engine-rank, off claude/level-spread = main fdbf363)
 

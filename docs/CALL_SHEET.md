@@ -138,22 +138,6 @@ back roads), which nudged how those roads scored. The calls:
 - **I left the tiles' travel times alone.** The inventory knows the posted limit on about half the main-road miles where
   our tiles only guess from the road's class, and using it would make times truer, but a mismatched stretch would make
   them wrong in a new way. The numbers are in STATE for whoever takes it on.
-## 2026-11-10 (fable-loved-roads): in the iPhone app a recorded drive counts toward loved roads (claude/fable-loved-roads)
-
-#323 made the upload carry `rec` (a pass from a recorded drive), which loved roads are counted from. But only the
-browser's drive set it. In the app one mounted stream carries the road feel through Start and End, and it never said
-so, so the phones that matter still sent every pass as ambient. The calls:
-- **The app's stream says "recorded" from the drive's first row on**, and keeps saying so for the rest of that trip
-  (also once End was pressed: the rows already driven were the recorded drive's, and a trip can't be split after the
-  fact). What it sent before Start stays an ambient pass. What waits for signal remembers it. Undo: cockpit.js
-  feedAmbient `deliberate`, contributor.js `recorded`.
-- **A drive whose road feel went (or waits for signal) is marked shared in the Log**, in the app and in the browser.
-  The Log offered "Share <drive>" by hand for every recent app drive, under another drive id: tapping it merged the
-  same pass into the road a second time. Undo: cockpit.js `nativeShared`, and the `|| waits` beside it.
-- **Share by hand says when it couldn't.** A busy server or no signal answered 'retry', which was counted as sent:
-  the button said "Shared 3 roads" and the drive was marked shared with nothing on the server. Now it says "Couldn't
-  share. Tap to try again." Undo: contributor.js `contributeDrive`.
-
 ## 2026-11-09 (route-sliders): Tune your routes, a Pro screen open to everyone until Pro goes on sale (claude/route-sliders)
 
 You asked for "every parameter with a slider for premium users", then: "remember everyone has pro if they are an early
@@ -256,6 +240,22 @@ Road: 41 good corners, five of them tight." / "About 3 miles through town at the
   (one is the forecast at six points, the other the engine's per-sample data). Undo: drop `conditionsLine` from build.
 - **Not on:** loops, GPX imports and a route restored after a reload (no ranking behind them: nothing said rather than
   a guess). Undo all of it: revert the commit.
+
+## 2026-11-10 (fable-loved-roads): in the iPhone app a recorded drive counts toward loved roads (claude/fable-loved-roads)
+
+#323 made the upload carry `rec` (a pass from a recorded drive), which loved roads are counted from. But only the
+browser's drive set it. In the app one mounted stream carries the road feel through Start and End, and it never said
+so, so the phones that matter still sent every pass as ambient. The calls:
+- **The app's stream says "recorded" from the drive's first row on**, and keeps saying so for the rest of that trip
+  (also once End was pressed: the rows already driven were the recorded drive's, and a trip can't be split after the
+  fact). What it sent before Start stays an ambient pass. What waits for signal remembers it. Undo: cockpit.js
+  feedAmbient `deliberate`, contributor.js `recorded`.
+- **A drive whose road feel went (or waits for signal) is marked shared in the Log**, in the app and in the browser.
+  The Log offered "Share <drive>" by hand for every recent app drive, under another drive id: tapping it merged the
+  same pass into the road a second time. Undo: cockpit.js `nativeShared`, and the `|| waits` beside it.
+- **Share by hand says when it couldn't.** A busy server or no signal answered 'retry', which was counted as sent:
+  the button said "Shared 3 roads" and the drive was marked shared with nothing on the server. Now it says "Couldn't
+  share. Tap to try again." Undo: contributor.js `contributeDrive`.
 
 ## 2026-11-08 (drop-fcc): FCC phone coverage removed, as you asked (claude/drop-fcc)
 
