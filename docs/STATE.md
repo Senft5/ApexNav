@@ -56,6 +56,15 @@
 - [x] web/cockpit.js `pickLoop` ends with `paintLoopSuggest()` (in a try: at launch the deck isn't set up yet).
 - [x] Tests: tests/test_loop_ways.py (+1); e2e "plan flow (b)" picks 15 mi and 45 mi on the dial and reads the row.
 
+## Session 2026-11-10 (fable-stages): the Stages page's runs are named by date (claude/fable-stages, off origin/main e76f1bb)
+
+- web/analysis.html `renderSegments`: `.run-name b` is `dateLabel(x.d)`, `.sub` the drive's name only when it differs
+  from the stage's (hidden otherwise); the list's length is `ApexUnits.long(s.length_m, 1)`. CSP hashes regenerated.
+- e2e "a stage's Board and Runs fit the phone" checks both.
+- After every merge to main, each open PR conflicts in this file and CALL_SHEET.md and gets no Actions run until
+  origin/main is merged into it (both notes kept).
+- Next: a crew's page and CarPlay have not had a design pass in this run.
+
 ## Session 2026-11-10 (fable-fix-join-scope): #332's page showed in the Garage too; scoped to People (claude/fable-fix-join-scope, off origin/main 6412cb5)
 
 - [x] Bug from #332 (live on main): `#accountSection:has(.join-page) { display: grid }` outranked `.sheet [data-panel]
