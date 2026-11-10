@@ -3869,7 +3869,7 @@
         const o = routeOptions;
         if (!o || !optionsOffered(plannedRoute)) return;
         const i = o.picked + (dx < 0 ? 1 : -1);
-        if (i >= 0 && i < o.list.length) pickOption(i);
+        if (i >= 0 && i < o.list.length) { try { localStorage.setItem(SWIPED, '1'); } catch (_) { /* storage off: the sentence stays */ } pickOption(i); }
       });
       card.addEventListener('touchcancel', () => { sx = null; });
     }
@@ -3897,6 +3897,8 @@
     // (route_card.js levelCards); on when that pick is the route on screen, so two levels that pick the same route are both
     // on and the line under them says so. A level the plan didn't look at says "Look further"; a tap on it plans again.
     // The cards are the page's own buttons, only their words change, so the one you tapped is still there under your finger.
+    const SWIPED = 'apex.cardSwiped';
+    const swipeLearned = () => { try { return localStorage.getItem(SWIPED) === '1'; } catch (_) { return false; } };
     function paintLevelCards() {
       const box = $('routeCardFun');
       if (!box || !window.ApexRouteCard) return;
@@ -3919,7 +3921,17 @@
         b.setAttribute('aria-checked', String(k.level === funLevel));
         b.setAttribute('aria-label', k.further ? `${k.label}: not looked at yet; plans again` : `${k.label}: ${k.time === '--' ? 'time --' : k.time}, ${k.corners === '--' ? 'corners --' : k.corners}${k.same.length ? `, the same route as ${k.same.join(' and ')}` : ''}`);
       }
-      const line = mine && !box.hidden ? ApexRouteCard.levelNote(o) : '';
+      // Page marks say "swipe" the way a phone does; the words stay beside them until the first swipe, then go. The line
+      // under them keeps only what the marks can't say (two levels picking one route, a route no level picked).
+      const pg = mine && !box.hidden ? ApexRouteCard.pager(o) : null, marks = $('routeCardPager');
+      marks.hidden = !pg;
+      if (pg) {
+        marks.setAttribute('aria-label', pg.label);
+        marks.replaceChildren(...Array.from({ length: pg.n }, (_, i) => { const m = document.createElement('i'); if (i === pg.at) m.className = 'on'; return m; }),
+          Object.assign(document.createElement('span'), { textContent: `${pg.at + 1}\u2009/\u2009${pg.n}` }),
+          ...(swipeLearned() ? [] : [Object.assign(document.createElement('small'), { textContent: 'Swipe the card for the next route' })]));
+      }
+      const line = mine && !box.hidden ? ApexRouteCard.levelNote(o, true) : '';
       $('routeCardLevelsNote').textContent = line;
       $('routeCardLevelsNote').hidden = !line;
     }
@@ -7741,6 +7753,7 @@
         ambient.sharer = ApexContributor.createAmbient({
           makeRecorder: () => new ApexSensors.Recorder(),
           makeLive: () => { const day = new Date(); return ApexContributor.createLive({ Core, fetch: window.fetch.bind(window), post: countedContribute,
+            deliberate: () => !!(drive.native && drive.rec),          // rows of a recorded drive say so: they count toward loved roads
             driveId: ApexContributor.driveIdFor({ id: `app_${Date.now()}`, date: day.toISOString() }), drivenOn: day.toISOString().slice(0, 10),
             hourBucket: () => (window.ApexFlags && ApexFlags.on('quiet_hours', false) ? ApexContributor.hourBucket(new Date()) : null) }); },
           onStatus: () => { paintAmbient(); if (state.mode === 'live') paintDriveStat(); },
@@ -8020,6 +8033,7 @@
       keepStart();                                                     // Round 3: the drive is kept as it goes (drive_keep.js)
       if (NATIVE_SHELL) {   // the app's own GPS and IMU feed window.apex.live; no browser sensors to start
         drive.native = true;
+        { const a = ambientStats(); drive.ambientTrips = a ? a.trips - (a.active ? 1 : 0) : 0; }
         activity('start', { title: track ? track.name : 'Drive', note: 'Recording', distance: '', eta: '' });
         drive.status = { gps: performance.now() - state.liveAt < 5000 && state.live ? 'on' : 'waiting', motion: 'on', wake: 'on', message: '' };
         setPlaying(false); setMode('live'); paintModeSwitch(); resumeFollow(); paintDriveStat();
@@ -8272,6 +8286,9 @@
       carPost({ kind: 'end' }); car.guideKey = ''; car.sightKey = '';
       // U-62: after End the car goes idle; the finished route was offered again as a trip preview ("Dry Ridge Rd · Drive")
       if (track && track.kind === 'route') { car.ended = track; carRoute(null); }
+      // In the app the mounted phone's own stream (feedAmbient) carries a recorded drive's road feel. When it ran during
+      // this drive, the drive is shared (or waits for signal), so the Log doesn't offer it again by hand.
+      const nativeShared = (() => { const a = drive.native && ambient.allowed ? ambientStats() : null; return !!(a && (a.active || a.trips > (drive.ambientTrips || 0))); })();
       const rec = drive.rec, sensors = drive.sensors, live = drive.live, road = rec && window.ApexRoadNames ? ApexRoadNames.mainRoad(drive.roads, rec.km * 1000) : null;
       drive.sensors = null; drive.rec = null; drive.live = null; drive.share = 'off'; drive.native = false;
       if (sensors) sensors.stop();
@@ -8309,12 +8326,13 @@
               // what had no signal to go with waits on the phone (road_carry.js): said, so a drive in the hills doesn't look unshared
               const waitM = window.ApexRoadCarry && ApexRoadCarry.itemM && live.leftover ? ApexRoadCarry.itemM(live.leftover()) : 0;
               const waits = waitM >= 100 ? ApexUnits.long(waitM, 1) : null;
+              // shared, or waiting to go by itself: either way the Log must not offer it by hand (the pass would be merged twice)
+              if ((shared && shared.chunks > 0) || waits) await ApexAnalysis.job('patch', { id: res.driveId, fields: { contributed: true } });
               if (shared && shared.chunks > 0) {
-                await ApexAnalysis.job('patch', { id: res.driveId, fields: { contributed: true } });
                 if (shared.km > 0) toast(waits ? `Shared ${ApexUnits.long((shared.km) * 1000, 1)} of road feel. ${waits} more waits for signal.` : `Shared ${ApexUnits.long((shared.km) * 1000, 1)} of road feel.`);
               } else if (waits) toast(`${waits} of road feel waits for signal. It goes when you're back online.`);
             }).catch(() => {});
-          }
+          } else if (nativeShared) ApexAnalysis.job('patch', { id: res.driveId, fields: { contributed: true } }).catch(() => {});
         } catch (e) {
           if (endDrive && endDrive.id === card.id) $('endCard').classList.remove('show');   // nothing was saved: no card for it
           toast(e && /Quota/.test(e.name || e.message || e) ? 'Couldn\'t save this drive. The phone is out of storage.' : 'Couldn\'t save this drive.'); console.error('save drive', e);

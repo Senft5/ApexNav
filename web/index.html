@@ -568,6 +568,11 @@
     .sw span { font-size: 11px; font-weight: 600; color: var(--panel-dim); }
     @media (prefers-reduced-motion: reduce) { .sw i, .sw i::after { transition: none; } }
     .sheet .sw, .edge-panel .sw, .side-pop .sw { display: flex; flex-direction: row-reverse; justify-content: space-between; align-items: center; width: 100%; min-height: 48px; padding: 0; border-top: 1px solid var(--hair, var(--panel-dim)); }
+    /* Garage rows under a section's head (design pass 2026-11-10): a control's label is a row label, the size and weight of the
+       switches beside it. "Night" at 18/800 outranked its own section head, "Co-driver". */
+    .sheet section[data-panel="garage"] .ctl-label { font-size: 15px; font-weight: 500; }
+    .co-row { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 0 12px; margin: 0; min-height: 44px; font-size: 15px; font-weight: 500; }
+    .co-row .linkbtn { flex: 0 1 auto; max-width: 100%; white-space: normal; text-align: left; }   /* at a large text size the key drops under the words, whole */
     .sheet .sw span, .edge-panel .sw span, .side-pop .sw span { font-size: 15px; font-weight: 500; color: var(--panel-ink); text-align: left; }
     .sw.on span { color: var(--panel-ink); }
     .sw[hidden], .sheet .sw[hidden], .edge-panel .sw[hidden], .side-pop .sw[hidden] { display: none; }   /* a switch only some accounts get (Satellite) */
@@ -655,6 +660,15 @@
     .rc-levels > button.further .rc-lv { font: 600 15px/1.2 var(--font-ui); color: var(--panel-dim); white-space: normal; }
     .rc-levels-note { margin: 6px 0 0; font-size: 15px; line-height: 1.3; color: var(--panel-dim); }
     .rc-levels-note[hidden] { display: none; }
+    /* the routes found, as page marks: the one on screen a long inked stroke, the others short pencil ones, then the count */
+    .rc-pager { display: flex; align-items: center; gap: 5px; min-height: 22px; margin: 8px 0 0; }
+    .rc-pager[hidden] { display: none; }
+    .rc-pager i { width: 7px; height: 3px; background: var(--panel-dim); opacity: 0.55; transition: width 0.18s cubic-bezier(0.2, 0.8, 0.2, 1), background-color 0.18s; }
+    .rc-pager i.on { width: 22px; background: var(--panel-ink); opacity: 1; }
+    .rc-pager span { margin-left: 6px; font: 600 15px/1 var(--font-num); letter-spacing: 0.04em; color: var(--panel-ink); }
+    .rc-pager small { margin-left: 8px; font-size: 14px; line-height: 1.2; color: var(--panel-dim); }
+    .rc-pager + .rc-levels-note { margin-top: 2px; } .rc-pager ~ .rc-via { margin-top: 2px; }
+    @media (prefers-reduced-motion: reduce) { .rc-pager i { transition: none; } }
     .rc-go { display: grid; grid-template-columns: 1.4fr 1fr; gap: 10px; margin-top: 14px; }
     /* U-70 / the plan flow (finding 2): Start is the card's foot, outside its scroll, so nothing that loads above it (the
        profile, the facts, a re-rank) moves it; the card's body ends above it */
@@ -1533,6 +1547,7 @@
                    (time, corners); a tap takes it, nothing planned again. A swipe sideways on the card steps through the routes
                    found (finding 11), and the line under the cards says so. -->
               <div class="rc-levels" id="routeCardFun" role="radiogroup" aria-label="Route style"><button data-fun="quick" role="radio" aria-checked="false"><b>Quick</b><span class="rc-lv"></span></button><button data-fun="fun" role="radio" aria-checked="false"><b>Fun</b><span class="rc-lv"></span></button><button data-fun="max" role="radio" aria-checked="false"><b>Long way</b><span class="rc-lv"></span></button></div>
+              <div class="rc-pager" id="routeCardPager" role="img" hidden></div>
               <p class="rc-levels-note" id="routeCardLevelsNote" hidden></p>
               <p class="note rc-via" id="routeCardWhy" hidden></p>
               <div class="rc-stats" id="routeCardStats"></div>
@@ -1730,7 +1745,9 @@
           <section data-panel="garage">
             <h3>Co-driver</h3>
             <!-- SO-1 (panel round 2): one setting, one home. Notes and Voice live in the map's Layers, where a drive reaches them -->
-            <p class="note" id="coNotesHere"><span id="coNotesNow">Notes: Auto</span>. Notes and Voice are on the map, under Layers. <button class="linkbtn" id="coNotesLink">Open Layers</button></p>
+            <!-- design pass 2026-11-10: a row like the ones under it (what it is now on the left, where to change it on the right); the
+                 sentence broke over two lines with the link dropped under its own full stop -->
+            <p class="co-row" id="coNotesHere"><span id="coNotesNow">Notes: Auto</span><button class="linkbtn" id="coNotesLink">Change in Layers</button></p>
             <div class="switches">
               <button class="sw" data-toggle="haptics"><i></i><span>Haptics</span></button>
               <button class="sw" data-toggle="keys"><i></i><span>Key sounds</span></button>

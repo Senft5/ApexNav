@@ -13,6 +13,7 @@
   key opens sign-in). Also run: every flow matching "theme", "Garage", "Dynamic Type", "REVIEW.md 1.2".
 - e2e note: a flow that swipes must wait for the splash (`#boot`) to lift; `elementFromPoint` under the finger says so.
 - Next design chunks: "Can't reach Vetta" on People; the Co-driver / Night / The words blocks lower in the Garage.
+
 ## Session 2026-11-10 (fable-fix-join-scope): #332's page showed in the Garage too; scoped to People (claude/fable-fix-join-scope, off origin/main 6412cb5)
 
 - [x] Bug from #332 (live on main): `#accountSection:has(.join-page) { display: grid }` outranked `.sheet [data-panel]
@@ -148,6 +149,18 @@
   tools/story_live.js runs: the grid's channels and the new lines 1-3 s after the card). Posted limits are known on few
   of these roads, so most leads say no speed. The owner's own trips still unread.
 - Exact next task: an e2e flow for the overview's refresh once #319 is merged; the owner reads the overview on his trips.
+
+## Session 2026-11-10 (fable-design-route-card): page marks under the level cards (claude/fable-design-route-card, off origin/main 2fda3f8)
+
+- [x] Design pass 3b. web/route_card.js `pager(o)` ({ n, at, label } or null under two routes) and `levelNote(o,
+  learned)` (learned: no swipe sentence, no count; "another route found" stays). web/cockpit.js `paintLevelCards` draws
+  `#routeCardPager` (an `i` per route, `.on` the one on screen, a `span` count, a `small` with the swipe words until
+  `apex.cardSwiped` is set by a real swipe in the card's touchend) and calls `levelNote(o, true)`.
+- [x] web/index.html `.rc-pager` rules (one 22 px row, the marks ease between widths, still under reduced motion).
+- [x] Tests: tests/test_route_pager.py (3); e2e "plan flow (a)" and "(e, f)" read the marks (which is on, the count,
+  the words before a swipe and gone after). All six "plan flow" flows pass.
+- Next design chunks: search says a plain "Routing…" while it waits; the Garage is a long page (IDEAS U-49); "Can't
+  reach Vetta" on People is a heading and a button on blank paper.
 
 ## Session 2026-11-10 (fable-hazard-alive): a repeated "still there" keeps a hazard alive (claude/fable-hazard-alive, off origin/main f27a1fe)
 
@@ -302,6 +315,20 @@
 - Exact next task: unchanged from engine-rank below (tools/live_speed.js on the owner's trips at Fun and Long way); the
   owner can now do the same on the phone with the Dev panel and paste its JSON.
 
+## Session 2026-11-10 (fable-design-pass): design pass 1, the empty Log and Stages pages and two Garage rows (claude/fable-design-pass, off origin/main ad4f1e4)
+
+- [x] Owner 2026-11-10: UI and UX polish is a main focus of the run ("designed by an artist, not a programmer").
+  Captured onboarding, the idle map, Layers, Garage, Settings, People (signed out), Log, Stages at 393x852 and read them.
+- [x] web/analysis.html: `#historyEmpty` is a `.first-page` (pencil sketch of the hero and one row, head, line, Start a
+  drive, Watch a replay first); the empty Stages list the same shape with a drawn stage; `.switch > button
+  { font-family: inherit; }` (Drives / Stages were Arial).
+- [x] web/index.html: Garage `.ctl-label` rows at 15/500; `#coNotesHere` is a `.co-row` with "Change in Layers".
+- Tests: tests/test_log_first_page.py (3), e2e "the empty Log is a first page..." (computed typeface, key sizes).
+- Seen and not yet done (next design chunks, in the order I would take them): the signed-out People page is a logo and
+  a button over two thirds of blank paper; the search sheet says "Routing..." in plain text where the route card will
+  be; MapLibre's attribution is the stock control (IDEAS U-53); the Garage is still a long settings page (U-49).
+- Exact next task: the signed-out People page and the search sheet's waiting state, then U-49.
+
 ## Session 2026-11-09 (drive-overview): "What this drive is like" on the route card (claude/drive-overview, off origin/main 01a0423)
 
 - [x] Owner: "can we compile the data used to give some kind of route overview for the type of drive it will be? in plain
@@ -338,6 +365,23 @@
 - Tests: pytest 1353 passed, 2 skipped (1358 before, less the 5 FCC-only tests); `python tools/csp.py` all pages up to
   date. Backend untouched.
 - Exact next task: unchanged from engine-rank below (tools/live_speed.js on the owner's trips at Fun and Long way).
+
+## Session 2026-11-10 (fable-loved-roads): the app's recorded drives count toward loved roads; by-hand sharing is honest (claude/fable-loved-roads, off origin/main ad4f1e4)
+
+- [x] web/contributor.js `createLive`: `deliberate` may be a function, asked as rows arrive; `recorded()` latches from
+  the first recorded row (slices' `rec`, and `leftover().deliberate` as a plain boolean for road_carry.js).
+  web/cockpit.js feedAmbient passes `deliberate: () => !!(drive.native && drive.rec)`.
+- [x] cockpit.js End: `nativeShared` (the mounted stream ran during this native drive) and `|| waits` (the browser's
+  drive whose road feel waits for signal) save the drive `contributed`, so analysis.html's Share by hand doesn't
+  offer a pass that went or will go by itself. `contributeDrive` throws on 'retry' instead of counting it sent.
+- Tests: tests/test_loved_roads.py (5), e2e "loved roads: in the app..." (a real native drive, `rec` on every chunk,
+  the saved drive marked shared).
+- Not shipped: I rebuilt road feel waiting for signal on a branch (`claude/fable-road-later`) before seeing #323 had
+  merged the same thing (road_carry.js). No PR was opened; the branch can be deleted. This entry is what was new in it.
+- Open: `road_love` on production has no rows from before this build. docs/WORKER_QUEUE.md road-queue names a
+  web/road_queue.js that is not in the repo.
+- Exact next task: after a TestFlight drive on a road driven before, check `road_love` has a row
+  (`SELECT COUNT(*) FROM road_love`) and the route card's "members come back to this road" line shows.
 
 ## Session 2026-11-08 (engine-rank): the engine and the router agree on what a longer way buys (claude/engine-rank, off claude/level-spread = main fdbf363)
 

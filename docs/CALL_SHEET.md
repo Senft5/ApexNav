@@ -16,6 +16,7 @@ Design pass 4. The three look cards were stacked: 750 px of the Garage before yo
 - **Your cars, signed out, is an empty bay**: a pencil outline where a car will stand, "No car parked here yet",
   and a Sign in key that opens People. It was a grey paragraph telling you to go to "(People)".
 - Undo: revert the PR.
+
 ## 2026-11-10 (fable-fix-join-scope): my mistake in #332, fixed: the signed-out People page also showed at the top of the Garage (claude/fable-fix-join-scope)
 
 The rule that lets the new signed-out People page fill the sheet named the People panel by its id, and an id outranks
@@ -136,6 +137,21 @@ I planned ten public trips round Cincinnati in the app and read each overview ag
 - **"Two-lane" means one lane each way.** It was also being said of four-lane roads.
 - Not done: your own trips (their addresses aren't in the repo, by rule). `node tools/story_live.js colerain:fun` prints
   the lines for the public ones.
+
+## 2026-11-10 (fable-design-route-card): the route card says "swipe" with page marks, not a sentence (claude/fable-design-route-card)
+
+Design pass 3b. Under the Quick / Fun / Long way cards the route card had two grey sentences stacked: "Swipe the card
+for the next route, 2 of 3" and the route's why line. The calls:
+- **The routes found are page marks**: one short stroke per route, the one on screen long and inked, then "2 / 3".
+  It is the sign a phone already uses for "swipe sideways", and it moves when you swipe.
+- **The words "Swipe the card for the next route" sit beside the marks until your first swipe, then go for good**
+  (remembered on the phone as `apex.cardSwiped`; Erase my data clears it, and the words come back). A screen reader
+  always hears "Route 2 of 3. Swipe the card for the next."
+- **The line under the marks only speaks when the marks can't**: "Quick and Fun pick the same route", or "Another
+  route found" for a route no level picked. Most of the time it is gone, and the card is one line shorter.
+- You asked on 2026-11-04 that the card say what a swipe does. It still does, on the same row as the marks; it just
+  stops repeating itself once you have done it. Say so if you want the sentence to stay forever.
+- Undo: revert the PR.
 
 ## 2026-11-10 (fable-hazard-alive): a hazard you keep confirming stays on the map (claude/fable-hazard-alive)
 
@@ -277,6 +293,23 @@ mess with". The calls I made building it:
   refused, the text appears in a box to copy by hand.
 - Undo: revert this commit; nothing on the server changed.
 
+## 2026-11-10 (fable-design-pass): the empty Log and Stages pages are drawn; two Garage rows fall into line (claude/fable-design-pass)
+
+The owner asked for the app to feel designed by an artist, not a programmer. I captured every main screen on a phone
+shape and read them as a designer would. The populated screens hold together; the tells were at the edges. The calls:
+- **An empty Log is the first page of the book**, not a sentence on a blank sheet: the page's own furniture in pencil
+  (three dashed places for the score's figures, a dashed date stamp, an empty corner strip), a head ("Your first drive
+  goes here."), one line, one full-width key (Start a drive) and a link (Watch a replay first). Nothing in the sketch
+  is a figure: unknown stays "--". Undo: analysis.html `#historyEmpty` and the `.first-page` rules.
+- **An empty Stages tab says what a stage is**, with a stretch of road drawn between its start and finish boards, and
+  the one way to make one. Undo: analysis.html `renderSegments`, the `first-page` block.
+- **The Log's Drives / Stages switch was set in Arial** beside Inter Tight everywhere else (a button doesn't inherit
+  the page's face by itself). Found by scanning every page's controls for a system font; it was the only one.
+- **Garage, Co-driver**: "Night" and "Co-driver's voice" were 18 px extra-bold labels under a 17 px section head, so a
+  row outranked its own heading; they are row labels now, like the switches beside them. The sentence that told you
+  Notes and Voice live in Layers broke over two lines with its link dropped under a full stop; it is a row: what they
+  are set to on the left, "Change in Layers" on the right. Undo: index.html `.co-row` and the `.ctl-label` rule.
+
 ## 2026-11-09: NASA night lights taken off your to-do list
 
 You said the Earthdata steps were confusing. Night lights already work from NASA's 2016 Black Marble image, which is
@@ -307,6 +340,22 @@ Road: 41 good corners, five of them tight." / "About 3 miles through town at the
   (one is the forecast at six points, the other the engine's per-sample data). Undo: drop `conditionsLine` from build.
 - **Not on:** loops, GPX imports and a route restored after a reload (no ranking behind them: nothing said rather than
   a guess). Undo all of it: revert the commit.
+
+## 2026-11-10 (fable-loved-roads): in the iPhone app a recorded drive counts toward loved roads (claude/fable-loved-roads)
+
+#323 made the upload carry `rec` (a pass from a recorded drive), which loved roads are counted from. But only the
+browser's drive set it. In the app one mounted stream carries the road feel through Start and End, and it never said
+so, so the phones that matter still sent every pass as ambient. The calls:
+- **The app's stream says "recorded" from the drive's first row on**, and keeps saying so for the rest of that trip
+  (also once End was pressed: the rows already driven were the recorded drive's, and a trip can't be split after the
+  fact). What it sent before Start stays an ambient pass. What waits for signal remembers it. Undo: cockpit.js
+  feedAmbient `deliberate`, contributor.js `recorded`.
+- **A drive whose road feel went (or waits for signal) is marked shared in the Log**, in the app and in the browser.
+  The Log offered "Share <drive>" by hand for every recent app drive, under another drive id: tapping it merged the
+  same pass into the road a second time. Undo: cockpit.js `nativeShared`, and the `|| waits` beside it.
+- **Share by hand says when it couldn't.** A busy server or no signal answered 'retry', which was counted as sent:
+  the button said "Shared 3 roads" and the drive was marked shared with nothing on the server. Now it says "Couldn't
+  share. Tap to try again." Undo: contributor.js `contributeDrive`.
 
 ## 2026-11-08 (drop-fcc): FCC phone coverage removed, as you asked (claude/drop-fcc)
 
