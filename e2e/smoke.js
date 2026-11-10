@@ -689,6 +689,73 @@ flow('Where to?: with the search and routing services unreachable, a search fail
   await page.waitForFunction(() => /Search is offline/.test(document.getElementById('toast').textContent), null, { timeout: 15000 });
 }, { geolocation: { latitude: 35.9606, longitude: -83.9207 }, permissions: ['geolocation'] });
 
+// 2026-11-10: a place you pin or tap on the map is called by its name, in the field and on the route, never by coordinates
+flow('a pin has a name: Go here routes "To <the road>", a tap on the map is a "Dropped pin", neither is coordinates; a spot rating fills its stars; the notes name the Search key', async (page, base) => {
+  // the real map style is offline here: a bare one (with a glyphs address, so the app's own labelled layers are taken and its
+  // load handler runs to the end, where the map's tap is wired), so the map loads and takes a tap
+  await page.route('https://tiles.openfreemap.org/**', (route) => (route.request().url().includes('/styles/')
+    ? route.fulfill({ contentType: 'application/json', body: JSON.stringify({ version: 8, glyphs: 'https://tiles.openfreemap.org/fonts/{fontstack}/{range}.pbf', sources: {}, layers: [{ id: 'bg', type: 'background', paint: { 'background-color': '#eee' } }] }) })
+    : route.abort()));
+  await page.route('https://nominatim.openstreetmap.org/reverse**', (route) => route.fulfill({ contentType: 'application/json', body: JSON.stringify({ name: '', address: { road: 'Foothills Parkway' } }) }));
+  let found = 'none';
+  await page.route('https://photon.komoot.io/**', (route) => (found === 'fail' ? route.abort() : route.fulfill({ contentType: 'application/json', body: '{"features":[]}' })));
+  const asked = [];
+  await page.route('https://valhalla1.openstreetmap.de/route', (route) => {
+    const req = JSON.parse(route.request().postData() || '{}');
+    asked.push(req);
+    route.fulfill({ contentType: 'application/json', body: JSON.stringify(stubTrip(req.locations)) });
+  });
+  await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); } catch (_) {} });
+  await page.goto(base + '/index.html');
+  await page.waitForFunction(() => window.apexDebug && window.apexDebug.map && !document.getElementById('boot'), null, { timeout: 20000 });
+  await page.waitForTimeout(1500);                                   // the camera goes to the fix; a hold while it moves is no hold
+  await page.waitForFunction(() => !window.apexDebug.map.isMoving());
+  const box = await page.locator('#map').boundingBox(), x = box.x + box.width / 2, y = box.y + box.height * 0.3;
+  const routed = () => page.waitForFunction(() => { const t = window.apexDebug.track; return t && t.kind === 'route' && t.lat.length > 50 && !document.getElementById('planPanel').classList.contains('busy'); }, null, { timeout: 20000 });
+  // hold the map: the pin's sheet names the road; Save is "as a spot", the word the rest of the app uses
+  await page.mouse.move(x, y); await page.mouse.down(); await page.waitForTimeout(800); await page.mouse.up();
+  await page.waitForFunction(() => document.getElementById('pinOverlay').classList.contains('show') && document.getElementById('pinPlace').textContent === 'Foothills Parkway', null, { timeout: 10000 });
+  check((await page.textContent('#pinSaveBtn')).trim() === 'Save as a spot', 'the pin saves "as a spot"');
+  // the spot dialog: a rating is stars filled up to it
+  await page.click('#pinSaveBtn');
+  await page.waitForFunction(() => document.getElementById('hlOverlay').classList.contains('show'));
+  await page.click('#hlRating [data-rating="3"]');
+  const stars = await page.evaluate(() => [...document.querySelectorAll('#hlRating button')].map((b) => [b.classList.contains('on'), b.getAttribute('aria-pressed'), Math.round(b.getBoundingClientRect().height)]));
+  check(stars.map((s) => s[0]).join() === 'true,true,true,false,false' && stars.map((s) => s[1]).join() === 'false,false,true,false,false' && stars.every((s) => s[2] >= 44), 'three stars: three filled, the third pressed, 44 pt each: ' + JSON.stringify(stars));
+  const keys = await page.evaluate(() => ['hlAddBtn', 'hlCancelBtn'].map((id) => { const r = document.getElementById(id).getBoundingClientRect(); return [Math.round(r.top), Math.round(r.height), Math.round(r.width)]; }));
+  check(keys[0][0] === keys[1][0] && keys[0][1] === keys[1][1] && keys[0][2] > keys[1][2], 'Save and Cancel are one row at one height, Save the wide one: ' + JSON.stringify(keys));
+  await page.click('#hlCancelBtn');
+  // Go here: the field and the route carry the name the sheet showed, and the router got the pin's own point
+  await page.mouse.move(x, y); await page.mouse.down(); await page.waitForTimeout(800); await page.mouse.up();
+  await page.waitForFunction(() => document.getElementById('pinOverlay').classList.contains('show') && document.getElementById('pinPlace').textContent === 'Foothills Parkway', null, { timeout: 10000 });
+  const pin = await page.evaluate(([px, py]) => { const r = document.getElementById('map').getBoundingClientRect(), ll = window.apexDebug.map.unproject([px - r.left, py - r.top]); return { lat: ll.lat, lon: ll.lng }; }, [x, y]);
+  await page.click('#pinGoBtn');
+  await routed();
+  let got = await page.evaluate(() => ({ field: document.getElementById('destInput').value, name: window.apexDebug.track.name, bar: document.getElementById('routeBarName').textContent, recent: localStorage.getItem('apex.recentPlaces') || '' }));
+  check(got.name === 'To Foothills Parkway' && /Foothills Parkway/.test(got.bar) && !/\d\.\d{3}/.test(got.field + got.name + got.bar), 'the route is "To Foothills Parkway", no coordinates: ' + JSON.stringify(got));
+  const last = asked[asked.length - 1].locations, end = last[last.length - 1];
+  check(Math.abs(end.lat - pin.lat) < 1e-3 && Math.abs(end.lon - pin.lon) < 1e-3, 'the router was asked for the pin itself: ' + JSON.stringify([end, pin]));
+  check(/Foothills Parkway/.test(got.recent), 'a named pin is a recent place');
+  // Tap the map: no lookup is waited for, so it is a "Dropped pin"; never kept as a recent place
+  const again = async () => { await page.click('#planCancel'); await page.click('#planClear'); await page.click('#destInput'); };   // the card down, the route cleared
+  await again();
+  await page.click('#tapRouteBtn');
+  await page.waitForTimeout(800);
+  await page.mouse.click(x + 40, y + 30);
+  await page.waitForFunction(() => window.apexDebug.track && window.apexDebug.track.name === 'To a dropped pin', null, { timeout: 20000 });
+  await routed();
+  got = await page.evaluate(() => ({ field: document.getElementById('destInput').value, name: window.apexDebug.track.name, recent: localStorage.getItem('apex.recentPlaces') || '' }));
+  check(got.name === 'To a dropped pin' && !/\d\.\d{3}/.test(got.field) && !/ropped pin/.test(got.recent), 'a tapped place is a dropped pin, not a recent place: ' + JSON.stringify(got));
+  // the notes under what is typed name the key that is on the screen (it says Search)
+  await again();
+  await page.fill('#destInput', 'Zzyzxqq');
+  await page.waitForFunction(() => /Press Search to look everywhere/.test(document.getElementById('placeList').textContent), null, { timeout: 10000 });
+  check((await page.textContent('#findGoBtn')).trim() === 'Search', 'the key under the note says Search');
+  found = 'fail';
+  await page.fill('#destInput', 'Zzyzxqqq');
+  await page.waitForFunction(() => /Suggestions didn't load\. Press Search to try\./.test(document.getElementById('placeList').textContent), null, { timeout: 10000 });
+}, { geolocation: { latitude: 35.9606, longitude: -83.9207 }, permissions: ['geolocation'] });
+
 flow('Where to?: your own stages match by name, even with the map search offline (IDEAS U-19)', async (page, base) => {
   await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1');
     localStorage.setItem('apex.segments', JSON.stringify([{ id: 's1', name: 'Tail of the Dragon (US 129)', lat0: 35.47, lon0: -83.92, lat1: 35.52, lon1: -83.95, length_m: 17000 }])); } catch (_) {} });
@@ -5453,6 +5520,17 @@ flow('REVIEW.md 1.2 screen by screen: first run, the map, planning, the route, d
   const layers = await page.evaluate(async () => { const tab = document.getElementById('swTab'), was = tab.getAttribute('aria-expanded') === 'true';
     if (!was) tab.click(); await new Promise((r) => setTimeout(r, 50)); const t = document.getElementById('swPanel').innerText; if (!was) tab.click(); return t; });
   check(/Friends/.test(layers) && /Cameras/.test(layers) && /Twisty roads/.test(layers) && /3D terrain/.test(layers) && !/Night|Theme|Units|Look/.test(layers), 'Layers: ' + layers);
+  // design pass 8: the panel is the map's legend. Every layer row has its key and a line of what it is, Measured roads names
+  // its three colours in words, "Who sees me" sits right under Friends, and the panel is whole on the screen
+  const legend = await page.evaluate(async () => { const tab = document.getElementById('swTab'); tab.click(); await new Promise((r) => setTimeout(r, 400));
+    const rows = [...document.querySelectorAll('#switchRow .sw')].filter((b) => !b.hidden), box = document.getElementById('swPanel').getBoundingClientRect();
+    const out = { bare: rows.filter((b) => !b.querySelector('.ly-key') || !b.querySelector('small') || !b.querySelector('small').textContent.trim()).map((b) => b.dataset.toggle),
+      keyOff: rows.filter((b) => { const k = b.querySelector('.ly-key').getBoundingClientRect(), t = b.querySelector('span').getBoundingClientRect(); return !(k.width >= 20 && k.right <= t.left + 1); }).map((b) => b.dataset.toggle),
+      words: [...document.querySelectorAll('[data-toggle="coverage"] .ly-legend b')].map((x) => x.textContent).join(),
+      last: rows[rows.length - 1].dataset.toggle, who: document.getElementById('switchRow').nextElementSibling.id, box: [Math.round(box.left), Math.round(box.right)], w: innerWidth };
+    tab.click(); return out; });
+  check(!legend.bare.length && !legend.keyOff.length && legend.words === 'Smooth,Fair,Rough' && legend.last === 'friends' && legend.who === 'friendsSheetBtn' && legend.box[0] >= 48 && legend.box[1] <= legend.w,
+    'Layers is a legend: a key and a line for every layer, Who sees me under Friends, whole on screen: ' + JSON.stringify(legend));
   // Plan sheet (the plan flow): the loop dial (five detents in one unit), Best roads nearby and Options as two chips (with
   // what is on beside them), no level switch (its home is the route card) and no More
   await page.click('#destInput');
@@ -6302,8 +6380,9 @@ flow('plan flow (d) one Options sheet: Avoid ✕ and Prefer ✓ in it, what is o
   await page.click('#planOptionsChip');
   await page.waitForFunction(() => { const s = document.getElementById('optSheet'); return s.classList.contains('open') && Math.abs(s.getBoundingClientRect().bottom - innerHeight) < 2; });
   await page.waitForTimeout(300);
-  const groups = await page.evaluate(() => [...document.querySelectorAll('#optSheet .ctl-label')].map((l) => l.firstChild.textContent.trim()));
-  check(JSON.stringify(groups) === '["Avoid","Prefer","Kinds of corners","Start from","Loop to fit","Presets"]', 'one sheet, in that order: ' + JSON.stringify(groups));
+  const groups = await page.evaluate(() => [...document.querySelectorAll('#optSheet .ctl-label')].filter((l) => l.offsetParent).map((l) => l.firstChild.textContent.trim()));
+  // (Loop to fit is the app's: My free time and This album. An hour or two is the dial's own, so a browser has no such group)
+  check(JSON.stringify(groups) === '["Avoid","Prefer","Kinds of corners","Start from","Presets"]' && !(await page.$('#optSheet [data-loop-min]')), 'one sheet, in that order, with no second home for a loop by time: ' + JSON.stringify(groups));
   await scan(page, 'Options');
   await page.click('[data-avoid="highways"]');
   await page.click('[data-driver="passenger"]');
