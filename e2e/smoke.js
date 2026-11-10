@@ -5516,6 +5516,17 @@ flow('REVIEW.md 1.2 screen by screen: first run, the map, planning, the route, d
   const layers = await page.evaluate(async () => { const tab = document.getElementById('swTab'), was = tab.getAttribute('aria-expanded') === 'true';
     if (!was) tab.click(); await new Promise((r) => setTimeout(r, 50)); const t = document.getElementById('swPanel').innerText; if (!was) tab.click(); return t; });
   check(/Friends/.test(layers) && /Cameras/.test(layers) && /Twisty roads/.test(layers) && /3D terrain/.test(layers) && !/Night|Theme|Units|Look/.test(layers), 'Layers: ' + layers);
+  // design pass 8: the panel is the map's legend. Every layer row has its key and a line of what it is, Measured roads names
+  // its three colours in words, "Who sees me" sits right under Friends, and the panel is whole on the screen
+  const legend = await page.evaluate(async () => { const tab = document.getElementById('swTab'); tab.click(); await new Promise((r) => setTimeout(r, 400));
+    const rows = [...document.querySelectorAll('#switchRow .sw')].filter((b) => !b.hidden), box = document.getElementById('swPanel').getBoundingClientRect();
+    const out = { bare: rows.filter((b) => !b.querySelector('.ly-key') || !b.querySelector('small') || !b.querySelector('small').textContent.trim()).map((b) => b.dataset.toggle),
+      keyOff: rows.filter((b) => { const k = b.querySelector('.ly-key').getBoundingClientRect(), t = b.querySelector('span').getBoundingClientRect(); return !(k.width >= 20 && k.right <= t.left + 1); }).map((b) => b.dataset.toggle),
+      words: [...document.querySelectorAll('[data-toggle="coverage"] .ly-legend b')].map((x) => x.textContent).join(),
+      last: rows[rows.length - 1].dataset.toggle, who: document.getElementById('switchRow').nextElementSibling.id, box: [Math.round(box.left), Math.round(box.right)], w: innerWidth };
+    tab.click(); return out; });
+  check(!legend.bare.length && !legend.keyOff.length && legend.words === 'Smooth,Fair,Rough' && legend.last === 'friends' && legend.who === 'friendsSheetBtn' && legend.box[0] >= 48 && legend.box[1] <= legend.w,
+    'Layers is a legend: a key and a line for every layer, Who sees me under Friends, whole on screen: ' + JSON.stringify(legend));
   // Plan sheet (the plan flow): the loop dial (five detents in one unit), Best roads nearby and Options as two chips (with
   // what is on beside them), no level switch (its home is the route card) and no More
   await page.click('#destInput');
