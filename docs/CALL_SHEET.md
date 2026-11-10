@@ -4,6 +4,17 @@ Decisions Claude made for you, newest first. Each one says what was decided, why
 you reach one you've seen. If you disagree with a call, say so and it gets reversed; nothing here is hard to undo unless
 it says so. Things only you can do are in docs/OWNER_TODO.md.
 
+## 2026-11-10 (fable-hazard-alive): a hazard you keep confirming stays on the map (claude/fable-hazard-alive)
+
+The app asks "still there?" every time you pass a reported hazard, but the server only listened the first time each
+person answered. So with few members, a pothole one driver passed and confirmed every day still went off the map a
+week after the first answer. The calls:
+- **Every "still there" keeps it alive from that moment**, whoever says it, as often as they say it. Reporting your own
+  hazard again from the same spot does the same.
+- **It still counts once per person.** "Confirmed by 3" means three different people; one driver can't raise it.
+- **"Gone" is unchanged**: one per person, and two that outvote the confirmations end it at once, so one person can't
+  keep a wrong report up against two who say it's gone.
+- Server only, no app change, no database change. Undo: backend/src/hazards.ts `vote`, the `seenAgain` lines.
 ## 2026-11-09 (fable-expressway): an expressway counts as a highway at Fun and Long way (claude/fable-expressway)
 
 "Fun should never go on the highway" covered motorways and trunk roads. Some divided, limited-access expressways are
