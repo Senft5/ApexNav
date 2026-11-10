@@ -3722,7 +3722,12 @@
         // (the route shown can drop out of the ranking altogether: the whole corridor's plan found a quicker way, and the
         // level's budget over it leaves the shown one too long; then the best goes up whatever the margin)
         const gone = !now && !!best;
-        if (!best || (!now && !gone) || (now && (best.t === now.t || !(best.value > now.value + OWN_SWAP_POINTS))) || !still()) return;
+        if (!best || (!now && !gone) || (now && (best.t === now.t || !(best.value > now.value + OWN_SWAP_POINTS))) || !still()) {
+          // the route stays: its overview again from the fuller context (land cover, lanes, housing: the first ranking of our
+          // own routes holds only the tiles' channels), in place, only where the words change
+          if (now && still() && now.ctx && now.corridor) { Object.defineProperty(shown, 'ranked', { value: now, configurable: true, writable: true, enumerable: false }); paintStory(shown, true); }
+          return;
+        }
         const d = (k) => ((best.parts && best.parts[k]) || 0) - ((now && now.parts && now.parts[k]) || 0);
         // a route the wider search found only now isn't about the weather: say what it is
         const why = gone ? 'Quicker way found' : added.has(best.t) ? 'Found a better way' : d('weather') + (d('penalty') > 0 ? d('penalty') : 0) >= 1 ? 'Weather ahead' : 'Conditions ahead';
@@ -5578,7 +5583,7 @@
     let whoSees = null, roadFeelOn = null;
     onSocial(() => { try { whoSees = window.ApexWhoSees && friendsMap ? ApexWhoSees.mount({ el, btn, toast, apiCall, jsonOf, friendsMap, zones: () => privacyZones,
       crews: () => (window.ApexSync && ApexSync.crews ? ApexSync.crews() : apiCall('GET', '/api/crews').then(jsonOf)),
-      roadFeel: { get: () => roadFeelOn, set: async (on) => { const r = await apiCall('PUT', '/api/me/contribute', { on }).catch(() => null); if (r && r.ok) roadFeelOn = !!on; return !!(r && r.ok); } },
+      roadFeel: { get: () => roadFeelOn, set: async (on) => { const r = await apiCall('PUT', '/api/me/contribute', { on }).catch(() => null); if (r && r.ok) { roadFeelOn = !!on; if (!on) clearCarry(); } return !!(r && r.ok); } },
       openGarage: (what) => { showView('garage'); const t = what === 'privacy' ? $('zoneRadius') : $('garageMeBody'); if (t && window.ApexGarageSettings && ApexGarageSettings.ui && ApexGarageSettings.ui.reveal(t)) return; if (t) setTimeout(() => t.scrollIntoView({ block: 'start' }), 60); },
       onChange: () => { if (view === 'people' || view === 'garage') renderAccount(); } }) : null; } catch (e) { console.error('who sees', e); } });
     onSocial(() => { if (friendsMap) $('friendsSheetBtn').addEventListener('click', () => (whoSees && accountMe && accountMe.member ? whoSees.open() : friendsMap.sheet())); });
@@ -5664,7 +5669,7 @@
       }
       // Anyone signed in can take their data or close the account, member or not.
       const downloadMyData = async () => { const r = await apiCall('GET', '/api/me/export'); const blob = new Blob([JSON.stringify(await r.json(), null, 2)], { type: 'application/json' }); const a = el('a', { href: URL.createObjectURL(blob), download: 'vetta-my-data.json' }); a.click(); };
-      const deleteMyAccount = async () => { if (await ApexConfirm.prompt('This erases your account, friends, shared results and spots from the server. Type DELETE to confirm.', { action: 'Delete account', placeholder: 'DELETE', maxLength: 10, match: 'DELETE' }) === 'DELETE') { const r = await apiCall('DELETE', '/api/me', { confirm: 'DELETE' }); if (r.ok) ApexSync.setSession(null); redo(); } };
+      const deleteMyAccount = async () => { if (await ApexConfirm.prompt('This erases your account, friends, shared results and spots from the server. Type DELETE to confirm.', { action: 'Delete account', placeholder: 'DELETE', maxLength: 10, match: 'DELETE' }) === 'DELETE') { const r = await apiCall('DELETE', '/api/me', { confirm: 'DELETE' }); if (r.ok) { ApexSync.setSession(null); clearCarry(); } redo(); } };
       // Vetta is open (P-02, the owner 2026-10-30): everyone signed in is a member, so the only one who isn't is an account the owner
       // removed. No paste field and no way in to offer; one line on each side, and the account's keys in the Garage, where they live (P-22).
       if (!me.member) {
@@ -5672,7 +5677,7 @@
           el('p', { className: 'note', textContent: 'Driving, notes and your Log work as always. Your account is still yours: download or delete it in the Garage.' }));
         const asec = el('div', { className: 'stack-8' });                        // the sheet's head says Account
         asec.append(el('div', { className: 'row' }, btn('Download my data', downloadMyData),
-          btn('Sign out', async () => { await apiCall('POST', '/api/auth/logout'); ApexSync.setSession(null); redo(); })), btn('Delete account', deleteMyAccount, 'danger-btn'));
+          btn('Sign out', async () => { await apiCall('POST', '/api/auth/logout'); ApexSync.setSession(null); clearCarry(); redo(); })), btn('Delete account', deleteMyAccount, 'danger-btn'));
         accBody.append(asec);
         return;
       }
@@ -6104,7 +6109,7 @@
       const contribOn = !!ex?.member?.contribute;
       ambientFromAccount(true, contribOn);                                    // U-116
       const dsec = rfBody === gbody ? section('Road feel') : el('div', { className: 'stack-8' });   // the sheet's head says Road feel
-      dsec.append(switchRow('Share road feel', contribOn, async () => { await apiCall('PUT', '/api/me/contribute', { on: !contribOn }); redo(); }),
+      dsec.append(switchRow('Share road feel', contribOn, async () => { const r = await apiCall('PUT', '/api/me/contribute', { on: !contribOn }); if (contribOn && r && r.ok) clearCarry(); redo(); }),
         // U-126: no multiplier of nothing: what the app shows for mapping a road first is the count below, for you only
         el('p', { className: 'note', textContent: 'Banking, bumps and surface. Never where you went or how fast. Roads you map first are counted here, for you only.' }));
       // P-14: your own contribution, not a board of friends: roads you were first or second to map (IDEAS S-09); only you see it
@@ -6114,7 +6119,7 @@
       const asec = accBody === gbody ? section('Account') : el('div', { className: 'stack-8' });
       asec.append(el('div', { className: 'row' },
         btn('Download my data', downloadMyData),
-        btn('Sign out', async () => { await apiCall('POST', '/api/auth/logout'); ApexSync.setSession(null); redo(); })),
+        btn('Sign out', async () => { await apiCall('POST', '/api/auth/logout'); ApexSync.setSession(null); clearCarry(); redo(); })),
         btn('Delete account', deleteMyAccount, 'danger-btn'));
       accBody.append(asec);                                                 // your account: Garage → Settings → Account
       if (safety) { accBody.append(safety.blockedSection()); if (me.moderator) accBody.append(safety.moderationSection()); }
@@ -6228,6 +6233,14 @@
     function closeHighlightDialog() { $('hlOverlay').classList.remove('show'); highlightPoint = null; }
     document.querySelectorAll('#hlCategories button').forEach(b => b.addEventListener('click', () => selectHighlightCategory(b.dataset.category)));
     document.querySelectorAll('#hlRating button').forEach(b => b.addEventListener('click', () => selectHighlightRating(Number(b.dataset.rating))));
+    // Road data that waited for signal (road_carry.js, IDEAS Q-06) wires itself; the page counts its uploads for app health,
+    // says when some went, and empties it when Road data is switched off, on sign-out and when the account is deleted, so
+    // nothing measured under one account is sent under another (Erase everything clears its index with the apex.* keys).
+    const clearCarry = () => { try { localStorage.removeItem('apex.roadShare'); } catch (_) {} try { if (window.ApexRoadCarry && ApexRoadCarry.clear) ApexRoadCarry.clear(); } catch (_) {} };
+    if (window.ApexRoadCarry && ApexRoadCarry.flush) {
+      ApexRoadCarry.onPost = (r) => health.bump(r === true ? 'road_upload_ok' : 'road_upload_fail');
+      ApexRoadCarry.onSent = (km) => { toast(`Sent ${ApexUnits.long(km * 1000, 1)} of road feel that waited for signal.`); renderMyData().catch(() => {}); };
+    }
     // Your data (my_data.js, IDEAS Z-03 / Z-04): what this phone holds, drives as GPX, delete and erase.
     async function renderMyData() {
       // the summaries (F-06): each drive's length and battery, never its rows (the Garage opened with every drive read)
@@ -7257,7 +7270,7 @@
     async function checkAmbientAllowed() {
       if (ambient.checking || performance.now() - ambient.checkedAt < 600000) return;
       ambient.checking = true;
-      try { const m = window.ApexSync ? await ApexSync.member() : null; ambient.member = !!m; ambient.allowed = !!(m && await ApexSync.contributionEnabled()); }
+      try { const sh = window.ApexSync ? await ApexSync.roadShare() : { on: false, member: false }; ambient.member = !!sh.member; ambient.allowed = !!sh.on; }
       catch (_) { ambient.allowed = null; }
       finally { ambient.checking = false; ambient.checkedAt = performance.now(); paintAmbient(); }
       if (ambient.allowed === false && ambient.sharer) ambient.sharer.stop();
@@ -7464,9 +7477,10 @@
     // What this drive is like (route_story.js, the owner 2026-11-09): a few plain lines from what the ranking already holds
     // for the route (its samples, context, corners, steps), worked out after the card is up and kept on the track; the
     // first line in view, the rest under it. A route with no ranking behind it (restored, a GPX, a loop): nothing said.
-    function paintStory(t) {
+    function paintStory(t, again) {
       const box = $('routeCardStory');
       if (!box) return;
+      if (again && (plannedRoute !== t || !t.__story)) return;         // only a card already painted for this route is refreshed
       const c = t && t.ranked, metric = ApexUnits.metric();
       const show = (s) => {
         const lines = s && Array.isArray(s.lines) ? s.lines : [];
@@ -7477,13 +7491,16 @@
         box.classList.toggle('one', lines.length === 1);
       };
       const kept = t && t.__story;
-      if (kept && kept.steps === t.steps && kept.metric === metric) { show(kept.s); return; }
-      box.hidden = true;
+      if (!again && kept && kept.steps === t.steps && kept.metric === metric) { show(kept.s); return; }
+      if (!again) box.hidden = true;                                   // a refresh keeps the lines up until the new ones are built
       if (!c || !window.ApexRouteStory) return;
       setTimeout(() => {
         if (plannedRoute !== t) return;
         let s = null;
-        try { s = ApexRouteStory.build(c, { metric, steps: t.steps, track: t, glareMin: t.glareMin }); } catch (_) { s = null; }   // unknown: nothing said
+        // the road you set off on: the router's depart maneuver names it, and the track's steps start at the first turn
+        const dep = c.route && Array.isArray(c.route.steps) && c.route.steps[0] && c.route.steps[0].type >= 1 && c.route.steps[0].type <= 3 ? c.route.steps[0].street : null;
+        const steps = dep && Array.isArray(t.steps) && !(t.steps[0] && t.steps[0].m <= 0) ? [{ m: 0, street: dep }, ...t.steps] : t.steps;
+        try { s = ApexRouteStory.build(c, { metric, steps, track: t, glareMin: t.glareMin }); } catch (_) { s = null; }   // unknown: nothing said
         Object.defineProperty(t, '__story', { value: { steps: t.steps, metric, s }, configurable: true, writable: true, enumerable: false });
         if (plannedRoute === t) show(s);
       }, 0);
@@ -7713,8 +7730,12 @@
     async function startLiveSharing() {
       const rec = drive.rec;
       try {
-        if (!window.ApexSync || !window.ApexContributor || !(await ApexSync.member())) return;
-        if (!(await ApexSync.contributionEnabled())) { drive.share = 'off-member'; paintDriveStat(); return; }
+        if (!window.ApexSync || !window.ApexContributor) return;
+        // with no signal at the start (sync.js roadShare): the last answer the server gave; the road data then waits on the
+        // phone (road_carry.js) and is sent only once the server says Road data is still on
+        const sh = await ApexSync.roadShare();
+        if (!sh.member) return;
+        if (!sh.on) { drive.share = 'off-member'; paintDriveStat(); return; }
         if (drive.rec !== rec) return;                                       // the drive ended while we were checking
         const day = new Date(), pad = (n) => String(n).padStart(2, '0');
         drive.live = ApexContributor.createLive({
@@ -8261,10 +8282,13 @@
           idle(() => refreshSavedDrives().catch(() => {}));            // the road memory learns this drive, off the card's moment
           if (live) {
             live.finish().then(async (shared) => {
+              // what had no signal to go with waits on the phone (road_carry.js): said, so a drive in the hills doesn't look unshared
+              const waitM = window.ApexRoadCarry && ApexRoadCarry.itemM && live.leftover ? ApexRoadCarry.itemM(live.leftover()) : 0;
+              const waits = waitM >= 100 ? ApexUnits.long(waitM, 1) : null;
               if (shared && shared.chunks > 0) {
                 await ApexAnalysis.job('patch', { id: res.driveId, fields: { contributed: true } });
-                if (shared.km > 0) toast(`Shared ${ApexUnits.long((shared.km) * 1000, 1)} of road feel.`);
-              }
+                if (shared.km > 0) toast(waits ? `Shared ${ApexUnits.long((shared.km) * 1000, 1)} of road feel. ${waits} more waits for signal.` : `Shared ${ApexUnits.long((shared.km) * 1000, 1)} of road feel.`);
+              } else if (waits) toast(`${waits} of road feel waits for signal. It goes when you're back online.`);
             }).catch(() => {});
           }
         } catch (e) {
