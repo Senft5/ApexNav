@@ -6,6 +6,10 @@
   climb and minimum length, the steadiness chart's scale, dots and note) and `web/drive_view.js` (repeatability list,
   grip circle notes; `size(100)` for "before turn-in"). drive_view falls back to metres with no units module (its tests).
 - Tests: tests/test_units.py (new case); e2e "a whole road as a stage" now expects "up 65 ft".
+## Session 2026-11-10 (merger): e2e time limit 35 min (claude/project-thread-er8kzz)
+
+- [x] .github/workflows/core-tests.yml e2e `timeout-minutes` 25 → 35: 152 flows take ~24 min and were cancelled on the
+  last flow. Next: split e2e into two jobs if it passes ~30 min.
 
 ## Session 2026-11-10 (fable-loop-time): the loop dial by distance or time (claude/fable-loop-time, off origin/main 1a38381)
 

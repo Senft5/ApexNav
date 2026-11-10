@@ -13,6 +13,11 @@ Settings, Units. Small lengths in feet are said to the nearest 5 ft ("within 20 
 claim more than the phone measured. Metric drivers see what they saw before.
 
 Undo: revert the PR. Nothing stored changes; this is only how lengths are written.
+## 2026-11-10 (merger): e2e may run 35 minutes, not 25 (claude/project-thread-er8kzz)
+
+The e2e suite is 152 flows now and takes about 24 minutes, so GitHub cut it off at its 25-minute limit on the last flow
+(twice on #349, once on #344) with every flow before it passing. The limit is 35 minutes. No test is skipped or
+shortened. Undo: set `timeout-minutes` back to 25 in `.github/workflows/core-tests.yml`, or better, split the suite.
 
 ## 2026-11-10 (fable-loop-time): a loop can be set by time on the dial (claude/fable-loop-time)
 
