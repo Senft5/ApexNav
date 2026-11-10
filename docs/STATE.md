@@ -21,6 +21,17 @@
 - [x] Tests: tests/test_garage_settings.py (+1); e2e "Settings behind the gear…".
 - Next: Road feel, Route tuning and Spots rows have no value yet (Road feel's is drawn by who_sees.js).
 
+## Session 2026-11-10 (fable-drive): Location off is said, in the app too (claude/fable-drive, off origin/main 1a38381)
+
+- ApexNavApp.swift: `LiveFrame.locationOff` (`location_off`: authorization denied or restricted; never during a review
+  replay), set at init and in `locationManagerDidChangeAuthorization` (which also clears `hasFix`); bridge command
+  `openSettings`.
+- web/cockpit.js: `setLocOff` (from `window.apex.live`), `paintPerms` gives `#permSheet` a second face (`.loc-off`:
+  title, one line, Open Settings in the app / Try again in a browser), `showPerms`; `startDrive` and Recenter (idle, no
+  route) open it when `locDenied`; no key is disabled for it any more. The drive line: "Location is off" + `LOC_HOW_TEXT`.
+- Tests: e2e "Location off, in the app" and "Location off, in a browser"; tests/test_car_native.py.
+- Active: none known. The Swift is uncompiled until CI. Next: the drive screen's design pass proper (this was found on the way in).
+
 ## Session 2026-11-10 (fable-loops): loops lose Quick / Fun / Long way; the card offers which way to head (claude/fable-loops, off origin/main 7dee309)
 
 - [x] The owner: "why do loops need a long way a fun and a quick? the whole point is aimless driving". web/cockpit.js:

@@ -454,6 +454,12 @@ final class ApexScriptBridge: NSObject, WKScriptMessageHandler {
             shell?.requestLocation()
             return
         }
+        // Location turned off for Vetta: the page's "Location is off" sheet opens the app's own page in Settings (the only
+        // place it can be turned back on once the system sheet has been answered).
+        if cmd == "openSettings" {
+            if let url = URL(string: UIApplication.openSettingsURLString) { UIApplication.shared.open(url) }
+            return
+        }
         // CarPlay (CarPlay/ApexCarPlay.swift): the route, the next maneuver and hazards for the car's screen.
         if cmd == "car", let dict = body as? [String: Any] {
             ApexCar.shared.receive(dict)
@@ -705,6 +711,7 @@ struct LiveFrame: Encodable, Sendable {
     var lowPowerMode: Bool
     var battery: Double?
     var charging, hasFix: Bool
+    var locationOff: Bool   // Location is denied or restricted for the app: the page says so instead of "Finding GPS…" for ever
     var segments: Int
     var at: Double
     var seq: Int?
@@ -713,7 +720,7 @@ struct LiveFrame: Encodable, Sendable {
         case lat, lon, accuracyM = "accuracy_m", speedMps = "speed_mps", courseDeg = "course_deg", elevationM = "elevation_m",
              gradePct = "grade_pct", latG = "lat_g", lonG = "lon_g", camberDeg = "camber_deg", crestVerticalG = "crest_vertical_g",
              roughnessRms = "roughness_rms", vertPeakG = "vert_peak_g", impactG = "impact_g", camberV = "camber_v", recording, calibration, thermal,
-             lowPowerMode = "low_power_mode", battery, charging, hasFix = "has_fix", segments, at, seq
+             lowPowerMode = "low_power_mode", battery, charging, hasFix = "has_fix", locationOff = "location_off", segments, at, seq
     }
 
     /// Rounded to `digits` (the page needs no more, and the bridge carries less); nil when unknown or not finite.
@@ -764,6 +771,7 @@ final class ApexSensorShell: NSObject, ObservableObject, CLLocationManagerDelega
 
     // GPS state
     private var hasFix = false
+    private var locationOff = false   // denied or restricted (set at launch and whenever the answer changes)
     private var accuracyM: Double? = nil   // horizontal, metres; the web's off-route test widens with it
     private var latDeg: Double = 0.0
     private var lonDeg: Double = 0.0
@@ -804,6 +812,7 @@ final class ApexSensorShell: NSObject, ObservableObject, CLLocationManagerDelega
         locManager.delegate = self
         locManager.activityType = .automotiveNavigation
         locManager.pausesLocationUpdatesAutomatically = false
+        locationOff = Self.isOff(locManager.authorizationStatus)
         applySensorStack()   // NA-2: idle until a drive (coarse GPS for the map, no IMU, no barometer)
         // U-65: never asked at launch. The page asks (requestLocation) after the welcome's Start, so the system sheet follows a
         // reason; a driver past the welcome asks at once, and a first drive (phone or car) asks if it never was.
@@ -1383,7 +1392,7 @@ final class ApexSensorShell: NSObject, ObservableObject, CLLocationManagerDelega
             lowPowerMode: ProcessInfo.processInfo.isLowPowerModeEnabled,
             battery: r(UIDevice.current.batteryLevel >= 0 ? Double(UIDevice.current.batteryLevel) : nil, 2),
             charging: UIDevice.current.batteryState == .charging || UIDevice.current.batteryState == .full,
-            hasFix: hasFix, segments: recordedSegments, at: at, seq: seq)
+            hasFix: hasFix, locationOff: locationOff && !replaying, segments: recordedSegments, at: at, seq: seq)
         liveInFlight += 1
         Self.liveQueue.async { [weak self] in
             let json = (try? JSONEncoder().encode(frame)).flatMap { String(data: $0, encoding: .utf8) }
@@ -1494,9 +1503,14 @@ final class ApexSensorShell: NSObject, ObservableObject, CLLocationManagerDelega
 
     nonisolated func locationManagerDidChangeAuthorization(_ manager: CLLocationManager) {
         Task { @MainActor in
+            self.locationOff = Self.isOff(self.locManager.authorizationStatus)
+            if self.locationOff { self.hasFix = false }   // the last fix is not where the phone is now
             if !self.replaying { self.locManager.startUpdatingLocation() }
         }
     }
+
+    /// Location is off for the app: the driver said no, or the phone does not allow it (Screen Time, a managed phone).
+    private static func isOff(_ status: CLAuthorizationStatus) -> Bool { status == .denied || status == .restricted }
 
     fileprivate func ingest(fix: GPSFix) {
         guard fix.horizontalAccuracyM >= 0 else { return }
