@@ -374,7 +374,12 @@
     #app.plan-open #recenterBtn, #app.sheet-open #recenterBtn { display: none; }
     .toast { position: absolute; left: 50%; top: 12px; transform: translateX(-50%); z-index: 6; max-width: calc(100% - 32px);
       background: var(--panel); color: var(--panel-ink); border: 1px solid var(--panel-ink); padding: 8px 12px; font-size: 12px; font-weight: 600; display: none; }   /* a message: ink, never the red pen */
-    .toast.show { display: block; }
+    .toast.show { display: block; width: max-content; }   /* as wide as its words, up to the screen: centred from left: 50%, it shrank to fit half of it */
+    /* a message with a key (2026-11-10): one row, the words wrapping on the left and the key whole on the right, in ink and
+       underlined like every other text key (.linkbtn); the red pen stays for what means slow down */
+    .toast.show.has-key { display: flex; align-items: center; gap: 14px; text-align: left; }
+    .toast .toast-key { flex: none; color: var(--panel-ink); font-weight: 700; text-decoration: underline; text-underline-offset: 2px; white-space: nowrap;
+      padding: 15px 6px; margin: -15px -6px -15px auto; }   /* a thumb's height to hit, without making the message taller */
     .pin { font-size: 11px; font-weight: 800; letter-spacing: 0.1em; padding: 2px 5px; border: 1.5px solid; background: var(--panel); white-space: nowrap; cursor: pointer; font-family: var(--font-ui); }
     .pin.alpr { color: var(--signal); border-color: var(--signal); }
         .puck { width: 26px; height: 26px; }

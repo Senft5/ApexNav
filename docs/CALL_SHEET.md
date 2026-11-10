@@ -4,6 +4,23 @@ Decisions Claude made for you, newest first. Each one says what was decided, why
 you reach one you've seen. If you disagree with a call, say so and it gets reversed; nothing here is hard to undo unless
 it says so. Things only you can do are in docs/OWNER_TODO.md.
 
+## 2026-11-10 (fable-toast-key): a message with a key is one row, and a message is as wide as its words (claude/fable-toast-key)
+
+For "reducing any clunky feelings", seen on the drive screen: "Typing is off while the car moves." took half the
+screen's width, wrapped, and its key ("I'm a passenger") dropped under it, indented, in the red pen. Two causes, both
+in every message the app shows:
+
+- A message is centred from `left: 50%`, so the browser let it be at most half the screen wide and it wrapped early.
+  It is now as wide as its words, up to the screen less 16 px a side.
+- A key on a message (twelve of them: Start drive, Save, Share ETA, Head home, Add as a stop, Garage, Open…) was an
+  inline link. It is now the end of a row: the words wrap on the left, the key stays whole on the right. It is ink and
+  underlined like every other text key (the red pen is for what means slow down), and a thumb tall to hit without
+  making the message taller.
+
+Also: "Saved for offline: … Find it in Where to?." ended "?."; it reads "It's listed in Where to? now."
+
+Undo: revert the PR (`toast()` in web/cockpit.js, four CSS lines in web/index.html).
+
 ## 2026-11-10 (fable-one-corner): "1 corners" is "1 corner"; a Best roads nearby key keeps its word while it searches (claude/fable-one-corner)
 
 A road with one corner read "1 corners" on its card's line, under its big number, aloud to a screen reader, in "1 more
