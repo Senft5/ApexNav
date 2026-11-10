@@ -4,6 +4,22 @@ Decisions Claude made for you, newest first. Each one says what was decided, why
 you reach one you've seen. If you disagree with a call, say so and it gets reversed; nothing here is hard to undo unless
 it says so. Things only you can do are in docs/OWNER_TODO.md.
 
+## 2026-11-10 (fable-loved-roads): in the iPhone app a recorded drive counts toward loved roads (claude/fable-loved-roads)
+
+#323 made the upload carry `rec` (a pass from a recorded drive), which loved roads are counted from. But only the
+browser's drive set it. In the app one mounted stream carries the road feel through Start and End, and it never said
+so, so the phones that matter still sent every pass as ambient. The calls:
+- **The app's stream says "recorded" from the drive's first row on**, and keeps saying so for the rest of that trip
+  (also once End was pressed: the rows already driven were the recorded drive's, and a trip can't be split after the
+  fact). What it sent before Start stays an ambient pass. What waits for signal remembers it. Undo: cockpit.js
+  feedAmbient `deliberate`, contributor.js `recorded`.
+- **A drive whose road feel went (or waits for signal) is marked shared in the Log**, in the app and in the browser.
+  The Log offered "Share <drive>" by hand for every recent app drive, under another drive id: tapping it merged the
+  same pass into the road a second time. Undo: cockpit.js `nativeShared`, and the `|| waits` beside it.
+- **Share by hand says when it couldn't.** A busy server or no signal answered 'retry', which was counted as sent:
+  the button said "Shared 3 roads" and the drive was marked shared with nothing on the server. Now it says "Couldn't
+  share. Tap to try again." Undo: contributor.js `contributeDrive`.
+
 ## 2026-11-09 (fable-road-carry): road data from roads with no signal is kept on the phone and sent later (claude/fable-road-carry)
 
 Found while looking for what matters most: matching a drive to the map needs the network, and a trip that ended with no
