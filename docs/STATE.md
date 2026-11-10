@@ -37,6 +37,24 @@
 - Exact next task: the deferred round-1 items: HPMS posted limits in the graph ETL edge time (after #321 merges and the
   region rebuild), then Hamilton Ave quality 0.47-0.54.
 
+## Session 2026-11-10 (fable-surface-map): Measured roads coloured by measured pavement, tap for words (claude/fable-surface-map, off origin/main f27a1fe)
+
+- [x] IDEAS U-13 (the surface half; the twisty half was the Twisty roads switch). `GET /api/coverage` has sent each
+  direction's mean roughness and banked / off-camber shares since the stage-discovery work, and the map drew none of it.
+  web/coverage.js: `reading(w)` (the surer direction's numbers, both averaged on a tie), `surface(rough)` (1 smooth under
+  `SMOOTH_G` 0.10 g, 3 rough over `ROUGH_G` 0.22 g, 2 fair, 0 not measured), `describe(w)` (the tap's words), feature
+  properties `{ t, s, way }`, and `add` now redraws when a road's numbers change, not only its confidence.
+- [x] web/cockpit.js: `apex-coverage` `line-color` is a match on `s` over the theme's gain / amber / signal / dim (all
+  three looks, day and night); a tap on a measured road toasts `describe` unless a route, option or stage line is under
+  the finger or tap-to-route is armed; the switch's toast names the colours and the tap.
+- Not done: a per-bin surface (the line is one colour per road, the server's per-direction mean); a drawn legend (the
+  switch's toast and the tap carry it); the scale lives in two files (coverage.js and route_story.js, held together by
+  test_the_scale_is_the_route_overviews) because route_story.js was in another open PR.
+- Tests: tests/test_coverage.py 7 (classes, surer direction, words, redraw, the shared scale); e2e "measured roads" flow
+  extended (colour property, four theme colours in the paint, a tap says the words); pytest 1375 passed, 5 skipped.
+- Exact next task: unchanged (tools/live_speed.js on the owner's trips at Fun and Long way). #321 is merged: the tiles'
+  travel times from HPMS posted limits (the fable-hpms-limits entry below) is unblocked once the region is rebuilt.
+
 ## Session 2026-11-09 (fable-overview): the drive overview read against real trips (claude/fable-overview, off origin/main 1d97979)
 
 - [x] The overview's "exact next task" (read it on real routes, tune `ApexRouteStory.T`), on ten public trips planned in
@@ -81,23 +99,6 @@
   (Valhalla-planned routes off our tiles) still knows only motorway/trunk.
 - Exact next task: after merge, run Actions → "Graph region (own routing, OH+KY+IN)" so the flag reaches the tiles; then
   unchanged (tools/live_speed.js on the owner's trips at Fun and Long way).
-## Session 2026-11-10 (fable-surface-map): Measured roads coloured by measured pavement, tap for words (claude/fable-surface-map, off origin/main f27a1fe)
-
-- [x] IDEAS U-13 (the surface half; the twisty half was the Twisty roads switch). `GET /api/coverage` has sent each
-  direction's mean roughness and banked / off-camber shares since the stage-discovery work, and the map drew none of it.
-  web/coverage.js: `reading(w)` (the surer direction's numbers, both averaged on a tie), `surface(rough)` (1 smooth under
-  `SMOOTH_G` 0.10 g, 3 rough over `ROUGH_G` 0.22 g, 2 fair, 0 not measured), `describe(w)` (the tap's words), feature
-  properties `{ t, s, way }`, and `add` now redraws when a road's numbers change, not only its confidence.
-- [x] web/cockpit.js: `apex-coverage` `line-color` is a match on `s` over the theme's gain / amber / signal / dim (all
-  three looks, day and night); a tap on a measured road toasts `describe` unless a route, option or stage line is under
-  the finger or tap-to-route is armed; the switch's toast names the colours and the tap.
-- Not done: a per-bin surface (the line is one colour per road, the server's per-direction mean); a drawn legend (the
-  switch's toast and the tap carry it); the scale lives in two files (coverage.js and route_story.js, held together by
-  test_the_scale_is_the_route_overviews) because route_story.js was in another open PR.
-- Tests: tests/test_coverage.py 7 (classes, surer direction, words, redraw, the shared scale); e2e "measured roads" flow
-  extended (colour property, four theme colours in the paint, a tap says the words); pytest 1375 passed, 5 skipped.
-- Exact next task: unchanged (tools/live_speed.js on the owner's trips at Fun and Long way). #321 is merged: the tiles'
-  travel times from HPMS posted limits (the fable-hpms-limits entry below) is unblocked once the region is rebuilt.
 ## Session 2026-11-09 (fable-hpms-limits): a "not reported" speed limit was read as 254 mph (claude/fable-hpms-limits, off origin/main 1d97979)
 
 - [x] Found while measuring posted limits for the overview: the context grid's HPMS `speed_limit` (u8 mph) clamped a state's
