@@ -658,6 +658,11 @@
     .rc-lv .rc-lv-c { font-size: 17px; }
     .rc-levels > button.on .rc-lv small { color: var(--panel); opacity: 0.8; }
     .rc-levels > button.further .rc-lv { font: 600 15px/1.2 var(--font-ui); color: var(--panel-dim); white-space: normal; }
+    /* a loop's ways (2026-11-10): the loops found, each its own outline, the way it heads, time and corners */
+    .rc-ways[data-n="2"] { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .rc-way-art { align-self: stretch; height: 40px; margin: 0 0 3px; overflow: visible; }
+    .rc-way-art path { fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linejoin: round; stroke-linecap: round; vector-effect: non-scaling-stroke; }
+    .rc-way-art circle { fill: var(--accent); }
     .rc-levels-note { margin: 6px 0 0; font-size: 15px; line-height: 1.3; color: var(--panel-dim); }
     .rc-levels-note[hidden] { display: none; }
     /* the routes found, as page marks: the one on screen a long inked stroke, the others short pencil ones, then the count */
@@ -1249,6 +1254,7 @@
     /* the level cards one a row once the text is larger: the level, its time and its corners on one line */
     html[data-type-size] .rc-levels { grid-template-columns: minmax(0, 1fr); }
     html[data-type-size] .rc-levels > button { flex-direction: row; flex-wrap: wrap; align-items: baseline; column-gap: 12px; min-height: 52px; }
+    html[data-type-size] .rc-way-art { align-self: center; width: 60px; flex: none; margin: 0; }
     html[data-type-size] .rc-lv { display: flex; flex-wrap: wrap; column-gap: 12px; align-items: baseline; }
     html[data-type-size] :is(.place small, .place span, .friend-head b, .friend-head small, .crew-tile-head b, .your-road b, .your-road small, .stop-row span) { white-space: normal; overflow: visible; text-overflow: clip; max-width: none; }
     /* GR-2: a floor on the same pages. Prose and captions at least 17 px (the numerals' small-caps labels keep their size
@@ -1543,6 +1549,7 @@
               </div>
               <!-- finding 6: a loop's length, in your units, on its card -->
               <div class="rc-loop" id="routeCardLoop" role="group" aria-label="Loop length" hidden><span class="rc-loop-label">Length</span><div class="detents" id="cardLoopDetents"></div></div>
+              <div class="rc-levels rc-ways" id="routeCardWays" role="radiogroup" aria-label="Which way the loop heads" hidden></div>
               <!-- the owner, 2026-11-04: one control. The level cards are the choices, each with its own pick of the routes found
                    (time, corners); a tap takes it, nothing planned again. A swipe sideways on the card steps through the routes
                    found (finding 11), and the line under the cards says so. -->

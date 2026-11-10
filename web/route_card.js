@@ -170,6 +170,41 @@
   }
 
   /**
+   * A loop's outline for its card: the loop's own planned line, north up, fitted in a w x h box with `pad` around it, as
+   * an SVG path (at most ~60 points) and where its start sits. null without a shape. Drawn from the route, nothing made up.
+   */
+  function loopOutline(t, w = 60, h = 40, pad = 4) {
+    const la = t && t.lat, lo = t && t.lon;
+    if (!Array.isArray(la) || !Array.isArray(lo) || la.length < 3 || la.length !== lo.length) return null;
+    const k = Math.cos(la[0] * Math.PI / 180), step = Math.max(1, Math.ceil(la.length / 60)), pts = [];
+    for (let i = 0; i < la.length; i += step) pts.push([lo[i] * k, la[i]]);
+    pts.push([lo[la.length - 1] * k, la[la.length - 1]]);
+    if (pts.some((p) => !finite(p[0]) || !finite(p[1]))) return null;
+    const xs = pts.map((p) => p[0]), ys = pts.map((p) => p[1]);
+    const x0 = Math.min(...xs), x1 = Math.max(...xs), y0 = Math.min(...ys), y1 = Math.max(...ys);
+    const s = Math.min((w - 2 * pad) / Math.max(x1 - x0, 1e-9), (h - 2 * pad) / Math.max(y1 - y0, 1e-9));
+    const ox = (w - (x1 - x0) * s) / 2, oy = (h - (y1 - y0) * s) / 2;
+    const at = (p) => [Math.round((ox + (p[0] - x0) * s) * 10) / 10, Math.round((oy + (y1 - p[1]) * s) * 10) / 10];
+    const q = pts.map(at);
+    return { w, h, d: q.map((p, i) => `${i ? 'L' : 'M'}${p[0]} ${p[1]}`).join(''), start: q[0] };
+  }
+
+  /**
+   * A loop's own choices (the owner, 2026-11-10: "why do loops need a long way a fun and a quick? the whole point is
+   * aimless driving"): no route style on a loop. Its card offers the really different loops found, each named by the way
+   * it heads (fun_route.js loopWay, on the option as `way`; "Around here" when it circles its start) with its outline,
+   * time and corners. `o` = { kind: 'loop', list, picked }. [] with fewer than two loops: nothing to choose.
+   */
+  function loopCards(o) {
+    if (!o || o.kind !== 'loop' || !Array.isArray(o.list) || o.list.length < 2) return [];
+    return o.list.map((c, i) => {
+      const d = duration(c && c.timeS), n = cornersOf(c);
+      return { i, label: c && c.way && c.way.name ? c.way.name : 'Around here', time: d ? (d.unit === 'h' ? d.value : `${d.value} min`) : '--',
+        corners: n == null ? '--' : cornerWord(n), on: i === o.picked, outline: loopOutline(c && c.t) };
+    });
+  }
+
+  /**
    * The plan flow (finding 1): the card says so when the ranked route replaces the first one, and why, in the card's own
    * numbers: "Better route found: +8 min, 52 more corners". `now` and `was` are the two routes on the card ({ timeS, events }
    * or a candidate); `why` the engine's why line for the new one, said when time and corners don't tell the difference.
@@ -183,6 +218,6 @@
     return `${head}${bits.length ? `: ${bits.join(', ')}` : ''}`;
   }
 
-  const api = { duration, stats, profile, dial, count, levelCards, levelNote, pager, LEVEL_KEYS, cornersOf, swapNote, shape, factText, alongGlyph };
+  const api = { duration, stats, profile, dial, count, levelCards, levelNote, pager, loopCards, loopOutline, LEVEL_KEYS, cornersOf, swapNote, shape, factText, alongGlyph };
   if (typeof module !== 'undefined' && module.exports) module.exports = api; else root.ApexRouteCard = api;
 })(typeof window !== 'undefined' ? window : globalThis);

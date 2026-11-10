@@ -1,22 +1,23 @@
 # VETTA — CURRENT AGENT HANDOFF STATE
 
-## Session 2026-11-10 (fable-design-garage): the looks' shelf and the empty bay (claude/fable-design-garage, off origin/main 2fda3f8)
+## Session 2026-11-10 (fable-loops): loops lose Quick / Fun / Long way; the card offers which way to head (claude/fable-loops, off origin/main 7dee309)
 
-- [x] Design pass 4 (part of IDEAS U-49, "the Garage is a long page"). web/index.html: under `(hover: none) and
-  (pointer: coarse)` and not `html[data-type-size]`, `.theme-cards` is a sideways scroll-snap grid (88 % columns, edge
-  to edge, the preview tightened so each call stays on one line). Signed out the page went from 1861 to 1373 px.
-- [x] web/cockpit.js: `shelveLooks()` (after `renderThemePicker`) opens the shelf on the look in use and turns it only
-  when the look changes; the sheet's swipe-right-to-close ignores touches that start in `.theme-cards`. Signed out,
-  Your cars is `.empty-bay` (a dashed slot, a line, `Sign in` → `showView('friends')`).
-- [x] Tests: tests/test_garage_shelf.py (3); e2e "the Garage on a phone…" (isMobile: the shelf's geometry, one line per
-  call, a real touch turn and back with the sheet still open, Use keeps the card in view, large text stacks, the bay's
-  key opens sign-in). Also run: every flow matching "theme", "Garage", "Dynamic Type", "REVIEW.md 1.2".
-- e2e note: a flow that swipes must wait for the splash (`#boot`) to lift; `elementFromPoint` under the finger says so.
-- Next design chunks: "Can't reach Vetta" on People; the Co-driver / Night / The words blocks lower in the Garage.
-- [x] CI red on cdbd25a ("a turn of the thumb brings the next look": the shelf ended two cards on). Not main: the
-  e2e swipe has no pauses, so on a fast runner it is a fling, and a fling passed the next snap point (reproduced
-  locally with a 300 px drag in 4 moves; fails before, passes after). Fix in the product: `.theme-card
-  { scroll-snap-stop: always }`. The check is unchanged.
+- [x] The owner: "why do loops need a long way a fun and a quick? the whole point is aimless driving". web/cockpit.js:
+  `LOOP_STYLE = 'fun'` is the one style a loop is searched, costed, ranked and rerouted with (never `funLevel`);
+  `loopLevels` is gone, `loopOptions` returns `{ kind: 'loop', list, picked: 0 }` with no `levels`; `#routeCardFun` is
+  hidden unless `route_dest`; `takeLevel` is destination-only.
+- [x] Which way: web/fun_route.js `loopWay(t)` (bearing from the start to the length-weighted middle of the loop, 8
+  names, null when it circles the start) and `loopOffer(order, 3)` (the best, then loops 60+ degrees apart within 100
+  points, then any not the same length and time). web/route_card.js `loopCards(o)` and `loopOutline(t)`;
+  cockpit.js `paintLoopWays` draws `#routeCardWays` (`.rc-levels.rc-ways`, buttons `[data-way]`, a tap = `pickOption`).
+  Hidden with one loop. The page marks stay a destination's.
+- [x] Tests: tests/test_loop_ways.py (5); e2e "plan flow (b)" and "level cards" now say a loop has no level (the old
+  checks asked for the three cards), new flow "a loop's choices are which way to head…" on the graph fixture (level
+  left on Quick, 2-3 cards, a tap swaps the loop with the network off, largest text).
+- Left: fun_route.js `LOOP_LEVEL` / `LOOP_HWY` quick and max rows and route_engine.js `LOOP_USE_HIGHWAYS` are no longer
+  reached by the app (tests/test_plan_options.py still covers them); remove them if loops never get a style back.
+- Next: two cards can share a name (both "Southeast"); a finer name (16 points, or the road it is built on) if it reads
+  badly on real roads. The 1 hour / 2 hours loops sit in Options; the card's Length row is miles only.
 
 ## Session 2026-11-10 (fable-fix-join-scope): #332's page showed in the Garage too; scoped to People (claude/fable-fix-join-scope, off origin/main 6412cb5)
 
@@ -44,6 +45,24 @@
 - Next design chunks, from reading the screens: the route card stacks two pencil help lines under the levels; search
   says a plain "Routing…" while it waits; the Garage is a long page (IDEAS U-49); "Can't reach Vetta" on People is a
   heading and a button on blank paper.
+
+## Session 2026-11-10 (fable-design-garage): the looks' shelf and the empty bay (claude/fable-design-garage, off origin/main 2fda3f8)
+
+- [x] Design pass 4 (part of IDEAS U-49, "the Garage is a long page"). web/index.html: under `(hover: none) and
+  (pointer: coarse)` and not `html[data-type-size]`, `.theme-cards` is a sideways scroll-snap grid (88 % columns, edge
+  to edge, the preview tightened so each call stays on one line). Signed out the page went from 1861 to 1373 px.
+- [x] web/cockpit.js: `shelveLooks()` (after `renderThemePicker`) opens the shelf on the look in use and turns it only
+  when the look changes; the sheet's swipe-right-to-close ignores touches that start in `.theme-cards`. Signed out,
+  Your cars is `.empty-bay` (a dashed slot, a line, `Sign in` → `showView('friends')`).
+- [x] Tests: tests/test_garage_shelf.py (3); e2e "the Garage on a phone…" (isMobile: the shelf's geometry, one line per
+  call, a real touch turn and back with the sheet still open, Use keeps the card in view, large text stacks, the bay's
+  key opens sign-in). Also run: every flow matching "theme", "Garage", "Dynamic Type", "REVIEW.md 1.2".
+- e2e note: a flow that swipes must wait for the splash (`#boot`) to lift; `elementFromPoint` under the finger says so.
+- Next design chunks: "Can't reach Vetta" on People; the Co-driver / Night / The words blocks lower in the Garage.
+- [x] CI red on cdbd25a ("a turn of the thumb brings the next look": the shelf ended two cards on). Not main: the
+  e2e swipe has no pauses, so on a fast runner it is a fling, and a fling passed the next snap point (reproduced
+  locally with a 300 px drag in 4 moves; fails before, passes after). Fix in the product: `.theme-card
+  { scroll-snap-stop: always }`. The check is unchanged.
 
 ## Session 2026-11-10 (fable-tile-limits): HPMS limits under 25 mph are unknown; tile times take HPMS's posted limit (claude/fable-tile-limits, off origin/main f27a1fe)
 

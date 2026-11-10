@@ -4,22 +4,25 @@ Decisions Claude made for you, newest first. Each one says what was decided, why
 you reach one you've seen. If you disagree with a call, say so and it gets reversed; nothing here is hard to undo unless
 it says so. Things only you can do are in docs/OWNER_TODO.md.
 
-## 2026-11-10 (fable-design-garage): the Garage's looks stand on a shelf you turn sideways; Your cars signed out is an empty bay (claude/fable-design-garage)
+## 2026-11-10 (fable-loops): a loop has no Quick / Fun / Long way; its card offers its length and which way to head (claude/fable-loops)
 
-Design pass 4. The three look cards were stacked: 750 px of the Garage before you reached the voice picker. The calls:
-- **On a phone the looks stand side by side**, one in view with the edge of the next showing; a turn of the thumb
-  brings the next and it settles in place. The Garage is about a quarter shorter and the voice picker is on the
-  first screen. It opens on the look in use.
-- **A mouse, or large text, keeps the stack.** A mouse wheel can't turn a shelf, and a card of big words reads
-  better whole.
-- **A sideways drag on the shelf no longer closes the Garage** (a drag to the right anywhere else still does).
-- **Your cars, signed out, is an empty bay**: a pencil outline where a car will stand, "No car parked here yet",
-  and a Sign in key that opens People. It was a grey paragraph telling you to go to "(People)".
-- Undo: revert the PR.
+You asked: "why do loops need a long way a fun and a quick? the whole point is aimless driving". They don't. On a
+loop's card the three level cards are gone (on the test loop they were three copies of the same loop). A loop is now
+found one way whatever the destination level is set to: good roads, about the length you asked for, off the highways
+(the engine's Fun; someone whose level was Quick used to get loops that could be a quarter highway).
 
-Added after CI went red: a quick flick could fly the shelf past the next look to the last one (a turn of 260 px
-ended on Billet, not Tapedeck). Each look now stops the shelf (`scroll-snap-stop: always`): one look a turn, however
-fast the thumb. A drag of more than a whole card still goes as far as you drag it.
+What a loop's card offers instead is the loop's own: its length (as before), and which way to head. When the search
+finds really different loops, up to three are cards, each drawn as its own outline (north up, a dot where you start),
+named by where it goes (North, Southeast…; "Around here" when it circles the start), with its time and corners. A tap
+puts that loop on the map; nothing is planned again, so planning takes no longer. The second and third cards are loops
+that head somewhere else when one is within reach of the best (60 degrees apart, within 100 points), before any
+lookalike. With one loop found there are no cards: nothing to choose. Two loops can share a name (both Southeast);
+their outlines tell them apart.
+
+Not changed: the 1 hour / 2 hours loops and "My free time" in Options, and the ranking functions' Quick and Long way
+weights in fun_route.js (unused by the app now, still tested).
+
+Undo: revert the PR. To bring a level back for loops only, set `LOOP_STYLE` in web/cockpit.js.
 
 ## 2026-11-10 (fable-fix-join-scope): my mistake in #332, fixed: the signed-out People page also showed at the top of the Garage (claude/fable-fix-join-scope)
 
@@ -45,6 +48,23 @@ three boxed icons and a button, with two thirds of the phone left blank under th
 - **The Vetta logo is gone from this page.** It sat above Friends only, and the first-run screen already shows it.
 - **A waiting friend or crew link is a boxed line** above the keys, so it reads as the reason to sign in.
 - Undo: revert the PR; nothing is stored and no behaviour changed.
+
+## 2026-11-10 (fable-design-garage): the Garage's looks stand on a shelf you turn sideways; Your cars signed out is an empty bay (claude/fable-design-garage)
+
+Design pass 4. The three look cards were stacked: 750 px of the Garage before you reached the voice picker. The calls:
+- **On a phone the looks stand side by side**, one in view with the edge of the next showing; a turn of the thumb
+  brings the next and it settles in place. The Garage is about a quarter shorter and the voice picker is on the
+  first screen. It opens on the look in use.
+- **A mouse, or large text, keeps the stack.** A mouse wheel can't turn a shelf, and a card of big words reads
+  better whole.
+- **A sideways drag on the shelf no longer closes the Garage** (a drag to the right anywhere else still does).
+- **Your cars, signed out, is an empty bay**: a pencil outline where a car will stand, "No car parked here yet",
+  and a Sign in key that opens People. It was a grey paragraph telling you to go to "(People)".
+- Undo: revert the PR.
+
+Added after CI went red: a quick flick could fly the shelf past the next look to the last one (a turn of 260 px
+ended on Billet, not Tapedeck). Each look now stops the shelf (`scroll-snap-stop: always`): one look a turn, however
+fast the thumb. A drag of more than a whole card still goes as far as you drag it.
 
 ## 2026-11-10 (fable-tile-limits): posted limits from the government road inventory: junk out, good ones into travel times (claude/fable-tile-limits)
 
