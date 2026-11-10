@@ -110,8 +110,10 @@ def test_hpms_rows_with_one_geometry_merge_their_items():
 def test_an_hpms_limit_that_is_no_limit_is_unknown():
     """A state's "not reported" code (999, 0, 254) is nodata, never a 254 mph limit; real limits are kept as they are."""
     from tools.ctx_etl import build
-    assert [build.limit_or(v) for v in (25, "55", 85.0, 5)] == [25, 55, 85, 5]
+    assert [build.limit_or(v) for v in (25, "55", 85.0, 30)] == [25, 55, 85, 30]
     assert [build.limit_or(v) for v in (999, 254, 99, 0, 3, -1, None, "", float("nan"), "n/a")] == [255] * 10
+    # under 25 mph is a county's filler, not a sign (context_grid.js LIMIT_MPH has the measurement)
+    assert [build.limit_or(v) for v in (5, 10, 15, 20, 24)] == [255] * 5
 
 
 def test_acs_jam_values_are_unknown():

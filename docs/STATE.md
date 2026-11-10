@@ -1,18 +1,32 @@
 # VETTA — CURRENT AGENT HANDOFF STATE
 
-## Session 2026-11-10 (fable-design-pass): design pass 1, the empty Log and Stages pages and two Garage rows (claude/fable-design-pass, off origin/main ad4f1e4)
+## Session 2026-11-10 (fable-tile-limits): HPMS limits under 25 mph are unknown; tile times take HPMS's posted limit (claude/fable-tile-limits, off origin/main f27a1fe)
 
-- [x] Owner 2026-11-10: UI and UX polish is a main focus of the run ("designed by an artist, not a programmer").
-  Captured onboarding, the idle map, Layers, Garage, Settings, People (signed out), Log, Stages at 393x852 and read them.
-- [x] web/analysis.html: `#historyEmpty` is a `.first-page` (pencil sketch of the hero and one row, head, line, Start a
-  drive, Watch a replay first); the empty Stages list the same shape with a drawn stage; `.switch > button
-  { font-family: inherit; }` (Drives / Stages were Arial).
-- [x] web/index.html: Garage `.ctl-label` rows at 15/500; `#coNotesHere` is a `.co-row` with "Change in Layers".
-- Tests: tests/test_log_first_page.py (3), e2e "the empty Log is a first page..." (computed typeface, key sizes).
-- Seen and not yet done (next design chunks, in the order I would take them): the signed-out People page is a logo and
-  a button over two thirds of blank paper; the search sheet says "Routing..." in plain text where the route card will
-  be; MapLibre's attribution is the stock control (IDEAS U-53); the Garage is still a long settings page (U-49).
-- Exact next task: the signed-out People page and the search sheet's waiting state, then U-49.
+- [x] Deferred finding 1 (the fable-hpms-limits entry below: "the tiles' times use OSM's limit or the class estimate,
+  never HPMS's"). Measured first, every edge of the shipped tiles (169k of 100 m or more) against the shipped bundles:
+  where OSM and HPMS both post a limit they agree within 5 mph on 93 % (motorway), 98 % (trunk), 88 % (primary), 75 %
+  (secondary), 76 % (tertiary) of the km. A cover / one-value / class guard barely moves those numbers: the misses are
+  the two sources disagreeing (HPMS 55 where OSM signs 45, 38 km of secondary), not wrong matches.
+- [x] By HPMS value: 30 mph and up agree on 76-99 %, 25 on 77 %, 20 on 63 %, 15 on 0 %. Asked HPMS itself
+  (geo.dot.gov, HPMS_FULL_IN_2024): Switzerland County, Indiana reports 15 mph on every county road (f_system 6 and
+  7). web/route_ctx/context_grid.js `LIMIT_MPH` and tools/ctx_etl/build.py `LIMIT_MPH` are now 25-85: the reader
+  refuses the value in today's bundles, the writer stops storing it.
+- [x] tools/graph_etl/score_edges.js `inventoryLimit(limit, fclass, rc, use)`: for an edge OSM has no sign on, HPMS's
+  modal limit when it is matched on `INVENTORY.COVER` (0.5) of the 25 m samples and `SAME` (0.6) of those agree; never
+  for a ramp; a freeway section (fclass 1-2) only for a motorway or trunk edge. It feeds the time model and the tile's
+  `speed` (flag `speed_est` clear: the phone already reads HPMS as posted in the engine's chain). In the model hash.
+- Not done: the "Graph region" rebuild (owner or coordinator: it commits to the data branch; the expressway flag waits
+  for the same run). Until then tiles keep today's times and baked quality; the reader's floor works at once.
+- Seen, not changed: Indiana HPMS 25-30 mph on rural roads (State Line Road 10.7 km at 25, Johnson Fork, Seeley,
+  Pinhook at 30) look low against OSM where both exist (Georgetown, Pribble: HPMS 25, OSM 35), but can't be told from
+  real town limits by value. A density-aware rule (a limit of 30 or less in open country) is the candidate; it needs
+  ground truth first.
+- Tests: test_travel_time_takes_the_road_inventorys_posted_limit_where_the_map_has_no_sign (unit cases and a real
+  shipped secondary edge, with and without the bundles), the two "no limit" tests extended to the 25 floor (the
+  shipped bundles hold over 100 such spans); pytest 1370 passed, 5 skipped. No web flow touched (no phone code path
+  but the reader's range): e2e own routing flows run below.
+- Exact next task: run "Graph region", then tools/live_speed.js on the owner's trips at Fun and Long way against the
+  new tiles (times on primary roads move about 3 %).
 
 ## Session 2026-11-09 (fable-road-carry): road data survives no signal and a closed app (claude/fable-road-carry, off origin/main 3a74cc3)
 
@@ -51,6 +65,24 @@
 - Exact next task: the deferred round-1 items: HPMS posted limits in the graph ETL edge time (after #321 merges and the
   region rebuild), then Hamilton Ave quality 0.47-0.54.
 
+## Session 2026-11-10 (fable-surface-map): Measured roads coloured by measured pavement, tap for words (claude/fable-surface-map, off origin/main f27a1fe)
+
+- [x] IDEAS U-13 (the surface half; the twisty half was the Twisty roads switch). `GET /api/coverage` has sent each
+  direction's mean roughness and banked / off-camber shares since the stage-discovery work, and the map drew none of it.
+  web/coverage.js: `reading(w)` (the surer direction's numbers, both averaged on a tie), `surface(rough)` (1 smooth under
+  `SMOOTH_G` 0.10 g, 3 rough over `ROUGH_G` 0.22 g, 2 fair, 0 not measured), `describe(w)` (the tap's words), feature
+  properties `{ t, s, way }`, and `add` now redraws when a road's numbers change, not only its confidence.
+- [x] web/cockpit.js: `apex-coverage` `line-color` is a match on `s` over the theme's gain / amber / signal / dim (all
+  three looks, day and night); a tap on a measured road toasts `describe` unless a route, option or stage line is under
+  the finger or tap-to-route is armed; the switch's toast names the colours and the tap.
+- Not done: a per-bin surface (the line is one colour per road, the server's per-direction mean); a drawn legend (the
+  switch's toast and the tap carry it); the scale lives in two files (coverage.js and route_story.js, held together by
+  test_the_scale_is_the_route_overviews) because route_story.js was in another open PR.
+- Tests: tests/test_coverage.py 7 (classes, surer direction, words, redraw, the shared scale); e2e "measured roads" flow
+  extended (colour property, four theme colours in the paint, a tap says the words); pytest 1375 passed, 5 skipped.
+- Exact next task: unchanged (tools/live_speed.js on the owner's trips at Fun and Long way). #321 is merged: the tiles'
+  travel times from HPMS posted limits (the fable-hpms-limits entry below) is unblocked once the region is rebuilt.
+
 ## Session 2026-11-09 (fable-overview): the drive overview read against real trips (claude/fable-overview, off origin/main 1d97979)
 
 - [x] The overview's "exact next task" (read it on real routes, tune `ApexRouteStory.T`), on ten public trips planned in
@@ -76,6 +108,21 @@
   tools/story_live.js runs: the grid's channels and the new lines 1-3 s after the card). Posted limits are known on few
   of these roads, so most leads say no speed. The owner's own trips still unread.
 - Exact next task: an e2e flow for the overview's refresh once #319 is merged; the owner reads the overview on his trips.
+
+## Session 2026-11-10 (fable-hazard-alive): a repeated "still there" keeps a hazard alive (claude/fable-hazard-alive, off origin/main f27a1fe)
+
+- [x] Found reading backend/src/hazards.ts `vote`: a person's second "still there" on the same report returned early
+  ("the same vote twice counts once") without moving `expires_at`, and the reporter's own (a repeat report within
+  SAME_M lands in `vote`) moved nothing either. The page asks again on every drive (hazard_reports.js createPassWatch
+  keeps `asked` per page), so those answers were thrown away: a report lived only as long as NEW people kept arriving.
+- [x] Now any "still" sets `expires_at = MAX(expires_at, now + the kind's life)`; `confirms` moves only on a person's
+  first "still" (never for the reporter, whose report is the first confirmation). "Gone" and the ending rule are
+  unchanged. No migration, no client change.
+- Tests: backend/test/hazards.test.ts "seen again by the same person" (second vote, the reporter's repeat report, a
+  doubled "gone", an ended report stays ended); backend vitest 358 passed, tsc clean.
+- Seen, not changed: the reporter is never asked about their own report and can't take it back; their "gone" through
+  the API leaves their own confirmation counted. No screen reaches that path today.
+- Exact next task: unchanged.
 
 ## Session 2026-11-09 (fable-expressway): expressways below trunk class are highways to Fun and Long way (claude/fable-expressway, off origin/main 1d97979)
 
@@ -182,6 +229,20 @@
   apply to destination plans only (not loops, reroutes or Best roads nearby).
 - Exact next task: unchanged from engine-rank below (tools/live_speed.js on the owner's trips at Fun and Long way); the
   owner can now do the same on the phone with the Dev panel and paste its JSON.
+
+## Session 2026-11-10 (fable-design-pass): design pass 1, the empty Log and Stages pages and two Garage rows (claude/fable-design-pass, off origin/main ad4f1e4)
+
+- [x] Owner 2026-11-10: UI and UX polish is a main focus of the run ("designed by an artist, not a programmer").
+  Captured onboarding, the idle map, Layers, Garage, Settings, People (signed out), Log, Stages at 393x852 and read them.
+- [x] web/analysis.html: `#historyEmpty` is a `.first-page` (pencil sketch of the hero and one row, head, line, Start a
+  drive, Watch a replay first); the empty Stages list the same shape with a drawn stage; `.switch > button
+  { font-family: inherit; }` (Drives / Stages were Arial).
+- [x] web/index.html: Garage `.ctl-label` rows at 15/500; `#coNotesHere` is a `.co-row` with "Change in Layers".
+- Tests: tests/test_log_first_page.py (3), e2e "the empty Log is a first page..." (computed typeface, key sizes).
+- Seen and not yet done (next design chunks, in the order I would take them): the signed-out People page is a logo and
+  a button over two thirds of blank paper; the search sheet says "Routing..." in plain text where the route card will
+  be; MapLibre's attribution is the stock control (IDEAS U-53); the Garage is still a long settings page (U-49).
+- Exact next task: the signed-out People page and the search sheet's waiting state, then U-49.
 
 ## Session 2026-11-09 (drive-overview): "What this drive is like" on the route card (claude/drive-overview, off origin/main 01a0423)
 

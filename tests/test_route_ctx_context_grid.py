@@ -224,12 +224,13 @@ def test_offline_areas_save_the_bundles_with_the_map():
 
 def test_an_hpms_limit_that_is_no_limit_reads_as_unknown():
     """Bundles built before 2026-11-09 hold a state's "not reported" code clamped to 254 mph. The reader gives unknown for
-    anything outside 5-85 mph, and no span of the shipped bundles reads as a limit outside it (281 of them hold 254)."""
+    anything outside 25-85 mph, and no span of the shipped bundles reads as a limit outside it (281 of them hold 254).
+    Under 25 is a county's filler (15 mph for every county road of one Indiana county), not a sign: unknown too."""
     js = r"""
 const path = require('path'), fs = require('fs'), zlib = require('zlib'), ROOT = process.argv[1];
 globalThis.ApexCore = require(path.join(ROOT, 'web/apex_core.js'));
 const G = require(path.join(ROOT, 'web/route_ctx/context_grid.js'));
-const fake = { header: { lines: { attrs: { speed_limit: { array: 'a', nodata: 255 }, lanes: { array: 'l', nodata: 255 } } } }, arrays: { a: [254, 3, 55, 255, 90, 85, 5, 0], l: [254, 2, 255, 1, 1, 1, 1, 1] } };
+const fake = { header: { lines: { attrs: { speed_limit: { array: 'a', nodata: 255 }, lanes: { array: 'l', nodata: 255 } } } }, arrays: { a: [254, 3, 55, 255, 90, 85, 5, 0, 15, 20, 24, 25], l: [254, 2, 255, 1, 1, 1, 1, 1, 1, 1, 1, 1] } };
 const out = { unit: fake.arrays.a.map((_, s) => G.lineValue({ s, bundle: fake }, 'speed_limit')), lanes: [0, 1, 2].map((s) => G.lineValue({ s, bundle: fake }, 'lanes')), raw254: 0, bad: 0, known: 0 };
 const dir = path.join(ROOT, 'web/data/ctx/v1'), ix = JSON.parse(fs.readFileSync(path.join(dir, 'index.json'), 'utf8'));
 for (const key of Object.keys(ix.bundles)) {
@@ -237,13 +238,14 @@ for (const key of Object.keys(ix.bundles)) {
   const g = G.parse(new Uint8Array(b.buffer, b.byteOffset, b.length)), A = g.header.lines && g.header.lines.attrs.speed_limit;
   if (!A) continue;
   const arr = g.arrays[A.array];
-  for (let s = 0; s < arr.length; s++) { if (arr[s] === 254) out.raw254++; const v = G.lineValue({ s, bundle: g }, 'speed_limit'); if (Number.isFinite(v)) { out.known++; if (v < 5 || v > 85) out.bad++; } }
+  for (let s = 0; s < arr.length; s++) { if (arr[s] === 254) out.raw254++; const v = G.lineValue({ s, bundle: g }, 'speed_limit'); if (Number.isFinite(v)) { out.known++; if (v < 25 || v > 85) out.bad++; } else if (arr[s] >= 5 && arr[s] < 25) out.filler = (out.filler || 0) + 1; }
 }
 console.log(JSON.stringify(out));
 """
     r = subprocess.run([NODE, "-e", js, ROOT], capture_output=True, text=True, timeout=120)
     assert r.returncode == 0, r.stderr
     o = json.loads(r.stdout)
-    assert o["unit"] == [None, None, 55, None, None, 85, 5, None], o["unit"]      # NaN is null in JSON
+    assert o["unit"] == [None, None, 55, None, None, 85, None, None, None, None, None, 25], o["unit"]      # NaN is null in JSON
+    assert o["filler"] > 100, "the shipped bundles hold such values (Switzerland County, Indiana: 15 mph on every road)"
     assert o["lanes"] == [254, 2, None], "only the limit is range-checked"
     assert o["known"] > 10000 and o["bad"] == 0, o

@@ -420,7 +420,8 @@
       if (has('apex-alt')) map.setPaintProperty('apex-alt', 'line-color', C.route);
       if (has('apex-explore')) map.setPaintProperty('apex-explore', 'line-color', C.route);
       if (has('apex-twisty')) map.setPaintProperty('apex-twisty', 'line-color', C.amber);
-      if (has('apex-coverage')) map.setPaintProperty('apex-coverage', 'line-color', C.gain);
+      // Measured roads by the pavement measured there (coverage.js surface): smooth, fair, rough; ink where roughness is unknown
+      if (has('apex-coverage')) map.setPaintProperty('apex-coverage', 'line-color', ['match', ['get', 's'], 1, C.gain, 2, C.amber, 3, C.signal, C.dim]);
     }
 
     function addApexLayers() {
@@ -725,6 +726,13 @@
         if (map.queryRenderedFeatures(e.point, { layers: ['apex-route'] }).length) return;   // a shared stretch: the drawn route wins
         suppressMapClickUntil = Date.now() + 400;
         pickOption(e.features[0].properties.i);
+      });
+      // Tap a measured road for what members measured there, in words (the colour is never the only way to read it).
+      map.on('click', 'apex-coverage', (e) => {
+        if (state.tapToRoute || Date.now() < suppressMapClickUntil || !e.features || !e.features.length) return;
+        if (map.queryRenderedFeatures(e.point, { layers: ['apex-route', 'apex-alt', 'apex-explore'].filter((id) => map.getLayer(id)) }).length) return;   // a route drawn over it wins the tap
+        const say = ApexCoverage.describe(coverage.cache.get(e.features[0].properties.way));
+        if (say) toast(say);
       });
       map.on('click', 'apex-explore', (e) => {
         if (state.tapToRoute || !e.features || !e.features.length) return;
@@ -7049,7 +7057,7 @@
       }
       if (k === 'coverage') {
         updateCoverage();
-        if (state.toggles.coverage) toast(mapReady && map.getZoom() < ApexCoverage.MIN_ZOOM ? 'Zoom in to see measured roads.' : 'Green: measured roads, bolder the surer. A road without a line is waiting for a pioneer: the first drivers to map it earn extra points.');
+        if (state.toggles.coverage) toast(mapReady && map.getZoom() < ApexCoverage.MIN_ZOOM ? 'Zoom in to see measured roads.' : 'Measured roads: green smooth, amber fair, red rough, bolder the surer. Tap one for what was measured. A road without a line is waiting for a pioneer: the first drivers to map it earn extra points.');
       }
       if (k === 'nudge') nudgeSwitched();                              // panel R-1: asks for notifications only now
       if (k === 'twisty') {

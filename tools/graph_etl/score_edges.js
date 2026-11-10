@@ -13,7 +13,7 @@
 // Out: a first line { meta: { model, files } }, then per edge { k, q, s, c, f, t, v, est }: quality and scenery (0..1,
 // the length-weighted mean of the known samples, null when none), c the engine's confidence (share of the weight known),
 // f the gated corner points (sum of corner weight x quality gate, corners whose apex lies on this edge), t seconds,
-// v the posted limit (or the class estimate, est 1) in km/h.
+// v the posted limit (OSM's sign, else the road inventory's: inventoryLimit) or the class estimate (est 1) in km/h.
 'use strict';
 const path = require('path');
 const fs = require('fs');
@@ -40,9 +40,42 @@ const Engine = require(path.join(ROOT, 'web/route_engine.js'));
 // at a comfortable lateral grip (MU_TRAVEL, well under the pace-note envelope's 0.6), braking into them at 2.5 m/s²
 // and accelerating out at 1.5; the point features inside the edge add their delay (build.py DELAY_S). The edge's end
 // nodes (signals, stops, the turn) are the router's turn cost at query time, not here.
+// The posted limit: OSM's sign where the map has one, else the road inventory's (HPMS, the context grid's
+// hpms_speed_limit, which the engine's own chain already reads as posted) where it holds one for the edge
+// (inventoryLimit), else the class estimate.
 const MU_TRAVEL = 0.3, BRAKE = 2.5, ACCEL = 1.5, MIN_MPS = 2;
+// Measured on the shipped Cincinnati tiles against the shipped bundles (2026-11-10): HPMS posts a limit on 41 % of the
+// primary and 36 % of the secondary km the map has no sign for (9 % of tertiary), and where both post one they agree
+// within 5 mph on 75-98 % of the km by class; the class estimate is off by more than 5 mph on a third (primary) to four
+// fifths (secondary) of the km HPMS knows.
+// INVENTORY: HPMS must be matched on COVER of the edge's samples and SAME of those must hold one value (a road that only
+// crosses or briefly runs beside another takes nothing from it; an edge whose limit changes halfway keeps the estimate).
+// A ramp keeps its estimate (it matches the road it leaves), and a freeway section's limit (functional class 1-2) goes
+// only to a motorway or trunk edge, never to the road beside or under it.
+const INVENTORY = { COVER: 0.5, SAME: 0.6, MPH: 1.609344 };
 const FLOW = { 0: 1.05, 1: 1.03, 2: 1.0, 3: 1.0, 4: 0.97, 5: 0.92, 6: 0.85, 7: 0.75 };
 const FERRY_MPS = 4, FERRY_WAIT_S = 300;
+
+/**
+ * The limit (km/h) the road inventory posts for an edge the map has no sign on, or null: `limit` and `fclass` are the
+ * grid's hpms_speed_limit (mph) and hpms_fclass per 25 m sample (NaN where unmatched or unknown), rc / use the edge's.
+ */
+function inventoryLimit(limit, fclass, rc, use) {
+  if (!limit || !limit.length || use === Router.ROAD_USE.ramp) return null;
+  const n = limit.length, count = new Map();
+  let known = 0;
+  for (let i = 0; i < n; i++) if (Number.isFinite(limit[i])) { known++; count.set(limit[i], (count.get(limit[i]) || 0) + 1); }
+  if (!(known >= INVENTORY.COVER * n)) return null;
+  let mph = null, most = 0;
+  for (const [v, c] of count) if (c > most || (c === most && v < mph)) { most = c; mph = v; }
+  if (!(most >= INVENTORY.SAME * known)) return null;
+  if (!(rc <= 1)) {                                                   // not a motorway or trunk edge: the section it matched must not be a freeway
+    let fwy = 0;
+    for (let i = 0; i < n; i++) if (limit[i] === mph && fclass && (fclass[i] === 1 || fclass[i] === 2)) fwy++;
+    if (fwy > most / 2) return null;
+  }
+  return mph * INVENTORY.MPH;
+}
 
 function args() {
   const a = {}, v = process.argv.slice(2);
@@ -53,7 +86,7 @@ function args() {
 function modelHash() {
   const strip = (t) => ({ ch: t.ch, w: t.w, family: t.family, unless: t.unless || null, probe: [0, 0.5, 1, 2, 5, 10, 30, 56, 72, 89, 105, 1000].map((x) => { try { const g = t.g(x); return Number.isFinite(g) ? +g.toFixed(4) : null; } catch (_) { return null; } }) });
   const body = JSON.stringify({ v: Engine.VERSION, Q: Engine.QUALITY.map(strip), S: Engine.SCENERY.map(strip), W: Engine.W,
-    corners: ['HP', 1, 2, 3, 4, 5, 6].map((s) => FunRoute.cornerWeight(s)), time: { MU_TRAVEL, BRAKE, ACCEL, FLOW } });
+    corners: ['HP', 1, 2, 3, 4, 5, 6].map((s) => FunRoute.cornerWeight(s)), time: { MU_TRAVEL, BRAKE, ACCEL, FLOW, INVENTORY, limit: Grid.LIMIT_MPH } });
   return crypto.createHash('sha256').update(body).digest('hex');
 }
 
@@ -108,15 +141,17 @@ function score(rec, src) {
   const n = c.distM.length, ch = {};
   for (const [k, v] of Object.entries(rec.ch || {})) if (v != null) ch[k] = fill(n, v);
   for (const [k, arr] of Object.entries(rec.smp || {})) ch[k] = arr.length === n ? Float32Array.from(arr, (x) => (x == null ? NaN : x)) : resampleTo(arr, n);
-  // the speed limit: posted where OSM has it, else the app's class estimate (router_edges.js), flagged
-  const posted = rec.ch && Number.isFinite(rec.ch.speed_limit_kph) ? rec.ch.speed_limit_kph : null;
+  // the speed limit: posted where OSM has it (or, below, where the road inventory does), else the app's class estimate
+  // (router_edges.js), flagged
+  const signed = rec.ch && Number.isFinite(rec.ch.speed_limit_kph) ? rec.ch.speed_limit_kph : null;
   const rc = rec.ch && rec.ch.road_class, use = rec.ch && rec.ch.road_use;
-  if (posted == null) ch.speed_limit_est_kph = Float32Array.from({ length: n }, (_, i) => { const e = Router.estimateLimit(rc, use, ch.density ? ch.density[i] : NaN); return e == null ? NaN : e; });
+  if (signed == null) ch.speed_limit_est_kph = Float32Array.from({ length: n }, (_, i) => { const e = Router.estimateLimit(rc, use, ch.density ? ch.density[i] : NaN); return e == null ? NaN : e; });
   if (NameAge && rec.name) { const r = NameAge.score(rec.name, rec.hw); if (r && Number.isFinite(r.score)) ch.name_age = fill(n, r.score); }
   if (src.grid.size) {
     const g = Grid.sampleCorridor(src.grid, c);
     for (const [k, v] of Object.entries(g.channels)) if (v.some(Number.isFinite)) ch[k] = v;
   }
+  const posted = signed != null ? signed : inventoryLimit(ch.hpms_speed_limit, ch.hpms_fclass, rc, use);
   if (src.dem) {
     const d = Dem.channelsFrom(c, Dem.sampler(src.dem));
     if (d.status !== 'unavailable') for (const [k, v] of Object.entries(d.channels)) ch[k] = v;
@@ -200,4 +235,4 @@ async function main() {
   console.log(`  scored ${k} edges in ${((Date.now() - t0) / 1000).toFixed(0)} s (grid bundles ${src.grid.size}, DEM ${src.dem ? 'on' : 'off'})`);
 }
 if (require.main === module) main().catch((e) => { console.error(e); process.exit(1); });
-module.exports = { score, modelHash, gridBundles, demTiles };
+module.exports = { score, modelHash, gridBundles, demTiles, inventoryLimit, INVENTORY };
