@@ -235,6 +235,56 @@ describe("convoy: socket authentication", () => {
     expect(c.closed).toBeNull();
   });
 
+  it("the leader keeps it going another hour in its last half hour, up to six hours; everyone is told", async () => {
+    const lead = await makeUser("lead"), mate = await makeUser("mate");
+    const made = await create(lead), id = made.context.sessionId as string;
+    await ok(join(mate, made.invite));
+    const start = made.context.expiresAtMs as number - LIMITS.roomMs;
+    expect(made.context.maxExpiresAtMs).toBe(start + LIMITS.roomMaxMs);
+    expect(made.context.keepWindowMs).toBe(LIMITS.keepWindowMs);
+    const keep = (u: TestUser) => api(u, "POST", `/api/convoy/${id}/keep`);
+    const setEnd = (ms: number) => runInDurableObject(stub(id), async (inst, state) => {
+      const room = (await state.storage.get<Msg>("room"))!; room.expiresAt = ms; await state.storage.put("room", room);
+      (inst as unknown as { room: Msg }).room.expiresAt = ms;
+    });
+    // with most of its two hours left: not yet, and never a member's to ask
+    expect((await keep(lead)).status).toBe(409);
+    expect((await keep(mate)).status).toBe(404);
+    const l = await connect(lead, id), m = await connect(mate, id);
+    // twenty minutes left: one more hour from its end, told to everyone connected, the leader included
+    const end1 = Date.now() + 20 * 60_000;
+    await setEnd(end1);
+    expect((await keep(mate)).status).toBe(404);
+    const kept = await json(keep(lead));
+    expect(kept).toEqual({ expiresAtMs: end1 + LIMITS.keepMs, maxExpiresAtMs: start + LIMITS.roomMaxMs });
+    expect((await m.next("extended")).expiresAtMs).toBe(end1 + LIMITS.keepMs);
+    expect((await l.next("extended")).maxExpiresAtMs).toBe(start + LIMITS.roomMaxMs);
+    expect((await json(api(mate, "GET", `/api/convoy/${id}`))).expiresAtMs).toBe(end1 + LIMITS.keepMs);
+    expect((await keep(lead)).status).toBe(409);                                       // an hour and twenty left again: too early
+    // the alarm moved with it: at the old end it does not end the convoy
+    await runDurableObjectAlarm(stub(id));
+    expect((await api(mate, "GET", `/api/convoy/${id}`)).status).toBe(200);
+    // each member's index holds the new end, so a block or a sign-out still finds the convoy after the old one
+    const ends = await runInDurableObject(env.CONVOY_INDEX.get(env.CONVOY_INDEX.idFromName(mate.id)), (_i, state) => state.storage.get<Record<string, number>>("convoys"));
+    expect(ends![id]).toBe(end1 + LIMITS.keepMs);
+    // it survives a restart (kept in storage, not only in memory)
+    l.ws.close(1000, "bye"); m.ws.close(1000, "bye");
+    await evictDurableObject(stub(id));
+    expect((await json(api(lead, "GET", `/api/convoy/${id}`))).expiresAtMs).toBe(end1 + LIMITS.keepMs);
+    // near the six-hour limit: only up to it, then no more
+    await setEnd(start + LIMITS.roomMaxMs - 10 * 60_000);
+    await runInDurableObject(stub(id), async (inst, state) => {                         // six hours on: move its start back instead of waiting
+      const room = (await state.storage.get<Msg>("room"))!; room.createdAt = Date.now() + 15 * 60_000 - LIMITS.roomMaxMs; room.expiresAt = Date.now() + 5 * 60_000;
+      await state.storage.put("room", room); Object.assign((inst as unknown as { room: Msg }).room, room);
+    });
+    const last = await json(keep(lead));
+    expect(last.expiresAtMs).toBe(last.maxExpiresAtMs);
+    expect(last.expiresAtMs - Date.now()).toBeLessThan(16 * 60_000);
+    const full = await keep(lead);
+    expect(full.status).toBe(409);
+    expect(((await full.json()) as Msg).error).toBe("convoy_at_limit");
+  });
+
   it("an expired ticket is refused", async () => {
     const { f1, id } = await convoyOfThree();
     const t = await ticket(f1, id);

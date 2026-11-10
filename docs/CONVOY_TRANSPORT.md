@@ -18,7 +18,11 @@ records where the build differs from the draft that follows, and why.
   leader's planned route, versioned; progress along it is what followers compare.
 - Live positions (lat, lon, heading, speed, progress on the shared route) go to the other members only, at most one per
   400 ms per member, kept in memory for 2 min. Regroup point: leader only.
-- Context is `{ sessionId, name, leaderEpoch, leaderKey, role, you, expiresAtMs, seq, members }`. Members are shown by a
+- Keep going (2026-11-10): a room lives 2 h; in its last 30 min the leader may `POST /api/convoy/:id/keep` for one more
+  hour, until it is 6 h old (`LIMITS.keepMs`, `keepWindowMs`, `roomMaxMs`; 409 `too_early` / `convoy_at_limit`). The
+  room's alarm and every member's ConvoyIndex entry move with it, and every open socket gets
+  `{ type: "extended", expiresAtMs, maxExpiresAtMs }`. The phone tells everyone ten minutes before the end.
+- Context is `{ sessionId, name, leaderEpoch, leaderKey, role, you, expiresAtMs, maxExpiresAtMs, keepWindowMs, seq, members }`. Members are shown by a
   per-convoy key, handle and name; account ids never leave the server. A new member gets every live hazard (they are
   behind the leader, which is exactly who needs them); a reconnecting client passes `{epoch, afterSeq}` to skip what it has.
 - Persisted: room, member keys/roles, left/removed lists. Names are read from the accounts, not stored. A second object

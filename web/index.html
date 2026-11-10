@@ -251,6 +251,15 @@
     #map.unstyled .maplibregl-canvas { opacity: 0; }
     .maplibregl-ctrl-top-left, .maplibregl-ctrl-top-right, .maplibregl-ctrl-bottom-left { display: none !important; }
     .maplibregl-ctrl-attrib { font-size: 10px; }
+    /* The map's credit (IDEAS U-53, design pass 2026-11-10): the one stock control on the page, a white pill with a round black
+       "i". On the page's own tokens: a square paper plate ruled in ink, the "i" set in the number face, dark in the dark looks. */
+    #map .maplibregl-ctrl-attrib.maplibregl-compact { min-height: 24px; margin: 0 10px 10px 0; padding: 2px 28px 2px 8px; border-radius: 0; background: var(--panel); color: var(--panel-ink); border: 1.5px solid var(--panel-ink); font-family: var(--font-ui); }
+    #map .maplibregl-ctrl-attrib.maplibregl-compact:not(.maplibregl-compact-show) { padding: 0; width: 24px; background: var(--panel); }
+    #map .maplibregl-ctrl-attrib a { color: var(--panel-ink); text-decoration: underline; }
+    #map .maplibregl-ctrl-attrib-button { top: 0; right: 0; width: 24px; height: 24px; border-radius: 0; background: none; display: grid; place-items: center; }
+    #map .maplibregl-ctrl-attrib-button:focus { box-shadow: none; } #map .maplibregl-ctrl-attrib-button:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+    #map .maplibregl-ctrl-attrib-button::before { content: "i"; font: 700 15px/1 var(--font-num); color: var(--panel-ink); }
+    #map .maplibregl-ctrl-attrib.maplibregl-compact-show .maplibregl-ctrl-attrib-button { background: none; border-left: 1.5px solid var(--panel-ink); }
     .plates { position: absolute; left: 10px; bottom: 10px; z-index: 4; display: flex; flex-wrap: wrap; gap: 6px; max-width: calc(100% - 90px); }
     .trial-plate { font-variant-numeric: tabular-nums; } .trial-plate .linkbtn { font: inherit; color: inherit; text-decoration: underline; padding: 0; min-height: 0; }
     .plate { background: var(--panel); color: var(--panel-ink); border: 1px solid var(--rule); padding: 8px 12px; font-size: 13px; font-weight: 600; min-height: 36px; }
@@ -559,6 +568,11 @@
     .sw span { font-size: 11px; font-weight: 600; color: var(--panel-dim); }
     @media (prefers-reduced-motion: reduce) { .sw i, .sw i::after { transition: none; } }
     .sheet .sw, .edge-panel .sw, .side-pop .sw { display: flex; flex-direction: row-reverse; justify-content: space-between; align-items: center; width: 100%; min-height: 48px; padding: 0; border-top: 1px solid var(--hair, var(--panel-dim)); }
+    /* Garage rows under a section's head (design pass 2026-11-10): a control's label is a row label, the size and weight of the
+       switches beside it. "Night" at 18/800 outranked its own section head, "Co-driver". */
+    .sheet section[data-panel="garage"] .ctl-label { font-size: 15px; font-weight: 500; }
+    .co-row { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 0 12px; margin: 0; min-height: 44px; font-size: 15px; font-weight: 500; }
+    .co-row .linkbtn { flex: 0 1 auto; max-width: 100%; white-space: normal; text-align: left; }   /* at a large text size the key drops under the words, whole */
     .sheet .sw span, .edge-panel .sw span, .side-pop .sw span { font-size: 15px; font-weight: 500; color: var(--panel-ink); text-align: left; }
     .sw.on span { color: var(--panel-ink); }
     .sw[hidden], .sheet .sw[hidden], .edge-panel .sw[hidden], .side-pop .sw[hidden] { display: none; }   /* a switch only some accounts get (Satellite) */
@@ -646,6 +660,15 @@
     .rc-levels > button.further .rc-lv { font: 600 15px/1.2 var(--font-ui); color: var(--panel-dim); white-space: normal; }
     .rc-levels-note { margin: 6px 0 0; font-size: 15px; line-height: 1.3; color: var(--panel-dim); }
     .rc-levels-note[hidden] { display: none; }
+    /* the routes found, as page marks: the one on screen a long inked stroke, the others short pencil ones, then the count */
+    .rc-pager { display: flex; align-items: center; gap: 5px; min-height: 22px; margin: 8px 0 0; }
+    .rc-pager[hidden] { display: none; }
+    .rc-pager i { width: 7px; height: 3px; background: var(--panel-dim); opacity: 0.55; transition: width 0.18s cubic-bezier(0.2, 0.8, 0.2, 1), background-color 0.18s; }
+    .rc-pager i.on { width: 22px; background: var(--panel-ink); opacity: 1; }
+    .rc-pager span { margin-left: 6px; font: 600 15px/1 var(--font-num); letter-spacing: 0.04em; color: var(--panel-ink); }
+    .rc-pager small { margin-left: 8px; font-size: 14px; line-height: 1.2; color: var(--panel-dim); }
+    .rc-pager + .rc-levels-note { margin-top: 2px; } .rc-pager ~ .rc-via { margin-top: 2px; }
+    @media (prefers-reduced-motion: reduce) { .rc-pager i { transition: none; } }
     .rc-go { display: grid; grid-template-columns: 1.4fr 1fr; gap: 10px; margin-top: 14px; }
     /* U-70 / the plan flow (finding 2): Start is the card's foot, outside its scroll, so nothing that loads above it (the
        profile, the facts, a re-rank) moves it; the card's body ends above it */
@@ -845,9 +868,34 @@
     .your-road b, .your-road small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     @media (max-height: 540px) and (orientation: landscape) { #app.idle .loop-suggest.your-road { display: none !important; } }
     #hzReportBtn.undo { background: var(--hz-bg); color: var(--hz-ink); border: 2px solid var(--hz-edge); }
-    .crew-gets { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; margin: 4px 0 8px; }
-    .crew-gets span { display: grid; justify-items: center; gap: 6px; font-size: 13px; font-weight: 600; text-align: center; }
-    .crew-gets svg { width: 34px; height: 34px; fill: none; stroke: var(--panel-ink); stroke-width: 1.8; stroke-linecap: round; border: 1.5px solid var(--panel-ink); padding: 4px; }
+    /* People, signed out (the owner, 2026-11-10: "designed by an artist"): a page with a drawing, a name set large, three rows shaped
+       like the friends list that will stand here, and the sign-in at the foot where the thumb is. One page for both sides. */
+    /* Only on People: the page is built signed out whatever tab is open, and an id's `display` would outrank the rule that
+       hides the other tabs' panels (it showed the whole page at the top of the Garage). */
+    .sheet[data-view="people"] .body:has(.join-page) { flex: 1 1 auto; }   /* the page fills the sheet, so the sign-in stands at its foot */
+    .sheet[data-view="people"] #accountSection:has(.join-page) { display: grid; }
+    .join-page { display: flex; flex-direction: column; }
+    .join-art { margin: -14px -16px 0; border-bottom: 1px solid var(--hair, var(--panel-dim)); line-height: 0; }
+    .join-art svg { display: block; width: 100%; height: auto; aspect-ratio: 360 / 128; }
+    .join-art path { fill: none; stroke-linecap: round; }
+    .join-art .jr-case { stroke: var(--panel-ink); stroke-width: 11; }
+    .join-art .jr-fill { stroke: var(--panel); stroke-width: 7; }
+    .join-art .jr-puck { fill: var(--panel-ink); stroke: var(--panel); stroke-width: 2.5; }
+    .join-art .jr-puck.lead { fill: var(--accent); }
+    #accountSection .join-head { margin: 22px 0 0; padding: 0; border: 0; font: 700 34px/1.02 var(--font-num); letter-spacing: 0.005em; text-transform: none; }
+    .join-line { margin: 8px 0 0; font-size: 15px; line-height: 1.4; color: var(--panel-dim); }
+    .join-gets { list-style: none; margin: 18px 0 0; padding: 0; border-top: 1px solid var(--hair, var(--panel-dim)); }
+    .join-gets li { display: grid; grid-template-columns: 44px minmax(0, 1fr); column-gap: 12px; align-items: center; min-height: 64px; padding: 9px 2px; border-bottom: 1px solid var(--hair, var(--panel-dim)); }
+    .join-gets .jg-glyph { grid-row: 1 / 3; display: grid; place-items: center; width: 44px; height: 44px; border: 1.5px dashed var(--panel-dim); border-radius: 50%; }
+    .join-gets svg { width: 24px; height: 24px; fill: none; stroke: var(--panel-ink); stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
+    .join-gets b { align-self: end; font-size: 16px; font-weight: 600; }
+    .join-gets small { align-self: start; margin-top: 2px; font-size: 13px; line-height: 1.35; color: var(--panel-dim); }
+    .join-wait { margin: 16px 0 0; padding: 10px 12px; border: 1.5px solid var(--panel-ink); font-size: 15px; font-weight: 600; }
+    .join-sign { margin-top: auto; padding-top: 24px; display: grid; gap: 8px; }
+    .join-sign .apple-btn { margin: 0; min-height: 52px; border-radius: 0; }   /* square, as every key here is (Apple lets the corner match the app) */
+    .join-sign a.ink-btn { display: flex; align-items: center; justify-content: center; min-height: 52px; font-size: 17px; text-decoration: none; }
+    .join-sign .note { margin: 4px 0 0; text-align: center; }
+    @media (max-height: 720px) { .join-art svg { aspect-ratio: auto; height: 84px; } #accountSection .join-head { margin-top: 16px; font-size: 30px; } .join-gets { margin-top: 14px; } .join-gets li { min-height: 58px; padding: 6px 2px; } .join-sign { padding-top: 16px; } }   /* a short phone: the keys stay on the first screen */
     /* the replay's keys get the same bevel as every other key (REVIEW.md 1.2, Replay: one button language) */
     .transport .key { box-shadow: inset 0 -3px 0 var(--rule); }
     .transport .key.on { box-shadow: inset 0 -3px 0 var(--accent); }
@@ -951,9 +999,17 @@
     .tp-car .tp-silhouette { grid-column: 1 / -1; justify-self: center; width: 96px; height: 40px; }
     .tp-car .tp-silhouette svg { width: 100%; height: 100%; }
     .tp-car .car-needle { opacity: 1 !important; }   /* the card is the car parked: needles at rest, no reading */
-    .rc-links { display: flex; flex-wrap: wrap; justify-content: center; gap: 4px 18px; margin-top: 10px; }
+    /* The route card's last row (design pass 2026-11-10): one ruled strip of keys, as the binnacle's are, where there
+       were five underlined words of two weights with "Pin place" left alone on a second line. A key that is on is inked in. */
+    .rc-links { display: flex; margin-top: 12px; border-top: 1px solid var(--rule); border-bottom: 1px solid var(--rule); }
+    .rc-links .linkbtn { flex: 1 1 auto; min-height: 48px; padding: 0 6px; font-size: 13px; font-weight: 600; text-decoration: none; white-space: nowrap; border-left: 1px solid var(--rule); }
+    .rc-links .linkbtn:first-child { border-left: 0; }
+    .rc-links .linkbtn:active { background: var(--rule); }
+    html[data-type-size] .rc-links { display: grid; grid-template-columns: 1fr 1fr; border-bottom: 0; }   /* large text: two a row, every word whole */
+    html[data-type-size] .rc-links .linkbtn { white-space: normal; border-left: 0; border-bottom: 1px solid var(--rule); }
     /* two weights: Save and Share in ink, the rest in pencil (REVIEW2.md route card) */
     .rc-links .linkbtn { color: var(--panel-dim); font-weight: 500; } .rc-links #routeSaveBtn, .rc-links #routeShareBtn { color: var(--panel-ink); font-weight: 700; }
+    .rc-links .linkbtn[aria-pressed="true"] { background: var(--panel-ink); color: var(--panel); }
     label.linkbtn { display: inline-flex; align-items: center; cursor: pointer; }
     .home-by { display: flex; align-items: center; justify-content: center; gap: 12px; margin-top: 10px; }
     .home-by .hb-label { font-size: 15px; font-weight: 700; color: var(--panel-ink); }
@@ -1471,6 +1527,7 @@
                    (time, corners); a tap takes it, nothing planned again. A swipe sideways on the card steps through the routes
                    found (finding 11), and the line under the cards says so. -->
               <div class="rc-levels" id="routeCardFun" role="radiogroup" aria-label="Route style"><button data-fun="quick" role="radio" aria-checked="false"><b>Quick</b><span class="rc-lv"></span></button><button data-fun="fun" role="radio" aria-checked="false"><b>Fun</b><span class="rc-lv"></span></button><button data-fun="max" role="radio" aria-checked="false"><b>Long way</b><span class="rc-lv"></span></button></div>
+              <div class="rc-pager" id="routeCardPager" role="img" hidden></div>
               <p class="rc-levels-note" id="routeCardLevelsNote" hidden></p>
               <p class="note rc-via" id="routeCardWhy" hidden></p>
               <div class="rc-stats" id="routeCardStats"></div>
@@ -1668,7 +1725,9 @@
           <section data-panel="garage">
             <h3>Co-driver</h3>
             <!-- SO-1 (panel round 2): one setting, one home. Notes and Voice live in the map's Layers, where a drive reaches them -->
-            <p class="note" id="coNotesHere"><span id="coNotesNow">Notes: Auto</span>. Notes and Voice are on the map, under Layers. <button class="linkbtn" id="coNotesLink">Open Layers</button></p>
+            <!-- design pass 2026-11-10: a row like the ones under it (what it is now on the left, where to change it on the right); the
+                 sentence broke over two lines with the link dropped under its own full stop -->
+            <p class="co-row" id="coNotesHere"><span id="coNotesNow">Notes: Auto</span><button class="linkbtn" id="coNotesLink">Change in Layers</button></p>
             <div class="switches">
               <button class="sw" data-toggle="haptics"><i></i><span>Haptics</span></button>
               <button class="sw" data-toggle="keys"><i></i><span>Key sounds</span></button>

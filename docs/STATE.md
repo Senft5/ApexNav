@@ -1,5 +1,32 @@
 # VETTA — CURRENT AGENT HANDOFF STATE
 
+## Session 2026-11-10 (fable-fix-join-scope): #332's page showed in the Garage too; scoped to People (claude/fable-fix-join-scope, off origin/main 6412cb5)
+
+- [x] Bug from #332 (live on main): `#accountSection:has(.join-page) { display: grid }` outranked `.sheet [data-panel]
+  { display: none }`, so signed out the People page (543 px) stood at the top of the Garage. web/index.html: both
+  `:has(.join-page)` rules now start `.sheet[data-view="people"]`.
+- [x] Tests: tests/test_people_signed_out.py refuses a bare `#accountSection:has(.join-page)`; e2e "REVIEW.md 1.2 screen
+  by screen: the Log…" checks the Garage signed out has no People page (fails on main's CSS, passes here).
+- Lesson: a rule that sets `display` on a tab's panel must carry the tab (`.sheet[data-view=…]`); after changing one
+  tab signed out, open the other three.
+
+## Session 2026-11-10 (fable-design-signed-out): People signed out, redrawn as a page (claude/fable-design-signed-out, off origin/main 2fda3f8)
+
+- [x] Design pass 3 (the owner, 2026-11-10: "designed by an artist not a programmer"). web/cockpit.js `renderAccount`,
+  signed out: `page(art, head, line, list, waiting)` builds `.join-page` for both sides: `.join-art` (an inline SVG,
+  roads as casing + fill, `.jr-puck` people, one `.lead` in the accent), `h3.join-head`, `.join-line`, `ul.join-gets`
+  (glyph in a dashed circle, `b` name, `small` one line), `.join-wait` for a stashed link, `.join-sign` (Apple, Google,
+  legal) pushed to the foot. The logo `img` and `.crew-gets` are gone.
+- [x] web/index.html: the `.join-*` rules; `.sheet .body:has(.join-page) { flex: 1 1 auto }` lets the page fill the
+  sheet (only while that page is drawn, so the signed-in lists are untouched); a short phone (max-height 720px) gets a
+  shorter drawing and rows so both keys stay on the first screen (checked at 375x667 with the Apple key shown).
+- [x] Tests: tests/test_people_signed_out.py; e2e "REVIEW.md 1.2 screen by screen: the Log…" now measures the page
+  (the head's face and size, two pucks and one lead, a line per row, 52 px key, keys at the foot, nothing wider than
+  the sheet). Also run: "one link in…", "Billet: a primary key…". docs/APP_REVIEW.md 5.1.1 row updated.
+- Next design chunks, from reading the screens: the route card stacks two pencil help lines under the levels; search
+  says a plain "Routing…" while it waits; the Garage is a long page (IDEAS U-49); "Can't reach Vetta" on People is a
+  heading and a button on blank paper.
+
 ## Session 2026-11-10 (fable-tile-limits): HPMS limits under 25 mph are unknown; tile times take HPMS's posted limit (claude/fable-tile-limits, off origin/main f27a1fe)
 
 - [x] Deferred finding 1 (the fable-hpms-limits entry below: "the tiles' times use OSM's limit or the class estimate,
@@ -65,6 +92,24 @@
 - Exact next task: the deferred round-1 items: HPMS posted limits in the graph ETL edge time (after #321 merges and the
   region rebuild), then Hamilton Ave quality 0.47-0.54.
 
+## Session 2026-11-10 (fable-surface-map): Measured roads coloured by measured pavement, tap for words (claude/fable-surface-map, off origin/main f27a1fe)
+
+- [x] IDEAS U-13 (the surface half; the twisty half was the Twisty roads switch). `GET /api/coverage` has sent each
+  direction's mean roughness and banked / off-camber shares since the stage-discovery work, and the map drew none of it.
+  web/coverage.js: `reading(w)` (the surer direction's numbers, both averaged on a tie), `surface(rough)` (1 smooth under
+  `SMOOTH_G` 0.10 g, 3 rough over `ROUGH_G` 0.22 g, 2 fair, 0 not measured), `describe(w)` (the tap's words), feature
+  properties `{ t, s, way }`, and `add` now redraws when a road's numbers change, not only its confidence.
+- [x] web/cockpit.js: `apex-coverage` `line-color` is a match on `s` over the theme's gain / amber / signal / dim (all
+  three looks, day and night); a tap on a measured road toasts `describe` unless a route, option or stage line is under
+  the finger or tap-to-route is armed; the switch's toast names the colours and the tap.
+- Not done: a per-bin surface (the line is one colour per road, the server's per-direction mean); a drawn legend (the
+  switch's toast and the tap carry it); the scale lives in two files (coverage.js and route_story.js, held together by
+  test_the_scale_is_the_route_overviews) because route_story.js was in another open PR.
+- Tests: tests/test_coverage.py 7 (classes, surer direction, words, redraw, the shared scale); e2e "measured roads" flow
+  extended (colour property, four theme colours in the paint, a tap says the words); pytest 1375 passed, 5 skipped.
+- Exact next task: unchanged (tools/live_speed.js on the owner's trips at Fun and Long way). #321 is merged: the tiles'
+  travel times from HPMS posted limits (the fable-hpms-limits entry below) is unblocked once the region is rebuilt.
+
 ## Session 2026-11-09 (fable-overview): the drive overview read against real trips (claude/fable-overview, off origin/main 1d97979)
 
 - [x] The overview's "exact next task" (read it on real routes, tune `ApexRouteStory.T`), on ten public trips planned in
@@ -91,6 +136,33 @@
   of these roads, so most leads say no speed. The owner's own trips still unread.
 - Exact next task: an e2e flow for the overview's refresh once #319 is merged; the owner reads the overview on his trips.
 
+## Session 2026-11-10 (fable-design-route-card): page marks under the level cards (claude/fable-design-route-card, off origin/main 2fda3f8)
+
+- [x] Design pass 3b. web/route_card.js `pager(o)` ({ n, at, label } or null under two routes) and `levelNote(o,
+  learned)` (learned: no swipe sentence, no count; "another route found" stays). web/cockpit.js `paintLevelCards` draws
+  `#routeCardPager` (an `i` per route, `.on` the one on screen, a `span` count, a `small` with the swipe words until
+  `apex.cardSwiped` is set by a real swipe in the card's touchend) and calls `levelNote(o, true)`.
+- [x] web/index.html `.rc-pager` rules (one 22 px row, the marks ease between widths, still under reduced motion).
+- [x] Tests: tests/test_route_pager.py (3); e2e "plan flow (a)" and "(e, f)" read the marks (which is on, the count,
+  the words before a swipe and gone after). All six "plan flow" flows pass.
+- Next design chunks: search says a plain "Routing…" while it waits; the Garage is a long page (IDEAS U-49); "Can't
+  reach Vetta" on People is a heading and a button on blank paper.
+
+## Session 2026-11-10 (fable-hazard-alive): a repeated "still there" keeps a hazard alive (claude/fable-hazard-alive, off origin/main f27a1fe)
+
+- [x] Found reading backend/src/hazards.ts `vote`: a person's second "still there" on the same report returned early
+  ("the same vote twice counts once") without moving `expires_at`, and the reporter's own (a repeat report within
+  SAME_M lands in `vote`) moved nothing either. The page asks again on every drive (hazard_reports.js createPassWatch
+  keeps `asked` per page), so those answers were thrown away: a report lived only as long as NEW people kept arriving.
+- [x] Now any "still" sets `expires_at = MAX(expires_at, now + the kind's life)`; `confirms` moves only on a person's
+  first "still" (never for the reporter, whose report is the first confirmation). "Gone" and the ending rule are
+  unchanged. No migration, no client change.
+- Tests: backend/test/hazards.test.ts "seen again by the same person" (second vote, the reporter's repeat report, a
+  doubled "gone", an ended report stays ended); backend vitest 358 passed, tsc clean.
+- Seen, not changed: the reporter is never asked about their own report and can't take it back; their "gone" through
+  the API leaves their own confirmation counted. No screen reaches that path today.
+- Exact next task: unchanged.
+
 ## Session 2026-11-09 (fable-expressway): expressways below trunk class are highways to Fun and Long way (claude/fable-expressway, off origin/main 1d97979)
 
 - [x] The gap STATE and OWN_ROUTING listed: an expressway mapped as `primary` (or lower) with `motorroad=yes` wasn't a
@@ -109,6 +181,26 @@
   (Valhalla-planned routes off our tiles) still knows only motorway/trunk.
 - Exact next task: after merge, run Actions → "Graph region (own routing, OH+KY+IN)" so the flag reaches the tiles; then
   unchanged (tools/live_speed.js on the owner's trips at Fun and Long way).
+## Session 2026-11-10 (fable-convoy-keep): the leader keeps a convoy going; a heads-up before it ends (claude/fable-convoy-keep, off origin/main f27a1fe)
+
+- [x] A room lived `LIMITS.roomMs` (2 h, "draft operational bounds" in CONVOY_TRANSPORT.md) and ended by alarm with no
+  way on and no warning. backend/src/convoy.ts `keepGoing(leaderId)`: leader only, in the last `keepWindowMs` (30 min),
+  `expiresAt += keepMs` (1 h) capped at `createdAt + roomMaxMs` (6 h); saves, moves the alarm, updates every member's
+  ConvoyIndex entry (a block or sign-out finds the convoy through it), broadcasts `extended`. Route
+  `POST /api/convoy/:id/keep`. The context carries `maxExpiresAtMs` and `keepWindowMs`.
+- [x] web/convoy.js: `canKeep(ctx, now)`, `endingNote(ctx, now, said)` (once per end time, last 10 min),
+  `ConvoyClient.keepGoing()`, the `extended` frame (`onExtended`). web/convoy_ui.js: "Keep going 1 h" on the card while
+  `canKeep`, the heads-up toast (spoken in a drive; the leader's has the key), "Convoy kept going: ..." to everyone.
+  An old app ignores `extended` and reads the new end at its next connect; an old server sends no numbers, so no key.
+- [x] Words: convoy_ui.js, cockpit.js (two places), privacy.html (Convoys), APP_REVIEW.md 5.1.2 row, BACKEND.md,
+  CONVOY_TRANSPORT.md, BACKUPS.md.
+- Not done: the car's screen (carplay.js) shows no heads-up of its own; the phone speaks it. In-app invites sent before
+  a keep still expire at their own time.
+- Tests: backend/test/convoy.test.ts "the leader keeps it going ..." (window, leader only, broadcast, alarm, index,
+  restart, the six-hour cap); tests/test_convoy_client.py test_keep_going_and_the_heads_up_before_the_end; e2e "convoy:
+  ten minutes before it ends ..."; backend vitest and pytest counts below in the PR.
+- Exact next task: unchanged.
+
 ## Session 2026-11-09 (fable-hpms-limits): a "not reported" speed limit was read as 254 mph (claude/fable-hpms-limits, off origin/main 1d97979)
 
 - [x] Found while measuring posted limits for the overview: the context grid's HPMS `speed_limit` (u8 mph) clamped a state's
@@ -132,6 +224,18 @@
   routing (4), plan flow (6) pass.
 - Exact next task: unchanged (tools/live_speed.js on the owner's trips at Fun and Long way); a "Graph region" run picks
   this up together with the expressway flag.
+## Session 2026-11-10 (fable-zone-samples): a home zone added later reaches the server and hides the stored position (claude/fable-zone-samples, off origin/main f27a1fe)
+
+- [x] Found by reading backend/src/presence.ts against the app: home zones were only sent with a change of "Show me
+  to", so a zone added or removed in Settings never reached the server's copy (the phone still dropped positions inside
+  it), and the last sample stored before the zone existed stayed on friends' maps until it aged out.
+- [x] web/friends_map.js `syncZones()` (loads settings if needed, nothing while Nobody, a quiet save with the current
+  zones); `start()` calls it at each launch; cockpit.js `zonesChanged()` calls it on zone add and remove.
+  backend/src/presence.ts `presenceSettingsPut` deletes the user's presence_samples when the zones JSON changes.
+- Tests: backend presence.test.ts "a home zone added or moved hides what was stored before it..." (vitest, tsc clean);
+  tests/test_friends_map.py test_home_zones_go_to_the_server_when_they_change_and_at_each_launch. No migration.
+- Next: nothing owed here. Deploys with the Worker on merge.
+
 ## Session 2026-11-09 (route-sliders): Tune your routes, Pro open to everyone until on sale (claude/route-sliders, off origin/main 1d97979)
 
 - [x] Owner: "every parameter with a slider for premium users"; "remember everyone has pro if they are an early user. Once
@@ -197,6 +301,20 @@
 - Exact next task: unchanged from engine-rank below (tools/live_speed.js on the owner's trips at Fun and Long way); the
   owner can now do the same on the phone with the Dev panel and paste its JSON.
 
+## Session 2026-11-10 (fable-design-pass): design pass 1, the empty Log and Stages pages and two Garage rows (claude/fable-design-pass, off origin/main ad4f1e4)
+
+- [x] Owner 2026-11-10: UI and UX polish is a main focus of the run ("designed by an artist, not a programmer").
+  Captured onboarding, the idle map, Layers, Garage, Settings, People (signed out), Log, Stages at 393x852 and read them.
+- [x] web/analysis.html: `#historyEmpty` is a `.first-page` (pencil sketch of the hero and one row, head, line, Start a
+  drive, Watch a replay first); the empty Stages list the same shape with a drawn stage; `.switch > button
+  { font-family: inherit; }` (Drives / Stages were Arial).
+- [x] web/index.html: Garage `.ctl-label` rows at 15/500; `#coNotesHere` is a `.co-row` with "Change in Layers".
+- Tests: tests/test_log_first_page.py (3), e2e "the empty Log is a first page..." (computed typeface, key sizes).
+- Seen and not yet done (next design chunks, in the order I would take them): the signed-out People page is a logo and
+  a button over two thirds of blank paper; the search sheet says "Routing..." in plain text where the route card will
+  be; MapLibre's attribution is the stock control (IDEAS U-53); the Garage is still a long settings page (U-49).
+- Exact next task: the signed-out People page and the search sheet's waiting state, then U-49.
+
 ## Session 2026-11-09 (drive-overview): "What this drive is like" on the route card (claude/drive-overview, off origin/main 01a0423)
 
 - [x] Owner: "can we compile the data used to give some kind of route overview for the type of drive it will be? in plain
@@ -233,6 +351,23 @@
 - Tests: pytest 1353 passed, 2 skipped (1358 before, less the 5 FCC-only tests); `python tools/csp.py` all pages up to
   date. Backend untouched.
 - Exact next task: unchanged from engine-rank below (tools/live_speed.js on the owner's trips at Fun and Long way).
+
+## Session 2026-11-10 (fable-loved-roads): the app's recorded drives count toward loved roads; by-hand sharing is honest (claude/fable-loved-roads, off origin/main ad4f1e4)
+
+- [x] web/contributor.js `createLive`: `deliberate` may be a function, asked as rows arrive; `recorded()` latches from
+  the first recorded row (slices' `rec`, and `leftover().deliberate` as a plain boolean for road_carry.js).
+  web/cockpit.js feedAmbient passes `deliberate: () => !!(drive.native && drive.rec)`.
+- [x] cockpit.js End: `nativeShared` (the mounted stream ran during this native drive) and `|| waits` (the browser's
+  drive whose road feel waits for signal) save the drive `contributed`, so analysis.html's Share by hand doesn't
+  offer a pass that went or will go by itself. `contributeDrive` throws on 'retry' instead of counting it sent.
+- Tests: tests/test_loved_roads.py (5), e2e "loved roads: in the app..." (a real native drive, `rec` on every chunk,
+  the saved drive marked shared).
+- Not shipped: I rebuilt road feel waiting for signal on a branch (`claude/fable-road-later`) before seeing #323 had
+  merged the same thing (road_carry.js). No PR was opened; the branch can be deleted. This entry is what was new in it.
+- Open: `road_love` on production has no rows from before this build. docs/WORKER_QUEUE.md road-queue names a
+  web/road_queue.js that is not in the repo.
+- Exact next task: after a TestFlight drive on a road driven before, check `road_love` has a row
+  (`SELECT COUNT(*) FROM road_love`) and the route card's "members come back to this road" line shows.
 
 ## Session 2026-11-08 (engine-rank): the engine and the router agree on what a longer way buys (claude/engine-rank, off claude/level-spread = main fdbf363)
 
@@ -285,6 +420,19 @@
 - Exact next task: find why route_engine.js rank values colerain's 31.6 min and subdivision4's 17.2 min Long way routes
   below the shorter ones (per-term breakdown of the value: corners on side streets, strip mall, time cost at perMin 0.35)
   and decide whether the engine or the router's goodness is wrong; then re-run route_quality.js and tools/live_speed.js.
+
+## Session 2026-11-10 (fable-design-people): design pass 2, the route card's action strip and the map's credit (claude/fable-design-people, off origin/main ad4f1e4)
+
+- [x] web/index.html `.rc-links`: a flex strip ruled top, bottom and between keys, 48 px keys sized to their words, no
+  underlines, `[aria-pressed="true"]` inked in; two a row under `html[data-type-size]`.
+- [x] web/index.html `.maplibregl-ctrl-attrib` on the look's tokens (IDEAS U-53 done): square, `--panel` paper,
+  `--panel-ink` rule, the button's stock image replaced by an "i" in `--font-num`; the accent outline on keyboard focus.
+- Tests: e2e "design pass 2..." (one row edge to edge, 44 pt, no underline, no cut word, Saved inked in, the credit's
+  computed style); tests/test_design_pass.py (source rules).
+- Seen and not yet done: the signed-out People page (a logo and a button over blank paper); the route card stacks two
+  pencil help lines under the levels ("Swipe the card for the next route", "For Fields Ertel Road..."); the Garage is
+  a long settings page (U-49).
+- Exact next task: the signed-out People page, then the route card's help lines.
 
 ## Session 2026-11-08 (keys): the owner's answers on the free keys (claude/keys-1108, off origin/main)
 

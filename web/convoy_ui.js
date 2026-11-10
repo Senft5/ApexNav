@@ -99,7 +99,17 @@
       onHazard: () => tick(),
       onRetract: (ev) => { if (spoken.has(ev.eventId)) toast(`${C.KINDS[ev.type] || 'Hazard'} call cancelled by the leader.`); spoken.delete(ev.eventId); paintMap(); },
       onError: (code) => toast(ERRORS[code] || 'The convoy refused that.'),
+      // the leader kept it going: everyone hears it at once, with how long it now has (they can leave as before)
+      onExtended: (m) => { const t = `Convoy kept going: ${C.leftText(m.expiresAtMs)}.`; toast(t); if (driving()) speak(t, false); },
     });
+    // Another hour, the leader's (C.canKeep): from the card's key and from the heads-up before the end.
+    const KEEP_REFUSED = { convoy_at_limit: 'A convoy runs six hours at most.', too_early: 'You can keep it going in its last half hour.' };
+    async function keepGoing() {
+      const r = await client.keepGoing();
+      if (r.ok) { if (client.status !== 'live') toast(`Convoy kept going: ${C.leftText(r.body.expiresAtMs)}.`); return; }   // connected, the convoy says it itself
+      toast((r.body && KEEP_REFUSED[r.body.error]) || (r.status === 404 ? 'That convoy has ended.' : 'Couldn\'t reach the convoy. Try again.'));
+    }
+    const endingSaid = new Set();
 
     const me = () => client.locate(getFix());
     const driving = () => !!(page.driving && page.driving());
@@ -121,8 +131,12 @@
         if (!was) { spoken.set(ev.eventId, ahead < NEAR_M ? 'near' : 'far'); speak(C.hazardPhrase(ev.type, ahead), ahead < NEAR_M); }
         else if (was === 'far' && ahead < NEAR_M) { spoken.set(ev.eventId, 'near'); speak(C.hazardPhrase(ev.type, ahead), true); }
       }
+      // ten minutes before it ends everyone is told, once; the leader's has the key that keeps it going
+      const ending = C.endingNote(snap.ctx, Date.now(), endingSaid);
+      // (no `ms`: a timed action holds the page's toast, and would swallow the answer when the card's own key is used)
+      if (ending) { toast(ending.text, ending.keep ? { label: 'Keep going', onClick: keepGoing } : undefined); if (driving()) speak(ending.text, false); }
       paintMap(); paintText();
-      if (structKey() !== lastKey) paint();                             // a drive started or ended: the calls come or go
+      if (structKey() !== lastKey) paint();                             // a drive started or ended: the calls come or go; or the last half hour began
     }
     setInterval(tick, TICK_MS);
 
@@ -210,7 +224,7 @@
       const s = snap;
       if (!s || !s.id) return JSON.stringify([s && s.status, store.get('sessionStorage', INVITE_KEY) !== '', asked.list.map((i) => i.id), driving()]);
       return JSON.stringify([s.id, s.status, s.unreachable, s.ctx && s.ctx.role, s.ctx && s.ctx.name, s.members.map((m) => [m.key, m.online, m.role, m.handle]),
-                             !!client.route, !!client.regroup, undo && undo.id, !!getRoute(), driving()]);
+                             !!client.route, !!client.regroup, undo && undo.id, !!getRoute(), driving(), C.canKeep(s.ctx)]);
     }
     // P-21: one line, a tap opens the convoy. Idle with an invite waiting, the line is the invite; in a drive it sits behind
     // the car, and the leader's calls open from it or from the Report key, never as a row over the map.
@@ -421,7 +435,7 @@
         } else if (!asked.list.length) {
           // Convoy now (P-11): drive together now, no crew needed; a crew's convoy starts from its drive's card
           const name = labelled(el('input', { className: 'field', placeholder: 'Convoy name', maxLength: 40, autocomplete: 'off', value: h.name || '' }), 'Convoy name');
-          kids.push(el('p', { className: 'note', textContent: 'Drive together, live, for up to two hours. Friends join with the code or the link; a crew’s run starts its convoy from the drive’s card.' }),
+          kids.push(el('p', { className: 'note', textContent: 'Drive together, live, for two hours; the leader can keep it going, up to six. Friends join with the code or the link; a crew’s run starts its convoy from the drive’s card.' }),
             el('details', { className: 'how' }, el('summary', { textContent: 'How this works' }),
               el('p', { className: 'note', textContent: 'Everyone in the convoy sees where everyone is, the leader can call hazards and a regroup point, and the co-driver warns you before you get there. Nothing is kept: it ends when the leader leaves or after two hours.' })),
             el('div', { className: 'row' }, name, btn('Start a convoy', () => now(name.value.trim()), 'ink-btn solid')));
@@ -460,6 +474,7 @@
       }
       // from the map's sheet, the drive itself is one key away (a convoy started at the petrol station, then go)
       if (h.kind === 'sheet' && !driving() && page.drive) actions.append(btn('Start the drive', () => { close(); page.drive(); }, 'ink-btn'));
+      if (C.canKeep(c)) actions.append(btn('Keep going 1 h', keepGoing, 'ink-btn'));   // its last half hour: the leader's to give it another hour
       actions.append(btn(c.role === 'leader' ? 'End convoy' : 'Leave', async () => {
         if (!(await ApexConfirm.ask(c.role === 'leader' ? 'End the convoy for everyone?' : 'Leave the convoy?', c.role === 'leader' ? 'End convoy' : 'Leave'))) return;
         await client.leave(); toast(c.role === 'leader' ? 'Convoy ended.' : 'You left the convoy.');

@@ -140,9 +140,10 @@
 
   /**
    * The line under the cards: that two levels pick the same route, and what a sideways swipe does (it steps through the
-   * routes found: the levels' picks, then any other good one). '' with one route and nothing shared.
+   * routes found: the levels' picks, then any other good one). '' with one route and nothing shared. `learned`: leave the
+   * swipe instruction and the count out; the page marks above the line (pager) carry them on the card.
    */
-  function levelNote(o) {
+  function levelNote(o, learned = false) {
     if (!o || !o.levels || !Array.isArray(o.list)) return '';
     const n = o.list.length, ks = LEVEL_KEYS.filter((k) => o.levels[k] != null);
     const shared = [];
@@ -151,10 +152,21 @@
       if (g.length > 1 && g[0] === k) shared.push(g.length === 3 ? 'all three pick the same route' : `${LEVEL_LABEL[g[0]]} and ${LEVEL_LABEL[g[1]]} pick the same route`);
     }
     const level = ks.some((k) => o.levels[k] === o.picked);
-    const swipe = n < 2 ? null : level ? `swipe the card for the next route, ${o.picked + 1} of ${n}`
-      : `another route found, ${o.picked + 1} of ${n}: swipe for the others`;
+    const swipe = n < 2 ? null : learned ? (level ? null : 'another route found')
+      : level ? `swipe the card for the next route, ${o.picked + 1} of ${n}`
+        : `another route found, ${o.picked + 1} of ${n}: swipe for the others`;
     const line = [...shared, swipe].filter(Boolean).join(' · ').replace(/(\d+) of (\d+)/g, '$1 of $2');
     return line.charAt(0).toUpperCase() + line.slice(1);
+  }
+
+  /**
+   * The marks under the level cards (design pass, 2026-11-10): one per route found, the one on screen inked, as a phone's
+   * page marks say "swipe". { n, at (0-based), label } or null with fewer than two routes.
+   */
+  function pager(o) {
+    if (!o || !Array.isArray(o.list) || o.list.length < 2 || !finite(o.picked)) return null;
+    const n = o.list.length, at = Math.max(0, Math.min(n - 1, o.picked));
+    return { n, at, label: `Route ${at + 1} of ${n}. Swipe the card for the next.` };
   }
 
   /**
@@ -171,6 +183,6 @@
     return `${head}${bits.length ? `: ${bits.join(', ')}` : ''}`;
   }
 
-  const api = { duration, stats, profile, dial, count, levelCards, levelNote, LEVEL_KEYS, cornersOf, swapNote, shape, factText, alongGlyph };
+  const api = { duration, stats, profile, dial, count, levelCards, levelNote, pager, LEVEL_KEYS, cornersOf, swapNote, shape, factText, alongGlyph };
   if (typeof module !== 'undefined' && module.exports) module.exports = api; else root.ApexRouteCard = api;
 })(typeof window !== 'undefined' ? window : globalThis);

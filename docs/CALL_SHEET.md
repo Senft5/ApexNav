@@ -4,6 +4,31 @@ Decisions Claude made for you, newest first. Each one says what was decided, why
 you reach one you've seen. If you disagree with a call, say so and it gets reversed; nothing here is hard to undo unless
 it says so. Things only you can do are in docs/OWNER_TODO.md.
 
+## 2026-11-10 (fable-fix-join-scope): my mistake in #332, fixed: the signed-out People page also showed at the top of the Garage (claude/fable-fix-join-scope)
+
+The rule that lets the new signed-out People page fill the sheet named the People panel by its id, and an id outranks
+the rule that hides the other tabs' panels. So, signed out, the whole "Drive with friends." page stood at the top of
+the Garage as well. Both rules now apply on the People tab only. I had read the page on People and never opened the
+Garage signed out after the change; the screen-by-screen flow now checks that the Garage shows no People page.
+- Undo: not something to undo; reverting #332 would also remove it.
+
+## 2026-11-10 (fable-design-signed-out): People, signed out, is a page instead of a form (claude/fable-design-signed-out)
+
+Design pass 3, after your "designed by an artist not a programmer". Signed out, People was a logo, a small heading,
+three boxed icons and a button, with two thirds of the phone left blank under them. The calls:
+- **A drawing leads each side.** A road drawn the way a printed map draws one, with pucks on it: two roads meeting
+  for Friends, one road with three in file behind a red lead for Crews. It is decoration, drawn by hand in the page,
+  never a map of real people.
+- **The name is set large** ("Drive with friends.", "Drive as a crew.") in the app's number face, and each of the
+  three things it gets you is a row with one plain line saying what it is, shaped like the friends list that will
+  stand there after sign-in.
+- **The sign-in keys stand at the foot of the page**, under the thumb, 52 pt tall. Apple's key is square-cornered
+  now so it matches every other key in the app (Apple's rules let the corner match); it is still first and the same
+  size as Google's.
+- **The Vetta logo is gone from this page.** It sat above Friends only, and the first-run screen already shows it.
+- **A waiting friend or crew link is a boxed line** above the keys, so it reads as the reason to sign in.
+- Undo: revert the PR; nothing is stored and no behaviour changed.
+
 ## 2026-11-10 (fable-tile-limits): posted limits from the government road inventory: junk out, good ones into travel times (claude/fable-tile-limits)
 
 Where the map has no speed-limit sign, the app knows a second source: the government road inventory (HPMS). I
@@ -61,6 +86,25 @@ the ones with no coverage, so the best roads' data was the data being lost. The 
 Undo: remove `<script src="road_carry.js">` from web/index.html (createLive then has no carry and behaves as before,
 apart from the 10 km pieces; set `maxRun` to Infinity for that).
 
+## 2026-11-10 (fable-surface-map): the Measured roads map shows how the pavement is (claude/fable-surface-map)
+
+While you drive → Measured roads drew every measured road in one green, so the one thing only Vetta knows about a road,
+what members' phones felt there, wasn't on the map. The server already sent it. The calls:
+- **Colour is the pavement**: green smooth, amber fair, red rough; thickness still says how sure (one pass faint, five
+  or more bold). A road sent without roughness is drawn in ink, never as smooth. Undo: cockpit.js, the `apex-coverage`
+  `line-color` line back to `C.gain`.
+- **One scale for the words**: smooth is under 0.10 g and rough over 0.22 g of mean roughness, the same two numbers
+  the route overview already words a road with (a test holds the two together). Change them in coverage.js
+  `SMOOTH_G` / `ROUGH_G` and route_story.js at once.
+- **A two-way road shows its better-measured direction** (both averaged when equally sure), since one line can only be
+  one colour.
+- **Tap a measured road and it says it in words**: "Smooth pavement (0.07 g) · many passes · 30% of it banked". How
+  sure stays a level ("one pass so far", "a few passes", "many passes"), never a count of passes or people. A route or
+  option drawn over the road still wins the tap. Undo: the `apex-coverage` click handler in cockpit.js.
+- **Red is the app's one "act on this" colour**, used here for rough pavement on purpose. If it fights the route line
+  for you on a phone, say so and rough moves to another colour.
+- No server, privacy or data change: same request, same two-driver / open-road rule, nothing new stored or sent.
+
 ## 2026-11-09 (fable-overview): "What this drive is like", read against real roads (claude/fable-overview)
 
 I planned ten public trips round Cincinnati in the app and read each overview against the road it described. The calls:
@@ -81,6 +125,33 @@ I planned ten public trips round Cincinnati in the app and read each overview ag
 - Not done: your own trips (their addresses aren't in the repo, by rule). `node tools/story_live.js colerain:fun` prints
   the lines for the public ones.
 
+## 2026-11-10 (fable-design-route-card): the route card says "swipe" with page marks, not a sentence (claude/fable-design-route-card)
+
+Design pass 3b. Under the Quick / Fun / Long way cards the route card had two grey sentences stacked: "Swipe the card
+for the next route, 2 of 3" and the route's why line. The calls:
+- **The routes found are page marks**: one short stroke per route, the one on screen long and inked, then "2 / 3".
+  It is the sign a phone already uses for "swipe sideways", and it moves when you swipe.
+- **The words "Swipe the card for the next route" sit beside the marks until your first swipe, then go for good**
+  (remembered on the phone as `apex.cardSwiped`; Erase my data clears it, and the words come back). A screen reader
+  always hears "Route 2 of 3. Swipe the card for the next."
+- **The line under the marks only speaks when the marks can't**: "Quick and Fun pick the same route", or "Another
+  route found" for a route no level picked. Most of the time it is gone, and the card is one line shorter.
+- You asked on 2026-11-04 that the card say what a swipe does. It still does, on the same row as the marks; it just
+  stops repeating itself once you have done it. Say so if you want the sentence to stay forever.
+- Undo: revert the PR.
+
+## 2026-11-10 (fable-hazard-alive): a hazard you keep confirming stays on the map (claude/fable-hazard-alive)
+
+The app asks "still there?" every time you pass a reported hazard, but the server only listened the first time each
+person answered. So with few members, a pothole one driver passed and confirmed every day still went off the map a
+week after the first answer. The calls:
+- **Every "still there" keeps it alive from that moment**, whoever says it, as often as they say it. Reporting your own
+  hazard again from the same spot does the same.
+- **It still counts once per person.** "Confirmed by 3" means three different people; one driver can't raise it.
+- **"Gone" is unchanged**: one per person, and two that outvote the confirmations end it at once, so one person can't
+  keep a wrong report up against two who say it's gone.
+- Server only, no app change, no database change. Undo: backend/src/hazards.ts `vote`, the `seenAgain` lines.
+
 ## 2026-11-09 (fable-expressway): an expressway counts as a highway at Fun and Long way (claude/fable-expressway)
 
 "Fun should never go on the highway" covered motorways and trunk roads. Some divided, limited-access expressways are
@@ -94,6 +165,23 @@ mapped one class lower (`primary`), marked only by a tag. The calls:
   then nothing changes on any phone: today's tiles don't carry the mark and the router treats them as before.
 - **A new flag bit, not a new tile version**: old apps ignore the bit, new apps read old tiles as "not an expressway".
 - Undo all of it: revert the branch's commits (tiles built with the flag still read fine in the old code).
+## 2026-11-10 (fable-convoy-keep): a convoy can run past two hours, and says when it is about to end (claude/fable-convoy-keep)
+
+A convoy ended two hours after it started, whatever was happening: a Sunday drive with a coffee stop lost its map
+mid-road, with no warning, and the leader had to start a new one and invite everyone again. The calls:
+- **The leader can keep it going, an hour at a time.** In its last half hour the convoy card has "Keep going 1 h".
+  Only then, so it is someone there and driving who asks; a convoy can't be opened for six hours up front.
+- **Six hours is the most one runs.** Longer than a full day's drive with stops needs a new convoy. Change:
+  backend/src/convoy.ts `LIMITS.roomMaxMs` (and `keepMs`, `keepWindowMs`).
+- **Everyone is told ten minutes before it ends**, on screen and aloud in a drive; the leader's notice has the Keep
+  going key on it. Nobody finds out by losing the map.
+- **Everyone is told at once when it is kept going** ("Convoy kept going: 1 h 9 min left"), because they joined a
+  two-hour convoy and their position is shared for longer now. Leaving works as before. The privacy page and the
+  convoy's own words say two hours unless the leader keeps it going, six at most.
+- Nothing more is kept: positions stay in memory only, and the convoy still ends when the leader leaves.
+- Undo: remove the `/api/convoy/:id/keep` route in backend/src/index.ts (the key never shows without the server's two
+  numbers), and put "up to two hours" back in convoy_ui.js, cockpit.js and privacy.html.
+
 ## 2026-11-09 (fable-hpms-limits): a speed limit of "254 mph" is no limit (claude/fable-hpms-limits)
 
 The government road inventory we read speed limits from (HPMS) marks "not reported" with a code. Our data build stored
@@ -107,6 +195,19 @@ back roads), which nudged how those roads scored. The calls:
 - **I left the tiles' travel times alone.** The inventory knows the posted limit on about half the main-road miles where
   our tiles only guess from the road's class, and using it would make times truer, but a mismatched stretch would make
   them wrong in a new way. The numbers are in STATE for whoever takes it on.
+## 2026-11-10 (fable-zone-samples): a new home zone hides you from friends at once (claude/fable-zone-samples)
+
+Friends on the map keeps your home zones on the server too, so it can refuse a position inside one. Two gaps:
+the zones only went up when you changed who sees you, so a zone added later in Settings never reached the server; and
+the last position stored before the zone existed (a drive that ended at home) stayed visible until it aged out.
+- **A zone added or removed goes up at once**, and the app sends its zones again at each launch while you share
+  (one small request; nothing is sent while Nobody sees you). A failed background save says nothing and heals at the
+  next launch. Undo: friends_map.js `syncZones` and cockpit.js `zonesChanged`.
+- **The server forgets the position it held whenever the zones change** (added, moved, grown or removed), the same way
+  it already does when you switch between Exact and Within a mile. Friends see you again from your next position
+  outside a zone. Removing a zone also forgets it: simpler than working out whether the old sample was inside, and it
+  costs at most one sample. Undo: presence.ts `presenceSettingsPut`, the `prev.zones !== zonesJson` half.
+
 ## 2026-11-09 (route-sliders): Tune your routes, a Pro screen open to everyone until Pro goes on sale (claude/route-sliders)
 
 You asked for "every parameter with a slider for premium users", then: "remember everyone has pro if they are an early
@@ -179,6 +280,23 @@ mess with". The calls I made building it:
   refused, the text appears in a box to copy by hand.
 - Undo: revert this commit; nothing on the server changed.
 
+## 2026-11-10 (fable-design-pass): the empty Log and Stages pages are drawn; two Garage rows fall into line (claude/fable-design-pass)
+
+The owner asked for the app to feel designed by an artist, not a programmer. I captured every main screen on a phone
+shape and read them as a designer would. The populated screens hold together; the tells were at the edges. The calls:
+- **An empty Log is the first page of the book**, not a sentence on a blank sheet: the page's own furniture in pencil
+  (three dashed places for the score's figures, a dashed date stamp, an empty corner strip), a head ("Your first drive
+  goes here."), one line, one full-width key (Start a drive) and a link (Watch a replay first). Nothing in the sketch
+  is a figure: unknown stays "--". Undo: analysis.html `#historyEmpty` and the `.first-page` rules.
+- **An empty Stages tab says what a stage is**, with a stretch of road drawn between its start and finish boards, and
+  the one way to make one. Undo: analysis.html `renderSegments`, the `first-page` block.
+- **The Log's Drives / Stages switch was set in Arial** beside Inter Tight everywhere else (a button doesn't inherit
+  the page's face by itself). Found by scanning every page's controls for a system font; it was the only one.
+- **Garage, Co-driver**: "Night" and "Co-driver's voice" were 18 px extra-bold labels under a 17 px section head, so a
+  row outranked its own heading; they are row labels now, like the switches beside them. The sentence that told you
+  Notes and Voice live in Layers broke over two lines with its link dropped under a full stop; it is a row: what they
+  are set to on the left, "Change in Layers" on the right. Undo: index.html `.co-row` and the `.ctl-label` rule.
+
 ## 2026-11-09: NASA night lights taken off your to-do list
 
 You said the Earthdata steps were confusing. Night lights already work from NASA's 2016 Black Marble image, which is
@@ -209,6 +327,22 @@ Road: 41 good corners, five of them tight." / "About 3 miles through town at the
   (one is the forecast at six points, the other the engine's per-sample data). Undo: drop `conditionsLine` from build.
 - **Not on:** loops, GPX imports and a route restored after a reload (no ranking behind them: nothing said rather than
   a guess). Undo all of it: revert the commit.
+
+## 2026-11-10 (fable-loved-roads): in the iPhone app a recorded drive counts toward loved roads (claude/fable-loved-roads)
+
+#323 made the upload carry `rec` (a pass from a recorded drive), which loved roads are counted from. But only the
+browser's drive set it. In the app one mounted stream carries the road feel through Start and End, and it never said
+so, so the phones that matter still sent every pass as ambient. The calls:
+- **The app's stream says "recorded" from the drive's first row on**, and keeps saying so for the rest of that trip
+  (also once End was pressed: the rows already driven were the recorded drive's, and a trip can't be split after the
+  fact). What it sent before Start stays an ambient pass. What waits for signal remembers it. Undo: cockpit.js
+  feedAmbient `deliberate`, contributor.js `recorded`.
+- **A drive whose road feel went (or waits for signal) is marked shared in the Log**, in the app and in the browser.
+  The Log offered "Share <drive>" by hand for every recent app drive, under another drive id: tapping it merged the
+  same pass into the road a second time. Undo: cockpit.js `nativeShared`, and the `|| waits` beside it.
+- **Share by hand says when it couldn't.** A busy server or no signal answered 'retry', which was counted as sent:
+  the button said "Shared 3 roads" and the drive was marked shared with nothing on the server. Now it says "Couldn't
+  share. Tap to try again." Undo: contributor.js `contributeDrive`.
 
 ## 2026-11-08 (drop-fcc): FCC phone coverage removed, as you asked (claude/drop-fcc)
 
@@ -250,6 +384,18 @@ trips. I broke each route's score into its parts to see why.
   of 12.1; the two had been within 0.3 points. The router's own picks now match the app's on harrison (Fun 31.1 min, Long
   way 41.9 min); the app's picks there didn't change. Quick, the highway rule and trips with no good road are unchanged.
   Planning speed is unchanged.
+
+## 2026-11-10 (fable-design-people): design pass 2, the route card's last row and the map's credit (claude/fable-design-people)
+
+Second cut of the owner's "designed by an artist" pass, on the two screens people look at most. The calls:
+- **The route card's last row is one ruled strip of keys** (Save, Share, Share ETA, GPX, Pin place). It was five
+  underlined words centred on the page, "Pin place" alone on a second line. REVIEW2's two weights stay (Save and
+  Share in ink, the rest in pencil); a key that is on (Saved, an ETA being shared) is inked in. With large text it
+  goes two a row. Undo: index.html `.rc-links`.
+- **The map's credit is a plate in the look's own style** (IDEAS U-53): a square paper plate ruled in ink with the "i"
+  in the number face, where MapLibre's white pill and round black "i" sat on every map. It follows the look's tokens,
+  so it is dark in the dark looks. The credit's text and links are unchanged. Undo: index.html, the
+  `.maplibregl-ctrl-attrib` rules.
 
 ## 2026-11-08 (levels): Fun and Long way each spend their time on better road (claude/level-spread)
 

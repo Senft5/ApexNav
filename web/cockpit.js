@@ -420,7 +420,8 @@
       if (has('apex-alt')) map.setPaintProperty('apex-alt', 'line-color', C.route);
       if (has('apex-explore')) map.setPaintProperty('apex-explore', 'line-color', C.route);
       if (has('apex-twisty')) map.setPaintProperty('apex-twisty', 'line-color', C.amber);
-      if (has('apex-coverage')) map.setPaintProperty('apex-coverage', 'line-color', C.gain);
+      // Measured roads by the pavement measured there (coverage.js surface): smooth, fair, rough; ink where roughness is unknown
+      if (has('apex-coverage')) map.setPaintProperty('apex-coverage', 'line-color', ['match', ['get', 's'], 1, C.gain, 2, C.amber, 3, C.signal, C.dim]);
     }
 
     function addApexLayers() {
@@ -725,6 +726,13 @@
         if (map.queryRenderedFeatures(e.point, { layers: ['apex-route'] }).length) return;   // a shared stretch: the drawn route wins
         suppressMapClickUntil = Date.now() + 400;
         pickOption(e.features[0].properties.i);
+      });
+      // Tap a measured road for what members measured there, in words (the colour is never the only way to read it).
+      map.on('click', 'apex-coverage', (e) => {
+        if (state.tapToRoute || Date.now() < suppressMapClickUntil || !e.features || !e.features.length) return;
+        if (map.queryRenderedFeatures(e.point, { layers: ['apex-route', 'apex-alt', 'apex-explore'].filter((id) => map.getLayer(id)) }).length) return;   // a route drawn over it wins the tap
+        const say = ApexCoverage.describe(coverage.cache.get(e.features[0].properties.way));
+        if (say) toast(say);
       });
       map.on('click', 'apex-explore', (e) => {
         if (state.tapToRoute || !e.features || !e.features.length) return;
@@ -3861,7 +3869,7 @@
         const o = routeOptions;
         if (!o || !optionsOffered(plannedRoute)) return;
         const i = o.picked + (dx < 0 ? 1 : -1);
-        if (i >= 0 && i < o.list.length) pickOption(i);
+        if (i >= 0 && i < o.list.length) { try { localStorage.setItem(SWIPED, '1'); } catch (_) { /* storage off: the sentence stays */ } pickOption(i); }
       });
       card.addEventListener('touchcancel', () => { sx = null; });
     }
@@ -3889,6 +3897,8 @@
     // (route_card.js levelCards); on when that pick is the route on screen, so two levels that pick the same route are both
     // on and the line under them says so. A level the plan didn't look at says "Look further"; a tap on it plans again.
     // The cards are the page's own buttons, only their words change, so the one you tapped is still there under your finger.
+    const SWIPED = 'apex.cardSwiped';
+    const swipeLearned = () => { try { return localStorage.getItem(SWIPED) === '1'; } catch (_) { return false; } };
     function paintLevelCards() {
       const box = $('routeCardFun');
       if (!box || !window.ApexRouteCard) return;
@@ -3911,7 +3921,17 @@
         b.setAttribute('aria-checked', String(k.level === funLevel));
         b.setAttribute('aria-label', k.further ? `${k.label}: not looked at yet; plans again` : `${k.label}: ${k.time === '--' ? 'time --' : k.time}, ${k.corners === '--' ? 'corners --' : k.corners}${k.same.length ? `, the same route as ${k.same.join(' and ')}` : ''}`);
       }
-      const line = mine && !box.hidden ? ApexRouteCard.levelNote(o) : '';
+      // Page marks say "swipe" the way a phone does; the words stay beside them until the first swipe, then go. The line
+      // under them keeps only what the marks can't say (two levels picking one route, a route no level picked).
+      const pg = mine && !box.hidden ? ApexRouteCard.pager(o) : null, marks = $('routeCardPager');
+      marks.hidden = !pg;
+      if (pg) {
+        marks.setAttribute('aria-label', pg.label);
+        marks.replaceChildren(...Array.from({ length: pg.n }, (_, i) => { const m = document.createElement('i'); if (i === pg.at) m.className = 'on'; return m; }),
+          Object.assign(document.createElement('span'), { textContent: `${pg.at + 1}\u2009/\u2009${pg.n}` }),
+          ...(swipeLearned() ? [] : [Object.assign(document.createElement('small'), { textContent: 'Swipe the card for the next route' })]));
+      }
+      const line = mine && !box.hidden ? ApexRouteCard.levelNote(o, true) : '';
       $('routeCardLevelsNote').textContent = line;
       $('routeCardLevelsNote').hidden = !line;
     }
@@ -5634,27 +5654,35 @@
       // A step only the Friends side can take (joining, a handle): the Crews side says so and has the key across.
       const acrossToFriends = (title, text, key) => [el('h3', { textContent: title }), el('p', { className: 'note', textContent: text }), btn(key, () => setPeopleSide('friends'), 'ink-btn solid')];
       if (!me.signed_in) {
-        // what each side gets you, in three glyphs (REVIEW.md 1.2, signed out), then the same sign-in on both sides
-        const gets = (...items) => el('div', { className: 'crew-gets' }, ...items.map(([path, label]) => el('span', { innerHTML: `<svg viewBox="0 0 24 24" aria-hidden="true">${path}</svg>${label}` })));
-        const signIn = () => [appleButton(),
-          el('a', { className: 'ink-btn solid', href: '/api/auth/google/start', textContent: 'Sign in with Google', style: 'display:flex;align-items:center;justify-content:center;text-decoration:none' }),
-          legalNote('By signing in you agree to the ')];
+        // Signed out is a page, not a form (the owner, 2026-11-10): a drawing of the side, its name set large, what it gets you as
+        // three rows shaped like the list that will stand here, and the sign-in at the foot, under the thumb (REVIEW.md 1.2, P-32).
+        const gets = (...items) => el('ul', { className: 'join-gets' }, ...items.map(([path, label, what]) => el('li', {},
+          el('span', { className: 'jg-glyph', innerHTML: `<svg viewBox="0 0 24 24" aria-hidden="true">${path}</svg>` }), el('b', { textContent: label }), el('small', { textContent: what }))));
+        // A road drawn as a printed map draws one (ink casing, paper fill), the people on it as pucks; the red one is the logo's dot.
+        const roads = (...ds) => ds.map((d) => `<path class="jr-case" d="${d}"/>`).join('') + ds.map((d) => `<path class="jr-fill" d="${d}"/>`).join('');   // casings first: roads that meet, join
+        const pucks = (...at) => at.map(([x, y, lead]) => `<circle class="jr-puck${lead ? ' lead' : ''}" cx="${x}" cy="${y}" r="7"/>`).join('');
+        const drawing = (inner) => el('div', { className: 'join-art', innerHTML: `<svg viewBox="0 0 360 128" preserveAspectRatio="xMidYMid slice" aria-hidden="true">${inner}</svg>` });
+        const signIn = () => el('div', { className: 'join-sign' }, appleButton(),
+          el('a', { className: 'ink-btn solid', href: '/api/auth/google/start', textContent: 'Sign in with Google' }),
+          legalNote('By signing in you agree to the '));
+        const page = (art, head, line, list, waiting) => el('div', { className: 'join-page' }, drawing(art), el('h3', { className: 'join-head', textContent: head }),
+          el('p', { className: 'join-line', textContent: line }), list, ...(waiting ? [el('p', { className: 'join-wait', textContent: waiting })] : []), signIn());
         // P-02: anyone who signs in is in; a link waiting here says what signing in will do with it
         const waiting = stash('apex.invite') ? 'You have a friend link. Sign in and you’re friends.' : stash('apex.add') ? `Sign in to ask @${stash('apex.add')} to be your friend.` : '';
-        body.append(el('img', { src: 'brand/logo.svg', alt: 'Vetta', width: 200, style: 'max-width:60%' }),
-          el('h3', { textContent: 'Drive with friends' }),
-          // P-32: what a newcomer with no friends yet can look forward to, not the board they can't have
-          gets(['<path d="M12 21s-6-6.2-6-11a6 6 0 0 1 12 0c0 4.8-6 11-6 11z"/><circle cx="12" cy="10" r="2.2"/>', 'Who’s out driving'],
-            ['<rect x="3" y="5" width="18" height="15"/><path d="M3 10h18M8 3v4M16 3v4"/>', 'Crew drives'],
-            ['<path d="M6 20c0-5 12-3 12-9 0-3-3-4-6-6"/><circle cx="6" cy="20" r="1.4"/><circle cx="12" cy="5" r="1.4"/>', 'Shared routes']),
-          ...(waiting ? [el('p', { textContent: waiting })] : []),
-          el('p', { className: 'note', textContent: 'Nothing is shared unless you switch it on.' }), ...signIn());
-        cbody.append(el('h3', { textContent: 'Drive as a crew' }),
-          gets(['<path d="M12 3l7 3v5c0 5-3.5 8-7 10-3.5-2-7-5-7-10V6z"/>', 'Your crew’s page'],
-            ['<rect x="3" y="5" width="18" height="15"/><path d="M3 10h18M8 3v4M16 3v4"/>', 'Crew drives'],
-            ['<path d="M8 21l3-18M16 21l-3-18"/><circle cx="12" cy="16" r="1.6"/><circle cx="12" cy="9" r="1.6"/>', 'Convoys']),
-          ...(stash('apex.crew') ? [el('p', { textContent: 'You have a crew link. Sign in to see which crew, then join it.' })] : []),
-          el('p', { className: 'note', textContent: 'A crew is a group for a club or a weekend run: its own page, drives you plan together and a live convoy.' }), ...signIn());
+        const crewDrives = ['<rect x="3" y="5" width="18" height="15"/><path d="M3 10h18M8 3v4M16 3v4"/>', 'Crew drives', 'A time, a meeting point and who’s going.'];
+        // Friends: two roads that meet, someone on each. P-32: what a newcomer with no friends yet can look forward to, not the board.
+        body.append(page(roads('M-12 34 C 70 34 96 96 176 92 S 300 24 372 50', 'M92 140 C 108 112 148 98 176 92') + pucks([116, 115], [277, 60, true]),
+          'Drive with friends.', 'Nothing is shared unless you switch it on.',
+          gets(['<path d="M12 21s-6-6.2-6-11a6 6 0 0 1 12 0c0 4.8-6 11-6 11z"/><circle cx="12" cy="10" r="2.2"/>', 'Who’s out driving', 'On your map, on the road they’re driving, when they share it.'],
+            crewDrives,
+            ['<path d="M6 20c0-5 12-3 12-9 0-3-3-4-6-6"/><circle cx="6" cy="20" r="1.4"/><circle cx="12" cy="5" r="1.4"/>', 'Shared routes', 'A route you planned, sent to a friend to drive.']), waiting));
+        // Crews: one road, three in file behind the lead.
+        cbody.append(page(roads('M-12 96 C 60 96 84 36 156 36 S 262 98 372 70') + pucks([72, 66], [98, 50], [128, 39], [173, 37, true]),
+          'Drive as a crew.', 'A group for a club or a weekend run.',
+          gets(['<path d="M12 3l7 3v5c0 5-3.5 8-7 10-3.5-2-7-5-7-10V6z"/>', 'Your crew’s page', 'Its crest, its next drive, its board and its chat.'],
+            crewDrives,
+            ['<path d="M8 21l3-18M16 21l-3-18"/><circle cx="12" cy="16" r="1.6"/><circle cx="12" cy="9" r="1.6"/>', 'Convoys', 'Everyone on one map while you drive together.']),
+          stash('apex.crew') ? 'You have a crew link. Sign in to see which crew, then join it.' : ''));
         gbody.append(el('h3', { textContent: 'Your cars' }), el('p', { className: 'note', textContent: 'Sign in (People) to keep your cars, a profile and build threads here. Everything else in the Garage works without it.' }));
         ambientFromAccount(false, false);                                     // U-116
         return;
@@ -5789,7 +5817,7 @@
       const driveWith = async (f) => {
         if (!convoy) return;
         if (convoy.active) { toast(`You're in a convoy: invite @${f.handle} from its Invite friends.`); return; }
-        if (!(await ApexConfirm.ask(`Start a convoy now and invite @${f.handle}? You see each other on the map while you drive, for up to two hours. Nothing is kept.`, 'Start convoy'))) return;
+        if (!(await ApexConfirm.ask(`Start a convoy now and invite @${f.handle}? You see each other on the map while you drive, for two hours unless you keep it going. Nothing is kept.`, 'Start convoy'))) return;
         const r = await convoy.startFor(`@${me.handle} and @${f.handle}`, [f.handle]);
         toast(r.ok ? (r.invited ? `Convoy started. @${f.handle} has the invite in the app.` : `Convoy started, but @${f.handle} couldn't be invited. Share its link.`) : 'Couldn\'t start a convoy. Check signal.');
         if (r.ok) closeSheet();
@@ -6864,15 +6892,17 @@
       if (!privacyZones.length) { list.append(el('p', { className: 'note', textContent: 'No zones yet.' })); return; }
       for (const z of privacyZones) {
         list.append(el('div', { className: 'row' }, el('span', { textContent: `${z.name} · ${z.r >= 1000 ? `${z.r / 1000} km` : `${z.r} m`}` }),
-          btn('Remove', () => { privacyZones = ApexPrivacyZones.remove(privacyZones, z.id); ApexPrivacyZones.save(localStorage, privacyZones); renderZones(); paintDriveStat(); }, 'linkbtn')));
+          btn('Remove', () => { privacyZones = ApexPrivacyZones.remove(privacyZones, z.id); ApexPrivacyZones.save(localStorage, privacyZones); renderZones(); paintDriveStat(); zonesChanged(); }, 'linkbtn')));
       }
     }
+    // friends on the map keeps a copy of the zones on the server: it goes up now, not at the next change of who sees you
+    const zonesChanged = () => { if (friendsMap && accountMe && accountMe.member) friendsMap.syncZones().catch(() => {}); };
     async function addZone(p) {
       const name = await ApexConfirm.prompt('Name this place', { action: 'Add zone', value: privacyZones.length ? '' : 'Home', placeholder: 'Home, Work', maxLength: 40 });
       if (name === null) return;
       const next = ApexPrivacyZones.add(privacyZones, { lat: p.lat, lon: p.lon, r: zoneR, name });
       if (!next) { toast(`Up to ${ApexPrivacyZones.MAX_ZONES} zones.`); return; }
-      privacyZones = next; ApexPrivacyZones.save(localStorage, privacyZones); renderZones(); paintDriveStat();
+      privacyZones = next; ApexPrivacyZones.save(localStorage, privacyZones); renderZones(); paintDriveStat(); zonesChanged();
       toast(`${privacyZones.at(-1).name}: nothing is recorded or shared within ${zoneR >= 1000 ? `${zoneR / 1000} km` : `${zoneR} m`}.`);
     }
     document.querySelectorAll('#zoneRadius [data-zone-r]').forEach(b => b.addEventListener('click', () => { zoneR = Number(b.dataset.zoneR); renderZones(); }));
@@ -7049,7 +7079,7 @@
       }
       if (k === 'coverage') {
         updateCoverage();
-        if (state.toggles.coverage) toast(mapReady && map.getZoom() < ApexCoverage.MIN_ZOOM ? 'Zoom in to see measured roads.' : 'Green: measured roads, bolder the surer. A road without a line is waiting for a pioneer: the first drivers to map it earn extra points.');
+        if (state.toggles.coverage) toast(mapReady && map.getZoom() < ApexCoverage.MIN_ZOOM ? 'Zoom in to see measured roads.' : 'Measured roads: green smooth, amber fair, red rough, bolder the surer. Tap one for what was measured. A road without a line is waiting for a pioneer: the first drivers to map it earn extra points.');
       }
       if (k === 'nudge') nudgeSwitched();                              // panel R-1: asks for notifications only now
       if (k === 'twisty') {
@@ -7709,6 +7739,7 @@
         ambient.sharer = ApexContributor.createAmbient({
           makeRecorder: () => new ApexSensors.Recorder(),
           makeLive: () => { const day = new Date(); return ApexContributor.createLive({ Core, fetch: window.fetch.bind(window), post: countedContribute,
+            deliberate: () => !!(drive.native && drive.rec),          // rows of a recorded drive say so: they count toward loved roads
             driveId: ApexContributor.driveIdFor({ id: `app_${Date.now()}`, date: day.toISOString() }), drivenOn: day.toISOString().slice(0, 10),
             hourBucket: () => (window.ApexFlags && ApexFlags.on('quiet_hours', false) ? ApexContributor.hourBucket(new Date()) : null) }); },
           onStatus: () => { paintAmbient(); if (state.mode === 'live') paintDriveStat(); },
@@ -7988,6 +8019,7 @@
       keepStart();                                                     // Round 3: the drive is kept as it goes (drive_keep.js)
       if (NATIVE_SHELL) {   // the app's own GPS and IMU feed window.apex.live; no browser sensors to start
         drive.native = true;
+        { const a = ambientStats(); drive.ambientTrips = a ? a.trips - (a.active ? 1 : 0) : 0; }
         activity('start', { title: track ? track.name : 'Drive', note: 'Recording', distance: '', eta: '' });
         drive.status = { gps: performance.now() - state.liveAt < 5000 && state.live ? 'on' : 'waiting', motion: 'on', wake: 'on', message: '' };
         setPlaying(false); setMode('live'); paintModeSwitch(); resumeFollow(); paintDriveStat();
@@ -8240,6 +8272,9 @@
       carPost({ kind: 'end' }); car.guideKey = ''; car.sightKey = '';
       // U-62: after End the car goes idle; the finished route was offered again as a trip preview ("Dry Ridge Rd · Drive")
       if (track && track.kind === 'route') { car.ended = track; carRoute(null); }
+      // In the app the mounted phone's own stream (feedAmbient) carries a recorded drive's road feel. When it ran during
+      // this drive, the drive is shared (or waits for signal), so the Log doesn't offer it again by hand.
+      const nativeShared = (() => { const a = drive.native && ambient.allowed ? ambientStats() : null; return !!(a && (a.active || a.trips > (drive.ambientTrips || 0))); })();
       const rec = drive.rec, sensors = drive.sensors, live = drive.live, road = rec && window.ApexRoadNames ? ApexRoadNames.mainRoad(drive.roads, rec.km * 1000) : null;
       drive.sensors = null; drive.rec = null; drive.live = null; drive.share = 'off'; drive.native = false;
       if (sensors) sensors.stop();
@@ -8277,12 +8312,13 @@
               // what had no signal to go with waits on the phone (road_carry.js): said, so a drive in the hills doesn't look unshared
               const waitM = window.ApexRoadCarry && ApexRoadCarry.itemM && live.leftover ? ApexRoadCarry.itemM(live.leftover()) : 0;
               const waits = waitM >= 100 ? ApexUnits.long(waitM, 1) : null;
+              // shared, or waiting to go by itself: either way the Log must not offer it by hand (the pass would be merged twice)
+              if ((shared && shared.chunks > 0) || waits) await ApexAnalysis.job('patch', { id: res.driveId, fields: { contributed: true } });
               if (shared && shared.chunks > 0) {
-                await ApexAnalysis.job('patch', { id: res.driveId, fields: { contributed: true } });
                 if (shared.km > 0) toast(waits ? `Shared ${ApexUnits.long((shared.km) * 1000, 1)} of road feel. ${waits} more waits for signal.` : `Shared ${ApexUnits.long((shared.km) * 1000, 1)} of road feel.`);
               } else if (waits) toast(`${waits} of road feel waits for signal. It goes when you're back online.`);
             }).catch(() => {});
-          }
+          } else if (nativeShared) ApexAnalysis.job('patch', { id: res.driveId, fields: { contributed: true } }).catch(() => {});
         } catch (e) {
           if (endDrive && endDrive.id === card.id) $('endCard').classList.remove('show');   // nothing was saved: no card for it
           toast(e && /Quota/.test(e.name || e.message || e) ? 'Couldn\'t save this drive. The phone is out of storage.' : 'Couldn\'t save this drive.'); console.error('save drive', e);
@@ -8406,7 +8442,7 @@
       const name = (accountMe && accountMe.handle ? `@${accountMe.handle}'s convoy` : 'Convoy');
       back.append(el('div', { className: 'card-sheet' }, el('h2', { textContent: 'Ways to go' }), drive,
         btn('Convoy now', () => { close(); needSocial().then(() => { if (convoy) convoy.now(name); else toast('The convoy isn\u2019t available here.'); }); }, 'ink-btn'),
-        el('p', { textContent: 'A convoy: drive together, live, for up to two hours. Friends join with the code on your screen; nothing is kept. A crew\u2019s run starts its convoy from the drive\u2019s card.' }),
+        el('p', { textContent: 'A convoy: drive together, live, for two hours (the leader can keep it going, up to six). Friends join with the code on your screen; nothing is kept. A crew\u2019s run starts its convoy from the drive\u2019s card.' }),
         btn('Cancel', close, 'linkbtn')));
       back.addEventListener('click', (e) => { if (e.target === back) close(); });
       document.addEventListener('keydown', esc);

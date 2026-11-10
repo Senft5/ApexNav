@@ -702,6 +702,28 @@ async function ownTrip(page, base, level = null) {
     steps: (window.apexDebug.track.steps || []).map((s) => s.street), via: ((window.apexDebug.track.request || {}).via || []).length }));
   return { r, calls };
 }
+flow('design pass 2: the route card\'s last row is one ruled strip of keys, and the map\'s credit is a plate on the look\'s own tokens (IDEAS U-53)', async (page, base) => {
+  graphDir = graphFixture();
+  try {
+    await ownTrip(page, base);
+    const k = await page.evaluate(() => { const row = document.querySelector('.rc-links'), keys = [...row.querySelectorAll('.linkbtn')].filter((b) => !b.hidden).map((b) => { const r = b.getBoundingClientRect(), c = getComputedStyle(b);
+        return { t: b.textContent, w: Math.round(r.width), h: Math.round(r.height), top: Math.round(r.top), u: c.textDecorationLine, over: b.scrollWidth > b.clientWidth + 1 }; });
+      return { keys, row: Math.round(row.getBoundingClientRect().width) }; });
+    check(k.keys.length >= 4 && new Set(k.keys.map((x) => x.top)).size === 1 && Math.abs(k.keys.reduce((n, x) => n + x.w, 0) - k.row) <= 3, 'one row of keys, edge to edge: ' + JSON.stringify(k));
+    check(k.keys.every((x) => x.h >= 44 && x.u === 'none' && !x.over), '44 pt keys, no underlines, every word whole: ' + JSON.stringify(k.keys));
+    await page.click('#routeSaveBtn');
+    const saved = await page.evaluate(() => { const b = document.getElementById('routeSaveBtn'), c = getComputedStyle(b), ink = getComputedStyle(document.documentElement).getPropertyValue('--panel-ink').trim();
+      const probe = document.createElement('i'); probe.style.color = ink; document.body.append(probe); const want = getComputedStyle(probe).color; probe.remove();
+      return { t: b.textContent, pressed: b.getAttribute('aria-pressed'), bg: c.backgroundColor, want }; });
+    check(saved.t === 'Saved' && saved.pressed === 'true' && saved.bg === saved.want, 'a key that is on is inked in: ' + JSON.stringify(saved));
+    const credit = await page.evaluate(() => { const a = document.querySelector('.maplibregl-ctrl-attrib'); if (!a) return null;
+      a.classList.remove('maplibregl-attrib-empty', 'maplibregl-compact-show'); a.classList.add('maplibregl-compact');
+      const c = getComputedStyle(a), b = a.querySelector('.maplibregl-ctrl-attrib-button'), cb = getComputedStyle(b), panel = getComputedStyle(document.querySelector('.plan')).backgroundColor;
+      return { radius: c.borderTopLeftRadius, bg: c.backgroundColor, panel, border: c.borderTopWidth, img: cb.backgroundImage, i: getComputedStyle(b, '::before').content, bradius: cb.borderTopLeftRadius }; });
+    check(credit && credit.radius === '0px' && credit.bradius === '0px' && credit.bg === credit.panel && parseFloat(credit.border) >= 1 && credit.img === 'none' && credit.i === '"i"', 'the credit is a square plate on the page\'s paper with its own "i": ' + JSON.stringify(credit));
+  } finally { graphDir = null; }
+}, { geolocation: { latitude: 39.155, longitude: -84.615 }, permissions: ['geolocation'] });
+
 flow('own routing: where our graph tiles cover the trip, our route wins and Valhalla only gives the turn instructions (docs/OWN_ROUTING.md)', async (page, base) => {
   graphDir = graphFixture();
   try {
@@ -2870,6 +2892,37 @@ flow('convoy: the leader shows a QR code of the link (Worker stubbed, IDEAS S-22
 // @fish5spd, 2026-11-03 ("Shits in my way when I lead"): leading a convoy on a drive, a card over the road just ahead of the
 // arrow held the convoy's line and a row of calls cut off under the Layers key. Now the convoy is one line behind the car,
 // clear of the right-hand keys and the safe areas, upright and on its side; the calls come from the Report key or the line.
+flow('convoy: ten minutes before it ends the leader is told and can keep it going another hour (Worker stubbed)', async (page, base) => {
+  await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); localStorage.setItem('apex.permsExplained', '1'); } catch (_) {} });
+  const id = 'KKKKKKKKKKKKKKKKKKKKKK', t0 = Date.now(), keeps = [];
+  const ctx = { sessionId: id, name: 'Sunday run', role: 'leader', you: 'k1', leaderKey: 'k1', expiresAtMs: t0 + 9 * 60000 + 30000, maxExpiresAtMs: t0 + 4 * 3600000, keepWindowMs: 30 * 60000, seq: 0, leaderEpoch: 1,
+                members: [{ key: 'k1', handle: 'lead', role: 'leader', online: true }, { key: 'k2', handle: 'mate', role: 'member', online: true }] };
+  await page.route('**/api/**', (route) => {
+    const u = new URL(route.request().url()), m = route.request().method();
+    const json = (b, status = 200) => route.fulfill({ status, contentType: 'application/json', body: JSON.stringify(b) });
+    if (u.pathname === '/api/me') return json({ signed_in: true, member: true, handle: 'lead' });
+    if (u.pathname === '/api/convoy' && m === 'POST') return json({ invite: `${id}.${'s'.repeat(32)}`, context: ctx }, 201);
+    if (u.pathname === `/api/convoy/${id}/keep` && m === 'POST') { keeps.push(1); ctx.expiresAtMs += 3600000; return json({ expiresAtMs: ctx.expiresAtMs, maxExpiresAtMs: ctx.maxExpiresAtMs }); }
+    if (u.pathname === `/api/convoy/${id}/ticket`) return json({ error: 'unavailable' }, 503);   // no socket here: the card's own words are under test
+    if (u.pathname === `/api/convoy/${id}`) return json(ctx);
+    if (m === 'GET') return json([]);
+    return json({}, 404);
+  });
+  await page.goto(base + '/index.html');
+  await page.waitForFunction(() => window.apex && typeof window.apex.live === 'function');
+  await page.evaluate(() => document.getElementById('startMore').click());
+  await page.click('.start-sheet button:has-text("Convoy now")');
+  await page.waitForSelector('.convoy-sheet button:has-text("Keep going 1 h")');
+  check(/\b[89] min left/.test(await page.locator('.convoy-sheet').innerText()), 'the card says how long is left');
+  // the heads-up, once, with the key on it
+  await page.waitForFunction(() => /Convoy ends in (9|10) min\./.test(document.getElementById('toast').textContent) && /Keep going/.test(document.getElementById('toast').textContent), null, { timeout: 5000 });
+  await page.click('.convoy-sheet button:has-text("Keep going 1 h")');
+  await page.waitForFunction(() => /Convoy kept going: 1 h [89] min left\./.test(document.getElementById('toast').textContent), null, { timeout: 5000 });
+  check(keeps.length === 1, 'asked the server once');
+  await page.waitForFunction(() => !/Keep going 1 h/.test(document.querySelector('.convoy-sheet').innerText) && /1 h [89] min left/.test(document.querySelector('.convoy-sheet').innerText), null, { timeout: 5000 });
+  check(true, 'with over half an hour left again the key is gone and the card shows the new time');
+});
+
 flow('convoy: leading a drive, the convoy is one line behind the car and the calls come when asked (Worker stubbed, @fish5spd 2026-11-03)', async (page, base) => {
   await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); localStorage.setItem('apex.permsExplained', '1'); } catch (_) {} });
   const id = 'CCCCCCCCCCCCCCCCCCCCCC', until = Date.now() + 120 * 60000;
@@ -3145,6 +3198,37 @@ flow('your data: Settings counts what the phone holds and downloads drives as GP
   await page.click('.confirm-sheet .cs-yes');
   await page.waitForFunction(() => /^Nothing saved for offline/.test(document.getElementById('myOfflineNote').textContent));
   check((await page.evaluate(() => localStorage.getItem('apex.savedRoutes'))) === null, 'saved routes gone');
+});
+
+flow('loved roads: in the app a recorded drive\'s road feel says it was recorded, and the saved drive is not offered again by hand (Worker stubbed)', async (page, base) => {
+  await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); localStorage.setItem('apex.permsExplained', '1'); } catch (_) {}
+    window.webkit = { messageHandlers: { apex: { postMessage: () => {} } } }; });
+  const posts = [], lat0 = 35.5, lon0 = -83.9, cors = { 'access-control-allow-origin': '*' };
+  await page.route('**/api/**', (route) => {
+    const u = new URL(route.request().url()), m = route.request().method(), p = u.pathname;
+    const json = (b, status = 200) => route.fulfill({ status, contentType: 'application/json', body: JSON.stringify(b) });
+    if (p === '/api/contribute' && m === 'POST') { posts.push(JSON.parse(route.request().postData())); return json({ accepted: true }, 202); }
+    if (m !== 'GET') return route.fulfill({ status: 204 });
+    if (p === '/api/me') return json({ signed_in: true, member: true, handle: 'me' });
+    if (p === '/api/me/export') return json({ member: { contribute: 1 } });
+    return json([]);
+  });
+  await page.route('**/trace_attributes', (route) => { const sh = JSON.parse(route.request().postData()).shape;
+    route.fulfill({ status: 200, contentType: 'application/json', headers: cors, body: JSON.stringify({ edges: [{ way_id: 77, road_class: 'tertiary' }], matched_points: sh.map(() => ({ type: 'matched', edge_index: 0 })) }) }); });
+  await page.route('**/api/interpreter', (route) => route.fulfill({ status: 200, contentType: 'application/json', headers: cors,
+    body: JSON.stringify({ elements: [{ type: 'way', id: 77, geometry: [{ lat: lat0 - 0.01, lon: lon0 }, { lat: lat0 + 0.09, lon: lon0 }] }] }) }));
+  await page.goto(base + '/index.html');
+  await page.waitForFunction(() => window.apexDebug && window.apex && window.ApexAnalysis && window.ApexContributor && window.ApexRecording);
+  const frames = ([a, b, lat0, lon0]) => { for (let j = a; j < b; j++) window.apex.live({ lat: lat0 + j * 1e-4, lon: lon0, accuracy_m: 4, speed_mps: 15, course_deg: 0, lat_g: 0, lon_g: 0, has_fix: true, calibration: 'locked', roughness_rms: 0.1 }); };
+  await page.evaluate(frames, [0, 1, lat0, lon0]);                                        // mounted: the app asks whether sharing is on
+  await page.waitForTimeout(1500);
+  await page.evaluate(() => window.apex.onNative({ type: 'link', params: { go: 'drive' } }));
+  await page.waitForFunction(() => window.apexDebug.driveActive);
+  for (let burst = 0; burst < 7; burst++) { await page.evaluate(frames, [burst * 100 + 1, (burst + 1) * 100 + 1, lat0, lon0]); await page.waitForTimeout(400); }   // 7.7 km due north
+  check(posts.length >= 1 && posts.every((c) => c.rec === 1 && c.way_id === 77), 'what went during the recorded drive says it was recorded: ' + JSON.stringify(posts.map((c) => [c.bins.length, c.rec])));
+  await page.evaluate(() => { document.getElementById('driveEnd').click(); window.apexDebug.endNow(); });
+  const saved = await page.evaluate(async () => { for (let i = 0; i < 150; i++) { const l = (await ApexAnalysis.job('summaries')).list; if (l.length && l[0].contributed) return l[0].contributed; await new Promise((r) => setTimeout(r, 100)); } return (await ApexAnalysis.job('summaries')).list.map((x) => x.contributed); });
+  check(saved === true, 'the saved drive is marked shared, so the Log does not offer it by hand: ' + JSON.stringify(saved));
 });
 
 flow('road feel that waited for signal: counted in Your data, kept while Road data can\'t be confirmed, sent once when the phone is back online (IDEAS Q-06)', async (page, base) => {
@@ -4421,7 +4505,7 @@ flow('measured roads: the switch draws the roads members have measured around th
     if (u.pathname === '/api/coverage') {
       boxes.push(u.searchParams.get('bbox'));
       const [s, w, n, e] = u.searchParams.get('bbox').split(',').map(Number), lat = (s + n) / 2, lon = (w + e) / 2;
-      return json({ ways: [{ way: 1, line: [[lat, lon], [lat + 0.01, lon]], conf: [2, 3] }] });
+      return json({ ways: [{ way: 1, line: [[lat, lon], [lat + 0.01, lon]], conf: [2, 3], rough: [0.3, 0.071], banked: [null, 0.3], offCamber: [null, 0] }] });
     }
     return json({ error: 'not_found' }, 404);
   });
@@ -4435,6 +4519,14 @@ flow('measured roads: the switch draws the roads members have measured around th
   const [s, w, n, e] = boxes[0].split(',').map(Number);
   check(n - s <= 0.5 && e - w <= 0.5 && s < 35.5 && n > 35.5, 'a small box around the view: ' + boxes[0]);
   check(await page.evaluate(() => window.apexDebug.map.getLayoutProperty('apex-coverage', 'visibility')) === 'visible', 'drawn');
+  // IDEAS U-13: the line's colour is the pavement measured there (its surer direction), and a tap says it in words
+  const drawn = await page.evaluate(() => { const m = window.apexDebug.map; return { p: m.getSource('apex-coverage-src')._data.features[0].properties, paint: JSON.stringify(m.getPaintProperty('apex-coverage', 'line-color')) }; });
+  check(drawn.p.s === 1 && drawn.p.t === 2, 'smooth, from the surer direction: ' + JSON.stringify(drawn.p));
+  check(/^\["match",\["get","s"\],1,"#[0-9A-Fa-f]{6}",2,"#[0-9A-Fa-f]{6}",3,"#[0-9A-Fa-f]{6}","#[0-9A-Fa-f]{6}"\]$/.test(drawn.paint) && new Set(drawn.paint.match(/#[0-9A-Fa-f]{6}/g)).size === 4, 'four colours: smooth, fair, rough, unknown: ' + drawn.paint);
+  await page.evaluate(() => { const m = window.apexDebug.map, f = m.getSource('apex-coverage-src')._data.features[0], c = f.geometry.coordinates; m.jumpTo({ center: [(c[0][0] + c[1][0]) / 2, (c[0][1] + c[1][1]) / 2], zoom: 14 }); });
+  await page.waitForFunction(() => { const m = window.apexDebug.map; return m.loaded() && m.queryRenderedFeatures([m.getCanvas().clientWidth / 2, m.getCanvas().clientHeight / 2], { layers: ['apex-coverage'] }).length > 0; }, null, { timeout: 8000 });
+  await page.evaluate(() => { const m = window.apexDebug.map, c = m.getCenter(); m.fire('click', { point: m.project(c), lngLat: c, originalEvent: {} }); });
+  await page.waitForFunction(() => /Smooth pavement \(0\.07 g\) · many passes · 30% of it banked/.test(document.getElementById('toast').textContent), null, { timeout: 4000 });
   await page.evaluate(() => document.querySelector('[data-toggle="coverage"]').click());
   check(await page.evaluate(() => window.apexDebug.map.getLayoutProperty('apex-coverage', 'visibility')) === 'none', 'hidden when off');
 });
@@ -4978,6 +5070,22 @@ async function storeDashDrive(page, id = 'dc1', name = 'Dashcam road') {
   }, [id, name]);
 }
 
+flow('the empty Log is a first page: the book\'s furniture in pencil, one key, and its switch in the page\'s own typeface (design pass 2026-11-10)', async (page, base) => {
+  await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); } catch (_) {} });
+  await page.goto(base + '/analysis.html');
+  await page.waitForFunction(() => window.apexLogDebug && window.apexLogDebug.loaded());
+  await page.waitForSelector('#historyEmpty:not([hidden])');
+  const f = await page.evaluate(() => { const fam = (e) => getComputedStyle(e).fontFamily, go = document.querySelector('#historyEmpty .fp-go').getBoundingClientRect(), alt = document.querySelector('#historyEmpty .fp-alt').getBoundingClientRect();
+    return { body: fam(document.body), sw: [...document.querySelectorAll('.log-seg button')].map(fam), go: [Math.round(go.height), Math.round(go.width)], alt: Math.round(alt.height),
+      over: document.documentElement.scrollWidth > innerWidth, head: document.querySelector('#historyEmpty .fp-head').textContent, table: document.getElementById('historyPanel').hidden }; });
+  check(f.sw.every((x) => x === f.body), 'Drives and Stages are set in the page\'s typeface: ' + JSON.stringify(f));
+  check(f.go[0] >= 44 && f.go[1] > 300 && f.alt >= 44 && !f.over && f.head === 'Your first drive goes here.' && f.table, 'one full-width key, a 44 pt link, nothing off the page, no empty table under it: ' + JSON.stringify(f));
+  await page.click('[data-seg="segments"]');
+  await page.waitForSelector('#segList .first-page');
+  const s = await page.evaluate(() => ({ head: document.querySelector('#segList .fp-head').textContent, go: document.querySelector('#segList .fp-go').textContent, mark: !!document.querySelector('#segList .fp-mark') }));
+  check(s.head === 'No stages yet.' && s.go === 'Start a drive' && s.mark, 'Stages: what a stage is, drawn, and the way to one: ' + JSON.stringify(s));
+});
+
 flow('the drive page\'s map: with no map to be had the picture keeps its blank panel; MapLibre loads only for it (TestFlight 15)', async (page, base) => {
   await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); } catch (_) {} });
   await page.goto(base + '/analysis.html');
@@ -5311,17 +5419,28 @@ flow('REVIEW.md 1.2 screen by screen: the Log, drive detail, Stages, People sign
   check(dv.first && /solid/.test(dv.replay) && /stamps/.test(dv.tags) && !dv.wide.length, 'Drive detail: ' + JSON.stringify(dv));
   // People signed out: the same Friends | Crews switch, each side what it gets you in three glyphs, then sign-in (the owner, 2026-10-30)
   await page.goto(base + '/index.html?view=people');
-  await page.waitForSelector('#accountBody .crew-gets');
-  const gets = (pane) => page.$$eval(`${pane} .crew-gets span`, (s) => s.map((x) => x.textContent + ':' + !!x.querySelector('svg')));
+  await page.waitForSelector('#accountBody .join-gets');
+  const gets = (pane) => page.$$eval(`${pane} .join-gets li`, (s) => s.map((x) => x.querySelector('b').textContent + ':' + !!x.querySelector('svg')));
   const fg = await gets('#accountBody');
   check(JSON.stringify(fg) === '["Who’s out driving:true","Crew drives:true","Shared routes:true"]', 'People signed out, Friends: ' + fg);
   check(await page.isVisible('#accountBody >> text=Sign in with Google') && !(await page.isVisible('#crewsBody')), 'Friends first, with sign-in');
+  // a page, not a form (the owner, 2026-11-10): a drawing, the name set large, each promise said in a line, the sign-in at the foot
+  const jp = await page.evaluate(() => { const b = document.getElementById('accountBody'), r = (q) => b.querySelector(q).getBoundingClientRect(), head = b.querySelector('.join-head');
+    const body = document.querySelector('.sheet .body').getBoundingClientRect(), key = r('.join-sign a.ink-btn'), art = r('.join-art');
+    return { head: head.textContent, size: parseFloat(getComputedStyle(head).fontSize), face: getComputedStyle(head).fontFamily, pucks: b.querySelectorAll('.join-art .jr-puck').length, lead: b.querySelectorAll('.join-art .jr-puck.lead').length,
+      artW: Math.round(art.width), w: innerWidth, said: [...b.querySelectorAll('.join-gets small')].every((x) => x.textContent.length > 12), keyH: Math.round(key.height),
+      foot: Math.round(body.bottom - r('.join-sign').bottom), wide: [...b.querySelectorAll('*')].filter((e) => e instanceof HTMLElement && e.getBoundingClientRect().right > body.right + 1).length, logo: !!b.querySelector('img') }; });
+  check(jp.head === 'Drive with friends.' && jp.size >= 30 && /Barlow/.test(jp.face) && jp.pucks === 2 && jp.lead === 1 && jp.artW === jp.w && jp.said && jp.keyH >= 52 && jp.foot >= 0 && jp.foot <= 40 && !jp.wide && !jp.logo,
+    'People signed out is a page: ' + JSON.stringify(jp));
   await page.click('[data-people="crews"]');
   const cg = await gets('#crewsBody');
   check(JSON.stringify(cg) === '["Your crew’s page:true","Crew drives:true","Convoys:true"]' && await page.isVisible('#crewsBody >> text=Sign in with Google'), 'People signed out, Crews: ' + cg);
   // Settings are the Garage: the theme picker, help folded under "How this works", no Octane, Erase is red text behind a confirm sheet
   await page.goto(base + '/index.html?view=garage');
   await page.waitForSelector('#garageGear', { state: 'visible' });
+  // signed out, the Garage is the Garage: People's page stays on People (it showed here, above Your cars)
+  const stray = await page.evaluate(() => ({ join: !!document.querySelector('.join-page') && document.querySelector('.join-page').getBoundingClientRect().height, acc: getComputedStyle(document.getElementById('accountSection')).display }));
+  check(stray.join === 0 && stray.acc === 'none', 'People\'s signed-out page is not in the Garage: ' + JSON.stringify(stray));
   await openSetting(page, 'data');
   const g = await page.evaluate(() => { const s = document.getElementById('sheet'), e = getComputedStyle(document.getElementById('myEraseBtn'));
     return { title: s.querySelector('h2').textContent, themes: document.querySelectorAll('#themeCards > *').length, how: document.querySelectorAll('[data-panel~="garage"] details.how').length, octane: /Octane/.test(document.body.innerText), erase: e.color + '/' + e.textDecorationLine + '/' + e.borderTopStyle }; });
@@ -5574,7 +5693,7 @@ flow('plan flow (a) a destination in 3 taps: Where to?, the place, Start; Start 
   const shown = ys.filter((y) => y != null);
   check(shown.length === ys.length && Math.max(...shown) - Math.min(...shown) <= 1, 'Start stays put while the card fills in and the ranking lands: ' + JSON.stringify([...new Set(ys)]));
   const card = await page.evaluate(() => ({ note: document.getElementById('routeProgress').textContent, found: document.getElementById('routeProgress').classList.contains('found'),
-    note2: document.getElementById('routeCardLevelsNote').textContent, name: apexDebug.track.name, h: document.getElementById('planPanel').getBoundingClientRect().height,
+    note2: document.getElementById('routeCardPager').textContent.replace(/\s/g, ' '), name: apexDebug.track.name, h: document.getElementById('planPanel').getBoundingClientRect().height,
     stage: document.querySelector('.stage').getBoundingClientRect().height, dials: document.getElementById('routeCardBars').innerText.replace(/\s+/g, ' ') }));
   check(card.found && /^Better route found: \+\d+ min, \d+ more corners$/.test(card.note), 'the card says the ranked route replaced the first one, and why: ' + JSON.stringify(card));
   // one control: the level cards are the choices, each its pick's time and corners, counted as the card counts them
@@ -5582,7 +5701,7 @@ flow('plan flow (a) a destination in 3 taps: Where to?, the place, Start; Start 
   check(cards.length === 3 && cards.filter((c) => !c.further).every((c) => /^(Quick|Fun|Long way) (\d+:\d\d|\d+ min) \d+ corners?$/i.test(c.text)) && !cards.some((c) => /good corners/i.test(c.text))
     && cards.find((c) => c.level === 'fun').on && cards.find((c) => c.level === 'fun').checked, 'the level cards: each its pick, Fun on: ' + JSON.stringify(cards));
   check(cards.find((c) => c.level === 'max').further && /^Long way Look further$/i.test(cards.find((c) => c.level === 'max').text), 'a plan at Fun didn\'t look as far as Long way, and its card says so, no numbers: ' + JSON.stringify(cards));
-  check(/swipe the card for the next route, 2\u00a0of\u00a02/i.test(card.note2), 'the line under the cards says what a swipe does: ' + card.note2);
+  check(/^2 \/ 2Swipe the card for the next route$/.test(card.note2), 'the marks under the cards say which route and what a swipe does: ' + card.note2);
   check(await page.evaluate(() => !document.getElementById('routeCardOptions') && !document.querySelector('#routeCard .switch')), 'no separate tile row or switch');
   check(card.h <= 0.52 * card.stage, `the card opens at half height, the map above it (finding 10): ${Math.round(card.h)} of ${Math.round(card.stage)} px`);
   check(/CURVY/.test(card.dials) && /FLOWING/.test(card.dials) && !/TWIST|FLOW\b/.test(card.dials), 'plain words on the dials: ' + card.dials);
@@ -5665,8 +5784,14 @@ flow('plan flow (e, f) a level change and an alternative are one tap or swipe ea
   // to the right goes back to the one before it, Quick's
   const ons = () => page.evaluate(() => [...document.querySelectorAll('#routeCardFun [data-fun]')].map((b) => b.classList.contains('on')).join());
   check(await ons() === 'false,true,false', 'two routes found, Fun\'s on: ' + await ons());
-  const hint = await page.evaluate(() => document.getElementById('routeCardLevelsNote').textContent);
-  check(/^Swipe the card for the next route, 2\u00a0of\u00a02$/.test(hint), 'the line under the cards says what a swipe does: ' + hint);
+  // page marks under the cards (design pass, 2026-11-10): one per route found, the one on screen inked, the count, and
+  // the words for what a swipe does until the first swipe
+  const marks = () => page.evaluate(() => { const p = document.getElementById('routeCardPager'), n = document.getElementById('routeCardLevelsNote');
+    return { shown: !p.hidden, on: [...p.querySelectorAll('i')].map((i) => +i.classList.contains('on')).join(''), count: p.querySelector('span').textContent.replace(/\s/g, ''),
+      words: (p.querySelector('small') || {}).textContent || '', label: p.getAttribute('aria-label'), note: n.hidden ? '' : n.textContent, h: Math.round(p.getBoundingClientRect().height) }; });
+  const hint = await marks();
+  check(hint.shown && hint.on === '01' && hint.count === '2/2' && hint.words === 'Swipe the card for the next route' && /^Route 2 of 2\. Swipe/.test(hint.label) && !hint.note && hint.h <= 24,
+    'the marks under the cards say which route and what a swipe does, on one row: ' + JSON.stringify(hint));
   const box = await page.evaluate(() => { const o = document.getElementById('routeCardStats'); o.scrollIntoView({ block: 'nearest' }); const r = o.getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height / 2 }; });
   const startY = await page.evaluate(() => document.getElementById('routeDriveBtn').getBoundingClientRect().top);
   await page.evaluate(() => { window.__touches = []; for (const k of ['touchstart', 'touchend']) document.getElementById('routeCard').addEventListener(k, (e) => window.__touches.push(k + ':' + Math.round((e.touches[0] || e.changedTouches[0]).clientX)), { passive: true }); });
@@ -5676,7 +5801,9 @@ flow('plan flow (e, f) a level change and an alternative are one tap or swipe ea
       .then((d) => { throw new Error('a swipe sideways picks the next route: ' + JSON.stringify(d)); }));
   check(asked.length === routed && await level() === 'Quick', 'a swipe picks the other route already found, and its level with it');
   check(Math.abs(await page.evaluate(() => document.getElementById('routeDriveBtn').getBoundingClientRect().top) - startY) <= 1, 'Start doesn\'t move on a swipe');
-  check(/1\u00a0of\u00a02$/.test(await page.evaluate(() => document.getElementById('routeCardLevelsNote').textContent)), 'the line counts along');
+  const swiped = await marks();
+  check(swiped.on === '10' && swiped.count === '1/2' && /^Route 1 of 2\./.test(swiped.label), 'the marks count along: ' + JSON.stringify(swiped));
+  check(!swiped.words && !swiped.note, 'once you have swiped, the words go and the marks stay: ' + JSON.stringify(swiped));
   await scan(page, 'the card after a swipe');
 }, IPHONE);
 

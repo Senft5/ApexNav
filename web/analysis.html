@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self' apexnav:; script-src 'self' apexnav: 'sha256-GybQ7lyBshkD0GwlWHAS6tR+6o+mUgnFmM/VezXCquo=' 'sha256-G7s/ZI+Hqrfc4DqbB6EANJJLmUmhNK06PizQ1LlsG84=' https://cdn.jsdelivr.net 'wasm-unsafe-eval'; worker-src 'self' apexnav: blob:; child-src 'self' apexnav: blob:; style-src 'self' apexnav: 'unsafe-inline'; font-src 'self' apexnav: data:; img-src 'self' apexnav: data: blob: https://tiles.openfreemap.org https://s3.amazonaws.com https://basemap.nationalmap.gov; media-src 'self' apexnav: data: blob:; connect-src 'self' apexnav: data: blob: https://apexnav.senftns.workers.dev wss://apexnav.senftns.workers.dev https://tiles.openfreemap.org https://basemap.nationalmap.gov https://s3.amazonaws.com https://valhalla1.openstreetmap.de https://router.project-osrm.org https://overpass-api.de https://overpass.private.coffee https://overpass.kumi.systems https://maps.mail.ru https://nominatim.openstreetmap.org https://photon.komoot.io https://api.open-meteo.com https://api.weather.gov https://statsapi.mlb.com https://api.seatgeek.com https://api.water.noaa.gov https://waterservices.usgs.gov https://in.carsprogram.org https://publicapi.ohgo.com https://quickstats.nass.usda.gov https://commons.wikimedia.org https://graph.mapillary.com https://vpic.nhtsa.dot.gov https://cdn.jsdelivr.net https://huggingface.co https://*.huggingface.co https://*.hf.co; object-src 'none'; base-uri 'none'; form-action 'self'" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self' apexnav:; script-src 'self' apexnav: 'sha256-qgnVuUgJ/YtdUaaQilsb2WyjjBcmVbrEQGmFLMVGIdo=' 'sha256-G7s/ZI+Hqrfc4DqbB6EANJJLmUmhNK06PizQ1LlsG84=' https://cdn.jsdelivr.net 'wasm-unsafe-eval'; worker-src 'self' apexnav: blob:; child-src 'self' apexnav: blob:; style-src 'self' apexnav: 'unsafe-inline'; font-src 'self' apexnav: data:; img-src 'self' apexnav: data: blob: https://tiles.openfreemap.org https://s3.amazonaws.com https://basemap.nationalmap.gov; media-src 'self' apexnav: data: blob:; connect-src 'self' apexnav: data: blob: https://apexnav.senftns.workers.dev wss://apexnav.senftns.workers.dev https://tiles.openfreemap.org https://basemap.nationalmap.gov https://s3.amazonaws.com https://valhalla1.openstreetmap.de https://router.project-osrm.org https://overpass-api.de https://overpass.private.coffee https://overpass.kumi.systems https://maps.mail.ru https://nominatim.openstreetmap.org https://photon.komoot.io https://api.open-meteo.com https://api.weather.gov https://statsapi.mlb.com https://api.seatgeek.com https://api.water.noaa.gov https://waterservices.usgs.gov https://in.carsprogram.org https://publicapi.ohgo.com https://quickstats.nass.usda.gov https://commons.wikimedia.org https://graph.mapillary.com https://vpic.nhtsa.dot.gov https://cdn.jsdelivr.net https://huggingface.co https://*.huggingface.co https://*.hf.co; object-src 'none'; base-uri 'none'; form-action 'self'" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
   <title>Vetta · Log</title>
   <link rel="icon" href="brand/mark.svg" type="image/svg+xml" />
@@ -198,6 +198,22 @@
     .stages-h { font-size: 22px; font-weight: 700; font-family: var(--font-num); overflow-wrap: anywhere; }
     .empty { border: 1px solid var(--rule); padding: 16px; display: grid; gap: 8px; } .empty b { font-size: 17px; } .empty .note { font-size: 14px; }
     /* an empty state is one line and its action, never a box of explanation (REVIEW2.md U-33) */
+    /* An empty Log or Stages page (design pass 2026-11-10): the page's own furniture in pencil, a head, one line, one key.
+       A bare sentence on a blank sheet read as an error, not as a book waiting for its first entry. */
+    .first-page { display: grid; gap: 0; padding-top: 2px; }
+    .fp-ghost { color: var(--panel-dim); border-bottom: 1px solid var(--rule); margin-bottom: 16px; }
+    .fp-ghost .hero-score { display: flex; align-items: flex-end; padding: 6px 0 14px; border-bottom: 1px solid var(--rule); }
+    .fp-digits { display: inline-flex; gap: 6px; } .fp-digits i { width: 40px; height: 68px; border: 1.5px dashed var(--panel-dim); }   /* three places for the score's figures */
+    .fp-ghost .stamp-d { border: 1.5px dashed var(--panel-dim); } .fp-ghost table.fp-index td { border-bottom: 0; }   /* its own class: a drawing of a row is not a row of the index */
+    .fp-ghost .ix-road b { font-weight: 500; } .fp-ghost .spark .base { stroke: var(--panel-dim); stroke-dasharray: 2 2; } .fp-ghost .score { color: var(--panel-dim); }
+    .fp-head { font: 700 26px/1.1 var(--font-num); margin: 0 0 6px; }
+    .fp-line { margin: 0 0 18px; font-size: 16px; line-height: 1.45; color: var(--panel-dim); max-width: 34em; }
+    a.btn.fp-go { justify-content: center; height: 52px; font-size: 17px; box-shadow: inset 0 -3px 0 rgba(0,0,0,0.3); }
+    .fp-alt { justify-self: center; min-height: 44px; display: inline-flex; align-items: center; margin-top: 4px; color: var(--panel-ink); font-weight: 600; }
+    .fp-mark { display: block; width: 100%; height: 56px; margin: 4px 0 14px; color: var(--panel-dim); }
+    .fp-mark path, .fp-mark line { fill: none; stroke: currentColor; stroke-width: 1.5; vector-effect: non-scaling-stroke; } .fp-mark .ink { stroke: var(--panel-ink); stroke-width: 2; } .fp-mark circle { fill: var(--accent); }
+    /* the Log's own switch: a button doesn't inherit the page's face by itself (it was Arial) */
+    .switch > button { font-family: inherit; }
     .empty-line { margin: 4px 0; font-size: 16px; line-height: 1.45; } .empty-line a { display: inline-block; color: var(--panel-ink); font-weight: 600; }   /* a link never breaks across lines */
     a.btn { display: inline-flex; align-items: center; text-decoration: none; font-weight: 600; }
     .seg b { font-size: 15px; } .seg span { font-size: 12px; color: var(--panel-dim); }
@@ -252,16 +268,16 @@
     details.quiet[open] > summary::after { content: "\2212"; }
     details.quiet > :not(summary) { margin-bottom: 10px; }
     .index-panel { padding: 0; border: 0; }
-    table.road-index { width: 100%; border-collapse: collapse; }
-    table.road-index td { padding: 10px 0; border-bottom: 1px solid var(--rule); vertical-align: middle; }
-    .road-index .ix-date { width: 56px; padding-right: 12px; }
+    table:is(.road-index, .fp-index) { width: 100%; border-collapse: collapse; }
+    table:is(.road-index, .fp-index) td { padding: 10px 0; border-bottom: 1px solid var(--rule); vertical-align: middle; }
+    :is(.road-index, .fp-index) .ix-date { width: 56px; padding-right: 12px; }
     .stamp-d { display: inline-grid; justify-items: center; width: 42px; padding: 3px 0; border: 1.5px solid var(--panel-ink); font-size: 10px; font-weight: 700; letter-spacing: 0.06em; }
     .stamp-d b { font: 800 18px/1 var(--font-num); }
-    .road-index .ix-road b { display: block; font-size: 16px; }
-    .road-index .spark { display: block; width: 100%; height: 10px; margin: 4px 0 2px; }
-    .road-index .spark line { stroke: var(--accent); stroke-width: 1; vector-effect: non-scaling-stroke; } .road-index .spark .base { stroke: var(--rule); }
-    .road-index .ix-score { width: 64px; text-align: right; }
-    .road-index .ix-score .score { font-size: 28px; }
+    :is(.road-index, .fp-index) .ix-road b { display: block; font-size: 16px; }
+    :is(.road-index, .fp-index) .spark { display: block; width: 100%; height: 10px; margin: 4px 0 2px; }
+    :is(.road-index, .fp-index) .spark line { stroke: var(--accent); stroke-width: 1; vector-effect: non-scaling-stroke; } :is(.road-index, .fp-index) .spark .base { stroke: var(--rule); }
+    :is(.road-index, .fp-index) .ix-score { width: 64px; text-align: right; }
+    :is(.road-index, .fp-index) .ix-score .score { font-size: 28px; }
     .actions { display: flex; gap: 8px; flex-wrap: wrap; }
     /* Same tab bar as the cockpit: ANALYSIS is this page, the others return to the cockpit view. */
     .tabbar { position: fixed; left: 0; right: 0; bottom: 0; z-index: 20; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr));
@@ -329,7 +345,20 @@
     <section id="tab-history" class="stack-12">
       <div class="bar-top"><h1 class="stages-h">Log</h1></div>
       <div class="switch log-seg" role="radiogroup" aria-label="Drives or stages"><button data-seg="history" role="radio" aria-checked="true">Drives</button><button data-seg="segments" role="radio" aria-checked="false">Stages</button></div>
-      <p class="empty-line" id="historyEmpty" hidden>No drives yet. <a href="index.html">Start one on the map</a>, or <a href="index.html?drive=dry_ridge&amp;play=1">watch a replay</a>.</p>
+      <!-- no drives yet: the first page of the book, drawn in pencil where the first drive's numbers will go (unknown
+           stays "--": nothing here reads as a result), then the one thing to do -->
+      <div class="first-page" id="historyEmpty" hidden>
+        <div class="fp-ghost" aria-hidden="true">
+          <div class="hero-score"><span class="fp-digits"><i></i><i></i><i></i></span><small>/1000</small></div>
+          <table class="fp-index"><tr><td class="ix-date"><span class="stamp-d"><b>--</b>---</span></td>
+            <td class="l ix-road"><b>The road you drove</b><svg class="spark" viewBox="0 0 100 10" preserveAspectRatio="none"><line class="base" x1="0" x2="100" y1="9" y2="9"/></svg><span class="sub">How far · how many corners</span></td>
+            <td class="ix-score"><span class="score">--</span></td></tr></table>
+        </div>
+        <h2 class="fp-head">Your first drive goes here.</h2>
+        <p class="fp-line">Every drive is kept on this phone with its road, its corners and a Vetta Score out of 1000. A few clean corners are enough for a score.</p>
+        <a class="btn solid fp-go" href="index.html">Start a drive</a>
+        <a class="fp-alt" href="index.html?drive=dry_ridge&amp;play=1">Watch a replay first</a>
+      </div>
       <!-- the Log (REVIEW.md roadmap 13): one hero number, a quiet year line, challenges in one line, then the drives -->
       <div class="log-hero" id="historyCards"></div>
       <!-- one quiet summary row (REVIEW2.md U-32): the year and this month's challenges in one line, the detail when opened -->
@@ -1015,7 +1044,12 @@
       // Nothing to mark a stage on until there is a drive: say so instead of showing an empty picker.
       // a stage is marked from a drive (its page's Mark a stage opens the marker here), not started from an empty tab
       $('newStage').hidden = !$('newStage').dataset.fromDrive; $('shareOlder').hidden = !drives.length;   // first visit: open the marker once
-      list.innerHTML = segs.length ? '' : `<p class="empty-line">No stages yet. ${drives.length ? 'Mark a stretch you drive often from a drive\u2019s page: <a href="analysis.html?tab=log">your drives</a>.' : 'A drive first; then Mark a stage at its end.'}</p>`;
+      // no stages yet: a stretch of road between its start and finish boards, drawn, then what a stage is and the one way to make one
+      list.innerHTML = segs.length ? '' : `<div class="first-page">
+        <svg class="fp-mark" viewBox="0 0 320 56" preserveAspectRatio="none" aria-hidden="true"><path d="M4 44 C 50 44, 60 14, 104 16 S 170 46, 214 34 S 280 10, 316 12" stroke-dasharray="3 4"/><path class="ink" d="M104 16 C 140 18, 170 46, 214 34"/><line class="ink" x1="104" y1="6" x2="104" y2="26"/><line class="ink" x1="214" y1="24" x2="214" y2="44"/><circle cx="104" cy="16" r="3.5"/></svg>
+        <h2 class="fp-head">No stages yet.</h2>
+        <p class="fp-line">A stage is a stretch of road you drive often, marked from its start to its finish. Every pass over it is set against your best.</p>
+        ${drives.length ? '<a class="btn solid fp-go" href="analysis.html?tab=log">Pick a drive to mark one from</a>' : '<a class="btn solid fp-go" href="index.html">Start a drive</a><p class="fp-line" style="margin:10px 0 0;text-align:center">Mark a stage is on a finished drive\u2019s page.</p>'}</div>`;
       for (const s of segs) {
         const passes = passesFor(s), best = passes.reduce((m, x) => (x.p.score != null && (m == null || x.p.score > m) ? x.p.score : m), null);
         const b = document.createElement('button');
