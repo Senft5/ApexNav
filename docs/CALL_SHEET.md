@@ -4,6 +4,21 @@ Decisions Claude made for you, newest first. Each one says what was decided, why
 you reach one you've seen. If you disagree with a call, say so and it gets reversed; nothing here is hard to undo unless
 it says so. Things only you can do are in docs/OWNER_TODO.md.
 
+## 2026-11-10 (fable-design-offline): design pass 5: People with no connection is a page, and comes back by itself (claude/fable-design-offline)
+
+With no answer from the server, People was a heading ("Can't reach Vetta"), a grey line and a small key at the top of
+an empty sheet, the same on both sides, and the Garage's top corner was an empty band. Now it is a page built from the
+signed-out page's parts: a road that stops at the red dot with the way on dotted, the headline set large, what still
+works without a connection as three rows (driving and notes, your Log, saved routes), and Try again at the foot,
+under the thumb.
+
+Three calls. It says which it is: "You're offline." only when the phone itself says it has no connection, otherwise
+"Can't reach Vetta." (the app never blames your signal for our server). It asks again by itself when the phone says
+the connection is back, so nobody has to press Try again to find out. And the Garage says in its own corner that your
+cars and profile will be back, and that looks, voices and settings work without it.
+
+Undo: revert the PR.
+
 ## 2026-11-10 (fable-fix-join-scope): my mistake in #332, fixed: the signed-out People page also showed at the top of the Garage (claude/fable-fix-join-scope)
 
 The rule that lets the new signed-out People page fill the sheet named the People panel by its id, and an id outranks

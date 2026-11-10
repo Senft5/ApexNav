@@ -5807,6 +5807,57 @@ flow('plan flow (e, f) a level change and an alternative are one tap or swipe ea
   await scan(page, 'the card after a swipe');
 }, IPHONE);
 
+flow('no connection: People is a page that says which it is (offline, or Vetta not answering) and what still works, Try again under the thumb; the Garage says so in its own corner (design pass 5)', async (page, base) => {
+  let down = true;
+  await page.route(/\/api\//, (route) => (down ? route.abort() : route.fulfill({ status: 200, contentType: 'application/json', body: '{"signed_in":false}' })));
+  await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); localStorage.setItem('apex.permsExplained', '1'); } catch (_) {}
+    Object.defineProperty(navigator, 'onLine', { configurable: true, get: () => window.__onLine !== false }); });
+  const read = () => page.evaluate(() => {
+    const vis = (e) => !!e && e.getClientRects().length > 0, pg = [...document.querySelectorAll('.lost-page')].find(vis);
+    if (!pg) return null;
+    const key = pg.querySelector('.join-sign button'), kr = key.getBoundingClientRect();
+    return { head: pg.querySelector('.join-head').textContent, line: pg.querySelector('.join-line').textContent, rows: [...pg.querySelectorAll('.join-gets li b')].map((b) => b.textContent),
+      art: !!pg.querySelector('.join-art .jr-ghost') && pg.querySelectorAll('.join-art .jr-puck.lead').length === 1, key: key.textContent, keyH: Math.round(kr.height),
+      keyOnScreen: kr.top >= 0 && kr.bottom <= innerHeight && document.elementFromPoint(kr.left + kr.width / 2, kr.top + kr.height / 2) === key,
+      wide: [...pg.querySelectorAll('*')].filter((e) => e instanceof HTMLElement && e.getBoundingClientRect().right > innerWidth + 0.5).length };
+  });
+  for (const [name, w, h] of [['an iPhone 15', 393, 852], ['an SE', 375, 667]]) {
+    await page.setViewportSize({ width: w, height: h });
+    await page.goto(base + '/index.html?view=people');
+    await page.waitForSelector('.lost-page', { timeout: 30000 });
+    await page.waitForFunction(() => !document.getElementById('boot'), null, { timeout: 20000 });   // the splash is over the key until it lifts
+    await page.waitForTimeout(900);
+    const p = await read();
+    check(p && p.head === 'Can’t reach Vetta.' && /^Friends .* will be back when it answers\. These don’t need it:$/.test(p.line), `${name}: it says Vetta isn't answering, not that you are offline: ` + JSON.stringify(p));
+    check(p.rows.join('|') === 'Driving and notes|Your Log|Saved routes' && p.art, `${name}: what works without it, as rows, under the road that stops: ` + JSON.stringify(p));
+    check(p.key === 'Try again' && p.keyH >= 44 && p.keyOnScreen && !p.wide, `${name}: Try again is on the first screen, whole and a thumb tall: ` + JSON.stringify(p));
+  }
+  await page.click('[data-people="crews"]');
+  await page.waitForTimeout(400);
+  const crews = await read();
+  check(crews && /^Crews, their drives and boards /.test(crews.line), 'the Crews side has its own page: ' + JSON.stringify(crews));
+  // the Garage: no People page in it (the #332 mistake), its own corner says what is missing
+  await page.click('#tabbar .tab[data-view="garage"]');
+  await page.waitForTimeout(500);
+  const g = await page.evaluate(() => { const vis = (e) => e.getClientRects().length > 0, b = document.getElementById('garageMeBody');
+    return { page: [...document.querySelectorAll('.join-page')].filter(vis).length, text: b.innerText.replace(/\s+/g, ' ').trim() }; });
+  check(g.page === 0 && /^Your cars Your cars and profile will be back when Vetta answers\. Looks, voices and settings work without it\. Try again$/i.test(g.text), 'the Garage says what is missing in its own corner: ' + JSON.stringify(g));
+  // the phone itself offline: the page says that instead
+  await page.click('#tabbar .tab[data-view="people"]');
+  await page.click('[data-people="friends"]');
+  await page.evaluate(() => { window.__onLine = false; window.dispatchEvent(new Event('offline')); });
+  await page.waitForFunction(() => [...document.querySelectorAll('.lost-page .join-head')].some((e) => e.getClientRects().length && e.textContent === 'You’re offline.'), null, { timeout: 10000 });
+  const off = await read();
+  check(/ need a connection\. These don’t:$/.test(off.line), 'offline: the line says a connection is what is missing: ' + JSON.stringify(off));
+  // Try again with nothing changed: the page stands, its key a key again
+  await page.evaluate(() => [...document.querySelectorAll('.lost-page .join-sign button')].find((e) => e.getClientRects().length).click());
+  await page.waitForFunction(() => { const k = [...document.querySelectorAll('.lost-page .join-sign button')].find((e) => e.getClientRects().length); return k && !k.disabled && k.textContent === 'Try again'; }, null, { timeout: 10000 });
+  // the connection back: People draws itself as it is (signed out here), nobody presses anything
+  down = false;
+  await page.evaluate(() => { window.__onLine = true; window.dispatchEvent(new Event('online')); });
+  await page.waitForFunction(() => !document.querySelector('.lost-page') && [...document.querySelectorAll('.join-page .join-head')].some((e) => e.getClientRects().length && /Drive with friends|Drive as a crew/.test(e.textContent)), null, { timeout: 10000 });
+}, IPHONE);
+
 flow('plan flow (b) a loop in 2 taps: Plan on the map, then Start; its progress in view, its card has a length in your units and the level (finding 6)', async (page, base) => {
   await planRouter(page);
   const { taps, tap } = await planPage(page, base);
