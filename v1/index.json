@@ -1,17 +1,17 @@
 {
  "bbox": null,
- "build": "2026-46-b50ef601-gebab6b",
+ "build": "2026-46-0a3822dc-gebab6b",
  "built": "2026-11-10",
  "bytes": 228885816,
  "edges": 5262635,
  "format": "VGR1 (tools/graph_etl/tiles.py)",
  "licence": "Road data (c) OpenStreetMap contributors, ODbL 1.0; elevation Mapzen Terrain Tiles; context grid: see web/data/ctx/v1",
- "model": "b50ef601c2e3147e23560358f6dfe1198a09624a669d222b80253c24bec23751",
+ "model": "0a3822dcf199bc0dfba8a98ea473d70a4b04c4926b320c876bbc5d5f57476f3e",
  "model_files": {
-  "tools/graph_etl/score_edges.js": "9923af50e9a0",
+  "tools/graph_etl/score_edges.js": "4e9a2a87c019",
   "web/apex_core.js": "5110dbc731ae",
   "web/fun_route.js": "a6173c12d675",
-  "web/route_ctx/context_grid.js": "ef4b162e1183",
+  "web/route_ctx/context_grid.js": "77f06be2708a",
   "web/route_ctx/dem.js": "c6f6a695745b",
   "web/route_engine.js": "ee5758b0f5b3"
  },
