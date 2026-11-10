@@ -104,7 +104,7 @@ def test_each_plan_setting_has_one_home_on_the_page():
     opts = html[html.index('id="optSheet"'):html.index("</aside>", html.index('id="optSheet"'))]
     for attr in ('data-avoid="highways"', 'data-avoid="cameras"', 'data-prefer="measured"', 'data-driver="passenger"', 'data-driver="tunnels"',
                  'data-pref-tight="1"', 'data-pref-fast="-1"', 'id="fromInput"', 'id="presetRow"', 'id="presetSaveBtn"', 'id="gpxFile"',
-                 'data-loop-min="60"', 'data-fit="calendar"'):
+                 'data-fit="calendar"'):
         assert attr in opts, attr
         assert html.count(attr) == 1, attr
     near = html[html.index('id="nearbySheet"'):html.index("</aside>", html.index('id="nearbySheet"'))]
@@ -112,6 +112,12 @@ def test_each_plan_setting_has_one_home_on_the_page():
     # the dial is one unit, yours (finding 6): five distances, no hours among them
     dial = html[html.index('id="loopDetents"'):html.index("</div>", html.index('id="loopDetents"'))]
     assert len(re.findall(r"data-loop-mi=", dial)) == 5 and "data-loop-min" not in dial
+    # one setting, one home: a loop by time is the dial's (Distance | Time), so Options has no "1 hour / 2 hours" of its own,
+    # and its Loop to fit group (My free time, This album) is put away where the phone can't answer (a browser)
+    assert "data-loop-min" not in html and "1 hour" not in opts
+    assert '<div class="ctl" id="fitCtl" hidden>' in opts
+    page = (WEB / "cockpit.js").read_text(encoding="utf-8")
+    assert "$('fitRow').hidden = false; $('fitCtl').hidden = false;" in page and "#optSheet [data-loop-min]" not in page
 
 
 def test_one_name_for_go():
