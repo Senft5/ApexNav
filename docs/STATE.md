@@ -1,5 +1,14 @@
 # VETTA — CURRENT AGENT HANDOFF STATE
 
+## Session 2026-11-10 (fable-loop-names): no two loop cards the same way and the same length (claude/fable-loop-names, off origin/main 1a38381)
+
+- web/fun_route.js `loopOffer`: the fill pass takes a loop only if it heads elsewhere than every card already offered
+  (60 degrees) or differs from it by `LOOP_OFFER.differs` (0.2) in km or time. Before, the fill took any lookalike, so
+  two "Southeast" cards a couple of minutes apart came up.
+- Tests: tests/test_loop_ways.py (`oneWay`, `twins`); e2e "a loop's choices are which way to head" checks no two cards
+  share a name with times within a fifth.
+- Next: the Layers panel and the drive screen have not had a design pass.
+
 ## Session 2026-11-10 (fable-loops): loops lose Quick / Fun / Long way; the card offers which way to head (claude/fable-loops, off origin/main 7dee309)
 
 - [x] The owner: "why do loops need a long way a fun and a quick? the whole point is aimless driving". web/cockpit.js:

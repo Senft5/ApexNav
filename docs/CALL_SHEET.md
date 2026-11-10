@@ -4,6 +4,16 @@ Decisions Claude made for you, newest first. Each one says what was decided, why
 you reach one you've seen. If you disagree with a call, say so and it gets reversed; nothing here is hard to undo unless
 it says so. Things only you can do are in docs/OWNER_TODO.md.
 
+## 2026-11-10 (fable-loop-names): a loop's cards are never two of the same way at the same length (claude/fable-loop-names)
+
+A loop's "which way" cards could come up as two Southeasts, 39 and 37 minutes: the same choice twice, told apart only by
+squinting at the outlines. A second loop that heads the same way as one already offered is now a card only when it is
+a really different drive: a fifth longer or shorter, in distance or in time (`LOOP_OFFER.differs` in web/fun_route.js).
+Loops that head somewhere else are offered as before. So there can be fewer cards than three (or none, when every other
+loop found is a lookalike); the best loop is always the first one.
+
+Undo: revert the PR, or set `differs: 0` in `LOOP_OFFER`.
+
 ## 2026-11-10 (fable-loops): a loop has no Quick / Fun / Long way; its card offers its length and which way to head (claude/fable-loops)
 
 You asked: "why do loops need a long way a fun and a quick? the whole point is aimless driving". They don't. On a
