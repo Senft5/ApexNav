@@ -4,6 +4,26 @@ Decisions Claude made for you, newest first. Each one says what was decided, why
 you reach one you've seen. If you disagree with a call, say so and it gets reversed; nothing here is hard to undo unless
 it says so. Things only you can do are in docs/OWNER_TODO.md.
 
+## 2026-11-10 (fable-coherence): the docs say what Vetta is and what ships (claude/fable-coherence)
+
+A red team (design and philosophy) found the repo describing two products. I rewrote docs/PHILOSOPHY.md: the
+"countermeasure co-driver", "zero-snitch", Octane, the Halda/Singer binnacle and the five unused hex colours are gone,
+with a table of what was dropped and why so nobody rebuilds them. It now states your answers from today: Pace stays in
+the Score and copy says plainly that the Score rewards using a corner's grip; Stage times and gaps stay shareable;
+police reports and speed cameras stay, named in the open; Pro is looks only; Tapedeck's glow is fine.
+
+CLAUDE.md, AGENTS.md and .cursorrules are now one text (a test keeps them so). The mission no longer claims Android,
+Android Auto, a C++ core, Kalman, FFT or an audio DSP bus; they are listed as not built. ARCHITECTURE.md §5 says the
+same. BRAND.md opens with the shipped state (four tabs, the VETTA wordmark, three themes and their voices, what is
+ownable) and "what Vetta refuses to match"; navigation is the vehicle, the co-driver the reason. SOCIAL.md's "3
+contributors" now matches the built rule in ROAD_DATA.md. "Zero subscription" and "nothing you made behind a paywall"
+became "free to drive" wording (about page, IDEAS, SOCIAL, marketing). "Never how fast" became "how well you used each
+corner's grip, never your top speed" (about page, Log note, marketing). The listing leads with the co-driver and names
+cameras and police reports. APP_REVIEW.md gains rows for the braking ribbon (1.4.1), the Score and boards, and cameras
+and police. The domain is at the top of OWNER_TODO.
+
+Undo: revert the PR. No code behaviour changed.
+
 ## 2026-11-10 (fable-road-page): About a road says its climb, and speaks in words (claude/fable-road-page)
 
 A bug first: on any road with 40 m or more of climb, the sheet's first line read "Switchbacks · 0.8 mi · descending

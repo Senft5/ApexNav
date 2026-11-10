@@ -1,5 +1,14 @@
 # VETTA — CURRENT AGENT HANDOFF STATE
 
+## Session 2026-11-10 (fable-coherence): red team doc coherence (claude/fable-coherence, off origin/main ac6c6c6)
+
+- docs/PHILOSOPHY.md rewritten (principles, road scores, measurement limits, built / not built, dropped and why).
+  CLAUDE.md = AGENTS.md = .cursorrules (tests/test_agent_docs.py). ARCHITECTURE.md §5 DSP bus marked not built.
+- BRAND.md shipped-state box; SOCIAL.md threshold; about.html, analysis.html Log note, LISTING.md, marketing copy;
+  APP_REVIEW.md rows (ribbon 1.4.1, Score/boards, cameras/police); OWNER_TODO domain.
+- Owner decisions 2026-11-10: Pace stays, Times/gaps shared, police + speed cameras stay, Pro looks only, Tapedeck stays.
+- Next: Pro looks only in code (Route tuning free, one Pro member dresses a crew); camber shown with how sure it is.
+
 ## Session 2026-11-10 (fable-road-page): About a road: the climb's "[object Object]" fixed; scores as named bars (claude/fable-road-page, off origin/main 3f2f315)
 
 - Bug: `openRoadPage` passed `ApexUnits.short` (returns `{ n, u }`) as the headline's height formatter, so a road with a
