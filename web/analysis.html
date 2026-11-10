@@ -204,7 +204,7 @@
     .fp-ghost { color: var(--panel-dim); border-bottom: 1px solid var(--rule); margin-bottom: 16px; }
     .fp-ghost .hero-score { display: flex; align-items: flex-end; padding: 6px 0 14px; border-bottom: 1px solid var(--rule); }
     .fp-digits { display: inline-flex; gap: 6px; } .fp-digits i { width: 40px; height: 68px; border: 1.5px dashed var(--panel-dim); }   /* three places for the score's figures */
-    .fp-ghost .stamp-d { border: 1.5px dashed var(--panel-dim); } .fp-ghost table.road-index td { border-bottom: 0; }
+    .fp-ghost .stamp-d { border: 1.5px dashed var(--panel-dim); } .fp-ghost table.fp-index td { border-bottom: 0; }   /* its own class: a drawing of a row is not a row of the index */
     .fp-ghost .ix-road b { font-weight: 500; } .fp-ghost .spark .base { stroke: var(--panel-dim); stroke-dasharray: 2 2; } .fp-ghost .score { color: var(--panel-dim); }
     .fp-head { font: 700 26px/1.1 var(--font-num); margin: 0 0 6px; }
     .fp-line { margin: 0 0 18px; font-size: 16px; line-height: 1.45; color: var(--panel-dim); max-width: 34em; }
@@ -268,16 +268,16 @@
     details.quiet[open] > summary::after { content: "\2212"; }
     details.quiet > :not(summary) { margin-bottom: 10px; }
     .index-panel { padding: 0; border: 0; }
-    table.road-index { width: 100%; border-collapse: collapse; }
-    table.road-index td { padding: 10px 0; border-bottom: 1px solid var(--rule); vertical-align: middle; }
-    .road-index .ix-date { width: 56px; padding-right: 12px; }
+    table:is(.road-index, .fp-index) { width: 100%; border-collapse: collapse; }
+    table:is(.road-index, .fp-index) td { padding: 10px 0; border-bottom: 1px solid var(--rule); vertical-align: middle; }
+    :is(.road-index, .fp-index) .ix-date { width: 56px; padding-right: 12px; }
     .stamp-d { display: inline-grid; justify-items: center; width: 42px; padding: 3px 0; border: 1.5px solid var(--panel-ink); font-size: 10px; font-weight: 700; letter-spacing: 0.06em; }
     .stamp-d b { font: 800 18px/1 var(--font-num); }
-    .road-index .ix-road b { display: block; font-size: 16px; }
-    .road-index .spark { display: block; width: 100%; height: 10px; margin: 4px 0 2px; }
-    .road-index .spark line { stroke: var(--accent); stroke-width: 1; vector-effect: non-scaling-stroke; } .road-index .spark .base { stroke: var(--rule); }
-    .road-index .ix-score { width: 64px; text-align: right; }
-    .road-index .ix-score .score { font-size: 28px; }
+    :is(.road-index, .fp-index) .ix-road b { display: block; font-size: 16px; }
+    :is(.road-index, .fp-index) .spark { display: block; width: 100%; height: 10px; margin: 4px 0 2px; }
+    :is(.road-index, .fp-index) .spark line { stroke: var(--accent); stroke-width: 1; vector-effect: non-scaling-stroke; } :is(.road-index, .fp-index) .spark .base { stroke: var(--rule); }
+    :is(.road-index, .fp-index) .ix-score { width: 64px; text-align: right; }
+    :is(.road-index, .fp-index) .ix-score .score { font-size: 28px; }
     .actions { display: flex; gap: 8px; flex-wrap: wrap; }
     /* Same tab bar as the cockpit: ANALYSIS is this page, the others return to the cockpit view. */
     .tabbar { position: fixed; left: 0; right: 0; bottom: 0; z-index: 20; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr));
@@ -350,7 +350,7 @@
       <div class="first-page" id="historyEmpty" hidden>
         <div class="fp-ghost" aria-hidden="true">
           <div class="hero-score"><span class="fp-digits"><i></i><i></i><i></i></span><small>/1000</small></div>
-          <table class="road-index"><tr><td class="ix-date"><span class="stamp-d"><b>--</b>---</span></td>
+          <table class="fp-index"><tr><td class="ix-date"><span class="stamp-d"><b>--</b>---</span></td>
             <td class="l ix-road"><b>The road you drove</b><svg class="spark" viewBox="0 0 100 10" preserveAspectRatio="none"><line class="base" x1="0" x2="100" y1="9" y2="9"/></svg><span class="sub">How far · how many corners</span></td>
             <td class="ix-score"><span class="score">--</span></td></tr></table>
         </div>

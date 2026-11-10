@@ -562,8 +562,8 @@
     /* Garage rows under a section's head (design pass 2026-11-10): a control's label is a row label, the size and weight of the
        switches beside it. "Night" at 18/800 outranked its own section head, "Co-driver". */
     .sheet section[data-panel="garage"] .ctl-label { font-size: 15px; font-weight: 500; }
-    .co-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin: 0; min-height: 44px; font-size: 15px; font-weight: 500; }
-    .co-row .linkbtn { flex: 0 0 auto; }
+    .co-row { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 0 12px; margin: 0; min-height: 44px; font-size: 15px; font-weight: 500; }
+    .co-row .linkbtn { flex: 0 1 auto; max-width: 100%; white-space: normal; text-align: left; }   /* at a large text size the key drops under the words, whole */
     .sheet .sw span, .edge-panel .sw span, .side-pop .sw span { font-size: 15px; font-weight: 500; color: var(--panel-ink); text-align: left; }
     .sw.on span { color: var(--panel-ink); }
     .sw[hidden], .sheet .sw[hidden], .edge-panel .sw[hidden], .side-pop .sw[hidden] { display: none; }   /* a switch only some accounts get (Satellite) */
