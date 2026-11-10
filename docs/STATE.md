@@ -1,5 +1,15 @@
 # VETTA — CURRENT AGENT HANDOFF STATE
 
+## Session 2026-11-10 (fable-fix-join-scope): #332's page showed in the Garage too; scoped to People (claude/fable-fix-join-scope, off origin/main 6412cb5)
+
+- [x] Bug from #332 (live on main): `#accountSection:has(.join-page) { display: grid }` outranked `.sheet [data-panel]
+  { display: none }`, so signed out the People page (543 px) stood at the top of the Garage. web/index.html: both
+  `:has(.join-page)` rules now start `.sheet[data-view="people"]`.
+- [x] Tests: tests/test_people_signed_out.py refuses a bare `#accountSection:has(.join-page)`; e2e "REVIEW.md 1.2 screen
+  by screen: the Log…" checks the Garage signed out has no People page (fails on main's CSS, passes here).
+- Lesson: a rule that sets `display` on a tab's panel must carry the tab (`.sheet[data-view=…]`); after changing one
+  tab signed out, open the other three.
+
 ## Session 2026-11-10 (fable-design-signed-out): People signed out, redrawn as a page (claude/fable-design-signed-out, off origin/main 2fda3f8)
 
 - [x] Design pass 3 (the owner, 2026-11-10: "designed by an artist not a programmer"). web/cockpit.js `renderAccount`,

@@ -856,8 +856,10 @@
     #hzReportBtn.undo { background: var(--hz-bg); color: var(--hz-ink); border: 2px solid var(--hz-edge); }
     /* People, signed out (the owner, 2026-11-10: "designed by an artist"): a page with a drawing, a name set large, three rows shaped
        like the friends list that will stand here, and the sign-in at the foot where the thumb is. One page for both sides. */
-    .sheet .body:has(.join-page) { flex: 1 1 auto; }   /* the page fills the sheet, so the sign-in stands at its foot */
-    #accountSection:has(.join-page) { display: grid; }
+    /* Only on People: the page is built signed out whatever tab is open, and an id's `display` would outrank the rule that
+       hides the other tabs' panels (it showed the whole page at the top of the Garage). */
+    .sheet[data-view="people"] .body:has(.join-page) { flex: 1 1 auto; }   /* the page fills the sheet, so the sign-in stands at its foot */
+    .sheet[data-view="people"] #accountSection:has(.join-page) { display: grid; }
     .join-page { display: flex; flex-direction: column; }
     .join-art { margin: -14px -16px 0; border-bottom: 1px solid var(--hair, var(--panel-dim)); line-height: 0; }
     .join-art svg { display: block; width: 100%; height: auto; aspect-ratio: 360 / 128; }

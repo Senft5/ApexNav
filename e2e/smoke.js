@@ -5422,6 +5422,9 @@ flow('REVIEW.md 1.2 screen by screen: the Log, drive detail, Stages, People sign
   // Settings are the Garage: the theme picker, help folded under "How this works", no Octane, Erase is red text behind a confirm sheet
   await page.goto(base + '/index.html?view=garage');
   await page.waitForSelector('#garageGear', { state: 'visible' });
+  // signed out, the Garage is the Garage: People's page stays on People (it showed here, above Your cars)
+  const stray = await page.evaluate(() => ({ join: !!document.querySelector('.join-page') && document.querySelector('.join-page').getBoundingClientRect().height, acc: getComputedStyle(document.getElementById('accountSection')).display }));
+  check(stray.join === 0 && stray.acc === 'none', 'People\'s signed-out page is not in the Garage: ' + JSON.stringify(stray));
   await openSetting(page, 'data');
   const g = await page.evaluate(() => { const s = document.getElementById('sheet'), e = getComputedStyle(document.getElementById('myEraseBtn'));
     return { title: s.querySelector('h2').textContent, themes: document.querySelectorAll('#themeCards > *').length, how: document.querySelectorAll('[data-panel~="garage"] details.how').length, octane: /Octane/.test(document.body.innerText), erase: e.color + '/' + e.textDecorationLine + '/' + e.borderTopStyle }; });
