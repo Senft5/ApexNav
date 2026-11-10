@@ -312,6 +312,18 @@ trips. I broke each route's score into its parts to see why.
   way 41.9 min); the app's picks there didn't change. Quick, the highway rule and trips with no good road are unchanged.
   Planning speed is unchanged.
 
+## 2026-11-10 (fable-design-people): design pass 2, the route card's last row and the map's credit (claude/fable-design-people)
+
+Second cut of the owner's "designed by an artist" pass, on the two screens people look at most. The calls:
+- **The route card's last row is one ruled strip of keys** (Save, Share, Share ETA, GPX, Pin place). It was five
+  underlined words centred on the page, "Pin place" alone on a second line. REVIEW2's two weights stay (Save and
+  Share in ink, the rest in pencil); a key that is on (Saved, an ETA being shared) is inked in. With large text it
+  goes two a row. Undo: index.html `.rc-links`.
+- **The map's credit is a plate in the look's own style** (IDEAS U-53): a square paper plate ruled in ink with the "i"
+  in the number face, where MapLibre's white pill and round black "i" sat on every map. It follows the look's tokens,
+  so it is dark in the dark looks. The credit's text and links are unchanged. Undo: index.html, the
+  `.maplibregl-ctrl-attrib` rules.
+
 ## 2026-11-08 (levels): Fun and Long way each spend their time on better road (claude/level-spread)
 
 An audit of our phone router found Long way came back with exactly Fun's route on every test trip: the search for how

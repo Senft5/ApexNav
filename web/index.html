@@ -251,6 +251,15 @@
     #map.unstyled .maplibregl-canvas { opacity: 0; }
     .maplibregl-ctrl-top-left, .maplibregl-ctrl-top-right, .maplibregl-ctrl-bottom-left { display: none !important; }
     .maplibregl-ctrl-attrib { font-size: 10px; }
+    /* The map's credit (IDEAS U-53, design pass 2026-11-10): the one stock control on the page, a white pill with a round black
+       "i". On the page's own tokens: a square paper plate ruled in ink, the "i" set in the number face, dark in the dark looks. */
+    #map .maplibregl-ctrl-attrib.maplibregl-compact { min-height: 24px; margin: 0 10px 10px 0; padding: 2px 28px 2px 8px; border-radius: 0; background: var(--panel); color: var(--panel-ink); border: 1.5px solid var(--panel-ink); font-family: var(--font-ui); }
+    #map .maplibregl-ctrl-attrib.maplibregl-compact:not(.maplibregl-compact-show) { padding: 0; width: 24px; background: var(--panel); }
+    #map .maplibregl-ctrl-attrib a { color: var(--panel-ink); text-decoration: underline; }
+    #map .maplibregl-ctrl-attrib-button { top: 0; right: 0; width: 24px; height: 24px; border-radius: 0; background: none; display: grid; place-items: center; }
+    #map .maplibregl-ctrl-attrib-button:focus { box-shadow: none; } #map .maplibregl-ctrl-attrib-button:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+    #map .maplibregl-ctrl-attrib-button::before { content: "i"; font: 700 15px/1 var(--font-num); color: var(--panel-ink); }
+    #map .maplibregl-ctrl-attrib.maplibregl-compact-show .maplibregl-ctrl-attrib-button { background: none; border-left: 1.5px solid var(--panel-ink); }
     .plates { position: absolute; left: 10px; bottom: 10px; z-index: 4; display: flex; flex-wrap: wrap; gap: 6px; max-width: calc(100% - 90px); }
     .trial-plate { font-variant-numeric: tabular-nums; } .trial-plate .linkbtn { font: inherit; color: inherit; text-decoration: underline; padding: 0; min-height: 0; }
     .plate { background: var(--panel); color: var(--panel-ink); border: 1px solid var(--rule); padding: 8px 12px; font-size: 13px; font-weight: 600; min-height: 36px; }
@@ -951,9 +960,17 @@
     .tp-car .tp-silhouette { grid-column: 1 / -1; justify-self: center; width: 96px; height: 40px; }
     .tp-car .tp-silhouette svg { width: 100%; height: 100%; }
     .tp-car .car-needle { opacity: 1 !important; }   /* the card is the car parked: needles at rest, no reading */
-    .rc-links { display: flex; flex-wrap: wrap; justify-content: center; gap: 4px 18px; margin-top: 10px; }
+    /* The route card's last row (design pass 2026-11-10): one ruled strip of keys, as the binnacle's are, where there
+       were five underlined words of two weights with "Pin place" left alone on a second line. A key that is on is inked in. */
+    .rc-links { display: flex; margin-top: 12px; border-top: 1px solid var(--rule); border-bottom: 1px solid var(--rule); }
+    .rc-links .linkbtn { flex: 1 1 auto; min-height: 48px; padding: 0 6px; font-size: 13px; font-weight: 600; text-decoration: none; white-space: nowrap; border-left: 1px solid var(--rule); }
+    .rc-links .linkbtn:first-child { border-left: 0; }
+    .rc-links .linkbtn:active { background: var(--rule); }
+    html[data-type-size] .rc-links { display: grid; grid-template-columns: 1fr 1fr; border-bottom: 0; }   /* large text: two a row, every word whole */
+    html[data-type-size] .rc-links .linkbtn { white-space: normal; border-left: 0; border-bottom: 1px solid var(--rule); }
     /* two weights: Save and Share in ink, the rest in pencil (REVIEW2.md route card) */
     .rc-links .linkbtn { color: var(--panel-dim); font-weight: 500; } .rc-links #routeSaveBtn, .rc-links #routeShareBtn { color: var(--panel-ink); font-weight: 700; }
+    .rc-links .linkbtn[aria-pressed="true"] { background: var(--panel-ink); color: var(--panel); }
     label.linkbtn { display: inline-flex; align-items: center; cursor: pointer; }
     .home-by { display: flex; align-items: center; justify-content: center; gap: 12px; margin-top: 10px; }
     .home-by .hb-label { font-size: 15px; font-weight: 700; color: var(--panel-ink); }
