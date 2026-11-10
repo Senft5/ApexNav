@@ -701,7 +701,8 @@ C: `night_lights` (0–1, saturates in suburbs) is a quality term and the dark-v
 `crash_density` (fatal /km/yr) costs per vehicle with AADT (rate per 100 M vehicle-km over the US ~0.8), never per km on a
 motorway; `flood_zone` (0–4) costs only when D says it's wet (48 h rain ≥ 25 mm or flood_risk ≥ 0.5) and is never hard;
 `cropland_class` limits D's harvest cost to crops and hay (others ×0.2); `park_visits` and D's `park_busy` are one term
-(`park_visitors`); `hpms_speed_limit` (mph), `hpms_lanes` (both directions, halved) and `hpms_fclass` fill gaps;
+(`park_visitors`); `hpms_speed_limit` (mph; only 25-85 is a limit, context_grid.js `LIMIT_MPH`), `hpms_lanes` (both
+directions, halved) and `hpms_fclass` fill gaps;
 `mobile_coverage` is not built and stays unknown. `canopy_pct`, `impervious_pct`, `noise_db`, `aadt`, `iri` are the
 model's names; volume, noise and trucks say nothing against a motorway. D: the speed-limit chain is router → OSM →
 Mapillary `sign_maxspeed_mps` → HPMS → class estimate (all but the last measured); `visibility_m` → `fog_vis_m`, and

@@ -4,21 +4,28 @@ Decisions Claude made for you, newest first. Each one says what was decided, why
 you reach one you've seen. If you disagree with a call, say so and it gets reversed; nothing here is hard to undo unless
 it says so. Things only you can do are in docs/OWNER_TODO.md.
 
-## 2026-11-10 (fable-loved-roads): in the iPhone app a recorded drive counts toward loved roads (claude/fable-loved-roads)
+## 2026-11-10 (fable-tile-limits): posted limits from the government road inventory: junk out, good ones into travel times (claude/fable-tile-limits)
 
-#323 made the upload carry `rec` (a pass from a recorded drive), which loved roads are counted from. But only the
-browser's drive set it. In the app one mounted stream carries the road feel through Start and End, and it never said
-so, so the phones that matter still sent every pass as ambient. The calls:
-- **The app's stream says "recorded" from the drive's first row on**, and keeps saying so for the rest of that trip
-  (also once End was pressed: the rows already driven were the recorded drive's, and a trip can't be split after the
-  fact). What it sent before Start stays an ambient pass. What waits for signal remembers it. Undo: cockpit.js
-  feedAmbient `deliberate`, contributor.js `recorded`.
-- **A drive whose road feel went (or waits for signal) is marked shared in the Log**, in the app and in the browser.
-  The Log offered "Share <drive>" by hand for every recent app drive, under another drive id: tapping it merged the
-  same pass into the road a second time. Undo: cockpit.js `nativeShared`, and the `|| waits` beside it.
-- **Share by hand says when it couldn't.** A busy server or no signal answered 'retry', which was counted as sent:
-  the button said "Shared 3 roads" and the drive was marked shared with nothing on the server. Now it says "Couldn't
-  share. Tap to try again." Undo: contributor.js `contributeDrive`.
+Where the map has no speed-limit sign, the app knows a second source: the government road inventory (HPMS). I
+measured it against the signs the map does have, on every road of the Cincinnati tiles. The calls:
+- **A limit under 25 mph from the inventory is unknown.** Its 30 mph and up agree with the map's signs on 76 to 99 %
+  of the km; its 20 mph on 63 %, its 15 mph on none. One Indiana county (Switzerland) reports 15 mph for every county
+  road, so Bryants Creek Drive and Wade Hill Road (12 and 9 km of the back roads this app is for) were "posted at 15"
+  and took the engine's worst speed mark: about 64 km of such roads here score 0.03 to 0.05 better without it. A real
+  20 mph street loses nothing: the estimate that stands in is as slow to the engine. Takes effect on phones at once
+  (the reader refuses the value) and in the baked tile scores at the next "Graph region" build. Undo:
+  context_grid.js and tools/ctx_etl/build.py `LIMIT_MPH` back to 5.
+- **Tile travel times use the inventory's limit where the map has no sign**, instead of a guess from the road's class.
+  It posts one on 41 % of the unsigned primary and 36 % of the unsigned secondary km, where the guess is off by more
+  than 5 mph on a third to four fifths of them. Expect primary roads about 3 % slower and secondary about 1 % slower
+  in the tiles' times after the next build (the guess was 55 where 45 is posted). OSM's own sign still wins.
+- **Guards against a wrong match**: the inventory must cover half the edge and six tenths of that must be one value;
+  a ramp keeps its estimate; a freeway's limit never goes to the road beside or under it. Numbers: score_edges.js
+  `INVENTORY`. Undo the whole time change: `inventoryLimit` returns null.
+- **It needs the tile rebuild, which I didn't run** (Actions → "Graph region (own routing, OH+KY+IN)" → Run
+  workflow; the same run the expressway change is waiting for). The build id changes with it.
+- **Left alone, for a driven check**: a few Indiana roads the inventory posts at 25 to 30 mph look low too (State Line
+  Road, 11 km at 25). They can't be told from real town limits by the number, so they stay.
 
 ## 2026-11-09 (fable-road-carry): road data from roads with no signal is kept on the phone and sent later (claude/fable-road-carry)
 
@@ -54,6 +61,25 @@ the ones with no coverage, so the best roads' data was the data being lost. The 
 Undo: remove `<script src="road_carry.js">` from web/index.html (createLive then has no carry and behaves as before,
 apart from the 10 km pieces; set `maxRun` to Infinity for that).
 
+## 2026-11-10 (fable-surface-map): the Measured roads map shows how the pavement is (claude/fable-surface-map)
+
+While you drive → Measured roads drew every measured road in one green, so the one thing only Vetta knows about a road,
+what members' phones felt there, wasn't on the map. The server already sent it. The calls:
+- **Colour is the pavement**: green smooth, amber fair, red rough; thickness still says how sure (one pass faint, five
+  or more bold). A road sent without roughness is drawn in ink, never as smooth. Undo: cockpit.js, the `apex-coverage`
+  `line-color` line back to `C.gain`.
+- **One scale for the words**: smooth is under 0.10 g and rough over 0.22 g of mean roughness, the same two numbers
+  the route overview already words a road with (a test holds the two together). Change them in coverage.js
+  `SMOOTH_G` / `ROUGH_G` and route_story.js at once.
+- **A two-way road shows its better-measured direction** (both averaged when equally sure), since one line can only be
+  one colour.
+- **Tap a measured road and it says it in words**: "Smooth pavement (0.07 g) · many passes · 30% of it banked". How
+  sure stays a level ("one pass so far", "a few passes", "many passes"), never a count of passes or people. A route or
+  option drawn over the road still wins the tap. Undo: the `apex-coverage` click handler in cockpit.js.
+- **Red is the app's one "act on this" colour**, used here for rough pavement on purpose. If it fights the route line
+  for you on a phone, say so and rough moves to another colour.
+- No server, privacy or data change: same request, same two-driver / open-road rule, nothing new stored or sent.
+
 ## 2026-11-09 (fable-overview): "What this drive is like", read against real roads (claude/fable-overview)
 
 I planned ten public trips round Cincinnati in the app and read each overview against the road it described. The calls:
@@ -73,6 +99,18 @@ I planned ten public trips round Cincinnati in the app and read each overview ag
 - **"Two-lane" means one lane each way.** It was also being said of four-lane roads.
 - Not done: your own trips (their addresses aren't in the repo, by rule). `node tools/story_live.js colerain:fun` prints
   the lines for the public ones.
+
+## 2026-11-10 (fable-hazard-alive): a hazard you keep confirming stays on the map (claude/fable-hazard-alive)
+
+The app asks "still there?" every time you pass a reported hazard, but the server only listened the first time each
+person answered. So with few members, a pothole one driver passed and confirmed every day still went off the map a
+week after the first answer. The calls:
+- **Every "still there" keeps it alive from that moment**, whoever says it, as often as they say it. Reporting your own
+  hazard again from the same spot does the same.
+- **It still counts once per person.** "Confirmed by 3" means three different people; one driver can't raise it.
+- **"Gone" is unchanged**: one per person, and two that outvote the confirmations end it at once, so one person can't
+  keep a wrong report up against two who say it's gone.
+- Server only, no app change, no database change. Undo: backend/src/hazards.ts `vote`, the `seenAgain` lines.
 
 ## 2026-11-09 (fable-expressway): an expressway counts as a highway at Fun and Long way (claude/fable-expressway)
 
@@ -100,6 +138,22 @@ back roads), which nudged how those roads scored. The calls:
 - **I left the tiles' travel times alone.** The inventory knows the posted limit on about half the main-road miles where
   our tiles only guess from the road's class, and using it would make times truer, but a mismatched stretch would make
   them wrong in a new way. The numbers are in STATE for whoever takes it on.
+## 2026-11-10 (fable-loved-roads): in the iPhone app a recorded drive counts toward loved roads (claude/fable-loved-roads)
+
+#323 made the upload carry `rec` (a pass from a recorded drive), which loved roads are counted from. But only the
+browser's drive set it. In the app one mounted stream carries the road feel through Start and End, and it never said
+so, so the phones that matter still sent every pass as ambient. The calls:
+- **The app's stream says "recorded" from the drive's first row on**, and keeps saying so for the rest of that trip
+  (also once End was pressed: the rows already driven were the recorded drive's, and a trip can't be split after the
+  fact). What it sent before Start stays an ambient pass. What waits for signal remembers it. Undo: cockpit.js
+  feedAmbient `deliberate`, contributor.js `recorded`.
+- **A drive whose road feel went (or waits for signal) is marked shared in the Log**, in the app and in the browser.
+  The Log offered "Share <drive>" by hand for every recent app drive, under another drive id: tapping it merged the
+  same pass into the road a second time. Undo: cockpit.js `nativeShared`, and the `|| waits` beside it.
+- **Share by hand says when it couldn't.** A busy server or no signal answered 'retry', which was counted as sent:
+  the button said "Shared 3 roads" and the drive was marked shared with nothing on the server. Now it says "Couldn't
+  share. Tap to try again." Undo: contributor.js `contributeDrive`.
+
 ## 2026-11-09 (route-sliders): Tune your routes, a Pro screen open to everyone until Pro goes on sale (claude/route-sliders)
 
 You asked for "every parameter with a slider for premium users", then: "remember everyone has pro if they are an early

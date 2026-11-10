@@ -74,6 +74,38 @@ describe("hand-reported hazards", () => {
     expect(LIFE_MIN.police).toBe(60);
   });
 
+  it("seen again by the same person: it lives on from then, and still counts once", async () => {
+    const a = await makeUser("alice"), b = await makeUser("bob"), c = await makeUser("carol");
+    const { id } = await json(report(a, { kind: "pothole", ...P }));
+    const row = () => env.DB.prepare("SELECT confirms, clears, (julianday(expires_at) - julianday('now')) * 1440 AS left_min FROM hazard_reports WHERE id = ?")
+      .bind(id).first<{ confirms: number; clears: number; left_min: number }>();
+    const nearlyOver = () => env.DB.prepare("UPDATE hazard_reports SET expires_at = datetime('now', '+5 minutes') WHERE id = ?").bind(id).run();
+    await ok(vote(b, id, true));
+    // bob passes it again the next day and says it is still there: no new confirmation, a full life again
+    await nearlyOver();
+    await ok(vote(b, id, true));
+    let r = (await row())!;
+    expect(r.confirms).toBe(2);
+    expect(r.left_min).toBeGreaterThan(LIFE_MIN.pothole - 2);
+    // the reporter reports it again from 20 m on: the same report, uncounted, alive from now
+    await nearlyOver();
+    const again = await json(report(a, { kind: "pothole", lat: P.lat + 0.00018, lon: P.lon }));
+    expect(again).toEqual({ id, confirmed: true });
+    r = (await row())!;
+    expect(r.confirms).toBe(2);
+    expect(r.left_min).toBeGreaterThan(LIFE_MIN.pothole - 2);
+    // "gone" twice from one person is one "gone" and never lengthens its life
+    await nearlyOver();
+    await ok(vote(c, id, false)); await ok(vote(c, id, false));
+    r = (await row())!;
+    expect(r.clears).toBe(1);
+    expect(r.left_min).toBeLessThan(6);
+    // and saying it again never brings back one that has ended
+    await ok(vote(b, id, false));                                                     // bob changes his mind: 2 gone vs 1
+    expect(await near(a)).toEqual([]);
+    expect((await vote(b, id, true)).status).toBe(404);
+  });
+
   it("deleting the account keeps the report but not who made it", async () => {
     const a = await makeUser("alice"), b = await makeUser("bob");
     await ok(report(a, { kind: "pothole", ...P }));
