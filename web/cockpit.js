@@ -3869,7 +3869,7 @@
         const o = routeOptions;
         if (!o || !optionsOffered(plannedRoute)) return;
         const i = o.picked + (dx < 0 ? 1 : -1);
-        if (i >= 0 && i < o.list.length) pickOption(i);
+        if (i >= 0 && i < o.list.length) { try { localStorage.setItem(SWIPED, '1'); } catch (_) { /* storage off: the sentence stays */ } pickOption(i); }
       });
       card.addEventListener('touchcancel', () => { sx = null; });
     }
@@ -3897,6 +3897,8 @@
     // (route_card.js levelCards); on when that pick is the route on screen, so two levels that pick the same route are both
     // on and the line under them says so. A level the plan didn't look at says "Look further"; a tap on it plans again.
     // The cards are the page's own buttons, only their words change, so the one you tapped is still there under your finger.
+    const SWIPED = 'apex.cardSwiped';
+    const swipeLearned = () => { try { return localStorage.getItem(SWIPED) === '1'; } catch (_) { return false; } };
     function paintLevelCards() {
       const box = $('routeCardFun');
       if (!box || !window.ApexRouteCard) return;
@@ -3919,7 +3921,17 @@
         b.setAttribute('aria-checked', String(k.level === funLevel));
         b.setAttribute('aria-label', k.further ? `${k.label}: not looked at yet; plans again` : `${k.label}: ${k.time === '--' ? 'time --' : k.time}, ${k.corners === '--' ? 'corners --' : k.corners}${k.same.length ? `, the same route as ${k.same.join(' and ')}` : ''}`);
       }
-      const line = mine && !box.hidden ? ApexRouteCard.levelNote(o) : '';
+      // Page marks say "swipe" the way a phone does; the words stay beside them until the first swipe, then go. The line
+      // under them keeps only what the marks can't say (two levels picking one route, a route no level picked).
+      const pg = mine && !box.hidden ? ApexRouteCard.pager(o) : null, marks = $('routeCardPager');
+      marks.hidden = !pg;
+      if (pg) {
+        marks.setAttribute('aria-label', pg.label);
+        marks.replaceChildren(...Array.from({ length: pg.n }, (_, i) => { const m = document.createElement('i'); if (i === pg.at) m.className = 'on'; return m; }),
+          Object.assign(document.createElement('span'), { textContent: `${pg.at + 1}\u2009/\u2009${pg.n}` }),
+          ...(swipeLearned() ? [] : [Object.assign(document.createElement('small'), { textContent: 'Swipe the card for the next route' })]));
+      }
+      const line = mine && !box.hidden ? ApexRouteCard.levelNote(o, true) : '';
       $('routeCardLevelsNote').textContent = line;
       $('routeCardLevelsNote').hidden = !line;
     }

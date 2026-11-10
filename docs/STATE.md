@@ -136,6 +136,18 @@
   of these roads, so most leads say no speed. The owner's own trips still unread.
 - Exact next task: an e2e flow for the overview's refresh once #319 is merged; the owner reads the overview on his trips.
 
+## Session 2026-11-10 (fable-design-route-card): page marks under the level cards (claude/fable-design-route-card, off origin/main 2fda3f8)
+
+- [x] Design pass 3b. web/route_card.js `pager(o)` ({ n, at, label } or null under two routes) and `levelNote(o,
+  learned)` (learned: no swipe sentence, no count; "another route found" stays). web/cockpit.js `paintLevelCards` draws
+  `#routeCardPager` (an `i` per route, `.on` the one on screen, a `span` count, a `small` with the swipe words until
+  `apex.cardSwiped` is set by a real swipe in the card's touchend) and calls `levelNote(o, true)`.
+- [x] web/index.html `.rc-pager` rules (one 22 px row, the marks ease between widths, still under reduced motion).
+- [x] Tests: tests/test_route_pager.py (3); e2e "plan flow (a)" and "(e, f)" read the marks (which is on, the count,
+  the words before a swipe and gone after). All six "plan flow" flows pass.
+- Next design chunks: search says a plain "Routing…" while it waits; the Garage is a long page (IDEAS U-49); "Can't
+  reach Vetta" on People is a heading and a button on blank paper.
+
 ## Session 2026-11-10 (fable-hazard-alive): a repeated "still there" keeps a hazard alive (claude/fable-hazard-alive, off origin/main f27a1fe)
 
 - [x] Found reading backend/src/hazards.ts `vote`: a person's second "still there" on the same report returned early

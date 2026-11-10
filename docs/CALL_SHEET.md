@@ -125,6 +125,21 @@ I planned ten public trips round Cincinnati in the app and read each overview ag
 - Not done: your own trips (their addresses aren't in the repo, by rule). `node tools/story_live.js colerain:fun` prints
   the lines for the public ones.
 
+## 2026-11-10 (fable-design-route-card): the route card says "swipe" with page marks, not a sentence (claude/fable-design-route-card)
+
+Design pass 3b. Under the Quick / Fun / Long way cards the route card had two grey sentences stacked: "Swipe the card
+for the next route, 2 of 3" and the route's why line. The calls:
+- **The routes found are page marks**: one short stroke per route, the one on screen long and inked, then "2 / 3".
+  It is the sign a phone already uses for "swipe sideways", and it moves when you swipe.
+- **The words "Swipe the card for the next route" sit beside the marks until your first swipe, then go for good**
+  (remembered on the phone as `apex.cardSwiped`; Erase my data clears it, and the words come back). A screen reader
+  always hears "Route 2 of 3. Swipe the card for the next."
+- **The line under the marks only speaks when the marks can't**: "Quick and Fun pick the same route", or "Another
+  route found" for a route no level picked. Most of the time it is gone, and the card is one line shorter.
+- You asked on 2026-11-04 that the card say what a swipe does. It still does, on the same row as the marks; it just
+  stops repeating itself once you have done it. Say so if you want the sentence to stay forever.
+- Undo: revert the PR.
+
 ## 2026-11-10 (fable-hazard-alive): a hazard you keep confirming stays on the map (claude/fable-hazard-alive)
 
 The app asks "still there?" every time you pass a reported hazard, but the server only listened the first time each
