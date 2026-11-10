@@ -289,6 +289,20 @@
 - Exact next task: unchanged from engine-rank below (tools/live_speed.js on the owner's trips at Fun and Long way); the
   owner can now do the same on the phone with the Dev panel and paste its JSON.
 
+## Session 2026-11-10 (fable-design-pass): design pass 1, the empty Log and Stages pages and two Garage rows (claude/fable-design-pass, off origin/main ad4f1e4)
+
+- [x] Owner 2026-11-10: UI and UX polish is a main focus of the run ("designed by an artist, not a programmer").
+  Captured onboarding, the idle map, Layers, Garage, Settings, People (signed out), Log, Stages at 393x852 and read them.
+- [x] web/analysis.html: `#historyEmpty` is a `.first-page` (pencil sketch of the hero and one row, head, line, Start a
+  drive, Watch a replay first); the empty Stages list the same shape with a drawn stage; `.switch > button
+  { font-family: inherit; }` (Drives / Stages were Arial).
+- [x] web/index.html: Garage `.ctl-label` rows at 15/500; `#coNotesHere` is a `.co-row` with "Change in Layers".
+- Tests: tests/test_log_first_page.py (3), e2e "the empty Log is a first page..." (computed typeface, key sizes).
+- Seen and not yet done (next design chunks, in the order I would take them): the signed-out People page is a logo and
+  a button over two thirds of blank paper; the search sheet says "Routing..." in plain text where the route card will
+  be; MapLibre's attribution is the stock control (IDEAS U-53); the Garage is still a long settings page (U-49).
+- Exact next task: the signed-out People page and the search sheet's waiting state, then U-49.
+
 ## Session 2026-11-09 (drive-overview): "What this drive is like" on the route card (claude/drive-overview, off origin/main 01a0423)
 
 - [x] Owner: "can we compile the data used to give some kind of route overview for the type of drive it will be? in plain
