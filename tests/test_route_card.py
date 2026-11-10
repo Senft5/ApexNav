@@ -118,3 +118,14 @@ def test_facts_never_orphan_a_unit_and_a_cafe_is_a_cup(out):
     assert out["glyphs"] == ["cafe", "view", "fuel", "view"]
     html = open(os.path.join(ROOT, "web", "index.html")).read()
     assert '.f-along[data-glyph="cafe"]' in html and '.f-along[data-glyph="fuel"]' in html
+
+
+def test_one_corner_is_a_corner():
+    """2026-11-10: a road with one corner read "1 corners" on its card's line, its number and aloud."""
+    js = ("const R = require(process.argv[1] + '/web/route_card.js'); const t = (n) => ({ dist: [0, 100], timeS: 60, events: Array(n).fill({ type: 'corner' }) });"
+          "console.log(JSON.stringify([R.stats(t(1), () => '0.1 mi')[2], R.stats(t(2), () => '0.1 mi')[2].label, R.stats(t(0), () => '0.1 mi')[2].label]));")
+    out = json.loads(subprocess.run([shutil.which("node"), "-e", js, ROOT], capture_output=True, text=True, check=True).stdout)
+    assert out == [{"value": "1", "unit": "", "label": "corner"}, "corners", "corners"]
+    page = open(os.path.join(ROOT, "web", "cockpit.js"), encoding="utf-8").read()
+    assert ".length} corners`" not in page and page.count("ApexFormat.cornerCount(t.events.filter(e => e.type === 'corner').length)") == 2
+    assert "the key keeps its own word" in page and "step(text, f) { key.progress(f); nearbyStatus(" in page

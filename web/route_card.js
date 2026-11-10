@@ -26,7 +26,7 @@
     return [
       { value: d ? d[0] : '--', unit: d ? d.slice(1).join(' ') : '', label: 'distance' },
       { value: time ? time.value : '--', unit: time ? time.unit : '', label: time ? extra : 'time' },
-      { value: corners == null ? '--' : String(corners), unit: '', label: 'corners' },
+      { value: corners == null ? '--' : String(corners), unit: '', label: corners === 1 ? 'corner' : 'corners' },
     ];
   }
 
