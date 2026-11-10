@@ -5032,7 +5032,8 @@
     (() => {   // swipe the panel right to close
       const sheet = $('sheet');
       let x0 = null, y0 = 0, dx = 0;
-      sheet.addEventListener('touchstart', (e) => { x0 = e.touches[0].clientX; y0 = e.touches[0].clientY; dx = 0; }, { passive: true });
+      // not from the looks' shelf: a sideways drag there turns to the next look
+      sheet.addEventListener('touchstart', (e) => { x0 = e.target.closest && e.target.closest('.theme-cards') ? null : e.touches[0].clientX; y0 = e.touches[0].clientY; dx = 0; }, { passive: true });
       sheet.addEventListener('touchmove', (e) => {
         if (x0 == null) return;
         dx = e.touches[0].clientX - x0;
@@ -5663,7 +5664,11 @@
             ['<path d="M8 21l3-18M16 21l-3-18"/><circle cx="12" cy="16" r="1.6"/><circle cx="12" cy="9" r="1.6"/>', 'Convoys']),
           ...(stash('apex.crew') ? [el('p', { textContent: 'You have a crew link. Sign in to see which crew, then join it.' })] : []),
           el('p', { className: 'note', textContent: 'A crew is a group for a club or a weekend run: its own page, drives you plan together and a live convoy.' }), ...signIn());
-        gbody.append(el('h3', { textContent: 'Your cars' }), el('p', { className: 'note', textContent: 'Sign in (People) to keep your cars, a profile and build threads here. Everything else in the Garage works without it.' }));
+        // An empty bay, not a paragraph (design pass, 2026-11-10): the place a car will stand, drawn in pencil, and the key that gets you there.
+        gbody.append(el('h3', { textContent: 'Your cars' }), el('div', { className: 'empty-bay' },
+          el('span', { className: 'eb-slot', innerHTML: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 16v-3l2.2-5h13.6L21 13v3M3 16h18M3 16v2M21 16v2"/><circle cx="7.5" cy="13" r="1"/><circle cx="16.5" cy="13" r="1"/></svg>' }),
+          el('p', {}, el('b', { textContent: 'No car parked here yet' }), el('small', { textContent: 'Sign in to keep your cars, a profile and build threads. Everything else in the Garage works without it.' })),
+          btn('Sign in', () => showView('friends'), 'ink-btn')));
         ambientFromAccount(false, false);                                     // U-116
         return;
       }
@@ -6831,6 +6836,15 @@
         if (inUse && key.isConnected) key.replaceWith(inUseTag);
         else if (!inUse && inUseTag.isConnected) inUseTag.replaceWith(key);
       }
+      shelveLooks();
+    }
+    // On a phone the looks stand on a shelf you turn sideways (index.html .theme-cards): it opens on the look in use, and
+    // turns to it when the look changes somewhere else. Never while a finger is turning it: the card you chose is in view.
+    function shelveLooks() {
+      const box = $('themeCards'), cur = themeCards.get(state.theme);
+      if (!box || !cur || box._at === state.theme || box.scrollWidth <= box.clientWidth + 4) return;
+      box._at = state.theme;
+      box.scrollLeft = cur.card.offsetLeft - box.firstElementChild.offsetLeft;
     }
     // a Pro theme without Pro (a shared phone, Pro lapsed) goes back to the road book, never silently kept
     if (!themeAllowed(state.theme)) { state.theme = 'roadbook'; savePrefs(); applyTheme(); }

@@ -4,6 +4,19 @@ Decisions Claude made for you, newest first. Each one says what was decided, why
 you reach one you've seen. If you disagree with a call, say so and it gets reversed; nothing here is hard to undo unless
 it says so. Things only you can do are in docs/OWNER_TODO.md.
 
+## 2026-11-10 (fable-design-garage): the Garage's looks stand on a shelf you turn sideways; Your cars signed out is an empty bay (claude/fable-design-garage)
+
+Design pass 4. The three look cards were stacked: 750 px of the Garage before you reached the voice picker. The calls:
+- **On a phone the looks stand side by side**, one in view with the edge of the next showing; a turn of the thumb
+  brings the next and it settles in place. The Garage is about a quarter shorter and the voice picker is on the
+  first screen. It opens on the look in use.
+- **A mouse, or large text, keeps the stack.** A mouse wheel can't turn a shelf, and a card of big words reads
+  better whole.
+- **A sideways drag on the shelf no longer closes the Garage** (a drag to the right anywhere else still does).
+- **Your cars, signed out, is an empty bay**: a pencil outline where a car will stand, "No car parked here yet",
+  and a Sign in key that opens People. It was a grey paragraph telling you to go to "(People)".
+- Undo: revert the PR.
+
 ## 2026-11-10 (fable-tile-limits): posted limits from the government road inventory: junk out, good ones into travel times (claude/fable-tile-limits)
 
 Where the map has no speed-limit sign, the app knows a second source: the government road inventory (HPMS). I
