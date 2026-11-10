@@ -798,6 +798,15 @@
     .end-score small { font-size: 18px; font-weight: 600; color: var(--panel-dim); }
     .end-score.no-score b { grid-column: 1 / -1; font: 700 22px/1.25 var(--font-ui); letter-spacing: 0; color: var(--panel-ink); }   /* D-6: the drive, in words */
     .end-score.no-score small, .end-score.no-score span { display: none; }
+    /* design pass 9: the number against your usual, on the label's line at the far end ("31 over your usual") */
+    .end-score:has(#endUsual:not([hidden])) span { grid-column: 1; }
+    .end-score em { justify-self: end; align-self: end; font-style: normal; font-size: 15px; font-weight: 600; color: var(--panel-ink); }
+    .end-score em[hidden], .end-score.no-score em { display: none; }
+    /* the solid key is a row of its own from the first frame; under it Mark a stage, sharing the row with Drive it again once
+       the drive is stored (it was two keys and an orphan). Nothing changes place when the score lands (U-118): Mark a stage
+       only gives up its right half. */
+    .end-acts > .solid:not([hidden]) { grid-column: 1 / -1; }
+    .end-acts:not(:has(#endAgain:not([hidden]))) > #endStage { grid-column: 1 / -1; }
     .end-score span { grid-column: 1 / -1; margin-top: 6px; font-size: 12px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; color: var(--panel-dim); }
     .end-line { margin: 12px 0 0; font-size: 16px; line-height: 1.35; }
     .end-acts { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 18px; }
@@ -1164,6 +1173,9 @@
     .perm { display: grid; grid-template-columns: 96px 1fr; gap: 4px 12px; font-size: 15px; border-top: 1px solid var(--hair, var(--panel-dim)); padding-top: 12px; }
     .perm b { font-weight: 600; }
     .perm span { color: var(--panel-dim); }
+    /* Location off (the driver said no): the sheet is that, said once, and the way back; the list of what a drive uses is put away */
+    #permSheet.loc-off .perm { display: none; }
+    #permSheet.loc-off #permNote { font-size: 16px; line-height: 1.4; }
     .badge { display: inline-block; min-width: 18px; height: 18px; border-radius: 9px; background: var(--panel-ink); color: var(--stage); font-size: 11px; font-weight: 700; line-height: 18px; text-align: center; padding: 0 5px; position: absolute; top: 4px; left: calc(50% + 6px); }
     details.more { margin-top: 8px; border-top: 1px solid var(--hair, var(--panel-dim)); }
     details.more summary { min-height: 44px; display: flex; align-items: center; font-size: 15px; font-weight: 600; cursor: pointer; list-style: none; }
@@ -1834,7 +1846,7 @@
           <p class="end-kicker">Drive saved</p>
           <h2 id="endName">--</h2>
           <p class="end-meta" id="endMeta"></p>
-          <div class="end-score"><b id="endScore">--</b><small>/1000</small><span>Vetta Score</span></div>
+          <div class="end-score"><b id="endScore">--</b><small>/1000</small><span>Vetta Score</span><em id="endUsual" hidden></em></div>
           <p class="end-feel" id="endFeel" hidden></p>   <!-- panel round 2, HE-1: what this phone felt, only when measured -->
           <p class="end-line" id="endLine"></p>
           <!-- U-75: the solid key is Share card only when there is a score to share; otherwise it is Open in the Log, and Share
@@ -1954,7 +1966,7 @@
   </div>
   <div class="overlay dim" id="permSheet" role="dialog" aria-modal="true" aria-label="Before your first drive">
     <div class="card-sheet">
-      <h2>Before your first drive</h2>
+      <h2 id="permTitle">Before your first drive</h2>
       <div class="perm"><b>Location</b><span id="permLoc">to call corners ahead</span><b>Motion</b><span id="permMot">to feel bumps and surface</span><b>Screen on</b><span>while you drive</span><b class="mount-row" hidden>Mount</b><span class="mount-row" hidden>in a holder, any way up. It sets itself up in the first minute of driving.</span></div>
       <p id="permNote">Your drive stays on this phone.</p>
       <button class="ink-btn solid" id="permGo">Allow and start</button>
