@@ -4,6 +4,21 @@ Decisions Claude made for you, newest first. Each one says what was decided, why
 you reach one you've seen. If you disagree with a call, say so and it gets reversed; nothing here is hard to undo unless
 it says so. Things only you can do are in docs/OWNER_TODO.md.
 
+## 2026-11-10 (fable-garage-two-blocks): the Garage's lower page is two blocks, the look and the co-driver (claude/fable-garage-two-blocks)
+
+For "cohesiveness": under the looks the Garage had two more blocks, **Co-driver** (Notes, Haptics, Key sounds and,
+oddly, Night) and **The words**, which opened with "Your co-driver's voice is chosen under Look and voice, above": a
+block that began by pointing back up the page. Now:
+
+- **Look and voice** ends with **Night** (Auto, Day, Night): it turns the page over, so it is the look's.
+- **Co-driver** is one block: The words (Plain words, Rally notes) with their example, the Notes row (Change in
+  Layers), Haptics, Key sounds, Speak road names. The cross-reference sentence is gone.
+
+Nothing was removed and every control keeps its id; the co-driver's voice stays with the looks, which suggest it (the
+one-home rule in tests/test_voice_pick.py). The page is one heading and about 90 px shorter.
+
+Undo: revert the PR (web/index.html only, plus two `set:` lines in web/vocabulary.js).
+
 ## 2026-11-10 (merger): e2e may run 35 minutes, not 25 (claude/project-thread-er8kzz)
 
 The e2e suite is 152 flows now and takes about 24 minutes, so GitHub cut it off at its 25-minute limit on the last flow

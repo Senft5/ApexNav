@@ -20,7 +20,14 @@ def garage_sections():
 
 def test_the_page_is_cars_look_and_the_co_driver():
     on_page = [a for a in garage_sections() if "data-setting" not in a]
-    assert len(on_page) == 4, on_page                                   # you and your cars, Look and voice, Co-driver, The words
+    assert len(on_page) == 3, on_page                                   # you and your cars, Look and voice, Co-driver
+    # (2026-11-10) The words were a block of their own that began by pointing back up the page; they are the co-driver's
+    look = HTML[HTML.index('id="lookSection"'):HTML.index("</section>", HTML.index('id="lookSection"'))]
+    co = HTML[HTML.index('id="coSection"'):HTML.index("</section>", HTML.index('id="coSection"'))]
+    assert 'id="nightSwitch"' in look and 'id="nightSwitch"' not in co   # Night is the look's
+    for part in ('id="noteWordsList"', 'id="coNotesHere"', 'data-toggle="haptics"', 'data-toggle="keys"', 'id="liveVoiceBtn"'):
+        assert part in co, part
+    assert "<h3>The words</h3>" not in HTML and "chosen under Look and voice, above" not in HTML
     assert any('id="garageMe"' in a for a in on_page) and any('id="lookSection"' in a for a in on_page)
     # the page's order: you and your cars first, then Look and voice, then the co-driver
     i_me, i_look = HTML.index('id="garageMe"'), HTML.index('id="lookSection"')

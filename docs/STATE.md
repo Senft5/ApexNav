@@ -1,5 +1,16 @@
 # VETTA — CURRENT AGENT HANDOFF STATE
 
+## Session 2026-11-10 (fable-garage-two-blocks): Night sits with the looks; Co-driver and The words are one block (claude/fable-garage-two-blocks, off origin/main dc9caf9)
+
+- [x] web/index.html: `#nightSwitch` moved into `#lookSection` with its one-line note; `#coSection` holds
+  `#noteWordsList` (as a `.ctl` labelled The words), `#coNotesHere`, haptics, keys, `#liveVoiceBtn`, `#liveNote`. The
+  "The words" section and its "chosen under Look and voice, above" line are gone. web/vocabulary.js: where words and
+  night are set.
+- [x] tests/test_garage_settings.py (three blocks on the page, Night in the look, the parts of Co-driver). e2e: "REVIEW5
+  §2", "the Garage on a phone", "private themes", "small things", "Settings behind the gear", "Dynamic Type",
+  "REVIEW.md 1.2", "safe areas".
+- Next: the Garage's "How this works" under the looks could be one line; nothing else queued here.
+
 ## Session 2026-11-10 (merger): e2e time limit 35 min (claude/project-thread-er8kzz)
 
 - [x] .github/workflows/core-tests.yml e2e `timeout-minutes` 25 → 35: 152 flows take ~24 min and were cancelled on the
