@@ -51,6 +51,11 @@
   sizes, both sides, the Garage, offline event, Try again, online event brings People back).
 - Next design pass candidates: the lower Garage blocks (How this works, Pro), the Options sheet's long list.
 
+## Session 2026-11-10 (fable-suggest-follows-dial): the loop suggestion follows the dial (claude/fable-suggest-follows-dial, off origin/main 1a38381)
+
+- [x] web/cockpit.js `pickLoop` ends with `paintLoopSuggest()` (in a try: at launch the deck isn't set up yet).
+- [x] Tests: tests/test_loop_ways.py (+1); e2e "plan flow (b)" picks 15 mi and 45 mi on the dial and reads the row.
+
 ## Session 2026-11-10 (fable-fix-join-scope): #332's page showed in the Garage too; scoped to People (claude/fable-fix-join-scope, off origin/main 6412cb5)
 
 - [x] Bug from #332 (live on main): `#accountSection:has(.join-page) { display: grid }` outranked `.sheet [data-panel]

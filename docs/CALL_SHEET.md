@@ -62,6 +62,12 @@ cars and profile will be back, and that looks, voices and settings work without 
 
 Undo: revert the PR.
 
+## 2026-11-10 (fable-suggest-follows-dial): the idle map's "Loop from here" says the length the dial is on (claude/fable-suggest-follows-dial)
+
+The row under Where to? read "Loop from here · 45 mi" from launch on, whatever you had turned the dial to, while its
+Plan key built the dial's loop: turn the dial to 15 mi, cancel, and the row still promised 45. It now says the dial's
+length (or time, once #342 is in) the moment you pick it. Undo: revert the PR.
+
 ## 2026-11-10 (fable-fix-join-scope): my mistake in #332, fixed: the signed-out People page also showed at the top of the Garage (claude/fable-fix-join-scope)
 
 The rule that lets the new signed-out People page fill the sheet named the People panel by its id, and an id outranks
