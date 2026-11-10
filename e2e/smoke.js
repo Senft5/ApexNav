@@ -5957,6 +5957,44 @@ flow('plan flow (b) a loop in 2 taps: Plan on the map, then Start; its progress 
   check(taps.n === 2, `a loop in 2 taps: ${taps.log.join(' → ')}`);
 }, IPHONE);
 
+flow('a loop by time: the dial turns to Time (half an hour to three hours), Find a loop builds a loop of that time, and its card changes it by time (2026-11-10)', async (page, base) => {
+  await planRouter(page);
+  await planPage(page, base);
+  await page.click('#destInput');
+  await page.waitForFunction(() => document.getElementById('planPanel').classList.contains('open') && document.getElementById('loopBy').getClientRects().length > 0);
+  await page.evaluate(() => { document.activeElement && document.activeElement.blur(); const st = document.querySelector('.stage'); if (st) st.scrollLeft = 0; });
+  const dial = () => page.evaluate(() => ({ by: [...document.querySelectorAll('#loopBy [aria-checked="true"]')].map((b) => b.textContent), keys: [...document.querySelectorAll('#loopDetents button')].map((b) => b.textContent),
+    on: (document.querySelector('#loopDetents [aria-pressed="true"]') || {}).textContent, face: document.getElementById('loopDialVal').textContent + ' ' + document.getElementById('loopDialUnit').textContent,
+    tall: [...document.querySelectorAll('#loopBy button')].map((b) => Math.round(b.getBoundingClientRect().height)), saved: localStorage.getItem('apex.loopBy') }));
+  const d0 = await dial();
+  check(d0.by.join() === 'Distance' && d0.on === '45 mi' && d0.face === '45 mi' && d0.tall.every((h) => h >= 44), 'the dial starts on distance, its two words a thumb tall: ' + JSON.stringify(d0));
+  await page.click('#loopBy [data-loop-by="time"]');
+  const d1 = await dial();
+  check(d1.by.join() === 'Time' && d1.keys.join('|') === '30 min|1 h|1½ h|2 h|3 h' && d1.on === '1½ h' && d1.face === '1½ h' && d1.saved === 'time', 'turned to time: its five times, the detent kept its place, the face says it: ' + JSON.stringify(d1));
+  const fits = await page.evaluate(() => { const st = document.querySelector('.stage'); if (st) st.scrollLeft = 0;   // (headless Chromium scrolls the stage sideways on a click into Where to?)
+    return [...document.querySelectorAll('#loopDetents button')].filter((b) => { const r = b.getBoundingClientRect(); return r.left < 0 || r.right > innerWidth || b.scrollHeight > b.clientHeight + 2 || b.scrollWidth > b.clientWidth + 1; }).map((b) => { const r = b.getBoundingClientRect(); return [b.textContent, Math.round(r.left), Math.round(r.right), b.scrollHeight, b.clientHeight, b.scrollWidth, b.clientWidth]; }); });
+  check(!fits.length, 'every time on the dial is whole: ' + JSON.stringify(fits));
+  await page.click('#loopDetents button:nth-child(2)');                 // 1 h
+  await page.click('#findLoopBtn');
+  await cardUp(page, 30000); await planDone(page, 30000);
+  const card = await page.evaluate(() => ({ name: apexDebug.track.name, label: document.querySelector('#routeCardLoop .rc-loop-label').textContent, aria: document.getElementById('routeCardLoop').getAttribute('aria-label'),
+    keys: [...document.querySelectorAll('#cardLoopDetents button')].map((b) => b.textContent), on: [...document.querySelectorAll('#cardLoopDetents [aria-pressed="true"]')].map((b) => b.textContent),
+    note: document.getElementById('routeProgress').textContent, levels: !document.getElementById('routeCardFun').hidden }));
+  check(/^\d+ min loop$/.test(card.name) && !card.levels, 'a loop named by its own time, no level: ' + JSON.stringify(card));
+  check(card.label === 'Time' && card.aria === 'Loop time' && card.keys.join('|') === '30 min|1 h|1½ h|2 h|3 h' && card.on.join() === '1 h', 'its card changes it by time, the hour you asked for on: ' + JSON.stringify(card));
+  check(!/\d\.\d h|0\.5 h/.test(card.note), 'the note never says "1.5 h": ' + card.note);
+  await scan(page, 'the time loop\'s card');
+  // back to distance on the card's own row is one tap on the dial's word next time: the choice is kept across a reload
+  await page.evaluate(() => sessionStorage.clear());
+  await page.goto(base + '/index.html');
+  await page.waitForFunction(() => window.apexDebug && !document.getElementById('boot'), null, { timeout: 20000 });
+  const d2 = await dial();
+  check(d2.by.join() === 'Time' && d2.on === '1 h', 'the dial opens as you left it: ' + JSON.stringify(d2));
+  await page.evaluate(() => document.querySelector('#loopBy [data-loop-by="distance"]').click());
+  const d3 = await dial();
+  check(d3.by.join() === 'Distance' && d3.keys.join('|') === '15 mi|30 mi|45 mi|60 mi|90 mi' && d3.face === '30 mi', 'and turns back to distance: ' + JSON.stringify(d3));
+}, IPHONE);
+
 flow('level cards: one control on the four phone shapes, a destination: each card its level, time and corners, a line each, nothing cut or under the island (the owner, 2026-11-04); a loop has none', async (page, base) => {
   await planRouter(page);
   const { cdp } = await planPage(page, base);
