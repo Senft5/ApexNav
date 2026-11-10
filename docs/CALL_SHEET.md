@@ -35,6 +35,33 @@ The e2e suite is 152 flows now and takes about 24 minutes, so GitHub cut it off 
 (twice on #349, once on #344) with every flow before it passing. The limit is 35 minutes. No test is skipped or
 shortened. Undo: set `timeout-minutes` back to 25 in `.github/workflows/core-tests.yml`, or better, split the suite.
 
+## 2026-11-10 (fable-driver-profile): the Log has "Your driving", a picture of how you drive over every drive (claude/fable-driver-profile)
+
+Until now every reading was of one drive, or one corner against your other passes of it. Your driving reads every clean
+corner of every drive on the phone together and says what kind of driver they show: six skills in the order a corner is
+driven (one braking, brakes done by the apex, one steering arc, entry speed, patient apex, back to power), each 0 to
+100; where you are measurably weaker (rights against lefts, tight against fast, downhill, the first ten minutes, after
+an hour, one car, a tag); each kind of corner side by side; each skill month by month; and the one thing to work on,
+with where it shows most. It opens from a card at the top of the Log.
+
+Calls I made:
+- No "pace" skill, and no rhythm skill. The share of a corner's sane limit you use is stated as a fact of your style
+  ("you keep about 40% in hand"), never as a level to raise. Nothing on the page is a speed or a time.
+- A skill stays "--" until 30 corners, a kind of corner until 10. A difference is only said when it is 8 points or more,
+  3 standard errors, and shows the same way on two drives in three (cars and tags: 4 drives a side). On made-up drives
+  with nothing planted, 12 sets of 8 drives produced no finding.
+- Lefts against rights, hills, time, cars and tags are compared after taking each corner's size out, so a road whose
+  tight corners happen to be lefts does not read as "weaker through lefts".
+- Steering is judged with the speed taken out (the load a given arc needs goes with speed squared), so slowing into a
+  long corner and driving out of it is one arc, not a correction.
+- "Work on" is only offered when the weakest skill is 85 or under. A driver with nothing short is told nothing.
+- Each drive's readings are kept on the phone in a small store of their own (credits per corner, no positions), so the
+  page opens without reading every drive again. It is only ever derived from your drives and is never sent.
+
+What it cannot see yet: the app records one g reading per GPS fix (once a second), so a correction shorter than about
+15 m does not show. That is the next piece of work (ten readings a second between fixes).
+
+Undo: revert the PR; the kept store ('vetta-profile') is unused without it and can be left.
 ## 2026-11-10 (fable-loop-time): a loop can be set by time on the dial (claude/fable-loop-time)
 
 Following your "the whole point is aimless driving": "I have an hour" is how a loop is usually asked for, and time
