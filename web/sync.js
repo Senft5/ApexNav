@@ -168,12 +168,36 @@
     try {
       r = await apiFetch('/api/contribute', { method: 'POST', headers: { 'content-type': 'application/json' },
         body: JSON.stringify({ way_id: c.way_id, dir: c.dir, driven_on: c.driven_on, drive_id: c.drive_id, bins: c.bins,
-                               shape: c.shape ?? null, cls: c.cls ?? null, cam_v: c.cam_v ?? null }) });
+                               shape: c.shape ?? null, cls: c.cls ?? null, cam_v: c.cam_v ?? null,
+                               // rec: a recorded drive (loved roads count members back on a road on another one); hr: the
+                               // busy-time bucket, only when the quiet_hours flag built one. Both were built and never
+                               // sent until 2026-11-09, so no road was ever counted as loved (contribute.ts `again`)
+                               ...(c.rec ? { rec: 1 } : {}), ...(Number.isInteger(c.hr) ? { hr: c.hr } : {}) }) });
     } catch (_) { return 'retry'; }
     return r.status === 202 ? true : r.status === 401 || r.status === 403 ? 'stop' : r.status === 429 || r.status >= 500 ? 'retry' : false;
   }
   const contributionEnabled = async () => { const e = await call('GET', '/api/me/export'); return !!(e && e.member && e.member.contribute); };
+  /**
+   * May this phone share road data? { on, known, member }. The server's answer when it gives one, remembered; with no
+   * connection (a drive begun in a car park with no signal: where the best roads start) the last answer it gave while
+   * still signed in, `known: false`. Nothing is sent on a remembered yes: the road data waits on the phone (road_carry.js)
+   * and the server refuses it later if the answer has changed.
+   */
+  const SHARE_KEY = 'apex.roadShare';
+  async function roadShare() {
+    const recall = () => { try { return signedIn() && localStorage.getItem(SHARE_KEY) === '1'; } catch (_) { return false; } };
+    const remember = (on) => { try { if (on) localStorage.setItem(SHARE_KEY, '1'); else localStorage.removeItem(SHARE_KEY); } catch (_) {} };
+    let r = null;
+    try { r = await apiFetch('/api/me/export', { method: 'GET' }); } catch (_) { r = null; }
+    if (r && r.ok) {
+      let e = null;
+      try { e = await r.json(); } catch (_) { e = null; }
+      if (e) { const member = !!e.member, on = !!(e.member && e.member.contribute); remember(on); return { on, known: true, member }; }
+    } else if (r && (r.status === 401 || r.status === 403)) { remember(false); return { on: false, known: true, member: false }; }
+    const on = recall();
+    return { on, known: false, member: on };
+  }
 
-  const api = { handlers, inApp: IN_APP, apiBase: API_BASE, apiFetch, signIn, signInApple, setSession, signedIn, contribute, newSegmentId, contributionEnabled, publishScore, standings, points, board, activity, kudos, kudosReceived, highlightsNear, shareHighlight, rateHighlight, member, pushSegments, sharedWithMe, adopt, shareSegment, friends, crews, crewMembers, removeRemote, toServer, fromServer };
+  const api = { handlers, inApp: IN_APP, apiBase: API_BASE, apiFetch, signIn, signInApple, setSession, signedIn, contribute, newSegmentId, contributionEnabled, roadShare, publishScore, standings, points, board, activity, kudos, kudosReceived, highlightsNear, shareHighlight, rateHighlight, member, pushSegments, sharedWithMe, adopt, shareSegment, friends, crews, crewMembers, removeRemote, toServer, fromServer };
   if (typeof module !== 'undefined' && module.exports) module.exports = api; else root.ApexSync = api;
 })(typeof window !== 'undefined' ? window : globalThis);

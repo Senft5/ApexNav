@@ -1,5 +1,42 @@
 # VETTA — CURRENT AGENT HANDOFF STATE
 
+## Session 2026-11-09 (fable-road-carry): road data survives no signal and a closed app (claude/fable-road-carry, off origin/main 3a74cc3)
+
+- [x] Found: contributor.js createLive `finish()` gave up when the last try had failed, so a trip that ended with no
+  signal sent nothing, and an app closed mid-retry lost its rows (IDEAS Q-06, F-05). Now a `carry` (web/road_carry.js,
+  `window.ApexRoadCarry`, found by createLive as its default) holds `leftover()`: after each failed try, when the page is
+  hidden (checkpoint), and at the trip's end. `flush()` resumes each kept item through createLive itself (`rows`,
+  `pending0`, skip 0, lag 0), so the same bins go, once, under the trip's own drive id and day.
+- [x] Kept: only the rows between the private ends; 13 days; 40,000 rows; IndexedDB `vetta-road-carry`, index in
+  localStorage `apex.roadCarry` (Erase everything clears it, and a missing index empties the store). Sent only online,
+  signed in, Road data on (`contributionEnabled`), never under APEX_REVIEW. Nothing is asked while nothing waits.
+- [x] createLive `maxRun` 2000: a backlog is matched 10 km a try. my_data.js: "road data from N mi waiting for signal".
+  privacy.html Road data paragraph; APP_REVIEW.md 5.1.2; IDEAS Q-06 / F-05; CALL_SHEET 2026-11-09 (fable-road-carry).
+- [x] Finished in a second session (2026-11-09, thread "Run autonomous Vetta improvement"; origin/main de537a6 merged in):
+  web/sync.js `contribute` now sends `rec` and `hr` (built by contributor.js, read by contribute.ts, never sent: no road
+  was ever counted loved); `roadShare()` -> { on, known, member } remembers the server's last answer (`apex.roadShare`,
+  only while signed in) so `startLiveSharing` and `checkAmbientAllowed` share on a drive begun with no signal (it never
+  shared before, so nothing was carried); cockpit.js `clearCarry` on Road data off (both switches), both Sign outs and
+  Delete account; `ApexRoadCarry.onPost` (app health counts late uploads) and `onSent` (a toast, Your data redrawn);
+  the end-of-drive toast says what waits (`ApexRoadCarry.itemM(live.leftover())`); the index's `n` counts the bins of
+  built chunks as well as rows (Your data said nothing waited for a trip whose uploads failed after matching: the e2e's catch).
+- cockpit.js edits are in the account, Your data and sharing code only (#322 touches paintStory / ownRefine);
+  web/index.html gains one script tag before contributor.js.
+- Tests: tests/test_road_carry.py (17: the first session's 14, plus `rec` on the wire, the remembered answer, the page's
+  clearing and wiring); pytest 1387 passed, 5 skipped (no existing test changed); `python tools/csp.py` up to date. e2e: new "road
+  feel that waited for signal" (the real IndexedDB store in Chromium: seeded with `hold(item, true)`, kept while the account
+  can't be confirmed, sent once on `online`, Your data counts it and stops), plus your data, drive ended (4), the app comes back whole, no signal hazard, spot photo with Erase, REVIEW5 §2, REVIEW.md 1.2 (2), review mode, People new account, first run (2), plan flow (g): all pass.
+- Open: not run in WebKit (no WebKit in the cloud container) or on a phone; the drive bar doesn't say what waits while
+  driving; a carried trip sent later doesn't mark its drive `contributed` in the Log.
+- Looked at and left (deferred finding 2, Sharon Woods to Winton Woods at Fun): reproduced on the shipped tiles. The one
+  good road is Lakeview Drive at the end; the engine prefers 29.8 min over a 23.8 min way that also drives it because
+  `poor` (10 a km) outweighs 6 minutes (1 a minute). A small-weight search step (a = 1.5) finds the 23.8 min way but
+  changed no router pick on 80 random trips, so it was not shipped. Halving `POOR_PER_KM` breaks no calibration test:
+  the fixtures do not pin it, so that weight needs a driven judgment (or the owner's word) before it moves. Also seen
+  live: the fresh-context re-rank swapped the card to a 26.0 min way under "Conditions ahead" (#322's area).
+- Exact next task: the deferred round-1 items: HPMS posted limits in the graph ETL edge time (after #321 merges and the
+  region rebuild), then Hamilton Ave quality 0.47-0.54.
+
 ## Session 2026-11-09 (fable-overview): the drive overview read against real trips (claude/fable-overview, off origin/main 1d97979)
 
 - [x] The overview's "exact next task" (read it on real routes, tune `ApexRouteStory.T`), on ten public trips planned in
