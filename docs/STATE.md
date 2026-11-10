@@ -1,15 +1,5 @@
 # VETTA — CURRENT AGENT HANDOFF STATE
 
-## Session 2026-11-10 (fable-garage-two-blocks): Night sits with the looks; Co-driver and The words are one block (claude/fable-garage-two-blocks, off origin/main dc9caf9)
-
-- [x] web/index.html: `#nightSwitch` moved into `#lookSection` with its one-line note; `#coSection` holds
-  `#noteWordsList` (as a `.ctl` labelled The words), `#coNotesHere`, haptics, keys, `#liveVoiceBtn`, `#liveNote`. The
-  "The words" section and its "chosen under Look and voice, above" line are gone. web/vocabulary.js: where words and
-  night are set.
-- [x] tests/test_garage_settings.py (three blocks on the page, Night in the look, the parts of Co-driver). e2e: "REVIEW5
-  §2", "the Garage on a phone", "private themes", "small things", "Settings behind the gear", "Dynamic Type",
-  "REVIEW.md 1.2", "safe areas".
-- Next: the Garage's "How this works" under the looks could be one line; nothing else queued here.
 ## Session 2026-11-10 (fable-pin-names): pins and tapped places by name; the spot dialog's stars (claude/fable-pin-names, off origin/main e76f1bb)
 
 - `web/cockpit.js`: `setFieldPin(field, point, name)` / `pinIn` / `fieldPin` beside `resolvePlace(q, field)`: Go here,
@@ -128,6 +118,17 @@
 
 - [x] web/cockpit.js `pickLoop` ends with `paintLoopSuggest()` (in a try: at launch the deck isn't set up yet).
 - [x] Tests: tests/test_loop_ways.py (+1); e2e "plan flow (b)" picks 15 mi and 45 mi on the dial and reads the row.
+
+## Session 2026-11-10 (fable-garage-two-blocks): Night sits with the looks; Co-driver and The words are one block (claude/fable-garage-two-blocks, off origin/main dc9caf9)
+
+- [x] web/index.html: `#nightSwitch` moved into `#lookSection` with its one-line note; `#coSection` holds
+  `#noteWordsList` (as a `.ctl` labelled The words), `#coNotesHere`, haptics, keys, `#liveVoiceBtn`, `#liveNote`. The
+  "The words" section and its "chosen under Look and voice, above" line are gone. web/vocabulary.js: where words and
+  night are set.
+- [x] tests/test_garage_settings.py (three blocks on the page, Night in the look, the parts of Co-driver). e2e: "REVIEW5
+  §2", "the Garage on a phone", "private themes", "small things", "Settings behind the gear", "Dynamic Type",
+  "REVIEW.md 1.2", "safe areas".
+- Next: the Garage's "How this works" under the looks could be one line; nothing else queued here.
 
 ## Session 2026-11-10 (fable-stages): the Stages page's runs are named by date (claude/fable-stages, off origin/main e76f1bb)
 
