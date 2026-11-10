@@ -5627,6 +5627,7 @@
     onSocial(() => { try { crewStandings = window.ApexCrewStandings ? ApexCrewStandings.mount({ el, sync: window.ApexSync, fmtKm: (km) => ApexUnits.long(km * 1000, 0) }) : null; } catch (e) { console.error('crew standings', e); } });
     onSocial(() => { try { spotsFeed = window.ApexSpotsFeed ? ApexSpotsFeed.mount({ el, btn, toast, sync: window.ApexSync, report: safety && safety.report,
       here: () => state.lastPosition || (() => { const c = map.getCenter(); return { lat: c.lat, lon: c.lng }; })(), goTo: (p) => { closeSheet(); routeToPlace(p); },
+      addSpot: () => { showView('garage'); if (window.ApexGarageSettings && ApexGarageSettings.ui) ApexGarageSettings.ui.open('spots'); },
       fmtKm: (km) => ApexUnits.long(km * 1000, 1) }) : null; } catch (e) { console.error('spots', e); } });
     onSocial(() => { if (spotsFeed) {
       const d = $('planSpots'); d.hidden = false;

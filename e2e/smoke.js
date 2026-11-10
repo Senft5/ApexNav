@@ -3519,6 +3519,25 @@ flow("what's new: shown once after an update, not on a first install, not over a
   } finally { await fresh.close(); }
 }, { news: true });
 
+flow('a path is a key: no shared spots near here offers "Add one", which opens Settings on Spots (it read "Garage → Settings → Spots")', async (page, base) => {
+  await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); } catch (_) {} });
+  await page.route('**/api/**', (route) => {
+    const u = new URL(route.request().url());
+    return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(u.pathname === '/api/me' ? { signed_in: true, member: true, handle: 'me' } : []) });
+  });
+  await page.goto(base + '/index.html');
+  await page.waitForFunction(() => window.apexDebug && window.apexDebug.map && !document.getElementById('boot'));
+  await page.click('#destInput');
+  await page.waitForSelector('#planSpots:not([hidden]) > summary');
+  await page.click('#planSpots > summary');
+  await page.waitForSelector('#planSpots p.note button.linkbtn');
+  const note = await page.textContent('#planSpots p.note');
+  check(note === 'No shared spots near here yet. Add one' && !note.includes('→'), 'the note and its key: ' + note);
+  await page.click('#planSpots p.note button.linkbtn');
+  await page.waitForSelector('.garage-pop.open[data-setting="spots"]');
+  check(await page.evaluate(() => document.getElementById('sheet').dataset.view === 'garage' && document.getElementById('sheet').classList.contains('open')), 'the Garage is open on Spots');
+});
+
 flow('crew drives: an upcoming drive shows on People, Crews, as the crew page’s card; Going answers it; the planner sets it up under More; Plan a drive is one screen with a Meet at search; spots near you (Worker stubbed, IDEAS S-06, S-12, REVIEW_PEOPLE.md P-10, P-18)', async (page, base) => {
   await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); } catch (_) {} });
   const posted = [];

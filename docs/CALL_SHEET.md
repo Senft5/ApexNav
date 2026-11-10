@@ -4,6 +4,19 @@ Decisions Claude made for you, newest first. Each one says what was decided, why
 you reach one you've seen. If you disagree with a call, say so and it gets reversed; nothing here is hard to undo unless
 it says so. Things only you can do are in docs/OWNER_TODO.md.
 
+## 2026-11-10 (fable-paths-are-keys): "Garage → Settings → Spots" is a key, not a path to walk (claude/fable-paths-are-keys)
+
+For "reducing any clunky feelings": Where to?'s Spots near you, when empty, read "No shared spots near here yet. Add
+one in Garage → Settings → Spots." It now reads "No shared spots near here yet. **Add one**", and the key opens
+Settings on Spots. The crash sheet's note had the same arrows ("Add an emergency contact in Garage → Settings → Crash
+check to text someone from here."); nothing in that sheet should lead away from Call and I'm OK, so it gets no key,
+only a plain sentence: "To text someone from here, add an emergency contact in Settings, under Crash check."
+
+Left for after #358 (it rewrites the same lines): Your data's "deleted from the server in Settings → Account → Delete
+account".
+
+Undo: revert the PR.
+
 ## 2026-11-10 (merger): e2e may run 35 minutes, not 25 (claude/project-thread-er8kzz)
 
 The e2e suite is 152 flows now and takes about 24 minutes, so GitHub cut it off at its 25-minute limit on the last flow

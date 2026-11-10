@@ -1,5 +1,12 @@
 # VETTA — CURRENT AGENT HANDOFF STATE
 
+## Session 2026-11-10 (fable-paths-are-keys): the empty Spots list has an Add one key (claude/fable-paths-are-keys, off origin/main dc9caf9)
+
+- [x] web/spots_feed.js: the empty note is text plus `btn('Add one', page.addSpot, 'linkbtn')`; web/cockpit.js hands
+  `addSpot` (`showView('garage')`, `ApexGarageSettings.ui.open('spots')`). web/incident.js: the note without arrows.
+- [x] tests/test_paths_are_keys.py (3); e2e flow "a path is a key".
+- Next: Your data's "Settings → Account → Delete account" note as a key, once #358 is in.
+
 ## Session 2026-11-10 (merger): e2e time limit 35 min (claude/project-thread-er8kzz)
 
 - [x] .github/workflows/core-tests.yml e2e `timeout-minutes` 25 → 35: 152 flows take ~24 min and were cancelled on the
