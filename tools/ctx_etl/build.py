@@ -113,11 +113,12 @@ def int_or(v, nodata, top):
     return int(min(round(f), top))
 
 
-# A posted limit HPMS can hold: 5 to 85 mph (the highest posted in the US). Anything else is a state's "not reported"
+# A posted limit HPMS can hold: 25 to 85 mph (the highest posted in the US). Anything else is a state's "not reported"
 # code (999 and the like), which the u8 used to clamp to 254 mph and the phone read as a measured limit (281 spans of
 # the Cincinnati bundles, 2026-11-09). web/route_ctx/context_grid.js LIMIT_MPH refuses the same range in bundles built
-# before this.
-LIMIT_MPH = (5, 85)
+# before this. Under 25 mph is no limit either (2026-11-10, measured in context_grid.js beside its LIMIT_MPH): HPMS's 15
+# and 20 mph rarely match the signs, and a county can report 15 mph for every road it has.
+LIMIT_MPH = (25, 85)
 
 
 def limit_or(v, nodata=255):
