@@ -62,6 +62,15 @@
   sizes, both sides, the Garage, offline event, Try again, online event brings People back).
 - Next design pass candidates: the lower Garage blocks (How this works, Pro), the Options sheet's long list.
 
+## Session 2026-11-10 (fable-end-card): design pass 9, the drive-ended card (claude/fable-end-card, off origin/main 01fa773)
+
+- web/end_line.js `usual(score, earlier)`: median of the last 10 scored drives (3 at least), `{ usual, diff, text }`.
+  web/cockpit.js `endCardScored` reads `ApexRecording.summaries(null)` after painting and fills `#endUsual` (drives dated
+  up to this one's, not itself). web/index.html: `#endUsual` in `.end-score`; `.end-acts` solid key spans the row,
+  `#endStage` spans it too until `#endAgain` shows.
+- Tests: tests/test_end_line.py; e2e "drive ended: the card and the Log give the same score and time".
+- Next: nothing queued from this pass. Not yet looked at in this run: the Log's Stages page, a crew's page, CarPlay.
+
 ## Session 2026-11-10 (fable-suggest-follows-dial): the loop suggestion follows the dial (claude/fable-suggest-follows-dial, off origin/main 1a38381)
 
 - [x] web/cockpit.js `pickLoop` ends with `paintLoopSuggest()` (in a try: at launch the deck isn't set up yet).
