@@ -26,6 +26,22 @@
 - [x] .github/workflows/core-tests.yml e2e `timeout-minutes` 25 → 35: 152 flows take ~24 min and were cancelled on the
   last flow. Next: split e2e into two jobs if it passes ~30 min.
 
+## Session 2026-11-10 (fable-when-to-go): When to go: the best hour to drive a route, and planning for it (claude/fable-when-to-go, off origin/main 948cb4b)
+
+- New `web/when_to_go.js` (`ApexWhenToGo`: slotTimes, shift, overlay, value, scan, reasons, advice, heights): the route on
+  the card valued for every half-hour departure of the next day with the engine's own model. docs/ROUTING.md "When to go".
+- `web/route_ctx/registry.js` `run(…, { inputs })`: late providers take a context already in hand. `web/route_engine.js`
+  `evaluate(…, { samples })`: the same road at another hour reuses its per-sample quality and scenery.
+- `web/cockpit.js`: `leaveAtMs` / `leaveAt()` (every clock a plan reads: corridors, glare, forecast, closures);
+  `attachWhen`, `whenScan`, `paintWhen`, `planFor`, `whenReset`; `apexDebug.lastWhen`. `web/index.html`: `#routeCardWhen`
+  (a fact that opens), `#routeWhenPanel` (ribbon, axis, detail, Plan for / Leave now). Flag `when_to_go` (flags.ts).
+- **Bug fixed:** `sun.js` and `route_weather.js` now load before the route_ctx providers. Before, conditions, wildlife and
+  hazards_live had no sun or hazard words in the app: light, glare, golden_view, deer_time_risk and wx_hazard were unknown
+  on every route since those providers merged. Rankings near dusk now carry deer hours where land use is known.
+- Tests: tests/test_when_to_go.py (11); tests/test_fun_route.py's engine glue takes `leaveAt`; e2e "when to go".
+- Not done: a reminder at the planned hour (a local notification: iOS shell work), the planned hour on a saved or shared
+  route, typical traffic by hour (no free source), beyond 24 h ("Saturday morning": the forecast reaches 3 days).
+- Next: there and back by different roads (a destination round trip that never repeats the way out).
 ## Session 2026-11-10 (fable-loop-time): the loop dial by distance or time (claude/fable-loop-time, off origin/main 1a38381)
 
 - [x] web/index.html `#loopBy` (two radio words over the dial, `.loop-by`). web/cockpit.js: `LOOP_BY` ('apex.loopBy'),

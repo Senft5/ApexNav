@@ -5921,6 +5921,49 @@ flow('plan flow (a) a destination in 3 taps: Where to?, the place, Start; Start 
   check(taps.n === 3, `a destination in 3 taps: ${taps.log.join(' → ')}`);
 }, IPHONE);
 
+flow('when to go: the route card says the best time to leave, opens the next day by the half hour, and plans the trip for the hour you pick (web/when_to_go.js)', async (page, base) => {
+  const asked = [];
+  await planRouter(page, asked);
+  const { tap } = await planPage(page, base);
+  await tap('#destInput', 'Where to?');
+  await page.fill('#destInput', 'Maryville');
+  await page.waitForSelector('#placeList .place', { timeout: 10000 });
+  await tap('#placeList .place', 'the place');
+  await cardUp(page);
+  await planDone(page);
+  // the line lands after the card, never holding it; no forecast here (every other host is blocked): the sun and the calendar
+  await page.waitForFunction(() => !document.getElementById('routeCardWhen').hidden && window.apexDebug.lastWhen, null, { timeout: 20000 });
+  const line = await page.evaluate(() => ({ text: document.getElementById('routeWhenLine').textContent, open: document.getElementById('routeWhenLine').getAttribute('aria-expanded'),
+    panel: !document.getElementById('routeWhenPanel').hidden, when: apexDebug.lastWhen }));
+  check(/^(Better at |Leave by |Go now|No better time )/.test(line.text) && line.open === 'false' && !line.panel, 'the card says when to go in one line, closed: ' + JSON.stringify(line));
+  check(line.when.forecast === false && line.when.slots >= 40, 'a day of departures, and no forecast claimed without one: ' + JSON.stringify(line.when));
+  await page.evaluate(() => document.getElementById('routeWhenLine').scrollIntoView({ block: 'center' }));
+  await tap('#routeWhenLine', 'When to go');
+  const ribbon = await page.evaluate(() => { const bars = [...document.querySelectorAll('#routeWhenRibbon > button')];
+    return { n: bars.length, picked: bars.filter((b) => b.getAttribute('aria-selected') === 'true').length, labels: bars.every((b) => /: /.test(b.getAttribute('aria-label'))), first: bars[0].getAttribute('aria-label'),
+      axis: document.getElementById('routeWhenAxis').textContent, detail: document.getElementById('routeWhenDetail').textContent, wide: document.getElementById('routeWhenRibbon').getBoundingClientRect().right <= innerWidth,
+      tall: bars.filter((b) => b.firstChild.getBoundingClientRect().height >= 3).length }; });
+  check(ribbon.n >= 40 && ribbon.picked === 1 && ribbon.labels && /^Now: /.test(ribbon.first) && ribbon.wide && ribbon.tall === ribbon.n, 'the day as one bar per departure, each named for a screen reader: ' + JSON.stringify(ribbon));
+  check(/^Now/.test(ribbon.axis) && /there by \d/.test(ribbon.detail) && /by the sun and the calendar only/.test(ribbon.detail), 'the pick in words, and that no forecast came back: ' + JSON.stringify(ribbon));
+  await scan(page, 'When to go, open');
+  // pick the departure six hours on and plan for it: the trip is planned again for that hour, and the card says so
+  const before = asked.length;
+  await page.evaluate(() => document.querySelectorAll('#routeWhenRibbon > button')[12].click());
+  const key = await page.evaluate(() => ({ text: document.getElementById('routeWhenPlan').textContent, hidden: document.getElementById('routeWhenPlan').hidden, detail: document.getElementById('routeWhenDetail').textContent }));
+  check(!key.hidden && /^Plan for (tomorrow )?\d{1,2}:\d\d/.test(key.text), 'the key names the hour: ' + JSON.stringify(key));
+  await tap('#routeWhenPlan', 'Plan for the hour');
+  await planDone(page);
+  await page.waitForFunction(() => !document.getElementById('routeCardWhen').hidden && /^Leaving /.test(document.getElementById('routeWhenLine').textContent), null, { timeout: 25000 });
+  const later = await page.evaluate(() => ({ text: document.getElementById('routeWhenLine').textContent, planned: apexDebug.lastWhen.planned, note: document.getElementById('routeProgress').textContent }));
+  check(asked.length > before && later.planned - Date.now() > 5 * 3600e3 && later.planned - Date.now() < 7 * 3600e3, 'planned again, for about six hours on: ' + JSON.stringify({ later, asked: asked.length - before }));
+  // Leave now puts the clock back
+  await page.evaluate(() => { document.getElementById('routeWhenLine').scrollIntoView({ block: 'center' }); document.getElementById('routeWhenLine').click(); });
+  await page.waitForFunction(() => !document.getElementById('routeWhenNow').hidden);
+  await page.evaluate(() => document.getElementById('routeWhenNow').click());
+  await planDone(page);
+  await page.waitForFunction(() => !document.getElementById('routeCardWhen').hidden && !/^Leaving /.test(document.getElementById('routeWhenLine').textContent) && apexDebug.lastWhen.planned === null, null, { timeout: 25000 });
+}, IPHONE);
+
 flow('no connection: People is a page that says which it is (offline, or Vetta not answering) and what still works, Try again under the thumb; the Garage says so in its own corner (design pass 5)', async (page, base) => {
   let down = true;
   await page.route(/\/api\//, (route) => (down ? route.abort() : route.fulfill({ status: 200, contentType: 'application/json', body: '{"signed_in":false}' })));
