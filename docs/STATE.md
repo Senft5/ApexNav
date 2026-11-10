@@ -100,6 +100,7 @@
   restart, the six-hour cap); tests/test_convoy_client.py test_keep_going_and_the_heads_up_before_the_end; e2e "convoy:
   ten minutes before it ends ..."; backend vitest and pytest counts below in the PR.
 - Exact next task: unchanged.
+
 ## Session 2026-11-09 (fable-hpms-limits): a "not reported" speed limit was read as 254 mph (claude/fable-hpms-limits, off origin/main 1d97979)
 
 - [x] Found while measuring posted limits for the overview: the context grid's HPMS `speed_limit` (u8 mph) clamped a state's
