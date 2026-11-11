@@ -4,6 +4,12 @@ Decisions Claude made for you, newest first. Each one says what was decided, why
 you reach one you've seen. If you disagree with a call, say so and it gets reversed; nothing here is hard to undo unless
 it says so. Things only you can do are in docs/OWNER_TODO.md.
 
+## 2026-11-11 (places by name, 3): ask Siri for the next gas station or café (claude/project-thread-me97iw)
+
+Two new Siri phrases: "Where's the next gas station in Vetta" and "Where's the next café in Vetta" (also "Next fuel" /
+"Next coffee in Vetta"). The co-driver says the next one along your planned route by its map name and how far it is
+("Next fuel: Shell, in 3.2 mi."). Calls: only places along the planned route count (not off-route detours); without a
+route it says to plan one. Undo: revert the PR (the two intents and the page's handler).
 ## 2026-11-11 (roam-c ta-placement): this week's time attack loop is a home deck suggestion (claude/roam-c-ta-placement)
 
 When you entered this week's loop, the deck's suggestion row names it with your place and the days left, ranked right
