@@ -2,6 +2,7 @@
 import { env } from "cloudflare:workers";
 import { beforeEach, describe, expect, it } from "vitest";
 import { api, befriend, freshDb, makeBanned, makeSegment, makeUser, ok } from "./helpers";
+type Msg = Record<string, any>;
 
 beforeEach(freshDb);
 
@@ -68,25 +69,39 @@ describe("friends", () => {
   });
 });
 
-describe("opt-in sharing (grants and boards)", () => {
-  it("only the friend the owner opted in with can see the score: a row shared with Bob is invisible to Carol, also a friend", async () => {
+describe("sharing per friend (grants and boards)", () => {
+  it("only a friend the owner shares with can see the score: switched off for Carol, a row shared with Bob is invisible to her", async () => {
     const [a, b, c] = [await makeUser("alice"), await makeUser("bob"), await makeUser("carol")];
     await befriend(a, b); await befriend(a, c);
     const seg = await makeSegment(a);
+    await ok(api(a, "PUT", "/api/grants", { audience_type: "friend", audience_id: c.id, share_scores: false }));   // on by default; off for Carol
     await ok(api(a, "PUT", "/api/grants", { audience_type: "friend", audience_id: b.id, share_scores: true }));
     expect(((await (await ok(api(a, "POST", "/api/board", { segment_id: seg, driver_score: 812, time_s: 600, driven_on: "2026-10-20" }))).json()) as { published: number }).published).toBe(1);
     expect(await board(b, seg)).toEqual([expect.objectContaining({ user_id: a.id, driver_score: 812 })]);
-    expect(await board(c, seg)).toEqual([]);                      // Carol is Alice's friend but was never granted
+    expect(await board(c, seg)).toEqual([]);                      // Carol is Alice's friend, switched off
     expect(await board(a, seg)).toHaveLength(1);                   // owner sees their own
   });
 
-  it("nothing is shared by default: no grant, nothing published", async () => {
+  it("a new friend shares Scores and Times both ways by default (the owner, 2026-11-11); switched off, nothing is published", async () => {
     const [a, b] = [await makeUser("alice"), await makeUser("bob")];
     await befriend(a, b);
+    for (const [u, o] of [[a, b], [b, a]] as const)
+      expect(await (await ok(api(u, "GET", "/api/grants"))).json()).toEqual([{ audience_type: "friend", audience_id: o.id, share_scores: 1, share_times: 1 }]);
     const seg = await makeSegment(a);
-    const r = (await (await ok(api(a, "POST", "/api/board", { segment_id: seg, driver_score: 700, driven_on: "2026-10-20" }))).json()) as { published: number };
-    expect(r.published).toBe(0);
+    let r = (await (await ok(api(a, "POST", "/api/board", { segment_id: seg, driver_score: 700, time_s: 300, driven_on: "2026-10-20" }))).json()) as { published: number };
+    expect(r.published).toBe(1);
+    expect(await board(b, seg)).toEqual([expect.objectContaining({ driver_score: 700, time_s: 300 })]);
+    await ok(api(a, "PUT", "/api/grants", { audience_type: "friend", audience_id: b.id, share_scores: false }));
     expect(await board(b, seg)).toEqual([]);
+    r = (await (await ok(api(a, "POST", "/api/board", { segment_id: seg, driver_score: 710, driven_on: "2026-10-21" }))).json()) as { published: number };
+    expect(r.published).toBe(0);
+    // a choice made stays made: switched off is kept as an off row, and a default never turns it back on (here bob joins
+    // alice's crew on her link, which befriends on a first join and would add the defaults)
+    expect(await (await ok(api(a, "GET", "/api/grants"))).json()).toEqual([{ audience_type: "friend", audience_id: b.id, share_scores: 0, share_times: 0 }]);
+    const crew = ((await (await ok(api(a, "POST", "/api/crews", { name: "Ridge Runners" }))).json()) as { id: string }).id;
+    const tok = ((await (await ok(api(a, "POST", `/api/crews/${crew}/invite`))).json()) as { token: string }).token;
+    await ok(api(b, "POST", "/api/crews/join", { token: tok }));
+    expect(((await (await ok(api(a, "GET", "/api/grants"))).json()) as Msg[]).find((g) => g.audience_type === "friend")).toEqual({ audience_type: "friend", audience_id: b.id, share_scores: 0, share_times: 0 });
   });
 
   it("times stay hidden unless share_times is on, and turning it off erases stored times", async () => {
@@ -155,6 +170,8 @@ describe("crews", () => {
     expect(mems.map((m) => m.handle)).toEqual(["alice", "bob"]);
     expect((await api(c, "GET", `/api/crews/${crew}/members`)).status).toBe(404);
     const seg = await makeSegment(a);
+    // bob came in on alice's link, so they are friends too, sharing by default; off here, so what bob sees is the crew's
+    await ok(api(a, "PUT", "/api/grants", { audience_type: "friend", audience_id: b.id, share_scores: false }));
     await ok(api(a, "PUT", "/api/grants", { audience_type: "crew", audience_id: crew, share_scores: true }));
     await ok(api(a, "POST", "/api/board", { segment_id: seg, driver_score: 750, driven_on: "2026-10-20" }));
     expect(await board(b, seg)).toHaveLength(1);
@@ -181,7 +198,7 @@ describe("crews", () => {
     await ok(api(b, "PUT", "/api/grants", { audience_type: "crew", audience_id: crew, share_scores: true }));
     await ok(api(b, "POST", "/api/board", { segment_id: seg, driver_score: 600, driven_on: "2026-10-20" }));
     await ok(api(a, "DELETE", `/api/crews/${crew}/membership`));
-    for (const t of ["crews", "crew_members", "grants", "board_entries"]) {
+    for (const t of ["crews", "crew_members", "grants WHERE audience_type = 'crew'", "board_entries WHERE audience_type = 'crew'"]) {
       expect((await env.DB.prepare(`SELECT COUNT(*) AS n FROM ${t}`).first<{ n: number }>())!.n).toBe(0);
     }
   });
@@ -264,18 +281,19 @@ describe("invites", () => {
     expect((await env.DB.prepare("SELECT COUNT(*) AS n FROM friendships WHERE status = 'accepted'").first<{ n: number }>())!.n).toBe(0);
   });
 
-  it("redeeming an invite makes you friends with whoever invited you, with sharing still off", async () => {
+  it("redeeming an invite makes you friends with whoever invited you, sharing Scores and Times both ways until switched off", async () => {
     const owner = await makeUser("owner"), newbie = await makeUser("newbie", false);
     const { token } = (await (await ok(api(owner, "POST", "/api/invites"))).json()) as { token: string };
     await ok(api(newbie, "POST", "/api/invites/redeem", { token }));
     const mine = (await (await ok(api(newbie, "GET", "/api/friends"))).json()) as { handle: string; status: string }[];
     expect(mine).toEqual([expect.objectContaining({ handle: "owner", status: "accepted" })]);
     expect(await (await ok(api(owner, "GET", "/api/friends"))).json()).toEqual([expect.objectContaining({ handle: "newbie", status: "accepted" })]);
-    expect(await (await ok(api(newbie, "GET", "/api/grants"))).json()).toEqual([]);                 // nothing is shared by default
-    expect(await (await ok(api(owner, "GET", "/api/grants"))).json()).toEqual([]);
+    expect(await (await ok(api(newbie, "GET", "/api/grants"))).json()).toEqual([{ audience_type: "friend", audience_id: owner.id, share_scores: 1, share_times: 1 }]);   // on by default
+    expect(await (await ok(api(owner, "GET", "/api/grants"))).json()).toEqual([{ audience_type: "friend", audience_id: newbie.id, share_scores: 1, share_times: 1 }]);
+    await ok(api(owner, "PUT", "/api/grants", { audience_type: "friend", audience_id: newbie.id, share_scores: false }));
     const seg = await makeSegment(owner);
     await ok(api(owner, "POST", "/api/board", { segment_id: seg, driver_score: 700, driven_on: "2026-10-20" }));
-    expect(await (await ok(api(newbie, "GET", `/api/board/${seg}`))).json()).toEqual([]);          // friends, but they see nothing until a grant exists
+    expect(await (await ok(api(newbie, "GET", `/api/board/${seg}`))).json()).toEqual([]);          // switched off: they see nothing
   });
 
   it("an invite completes a friend request that was already waiting", async () => {

@@ -374,3 +374,88 @@ def profile(drives: list) -> dict:
                                             "worse": f["a"] if f["mean_a"] < f["mean_b"] else f["b"]}
             out["focus"] = {"skill": worst, "where": where}
     return out
+
+
+# Practice (IDEAS D-27): the skill "Work on" names, carried into the next drives. A plan is {skill, since, where}: since
+# is the moment it was set, in the drives' own local "YYYY-MM-DDTHH:MM" form; where is the focus's place, if any. Each
+# drive after it is read on that one skill alone and set against every corner before it.
+PRACTICE_MIN = 4             # corners of the skill one drive needs before it says how the practice went
+PRACTICE_FLOOR = 0.05        # a change smaller than this is not worth saying
+PRACTICE_SE = 2.0            # ...and it must be this many standard errors from the level before the practice
+GENERIC = frozenset({"rest", "later", "before"})
+
+
+def _side(where):
+    """The test for the corners a focus's place names (lefts, tight corners, downhill...); None for none, a whole-drive
+    place (a car, a tag) or one that is only "the rest"."""
+    if not where or where.get("worse") in GENERIC:
+        return None
+    for split, a, b, in_a, in_b in WITHIN:
+        if split == where.get("split"):
+            if a == where.get("worse"):
+                return in_a
+            if b == where.get("worse"):
+                return in_b
+    return None
+
+
+def _against(xs: list, base):
+    """(level, delta in levels, sure) of corners xs against base (mean, se) of the corners before; delta None without one."""
+    m, se = da._mean_se(xs)
+    if base is None:
+        return _level(m), None, False
+    diff, s = m - base[0], math.sqrt(se * se + base[1] * base[1])
+    return _level(m), _level(m) - _level(base[0]), bool(abs(diff) >= PRACTICE_FLOOR and abs(diff) >= PRACTICE_SE * s)
+
+
+def drive_practice(obs: list, plan: dict, base=None):
+    """One drive on the practised skill. base: (mean, se) of every corner before the practice, or None.
+
+    Returns {skill, n, level, delta, sure, where_n, where_level}: level None under PRACTICE_MIN corners; delta (against the
+    level before) None without one; where_* the same over the corners of the focus's place. None for an unknown skill.
+    """
+    k = plan.get("skill") if plan else None
+    if k not in SKILLS:
+        return None
+    xs = _vals(obs, k)
+    out = {"skill": k, "n": len(xs), "level": None, "delta": None, "sure": False, "where_n": None, "where_level": None}
+    if len(xs) >= PRACTICE_MIN:
+        out["level"], out["delta"], out["sure"] = _against(xs, base)
+    side = _side(plan.get("where"))
+    if side is not None:
+        ws = [o[k] for o in obs if o[k] is not None and side(o)]
+        out["where_n"] = len(ws)
+        if len(ws) >= PRACTICE_MIN:
+            out["where_level"] = _level(da._mean_se(ws)[0])
+    return out
+
+
+def practice(drives: list, plan: dict):
+    """The practice so far. drives: profile's, each with at (its local start, "YYYY-MM-DDTHH:MM", or None: unknown, and
+    counted before). Returns {skill, since, before {level, n, mean, se}, after {level, n}, delta, sure, drives [{id, at,
+    ...drive_practice}]}, or None for no plan. Every corner of a drive that started before since is "before"."""
+    k = plan.get("skill") if plan else None
+    if k not in SKILLS:
+        return None
+    since = str(plan.get("since") or "")
+    order = sorted((d for d in drives if d.get("obs")), key=lambda d: (d.get("at") or "", str(d.get("id"))))
+    before, after, rows = [], [], []
+    for d in order:
+        xs = _vals(d["obs"], k)
+        if d.get("at") and d["at"] >= since:
+            after.extend(xs)
+            if xs:
+                rows.append(d)
+        else:
+            before.extend(xs)
+    base = None
+    out = {"skill": k, "since": since, "before": {"level": None, "n": len(before), "mean": None, "se": None},
+           "after": {"level": None, "n": len(after)}, "delta": None, "sure": False, "drives": []}
+    if len(before) >= SKILL_MIN:
+        m, se = da._mean_se(before)
+        base = (da._r(m, 4), da._r(se, 4))          # as the plan keeps it for the end card, so both say the same
+        out["before"].update(level=_level(base[0]), mean=base[0], se=base[1])
+    if len(after) >= PRACTICE_MIN:
+        out["after"]["level"], out["delta"], out["sure"] = _against(after, base)
+    out["drives"] = [{"id": d.get("id"), "at": d.get("at"), **drive_practice(d["obs"], plan, base)} for d in rows]
+    return out
