@@ -4323,11 +4323,14 @@ flow('People: two tabs; a request is a card on top, then you, then friends with 
 
 flow('People, a new account: Friends is one sentence and the Invite key; Crews is one "Find or start a crew" row (REVIEW_PEOPLE P-08)', async (page, base) => {
   await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); } catch (_) {} });
+  const put = [];
   await page.route(base + '/api/**', (route) => {
     const u = new URL(route.request().url()), json = (b) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(b) });
     if (u.pathname === '/api/me') return json({ signed_in: true, member: true, handle: 'me' });
     if (u.pathname === '/api/crews/discover') return json([{ id: 'K9', name: 'Tail of the Dragon Regulars', members: 118, area_name: 'Deals Gap', km: 54 }]);
     if (u.pathname === '/api/points') return json({ total: 0 });
+    if (route.request().method() !== 'GET') put.push([route.request().method(), u.pathname, route.request().postData()]);
+    if (u.pathname === '/api/crews/K9/join') return json({ id: 'K9' });
     return json([]);
   });
   await page.goto(base + '/index.html?view=people');
@@ -4343,6 +4346,14 @@ flow('People, a new account: Friends is one sentence and the Invite key; Crews i
   const tile = await page.evaluate(() => { const b = [...document.querySelectorAll('.side-pop.open .crew-tiles.one .crew-tile-head b')].find((x) => /Dragon/.test(x.textContent)); return { whole: b.scrollWidth <= b.clientWidth + 1, line: b.nextElementSibling.textContent }; });
   check(tile.whole && /118 members · Deals Gap · 34 mi/.test(tile.line), 'one crew a row, the name whole, the area and the distance under it (P-26): ' + JSON.stringify(tile));
   check(await page.isVisible('.side-pop.open input[aria-label="Crew name"]'), 'and Start a crew in the same sheet');
+  // a public crew starts with nothing shared and asks on joining (the owner, 2026-11-11: on by default for friends and private crews)
+  await page.click('.side-pop.open .crew-tiles .card:has-text("Tail of the Dragon") button:has-text("Join")');
+  await page.waitForSelector('.confirm-sheet .cs-box');
+  const ask = await page.textContent('.confirm-sheet .cs-box');
+  check(/public crew: anyone can join it and see what you share/.test(ask) && /Share Scores and times/.test(ask) && /Scores only/.test(ask) && /Cancel/.test(ask), 'joining a public crew asks: ' + ask);
+  await page.click('.confirm-sheet button:has-text("Scores only")');
+  await page.waitForFunction(() => /sees your Scores\./.test(document.getElementById('toast').textContent));
+  check(put.some(([m, p, b]) => m === 'PUT' && p === '/api/grants' && JSON.parse(b).audience_id === 'K9' && JSON.parse(b).share_scores === true && JSON.parse(b).share_times === false), 'Scores only is sent: ' + JSON.stringify(put));
 });
 flow('one link in: no "invite-only" anywhere; a crew link joins a newcomer with a handle in one card; a friend link asks first; any member invites; the owner picks who can (Worker stubbed, REVIEW_PEOPLE.md P-02, P-07, P-20, P-22, P-32)', async (page, base) => {
   await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); } catch (_) {} });
@@ -7184,6 +7195,11 @@ flow('TestFlight 2026-11-05 note 1: in several crews the Crews side is a dashboa
   check(await page.textContent('.crew-page .cp-title h2') === 'Blue Ridge Breakfast Club' && await page.isVisible('#crewsBody .crew-head .cd-back') && await page.isVisible('#crewsBody .crew-head .gear-key'),
     'a crew opens with the key back and its gear');
   check(!(await page.$('.crew-dash')), 'and the dashboard gives way to it');
+  // a public crew you don't share with asks once on this phone (the owner, 2026-11-11); Cancel keeps it off and it doesn't ask again
+  await page.waitForSelector('.confirm-sheet .cs-box');
+  check(/public crew/.test(await page.textContent('.confirm-sheet .cs-box')), 'the public crew asks whether to share');
+  await page.click('.confirm-sheet button:has-text("Cancel")');
+  check(await page.evaluate(() => localStorage.getItem('apex.askedShare.k4') === '1'), 'asked once');
   await page.click('#crewsBody .cd-back');
   await page.waitForSelector('.crew-dash .cd-row');
   check(await page.waitForFunction(() => document.activeElement && document.activeElement.classList.contains('cd-open'), null, { timeout: 3000 }).then(() => true, () => false), 'back on the dashboard, the focus on its first crew');

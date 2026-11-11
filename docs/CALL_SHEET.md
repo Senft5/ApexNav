@@ -57,6 +57,34 @@ notes under a search that finds nothing said "Press Go" while the key under them
 "offline" is only said when the phone is offline.
 
 Undo: revert the PR. Typed coordinates still work as before and are still named "Pin lat, lon".
+## 2026-11-11 (fable-share-defaults): Scores and times shared with friends and private crews by default (claude/fable-share-defaults)
+
+Nate (2026-11-11): "data sharing with friends and private crews should be on by default, with an option to turn each
+off case by case. Public crews should default to off, but prompt you when you join to enable." Done that way: a new
+friendship (a request accepted, a mutual request, a friend link, a crew link's sender) gives both people a grant with
+Scores and Times on; starting or joining a private crew gives one for that crew; a public crew gives none, and joining
+one (from Crews near you, a meet's card or a link) asks once: Share Scores and times, Scores only, or Cancel. Every one
+is still switched off per friend and per crew where it was.
+
+The calls:
+- **Existing friendships and private crews too** (Nate, 2026-11-11: "for those too"): migration 0050 is a one-off
+  backfill (INSERT OR IGNORE, both sides of every accepted friendship and every private-crew member, never across a
+  block, never a public crew). Before this PR switching off deleted the row, so someone who once switched a friend off
+  and never back on is turned on again by it: there is no record of that choice to keep. The app says so once (a note
+  when People opens with friends: "Your friends and private crews now see your Scores and times. Switch it off for
+  anyone"). Apply 0050 on preview then prod at merge (it only adds rows; no schema change).
+- **Switching off now keeps a row with both off** instead of deleting it, so a later default (say a crew link from
+  someone you're already friends with) never turns it back on. Everything that reads grants already checks the flag.
+- **Times are on too**, since the stage times decision (2026-11-10) makes them part of "data sharing".
+- **Not in this**: live position on the friends map, cars shown and road data keep their own switches and defaults.
+  Position stays off by default: it says where someone is right now, which is a safety matter, not a sharing one.
+- **A private crew made public** (review note): its members' sharing with it goes back to off (everyone but the owner,
+  who made it public), what they published to it is removed, and the crew page asks each of them once, as joining a
+  public crew does. Most of those grants were the private-crew default, never a choice to show strangers.
+- The new-account Friends page said "Nothing is shared unless you switch it on."; it says "Friends see your Scores and
+  times. Switch it off for anyone." Tests that encoded "nothing by default" now switch off explicitly (a spec change).
+
+Undo: revert the PR. Grants made in the meantime stay on until switched off.
 ## 2026-11-11 (fable-offline-road-feel): saved map areas keep members' road feel (claude/fable-offline-road-feel)
 
 A saved offline area now also keeps the members' measured roads round it, so a plan with no signal still knows which

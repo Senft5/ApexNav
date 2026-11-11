@@ -54,6 +54,20 @@
 - Checked: pytest full; e2e "a pin has a name", "Where to?" 9/9, "plan flow" 6/6, "spot photo", "Dynamic Type",
   "REVIEW.md 1.2" 2/2, "routes from elsewhere", "saved for offline", "drag to reshape", "safe areas".
 - Next: a tapped place could take the road's name once the lookup lands (rename the planned route after the fact).
+## Session 2026-11-11 (fable-share-defaults): sharing on by default for friends and private crews (claude/fable-share-defaults, off origin/main fc27c473)
+
+- `backend/src/share_defaults.ts`: `friendDefaults(a, b)` (both ways, only while accepted and unblocked) from
+  `friendAccept`, the mutual request in `friendRequest`, and `befriendOnLink` (auth.ts); `crewDefaults(user, crew)` (private
+  crews only) from `crewCreate` and `crewJoin`. INSERT OR IGNORE: an existing row is never changed.
+- `setGrant` with Scores off keeps a 0/0 row (was a DELETE) so defaults never undo it. `crewJoin` returns `public`.
+- `crewUpdate` private → public: members' crew grants to 0/0 (not the owner's), their board_entries and drive_scores for
+  it deleted; `web/crew_page.js` asks once per phone (`apex.askedShare.<id>`) on a public crew you don't share with.
+- `web/cockpit.js` `askPublicSharing(id, name)` (ApexConfirm.choose) after joining a public crew from Crews near you or a
+  link; `web/crew_events.js` meet card's Join the crew calls it through `page.askPublicSharing`. Onboarding copy changed.
+- Tests: backend/test/share_defaults.test.ts (new); privacy, crews, activity, crew_page, drive_scores updated for the new
+  default; e2e "People, a new account" joins a public crew and picks Scores only.
+- Migration `0050_share_backfill.sql` (data only): sharing on for existing friendships and private-crew members.
+  On preview 2026-11-11 (with its d1_migrations row); **prod: apply at merge**. People says so once (`apex.sharingOnTold`).
 ## Session 2026-11-11 (fable-avoid-police): Avoid → Police reports (claude/fable-avoid-police, off origin/main fc27c47)
 
 - Done: `ApexHazardReports.policeFor` / `passesNear`; `FunRoute` avoid key `police` (unavoided, keepAvoiding); graph_router
