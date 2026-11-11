@@ -77,6 +77,35 @@
     return { name: null, hold: null };
   }
 
-  const api = { nearestRoadName, mainRoad, shortRoadName, holdRoadName, HOLD_MS };
+  /**
+   * An imported drive's main road (IDEAS U-04): every `stepM` metres along it ({ lat[], lon[], dist[]? }, dist from the
+   * start; 5 m a sample without it), the named road line nearest (nearestRoadName), totalled, then mainRoad. null when no
+   * road carried a third of it.
+   */
+  function roadOfTrack(features, t, stepM = 150) {
+    if (!t || !Array.isArray(t.lat) || t.lat.length < 2) return null;
+    const dist = Array.isArray(t.dist) && t.dist.length === t.lat.length ? t.dist : t.lat.map((_, i) => i * 5);
+    const total = dist[dist.length - 1] - dist[0];
+    if (!(total > 0)) return null;
+    const by = {};
+    let next = dist[0];
+    for (let i = 0; i < t.lat.length; i++) {
+      if (!(dist[i] >= next)) continue;
+      next = dist[i] + stepM;
+      const name = nearestRoadName(features, t.lat[i], t.lon[i]);
+      if (name) by[name] = (by[name] || 0) + stepM;
+    }
+    return mainRoad(by, total);
+  }
+  /** Is an imported drive's name only a stand-in: missing, its file's name, or a date ("Drive 10/26/2026 5:03 PM",
+   *  "web_20261027_080000")? A name the driver gave it in the app is kept. */
+  function isStandInName(name, fileName = '') {
+    const n = typeof name === 'string' ? name.trim() : '';
+    if (!n) return true;
+    if (fileName && n === String(fileName).replace(/\.csv$/i, '')) return true;
+    return /^web_\d{8}_\d{6}$/.test(n) || /^Drive \d{1,2}\/\d{1,2}\/\d{4}\b/.test(n);
+  }
+
+  const api = { nearestRoadName, mainRoad, shortRoadName, holdRoadName, HOLD_MS, roadOfTrack, isStandInName };
   if (typeof module !== 'undefined' && module.exports) module.exports = api; else root.ApexRoadNames = api;
 })(typeof window !== 'undefined' ? window : globalThis);

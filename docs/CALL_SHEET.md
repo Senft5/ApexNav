@@ -13,6 +13,27 @@ and height) heats the discs, and the air cools them. It never says a temperature
 it counts engine braking as brake work, so it errs toward warning. Ordinary hills stay quiet (the two demo drives never
 get past cool). Nothing leaves the phone. Undo: revert the PR, or remove the `noteBrakes(...)` calls in cockpit.js to keep
 only the drive page line.
+## 2026-11-11 (ui-round-two): Settings and every sheet that rises over a page match the rest (claude/project-thread-5sbga7)
+
+Every sheet that slides up over a page (Settings and each setting under it, route Options, Best roads nearby, a friend's
+or a crew's sheet, roadbooks, duels) now rises on the same soft shadow as the deck instead of a hard rule and shadow, and
+its title is set large like the Garage's. Every mode switch (Units, Driving side, Roads, Map motion and the rest) is now a
+soft well with the chosen key in ink, instead of a heavy ink frame with a pressed-in thumb; the choice reads the same.
+The on/off slide switches were left alone, since you asked for those to be unmistakable. Undo: delete the "sheets over a
+page" block at the end of web/signature.css. Shots: design-pass/round-two/settings-before-after.png.
+
+## 2026-11-11 (round two analysis): Pace in Your driving, but never "Work on: Pace" (claude/project-thread-gd7nre)
+
+You asked for more speed-based features. Your driving now has a "Your pace" panel: the Score's own Pace credit (full
+from 85 % to 100 % of a corner's sane limit, less above it) as a level, month by month, by kind of corner (a Pace row in
+the table), where it is measurably lower or higher ("Pace is lower downhill: 71 against 88 uphill"), and how often a
+corner went over its sane limit. The call: Pace is never the strongest skill, never "Work on" and never a practice, and
+its findings are said apart from technique ones, because a page that coaches someone to carry more speed on a public
+road is the one thing App Review (1.4) and a crash would both hold against us. APP_REVIEW.md has a row with the fallback.
+
+Undo: let pace be a Work on by adding it to SKILLS (core/driver_profile.py and web/driver_profile.js); hide the panel
+by removing the `dp-pace` block in `render`.
+
 ## 2026-11-11 (ui-round-two): the Garage and People match the Log and the home screen (claude/project-thread-5sbga7)
 
 The Garage's title is now set large like the place name on the map, its gear is a key laid on the page instead of an
@@ -23,6 +44,16 @@ empty states stay drawn in pencil. No words or places changed.
 
 Undo: revert the PR (CSS only).
 
+## 2026-11-11 (roam-c-safe-area-split): the safe-area e2e check runs as one flow a phone shape (claude/roam-c-safe-area-split)
+
+The safe-area flow (every screen under the island, home indicator and corners) walked all four phone shapes in one
+4.5-minute flow, the longest in CI, so whichever e2e shard got it was the slowest. It is now four flows, `safe areas
+(portrait)` and so on, with the same 16 screens and checks each, and the scanner's self-check in the first; each still
+writes its own contact sheet. A failure now names its phone shape. The shards even out (by the last CI log, 5.9 to 6.7
+min of flows each, from 5.8 to 6.9): a small gain at four jobs, and it lets a fifth job pay off later (about 5.2 min
+each), which I left at four because each job pays its own minute of setup in Actions minutes.
+
+Undo: revert the PR (one flow again; set `LONG_S` back to 258 s for it).
 ## 2026-11-11 (roam-c-ci-shards): the e2e check runs as four jobs side by side (claude/roam-c-ci-shards)
 
 The e2e check ran 173 flows one after another in 28-31 minutes against a 35-minute limit, and every PR waited on it. It
@@ -59,6 +90,7 @@ quicker one is counted as "quick" rather than read too slow, and when most are q
 (quicker than the recording can time)" instead of a number. Finer timing would need the recording to keep the raw frames.
 
 Undo: revert the PR (kept observations rebuild on the next visit, `OBS_VERSION` 2 back to 1).
+
 ## 2026-11-11 (ui-round-two): the Log looks like the rest of the app (claude/project-thread-5sbga7)
 
 The Log is its own page shown over the map, and it had kept the old look: opening it swapped the tab bar's red dot for a

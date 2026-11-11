@@ -16,8 +16,11 @@ Touch (round two, from the ten g readings a second the recording keeps since #37
 off, and how fast the car is loaded up at turn-in, in g a second, as style facts. Old drives, whose g was kept once a
 second (a staircase or a straight ramp between fixes), give no touch: `_fine` tells them apart from the g itself.
 
-Technique only: no speed, time or legality enters a level, and nothing here rewards pace. The share of a corner's sane
-limit used is reported as a style fact, never as a skill. Unknown stays unknown (None). `web/driver_profile.js` is the
+The six skills are technique: no speed, time or legality enters them. Pace (IDEAS D-29, Nate 2026-11-10: "more speed
+based stuff") is read beside them, the Vetta Score's own pace credit per corner (full from 85 % to 100 % of the corner's
+sane limit, falling steeply above it, so overdriving never earns it): a level, by kind of corner, month by month, and where
+it is measurably lower or higher (`pace_findings`), with the share of corners over the sane limit. It is never the
+strongest, never a Work on and never practised: Vetta does not tell anyone to go faster. Unknown stays unknown (None). `web/driver_profile.js` is the
 port, held to parity by tests/test_driver_profile.py.
 """
 from __future__ import annotations
@@ -29,6 +32,8 @@ import numpy as np
 from core import drive_analysis as da
 
 SKILLS = ("squeeze", "brake", "arc", "entry", "line", "exit")
+PACE = "pace"
+MEASURES = SKILLS + (PACE,)  # pace (IDEAS D-29) is read like a skill but is never the strongest, a Work on or a practice
 # In the order a corner is driven:
 #  squeeze  braking in one go: on once, off once, no second stab or early lift
 #  brake    brakes done by the apex: nothing hard after it
@@ -277,6 +282,7 @@ def observe(drive: dict) -> list:
             "trail": None if ph["brake_m"] is None else (1 if ph["trail_m"] >= TRAIL_MIN_M else 0),
             "slow_m": None if slow is None else (slow - a) * 5.0,
             "brake_on": brake_on, "brake_off": brake_off, "turn_in": turn_in,
+            "pace": da._pace_credit(float(tech["use"])),
         })
     return out
 
@@ -365,10 +371,11 @@ def profile(drives: list) -> dict:
     drives = [d for d in drives if d.get("obs")]
     every = [o for d in drives for o in d["obs"]]
     out = {"corners": len(every), "drives": len(drives), "skills": {}, "style": {}, "touch": {}, "matrix": [], "findings": [],
+           "pace_findings": [], "pace": {},
            "trend": {}, "change": {}, "strongest": None, "focus": None}
 
     overall = {}
-    for k in SKILLS:
+    for k in MEASURES:
         xs = _vals(every, k)
         overall[k] = da._mean_se(xs)[0] if xs else None
         if len(xs) >= SKILL_MIN:
@@ -388,14 +395,14 @@ def profile(drives: list) -> dict:
     by_size = {}                                   # each skill's mean for each size of corner (None: size unknown)
     for size in ("tight", "medium", "fast", None):
         cell = [o for o in every if o["size"] == size]
-        for k in SKILLS:
+        for k in MEASURES:
             xs = _vals(cell, k)
             by_size[(k, size)] = da._mean_se(xs)[0] if xs else 0.0
     for way in ("L", "R"):
         for size in ("tight", "medium", "fast"):
             cell = [o for o in every if o["dir"] == way and o["size"] == size]
             levels = {}
-            for k in SKILLS:
+            for k in MEASURES:
                 xs = _vals(cell, k)
                 levels[k] = _level(da._mean_se(xs)[0]) if len(xs) >= MATRIX_MIN else None
             out["matrix"].append({"dir": way, "size": size, "n": len(cell), "levels": levels})
@@ -409,7 +416,7 @@ def profile(drives: list) -> dict:
         found.append({"skill": k, "split": split, "a": a, "b": b, **r,
                       "mean_a": _level(_clamp01(base + r["mean_a"])), "mean_b": _level(_clamp01(base + r["mean_b"]))})
 
-    for k in SKILLS:
+    for k in MEASURES:
         left = lambda o, k=k: o[k] - by_size[(k, o["size"])]
         for split, a, b, in_a, in_b in WITHIN:
             raw = split == "size"
@@ -422,20 +429,24 @@ def profile(drives: list) -> dict:
         for tag in sorted({t for d in drives for t in (d.get("tags") or [])}):
             add(k, "tag", tag, "rest", _between(drives, k, left, lambda d, tag=tag: tag in (d.get("tags") or [])), False)
     # the strongest evidence first; one line per comparison (the skill it shows most in), the rest named beside it
-    found.sort(key=lambda f: (-abs(f["z"]) if f["z"] is not None else -math.inf, f["split"], str(f["a"]), SKILLS.index(f["skill"])))
-    seen = {}
-    for f in found:
-        key = (f["split"], f["a"])
-        if key in seen:
-            seen[key]["also"].append(f["skill"])
-            continue
-        f = {**f, "also": [], "z": None if f["z"] is None else da._r(f["z"], 2)}
-        seen[key] = f
-        out["findings"].append(f)
-    out["findings"] = out["findings"][:TOP_FINDINGS]
+    found.sort(key=lambda f: (-abs(f["z"]) if f["z"] is not None else -math.inf, f["split"], str(f["a"]), MEASURES.index(f["skill"])))
+    # technique and pace are said apart: "the same shows in pace" would join a fault to a speed
+    for name, group in (("findings", [f for f in found if f["skill"] != PACE]), ("pace_findings", [f for f in found if f["skill"] == PACE])):
+        seen, kept = {}, []
+        for f in group:
+            key = (f["split"], f["a"])
+            if key in seen:
+                seen[key]["also"].append(f["skill"])
+                continue
+            f = {**f, "also": [], "z": None if f["z"] is None else da._r(f["z"], 2)}
+            seen[key] = f
+            kept.append(f)
+        out[name] = kept[:TOP_FINDINGS]
+    over = [1 if o["use"] > da.PACE_CEILING else 0 for o in every]
+    out["pace"] = {"over": da._r(da._mean_se(over)[0], 4) if len(over) >= SKILL_MIN else None, "n": len(over)}
 
     months = sorted({d["month"] for d in drives if d.get("month")})
-    for k in SKILLS:
+    for k in MEASURES:
         rows, raw = [], []
         for mth in months:
             xs = [x for d in drives if d.get("month") == mth for x in _vals(d["obs"], k)]
