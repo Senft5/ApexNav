@@ -75,3 +75,14 @@ def test_the_apex_dot_sits_on_the_profile_where_you_are(out):
     assert end["fx"] == 1                                                        # clamped to the route
     assert flat == {"fx": 0.25, "fy": 72 / 80}                                   # no heights: on the foot line
     assert none is None
+
+
+def test_the_ranked_route_after_the_early_one_is_not_drawn_twice():
+    """A slow phone (THROTTLE=6, 2026-11-11) saw the line drawn, then drawn again from nothing when the ranked route
+    replaced the early quickest after the first stroke had ended. That replacement now takes the line whole (penCarry);
+    a re-plan you ask for (a level card) still redraws quickly."""
+    import os
+    src = open(os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "web", "cockpit.js"), encoding="utf-8").read()
+    assert "penCarry = !!shownEarly;" in src
+    assert "try { t = await useOption(lv, lv.picked, ownUsed ? OWN_SIGHT_MS : undefined); } finally { penCarry = false; }" in src
+    assert "carried = !pen && penCarry;" in src and "if (!(ms > 0) || carried || !window.ApexReveal) return;" in src

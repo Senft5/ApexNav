@@ -799,7 +799,7 @@
       try {
         const r = await apiCall('GET', `/api/coverage?bbox=${box.join(',')}`);
         if (r.status === 401 || r.status === 403) {
-          if (!coverage.said) toast('Sign in (People) to see measured roads.');
+          if (!coverage.said) askSignIn('see measured roads');
           coverage.said = true;
         } else if (r.ok) {
           coverage.had.push(box);
@@ -1301,7 +1301,7 @@
     // end (and by a timer, should the frames stop: a hidden tab), so the line is never left half drawn and the look's
     // line-color rules again.
     const PEN_LAYERS = ['apex-route-casing', 'apex-route'];
-    let pen = null;
+    let pen = null, penCarry = false;
     function penStop() {
       if (!pen) return;
       cancelAnimationFrame(pen.raf); clearTimeout(pen.timer); pen = null;
@@ -1311,9 +1311,10 @@
       if (pen && pen.t === t && !(ms > 0)) return;                      // the same route sent again mid-stroke: the stroke carries on
       // another route while the pen is still down (the ranked route lands inside the first stroke): the pen carries on from
       // where it was along the new line, it never goes back to the start
-      const from = pen && ms > 0 ? pen.p : 0;
+      // the ranking's route after a stroke has finished (penCarry): the line is already whole, so it is whole at once
+      const from = pen && ms > 0 ? pen.p : 0, carried = !pen && penCarry;
       penStop();
-      if (!(ms > 0) || !window.ApexReveal) return;
+      if (!(ms > 0) || carried || !window.ApexReveal) return;
       const C = look.colors, cols = { 'apex-route-casing': C.routeCasing, 'apex-route': C.route }, t0 = performance.now();
       const at = (p) => { me.p = p; for (const id of PEN_LAYERS) if (map.getLayer(id)) map.setPaintProperty(id, 'line-gradient', ApexReveal.gradient(cols[id], p)); };
       const me = pen = { t, p: from, raf: 0, timer: setTimeout(() => { if (pen === me) penStop(); }, ms + 250) };
@@ -3279,7 +3280,7 @@
       let r = null;
       try { r = await ApexSync.apiFetch('/api/eta', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ left_s: Math.round(t.timeS) }) }); } catch (_) {}
       if (!r) { toast('No signal. Try again in a moment.'); return; }
-      if (r.status === 401 || r.status === 403) { toast('Sign in (People) to share your ETA.'); return; }
+      if (r.status === 401 || r.status === 403) { askSignIn('share your ETA'); return; }
       if (!r.ok) { toast(r.status === 429 ? 'You\'re sharing three already. Stop one first.' : 'Couldn\'t share it. Try again.'); return; }
       etaShare.token = (await r.json()).token; etaShare.at = performance.now(); paintEtaShareBtn();
       copyText(`${shareOrigin()}/eta.html?t=${etaShare.token}`, 'Link copied. It shows when you\'ll arrive, never where you are.', 'My ETA');
@@ -3791,7 +3792,13 @@
         optionOnto(kept, offered[0], lv);
         routeOptions = Object.assign(lv, { current: kept });
         if (typeof renderRouteCard === 'function') { timeFromEnvelope(kept); renderRouteCard(kept); }   // its saved copy stays the one drawn
-      } else t = await useOption(lv, lv.picked, ownUsed ? OWN_SIGHT_MS : undefined);
+      } else {
+        // the early quickest is already drawn: the ranked route takes its place on the map without a second stroke from
+        // the start (a slow phone saw the line drawn twice, the second time from nothing). A re-plan you asked for (a level
+        // card) still redraws quickly: that is your change, shown.
+        penCarry = !!shownEarly;
+        try { t = await useOption(lv, lv.picked, ownUsed ? OWN_SIGHT_MS : undefined); } finally { penCarry = false; }
+      }
       mark('built');
       if (!t) return false;   // no toast: the route bar and card say it (REVIEW.md 1.2, Route bar: the bar is the toast)
       // finding 1: the card says what the ranking did: kept the first route, or replaced it, and why, in the card's numbers
@@ -4835,6 +4842,13 @@
       t.classList.add('show'); clearTimeout(t._h);
       t._h = setTimeout(() => { t.classList.remove('show'); if (action && action.onClick) t.querySelectorAll('a').forEach(x => x.remove()); }, action ? action.ms || 7000 : 4200);
     }
+    // Something that needs an account says so and offers the way in: the toast's "Sign in" key opens People, where signing in
+    // lives. In a drive it is only said, on the drive's message row: no sheet opens over the road.
+    function askSignIn(why) {
+      const msg = `Sign in to ${why}.`;
+      if (!$('driveBar').hidden) { driveNote(msg); return; }
+      toast(msg, { label: 'Sign in', onClick: () => showView('friends') });
+    }
     // The drive's message row: the whole message if it fits beside Report and End, else its first sentence ("Gravel
     // reported."), never a word cut in half; VoiceOver is read all of it. It goes after DRIVE_NOTE_MS.
     const DRIVE_NOTE_MS = 6000;
@@ -5684,7 +5698,7 @@
       let friends = [], crews = [];
       try { [friends, crews] = await Promise.all([apiCall('GET', '/api/friends').then(jsonOf), apiCall('GET', '/api/crews').then(jsonOf)]); } catch (_) {}
       const fr = (friends || []).filter(f => f.status === 'accepted' && f.handle), cr = crews || [];
-      if (!fr.length && !cr.length) { box.replaceChildren(el('p', { className: 'note', textContent: 'Sign in and add friends or a crew (People) to share routes.' })); return; }
+      if (!fr.length && !cr.length) { box.replaceChildren(el('p', { className: 'note', textContent: 'No friends or crews to share with yet. Add them in People.' })); return; }
       const picked = { friends: new Set(), crews: new Set() };
       if (shareTo && fr.some(f => f.handle === shareTo)) picked.friends.add(shareTo);
       shareTo = null;
@@ -5928,7 +5942,7 @@
     onSocial(() => { try { builds = window.ApexBuilds ? ApexBuilds.mount({ el, btn, toast, apiCall, jsonOf, report: safety && safety.report }) : null; } catch (e) { console.error('builds', e); } });
     // Friends on the map (web/friends_map.js, REVIEW.md 5.4): the Friends layer and who sees you, sent only while you drive
     let friendsMap = null;
-    onSocial(() => { try { friendsMap = window.ApexFriendsMap ? ApexFriendsMap.mount({ el, btn, toast, apiCall, map, zones: () => privacyZones, inZone: inPrivacyZone,
+    onSocial(() => { try { friendsMap = window.ApexFriendsMap ? ApexFriendsMap.mount({ el, btn, toast, askSignIn, apiCall, map, zones: () => privacyZones, inZone: inPrivacyZone,
       position: () => state.lastPosition || null, driving: () => driveActive,
       roadName: (lat, lon) => { try { return window.ApexRoadNames ? ApexRoadNames.nearestRoadName(map.querySourceFeatures('openmaptiles', { sourceLayer: 'transportation_name' }), lat, lon) : null; } catch (_) { return null; } },
       setLayerToggle: (on) => { state.toggles.friends = on; paintSwitches(); friendsMap.setLayer(on); savePrefs(); }, openGarage: () => showView('garage') }) : null; } catch (e) { console.error('friends map', e); } });
@@ -7105,7 +7119,9 @@
     function nudgeAnswered(granted) {
       if (granted) { scheduleNudge(); return; }
       state.toggles.nudge = false; paintSwitches(); savePrefs(); scheduleNudge();
-      toast('Notifications are off for Vetta. Turn them on in the iPhone’s Settings, then here.');
+      // Only the shell answers here, so the key can open Vetta's own page in the iPhone's Settings (the `openSettings` the
+      // "Location is off" sheet uses).
+      toast('Notifications are off for Vetta. Turn them on in Settings, then here.', { label: 'Settings', onClick: () => { try { nudgeShell().postMessage({ cmd: 'openSettings' }); } catch (_) {} } });
     }
     // The morning of a crew drive you said you're going to (REVIEW.md roadmap 21, crew_events.js todayDrive): from 4 AM until an
     // hour after it starts, the idle map offers directions to the meeting point instead of the loop. Members only, every 10 min.
@@ -7475,7 +7491,7 @@
         if (state.toggles.terrain && power.low) toast('3D terrain waits until the phone stops saving battery.');
       }
       if (k === 'friends') {   // REVIEW.md 5.4: seeing friends; the first time, the sheet explains both choices
-        if (!accountMe || !accountMe.member) { state.toggles.friends = false; paintSwitches(); toast('Sign in (People) to see friends on the map.'); return; }
+        if (!accountMe || !accountMe.member) { state.toggles.friends = false; paintSwitches(); askSignIn('see friends on the map'); return; }
         needSocial().then(() => {                                      // F-03: friends_map.js loads on first use
           if (friendsMap) friendsMap.setLayer(state.toggles.friends);
           let seen = false; try { seen = localStorage.getItem('apex.friendsExplained') === '1'; localStorage.setItem('apex.friendsExplained', '1'); } catch (_) {}
@@ -8259,7 +8275,7 @@
       if (window.APEX_REVIEW) r = reviewHazard(body);
       else try { r = await ApexSync.apiFetch('/api/hazards', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) }); } catch (_) {}
       if (!r || r.status >= 500) { outbox.add('/api/hazards', body, true); health.bump('hazard_queued'); toast(`No signal. ${word} saved; it's sent when you have one.`); return; }
-      if (r.status === 401 || r.status === 403) { toast('Sign in (People) to report hazards for others.'); return; }
+      if (r.status === 401 || r.status === 403) { askSignIn('report hazards for others'); return; }
       if (!r.ok) { toast(r.status === 429 ? 'That\'s a lot of reports today.' : 'Couldn\'t send that. Try again.'); return; }
       const j = await r.json(); reported.mine.add(j.id); reported.said.add(j.id);
       toast(j.confirmed ? `${word}: someone reported it already. You confirmed it.` : `${word} reported. Drivers behind you will hear about it.`);
