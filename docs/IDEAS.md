@@ -138,7 +138,7 @@ ideal drive and where to find time (#80), grip circle (#86), automatic mount cal
 | D-24 | Driving year in review (roads, regions, best corners, crews) | M | M | partial (Log → \"2026 so far\": miles, drives, corners, months, roads you came back to, best score, longest drive, share as text; regions, best corners and crews are still to do) | Strava Year in Sport, Spotify Wrapped |
 | D-25 | Driver profile over every drive: skills in the order a corner is driven, where you are weaker (side, size, hill, time, car, tag), months, one thing to work on | H | M | done (claude/fable-driver-profile: the Log's Your driving, `core/driver_profile.py`) | Garmin Catalyst, Whoop |
 | D-26 | Ten g readings a second between GPS fixes in the recording (today: one per fix, placed early), with per-sample steering and brake rates | H | M | todo | STATE 2026-11-10 fable-driver-profile |
-| D-27 | Practice focus: the profile's Work on carried into the next drive, each corner judged on that one skill, the end card says how it went | H | M | todo | Garmin Catalyst |
+| D-27 | Practice focus: the profile's Work on carried into the next drive, each corner judged on that one skill, the end card says how it went | H | M | done (claude/fable-practice-focus: Practice it on my next drives, `core/driver_profile.py` practice) | Garmin Catalyst |
 
 ## 3. Road intelligence (Q)
 

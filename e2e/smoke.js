@@ -3955,6 +3955,52 @@ flow('Your driving: the profile over every drive opens from the Log, names the w
   check(await page.evaluate(() => !document.getElementById('tab-history').hidden && document.getElementById('tab-driving').hidden), 'back to the Log');
 });
 
+flow('Practice (IDEAS D-27): Work on is carried into the next drives, the end card says how the skill went, and the page drive by drive', async (page, base) => {
+  await page.goto(base + '/analysis.html');
+  await page.waitForFunction(() => window.apexLogDebug && window.apexLogDebug.loaded() && window.ApexRecording);
+  await page.evaluate(async (src) => {
+    const gen = eval(src); let k = 0;
+    for (const [id, date] of [['q1', '2026-08-12T09:00'], ['q2', '2026-09-14T09:00'], ['q3', '2026-10-03T09:00']])
+      await ApexRecording.store(ApexRecording.parse(ApexCore, gen('saw', k++), id + '.csv', { id, name: 'Dry Ridge Rd', date, source: 'web-gps' }));
+  }, PROFILE_CSV);
+  await page.goto(base + '/analysis.html?tab=driving');
+  await page.waitForSelector('#drivingRoot .dp-go', { timeout: 20000 });
+  await page.click('#drivingRoot .dp-go');
+  await page.waitForSelector('#drivingRoot .dp-practice');
+  const set = await page.evaluate(() => ({ plan: JSON.parse(localStorage.getItem('vetta.practice')), text: document.querySelector('.dp-practice').innerText,
+    focused: document.activeElement === document.querySelector('.dp-practice') }));
+  check(set.plan && set.plan.skill === 'arc' && set.plan.where && set.plan.where.worse === 'R' && /^\d{4}-\d\d-\d\dT\d\d:\d\d$/.test(set.plan.since), 'the plan is kept: ' + JSON.stringify(set.plan));
+  check(set.plan.before && set.plan.before.n === 108 && Number.isFinite(set.plan.before.level) && Number.isFinite(set.plan.before.mean), 'with the level before it: ' + JSON.stringify(set.plan.before));
+  check(/Practicing: One steering arc/.test(set.text) && /no drive yet with 4 or more corners/.test(set.text), 'the box says it is waiting for a drive: ' + set.text);
+  check(set.focused, 'the pressed key is gone, its box has the focus');
+  // a clean drive after it: the end card on the map reads it on this one skill against the level before
+  await page.goto(base + '/index.html');
+  await page.waitForFunction(() => window.apexDebug && window.ApexRecording && window.ApexCore && window.ApexAnalysis);
+  const end = await page.evaluate(async (src) => {
+    const d = ApexRecording.parse(ApexCore, eval(src)(null, 5), 'q4.csv', { id: 'q4', name: 'Dry Ridge Rd', date: '2099-01-02T09:00', source: 'web-gps' });
+    await ApexRecording.store(d);
+    apexDebug.showEndCard(d, Date.now() - 1800e3);
+    for (let i = 0; i < 100 && document.getElementById('endPractice').hidden; i++) await new Promise((r) => setTimeout(r, 50));
+    const e = document.getElementById('endPractice');
+    return { text: e.textContent, shown: !!e.offsetParent };
+  }, PROFILE_CSV);
+  check(end.shown && /^Practice · One steering arc: \d+ on 36 corners, \d+ above your \d+ before\. Through rights: \d+ on 18\.$/.test(end.text), 'the end card: ' + JSON.stringify(end));
+  check(!/mph|km\/h|faster|\d s\b/.test(end.text), 'never a speed or a time');
+  // the page: the drive since, against the mark of before, and the Log's card says it
+  await page.goto(base + '/analysis.html');
+  await page.waitForSelector('#drivingOpen', { timeout: 20000 });
+  check(/Practicing: One steering arc \d+, \d+ before/.test(await page.textContent('#drivingOpen span')), 'the Log card: ' + await page.textContent('#drivingOpen span'));
+  await page.click('#drivingOpen');
+  await page.waitForSelector('#drivingRoot .dp-pr');
+  const pg = await page.evaluate(() => ({ text: document.querySelector('.dp-practice').innerText, rows: document.querySelectorAll('.dp-pr').length, up: !!document.querySelector('.dp-pr b.up'),
+    mark: !!document.querySelector('.dp-pr .dp-bar s'), wide: document.documentElement.scrollWidth <= document.documentElement.clientWidth }));
+  check(/on 36 corners over 1 drive, against \d+ before\. Up \d+: the practice is showing\./.test(pg.text), 'the practice so far: ' + pg.text);
+  check(pg.rows === 1 && pg.up && pg.mark && pg.wide, 'one drive, up, with the mark of before, nothing wider than the phone: ' + JSON.stringify(pg));
+  await page.click('.dp-practice button:has-text("Stop practicing")');
+  await page.waitForSelector('#drivingRoot .dp-go');
+  check(await page.evaluate(() => localStorage.getItem('vetta.practice') === null), 'Stop forgets the plan, and Work on is back');
+});
+
 flow('feedback: Settings sends what you typed with the diagnostics, never a place (Worker stubbed, IDEAS L-05)', async (page, base) => {
   await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); } catch (_) {} });
   let sent = null;
