@@ -4,6 +4,13 @@ Decisions Claude made for you, newest first. Each one says what was decided, why
 you reach one you've seen. If you disagree with a call, say so and it gets reversed; nothing here is hard to undo unless
 it says so. Things only you can do are in docs/OWNER_TODO.md.
 
+## 2026-11-11 (ui-round-three): People when you have no friends or crews yet looks like the signed-out page (claude/project-thread-5sbga7)
+
+Signed in with nobody yet, Friends and Crews used to show one grey sentence and a small key. Now each is a page like the
+signed-out one: a drawing (your road drawn, a friend's road or three crew seats still in pencil), "Bring a friend." or
+"Start a crew." set large, one sentence, and the Invite key full width. The example card stays under it. Undo: the two
+`people-first` blocks in web/cockpit.js and the "first friend" block at the end of web/signature.css.
+
 ## 2026-11-11 (roam-c crew-public-reset): a crew made public stops showing what members shared with it by hand (claude/roam-c-crew-public-reset)
 
 Found in the security pass. When an owner makes a private crew public, members' Scores and times already went back to off
