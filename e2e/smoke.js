@@ -4379,6 +4379,19 @@ flow('Your driving: the profile over every drive opens from the Log, names the w
   check(await page.evaluate(() => document.querySelector('.dp-st.weak').dataset.skill === 'arc' && document.querySelectorAll('.dp-st').length === 6), 'six stations, the weak one marked');
   check(!/mph|km\/h|\d s\b/.test(text), 'never a speed or a time');
   check(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth), 'nothing wider than the phone');
+  // touch: these drives' g runs straight between fixes (as recordings before ten readings a second did), so there is none
+  check(await page.evaluate(() => !document.querySelector('#drivingRoot .dp-touch')), 'no touch from g kept once a second');
+  const touch = await page.evaluate(async () => {
+    const p = (await ApexAnalysis.job('profile')).profile, host = document.createElement('div');
+    p.touch = { brake_on: { rate: 0.82, lo: 0.6, hi: 1.1, n: 40, quick: 3, quick_rate: false }, brake_off: { rate: 0.41, lo: 0.3, hi: 0.5, n: 40, quick: 0, quick_rate: false },
+      turn_in: { rate: null, lo: 0.7, hi: null, n: 50, quick: 30, quick_rate: true }, release: 0.5, release_n: 37 };
+    document.getElementById('drivingRoot').append(host);
+    ApexDriverProfile.render(host, p, {});
+    const t = host.querySelector('.dp-touch'), out = t ? t.innerText : null; host.remove();
+    return out;
+  });
+  check(/Your touch/.test(touch) && /brakes on at about 0\.82 g a second and let them off at about 0\.41 g a second/.test(touch) && /more gently/.test(touch)
+    && /quick movement of the wheel/.test(touch), 'the touch panel says it in words: ' + touch);
   // each drive's observations were kept: a second visit reads no drive again, and a deleted drive's are dropped
   const again = await page.evaluate(() => ApexAnalysis.job('profile'));
   check(again.read === 0 && again.profile.corners === 108, 'kept between visits: read ' + again.read);
