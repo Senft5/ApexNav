@@ -4,6 +4,16 @@ Decisions Claude made for you, newest first. Each one says what was decided, why
 you reach one you've seen. If you disagree with a call, say so and it gets reversed; nothing here is hard to undo unless
 it says so. Things only you can do are in docs/OWNER_TODO.md.
 
+## 2026-11-11 (CI load): e2e sits out PRs that can't change the page; one CI slot per branch (claude/project-thread-g9yher)
+
+The 20:16-21:15 UTC stall was GitHub's own incident (githubstatus.com, 20:48 "Impact across multiple GitHub products
+including Actions"): e2e shards passed and then failed uploading their artifact, aggregate jobs never got a runner, and
+runs started by hand ended in "startup failure". It hit harder because every push queued eight Linux jobs, and a run
+started by hand on a PR branch ran beside the PR's own (two concurrency groups). Now core-tests.yml groups by branch
+(the newest run cancels older ones, by hand or not), and a PR that changes only docs, the Worker, Python tests/tools or
+the Swift shells skips the four e2e jobs (the "e2e" check still reports, green). Pushes to main and runs by hand always
+run them. Undo: the `changes` job and the group line in core-tests.yml.
+
 ## 2026-11-11 (sweep: cron monitoring): a stopped backup or sweep opens an issue (claude/project-thread-g9yher)
 
 The weekly D1 backup and the daily sweep used to fail with one log line nobody reads, and a run killed for CPU time left
