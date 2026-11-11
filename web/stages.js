@@ -269,7 +269,7 @@
     await Promise.all([...want].filter(k => !poiTiles.has(k)).map(async (key) => {
       const [x, y] = key.split('/').map(Number);
       const buf = new Uint8Array(await bufferOf(tileUrl.replace('{z}', POI_Z).replace('{x}', x).replace('{y}', y)));
-      poiTiles.set(key, decodeLayer(buf, 'poi', POI_Z, x, y, 1).map(f => ({ kind: POI_KIND(f.props), name: f.props.name || null, pt: f.lines[0] && f.lines[0][0] }))
+      poiTiles.set(key, decodeLayer(buf, 'poi', POI_Z, x, y, 1).map(f => ({ kind: POI_KIND(f.props), name: f.props.name || f.props['name:latin'] || f.props.name_en || null, pt: f.lines[0] && f.lines[0][0] }))
         .filter(f => f.kind && f.pt).map(f => ({ kind: f.kind, name: f.name, lat: f.pt[1], lon: f.pt[0] })));
     }));
     return [...want].flatMap(k => poiTiles.get(k) || []);
