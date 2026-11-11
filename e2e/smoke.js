@@ -5991,7 +5991,8 @@ flow('the empty Log is a first page: the book\'s furniture in pencil, one key, a
   const f = await page.evaluate(() => { const fam = (e) => getComputedStyle(e).fontFamily, go = document.querySelector('#historyEmpty .fp-go').getBoundingClientRect(), alt = document.querySelector('#historyEmpty .fp-alt').getBoundingClientRect();
     return { body: fam(document.body), sw: [...document.querySelectorAll('.log-seg button')].map(fam), go: [Math.round(go.height), Math.round(go.width)], alt: Math.round(alt.height),
       over: document.documentElement.scrollWidth > innerWidth, head: document.querySelector('#historyEmpty .fp-head').textContent, table: document.getElementById('historyPanel').hidden }; });
-  check(f.sw.every((x) => x === f.body), 'Drives and Stages are set in the page\'s typeface: ' + JSON.stringify(f));
+  // Vetta Line: Drives and Stages are the page's head, two places set in the numeral face like People's Friends and Crews
+  check(f.sw.length >= 2 && f.sw.every((x) => /Barlow/.test(x) && x !== f.body), 'Drives and Stages are the head, in the numeral face: ' + JSON.stringify(f));
   check(f.go[0] >= 44 && f.go[1] > 300 && f.alt >= 44 && !f.over && f.head === 'Your first drive goes here.' && f.table, 'one full-width key, a 44 pt link, nothing off the page, no empty table under it: ' + JSON.stringify(f));
   await page.click('[data-seg="segments"]');
   await page.waitForSelector('#segList .first-page');
