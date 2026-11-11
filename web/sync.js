@@ -45,7 +45,7 @@
   const learn = (path, method, r) => {
     if (method !== 'GET' || !r) return;
     const p = String(path);
-    if (/^\/api\/me(\?|$)/.test(p) && r.ok) r.clone().json().then((j) => { if (j && typeof j.signed_in === 'boolean') known = j.signed_in; }, () => {});   // only what it says
+    if (/^\/api\/me(\?|$)/.test(p) && r.ok && typeof r.clone === 'function') r.clone().json().then((j) => { if (j && typeof j.signed_in === 'boolean') known = j.signed_in; }, () => {});   // only what it says
     else if (r.status === 401 && MEMBER_READS.test(p)) known = false;
   };
   const signedOutAnswer = () => new Response(JSON.stringify({ error: 'sign_in_required' }), { status: 401, headers: { 'content-type': 'application/json' } });
