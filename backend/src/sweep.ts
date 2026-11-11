@@ -1,3 +1,4 @@
+import { rollRepeats } from "./events";
 // Daily housekeeping (IDEAS Y-13): rows that expired and can never be used again are deleted, so D1 doesn't keep
 // them forever. Used account invites stay (they record who invited whom, which moderation reads as invite chains).
 import { Env } from "./util";
@@ -36,6 +37,8 @@ export const SWEEPS: Record<string, string> = {
 };
 
 export async function sweepExpired(env: Env): Promise<Record<string, number>> {
+  // a recurring meet plans its next drive before the old one is swept (events.ts rollRepeats)
+  await rollRepeats(env).catch((e) => console.error(JSON.stringify({ event: "roll_failed", reason: String(e) })));
   const names = Object.keys(SWEEPS);
   const res = await env.DB.batch(names.map((n) => env.DB.prepare(SWEEPS[n])));
   const deleted = Object.fromEntries(names.map((n, i) => [n, res[i].meta.changes ?? 0]));
