@@ -279,8 +279,53 @@ export async function eventRecord(env: Env, v: Viewer, id: string) {
        AND EXISTS (SELECT 1 FROM grants g WHERE g.user_id = be.user_id AND g.audience_type = 'crew' AND g.audience_id = ?3 AND g.share_scores = 1)
        AND ${seen("be.user_id")}
      ORDER BY be.driver_score DESC LIMIT 1`).bind(id, v.id, e.crew_id, e.starts_at).first<{ handle: string | null; score: number; stage: string | null }>();
+  // The results sheet (IDEAS S-25): each stage of the day with every driver's best Score on it, and the overall, rally
+  // style. Same pool, same window, same rules as `best`: Scores only (never a time), only ones shared with the crew.
+  const runs = (await env.DB.prepare(`SELECT COALESCE(be.canon_id, s.origin_id, s.id) AS canon, MAX(be.driver_score) AS score, u.handle, be.user_id AS uid,
+        COALESCE((SELECT c.name FROM segments c WHERE c.id = COALESCE(be.canon_id, s.origin_id, s.id)), MIN(s.name)) AS stage
+      FROM board_entries be JOIN users u ON u.id = be.user_id
+      JOIN segments s ON s.id = be.segment_id JOIN crew_members m ON m.crew_id = ?3 AND m.user_id = be.user_id
+     WHERE be.audience_type = 'crew' AND be.audience_id = ?3 AND ${pool}
+       AND be.driven_on BETWEEN date(?4, '-12 hours') AND date(?4, '+14 hours')
+       AND EXISTS (SELECT 1 FROM grants g WHERE g.user_id = be.user_id AND g.audience_type = 'crew' AND g.audience_id = ?3 AND g.share_scores = 1)
+       AND ${seen("be.user_id")}
+     GROUP BY canon, be.user_id LIMIT ${RESULTS_MAX_RUNS}`).bind(id, v.id, e.crew_id, e.starts_at)
+    .all<{ canon: string; score: number; handle: string | null; uid: string; stage: string | null }>()).results;
   return { id: e.id, crew_id: e.crew_id, crew_name: e.crew_name, title: e.title, starts_at: e.starts_at.replace(" ", "T") + "Z", meet_name: e.meet_name,
-    came, going, i_came: iCame, best: best ? { handle: best.handle || "?", score: best.score, stage: best.stage } : null };
+    came, going, i_came: iCame, best: best ? { handle: best.handle || "?", score: best.score, stage: best.stage } : null,
+    results: resultsSheet(runs.map((r) => ({ stage_id: r.canon, stage: r.stage || "A stage", who: r.uid, handle: r.handle || "?", score: r.score }))) };
+}
+
+export const RESULTS_MAX_STAGES = 12, RESULTS_MAX_RUNS = 400;
+type Run = { stage_id: string; stage: string; who: string; handle: string; score: number };   // who: kept on the server
+/**
+ * A crew drive's results sheet from each driver's best Score per stage. Stages are ordered by how many drove them, then
+ * by name; each stage ranks its drivers by Score (equal Scores share a place). The overall ranks first by stages driven
+ * (a driver who did them all is classified ahead of one who missed some, as in a rally), then by the mean Score over
+ * the stages they drove, rounded. Pure; tests in backend/test/events.test.ts.
+ */
+export function resultsSheet(runs: Run[]) {
+  const byStage = new Map<string, { id: string; name: string; rows: { who: string; handle: string; score: number }[] }>();
+  for (const r of runs) {
+    const st = byStage.get(r.stage_id) ?? { id: r.stage_id, name: r.stage, rows: [] };
+    st.rows.push({ who: r.who, handle: r.handle, score: r.score });
+    byStage.set(r.stage_id, st);
+  }
+  // 1, 2, 2, 4: equal keys share a place
+  const placed = <T,>(rows: T[], same: (x: T, y: T) => boolean) => {
+    const out: (T & { place: number })[] = [];
+    rows.forEach((r, i) => out.push({ ...r, place: i && same(rows[i - 1], r) ? out[i - 1].place : i + 1 }));
+    return out;
+  };
+  const stages = [...byStage.values()].sort((a, b) => b.rows.length - a.rows.length || a.name.localeCompare(b.name)).slice(0, RESULTS_MAX_STAGES)
+    .map((s) => ({ id: s.id, name: s.name,
+      rows: placed(s.rows.sort((a, b) => b.score - a.score || a.handle.localeCompare(b.handle)), (x, y) => x.score === y.score) }));
+  const per = new Map<string, { handle: string; xs: number[] }>();
+  for (const s of stages) for (const r of s.rows) { const p = per.get(r.who) ?? { handle: r.handle, xs: [] }; p.xs.push(r.score); per.set(r.who, p); }
+  const overall = placed([...per.values()]
+    .map(({ handle, xs }) => ({ handle, stages: xs.length, score: Math.round(xs.reduce((a, b) => a + b, 0) / xs.length), full: xs.length === stages.length }))
+    .sort((a, b) => b.stages - a.stages || b.score - a.score || a.handle.localeCompare(b.handle)), (x, y) => x.stages === y.stages && x.score === y.score);
+  return { stages: stages.map((s) => ({ ...s, rows: s.rows.map(({ who: _, ...r }) => r) })), overall };
 }
 
 /** The crew's last drive (P-03): the most recent one that started RECORD_AFTER_H or more ago and is still kept, for the crew

@@ -97,6 +97,25 @@
   }
 
   // The card is the crew page's drive card (mockup 09: the black date block, three lines, faces, one key), now everywhere.
+  /**
+   * The results sheet as plain text (IDEAS S-25), for Share: the drive, the overall, then each stage as SS1, SS2…, rally
+   * style. Scores only, never a time. results: GET /api/events/:id/record → results. '' when nobody shared a Score.
+   */
+  function resultsText(e, results) {
+    const st = (results && Array.isArray(results.stages)) ? results.stages : [], all = (results && Array.isArray(results.overall)) ? results.overall : [];
+    if (!st.length) return '';
+    const n = st.length, lines = [`${e.title || 'Crew drive'}${e.crew_name ? ` \u00b7 ${e.crew_name}` : ''} \u2014 results (Vetta Score)`, '', 'Overall'];
+    for (const r of all) lines.push(`${r.place}. @${r.handle} ${r.score}${n > 1 ? ` (${r.full ? 'all ' + n : r.stages + ' of ' + n} stages)` : ''}`);
+    st.forEach((s, i) => {
+      lines.push('', `SS${i + 1} ${s.name}`);
+      for (const r of s.rows) lines.push(`${r.place}. @${r.handle} ${r.score}`);
+    });
+    lines.push('', 'Vetta Score: how cleanly the corners were driven. Never a time.');
+    return lines.join('\n');
+  }
+  /** The overall's line for one driver on the card. */
+  const overallNote = (r, n) => (n > 1 ? (r.full ? `all ${n} stages` : `${r.stages} of ${n} stages`) : '');
+
   const STYLE = `
     .plan-plus { align-self: center; margin: -10px -10px -10px 0; color: var(--panel-ink); }
     .plan-plus svg { width: 26px; height: 26px; stroke-width: 2.2; }
@@ -114,6 +133,14 @@
     .cp-now .row { flex-wrap: wrap; gap: 8px; align-items: center; }
     .cp-now p { margin: 0; }
     .cp-best { font-family: var(--font-num); font-size: 26px; font-variant-numeric: tabular-nums; letter-spacing: 0.04em; margin-right: 6px; }
+    .cp-results { display: grid; gap: 10px; }
+    .cp-results h4 { margin: 0; font-size: 11px; font-weight: 800; letter-spacing: 0.1em; text-transform: uppercase; color: var(--panel-dim); }
+    .cp-results ol { margin: 0; padding: 0; list-style: none; display: grid; gap: 2px; }
+    .cp-results li { display: grid; grid-template-columns: 2.2em minmax(0, 1fr) auto; gap: 6px; align-items: baseline; font-size: 15px; }
+    .cp-results li .pl { font-family: var(--font-num); color: var(--panel-dim); } .cp-results li .who { overflow-wrap: anywhere; }
+    .cp-results li .sc { font-family: var(--font-num); font-variant-numeric: tabular-nums; font-size: 17px; }
+    .cp-results li small { grid-column: 2 / -1; color: var(--panel-dim); font-size: 12px; margin-top: -2px; }
+    .cp-results li.me .who { font-weight: 700; }
     .cp-more > summary { cursor: pointer; color: var(--panel-dim); font-size: 14px; font-weight: 600; min-height: 32px; display: flex; align-items: center; list-style: none; }
     .cp-more > summary::-webkit-details-marker { display: none; }
     .cp-more > summary::after { content: ''; width: 7px; height: 7px; border: solid currentColor; border-width: 0 2px 2px 0; transform: rotate(45deg); margin: -3px 0 0 8px; }
@@ -298,6 +325,8 @@
         // the best Vetta Score crew-mates published to the crew that day; none shared, none said
         if (r.best) kids.push(el('p', {}, el('span', { className: 'cp-best', textContent: String(r.best.score) }),
           el('span', { className: 'note', textContent: `Best Vetta Score \u00b7 @${r.best.handle}${r.best.stage ? ` on ${r.best.stage}` : ''}` })));
+        const sheet = results(e, r);
+        if (sheet) kids.push(sheet);
         kids.push(el('div', { className: 'row' }, btn(r.i_came ? 'I wasn\u2019t there' : 'I was there', async () => {
           const x = await apiCall(r.i_came ? 'DELETE' : 'POST', `/api/events/${id(e)}/came`).catch(() => null);
           if (x && x.ok) redo(); else toast('Couldn\u2019t change that. Check signal.');
@@ -305,6 +334,35 @@
         now.replaceChildren(...kids);
       });
       return now;
+    }
+
+    // The results sheet (IDEAS S-25): the overall, then each stage as SS1, SS2…, every driver's best Score that day among
+    // those shared with the crew. Folded under the best Score; Share sends the plain-text sheet. Nothing when none shared.
+    function results(e, r) {
+      const res = r.results, st = res && Array.isArray(res.stages) ? res.stages : [];
+      if (!st.length) return null;
+      const mine = me(), n = st.length;
+      const list = (rows, note) => el('ol', {}, ...rows.map((x) => {
+        const li = el('li', { className: x.handle === mine ? 'me' : '' }, el('span', { className: 'pl', textContent: `${x.place}.` }),
+          el('span', { className: 'who', textContent: '@' + x.handle }), el('span', { className: 'sc', textContent: String(x.score) }));
+        const t = note ? note(x) : '';
+        if (t) li.append(el('small', { textContent: t }));
+        return li;
+      }));
+      const det = el('details', { className: 'cp-more cp-results-fold' }, el('summary', { textContent: n > 1 ? `Results \u00b7 ${n} stages` : 'Results' }));
+      const body = el('div', { className: 'cp-results' });
+      if (n > 1) body.append(el('h4', { textContent: 'Overall' }), list(res.overall || [], (x) => overallNote(x, n)));
+      st.forEach((s, i) => body.append(el('h4', { textContent: `SS${i + 1} \u00b7 ${s.name}` }), list(s.rows)));
+      body.append(el('p', { className: 'note', textContent: 'Each driver\u2019s best Vetta Score that day, from Scores shared with the crew. Overall: most stages first, then the average Score. Never a time.' }));
+      body.append(el('div', { className: 'row' }, btn('Share the results', async () => {
+        const text = resultsText(e.title ? e : { ...e, title: r.title, crew_name: r.crew_name }, res);
+        try {
+          if (root.navigator && root.navigator.share) { await root.navigator.share({ title: r.title || 'Results', text }); return; }
+          await root.navigator.clipboard.writeText(text); toast('Results copied.');
+        } catch (err) { if (!err || err.name !== 'AbortError') toast('Couldn\u2019t share. Try again.'); }
+      }, 'linkbtn')));
+      det.append(body);
+      return det;
     }
 
     // ---- More: the detail, and what the planner sets after planning (P-10) --------------------------------------------
@@ -619,6 +677,6 @@
     return { section, plan, card, refresh };
   }
 
-  const api = { whenText, timeText, convoyOpen, convoyName, driveState, onTheDay, icsFor, isoFromInputs, rolesLine, todayDrive, mount };
+  const api = { whenText, timeText, resultsText, convoyOpen, convoyName, driveState, onTheDay, icsFor, isoFromInputs, rolesLine, todayDrive, mount };
   if (typeof module !== 'undefined' && module.exports) module.exports = api; else root.ApexCrewEvents = api;
 })(typeof window !== 'undefined' ? window : globalThis);

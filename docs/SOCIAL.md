@@ -46,6 +46,11 @@ and in random batches so a trace cannot be re-assembled.
 - Share a planned route (geometry + pace notes) to friends or publish a stage list.
   Never a recorded drive.
 
+### 2.8 Crew drive results (crew members, Scores only)
+- A remembered crew drive folds out its results: an overall, then each stage as SS1, SS2…, each driver's best Vetta
+  Score that day and a place. Overall ranks by stages driven, then the mean Score. Share sends it as text.
+- Only Scores already shared with the crew, among those who came; never a time. `resultsSheet` in `backend/src/events.ts`.
+
 ## 3. Drive analysis (private)
 Compare passes of the same road — yours, or a friend's ghost they chose to send you.
 
