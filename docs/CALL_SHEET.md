@@ -4,6 +4,19 @@ Decisions Claude made for you, newest first. Each one says what was decided, why
 you reach one you've seen. If you disagree with a call, say so and it gets reversed; nothing here is hard to undo unless
 it says so. Things only you can do are in docs/OWNER_TODO.md.
 
+## 2026-11-10 (fable-pro-looks): Pro is looks only; one Pro crew-mate dresses the whole crew (claude/fable-pro-looks)
+
+Your answer to the red team (PH-06, BR-06, UX-06): Pro is themes and liveries, nothing else. Route tuning, which went
+Pro on 2026-11-09, is free for everyone, with or without Pro and after Pro goes on sale (web/pro.js has two kinds now,
+theme and livery; tests/test_pro.py fails if a third appears). A crew's livery used to climb Plain, Club (5 Decals), Works
+(12), Factory (20) as Pro crew-mates added up, with a meter in Edit livery and "Decals come from crew-mates with Vetta
+Pro" on every crew page. Now any one crew-mate with Pro opens the whole livery for everyone (backend/src/livery.ts); the
+meter is gone; a Plain crew's page says "Plain livery" and nothing it lacks, and a dressed one says who dressed it
+("Factory livery · dressed by @bob"). A crew loses nothing it set when the Pro member leaves: it falls back to Plain
+and comes back with the next one, as before.
+
+Undo: revert the PR (tiers come back as they were; nothing in the database changed).
+
 ## 2026-11-10 (fable-road-page): About a road says its climb, and speaks in words (claude/fable-road-page)
 
 A bug first: on any road with 40 m or more of climb, the sheet's first line read "Switchbacks · 0.8 mi · descending
@@ -43,17 +56,13 @@ keeps its own word and only its progress bar moves.
 
 Undo: revert the PR.
 
-## 2026-11-10 (fable-route-reveal): the route card reads like a page, and a route found is drawn onto the map (claude/fable-route-reveal)
+## 2026-11-10 (fable-there-and-back): a trip to a place can come home another way in one tap (claude/fable-there-and-back)
 
-When a route is found its line is now drawn onto the map from start to finish in 0.8 s, the profile on the card is
-drawn with it and the card's three numbers count up. The card and Start are up from the first frame, as before (the
-plan flow still times it). Picking another level card or loop way redraws in 0.3 s. With reduced motion the line is
-simply there. The card itself was recomposed: the route's name is the headline in the number face, then time,
-distance and corners large, then the profile (now always drawn: before the heights arrive it is the road and its
-corner ticks, with "Heights --") carrying a red dot where you are, then the one choice, then quiet labelled groups
-(This drive, The road, Planned with) and the links. The Options chips moved from the top to "Planned with". Folded,
-the bar is the same name and numbers, with Start beside it. Why: the card was a long form; this is the moment the app
-makes its promise. Undo: revert the branch's commit (presentation only; no routing, ranking or number changed).
+The route card of a trip to a place has a new key, "There and back, home another way". It plans the drive home too,
+staying off the road you drove out on wherever another way exists, and the destination becomes a stop on the trip.
+Calls made: the way home is chosen by the same Fun / Long way rules as any route (so it may be longer, on better road);
+where our own map tiles don't reach, the public router is asked to avoid the way out; a dead end that has only one way
+in says so instead of failing. Undo: hide `#routeRoundBtn` (one line in renderRouteCard), nothing else depends on it.
 
 ## 2026-11-10 (fable-your-data): Your data is three short lists, like Settings (claude/fable-your-data)
 
@@ -71,6 +80,14 @@ The e2e suite is 152 flows now and takes about 24 minutes, so GitHub cut it off 
 (twice on #349, once on #344) with every flow before it passing. The limit is 35 minutes. No test is skipped or
 shortened. Undo: set `timeout-minutes` back to 25 in `.github/workflows/core-tests.yml`, or better, split the suite.
 
+## 2026-11-10 · Vetta Line: the home screen is a masthead over the map and a shelf of road cards (claude/fable-signature)
+
+- What: web/signature.css, a new last stylesheet, restyles the idle map: the place as a masthead in type, the deck as one
+  sheet with a red Just drive and the invitations side by side as cards, soft lift instead of ink boxes, the apex dot on
+  the open tab, a short arrival.
+- Why: the owner asked for big moves toward one cohesive, artist-made look; the home was boxes in 1.5 px ink stacked in rows.
+- Undo: remove the `signature.css` link in web/index.html (the shelf wrapper is harmless without it), or revert the PR.
+
 ## 2026-11-10 (fable-loop-time): a loop can be set by time on the dial (claude/fable-loop-time)
 
 Following your "the whole point is aimless driving": "I have an hour" is how a loop is usually asked for, and time
@@ -83,6 +100,23 @@ dial to Time as well, so the card always changes the loop in the unit it was ask
 Also: a time loop's note said "the closest good loop to 1.5 h"; times now read "1½ h" everywhere.
 
 Not changed: Options keeps its 1 hour / 2 hours keys and My free time. Undo: revert the PR.
+
+## 2026-11-10 (fable-toast-key): a message with a key is one row, and a message is as wide as its words (claude/fable-toast-key)
+
+For "reducing any clunky feelings", seen on the drive screen: "Typing is off while the car moves." took half the
+screen's width, wrapped, and its key ("I'm a passenger") dropped under it, indented, in the red pen. Two causes, both
+in every message the app shows:
+
+- A message is centred from `left: 50%`, so the browser let it be at most half the screen wide and it wrapped early.
+  It is now as wide as its words, up to the screen less 16 px a side.
+- A key on a message (twelve of them: Start drive, Save, Share ETA, Head home, Add as a stop, Garage, Open…) was an
+  inline link. It is now the end of a row: the words wrap on the left, the key stays whole on the right. It is ink and
+  underlined like every other text key (the red pen is for what means slow down), and a thumb tall to hit without
+  making the message taller.
+
+Also: "Saved for offline: … Find it in Where to?." ended "?."; it reads "It's listed in Where to? now."
+
+Undo: revert the PR (`toast()` in web/cockpit.js, four CSS lines in web/index.html).
 
 ## 2026-11-10 (fable-layers): design pass 8: the Layers panel is the map's legend (claude/fable-layers)
 
@@ -107,6 +141,18 @@ check and Reminder "On" / "Off", Units "Miles and feet", Map motion "Lean". Chan
 when you come back. A row with nothing to say (Feedback, About) says nothing; a row never guesses.
 
 The order of the rows is unchanged. Undo: revert the PR.
+
+## 2026-11-10 (fable-route-reveal): the route card reads like a page, and a route found is drawn onto the map (claude/fable-route-reveal)
+
+When a route is found its line is now drawn onto the map from start to finish in 0.8 s, the profile on the card is
+drawn with it and the card's three numbers count up. The card and Start are up from the first frame, as before (the
+plan flow still times it). Picking another level card or loop way redraws in 0.3 s. With reduced motion the line is
+simply there. The card itself was recomposed: the route's name is the headline in the number face, then time,
+distance and corners large, then the profile (now always drawn: before the heights arrive it is the road and its
+corner ticks, with "Heights --") carrying a red dot where you are, then the one choice, then quiet labelled groups
+(This drive, The road, Planned with) and the links. The Options chips moved from the top to "Planned with". Folded,
+the bar is the same name and numbers, with Start beside it. Why: the card was a long form; this is the moment the app
+makes its promise. Undo: revert the branch's commit (presentation only; no routing, ranking or number changed).
 
 ## 2026-11-10 (fable-drive): Location turned off is said, and Settings is one key away (claude/fable-drive)
 

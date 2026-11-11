@@ -27,7 +27,7 @@ describe("crew page", () => {
     await ok(api(c, "POST", "/api/board", { segment_id: await makeSegment(c), driver_score: 900, driven_on: today() })); // carol shares nothing
     const p = await page(a, crew);
     expect(p.board.map((r: any) => [r.handle, r.score])).toEqual([["bob", 702], ["alice", null], ["carol", null]]);
-    expect(p).toMatchObject({ name: "Ridge Runners", members: 3, is_owner: true, livery: { tier: "plain", decals: 0, next: { tier: "club", at: 5 }, supporters: [] }, next: null, sharing_scores: false });
+    expect(p).toMatchObject({ name: "Ridge Runners", members: 3, is_owner: true, livery: { tier: "plain", decals: 0, next: null, supporters: [] }, next: null, sharing_scores: false });
     expect((await page(b, crew)).is_owner).toBe(false);
     expect((await api(out, "GET", `/api/crews/${crew}/page`)).status).toBe(404);
     await ok(api(a, "POST", "/api/blocks", { handle: "carol" }));
@@ -118,48 +118,41 @@ describe("crew page", () => {
     expect(res.filter((r) => r.status === 429)).toHaveLength(3);
   });
 
-  it("Decals: Pro crew-mates set the tier (1, 2, then 3 a member), each tier unlocks its part of the livery, opting out takes yours off", async () => {
+  it("Decals: one Pro crew-mate dresses the whole crew (Factory, the owner 2026-11-10), opting out takes yours off", async () => {
     const users = [await makeUser("alice"), await makeUser("bob"), await makeUser("carol"), await makeUser("dee")];
-    const [a, b, c, d] = users;
-    const crew = await crewOf(a, b, c, d);
+    const [a, b, c] = users;
+    const crew = await crewOf(a, b, c, users[3]);
     const pro = (u: TestUser, daysAgo: number, expires: string | null = null) => env.DB.prepare(
       "INSERT OR REPLACE INTO pro_entitlements (user_id, source, since, expires_at) VALUES (?, 'app_store', datetime('now', ?), ?)").bind(u.id, `-${daysAgo} days`, expires).run();
     const route = ((await (await ok(api(a, "POST", "/api/routes", { name: "Skyway loop", geom: [[-84.1, 35.3], [-84.0, 35.4]], crews: [crew] }))).json()) as { id: string }).id;
     // Plain: nothing past the Plain look
     expect((await api(a, "PUT", `/api/crews/${crew}/page`, { stripe2: "#ffffff" })).status).toBe(403);
     expect((await api(a, "PUT", `/api/crews/${crew}/page`, { pinned_route_id: route })).status).toBe(403);
-    // bob 3 decals (70 days), carol 2 (40 days): 5 = Club
-    await pro(b, 70); await pro(c, 40);
+    // an expired Pro counts nothing
+    await pro(c, 40, "2020-01-01 00:00:00");
+    expect((await page(a, crew)).livery).toMatchObject({ decals: 0, tier: "plain", next: null });
+    // bob alone (3 Decals, 70 days): the whole livery, no next threshold
+    await pro(b, 70);
     let p = await page(a, crew);
-    expect(p.livery).toMatchObject({ decals: 5, tier: "club", next: { tier: "works", at: 12 } });
-    expect(p.livery.supporters).toEqual([{ handle: "bob", decals: 3 }, { handle: "carol", decals: 2 }]);
-    await ok(api(a, "PUT", `/api/crews/${crew}/page`, { stripe2: "#FFFFFF", pinned_route_id: route }));
-    expect((await api(a, "PUT", `/api/crews/${crew}/page`, { stripe3: "#000000" })).status).toBe(403);   // Works
-    expect((await api(a, "PUT", `/api/crews/${crew}/page`, { pattern: "chevron" })).status).toBe(403);
+    expect(p.livery).toMatchObject({ decals: 3, tier: "factory", next: null });
+    expect(p.livery.supporters).toEqual([{ handle: "bob", decals: 3 }]);
+    await ok(api(a, "PUT", `/api/crews/${crew}/page`, { stripe2: "#FFFFFF", pinned_route_id: route, stripe3: "#111111", pattern: "chevron" }));
     expect((await api(a, "PUT", `/api/crews/${crew}/page`, { pattern: "zigzag" })).status).toBe(400);
     p = await page(b, crew);
-    expect(p).toMatchObject({ stripe2: "#ffffff", pinned: { id: route, name: "Skyway loop" }, stripe3: null, pattern: null });
+    expect(p).toMatchObject({ stripe2: "#ffffff", pinned: { id: route, name: "Skyway loop" }, stripe3: "#111111", pattern: "chevron" });
     expect(p.livery.mine).toEqual({ pro: true, decals: 3, on: true });
     expect(p.routes).toBeUndefined();                                                                  // only the owner picks
-    expect((await page(a, crew)).routes.map((r: any) => r.id)).toEqual([route]);
-    // carol keeps her Decals off: back to 3, Plain, and the Club look falls back without being lost
-    await ok(api(c, "PUT", `/api/crews/${crew}/decals`, { on: false }));
+    // bob keeps his Decals off: Plain again, and the look falls back without being lost
+    await ok(api(b, "PUT", `/api/crews/${crew}/decals`, { on: false }));
     p = await page(a, crew);
-    expect(p.livery).toMatchObject({ decals: 3, tier: "plain" });
+    expect(p.livery).toMatchObject({ decals: 0, tier: "plain" });
     expect([p.stripe2, p.pinned]).toEqual([null, null]);
-    await ok(api(c, "PUT", `/api/crews/${crew}/decals`, { on: true }));
-    // dee and alice join in (3 each, a long time Pro), and an expired one counts nothing: 3 + 2 + 3 + 3 = 11, then 12 = Works
-    await pro(d, 400); await pro(a, 100, "2020-01-01 00:00:00");
-    expect((await page(a, crew)).livery).toMatchObject({ decals: 8, tier: "club" });
-    await pro(a, 100);
-    await env.DB.prepare("UPDATE pro_entitlements SET since = datetime('now', '-100 days') WHERE user_id = ?").bind(c.id).run();
-    expect((await page(a, crew)).livery).toMatchObject({ decals: 12, tier: "works", next: { tier: "factory", at: 20 } });
-    await ok(api(a, "PUT", `/api/crews/${crew}/page`, { stripe3: "#111111", pattern: "chevron" }));
-    expect(await page(c, crew)).toMatchObject({ stripe3: "#111111", pattern: "chevron" });
+    await ok(api(b, "PUT", `/api/crews/${crew}/decals`, { on: true }));
+    expect(await page(c, crew)).toMatchObject({ stripe2: "#ffffff", stripe3: "#111111", pattern: "chevron" });
     expect((await api(users[0], "PUT", `/api/crews/${crew}/decals`, { on: "yes" })).status).toBe(400);
   });
 
-  it("Club pins a chat message and keeps 3 templates; Works badges, a house stage, a call sign and 10 templates", async () => {
+  it("One Pro crew-mate opens it all: a pinned message, 10 templates, badges, a house stage and a call sign", async () => {
     const [a, b, c, d] = [await makeUser("alice"), await makeUser("bob"), await makeUser("carol"), await makeUser("dee")];
     const crew = await crewOf(a, b, c, d);
     const pro = (u: TestUser, days: number) => env.DB.prepare("INSERT OR REPLACE INTO pro_entitlements (user_id, source, since) VALUES (?, 'founder', datetime('now', ?))").bind(u.id, `-${days} days`).run();
@@ -169,18 +162,15 @@ describe("crew page", () => {
     expect((await api(a, "PUT", `/api/crews/${crew}/page`, { pinned_chat_id: msg })).status).toBe(403);
     expect((await tpl(1)).status).toBe(403);
     expect(await (await ok(api(b, "GET", `/api/crews/${crew}/templates`))).json()).toEqual([]);
-    // Club (3 + 2 = 5)
-    await pro(b, 70); await pro(c, 40);
+    expect((await api(a, "PUT", `/api/crews/${crew}/badges`, { handle: "bob", badge: "Sweep" })).status).toBe(403);
+    expect((await api(a, "PUT", `/api/crews/${crew}/page`, { call_sign: "Ridge" })).status).toBe(403);
+    // one Pro crew-mate: everything
+    await pro(b, 70);
     await ok(api(a, "PUT", `/api/crews/${crew}/page`, { pinned_chat_id: msg }));
     expect((await page(d, crew)).pinned_chat).toMatchObject({ id: msg, body: "Dawn run Saturday, meet 6:15", handle: "bob" });
     for (const n of [1, 2, 3]) await ok(tpl(n));
-    expect((await tpl(4)).status).toBe(429);
     expect(((await (await ok(api(d, "GET", `/api/crews/${crew}/templates`))).json()) as any[]).map((t) => t.name)).toEqual(["T1", "T2", "T3"]);
     expect((await api(b, "POST", `/api/crews/${crew}/templates`, { name: "x", title: "x", meet: { lat: 1, lon: 1 } })).status).toBe(404);   // the owner's
-    expect((await api(a, "PUT", `/api/crews/${crew}/badges`, { handle: "bob", badge: "Sweep" })).status).toBe(403);                     // Works
-    expect((await api(a, "PUT", `/api/crews/${crew}/page`, { call_sign: "Ridge" })).status).toBe(403);
-    // Works (3 + 3 + 3 + 3 = 12)
-    await pro(c, 70); await pro(d, 70); await pro(a, 70);
     await ok(api(a, "PUT", `/api/crews/${crew}/badges`, { handle: "bob", badge: "Sweep" }));
     await ok(api(a, "PUT", `/api/crews/${crew}/page`, { call_sign: "ridge 1" }));
     const seg = await makeSegment(b, "Skyway climb");
@@ -194,7 +184,8 @@ describe("crew page", () => {
     expect(p.board.find((r: any) => r.handle === "bob").badge).toBe("Sweep");
     expect(p.house).toEqual({ id: seg, name: "Skyway climb", board: [{ handle: "bob", score: 744 }] });
     expect(p.templates_cap).toBe(10);
-    for (const n of [4, 5]) await ok(tpl(n));
+    for (const n of [4, 5, 6, 7, 8, 9, 10]) await ok(tpl(n));
+    expect((await tpl(11)).status).toBe(429);
     // the call sign rides on the crew's drives (for the convoy's name)
     await ok(api(a, "POST", `/api/crews/${crew}/events`, { title: "Dawn run", starts_at: new Date(Date.now() + 86400e3).toISOString(), meet: { lat: 35.36, lon: -84.29 } }));
     expect(((await (await ok(api(d, "GET", `/api/crews/${crew}/events`))).json()) as any[])[0].call_sign).toBe("RIDGE 1");
@@ -209,15 +200,10 @@ describe("crew page", () => {
     const [a, b, c, d, e, out] = users;
     const crew = await crewOf(a, b, c, d, e);
     expect((await api(a, "PUT", `/api/crews/${crew}/page`, { hazard_kinds: ["Cattle grid"] })).status).toBe(403);
-    for (const u of [a, b, c, d, e]) await env.DB.prepare("INSERT INTO pro_entitlements (user_id, source, since) VALUES (?, 'founder', datetime('now', '-90 days'))").bind(u.id).run();   // 15
-    expect((await page(a, crew)).livery.tier).toBe("works");
-    expect((await api(a, "PUT", `/api/crews/${crew}/page`, { hazard_kinds: ["Cattle grid"] })).status).toBe(403);
+    // an outsider's Pro dresses nothing; one member's Pro dresses the crew
     await env.DB.prepare("INSERT INTO pro_entitlements (user_id, source, since) VALUES (?, 'founder', datetime('now', '-90 days'))").bind(out.id).run();
-    const tok = ((await (await ok(api(a, "POST", `/api/crews/${crew}/invite`))).json()) as { token: string }).token;
-    const f = await makeUser("frank"); await ok(api(f, "POST", "/api/crews/join", { token: tok }));
-    await env.DB.prepare("INSERT INTO pro_entitlements (user_id, source, since) VALUES (?, 'founder', datetime('now', '-90 days'))").bind(f.id).run();   // 18
-    const g = await makeUser("gus"); await ok(api(g, "POST", "/api/crews/join", { token: tok }));
-    await env.DB.prepare("INSERT INTO pro_entitlements (user_id, source, since) VALUES (?, 'founder', datetime('now', '-90 days'))").bind(g.id).run();   // 21
+    expect((await page(a, crew)).livery.tier).toBe("plain");
+    await env.DB.prepare("INSERT INTO pro_entitlements (user_id, source, since) VALUES (?, 'founder', datetime('now', '-90 days'))").bind(e.id).run();
     expect((await page(a, crew)).livery.tier).toBe("factory");
     expect((await api(a, "PUT", `/api/crews/${crew}/page`, { hazard_kinds: ["a", "b", "c", "d", "e"] })).status).toBe(400);
     await ok(api(a, "PUT", `/api/crews/${crew}/page`, { hazard_kinds: [" Cattle   grid ", "Cattle grid", "Logging trucks"] }));
