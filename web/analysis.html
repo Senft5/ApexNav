@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self' apexnav:; script-src 'self' apexnav: 'sha256-GKI2E8GYfnf7UidraCj6NFeJ2sWzecAn28WNgHxrgm4=' 'sha256-G7s/ZI+Hqrfc4DqbB6EANJJLmUmhNK06PizQ1LlsG84=' https://cdn.jsdelivr.net 'wasm-unsafe-eval'; worker-src 'self' apexnav: blob:; child-src 'self' apexnav: blob:; style-src 'self' apexnav: 'unsafe-inline'; font-src 'self' apexnav: data:; img-src 'self' apexnav: data: blob: https://tiles.openfreemap.org https://s3.amazonaws.com https://basemap.nationalmap.gov; media-src 'self' apexnav: data: blob:; connect-src 'self' apexnav: data: blob: https://apexnav.senftns.workers.dev wss://apexnav.senftns.workers.dev https://tiles.openfreemap.org https://basemap.nationalmap.gov https://s3.amazonaws.com https://valhalla1.openstreetmap.de https://router.project-osrm.org https://overpass-api.de https://overpass.private.coffee https://overpass.kumi.systems https://maps.mail.ru https://nominatim.openstreetmap.org https://photon.komoot.io https://api.open-meteo.com https://api.weather.gov https://statsapi.mlb.com https://api.seatgeek.com https://api.water.noaa.gov https://waterservices.usgs.gov https://in.carsprogram.org https://publicapi.ohgo.com https://quickstats.nass.usda.gov https://commons.wikimedia.org https://graph.mapillary.com https://vpic.nhtsa.dot.gov https://cdn.jsdelivr.net https://huggingface.co https://*.huggingface.co https://*.hf.co; object-src 'none'; base-uri 'none'; form-action 'self'" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self' apexnav:; script-src 'self' apexnav: 'sha256-EgGm0TN48SfmVccg32Ze9NvX63CNnJxLm0dPE9Huhps=' 'sha256-G7s/ZI+Hqrfc4DqbB6EANJJLmUmhNK06PizQ1LlsG84=' https://cdn.jsdelivr.net 'wasm-unsafe-eval'; worker-src 'self' apexnav: blob:; child-src 'self' apexnav: blob:; style-src 'self' apexnav: 'unsafe-inline'; font-src 'self' apexnav: data:; img-src 'self' apexnav: data: blob: https://tiles.openfreemap.org https://s3.amazonaws.com https://basemap.nationalmap.gov; media-src 'self' apexnav: data: blob:; connect-src 'self' apexnav: data: blob: https://apexnav.senftns.workers.dev wss://apexnav.senftns.workers.dev https://tiles.openfreemap.org https://basemap.nationalmap.gov https://s3.amazonaws.com https://valhalla1.openstreetmap.de https://router.project-osrm.org https://overpass-api.de https://overpass.private.coffee https://overpass.kumi.systems https://maps.mail.ru https://nominatim.openstreetmap.org https://photon.komoot.io https://api.open-meteo.com https://api.weather.gov https://statsapi.mlb.com https://api.seatgeek.com https://api.water.noaa.gov https://waterservices.usgs.gov https://in.carsprogram.org https://publicapi.ohgo.com https://quickstats.nass.usda.gov https://commons.wikimedia.org https://graph.mapillary.com https://vpic.nhtsa.dot.gov https://cdn.jsdelivr.net https://huggingface.co https://*.huggingface.co https://*.hf.co; object-src 'none'; base-uri 'none'; form-action 'self'" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
   <title>Vetta · Log</title>
   <link rel="icon" href="brand/mark.svg" type="image/svg+xml" />
@@ -374,7 +374,7 @@
       <details class="quiet" id="yearPanel" hidden><summary id="yearTitle">--</summary><div id="yearLines" class="stack-8"></div>
         <div class="row mt-8" id="yearShareRow"><button class="btn" id="yearShare">Share</button></div>
         <div id="challengePanel" class="stack-8 mt-8" hidden><b id="challengeSum">This month's challenges</b><div id="challengeList" class="stack-8"></div>
-          <p class="note">Exploring and technique, never speed. From the drives on this phone.</p></div></details>
+          <p class="note">Exploring and clean, committed driving, never top speed. From the drives on this phone.</p></div></details>
       <div class="stamps" id="historyFilter" role="group" aria-label="Show drives tagged" hidden></div>
       <!-- the drive list is the Log; your week heads it when the week has drives -->
       <div id="drivingCard" hidden></div>
@@ -812,15 +812,15 @@
         const W = Math.max(300, Math.round($('steadyChart').clientWidth || 760)), H = 160, L = 40, R = 22, T = 12, B = 26;
         const top = Math.max(10, Math.ceil(Math.max(...months.map(w => w.sd_m)) / 5) * 5);
         const X = (m) => L + (idx(m) - i0) / span * (W - L - R), Y = (v) => T + (v / top) * (H - T - B);   // steadier is higher
-        const grid = [0, top / 2, top].map(v => `<line x1="${L}" x2="${W - R}" y1="${Y(v)}" y2="${Y(v)}" stroke="${C.rule}"/><text x="${L - 6}" y="${Y(v) + 3}" text-anchor="end" font-size="10" fill="${C.panelDim}">${Math.round(v)} m</text>`).join('');
+        const grid = [0, top / 2, top].map(v => `<line x1="${L}" x2="${W - R}" y1="${Y(v)}" y2="${Y(v)}" stroke="${C.rule}"/><text x="${L - 6}" y="${Y(v) + 3}" text-anchor="end" font-size="10" fill="${C.panelDim}">${ApexUnits.fine(v)}</text>`).join('');
         const line = months.map((w, i) => `${i ? 'L' : 'M'}${X(w.month).toFixed(1)} ${Y(w.sd_m).toFixed(1)}`).join('');
-        const dots = months.map((w) => `<circle cx="${X(w.month).toFixed(1)}" cy="${Y(w.sd_m).toFixed(1)}" r="${Math.min(8, 3 + Math.sqrt(w.corners))}" fill="${C.accent}"><title>${monthLabel(w.month)}: ${Math.round(w.sd_m)} m over ${w.corners} corners</title></circle><text x="${X(w.month).toFixed(1)}" y="${H - 8}" text-anchor="middle" font-size="10" fill="${C.panelDim}">${monthLabel(w.month)}</text>`).join('');
+        const dots = months.map((w) => `<circle cx="${X(w.month).toFixed(1)}" cy="${Y(w.sd_m).toFixed(1)}" r="${Math.min(8, 3 + Math.sqrt(w.corners))}" fill="${C.accent}"><title>${monthLabel(w.month)}: ${ApexUnits.fine(w.sd_m)} over ${w.corners} corners</title></circle><text x="${X(w.month).toFixed(1)}" y="${H - 8}" text-anchor="middle" font-size="10" fill="${C.panelDim}">${monthLabel(w.month)}</text>`).join('');
         $('steadyChart').innerHTML = `<svg width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" role="img" aria-label="Braking consistency by month">${grid}<path d="${line}" fill="none" stroke="${C.accent}" stroke-width="2"/>${dots}</svg>`;
         const a = months[0], z = months[months.length - 1], diff = z.sd_m - a.sd_m;
-        const about = (v) => (v < 3 ? 'under 3 m' : `about ${Math.round(v)} m`);           // below the floor, no finer figure
+        const about = (v) => (v < 3 ? `under ${ApexUnits.fine(3)}` : `about ${ApexUnits.fine(v)}`);           // below the floor, no finer figure
         const claim = Math.abs(diff) >= STEADY_CLAIM_M && a.corners >= STEADY_CLAIM_CORNERS && z.corners >= STEADY_CLAIM_CORNERS;
-        $('steadyNote').textContent = `How widely your braking point varied, within each month, on corners you drove five or more times that month; higher on the chart is steadier (fewer metres), bigger dots are more corners. `
-          + `${monthLabel(z.month)}: ${about(z.sd_m)} over ${z.corners} corners${claim ? `, ${diff < 0 ? 'steadier' : 'less steady'} than ${monthLabel(a.month)} (${about(a.sd_m)})` : ''}. 5 m samples and GPS put the floor near 3 m.`;
+        $('steadyNote').textContent = `How widely your braking point varied, within each month, on corners you drove five or more times that month; higher on the chart is steadier (fewer ${ApexUnits.metric() ? 'metres' : 'feet'}), bigger dots are more corners. `
+          + `${monthLabel(z.month)}: ${about(z.sd_m)} over ${z.corners} corners${claim ? `, ${diff < 0 ? 'steadier' : 'less steady'} than ${monthLabel(a.month)} (${about(a.sd_m)})` : ''}. ${ApexUnits.fine(5)} samples and GPS put the floor near ${ApexUnits.fine(3)}.`;
       });
     }
 
@@ -941,7 +941,7 @@
       for (const k of $('segRoads').querySelectorAll('button[data-a]')) k.setAttribute('aria-pressed', String(!!sel && +k.dataset.a === a && +k.dataset.b === b));
       if (!sel) { $('segInfo').textContent = ''; return; }
       const corners = d.corners.filter(c => c.start >= a && c.end <= b).length, dz = ApexRoadRuns.climb(d.elev, a, b);
-      $('segInfo').textContent = `${ApexUnits.long((b - a) * 5, 2)} · ${corners} corner${corners === 1 ? '' : 's'}${dz != null && Math.abs(dz) >= 15 ? ` · ${dz > 0 ? 'up' : 'down'} ${Math.round(Math.abs(dz))} m` : ''}`;
+      $('segInfo').textContent = `${ApexUnits.long((b - a) * 5, 2)} · ${corners} corner${corners === 1 ? '' : 's'}${dz != null && Math.abs(dz) >= 15 ? ` · ${dz > 0 ? 'up' : 'down'} ${ApexUnits.fine(Math.abs(dz))}` : ''}`;
     }
     for (const k of ['segFrom', 'segTo']) $(k).addEventListener('input', () => { sel = [+$('segFrom').value, +$('segTo').value]; selLabel = ''; drawSel(); });
     $('segDrive').addEventListener('change', () => { sel = null; selLabel = ''; renderSegStrip(); });
@@ -949,7 +949,7 @@
       const d = summaryOf($('segDrive').value) ? await full($('segDrive').value) : null;
       if (!d || !sel) { $('segInfo').textContent = 'Pick a road, or slide Start and Finish, first.'; return; }
       const [a, b] = sel[0] < sel[1] ? sel : [sel[1], sel[0]];
-      if (b - a < 40) { $('segInfo').textContent = 'Make it at least 200 m long.'; return; }
+      if (b - a < 40) { $('segInfo').textContent = `Make it at least ${ApexUnits.size(200)} long.`; return; }
       const seg = { id: ApexSync.newSegmentId(), name: $('segName').value.trim() || selLabel || `${d.name} ${ApexUnits.longN(a * 5).toFixed(1)}-${ApexUnits.long(b * 5)}`,
                     lat0: d.lat[a], lon0: d.lon[a], lat1: d.lat[b], lon1: d.lon[b], length_m: (b - a) * 5, from: d.id,
                     geom: JSON.stringify(Array.from({ length: Math.min(60, b - a + 1) }, (_, k) => { const i = a + Math.round(k * (b - a) / (Math.min(60, b - a + 1) - 1)); return [+d.lat[i].toFixed(6), +d.lon[i].toFixed(6)]; })) };

@@ -1,7 +1,24 @@
 # VETTA — BRAND & UI DIRECTION
 
-Status: decided (owner asked for decisions, not options). Supersedes the visual parts of
-PHILOSOPHY.md §1 where they conflict. Engineers: section 7 is the work list.
+Status: the brand direction, decided 2026-10 and brought in line with what ships on 2026-11-10 (red team BR-08).
+`docs/PHILOSOPHY.md` says what the product is for; this file says how it looks and talks. Sections 0 and 7 are the
+2026-10 critique and work list, kept as history: most of section 7 has shipped or been overtaken, so do not rebuild from
+it. Where a section below and the shipped app disagree, the box at the top of that section says which wins.
+
+### Shipped state (2026-11-10): read this before the sections below
+- **Tabs:** Map, Log, People, Garage (`web/index.html` `#tabbar`). Plan lives on Map (Where to? and the plan sheet);
+  Stages live in the Log; Settings live in Garage. The five-tab table in §4 is superseded.
+- **Wordmark:** the tulip mark + `VETTA` in monoline caps drawn as paths (`web/brand/logo.svg`). The `APEX`/`NAV`
+  wordmark in §5 is gone.
+- **Themes:** Roadbook is the brand look and the default. Tapedeck and Billet are optional skins (`web/themes.js`, Pro
+  once Pro is on sale; open to everyone in early access), and private car-cluster themes exist for single accounts
+  (`docs/design/CAR_THEMES.md`). Skins may change type, colour, gauges and voice; they keep the layout and the call
+  grammar. Skins are exempt from "no neon" and may glow (owner, 2026-11-10: Tapedeck stays as it is); the brand look,
+  Roadbook, keeps every rule in this file.
+- **Voices:** each theme brings its co-driver: Marguerite (Roadbook), Kit (Tapedeck), Hale (Billet) (`docs/VOICE.md`).
+  George, Daniel, Emma, Michael, My voice and Jarvis are retired.
+- **Ownable:** the tulip mark with its red apex, the red pen on paper, the rally call grammar, the road book. Not the
+  marks of others (Singer, Halda, VDO, Group B and car makers' clusters are never brand references).
 
 Evidence base: the 8 phone captures (390×844) of the current build (`01_cockpit_map` …
 `08_analysis_compare`), earlier captures of the Roadbook and Telemetry themes and of the
@@ -85,10 +102,15 @@ out loud, scores how cleanly you drove it, and keeps a shared road book with you
   they do not know what LPR, DNA or an envelope is.
 - **The feeling:** a rally co-driver and a road book. Calm, exact, a step ahead. Paper, ink, one
   red pen. The app is quiet until the road gets interesting.
-- **Not:** a gamer dashboard (no neon, no XP, no robot voice, no top-speed brag), not a nav app
-  (no turn-by-turn to an address as the main job), not a lab tool (no raw g traces up front).
+- **Not:** a gamer dashboard (no neon, no XP, no robot voice, no top-speed brag), not a lab tool (no raw g traces
+  up front). **Navigation is the vehicle, the co-driver is the reason:** Vetta does turn-by-turn to an address (CarPlay
+  needs it, and you have to get to the good road and home), but the listing and the app lead with the co-driver.
+- **What Vetta refuses to match** (nav parity gets the minimum that keeps it out of the way, never roadmap priority over
+  measured roads): lane-by-lane guidance beyond the next junction, live traffic as a feature, fuel and charger
+  marketplaces, calendar and contacts integrations.
 - **Promise to keep:** unknown stays unknown (`--`), nothing is shared until you share it,
-  and there are no speed or time leaderboards.
+  and there are no public speed or time leaderboards. The Score rewards using a corner's grip, smoothly (Pace is one
+  part); say so, never "never how fast" (owner, 2026-11-10).
 
 ---
 
@@ -183,6 +205,8 @@ Vague errors: *something went wrong, unavailable, oops, invalid* (say what is wr
 ## 4. Information architecture (phone)
 
 ### Bottom tabs (5, sentence case, 11 px labels, icons 24 px)
+*Superseded 2026-11-10: the app ships four tabs, Map, Log, People, Garage (see "Shipped state" at the top). The rest of
+this section's wireframes are the 2026-10 direction, kept for intent.*
 | Tab | What lives there |
 |---|---|
 | **Map** | The cockpit. Idle: map, Start drive. Driving: notes strip, map, binnacle. Replay/Preview: same plus transport. Gear → Settings sheet (voice, notes, map motion, theme, night, units, sources). |
@@ -366,8 +390,8 @@ Auto/Full/Quiet, Map motion, Theme (Road book / Instruments), Night (Auto / On /
   **red apex dot on the inside of the bend**. It is the same drawing language as the pace-note
   tulips the app already draws (`tulipSVG` in `web/instruments.js`), so the logo is a call, not a
   decoration.
-- **Wordmark:** `APEX` heavy + `NAV` light, monoline caps drawn as paths (no font dependency),
-  flat-cut tops and bottoms. Written "Vetta" in running text.
+- **Wordmark:** `VETTA` in monoline caps drawn as paths (no font dependency), flat-cut tops and bottoms, after the mark.
+  Written "Vetta" in running text.
 - Files (all hand-written SVG, ink = `currentColor`, apex = `var(--brand-accent, var(--accent, #C8102E))`):
   - `web/brand/logo.svg`: mark + wordmark, 444×100. First-run screen 1, Crew signed-out state,
     and the web page `<head>` share image. Not inside the cockpit.
@@ -387,7 +411,7 @@ Why: it is the only theme that is not "dark UI with an orange accent"; paper and
 direct sun on a windscreen mount; red ink is what a co-driver marks a road book with; and
 the earlier Roadbook capture is the one screen of this app that looks like nothing else.
 
-Keep **two** themes: **Road book** (default) and **Instruments** (today's Stage: dark binnacle
+*Superseded 2026-11-10: see "Shipped state" at the top (Roadbook + two skins).* Keep **two** themes: **Road book** (default) and **Instruments** (today's Stage: dark binnacle
 over the topo map, for people who want a dash). **Delete Instrument (B)** (same fonts, dials and
 layout as Stage with different hex) and **Telemetry (C)** (GitHub Primer colours, two extra
 fonts, a third cluster renderer to maintain). This reverses the session (c) "A/B/C/AB" decision;
@@ -464,7 +488,7 @@ the gamer register this brand is not); the word Octane; shimmer sweep; the 8–1
 ## 6. What stays as it is
 Tulip pace notes and the rally call grammar; the speed dial with the LIMIT sign; the g-ball
 with bank inclinometer; paper topo map with contours; "unknown is `--`"; sheets that close
-by swiping right; the Kokoro voices; the analysis lanes and corner list (only restyled).
+by swiping right; the theme voice packs (Marguerite, Kit, Hale); the analysis lanes and corner list (only restyled).
 
 ---
 

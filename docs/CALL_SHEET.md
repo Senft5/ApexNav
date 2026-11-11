@@ -41,6 +41,12 @@ simulated sane driver"; it reads "as a careful driver would take it. Never a spe
 
 Undo: revert the PR. The scores themselves and how they are worked out are unchanged.
 
+## 2026-11-11 (fable-reveal-once): the ranked route takes the line's place without a second stroke (claude/fable-reveal-once)
+
+On a slow phone the route was drawn onto the map, then drawn again from the start a moment later when the better route
+replaced the first one. Now the better route just takes the line's place once the first stroke is done (mid-stroke it
+carries on, as before). A level card you tap still redraws quickly, since that change is yours. Undo: revert the PR.
+
 ## 2026-11-10 (fable-pin-names): a place you pin or tap goes by its name, never by coordinates (claude/fable-pin-names)
 
 Hold the map on Foothills Parkway and the pin's sheet said "Foothills Parkway", but Go here then filled Where to? with
@@ -142,6 +148,22 @@ Tapedeck, Billet and the car themes keep their own clusters; they get only the q
 
 Undo: in web/themes.js set Roadbook back to `cluster: 'dials'` and `dial: 'printed'` (the three dials come back
 unchanged), and delete the "Vetta Line" CSS block in web/index.html (above "The opening cover").
+## 2026-11-11 (fable-first-last): the welcome shows the app; the end card is a reveal (claude/fable-first-last)
+
+The welcome was one still page. Now the Vetta lockup moves from the middle of the screen (where the launch screen left
+it) to its place, a road draws itself across the paper, and a red dot drives it while the road book strip calls each
+corner just before the dot reaches it. Start and Watch a replay are there and work from the first frame; a touch anywhere
+ends the drawing; it settles in under 4 s. With Reduce Motion on, it is one still page and the strip no longer changes
+call every 4 s (I made that call: the brief was a still page). The permission sheet uses the same type, a drawing per
+row, and the red Start key with its dot, since that key is go; when Location is off its key stays ink. No permission is
+asked any earlier, and there is no sign-in on either page.
+
+The drive-ended card: the driven line draws itself beside the Score while the drive is being scored (the score's place
+shows a moving pen stroke and "Vetta Score · working it out", never a number); when the number is known it counts up to
+it and settles; the distance, time and corners are a row of big numbers; Mark a stage and Drive it again are quiet keys
+so Share card is the one ink key. A drive with no score shows "0.9 mi · no corners to score" set as a title.
+
+Undo: revert the PR (web/first_run.js and web/end_reveal.js can simply be removed; the page works without them).
 ## 2026-11-10 (fable-ten-hz-g): a recorded drive keeps the car's g ten times a second, where it happened (claude/fable-ten-hz-g)
 
 The app sends the page ten readings a second, but the recorder kept only the one that arrived with each GPS fix and gave
@@ -217,6 +239,19 @@ Calls made: the way home is chosen by the same Fun / Long way rules as any route
 where our own map tiles don't reach, the public router is asked to avoid the way out; a dead end that has only one way
 in says so instead of failing. Undo: hide `#routeRoundBtn` (one line in renderRouteCard), nothing else depends on it.
 
+## 2026-11-10 (fable-soundtrack): the Soundtrack, music made by the road (claude/fable-soundtrack)
+
+Section 5 of the architecture (an audio bus driven by the driver's workload and the road ahead, with build-ups timed to
+corners) was never built. It is now, as an opt-in Soundtrack in Garage > Co-driver. Calls I made:
+- Generated, not licensed: the phone writes the music (WebAudio, no files), so it costs nothing, works with no signal and
+  raises no rights questions. A licensed or stem-based score can replace `soundtrack.js` behind the same bus later.
+- It never follows speed. Speed only turns a distance into a time to the next corner; the energy comes from measured g
+  and the road's corners. Over Sight it drops to the pad. A soundtrack that rose with speed would egg drivers on.
+- Unknown stays unknown: before the mount is set, or with no road ahead known, it rests on its pad instead of acting out
+  a road it has not measured.
+- Off by default, because sound in someone's car is theirs to choose.
+Undo: switch it off (nothing plays), or revert the PR.
+
 ## 2026-11-10 (fable-your-data): Your data is three short lists, like Settings (claude/fable-your-data)
 
 For your "cohesiveness, less clunky": Your data was eight keys of eight widths in two wrapped rows, one of them a link
@@ -233,6 +268,15 @@ The e2e suite is 152 flows now and takes about 24 minutes, so GitHub cut it off 
 (twice on #349, once on #344) with every flow before it passing. The limit is 35 minutes. No test is skipped or
 shortened. Undo: set `timeout-minutes` back to 25 in `.github/workflows/core-tests.yml`, or better, split the suite.
 
+## 2026-11-10 (fable-log-units): the Log's last metre-only lines are in your units (claude/fable-log-units)
+
+After #352 a driver in miles still read metres in the Log: a stage being marked said "up 34 m" and "Make it at least
+200 m long"; the repeatability list said "braking point typically within 6 m"; the steadiness chart's scale, its dots
+and its note were in metres; the grip circle's notes said "every 5 m" and "100 m before turn-in". These now follow
+Settings, Units. Small lengths in feet are said to the nearest 5 ft ("within 20 ft"), since a finer figure would
+claim more than the phone measured. Metric drivers see what they saw before.
+
+Undo: revert the PR. Nothing stored changes; this is only how lengths are written.
 ## 2026-11-10 (fable-driver-profile): the Log has "Your driving", a picture of how you drive over every drive (claude/fable-driver-profile)
 
 Until now every reading was of one drive, or one corner against your other passes of it. Your driving reads every clean
@@ -319,6 +363,21 @@ Also: a time loop's note said "the closest good loop to 1.5 h"; times now read "
 
 Not changed: Options keeps its 1 hour / 2 hours keys and My free time. Undo: revert the PR.
 
+## 2026-11-10 (fable-sign-in-key): a message that asks you to sign in carries the key (claude/fable-sign-in-key)
+
+Following your "reducing any clunky feelings": five things that need an account answered "Sign in (People) to see
+friends on the map." and the like: a direction to go and find a tab, in brackets. The Garage's empty bay had already
+dropped that wording for a Sign in key. Now the message itself has the key: "Sign in to see friends on the map." with
+**Sign in** on it, which opens People where signing in lives. In a drive (sharing an ETA, reporting a hazard) it is
+only said on the drive's message row, with no key, so no sheet opens over the road.
+
+Also: sharing a route with nobody to share it with read "Sign in and add friends or a crew (People) to share routes."
+It now reads like the convoy's: "No friends or crews to share with yet. Add them in People."
+
+The same for notifications: "Notifications are off for Vetta. Turn them on in the iPhone's Settings, then here."
+now has a **Settings** key that opens Vetta's page there (the shell's `openSettings`, already used by Location is off).
+
+Undo: revert the PR (`askSignIn` in web/cockpit.js, one line in web/friends_map.js).
 ## 2026-11-10 (fable-crew-settings): Crew settings in the Settings list's shape (claude/fable-crew-settings)
 
 For "cohesiveness" (and the first look at a crew's page in this run): the sheet behind a crew's gear had three sizes
@@ -352,17 +411,6 @@ Also: "Saved for offline: … Find it in Where to?." ended "?."; it reads "It's 
 
 Undo: revert the PR (`toast()` in web/cockpit.js, four CSS lines in web/index.html).
 
-## 2026-11-10 (fable-camber-sure): banking says how sure it is (claude/fable-camber-sure)
-
-The red team (TE-03) pointed out that banking comes from one phone on a sprung car with no body-roll model, yet the
-gauge read it to a tenth of a degree ("BANK +4.3°"). It now reads whole degrees ("BANK +4°"), the drive's lane readout
-too, and the end-of-drive line says "banked about 4°". Tapping the gauge (parked) says Bank is approximate, to a
-degree or two, because body roll is not modelled. The drive view already says how many runs agree or differ beside
-it. Nothing about how banking is measured or shared changed; a roll model or a surveyed reference road is the real fix
-(docs/PHILOSOPHY.md §4).
-
-Undo: revert the PR.
-
 ## 2026-11-10 (fable-layers): design pass 8: the Layers panel is the map's legend (claude/fable-layers)
 
 Layers was a column of names and switches: "Cameras" (which cameras?), "Measured roads" (three colours on the map and
@@ -377,6 +425,12 @@ Not changed: what any switch does, the Co-driver half (Notes, Voice, music).
 
 Undo: revert the PR.
 
+## 2026-11-10 (fable-story-flake): the "route overview" e2e flow waits for the settled card (claude/fable-story-flake)
+
+The e2e check went red on PRs that touch nothing near it. The flow compared the overview's lines with the route's
+streets while the app was between two sets of steps. I changed the flow to read once the lines belong to the steps the
+route has now; the app is unchanged, and the check ("every name it says is a street the route drives") is as strict
+as before. Undo: revert the PR.
 ## 2026-11-10 (fable-no-orphan-key): a friend's third key takes the row (claude/fable-no-orphan-key)
 
 On People, a friend's row opens on two columns of keys. A friend who shares no position has three (Share a route,
@@ -451,6 +505,26 @@ Not changed: the 1 hour / 2 hours loops and "My free time" in Options, and the r
 weights in fun_route.js (unused by the app now, still tested).
 
 Undo: revert the PR. To bring a level back for loops only, set `LOOP_STYLE` in web/cockpit.js.
+
+## 2026-11-10 (fable-coherence): the docs say what Vetta is and what ships (claude/fable-coherence)
+
+A red team (design and philosophy) found the repo describing two products. I rewrote docs/PHILOSOPHY.md: the
+"countermeasure co-driver", "zero-snitch", Octane, the Halda/Singer binnacle and the five unused hex colours are gone,
+with a table of what was dropped and why so nobody rebuilds them. It now states your answers from today: Pace stays in
+the Score and copy says plainly that the Score rewards using a corner's grip; Stage times and gaps stay shareable;
+police reports and speed cameras stay, named in the open; Pro is looks only; Tapedeck's glow is fine.
+
+CLAUDE.md, AGENTS.md and .cursorrules are now one text (a test keeps them so). The mission no longer claims Android,
+Android Auto, a C++ core, Kalman, FFT or an audio DSP bus; they are listed as not built. ARCHITECTURE.md §5 says the
+same. BRAND.md opens with the shipped state (four tabs, the VETTA wordmark, three themes and their voices, what is
+ownable) and "what Vetta refuses to match"; navigation is the vehicle, the co-driver the reason. SOCIAL.md's "3
+contributors" now matches the built rule in ROAD_DATA.md. "Zero subscription" and "nothing you made behind a paywall"
+became "free to drive" wording (about page, IDEAS, SOCIAL, marketing). "Never how fast" became "how well you used each
+corner's grip, never your top speed" (about page, Log note, marketing). The listing leads with the co-driver and names
+cameras and police reports. APP_REVIEW.md gains rows for the braking ribbon (1.4.1), the Score and boards, and cameras
+and police. The domain is at the top of OWNER_TODO.
+
+Undo: revert the PR. No code behaviour changed.
 
 ## 2026-11-10 (fable-paths-are-keys): "Garage → Settings → Spots" is a key, not a path to walk (claude/fable-paths-are-keys)
 

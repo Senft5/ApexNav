@@ -14,7 +14,7 @@ Navigation for back roads
 
 ## Promotional text (170)
 
-Turn-by-turn navigation for the long way home: spoken directions and pace notes for every corner, routes over the twistiest roads nearby, and a score for smooth driving.
+A co-driver for the long way home: pace notes for every corner, routes over the twistiest roads nearby, turn-by-turn directions and a score for smooth driving.
 
 ## Keywords (100, comma separated, no spaces)
 
@@ -22,22 +22,22 @@ navigation,gps,pace notes,co-driver,twisty roads,scenic drive,back roads,road tr
 
 ## Description (4000)
 
-Vetta is turn-by-turn navigation for people who take the long way home. Search for a destination, pick the fun route or the quick one, and follow spoken directions with the next turn on screen and a live arrival time. Along the way it reads every corner out loud like a rally co-driver, and afterwards it scores how cleanly you drove, never how fast.
-
-TURN-BY-TURN NAVIGATION
-Search for any address or place, choose between routes, and get spoken turn-by-turn directions ("In 0.3 miles, turn left onto Deals Gap Road") with the next turn on screen, distance and time left, and arrival time. Miss a turn and the route is rebuilt. Directions and notes keep working with the screen off and play over your music, which dips while a prompt plays.
+Vetta is a co-driver for people who take the long way home. It calls every corner out loud before you reach it, finds the twisty roads near you, and gets you there and home again with turn-by-turn directions. Afterwards it scores how cleanly you drove.
 
 PACE NOTES, SPOKEN
 Corners are called before you reach them, in plain words or rally notes ("left 4 tightens"), with hazards other drivers reported, and crests and bumps on roads that have been measured. The voice runs on the phone and works with no signal. Calls are timed to your speed so you hear them at the entry, not the apex.
 
 FIND THE GOOD ROADS
-Ask for a loop of the length you want and Vetta builds one from the twistiest roads around you, or plans a fun route to a destination. Mark the spots you love and loops lean toward them.
+Ask for a loop of the length you want and Vetta builds one from the twistiest roads around you, or plans a fun route to a destination. Mark the spots you love and loops lean toward them. Plate-reading and speed cameras mapped on OpenStreetMap show on the map, and routes can avoid them.
+
+TURN-BY-TURN NAVIGATION
+Search for any address or place, choose between routes, and get spoken turn-by-turn directions ("In 0.3 miles, turn left onto Deals Gap Road") with the next turn on screen, distance and time left, and arrival time. Miss a turn and the route is rebuilt. Directions and notes keep working with the screen off and play over your music, which dips while a prompt plays.
 
 A SCORE FOR EVERY DRIVE
 Every drive gets a Vetta Score. The Log shows your drives on the map, corner by corner, and how you are improving on the roads you drive most. Share a drive card with the road's outline and your score.
 
 DRIVE TOGETHER
-Start a convoy with friends and see each other on the map while you drive. Share planned routes with friends and crews, and report hazards (gravel, debris, an animal on the road) so the drivers behind you hear about them.
+Start a convoy with friends and see each other on the map while you drive. Share planned routes with friends and crews, and report hazards (gravel, debris, an animal on the road, a police car) so the drivers behind you hear about them.
 
 YOUR DATA STAYS YOURS
 Drives are kept on your phone. Nothing is shared until you share it. Privacy zones keep home and work out of everything. Unknown values show as unknown, never guessed. Settings → Your data downloads your drives as GPX or erases them.

@@ -185,7 +185,8 @@ def test_recording_notes_of_the_fifth_recording():
     first = body("test01FirstRun")
     assert "for k in 1...6" in first and 'shot("welcome-\\(k)")' in first and "WELCOME_BEAT = 1.8" in flows
     cockpit = read("web", "cockpit.js")
-    assert "matches ? 4000 : 1800);" in cockpit and cockpit.count("{ type: ", cockpit.index("const OB_NOTES"), cockpit.index("function runOnboarding")) == 5
+    # design pass "first and last": the beat is 1.8 s; under reduced motion the welcome is a still page (no beat at all)
+    assert "if (!matchMedia('(prefers-reduced-motion: reduce)').matches) setTimeout(tick, 1800);" in cockpit and cockpit.count("{ type: ", cockpit.index("const OB_NOTES"), cockpit.index("function runOnboarding")) == 5
     # §7.5, §7.8, §7.9: landscape on a call and on the quiet line, the island on the quiet line, the lock screen
     assert guided.index('landscape(16, "landscape-corner")') < guided.index('landscape(10, "landscape-quiet")') < guided.index('homeScreen("home-quiet-line")') < guided.index("driveTo(5)")
     assert 'shot("report-sheet-landscape")' in guided and 'lockScreen("lock-screen-live-activity")' in guided
