@@ -581,7 +581,22 @@
     const ro = new ResizeObserver(() => { if (Math.abs((lanes.clientWidth || 0) - W) > 2) draw(); if (basemap) basemap.refit(); });
     ro.observe(lanes); if (basemap && planBox) ro.observe(planBox);
     function setRoadFeel(series) { feel = series; draw(); }
-    return { move, setRoadFeel, restyleMap() { if (basemap) basemap.restyle(); }, recenterMap() { if (basemap) basemap.recenter(); }, destroy() { ro.disconnect(); if (basemap) basemap.destroy(); }, summary: S };
+    // the corners this drive is your cleanest pass of on this road (driver_profile.js roadRecords, from the drive job)
+    // rows: [{ apex, note, by }] (driver_profile.js roadRecords rows with their words), or bare apexes this pass is cleanest
+    // at; open(by) makes the note a link to the drive that holds the corner
+    function markRecords(rows, open) {
+      const at = new Map((rows || []).map((x) => (typeof x === 'object' && x ? [x.apex, x] : [x, { apex: x, by: null, note: 'Your cleanest pass here' }])));
+      grid2.querySelectorAll('.dv-corner').forEach((r, k) => {
+        const x = at.get(d.corners[k] && d.corners[k].apex), old = r.querySelector('.dv-rec');
+        if (old) old.remove();
+        r.classList.toggle('rec', !!x && (x.by === null || x.by === undefined));
+        if (!x || !x.note) return;
+        if (x.by !== null && x.by !== undefined && open) {
+          const a = el('button', 'dv-rec dv-rec-by'); a.textContent = x.note; a.type = 'button'; a.addEventListener('click', () => open(x.by)); r.append(a);
+        } else { const t = el('span', 'dv-rec'); t.textContent = x.note; r.append(t); }
+      });
+    }
+    return { move, setRoadFeel, markRecords, restyleMap() { if (basemap) basemap.restyle(); }, recenterMap() { if (basemap) basemap.recenter(); }, destroy() { ro.disconnect(); if (basemap) basemap.destroy(); }, summary: S };
   }
 
   const api = { mount, summarize, tipText, plainCoach, abruptAdvice, fatigueText, consistencyRows, noteWordsPref, cornerCall };

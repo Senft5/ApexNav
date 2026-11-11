@@ -904,7 +904,7 @@
   function stageCorridor(s, id, o = {}) {
     if (!Ctx || !s || !s.lat || s.lat.length < 2) return null;
     const c = Ctx.corridor(id, s.lat.map((la, i) => [s.lon[i], la]), { departAt: o.departAt, car: o.car });
-    if (c) c.match = 'map_snap';                     // map-tile geometry, not the router's own line: providers snap it
+    if (c) { c.match = 'map_snap'; c.stage = true; }   // map-tile geometry, not the router's own line: providers snap it; a stage may use our relay
     return c;
   }
   /**

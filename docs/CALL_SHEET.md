@@ -14,6 +14,43 @@ it says so. Things only you can do are in docs/OWNER_TODO.md.
 Your rule ("anything but the quick route") covers loops too, so Find a loop no longer falls back to Valhalla's stage loops
 or a circle. Off our road map the card says loops use it and where it reaches. Explore's road list still times roads with
 Valhalla's matrix (it plans no route); say if that should go too. Undo: restore the `stageJobs` calls in `buildLoop`.
+## 2026-11-11 (roam-b walkthrough): a planned loop is fitted again once its card settles; loops never go through our relay (claude/project-thread-sxhrgi)
+
+- When a route or loop comes back, the map frames it above its card. The card was still growing and shrinking for a
+  moment, so the loop ended up in a thin strip at the top. Now, for 4 seconds after that fit, a change in the card's height
+  frames it again, unless you've touched the map. Undo: remove `cardFit` in cockpit.js.
+- Loops were being sent to our Worker's road-attributes relay, which only takes stages (stretches cut from the map, never
+  the driver's own line) and refused them as too long. Only stages go there now, as APP_REVIEW 5.1.2 already says; loops
+  ask the public router from the phone like every route. Undo: drop the `c.stage` test in route_ctx/router_edges.js.
+- "Watch a replay" on the welcome screen now plays the demo drive straight away; it used to open it paused at 0 mph,
+  with Play down in the controls. Undo: remove `replayWhenReady(d)` in cockpit.js watchDryRidge.
+- Tapping Log in the first seconds after install showed a blank screen with no tabs until it loaded. Now the map stays
+  usable with a short "Opening your Log…" and the Log opens when ready (a different tab cancels it). Undo: the
+  `logFrame.want` branch in cockpit.js openLog.
+## 2026-11-11 (recurring meets): a crew drive can repeat weekly, every 2 or every 4 weeks (claude/project-thread-uwmi4e)
+
+Crews that meet every Saturday had to plan the same drive by hand each week. A drive can now repeat (Repeats: Once,
+Weekly, Every 2 weeks, Every 4 weeks). Calls I made: only the newest drive of a series carries the repeat, and the next
+one is planned when that one starts (on read and in the daily sweep), so there is only ever one upcoming drive to
+answer; the planner is marked Going on the new one and nobody else's answers carry over; cancelling it, setting it to
+Once, or the planner leaving the crew ends the series; editing an older drive in a series is refused (409). Add to
+calendar puts the series in once with a weekly rule.
+
+Undo: revert the PR. Migration 0053 only adds two columns to `crew_events`; the old code ignores them.
+## 2026-11-11 (deepest analysis, PR 12): roads are matched by name for the corner-by-corner book (claude/project-thread-gd7nre)
+
+The book takes every drive with the same road name (as the deck's Your roads does) and merges their corners by place and
+heading, so a drive the other way round makes its own corners rather than mixing. Drives named after a different road
+that share part of it are not in it; matching by shape across names is the bigger job and can come later. It lives in the
+Log as a quiet line (REVIEW.md 1.2), not a new tab. Undo: revert the PR.
+
+## 2026-11-11 (deepest analysis, PR 11): a corner's record lives on the drive page's corner rows, not a new page (claude/project-thread-gd7nre)
+
+STATE's next step was "a road page with its corners' records and which drive holds each". I put it on the drive page's
+own corner rows first: each corner driven three or more times says your cleanest pass there and, when another drive
+holds it, links to that drive. That reuses the matching already done for "On this road" and adds no new screen. Ties go
+to the earlier drive. Undo: revert the PR (the rows field is additive).
+
 ## 2026-11-11 (places by name, 2): in a drive, the next fuel stop's stamp says which station (claude/project-thread-me97iw)
 
 While driving a planned route the map keeps only the next fuel stop's stamp; it now reads "FUEL · Shell" instead of FUEL

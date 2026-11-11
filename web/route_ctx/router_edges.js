@@ -38,7 +38,7 @@
     culdesac: 9, living_street: 10, service_road: 11, cycleway: 20, mountain_bike: 21, footway: 25, steps: 26, path: 27, pedestrian: 28, ferry: 41 };
   const SURFACE = { paved_smooth: 0, paved: 1, paved_rough: 2, compacted: 3, dirt: 4, gravel: 5, path: 6, impassable: 7 };
   const MAX_KM = 200;            // the public server's trace limit
-  const RELAY = '/api/ctx/trace', RELAY_POINTS = 600;   // a stage's line through our Worker: at most 600 points (the relay takes 700)
+  const RELAY = '/api/ctx/trace', RELAY_POINTS = 600, RELAY_KM = 40;   // a stage's line through our Worker: at most 600 points, 40 km (backend/src/trace_relay.ts takes 700, MAX_KM)
   const TTL_MS = 30 * 60000;
   const kept = Ctx && Ctx.cache ? Ctx.cache(TTL_MS, 60) : null;
 
@@ -166,8 +166,10 @@
     const key = Ctx.keyOf(c.coords);
     let edges = kept && kept.get(key);
     // a stage (a stretch cut from the map tiles, the same for everyone near it, never the driver's route) through our
-    // Worker's relay (backend/src/trace_relay.ts), kept there per shape: the next plan nearby has its edges at once
-    if (!edges && c.match === 'map_snap' && typeof opts.apiGet === 'function') {
+    // Worker's relay (backend/src/trace_relay.ts), kept there per shape: the next plan nearby has its edges at once. Only a
+    // stage: a loop is snapped too (map_snap) but it is the driver's own line from where they are, so it goes to the public
+    // router as every route does (walkthrough 2026-11-11: each loop's line was sent here and refused as too long)
+    if (!edges && c.stage && c.match === 'map_snap' && (c.totalM || 0) <= RELAY_KM * 1000 && typeof opts.apiGet === 'function') {
       try {
         const j = await Promise.race([opts.apiGet(`${RELAY}?shape=${encodeURIComponent(encode6(thin(c.coords, RELAY_POINTS)))}`),
           new Promise((r) => { if (!opts.signal) return; if (opts.signal.aborted) r(null); else opts.signal.addEventListener('abort', () => r(null), { once: true }); })]);
