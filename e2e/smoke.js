@@ -149,6 +149,32 @@ const GAUGE_CLASH = (root) => `(() => {
   return out;
 })()`;
 // REVIEW5 §2: a setting lives behind the Garage's one gear; open its sheet as a driver does (the Garage open): the gear, then its row
+// Text a driver could read, or a screen reader say, that is a value the code failed to format: in every open page of the flow.
+async function leftovers(page) {
+  const out = [];
+  for (const p of page.context().pages()) {
+    if (p.isClosed()) continue;
+    const found = await p.evaluate(() => {
+      const BAD = /\[object [A-Za-z]+\]|\bundefined\b|\bNaN\b/;
+      const shown = (el) => { for (let n = el; n && n.nodeType === 1; n = n.parentElement) { if (n.hidden || n.getAttribute('aria-hidden') === 'true') return false; }
+        const cs = getComputedStyle(el); return cs.visibility !== 'hidden' && cs.display !== 'none' && el.getClientRects().length > 0; };
+      const hits = [], where = (el) => el.tagName.toLowerCase() + (el.id ? '#' + el.id : '') + (el.className && typeof el.className === 'string' ? '.' + el.className.trim().split(/\s+/).join('.') : '');
+      const walk = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
+      for (let t = walk.nextNode(); t; t = walk.nextNode()) {
+        const el = t.parentElement;
+        if (!el || /^(SCRIPT|STYLE|TEMPLATE|NOSCRIPT)$/.test(el.tagName) || !BAD.test(t.nodeValue) || !shown(el)) continue;
+        hits.push(`${where(el)}: "${t.nodeValue.trim().slice(0, 80)}"`);
+      }
+      for (const el of document.querySelectorAll('[aria-label], [placeholder], [title], [alt]')) {
+        for (const a of ['aria-label', 'placeholder', 'title', 'alt']) { const v = el.getAttribute(a); if (v && BAD.test(v) && shown(el)) hits.push(`${where(el)} ${a}="${v.slice(0, 80)}"`); }
+      }
+      return hits.slice(0, 8);
+    }).catch(() => []);
+    out.push(...found);
+  }
+  return out;
+}
+
 async function openSetting(page, key) {
   await page.click('#garageGear');
   await page.click(`#garageSettings .nav-row[data-setting="${key}"]`);
@@ -1600,6 +1626,40 @@ flow('a reported road closure: routing asks the router to go around it (Worker a
   await page.click('#placeList .place');
   await page.waitForFunction(() => { const t = window.apexDebug.track; return t && t.kind === 'route'; }, null, { timeout: 20000 });
   check(bodies.length && bodies.every((b) => JSON.stringify(b.exclude_locations) === JSON.stringify([{ lat: 35.86, lon: -83.95 }])), 'every route request goes around the closure, and only the closure: ' + JSON.stringify(bodies.map((b) => b.exclude_locations)));
+}, { geolocation: { latitude: 35.9606, longitude: -83.9207 }, permissions: ['geolocation'] });
+
+flow('avoid police reports: with the chip on, live police reports near the trip go to the router as exclusions and the card says it went round (Worker and router stubbed, IDEAS R-35)', async (page, base) => {
+  const bodies = [];
+  await page.route('https://photon.komoot.io/**', (route) => route.fulfill({ contentType: 'application/json', body: JSON.stringify({ features: [
+    { geometry: { coordinates: [-83.9700, 35.7565] }, properties: { name: 'Maryville', state: 'Tennessee' } }] }) }));
+  await page.route('https://valhalla1.openstreetmap.de/route', (route) => {
+    const req = JSON.parse(route.request().postData() || '{}'); bodies.push(req);
+    route.fulfill({ contentType: 'application/json', body: JSON.stringify(stubTrip(req.locations)) });
+  });
+  const soon = new Date(Date.now() + 40 * 60000).toISOString(), gone = new Date(Date.now() - 60000).toISOString();
+  await page.route(base + '/api/**', (route) => {
+    const u = new URL(route.request().url());
+    // a slow Worker (1.5 s): the plan never waits more than 0.2 s for it, and the router's requests still go round
+    if (u.pathname === '/api/hazards') return new Promise((r) => setTimeout(r, 1500)).then(() => route.fulfill({ contentType: 'application/json', body: JSON.stringify([
+      { id: 'p1', kind: 'police', lat: 35.86, lon: -83.90, heading: null, confirms: 1, clears: 0, expires_at: soon, m: 0 },
+      { id: 'p2', kind: 'police', lat: 35.80, lon: -83.91, heading: null, confirms: 0, clears: 3, expires_at: soon, m: 0 },
+      { id: 'p3', kind: 'police', lat: 35.83, lon: -83.89, heading: null, confirms: 0, clears: 0, expires_at: gone, m: 0 }]) })).catch(() => {});
+    return route.fulfill({ status: 200, contentType: 'application/json', body: '[]' });
+  });
+  await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); localStorage.setItem('apex.signedIn', '1'); localStorage.setItem('apex.avoid', JSON.stringify({ police: true })); } catch (_) {} });
+  await page.goto(base + '/index.html');
+  await page.waitForFunction(() => window.apexDebug && window.apexDebug.map);
+  check(await page.evaluate(() => document.querySelector('[data-avoid="police"]').getAttribute('aria-pressed')) === 'true', 'the Police reports chip shows it is on');
+  await page.click('#destInput'); await page.fill('#destInput', 'Maryville');
+  await page.waitForSelector('#placeList .place', { timeout: 10000 });
+  await page.click('#placeList .place');
+  await page.waitForFunction(() => { const t = window.apexDebug.track; return t && t.kind === 'route'; }, null, { timeout: 20000 });
+  check(bodies.length && bodies.every((b) => JSON.stringify(b.exclude_locations) === JSON.stringify([{ lat: 35.86, lon: -83.90 }])),
+    'every route request goes around the live report, not the cleared or the expired one: ' + JSON.stringify(bodies.map((b) => b.exclude_locations)));
+  await page.waitForFunction(() => /Around a police report/.test(document.getElementById('routeCardSub').textContent), null, { timeout: 10000 });
+  check(!/checkpoint/i.test(await page.textContent('#planPanel')), 'no checkpoint anywhere');
+  const waited = await page.evaluate(() => apexDebug.policeWaitMs);
+  check(Number.isFinite(waited) && waited <= 260, 'the route card\'s budget holds: the plan waited ' + waited + ' ms for the police reports');
 }, { geolocation: { latitude: 35.9606, longitude: -83.9207 }, permissions: ['geolocation'] });
 
 // IN-1 / GR-2 (panel round 2): the pages that carry the drive follow the phone's text size, and hold a floor.
@@ -3952,6 +4012,77 @@ flow('flyby: a friend on the same stage that day shows on the drive, as text; ch
   check(/^Your week: \d+(\.\d)? mi in 1 drive · 1 new road/.test(await page.textContent('#weekSum')), 'your week: ' + await page.textContent('#weekSum'));
 });
 
+// A recorded drive as its CSV, for Your driving: 36 corners, with a fault planted in the right-handers
+const PROFILE_CSV = `(fault, seed) => {
+  // a road of 36 corners 300 m apart, alternating left and right, radius 35 / 60 / 110 m: brake once, slowest at the middle, drive out.
+  // fault 'saw': two steering corrections in every right-hander; 'coast': 50 m of coasting after the slowest point in rights
+  const G = 9.80665, rows = [], R = [35, 60, 110], VC = [10.5, 13.5, 17.5];
+  let lat = 38.72 + seed * 0.02, lon = -84.6, hd = 0.3, dist = 0;
+  const pts = [];
+  for (let c = 0; c < 36; c++) {
+    const left = c % 2 === 0, r = R[c % 3], vc = VC[c % 3], arc = Math.round((Math.PI / 2) * r / 5);
+    for (let i = 0; i < 60; i++) pts.push({ k: 0, c: -1 });
+    for (let i = 0; i < arc; i++) pts.push({ k: (left ? 1 : -1) / r, c, i, arc, vc, right: !left });
+  }
+  for (let i = 0; i < 40; i++) pts.push({ k: 0, c: -1 });
+  const n = pts.length, v = new Array(n).fill(21);
+  for (let i = 0; i < n; i++) if (pts[i].c >= 0 && pts[i].i === 0) {
+    const p = pts[i], mid = i + Math.floor(p.arc / 2), hold = fault === 'coast' && p.right ? 10 : 0;
+    for (let q = 0; q <= 12; q++) v[mid - 2 - 12 + q] = 21 + (p.vc - 21) * q / 12;
+    for (let q = mid - 2; q <= mid + hold; q++) v[q] = p.vc;
+    for (let q = 0; q < 14; q++) v[mid + hold + q] = Math.min(21, p.vc + (21 - p.vc) * q / 13);
+  }
+  for (let i = 0; i < n; i++) {
+    const p = pts[i];
+    hd += p.k * 5; dist = i * 5;
+    lat += 5 * Math.cos(hd) / 110540; lon += 5 * Math.sin(-hd) / (111320 * Math.cos(lat * Math.PI / 180));
+    let latG = v[i] * v[i] * p.k / G;
+    if (p.c >= 0) {
+      const edge = Math.min(1, (p.i + 1) / 4, (p.arc - p.i) / 4); latG *= edge;
+      if (fault === 'saw' && p.right && (p.i === 5 || p.i === 6 || p.i === 9 || p.i === 10)) latG *= 0.5;
+    }
+    const lonG = i + 1 < n ? (v[i + 1] - v[i]) * v[i] / 5 / G : 0;
+    rows.push([i, dist, lat.toFixed(7), lon.toFixed(7), 250, (v[i] * 2.2369362921).toFixed(3), lonG.toFixed(4), latG.toFixed(4)].join(','));
+  }
+  return 'segment_index,distance_m,lat,lon,elevation_m,speed_mph,lon_g,lat_g\\n' + rows.join('\\n') + '\\n';
+}`;
+
+flow('Your driving: the profile over every drive opens from the Log, names the weak side, and is kept between visits (driver_profile.js)', async (page, base) => {
+  await page.goto(base + '/analysis.html');
+  await page.waitForFunction(() => window.apexLogDebug && window.apexLogDebug.loaded() && window.ApexRecording);
+  check(await page.evaluate(() => document.getElementById('drivingCard').hidden), 'no drives: no card');
+  await page.evaluate(async (src) => {
+    const gen = eval(src); let k = 0;
+    for (const [id, name, date, fault] of [['p1', 'Dry Ridge Rd', '2026-08-12T09:00', 'saw'], ['p2', 'Dry Ridge Rd', '2026-09-14T09:00', 'saw'], ['p3', 'Pebble Ridge', '2026-10-03T09:00', 'saw']])
+      await ApexRecording.store(ApexRecording.parse(ApexCore, gen(fault, k++), id + '.csv', { id, name, date, source: 'web-gps' }));
+  }, PROFILE_CSV);
+  await page.goto(base + '/analysis.html');
+  await page.waitForSelector('#drivingOpen', { timeout: 20000 });
+  const card = await page.textContent('#drivingOpen span');
+  check(/Work on: One steering arc \d+/.test(card) && /Strongest: /.test(card), 'the card says the strongest and the one to work on: ' + card);
+  await page.click('#drivingOpen');
+  await page.waitForSelector('#drivingRoot .dp-st');
+  const text = await page.evaluate(() => document.getElementById('drivingRoot').innerText);
+  check(/From 108 clean corners on 3 drives/.test(text), 'what it is read from: ' + text.slice(0, 120));
+  check(/One steering arc is weaker through rights: \d+ against 100 through lefts, on 3 of 3 drives\./.test(text), 'the weak side is named: ' + text);
+  check(/Work on: One steering arc\s+It shows most through rights\./.test(text), 'the focus says where');
+  check(await page.evaluate(() => document.querySelector('.dp-st.weak').dataset.skill === 'arc' && document.querySelectorAll('.dp-st').length === 6), 'six stations, the weak one marked');
+  check(!/mph|km\/h|\d s\b/.test(text), 'never a speed or a time');
+  check(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth), 'nothing wider than the phone');
+  // each drive's observations were kept: a second visit reads no drive again, and a deleted drive's are dropped
+  const again = await page.evaluate(() => ApexAnalysis.job('profile'));
+  check(again.read === 0 && again.profile.corners === 108, 'kept between visits: read ' + again.read);
+  const after = await page.evaluate(async () => { await ApexRecording.remove('p3'); return ApexAnalysis.job('profile'); });
+  check(after.profile.drives === 2 && after.profile.corners === 72, 'a deleted drive is gone from it');
+  const kept = await page.evaluate(() => new Promise((ok) => { const q = indexedDB.open('vetta-profile'); q.onsuccess = () => { const g = q.result.transaction('obs').objectStore('obs').getAllKeys(); g.onsuccess = () => ok(g.result); }; }));
+  check(kept.join() === 'p1,p2', 'its kept observations too: ' + kept);
+  // straight to the page by its address, and back to the Log
+  await page.goto(base + '/analysis.html?tab=driving');
+  await page.waitForSelector('#drivingRoot .dp-st');
+  await page.click('#tab-driving a.back');
+  check(await page.evaluate(() => !document.getElementById('tab-history').hidden && document.getElementById('tab-driving').hidden), 'back to the Log');
+});
+
 flow('feedback: Settings sends what you typed with the diagnostics, never a place (Worker stubbed, IDEAS L-05)', async (page, base) => {
   await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); } catch (_) {} });
   let sent = null;
@@ -5516,6 +5647,21 @@ flow('the drive page\'s map: when the map can draw it sits under the path, fitte
   check(Math.abs(z.again[0] - z.before[0]) < 1 && Math.abs(z.again[1] - z.before[1]) < 1 && /^matrix\(1 0 0 1 /.test(z.back || 'matrix(1 0 0 1 '), 'and the picture is back where it was: ' + JSON.stringify([z.before, z.again, z.back]));
 });
 
+flow('leftovers: the check every flow ends with sees "[object Object]", "undefined" and "NaN" in text and in a spoken label, and not in what is hidden', async (page, base) => {
+  await page.goto(base + '/analysis.html');
+  await page.waitForSelector('[data-seg="segments"]');
+  check((await leftovers(page)).length === 0, 'a clean page has none: ' + JSON.stringify(await leftovers(page)));
+  await page.evaluate(() => {
+    const add = (html) => { const d = document.createElement('div'); d.className = 'lo-test'; d.innerHTML = html; document.body.append(d); };
+    add('<p>descending [object Object]</p>'); add('<p>Best undefined mph</p>'); add('<p>NaN mi</p>');
+    add('<button aria-label="Remove undefined">×</button>');
+    add('<p hidden>undefined</p>'); add('<p style="display:none">NaN</p>'); add('<p>Undefined roads are fine, and so is a Nanny</p>');
+  });
+  const found = await leftovers(page);
+  check(found.length === 4 && found.some((f) => f.includes('[object Object]')) && found.some((f) => f.includes('aria-label="Remove undefined"')), 'four seen, the hidden and the innocent left alone: ' + JSON.stringify(found));
+  await page.evaluate(() => document.querySelectorAll('.lo-test').forEach((d) => d.remove()));
+});
+
 flow('the Log page opens', async (page, base) => {
   await page.goto(base + '/analysis.html');
   await page.waitForLoadState('load');
@@ -7040,6 +7186,10 @@ flow('TestFlight 2026-11-05 note 6: the idle map\'s deck is the suggestion and o
     try {
       await fn(page, base);
       await page.waitForTimeout(300);   // let late async errors surface
+      // 2026-11-10: nothing a driver can read is the code's leftovers. Whatever screen a flow ends on, no text in view (or
+      // spoken label) says "[object Object]", "undefined" or "NaN" (About a road read "descending [object Object]").
+      const raw = await leftovers(page);
+      check(!raw.length, `the code's own leftovers on screen:\n  ${raw.join('\n  ')}`);
       check(!errors.length, `page errors or missing files:\n  ${errors.join('\n  ')}`);
       console.log(`ok   ${name} (${Date.now() - t0} ms)`);
     } catch (e) {
