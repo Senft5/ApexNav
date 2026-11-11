@@ -5453,6 +5453,24 @@ flow('road page: About a road shows its archetype, axes and how sure it is (IDEA
   check(!(await page.isVisible('aside.side-pop.open[aria-label="About this road"]')), 'closes');
 });
 
+flow('import: a drive from a file is named after the road that carried it (IDEAS U-04)', async (page, base) => {
+  await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); } catch (_) {} });
+  await page.goto(base + '/index.html');
+  await page.waitForFunction(() => window.apexDebug && window.ApexStages && window.ApexRoadNames);
+  // the map's named road lines along it, as the tiles would give them
+  await page.evaluate(() => { ApexStages.namesAlong = async () => [{ properties: { name: 'Dry Ridge Road' }, geometry: { type: 'MultiLineString', coordinates: [[[-84.75, 39.24], [-84.68, 39.24]]] } }]; });
+  const kx = 111320 * Math.cos(39.24 * Math.PI / 180);
+  const csv = (n) => ['t,lat,lon,speed_mph,lon_g,lat_g', ...Array.from({ length: n }, (_, i) => `${i * 0.25},39.2401,${(-84.74 + i * 5 / kx).toFixed(7)},45,0,0`)].join('\n');
+  await page.setInputFiles('#importFile', { name: 'web_20261027_080000.csv', mimeType: 'text/csv', buffer: Buffer.from(csv(600)) });
+  await page.waitForFunction(() => /is in your Log/.test(document.getElementById('toast').textContent), null, { timeout: 15000 });
+  const said = await page.textContent('#toast');
+  check(/^Dry Ridge Road is in your Log/.test(said.trim()), 'named after its road, not the file: ' + said);
+  // no tiles: it keeps the date name
+  await page.evaluate(() => { ApexStages.namesAlong = async () => []; });
+  await page.setInputFiles('#importFile', { name: 'web_20261028_090000.csv', mimeType: 'text/csv', buffer: Buffer.from(csv(600)) });
+  await page.waitForFunction(() => /^\s*Drive 10\/28\/2026 9:00 AM is in your Log/.test(document.getElementById('toast').textContent), null, { timeout: 15000 });
+});
+
 flow('track day: on a mapped raceway, Start/finish here times laps (IDEAS D-15)', async (page, base) => {
   await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); } catch (_) {}
     window.webkit = { messageHandlers: { apex: { postMessage() {} } } };   // the iOS shell's bridge, faked: frames come from window.apex.live
