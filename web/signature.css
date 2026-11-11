@@ -158,3 +158,33 @@
 .log-page .hero-score b { animation: vl-ink 0.6s var(--arrive) both; }
 .log-page .dv-head .score.big { animation: vl-ink 0.6s var(--arrive) both; }
 @media (prefers-reduced-motion: reduce) { .log-page .hero-score b, .log-page .dv-head .score.big { animation: none; } }
+
+/* ================= the Garage (index.html, the sheet's garage view): you, your cars and the looks as paper =================
+   It kept the boxed look: a 22 px title beside a gear in an ink box with a drop edge, each car in an ink frame with its keys
+   stacked in outlines, each look framed in 1.5 px ink. Now the title is a masthead, the gear is a key laid on the page, a car
+   is a card of paper with its name set large and its keys as wells, and the look in use is the one card ringed in ink. */
+.sheet header { border-bottom-color: var(--hair); }
+.sheet[data-view="garage"] #sheetTitle { font: 800 30px/1 var(--font-num); letter-spacing: 0.005em; }
+.gear-key { border: 0; background: var(--face, var(--panel)); box-shadow: var(--lift-1); transition: transform 0.12s; }
+.gear-key:active { box-shadow: 0 0 0 1px var(--hair); transform: translateY(1px); }
+
+.garage-cards .car-card { border: 0; background: var(--face, var(--panel)); box-shadow: var(--lift-0); padding: 14px; gap: 6px; }
+.garage-cards .car-card .car-cover { width: calc(100% + 28px); margin: -14px -14px 8px; }
+.garage-cards .car-card .car-title b { font: 700 22px/1.1 var(--font-num); letter-spacing: 0.005em; }
+.garage-cards .car-card .car-title .note { display: inline-flex; align-items: center; gap: 6px; font-size: 14px; font-weight: 600; }
+.garage-cards .car-card .car-title .note::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: var(--accent); }   /* the daily car: the apex dot, the one you drive now */
+.garage-cards .car-card :is(.ink-btn, label.ink-btn):not(.solid) { border-color: transparent; background: var(--well); }
+.garage-cards .car-card .car-gallery img { border-color: var(--hair); }
+.garage-cards { gap: 10px; }   /* .garage-cards before .car-card: garage_ui.js adds its own rules after this file */
+
+.theme-card { border: 0; background: var(--face, var(--panel)); box-shadow: var(--lift-0); overflow: hidden; }
+.theme-card.in-use { border-width: 0; box-shadow: 0 0 0 2px var(--panel-ink), var(--lift-1); }
+.theme-cards, html:not([data-type-size]) .theme-cards { padding-top: 4px; padding-bottom: 8px; }   /* the in-use ring and the lift are not clipped by the shelf */
+
+/* ================= People: the same head as the Log, cards as paper ================= */
+.people-tabs > button { font: 800 26px var(--font-num); letter-spacing: 0.005em; }
+.people-tabs > button::after { transform-origin: left; transition: transform 0.22s var(--arrive); }
+.sheet .card:not(.sample-crew) { border: 0; background: var(--face, var(--panel)); box-shadow: var(--lift-0); }
+/* a friend's request is the one thing to answer on the page: paper, marked with the apex dot */
+.sheet .request-card { padding: 14px; }
+.sheet .request-card p b::before { content: ""; display: inline-block; width: 7px; height: 7px; margin: 0 7px 2px 0; border-radius: 50%; background: var(--accent); }
