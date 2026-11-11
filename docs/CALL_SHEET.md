@@ -4,6 +4,13 @@ Decisions Claude made for you, newest first. Each one says what was decided, why
 you reach one you've seen. If you disagree with a call, say so and it gets reversed; nothing here is hard to undo unless
 it says so. Things only you can do are in docs/OWNER_TODO.md.
 
+## 2026-11-11 (Valhalla for Quick only): Fun and Long way fail plainly instead of falling back (claude/project-thread-39xbx9)
+
+Your rule: Valhalla only for Quick. Fun and Long way now come from our own router or not at all. Where our road map doesn't
+reach (it covers Ohio, Kentucky and Indiana so far), or it can't be loaded, the plan says which, with a **Use Quick** key,
+instead of a Valhalla route. Calls I made: the map's index gets 8 s (not 1.5 s) at Fun, since there is no stand-in to fall
+back on; spoken turn directions on our route still come from Valhalla's trace_route (it routes nothing, it reads our line);
+loops still use Valhalla off our map until the next PR. Undo: `const ownOnly = false` in cockpit.js `funRoute`.
 ## 2026-11-11 (places by name): cafés and fuel along the route, tap for their names (claude/project-thread-me97iw)
 
 The route card's "Along" line ("1 viewpoint · 2 cafés · 3 fuel stops") now opens a list of each place by the name
