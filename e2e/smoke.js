@@ -3388,6 +3388,7 @@ flow('convoy: the leader shows a QR code of the link (Worker stubbed, IDEAS S-22
     if (u.pathname === '/api/me') return json({ signed_in: true, member: true, handle: 'me' });
     if (u.pathname === '/api/convoy' && m === 'POST') return json({ invite: `${id}.${'s'.repeat(32)}`, context: ctx }, 201);
     if (u.pathname === `/api/convoy/${id}/ticket`) return json({ ticket: 't'.repeat(32), expiresAtMs: Date.now() + 60000 }, 201);
+    if (u.pathname === `/api/convoy/${id}/code` && m === 'POST') return json({ code: 'K7P4QX', expiresAtMs: Date.now() + 15 * 60000 }, 201);
     if (u.pathname === `/api/convoy/${id}`) return json(ctx);
     if (m === 'GET') return json([]);
     return json({}, 404);
@@ -3404,6 +3405,43 @@ flow('convoy: the leader shows a QR code of the link (Worker stubbed, IDEAS S-22
   const dark = await page.evaluate(() => { const c = document.querySelector('canvas.cv-qr'), d = c.getContext('2d').getImageData(0, 0, c.width, c.height).data;
     let n = 0; for (let i = 0; i < d.length; i += 4) if (d[i] < 128) n++; return n / (d.length / 4); });
   check(dark > 0.2 && dark < 0.6, `a QR code is drawn (${(dark * 100).toFixed(0)} % dark)`);
+  // and the code to read out, for a friend whose camera can't see the screen
+  await page.waitForFunction(() => { const c = document.querySelector('.convoy-sheet .cv-code'); return c && !c.hidden; }, null, { timeout: 5000 });
+  check((await page.textContent('.convoy-sheet .cv-code')) === 'Or join code K7P 4QX', 'the join code under the QR: ' + await page.textContent('.convoy-sheet .cv-code'));
+});
+
+flow('convoy: a friend joins with the code the leader read out (Worker stubbed, IDEAS S-22)', async (page, base) => {
+  await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); } catch (_) {} });
+  const id = 'CCCCCCCCCCCCCCCCCCCCCC', until = Date.now() + 60 * 60000;
+  const ctx = { sessionId: id, name: 'Car park', role: 'member', you: 'k2', leaderKey: 'k1', expiresAtMs: until, seq: 0, leaderEpoch: 1,
+                members: [{ key: 'k1', handle: 'lead', role: 'leader', online: true }, { key: 'k2', handle: 'me', role: 'member', online: true }] };
+  const sent = [];
+  await page.route('**/api/**', (route) => {
+    const u = new URL(route.request().url()), m = route.request().method();
+    const json = (b, status = 200) => route.fulfill({ status, contentType: 'application/json', body: JSON.stringify(b) });
+    if (u.pathname === '/api/me') return json({ signed_in: true, member: true, handle: 'me' });
+    if (u.pathname === '/api/convoy/code/join' && m === 'POST') {
+      const b = JSON.parse(route.request().postData()); sent.push(b);
+      return b.code.replace(/[\s-]/g, '').toUpperCase() === 'K7P4QX' && b.consent === true ? json(ctx) : json({ error: 'invalid_invite' }, 400);
+    }
+    if (u.pathname === `/api/convoy/${id}/ticket`) return json({ ticket: 't'.repeat(32), expiresAtMs: Date.now() + 60000 }, 201);
+    if (u.pathname === `/api/convoy/${id}`) return json(ctx);
+    if (m === 'GET') return json([]);
+    return json({}, 404);
+  });
+  await page.goto(base + '/index.html');
+  await page.waitForFunction(() => window.apex && typeof window.apex.live === 'function');
+  await page.click('#startMore');
+  await page.waitForSelector('.start-sheet .rec-key');
+  await page.click('.start-sheet button:has-text("Join with a code")');
+  await page.waitForSelector('.convoy-sheet input[aria-label="Convoy join code"]');
+  await page.fill('.convoy-sheet input[aria-label="Convoy join code"]', 'k7p 4qz');
+  await page.click('.convoy-sheet button:has-text("Join with code")');
+  await page.waitForFunction(() => /didn.t work/.test(document.getElementById('toast').textContent), null, { timeout: 5000 });
+  await page.fill('.convoy-sheet input[aria-label="Convoy join code"]', 'k7p 4qx');
+  await page.click('.convoy-sheet button:has-text("Join with code")');
+  await page.waitForFunction(() => /you are following/.test(document.querySelector('.convoy-sheet').textContent), null, { timeout: 5000 });
+  check(sent.length === 2 && sent.every((b) => b.consent === true), 'joined with consent: ' + JSON.stringify(sent));
 });
 
 // @fish5spd, 2026-11-03 ("Shits in my way when I lead"): leading a convoy on a drive, a card over the road just ahead of the
