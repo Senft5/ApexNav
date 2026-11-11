@@ -2430,7 +2430,7 @@ flow('crew page: an old ?view=crew link opens People on Crews, at your crew; goi
   check(!('stripe2' in JSON.parse(liv.b)) && !('pattern' in JSON.parse(liv.b)), 'a Plain crew sends nothing past the Plain livery');
   // fair meeting points (crew_meet.js): your rough area is off until you switch it on, and nothing was sent about it
   check(await page.getAttribute('.cp-meet [data-crew-home]', 'aria-checked') === 'false' && !find('/api/crews/k1/home'), 'Share my rough area is off by default');
-  check(/Plain livery/.test(await page.textContent('.cp-livery-line')) && /Decals come from crew-mates with Vetta Pro/.test(await page.textContent('.cp-livery-line')), 'the livery line says Plain and where Decals come from');
+  check((await page.textContent('.cp-livery-line')).trim() === 'Plain livery', 'the livery line says Plain and nothing it lacks (the owner, 2026-11-10: no Pro nudge on the crew page)');
 });
 
 flow('build threads: start one from a car, add a step, a friend suggests and it shows on a red rule (Worker stubbed, REVIEW.md roadmap 23)', async (page, base) => {
@@ -4649,7 +4649,7 @@ flow('dev mode: a developer opens the Dev panel from the Garage, changes a const
   } finally { graphDir = null; }
 }, { geolocation: { latitude: 39.155, longitude: -84.615 }, permissions: ['geolocation'] });
 
-// Tune your routes (the owner, 2026-11-09: "every parameter with a slider for premium users"; Pro is open to everyone
+// Tune your routes (the owner, 2026-11-09; free for everyone since 2026-11-10, Pro is looks only; it was Pro, open to everyone
 // until it goes on sale): Garage → Settings → Route tuning, plain sliders over the routing's numbers (web/route_tuning.js).
 // Fun's extra time up re-plans the trip on screen to a longer way, the card says "Your tuning", Reset brings the route back.
 flow('route tuning: Fun\'s extra time slider re-plans a longer Fun route, the card says so, Reset brings it back (the owner 2026-11-09)', async (page, base) => {
@@ -4704,7 +4704,7 @@ flow('route tuning: Fun\'s extra time slider re-plans a longer Fun route, the ca
     check(await page.evaluate(() => ApexFunRoute.LEVELS.fun.budget === 0.35 && ApexRouteEngine.W.FUN === 1), 'the code\'s numbers back on the page');
   } finally { graphDir = null; }
 }, { geolocation: { latitude: 39.155, longitude: -84.615 }, permissions: ['geolocation'] });
-flow('route tuning: once Pro is on sale, the screen asks for Pro and settings left on this phone change no plan (the owner 2026-11-09)', async (page, base) => {
+flow('route tuning: once Pro is on sale it is still free: no Pro line, the sliders work, the settings on this phone plan the route (the owner 2026-11-10: Pro is looks only)', async (page, base) => {
   graphDir = graphFixture();
   try {
     // the server's flags as the phone keeps them (flags.js): Pro on sale; no entitlement on this phone
@@ -4715,8 +4715,8 @@ flow('route tuning: once Pro is on sale, the screen asks for Pro and settings le
       locked: !document.getElementById('tuneLock').hidden, lock: document.getElementById('tuneLock').textContent, disabled: document.querySelector('#garageTuneBody input[data-tune="funTime"]').disabled,
       kept: JSON.parse(localStorage.getItem('apex.routeTuning')).values.funTime }));
     check(x.onSale === true, 'Pro on sale: ' + JSON.stringify(x));
-    check(!x.chip && x.budget === 0.35 && x.fun === 1, 'on sale without Pro: the defaults plan it: ' + JSON.stringify(x));
-    check(x.locked && /comes with Vetta Pro/.test(x.lock) && x.disabled && x.kept === 100, 'the screen says Pro, the sliders are off, the settings kept: ' + JSON.stringify(x));
+    check(x.chip && (x.budget !== 0.35 || x.fun !== 1), 'on sale without Pro: your settings plan it, and the card says so: ' + JSON.stringify(x));
+    check(!x.locked && !/Vetta Pro/.test(x.lock) && !x.disabled && x.kept === 100, 'no Pro line, the sliders on, the settings kept: ' + JSON.stringify(x));
   } finally { graphDir = null; }
 }, { geolocation: { latitude: 39.155, longitude: -84.615 }, permissions: ['geolocation'] });
 

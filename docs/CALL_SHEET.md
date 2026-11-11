@@ -4,6 +4,19 @@ Decisions Claude made for you, newest first. Each one says what was decided, why
 you reach one you've seen. If you disagree with a call, say so and it gets reversed; nothing here is hard to undo unless
 it says so. Things only you can do are in docs/OWNER_TODO.md.
 
+## 2026-11-10 (fable-pro-looks): Pro is looks only; one Pro crew-mate dresses the whole crew (claude/fable-pro-looks)
+
+Your answer to the red team (PH-06, BR-06, UX-06): Pro is themes and liveries, nothing else. Route tuning, which went
+Pro on 2026-11-09, is free for everyone, with or without Pro and after Pro goes on sale (web/pro.js has two kinds now,
+theme and livery; tests/test_pro.py fails if a third appears). A crew's livery used to climb Plain, Club (5 Decals), Works
+(12), Factory (20) as Pro crew-mates added up, with a meter in Edit livery and "Decals come from crew-mates with Vetta
+Pro" on every crew page. Now any one crew-mate with Pro opens the whole livery for everyone (backend/src/livery.ts); the
+meter is gone; a Plain crew's page says "Plain livery" and nothing it lacks, and a dressed one says who dressed it
+("Factory livery · dressed by @bob"). A crew loses nothing it set when the Pro member leaves: it falls back to Plain
+and comes back with the next one, as before.
+
+Undo: revert the PR (tiers come back as they were; nothing in the database changed).
+
 ## 2026-11-10 (fable-road-page): About a road says its climb, and speaks in words (claude/fable-road-page)
 
 A bug first: on any road with 40 m or more of climb, the sheet's first line read "Switchbacks · 0.8 mi · descending
