@@ -11,6 +11,15 @@ signed-out one: a drawing (your road drawn, a friend's road or three crew seats 
 "Start a crew." set large, one sentence, and the Invite key full width. The example card stays under it. Undo: the two
 `people-first` blocks in web/cockpit.js and the "first friend" block at the end of web/signature.css.
 
+## 2026-11-11 (roam-c presence-private-crews): "Your crews see where you are" means private crews only (claude/roam-c-presence-private-crews)
+
+Found in the security pass. Anyone can join a public crew with one tap, and Friends on the map set to Crew showed your
+position to every member of every crew you were in, public ones included. So a stranger could join a big public crew and see
+where its members were (within a mile and 10 minutes late by default, but exact and live if they chose that). Now Crew means
+your private crews only, as cars already did. The sheet, Who sees what and the privacy page say "private crews". Nothing
+stored changes. Undo: revert the PR (public crews' members see your position again).
+
+
 ## 2026-11-11 (ui-round-two): the blank band at the top of the map, signed-out 401s, a crew's name and the Share box (claude/project-thread-5sbga7)
 
 The blank paper band at the top of the idle map (as tall as the deck under it) was not missing tiles: the map draws all

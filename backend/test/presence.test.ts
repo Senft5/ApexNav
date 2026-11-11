@@ -69,6 +69,18 @@ describe("friends on the map", () => {
     expect(await count()).toBe(1);
   });
 
+  it("crew means private crews: a stranger who joins a public crew you're in doesn't see where you are", async () => {
+    const [a, b, s] = [await makeUser("rio"), await makeUser("mate"), await makeUser("stranger")];
+    const crew = (await json(api(a, "POST", "/api/crews", { name: "Coffee & Cars", visibility: "public", area: { name: "Knoxville", lat: 35.96, lon: -83.92 } }))).id;
+    await ok(api(s, "POST", `/api/crews/${crew}/join`));
+    const priv = (await json(api(a, "POST", "/api/crews", { name: "Ridge Runners" }))).id;
+    await ok(api(b, "POST", "/api/crews/join", { token: (await json(api(a, "POST", `/api/crews/${priv}/invite`))).token }));
+    await set(a, { audience: "crew", delay_s: 0, fuzz: true });
+    await pub(a, 35.36123, -84.29011);
+    expect(await json(api(s, "GET", "/api/presence"))).toEqual([]);
+    expect((await json(api(b, "GET", "/api/presence")))[0]).toMatchObject({ handle: "rio" });
+  });
+
   it("switching to within a mile drops exact samples; turning it off keeps nothing; checks", async () => {
     const [a] = [await makeUser("sam")];
     await set(a, { audience: "friends", delay_s: 0, fuzz: false });
