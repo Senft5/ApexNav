@@ -1,5 +1,16 @@
 # VETTA — CURRENT AGENT HANDOFF STATE
 
+## Session 2026-11-11 (ui-round-two, PR 2): the Garage and People in the Vetta Line (claude/project-thread-5sbga7)
+
+- web/signature.css, new blocks "the Garage" and "People". Sheet header hairline; Garage title a 30 px masthead; `.gear-key`
+  is paper on `--lift-1` (no ink box, no drop edge) everywhere it appears; car cards paper with a 22 px Barlow name, their
+  keys as wells, the daily car marked with the apex dot; theme cards paper, the one in use ringed in ink (`.theme-cards`
+  padding so the shelf doesn't clip it). Car rules are `.garage-cards .car-card` because garage_ui.js appends its CSS later.
+- People: Friends | Crews at 26 px like the Log's head; `.sheet .card` (crew tiles, a friend's request) paper; the request
+  carries the apex dot. The dashed sample crew and the empty bay stay pencil (e2e checks the dashed slot).
+- Tests: tests/test_garage_line.py. e2e Garage, People, crew, friend flows pass here.
+- Next: the crew page and Your data/Settings sub-sheets (ink rules on lists), the route card's Share box.
+
 ## Session 2026-11-11 (ui-round-two, PR 1): the Log in the Vetta Line (claude/project-thread-5sbga7, off origin/main)
 
 - The Log (analysis.html, the frame over the map) now loads web/signature.css after controls.css; its rules are under
