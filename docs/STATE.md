@@ -11,6 +11,14 @@
 - Tests: tests/test_touch_detail.py (4); e2e "Your driving" covers the table, the month line and the drive's words.
 - Next: say when a drive's touch is clearly outside your usual spread (its median beyond the usual quartiles on 8+ corners).
 
+## Session 2026-11-11 (roam-c-crest-contract): crest's units written down; IDEAS Q-08 done (claude/roam-c-crest-contract, off origin/main)
+
+- Checked: ApexNavApp.swift, web/sensors.js and both CSVs carry `crest_vertical_g` in g (negative going light);
+  contributor.js uploads max(0, -min) clamped 0..3, which contribute.ts validates. The schema now describes the field.
+- Looked at and left: D-24 "best corners" needs per-corner smoothness in the drive summaries (the Log reads summaries, not
+  rows; a new summary field rebuilds every drive's summary once), so it is bigger than a roam PR.
+
+
 ## Session 2026-11-11 (sweep round two): time attack wiring and opt-in (claude/project-thread-g9yher, off origin/main 936aec3)
 
 - Bug: analysis.html never loaded time_attack.js or called `ApexTimeAttack.sendRuns`, so no run reached a board. Now after

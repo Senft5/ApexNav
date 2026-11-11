@@ -99,7 +99,8 @@
           "description": "2 when camber_deg comes from the fixed live pipeline (ApexKit IMUPipeline.camberVersion). Rows, frames and uploads without it come from builds that decayed camber to a placeholder 0, and their camber is not shared."
         },
         "crest_vertical_g": {
-          "type": "number"
+          "type": "number",
+          "description": "Low-passed (< 1 Hz) vertical acceleration with gravity removed, in g (the pipeline's m/s^2 over 9.80665): negative when the car goes light over a crest. Uploads send the bin's peak unweighting, max(0, -min), clamped to 0..3 (web/contributor.js); the server keeps that peak (backend/src/contribute.ts)."
         },
         "roughness_rms": {
           "type": "number"
