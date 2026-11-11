@@ -16,7 +16,7 @@
       .sort((a, b) => (b.rating || 0) - (a.rating || 0) || a.km - b.km).slice(0, MAX);
   }
 
-  /** page: el, btn, toast, sync (ApexSync), here() → {lat, lon}|null, goTo({label, lat, lon}), report, fmtKm(km) → "250.6 mi". */
+  /** page: el, btn, toast, sync (ApexSync), here() → {lat, lon}|null, goTo({label, lat, lon}), report, addSpot() (opens where a spot is added), fmtKm(km) → "250.6 mi". */
   const STYLE = `
     .spot-stars { display: inline-flex; align-items: center; }
     .spot-star { width: 36px; height: 44px; padding: 0; border: 0; background: none; font-size: 22px; line-height: 1; color: var(--panel-dim); opacity: 0.45; }
@@ -58,7 +58,8 @@
           if (!s.mine && page.report) acts.append(btn('Report', () => page.report({ kind: 'highlight', target: s.id.replace(/^srv_/, ''), label: s.name, done: load }), 'linkbtn'));
           box.append(acts);
           return box;
-        }) : [el('p', { className: 'note', textContent: page.here() ? 'No shared spots near here yet. Add one in Garage → Settings → Spots.' : 'Waiting for your position.' })]));
+        }) : [page.here() ? el('p', { className: 'note' }, 'No shared spots near here yet. ', page.addSpot ? btn('Add one', () => page.addSpot(), 'linkbtn') : 'Add one in Settings, under Spots.')
+          : el('p', { className: 'note', textContent: 'Waiting for your position.' })]));
       };
       const load = () => {
         const at = page.here();

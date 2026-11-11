@@ -1,5 +1,23 @@
 # VETTA — CURRENT AGENT HANDOFF STATE
 
+## Session 2026-11-10 (fable-pro-looks): Pro looks only (claude/fable-pro-looks, off origin/main)
+
+- web/pro.js: KINDS theme + livery; route_tuning removed; web/route_tuning.js `allowed()` always true.
+- backend/src/livery.ts `liveryOf`: any Decals (one Pro crew-mate) or a grant = factory, else plain; `next` always null.
+  web/crew_page.js: no meter, `dressedBy`, Plain says "Plain livery"; editor locks read "With a crew-mate on Vetta Pro".
+- Tests: tests/test_pro.py, test_crew_page.py, test_route_tuning.py; backend/test/crew_page.test.ts; e2e "crew page" line.
+- Next: camber with how sure it is (red team TE-03).
+
+## Session 2026-11-10 (fable-road-page): About a road: the climb's "[object Object]" fixed; scores as named bars (claude/fable-road-page, off origin/main 3f2f315)
+
+- Bug: `openRoadPage` passed `ApexUnits.short` (returns `{ n, u }`) as the headline's height formatter, so a road with a
+  climb read "descending [object Object]". Now `heightLabel` (feet or metres).
+- `web/road_page.js`: `rows()` is gone; `meters(d)` (Technical, Flow, Surface, Clear road: label, hint, value or null)
+  and `facts(d)` (Corners, Blind corners, How sure in words). `web/cockpit.js` draws `.rp-meter` (name, number, bar,
+  hint) and `.rp-fact` rows; CSS in `web/index.html`.
+- Tests: tests/test_road_page.py (plain words, unknown stays null, the climb formatter); e2e "road page…" (names, the
+  empty bar for an unknown score, bar length = score, the climb in feet with a stubbed terrain profile).
+
 ## Session 2026-11-10 (fable-pin-names): pins and tapped places by name; the spot dialog's stars (claude/fable-pin-names, off origin/main e76f1bb)
 
 - `web/cockpit.js`: `setFieldPin(field, point, name)` / `pinIn` / `fieldPin` beside `resolvePlace(q, field)`: Go here,
@@ -21,10 +39,79 @@
 - Tests: tests/test_route_card.py; e2e "plan flow (c)".
 - Next: CarPlay has not had a design pass in this run (Swift, not visible from the cloud).
 
+## Session 2026-11-10 (fable-sheet-races): two e2e flows clicked a sheet's key while it slid up (claude/fable-sheet-races, off origin/main 948cb4b)
+
+- `e2e/smoke.js` `sheetSettled(page, id)`: a `.overlay.dim` sheet is shown, nothing in it animating, and in the same place
+  two frames running. "a pin has a name" waits for it before the star, then checks the spot dialog is still open;
+  "Location off, in a browser" waits for it after Try again brings the sheet back, before Not now. On CI the star click
+  landed on the backdrop mid-slide and the backdrop closed the dialog (stars 0 px tall); nine PRs were red on it.
+- Found while tracing, not changed here: run alone in this container, "a pin has a name" fails later at Tap the map, on
+  main too, because Playwright's scroll-into-view scrolled `.stage` (overflow: hidden) by ~420 px, which stands the plan
+  sheet over the map. It passed in the whole-suite run and on CI. `overflow: clip` on `.stage` fixes the scroll but the
+  sheet still came up in the isolated run, so I left both out of this PR. Next: find what else holds the sheet up there.
+- Location flow 5 of 5 here (also at THROTTLE=6); pin flow passes the star step every run.
+- 2026-11-11, the real cause (from the reviewer's diagnostic run): the star tap reached the backdrop's click handler.
+  Two faults. (1) `sheetSettled` never waited: its `waitForFunction` predicate was `async`, and a promise is truthy, so
+  it returned at once with the sheet still at the bottom of its slide (measured here: card top 844 of 844, sheet-up at
+  0 ms). It now loops in one `page.evaluate`, which does await, and checks it settled. (2) The app: a press that began
+  on a key and lifted on the backdrop (the sheet moving under it, or a drag) sends the click to the backdrop, their
+  shared parent, and that closed the sheet. `onBackdrop(back, close)` in `web/cockpit.js` closes only when the press
+  began on the backdrop too; the spot, pin, explain, spot-photo and Ways-to-go backdrops use it
+  (`tests/test_backdrop_press.py`). The flow now checks the star is under its own centre before the tap, and that a
+  press on a star lifted on the backdrop leaves the dialog open. Not done: the backdrops in confirm.js, convoy_ui.js,
+  crew_page.js, photos.js, row_select.js and whats_new.js still close on the click target alone.
+## Session 2026-11-11 (fable-rally-sheet): crew drive results sheet (claude/fable-rally-sheet, off origin/main affc1d0)
+
+- `backend/src/events.ts`: `eventRecord` adds `results` from `resultsSheet(runs)` (pure): best `driver_score` per stage
+  (`COALESCE(canon_id, origin_id, id)`) per driver, same pool / window / grant / block rules as `best`; stages by how many
+  drove them, places shared on equal Scores; overall by stages driven, then the rounded mean. User ids stay on the server.
+  Times: `time_s` (min, only while the driver's crew grant has `share_times`) and `gap_s` per stage; overall total when full.
+- `web/crew_events.js`: `results(e, r)` folds under the best Score on a remembered card (`.cp-results`); `resultsText()`
+  (pure, tests/test_crew_results.py) is what Share sends (navigator.share, else the clipboard).
+- Tests: backend events.test.ts (two new), e2e "the run as one card" (it skips before 4 AM local: run it with a TZ where it
+  is daytime, e.g. `TZ=Asia/Tokyo`).
+- Next: a crew's roadbook (a crew-owned Roadbook once #374 merges), or recurring meets.
+
+## Session 2026-11-10 (fable-there-and-back): there and back, home another way (claude/fable-there-and-back, off origin/main 948cb4b)
+
+- `web/graph_router.js` `roundTrip` (worker message `round`, client `round`): ways out paired with ways home that avoid
+  them (K.ROUND_*); `assemble` now keeps `fs`/`ft`. `web/own_routing.js` `roundTrip`.
+- `web/cockpit.js` `planRoundTrip`, `outExclusions`; `#routeRoundBtn` on the card (index.html). docs/ROUTING.md.
+- Tests: test_graph_router.py (roundTrips case), e2e "there and back" (the Valhalla path).
+- Not done: offering the round trip as a level card of its own; a timed stop at the destination (lunch: ETA home).
+- Next: discovery of great unknown roads near a planned trip ("a better road 4 min off your route").
+## Session 2026-11-10 (fable-your-data): Your data as Settings-style rows (claude/fable-your-data, off origin/main 3f2f315)
+
+- `web/index.html` only: the Your data section's keys are `.nav-rows.data-rows` with three `.nav-group` headings; the
+  ids are the same (`myGpxBtn` … `myEraseBtn`), so cockpit.js and the tests reach them as before. `.nav-row.danger`.
+- Cohesion pass notes (Nate 2026-11-10 15:12): compared Options, Best roads nearby, Ways to go, About a road, Settings
+  and its eleven sheets side by side. Left alone: Done (a sheet that sets things) vs Close (a sheet that shows things).
+
 ## Session 2026-11-10 (merger): e2e time limit 35 min (claude/project-thread-er8kzz)
 
 - [x] .github/workflows/core-tests.yml e2e `timeout-minutes` 25 → 35: 152 flows take ~24 min and were cancelled on the
   last flow. Next: split e2e into two jobs if it passes ~30 min.
+
+## Session 2026-11-11 (fable-taste-picks): taste learnt from the routes you choose (claude/fable-taste-picks, off origin/main ac6c6c6)
+
+- Done: `ApexTaste.recordPick` / `leanOf` (taste.js), pairs weighted in `fit`; cockpit `learnFromPick` at Start
+  (Vetta's pick = `levels[builtLevel]`); the toast; the card's "Suits your taste" line. Tests: tests/test_taste.py
+  (picks at half weight), e2e "taste from picks". Full pytest green.
+- Next: a picks-only fit could also tune Quick / Fun / Long way's default level (a driver who always takes Quick).
+
+## Session 2026-11-10 (fable-signature): Vetta Line, the home screen (claude/fable-signature, off origin/main 948cb4b)
+
+- web/signature.css (new, loaded after controls.css): the signature layer (docs/design/SIGNATURE.md). Map keys and the deck
+  lift on soft shadows instead of ink boxes; the place plate is a masthead (place in Barlow 30 px, the sky under it after a
+  red apex dot) on a paper wash down from the top; Where to? is a 52 px well and Just drive the one red key; the deck's
+  invitations (`#loopSuggest`, `#yourRoads` rows, `#driveToday`, `#deckChips`) stand on one sideways shelf `#deckShelf`
+  (new wrapper in index.html, ids unchanged; `display: contents` on a phone on its side, so landscape is as before); the
+  tab bar marks the open tab with the apex dot. Arrival: bar, shelf cards and masthead rise once (none under reduced motion).
+- web/place_plate.js `parts()` (head / rest); cockpit.js fills `#placePlate` as `<b>` + hidden ` · ` + `<span>` (textContent
+  unchanged) and `apexDebug.placePlate()` (e2e). `--plan-bar` starts at 76 px (the bar's new height).
+- Tests: tests/test_place_plate.py (+1); e2e "Vetta Line home"; "note 6" fold thresholds follow the shorter deck
+  (folds by > 80 px, was 150; the folded bar + tabs under 182 px, was 170: the bar is 12 px taller).
+- Parallel agents on their own branches: claude/fable-drive-hud, claude/fable-first-last, claude/fable-route-reveal.
 
 ## Session 2026-11-10 (fable-loop-time): the loop dial by distance or time (claude/fable-loop-time, off origin/main 1a38381)
 
@@ -37,6 +124,23 @@
   across a reload, back to distance).
 - Next: Options' "Loop to fit" 1 hour / 2 hours keys now duplicate the dial; remove them once the owner has used the
   dial (My free time stays).
+
+## Session 2026-11-10 (fable-toast-key): toasts are as wide as their words; a toast's key ends its row (claude/fable-toast-key, off origin/main 51c8c4c)
+
+- [x] web/cockpit.js `toast()`: the action is `a.toast-key`, `#toast.has-key` while it has one. web/index.html:
+  `.toast.show { width: max-content }`, `.toast.show.has-key` (flex row), `.toast .toast-key` (ink, underlined, 44 px
+  hit area by padding and negative margin). The saved-for-offline sentence.
+- [x] tests/test_toast_key.py (4); e2e "the car connects" measures the row, the ink, the hit height and a 320 px phone.
+- Found on the way, not a bug in use: `scrollIntoView()` on a key inside the closed Layers panel scrolls `.stage`
+  (overflow: hidden) sideways. Nothing in the app does that (the closed panel can't take focus); a test script that
+  clicks a Layers key before the panel has slid in will. `overflow: clip` on `.stage` would rule it out.
+- Next: the drive screen proper (the status row beside Report and End).
+
+## Session 2026-11-10 (fable-camber-sure): Bank in whole degrees, said as approximate (claude/fable-camber-sure, off origin/main)
+
+- web/instruments.js `bankText` whole degrees; `BANK_SURE` appended to the gball/pod/grip explanations. web/drive_view.js
+  lane Banking whole degrees. web/road_feel.js `endLine` "banked about N°". Tests: test_alarm_grammar.py, test_road_feel.py.
+- Next: a body-roll gain per suspension class (ROAD_DATA.md "planned"), or validate against one surveyed road.
 
 ## Session 2026-11-10 (fable-layers): design pass 8, the Layers panel as the map's legend (claude/fable-layers, off origin/main 1a38381)
 
@@ -92,6 +196,13 @@
 - Next: two cards can share a name (both "Southeast"); a finer name (16 points, or the road it is built on) if it reads
   badly on real roads. The 1 hour / 2 hours loops sit in Options; the card's Length row is miles only.
 
+## Session 2026-11-10 (fable-paths-are-keys): the empty Spots list has an Add one key (claude/fable-paths-are-keys, off origin/main dc9caf9)
+
+- [x] web/spots_feed.js: the empty note is text plus `btn('Add one', page.addSpot, 'linkbtn')`; web/cockpit.js hands
+  `addSpot` (`showView('garage')`, `ApexGarageSettings.ui.open('spots')`). web/incident.js: the note without arrows.
+- [x] tests/test_paths_are_keys.py (3); e2e flow "a path is a key".
+- Next: Your data's "Settings → Account → Delete account" note as a key, once #358 is in.
+
 ## Session 2026-11-10 (fable-one-loop-home): Options' duplicate loop-by-time keys removed (claude/fable-one-loop-home, off origin/main 01fa773)
 
 - web/index.html: `#fitCtl` holds only `#fitRow` (My free time, This album) and is `hidden` until cockpit.js finds
@@ -110,6 +221,16 @@
 - [x] Tests: tests/test_people_no_connection.py (5); e2e "no connection: People is a page…" (/api aborted: both phone
   sizes, both sides, the Garage, offline event, Try again, online event brings People back).
 - Next design pass candidates: the lower Garage blocks (How this works, Pro), the Options sheet's long list.
+
+## Session 2026-11-10 (fable-settings-values): Road feel, Route tuning and Spots rows have values (claude/fable-settings-values, off origin/main dc9caf9)
+
+- [x] web/garage_settings.js `summaryOf`: a node with `data-summary-text` says it itself. web/cockpit.js `paintTuning`
+  sets it on `#garageTuneBody` ("Standard" / "N changed"; removed when `ApexRouteTuning.allowed` is false), again on
+  every change. web/index.html: `data-summary` on roadfeel (`#garageRoadFeelBody .sw`), tuning, spots (`#hlList`,
+  count "spot,spots").
+- [x] tests/test_garage_settings.py (summaryText case, the three selectors, the tuning source test); e2e "Settings
+  behind the gear" checks Spots None, Route tuning Standard, 1 changed after a slider, Standard after Reset.
+- Next: Your data, Feedback and About have nothing to say, which is right; nothing queued here.
 
 ## Session 2026-11-10 (fable-end-card): design pass 9, the drive-ended card (claude/fable-end-card, off origin/main 01fa773)
 
