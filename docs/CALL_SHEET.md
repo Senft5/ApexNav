@@ -4,6 +4,17 @@ Decisions Claude made for you, newest first. Each one says what was decided, why
 you reach one you've seen. If you disagree with a call, say so and it gets reversed; nothing here is hard to undo unless
 it says so. Things only you can do are in docs/OWNER_TODO.md.
 
+## 2026-11-11 (social round two): For you, and a People badge that counts what's new (claude/project-thread-uwmi4e)
+
+People → Friends now opens with For you: a friend topping your best Score on one of your stages, someone passing your
+time in this week's time attack, kudos, a duel accepted or won, new followers of your roadbooks, a crew drive you haven't
+answered. The People tab's badge counts those until you've looked, plus requests and duels waiting on you, and it's
+there from launch, not only after People has been opened. I kept "seen" on the phone instead of the server, so there's no
+migration and nothing new is stored about you; the cost is that a second phone shows the same items as new once.
+Roadbook followers are counted, never named, because a public book's followers can be strangers.
+
+Undo: revert the PR (no data changed).
+
 ## 2026-11-10 (fable-pro-looks): Pro is looks only; one Pro crew-mate dresses the whole crew (claude/fable-pro-looks)
 
 Your answer to the red team (PH-06, BR-06, UX-06): Pro is themes and liveries, nothing else. Route tuning, which went

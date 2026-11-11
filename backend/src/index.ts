@@ -48,6 +48,7 @@ import { healthReport, healthSummary } from "./health";
 import { feedbackCreate, feedbackDone, feedbackList } from "./feedback";
 import { friendProfile } from "./profile";
 import { kudosGive, kudosReceived, kudosTake } from "./kudos";
+import { inbox } from "./inbox";
 import { STATS_SAMPLE, recordStat, statsSummary } from "./stats";
 import { etaStart, etaUpdate, etaView } from "./eta_share";
 import { highlightCreate, highlightDelete, highlightList, highlightRate } from "./highlights";
@@ -308,6 +309,8 @@ on("POST", "/api/board", async (req, env) => json(await publish(env, await requi
 on("POST", "/api/kudos", async (req, env) => { await kudosGive(env, await requireMember(req, env), req); return noContent(); });
 on("DELETE", "/api/kudos", async (req, env) => { await kudosTake(env, await requireMember(req, env), req); return noContent(); });
 on("GET", "/api/kudos", async (req, env) => json(await kudosReceived(env, await requireMember(req, env))));
+// For you (src/inbox.ts): what happened to you socially, made from what each part already shows you; seen is kept on the phone.
+on("GET", "/api/inbox", async (req, env) => json(await inbox(env, await requireMember(req, env))));
 on("GET", "/api/board/activity", async (req, env) => json(await boardActivity(env, await requireMember(req, env))));
 on("GET", "/api/board/:canon", async (req, env, m) => json(await boardFor(env, await requireMember(req, env), m.groups!.canon)));
 

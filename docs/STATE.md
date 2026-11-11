@@ -1,5 +1,18 @@
 # VETTA — CURRENT AGENT HANDOFF STATE
 
+## Session 2026-11-11 (social round two): For you, what happened to you socially (claude/project-thread-uwmi4e, off origin/main 936aec3)
+
+- IDEAS S-27, SOCIAL 2.10. `backend/src/inbox.ts` `GET /api/inbox` → `{ items, waiting, now }`: kinds `request`, `duel_ask`
+  (waiting), `topped` (a visible run this week over your best Score on one of your stages), `passed` (time attack this week,
+  quicker than you after your time went up, with your place), `kudos` (14 days), `duel_on` (your challenge accepted),
+  `duel_over` (`duelOutcome`), `follows` (roadbook followers counted), `crew_drive` (upcoming, unanswered). No migration.
+- `web/inbox.js` (social group): pure `line`, `fresh`, `ago`; `mount` → `refresh`, `section`, `markSeen`. cockpit.js
+  `paintPeopleBadge` (requests from the inbox once it answers, else /api/me; crew link; convoy invites; new items);
+  seen (`apex.inboxSeen`, server clock) only when People → Friends is on screen (`showView`, `setPeopleSide`), since People
+  is drawn behind other tabs. Refreshed on visibilitychange and every 5 min, never while driving.
+- Tests: backend/test/inbox.test.ts (3), tests/test_inbox.py (3), e2e "For you: …".
+- Next: push notifications for the same items once APNs is set up (OWNER_TODO); a crew's own roadbook; recurring meets (S-13).
+
 ## Session 2026-11-11 (fable-time-attack): weekly time attack per area (claude/fable-time-attack, off origin/main)
 
 - Migration 0049 (ta_pool, ta_weeks, ta_entries): applied on preview; prod at merge. backend/src/time_attack.ts, routes /api/timeattack*,

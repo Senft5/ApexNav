@@ -198,7 +198,7 @@
         el('div', { className: 'row' }, send1));
     }
 
-    return { cards, challenge };
+    return { cards, challenge, openStage: page.openStage };
   }
 
   const api = { card, shown, daysLeft, timesLine, clock, mount, DAYS };
