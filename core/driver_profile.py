@@ -78,6 +78,7 @@ TREND_MIN = 15               # corners in a month before the month has a level
 TREND_FLOOR = 0.05
 TREND_SE = 2.0
 TOP_FINDINGS = 8
+DRIVE_TOUCH_MIN = 8          # corners one drive needs before its own touch is said (its Log page)
 TOUCH_MIN_G = 0.25           # a braking or turn-in peaking lighter than this has no touch to read (noise is 0.02-0.04 g)
 TOUCH_LO, TOUCH_HI = 0.2, 0.8  # touch is the rise (or fall) between 20 % and 80 % of the peak, over the time it took
 TOUCH_MIN_BINS = 1.5         # a rise over fewer 5 m bins than this is quicker than the recording can time ("quick")
@@ -372,7 +373,7 @@ def profile(drives: list) -> dict:
     every = [o for d in drives for o in d["obs"]]
     out = {"corners": len(every), "drives": len(drives), "skills": {}, "style": {}, "touch": {}, "matrix": [], "findings": [],
            "pace_findings": [], "pace": {},
-           "trend": {}, "change": {}, "strongest": None, "focus": None}
+           "touch_by": {}, "touch_trend": {}, "trend": {}, "change": {}, "strongest": None, "focus": None}
 
     overall = {}
     for k in MEASURES:
@@ -391,6 +392,8 @@ def profile(drives: list) -> dict:
         "use": da._r(da._median(use), 4) if len(use) >= SKILL_MIN else None,
     }
     out["touch"] = touch(every)
+    # touch by size of corner (a tight corner takes the brakes on harder) and month by month: facts, never a level
+    out["touch_by"] = {size: touch([o for o in every if o["size"] == size], MATRIX_MIN) for size in ("tight", "medium", "fast")}
 
     by_size = {}                                   # each skill's mean for each size of corner (None: size unknown)
     for size in ("tight", "medium", "fast", None):
@@ -446,6 +449,12 @@ def profile(drives: list) -> dict:
     out["pace"] = {"over": da._r(da._mean_se(over)[0], 4) if len(over) >= SKILL_MIN else None, "n": len(over)}
 
     months = sorted({d["month"] for d in drives if d.get("month")})
+    out["touch_trend"] = {k: [] for k in TOUCH}
+    for mth in months:
+        t = touch([o for d in drives if d.get("month") == mth for o in d["obs"]], TREND_MIN)
+        for k in TOUCH:
+            if t[k]["n"] >= TREND_MIN:
+                out["touch_trend"][k].append({"month": mth, "rate": t[k]["rate"], "quick": t[k]["quick_rate"], "n": t[k]["n"]})
     for k in MEASURES:
         rows, raw = [], []
         for mth in months:
@@ -478,23 +487,29 @@ def profile(drives: list) -> dict:
 TOUCH = ("brake_on", "brake_off", "turn_in")
 
 
-def touch(obs: list) -> dict:
+def touch(obs: list, least: int = STYLE_MIN) -> dict:
     """The touch over corners obs: per measure {rate, lo, hi, n, quick}: the median and quartiles in g a second over the n
     corners read, a quick one ranking above every rate (it is quicker than any the bins can time); a statistic that lands
-    among the quick ones is None and quick_rate (rate's) True. None everywhere under STYLE_MIN corners. release: the median
+    among the quick ones is None and quick_rate (rate's) True. None everywhere under `least` corners. release: the median
     of brakes off over brakes on, on corners with both timed (None likewise)."""
     out = {}
     for k in TOUCH:
         xs = sorted(o[k] for o in obs if isinstance(o.get(k), float))
         q = sum(1 for o in obs if o.get(k) == QUICK)
-        n, ok = len(xs) + q, len(xs) + q >= STYLE_MIN
+        n, ok = len(xs) + q, len(xs) + q >= least
         at = lambda f: _rank(xs, n, f) if ok else None
         out[k] = {"rate": at(0.5), "lo": at(0.25), "hi": at(0.75), "n": n, "quick": q,
                   "quick_rate": bool(ok and at(0.5) is None)}
     both = [o["brake_off"] / o["brake_on"] for o in obs if isinstance(o.get("brake_on"), float) and isinstance(o.get("brake_off"), float)]
-    out["release"] = da._r(da._median(both), 3) if len(both) >= STYLE_MIN else None
+    out["release"] = da._r(da._median(both), 3) if len(both) >= least else None
     out["release_n"] = len(both)
     return out
+
+
+def drive_touch(obs: list, others: list) -> dict:
+    """A drive's own touch (its Log page): {drive: touch over its corners (from DRIVE_TOUCH_MIN), usual: touch over the
+    corners of every other drive (from STYLE_MIN)}. Facts side by side; a drive is never marked better or worse for it."""
+    return {"drive": touch(obs, DRIVE_TOUCH_MIN), "usual": touch(others)}
 
 
 def _rank(xs: list, n: int, f: float):

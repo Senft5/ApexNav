@@ -1,5 +1,16 @@
 # VETTA — CURRENT AGENT HANDOFF STATE
 
+## Session 2026-11-11 (round two analysis, PR 3): touch by kind of corner and month, and a drive's own touch (claude/project-thread-gd7nre, off origin/main)
+
+- core/driver_profile.py (reference) and web/driver_profile.js (port): `touch(obs, least)`; profile adds `touch_by`
+  (tight/medium/fast, from MATRIX_MIN corners) and `touch_trend` (per measure, months with TREND_MIN corners read);
+  `drive_touch(obs, others)` / `driveTouch`: one drive's touch (from DRIVE_TOUCH_MIN = 8 corners) beside the usual.
+- Your touch panel: a "By kind of corner" table (g a second; quick; --) and month-by-month lines. The Log's drive page:
+  "Your touch on this drive" (`#dvTouch`), from the drive job (`touchOf` in analysis_client.js, the usual from Your
+  driving's kept observations); hidden for drives with g kept once a second. Facts only: never better or worse.
+- Tests: tests/test_touch_detail.py (4); e2e "Your driving" covers the table, the month line and the drive's words.
+- Next: say when a drive's touch is clearly outside your usual spread (its median beyond the usual quartiles on 8+ corners).
+
 ## Session 2026-11-11 (roam-c-safe-area-split): the safe-area e2e flow, one a phone shape (claude/roam-c-safe-area-split, off origin/main)
 
 - e2e/smoke.js: `safe areas (<shape>)` x4 from `SAFE`, same screens and checks; scanner self-check in the first; one

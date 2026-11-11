@@ -4389,6 +4389,9 @@ flow('Your driving: the profile over every drive opens from the Log, names the w
     const p = (await ApexAnalysis.job('profile')).profile, host = document.createElement('div');
     p.touch = { brake_on: { rate: 0.82, lo: 0.6, hi: 1.1, n: 40, quick: 3, quick_rate: false }, brake_off: { rate: 0.41, lo: 0.3, hi: 0.5, n: 40, quick: 0, quick_rate: false },
       turn_in: { rate: null, lo: 0.7, hi: null, n: 50, quick: 30, quick_rate: true }, release: 0.5, release_n: 37 };
+    const cell = (on) => ({ brake_on: { rate: on, n: 12, quick_rate: false }, brake_off: { rate: 0.4, n: 12, quick_rate: false }, turn_in: { rate: null, n: 12, quick_rate: true } });
+    p.touch_by = { tight: cell(1.2), medium: cell(0.8), fast: { brake_on: { rate: null, n: 4 }, brake_off: { rate: null, n: 4 }, turn_in: { rate: null, n: 4 } } };
+    p.touch_trend = { brake_on: [{ month: '2026-09', rate: 0.9, quick: false, n: 20 }, { month: '2026-10', rate: 0.8, quick: false, n: 20 }], brake_off: [], turn_in: [] };
     document.getElementById('drivingRoot').append(host);
     ApexDriverProfile.render(host, p, {});
     const t = host.querySelector('.dp-touch'), out = t ? t.innerText : null; host.remove();
@@ -4396,6 +4399,17 @@ flow('Your driving: the profile over every drive opens from the Log, names the w
   });
   check(/Your touch/.test(touch) && /brakes on at about 0\.82 g a second and let them off at about 0\.41 g a second/.test(touch) && /more gently/.test(touch)
     && /quick movement of the wheel/.test(touch), 'the touch panel says it in words: ' + touch);
+  // by kind of corner (a row a measure, a column a size, "--" where too few) and month by month
+  check(/By kind of corner/.test(touch) && /Brakes on\s+1\.2\s+0\.8\s+--/.test(touch) && /Turn-in\s+quick\s+quick\s+--/.test(touch)
+    && /Brakes on month by month, in g a second: Sep 0\.9, Oct 0\.8\./.test(touch), 'touch by kind of corner and month: ' + touch);
+  // a drive's own touch on its Log page: none from g kept once a second, so the panel stays hidden; words when there is one
+  const dt = await page.evaluate(async () => {
+    const info = await ApexAnalysis.job('drive', { id: 'p1' });
+    return { has: !!info.touch, lines: ApexDriverProfile.driveTouchLines(info.touch),
+      say: ApexDriverProfile.driveTouchLines({ drive: { brake_on: { rate: 1.1 }, brake_off: { rate: null }, turn_in: { rate: null, quick_rate: true } }, usual: { brake_on: { rate: 0.8 }, brake_off: { rate: null }, turn_in: { rate: 0.9 } } }) };
+  });
+  check(dt.has && dt.lines.length === 0, 'a drive with g kept once a second has no touch of its own: ' + JSON.stringify(dt.lines));
+  check(dt.say.join(' ') === 'Brakes on: about 1.1 g a second on this drive, 0.8 usually. Turn-in: one quick movement (quicker than the recording can time) on this drive, 0.9 usually.', 'a drive\'s touch in words: ' + dt.say);
   // each drive's observations were kept: a second visit reads no drive again, and a deleted drive's are dropped
   const again = await page.evaluate(() => ApexAnalysis.job('profile'));
   check(again.read === 0 && again.profile.corners === 108, 'kept between visits: read ' + again.read);
