@@ -20,6 +20,9 @@ console.log(JSON.stringify({
   metric: P.text({ place: 'Tellico Plains', code: 61, tempC: 16 }, true),
   noWeather: P.text({ place: 'Tellico Plains', code: null, tempC: null }, false),
   nothing: P.text({}, false),
+  mast: P.parts({ place: 'Tellico Plains', code: 1, mm3h: 0, tempC: 16 }, false),
+  mastSky: P.parts({ code: 61, tempC: 16 }, true),
+  mastNone: P.parts({}, false),
   // 2026-11-04 near Cincinnati: overcast code, 0 mm this quarter hour, rain in the hours before, the station saying light rain
   owner: P.text({ place: 'Colerain', code: 3, mmNow: 0, mm3h: 2.2, obs: { ageMin: 20, weather: ['light rain', 'Light Rain'] }, tempC: 17 }, true),
   staleObs: P.weather({ code: 3, mmNow: 0, mm3h: 2.2, obs: { ageMin: 200, weather: ['light rain'] } }),
@@ -72,3 +75,10 @@ def test_past_rain_and_observation(out):
     assert abs(out["past"] - 2.2) < 1e-9
     assert out["noPast"] is None
     assert round(out["obs"]["ageMin"]) == 30 and out["obs"]["weather"] == ["light rain", "Light Rain"]
+
+
+def test_masthead_parts(out):
+    # Vetta Line: the plate is a masthead, the first known part set large and the rest as its line; nothing invented
+    assert out["mast"] == {"head": "Tellico Plains", "rest": "Dry · 61°"}
+    assert out["mastSky"] == {"head": "Rain", "rest": "16°"}
+    assert out["mastNone"] == {"head": "", "rest": ""}
