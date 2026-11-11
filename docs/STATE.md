@@ -6,6 +6,48 @@
   `repeat_weeks` (409 `not_latest` on an older drive of a series). `web/crew_events.js` Repeats chips, "Every Saturday"
   on cards and Meets near you, ICS RRULE. Tests: backend event_repeat 4, pytest test_crew_events, e2e crew drives.
 - Next: the auto time attack PR (local branch, built on #397's) once #397 merges.
+## Session 2026-11-11 (places by name): the cafés and fuel on the route card are a tap away, by name (claude/project-thread-me97iw, off origin/main)
+
+- The owner: "when it says there's cafes or gas stations ... i want to be able to tap for details. Ideally just show the name".
+- web/scenic.js: `summary` also counts fuel ("2 fuel stops"); `places(list, fmt)` one row per place (the map's name, or
+  "Café, no name on the map"; "3.1 mi in"; "beside the road" / "300 ft off the road"); `placeLine(row)` for a tap.
+- index.html/cockpit.js: the Along fact is a disclosure (`#routeAlongLine`, `#routeAlongPanel`, like When to go); a row flies
+  the map there and toasts "Bean · Café · 3.1 mi in" with Add as a stop; the map pins toast the same and carry it as
+  their aria-label (set after the Marker, which writes "Map marker"). stages.js pois fall back to name:latin / name_en.
+- Survey: the other mentions already name their place (Spots near you, the day's stops) or name no place (route_engine
+  costs, car.js fuel spans, which no screen shows). CarPlay shows no cafés or fuel.
+- Tests: tests/test_scenic.py (+1, summary updated); e2e "along the route by name…". Checked: pytest, that flow.
+- Next: the co-driver could name the next café or fuel stop when you ask; CarPlay's route preview could list them.
+## Session 2026-11-11 (roam-a best run): the drive page names your best run of clean corners (claude/project-thread-h7xxmf, off origin/main)
+
+- IDEAS D-30. `core/flow.py` (reference) and `web/flow.js` (port, parity-tested on synthetic and both demo drives):
+  `longest_flow` / `longest` over the drive's corners in road order, each judged by `corner_technique` (smooth >= 0.60,
+  brake >= 0.90, use <= 1.0); a miss or > 2 km between apexes ends a run; MIN_RUN 5. `text()`: "Your best run: N corners in
+  a row, smooth and settled over X."
+- web/drive_view.js: a `dv-plain` line after the coach's; analysis.html loads flow.js (index.html untouched: no boot cost).
+- The demo drives' longest runs are 4 (nothing said). Tests: tests/test_flow.py (5). Checked: pytest; e2e drive-ended
+  card/Log, Your driving, drive tags, startup budget.
+- Next: "Best run this month" in Your records (needs corners per drive: the analysis worker), and the end card.
+## Session 2026-11-11 (ui-round-three, PR 1): the first friend and the first crew (claude/project-thread-5sbga7)
+
+- Walked the empty and signed-out screens (People, Crews, Garage, Log, Stages, signed in and out). Signed out People and
+  the Log's empty page were already pages; signed in with nobody, Friends and Crews were a grey sentence and a small key.
+- cockpit.js: `.people-first` (the join page's `drawing`, `roads`, `pucks`; a `jr-ghost` road for the friend, `jr-seat`
+  circles for the crew), `.join-head` "Bring a friend." / "Start a crew.", the `.people-lead` sentence kept inside.
+  signature.css: the Invite key after it is full width (52 px). e2e "People, a new account" checks the new first child.
+- Tests: tests/test_people_first.py. e2e People, crew, friend, Dynamic Type, VoiceOver flows pass here.
+- Next ideas: Garage's "Add a car" as a paper key in the empty bay; the drive HUD; CarPlay visuals.
+
+## Session 2026-11-11 (roam-c-crew-public-reset, security pass): a crew made public drops members' hand-made shares (claude/roam-c-crew-public-reset)
+
+- backend/src/social.ts `crewUpdate` private to public: besides grants, board entries and drive scores (already), members'
+  (not the owner's) shared_route_audience and segment_shares rows for the crew go, their crew_members.home_cell is cleared,
+  and a pinned route of a member's is unpinned. Owner settings copy (cockpit.js) and privacy.html say so.
+- Tests: backend/test/share_defaults.test.ts (+1, fails without the fix: a stranger joining after sees only the owner's
+  route); tests/test_crew_settings_sheet.py copy. Full backend vitest 394/394, tsc clean.
+- Not changed, noted: a crew chat's last 30 days stay readable to people who join after it goes public (the chat says who
+  wrote it; deleting history felt worse than it). Photos are served to any member by id (UUIDs, never listed to strangers).
+
 
 ## Session 2026-11-11 (roam-c-presence-private-crews, security pass): friends map "Crew" is private crews only (claude/roam-c-presence-private-crews)
 
@@ -64,6 +106,16 @@
 - Tests: tests/test_brake_heat.py (+2); e2e "the co-driver says a long descent once…" (GPX + stubbed DEM, live frames).
   Checked: pytest, that flow, the route-card descent flow, "co-driver reads the road", startup budget.
 - Next: the Garage car's weight and brakes could tune DISC_C; CarPlay could show the descent line on its route preview.
+## Session 2026-11-11 (round two analysis, PR 8): your records by kind of corner (claude/project-thread-gd7nre, off origin/main)
+
+- core/driver_profile.py `records_by_size` (reference) and web/driver_profile.js `recordsBySize` (port): your cleanest tight,
+  medium and fast corner of any date, by the mean of the six technique credits; the first to reach a level holds it; none
+  under RECORD_MIN 5 corners of that kind. The profile job returns `records`.
+- web/analysis.html Your records adds "Cleanest tight left, of 36 tight corners" rows (the level, the drive's day), painted
+  again when Your driving's job answers. IDEAS D-08 is done.
+- Tests: tests/test_best_corners.py (+1, parity), e2e "Your driving" checks the rows.
+- Next: the deepest-analysis list: a drive's corners against your records (how close each kind came to your best).
+
 ## Session 2026-11-11 (roam-c-scheme-offmain, sweep: iOS shell): bundle files read off the main thread (claude/roam-c-scheme-offmain, off origin/main)
 
 - ApexNavApp.swift `ApexBundleSchemeHandler`: every apexnav:// file (the page's 130 scripts at launch, the 5.5 MB

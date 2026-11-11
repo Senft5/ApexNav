@@ -53,6 +53,35 @@ describe("sharing defaults", () => {
     expect((await grants(b)).filter((g) => g.includes(crew))).toEqual([`crew:${crew}:10`]);
   });
 
+  it("a private crew made public: what members shared with it by hand (routes, stages, home areas) goes too; the owner's stays", async () => {
+    const [a, b] = [await makeUser("alice"), await makeUser("bob")];
+    const crew = ((await (await ok(api(a, "POST", "/api/crews", { name: "Ridge Runners" }))).json()) as { id: string }).id;
+    const tok = ((await (await ok(api(a, "POST", `/api/crews/${crew}/invite`))).json()) as { token: string }).token;
+    await ok(api(b, "POST", "/api/crews/join", { token: tok }));
+    const geom = [[-84.1, 35.3], [-84.0, 35.4]];
+    for (const u of [a, b]) {
+      await ok(api(u, "POST", "/api/routes", { name: `${u.handle} loop`, geom, crews: [crew] }));
+      await ok(api(u, "PUT", `/api/crews/${crew}/home`, { on: true, lat: 35.3, lon: -84.1 }));
+    }
+    await env.DB.prepare(`INSERT INTO segments (id, owner, name, length_m, geom, start_lat, start_lon, end_lat, end_lon) VALUES ('s1', ?, 'Esses', 3000, '[[1,2]]', 1, 2, 3, 4), ('s2', ?, 'Esses', 3000, '[[1,2]]', 1, 2, 3, 4)`).bind(a.id, b.id).run();
+    for (const [u, seg] of [[a, "s1"], [b, "s2"]] as const) await ok(api(u, "POST", `/api/segments/${seg}/share`, { audience_type: "crew", audience_id: crew }));
+    const bRoute = (await env.DB.prepare("SELECT id FROM shared_routes WHERE owner = ?").bind(b.id).first<{ id: string }>())!.id;
+    await env.DB.prepare("UPDATE crews SET pinned_route_id = ? WHERE id = ?").bind(bRoute, crew).run();
+    const n = async (sql: string) => (await env.DB.prepare(sql).bind(crew).first<{ n: number }>())!.n;
+    const left = () => Promise.all([
+      n("SELECT COUNT(*) AS n FROM shared_route_audience WHERE audience_type = 'crew' AND audience_id = ?"),
+      n("SELECT COUNT(*) AS n FROM segment_shares WHERE audience_type = 'crew' AND audience_id = ?"),
+      n("SELECT COUNT(*) AS n FROM crew_members WHERE crew_id = ? AND home_cell IS NOT NULL"),
+      n("SELECT COUNT(*) AS n FROM crews WHERE id = ? AND pinned_route_id IS NOT NULL")]);
+    expect(await left()).toEqual([2, 2, 2, 1]);
+    await ok(api(a, "PUT", `/api/crews/${crew}`, { visibility: "public", area: { name: "Robbinsville", lat: 35.33, lon: -83.81 } }));
+    expect(await left()).toEqual([1, 1, 1, 0]);                                               // alice (the owner) keeps hers
+    const c = await makeUser("cara");
+    await ok(api(c, "POST", `/api/crews/${crew}/join`));
+    const seen = (await (await ok(api(c, "GET", "/api/routes/shared"))).json()) as { name: string }[];
+    expect(seen.map((r) => r.name)).toEqual(["alice loop"]);
+  });
+
   it("the backfill (migration 0050): existing friends and private crews share; a row already set stays; blocks and public crews don't", async () => {
     const [a, b, c, x] = [await makeUser("alice"), await makeUser("bob"), await makeUser("cara"), await makeUser("xavier")];
     // the old world: friendships and crews made with no grants
