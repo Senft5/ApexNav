@@ -12,6 +12,16 @@
   costs, car.js fuel spans, which no screen shows). CarPlay shows no cafés or fuel.
 - Tests: tests/test_scenic.py (+1, summary updated); e2e "along the route by name…". Checked: pytest, that flow.
 - Next: the co-driver could name the next café or fuel stop when you ask; CarPlay's route preview could list them.
+## Session 2026-11-11 (roam-c-crew-public-reset, security pass): a crew made public drops members' hand-made shares (claude/roam-c-crew-public-reset)
+
+- backend/src/social.ts `crewUpdate` private to public: besides grants, board entries and drive scores (already), members'
+  (not the owner's) shared_route_audience and segment_shares rows for the crew go, their crew_members.home_cell is cleared,
+  and a pinned route of a member's is unpinned. Owner settings copy (cockpit.js) and privacy.html say so.
+- Tests: backend/test/share_defaults.test.ts (+1, fails without the fix: a stranger joining after sees only the owner's
+  route); tests/test_crew_settings_sheet.py copy. Full backend vitest 394/394, tsc clean.
+- Not changed, noted: a crew chat's last 30 days stay readable to people who join after it goes public (the chat says who
+  wrote it; deleting history felt worse than it). Photos are served to any member by id (UUIDs, never listed to strangers).
+
 
 ## Session 2026-11-11 (roam-c-presence-private-crews, security pass): friends map "Crew" is private crews only (claude/roam-c-presence-private-crews)
 
@@ -70,6 +80,16 @@
 - Tests: tests/test_brake_heat.py (+2); e2e "the co-driver says a long descent once…" (GPX + stubbed DEM, live frames).
   Checked: pytest, that flow, the route-card descent flow, "co-driver reads the road", startup budget.
 - Next: the Garage car's weight and brakes could tune DISC_C; CarPlay could show the descent line on its route preview.
+## Session 2026-11-11 (round two analysis, PR 8): your records by kind of corner (claude/project-thread-gd7nre, off origin/main)
+
+- core/driver_profile.py `records_by_size` (reference) and web/driver_profile.js `recordsBySize` (port): your cleanest tight,
+  medium and fast corner of any date, by the mean of the six technique credits; the first to reach a level holds it; none
+  under RECORD_MIN 5 corners of that kind. The profile job returns `records`.
+- web/analysis.html Your records adds "Cleanest tight left, of 36 tight corners" rows (the level, the drive's day), painted
+  again when Your driving's job answers. IDEAS D-08 is done.
+- Tests: tests/test_best_corners.py (+1, parity), e2e "Your driving" checks the rows.
+- Next: the deepest-analysis list: a drive's corners against your records (how close each kind came to your best).
+
 ## Session 2026-11-11 (roam-c-scheme-offmain, sweep: iOS shell): bundle files read off the main thread (claude/roam-c-scheme-offmain, off origin/main)
 
 - ApexNavApp.swift `ApexBundleSchemeHandler`: every apexnav:// file (the page's 130 scripts at launch, the 5.5 MB

@@ -11,6 +11,14 @@ OpenStreetMap has for it, how far into the route and how far off the road; tappi
 a stop. Tapping a CAFÉ or FUEL pin on the map says its name too. Calls: fuel stations are now counted on the line (before,
 only a long stretch without fuel was said), so there is something to tap; a place with no name on the map says "no name on
 the map" rather than a guess. Undo: revert the PR.
+## 2026-11-11 (roam-c crew-public-reset): a crew made public stops showing what members shared with it by hand (claude/roam-c-crew-public-reset)
+
+Found in the security pass. When an owner makes a private crew public, members' Scores and times already went back to off
+(they were the private default, not a choice to show strangers). Routes, stages and the rough "where I drive from" area that
+members had shared with the private crew stayed, so a stranger who joined next could see them. Now they go too, except the
+owner's own, because the owner made it public. The routes and stages themselves stay with their owners, who can share them
+again. The owner's crew settings and the privacy page say so. Undo: revert the PR.
+
 ## 2026-11-11 (roam-c presence-private-crews): "Your crews see where you are" means private crews only (claude/roam-c-presence-private-crews)
 
 Found in the security pass. Anyone can join a public crew with one tap, and Friends on the map set to Crew showed your
@@ -56,6 +64,13 @@ On a planned route, the same long, steep descents the route card names are now s
 top (or up to 300 m down it): "Long descent ahead: 2.5 miles at 8 percent. A lower gear saves the brakes." It waits for a
 quiet moment like the break cue (no corner call due), in any notes mode, since it is a safety line. Off the route, or
 driving without one, nothing is said. Undo: remove the `descentAhead` block in cockpit.js `updateNotes`.
+
+## 2026-11-11 (round two analysis): records by kind of corner are technique, not speed (claude/project-thread-gd7nre)
+
+- What: Your records lists your cleanest tight, medium and fast corner (the six technique credits' mean, 0 to 100).
+- Why: IDEAS D-08 asked for records per archetype; a fastest-corner record would reward speed on public roads, so this is
+  the technique figure Your year already uses. The first drive to reach a level keeps the record.
+- Undo: drop the `kinds` rows in renderRecords (web/analysis.html).
 
 ## 2026-11-11 (roam-a descents): the route card warns of a long, steep descent (claude/project-thread-h7xxmf)
 

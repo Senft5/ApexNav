@@ -4507,6 +4507,10 @@ flow('Your driving: the profile over every drive opens from the Log, names the w
   await page.waitForSelector('#drivingOpen', { timeout: 20000 });
   const card = await page.textContent('#drivingOpen span');
   check(/Work on: One steering arc \d+/.test(card) && /Strongest: /.test(card), 'the card says the strongest and the one to work on: ' + card);
+  // Your records: the cleanest corner of each kind (tight, medium, fast), from the same kept observations (IDEAS D-08)
+  await page.waitForFunction(() => /Cleanest tight (left|right|corner), of \d+ tight corners/.test(document.getElementById('recordsTable').textContent), null, { timeout: 10000 });
+  const recs = await page.textContent('#recordsTable');
+  check(/Cleanest medium/.test(recs) && !/mph|km\/h/.test(recs), 'records by kind of corner: ' + recs);
   // Your year: the year's cleanest corners, one a road (two roads here), from the same kept observations
   const best = await page.evaluate(() => ApexAnalysis.job('profile', { year: 2026 }).then((r) => r.best));
   check(best.length === 2 && best[0].level >= best[1].level && new Set(best.map((b) => b.name)).size === 2 && best.every((b) => b.at.startsWith('2026-')), 'the year\'s best corners: ' + JSON.stringify(best));
