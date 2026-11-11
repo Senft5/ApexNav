@@ -12,6 +12,10 @@ drive). `profile` then answers, over all of them:
   * each skill month by month, and whether the newest month differs from the first;
   * the strongest skill and, when one is clearly short (FOCUS_MAX), the one to work on and the place it shows most.
 
+Touch (round two, from the ten g readings a second the recording keeps since #377): how fast the brakes go on and come
+off, and how fast the car is loaded up at turn-in, in g a second, as style facts. Old drives, whose g was kept once a
+second (a staircase or a straight ramp between fixes), give no touch: `_fine` tells them apart from the g itself.
+
 Technique only: no speed, time or legality enters a level, and nothing here rewards pace. The share of a corner's sane
 limit used is reported as a style fact, never as a skill. Unknown stays unknown (None). `web/driver_profile.js` is the
 port, held to parity by tests/test_driver_profile.py.
@@ -69,6 +73,11 @@ TREND_MIN = 15               # corners in a month before the month has a level
 TREND_FLOOR = 0.05
 TREND_SE = 2.0
 TOP_FINDINGS = 8
+TOUCH_MIN_G = 0.25           # a braking or turn-in peaking lighter than this has no touch to read (noise is 0.02-0.04 g)
+TOUCH_LO, TOUCH_HI = 0.2, 0.8  # touch is the rise (or fall) between 20 % and 80 % of the peak, over the time it took
+TOUCH_MIN_BINS = 1.5         # a rise over fewer 5 m bins than this is quicker than the recording can time ("quick")
+FINE_EPS = 3e-4              # g: two readings this close (or three in a straight line) are one reading spread out...
+FINE_FLAT = 0.3              # ...and when this share of a stretch is, its g was kept once a second: no touch from it
 
 
 def _size(sev):
@@ -121,6 +130,81 @@ def _brake_run(lon, start: int, apex: int):
     return r0, r1
 
 
+def _fine(x: list) -> bool:
+    """True when x (g, one value a bin) moves like ten readings a second, not like one a second spread over the bins
+    between two fixes: older recordings repeat a fix's g (a staircase) or run straight between fixes (a ramp)."""
+    if len(x) < 4:
+        return False
+    flat = 0
+    for i in range(1, len(x) - 1):
+        if abs(x[i] - x[i - 1]) <= FINE_EPS or abs(x[i + 1] - 2.0 * x[i] + x[i - 1]) <= FINE_EPS:
+            flat += 1
+    return flat < FINE_FLAT * (len(x) - 2)
+
+
+def _cross(y: list, t: list, j: int, k: int, level: float) -> tuple:
+    """(time, fractional bin) where y passes level between bins j and k (neighbours), linear between them."""
+    f = _clamp01((level - y[j]) / (y[k] - y[j]) if y[k] != y[j] else 0.0)
+    return t[j] + f * (t[k] - t[j]), j + f * (k - j)
+
+
+QUICK = "quick"
+
+
+def _touch(y: list, t: list, pk: int, way: int):
+    """Rate in g a second at which y (load towards its peak, positive) rose to its peak at pk (way -1: walking back) or
+    fell from it (way +1), between TOUCH_LO and TOUCH_HI of the peak. QUICK when that took under TOUCH_MIN_BINS bins (the
+    5 m bins cannot time it; a rate read off them would come out too low), None when it does not get there inside y."""
+    p, at = y[pk], {}
+    j = pk
+    for level in (TOUCH_HI, TOUCH_LO):
+        while 0 <= j + way < len(y) and y[j + way] >= level * p:
+            j += way
+        if not 0 <= j + way < len(y):
+            return None
+        at[level] = _cross(y, t, j + way, j, level * p)
+    if abs(at[TOUCH_HI][1] - at[TOUCH_LO][1]) < TOUCH_MIN_BINS:
+        return QUICK
+    dt = (at[TOUCH_HI][0] - at[TOUCH_LO][0]) * -way
+    return None if dt <= 0 else (TOUCH_HI - TOUCH_LO) * p / dt
+
+
+def _measured(v, known, w0: int, w1: int) -> bool:
+    """Every bin w0..w1 has its g measured (g_known, where the drive says) and the car moving at a known speed: a
+    blanked g reads as a sudden 0 g, and a stopped or unknown bin takes no time, so either would make a false rate."""
+    for q in range(w0, w1 + 1):
+        if known is not None and not known[q]:
+            return False
+        if not (math.isfinite(v[q]) and v[q] >= da.STOPPED_MPS):
+            return False
+    return True
+
+
+def _corner_touch(lon, lat, t: list, s: int, e: int, a: int, run, first, v, known=None):
+    """(brake_on, brake_off, turn_in) in g a second for one corner, each QUICK when quicker than the bins can time and
+    None when it cannot be told (its window not all measured, moving, and read ten times a second)."""
+    n = len(lat)
+    on = off = turn = None
+    if run is not None:
+        w0, w1 = max(0, first - SQUEEZE_GAP), min(n - 1, run[1] + SQUEEZE_GAP)
+        dec = [-float(lon[q]) for q in range(w0, w1 + 1)]
+        if all(math.isfinite(x) for x in dec) and _measured(v, known, w0, w1) and _fine(dec):
+            r0, r1 = first - w0, run[1] - w0
+            pk = max(range(r0, r1 + 1), key=lambda i: (dec[i], -i))
+            if dec[pk] >= TOUCH_MIN_G:
+                tt = t[w0:w1 + 1]
+                on, off = _touch(dec, tt, pk, -1), _touch(dec, tt, pk, 1)
+    w0 = max(0, s - da.TURN_LEAD)
+    side = [float(lat[q]) for q in range(w0, e + 1)]
+    if all(math.isfinite(x) for x in side) and _measured(v, known, w0, e) and _fine(side):
+        pk = max(range(s - w0, e - w0 + 1), key=lambda i: (abs(side[i]), -i))
+        way = 1.0 if side[pk] > 0 else -1.0
+        y = [way * x for x in side]
+        if y[pk] >= TOUCH_MIN_G:
+            turn = _touch(y, t[w0:e + 1], pk, -1)
+    return on, off, turn
+
+
 def observe(drive: dict) -> list:
     """One observation per corner the coach may read (measured speed and g from the brake lookback to the throttle
     lookahead, no stop through it). drive: {speed_mps, lon_g, lat_g, g_known?, elev?, corners: [{start, end, apex,
@@ -153,6 +237,7 @@ def observe(drive: dict) -> list:
         arc = 1.0 - _clamp01(_excess([x if peak >= 0 else -x for x in side]) / ARC_SPAN_G)
         squeeze = None
         run = _brake_run(lon, s, a)
+        first = None
         if run is not None:
             lo, first = max(0, a - da.BRAKE_LOOKBACK), run[0]
             while True:                              # an earlier stab at the brakes on the same approach
@@ -165,6 +250,7 @@ def observe(drive: dict) -> list:
                 dec = [-float(x) for x in lon[b0:b1 + 1]]
                 if max(dec) >= SQUEEZE_MIN_G:
                     squeeze = 1.0 - _clamp01(_excess(dec) / SQUEEZE_SPAN_G)
+        brake_on, brake_off, turn_in = _corner_touch(lon, lat, t, s, e, a, run, first, v, drive.get("g_known"))
         grade = None
         if elev is not None:
             g0, g1 = max(0, s - GRADE_PAD), min(n - 1, e + GRADE_PAD)
@@ -190,6 +276,7 @@ def observe(drive: dict) -> list:
             "entry": 1.0 - _clamp01(_excess([-float(x) for x in v[s:e + 1]], ENTRY_SWING_MPS) / ENTRY_SPAN_MPS),
             "trail": None if ph["brake_m"] is None else (1 if ph["trail_m"] >= TRAIL_MIN_M else 0),
             "slow_m": None if slow is None else (slow - a) * 5.0,
+            "brake_on": brake_on, "brake_off": brake_off, "turn_in": turn_in,
         })
     return out
 
@@ -277,7 +364,7 @@ def profile(drives: list) -> dict:
     """
     drives = [d for d in drives if d.get("obs")]
     every = [o for d in drives for o in d["obs"]]
-    out = {"corners": len(every), "drives": len(drives), "skills": {}, "style": {}, "matrix": [], "findings": [],
+    out = {"corners": len(every), "drives": len(drives), "skills": {}, "style": {}, "touch": {}, "matrix": [], "findings": [],
            "trend": {}, "change": {}, "strongest": None, "focus": None}
 
     overall = {}
@@ -296,6 +383,7 @@ def profile(drives: list) -> dict:
         "slow_m": da._r(da._mean_se(slow)[0], 2) if len(slow) >= STYLE_MIN else None, "slow_n": len(slow),
         "use": da._r(da._median(use), 4) if len(use) >= SKILL_MIN else None,
     }
+    out["touch"] = touch(every)
 
     by_size = {}                                   # each skill's mean for each size of corner (None: size unknown)
     for size in ("tight", "medium", "fast", None):
@@ -374,6 +462,39 @@ def profile(drives: list) -> dict:
                                             "worse": f["a"] if f["mean_a"] < f["mean_b"] else f["b"]}
             out["focus"] = {"skill": worst, "where": where}
     return out
+
+
+TOUCH = ("brake_on", "brake_off", "turn_in")
+
+
+def touch(obs: list) -> dict:
+    """The touch over corners obs: per measure {rate, lo, hi, n, quick}: the median and quartiles in g a second over the n
+    corners read, a quick one ranking above every rate (it is quicker than any the bins can time); a statistic that lands
+    among the quick ones is None and quick_rate (rate's) True. None everywhere under STYLE_MIN corners. release: the median
+    of brakes off over brakes on, on corners with both timed (None likewise)."""
+    out = {}
+    for k in TOUCH:
+        xs = sorted(o[k] for o in obs if isinstance(o.get(k), float))
+        q = sum(1 for o in obs if o.get(k) == QUICK)
+        n, ok = len(xs) + q, len(xs) + q >= STYLE_MIN
+        at = lambda f: _rank(xs, n, f) if ok else None
+        out[k] = {"rate": at(0.5), "lo": at(0.25), "hi": at(0.75), "n": n, "quick": q,
+                  "quick_rate": bool(ok and at(0.5) is None)}
+    both = [o["brake_off"] / o["brake_on"] for o in obs if isinstance(o.get("brake_on"), float) and isinstance(o.get("brake_off"), float)]
+    out["release"] = da._r(da._median(both), 3) if len(both) >= STYLE_MIN else None
+    out["release_n"] = len(both)
+    return out
+
+
+def _rank(xs: list, n: int, f: float):
+    """The f quantile of n values of which sorted xs are the lowest (the rest quick), linear between ranks (numpy's
+    default); None when it reaches into the quick ones."""
+    pos = f * (n - 1)
+    i = int(math.floor(pos))
+    hi = min(i + 1, n - 1)
+    if hi >= len(xs) and pos > i or i >= len(xs):
+        return None
+    return da._r(xs[i] + (xs[hi] - xs[i]) * (pos - i) if hi < len(xs) else xs[i], 3)
 
 
 # Practice (IDEAS D-27): the skill "Work on" names, carried into the next drives. A plan is {skill, since, where}: since

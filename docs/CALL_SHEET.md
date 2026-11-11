@@ -13,6 +13,62 @@ and height) heats the discs, and the air cools them. It never says a temperature
 it counts engine braking as brake work, so it errs toward warning. Ordinary hills stay quiet (the two demo drives never
 get past cool). Nothing leaves the phone. Undo: revert the PR, or remove the `noteBrakes(...)` calls in cockpit.js to keep
 only the drive page line.
+## 2026-11-11 (ui-round-two): the Garage and People match the Log and the home screen (claude/project-thread-5sbga7)
+
+The Garage's title is now set large like the place name on the map, its gear is a key laid on the page instead of an
+ink box, each car is a paper card with its name large and its keys as soft wells, your daily car carries the red dot,
+and the look you use is the one card ringed in ink. On People, Friends and Crews are the same size as Drives and Stages
+on the Log, crew tiles are paper, and a friend's request carries the red dot as the one thing to answer. Example and
+empty states stay drawn in pencil. No words or places changed.
+
+Undo: revert the PR (CSS only).
+
+## 2026-11-11 (roam-c-ci-shards): the e2e check runs as four jobs side by side (claude/roam-c-ci-shards)
+
+The e2e check ran 173 flows one after another in 28-31 minutes against a 35-minute limit, and every PR waited on it. It
+now runs as four jobs at once, `e2e (1/4)` to `e2e (4/4)`, each taking a quarter of the flows (smoke.js `SHARD=k/n`),
+and one small job still named `e2e` that is green only when all four are, so anything that reads the check by name sees
+no change. Calls made: (1) four jobs, not more: each pays about a minute of setup, and the safe-area flow alone is about
+4.5 minutes, so more jobs would not finish sooner. (2) Flows are dealt longest first to the lightest job, from a short
+table of the 18 flows over 15 s in smoke.js (`LONG_S`); a flow not in it counts as 5 s, so a renamed or new flow still
+runs, it is only dealt as a short one. From the last CI log that gives 6.4 / 6.5 / 5.8 / 6.9 minutes of flows (plain
+every-4th dealing gave 9.0 for one job). (3) The job limit is 25 minutes. (4) The Playwright browser is cached by its
+version; npm installs only Playwright itself (no lock file to cache), so there is nothing else worth caching. Coverage
+is the same: `LIST=1` over the four shards gives exactly the 173 flows of an unsharded run.
+
+Undo: revert the PR, or set the matrix to `[1]` and `SHARD` to `1/1` (one job running every flow, as before).
+## 2026-11-11 (roam-b-crowd-bumps): a bump is called on a planned route once two members felt it (claude/roam-b-crowd-bumps)
+
+Each 5 m section of road data now also says whether the phone felt a sharp bump there (yes, no or unknown; never a g
+value). The server keeps it as a Beta posterior with a 120-day half-life and counts different people per spot without
+storing who. A bump shows to members once two or more people felt it and most passes agree (posterior over 0.8: two
+hits and no clean pass is 0.83; three of four is 0.70, not shown), and the co-driver calls it on a planned route even in
+cruise, the strip saying "Confirmed by members". The calls I made: 120 days for the half-life (potholes get filled
+within a season or two; a frost heave comes back each winter and gets re-felt); ±10 m to treat two hits as one bump
+(GPS); a Jeffreys prior; a repaved section starts its bump evidence again. Migration 0052 (additive). Undo: FLAGS
+{"crowd_bumps":{"on":false}} stops the calls; the thresholds are `BUMP` (contribute.ts) and `VERIFY` (roads.ts).
+## 2026-11-11 (round two analysis): Your touch, and when the recording is too coarse to time it (claude/project-thread-gd7nre)
+
+Your driving now has a "Your touch" panel: how fast the brakes go on and come off and how fast the car is loaded up at
+turn-in, in g a second (median of every clean corner, from 20 corners), and whether the brakes are let go more gently
+than they go on. Calls made: (1) touch is a style fact, not a 0-100 skill, because nothing yet says what a good rate is
+on a road; it never enters Work on or the Score. (2) Drives whose g was kept once a second (everything before #377, and
+browser drives) give no touch: the g itself is checked for a staircase or a straight ramp between fixes, so no date or
+flag is needed. (3) 5 m bins can only time a rise that spans about one and a half bins (at 20 m/s, about 0.4 s); a
+quicker one is counted as "quick" rather than read too slow, and when most are quick the panel says "one quick movement
+(quicker than the recording can time)" instead of a number. Finer timing would need the recording to keep the raw frames.
+
+Undo: revert the PR (kept observations rebuild on the next visit, `OBS_VERSION` 2 back to 1).
+## 2026-11-11 (ui-round-two): the Log looks like the rest of the app (claude/project-thread-5sbga7)
+
+The Log is its own page shown over the map, and it had kept the old look: opening it swapped the tab bar's red dot for a
+red bar, Drives and Stages were a black slide switch (it read as a setting), and every date, card and panel sat in an ink
+box. Now the Log uses the same signature layer as the home screen: the dot marks the open tab, Drives and Stages are the
+page's head as two underlined places (as Friends and Crews are on People), rows are divided by hairlines, a date is
+set in type, cards are paper with a soft shadow, a drive's name is a masthead and the score sets itself once. Tapedeck and
+Billet keep their own colours. Nothing moved and no words changed.
+
+Undo: revert the PR (CSS and markup only; nothing stored changed).
 
 ## 2026-11-10 (fable-pro-looks): Pro is looks only; one Pro crew-mate dresses the whole crew (claude/fable-pro-looks)
 

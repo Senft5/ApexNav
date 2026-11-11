@@ -3,6 +3,8 @@
 // words for it, and the Log's page. Six skills in the order a corner is driven, each 0-100 and unknown under 30 corners;
 // where you are measurably better or worse (lefts and rights, tight and fast, downhill, the first ten minutes, one car, a
 // tag), kept only when it is large, far beyond chance and repeats drive after drive; each skill month by month.
+// Touch: how fast the brakes go on and come off and the car is loaded at turn-in, in g a second, from the ten g readings
+// a second kept since #377 (older drives, kept once a second, give none).
 // Technique only: no speed, time or legality enters a level, and nothing here is sent anywhere.
 (function (root) {
   'use strict';
@@ -10,7 +12,9 @@
   const SWING_G = 0.10, ARC_SPAN_G = 0.6, SQUEEZE_SPAN_G = 0.5, SQUEEZE_MIN_G = 0.20, SQUEEZE_PAD = 2, SQUEEZE_GAP = 6, ENTRY_SWING_MPS = 0.6, SLOW_PAD = 10, ENTRY_SPAN_MPS = 3.0,
     FOCUS_MAX = 85, EXIT_FREE_M = 10, EXIT_SPAN_M = 40, LINE_FREE_M = 5, LINE_SPAN_M = 25, TRAIL_MIN_M = 10, GRADE_PAD = 10, GRADE_MIN = 0.04,
     WARM_MIN = 10, LONG_MIN = 60, SKILL_MIN = 30, STYLE_MIN = 20, MATRIX_MIN = 10, SPLIT_MIN = 12, SPLIT_FLOOR = 0.08, SPLIT_SE = 3,
-    SPLIT_DRIVE_MIN = 3, SPLIT_DRIVES = 2, GROUP_DRIVES = 4, GROUP_DRIVE_MIN = 5, TREND_MIN = 15, TREND_FLOOR = 0.05, TREND_SE = 2, TOP_FINDINGS = 8;
+    SPLIT_DRIVE_MIN = 3, SPLIT_DRIVES = 2, GROUP_DRIVES = 4, GROUP_DRIVE_MIN = 5, TREND_MIN = 15, TREND_FLOOR = 0.05, TREND_SE = 2, TOP_FINDINGS = 8,
+    TOUCH_MIN_G = 0.25, TOUCH_LO = 0.2, TOUCH_HI = 0.8, TOUCH_MIN_BINS = 1.5, FINE_EPS = 3e-4, FINE_FLAT = 0.3;
+  const TOUCH = ['brake_on', 'brake_off', 'turn_in'];
   const CoreOf = () => root.ApexCore || (typeof require === 'function' ? require('./apex_core.js') : null);
   const finite = (x) => typeof x === 'number' && Number.isFinite(x);
   const clamp01 = (x) => Math.min(1, Math.max(0, x));
@@ -46,6 +50,54 @@
     while (r0 - 1 >= lo && lon[r0 - 1] < Core.BRAKE_G) r0--;
     return [r0, r1];
   }
+  /** True when x moves like ten g readings a second, not one a second spread over the bins (a staircase or a ramp). */
+  function fine(x) {
+    if (x.length < 4) return false;
+    let flat = 0;
+    for (let i = 1; i < x.length - 1; i++) if (Math.abs(x[i] - x[i - 1]) <= FINE_EPS || Math.abs(x[i + 1] - 2 * x[i] + x[i - 1]) <= FINE_EPS) flat++;
+    return flat < FINE_FLAT * (x.length - 2);
+  }
+  const cross = (y, t, j, k, lv) => { const f = clamp01(y[k] !== y[j] ? (lv - y[j]) / (y[k] - y[j]) : 0); return [t[j] + f * (t[k] - t[j]), j + f * (k - j)]; };
+  const QUICK = 'quick';
+  /** g a second at which y rose to its peak at pk (way -1) or fell from it (way +1), 20 % to 80 % of the peak; QUICK when
+   *  that took under TOUCH_MIN_BINS bins (too quick for 5 m bins to time); null when it does not get there. */
+  function touchRate(y, t, pk, way) {
+    const p = y[pk], at = {};
+    let j = pk;
+    for (const lv of [TOUCH_HI, TOUCH_LO]) {
+      while (j + way >= 0 && j + way < y.length && y[j + way] >= lv * p) j += way;
+      if (!(j + way >= 0 && j + way < y.length)) return null;
+      at[lv] = cross(y, t, j + way, j, lv * p);
+    }
+    if (Math.abs(at[TOUCH_HI][1] - at[TOUCH_LO][1]) < TOUCH_MIN_BINS) return QUICK;
+    const dt = (at[TOUCH_HI][0] - at[TOUCH_LO][0]) * -way;
+    return dt <= 0 ? null : (TOUCH_HI - TOUCH_LO) * p / dt;
+  }
+  const argmax = (lo, hi, f) => { let best = lo; for (let i = lo + 1; i <= hi; i++) if (f(i) > f(best)) best = i; return best; };
+  // every bin w0..w1 with its g measured and the car moving at a known speed (a blanked g or a bin taking no time makes a false rate)
+  function measured(Core, v, known, w0, w1) {
+    for (let q = w0; q <= w1; q++) if ((known && !known[q]) || !(Number.isFinite(v[q]) && v[q] >= Core.STOPPED_MPS)) return false;
+    return true;
+  }
+  function cornerTouch(Core, lon, lat, t, s, e, run, first, v, known) {
+    const n = lat.length;
+    let on = null, off = null, turn = null;
+    if (run) {
+      const w0 = Math.max(0, first - SQUEEZE_GAP), w1 = Math.min(n - 1, run[1] + SQUEEZE_GAP), dec = [];
+      for (let q = w0; q <= w1; q++) dec.push(-lon[q]);
+      if (dec.every(Number.isFinite) && measured(Core, v, known, w0, w1) && fine(dec)) {
+        const pk = argmax(first - w0, run[1] - w0, (i) => dec[i]);
+        if (dec[pk] >= TOUCH_MIN_G) { const tt = Array.from(t.slice(w0, w1 + 1)); on = touchRate(dec, tt, pk, -1); off = touchRate(dec, tt, pk, 1); }
+      }
+    }
+    const w0 = Math.max(0, s - Core.TURN_LEAD), side = [];
+    for (let q = w0; q <= e; q++) side.push(lat[q]);
+    if (side.every(Number.isFinite) && measured(Core, v, known, w0, e) && fine(side)) {
+      const pk = argmax(s - w0, e - w0, (i) => Math.abs(side[i])), way = side[pk] > 0 ? 1 : -1, y = side.map((x) => way * x);
+      if (y[pk] >= TOUCH_MIN_G) turn = touchRate(y, Array.from(t.slice(w0, e + 1)), pk, -1);
+    }
+    return [on, off, turn];
+  }
 
   /**
    * One observation per corner the coach may read. drive: { speed_mps, lon_g, lat_g, g_known?, elev?, corners: [{ start, end,
@@ -71,11 +123,11 @@
       let peak = side[0];
       for (const x of side) if (Math.abs(x) > Math.abs(peak)) peak = x;
       const arc = 1 - clamp01(excess(side.map((x) => (peak >= 0 ? x : -x))) / ARC_SPAN_G);
-      let squeeze = null;
+      let squeeze = null, first = null;
       const run = brakeRun(Core, lon, s, a);
       if (run) {
         const lo = Math.max(0, a - Core.BRAKE_LOOKBACK);
-        let first = run[0];
+        first = run[0];
         for (let more = true; more;) {                                 // an earlier stab at the brakes on the same approach
           more = false;
           for (let q = first - 1; q >= Math.max(lo, first - SQUEEZE_GAP); q--) if (lon[q] < Core.BRAKE_G) { first = q; more = true; break; }
@@ -88,6 +140,7 @@
           if (Math.max(...dec) >= SQUEEZE_MIN_G) squeeze = 1 - clamp01(excess(dec) / SQUEEZE_SPAN_G);
         }
       }
+      const [brakeOn, brakeOff, turnIn] = cornerTouch(Core, lon, lat, t, s, e, run, first, v, drive.g_known || null);
       let grade = null;
       if (elev) {
         const g0 = Math.max(0, s - GRADE_PAD), g1 = Math.min(n - 1, e + GRADE_PAD), h0 = elev[g0], h1 = elev[g1];
@@ -103,6 +156,7 @@
         exit: slow === null ? null : 1 - clamp01((ph.coast_m - EXIT_FREE_M) / EXIT_SPAN_M),
         trail: ph.brake_m === null ? null : (ph.trail_m >= TRAIL_MIN_M ? 1 : 0),
         slow_m: slow === null ? null : (slow - a) * 5,
+        brake_on: brakeOn, brake_off: brakeOff, turn_in: turnIn,
       });
     }
     return out;
@@ -154,6 +208,26 @@
     ['time', 'start', 'later', (o) => o.minute < WARM_MIN, (o) => o.minute >= WARM_MIN],
     ['time', 'long', 'before', (o) => o.minute >= LONG_MIN, (o) => o.minute < LONG_MIN],
   ];
+  // the f quantile of n values of which sorted xs are the lowest (the rest quick); null when it reaches into the quick ones
+  function rank(xs, n, f) {
+    const pos = f * (n - 1), i = Math.floor(pos), hi = Math.min(i + 1, n - 1);
+    if ((hi >= xs.length && pos > i) || i >= xs.length) return null;
+    return r(hi < xs.length ? xs[i] + (xs[hi] - xs[i]) * (pos - i) : xs[i], 3);
+  }
+  /** The touch over corners obs: per measure { rate, lo, hi, n, quick, quick_rate } in g a second (null under STYLE_MIN
+   *  corners; a quick corner ranks above every rate), and release (brakes off over on, corners with both timed). */
+  function touch(obs) {
+    const out = {};
+    for (const k of TOUCH) {
+      const xs = obs.map((o) => o[k]).filter(finite).sort((p, q) => p - q), q = obs.filter((o) => o[k] === QUICK).length, n = xs.length + q, ok = n >= STYLE_MIN;
+      const at = (f) => (ok ? rank(xs, n, f) : null);
+      out[k] = { rate: at(0.5), lo: at(0.25), hi: at(0.75), n, quick: q, quick_rate: ok && at(0.5) === null };
+    }
+    const both = obs.filter((o) => finite(o.brake_on) && finite(o.brake_off)).map((o) => o.brake_off / o.brake_on);
+    out.release = both.length >= STYLE_MIN ? r(median(both), 3) : null;
+    out.release_n = both.length;
+    return out;
+  }
   const cmp = (p, q) => (p < q ? -1 : p > q ? 1 : 0);
 
   /** drives: [{ id, month ('YYYY-MM' or null), car (label or null), tags ([str] or null), obs (observe's) }]. */
@@ -161,7 +235,7 @@
     const drives = (drivesIn || []).filter((d) => d && Array.isArray(d.obs) && d.obs.length);
     const every = [];
     for (const d of drives) every.push(...d.obs);
-    const out = { corners: every.length, drives: drives.length, skills: {}, style: {}, matrix: [], findings: [], trend: {}, change: {}, strongest: null, focus: null };
+    const out = { corners: every.length, drives: drives.length, skills: {}, style: {}, touch: {}, matrix: [], findings: [], trend: {}, change: {}, strongest: null, focus: null };
     const overall = {};
     for (const k of SKILLS) {
       const xs = vals(every, k);
@@ -175,6 +249,7 @@
       slow_m: slow.length >= STYLE_MIN ? r(Core.meanSe(slow)[0], 2) : null, slow_n: slow.length,
       use: use.length >= SKILL_MIN ? r(median(use), 4) : null,
     };
+    out.touch = touch(every);
     const bySize = {};
     for (const size of ['tight', 'medium', 'fast', null]) {
       const cell = every.filter((o) => o.size === size);
@@ -356,6 +431,27 @@
     }
     return out;
   }
+  /** Your touch, as sentences of fact: how the brakes go on and come off, and how the car is loaded at turn-in. */
+  const gps = (x) => `${x < 1 ? r(x, 2).toFixed(2).replace(/0$/, '') : r(x, 1).toFixed(1)} g a second`;
+  function touchLines(t) {
+    const out = [];
+    if (!t) return out;
+    const on = t.brake_on || {}, off = t.brake_off || {}, turn = t.turn_in || {};
+    // a rate, or "quick": most corners quicker than 5 m bins can time
+    const how = (m) => (finite(m.rate) ? `at about ${gps(m.rate)}` : m.quick_rate ? 'in one quick movement (quicker than the recording can time)' : null);
+    const a = how(on), b = how(off);
+    if (a && b) out.push(`You put the brakes on ${a} and let them off ${b}.`);
+    else if (a) out.push(`You put the brakes on ${a}.`);
+    else if (b) out.push(`You let the brakes off ${b}.`);
+    if (finite(t.release)) {
+      out.push(t.release <= 0.7 ? 'You let the brakes go more gently than you put them on, which keeps the front tyres loaded as you turn in.'
+        : t.release >= 1.3 ? 'You let the brakes go more sharply than you put them on. Easing off them as you turn in keeps the front tyres loaded.'
+          : 'You put the brakes on and let them off at about the same rate.');
+    }
+    if (finite(turn.rate)) out.push(`You load the car up at about ${gps(turn.rate)} as you turn in${finite(turn.lo) && finite(turn.hi) ? `, most corners between ${r(turn.lo, 1).toFixed(1)} and ${r(turn.hi, 1).toFixed(1)}` : ''}.`);
+    else if (turn.quick_rate) out.push('You turn in with one quick movement of the wheel (quicker than the recording can time).');
+    return out;
+  }
   /** The Log's card: one line. */
   function cardLine(p, pr = null) {
     if (!p || !p.corners) return null;
@@ -530,6 +626,19 @@
     const style = styleLines(p.style, metric);
     if (style.length) { const pn = el('div', 'panel'); pn.append(el('h2', null, 'Your style'), ...style.map((t) => el('p', 'dp-say', t))); host.append(pn); }
 
+    // Your touch: from the ten g readings a second (drives recorded before them have none to give)
+    if (p.touch && TOUCH.some((k) => p.touch[k] && p.touch[k].n)) {
+      const pn = el('div', 'panel dp-touch'), lines = touchLines(p.touch);
+      pn.append(el('h2', null, 'Your touch'));
+      if (lines.length) pn.append(...lines.map((t) => el('p', 'dp-say', t)));
+      else {
+        const most = Math.max(...TOUCH.map((k) => p.touch[k].n));
+        pn.append(el('p', 'dp-say', `${most} of ${STYLE_MIN} corners read so far. Your touch is said from ${STYLE_MIN}.`));
+      }
+      pn.append(el('p', 'note', 'Read from the g the phone measures ten times a second: how fast the load comes on and goes off between a fifth and four fifths of its peak. Drives recorded before the phone kept every reading have none to give.'));
+      host.append(pn);
+    }
+
     const say = el('div', 'panel');
     say.append(el('h2', null, 'What your drives say'));
     if (p.findings.length) say.append(...p.findings.map((f) => { const n = el('p', 'dp-say', findingLine(f)); n.dataset.split = f.split; return n; }));
@@ -568,7 +677,7 @@
     }
   }
 
-  const api = { SKILLS, observe, profile, swing, excess, SKILL_MIN, WORDS, findingLine, styleLines, cardLine, focusLines, render,
+  const api = { SKILLS, observe, profile, swing, excess, SKILL_MIN, WORDS, findingLine, styleLines, touchLines, touch, TOUCH, cardLine, focusLines, render,
     PRACTICE_MIN, practice, drivePractice, practiceLine, practiceSummary, localStamp, loadPlan, savePlan, PLAN_KEY };
   if (typeof module !== 'undefined' && module.exports) module.exports = api; else root.ApexDriverProfile = api;
 })(typeof window !== 'undefined' ? window : globalThis);

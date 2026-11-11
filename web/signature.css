@@ -97,3 +97,94 @@
 @media (prefers-reduced-motion: reduce) {
   #app.idle .plan-bar, #app.idle .deck-shelf > *, .place-plate b, .place-plate span { animation: none; }
 }
+
+/* ================= the Log (analysis.html, body.log-page): the same book as the map page =================
+   Before this it kept the old furniture: a red bar over the open tab where the map page has the apex dot, a slide switch for
+   two places, every row and panel boxed in ink. Here: the two places are the page's head, rows are hairline-divided, a box
+   is paper with a breath of shadow, keys are flat ink, and the score is set once, as the masthead is. */
+.log-page .vh { position: absolute; width: 1px; height: 1px; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+
+/* the tab bar: the apex dot marks where you are, as on the map page */
+.log-page .tabbar { border-top-color: var(--hair); }
+.log-page .tabbar a { height: 54px; transition: color 0.12s; }
+.log-page .tabbar a.on { color: var(--panel-ink); }
+.log-page .tabbar a.on::before { top: 3px; left: 50%; right: auto; bottom: auto; width: 6px; height: 6px; margin-left: -3px; border-radius: 50%; background: var(--accent); }
+.log-page .tabbar a.on svg { transform: translateY(1px) scale(1.08); stroke-width: 2.1; }
+@media (orientation: landscape) and (max-height: 540px) {
+  .log-page .tabbar { border-left-color: var(--hair); }
+  .log-page .tabbar a.on::before { top: 50%; left: 7px; margin: -3px 0 0; }
+}
+
+/* the head: Drives and Stages, two places, underlined like People's Friends and Crews */
+.log-page .log-head { align-items: flex-end; min-height: 0; margin: 0 -16px; padding: 0 16px; border-bottom: 1px solid var(--hair); }
+.log-page .log-tabs { display: flex; gap: 26px; }
+.log-page .log-tabs > button { position: relative; min-height: 48px; padding: 0 2px 10px; border: 0; background: transparent; color: var(--panel-dim); cursor: pointer;
+  font: 800 26px/1 var(--font-num); letter-spacing: 0.005em; display: flex; align-items: flex-end; }
+.log-page .log-tabs > button[aria-selected="true"] { color: var(--panel-ink); }
+.log-page .log-tabs > button::after { content: ""; position: absolute; left: 0; right: 0; bottom: -1px; height: 3px; background: var(--panel-ink); transform: scaleX(0); transform-origin: left; transition: transform 0.22s var(--arrive); }
+.log-page .log-tabs > button[aria-selected="true"]::after { transform: none; }
+.log-page .log-tabs > button:active { opacity: 0.7; }
+
+/* quiet rows: hairlines, not ink rules */
+.log-page :is(table:is(.road-index, .fp-index) td, details.quiet, td, th, .dv-tagrow, .dv-head, details.more, .log-hero, .fp-ghost, .fp-ghost .hero-score) { border-color: var(--hair); }
+.log-page :is(.road-index, .fp-index) .ix-road b { font-size: 17px; }
+/* a drive's date is set, not stamped: the day in the numeral face, the month small under it */
+.log-page .stamp-d { border: 0; width: 42px; padding: 0; color: var(--panel-dim); font-size: 11px; letter-spacing: 0.08em; gap: 1px; }
+.log-page .stamp-d b { color: var(--panel-ink); font-size: 26px; line-height: 0.95; }
+.log-page .fp-ghost .stamp-d { border: 0; } .log-page .fp-ghost .stamp-d b { color: var(--panel-dim); }
+.log-page tr.row-link:active td { background: var(--well); }
+
+/* a box is paper on the page: a hairline and a breath of shadow, never an ink frame */
+.log-page :is(.dp-card, .seg, .dv-corner, .dv-time button, .card, .empty, .dv-map, .dv-lanes, .seg-map, .vote-map) { border: 0; background: var(--face, var(--panel)); box-shadow: var(--lift-0); }
+.log-page .dp-card { padding: 14px; } .log-page .dp-card b { font-size: 20px; }
+.log-page :is(.seg, .dv-corner).on { box-shadow: inset 3px 0 0 var(--accent), var(--lift-0); }
+.log-page .dv-read { background: var(--hair); border-color: var(--hair); }
+.log-page .dv-z:not(.on) { border-color: var(--hair); }
+/* a panel is a section of the page under a hairline, not a box */
+.log-page .panel:not(.index-panel) { border: 0; border-top: 1px solid var(--hair); padding: 14px 0 0; }
+.log-page .panel h2 { font-size: 20px; }
+
+/* fields are wells, as Where to? is on the map page */
+.log-page :is(select, input:not([type="range"]):not([type="checkbox"]), textarea) { border: 0; background-color: var(--well); }
+.log-page :is(select, input, textarea):focus-visible { box-shadow: inset 0 0 0 2px var(--panel-ink); }
+/* keys are flat ink; the old pressed-in bottom edge belonged to the boxed look */
+.log-page :is(a.btn.fp-go, .dv-acts .dv-replay) { box-shadow: none; }
+.log-page :is(button.btn, a.btn, label.btn):active { transform: translateY(1px); }
+
+/* a drive's page and Your driving: the title is a masthead, like the place on the map */
+.log-page #tab-drive .stages-h, .log-page #tab-driving .stages-h { font: 800 30px/1.05 var(--font-num); letter-spacing: 0.005em; }
+
+/* arrival: the score is set once, as the masthead is; reduced motion, a cut */
+.log-page .hero-score b { animation: vl-ink 0.6s var(--arrive) both; }
+.log-page .dv-head .score.big { animation: vl-ink 0.6s var(--arrive) both; }
+@media (prefers-reduced-motion: reduce) { .log-page .hero-score b, .log-page .dv-head .score.big { animation: none; } }
+
+/* ================= the Garage (index.html, the sheet's garage view): you, your cars and the looks as paper =================
+   It kept the boxed look: a 22 px title beside a gear in an ink box with a drop edge, each car in an ink frame with its keys
+   stacked in outlines, each look framed in 1.5 px ink. Now the title is a masthead, the gear is a key laid on the page, a car
+   is a card of paper with its name set large and its keys as wells, and the look in use is the one card ringed in ink. */
+.sheet header { border-bottom-color: var(--hair); }
+.sheet[data-view="garage"] #sheetTitle { font: 800 30px/1 var(--font-num); letter-spacing: 0.005em; }
+.gear-key { border: 0; background: var(--face, var(--panel)); box-shadow: var(--lift-1); transition: transform 0.12s; }
+.gear-key:active { box-shadow: 0 0 0 1px var(--hair); transform: translateY(1px); }
+
+.garage-cards .car-card { border: 0; background: var(--face, var(--panel)); box-shadow: var(--lift-0); padding: 14px; gap: 6px; }
+.garage-cards .car-card .car-cover { width: calc(100% + 28px); margin: -14px -14px 8px; }
+.garage-cards .car-card .car-title b { font: 700 22px/1.1 var(--font-num); letter-spacing: 0.005em; }
+.garage-cards .car-card .car-title .note { display: inline-flex; align-items: center; gap: 6px; font-size: 14px; font-weight: 600; }
+.garage-cards .car-card .car-title .note::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: var(--accent); }   /* the daily car: the apex dot, the one you drive now */
+.garage-cards .car-card :is(.ink-btn, label.ink-btn):not(.solid) { border-color: transparent; background: var(--well); }
+.garage-cards .car-card .car-gallery img { border-color: var(--hair); }
+.garage-cards { gap: 10px; }   /* .garage-cards before .car-card: garage_ui.js adds its own rules after this file */
+
+.theme-card { border: 0; background: var(--face, var(--panel)); box-shadow: var(--lift-0); overflow: hidden; }
+.theme-card.in-use { border-width: 0; box-shadow: 0 0 0 2px var(--panel-ink), var(--lift-1); }
+.theme-cards, html:not([data-type-size]) .theme-cards { padding-top: 4px; padding-bottom: 8px; }   /* the in-use ring and the lift are not clipped by the shelf */
+
+/* ================= People: the same head as the Log, cards as paper ================= */
+.people-tabs > button { font: 800 26px var(--font-num); letter-spacing: 0.005em; }
+.people-tabs > button::after { transform-origin: left; transition: transform 0.22s var(--arrive); }
+.sheet .card:not(.sample-crew) { border: 0; background: var(--face, var(--panel)); box-shadow: var(--lift-0); }
+/* a friend's request is the one thing to answer on the page: paper, marked with the apex dot */
+.sheet .request-card { padding: 14px; }
+.sheet .request-card p b::before { content: ""; display: inline-block; width: 7px; height: 7px; margin: 0 7px 2px 0; border-radius: 50%; background: var(--accent); }

@@ -3584,13 +3584,21 @@ flow('reported hazards: a call ahead, "still there?" after passing, and a one-ta
   // VI-1: asked by the 0.1-degree cell, never the position (the phone measures the 200 m itself)
   check(asked.length >= 1 && asked.every((q) => /^\?lat=35\.6&lon=-83\.9&km=20$/.test(q)), 'the hazards are asked for by cell: ' + JSON.stringify(asked));
   check(await page.evaluate(() => window.__said.some((t) => /gravel reported ahead/i.test(t)) || /Gravel reported ahead/.test(document.body.textContent)), 'the hazard was called ahead');
+  // The car keeps sending fixes from here on, as a phone does. A web drive with no fix for 5 s drops back to the replay
+  // ("GPS lost"), the drive bar goes and the report's word goes to the toast instead of the status line: the ask, the vote
+  // and the report's 3 s Undo run past 5 s on a slow runner (main's e2e, 2026-11-11, a bare 30 s timeout here).
+  await page.evaluate(() => { window.__fixes = setInterval(() => window.apex.live({ lat: 35.6 + 330 / 110540, lon: -83.9, accuracy_m: 5, speed_mps: 15, course_deg: 0, has_fix: true, calibration: 'locked' }), 500); });
   await page.click('#hzReportBtn');
   await page.click('#hzKinds button:has-text("Pothole")');
   // REVIEW4 U-74 / U-102 (check): in a drive the confirmation is the status line's, never a toast over the map
-  await page.waitForFunction(() => /Pothole reported/.test(document.getElementById('dsNote').textContent));
+  await page.waitForFunction(() => /Pothole reported/.test(document.getElementById('dsNote').textContent), null, { timeout: 15000 })
+    .catch(async () => { throw new Error('the report\'s status line never came: ' + JSON.stringify(await page.evaluate(() => ({ note: document.getElementById('dsNote').textContent,
+      toast: document.getElementById('toast').textContent, key: document.getElementById('hzReportBtn').textContent, bar: !document.getElementById('driveBar').hidden,
+      outbox: localStorage.getItem('apex.outbox'), said: (window.__said || []).slice(-4) }))) + ' reports=' + reports.length); });
   check(!(await page.evaluate(() => document.getElementById('toast').classList.contains('show') && /Pothole/.test(document.getElementById('toast').textContent))), 'no toast over the map');
   check(await page.evaluate(() => { const n = document.getElementById('dsNote'); return !n.hidden && n.scrollWidth <= n.clientWidth + 1 && /reported/.test(n.getAttribute('aria-label')); }), 'the status line says it whole (or its first sentence)');
   check(reports.length === 1 && reports[0].kind === 'pothole' && Math.abs(reports[0].lat - (35.6 + 330 / 110540)) < 1e-4 && reports[0].heading === 0, 'reported at your position and heading');
+  await page.evaluate(() => clearInterval(window.__fixes));
 });
 
 flow('review mode (U-94): the recording\'s hazard report is the sheet, Undo and a pin, and nothing reaches the server', async (page, base) => {
@@ -3609,10 +3617,14 @@ flow('review mode (U-94): the recording\'s hazard report is the sheet, Undo and 
     for (let i = 0; i <= 40; i++) { window.apex.live({ lat: 35.6 + (i * 1.5) / 110540, lon: -83.9, accuracy_m: 5, speed_mps: 15, course_deg: 0, has_fix: true, calibration: 'locked' });
       await new Promise(r => setTimeout(r, 20)); }
   });
+  // the car keeps sending fixes, as a phone does: a web drive with no fix for 5 s drops back to the replay (see "reported hazards")
+  await page.evaluate(() => { window.__fixes = setInterval(() => window.apex.live({ lat: 35.6 + 60 / 110540, lon: -83.9, accuracy_m: 5, speed_mps: 15, course_deg: 0, has_fix: true, calibration: 'locked' }), 500); });
   await page.click('#hzReportBtn');
   check(await page.evaluate(() => document.getElementById('hzOverlay').classList.contains('show')), 'the sheet opens');
-  await page.click('#hzKinds button:has-text("Gravel")');
-  check(/Undo Gravel/.test(await page.textContent('#hzReportBtn')), 'the Report key is Undo for 3 s');
+  // the key is read in the same task as the tap: a separate read after a click can land past the 3 s on a slow runner
+  // (CI 2026-11-11, this check failed once when the whole suite ran 27 minutes)
+  check(await page.evaluate(() => { [...document.querySelectorAll('#hzKinds button')].find((b) => b.textContent === 'Gravel').click();
+    return /Undo Gravel/.test(document.getElementById('hzReportBtn').textContent); }), 'the Report key is Undo for 3 s');
   await saidOn(page, /Gravel reported/, { timeout: 6000 });                 // the toast, or the status line in a drive (U-74)
   await page.waitForFunction(() => [...document.querySelectorAll('.hz-pin')].some((p) => p.textContent === 'GRAVEL'), null, { timeout: 4000 });
   await page.evaluate(async () => { await ApexSync.apiFetch('/api/presence', { method: 'POST', body: '{}' }); await ApexSync.apiFetch('/api/feedback', { method: 'POST', body: '{}' }); });
@@ -3620,6 +3632,7 @@ flow('review mode (U-94): the recording\'s hazard report is the sheet, Undo and 
   check([...await page.$$eval('.hz-pin', (ps) => ps.map((p) => p.textContent))].includes('GRAVEL'), 'the pin outlives a reload of the server\'s hazards');
   check(writes.length === 0, 'nothing was written to the server: ' + writes.join(', '));
   check(await page.evaluate(() => !localStorage.getItem('apex.outbox')), 'nothing waits in the outbox either');
+  await page.evaluate(() => clearInterval(window.__fixes));
 });
 
 flow('your data: Settings counts what the phone holds and downloads drives as GPX, offline data deleted (IDEAS Z-03/Z-04, F-06)', async (page, base) => {
@@ -4366,6 +4379,19 @@ flow('Your driving: the profile over every drive opens from the Log, names the w
   check(await page.evaluate(() => document.querySelector('.dp-st.weak').dataset.skill === 'arc' && document.querySelectorAll('.dp-st').length === 6), 'six stations, the weak one marked');
   check(!/mph|km\/h|\d s\b/.test(text), 'never a speed or a time');
   check(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth), 'nothing wider than the phone');
+  // touch: these drives' g runs straight between fixes (as recordings before ten readings a second did), so there is none
+  check(await page.evaluate(() => !document.querySelector('#drivingRoot .dp-touch')), 'no touch from g kept once a second');
+  const touch = await page.evaluate(async () => {
+    const p = (await ApexAnalysis.job('profile')).profile, host = document.createElement('div');
+    p.touch = { brake_on: { rate: 0.82, lo: 0.6, hi: 1.1, n: 40, quick: 3, quick_rate: false }, brake_off: { rate: 0.41, lo: 0.3, hi: 0.5, n: 40, quick: 0, quick_rate: false },
+      turn_in: { rate: null, lo: 0.7, hi: null, n: 50, quick: 30, quick_rate: true }, release: 0.5, release_n: 37 };
+    document.getElementById('drivingRoot').append(host);
+    ApexDriverProfile.render(host, p, {});
+    const t = host.querySelector('.dp-touch'), out = t ? t.innerText : null; host.remove();
+    return out;
+  });
+  check(/Your touch/.test(touch) && /brakes on at about 0\.82 g a second and let them off at about 0\.41 g a second/.test(touch) && /more gently/.test(touch)
+    && /quick movement of the wheel/.test(touch), 'the touch panel says it in words: ' + touch);
   // each drive's observations were kept: a second visit reads no drive again, and a deleted drive's are dropped
   const again = await page.evaluate(() => ApexAnalysis.job('profile'));
   check(again.read === 0 && again.profile.corners === 108, 'kept between visits: read ' + again.read);
@@ -5978,7 +6004,8 @@ flow('the empty Log is a first page: the book\'s furniture in pencil, one key, a
   const f = await page.evaluate(() => { const fam = (e) => getComputedStyle(e).fontFamily, go = document.querySelector('#historyEmpty .fp-go').getBoundingClientRect(), alt = document.querySelector('#historyEmpty .fp-alt').getBoundingClientRect();
     return { body: fam(document.body), sw: [...document.querySelectorAll('.log-seg button')].map(fam), go: [Math.round(go.height), Math.round(go.width)], alt: Math.round(alt.height),
       over: document.documentElement.scrollWidth > innerWidth, head: document.querySelector('#historyEmpty .fp-head').textContent, table: document.getElementById('historyPanel').hidden }; });
-  check(f.sw.every((x) => x === f.body), 'Drives and Stages are set in the page\'s typeface: ' + JSON.stringify(f));
+  // Vetta Line: Drives and Stages are the page's head, two places set in the numeral face like People's Friends and Crews
+  check(f.sw.length >= 2 && f.sw.every((x) => /Barlow/.test(x) && x !== f.body), 'Drives and Stages are the head, in the numeral face: ' + JSON.stringify(f));
   check(f.go[0] >= 44 && f.go[1] > 300 && f.alt >= 44 && !f.over && f.head === 'Your first drive goes here.' && f.table, 'one full-width key, a 44 pt link, nothing off the page, no empty table under it: ' + JSON.stringify(f));
   await page.click('[data-seg="segments"]');
   await page.waitForSelector('#segList .first-page');
@@ -7901,7 +7928,26 @@ flow('time attack this week (SOCIAL 2.9): in Where to?, the area\'s stage and it
   const browser = await chromium.launch();
   let failed = 0;
   // FLOW=<text> runs only the flows whose name contains it; REPEAT=<n> runs each n times (for chasing a flaky one).
-  const only = process.env.FLOW ? flows.filter((f) => f.name.includes(process.env.FLOW)) : flows;
+  const picked = process.env.FLOW ? flows.filter((f) => f.name.includes(process.env.FLOW)) : flows;
+  // SHARD=<k>/<n> runs the k-th of n slices (CI runs n jobs side by side; each flow is in exactly one of them). Flows are
+  // dealt longest first to the lightest slice, so the long ones don't pile into one job. Seconds from the CI log of
+  // 2026-11-11; a flow not listed counts as 5 s (a renamed one still runs, it is only dealt as a short one).
+  const shard = /^(\d+)\/(\d+)$/.exec(process.env.SHARD || '');
+  if (process.env.SHARD && (!shard || +shard[1] < 1 || +shard[1] > +shard[2])) throw new Error(`SHARD must be k/n with 1 <= k <= n, not ${process.env.SHARD}`);
+  const LONG_S = [['safe areas: the Dynamic Island', 258], ['theme contract on its side', 50], ['TestFlight 2026-11-05 note 6', 41],
+    ['the car map glides between fixes', 32], ['private themes', 32], ['turn by turn in road order', 30], ['level cards: one control', 27],
+    ['the strip never cuts', 23], ['when to go', 21], ['the map is a fixed stage', 20], ['a deliberate detour', 20],
+    ['theme contract on the page', 19], ['plan flow (d)', 18], ['plan flow (g)', 18], ['a loop by time', 17], ['plan flow (a)', 17],
+    ['plan flow (e, f)', 16], ["the map's viewpoint, café and fuel stamps", 15]];
+  const weight = (f) => (LONG_S.find(([p]) => f.name.startsWith(p)) || [, 5])[1];
+  const slice = new Map();
+  if (shard) {
+    const load = Array(+shard[2]).fill(0);
+    const order = picked.map((f, i) => [f, i]).sort((a, b) => weight(b[0]) - weight(a[0]) || a[1] - b[1]);   // stable: same deal every run
+    for (const [f] of order) { const k = load.indexOf(Math.min(...load)); load[k] += weight(f); slice.set(f, k); }
+  }
+  const only = shard ? picked.filter((f) => slice.get(f) === +shard[1] - 1) : picked;
+  if (process.env.LIST) { for (const f of only) console.log(f.name); process.exit(0); }   // LIST=1: the flows this run would take, nothing run
   const runs = only.flatMap((f) => Array.from({ length: Math.max(1, Number(process.env.REPEAT) || 1) }, () => f));
   for (const { name, fn, ctxOpts } of runs) {
     const { news, ...browserOpts } = ctxOpts;
