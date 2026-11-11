@@ -3669,6 +3669,10 @@
     try { funLevel = FunRoute.LEVELS[localStorage.getItem(FUN_LEVEL)] ? localStorage.getItem(FUN_LEVEL) : 'fun'; } catch (_) { /* storage off */ }
     async function funRoute(from, to, id, name, request, ui, opts = {}) {
       const level = funLevel, planT0 = Date.now();      // the early quickest counts from here, not from the router's answer
+      // Valhalla is for Quick only (the owner, 2026-11-11: "I don't want subpar routes going out for users with a bad
+      // connection"): Fun and Long way come from our own router or not at all, never Valhalla's routes or stage plans
+      // (its trace_route still gives our chosen line its spoken directions: own_routing.js instruct)
+      const ownOnly = level !== 'quick';
       const avoid = await avoidForTrip([from, to]);     // this plan's avoid choices, with the police reports near it
       const dev = (window.apexDebug && window.apexDebug.dev) || null;   // dev mode (devPlanner): off but for a developer
       if (dev && dev.apply) dev.apply();                                    // Route tuning's and the Dev panel's tune, as of now
@@ -3705,12 +3709,14 @@
       // our quickest is asked for first, with the coverage question behind it (the worker answers in order; a trip off
       // the tiles answers it with an error, and its answer is only used when the tiles cover the trip)
       const ownQuickAsk = ownOn() ? tlTime('worker: quickest', ApexOwnRouting.quick(ownRouter(), { from, to, level, avoid, heading: from.heading, ...(dev ? dev.tuneReq() : {}) })) : null;
-      const ownCovered = ownOn() ? !!(await RouteLoading.optional(ownRouter().covers([from, to]), OWN_COVERS_MS)) : false;
+      // (Fun and Long way have no stand-in, so they wait longer for the index on a slow connection; null: not known)
+      const coversAns = ownOn() ? await RouteLoading.optional(ownRouter().covers([from, to]), ownOnly ? OWN_COVERS_ONLY_MS : OWN_COVERS_MS).catch(() => null) : false;
+      const ownCovered = coversAns === true;
       mark('covers');
       // Valhalla: today's router without our tiles; with them only a check, asked once our first route is drawn (its
       // answers' decoding on the page held that first draw up, live 2026-11-05)
       // (Fun and Long way never drive a highway: Valhalla is asked to keep off them too, route_engine.js levelCosting)
-      const valhallaP = dev && dev.on('forceOwn') ? Promise.resolve([]) : (ownCovered ? firstSeen : Promise.resolve()).then(() => tlTime('valhalla: route', valhallaRoutes([from, to], false, 2, FunRoute.LEVELS[level].noHighway ? (connectorCosting() || {}) : {}))).catch(() => osrmRoutes([from, to])).catch(() => []);
+      const valhallaP = ownOnly || (dev && dev.on('forceOwn')) ? Promise.resolve([]) : (ownCovered ? firstSeen : Promise.resolve()).then(() => tlTime('valhalla: route', valhallaRoutes([from, to], false, 2, FunRoute.LEVELS[level].noHighway ? (connectorCosting() || {}) : {}))).catch(() => osrmRoutes([from, to])).catch(() => []);
       // (not with our tiles: the map tiles' road data is in them, and the context for our routes doesn't read it)
       try { if (!ownCovered && window.ApexOsmTiles && window.ApexRouteCtx && ApexRouteCtx.corridor && (!window.ApexFlags || ApexFlags.on('route_engine'))) ApexOsmTiles.prefetch([ApexRouteCtx.corridor('ahead', [[from.lon, from.lat], [to.lon, to.lat]], {})]); } catch (_) { /* nothing ahead: fetched with the context */ }
       // members' measured roads round the trip go into our search itself (signed out or none: unchanged)
@@ -3727,11 +3733,11 @@
         .then(([r, late]) => (r && r.result && (r.result.partial || late) ? ApexOwnRouting.plan(ownRouter(), late ? { ...ownReq, crowd: late } : ownReq) : null)).catch(() => null) : Promise.resolve(null);
       // our quickest alone, first (one search): the first route on screen
       const ownQuickP = ownCovered ? ownQuickAsk : null;
-      const stagesAhead = !ownCovered && level !== 'quick' && crowKm >= 3 && crowKm <= 48 && window.ApexStages ? stagesFor(from, to).catch(() => null) : null;
+      const stagesAhead = !ownCovered && !ownOnly && level !== 'quick' && crowKm >= 3 && crowKm <= 48 && window.ApexStages ? stagesFor(from, to).catch(() => null) : null;
       let direct;
       // The router's costing keeps off highways (use_highways 0.15), which is what sent routes through subdivisions and
       // business districts; so the highway-friendly quickest competes too (route_engine.js highwayCosting), unless avoided.
-      const hwyCosting = window.ApexRouteEngine && FunRoute.kmBetween(from, to) >= 2 && !(dev && dev.on('forceOwn')) ? ApexRouteEngine.highwayCosting(avoid, routingCar()) : null;
+      const hwyCosting = !ownOnly && window.ApexRouteEngine && FunRoute.kmBetween(from, to) >= 2 && !(dev && dev.on('forceOwn')) ? ApexRouteEngine.highwayCosting(avoid, routingCar()) : null;
       // (asked with our routes too: Valhalla's highway-friendly quickest is the check, and the clock ours are put on)
       const hwyTry = hwyCosting ? (ownCovered ? firstSeen : Promise.resolve()).then(() => tlTime('valhalla: highway route', valhallaRoutes([from, to], false, 0, hwyCosting))).catch(() => []) : Promise.resolve([]);
       // Where to? stays instant (REVIEW_FEEL): the FIRST answer goes up at once, not held for the other requests, the
@@ -3759,7 +3765,7 @@
       if (ownQuickP) ownQuickP.then((c) => { mark('quick'); if (c) fireEarly([c]); });
       const hwyCandsP = hwyTry.then((rs) => rs.filter(r => Number.isFinite(r.timeS)).map(r => ({ kind: 'router', highway: true, route: r, timeS: r.timeS, via: [] })));
       hwyCandsP.then((h) => { if (!ownCovered) fireEarly(h); });
-      const own = ownP ? await ownP : { cands: [], reason: ownOn() ? 'out' : 'off', ms: 0 };
+      const own = ownP ? await ownP : { cands: [], reason: !ownOn() ? 'off' : coversAns == null ? 'index' : 'out', ms: 0 };
       const ownUsed = own.cands.length > 0;
       mark('own');
       // our quickest already on screen is the same route as the plan's quickest: the plan keeps that very candidate, so
@@ -3769,6 +3775,18 @@
         if (k >= 0) { quickNow.ownRole = own.cands[k].ownRole; quickNow.own = own.cands[k].own; own.cands[k] = quickNow; }
       }
       if (window.apexDebug) window.apexDebug.lastOwn = { covered: ownCovered, used: ownUsed, reason: own.reason, ms: own.ms, n: own.cands.length, error: own.error || null, tiles: own.result ? own.result.tiles : null, routerMs: own.result ? own.result.ms : null, viewMs: own.result ? own.result.viewMs : null, geoMs: own.result ? own.result.geoMs : null, partial: own.result ? !!own.result.partial : null, quickMs: quickNow && quickNow.kind === 'own' ? quickNow.ownMs : null, quickLoadMs: quickNow && quickNow.kind === 'own' ? quickNow.ownLoadMs : null };
+      // Fun and Long way with no route of ours: said plainly, with Quick a tap away (no Valhalla stand-in)
+      if (ownOnly && !ownUsed) {
+        if (window.apexDebug) window.apexDebug.ownOnlyFail = own.reason;
+        if (early.shown) return true;                                       // (never: the early quickest is ours too)
+        const what = FunRoute.LEVELS[level].label;
+        const msg = own.reason === 'out' ? `${what} routes use Vetta's own road map, which covers Ohio, Kentucky and Indiana so far. Quick works anywhere.`
+          : own.reason === 'off' ? `${what} routes need Vetta's own router, which is switched off. Quick still works.`
+          : own.reason === 'index' ? `Couldn't load Vetta's road map for this trip. Check signal and try again, or use Quick.`
+          : `Couldn't plan a ${what} route just now. Try again, or use Quick.`;
+        toast(msg, { label: 'Use Quick', ms: 12000, onClick: () => { setFunLevel('quick'); const u = planBusy(); funRoute(from, to, id, name, request, u, opts).catch((e) => toast(e.message)).finally(() => u.done()); } });
+        return false;
+      }
       // with our routes in, Valhalla's answers are only checks, fetched alongside (below); without, today's path
       if (!ownUsed && !early.fired) openGate();                            // ours failed: Valhalla is asked now, not at the gate's time
       direct = ownUsed ? [] : await valhallaP;
@@ -4016,7 +4034,7 @@
     const EARLY_MS = 0, EARLY_SIGHT_MS = 100, FIRST_GATE_MS = 1800;
     // Our own router (graph_worker.js), started at launch; the Valhalla check waits at most OWN_CHECK_MS once
     // our routes are in, and the chosen route's instructions at most OWN_INSTRUCT_MS (else our own maneuvers)
-    const OWN_CHECK_MS = 2500, OWN_INSTRUCT_MS = 3000, OWN_COVERS_MS = 1500, OWN_PLAN_MS = 6000, OWN_CROWD_MS = 250, OWN_FIRST_WAIT_MS = 700;
+    const OWN_CHECK_MS = 2500, OWN_INSTRUCT_MS = 3000, OWN_COVERS_MS = 1500, OWN_COVERS_ONLY_MS = 8000, OWN_PLAN_MS = 6000, OWN_CROWD_MS = 250, OWN_FIRST_WAIT_MS = 700;
     // members' measured roads for our search: only signed in (the server answers sign_in_required otherwise)
     const ownCrowdOn = () => !!(window.ApexSync && typeof ApexSync.signedIn === 'function' && ApexSync.signedIn());
     // Own-routed plans: the tiles carry the static road data (land use, density, businesses, signals, the grid, the DEM,
@@ -4059,10 +4077,10 @@
     // the shipped tiles' index and the region's (graph_tiles.js index(): the union, the region's asked once a day), so a
     // trip anywhere in OH+KY+IN is ours; without the reader, the shipped index alone
     const ownIndex = () => (ownIndexP || (ownIndexP = (window.ApexGraphTiles && ApexGraphTiles.index ? ApexGraphTiles.index()
-      : fetch('data/graph/v1/index.json').then((r) => (r.ok ? r.json() : null))).then((j) => ApexGraphRouter.indexKeys(j))
-      .catch(() => { ownIndexP = null; return new Set(); })));
+      : fetch('data/graph/v1/index.json').then((r) => (r.ok ? r.json() : null))).then((j) => (j ? ApexGraphRouter.indexKeys(j) : null))
+      .catch(() => null)).then((k) => { if (!k) ownIndexP = null; return k; }));   // (no index: unknown, asked again next time)
     const ownRouter = () => (ownClient || (ownClient = Object.assign(ApexGraphRouter.client({ url: 'graph_worker.js', timeoutMs: OWN_PLAN_MS }),
-      { covers: (points) => ownIndex().then((keys) => ApexGraphRouter.covers(keys, points)) })));
+      { covers: (points) => ownIndex().then((keys) => (keys ? ApexGraphRouter.covers(keys, points) : null)) })));
     // Turn instructions for one of our routes: Valhalla's maneuvers on our line (trace_route), offline our own
     // (one request per route, however often it's asked for)
     const ownInstructed = new WeakMap();
@@ -4500,6 +4518,10 @@
           // ours: the best pair (out and back), split at the destination
           const c = own[0].route.coords, k = c.reduce((b, p, i) => (FunRoute.kmBetween({ lat: p[1], lon: p[0] }, to) < FunRoute.kmBetween({ lat: c[b][1], lon: c[b][0] }, to) ? i : b), 0);
           outLine = c.slice(0, k + 1); backLine = c.slice(k); how = 'own';
+        } else if (level !== 'quick') {
+          // Fun and Long way are our router's or nothing (Valhalla is for Quick only, the owner 2026-11-11)
+          toast(`Couldn't find a ${FunRoute.LEVELS[level].label} way back on Vetta's road map here. Quick can plan one.`);
+          return;
         } else {
           const extra = FunRoute.LEVELS[level].noHighway && window.ApexRouteEngine ? ApexRouteEngine.levelCosting(avoid, routingCar(), level) : {};
           const backs = await valhallaRoutesExcluding([to, from], false, 2, extra, outExclusions(outCoords));
