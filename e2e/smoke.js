@@ -3622,12 +3622,17 @@ flow('review mode (U-94): the recording\'s hazard report is the sheet, Undo and 
     for (let i = 0; i <= 40; i++) { window.apex.live({ lat: 35.6 + (i * 1.5) / 110540, lon: -83.9, accuracy_m: 5, speed_mps: 15, course_deg: 0, has_fix: true, calibration: 'locked' });
       await new Promise(r => setTimeout(r, 20)); }
   });
+  // the car keeps sending fixes, as a phone does: with none for 5 s a web drive drops to the replay and the report key with
+  // it (the same cause as the reported-hazards flow, #397); on a slow runner the sheet and the 3 s Undo can run past that
+  await page.evaluate(() => { window.__fixes = setInterval(() => window.apex.live({ lat: 35.6 + 60 / 110540, lon: -83.9, accuracy_m: 5, speed_mps: 15, course_deg: 0, has_fix: true, calibration: 'locked' }), 500); });
   await page.click('#hzReportBtn');
   check(await page.evaluate(() => document.getElementById('hzOverlay').classList.contains('show')), 'the sheet opens');
   await page.click('#hzKinds button:has-text("Gravel")');
-  check(/Undo Gravel/.test(await page.textContent('#hzReportBtn')), 'the Report key is Undo for 3 s');
+  const undo = await page.waitForFunction(() => /Undo Gravel/.test(document.getElementById('hzReportBtn').textContent), null, { timeout: 2000 }).then(() => true, () => false);
+  check(undo, 'the Report key is Undo for 3 s: ' + await page.textContent('#hzReportBtn'));
   await saidOn(page, /Gravel reported/, { timeout: 6000 });                 // the toast, or the status line in a drive (U-74)
   await page.waitForFunction(() => [...document.querySelectorAll('.hz-pin')].some((p) => p.textContent === 'GRAVEL'), null, { timeout: 4000 });
+  await page.evaluate(() => clearInterval(window.__fixes));
   await page.evaluate(async () => { await ApexSync.apiFetch('/api/presence', { method: 'POST', body: '{}' }); await ApexSync.apiFetch('/api/feedback', { method: 'POST', body: '{}' }); });
   await page.waitForTimeout(1500);   // loadReported(true) after the report: the server's list again, with the review's own pin kept
   check([...await page.$$eval('.hz-pin', (ps) => ps.map((p) => p.textContent))].includes('GRAVEL'), 'the pin outlives a reload of the server\'s hazards');
