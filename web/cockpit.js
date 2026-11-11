@@ -1941,6 +1941,12 @@
       // at the app's estimate of 600 ms + 70 ms a character, plus 2 s for a model voice to start. Dropped after 5 min unsaid;
       // the toast already showed it.
       // The brake heat call (brakeSay, noteBrakes) goes first through the same gate, with its own 60 s expiry.
+      // So does a long descent on the planned route (brake_heat.js descentAhead, from its terrain), once, near its top.
+      if (live && !offRoute && !brakeSay && track === plannedRoute && Array.isArray(track.descents) && window.ApexBrakeHeat) {
+        const said = drive.descentSaid || (drive.descentSaid = new Set());
+        const d = ApexBrakeHeat.descentAhead(track.descents, state.cursorM, said);
+        if (d) { said.add(d.start_m); brakeSay = { text: ApexBrakeHeat.descentCall(d, ApexUnits.spokenShort), until: performance.now() + 60000 }; }
+      }
       if (brakeSay && performance.now() > brakeSay.until) brakeSay = null;
       if (breakSay && performance.now() > breakSay.until) breakSay = null;
       const quiet = brakeSay || breakSay;
@@ -7845,7 +7851,7 @@
     // =======================================================================
     // 10b. DRIVE MODE (web): real GPS + motion, recorded to this device. REPLAY plays a saved drive; the two never mix.
     // =======================================================================
-    const drive = { sensors: null, rec: null, status: null, frames: 0, live: null, liveIdx: 0, share: 'off', shareKm: 0, shareErr: null, native: false, roads: {}, roadIdx: 0, rest: null, brakes: null };
+    const drive = { sensors: null, rec: null, status: null, frames: 0, live: null, liveIdx: 0, share: 'off', shareKm: 0, shareErr: null, native: false, roads: {}, roadIdx: 0, rest: null, brakes: null, descentSaid: null };
     const NATIVE_SHELL = !!(window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.apex);
     function paintModeSwitch() {
       const on = state.mode === 'live';
@@ -8342,7 +8348,7 @@
     // The route's climb (stages.js profile, IDEAS U-21): its elevation from the DEM, so Preview's scrubber shows the hills
     // and the card says how much it climbs. A long trip or no tiles: unknown, nothing shown.
     async function attachProfile(t) {
-      $('routeCardClimb').hidden = true;
+      $('routeCardClimb').hidden = true; $('routeCardDescent').hidden = true;
       const none = () => { if (!t) return; t.profileDone = true; if (plannedRoute === t && !t.elev) $('routeCardProfile').classList.add('none'); };
       if (!t || t.elev || !window.ApexStages || !ApexStages.profile) { if (t && t.elev) paintClimb(t); else none(); return; }
       let elev = null;
@@ -8407,6 +8413,10 @@
       const h = heightLabel;
       $('routeCardClimb').textContent = ApexRouteCard.factText(`Climbs ${h(up)} in all · highest ${h(hi)}`);
       $('routeCardClimb').hidden = false;
+      // a long, steep descent on the way (brake_heat.js longDescents, from the same terrain): said before you set off
+      t.descents = window.ApexBrakeHeat ? ApexBrakeHeat.longDescents(t.dist, t.elev) : [];    // also said near each top (notes loop)
+      const fall = window.ApexBrakeHeat ? ApexBrakeHeat.descentText(t.descents, (m) => ApexUnits.long(m, 1), h) : null;
+      $('routeCardDescent').textContent = fall ? ApexRouteCard.factText(fall) : ''; $('routeCardDescent').hidden = !fall;
     }
     async function attachScenic(t) {
       for (const mk of scenicPins.splice(0)) mk.remove();
@@ -8914,7 +8924,7 @@
       startStageWatch();
       state.firstNoteDue = true; state.firstNoteKey = null;   // U-58: the drive's first note is called
       state.openerDue = true; state.openerAt = performance.now(); state.wakeCue = false;   // DA-3: the first words name the road
-      drive.live = null; drive.liveIdx = 0; drive.share = 'off'; drive.shareKm = 0; drive.shareErr = null; drive.roads = {}; drive.roadIdx = 0; drive.rest = null; drive.brakes = null; brakeSay = null; breakSay = null; if (breakWorker) { breakWorker.terminate(); breakWorker = null; }
+      drive.live = null; drive.liveIdx = 0; drive.share = 'off'; drive.shareKm = 0; drive.shareErr = null; drive.roads = {}; drive.roadIdx = 0; drive.rest = null; drive.brakes = null; drive.descentSaid = null; brakeSay = null; breakSay = null; if (breakWorker) { breakWorker.terminate(); breakWorker = null; }
       keepStart();                                                     // Round 3: the drive is kept as it goes (drive_keep.js)
       if (NATIVE_SHELL) {   // the app's own GPS and IMU feed window.apex.live; no browser sensors to start
         drive.native = true;

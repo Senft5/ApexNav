@@ -18,6 +18,19 @@ it says so. Things only you can do are in docs/OWNER_TODO.md.
   usable with a short "Opening your Log…" and the Log opens when ready (a different tab cancels it). Undo: the
   `logFrame.want` branch in cockpit.js openLog.
 
+## 2026-11-11 (roam-a descent call): the co-driver says a long descent as you near its top (claude/project-thread-h7xxmf)
+
+On a planned route, the same long, steep descents the route card names are now said once, as you come within 500 m of the
+top (or up to 300 m down it): "Long descent ahead: 2.5 miles at 8 percent. A lower gear saves the brakes." It waits for a
+quiet moment like the break cue (no corner call due), in any notes mode, since it is a safety line. Off the route, or
+driving without one, nothing is said. Undo: remove the `descentAhead` block in cockpit.js `updateNotes`.
+
+## 2026-11-11 (roam-a descents): the route card warns of a long, steep descent (claude/project-thread-h7xxmf)
+
+A planned route with a long, steep way down now says so on its card, under the climb: "A long descent: down 1,575 ft over
+3.7 mi at 8%. A lower gear saves the brakes." It comes from the map's terrain (the same heights as the climb line), not from a
+model: 300 m or more of drop at 5 % or steeper counts, which is the kind of hill where brakes fade. Ordinary hills say
+nothing. Undo: revert the PR (one line on the card goes away).
 ## 2026-11-11 (roam-c-boot-budget): an e2e check on what the map page loads and runs before it is ready (claude/roam-c-boot-budget)
 
 New e2e flow "startup budget" (IDEAS P-06): it loads index.html and fails if the page needs more than 3.6 MB of its own

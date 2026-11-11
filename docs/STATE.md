@@ -19,6 +19,36 @@
   the idle map's top ~150 px is blank paper at pitch 42 with the deck's padding (MapLibre draws no tiles beyond the far
   plane; no sky in the style). Next: replay drive, Log, add a friend, join a crew.
 
+## Session 2026-11-11 (roam-a descent call): "Long descent ahead" near the top (claude/project-thread-h7xxmf, off origin/main)
+
+- IDEAS V-12, part three. web/brake_heat.js `descentAhead(list, atM, said)` (500 m before a top to 300 m past it, once per
+  start_m) and `descentCall(d, spoken)` ("Long descent ahead: 2.5 miles at 8 percent. A lower gear saves the brakes.").
+- cockpit.js: `paintClimb` keeps `t.descents`; `updateNotes` queues the call in the `brakeSay` slot (live, on the planned
+  route, not off it), said through the quiet gate; `drive.descentSaid` reset at drive start.
+- Tests: tests/test_brake_heat.py (+2); e2e "the co-driver says a long descent once…" (GPX + stubbed DEM, live frames).
+  Checked: pytest, that flow, the route-card descent flow, "co-driver reads the road", startup budget.
+- Next: the Garage car's weight and brakes could tune DISC_C; CarPlay could show the descent line on its route preview.
+## Session 2026-11-11 (roam-c-scheme-offmain, sweep: iOS shell): bundle files read off the main thread (claude/roam-c-scheme-offmain, off origin/main)
+
+- ApexNavApp.swift `ApexBundleSchemeHandler`: every apexnav:// file (the page's 130 scripts at launch, the 5.5 MB
+  lexicons, routing graph tiles up to 2.8 MB, voice banks) was read with `Data(contentsOf:)` on the main thread, the
+  phone's UI and the car's map waiting on it. Now read on a concurrent queue (mapped when safe) and answered on main;
+  a task WebKit stopped meanwhile is never answered (`pending`). Same responses, same 404 for a missing file.
+- Swift is compiled only by CI (build.yml simulator tests run the page). APP_REVIEW.md: nothing reviewable changes.
+- Next in the sweep: CarPlay (CarPlay/*.swift) and the shell's frame path (pushLiveFrame, 10 Hz evaluateJavaScript).
+
+
+## Session 2026-11-11 (roam-a descents): the route card says a long descent before you set off (claude/project-thread-h7xxmf, off origin/main)
+
+- IDEAS V-12, its second part. `long_descents` (core/brake_heat.py) / `longDescents` (web/brake_heat.js, parity-tested): from the
+  route's terrain profile (stages.js `profile`, the same DEM as the climb line), each run from a high point to the lowest point
+  before the road climbs more than 30 m again; kept when it drops 300 m or more at 5 % or steeper. Biggest first.
+- cockpit.js `paintClimb`: `#routeCardDescent` (index.html, `.f-descent` glyph, under the climb line): "A long descent: down
+  1,575 ft over 3.7 mi at 8%. A lower gear saves the brakes." (", and N more" when there are others). Hidden for a new route.
+- Tests: tests/test_brake_heat.py (+5); e2e "the route card says a long descent…" (DEM stubbed). Checked: pytest, that flow,
+  plan flow (a).
+- Next: a live "long descent ahead" call before the top (the co-driver knows it from the same profile); the Garage car's
+  weight and brakes could tune DISC_C.
 ## Session 2026-11-11 (roam-c-boot-budget): startup budget in e2e (claude/roam-c-boot-budget, off origin/main)
 
 - e2e "startup budget" (`BOOT` in smoke.js): own script bytes 3.6 MB, 145 scripts, 2 s CPU, 1.5 s longest task before
