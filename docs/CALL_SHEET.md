@@ -57,6 +57,11 @@ notes under a search that finds nothing said "Press Go" while the key under them
 "offline" is only said when the phone is offline.
 
 Undo: revert the PR. Typed coordinates still work as before and are still named "Pin lat, lon".
+## 2026-11-11 (fable-pin-tap): the pin flow names its waits and taps the map where the map is (claude/fable-pin-tap)
+
+The flow's tap on the map once landed on the plan sheet, which stood higher on that run, and the test then waited 20 s
+with no word of why. It now taps open map, found by looking, and every wait names itself on failure. No check was dropped
+and one was added (there is open map to tap). Undo: revert the PR.
 ## 2026-11-11 (fable-share-defaults): Scores and times shared with friends and private crews by default (claude/fable-share-defaults)
 
 Nate (2026-11-11): "data sharing with friends and private crews should be on by default, with an option to turn each

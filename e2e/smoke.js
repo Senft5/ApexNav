@@ -758,11 +758,17 @@ flow('a pin has a name: Go here routes "To <the road>", a tap on the map is a "D
   });
   await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); } catch (_) {} });
   await page.goto(base + '/index.html');
-  await page.waitForFunction(() => window.apexDebug && window.apexDebug.map && !document.getElementById('boot'), null, { timeout: 20000 });
+  // CI (2026-11-11): this flow timed out at 20 s with no word of which wait it was. Each wait below says its name and what
+  // the page looked like when it gave up (pinWait), so the next failure names its step.
+  const pinState = () => page.evaluate(() => { const t = window.apexDebug && window.apexDebug.track, pp = document.getElementById('planPanel');
+    return { boot: !!document.getElementById('boot'), map: !!(window.apexDebug && window.apexDebug.map), track: t ? [t.kind, t.name, t.lat && t.lat.length] : null, plan: pp && pp.className,
+      tap: window.apexDebug && window.apexDebug.state && window.apexDebug.state.tapToRoute, pin: document.getElementById('pinOverlay').className, toast: (document.querySelector('.toast.show') || {}).textContent || null }; }).catch((e) => String(e));
+  const pinWait = async (name, fn, ms = 20000) => { try { await page.waitForFunction(fn, null, { timeout: ms }); } catch (e) { throw new Error(`${name}: ${String(e.message).split('\n')[0]} ${JSON.stringify(await pinState())} asked ${asked.length}`); } };
+  await pinWait('the app booted', () => window.apexDebug && window.apexDebug.map && !document.getElementById('boot'), 45000);
   await page.waitForTimeout(1500);                                   // the camera goes to the fix; a hold while it moves is no hold
   await page.waitForFunction(() => !window.apexDebug.map.isMoving());
   const box = await page.locator('#map').boundingBox(), x = box.x + box.width / 2, y = box.y + box.height * 0.3;
-  const routed = () => page.waitForFunction(() => { const t = window.apexDebug.track; return t && t.kind === 'route' && t.lat.length > 50 && !document.getElementById('planPanel').classList.contains('busy'); }, null, { timeout: 20000 });
+  const routed = (name) => pinWait(`routed (${name})`, () => { const t = window.apexDebug.track; return t && t.kind === 'route' && t.lat.length > 50 && !document.getElementById('planPanel').classList.contains('busy'); });
   // hold the map: the pin's sheet names the road; Save is "as a spot", the word the rest of the app uses
   await page.mouse.move(x, y); await page.mouse.down(); await page.waitForTimeout(800); await page.mouse.up();
   await page.waitForFunction(() => document.getElementById('pinOverlay').classList.contains('show') && document.getElementById('pinPlace').textContent === 'Foothills Parkway', null, { timeout: 10000 });
@@ -798,7 +804,7 @@ flow('a pin has a name: Go here routes "To <the road>", a tap on the map is a "D
   await page.waitForFunction(() => document.getElementById('pinOverlay').classList.contains('show') && document.getElementById('pinPlace').textContent === 'Foothills Parkway', null, { timeout: 10000 });
   const pin = await page.evaluate(([px, py]) => { const r = document.getElementById('map').getBoundingClientRect(), ll = window.apexDebug.map.unproject([px - r.left, py - r.top]); return { lat: ll.lat, lon: ll.lng }; }, [x, y]);
   await page.click('#pinGoBtn');
-  await routed();
+  await routed('Go here');
   let got = await page.evaluate(() => ({ field: document.getElementById('destInput').value, name: window.apexDebug.track.name, bar: document.getElementById('routeBarName').textContent, recent: localStorage.getItem('apex.recentPlaces') || '' }));
   check(got.name === 'To Foothills Parkway' && /Foothills Parkway/.test(got.bar) && !/\d\.\d{3}/.test(got.field + got.name + got.bar), 'the route is "To Foothills Parkway", no coordinates: ' + JSON.stringify(got));
   const last = asked[asked.length - 1].locations, end = last[last.length - 1];
@@ -808,10 +814,24 @@ flow('a pin has a name: Go here routes "To <the road>", a tap on the map is a "D
   const again = async () => { await page.click('#planCancel'); await page.click('#planClear'); await page.click('#destInput'); };   // the card down, the route cleared
   await again();
   await page.click('#tapRouteBtn');
-  await page.waitForTimeout(800);
-  await page.mouse.click(x + 40, y + 30);
-  await page.waitForFunction(() => window.apexDebug.track && window.apexDebug.track.name === 'To a dropped pin', null, { timeout: 20000 });
-  await routed();
+  // the tap goes where the map itself is under the pointer, once tap-to-route is on, the plan sheet has come up and the
+  // camera is still (a fixed 800 ms was a guess; on a slow runner the sheet or its toast could still be in the way)
+  await pinWait('tap to route is on', () => window.apexDebug.state.tapToRoute === true && !window.apexDebug.map.isMoving() && !document.getAnimations().some((a) => a.playState === 'running' && Number.isFinite(a.effect.getComputedTiming().endTime)), 10000);
+  // where the map shows: the plan sheet may stand higher on one run than another (CI, 2026-11-11: the tap landed on its
+  // Options chip, so nothing was routed and the wait ran out), so the tap goes to the open map nearest the old spot
+  const spot = await page.evaluate(([px, py]) => {
+    const onMap = (a, b) => { const h = document.elementFromPoint(a, b); return !!h && h.classList.contains('maplibregl-canvas'); };
+    const r = document.getElementById('map').getBoundingClientRect(), pts = [];
+    for (let b = r.top + 60; b < r.bottom - 20; b += 20) for (let a = r.left + 30; a < r.right - 30; a += 20) pts.push([a, b]);
+    pts.sort((p, q) => Math.hypot(p[0] - px - 40, p[1] - py - 30) - Math.hypot(q[0] - px - 40, q[1] - py - 30));
+    const ok = pts.filter(([a, b]) => onMap(a, b) && onMap(a + 12, b + 12) && onMap(a - 12, b - 12));
+    if (ok.length) return ok[0];
+    const h = document.elementFromPoint(px + 40, py + 30); return { under: h ? (h.id || h.className || h.tagName) : null };
+  }, [x, y]);
+  check(Array.isArray(spot), 'the map is under the pointer to tap: ' + JSON.stringify(spot));
+  await page.mouse.click(spot[0], spot[1]);
+  await pinWait('the tap made a dropped pin', () => window.apexDebug.track && window.apexDebug.track.name === 'To a dropped pin');
+  await routed('the tapped place');
   got = await page.evaluate(() => ({ field: document.getElementById('destInput').value, name: window.apexDebug.track.name, recent: localStorage.getItem('apex.recentPlaces') || '' }));
   check(got.name === 'To a dropped pin' && !/\d\.\d{3}/.test(got.field) && !/ropped pin/.test(got.recent), 'a tapped place is a dropped pin, not a recent place: ' + JSON.stringify(got));
   // the notes under what is typed name the key that is on the screen (it says Search)
@@ -6463,7 +6483,9 @@ flow('the route reveal: a route found is drawn onto the map like a pen stroke (a
   check(s && s.draw, 'the profile is drawn on with the line: ' + JSON.stringify(found.strokes));
   check(found.last.g === null, 'the stroke ends with the line whole, on the look\'s own colour (no gradient left on it)');
   const total = await page.evaluate(() => parseFloat(document.querySelector('#routeCardStats > div b').firstChild.textContent));
-  check(found.dists.length >= 4 && found.dists.every((d, i) => i === 0 || d >= found.dists[i - 1]) && found.dists[0] < total && found.dists[found.dists.length - 1] === total,
+  // a count-up is a start below the total, at least one step between, and the total last; a slow runner paints fewer frames
+  // of it (CI, 2026-11-11: [0, 3.3, 9.6]), so three distinct values are enough, every one rising
+  check(found.dists.length >= 3 && found.dists.some((d) => d > found.dists[0] && d < total) && found.dists.every((d, i) => i === 0 || d >= found.dists[i - 1]) && found.dists[0] < total && found.dists[found.dists.length - 1] === total,
     'the distance counts up to what it is: ' + JSON.stringify(found.dists.slice(0, 6)) + ' … ' + total);
   // the card as a page: the name is the headline (the number face, large), then time, distance, corners, the profile with
   // the apex dot at the start, the choice, and only then the groups; Start is its foot
