@@ -14,6 +14,12 @@ it says so. Things only you can do are in docs/OWNER_TODO.md.
 Your rule ("anything but the quick route") covers loops too, so Find a loop no longer falls back to Valhalla's stage loops
 or a circle. Off our road map the card says loops use it and where it reaches. Explore's road list still times roads with
 Valhalla's matrix (it plans no route); say if that should go too. Undo: restore the `stageJobs` calls in `buildLoop`.
+## 2026-11-11 (deepest analysis, PR 14): "near your cleanest" is within 5 levels (claude/project-thread-gd7nre)
+
+A drive's page says how it went at the road's least even corners. Within 5 levels of your cleanest pass counts as near it:
+about a third of the 15-level span that makes a corner uneven, so a pass in the top third of your own range there.
+Undo: NEAR_BEST in core/driver_profile.py and web/driver_profile.js, or revert the PR.
+
 ## 2026-11-11 (roam-b walkthrough): a planned loop is fitted again once its card settles; loops never go through our relay (claude/project-thread-sxhrgi)
 
 - When a route or loop comes back, the map frames it above its card. The card was still growing and shrinking for a

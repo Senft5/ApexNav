@@ -585,6 +585,7 @@ def drive_records(obs: list, records: dict) -> dict:
 
 UNEVEN_LEVELS = 15           # a corner whose passes span this many levels or more is uneven on a road book
 UNEVEN_MAX = 3               # ...and the book names at most this many, the widest first
+NEAR_BEST = 5                # a pass within this many levels of the corner's cleanest is near your best there
 ROAD_MIN_PASSES = 3          # passes of a corner (this drive's among them) before its record on the road means anything
 SAME_CORNER_M = 20.0         # the same corner: apexes this close...
 SAME_WAY = 0.7               # ...and headings this alike (cosine, about 45 degrees): not the next bend of an S
@@ -598,7 +599,8 @@ def road_records(mine: list, others: list, ids: list | None = None) -> dict:
     the cleanest of all), level (equal to the cleanest other), held (the apexes, when given, of the corners it is cleanest
     at), rows (per such corner with an apex: {apex, level (this pass), passes, record (the cleanest of all passes), by (None
     when this pass holds it, else ids[i] of the other drive, or its index; the first listed of equals holds a tie, so list
-    others oldest first)})}. Technique only."""
+    others oldest first), low: the least clean pass}), uneven: how many of those rows span UNEVEN_LEVELS or more (where your
+    passes differ most), steady: how many of those this drive took within NEAR_BEST of your cleanest}. Technique only."""
     corners = best = level = 0
     held, rows = [], []
     for m in mine:
@@ -621,14 +623,16 @@ def road_records(mine: list, others: list, ids: list | None = None) -> dict:
         mx = max(tops)
         if m.get("apex") is not None:
             rows.append({"apex": m["apex"], "level": m["level"], "passes": 1 + len(tops), "record": max(mx, m["level"]),
-                         "by": None if m["level"] > mx else who[tops.index(mx)]})
+                         "low": min(min(tops), m["level"]), "by": None if m["level"] > mx else who[tops.index(mx)]})
         if m["level"] > mx:
             best += 1
             if m.get("apex") is not None:
                 held.append(m["apex"])
         elif m["level"] == mx:
             level += 1
-    return {"corners": corners, "best": best, "level": level, "held": held, "rows": rows}
+    wide = [r for r in rows if r["record"] - r["low"] >= UNEVEN_LEVELS]
+    return {"corners": corners, "best": best, "level": level, "held": held, "rows": rows,
+            "uneven": len(wide), "steady": sum(1 for r in wide if r["level"] >= r["record"] - NEAR_BEST)}
 
 
 def road_book(drives: list, ref: list | None = None) -> dict:

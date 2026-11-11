@@ -27,6 +27,17 @@
 - Seen, not fixed (other areas): signed-out pages still ask /api/convoy/invites, /api/points, /api/hazards, /api/roads (401s);
   the idle map's top ~150 px is blank paper at pitch 42 with the deck's padding (MapLibre draws no tiles beyond the far
   plane; no sky in the style). Next: replay drive, Log, add a friend, join a crew.
+## Session 2026-11-11 (deepest analysis, PR 14): a drive at its road's least even corners (claude/project-thread-gd7nre)
+
+- `road_records` / `roadRecords` rows carry `low` (the least clean pass); the result adds `uneven` (rows spanning 15
+  levels or more) and `steady` (of those, how many this drive took within NEAR_BEST = 5 of your cleanest).
+- web/driver_profile.js `roadUnevenLine`: "At the 3 corners here where your passes differ most, this drive was near your
+  cleanest at 2." (or "...not near your cleanest at any of them: they are the places to work on."), under "Against your
+  records" on the drive page.
+- Tests: tests/test_best_corners.py (rows' low, uneven/steady, words, parity); e2e checks the fields.
+- Next: Practice (IDEAS D-27) could take a road's least even corner as the thing to work on, and say after the next drive
+  of that road how it went there.
+
 ## Session 2026-11-11 (recurring meets): crew drives that repeat (claude/project-thread-uwmi4e, after #400)
 - Migration 0053 (`crew_events.repeat_weeks` 1/2/4, `series_id`): applied on preview; prod before merge.
 - `backend/src/events.ts` rollRepeats (on events list/near reads and in the sweep), eventCreate/eventUpdate take

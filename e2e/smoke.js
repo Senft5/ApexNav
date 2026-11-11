@@ -4585,7 +4585,7 @@ flow('a drive\'s corners on a road driven four times: each says your cleanest pa
     for (let k = 0; k < 4; k++) await ApexRecording.store(ApexRecording.parse(ApexCore, tweak(gen('saw', 0), k), 'r' + k + '.csv', { id: 'r' + k, name: 'Dry Ridge Rd', date: `2026-0${5 + k}-01T09:00`, source: 'web-gps' }));
   }, PROFILE_CSV);
   const road = await page.evaluate(async () => (await ApexAnalysis.job('drive', { id: 'r3' })).touch.road);
-  check(road && road.corners > 0 && road.rows.length === road.corners && road.rows.every((r) => r.passes === 4 && r.record >= r.level)
+  check(road && road.corners > 0 && road.rows.length === road.corners && Number.isInteger(road.uneven) && road.steady <= road.uneven && road.rows.every((r) => r.low <= r.level) && road.rows.every((r) => r.passes === 4 && r.record >= r.level)
     && road.rows.every((r) => r.by === null || (['r0', 'r1', 'r2'].includes(r.by) && /^2026-0[5-7]-01/.test(r.on))), 'every corner driven four times has its record and who holds it: ' + JSON.stringify(road && road.rows.slice(0, 3)));
   await page.goto(base + '/analysis.html?tab=drive&drive=r3');
   await page.waitForFunction(() => document.querySelectorAll('.dv-corner .dv-rec').length > 0, null, { timeout: 20000 });
