@@ -76,6 +76,7 @@
   <script src="plain_notes.js" defer></script>
   <script src="hazard_reports.js" defer></script>
   <script src="route_card.js" defer></script>
+  <script src="route_reveal.js" defer></script>
   <script src="route_story.js" defer></script>
   <script src="plan_presets.js" defer></script>
   <script src="plan_options.js" defer></script>
@@ -444,6 +445,12 @@
     /* I-3: 16 pt from Report, not 6; after End, the key is Undo in the panel's ink with a fill running out (cockpit.js askEnd).
        #app outranks the themes' own #driveEnd */
     #driveEnd { margin-left: 8px; }
+    /* Red team UX-07 (2026-11-10): at night the brightest thing on the drive screen was a key (End, Done, the chosen
+       replay speed: solid cream). At night they are outlined in the panel's ink, so the instruments and the road stay
+       the brightest; the layout is the same as by day. Tapedeck keeps its own outlined End. */
+    html[data-mode="night"]:not([data-theme="tapedeck"]) #app #driveEnd:not(.undo),
+    html[data-mode="night"] .transport > #replayDone { background: transparent; color: var(--panel-ink); border: 1.5px solid var(--panel-ink); }
+    html[data-mode="night"] .transport .detents > [aria-checked="true"] { background: transparent; color: var(--panel-ink); box-shadow: inset 0 0 0 2px var(--panel-ink); }
     #app #driveEnd.undo { position: relative; overflow: hidden; background: var(--panel); color: var(--panel-ink); border: 2px solid var(--panel-ink); }
     #app #driveEnd.undo::after { content: ""; position: absolute; left: 0; right: 0; bottom: 0; height: 4px; background: var(--panel-ink); transform-origin: left; animation: end-undo var(--end-undo-ms, 5s) linear forwards; }
     @keyframes end-undo { to { transform: scaleX(0); } }
@@ -637,17 +644,26 @@
     /* ---------------- the route card as instruments (REVIEW.md roadmap 5) ---------------- */
     #routeCard h3 { font-size: 26px; line-height: 1.1; }
     .rc-via { margin: 4px 0 0; }
-    .rc-stats { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); margin-top: 12px; border-top: 2px solid var(--panel-ink); border-bottom: 1px solid var(--rule); }
-    .rc-stats > div { padding: 8px 8px 8px 0; min-width: 0; }
-    .rc-stats > div + div { border-left: 1px solid var(--rule); padding-left: 8px; }
-    .rc-stats b { display: block; font: 800 34px/1 var(--font-num); font-variant-numeric: tabular-nums; white-space: nowrap; }
-    .rc-stats b small { font: 600 13px var(--font-ui); color: var(--panel-dim); margin-left: 2px; }
-    .rc-stats span { display: block; margin-top: 4px; font-size: 11px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--panel-dim); line-height: 1.2; }
-    .rc-profile { display: block; width: 100%; height: 92px; margin-top: 10px; }
-    .rc-ground { fill: var(--rule); opacity: 0.3; } .rc-line { fill: none; stroke: var(--panel-ink); stroke-width: 1.5; vector-effect: non-scaling-stroke; }
+    /* the stat line (design pass, 2026-11-10): time, distance, corners, large in the number face, no boxes; time first */
+    .rc-stats { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); column-gap: 12px; margin-top: 0; }
+    .rc-stats > div { min-width: 0; }
+    .rc-stats > div:nth-child(2) { order: -1; }
+    .rc-stats b { display: block; font: 800 40px/0.95 var(--font-num); font-variant-numeric: tabular-nums; white-space: nowrap; }
+    .rc-stats b small { font: 600 17px var(--font-num); color: var(--panel-dim); margin-left: 3px; }
+    .rc-stats span { display: block; margin-top: 3px; font-size: 13px; font-weight: 500; color: var(--panel-dim); line-height: 1.2; }
+    .rc-stats span::first-letter { text-transform: uppercase; }
+    /* the profile, the card's hero: the ground in a wash of ink, the line on it, a tick for every corner along the foot */
+    .rc-profile { display: block; width: 100%; height: 80px; }
+    .rc-ground { fill: var(--panel-ink); opacity: 0.1; } .rc-line { fill: none; stroke: var(--panel-ink); stroke-width: 1.75; stroke-linejoin: round; vector-effect: non-scaling-stroke; }
     .rc-base { stroke: var(--rule); stroke-width: 1; vector-effect: non-scaling-stroke; }
     .rc-ticks path { stroke: var(--panel-ink); stroke-width: 1; opacity: 0.55; vector-effect: non-scaling-stroke; }   /* corners in ink; red is the record key */
-    .rc-profile text { font: 600 10px var(--font-ui); fill: var(--panel-dim); }
+    .rc-profile text { font: 600 13px var(--font-num); letter-spacing: 0.02em; fill: var(--panel-dim); }
+    /* the pen: a profile new on the card is drawn on from the left, in step with the line on the map (cockpit.js paintProfile) */
+    .rc-profile.draw { animation: rc-draw var(--rc-draw, 800ms) cubic-bezier(0.2, 0.8, 0.2, 1) both; }
+    @keyframes rc-draw { from { clip-path: inset(0 100% 0 0); } to { clip-path: inset(0 0 0 0); } }
+    /* the apex dot: where you are on the route (the start; where a fly-through was left) */
+    .rc-here { position: absolute; width: 10px; height: 10px; margin: -5px 0 0 -5px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 0 2px var(--panel); pointer-events: none; }
+    .rc-here[hidden] { display: none; }
     .rc-dials { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; margin-top: 12px; text-align: center; }
     .rc-dial svg { width: 60px; height: 36px; display: block; margin: 0 auto; }
     .rc-dial .rc-track { fill: none; stroke: var(--rule); stroke-width: 3; }
@@ -655,7 +671,7 @@
     .rc-dial .rc-arc { fill: none; stroke: var(--accent); stroke-width: 3.5; }
     .rc-dial .rc-needle { stroke: var(--panel-ink); stroke-width: 2.4; stroke-linecap: round; } .rc-dial circle { fill: var(--panel-ink); }
     .rc-dial b { display: block; font: 800 26px/1 var(--font-num); font-variant-numeric: tabular-nums; }
-    .rc-dial span { display: block; margin-top: 3px; font-size: 11px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: var(--panel-dim); }
+    .rc-dial span { display: block; margin-top: 3px; font-size: 13px; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; color: var(--panel-dim); }
     .rc-facts { display: grid; gap: 6px; margin-top: 10px; }
     /* What this drive is like: the lead line as the summary, a chevron for the rest (the plan-more chevron, smaller) */
     .rc-story { margin-top: 10px; }
@@ -680,19 +696,25 @@
     .f-closed { --glyph: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2'%3E%3Crect x='2' y='8' width='20' height='6'/%3E%3Cpath d='M6 8 L10 14 M12 8 L16 14 M18 8 L22 14 M5 14 V21 M19 14 V21'/%3E%3C/svg%3E"); }
     .rc-round { width: 100%; min-height: 44px; margin-top: 10px; } .rc-round[hidden] { display: none; }
     /* the level cards (the owner, 2026-11-04): Quick, Fun, Long way, each its pick's time and corners; on = the route on screen */
-    .rc-levels { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; margin-top: 10px; }
+    /* (design pass, 2026-11-10: the one clear choice. One joined row, hairlines between, the one on screen filled with
+       ink; the time is each card's big number, the corners under it) */
+    .rc-levels { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0; margin-top: 10px; }
     .rc-levels[hidden] { display: none; }
-    .rc-levels > button { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; min-width: 0; min-height: 76px; padding: 7px 9px 8px; text-align: left;
-      border: 1.5px solid var(--panel-ink); background: transparent; color: var(--panel-ink); font: inherit; transition: background-color 0.15s ease-out, color 0.15s ease-out; }
-    .rc-levels > button.on { background: var(--panel-ink); color: var(--panel); box-shadow: inset 0 -3px 0 rgba(0, 0, 0, 0.35); }
-    .rc-levels > button:active { box-shadow: inset 0 2px 0 rgba(0, 0, 0, 0.25); }
-    .rc-levels b { font-size: 17px; font-weight: 800; line-height: 1.1; white-space: nowrap; }
-    .rc-lv { display: grid; gap: 1px; font: 800 20px/1.05 var(--font-num); font-variant-numeric: tabular-nums; white-space: nowrap; }
+    .rc-levels > button { display: flex; flex-direction: column; align-items: flex-start; gap: 0; min-width: 0; min-height: 74px; padding: 7px 10px 8px; text-align: left;
+      border: 1px solid var(--rule); background: transparent; color: var(--panel-ink); font: inherit; transition: background-color 0.12s ease-out, color 0.12s ease-out; }
+    .rc-levels > button + button { margin-left: -1px; }
+    .rc-levels > button.on { position: relative; background: var(--panel-ink); border-color: var(--panel-ink); color: var(--panel); }
+    .rc-levels > button:active { background: var(--hair, var(--rule)); }
+    .rc-levels > button.on:active { background: var(--panel-ink); opacity: 0.85; }
+    .rc-levels b { font-size: 17px; font-weight: 700; line-height: 1.15; white-space: nowrap; }
+    .rc-lv { display: grid; gap: 0; margin-top: auto; font: 800 26px/1 var(--font-num); font-variant-numeric: tabular-nums; white-space: nowrap; }
     .rc-lv i { font-style: normal; }
-    .rc-lv small { font: 600 11px var(--font-ui); letter-spacing: 0.06em; text-transform: uppercase; color: var(--panel-dim); }
-    .rc-lv .rc-lv-c { font-size: 17px; }
+    .rc-lv small { font: 600 15px var(--font-num); color: var(--panel-dim); }
+    .rc-lv .rc-lv-c { font-size: 16px; font-weight: 600; line-height: 1.1; }
+    .rc-lv .rc-lv-c small { font-size: 16px; color: inherit; }
     .rc-levels > button.on .rc-lv small { color: var(--panel); opacity: 0.8; }
-    .rc-levels > button.further .rc-lv { font: 600 15px/1.2 var(--font-ui); color: var(--panel-dim); white-space: normal; }
+    .rc-levels > button.on .rc-lv .rc-lv-c small { opacity: 1; }
+    .rc-levels > button.further .rc-lv { font: 500 15px/1.2 var(--font-ui); color: var(--panel-dim); white-space: normal; }
     /* a loop's ways (2026-11-10): the loops found, each its own outline, the way it heads, time and corners */
     .rc-ways[data-n="2"] { grid-template-columns: repeat(2, minmax(0, 1fr)); }
     .rc-way-art { align-self: stretch; height: 40px; margin: 0 0 3px; overflow: visible; }
@@ -768,7 +790,6 @@
     .opt-chip[data-count] { background: var(--panel-ink); color: var(--panel); }
     .deck-chips { display: none; padding: 8px 2px 0; }
     #app.idle:not(.plan-open):not(.routed):not(.drive-today-on) .deck-chips { display: flex; }
-    .rc-chips { margin: 6px 0 0; }
     /* finding 3: the main key follows the task: once you type, the loop gives way and the key goes to the place */
     .plan.typing .plan-loop, .plan.typing .plan-links, .plan.typing #planSpots, .plan.typing #planBooks, .plan.typing #findLoopBtn { display: none; }
     #findGoBtn { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -781,16 +802,16 @@
     @keyframes rc-spin { to { transform: rotate(360deg); } }
     @media (prefers-reduced-motion: reduce) { .rc-progress.busy::before { animation: none; } }
     /* finding 2: the profile's room is kept before it loads */
-    .rc-profile-box { min-height: 102px; position: relative; }
+    .rc-profile-box { min-height: 80px; position: relative; margin-top: 6px; }
     /* heights that never came: the room stays (nothing below moves) and says so, unknown as -- */
-    .rc-profile-box.none::after { content: "Heights --"; position: absolute; left: 0; right: 0; top: 50%; border-top: 1px dashed var(--rule); padding-top: 4px; text-align: center; font-size: 13px; color: var(--panel-dim); }
+    .rc-profile-box.none::after { content: "Heights --"; position: absolute; right: 0; top: 0; font: 600 13px var(--font-num); letter-spacing: 0.02em; color: var(--panel-dim); }
     /* finding 6: a loop's length on its card, in your units */
     .rc-loop { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 10px; align-items: center; margin-top: 8px; }
     .rc-loop[hidden] { display: none; }
     .rc-loop-label { font-size: 13px; font-weight: 700; color: var(--panel-dim); }
     .rc-loop .detents > button { min-width: 0; padding: 0 2px; font-size: 14px; }
     /* finding 10: the card opens at half height over the map; dragged up it takes the full sheet */
-    .plan.open.routed:not(.full) { height: min(50%, 440px); }
+    .plan.open.routed:not(.full) { height: min(51.5%, 452px); }
     .plan.routed { transition: transform 0.2s cubic-bezier(0.2, 0.8, 0.2, 1), height 0.2s cubic-bezier(0.2, 0.8, 0.2, 1); }
     .plan.routed.dragging { transition: none; }
     /* finding 11: the alternatives answer a swipe sideways; the card says how many */
@@ -1091,6 +1112,34 @@
     .home-by .hb-label { font-size: 15px; font-weight: 700; color: var(--panel-ink); }
     .home-by .stepper > output { min-width: 112px; }
     .home-by .stepper > output.unk { color: var(--panel-dim); letter-spacing: 0.06em; }   /* no time set: unknown in pencil */
+    /* ---------------- the route card as a page (design pass, 2026-11-10, "Vetta Line") ---------------- */
+    /* The headline: the bar is the card's title, the route's name large in the number face. Folded down it is the same
+       line a size smaller with its three numbers under it and Start beside it: one object, open or folded. */
+    .plan.routed .plan-bar { padding-left: 14px; }
+    .plan.routed .plan-body { scroll-padding-bottom: 0; }   /* the card's foot is outside its scroll: nothing to clear (the Find bar's 80 px moved a tapped level card) */
+    /* paper laid on the map: a route's card lifts on a soft shadow and a hairline, not a ruled ink edge */
+    .plan.routed, [data-theme="roadbook"] .plan.routed { border-top: 1px solid var(--hair, var(--rule)); box-shadow: 0 -10px 28px rgba(0, 0, 0, 0.16); }
+    .route-bar span i { font-style: normal; font-weight: 700; color: var(--panel-ink); }
+    .route-bar b { font: 700 22px/1.05 var(--font-num); letter-spacing: 0.01em; }
+    .route-bar span { margin-top: 1px; font: 600 16px/1.15 var(--font-num); letter-spacing: 0.02em; font-variant-numeric: tabular-nums; color: var(--panel-dim); }
+    .plan.open.routed .route-bar b { font-size: 30px; font-weight: 800; line-height: 1; }
+    .plan.open.routed .route-bar span { display: none; }   /* the stat line right under it says the same, large */
+    .plan.open.routed .plan-bar { padding-top: 12px; padding-bottom: 2px; }
+    /* quiet groups under the choice: a small label, a hairline over it, rows inside */
+    .rc-group { margin-top: 18px; padding-top: 10px; border-top: 1px solid var(--hair, var(--rule)); }
+    .rc-h { margin: 0 0 4px; font: 700 13px/1.2 var(--font-ui); letter-spacing: 0.08em; text-transform: uppercase; color: var(--panel-dim); }
+    .rc-drive:not(:has(.fact:not([hidden]), .rc-story:not([hidden]))) { display: none; }   /* nothing known about the drive yet: no empty group */
+    .rc-group .rc-story { margin-top: 6px; }
+    .rc-group .rc-story > summary { font-size: 17px; font-weight: 600; }
+    .rc-group .rc-facts { gap: 0; margin-top: 6px; }
+    .rc-group .rc-facts .fact { padding: 9px 0; border-top: 1px solid var(--hair, var(--rule)); font-weight: 500; }
+    .rc-group .rc-dials { margin-top: 10px; }
+    .rc-with .rc-chips { margin: 8px 0 0; }
+    .rc-with .rc-chips .chip { border-width: 1px; border-color: var(--rule); }
+    #routeCard .rc-via { margin: 10px 0 0; font-size: 15px; line-height: 1.35; }
+    #routeCard .rc-links { margin-top: 18px; }
+    /* Start is the page's foot: the tabs under it already clear the home indicator */
+    .plan-foot { padding-bottom: 12px; border-top-color: var(--hair, var(--rule)); }
     .linkbtn { font: inherit; font-size: 15px; font-weight: 500; color: var(--panel-ink); text-decoration: underline; min-height: 44px; padding: 0 4px; background: none; border: none; }
     details.how { margin: 2px 0 6px; }
     details.how > summary { cursor: pointer; font-size: 14px; font-weight: 600; color: var(--panel-dim); min-height: 36px; display: flex; align-items: center; list-style: none; }
@@ -1175,7 +1224,9 @@
     .request-card p { margin: 0; font-size: 16px; } .request-card small { display: block; color: var(--panel-dim); font-size: 13px; margin-top: 2px; }
     #accountBody > .you-row { border-bottom: 1px solid var(--hair, var(--panel-dim)); margin-top: -8px; }
     #accountBody > .you-row + .friend-list { border-top: 0; }
-    .row.friend-keys { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; } .friend-keys .ink-btn, .friend-keys .ink-btn.solid { height: 44px; padding: 0 8px; }
+    .row.friend-keys { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+    .friend-keys > :last-child:nth-child(odd) { grid-column: 1 / -1; }   /* three keys: the third takes the row, not half of it beside a hole */
+    .friend-keys .ink-btn, .friend-keys .ink-btn.solid { height: 44px; padding: 0 8px; }
     #accountBody > .you-row .chev { transform: rotate(-45deg); }   /* it opens a page, it does not unfold */
     .nav-row.quiet { min-height: 44px; font-size: 14px; font-weight: 500; color: var(--panel-dim); border-top: 1px solid var(--hair, var(--panel-dim)); }
     .nav-row.quiet[aria-expanded="true"] { border-bottom: 0; } .nav-row.quiet[aria-expanded="true"] i { transform: rotate(45deg); }
@@ -1327,6 +1378,7 @@
     html[data-type-size] .switch > button { white-space: normal; text-overflow: clip; line-height: 1.15; padding: 4px; }
     /* the level cards one a row once the text is larger: the level, its time and its corners on one line */
     html[data-type-size] .rc-levels { grid-template-columns: minmax(0, 1fr); }
+    html[data-type-size] .rc-levels > button + button { margin-left: 0; margin-top: -1px; }   /* one a row: the hairlines shared top and bottom */
     html[data-type-size] .rc-levels > button { flex-direction: row; flex-wrap: wrap; align-items: baseline; column-gap: 12px; min-height: 52px; }
     html[data-type-size] .rc-way-art { align-self: center; width: 60px; flex: none; margin: 0; }
     html[data-type-size] .rc-lv { display: flex; flex-wrap: wrap; column-gap: 12px; align-items: baseline; }
@@ -1619,15 +1671,14 @@
             </section>
             <section id="routeCard" hidden>
               <h3 id="routeCardName"></h3>
+              <!-- The card as a page (design pass, 2026-11-10): the headline is the bar above (the route's name) and this stat line,
+                   time, distance, corners; then the profile, the card's one graphic, with the apex dot where you are on it; then the
+                   one choice (the level cards, or a loop's length and ways); everything else in quiet groups under it. -->
+              <div class="rc-stats" id="routeCardStats"></div>
+              <!-- finding 2: the profile's room is kept before it loads, so nothing under it jumps -->
+              <div class="rc-profile-box" id="routeCardProfile"></div>
               <!-- finding 1: the plan's progress, then what the ranking did ("Better route found: +8 min, 52 more corners") -->
               <p class="rc-progress" id="routeProgress" role="status" aria-live="polite"></p>
-              <!-- finding 5: what is on, as small chips; any of them opens Options -->
-              <div class="plan-chips rc-chips" id="routeCardChips" role="group" aria-label="Options on this route">
-                <button class="chip opt-chip" id="cardOptionsChip" aria-haspopup="dialog">Options</button>
-                <span class="opt-on" id="cardOptsOn"></span>
-                <!-- planned with Route tuning's settings (route_tuning.js): says so, so a surprising route is explainable -->
-                <button class="chip tune-chip" id="cardTuneChip" hidden>Your tuning</button>
-              </div>
               <!-- finding 6: a loop's length, in your units, on its card -->
               <div class="rc-loop" id="routeCardLoop" role="group" aria-label="Loop length" hidden><span class="rc-loop-label">Length</span><div class="detents" id="cardLoopDetents"></div></div>
               <div class="rc-levels rc-ways" id="routeCardWays" role="radiogroup" aria-label="Which way the loop heads" hidden></div>
@@ -1640,11 +1691,9 @@
               <p class="note rc-via" id="routeCardWhy" hidden></p>
               <!-- There and back (graph_router.js roundTrip): the trip home again by other road, the destination a stop -->
               <button type="button" class="ink-btn rc-round" id="routeRoundBtn" hidden>There and back, home another way</button>
-              <div class="rc-stats" id="routeCardStats"></div>
-              <!-- finding 2: the profile's room is kept before it loads, so nothing under it jumps -->
-              <div class="rc-profile-box" id="routeCardProfile"></div>
               <p class="route-meta" id="routeCardMeta" hidden></p>
               <!-- What this drive is like (route_story.js, the owner 2026-11-09): its first line in view, the rest a tap away -->
+              <div class="rc-group rc-drive"><h4 class="rc-h">This drive</h4>
               <details class="rc-story" id="routeCardStory" hidden><summary id="routeCardStoryLead"></summary><div id="routeCardStoryMore"></div></details>
               <div class="rc-facts">
                 <p class="fact f-along" id="routeCardAlong" hidden></p>
@@ -1653,9 +1702,21 @@
                 <p class="fact f-sky" id="routeCardWeather" hidden></p>
                 <p class="fact f-closed" id="routeCardClosures" hidden></p>
               </div>
+              </div>
               <div class="stack-8" id="routeStops" hidden></div>
+              <div class="rc-group"><h4 class="rc-h">The road</h4>
               <div class="rc-dials" id="routeCardBars"></div>
               <p class="note" id="routeCardSub"></p>
+              </div>
+              <!-- finding 5: what is on, as small chips; any of them opens Options -->
+              <div class="rc-group rc-with"><h4 class="rc-h">Planned with</h4>
+              <div class="plan-chips rc-chips" id="routeCardChips" role="group" aria-label="Options on this route">
+                <button class="chip opt-chip" id="cardOptionsChip" aria-haspopup="dialog">Options</button>
+                <span class="opt-on" id="cardOptsOn"></span>
+                <!-- planned with Route tuning's settings (route_tuning.js): says so, so a surprising route is explainable -->
+                <button class="chip tune-chip" id="cardTuneChip" hidden>Your tuning</button>
+              </div>
+              </div>
               <div class="rc-links">
                 <button class="linkbtn" id="routeSaveBtn" aria-pressed="false">Save</button>
                 <button class="linkbtn" id="routeShareBtn">Share</button>
@@ -1841,9 +1902,23 @@
                 <button data-pack="look" role="radio">Suggested</button><button data-pack="marguerite" role="radio">Marguerite</button><button data-pack="kit" role="radio">Kit</button><button data-pack="hale" role="radio">Hale</button>
               </div></div>
             <p class="note" id="packNote" role="status" aria-live="polite"></p>
+            <!-- Night is the look's (it turns the page over), so it sits with the looks; it was under Co-driver (2026-11-10) -->
+            <div class="ctl"><p class="ctl-label">Night</p>
+              <div class="switch" id="nightSwitch" role="radiogroup" aria-label="Night">
+                <button data-night="auto" role="radio">Auto</button><button data-night="off" role="radio">Day</button><button data-night="on" role="radio">Night</button>
+              </div></div>
+            <p class="note">Auto turns the page over after sunset.</p>
           </section>
-          <section data-panel="garage">
+          <!-- One block for the co-driver (2026-11-10; it was two, Co-driver and The words, and the second began by pointing
+               back up the page): how it speaks, then what else it does. Its voice stays with the looks, which suggest it. -->
+          <section data-panel="garage" id="coSection">
             <h3>Co-driver</h3>
+            <div class="ctl"><p class="ctl-label">The words</p>
+              <div class="switch" id="noteWordsList" role="group" aria-label="Note words">
+                <button data-words="plain">Plain words</button>
+                <button data-words="rally">Rally notes</button>
+              </div></div>
+            <p class="note" id="noteWordsNote"></p>
             <!-- SO-1 (panel round 2): one setting, one home. Notes and Voice live in the map's Layers, where a drive reaches them -->
             <!-- design pass 2026-11-10: a row like the ones under it (what it is now on the left, where to change it on the right); the
                  sentence broke over two lines with the link dropped under its own full stop -->
@@ -1852,22 +1927,9 @@
               <button class="sw" data-toggle="haptics"><i></i><span>Haptics</span></button>
               <button class="sw" data-toggle="keys"><i></i><span>Key sounds</span></button>
             </div>
-            <div class="ctl"><p class="ctl-label">Night</p>
-              <div class="switch" id="nightSwitch" role="radiogroup" aria-label="Night">
-                <button data-night="auto" role="radio">Auto</button><button data-night="off" role="radio">Day</button><button data-night="on" role="radio">Night</button>
-              </div></div>
-            <p class="note">Notes: Full calls every corner; Quiet only hazards and cameras; Auto calls corners once you are cornering with some purpose, quiet otherwise. Night: Auto turns the page over after sunset.</p>
-          </section>
-          <section data-panel="garage">
-            <h3>The words</h3>
-            <p class="note" style="margin:0 0 8px">Your co-driver's voice is chosen under Look and voice, above. Works offline.</p>
-            <div class="switch mt-8" id="noteWordsList" role="group" aria-label="Note words">
-              <button data-words="plain">Plain words</button>
-              <button data-words="rally">Rally notes</button>
-            </div>
-            <p class="note" id="noteWordsNote"></p>
-            <button class="sw mt-8" id="liveVoiceBtn" role="switch" aria-checked="false"><i></i><span>Speak road names</span></button>
+            <button class="sw" id="liveVoiceBtn" role="switch" aria-checked="false"><i></i><span>Speak road names</span></button>
             <p class="note" id="liveNote" role="status" aria-live="polite"></p>
+            <p class="note">Notes: Full calls every corner; Quiet only hazards and cameras; Auto calls corners once you are cornering with some purpose, quiet otherwise. The words and the voice work offline.</p>
           </section>
           <!-- dev mode (the owner, 2026-11-09): filled only while /api/me says this account is a developer (cockpit.js
                paintDevRow), so for everyone else the row is empty and not offered (data-empty-hides) -->
@@ -2052,7 +2114,7 @@
       <aside class="side-pop opt-sheet" id="optSheet" role="dialog" aria-modal="true" aria-labelledby="optTitle">
         <div class="side-pop-head"><h3 id="optTitle">Options</h3><button class="linkbtn" id="optDone">Done</button></div>
         <div class="ctl"><div class="ctl-label">Avoid <small>✕ keeps off it when it can</small></div>
-          <div class="stamps opt-stamps opt-avoid" role="group" aria-label="Avoid"><button data-avoid="highways" aria-pressed="false">Highways</button><button data-avoid="tolls" aria-pressed="false">Tolls</button><button data-avoid="ferries" aria-pressed="false">Ferries</button><button data-avoid="unpaved" aria-pressed="false">Unpaved</button><button data-avoid="towns" aria-pressed="false">Towns</button><button data-avoid="cameras" aria-pressed="false">Cameras</button></div></div>
+          <div class="stamps opt-stamps opt-avoid" role="group" aria-label="Avoid"><button data-avoid="highways" aria-pressed="false">Highways</button><button data-avoid="tolls" aria-pressed="false">Tolls</button><button data-avoid="ferries" aria-pressed="false">Ferries</button><button data-avoid="unpaved" aria-pressed="false">Unpaved</button><button data-avoid="towns" aria-pressed="false">Towns</button><button data-avoid="cameras" aria-pressed="false">Cameras</button><button data-avoid="police" aria-pressed="false">Police reports</button></div></div>
         <!-- Prefer: the roads (prefer.js) and this drive (route_ctx/driver.js; vocabulary.js passenger / litRoads / cyclists / tunnels) -->
         <div class="ctl"><div class="ctl-label">Prefer <small>✓ ranks routes higher for it</small></div>
           <div class="stamps opt-stamps opt-prefer" role="group" aria-label="Prefer"><button data-prefer="measured" aria-pressed="false">Measured roads</button><button data-prefer="novel" aria-pressed="false">New to me</button><button data-prefer="crew" aria-pressed="false">Crew favourites</button><button data-driver="passenger" aria-pressed="false">Passenger aboard</button><button data-driver="lit" aria-pressed="false">Lit roads at night</button><button data-driver="cyclists" aria-pressed="false">Cyclist courtesy</button><button data-driver="tunnels" aria-pressed="false">Tunnels</button></div>

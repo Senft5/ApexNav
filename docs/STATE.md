@@ -7,6 +7,12 @@
   web/crew_page.js: no meter, `dressedBy`, Plain says "Plain livery"; editor locks read "With a crew-mate on Vetta Pro".
 - Tests: tests/test_pro.py, test_crew_page.py, test_route_tuning.py; backend/test/crew_page.test.ts; e2e "crew page" line.
 - Next: camber with how sure it is (red team TE-03).
+## Session 2026-11-10 (fable-night-keys): night drive keys outlined (claude/fable-night-keys, off origin/main)
+
+- web/index.html CSS: `html[data-mode="night"]` #driveEnd (not .undo, not Tapedeck), .transport > #replayDone and the
+  transport's checked detent are outlined, not filled. tests/test_night_keys.py.
+- Red team UI findings checked against the build: UX-02 tab bar (hidden while driving/replaying) and UX-05 Loop keys are
+  stale; UX-04 route card and UX-08 Garage are with the redesign thread.
 
 ## Session 2026-11-10 (fable-road-page): About a road: the climb's "[object Object]" fixed; scores as named bars (claude/fable-road-page, off origin/main 3f2f315)
 
@@ -49,6 +55,14 @@
 - Checked: backend vitest 367/367 + tsc, pytest 1447 passed, e2e roadbooks, shared routes, REVIEW.md 1.2.
 - Next: a crew's own roadbook on its page; a road added from a stage or a drive's page (only planned routes today); a
   roadbook's roads as pins on the map; "finished the book" on a profile.
+## Session 2026-11-11 (fable-avoid-police): Avoid → Police reports (claude/fable-avoid-police, off origin/main fc27c47)
+
+- Done: `ApexHazardReports.policeFor` / `passesNear`; `FunRoute` avoid key `police` (unavoided, keepAvoiding); graph_router
+  `AVOID_POINT_X` on edges near `avoid.points`; cockpit `avoidForTrip` (per plan), police exclusions in valhallaRoutesOnce,
+  card "Around a police report"; the Options chip; APP_REVIEW 1.4.3 row. Tests: tests/test_avoid_police.py, graph router
+  `avoidPolice`, e2e "avoid police reports". Full pytest green.
+- Next: a police report that arrives mid-drive could offer a reroute (today it counts only when a route is planned);
+  fixed speed cameras (IDEAS R-35 todo).
 
 ## Session 2026-11-10 (fable-one-corner): singular corners, and the nearby key keeps its label (claude/fable-one-corner, off origin/main e76f1bb)
 
@@ -111,6 +125,28 @@
 - [x] .github/workflows/core-tests.yml e2e `timeout-minutes` 25 → 35: 152 flows take ~24 min and were cancelled on the
   last flow. Next: split e2e into two jobs if it passes ~30 min.
 
+## Session 2026-11-10 (fable-driver-profile): Your driving, the driver profile over every drive (claude/fable-driver-profile, off origin/main 948cb4b)
+
+- `core/driver_profile.py` (new): `observe(drive)` gives one observation per corner the coach may read (six credits
+  0..1: `squeeze`, `brake`, `arc`, `entry`, `line`, `exit`; style facts `trail`, `slow_m`, `use`; context `dir`, `size`,
+  `tightens`, `crest`, `grade`, `minute`); `profile(drives)` gives levels (30 corners), `style`, the `matrix` (dir x
+  size, 10 corners), `findings` (within-drive splits with size taken out, drive-level car and tag splits), `trend` and
+  `change` by month (15 corners), `strongest`, `focus` (weakest at 85 or under, with where).
+- `web/driver_profile.js` (new): the port (parity: tests/test_driver_profile.py, made-up drives with planted faults and
+  the two shipped real drives), the words (`findingLine`, `styleLines`, `cardLine`, `focusLines`) and the page (`render`).
+  `web/apex_core.js` exports `knownRun`, `passMarks`, `meanSe` and four constants for it (no behaviour changed).
+- `web/analysis_client.js` job `profile` (in the analysis worker): observations per drive kept in IndexedDB
+  `vetta-profile` / `obs` under `OBS_VERSION|summary stamp|car`; only new drives are read; deleted drives' are dropped.
+  Bump `OBS_VERSION` when `observe` changes.
+- `web/analysis.html`: view `driving` (`?tab=driving`, `#tab-driving`, `#drivingRoot`), the Log's `#drivingCard`
+  (`#drivingOpen`), `apexLogDebug.driving()`. CSP hashes regenerated.
+- Checked: `pytest tests` full; e2e "Your driving" and the Log's flows.
+- Found on the way, not fixed here: `sensors.js Recorder.add` gives every 5 m sample between two GPS fixes the g of the
+  later fix (one reading a second, placed up to a fix early), though the shell sends ten frames a second. Coach marks,
+  the Score's smoothness and this profile all read that.
+- Next: record every frame's g between fixes (placed along the road as `vert_peak_g` already is), plus per-sample
+  steering and brake rates; then the profile's "touch" skills (turn-in, brake application and release rates) and a
+  practice focus that follows the profile's Work on into the next drive.
 ## Session 2026-11-11 (fable-taste-picks): taste learnt from the routes you choose (claude/fable-taste-picks, off origin/main ac6c6c6)
 
 - Done: `ApexTaste.recordPick` / `leanOf` (taste.js), pairs weighted in `fit`; cockpit `learnFromPick` at Start
@@ -144,6 +180,14 @@
 - Next: Options' "Loop to fit" 1 hour / 2 hours keys now duplicate the dial; remove them once the owner has used the
   dial (My free time stays).
 
+## Session 2026-11-10 (fable-whats-new): What's new says what changed since October (claude/fable-whats-new, off origin/main 948cb4b)
+
+- `web/whats_new.js`: `NEWS.id` '2026-11-10' with four lines: Quick / Fun / Long way, the drive overview on the route
+  card, loops by distance or time with a way to head, Route tuning. The last news was 2026-10-28 (Siri, landscape, stops,
+  kilometres), so everyone who updated since saw none of the routing work announced.
+- `tests/test_whats_new.py::test_it_names_what_is_really_there`: each name in the news is on a screen under that name.
+- Looked at on 393 and 320 px wide screens: one screen, nothing cut. pytest whole suite and the e2e "What's new" flow passed.
+- Next: when a PR adds something a driver would notice, it edits NEWS and its id in the same PR (the file's own rule).
 ## Session 2026-11-10 (fable-toast-key): toasts are as wide as their words; a toast's key ends its row (claude/fable-toast-key, off origin/main 51c8c4c)
 
 - [x] web/cockpit.js `toast()`: the action is `a.toast-key`, `#toast.has-key` while it has one. web/index.html:
@@ -170,6 +214,12 @@
 - e2e: that flow checks every row has a key and a line, the three surface words, Who sees me under Friends, panel on screen.
 - Next: the drive screen has not had a design pass.
 
+## Session 2026-11-10 (fable-no-orphan-key): three friend keys no longer leave a hole (claude/fable-no-orphan-key, off origin/main 51c8c4c)
+
+- [x] web/index.html `.friend-keys > :last-child:nth-child(odd) { grid-column: 1 / -1; }`. tests/test_friend_keys.py;
+  e2e "People: two tabs" reads the last key's span for a friend with three keys and one with four.
+- Looked over with the flows' fixtures and left as they are: the Friends list, a friend's profile, a crew's page.
+
 ## Session 2026-11-10 (fable-polish-7): the Settings list in groups, with values (claude/fable-polish-7, off origin/main 1a38381)
 
 - [x] web/garage_settings.js: `GROUPS` (a group's name goes before its first key, hidden while all its rows are),
@@ -178,6 +228,23 @@
   list) in web/index.html: zones, crash, nudge, units, motion. `.nav-group` CSS.
 - [x] Tests: tests/test_garage_settings.py (+1); e2e "Settings behind the gear…".
 - Next: Road feel, Route tuning and Spots rows have no value yet (Road feel's is drawn by who_sees.js).
+
+## Session 2026-11-10 (fable-route-reveal): design pass, the route card as a page and the route drawn on (claude/fable-route-reveal, off origin/main ac6c6c6)
+
+- web/route_reveal.js (new): `plan(prev, next, still)` (800 ms stroke + 500 ms count for a route found; 300 ms, no count,
+  for another route of the same plan; 0 under reduced motion, at launch, in a drive), `countText`, `ease`, `gradient`, `countUp`.
+- web/cockpit.js: `apex-route-src` has `lineMetrics: true`; `loadTrackOnMap` calls `revealOf(track)` (once per route) and
+  `penDraw` (a `line-gradient` on `apex-route` and its casing, taken off at the end and by a timer; a route replaced mid-stroke
+  carries on from where the pen was). `paintProfile` / `paintHere`: the profile drawn at the box's width (80 px), a strip
+  (`ApexRouteCard.strip`) before heights, the red apex dot (`#routeCardHere`) at the cursor (moved on return from a
+  fly-through via `paintIdle`), drawn on with the line (`.rc-profile.draw`). `#routeBarMeta` is time · distance · corners,
+  numbers in ink. The card opens scrolled to the top.
+- web/route_card.js: `strip`, `profileAt`, `tickLen`. web/index.html: card order is stat line, profile, progress, the
+  choice, then groups "This drive" (story, facts), "The road" (dials, sub), "Planned with" (chips), links, Home by. The
+  open bar is the headline (30 px Barlow); folded it is 22 px with the stat line under it, Start beside it. Every id kept.
+  `.plan.routed .plan-body { scroll-padding-bottom: 0 }` (the Find bar's 80 px made a tapped level card scroll).
+- Tests: tests/test_route_reveal.py; e2e "the route reveal…"; "routes from elsewhere" bar regex now expects time first.
+- Next: the fly-through could move the apex dot live while it plays (the card is hidden then; only its return position shows).
 
 ## Session 2026-11-10 (fable-drive): Location off is said, in the app too (claude/fable-drive, off origin/main 1a38381)
 
@@ -259,6 +326,17 @@
 - [x] web/cockpit.js `pickLoop` ends with `paintLoopSuggest()` (in a try: at launch the deck isn't set up yet).
 - [x] Tests: tests/test_loop_ways.py (+1); e2e "plan flow (b)" picks 15 mi and 45 mi on the dial and reads the row.
 
+## Session 2026-11-10 (fable-garage-two-blocks): Night sits with the looks; Co-driver and The words are one block (claude/fable-garage-two-blocks, off origin/main dc9caf9)
+
+- [x] web/index.html: `#nightSwitch` moved into `#lookSection` with its one-line note; `#coSection` holds
+  `#noteWordsList` (as a `.ctl` labelled The words), `#coNotesHere`, haptics, keys, `#liveVoiceBtn`, `#liveNote`. The
+  "The words" section and its "chosen under Look and voice, above" line are gone. web/vocabulary.js: where words and
+  night are set.
+- [x] tests/test_garage_settings.py (three blocks on the page, Night in the look, the parts of Co-driver). e2e: "REVIEW5
+  §2", "the Garage on a phone", "private themes", "small things", "Settings behind the gear", "Dynamic Type",
+  "REVIEW.md 1.2", "safe areas".
+- Next: the Garage's "How this works" under the looks could be one line; nothing else queued here.
+
 ## Session 2026-11-10 (fable-stages): the Stages page's runs are named by date (claude/fable-stages, off origin/main e76f1bb)
 
 - web/analysis.html `renderSegments`: `.run-name b` is `dateLabel(x.d)`, `.sub` the drive's name only when it differs
@@ -277,6 +355,13 @@
   by screen: the Log…" checks the Garage signed out has no People page (fails on main's CSS, passes here).
 - Lesson: a rule that sets `display` on a tab's panel must carry the tab (`.sheet[data-view=…]`); after changing one
   tab signed out, open the other three.
+
+## Session 2026-11-10 (fable-no-leftovers): the e2e runner checks every flow's last screen for "[object Object]", "undefined", "NaN" (claude/fable-no-leftovers, off origin/main 51c8c4c)
+
+- [x] e2e/smoke.js `leftovers(page)` (visible text nodes and aria-label / placeholder / title / alt, in every open page
+  of the flow), checked in the runner after each flow's body; flow "leftovers: the check every flow ends with…" seeds
+  the three and two hidden ones. Whole suite: 154/154 with the check on (about 80 min in the cloud container).
+- Next: call `leftovers(page)` mid-flow in the long screen-by-screen flows (REVIEW.md 1.2) so more screens are read.
 
 ## Session 2026-11-10 (fable-your-units): fixed sizes labelled in the driver's units (claude/fable-your-units, off origin/main e76f1bb)
 

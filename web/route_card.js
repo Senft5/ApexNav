@@ -50,8 +50,7 @@
     for (let i = 0; i < pts.length; i += step) line.push(`${x(pts[i][0]).toFixed(1)},${y(pts[i][1]).toFixed(1)}`);
     line.push(`${w.toFixed(1)},${y(pts[pts.length - 1][1]).toFixed(1)}`);
     const ticks = (t.events || []).filter((e) => e && e.type === 'corner' && finite(e.dist_m) && e.dist_m >= d0 && e.dist_m <= d1).map((e) => {
-      const sev = e.severity === 'HP' ? 1 : finite(+e.severity) ? 1 - (+e.severity - 1) / 6 : 0.4;
-      const len = 3 + 9 * Math.max(0, Math.min(1, sev)) ** 2;          // the tight ones stand out from the rest
+      const len = tickLen(e);                                          // the tight ones stand out from the rest
       const tx = x(e.dist_m).toFixed(1);
       return `<path d="M${tx} ${h - 8} V${(h - 8 - len).toFixed(1)}"/>`;
     }).join('');
@@ -60,6 +59,49 @@
       + `<path class="rc-ground" d="M0,${base} L${line.join(' L')} L${w},${base} Z"/>`
       + `<polyline class="rc-line" points="${line.join(' ')}"/>`
       + `<path class="rc-base" d="M0 ${h - 8} H${w}"/><g class="rc-ticks">${ticks}</g>${label}</svg>`;
+  }
+
+  /** A corner's tick on the profile's foot: taller for a tighter one. */
+  function tickLen(e) {
+    const sev = e.severity === 'HP' ? 1 : finite(+e.severity) ? 1 - (+e.severity - 1) / 6 : 0.4;
+    return 3 + 9 * Math.max(0, Math.min(1, sev)) ** 2;
+  }
+
+  /**
+   * The profile's room before its heights are in, or when they never come (design pass, 2026-11-10): the road as the foot's
+   * line with the same tick for every corner, so the card's graphic is never an empty box. Heights stay unknown: no
+   * ground is drawn and the page says "Heights --". Null without a length.
+   */
+  function strip(t, w = 340, h = 92) {
+    if (!t || !Array.isArray(t.dist) || t.dist.length < 2) return null;
+    const d0 = t.dist[0], d1 = t.dist[t.dist.length - 1];
+    if (!finite(d0) || !finite(d1) || !(d1 > d0)) return null;
+    const ticks = (t.events || []).filter((e) => e && e.type === 'corner' && finite(e.dist_m) && e.dist_m >= d0 && e.dist_m <= d1).map((e) =>
+      `<path d="M${(((e.dist_m - d0) / (d1 - d0)) * w).toFixed(1)} ${h - 8} V${(h - 8 - tickLen(e)).toFixed(1)}"/>`).join('');
+    return `<svg class="rc-profile rc-strip" viewBox="0 0 ${w} ${h}" preserveAspectRatio="none" role="img" aria-label="Corners along the route. Heights unknown">`
+      + `<path class="rc-base" d="M0 ${h - 8} H${w}"/><g class="rc-ticks">${ticks}</g></svg>`;
+  }
+
+  /**
+   * Where `m` metres along the route sits on the drawing `profile` (or `strip`) makes at the same w x h: { fx: 0..1 across,
+   * fy: 0..1 down }, for the dot that marks where you are. On the level line when the heights are unknown. Null without a length.
+   */
+  function profileAt(t, m, w = 340, h = 92) {
+    if (!t || !Array.isArray(t.dist) || t.dist.length < 2) return null;
+    const flat = { fy: (h - 8) / h };
+    const D0 = t.dist[0], D1 = t.dist[t.dist.length - 1];
+    if (!finite(D0) || !finite(D1) || !(D1 > D0)) return null;
+    const at = Math.max(D0, Math.min(D1, finite(m) ? m : D0));
+    const pts = [];
+    if (Array.isArray(t.elev)) for (let i = 0; i < t.dist.length; i++) if (finite(t.dist[i]) && finite(t.elev[i])) pts.push([t.dist[i], t.elev[i]]);
+    if (pts.length < 2 || !(pts[pts.length - 1][0] > pts[0][0])) return { fx: (at - D0) / (D1 - D0), fy: flat.fy };
+    const d0 = pts[0][0], d1 = pts[pts.length - 1][0], d = Math.max(d0, Math.min(d1, at));
+    let lo = Infinity, hi = -Infinity;
+    for (const [, e] of pts) { if (e < lo) lo = e; if (e > hi) hi = e; }
+    let k = 1; while (k < pts.length - 1 && pts[k][0] < d) k++;
+    const a = pts[k - 1], b = pts[k], f = b[0] > a[0] ? (d - a[0]) / (b[0] - a[0]) : 0, e = a[1] + (b[1] - a[1]) * f;
+    const top = 16, base = h - 22, span = Math.max(30, hi - lo);
+    return { fx: (d - d0) / (d1 - d0), fy: (base - ((e - lo) / span) * (base - top)) / h };
   }
 
   /** A half-dial for a 0-100 value: the arc filled to the value, a needle, the number under it; dashed and "--" when unknown. */
@@ -226,6 +268,6 @@
     return `${head}${bits.length ? `: ${bits.join(', ')}` : ''}`;
   }
 
-  const api = { duration, stats, profile, dial, count, levelCards, levelNote, pager, loopCards, loopOutline, loopTime, LEVEL_KEYS, cornersOf, swapNote, shape, factText, alongGlyph };
+  const api = { duration, stats, profile, strip, profileAt, dial, count, levelCards, levelNote, pager, loopCards, loopOutline, loopTime, LEVEL_KEYS, cornersOf, swapNote, shape, factText, alongGlyph };
   if (typeof module !== 'undefined' && module.exports) module.exports = api; else root.ApexRouteCard = api;
 })(typeof window !== 'undefined' ? window : globalThis);

@@ -344,6 +344,20 @@ const CASES = {
 
   // there and back by different roads (roundTrip): a 28 x 28 grid, a destination 4 km off; each level's round trips, the
   // share driven twice, both ends, the two legs, and the same trip's plan for the way out
+  // Avoid police reports: a live report on the quickest's middle sends quickest and plan round it; with none, as before
+  avoidPolice() {
+    const g = H.grid({ seed: 9, nx: 28, ny: 28, holes: 0.05, stepDeg: 0.004, lat0: 39.15, lon0: -84.62 });
+    const v = R.view(H.tiles(g.nodes, g.edges).tiles);
+    const from = { lat: 39.17, lon: -84.6 }, to = { lat: 39.23, lon: -84.52 };
+    const base = R.quickest(v, { from, to, level: 'quick' });
+    const mid = base.coords[Math.floor(base.coords.length / 2)], p = { lat: mid[0], lon: mid[1] };
+    const near = (r) => Math.min(...r.coords.map((c) => R.distM(p.lat, p.lon, c[0], c[1])));
+    const avoid = { police: true, points: [p] };
+    const q = R.quickest(v, { from, to, level: 'quick', avoid }), plan = R.plan(v, { from, to, level: 'fun', avoid });
+    const off = R.quickest(v, { from, to, level: 'quick', avoid: { police: false, points: [p] } });
+    return { baseNear: near(base), baseS: base.timeS, quickNear: near(q), quickS: q.timeS, planNear: plan.routes.map(near), offNear: near(off) };
+  },
+
   roundTrips() {
     const g = H.grid({ seed: 9, nx: 28, ny: 28, holes: 0.05, stepDeg: 0.004, lat0: 39.15, lon0: -84.62 });
     const v = R.view(H.tiles(g.nodes, g.edges).tiles);

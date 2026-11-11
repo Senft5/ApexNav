@@ -13,7 +13,7 @@ Aggregates 5.0m physics bins into coherent **Road Sectors (`250m – 2.5km`)** s
 1. **`TECH` (Technicality)**: Corner density, curvature variance $\sigma(\kappa)$, hairpins, and grade transitions.
 2. **`FLOW` (Flow & Rhythm)**: Sweeper consistency, positive banking ($\phi > +2^\circ$), and speed continuity.
 3. **`SURF` (Surface & Chassis Confidence)**: Smoothness (inverse of $>8\text{ Hz}$ vertical RMS), absence of mid-corner potholes and blind crest unweighting, weighted by the user's **Garage Car Spec**.
-4. **`CLEAR` (Stealth / Low Heat)**: Freedom from Flock LPR cameras, speed traps, and dense intersections.
+4. **`CLEAR` (Stealth / Low Heat)**: Freedom from Flock LPR cameras, speed traps, and dense intersections. Built: Avoid → Cameras (plate readers) and Avoid → Police reports (drivers' live Police reports and a convoy's Police call, docs/ROUTING.md). Never DUI checkpoints (App Store 1.4.3).
 
 ## 3. Speed-Aware Route Line & Adaptive Rally Co-Driver
 - **Speed-Aware Braking Ribbon**: Compares live approach speed $v$ against corner target speed $v_{\text{apex}} = \sqrt{R_c \, g \, (\mu_{\text{eff}} + \tan \phi)}$, dynamically shifting the upcoming corner entry ribbon from **Warm Cream/Amber** to **Signal Vermilion Red** when braking is required.
