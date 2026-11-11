@@ -4,6 +4,15 @@ Decisions Claude made for you, newest first. Each one says what was decided, why
 you reach one you've seen. If you disagree with a call, say so and it gets reversed; nothing here is hard to undo unless
 it says so. Things only you can do are in docs/OWNER_TODO.md.
 
+## 2026-11-11 (roam-c-boot-budget): an e2e check on what the map page loads and runs before it is ready (claude/roam-c-boot-budget)
+
+New e2e flow "startup budget" (IDEAS P-06): it loads index.html and fails if the page needs more than 3.6 MB of its own
+scripts, more than 145 of them, more than 2 s of script CPU, or a task over 1.5 s before it is ready. Today it is 3.23 MB
+in 130 scripts, 0.12 s and 0.17 s, so bytes and count have about a tenth of headroom (exact numbers, never flaky) and CPU
+only catches a gross regression (runners vary). It takes about a second. Calls: same-origin scripts only (the map's style
+and tiles are the network's, not ours); budgets are raised on purpose in the PR that needs it, with the reason.
+
+Undo: delete the flow (e2e/smoke.js `BOOT`), or raise a budget.
 ## 2026-11-11 (sweep round two): time attack counts only a week you entered (claude/project-thread-g9yher)
 
 Two bugs in the weekly time attack (#393). The Log never sent any runs, so every board stayed empty. And the server

@@ -189,6 +189,28 @@ const saidOn = (page, re, opts) => page.waitForFunction((src) => { const r = new
 const frame = (i, extra = {}) => ({ lat: 35.96 + i * 1e-5, lon: -83.92, accuracy_m: 5, speed_mps: 12, course_deg: 0, has_fix: true,
   lat_g: 0.1, lon_g: 0, calibration: 'locked', thermal: 0, low_power_mode: false, recording: false, segments: 0, ...extra });
 
+// Startup budget (IDEAS P-06): what the map page loads and runs before it is ready, so a heavy module added to the boot
+// path shows here instead of on a phone. Bytes are exact, so their budget is about a tenth over today; CPU time varies by runner, so its
+// budget only catches a gross regression (about 0.2 s here on 2026-11-11). Raise a budget on purpose, never to get green.
+const BOOT = { scriptBytes: 3.6e6, scriptCount: 145, cpuS: 2.0, longTaskMs: 1500 };   // 2026-11-11: 3.23 MB in 130 scripts, 0.12 s, 0.17 s
+flow('startup budget: the map page is ready within its script bytes, script count, CPU time and longest task (IDEAS P-06)', async (page, base) => {
+  await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); } catch (_) {}
+    window.__long = 0; try { new PerformanceObserver((l) => { for (const e of l.getEntries()) window.__long = Math.max(window.__long, e.duration); }).observe({ type: 'longtask', buffered: true }); } catch (_) {} });
+  const cdp = await page.context().newCDPSession(page);
+  await cdp.send('Performance.enable');
+  await page.goto(base + '/index.html');
+  await page.waitForFunction(() => window.apex && window.apexDebug, null, { timeout: 15000 });
+  const m = Object.fromEntries((await cdp.send('Performance.getMetrics')).metrics.map((x) => [x.name, x.value]));
+  const r = await page.evaluate((origin) => { const js = performance.getEntriesByType('resource').filter((e) => e.name.startsWith(origin) && /\.js(\?|$)/.test(e.name));
+    return { bytes: js.reduce((s, e) => s + (e.decodedBodySize || 0), 0), count: js.length, long: Math.round(window.__long),
+      top: js.sort((a, b) => b.decodedBodySize - a.decodedBodySize).slice(0, 3).map((e) => `${e.name.split('/').pop()} ${Math.round(e.decodedBodySize / 1024)} KB`) }; }, base);
+  const got = { ...r, cpuS: +m.ScriptDuration.toFixed(2) };
+  console.log('     startup: ' + JSON.stringify(got));
+  check(r.bytes > 1e6 && r.bytes <= BOOT.scriptBytes, `script bytes before ready ${r.bytes} (budget ${BOOT.scriptBytes}): ` + JSON.stringify(got));
+  check(r.count <= BOOT.scriptCount, `scripts before ready ${r.count} (budget ${BOOT.scriptCount}): ` + JSON.stringify(got));
+  check(got.cpuS <= BOOT.cpuS && r.long <= BOOT.longTaskMs, `CPU before ready ${got.cpuS} s (budget ${BOOT.cpuS}), longest task ${r.long} ms (budget ${BOOT.longTaskMs}): ` + JSON.stringify(got));
+}, { viewport: { width: 393, height: 852 }, hasTouch: true });
+
 flow('first run: onboarding, Watch a replay loads the bundled drive and Play moves along it', async (page, base) => {
   await page.goto(base + '/index.html');
   await page.waitForSelector('#onboard.show', { timeout: 10000 });

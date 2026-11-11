@@ -1,5 +1,13 @@
 # VETTA — CURRENT AGENT HANDOFF STATE
 
+## Session 2026-11-11 (roam-c-boot-budget): startup budget in e2e (claude/roam-c-boot-budget, off origin/main)
+
+- e2e "startup budget" (`BOOT` in smoke.js): own script bytes 3.6 MB, 145 scripts, 2 s CPU, 1.5 s longest task before
+  `window.apex` is ready. Measured 2026-11-11: 3.23 MB / 130 / 0.12 s / 0.17 s (maplibre 784 KB, cockpit.js 753 KB).
+- Measured too: at 4x CPU throttle the page is ready in ~1.7 s; the opening cover waits for the first basemap tile
+  (OpenFreeMap; style, sprites and glyphs are HTTP-cached a day). Next for P-06: load route-only modules (graph_router,
+  route_engine, fun_route, ~260 KB) on first plan instead of at boot.
+
 ## Session 2026-11-11 (roam-c-crest-contract): crest's units written down; IDEAS Q-08 done (claude/roam-c-crest-contract, off origin/main)
 
 - Checked: ApexNavApp.swift, web/sensors.js and both CSVs carry `crest_vertical_g` in g (negative going light);
