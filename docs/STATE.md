@@ -1,5 +1,14 @@
 # VETTA — CURRENT AGENT HANDOFF STATE
 
+## Session 2026-11-11 (roam-a descent call): "Long descent ahead" near the top (claude/project-thread-h7xxmf, off origin/main)
+
+- IDEAS V-12, part three. web/brake_heat.js `descentAhead(list, atM, said)` (500 m before a top to 300 m past it, once per
+  start_m) and `descentCall(d, spoken)` ("Long descent ahead: 2.5 miles at 8 percent. A lower gear saves the brakes.").
+- cockpit.js: `paintClimb` keeps `t.descents`; `updateNotes` queues the call in the `brakeSay` slot (live, on the planned
+  route, not off it), said through the quiet gate; `drive.descentSaid` reset at drive start.
+- Tests: tests/test_brake_heat.py (+2); e2e "the co-driver says a long descent once…" (GPX + stubbed DEM, live frames).
+  Checked: pytest, that flow, the route-card descent flow, "co-driver reads the road", startup budget.
+- Next: the Garage car's weight and brakes could tune DISC_C; CarPlay could show the descent line on its route preview.
 ## Session 2026-11-11 (roam-a descents): the route card says a long descent before you set off (claude/project-thread-h7xxmf, off origin/main)
 
 - IDEAS V-12, its second part. `long_descents` (core/brake_heat.py) / `longDescents` (web/brake_heat.js, parity-tested): from the
