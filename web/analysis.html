@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self' apexnav:; script-src 'self' apexnav: 'sha256-EgGm0TN48SfmVccg32Ze9NvX63CNnJxLm0dPE9Huhps=' 'sha256-G7s/ZI+Hqrfc4DqbB6EANJJLmUmhNK06PizQ1LlsG84=' https://cdn.jsdelivr.net 'wasm-unsafe-eval'; worker-src 'self' apexnav: blob:; child-src 'self' apexnav: blob:; style-src 'self' apexnav: 'unsafe-inline'; font-src 'self' apexnav: data:; img-src 'self' apexnav: data: blob: https://tiles.openfreemap.org https://s3.amazonaws.com https://basemap.nationalmap.gov; media-src 'self' apexnav: data: blob:; connect-src 'self' apexnav: data: blob: https://apexnav.senftns.workers.dev wss://apexnav.senftns.workers.dev https://tiles.openfreemap.org https://basemap.nationalmap.gov https://s3.amazonaws.com https://valhalla1.openstreetmap.de https://router.project-osrm.org https://overpass-api.de https://overpass.private.coffee https://overpass.kumi.systems https://maps.mail.ru https://nominatim.openstreetmap.org https://photon.komoot.io https://api.open-meteo.com https://api.weather.gov https://statsapi.mlb.com https://api.seatgeek.com https://api.water.noaa.gov https://waterservices.usgs.gov https://in.carsprogram.org https://publicapi.ohgo.com https://quickstats.nass.usda.gov https://commons.wikimedia.org https://graph.mapillary.com https://vpic.nhtsa.dot.gov https://cdn.jsdelivr.net https://huggingface.co https://*.huggingface.co https://*.hf.co; object-src 'none'; base-uri 'none'; form-action 'self'" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self' apexnav:; script-src 'self' apexnav: 'sha256-id9zn17zdju8/K096IcJ/8haO7j5kpI6A1wwpI8cUpk=' 'sha256-G7s/ZI+Hqrfc4DqbB6EANJJLmUmhNK06PizQ1LlsG84=' https://cdn.jsdelivr.net 'wasm-unsafe-eval'; worker-src 'self' apexnav: blob:; child-src 'self' apexnav: blob:; style-src 'self' apexnav: 'unsafe-inline'; font-src 'self' apexnav: data:; img-src 'self' apexnav: data: blob: https://tiles.openfreemap.org https://s3.amazonaws.com https://basemap.nationalmap.gov; media-src 'self' apexnav: data: blob:; connect-src 'self' apexnav: data: blob: https://apexnav.senftns.workers.dev wss://apexnav.senftns.workers.dev https://tiles.openfreemap.org https://basemap.nationalmap.gov https://s3.amazonaws.com https://valhalla1.openstreetmap.de https://router.project-osrm.org https://overpass-api.de https://overpass.private.coffee https://overpass.kumi.systems https://maps.mail.ru https://nominatim.openstreetmap.org https://photon.komoot.io https://api.open-meteo.com https://api.weather.gov https://statsapi.mlb.com https://api.seatgeek.com https://api.water.noaa.gov https://waterservices.usgs.gov https://in.carsprogram.org https://publicapi.ohgo.com https://quickstats.nass.usda.gov https://commons.wikimedia.org https://graph.mapillary.com https://vpic.nhtsa.dot.gov https://cdn.jsdelivr.net https://huggingface.co https://*.huggingface.co https://*.hf.co; object-src 'none'; base-uri 'none'; form-action 'self'" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
   <title>Vetta · Log</title>
   <link rel="icon" href="brand/mark.svg" type="image/svg+xml" />
@@ -306,8 +306,9 @@
     @media (prefers-reduced-motion: reduce) { #boot { transition: none; } }
 </style>
   <link rel="stylesheet" href="controls.css" />
+  <link rel="stylesheet" href="signature.css" />   <!-- Vetta Line (docs/design/SIGNATURE.md): the Log's part is under body.log-page -->
 </head>
-<body>
+<body class="log-page">
   <div id="boot" aria-hidden="true"><img src="brand/mark.svg" alt="" /></div>
   <main>
     <!-- ============================ DRIVE ============================ -->
@@ -352,8 +353,10 @@
 
     <!-- ============================ HISTORY ============================ -->
     <section id="tab-history" class="stack-12">
-      <div class="bar-top"><h1 class="stages-h">Log</h1></div>
-      <div class="switch log-seg" role="radiogroup" aria-label="Drives or stages"><button data-seg="history" role="radio" aria-checked="true">Drives</button><button data-seg="segments" role="radio" aria-checked="false">Stages</button></div>
+      <!-- Vetta Line: the page's head is its two places, Drives and Stages, as underlined tabs like People's Friends and Crews
+           (a slide switch read as a setting); "Log" stays for screen readers, the tab bar already says it -->
+      <div class="bar-top log-head"><h1 class="stages-h vh">Log</h1>
+        <div class="log-seg log-tabs" role="tablist" aria-label="Drives or stages"><button type="button" data-seg="history" role="tab" aria-selected="true">Drives</button><button type="button" data-seg="segments" role="tab" aria-selected="false">Stages</button></div></div>
       <!-- no drives yet: the first page of the book, drawn in pencil where the first drive's numbers will go (unknown
            stays "--": nothing here reads as a result), then the one thing to do -->
       <div class="first-page" id="historyEmpty" hidden>
@@ -392,8 +395,8 @@
 
     <!-- ============================ SEGMENTS ============================ -->
     <section id="tab-segments" hidden class="stack-12">
-      <div class="bar-top"><h1 class="stages-h">Log</h1></div>
-      <div class="switch log-seg" role="radiogroup" aria-label="Drives or stages"><button data-seg="history" role="radio" aria-checked="false">Drives</button><button data-seg="segments" role="radio" aria-checked="true">Stages</button></div>
+      <div class="bar-top log-head"><h1 class="stages-h vh">Log</h1>
+        <div class="log-seg log-tabs" role="tablist" aria-label="Drives or stages"><button type="button" data-seg="history" role="tab" aria-selected="false">Drives</button><button type="button" data-seg="segments" role="tab" aria-selected="true">Stages</button></div></div>
       <div class="seglist" id="segList"></div>
       <div class="grid2" id="segDetail" hidden>
       <div class="panel" id="segSyncPanel" hidden><h2>Board</h2><div class="row" id="segBoardFilter" role="group" aria-label="Board filter"></div><p class="note" id="segLegend"></p><div class="scroll mt-8"><table id="segBoard"></table></div><div class="row mt-8" id="segShareRow"></div><div id="segShared" class="stack-8 mt-8"></div><div class="note mt-8" id="segSyncNote"></div></div>
@@ -1366,7 +1369,7 @@
       for (const v of VIEWS) $(`tab-${v}`).hidden = v !== t;
       // Stages are part of the Log (REVIEW.md roadmap 9): one tab, a Drives / Stages switch
       $('navLog').classList.add('on'); $('navLog').setAttribute('aria-current', 'page');
-      document.querySelectorAll('[data-seg]').forEach(b => { const on = b.dataset.seg === (t === 'segments' ? 'segments' : 'history'); b.classList.toggle('on', on); b.setAttribute('aria-checked', String(on)); });
+      document.querySelectorAll('[data-seg]').forEach(b => { const on = b.dataset.seg === (t === 'segments' ? 'segments' : 'history'); b.classList.toggle('on', on); b.setAttribute('aria-selected', String(on)); });
       if (dirty.has(t) || t === 'history') renderView(t);
       else if (t === 'segments') renderSegStrip();
     }

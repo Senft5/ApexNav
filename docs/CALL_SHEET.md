@@ -4,6 +4,17 @@ Decisions Claude made for you, newest first. Each one says what was decided, why
 you reach one you've seen. If you disagree with a call, say so and it gets reversed; nothing here is hard to undo unless
 it says so. Things only you can do are in docs/OWNER_TODO.md.
 
+## 2026-11-11 (ui-round-two): the Log looks like the rest of the app (claude/project-thread-5sbga7)
+
+The Log is its own page shown over the map, and it had kept the old look: opening it swapped the tab bar's red dot for a
+red bar, Drives and Stages were a black slide switch (it read as a setting), and every date, card and panel sat in an ink
+box. Now the Log uses the same signature layer as the home screen: the dot marks the open tab, Drives and Stages are the
+page's head as two underlined places (as Friends and Crews are on People), rows are divided by hairlines, a date is
+set in type, cards are paper with a soft shadow, a drive's name is a masthead and the score sets itself once. Tapedeck and
+Billet keep their own colours. Nothing moved and no words changed.
+
+Undo: revert the PR (CSS and markup only; nothing stored changed).
+
 ## 2026-11-10 (fable-pro-looks): Pro is looks only; one Pro crew-mate dresses the whole crew (claude/fable-pro-looks)
 
 Your answer to the red team (PH-06, BR-06, UX-06): Pro is themes and liveries, nothing else. Route tuning, which went
