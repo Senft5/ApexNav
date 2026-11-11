@@ -31,6 +31,21 @@
 - Tests: tests/test_route_card.py; e2e "plan flow (c)".
 - Next: CarPlay has not had a design pass in this run (Swift, not visible from the cloud).
 
+## Session 2026-11-11 (fable-first-last): the first run and the drive-ended card as reveals (claude/fable-first-last, off origin/main ac6c6c6)
+
+- web/first_run.js (`ApexFirstRun`: `rests`, `leg`, `attach`): the welcome's lockup moves in from where the cover drew it,
+  a road (`.ob-road`, inline SVG, five `.ob-apex` corners) draws itself, and the red dot (`.ob-you`) drives up to each
+  corner as the strip (`#obNotes`, same renderer) calls it; cockpit.js `runOnboarding` steps both every 1.8 s. Keys live
+  from the first frame; a touch adds `.ob-skip`; under reduced motion there is no beat and no animation (still, whole page).
+- `#permSheet`: rows `.perm-row` with pen drawings; `#permGo` is the red `.rec-key` (ink `.ink-btn solid` when Location is
+  off: paintPerms). Same words, same ids, nothing asked earlier.
+- web/end_reveal.js (`ApexEndReveal`: `glyph`, `cells`, `countAt`, `open`, `land`): `#endGlyph` (the driven line beside
+  the Score, red dot at its end), the Score 108 px, `#endMeta` as a ledger (`.f` cells; its text is still the facts line),
+  busy state = a pen stroke + "working it out"; the count (`data-n` over the real text) only in `land`, after the number is written.
+- Tests: tests/test_end_reveal.py; tests/test_review_recording.py now asserts the welcome is still under reduced motion;
+  e2e "first run and the end card…".
+- Next: the welcome on its side (landscape) is correct but plain; the road could take the left column's full height.
+
 ## Session 2026-11-10 (fable-your-data): Your data as Settings-style rows (claude/fable-your-data, off origin/main 3f2f315)
 
 - `web/index.html` only: the Your data section's keys are `.nav-rows.data-rows` with three `.nav-group` headings; the
