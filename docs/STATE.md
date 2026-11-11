@@ -39,6 +39,27 @@
 - Tests: tests/test_route_card.py; e2e "plan flow (c)".
 - Next: CarPlay has not had a design pass in this run (Swift, not visible from the cloud).
 
+## Session 2026-11-10 (fable-sheet-races): two e2e flows clicked a sheet's key while it slid up (claude/fable-sheet-races, off origin/main 948cb4b)
+
+- `e2e/smoke.js` `sheetSettled(page, id)`: a `.overlay.dim` sheet is shown, nothing in it animating, and in the same place
+  two frames running. "a pin has a name" waits for it before the star, then checks the spot dialog is still open;
+  "Location off, in a browser" waits for it after Try again brings the sheet back, before Not now. On CI the star click
+  landed on the backdrop mid-slide and the backdrop closed the dialog (stars 0 px tall); nine PRs were red on it.
+- Found while tracing, not changed here: run alone in this container, "a pin has a name" fails later at Tap the map, on
+  main too, because Playwright's scroll-into-view scrolled `.stage` (overflow: hidden) by ~420 px, which stands the plan
+  sheet over the map. It passed in the whole-suite run and on CI. `overflow: clip` on `.stage` fixes the scroll but the
+  sheet still came up in the isolated run, so I left both out of this PR. Next: find what else holds the sheet up there.
+- Location flow 5 of 5 here (also at THROTTLE=6); pin flow passes the star step every run.
+- 2026-11-11, the real cause (from the reviewer's diagnostic run): the star tap reached the backdrop's click handler.
+  Two faults. (1) `sheetSettled` never waited: its `waitForFunction` predicate was `async`, and a promise is truthy, so
+  it returned at once with the sheet still at the bottom of its slide (measured here: card top 844 of 844, sheet-up at
+  0 ms). It now loops in one `page.evaluate`, which does await, and checks it settled. (2) The app: a press that began
+  on a key and lifted on the backdrop (the sheet moving under it, or a drag) sends the click to the backdrop, their
+  shared parent, and that closed the sheet. `onBackdrop(back, close)` in `web/cockpit.js` closes only when the press
+  began on the backdrop too; the spot, pin, explain, spot-photo and Ways-to-go backdrops use it
+  (`tests/test_backdrop_press.py`). The flow now checks the star is under its own centre before the tap, and that a
+  press on a star lifted on the backdrop leaves the dialog open. Not done: the backdrops in confirm.js, convoy_ui.js,
+  crew_page.js, photos.js, row_select.js and whats_new.js still close on the click target alone.
 ## Session 2026-11-11 (fable-rally-sheet): crew drive results sheet (claude/fable-rally-sheet, off origin/main affc1d0)
 
 - `backend/src/events.ts`: `eventRecord` adds `results` from `resultsSheet(runs)` (pure): best `driver_score` per stage
