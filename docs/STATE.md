@@ -1,5 +1,14 @@
 # VETTA — CURRENT AGENT HANDOFF STATE
 
+## Session 2026-11-11 (TestFlight 21:14): corner and moment taps zoom the drive page's map (claude/project-thread-0wt1zm)
+
+- The hourly TestFlight run moved to this thread (scheduled task at :52 UTC; the old task is paused). Owner note 21:14:22Z.
+- web/drive_basemap.js: `attach()` returns `focus(v)` (easeTo, or jumpTo under reduced motion). web/drive_view.js:
+  `applyCam` (the old onMove body), `focusMap(a, b)` frames samples a..b, `pick(i, a, b)` for every list row; "All" and a
+  tap on the plain picture call `unfocusMap`.
+- Tests: e2e "the drive page's map" flows (stubbed MapLibre: a corner row eases in, All fits again; plain picture zooms and
+  back). Checked: pytest, those flows.
+- Next: the hourly run keeps watching TestFlight.
 ## Session 2026-11-11 (places by name): the cafés and fuel on the route card are a tap away, by name (claude/project-thread-me97iw, off origin/main)
 
 - The owner: "when it says there's cafes or gas stations ... i want to be able to tap for details. Ideally just show the name".
