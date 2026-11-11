@@ -164,7 +164,8 @@ process.stdout.write(JSON.stringify(out));
     assert r["restored"], r
 
 
-def test_pro_gate_open_now_closed_on_sale_without_pro_open_with_it():
+def test_route_tuning_is_free_with_or_without_pro():
+    # the owner, 2026-11-10: Pro is looks only, so Route tuning is never gated (it was Pro from 2026-11-09)
     r = run(LOAD + r"""
 T.save(store, { corners: 1.5 });
 const now = T.active(store, {}, P), onSaleNoPro = T.active(store, { pro: true, proOnSale: true }, P);
@@ -174,14 +175,15 @@ const kept = T.load(store).corners;
 process.stdout.write(JSON.stringify({ now, onSaleNoPro, withPro, kept, allowedNow: T.allowed(store, {}, P), allowedSale: T.allowed(store, { pro: true, proOnSale: true }, P) }));
 """)
     assert r["now"] == {"router": {"W_FUN": 0.675}, "engine": {"FUN": 1.5, "GAIN": 0.75}}, r   # early access: everyone
-    assert r["onSaleNoPro"] is None, r                                     # on sale, no Pro: the defaults
-    assert r["withPro"] == r["now"] and r["kept"] == 1.5, r                # with Pro (beta and early users: lifetime)
+    assert r["onSaleNoPro"] == r["now"], r                                 # on sale, no Pro: still yours
+    assert r["withPro"] == r["now"] and r["kept"] == 1.5, r
+    assert r["allowedNow"] is True and r["allowedSale"] is True, r
 
 
 def test_the_page_wiring():
     js, html = read("cockpit.js"), read("index.html")
     assert '<script src="route_tuning.js" defer></script>' in html
-    assert re.search(r'<section data-panel="garage" data-setting="tuning" data-title="Route tuning">\s*<div id="garageTuneBody"', html)
+    assert re.search(r'<section data-panel="garage" data-setting="tuning" data-title="Route tuning" data-summary="#garageTuneBody">\s*<div id="garageTuneBody"', html)
     assert 'id="cardTuneChip"' in html
     gs = read("garage_settings.js")
     assert "'tuning'" in gs

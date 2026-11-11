@@ -278,6 +278,18 @@
       return c ? Object.assign(c.route, { timeS: c.timeS, own: c.own }) : null;
     } catch (_) { return null; }
   }
+  /**
+   * There and back from our router (graph_router.js roundTrip): a destination and home again by other road, as candidates
+   * ([{ route, timeS, own: { retraced, out, back } }], best first), or [] where the tiles don't cover both ends, or on any
+   * failure (the planner then asks Valhalla for the way back).
+   */
+  async function roundTrip(client, req) {
+    if (!client || typeof client.round !== 'function') return [];
+    try {
+      if (!(await client.covers([req.from, req.to]))) return [];
+      return candidates(await client.round(req));
+    } catch (_) { return []; }
+  }
   /** Loops from our router, as routes in the shape the loop planner routes (coords [[lon, lat]], turns, times). */
   async function loops(client, req) {
     if (!client) return [];
@@ -373,7 +385,7 @@
     return 'own';
   }
 
-  const api = { OFF_KEY, on, withCoords, routeOfLine, limitsAlong, candidates, plan, quick, through, loops, cellsFor, crowdItems, crowdFor, crowdSoon, _cells: cellMemo, sharedShare, oneClock, polyline6, thin, traceBody, instruct };
+  const api = { roundTrip, OFF_KEY, on, withCoords, routeOfLine, limitsAlong, candidates, plan, quick, through, loops, cellsFor, crowdItems, crowdFor, crowdSoon, _cells: cellMemo, sharedShare, oneClock, polyline6, thin, traceBody, instruct };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   root.ApexOwnRouting = api;
 })(typeof window !== 'undefined' ? window : globalThis);
