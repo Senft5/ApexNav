@@ -4507,6 +4507,14 @@ flow('Your driving: the profile over every drive opens from the Log, names the w
   await page.waitForSelector('#drivingOpen', { timeout: 20000 });
   const card = await page.textContent('#drivingOpen span');
   check(/Work on: One steering arc \d+/.test(card) && /Strongest: /.test(card), 'the card says the strongest and the one to work on: ' + card);
+  // Your year: the year's cleanest corners, one a road (two roads here), from the same kept observations
+  const best = await page.evaluate(() => ApexAnalysis.job('profile', { year: 2026 }).then((r) => r.best));
+  check(best.length === 2 && best[0].level >= best[1].level && new Set(best.map((b) => b.name)).size === 2 && best.every((b) => b.at.startsWith('2026-')), 'the year\'s best corners: ' + JSON.stringify(best));
+  if (new Date().getFullYear() === 2026) {
+    await page.waitForFunction(() => /Cleanest corners: a /.test(document.getElementById('yearLines').textContent), null, { timeout: 10000 });
+    const yl = await page.textContent('#yearLines');
+    check(/Cleanest corners: a (tight |medium |fast )?(left|right|corner) on (Dry Ridge Rd|Pebble Ridge) \(\w{3} \d{1,2}\), \d{1,3}; a /.test(yl) && !/mph|km\/h/.test(yl), 'Your year names them: ' + yl);
+  }
   await page.click('#drivingOpen');
   await page.waitForSelector('#drivingRoot .dp-st');
   const text = await page.evaluate(() => document.getElementById('drivingRoot').innerText);
@@ -7182,6 +7190,22 @@ flow('no connection: People is a page that says which it is (offline, or Vetta n
   down = false;
   await page.evaluate(() => { window.__onLine = true; window.dispatchEvent(new Event('online')); });
   await page.waitForFunction(() => !document.querySelector('.lost-page') && [...document.querySelectorAll('.join-page .join-head')].some((e) => e.getClientRects().length && /Drive with friends|Drive as a crew/.test(e.textContent)), null, { timeout: 10000 });
+}, IPHONE);
+
+flow('the route card says a long descent before you set off, from the terrain, in words (brake_heat.js longDescents, IDEAS V-12)', async (page, base) => {
+  await planRouter(page, []);
+  const { tap } = await planPage(page, base);
+  // terrain: 8 % down for the first 6 km of the route, flat after (the DEM is stubbed: no tiles here)
+  await page.evaluate(() => { ApexStages.profile = async (t) => t.dist.map((m) => 1500 - 0.08 * Math.min(m, 6000)); });
+  await tap('#destInput', 'Where to?');
+  await page.fill('#destInput', 'Maryville');
+  await page.waitForSelector('#placeList .place', { timeout: 10000 });
+  await page.waitForFunction(() => /^Go to Maryville$/.test(document.getElementById('findGoBtn').textContent));
+  await tap('#placeList .place', 'the place');
+  await cardUp(page);
+  await page.waitForFunction(() => !document.getElementById('routeCardDescent').hidden, null, { timeout: 20000 });
+  const line = await page.textContent('#routeCardDescent');
+  check(/^A long descent: down [\d,]+ ft over [\d.]+ mi at 8%\. A lower gear saves the brakes\.$/.test(line.replace(/\u00a0/g, ' ')), 'the descent, in feet and miles: ' + line);
 }, IPHONE);
 
 flow('plan flow (e, f) a level change and an alternative are one tap or swipe each: the level cards are the routes found, nothing planned again (finding 4, 11)', async (page, base) => {

@@ -12,6 +12,17 @@
   is drawn behind other tabs. Refreshed on visibilitychange and every 5 min, never while driving.
 - Tests: backend/test/inbox.test.ts (3), tests/test_inbox.py (3), e2e "For you: …".
 - Next: push notifications for the same items once APNs is set up (OWNER_TODO); a crew's own roadbook; recurring meets (S-13).
+## Session 2026-11-11 (roam-a descents): the route card says a long descent before you set off (claude/project-thread-h7xxmf, off origin/main)
+
+- IDEAS V-12, its second part. `long_descents` (core/brake_heat.py) / `longDescents` (web/brake_heat.js, parity-tested): from the
+  route's terrain profile (stages.js `profile`, the same DEM as the climb line), each run from a high point to the lowest point
+  before the road climbs more than 30 m again; kept when it drops 300 m or more at 5 % or steeper. Biggest first.
+- cockpit.js `paintClimb`: `#routeCardDescent` (index.html, `.f-descent` glyph, under the climb line): "A long descent: down
+  1,575 ft over 3.7 mi at 8%. A lower gear saves the brakes." (", and N more" when there are others). Hidden for a new route.
+- Tests: tests/test_brake_heat.py (+5); e2e "the route card says a long descent…" (DEM stubbed). Checked: pytest, that flow,
+  plan flow (a).
+- Next: a live "long descent ahead" call before the top (the co-driver knows it from the same profile); the Garage car's
+  weight and brakes could tune DISC_C.
 ## Session 2026-11-11 (roam-c-boot-budget): startup budget in e2e (claude/roam-c-boot-budget, off origin/main)
 
 - e2e "startup budget" (`BOOT` in smoke.js): own script bytes 3.6 MB, 145 scripts, 2 s CPU, 1.5 s longest task before
@@ -48,6 +59,17 @@
   `skipStage(span)` takes the one to skip. IDEAS R-37 done.
 - Tests: tests/test_police_ahead.py, tests/test_eta.py (+1), e2e "avoid police reports, driving".
 - Next: CarPlay has no toast keys; the Go round and Skip offers are phone-only (a CPAlert in CarPlay/ would carry them).
+
+## Session 2026-11-11 (round two analysis, PR 4): Your year's cleanest corners; a drive's touch outside your usual (claude/project-thread-gd7nre, off origin/main)
+
+- core/driver_profile.py `best_corners(drives, year)` (port `bestCorners`): that year's dated drives, corners with all six
+  technique credits, by their mean (tighter first on a tie, then earlier), one a drive and one a road, top 3. The profile
+  job returns `best` (entries now carry `name`); analysis.html `renderYear` repaints with it; year_review.js `cornerText`
+  and a "Cleanest corners: a tight right on Dry Ridge Rd (Aug 12), 99; ..." line (shared with the year's text too).
+- `drive_touch` / `driveTouch` add `outside` per measure ("above" past your usual upper quartile, "below" under the lower);
+  the drive page adds "Sharper / Gentler than your usual range."
+- Tests: tests/test_best_corners.py (3), tests/test_touch_detail.py (+outside); e2e "Your driving" checks the year line.
+- Next: regions and crews for Your year (IDEAS D-24 still lists them).
 
 ## Session 2026-11-11 (routing round two): Avoid cameras holds for every candidate, speed cameras included (claude/project-thread-39xbx9)
 

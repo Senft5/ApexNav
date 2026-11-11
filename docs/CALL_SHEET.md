@@ -14,6 +14,12 @@ migration and nothing new is stored about you; the cost is that a second phone s
 Roadbook followers are counted, never named, because a public book's followers can be strangers.
 
 Undo: revert the PR (no data changed).
+## 2026-11-11 (roam-a descents): the route card warns of a long, steep descent (claude/project-thread-h7xxmf)
+
+A planned route with a long, steep way down now says so on its card, under the climb: "A long descent: down 1,575 ft over
+3.7 mi at 8%. A lower gear saves the brakes." It comes from the map's terrain (the same heights as the climb line), not from a
+model: 300 m or more of drop at 5 % or steeper counts, which is the kind of hill where brakes fade. Ordinary hills say
+nothing. Undo: revert the PR (one line on the card goes away).
 ## 2026-11-11 (roam-c-boot-budget): an e2e check on what the map page loads and runs before it is ready (claude/roam-c-boot-budget)
 
 New e2e flow "startup budget" (IDEAS P-06): it loads index.html and fails if the page needs more than 3.6 MB of its own
@@ -44,6 +50,15 @@ only the drive page line.
 - **Go round is kept only if it goes round.** If the new way still passes within 150 m, it says so and you stay put.
 - **A late loop skips its next stage before offering Head home.** "Running 12 min late for home." now has "Skip Foothills
   Parkway" while a stage you haven't begun is ahead; the stage you're on is never cut. Undo: `homeByAction` returning home always.
+## 2026-11-11 (round two analysis): Your year's "cleanest corners" are technique only, one a road (claude/project-thread-gd7nre)
+
+Your year now names its three cleanest corners: the mean of the six technique credits, a corner counted only when all
+six were measured. Pace and speed never count, keeping the year's guardrail (never top speeds or times). One corner a
+road, so it is three roads, not your home road three times. A drive's touch now says "Sharper / Gentler than your usual
+range" when its middle corner is past your usual quartiles. That is a fact about the drive, not a grade.
+
+Undo: drop the `bestCorners` line in year_review.js `lines`; drop the `outside` words in `driveTouchLines`.
+
 ## 2026-11-11 (routing round two): Avoid cameras keeps every route off them, speed cameras with plate readers
 
 With Avoid → Cameras on, only one of the routers was told about the cameras; the others' routes (our own router's, the
