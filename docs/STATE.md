@@ -11,6 +11,14 @@
   plan flow (a).
 - Next: a live "long descent ahead" call before the top (the co-driver knows it from the same profile); the Garage car's
   weight and brakes could tune DISC_C.
+## Session 2026-11-11 (roam-c-boot-budget): startup budget in e2e (claude/roam-c-boot-budget, off origin/main)
+
+- e2e "startup budget" (`BOOT` in smoke.js): own script bytes 3.6 MB, 145 scripts, 2 s CPU, 1.5 s longest task before
+  `window.apex` is ready. Measured 2026-11-11: 3.23 MB / 130 / 0.12 s / 0.17 s (maplibre 784 KB, cockpit.js 753 KB).
+- Measured too: at 4x CPU throttle the page is ready in ~1.7 s; the opening cover waits for the first basemap tile
+  (OpenFreeMap; style, sprites and glyphs are HTTP-cached a day). Next for P-06: load route-only modules (graph_router,
+  route_engine, fun_route, ~260 KB) on first plan instead of at boot.
+
 
 ## Session 2026-11-11 (roam-a brake heat): the co-driver knows when your brakes are cooking (claude/project-thread-h7xxmf, off origin/main)
 
@@ -57,6 +65,16 @@
 - Looked at and left: D-24 "best corners" needs per-corner smoothness in the drive summaries (the Log reads summaries, not
   rows; a new summary field rebuilds every drive's summary once), so it is bigger than a roam PR.
 
+## Session 2026-11-11 (round two analysis, PR 3): touch by kind of corner and month, and a drive's own touch (claude/project-thread-gd7nre, off origin/main)
+
+- core/driver_profile.py (reference) and web/driver_profile.js (port): `touch(obs, least)`; profile adds `touch_by`
+  (tight/medium/fast, from MATRIX_MIN corners) and `touch_trend` (per measure, months with TREND_MIN corners read);
+  `drive_touch(obs, others)` / `driveTouch`: one drive's touch (from DRIVE_TOUCH_MIN = 8 corners) beside the usual.
+- Your touch panel: a "By kind of corner" table (g a second; quick; --) and month-by-month lines. The Log's drive page:
+  "Your touch on this drive" (`#dvTouch`), from the drive job (`touchOf` in analysis_client.js, the usual from Your
+  driving's kept observations); hidden for drives with g kept once a second. Facts only: never better or worse.
+- Tests: tests/test_touch_detail.py (4); e2e "Your driving" covers the table, the month line and the drive's words.
+- Next: say when a drive's touch is clearly outside your usual spread (its median beyond the usual quartiles on 8+ corners).
 
 ## Session 2026-11-11 (sweep round two): time attack wiring and opt-in (claude/project-thread-g9yher, off origin/main 936aec3)
 
@@ -77,7 +95,6 @@
   contact sheet each. `LONG_S` weighs each 65 s. 176 flows; the four shards together list all of them.
 - Next: a fifth e2e job would bring each to about 5.2 min of flows, at one more minute of setup per run.
 
-
 ## Session 2026-11-11 (ui-round-two, PR 3): Settings and the sheets over a page in the Vetta Line (claude/project-thread-5sbga7)
 
 - web/signature.css, new block "the sheets over a page": `.side-pop` rises on `--lift-2` (no top rule), grabber as the
@@ -94,7 +111,6 @@
 - Also this session: my Avoid cameras build (#401) was closed for the routing thread's #396 (same change); one review
   comment left there (an edge near two cameras compounds to x64).
 - Next: a live drift check in CI needs a Cloudflare API token (owner).
-
 
 ## Session 2026-11-11 (ui-round-two, PR 2): the Garage and People in the Vetta Line (claude/project-thread-5sbga7)
 

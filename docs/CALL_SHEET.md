@@ -10,6 +10,15 @@ A planned route with a long, steep way down now says so on its card, under the c
 3.7 mi at 8%. A lower gear saves the brakes." It comes from the map's terrain (the same heights as the climb line), not from a
 model: 300 m or more of drop at 5 % or steeper counts, which is the kind of hill where brakes fade. Ordinary hills say
 nothing. Undo: revert the PR (one line on the card goes away).
+## 2026-11-11 (roam-c-boot-budget): an e2e check on what the map page loads and runs before it is ready (claude/roam-c-boot-budget)
+
+New e2e flow "startup budget" (IDEAS P-06): it loads index.html and fails if the page needs more than 3.6 MB of its own
+scripts, more than 145 of them, more than 2 s of script CPU, or a task over 1.5 s before it is ready. Today it is 3.23 MB
+in 130 scripts, 0.12 s and 0.17 s, so bytes and count have about a tenth of headroom (exact numbers, never flaky) and CPU
+only catches a gross regression (runners vary). It takes about a second. Calls: same-origin scripts only (the map's style
+and tiles are the network's, not ours); budgets are raised on purpose in the PR that needs it, with the reason.
+
+Undo: delete the flow (e2e/smoke.js `BOOT`), or raise a budget.
 
 ## 2026-11-11 (roam-a brake heat): the co-driver warns when your brakes are getting hot (claude/project-thread-h7xxmf)
 
@@ -53,6 +62,15 @@ The owner of the stage enters like anyone else; putting a stage up isn't enterin
 skipped instead of rejecting the whole upload.
 
 Undo: revert the PR, then `DROP TABLE ta_joins` on both databases.
+## 2026-11-11 (round two analysis): touch by kind of corner, month and drive is said as facts, never as a grade (claude/project-thread-gd7nre)
+
+Your touch now has a table by size of corner and a line a month, and each drive's Log page says its own touch beside
+your usual ("Brakes on: about 1.1 g a second on this drive, 0.8 usually"). The call: these are rates, never a level or
+"better/worse". A tight corner takes the brakes on harder because of the road, and a sharp input is not a fault on its
+own; grading it would coach the wrong thing. A drive needs 8 timed corners before it says anything.
+
+Undo: hide the table and the month lines in `render` (the `dp-touch-by` block), and the drive page's `#dvTouch` panel.
+
 ## 2026-11-11 (ui-round-two): Settings and every sheet that rises over a page match the rest (claude/project-thread-5sbga7)
 
 Every sheet that slides up over a page (Settings and each setting under it, route Options, Best roads nearby, a friend's

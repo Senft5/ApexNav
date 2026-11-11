@@ -179,7 +179,7 @@
       this.reset();
     }
     reset() {
-      this.id = null; this.ctx = null; this.status = 'off'; this.ws = null; this.lastSeq = 0; this.epoch = null; this.invite = null;
+      this.id = null; this.ctx = null; this.status = 'off'; this.ws = null; this.lastSeq = 0; this.epoch = null; this.invite = null; this.code = null;
       this.members = new Map(); this.positions = new Map(); this.events = new Map(); this.route = null; this.routeIdx = null; this.regroup = null;
       this.retry = 0; this.failedTries = 0; this.timer = null; this.lastPosAt = 0; this.pending = []; this.sent = new Map(); this.myProgress = null;
       this.routeVersion = 0;   // highest version seen or sent: a new share never reuses one that old hazards are anchored to
@@ -246,6 +246,22 @@
       if (!r.ok) return null;
       this.invite = { invite: r.body.invite, expiresAtMs: r.body.expiresAtMs };
       return r.body.invite;
+    }
+    /** Join with the code the leader read out (IDEAS S-22): six characters, spaces and dashes ignored. */
+    async joinCode(code) {
+      const r = await this.post('/api/convoy/code/join', { consent: true, code });
+      if (!r.ok) return r;
+      this.adopt(r.body);
+      this.connect();
+      return r;
+    }
+    /** Leader: the join code while it has 3+ minutes left (15 in all); a fresh one when it is running out. */
+    async leaderCode() {
+      if (this.code && this.code.expiresAtMs - this.now() > 3 * 60000) return this.code.code;
+      const r = await this.post(`/api/convoy/${this.id}/code`);
+      if (!r.ok) return null;
+      this.code = { code: r.body.code, expiresAtMs: r.body.expiresAtMs };
+      return r.body.code;
     }
     async leave() {
       const id = this.id;

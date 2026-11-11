@@ -146,6 +146,17 @@
     return r ? { ...r, line: P.practiceLine(r, plan) } : null;
   }
 
+  // A drive's own touch (its Log page), beside the usual over every other drive's kept observations (Your driving's
+  // store, as last read: none kept yet gives no usual). null without driver_profile.js here or a corner on the drive.
+  async function touchOf(Core, d, id) {
+    const P = root.ApexDriverProfile;
+    if (!P || !d || !Array.isArray(d.corners) || !d.corners.length) return null;
+    const obs = P.observe({ ...d, corners: Rec().scorableCorners(d, d.corners) }, Core), others = [], db = await obsDb();
+    if (db) try { for (const x of await obsAll(db)) if (x.id !== id && String(x.key).startsWith(`${OBS_VERSION}|`)) others.push(...x.obs); } catch (_) {}
+    if (db) try { db.close(); } catch (_) {}
+    return P.driveTouch(obs, others);
+  }
+
   // Your driving's kept observations: a store of its own, only ever derived from the drives (deleting it loses nothing)
   const OBS_VERSION = 3;                                           // 2: touch (brake_on, brake_off, turn_in); 3: pace
   function obsDb() {
@@ -231,8 +242,10 @@
         .map((o) => { const r = o === d ? null : compare(o);
           return { id: o.id, name: o.name, date: o.date, dateLabel: label(o), score: o.ds.score, corners: Array.isArray(o.corners) ? o.corners.length : null, self: o === d,   // RA-3: every corner, as the Log row counts
                    matched: r ? r.matched_corners : 0, delta_s: r ? r.corner_delta_s : null }; });
+      let touch = null;
+      try { touch = await touchOf(Core, d, id); } catch (_) { touch = null; }
       release();
-      return { reference, coach: co, road, bestOther: reference ? reference.id : (sums.find((s) => s.id !== id) || {}).id || null };
+      return { reference, coach: co, road, touch, bestOther: reference ? reference.id : (sums.find((s) => s.id !== id) || {}).id || null };
     },
 
     /** Corner by corner between two drives (Core.compareDrives). */

@@ -13,7 +13,7 @@
   const SWING_G = 0.10, ARC_SPAN_G = 0.6, SQUEEZE_SPAN_G = 0.5, SQUEEZE_MIN_G = 0.20, SQUEEZE_PAD = 2, SQUEEZE_GAP = 6, ENTRY_SWING_MPS = 0.6, SLOW_PAD = 10, ENTRY_SPAN_MPS = 3.0,
     FOCUS_MAX = 85, EXIT_FREE_M = 10, EXIT_SPAN_M = 40, LINE_FREE_M = 5, LINE_SPAN_M = 25, TRAIL_MIN_M = 10, GRADE_PAD = 10, GRADE_MIN = 0.04,
     WARM_MIN = 10, LONG_MIN = 60, SKILL_MIN = 30, STYLE_MIN = 20, MATRIX_MIN = 10, SPLIT_MIN = 12, SPLIT_FLOOR = 0.08, SPLIT_SE = 3,
-    SPLIT_DRIVE_MIN = 3, SPLIT_DRIVES = 2, GROUP_DRIVES = 4, GROUP_DRIVE_MIN = 5, TREND_MIN = 15, TREND_FLOOR = 0.05, TREND_SE = 2, TOP_FINDINGS = 8,
+    SPLIT_DRIVE_MIN = 3, SPLIT_DRIVES = 2, GROUP_DRIVES = 4, GROUP_DRIVE_MIN = 5, TREND_MIN = 15, TREND_FLOOR = 0.05, TREND_SE = 2, TOP_FINDINGS = 8, DRIVE_TOUCH_MIN = 8,
     TOUCH_MIN_G = 0.25, TOUCH_LO = 0.2, TOUCH_HI = 0.8, TOUCH_MIN_BINS = 1.5, FINE_EPS = 3e-4, FINE_FLAT = 0.3;
   const TOUCH = ['brake_on', 'brake_off', 'turn_in'];
   const CoreOf = () => root.ApexCore || (typeof require === 'function' ? require('./apex_core.js') : null);
@@ -217,18 +217,20 @@
   }
   /** The touch over corners obs: per measure { rate, lo, hi, n, quick, quick_rate } in g a second (null under STYLE_MIN
    *  corners; a quick corner ranks above every rate), and release (brakes off over on, corners with both timed). */
-  function touch(obs) {
+  function touch(obs, least = STYLE_MIN) {
     const out = {};
     for (const k of TOUCH) {
-      const xs = obs.map((o) => o[k]).filter(finite).sort((p, q) => p - q), q = obs.filter((o) => o[k] === QUICK).length, n = xs.length + q, ok = n >= STYLE_MIN;
+      const xs = obs.map((o) => o[k]).filter(finite).sort((p, q) => p - q), q = obs.filter((o) => o[k] === QUICK).length, n = xs.length + q, ok = n >= least;
       const at = (f) => (ok ? rank(xs, n, f) : null);
       out[k] = { rate: at(0.5), lo: at(0.25), hi: at(0.75), n, quick: q, quick_rate: ok && at(0.5) === null };
     }
     const both = obs.filter((o) => finite(o.brake_on) && finite(o.brake_off)).map((o) => o.brake_off / o.brake_on);
-    out.release = both.length >= STYLE_MIN ? r(median(both), 3) : null;
+    out.release = both.length >= least ? r(median(both), 3) : null;
     out.release_n = both.length;
     return out;
   }
+  /** A drive's own touch (its Log page): { drive (from DRIVE_TOUCH_MIN corners), usual (every other drive's corners) }. */
+  const driveTouch = (obs, others) => ({ drive: touch(obs || [], DRIVE_TOUCH_MIN), usual: touch(others || []) });
   const cmp = (p, q) => (p < q ? -1 : p > q ? 1 : 0);
 
   /** drives: [{ id, month ('YYYY-MM' or null), car (label or null), tags ([str] or null), obs (observe's) }]. */
@@ -236,7 +238,7 @@
     const drives = (drivesIn || []).filter((d) => d && Array.isArray(d.obs) && d.obs.length);
     const every = [];
     for (const d of drives) every.push(...d.obs);
-    const out = { corners: every.length, drives: drives.length, skills: {}, style: {}, touch: {}, matrix: [], findings: [], pace_findings: [], pace: {}, trend: {}, change: {}, strongest: null, focus: null };
+    const out = { corners: every.length, drives: drives.length, skills: {}, style: {}, touch: {}, matrix: [], findings: [], pace_findings: [], pace: {}, touch_by: {}, touch_trend: {}, trend: {}, change: {}, strongest: null, focus: null };
     const overall = {};
     for (const k of MEASURES) {
       const xs = vals(every, k);
@@ -251,6 +253,8 @@
       use: use.length >= SKILL_MIN ? r(median(use), 4) : null,
     };
     out.touch = touch(every);
+    // touch by size of corner and month by month: facts, never a level
+    for (const z of ['tight', 'medium', 'fast']) out.touch_by[z] = touch(every.filter((o) => o.size === z), MATRIX_MIN);
     const bySize = {};
     for (const size of ['tight', 'medium', 'fast', null]) {
       const cell = every.filter((o) => o.size === size);
@@ -293,6 +297,11 @@
     out.pace = { over: over.length >= SKILL_MIN ? r(Core.meanSe(over)[0], 4) : null, n: over.length };
 
     const months = [...new Set(drives.map((d) => d.month).filter(Boolean))].sort(cmp);
+    for (const k of TOUCH) out.touch_trend[k] = [];
+    for (const mth of months) {
+      const t = touch(drives.filter((d) => d.month === mth).flatMap((d) => d.obs), TREND_MIN);
+      for (const k of TOUCH) if (t[k].n >= TREND_MIN) out.touch_trend[k].push({ month: mth, rate: t[k].rate, quick: t[k].quick_rate, n: t[k].n });
+    }
     for (const k of MEASURES) {
       const rows = [], raw = [];
       for (const mth of months) {
@@ -460,6 +469,30 @@
     else if (turn.quick_rate) out.push('You turn in with one quick movement of the wheel (quicker than the recording can time).');
     return out;
   }
+  const TOUCH_NAME = { brake_on: 'Brakes on', brake_off: 'Brakes off', turn_in: 'Turn-in' };
+  const rateText = (m) => (m && finite(m.rate) ? (m.rate < 1 ? r(m.rate, 2).toFixed(2).replace(/0$/, '') : r(m.rate, 1).toFixed(1)) : m && (m.quick_rate || m.quick === true) ? 'quick' : null);
+  /** Touch month by month: a line a measure with two months or more read, the rate each month (facts, never a level). */
+  function touchTrendLines(tt) {
+    const out = [];
+    for (const k of TOUCH) {
+      const rows = (tt && tt[k]) || [];
+      if (rows.length < 2) continue;
+      out.push(`${TOUCH_NAME[k]} month by month, in g a second: ${rows.map((x) => `${MONTHS[+x.month.slice(5, 7) - 1]} ${rateText({ rate: x.rate, quick: x.quick }) || '--'}`).join(', ')}.`);
+    }
+    return out;
+  }
+  /** A drive's own touch (driveTouch) as sentences: this drive's rate a measure, beside the usual when there is one. */
+  function driveTouchLines(dt) {
+    const out = [];
+    if (!dt || !dt.drive) return out;
+    for (const k of TOUCH) {
+      const a = rateText(dt.drive[k]), b = dt.usual ? rateText(dt.usual[k]) : null;
+      if (!a) continue;
+      const now = a === 'quick' ? 'one quick movement (quicker than the recording can time)' : `about ${a} g a second`;
+      out.push(`${TOUCH_NAME[k]}: ${now} on this drive${b ? `, ${b === 'quick' ? 'quick' : `${b}`} usually` : ''}.`);
+    }
+    return out;
+  }
   /** Pace in words: what the level means for this driver, and how often a corner went over its sane limit. */
   function paceLines(p) {
     const out = [], s = p && p.skills && p.skills.pace, ov = p && p.pace ? p.pace.over : null;
@@ -534,6 +567,7 @@
     .dp-lv { font-family: var(--font-num); font-weight: 700; font-size: 26px; line-height: 1; text-align: right; min-width: 44px; }
     .dp-lv small { display: block; font-family: var(--font-ui); font-weight: 600; font-size: 11px; color: var(--panel-dim); margin-top: 4px; white-space: nowrap; }
     .dp-bar { height: 5px; background: color-mix(in srgb, var(--panel-ink) 14%, transparent); margin-top: 8px; } .dp-bar u { display: block; height: 100%; background: var(--panel-ink); } .dp-st.weak .dp-bar u { background: var(--accent); }
+    .dp-touch h3 { font-size: 11px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--panel-dim); margin: 18px 0 2px; }
     .dp-phase { font-size: 11px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--panel-dim); padding: 0 0 6px 38px; }
     .dp-prs { display: grid; gap: 6px; margin: 10px 0; } .dp-pr { display: grid; grid-template-columns: 56px minmax(0, 1fr) 56px; gap: 10px; align-items: center; font-size: 13px; }
     .dp-pr .dp-bar { margin-top: 0; height: 8px; position: relative; } .dp-pr .dp-bar s { position: absolute; top: -3px; bottom: -3px; width: 2px; margin-left: -1px; background: var(--accent); }
@@ -675,6 +709,27 @@
         const most = Math.max(...TOUCH.map((k) => p.touch[k].n));
         pn.append(el('p', 'dp-say', `${most} of ${STYLE_MIN} corners read so far. Your touch is said from ${STYLE_MIN}.`));
       }
+      // by size of corner: a row a measure, a column a size (a tight corner takes the brakes on harder: not a fault)
+      const tb = p.touch_by || {}, sizes = ['tight', 'medium', 'fast'];
+      if (sizes.some((z) => tb[z] && TOUCH.some((k) => tb[z][k] && (finite(tb[z][k].rate) || tb[z][k].quick_rate)))) {
+        const t = el('table', 'dp-grid dp-touch-by'), hr = el('tr');
+        hr.append(el('th', 'l', 'g a second'), ...sizes.map((z) => el('th', null, `${z[0].toUpperCase()}${z.slice(1)}`)));
+        t.append(hr);
+        for (const k of TOUCH) {
+          const tr = el('tr');
+          tr.append(el('td', 'l', TOUCH_NAME[k]));
+          for (const z of sizes) {
+            const v = rateText(tb[z] && tb[z][k]), td = el('td');
+            if (v === null) td.innerHTML = '<i class="unk">--</i>'; else td.textContent = v;
+            td.setAttribute('aria-label', `${TOUCH_NAME[k]}, ${z} corners: ${v === null ? 'not known yet' : v === 'quick' ? 'quicker than the recording can time' : `${v} g a second`}`);
+            tr.append(td);
+          }
+          t.append(tr);
+        }
+        pn.append(el('h3', null, 'By kind of corner'), t, el('p', 'note', `The middle corner of each kind, from ${MATRIX_MIN} corners. Quick: quicker than the recording can time. A tight corner takes the brakes on harder; that is the road, not a fault.`));
+      }
+      const tl = touchTrendLines(p.touch_trend);
+      if (tl.length) pn.append(...tl.map((x) => el('p', 'dp-say', x)));
       pn.append(el('p', 'note', 'Read from the g the phone measures ten times a second: how fast the load comes on and goes off between a fifth and four fifths of its peak. Drives recorded before the phone kept every reading have none to give.'));
       host.append(pn);
     }
@@ -717,7 +772,7 @@
     }
   }
 
-  const api = { SKILLS, observe, profile, swing, excess, SKILL_MIN, WORDS, findingLine, styleLines, touchLines, paceLines, PACE, MEASURES, touch, TOUCH, cardLine, focusLines, render,
+  const api = { SKILLS, observe, profile, swing, excess, SKILL_MIN, WORDS, findingLine, styleLines, touchLines, touchTrendLines, driveTouchLines, paceLines, PACE, MEASURES, touch, TOUCH, driveTouch, DRIVE_TOUCH_MIN, cardLine, focusLines, render,
     PRACTICE_MIN, practice, drivePractice, practiceLine, practiceSummary, localStamp, loadPlan, savePlan, PLAN_KEY };
   if (typeof module !== 'undefined' && module.exports) module.exports = api; else root.ApexDriverProfile = api;
 })(typeof window !== 'undefined' ? window : globalThis);

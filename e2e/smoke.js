@@ -189,6 +189,28 @@ const saidOn = (page, re, opts) => page.waitForFunction((src) => { const r = new
 const frame = (i, extra = {}) => ({ lat: 35.96 + i * 1e-5, lon: -83.92, accuracy_m: 5, speed_mps: 12, course_deg: 0, has_fix: true,
   lat_g: 0.1, lon_g: 0, calibration: 'locked', thermal: 0, low_power_mode: false, recording: false, segments: 0, ...extra });
 
+// Startup budget (IDEAS P-06): what the map page loads and runs before it is ready, so a heavy module added to the boot
+// path shows here instead of on a phone. Bytes are exact, so their budget is about a tenth over today; CPU time varies by runner, so its
+// budget only catches a gross regression (about 0.2 s here on 2026-11-11). Raise a budget on purpose, never to get green.
+const BOOT = { scriptBytes: 3.6e6, scriptCount: 145, cpuS: 2.0, longTaskMs: 1500 };   // 2026-11-11: 3.23 MB in 130 scripts, 0.12 s, 0.17 s
+flow('startup budget: the map page is ready within its script bytes, script count, CPU time and longest task (IDEAS P-06)', async (page, base) => {
+  await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); } catch (_) {}
+    window.__long = 0; try { new PerformanceObserver((l) => { for (const e of l.getEntries()) window.__long = Math.max(window.__long, e.duration); }).observe({ type: 'longtask', buffered: true }); } catch (_) {} });
+  const cdp = await page.context().newCDPSession(page);
+  await cdp.send('Performance.enable');
+  await page.goto(base + '/index.html');
+  await page.waitForFunction(() => window.apex && window.apexDebug, null, { timeout: 15000 });
+  const m = Object.fromEntries((await cdp.send('Performance.getMetrics')).metrics.map((x) => [x.name, x.value]));
+  const r = await page.evaluate((origin) => { const js = performance.getEntriesByType('resource').filter((e) => e.name.startsWith(origin) && /\.js(\?|$)/.test(e.name));
+    return { bytes: js.reduce((s, e) => s + (e.decodedBodySize || 0), 0), count: js.length, long: Math.round(window.__long),
+      top: js.sort((a, b) => b.decodedBodySize - a.decodedBodySize).slice(0, 3).map((e) => `${e.name.split('/').pop()} ${Math.round(e.decodedBodySize / 1024)} KB`) }; }, base);
+  const got = { ...r, cpuS: +m.ScriptDuration.toFixed(2) };
+  console.log('     startup: ' + JSON.stringify(got));
+  check(r.bytes > 1e6 && r.bytes <= BOOT.scriptBytes, `script bytes before ready ${r.bytes} (budget ${BOOT.scriptBytes}): ` + JSON.stringify(got));
+  check(r.count <= BOOT.scriptCount, `scripts before ready ${r.count} (budget ${BOOT.scriptCount}): ` + JSON.stringify(got));
+  check(got.cpuS <= BOOT.cpuS && r.long <= BOOT.longTaskMs, `CPU before ready ${got.cpuS} s (budget ${BOOT.cpuS}), longest task ${r.long} ms (budget ${BOOT.longTaskMs}): ` + JSON.stringify(got));
+}, { viewport: { width: 393, height: 852 }, hasTouch: true });
+
 flow('first run: onboarding, Watch a replay loads the bundled drive and Play moves along it', async (page, base) => {
   await page.goto(base + '/index.html');
   await page.waitForSelector('#onboard.show', { timeout: 10000 });
@@ -3388,6 +3410,7 @@ flow('convoy: the leader shows a QR code of the link (Worker stubbed, IDEAS S-22
     if (u.pathname === '/api/me') return json({ signed_in: true, member: true, handle: 'me' });
     if (u.pathname === '/api/convoy' && m === 'POST') return json({ invite: `${id}.${'s'.repeat(32)}`, context: ctx }, 201);
     if (u.pathname === `/api/convoy/${id}/ticket`) return json({ ticket: 't'.repeat(32), expiresAtMs: Date.now() + 60000 }, 201);
+    if (u.pathname === `/api/convoy/${id}/code` && m === 'POST') return json({ code: 'K7P4QX', expiresAtMs: Date.now() + 15 * 60000 }, 201);
     if (u.pathname === `/api/convoy/${id}`) return json(ctx);
     if (m === 'GET') return json([]);
     return json({}, 404);
@@ -3404,6 +3427,43 @@ flow('convoy: the leader shows a QR code of the link (Worker stubbed, IDEAS S-22
   const dark = await page.evaluate(() => { const c = document.querySelector('canvas.cv-qr'), d = c.getContext('2d').getImageData(0, 0, c.width, c.height).data;
     let n = 0; for (let i = 0; i < d.length; i += 4) if (d[i] < 128) n++; return n / (d.length / 4); });
   check(dark > 0.2 && dark < 0.6, `a QR code is drawn (${(dark * 100).toFixed(0)} % dark)`);
+  // and the code to read out, for a friend whose camera can't see the screen
+  await page.waitForFunction(() => { const c = document.querySelector('.convoy-sheet .cv-code'); return c && !c.hidden; }, null, { timeout: 5000 });
+  check((await page.textContent('.convoy-sheet .cv-code')) === 'Or join code K7P 4QX', 'the join code under the QR: ' + await page.textContent('.convoy-sheet .cv-code'));
+});
+
+flow('convoy: a friend joins with the code the leader read out (Worker stubbed, IDEAS S-22)', async (page, base) => {
+  await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); } catch (_) {} });
+  const id = 'CCCCCCCCCCCCCCCCCCCCCC', until = Date.now() + 60 * 60000;
+  const ctx = { sessionId: id, name: 'Car park', role: 'member', you: 'k2', leaderKey: 'k1', expiresAtMs: until, seq: 0, leaderEpoch: 1,
+                members: [{ key: 'k1', handle: 'lead', role: 'leader', online: true }, { key: 'k2', handle: 'me', role: 'member', online: true }] };
+  const sent = [];
+  await page.route('**/api/**', (route) => {
+    const u = new URL(route.request().url()), m = route.request().method();
+    const json = (b, status = 200) => route.fulfill({ status, contentType: 'application/json', body: JSON.stringify(b) });
+    if (u.pathname === '/api/me') return json({ signed_in: true, member: true, handle: 'me' });
+    if (u.pathname === '/api/convoy/code/join' && m === 'POST') {
+      const b = JSON.parse(route.request().postData()); sent.push(b);
+      return b.code.replace(/[\s-]/g, '').toUpperCase() === 'K7P4QX' && b.consent === true ? json(ctx) : json({ error: 'invalid_invite' }, 400);
+    }
+    if (u.pathname === `/api/convoy/${id}/ticket`) return json({ ticket: 't'.repeat(32), expiresAtMs: Date.now() + 60000 }, 201);
+    if (u.pathname === `/api/convoy/${id}`) return json(ctx);
+    if (m === 'GET') return json([]);
+    return json({}, 404);
+  });
+  await page.goto(base + '/index.html');
+  await page.waitForFunction(() => window.apex && typeof window.apex.live === 'function');
+  await page.click('#startMore');
+  await page.waitForSelector('.start-sheet .rec-key');
+  await page.click('.start-sheet button:has-text("Join with a code")');
+  await page.waitForSelector('.convoy-sheet input[aria-label="Convoy join code"]');
+  await page.fill('.convoy-sheet input[aria-label="Convoy join code"]', 'k7p 4qz');
+  await page.click('.convoy-sheet button:has-text("Join with code")');
+  await page.waitForFunction(() => /didn.t work/.test(document.getElementById('toast').textContent), null, { timeout: 5000 });
+  await page.fill('.convoy-sheet input[aria-label="Convoy join code"]', 'k7p 4qx');
+  await page.click('.convoy-sheet button:has-text("Join with code")');
+  await page.waitForFunction(() => /you are following/.test(document.querySelector('.convoy-sheet').textContent), null, { timeout: 5000 });
+  check(sent.length === 2 && sent.every((b) => b.consent === true), 'joined with consent: ' + JSON.stringify(sent));
 });
 
 // @fish5spd, 2026-11-03 ("Shits in my way when I lead"): leading a convoy on a drive, a card over the road just ahead of the
@@ -4464,6 +4524,9 @@ flow('Your driving: the profile over every drive opens from the Log, names the w
     const p = (await ApexAnalysis.job('profile')).profile, host = document.createElement('div');
     p.touch = { brake_on: { rate: 0.82, lo: 0.6, hi: 1.1, n: 40, quick: 3, quick_rate: false }, brake_off: { rate: 0.41, lo: 0.3, hi: 0.5, n: 40, quick: 0, quick_rate: false },
       turn_in: { rate: null, lo: 0.7, hi: null, n: 50, quick: 30, quick_rate: true }, release: 0.5, release_n: 37 };
+    const cell = (on) => ({ brake_on: { rate: on, n: 12, quick_rate: false }, brake_off: { rate: 0.4, n: 12, quick_rate: false }, turn_in: { rate: null, n: 12, quick_rate: true } });
+    p.touch_by = { tight: cell(1.2), medium: cell(0.8), fast: { brake_on: { rate: null, n: 4 }, brake_off: { rate: null, n: 4 }, turn_in: { rate: null, n: 4 } } };
+    p.touch_trend = { brake_on: [{ month: '2026-09', rate: 0.9, quick: false, n: 20 }, { month: '2026-10', rate: 0.8, quick: false, n: 20 }], brake_off: [], turn_in: [] };
     document.getElementById('drivingRoot').append(host);
     ApexDriverProfile.render(host, p, {});
     const t = host.querySelector('.dp-touch'), out = t ? t.innerText : null; host.remove();
@@ -4471,6 +4534,17 @@ flow('Your driving: the profile over every drive opens from the Log, names the w
   });
   check(/Your touch/.test(touch) && /brakes on at about 0\.82 g a second and let them off at about 0\.41 g a second/.test(touch) && /more gently/.test(touch)
     && /quick movement of the wheel/.test(touch), 'the touch panel says it in words: ' + touch);
+  // by kind of corner (a row a measure, a column a size, "--" where too few) and month by month
+  check(/By kind of corner/i.test(touch) && /Brakes on\s+1\.2\s+0\.8\s+--/.test(touch) && /Turn-in\s+quick\s+quick\s+--/.test(touch)
+    && /Brakes on month by month, in g a second: Sep 0\.9, Oct 0\.8\./.test(touch), 'touch by kind of corner and month: ' + touch);
+  // a drive's own touch on its Log page: none from g kept once a second, so the panel stays hidden; words when there is one
+  const dt = await page.evaluate(async () => {
+    const info = await ApexAnalysis.job('drive', { id: 'p1' });
+    return { has: !!info.touch, lines: ApexDriverProfile.driveTouchLines(info.touch),
+      say: ApexDriverProfile.driveTouchLines({ drive: { brake_on: { rate: 1.1 }, brake_off: { rate: null }, turn_in: { rate: null, quick_rate: true } }, usual: { brake_on: { rate: 0.8 }, brake_off: { rate: null }, turn_in: { rate: 0.9 } } }) };
+  });
+  check(dt.has && dt.lines.length === 0, 'a drive with g kept once a second has no touch of its own: ' + JSON.stringify(dt.lines));
+  check(dt.say.join(' ') === 'Brakes on: about 1.1 g a second on this drive, 0.8 usually. Turn-in: one quick movement (quicker than the recording can time) on this drive, 0.9 usually.', 'a drive\'s touch in words: ' + dt.say);
   // each drive's observations were kept: a second visit reads no drive again, and a deleted drive's are dropped
   const again = await page.evaluate(() => ApexAnalysis.job('profile'));
   check(again.read === 0 && again.profile.corners === 108, 'kept between visits: read ' + again.read);
