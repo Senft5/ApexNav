@@ -4,6 +4,14 @@ Decisions Claude made for you, newest first. Each one says what was decided, why
 you reach one you've seen. If you disagree with a call, say so and it gets reversed; nothing here is hard to undo unless
 it says so. Things only you can do are in docs/OWNER_TODO.md.
 
+## 2026-11-11 (roam-c crew-public-reset): a crew made public stops showing what members shared with it by hand (claude/roam-c-crew-public-reset)
+
+Found in the security pass. When an owner makes a private crew public, members' Scores and times already went back to off
+(they were the private default, not a choice to show strangers). Routes, stages and the rough "where I drive from" area that
+members had shared with the private crew stayed, so a stranger who joined next could see them. Now they go too, except the
+owner's own, because the owner made it public. The routes and stages themselves stay with their owners, who can share them
+again. The owner's crew settings and the privacy page say so. Undo: revert the PR.
+
 ## 2026-11-11 (roam-a descents): the route card warns of a long, steep descent (claude/project-thread-h7xxmf)
 
 A planned route with a long, steep way down now says so on its card, under the climb: "A long descent: down 1,575 ft over
