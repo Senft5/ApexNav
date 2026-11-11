@@ -3622,22 +3622,22 @@ flow('review mode (U-94): the recording\'s hazard report is the sheet, Undo and 
     for (let i = 0; i <= 40; i++) { window.apex.live({ lat: 35.6 + (i * 1.5) / 110540, lon: -83.9, accuracy_m: 5, speed_mps: 15, course_deg: 0, has_fix: true, calibration: 'locked' });
       await new Promise(r => setTimeout(r, 20)); }
   });
-  // the car keeps sending fixes, as a phone does: with none for 5 s a web drive drops to the replay and the report key with
-  // it (the same cause as the reported-hazards flow, #397); on a slow runner the sheet and the 3 s Undo can run past that
+  // the car keeps sending fixes, as a phone does: a web drive with no fix for 5 s drops back to the replay (see "reported hazards")
   await page.evaluate(() => { window.__fixes = setInterval(() => window.apex.live({ lat: 35.6 + 60 / 110540, lon: -83.9, accuracy_m: 5, speed_mps: 15, course_deg: 0, has_fix: true, calibration: 'locked' }), 500); });
   await page.click('#hzReportBtn');
   check(await page.evaluate(() => document.getElementById('hzOverlay').classList.contains('show')), 'the sheet opens');
-  await page.click('#hzKinds button:has-text("Gravel")');
-  const undo = await page.waitForFunction(() => /Undo Gravel/.test(document.getElementById('hzReportBtn').textContent), null, { timeout: 2000 }).then(() => true, () => false);
-  check(undo, 'the Report key is Undo for 3 s: ' + await page.textContent('#hzReportBtn'));
+  // the key is read in the same task as the tap: a separate read after a click can land past the 3 s on a slow runner
+  // (CI 2026-11-11, this check failed once when the whole suite ran 27 minutes)
+  check(await page.evaluate(() => { [...document.querySelectorAll('#hzKinds button')].find((b) => b.textContent === 'Gravel').click();
+    return /Undo Gravel/.test(document.getElementById('hzReportBtn').textContent); }), 'the Report key is Undo for 3 s');
   await saidOn(page, /Gravel reported/, { timeout: 6000 });                 // the toast, or the status line in a drive (U-74)
   await page.waitForFunction(() => [...document.querySelectorAll('.hz-pin')].some((p) => p.textContent === 'GRAVEL'), null, { timeout: 4000 });
-  await page.evaluate(() => clearInterval(window.__fixes));
   await page.evaluate(async () => { await ApexSync.apiFetch('/api/presence', { method: 'POST', body: '{}' }); await ApexSync.apiFetch('/api/feedback', { method: 'POST', body: '{}' }); });
   await page.waitForTimeout(1500);   // loadReported(true) after the report: the server's list again, with the review's own pin kept
   check([...await page.$$eval('.hz-pin', (ps) => ps.map((p) => p.textContent))].includes('GRAVEL'), 'the pin outlives a reload of the server\'s hazards');
   check(writes.length === 0, 'nothing was written to the server: ' + writes.join(', '));
   check(await page.evaluate(() => !localStorage.getItem('apex.outbox')), 'nothing waits in the outbox either');
+  await page.evaluate(() => clearInterval(window.__fixes));
 });
 
 flow('your data: Settings counts what the phone holds and downloads drives as GPX, offline data deleted (IDEAS Z-03/Z-04, F-06)', async (page, base) => {
@@ -7933,7 +7933,26 @@ flow('time attack this week (SOCIAL 2.9): in Where to?, the area\'s stage and it
   const browser = await chromium.launch();
   let failed = 0;
   // FLOW=<text> runs only the flows whose name contains it; REPEAT=<n> runs each n times (for chasing a flaky one).
-  const only = process.env.FLOW ? flows.filter((f) => f.name.includes(process.env.FLOW)) : flows;
+  const picked = process.env.FLOW ? flows.filter((f) => f.name.includes(process.env.FLOW)) : flows;
+  // SHARD=<k>/<n> runs the k-th of n slices (CI runs n jobs side by side; each flow is in exactly one of them). Flows are
+  // dealt longest first to the lightest slice, so the long ones don't pile into one job. Seconds from the CI log of
+  // 2026-11-11; a flow not listed counts as 5 s (a renamed one still runs, it is only dealt as a short one).
+  const shard = /^(\d+)\/(\d+)$/.exec(process.env.SHARD || '');
+  if (process.env.SHARD && (!shard || +shard[1] < 1 || +shard[1] > +shard[2])) throw new Error(`SHARD must be k/n with 1 <= k <= n, not ${process.env.SHARD}`);
+  const LONG_S = [['safe areas: the Dynamic Island', 258], ['theme contract on its side', 50], ['TestFlight 2026-11-05 note 6', 41],
+    ['the car map glides between fixes', 32], ['private themes', 32], ['turn by turn in road order', 30], ['level cards: one control', 27],
+    ['the strip never cuts', 23], ['when to go', 21], ['the map is a fixed stage', 20], ['a deliberate detour', 20],
+    ['theme contract on the page', 19], ['plan flow (d)', 18], ['plan flow (g)', 18], ['a loop by time', 17], ['plan flow (a)', 17],
+    ['plan flow (e, f)', 16], ["the map's viewpoint, café and fuel stamps", 15]];
+  const weight = (f) => (LONG_S.find(([p]) => f.name.startsWith(p)) || [, 5])[1];
+  const slice = new Map();
+  if (shard) {
+    const load = Array(+shard[2]).fill(0);
+    const order = picked.map((f, i) => [f, i]).sort((a, b) => weight(b[0]) - weight(a[0]) || a[1] - b[1]);   // stable: same deal every run
+    for (const [f] of order) { const k = load.indexOf(Math.min(...load)); load[k] += weight(f); slice.set(f, k); }
+  }
+  const only = shard ? picked.filter((f) => slice.get(f) === +shard[1] - 1) : picked;
+  if (process.env.LIST) { for (const f of only) console.log(f.name); process.exit(0); }   // LIST=1: the flows this run would take, nothing run
   const runs = only.flatMap((f) => Array.from({ length: Math.max(1, Number(process.env.REPEAT) || 1) }, () => f));
   for (const { name, fn, ctxOpts } of runs) {
     const { news, ...browserOpts } = ctxOpts;

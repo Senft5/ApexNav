@@ -10,6 +10,49 @@
   `unavoided` → `cameras` within `CAMERA_ON_M` 35 m (route.has.cameras), so keepAvoiding drops it when another doesn't.
 - Tests: tests/test_avoid_cameras.py (+3), tests/test_graph_router.py avoidCameras, e2e "avoid cameras" (speed camera too).
 - Not done: loops don't take `avoid.cams` (only A→B plans go through avoidForTrip).
+## Session 2026-11-11 (roam-c-migration-guard): migration numbers can't clash (claude/roam-c-migration-guard, off origin/main 936aec3)
+
+- tests/test_migrations.py: names NNNN_words.sql, numbers unique from 0001 (the message says which number to take; gaps are
+  allowed, PRs merge out of order), and backend/test/helpers.ts imports and applies every file in order. Eight threads add migrations at once.
+- D1 by hand 2026-11-11: d1_migrations on prod and preview both list 0001–0050, matching the files (no drift).
+- Also this session: my Avoid cameras build (#401) was closed for the routing thread's #396 (same change); one review
+  comment left there (an edge near two cameras compounds to x64).
+- Next: a live drift check in CI needs a Cloudflare API token (owner).
+
+
+## Session 2026-11-11 (ui-round-two, PR 2): the Garage and People in the Vetta Line (claude/project-thread-5sbga7)
+
+- web/signature.css, new blocks "the Garage" and "People". Sheet header hairline; Garage title a 30 px masthead; `.gear-key`
+  is paper on `--lift-1` (no ink box, no drop edge) everywhere it appears; car cards paper with a 22 px Barlow name, their
+  keys as wells, the daily car marked with the apex dot; theme cards paper, the one in use ringed in ink (`.theme-cards`
+  padding so the shelf doesn't clip it). Car rules are `.garage-cards .car-card` because garage_ui.js appends its CSS later.
+- People: Friends | Crews at 26 px like the Log's head; `.sheet .card` (crew tiles, a friend's request) paper; the request
+  carries the apex dot. The dashed sample crew and the empty bay stay pencil (e2e checks the dashed slot).
+- Tests: tests/test_garage_line.py. e2e Garage, People, crew, friend flows pass here.
+- Next: the crew page and Your data/Settings sub-sheets (ink rules on lists), the route card's Share box.
+## Session 2026-11-11 (roam-c-ci-shards): the e2e check in four parallel jobs (claude/roam-c-ci-shards, off origin/main)
+
+- Done: `e2e/smoke.js` takes `SHARD=k/n` (flows dealt longest first, weights in `LONG_S`) and `LIST=1` (print the flows a
+  run would take). `core-tests.yml` runs `e2e (1/4)`..`e2e (4/4)` side by side (25 min limit, fail-fast off, contact
+  sheets uploaded per shard), caches `~/.cache/ms-playwright`, and keeps one job named `e2e` that needs all four.
+- Checked: the four `LIST=1` shards together are exactly the 173 flows of an unsharded run; expected flow time per job
+  from the last CI log is 5.8-6.9 min (was 25.4 min in one job).
+- Next: when a new flow runs over about 15 s, add it to `LONG_S` so it is dealt as a long one.
+
+## Session 2026-11-11 (roam-b-crowd-bumps): bumps the crowd felt, verified and called (claude/roam-b-crowd-bumps, off origin/main)
+
+- IDEAS Q-02 crowd half, ROAD_INTELLIGENCE 4.3. `core/road_dna.spike_mask` / `Core.spikeMask` (parity-tested; detect_hazards
+  reads it): per sample 1 / 0 / unknown. web/contributor.js `bumpEvidence` + `binBump`: each bin's `bp` (unknown at walking
+  pace or with no vertical peaks); the live stream and ambient sharing carry `vert_peak_g` now (cockpit.js feedLive too).
+- Migration 0052 (`road_bins.bump_hit`, `bump_pass`, `bump_drivers`): sums weighted 2^((day - 2026-01-01)/120 d) (D1 refuses
+  power()); drivers via a keyed hash per person and 40 m in `seen` (contribute.ts `BUMP`, `bumpDriverStmts`). roads.ts
+  `verifiedBumps`: ±2 bins, Jeffreys Beta, > 0.8 and 2+ drivers, `bp: [[bin, p]]` per direction.
+- Phone: `seriesFrom` → `measuredAlong().crowdBumps`; `bumpEvents` makes `Bump` notes (marked `crowd`); cockpit.js
+  `applyCrowdBumps` (flag `crowd_bumps`, also mid-drive: it only adds), `noteworthyInCruise` calls them in cruise,
+  `seenLabel` says "Confirmed by members". privacy.html and APP_REVIEW.md say what the flag is.
+- Tests: backend/test/crowd_bumps.test.ts, tests/test_contributor.py (bump flags, route bumps), parity spike mask.
+- Next: hand-reported hazards (hazards.ts) still use vote counts; the same posterior could rank them. Crowd bumps on the
+  road page (Q-13 "verified hazards") and the map; bumps on a free drive with no route (needs the cells lookup live).
 ## Session 2026-11-11 (round two analysis): Your touch from the 10 Hz g (IDEAS D-28; claude/project-thread-gd7nre, off origin/main 936aec3)
 
 - `core/driver_profile.py` `observe` adds `brake_on`, `brake_off`, `turn_in` per corner (g a second, 20 % to 80 % of the
