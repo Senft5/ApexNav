@@ -45,7 +45,10 @@
     FUN_FULL_PCT: 0.5,       // fun per km that counts as full: the loaded network's median of edges with corners
     // members' data (crowd.js channels) per edge, with the route engine's own weights (route_engine.js QUALITY/SCENERY)
     // against the share of the model the tile's score already knew (conf x the model's weight)
-    CROWD_W: { rough: 1, flow: 1, loved: 1.5, bank: 0.5 }, MODEL_WQ: 37.1, MODEL_WS: 12.8,
+    CROWD_W: { rough: 1, flow: 1, loved: 1.5, bank: 0.5, crest: 2 }, MODEL_WQ: 37.1, MODEL_WS: 12.8,
+    // measured crests (ROAD_INTELLIGENCE 3.2: unweighting over CREST_G is a vertical event) per km, full at CREST_FULL_KM;
+    // crowd-verified bumps cost an edge BUMP_X of its time each, at most BUMP_MAX (a pothole road loses, it isn't banned)
+    CREST_G: 0.15, CREST_FULL_KM: 3, BUMP_X: 0.25, BUMP_MAX: 1,
     TURN_RIGHT_S: 2, TURN_RIGHT_K: 4, TURN_LEFT_S: 5, TURN_LEFT_K: 8, STRAIGHT_RAD: 0.35, UTURN_S: 30,
     // passing a node with a signal, a stop sign, give way, a level crossing, calming or a crossing (the tiles' node flags;
     // the same seconds the ETL adds for those inside an edge, tools/graph_etl/build.py DELAY_S; end nodes are ours)
@@ -503,11 +506,13 @@
    * each way's line is walked every 10 m in its measured direction (dir 0 along the line, 1 against it) and each point
    * lands on the nearest edge within 15 m heading the same way (within 50°). Bins are 5 m along the line, as the server
    * keeps them. An edge counts as measured where 40 % of it (or 150 m) was matched; its values are the matched points'
-   * means. items: [{ line: [[lat, lon]], dir, i: [bins], rough: [g], cam: [deg], flow: [0..1], loved }].
+   * means. items: [{ line: [[lat, lon]], dir, i: [bins], rough: [g], cam: [deg], flow: [0..1], crest: [g], bumps: [bin], loved }].
+   * Crests are counted as events (a run of samples over CREST_G on one edge is one crest); each verified bump lands on
+   * the edge nearest its own bin, so none is missed between the 10 m samples.
    */
   function crowdOnto(v, items) {
     const E = v.E, n = new Float32Array(E), sum = { rough: new Float32Array(E), cam: new Float32Array(E), flow: new Float32Array(E) }, cnt = { rough: new Uint16Array(E), cam: new Uint16Array(E), flow: new Uint16Array(E) };
-    const loved = new Float32Array(E).fill(NaN);
+    const loved = new Float32Array(E).fill(NaN), crestN = new Uint16Array(E), crestEv = new Uint16Array(E), bumpN = new Uint16Array(E);
     let any = false;
     for (const it of items || []) {
       const L = it && it.line;
@@ -516,8 +521,9 @@
       const cum = [0];
       for (let k = 1; k < L.length; k++) cum.push(cum[k - 1] + distM(L[k - 1][0], L[k - 1][1], L[k][0], L[k][1]));
       const total = cum[cum.length - 1];
-      let seg = 0;
-      for (let off = 5; off < total; off += 10) {
+      // the point `off` m along the line and the edge under it heading the line's way (or -1)
+      const edgeAt = (off) => {
+        let seg = 0;
         while (seg < L.length - 2 && cum[seg + 1] < off) seg++;
         const u = cum[seg + 1] > cum[seg] ? (off - cum[seg]) / (cum[seg + 1] - cum[seg]) : 0;
         const la = L[seg][0] + u * (L[seg + 1][0] - L[seg][0]), lo = L[seg][1] + u * (L[seg + 1][1] - L[seg][1]);
@@ -530,23 +536,43 @@
           for (let q = 0; q < m - 1; q++) { const d = distM(la, lo, (g[2 * q] + g[2 * q + 2]) / 2, (g[2 * q + 1] + g[2 * q + 3]) / 2); if (d < bd) { bd = d; best = q; } }
           return pr.d <= 15 && Math.abs(turnAngle(h, bearing(g[2 * best], g[2 * best + 1], g[2 * best + 2], g[2 * best + 3]))) < 0.87;
         }, 15);
-        if (!s.length) continue;
-        const e = s[0].edge;
+        return s.length ? s[0].edge : -1;
+      };
+      let crestOn = -1;                                                  // the edge of the crest run under way, if any
+      for (let off = 5; off < total; off += 10) {
+        const e = edgeAt(off);
+        if (e < 0) { crestOn = -1; continue; }
         n[e] += 10;
         const j = bins.get(Math.floor(off / 5));
         if (j != null) for (const k of ['rough', 'cam', 'flow']) { const x = it[k] && it[k][j]; if (Number.isFinite(x)) { sum[k][e] += x; cnt[k][e]++; } }
+        const c = j != null && it.crest ? it.crest[j] : NaN;
+        if (Number.isFinite(c)) {
+          crestN[e]++;
+          if (c >= K.CREST_G) { if (crestOn !== e) crestEv[e]++; crestOn = e; } else crestOn = -1;
+        } else crestOn = -1;
         if (Number.isFinite(it.loved)) loved[e] = Number.isFinite(loved[e]) ? Math.max(loved[e], it.loved) : it.loved;
+      }
+      for (const b of Array.isArray(it.bumps) ? it.bumps : []) {
+        const off = (b + 0.5) * 5;
+        if (!(off >= 0 && off <= total)) continue;
+        const e = edgeAt(off);
+        if (e >= 0) bumpN[e]++;
       }
     }
     const has = new Uint8Array(E), rough = new Float32Array(E).fill(NaN), bank = new Float32Array(E).fill(NaN), flow = new Float32Array(E).fill(NaN);
+    const crest = new Float32Array(E).fill(NaN), bumps = new Uint16Array(E);
     for (let e = 0; e < E; e++) {
+      // a verified bump counts wherever it lands: it was verified on its own, not by how much of the edge was driven
+      if (bumpN[e]) { bumps[e] = bumpN[e]; has[e] = 1; any = true; }
       if (!(n[e] >= Math.min(150, 0.4 * v.len[e]))) { loved[e] = NaN; continue; }
       if (cnt.rough[e]) rough[e] = sum.rough[e] / cnt.rough[e];
       if (cnt.cam[e]) bank[e] = sum.cam[e] / cnt.cam[e];
       if (cnt.flow[e]) flow[e] = sum.flow[e] / cnt.flow[e];
-      if (Number.isFinite(rough[e]) || Number.isFinite(bank[e]) || Number.isFinite(flow[e]) || Number.isFinite(loved[e])) { has[e] = 1; any = true; }
+      // crests per km over the measured part (10 m a sample), only where at least half of what was matched had crest data
+      if (crestN[e] * 10 >= 0.5 * n[e]) crest[e] = crestEv[e] / Math.max(0.05, crestN[e] * 10 / 1000);
+      if (Number.isFinite(rough[e]) || Number.isFinite(bank[e]) || Number.isFinite(flow[e]) || Number.isFinite(loved[e]) || Number.isFinite(crest[e])) { has[e] = 1; any = true; }
     }
-    return any ? { has, rough, bank, flow, loved, edges: has.reduce((a, b) => a + b, 0) } : null;
+    return any ? { has, rough, bank, flow, loved, crest, bumps, edges: has.reduce((a, b) => a + b, 0) } : null;
   }
 
   // ---- the objective ---------------------------------------------------------------------------------------------------
@@ -608,6 +634,8 @@
         if (Number.isFinite(c.flow[e])) { nq += CW.flow * clamp01(c.flow[e]); dq += CW.flow; }
         if (Number.isFinite(c.loved[e])) { ns += CW.loved * clamp01(c.loved[e]); ds += CW.loved; }
         if (Number.isFinite(c.bank[e])) { const b = c.bank[e]; ns += CW.bank * (b <= 0 ? clamp01((b + 3) / 3) * 0.5 : 0.5 + 0.5 * clamp01(b / 4)); ds += CW.bank; }
+        // measured crests are character: a road that goes light over its rises is more fun than a flat one
+        if (c.crest && Number.isFinite(c.crest[e]) && CW.crest) { ns += CW.crest * clamp01(c.crest[e] / K.CREST_FULL_KM); ds += CW.crest; }
         if (dq > kq) { q = nq / dq; cf = Math.max(cf, dq > 0 ? (kq + (dq - kq)) / (K.MODEL_WQ + (dq - kq)) : cf); }
         if (ds > ks && ds > 0) s = ns / ds;
       }
@@ -618,7 +646,10 @@
       const f = fk ? Math.min(1, v.fun[e] * keep / Math.max(0.05, v.len[e] / 1000) / v.funFull) : 0;
       const w = wp + wq + (fk ? wf : 0) + (sk ? ws : 0);
       const raw = (wp * notPoor + wq * q + (fk ? wf * f : 0) + (sk ? ws * s * (0.5 + 0.5 * gate) : 0)) / Math.max(1e-6, w);
-      const g = cf * raw + (1 - cf) * K.UNKNOWN_G;
+      let g = cf * raw + (1 - cf) * K.UNKNOWN_G;
+      // crowd-verified bumps (roads.ts verifiedBumps) take goodness off the edge too, so the pick sees them, not only the search
+      const bumpX = crowd && crowd.bumps && crowd.bumps[e] ? 1 + Math.min(K.BUMP_MAX, K.BUMP_X * crowd.bumps[e]) : 1;
+      g /= bumpX;
       bad[e] = 1 - g;
       if (bad[e] < minBad) minBad = bad[e];
       const fl = v.flags[e];
@@ -629,6 +660,8 @@
       if (fl & B.unpaved) m *= avoid.unpaved ? K.AVOID_UNPAVED_X : K.UNPAVED_X;
       if (avoid.highways && ((fl & B.motorway) || v.cls[e] === CLS.motorway)) m *= K.AVOID_HWY_X;
       if (avoid.tolls && (fl & B.toll)) m *= K.AVOID_TOLL_X;
+      // crowd-verified bumps (roads.ts verifiedBumps): each costs the edge BUMP_X of its time, at most BUMP_MAX
+      m *= bumpX;
       mult[e] = m; add[e] = ad;
     }
     // Avoid police reports (hazard_reports.js policeFor): the roads by each live report cost AVOID_POINT_X their time, so

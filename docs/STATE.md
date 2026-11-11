@@ -10,6 +10,65 @@
 - The demo drives' longest runs are 4 (nothing said). Tests: tests/test_flow.py (5). Checked: pytest; e2e drive-ended
   card/Log, Your driving, drive tags, startup budget.
 - Next: "Best run this month" in Your records (needs corners per drive: the analysis worker), and the end card.
+## Session 2026-11-11 (roam-c-crew-public-reset, security pass): a crew made public drops members' hand-made shares (claude/roam-c-crew-public-reset)
+
+- backend/src/social.ts `crewUpdate` private to public: besides grants, board entries and drive scores (already), members'
+  (not the owner's) shared_route_audience and segment_shares rows for the crew go, their crew_members.home_cell is cleared,
+  and a pinned route of a member's is unpinned. Owner settings copy (cockpit.js) and privacy.html say so.
+- Tests: backend/test/share_defaults.test.ts (+1, fails without the fix: a stranger joining after sees only the owner's
+  route); tests/test_crew_settings_sheet.py copy. Full backend vitest 394/394, tsc clean.
+- Not changed, noted: a crew chat's last 30 days stay readable to people who join after it goes public (the chat says who
+  wrote it; deleting history felt worse than it). Photos are served to any member by id (UUIDs, never listed to strangers).
+
+
+## Session 2026-11-11 (roam-c-presence-private-crews, security pass): friends map "Crew" is private crews only (claude/roam-c-presence-private-crews)
+
+- backend/src/presence.ts `presenceView`: audience "crew" showed you to members of any crew you share, public ones too, which
+  anyone can join. Now private crews only (garage.ts peoplesCars already did this for cars). web/who_sees.js: a public
+  crew's Where cell is off. Copy: friends_map.js explainer, cockpit.js and who_sees.js summaries say "private crews";
+  privacy.html and APP_REVIEW.md 5.1.1 updated.
+- Tests: backend/test/presence.test.ts (+1, fails without the fix), tests/test_who_sees.py (+1), test_friends_map.py copy.
+- Security pass so far, no issue found: auth on every route (requireMember; ops routes moderator-only; CSRF origin and header
+  check; WRITE_LIMIT on every write, AUTH_LIMIT on sign-in), ownership checks on every :id write (cars, routes, highlights,
+  segments, templates, chat, events, duels, pool), grants re-checked against current friendship or membership on read.
+  Next: the rest of the pass (time attack, drive scores, convoy, hazards and reports rate limits, photos by id).
+
+
+
+
+## Session 2026-11-11 (ui-round-two, PR 4): the map's top band, signed-out reads, a crew's head and the Share box (claude/project-thread-5sbga7)
+
+- The idle map's blank top band (Roamer B): the canvas draws fully (toDataURL shows the map to y = 0); Chromium culled the
+  canvas under the opaque `.binnacle` at the wrong (y-flipped) end, so the band was exactly the binnacle's height (157 px)
+  at every pitch and viewport. A bare MapLibre page doesn't show it; `visibility: hidden` on the binnacle or 0.99 alpha
+  clears it. Fix: `.binnacle` background at 99.6 % (signature.css, last block). setSky changes nothing there.
+- web/sync.js `apiFetch`: `known` (true/false/null) from /api/me's `signed_in` (only when it says), setSession, or a 401;
+  signed out, GET /api/convoy/invites, /api/points, /api/hazards, /api/roads answer 401 locally. Unknown still asks.
+- signature.css "a crew's page and the Share box": crew name Barlow 30/32 px, cp keys paper, chat a well; Share chips wells.
+- Tests: tests/test_signed_out_reads.py, tests/test_sheets_line.py (+2). e2e convoy, hazard, police, closure flows pass.
+- Next: round two is done (Log, Garage, People, Settings and sheets, crew, Share). Look for screens still boxed in ink.
+## Session 2026-11-11 (social round two): For you, what happened to you socially (claude/project-thread-uwmi4e, off origin/main 936aec3)
+
+- IDEAS S-27, SOCIAL 2.10. `backend/src/inbox.ts` `GET /api/inbox` → `{ items, waiting, now }`: kinds `request`, `duel_ask`
+  (waiting), `topped` (a visible run this week over your best Score on one of your stages), `passed` (time attack this week,
+  quicker than you after your time went up, with your place), `kudos` (14 days), `duel_on` (your challenge accepted),
+  `duel_over` (`duelOutcome`), `follows` (roadbook followers counted), `crew_drive` (upcoming, unanswered). No migration.
+- `web/inbox.js` (social group): pure `line`, `fresh`, `ago`; `mount` → `refresh`, `section`, `markSeen`. cockpit.js
+  `paintPeopleBadge` (requests from the inbox once it answers, else /api/me; crew link; convoy invites; new items);
+  seen (`apex.inboxSeen`, server clock) only when People → Friends is on screen (`showView`, `setPeopleSide`), since People
+  is drawn behind other tabs. Refreshed on visibilitychange and every 5 min, never while driving.
+- Tests: backend/test/inbox.test.ts (3), tests/test_inbox.py (3), e2e "For you: …".
+- Next: push notifications for the same items once APNs is set up (OWNER_TODO); a crew's own roadbook; recurring meets (S-13).
+## Session 2026-11-11 (routing round three): measured crests and verified bumps steer our router (claude/project-thread-39xbx9, off origin/main)
+
+- IDEAS R-04 partial (WORKER_QUEUE road-3). own_routing.js `crowdItems` now passes each bin's crest (two passes or more)
+  and the server's crowd-verified bumps (`bp`, posterior > 0.8). graph_router.js `crowdOnto` counts crests per km per
+  edge (a run over `CREST_G` 0.15 g is one) and lands each bump on the edge under its own bin; the objective puts crests
+  into scenery (`CROWD_W.crest` 2, full at 3/km) and divides goodness and multiplies cost by 1 + 0.25 a bump (max 2).
+- Test: tests/test_graph_router.py `test_measured_crests_and_verified_bumps_steer_the_search` (graph_router_cases.js
+  `crowdCrestBump`). docs/OWN_ROUTING.md says the weights.
+- Next: the same crest and bump data in stage discovery (stages.js) and the FunRoute ranking of Valhalla candidates.
+
 ## Session 2026-11-11 (roam-a descent call): "Long descent ahead" near the top (claude/project-thread-h7xxmf, off origin/main)
 
 - IDEAS V-12, part three. web/brake_heat.js `descentAhead(list, atM, said)` (500 m before a top to 300 m past it, once per
@@ -19,6 +78,16 @@
 - Tests: tests/test_brake_heat.py (+2); e2e "the co-driver says a long descent once…" (GPX + stubbed DEM, live frames).
   Checked: pytest, that flow, the route-card descent flow, "co-driver reads the road", startup budget.
 - Next: the Garage car's weight and brakes could tune DISC_C; CarPlay could show the descent line on its route preview.
+## Session 2026-11-11 (round two analysis, PR 8): your records by kind of corner (claude/project-thread-gd7nre, off origin/main)
+
+- core/driver_profile.py `records_by_size` (reference) and web/driver_profile.js `recordsBySize` (port): your cleanest tight,
+  medium and fast corner of any date, by the mean of the six technique credits; the first to reach a level holds it; none
+  under RECORD_MIN 5 corners of that kind. The profile job returns `records`.
+- web/analysis.html Your records adds "Cleanest tight left, of 36 tight corners" rows (the level, the drive's day), painted
+  again when Your driving's job answers. IDEAS D-08 is done.
+- Tests: tests/test_best_corners.py (+1, parity), e2e "Your driving" checks the rows.
+- Next: the deepest-analysis list: a drive's corners against your records (how close each kind came to your best).
+
 ## Session 2026-11-11 (roam-c-scheme-offmain, sweep: iOS shell): bundle files read off the main thread (claude/roam-c-scheme-offmain, off origin/main)
 
 - ApexNavApp.swift `ApexBundleSchemeHandler`: every apexnav:// file (the page's 130 scripts at launch, the 5.5 MB
@@ -28,6 +97,39 @@
 - Swift is compiled only by CI (build.yml simulator tests run the page). APP_REVIEW.md: nothing reviewable changes.
 - Next in the sweep: CarPlay (CarPlay/*.swift) and the shell's frame path (pushLiveFrame, 10 Hz evaluateJavaScript).
 
+
+## Session 2026-11-11 (round two analysis, PR 7): corner-speed steadiness month by month (claude/project-thread-gd7nre, off origin/main)
+
+- core/drive_analysis.py `spread_by(co, keys, what="speed")` (reference) and web/apex_core.js `spreadBy(co, keys, 'speed')`
+  (port) read the coach's new `speed_marks` ([from, slowest m/s] per pass) the way the braking trend reads `marks`.
+- web/analysis_client.js steadiness job: each month also has `speed_sd_mps`/`speed_corners` (same 20 m de-duplication,
+  null under minCorners). web/analysis.html's braking-consistency note adds "Your speed at their slowest point varied about
+  1 mph in Oct 2026", and "steadier/less steady than Sep (2 mph)" from a 1 mph change over five corners or more each.
+- Tests: tests/test_web_core_parity.py (speed_marks and the speed trend, JS = Python). Checked in a browser with ten drives.
+- Next: IDEAS D-08's records per kind of corner (your cleanest tight, medium and fast corners).
+
+## Session 2026-11-11 (round two analysis, PR 6): how steady your turn-in and corner speed are on roads you repeat (claude/project-thread-gd7nre, off origin/main)
+
+- core/drive_analysis.py `_spread` (reference) and web/apex_core.js `spread` (port) add `turn_sd_m`/`turn_passes` (where you
+  turned in, `_turn_in`, on this drive's road) and `speed_sd_mps`/`speed_passes` (speed at the corner's slowest point), the
+  same robust SD as the braking spread, over the same clean passes. `marks` and `spread_by` are unchanged.
+- web/drive_view.js: "How repeatable your corners are" says, per corner, "turn-in within 10 ft, speed at the slowest point
+  within 1 mph", and the intro "Your speed at their slowest point typically varies about 1 mph" (from three corners).
+- Tests: tests/test_web_core_parity.py (+1: noise stays steady, 8 % slower passes or a 25 m earlier turn-in spread it; the
+  parity case now compares the new fields), tests/test_drive_view.py (rows carry them).
+- Next: corner-speed steadiness by month beside the braking trend (`spread_by` on the speeds), then IDEAS D-08's records
+  per kind of corner.
+
+## Session 2026-11-11 (round two analysis, PR 5): Your year's areas and crew drives (claude/project-thread-gd7nre, off origin/main)
+
+- web/year_review.js: `areas` (drives whose map boxes' middles are within AREA_KM 40 of an area's first drive, named after
+  the road driven most there; no place lookup) and "Where you drove: 3 areas, most around …" from two areas; `crewYear`
+  and "Crew drives: 2 with Smoky Crew, …". IDEAS D-24's regions and crews are done.
+- Crew drives are kept on the phone: crew_events.js `noteCame` writes `apex.crewCame` ({id, crew, at}, at most 300) when
+  the convoy join or I was there succeeds, or the record says you came; I wasn't there removes it. The server sweeps
+  attendance after 7 days, so a year count can't come from it. Erase everything clears the key (an `apex.` key).
+- Tests: tests/test_year_review.py (+2). APP_REVIEW.md has a 5.1.1 row.
+- Next: the deepest-analysis list: corner-by-corner consistency on roads you repeat (same corner, how your lines vary).
 
 ## Session 2026-11-11 (roam-a descents): the route card says a long descent before you set off (claude/project-thread-h7xxmf, off origin/main)
 
@@ -115,6 +217,15 @@
   driving's kept observations); hidden for drives with g kept once a second. Facts only: never better or worse.
 - Tests: tests/test_touch_detail.py (4); e2e "Your driving" covers the table, the month line and the drive's words.
 - Next: say when a drive's touch is clearly outside your usual spread (its median beyond the usual quartiles on 8+ corners).
+## Session 2026-11-11 (auto time attack): the weekly loop is auto-picked per area (claude/project-thread-uwmi4e, off #397's branch)
+- Owner call (2026-11-11): time attacks autogenerated weekly in any area with users, the best loop roads chosen at random,
+  small loops, not member stages. Migration 0054 (`ta_weeks` gets name, length_m, geom, tries, removed; ta_pool unread).
+- `GET /api/timeattack` answers `make {seed, km}` when the area has no loop; `POST /api/timeattack/circuit` takes the loop
+  a phone built (checkLoop: closed, in the area, 5-25 km measured here, no jumps), first one kept. Pool routes removed.
+- `web/time_attack.js` makeLoop (rng, hubs, kmFor, choose, geomOf, loopName): the router's loops from a seeded tile; the
+  cockpit hands it `ownIndex` and `ApexOwnRouting.loops`. e2e builds a real loop over the bundled Cincinnati tiles.
+- Tests: backend time_attack 4 pass (387 total), pytest test_time_attack 10 pass, e2e both time attack flows pass.
+- Next: open the PR once #397 merges, apply 0054 on preview then prod (with d1_migrations rows) before merging.
 
 ## Session 2026-11-11 (sweep round two): time attack wiring and opt-in (claude/project-thread-g9yher, off origin/main 936aec3)
 

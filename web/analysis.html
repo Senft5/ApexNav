@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self' apexnav:; script-src 'self' apexnav: 'sha256-fokBdRktv54c7IJGyYKFZrO+yi0ikFHm6SDVDM1isXo=' 'sha256-G7s/ZI+Hqrfc4DqbB6EANJJLmUmhNK06PizQ1LlsG84=' https://cdn.jsdelivr.net 'wasm-unsafe-eval'; worker-src 'self' apexnav: blob:; child-src 'self' apexnav: blob:; style-src 'self' apexnav: 'unsafe-inline'; font-src 'self' apexnav: data:; img-src 'self' apexnav: data: blob: https://tiles.openfreemap.org https://s3.amazonaws.com https://basemap.nationalmap.gov; media-src 'self' apexnav: data: blob:; connect-src 'self' apexnav: data: blob: https://apexnav.senftns.workers.dev wss://apexnav.senftns.workers.dev https://tiles.openfreemap.org https://basemap.nationalmap.gov https://s3.amazonaws.com https://valhalla1.openstreetmap.de https://router.project-osrm.org https://overpass-api.de https://overpass.private.coffee https://overpass.kumi.systems https://maps.mail.ru https://nominatim.openstreetmap.org https://photon.komoot.io https://api.open-meteo.com https://api.weather.gov https://statsapi.mlb.com https://api.seatgeek.com https://api.water.noaa.gov https://waterservices.usgs.gov https://in.carsprogram.org https://publicapi.ohgo.com https://quickstats.nass.usda.gov https://commons.wikimedia.org https://graph.mapillary.com https://vpic.nhtsa.dot.gov https://cdn.jsdelivr.net https://huggingface.co https://*.huggingface.co https://*.hf.co; object-src 'none'; base-uri 'none'; form-action 'self'" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self' apexnav:; script-src 'self' apexnav: 'sha256-k6jhboAqdk7mhi3qFsuNVYTxXLLx5YQdOvPd5GMN9G4=' 'sha256-G7s/ZI+Hqrfc4DqbB6EANJJLmUmhNK06PizQ1LlsG84=' https://cdn.jsdelivr.net 'wasm-unsafe-eval'; worker-src 'self' apexnav: blob:; child-src 'self' apexnav: blob:; style-src 'self' apexnav: 'unsafe-inline'; font-src 'self' apexnav: data:; img-src 'self' apexnav: data: blob: https://tiles.openfreemap.org https://s3.amazonaws.com https://basemap.nationalmap.gov; media-src 'self' apexnav: data: blob:; connect-src 'self' apexnav: data: blob: https://apexnav.senftns.workers.dev wss://apexnav.senftns.workers.dev https://tiles.openfreemap.org https://basemap.nationalmap.gov https://s3.amazonaws.com https://valhalla1.openstreetmap.de https://router.project-osrm.org https://overpass-api.de https://overpass.private.coffee https://overpass.kumi.systems https://maps.mail.ru https://nominatim.openstreetmap.org https://photon.komoot.io https://api.open-meteo.com https://api.weather.gov https://statsapi.mlb.com https://api.seatgeek.com https://api.water.noaa.gov https://waterservices.usgs.gov https://in.carsprogram.org https://publicapi.ohgo.com https://quickstats.nass.usda.gov https://commons.wikimedia.org https://graph.mapillary.com https://vpic.nhtsa.dot.gov https://cdn.jsdelivr.net https://huggingface.co https://*.huggingface.co https://*.hf.co; object-src 'none'; base-uri 'none'; form-action 'self'" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
   <title>Vetta · Log</title>
   <link rel="icon" href="brand/mark.svg" type="image/svg+xml" />
@@ -689,7 +689,7 @@
       summaryParts.year = `${year} · ${ApexFormat.distance(s.m)} · ${s.drives} drive${s.drives === 1 ? '' : 's'}`; paintSummary();   // the rest when opened
       // the year's cleanest corners come with Your driving's profile (the profile job), once it has answered
       const paint = () => {
-        const ls = ApexYearReview.lines({ ...s, bestCorners: (driving.best || []).filter((b) => String(b.at).startsWith(`${year}-`)) });
+        const ls = ApexYearReview.lines({ ...s, crews: (() => { try { return ApexYearReview.crewYear(localStorage, year); } catch (_) { return []; } })(), bestCorners: (driving.best || []).filter((b) => String(b.at).startsWith(`${year}-`)) });
         $('yearLines').replaceChildren(...ls.map((t) => Object.assign(document.createElement('p'), { textContent: t })));
         yearText = [`My ${year} on the road with Vetta`, ...ls].join('\n');
       };
@@ -761,7 +761,8 @@
     }
 
     // Your records (IDEAS D-08): the best Score on each road you have driven twice or more (roads by name), and this month's
-    // smoothest drive and best braking. No speed, time or pace record of its own.
+    // smoothest drive and best braking, and your cleanest corner of each kind (tight, medium, fast: technique credits, as Your
+    // driving reads them). No speed, time or pace record of its own.
     // A drive whose date is unknown never counts for "this month".
     function renderRecords(list = drives) {
       const roads = new Map();
@@ -779,7 +780,10 @@
       const of = (k) => mine.filter(d => finiteNum(d.ds.components[k]));
       const top = (k) => { const c = of(k); return c.length >= 2 ? c.reduce((m, d) => (d.ds.components[k] > m.ds.components[k] ? d : m)) : null; };
       const smooth = top('smoothness'), brake = top('braking');
-      $('recordsPanel').hidden = !rows.length && !smooth && !brake;
+      // by kind of corner (D-08 per archetype): your cleanest tight, medium and fast corner, from Your driving's kept observations
+      const byId = new Map(list.map((d) => [d.id, d]));
+      const kinds = ['tight', 'medium', 'fast'].map((z) => { const r = driving.records && driving.records[z]; return r && byId.has(r.id) ? { z, r, d: byId.get(r.id) } : null; }).filter(Boolean);
+      $('recordsPanel').hidden = !rows.length && !smooth && !brake && !kinds.length;
       if ($('recordsPanel').hidden) return;
       const pct = (v) => `${Math.round(v * 100)}%`;
       const day = (d) => `<span class="nw">${monthOf(d) ? ApexFormat.dateTime(d.date.slice(0, 10)) : 'date unknown'}</span>`;   // "30 Oct", as the list's stamps read; never 2026-10-30
@@ -788,6 +792,8 @@
       for (const r of rows) { out.push(line(`Best Score on this road, of ${r.n} scored drives`, r.best, r.best.ds.score, r.fresh ? `${day(r.best)}, your latest here: a new best` : day(r.best))); names.push(r.name); }
       if (smooth) { out.push(line(`Smoothest drive this month, of ${of('smoothness').length}`, smooth, pct(smooth.ds.components.smoothness), day(smooth))); names.push(smooth.name); }
       if (brake) { out.push(line(`Best braking this month, of ${of('braking').length}`, brake, pct(brake.ds.components.braking), day(brake))); names.push(brake.name); }
+      const way = (dir) => (dir === 'L' ? ' left' : dir === 'R' ? ' right' : ' corner');
+      for (const { z, r, d } of kinds) { out.push(line(`Cleanest ${z}${way(r.dir)}, of ${r.n} ${z} corners`, d, r.level, day(d))); names.push(d.name); }
       $('recordsTable').innerHTML = out.join('');
       $('recordsTable').querySelectorAll('tr td.l b').forEach((b, i) => { b.textContent = names[i]; });   // names are user text
       $('recordsNote').textContent = 'Roads are matched by name.';
@@ -816,6 +822,16 @@
     }
     const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
     const monthLabel = (m) => `${MONTHS[+m.slice(5, 7) - 1]} ${m.slice(0, 4)}`;
+    // the speed at those corners' slowest point, the same way: how steadily you carried speed through them (a spread, never a target)
+    const STEADY_CLAIM_MPS = 0.45;                                       // 1 mph
+    function speedNote(months) {
+      const vs = months.filter((w) => finiteNum(w.speed_sd_mps));
+      if (!vs.length) return '';
+      const spd = (v) => `${Math.max(1, Math.round(ApexUnits.speed(v)))} ${ApexUnits.speedU()}`;
+      const a = vs[0], z = vs[vs.length - 1], diff = z.speed_sd_mps - a.speed_sd_mps;
+      const claim = vs.length > 1 && Math.abs(diff) >= STEADY_CLAIM_MPS && a.speed_corners >= STEADY_CLAIM_CORNERS && z.speed_corners >= STEADY_CLAIM_CORNERS;
+      return ` Your speed at their slowest point varied about ${spd(z.speed_sd_mps)} in ${monthLabel(z.month)}${claim ? `, ${diff < 0 ? 'steadier' : 'less steady'} than ${monthLabel(a.month)} (${spd(a.speed_sd_mps)})` : ''}.`;
+    }
     function renderSteadiness() {
       const panel = $('steadyPanel'); if (!panel) return;
       steadinessByMonth((months) => {
@@ -833,13 +849,14 @@
         const about = (v) => (v < 3 ? `under ${ApexUnits.fine(3)}` : `about ${ApexUnits.fine(v)}`);           // below the floor, no finer figure
         const claim = Math.abs(diff) >= STEADY_CLAIM_M && a.corners >= STEADY_CLAIM_CORNERS && z.corners >= STEADY_CLAIM_CORNERS;
         $('steadyNote').textContent = `How widely your braking point varied, within each month, on corners you drove five or more times that month; higher on the chart is steadier (fewer ${ApexUnits.metric() ? 'metres' : 'feet'}), bigger dots are more corners. `
-          + `${monthLabel(z.month)}: ${about(z.sd_m)} over ${z.corners} corners${claim ? `, ${diff < 0 ? 'steadier' : 'less steady'} than ${monthLabel(a.month)} (${about(a.sd_m)})` : ''}. ${ApexUnits.fine(5)} samples and GPS put the floor near ${ApexUnits.fine(3)}.`;
+          + `${monthLabel(z.month)}: ${about(z.sd_m)} over ${z.corners} corners${claim ? `, ${diff < 0 ? 'steadier' : 'less steady'} than ${monthLabel(a.month)} (${about(a.sd_m)})` : ''}. ${ApexUnits.fine(5)} samples and GPS put the floor near ${ApexUnits.fine(3)}.`
+          + speedNote(months);
       });
     }
 
     // Your driving (driver_profile.js): the profile over every drive, worked out in the analysis worker (the profile job
     // keeps each drive's observations, so only new drives are read) and asked again only when the library changes.
-    const driving = { key: null, p: null, pending: null, wait: [], best: null };
+    const driving = { key: null, p: null, pending: null, wait: [], best: null, records: null };
     // IDEAS D-27: the skill being practiced (driver_profile.js loadPlan), read again with each run; its level before the
     // practice is kept in the plan from each run, so the end card on the map can set a drive against it
     const planNow = () => ApexDriverProfile.loadPlan(localStorage);
@@ -852,7 +869,8 @@
       driving.pending = key;
       ApexAnalysis.job('profile', { plan }).then((r) => {
         if (driving.pending !== key) return;                             // the library changed meanwhile: a newer run answers
-        driving.key = key; driving.pending = null; driving.p = r.profile || null; driving.pr = r.practice || null; driving.best = r.best || null;
+        driving.key = key; driving.pending = null; driving.p = r.profile || null; driving.pr = r.practice || null; driving.best = r.best || null; driving.records = r.records || null;
+        renderRecords();                                                  // records by kind of corner come from the same kept observations
         if (plan && driving.pr) ApexDriverProfile.savePlan(localStorage, { ...plan, before: driving.pr.before });
         driving.wait.forEach((f) => f(driving.p, driving.pr));
       }).catch(() => { if (driving.pending === key) driving.pending = null; });

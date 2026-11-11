@@ -42,12 +42,13 @@ import { isDeveloper } from "./developers";
 import { coverage, exportRoads, roadBins } from "./roads";
 import { crewStandings } from "./standings";
 import { crewBoard, publishDriveScores } from "./drive_scores";
-import { enter as taEnter, circuitsNow, leave as taLeave, poolAdd, poolMine, poolRemove, runs as taRuns, timeAttack } from "./time_attack";
+import { enter as taEnter, circuitsNow, leave as taLeave, makeCircuit, runs as taRuns, timeAttack } from "./time_attack";
 import { eventCame, eventCancel, eventCreate, eventRecord, eventRole, eventRsvp, eventUpdate, eventsList, eventsNear } from "./events";
 import { healthReport, healthSummary } from "./health";
 import { feedbackCreate, feedbackDone, feedbackList } from "./feedback";
 import { friendProfile } from "./profile";
 import { kudosGive, kudosReceived, kudosTake } from "./kudos";
+import { inbox } from "./inbox";
 import { STATS_SAMPLE, recordStat, statsSummary } from "./stats";
 import { etaStart, etaUpdate, etaView } from "./eta_share";
 import { highlightCreate, highlightDelete, highlightList, highlightRate } from "./highlights";
@@ -167,9 +168,7 @@ on("PUT", "/api/eta/:token", async (req, env, m) => { await etaUpdate(env, await
 on("GET", "/api/eta/:token", async (_req, env, m) => json(await etaView(env, m.groups!.token)));
 on("GET", "/api/timeattack", async (req, env) => json(await timeAttack(env, await requireMember(req, env), new URL(req.url))));
 on("GET", "/api/timeattack/circuits", async (req, env) => json(await circuitsNow(env, await requireMember(req, env))));
-on("GET", "/api/timeattack/pool", async (req, env) => json(await poolMine(env, await requireMember(req, env))));
-on("POST", "/api/timeattack/pool", async (req, env) => json(await poolAdd(env, await requireMember(req, env), req), 201));
-on("DELETE", "/api/timeattack/pool/:id", async (req, env, m) => { await poolRemove(env, await requireMember(req, env), m.groups!.id); return noContent(); });
+on("POST", "/api/timeattack/circuit", async (req, env) => json(await makeCircuit(env, await requireMember(req, env), req)));
 on("POST", "/api/timeattack/enter", async (req, env) => json(await taEnter(env, await requireMember(req, env), req)));
 on("POST", "/api/timeattack/runs", async (req, env) => json(await taRuns(env, await requireMember(req, env), req)));
 on("DELETE", "/api/timeattack/entry", async (req, env) => { await taLeave(env, await requireMember(req, env), new URL(req.url)); return noContent(); });
@@ -308,6 +307,8 @@ on("POST", "/api/board", async (req, env) => json(await publish(env, await requi
 on("POST", "/api/kudos", async (req, env) => { await kudosGive(env, await requireMember(req, env), req); return noContent(); });
 on("DELETE", "/api/kudos", async (req, env) => { await kudosTake(env, await requireMember(req, env), req); return noContent(); });
 on("GET", "/api/kudos", async (req, env) => json(await kudosReceived(env, await requireMember(req, env))));
+// For you (src/inbox.ts): what happened to you socially, made from what each part already shows you; seen is kept on the phone.
+on("GET", "/api/inbox", async (req, env) => json(await inbox(env, await requireMember(req, env))));
 on("GET", "/api/board/activity", async (req, env) => json(await boardActivity(env, await requireMember(req, env))));
 on("GET", "/api/board/:canon", async (req, env, m) => json(await boardFor(env, await requireMember(req, env), m.groups!.canon)));
 

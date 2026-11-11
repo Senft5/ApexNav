@@ -4030,7 +4030,9 @@ flow('no signal: a hazard report waits on the phone and goes when the connection
   });
   await page.goto(base + '/index.html');
   await page.waitForFunction(() => window.apex && typeof window.apex.live === 'function');
-  await page.evaluate(() => window.apex.live({ lat: 35.6, lon: -83.9, accuracy_m: 5, speed_mps: 15, course_deg: 90, has_fix: true }));
+  // the phone keeps sending fixes, as a phone does: with one fix only, a loaded CI runner passed the 10 s a report needs a
+  // fresh fix within before Debris was tapped, and nothing was saved (CI 2026-11-11; as "review mode (U-94)")
+  await page.evaluate(() => { const fix = () => window.apex.live({ lat: 35.6, lon: -83.9, accuracy_m: 5, speed_mps: 15, course_deg: 90, has_fix: true }); fix(); window.__fixes = setInterval(fix, 500); });
   await page.click('#hzReportBtn');
   await page.click('#hzKinds button:has-text("Debris")');
   await saidOn(page, /Debris saved/);
@@ -4505,6 +4507,10 @@ flow('Your driving: the profile over every drive opens from the Log, names the w
   await page.waitForSelector('#drivingOpen', { timeout: 20000 });
   const card = await page.textContent('#drivingOpen span');
   check(/Work on: One steering arc \d+/.test(card) && /Strongest: /.test(card), 'the card says the strongest and the one to work on: ' + card);
+  // Your records: the cleanest corner of each kind (tight, medium, fast), from the same kept observations (IDEAS D-08)
+  await page.waitForFunction(() => /Cleanest tight (left|right|corner), of \d+ tight corners/.test(document.getElementById('recordsTable').textContent), null, { timeout: 10000 });
+  const recs = await page.textContent('#recordsTable');
+  check(/Cleanest medium/.test(recs) && !/mph|km\/h/.test(recs), 'records by kind of corner: ' + recs);
   // Your year: the year's cleanest corners, one a road (two roads here), from the same kept observations
   const best = await page.evaluate(() => ApexAnalysis.job('profile', { year: 2026 }).then((r) => r.best));
   check(best.length === 2 && best[0].level >= best[1].level && new Set(best.map((b) => b.name)).size === 2 && best.every((b) => b.at.startsWith('2026-')), 'the year\'s best corners: ' + JSON.stringify(best));
@@ -4736,6 +4742,58 @@ flow('duels: a friend\'s challenge is a card on People; Accept starts it; the ca
   await page.click('.duel-pop.open button:has-text("Send to @bob")');
   await page.waitForFunction(() => /Sent\. @bob has 3 days on Esses once they say yes\./.test(document.getElementById('toast').textContent));
   check(JSON.stringify(sent) === '[{"handle":"bob","segment_id":"MY2","days":3,"kind":"time"}]', 'what was sent: ' + JSON.stringify(sent));
+});
+
+flow('For you: the People badge counts what is new and what waits; People lists it in sentences; seen once drawn; a row\'s key takes you there (Worker stubbed, SOCIAL 2.10)', async (page, base) => {
+  await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); } catch (_) {} });
+  const at = (minAgo) => new Date(Date.now() - minAgo * 60e3).toISOString().replace('T', ' ').slice(0, 19);
+  const geom = JSON.stringify(Array.from({ length: 80 }, (_, i) => [35.6 + i * 3e-4, -83.9 + i * 4e-4 + Math.sin(i / 6) * 3e-4]));
+  let items = [
+    { kind: 'topped', at: at(20), handle: 'bob', canon_id: 'MY1', stage: 'Dry Ridge climb', score: 850, yours: 800 },
+    { kind: 'kudos', at: at(90), handle: 'cara', stage: 'Dry Ridge climb', canon_id: 'SEG1', driven_on: '2026-11-10' },
+    { kind: 'request', at: at(200), handle: 'dan', waiting: true },
+    { kind: 'crew_drive', at: at(300), event_id: 'E1', title: 'Cherohala Saturday', starts_at: '2030-11-14 14:00:00', crew: 'Ridge Runners', crew_id: 'C1' },
+  ];
+  let asked = 0;
+  await page.route(base + '/api/**', (route) => {
+    const u = new URL(route.request().url()), json = (b, s = 200) => route.fulfill({ status: s, contentType: 'application/json', body: JSON.stringify(b) });
+    if (u.pathname === '/api/me') return json({ signed_in: true, member: true, handle: 'me', requests: 1 });
+    if (u.pathname === '/api/inbox') { asked++; return json({ items, waiting: 1, now: at(0) }); }
+    if (u.pathname === '/api/friends') return json([{ id: 'U1', handle: 'bob', name: 'Bob', status: 'accepted', incoming: 0 }, { id: 'U4', handle: 'dan', name: null, status: 'pending', incoming: 1 }]);
+    if (u.pathname === '/api/segments') return json([{ id: 'MY1', origin_id: null, name: 'Dry Ridge climb', geom, start_lat: 35.6, start_lon: -83.9 }]);
+    if (u.pathname === '/api/points') return json({ total: 0 });
+    return json([]);
+  });
+  await page.goto(base + '/index.html');
+  await page.waitForFunction(() => window.apex && typeof window.apex.live === 'function');
+  // before People is opened: the badge, from the social group's first ask (the request and three new rows)
+  await page.waitForFunction(() => (document.querySelector('#crewTab .badge') || {}).textContent === '4', null, { timeout: 20000 });
+  const label = await page.getAttribute('#crewTab .badge', 'aria-label');
+  check(label === '1 friend request, 3 new for you', 'the badge says what it counts: ' + label + ' / ' + await page.textContent('#crewTab .badge'));
+  await page.evaluate(() => document.querySelector('.tab[data-view="people"]').click());
+  await page.waitForSelector('#accountBody .inbox-sec:not([hidden]) .inbox-row');
+  const rows = await page.$$eval('#accountBody .inbox-row', (l) => l.map((r) => [r.classList.contains('new'), r.querySelector('.inbox-kick').textContent, r.querySelector('.inbox-text').textContent]));
+  check(rows.length === 3, 'the request is a card above, not a row: ' + JSON.stringify(rows));
+  check(rows[0][0] && rows[0][1] === 'Topped · 20 min ago' && rows[0][2] === '@bob scored 850 on Dry Ridge climb, over your best of 800.', 'topped, new, in a sentence: ' + JSON.stringify(rows[0]));
+  check(/^Kudos · 2 h ago$/.test(rows[1][1]) && /^Ridge Runners: Cherohala Saturday, .+\. Are you going\?$/.test(rows[2][2]), 'kudos and the crew drive: ' + JSON.stringify(rows));
+  check(await page.isVisible('#accountBody .request-card:has-text("@dan")'), 'the request stays a card with its keys');
+  // drawn is seen: the badge keeps only what waits on you
+  await page.waitForFunction(() => (document.querySelector('#crewTab .badge') || {}).textContent === '1');
+  check(await page.evaluate(() => !!localStorage.getItem('apex.inboxSeen')), 'seen is kept on the phone');
+  const small = await page.$$eval('#accountBody .inbox-row button', (l) => l.map((b) => Math.round(b.getBoundingClientRect().height)).filter((h) => h < 32));
+  check(!small.length, 'keys big enough: ' + JSON.stringify(small));
+  // Answer goes to the Crews side; Drive it plans the stage
+  await page.click('#accountBody .inbox-row:has-text("Cherohala") button:has-text("Answer")');
+  await page.waitForFunction(() => document.getElementById('peopleTabCrews').getAttribute('aria-selected') === 'true');
+  await page.click('#peopleTabFriends');
+  await page.click('#accountBody .inbox-row:has-text("Topped") button:has-text("Drive it")');
+  await page.waitForFunction(() => /Dry Ridge climb/.test(document.getElementById('routeCardName').textContent), null, { timeout: 8000 });
+  // something new comes in while the app is in the back: it counts again when the app comes to the front
+  items = [{ kind: 'passed', at: at(-1), handle: 'sam', stage: 'Tail of the Dragon', gap_s: 4, place: 3 }, ...items];
+  const before = asked;
+  await page.evaluate(() => document.dispatchEvent(new Event('visibilitychange')));
+  await page.waitForFunction(() => (document.querySelector('#crewTab .badge') || {}).textContent === '2');
+  check(asked > before, 'asked again on coming to the front');
 });
 
 flow('Billet: a primary key is light metal with dark ink, not dark on dark (REVIEW_PEOPLE.md P-01)', async (page, base) => {
@@ -8132,31 +8190,26 @@ flow('TestFlight 2026-11-05 note 6: the idle map\'s deck is the suggestion and o
   }
 }, { hasTouch: true, viewport: { width: 393, height: 852 }, geolocation: { latitude: 35.9606, longitude: -83.9207 }, permissions: ['geolocation'] });
 
-flow('time attack this week (SOCIAL 2.9): in Where to?, the area\'s stage and its board, as text, with gaps and Scores; Enter puts it in your Stages; your own stages go up; the area, never where you are, is sent', async (page, base) => {
-  const sent = [];
+flow('time attack this week (SOCIAL 2.9): in Where to?, the area\'s loop and its board, as text, with gaps and Scores; Enter puts it in your Stages; the area, never where you are, is sent', async (page, base) => {
+  const GEOM = JSON.stringify([[35.95, -83.9], [35.97, -83.88], [35.95, -83.9]]);
   let entered = false;
-  const GEOM = JSON.stringify([[35.95, -83.9], [35.97, -83.88]]);
+  const sent = [];
   await page.addInitScript(() => { localStorage.setItem('apex.onboarded', '1'); localStorage.setItem('apex.permsExplained', '1'); });
-  await page.addInitScript(() => localStorage.setItem('apex.segments', JSON.stringify([
-    { id: 'MINE1', name: 'Back road', length_m: 4200, synced: true, geom: '[[35.9,-83.9],[35.91,-83.89]]', lat0: 35.9, lon0: -83.9, lat1: 35.91, lon1: -83.89 },
-    { id: 'SHORT', name: 'Driveway', length_m: 300, synced: true }])));
   await page.route('**/api/**', (route) => {
     const u = new URL(route.request().url()), m = route.request().method();
     const json = (b, status = 200) => route.fulfill({ status, contentType: 'application/json', body: JSON.stringify(b) });
     if (u.pathname === '/api/me') return json({ signed_in: true, member: true, handle: 'me' });
     if (u.pathname === '/api/timeattack' && m === 'GET') {
       sent.push(['GET', u.search]);
-      return json({ week: '2026-11-09', ends_on: '2026-11-15', today: '2026-11-13', cell: '35,-84', entered, entrants: 3, pool: 2,
-        circuit: { segment_id: 'CIRC1', name: 'Foothills <b>run</b>', length_m: 2500, geom: GEOM, by: 'alice', week: '2026-11-09', ends_on: '2026-11-15', cell: '35,-84' },
-        board: [{ place: 1, handle: 'alice', time_s: 190, gap_s: 0, score: 700, mine: false }, { place: 2, handle: 'bob', time_s: 200, gap_s: 10, score: 780, mine: false },
-                { place: 2, handle: 'cara', time_s: 200, gap_s: 10, score: null, mine: false }],
-        you: null, last: { name: 'Last stage', podium: [{ handle: 'dee', time_s: 312 }] } });
+      return json({ week: '2026-11-09', ends_on: '2026-11-15', today: '2026-11-13', cell: '35,-84', entered, entrants: 3, make: null,
+        circuit: { segment_id: 'ta-CIRC1', name: 'Foothills <b>run</b> loop', length_m: 12500, geom: GEOM, week: '2026-11-09', ends_on: '2026-11-15', cell: '35,-84' },
+        board: [{ place: 1, handle: 'alice', time_s: 590, gap_s: 0, score: 700, mine: false }, { place: 2, handle: 'bob', time_s: 600, gap_s: 10, score: 780, mine: false },
+                { place: 2, handle: 'cara', time_s: 600, gap_s: 10, score: null, mine: false }],
+        you: null, last: { name: 'Last loop', podium: [{ handle: 'dee', time_s: 712 }] } });
     }
-    if (u.pathname === '/api/timeattack/pool' && m === 'GET') return json([]);
     if (m === 'POST') {
       sent.push([u.pathname, JSON.parse(route.request().postData() || 'null')]);
       if (u.pathname === '/api/timeattack/enter') { entered = true; return json({ segment_id: 'COPY1', added: true }); }
-      if (u.pathname === '/api/timeattack/pool') return json({ cell: '35,-83' }, 201);
       return json({}, 201);
     }
     if (m === 'GET') return json([]);
@@ -8169,25 +8222,56 @@ flow('time attack this week (SOCIAL 2.9): in Where to?, the area\'s stage and it
   await page.click('#planAttack > summary');
   await page.waitForSelector('#planAttack .ta-board');
   const text = await page.textContent('#planAttackBody');
-  check(text.includes('Foothills <b>run</b>') && /put up by @alice · 3 days left · 3 times/.test(text), 'the stage, as text: ' + text);
+  check(text.includes('Foothills <b>run</b> loop') && /loop from the area’s best roads · 3 days left · 3 times/.test(text) && !/put up/i.test(text), 'the loop, as text: ' + text);
   const cells = await page.$$eval('#planAttack .ta-board > span', (els) => els.map((e) => e.textContent));
-  check(cells.slice(0, 8).join('|') === '1|@alice|3:10|Score 700|2|@bob|3:20 +0:10|Score 780' && cells[11] === '', 'the board, quickest first, with gaps and Scores: ' + cells.join('|'));
-  check(/Last week, Last stage: 1\. @dee 5:12/.test(text) && /drive within the law/.test(text), 'last week\'s podium and the road note');
+  check(cells.slice(0, 8).join('|') === '1|@alice|9:50|Score 700|2|@bob|10:00 +0:10|Score 780' && cells[11] === '', 'the board, quickest first, with gaps and Scores: ' + cells.join('|'));
+  check(/Last week, Last loop: 1\. @dee 11:52/.test(text) && /A new loop every Monday/.test(text) && /drive within the law/.test(text), 'last week\'s podium and the road note');
   const q = new URLSearchParams(sent[0][1]);
   check(/\.5$/.test(q.get('lat')) && /\.5$/.test(q.get('lon')), 'only the middle of the area is sent: ' + sent[0][1]);
+  check(!sent.some(([p]) => p === '/api/timeattack/circuit'), 'a week that has its loop builds none');
   await page.click('#planAttack button:text-is("Enter")');
   await page.waitForSelector('#planAttack button:text-is("Drive it")');
   check(sent.some(([p, b]) => p === '/api/timeattack/enter' && b.cell === '35,-84'), 'Enter sends the area');
   const segs = await page.evaluate(() => JSON.parse(localStorage.getItem('apex.segments')));
-  check(segs.some((x) => x.id === 'COPY1' && x.origin === 'CIRC1' && x.synced && x.lat0 === 35.95 && x.lon1 === -83.88), 'the stage is in your Stages: ' + JSON.stringify(segs));
-  // your own stages go up: a 300 m one can't
-  await page.click('#planAttack summary:has-text("Put one of your stages up")');
-  const up = await page.textContent('#planAttack details.plan-more');
-  check(/Back road/.test(up) && !/Driveway/.test(up), 'only stages of 1 to 25 km: ' + up);
-  await page.click('#planAttack details.plan-more button:text-is("Put up")');
-  await page.waitForFunction(() => /It can be picked/.test(document.getElementById('toast').textContent));
-  check(sent.some(([p, b]) => p === '/api/timeattack/pool' && b.segment_id === 'MINE1'), 'Put up sends the stage');
+  check(segs.some((x) => x.id === 'COPY1' && x.origin === 'ta-CIRC1' && x.synced && x.lat0 === 35.95 && x.lat1 === 35.95), 'the loop is in your Stages: ' + JSON.stringify(segs));
 }, { geolocation: { latitude: 35.9606, longitude: -83.9207 }, permissions: ['geolocation'] });
+
+flow('time attack, a new week (the owner, 2026-11-11: autogenerated, the area\'s best loop roads at random, small loops): the first phone in the area builds the loop with our own router from the seed and sends it', async (page, base) => {
+  let circuit = null;
+  const sent = [];
+  await page.addInitScript(() => { localStorage.setItem('apex.onboarded', '1'); localStorage.setItem('apex.permsExplained', '1'); });
+  await page.route('**/api/**', (route) => {
+    const u = new URL(route.request().url()), m = route.request().method();
+    const json = (b, status = 200) => route.fulfill({ status, contentType: 'application/json', body: JSON.stringify(b) });
+    if (u.pathname === '/api/me') return json({ signed_in: true, member: true, handle: 'me' });
+    if (u.pathname === '/api/timeattack' && m === 'GET') {
+      return json({ week: '2026-11-09', ends_on: '2026-11-15', today: '2026-11-13', cell: '39,-85', entered: false, entrants: 0, circuit,
+        make: circuit ? null : { seed: '2026-11-09|39,-85|0', km: { min: 8, max: 16 } }, board: [], you: null, last: null });
+    }
+    if (u.pathname === '/api/timeattack/circuit' && m === 'POST') {
+      const b = JSON.parse(route.request().postData() || 'null');
+      sent.push(b);
+      circuit = { segment_id: 'ta-NEW', name: b.name, length_m: 10000, geom: JSON.stringify(b.geom), week: '2026-11-09', ends_on: '2026-11-15', cell: '39,-85' };
+      return json({ circuit, kept: true });
+    }
+    if (m === 'GET') return json([]);
+    return json({}, 404);
+  });
+  await page.goto(base + '/index.html');
+  await page.waitForFunction(() => window.apex && typeof window.apex.live === 'function');
+  await page.click('#destInput');
+  await page.waitForSelector('#planAttack:not([hidden]) > summary');
+  await page.click('#planAttack > summary');
+  await page.waitForFunction(() => /loop from the area’s best roads|doesn’t reach this area/.test(document.getElementById('planAttackBody').textContent), null, { timeout: 60000 });
+  const text = await page.textContent('#planAttackBody');
+  check(sent.length === 1, 'one loop sent: ' + text);
+  const b = sent[0] || {};
+  const g = b.geom || [], km = g.reduce((s, p, i) => (i ? s + Math.hypot((p[0] - g[i - 1][0]) * 111195, (p[1] - g[i - 1][1]) * 111195 * Math.cos(p[0] * Math.PI / 180)) : 0), 0) / 1000;
+  check(b.cell === '39,-85' && b.seed === '2026-11-09|39,-85|0' && / loop$|This week’s loop/.test(b.name || ''), 'the area, the seed and a name: ' + JSON.stringify({ cell: b.cell, seed: b.seed, name: b.name }));
+  check(g.length >= 10 && JSON.stringify(g[0]) === JSON.stringify(g[g.length - 1]) && Math.floor(g[0][0]) === 39 && Math.floor(g[0][1]) === -85, 'a closed line that starts in the area: ' + g.length + ' points');
+  check(km >= 5 && km <= 25, 'a small loop: ' + km.toFixed(1) + ' km');
+  check(text.includes(b.name) && /Enter/.test(await page.textContent('#planAttack')), 'and it is the week\'s loop on the page: ' + text);
+}, { geolocation: { latitude: 39.1, longitude: -84.5 }, permissions: ['geolocation'] });
 
 
 (async () => {

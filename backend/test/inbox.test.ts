@@ -1,0 +1,99 @@
+// For you (src/inbox.ts): one list of what happened to you socially, made from what each part already shows you.
+import { env } from "cloudflare:workers";
+import { beforeEach, describe, expect, it } from "vitest";
+import { api, befriend, freshDb, makeSegment, makeUser, ok, type TestUser } from "./helpers";
+import { duelOutcome } from "../src/inbox";
+
+beforeEach(freshDb);
+type Msg = Record<string, any>;
+const json = async (r: Promise<Response>) => (await (await ok(r)).json()) as any;
+const inbox = async (u: TestUser) => (await json(api(u, "GET", "/api/inbox"))) as { items: Msg[]; waiting: number; now: string };
+const kinds = (b: { items: Msg[] }) => b.items.map((i) => i.kind).sort();
+const today = new Date().toISOString().slice(0, 10);
+const inHours = (h: number) => new Date(Date.now() + h * 3600_000).toISOString();
+const road = (lat = 35.5, lon = -83.9, n = 60) => Array.from({ length: n }, (_, i) => [lon + i * 1e-3, lat + Math.sin(i / 5) * 1e-3]);
+
+describe("For you", () => {
+  it("a friend tops your Score, gives kudos, accepts your duel; a request waits; blocks hide all of it", async () => {
+    const a = await makeUser("alice"), b = await makeUser("bob"), c = await makeUser("cara");
+    await befriend(a, b);                                          // sharing is on by default between friends
+    const seg = await makeSegment(a, "Dry Ridge climb");
+    const { id } = await json(api(a, "POST", "/api/duels", { handle: "bob", segment_id: seg, days: 7 }));
+    expect((await inbox(b)).items.map((i) => [i.kind, i.handle, i.stage, i.waiting])).toEqual([["duel_ask", "alice", "Dry Ridge climb", true]]);
+    await ok(api(b, "POST", `/api/duels/${id}/accept`));
+    const bSeg = ((await json(api(b, "GET", "/api/segments"))) as Msg[]).find((s) => s.origin_id === seg)!.id;
+    await ok(api(a, "POST", "/api/board", { segment_id: seg, driver_score: 800, driven_on: today }));
+    await ok(api(b, "POST", "/api/board", { segment_id: bSeg, driver_score: 850, driven_on: today }));
+    await ok(api(b, "POST", "/api/kudos", { handle: "alice", canon_id: seg, driven_on: today }));
+    await ok(api(c, "POST", "/api/friends/request", { handle: "alice" }));
+    let got = await inbox(a);
+    expect(kinds(got)).toEqual(["duel_on", "kudos", "request", "topped"]);
+    expect(got.waiting).toBe(1);
+    expect(got.items.find((i) => i.kind === "topped")).toMatchObject({ handle: "bob", stage: "Dry Ridge climb", score: 850, yours: 800, canon_id: seg });
+    expect(got.items.find((i) => i.kind === "duel_on")).toMatchObject({ handle: "bob", stage: "Dry Ridge climb", have_stage: true });
+    expect(got.items.find((i) => i.kind === "request")).toMatchObject({ handle: "cara", waiting: true });
+    // newest first, by a sortable UTC time
+    expect(got.items.map((i) => i.at)).toEqual([...got.items.map((i) => i.at)].sort().reverse());
+    // beat it back: no longer topped
+    await ok(api(a, "POST", "/api/board", { segment_id: seg, driver_score: 900, driven_on: today }));
+    expect(kinds(await inbox(a))).not.toContain("topped");
+    // bob's Scores no longer reach alice: his run can't top her
+    await ok(api(a, "POST", "/api/board", { segment_id: seg, driver_score: 700, driven_on: today }));
+    await env.DB.prepare("UPDATE board_entries SET driver_score = 700 WHERE user_id = ?").bind(a.id).run();
+    expect(kinds(await inbox(a))).toContain("topped");
+    await ok(api(b, "PUT", "/api/grants", { audience_type: "friend", audience_id: a.id, share_scores: false }));
+    expect(kinds(await inbox(a))).not.toContain("topped");
+    // the duel ends: a result from each side (bob still shows alice nothing, so alice wins on hers alone)
+    await env.DB.prepare("UPDATE duels SET starts_on = date('now', '-7 days'), ends_on = date('now', '-1 days')").run();
+    await env.DB.prepare("UPDATE board_entries SET driven_on = date('now', '-2 days')").run();
+    expect((await inbox(a)).items.find((i) => i.kind === "duel_over")).toMatchObject({ handle: "bob", stage: "Dry Ridge climb", result: "won" });
+    expect((await inbox(b)).items.find((i) => i.kind === "duel_over")).toMatchObject({ handle: "alice", result: "lost" });
+    // blocks: cara's request and bob's kudos go
+    await ok(api(a, "POST", "/api/blocks", { handle: "cara" }));
+    await ok(api(a, "POST", "/api/blocks", { handle: "bob" }));
+    got = await inbox(a);
+    expect(got.items).toEqual([]);
+    expect(got.waiting).toBe(0);
+  });
+
+  it("a crew drive you haven't answered, new followers of your roadbook, and a time attack you were passed in", async () => {
+    const a = await makeUser("alice"), b = await makeUser("bob"), out = await makeUser("outsider");
+    const crew = (await json(api(a, "POST", "/api/crews", { name: "Ridge Runners" }))).id as string;
+    const tok = (await json(api(a, "POST", `/api/crews/${crew}/invite`))).token as string;
+    await ok(api(b, "POST", "/api/crews/join", { token: tok }));
+    const ev = (await json(api(b, "POST", `/api/crews/${crew}/events`, { title: "Cherohala Saturday", starts_at: inHours(48), meet: { name: "Shell", lat: 35.36, lon: -84.29 } }))).id;
+    expect((await inbox(a)).items).toMatchObject([{ kind: "crew_drive", event_id: ev, title: "Cherohala Saturday", crew: "Ridge Runners", crew_id: crew }]);
+    expect(kinds(await inbox(b))).toEqual([]);                      // your own drive isn't news to you
+    expect(kinds(await inbox(out))).toEqual([]);
+    await ok(api(a, "POST", `/api/events/${ev}/rsvp`, { status: "maybe" }));
+    expect(kinds(await inbox(a))).toEqual([]);
+    // a public roadbook followed by two people: counted, never named
+    const book = (await json(api(a, "POST", "/api/roadbooks", { name: "Smokies classics" }))).id as string;
+    await ok(api(a, "POST", `/api/roadbooks/${book}/roads`, { name: "The Dragon", geom: road() }));
+    await ok(api(a, "PUT", `/api/roadbooks/${book}`, { visibility: "public" }));
+    await ok(api(b, "PUT", `/api/roadbooks/${book}/follow`));
+    await ok(api(out, "PUT", `/api/roadbooks/${book}/follow`));
+    const f = (await inbox(a)).items.find((i) => i.kind === "follows")!;
+    expect(f).toMatchObject({ book_id: book, book: "Smokies classics", n: 2 });
+    expect(JSON.stringify(f)).not.toMatch(/bob|outsider/);
+    // time attack: bob goes quicker than alice after her time went up
+    const week = (await env.DB.prepare("SELECT date('now', '-6 days', 'weekday 1') AS w").first<{ w: string }>())!.w;
+    const segId = await makeSegment(a, "Tail of the Dragon");
+    await env.DB.prepare("INSERT INTO ta_weeks (week, cell, segment_id) VALUES (?, '35,-84', ?)").bind(week, segId).run();
+    await env.DB.prepare("INSERT INTO ta_entries (week, cell, user_id, time_s, driven_on, updated_at) VALUES (?, '35,-84', ?, 300, ?, datetime('now', '-1 hour'))").bind(week, a.id, today).run();
+    await env.DB.prepare("INSERT INTO ta_entries (week, cell, user_id, time_s, driven_on) VALUES (?, '35,-84', ?, 291, ?)").bind(week, b.id, today).run();
+    expect((await inbox(a)).items.find((i) => i.kind === "passed")).toMatchObject({ handle: "bob", stage: "Tail of the Dragon", gap_s: 9, place: 2 });
+    expect(kinds(await inbox(b))).not.toContain("passed");
+  });
+
+  it("a duel's outcome from your side, by Score or by time", () => {
+    const s = (score: number, time_s: number | null = null) => ({ score, time_s });
+    expect(duelOutcome({ kind: "score", you: s(800), them: s(790) })).toBe("won");
+    expect(duelOutcome({ kind: "score", you: s(780), them: s(790) })).toBe("lost");
+    expect(duelOutcome({ kind: "score", you: null, them: null })).toBe("none");
+    expect(duelOutcome({ kind: "score", you: s(800), them: null })).toBe("won");
+    expect(duelOutcome({ kind: "time", you: s(700, 290), them: s(900, 300) })).toBe("won");
+    expect(duelOutcome({ kind: "time", you: s(700, 300), them: s(900, 300) })).toBe("draw");
+    expect(duelOutcome({ kind: "time", you: s(900, null), them: s(700, 310) })).toBe("lost");
+  });
+});

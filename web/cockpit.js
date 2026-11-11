@@ -5067,6 +5067,7 @@
       $('accountBody').hidden = next !== 'friends'; $('crewsBody').hidden = next !== 'crews';
       document.querySelectorAll('[data-people]').forEach((b) => { const on = b.dataset.people === next; b.setAttribute('aria-selected', String(on)); b.tabIndex = on ? 0 : -1; });
       $('sheet').querySelector('.body').scrollTop = 0;
+      if (next === 'friends' && view === 'people') try { if (inbox) inbox.markSeen(); } catch (_) {}
     }
     function showView(v) {
       if (v) $('endCard').classList.remove('show');                    // R-5 / I-6: a tab never opens under the drive's card
@@ -5086,6 +5087,7 @@
       $('app').classList.toggle('sheet-open', !!v);
       $('scrim').classList.toggle('show', !!v);
       document.querySelectorAll('#tabbar .tab').forEach(t => t.classList.toggle('on', v ? t.dataset.view === v : t.dataset.view === 'map'));
+      if (v === 'people' && peopleSide === 'friends') try { if (inbox) inbox.markSeen(); } catch (_) {}   // For you on screen: seen
     }
     const openSheet = (v = view || 'route') => showView(v);
     // The Log and Stages (analysis.html) open in a full-screen frame over the map, never in its place (the owner,
@@ -6135,7 +6137,7 @@
       const d = $('planSpots'); d.hidden = false;
       d.addEventListener('toggle', () => { if (!d.open) return; const sec = spotsFeed.section(); const h = sec.querySelector(':scope > h3'); if (h) h.remove(); $('planSpotsBody').replaceChildren(sec); });
     } });
-    // Weekly time attack (web/time_attack.js, SOCIAL 2.9, IDEAS S-26): this area's stage this week and its board, in Where to?
+    // Weekly time attack (web/time_attack.js, SOCIAL 2.9, IDEAS S-26): this area's loop this week and its board, in Where to?
     // beside Spots near you; drawn when opened, fresh each time. Runs go up from the Log when stages sync.
     onSocial(() => { try {
       const ta = window.ApexTimeAttack ? ApexTimeAttack.mount({ el, btn, toast, apiCall, jsonOf, report: safety && safety.report,
@@ -6143,7 +6145,10 @@
         here: () => state.lastPosition || (() => { const c = map.getCenter(); return { lat: c.lat, lon: c.lng }; })(), goTo: (p) => { closeSheet(); routeToPlace(p); },
         segs: () => { try { return JSON.parse(localStorage.getItem('apex.segments') || '[]') || []; } catch (_) { return []; } },
         saveSegs: (l) => { try { localStorage.setItem('apex.segments', JSON.stringify(l)); } catch (_) {} },
-        fmtKm: (km) => ApexUnits.long(km * 1000, 1) }) : null;
+        fmtKm: (km) => ApexUnits.long(km * 1000, 1),
+        // the week's loop, where nobody in the area has built it yet: our own router's loops (graph_router.js loop) over its tiles
+        graphKeys: () => (ownOn() ? ownIndex() : null),
+        loops: (start, km) => (ownOn() ? ApexOwnRouting.loops(ownRouter(), { start, km, level: LOOP_STYLE }) : Promise.resolve([])) }) : null;
       if (ta) {
         const d = $('planAttack'); d.hidden = false;
         d.addEventListener('toggle', () => { if (!d.open) return; const sec = ta.section(); const h = sec.querySelector(':scope > h3'); if (h) h.remove(); $('planAttackBody').replaceChildren(sec); });
@@ -6187,6 +6192,32 @@
           toast(`${name}: your duel's stage, ${ApexUnits.long(totalM(), 1)}.`);
         } else routeToPlace({ label: name, lat: s.start_lat, lon: s.start_lon });
       } }) : null; } catch (e) { console.error('duels', e); } });
+    // For you (web/inbox.js, docs/SOCIAL.md 2.10): what happened to you socially, newest first, on People → Friends; the
+    // People tab's badge counts what is new since you last looked, plus what waits on you. Asked when the social group
+    // loads, when the app comes back to the front, and every five minutes while it is in front (never while driving).
+    let inbox = null, inboxBadge = null, peopleAsks = [], peopleRequests = 0;
+    function paintPeopleBadge() {
+      const tab = $('crewTab'), old = tab.querySelector('.badge'); if (old) old.remove();
+      // friend requests from For you once it has answered (it may know of a newer one), else from /api/me
+      const req = inboxBadge ? inboxBadge.data.items.filter((i) => i.kind === 'request').length : peopleRequests;
+      const parts = [[req, 'friend request'], ...peopleAsks, ...(inboxBadge && inboxBadge.n - req > 0 ? [[inboxBadge.n - req, 'new for you']] : [])].filter(([k]) => k > 0);
+      const n = parts.reduce((a, [k]) => a + k, 0);
+      if (!n) return;
+      const b = el('span', { className: 'badge', textContent: String(n) });
+      b.setAttribute('aria-label', parts.map(([k, w]) => `${k} ${w}${k === 1 || w === 'new for you' ? '' : 's'}`).join(', '));
+      tab.append(b);
+    }
+    onSocial(() => { try { inbox = window.ApexInbox ? ApexInbox.mount({ el, btn, apiCall, jsonOf,
+      signedIn: () => !!(accountMe && accountMe.member),
+      onScreen: () => view === 'people' && peopleSide === 'friends' && document.visibilityState === 'visible',
+      badge: (n, data) => { inboxBadge = data && Array.isArray(data.items) ? { n, data } : null; paintPeopleBadge(); },
+      openStage: (canon, name) => (duels ? duels.openStage(canon, name) : null),
+      openBoard: () => { closeSheet(); showView(null); openPlan(true); const d = $('planAttack'); if (d && !d.hidden) { d.open = true; d.scrollIntoView({ block: 'nearest' }); } },
+      openBook: (id) => openRoadbookLink(id),
+      openCrews: () => setPeopleSide('crews') }) : null; } catch (e) { console.error('inbox', e); } });
+    const inboxTick = () => { if (inbox && !driveActive && document.visibilityState === 'visible') inbox.refresh(); };
+    document.addEventListener('visibilitychange', inboxTick);
+    setInterval(inboxTick, 5 * 60 * 1000);
     let garage = null;
     // Build threads (web/builds.js, REVIEW.md 5.3): from a car card, the crew page and Builds you follow.
     let builds = null;
@@ -6242,7 +6273,10 @@
       const rfBody = $('garageRoadFeelBody') || gbody, accBody = $('garageAccountBody') || gbody;
       if (rfBody !== gbody) rfBody.innerHTML = ''; if (accBody !== gbody) accBody.innerHTML = '';
       const redo = () => renderAccount();
-      const badge = $('crewTab').querySelector('.badge'); if (badge) badge.remove();
+      peopleAsks = []; peopleRequests = 0;
+      if (!(accountMe && accountMe.member)) inboxBadge = null;               // signed out or not a member: no For you count
+      if (inbox) inbox.refresh();
+      paintPeopleBadge();
       const params2 = new URLSearchParams(location.search);
       // The People pages' parts (signed out, and no connection): what a side gets you as rows shaped like its list, and its drawing.
       const gets = (...items) => el('ul', { className: 'join-gets' }, ...items.map(([path, label, what]) => el('li', {},
@@ -6369,10 +6403,10 @@
         friendsMap ? friendsMap.sharing().catch(() => null) : null,
         convoy && !convoy.active ? apiCall('GET', '/api/convoy/invites').then(jsonOf).catch(() => null) : null]);
       if (gen !== renderGen) return;
-      // P-34: the People badge counts everything waiting on you: friend requests, a crew link not yet answered, convoy invites
-      const asks = [[me.requests || 0, 'friend request'], [stash('apex.crew') ? 1 : 0, 'crew invite'], [Array.isArray(convoyAsks) ? convoyAsks.length : 0, 'convoy invite']].filter(([n]) => n > 0);
-      const waitingN = asks.reduce((a, [n]) => a + n, 0);
-      if (waitingN) { const b = el('span', { className: 'badge', textContent: String(waitingN) }); b.setAttribute('aria-label', asks.map(([n, w]) => `${n} ${w}${n === 1 ? '' : 's'}`).join(', ')); $('crewTab').append(b); }
+      // P-34: the badge counts friend requests (For you's count once it has answered), a crew link not yet answered, convoy invites, and what's new (inbox.js)
+      peopleRequests = me.requests || 0;
+      peopleAsks = [[stash('apex.crew') ? 1 : 0, 'crew invite'], [Array.isArray(convoyAsks) ? convoyAsks.length : 0, 'convoy invite']].filter(([n]) => n > 0);
+      paintPeopleBadge();
       roadFeelOn = ex && ex.member ? !!ex.member.contribute : null;
       const friends = Array.isArray(fr) ? fr : [], grants = new Map((Array.isArray(gr) ? gr : []).map(g => [g.audience_type + ':' + g.audience_id, g]));
       const putGrant = async (type, id, scores, times) => { await apiCall('PUT', '/api/grants', { audience_type: type, audience_id: id, share_scores: scores, share_times: times }); redo(); };
@@ -6427,8 +6461,10 @@
       if (duels && accepted.length) body.append(duels.cards());
 
       // P-23: you, one tap from People: your face, your handle and who sees where you are; it opens Who sees what (P-09)
-      const WHO = { nobody: 'Nobody sees where you are', crew: 'Your crews see where you are', friends: 'Friends see where you are' };
+      const WHO = { nobody: 'Nobody sees where you are', crew: 'Your private crews see where you are', friends: 'Friends see where you are' };
       const empty = !accepted.length && !(Array.isArray(crews) && crews.length);
+      // For you (inbox.js): what happened to you lately, one sentence a row (a new account's page stays its three parts)
+      if (inbox && !empty) body.append(inbox.section());
       if (!empty) {
         const yline = el('small'), yface = window.ApexPhotos ? ApexPhotos.avatar(me.photo_id, me.handle, 40) : el('span');
         const yrow = el('button', { className: 'friend-head you-row', type: 'button', 'aria-label': `You, @${me.handle}: who sees what` }, yface,
@@ -6623,7 +6659,7 @@
           else {
             const areaIn = el('input', { className: 'field', placeholder: 'Area, like Robbinsville', maxLength: 60, autocomplete: 'off' });
             areaIn.setAttribute('aria-label', 'Area people nearby will see');
-            ownerBox.append(el('p', { className: 'note', textContent: 'Private: only people with a link. Public lets people nearby find and join it, under the area you name.' }),
+            ownerBox.append(el('p', { className: 'note', textContent: 'Private: only people with a link. Public lets people nearby find and join it, under the area you name. What members shared with it (scores, routes, stages) stops showing until each says yes again.' }),
               el('div', { className: 'row' }, areaIn, btn('Make public', async () => {
               const near = crewNear(), name = areaIn.value.trim();
               if (name.length < 2) { toast('Name the area people nearby will see.'); return; }

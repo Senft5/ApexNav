@@ -276,28 +276,31 @@
      * braking point spread inside that month (Core.spreadBy), the median over the month's corners. Every drive is a
      * reference in turn, newest first; a corner already counted for a month (from a newer reference, within 20 m, the same
      * way) is not counted again, so overlapping roads do not double it. Drives whose date is unknown are left out (monthOf).
+     * Each month also says how widely the speed at the corners' slowest point varied (speed_sd_mps, m/s), the same way.
      */
     async steadiness({ minCorners = 3 } = {}) {
-      const Core = CoreOf(), sums = await Rec().summaries(Core), seen = [], sds = new Map();
+      const Core = CoreOf(), sums = await Rec().summaries(Core), seen = { brake: [], speed: [] }, sds = { brake: new Map(), speed: new Map() };
       const queue = sums.filter((s) => s.corners && s.corners.length).sort((p, q) => (q.date || '').localeCompare(p.date || ''));
       for (const s of queue) {
         const d = await full(s.id, s);
         if (!d) continue;
-        const { co } = await coachOf(Core, d, sums), by = Core.spreadBy(co, [monthOf(d), ...co.near.map(monthOf)]);
-        for (const [k, xs] of Object.entries(by)) for (const [apex, sd] of xs) {
+        const { co } = await coachOf(Core, d, sums), keys = [monthOf(d), ...co.near.map(monthOf)];
+        for (const what of ['brake', 'speed']) for (const [k, xs] of Object.entries(Core.spreadBy(co, keys, what))) for (const [apex, sd] of xs) {
           const lat = d.lat[apex], lon = d.lon[apex], c = Math.cos(lat * Math.PI / 180);
           const a0 = Math.max(0, apex - 2), a1 = Math.min(d.lat.length - 1, apex + 2);
           const hx = (d.lon[a1] - d.lon[a0]) * c, hy = d.lat[a1] - d.lat[a0], hn = Math.hypot(hx, hy) || 1;
           // the same corner, the same way: apex within 20 m and heading within ~45 degrees (not the next bend of an S)
-          if (seen.some((x) => x.k === k && Math.hypot((x.lon - lon) * 111320 * c, (x.lat - lat) * 110540) < 20 && (x.hx * hx + x.hy * hy) / hn > 0.7)) continue;
-          seen.push({ k, lat, lon, hx: hx / hn, hy: hy / hn });
-          sds.set(k, (sds.get(k) || []).concat([sd]));
+          if (seen[what].some((x) => x.k === k && Math.hypot((x.lon - lon) * 111320 * c, (x.lat - lat) * 110540) < 20 && (x.hx * hx + x.hy * hy) / hn > 0.7)) continue;
+          seen[what].push({ k, lat, lon, hx: hx / hn, hy: hy / hn });
+          sds[what].set(k, (sds[what].get(k) || []).concat([sd]));
         }
       }
       const med = (xs) => { const v = xs.slice().sort((p, q) => p - q), k = v.length >> 1; return v.length % 2 ? v[k] : (v[k - 1] + v[k]) / 2; };
       release();
-      return { key: sums.map((s) => s.id).join(','), months: [...sds.entries()].filter(([, xs]) => xs.length >= minCorners).sort((p, q) => p[0].localeCompare(q[0]))
-        .map(([month, xs]) => ({ month, sd_m: med(xs), corners: xs.length })) };
+      // the speed at the slowest point, the same way (m/s), on the months that have a braking figure; null with too few corners
+      const sp = (m) => { const xs = sds.speed.get(m) || []; return xs.length >= minCorners ? { speed_sd_mps: med(xs), speed_corners: xs.length } : { speed_sd_mps: null, speed_corners: xs.length }; };
+      return { key: sums.map((s) => s.id).join(','), months: [...sds.brake.entries()].filter(([, xs]) => xs.length >= minCorners).sort((p, q) => p[0].localeCompare(q[0]))
+        .map(([month, xs]) => ({ month, sd_m: med(xs), corners: xs.length, ...sp(month) })) };
     },
 
     /**
@@ -327,7 +330,7 @@
       }
       const live = new Set(sums.map((s) => s.id)), gone = [...kept.keys()].filter((id) => !live.has(id));
       if (db && (fresh.length || gone.length)) try { await obsWrite(db, fresh, gone); } catch (_) {}
-      return { key: sums.map(stamp).join(','), read: fresh.length, profile: P.profile(list, Core), practice: plan ? P.practice(list, plan, Core) : null, best: P.bestCorners(list, year) };
+      return { key: sums.map(stamp).join(','), read: fresh.length, profile: P.profile(list, Core), practice: plan ? P.practice(list, plan, Core) : null, best: P.bestCorners(list, year), records: P.recordsBySize(list) };
     },
 
     /**
