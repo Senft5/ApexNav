@@ -41,6 +41,12 @@ simulated sane driver"; it reads "as a careful driver would take it. Never a spe
 
 Undo: revert the PR. The scores themselves and how they are worked out are unchanged.
 
+## 2026-11-11 (fable-reveal-once): the ranked route takes the line's place without a second stroke (claude/fable-reveal-once)
+
+On a slow phone the route was drawn onto the map, then drawn again from the start a moment later when the better route
+replaced the first one. Now the better route just takes the line's place once the first stroke is done (mid-stroke it
+carries on, as before). A level card you tap still redraws quickly, since that change is yours. Undo: revert the PR.
+
 ## 2026-11-10 (fable-pin-names): a place you pin or tap goes by its name, never by coordinates (claude/fable-pin-names)
 
 Hold the map on Foothills Parkway and the pin's sheet said "Foothills Parkway", but Go here then filled Where to? with

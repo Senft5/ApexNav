@@ -14,6 +14,16 @@
 - Red team UI findings checked against the build: UX-02 tab bar (hidden while driving/replaying) and UX-05 Loop keys are
   stale; UX-04 route card and UX-08 Garage are with the redesign thread.
 
+## Session 2026-11-11 (fable-reveal-once): a slow phone drew the route twice (claude/fable-reveal-once, off origin/main)
+
+- At THROTTLE=6 the route reveal drew the line, then drew it again from nothing (680 ms, then 256 ms from 0): the ranked
+  route replaced the early quickest after the first stroke had ended, as a "swap", and a swap starts its pen at 0.
+  `penCarry` (cockpit.js) is set while the ranking puts its route up over the early one; penDraw then puts the line up
+  whole (the old one was already whole). Inside a stroke the pen still carries on from where it was. A re-plan you ask
+  for (a level card) is unchanged: it redraws quickly.
+- The route reveal flow: at THROTTLE=6 the stroke checks pass now; its count-up check still wants four painted values
+  there, which claude/fable-pin-tap (#394) relaxes to three. At normal speed 2 of 2 passed. tests/test_route_reveal.py +1.
+
 ## Session 2026-11-10 (fable-road-page): About a road: the climb's "[object Object]" fixed; scores as named bars (claude/fable-road-page, off origin/main 3f2f315)
 
 - Bug: `openRoadPage` passed `ApexUnits.short` (returns `{ n, u }`) as the headline's height formatter, so a road with a

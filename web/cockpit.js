@@ -1301,7 +1301,7 @@
     // end (and by a timer, should the frames stop: a hidden tab), so the line is never left half drawn and the look's
     // line-color rules again.
     const PEN_LAYERS = ['apex-route-casing', 'apex-route'];
-    let pen = null;
+    let pen = null, penCarry = false;
     function penStop() {
       if (!pen) return;
       cancelAnimationFrame(pen.raf); clearTimeout(pen.timer); pen = null;
@@ -1311,9 +1311,10 @@
       if (pen && pen.t === t && !(ms > 0)) return;                      // the same route sent again mid-stroke: the stroke carries on
       // another route while the pen is still down (the ranked route lands inside the first stroke): the pen carries on from
       // where it was along the new line, it never goes back to the start
-      const from = pen && ms > 0 ? pen.p : 0;
+      // the ranking's route after a stroke has finished (penCarry): the line is already whole, so it is whole at once
+      const from = pen && ms > 0 ? pen.p : 0, carried = !pen && penCarry;
       penStop();
-      if (!(ms > 0) || !window.ApexReveal) return;
+      if (!(ms > 0) || carried || !window.ApexReveal) return;
       const C = look.colors, cols = { 'apex-route-casing': C.routeCasing, 'apex-route': C.route }, t0 = performance.now();
       const at = (p) => { me.p = p; for (const id of PEN_LAYERS) if (map.getLayer(id)) map.setPaintProperty(id, 'line-gradient', ApexReveal.gradient(cols[id], p)); };
       const me = pen = { t, p: from, raf: 0, timer: setTimeout(() => { if (pen === me) penStop(); }, ms + 250) };
@@ -3785,7 +3786,13 @@
         optionOnto(kept, offered[0], lv);
         routeOptions = Object.assign(lv, { current: kept });
         if (typeof renderRouteCard === 'function') { timeFromEnvelope(kept); renderRouteCard(kept); }   // its saved copy stays the one drawn
-      } else t = await useOption(lv, lv.picked, ownUsed ? OWN_SIGHT_MS : undefined);
+      } else {
+        // the early quickest is already drawn: the ranked route takes its place on the map without a second stroke from
+        // the start (a slow phone saw the line drawn twice, the second time from nothing). A re-plan you asked for (a level
+        // card) still redraws quickly: that is your change, shown.
+        penCarry = !!shownEarly;
+        try { t = await useOption(lv, lv.picked, ownUsed ? OWN_SIGHT_MS : undefined); } finally { penCarry = false; }
+      }
       mark('built');
       if (!t) return false;   // no toast: the route bar and card say it (REVIEW.md 1.2, Route bar: the bar is the toast)
       // finding 1: the card says what the ranking did: kept the first route, or replaced it, and why, in the card's numbers
