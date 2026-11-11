@@ -415,7 +415,8 @@
     const out = { quality: null, qCoverage: 0, poorKm: 0, poorCost: 0, scenery: null, sCoverage: 0, sceneryPts: 0, bonusPts: 0, bonuses: [],
       penalties: [], penaltyPts: 0, hard: [], confidence: 0, fun: cand.fun || null, stats: {} };
     if (!c || !ctx) { cand.ev = out; return out; }
-    const s = samples(c, ctx), n = s.n, step = c.distM.length > 1 ? c.distM[1] - c.distM[0] : 25, total = c.totalM || c.distM[n - 1];
+    // opts.samples: the same road at another hour (when_to_go.js): its quality and scenery per sample are the plan's
+    const s = opts.samples && opts.samples.n === c.distM.length ? opts.samples : samples(c, ctx), n = s.n, step = c.distM.length > 1 ? c.distM[1] - c.distM[0] : 25, total = c.totalM || c.distM[n - 1];
     // quality: length-weighted mean of the known samples, and the side-street / business-district km
     let qs = 0, qn = 0, qw = 0, poorM = 0, poorCost = 0, ss = 0, sn = 0, sp = 0, conf = 0, bizCost = 0, bizM = 0, goodM = 0;
     const bizC = channel(ctx, 'business_per_km'), rcQ = channel(ctx, 'road_class'), useQ = channel(ctx, 'road_use');

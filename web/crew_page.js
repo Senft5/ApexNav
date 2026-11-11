@@ -333,6 +333,13 @@
         // P-03: the run, the people, what they said, then the board; the livery last, as one line
         box.replaceChildren(header(c, draw), el('div', { className: 'cp-body' }, titleBlock(c), driveSec, members(c), chat(c, draw), boardSec,
           ...(c.house ? [houseBoard(c)] : []), ...(c.pinned ? [pinnedRow(c)] : []), buildsRow(c), meetShare(c), liveryFoot(c, draw)));
+        // a public crew (joined as one, or made public since: social.ts crewUpdate turns members' sharing off) asks once on
+        // this phone whether to share with it (the owner, 2026-11-11: public crews off by default, asked)
+        if (c.visibility === 'public' && !c.is_owner && !c.sharing_scores && page.askPublicSharing) {
+          const key = `apex.askedShare.${c.id}`;
+          let asked = false; try { asked = !!localStorage.getItem(key); } catch (_) {}
+          if (!asked) { try { localStorage.setItem(key, '1'); } catch (_) {} await page.askPublicSharing(c.id, c.name); const c2 = await load(id); if (c2 && c2.sharing_scores) draw(); }
+        }
       };
       draw();
       return box;
@@ -427,7 +434,7 @@
         if (!r || !r.ok) { toast('Couldn\u2019t change that. Try again.'); return; }
         sw.classList.toggle('on', on); sw.setAttribute('aria-checked', String(on));
       });
-      return el('section', { className: 'cp-meet stack-8' }, el('h3', { textContent: 'Meeting points' }), sw,
+      return el('section', { className: 'cp-meet stack-8' }, el('div', { className: 'cp-sec' }, el('h3', { textContent: 'Meeting points' })), sw,   // named like Members, Chat and the board (it was the one small heading under a rule)
         el('p', { className: 'note', textContent: `Your Home pin\u2019s square, about ${root.ApexUnits && !root.ApexUnits.metric() ? '7 miles' : '11 km'} across, never the address. Crew-mates see the squares, not whose, once two share. Used to pick a meeting point fair to everyone.` }));
     }
     function pinnedRow(c) {
