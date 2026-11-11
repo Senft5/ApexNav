@@ -8,6 +8,14 @@
     const MPH = Core.MPS_TO_MPH;
     const params = new URLSearchParams(location.search);
     const $ = (id) => document.getElementById(id);
+    // A tap on a sheet's backdrop closes it only when the press began on the backdrop too. A press on a key inside the
+    // sheet that lifts outside it (a drag, or the sheet moving under the finger) makes the browser send the click to the
+    // backdrop, their shared parent; that is not a tap on the backdrop and must not shut the sheet.
+    function onBackdrop(back, close) {
+      let downOnBack = false;
+      back.addEventListener('pointerdown', (e) => { downOnBack = e.target === back; });
+      back.addEventListener('click', (e) => { const ok = e.target === back && downOnBack; downOnBack = false; if (ok) close(e); });
+    }
 
     // =======================================================================
     // 1. TRACKS — one shape for profiled drives and geometry-only routes.
@@ -2005,7 +2013,7 @@
       });
     }
     $('explainDone').addEventListener('click', closeExplain);
-    $('explainCard').addEventListener('click', (e) => { if (e.target === $('explainCard')) closeExplain(); });
+    onBackdrop($('explainCard'), closeExplain);
     const simSpeed = (i) => Math.max(6, Math.min(track.envMps[i] * 0.92, track.limitMps && track.limitMps[i] ? track.limitMps[i] : 27));
 
     let lastTs = 0, raf = null, video = null;   // video: a replay being recorded (startVideo below)
@@ -5108,7 +5116,7 @@
     });
     $('scrim').addEventListener('click', closeSheet);
     $('pinCancelBtn').addEventListener('click', closePin);
-    $('pinOverlay').addEventListener('click', (e) => { if (e.target === $('pinOverlay')) closePin(); });
+    onBackdrop($('pinOverlay'), () => closePin());
     $('pinGoBtn').addEventListener('click', () => {
       if (!droppedPin) return;
       $('fromInput').value = '';
@@ -6375,7 +6383,7 @@
           const ov = document.createElement('div'); ov.className = 'overlay dim show spot-photo'; ov.setAttribute('role', 'dialog'); ov.setAttribute('aria-label', h.name);
           const big = document.createElement('img'); big.src = url; big.alt = h.name;
           const close = document.createElement('button'); close.className = 'ink-btn'; close.textContent = 'Close';
-          ov.onclick = (e) => { if (e.target === ov || e.target === close) ov.remove(); };
+          onBackdrop(ov, () => ov.remove()); close.onclick = () => ov.remove();
           ov.append(big, close); document.body.append(ov); close.focus();
         };
       });
@@ -7125,7 +7133,7 @@
       openHighlightDialog(p);
     });
     $('hlCancelBtn').addEventListener('click', closeHighlightDialog);
-    $('hlOverlay').addEventListener('click', (e) => { if (e.target === $('hlOverlay')) closeHighlightDialog(); });
+    onBackdrop($('hlOverlay'), () => closeHighlightDialog());
     $('hlAddBtn').addEventListener('click', async () => {
       if (!highlightPoint) return;
       let name = $('hlName').value.trim();
@@ -8699,7 +8707,7 @@
         btn('Convoy now', () => { close(); needSocial().then(() => { if (convoy) convoy.now(name); else toast('The convoy isn\u2019t available here.'); }); }, 'ink-btn'),
         el('p', { textContent: 'A convoy: drive together, live, for two hours (the leader can keep it going, up to six). Friends join with the code on your screen; nothing is kept. A crew\u2019s run starts its convoy from the drive\u2019s card.' }),
         btn('Cancel', close, 'linkbtn')));
-      back.addEventListener('click', (e) => { if (e.target === back) close(); });
+      onBackdrop(back, () => close());
       document.addEventListener('keydown', esc);
       document.body.append(back);
       drive.focus({ preventScroll: true });   // TestFlight 2026-11-05: focusing mid-slide scrolled the sheet up past its place (keyboard.js)
