@@ -1,5 +1,14 @@
 # VETTA — CURRENT AGENT HANDOFF STATE
 
+## Session 2026-11-11 (roam-c-boot-budget): startup budget in e2e (claude/roam-c-boot-budget, off origin/main)
+
+- e2e "startup budget" (`BOOT` in smoke.js): own script bytes 3.6 MB, 145 scripts, 2 s CPU, 1.5 s longest task before
+  `window.apex` is ready. Measured 2026-11-11: 3.23 MB / 130 / 0.12 s / 0.17 s (maplibre 784 KB, cockpit.js 753 KB).
+- Measured too: at 4x CPU throttle the page is ready in ~1.7 s; the opening cover waits for the first basemap tile
+  (OpenFreeMap; style, sprites and glyphs are HTTP-cached a day). Next for P-06: load route-only modules (graph_router,
+  route_engine, fun_route, ~260 KB) on first plan instead of at boot.
+
+
 ## Session 2026-11-11 (roam-a brake heat): the co-driver knows when your brakes are cooking (claude/project-thread-h7xxmf, off origin/main)
 
 - IDEAS V-12. `core/brake_heat.py` (reference) and `web/brake_heat.js` (port, parity-tested): specific energy v^2/2 + g h
