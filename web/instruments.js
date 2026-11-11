@@ -387,12 +387,15 @@
   function sightShort(d) { return sightCell(d).short; }
   /** GR-1: the warning's plain sentence, said in words when it fires: "Slow to 45 for what you can see." Pure. */
   function slowLine(v) { return Number.isFinite(v) ? `Slow to ${Math.round(v)} for what you can see.` : ''; }
-  /** HE-1 / LA-3: the Bank readout; "BANK --" until measured, never a false +0.0°. Pure. */
+  /** HE-1 / LA-3: the Bank readout; "BANK --" until measured, never a false +0.0°. Whole degrees (red team TE-03,
+   *  2026-11-10): one phone on a sprung body, with no body-roll model, is good to a degree or two, never to a tenth. Pure. */
   function bankText(deg) {
     if (!Number.isFinite(deg)) return 'BANK --';
-    const r = Math.round(deg * 10) / 10;
-    return `BANK ${r > 0 ? '+' : r < 0 ? '-' : ''}${Math.abs(r).toFixed(1)}°`;
+    const r = Math.round(deg);
+    return `BANK ${r > 0 ? '+' : r < 0 ? '-' : ''}${Math.abs(r)}°`;
   }
+  // said under every Bank explanation: how sure a phone's banking is (docs/PHILOSOPHY.md §4)
+  const BANK_SURE = ' Bank is approximate, to a degree or two: the car\'s body roll is not modelled.';
 
   // ---- Panel round 2: explain behind a tap (PR-1, SO-4) -----------------------------------------------------------------
   // What each instrument means and how it is measured, one short sheet each. Shown only parked or in a replay
@@ -407,15 +410,15 @@
       how: 'Worked out from the shape of the road ahead: its bends, its crests and what stands at its edge. When you are faster than it, it turns red and says SLOW. Open: nothing ahead limits you.',
       now: (d, u) => (d.sightOpen ? 'Open' : nf(sightValue(d), u)) },
     gball: { title: 'Grip ball and Bank', what: 'The ball shows the force you feel: it rolls forward under braking and outward in a turn. Bank is how much the road leans in the corner: + leans into the turn and helps, - is off-camber.',
-      how: 'From the phone\'s motion sensors. Bank reads -- until the phone is calibrated in its mount; nothing is shown that was not measured.',
+      how: 'From the phone\'s motion sensors. Bank reads -- until the phone is calibrated in its mount; nothing is shown that was not measured.' + BANK_SURE,
       now: (d) => bankText(d.camberDeg) },
     meters: { title: 'Surface and Brake / Turn', what: 'Surface: how rough the road is under you. Brake / Turn: how hard you braked or turned, the last few seconds.',
       how: 'From the phone\'s motion sensors. Dark bars are readings not taken yet.', now: () => '' },
     pod: { title: 'Turn, Brake and Bank', what: 'The car\'s small gauges, reading what Vetta measures. Turn: how hard you are turning. Brake: how hard you are braking. Bank: how much the road leans in the corner.',
-      how: 'From the phone\'s motion sensors. A needle lies dim at rest until it is measured; Bank reads -- until the phone is calibrated in its mount.',
+      how: 'From the phone\'s motion sensors. A needle lies dim at rest until it is measured; Bank reads -- until the phone is calibrated in its mount.' + BANK_SURE,
       now: (d) => bankText(d.camberDeg) },
     grip: { title: 'Grip, Turn, Brake and Bank', what: 'The big dial reads grip: turning and braking together, in tenths of g (8 is 0.8 g). The two small gauges: Turn and Brake. Bank: how much the road leans.',
-      how: 'From the phone\'s motion sensors. A needle lies dim at rest until it is measured; Bank reads -- until the phone is calibrated.', now: (d) => bankText(d.camberDeg) },
+      how: 'From the phone\'s motion sensors. A needle lies dim at rest until it is measured; Bank reads -- until the phone is calibrated.' + BANK_SURE, now: (d) => bankText(d.camberDeg) },
     tach: { title: 'Speed', what: 'How fast you are going, in the window. The big dial is the car\'s rev counter: Vetta can\'t read the engine, so its needle rests, dimmed. PACE is what the next corner allows; the lamp lights over it.',
       how: 'From GPS, smoothed. -- with no fix.', now: (d, u) => nf(d.speedMph, u) },
     score: { title: 'Vetta Score', what: 'How cleanly you drove the corners: your pace against what each one allows, smoothness, braking and rhythm. Out of 1000.',

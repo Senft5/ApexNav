@@ -53,6 +53,11 @@ and in random batches so a trace cannot be re-assembled.
 - Reads only Scores each already shows the other (grants + board entries); the card says in words when one side's
   don't reach the other. Friends only; a block or unfriend hides it. Kept 60 days after it ends. `web/duels.js`,
   `backend/src/duels.ts`, migration 0047.
+### 2.8 Crew drive results (crew members)
+- A remembered crew drive folds out its results: an overall, then each stage as SS1, SS2…, each driver's best Vetta
+  Score that day and a place. Overall ranks by stages driven, then the mean Score. Share sends it as text.
+- Only Scores already shared with the crew, among those who came; a time and its gap to the quickest only where that
+  driver shares times with the crew, and the overall's total time when every stage has one. `resultsSheet` in `backend/src/events.ts`.
 
 ## 3. Drive analysis (private)
 Compare passes of the same road — yours, or a friend's ghost they chose to send you.

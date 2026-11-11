@@ -1,5 +1,13 @@
 # VETTA — CURRENT AGENT HANDOFF STATE
 
+## Session 2026-11-10 (fable-pro-looks): Pro looks only (claude/fable-pro-looks, off origin/main)
+
+- web/pro.js: KINDS theme + livery; route_tuning removed; web/route_tuning.js `allowed()` always true.
+- backend/src/livery.ts `liveryOf`: any Decals (one Pro crew-mate) or a grant = factory, else plain; `next` always null.
+  web/crew_page.js: no meter, `dressedBy`, Plain says "Plain livery"; editor locks read "With a crew-mate on Vetta Pro".
+- Tests: tests/test_pro.py, test_crew_page.py, test_route_tuning.py; backend/test/crew_page.test.ts; e2e "crew page" line.
+- Next: camber with how sure it is (red team TE-03).
+
 ## Session 2026-11-10 (fable-road-page): About a road: the climb's "[object Object]" fixed; scores as named bars (claude/fable-road-page, off origin/main 3f2f315)
 
 - Bug: `openRoadPage` passed `ApexUnits.short` (returns `{ n, u }`) as the headline's height formatter, so a road with a
@@ -47,6 +55,38 @@
 - Tests: tests/test_duels.py, backend/test/duels.test.ts, sweep.test.ts (a long-over duel goes, a late-accepted one stays),
   e2e "duels: …", "friend profile", People.
 - Next: a crew's roadbook, or a crew drive's results as a rally sheet (who came, each one's Score on each stage).
+## Session 2026-11-10 (fable-sheet-races): two e2e flows clicked a sheet's key while it slid up (claude/fable-sheet-races, off origin/main 948cb4b)
+
+- `e2e/smoke.js` `sheetSettled(page, id)`: a `.overlay.dim` sheet is shown, nothing in it animating, and in the same place
+  two frames running. "a pin has a name" waits for it before the star, then checks the spot dialog is still open;
+  "Location off, in a browser" waits for it after Try again brings the sheet back, before Not now. On CI the star click
+  landed on the backdrop mid-slide and the backdrop closed the dialog (stars 0 px tall); nine PRs were red on it.
+- Found while tracing, not changed here: run alone in this container, "a pin has a name" fails later at Tap the map, on
+  main too, because Playwright's scroll-into-view scrolled `.stage` (overflow: hidden) by ~420 px, which stands the plan
+  sheet over the map. It passed in the whole-suite run and on CI. `overflow: clip` on `.stage` fixes the scroll but the
+  sheet still came up in the isolated run, so I left both out of this PR. Next: find what else holds the sheet up there.
+- Location flow 5 of 5 here (also at THROTTLE=6); pin flow passes the star step every run.
+- 2026-11-11, the real cause (from the reviewer's diagnostic run): the star tap reached the backdrop's click handler.
+  Two faults. (1) `sheetSettled` never waited: its `waitForFunction` predicate was `async`, and a promise is truthy, so
+  it returned at once with the sheet still at the bottom of its slide (measured here: card top 844 of 844, sheet-up at
+  0 ms). It now loops in one `page.evaluate`, which does await, and checks it settled. (2) The app: a press that began
+  on a key and lifted on the backdrop (the sheet moving under it, or a drag) sends the click to the backdrop, their
+  shared parent, and that closed the sheet. `onBackdrop(back, close)` in `web/cockpit.js` closes only when the press
+  began on the backdrop too; the spot, pin, explain, spot-photo and Ways-to-go backdrops use it
+  (`tests/test_backdrop_press.py`). The flow now checks the star is under its own centre before the tap, and that a
+  press on a star lifted on the backdrop leaves the dialog open. Not done: the backdrops in confirm.js, convoy_ui.js,
+  crew_page.js, photos.js, row_select.js and whats_new.js still close on the click target alone.
+## Session 2026-11-11 (fable-rally-sheet): crew drive results sheet (claude/fable-rally-sheet, off origin/main affc1d0)
+
+- `backend/src/events.ts`: `eventRecord` adds `results` from `resultsSheet(runs)` (pure): best `driver_score` per stage
+  (`COALESCE(canon_id, origin_id, id)`) per driver, same pool / window / grant / block rules as `best`; stages by how many
+  drove them, places shared on equal Scores; overall by stages driven, then the rounded mean. User ids stay on the server.
+  Times: `time_s` (min, only while the driver's crew grant has `share_times`) and `gap_s` per stage; overall total when full.
+- `web/crew_events.js`: `results(e, r)` folds under the best Score on a remembered card (`.cp-results`); `resultsText()`
+  (pure, tests/test_crew_results.py) is what Share sends (navigator.share, else the clipboard).
+- Tests: backend events.test.ts (two new), e2e "the run as one card" (it skips before 4 AM local: run it with a TZ where it
+  is daytime, e.g. `TZ=Asia/Tokyo`).
+- Next: a crew's roadbook (a crew-owned Roadbook once #374 merges), or recurring meets.
 
 ## Session 2026-11-10 (fable-there-and-back): there and back, home another way (claude/fable-there-and-back, off origin/main 948cb4b)
 
@@ -67,6 +107,27 @@
 
 - [x] .github/workflows/core-tests.yml e2e `timeout-minutes` 25 → 35: 152 flows take ~24 min and were cancelled on the
   last flow. Next: split e2e into two jobs if it passes ~30 min.
+
+## Session 2026-11-11 (fable-taste-picks): taste learnt from the routes you choose (claude/fable-taste-picks, off origin/main ac6c6c6)
+
+- Done: `ApexTaste.recordPick` / `leanOf` (taste.js), pairs weighted in `fit`; cockpit `learnFromPick` at Start
+  (Vetta's pick = `levels[builtLevel]`); the toast; the card's "Suits your taste" line. Tests: tests/test_taste.py
+  (picks at half weight), e2e "taste from picks". Full pytest green.
+- Next: a picks-only fit could also tune Quick / Fun / Long way's default level (a driver who always takes Quick).
+
+## Session 2026-11-10 (fable-signature): Vetta Line, the home screen (claude/fable-signature, off origin/main 948cb4b)
+
+- web/signature.css (new, loaded after controls.css): the signature layer (docs/design/SIGNATURE.md). Map keys and the deck
+  lift on soft shadows instead of ink boxes; the place plate is a masthead (place in Barlow 30 px, the sky under it after a
+  red apex dot) on a paper wash down from the top; Where to? is a 52 px well and Just drive the one red key; the deck's
+  invitations (`#loopSuggest`, `#yourRoads` rows, `#driveToday`, `#deckChips`) stand on one sideways shelf `#deckShelf`
+  (new wrapper in index.html, ids unchanged; `display: contents` on a phone on its side, so landscape is as before); the
+  tab bar marks the open tab with the apex dot. Arrival: bar, shelf cards and masthead rise once (none under reduced motion).
+- web/place_plate.js `parts()` (head / rest); cockpit.js fills `#placePlate` as `<b>` + hidden ` · ` + `<span>` (textContent
+  unchanged) and `apexDebug.placePlate()` (e2e). `--plan-bar` starts at 76 px (the bar's new height).
+- Tests: tests/test_place_plate.py (+1); e2e "Vetta Line home"; "note 6" fold thresholds follow the shorter deck
+  (folds by > 80 px, was 150; the folded bar + tabs under 182 px, was 170: the bar is 12 px taller).
+- Parallel agents on their own branches: claude/fable-drive-hud, claude/fable-first-last, claude/fable-route-reveal.
 
 ## Session 2026-11-10 (fable-loop-time): the loop dial by distance or time (claude/fable-loop-time, off origin/main 1a38381)
 
@@ -90,6 +151,12 @@
   (overflow: hidden) sideways. Nothing in the app does that (the closed panel can't take focus); a test script that
   clicks a Layers key before the panel has slid in will. `overflow: clip` on `.stage` would rule it out.
 - Next: the drive screen proper (the status row beside Report and End).
+
+## Session 2026-11-10 (fable-camber-sure): Bank in whole degrees, said as approximate (claude/fable-camber-sure, off origin/main)
+
+- web/instruments.js `bankText` whole degrees; `BANK_SURE` appended to the gball/pod/grip explanations. web/drive_view.js
+  lane Banking whole degrees. web/road_feel.js `endLine` "banked about N°". Tests: test_alarm_grammar.py, test_road_feel.py.
+- Next: a body-roll gain per suspension class (ROAD_DATA.md "planned"), or validate against one surveyed road.
 
 ## Session 2026-11-10 (fable-layers): design pass 8, the Layers panel as the map's legend (claude/fable-layers, off origin/main 1a38381)
 
