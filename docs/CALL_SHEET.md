@@ -251,6 +251,18 @@ when you come back. A row with nothing to say (Feedback, About) says nothing; a 
 
 The order of the rows is unchanged. Undo: revert the PR.
 
+## 2026-11-10 (fable-route-reveal): the route card reads like a page, and a route found is drawn onto the map (claude/fable-route-reveal)
+
+When a route is found its line is now drawn onto the map from start to finish in 0.8 s, the profile on the card is
+drawn with it and the card's three numbers count up. The card and Start are up from the first frame, as before (the
+plan flow still times it). Picking another level card or loop way redraws in 0.3 s. With reduced motion the line is
+simply there. The card itself was recomposed: the route's name is the headline in the number face, then time,
+distance and corners large, then the profile (now always drawn: before the heights arrive it is the road and its
+corner ticks, with "Heights --") carrying a red dot where you are, then the one choice, then quiet labelled groups
+(This drive, The road, Planned with) and the links. The Options chips moved from the top to "Planned with". Folded,
+the bar is the same name and numbers, with Start beside it. Why: the card was a long form; this is the moment the app
+makes its promise. Undo: revert the branch's commit (presentation only; no routing, ranking or number changed).
+
 ## 2026-11-10 (fable-drive): Location turned off is said, and Settings is one key away (claude/fable-drive)
 
 Found while looking over the drive screen. In the iPhone app, a driver who tapped "Don't Allow" on the location sheet (or
