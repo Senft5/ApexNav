@@ -43,7 +43,7 @@ keeps its own word and only its progress bar moves.
 
 Undo: revert the PR.
 
-## 2026-11-11 (fable-rally-sheet): a crew drive's results sheet, rally style, Scores only (claude/fable-rally-sheet)
+## 2026-11-11 (fable-rally-sheet): a crew drive's results sheet, rally style, Scores and shared times (claude/fable-rally-sheet)
 
 A crew drive used to remember one number afterwards: the best Score of the day. Its card now folds out "Results · 3
 stages": an Overall, then each stage as SS1, SS2…, every driver who came with their best Vetta Score on it and a place.
@@ -51,7 +51,9 @@ Share the results sends the sheet as plain text (or copies it), ready for the cr
 
 The calls: it uses exactly what the best Score already used (Scores the drivers shared with that crew, from the drive's
 day, among those who came, or those going when nobody marked it; blocks hide people both ways), so nobody shows up who
-wasn't already visible, and no time is ever on it, even when a driver shares times. The overall is ranked by stages driven
+wasn't already visible. A time and its gap to the stage's quickest sit beside a Score only while that driver shares
+times with the crew (Share times on the crew's grant), and the overall adds a total time for those who drove every stage
+with one; unknown stays "--" (the owner, 2026-11-10: share stage times and gaps). The order stays by Score. The overall is ranked by stages driven
 first, then the average Score over them, the way a rally classifies only those who finish: someone who drove one stage
 brilliantly sits behind everyone who drove them all, with "1 of 3 stages" beside them. Equal Scores share a place. Up
 to 12 stages. No migration, no new data: it goes with the drive (a week after it starts), as before.

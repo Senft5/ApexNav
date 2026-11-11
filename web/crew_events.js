@@ -99,20 +99,30 @@
   // The card is the crew page's drive card (mockup 09: the black date block, three lines, faces, one key), now everywhere.
   /**
    * The results sheet as plain text (IDEAS S-25), for Share: the drive, the overall, then each stage as SS1, SS2…, rally
-   * style. Scores only, never a time. results: GET /api/events/:id/record → results. '' when nobody shared a Score.
+   * style: each driver's Vetta Score, and their time and gap to the quickest when they share times with the crew.
+   * results: GET /api/events/:id/record → results. '' when nobody shared a Score.
    */
   function resultsText(e, results) {
     const st = (results && Array.isArray(results.stages)) ? results.stages : [], all = (results && Array.isArray(results.overall)) ? results.overall : [];
     if (!st.length) return '';
     const n = st.length, lines = [`${e.title || 'Crew drive'}${e.crew_name ? ` \u00b7 ${e.crew_name}` : ''} \u2014 results (Vetta Score)`, '', 'Overall'];
-    for (const r of all) lines.push(`${r.place}. @${r.handle} ${r.score}${n > 1 ? ` (${r.full ? 'all ' + n : r.stages + ' of ' + n} stages)` : ''}`);
+    const t = (r) => (r.time_s != null ? ` \u00b7 ${clock(r.time_s)}${r.gap_s ? ` (${gap(r.gap_s)})` : ''}` : '');
+    for (const r of all) lines.push(`${r.place}. @${r.handle} ${r.score}${n > 1 ? ` (${r.full ? 'all ' + n : r.stages + ' of ' + n} stages)` : ''}${t(r)}`);
     st.forEach((s, i) => {
       lines.push('', `SS${i + 1} ${s.name}`);
-      for (const r of s.rows) lines.push(`${r.place}. @${r.handle} ${r.score}`);
+      for (const r of s.rows) lines.push(`${r.place}. @${r.handle} ${r.score}${t(r)}`);
     });
-    lines.push('', 'Vetta Score: how cleanly the corners were driven. Never a time.');
+    lines.push('', 'Vetta Score: how cleanly the corners were driven. Times only from drivers who share them with the crew.');
     return lines.join('\n');
   }
+  /** 184 → "3:04"; 3725 → "1:02:05". */
+  function clock(sec) {
+    if (!Number.isFinite(sec) || sec < 0) return '--';
+    const x = Math.round(sec), h = Math.floor(x / 3600), m = Math.floor((x % 3600) / 60), s2 = String(x % 60).padStart(2, '0');
+    return h ? `${h}:${String(m).padStart(2, '0')}:${s2}` : `${m}:${s2}`;
+  }
+  /** A gap to the quickest: 6 → "+6 s", 65 → "+1:05". */
+  const gap = (sec) => (sec < 60 ? `+${Math.round(sec)} s` : `+${clock(sec)}`);
   /** The overall's line for one driver on the card. */
   const overallNote = (r, n) => (n > 1 ? (r.full ? `all ${n} stages` : `${r.stages} of ${n} stages`) : '');
 
@@ -337,7 +347,7 @@
     }
 
     // The results sheet (IDEAS S-25): the overall, then each stage as SS1, SS2…, every driver's best Score that day among
-    // those shared with the crew. Folded under the best Score; Share sends the plain-text sheet. Nothing when none shared.
+    // those shared with the crew, with their time and gap where they share times. Folded under the best Score; Share sends the plain-text sheet. Nothing when none shared.
     function results(e, r) {
       const res = r.results, st = res && Array.isArray(res.stages) ? res.stages : [];
       if (!st.length) return null;
@@ -345,7 +355,7 @@
       const list = (rows, note) => el('ol', {}, ...rows.map((x) => {
         const li = el('li', { className: x.handle === mine ? 'me' : '' }, el('span', { className: 'pl', textContent: `${x.place}.` }),
           el('span', { className: 'who', textContent: '@' + x.handle }), el('span', { className: 'sc', textContent: String(x.score) }));
-        const t = note ? note(x) : '';
+        const t = [note ? note(x) : '', x.time_s != null ? `${clock(x.time_s)}${x.gap_s ? ` \u00b7 ${gap(x.gap_s)}` : x.gap_s === 0 ? ' \u00b7 quickest' : ''}` : ''].filter(Boolean).join(' \u00b7 ');
         if (t) li.append(el('small', { textContent: t }));
         return li;
       }));
@@ -353,7 +363,7 @@
       const body = el('div', { className: 'cp-results' });
       if (n > 1) body.append(el('h4', { textContent: 'Overall' }), list(res.overall || [], (x) => overallNote(x, n)));
       st.forEach((s, i) => body.append(el('h4', { textContent: `SS${i + 1} \u00b7 ${s.name}` }), list(s.rows)));
-      body.append(el('p', { className: 'note', textContent: 'Each driver\u2019s best Vetta Score that day, from Scores shared with the crew. Overall: most stages first, then the average Score. Never a time.' }));
+      body.append(el('p', { className: 'note', textContent: 'Each driver\u2019s best Vetta Score that day, from Scores shared with the crew, and their time and gap to the quickest if they share times with it. Overall: most stages first, then the average Score; the total time when every stage has one.' }));
       body.append(el('div', { className: 'row' }, btn('Share the results', async () => {
         const text = resultsText(e.title ? e : { ...e, title: r.title, crew_name: r.crew_name }, res);
         try {
@@ -677,6 +687,6 @@
     return { section, plan, card, refresh };
   }
 
-  const api = { whenText, timeText, resultsText, convoyOpen, convoyName, driveState, onTheDay, icsFor, isoFromInputs, rolesLine, todayDrive, mount };
+  const api = { whenText, timeText, resultsText, clock, convoyOpen, convoyName, driveState, onTheDay, icsFor, isoFromInputs, rolesLine, todayDrive, mount };
   if (typeof module !== 'undefined' && module.exports) module.exports = api; else root.ApexCrewEvents = api;
 })(typeof window !== 'undefined' ? window : globalThis);

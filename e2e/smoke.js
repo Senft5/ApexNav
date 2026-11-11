@@ -3770,8 +3770,8 @@ flow('the run as one card: the morning of, a crew-mate\'s convoy to join or your
     if (p === `/api/convoy/${cid}`) return json(ctx);
     if (p === '/api/events/e0AAAAAAAAAAAAAA/record') return json({ id: 'e0AAAAAAAAAAAAAA', crew_id: 'k1', crew_name: 'Ridge Runners', title: 'Sunday dawn run', starts_at: last.starts_at, meet_name: 'Tellico Shell',
       came: ['sam', 'cara'], going: ['sam', 'cara', 'bob'], i_came: false, best: { handle: 'sam', score: 811, stage: 'Cherohala Skyway' },
-      results: { stages: [{ id: 's1', name: 'Cherohala Skyway', rows: [{ handle: 'sam', score: 811, place: 1 }, { handle: 'cara', score: 790, place: 2 }] },
-        { id: 's2', name: 'Tellico River Road', rows: [{ handle: 'cara', score: 802, place: 1 }] }],
+      results: { stages: [{ id: 's1', name: 'Cherohala Skyway', rows: [{ handle: 'sam', score: 811, place: 1, time_s: 184, gap_s: 0 }, { handle: 'cara', score: 790, place: 2, time_s: 190, gap_s: 6 }] },
+        { id: 's2', name: 'Tellico River Road', rows: [{ handle: 'cara', score: 802, place: 1, time_s: null, gap_s: null }] }],
         overall: [{ handle: 'cara', stages: 2, score: 796, full: true, place: 1 }, { handle: 'sam', stages: 1, score: 811, full: false, place: 2 }] } });
     if (m === 'POST' || m === 'DELETE') return route.fulfill({ status: 204 });
     return json([]);
@@ -3805,12 +3805,12 @@ flow('the run as one card: the morning of, a crew-mate\'s convoy to join or your
   check(/Results · 2 stages/.test(rec) && !(await page.isVisible('.cp-week .cp-results')), 'the results fold, closed: ' + rec);
   await page.click('.cp-week .cp-results-fold > summary');
   const sheet = await page.$$eval('.cp-week .cp-results > *', (els) => els.map((x) => x.innerText.replace(/\s+/g, ' ').trim()));
-  check(sheet[0] === 'OVERALL' && /^1\. @cara 796 all 2 stages 2\. @sam 811 1 of 2 stages$/.test(sheet[1]) && sheet[2] === 'SS1 · CHEROHALA SKYWAY' && /^1\. @sam 811 2\. @cara 790$/.test(sheet[3]) && sheet[4] === 'SS2 · TELLICO RIVER ROAD' && /Never a time/.test(sheet[6]), 'the sheet: ' + JSON.stringify(sheet));
+  check(sheet[0] === 'OVERALL' && /^1\. @cara 796 all 2 stages 2\. @sam 811 1 of 2 stages$/.test(sheet[1]) && sheet[2] === 'SS1 · CHEROHALA SKYWAY' && /^1\. @sam 811 3:04 · quickest 2\. @cara 790 3:10 · \+6 s$/.test(sheet[3]) && sheet[4] === 'SS2 · TELLICO RIVER ROAD' && /share times/.test(sheet[6]), 'the sheet: ' + JSON.stringify(sheet));
   await page.evaluate(() => { window.__copied = null; Object.defineProperty(navigator, 'share', { value: undefined, configurable: true }); Object.defineProperty(navigator, 'clipboard', { value: { writeText: async (t) => { window.__copied = t; } }, configurable: true }); });
   await page.click('.cp-week button:has-text("Share the results")');
   await page.waitForFunction(() => window.__copied);
   const copied = await page.evaluate(() => window.__copied);
-  check(/^Sunday dawn run · Ridge Runners — results \(Vetta Score\)\n\nOverall\n1\. @cara 796 \(all 2 stages\)\n2\. @sam 811 \(1 of 2 stages\)\n\nSS1 Cherohala Skyway\n1\. @sam 811\n2\. @cara 790\n\nSS2 Tellico River Road\n1\. @cara 802\n/.test(copied), 'Share copies the sheet as text: ' + JSON.stringify(copied));
+  check(/^Sunday dawn run · Ridge Runners — results \(Vetta Score\)\n\nOverall\n1\. @cara 796 \(all 2 stages\)\n2\. @sam 811 \(1 of 2 stages\)\n\nSS1 Cherohala Skyway\n1\. @sam 811 · 3:04\n2\. @cara 790 · 3:10 \(\+6 s\)\n\nSS2 Tellico River Road\n1\. @cara 802\n/.test(copied), 'Share copies the sheet as text: ' + JSON.stringify(copied));
   await page.click('.cp-week button:has-text("I was there")');
   await page.waitForTimeout(300);
   check(sent.some(([m, p]) => m === 'POST' && p === '/api/events/e0AAAAAAAAAAAAAA/came'), 'I was there is sent');

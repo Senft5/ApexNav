@@ -208,7 +208,7 @@ describe("a drive's card and its record", () => {
     expect((await env.DB.prepare("SELECT COUNT(*) AS n FROM crew_event_attendance").first<{ n: number }>())!.n).toBe(0);
   });
 
-  it("the results sheet: each stage's Scores with places, the overall by stages driven then mean Score; never a time", async () => {
+  it("the results sheet: each stage's Scores with places and shared times with gaps; the overall by stages driven then mean Score", async () => {
     const [a, b, c, d] = [await makeUser("alice"), await makeUser("bob"), await makeUser("cara"), await makeUser("dee")];
     const crew = await crewOf(a, b, c, d);
     const { id } = await json(api(a, "POST", `/api/crews/${crew}/events`, DRIVE));
@@ -218,26 +218,28 @@ describe("a drive's card and its record", () => {
       ('s1', ?1, 'Cherohala Skyway', 3000, '[[1,2]]', 1, 2, 3, 4), ('s2', ?1, 'Tellico River', 2000, '[[1,2]]', 1, 2, 3, 4)`).bind(a.id).run();
     // bob's own copy of the Skyway, renamed: it is the same stage on the sheet, under the original's name
     await env.DB.prepare("INSERT INTO segments (id, owner, name, length_m, geom, start_lat, start_lon, end_lat, end_lon, origin_id) VALUES ('s1b', ?, 'Skyway (mine)', 3000, '[[1,2]]', 1, 2, 3, 4, 's1')").bind(b.id).run();
-    const run = (u: TestUser, seg: string, canon: string, score: number, day = "date('now', '-5 hours')") => env.DB.prepare(
-      `INSERT INTO board_entries (id, segment_id, user_id, audience_type, audience_id, driver_score, time_s, driven_on, canon_id) VALUES (?, ?, ?, 'crew', ?, ?, 95, ${day}, ?)`)
-      .bind(crypto.randomUUID(), seg, u.id, crew, score, canon).run();
-    for (const u of [a, b, c, d]) await ok(api(u, "PUT", "/api/grants", { audience_type: "crew", audience_id: crew, share_scores: true, share_times: true }));
-    await run(a, "s1", "s1", 780); await run(a, "s2", "s2", 820);
-    await run(b, "s1b", "s1", 811); await run(b, "s2", "s2", 760);
-    await run(c, "s1", "s1", 905);                                   // one stage only: classified behind those with both
-    await run(a, "s1", "s1", 999, "date('now', '-9 days')");          // another day: not this drive's
-    await run(d, "s1", "s1", 950);                                    // dee didn't come
+    const run = (u: TestUser, seg: string, canon: string, score: number, time: number, day = "date('now', '-5 hours')") => env.DB.prepare(
+      `INSERT INTO board_entries (id, segment_id, user_id, audience_type, audience_id, driver_score, time_s, driven_on, canon_id) VALUES (?, ?, ?, 'crew', ?, ?, ?, ${day}, ?)`)
+      .bind(crypto.randomUUID(), seg, u.id, crew, score, time, canon).run();
+    for (const u of [a, b, d]) await ok(api(u, "PUT", "/api/grants", { audience_type: "crew", audience_id: crew, share_scores: true, share_times: true }));
+    await ok(api(c, "PUT", "/api/grants", { audience_type: "crew", audience_id: crew, share_scores: true, share_times: false }));   // cara: Scores only
+    await run(a, "s1", "s1", 780, 190); await run(a, "s2", "s2", 820, 130);
+    await run(b, "s1b", "s1", 811, 184); await run(b, "s2", "s2", 760, 141);
+    await run(c, "s1", "s1", 905, 170);                              // one stage only: classified behind those with both; her time isn't shared
+    await run(a, "s1", "s1", 999, 150, "date('now', '-9 days')");     // another day: not this drive's
+    await run(d, "s1", "s1", 950, 160);                               // dee didn't come
     const r = await json(api(c, "GET", `/api/events/${id}/record`));
     expect(r.results.stages).toEqual([
-      { id: "s1", name: "Cherohala Skyway", rows: [{ handle: "cara", score: 905, place: 1 }, { handle: "bob", score: 811, place: 2 }, { handle: "alice", score: 780, place: 3 }] },
-      { id: "s2", name: "Tellico River", rows: [{ handle: "alice", score: 820, place: 1 }, { handle: "bob", score: 760, place: 2 }] },
+      { id: "s1", name: "Cherohala Skyway", rows: [{ handle: "cara", score: 905, place: 1, time_s: null, gap_s: null },
+        { handle: "bob", score: 811, place: 2, time_s: 184, gap_s: 0 }, { handle: "alice", score: 780, place: 3, time_s: 190, gap_s: 6 }] },
+      { id: "s2", name: "Tellico River", rows: [{ handle: "alice", score: 820, place: 1, time_s: 130, gap_s: 0 }, { handle: "bob", score: 760, place: 2, time_s: 141, gap_s: 11 }] },
     ]);
     expect(r.results.overall).toEqual([
-      { handle: "alice", stages: 2, score: 800, full: true, place: 1 },
-      { handle: "bob", stages: 2, score: 786, full: true, place: 2 },
-      { handle: "cara", stages: 1, score: 905, full: false, place: 3 },
+      { handle: "alice", stages: 2, score: 800, full: true, place: 1, time_s: 320, gap_s: 0 },
+      { handle: "bob", stages: 2, score: 786, full: true, place: 2, time_s: 325, gap_s: 5 },
+      { handle: "cara", stages: 1, score: 905, full: false, place: 3, time_s: null, gap_s: null },
     ]);
-    expect(JSON.stringify(r.results)).not.toMatch(/time|95/);          // shared times never reach the sheet
+    expect(JSON.stringify(r.results)).not.toMatch(/170/);              // cara's time, not shared with the crew, never reaches it
     // a Score not shared with the crew is not on it; a block hides the person
     await ok(api(b, "PUT", "/api/grants", { audience_type: "crew", audience_id: crew, share_scores: false, share_times: false }));
     await ok(api(c, "POST", "/api/blocks", { handle: "alice" }));

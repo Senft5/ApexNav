@@ -36,6 +36,7 @@
 - `backend/src/events.ts`: `eventRecord` adds `results` from `resultsSheet(runs)` (pure): best `driver_score` per stage
   (`COALESCE(canon_id, origin_id, id)`) per driver, same pool / window / grant / block rules as `best`; stages by how many
   drove them, places shared on equal Scores; overall by stages driven, then the rounded mean. User ids stay on the server.
+  Times: `time_s` (min, only while the driver's crew grant has `share_times`) and `gap_s` per stage; overall total when full.
 - `web/crew_events.js`: `results(e, r)` folds under the best Score on a remembered card (`.cp-results`); `resultsText()`
   (pure, tests/test_crew_results.py) is what Share sends (navigator.share, else the clipboard).
 - Tests: backend events.test.ts (two new), e2e "the run as one card" (it skips before 4 AM local: run it with a TZ where it
