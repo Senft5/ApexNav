@@ -4,6 +4,26 @@ Decisions Claude made for you, newest first. Each one says what was decided, why
 you reach one you've seen. If you disagree with a call, say so and it gets reversed; nothing here is hard to undo unless
 it says so. Things only you can do are in docs/OWNER_TODO.md.
 
+## 2026-11-11 (roam-a brake heat): the co-driver warns when your brakes are getting hot (claude/project-thread-h7xxmf)
+
+New, my call, as the free-roaming thread. On a long spirited descent the co-driver now says once "Brakes are getting
+hot. Use a lower gear and ease off." (and shows it), and a drive's page says when the brakes got warm or hot. Nobody can
+see a brake disc from a phone, so this is a model: the energy the car loses beyond rolling and air drag (from GPS speed
+and height) heats the discs, and the air cools them. It never says a temperature, the page says it is an estimate, and
+it counts engine braking as brake work, so it errs toward warning. Ordinary hills stay quiet (the two demo drives never
+get past cool). Nothing leaves the phone. Undo: revert the PR, or remove the `noteBrakes(...)` calls in cockpit.js to keep
+only the drive page line.
+
+
+## 2026-11-11 (routing round two, part 2): mid-drive, Vetta offers to go round a police report; a late loop drops a stage before going home
+
+- **A police report on your route ahead is offered, not taken.** Between 0.8 and 25 km ahead, with Police reports on, a
+  toast says how far and has Go round (15 s). I didn't reroute on my own: a report can be gone by the time you get there,
+  and a surprise reroute mid-drive is worse than a tap. Nearer than 0.8 km there's no time to turn off, so only the voice's
+  usual call is made. Undo: drop `policeAheadTick` from feedReported.
+- **Go round is kept only if it goes round.** If the new way still passes within 150 m, it says so and you stay put.
+- **A late loop skips its next stage before offering Head home.** "Running 12 min late for home." now has "Skip Foothills
+  Parkway" while a stage you haven't begun is ahead; the stage you're on is never cut. Undo: `homeByAction` returning home always.
 ## 2026-11-11 (routing round two): Avoid cameras keeps every route off them, speed cameras with plate readers
 
 With Avoid → Cameras on, only one of the routers was told about the cameras; the others' routes (our own router's, the
