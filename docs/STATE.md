@@ -31,6 +31,14 @@
 - Tests: tests/test_route_card.py; e2e "plan flow (c)".
 - Next: CarPlay has not had a design pass in this run (Swift, not visible from the cloud).
 
+## Session 2026-11-10 (fable-there-and-back): there and back, home another way (claude/fable-there-and-back, off origin/main 948cb4b)
+
+- `web/graph_router.js` `roundTrip` (worker message `round`, client `round`): ways out paired with ways home that avoid
+  them (K.ROUND_*); `assemble` now keeps `fs`/`ft`. `web/own_routing.js` `roundTrip`.
+- `web/cockpit.js` `planRoundTrip`, `outExclusions`; `#routeRoundBtn` on the card (index.html). docs/ROUTING.md.
+- Tests: test_graph_router.py (roundTrips case), e2e "there and back" (the Valhalla path).
+- Not done: offering the round trip as a level card of its own; a timed stop at the destination (lunch: ETA home).
+- Next: discovery of great unknown roads near a planned trip ("a better road 4 min off your route").
 ## Session 2026-11-10 (fable-soundtrack): the Soundtrack, music made by the road (claude/fable-soundtrack, off origin/main 948cb4b)
 
 - The mission's audio half (ARCHITECTURE section 5), built: `core/audio_bus.py` (reference) and `web/audio_bus.js` (port,
@@ -61,6 +69,20 @@
 - [x] .github/workflows/core-tests.yml e2e `timeout-minutes` 25 → 35: 152 flows take ~24 min and were cancelled on the
   last flow. Next: split e2e into two jobs if it passes ~30 min.
 
+## Session 2026-11-10 (fable-signature): Vetta Line, the home screen (claude/fable-signature, off origin/main 948cb4b)
+
+- web/signature.css (new, loaded after controls.css): the signature layer (docs/design/SIGNATURE.md). Map keys and the deck
+  lift on soft shadows instead of ink boxes; the place plate is a masthead (place in Barlow 30 px, the sky under it after a
+  red apex dot) on a paper wash down from the top; Where to? is a 52 px well and Just drive the one red key; the deck's
+  invitations (`#loopSuggest`, `#yourRoads` rows, `#driveToday`, `#deckChips`) stand on one sideways shelf `#deckShelf`
+  (new wrapper in index.html, ids unchanged; `display: contents` on a phone on its side, so landscape is as before); the
+  tab bar marks the open tab with the apex dot. Arrival: bar, shelf cards and masthead rise once (none under reduced motion).
+- web/place_plate.js `parts()` (head / rest); cockpit.js fills `#placePlate` as `<b>` + hidden ` · ` + `<span>` (textContent
+  unchanged) and `apexDebug.placePlate()` (e2e). `--plan-bar` starts at 76 px (the bar's new height).
+- Tests: tests/test_place_plate.py (+1); e2e "Vetta Line home"; "note 6" fold thresholds follow the shorter deck
+  (folds by > 80 px, was 150; the folded bar + tabs under 182 px, was 170: the bar is 12 px taller).
+- Parallel agents on their own branches: claude/fable-drive-hud, claude/fable-first-last, claude/fable-route-reveal.
+
 ## Session 2026-11-10 (fable-loop-time): the loop dial by distance or time (claude/fable-loop-time, off origin/main 1a38381)
 
 - [x] web/index.html `#loopBy` (two radio words over the dial, `.loop-by`). web/cockpit.js: `LOOP_BY` ('apex.loopBy'),
@@ -72,6 +94,17 @@
   across a reload, back to distance).
 - Next: Options' "Loop to fit" 1 hour / 2 hours keys now duplicate the dial; remove them once the owner has used the
   dial (My free time stays).
+
+## Session 2026-11-10 (fable-toast-key): toasts are as wide as their words; a toast's key ends its row (claude/fable-toast-key, off origin/main 51c8c4c)
+
+- [x] web/cockpit.js `toast()`: the action is `a.toast-key`, `#toast.has-key` while it has one. web/index.html:
+  `.toast.show { width: max-content }`, `.toast.show.has-key` (flex row), `.toast .toast-key` (ink, underlined, 44 px
+  hit area by padding and negative margin). The saved-for-offline sentence.
+- [x] tests/test_toast_key.py (4); e2e "the car connects" measures the row, the ink, the hit height and a 320 px phone.
+- Found on the way, not a bug in use: `scrollIntoView()` on a key inside the closed Layers panel scrolls `.stage`
+  (overflow: hidden) sideways. Nothing in the app does that (the closed panel can't take focus); a test script that
+  clicks a Layers key before the panel has slid in will. `overflow: clip` on `.stage` would rule it out.
+- Next: the drive screen proper (the status row beside Report and End).
 
 ## Session 2026-11-10 (fable-layers): design pass 8, the Layers panel as the map's legend (claude/fable-layers, off origin/main 1a38381)
 
