@@ -37,6 +37,8 @@
   `friendAccept`, the mutual request in `friendRequest`, and `befriendOnLink` (auth.ts); `crewDefaults(user, crew)` (private
   crews only) from `crewCreate` and `crewJoin`. INSERT OR IGNORE: an existing row is never changed.
 - `setGrant` with Scores off keeps a 0/0 row (was a DELETE) so defaults never undo it. `crewJoin` returns `public`.
+- `crewUpdate` private → public: members' crew grants to 0/0 (not the owner's), their board_entries and drive_scores for
+  it deleted; `web/crew_page.js` asks once per phone (`apex.askedShare.<id>`) on a public crew you don't share with.
 - `web/cockpit.js` `askPublicSharing(id, name)` (ApexConfirm.choose) after joining a public crew from Crews near you or a
   link; `web/crew_events.js` meet card's Join the crew calls it through `page.askPublicSharing`. Onboarding copy changed.
 - Tests: backend/test/share_defaults.test.ts (new); privacy, crews, activity, crew_page, drive_scores updated for the new

@@ -126,13 +126,21 @@ export async function crewCreate(env: Env, v: Viewer, req: Request): Promise<{ i
 
 /** Owner only: rename, describe, or switch between private and public (with an area). */
 export async function crewUpdate(env: Env, v: Viewer, crewId: string, req: Request): Promise<void> {
-  const crew = await first<{ owner: string; name: string }>(env, "SELECT owner, name FROM crews WHERE id = ?", crewId);
+  const crew = await first<{ owner: string; name: string; visibility: string }>(env, "SELECT owner, name, visibility FROM crews WHERE id = ?", crewId);
   if (!crew || crew.owner !== v.id) throw new HttpError(404, "no_crew");
   const b = await body<CrewBody>(req);
   const set = crewSettings(b), name = b.name === undefined ? crew.name : str(b.name, "name", 2, 40);
   if (set.visibility === "public" && (await first(env, `SELECT 1 WHERE ${removedSql("crew", "?1")}`, crewId))) throw new HttpError(403, "removed_by_moderator");
   await run(env, "UPDATE crews SET name = ?, visibility = ?, about = ?, area_name = ?, area_lat = ?, area_lon = ? WHERE id = ?",
     name, set.visibility, set.about, set.area_name, set.area_lat, set.area_lon, crewId);
+  // Private to public: a member's sharing with it was most likely the default for a private crew, never a choice to show
+  // strangers. So everyone but the owner (who made it public) starts again at off, their Scores and times published to it
+  // go, and the crew page asks them, as joining a public crew does (share_defaults.ts).
+  if (crew.visibility !== "public" && set.visibility === "public") await env.DB.batch([
+    env.DB.prepare("UPDATE grants SET share_scores = 0, share_times = 0 WHERE audience_type = 'crew' AND audience_id = ? AND user_id != ?").bind(crewId, v.id),
+    env.DB.prepare("DELETE FROM board_entries WHERE audience_type = 'crew' AND audience_id = ? AND user_id != ?").bind(crewId, v.id),
+    env.DB.prepare("DELETE FROM drive_scores WHERE crew_id = ? AND user_id != ?").bind(crewId, v.id),
+  ]);
 }
 
 export const crewList = (env: Env, v: Viewer) => all<{ id: string; name: string; role: string; members: number; visibility: string; about: string | null; area_name: string | null; invites: string }>(env,

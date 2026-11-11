@@ -26,6 +26,32 @@ describe("sharing defaults", () => {
     expect((await grants(a)).filter((g) => g.includes(pub))).toEqual([]);              // the phone asks
   });
 
+  it("a private crew made public: members' sharing goes back to off and what they published to it goes; the owner's stays", async () => {
+    const [a, b] = [await makeUser("alice"), await makeUser("bob")];
+    const crew = ((await (await ok(api(a, "POST", "/api/crews", { name: "Ridge Runners" }))).json()) as { id: string }).id;
+    const tok = ((await (await ok(api(a, "POST", `/api/crews/${crew}/invite`))).json()) as { token: string }).token;
+    await ok(api(b, "POST", "/api/crews/join", { token: tok }));
+    await env.DB.prepare(`INSERT INTO segments (id, owner, name, length_m, geom, start_lat, start_lon, end_lat, end_lon) VALUES ('s1', ?, 'Esses', 3000, '[[1,2]]', 1, 2, 3, 4), ('s2', ?, 'Esses', 3000, '[[1,2]]', 1, 2, 3, 4)`).bind(a.id, b.id).run();
+    for (const [u, seg] of [[a, "s1"], [b, "s2"]] as const) {
+      await ok(api(u, "POST", "/api/board", { segment_id: seg, driver_score: 800, time_s: 200, driven_on: "2026-11-01" }));
+      await ok(api(u, "POST", "/api/drives/scores", { drives: [{ id: `d-${seg}`, score: 800, driven_on: "2026-11-01" }] }));
+    }
+    const count = async (sql: string, u: TestUser) => (await env.DB.prepare(sql).bind(crew, u.id).first<{ n: number }>())!.n;
+    const published = (u: TestUser) => Promise.all([count("SELECT COUNT(*) AS n FROM board_entries WHERE audience_type = 'crew' AND audience_id = ? AND user_id = ?", u),
+      count("SELECT COUNT(*) AS n FROM drive_scores WHERE crew_id = ? AND user_id = ?", u)]);
+    expect([await published(a), await published(b)]).toEqual([[1, 1], [1, 1]]);
+    await ok(api(a, "PUT", `/api/crews/${crew}`, { visibility: "public", area: { name: "Robbinsville", lat: 35.33, lon: -83.81 } }));
+    expect((await grants(b)).filter((g) => g.includes(crew))).toEqual([`crew:${crew}:00`]);
+    expect((await grants(a)).filter((g) => g.includes(crew))).toEqual([`crew:${crew}:11`]);    // the owner made it public
+    expect([await published(a), await published(b)]).toEqual([[1, 1], [0, 0]]);
+    const page = await (await ok(api(b, "GET", `/api/crews/${crew}/page`))).json() as { visibility: string; sharing_scores: boolean };
+    expect([page.visibility, page.sharing_scores]).toEqual(["public", false]);                    // the page asks
+    // public to private and back: only a flip from private clears; a member who said yes since keeps it until then
+    await ok(api(b, "PUT", "/api/grants", { audience_type: "crew", audience_id: crew, share_scores: true }));
+    await ok(api(a, "PUT", `/api/crews/${crew}`, { visibility: "public", area: { name: "Robbinsville", lat: 35.33, lon: -83.81 }, about: "Sundays" }));
+    expect((await grants(b)).filter((g) => g.includes(crew))).toEqual([`crew:${crew}:10`]);
+  });
+
   it("an off switch stays off; a block shares nothing", async () => {
     const [a, b, x] = [await makeUser("alice"), await makeUser("bob"), await makeUser("xavier")];
     await befriend(a, b);

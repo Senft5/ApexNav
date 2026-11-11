@@ -333,6 +333,13 @@
         // P-03: the run, the people, what they said, then the board; the livery last, as one line
         box.replaceChildren(header(c, draw), el('div', { className: 'cp-body' }, titleBlock(c), driveSec, members(c), chat(c, draw), boardSec,
           ...(c.house ? [houseBoard(c)] : []), ...(c.pinned ? [pinnedRow(c)] : []), buildsRow(c), meetShare(c), liveryFoot(c, draw)));
+        // a public crew (joined as one, or made public since: social.ts crewUpdate turns members' sharing off) asks once on
+        // this phone whether to share with it (the owner, 2026-11-11: public crews off by default, asked)
+        if (c.visibility === 'public' && !c.is_owner && !c.sharing_scores && page.askPublicSharing) {
+          const key = `apex.askedShare.${c.id}`;
+          let asked = false; try { asked = !!localStorage.getItem(key); } catch (_) {}
+          if (!asked) { try { localStorage.setItem(key, '1'); } catch (_) {} await page.askPublicSharing(c.id, c.name); const c2 = await load(id); if (c2 && c2.sharing_scores) draw(); }
+        }
       };
       draw();
       return box;

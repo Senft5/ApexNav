@@ -5619,6 +5619,7 @@
     // Sharing on by default (the owner, 2026-11-11; backend/src/share_defaults.ts): friends and private crews share Scores and
     // Times from the start, a public crew nothing, so joining one asks once. Cancel keeps it off; the crew's page switches it.
     async function askPublicSharing(crewId, name) {
+      try { localStorage.setItem(`apex.askedShare.${crewId}`, '1'); } catch (_) {}
       if (!window.ApexConfirm || !ApexConfirm.choose) return;
       const pick = await ApexConfirm.choose(`Share your drives with ${name || 'this crew'}? It's a public crew: anyone can join it and see what you share. Switch it off any time on the crew's page.`,
         [{ key: 'both', label: 'Share Scores and times' }, { key: 'scores', label: 'Scores only' }]);
@@ -5676,7 +5677,7 @@
     let crewPage = null, crewDrivesEl = null;
     // in a crew, Crew drives is a row on the Crews side that opens its sheet; not in one, the section on the side itself
     const toDrives = () => { const pop = crewDrivesEl && crewDrivesEl.closest('.side-pop'); if (pop) pop.classList.add('open'); else if (crewDrivesEl) crewDrivesEl.scrollIntoView({ behavior: 'smooth', block: 'start' }); };
-    onSocial(() => { try { crewPage = window.ApexCrewPage ? ApexCrewPage.mount({ el, btn, toast, apiCall, jsonOf, report: safety && safety.report,
+    onSocial(() => { try { crewPage = window.ApexCrewPage ? ApexCrewPage.mount({ el, btn, toast, apiCall, jsonOf, report: safety && safety.report, askPublicSharing,
       invite: (c) => crewInviteLink(c),
       openRoute: (id) => openSharedRoute(id), builds: () => builds, onAllDrives: toDrives, onPlan: (c) => { if (crewEvents) crewEvents.plan(c.id); toDrives(); },
       // the owner's TestFlight note 05: the crew page's Upcoming drives is the crew's drives list, a + plans one (no Crew drives row)

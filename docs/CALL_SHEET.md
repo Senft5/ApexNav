@@ -66,7 +66,9 @@ The calls:
 - **Times are on too**, since the stage times decision (2026-11-10) makes them part of "data sharing".
 - **Not in this**: live position on the friends map, cars shown and road data keep their own switches and defaults.
   Position stays off by default: it says where someone is right now, which is a safety matter, not a sharing one.
-- A private crew switched to public keeps its members' switches as they are (as before).
+- **A private crew made public** (review note): its members' sharing with it goes back to off (everyone but the owner,
+  who made it public), what they published to it is removed, and the crew page asks each of them once, as joining a
+  public crew does. Most of those grants were the private-crew default, never a choice to show strangers.
 - The new-account Friends page said "Nothing is shared unless you switch it on."; it says "Friends see your Scores and
   times. Switch it off for anyone." Tests that encoded "nothing by default" now switch off explicitly (a spec change).
 
