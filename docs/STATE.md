@@ -16,6 +16,15 @@
   (max 4.5), the larger direction's count per matched road. No migration.
 - Tests: backend/test/coverage.test.ts (+2), tests/test_measured_stages.py `test_crests_and_verified_bumps`.
 - Next: the FunRoute ranking of Valhalla candidates (fun_route.js) with the same crest and bump data per route.
+## Session 2026-11-11 (deepest analysis, PR 15): what differs at a road's least even corners (claude/project-thread-gd7nre)
+
+- `road_book` / `roadBook` keep each drive's cleanest pass of a corner with its six credits (`placed` now carries
+  `credits`); an uneven corner's `why` is the credit that differs most between its cleanest and least clean pass
+  (`_why` / `whyOf`, ties to the earlier skill), else null. The Log's road list says "; your least clean 62, mostly one
+  steering arc".
+- Tests: tests/test_best_corners.py (why, words, parity); e2e row pattern.
+- Next: Practice (IDEAS D-27) could take that corner's skill as the one to work on, from the road list.
+
 ## Session 2026-11-11 (places by name, 3): Siri, "where's the next gas station / café" (claude/project-thread-me97iw, off origin/main)
 
 - ApexIntents.swift: NextFuelIntent / NextCafeIntent (go=nextfuel / nextcafe), 7 App Shortcuts now (Apple allows 10).
