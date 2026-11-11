@@ -367,7 +367,7 @@ const marksSource = html.match(/function timeMarksOf\(.*?\n    }/s)[0];
 const fewerSource = html.match(/const fewerTownKm = .*?;\n/s)[0];
 const townsOnSource = html.match(/async function townsOn\(.*?\n    }/s)[0];
 // the route engine's glue in the cockpit (rankPool, contextOn, the stage network, connector costing), as written
-const engineSource = [/const CTX_BUDGET_MS = .*?;\n/s, /const engineOpts = .*?;\n/s, /function rankPool\(.*?\n    }/s, /async function contextOn\(.*?\n    }/s,
+const engineSource = [/const CTX_BUDGET_MS = .*?;\n/s, /let leaveAtMs = null;\n\s*const leaveAt = .*?;\n/s, /const engineOpts = .*?;\n/s, /function rankPool\(.*?\n    }/s, /async function contextOn\(.*?\n    }/s,
   /async function stagesWithContext\(.*?\n    }/s, /function routeCtxSettings\(.*?\n    }/s, /function routeCtxOpts\(.*?\n    }/s, /const EARLY_MS = .*?;\n/s, /const OWN_CHECK_MS = .*?function ownInstructions\(.*?\n    }/s, /const connectorCosting = .*?;\n/s].map((re) => html.match(re)[0]).join('\n');
 const whyText = new Function('return (' + html.match(/function whyText\(w.*?\) \{.*?\n    }/s)[0] + ')')();
 const lat0 = 39.2, lon0 = -84.6, mLat = 1 / 110540, mLon = 1 / (111320 * Math.cos(lat0 * Math.PI / 180));
@@ -378,7 +378,7 @@ const A = { lat: lat0, lon: lon0 }, B = { lat: lat0, lon: lon0 + 10000 * mLon };
 async function run({ level, routes, osrm, discover, matrix, places, avoid = FunRoute.AVOID_DEFAULT, win = {} }) {
   const built = [], toasts = [], calls = { matrix: 0, routes: 0, extras: [] };
   const funRoute = new Function('funLevel', 'valhallaRoutes', 'osrmRoutes', 'toast', 'FunRoute', 'ApexStages', 'state', 'allHighlights', 'valhallaMatrix',
-    'Core', 'RouteLoading', 'funOf', 'applyMeasured', 'trackFromPolyline', 'buildRouteStub', 'totalOf', 'window', 'whyText', 'avoid', 'let routeOptions = null; const routingCar = () => null; const roadPrefs = {}; const etaPace = {}; let plannedRoute = null; const buildRoute = async (p, i, n, t) => { plannedRoute = t; return buildRouteStub(p, i, n, t); }; ' + engineSource + '; ' + useOptionSource + '; ' + townsOnSource + '; const weatherOn = async () => {}; const weatherFetch = () => new Map(); const tasteOn = () => {}; const preferOn = async () => {}; const measuredStages = async (s) => s; ' + fewerSource + '; ' + marksSource + '; const stepsOf = () => []; return (' + source + ')')(
+    'Core', 'RouteLoading', 'funOf', 'applyMeasured', 'trackFromPolyline', 'buildRouteStub', 'totalOf', 'window', 'whyText', 'avoid', 'let routeOptions = null; const avoidForTrip = async () => avoid; const routingCar = () => null; const roadPrefs = {}; const etaPace = {}; let plannedRoute = null; const buildRoute = async (p, i, n, t) => { plannedRoute = t; return buildRouteStub(p, i, n, t); }; ' + engineSource + '; ' + useOptionSource + '; ' + townsOnSource + '; const weatherOn = async () => {}; const weatherFetch = () => new Map(); const tasteOn = () => {}; const preferOn = async () => {}; const measuredStages = async (s) => s; ' + fewerSource + '; ' + marksSource + '; const stepsOf = () => []; return (' + source + ')')(
     level, async (pts, through, alts, extra) => { calls.routes++; calls.extras.push(extra || null); return routes(pts, alts, extra); }, osrm || (async () => { throw Error('down'); }),
     (m) => toasts.push(m), FunRoute, { discover, places }, { hlOn: false }, async () => [],
     async (s, t) => { calls.matrix++; return { times: await matrix(s, t) }; },

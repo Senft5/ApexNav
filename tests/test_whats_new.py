@@ -49,3 +49,15 @@ def test_it_never_interrupts(out):
     src = open(os.path.join(ROOT, "web", "cockpit.js"), encoding="utf-8").read()
     assert "ApexWhatsNew.moment({ touched, driving: driveActive, splash: !!$('boot'), open: anythingOpen() })" in src
     assert ".side-pop.open, #planPanel.open, .sheet.open" in src
+
+
+def test_it_names_what_is_really_there(out):
+    """The news of 2026-11-10 (the first since 2026-10-28): each thing it names is on a screen under that name."""
+    text = " ".join(t + " " + x for t, x in out["items"])
+    page = open(os.path.join(ROOT, "web", "index.html"), encoding="utf-8").read()
+    fun = open(os.path.join(ROOT, "web", "fun_route.js"), encoding="utf-8").read()
+    for level in ("Quick", "Fun", "Long way"):
+        assert level in text and f"label: '{level}'" in fun, level
+    assert "Route tuning" in text and 'data-title="Route tuning"' in page
+    assert 'id="loopDialVal"' in page and 'aria-label="Which way the loop heads"' in page
+    assert "→" not in text          # a place in the app is named in words, as everywhere else

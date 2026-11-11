@@ -52,6 +52,8 @@ The JS file is a line-for-line port used by the browser/iOS cockpit for live OSR
   sent as `vert_peak_g`; the web Recorder places each frame's spike on the 5 m sample where the car was (its share of the way
   between the two GPS fixes around it), only with a locked mount and above 1 m/s, as the CSV column `vert_peak_g`;
   spikes inside a gap of over ~3 s or 100 m between fixes are dropped, not guessed. Blank means unmeasured, never 0.
+  The lateral and longitudinal g are placed the same way (IDEAS D-26): each frame's g at its share of the stretch, each
+  5 m sample interpolated between the frames either side (blank if either is unknown); over a gap the fix's own g.
 - A drive is kept as it goes (`web/drive_keep.js`, 2026-10-30): the page checkpoints the Recorder to IndexedDB (`apexnav` v2+,
   store `keep`: a head plus row chunks, `recording.js keepPut/keepAll/keepRemove`) every 15 s or 250 m; the shell numbers
   every fix (`seq`, `at` in each live frame) and journals those since the last checkpoint on disk (`ApexKit.DriveJournal`,
@@ -133,6 +135,25 @@ The JS file is a line-for-line port used by the browser/iOS cockpit for live OSR
   over a stretch = mean of combined g / that slice's radius (capped at 1.5, shown capped at 100 %) over samples of at least
   0.15 g. The drive view draws it as the Grip circle; scrubbing into a corner shows its trace and grip use from 100 m
   before turn-in to the exit.
+- Driver profile (`core/driver_profile.py`; JS `web/driver_profile.js`, parity-tested; the Log's Your driving): every
+  corner the coach may read, in every drive, is one observation. Six credits in the order a corner is driven: `squeeze`
+  (the braking for it, earlier stabs within 30 m included, is one rise and one fall: `_excess` = movement between
+  turning points, a turn counting once the trace has come back 0.10 g, beyond the one rise and fall it needs; 0.5 g of
+  excess is no credit; unjudged under 0.20 g peak), `brake` (the Score's braking credit, only where there was braking),
+  `arc` (the same excess on lateral g x (mean corner speed / speed)^2, so slowing in and driving out of one arc is not a
+  correction; 0.6 g is no credit), `entry` (the excess of speed through the corner, turns of 0.6 m/s, 3 m/s is no
+  credit), `line` (the slowest point, `_marks` over the corner and 50 m either side, up to 5 m before the apex is full
+  credit, 30 m none) and `exit` (coasting from brakes to throttle beyond 10 m, 50 m none; only with a slowest point).
+  Levels are means x 100 from 30 corners. Findings: lefts/rights, tightens, crests, down/uphill (4 % over the corner and
+  50 m either side), the first 10 and after 60 minutes compare each credit minus its size class's mean; tight and fast
+  against the rest compare it as measured. Kept when the sides differ by 0.08 and 3 standard errors, on 12 corners a
+  side, and two in three of the drives holding 3 of each agree. A car or a tag compares drive means (4 drives a side of
+  5 corners). Months need 15 corners; a change is "sure" at 0.05 and 2 standard errors. Never a speed, time or pace.
+- Practice (`practice`, `drive_practice` in the same files; IDEAS D-27): a plan `{skill, since, where, before}` in
+  localStorage `vetta.practice`, set from Your driving. Every corner of a drive that started before `since` is
+  "before". Each later drive is read on that skill alone (and on the corners of the focus's place) against the kept
+  `before` mean and SE. Sure at 0.05 and 2 SE; unknown under 4 corners. The end card gets its line from the `save` job,
+  or from `practiceLine` for a stored drive.
 - Web shell: `web/index.html` (cockpit markup and styles; its script is `web/cockpit.js`, loaded `defer` with the launch modules, while `web/lazy.js` loads People, the Garage, crews, builds, the convoy, friends on the map and the phonemizer on first use or once the map is idle, REVIEW_FEEL F-03; fonts bundled in `web/fonts/`, F-12), `web/analysis.html` (history / segments / compare), `web/themes.js` (theme registry), `web/instruments.js` (renderers).
 
 ## 3c. Fun routing (`web/fun_route.js`)
@@ -141,8 +162,10 @@ Destination routes are chosen for fun within a time budget (Quick / Fun / Max fu
 ## 4. Data Honesty
 Everything the cockpit shows is measured, derived from measurements, or fetched from a named open source (OSM/DeFlock ALPR via Overpass, OSRM, Nominatim). Geometry-only routes are labelled `SIM · NOT DRIVEN` and show `--` for anything that needs an IMU. A failed ALPR fetch says so instead of implying no cameras.
 
-## 5. Dynamic Audio DSP Bus
-Maps a normalized **Driver Engagement Score** (0.0 to 1.0, derived from combined horizontal G-load $\sqrt{a_x^2 + a_y^2}$ and yaw jerk $\dot{\omega}_z$) plus a **400-meter look-ahead horizon** from the 5m road mesh to control real-time audio filters, stem crossfades, and musical build-ups timed to corner entry apexes.
+## 5. Dynamic Audio DSP Bus (not built)
+An idea, not architecture: a normalised driver-engagement score (horizontal g and yaw jerk) plus a 400 m look-ahead would
+drive audio filters and music stems. Nothing of it exists. What exists: the shell lowers or pauses music while a call
+plays (`ApexNavApp.swift`, `speechDuck`; Settings → Music). See docs/PHILOSOPHY.md §5 for the built / not built list.
 
 Built 2026-11-10 as the **Soundtrack** (Garage > Co-driver, off by default):
 - `core/audio_bus.py` (the reference) and `web/audio_bus.js` (its port, held to one sequence by `tests/test_audio_bus.py`):
@@ -165,7 +188,7 @@ Built 2026-11-10 as the **Soundtrack** (Garage > Co-driver, off by default):
 - **The car's map (2026-10-30, REVIEW_FEEL.md F-07, F-01)**: the CarPlay base view, the Dashboard and the instrument cluster draw
   with MapLibre Native for iOS (Metal; Swift package `MapLibre`, pinned in `project.yml`) in `CarPlay/ApexCarMap.swift`: one map
   engine in the app's process, not a WKWebView per screen. The cockpit page stays the brain and sends the same messages as
-  before (`ApexCarMapViewController`); `web/carmap.html` is the fallback, and Android Auto's and the website's car map. The
+  before (`ApexCarMapViewController`); `web/carmap.html` is the fallback and the website's car map (there is no Android app). The
   arrow is dead reckoned between 1 Hz fixes (position only, never road data): `web/car_glide.js` and ApexKit `CarGlide`, one
   algorithm held to one fixture (`ApexKit/Tests/Fixtures/car_glide.json`, `tools/make_glide_fixture.js`).
 - **The shell's threads (F-13)**: CoreMotion's 100 Hz samples go to the motion lane's own serial `OperationQueue`
@@ -249,7 +272,7 @@ the shell only asks Apple.
 
 - **Source**: MapKit `MKDirections` in `ApexNavApp.swift` (free, no key, traffic-aware), over the bridge as
   `{cmd: 'trafficProbe', id, chunks: [{a, b}]}` answered with `{type: 'trafficProbe', id, results: [{now, night}], throttled, busy}`.
-  Web and Android have no traffic source and show nothing; a keyed provider (TomTom/HERE through the Worker) needs the
+  The website has no traffic source and shows nothing; a keyed provider (TomTom/HERE through the Worker) needs the
   owner's approval and is not built.
 - **When**: every 2 min while driving (> 2 m/s, on route) a planned route with a request; one probe in flight; MapKit
   throttling backs off 4 / 8 / 16 min. A new route waits a full interval.

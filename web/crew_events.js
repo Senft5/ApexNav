@@ -622,7 +622,7 @@
       const acts = el('div', { className: 'row', style: 'flex-wrap:wrap' },
         btn('Join the crew', async () => {
           const r = await apiCall('POST', `/api/crews/${encodeURIComponent(e.crew_id)}/join`);
-          if (r.ok) { toast(`You're in ${e.crew_name}. Answer on its card on the crew page.`); redo(); }
+          if (r.ok) { toast(`You're in ${e.crew_name}. Answer on its card on the crew page.`); if (page.askPublicSharing) await page.askPublicSharing(e.crew_id, e.crew_name); redo(); }
           else toast(r.status === 429 ? 'You\'re in 10 crews already. Leave one first.' : 'Couldn\'t join. Try again.');
         }, 'ink-btn solid'),
         btn('Directions to meet', () => page.goTo({ label: e.meet_name || e.title, lat: e.meet_lat, lon: e.meet_lon }), 'linkbtn'),

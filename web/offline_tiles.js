@@ -111,9 +111,11 @@
     saveAreas([...areas(), area]);
     return area;
   }
+  /** Adds fields to a saved area's record (members' road feel counts, set after the tiles). */
+  function setArea(id, fields) { saveAreas(areas().map((a) => (a.id === id ? { ...a, ...fields } : a))); }
   /** Bytes saved, from the areas list. */
   const bytesSaved = () => areas().reduce((s, a) => s + (a.bytes || 0), 0);
 
-  const api = { tilesFor, plan, transform, install, download, get, put, clear, areas, removeArea, bytesSaved, MAX_TILES, PROTO, DEM };
+  const api = { tilesFor, plan, transform, install, download, get, put, clear, areas, setArea, removeArea, bytesSaved, MAX_TILES, PROTO, DEM };
   if (typeof module !== 'undefined' && module.exports) module.exports = api; else root.ApexOfflineTiles = api;
 })(typeof window !== 'undefined' ? window : globalThis);

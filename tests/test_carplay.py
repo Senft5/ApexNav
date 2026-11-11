@@ -418,3 +418,14 @@ def test_every_drive_reaches_the_car_and_ends_idle():
     assert "if (track && track.kind === 'route') { car.ended = track; carRoute(null); }" in html
     # a record card carries no distance to a maneuver
     assert "recording || d != nil" in swift and "g.distM.map {" in swift
+
+
+def test_the_car_offers_the_same_loop_times_as_the_phones_dial():
+    """The phone's loop dial has five times; the car's Loops list had three of its own (30 minutes, 1 hour, 2 hours)."""
+    import re
+    swift = open(os.path.join(ROOT, "CarPlay", "ApexCarPlay.swift"), encoding="utf-8").read()
+    row = re.search(r"let loops: \[\(String, Int\)\] = \[(.*)\]", swift).group(1)
+    car = [int(m) for m in re.findall(r'\("[^"]+", (\d+)\)', row)]
+    dial = json.loads(re.search(r"LOOP_MINUTES = (\[[\d, ]+\])", cockpit_source()).group(1))
+    assert car == dial == [30, 60, 90, 120, 180]
+    assert '("1½ hours", 90)' in row and '("3 hours", 180)' in row
