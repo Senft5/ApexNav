@@ -13,6 +13,7 @@ export const DEFAULT_FLAGS: Record<string, Rule> = {
   taste_ranking: { on: true },       // R-33 your taste nudging fun routes
   crowd_curvature: { on: true },     // Q-04 members' corners over the map's
   measured_stages: { on: true },     // R-04 measurements and hazards in stage discovery
+  when_to_go: { on: true },          // the route card's best time to leave and Plan for a later hour (web/when_to_go.js)
   // Our own routing on the phone (docs/OWN_ROUTING.md): on, but it only acts where the shipped graph tiles cover the
   // trip (web/data/graph/v1/index.json); everywhere else, and with this off, Valhalla routes as before.
   // Turn off: FLAGS {"own_routing":{"on":false}} (or on one phone: localStorage apex.ownRouting = "0").
