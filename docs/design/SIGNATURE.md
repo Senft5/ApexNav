@@ -14,3 +14,7 @@ One language for every screen, so the app reads as one made thing. web/signature
 6. **Quiet rows.** Hairline-divided rows, the action a word in ink.
 7. **Driving first.** Glanceable at arm's length, 44 pt targets (52 for the main key), no motion while the car moves
    except at start, end and a new call.
+
+**Where it applies.** The map page (index.html) and the Log (analysis.html, `body.log-page`) both load signature.css last.
+A page that has its own tab bar draws the same apex dot on the open tab. Two places on one tab (Drives | Stages, Friends |
+Crews) are underlined tabs in the numeral face, never a slide switch.
