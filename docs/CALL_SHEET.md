@@ -11,6 +11,13 @@ OpenStreetMap has for it, how far into the route and how far off the road; tappi
 a stop. Tapping a CAFÉ or FUEL pin on the map says its name too. Calls: fuel stations are now counted on the line (before,
 only a long stretch without fuel was said), so there is something to tap; a place with no name on the map says "no name on
 the map" rather than a guess. Undo: revert the PR.
+## 2026-11-11 (ui-round-three): People when you have no friends or crews yet looks like the signed-out page (claude/project-thread-5sbga7)
+
+Signed in with nobody yet, Friends and Crews used to show one grey sentence and a small key. Now each is a page like the
+signed-out one: a drawing (your road drawn, a friend's road or three crew seats still in pencil), "Bring a friend." or
+"Start a crew." set large, one sentence, and the Invite key full width. The example card stays under it. Undo: the two
+`people-first` blocks in web/cockpit.js and the "first friend" block at the end of web/signature.css.
+
 ## 2026-11-11 (roam-c crew-public-reset): a crew made public stops showing what members shared with it by hand (claude/roam-c-crew-public-reset)
 
 Found in the security pass. When an owner makes a private crew public, members' Scores and times already went back to off

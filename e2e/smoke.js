@@ -4928,7 +4928,7 @@ flow('People, a new account: Friends is one sentence and the Invite key; Crews i
   await page.goto(base + '/index.html?view=people');
   await page.waitForSelector('#accountBody .people-lead');
   const kids = await page.$$eval('#accountBody > *', (k) => k.map((x) => x.className + ':' + x.textContent.trim()));
-  check(kids.length === 3 && /people-lead/.test(kids[0]) && /Invite or add a friend/.test(kids[1]) && /^people-sample:Example: /.test(kids[2]), 'one sentence, the Invite key and an example (U-121): ' + JSON.stringify(kids));
+  check(kids.length === 3 && /^people-first:Bring a friend\./.test(kids[0]) && /Invite or add a friend/.test(kids[1]) && /^people-sample:Example: /.test(kids[2]), 'a page (drawing, Bring a friend., one sentence), the Invite key and an example (U-121): ' + JSON.stringify(kids));
   await page.click('[data-people="crews"]');
   await page.waitForSelector('#crewsBody .nav-row:has-text("Find or start a crew")');
   const rows = await page.$$eval('#crewsBody .nav-row > span', (s) => s.map((x) => x.textContent));
