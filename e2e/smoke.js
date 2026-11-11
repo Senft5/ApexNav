@@ -2878,7 +2878,9 @@ flow('surfaces: Home by is the app\'s stepper, the replay has a Done key, the fi
   await page.evaluate(() => document.getElementById('planPanel').classList.remove('open'));
   await page.goto(base + '/index.html?drive=dry_ridge');
   await page.waitForFunction(() => window.apexDebug && window.apexDebug.track && document.getElementById('app').classList.contains('replaying'), null, { timeout: 15000 });
-  const done = await page.evaluate(() => { const b = document.getElementById('replayDone').getBoundingClientRect(); return { w: b.width, h: b.height, inView: b.bottom <= innerHeight && b.right <= innerWidth && b.left >= 0 }; });
+  // the panel rises onto the map once (420 ms, the Vetta Line drive screen): the key is measured where it comes to rest
+  await page.waitForFunction(() => !document.getElementById('binnacle').getAnimations().length, null, { timeout: 3000 });
+  const done =await page.evaluate(() => { const b = document.getElementById('replayDone').getBoundingClientRect(); return { w: b.width, h: b.height, inView: b.bottom <= innerHeight && b.right <= innerWidth && b.left >= 0 }; });
   check(done.h >= 44 && done.w >= 60 && done.inView, 'the Done key: ' + JSON.stringify(done));
   await page.click('#replayDone');
   check(await page.evaluate(() => document.getElementById('app').classList.contains('idle') && !!document.getElementById('tabbar').offsetHeight), 'Done closes the replay and the tabs come back');
