@@ -57,6 +57,13 @@ notes under a search that finds nothing said "Press Go" while the key under them
 "offline" is only said when the phone is offline.
 
 Undo: revert the PR. Typed coordinates still work as before and are still named "Pin lat, lon".
+## 2026-11-11 (fable-offline-road-feel): saved map areas keep members' road feel (claude/fable-offline-road-feel)
+
+A saved offline area now also keeps the members' measured roads round it, so a plan with no signal still knows which
+roads are smooth, banked and flowing. It asks the server for the area's 0.1° cells, which is the same coarseness the
+privacy rule (VI-1) already allows for a plan, and nothing finer. Only members get it, and it leaves the phone on sign-out,
+account deletion, Erase everything and Delete offline data (before this, the day's kept cells were never cleared on any of
+them). Undo: revert the PR; the areas still save their map.
 ## 2026-11-11 (fable-avoid-police): Avoid → Police reports (claude/fable-avoid-police)
 
 The owner said go (2026-11-11, "yes avoid police"), reversing October's call that dropped routing round police (IDEAS
