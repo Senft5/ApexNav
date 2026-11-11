@@ -961,7 +961,9 @@ flow('route overview: the card says what the drive is like in plain words, from 
       const t = window.apexDebug.track, s = t.__story && t.__story.s, box = document.getElementById('routeCardStory');
       return { lines: s ? s.lines : [], coverage: s && s.coverage, lead: document.getElementById('routeCardStoryLead').textContent,
         more: [...document.querySelectorAll('#routeCardStoryMore p')].map((p) => p.textContent), open: box.open, one: box.classList.contains('one'),
-        streets: (t.steps || []).map((x) => x.street).filter(Boolean), cardW: document.getElementById('routeCard').scrollWidth - document.getElementById('routeCard').clientWidth };
+        streets: (t.steps || []).map((x) => x.street).filter(Boolean), cardW: document.getElementById('routeCard').scrollWidth - document.getElementById('routeCard').clientWidth,
+        // deer hours need no tiles: the clock, the sun and the month (wildlife.js) times the land along the road
+        deerKnown: (() => { const c = t.ranked, v = c && c.ctx && ApexRouteEngine.channel(c.ctx, 'deer_risk'); return !!v && [...v].some((x) => Number.isFinite(x) && x > 1); })() };
     });
     const texts = r.lines.map((l) => l.text);
     if (process.env.STORY_LOG) console.log(JSON.stringify({ texts, coverage: r.coverage, streets: [...new Set(r.streets)] }));
@@ -974,8 +976,10 @@ flow('route overview: the card says what the drive is like in plain words, from 
     for (const l of r.lines) for (const n of (l.facts && l.facts.names) || []) check(r.streets.includes(n), `"${n}" is on the route: ` + JSON.stringify(r.streets));
     const hl = r.lines.find((l) => l.kind === 'highlight');
     if (hl) check(hl.facts.m >= 1500 && hl.facts.toM <= r.coverage.km * 1000 + 30, 'the best part is a real stretch of this route: ' + JSON.stringify(hl.facts));
-    // the grid's tiles carry no weather, deer or members' data here: nothing said about them
-    check(!r.lines.some((l) => l.kind === 'members' || l.kind === 'conditions'), 'no members\' or conditions line without their data: ' + JSON.stringify(texts));
+    // the grid's tiles carry no weather or members' data here: nothing said about them; deer only where the route's deer
+    // channel says so (it is evening in November on CI's clock some of the time, and the wildlife provider runs offline)
+    const deerOnly = (l) => l.kind === 'conditions' && l.facts.items.every((x) => x.key === 'deer') && r.deerKnown;
+    check(!r.lines.some((l) => l.kind === 'members' || (l.kind === 'conditions' && !deerOnly(l))), 'no members\' or conditions line without their data: ' + JSON.stringify(texts));
     check(r.cardW <= 1, 'the card does not grow sideways: ' + r.cardW);
     // a tap opens the rest
     if (texts.length > 1) {
@@ -2548,6 +2552,16 @@ flow('crew page: an old ?view=crew link opens People on Crews, at your crew; goi
   await page.waitForSelector('.side-pop.open[aria-label="Crew settings"] .crew-settings');
   const gearText = await page.textContent('.side-pop.open[aria-label="Crew settings"]');
   check(/Ridge Runners/.test(gearText) && /What it sees of yours/.test(gearText) && /Leave/.test(gearText) && !(await page.$$('.side-pop.open[aria-label="Crew settings"] .crew-tiles')).length, 'the gear: one crew\'s settings, no tiles: ' + gearText.slice(0, 160));
+  // 2026-11-10: the sheet in the Settings list's shape: a small-caps name over each part on one line, text keys at the left
+  // edge like the rows, the area field's hint whole
+  const gs = await page.evaluate(() => { const box = document.querySelector('.side-pop.open[aria-label="Crew settings"] .crew-settings'), L = box.getBoundingClientRect().left;
+    const heads = [...box.querySelectorAll('h4.nav-group')].map((h) => ({ t: h.textContent, lines: Math.round(h.getBoundingClientRect().height / parseFloat(getComputedStyle(h).lineHeight)) || 1 }));
+    const off = box.querySelector('button.linkbtn'), area = box.querySelector('input.field'), leave = box.querySelector('.danger-btn');
+    return { heads, offLeft: Math.round(off.getBoundingClientRect().left - L), leaveLeft: Math.round(leave.getBoundingClientRect().left - L), offWide: off.getBoundingClientRect().width < box.getBoundingClientRect().width * 0.8,
+      hintCut: (() => { const c = document.createElement('canvas').getContext('2d'); c.font = getComputedStyle(area).font; const cs = getComputedStyle(area);
+        return c.measureText(area.placeholder).width > area.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight); })() }; });
+  check(gs.heads.map((h) => h.t).join('|') === 'What it sees of yours|Who can invite|Who can find it' && gs.heads.every((h) => h.lines === 1), 'three parts, each named on one line: ' + JSON.stringify(gs.heads));
+  check(gs.offLeft <= 4 && gs.leaveLeft <= 4 && gs.offWide && !gs.hintCut, 'text keys start at the left, the area hint is whole: ' + JSON.stringify(gs));
   await page.click('.side-pop.open[aria-label="Crew settings"] button:has-text("Done")');
   await page.click('.cp-drive button:has-text("going")');
   await page.fill('.cp-say textarea', 'Saturday it is');
@@ -4339,11 +4353,14 @@ flow('People: two tabs; a request is a card on top, then you, then friends with 
 
 flow('People, a new account: Friends is one sentence and the Invite key; Crews is one "Find or start a crew" row (REVIEW_PEOPLE P-08)', async (page, base) => {
   await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); } catch (_) {} });
+  const put = [];
   await page.route(base + '/api/**', (route) => {
     const u = new URL(route.request().url()), json = (b) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(b) });
     if (u.pathname === '/api/me') return json({ signed_in: true, member: true, handle: 'me' });
     if (u.pathname === '/api/crews/discover') return json([{ id: 'K9', name: 'Tail of the Dragon Regulars', members: 118, area_name: 'Deals Gap', km: 54 }]);
     if (u.pathname === '/api/points') return json({ total: 0 });
+    if (route.request().method() !== 'GET') put.push([route.request().method(), u.pathname, route.request().postData()]);
+    if (u.pathname === '/api/crews/K9/join') return json({ id: 'K9' });
     return json([]);
   });
   await page.goto(base + '/index.html?view=people');
@@ -4359,6 +4376,14 @@ flow('People, a new account: Friends is one sentence and the Invite key; Crews i
   const tile = await page.evaluate(() => { const b = [...document.querySelectorAll('.side-pop.open .crew-tiles.one .crew-tile-head b')].find((x) => /Dragon/.test(x.textContent)); return { whole: b.scrollWidth <= b.clientWidth + 1, line: b.nextElementSibling.textContent }; });
   check(tile.whole && /118 members · Deals Gap · 34 mi/.test(tile.line), 'one crew a row, the name whole, the area and the distance under it (P-26): ' + JSON.stringify(tile));
   check(await page.isVisible('.side-pop.open input[aria-label="Crew name"]'), 'and Start a crew in the same sheet');
+  // a public crew starts with nothing shared and asks on joining (the owner, 2026-11-11: on by default for friends and private crews)
+  await page.click('.side-pop.open .crew-tiles .card:has-text("Tail of the Dragon") button:has-text("Join")');
+  await page.waitForSelector('.confirm-sheet .cs-box');
+  const ask = await page.textContent('.confirm-sheet .cs-box');
+  check(/public crew: anyone can join it and see what you share/.test(ask) && /Share Scores and times/.test(ask) && /Scores only/.test(ask) && /Cancel/.test(ask), 'joining a public crew asks: ' + ask);
+  await page.click('.confirm-sheet button:has-text("Scores only")');
+  await page.waitForFunction(() => /sees your Scores\./.test(document.getElementById('toast').textContent));
+  check(put.some(([m, p, b]) => m === 'PUT' && p === '/api/grants' && JSON.parse(b).audience_id === 'K9' && JSON.parse(b).share_scores === true && JSON.parse(b).share_times === false), 'Scores only is sent: ' + JSON.stringify(put));
 });
 flow('one link in: no "invite-only" anywhere; a crew link joins a newcomer with a handle in one card; a friend link asks first; any member invites; the owner picks who can (Worker stubbed, REVIEW_PEOPLE.md P-02, P-07, P-20, P-22, P-32)', async (page, base) => {
   await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); } catch (_) {} });
@@ -6307,6 +6332,49 @@ flow('plan flow (a) a destination in 3 taps: Where to?, the place, Start; Start 
   check(taps.n === 3, `a destination in 3 taps: ${taps.log.join(' → ')}`);
 }, IPHONE);
 
+flow('when to go: the route card says the best time to leave, opens the next day by the half hour, and plans the trip for the hour you pick (web/when_to_go.js)', async (page, base) => {
+  const asked = [];
+  await planRouter(page, asked);
+  const { tap } = await planPage(page, base);
+  await tap('#destInput', 'Where to?');
+  await page.fill('#destInput', 'Maryville');
+  await page.waitForSelector('#placeList .place', { timeout: 10000 });
+  await tap('#placeList .place', 'the place');
+  await cardUp(page);
+  await planDone(page);
+  // the line lands after the card, never holding it; no forecast here (every other host is blocked): the sun and the calendar
+  await page.waitForFunction(() => !document.getElementById('routeCardWhen').hidden && window.apexDebug.lastWhen, null, { timeout: 20000 });
+  const line = await page.evaluate(() => ({ text: document.getElementById('routeWhenLine').textContent, open: document.getElementById('routeWhenLine').getAttribute('aria-expanded'),
+    panel: !document.getElementById('routeWhenPanel').hidden, when: apexDebug.lastWhen }));
+  check(/^(Better at |Leave by |Go now|No better time )/.test(line.text) && line.open === 'false' && !line.panel, 'the card says when to go in one line, closed: ' + JSON.stringify(line));
+  check(line.when.forecast === false && line.when.slots >= 40, 'a day of departures, and no forecast claimed without one: ' + JSON.stringify(line.when));
+  await page.evaluate(() => document.getElementById('routeWhenLine').scrollIntoView({ block: 'center' }));
+  await tap('#routeWhenLine', 'When to go');
+  const ribbon = await page.evaluate(() => { const bars = [...document.querySelectorAll('#routeWhenRibbon > button')];
+    return { n: bars.length, picked: bars.filter((b) => b.getAttribute('aria-selected') === 'true').length, labels: bars.every((b) => /: /.test(b.getAttribute('aria-label'))), first: bars[0].getAttribute('aria-label'),
+      axis: document.getElementById('routeWhenAxis').textContent, detail: document.getElementById('routeWhenDetail').textContent, wide: document.getElementById('routeWhenRibbon').getBoundingClientRect().right <= innerWidth,
+      tall: bars.filter((b) => b.firstChild.getBoundingClientRect().height >= 3).length }; });
+  check(ribbon.n >= 40 && ribbon.picked === 1 && ribbon.labels && /^Now: /.test(ribbon.first) && ribbon.wide && ribbon.tall === ribbon.n, 'the day as one bar per departure, each named for a screen reader: ' + JSON.stringify(ribbon));
+  check(/^Now/.test(ribbon.axis) && /there by \d/.test(ribbon.detail) && /by the sun and the calendar only/.test(ribbon.detail), 'the pick in words, and that no forecast came back: ' + JSON.stringify(ribbon));
+  await scan(page, 'When to go, open');
+  // pick the departure six hours on and plan for it: the trip is planned again for that hour, and the card says so
+  const before = asked.length;
+  await page.evaluate(() => document.querySelectorAll('#routeWhenRibbon > button')[12].click());
+  const key = await page.evaluate(() => ({ text: document.getElementById('routeWhenPlan').textContent, hidden: document.getElementById('routeWhenPlan').hidden, detail: document.getElementById('routeWhenDetail').textContent }));
+  check(!key.hidden && /^Plan for (tomorrow )?\d{1,2}:\d\d/.test(key.text), 'the key names the hour: ' + JSON.stringify(key));
+  await tap('#routeWhenPlan', 'Plan for the hour');
+  await planDone(page);
+  await page.waitForFunction(() => !document.getElementById('routeCardWhen').hidden && /^Leaving /.test(document.getElementById('routeWhenLine').textContent), null, { timeout: 25000 });
+  const later = await page.evaluate(() => ({ text: document.getElementById('routeWhenLine').textContent, planned: apexDebug.lastWhen.planned, note: document.getElementById('routeProgress').textContent }));
+  check(asked.length > before && later.planned - Date.now() > 5 * 3600e3 && later.planned - Date.now() < 7 * 3600e3, 'planned again, for about six hours on: ' + JSON.stringify({ later, asked: asked.length - before }));
+  // Leave now puts the clock back
+  await page.evaluate(() => { document.getElementById('routeWhenLine').scrollIntoView({ block: 'center' }); document.getElementById('routeWhenLine').click(); });
+  await page.waitForFunction(() => !document.getElementById('routeWhenNow').hidden);
+  await page.evaluate(() => document.getElementById('routeWhenNow').click());
+  await planDone(page);
+  await page.waitForFunction(() => !document.getElementById('routeCardWhen').hidden && !/^Leaving /.test(document.getElementById('routeWhenLine').textContent) && apexDebug.lastWhen.planned === null, null, { timeout: 25000 });
+}, IPHONE);
+
 // The route reveal and the card as a page (design pass, 2026-11-10; web/route_reveal.js): a route found is drawn onto the
 // map from its start like a pen stroke while the card rises and its numbers count up; Start is up from the first frame of
 // it. Another route of the same plan redraws quickly; reduced motion is a cut, the line whole at once.
@@ -7159,6 +7227,11 @@ flow('TestFlight 2026-11-05 note 1: in several crews the Crews side is a dashboa
   check(await page.textContent('.crew-page .cp-title h2') === 'Blue Ridge Breakfast Club' && await page.isVisible('#crewsBody .crew-head .cd-back') && await page.isVisible('#crewsBody .crew-head .gear-key'),
     'a crew opens with the key back and its gear');
   check(!(await page.$('.crew-dash')), 'and the dashboard gives way to it');
+  // a public crew you don't share with asks once on this phone (the owner, 2026-11-11); Cancel keeps it off and it doesn't ask again
+  await page.waitForSelector('.confirm-sheet .cs-box');
+  check(/public crew/.test(await page.textContent('.confirm-sheet .cs-box')), 'the public crew asks whether to share');
+  await page.click('.confirm-sheet button:has-text("Cancel")');
+  check(await page.evaluate(() => localStorage.getItem('apex.askedShare.k4') === '1'), 'asked once');
   await page.click('#crewsBody .cd-back');
   await page.waitForSelector('.crew-dash .cd-row');
   check(await page.waitForFunction(() => document.activeElement && document.activeElement.classList.contains('cd-open'), null, { timeout: 3000 }).then(() => true, () => false), 'back on the dashboard, the focus on its first crew');

@@ -66,6 +66,20 @@
 - Checked: pytest full; e2e "a pin has a name", "Where to?" 9/9, "plan flow" 6/6, "spot photo", "Dynamic Type",
   "REVIEW.md 1.2" 2/2, "routes from elsewhere", "saved for offline", "drag to reshape", "safe areas".
 - Next: a tapped place could take the road's name once the lookup lands (rename the planned route after the fact).
+## Session 2026-11-11 (fable-share-defaults): sharing on by default for friends and private crews (claude/fable-share-defaults, off origin/main fc27c473)
+
+- `backend/src/share_defaults.ts`: `friendDefaults(a, b)` (both ways, only while accepted and unblocked) from
+  `friendAccept`, the mutual request in `friendRequest`, and `befriendOnLink` (auth.ts); `crewDefaults(user, crew)` (private
+  crews only) from `crewCreate` and `crewJoin`. INSERT OR IGNORE: an existing row is never changed.
+- `setGrant` with Scores off keeps a 0/0 row (was a DELETE) so defaults never undo it. `crewJoin` returns `public`.
+- `crewUpdate` private → public: members' crew grants to 0/0 (not the owner's), their board_entries and drive_scores for
+  it deleted; `web/crew_page.js` asks once per phone (`apex.askedShare.<id>`) on a public crew you don't share with.
+- `web/cockpit.js` `askPublicSharing(id, name)` (ApexConfirm.choose) after joining a public crew from Crews near you or a
+  link; `web/crew_events.js` meet card's Join the crew calls it through `page.askPublicSharing`. Onboarding copy changed.
+- Tests: backend/test/share_defaults.test.ts (new); privacy, crews, activity, crew_page, drive_scores updated for the new
+  default; e2e "People, a new account" joins a public crew and picks Scores only.
+- Migration `0050_share_backfill.sql` (data only): sharing on for existing friendships and private-crew members.
+  On preview 2026-11-11 (with its d1_migrations row); **prod: apply at merge**. People says so once (`apex.sharingOnTold`).
 ## Session 2026-11-11 (fable-avoid-police): Avoid → Police reports (claude/fable-avoid-police, off origin/main fc27c47)
 
 - Done: `ApexHazardReports.policeFor` / `passesNear`; `FunRoute` avoid key `police` (unavoided, keepAvoiding); graph_router
@@ -191,6 +205,23 @@
   (folds by > 80 px, was 150; the folded bar + tabs under 182 px, was 170: the bar is 12 px taller).
 - Parallel agents on their own branches: claude/fable-drive-hud, claude/fable-first-last, claude/fable-route-reveal.
 
+## Session 2026-11-10 (fable-when-to-go): When to go: the best hour to drive a route, and planning for it (claude/fable-when-to-go, off origin/main 948cb4b)
+
+- New `web/when_to_go.js` (`ApexWhenToGo`: slotTimes, shift, overlay, value, scan, reasons, advice, heights): the route on
+  the card valued for every half-hour departure of the next day with the engine's own model. docs/ROUTING.md "When to go".
+- `web/route_ctx/registry.js` `run(…, { inputs })`: late providers take a context already in hand. `web/route_engine.js`
+  `evaluate(…, { samples })`: the same road at another hour reuses its per-sample quality and scenery.
+- `web/cockpit.js`: `leaveAtMs` / `leaveAt()` (every clock a plan reads: corridors, glare, forecast, closures);
+  `attachWhen`, `whenScan`, `paintWhen`, `planFor`, `whenReset`; `apexDebug.lastWhen`. `web/index.html`: `#routeCardWhen`
+  (a fact that opens), `#routeWhenPanel` (ribbon, axis, detail, Plan for / Leave now). Flag `when_to_go` (flags.ts).
+- **Bug fixed:** `sun.js` and `route_weather.js` now load before the route_ctx providers. Before, conditions, wildlife and
+  hazards_live had no sun or hazard words in the app: light, glare, golden_view, deer_time_risk and wx_hazard were unknown
+  on every route since those providers merged. Rankings near dusk now carry deer hours where land use is known.
+- Tests: tests/test_when_to_go.py (11); tests/test_fun_route.py's engine glue takes `leaveAt`; e2e "when to go".
+- Not done: a reminder at the planned hour (a local notification: iOS shell work), the planned hour on a saved or shared
+  route, typical traffic by hour (no free source), beyond 24 h ("Saturday morning": the forecast reaches 3 days).
+- Next: there and back by different roads (a destination round trip that never repeats the way out).
+
 ## Session 2026-11-10 (fable-loop-time): the loop dial by distance or time (claude/fable-loop-time, off origin/main 1a38381)
 
 - [x] web/index.html `#loopBy` (two radio words over the dial, `.loop-by`). web/cockpit.js: `LOOP_BY` ('apex.loopBy'),
@@ -203,6 +234,17 @@
 - Next: Options' "Loop to fit" 1 hour / 2 hours keys now duplicate the dial; remove them once the owner has used the
   dial (My free time stays).
 
+## Session 2026-11-10 (fable-crew-settings): the crew gear's sheet has named parts (claude/fable-crew-settings, off origin/main 51c8c4c)
+
+- [x] web/cockpit.js `crewSettingsFor`: `h4.nav-group` names, notes as `p.note`, the area field's placeholder and
+  aria-label. web/index.html `.crew-settings` rules (headings without a rule, text keys `justify-self: start`, notes
+  13 px pencil, the field takes the row's free width).
+- [x] web/crew_page.js: Meeting points' heading sits in `.cp-sec` like its neighbours.
+- [x] tests/test_crew_settings_sheet.py (5); e2e "crew page" measures the three names on one line, the keys' left
+  edge and the hint's fit. Also run: "one link in", "TestFlight 2026-11-05 note 1", "crew drives", "Dynamic Type",
+  "REVIEW.md 1.2", "safe areas".
+- Next on a crew's page: the chat row and the Score board were looked at and left; Meeting points and what is under it
+  were not reached.
 ## Session 2026-11-10 (fable-whats-new): What's new says what changed since October (claude/fable-whats-new, off origin/main 948cb4b)
 
 - `web/whats_new.js`: `NEWS.id` '2026-11-10' with four lines: Quick / Fun / Long way, the drive overview on the route
