@@ -31,6 +31,14 @@
 - Tests: tests/test_route_card.py; e2e "plan flow (c)".
 - Next: CarPlay has not had a design pass in this run (Swift, not visible from the cloud).
 
+## Session 2026-11-10 (fable-there-and-back): there and back, home another way (claude/fable-there-and-back, off origin/main 948cb4b)
+
+- `web/graph_router.js` `roundTrip` (worker message `round`, client `round`): ways out paired with ways home that avoid
+  them (K.ROUND_*); `assemble` now keeps `fs`/`ft`. `web/own_routing.js` `roundTrip`.
+- `web/cockpit.js` `planRoundTrip`, `outExclusions`; `#routeRoundBtn` on the card (index.html). docs/ROUTING.md.
+- Tests: test_graph_router.py (roundTrips case), e2e "there and back" (the Valhalla path).
+- Not done: offering the round trip as a level card of its own; a timed stop at the destination (lunch: ETA home).
+- Next: discovery of great unknown roads near a planned trip ("a better road 4 min off your route").
 ## Session 2026-11-10 (fable-your-data): Your data as Settings-style rows (claude/fable-your-data, off origin/main 3f2f315)
 
 - `web/index.html` only: the Your data section's keys are `.nav-rows.data-rows` with three `.nav-group` headings; the

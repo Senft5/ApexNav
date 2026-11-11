@@ -673,6 +673,7 @@
     .f-ahead { --glyph: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2.2' stroke-linecap='round'%3E%3Cpath d='M8 22 V14 Q8 7 16 5'/%3E%3Cpath d='M12 2 L17 5 L13 9'/%3E%3Ccircle cx='8' cy='22' r='1.5' fill='black'/%3E%3C/svg%3E"); }
     .f-sky { --glyph: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round'%3E%3Ccircle cx='12' cy='12' r='4'/%3E%3Cpath d='M12 2v3M12 19v3M2 12h3M19 12h3M5 5l2 2M17 17l2 2M5 19l2-2M17 7l2-2'/%3E%3C/svg%3E"); }
     .f-closed { --glyph: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2'%3E%3Crect x='2' y='8' width='20' height='6'/%3E%3Cpath d='M6 8 L10 14 M12 8 L16 14 M18 8 L22 14 M5 14 V21 M19 14 V21'/%3E%3C/svg%3E"); }
+    .rc-round { width: 100%; min-height: 44px; margin-top: 10px; } .rc-round[hidden] { display: none; }
     /* the level cards (the owner, 2026-11-04): Quick, Fun, Long way, each its pick's time and corners; on = the route on screen */
     .rc-levels { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; margin-top: 10px; }
     .rc-levels[hidden] { display: none; }
@@ -1626,6 +1627,8 @@
               <div class="rc-pager" id="routeCardPager" role="img" hidden></div>
               <p class="rc-levels-note" id="routeCardLevelsNote" hidden></p>
               <p class="note rc-via" id="routeCardWhy" hidden></p>
+              <!-- There and back (graph_router.js roundTrip): the trip home again by other road, the destination a stop -->
+              <button type="button" class="ink-btn rc-round" id="routeRoundBtn" hidden>There and back, home another way</button>
               <div class="rc-stats" id="routeCardStats"></div>
               <!-- finding 2: the profile's room is kept before it loads, so nothing under it jumps -->
               <div class="rc-profile-box" id="routeCardProfile"></div>

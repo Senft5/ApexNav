@@ -43,6 +43,14 @@ keeps its own word and only its progress bar moves.
 
 Undo: revert the PR.
 
+## 2026-11-10 (fable-there-and-back): a trip to a place can come home another way in one tap (claude/fable-there-and-back)
+
+The route card of a trip to a place has a new key, "There and back, home another way". It plans the drive home too,
+staying off the road you drove out on wherever another way exists, and the destination becomes a stop on the trip.
+Calls made: the way home is chosen by the same Fun / Long way rules as any route (so it may be longer, on better road);
+where our own map tiles don't reach, the public router is asked to avoid the way out; a dead end that has only one way
+in says so instead of failing. Undo: hide `#routeRoundBtn` (one line in renderRouteCard), nothing else depends on it.
+
 ## 2026-11-10 (fable-your-data): Your data is three short lists, like Settings (claude/fable-your-data)
 
 For your "cohesiveness, less clunky": Your data was eight keys of eight widths in two wrapped rows, one of them a link
