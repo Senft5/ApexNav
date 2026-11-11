@@ -16,6 +16,8 @@ describe("duels", () => {
   it("a challenge, accepted: the stage reaches the friend, and each side's best Score in the days counts; a time only from a side that shares times", async () => {
     const a = await makeUser("alice"), b = await makeUser("bob");
     await befriend(a, b);
+    // sharing is on by default for friends (#392, share_defaults.ts): both switch it off here, so each side's sharing below is its own choice
+    for (const [u, to] of [[a, b], [b, a]]) await ok(api(u, "PUT", "/api/grants", { audience_type: "friend", audience_id: to.id, share_scores: false }));
     const seg = await makeSegment(a, "Dry Ridge climb");
     const { id } = await json(api(a, "POST", "/api/duels", { handle: "@bob", segment_id: seg, days: 7 }));
     let [mineA] = await duels(a), [mineB] = await duels(b);

@@ -147,6 +147,11 @@ The JS file is a line-for-line port used by the browser/iOS cockpit for live OSR
   against the rest compare it as measured. Kept when the sides differ by 0.08 and 3 standard errors, on 12 corners a
   side, and two in three of the drives holding 3 of each agree. A car or a tag compares drive means (4 drives a side of
   5 corners). Months need 15 corners; a change is "sure" at 0.05 and 2 standard errors. Never a speed, time or pace.
+- Practice (`practice`, `drive_practice` in the same files; IDEAS D-27): a plan `{skill, since, where, before}` in
+  localStorage `vetta.practice`, set from Your driving. Every corner of a drive that started before `since` is
+  "before". Each later drive is read on that skill alone (and on the corners of the focus's place) against the kept
+  `before` mean and SE. Sure at 0.05 and 2 SE; unknown under 4 corners. The end card gets its line from the `save` job,
+  or from `practiceLine` for a stored drive.
 - Web shell: `web/index.html` (cockpit markup and styles; its script is `web/cockpit.js`, loaded `defer` with the launch modules, while `web/lazy.js` loads People, the Garage, crews, builds, the convoy, friends on the map and the phonemizer on first use or once the map is idle, REVIEW_FEEL F-03; fonts bundled in `web/fonts/`, F-12), `web/analysis.html` (history / segments / compare), `web/themes.js` (theme registry), `web/instruments.js` (renderers).
 
 ## 3c. Fun routing (`web/fun_route.js`)
