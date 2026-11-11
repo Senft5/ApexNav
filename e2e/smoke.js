@@ -4544,6 +4544,10 @@ flow('Your driving: the profile over every drive opens from the Log, names the w
   await page.waitForSelector('#drivingOpen', { timeout: 20000 });
   const card = await page.textContent('#drivingOpen span');
   check(/Work on: One steering arc \d+/.test(card) && /Strongest: /.test(card), 'the card says the strongest and the one to work on: ' + card);
+  // Your records: the cleanest corner of each kind (tight, medium, fast), from the same kept observations (IDEAS D-08)
+  await page.waitForFunction(() => /Cleanest tight (left|right|corner), of \d+ tight corners/.test(document.getElementById('recordsTable').textContent), null, { timeout: 10000 });
+  const recs = await page.textContent('#recordsTable');
+  check(/Cleanest medium/.test(recs) && !/mph|km\/h/.test(recs), 'records by kind of corner: ' + recs);
   // Your year: the year's cleanest corners, one a road (two roads here), from the same kept observations
   const best = await page.evaluate(() => ApexAnalysis.job('profile', { year: 2026 }).then((r) => r.best));
   check(best.length === 2 && best[0].level >= best[1].level && new Set(best.map((b) => b.name)).size === 2 && best.every((b) => b.at.startsWith('2026-')), 'the year\'s best corners: ' + JSON.stringify(best));
@@ -4961,7 +4965,7 @@ flow('People, a new account: Friends is one sentence and the Invite key; Crews i
   await page.goto(base + '/index.html?view=people');
   await page.waitForSelector('#accountBody .people-lead');
   const kids = await page.$$eval('#accountBody > *', (k) => k.map((x) => x.className + ':' + x.textContent.trim()));
-  check(kids.length === 3 && /people-lead/.test(kids[0]) && /Invite or add a friend/.test(kids[1]) && /^people-sample:Example: /.test(kids[2]), 'one sentence, the Invite key and an example (U-121): ' + JSON.stringify(kids));
+  check(kids.length === 3 && /^people-first:Bring a friend\./.test(kids[0]) && /Invite or add a friend/.test(kids[1]) && /^people-sample:Example: /.test(kids[2]), 'a page (drawing, Bring a friend., one sentence), the Invite key and an example (U-121): ' + JSON.stringify(kids));
   await page.click('[data-people="crews"]');
   await page.waitForSelector('#crewsBody .nav-row:has-text("Find or start a crew")');
   const rows = await page.$$eval('#crewsBody .nav-row > span', (s) => s.map((x) => x.textContent));

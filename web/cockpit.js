@@ -6587,7 +6587,11 @@
         if (!told) { try { localStorage.setItem('apex.sharingOnTold', '1'); } catch (_) {} toast('Your friends and private crews now see your Scores and times. Switch it off for anyone: open their row, then What they see of you.'); }
       }
       // P-08: no friends yet is one sentence and the Invite key, not four empty drawers
-      else body.append(el('p', { className: 'people-lead', textContent: 'Bring a friend: they sign in with your link, and you’re friends the moment they do.' }));
+      // the first friend is a page like the signed-out one (round three, 2026-11-11): your road drawn, the friend's still pencil
+      else body.append(el('div', { className: 'people-first' },
+        drawing(roads('M-12 34 C 70 34 96 96 176 92 S 300 24 372 50') + '<path class="jr-ghost" d="M92 140 C 108 112 148 98 176 92"/>' + pucks([277, 60, true])),
+        el('h3', { className: 'join-head', textContent: 'Bring a friend.' }),
+        el('p', { className: 'people-lead', textContent: 'They sign in with your link, and you’re friends the moment they do.' })));
 
       // One Invite key (the owner, 2026-10-30): someone new gets an invite link, a member your handle or a request; requests here too.
       const ipop = popSheet('Invite'); pops.push(ipop);
@@ -6681,7 +6685,7 @@
           else {
             const areaIn = el('input', { className: 'field', placeholder: 'Area, like Robbinsville', maxLength: 60, autocomplete: 'off' });
             areaIn.setAttribute('aria-label', 'Area people nearby will see');
-            ownerBox.append(el('p', { className: 'note', textContent: 'Private: only people with a link. Public lets people nearby find and join it, under the area you name.' }),
+            ownerBox.append(el('p', { className: 'note', textContent: 'Private: only people with a link. Public lets people nearby find and join it, under the area you name. What members shared with it (scores, routes, stages) stops showing until each says yes again.' }),
               el('div', { className: 'row' }, areaIn, btn('Make public', async () => {
               const near = crewNear(), name = areaIn.value.trim();
               if (name.length < 2) { toast('Name the area people nearby will see.'); return; }
@@ -6831,7 +6835,10 @@
       } else {
         if (myCrews.length) cbody.append(nsec, newSec);
         // P-08: no crew yet is one sentence and one row, not five empty drawers
-        else cbody.append(el('p', { className: 'people-lead', textContent: 'A crew is a group for a club or a weekend run: its own page, and drives you plan together.' }),
+        else cbody.append(el('div', { className: 'people-first' },
+            drawing(roads('M-12 96 C 60 96 84 36 156 36 S 262 98 372 70') + [[72, 66], [98, 50], [128, 39]].map(([x, y]) => `<circle class="jr-seat" cx="${x}" cy="${y}" r="7"/>`).join('') + pucks([173, 37, true])),   // the lead, three seats in file still empty
+            el('h3', { className: 'join-head', textContent: 'Start a crew.' }),
+            el('p', { className: 'people-lead', textContent: 'A group for a club or a weekend run: its own page, and drives you plan together.' })),
           el('div', { className: 'nav-rows' }, nearbyRow = navRow('Find or start a crew', findSheet())));
         if (!myCrews.length && window.ApexPeopleSamples) cbody.append(ApexPeopleSamples.crew(el));   // U-121: what a crew looks like, as an example
         if (drives) cbody.append(drives);
