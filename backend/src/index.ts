@@ -12,6 +12,7 @@ import { sweepExpired } from "./sweep";
 import { appleSignIn } from "./apple";
 import { crewHazardKinds, hazardsNear, reportHazard, voteHazard } from "./hazards";
 import { routeDelete, routeGet, routesSharedWithMe, shareRoute } from "./routes_shared";
+import { duelAccept, duelCreate, duelEnd, duelList } from "./duels";
 
 const BACKUP_CRON = "0 7 * * 1";   // wrangler.jsonc triggers; the other cron is the daily sweep
 import {
@@ -273,6 +274,11 @@ on("POST", "/api/highlights/:id/report", async (req, env, m) => {   // older rou
 });
 on("DELETE", "/api/highlights/:id", async (req, env, m) => { await highlightDelete(env, await requireMember(req, env), m.groups!.id); return noContent(); });
 
+// Duels (src/duels.ts): a friend against a friend on a stage for a few days, the higher Score wins; Scores they already share.
+on("GET", "/api/duels", async (req, env) => json(await duelList(env, await requireMember(req, env))));
+on("POST", "/api/duels", async (req, env) => json(await duelCreate(env, await requireMember(req, env), req), 201));
+on("POST", "/api/duels/:id/accept", async (req, env, m) => json(await duelAccept(env, await requireMember(req, env), m.groups!.id)));
+on("DELETE", "/api/duels/:id", async (req, env, m) => json(await duelEnd(env, await requireMember(req, env), m.groups!.id)));
 on("POST", "/api/board", async (req, env) => json(await publish(env, await requireMember(req, env), req)));
 // Kudos (IDEAS S-07): a tap of thanks on a friend's run you can see; no text.
 on("POST", "/api/kudos", async (req, env) => { await kudosGive(env, await requireMember(req, env), req); return noContent(); });
