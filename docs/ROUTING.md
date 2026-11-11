@@ -232,6 +232,20 @@ through road worth driving, judged on the data, not the corners:
   class all along, 57 addresses per km, density 10, posted 25 mph on most of it) is no longer listed. Not fixed: outside our tiles, with the live
   context too slow to say (the router's edges come back partial in 1.2 s), a neighbourhood is unknown and can still be listed.
 
+## There and back (2026-11-10)
+
+A drive out to a café or a viewpoint is two drives, and the second should be new road. **There and back, home another
+way** on a trip's card plans the trip home too: where our tiles cover both ends, `graph_router.js roundTrip` pairs ways
+out (the level's plan: its pick and alternates, `ROUND_PAIRS`) with a way back whose search costs the way out x4 both
+ways (`ROUND_RETRACE_X`), at the weights `ROUND_A` per level and chosen by the level's own `pick()` (Fun and Long way
+spend time on good road home, never a highway); pairs driving a fifth or less of themselves twice come first, then the
+most good road. Elsewhere the way out on the card stays and Valhalla is asked for the way back with points along the way
+out as `exclude_locations` (1 km apart, 1.5 km kept clear of each end, at most 40), taking the alternate that shares
+least with it. Either way the whole trip is routed through shaping points every 2.5 km with the destination as your stop
+(`request.round`), so the stop list, a reroute and Remove behave as on any trip with a stop. The card says how much of
+the way home is new road, or "no other way home here" (a dead-end valley). Tests: tests/test_graph_router.py
+`test_there_and_back_comes_home_by_other_road`; e2e "there and back".
+
 ## Loops
 
 Loops chain stages found around the start. Their length used to come from crow-fly connectors x 1.6,
