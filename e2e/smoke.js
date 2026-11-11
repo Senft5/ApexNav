@@ -6735,6 +6735,11 @@ flow('TestFlight 2026-11-05 note 1: in several crews the Crews side is a dashboa
   check(await page.textContent('.crew-page .cp-title h2') === 'Blue Ridge Breakfast Club' && await page.isVisible('#crewsBody .crew-head .cd-back') && await page.isVisible('#crewsBody .crew-head .gear-key'),
     'a crew opens with the key back and its gear');
   check(!(await page.$('.crew-dash')), 'and the dashboard gives way to it');
+  // a public crew you don't share with asks once on this phone (the owner, 2026-11-11); Cancel keeps it off and it doesn't ask again
+  await page.waitForSelector('.confirm-sheet .cs-box');
+  check(/public crew/.test(await page.textContent('.confirm-sheet .cs-box')), 'the public crew asks whether to share');
+  await page.click('.confirm-sheet button:has-text("Cancel")');
+  check(await page.evaluate(() => localStorage.getItem('apex.askedShare.k4') === '1'), 'asked once');
   await page.click('#crewsBody .cd-back');
   await page.waitForSelector('.crew-dash .cd-row');
   check(await page.waitForFunction(() => document.activeElement && document.activeElement.classList.contains('cd-open'), null, { timeout: 3000 }).then(() => true, () => false), 'back on the dashboard, the focus on its first crew');
