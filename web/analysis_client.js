@@ -133,6 +133,19 @@
     return root.ApexDriveView.plainCoach(d.ds, co) || null;
   }
 
+  // IDEAS D-27: how the practised skill went on one drive, against the level the plan keeps from before it, and the end
+  // card's line for it. null with no plan, no driver_profile.js here, or no clean corner at all on the drive.
+  function practiceOf(Core, d, plan) {
+    const P = root.ApexDriverProfile;
+    if (!P || !plan || !d) return null;
+    const f = finish(Core, d);                                         // read exactly as Your driving reads a stored drive
+    if (!f.corners || !f.corners.length) return null;
+    const obs = P.observe({ ...f, corners: Rec().scorableCorners(f, f.corners) }, Core);
+    const b = plan.before && Number.isFinite(plan.before.mean) && Number.isFinite(plan.before.se) ? [plan.before.mean, plan.before.se] : null;
+    const r = P.drivePractice(obs, plan, b, Core);
+    return r ? { ...r, line: P.practiceLine(r, plan) } : null;
+  }
+
   // Your driving's kept observations: a store of its own, only ever derived from the drives (deleting it loses nothing)
   const OBS_VERSION = 1;
   function obsDb() {
@@ -160,7 +173,7 @@
      * End (F-04): the recording as the recorder holds it, parsed, scored and stored here, with its summary; and your
      * earlier drives with the same name, by their summaries, for "your best on this road".
      */
-    async save({ state, rows, fileName, meta, extra }) {
+    async save({ state, rows, fileName, meta, extra, plan }) {
       const Core = CoreOf(), rec = root.ApexSensors.Recorder.restore(state, rows);
       const d = Object.assign(Rec().parse(Core, rec.toCsv(), fileName, meta), extra || {});
       const summary = (await Rec().store(d)) || Rec().summarize(Core, d);
@@ -171,8 +184,10 @@
         .map((o) => ({ id: o.id, name: o.name, score: o.ds && o.ds.score != null ? Math.round(o.ds.score) : null }));
       let coach = null;                                                // U-111: the Log's sentence, written once, here
       try { coach = await coachLineOf(Core, d.id, sums); } catch (_) { coach = null; }
+      let practice = null;                                             // IDEAS D-27: the practised skill, on this drive alone
+      try { practice = practiceOf(Core, d, plan); } catch (_) { practice = null; }
       release();
-      return { driveId: d.id, summary, others, card, coach };   // (never `id`: the message's own)
+      return { driveId: d.id, summary, others, card, coach, practice };   // (never `id`: the message's own)
     },
 
     /** U-111: a stored drive's coaching sentence, the Log's (coachLineOf); { coach: null } when there is none. */
@@ -182,6 +197,15 @@
       try { coach = await coachLineOf(Core, id, sums); } catch (_) { coach = null; }
       release();
       return { coach };
+    },
+
+    /** IDEAS D-27: how the practised skill went on a stored drive (practiceOf); { practice: null } without a plan or corners. */
+    async practiceLine({ id, plan }) {
+      const Core = CoreOf(), raw = plan ? await Rec().get(id) : null;
+      let practice = null;
+      try { practice = raw ? practiceOf(Core, raw, plan) : null; } catch (_) { practice = null; }
+      release();
+      return { practice };
     },
 
     /** A few fields of a stored drive (tags, a note, shared), its summary kept in step. */
@@ -269,7 +293,7 @@
      * stamp and its car, so opening the page again reads only the drives that are new; those of drives since deleted
      * are dropped. Without IndexedDB nothing is kept and every drive is read.
      */
-    async profile() {
+    async profile({ plan = null } = {}) {
       const Core = CoreOf(), P = root.ApexDriverProfile, sums = await Rec().summaries(Core);
       if (!P) return { profile: null };
       const db = await obsDb(), kept = new Map();
@@ -286,11 +310,11 @@
           rec = { id: s.id, key, obs: P.observe({ ...d, corners: Rec().scorableCorners(d, d.corners) }, Core) };
           fresh.push(rec);
         }
-        list.push({ id: s.id, month: monthOf(s), car: s.car && s.car.label ? s.car.label : null, tags: Array.isArray(s.tags) && s.tags.length ? s.tags : null, obs: rec.obs });
+        list.push({ id: s.id, month: monthOf(s), at: monthOf(s) ? String(s.date).slice(0, 16) : null, car: s.car && s.car.label ? s.car.label : null, tags: Array.isArray(s.tags) && s.tags.length ? s.tags : null, obs: rec.obs });
       }
       const live = new Set(sums.map((s) => s.id)), gone = [...kept.keys()].filter((id) => !live.has(id));
       if (db && (fresh.length || gone.length)) try { await obsWrite(db, fresh, gone); } catch (_) {}
-      return { key: sums.map(stamp).join(','), read: fresh.length, profile: P.profile(list, Core) };
+      return { key: sums.map(stamp).join(','), read: fresh.length, profile: P.profile(list, Core), practice: plan ? P.practice(list, plan, Core) : null };
     },
 
     /**

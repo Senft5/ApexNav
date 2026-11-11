@@ -24,6 +24,23 @@
 - Tests: tests/test_road_page.py (plain words, unknown stays null, the climb formatter); e2e "road page…" (names, the
   empty bar for an unknown score, bar length = score, the climb in feet with a stubbed terrain profile).
 
+## Session 2026-11-11 (fable-offline-road-feel): a saved map area keeps the measured roads too (claude/fable-offline-road-feel, off origin/main)
+
+- IDEAS F-02, its last part. The twisty roads are where signal dies, and a saved area kept the map, terrain and road
+  network but not what members measured, so a plan there with no signal lost the road feel. Now Save the map here, signed
+  in as a member, also asks `/api/roads?cells=` for every 0.1° cell round the area (`ApexOwnRouting.cellsNear`,
+  `holdArea`: two cells per ask because the server caps ways per answer) and holds them (`apex.crowdHeld`) past the
+  day's keep until the area is deleted. A cell that didn't answer isn't held.
+- Plans: `routeCtxOpts().lookupCells` (cockpit.js) falls back to `ApexOwnRouting.keptFor(cells)` when the ask throws or
+  the server is down (5xx), never when the server says no (signed out). `keptFor` answers only when every cell asked is
+  kept, so a plan never takes part of the data for the whole.
+- Privacy fix found on the way: the members' cells kept for plans (IndexedDB `vetta-crowd`) were never cleared. Now
+  `clearCrowd` runs on both Sign out keys, Delete account, Erase everything and Delete offline data.
+- The area's row says "N measured roads", "no measured roads yet" or "members' road feel for part of it".
+- Tests: tests/test_offline_road_feel.py (5); e2e "offline area, as a member" (real IndexedDB across a reload offline).
+- Not done: the route card's measured line (`measuredAlong`) needs map matching over the network, so offline it still
+  says nothing; the coverage layer (`/api/coverage`) isn't kept for areas.
+
 ## Session 2026-11-10 (fable-pin-names): pins and tapped places by name; the spot dialog's stars (claude/fable-pin-names, off origin/main e76f1bb)
 
 - `web/cockpit.js`: `setFieldPin(field, point, name)` / `pinIn` / `fieldPin` beside `resolvePlace(q, field)`: Go here,
@@ -71,6 +88,18 @@
   its text, used by `exploreNear`. route_card.js `stats` label "corner" for one; drive_view.js habits; analysis.html `segInfo`.
 - Tests: tests/test_route_card.py; e2e "plan flow (c)".
 - Next: CarPlay has not had a design pass in this run (Swift, not visible from the cloud).
+
+## Session 2026-11-11 (fable-practice-focus): practice focus, the profile's Work on carried into the next drives (claude/fable-practice-focus, stacked on claude/fable-driver-profile)
+
+- `core/driver_profile.py` `practice` and `drive_practice`, ported in `web/driver_profile.js` and held to parity by
+  `tests/test_practice_focus.py` (5 tests). A plan is `{skill, since, where, before}`. Each drive since then is read on
+  that skill alone, and on the corners of the focus's place, against every corner before. A change counts as sure at
+  5 points and 2 SE or more; under 4 corners the level stays unknown.
+- The plan is kept in localStorage `vetta.practice`. Your driving sets it and stops it, and keeps `before` up to date
+  on each read. The `save` job (end of a drive) and the new `practiceLine` job (a stored drive, used by the debug end
+  card) return `practice` with its line. The end card shows it in `#endPractice`.
+- e2e: "Practice (IDEAS D-27)": set from the page, the end card's line, the page's drive rows, the Log card, and Stop.
+- Next: "touch" skills from the 10 Hz g (#377): how fast the brake goes on and comes off, and the turn-in rate.
 
 ## Session 2026-11-10 (fable-sheet-races): two e2e flows clicked a sheet's key while it slid up (claude/fable-sheet-races, off origin/main 948cb4b)
 
@@ -229,6 +258,13 @@
 - [x] Tests: tests/test_garage_settings.py (+1); e2e "Settings behind the gear…".
 - Next: Road feel, Route tuning and Spots rows have no value yet (Road feel's is drawn by who_sees.js).
 
+## Session 2026-11-10 (fable-carplay-loops): CarPlay's Loops list matches the dial (claude/fable-carplay-loops, off origin/main dc9caf9)
+
+- [x] CarPlay/ApexCarPlay.swift `openLoops()`: 30, 60, 90, 120, 180 minutes (web/cockpit.js `LOOP_MINUTES`).
+  tests/test_carplay.py `test_the_car_offers_the_same_loop_times_as_the_phones_dial`. docs/APP_REVIEW.md needs no
+  change (the CarPlay row already says "Loops from here"; no new template or data).
+- Next: CarPlay has not been looked at on a screen in this run; its three identical detail lines under each loop
+  ("A twisty loop from here, back where you started") could become one section header once someone can see it.
 ## Session 2026-11-10 (fable-route-reveal): design pass, the route card as a page and the route drawn on (claude/fable-route-reveal, off origin/main ac6c6c6)
 
 - web/route_reveal.js (new): `plan(prev, next, still)` (800 ms stroke + 500 ms count for a route found; 300 ms, no count,
