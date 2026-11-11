@@ -98,6 +98,56 @@
     }).join(' · ');
   }
 
-  const api = { describe, headline, meters, facts, CONF, character, characterLine };
+  /**
+   * What's on the road now (IDEAS Q-13, verified hazards): bumps members felt (ApexContributor.measuredAlong crowdBumps,
+   * verified by 2+ drivers on the server) and live hand reports (GET /api/hazards) within NEAR_M of its line, cleared ones
+   * left out, in order along it: [{ kind, title, atM, confirms, crowd }]. rs: the road resampled at 5 m ({ lat[], lon[] });
+   * reports: the API's list, or null when it wasn't asked (then only bumps). null when nothing was looked up at all, so the
+   * page says nothing rather than "none" (unknown stays unknown).
+   */
+  const NEAR_M = 30, LABEL = { pothole: 'Pothole', gravel: 'Gravel', debris: 'Debris', animal: 'Animal', police: 'Police', closure: 'Road closed' };
+  function onThisRoad(rs, measured, reports) {
+    if (!rs || !Array.isArray(rs.lat) || rs.lat.length < 2) return null;
+    if (!measured && !Array.isArray(reports)) return null;
+    const out = [];
+    for (const b of (measured && Array.isArray(measured.crowdBumps) ? measured.crowdBumps : [])) {
+      if (b && Number.isInteger(b.index) && b.index >= 0 && b.index < rs.lat.length) out.push({ kind: 'bump', title: 'Bump', atM: b.index * 5, confirms: null, crowd: true });
+    }
+    const n = rs.lat.length, lat0 = rs.lat[0], kx = 111320 * Math.cos(lat0 * Math.PI / 180), ky = 110540;
+    for (const h of (Array.isArray(reports) ? reports : [])) {
+      if (!h || !finite(h.lat) || !finite(h.lon)) continue;
+      if ((Number(h.clears) || 0) > (Number(h.confirms) || 0)) continue;
+      let best = Infinity, at = -1;
+      const px = (h.lon - rs.lon[0]) * kx, py = (h.lat - lat0) * ky;
+      for (let i = 1; i < n; i++) {
+        const ax = (rs.lon[i - 1] - rs.lon[0]) * kx - px, ay = (rs.lat[i - 1] - lat0) * ky - py;
+        const dx = (rs.lon[i] - rs.lon[i - 1]) * kx, dy = (rs.lat[i] - rs.lat[i - 1]) * ky, L = dx * dx + dy * dy;
+        const t = L > 0 ? Math.max(0, Math.min(1, -(ax * dx + ay * dy) / L)) : 0, d = Math.hypot(ax + t * dx, ay + t * dy);
+        if (d < best) { best = d; at = (i - 1 + t) * 5; }
+      }
+      if (best > NEAR_M) continue;
+      out.push({ kind: h.kind, title: h.label || LABEL[h.kind] || 'Hazard', atM: Math.round(at), confirms: finite(h.confirms) ? h.confirms : null, crowd: false });
+    }
+    return out.sort((a, b) => a.atM - b.atM);
+  }
+  /**
+   * The page's lines for it: [label, value]. Bumps in one line ("Bumps members felt", "at 0.4 and 1.3 mi"), each report
+   * on its own ("Gravel", "at 1.2 mi · 3 confirmed"), at most `max` reports; "None reported" when it was looked up and
+   * nothing is there; [] when it wasn't (null).
+   */
+  function hazardFacts(list, fmt = (m) => `${(m / 1000).toFixed(1)} km`, max = 5) {
+    if (!Array.isArray(list)) return [];
+    if (!list.length) return [['On this road', 'None reported']];
+    const and = (xs) => (xs.length < 2 ? xs.join('') : `${xs.slice(0, -1).join(', ')} and ${xs[xs.length - 1]}`);
+    const bumps = list.filter((x) => x.crowd), reps = list.filter((x) => !x.crowd).slice(0, max), rows = [];
+    if (bumps.length) {
+      const at = bumps.slice(0, 4).map((b) => fmt(b.atM)), nums = at.map((v, i) => (i < at.length - 1 ? v.replace(/\s*[^\d.,\s]+$/, '') : v));
+      rows.push([bumps.length === 1 ? 'Bump members felt' : `${bumps.length} bumps members felt`, `at ${and(nums)}${bumps.length > 4 ? ' and more' : ''}`]);
+    }
+    for (const r of reps) rows.push([r.title, `at ${fmt(r.atM)}${finite(r.confirms) && r.confirms > 0 ? ` · ${r.confirms} confirmed` : ''}`]);
+    return rows;
+  }
+
+  const api = { describe, headline, meters, facts, CONF, character, characterLine, onThisRoad, hazardFacts, NEAR_M };
   if (typeof module !== 'undefined' && module.exports) module.exports = api; else root.ApexRoadPage = api;
 })(typeof window !== 'undefined' ? window : globalThis);

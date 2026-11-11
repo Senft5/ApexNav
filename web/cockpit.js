@@ -4836,6 +4836,7 @@
       const body = document.createElement('div'); body.className = 'stack-8 road-page';
       const note = (t) => { const p = document.createElement('p'); p.className = 'note'; p.textContent = t; return p; };
       roadPop.replaceChildren(head, body); roadPop.classList.add('open');
+      let onRoad = [];   // ApexRoadPage.hazardFacts: what members felt and reported on it, once looked up
       const paint = (d) => {
         if (!d) { body.replaceChildren(note('Too short to describe.')); return; }
         const el = (tag, cls, text) => { const n = document.createElement(tag); if (cls) n.className = cls; if (text != null) n.textContent = text; return n; };
@@ -4847,7 +4848,7 @@
           r.setAttribute('role', 'group'); r.setAttribute('aria-label', `${m.label}: ${m.value == null ? 'not known' : `${m.value} out of 100`}, ${m.hint}`);
           return r;
         });
-        const lines = [...meters, ...ApexRoadPage.facts(d).map(([k, v]) => { const r = el('div', 'rp-fact'); r.append(el('span', '', k), el('b', '', v)); return r; })];
+        const lines = [...meters, ...[...ApexRoadPage.facts(d), ...onRoad].map(([k, v]) => { const r = el('div', 'rp-fact'); r.append(el('span', '', k), el('b', '', v)); return r; })];
         const best = Number.isFinite(s.elevA) && Number.isFinite(s.elevB) && Math.abs(s.elevB - s.elevA) >= 40
           ? ((s.tight || 0) / s.km >= 1.2 ? 'Better climbed: tight corners are safer uphill.' : 'Better descended: it flows.') : null;
         // the climb is a height (feet or metres, heightLabel); ApexUnits.short is an object and printed "[object Object]"
@@ -4858,13 +4859,23 @@
       const rs = Core.resamplePolyline(s.lat, s.lon, 5), dist = rs.lat.map((_, i) => i * 5);
       const side = (() => { try { return ApexDrivingSide.forRoute(rs.lat[0], rs.lon[0]); } catch (_) { return null; } })();
       paint(ApexRoadPage.describe(Core, s, { side }));                // straight away from the shape; then with the terrain and members' data
-      let elev = null, measured = null;
+      let elev = null, measured = null, reports = null;
+      const member = window.ApexSync ? await RouteLoading.optional(ApexSync.member(), 4000).catch(() => null) : null;
+      // live hand reports round the road's middle (by cell, VI-1), wide enough for the whole road
+      const reportsP = member ? (async () => {
+        const mid = Math.floor(rs.lat.length / 2), km = Math.min(50, Math.max(2, Math.ceil(rs.lat.length * 5 / 2000) + 1));
+        const r = await RouteLoading.optional(ApexSync.apiFetch(`/api/hazards?${ApexPrivacyZones.cellQuery(rs.lat[mid], rs.lon[mid], km)}`, { method: 'GET' }), 6000);
+        const j = r && r.ok ? await r.json() : null;
+        return Array.isArray(j) ? j : null;
+      })().catch(() => null) : Promise.resolve(null);
       try { elev = await RouteLoading.optional(ApexStages.profile({ lat: rs.lat, lon: rs.lon, dist }, 30), 6000); } catch (_) { elev = null; }
       try {
-        if (window.ApexContributor && window.ApexSync && (await ApexSync.member()))
+        if (window.ApexContributor && member)
           measured = await RouteLoading.optional(ApexContributor.measuredAlong({ lat: rs.lat, lon: rs.lon }, async (ids) => { const r = await apiCall('GET', `/api/roads?ways=${ids.join(',')}`); return r.ok ? r.json() : null; }), 12000);
       } catch (_) { measured = null; }
+      reports = await reportsP;
       if (!roadPop.classList.contains('open') || h.textContent !== roadLabel(s.name)) return;
+      onRoad = ApexRoadPage.hazardFacts(ApexRoadPage.onThisRoad(rs, measured, reports), (m) => ApexUnits.long(m, 1));
       paint(ApexRoadPage.describe(Core, s, { side, elev, measured, surf: window.ApexContributor ? ApexContributor.surfaceScore(measured) : null }));
     }
     function paintExplore() {

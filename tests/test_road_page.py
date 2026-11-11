@@ -99,3 +99,54 @@ def test_route_character():
     assert 2500 <= mid["startM"] <= 3100 and 1000 <= mid["endM"] - mid["startM"] <= 2200
     assert out["line"].startswith(f"{mid['archetype']} ") and (" at 3." in out["line"] or " at 2." in out["line"]), out["line"]
     assert out["none"] == "", "plain road: nothing to say"
+
+
+HAZ = r"""
+const P = require(process.argv[1] + '/web/road_page.js');
+// a straight road north, 2 km, at 5 m
+const lat = [], lon = [];
+for (let i = 0; i <= 400; i++) { lat.push(35 + i * 5 / 110540); lon.push(-83); }
+const rs = { lat, lon };
+const kx = 111320 * Math.cos(35 * Math.PI / 180);
+const at = (m, off) => ({ lat: 35 + m / 110540, lon: -83 + off / kx });
+const reports = [
+  { kind: 'gravel', ...at(1200, 8), confirms: 3, clears: 0 },
+  { kind: 'pothole', ...at(300, -12), confirms: 1, clears: 0 },
+  { kind: 'debris', ...at(900, 90), confirms: 4, clears: 0 },       // off the road
+  { kind: 'animal', ...at(600, 0), confirms: 1, clears: 3 },        // cleared
+  { kind: 'debris', label: 'Oil', ...at(1500, 2), confirms: 0, clears: 0 },
+];
+const measured = { crowdBumps: [{ index: 80, p: 0.9 }, { index: 260, p: 0.85 }, { index: 9999, p: 0.9 }] };
+const list = P.onThisRoad(rs, measured, reports);
+const mi = (m) => `${(m / 1609.344).toFixed(1)} mi`;
+console.log(JSON.stringify({ list, facts: P.hazardFacts(list, mi), none: P.hazardFacts(P.onThisRoad(rs, null, [])),
+  unknown: P.onThisRoad(rs, null, null), unknownFacts: P.hazardFacts(null), bumpsOnly: P.hazardFacts(P.onThisRoad(rs, measured, null), mi),
+  one: P.hazardFacts(P.onThisRoad(rs, { crowdBumps: [{ index: 80, p: 0.9 }] }, null), mi) }));
+"""
+
+
+@pytest.fixture(scope="module")
+def haz():
+    return json.loads(subprocess.run([NODE, "-e", HAZ, ROOT], capture_output=True, text=True, check=True).stdout)
+
+
+def test_hazards_on_the_road_in_order(haz):
+    kinds = [(x["kind"], x["atM"]) for x in haz["list"]]
+    # off-road (90 m) and cleared reports are left out; the bump past the end too
+    assert kinds == [("pothole", 300), ("bump", 400), ("gravel", 1200), ("bump", 1300), ("debris", 1500)]
+    assert haz["list"][-1]["title"] == "Oil"
+
+
+def test_hazard_lines(haz):
+    f = haz["facts"]
+    assert f[0] == ["2 bumps members felt", "at 0.2 and 0.8 mi"]
+    assert ["Pothole", "at 0.2 mi · 1 confirmed"] in f
+    assert ["Gravel", "at 0.7 mi · 3 confirmed"] in f
+    assert ["Oil", "at 0.9 mi"] in f       # no confirmations: no count
+    assert haz["one"] == [["Bump members felt", "at 0.2 mi"]]
+
+
+def test_unknown_stays_unknown(haz):
+    assert haz["unknown"] is None and haz["unknownFacts"] == []
+    assert haz["none"] == [["On this road", "None reported"]]
+    assert haz["bumpsOnly"] == [["2 bumps members felt", "at 0.2 and 0.8 mi"]]
