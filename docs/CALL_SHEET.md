@@ -4,6 +4,14 @@ Decisions Claude made for you, newest first. Each one says what was decided, why
 you reach one you've seen. If you disagree with a call, say so and it gets reversed; nothing here is hard to undo unless
 it says so. Things only you can do are in docs/OWNER_TODO.md.
 
+## 2026-11-11 (time attack placement): the week's loop in Where to?, Drive it, and your place after a drive (claude/project-thread-uwmi4e)
+
+Calls I made: the Where to? row asks for the week's loop when Where to? opens (at most every 5 minutes, only the area,
+and not from a privacy zone), so it can say the loop and your place without a tap. Drive it now plans the loop itself
+instead of the way to its start. The Log adds one sentence with your place to its sync line rather than a toast, because
+the Log has no toast and the line is already where the board is. For you's "went quicker than you" now names the loop and
+drops a loop a moderator took down. I left the home deck to Roamer C's branch. Undo: drop `peek` from `openPlan`, or the
+`driveLoop` hook in cockpit.js, which falls back to the way to the start.
 ## 2026-11-11 (recurring meets): a crew drive can repeat weekly, every 2 or every 4 weeks (claude/project-thread-uwmi4e)
 
 Crews that meet every Saturday had to plan the same drive by hand each week. A drive can now repeat (Repeats: Once,

@@ -1,5 +1,11 @@
 # VETTA — CURRENT AGENT HANDOFF STATE
 
+## Session 2026-11-11 (time attack placement): where the weekly loop shows (claude/project-thread-uwmi4e, after #433)
+- Done: the Where to? row names the week's loop and your place (time_attack.js summaryLine and peek). Drive it plans the
+  loop as the route (cockpit driveLoop). The Log says your place after a sync (runs returns `places`, placeLine). For you's
+  `passed` names the loop and skips taken-down loops.
+- Tests: backend time_attack and inbox, pytest test_time_attack (12), and the e2e time attack flow (row line, Drive it).
+- Next: the home deck's weekly loop is on Roamer C's branch claude/roam-c-ta-placement.
 ## Session 2026-11-11 (recurring meets): crew drives that repeat (claude/project-thread-uwmi4e, after #400)
 - Migration 0053 (`crew_events.repeat_weeks` 1/2/4, `series_id`): applied on preview; prod before merge.
 - `backend/src/events.ts` rollRepeats (on events list/near reads and in the sweep), eventCreate/eventUpdate take

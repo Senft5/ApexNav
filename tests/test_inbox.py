@@ -49,7 +49,7 @@ def test_every_kind_is_a_sentence_with_one_key_at_most():
     lines = r["lines"]
     assert lines[0] == ["Topped", "@bob scored 850 on Dry Ridge climb, over your best of 800.", "stage"]
     assert lines[1] == ["Time attack", "@bob went 9 s quicker than you on Tail of the Dragon. You're 2nd now.", "board"]
-    assert lines[2][1] == "@sam went 1:15 quicker than you on this week’s stage. You're 11th now."
+    assert lines[2][1] == "@sam went 1:15 quicker than you on this week’s loop. You're 11th now."
     assert lines[3] == ["Kudos", "@cara gave you kudos for Dry Ridge climb.", None]
     assert lines[4] == ["Duel on", "@bob took your duel on Dry Ridge climb.", None]    # no stage yet: no key to drive it
     assert lines[5][:2] == ["Duel won", "You beat @bob on Dry Ridge climb."]

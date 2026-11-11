@@ -54,6 +54,32 @@
     const [a, b] = [g[0], g[g.length - 1]];
     return { id, name: c.name, length_m: c.length_m, geom: c.geom, lat0: a[0], lon0: a[1], lat1: b[0], lon1: b[1], origin: c.segment_id, synced: true };
   }
+  /** 1 → "1st", 2 → "2nd", 11 → "11th", 23 → "23rd". */
+  const nth = (n) => { const v = n % 100; return `${n}${v >= 11 && v <= 13 ? 'th' : ({ 1: 'st', 2: 'nd', 3: 'rd' }[n % 10] || 'th')}`; };
+  /**
+   * Your place after a drive, from POST /api/timeattack/runs places [{name, place, of, time_s, gap_s}]: one sentence per
+   * loop ("East Greenwood Church Road loop: you're 3rd of 12 this week, 1:02 off the lead (12:41)."). '' when unknown.
+   */
+  function placeLine(p) {
+    if (!p || !Number.isFinite(p.place) || !Number.isFinite(p.of) || p.place < 1 || p.of < 1) return '';
+    const name = typeof p.name === 'string' && p.name ? p.name : 'This week’s loop', t = clock(p.time_s);
+    if (p.of === 1) return `${name}: the first time on the board this week (${t}).`;
+    if (p.place === 1) return `${name}: you're quickest of ${p.of} this week (${t}).`;
+    return `${name}: you're ${nth(p.place)} of ${p.of} this week, ${clock(p.gap_s)} off the lead (${t}).`;
+  }
+  /**
+   * The Where to? row's line for this week, from GET /api/timeattack: the loop's name and your place, or what to do next.
+   * null while there is nothing to say yet (no answer, no loop): the row keeps its plain line.
+   */
+  function summaryLine(t, dist) {
+    const c = t && t.circuit;
+    if (!c) return null;
+    const left = daysLeft(t.today, t.ends_on), when = left == null ? '' : left === 1 ? ' · last day' : ` · ${left} days left`;
+    const len = dist && Number.isFinite(c.length_m) ? ` (${dist(c.length_m)})` : '';
+    if (t.you && Number.isFinite(t.you.place)) return `Time attack: ${c.name} · you're ${nth(t.you.place)} of ${t.entrants}${when}`;
+    if (t.entered) return `Time attack: ${c.name}${len} · log a run on it${when}`;
+    return `Time attack: ${c.name}${len}${t.entrants ? ` · ${t.entrants} ${t.entrants === 1 ? 'time' : 'times'}` : ''}${when}`;
+  }
   // ---- building the week's loop ----------------------------------------------------------------------------------------
   /** A random number stream from a seed string (FNV-1a, then mulberry32): every phone draws the same from the same seed. */
   function rng(seed) {
@@ -184,6 +210,7 @@
         draw(r.j, at);
       };
       function draw(t, at) {
+        if (page.line) page.line(summaryLine(t, dist));
         const kids = [];
         const c = t.circuit, left = daysLeft(t.today, t.ends_on);
         if (!c) {
@@ -197,7 +224,9 @@
           let g = [];
           try { g = JSON.parse(c.geom) || []; } catch (_) {}
           if (t.entered) {
-            if (g.length && page.goTo) acts.append(btn('Drive it', () => page.goTo({ label: c.name, lat: g[0][0], lon: g[0][1] }), 'ink-btn'));
+            // the loop itself as the route when the page can plan it (cockpit driveLoop), else the way to its start
+            if (g.length && page.driveLoop) acts.append(btn('Drive it', () => page.driveLoop(c, g), 'ink-btn'));
+            else if (g.length && page.goTo) acts.append(btn('Drive it', () => page.goTo({ label: c.name, lat: g[0][0], lon: g[0][1] }), 'ink-btn'));
           } else {
             acts.append(btn('Enter', async () => {
               const r = await call('POST', '/api/timeattack/enter', { cell: t.cell });
@@ -237,26 +266,44 @@
       load();
       return sec;
     }
-    return { section };
+    /**
+     * The Where to? row's line without opening it (summaryLine), at most once in PEEK_MS: only the area goes, as for the
+     * section. Never builds the loop (opening the row does).
+     */
+    let peeked = 0;
+    async function peek() {
+      if (Date.now() - peeked < PEEK_MS) return;
+      const at = areaPoint(page.here());
+      if (!at) return;
+      peeked = Date.now();
+      const r = await call('GET', `/api/timeattack?lat=${at.lat}&lon=${at.lon}`);
+      if (r.ok && r.j && page.line) page.line(summaryLine(r.j, dist));
+    }
+    return { section, peek };
   }
+  const PEEK_MS = 5 * 60 * 1000;
 
   /**
-   * From the Log after stages sync (analysis.html): sends your quickest run this week on each circuit you entered. Quiet:
-   * nothing is said, and a failure waits for the next sync. sync: ApexSync; segs; passesOf(seg) as for runsToSend.
+   * From the Log after stages sync (analysis.html): sends your quickest run this week on each circuit you entered.
+   * A failure waits for the next sync. sync: ApexSync; segs; passesOf(seg) as for runsToSend. → { accepted, places }: how
+   * many runs went up, and your place on each loop's board after them, for the Log to say (placeLine).
    */
   async function sendRuns(sync, segs, passesOf) {
-    if (!sync || !sync.apiFetch) return 0;
+    const none = { accepted: 0, places: [] };
+    if (!sync || !sync.apiFetch) return none;
     try {
       const r = await sync.apiFetch('/api/timeattack/circuits');
-      if (!r || !r.ok) return 0;
+      if (!r || !r.ok) return none;
       const now = await r.json();
       const runs = runsToSend(now.circuits, segs, passesOf, now.week, now.ends_on);
-      if (!runs.length) return 0;
+      if (!runs.length) return none;
       const p = await sync.apiFetch('/api/timeattack/runs', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ runs }) });
-      return p && p.ok ? ((await p.json()).accepted || 0) : 0;
-    } catch (_) { return 0; }
+      if (!p || !p.ok) return none;
+      const j = await p.json();
+      return { accepted: j.accepted || 0, places: Array.isArray(j.places) ? j.places : [] };
+    } catch (_) { return none; }
   }
 
-  const api = { clock, gap, daysLeft, areaPoint, runsToSend, localCopy, rng, hubs, kmFor, choose, geomOf, loopName, makeLoop, mount, sendRuns };
+  const api = { clock, gap, nth, placeLine, summaryLine, daysLeft, areaPoint, runsToSend, localCopy, rng, hubs, kmFor, choose, geomOf, loopName, makeLoop, mount, sendRuns };
   if (typeof module !== 'undefined' && module.exports) module.exports = api; else root.ApexTimeAttack = api;
 })(typeof window !== 'undefined' ? window : globalThis);
