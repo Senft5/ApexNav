@@ -45,6 +45,8 @@ export interface RoadBinRow {
  * MIN_DRIVERS different people hit it. One per window, at the bin with the most hits. Weights are divided by today's
  * (contribute.ts bumpWeight), so a pass one half-life old counts half.
  */
+/** A crest (ROAD_INTELLIGENCE 3.2): a bin whose peak unweighting is this many g or more. */
+export const CREST_G = 0.15;
 export const VERIFY = { window: 2, prior: 0.5, minP: 0.8, minDrivers: 2 };
 export function verifiedBumps(rows: { bin_idx: number; bump_hit: number; bump_pass: number; bump_drivers: number }[], today = new Date().toISOString().slice(0, 10)): [number, number][] {
   const now = bumpWeight(today), at = new Map(rows.map((r) => [r.bin_idx, r])), out: [number, number][] = [];
@@ -182,20 +184,34 @@ export async function coverage(env: Env, url: URL) {
     `SELECT rw.way_id, rw.shape, rb.dir, MAX(rb.n) AS passes,
             SUM(rb.rough_mean * rb.n) / NULLIF(SUM(CASE WHEN rb.rough_mean IS NOT NULL THEN rb.n END), 0) AS rough,
             1.0 * SUM(CASE WHEN rb.camber_n > 0 AND rb.camber_mean >= 3 THEN 1 ELSE 0 END) / NULLIF(SUM(CASE WHEN rb.camber_n > 0 THEN 1 ELSE 0 END), 0) AS banked,
-            1.0 * SUM(CASE WHEN rb.camber_n > 0 AND rb.camber_mean <= -3 THEN 1 ELSE 0 END) / NULLIF(SUM(CASE WHEN rb.camber_n > 0 THEN 1 ELSE 0 END), 0) AS off_camber
+            1.0 * SUM(CASE WHEN rb.camber_n > 0 AND rb.camber_mean <= -3 THEN 1 ELSE 0 END) / NULLIF(SUM(CASE WHEN rb.camber_n > 0 THEN 1 ELSE 0 END), 0) AS off_camber,
+            -- crests (R-04): the share of bins two or more passes measured that go light by CREST_G or more
+            1.0 * SUM(CASE WHEN rb.crest_n >= 2 AND rb.crest_peak >= ${CREST_G} THEN 1 ELSE 0 END) / NULLIF(SUM(CASE WHEN rb.crest_n >= 2 AND rb.crest_peak IS NOT NULL THEN 1 ELSE 0 END), 0) AS crested
        FROM road_ways rw JOIN road_bins rb ON rb.way_id = rw.way_id
       WHERE rw.s <= ?3 AND rw.n >= ?1 AND rw.w <= ?4 AND rw.e >= ?2
       GROUP BY rw.way_id, rb.dir
      HAVING ${shownSql("rw.way_id", "rb.dir")}
       ORDER BY rw.way_id, rb.dir LIMIT 2000`,
-  ).bind(s, w, n, e).all<{ way_id: number; shape: string; dir: number; passes: number; rough: number | null; banked: number | null; off_camber: number | null }>()).results;
-  type Item = { way: number; line: [number, number][]; conf: number[]; rough: (number | null)[]; banked: (number | null)[]; offCamber: (number | null)[] };
+  ).bind(s, w, n, e).all<{ way_id: number; shape: string; dir: number; passes: number; rough: number | null; banked: number | null; off_camber: number | null; crested: number | null }>()).results;
+  // crowd-verified bumps per direction (verifiedBumps, the rule /api/roads uses), only on the ways shown above
+  const shown = new Set(rows.map((r) => `${r.way_id}:${r.dir}`)), bumpRows = new Map<string, { bin_idx: number; bump_hit: number; bump_pass: number; bump_drivers: number }[]>();
+  if (shown.size) {
+    const br = (await env.DB.prepare(
+      `SELECT rb.way_id, rb.dir, rb.bin_idx, rb.bump_hit, rb.bump_pass, rb.bump_drivers
+         FROM road_ways rw JOIN road_bins rb ON rb.way_id = rw.way_id
+        WHERE rw.s <= ?3 AND rw.n >= ?1 AND rw.w <= ?4 AND rw.e >= ?2 AND rb.bump_pass > 0
+        ORDER BY rb.way_id, rb.dir, rb.bin_idx LIMIT 20000`,
+    ).bind(s, w, n, e).all<{ way_id: number; dir: number; bin_idx: number; bump_hit: number; bump_pass: number; bump_drivers: number }>()).results;
+    for (const r of br) { const k = `${r.way_id}:${r.dir}`; if (!shown.has(k)) continue; const a = bumpRows.get(k) ?? []; a.push(r); bumpRows.set(k, a); }
+  }
+  type Item = { way: number; line: [number, number][]; conf: number[]; rough: (number | null)[]; banked: (number | null)[]; offCamber: (number | null)[]; crested: (number | null)[]; bumps: number[] };
   const ways = new Map<number, Item>();
   const r3 = (v: number | null) => (v == null ? null : Math.round(v * 1000) / 1000);
   for (const r of rows) {
-    const it = ways.get(r.way_id) ?? { way: r.way_id, line: JSON.parse(r.shape), conf: [0, 0], rough: [null, null], banked: [null, null], offCamber: [null, null] };
+    const it = ways.get(r.way_id) ?? { way: r.way_id, line: JSON.parse(r.shape), conf: [0, 0], rough: [null, null], banked: [null, null], offCamber: [null, null], crested: [null, null], bumps: [0, 0] };
     it.conf[r.dir] = confLevel(r.passes);
-    it.rough[r.dir] = r3(r.rough); it.banked[r.dir] = r3(r.banked); it.offCamber[r.dir] = r3(r.off_camber);
+    it.rough[r.dir] = r3(r.rough); it.banked[r.dir] = r3(r.banked); it.offCamber[r.dir] = r3(r.off_camber); it.crested[r.dir] = r3(r.crested);
+    it.bumps[r.dir] = verifiedBumps(bumpRows.get(`${r.way_id}:${r.dir}`) ?? []).length;
     ways.set(r.way_id, it);
   }
   return { ways: [...ways.values()] };
