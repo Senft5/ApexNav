@@ -349,6 +349,12 @@ Not changed: what any switch does, the Co-driver half (Notes, Voice, music).
 
 Undo: revert the PR.
 
+## 2026-11-10 (fable-story-flake): the "route overview" e2e flow waits for the settled card (claude/fable-story-flake)
+
+The e2e check went red on PRs that touch nothing near it. The flow compared the overview's lines with the route's
+streets while the app was between two sets of steps. I changed the flow to read once the lines belong to the steps the
+route has now; the app is unchanged, and the check ("every name it says is a street the route drives") is as strict
+as before. Undo: revert the PR.
 ## 2026-11-10 (fable-no-orphan-key): a friend's third key takes the row (claude/fable-no-orphan-key)
 
 On People, a friend's row opens on two columns of keys. A friend who shares no position has three (Share a route,

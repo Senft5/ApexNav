@@ -294,6 +294,14 @@
 - e2e: that flow checks every row has a key and a line, the three surface words, Who sees me under Friends, panel on screen.
 - Next: the drive screen has not had a design pass.
 
+## Session 2026-11-10 (fable-story-flake): the "route overview" e2e flow read a frame early (claude/fable-story-flake, off origin/main 948cb4b)
+
+- `e2e/smoke.js` "route overview": the card's lines are rebuilt on a timer when the route's steps change (the router's
+  own, then the spoken directions'). The flow read the lines and the steps in the gap, so lines built from the first
+  steps ("Row 7") were held against the second steps' streets (the stub's "Instruction Lane"). On main it failed 1 run
+  in 2 here and reddened the e2e check on #368 and the whole-suite run of another branch. It now waits, inside one
+  evaluate, until the lines up are the ones built from the present steps, and counts the departure road as the app does.
+- 6 of 6 runs passed after (1 of 2 before). No app code changed.
 ## Session 2026-11-10 (fable-no-orphan-key): three friend keys no longer leave a hole (claude/fable-no-orphan-key, off origin/main 51c8c4c)
 
 - [x] web/index.html `.friend-keys > :last-child:nth-child(odd) { grid-column: 1 / -1; }`. tests/test_friend_keys.py;
