@@ -1,5 +1,11 @@
 # VETTA — CURRENT AGENT HANDOFF STATE
 
+## Session 2026-11-11 (roam-c-safe-area-split): the safe-area e2e flow, one a phone shape (claude/roam-c-safe-area-split, off origin/main)
+
+- e2e/smoke.js: `safe areas (<shape>)` x4 from `SAFE`, same screens and checks; scanner self-check in the first; one
+  contact sheet each. `LONG_S` weighs each 65 s. 176 flows; the four shards together list all of them.
+- Next: a fifth e2e job would bring each to about 5.2 min of flows, at one more minute of setup per run.
+
 ## Session 2026-11-11 (roam-c-migration-guard): migration numbers can't clash (claude/roam-c-migration-guard, off origin/main 936aec3)
 
 - tests/test_migrations.py: names NNNN_words.sql, numbers unique from 0001 (the message says which number to take; gaps are
