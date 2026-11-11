@@ -5616,8 +5616,18 @@
     let safety = null;
     onSocial(() => { try { safety = window.ApexSafetyUI ? ApexSafetyUI.mount({ el, btn, toast, apiCall, jsonOf }) : null; } catch (e) { console.error('safety', e); } });
     // Crew drives (web/crew_events.js, IDEAS S-06): planned drives across your crews, RSVPs, and the day's convoy.
+    // Sharing on by default (the owner, 2026-11-11; backend/src/share_defaults.ts): friends and private crews share Scores and
+    // Times from the start, a public crew nothing, so joining one asks once. Cancel keeps it off; the crew's page switches it.
+    async function askPublicSharing(crewId, name) {
+      if (!window.ApexConfirm || !ApexConfirm.choose) return;
+      const pick = await ApexConfirm.choose(`Share your drives with ${name || 'this crew'}? It's a public crew: anyone can join it and see what you share. Switch it off any time on the crew's page.`,
+        [{ key: 'both', label: 'Share Scores and times' }, { key: 'scores', label: 'Scores only' }]);
+      if (!pick) return;
+      const r = await apiCall('PUT', '/api/grants', { audience_type: 'crew', audience_id: crewId, share_scores: true, share_times: pick === 'both' }).catch(() => null);
+      toast(r && r.ok ? (pick === 'both' ? `${name} sees your Scores and times.` : `${name} sees your Scores.`) : 'Couldn\u2019t change that. Switch it on from the crew\u2019s page.');
+    }
     let crewEvents = null;
-    onSocial(() => { try { crewEvents = window.ApexCrewEvents ? ApexCrewEvents.mount({ el, btn, toast, apiCall, jsonOf, report: safety && safety.report,
+    onSocial(() => { try { crewEvents = window.ApexCrewEvents ? ApexCrewEvents.mount({ el, btn, toast, apiCall, jsonOf, report: safety && safety.report, askPublicSharing,
       here: () => state.lastPosition || null, mapCentre: () => { const c = map.getCenter(); return { lat: c.lat, lon: c.lng }; }, mayLookUp: nearLookupOk,
       myHandle: () => (accountMe && accountMe.handle) || null,
       plannedRoute: () => (plannedRoute && plannedRoute.lat.length > 1 ? { name: plannedRoute.name, geom: sharedGeom(plannedRoute) } : null),
@@ -5835,7 +5845,7 @@
         const crewDrives = ['<rect x="3" y="5" width="18" height="15"/><path d="M3 10h18M8 3v4M16 3v4"/>', 'Crew drives', 'A time, a meeting point and who’s going.'];
         // Friends: two roads that meet, someone on each. P-32: what a newcomer with no friends yet can look forward to, not the board.
         body.append(page(roads('M-12 34 C 70 34 96 96 176 92 S 300 24 372 50', 'M92 140 C 108 112 148 98 176 92') + pucks([116, 115], [277, 60, true]),
-          'Drive with friends.', 'Nothing is shared unless you switch it on.',
+          'Drive with friends.', 'Friends see your Scores and times. Switch it off for anyone.',
           gets(['<path d="M12 21s-6-6.2-6-11a6 6 0 0 1 12 0c0 4.8-6 11-6 11z"/><circle cx="12" cy="10" r="2.2"/>', 'Who’s out driving', 'On your map, on the road they’re driving, when they share it.'],
             crewDrives,
             ['<path d="M6 20c0-5 12-3 12-9 0-3-3-4-6-6"/><circle cx="6" cy="20" r="1.4"/><circle cx="12" cy="5" r="1.4"/>', 'Shared routes', 'A route you planned, sent to a friend to drive.']), waiting));
@@ -5892,6 +5902,7 @@
               const r = await apiCall('POST', '/api/crews/join', { token: tok }), j = r.ok ? await jsonOf(r) : null;
               if (r.ok || (r.status >= 400 && r.status < 500)) unstash('apex.crew');
               toast(r.ok ? (j && j.friend ? `You're in the crew, and friends with @${j.friend}.` : 'You joined the crew.') : r.status < 500 ? 'That crew link didn\'t work. Ask for a new one.' : 'Couldn\'t join. Check signal and try again.');
+              if (j && j.public) await askPublicSharing(j.id, 'this crew');
               redo();
             } catch (_) { toast('Couldn\'t join. Check signal and try again.'); } finally { if (b) b.disabled = false; }
           }, 'ink-btn solid')), btn('Not now', () => { unstash('apex.crew'); redo(); }, 'linkbtn')));
@@ -6184,6 +6195,7 @@
             if (r.ok || (r.status >= 400 && r.status < 500)) unstash('apex.crew');
             const j = r.ok ? await jsonOf(r).catch(() => null) : null;   // P-02: the link friends its sender too
             toast(r.ok ? (j && j.friend ? `You're in the crew, and friends with @${j.friend}.` : 'You joined the crew.') : r.status < 500 ? 'That crew link didn\'t work. Ask for a new one.' : 'Couldn\'t join. Check signal and try again.');
+            if (j && j.public) await askPublicSharing(j.id, 'this crew');
             redo();
           }, 'ink-btn solid'), btn('Not now', () => { unstash('apex.crew'); redo(); }, 'linkbtn'));
       }
@@ -6261,7 +6273,7 @@
             el('span', { textContent: `${c.members} ${c.members === 1 ? 'member' : 'members'} · ${c.area_name}${Number.isFinite(c.km) ? ` · ${ApexUnits.long(Math.max(1609.344, c.km * 1000), 0)}` : ''}` }),
             ...(c.about ? [el('em', { textContent: c.about })] : [])),
             el('div', { className: 'row' },
-              btn('Join', async () => { const r = await apiCall('POST', `/api/crews/${c.id}/join`); if (r.ok) { toast(`You joined ${c.name}.`); openCrewId = c.id; redo(); } else toast(r.status === 429 ? 'You\'re in 10 crews already.' : 'Couldn\'t join. Try again.'); }, 'ink-btn solid'),
+              btn('Join', async () => { const r = await apiCall('POST', `/api/crews/${c.id}/join`); if (r.ok) { toast(`You joined ${c.name}.`); await askPublicSharing(c.id, c.name); openCrewId = c.id; redo(); } else toast(r.status === 429 ? 'You\'re in 10 crews already.' : 'Couldn\'t join. Try again.'); }, 'ink-btn solid'),
               ...(safety ? [btn('Report', () => safety.report({ kind: 'crew', target: c.id, label: c.name, done: redo }), 'linkbtn')] : [])));
           ntiles.append(t);
         }

@@ -47,6 +47,31 @@ notes under a search that finds nothing said "Press Go" while the key under them
 "offline" is only said when the phone is offline.
 
 Undo: revert the PR. Typed coordinates still work as before and are still named "Pin lat, lon".
+## 2026-11-11 (fable-share-defaults): Scores and times shared with friends and private crews by default (claude/fable-share-defaults)
+
+Nate (2026-11-11): "data sharing with friends and private crews should be on by default, with an option to turn each
+off case by case. Public crews should default to off, but prompt you when you join to enable." Done that way: a new
+friendship (a request accepted, a mutual request, a friend link, a crew link's sender) gives both people a grant with
+Scores and Times on; starting or joining a private crew gives one for that crew; a public crew gives none, and joining
+one (from Crews near you, a meet's card or a link) asks once: Share Scores and times, Scores only, or Cancel. Every one
+is still switched off per friend and per crew where it was.
+
+The calls:
+- **Existing friendships and crews are not changed.** A pair who never touched the switch has no grant row, which looks
+  the same as "never chose", so turning those on would publish people's drives without telling them. Only new
+  friendships and joins get the default. To also turn on the old ones, a one-off backfill is a single INSERT OR IGNORE
+  per audience (ask and I'll write it); it would need a line in the app saying so.
+- **Switching off now keeps a row with both off** instead of deleting it, so a later default (say a crew link from
+  someone you're already friends with) never turns it back on. Everything that reads grants already checks the flag.
+- **Times are on too**, since the stage times decision (2026-11-10) makes them part of "data sharing".
+- **Not in this**: live position on the friends map, cars shown and road data keep their own switches and defaults.
+  Position stays off by default: it says where someone is right now, which is a safety matter, not a sharing one.
+- A private crew switched to public keeps its members' switches as they are (as before).
+- The new-account Friends page said "Nothing is shared unless you switch it on."; it says "Friends see your Scores and
+  times. Switch it off for anyone." Tests that encoded "nothing by default" now switch off explicitly (a spec change).
+
+Undo: revert the PR. Grants made in the meantime stay on until switched off.
+
 ## 2026-11-10 (fable-one-corner): "1 corners" is "1 corner"; a Best roads nearby key keeps its word while it searches (claude/fable-one-corner)
 
 A road with one corner read "1 corners" on its card's line, under its big number, aloud to a screen reader, in "1 more

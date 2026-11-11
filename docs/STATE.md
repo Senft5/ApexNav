@@ -31,6 +31,18 @@
 - Checked: pytest full; e2e "a pin has a name", "Where to?" 9/9, "plan flow" 6/6, "spot photo", "Dynamic Type",
   "REVIEW.md 1.2" 2/2, "routes from elsewhere", "saved for offline", "drag to reshape", "safe areas".
 - Next: a tapped place could take the road's name once the lookup lands (rename the planned route after the fact).
+## Session 2026-11-11 (fable-share-defaults): sharing on by default for friends and private crews (claude/fable-share-defaults, off origin/main fc27c473)
+
+- `backend/src/share_defaults.ts`: `friendDefaults(a, b)` (both ways, only while accepted and unblocked) from
+  `friendAccept`, the mutual request in `friendRequest`, and `befriendOnLink` (auth.ts); `crewDefaults(user, crew)` (private
+  crews only) from `crewCreate` and `crewJoin`. INSERT OR IGNORE: an existing row is never changed.
+- `setGrant` with Scores off keeps a 0/0 row (was a DELETE) so defaults never undo it. `crewJoin` returns `public`.
+- `web/cockpit.js` `askPublicSharing(id, name)` (ApexConfirm.choose) after joining a public crew from Crews near you or a
+  link; `web/crew_events.js` meet card's Join the crew calls it through `page.askPublicSharing`. Onboarding copy changed.
+- Tests: backend/test/share_defaults.test.ts (new); privacy, crews, activity, crew_page, drive_scores updated for the new
+  default; e2e "People, a new account" joins a public crew and picks Scores only.
+- Not done: no backfill of existing friendships (CALL_SHEET says why and how).
+
 ## Session 2026-11-10 (fable-one-corner): singular corners, and the nearby key keeps its label (claude/fable-one-corner, off origin/main e76f1bb)
 
 - cockpit.js: the route bar and card lines use `ApexFormat.cornerCount`; `buildRoute`'s announce pluralises inline

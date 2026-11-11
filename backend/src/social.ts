@@ -1,5 +1,6 @@
 // Friends, blocks, crews, grants and boards. Every function takes the verified viewer; there is no endpoint that
 // takes a user id for "whose data to read". Privacy rules (docs/BACKEND.md section 11) are enforced here and tested.
+import { crewDefaults, friendDefaults } from "./share_defaults";
 import { CELL_DEG, Env, HANDLE_RE, HttpError, body, nearCell, num, pair, randomToken, sha256hex, sqlTime, str } from "./util";
 import { befriendOnLink, type Viewer } from "./auth";
 import { removedSql, reportedSql } from "./reports_sql";
@@ -49,6 +50,7 @@ export async function friendRequest(env: Env, v: Viewer, req: Request): Promise<
     await run(env, "INSERT INTO friendships (user_a, user_b, status, requested_by) VALUES (?, ?, 'pending', ?)", a, b, v.id);
   } else if (existing.status === "pending" && existing.requested_by !== v.id) {
     await run(env, "UPDATE friendships SET status = 'accepted' WHERE user_a = ? AND user_b = ?", a, b);   // they asked first: mutual
+    await friendDefaults(env, a, b);
   }
 }
 
@@ -75,6 +77,7 @@ export async function friendAccept(env: Env, v: Viewer, req: Request): Promise<v
   const r = await run(env,
     "UPDATE friendships SET status = 'accepted' WHERE user_a = ? AND user_b = ? AND status = 'pending' AND requested_by != ?", a, b, v.id);
   if (!r.meta.changes) throw new HttpError(404, "no_request");
+  await friendDefaults(env, a, b);
 }
 
 /** Unfriend / decline / cancel / block: the friendship goes, and with it every grant and published entry between the two. */
@@ -117,6 +120,7 @@ export async function crewCreate(env: Env, v: Viewer, req: Request): Promise<{ i
       .bind(id, name, v.id, set.visibility, set.about, set.area_name, set.area_lat, set.area_lon),
     env.DB.prepare("INSERT INTO crew_members (crew_id, user_id, role) VALUES (?, ?, 'owner')").bind(id, v.id),
   ]);
+  await crewDefaults(env, v.id, id);
   return { id };
 }
 
@@ -225,7 +229,7 @@ const CREW_INVITE_OK = `i.token_hash = ?1 AND i.expires_at > datetime('now')
 
 /** POST /api/crews/join { token }: one link is the whole way in (P-02). Anyone signed in (a member, since Vetta opened) joins the
  *  crew and, on first joining, is friends with whoever sent the link (not across a block). `friend` is that sender's handle. */
-export async function crewJoin(env: Env, v: Viewer, req: Request): Promise<{ id: string; friend: string | null }> {
+export async function crewJoin(env: Env, v: Viewer, req: Request): Promise<{ id: string; friend: string | null; public: boolean }> {
   const { token } = await body<{ token?: string }>(req);
   const inv = await first<{ crew_id: string; created_by: string; handle: string | null }>(env,
     `SELECT i.crew_id, i.created_by, s.handle FROM crew_invites i JOIN crews c ON c.id = i.crew_id JOIN users s ON s.id = i.created_by
@@ -235,9 +239,11 @@ export async function crewJoin(env: Env, v: Viewer, req: Request): Promise<{ id:
   if ((n?.n ?? 0) >= 10) throw new HttpError(429, "too_many_crews");                // same cap as creating or joining a public crew
   const joined = await run(env, "INSERT OR IGNORE INTO crew_members (crew_id, user_id) VALUES (?, ?)", inv.crew_id, v.id);
   // only a first join: tapping an old link again doesn't undo an unfriending
-  if (joined.meta.changes) await befriendOnLink(env, v.id, inv.created_by);
+  if (joined.meta.changes) { await befriendOnLink(env, v.id, inv.created_by); await crewDefaults(env, v.id, inv.crew_id); }
   const friend = inv.created_by !== v.id && await isAcceptedFriend(env, v.id, inv.created_by) ? inv.handle : null;
-  return { id: inv.crew_id, friend };
+  // a public crew starts with nothing shared, and the phone asks (share_defaults.ts); a private one already shares
+  const pub = await first<{ x: number }>(env, "SELECT 1 AS x FROM crews WHERE id = ? AND visibility = 'public'", inv.crew_id);
+  return { id: inv.crew_id, friend, public: !!pub };
 }
 
 /** What a crew invite is for, before joining: its name, owner, size and whether you're in it already. Asks nothing of the
@@ -270,7 +276,7 @@ export async function crewLeave(env: Env, v: Viewer, crewId: string): Promise<vo
   ]);
 }
 
-// ---- grants: opt-in, one row per friend or crew --------------------------------------------------
+// ---- grants: one row per friend or crew (on by default for friends and private crews, share_defaults.ts) --------------------------------------------------
 export async function setGrant(env: Env, v: Viewer, req: Request): Promise<void> {
   const b = await body<{ audience_type?: string; audience_id?: string; share_scores?: boolean; share_times?: boolean }>(req);
   const type = b.audience_type, id = str(b.audience_id, "audience_id", 1, 64);
@@ -280,7 +286,9 @@ export async function setGrant(env: Env, v: Viewer, req: Request): Promise<void>
   const times = b.share_times === true, scores = b.share_scores === true || times;   // sharing times implies sharing scores
   if (!scores) {
     await env.DB.batch([
-      env.DB.prepare("DELETE FROM grants WHERE user_id = ? AND audience_type = ? AND audience_id = ?").bind(v.id, type, id),
+      // kept as an "off" row, not deleted: a choice made stays made, so a default (share_defaults.ts) never turns it back on
+      env.DB.prepare(`INSERT INTO grants (user_id, audience_type, audience_id, share_scores, share_times) VALUES (?1, ?2, ?3, 0, 0)
+         ON CONFLICT (user_id, audience_type, audience_id) DO UPDATE SET share_scores = 0, share_times = 0`).bind(v.id, type, id),
       env.DB.prepare("DELETE FROM board_entries WHERE user_id = ? AND audience_type = ? AND audience_id = ?").bind(v.id, type, id),
       ...(type === "crew" ? [env.DB.prepare("DELETE FROM drive_scores WHERE user_id = ? AND crew_id = ?").bind(v.id, id)] : []),
     ]);
