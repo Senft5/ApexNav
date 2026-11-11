@@ -62,6 +62,20 @@
       try { if (window.ApexRecce) ApexRecce.apply(ApexRecce.load(localStorage), t); } catch (_) {}   // your own recce notes again
       return true;
     }
+    /**
+     * Bumps several members felt (IDEAS Q-02, roads.ts verifiedBumps) go on the route as pace notes. Unlike the corners this
+     * may happen mid-drive: it only adds notes, it never moves one. Once per track. Returns true when anything was added.
+     */
+    function applyCrowdBumps(t, m) {
+      if (!t || t.kind !== 'route' || !m || !Array.isArray(m.crowdBumps) || t.crowdBumps != null || !Array.isArray(t.events)) return false;
+      if (window.ApexFlags && !ApexFlags.on('crowd_bumps')) return false;               // switched off on the server (flags.js)
+      const add = ApexContributor.bumpEvents(t, m.crowdBumps, t.events);
+      t.crowdBumps = add.length;
+      if (!add.length) return false;
+      t.events = [...t.events, ...add].sort((a, b) => a.dist_m - b.dist_m);
+      Core.linkNotes(t.events);
+      return true;
+    }
     const ownRouteOfTrack = new WeakMap();                            // a track built from one of our routes -> that route
     async function trackFromPolyline(coords, id, name, sightMs = 4000, o = {}) {
       const tl = typeof tlSpan === 'function' && typeof performance !== 'undefined' ? tlSpan : null, t0 = tl ? performance.now() : 0;
@@ -1386,7 +1400,8 @@
     // Auto: wake on the road ahead (a corner that is tight or needs braking, updateNotes, U-58) or on hard driving. Full:
     // always awake. Quiet: never wake, so only cameras and severe bumps are called.
     const isSpirited = () => state.notesMode === 'full' || (state.notesMode === 'auto' && performance.now() - state.spiritedAt < 30000);
-    const noteworthyInCruise = (e) => e.type === 'alpr' || (e.type === 'bump' && e.severity_g >= 0.45);
+    // a bump several members felt (IDEAS Q-02) is called in cruise as well: verified, not one phone's guess
+    const noteworthyInCruise = (e) => e.type === 'alpr' || (e.type === 'bump' && (e.severity_g >= 0.45 || !!e.crowd));
 
     // -------------------------------------------------------------------------
     // Voice: the most natural voice installed, read like a real co-driver.
@@ -2331,6 +2346,8 @@
       const m = t.measured;
       // the corners members actually drove, where the map simplified them (IDEAS Q-04); never mid-drive
       if (state.mode !== 'live' && applyCrowdCurvature(t, m) && track === t) { state.spoken.clear(); loadTrackOnMap(); render(true); }
+      if (applyCrowdBumps(t, m) && track === t) render(false);
+
       if (t === plannedRoute) renderRouteCard(t);
       if (!m || track !== t) return;
       note.hidden = false;
@@ -7772,7 +7789,7 @@
     // Camber and crest go up when the recorder kept them (calibrated mount).
     function feedLive() {
       const L = drive.live, r = drive.rec; if (!L || !r) return;
-      while (drive.liveIdx < r.rows.length) { const x = r.rows[drive.liveIdx++]; L.push({ lat: x.lat, lon: x.lon, roughness_rms: x.roughness_rms, camber_deg: x.camber_deg, camber_v: x.camber_v, crest: x.crest_vertical_g, speed_mps: x.speed_mps, lon_g: x.lon_g }); }
+      while (drive.liveIdx < r.rows.length) { const x = r.rows[drive.liveIdx++]; L.push({ lat: x.lat, lon: x.lon, roughness_rms: x.roughness_rms, camber_deg: x.camber_deg, camber_v: x.camber_v, crest: x.crest_vertical_g, speed_mps: x.speed_mps, lon_g: x.lon_g, vert_peak_g: x.vert_peak_g }); }
     }
     // The live Vetta Score (REVIEW.md 1.2, Driving; 4.3): the drive so far scored the way the end card scores it, every 30 s
     // while recording; null (shown "--") until there are enough clean corners.

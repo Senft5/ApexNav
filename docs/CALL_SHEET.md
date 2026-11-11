@@ -14,6 +14,16 @@ empty states stay drawn in pencil. No words or places changed.
 
 Undo: revert the PR (CSS only).
 
+## 2026-11-11 (roam-b-crowd-bumps): a bump is called on a planned route once two members felt it (claude/roam-b-crowd-bumps)
+
+Each 5 m section of road data now also says whether the phone felt a sharp bump there (yes, no or unknown; never a g
+value). The server keeps it as a Beta posterior with a 120-day half-life and counts different people per spot without
+storing who. A bump shows to members once two or more people felt it and most passes agree (posterior over 0.8: two
+hits and no clean pass is 0.83; three of four is 0.70, not shown), and the co-driver calls it on a planned route even in
+cruise, the strip saying "Confirmed by members". The calls I made: 120 days for the half-life (potholes get filled
+within a season or two; a frost heave comes back each winter and gets re-felt); ±10 m to treat two hits as one bump
+(GPS); a Jeffreys prior; a repaved section starts its bump evidence again. Migration 0052 (additive). Undo: FLAGS
+{"crowd_bumps":{"on":false}} stops the calls; the thresholds are `BUMP` (contribute.ts) and `VERIFY` (roads.ts).
 ## 2026-11-11 (round two analysis): Your touch, and when the recording is too coarse to time it (claude/project-thread-gd7nre)
 
 Your driving now has a "Your touch" panel: how fast the brakes go on and come off and how fast the car is loaded up at

@@ -707,3 +707,24 @@ def test_adaptive_sectors_match_and_follow_the_road():
     assert all((b - a) * 5 <= 2500 for a, b in got[1]), "never over 2.5 km"
     assert any(a == 300 for a, _ in got[2]), "split at the junction"
     assert got[3] == [[0, len(path_from_legs([("straight", 200)])[0])]]
+
+
+def test_parity_spike_mask():
+    """The bump evidence a pass contributes (IDEAS Q-02): the same 1 / 0 / unknown per sample in Python and JS."""
+    rng = np.random.default_rng(7)
+    n = 300
+    rough = 0.03 + 0.01 * rng.random(n)
+    rough[150:200] = 0.2                                                               # broken pavement: no spikes
+    peak = 0.1 + 0.05 * rng.random(n)
+    peak[[20, 60, 170, 250]] = [0.5, 0.3, 0.9, 1.1]
+    peak[[100, 101]] = np.nan                                                          # not measured: unknown
+    payload = {"rough": rough.tolist(), "peak": [None if not np.isfinite(v) else v for v in peak.tolist()]}
+    runner = ("const c=require(process.argv[1]);const p=JSON.parse(require('fs').readFileSync(0,'utf8'));"
+              "process.stdout.write(JSON.stringify(c.spikeMask(p.rough,p.peak)));")
+    out = subprocess.run([NODE, "-e", runner, os.path.abspath("web/apex_core.js")], input=json.dumps(payload),
+                         capture_output=True, text=True, check=True)
+    js = json.loads(out.stdout)
+    py = rd.spike_mask(rough, peak)
+    assert js == [None if not np.isfinite(v) else int(v) for v in py]
+    assert [i for i, v in enumerate(js) if v == 1] == [20, 250]
+    assert js[100] is None and js[101] is None

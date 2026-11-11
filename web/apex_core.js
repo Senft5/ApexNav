@@ -1156,6 +1156,20 @@
   }
 
   /**
+   * Per 5 m sample (road_dna.spike_mask): 1 where the vertical peak is a spike (over SPIKE_PEAK_G and SPIKE_CONTRAST times
+   * the rolling-median roughness around it), 0 where measured and not, null where either is unknown. The bump evidence a
+   * pass contributes (IDEAS Q-02, contributor.js `bp`) and what detectHazards reads bumps from.
+   */
+  function spikeMask(rough, vertPeak) {
+    const n = vertPeak ? vertPeak.length : 0, f = (a, i) => (a && Number.isFinite(a[i]) ? a[i] : NaN);
+    const bg = rollingMedian(Float64Array.from({ length: n }, (_, i) => f(rough, i)), SPIKE_BACKGROUND_BINS);
+    return Array.from({ length: n }, (_, i) => {
+      const p = f(vertPeak, i);
+      return Number.isFinite(p) && Number.isFinite(bg[i]) ? (p > SPIKE_PEAK_G && p > SPIKE_CONTRAST * bg[i] ? 1 : 0) : null;
+    });
+  }
+
+  /**
    * Bumps (vertical spike), crests (unweighting) and dips (compression) from measured IMU (road_dna.detect_hazards).
    * Unmeasured samples (null/NaN) never make a hazard. With no vertPeak, roughness stands in for bumps unless
    * roughFallback is false (phone recordings: a roughness RMS alone cannot tell a pothole from broken pavement).
@@ -1164,8 +1178,7 @@
     const num = (a, n) => Float64Array.from({ length: n }, (_, i) => (a && Number.isFinite(a[i]) ? a[i] : NaN));
     const n = dist.length, c = num(crest, n), r = num(rough, n), out = [];
     if (vertPeak) {
-      const peak = num(vertPeak, n), bg = rollingMedian(r, SPIKE_BACKGROUND_BINS);
-      const spike = Array.from(peak, (p, i) => p > SPIKE_PEAK_G && p > SPIKE_CONTRAST * bg[i]);
+      const peak = num(vertPeak, n), spike = spikeMask(r, peak).map((v) => v === 1);
       for (const i of peakEvents(peak, spike, dist, true)) out.push({ index: i, type: 'bump', severity_g: peak[i] });
     } else if (roughFallback) {
       for (const i of peakEvents(r, Array.from(r, (v) => v > ROUGH_RMS_FALLBACK_G), dist, true)) out.push({ index: i, type: 'bump', severity_g: r[i] });
@@ -1207,7 +1220,7 @@
   }
 
   const api = {
-    profileRecording, referenceLap, windowFeatures, axisScores, archetype,
+    profileRecording, spikeMask, referenceLap, windowFeatures, axisScores, archetype,
     driverScore, techniqueScore, cornerTechnique, carGrip, cornersForCar, fatigue, spreadBy, turnIn, segmentPass, segmentWindow,
     removeSpurs, retracedShare,
     compareDrives, cornerMetrics, elapsedS, cornerPhases, coach, ggEnvelope, gripUse, ggSector, abruptMoments,

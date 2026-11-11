@@ -56,6 +56,17 @@ out.cls = a[0].cls;
   }
   const poly = pts.map(([px, py]) => [lat0 + py / 110540, lon0 + px / mLon]), cum = C.cumulative(poly), sh = C.shapeOf(poly), cs = C.cumulative(sh);
   out.twisty = { nodes: poly.length, sent: sh.length, kept: cs[cs.length - 1] / cum[cum.length - 1], ends: JSON.stringify([sh[0], sh[sh.length - 1]]) === JSON.stringify([poly[0], poly[poly.length - 1]].map(([la, lo]) => [+la.toFixed(5), +lo.toFixed(5)])) }; }
+// bump flags (IDEAS Q-02): a spike over clean road is 1 in its bin, the rest 0; no core, no peaks or walking pace: unknown
+{ const Core = require(process.argv[1] + '/web/apex_core.js');
+  const rough = d.lat.map(() => 0.03), vpeak = d.lat.map((_, i) => (i === 500 ? 0.9 : 0.1));
+  const bins = (extra) => run({ ...d, rough, vpeak, ...extra }, m, { 77: way }, { Core })[0].bins;
+  const b = bins({}), hit = b.filter((x) => x.bp === 1);
+  out.bump = { hits: hit.length, hitBin: hit.length ? hit[0].i : null, zeros: b.filter((x) => x.bp === 0).length, total: b.length,
+    noCore: [...new Set(run({ ...d, rough, vpeak }, m, { 77: way }, { Core: null })[0].bins.map((x) => x.bp))],
+    noPeaks: [...new Set(run({ ...d, rough }, m, { 77: way }, { Core })[0].bins.map((x) => x.bp))],
+    walking: [...new Set(bins({ speed_mps: d.lat.map(() => 1) }).map((x) => x.bp))],
+    driving: bins({ speed_mps: d.lat.map(() => 20) }).filter((x) => x.bp === 1).length,
+    unknownPeak: bins({ vpeak: vpeak.map((v, i) => (i >= 600 && i < 700 ? null : v)) }).filter((x) => x.bp === null).length }; }
 // network shell with a fake fetch: Valhalla trace_attributes + Overpass, then upload
 // a mostly disputed road: 45 of 50 measured bins disagree, 5 agree on smooth: tiny weight, no Surface
 out.mostlyDisputed = (() => { const m = { km: 0.5, coverage: 0.5, roughCoverage: 0.05, roughness: 0.05, avgPasses: 3, bankedKm: 0, offCamberKm: 0 }; return { adj: C.measuredAdjust(m), surface: C.surfaceScore(m) }; })();
@@ -82,6 +93,13 @@ out.adjust = [C.measuredAdjust(null), C.measuredAdjust({ roughness: null, covera
     : { ok: true, json: async () => ({ elements: [{ type: 'way', id: 77, geometry: way.map(([la, lo]) => ({ lat: la, lon: lo })) }] }) };
   const viaNet = await C.measuredAlong(rt, async (ids) => { out.lookupIds = ids; return roads; }, { fetch: fk });
   out.series = (() => { const s = C.seriesFrom(C.locate({ drive: rt, match: rm, ways: { 77: way } }), roads, 1000); return { len: s.cam.length, known: s.cam.filter((v) => v != null).length, unknownRough: s.rough.filter((v) => v == null).length, first: s.cam.findIndex((v) => v != null), n: s.n.find((v) => v != null) }; })();
+  // crowd-verified bumps (IDEAS Q-02): [bin, posterior] become one route event each, never two at one spot
+  { const br = { 77: { 0: { ...roads[77][0], bp: [[250, 0.86], [251, 0.9], [300, 0.83], [5000, 0.9]] } } };
+    const s = C.seriesFrom(C.locate({ drive: rt, match: rm, ways: { 77: way } }), br, 1000);
+    const t = { lat: rt.lat, lon: rt.lon, dist: rt.lat.map((_, i) => i * 5) };
+    const ev = C.bumpEvents(t, s.bumps, [{ type: 'bump', dist_m: s.bumps.length > 2 ? t.dist[s.bumps[2].index] + 10 : -1 }]);
+    out.crowdBumps = { series: s.bumps.map((b) => [b.index, b.p]), events: C.bumpEvents(t, s.bumps).map((e) => [e.index, e.call, e.crowd.p, e.severity_g]),
+      besideOwn: ev.length, bad: C.bumpEvents(t, [{ index: -1, p: 0.9 }, { index: 1e6, p: 0.9 }]).length, none: C.seriesFrom([], {}, 10).bumps.length }; }
   out.viaNetwork = viaNet && { coveredKm: Math.round(viaNet.coveredKm * 100) / 100, banked: viaNet.bankedKm };
   out.signedOut = await C.measuredAlong(rt, async () => null, { fetch: fk });
   // a route over 125 ways: three lookups of at most 50; one signed-out batch makes the whole answer unknown
@@ -152,7 +170,7 @@ def test_eligibility_window(result):
 
 def test_payload_has_no_drive_coordinates_or_times(result):
     assert result["shape"] is True
-    assert result["keys"] == "bins,cam_v,cls,dir,drive_id,driven_on,rec,shape,way_id|cam,crest,fl,hb,i,k,rough"
+    assert result["keys"] == "bins,cam_v,cls,dir,drive_id,driven_on,rec,shape,way_id|bp,cam,crest,fl,hb,i,k,rough"
     assert result["cls"] == "tertiary", "the map match's road class goes with it (the server's open-road rule)"
 
 
@@ -465,3 +483,24 @@ def test_repaved_stretches_are_counted(result):
     r, m = result["repaved"], result["measured"]
     assert r["repavedKm"] == pytest.approx(0.3) and r["repavedOn"] == "2026-10"
     assert m["repavedKm"] == 0 and m["repavedOn"] is None, "an older server without ch says nothing"
+
+
+def test_bump_flags(result):
+    """Each bin says whether this pass felt a spike there (IDEAS Q-02); unknown is never sent as clean."""
+    b = result["bump"]
+    assert b["hits"] == 1 and b["zeros"] == b["total"] - 1
+    assert b["hitBin"] in (499, 500)                                # sample 500, 2500 m along the way (float floor)
+    assert b["noCore"] == [None] and b["noPeaks"] == [None] and b["walking"] == [None]
+    assert b["driving"] == 1
+    assert 90 <= b["unknownPeak"] <= 101                            # the 100 samples with no peak: their bins unknown
+
+
+def test_crowd_bumps_on_a_route(result):
+    b = result["crowdBumps"]
+    # bins 250, 251 and 300 are on the route (bin 5000 is not); 250 and 251 are 5 m apart: one note, not two
+    idx = [x[0] for x in b["series"]]
+    assert len(idx) == 3 and idx[1] - idx[0] == 1 and idx[2] - idx[0] == 50 and abs(idx[0] - 250) <= 1   # the drive is 3 m off the way
+    assert len(b["events"]) == 2 and all(e[1] == "Bump" and e[3] is None for e in b["events"])
+    assert b["events"][0][2] == 0.86
+    assert b["besideOwn"] == 1                                       # one already on the track 10 m from the third
+    assert b["bad"] == 0 and b["none"] == 0
