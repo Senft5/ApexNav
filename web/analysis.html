@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self' apexnav:; script-src 'self' apexnav: 'sha256-fokBdRktv54c7IJGyYKFZrO+yi0ikFHm6SDVDM1isXo=' 'sha256-G7s/ZI+Hqrfc4DqbB6EANJJLmUmhNK06PizQ1LlsG84=' https://cdn.jsdelivr.net 'wasm-unsafe-eval'; worker-src 'self' apexnav: blob:; child-src 'self' apexnav: blob:; style-src 'self' apexnav: 'unsafe-inline'; font-src 'self' apexnav: data:; img-src 'self' apexnav: data: blob: https://tiles.openfreemap.org https://s3.amazonaws.com https://basemap.nationalmap.gov; media-src 'self' apexnav: data: blob:; connect-src 'self' apexnav: data: blob: https://apexnav.senftns.workers.dev wss://apexnav.senftns.workers.dev https://tiles.openfreemap.org https://basemap.nationalmap.gov https://s3.amazonaws.com https://valhalla1.openstreetmap.de https://router.project-osrm.org https://overpass-api.de https://overpass.private.coffee https://overpass.kumi.systems https://maps.mail.ru https://nominatim.openstreetmap.org https://photon.komoot.io https://api.open-meteo.com https://api.weather.gov https://statsapi.mlb.com https://api.seatgeek.com https://api.water.noaa.gov https://waterservices.usgs.gov https://in.carsprogram.org https://publicapi.ohgo.com https://quickstats.nass.usda.gov https://commons.wikimedia.org https://graph.mapillary.com https://vpic.nhtsa.dot.gov https://cdn.jsdelivr.net https://huggingface.co https://*.huggingface.co https://*.hf.co; object-src 'none'; base-uri 'none'; form-action 'self'" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self' apexnav:; script-src 'self' apexnav: 'sha256-FmUPxTjbgkigTU4XSnDsoR7FDVqg2Mo/yrnfWvDjS0E=' 'sha256-G7s/ZI+Hqrfc4DqbB6EANJJLmUmhNK06PizQ1LlsG84=' https://cdn.jsdelivr.net 'wasm-unsafe-eval'; worker-src 'self' apexnav: blob:; child-src 'self' apexnav: blob:; style-src 'self' apexnav: 'unsafe-inline'; font-src 'self' apexnav: data:; img-src 'self' apexnav: data: blob: https://tiles.openfreemap.org https://s3.amazonaws.com https://basemap.nationalmap.gov; media-src 'self' apexnav: data: blob:; connect-src 'self' apexnav: data: blob: https://apexnav.senftns.workers.dev wss://apexnav.senftns.workers.dev https://tiles.openfreemap.org https://basemap.nationalmap.gov https://s3.amazonaws.com https://valhalla1.openstreetmap.de https://router.project-osrm.org https://overpass-api.de https://overpass.private.coffee https://overpass.kumi.systems https://maps.mail.ru https://nominatim.openstreetmap.org https://photon.komoot.io https://api.open-meteo.com https://api.weather.gov https://statsapi.mlb.com https://api.seatgeek.com https://api.water.noaa.gov https://waterservices.usgs.gov https://in.carsprogram.org https://publicapi.ohgo.com https://quickstats.nass.usda.gov https://commons.wikimedia.org https://graph.mapillary.com https://vpic.nhtsa.dot.gov https://cdn.jsdelivr.net https://huggingface.co https://*.huggingface.co https://*.hf.co; object-src 'none'; base-uri 'none'; form-action 'self'" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
   <title>Vetta · Log</title>
   <link rel="icon" href="brand/mark.svg" type="image/svg+xml" />
@@ -688,7 +688,7 @@
       summaryParts.year = `${year} · ${ApexFormat.distance(s.m)} · ${s.drives} drive${s.drives === 1 ? '' : 's'}`; paintSummary();   // the rest when opened
       // the year's cleanest corners come with Your driving's profile (the profile job), once it has answered
       const paint = () => {
-        const ls = ApexYearReview.lines({ ...s, bestCorners: (driving.best || []).filter((b) => String(b.at).startsWith(`${year}-`)) });
+        const ls = ApexYearReview.lines({ ...s, crews: (() => { try { return ApexYearReview.crewYear(localStorage, year); } catch (_) { return []; } })(), bestCorners: (driving.best || []).filter((b) => String(b.at).startsWith(`${year}-`)) });
         $('yearLines').replaceChildren(...ls.map((t) => Object.assign(document.createElement('p'), { textContent: t })));
         yearText = [`My ${year} on the road with Vetta`, ...ls].join('\n');
       };
@@ -815,6 +815,16 @@
     }
     const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
     const monthLabel = (m) => `${MONTHS[+m.slice(5, 7) - 1]} ${m.slice(0, 4)}`;
+    // the speed at those corners' slowest point, the same way: how steadily you carried speed through them (a spread, never a target)
+    const STEADY_CLAIM_MPS = 0.45;                                       // 1 mph
+    function speedNote(months) {
+      const vs = months.filter((w) => finiteNum(w.speed_sd_mps));
+      if (!vs.length) return '';
+      const spd = (v) => `${Math.max(1, Math.round(ApexUnits.speed(v)))} ${ApexUnits.speedU()}`;
+      const a = vs[0], z = vs[vs.length - 1], diff = z.speed_sd_mps - a.speed_sd_mps;
+      const claim = vs.length > 1 && Math.abs(diff) >= STEADY_CLAIM_MPS && a.speed_corners >= STEADY_CLAIM_CORNERS && z.speed_corners >= STEADY_CLAIM_CORNERS;
+      return ` Your speed at their slowest point varied about ${spd(z.speed_sd_mps)} in ${monthLabel(z.month)}${claim ? `, ${diff < 0 ? 'steadier' : 'less steady'} than ${monthLabel(a.month)} (${spd(a.speed_sd_mps)})` : ''}.`;
+    }
     function renderSteadiness() {
       const panel = $('steadyPanel'); if (!panel) return;
       steadinessByMonth((months) => {
@@ -832,7 +842,8 @@
         const about = (v) => (v < 3 ? `under ${ApexUnits.fine(3)}` : `about ${ApexUnits.fine(v)}`);           // below the floor, no finer figure
         const claim = Math.abs(diff) >= STEADY_CLAIM_M && a.corners >= STEADY_CLAIM_CORNERS && z.corners >= STEADY_CLAIM_CORNERS;
         $('steadyNote').textContent = `How widely your braking point varied, within each month, on corners you drove five or more times that month; higher on the chart is steadier (fewer ${ApexUnits.metric() ? 'metres' : 'feet'}), bigger dots are more corners. `
-          + `${monthLabel(z.month)}: ${about(z.sd_m)} over ${z.corners} corners${claim ? `, ${diff < 0 ? 'steadier' : 'less steady'} than ${monthLabel(a.month)} (${about(a.sd_m)})` : ''}. ${ApexUnits.fine(5)} samples and GPS put the floor near ${ApexUnits.fine(3)}.`;
+          + `${monthLabel(z.month)}: ${about(z.sd_m)} over ${z.corners} corners${claim ? `, ${diff < 0 ? 'steadier' : 'less steady'} than ${monthLabel(a.month)} (${about(a.sd_m)})` : ''}. ${ApexUnits.fine(5)} samples and GPS put the floor near ${ApexUnits.fine(3)}.`
+          + speedNote(months);
       });
     }
 

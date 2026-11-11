@@ -29,6 +29,39 @@
 - Next in the sweep: CarPlay (CarPlay/*.swift) and the shell's frame path (pushLiveFrame, 10 Hz evaluateJavaScript).
 
 
+## Session 2026-11-11 (round two analysis, PR 7): corner-speed steadiness month by month (claude/project-thread-gd7nre, off origin/main)
+
+- core/drive_analysis.py `spread_by(co, keys, what="speed")` (reference) and web/apex_core.js `spreadBy(co, keys, 'speed')`
+  (port) read the coach's new `speed_marks` ([from, slowest m/s] per pass) the way the braking trend reads `marks`.
+- web/analysis_client.js steadiness job: each month also has `speed_sd_mps`/`speed_corners` (same 20 m de-duplication,
+  null under minCorners). web/analysis.html's braking-consistency note adds "Your speed at their slowest point varied about
+  1 mph in Oct 2026", and "steadier/less steady than Sep (2 mph)" from a 1 mph change over five corners or more each.
+- Tests: tests/test_web_core_parity.py (speed_marks and the speed trend, JS = Python). Checked in a browser with ten drives.
+- Next: IDEAS D-08's records per kind of corner (your cleanest tight, medium and fast corners).
+
+## Session 2026-11-11 (round two analysis, PR 6): how steady your turn-in and corner speed are on roads you repeat (claude/project-thread-gd7nre, off origin/main)
+
+- core/drive_analysis.py `_spread` (reference) and web/apex_core.js `spread` (port) add `turn_sd_m`/`turn_passes` (where you
+  turned in, `_turn_in`, on this drive's road) and `speed_sd_mps`/`speed_passes` (speed at the corner's slowest point), the
+  same robust SD as the braking spread, over the same clean passes. `marks` and `spread_by` are unchanged.
+- web/drive_view.js: "How repeatable your corners are" says, per corner, "turn-in within 10 ft, speed at the slowest point
+  within 1 mph", and the intro "Your speed at their slowest point typically varies about 1 mph" (from three corners).
+- Tests: tests/test_web_core_parity.py (+1: noise stays steady, 8 % slower passes or a 25 m earlier turn-in spread it; the
+  parity case now compares the new fields), tests/test_drive_view.py (rows carry them).
+- Next: corner-speed steadiness by month beside the braking trend (`spread_by` on the speeds), then IDEAS D-08's records
+  per kind of corner.
+
+## Session 2026-11-11 (round two analysis, PR 5): Your year's areas and crew drives (claude/project-thread-gd7nre, off origin/main)
+
+- web/year_review.js: `areas` (drives whose map boxes' middles are within AREA_KM 40 of an area's first drive, named after
+  the road driven most there; no place lookup) and "Where you drove: 3 areas, most around …" from two areas; `crewYear`
+  and "Crew drives: 2 with Smoky Crew, …". IDEAS D-24's regions and crews are done.
+- Crew drives are kept on the phone: crew_events.js `noteCame` writes `apex.crewCame` ({id, crew, at}, at most 300) when
+  the convoy join or I was there succeeds, or the record says you came; I wasn't there removes it. The server sweeps
+  attendance after 7 days, so a year count can't come from it. Erase everything clears the key (an `apex.` key).
+- Tests: tests/test_year_review.py (+2). APP_REVIEW.md has a 5.1.1 row.
+- Next: the deepest-analysis list: corner-by-corner consistency on roads you repeat (same corner, how your lines vary).
+
 ## Session 2026-11-11 (roam-a descents): the route card says a long descent before you set off (claude/project-thread-h7xxmf, off origin/main)
 
 - IDEAS V-12, its second part. `long_descents` (core/brake_heat.py) / `longDescents` (web/brake_heat.js, parity-tested): from the

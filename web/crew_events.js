@@ -194,7 +194,8 @@
       doc.body.append(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 10000);
     };
     const directions = (e) => page.goTo({ label: e.meet_name || e.title, lat: e.meet_lat, lon: e.meet_lon });
-    const came = (e) => apiCall('POST', `/api/events/${id(e)}/came`).catch(() => null);   // the drive's record: you came
+    const keep = (e, yes) => { try { noteCame(root.localStorage, e, yes); } catch (_) {} };
+    const came = (e) => apiCall('POST', `/api/events/${id(e)}/came`).then((x) => { if (x && x.ok) keep(e, true); return x; }).catch(() => null);   // the drive's record: you came
 
     /**
      * "Meet at…" (P-10): a place search (Where to?'s own, place_search.js) with Where I am and the map's centre as chips.
@@ -330,6 +331,7 @@
       apiCall('GET', `/api/events/${id(e)}/record`).then(jsonOf).catch(() => null).then((r) => {
         if (!r || !Array.isArray(r.came)) { now.replaceChildren(el('p', { className: 'note', textContent: 'Couldn\u2019t load who came. Check signal.' })); return; }
         const kids = [];
+        if (r.i_came) keep(r, true);                                     // kept on the phone for Your year
         if (r.came.length) kids.push(el('div', { className: 'cp-going' }, faces(r.came, 'Came'), el('span', { className: 'note', textContent: `${r.came.length} came: ${r.came.map((h) => '@' + h).join(', ')}` })));
         else kids.push(el('p', { className: 'note', textContent: r.going.length ? `Nobody marked that they came. ${r.going.length} said going.` : 'Nobody marked that they came.' }));
         // the best Vetta Score crew-mates published to the crew that day; none shared, none said
@@ -339,7 +341,7 @@
         if (sheet) kids.push(sheet);
         kids.push(el('div', { className: 'row' }, btn(r.i_came ? 'I wasn\u2019t there' : 'I was there', async () => {
           const x = await apiCall(r.i_came ? 'DELETE' : 'POST', `/api/events/${id(e)}/came`).catch(() => null);
-          if (x && x.ok) redo(); else toast('Couldn\u2019t change that. Check signal.');
+          if (x && x.ok) { keep(r, !r.i_came); redo(); } else toast('Couldn\u2019t change that. Check signal.');
         }, 'linkbtn')));
         now.replaceChildren(...kids);
       });
@@ -687,6 +689,19 @@
     return { section, plan, card, refresh };
   }
 
-  const api = { whenText, timeText, resultsText, clock, convoyOpen, convoyName, driveState, onTheDay, icsFor, isoFromInputs, rolesLine, todayDrive, mount };
+  // Your year's crew drives (IDEAS D-24): the server forgets who came a week after a drive (sweep.ts), so the phone keeps
+  // its own short list of the crew drives you came to, { id, crew, at }, in localStorage under CAME_KEY (year_review.js
+  // crewYear reads it). Newest kept, at most CAME_MAX. Nothing else: no place, no other driver.
+  const CAME_KEY = 'apex.crewCame', CAME_MAX = 300;
+  function noteCame(storage, e, yes) {
+    if (!storage || !e || !e.id) return;
+    let list = [];
+    try { list = JSON.parse(storage.getItem(CAME_KEY) || '[]'); } catch (_) { list = []; }
+    if (!Array.isArray(list)) list = [];
+    list = list.filter((x) => x && x.id !== e.id);
+    if (yes) list.push({ id: String(e.id), crew: typeof e.crew_name === 'string' ? e.crew_name.slice(0, 60) : null, at: typeof e.starts_at === 'string' ? e.starts_at.slice(0, 16) : null });
+    try { storage.setItem(CAME_KEY, JSON.stringify(list.slice(-CAME_MAX))); } catch (_) {}
+  }
+  const api = { noteCame, CAME_KEY, whenText, timeText, resultsText, clock, convoyOpen, convoyName, driveState, onTheDay, icsFor, isoFromInputs, rolesLine, todayDrive, mount };
   if (typeof module !== 'undefined' && module.exports) module.exports = api; else root.ApexCrewEvents = api;
 })(typeof window !== 'undefined' ? window : globalThis);

@@ -26,6 +26,23 @@ A planned route with a long, steep way down now says so on its card, under the c
 3.7 mi at 8%. A lower gear saves the brakes." It comes from the map's terrain (the same heights as the climb line), not from a
 model: 300 m or more of drop at 5 % or steeper counts, which is the kind of hill where brakes fade. Ordinary hills say
 nothing. Undo: revert the PR (one line on the card goes away).
+## 2026-11-11 (round two analysis): corner-speed steadiness is shown in mph, beside the braking spread (claude/project-thread-gd7nre)
+
+- What: the Log drive page's repeatable-corners list now also says how steady your turn-in point and your speed at the slowest
+  point are over your passes of each corner ("speed at the slowest point within 2 mph").
+- Why: you asked for more speed-based features; a steady corner speed is a speed figure that rewards repeatability, not going
+  faster. It is a spread, never a target speed.
+- Undo: drop the two `turn_sd_m`/`speed_sd_mps` clauses in web/drive_view.js (the figures can stay in the coach).
+
+## 2026-11-11 (round two analysis): Your year's areas need no map lookup, and crew drives are counted on the phone (claude/project-thread-gd7nre)
+
+"Where you drove" groups your drives within 40 km of one another and names each area after the road you drove most
+there. That avoids a reverse-geocoding service, so no position leaves the phone. Crew drives are counted from a short
+list the phone keeps (drive id, crew name, start time), because the server deletes attendance a week after each drive;
+keeping it longer on the server would have been a privacy change. Drives before today aren't in the count.
+
+Undo: drop the `areas` and `crews` lines in year_review.js `lines`, and `noteCame` in crew_events.js.
+
 ## 2026-11-11 (roam-c-boot-budget): an e2e check on what the map page loads and runs before it is ready (claude/roam-c-boot-budget)
 
 New e2e flow "startup budget" (IDEAS P-06): it loads index.html and fails if the page needs more than 3.6 MB of its own

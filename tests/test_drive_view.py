@@ -302,6 +302,13 @@ console.log(JSON.stringify({
     assert [x["k"] for x in r["rows"]] == [2, 4, 0]                  # steadiest first; unknown braking spread left out
     assert r["rows"][0]["min_sd_m"] is None and r["rows"][2]["passes"] == 4 and r["rows"][2]["brake_passes"] == 4
     assert r["few"] == [] and r["none"] == []                        # too little to rank
+    assert r["rows"][0]["turn_sd_m"] is None and r["rows"][0]["speed_sd_mps"] is None   # an older coach without them: unknown
+    p = subprocess.run([NODE, "-e", "const V=require(process.argv[1]+'/web/drive_view.js');const s={passes:5,brake_sd_m:4,brake_passes:5,"
+                        "min_sd_m:6,min_passes:5,turn_sd_m:8,turn_passes:4,speed_sd_mps:0.9,speed_passes:5};"
+                        "console.log(JSON.stringify(V.consistencyRows({corners:[{spread:s},{spread:s},{spread:s}]})[0]))", root],
+                       capture_output=True, text=True, timeout=60)
+    row = json.loads(p.stdout)
+    assert (row["turn_sd_m"], row["turn_passes"], row["speed_sd_mps"], row["speed_passes"]) == (8, 4, 0.9, 5)
 
 
 def test_the_log_names_corners_in_the_strips_words():
