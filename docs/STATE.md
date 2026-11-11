@@ -1,5 +1,43 @@
 # VETTA — CURRENT AGENT HANDOFF STATE
 
+## Session 2026-11-11 (roam-c-presence-private-crews, security pass): friends map "Crew" is private crews only (claude/roam-c-presence-private-crews)
+
+- backend/src/presence.ts `presenceView`: audience "crew" showed you to members of any crew you share, public ones too, which
+  anyone can join. Now private crews only (garage.ts peoplesCars already did this for cars). web/who_sees.js: a public
+  crew's Where cell is off. Copy: friends_map.js explainer, cockpit.js and who_sees.js summaries say "private crews";
+  privacy.html and APP_REVIEW.md 5.1.1 updated.
+- Tests: backend/test/presence.test.ts (+1, fails without the fix), tests/test_who_sees.py (+1), test_friends_map.py copy.
+- Security pass so far, no issue found: auth on every route (requireMember; ops routes moderator-only; CSRF origin and header
+  check; WRITE_LIMIT on every write, AUTH_LIMIT on sign-in), ownership checks on every :id write (cars, routes, highlights,
+  segments, templates, chat, events, duels, pool), grants re-checked against current friendship or membership on read.
+  Next: the rest of the pass (time attack, drive scores, convoy, hazards and reports rate limits, photos by id).
+
+
+
+
+## Session 2026-11-11 (ui-round-two, PR 4): the map's top band, signed-out reads, a crew's head and the Share box (claude/project-thread-5sbga7)
+
+- The idle map's blank top band (Roamer B): the canvas draws fully (toDataURL shows the map to y = 0); Chromium culled the
+  canvas under the opaque `.binnacle` at the wrong (y-flipped) end, so the band was exactly the binnacle's height (157 px)
+  at every pitch and viewport. A bare MapLibre page doesn't show it; `visibility: hidden` on the binnacle or 0.99 alpha
+  clears it. Fix: `.binnacle` background at 99.6 % (signature.css, last block). setSky changes nothing there.
+- web/sync.js `apiFetch`: `known` (true/false/null) from /api/me's `signed_in` (only when it says), setSession, or a 401;
+  signed out, GET /api/convoy/invites, /api/points, /api/hazards, /api/roads answer 401 locally. Unknown still asks.
+- signature.css "a crew's page and the Share box": crew name Barlow 30/32 px, cp keys paper, chat a well; Share chips wells.
+- Tests: tests/test_signed_out_reads.py, tests/test_sheets_line.py (+2). e2e convoy, hazard, police, closure flows pass.
+- Next: round two is done (Log, Garage, People, Settings and sheets, crew, Share). Look for screens still boxed in ink.
+## Session 2026-11-11 (social round two): For you, what happened to you socially (claude/project-thread-uwmi4e, off origin/main 936aec3)
+
+- IDEAS S-27, SOCIAL 2.10. `backend/src/inbox.ts` `GET /api/inbox` → `{ items, waiting, now }`: kinds `request`, `duel_ask`
+  (waiting), `topped` (a visible run this week over your best Score on one of your stages), `passed` (time attack this week,
+  quicker than you after your time went up, with your place), `kudos` (14 days), `duel_on` (your challenge accepted),
+  `duel_over` (`duelOutcome`), `follows` (roadbook followers counted), `crew_drive` (upcoming, unanswered). No migration.
+- `web/inbox.js` (social group): pure `line`, `fresh`, `ago`; `mount` → `refresh`, `section`, `markSeen`. cockpit.js
+  `paintPeopleBadge` (requests from the inbox once it answers, else /api/me; crew link; convoy invites; new items);
+  seen (`apex.inboxSeen`, server clock) only when People → Friends is on screen (`showView`, `setPeopleSide`), since People
+  is drawn behind other tabs. Refreshed on visibilitychange and every 5 min, never while driving.
+- Tests: backend/test/inbox.test.ts (3), tests/test_inbox.py (3), e2e "For you: …".
+- Next: push notifications for the same items once APNs is set up (OWNER_TODO); a crew's own roadbook; recurring meets (S-13).
 ## Session 2026-11-11 (routing round three): measured crests and verified bumps steer our router (claude/project-thread-39xbx9, off origin/main)
 
 - IDEAS R-04 partial (WORKER_QUEUE road-3). own_routing.js `crowdItems` now passes each bin's crest (two passes or more)
