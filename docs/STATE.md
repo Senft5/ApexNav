@@ -54,6 +54,18 @@
 - Tests: tests/test_route_card.py; e2e "plan flow (c)".
 - Next: CarPlay has not had a design pass in this run (Swift, not visible from the cloud).
 
+## Session 2026-11-11 (fable-practice-focus): practice focus, the profile's Work on carried into the next drives (claude/fable-practice-focus, stacked on claude/fable-driver-profile)
+
+- `core/driver_profile.py` `practice` and `drive_practice`, ported in `web/driver_profile.js` and held to parity by
+  `tests/test_practice_focus.py` (5 tests). A plan is `{skill, since, where, before}`. Each drive since then is read on
+  that skill alone, and on the corners of the focus's place, against every corner before. A change counts as sure at
+  5 points and 2 SE or more; under 4 corners the level stays unknown.
+- The plan is kept in localStorage `vetta.practice`. Your driving sets it and stops it, and keeps `before` up to date
+  on each read. The `save` job (end of a drive) and the new `practiceLine` job (a stored drive, used by the debug end
+  card) return `practice` with its line. The end card shows it in `#endPractice`.
+- e2e: "Practice (IDEAS D-27)": set from the page, the end card's line, the page's drive rows, the Log card, and Stop.
+- Next: "touch" skills from the 10 Hz g (#377): how fast the brake goes on and comes off, and the turn-in rate.
+
 ## Session 2026-11-10 (fable-sheet-races): two e2e flows clicked a sheet's key while it slid up (claude/fable-sheet-races, off origin/main 948cb4b)
 
 - `e2e/smoke.js` `sheetSettled(page, id)`: a `.overlay.dim` sheet is shown, nothing in it animating, and in the same place

@@ -79,6 +79,29 @@ keeps its own word and only its progress bar moves.
 
 Undo: revert the PR.
 
+## 2026-11-11 (fable-practice-focus): Work on becomes a practice you can follow drive by drive (claude/fable-practice-focus)
+
+Your driving names one skill to work on. Under it there is now a key: "Practice it on my next drives". Press it and
+every drive after that is read on that one skill alone. The drive's end card gets a line like "Practice · One steering
+arc: 82 on 24 corners, 14 above your 68 before. Through rights: 79 on 12." On Your driving, the Work on box becomes
+"Practicing", with how it has gone since you started, one bar per drive against a mark for your level before, and Stop
+practicing. The Log's card says it too.
+
+The calls I made:
+
+* **What "before" means.** It is every corner of every drive that started before you pressed the key (drives with an
+  unknown date count as before). The plan on the phone keeps that level, so the end card can compare without reading
+  every drive again. The page refreshes it whenever it reads your drives.
+* **When it says "above" or "below".** Only when the change is at least 5 points and twice its standard error.
+  Otherwise it says "close to your 68 before". A drive with fewer than 4 corners for the skill says "too few to say".
+  Nothing is said for a drive with no clean corners.
+* **One skill at a time, by hand.** Practice is never started for you. When the skill to work on changes, the box offers
+  "Practice <the new one> instead"; it does not switch by itself.
+* **Technique only.** Like the profile, it never says a speed or a time.
+
+This PR is stacked on #373 (Your driving) and needs it merged first.
+
+Undo: revert the PR. The plan lives only in the phone's storage (`vetta.practice`); nothing else changes.
 ## 2026-11-10 (fable-whats-new): What's new tells of the routing work (claude/fable-whats-new)
 
 The What's new sheet still showed the news of 2026-10-28 (Siri, landscape, stops of the day, kilometres), which every
