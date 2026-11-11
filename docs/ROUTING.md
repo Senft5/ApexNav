@@ -375,7 +375,8 @@ What each one is for, and how it should move a route:
   ones members flow through) and the "Members drive it smoothly" span; **`loved`**, the most of members coming back to a road
   on a second recorded drive (`road_love`, a level from two people), your crews' shared lines, your own "Which road was
   better?" Elo by road name and roads you drove twice: a fun term with a "loved" span named for the road; **`taste`**, your
-  taste fit (taste.js) over 2 km windows in fun points; **`crowd_busy`**, the busy-time ratio at your ETA, only with the
+  taste fit (taste.js) over 2 km windows in fun points (fit from your answers and, at half weight, the routes you
+  Start instead of Vetta's pick); **`crowd_busy`**, the busy-time ratio at your ETA, only with the
   `quiet_hours` flag on (the owner's open decision; default off: no hour is sent, stored or shown).
 - **driver.js** (phone only; Overpass tiles for OSM `lit`, `tunnel`, `route=bicycle`): settings in the plan sheet's More,
   **For this drive** (vocabulary.js `passenger`, `litRoads`, `cyclists`, `tunnels`, apex.driverPrefs). `passenger_cost` (a

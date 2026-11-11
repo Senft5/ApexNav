@@ -43,6 +43,20 @@ keeps its own word and only its progress bar moves.
 
 Undo: revert the PR.
 
+## 2026-11-11 (fable-taste-picks): the route you choose over Vetta's pick teaches your taste (claude/fable-taste-picks)
+
+Taste learning only heard from "Which road was better?" after a drive, and most drivers never answer it. A choice made
+on the route card says the same thing: when you Start a different level's route or swipe to another option than the
+one Vetta picked at the plan's level, that pair (the road you took, the road you passed) goes into the taste fit at
+half the weight of an answer (`PICK_WEIGHT` in taste.js; you may have picked it for the time, not the road). It counts
+only for a destination route, once per plan, when the two times are within 30% (a much quicker pick says nothing about
+corners), and not when the two roads read the same. A short toast says which way it leaned ("Noted: you picked the more
+flowing road"), the Log's taste line counts routes chosen beside answers, and when a route on the card is there because
+it suits your taste the card says so ("Suits your taste for flowing roads"). Half an answer is my call: five picks make
+the fit as sure as two and a half answers.
+
+Undo: revert the PR, or set `PICK_WEIGHT` to 0 (stored picks then carry no weight).
+
 ## 2026-11-10 (fable-your-data): Your data is three short lists, like Settings (claude/fable-your-data)
 
 For your "cohesiveness, less clunky": Your data was eight keys of eight widths in two wrapped rows, one of them a link

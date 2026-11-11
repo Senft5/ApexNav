@@ -31,6 +31,13 @@
 - Tests: tests/test_route_card.py; e2e "plan flow (c)".
 - Next: CarPlay has not had a design pass in this run (Swift, not visible from the cloud).
 
+## Session 2026-11-11 (fable-taste-picks): taste learnt from the routes you choose (claude/fable-taste-picks, off origin/main ac6c6c6)
+
+- Done: `ApexTaste.recordPick` / `leanOf` (taste.js), pairs weighted in `fit`; cockpit `learnFromPick` at Start
+  (Vetta's pick = `levels[builtLevel]`); the toast; the card's "Suits your taste" line. Tests: tests/test_taste.py
+  (picks at half weight), e2e "taste from picks". Full pytest green.
+- Next: a picks-only fit could also tune Quick / Fun / Long way's default level (a driver who always takes Quick).
+
 ## Session 2026-11-10 (fable-your-data): Your data as Settings-style rows (claude/fable-your-data, off origin/main 3f2f315)
 
 - `web/index.html` only: the Your data section's keys are `.nav-rows.data-rows` with three `.nav-group` headings; the
