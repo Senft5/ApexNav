@@ -222,6 +222,17 @@
 - Next: Options' "Loop to fit" 1 hour / 2 hours keys now duplicate the dial; remove them once the owner has used the
   dial (My free time stays).
 
+## Session 2026-11-10 (fable-crew-settings): the crew gear's sheet has named parts (claude/fable-crew-settings, off origin/main 51c8c4c)
+
+- [x] web/cockpit.js `crewSettingsFor`: `h4.nav-group` names, notes as `p.note`, the area field's placeholder and
+  aria-label. web/index.html `.crew-settings` rules (headings without a rule, text keys `justify-self: start`, notes
+  13 px pencil, the field takes the row's free width).
+- [x] web/crew_page.js: Meeting points' heading sits in `.cp-sec` like its neighbours.
+- [x] tests/test_crew_settings_sheet.py (5); e2e "crew page" measures the three names on one line, the keys' left
+  edge and the hint's fit. Also run: "one link in", "TestFlight 2026-11-05 note 1", "crew drives", "Dynamic Type",
+  "REVIEW.md 1.2", "safe areas".
+- Next on a crew's page: the chat row and the Score board were looked at and left; Meeting points and what is under it
+  were not reached.
 ## Session 2026-11-10 (fable-whats-new): What's new says what changed since October (claude/fable-whats-new, off origin/main 948cb4b)
 
 - `web/whats_new.js`: `NEWS.id` '2026-11-10' with four lines: Quick / Fun / Long way, the drive overview on the route

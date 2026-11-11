@@ -2532,6 +2532,16 @@ flow('crew page: an old ?view=crew link opens People on Crews, at your crew; goi
   await page.waitForSelector('.side-pop.open[aria-label="Crew settings"] .crew-settings');
   const gearText = await page.textContent('.side-pop.open[aria-label="Crew settings"]');
   check(/Ridge Runners/.test(gearText) && /What it sees of yours/.test(gearText) && /Leave/.test(gearText) && !(await page.$$('.side-pop.open[aria-label="Crew settings"] .crew-tiles')).length, 'the gear: one crew\'s settings, no tiles: ' + gearText.slice(0, 160));
+  // 2026-11-10: the sheet in the Settings list's shape: a small-caps name over each part on one line, text keys at the left
+  // edge like the rows, the area field's hint whole
+  const gs = await page.evaluate(() => { const box = document.querySelector('.side-pop.open[aria-label="Crew settings"] .crew-settings'), L = box.getBoundingClientRect().left;
+    const heads = [...box.querySelectorAll('h4.nav-group')].map((h) => ({ t: h.textContent, lines: Math.round(h.getBoundingClientRect().height / parseFloat(getComputedStyle(h).lineHeight)) || 1 }));
+    const off = box.querySelector('button.linkbtn'), area = box.querySelector('input.field'), leave = box.querySelector('.danger-btn');
+    return { heads, offLeft: Math.round(off.getBoundingClientRect().left - L), leaveLeft: Math.round(leave.getBoundingClientRect().left - L), offWide: off.getBoundingClientRect().width < box.getBoundingClientRect().width * 0.8,
+      hintCut: (() => { const c = document.createElement('canvas').getContext('2d'); c.font = getComputedStyle(area).font; const cs = getComputedStyle(area);
+        return c.measureText(area.placeholder).width > area.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight); })() }; });
+  check(gs.heads.map((h) => h.t).join('|') === 'What it sees of yours|Who can invite|Who can find it' && gs.heads.every((h) => h.lines === 1), 'three parts, each named on one line: ' + JSON.stringify(gs.heads));
+  check(gs.offLeft <= 4 && gs.leaveLeft <= 4 && gs.offWide && !gs.hintCut, 'text keys start at the left, the area hint is whole: ' + JSON.stringify(gs));
   await page.click('.side-pop.open[aria-label="Crew settings"] button:has-text("Done")');
   await page.click('.cp-drive button:has-text("going")');
   await page.fill('.cp-say textarea', 'Saturday it is');

@@ -1374,6 +1374,11 @@
     .nav-group { margin: 0; padding: 22px 2px 8px; border-bottom: 1px solid var(--hair, var(--panel-dim)); font: 700 12px var(--font-ui); letter-spacing: 0.08em; text-transform: uppercase; color: var(--panel-dim); }
     .nav-group:first-child { padding-top: 6px; }
     .nav-group[hidden] { display: none; }
+    /* Crew settings (2026-11-10): the same small-caps names as the Settings list; a key that is a line of text starts at the left
+       like the rows around it (a grid stretched it and centred its words), and the parts sit closer than the sheet's 12 px */
+    .crew-settings .nav-group { padding: 10px 0 0; border-bottom: 0; } .crew-settings .linkbtn, .crew-settings .danger-btn { justify-self: start; }
+    .crew-settings p { margin: 0; } .crew-settings .row > .field { flex: 1 1 0; min-width: 0; }
+    .crew-settings p.note { font-size: 13px; color: var(--panel-dim); line-height: 1.45; }   /* as in the Garage's sheets */
     .nav-row.danger { color: var(--accent); }                       /* a row that removes something (Your data) */
     label.nav-row { cursor: pointer; } .nav-row:disabled { color: var(--panel-dim); }
     .data-rows { margin-top: 4px; }

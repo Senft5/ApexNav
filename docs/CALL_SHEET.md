@@ -273,6 +273,22 @@ Also: a time loop's note said "the closest good loop to 1.5 h"; times now read "
 
 Not changed: Options keeps its 1 hour / 2 hours keys and My free time. Undo: revert the PR.
 
+## 2026-11-10 (fable-crew-settings): Crew settings in the Settings list's shape (claude/fable-crew-settings)
+
+For "cohesiveness" (and the first look at a crew's page in this run): the sheet behind a crew's gear had three sizes
+of heading, "Who can invite" broken over two lines because its explanation was set beside it, "Turn off invite links"
+centred while everything else started at the left, and an area field whose hint was cut off ("Area people nearby will
+see, like"). It now reads like the Garage's Settings: a small-caps name over each part (What it sees of yours, Who
+can invite, Who can find it), each explanation a pencil line under its keys, text keys at the left edge, and the
+field's hint short enough to read ("Area, like Robbinsville"; a screen reader still hears "Area people nearby will
+see"). Who can find it now says what Private and Public mean before asking for an area.
+
+Also on the crew's page: Meeting points was the one small heading under a rule; it is named like Members, Chat and
+the Score board now.
+
+Every control does what it did and the Worker calls are unchanged.
+
+Undo: revert the PR (`crewSettingsFor` in web/cockpit.js, four CSS lines in web/index.html).
 ## 2026-11-10 (fable-toast-key): a message with a key is one row, and a message is as wide as its words (claude/fable-toast-key)
 
 For "reducing any clunky feelings", seen on the drive screen: "Typing is off while the car moves." took half the
