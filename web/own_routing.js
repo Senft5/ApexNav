@@ -129,7 +129,12 @@
         const rough = d.i.map((_, j) => (n(j) >= 2 && at(d.rsd, j) > AGREE.rough ? NaN : at(d.rough, j)));
         const cam = d.i.map((_, j) => ((d.cn ? at(d.cn, j) : n(j)) >= 2 && at(d.csd, j) > AGREE.cam ? NaN : at(d.cam, j)));
         const flow = d.i.map((_, j) => flowConf(at(d.fl, j), at(d.hb, j), at(d.fn, j)));
-        out.push({ line, dir, i: d.i, rough, cam, flow, loved: Number.isFinite(d.ag) ? LOVE_LEVEL[d.ag] || NaN : NaN });
+        // crest: the bin's mean peak unweighting (g, 0..3), only where two or more passes measured it (one pass can be
+        // the phone moving in its mount); bumps: the server's crowd-verified bumps only ([bin, posterior], roads.ts
+        // verifiedBumps), so a bump nobody verified is no bump here and no smooth road either
+        const crest = d.i.map((_, j) => (n(j) >= 2 && at(d.crest, j) >= 0 ? at(d.crest, j) : NaN));
+        const bumps = Array.isArray(d.bp) ? d.bp.filter((b) => Array.isArray(b) && Number.isFinite(b[0]) && b[1] > 0.8).map((b) => b[0]) : [];
+        out.push({ line, dir, i: d.i, rough, cam, flow, crest, bumps, loved: Number.isFinite(d.ag) ? LOVE_LEVEL[d.ag] || NaN : NaN });
       }
     }
     return out.length ? out : null;

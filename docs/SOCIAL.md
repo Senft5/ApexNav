@@ -83,6 +83,18 @@ and in random batches so a trace cannot be re-assembled.
 - It is a public time board on public roads, which the guardrails ruled out before the owner's call; the risk and the copy
   rules are in docs/APP_REVIEW.md (1.4).
 
+### 2.10 For you (members; built 2026-11-11)
+- One list on People → Friends of what happened to you, newest first, each a sentence with at most one key: a friend or
+  crew-mate topped your best Score on one of your stages this week (Drive it), someone went quicker than you in this
+  week's time attack (See the board), kudos on your runs, a duel accepted or decided, new followers of your roadbooks
+  (counted, never named: a public book's followers may be strangers), and a crew drive you haven't answered (Answer).
+- The People tab's badge counts what is new since you last had People → Friends on screen, plus what waits on you
+  (friend requests, duels asked of you, a crew link, convoy invites). Asked when the app opens, comes to the front, and
+  every five minutes while it is in front, never while driving.
+- Made only from what each part already shows you (the same grants, blocks and friendships), so it shares nothing new
+  and has no table: what you've seen is kept on the phone (`apex.inboxSeen`). `backend/src/inbox.ts` (`GET /api/inbox`),
+  `web/inbox.js`. There are no push notifications yet; this is what a push would say.
+
 ## 3. Drive analysis (private)
 Compare passes of the same road — yours, or a friend's ghost they chose to send you.
 
