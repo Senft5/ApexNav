@@ -10,6 +10,7 @@
   `unavoided` → `cameras` within `CAMERA_ON_M` 35 m (route.has.cameras), so keepAvoiding drops it when another doesn't.
 - Tests: tests/test_avoid_cameras.py (+3), tests/test_graph_router.py avoidCameras, e2e "avoid cameras" (speed camera too).
 - Not done: loops don't take `avoid.cams` (only A→B plans go through avoidForTrip).
+
 ## Session 2026-11-11 (ui-round-two, PR 1): the Log in the Vetta Line (claude/project-thread-5sbga7, off origin/main)
 
 - The Log (analysis.html, the frame over the map) now loads web/signature.css after controls.css; its rules are under
