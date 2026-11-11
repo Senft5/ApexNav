@@ -54,7 +54,7 @@ R-35). My calls inside it: only live reports count (the server's 60 min life, an
 confirmed it is skipped), within 15 km of the trip, 20 at most; a convoy leader's live Police call counts first. Valhalla
 gets them as exclusions ahead of cameras in the 50-slot budget (police reports move, cameras don't, so a fresh report is
 the more useful exclusion). Our own router can't exclude a point, so the roads within 150 m cost x8: a way round wins
-unless it is much longer, and then the card says "Couldn't avoid police reports". A plan waits at most 0.8 s for the
+unless it is much longer, and then the card says "Couldn't avoid police reports". A plan waits at most 0.2 s for the
 reports. Signed out there are none, and a toast says so once a minute. No checkpoint kind exists and none is made
 (App Store 1.4.3, APP_REVIEW.md).
 
@@ -68,6 +68,23 @@ the key you tapped ("Within 15 min") turned into "Finding roads" over a line tha
 keeps its own word and only its progress bar moves.
 
 Undo: revert the PR.
+
+## 2026-11-11 (fable-rally-sheet): a crew drive's results sheet, rally style, Scores and shared times (claude/fable-rally-sheet)
+
+A crew drive used to remember one number afterwards: the best Score of the day. Its card now folds out "Results · 3
+stages": an Overall, then each stage as SS1, SS2…, every driver who came with their best Vetta Score on it and a place.
+Share the results sends the sheet as plain text (or copies it), ready for the crew chat or a group text.
+
+The calls: it uses exactly what the best Score already used (Scores the drivers shared with that crew, from the drive's
+day, among those who came, or those going when nobody marked it; blocks hide people both ways), so nobody shows up who
+wasn't already visible. A time and its gap to the stage's quickest sit beside a Score only while that driver shares
+times with the crew (Share times on the crew's grant), and the overall adds a total time for those who drove every stage
+with one; unknown stays "--" (the owner, 2026-11-10: share stage times and gaps). The order stays by Score. The overall is ranked by stages driven
+first, then the average Score over them, the way a rally classifies only those who finish: someone who drove one stage
+brilliantly sits behind everyone who drove them all, with "1 of 3 stages" beside them. Equal Scores share a place. Up
+to 12 stages. No migration, no new data: it goes with the drive (a week after it starts), as before.
+
+Undo: revert the PR; the card goes back to the single best Score.
 
 ## 2026-11-10 (fable-there-and-back): a trip to a place can come home another way in one tap (claude/fable-there-and-back)
 
@@ -92,6 +109,20 @@ Undo: revert the PR.
 The e2e suite is 152 flows now and takes about 24 minutes, so GitHub cut it off at its 25-minute limit on the last flow
 (twice on #349, once on #344) with every flow before it passing. The limit is 35 minutes. No test is skipped or
 shortened. Undo: set `timeout-minutes` back to 25 in `.github/workflows/core-tests.yml`, or better, split the suite.
+
+## 2026-11-11 (fable-taste-picks): the route you choose over Vetta's pick teaches your taste (claude/fable-taste-picks)
+
+Taste learning only heard from "Which road was better?" after a drive, and most drivers never answer it. A choice made
+on the route card says the same thing: when you Start a different level's route or swipe to another option than the
+one Vetta picked at the plan's level, that pair (the road you took, the road you passed) goes into the taste fit at
+half the weight of an answer (`PICK_WEIGHT` in taste.js; you may have picked it for the time, not the road). It counts
+only for a destination route, once per plan, when the two times are within 30% (a much quicker pick says nothing about
+corners), and not when the two roads read the same. A short toast says which way it leaned ("Noted: you picked the more
+flowing road"), the Log's taste line counts routes chosen beside answers, and when a route on the card is there because
+it suits your taste the card says so ("Suits your taste for flowing roads"). Half an answer is my call: five picks make
+the fit as sure as two and a half answers.
+
+Undo: revert the PR, or set `PICK_WEIGHT` to 0 (stored picks then carry no weight).
 
 ## 2026-11-10 · Vetta Line: the home screen is a masthead over the map and a shelf of road cards (claude/fable-signature)
 

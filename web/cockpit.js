@@ -2387,27 +2387,58 @@
       if (!member && performance.now() - policeNote > 60000 && !convoyPolice().length) { policeNote = performance.now(); toast('Sign in to route around police reports.'); }
       return ApexHazardReports.policeFor(list, points, Date.now(), convoyPolice());
     }
-    // The avoid choices for one plan, with the police reports near it (a plan is never held more than POLICE_WAIT_MS for them)
-    const POLICE_WAIT_MS = 800;
+    // The avoid choices for one plan, with the police reports near it. The route card's budget (~0.75 s) comes first: the
+    // reports asked for this area in the last 5 min are used at once; otherwise a plan waits POLICE_WAIT_MS at most and
+    // goes without them (the Valhalla requests ask again, by then answered). Where to? opening warms them (policeWarm).
+    const POLICE_WAIT_MS = 200;
+    const policeCached = (points) => hazardsCover(points);
+    // the card's word: { n, passes } for a planned route with Avoid police on and the reports for its area in hand
+    const policeSeen = new WeakMap();
+    function policeOnCard(t) {
+      if (!avoid.police || !t || t.id !== 'route_dest' || !Array.isArray(t.lat) || t.lat.length < 2 || !window.ApexHazardReports) return null;
+      const ends = [{ lat: t.lat[0], lon: t.lon[0] }, { lat: t.lat[t.lat.length - 1], lon: t.lon[t.lon.length - 1] }];
+      if (!hazardsCover(ends) && !convoyPolice().length) return null;
+      const list = hazardsCover(ends) ? closureCache.list : [], kept = policeSeen.get(t);
+      if (kept && kept.list === list) return kept.r;
+      const pts = ApexHazardReports.policeFor(list, ends, Date.now(), convoyPolice());
+      const r = { n: pts.length, passes: pts.length > 0 && ApexHazardReports.passesNear(t.lat.map((la, i) => [t.lon[i], la]), pts) };
+      policeSeen.set(t, { list, r });
+      return r;
+    }
+    function policeWarm() {
+      const p = state.lastPosition;
+      if (avoid.police && p && window.ApexSync && ApexSync.signedIn() && !policeCached([p])) hazardsAround([p]).catch(() => {});
+    }
     async function avoidForTrip(points) {
       if (!avoid.police) return avoid;
-      const pts = await RouteLoading.optional(policeAround(points), POLICE_WAIT_MS).catch(() => null);
+      const t0 = performance.now(), ask = policeAround(points);
+      const pts = policeCached(points) ? await ask.catch(() => null) : await RouteLoading.optional(ask, POLICE_WAIT_MS).catch(() => null);
+      if (window.apexDebug) window.apexDebug.policeWaitMs = Math.round(performance.now() - t0);
       if (window.apexDebug) window.apexDebug.lastPolice = Array.isArray(pts) ? pts : null;
       return { ...avoid, points: Array.isArray(pts) ? pts : [] };
     }
+    // The reported hazards around a trip (50 km round its middle, asked by cell, VI-1), kept 5 min and reused for any trip
+    // whose points all lie within 35 km of where they were asked for; one request at a time
+    const hazardsCover = (points) => !!closureCache.mid && performance.now() - closureCache.at <= 300000
+      && points.every((p) => p && FunRoute.kmBetween(p, closureCache.mid) <= 35);
     async function hazardsAround(points) {
       const mid = points[Math.floor(points.length / 2)] || points[0];
       if (!mid || !window.ApexSync) return [];
-      const key = `${mid.lat.toFixed(1)},${mid.lon.toFixed(1)}`;
-      if (closureCache.key !== key || performance.now() - closureCache.at > 300000) {
+      if (hazardsCover(points)) return closureCache.list;
+      if (closureCache.asking && closureCache.askMid && points.every((p) => p && FunRoute.kmBetween(p, closureCache.askMid) <= 35)) return closureCache.asking;
+      const ask = (async () => {
         let list = [];
         try {
           const r = await ApexSync.apiFetch(`/api/hazards?${ApexPrivacyZones.cellQuery(mid.lat, mid.lon, 50)}`, { method: 'GET' });   // VI-1: by cell
           if (r.ok) list = await r.json();
         } catch (_) { /* offline or signed out: no closures known */ }
-        Object.assign(closureCache, { key, at: performance.now(), list: Array.isArray(list) ? list : [] });
-      }
-      return closureCache.list;
+        Object.assign(closureCache, { key: `${mid.lat.toFixed(1)},${mid.lon.toFixed(1)}`, mid: { lat: mid.lat, lon: mid.lon }, at: performance.now(), list: Array.isArray(list) ? list : [], asking: null });
+        // the reports landed after the card went up (a slow answer; a plan waits 0.2 s at most): its word again
+        if (avoid.police && plannedRoute && !driveActive && typeof renderRouteCard === 'function') setTimeout(() => { try { if (plannedRoute) renderRouteCard(plannedRoute); } catch (_) {} }, 0);
+        return closureCache.list;
+      })();
+      Object.assign(closureCache, { asking: ask, askMid: { lat: mid.lat, lon: mid.lon } });
+      return ask;
     }
     // Avoid cameras (IDEAS R-35): the plate readers near the trip go to the router as exclude_locations with the closures.
     // A trip too big for one camera-map query, or the map offline, routes without them; the card still counts what is on it.
@@ -2769,15 +2800,20 @@
           : null;
       const feel = mCov != null && mCov > 0 ? `Road feel ${mCov}% driven` : 'Road feel after first drive';
       const missed = Array.isArray(t.unavoided) && t.unavoided.length ? `Couldn't avoid ${t.unavoided.map(k => FunRoute.AVOID_LABELS[k] || k).join(' or ')} · ` : '';
-      // Avoid police reports, and it did: how many live reports near the trip it keeps away from (none known: nothing said)
-      const policeN = avoid.police && Number.isFinite(t.policeAround) && t.policeAround > 0 && !(t.unavoided || []).includes('police') ? t.policeAround : 0;
-      const around = policeN ? `Around ${policeN === 1 ? 'a police report' : `${policeN} police reports`} · ` : '';
+      // Avoid police reports: the live reports near this route, from the reports as they are now (they can land after the
+      // plan: the card is painted again then, policeLanded); none known: nothing said
+      const pol = policeOnCard(t);
+      const around = pol && pol.n && !pol.passes ? `Around ${pol.n === 1 ? 'a police report' : `${pol.n} police reports`} · ` : '';
+      const missedPolice = pol && pol.passes && !(t.unavoided || []).includes('police') ? 'Couldn\'t avoid police reports · ' : '';
       // Planned routes only: a driven track's own time has passed.
       const sun = !(Array.isArray(t.sectors) && t.sectors.length) && t.glareMin >= 3 ? `Low sun ahead for ~${t.glareMin} min · ` : '';
       // Only on a route planned with Towns on (townKm undefined otherwise); null = the town check couldn't run.
       const towns = t.townKm === null ? 'Couldn\'t check towns · ' : t.townKm >= 1.6 ? `Through towns ~${ApexUnits.long(t.townKm * 1000, 0)} · ` : '';
       const carLine = t.request ? FunRoute.carNote(routingCar(), avoid) : '';
-      $('routeCardSub').textContent = `${carLine ? carLine + ' · ' : ''}${missed}${around}${towns}${sun}${cams}${feel}`;
+      // your taste (taste.js) when it moved this route up: the word for what you lean to, never a number
+      const tasteLine = (() => { try { const f = t.tasteBonus >= 1 && window.ApexTaste ? ApexTaste.fit(ApexTaste.load(localStorage)) : null;
+        if (!f) return ''; const k = ApexTaste.AXES.slice().sort((a, b) => f[b] - f[a])[0]; return `Suits your taste for ${{ tech: 'technical roads', flow: 'flowing roads', smooth: 'smooth surfaces' }[k]} · `; } catch (_) { return ''; } })();
+      $('routeCardSub').textContent = `${tasteLine}${carLine ? carLine + ' · ' : ''}${missed}${missedPolice}${around}${towns}${sun}${cams}${feel}`;
       $('routeCardWhy').textContent = t.why || '';
       $('routeCardWhy').hidden = !t.why;
       // There and back: a trip to a place (not a round trip already, no stop of yours on it), planned and not driving
@@ -3622,7 +3658,7 @@
       // The best and up to two really different others (the level cards: each level's pick, then the others) stay on the
       // card (and faint on the map) to pick from.
       const offered = FunRoute.distinctOptions(ranked, 3);
-      const lv = destLevels({ id, name, request, level, quickest, pool, builtLevel: level, police: Array.isArray(avoid.points) ? avoid.points.length : null }, level);
+      const lv = destLevels({ id, name, request, level, quickest, pool, builtLevel: level }, level);
       lv.tuned = tunedNow;
       if (lv.levels[level] == null) Object.assign(lv, { list: offered, levels: null, picked: 0 });   // (never: the same ranking)
       // the quickest already up is the only option: keep it as it is (no second draw of the same route and card), but
@@ -3870,7 +3906,6 @@
     }
     /** What the ranking says about option c, onto its track t (the card reads these): times, the why line, the engine. */
     function optionOnto(t, c, o) {
-      t.policeAround = o && Number.isFinite(o.police) ? o.police : null;
       // A winning alternate is pinned with shaping points along it, so a reroute stays on it; so is the highway-costed
       // route (the router's own costing would reroute it onto the side streets it avoided).
       // Ours always is: a reroute goes to Valhalla, which would otherwise take its own way.
@@ -3890,7 +3925,7 @@
       const overLine = rival ? ApexRouteEngine.whyOver(c, rival) : null;
       // Fun and Long way: the exception's highway, or no highway-free way in a sensible time (first: it's what you'd ask)
       const hwyLine = window.ApexRouteEngine && ApexRouteEngine.whyHighway ? ApexRouteEngine.whyHighway(c, { metric: ApexUnits.metric() }) : null;
-      Object.assign(t, { measured: c.t.measured, fun: c.fun, timeS: c.timeS, timeMarks: timeMarksOf(t, c.route), steps: stepsOf(t, c.route), extraS: c.extraS, funLevel: o.level, glareMin: c.glare ? Math.round(c.glare.minutes) : null, townKm: c.townKm,
+      Object.assign(t, { tasteBonus: Number.isFinite(c.tasteBonus) ? c.tasteBonus : null, measured: c.t.measured, fun: c.fun, timeS: c.timeS, timeMarks: timeMarksOf(t, c.route), steps: stepsOf(t, c.route), extraS: c.extraS, funLevel: o.level, glareMin: c.glare ? Math.round(c.glare.minutes) : null, townKm: c.townKm,
                          engine: c.ev ? { quality: c.ev.quality, confidence: c.ev.confidence, poorKm: c.ev.poorKm, hard: c.ev.hard, penalties: c.ev.penalties } : null,
                          unavoided: FunRoute.unavoided(avoid, c.route), why: (hwyLine && hwyLine.kind === 'absurd' ? [hwyLine.text] : [hwyLine && hwyLine.text, (engineWhy && engineWhy.text) || (quickLine && quickLine.text) || whyText(FunRoute.why(c, o.quickest), fewerTownKm(c, o.quickest), c.extraS), overLine && overLine.text]).filter(Boolean).join('. ') || null,
                          request: { ...o.request, via: via.map(p => ({ lat: p.lat, lon: p.lon, shaping: true })) }, tuned: o.tuned || null });
@@ -4876,7 +4911,7 @@
     }
     $('planClear').addEventListener('click', clearPlanned);
     $('routeBar').addEventListener('click', () => openPlan(!$('planPanel').classList.contains('open')));
-    $('destInput').addEventListener('focus', () => { if (!$('planPanel').classList.contains('open')) openPlan(true); });
+    $('destInput').addEventListener('focus', () => { if (!$('planPanel').classList.contains('open')) openPlan(true); policeWarm(); });
     $('planCancel').addEventListener('click', () => openPlan(false));
     // TestFlight 2026-11-05 ("takes up so much screen"): on the idle map the deck under Where to? (Best roads nearby, the
     // suggestion, your road) folds away with a swipe down on the bar, like a sheet's lowest detent, and comes back with a swipe
@@ -8220,10 +8255,37 @@
       $('lapSetBtn').hidden = true; $('lapInfo').textContent = 'Line set · laps start at the next crossing';
       toast('Start/finish set here. Laps are timed from the next crossing.');
     });
+    // Your taste from what you drive (taste.js recordPick, IDEAS R-33): starting a route you chose over the one Vetta put
+    // first (another card, a swipe) is half an answer to "which was better?": the chosen road beat the passed one. Only
+    // between routes within 30 % of each other's time (a much longer pick says more about your afternoon than your
+    // taste), once per plan, never for loops (their cards are directions, not kinds of road). Kept on this phone.
+    let pickLearned = null;
+    function learnFromPick() {
+      try {
+        const o = routeOptions, t = plannedRoute;
+        if (!window.ApexTaste || !o || !o.list || o.current !== t || !t || t.id !== 'route_dest' || pickLearned === o) return;
+        // Vetta's pick is the plan's own level's (the list starts with Quick's, so list[0] is not it); after a refine's swap
+        // it is the swapped-in one, since the refine ranks at that same level
+        const first = o.levels && o.builtLevel ? o.levels[o.builtLevel] : null;
+        if (first == null || o.picked === first) return;
+        const chosen = o.list[o.picked], passed = o.list[first];
+        if (!chosen || !passed || !chosen.t || !passed.t || !(chosen.timeS > 0) || !(passed.timeS > 0)) return;
+        if (Math.abs(chosen.timeS - passed.timeS) > 0.3 * Math.min(chosen.timeS, passed.timeS)) return;
+        const fc = ApexTaste.featuresOf(Core, chosen.t, { quick: true }), fp = ApexTaste.featuresOf(Core, passed.t, { quick: true });
+        const before = ApexTaste.load(localStorage), after = ApexTaste.recordPick(before, fc, fp);
+        if (after === before) return;
+        pickLearned = o;
+        ApexTaste.save(localStorage, after);
+        const lean = ApexTaste.leanOf(fc, fp);
+        if (window.apexDebug) window.apexDebug.lastPick = { lean, picks: after.picks, fc, fp };
+        if (lean) setTimeout(() => toast(`Noted: you picked the more ${lean} road. Your fun routes learn from it.`), 1500);
+      } catch (_) { /* a taste is a nicety: never in the way of a drive */ }
+    }
     async function enterDrive() {
       if (state.mode === 'live' && drive.sensors) return;
       if (state.mode === 'live' || driveActive) return;                                   // native app is feeding frames already or start is pending
       driveActive = true; health.bump('drives'); drive.startedAt = performance.now();
+      learnFromPick();                                                 // a route you chose over Vetta's first: your taste (taste.js)
       // A drive takes the whole screen, whatever the phone was showing: a drive started from the car (or a link, or Siri)
       // with the Crew or Garage sheet or the Log open left that page in the middle of the drive screen (the owner, 2026-10-30).
       if (logFrame.el && !logFrame.el.hidden) { logFrame.el.hidden = true; document.documentElement.classList.remove('log-open'); }

@@ -48,6 +48,18 @@
 - Tests: tests/test_route_card.py; e2e "plan flow (c)".
 - Next: CarPlay has not had a design pass in this run (Swift, not visible from the cloud).
 
+## Session 2026-11-11 (fable-rally-sheet): crew drive results sheet (claude/fable-rally-sheet, off origin/main affc1d0)
+
+- `backend/src/events.ts`: `eventRecord` adds `results` from `resultsSheet(runs)` (pure): best `driver_score` per stage
+  (`COALESCE(canon_id, origin_id, id)`) per driver, same pool / window / grant / block rules as `best`; stages by how many
+  drove them, places shared on equal Scores; overall by stages driven, then the rounded mean. User ids stay on the server.
+  Times: `time_s` (min, only while the driver's crew grant has `share_times`) and `gap_s` per stage; overall total when full.
+- `web/crew_events.js`: `results(e, r)` folds under the best Score on a remembered card (`.cp-results`); `resultsText()`
+  (pure, tests/test_crew_results.py) is what Share sends (navigator.share, else the clipboard).
+- Tests: backend events.test.ts (two new), e2e "the run as one card" (it skips before 4 AM local: run it with a TZ where it
+  is daytime, e.g. `TZ=Asia/Tokyo`).
+- Next: a crew's roadbook (a crew-owned Roadbook once #374 merges), or recurring meets.
+
 ## Session 2026-11-10 (fable-there-and-back): there and back, home another way (claude/fable-there-and-back, off origin/main 948cb4b)
 
 - `web/graph_router.js` `roundTrip` (worker message `round`, client `round`): ways out paired with ways home that avoid
@@ -67,6 +79,13 @@
 
 - [x] .github/workflows/core-tests.yml e2e `timeout-minutes` 25 → 35: 152 flows take ~24 min and were cancelled on the
   last flow. Next: split e2e into two jobs if it passes ~30 min.
+
+## Session 2026-11-11 (fable-taste-picks): taste learnt from the routes you choose (claude/fable-taste-picks, off origin/main ac6c6c6)
+
+- Done: `ApexTaste.recordPick` / `leanOf` (taste.js), pairs weighted in `fit`; cockpit `learnFromPick` at Start
+  (Vetta's pick = `levels[builtLevel]`); the toast; the card's "Suits your taste" line. Tests: tests/test_taste.py
+  (picks at half weight), e2e "taste from picks". Full pytest green.
+- Next: a picks-only fit could also tune Quick / Fun / Long way's default level (a driver who always takes Quick).
 
 ## Session 2026-11-10 (fable-signature): Vetta Line, the home screen (claude/fable-signature, off origin/main 948cb4b)
 

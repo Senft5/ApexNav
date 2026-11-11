@@ -128,7 +128,7 @@ most within 15 km of the trip (`ApexHazardReports.policeFor`). The router gets t
 `AVOID_POINT_X`), so a way round wins when there is one near. A route that still passes within 150 m of one is dropped when
 any candidate doesn't (`FunRoute.unavoided`, `passesNear`), and the card says "Couldn't avoid police reports"; one that
 went round says "Around a police report" (or "Around 3 police reports"). Signed out, there are no reports to avoid: the
-plan is the usual one and a toast says to sign in. A plan waits at most 0.8 s for the reports. There is no checkpoint
+plan is the usual one and a toast says to sign in. A plan never waits more than 0.2 s for the reports (the route card's 0.75 s budget): reports for the area from the last 5 min are used at once, Where to? opening asks for them ahead, and ones that land later still reach the router's requests and the card. There is no checkpoint
 report and none is made from these (App Store 1.4.3, docs/APP_REVIEW.md).
 
 ## Drag to reshape
@@ -402,7 +402,8 @@ What each one is for, and how it should move a route:
   ones members flow through) and the "Members drive it smoothly" span; **`loved`**, the most of members coming back to a road
   on a second recorded drive (`road_love`, a level from two people), your crews' shared lines, your own "Which road was
   better?" Elo by road name and roads you drove twice: a fun term with a "loved" span named for the road; **`taste`**, your
-  taste fit (taste.js) over 2 km windows in fun points; **`crowd_busy`**, the busy-time ratio at your ETA, only with the
+  taste fit (taste.js) over 2 km windows in fun points (fit from your answers and, at half weight, the routes you
+  Start instead of Vetta's pick); **`crowd_busy`**, the busy-time ratio at your ETA, only with the
   `quiet_hours` flag on (the owner's open decision; default off: no hour is sent, stored or shown).
 - **driver.js** (phone only; Overpass tiles for OSM `lit`, `tunnel`, `route=bicycle`): settings in the plan sheet's More,
   **For this drive** (vocabulary.js `passenger`, `litRoads`, `cyclists`, `tunnels`, apex.driverPrefs). `passenger_cost` (a
