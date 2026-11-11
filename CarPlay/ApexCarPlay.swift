@@ -777,7 +777,7 @@ final class ApexCarClusterSceneDelegate: UIResponder, CPTemplateApplicationInstr
 
 /// One per car screen (main, Dashboard, cluster). F-07 (REVIEW_FEEL.md): the map is MapLibre Native (ApexCarMap.swift), one
 /// engine in the app's process for every screen; web/carmap.html in a WKWebView is the fallback if it fails to start (and
-/// remains Android Auto's and the website's car map). Either way it speaks the same messages.
+/// remains the website's car map). Either way it speaks the same messages.
 final class ApexCarMapViewController: UIViewController, WKNavigationDelegate {
     enum Role { case main, dashboard, cluster }
     let role: Role

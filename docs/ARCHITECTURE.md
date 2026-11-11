@@ -52,6 +52,8 @@ The JS file is a line-for-line port used by the browser/iOS cockpit for live OSR
   sent as `vert_peak_g`; the web Recorder places each frame's spike on the 5 m sample where the car was (its share of the way
   between the two GPS fixes around it), only with a locked mount and above 1 m/s, as the CSV column `vert_peak_g`;
   spikes inside a gap of over ~3 s or 100 m between fixes are dropped, not guessed. Blank means unmeasured, never 0.
+  The lateral and longitudinal g are placed the same way (IDEAS D-26): each frame's g at its share of the stretch, each
+  5 m sample interpolated between the frames either side (blank if either is unknown); over a gap the fix's own g.
 - A drive is kept as it goes (`web/drive_keep.js`, 2026-10-30): the page checkpoints the Recorder to IndexedDB (`apexnav` v2+,
   store `keep`: a head plus row chunks, `recording.js keepPut/keepAll/keepRemove`) every 15 s or 250 m; the shell numbers
   every fix (`seq`, `at` in each live frame) and journals those since the last checkpoint on disk (`ApexKit.DriveJournal`,
@@ -160,8 +162,10 @@ Destination routes are chosen for fun within a time budget (Quick / Fun / Max fu
 ## 4. Data Honesty
 Everything the cockpit shows is measured, derived from measurements, or fetched from a named open source (OSM/DeFlock ALPR via Overpass, OSRM, Nominatim). Geometry-only routes are labelled `SIM · NOT DRIVEN` and show `--` for anything that needs an IMU. A failed ALPR fetch says so instead of implying no cameras.
 
-## 5. Dynamic Audio DSP Bus
-Maps a normalized **Driver Engagement Score** (0.0 to 1.0, derived from combined horizontal G-load $\sqrt{a_x^2 + a_y^2}$ and yaw jerk $\dot{\omega}_z$) plus a **400-meter look-ahead horizon** from the 5m road mesh to control real-time audio filters, stem crossfades, and musical build-ups timed to corner entry apexes.
+## 5. Dynamic Audio DSP Bus (not built)
+An idea, not architecture: a normalised driver-engagement score (horizontal g and yaw jerk) plus a 400 m look-ahead would
+drive audio filters and music stems. Nothing of it exists. What exists: the shell lowers or pauses music while a call
+plays (`ApexNavApp.swift`, `speechDuck`; Settings → Music). See docs/PHILOSOPHY.md §5 for the built / not built list.
 
 ## 6. iOS & CarPlay Deployment Pipeline
 - **Cloud Unsigned `.ipa` Builder**: `.github/workflows/build.yml` uses `xcodegen` (`project.yml`) on `macos-15` runners to compile `ApexNav.ipa` for USB sideloading (Sideloadly / iloader) on pull requests that change native code; main archives for TestFlight (docs/TESTFLIGHT.md).
@@ -169,7 +173,7 @@ Maps a normalized **Driver Engagement Score** (0.0 to 1.0, derived from combined
 - **The car's map (2026-10-30, REVIEW_FEEL.md F-07, F-01)**: the CarPlay base view, the Dashboard and the instrument cluster draw
   with MapLibre Native for iOS (Metal; Swift package `MapLibre`, pinned in `project.yml`) in `CarPlay/ApexCarMap.swift`: one map
   engine in the app's process, not a WKWebView per screen. The cockpit page stays the brain and sends the same messages as
-  before (`ApexCarMapViewController`); `web/carmap.html` is the fallback, and Android Auto's and the website's car map. The
+  before (`ApexCarMapViewController`); `web/carmap.html` is the fallback and the website's car map (there is no Android app). The
   arrow is dead reckoned between 1 Hz fixes (position only, never road data): `web/car_glide.js` and ApexKit `CarGlide`, one
   algorithm held to one fixture (`ApexKit/Tests/Fixtures/car_glide.json`, `tools/make_glide_fixture.js`).
 - **The shell's threads (F-13)**: CoreMotion's 100 Hz samples go to the motion lane's own serial `OperationQueue`
@@ -253,7 +257,7 @@ the shell only asks Apple.
 
 - **Source**: MapKit `MKDirections` in `ApexNavApp.swift` (free, no key, traffic-aware), over the bridge as
   `{cmd: 'trafficProbe', id, chunks: [{a, b}]}` answered with `{type: 'trafficProbe', id, results: [{now, night}], throttled, busy}`.
-  Web and Android have no traffic source and show nothing; a keyed provider (TomTom/HERE through the Worker) needs the
+  The website has no traffic source and shows nothing; a keyed provider (TomTom/HERE through the Worker) needs the
   owner's approval and is not built.
 - **When**: every 2 min while driving (> 2 m/s, on route) a planned route with a request; one probe in flight; MapKit
   throttling backs off 4 / 8 / 16 min. A new route waits a full interval.

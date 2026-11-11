@@ -14,6 +14,16 @@
 - Red team UI findings checked against the build: UX-02 tab bar (hidden while driving/replaying) and UX-05 Loop keys are
   stale; UX-04 route card and UX-08 Garage are with the redesign thread.
 
+## Session 2026-11-11 (fable-reveal-once): a slow phone drew the route twice (claude/fable-reveal-once, off origin/main)
+
+- At THROTTLE=6 the route reveal drew the line, then drew it again from nothing (680 ms, then 256 ms from 0): the ranked
+  route replaced the early quickest after the first stroke had ended, as a "swap", and a swap starts its pen at 0.
+  `penCarry` (cockpit.js) is set while the ranking puts its route up over the early one; penDraw then puts the line up
+  whole (the old one was already whole). Inside a stroke the pen still carries on from where it was. A re-plan you ask
+  for (a level card) is unchanged: it redraws quickly.
+- The route reveal flow: at THROTTLE=6 the stroke checks pass now; its count-up check still wants four painted values
+  there, which claude/fable-pin-tap (#394) relaxes to three. At normal speed 2 of 2 passed. tests/test_route_reveal.py +1.
+
 ## Session 2026-11-10 (fable-road-page): About a road: the climb's "[object Object]" fixed; scores as named bars (claude/fable-road-page, off origin/main 3f2f315)
 
 - Bug: `openRoadPage` passed `ApexUnits.short` (returns `{ n, u }`) as the headline's height formatter, so a road with a
@@ -115,6 +125,17 @@
 - Tests: tests/test_route_card.py; e2e "plan flow (c)".
 - Next: CarPlay has not had a design pass in this run (Swift, not visible from the cloud).
 
+## Session 2026-11-10 (fable-ten-hz-g): every live frame's g reaches the recording (IDEAS D-26; claude/fable-ten-hz-g, off origin/main ac6c6c6)
+
+- `web/sensors.js Recorder`: `gs` (each frame's [lat_g, lon_g] or null since the last move, up to 31) and `g0` ([g or
+  null] of the last frame placed). On a move, frame k of n sits at (k + 1) / n of the stretch and `g0` at its start; a
+  5 m sample interpolates between the frames either side (null if either is unknown). No placement (first fix, more
+  than 30 frames waiting, a stretch over 100 m) falls back to the fix's g as before. `snapshot`/`restore` carry both,
+  and `pause`, `truncate` and a stray fix clear them.
+- Tests: tests/test_ten_hz_g.py (error vs truth, a 12 m correction, blanks, checkpoint mid-fix, 1 Hz browser frames).
+- Checked: `pytest tests` full; e2e recording and Log flows.
+- Next: IDEAS D-26 in docs/IDEAS.md is added by claude/fable-driver-profile (#373); mark it done when both are merged.
+  Then the driver profile's "touch" skills (brake application and release rates, turn-in rate) from this finer g.
 ## Session 2026-11-11 (fable-practice-focus): practice focus, the profile's Work on carried into the next drives (claude/fable-practice-focus, stacked on claude/fable-driver-profile)
 
 - `core/driver_profile.py` `practice` and `drive_practice`, ported in `web/driver_profile.js` and held to parity by
@@ -282,12 +303,6 @@
   clicks a Layers key before the panel has slid in will. `overflow: clip` on `.stage` would rule it out.
 - Next: the drive screen proper (the status row beside Report and End).
 
-## Session 2026-11-10 (fable-camber-sure): Bank in whole degrees, said as approximate (claude/fable-camber-sure, off origin/main)
-
-- web/instruments.js `bankText` whole degrees; `BANK_SURE` appended to the gball/pod/grip explanations. web/drive_view.js
-  lane Banking whole degrees. web/road_feel.js `endLine` "banked about N°". Tests: test_alarm_grammar.py, test_road_feel.py.
-- Next: a body-roll gain per suspension class (ROAD_DATA.md "planned"), or validate against one surveyed road.
-
 ## Session 2026-11-10 (fable-layers): design pass 8, the Layers panel as the map's legend (claude/fable-layers, off origin/main 1a38381)
 
 - web/index.html only (markup and CSS, no script): `#switchRow` rows are `.sw.ly` = switch, name over a `<small>` line,
@@ -365,6 +380,15 @@
   reached by the app (tests/test_plan_options.py still covers them); remove them if loops never get a style back.
 - Next: two cards can share a name (both "Southeast"); a finer name (16 points, or the road it is built on) if it reads
   badly on real roads. The 1 hour / 2 hours loops sit in Options; the card's Length row is miles only.
+
+## Session 2026-11-10 (fable-coherence): red team doc coherence (claude/fable-coherence, off origin/main ac6c6c6)
+
+- docs/PHILOSOPHY.md rewritten (principles, road scores, measurement limits, built / not built, dropped and why).
+  CLAUDE.md = AGENTS.md = .cursorrules (tests/test_agent_docs.py). ARCHITECTURE.md §5 DSP bus marked not built.
+- BRAND.md shipped-state box; SOCIAL.md threshold; about.html, analysis.html Log note, LISTING.md, marketing copy;
+  APP_REVIEW.md rows (ribbon 1.4.1, Score/boards, cameras/police); OWNER_TODO domain.
+- Owner decisions 2026-11-10: Pace stays, Times/gaps shared, police + speed cameras stay, Pro looks only, Tapedeck stays.
+- Next: Pro looks only in code (Route tuning free, one Pro member dresses a crew); camber shown with how sure it is.
 
 ## Session 2026-11-10 (fable-paths-are-keys): the empty Spots list has an Add one key (claude/fable-paths-are-keys, off origin/main dc9caf9)
 

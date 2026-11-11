@@ -3,14 +3,14 @@
 The social layer exists to (1) make the road intelligence better with every drive and
 (2) make driving with friends better. It must never become evidence against its users.
 
-## 1. Privacy model (zero-snitch, enforced in code)
+## 1. Privacy model (never evidence against you, enforced in code)
 | Data | Stays on phone | Shared (private group) | Public crowd map |
 |---|---|---|---|
 | Raw IMU / GPS trace | yes | — | — |
 | Absolute speeds, timestamps | yes | convoy live only, ephemeral | never |
 | Your own drive analysis, corner times | yes | opt-in "ghost" to named friends | never |
-| Road physics per 5 m bin (camber, roughness, crest) | — | — | yes, speed-invariant, anonymous, ≥ 3 contributors before shown |
-| Corner deviation ratio `d` (ROAD_INTELLIGENCE §4.1) | — | — | yes, aggregated, ≥ 3 contributors |
+| Road physics per 5 m bin (camber, roughness, crest) | — | — | yes, speed-invariant, anonymous; shown under docs/ROAD_DATA.md §2: open roads (and unclassified roads of 1.5 km or more) from the first pass, every other road only after two different drivers |
+| Corner deviation ratio `d` (ROAD_INTELLIGENCE §4.1) | — | — | yes, aggregated, under the same rule as road physics (docs/ROAD_DATA.md §2) |
 | Hazard observations (hit / clean pass) | — | — | yes, bin-level, no trace |
 | Trip start/end | trimmed 500 m server-side even from physics uploads | — | never |
 
@@ -20,9 +20,9 @@ and in random batches so a trace cannot be re-assembled.
 ## 2. Features
 ### 2.1 Convoy (live, private)
 - Join by code/QR; group is ephemeral.
-- Lead-car IMU relay (manifesto §4): severe spike (> 0.35 g, robust 50 ms measure) or
+- Lead-car IMU relay: severe spike (> 0.35 g, robust 50 ms measure) or
   hard mid-corner braking (< −0.55 g) → immediate geo-pinned provisional alert and spoken warning to approaching followers. Validate thresholds against live sensor evidence. The 3 s cancel window retracts an already-sent alert; it does not delay delivery. Works independently of personal drive recording and crowd-profile verification.
-- Physical switches: COP, FLOCK LPR, GRAVEL, REGROUP.
+- Leader calls (one tap, relayed to followers): web/convoy_ui.js `LEADER_CALLS`. Regroup.
 - Gap display in time, not distance. Regroup points suggested at stage ends.
 - Transport: peer-to-peer where possible (WebRTC), tiny relay otherwise; nothing stored.
 
@@ -112,7 +112,7 @@ row-level security in one place, with no server for us to keep patched.
 - Store: Postgres + PostGIS; road bins keyed by (OSM way id, direction, 5 m index), with
   H3 cells for spatial lookup.
 - Aggregation jobs: Bayesian hazard posteriors, corner deviation medians, roughness spectra.
-- Cost target fits the zero-subscription promise: static tiles + bin aggregates are cheap;
+- Cost target fits free-to-drive (no part of driving needs a subscription): static tiles + bin aggregates are cheap;
   no per-user trace storage.
 
 ## 5. Build order
