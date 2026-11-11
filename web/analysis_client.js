@@ -148,13 +148,25 @@
 
   // A drive's own touch (its Log page), beside the usual over every other drive's kept observations (Your driving's
   // store, as last read: none kept yet gives no usual). null without driver_profile.js here or a corner on the drive.
-  async function touchOf(Core, d, id) {
+  // also the drive's corners against your records by kind (driveRecords): the kept observations of the drives still in the
+  // Log, dated from their summaries, with this drive's own
+  async function touchOf(Core, d, id, sums = []) {
     const P = root.ApexDriverProfile;
     if (!P || !d || !Array.isArray(d.corners) || !d.corners.length) return null;
     const obs = P.observe({ ...d, corners: Rec().scorableCorners(d, d.corners) }, Core), others = [], db = await obsDb();
-    if (db) try { for (const x of await obsAll(db)) if (x.id !== id && String(x.key).startsWith(`${OBS_VERSION}|`)) others.push(...x.obs); } catch (_) {}
+    const byId = new Map(sums.map((s) => [s.id, s])), list = [];
+    const entry = (s, o) => ({ id: s.id, name: s.name || null, at: monthOf(s) ? String(s.date).slice(0, 16) : null, obs: o });
+    if (db) try {
+      for (const x of await obsAll(db)) {
+        if (x.id === id || !String(x.key).startsWith(`${OBS_VERSION}|`)) continue;
+        others.push(...x.obs);
+        if (byId.has(x.id)) list.push(entry(byId.get(x.id), x.obs));
+      }
+    } catch (_) {}
     if (db) try { db.close(); } catch (_) {}
-    return P.driveTouch(obs, others);
+    const t = P.driveTouch(obs, others);
+    if (P.driveRecords) t.records = P.driveRecords(obs, P.recordsBySize(list.concat([entry(byId.get(id) || { id, date: d.date, name: d.name }, obs)])));
+    return t;
   }
 
   // Your driving's kept observations: a store of its own, only ever derived from the drives (deleting it loses nothing)
@@ -243,9 +255,42 @@
           return { id: o.id, name: o.name, date: o.date, dateLabel: label(o), score: o.ds.score, corners: Array.isArray(o.corners) ? o.corners.length : null, self: o === d,   // RA-3: every corner, as the Log row counts
                    matched: r ? r.matched_corners : 0, delta_s: r ? r.corner_delta_s : null }; });
       let touch = null;
-      try { touch = await touchOf(Core, d, id); } catch (_) { touch = null; }
+      try { touch = await touchOf(Core, d, id, sums); } catch (_) { touch = null; }
+      // this drive's corners against your other passes of the same road, corner by corner (driver_profile.js roadRecords)
+      const P = root.ApexDriverProfile;
+      if (touch && P && P.roadRecords) try {
+        const ob = (x) => P.observe({ ...x, corners: Rec().scorableCorners(x, x.corners || []) }, Core), lat0 = d.lat[0], lon0 = d.lon[0];
+        // oldest first, so of equal passes the first to reach a level holds the corner (as recordsBySize)
+        const past = near.filter((o) => Array.isArray(o.corners) && o.corners.length).sort((p, q) => String(p.date || '').localeCompare(String(q.date || '')));
+        touch.road = P.roadRecords(P.placed(d, ob(d), lat0, lon0), past.map((o) => P.placed(o, ob(o), lat0, lon0)), past.map((o) => o.id));
+        const on = new Map(past.map((o) => [o.id, monthOf(o) === null ? null : o.date]));
+        touch.road.rows = (touch.road.rows || []).map((r) => ({ ...r, on: r.by === null ? null : on.get(r.by) || null }));
+      } catch (_) { touch.road = null; }
       release();
       return { reference, coach: co, road, touch, bestOther: reference ? reference.id : (sums.find((s) => s.id !== id) || {}).id || null };
+    },
+
+    /**
+     * A road's corners across every drive with the same name as drive id (Your roads, corner by corner; driver_profile.js roadBook): the
+     * drives oldest first, placed in the newest one's frame, the corners in its road order. A drive of unknown date holds a
+     * corner with no date. { book: { corners, fewer, drives } | null }.
+     */
+    async roadBook({ id }) {
+      const Core = CoreOf(), P = root.ApexDriverProfile, all = await Rec().summaries(Core), me = all.find((s) => s.id === id);
+      const key = me ? String(me.name || '').trim().toLowerCase() : '';
+      if (!P || !P.roadBook || !key) return { book: null };
+      const sums = all.filter((s) => String(s.name || '').trim().toLowerCase() === key)
+        .sort((p, q) => String(p.date || '').localeCompare(String(q.date || '')));
+      const ds = [];
+      for (const s of sums) { const d = await full(s.id, s); if (d && d.lat && d.lat.length >= 2) ds.push(d); }
+      if (!ds.length) { release(); return { book: null }; }
+      const last = ds[ds.length - 1], lat0 = last.lat[0], lon0 = last.lon[0], c = Math.cos(lat0 * Math.PI / 180);
+      const ob = (x) => P.observe({ ...x, corners: Rec().scorableCorners(x, x.corners || []) }, Core);
+      const drives = ds.map((d) => ({ id: d.id, at: monthOf(d) === null ? null : String(d.date).slice(0, 16), corners: Array.isArray(d.corners) && d.corners.length ? P.placed(d, ob(d), lat0, lon0) : [] }));
+      const ref = [];
+      for (let i = 0; i < last.lat.length; i += 5) ref.push([(last.lon[i] - lon0) * c * 111320, (last.lat[i] - lat0) * 110540]);
+      release();
+      return { book: P.roadBook(drives, ref) };
     },
 
     /** Corner by corner between two drives (Core.compareDrives). */
