@@ -12,12 +12,75 @@ members had shared with the private crew stayed, so a stranger who joined next c
 owner's own, because the owner made it public. The routes and stages themselves stay with their owners, who can share them
 again. The owner's crew settings and the privacy page say so. Undo: revert the PR.
 
+## 2026-11-11 (roam-c presence-private-crews): "Your crews see where you are" means private crews only (claude/roam-c-presence-private-crews)
+
+Found in the security pass. Anyone can join a public crew with one tap, and Friends on the map set to Crew showed your
+position to every member of every crew you were in, public ones included. So a stranger could join a big public crew and see
+where its members were (within a mile and 10 minutes late by default, but exact and live if they chose that). Now Crew means
+your private crews only, as cars already did. The sheet, Who sees what and the privacy page say "private crews". Nothing
+stored changes. Undo: revert the PR (public crews' members see your position again).
+
+
+## 2026-11-11 (ui-round-two): the blank band at the top of the map, signed-out 401s, a crew's name and the Share box (claude/project-thread-5sbga7)
+
+The blank paper band at the top of the idle map (as tall as the deck under it) was not missing tiles: the map draws all
+the way up, but Chrome treated the solid deck over the map as hiding part of it and skipped the wrong end. The deck is now
+99.6 % solid instead of 100 %, which nobody can see, and the map reaches the top. A sky colour would not have helped.
+Undo: delete the "map under the deck" rule at the end of web/signature.css.
+Signed out, the app no longer asks the server for convoy invites, points, hazards or members' roads once it knows you are
+signed out; it answers itself with "sign in required". Undo: the MEMBER_READS lines in web/sync.js.
+A crew's name is set large like the Garage's, its keys are paper, and the people you can share a route with are soft wells
+that turn ink when picked.
+
+## 2026-11-11 (social round two): For you, and a People badge that counts what's new (claude/project-thread-uwmi4e)
+
+People → Friends now opens with For you: a friend topping your best Score on one of your stages, someone passing your
+time in this week's time attack, kudos, a duel accepted or won, new followers of your roadbooks, a crew drive you haven't
+answered. The People tab's badge counts those until you've looked, plus requests and duels waiting on you, and it's
+there from launch, not only after People has been opened. I kept "seen" on the phone instead of the server, so there's no
+migration and nothing new is stored about you; the cost is that a second phone shows the same items as new once.
+Roadbook followers are counted, never named, because a public book's followers can be strangers.
+
+Undo: revert the PR (no data changed).
+## 2026-11-11 (routing round three): our router reads measured crests and verified bumps (claude/project-thread-39xbx9)
+
+Roads members measured going light over their crests (0.15 g or more, two or more passes) now count as more character in
+our router, and crowd-verified bumps (the same ones the co-driver calls "Confirmed by members") cost a road 25 % of its
+time each, at most double, in both the search and the Fun pick. One pass of crest data, and bumps the server hasn't
+verified, count nothing. The weights are a judgment call: crests at 2 against loved 1.5 and banking 0.5 so a crested road
+wins a near-tie and no more; bumps sized so three on a short lane lose it a 1 s tie, while one bump costs only the stretch
+it sits on (a long road isn't written off for one). Undo: `CROWD_W.crest` 0 and `BUMP_X` 0 in web/graph_router.js.
+
+## 2026-11-11 (roam-a descent call): the co-driver says a long descent as you near its top (claude/project-thread-h7xxmf)
+
+On a planned route, the same long, steep descents the route card names are now said once, as you come within 500 m of the
+top (or up to 300 m down it): "Long descent ahead: 2.5 miles at 8 percent. A lower gear saves the brakes." It waits for a
+quiet moment like the break cue (no corner call due), in any notes mode, since it is a safety line. Off the route, or
+driving without one, nothing is said. Undo: remove the `descentAhead` block in cockpit.js `updateNotes`.
+
 ## 2026-11-11 (roam-a descents): the route card warns of a long, steep descent (claude/project-thread-h7xxmf)
 
 A planned route with a long, steep way down now says so on its card, under the climb: "A long descent: down 1,575 ft over
 3.7 mi at 8%. A lower gear saves the brakes." It comes from the map's terrain (the same heights as the climb line), not from a
 model: 300 m or more of drop at 5 % or steeper counts, which is the kind of hill where brakes fade. Ordinary hills say
 nothing. Undo: revert the PR (one line on the card goes away).
+## 2026-11-11 (round two analysis): corner-speed steadiness is shown in mph, beside the braking spread (claude/project-thread-gd7nre)
+
+- What: the Log drive page's repeatable-corners list now also says how steady your turn-in point and your speed at the slowest
+  point are over your passes of each corner ("speed at the slowest point within 2 mph").
+- Why: you asked for more speed-based features; a steady corner speed is a speed figure that rewards repeatability, not going
+  faster. It is a spread, never a target speed.
+- Undo: drop the two `turn_sd_m`/`speed_sd_mps` clauses in web/drive_view.js (the figures can stay in the coach).
+
+## 2026-11-11 (round two analysis): Your year's areas need no map lookup, and crew drives are counted on the phone (claude/project-thread-gd7nre)
+
+"Where you drove" groups your drives within 40 km of one another and names each area after the road you drove most
+there. That avoids a reverse-geocoding service, so no position leaves the phone. Crew drives are counted from a short
+list the phone keeps (drive id, crew name, start time), because the server deletes attendance a week after each drive;
+keeping it longer on the server would have been a privacy change. Drives before today aren't in the count.
+
+Undo: drop the `areas` and `crews` lines in year_review.js `lines`, and `noteCame` in crew_events.js.
+
 ## 2026-11-11 (roam-c-boot-budget): an e2e check on what the map page loads and runs before it is ready (claude/roam-c-boot-budget)
 
 New e2e flow "startup budget" (IDEAS P-06): it loads index.html and fails if the page needs more than 3.6 MB of its own

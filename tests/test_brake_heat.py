@@ -172,7 +172,7 @@ def test_the_cockpit_feeds_every_live_frame_and_resets_per_drive():
     assert '<script src="brake_heat.js" defer></script>' in page
     src = open(os.path.join(ROOT, "web", "cockpit.js"), encoding="utf-8").read()
     assert src.count("noteBrakes(fr);") + src.count("noteBrakes(frame);") == 2     # the web sensors and the app's own
-    assert "drive.brakes = null; brakeSay = null; breakSay = null;" in src
+    assert "drive.brakes = null; drive.descentSaid = null; brakeSay = null; breakSay = null;" in src
     assert "brakeSay = { text: ApexBrakeHeat.CALL_TEXT, until: now + 60000 }" in src   # its own slot and expiry
 
 
@@ -311,5 +311,34 @@ def test_the_route_card_says_it_under_the_climb():
     page = open(os.path.join(ROOT, "web", "index.html"), encoding="utf-8").read()
     assert 'id="routeCardDescent" hidden' in page and ".f-descent {" in page
     src = open(os.path.join(ROOT, "web", "cockpit.js"), encoding="utf-8").read()
-    assert "ApexBrakeHeat.descentText(ApexBrakeHeat.longDescents(t.dist, t.elev)" in src
+    assert "t.descents = window.ApexBrakeHeat ? ApexBrakeHeat.longDescents(t.dist, t.elev) : [];" in src
+    assert "ApexBrakeHeat.descentText(t.descents," in src
     assert "$('routeCardDescent').hidden = true;" in src                   # a new route starts with no line
+
+
+@pytest.mark.skipif(NODE is None, reason="node not installed")
+def test_a_long_descent_is_said_once_near_its_top_and_never_off_its_road():
+    script = (
+        "const B=require(process.argv[1]);"
+        "const L=[{start_m:2000,end_m:8000,drop_m:480,grade:0.08},{start_m:12000,end_m:16000,drop_m:320,grade:0.08}];"
+        "const sp=(m)=>(m/1609.344).toFixed(1)+' miles', said=new Set(), at=(m)=>{const d=B.descentAhead(L,m,said);return d?d.start_m:null;};"
+        "const r={far:at(1000),near:at(1600),down:at(2250),deep:at(2400),none:B.descentAhead(L,NaN,said),noList:B.descentAhead(null,2000,said)};"
+        "said.add(2000);r.again=at(1800);r.second=at(11700);"
+        "r.text=B.descentCall(L[0],sp);r.bad=B.descentCall(null,sp);"
+        "process.stdout.write(JSON.stringify(r));"
+    )
+    res = subprocess.run([NODE, "-e", script, os.path.join(ROOT, "web", "brake_heat.js")], capture_output=True, text=True, check=True)
+    r = json.loads(res.stdout)
+    assert r["far"] is None and r["near"] == 2000 and r["down"] == 2000      # 500 m ahead of the top to 300 m down it
+    assert r["deep"] is None and r["none"] is None and r["noList"] is None
+    assert r["again"] is None and r["second"] == 12000                         # once each
+    assert r["text"] == "Long descent ahead: 3.7 miles at 8 percent. A lower gear saves the brakes."
+    assert r["bad"] is None
+
+
+def test_the_cockpit_says_the_descent_through_the_quiet_slot_on_the_planned_route_only():
+    src = open(os.path.join(ROOT, "web", "cockpit.js"), encoding="utf-8").read()
+    assert "if (live && !offRoute && !brakeSay && track === plannedRoute && Array.isArray(track.descents)" in src
+    assert "ApexBrakeHeat.descentCall(d, ApexUnits.spokenShort)" in src
+    i = src.index("ApexBrakeHeat.descentAhead(track.descents"); j = src.index("const quiet = brakeSay || breakSay;")
+    assert i < j                                                               # queued before the gate reads the slot

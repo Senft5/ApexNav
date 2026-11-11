@@ -272,6 +272,48 @@ const CASES = {
       noSignals: (() => { v = network(false); return dump(R.plan(v, { from, to, level: 'quick', tune: T0.tune({ lights: 4 }) })) === dump(R.plan(v, { from, to, level: 'quick' })); })() };
   },
 
+  // measured crests and crowd-verified bumps in the search: two lanes otherwise alike (the plain one `gap` s quicker);
+  // the lane members measured going light over its crests (two passes) wins, one pass of crest data counts nothing, and
+  // verified bumps on the crested lane hand it back; bumps on the other lane alone change nothing about the winner
+  crowdCrestBump() {
+    const A = [39.30, -84.70], nodes = [at(A[0], A[1] - 0.004), at(A[0], A[1]), at(A[0], A[1] + 0.03), at(A[0], A[1] + 0.034)];
+    const edges = [];
+    two(edges, 0, 1, { name: 'Start Lane', t: 30 }); two(edges, 2, 3, { name: 'End Lane', t: 30 });
+    const north = [[A[0] + 0.004, A[1] + 0.01], [A[0] + 0.004, A[1] + 0.02]], south = [[A[0] - 0.004, A[1] + 0.01], [A[0] - 0.004, A[1] + 0.02]];
+    const chain = (pts, props) => { const ids = pts.map((p) => { nodes.push(at(p[0], p[1])); return nodes.length - 1; }); const c = [1, ...ids, 2]; for (let k = 0; k + 1 < c.length; k++) two(edges, c[k], c[k + 1], props(k)); };
+    chain(north, (k) => ({ name: 'Crest Lane', quality: 0.6, scenery: 0.5, fun: 0.5, conf: 0.8, cls: 4, t: k === 1 ? 60.5 : 60 }));
+    chain(south, (k) => ({ name: 'Flat Lane', quality: 0.6, scenery: 0.5, fun: 0.5, conf: 0.8, cls: 4, t: k === 1 ? 59.5 : 60 }));
+    const v = R.view(H.tiles(nodes, edges).tiles);
+    const from = { lat: A[0], lon: A[1] - 0.002 }, to = { lat: A[0], lon: A[1] + 0.032 };
+    const roads = (r) => r.names.map((n) => n.name).filter((n) => /Lane$/.test(n) && !/Start|End/.test(n));
+    const lineN = [[A[0], A[1]], [A[0] + 0.004, A[1] + 0.01], [A[0] + 0.004, A[1] + 0.02], [A[0], A[1] + 0.03]];
+    const lineS = [[A[0], A[1]], [A[0] - 0.004, A[1] + 0.01], [A[0] - 0.004, A[1] + 0.02], [A[0], A[1] + 0.03]];
+    const lenOf = (line) => { let L = 0; for (let k = 1; k < line.length; k++) L += R.distM(line[k - 1][0], line[k - 1][1], line[k][0], line[k][1]); return L; };
+    const binsOf = (line) => Array.from({ length: Math.floor(lenOf(line) / 5) }, (_, b) => b);
+    // crests: a rise every 400 m that takes 0.3 g off (8 bins of it), measured by `passes` passes; nothing else measured
+    const way = (line, passes, bp) => {
+      const bins = binsOf(line), d = { i: bins, n: bins.map(() => passes), crest: bins.map((b) => (b % 80 < 8 ? 0.3 : 0.02)) };
+      if (bp) d.bp = bp;
+      return { 0: d, 1: { ...d } };
+    };
+    const planWith = (ways, lines) => {
+      v.crowd = ways ? R.crowdOnto(v, Own.crowdItems({ ways, lines })) : null;
+      const r = R.plan(v, { from, to, level: 'fun' }), edgesN = v.crowd ? v.crowd.edges : 0;
+      const crests = v.crowd ? Array.from(v.crowd.crest).filter(Number.isFinite) : [], bumps = v.crowd ? Array.from(v.crowd.bumps).reduce((a, b) => a + b, 0) : 0;
+      v.crowd = null;
+      return { road: roads(r.routes[0]), edges: edgesN, crestMax: crests.length ? Math.max(...crests) : null, bumps };
+    };
+    const nBins = binsOf(lineN).length, bp = [[Math.floor(nBins * 0.3), 0.93], [Math.floor(nBins * 0.5), 0.88], [Math.floor(nBins * 0.7), 0.9]];
+    return {
+      none: planWith(null),
+      crest: planWith({ 77: way(lineN, 2) }, { 77: lineN }),
+      onePass: planWith({ 77: way(lineN, 1) }, { 77: lineN }),
+      crestBumps: planWith({ 77: way(lineN, 2, bp) }, { 77: lineN }),
+      weakBumps: planWith({ 77: way(lineN, 2, bp.map(([b]) => [b, 0.6])) }, { 77: lineN }),
+      otherBumps: planWith({ 77: way(lineN, 2), 78: way(lineS, 2, bp) }, { 77: lineN, 78: lineS }),
+    };
+  },
+
   // members' data in the search: a near-tie (the plain lane 2 s quicker) flips to the loved, smooth, flowing lane, and
   // with no data (signed out) nothing changes
   crowd() {

@@ -4030,7 +4030,9 @@ flow('no signal: a hazard report waits on the phone and goes when the connection
   });
   await page.goto(base + '/index.html');
   await page.waitForFunction(() => window.apex && typeof window.apex.live === 'function');
-  await page.evaluate(() => window.apex.live({ lat: 35.6, lon: -83.9, accuracy_m: 5, speed_mps: 15, course_deg: 90, has_fix: true }));
+  // the phone keeps sending fixes, as a phone does: with one fix only, a loaded CI runner passed the 10 s a report needs a
+  // fresh fix within before Debris was tapped, and nothing was saved (CI 2026-11-11; as "review mode (U-94)")
+  await page.evaluate(() => { const fix = () => window.apex.live({ lat: 35.6, lon: -83.9, accuracy_m: 5, speed_mps: 15, course_deg: 90, has_fix: true }); fix(); window.__fixes = setInterval(fix, 500); });
   await page.click('#hzReportBtn');
   await page.click('#hzKinds button:has-text("Debris")');
   await saidOn(page, /Debris saved/);
@@ -4736,6 +4738,58 @@ flow('duels: a friend\'s challenge is a card on People; Accept starts it; the ca
   await page.click('.duel-pop.open button:has-text("Send to @bob")');
   await page.waitForFunction(() => /Sent\. @bob has 3 days on Esses once they say yes\./.test(document.getElementById('toast').textContent));
   check(JSON.stringify(sent) === '[{"handle":"bob","segment_id":"MY2","days":3,"kind":"time"}]', 'what was sent: ' + JSON.stringify(sent));
+});
+
+flow('For you: the People badge counts what is new and what waits; People lists it in sentences; seen once drawn; a row\'s key takes you there (Worker stubbed, SOCIAL 2.10)', async (page, base) => {
+  await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); } catch (_) {} });
+  const at = (minAgo) => new Date(Date.now() - minAgo * 60e3).toISOString().replace('T', ' ').slice(0, 19);
+  const geom = JSON.stringify(Array.from({ length: 80 }, (_, i) => [35.6 + i * 3e-4, -83.9 + i * 4e-4 + Math.sin(i / 6) * 3e-4]));
+  let items = [
+    { kind: 'topped', at: at(20), handle: 'bob', canon_id: 'MY1', stage: 'Dry Ridge climb', score: 850, yours: 800 },
+    { kind: 'kudos', at: at(90), handle: 'cara', stage: 'Dry Ridge climb', canon_id: 'SEG1', driven_on: '2026-11-10' },
+    { kind: 'request', at: at(200), handle: 'dan', waiting: true },
+    { kind: 'crew_drive', at: at(300), event_id: 'E1', title: 'Cherohala Saturday', starts_at: '2030-11-14 14:00:00', crew: 'Ridge Runners', crew_id: 'C1' },
+  ];
+  let asked = 0;
+  await page.route(base + '/api/**', (route) => {
+    const u = new URL(route.request().url()), json = (b, s = 200) => route.fulfill({ status: s, contentType: 'application/json', body: JSON.stringify(b) });
+    if (u.pathname === '/api/me') return json({ signed_in: true, member: true, handle: 'me', requests: 1 });
+    if (u.pathname === '/api/inbox') { asked++; return json({ items, waiting: 1, now: at(0) }); }
+    if (u.pathname === '/api/friends') return json([{ id: 'U1', handle: 'bob', name: 'Bob', status: 'accepted', incoming: 0 }, { id: 'U4', handle: 'dan', name: null, status: 'pending', incoming: 1 }]);
+    if (u.pathname === '/api/segments') return json([{ id: 'MY1', origin_id: null, name: 'Dry Ridge climb', geom, start_lat: 35.6, start_lon: -83.9 }]);
+    if (u.pathname === '/api/points') return json({ total: 0 });
+    return json([]);
+  });
+  await page.goto(base + '/index.html');
+  await page.waitForFunction(() => window.apex && typeof window.apex.live === 'function');
+  // before People is opened: the badge, from the social group's first ask (the request and three new rows)
+  await page.waitForFunction(() => (document.querySelector('#crewTab .badge') || {}).textContent === '4', null, { timeout: 20000 });
+  const label = await page.getAttribute('#crewTab .badge', 'aria-label');
+  check(label === '1 friend request, 3 new for you', 'the badge says what it counts: ' + label + ' / ' + await page.textContent('#crewTab .badge'));
+  await page.evaluate(() => document.querySelector('.tab[data-view="people"]').click());
+  await page.waitForSelector('#accountBody .inbox-sec:not([hidden]) .inbox-row');
+  const rows = await page.$$eval('#accountBody .inbox-row', (l) => l.map((r) => [r.classList.contains('new'), r.querySelector('.inbox-kick').textContent, r.querySelector('.inbox-text').textContent]));
+  check(rows.length === 3, 'the request is a card above, not a row: ' + JSON.stringify(rows));
+  check(rows[0][0] && rows[0][1] === 'Topped · 20 min ago' && rows[0][2] === '@bob scored 850 on Dry Ridge climb, over your best of 800.', 'topped, new, in a sentence: ' + JSON.stringify(rows[0]));
+  check(/^Kudos · 2 h ago$/.test(rows[1][1]) && /^Ridge Runners: Cherohala Saturday, .+\. Are you going\?$/.test(rows[2][2]), 'kudos and the crew drive: ' + JSON.stringify(rows));
+  check(await page.isVisible('#accountBody .request-card:has-text("@dan")'), 'the request stays a card with its keys');
+  // drawn is seen: the badge keeps only what waits on you
+  await page.waitForFunction(() => (document.querySelector('#crewTab .badge') || {}).textContent === '1');
+  check(await page.evaluate(() => !!localStorage.getItem('apex.inboxSeen')), 'seen is kept on the phone');
+  const small = await page.$$eval('#accountBody .inbox-row button', (l) => l.map((b) => Math.round(b.getBoundingClientRect().height)).filter((h) => h < 32));
+  check(!small.length, 'keys big enough: ' + JSON.stringify(small));
+  // Answer goes to the Crews side; Drive it plans the stage
+  await page.click('#accountBody .inbox-row:has-text("Cherohala") button:has-text("Answer")');
+  await page.waitForFunction(() => document.getElementById('peopleTabCrews').getAttribute('aria-selected') === 'true');
+  await page.click('#peopleTabFriends');
+  await page.click('#accountBody .inbox-row:has-text("Topped") button:has-text("Drive it")');
+  await page.waitForFunction(() => /Dry Ridge climb/.test(document.getElementById('routeCardName').textContent), null, { timeout: 8000 });
+  // something new comes in while the app is in the back: it counts again when the app comes to the front
+  items = [{ kind: 'passed', at: at(-1), handle: 'sam', stage: 'Tail of the Dragon', gap_s: 4, place: 3 }, ...items];
+  const before = asked;
+  await page.evaluate(() => document.dispatchEvent(new Event('visibilitychange')));
+  await page.waitForFunction(() => (document.querySelector('#crewTab .badge') || {}).textContent === '2');
+  check(asked > before, 'asked again on coming to the front');
 });
 
 flow('Billet: a primary key is light metal with dark ink, not dark on dark (REVIEW_PEOPLE.md P-01)', async (page, base) => {
@@ -7153,6 +7207,37 @@ flow('the route card says a long descent before you set off, from the terrain, i
   const line = await page.textContent('#routeCardDescent');
   check(/^A long descent: down [\d,]+ ft over [\d.]+ mi at 8%\. A lower gear saves the brakes\.$/.test(line.replace(/\u00a0/g, ' ')), 'the descent, in feet and miles: ' + line);
 }, IPHONE);
+
+flow('the co-driver says a long descent once as the car nears its top, from the route\'s terrain (brake_heat.js descentAhead, IDEAS V-12)', async (page, base) => {
+  await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); } catch (_) {}
+    window.__said = []; window.APEX_REVIEW = true;
+    window.webkit = { messageHandlers: { apex: { postMessage(m) { if (m && m.cmd === 'said') window.__said.push(m.text); } } } }; });
+  await page.goto(base + '/index.html');
+  await page.waitForFunction(() => window.apexDebug && window.apexDebug.map && window.ApexRouteImport && window.apex && window.apex.live && window.ApexStages);
+  // terrain: a gentle climb to the top at 1.5 km, then 8 % down for 4 km (the DEM is stubbed: no tiles here)
+  await page.evaluate(() => { ApexStages.profile = async (t) => t.dist.map((m) => (m < 1500 ? 1000 + 0.02 * m : 1030 - 0.08 * Math.min(m - 1500, 4000))); });
+  const KY = 110540, pts = [];
+  for (let y = 0; y <= 6000; y += 5) pts.push(y);
+  const gpx = pts.map((n) => `<trkpt lat="${(35.5 + n / KY).toFixed(7)}" lon="-83.9000000"/>`).join('');
+  await page.setInputFiles('#gpxFile', { name: 'pass.gpx', mimeType: 'application/gpx+xml', buffer: Buffer.from(`<gpx><trk><name>Over the pass</name><trkseg>${gpx}</trkseg></trk></gpx>`) });
+  await page.waitForFunction(() => window.apexDebug.track && window.apexDebug.track.name === 'Over the pass', null, { timeout: 10000 });
+  await page.waitForFunction(() => Array.isArray(apexDebug.track.descents) && apexDebug.track.descents.length === 1, null, { timeout: 15000 })
+    .catch(async () => { throw new Error('descents: ' + JSON.stringify(await page.evaluate(() => apexDebug.track.descents))); });
+  await page.evaluate(() => window.apex.onNative({ type: 'carplay', action: 'start' }));
+  await page.waitForFunction(() => window.apexDebug.driveActive);
+  const at = (i, v) => page.evaluate(([i, v]) => { const t = apexDebug.track;
+    window.apex.live({ lat: t.lat[i], lon: t.lon[i], accuracy_m: 5, speed_mps: v, course_deg: 0, has_fix: true, lat_g: 0, lon_g: 0, calibration: 'locked', thermal: 0 }); }, [i, v]);
+  const calls = () => page.evaluate(() => window.__said.filter((s) => /^Long descent ahead/.test(s)));
+  // the climb, well short of the top: nothing yet
+  for (let i = 0; i <= 160; i += 4) { await at(i, 20); await page.waitForTimeout(40); }
+  check((await calls()).length === 0, 'nothing said 700 m short of the top: ' + JSON.stringify(await calls()));
+  // into the last 500 m and over the top: said once, in words
+  for (let i = 200; i <= 420; i += 3) { await at(i, 20); await page.waitForTimeout(60); }
+  const said = await calls();
+  check(said.length === 1 && /^Long descent ahead: [\d.]+ miles at 8 percent\. A lower gear saves the brakes\.$/.test(said[0]), 'said once near the top: ' + JSON.stringify(said));
+  for (let i = 420; i <= 500; i += 3) { await at(i, 20); await page.waitForTimeout(40); }
+  check((await calls()).length === 1, 'and not again on the way down: ' + JSON.stringify(await calls()));
+});
 
 flow('plan flow (e, f) a level change and an alternative are one tap or swipe each: the level cards are the routes found, nothing planned again (finding 4, 11)', async (page, base) => {
   const asked = [];
