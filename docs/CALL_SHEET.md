@@ -14,6 +14,20 @@ empty states stay drawn in pencil. No words or places changed.
 
 Undo: revert the PR (CSS only).
 
+## 2026-11-11 (roam-c-ci-shards): the e2e check runs as four jobs side by side (claude/roam-c-ci-shards)
+
+The e2e check ran 173 flows one after another in 28-31 minutes against a 35-minute limit, and every PR waited on it. It
+now runs as four jobs at once, `e2e (1/4)` to `e2e (4/4)`, each taking a quarter of the flows (smoke.js `SHARD=k/n`),
+and one small job still named `e2e` that is green only when all four are, so anything that reads the check by name sees
+no change. Calls made: (1) four jobs, not more: each pays about a minute of setup, and the safe-area flow alone is about
+4.5 minutes, so more jobs would not finish sooner. (2) Flows are dealt longest first to the lightest job, from a short
+table of the 18 flows over 15 s in smoke.js (`LONG_S`); a flow not in it counts as 5 s, so a renamed or new flow still
+runs, it is only dealt as a short one. From the last CI log that gives 6.4 / 6.5 / 5.8 / 6.9 minutes of flows (plain
+every-4th dealing gave 9.0 for one job). (3) The job limit is 25 minutes. (4) The Playwright browser is cached by its
+version; npm installs only Playwright itself (no lock file to cache), so there is nothing else worth caching. Coverage
+is the same: `LIST=1` over the four shards gives exactly the 173 flows of an unsharded run.
+
+Undo: revert the PR, or set the matrix to `[1]` and `SHARD` to `1/1` (one job running every flow, as before).
 ## 2026-11-11 (roam-b-crowd-bumps): a bump is called on a planned route once two members felt it (claude/roam-b-crowd-bumps)
 
 Each 5 m section of road data now also says whether the phone felt a sharp bump there (yes, no or unknown; never a g

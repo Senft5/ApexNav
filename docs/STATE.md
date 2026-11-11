@@ -10,6 +10,14 @@
   carries the apex dot. The dashed sample crew and the empty bay stay pencil (e2e checks the dashed slot).
 - Tests: tests/test_garage_line.py. e2e Garage, People, crew, friend flows pass here.
 - Next: the crew page and Your data/Settings sub-sheets (ink rules on lists), the route card's Share box.
+## Session 2026-11-11 (roam-c-ci-shards): the e2e check in four parallel jobs (claude/roam-c-ci-shards, off origin/main)
+
+- Done: `e2e/smoke.js` takes `SHARD=k/n` (flows dealt longest first, weights in `LONG_S`) and `LIST=1` (print the flows a
+  run would take). `core-tests.yml` runs `e2e (1/4)`..`e2e (4/4)` side by side (25 min limit, fail-fast off, contact
+  sheets uploaded per shard), caches `~/.cache/ms-playwright`, and keeps one job named `e2e` that needs all four.
+- Checked: the four `LIST=1` shards together are exactly the 173 flows of an unsharded run; expected flow time per job
+  from the last CI log is 5.8-6.9 min (was 25.4 min in one job).
+- Next: when a new flow runs over about 15 s, add it to `LONG_S` so it is dealt as a long one.
 
 ## Session 2026-11-11 (roam-b-crowd-bumps): bumps the crowd felt, verified and called (claude/roam-b-crowd-bumps, off origin/main)
 
