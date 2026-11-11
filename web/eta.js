@@ -116,6 +116,16 @@
     if (Number.isFinite(offeredAt) && now - offeredAt < REOFFER_MS) return null;
     return { lateMin: Math.round((arriveAt - homeBy) / 60000) };
   }
+  /**
+   * What a late loop offers (IDEAS R-37): skip the next stage not yet begun (at least 300 m on: there's time to take the
+   * other way), else head home. spans: the route's stages along it ({ name, startM, endM }), atM: where you are on it.
+   * { kind: 'skip', span, label } or { kind: 'home', label }.
+   */
+  function homeByAction(spans, atM) {
+    const at = Number.isFinite(atM) ? atM : 0;
+    const span = (spans || []).find((s) => s && Number.isFinite(s.startM) && s.startM >= at + 300);
+    return span ? { kind: 'skip', span, label: span.name ? `Skip ${span.name}` : 'Skip the next stage' } : { kind: 'home', label: 'Head home' };
+  }
   /** The next time `hh:mm` happens after `now` (a "home by 6:00" set at 7 PM means tomorrow's 6 AM is not meant: today). */
   function homeByAt(hhmm, now = Date.now()) {
     const m = /^(\d{1,2}):(\d{2})$/.exec(hhmm || '');
@@ -168,7 +178,7 @@
     return { timeS: s, marks };
   }
 
-  const api = { routerLeft, cornerSections, createEta, leftText, homeByOffer, homeByAt, envelopeTime, PACE_MIN, PACE_MAX, LATE_GRACE_MS };
+  const api = { routerLeft, cornerSections, createEta, leftText, homeByOffer, homeByAction, homeByAt, envelopeTime, PACE_MIN, PACE_MAX, LATE_GRACE_MS };
   api.ENVELOPE = { ENVELOPE_SHARE, OPEN_LIMIT_MPS, TOWN_SHARE, UNPOSTED_MPS, UNKNOWN_MPS, FLOOR_MPS };   // U-97 (tests)
   if (typeof module !== 'undefined' && module.exports) module.exports = api; else root.ApexEta = api;
 })(typeof window !== 'undefined' ? window : globalThis);

@@ -5,6 +5,16 @@ you reach one you've seen. If you disagree with a call, say so and it gets rever
 it says so. Things only you can do are in docs/OWNER_TODO.md.
 
 
+
+## 2026-11-11 (routing round two, part 2): mid-drive, Vetta offers to go round a police report; a late loop drops a stage before going home
+
+- **A police report on your route ahead is offered, not taken.** Between 0.8 and 25 km ahead, with Police reports on, a
+  toast says how far and has Go round (15 s). I didn't reroute on my own: a report can be gone by the time you get there,
+  and a surprise reroute mid-drive is worse than a tap. Nearer than 0.8 km there's no time to turn off, so only the voice's
+  usual call is made. Undo: drop `policeAheadTick` from feedReported.
+- **Go round is kept only if it goes round.** If the new way still passes within 150 m, it says so and you stay put.
+- **A late loop skips its next stage before offering Head home.** "Running 12 min late for home." now has "Skip Foothills
+  Parkway" while a stage you haven't begun is ahead; the stage you're on is never cut. Undo: `homeByAction` returning home always.
 ## 2026-11-11 (routing round two): Avoid cameras keeps every route off them, speed cameras with plate readers
 
 With Avoid → Cameras on, only one of the routers was told about the cameras; the others' routes (our own router's, the
