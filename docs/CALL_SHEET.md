@@ -57,6 +57,46 @@ notes under a search that finds nothing said "Press Go" while the key under them
 "offline" is only said when the phone is offline.
 
 Undo: revert the PR. Typed coordinates still work as before and are still named "Pin lat, lon".
+## 2026-11-11 (fable-pin-tap): the pin flow names its waits and taps the map where the map is (claude/fable-pin-tap)
+
+The flow's tap on the map once landed on the plan sheet, which stood higher on that run, and the test then waited 20 s
+with no word of why. It now taps open map, found by looking, and every wait names itself on failure. No check was dropped
+and one was added (there is open map to tap). Undo: revert the PR.
+## 2026-11-11 (fable-share-defaults): Scores and times shared with friends and private crews by default (claude/fable-share-defaults)
+
+Nate (2026-11-11): "data sharing with friends and private crews should be on by default, with an option to turn each
+off case by case. Public crews should default to off, but prompt you when you join to enable." Done that way: a new
+friendship (a request accepted, a mutual request, a friend link, a crew link's sender) gives both people a grant with
+Scores and Times on; starting or joining a private crew gives one for that crew; a public crew gives none, and joining
+one (from Crews near you, a meet's card or a link) asks once: Share Scores and times, Scores only, or Cancel. Every one
+is still switched off per friend and per crew where it was.
+
+The calls:
+- **Existing friendships and private crews too** (Nate, 2026-11-11: "for those too"): migration 0050 is a one-off
+  backfill (INSERT OR IGNORE, both sides of every accepted friendship and every private-crew member, never across a
+  block, never a public crew). Before this PR switching off deleted the row, so someone who once switched a friend off
+  and never back on is turned on again by it: there is no record of that choice to keep. The app says so once (a note
+  when People opens with friends: "Your friends and private crews now see your Scores and times. Switch it off for
+  anyone"). Apply 0050 on preview then prod at merge (it only adds rows; no schema change).
+- **Switching off now keeps a row with both off** instead of deleting it, so a later default (say a crew link from
+  someone you're already friends with) never turns it back on. Everything that reads grants already checks the flag.
+- **Times are on too**, since the stage times decision (2026-11-10) makes them part of "data sharing".
+- **Not in this**: live position on the friends map, cars shown and road data keep their own switches and defaults.
+  Position stays off by default: it says where someone is right now, which is a safety matter, not a sharing one.
+- **A private crew made public** (review note): its members' sharing with it goes back to off (everyone but the owner,
+  who made it public), what they published to it is removed, and the crew page asks each of them once, as joining a
+  public crew does. Most of those grants were the private-crew default, never a choice to show strangers.
+- The new-account Friends page said "Nothing is shared unless you switch it on."; it says "Friends see your Scores and
+  times. Switch it off for anyone." Tests that encoded "nothing by default" now switch off explicitly (a spec change).
+
+Undo: revert the PR. Grants made in the meantime stay on until switched off.
+## 2026-11-11 (fable-offline-road-feel): saved map areas keep members' road feel (claude/fable-offline-road-feel)
+
+A saved offline area now also keeps the members' measured roads round it, so a plan with no signal still knows which
+roads are smooth, banked and flowing. It asks the server for the area's 0.1° cells, which is the same coarseness the
+privacy rule (VI-1) already allows for a plan, and nothing finer. Only members get it, and it leaves the phone on sign-out,
+account deletion, Erase everything and Delete offline data (before this, the day's kept cells were never cleared on any of
+them). Undo: revert the PR; the areas still save their map.
 ## 2026-11-11 (fable-avoid-police): Avoid → Police reports (claude/fable-avoid-police)
 
 The owner said go (2026-11-11, "yes avoid police"), reversing October's call that dropped routing round police (IDEAS
@@ -79,6 +119,29 @@ keeps its own word and only its progress bar moves.
 
 Undo: revert the PR.
 
+## 2026-11-11 (fable-practice-focus): Work on becomes a practice you can follow drive by drive (claude/fable-practice-focus)
+
+Your driving names one skill to work on. Under it there is now a key: "Practice it on my next drives". Press it and
+every drive after that is read on that one skill alone. The drive's end card gets a line like "Practice · One steering
+arc: 82 on 24 corners, 14 above your 68 before. Through rights: 79 on 12." On Your driving, the Work on box becomes
+"Practicing", with how it has gone since you started, one bar per drive against a mark for your level before, and Stop
+practicing. The Log's card says it too.
+
+The calls I made:
+
+* **What "before" means.** It is every corner of every drive that started before you pressed the key (drives with an
+  unknown date count as before). The plan on the phone keeps that level, so the end card can compare without reading
+  every drive again. The page refreshes it whenever it reads your drives.
+* **When it says "above" or "below".** Only when the change is at least 5 points and twice its standard error.
+  Otherwise it says "close to your 68 before". A drive with fewer than 4 corners for the skill says "too few to say".
+  Nothing is said for a drive with no clean corners.
+* **One skill at a time, by hand.** Practice is never started for you. When the skill to work on changes, the box offers
+  "Practice <the new one> instead"; it does not switch by itself.
+* **Technique only.** Like the profile, it never says a speed or a time.
+
+This PR is stacked on #373 (Your driving) and needs it merged first.
+
+Undo: revert the PR. The plan lives only in the phone's storage (`vetta.practice`); nothing else changes.
 ## 2026-11-10 (fable-whats-new): What's new tells of the routing work (claude/fable-whats-new)
 
 The What's new sheet still showed the news of 2026-10-28 (Siri, landscape, stops of the day, kilometres), which every
@@ -186,6 +249,22 @@ Undo: revert the PR, or set `PICK_WEIGHT` to 0 (stored picks then carry no weigh
 - Why: the owner asked for big moves toward one cohesive, artist-made look; the home was boxes in 1.5 px ink stacked in rows.
 - Undo: remove the `signature.css` link in web/index.html (the shelf wrapper is harmless without it), or revert the PR.
 
+## 2026-11-10 (fable-when-to-go): the route card says when to go, and plans for the hour you pick (claude/fable-when-to-go)
+
+A route is a different drive at 7 am (into the sunrise, through the school run) than at 10. The card now has one more
+line: "Better at 10:00 AM: no low sun ahead, no school run", or "Leave by 9:30 PM: rain likely after", or "No better
+time to leave in the next day". Tap it for the next 24 hours as bars (taller is better, night dimmed), pick one, and
+Plan for 6:30 PM plans the trip for that hour. Calls made:
+
+- **The same model, not a new one.** Each departure is scored by the route engine with that hour's sun, forecast, deer
+  hours, school runs, events and closures. One addition: scenery driven past in the dark counts for nothing.
+- **Only hours you'd be up for** (6 am to 10 pm) can be called better, and only by 3 points or more.
+- **No forecast, no claim.** Offline it goes by the sun and the calendar and says so.
+- **A real bug fixed on the way:** in the app the routes never knew the sun or the deer hour per stretch (two scripts
+  loaded in the wrong order). Routes near dusk can now rank differently where deer are likely.
+
+Undo: FLAGS {"when_to_go":{"on":false}} hides the line and the panel; the script order fix stays.
+
 ## 2026-11-10 (fable-loop-time): a loop can be set by time on the dial (claude/fable-loop-time)
 
 Following your "the whole point is aimless driving": "I have an hour" is how a loop is usually asked for, and time
@@ -208,6 +287,22 @@ slower.", "Traffic ahead. Switching to Route 9, 4 min longer."), so the screen a
 message written in web/*.js and fails on one that doesn't end as a sentence or joins labels with "·".
 
 Undo: revert the PR; nothing else depends on the wording.
+## 2026-11-10 (fable-crew-settings): Crew settings in the Settings list's shape (claude/fable-crew-settings)
+
+For "cohesiveness" (and the first look at a crew's page in this run): the sheet behind a crew's gear had three sizes
+of heading, "Who can invite" broken over two lines because its explanation was set beside it, "Turn off invite links"
+centred while everything else started at the left, and an area field whose hint was cut off ("Area people nearby will
+see, like"). It now reads like the Garage's Settings: a small-caps name over each part (What it sees of yours, Who
+can invite, Who can find it), each explanation a pencil line under its keys, text keys at the left edge, and the
+field's hint short enough to read ("Area, like Robbinsville"; a screen reader still hears "Area people nearby will
+see"). Who can find it now says what Private and Public mean before asking for an area.
+
+Also on the crew's page: Meeting points was the one small heading under a rule; it is named like Members, Chat and
+the Score board now.
+
+Every control does what it did and the Worker calls are unchanged.
+
+Undo: revert the PR (`crewSettingsFor` in web/cockpit.js, four CSS lines in web/index.html).
 ## 2026-11-10 (fable-toast-key): a message with a key is one row, and a message is as wide as its words (claude/fable-toast-key)
 
 For "reducing any clunky feelings", seen on the drive screen: "Typing is off while the car moves." took half the
@@ -268,6 +363,14 @@ when you come back. A row with nothing to say (Feedback, About) says nothing; a 
 
 The order of the rows is unchanged. Undo: revert the PR.
 
+## 2026-11-10 (fable-carplay-loops): the car offers the same loop times as the phone (claude/fable-carplay-loops)
+
+For "cohesiveness": the phone's loop dial has five times (30 min, 1 h, 1½ h, 2 h, 3 h) since #342, but CarPlay's Loops
+list still had its own three (30 minutes, 1 hour, 2 hours). The car now lists the same five, spelled out for a glance
+("1½ hours", "3 hours"). The message to the page is unchanged (`loop` with `minutes`), and a test holds the two lists
+equal. Not seen on a car screen: this is a list of five rows where there were three, built by CI only.
+
+Undo: revert the PR (one line in CarPlay/ApexCarPlay.swift).
 ## 2026-11-10 (fable-route-reveal): the route card reads like a page, and a route found is drawn onto the map (claude/fable-route-reveal)
 
 When a route is found its line is now drawn onto the map from start to finish in 0.8 s, the profile on the card is
