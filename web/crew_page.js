@@ -85,12 +85,17 @@
     list.sort((a, b) => (b.role === 'owner') - (a.role === 'owner') || b.live - a.live || String(a.handle).localeCompare(String(b.handle)));
     return { list, out: list.filter((m) => m.live).length };
   }
-  /** The livery's one line on the page (P-03): "Club livery · 6 Decals"; nothing to count, where Decals come from. */
+  /** The livery's one line on the page (P-03): "Factory livery · dressed by @bob"; Plain says nothing it lacks (UX-06). */
   function liveryShort(l) {
-    const t = TIER_NAME[(l && l.tier) || 'plain'] || 'Plain';
     if (l && l.granted) return 'Factory livery · every option open (early access)';
-    if (!l || !l.decals) return `${t} livery · Decals come from crew-mates with Vetta Pro`;
-    return `${t} livery · ${l.decals} Decal${l.decals === 1 ? '' : 's'}`;
+    if (!l || !l.decals) return 'Plain livery';
+    return `Factory livery · ${dressedBy(l)}`;
+  }
+  /** "dressed by @bob" / "dressed by @bob and @carol" / "dressed by @bob and 2 more": thanks, never a count to reach. */
+  function dressedBy(l) {
+    const h = (l.supporters || []).map((s) => `@${String(s.handle || '?').replace(/^@/, '')}`);
+    if (!h.length) return 'dressed by a crew-mate with Vetta Pro';
+    return `dressed by ${h.length === 1 ? h[0] : h.length === 2 ? `${h[0]} and ${h[1]}` : `${h[0]} and ${h.length - 1} more`}`;
   }
   // Livery tiers (REVIEW.md 5.1; backend/src/livery.ts): what each unlocks on this page.
   const TIER_AT = { plain: 0, club: 5, works: 12, factory: 20 };
@@ -98,12 +103,12 @@
   const PATTERNS = ['blocks', 'bands', 'chevron', 'checker', 'pinstripe'];
   const PATTERN_NAMES = { blocks: 'Blocks', bands: 'Bands', chevron: 'Chevron', checker: 'Checker', pinstripe: 'Pinstripe' };
   const atLeast = (have, need) => (TIER_AT[have] ?? 0) >= (TIER_AT[need] ?? 0);
-  /** The livery line: "14 Decals from 5 supporters · Factory at 20"; Plain with none says where Decals come from. */
+  /** The livery line in Edit livery: who dressed the crew, or (Plain) that one crew-mate with Pro opens all of it. */
   function liveryLine(l) {
-    if (!l || !l.decals) return 'Decals come from crew-mates with Vetta Pro.';
-    const n = (l.supporters || []).length;
-    const head = `${l.decals} Decal${l.decals === 1 ? '' : 's'} from ${n} supporter${n === 1 ? '' : 's'}`;
-    return l.next ? `${head} \u00b7 ${TIER_NAME[l.next.tier]} at ${l.next.at}` : head;
+    if (l && l.granted) return 'Every option open (early access).';
+    if (!l || !l.decals) return 'One crew-mate with Vetta Pro opens the whole livery for everyone.';
+    const d = dressedBy(l);
+    return `${d[0].toUpperCase()}${d.slice(1)}.`;
   }
   /** The stripe band's CSS background for a pattern and up to three colours (ink fills the gaps). */
   function stripeCss(pattern, a, b, c, ink = 'var(--panel-ink)', k = 1) {
@@ -199,9 +204,6 @@
     .cp-swatches button[aria-pressed="true"] { outline: 3px solid var(--panel-ink); }
     .cp-livery { border: 1.5px solid var(--panel-ink); padding: 12px 14px; display: grid; gap: 8px; }
     .cp-livery h3 { margin: 0; font-size: 22px; border: 0; padding: 0; }
-    .cp-meter { position: relative; height: 12px; border: 1.5px solid var(--panel-ink); }
-    .cp-meter i { position: absolute; inset: 0 auto 0 0; background: var(--panel-ink); }
-    .cp-meter b { position: absolute; top: -5px; bottom: -5px; width: 1.5px; background: var(--panel-ink); }
     .cp-stickers { display: flex; flex-wrap: wrap; gap: 6px; }
     .cp-stickers span { width: 34px; height: 34px; border: 1.5px solid var(--panel-ink); display: grid; place-items: center; font-family: var(--font-num); font-size: 17px; font-weight: 800; color: #fff; }
     .cp-badge { display: inline-block; margin-left: 6px; padding: 0 6px; border: 1.5px solid var(--panel-ink); font-size: 13px; font-weight: 600; transform: rotate(-2deg); }
@@ -360,7 +362,7 @@
     // The livery at the foot of the page (P-03): one line. The people who care (the owner, a Pro supporter) open it: the
     // owner's Edit livery, or for a supporter the meter and their own Decals; for everyone else it is a line, not a key.
     function liveryFoot(c, redo) {
-      const l = c.livery || { tier: 'plain', decals: 0, next: { tier: 'club', at: 5 }, supporters: [] };
+      const l = c.livery || { tier: 'plain', decals: 0, next: null, supporters: [] };
       const line = el('p', { className: 'note cp-livery-line', textContent: liveryShort(l) });
       const foot = el('div', { className: 'cp-livery-foot' }, line);
       if (!c.is_owner && l.mine && l.mine.pro && !l.granted) foot.append(btn('Your Decals', () => liverySheet(c, redo), 'linkbtn'));
@@ -374,21 +376,16 @@
       ov.append(el('div', { className: 'card-sheet' }, liveryBox(c, () => { close(); redo(); }), btn('Done', close, 'linkbtn')));
       root.document.body.append(ov);
     }
-    // The livery (REVIEW.md 5.1, mockup 09): the tier, the Decals and the next threshold, supporters as tilted stickers. In
-    // Edit livery and the supporter's sheet now (P-03), never above the run.
+    // The livery (REVIEW.md 5.1, mockup 09): who dressed the crew, supporters as tilted stickers. In Edit livery and the
+    // supporter's sheet (P-03), never above the run. No meter (2026-11-10, UX-06): one Pro crew-mate dresses the crew.
     function liveryBox(c, redo) {
-      const l = c.livery || { tier: 'plain', decals: 0, next: { tier: 'club', at: 5 }, supporters: [] };
-      // the whole livery granted by hand (livery_grants): no Decals to count, every option open
+      const l = c.livery || { tier: 'plain', decals: 0, next: null, supporters: [] };
+      // the whole livery granted by hand (livery_grants): every option open
       if (l.granted) return el('p', { className: 'note', textContent: 'Factory livery · every option open (early access)' });
-      // nothing to count yet: one pencil line, no box and no empty gauge (REVIEW2.md crew page)
-      if (!l.decals && !(l.mine && l.mine.pro)) return el('p', { className: 'note', textContent: `${TIER_NAME[l.tier] || 'Plain'} livery · Decals come from crew-mates with Vetta Pro` });
+      // Plain: one pencil line, no box and no gauge
+      if (!l.decals && !(l.mine && l.mine.pro)) return el('p', { className: 'note', textContent: `Plain livery · ${liveryLine(l)}` });
       const box = el('div', { className: 'cp-livery' }, el('h3', { textContent: `${TIER_NAME[l.tier] || 'Plain'} livery` }),
         el('span', { className: 'note', textContent: liveryLine(l) }));
-      const meter = el('div', { className: 'cp-meter', role: 'img' });
-      meter.setAttribute('aria-label', `${l.decals} of 20 Decals`);
-      const fill = el('i'); fill.style.width = `${Math.min(100, (l.decals / 20) * 100)}%`; meter.append(fill);
-      for (const t of ['club', 'works']) { const tick = el('b'); tick.style.left = `${(TIER_AT[t] / 20) * 100}%`; meter.append(tick); }
-      box.append(meter);
       if ((l.supporters || []).length) {
         const stickers = el('div', { className: 'cp-stickers' });
         l.supporters.forEach((s, i) => {
@@ -659,7 +656,7 @@
       }, 'ink-btn solid');
       const cover = P() ? P().picker(c.cover_photo_id ? 'Change cover photo' : 'Add a cover photo', 'crew', c.id, () => { close(); redo(); }, { toast }) : '';
       const tier = (c.livery && c.livery.tier) || 'plain', club = atLeast(tier, 'club'), works = atLeast(tier, 'works');
-      const lock = (t) => el('span', { className: 'cp-lock', textContent: `${TIER_NAME[t]} livery` });
+      const lock = () => el('span', { className: 'cp-lock', textContent: 'With a crew-mate on Vetta Pro' });
       let stripe2 = c.stripe2 || null, stripe3 = c.stripe3 || null, pattern = c.pattern || 'blocks', pinned = c.pinned ? c.pinned.id : '';
       const sw2 = el('div', { className: 'cp-swatches', role: 'group' }), sw3 = el('div', { className: 'cp-swatches', role: 'group' }), pats = el('div', { className: 'cp-patterns', role: 'group' });
       sw2.setAttribute('aria-label', 'Second colour'); sw3.setAttribute('aria-label', 'Third colour'); pats.setAttribute('aria-label', 'Pattern');
@@ -732,7 +729,7 @@
         el('b', { textContent: 'Cover' }), el('div', { className: 'row' }, cover),
         el('p', { className: 'note', textContent: 'Photos lose their location data before they leave your phone.' }),
         clubSet, worksSet, factorySet,
-        el('p', { className: 'note', textContent: club ? liveryLine(c.livery) : `Club at 5 Decals, Works at 12. ${liveryLine(c.livery)}` }),
+        el('p', { className: 'note', textContent: liveryLine(c.livery) }),
         el('div', { className: 'row' }, save, btn('Cancel', close, 'linkbtn'))));
       d.body.append(ov);
       if (root.ApexRowSelect) for (const s of [routeSel, houseSel, badgeWho]) root.ApexRowSelect.enhance(s);   // the app's row lists, now that they are on the sheet
