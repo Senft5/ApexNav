@@ -27,6 +27,13 @@ Once, or the planner leaving the crew ends the series; editing an older drive in
 calendar puts the series in once with a weekly rule.
 
 Undo: revert the PR. Migration 0053 only adds two columns to `crew_events`; the old code ignores them.
+## 2026-11-11 (deepest analysis, PR 11): a corner's record lives on the drive page's corner rows, not a new page (claude/project-thread-gd7nre)
+
+STATE's next step was "a road page with its corners' records and which drive holds each". I put it on the drive page's
+own corner rows first: each corner driven three or more times says your cleanest pass there and, when another drive
+holds it, links to that drive. That reuses the matching already done for "On this road" and adds no new screen. Ties go
+to the earlier drive. Undo: revert the PR (the rows field is additive).
+
 ## 2026-11-11 (places by name, 2): in a drive, the next fuel stop's stamp says which station (claude/project-thread-me97iw)
 
 While driving a planned route the map keeps only the next fuel stop's stamp; it now reads "FUEL · Shell" instead of FUEL

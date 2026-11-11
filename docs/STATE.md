@@ -24,6 +24,19 @@
   `repeat_weeks` (409 `not_latest` on an older drive of a series). `web/crew_events.js` Repeats chips, "Every Saturday"
   on cards and Meets near you, ICS RRULE. Tests: backend event_repeat 4, pytest test_crew_events, e2e crew drives.
 - Next: the auto time attack PR (local branch, built on #397's) once #397 merges.
+## Session 2026-11-11 (deepest analysis, PR 11): every corner of a road says its record and which drive holds it (claude/project-thread-gd7nre)
+
+- core/driver_profile.py `road_records(mine, others, ids=None)` and its port `roadRecords` add `rows`: per corner driven
+  three or more times, {apex, level (this pass), passes, record, by (None when this pass holds it, else the holding
+  drive's id)}; of equal passes the first listed (the client lists the oldest first) holds it, as records_by_size does.
+- web/driver_profile.js `roadCornerNote(row, day)`: "Your cleanest of 4 passes here (92)", "Level with your cleanest here
+  (90, Aug 12)", "Your cleanest here: 90, Aug 12; this pass 82". Technique only.
+- The drive page's corner list carries that note under each such corner; when another drive holds it the note is a button
+  that opens that drive (drive_view.js `markRecords(rows, open)`; analysis_client.js adds each row's `on` date).
+- Tests: tests/test_best_corners.py (rows, ids, ties, words, parity), e2e "a drive's corners on a road driven four times".
+- Next: the road itself as a page (from Your roads): its corners in order, each with its record and holder across every
+  drive of it, not only from one drive's page.
+
 ## Session 2026-11-11 (places by name, 2): the drive's fuel stamp names its station (claude/project-thread-me97iw, off origin/main)
 
 - cockpit.js `updatePins`: in a drive the one fuel stamp left (U-85, the next stop ahead) reads "FUEL · Shell" when the map

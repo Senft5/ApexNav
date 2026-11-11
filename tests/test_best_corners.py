@@ -114,17 +114,25 @@ def test_road_records_corner_by_corner():
     others = [[c(5, 90), c(305, 85), c(603, 90), c(1500, 100)],          # 5 m off: the same corners
               [c(-8, 93), c(310, 70), c(598, 88, hx=-1.0)]]                # the third the other way: not the same corner
     r = dp.road_records(mine, others)
-    assert r == {"corners": 2, "best": 1, "level": 0, "held": [0]}       # 0 m: best of three; 300 m: 85 beat it; 600, 900: too few
-    assert dp.road_records(mine, []) == {"corners": 0, "best": 0, "level": 0, "held": []}
+    rows = [{"apex": 0, "level": 95, "passes": 3, "record": 95, "by": None}, {"apex": 60, "level": 80, "passes": 3, "record": 85, "by": 0}]
+    assert r == {"corners": 2, "best": 1, "level": 0, "held": [0], "rows": rows}   # 0 m: best of three; 300 m: 85 beat it; 600, 900: too few
+    assert dp.road_records(mine, others, ["a", "b"])["rows"][1]["by"] == "a"   # the other drive by its id
+    assert dp.road_records(mine, []) == {"corners": 0, "best": 0, "level": 0, "held": [], "rows": []}
     tie = dp.road_records([c(0, 90)], [[c(1, 90)], [c(2, 80)]])
-    assert tie == {"corners": 1, "best": 0, "level": 1, "held": []}
+    assert tie == {"corners": 1, "best": 0, "level": 1, "held": [], "rows": [{"apex": 0, "level": 90, "passes": 3, "record": 90, "by": 0}]}
+    first = dp.road_records([c(0, 80)], [[c(1, 90)], [c(2, 90)]], ["old", "new"])["rows"][0]
+    assert first["by"] == "old"                                          # of equals the first listed (the oldest) holds it
     if NODE is None:
         return
     runner = ("const P=require(process.argv[1]+'/web/driver_profile.js');const [m,o]=JSON.parse(require('fs').readFileSync(0,'utf8'));"
-              "const r=P.roadRecords(m,o);process.stdout.write(JSON.stringify({r,say:[P.roadRecordLine(r),P.roadRecordLine({corners:24,best:7,level:2}),"
+              "const r=P.roadRecords(m,o),ids=P.roadRecords(m,o,['a','b']).rows[1].by,day=(x)=>x.by==='a'?'Aug 12':null;"
+              "const notes=[{by:null,passes:4,record:92,level:92},{by:'a',passes:3,record:90,level:90},{by:'a',passes:3,record:90,level:82},{by:'b',passes:3,record:90,level:82},null].map((x)=>P.roadCornerNote(x,day));"
+              "process.stdout.write(JSON.stringify({r,ids,notes,say:[P.roadRecordLine(r),P.roadRecordLine({corners:24,best:7,level:2}),"
               "P.roadRecordLine({corners:1,best:0,level:0}),P.roadRecordLine({corners:0,best:0,level:0}),P.roadRecordLine(null),P.roadRecordLine({corners:24,best:0,level:24})]}));")
     out = json.loads(subprocess.run([NODE, "-e", runner, os.getcwd()], input=json.dumps([mine, others]), capture_output=True, text=True, check=True).stdout)
-    assert out["r"] == r
+    assert out["r"] == r and out["ids"] == "a"
+    assert out["notes"] == ["Your cleanest of 4 passes here (92)", "Level with your cleanest here (90, Aug 12)",
+                            "Your cleanest here: 90, Aug 12; this pass 82", "Your cleanest here: 90; this pass 82", None]
     assert out["say"] == ["On this road: your cleanest pass yet at 1 of the 2 corners here you have driven three or more times.",
                           "On this road: your cleanest pass yet at 7 of the 24 corners here you have driven three or more times, level with it at 2.",
                           "On this road: 1 corner you have driven three or more times; your cleanest pass of it came on another drive.",

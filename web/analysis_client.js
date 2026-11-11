@@ -260,7 +260,11 @@
       const P = root.ApexDriverProfile;
       if (touch && P && P.roadRecords) try {
         const ob = (x) => P.observe({ ...x, corners: Rec().scorableCorners(x, x.corners || []) }, Core), lat0 = d.lat[0], lon0 = d.lon[0];
-        touch.road = P.roadRecords(P.placed(d, ob(d), lat0, lon0), near.filter((o) => Array.isArray(o.corners) && o.corners.length).map((o) => P.placed(o, ob(o), lat0, lon0)));
+        // oldest first, so of equal passes the first to reach a level holds the corner (as recordsBySize)
+        const past = near.filter((o) => Array.isArray(o.corners) && o.corners.length).sort((p, q) => String(p.date || '').localeCompare(String(q.date || '')));
+        touch.road = P.roadRecords(P.placed(d, ob(d), lat0, lon0), past.map((o) => P.placed(o, ob(o), lat0, lon0)), past.map((o) => o.id));
+        const on = new Map(past.map((o) => [o.id, monthOf(o) === null ? null : o.date]));
+        touch.road.rows = (touch.road.rows || []).map((r) => ({ ...r, on: r.by === null ? null : on.get(r.by) || null }));
       } catch (_) { touch.road = null; }
       release();
       return { reference, coach: co, road, touch, bestOther: reference ? reference.id : (sums.find((s) => s.id !== id) || {}).id || null };
