@@ -3584,13 +3584,21 @@ flow('reported hazards: a call ahead, "still there?" after passing, and a one-ta
   // VI-1: asked by the 0.1-degree cell, never the position (the phone measures the 200 m itself)
   check(asked.length >= 1 && asked.every((q) => /^\?lat=35\.6&lon=-83\.9&km=20$/.test(q)), 'the hazards are asked for by cell: ' + JSON.stringify(asked));
   check(await page.evaluate(() => window.__said.some((t) => /gravel reported ahead/i.test(t)) || /Gravel reported ahead/.test(document.body.textContent)), 'the hazard was called ahead');
+  // The car keeps sending fixes from here on, as a phone does. A web drive with no fix for 5 s drops back to the replay
+  // ("GPS lost"), the drive bar goes and the report's word goes to the toast instead of the status line: the ask, the vote
+  // and the report's 3 s Undo run past 5 s on a slow runner (main's e2e, 2026-11-11, a bare 30 s timeout here).
+  await page.evaluate(() => { window.__fixes = setInterval(() => window.apex.live({ lat: 35.6 + 330 / 110540, lon: -83.9, accuracy_m: 5, speed_mps: 15, course_deg: 0, has_fix: true, calibration: 'locked' }), 500); });
   await page.click('#hzReportBtn');
   await page.click('#hzKinds button:has-text("Pothole")');
   // REVIEW4 U-74 / U-102 (check): in a drive the confirmation is the status line's, never a toast over the map
-  await page.waitForFunction(() => /Pothole reported/.test(document.getElementById('dsNote').textContent));
+  await page.waitForFunction(() => /Pothole reported/.test(document.getElementById('dsNote').textContent), null, { timeout: 15000 })
+    .catch(async () => { throw new Error('the report\'s status line never came: ' + JSON.stringify(await page.evaluate(() => ({ note: document.getElementById('dsNote').textContent,
+      toast: document.getElementById('toast').textContent, key: document.getElementById('hzReportBtn').textContent, bar: !document.getElementById('driveBar').hidden,
+      outbox: localStorage.getItem('apex.outbox'), said: (window.__said || []).slice(-4) }))) + ' reports=' + reports.length); });
   check(!(await page.evaluate(() => document.getElementById('toast').classList.contains('show') && /Pothole/.test(document.getElementById('toast').textContent))), 'no toast over the map');
   check(await page.evaluate(() => { const n = document.getElementById('dsNote'); return !n.hidden && n.scrollWidth <= n.clientWidth + 1 && /reported/.test(n.getAttribute('aria-label')); }), 'the status line says it whole (or its first sentence)');
   check(reports.length === 1 && reports[0].kind === 'pothole' && Math.abs(reports[0].lat - (35.6 + 330 / 110540)) < 1e-4 && reports[0].heading === 0, 'reported at your position and heading');
+  await page.evaluate(() => clearInterval(window.__fixes));
 });
 
 flow('review mode (U-94): the recording\'s hazard report is the sheet, Undo and a pin, and nothing reaches the server', async (page, base) => {
@@ -3609,10 +3617,14 @@ flow('review mode (U-94): the recording\'s hazard report is the sheet, Undo and 
     for (let i = 0; i <= 40; i++) { window.apex.live({ lat: 35.6 + (i * 1.5) / 110540, lon: -83.9, accuracy_m: 5, speed_mps: 15, course_deg: 0, has_fix: true, calibration: 'locked' });
       await new Promise(r => setTimeout(r, 20)); }
   });
+  // the car keeps sending fixes, as a phone does: a web drive with no fix for 5 s drops back to the replay (see "reported hazards")
+  await page.evaluate(() => { window.__fixes = setInterval(() => window.apex.live({ lat: 35.6 + 60 / 110540, lon: -83.9, accuracy_m: 5, speed_mps: 15, course_deg: 0, has_fix: true, calibration: 'locked' }), 500); });
   await page.click('#hzReportBtn');
   check(await page.evaluate(() => document.getElementById('hzOverlay').classList.contains('show')), 'the sheet opens');
-  await page.click('#hzKinds button:has-text("Gravel")');
-  check(/Undo Gravel/.test(await page.textContent('#hzReportBtn')), 'the Report key is Undo for 3 s');
+  // the key is read in the same task as the tap: a separate read after a click can land past the 3 s on a slow runner
+  // (CI 2026-11-11, this check failed once when the whole suite ran 27 minutes)
+  check(await page.evaluate(() => { [...document.querySelectorAll('#hzKinds button')].find((b) => b.textContent === 'Gravel').click();
+    return /Undo Gravel/.test(document.getElementById('hzReportBtn').textContent); }), 'the Report key is Undo for 3 s');
   await saidOn(page, /Gravel reported/, { timeout: 6000 });                 // the toast, or the status line in a drive (U-74)
   await page.waitForFunction(() => [...document.querySelectorAll('.hz-pin')].some((p) => p.textContent === 'GRAVEL'), null, { timeout: 4000 });
   await page.evaluate(async () => { await ApexSync.apiFetch('/api/presence', { method: 'POST', body: '{}' }); await ApexSync.apiFetch('/api/feedback', { method: 'POST', body: '{}' }); });
@@ -3620,6 +3632,7 @@ flow('review mode (U-94): the recording\'s hazard report is the sheet, Undo and 
   check([...await page.$$eval('.hz-pin', (ps) => ps.map((p) => p.textContent))].includes('GRAVEL'), 'the pin outlives a reload of the server\'s hazards');
   check(writes.length === 0, 'nothing was written to the server: ' + writes.join(', '));
   check(await page.evaluate(() => !localStorage.getItem('apex.outbox')), 'nothing waits in the outbox either');
+  await page.evaluate(() => clearInterval(window.__fixes));
 });
 
 flow('your data: Settings counts what the phone holds and downloads drives as GPX, offline data deleted (IDEAS Z-03/Z-04, F-06)', async (page, base) => {
