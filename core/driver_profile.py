@@ -506,10 +506,58 @@ def touch(obs: list, least: int = STYLE_MIN) -> dict:
     return out
 
 
+BEST_N = 3                   # the year's cleanest corners said (Your year)
+SIZE_RANK = {"tight": 2, "medium": 1, "fast": 0, None: -1}
+
+
+def best_corners(drives: list, year: int, n: int = BEST_N) -> list:
+    """The year's cleanest corners (Your year, IDEAS D-24): over drives [{id, at ('YYYY-MM-DDTHH:MM' or None), name, obs}]
+    of that calendar year, the corners with all six technique credits measured, ranked by their mean (a tighter corner
+    first on a tie, then the earlier). One a drive and one a road, so the list is three roads, not one road three times.
+    Technique only: never pace, speed or a time. [{id, at, name, apex, dir, size, level}]."""
+    picks = []
+    for d in drives:
+        at = d.get("at")
+        if not isinstance(at, str) or not at.startswith(f"{year}-"):
+            continue
+        best = None
+        for o in d.get("obs") or []:
+            if any(o.get(k) is None for k in SKILLS):
+                continue
+            key = (_level(sum(o[k] for k in SKILLS) / len(SKILLS)), SIZE_RANK.get(o.get("size"), -1), -o["apex"])
+            if best is None or key > best[0]:
+                best = (key, o)
+        if best is not None:
+            (lv, _, _), o = best
+            picks.append({"id": d["id"], "at": at[:16], "name": d.get("name") or None, "apex": o["apex"],
+                          "dir": o.get("dir"), "size": o.get("size"), "level": lv})
+    picks.sort(key=lambda b: (-b["level"], -SIZE_RANK.get(b["size"], -1), b["at"], b["id"]))
+    out, roads = [], set()
+    for b in picks:
+        if b["name"] and b["name"] in roads:
+            continue
+        roads.add(b["name"])
+        out.append(b)
+    return out[:n]
+
+
 def drive_touch(obs: list, others: list) -> dict:
     """A drive's own touch (its Log page): {drive: touch over its corners (from DRIVE_TOUCH_MIN), usual: touch over the
-    corners of every other drive (from STYLE_MIN)}. Facts side by side; a drive is never marked better or worse for it."""
-    return {"drive": touch(obs, DRIVE_TOUCH_MIN), "usual": touch(others)}
+    corners of every other drive (from STYLE_MIN), outside: per measure "above" when the drive's middle corner was beyond
+    the usual upper quartile (or quick where that is timed), "below" when under the lower one, else None}. Facts side by
+    side; a drive is never marked better or worse for it."""
+    d, u = touch(obs, DRIVE_TOUCH_MIN), touch(others)
+    return {"drive": d, "usual": u, "outside": {k: _outside(d[k], u[k]) for k in TOUCH}}
+
+
+def _outside(d: dict, u: dict):
+    if u["rate"] is None and not u["quick_rate"] or d["rate"] is None and not d["quick_rate"]:
+        return None
+    if u["hi"] is not None and (d["quick_rate"] or d["rate"] > u["hi"]):
+        return "above"
+    if d["rate"] is not None and u["lo"] is not None and d["rate"] < u["lo"]:
+        return "below"
+    return None
 
 
 def _rank(xs: list, n: int, f: float):

@@ -47,9 +47,15 @@ def test_a_drive_beside_the_usual():
     dt = dp.drive_touch(mine, others)
     assert dt["drive"]["brake_on"]["rate"] == pytest.approx(0.7, rel=0.2)
     assert dt["usual"]["brake_on"]["rate"] == pytest.approx(0.35, rel=0.2)
+    assert dt["outside"]["brake_on"] == "above"                      # its middle corner beyond your upper quartile
+    assert dt["outside"]["turn_in"] is None                          # the same turn-in as usual
+    gentle = dp.drive_touch(dp.observe(plant(make_drive(8), 0.15, 0.5, 0.6, seed=8)), others)
+    assert gentle["outside"]["brake_on"] == "below"
     # a short drive says nothing of its own; with no other drive there is no usual
     assert all(dp.drive_touch(mine[:dp.DRIVE_TOUCH_MIN - 1], others)["drive"][k]["rate"] is None for k in dp.TOUCH)
     assert all(dp.drive_touch(mine, [])["usual"][k]["rate"] is None for k in dp.TOUCH)
+    assert all(v is None for v in dp.drive_touch(mine, [])["outside"].values())
+    assert all(v is None for v in dp.drive_touch(mine[:dp.DRIVE_TOUCH_MIN - 1], others)["outside"].values())
 
 
 @pytest.mark.skipif(NODE is None, reason="node not installed")
@@ -66,6 +72,7 @@ def test_parity_and_words():
               "fixed:P.driveTouchLines({drive:{brake_on:{rate:1.42},brake_off:{rate:null,quick_rate:true},turn_in:{rate:null}},usual:{brake_on:{rate:0.86},brake_off:{rate:0.5},turn_in:{rate:0.7}}}),"
               "alone:P.driveTouchLines({drive:{brake_on:{rate:0.9},brake_off:{rate:null},turn_in:{rate:null}},usual:{brake_on:{rate:null},brake_off:{rate:null},turn_in:{rate:null}}}),"
               "months:P.touchTrendLines({brake_on:[{month:'2026-09',rate:1.2,quick:false},{month:'2026-10',rate:null,quick:true}],brake_off:[{month:'2026-09',rate:0.5}],turn_in:[]}),"
+              "off:P.driveTouchLines({drive:{brake_on:{rate:1.2},brake_off:{rate:0.2},turn_in:{rate:0.6}},usual:{brake_on:{rate:0.8},brake_off:{rate:0.5},turn_in:{rate:0.6}},outside:{brake_on:'above',brake_off:'below',turn_in:null}}),"
               "none:P.driveTouchLines(null)}));")
     out = json.loads(subprocess.run([NODE, "-e", runner, os.getcwd()], input=json.dumps([drives, meta]), capture_output=True, text=True, check=True).stdout)
     assert out["by"] == py["touch_by"]
@@ -74,7 +81,10 @@ def test_parity_and_words():
     assert out["fixed"] == ["Brakes on: about 1.4 g a second on this drive, 0.86 usually.",
                             "Brakes off: one quick movement (quicker than the recording can time) on this drive, 0.5 usually."]
     assert out["alone"] == ["Brakes on: about 0.9 g a second on this drive."]
+    assert out["off"] == ["Brakes on: about 1.2 g a second on this drive, 0.8 usually. Sharper than your usual range.",
+                          "Brakes off: about 0.2 g a second on this drive, 0.5 usually. Gentler than your usual range.",
+                          "Turn-in: about 0.6 g a second on this drive, 0.6 usually."]
     assert out["months"] == ["Brakes on month by month, in g a second: Sep 1.2, Oct quick."]
     assert out["none"] == [] and out["say"] and len(out["trend"]) >= 1
-    words = " ".join(out["say"] + out["trend"] + out["fixed"]).lower()
+    words = " ".join(out["say"] + out["trend"] + out["fixed"] + out["off"]).lower()
     assert not any(w in words for w in ("better", "worse", "faster", "push", "work on"))

@@ -229,8 +229,46 @@
     out.release_n = both.length;
     return out;
   }
+  const BEST_N = 3, SIZE_RANK = { tight: 2, medium: 1, fast: 0 };
+  const sizeRank = (z) => (z in SIZE_RANK ? SIZE_RANK[z] : -1);
+  /** The year's cleanest corners (Your year): [{ id, at, name, obs }] of that year, all six technique credits measured,
+   *  by their mean (tighter first on a tie, then earlier); one a drive and one a road. Never pace, speed or a time. */
+  function bestCorners(drives, year, n = BEST_N) {
+    const picks = [];
+    for (const d of drives || []) {
+      const at = d && d.at;
+      if (typeof at !== 'string' || !at.startsWith(`${year}-`)) continue;
+      let best = null;
+      for (const o of d.obs || []) {
+        if (SKILLS.some((k) => o[k] === null || o[k] === undefined)) continue;
+        const key = [level(SKILLS.reduce((a, k) => a + o[k], 0) / SKILLS.length), sizeRank(o.size), -o.apex];
+        if (!best || key[0] > best.key[0] || (key[0] === best.key[0] && (key[1] > best.key[1] || (key[1] === best.key[1] && key[2] > best.key[2])))) best = { key, o };
+      }
+      if (best) picks.push({ id: d.id, at: at.slice(0, 16), name: d.name || null, apex: best.o.apex, dir: best.o.dir === undefined ? null : best.o.dir, size: best.o.size === undefined ? null : best.o.size, level: best.key[0] });
+    }
+    picks.sort((p, q) => q.level - p.level || sizeRank(q.size) - sizeRank(p.size) || cmp(p.at, q.at) || cmp(p.id, q.id));
+    const out = [], roads = new Set();
+    for (const b of picks) {
+      if (b.name && roads.has(b.name)) continue;
+      roads.add(b.name);
+      out.push(b);
+    }
+    return out.slice(0, n);
+  }
   /** A drive's own touch (its Log page): { drive (from DRIVE_TOUCH_MIN corners), usual (every other drive's corners) }. */
-  const driveTouch = (obs, others) => ({ drive: touch(obs || [], DRIVE_TOUCH_MIN), usual: touch(others || []) });
+  // outside: "above" when the drive's middle corner was beyond the usual upper quartile (or quick where that is timed),
+  // "below" under the lower one
+  function driveTouch(obs, others) {
+    const d = touch(obs || [], DRIVE_TOUCH_MIN), u = touch(others || []), outside = {};
+    for (const k of TOUCH) outside[k] = outsideOf(d[k], u[k]);
+    return { drive: d, usual: u, outside };
+  }
+  function outsideOf(d, u) {
+    if ((u.rate === null && !u.quick_rate) || (d.rate === null && !d.quick_rate)) return null;
+    if (u.hi !== null && (d.quick_rate || d.rate > u.hi)) return 'above';
+    if (d.rate !== null && u.lo !== null && d.rate < u.lo) return 'below';
+    return null;
+  }
   const cmp = (p, q) => (p < q ? -1 : p > q ? 1 : 0);
 
   /** drives: [{ id, month ('YYYY-MM' or null), car (label or null), tags ([str] or null), obs (observe's) }]. */
@@ -489,7 +527,8 @@
       const a = rateText(dt.drive[k]), b = dt.usual ? rateText(dt.usual[k]) : null;
       if (!a) continue;
       const now = a === 'quick' ? 'one quick movement (quicker than the recording can time)' : `about ${a} g a second`;
-      out.push(`${TOUCH_NAME[k]}: ${now} on this drive${b ? `, ${b === 'quick' ? 'quick' : `${b}`} usually` : ''}.`);
+      const off = dt.outside && dt.outside[k];
+      out.push(`${TOUCH_NAME[k]}: ${now} on this drive${b ? `, ${b === 'quick' ? 'quick' : `${b}`} usually` : ''}.${off === 'above' ? ' Sharper than your usual range.' : off === 'below' ? ' Gentler than your usual range.' : ''}`);
     }
     return out;
   }
@@ -772,7 +811,7 @@
     }
   }
 
-  const api = { SKILLS, observe, profile, swing, excess, SKILL_MIN, WORDS, findingLine, styleLines, touchLines, touchTrendLines, driveTouchLines, paceLines, PACE, MEASURES, touch, TOUCH, driveTouch, DRIVE_TOUCH_MIN, cardLine, focusLines, render,
+  const api = { SKILLS, observe, profile, swing, excess, SKILL_MIN, WORDS, findingLine, styleLines, touchLines, touchTrendLines, driveTouchLines, paceLines, PACE, MEASURES, touch, TOUCH, driveTouch, DRIVE_TOUCH_MIN, bestCorners, cardLine, focusLines, render,
     PRACTICE_MIN, practice, drivePractice, practiceLine, practiceSummary, localStamp, loadPlan, savePlan, PLAN_KEY };
   if (typeof module !== 'undefined' && module.exports) module.exports = api; else root.ApexDriverProfile = api;
 })(typeof window !== 'undefined' ? window : globalThis);

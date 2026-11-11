@@ -34,6 +34,14 @@
     };
   }
 
+  const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+  /** One best corner as words: "a tight right on Dry Ridge Rd (Aug 12), 99". */
+  function cornerText(b) {
+    const way = b.dir === 'L' ? 'left' : b.dir === 'R' ? 'right' : 'corner';
+    const what = `a ${b.size ? `${b.size} ` : ''}${way}`;
+    const day = typeof b.at === 'string' && /^\d{4}-\d{2}-\d{2}/.test(b.at) ? `${MONTHS[+b.at.slice(5, 7) - 1]} ${+b.at.slice(8, 10)}` : null;
+    return `${what}${b.name ? ` on ${b.name}` : ''}${day ? ` (${day})` : ''}, ${b.level}`;
+  }
   /** The year as a few lines of text, for the panel and for sharing. */
   function lines(s) {
     // RA-3: every distance through the one format (format.js distance: a tenth under 10, whole from 10), as Your week
@@ -43,9 +51,11 @@
     if (s.best) out.push(`Best Vetta Score: ${s.best.score} on ${s.best.name}`);
     if (s.longest) out.push(`Longest drive: ${s.longest.name}, ${dist(s.longest.miles)}`);
     if (s.topRoads.length) out.push(`Roads you came back to: ${s.topRoads.map((r) => `${r.name} (${r.times}×)`).join(', ')}`);
+    // the year's cleanest corners (driver_profile.js bestCorners): technique, 0 to 100, never a speed or a time
+    if (Array.isArray(s.bestCorners) && s.bestCorners.length) out.push(`Cleanest corners: ${s.bestCorners.map(cornerText).join('; ')}`);
     return out;
   }
 
-  const api = { summary, lines };
+  const api = { summary, lines, cornerText };
   if (typeof module !== 'undefined' && module.exports) module.exports = api; else root.ApexYearReview = api;
 })(typeof window !== 'undefined' ? window : globalThis);

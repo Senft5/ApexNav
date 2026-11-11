@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self' apexnav:; script-src 'self' apexnav: 'sha256-V8UEZxrgcV7f6Q5lzOjSITAZ7y+wZsTdUcgz6fXQ5R8=' 'sha256-G7s/ZI+Hqrfc4DqbB6EANJJLmUmhNK06PizQ1LlsG84=' https://cdn.jsdelivr.net 'wasm-unsafe-eval'; worker-src 'self' apexnav: blob:; child-src 'self' apexnav: blob:; style-src 'self' apexnav: 'unsafe-inline'; font-src 'self' apexnav: data:; img-src 'self' apexnav: data: blob: https://tiles.openfreemap.org https://s3.amazonaws.com https://basemap.nationalmap.gov; media-src 'self' apexnav: data: blob:; connect-src 'self' apexnav: data: blob: https://apexnav.senftns.workers.dev wss://apexnav.senftns.workers.dev https://tiles.openfreemap.org https://basemap.nationalmap.gov https://s3.amazonaws.com https://valhalla1.openstreetmap.de https://router.project-osrm.org https://overpass-api.de https://overpass.private.coffee https://overpass.kumi.systems https://maps.mail.ru https://nominatim.openstreetmap.org https://photon.komoot.io https://api.open-meteo.com https://api.weather.gov https://statsapi.mlb.com https://api.seatgeek.com https://api.water.noaa.gov https://waterservices.usgs.gov https://in.carsprogram.org https://publicapi.ohgo.com https://quickstats.nass.usda.gov https://commons.wikimedia.org https://graph.mapillary.com https://vpic.nhtsa.dot.gov https://cdn.jsdelivr.net https://huggingface.co https://*.huggingface.co https://*.hf.co; object-src 'none'; base-uri 'none'; form-action 'self'" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self' apexnav:; script-src 'self' apexnav: 'sha256-fokBdRktv54c7IJGyYKFZrO+yi0ikFHm6SDVDM1isXo=' 'sha256-G7s/ZI+Hqrfc4DqbB6EANJJLmUmhNK06PizQ1LlsG84=' https://cdn.jsdelivr.net 'wasm-unsafe-eval'; worker-src 'self' apexnav: blob:; child-src 'self' apexnav: blob:; style-src 'self' apexnav: 'unsafe-inline'; font-src 'self' apexnav: data:; img-src 'self' apexnav: data: blob: https://tiles.openfreemap.org https://s3.amazonaws.com https://basemap.nationalmap.gov; media-src 'self' apexnav: data: blob:; connect-src 'self' apexnav: data: blob: https://apexnav.senftns.workers.dev wss://apexnav.senftns.workers.dev https://tiles.openfreemap.org https://basemap.nationalmap.gov https://s3.amazonaws.com https://valhalla1.openstreetmap.de https://router.project-osrm.org https://overpass-api.de https://overpass.private.coffee https://overpass.kumi.systems https://maps.mail.ru https://nominatim.openstreetmap.org https://photon.komoot.io https://api.open-meteo.com https://api.weather.gov https://statsapi.mlb.com https://api.seatgeek.com https://api.water.noaa.gov https://waterservices.usgs.gov https://in.carsprogram.org https://publicapi.ohgo.com https://quickstats.nass.usda.gov https://commons.wikimedia.org https://graph.mapillary.com https://vpic.nhtsa.dot.gov https://cdn.jsdelivr.net https://huggingface.co https://*.huggingface.co https://*.hf.co; object-src 'none'; base-uri 'none'; form-action 'self'" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
   <title>Vetta · Log</title>
   <link rel="icon" href="brand/mark.svg" type="image/svg+xml" />
@@ -685,10 +685,15 @@
       const s = window.ApexYearReview ? ApexYearReview.summary(drives.map((d) => ({ ...d, dateKnown: monthOf(d) !== null })), year) : null;
       $('yearLines').hidden = $('yearShareRow').hidden = !s;
       if (!s) { summaryParts.year = ''; paintSummary(); return; }
-      const ls = ApexYearReview.lines(s);
       summaryParts.year = `${year} · ${ApexFormat.distance(s.m)} · ${s.drives} drive${s.drives === 1 ? '' : 's'}`; paintSummary();   // the rest when opened
-      $('yearLines').replaceChildren(...ls.map((t) => Object.assign(document.createElement('p'), { textContent: t })));
-      yearText = [`My ${year} on the road with Vetta`, ...ls].join('\n');
+      // the year's cleanest corners come with Your driving's profile (the profile job), once it has answered
+      const paint = () => {
+        const ls = ApexYearReview.lines({ ...s, bestCorners: (driving.best || []).filter((b) => String(b.at).startsWith(`${year}-`)) });
+        $('yearLines').replaceChildren(...ls.map((t) => Object.assign(document.createElement('p'), { textContent: t })));
+        yearText = [`My ${year} on the road with Vetta`, ...ls].join('\n');
+      };
+      paint();
+      if (drives.some((d) => d.corners.length)) drivingProfile(() => paint());
     }
     $('yearShare').addEventListener('click', async () => {
       if (!yearText) return;
@@ -833,7 +838,7 @@
 
     // Your driving (driver_profile.js): the profile over every drive, worked out in the analysis worker (the profile job
     // keeps each drive's observations, so only new drives are read) and asked again only when the library changes.
-    const driving = { key: null, p: null, pending: null, wait: [] };
+    const driving = { key: null, p: null, pending: null, wait: [], best: null };
     // IDEAS D-27: the skill being practiced (driver_profile.js loadPlan), read again with each run; its level before the
     // practice is kept in the plan from each run, so the end card on the map can set a drive against it
     const planNow = () => ApexDriverProfile.loadPlan(localStorage);
@@ -846,7 +851,7 @@
       driving.pending = key;
       ApexAnalysis.job('profile', { plan }).then((r) => {
         if (driving.pending !== key) return;                             // the library changed meanwhile: a newer run answers
-        driving.key = key; driving.pending = null; driving.p = r.profile || null; driving.pr = r.practice || null;
+        driving.key = key; driving.pending = null; driving.p = r.profile || null; driving.pr = r.practice || null; driving.best = r.best || null;
         if (plan && driving.pr) ApexDriverProfile.savePlan(localStorage, { ...plan, before: driving.pr.before });
         driving.wait.forEach((f) => f(driving.p, driving.pr));
       }).catch(() => { if (driving.pending === key) driving.pending = null; });
