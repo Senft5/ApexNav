@@ -213,7 +213,7 @@ console.log(JSON.stringify({ tests, s: C2.seriesFrom(runs, roads, 4), o: C2.seri
 
 
 def test_road_feel_readout_labels_agreement(r):
-    assert "Banking · 3 runs agree" in r["feelRead"] and "4.2°" in r["feelRead"]
+    assert "Banking · 3 runs agree" in r["feelRead"] and "<b>4°</b>" in r["feelRead"]   # whole degrees (red team TE-03)
     assert "Roughness · runs differ ±0.20 g" in r["feelRead"]
 
 
