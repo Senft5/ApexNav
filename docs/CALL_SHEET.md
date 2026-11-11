@@ -4,6 +4,15 @@ Decisions Claude made for you, newest first. Each one says what was decided, why
 you reach one you've seen. If you disagree with a call, say so and it gets reversed; nothing here is hard to undo unless
 it says so. Things only you can do are in docs/OWNER_TODO.md.
 
+## 2026-11-11 (ui-round-two): Settings and every sheet that rises over a page match the rest (claude/project-thread-5sbga7)
+
+Every sheet that slides up over a page (Settings and each setting under it, route Options, Best roads nearby, a friend's
+or a crew's sheet, roadbooks, duels) now rises on the same soft shadow as the deck instead of a hard rule and shadow, and
+its title is set large like the Garage's. Every mode switch (Units, Driving side, Roads, Map motion and the rest) is now a
+soft well with the chosen key in ink, instead of a heavy ink frame with a pressed-in thumb; the choice reads the same.
+The on/off slide switches were left alone, since you asked for those to be unmistakable. Undo: delete the "sheets over a
+page" block at the end of web/signature.css. Shots: design-pass/round-two/settings-before-after.png.
+
 ## 2026-11-11 (round two analysis): Pace in Your driving, but never "Work on: Pace" (claude/project-thread-gd7nre)
 
 You asked for more speed-based features. Your driving now has a "Your pace" panel: the Score's own Pace credit (full

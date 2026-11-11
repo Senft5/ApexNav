@@ -188,3 +188,20 @@
 /* a friend's request is the one thing to answer on the page: paper, marked with the apex dot */
 .sheet .request-card { padding: 14px; }
 .sheet .request-card p b::before { content: ""; display: inline-block; width: 7px; height: 7px; margin: 0 7px 2px 0; border-radius: 50%; background: var(--accent); }
+
+/* ================= the sheets over a page (.side-pop: Settings and each setting, Options, Best roads nearby, People's,
+   a crew's, roadbooks, duels): paper risen over the scrim, a masthead, the choices laid in wells =================
+   They kept the boxed look: a 1 px rule on the top edge and a hard shadow, an 18 px title, every mode switch framed in
+   2 px ink with a pressed-in thumb. Now a sheet rises like the deck (--lift-2), its title is set like the Garage's,
+   and a mode switch is a well with the chosen key in ink: the choice still reads at a glance. */
+.side-pop { border-top: 0; box-shadow: var(--lift-2); }
+.side-pop::before { top: 6px; height: 4px; border-radius: 2px; opacity: 0.35; }   /* the grabber, as on the deck */
+.side-pop > .side-pop-head { gap: 12px; }   /* no rule under it: the first row's hairline divides, so a switch or a list never doubles it */
+.side-pop > .side-pop-head h3 { font: 800 26px/1.05 var(--font-num); letter-spacing: 0.005em; min-width: 0; overflow-wrap: anywhere; }
+.side-pop > .side-pop-head h3 + * { flex: none; }
+@media (min-width: 1100px) and (min-height: 600px) { .side-pop { border-left: 0; } }   /* a desk: the panel beside the Garage, on its lift */
+
+/* a mode: a well, the chosen key in ink (was a 2 px ink frame and a drop edge on the thumb) */
+.switch { border: 0; background: var(--well); }
+.switch > .on, .switch > [aria-checked="true"], .switch > [aria-pressed="true"] { box-shadow: none; }
+.switch > button:active { box-shadow: none; filter: brightness(0.92); }
