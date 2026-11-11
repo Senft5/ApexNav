@@ -4,6 +4,11 @@ Decisions Claude made for you, newest first. Each one says what was decided, why
 you reach one you've seen. If you disagree with a call, say so and it gets reversed; nothing here is hard to undo unless
 it says so. Things only you can do are in docs/OWNER_TODO.md.
 
+## 2026-11-11 e2e: two flows raced the refine's swap after #434
+- **What:** "taste from picks" and "plan flow (e, f)" wait for `apexDebug.refineDone` (new, set when ownRefine ends) and expect the three routes found after the refine swaps Fun's pick; taste from picks takes the third by a swipe (Quick's is >30 % faster than Fun's on the motorway grid, so it teaches nothing by design).
+- **Why:** since Fun plans on our router, the refine's swap lands ~150 ms after the card; CI hit it every time, local runs sometimes didn't.
+- **Undo:** revert the commit; the flag is debug only.
+
 ## 2026-11-11 (Valhalla for Quick only, part 2): loops come from our router only (claude/project-thread-39xbx9)
 
 Your rule ("anything but the quick route") covers loops too, so Find a loop no longer falls back to Valhalla's stage loops
