@@ -687,8 +687,8 @@
   // ---- avoid options ------------------------------------------------------------------
   // What the driver asked to stay off. Unpaved is avoided by default: stages never use it (web/stages.js) and most cars
   // that want this app don't want gravel. Highways and tolls are already de-prioritised, not avoided, by default.
-  const AVOID_DEFAULT = { highways: false, tolls: false, ferries: false, unpaved: true, towns: false, cameras: false };
-  const AVOID_LABELS = { highways: 'highways', tolls: 'tolls', ferries: 'ferries', unpaved: 'unpaved roads', towns: 'towns', cameras: 'cameras' };
+  const AVOID_DEFAULT = { highways: false, tolls: false, ferries: false, unpaved: true, towns: false, cameras: false, police: false };
+  const AVOID_LABELS = { highways: 'highways', tolls: 'tolls', ferries: 'ferries', unpaved: 'unpaved roads', towns: 'towns', cameras: 'cameras', police: 'police reports' };
   /**
    * Did the router actually drive the stages (IDEAS R-14, ROAD_INTELLIGENCE §7.2.4)? For each stage of `plan`, the share of
    * its length (sampled every ~50 m) that lies within `nearM` of the returned route ([lon, lat] coords). The lowest share
@@ -801,7 +801,20 @@
   /** Which avoided things a route still uses, from the router's summary flags (route.has = { highways, tolls, ferries }); unknown flags say nothing. */
   function unavoided(avoid, route) {
     const has = (route && route.has) || {};
-    return ['highways', 'tolls', 'ferries'].filter(k => avoid && avoid[k] && has[k] === true);
+    const out = ['highways', 'tolls', 'ferries'].filter(k => avoid && avoid[k] && has[k] === true);
+    if (avoid && avoid.police && policeOn(avoid, route)) out.push('police');
+    return out;
+  }
+  // Avoid police reports: avoid.points are the live reports near this trip (hazard_reports.js policeFor), worked out once
+  // per plan; whether a route passes one is kept on the route for that set (route.has.police), so the card can say it later
+  const policeSeen = new WeakMap();
+  function policeOn(avoid, route) {
+    if (!route) return false;
+    const pts = Array.isArray(avoid.points) ? avoid.points : null, H = root.ApexHazardReports || (typeof require === 'function' && typeof module !== 'undefined' ? require('./hazard_reports.js') : null);
+    if (pts && H && Array.isArray(route.coords)) {
+      if (policeSeen.get(route) !== pts) { route.has = { ...(route.has || {}), police: H.passesNear(route.coords, pts) }; policeSeen.set(route, pts); }
+    }
+    return !!(route.has && route.has.police === true);
   }
   /** Candidates that keep to the avoid options, when any do; otherwise all of them (the card then says what couldn't be avoided). */
   function keepAvoiding(cands, avoid) {
