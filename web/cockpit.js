@@ -1402,6 +1402,7 @@
     // talkingUntil: the native voice's estimated end (it reports no finish).
     const speech = { busy: false, queue: ApexSpeechQueue.createSpeechQueue(), current: null, talkingUntil: 0, nativeTimer: 0, via: null, chime: null };
     const MEMO_S = 5;   // a remembered coaching tip takes up to this long to say
+    let brakeSay = null;  // the brake heat call waiting for a quiet moment (noteBrakes), said before a break cue
     let breakSay = null;  // a break suggestion waiting for a quiet moment (noteRest sets it, the notes loop says it)
     const NUM_WORDS = ['zero', 'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine'];
     const TENS = { 30: 'thirty', 40: 'forty', 50: 'fifty', 60: 'sixty', 70: 'seventy', 80: 'eighty' };
@@ -1924,13 +1925,16 @@
       // voice, and no call that will be spoken (route call or a remembered bump) within the distance the line takes to say,
       // at the app's estimate of 600 ms + 70 ms a character, plus 2 s for a model voice to start. Dropped after 5 min unsaid;
       // the toast already showed it.
+      // The brake heat call (brakeSay, noteBrakes) goes first through the same gate, with its own 60 s expiry.
+      if (brakeSay && performance.now() > brakeSay.until) brakeSay = null;
       if (breakSay && performance.now() > breakSay.until) breakSay = null;
-      if (breakSay && live && performance.now() - state.liveAt < 2500 && !speech.busy && !speech.queue.size && performance.now() > speech.talkingUntil) {
-        const breakReach = lead + vMps * (0.6 + 0.07 * breakSay.text.length + 2);
-        const callDue = ev.some(e => noteM(e) - state.cursorM < breakReach && !state.spoken.has(`${track.id}:${e.type}:${e.index}`)
+      const quiet = brakeSay || breakSay;
+      if (quiet && live && performance.now() - state.liveAt < 2500 && !speech.busy && !speech.queue.size && performance.now() > speech.talkingUntil) {
+        const quietReach = lead + vMps * (0.6 + 0.07 * quiet.text.length + 2);
+        const callDue = ev.some(e => noteM(e) - state.cursorM < quietReach && !state.spoken.has(`${track.id}:${e.type}:${e.index}`)
           && (e.type === 'corner' ? spirited : (spirited || noteworthyInCruise(e))));
-        const bumpDue = ApexRoadMemory.upcoming(hazardMemory, state.live, 0, breakReach, { has: () => false });
-        if (!callDue && !bumpDue) { say(breakSay.text); breakSay = null; }
+        const bumpDue = ApexRoadMemory.upcoming(hazardMemory, state.live, 0, quietReach, { has: () => false });
+        if (!callDue && !bumpDue) { say(quiet.text); if (quiet === brakeSay) brakeSay = null; else breakSay = null; }
       }
     }
 
@@ -7847,7 +7851,7 @@
     }
     // Brake heat (web/brake_heat.js, core/brake_heat.py): energy the car loses faster than rolling and air take it went into
     // the discs (or the engine in a low gear: an upper bound). When the model says hot, the co-driver says so once in words,
-    // in the same quiet slot as the break cue (first: hot brakes matter more than a rest), and a toast shows it. Frames come
+    // in its own quiet slot, said before a waiting break cue (hot brakes matter more than a rest), and a toast shows it. Frames come
     // at 10 Hz from the app with speed held between fixes: the model differences energy over 2 s windows for that.
     // At most once every 3 minutes, and only again after the discs cooled. Nothing leaves the phone.
     function noteBrakes(frame) {
@@ -7857,8 +7861,7 @@
       const out = b.model.step(dt, frame.speed_mps, frame.elevation_m);
       if (!out.call) return;
       toast(ApexBrakeHeat.CALL_TEXT);
-      // a break cue already waiting rides after it (its kind is marked spoken, so it would not come again)
-      breakSay = { text: breakSay ? `${ApexBrakeHeat.CALL_TEXT} ${breakSay.text}` : ApexBrakeHeat.CALL_TEXT, until: now + (breakSay ? Math.max(60000, breakSay.until - now) : 60000) };
+      brakeSay = { text: ApexBrakeHeat.CALL_TEXT, until: now + 60000 };   // its own slot: a break cue waiting stays as it is
     }
     // Road data whenever the app is open and the phone is mounted (calibration locked), not only during a drive
     // (owner 2026-10-26). Trips, privacy trims and gaps: ApexContributor.createAmbient. Members with ROAD DATA on only.
@@ -8755,7 +8758,7 @@
       startStageWatch();
       state.firstNoteDue = true; state.firstNoteKey = null;   // U-58: the drive's first note is called
       state.openerDue = true; state.openerAt = performance.now(); state.wakeCue = false;   // DA-3: the first words name the road
-      drive.live = null; drive.liveIdx = 0; drive.share = 'off'; drive.shareKm = 0; drive.shareErr = null; drive.roads = {}; drive.roadIdx = 0; drive.rest = null; drive.brakes = null; breakSay = null; if (breakWorker) { breakWorker.terminate(); breakWorker = null; }
+      drive.live = null; drive.liveIdx = 0; drive.share = 'off'; drive.shareKm = 0; drive.shareErr = null; drive.roads = {}; drive.roadIdx = 0; drive.rest = null; drive.brakes = null; brakeSay = null; breakSay = null; if (breakWorker) { breakWorker.terminate(); breakWorker = null; }
       keepStart();                                                     // Round 3: the drive is kept as it goes (drive_keep.js)
       if (NATIVE_SHELL) {   // the app's own GPS and IMU feed window.apex.live; no browser sensors to start
         drive.native = true;
