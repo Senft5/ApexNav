@@ -150,3 +150,27 @@ def test_unknown_stays_unknown(haz):
     assert haz["unknown"] is None and haz["unknownFacts"] == []
     assert haz["none"] == [["On this road", "None reported"]]
     assert haz["bumpsOnly"] == [["2 bumps members felt", "at 0.2 and 0.8 mi"]]
+
+
+ROUTE = r"""
+const P = require(process.argv[1] + '/web/road_page.js');
+// a route sampled every 10 m with its own dist
+const lat = [], lon = [], dist = [];
+for (let i = 0; i <= 2000; i++) { lat.push(35 + i * 10 / 110540); lon.push(-83); dist.push(i * 10); }
+const kx = 111320 * Math.cos(35 * Math.PI / 180), at = (m, off) => ({ lat: 35 + m / 110540, lon: -83 + off / kx });
+const reps = [{ kind: 'gravel', ...at(12000, 5), confirms: 3, clears: 0 }, { kind: 'pothole', ...at(3000, 0), confirms: 1, clears: 0 },
+  { kind: 'closure', ...at(5000, 0), confirms: 2, clears: 0 }, { kind: 'debris', ...at(15000, 0), confirms: 1, clears: 0 },
+  { kind: 'animal', ...at(16000, 0), confirms: 1, clears: 0 }, { kind: 'police', ...at(8000, 3000), confirms: 2, clears: 0 }];
+const list = P.onThisRoad({ lat, lon, dist }, null, reps);
+const km = (m) => `${(m / 1000).toFixed(0)} km`;
+console.log(JSON.stringify({ at: list.map((x) => [x.kind, x.atM]), line: P.routeReportsLine(list, km), two: P.routeReportsLine(list, km, 2), none: P.routeReportsLine([], km) }));
+"""
+
+
+def test_route_reports_line():
+    out = json.loads(subprocess.run([NODE, "-e", ROUTE, ROOT], capture_output=True, text=True, check=True).stdout)
+    # metres from the route's own dist (10 m a sample here); the police report 3 km off it is left out
+    assert out["at"] == [["pothole", 3000], ["closure", 5000], ["gravel", 12000], ["debris", 15000], ["animal", 16000]]
+    # closures have their own warning
+    assert out["line"] == "Reported on the way: Pothole at 3 km (1 confirmed) · Gravel at 12 km (3 confirmed) · Debris at 15 km (1 confirmed) and 1 more"
+    assert out["two"].endswith("and 2 more") and out["none"] == ""
