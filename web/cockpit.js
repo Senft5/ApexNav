@@ -2830,7 +2830,7 @@
       const t = plannedRoute;
       if (!t || !Array.isArray(t.lat) || t.lat.length < 2) return;
       if (ApexSavedRoutes.has(localStorage, t.id)) { ApexSavedRoutes.remove(localStorage, t.id); toast(`${t.name} removed from saved routes.`); }
-      else if (ApexSavedRoutes.save(localStorage, ApexSavedRoutes.pack(t)) === 'saved') toast(`Saved for offline: ${t.name}. Find it in Where to?.`);
+      else if (ApexSavedRoutes.save(localStorage, ApexSavedRoutes.pack(t)) === 'saved') toast(`Saved for offline: ${t.name}. It's listed in Where to? now.`);
       else toast('The phone is out of room for saved routes. Remove one first.');
       paintSaveBtn();
     });
@@ -4638,8 +4638,11 @@
       if (!action && t._holdUntil > performance.now()) return;   // a Cancel countdown owns the toast until it ends
       t._holdUntil = action && action.ms ? performance.now() + action.ms : 0;
       t.textContent = msg;
+      // A message with a key is a row: the words on the left, the key whole on the right (.toast.has-key). The key was an
+      // inline link in the red pen; when the words wrapped it dropped under them, indented.
+      t.classList.toggle('has-key', !!action);
       if (action) {
-        const a = document.createElement('a'); a.href = action.href || '#'; a.textContent = action.label; a.style.cssText = 'margin-left:10px;color:var(--accent);text-decoration:underline'; t.append(a);
+        const a = document.createElement('a'); a.href = action.href || '#'; a.textContent = action.label; a.className = 'toast-key'; t.append(a);
         // Once the countdown is over the action is gone: a late tap must not undo what already happened.
         if (action.onClick) a.onclick = (e) => { e.preventDefault(); if (!a.isConnected) return; t._holdUntil = 0; a.remove(); action.onClick(); t.classList.remove('show'); };
       }

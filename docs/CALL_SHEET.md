@@ -80,6 +80,23 @@ Also: a time loop's note said "the closest good loop to 1.5 h"; times now read "
 
 Not changed: Options keeps its 1 hour / 2 hours keys and My free time. Undo: revert the PR.
 
+## 2026-11-10 (fable-toast-key): a message with a key is one row, and a message is as wide as its words (claude/fable-toast-key)
+
+For "reducing any clunky feelings", seen on the drive screen: "Typing is off while the car moves." took half the
+screen's width, wrapped, and its key ("I'm a passenger") dropped under it, indented, in the red pen. Two causes, both
+in every message the app shows:
+
+- A message is centred from `left: 50%`, so the browser let it be at most half the screen wide and it wrapped early.
+  It is now as wide as its words, up to the screen less 16 px a side.
+- A key on a message (twelve of them: Start drive, Save, Share ETA, Head home, Add as a stop, Garage, Open…) was an
+  inline link. It is now the end of a row: the words wrap on the left, the key stays whole on the right. It is ink and
+  underlined like every other text key (the red pen is for what means slow down), and a thumb tall to hit without
+  making the message taller.
+
+Also: "Saved for offline: … Find it in Where to?." ended "?."; it reads "It's listed in Where to? now."
+
+Undo: revert the PR (`toast()` in web/cockpit.js, four CSS lines in web/index.html).
+
 ## 2026-11-10 (fable-layers): design pass 8: the Layers panel is the map's legend (claude/fable-layers)
 
 Layers was a column of names and switches: "Cameras" (which cameras?), "Measured roads" (three colours on the map and

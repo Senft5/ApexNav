@@ -63,6 +63,17 @@
 - Next: Options' "Loop to fit" 1 hour / 2 hours keys now duplicate the dial; remove them once the owner has used the
   dial (My free time stays).
 
+## Session 2026-11-10 (fable-toast-key): toasts are as wide as their words; a toast's key ends its row (claude/fable-toast-key, off origin/main 51c8c4c)
+
+- [x] web/cockpit.js `toast()`: the action is `a.toast-key`, `#toast.has-key` while it has one. web/index.html:
+  `.toast.show { width: max-content }`, `.toast.show.has-key` (flex row), `.toast .toast-key` (ink, underlined, 44 px
+  hit area by padding and negative margin). The saved-for-offline sentence.
+- [x] tests/test_toast_key.py (4); e2e "the car connects" measures the row, the ink, the hit height and a 320 px phone.
+- Found on the way, not a bug in use: `scrollIntoView()` on a key inside the closed Layers panel scrolls `.stage`
+  (overflow: hidden) sideways. Nothing in the app does that (the closed panel can't take focus); a test script that
+  clicks a Layers key before the panel has slid in will. `overflow: clip` on `.stage` would rule it out.
+- Next: the drive screen proper (the status row beside Report and End).
+
 ## Session 2026-11-10 (fable-layers): design pass 8, the Layers panel as the map's legend (claude/fable-layers, off origin/main 1a38381)
 
 - web/index.html only (markup and CSS, no script): `#switchRow` rows are `.sw.ly` = switch, name over a `<small>` line,
