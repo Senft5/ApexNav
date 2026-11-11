@@ -15,6 +15,11 @@ and skips the loop if the week is over by the day it names. Undo: drop `attack` 
 paintDeck (or move `if (ta) return attackSugg();` in your_roads.js to change its rank).
 
 
+## 2026-11-11 (places by name, 2): in a drive, the next fuel stop's stamp says which station (claude/project-thread-me97iw)
+
+While driving a planned route the map keeps only the next fuel stop's stamp; it now reads "FUEL · Shell" instead of FUEL
+when OpenStreetMap has its name (unnamed stays FUEL). Only that one stamp grows, so the map stays clear. Undo: revert the PR.
+
 ## 2026-11-11 (Valhalla for Quick only): Fun and Long way fail plainly instead of falling back (claude/project-thread-39xbx9)
 
 Your rule: Valhalla only for Quick. Fun and Long way now come from our own router or not at all. Where our road map doesn't

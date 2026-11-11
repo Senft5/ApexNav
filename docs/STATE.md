@@ -14,6 +14,12 @@
 - Tests: tests/test_your_roads.py (+4), e2e flow "time attack on the home deck". Full pytest 1692 passed.
 
 
+## Session 2026-11-11 (places by name, 2): the drive's fuel stamp names its station (claude/project-thread-me97iw, off origin/main)
+
+- cockpit.js `updatePins`: in a drive the one fuel stamp left (U-85, the next stop ahead) reads "FUEL · Shell" when the map
+  names it; the preview keeps plain FUEL stamps (fuelPins carry `name`). e2e "along the route by name…" starts the drive.
+- Next: the co-driver could say the next café or fuel stop by name on request; CarPlay's route preview could list them.
+
 ## Session 2026-11-11 (Valhalla for Quick only): Fun and Long way are our router's or nothing (claude/project-thread-39xbx9, off origin/main)
 
 - The owner: Fun and Long way "always say check my signal", and Valhalla only ever for Quick. cockpit.js `funRoute`: at
@@ -98,6 +104,16 @@
 - signature.css "a crew's page and the Share box": crew name Barlow 30/32 px, cp keys paper, chat a well; Share chips wells.
 - Tests: tests/test_signed_out_reads.py, tests/test_sheets_line.py (+2). e2e convoy, hazard, police, closure flows pass.
 - Next: round two is done (Log, Garage, People, Settings and sheets, crew, Share). Look for screens still boxed in ink.
+## Session 2026-11-11 (round two analysis, PR 9): a drive's corners against your records (claude/project-thread-gd7nre, off origin/main)
+
+- core/driver_profile.py `drive_records` (reference) and web/driver_profile.js `driveRecords` (port): a drive's cleanest
+  corner of each kind beside your record for it; `driveRecordLines` says "Tight corners: 94 at best here; your record is
+  100 (Aug 12).", "…, level with your record (…)" or "…, your record of 36 tight corners." when the drive holds it.
+- web/analysis_client.js drive job: `touch.records`, from the kept observations of drives still in the Log, dated from
+  their summaries, plus this drive's own. web/analysis.html: the "Against your records" panel on the drive page.
+- Tests: tests/test_best_corners.py (+1, parity and words), e2e "Your driving".
+- Next: the deepest-analysis list: where on a road your cleanest corners come from (a road's own records by corner).
+
 ## Session 2026-11-11 (social round two): For you, what happened to you socially (claude/project-thread-uwmi4e, off origin/main 936aec3)
 
 - IDEAS S-27, SOCIAL 2.10. `backend/src/inbox.ts` `GET /api/inbox` → `{ items, waiting, now }`: kinds `request`, `duel_ask`

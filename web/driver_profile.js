@@ -278,6 +278,35 @@
     }
     return out;
   }
+  /** A drive's corners against your records (port of driver_profile.drive_records): { size: { level, record } }. */
+  function driveRecords(obs, records) {
+    const out = {};
+    for (const z of ['tight', 'medium', 'fast']) {
+      let lv = null;
+      for (const o of obs || []) {
+        if (o.size !== z || SKILLS.some((k) => o[k] === null || o[k] === undefined)) continue;
+        const v = level(SKILLS.reduce((a, k) => a + o[k], 0) / SKILLS.length);
+        if (lv === null || v > lv) lv = v;
+      }
+      out[z] = { level: lv, record: (records && records[z]) || null };
+    }
+    return out;
+  }
+  /** Words for driveRecords on drive `id`: "Tight corners: 94 at best here; your record is 100 (Aug 12)." Facts, never a push. */
+  function driveRecordLines(dr, id, day = (at) => at.slice(0, 10)) {
+    if (!dr) return [];
+    const out = [];
+    for (const z of ['tight', 'medium', 'fast']) {
+      const x = dr[z];
+      if (!x || x.level === null) continue;
+      const r = x.record, Z = z[0].toUpperCase() + z.slice(1);
+      if (r && r.id === id) out.push(`${Z} corners: ${x.level} at best here, your record of ${r.n} ${z} corners.`);
+      else if (r && x.level >= r.level) out.push(`${Z} corners: ${x.level} at best here, level with your record (${r.at ? day(r.at) : 'set first'}).`);
+      else if (r) out.push(`${Z} corners: ${x.level} at best here; your record is ${r.level}${r.at ? ` (${day(r.at)})` : ''}.`);
+      else out.push(`${Z} corners: ${x.level} at best here.`);
+    }
+    return out;
+  }
   /** A drive's own touch (its Log page): { drive (from DRIVE_TOUCH_MIN corners), usual (every other drive's corners) }. */
   // outside: "above" when the drive's middle corner was beyond the usual upper quartile (or quick where that is timed),
   // "below" under the lower one
@@ -834,7 +863,7 @@
     }
   }
 
-  const api = { SKILLS, observe, profile, swing, excess, SKILL_MIN, WORDS, findingLine, styleLines, touchLines, touchTrendLines, driveTouchLines, paceLines, PACE, MEASURES, touch, TOUCH, driveTouch, DRIVE_TOUCH_MIN, bestCorners, recordsBySize, RECORD_MIN, cardLine, focusLines, render,
+  const api = { SKILLS, observe, profile, swing, excess, SKILL_MIN, WORDS, findingLine, styleLines, touchLines, touchTrendLines, driveTouchLines, paceLines, PACE, MEASURES, touch, TOUCH, driveTouch, DRIVE_TOUCH_MIN, bestCorners, recordsBySize, RECORD_MIN, driveRecords, driveRecordLines, cardLine, focusLines, render,
     PRACTICE_MIN, practice, drivePractice, practiceLine, practiceSummary, localStamp, loadPlan, savePlan, PLAN_KEY };
   if (typeof module !== 'undefined' && module.exports) module.exports = api; else root.ApexDriverProfile = api;
 })(typeof window !== 'undefined' ? window : globalThis);
