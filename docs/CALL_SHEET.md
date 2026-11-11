@@ -37,6 +37,13 @@ Once, or the planner leaving the crew ends the series; editing an older drive in
 calendar puts the series in once with a weekly rule.
 
 Undo: revert the PR. Migration 0053 only adds two columns to `crew_events`; the old code ignores them.
+## 2026-11-11 (deepest analysis, PR 13): "least even" is a 15-level span, at most three corners (claude/project-thread-gd7nre)
+
+A road book now names where your passes differ most, as the place on the road worth working on. It uses the plain span
+between your cleanest and least clean pass, not a statistical spread: three to five passes are too few for one, and a
+span is easy to check against the rows. 15 levels is about one step on the six credits; three corners keep it a short
+list. Undo: UNEVEN_LEVELS / UNEVEN_MAX in core/driver_profile.py and web/driver_profile.js, or revert the PR.
+
 ## 2026-11-11 (deepest analysis, PR 12): roads are matched by name for the corner-by-corner book (claude/project-thread-gd7nre)
 
 The book takes every drive with the same road name (as the deck's Your roads does) and merges their corners by place and

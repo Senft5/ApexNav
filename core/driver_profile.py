@@ -583,6 +583,8 @@ def drive_records(obs: list, records: dict) -> dict:
     return out
 
 
+UNEVEN_LEVELS = 15           # a corner whose passes span this many levels or more is uneven on a road book
+UNEVEN_MAX = 3               # ...and the book names at most this many, the widest first
 ROAD_MIN_PASSES = 3          # passes of a corner (this drive's among them) before its record on the road means anything
 SAME_CORNER_M = 20.0         # the same corner: apexes this close...
 SAME_WAY = 0.7               # ...and headings this alike (cosine, about 45 degrees): not the next bend of an S
@@ -635,8 +637,10 @@ def road_book(drives: list, ref: list | None = None) -> dict:
     the road, to put the corners in road order. A corner is the first pass seen of it; a later pass is the same corner when
     within SAME_CORNER_M of it and its heading within SAME_WAY (a drive counts once per corner, its cleanest there). The
     first drive to reach the cleanest level holds the corner, so a tie goes to the older drive. Corners passed
-    ROAD_MIN_PASSES times or more: {corners: [{x, y, size, dir, passes, record, by, at}] in road order (by the nearest
-    point of ref, else as first seen), fewer: corners passed less often, drives: how many drives}. Technique only."""
+    ROAD_MIN_PASSES times or more: {corners: [{x, y, size, dir, passes, record, low (the least clean pass), by, at}] in
+    road order (by the nearest point of ref, else as first seen), fewer: corners passed less often, drives: how many drives,
+    uneven: the 1-based places of the corners whose passes span UNEVEN_LEVELS or more, the widest first (road order
+    among equals), at most UNEVEN_MAX}. Technique only."""
     book = []
     for d in drives:
         for o in d.get("corners") or []:
@@ -663,8 +667,9 @@ def road_book(drives: list, ref: list | None = None) -> dict:
         rec = max(c["by"].values())
         by = min((i for i, v in c["by"].items() if v == rec), key=lambda i: order[i])
         out.append({"x": c["x"], "y": c["y"], "size": c["size"], "dir": c["dir"], "passes": len(c["by"]),
-                    "record": rec, "by": by, "at": at.get(by)})
-    return {"corners": out, "fewer": len(book) - len(out), "drives": len(drives)}
+                    "record": rec, "low": min(c["by"].values()), "by": by, "at": at.get(by)})
+    wide = sorted((i for i, k in enumerate(out) if k["record"] - k["low"] >= UNEVEN_LEVELS), key=lambda i: (-(out[i]["record"] - out[i]["low"]), i))
+    return {"corners": out, "fewer": len(book) - len(out), "drives": len(drives), "uneven": [i + 1 for i in wide[:UNEVEN_MAX]]}
 
 
 def drive_touch(obs: list, others: list) -> dict:
