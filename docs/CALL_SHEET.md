@@ -11,6 +11,14 @@ OpenStreetMap has for it, how far into the route and how far off the road; tappi
 a stop. Tapping a CAFÉ or FUEL pin on the map says its name too. Calls: fuel stations are now counted on the line (before,
 only a long stretch without fuel was said), so there is something to tap; a place with no name on the map says "no name on
 the map" rather than a guess. Undo: revert the PR.
+## 2026-11-11 (routing round three): our router reads measured crests and verified bumps (claude/project-thread-39xbx9)
+
+Roads members measured going light over their crests (0.15 g or more, two or more passes) now count as more character in
+our router, and crowd-verified bumps (the same ones the co-driver calls "Confirmed by members") cost a road 25 % of its
+time each, at most double, in both the search and the Fun pick. One pass of crest data, and bumps the server hasn't
+verified, count nothing. The weights are a judgment call: crests at 2 against loved 1.5 and banking 0.5 so a crested road
+wins a near-tie and no more; bumps sized so three on a short lane lose it a 1 s tie, while one bump costs only the stretch
+it sits on (a long road isn't written off for one). Undo: `CROWD_W.crest` 0 and `BUMP_X` 0 in web/graph_router.js.
 
 ## 2026-11-11 (roam-a descent call): the co-driver says a long descent as you near its top (claude/project-thread-h7xxmf)
 
