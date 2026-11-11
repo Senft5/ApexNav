@@ -12,6 +12,8 @@ it says so. Things only you can do are in docs/OWNER_TODO.md.
 - Loops were being sent to our Worker's road-attributes relay, which only takes stages (stretches cut from the map, never
   the driver's own line) and refused them as too long. Only stages go there now, as APP_REVIEW 5.1.2 already says; loops
   ask the public router from the phone like every route. Undo: drop the `c.stage` test in route_ctx/router_edges.js.
+- "Watch a replay" on the welcome screen now plays the demo drive straight away; it used to open it paused at 0 mph,
+  with Play down in the controls. Undo: remove `replayWhenReady(d)` in cockpit.js watchDryRidge.
 
 ## 2026-11-11 (roam-c-boot-budget): an e2e check on what the map page loads and runs before it is ready (claude/roam-c-boot-budget)
 

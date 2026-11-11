@@ -211,14 +211,18 @@ flow('startup budget: the map page is ready within its script bytes, script coun
   check(got.cpuS <= BOOT.cpuS && r.long <= BOOT.longTaskMs, `CPU before ready ${got.cpuS} s (budget ${BOOT.cpuS}), longest task ${r.long} ms (budget ${BOOT.longTaskMs}): ` + JSON.stringify(got));
 }, { viewport: { width: 393, height: 852 }, hasTouch: true });
 
-flow('first run: onboarding, Watch a replay loads the bundled drive and Play moves along it', async (page, base) => {
+flow('first run: onboarding, Watch a replay loads the bundled drive and plays it; the Play switch drives it', async (page, base) => {
   await page.goto(base + '/index.html');
   await page.waitForSelector('#onboard.show', { timeout: 10000 });
   await page.click('#obAlt');
   await page.waitForFunction(() => window.apexDebug && window.apexDebug.track && window.apexDebug.state.mode === 'replay', null, { timeout: 15000 });
   check(!(await page.isVisible('#onboard.show')), 'onboarding should close');
-  await page.evaluate(() => document.getElementById('playBtn').click());
+  // Watch means watch: it plays on its own once the map has the drive's start (walkthrough 2026-11-11: it sat at 0 mph)
   await page.waitForFunction(() => window.apexDebug.state.playing && window.apexDebug.state.cursorM > 0, null, { timeout: 10000 });
+  await page.evaluate(() => document.getElementById('playBtn').click());
+  check(!(await page.evaluate(() => window.apexDebug.state.playing)), 'the Play switch pauses it');
+  await page.evaluate(() => document.getElementById('playBtn').click());
+  await page.waitForFunction(() => window.apexDebug.state.playing, null, { timeout: 3000 });
   // REVIEW2.md U-45: Play is one slide switch, speed a detent, and a replay is full-screen like a drive (the plate's × is the exit)
   const tp = await page.evaluate(() => { document.querySelector('#rateDetents [data-rate="4"]').click();
     const tb = document.querySelector('.tabbar');

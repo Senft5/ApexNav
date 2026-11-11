@@ -10,6 +10,8 @@
   - Every loop candidate was sent to our trace relay (`/api/ctx/trace`), which refused it (400, over 40 km), and APP_REVIEW
     says only stages go there. router_edges.js now relays only `c.stage` corridors (route_engine.js stageCorridor sets it),
     at most 40 km; test_route_ctx_router_edges.py covers a loop not relayed.
+- Watch a replay (the welcome's, and a theme trial's) loaded the demo and sat at 0 mph until you found Play: watchDryRidge
+  now plays it once the map has its start (replayWhenReady, as a Log replay link does). e2e first-run flow asserts it.
 - Seen, not fixed (other areas): signed-out pages still ask /api/convoy/invites, /api/points, /api/hazards, /api/roads (401s);
   the idle map's top ~150 px is blank paper at pitch 42 with the deck's padding (MapLibre draws no tiles beyond the far
   plane; no sky in the style). Next: replay drive, Log, add a friend, join a crew.

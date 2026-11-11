@@ -9295,6 +9295,7 @@
       const d = drives.find(x => x.id === 'dry_ridge');
       if (!d) { toast('Couldn\'t load the replay. Check the connection and try again.'); return; }
       booting = false; replayOn = true; closeSheet(); activate(d, 0);
+      replayWhenReady(d);                                              // "Watch" plays it (walkthrough 2026-11-11: it sat at 0 mph until Play)
     }
     // CarPlay's "Start drive" offer (IDEAS C-05) holds the toast for 10 s: once a drive starts it is moot, so it goes
     // and stops holding back other toasts.
