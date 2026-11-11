@@ -6137,7 +6137,7 @@
       const d = $('planSpots'); d.hidden = false;
       d.addEventListener('toggle', () => { if (!d.open) return; const sec = spotsFeed.section(); const h = sec.querySelector(':scope > h3'); if (h) h.remove(); $('planSpotsBody').replaceChildren(sec); });
     } });
-    // Weekly time attack (web/time_attack.js, SOCIAL 2.9, IDEAS S-26): this area's stage this week and its board, in Where to?
+    // Weekly time attack (web/time_attack.js, SOCIAL 2.9, IDEAS S-26): this area's loop this week and its board, in Where to?
     // beside Spots near you; drawn when opened, fresh each time. Runs go up from the Log when stages sync.
     onSocial(() => { try {
       const ta = window.ApexTimeAttack ? ApexTimeAttack.mount({ el, btn, toast, apiCall, jsonOf, report: safety && safety.report,
@@ -6145,7 +6145,10 @@
         here: () => state.lastPosition || (() => { const c = map.getCenter(); return { lat: c.lat, lon: c.lng }; })(), goTo: (p) => { closeSheet(); routeToPlace(p); },
         segs: () => { try { return JSON.parse(localStorage.getItem('apex.segments') || '[]') || []; } catch (_) { return []; } },
         saveSegs: (l) => { try { localStorage.setItem('apex.segments', JSON.stringify(l)); } catch (_) {} },
-        fmtKm: (km) => ApexUnits.long(km * 1000, 1) }) : null;
+        fmtKm: (km) => ApexUnits.long(km * 1000, 1),
+        // the week's loop, where nobody in the area has built it yet: our own router's loops (graph_router.js loop) over its tiles
+        graphKeys: () => (ownOn() ? ownIndex() : null),
+        loops: (start, km) => (ownOn() ? ApexOwnRouting.loops(ownRouter(), { start, km, level: LOOP_STYLE }) : Promise.resolve([])) }) : null;
       if (ta) {
         const d = $('planAttack'); d.hidden = false;
         d.addEventListener('toggle', () => { if (!d.open) return; const sec = ta.section(); const h = sec.querySelector(':scope > h3'); if (h) h.remove(); $('planAttackBody').replaceChildren(sec); });
