@@ -4381,10 +4381,62 @@ flow('friend profile: a friend on People → Profile shows what the friend share
   check(t.includes('@bob') && /Bob <b>S<\/b> · friends since September( 2026)?/.test(t) && t.includes('Esses · best 812 · 3 days this month') && t.includes('Ridge Runners'), 'the profile, as text: ' + t);
   const pk = await page.evaluate(() => ({ keys: [...document.querySelectorAll('.profile-view .profile-keys button')].map((b) => b.textContent), foot: [...document.querySelectorAll('.profile-view .profile-foot button')].map((b) => b.textContent),
     last: document.querySelector('.profile-view > :last-child').className }));
-  check(JSON.stringify(pk.keys) === '["Share a route","Invite to a drive"]' && JSON.stringify(pk.foot) === '["Unfriend","Report","Block"]' && /profile-foot/.test(pk.last), 'things to do first, Unfriend/Report/Block at the foot: ' + JSON.stringify(pk));
+  check(JSON.stringify(pk.keys) === '["Share a route","Invite to a drive","Challenge on a stage"]' && JSON.stringify(pk.foot) === '["Unfriend","Report","Block"]' && /profile-foot/.test(pk.last), 'things to do first, Unfriend/Report/Block at the foot: ' + JSON.stringify(pk));
   await page.click('.profile-view button:has-text("Friends")');   // one back glyph and where it goes (REVIEW2.md)
   await page.waitForSelector('.side-pop.open .profile-view', { state: 'detached', timeout: 3000 }).catch(() => {});
   check(await page.evaluate(() => !document.querySelector('.side-pop.open') && !!document.querySelector('#accountBody .friend-head[aria-expanded="true"]')), 'Back returns to the friends list, the row still open');
+});
+
+flow('duels: a friend\'s challenge is a card on People; Accept starts it; the card keeps both Scores and the days left; your own Scores can be shown from it; Challenge on a stage sends one (Worker stubbed, SOCIAL 2.7)', async (page, base) => {
+  await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); } catch (_) {} });
+  const today = new Date().toISOString().slice(0, 10), plus = (n) => new Date(Date.now() + n * 864e5).toISOString().slice(0, 10);
+  const geom = JSON.stringify(Array.from({ length: 80 }, (_, i) => [35.6 + i * 3e-4, -83.9 + i * 4e-4 + Math.sin(i / 6) * 3e-4]));
+  let duel = { id: 'D1', stage: 'Dry Ridge climb', canon_id: 'SEG1', days: 7, with: 'bob', with_id: 'U1', challenger: false, status: 'pending', starts_on: null, ends_on: null, today,
+    have_stage: false, you: null, them: null, you_share: false, they_share: true };
+  const sent = [], grants = [];
+  await page.route(base + '/api/**', (route) => {
+    const u = new URL(route.request().url()), m = route.request().method(), json = (b, s = 200) => route.fulfill({ status: s, contentType: 'application/json', body: JSON.stringify(b) });
+    if (u.pathname === '/api/me') return json({ signed_in: true, member: true, handle: 'me' });
+    if (u.pathname === '/api/friends') return json([{ id: 'U1', handle: 'bob', name: 'Bob', status: 'accepted', incoming: 0 }]);
+    if (u.pathname === '/api/duels' && m === 'GET') return json([duel]);
+    if (u.pathname === '/api/duels' && m === 'POST') { sent.push(JSON.parse(route.request().postData())); return json({ id: 'D2' }, 201); }
+    if (u.pathname === '/api/duels/D1/accept') { duel = { ...duel, status: 'on', starts_on: today, ends_on: plus(6), have_stage: true, them: { score: 812, on: today } }; return json({ stage_added: true }); }
+    if (u.pathname === '/api/grants' && m === 'PUT') { grants.push(JSON.parse(route.request().postData())); duel = { ...duel, you_share: true, you: { score: 845, on: today } }; return route.fulfill({ status: 204, body: '' }); }
+    if (u.pathname === '/api/segments') return json([{ id: 'MY1', origin_id: 'SEG1', name: 'Dry Ridge climb', geom, start_lat: 35.6, start_lon: -83.9 }, { id: 'MY2', origin_id: null, name: 'Esses', geom: '[]', start_lat: 35.7, start_lon: -83.8 }]);
+    if (u.pathname === '/api/points') return json({ total: 0 });
+    return json([]);
+  });
+  await page.goto(base + '/index.html');
+  await page.waitForFunction(() => window.apex && typeof window.apex.live === 'function');
+  await page.evaluate(() => document.querySelector('.tab[data-view="people"]').click());
+  await page.waitForSelector('#accountBody .duel-card.ask');
+  check(/@bob challenged you/.test(await page.textContent('.duel-card.ask')) && /Dry Ridge climb · 7 days\. The higher Vetta Score on it wins\./.test(await page.textContent('.duel-card.ask')), 'the ask says who, where, how long and what wins');
+  await page.click('.duel-card.ask button:has-text("Accept")');
+  await page.waitForFunction(() => /Dry Ridge climb is in your Stages now/.test(document.getElementById('toast').textContent));
+  await page.waitForSelector('#accountBody .duel-card.on');
+  let t = await page.textContent('.duel-card.on');
+  check(/You -- · @bob 812 · @bob has a run in · 7 days left/.test(t) && /Your Scores don't reach @bob yet/.test(t), 'on: both Scores, the days left, and that yours don\'t reach them: ' + t);
+  await page.click('.duel-card.on button:has-text("Show my Scores to @bob")');
+  await page.waitForFunction(() => /You 845 · @bob 812 · You lead by 33/.test((document.querySelector('.duel-card.on') || {}).textContent || ''));
+  check(grants.length === 1 && grants[0].audience_id === 'U1' && grants[0].share_scores === true && !grants[0].share_times, 'Scores only, to that friend: ' + JSON.stringify(grants));
+  check(!/\d+:\d\d|mph|km\/h/.test(await page.textContent('.duel-card.on')), 'never a time or a speed');
+  // Drive it plans the stage itself
+  await page.click('.duel-card.on button:has-text("Drive it")');
+  await page.waitForFunction(() => /Dry Ridge climb/.test(document.getElementById('routeCardName').textContent), null, { timeout: 8000 });
+  // challenging: from the friend's row, pick a stage and the days, Send
+  await page.evaluate(() => document.querySelector('.tab[data-view="people"]').click());
+  await page.click('#accountBody .friend-head:has-text("@bob")');
+  await page.click('#accountBody .friend button:has-text("Challenge on a stage")');
+  await page.waitForSelector('.duel-pop.open [aria-label="Stage"] button:has-text("Esses")');
+  await page.click('.duel-pop.open [aria-label="Stage"] button:has-text("Esses")');
+  await page.click('.duel-pop.open [aria-label="How long"] button:has-text("3 days")');
+  check(/your best counts/.test(await page.textContent('.duel-pop.open')) && await page.isVisible('.duel-pop.open [aria-label="Won by"] button.on:has-text("Vetta Score")'), 'the sheet says what counts; won by Score unless you pick Time');
+  await page.click('.duel-pop.open [aria-label="Won by"] button:has-text("Time")');
+  const small = await page.evaluate(() => [...document.querySelectorAll('.duel-pop.open button')].filter((b) => b.getClientRects().length).map((b) => ({ t: b.textContent, h: Math.round(b.getBoundingClientRect().height) })).filter((b) => b.h < 32));
+  check(!small.length, 'keys big enough: ' + JSON.stringify(small));
+  await page.click('.duel-pop.open button:has-text("Send to @bob")');
+  await page.waitForFunction(() => /Sent\. @bob has 3 days on Esses once they say yes\./.test(document.getElementById('toast').textContent));
+  check(JSON.stringify(sent) === '[{"handle":"bob","segment_id":"MY2","days":3,"kind":"time"}]', 'what was sent: ' + JSON.stringify(sent));
 });
 
 flow('Billet: a primary key is light metal with dark ink, not dark on dark (REVIEW_PEOPLE.md P-01)', async (page, base) => {
@@ -4429,7 +4481,8 @@ flow('People: two tabs; a request is a card on top, then you, then friends with 
   // P-34: the badge counts the friend request and the convoy invite
   check(await page.evaluate(() => { const b = document.querySelector('#crewTab .badge'); return b && b.textContent === '2' && /1 friend request, 1 convoy invite/.test(b.getAttribute('aria-label')); }), 'the badge counts what waits: ' + await page.evaluate(() => document.querySelector('#crewTab .badge')?.getAttribute('aria-label')));
   // P-05: the request is a card on top; P-23: you next; then the friends, live first, a friend who shares nothing under their name (P-15)
-  const order = await page.$$eval('#accountBody > *', (k) => k.map((x) => x.className));
+  // (what is on screen: an empty, hidden place for duel cards (SOCIAL 2.7) isn't a part of the order)
+  const order = await page.$$eval('#accountBody > *', (k) => k.filter((x) => !x.hidden).map((x) => x.className));
   check(/request-card/.test(order[0]) && /you-row/.test(order[1]) && /friend-list/.test(order[2]), 'request card, You, friends: ' + JSON.stringify(order));
   check(/@dan wants to be your friend/.test(await page.textContent('#accountBody .request-card')), 'the request card names who asks');
   await page.waitForFunction(() => /You · @me/.test(document.querySelector('.you-row').textContent) && /Friends see where you are/.test(document.querySelector('.you-row small').textContent));
@@ -4444,15 +4497,15 @@ flow('People: two tabs; a request is a card on top, then you, then friends with 
   // P-04: the friend row is about the friend; the grants are one quiet row
   await page.click('#accountBody .friend-head:has-text("@cara")');
   const acts = await page.$$eval('#accountBody .friend:has-text("@cara") .friend-keys button', (b) => b.map((x) => x.textContent));
-  check(JSON.stringify(acts) === '["On the map","Share a route","Invite to a drive","Profile"]', 'the row opens on what you can do with her: ' + JSON.stringify(acts));
+  check(JSON.stringify(acts) === '["On the map","Share a route","Invite to a drive","Challenge on a stage","Profile"]', 'the row opens on what you can do with her: ' + JSON.stringify(acts));
   const cara = await page.textContent('#accountBody .friend:has-text("@cara") .crew-detail');
   check(/Shared Cherohala loop · /.test(cara) && /What @cara sees of you/.test(cara) && !/Unfriend|Block/.test(cara) && !(await page.isVisible('#accountBody .friend:has-text("@cara") .friend-grants')), 'her last share, a quiet grants row, no Unfriend: ' + cara);
   check(!!(await page.$('#accountBody .friend:has-text("@bob") .friend-keys button:has-text("On the map")')), 'bob shares a delayed position: On the map too');
   check(!(await page.$('#accountBody .friend:has-text("@eve") .friend-keys button:text-is("On the map")')), 'no On the map for a friend who shares nothing');
-  // three keys (eve): the third takes the row, it does not sit in half of it beside a hole; four (cara) stay two and two
+  // with Duel (#383) eve has four keys (two and two) and cara five: an odd last key takes the row, not half of it beside a hole
   const spans = await page.evaluate(() => Object.fromEntries(['@eve', '@cara'].map((h) => { const row = [...document.querySelectorAll('#accountBody .friend')].find((f) => f.textContent.includes(h));
     const keys = [...row.querySelectorAll('.friend-keys > *')]; return [h, { n: keys.length, end: getComputedStyle(keys[keys.length - 1]).gridColumnEnd }]; })));
-  check(spans['@eve'].n === 3 && spans['@eve'].end === '-1' && spans['@cara'].n === 4 && spans['@cara'].end === 'auto', 'an odd last key spans the row: ' + JSON.stringify(spans));
+  check(spans['@eve'].n === 4 && spans['@eve'].end === 'auto' && spans['@cara'].n === 5 && spans['@cara'].end === '-1', 'an odd last key spans the row: ' + JSON.stringify(spans));
   await page.click('#accountBody .friend:has-text("@cara") .nav-row.quiet');
   check(await page.isVisible('#accountBody .friend:has-text("@cara") .friend-grants [role="switch"][aria-checked="true"]'), 'the quiet row opens her Scores and Times');
   // P-09: Who sees what, from her row, her line marked

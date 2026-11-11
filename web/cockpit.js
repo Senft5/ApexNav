@@ -5998,6 +5998,23 @@
       const d = $('planSpots'); d.hidden = false;
       d.addEventListener('toggle', () => { if (!d.open) return; const sec = spotsFeed.section(); const h = sec.querySelector(':scope > h3'); if (h) h.remove(); $('planSpotsBody').replaceChildren(sec); });
     } });
+    // Duels (web/duels.js, docs/SOCIAL.md 2.7): a friend against a friend on a stage, the higher Score in the days wins.
+    let duels = null;
+    onSocial(() => { try { duels = window.ApexDuels ? ApexDuels.mount({ el, btn, toast, apiCall, jsonOf, redo: () => renderAccount(),
+      openStage: async (canon, name) => {
+        let s = null;
+        try { const r = await apiCall('GET', '/api/segments'); const l = r.ok ? await jsonOf(r) : null; s = Array.isArray(l) ? l.find((x) => (x.origin_id || x.id) === canon) : null; } catch (_) {}
+        let pts = null;
+        try { pts = s ? JSON.parse(s.geom) : null; } catch (_) { pts = null; }
+        if (!s) { toast('That stage isn\u2019t in your Stages. Open the duel again once it is.'); return; }
+        closeSheet();
+        // a stage is kept as [[lat, lon], …]: planned as its own road; one kept as two ends only goes to its start
+        if (Array.isArray(pts) && pts.length > 2 && pts.every((p) => Array.isArray(p) && Number.isFinite(p[0]) && Number.isFinite(p[1]))) {
+          const t = await trackFromPolyline(pts.map(([la, lo]) => [lo, la]), `stage_${s.id}`, name);
+          await buildRoute(null, t.id, name, t);
+          toast(`${name}: your duel's stage, ${ApexUnits.long(totalM(), 1)}.`);
+        } else routeToPlace({ label: name, lat: s.start_lat, lon: s.start_lon });
+      } }) : null; } catch (e) { console.error('duels', e); } });
     let garage = null;
     // Build threads (web/builds.js, REVIEW.md 5.3): from a car card, the crew page and Builds you follow.
     let builds = null;
@@ -6234,6 +6251,9 @@
           btn('Accept', async () => { await apiCall('POST', '/api/friends/accept', { user_id: f.id }); toast(`You and @${f.handle} are friends.`); redo(); }, 'ink-btn solid'),
           btn('Not now', async () => { await apiCall('DELETE', `/api/friends/${f.id}`); toast(`Declined. @${f.handle} isn’t told.`); redo(); }, 'linkbtn'))));
 
+      // Duels (duels.js): one asked of you, one on, a result: cards under the requests, while there is a friend to duel
+      if (duels && accepted.length) body.append(duels.cards());
+
       // P-23: you, one tap from People: your face, your handle and who sees where you are; it opens Who sees what (P-09)
       const WHO = { nobody: 'Nobody sees where you are', crew: 'Your crews see where you are', friends: 'Friends see where you are' };
       const empty = !accepted.length && !(Array.isArray(crews) && crews.length);
@@ -6268,7 +6288,8 @@
       const keysFor = (f) => [
         ...(where.get(f.handle) && friendsMap ? [['On the map', () => seeOnMap(f)]] : []),
         ['Share a route', () => { ppop.classList.remove('open'); shareRouteWith(f.handle); }],
-        ...(convoy ? [['Invite to a drive', () => driveWith(f)]] : [])];
+        ...(convoy ? [['Invite to a drive', () => driveWith(f)]] : []),
+        ...(duels ? [['Challenge on a stage', () => duels.challenge(f)]] : [])];
       const openProfile = async (f) => {
         let p = null;
         try { const r = await apiCall('GET', `/api/friends/${encodeURIComponent(f.id)}/profile`); p = r.ok ? await jsonOf(r) : null; } catch (_) {}

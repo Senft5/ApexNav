@@ -148,6 +148,28 @@ Tapedeck, Billet and the car themes keep their own clusters; they get only the q
 
 Undo: in web/themes.js set Roadbook back to `cluster: 'dials'` and `dial: 'printed'` (the three dials come back
 unchanged), and delete the "Vetta Line" CSS block in web/index.html (above "The opening cover").
+## 2026-11-11 (fable-duels): challenge a friend on a stage; the higher Vetta Score in a few days wins (claude/fable-duels)
+
+A new thing to do with a friend. On a friend's row in People, Challenge on a stage picks one of your stages and 3, 7 or
+14 days. They get a card on People: Accept or No thanks. Once accepted the stage is copied to their Stages, the days
+start, and the card shows both of your best Vetta Scores on it in that window, who leads and the days left; when it ends
+it says who won by how much, with Rematch. Drive takes you to the stage.
+
+The calls: the Score decides, because it is how well corners were driven. Each side's quickest time in the window and
+the gap ("you're 6 s quicker") sit beside it where that side shares times with the other (the owner, 2026-11-10: share
+stage times and gaps); a time not shared stays unshown and no gap is guessed. Time duels (the owner, 2026-11-11: "we
+should have time duel and score duel"): the Challenge sheet has Won by: Vetta Score (the default) or Time; a time duel is
+won by the quicker time, counts a side's times only while it shares times with the other (its card offers Share my times),
+and shows the Scores beside the times. Migration 0048 adds `duels.kind`. A duel reads only Scores each of you already shows the other (the per-friend grant and the
+board entries that exist today); nothing new about a drive is stored. When one side's Scores don't reach the other the
+card says so in words, and your own card has a Show my Scores key that turns on Scores (never times) for that friend.
+Friends only; a block or an unfriend hides every duel between the two at once. At most 10 open, 10 new a day, one open
+duel per friend and stage; a duel row is deleted 60 days after it ends. No report kind: a duel holds no text of its own
+(the stage name is the challenger's, already reportable as a stage). The friend row's key list grew a fourth action, so the
+People e2e check for that row now expects "Challenge on a stage" after "Invite to a drive" (a deliberate spec change).
+
+Needs migrations 0047 (one new table) and 0048 (one column) on preview and prod before merging. Undo: revert the PR;
+`DROP TABLE duels`.
 ## 2026-11-11 (fable-first-last): the welcome shows the app; the end card is a reveal (claude/fable-first-last)
 
 The welcome was one still page. Now the Vetta lockup moves from the middle of the screen (where the launch screen left

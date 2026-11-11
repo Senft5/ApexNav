@@ -120,6 +120,22 @@
 - Tests: tests/test_drive_hud.py (count-in curve, which look gets which cluster, parts kept, motion bounds, tokens, 13 px);
   e2e "the drive screen, Vetta Line…".
 - Next: CarPlay's own speed readout could take the same hierarchy (Swift, not compiled here).
+## Session 2026-11-11 (fable-duels): Duels between friends on a stage (claude/fable-duels, off origin/main affc1d0)
+
+- Migrations `0047_duels.sql` (table `duels`) (applied on both) and `0048_duel_kind.sql` (`kind` score|time; on preview 2026-11-11, **prod still to apply before merging**, with its d1_migrations row).
+- Time duels: `kind` 'time' is won by the lower `time_s`; `you_share` / `they_share` then need `share_times` too.
+- `backend/src/duels.ts`: `duelCreate` (friend by handle, your own segment, 3/7/14 days, 409 `duel_exists`, 429
+  `too_many_duels` / `daily_limit`; also shares the segment to them), `duelAccept` (opponent only; days start today; the
+  stage is copied with `origin_id`), `duelEnd` (decline / withdraw), `duelList` (best `driver_score` per side from
+  `board_entries` published to the other inside the window, only while that side's `share_scores` grant holds;
+  `you_share` / `they_share`), `DUELS_SWEEP` (60 days after it ends). Routes `GET/POST /api/duels`,
+  `POST /api/duels/:id/accept`, `DELETE /api/duels/:id`. Export lists `duels`.
+- `web/duels.js` (lazy, social group): pure `card()`, `shown()`, `daysLeft()`; `mount()` → `cards()` (People → Friends,
+  after requests) and `challenge(f)` (a sheet: Stage, How long, Send). cockpit.js `keysFor` adds Challenge on a stage;
+  `openStage` plans a stage from its geometry.
+- Tests: tests/test_duels.py, backend/test/duels.test.ts, sweep.test.ts (a long-over duel goes, a late-accepted one stays),
+  e2e "duels: …", "friend profile", People.
+- Next: a crew's roadbook, or a crew drive's results as a rally sheet (who came, each one's Score on each stage).
 ## Session 2026-11-11 (fable-first-last): the first run and the drive-ended card as reveals (claude/fable-first-last, off origin/main ac6c6c6)
 
 - web/first_run.js (`ApexFirstRun`: `rests`, `leg`, `attach`): the welcome's lockup moves in from where the cover drew it,
