@@ -4,6 +4,14 @@ Decisions Claude made for you, newest first. Each one says what was decided, why
 you reach one you've seen. If you disagree with a call, say so and it gets reversed; nothing here is hard to undo unless
 it says so. Things only you can do are in docs/OWNER_TODO.md.
 
+## 2026-11-11 (places by name): cafés and fuel along the route, tap for their names (claude/project-thread-me97iw)
+
+The route card's "Along" line ("1 viewpoint · 2 cafés · 3 fuel stops") now opens a list of each place by the name
+OpenStreetMap has for it, how far into the route and how far off the road; tapping one moves the map there and offers it as
+a stop. Tapping a CAFÉ or FUEL pin on the map says its name too. Calls: fuel stations are now counted on the line (before,
+only a long stretch without fuel was said), so there is something to tap; a place with no name on the map says "no name on
+the map" rather than a guess. Undo: revert the PR.
+
 ## 2026-11-11 (roam-a descent call): the co-driver says a long descent as you near its top (claude/project-thread-h7xxmf)
 
 On a planned route, the same long, steep descents the route card names are now said once, as you come within 500 m of the

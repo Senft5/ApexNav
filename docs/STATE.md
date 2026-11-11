@@ -1,5 +1,18 @@
 # VETTA — CURRENT AGENT HANDOFF STATE
 
+## Session 2026-11-11 (places by name): the cafés and fuel on the route card are a tap away, by name (claude/project-thread-me97iw, off origin/main)
+
+- The owner: "when it says there's cafes or gas stations ... i want to be able to tap for details. Ideally just show the name".
+- web/scenic.js: `summary` also counts fuel ("2 fuel stops"); `places(list, fmt)` one row per place (the map's name, or
+  "Café, no name on the map"; "3.1 mi in"; "beside the road" / "300 ft off the road"); `placeLine(row)` for a tap.
+- index.html/cockpit.js: the Along fact is a disclosure (`#routeAlongLine`, `#routeAlongPanel`, like When to go); a row flies
+  the map there and toasts "Bean · Café · 3.1 mi in" with Add as a stop; the map pins toast the same and carry it as
+  their aria-label (set after the Marker, which writes "Map marker"). stages.js pois fall back to name:latin / name_en.
+- Survey: the other mentions already name their place (Spots near you, the day's stops) or name no place (route_engine
+  costs, car.js fuel spans, which no screen shows). CarPlay shows no cafés or fuel.
+- Tests: tests/test_scenic.py (+1, summary updated); e2e "along the route by name…". Checked: pytest, that flow.
+- Next: the co-driver could name the next café or fuel stop when you ask; CarPlay's route preview could list them.
+
 ## Session 2026-11-11 (roam-a descent call): "Long descent ahead" near the top (claude/project-thread-h7xxmf, off origin/main)
 
 - IDEAS V-12, part three. web/brake_heat.js `descentAhead(list, atM, said)` (500 m before a top to 300 m past it, once per

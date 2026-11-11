@@ -707,6 +707,10 @@
     .when-line::after { content: ""; flex: none; width: 7px; height: 7px; margin: 0 4px 3px 0; border-right: 2px solid currentColor; border-bottom: 2px solid currentColor; transform: rotate(45deg); transition: transform 0.15s; }
     .when-line[aria-expanded="true"]::after { transform: rotate(-135deg); margin-bottom: -3px; }
     .rc-when { margin-top: 10px; } .rc-when[hidden] { display: none; }
+    .when-line:disabled { cursor: default; } .when-line:disabled::after { display: none; }
+    .rc-along { margin: 4px 0 6px 28px; } .rc-along[hidden] { display: none; }
+    .rc-along .place { width: 100%; font: inherit; color: inherit; background: none; border-left: 0; border-right: 0; border-bottom: 0; cursor: pointer; }
+    .rc-along .place.unnamed b { font-weight: 500; color: var(--panel-dim); }
     .when-ribbon { display: flex; align-items: flex-end; gap: 1px; height: 64px; border-bottom: 1.5px solid var(--panel-ink); }
     .when-ribbon > button { flex: 1 1 0; min-width: 0; height: 100%; padding: 0; display: flex; align-items: flex-end; background: none; border: 0; color: var(--panel-ink); cursor: pointer; }
     .when-ribbon > button > i { display: block; width: 100%; height: calc(var(--h, 0.5) * 100%); min-height: 3px; background: currentColor; }
@@ -1977,7 +1981,9 @@
               <div class="rc-group rc-drive"><h4 class="rc-h">This drive</h4>
               <details class="rc-story" id="routeCardStory" hidden><summary id="routeCardStoryLead"></summary><div id="routeCardStoryMore"></div></details>
               <div class="rc-facts">
-                <p class="fact f-along" id="routeCardAlong" hidden></p>
+                <!-- the owner, 2026-11-11: the cafés and fuel it counts are a tap away, each by its name on the map -->
+                <p class="fact f-along" id="routeCardAlong" hidden><button type="button" class="when-line" id="routeAlongLine" aria-expanded="false" aria-controls="routeAlongPanel"></button></p>
+                <div class="place-list rc-along" id="routeAlongPanel" role="list" aria-label="Along the route" hidden></div>
                 <p class="fact f-climb" id="routeCardClimb" hidden></p>
                 <p class="fact f-descent" id="routeCardDescent" hidden></p>   <!-- brake_heat.js longDescents: from the terrain, never a model -->
                 <p class="fact f-along" id="routeCardReports" hidden></p>

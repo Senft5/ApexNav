@@ -6940,6 +6940,36 @@ flow('when to go: the route card says the best time to leave, opens the next day
   await page.waitForFunction(() => !document.getElementById('routeCardWhen').hidden && !/^Leaving /.test(document.getElementById('routeWhenLine').textContent) && apexDebug.lastWhen.planned === null, null, { timeout: 25000 });
 }, IPHONE);
 
+flow('along the route by name: the Along line opens a list of the cafés and fuel stops by their names on the map, and a tap on one (or its pin) says its name and offers it as a stop (the owner, 2026-11-11)', async (page, base) => {
+  await planRouter(page);
+  const { tap } = await planPage(page, base);
+  // the map's points (offline here): a named café and an unnamed fuel station beside the route, from the route's own samples
+  await page.evaluate(() => { ApexStages.pois = async (pts) => { const a = pts[Math.min(1, pts.length - 1)], b = pts[Math.min(3, pts.length - 1)];
+    return [{ kind: 'cafe', name: 'Bean There Coffee', lat: a.lat + 0.0003, lon: a.lon }, { kind: 'fuel', name: null, lat: b.lat, lon: b.lon + 0.0004 }, { kind: 'fuel', name: 'Shell', lat: pts[pts.length - 1].lat, lon: pts[pts.length - 1].lon }]; }; });
+  await tap('#destInput', 'Where to?');
+  await page.fill('#destInput', 'Maryville');
+  await page.waitForSelector('#placeList .place', { timeout: 10000 });
+  await tap('#placeList .place', 'the place');
+  await cardUp(page);
+  await planDone(page);
+  await page.waitForFunction(() => !document.getElementById('routeCardAlong').hidden && /café/.test(document.getElementById('routeAlongLine').textContent), null, { timeout: 20000 });
+  const line = await page.evaluate(() => ({ text: document.getElementById('routeAlongLine').textContent, open: document.getElementById('routeAlongLine').getAttribute('aria-expanded'), panel: !document.getElementById('routeAlongPanel').hidden }));
+  check(/1 café/.test(line.text) && /fuel stop/.test(line.text) && line.open === 'false' && !line.panel, 'the Along line counts the café and fuel, closed: ' + JSON.stringify(line));
+  await page.evaluate(() => document.getElementById('routeAlongLine').scrollIntoView({ block: 'center' }));
+  await tap('#routeAlongLine', 'Along the route');
+  const rows = await page.evaluate(() => [...document.querySelectorAll('#routeAlongPanel .place')].map((b) => ({ name: b.querySelector('b').textContent, at: b.querySelector('span').textContent, sub: b.querySelector('small').textContent,
+    h: b.getBoundingClientRect().height, wide: b.getBoundingClientRect().right <= innerWidth })));
+  check(rows.length >= 2 && rows[0].name === 'Bean There Coffee' && /^Café/.test(rows[0].sub) && rows.some((r) => r.name === 'Fuel station, no name on the map')
+    && rows.every((r) => /( in|at the start)$/.test(r.at) && r.h >= 44 && r.wide), 'each place by its name (an unnamed one says so), where on the route, a 44 px row: ' + JSON.stringify(rows));
+  await scan(page, 'Along the route, open');
+  if (process.env.SHOTS) await page.screenshot({ path: `${process.env.SHOTS}/along-open.png` });
+  await page.evaluate(() => document.querySelector('#routeAlongPanel .place').click());
+  await page.waitForFunction(() => /^Bean There Coffee · Café · /.test(document.getElementById('toast').textContent) && /Add as a stop/.test(document.getElementById('toast').textContent), null, { timeout: 5000 });
+  // the café's pin on the map says the same
+  const pin = await page.evaluate(() => { const el = [...document.querySelectorAll('.poi-pin.poi-cafe')][0]; return el ? el.getAttribute('aria-label') : null; });
+  check(/^Bean There Coffee · Café · /.test(pin || ''), 'the café pin is named for a screen reader: ' + pin);
+}, IPHONE);
+
 // The route reveal and the card as a page (design pass, 2026-11-10; web/route_reveal.js): a route found is drawn onto the
 // map from its start like a pen stroke while the card rises and its numbers count up; Start is up from the first frame of
 // it. Another route of the same plan redraws quickly; reduced motion is a cut, the line whole at once.
