@@ -185,6 +185,26 @@
 - Tests: test_graph_router.py (roundTrips case), e2e "there and back" (the Valhalla path).
 - Not done: offering the round trip as a level card of its own; a timed stop at the destination (lunch: ETA home).
 - Next: discovery of great unknown roads near a planned trip ("a better road 4 min off your route").
+## Session 2026-11-10 (fable-soundtrack): the Soundtrack, music made by the road (claude/fable-soundtrack, off origin/main 948cb4b)
+
+- The mission's audio half (ARCHITECTURE section 5), built: `core/audio_bus.py` (reference) and `web/audio_bus.js` (port,
+  held to one 900-step sequence by tests/test_audio_bus.py), frames under `AudioBusFrame` in the telemetry contract.
+  `web/soundtrack.js`: a seeded score at a fixed 92 bpm in four stems (pad, pulse, bass, lead) synthesised with WebAudio,
+  mixed by the bus. Garage > Co-driver > Soundtrack (off by default) with "Hear a sample" (24 s of a made-up road, said
+  to be a sample, never in a drive).
+- cockpit.js `soundtrackTick` (10 Hz from render): the calibrated g (unknown before the mount is set), the route's or the
+  road's corners inside 400 m (`noteM`, severity from the code), `Inst.sightShort`, `speech.busy`. Stops at End (the tap,
+  not the next frame) and in `leaveDrive`. `apexDebug.soundtrack` for tests.
+- ApexNavApp.swift `setSoundtrack`: the session held `.playback` + `.mixWithOthers` while it plays; `releaseVoice` returns
+  to that instead of deactivating. Not compiled here (CI builds the Swift). APP_REVIEW 2.5.4 row added.
+- Tests: tests/test_audio_bus.py (8), tests/test_soundtrack.py (6), e2e "the Soundtrack" (switch, pad before the mount is
+  set, a busy road fills it, End stops it, the session asked for and given back, offline render: fuller on a busy road,
+  no clipping). pytest 1458 passed; Dynamic Type, REVIEW.md 1.2, REVIEW5 §2 and safe areas flows passed.
+- Not heard by a person yet: the levels were set from offline renders (RMS and peak), not by ear in a car. Next: the
+  owner listens to "Hear a sample" and says what to change; then CarPlay (the session is shared, so it should play there).
+- 2026-11-11: `tests/test_audio_bus.py` checks frames against `AudioBusFrame` with its own small checker (`conform`), not
+  `jsonschema`, which is not in requirements.txt and broke collection on CI. It fails on any schema keyword it does not check.
+
 ## Session 2026-11-10 (fable-your-data): Your data as Settings-style rows (claude/fable-your-data, off origin/main 3f2f315)
 
 - `web/index.html` only: the Your data section's keys are `.nav-rows.data-rows` with three `.nav-group` headings; the

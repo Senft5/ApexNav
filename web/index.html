@@ -90,6 +90,8 @@
   <script src="pro.js" defer></script>
   <script src="route_tuning.js" defer></script>
   <script src="theme_sounds.js" defer></script>
+  <script src="audio_bus.js" defer></script>
+  <script src="soundtrack.js" defer></script>
   <script src="week_digest.js" defer></script>
   <script src="drive_card.js" defer></script>
   <script src="road_portrait.js" defer></script>
@@ -2095,7 +2097,11 @@
             <div class="switches">
               <button class="sw" data-toggle="haptics"><i></i><span>Haptics</span></button>
               <button class="sw" data-toggle="keys"><i></i><span>Key sounds</span></button>
+              <button class="sw" data-toggle="soundtrack"><i></i><span>Soundtrack</span></button>
             </div>
+            <!-- the Soundtrack (soundtrack.js, audio_bus.js; ARCHITECTURE section 5): off until asked for; what it follows, said plainly -->
+            <p class="co-row" id="soundtrackRow"><span>Music made by the road, in a drive.</span><button class="linkbtn" id="soundtrackHear">Hear a sample</button></p>
+            <p class="note" id="soundtrackNote">Soundtrack: it builds into each corner, fills out as the road gets busier and settles on the straights. It follows the road, never your speed. It steps back under the co-driver's voice, and thins out when you are over Sight.</p>
             <button class="sw" id="liveVoiceBtn" role="switch" aria-checked="false"><i></i><span>Speak road names</span></button>
             <p class="note" id="liveNote" role="status" aria-live="polite"></p>
             <p class="note">Notes: Full calls every corner; Quiet only hazards and cameras; Auto calls corners once you are cornering with some purpose, quiet otherwise. The words and the voice work offline.</p>

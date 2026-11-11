@@ -319,6 +319,61 @@ flow('Location off, in a browser: the sheet says it once and its key tries again
   check(!(await page.isVisible('#permSheet.show')), 'Not now puts it away');
 });
 
+// The Soundtrack (web/soundtrack.js on web/audio_bus.js, ARCHITECTURE section 5): off until switched on in the Garage; in
+// a drive it plays, rests on its pad while the mount is not set, fills out on a busy road, and stops at End; the app's
+// audio session is held while it plays. Rendered offline: a busy road is louder and fuller than a straight, nothing clips.
+flow('the Soundtrack: off by default, a Garage switch; in a drive it follows the measured road and stops at End; rendered, it never clips', async (page, base) => {
+  await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); localStorage.setItem('apex.permsExplained', '1'); } catch (_) {}
+    window.__posted = []; window.webkit = { messageHandlers: { apex: { postMessage(m) { window.__posted.push(m); } } } }; });
+  await page.route(base + '/api/**', (route) => route.fulfill({ status: 200, contentType: 'application/json', body: '{"signed_in":false}' }));
+  await page.goto(base + '/index.html');
+  await page.waitForFunction(() => window.apexDebug && window.apexDebug.map && window.apex && window.apex.live && window.ApexSoundtrack && window.ApexAudioBus);
+  check(await page.evaluate(() => window.apexDebug.state.toggles.soundtrack === false), 'off until asked for');
+  await page.click('.tab[data-view="garage"]');
+  const sw = page.locator('[data-toggle="soundtrack"]');
+  await sw.scrollIntoViewIfNeeded();
+  check(/Soundtrack/.test(await sw.textContent()) && (await page.textContent('#soundtrackHear')).trim() === 'Hear a sample', 'the switch and its sample key are on the Garage page');
+  await sw.click();
+  check(await page.evaluate(() => window.apexDebug.state.toggles.soundtrack === true && document.querySelector('[data-toggle="soundtrack"]').getAttribute('aria-checked') === 'true'), 'the switch turns it on');
+  await page.click('.tab[data-view="map"]');
+  const c = await page.evaluate(() => { const m = window.apexDebug.map.getCenter(); return [m.lat, m.lng]; });
+  const feed = (from, n, latG) => page.evaluate(async ([c, from, n, latG]) => {
+    for (let i = from; i < from + n; i++) {
+      window.apex.live({ lat: c[0] + i * 1.3e-5, lon: c[1], accuracy_m: 5, speed_mps: 14, course_deg: 0, has_fix: true, calibration: latG == null ? 'default' : 'locked',
+        lat_g: latG == null ? 0.5 : latG, lon_g: 0.05, roughness_rms: 0.05, thermal: 0, battery: 0.8, charging: true, seq: i, at: Date.now() / 1000 });
+      await new Promise((r) => setTimeout(r, 100));
+    } }, [c, from, n, latG]);
+  await feed(0, 10, 0.02);
+  check(await page.evaluate(() => !window.apexDebug.soundtrack.playing), 'nothing plays before a drive');
+  await page.evaluate(() => document.getElementById('startDrive').click());
+  await feed(10, 25, null);                                           // the mount not set yet: its g is no measurement
+  let st = await page.evaluate(() => window.apexDebug.soundtrack);
+  check(st.playing && st.frame && st.frame.intensity === null && st.frame.energy === 0 && st.frame.layers.pulse === 0, 'in a drive it plays; before the mount is set it rests on its pad: ' + JSON.stringify(st.frame));
+  check(await page.evaluate(() => window.__posted.some((m) => m && m.cmd === 'soundtrack' && m.on === true)), 'the app is asked to hold its audio session');
+  await feed(35, 50, 0.5);
+  st = await page.evaluate(() => window.apexDebug.soundtrack);
+  check(st.frame.intensity > 0.3 && st.frame.layers.pulse > 0.9 && st.frame.cutoff_hz > 1000, 'a busy measured road fills it out: ' + JSON.stringify(st.frame));
+  await page.evaluate(() => document.getElementById('driveEnd').click());
+  await page.waitForFunction(() => !window.apexDebug.soundtrack.playing, null, { timeout: 5000 }).catch(() => {});
+  check(await page.evaluate(() => !window.apexDebug.soundtrack.playing && window.__posted.some((m) => m && m.cmd === 'soundtrack' && m.on === false)), 'End stops it and gives the session back');
+  // rendered offline: the same engine on a quiet straight and on a busy road
+  const r = await page.evaluate(async () => {
+    const out = {};
+    for (const [name, g] of [['quiet', 0.02], ['busy', 0.6]]) {
+      const sr = 22050, ctx = new OfflineAudioContext(1, sr * 14, sr), eng = ApexSoundtrack.create(ctx), bus = ApexAudioBus.create();
+      eng.start(7, { at: 0, live: false }); eng.schedule(0, 6);
+      let f; for (let i = 0; i < 300; i++) f = bus.step(0.1, { lat_g: g, lon_g: 0.02, speed_mps: 15, corners: [] });
+      eng.set(f, 1, 0.01);
+      const d = (await ctx.startRendering()).getChannelData(0); let peak = 0, sq = 0; const from = sr * 4;
+      for (let i = from; i < d.length; i++) { peak = Math.max(peak, Math.abs(d[i])); sq += d[i] * d[i]; }
+      out[name] = { peak, rms: Math.sqrt(sq / (d.length - from)) };
+    }
+    return out;
+  });
+  check(r.quiet.rms > 0.005 && r.busy.rms > 1.5 * r.quiet.rms, 'a busy road is fuller than a straight, and a straight is not silence: ' + JSON.stringify(r));
+  check(r.quiet.peak < 0.95 && r.busy.peak < 0.95, 'nothing clips: ' + JSON.stringify(r));
+});
+
 flow('returning driver: live frames switch to the cockpit, big targets and no keyboard while moving', async (page, base) => {
   await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); } catch (_) {} });
   await page.goto(base + '/index.html');

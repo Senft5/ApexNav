@@ -216,6 +216,19 @@ Calls made: the way home is chosen by the same Fun / Long way rules as any route
 where our own map tiles don't reach, the public router is asked to avoid the way out; a dead end that has only one way
 in says so instead of failing. Undo: hide `#routeRoundBtn` (one line in renderRouteCard), nothing else depends on it.
 
+## 2026-11-10 (fable-soundtrack): the Soundtrack, music made by the road (claude/fable-soundtrack)
+
+Section 5 of the architecture (an audio bus driven by the driver's workload and the road ahead, with build-ups timed to
+corners) was never built. It is now, as an opt-in Soundtrack in Garage > Co-driver. Calls I made:
+- Generated, not licensed: the phone writes the music (WebAudio, no files), so it costs nothing, works with no signal and
+  raises no rights questions. A licensed or stem-based score can replace `soundtrack.js` behind the same bus later.
+- It never follows speed. Speed only turns a distance into a time to the next corner; the energy comes from measured g
+  and the road's corners. Over Sight it drops to the pad. A soundtrack that rose with speed would egg drivers on.
+- Unknown stays unknown: before the mount is set, or with no road ahead known, it rests on its pad instead of acting out
+  a road it has not measured.
+- Off by default, because sound in someone's car is theirs to choose.
+Undo: switch it off (nothing plays), or revert the PR.
+
 ## 2026-11-10 (fable-your-data): Your data is three short lists, like Settings (claude/fable-your-data)
 
 For your "cohesiveness, less clunky": Your data was eight keys of eight widths in two wrapped rows, one of them a link
