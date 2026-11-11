@@ -4,6 +4,13 @@ Decisions Claude made for you, newest first. Each one says what was decided, why
 you reach one you've seen. If you disagree with a call, say so and it gets reversed; nothing here is hard to undo unless
 it says so. Things only you can do are in docs/OWNER_TODO.md.
 
+## 2026-11-11 (roam-a best run): a drive's page names your best run of clean corners (claude/project-thread-h7xxmf)
+
+New, my call (Nate asked for more fun-driving features). A drive's page now says, when it happened, "Your best run: 9
+corners in a row, smooth and settled over 2.1 mi." A corner counts when the Score itself judged it smooth (the better half
+of real corners), with no braking past the apex and inside the corner's sane limit, so the line can never reward going
+faster. A corner that misses, or 2 km of road between two corners, ends the run; under 5 in a row says nothing. Undo:
+remove the `flow` line in web/drive_view.js (or tune SMOOTH_MIN / MIN_RUN in core/flow.py and web/flow.js together).
 ## 2026-11-11 (ui-round-three): People when you have no friends or crews yet looks like the signed-out page (claude/project-thread-5sbga7)
 
 Signed in with nobody yet, Friends and Crews used to show one grey sentence and a small key. Now each is a page like the

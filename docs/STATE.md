@@ -1,5 +1,15 @@
 # VETTA — CURRENT AGENT HANDOFF STATE
 
+## Session 2026-11-11 (roam-a best run): the drive page names your best run of clean corners (claude/project-thread-h7xxmf, off origin/main)
+
+- IDEAS D-30. `core/flow.py` (reference) and `web/flow.js` (port, parity-tested on synthetic and both demo drives):
+  `longest_flow` / `longest` over the drive's corners in road order, each judged by `corner_technique` (smooth >= 0.60,
+  brake >= 0.90, use <= 1.0); a miss or > 2 km between apexes ends a run; MIN_RUN 5. `text()`: "Your best run: N corners in
+  a row, smooth and settled over X."
+- web/drive_view.js: a `dv-plain` line after the coach's; analysis.html loads flow.js (index.html untouched: no boot cost).
+- The demo drives' longest runs are 4 (nothing said). Tests: tests/test_flow.py (5). Checked: pytest; e2e drive-ended
+  card/Log, Your driving, drive tags, startup budget.
+- Next: "Best run this month" in Your records (needs corners per drive: the analysis worker), and the end card.
 ## Session 2026-11-11 (ui-round-three, PR 1): the first friend and the first crew (claude/project-thread-5sbga7)
 
 - Walked the empty and signed-out screens (People, Crews, Garage, Log, Stages, signed in and out). Signed out People and
