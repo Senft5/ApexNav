@@ -705,7 +705,12 @@
       // U-85: in a drive only the next fuel stop ahead keeps its stamp (the preview shows them all)
       if (!fuelPins.length) return;                                        // (filled only once a route exists)
       const driving = state.mode === 'live', next = driving && track === plannedRoute ? fuelPins.find((f) => f.m > state.cursorM) : null;
-      for (const f of fuelPins) f.el.style.display = !driving || f === next ? '' : 'none';
+      for (const f of fuelPins) {
+        f.el.style.display = !driving || f === next ? '' : 'none';
+        // the owner, 2026-11-11: the one fuel stamp of a drive says which station it is, when the map names it
+        const label = f === next && f.name ? `FUEL · ${f.name}` : 'FUEL';
+        if (f.el.textContent !== label) f.el.textContent = label;
+      }
       declutterSoon();
     }
     // The owner, 2026-11-04: no pile of overlapping FUEL stamps along the route. The viewpoint, café and fuel pins
@@ -8514,7 +8519,7 @@
         el.setAttribute('role', 'button'); el.setAttribute('aria-label', row ? ApexScenic.placeLine(row) : SCENIC_LABEL[p.kind]);   // after the Marker's own "Map marker"
         scenicPins.push(mk);
         poiDeclutter.pins.push({ marker: mk, el, kind: p.kind, named: !!p.name, m: p.m });
-        if (p.kind === 'fuel' && Number.isFinite(p.m)) fuelPins.push({ m: p.m, el });
+        if (p.kind === 'fuel' && Number.isFinite(p.m)) fuelPins.push({ m: p.m, el, name: p.name || null });
       }
       fuelPins.sort((a, b) => a.m - b.m);
       updatePins();

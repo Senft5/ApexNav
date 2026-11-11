@@ -9,6 +9,10 @@ it says so. Things only you can do are in docs/OWNER_TODO.md.
 Your rule ("anything but the quick route") covers loops too, so Find a loop no longer falls back to Valhalla's stage loops
 or a circle. Off our road map the card says loops use it and where it reaches. Explore's road list still times roads with
 Valhalla's matrix (it plans no route); say if that should go too. Undo: restore the `stageJobs` calls in `buildLoop`.
+## 2026-11-11 (places by name, 2): in a drive, the next fuel stop's stamp says which station (claude/project-thread-me97iw)
+
+While driving a planned route the map keeps only the next fuel stop's stamp; it now reads "FUEL · Shell" instead of FUEL
+when OpenStreetMap has its name (unnamed stays FUEL). Only that one stamp grows, so the map stays clear. Undo: revert the PR.
 
 ## 2026-11-11 (Valhalla for Quick only): Fun and Long way fail plainly instead of falling back (claude/project-thread-39xbx9)
 
