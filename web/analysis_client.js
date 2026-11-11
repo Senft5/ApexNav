@@ -147,7 +147,7 @@
   }
 
   // Your driving's kept observations: a store of its own, only ever derived from the drives (deleting it loses nothing)
-  const OBS_VERSION = 2;                                           // 2: touch (brake_on, brake_off, turn_in)
+  const OBS_VERSION = 3;                                           // 2: touch (brake_on, brake_off, turn_in); 3: pace
   function obsDb() {
     return new Promise((res) => {
       try {

@@ -686,7 +686,7 @@
     say.append(el('p', 'note', 'A difference is said only when it is large, far beyond chance, and repeats drive after drive. Lefts against rights, hills, time and cars are compared on corners of the same size.'));
     host.append(say);
 
-    if (p.matrix.some((m) => MEASURES.some((k) => m.levels[k] !== null))) {
+    if (p.matrix.some((m) => MEASURES.some((k) => m.levels[k] != null))) {
       const grid = el('div', 'panel');
       grid.append(el('h2', null, 'By kind of corner'));
       // a row a skill, a column a size, lefts and rights side by side in it: six columns of numbers do not fit a phone
@@ -696,14 +696,14 @@
       const sub = el('tr', 'dp-lr');
       sub.append(el('td', 'l', ''), ...sizes.map(() => { const td = el('td'); td.append(el('span', null, 'left'), el('span', null, 'right')); return td; }));
       t.append(sub);
-      for (const k of MEASURES) {
+      for (const k of MEASURES.filter((x) => p.skills[x])) {
         const tr = el('tr');
         tr.append(el('td', 'l', WORDS[k].name));
         for (const z of sizes) {
           const td = el('td');
           for (const way of ['L', 'R']) {
-            const m = p.matrix.find((x) => x.dir === way && x.size === z), v = m ? m.levels[k] : null;
-            const n = el('span', v !== null && p.skills[k].level !== null && v <= p.skills[k].level - 10 ? 'low' : null);
+            const m = p.matrix.find((x) => x.dir === way && x.size === z), v = m && m.levels[k] != null ? m.levels[k] : null;
+            const n = el('span', v !== null && p.skills[k] && p.skills[k].level !== null && v <= p.skills[k].level - 10 ? 'low' : null);
             if (v === null) n.innerHTML = '<i class="unk">--</i>'; else n.textContent = String(v);
             n.setAttribute('aria-label', `${z} ${way === 'L' ? 'lefts' : 'rights'}: ${v === null ? 'not known yet' : v}`);
             td.append(n);
