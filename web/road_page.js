@@ -1,6 +1,6 @@
 // Road pages (IDEAS Q-13): what a road is like before you drive it, from the reference lap (apex_core referenceLap, the
 // same simulation the Python profiler uses) over the map's shape and the DEM: its archetype ("Esses", "Switchbacks"),
-// TECH and FLOW, SURF from members' roughness, CLEAR from junctions, how sure we are (L0 map only, L1 some member
+// Technical and Flow, Surface from members' roughness, Clear road from junctions, how sure we are (L0 map only, L1 some member
 // passes, L2 most of it measured by 2+ runs), the climb and the better way round. Unknown stays unknown (--).
 // describe() is pure (tests/test_road_page.py); open() draws the sheet.
 (function (root) {
@@ -45,11 +45,24 @@
     return bits.join(' · ');
   }
 
-  /** Rows for the sheet: [label, value] with '--' for unknown. */
-  function rows(d) {
-    const v = (x) => (finite(x) ? String(x) : '--');
-    return [['TECH', v(d.tech)], ['FLOW', v(d.flow)], ['SURF', v(d.surf)], ['CLEAR', v(d.clear)],
-      ['Corners', `${d.corners}${d.hairpins ? ` (${d.hairpins} hairpins)` : ''}`], ['Blind corners', `${v(d.blind)}%`], ['Confidence', `${d.confidence} · ${CONF[d.confidence]}`]];
+  /**
+   * The four scores as a driver reads them (2026-11-10: the sheet said TECH, FLOW, SURF, CLEAR and "L0", the code's own
+   * words): a plain name, what it means in a few words, and the score out of 100, or null when it isn't known (drawn as
+   * "--" with an empty bar; never a guess).
+   */
+  function meters(d) {
+    const n = (x) => (finite(x) ? Math.max(0, Math.min(100, Math.round(x))) : null);
+    return [
+      { key: 'tech', label: 'Technical', hint: 'how tight and busy its corners are', value: n(d.tech) },
+      { key: 'flow', label: 'Flow', hint: 'how well one corner leads into the next', value: n(d.flow) },
+      { key: 'surf', label: 'Surface', hint: finite(d.surf) ? 'how smooth members\' phones felt it' : 'not measured by members yet', value: n(d.surf) },
+      { key: 'clear', label: 'Clear road', hint: finite(d.clear) ? 'how few junctions break it up' : 'its junctions aren\'t counted yet', value: n(d.clear) },
+    ];
+  }
+  /** The facts under the scores: [label, value]; how sure we are in words, never a code. */
+  function facts(d) {
+    const hp = !d.hairpins ? '' : d.hairpins === d.corners && d.corners > 1 ? ', all hairpins' : ` · ${d.hairpins} ${d.hairpins === 1 ? 'hairpin' : 'hairpins'}`;
+    return [['Corners', `${d.corners}${hp}`], ['Blind corners', finite(d.blind) ? `${d.blind}%` : '--'], ['How sure', CONF[d.confidence]]];
   }
 
   /**
@@ -85,6 +98,6 @@
     }).join(' · ');
   }
 
-  const api = { describe, headline, rows, CONF, character, characterLine };
+  const api = { describe, headline, meters, facts, CONF, character, characterLine };
   if (typeof module !== 'undefined' && module.exports) module.exports = api; else root.ApexRoadPage = api;
 })(typeof window !== 'undefined' ? window : globalThis);

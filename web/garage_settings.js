@@ -15,11 +15,13 @@
   /**
    * What a setting is set to, for its row (design pass 7: the list said nothing until each sheet was opened). A section
    * names the control that says it, `data-summary="#unitsRow"`: a switch key reads On / Off, a group of keys reads the
-   * key that is on, and a list (`data-summary-count="place,places"`) its count, "None" when empty. '' when it can't tell:
+   * key that is on, and a list (`data-summary-count="place,places"`) its count, "None" when empty; a node that carries
+   * `data-summary-text` has said it itself (Route tuning: "Standard", "2 changed"). '' when it can't tell:
    * a row never guesses.
    */
   function summaryOf(node, count) {
     if (!node) return '';
+    if (node.dataset && typeof node.dataset.summaryText === 'string') return node.dataset.summaryText;   // the sheet's own words (Route tuning)
     const on = (b) => b.classList.contains('on') || b.getAttribute('aria-checked') === 'true' || b.getAttribute('aria-pressed') === 'true';
     if (count) { const n = [...node.children].filter((c) => !c.classList.contains('note')).length,   // (a list's own "none yet" line is not an entry)
        [one, many] = String(count).split(','); return n === 0 ? 'None' : `${n} ${n === 1 ? one : many || one}`; }
