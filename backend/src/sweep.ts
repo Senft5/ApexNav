@@ -9,6 +9,7 @@ import { STATS_SWEEP } from "./stats";
 import { CHAT_SWEEP } from "./crew_page";
 import { PRESENCE_SWEEP } from "./presence";
 import { BUILD_CHAT_SWEEP } from "./builds";
+import { TA_SWEEP } from "./time_attack";
 
 export const SWEEPS: Record<string, string> = {
   sessions: "DELETE FROM sessions WHERE expires_at <= datetime('now')",
@@ -29,6 +30,7 @@ export const SWEEPS: Record<string, string> = {
   crew_chat: CHAT_SWEEP,
   presence_samples: PRESENCE_SWEEP,
   build_chat: BUILD_CHAT_SWEEP,
+  ...TA_SWEEP,
 };
 
 export async function sweepExpired(env: Env): Promise<Record<string, number>> {

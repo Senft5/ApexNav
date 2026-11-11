@@ -16,7 +16,7 @@ const UNSAFE_RE = /(?!\u200d)[\p{Cc}\p{Cf}\p{Cs}\p{Co}\p{Cn}\u2028\u2029]/u;
 const HIDES: Record<ReportKind, string | null> = {
   user: null, car: "1",
   crew: "(SELECT visibility FROM crews WHERE id = r.target_id) = 'public'",
-  highlight: "1", event: "1", photo: "1", chat: "1", post: "1", reply: "1", build_chat: "1",
+  highlight: "1", event: "1", photo: "1", chat: "1", post: "1", reply: "1", build_chat: "1", circuit: "1",
 };
 
 const first = <T>(env: Env, sql: string, ...args: unknown[]) => env.DB.prepare(sql).bind(...args).first<T>();
@@ -111,6 +111,11 @@ async function resolveTarget(env: Env, v: Viewer, kind: ReportKind, target: unkn
     if (!m) throw new HttpError(404, kind === "post" ? "no_post" : "no_reply");
     return { id, person: m.person };
   }
+  if (kind === "circuit") {   // a stage put up for time attack: every member can see one (time_attack.ts); never your own
+    const c = await first<{ owner: string }>(env, "SELECT owner FROM ta_pool WHERE segment_id = ?1 AND owner != ?2", id, v.id);
+    if (!c) throw new HttpError(404, "no_circuit");
+    return { id, person: c.owner };
+  }
   if (kind === "chat") {   // a crew chat message: its crew's members (crew_page.ts); never your own
     const m = await first<{ author: string }>(env,
       "SELECT c.author FROM crew_chat c JOIN crew_members me ON me.crew_id = c.crew_id AND me.user_id = ?2 WHERE c.id = ?1 AND c.author != ?2", id, v.id);
@@ -179,6 +184,7 @@ export async function moderationQueue(env: Env, v: Viewer) {
   await each("crew", (q) => `SELECT id, name, visibility FROM crews WHERE id IN (${q})`, (r) => `${r.name} (${r.visibility})`);
   await each("car", (q) => `SELECT c.id, c.make, c.model, c.nickname, u.handle FROM cars c JOIN users u ON u.id = c.owner WHERE c.id IN (${q})`,
     (r) => `${r.make} ${r.model}${r.nickname ? ` "${r.nickname}"` : ""} · @${r.handle ?? "?"}`);
+  await each("circuit", (q) => `SELECT s.id, s.name, u.handle FROM segments s JOIN users u ON u.id = s.owner WHERE s.id IN (${q})`, (r) => `time attack stage "${String(r.name).slice(0, 80)}" · @${r.handle ?? "?"}`);
   await each("highlight", (q) => `SELECT id, name FROM highlights WHERE id IN (${q})`, (r) => r.name);
   await each("photo", (q) => `SELECT p.id, p.kind, u.handle FROM photos p JOIN users u ON u.id = p.owner WHERE p.id IN (${q})`, (r) => `a ${r.kind} photo · @${r.handle ?? "?"} · /api/photos/${r.id}`);
   await each("chat", (q) => `SELECT m.id, m.body, c.name AS crew, u.handle FROM crew_chat m JOIN crews c ON c.id = m.crew_id JOIN users u ON u.id = m.author WHERE m.id IN (${q})`,
@@ -238,6 +244,11 @@ export async function moderationResolve(env: Env, v: Viewer, req: Request): Prom
     post: [env.DB.prepare("DELETE FROM build_posts WHERE id = ?").bind(id)],
     reply: [env.DB.prepare("DELETE FROM build_replies WHERE id = ?").bind(id)],
     build_chat: [env.DB.prepare("DELETE FROM build_chat WHERE id = ?").bind(id)],
+    // a stage put up for time attack: out of the pool, and off this week's pick so the area gets another
+    // the week's times on it go too, so a stage picked in its place starts with an empty board
+    circuit: [env.DB.prepare(`DELETE FROM ta_entries WHERE (week, cell) IN (SELECT week, cell FROM ta_weeks WHERE segment_id = ? AND week = date('now', '-6 days', 'weekday 1'))`).bind(id),
+      env.DB.prepare("DELETE FROM ta_pool WHERE segment_id = ?").bind(id),
+      env.DB.prepare("DELETE FROM ta_weeks WHERE segment_id = ? AND week = date('now', '-6 days', 'weekday 1')").bind(id)],
     photo: [],                                                        // stays down: removed reports hide it for good (photos.ts)
   }[kind];
   await env.DB.batch([mark, ...act]);

@@ -62,5 +62,8 @@ SELECT
   (SELECT COUNT(*) FROM road_love) AS road_love,
   (SELECT COUNT(*) FROM road_hours) AS road_hours,
   (SELECT COUNT(*) FROM road_hour_holders) AS road_hour_holders,
+  (SELECT COUNT(*) FROM ta_pool) AS ta_pool,
+  (SELECT COUNT(*) FROM ta_weeks) AS ta_weeks,
+  (SELECT COUNT(*) FROM ta_entries) AS ta_entries,
   (SELECT COUNT(*) FROM d1_migrations) AS d1_migrations
 ;

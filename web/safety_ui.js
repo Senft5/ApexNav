@@ -4,7 +4,7 @@
 (function (root) {
   const REASONS = [['spam', 'Spam or scam'], ['abuse', 'Harassment or hate'], ['impersonation', 'Pretending to be someone'],
                    ['unsafe', 'Dangerous driving or illegal'], ['other', 'Something else']];
-  const KIND_WORD = { user: 'person', crew: 'crew', car: 'car', highlight: 'spot', event: 'drive', photo: 'photo' };
+  const KIND_WORD = { user: 'person', crew: 'crew', car: 'car', highlight: 'spot', event: 'drive', photo: 'photo', circuit: 'time attack stage' };
   const CSS = `
     .report-sheet { position: fixed; left: 0; right: 0; bottom: 0; z-index: 45; background: var(--panel); color: var(--panel-ink);
       border-top: 1px solid var(--rule); box-shadow: 0 -12px 32px rgba(0, 0, 0, 0.3); display: grid; gap: 10px;
@@ -128,7 +128,7 @@
           };
           const word = KIND_WORD[it.kind] || it.kind;
           const removeAsk = { user: 'Ban this person? Their membership ends, they\'re signed out, their invites stop working and they can\'t rejoin.', crew: 'Take this crew off the public list?',
-                              car: 'Stop showing this car to anyone?', highlight: 'Hide this spot?' }[it.kind];
+                              car: 'Stop showing this car to anyone?', highlight: 'Hide this spot?', circuit: 'Take this stage out of time attack? This week’s board for its area ends.' }[it.kind];
           kids.push(el('div', { className: 'mod-item' },
             el('b', { textContent: `${word[0].toUpperCase() + word.slice(1)}: ${it.label == null ? '(gone)' : it.kind === 'user' ? '@' + it.label : it.label}` }),
             el('span', { className: 'note', textContent: `${it.reporters} ${it.reporters === 1 ? 'person' : 'people'} · last ${String(it.latest).slice(0, 16)} UTC${it.hidden ? ' · hidden until you decide' : ''}` }),

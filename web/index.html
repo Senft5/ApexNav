@@ -770,7 +770,7 @@
     #app.idle:not(.plan-open):not(.routed):not(.drive-today-on) .deck-chips { display: flex; }
     .rc-chips { margin: 6px 0 0; }
     /* finding 3: the main key follows the task: once you type, the loop gives way and the key goes to the place */
-    .plan.typing .plan-loop, .plan.typing .plan-links, .plan.typing #planSpots, .plan.typing #findLoopBtn { display: none; }
+    .plan.typing .plan-loop, .plan.typing .plan-links, .plan.typing #planSpots, .plan.typing #planAttack, .plan.typing #findLoopBtn { display: none; }
     #findGoBtn { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     /* finding 1: the plan's progress on the card, then what the ranking did */
     .rc-progress { display: flex; gap: 8px; align-items: center; margin: 4px 0 0; font-size: 14px; font-weight: 600; line-height: 1.3; color: var(--panel-dim); }
@@ -1608,6 +1608,11 @@
               <details class="plan-more" id="planSpots" hidden>
                 <summary>Spots near you: overlooks, cafés, bridges</summary>
                 <div id="planSpotsBody"></div>
+              </details>
+              <!-- SOCIAL 2.9: the area's stage this week, members' quickest times on it -->
+              <details class="plan-more" id="planAttack" hidden>
+                <summary>Time attack this week: one stage, quickest time</summary>
+                <div id="planAttackBody"></div>
               </details>
               <!-- finding 3: the main key follows the task: Find a loop with nothing typed, Go to the place once you type -->
               <div class="find-bar"><button class="find-key" id="findLoopBtn">Find a loop</button><button class="find-key" id="findGoBtn" hidden>Search</button></div>

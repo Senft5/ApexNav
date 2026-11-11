@@ -43,7 +43,8 @@ makes those four trustworthy in production.
 
 - Driver Score is technique only. No legality in the score, no public speed or time
   leaderboards; corner and segment times are shared only by explicit opt-in per friend and
-  per crew (docs/SOCIAL.md, owner 2026-10-25).
+  per crew (docs/SOCIAL.md, owner 2026-10-25). One exception, the owner's call (2026-11-11): the weekly time
+  attack (S-26), where entering a week is the opt-in and only entrants' times are shown.
 - Zero subscription and zero budget backend (Cloudflare Workers + D1 today). A paid
   provider (traffic, tiles, routing) needs the owner's yes first.
 - Never ship placeholder or synthesized road data as if measured. Single-pass hazards are
@@ -219,6 +220,7 @@ Today: accounts with Google sign-in, friends, crews (public and private, crews n
 | S-20 | Flyby: after a drive, see which friends drove the same road that day (opt-in) | L | M | done: a drive's page lists friends who posted a score on its stages that day (`web/flyby.js`, from `/api/board/activity`: their board sharing is the opt-in; marked stages only, 14 days) | Strava Flyby |
 | S-21 | Garage cars from a vehicle database: pick year, make, model and trim, specs (power, weight, drive, gearbox) fill in, and you only change what differs (colour, mods, tyres). Free source: NHTSA vPIC (makes/models/years, VIN decode, US-only, no power/weight) plus a curated spec table for enthusiast cars | H | M | partial (this PR: VIN decode and model suggestions from NHTSA vPIC, typical specs for 31 enthusiast cars incl. weight; a bigger spec table todo) | owner 2026-10-28 |
 | S-25 | A crew drive's results sheet, rally style: each stage's Scores (SS1, SS2…) and an overall, shareable as text; times and gaps where a driver shares times with the crew | M | L | done (`resultsSheet` in `backend/src/events.ts`, the Results fold on a remembered drive in `web/crew_events.js`) | rally timing sheets |
+| S-26 | Weekly time attack per area: one member-put-up stage per 1-degree area each week, a board of entrants' quickest times with gaps and Scores, last week's podium | H | M | done (`backend/src/time_attack.ts`, migration 0049; Where to? → Time attack this week, `web/time_attack.js`; runs sent from the Log). The owner's exception to the time-board guardrail | Strava segments, rally weekly stages |
 | S-22 | Convoys without copy-paste links or a website: invite friends and crew-mates from inside the app (they get the invite in the app), a short join code to read out, and a QR code to scan in the car park | H | M | partial (this PR: in-app invites to friends and private crew-mates, Join from the Crew sheet, a toast when one arrives, and a QR code of the link for the car park; a short spoken join code todo) | owner 2026-10-28 |
 
 ## 6. UI and UX (U)

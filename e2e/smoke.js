@@ -6952,6 +6952,63 @@ flow('TestFlight 2026-11-05 note 6: the idle map\'s deck is the suggestion and o
   }
 }, { hasTouch: true, viewport: { width: 393, height: 852 }, geolocation: { latitude: 35.9606, longitude: -83.9207 }, permissions: ['geolocation'] });
 
+flow('time attack this week (SOCIAL 2.9): in Where to?, the area\'s stage and its board, as text, with gaps and Scores; Enter puts it in your Stages; your own stages go up; the area, never where you are, is sent', async (page, base) => {
+  const sent = [];
+  let entered = false;
+  const GEOM = JSON.stringify([[35.95, -83.9], [35.97, -83.88]]);
+  await page.addInitScript(() => { localStorage.setItem('apex.onboarded', '1'); localStorage.setItem('apex.permsExplained', '1'); });
+  await page.addInitScript(() => localStorage.setItem('apex.segments', JSON.stringify([
+    { id: 'MINE1', name: 'Back road', length_m: 4200, synced: true, geom: '[[35.9,-83.9],[35.91,-83.89]]', lat0: 35.9, lon0: -83.9, lat1: 35.91, lon1: -83.89 },
+    { id: 'SHORT', name: 'Driveway', length_m: 300, synced: true }])));
+  await page.route('**/api/**', (route) => {
+    const u = new URL(route.request().url()), m = route.request().method();
+    const json = (b, status = 200) => route.fulfill({ status, contentType: 'application/json', body: JSON.stringify(b) });
+    if (u.pathname === '/api/me') return json({ signed_in: true, member: true, handle: 'me' });
+    if (u.pathname === '/api/timeattack' && m === 'GET') {
+      sent.push(['GET', u.search]);
+      return json({ week: '2026-11-09', ends_on: '2026-11-15', today: '2026-11-13', cell: '35,-84', entered, entrants: 3, pool: 2,
+        circuit: { segment_id: 'CIRC1', name: 'Foothills <b>run</b>', length_m: 2500, geom: GEOM, by: 'alice', week: '2026-11-09', ends_on: '2026-11-15', cell: '35,-84' },
+        board: [{ place: 1, handle: 'alice', time_s: 190, gap_s: 0, score: 700, mine: false }, { place: 2, handle: 'bob', time_s: 200, gap_s: 10, score: 780, mine: false },
+                { place: 2, handle: 'cara', time_s: 200, gap_s: 10, score: null, mine: false }],
+        you: null, last: { name: 'Last stage', podium: [{ handle: 'dee', time_s: 312 }] } });
+    }
+    if (u.pathname === '/api/timeattack/pool' && m === 'GET') return json([]);
+    if (m === 'POST') {
+      sent.push([u.pathname, JSON.parse(route.request().postData() || 'null')]);
+      if (u.pathname === '/api/timeattack/enter') { entered = true; return json({ segment_id: 'COPY1', added: true }); }
+      if (u.pathname === '/api/timeattack/pool') return json({ cell: '35,-83' }, 201);
+      return json({}, 201);
+    }
+    if (m === 'GET') return json([]);
+    return json({}, 404);
+  });
+  await page.goto(base + '/index.html');
+  await page.waitForFunction(() => window.apex && typeof window.apex.live === 'function');
+  await page.click('#destInput');
+  await page.waitForSelector('#planAttack:not([hidden]) > summary');
+  await page.click('#planAttack > summary');
+  await page.waitForSelector('#planAttack .ta-board');
+  const text = await page.textContent('#planAttackBody');
+  check(text.includes('Foothills <b>run</b>') && /put up by @alice · 3 days left · 3 times/.test(text), 'the stage, as text: ' + text);
+  const cells = await page.$$eval('#planAttack .ta-board > span', (els) => els.map((e) => e.textContent));
+  check(cells.slice(0, 8).join('|') === '1|@alice|3:10|Score 700|2|@bob|3:20 +0:10|Score 780' && cells[11] === '', 'the board, quickest first, with gaps and Scores: ' + cells.join('|'));
+  check(/Last week, Last stage: 1\. @dee 5:12/.test(text) && /drive within the law/.test(text), 'last week\'s podium and the road note');
+  const q = new URLSearchParams(sent[0][1]);
+  check(/\.5$/.test(q.get('lat')) && /\.5$/.test(q.get('lon')), 'only the middle of the area is sent: ' + sent[0][1]);
+  await page.click('#planAttack button:text-is("Enter")');
+  await page.waitForSelector('#planAttack button:text-is("Drive it")');
+  check(sent.some(([p, b]) => p === '/api/timeattack/enter' && b.cell === '35,-84'), 'Enter sends the area');
+  const segs = await page.evaluate(() => JSON.parse(localStorage.getItem('apex.segments')));
+  check(segs.some((x) => x.id === 'COPY1' && x.origin === 'CIRC1' && x.synced && x.lat0 === 35.95 && x.lon1 === -83.88), 'the stage is in your Stages: ' + JSON.stringify(segs));
+  // your own stages go up: a 300 m one can't
+  await page.click('#planAttack summary:has-text("Put one of your stages up")');
+  const up = await page.textContent('#planAttack details.plan-more');
+  check(/Back road/.test(up) && !/Driveway/.test(up), 'only stages of 1 to 25 km: ' + up);
+  await page.click('#planAttack details.plan-more button:text-is("Put up")');
+  await page.waitForFunction(() => /It can be picked/.test(document.getElementById('toast').textContent));
+  check(sent.some(([p, b]) => p === '/api/timeattack/pool' && b.segment_id === 'MINE1'), 'Put up sends the stage');
+}, { geolocation: { latitude: 35.9606, longitude: -83.9207 }, permissions: ['geolocation'] });
+
 
 (async () => {
   const server = await serve();

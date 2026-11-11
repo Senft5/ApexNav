@@ -21,6 +21,8 @@ export async function exportMyData(env: Env, v: Viewer) {
     hazard_reports: await q("SELECT kind, lat, lon, heading, created_at, expires_at, confirms, clears FROM hazard_reports WHERE reported_by = ?"),
     crew_drives_planned: await q("SELECT title, starts_at, meet_name, meet_lat, meet_lon, notes, cancelled, created_at FROM crew_events WHERE created_by = ?"),
     crew_drive_rsvps: await q("SELECT e.title, e.starts_at, r.status, r.updated_at FROM crew_event_rsvps r JOIN crew_events e ON e.id = r.event_id WHERE r.user_id = ?"),
+    time_attack_stages: await q("SELECT s.name, p.cell, p.created_at FROM ta_pool p JOIN segments s ON s.id = p.segment_id WHERE p.owner = ?"),
+    time_attack_times: await q("SELECT week, cell, time_s, driver_score, driven_on FROM ta_entries WHERE user_id = ?"),
     crew_drives_came_to: await q("SELECT e.title, e.starts_at, a.created_at FROM crew_event_attendance a JOIN crew_events e ON e.id = a.event_id WHERE a.user_id = ?"),
     // home_area: the 0.1-degree cell you share with that crew for fair meeting points (crew_meet.js), null when off
     crews: await q("SELECT c.name, m.role, m.joined_at, m.home_cell AS home_area FROM crew_members m JOIN crews c ON c.id = m.crew_id WHERE m.user_id = ?"),
