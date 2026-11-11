@@ -411,6 +411,7 @@ def test_avoid_cameras_keeps_off_the_road_a_camera_is_on():
     assert r["quickNear"] > 35 and r["quickS"] > r["baseS"], r
     assert r["planNear"] and all(d > 35 for d in r["planNear"]), r
     assert r["offNear"] < 20 and r["noneS"] == r["baseS"], r
+    assert r["max1"] == 8 and r["max2"] == 8, r          # two cameras on one road: x8 once, not x64
 
 
 def test_there_and_back_comes_home_by_other_road():

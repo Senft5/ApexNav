@@ -633,19 +633,25 @@
     }
     // Avoid police reports (hazard_reports.js policeFor): the roads by each live report cost AVOID_POINT_X their time, so
     // a way round wins where one is near; with none, the route goes by and the card says it couldn't avoid them
+    // (once per edge: two reports 100 m apart cost a road AVOID_POINT_X, not its square)
     if (avoid.police && Array.isArray(avoid.points)) {
+      const hit = new Set();
       for (const p of avoid.points.slice(0, K.AVOID_POINT_MAX)) {
         if (!p || !Number.isFinite(p.lat) || !Number.isFinite(p.lon)) continue;
-        for (const e of edgesNear(v, p.lat, p.lon, K.AVOID_POINT_M)) mult[e] *= K.AVOID_POINT_X;
+        for (const e of edgesNear(v, p.lat, p.lon, K.AVOID_POINT_M)) hit.add(e);
       }
+      for (const e of hit) mult[e] *= K.AVOID_POINT_X;
     }
     // Avoid cameras (plate readers and fixed speed cameras from the camera map near the trip, cockpit.js avoidForTrip): a
     // camera sits on its road, so only the edges within AVOID_CAM_M of one cost AVOID_CAM_X their time
+    // (once per edge: two cameras on one road cost it AVOID_CAM_X, not its square)
     if (avoid.cameras && Array.isArray(avoid.cams)) {
+      const hit = new Set();
       for (const p of avoid.cams.slice(0, K.AVOID_CAM_MAX)) {
         if (!p || !Number.isFinite(p.lat) || !Number.isFinite(p.lon)) continue;
-        for (const e of edgesNear(v, p.lat, p.lon, K.AVOID_CAM_M)) mult[e] *= K.AVOID_CAM_X;
+        for (const e of edgesNear(v, p.lat, p.lon, K.AVOID_CAM_M)) hit.add(e);
       }
+      for (const e of hit) mult[e] *= K.AVOID_CAM_X;
     }
     return { bad, mult, add, minBad, nodeCosts: o.nodeCosts !== false };
   }

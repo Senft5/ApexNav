@@ -371,7 +371,11 @@ const CASES = {
     const q = R.quickest(v, { from, to, level: 'quick', avoid }), plan = R.plan(v, { from, to, level: 'fun', avoid });
     const off = R.quickest(v, { from, to, level: 'quick', avoid: { cameras: false, cams: [p] } });
     const none = R.quickest(v, { from, to, level: 'quick', avoid: { cameras: true } });
-    return { baseNear: near(base), baseS: base.timeS, quickNear: near(q), quickS: q.timeS, planNear: plan.routes.map(near), offNear: near(off), noneS: none.timeS };
+    // two cameras on the same road cost it x8 once, not x64: the road's cost is the same as with one
+    const c0 = R.objective(v, {}), c1 = R.objective(v, { avoid }), c2 = R.objective(v, { avoid: { cameras: true, cams: [p, { lat: p.lat + 1e-5, lon: p.lon }] } });
+    const maxMult = (c) => { let m = 0; for (let e = 0; e < c.mult.length; e++) m = Math.max(m, c.mult[e] / c0.mult[e]); return m; };
+    return { baseNear: near(base), baseS: base.timeS, quickNear: near(q), quickS: q.timeS, planNear: plan.routes.map(near), offNear: near(off), noneS: none.timeS,
+      max1: maxMult(c1), max2: maxMult(c2) };
   },
 
   roundTrips() {
