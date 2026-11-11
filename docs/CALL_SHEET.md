@@ -4,6 +4,17 @@ Decisions Claude made for you, newest first. Each one says what was decided, why
 you reach one you've seen. If you disagree with a call, say so and it gets reversed; nothing here is hard to undo unless
 it says so. Things only you can do are in docs/OWNER_TODO.md.
 
+## 2026-11-10 (fable-camber-sure): banking says how sure it is (claude/fable-camber-sure)
+
+The red team (TE-03) pointed out that banking comes from one phone on a sprung car with no body-roll model, yet the
+gauge read it to a tenth of a degree ("BANK +4.3°"). It now reads whole degrees ("BANK +4°"), the drive's lane readout
+too, and the end-of-drive line says "banked about 4°". Tapping the gauge (parked) says Bank is approximate, to a
+degree or two, because body roll is not modelled. The drive view already says how many runs agree or differ beside
+it. Nothing about how banking is measured or shared changed; a roll model or a surveyed reference road is the real fix
+(docs/PHILOSOPHY.md §4).
+
+Undo: revert the PR.
+
 ## 2026-11-10 (fable-road-page): About a road says its climb, and speaks in words (claude/fable-road-page)
 
 A bug first: on any road with 40 m or more of climb, the sheet's first line read "Switchbacks · 0.8 mi · descending
