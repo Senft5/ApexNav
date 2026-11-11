@@ -47,6 +47,12 @@ notes under a search that finds nothing said "Press Go" while the key under them
 "offline" is only said when the phone is offline.
 
 Undo: revert the PR. Typed coordinates still work as before and are still named "Pin lat, lon".
+## 2026-11-11 (fable-pin-tap): the pin flow names its waits and taps the map where the map is (claude/fable-pin-tap)
+
+The flow's tap on the map once landed on the plan sheet, which stood higher on that run, and the test then waited 20 s
+with no word of why. It now taps open map, found by looking, and every wait names itself on failure. No check was dropped
+and one was added (there is open map to tap). Undo: revert the PR.
+
 ## 2026-11-10 (fable-one-corner): "1 corners" is "1 corner"; a Best roads nearby key keeps its word while it searches (claude/fable-one-corner)
 
 A road with one corner read "1 corners" on its card's line, under its big number, aloud to a screen reader, in "1 more

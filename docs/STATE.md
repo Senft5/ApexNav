@@ -18,6 +18,17 @@
 - Tests: tests/test_road_page.py (plain words, unknown stays null, the climb formatter); e2e "road page…" (names, the
   empty bar for an unknown score, bar length = score, the climb in feet with a stubbed terrain profile).
 
+## Session 2026-11-11 (fable-pin-tap): "a pin has a name" timed out on CI at a wait it didn't name (claude/fable-pin-tap, off origin/main)
+
+- After #376, the flow still failed on CI with a bare "waitForFunction: Timeout 20000ms". Every wait in it now says its name
+  and the page's state when it gave up (`pinWait`: boot, track, plan sheet, tap-to-route, pin sheet, toast, router asks).
+- One cause, reproduced here once in eight runs: at Tap the map, the plan sheet stood higher than on other runs and the
+  tap at a fixed spot landed on its Options chip, so nothing was routed. The tap now waits until tap-to-route is on, the
+  camera is still and no finite animation is running, then goes to the open map (canvas under the point and round it)
+  nearest the old spot, with a check that there is one. The boot wait is 45 s (a cold page late in a 25-minute suite).
+- 6 of 6 runs passed here after the change, one at THROTTLE=6. Not checked: why the plan sheet's height differs between
+  runs after Tap to route (the test now copes; the sheet itself may be worth a look).
+
 ## Session 2026-11-10 (fable-pin-names): pins and tapped places by name; the spot dialog's stars (claude/fable-pin-names, off origin/main e76f1bb)
 
 - `web/cockpit.js`: `setFieldPin(field, point, name)` / `pinIn` / `fieldPin` beside `resolvePlace(q, field)`: Go here,
