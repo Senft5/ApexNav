@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self' apexnav:; script-src 'self' apexnav: 'sha256-k6jhboAqdk7mhi3qFsuNVYTxXLLx5YQdOvPd5GMN9G4=' 'sha256-G7s/ZI+Hqrfc4DqbB6EANJJLmUmhNK06PizQ1LlsG84=' https://cdn.jsdelivr.net 'wasm-unsafe-eval'; worker-src 'self' apexnav: blob:; child-src 'self' apexnav: blob:; style-src 'self' apexnav: 'unsafe-inline'; font-src 'self' apexnav: data:; img-src 'self' apexnav: data: blob: https://tiles.openfreemap.org https://s3.amazonaws.com https://basemap.nationalmap.gov; media-src 'self' apexnav: data: blob:; connect-src 'self' apexnav: data: blob: https://apexnav.senftns.workers.dev wss://apexnav.senftns.workers.dev https://tiles.openfreemap.org https://basemap.nationalmap.gov https://s3.amazonaws.com https://valhalla1.openstreetmap.de https://router.project-osrm.org https://overpass-api.de https://overpass.private.coffee https://overpass.kumi.systems https://maps.mail.ru https://nominatim.openstreetmap.org https://photon.komoot.io https://api.open-meteo.com https://api.weather.gov https://statsapi.mlb.com https://api.seatgeek.com https://api.water.noaa.gov https://waterservices.usgs.gov https://in.carsprogram.org https://publicapi.ohgo.com https://quickstats.nass.usda.gov https://commons.wikimedia.org https://graph.mapillary.com https://vpic.nhtsa.dot.gov https://cdn.jsdelivr.net https://huggingface.co https://*.huggingface.co https://*.hf.co; object-src 'none'; base-uri 'none'; form-action 'self'" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self' apexnav:; script-src 'self' apexnav: 'sha256-kiR+4XNqvg/BjEikZzQ/k/fmM+0Pr5Xi3d0xv1jfGWY=' 'sha256-G7s/ZI+Hqrfc4DqbB6EANJJLmUmhNK06PizQ1LlsG84=' https://cdn.jsdelivr.net 'wasm-unsafe-eval'; worker-src 'self' apexnav: blob:; child-src 'self' apexnav: blob:; style-src 'self' apexnav: 'unsafe-inline'; font-src 'self' apexnav: data:; img-src 'self' apexnav: data: blob: https://tiles.openfreemap.org https://s3.amazonaws.com https://basemap.nationalmap.gov; media-src 'self' apexnav: data: blob:; connect-src 'self' apexnav: data: blob: https://apexnav.senftns.workers.dev wss://apexnav.senftns.workers.dev https://tiles.openfreemap.org https://basemap.nationalmap.gov https://s3.amazonaws.com https://valhalla1.openstreetmap.de https://router.project-osrm.org https://overpass-api.de https://overpass.private.coffee https://overpass.kumi.systems https://maps.mail.ru https://nominatim.openstreetmap.org https://photon.komoot.io https://api.open-meteo.com https://api.weather.gov https://statsapi.mlb.com https://api.seatgeek.com https://api.water.noaa.gov https://waterservices.usgs.gov https://in.carsprogram.org https://publicapi.ohgo.com https://quickstats.nass.usda.gov https://commons.wikimedia.org https://graph.mapillary.com https://vpic.nhtsa.dot.gov https://cdn.jsdelivr.net https://huggingface.co https://*.huggingface.co https://*.hf.co; object-src 'none'; base-uri 'none'; form-action 'self'" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
   <title>Vetta · Log</title>
   <link rel="icon" href="brand/mark.svg" type="image/svg+xml" />
@@ -345,6 +345,8 @@
         <p class="note">From the scores friends chose to show you, on stages you both marked. The last 14 days.</p></div>
       <div class="panel" id="dvTouch" hidden><h2>Your touch on this drive</h2><div id="dvTouchList" class="stack-8"></div>
         <p class="note">How fast the load came on and went off, from the g the phone measures ten times a second, beside your other drives. The middle corner of each; never better or worse.</p></div>
+      <div class="panel" id="dvBest" hidden><h2>Against your records</h2><div id="dvBestList" class="stack-8"></div>
+        <p class="note">This drive's cleanest corner of each kind beside your record for it (Your records in the Log): technique credits out of 100, never speed.</p></div>
       <div class="panel" id="dvRoad" hidden><h2>This road over time</h2><div id="dvRoadChart"></div><div class="scroll"><table id="dvRoadTable"></table></div></div>
     </section>
 
@@ -1270,7 +1272,7 @@
         if (dvView) dvView.destroy();
         dvView = null; dvCurrent = null; dvInfo = null;
         $('dvRoot').replaceChildren(); $('dvDashcam').replaceChildren();
-        for (const k of ['dvRoad', 'dvVote', 'dvRecce', 'dvFlyby', 'dvTouch']) $(k).hidden = true;
+        for (const k of ['dvRoad', 'dvVote', 'dvRecce', 'dvFlyby', 'dvTouch', 'dvBest']) $(k).hidden = true;
       }
       // The drive's name is the page title (you arrive from the Log list); the picker stays only as this view's state.
       $('dvTitle').textContent = s.name;
@@ -1306,6 +1308,10 @@
       const lines = window.ApexDriverProfile ? ApexDriverProfile.driveTouchLines(t) : [];
       $('dvTouchList').replaceChildren(...lines.map((x) => { const p = document.createElement('p'); p.className = 'friend-act'; p.textContent = x; return p; }));
       $('dvTouch').hidden = !lines.length;
+      // the drive's corners against your records by kind (driveRecords, the same job)
+      const best = window.ApexDriverProfile && t && t.records ? ApexDriverProfile.driveRecordLines(t.records, dvCurrent && dvCurrent.id, (at) => ApexFormat.dateTime(at.slice(0, 10))) : [];
+      $('dvBestList').replaceChildren(...best.map((x) => { const p = document.createElement('p'); p.className = 'friend-act'; p.textContent = x; return p; }));
+      $('dvBest').hidden = !best.length;
     }
     // Flyby (flyby.js, IDEAS S-20): friends who drove this drive's stages the same day. Members only; set as text.
     let activityRows = null;
