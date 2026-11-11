@@ -18,6 +18,90 @@
 - Seen, not fixed (other areas): signed-out pages still ask /api/convoy/invites, /api/points, /api/hazards, /api/roads (401s);
   the idle map's top ~150 px is blank paper at pitch 42 with the deck's padding (MapLibre draws no tiles beyond the far
   plane; no sky in the style). Next: replay drive, Log, add a friend, join a crew.
+## Session 2026-11-11 (Valhalla for Quick only): Fun and Long way are our router's or nothing (claude/project-thread-39xbx9, off origin/main)
+
+- The owner: Fun and Long way "always say check my signal", and Valhalla only ever for Quick. cockpit.js `funRoute`: at
+  Fun and Long way (`ownOnly`) no Valhalla route, highway check, stage search or matrix; with no route of ours a toast says
+  why (off the map: "covers Ohio, Kentucky and Indiana so far"; the index not loaded in 8 s, `OWN_COVERS_ONLY_MS`: check
+  signal; router off) with a **Use Quick** key. The index failing is now unknown (null), not "nothing here". There and back
+  at Fun / Long way likewise. Live check on production first: Fun plans on our router in Cincinnati and on Valhalla near the
+  Dragon from a desktop browser, so the owner's failure wasn't reproduced; this makes the message say what really failed.
+- e2e: flows plan at Quick unless they choose a level (`ctxOpts.funLevel`); the plan flows at Fun route on the synthetic
+  tiles (`funTiles`, the motorway grid where Quick's and Fun's picks must differ); new flow "valhalla for quick only".
+  tests/test_fun_route.py: Fun / Long way ask Valhalla nothing without our router. `FLOWS` (newline list) runs several flows.
+- Still on Valhalla: loops off our tiles (stage loops), Explore's matrix, a reroute to rejoin, spoken directions. The
+  stage-plan code in funRoute is now unreachable (kept for now).
+- Next: loops on our router only (the owner's rule says "anything but the quick route"); find the owner's failure (where,
+  app or web, which message).
+## Session 2026-11-11 (places by name): the cafés and fuel on the route card are a tap away, by name (claude/project-thread-me97iw, off origin/main)
+
+- The owner: "when it says there's cafes or gas stations ... i want to be able to tap for details. Ideally just show the name".
+- web/scenic.js: `summary` also counts fuel ("2 fuel stops"); `places(list, fmt)` one row per place (the map's name, or
+  "Café, no name on the map"; "3.1 mi in"; "beside the road" / "300 ft off the road"); `placeLine(row)` for a tap.
+- index.html/cockpit.js: the Along fact is a disclosure (`#routeAlongLine`, `#routeAlongPanel`, like When to go); a row flies
+  the map there and toasts "Bean · Café · 3.1 mi in" with Add as a stop; the map pins toast the same and carry it as
+  their aria-label (set after the Marker, which writes "Map marker"). stages.js pois fall back to name:latin / name_en.
+- Survey: the other mentions already name their place (Spots near you, the day's stops) or name no place (route_engine
+  costs, car.js fuel spans, which no screen shows). CarPlay shows no cafés or fuel.
+- Tests: tests/test_scenic.py (+1, summary updated); e2e "along the route by name…". Checked: pytest, that flow.
+- Next: the co-driver could name the next café or fuel stop when you ask; CarPlay's route preview could list them.
+## Session 2026-11-11 (roam-a best run): the drive page names your best run of clean corners (claude/project-thread-h7xxmf, off origin/main)
+
+- IDEAS D-30. `core/flow.py` (reference) and `web/flow.js` (port, parity-tested on synthetic and both demo drives):
+  `longest_flow` / `longest` over the drive's corners in road order, each judged by `corner_technique` (smooth >= 0.60,
+  brake >= 0.90, use <= 1.0); a miss or > 2 km between apexes ends a run; MIN_RUN 5. `text()`: "Your best run: N corners in
+  a row, smooth and settled over X."
+- web/drive_view.js: a `dv-plain` line after the coach's; analysis.html loads flow.js (index.html untouched: no boot cost).
+- The demo drives' longest runs are 4 (nothing said). Tests: tests/test_flow.py (5). Checked: pytest; e2e drive-ended
+  card/Log, Your driving, drive tags, startup budget.
+- Next: "Best run this month" in Your records (needs corners per drive: the analysis worker), and the end card.
+## Session 2026-11-11 (ui-round-three, PR 1): the first friend and the first crew (claude/project-thread-5sbga7)
+
+- Walked the empty and signed-out screens (People, Crews, Garage, Log, Stages, signed in and out). Signed out People and
+  the Log's empty page were already pages; signed in with nobody, Friends and Crews were a grey sentence and a small key.
+- cockpit.js: `.people-first` (the join page's `drawing`, `roads`, `pucks`; a `jr-ghost` road for the friend, `jr-seat`
+  circles for the crew), `.join-head` "Bring a friend." / "Start a crew.", the `.people-lead` sentence kept inside.
+  signature.css: the Invite key after it is full width (52 px). e2e "People, a new account" checks the new first child.
+- Tests: tests/test_people_first.py. e2e People, crew, friend, Dynamic Type, VoiceOver flows pass here.
+- Next ideas: Garage's "Add a car" as a paper key in the empty bay; the drive HUD; CarPlay visuals.
+
+## Session 2026-11-11 (roam-c-crew-public-reset, security pass): a crew made public drops members' hand-made shares (claude/roam-c-crew-public-reset)
+
+- backend/src/social.ts `crewUpdate` private to public: besides grants, board entries and drive scores (already), members'
+  (not the owner's) shared_route_audience and segment_shares rows for the crew go, their crew_members.home_cell is cleared,
+  and a pinned route of a member's is unpinned. Owner settings copy (cockpit.js) and privacy.html say so.
+- Tests: backend/test/share_defaults.test.ts (+1, fails without the fix: a stranger joining after sees only the owner's
+  route); tests/test_crew_settings_sheet.py copy. Full backend vitest 394/394, tsc clean.
+- Not changed, noted: a crew chat's last 30 days stay readable to people who join after it goes public (the chat says who
+  wrote it; deleting history felt worse than it). Photos are served to any member by id (UUIDs, never listed to strangers).
+
+
+## Session 2026-11-11 (roam-c-presence-private-crews, security pass): friends map "Crew" is private crews only (claude/roam-c-presence-private-crews)
+
+- backend/src/presence.ts `presenceView`: audience "crew" showed you to members of any crew you share, public ones too, which
+  anyone can join. Now private crews only (garage.ts peoplesCars already did this for cars). web/who_sees.js: a public
+  crew's Where cell is off. Copy: friends_map.js explainer, cockpit.js and who_sees.js summaries say "private crews";
+  privacy.html and APP_REVIEW.md 5.1.1 updated.
+- Tests: backend/test/presence.test.ts (+1, fails without the fix), tests/test_who_sees.py (+1), test_friends_map.py copy.
+- Security pass so far, no issue found: auth on every route (requireMember; ops routes moderator-only; CSRF origin and header
+  check; WRITE_LIMIT on every write, AUTH_LIMIT on sign-in), ownership checks on every :id write (cars, routes, highlights,
+  segments, templates, chat, events, duels, pool), grants re-checked against current friendship or membership on read.
+  Next: the rest of the pass (time attack, drive scores, convoy, hazards and reports rate limits, photos by id).
+
+
+
+
+## Session 2026-11-11 (ui-round-two, PR 4): the map's top band, signed-out reads, a crew's head and the Share box (claude/project-thread-5sbga7)
+
+- The idle map's blank top band (Roamer B): the canvas draws fully (toDataURL shows the map to y = 0); Chromium culled the
+  canvas under the opaque `.binnacle` at the wrong (y-flipped) end, so the band was exactly the binnacle's height (157 px)
+  at every pitch and viewport. A bare MapLibre page doesn't show it; `visibility: hidden` on the binnacle or 0.99 alpha
+  clears it. Fix: `.binnacle` background at 99.6 % (signature.css, last block). setSky changes nothing there.
+- web/sync.js `apiFetch`: `known` (true/false/null) from /api/me's `signed_in` (only when it says), setSession, or a 401;
+  signed out, GET /api/convoy/invites, /api/points, /api/hazards, /api/roads answer 401 locally. Unknown still asks.
+- signature.css "a crew's page and the Share box": crew name Barlow 30/32 px, cp keys paper, chat a well; Share chips wells.
+- Tests: tests/test_signed_out_reads.py, tests/test_sheets_line.py (+2). e2e convoy, hazard, police, closure flows pass.
+- Next: round two is done (Log, Garage, People, Settings and sheets, crew, Share). Look for screens still boxed in ink.
 ## Session 2026-11-11 (social round two): For you, what happened to you socially (claude/project-thread-uwmi4e, off origin/main 936aec3)
 
 - IDEAS S-27, SOCIAL 2.10. `backend/src/inbox.ts` `GET /api/inbox` → `{ items, waiting, now }`: kinds `request`, `duel_ask`
@@ -49,6 +133,16 @@
 - Tests: tests/test_brake_heat.py (+2); e2e "the co-driver says a long descent once…" (GPX + stubbed DEM, live frames).
   Checked: pytest, that flow, the route-card descent flow, "co-driver reads the road", startup budget.
 - Next: the Garage car's weight and brakes could tune DISC_C; CarPlay could show the descent line on its route preview.
+## Session 2026-11-11 (round two analysis, PR 8): your records by kind of corner (claude/project-thread-gd7nre, off origin/main)
+
+- core/driver_profile.py `records_by_size` (reference) and web/driver_profile.js `recordsBySize` (port): your cleanest tight,
+  medium and fast corner of any date, by the mean of the six technique credits; the first to reach a level holds it; none
+  under RECORD_MIN 5 corners of that kind. The profile job returns `records`.
+- web/analysis.html Your records adds "Cleanest tight left, of 36 tight corners" rows (the level, the drive's day), painted
+  again when Your driving's job answers. IDEAS D-08 is done.
+- Tests: tests/test_best_corners.py (+1, parity), e2e "Your driving" checks the rows.
+- Next: the deepest-analysis list: a drive's corners against your records (how close each kind came to your best).
+
 ## Session 2026-11-11 (roam-c-scheme-offmain, sweep: iOS shell): bundle files read off the main thread (claude/roam-c-scheme-offmain, off origin/main)
 
 - ApexNavApp.swift `ApexBundleSchemeHandler`: every apexnav:// file (the page's 130 scripts at launch, the 5.5 MB
@@ -178,6 +272,15 @@
   driving's kept observations); hidden for drives with g kept once a second. Facts only: never better or worse.
 - Tests: tests/test_touch_detail.py (4); e2e "Your driving" covers the table, the month line and the drive's words.
 - Next: say when a drive's touch is clearly outside your usual spread (its median beyond the usual quartiles on 8+ corners).
+## Session 2026-11-11 (auto time attack): the weekly loop is auto-picked per area (claude/project-thread-uwmi4e, off #397's branch)
+- Owner call (2026-11-11): time attacks autogenerated weekly in any area with users, the best loop roads chosen at random,
+  small loops, not member stages. Migration 0054 (`ta_weeks` gets name, length_m, geom, tries, removed; ta_pool unread).
+- `GET /api/timeattack` answers `make {seed, km}` when the area has no loop; `POST /api/timeattack/circuit` takes the loop
+  a phone built (checkLoop: closed, in the area, 5-25 km measured here, no jumps), first one kept. Pool routes removed.
+- `web/time_attack.js` makeLoop (rng, hubs, kmFor, choose, geomOf, loopName): the router's loops from a seeded tile; the
+  cockpit hands it `ownIndex` and `ApexOwnRouting.loops`. e2e builds a real loop over the bundled Cincinnati tiles.
+- Tests: backend time_attack 4 pass (387 total), pytest test_time_attack 10 pass, e2e both time attack flows pass.
+- Next: open the PR once #397 merges, apply 0054 on preview then prod (with d1_migrations rows) before merging.
 
 ## Session 2026-11-11 (sweep round two): time attack wiring and opt-in (claude/project-thread-g9yher, off origin/main 936aec3)
 

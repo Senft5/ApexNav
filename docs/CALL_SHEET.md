@@ -17,6 +17,62 @@ it says so. Things only you can do are in docs/OWNER_TODO.md.
 - Tapping Log in the first seconds after install showed a blank screen with no tabs until it loaded. Now the map stays
   usable with a short "Opening your Log…" and the Log opens when ready (a different tab cancels it). Undo: the
   `logFrame.want` branch in cockpit.js openLog.
+## 2026-11-11 (Valhalla for Quick only): Fun and Long way fail plainly instead of falling back (claude/project-thread-39xbx9)
+
+Your rule: Valhalla only for Quick. Fun and Long way now come from our own router or not at all. Where our road map doesn't
+reach (it covers Ohio, Kentucky and Indiana so far), or it can't be loaded, the plan says which, with a **Use Quick** key,
+instead of a Valhalla route. Calls I made: the map's index gets 8 s (not 1.5 s) at Fun, since there is no stand-in to fall
+back on; spoken turn directions on our route still come from Valhalla's trace_route (it routes nothing, it reads our line);
+loops still use Valhalla off our map until the next PR. Undo: `const ownOnly = false` in cockpit.js `funRoute`.
+## 2026-11-11 (places by name): cafés and fuel along the route, tap for their names (claude/project-thread-me97iw)
+
+The route card's "Along" line ("1 viewpoint · 2 cafés · 3 fuel stops") now opens a list of each place by the name
+OpenStreetMap has for it, how far into the route and how far off the road; tapping one moves the map there and offers it as
+a stop. Tapping a CAFÉ or FUEL pin on the map says its name too. Calls: fuel stations are now counted on the line (before,
+only a long stretch without fuel was said), so there is something to tap; a place with no name on the map says "no name on
+the map" rather than a guess. Undo: revert the PR.
+## 2026-11-11 (roam-a best run): a drive's page names your best run of clean corners (claude/project-thread-h7xxmf)
+
+New, my call (Nate asked for more fun-driving features). A drive's page now says, when it happened, "Your best run: 9
+corners in a row, smooth and settled over 2.1 mi." A corner counts when the Score itself judged it smooth (the better half
+of real corners), with no braking past the apex and inside the corner's sane limit, so the line can never reward going
+faster. A corner that misses, or 2 km of road between two corners, ends the run; under 5 in a row says nothing. Undo:
+remove the `flow` line in web/drive_view.js (or tune SMOOTH_MIN / MIN_RUN in core/flow.py and web/flow.js together).
+## 2026-11-11 (ui-round-three): People when you have no friends or crews yet looks like the signed-out page (claude/project-thread-5sbga7)
+
+Signed in with nobody yet, Friends and Crews used to show one grey sentence and a small key. Now each is a page like the
+signed-out one: a drawing (your road drawn, a friend's road or three crew seats still in pencil), "Bring a friend." or
+"Start a crew." set large, one sentence, and the Invite key full width. The example card stays under it. Undo: the two
+`people-first` blocks in web/cockpit.js and the "first friend" block at the end of web/signature.css.
+
+## 2026-11-11 (roam-c crew-public-reset): a crew made public stops showing what members shared with it by hand (claude/roam-c-crew-public-reset)
+
+Found in the security pass. When an owner makes a private crew public, members' Scores and times already went back to off
+(they were the private default, not a choice to show strangers). Routes, stages and the rough "where I drive from" area that
+members had shared with the private crew stayed, so a stranger who joined next could see them. Now they go too, except the
+owner's own, because the owner made it public. The routes and stages themselves stay with their owners, who can share them
+again. The owner's crew settings and the privacy page say so. Undo: revert the PR.
+
+## 2026-11-11 (roam-c presence-private-crews): "Your crews see where you are" means private crews only (claude/roam-c-presence-private-crews)
+
+Found in the security pass. Anyone can join a public crew with one tap, and Friends on the map set to Crew showed your
+position to every member of every crew you were in, public ones included. So a stranger could join a big public crew and see
+where its members were (within a mile and 10 minutes late by default, but exact and live if they chose that). Now Crew means
+your private crews only, as cars already did. The sheet, Who sees what and the privacy page say "private crews". Nothing
+stored changes. Undo: revert the PR (public crews' members see your position again).
+
+
+## 2026-11-11 (ui-round-two): the blank band at the top of the map, signed-out 401s, a crew's name and the Share box (claude/project-thread-5sbga7)
+
+The blank paper band at the top of the idle map (as tall as the deck under it) was not missing tiles: the map draws all
+the way up, but Chrome treated the solid deck over the map as hiding part of it and skipped the wrong end. The deck is now
+99.6 % solid instead of 100 %, which nobody can see, and the map reaches the top. A sky colour would not have helped.
+Undo: delete the "map under the deck" rule at the end of web/signature.css.
+Signed out, the app no longer asks the server for convoy invites, points, hazards or members' roads once it knows you are
+signed out; it answers itself with "sign in required". Undo: the MEMBER_READS lines in web/sync.js.
+A crew's name is set large like the Garage's, its keys are paper, and the people you can share a route with are soft wells
+that turn ink when picked.
+
 ## 2026-11-11 (social round two): For you, and a People badge that counts what's new (claude/project-thread-uwmi4e)
 
 People → Friends now opens with For you: a friend topping your best Score on one of your stages, someone passing your
@@ -42,6 +98,13 @@ On a planned route, the same long, steep descents the route card names are now s
 top (or up to 300 m down it): "Long descent ahead: 2.5 miles at 8 percent. A lower gear saves the brakes." It waits for a
 quiet moment like the break cue (no corner call due), in any notes mode, since it is a safety line. Off the route, or
 driving without one, nothing is said. Undo: remove the `descentAhead` block in cockpit.js `updateNotes`.
+
+## 2026-11-11 (round two analysis): records by kind of corner are technique, not speed (claude/project-thread-gd7nre)
+
+- What: Your records lists your cleanest tight, medium and fast corner (the six technique credits' mean, 0 to 100).
+- Why: IDEAS D-08 asked for records per archetype; a fastest-corner record would reward speed on public roads, so this is
+  the technique figure Your year already uses. The first drive to reach a level keeps the record.
+- Undo: drop the `kinds` rows in renderRecords (web/analysis.html).
 
 ## 2026-11-11 (roam-a descents): the route card warns of a long, steep descent (claude/project-thread-h7xxmf)
 
@@ -116,6 +179,18 @@ against a route (35 m, not the card's 60 m count). When nothing gets round, the 
 
 Undo: revert the PR (no data changed). To split speed cameras onto their own switch, filter `kind` in `camsForTrip` and
 `camerasAround` (cockpit.js) by a new avoid key.
+## 2026-11-11 (auto time attack): each area's weekly loop is picked by Vetta, built on the first phone there (claude/project-thread-uwmi4e)
+
+Your call: time attacks are made automatically every week in any area with members, as small loops over the area's best
+roads chosen at random, not from members' stages. The server can't plan routes, so the first member's phone to open Time
+attack in an area that week builds the loop with our own router from a seed the server hands out (the same seed gives
+every phone the same start and pick), and the server checks it and keeps the first one. Choices I made: a loop of 8 to 16
+km is asked for (5 to 25 km accepted); the start is a random one of the area's road tiles, tried up to four; one of the
+router's best three loops is drawn; it's named by its main road; nobody's name is on it and who built it isn't stored. An
+area outside our road tiles (Ohio, Kentucky, Indiana today) gets no loop until the tiles reach it. Putting your own stages
+up is gone. A loop a moderator takes down is replaced by one from the next seed.
+
+Undo: revert the PR. Migration 0054 only adds columns to `ta_weeks`; the old code ignores them.
 ## 2026-11-11 (sweep round two): time attack counts only a week you entered (claude/project-thread-g9yher)
 
 Two bugs in the weekly time attack (#393). The Log never sent any runs, so every board stayed empty. And the server

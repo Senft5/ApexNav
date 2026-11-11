@@ -1050,6 +1050,43 @@ flow('own routing: where our graph tiles cover the trip, our route wins and Valh
   } finally { graphDir = null; }
 }, { geolocation: { latitude: 39.155, longitude: -84.615 }, permissions: ['geolocation'] });
 
+// Valhalla is for Quick only (the owner, 2026-11-11): Fun and Long way come from our router or not at all. Off our tiles a
+// Fun plan says so, asks Valhalla for nothing, and its "Use Quick" key plans the Quick way (from Valhalla, as before).
+flow('valhalla for quick only: off our tiles, Fun says it plainly and Use Quick plans it; Valhalla never asked for Fun', async (page, base) => {
+  graphDir = 'none';
+  try {
+    const calls = { route: [], matrix: 0 };
+    await page.route('https://photon.komoot.io/**', (route) => route.fulfill({ contentType: 'application/json', body: JSON.stringify({ features: [
+      { geometry: { coordinates: [-84.57, 39.19] }, properties: { name: 'Forest Park', state: 'Ohio' } }] }) }));
+    await page.route('https://valhalla1.openstreetmap.de/**', (route) => {
+      const u = route.request().url(), req = JSON.parse(route.request().postData() || '{}');
+      if (u.endsWith('/route')) { calls.route.push(req); return route.fulfill({ contentType: 'application/json', body: JSON.stringify(stubTrip(req.locations)) }); }
+      if (u.includes('sources_to_targets')) calls.matrix++;
+      return route.abort();
+    });
+    await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); localStorage.setItem('apex.funLevel', 'fun'); } catch (_) {} });
+    await page.goto(base + '/index.html');
+    await page.waitForFunction(() => window.apexDebug && window.apexDebug.map);
+    await page.click('#destInput');
+    await page.fill('#destInput', 'Forest Park');
+    await page.waitForSelector('#placeList .place', { timeout: 10000 });
+    await page.click('#placeList .place');
+    await page.waitForFunction(() => window.apexDebug.ownOnlyFail && document.getElementById('toast').classList.contains('show'), null, { timeout: 20000 })
+      .catch(async (e) => { throw new Error(e.message + ' ' + JSON.stringify(await page.evaluate(() => ({ fail: window.apexDebug.ownOnlyFail, own: window.apexDebug.lastOwn, toast: document.getElementById('toast').textContent,
+        cls: document.getElementById('toast').className, marks: window.apexDebug.planMarks, track: window.apexDebug.track && window.apexDebug.track.id }))) + ' asked ' + calls.route.length); });
+    const t = await page.evaluate(() => ({ text: document.getElementById('toast').textContent, why: window.apexDebug.ownOnlyFail, track: window.apexDebug.track && window.apexDebug.track.id }));
+    check(/Fun routes use Vetta's own road map|Couldn't load Vetta's road map/.test(t.text) && /Use Quick/.test(t.text), 'said plainly, with Quick a tap away: ' + JSON.stringify(t));
+    check(calls.route.length === 0 && calls.matrix === 0, 'Valhalla asked for nothing at Fun: ' + calls.route.length + ' routes, ' + calls.matrix + ' matrices');
+    check(t.track !== 'route_dest', 'no stand-in route on the map: ' + t.track);
+    await page.click('#toast .toast-key');
+    await page.waitForFunction(() => window.apexDebug.track && window.apexDebug.track.id === 'route_dest', null, { timeout: 20000 })
+      .catch(async (e) => { throw new Error('after Use Quick: ' + e.message + ' ' + JSON.stringify(await page.evaluate(() => ({ level: localStorage.getItem('apex.funLevel'), own: window.apexDebug.lastOwn,
+        toast: document.getElementById('toast').textContent, track: window.apexDebug.track && window.apexDebug.track.id }))) + ' asked ' + calls.route.length); });
+    const q = await page.evaluate(() => ({ level: localStorage.getItem('apex.funLevel'), kind: window.apexDebug.track.kind }));
+    check(q.level === 'quick' && calls.route.length >= 1, 'Use Quick plans the Quick way, from Valhalla: ' + JSON.stringify(q) + ' ' + calls.route.length);
+  } finally { graphDir = null; }
+}, { geolocation: { latitude: 39.155, longitude: -84.615 }, permissions: ['geolocation'] });
+
 // What this drive is like (web/route_story.js, the owner 2026-11-09): a planned route's card carries a few plain lines
 // built from the ranking's own data, in your units, after the card is up; nothing it says is unknown to the data.
 flow('route overview: the card says what the drive is like in plain words, from the route\'s own data', async (page, base) => {
@@ -4532,6 +4569,10 @@ flow('Your driving: the profile over every drive opens from the Log, names the w
   await page.waitForSelector('#drivingOpen', { timeout: 20000 });
   const card = await page.textContent('#drivingOpen span');
   check(/Work on: One steering arc \d+/.test(card) && /Strongest: /.test(card), 'the card says the strongest and the one to work on: ' + card);
+  // Your records: the cleanest corner of each kind (tight, medium, fast), from the same kept observations (IDEAS D-08)
+  await page.waitForFunction(() => /Cleanest tight (left|right|corner), of \d+ tight corners/.test(document.getElementById('recordsTable').textContent), null, { timeout: 10000 });
+  const recs = await page.textContent('#recordsTable');
+  check(/Cleanest medium/.test(recs) && !/mph|km\/h/.test(recs), 'records by kind of corner: ' + recs);
   // Your year: the year's cleanest corners, one a road (two roads here), from the same kept observations
   const best = await page.evaluate(() => ApexAnalysis.job('profile', { year: 2026 }).then((r) => r.best));
   check(best.length === 2 && best[0].level >= best[1].level && new Set(best.map((b) => b.name)).size === 2 && best.every((b) => b.at.startsWith('2026-')), 'the year\'s best corners: ' + JSON.stringify(best));
@@ -4949,7 +4990,7 @@ flow('People, a new account: Friends is one sentence and the Invite key; Crews i
   await page.goto(base + '/index.html?view=people');
   await page.waitForSelector('#accountBody .people-lead');
   const kids = await page.$$eval('#accountBody > *', (k) => k.map((x) => x.className + ':' + x.textContent.trim()));
-  check(kids.length === 3 && /people-lead/.test(kids[0]) && /Invite or add a friend/.test(kids[1]) && /^people-sample:Example: /.test(kids[2]), 'one sentence, the Invite key and an example (U-121): ' + JSON.stringify(kids));
+  check(kids.length === 3 && /^people-first:Bring a friend\./.test(kids[0]) && /Invite or add a friend/.test(kids[1]) && /^people-sample:Example: /.test(kids[2]), 'a page (drawing, Bring a friend., one sentence), the Invite key and an example (U-121): ' + JSON.stringify(kids));
   await page.click('[data-people="crews"]');
   await page.waitForSelector('#crewsBody .nav-row:has-text("Find or start a crew")');
   const rows = await page.$$eval('#crewsBody .nav-row > span', (s) => s.map((x) => x.textContent));
@@ -5544,12 +5585,13 @@ flow('dev mode: a developer opens the Dev panel from the Garage, changes a const
     const reset = await page.evaluate(() => ({ tune: document.getElementById('devPlanTune').textContent, own: apexDebug.devPlan.own.limitS, slack: ApexFunRoute.LEVELS.fun.slackS,
       input: document.querySelector('#devPanel input[data-table="levels"][data-path="fun.slackS"]').value }));
     check(reset.tune === 'planned with the defaults' && reset.slack === 240 && Math.abs(reset.own - before.own) < 1 && reset.input === '240', 'Reset: the defaults again: ' + JSON.stringify(reset));
-    // Force Valhalla: our router off for the next plan
+    // Force Valhalla: our router off for the next plan; at Fun that is no route at all (Valhalla is for Quick only, the
+    // owner 2026-11-11), said plainly
     await page.click('#devPanel input[data-dev="forceValhalla"]');
     await page.click('#devReplan');
-    await page.waitForFunction(() => { const p = window.apexDebug.devPlan; return p && p.switches.forceValhalla && !document.getElementById('planPanel').classList.contains('busy') && /Re-planned|failed/.test(document.getElementById('devStatus').textContent); }, null, { timeout: 30000 });
-    const fv = await page.evaluate(() => ({ own: apexDebug.devPlan.own, kinds: apexDebug.devPlan.pool.map((c) => c.kind) }));
-    check(!fv.own.used && fv.own.reason === 'off' && fv.kinds.every((k) => k !== 'own'), 'Force Valhalla: none of ours: ' + JSON.stringify(fv));
+    await page.waitForFunction(() => window.apexDebug.ownOnlyFail === 'off' && !document.getElementById('planPanel').classList.contains('busy'), null, { timeout: 30000 });
+    const fv = await page.evaluate(() => document.getElementById('toast').textContent);
+    check(/switched off/.test(fv) && /Use Quick/.test(fv), 'Force Valhalla at Fun: none of ours and no stand-in, said plainly: ' + fv);
     await page.click('#devPanel input[data-dev="forceValhalla"]');
     // Offline simulation: other hosts fail and the page reads as offline; off again, as it was
     await page.click('#devPanel input[data-dev="offline"]');
@@ -5560,7 +5602,7 @@ flow('dev mode: a developer opens the Dev panel from the Garage, changes a const
     await page.click('#devClose');
     check(await page.evaluate(() => document.getElementById('devPanel').hidden), 'Close hides it');
   } finally { graphDir = null; }
-}, { geolocation: { latitude: 39.155, longitude: -84.615 }, permissions: ['geolocation'] });
+}, { funLevel: 'fun', geolocation: { latitude: 39.155, longitude: -84.615 }, permissions: ['geolocation'] });
 
 // Tune your routes (the owner, 2026-11-09; free for everyone since 2026-11-10, Pro is looks only; it was Pro, open to everyone
 // until it goes on sale): Garage → Settings → Route tuning, plain sliders over the routing's numbers (web/route_tuning.js).
@@ -6937,6 +6979,15 @@ async function planRouter(page, asked = []) {
     route.fulfill({ contentType: 'application/json', body: JSON.stringify({ sources_to_targets: req.sources.map(() => req.targets.map((_, j) => ({ time: 240 + 60 * j, distance: 3 + j }))) }) });
   });
 }
+// Fun and Long way are our router's only (Valhalla is for Quick, the owner 2026-11-11): a flow that plans at Fun routes on
+// the synthetic graph tiles round Forest Park (tests/graph_fixture.py), the place still called Maryville; graphDir is
+// reset before every flow
+async function funTiles(page, motorway = false) {
+  graphDir = graphFixture(motorway);
+  await page.context().setGeolocation({ latitude: 39.155, longitude: -84.615 });
+  await page.route('https://photon.komoot.io/**', (route) => route.fulfill({ contentType: 'application/json', body: JSON.stringify({ features: [
+    { geometry: { coordinates: [-84.57, 39.19] }, properties: { name: 'Maryville', state: 'Ohio' } }] }) }));
+}
 async function planPage(page, base, store = {}) {
   await page.addInitScript((store) => { try { localStorage.setItem('apex.onboarded', '1'); localStorage.setItem('apex.permsExplained', '1');
     for (const [k, v] of Object.entries(store)) localStorage.setItem(k, v); } catch (_) {} }, store);
@@ -6976,6 +7027,7 @@ async function swipe(cdp, x0, y0, dx, dy) {
 flow('plan flow (a) a destination in 3 taps: Where to?, the place, Start; Start never moves, the card says the ranked swap (finding 1, 2, 3)', async (page, base) => {
   const asked = [];
   await planRouter(page, asked);
+  await funTiles(page);
   const { taps, tap } = await planPage(page, base);
   // the main key follows the task (finding 3): Find a loop with nothing typed, the place once you type
   await tap('#destInput', 'Where to?');
@@ -6996,7 +7048,8 @@ flow('plan flow (a) a destination in 3 taps: Where to?, the place, Start; Start 
   const card = await page.evaluate(() => ({ note: document.getElementById('routeProgress').textContent, found: document.getElementById('routeProgress').classList.contains('found'),
     note2: document.getElementById('routeCardPager').textContent.replace(/\s/g, ' '), name: apexDebug.track.name, h: document.getElementById('planPanel').getBoundingClientRect().height,
     stage: document.querySelector('.stage').getBoundingClientRect().height, dials: document.getElementById('routeCardBars').innerText.replace(/\s+/g, ' ') }));
-  check(card.found && /^Better route found: \+\d+ min, \d+ more corners$/.test(card.note), 'the card says the ranked route replaced the first one, and why: ' + JSON.stringify(card));
+  // (on our router the swap can come from the context's refresh: "Conditions ahead: switched to the way by ...")
+  check(card.found && /^(Better route found: \+\d+ min, \d+ more corners|Conditions ahead: switched to the way by .+)$/.test(card.note), 'the card says the ranked route replaced the first one, and why: ' + JSON.stringify(card));
   // one control: the level cards are the choices, each its pick's time and corners, counted as the card counts them
   const cards = await levelCards(page);
   check(cards.length === 3 && cards.filter((c) => !c.further).every((c) => /^(Quick|Fun|Long way) (\d+:\d\d|\d+ min) \d+ corners?$/i.test(c.text)) && !cards.some((c) => /good corners/i.test(c.text))
@@ -7010,7 +7063,7 @@ flow('plan flow (a) a destination in 3 taps: Where to?, the place, Start; Start 
   await tap('#routeDriveBtn', 'Start');
   await page.waitForFunction(() => window.apexDebug.driveActive && apexDebug.track && apexDebug.track.kind === 'route', null, { timeout: 10000 });
   check(taps.n === 3, `a destination in 3 taps: ${taps.log.join(' → ')}`);
-}, IPHONE);
+}, { ...IPHONE, funLevel: 'fun' });
 
 flow('when to go: the route card says the best time to leave, opens the next day by the half hour, and plans the trip for the hour you pick (web/when_to_go.js)', async (page, base) => {
   const asked = [];
@@ -7053,6 +7106,36 @@ flow('when to go: the route card says the best time to leave, opens the next day
   await page.evaluate(() => document.getElementById('routeWhenNow').click());
   await planDone(page);
   await page.waitForFunction(() => !document.getElementById('routeCardWhen').hidden && !/^Leaving /.test(document.getElementById('routeWhenLine').textContent) && apexDebug.lastWhen.planned === null, null, { timeout: 25000 });
+}, IPHONE);
+
+flow('along the route by name: the Along line opens a list of the cafés and fuel stops by their names on the map, and a tap on one (or its pin) says its name and offers it as a stop (the owner, 2026-11-11)', async (page, base) => {
+  await planRouter(page);
+  const { tap } = await planPage(page, base);
+  // the map's points (offline here): a named café and an unnamed fuel station beside the route, from the route's own samples
+  await page.evaluate(() => { ApexStages.pois = async (pts) => { const a = pts[Math.min(1, pts.length - 1)], b = pts[Math.min(3, pts.length - 1)];
+    return [{ kind: 'cafe', name: 'Bean There Coffee', lat: a.lat + 0.0003, lon: a.lon }, { kind: 'fuel', name: null, lat: b.lat, lon: b.lon + 0.0004 }, { kind: 'fuel', name: 'Shell', lat: pts[pts.length - 1].lat, lon: pts[pts.length - 1].lon }]; }; });
+  await tap('#destInput', 'Where to?');
+  await page.fill('#destInput', 'Maryville');
+  await page.waitForSelector('#placeList .place', { timeout: 10000 });
+  await tap('#placeList .place', 'the place');
+  await cardUp(page);
+  await planDone(page);
+  await page.waitForFunction(() => !document.getElementById('routeCardAlong').hidden && /café/.test(document.getElementById('routeAlongLine').textContent), null, { timeout: 20000 });
+  const line = await page.evaluate(() => ({ text: document.getElementById('routeAlongLine').textContent, open: document.getElementById('routeAlongLine').getAttribute('aria-expanded'), panel: !document.getElementById('routeAlongPanel').hidden }));
+  check(/1 café/.test(line.text) && /fuel stop/.test(line.text) && line.open === 'false' && !line.panel, 'the Along line counts the café and fuel, closed: ' + JSON.stringify(line));
+  await page.evaluate(() => document.getElementById('routeAlongLine').scrollIntoView({ block: 'center' }));
+  await tap('#routeAlongLine', 'Along the route');
+  const rows = await page.evaluate(() => [...document.querySelectorAll('#routeAlongPanel .place')].map((b) => ({ name: b.querySelector('b').textContent, at: b.querySelector('span').textContent, sub: b.querySelector('small').textContent,
+    h: b.getBoundingClientRect().height, wide: b.getBoundingClientRect().right <= innerWidth })));
+  check(rows.length >= 2 && rows[0].name === 'Bean There Coffee' && /^Café/.test(rows[0].sub) && rows.some((r) => r.name === 'Fuel station, no name on the map')
+    && rows.every((r) => /( in|at the start)$/.test(r.at) && r.h >= 44 && r.wide), 'each place by its name (an unnamed one says so), where on the route, a 44 px row: ' + JSON.stringify(rows));
+  await scan(page, 'Along the route, open');
+  if (process.env.SHOTS) await page.screenshot({ path: `${process.env.SHOTS}/along-open.png` });
+  await page.evaluate(() => document.querySelector('#routeAlongPanel .place').click());
+  await page.waitForFunction(() => /^Bean There Coffee · Café · /.test(document.getElementById('toast').textContent) && /Add as a stop/.test(document.getElementById('toast').textContent), null, { timeout: 5000 });
+  // the café's pin on the map says the same
+  const pin = await page.evaluate(() => { const el = [...document.querySelectorAll('.poi-pin.poi-cafe')][0]; return el ? el.getAttribute('aria-label') : null; });
+  check(/^Bean There Coffee · Café · /.test(pin || ''), 'the café pin is named for a screen reader: ' + pin);
 }, IPHONE);
 
 // The route reveal and the card as a page (design pass, 2026-11-10; web/route_reveal.js): a route found is drawn onto the
@@ -7122,8 +7205,9 @@ flow('the route reveal: a route found is drawn onto the map like a pen stroke (a
   await page.click('#routeBar'); await page.waitForTimeout(400);
   // another route of the same plan: a quick redraw, not the set piece again, and no count
   await watch();
-  await page.click('#routeCardFun [data-fun="fun"]');
-  await page.waitForFunction(() => apexDebug.track && apexDebug.track.kind === 'route' && apexDebug.track.events.filter((e) => e.type === 'corner').length > 10 && !document.getElementById('planPanel').classList.contains('busy'), null, { timeout: 20000 });
+  // (the same plan's other route put up as a level card does: a Fun plan here would be our router's, and the Valhalla
+  // stand-in this flow routes on is Quick's only, the owner 2026-11-11)
+  await page.evaluate(() => { const t = apexDebug.track; apexDebug.buildRoute(null, t.id, t.name, { ...t, id: t.id, name: t.name }); });
   await page.waitForTimeout(900);
   const swap = await strokes();
   check(swap.strokes.length >= 1 && swap.strokes.every((k) => k.ms <= 500 && k.up) && swap.strokes[swap.strokes.length - 1].hi >= 0.6 && swap.last.g === null, 'a level card redraws the line quickly (about 0.3 s): ' + JSON.stringify(swap.strokes));
@@ -7152,6 +7236,7 @@ flow('the route reveal: a route found is drawn onto the map like a pen stroke (a
 flow('taste from picks: Start on another level\'s route than Vetta\'s pick teaches the taste, once, at half an answer, and says so', async (page, base) => {
   const asked = [];
   await planRouter(page, asked);
+  await funTiles(page, true);                                // (its arterials motorways: Quick's pick and Fun's differ)
   const { tap } = await planPage(page, base);
   await tap('#destInput', 'Where to?');
   await page.fill('#destInput', 'Maryville');
@@ -7171,7 +7256,7 @@ flow('taste from picks: Start on another level\'s route than Vetta\'s pick teach
   if (got.pick.lean) {
     await page.waitForFunction(() => /Noted: you picked the more (technical|flowing|smooth) road/.test(document.getElementById('toast').textContent), null, { timeout: 5000 });
   }
-}, IPHONE);
+}, { ...IPHONE, funLevel: 'fun' });
 
 flow('there and back: a trip to a place comes home another way in one tap, the destination a stop, the way out kept off the way home (graph_router.js roundTrip; Valhalla where our tiles don\'t reach)', async (page, base) => {
   const asked = [];
@@ -7303,6 +7388,7 @@ flow('the co-driver says a long descent once as the car nears its top, from the 
 flow('plan flow (e, f) a level change and an alternative are one tap or swipe each: the level cards are the routes found, nothing planned again (finding 4, 11)', async (page, base) => {
   const asked = [];
   await planRouter(page, asked);
+  await funTiles(page, true);                                // (its arterials motorways: Quick's pick and Fun's differ)
   const { cdp, taps, tap } = await planPage(page, base);
   await tap('#destInput'); await page.fill('#destInput', 'Maryville');
   await page.waitForSelector('#placeList .place', { timeout: 10000 });
@@ -7394,7 +7480,7 @@ flow('plan flow (e, f) a level change and an alternative are one tap or swipe ea
   check(swiped.on === '10' && swiped.count === '1/2' && /^Route 1 of 2\./.test(swiped.label), 'the marks count along: ' + JSON.stringify(swiped));
   check(!swiped.words && !swiped.note, 'once you have swiped, the words go and the marks stay: ' + JSON.stringify(swiped));
   await scan(page, 'the card after a swipe');
-}, IPHONE);
+}, { ...IPHONE, funLevel: 'fun' });
 
 // Design pass 4 (2026-11-10): on a phone the looks stand on a shelf you turn sideways, so the Garage is a third shorter and
 // the voice picker is on the first screen; signed out, Your cars is an empty bay with the key that gets you signed in.
@@ -8247,31 +8333,26 @@ flow('TestFlight 2026-11-05 note 6: the idle map\'s deck is the suggestion and o
   }
 }, { hasTouch: true, viewport: { width: 393, height: 852 }, geolocation: { latitude: 35.9606, longitude: -83.9207 }, permissions: ['geolocation'] });
 
-flow('time attack this week (SOCIAL 2.9): in Where to?, the area\'s stage and its board, as text, with gaps and Scores; Enter puts it in your Stages; your own stages go up; the area, never where you are, is sent', async (page, base) => {
-  const sent = [];
+flow('time attack this week (SOCIAL 2.9): in Where to?, the area\'s loop and its board, as text, with gaps and Scores; Enter puts it in your Stages; the area, never where you are, is sent', async (page, base) => {
+  const GEOM = JSON.stringify([[35.95, -83.9], [35.97, -83.88], [35.95, -83.9]]);
   let entered = false;
-  const GEOM = JSON.stringify([[35.95, -83.9], [35.97, -83.88]]);
+  const sent = [];
   await page.addInitScript(() => { localStorage.setItem('apex.onboarded', '1'); localStorage.setItem('apex.permsExplained', '1'); });
-  await page.addInitScript(() => localStorage.setItem('apex.segments', JSON.stringify([
-    { id: 'MINE1', name: 'Back road', length_m: 4200, synced: true, geom: '[[35.9,-83.9],[35.91,-83.89]]', lat0: 35.9, lon0: -83.9, lat1: 35.91, lon1: -83.89 },
-    { id: 'SHORT', name: 'Driveway', length_m: 300, synced: true }])));
   await page.route('**/api/**', (route) => {
     const u = new URL(route.request().url()), m = route.request().method();
     const json = (b, status = 200) => route.fulfill({ status, contentType: 'application/json', body: JSON.stringify(b) });
     if (u.pathname === '/api/me') return json({ signed_in: true, member: true, handle: 'me' });
     if (u.pathname === '/api/timeattack' && m === 'GET') {
       sent.push(['GET', u.search]);
-      return json({ week: '2026-11-09', ends_on: '2026-11-15', today: '2026-11-13', cell: '35,-84', entered, entrants: 3, pool: 2,
-        circuit: { segment_id: 'CIRC1', name: 'Foothills <b>run</b>', length_m: 2500, geom: GEOM, by: 'alice', week: '2026-11-09', ends_on: '2026-11-15', cell: '35,-84' },
-        board: [{ place: 1, handle: 'alice', time_s: 190, gap_s: 0, score: 700, mine: false }, { place: 2, handle: 'bob', time_s: 200, gap_s: 10, score: 780, mine: false },
-                { place: 2, handle: 'cara', time_s: 200, gap_s: 10, score: null, mine: false }],
-        you: null, last: { name: 'Last stage', podium: [{ handle: 'dee', time_s: 312 }] } });
+      return json({ week: '2026-11-09', ends_on: '2026-11-15', today: '2026-11-13', cell: '35,-84', entered, entrants: 3, make: null,
+        circuit: { segment_id: 'ta-CIRC1', name: 'Foothills <b>run</b> loop', length_m: 12500, geom: GEOM, week: '2026-11-09', ends_on: '2026-11-15', cell: '35,-84' },
+        board: [{ place: 1, handle: 'alice', time_s: 590, gap_s: 0, score: 700, mine: false }, { place: 2, handle: 'bob', time_s: 600, gap_s: 10, score: 780, mine: false },
+                { place: 2, handle: 'cara', time_s: 600, gap_s: 10, score: null, mine: false }],
+        you: null, last: { name: 'Last loop', podium: [{ handle: 'dee', time_s: 712 }] } });
     }
-    if (u.pathname === '/api/timeattack/pool' && m === 'GET') return json([]);
     if (m === 'POST') {
       sent.push([u.pathname, JSON.parse(route.request().postData() || 'null')]);
       if (u.pathname === '/api/timeattack/enter') { entered = true; return json({ segment_id: 'COPY1', added: true }); }
-      if (u.pathname === '/api/timeattack/pool') return json({ cell: '35,-83' }, 201);
       return json({}, 201);
     }
     if (m === 'GET') return json([]);
@@ -8284,25 +8365,56 @@ flow('time attack this week (SOCIAL 2.9): in Where to?, the area\'s stage and it
   await page.click('#planAttack > summary');
   await page.waitForSelector('#planAttack .ta-board');
   const text = await page.textContent('#planAttackBody');
-  check(text.includes('Foothills <b>run</b>') && /put up by @alice · 3 days left · 3 times/.test(text), 'the stage, as text: ' + text);
+  check(text.includes('Foothills <b>run</b> loop') && /loop from the area’s best roads · 3 days left · 3 times/.test(text) && !/put up/i.test(text), 'the loop, as text: ' + text);
   const cells = await page.$$eval('#planAttack .ta-board > span', (els) => els.map((e) => e.textContent));
-  check(cells.slice(0, 8).join('|') === '1|@alice|3:10|Score 700|2|@bob|3:20 +0:10|Score 780' && cells[11] === '', 'the board, quickest first, with gaps and Scores: ' + cells.join('|'));
-  check(/Last week, Last stage: 1\. @dee 5:12/.test(text) && /drive within the law/.test(text), 'last week\'s podium and the road note');
+  check(cells.slice(0, 8).join('|') === '1|@alice|9:50|Score 700|2|@bob|10:00 +0:10|Score 780' && cells[11] === '', 'the board, quickest first, with gaps and Scores: ' + cells.join('|'));
+  check(/Last week, Last loop: 1\. @dee 11:52/.test(text) && /A new loop every Monday/.test(text) && /drive within the law/.test(text), 'last week\'s podium and the road note');
   const q = new URLSearchParams(sent[0][1]);
   check(/\.5$/.test(q.get('lat')) && /\.5$/.test(q.get('lon')), 'only the middle of the area is sent: ' + sent[0][1]);
+  check(!sent.some(([p]) => p === '/api/timeattack/circuit'), 'a week that has its loop builds none');
   await page.click('#planAttack button:text-is("Enter")');
   await page.waitForSelector('#planAttack button:text-is("Drive it")');
   check(sent.some(([p, b]) => p === '/api/timeattack/enter' && b.cell === '35,-84'), 'Enter sends the area');
   const segs = await page.evaluate(() => JSON.parse(localStorage.getItem('apex.segments')));
-  check(segs.some((x) => x.id === 'COPY1' && x.origin === 'CIRC1' && x.synced && x.lat0 === 35.95 && x.lon1 === -83.88), 'the stage is in your Stages: ' + JSON.stringify(segs));
-  // your own stages go up: a 300 m one can't
-  await page.click('#planAttack summary:has-text("Put one of your stages up")');
-  const up = await page.textContent('#planAttack details.plan-more');
-  check(/Back road/.test(up) && !/Driveway/.test(up), 'only stages of 1 to 25 km: ' + up);
-  await page.click('#planAttack details.plan-more button:text-is("Put up")');
-  await page.waitForFunction(() => /It can be picked/.test(document.getElementById('toast').textContent));
-  check(sent.some(([p, b]) => p === '/api/timeattack/pool' && b.segment_id === 'MINE1'), 'Put up sends the stage');
+  check(segs.some((x) => x.id === 'COPY1' && x.origin === 'ta-CIRC1' && x.synced && x.lat0 === 35.95 && x.lat1 === 35.95), 'the loop is in your Stages: ' + JSON.stringify(segs));
 }, { geolocation: { latitude: 35.9606, longitude: -83.9207 }, permissions: ['geolocation'] });
+
+flow('time attack, a new week (the owner, 2026-11-11: autogenerated, the area\'s best loop roads at random, small loops): the first phone in the area builds the loop with our own router from the seed and sends it', async (page, base) => {
+  let circuit = null;
+  const sent = [];
+  await page.addInitScript(() => { localStorage.setItem('apex.onboarded', '1'); localStorage.setItem('apex.permsExplained', '1'); });
+  await page.route('**/api/**', (route) => {
+    const u = new URL(route.request().url()), m = route.request().method();
+    const json = (b, status = 200) => route.fulfill({ status, contentType: 'application/json', body: JSON.stringify(b) });
+    if (u.pathname === '/api/me') return json({ signed_in: true, member: true, handle: 'me' });
+    if (u.pathname === '/api/timeattack' && m === 'GET') {
+      return json({ week: '2026-11-09', ends_on: '2026-11-15', today: '2026-11-13', cell: '39,-85', entered: false, entrants: 0, circuit,
+        make: circuit ? null : { seed: '2026-11-09|39,-85|0', km: { min: 8, max: 16 } }, board: [], you: null, last: null });
+    }
+    if (u.pathname === '/api/timeattack/circuit' && m === 'POST') {
+      const b = JSON.parse(route.request().postData() || 'null');
+      sent.push(b);
+      circuit = { segment_id: 'ta-NEW', name: b.name, length_m: 10000, geom: JSON.stringify(b.geom), week: '2026-11-09', ends_on: '2026-11-15', cell: '39,-85' };
+      return json({ circuit, kept: true });
+    }
+    if (m === 'GET') return json([]);
+    return json({}, 404);
+  });
+  await page.goto(base + '/index.html');
+  await page.waitForFunction(() => window.apex && typeof window.apex.live === 'function');
+  await page.click('#destInput');
+  await page.waitForSelector('#planAttack:not([hidden]) > summary');
+  await page.click('#planAttack > summary');
+  await page.waitForFunction(() => /loop from the area’s best roads|doesn’t reach this area/.test(document.getElementById('planAttackBody').textContent), null, { timeout: 60000 });
+  const text = await page.textContent('#planAttackBody');
+  check(sent.length === 1, 'one loop sent: ' + text);
+  const b = sent[0] || {};
+  const g = b.geom || [], km = g.reduce((s, p, i) => (i ? s + Math.hypot((p[0] - g[i - 1][0]) * 111195, (p[1] - g[i - 1][1]) * 111195 * Math.cos(p[0] * Math.PI / 180)) : 0), 0) / 1000;
+  check(b.cell === '39,-85' && b.seed === '2026-11-09|39,-85|0' && / loop$|This week’s loop/.test(b.name || ''), 'the area, the seed and a name: ' + JSON.stringify({ cell: b.cell, seed: b.seed, name: b.name }));
+  check(g.length >= 10 && JSON.stringify(g[0]) === JSON.stringify(g[g.length - 1]) && Math.floor(g[0][0]) === 39 && Math.floor(g[0][1]) === -85, 'a closed line that starts in the area: ' + g.length + ' points');
+  check(km >= 5 && km <= 25, 'a small loop: ' + km.toFixed(1) + ' km');
+  check(text.includes(b.name) && /Enter/.test(await page.textContent('#planAttack')), 'and it is the week\'s loop on the page: ' + text);
+}, { geolocation: { latitude: 39.1, longitude: -84.5 }, permissions: ['geolocation'] });
 
 
 (async () => {
@@ -8311,7 +8423,8 @@ flow('time attack this week (SOCIAL 2.9): in Where to?, the area\'s stage and it
   const browser = await chromium.launch();
   let failed = 0;
   // FLOW=<text> runs only the flows whose name contains it; REPEAT=<n> runs each n times (for chasing a flaky one).
-  const picked = process.env.FLOW ? flows.filter((f) => f.name.includes(process.env.FLOW)) : flows;
+  const pats = process.env.FLOWS ? process.env.FLOWS.split("\n").filter(Boolean) : null;
+  const picked = pats ? flows.filter((f) => pats.some((p) => f.name.includes(p))) : process.env.FLOW ? flows.filter((f) => f.name.includes(process.env.FLOW)) : flows;
   // SHARD=<k>/<n> runs the k-th of n slices (CI runs n jobs side by side; each flow is in exactly one of them). Flows are
   // dealt longest first to the lightest slice, so the long ones don't pile into one job. Seconds from the CI log of
   // 2026-11-11; a flow not listed counts as 5 s (a renamed one still runs, it is only dealt as a short one).
@@ -8333,13 +8446,17 @@ flow('time attack this week (SOCIAL 2.9): in Where to?, the area\'s stage and it
   if (process.env.LIST) { for (const f of only) console.log(f.name); process.exit(0); }   // LIST=1: the flows this run would take, nothing run
   const runs = only.flatMap((f) => Array.from({ length: Math.max(1, Number(process.env.REPEAT) || 1) }, () => f));
   for (const { name, fn, ctxOpts } of runs) {
-    const { news, ...browserOpts } = ctxOpts;
+    graphDir = null;
+    const { news, funLevel: lv0, ...browserOpts } = ctxOpts;
     const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 2, ...browserOpts });
     // Only our own server: maps, routers, fonts and voices are blocked, so the result doesn't depend on the network.
     await ctx.route('**/*', (route) => (route.request().url().startsWith(base) ? route.continue() : route.abort()));
     // "What's new" (IDEAS O-10) would sit over every flow; it is seen already unless a flow says otherwise (ctxOpts.news).
     const newsId = require('../web/whats_new.js').NEWS.id;
     if (!ctxOpts.news) await ctx.addInitScript((id) => { try { if (!localStorage.getItem('apex.newsSeen')) localStorage.setItem('apex.newsSeen', id); } catch (_) {} }, newsId);
+    // Fun and Long way are our router's only (Valhalla is for Quick, the owner 2026-11-11), and most flows route on a
+    // stubbed Valhalla off our tiles: they plan at Quick unless they (or ctxOpts.funLevel) choose a level
+    await ctx.addInitScript((lv) => { try { if (!localStorage.getItem('apex.funLevel')) localStorage.setItem('apex.funLevel', lv); } catch (_) {} }, lv0 || 'quick');
     const page = await ctx.newPage();
     if (process.env.THROTTLE) { const c = await ctx.newCDPSession(page); await c.send('Emulation.setCPUThrottlingRate', { rate: Number(process.env.THROTTLE) }); }
     const errors = [];

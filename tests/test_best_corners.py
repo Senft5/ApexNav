@@ -48,17 +48,34 @@ def test_from_real_observations():
     assert len(b) == 1 and 0 <= b[0]["level"] <= 100 and b[0]["size"] in ("tight", "medium", "fast")
 
 
+def test_records_by_size_hold_the_first_cleanest_corner():
+    t = [corner(10 * i, 80 + i, "tight") for i in range(4)]
+    drives = [
+        {"id": "a", "at": "2026-05-02T09:00", "name": "Dry Ridge Rd", "obs": t + [corner(90, 95, "medium", "R")]},
+        {"id": "b", "at": "2026-03-02T09:00", "name": "Pebble Ridge", "obs": [corner(5, 95, "medium"), corner(7, 99, "tight", brake=None)]},
+        {"id": "c", "at": None, "name": "Undated", "obs": [corner(5, 97, "tight")] + [corner(20 + i, 70, "medium") for i in range(3)]},
+        {"id": "d", "at": "2025-12-30T09:00", "name": "Last Year Rd", "obs": [corner(5, 60, "fast")]},
+    ]
+    r = dp.records_by_size(drives)
+    assert r["tight"]["id"] == "c" and r["tight"]["level"] == 97 and r["tight"]["at"] is None and r["tight"]["n"] == 5   # unmeasured credit: not read
+    assert (r["medium"]["id"], r["medium"]["level"], r["medium"]["n"]) == ("b", 95, 5)       # a tie: the earlier drive holds it
+    assert r["fast"] is None                                                                  # one fast corner says nothing
+    assert dp.records_by_size([]) == {"tight": None, "medium": None, "fast": None}
+
+
 @pytest.mark.skipif(NODE is None, reason="node not installed")
 def test_parity_and_words():
     drives = [{"id": f"d{s}", "at": f"2026-{4 + s:02d}-0{1 + s}T09:00", "name": f"Road {s % 3}", "obs": dp.observe(make_drive(s, fault=(lambda i, w, z: "saw" if i % 4 == s % 4 else None)))} for s in range(6)]
     py = dp.best_corners(drives, 2026)
+    rec = dp.records_by_size(drives + [{"id": "u", "at": None, "name": None, "obs": dp.observe(make_drive(7))}])
     runner = ("const P=require(process.argv[1]+'/web/driver_profile.js'),Y=require(process.argv[1]+'/web/year_review.js');"
-              "const ds=JSON.parse(require('fs').readFileSync(0,'utf8'));const b=P.bestCorners(ds,2026);"
-              "process.stdout.write(JSON.stringify({b,say:Y.lines({miles:1,m:1609.344,drives:1,corners:3,months:1,topRoads:[],best:null,longest:null,bestCorners:b}),"
+              "const [ds,more]=JSON.parse(require('fs').readFileSync(0,'utf8'));const b=P.bestCorners(ds,2026);"
+              "process.stdout.write(JSON.stringify({b,rec:P.recordsBySize(ds.concat(more)),say:Y.lines({miles:1,m:1609.344,drives:1,corners:3,months:1,topRoads:[],best:null,longest:null,bestCorners:b}),"
               "one:Y.cornerText({at:'2026-08-12T09:00',name:'Dry Ridge Rd',dir:'R',size:'tight',level:99}),"
               "bare:Y.cornerText({at:null,name:null,dir:null,size:null,level:90})}));")
-    out = json.loads(subprocess.run([NODE, "-e", runner, os.getcwd()], input=json.dumps(drives), capture_output=True, text=True, check=True).stdout)
+    out = json.loads(subprocess.run([NODE, "-e", runner, os.getcwd()], input=json.dumps([drives, [{"id": "u", "at": None, "name": None, "obs": dp.observe(make_drive(7))}]]), capture_output=True, text=True, check=True).stdout)
     assert out["b"] == py and len(py) == 3
+    assert out["rec"] == rec and sum(rec[z] is not None for z in rec) >= 2
     assert out["one"] == "a tight right on Dry Ridge Rd (Aug 12), 99"
     assert out["bare"] == "a corner, 90"
     line = out["say"][-1]

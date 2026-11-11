@@ -44,7 +44,7 @@ def test_should_send():
 @needs_node
 def test_explainer():
     assert "Nobody sees you until you choose" in run("F.explainer({ audience: 'nobody' })")
-    assert run("F.explainer({ audience: 'crew', delay_s: 600, fuzz: true })").startswith("Your crews see you 10 minutes late, within a mile, only while you drive.")
+    assert run("F.explainer({ audience: 'crew', delay_s: 600, fuzz: true })").startswith("Your private crews see you 10 minutes late, within a mile, only while you drive.")
     assert run("F.explainer({ audience: 'friends', delay_s: 0, fuzz: false, onlyDriving: false })").startswith("Your friends see you as you drive, where you are, whenever the app is open.")
 
 
