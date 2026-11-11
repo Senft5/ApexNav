@@ -7748,6 +7748,9 @@
       // wrapped line never starts with one.
       const m = main.map((x, i) => `<span>${x}${i < main.length - 1 ? ' ·' : ''}</span>`).join(' '), w = warn.join(' · ');
       if ($('dsMain').innerHTML !== m) $('dsMain').innerHTML = m;
+      // the line's state, for its drawing (index.html #driveBar[data-state]): seek until the first sample is kept
+      const ds = s.gps === 'denied' ? 'off' : zoned ? 'zone' : r && r.samples > 0 ? 'rec' : 'seek';
+      if ($('driveBar').dataset.state !== ds) $('driveBar').dataset.state = ds;
       if ($('dsWarn').textContent !== w) $('dsWarn').textContent = w;
       if ($('dsWarn').hidden !== !w) $('dsWarn').hidden = !w;
     }

@@ -189,8 +189,6 @@
     .notes-roadbook > .note-quiet { padding-left: 8px; grid-column: 1 / -1; }   /* 16 pt from the edge like the deck (docs/design/REVIEW2.md 1.17) */
     .rb-box { display: grid; grid-template-columns: auto 46px minmax(0, 1fr); gap: 6px; align-items: center; padding: 2px 8px; border-left: 1.5px solid var(--rule); min-width: 0; }
     .rb-box:first-child { border-left: none; }
-    .rb-box.advance { animation: rb-advance 160ms ease-out both; }
-    @keyframes rb-advance { from { transform: translateX(14%); opacity: 0.35; } to { transform: none; opacity: 1; } }
     /* The next note steps back in colour, not opacity, so its small text keeps 4.5:1 contrast (only the tulip fades) */
     .rb-box:not(.now) { color: var(--panel-dim); } .rb-box:not(.now) .rb-tulip { opacity: 0.62; }
     @media (max-width: 520px) { .notes-roadbook { grid-template-columns: minmax(0, 1fr) auto; } .rb-box:nth-child(3) { display: none; } }   /* one next cell on a phone upright */
@@ -634,7 +632,7 @@
     /* Roadbook binnacle reads as the printed page */
     [data-theme="roadbook"] .key, [data-theme="roadbook"] .ro, [data-theme="roadbook"] .scrubber { border-width: 1.5px; }
     [data-theme="roadbook"] .notes { border-bottom: 2px solid var(--rule); }
-    [data-theme="roadbook"] .binnacle { border-top: 2px solid var(--rule); }
+    [data-theme="roadbook"] .binnacle { border-top: 2px solid var(--rule); }   /* the idle deck's edge; in a drive both are paper on the map (the Vetta Line block below) */
 
     @media (min-width: 820px) {
       :root { --dial: clamp(128px, 17dvh, 180px); }
@@ -1751,6 +1749,114 @@
       .plates, .place-plate, .hz-plate { left: calc(16px + var(--safe-left)); }                                  /* 21 */
     }
 
+    /* ---------------- The drive screen, "Vetta Line" (design pass 2026-11-10, docs/CALL_SHEET.md) ----------------
+       The map is the page; the strip and the instrument panel are paper laid on it (a soft warm lift, no black rule).
+       One hero readout: the speed, in Barlow Condensed, over a ruled line the speed is drawn along (instruments.js
+       mountLine, Roadbook's cluster). End is the one ink key; Report is a word. Motion only where a drive starts (the
+       paper arrives, the numeral counts in, the meter's rings are drawn, once) and where a call changes. */
+    /* 1. paper on the map (Roadbook; Tapedeck and Billet keep their own edges) */
+    [data-theme="roadbook"] #app > .notes { border-bottom: 0; box-shadow: 0 10px 22px -14px color-mix(in srgb, var(--rule) 55%, transparent), 0 1px 0 var(--hair); }
+    [data-theme="roadbook"] #app.live > .binnacle, [data-theme="roadbook"] #app.replaying > .binnacle { border-top: 0; border-left: 0;
+      box-shadow: 0 -10px 22px -14px color-mix(in srgb, var(--rule) 55%, transparent), 0 -1px 0 var(--hair); }
+    [data-theme="roadbook"][data-mode="night"] #app > .notes, [data-theme="roadbook"][data-mode="night"] #app.live > .binnacle, [data-theme="roadbook"][data-mode="night"] #app.replaying > .binnacle { box-shadow: 0 0 0 1px var(--hair); }
+    #app.live > .binnacle, #app.replaying > .binnacle { padding-top: 8px; gap: 0; }
+    /* 2. the drive bar: what the drive is doing, said once; Report a quiet word; End the one key */
+    #app .drivebar { padding: 0 6px 8px; gap: 2px; border-bottom: 1px solid var(--hair); min-height: 60px; }
+    #app .drivebar .ds-main { font-size: 17px; }
+    #app #hzReportBtn { height: 52px; padding: 0 12px; border: 0; background: none; box-shadow: none; font-size: 15px; font-weight: 600; color: var(--panel-ink); }
+    #app #driveEnd { height: 52px; min-width: 76px; margin-left: 4px; font-size: 17px; font-weight: 700; }
+    /* seeking (Finding GPS…, Starting…): pencil, an open ring, and a short stroke of ink searching along a hairline; the
+       moment a sample is kept the line is the record line, in ink, and holds still */
+    #driveBar[data-state="seek"] .ds-main { position: relative; width: fit-content; max-width: 100%; padding-bottom: 7px; color: var(--panel-dim); }
+    #driveBar[data-state="seek"] .ds-main::before { content: ""; display: inline-block; width: 10px; height: 10px; margin-right: 9px; border: 2px solid var(--panel-dim); border-radius: 50%; }
+    #driveBar[data-state="seek"] .ds-main::after { content: ""; position: absolute; left: 0; right: 0; bottom: 0; height: 2px;
+      background: linear-gradient(var(--panel-ink), var(--panel-ink)) 0 0 / 30% 100% no-repeat var(--hair); animation: hud-seek 1.8s cubic-bezier(0.45, 0, 0.55, 1) infinite alternate; }
+    @keyframes hud-seek { from { background-position: 0 0; } to { background-position: 100% 0; } }
+    #driveBar[data-state="off"] .ds-main, #driveBar[data-state="zone"] .ds-main { color: var(--panel-ink); }
+    #app .transport { padding: 0 6px 10px; border-bottom: 1px solid var(--hair); }
+    /* the replay's transport in the same hand: the trace bare on the paper, the speeds as numerals with the chosen one
+       underlined in ink, Video a word; Done is the one key. The replay's name is a paper tag on the map. */
+    [data-theme="roadbook"] .transport .scrubber { border: 0; height: 34px; }
+    [data-theme="roadbook"] .transport .detents.tp-rate > button { border: 0; background: none; color: var(--panel-dim); font-size: 20px; }
+    [data-theme="roadbook"] .transport .detents.tp-rate > button::after { display: none; }
+    [data-theme="roadbook"] .transport .detents.tp-rate > [aria-checked="true"] { color: var(--panel-ink); box-shadow: inset 0 -3px 0 var(--panel-ink); }
+    [data-theme="roadbook"] .transport #videoBtn { border: 0; box-shadow: none; padding: 0 6px; }
+    [data-theme="roadbook"] .transport #videoBtn.on { color: var(--accent); }
+    [data-theme="roadbook"] .transport > #replayDone { min-height: 52px; min-width: 76px; font-size: 17px; font-weight: 700; box-shadow: none; }
+    [data-theme="roadbook"] #app.replaying #modePlate { border: 0; padding: 10px 14px; font-size: 15px; box-shadow: 0 6px 18px -8px color-mix(in srgb, var(--rule) 60%, transparent), 0 0 0 1px var(--hair); }
+    /* 3. the Vetta Line cluster */
+    .cluster-line { display: grid; grid-template-columns: minmax(0, 1fr) auto 82px; grid-template-areas: "speed read g" "rule rule rule" "ledger ledger ledger";
+      column-gap: 14px; align-items: end; padding: 10px 6px 0; width: 100%; max-width: 560px; margin: 0 auto; }
+    .cluster-line > * { min-width: 0; }
+    .cluster-line > .dial.dial-speed { grid-area: speed; width: 100%; max-width: 172px; height: auto; aspect-ratio: 150 / 100; }
+    .cluster-line .line-svg { overflow: visible; }
+    .cluster-line .dial-speed .dial-digital, html[data-mode="night"] .cluster-line .dial-speed .dial-digital:not(.small) { font-size: 104px; font-weight: 700; letter-spacing: -1px; fill: var(--panel-ink); filter: none; }
+    .cluster-line .dial-speed .dial-digital.unk { fill: var(--panel-dim); }
+    .cluster-line .dial-speed .dial-label { font-size: 16px; font-weight: 700; letter-spacing: 1.5px; fill: var(--panel-dim); }
+    .cluster-line > .cluster-center { grid-area: read; align-self: center; display: block; }
+    .cluster-line .readouts { grid-template-columns: 44px auto; gap: 12px; width: auto; align-items: center; }
+    .cluster-line .ro.ro-sight { min-width: 58px; padding: 4px 6px; border: 0; justify-items: start; gap: 3px; }
+    .cluster-line .ro.ro-sight b, html[data-mode="night"] .cluster-line .ro.ro-sight b { font-size: 26px; line-height: 1; }
+    .cluster-line .ro-eye { width: 15px; height: 15px; }
+    .cluster-line > .dial.dial-g { grid-area: g; display: block; width: 82px; height: auto; }
+    .cluster-line .dial.dial-g > svg.g-line { display: block; flex: none; width: 100%; height: auto; overflow: visible; }
+    .cluster-line .g-line .dial-label { font-size: 32px; letter-spacing: 3px; fill: var(--panel-dim); }
+    .cluster-line .g-line .dial-digital.small, html[data-mode="night"] .cluster-line .g-line .dial-digital.small { font-size: 34px; font-weight: 700; fill: var(--panel-ink); }
+    .cluster-line .g-line .dial-digital.small.unk { fill: var(--panel-dim); }
+    .cluster-line .g-ring { animation: hud-ring 800ms cubic-bezier(0.2, 0.8, 0.2, 1) 260ms backwards; }
+    @keyframes hud-ring { from { stroke-dasharray: var(--len); stroke-dashoffset: var(--len); } to { stroke-dasharray: var(--len); stroke-dashoffset: 0; } }
+    /* the line: a ruler the width of the panel; the speed in ink along it, the limit, pace and sight marks standing on it */
+    .cluster-line > .speed-line { grid-area: rule; height: 34px; margin-top: 8px; padding: 0 6px; }
+    .speed-line-svg { display: block; }
+    .sl-base, .sl-tick { stroke: var(--panel-dim); stroke-width: 1; } .sl-tick.major { stroke: var(--panel-ink); stroke-width: 1.5; }
+    .sl-num { font: 600 13px var(--font-num); fill: var(--panel-dim); }
+    .sl-fill { stroke: var(--panel-ink); stroke-width: 5; }
+    .sl-tip circle { fill: var(--panel-ink); stroke: var(--panel); stroke-width: 1.5; } .sl-tip.over circle { fill: var(--signal); }
+    .sl-limit rect { fill: var(--face); stroke: var(--panel-ink); stroke-width: 1.5; }
+    .sl-pace path { fill: var(--panel-ink); }
+    .sl-sight path { fill: none; stroke: var(--amber); stroke-width: 2; }
+    /* the ledger: the trip, the road and the Score, one quiet line under the ruler */
+    .cluster-line > .ledger { grid-area: ledger; display: flex; align-items: center; gap: 4px 18px; min-height: 46px; margin-top: 6px; border-top: 1px solid var(--hair); }
+    .cluster-line .odo { display: flex; align-items: baseline; gap: 6px; flex: none; }
+    .cluster-line .odo-meta { display: contents; font-size: 13px; font-weight: 600; color: var(--panel-dim); }
+    .cluster-line .odo-meta > span { font-size: 13px; font-weight: 600; color: var(--panel-dim); white-space: nowrap; } .cluster-line .odo-meta > span:first-child { order: -1; } .cluster-line .odo-meta > span:empty { display: none; }
+    .cluster-line .odo-digits { font-size: 22px; gap: 0; } .cluster-line .odo-digits .lead { color: var(--panel-dim); opacity: 0.55; }
+    .cluster-line .ledger > .dna-arch { flex: 1 1 0; min-width: 0; text-align: left; font-size: 15px; font-weight: 600; line-height: 1.15; white-space: normal; overflow-wrap: break-word; }
+    .cluster-line .ledger > .g-score { flex: none; margin: 0 0 0 auto; display: flex; flex-direction: row-reverse; align-items: baseline; gap: 8px; min-height: 44px; }
+    .cluster-line .ledger > .g-score b { font-size: 26px; line-height: 44px; } .cluster-line .ledger > .g-score.unk b { color: var(--panel-dim); } .cluster-line .ledger > .g-score span { font-size: 13px; }
+    html[data-mode="night"] #cluster.cluster-line:not(.show-trip) .trip-peek { padding: 0; min-width: 44px; text-align: left; }
+    @media (orientation: landscape) and (max-height: 540px), (max-width: 359px) {
+      /* a narrow column (a phone on its side, a small phone): the numeral keeps its size; the meter moves down beside the ledger */
+      .cluster-line { grid-template-columns: 80px minmax(0, 1fr) auto; grid-template-areas: "speed speed read" "rule rule rule" "g ledger ledger"; }
+      #app .drivebar .ds-main { font-size: 15px; }
+      .cluster-line > .dial.dial-speed { max-width: 150px; }
+      .cluster-line > .dial.dial-g { width: 80px; margin-top: 8px; align-self: start; }
+      .cluster-line > .ledger { flex-direction: column; align-items: flex-start; justify-content: center; align-self: stretch; gap: 2px; border-top: 0; margin: 8px 0 0 4px; }
+      .cluster-line .ledger > .dna-arch { flex: none; width: 100%; }
+      .cluster-line .ledger > .g-score { margin: 0; min-height: 0; } .cluster-line .ledger > .g-score b { line-height: 1.2; }
+    }
+    /* 4. the start: the strip and the panel arrive as paper on one curve, once; then stillness */
+    @keyframes hud-rise { from { transform: translateY(100%); } }
+    @keyframes hud-drop { from { transform: translateY(-100%); } }
+    @keyframes hud-side { from { transform: translateX(100%); } }
+    #app.live > .binnacle, #app.replaying > .binnacle { animation: hud-rise 420ms cubic-bezier(0.2, 0.8, 0.2, 1) backwards; }
+    #app.live > .notes, #app.replaying > .notes { animation: hud-drop 420ms cubic-bezier(0.2, 0.8, 0.2, 1) backwards; }
+    @media (orientation: landscape) and (max-height: 540px) {
+      #app.live > .binnacle, #app.replaying > .binnacle { animation-name: hud-side; }
+      [data-theme="roadbook"] #app.live > .binnacle, [data-theme="roadbook"] #app.replaying > .binnacle { box-shadow: -10px 0 22px -14px color-mix(in srgb, var(--rule) 55%, transparent), -1px 0 0 var(--hair); }
+      [data-theme="roadbook"][data-mode="night"] #app.live > .binnacle, [data-theme="roadbook"][data-mode="night"] #app.replaying > .binnacle { box-shadow: 0 0 0 1px var(--hair); }
+      #app.live > .binnacle, #app.replaying > .binnacle { padding-top: 6px; }
+    }
+    /* 5. a call arrives: its words settle up into place and the pen draws its tulip (instruments.js ADVANCE_MS) */
+    .rb-box.advance { animation: rb-advance 420ms cubic-bezier(0.2, 0.8, 0.2, 1) both; }
+    @keyframes rb-advance { from { transform: translateY(10px); opacity: 0.3; } to { transform: none; opacity: 1; } }
+    .rb-box.now.advance .tulip .pen { animation: hud-pen 420ms cubic-bezier(0.2, 0.8, 0.2, 1) var(--adv, 0ms) backwards; }
+    .rb-box.now.advance .tulip polygon { animation: hud-head 420ms linear var(--adv, 0ms) backwards; }
+    @keyframes hud-pen { from { stroke-dasharray: 1; stroke-dashoffset: 1; } to { stroke-dasharray: 1; stroke-dashoffset: 0; } }
+    /* the welcome calls a corner every 1.8 s and settles between calls (e2e "first run and the end card"): its strip keeps the 160 ms slide */
+    #onboard .rb-box.advance, #onboard .rb-box.now.advance .tulip .pen, #onboard .rb-box.now.advance .tulip polygon { animation-duration: 160ms; }
+    @keyframes hud-head { from, 70% { opacity: 0; } }
+
     /* The opening cover (web/boot.js): the theme's panel and the mark until the page has drawn. */
     #boot { position: fixed; inset: 0; z-index: 10000; display: grid; place-items: center; background: var(--panel, #151310); transition: opacity 0.2s ease-out; }
     #boot { color: var(--panel-ink, #EDE4D3); }
@@ -2210,7 +2316,7 @@
     </section>
 
     <section class="binnacle" id="binnacle">
-      <div class="drivebar" id="driveBar" hidden>
+      <div class="drivebar" id="driveBar" data-state="seek" hidden>
         <div class="dbstat" id="driveStat"><div class="ds-main" id="dsMain">Finding GPS…</div><div class="ds-note" id="dsNote" role="status" aria-live="polite" hidden></div><div class="ds-warn" id="dsWarn" role="status" aria-live="polite" hidden></div></div>
         <button class="key" id="hzReportBtn" aria-label="Report a hazard">Report</button>
         <button class="key" id="driveEnd" aria-label="End drive">End</button>
