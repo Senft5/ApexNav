@@ -3575,6 +3575,14 @@ flow('reported hazards: a call ahead, "still there?" after passing, and a one-ta
       const k = window.apexDebug.state.lastSaid;   // a line the voice pack says (web/voice_lines.js) never reaches speechSynthesis
       if (k && window.__said[window.__said.length - 1] !== k) window.__said.push(k);
       await new Promise(r => setTimeout(r, 20)); }
+    // The car keeps sending fixes from here on, as a phone does. A web drive with no fix for 5 s drops back to the replay
+    // ("GPS lost") and the drive bar goes: the ask, the vote and the report's 3 s Undo run past 5 s on a slow runner
+    // (main's e2e 2026-11-11; then a sharded run where the gap opened before the first fix of a later-started feed).
+    const fix = () => window.apex.live({ lat: 35.6 + 330 / 110540, lon: -83.9, accuracy_m: 5, speed_mps: 15, course_deg: 0, has_fix: true, calibration: 'locked' });
+    window.__fixes = setInterval(fix, 500);
+    window.__words = [];   // every word the toast and the status line showed, for the dump below
+    for (const id of ['toast', 'dsNote']) new MutationObserver(() => { const t = document.getElementById(id).textContent; if (t) window.__words.push(id + ': ' + t); })
+      .observe(document.getElementById(id), { childList: true, characterData: true, subtree: true });
   });
   await page.waitForFunction(() => !document.getElementById('hzAsk').hidden, null, { timeout: 5000 });
   check(/Gravel still there\?/.test(await page.textContent('#hzAsk')), 'asks after passing it');
@@ -3584,17 +3592,14 @@ flow('reported hazards: a call ahead, "still there?" after passing, and a one-ta
   // VI-1: asked by the 0.1-degree cell, never the position (the phone measures the 200 m itself)
   check(asked.length >= 1 && asked.every((q) => /^\?lat=35\.6&lon=-83\.9&km=20$/.test(q)), 'the hazards are asked for by cell: ' + JSON.stringify(asked));
   check(await page.evaluate(() => window.__said.some((t) => /gravel reported ahead/i.test(t)) || /Gravel reported ahead/.test(document.body.textContent)), 'the hazard was called ahead');
-  // The car keeps sending fixes from here on, as a phone does. A web drive with no fix for 5 s drops back to the replay
-  // ("GPS lost"), the drive bar goes and the report's word goes to the toast instead of the status line: the ask, the vote
-  // and the report's 3 s Undo run past 5 s on a slow runner (main's e2e, 2026-11-11, a bare 30 s timeout here).
-  await page.evaluate(() => { window.__fixes = setInterval(() => window.apex.live({ lat: 35.6 + 330 / 110540, lon: -83.9, accuracy_m: 5, speed_mps: 15, course_deg: 0, has_fix: true, calibration: 'locked' }), 500); });
   await page.click('#hzReportBtn');
   await page.click('#hzKinds button:has-text("Pothole")');
   // REVIEW4 U-74 / U-102 (check): in a drive the confirmation is the status line's, never a toast over the map
   await page.waitForFunction(() => /Pothole reported/.test(document.getElementById('dsNote').textContent), null, { timeout: 15000 })
     .catch(async () => { throw new Error('the report\'s status line never came: ' + JSON.stringify(await page.evaluate(() => ({ note: document.getElementById('dsNote').textContent,
       toast: document.getElementById('toast').textContent, key: document.getElementById('hzReportBtn').textContent, bar: !document.getElementById('driveBar').hidden,
-      outbox: localStorage.getItem('apex.outbox'), said: (window.__said || []).slice(-4) }))) + ' reports=' + reports.length); });
+      outbox: localStorage.getItem('apex.outbox'), said: (window.__said || []).slice(-4),
+      sheet: document.getElementById('hzOverlay').classList.contains('show'), words: (window.__words || []).slice(-6) }))) + ' reports=' + reports.length); });
   check(!(await page.evaluate(() => document.getElementById('toast').classList.contains('show') && /Pothole/.test(document.getElementById('toast').textContent))), 'no toast over the map');
   check(await page.evaluate(() => { const n = document.getElementById('dsNote'); return !n.hidden && n.scrollWidth <= n.clientWidth + 1 && /reported/.test(n.getAttribute('aria-label')); }), 'the status line says it whole (or its first sentence)');
   check(reports.length === 1 && reports[0].kind === 'pothole' && Math.abs(reports[0].lat - (35.6 + 330 / 110540)) < 1e-4 && reports[0].heading === 0, 'reported at your position and heading');
