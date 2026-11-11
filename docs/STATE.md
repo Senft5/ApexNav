@@ -1,5 +1,17 @@
 # VETTA — CURRENT AGENT HANDOFF STATE
 
+## Session 2026-11-11 (ui-round-two, PR 4): the map's top band, signed-out reads, a crew's head and the Share box (claude/project-thread-5sbga7)
+
+- The idle map's blank top band (Roamer B): the canvas draws fully (toDataURL shows the map to y = 0); Chromium culled the
+  canvas under the opaque `.binnacle` at the wrong (y-flipped) end, so the band was exactly the binnacle's height (157 px)
+  at every pitch and viewport. A bare MapLibre page doesn't show it; `visibility: hidden` on the binnacle or 0.99 alpha
+  clears it. Fix: `.binnacle` background at 99.6 % (signature.css, last block). setSky changes nothing there.
+- web/sync.js `apiFetch`: `known` (true/false/null) from /api/me's `signed_in` (only when it says), setSession, or a 401;
+  signed out, GET /api/convoy/invites, /api/points, /api/hazards, /api/roads answer 401 locally. Unknown still asks.
+- signature.css "a crew's page and the Share box": crew name Barlow 30/32 px, cp keys paper, chat a well; Share chips wells.
+- Tests: tests/test_signed_out_reads.py, tests/test_sheets_line.py (+2). e2e convoy, hazard, police, closure flows pass.
+- Next: round two is done (Log, Garage, People, Settings and sheets, crew, Share). Look for screens still boxed in ink.
+
 ## Session 2026-11-11 (roam-a descent call): "Long descent ahead" near the top (claude/project-thread-h7xxmf, off origin/main)
 
 - IDEAS V-12, part three. web/brake_heat.js `descentAhead(list, atM, said)` (500 m before a top to 300 m past it, once per
