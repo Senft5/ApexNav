@@ -11,6 +11,26 @@ OpenStreetMap has for it, how far into the route and how far off the road; tappi
 a stop. Tapping a CAFÉ or FUEL pin on the map says its name too. Calls: fuel stations are now counted on the line (before,
 only a long stretch without fuel was said), so there is something to tap; a place with no name on the map says "no name on
 the map" rather than a guess. Undo: revert the PR.
+## 2026-11-11 (roam-c presence-private-crews): "Your crews see where you are" means private crews only (claude/roam-c-presence-private-crews)
+
+Found in the security pass. Anyone can join a public crew with one tap, and Friends on the map set to Crew showed your
+position to every member of every crew you were in, public ones included. So a stranger could join a big public crew and see
+where its members were (within a mile and 10 minutes late by default, but exact and live if they chose that). Now Crew means
+your private crews only, as cars already did. The sheet, Who sees what and the privacy page say "private crews". Nothing
+stored changes. Undo: revert the PR (public crews' members see your position again).
+
+
+## 2026-11-11 (ui-round-two): the blank band at the top of the map, signed-out 401s, a crew's name and the Share box (claude/project-thread-5sbga7)
+
+The blank paper band at the top of the idle map (as tall as the deck under it) was not missing tiles: the map draws all
+the way up, but Chrome treated the solid deck over the map as hiding part of it and skipped the wrong end. The deck is now
+99.6 % solid instead of 100 %, which nobody can see, and the map reaches the top. A sky colour would not have helped.
+Undo: delete the "map under the deck" rule at the end of web/signature.css.
+Signed out, the app no longer asks the server for convoy invites, points, hazards or members' roads once it knows you are
+signed out; it answers itself with "sign in required". Undo: the MEMBER_READS lines in web/sync.js.
+A crew's name is set large like the Garage's, its keys are paper, and the people you can share a route with are soft wells
+that turn ink when picked.
+
 ## 2026-11-11 (social round two): For you, and a People badge that counts what's new (claude/project-thread-uwmi4e)
 
 People → Friends now opens with For you: a friend topping your best Score on one of your stages, someone passing your
@@ -110,6 +130,18 @@ against a route (35 m, not the card's 60 m count). When nothing gets round, the 
 
 Undo: revert the PR (no data changed). To split speed cameras onto their own switch, filter `kind` in `camsForTrip` and
 `camerasAround` (cockpit.js) by a new avoid key.
+## 2026-11-11 (auto time attack): each area's weekly loop is picked by Vetta, built on the first phone there (claude/project-thread-uwmi4e)
+
+Your call: time attacks are made automatically every week in any area with members, as small loops over the area's best
+roads chosen at random, not from members' stages. The server can't plan routes, so the first member's phone to open Time
+attack in an area that week builds the loop with our own router from a seed the server hands out (the same seed gives
+every phone the same start and pick), and the server checks it and keeps the first one. Choices I made: a loop of 8 to 16
+km is asked for (5 to 25 km accepted); the start is a random one of the area's road tiles, tried up to four; one of the
+router's best three loops is drawn; it's named by its main road; nobody's name is on it and who built it isn't stored. An
+area outside our road tiles (Ohio, Kentucky, Indiana today) gets no loop until the tiles reach it. Putting your own stages
+up is gone. A loop a moderator takes down is replaced by one from the next seed.
+
+Undo: revert the PR. Migration 0054 only adds columns to `ta_weeks`; the old code ignores them.
 ## 2026-11-11 (sweep round two): time attack counts only a week you entered (claude/project-thread-g9yher)
 
 Two bugs in the weekly time attack (#393). The Log never sent any runs, so every board stayed empty. And the server
