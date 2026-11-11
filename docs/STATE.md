@@ -1,5 +1,19 @@
 # VETTA — CURRENT AGENT HANDOFF STATE
 
+## Session 2026-11-11 (roam-c-ta-placement): this week's time attack loop on the home deck (claude/roam-c-ta-placement)
+
+- web/your_roads.js: `attackFrom(t)` reads GET /api/timeattack's answer (no loop, no line, or the week over gives null);
+  `suggest()` takes `attack`: entered, it comes right after a crew drive you're going to ("Time attack · <loop>", "You're
+  3rd of 8 · 3 days left" or "No time yet · last day"); not entered, after the road you haven't driven and before your
+  best road ("This week's loop · 20 mi · 8 times · 3 days left"). `nudgeText(sugg, day, at)`: the reminder says only what
+  lasts, and a week over by the day it names is not named.
+- web/cockpit.js: `refreshAttack` runs with the drive-today check (members, online, every 10 min; once more at 40 s when the
+  position came late) and sends only the middle of the 1-degree area. The suggestion's key routes to the loop's start
+  (routeToPlace); its body draws the loop. Where to?'s Time attack section and the place after a drive are the social
+  thread's; time_attack.ts untouched.
+- Tests: tests/test_your_roads.py (+4), e2e flow "time attack on the home deck". Full pytest 1692 passed.
+
+
 ## Session 2026-11-11 (Valhalla for Quick only, part 2): loops are our router's or nothing (claude/project-thread-39xbx9, off origin/main)
 
 - cockpit.js `buildLoop`: our router's loops only; no Valhalla stage loops, circle or refine. With none of ours a toast

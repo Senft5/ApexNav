@@ -4,6 +4,17 @@ Decisions Claude made for you, newest first. Each one says what was decided, why
 you reach one you've seen. If you disagree with a call, say so and it gets reversed; nothing here is hard to undo unless
 it says so. Things only you can do are in docs/OWNER_TODO.md.
 
+## 2026-11-11 (roam-c ta-placement): this week's time attack loop is a home deck suggestion (claude/roam-c-ta-placement)
+
+When you entered this week's loop, the deck's suggestion row names it with your place and the days left, ranked right
+after a crew drive you're going to (a plan with friends beats a solo time). When you haven't entered, it comes after the
+road near you that you haven't driven and before your best road, so a new road you'd like still wins. Tapping it gives
+directions to the loop's start, like a crew drive's meeting point. The phone sends the server only the middle of your
+1-degree area, as the Where to? section does. The reminder never quotes your place or days left (they change by then),
+and skips the loop if the week is over by the day it names. Undo: drop `attack` from the `YR.suggest` call in cockpit.js
+paintDeck (or move `if (ta) return attackSugg();` in your_roads.js to change its rank).
+
+
 ## 2026-11-11 e2e: two flows raced the refine's swap after #434
 - **What:** "taste from picks" and "plan flow (e, f)" wait for `apexDebug.refineDone` (new, set when ownRefine ends) and expect the three routes found after the refine swaps Fun's pick; taste from picks takes the third by a swipe (Quick's is >30 % faster than Fun's on the motorway grid, so it teaches nothing by design).
 - **Why:** since Fun plans on our router, the refine's swap lands ~150 ms after the card; CI hit it every time, local runs sometimes didn't.

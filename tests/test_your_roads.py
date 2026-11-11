@@ -65,6 +65,26 @@ console.log(JSON.stringify({
   tUntried: Y.nudgeText(Y.suggest({ untried, mine, now, long }), 0),
   tCrew: Y.nudgeText(Y.suggest({ crew, mine, now, long }), 0),
   tLoop: Y.nudgeText(null, 6),
+  ...(() => {
+    const T = (o) => ({ week: '2026-11-02', ends_on: '2026-11-08', today: '2026-11-06', cell: '39,-85', entered: false, entrants: 8, you: null,
+      circuit: { name: 'Pippin and Bank loop', length_m: 32187, segment_id: 'seg1', geom: JSON.stringify([[39.1, -84.6], [39.2, -84.5], [39.1, -84.6]]) }, ...o });
+    const inA = Y.attackFrom(T({ entered: true, you: { place: 3, time_s: 1200 } })), outA = Y.attackFrom(T({}));
+    const sunEve = new Date(2026, 10, 7, 19, 0).getTime();
+    return {
+      ta: inA,
+      taNone: [Y.attackFrom(null), Y.attackFrom({ circuit: null }), Y.attackFrom(T({ circuit: { name: 'X', geom: '[[1,2]]' } })), Y.attackFrom(T({ today: '2026-11-09' }))],
+      sAttackIn: Y.suggest({ attack: inA, untried, mine, now, long }),
+      sAttackNoTime: Y.suggest({ attack: { ...inA, place: null }, untried, mine, now, long }).reason,
+      sAttackLast: Y.suggest({ attack: Y.attackFrom(T({ entered: true, today: '2026-11-08' })), mine, now, long }).reason,
+      sAttackCrew: Y.suggest({ crew, attack: inA, mine, now, long }).kind,
+      sAttackOutUntried: Y.suggest({ attack: outA, untried, mine, now, long }).kind,
+      sAttackOut: Y.suggest({ attack: outA, mine, now, long }),
+      sAttackOver: Y.suggest({ attack: outA, mine, now: outA.until, long }).kind,
+      tAttack: Y.nudgeText(Y.suggest({ attack: inA, mine, now, long }), 0, new Date(2026, 10, 5, 19, 0).getTime()),
+      tAttackOver: Y.nudgeText(Y.suggest({ attack: inA, mine, now, long }), 1, sunEve + 86400000),
+      nth: [1, 2, 3, 4, 11, 12, 13, 21, 22, 101, 111].map((n) => Y.suggest({ attack: { ...inA, place: n, times: 200 }, now, long }).reason.split(' · ')[0]),
+    };
+  })(),
   again: Y.againPoints({ lat: 1, lon: 2 }, [10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20], [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], 3),
   againShort: Y.againPoints({ lat: 1, lon: 2 }, [10], [0]),
 }));
@@ -136,6 +156,40 @@ def test_the_reminder_names_the_suggestion_without_guilt(out):
     words = json.dumps([out["tBest"], out["tUntried"], out["tCrew"], out["tLoop"]]).lower()
     for nag in ("streak", "haven't", "haven’t", "miss", "days since", "don't forget", "come back"):
         assert nag not in words, nag
+
+
+def test_this_weeks_time_attack_is_read_from_the_answer(out):
+    ta = out["ta"]
+    assert ta["name"] == "Pippin and Bank loop" and ta["entered"] is True and ta["place"] == 3 and ta["times"] == 8
+    assert ta["left"] == 3 and (ta["lat"], ta["lon"]) == (39.1, -84.6) and ta["key"] == "2026-11-02|39,-85|seg1"
+    assert out["taNone"] == [None, None, None, None]                       # no loop, no line to drive, the week over
+
+
+def test_the_time_attack_is_the_suggestion_in_its_place(out):
+    a = out["sAttackIn"]
+    assert a["kind"] == "attack" and a["title"] == "Time attack · Pippin and Bank loop"
+    assert a["reason"] == "You’re 3rd of 8 · 3 days left"                 # entered: ahead of the road you haven't driven
+    assert out["sAttackNoTime"] == "No time yet · 3 days left"
+    assert out["sAttackLast"] == "No time yet · last day"
+    assert out["sAttackCrew"] == "crew"                                    # a crew drive you're going to still comes first
+    assert out["sAttackOutUntried"] == "untried"                           # not entered: after the road you haven't driven
+    o = out["sAttackOut"]
+    assert o["kind"] == "attack" and o["reason"] == "This week’s loop · 20.0 mi · 8 times · 3 days left"   # and before your best road
+    assert out["sAttackOver"] == "best"
+    assert out["nth"] == ["You’re 1st of 200", "You’re 2nd of 200", "You’re 3rd of 200", "You’re 4th of 200", "You’re 11th of 200",
+                          "You’re 12th of 200", "You’re 13th of 200", "You’re 21st of 200", "You’re 22nd of 200", "You’re 101st of 200", "You’re 111th of 200"]
+
+
+def test_the_time_attack_reminder_says_only_what_lasts(out):
+    assert out["tAttack"] == {"title": "Sunday: Pippin and Bank loop", "body": "This week’s time attack · 20.0 mi"}
+    assert out["tAttackOver"]["title"] == "Monday: a loop from home"       # the week is over by the day it names
+
+
+def test_the_deck_reads_the_week_for_members_and_drives_to_the_start():
+    src = cockpit_source()
+    assert "apiCall('GET', `/api/timeattack?lat=${at.lat}&lon=${at.lon}`)" in src and "YR.attackFrom(" in src
+    assert "if (s && s.kind === 'attack') { routeToPlace({ label: s.name, lat: s.lat, lon: s.lon }); return; }" in src
+    assert "YR.nudgeText(sugg, day, at)" in src
 
 
 def test_drive_it_again_goes_from_here_along_the_drive(out):
