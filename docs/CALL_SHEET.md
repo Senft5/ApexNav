@@ -149,6 +149,17 @@ Also: "Saved for offline: … Find it in Where to?." ended "?."; it reads "It's 
 
 Undo: revert the PR (`toast()` in web/cockpit.js, four CSS lines in web/index.html).
 
+## 2026-11-10 (fable-camber-sure): banking says how sure it is (claude/fable-camber-sure)
+
+The red team (TE-03) pointed out that banking comes from one phone on a sprung car with no body-roll model, yet the
+gauge read it to a tenth of a degree ("BANK +4.3°"). It now reads whole degrees ("BANK +4°"), the drive's lane readout
+too, and the end-of-drive line says "banked about 4°". Tapping the gauge (parked) says Bank is approximate, to a
+degree or two, because body roll is not modelled. The drive view already says how many runs agree or differ beside
+it. Nothing about how banking is measured or shared changed; a roll model or a surveyed reference road is the real fix
+(docs/PHILOSOPHY.md §4).
+
+Undo: revert the PR.
+
 ## 2026-11-10 (fable-layers): design pass 8: the Layers panel is the map's legend (claude/fable-layers)
 
 Layers was a column of names and switches: "Cameras" (which cameras?), "Measured roads" (three colours on the map and

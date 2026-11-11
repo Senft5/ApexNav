@@ -69,7 +69,7 @@ def test_the_one_alarm_is_faster_than_sight(out):
 
 def test_bank_is_dashes_until_measured(out):
     """HE-1 / LA-3: BANK +0.0° for twenty minutes read as measured; unknown is "--" in the same slot."""
-    assert out["bank"] == ["BANK --", "BANK --", "BANK --", "BANK 0.0°", "BANK 0.0°", "BANK +4.3°", "BANK -2.5°"]
+    assert out["bank"] == ["BANK --", "BANK --", "BANK --", "BANK 0°", "BANK 0°", "BANK +4°", "BANK -2°"]   # whole degrees (TE-03): a phone is good to a degree or two
 
 
 def test_explain_only_parked_or_in_a_replay(out):
@@ -86,7 +86,7 @@ def test_every_instrument_says_what_it_is_and_how_it_is_measured(out):
         assert e["title"] and 20 <= len(e["what"]) <= 220 and 10 <= len(e["how"]) <= 220, k   # short: read parked, in one go
     ex = out["explain"]
     assert "never a target" in ex["sight"]["what"] and "SLOW" in ex["sight"]["how"]
-    assert ex["gball"]["now"] == "BANK --" and "calibrated" in ex["gball"]["how"]
+    assert ex["gball"]["now"] == "BANK --" and "calibrated" in ex["gball"]["how"] and "approximate" in ex["gball"]["how"]
     assert ex["score"]["now"] == "--" and ex["limit"]["now"] == "--" and ex["speed"]["now"] == "42 mph" and ex["sight"]["now"] == "45 mph"
     assert ex["road"]["now"] == "--" and ex["trip"]["now"] == "1.3"
 

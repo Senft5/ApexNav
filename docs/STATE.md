@@ -115,6 +115,12 @@
   clicks a Layers key before the panel has slid in will. `overflow: clip` on `.stage` would rule it out.
 - Next: the drive screen proper (the status row beside Report and End).
 
+## Session 2026-11-10 (fable-camber-sure): Bank in whole degrees, said as approximate (claude/fable-camber-sure, off origin/main)
+
+- web/instruments.js `bankText` whole degrees; `BANK_SURE` appended to the gball/pod/grip explanations. web/drive_view.js
+  lane Banking whole degrees. web/road_feel.js `endLine` "banked about N°". Tests: test_alarm_grammar.py, test_road_feel.py.
+- Next: a body-roll gain per suspension class (ROAD_DATA.md "planned"), or validate against one surveyed road.
+
 ## Session 2026-11-10 (fable-layers): design pass 8, the Layers panel as the map's legend (claude/fable-layers, off origin/main 1a38381)
 
 - web/index.html only (markup and CSS, no script): `#switchRow` rows are `.sw.ly` = switch, name over a `<small>` line,
