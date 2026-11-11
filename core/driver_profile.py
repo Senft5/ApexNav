@@ -541,6 +541,33 @@ def best_corners(drives: list, year: int, n: int = BEST_N) -> list:
     return out[:n]
 
 
+RECORD_MIN = 5               # clean corners of a kind before its record means anything
+
+
+def records_by_size(drives: list) -> dict:
+    """Your records by kind of corner (IDEAS D-08 per archetype): for each size, the cleanest corner you have driven, over
+    drives [{id, at, name, obs}] of any date, by the mean of the six technique credits (only corners with all six measured).
+    The first to reach a level holds it: a tie goes to the earlier drive (an unknown date after every known one), then the
+    lower id, then the earlier corner. None for a size with fewer than RECORD_MIN such corners. Technique only, never pace,
+    speed or a time. {size: {id, at, name, apex, dir, level, n} | None}."""
+    out = {}
+    for z in ("tight", "medium", "fast"):
+        n, best = 0, None
+        for d in drives:
+            at = d.get("at") if isinstance(d.get("at"), str) else None
+            for o in d.get("obs") or []:
+                if o.get("size") != z or any(o.get(k) is None for k in SKILLS):
+                    continue
+                n += 1
+                lv = _level(sum(o[k] for k in SKILLS) / len(SKILLS))
+                key = (-lv, at is None, at or "", str(d["id"]), o["apex"])
+                if best is None or key < best[0]:
+                    best = (key, {"id": d["id"], "at": at[:16] if at else None, "name": d.get("name") or None,
+                                  "apex": o["apex"], "dir": o.get("dir"), "level": lv})
+        out[z] = {**best[1], "n": n} if best is not None and n >= RECORD_MIN else None
+    return out
+
+
 def drive_touch(obs: list, others: list) -> dict:
     """A drive's own touch (its Log page): {drive: touch over its corners (from DRIVE_TOUCH_MIN), usual: touch over the
     corners of every other drive (from STYLE_MIN), outside: per measure "above" when the drive's middle corner was beyond

@@ -11,6 +11,14 @@ signed-out one: a drawing (your road drawn, a friend's road or three crew seats 
 "Start a crew." set large, one sentence, and the Invite key full width. The example card stays under it. Undo: the two
 `people-first` blocks in web/cockpit.js and the "first friend" block at the end of web/signature.css.
 
+## 2026-11-11 (roam-c crew-public-reset): a crew made public stops showing what members shared with it by hand (claude/roam-c-crew-public-reset)
+
+Found in the security pass. When an owner makes a private crew public, members' Scores and times already went back to off
+(they were the private default, not a choice to show strangers). Routes, stages and the rough "where I drive from" area that
+members had shared with the private crew stayed, so a stranger who joined next could see them. Now they go too, except the
+owner's own, because the owner made it public. The routes and stages themselves stay with their owners, who can share them
+again. The owner's crew settings and the privacy page say so. Undo: revert the PR.
+
 ## 2026-11-11 (roam-c presence-private-crews): "Your crews see where you are" means private crews only (claude/roam-c-presence-private-crews)
 
 Found in the security pass. Anyone can join a public crew with one tap, and Friends on the map set to Crew showed your
@@ -56,6 +64,13 @@ On a planned route, the same long, steep descents the route card names are now s
 top (or up to 300 m down it): "Long descent ahead: 2.5 miles at 8 percent. A lower gear saves the brakes." It waits for a
 quiet moment like the break cue (no corner call due), in any notes mode, since it is a safety line. Off the route, or
 driving without one, nothing is said. Undo: remove the `descentAhead` block in cockpit.js `updateNotes`.
+
+## 2026-11-11 (round two analysis): records by kind of corner are technique, not speed (claude/project-thread-gd7nre)
+
+- What: Your records lists your cleanest tight, medium and fast corner (the six technique credits' mean, 0 to 100).
+- Why: IDEAS D-08 asked for records per archetype; a fastest-corner record would reward speed on public roads, so this is
+  the technique figure Your year already uses. The first drive to reach a level keeps the record.
+- Undo: drop the `kinds` rows in renderRecords (web/analysis.html).
 
 ## 2026-11-11 (roam-a descents): the route card warns of a long, steep descent (claude/project-thread-h7xxmf)
 
@@ -130,6 +145,18 @@ against a route (35 m, not the card's 60 m count). When nothing gets round, the 
 
 Undo: revert the PR (no data changed). To split speed cameras onto their own switch, filter `kind` in `camsForTrip` and
 `camerasAround` (cockpit.js) by a new avoid key.
+## 2026-11-11 (auto time attack): each area's weekly loop is picked by Vetta, built on the first phone there (claude/project-thread-uwmi4e)
+
+Your call: time attacks are made automatically every week in any area with members, as small loops over the area's best
+roads chosen at random, not from members' stages. The server can't plan routes, so the first member's phone to open Time
+attack in an area that week builds the loop with our own router from a seed the server hands out (the same seed gives
+every phone the same start and pick), and the server checks it and keeps the first one. Choices I made: a loop of 8 to 16
+km is asked for (5 to 25 km accepted); the start is a random one of the area's road tiles, tried up to four; one of the
+router's best three loops is drawn; it's named by its main road; nobody's name is on it and who built it isn't stored. An
+area outside our road tiles (Ohio, Kentucky, Indiana today) gets no loop until the tiles reach it. Putting your own stages
+up is gone. A loop a moderator takes down is replaced by one from the next seed.
+
+Undo: revert the PR. Migration 0054 only adds columns to `ta_weeks`; the old code ignores them.
 ## 2026-11-11 (sweep round two): time attack counts only a week you entered (claude/project-thread-g9yher)
 
 Two bugs in the weekly time attack (#393). The Log never sent any runs, so every board stayed empty. And the server

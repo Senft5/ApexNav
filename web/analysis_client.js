@@ -330,7 +330,7 @@
       }
       const live = new Set(sums.map((s) => s.id)), gone = [...kept.keys()].filter((id) => !live.has(id));
       if (db && (fresh.length || gone.length)) try { await obsWrite(db, fresh, gone); } catch (_) {}
-      return { key: sums.map(stamp).join(','), read: fresh.length, profile: P.profile(list, Core), practice: plan ? P.practice(list, plan, Core) : null, best: P.bestCorners(list, year) };
+      return { key: sums.map(stamp).join(','), read: fresh.length, profile: P.profile(list, Core), practice: plan ? P.practice(list, plan, Core) : null, best: P.bestCorners(list, year), records: P.recordsBySize(list) };
     },
 
     /**
