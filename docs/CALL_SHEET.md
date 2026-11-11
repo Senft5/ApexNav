@@ -322,6 +322,19 @@ the Garage as well. Both rules now apply on the People tab only. I had read the 
 Garage signed out after the change; the screen-by-screen flow now checks that the Garage shows no People page.
 - Undo: not something to undo; reverting #332 would also remove it.
 
+## 2026-11-10 (fable-no-leftovers): every e2e flow ends by checking the screen for the code's own leftovers (claude/fable-no-leftovers)
+
+About a road read "descending [object Object]" for weeks (#356) and no test saw it, because no test read that line. So
+the e2e runner now ends every flow with one more check: on whatever screens the flow left open, no text in view and no
+spoken label (aria-label, placeholder, title, alt) says "[object Something]", "undefined" or "NaN". Hidden nodes are
+left alone, and whole words only ("Undefined roads" would pass, lower-case "undefined" would not). All 154 flows pass
+with it, so nothing else like #356 is on the screens the flows end on. A flow of its own proves the check sees each of
+the three and ignores what is hidden.
+
+Its limit: it reads the screen a flow ends on, not every screen it passed through.
+
+Undo: revert the PR (e2e/smoke.js only; no app code).
+
 ## 2026-11-10 (fable-your-units): sizes that were always metric are in your units (claude/fable-your-units)
 
 Three places spoke metric to a driver in miles: a privacy zone's size ("200 m / 500 m / 1 km", and the list and the

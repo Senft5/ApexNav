@@ -149,6 +149,32 @@ const GAUGE_CLASH = (root) => `(() => {
   return out;
 })()`;
 // REVIEW5 §2: a setting lives behind the Garage's one gear; open its sheet as a driver does (the Garage open): the gear, then its row
+// Text a driver could read, or a screen reader say, that is a value the code failed to format: in every open page of the flow.
+async function leftovers(page) {
+  const out = [];
+  for (const p of page.context().pages()) {
+    if (p.isClosed()) continue;
+    const found = await p.evaluate(() => {
+      const BAD = /\[object [A-Za-z]+\]|\bundefined\b|\bNaN\b/;
+      const shown = (el) => { for (let n = el; n && n.nodeType === 1; n = n.parentElement) { if (n.hidden || n.getAttribute('aria-hidden') === 'true') return false; }
+        const cs = getComputedStyle(el); return cs.visibility !== 'hidden' && cs.display !== 'none' && el.getClientRects().length > 0; };
+      const hits = [], where = (el) => el.tagName.toLowerCase() + (el.id ? '#' + el.id : '') + (el.className && typeof el.className === 'string' ? '.' + el.className.trim().split(/\s+/).join('.') : '');
+      const walk = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
+      for (let t = walk.nextNode(); t; t = walk.nextNode()) {
+        const el = t.parentElement;
+        if (!el || /^(SCRIPT|STYLE|TEMPLATE|NOSCRIPT)$/.test(el.tagName) || !BAD.test(t.nodeValue) || !shown(el)) continue;
+        hits.push(`${where(el)}: "${t.nodeValue.trim().slice(0, 80)}"`);
+      }
+      for (const el of document.querySelectorAll('[aria-label], [placeholder], [title], [alt]')) {
+        for (const a of ['aria-label', 'placeholder', 'title', 'alt']) { const v = el.getAttribute(a); if (v && BAD.test(v) && shown(el)) hits.push(`${where(el)} ${a}="${v.slice(0, 80)}"`); }
+      }
+      return hits.slice(0, 8);
+    }).catch(() => []);
+    out.push(...found);
+  }
+  return out;
+}
+
 async function openSetting(page, key) {
   await page.click('#garageGear');
   await page.click(`#garageSettings .nav-row[data-setting="${key}"]`);
@@ -5539,6 +5565,21 @@ flow('the drive page\'s map: when the map can draw it sits under the path, fitte
   check(Math.abs(z.again[0] - z.before[0]) < 1 && Math.abs(z.again[1] - z.before[1]) < 1 && /^matrix\(1 0 0 1 /.test(z.back || 'matrix(1 0 0 1 '), 'and the picture is back where it was: ' + JSON.stringify([z.before, z.again, z.back]));
 });
 
+flow('leftovers: the check every flow ends with sees "[object Object]", "undefined" and "NaN" in text and in a spoken label, and not in what is hidden', async (page, base) => {
+  await page.goto(base + '/analysis.html');
+  await page.waitForSelector('[data-seg="segments"]');
+  check((await leftovers(page)).length === 0, 'a clean page has none: ' + JSON.stringify(await leftovers(page)));
+  await page.evaluate(() => {
+    const add = (html) => { const d = document.createElement('div'); d.className = 'lo-test'; d.innerHTML = html; document.body.append(d); };
+    add('<p>descending [object Object]</p>'); add('<p>Best undefined mph</p>'); add('<p>NaN mi</p>');
+    add('<button aria-label="Remove undefined">×</button>');
+    add('<p hidden>undefined</p>'); add('<p style="display:none">NaN</p>'); add('<p>Undefined roads are fine, and so is a Nanny</p>');
+  });
+  const found = await leftovers(page);
+  check(found.length === 4 && found.some((f) => f.includes('[object Object]')) && found.some((f) => f.includes('aria-label="Remove undefined"')), 'four seen, the hidden and the innocent left alone: ' + JSON.stringify(found));
+  await page.evaluate(() => document.querySelectorAll('.lo-test').forEach((d) => d.remove()));
+});
+
 flow('the Log page opens', async (page, base) => {
   await page.goto(base + '/analysis.html');
   await page.waitForLoadState('load');
@@ -7058,6 +7099,10 @@ flow('TestFlight 2026-11-05 note 6: the idle map\'s deck is the suggestion and o
     try {
       await fn(page, base);
       await page.waitForTimeout(300);   // let late async errors surface
+      // 2026-11-10: nothing a driver can read is the code's leftovers. Whatever screen a flow ends on, no text in view (or
+      // spoken label) says "[object Object]", "undefined" or "NaN" (About a road read "descending [object Object]").
+      const raw = await leftovers(page);
+      check(!raw.length, `the code's own leftovers on screen:\n  ${raw.join('\n  ')}`);
       check(!errors.length, `page errors or missing files:\n  ${errors.join('\n  ')}`);
       console.log(`ok   ${name} (${Date.now() - t0} ms)`);
     } catch (e) {
