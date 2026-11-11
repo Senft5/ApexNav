@@ -19,6 +19,16 @@
 - Tests: tests/test_brake_heat.py (+2); e2e "the co-driver says a long descent once…" (GPX + stubbed DEM, live frames).
   Checked: pytest, that flow, the route-card descent flow, "co-driver reads the road", startup budget.
 - Next: the Garage car's weight and brakes could tune DISC_C; CarPlay could show the descent line on its route preview.
+## Session 2026-11-11 (round two analysis, PR 8): your records by kind of corner (claude/project-thread-gd7nre, off origin/main)
+
+- core/driver_profile.py `records_by_size` (reference) and web/driver_profile.js `recordsBySize` (port): your cleanest tight,
+  medium and fast corner of any date, by the mean of the six technique credits; the first to reach a level holds it; none
+  under RECORD_MIN 5 corners of that kind. The profile job returns `records`.
+- web/analysis.html Your records adds "Cleanest tight left, of 36 tight corners" rows (the level, the drive's day), painted
+  again when Your driving's job answers. IDEAS D-08 is done.
+- Tests: tests/test_best_corners.py (+1, parity), e2e "Your driving" checks the rows.
+- Next: the deepest-analysis list: a drive's corners against your records (how close each kind came to your best).
+
 ## Session 2026-11-11 (roam-c-scheme-offmain, sweep: iOS shell): bundle files read off the main thread (claude/roam-c-scheme-offmain, off origin/main)
 
 - ApexNavApp.swift `ApexBundleSchemeHandler`: every apexnav:// file (the page's 130 scripts at launch, the 5.5 MB
