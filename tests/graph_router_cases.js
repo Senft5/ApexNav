@@ -342,6 +342,29 @@ const CASES = {
     return { n: res.routes.length, ms: res.ms, loops: res.routes.map((r) => ({ km: r.distM / 1000, retraced: r.retraced, d0: R.distM(start.lat, start.lon, r.coords[0][0], r.coords[0][1]), dN: R.distM(start.lat, start.lon, r.coords[r.coords.length - 1][0], r.coords[r.coords.length - 1][1]) })) };
   },
 
+  // there and back by different roads (roundTrip): a 28 x 28 grid, a destination 4 km off; each level's round trips, the
+  // share driven twice, both ends, the two legs, and the same trip's plan for the way out
+  roundTrips() {
+    const g = H.grid({ seed: 9, nx: 28, ny: 28, holes: 0.05, stepDeg: 0.004, lat0: 39.15, lon0: -84.62 });
+    const v = R.view(H.tiles(g.nodes, g.edges).tiles);
+    const from = { lat: 39.17, lon: -84.6 }, to = { lat: 39.23, lon: -84.52 };
+    const out = {};
+    for (const level of ['quick', 'fun', 'max']) {
+      const res = R.roundTrip(v, { from, to, level });
+      const near = (r, p) => Math.min(...r.coords.map((c) => R.distM(p.lat, p.lon, c[0], c[1])));
+      out[level] = { ms: res.ms, outS: res.out.timeS, trips: res.routes.map((r) => ({ km: r.distM / 1000, timeS: r.timeS, retraced: r.retraced, kind: r.kind, role: r.why.role,
+        outS: r.out.timeS, backS: r.back.timeS, d0: R.distM(from.lat, from.lon, r.coords[0][0], r.coords[0][1]), dN: R.distM(from.lat, from.lon, r.coords[r.coords.length - 1][0], r.coords[r.coords.length - 1][1]),
+        reaches: near(r, to), steps: r.route.steps.length, flat: r.route.coords.length })) };
+    }
+    // a dead-end valley: one road in, so the way back must be the way out (offered, said as all of it twice)
+    const nodes = [at(39.1, -84.5), at(39.1, -84.49), at(39.1, -84.48)], edges = [];
+    two(edges, 0, 1, { name: 'Valley Road', t: 60 }); two(edges, 1, 2, { name: 'Valley Road', t: 60 });
+    const dv = R.view(H.tiles(nodes, edges).tiles);
+    const de = R.roundTrip(dv, { from: { lat: 39.1, lon: -84.4995 }, to: { lat: 39.1, lon: -84.4805 }, level: 'fun' });
+    out.deadEnd = de.routes.map((r) => ({ retraced: r.retraced, timeS: r.timeS }));
+    return out;
+  },
+
   // loops off the highway (the owner, 2026-11-04: "it also seems to route mostly highway for loops"): a grid whose every
   // fourth row and column is a motorway, fast and good road with no corners; each level's loops, their motorway share
   // and how they were built (from the best roads, not a ring)
