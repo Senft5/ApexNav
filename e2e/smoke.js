@@ -4558,6 +4558,32 @@ const PROFILE_CSV = `(fault, seed) => {
   return 'segment_index,distance_m,lat,lon,elevation_m,speed_mph,lon_g,lat_g\\n' + rows.join('\\n') + '\\n';
 }`;
 
+flow('a drive\'s corners on a road driven four times: each says your cleanest pass there, and a tap opens the drive that holds it (driver_profile.js roadRecords rows)', async (page, base) => {
+  await page.goto(base + '/analysis.html');
+  await page.waitForFunction(() => window.apexLogDebug && window.apexLogDebug.loaded() && window.ApexRecording);
+  await page.evaluate(async (src) => {
+    const gen = eval(src);
+    // one road four times, each pass a little slower through the same corners (a different speed column)
+    const tweak = (csv, k) => csv.split('\n').map((l, i) => { if (!i || !l) return l; const c = l.split(','); c[5] = (+c[5] * (1 - 0.03 * k)).toFixed(3); return c.join(','); }).join('\n');
+    for (let k = 0; k < 4; k++) await ApexRecording.store(ApexRecording.parse(ApexCore, tweak(gen('saw', 0), k), 'r' + k + '.csv', { id: 'r' + k, name: 'Dry Ridge Rd', date: `2026-0${5 + k}-01T09:00`, source: 'web-gps' }));
+  }, PROFILE_CSV);
+  const road = await page.evaluate(async () => (await ApexAnalysis.job('drive', { id: 'r3' })).touch.road);
+  check(road && road.corners > 0 && road.rows.length === road.corners && road.rows.every((r) => r.passes === 4 && r.record >= r.level)
+    && road.rows.every((r) => r.by === null || (['r0', 'r1', 'r2'].includes(r.by) && /^2026-0[5-7]-01/.test(r.on))), 'every corner driven four times has its record and who holds it: ' + JSON.stringify(road && road.rows.slice(0, 3)));
+  await page.goto(base + '/analysis.html?tab=drive&drive=r3');
+  await page.waitForFunction(() => document.querySelectorAll('.dv-corner .dv-rec').length > 0, null, { timeout: 20000 });
+  const notes = await page.evaluate(() => [...document.querySelectorAll('.dv-corner .dv-rec')].map((n) => ({ t: n.textContent, link: n.tagName === 'BUTTON', rec: n.closest('.dv-corner').classList.contains('rec') })));
+  check(notes.length === road.rows.length && notes.every((n) => /^(Your cleanest of 4 passes here \(\d{1,3}\)|Level with your cleanest here \(\d{1,3}, .+\)|Your cleanest here: \d{1,3}, .+; this pass \d{1,3})$/.test(n.t))
+    && notes.every((n) => n.rec === !n.link) && !notes.some((n) => /mph|km\/h/.test(n.t)), 'a note on each corner row: ' + JSON.stringify(notes.slice(0, 4)));
+  const by = road.rows.find((r) => r.by !== null);
+  if (by) {
+    await page.click('.dv-corner button.dv-rec');
+    await page.waitForFunction((t) => document.getElementById('dvPick').value === t, by.by, { timeout: 20000 });
+  }
+  check(!by || await page.evaluate((t) => document.getElementById('dvPick').value === t, by.by), 'the note opens the drive that holds the corner');
+  check(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth), 'nothing wider than the phone');
+});
+
 flow('Your driving: the profile over every drive opens from the Log, names the weak side, and is kept between visits (driver_profile.js)', async (page, base) => {
   await page.goto(base + '/analysis.html');
   await page.waitForFunction(() => window.apexLogDebug && window.apexLogDebug.loaded() && window.ApexRecording);

@@ -309,26 +309,27 @@
   }
   /** A drive's corners against your other passes of the same road (port of driver_profile.road_records). */
   const ROAD_MIN_PASSES = 3, SAME_CORNER_M = 20, SAME_WAY = 0.7;
-  function roadRecords(mine, others) {
+  function roadRecords(mine, others, ids = null) {
     let corners = 0, best = 0, lvl = 0;
-    const held = [];
+    const held = [], rows = [];
     for (const m of mine || []) {
       if (m.level === null || m.level === undefined) continue;
-      const tops = [];
-      for (const drive of others || []) {
+      const tops = [], who = [];
+      (others || []).forEach((drive, i) => {
         let top = null;
         for (const o of drive) {
           if (o.level === null || o.level === undefined) continue;
           if (Math.hypot(o.x - m.x, o.y - m.y) < SAME_CORNER_M && o.hx * m.hx + o.hy * m.hy > SAME_WAY) top = top === null ? o.level : Math.max(top, o.level);
         }
-        if (top !== null) tops.push(top);
-      }
+        if (top !== null) { tops.push(top); who.push(ids ? ids[i] : i); }
+      });
       if (1 + tops.length < ROAD_MIN_PASSES) continue;
       corners++;
       const mx = Math.max(...tops);
+      if (m.apex !== null && m.apex !== undefined) rows.push({ apex: m.apex, level: m.level, passes: 1 + tops.length, record: Math.max(mx, m.level), by: m.level > mx ? null : who[tops.indexOf(mx)] });
       if (m.level > mx) { best++; if (m.apex !== null && m.apex !== undefined) held.push(m.apex); } else if (m.level === mx) lvl++;
     }
-    return { corners, best, level: lvl, held };
+    return { corners, best, level: lvl, held, rows };
   }
   /** Clean corners of a drive placed for roadRecords: metres from (lat0, lon0), unit heading, the credits' level. */
   function placed(d, obs, lat0, lon0) {
@@ -346,6 +347,15 @@
     if (!r.best && !r.level) return `On this road: ${r.corners} corner${r.corners === 1 ? '' : 's'} you have driven three or more times; your cleanest pass of ${r.corners === 1 ? 'it' : 'each'} came on another drive.`;
     if (!r.best) return `On this road: level with your cleanest pass at ${r.level} ${of}.`;
     return `On this road: your cleanest pass yet at ${r.best} ${of}${r.level ? `, level with it at ${r.level}` : ''}.`;
+  }
+  /** A corner row's note from roadRecords rows: "Your cleanest of 4 passes here (92)", "Level with your cleanest here (90,
+   *  Aug 12)", "Your cleanest here: 90, Aug 12; this pass 82". day(row) gives the holding drive's date, or null. */
+  function roadCornerNote(row, day) {
+    if (!row) return null;
+    if (row.by === null || row.by === undefined) return `Your cleanest of ${row.passes} passes here (${row.record})`;
+    const on = day ? day(row) : null;
+    if (row.level >= row.record) return `Level with your cleanest here (${row.record}${on ? `, ${on}` : ''})`;
+    return `Your cleanest here: ${row.record}${on ? `, ${on}` : ''}; this pass ${row.level}`;
   }
   /** A drive's own touch (its Log page): { drive (from DRIVE_TOUCH_MIN corners), usual (every other drive's corners) }. */
   // outside: "above" when the drive's middle corner was beyond the usual upper quartile (or quick where that is timed),
@@ -903,7 +913,7 @@
     }
   }
 
-  const api = { SKILLS, observe, profile, swing, excess, SKILL_MIN, WORDS, findingLine, styleLines, touchLines, touchTrendLines, driveTouchLines, paceLines, PACE, MEASURES, touch, TOUCH, driveTouch, DRIVE_TOUCH_MIN, bestCorners, recordsBySize, RECORD_MIN, driveRecords, driveRecordLines, roadRecords, placed, roadRecordLine, cardLine, focusLines, render,
+  const api = { SKILLS, observe, profile, swing, excess, SKILL_MIN, WORDS, findingLine, styleLines, touchLines, touchTrendLines, driveTouchLines, paceLines, PACE, MEASURES, touch, TOUCH, driveTouch, DRIVE_TOUCH_MIN, bestCorners, recordsBySize, RECORD_MIN, driveRecords, driveRecordLines, roadRecords, placed, roadRecordLine, roadCornerNote, cardLine, focusLines, render,
     PRACTICE_MIN, practice, drivePractice, practiceLine, practiceSummary, localStamp, loadPlan, savePlan, PLAN_KEY };
   if (typeof module !== 'undefined' && module.exports) module.exports = api; else root.ApexDriverProfile = api;
 })(typeof window !== 'undefined' ? window : globalThis);

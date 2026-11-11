@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self' apexnav:; script-src 'self' apexnav: 'sha256-Qn9EbRNiUJgkG0SuQgYqtnFfLtE+m/yiqUFAv3WDelE=' 'sha256-G7s/ZI+Hqrfc4DqbB6EANJJLmUmhNK06PizQ1LlsG84=' https://cdn.jsdelivr.net 'wasm-unsafe-eval'; worker-src 'self' apexnav: blob:; child-src 'self' apexnav: blob:; style-src 'self' apexnav: 'unsafe-inline'; font-src 'self' apexnav: data:; img-src 'self' apexnav: data: blob: https://tiles.openfreemap.org https://s3.amazonaws.com https://basemap.nationalmap.gov; media-src 'self' apexnav: data: blob:; connect-src 'self' apexnav: data: blob: https://apexnav.senftns.workers.dev wss://apexnav.senftns.workers.dev https://tiles.openfreemap.org https://basemap.nationalmap.gov https://s3.amazonaws.com https://valhalla1.openstreetmap.de https://router.project-osrm.org https://overpass-api.de https://overpass.private.coffee https://overpass.kumi.systems https://maps.mail.ru https://nominatim.openstreetmap.org https://photon.komoot.io https://api.open-meteo.com https://api.weather.gov https://statsapi.mlb.com https://api.seatgeek.com https://api.water.noaa.gov https://waterservices.usgs.gov https://in.carsprogram.org https://publicapi.ohgo.com https://quickstats.nass.usda.gov https://commons.wikimedia.org https://graph.mapillary.com https://vpic.nhtsa.dot.gov https://cdn.jsdelivr.net https://huggingface.co https://*.huggingface.co https://*.hf.co; object-src 'none'; base-uri 'none'; form-action 'self'" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self' apexnav:; script-src 'self' apexnav: 'sha256-l2GVHYsgjbpNIsD225EU+HXhpeXRqIwZDU1gGjcx5MM=' 'sha256-G7s/ZI+Hqrfc4DqbB6EANJJLmUmhNK06PizQ1LlsG84=' https://cdn.jsdelivr.net 'wasm-unsafe-eval'; worker-src 'self' apexnav: blob:; child-src 'self' apexnav: blob:; style-src 'self' apexnav: 'unsafe-inline'; font-src 'self' apexnav: data:; img-src 'self' apexnav: data: blob: https://tiles.openfreemap.org https://s3.amazonaws.com https://basemap.nationalmap.gov; media-src 'self' apexnav: data: blob:; connect-src 'self' apexnav: data: blob: https://apexnav.senftns.workers.dev wss://apexnav.senftns.workers.dev https://tiles.openfreemap.org https://basemap.nationalmap.gov https://s3.amazonaws.com https://valhalla1.openstreetmap.de https://router.project-osrm.org https://overpass-api.de https://overpass.private.coffee https://overpass.kumi.systems https://maps.mail.ru https://nominatim.openstreetmap.org https://photon.komoot.io https://api.open-meteo.com https://api.weather.gov https://statsapi.mlb.com https://api.seatgeek.com https://api.water.noaa.gov https://waterservices.usgs.gov https://in.carsprogram.org https://publicapi.ohgo.com https://quickstats.nass.usda.gov https://commons.wikimedia.org https://graph.mapillary.com https://vpic.nhtsa.dot.gov https://cdn.jsdelivr.net https://huggingface.co https://*.huggingface.co https://*.hf.co; object-src 'none'; base-uri 'none'; form-action 'self'" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
   <title>Vetta · Log</title>
   <link rel="icon" href="brand/mark.svg" type="image/svg+xml" />
@@ -169,6 +169,8 @@
     .dv-mapmode { max-width: 320px; margin-bottom: 8px; }
     .dv-zoom { display: flex; gap: 6px; flex-wrap: wrap; } .dv-z { font: inherit; font-size: 11px; font-weight: 700; height: 44px; min-width: 44px; padding: 0 10px; background: transparent; color: var(--panel-dim); border: 1px solid var(--rule); cursor: pointer; } .dv-z.on { color: var(--panel); background: var(--panel-ink); border-color: var(--panel-ink); } .mt-8 { margin-top: 8px; } .stack-8 { display: grid; gap: 8px; } .stack-12 { display: grid; gap: 12px; }
     .dv-rec { grid-column: 2 / 4; font-size: 12px; color: var(--gain); }
+    .dv-corner:not(.rec) .dv-rec { color: var(--panel-dim); }
+    .dv-rec-by { justify-self: start; min-height: 44px; padding: 0; font: inherit; font-size: 12px; text-align: left; background: none; border: 0; text-decoration: underline; cursor: pointer; }
     .dv-corners { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 6px; }
     .dv-corner { display: grid; grid-template-columns: 24px 1fr auto; gap: 2px 8px; align-items: baseline; text-align: left; padding: 8px 10px; border: 1px solid var(--rule); background: transparent; color: inherit; font: inherit; cursor: pointer; }
     .dv-corner.on { border-color: var(--accent); box-shadow: inset 3px 0 0 var(--accent); }
@@ -1314,7 +1316,9 @@
       const best = window.ApexDriverProfile && t && t.records ? ApexDriverProfile.driveRecordLines(t.records, dvCurrent && dvCurrent.id, (at) => ApexFormat.dateTime(at.slice(0, 10))) : [];
       const road = window.ApexDriverProfile && ApexDriverProfile.roadRecordLine && t ? ApexDriverProfile.roadRecordLine(t.road) : null;
       if (road) best.push(road);
-      if (dvView && dvView.markRecords) dvView.markRecords(t && t.road ? t.road.held : []);
+      // each corner driven three or more times says its cleanest pass and, when another drive holds it, links to that drive
+      const P = window.ApexDriverProfile, rows = t && t.road ? (t.road.rows || t.road.held || []) : [];
+      if (dvView && dvView.markRecords) dvView.markRecords(rows.map((x) => (typeof x === 'object' && P && P.roadCornerNote ? { ...x, note: P.roadCornerNote(x, (r) => (r.on ? ApexFormat.dateTime(r.on.slice(0, 10)) : null)) } : x)), openDrive);
       $('dvBestList').replaceChildren(...best.map((x) => { const p = document.createElement('p'); p.className = 'friend-act'; p.textContent = x; return p; }));
       $('dvBest').hidden = !best.length;
     }
