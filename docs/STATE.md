@@ -9,6 +9,16 @@
 - Tests: tests/test_brake_heat.py (+2); e2e "the co-driver says a long descent once…" (GPX + stubbed DEM, live frames).
   Checked: pytest, that flow, the route-card descent flow, "co-driver reads the road", startup budget.
 - Next: the Garage car's weight and brakes could tune DISC_C; CarPlay could show the descent line on its route preview.
+## Session 2026-11-11 (roam-c-scheme-offmain, sweep: iOS shell): bundle files read off the main thread (claude/roam-c-scheme-offmain, off origin/main)
+
+- ApexNavApp.swift `ApexBundleSchemeHandler`: every apexnav:// file (the page's 130 scripts at launch, the 5.5 MB
+  lexicons, routing graph tiles up to 2.8 MB, voice banks) was read with `Data(contentsOf:)` on the main thread, the
+  phone's UI and the car's map waiting on it. Now read on a concurrent queue (mapped when safe) and answered on main;
+  a task WebKit stopped meanwhile is never answered (`pending`). Same responses, same 404 for a missing file.
+- Swift is compiled only by CI (build.yml simulator tests run the page). APP_REVIEW.md: nothing reviewable changes.
+- Next in the sweep: CarPlay (CarPlay/*.swift) and the shell's frame path (pushLiveFrame, 10 Hz evaluateJavaScript).
+
+
 ## Session 2026-11-11 (roam-a descents): the route card says a long descent before you set off (claude/project-thread-h7xxmf, off origin/main)
 
 - IDEAS V-12, its second part. `long_descents` (core/brake_heat.py) / `longDescents` (web/brake_heat.js, parity-tested): from the
