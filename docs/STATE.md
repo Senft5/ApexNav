@@ -19,6 +19,17 @@
 - Next in the sweep: CarPlay (CarPlay/*.swift) and the shell's frame path (pushLiveFrame, 10 Hz evaluateJavaScript).
 
 
+## Session 2026-11-11 (round two analysis, PR 5): Your year's areas and crew drives (claude/project-thread-gd7nre, off origin/main)
+
+- web/year_review.js: `areas` (drives whose map boxes' middles are within AREA_KM 40 of an area's first drive, named after
+  the road driven most there; no place lookup) and "Where you drove: 3 areas, most around …" from two areas; `crewYear`
+  and "Crew drives: 2 with Smoky Crew, …". IDEAS D-24's regions and crews are done.
+- Crew drives are kept on the phone: crew_events.js `noteCame` writes `apex.crewCame` ({id, crew, at}, at most 300) when
+  the convoy join or I was there succeeds, or the record says you came; I wasn't there removes it. The server sweeps
+  attendance after 7 days, so a year count can't come from it. Erase everything clears the key (an `apex.` key).
+- Tests: tests/test_year_review.py (+2). APP_REVIEW.md has a 5.1.1 row.
+- Next: the deepest-analysis list: corner-by-corner consistency on roads you repeat (same corner, how your lines vary).
+
 ## Session 2026-11-11 (roam-a descents): the route card says a long descent before you set off (claude/project-thread-h7xxmf, off origin/main)
 
 - IDEAS V-12, its second part. `long_descents` (core/brake_heat.py) / `longDescents` (web/brake_heat.js, parity-tested): from the
