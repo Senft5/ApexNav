@@ -56,6 +56,8 @@
   no clipping). pytest 1458 passed; Dynamic Type, REVIEW.md 1.2, REVIEW5 §2 and safe areas flows passed.
 - Not heard by a person yet: the levels were set from offline renders (RMS and peak), not by ear in a car. Next: the
   owner listens to "Hear a sample" and says what to change; then CarPlay (the session is shared, so it should play there).
+- 2026-11-11: `tests/test_audio_bus.py` checks frames against `AudioBusFrame` with its own small checker (`conform`), not
+  `jsonschema`, which is not in requirements.txt and broke collection on CI. It fails on any schema keyword it does not check.
 
 ## Session 2026-11-10 (fable-your-data): Your data as Settings-style rows (claude/fable-your-data, off origin/main 3f2f315)
 

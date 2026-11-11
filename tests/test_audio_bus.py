@@ -6,7 +6,6 @@ import os
 import shutil
 import subprocess
 
-import jsonschema
 import pytest
 
 from core.audio_bus import AudioBus, CALM_CAP, DUCK, HORIZON_M, severity
@@ -14,7 +13,44 @@ from core.audio_bus import AudioBus, CALM_CAP, DUCK, HORIZON_M, severity
 NODE = shutil.which("node")
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SCHEMA = json.load(open(os.path.join(ROOT, "schemas", "telemetry_contracts.json"), encoding="utf-8"))
-FRAME = {"$ref": "#/definitions/AudioBusFrame", "definitions": SCHEMA["definitions"]}
+FRAME = SCHEMA["definitions"]["AudioBusFrame"]
+KNOWN = {"description", "type", "required", "additionalProperties", "properties", "minimum", "maximum"}
+TYPES = {"object": dict, "number": (int, float), "integer": int, "boolean": bool, "string": str, "null": type(None)}
+
+
+def conform(value, schema, path="frame"):
+    """The JSON Schema keywords AudioBusFrame uses, checked by hand (no jsonschema in requirements.txt). A keyword this
+    does not know fails loudly, so the contract cannot grow past what is checked."""
+    unknown = set(schema) - KNOWN
+    assert not unknown, f"{path}: conform() does not check {sorted(unknown)}"
+    if "type" in schema:
+        kinds = schema["type"] if isinstance(schema["type"], list) else [schema["type"]]
+        ok = any(isinstance(value, TYPES[k]) and not (k in ("number", "integer") and isinstance(value, bool)) for k in kinds)
+        assert ok, f"{path}: {value!r} is not {kinds}"
+    if isinstance(value, (int, float)) and not isinstance(value, bool):
+        assert math.isfinite(value), f"{path}: {value!r} is not finite"
+        if "minimum" in schema:
+            assert value >= schema["minimum"], f"{path}: {value} < {schema['minimum']}"
+        if "maximum" in schema:
+            assert value <= schema["maximum"], f"{path}: {value} > {schema['maximum']}"
+    if isinstance(value, dict):
+        for k in schema.get("required", []):
+            assert k in value, f"{path}: missing {k}"
+        props = schema.get("properties", {})
+        if schema.get("additionalProperties") is False:
+            extra = set(value) - set(props)
+            assert not extra, f"{path}: not in the contract: {sorted(extra)}"
+        for k, sub in props.items():
+            if k in value:
+                conform(value[k], sub, f"{path}.{k}")
+
+
+def test_the_checker_catches_a_frame_that_breaks_the_contract(frames):
+    bad = dict(frames[100], cutoff_hz=-1.0)
+    with pytest.raises(AssertionError):
+        conform(bad, FRAME)
+    with pytest.raises(AssertionError):
+        conform(dict(frames[100], loudness=1.0), FRAME)
 
 
 def road():
@@ -47,7 +83,7 @@ def frames():
 
 def test_every_frame_obeys_the_contract(frames):
     for f in frames:
-        jsonschema.validate(f, FRAME)
+        conform(f, FRAME)
 
 
 def test_unknown_stays_unknown(frames):
