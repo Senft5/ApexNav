@@ -45,6 +45,12 @@ def test_crew_audience_lights_crews_not_friends():
     assert rows[0]["where"]["on"] is False and rows[1]["where"] == {"on": True, "text": "Live", "say": "sees where you are, live, exactly"}
 
 
+def test_a_public_crew_never_sees_where_you_are():
+    # anyone can join a public crew, so "Your crews" means private ones (backend presence.ts)
+    rows = run("W.rows({ crews: [{ id: 'K1', name: 'R', visibility: 'private' }, { id: 'K2', name: 'Cafe', visibility: 'public' }], presence: { audience: 'crew', delay_s: 0, fuzz: false }, cars: [] })")
+    assert rows[0]["where"]["on"] is True and rows[1]["where"]["on"] is False
+
+
 def test_the_page_is_loaded():
     html = cockpit_source()
     assert "'who_sees.js'" in html and "ApexWhoSees.mount(" in html

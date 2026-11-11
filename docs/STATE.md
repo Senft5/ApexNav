@@ -1,5 +1,17 @@
 # VETTA — CURRENT AGENT HANDOFF STATE
 
+## Session 2026-11-11 (roam-c-presence-private-crews, security pass): friends map "Crew" is private crews only (claude/roam-c-presence-private-crews)
+
+- backend/src/presence.ts `presenceView`: audience "crew" showed you to members of any crew you share, public ones too, which
+  anyone can join. Now private crews only (garage.ts peoplesCars already did this for cars). web/who_sees.js: a public
+  crew's Where cell is off. Copy: friends_map.js explainer, cockpit.js and who_sees.js summaries say "private crews";
+  privacy.html and APP_REVIEW.md 5.1.1 updated.
+- Tests: backend/test/presence.test.ts (+1, fails without the fix), tests/test_who_sees.py (+1), test_friends_map.py copy.
+- Security pass so far, no issue found: auth on every route (requireMember; ops routes moderator-only; CSRF origin and header
+  check; WRITE_LIMIT on every write, AUTH_LIMIT on sign-in), ownership checks on every :id write (cars, routes, highlights,
+  segments, templates, chat, events, duels, pool), grants re-checked against current friendship or membership on read.
+  Next: the rest of the pass (time attack, drive scores, convoy, hazards and reports rate limits, photos by id).
+
 ## Session 2026-11-11 (roam-c-scheme-offmain, sweep: iOS shell): bundle files read off the main thread (claude/roam-c-scheme-offmain, off origin/main)
 
 - ApexNavApp.swift `ApexBundleSchemeHandler`: every apexnav:// file (the page's 130 scripts at launch, the 5.5 MB

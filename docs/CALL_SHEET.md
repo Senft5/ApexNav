@@ -4,6 +4,14 @@ Decisions Claude made for you, newest first. Each one says what was decided, why
 you reach one you've seen. If you disagree with a call, say so and it gets reversed; nothing here is hard to undo unless
 it says so. Things only you can do are in docs/OWNER_TODO.md.
 
+## 2026-11-11 (roam-c presence-private-crews): "Your crews see where you are" means private crews only (claude/roam-c-presence-private-crews)
+
+Found in the security pass. Anyone can join a public crew with one tap, and Friends on the map set to Crew showed your
+position to every member of every crew you were in, public ones included. So a stranger could join a big public crew and see
+where its members were (within a mile and 10 minutes late by default, but exact and live if they chose that). Now Crew means
+your private crews only, as cars already did. The sheet, Who sees what and the privacy page say "private crews". Nothing
+stored changes. Undo: revert the PR (public crews' members see your position again).
+
 ## 2026-11-11 (roam-a descents): the route card warns of a long, steep descent (claude/project-thread-h7xxmf)
 
 A planned route with a long, steep way down now says so on its card, under the climb: "A long descent: down 1,575 ft over
