@@ -4,6 +4,19 @@ Decisions Claude made for you, newest first. Each one says what was decided, why
 you reach one you've seen. If you disagree with a call, say so and it gets reversed; nothing here is hard to undo unless
 it says so. Things only you can do are in docs/OWNER_TODO.md.
 
+## 2026-11-10 (fable-pro-looks): Pro is looks only; one Pro crew-mate dresses the whole crew (claude/fable-pro-looks)
+
+Your answer to the red team (PH-06, BR-06, UX-06): Pro is themes and liveries, nothing else. Route tuning, which went
+Pro on 2026-11-09, is free for everyone, with or without Pro and after Pro goes on sale (web/pro.js has two kinds now,
+theme and livery; tests/test_pro.py fails if a third appears). A crew's livery used to climb Plain, Club (5 Decals), Works
+(12), Factory (20) as Pro crew-mates added up, with a meter in Edit livery and "Decals come from crew-mates with Vetta
+Pro" on every crew page. Now any one crew-mate with Pro opens the whole livery for everyone (backend/src/livery.ts); the
+meter is gone; a Plain crew's page says "Plain livery" and nothing it lacks, and a dressed one says who dressed it
+("Factory livery · dressed by @bob"). A crew loses nothing it set when the Pro member leaves: it falls back to Plain
+and comes back with the next one, as before.
+
+Undo: revert the PR (tiers come back as they were; nothing in the database changed).
+
 ## 2026-11-10 (fable-road-page): About a road says its climb, and speaks in words (claude/fable-road-page)
 
 A bug first: on any road with 40 m or more of climb, the sheet's first line read "Switchbacks · 0.8 mi · descending
@@ -75,6 +88,13 @@ Update 2026-11-11: the wait itself was broken (an async predicate returns at onc
 press on a key that lifts on the backdrop closed the sheet. Now a backdrop closes a sheet only when the press began on
 it (`onBackdrop` in cockpit.js, five sheets). On a phone that is a tap during the slide, or a thumb that drifts off a
 key, no longer throwing the sheet away. Every check is as strict as before, plus two new ones. Undo: revert the PR.
+## 2026-11-10 · Vetta Line: the home screen is a masthead over the map and a shelf of road cards (claude/fable-signature)
+
+- What: web/signature.css, a new last stylesheet, restyles the idle map: the place as a masthead in type, the deck as one
+  sheet with a red Just drive and the invitations side by side as cards, soft lift instead of ink boxes, the apex dot on
+  the open tab, a short arrival.
+- Why: the owner asked for big moves toward one cohesive, artist-made look; the home was boxes in 1.5 px ink stacked in rows.
+- Undo: remove the `signature.css` link in web/index.html (the shelf wrapper is harmless without it), or revert the PR.
 
 ## 2026-11-10 (fable-loop-time): a loop can be set by time on the dial (claude/fable-loop-time)
 
