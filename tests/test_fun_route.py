@@ -394,27 +394,22 @@ async function run({ level, routes, osrm, discover, matrix, places, avoid = FunR
   let r = await run({ level: 'quick', routes: async (pts, alts) => [{ coords: straight, turns: [], timeS: 600 }, { coords: wiggly, turns: [], timeS: 660, names: new Map([['Twisty Rd', 14]]), times: [[...wiggly[0], 0], [...wiggly[1200], 330]] }],
                       discover: async () => { throw Error('should not search'); } });
   out.quick = { fun: r.built[r.built.length - 1].fun.fun, extraS: r.built[r.built.length - 1].extraS, via: r.built[r.built.length - 1].request.via.length, shaping: r.built[r.built.length - 1].request.via.every(v => v.shaping), matrix: r.calls.matrix, why: r.built[r.built.length - 1].why, marks: r.built[r.built.length - 1].timeMarks.map(([m, sec]) => [Math.round(m / 100) / 10, sec]) };
-  // 2. No tiles: the router's own routes still compete, no error.
-  r = await run({ level: 'fun', routes: async () => [{ coords: straight, turns: [], timeS: 600 }], discover: async () => { throw Error('no tiles'); } });
-  out.noTiles = { built: r.built.length, fun: r.built[r.built.length - 1].fun.fun };
-  // 3. Valhalla down: OSRM's route.
-  r = await run({ level: 'fun', routes: async () => { throw Error('down'); }, osrm: async () => [{ coords: straight, turns: [], timeS: 700 }], discover: async () => [] });
+  // 2. Fun and Long way are our router's only (Valhalla is for Quick, the owner 2026-11-11): with ours not there, nothing
+  //    is asked of Valhalla, nothing is built, and one toast says so with Quick a tap away
+  out.ownOnly = {};
+  for (const lv of ['fun', 'max']) {
+    r = await run({ level: lv, routes: async () => [{ coords: straight, turns: [], timeS: 600 }], discover: async () => { throw Error('should not search'); }, matrix: async () => { throw Error('no matrix'); } });
+    out.ownOnly[lv] = { built: r.built.length, routes: r.calls.routes, matrix: r.calls.matrix, toasts: r.toasts };
+  }
+  // 3. Valhalla down at Quick: OSRM's route.
+  r = await run({ level: 'quick', routes: async () => { throw Error('down'); }, osrm: async () => [{ coords: straight, turns: [], timeS: 700 }], discover: async () => [] });
   out.osrm = { built: r.built.length, timeS: r.built[r.built.length - 1].timeS };
-  // 4. A stage on the way: shortlisted, timed by the matrix, routed, wins, and its points become shaping vias.
+  // 4. (Stage plans on Valhalla were Fun's and Long way's: gone with the owner's rule above.) Whether a route drove its stage:
   const stage = { km: 5, score: 20, lat: wiggly.slice(0, 1001).map(p => p[1] + 300 * mLat), lon: wiggly.slice(0, 1001).map(p => p[0]) };
   const onStage = wiggly.map(p => [p[0], p[1] + 300 * mLat]);
-  r = await run({ level: 'fun', discover: async () => [stage],
-                  routes: async (pts) => pts.length === 2 ? [{ coords: straight, turns: [], timeS: 600 }] : [{ coords: onStage, turns: [], timeS: 720 }],
-                  matrix: async (s, t) => s.map(() => t.map(() => 60)) });
-  out.stage = { fun: r.built[r.built.length - 1].fun.fun, via: r.built[r.built.length - 1].request.via.length, shaping: r.built[r.built.length - 1].request.via.every(v => v.shaping), extraS: r.built[r.built.length - 1].extraS, matrix: r.calls.matrix };
-  // 4b. The router's way through the stage points is a road 300 m away (a shortcut past it, R-14): the plan is dropped.
-  r = await run({ level: 'fun', discover: async () => [stage],
-                  routes: async (pts) => pts.length === 2 ? [{ coords: straight, turns: [], timeS: 600 }] : [{ coords: wiggly, turns: [], timeS: 720 }],
-                  matrix: async (s, t) => s.map(() => t.map(() => 60)) });
-  out.shortcut = { timeS: r.built[r.built.length - 1].timeS, via: r.built[r.built.length - 1].request.via.length };
   out.coverage = { kept: FunRoute.stageCoverage(onStage, { legs: [{ s: stage }] }), skipped: FunRoute.stageCoverage(wiggly, { legs: [{ s: stage }] }), none: FunRoute.stageCoverage(wiggly, { legs: [] }) };
   // 5. All down: one toast, nothing built.
-  r = await run({ level: 'fun', routes: async () => { throw Error('down'); }, discover: async () => [] });
+  r = await run({ level: 'quick', routes: async () => { throw Error('down'); }, discover: async () => [] });
   out.down = { built: r.built.length, toasts: r.toasts };
   // 6. Avoiding tolls: the quick toll road is dropped and the toll-free one is the baseline (no "+N for fun");
   //    when every route has a toll, it stays and the card says so.
@@ -445,20 +440,20 @@ async function run({ level, routes, osrm, discover, matrix, places, avoid = FunR
     return [c.id, { status: 'ok', channels: Object.fromEntries(Object.entries(src).map(([k, v]) => [k, new Float32Array(c.distM.length).fill(v)])), spans: [], points: [] }];
   })) });
   const engineWin = { ApexRouteEngine: Engine, ApexRouteCtx: Ctx };
-  for (const lv of ['quick', 'fun', 'max']) {
+  for (const lv of ['quick']) {
     r = await run({ level: lv, win: engineWin, discover: async () => [],
       routes: async (pts, alts, extra) => (extra && extra.costing_options && extra.costing_options.auto.use_highways === 1 ? [{ coords: straight, turns: [], timeS: 600 }] : [{ coords: wiggly, turns: [], timeS: 560 }]) });
     out['engine_' + lv] = { timeS: r.built[r.built.length - 1].timeS, via: r.built[r.built.length - 1].request.via.length, why: r.built[r.built.length - 1].why, quality: r.built[r.built.length - 1].engine && r.built[r.built.length - 1].engine.quality,
       highwayAsked: r.calls.extras.some((x) => x && x.costing_options && x.costing_options.auto.use_highways === 1) };
   }
   // avoiding highways: no highway request, the subdivision route it is (with what it is on the card)
-  r = await run({ level: 'fun', win: engineWin, avoid: { ...FunRoute.AVOID_DEFAULT, highways: true }, discover: async () => [],
+  r = await run({ level: 'quick', win: engineWin, avoid: { ...FunRoute.AVOID_DEFAULT, highways: true }, discover: async () => [],
     routes: async (pts, alts, extra) => [{ coords: wiggly, turns: [], timeS: 560 }] });
   out.engineAvoidHighways = { timeS: r.built[r.built.length - 1].timeS, highwayAsked: r.calls.extras.some((x) => x && x.costing_options && x.costing_options.auto.use_highways === 1) };
   Ctx.unregister('stub');
   // every candidate crosses a closure: never an empty ranking, the least bad is built and says so
   Ctx.register({ id: 'closed', channels: [], fetch: async (cs) => Object.fromEntries(cs.map((c) => [c.id, { status: 'ok', channels: {}, spans: [{ fromM: 100, toM: 200, kind: 'closure', label: 'Closed' }], points: [] }])) });
-  r = await run({ level: 'fun', win: engineWin, discover: async () => [],
+  r = await run({ level: 'quick', win: engineWin, discover: async () => [],
     routes: async (pts, alts, extra) => (extra && extra.costing_options && extra.costing_options.auto.use_highways === 1 ? [{ coords: straight, turns: [], timeS: 600 }] : [{ coords: wiggly, turns: [], timeS: 560 }]) });
   out.allClosed = { built: r.built.length, hard: r.built[r.built.length - 1] && r.built[r.built.length - 1].engine ? r.built[r.built.length - 1].engine.hard.map((h) => h.kind) : null, toasts: r.toasts };
   Ctx.unregister('closed');
@@ -478,11 +473,6 @@ def test_app_ranks_with_the_route_engine():
     assert e["via"] >= 1, "the highway route is pinned with shaping points so a reroute doesn't fall back to the side streets"
     assert e["why"] and e["why"].startswith("Highway instead of") and "side streets" in e["why"], e["why"]
     assert e["quality"] > 50
-    # Fun and Long way never drive a highway (the owner, 2026-11-08): the only highway-free way is theirs, though the
-    # highway quickest is still asked for (Quick's card and the level's measure)
-    for lv in ("fun", "max"):
-        e = r["engine_" + lv]
-        assert e["highwayAsked"] and e["timeS"] == 560, (lv, e)
     assert r["engineAvoidHighways"] == {"timeS": 560, "highwayAsked": False}, "the driver's avoid-highways choice is kept"
     assert r["allClosed"]["built"] == 1 and r["allClosed"]["hard"] == ["closure"], r["allClosed"]
 
@@ -494,7 +484,6 @@ def test_app_fun_route_picks_and_falls_back():
     assert r["quick"]["fun"] > 50 and r["quick"]["extraS"] == 60 and r["quick"]["matrix"] == 0
     assert len(r["quick"]["marks"]) == 2 and r["quick"]["marks"][0] == [0, 0] and r["quick"]["marks"][1][1] == 330, r["quick"]["marks"]
     assert r["quick"]["via"] >= 1 and r["quick"]["shaping"], "the winning 12 km alternate is pinned so a reroute stays on it"
-    assert r["shortcut"] == {"timeS": 600, "via": 0}, "a route that skipped its stage is not a stage route"
     assert r["coverage"]["kept"] == 1 and r["coverage"]["skipped"] == 0 and r["coverage"]["none"] == 1
     assert r["avoidTolls"] == {"timeS": 600, "extraS": 0, "why": None, "unavoided": []}, "the toll road is dropped, not ranked"
     assert r["tollOnly"] == ["tolls"], "no toll-free way: the card says so"
@@ -504,9 +493,11 @@ def test_app_fun_route_picks_and_falls_back():
     assert r["townsOff"] == {"timeS": 600, "townKm": "unset"}, "not asked: the quickest straight road, no town lookup"
     assert r["townsUnknown"] == {"timeS": 600, "townKm": None}, "no place data: unknown (the card says it couldn't check), no cost"
     assert re.fullmatch(r"For Twisty Rd 8\.7 mi · \d+ more good corners, \+1 min", r["quick"]["why"]), r["quick"]["why"]
-    assert r["noTiles"] == {"built": 1, "fun": r["noTiles"]["fun"]}
+    # Valhalla is for Quick only (the owner, 2026-11-11): without our router, Fun and Long way ask it nothing and say so
+    for lv in ("fun", "max"):
+        o = r["ownOnly"][lv]
+        assert o["built"] == 0 and o["routes"] == 0 and o["matrix"] == 0 and len(o["toasts"]) == 1 and "Quick" in o["toasts"][0], (lv, o)
     assert r["osrm"] == {"built": 1, "timeS": 700}
-    assert r["stage"]["matrix"] == 1 and r["stage"]["via"] >= 2 and r["stage"]["shaping"] and r["stage"]["fun"] > 50 and r["stage"]["extraS"] == 120
     assert r["down"]["built"] == 0 and len(r["down"]["toasts"]) == 1
 
 
