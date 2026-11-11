@@ -4,6 +4,33 @@ Decisions Claude made for you, newest first. Each one says what was decided, why
 you reach one you've seen. If you disagree with a call, say so and it gets reversed; nothing here is hard to undo unless
 it says so. Things only you can do are in docs/OWNER_TODO.md.
 
+## 2026-11-10 (fable-pro-looks): Pro is looks only; one Pro crew-mate dresses the whole crew (claude/fable-pro-looks)
+
+Your answer to the red team (PH-06, BR-06, UX-06): Pro is themes and liveries, nothing else. Route tuning, which went
+Pro on 2026-11-09, is free for everyone, with or without Pro and after Pro goes on sale (web/pro.js has two kinds now,
+theme and livery; tests/test_pro.py fails if a third appears). A crew's livery used to climb Plain, Club (5 Decals), Works
+(12), Factory (20) as Pro crew-mates added up, with a meter in Edit livery and "Decals come from crew-mates with Vetta
+Pro" on every crew page. Now any one crew-mate with Pro opens the whole livery for everyone (backend/src/livery.ts); the
+meter is gone; a Plain crew's page says "Plain livery" and nothing it lacks, and a dressed one says who dressed it
+("Factory livery · dressed by @bob"). A crew loses nothing it set when the Pro member leaves: it falls back to Plain
+and comes back with the next one, as before.
+
+Undo: revert the PR (tiers come back as they were; nothing in the database changed).
+
+## 2026-11-10 (fable-road-page): About a road says its climb, and speaks in words (claude/fable-road-page)
+
+A bug first: on any road with 40 m or more of climb, the sheet's first line read "Switchbacks · 0.8 mi · descending
+[object Object]". The climb was given to the formatter for short distances, which returns a number and a unit as a
+pair. It now uses the height formatter the route card uses: "descending 308 ft", or metres.
+
+Then the words. The sheet listed TECH, FLOW, SURF, CLEAR and "Confidence: L0 · From the map only", which are the
+code's names. They are now Technical, Flow, Surface and Clear road, each with a few words on what it measures, its
+score, and a bar as long as the score. An unknown score is "--" with an empty bar and says why ("not measured by
+members yet"); nothing is guessed. "How sure" is said in words with no L0/L1/L2. The closing note read "scored by a
+simulated sane driver"; it reads "as a careful driver would take it. Never a speed to aim for."
+
+Undo: revert the PR. The scores themselves and how they are worked out are unchanged.
+
 ## 2026-11-10 (fable-pin-names): a place you pin or tap goes by its name, never by coordinates (claude/fable-pin-names)
 
 Hold the map on Foothills Parkway and the pin's sheet said "Foothills Parkway", but Go here then filled Where to? with
@@ -29,11 +56,76 @@ keeps its own word and only its progress bar moves.
 
 Undo: revert the PR.
 
+## 2026-11-11 (fable-rally-sheet): a crew drive's results sheet, rally style, Scores and shared times (claude/fable-rally-sheet)
+
+A crew drive used to remember one number afterwards: the best Score of the day. Its card now folds out "Results · 3
+stages": an Overall, then each stage as SS1, SS2…, every driver who came with their best Vetta Score on it and a place.
+Share the results sends the sheet as plain text (or copies it), ready for the crew chat or a group text.
+
+The calls: it uses exactly what the best Score already used (Scores the drivers shared with that crew, from the drive's
+day, among those who came, or those going when nobody marked it; blocks hide people both ways), so nobody shows up who
+wasn't already visible. A time and its gap to the stage's quickest sit beside a Score only while that driver shares
+times with the crew (Share times on the crew's grant), and the overall adds a total time for those who drove every stage
+with one; unknown stays "--" (the owner, 2026-11-10: share stage times and gaps). The order stays by Score. The overall is ranked by stages driven
+first, then the average Score over them, the way a rally classifies only those who finish: someone who drove one stage
+brilliantly sits behind everyone who drove them all, with "1 of 3 stages" beside them. Equal Scores share a place. Up
+to 12 stages. No migration, no new data: it goes with the drive (a week after it starts), as before.
+
+Undo: revert the PR; the card goes back to the single best Score.
+
+## 2026-11-10 (fable-there-and-back): a trip to a place can come home another way in one tap (claude/fable-there-and-back)
+
+The route card of a trip to a place has a new key, "There and back, home another way". It plans the drive home too,
+staying off the road you drove out on wherever another way exists, and the destination becomes a stop on the trip.
+Calls made: the way home is chosen by the same Fun / Long way rules as any route (so it may be longer, on better road);
+where our own map tiles don't reach, the public router is asked to avoid the way out; a dead end that has only one way
+in says so instead of failing. Undo: hide `#routeRoundBtn` (one line in renderRouteCard), nothing else depends on it.
+
+## 2026-11-10 (fable-your-data): Your data is three short lists, like Settings (claude/fable-your-data)
+
+For your "cohesiveness, less clunky": Your data was eight keys of eight widths in two wrapped rows, one of them a link
+and two of them red text. It is now the same rows as the Settings list it opens from, in three groups: Take a copy
+(Download drives, Download account data, Import a drive), Offline (Save the map here, Delete offline data), Remove
+(Delete drives on this phone, Erase everything on this phone, both in red). Each row does what it did; the confirm
+sheets are unchanged. A row acts when touched, so it has no chevron; the file type sits at the row's end in pencil.
+
+Undo: revert the PR.
+
 ## 2026-11-10 (merger): e2e may run 35 minutes, not 25 (claude/project-thread-er8kzz)
 
 The e2e suite is 152 flows now and takes about 24 minutes, so GitHub cut it off at its 25-minute limit on the last flow
 (twice on #349, once on #344) with every flow before it passing. The limit is 35 minutes. No test is skipped or
 shortened. Undo: set `timeout-minutes` back to 25 in `.github/workflows/core-tests.yml`, or better, split the suite.
+
+## 2026-11-10 (fable-sheet-races): e2e waits for a sheet to be still before tapping its keys (claude/fable-sheet-races)
+
+Nine PRs were red on CI-only races: a click aimed at a sheet that was still sliding up landed on its backdrop, which
+closes the sheet. The two flows now wait until the sheet is open and still, and check it is still open after the tap.
+Update 2026-11-11: the wait itself was broken (an async predicate returns at once), and the app had a real fault: a
+press on a key that lifts on the backdrop closed the sheet. Now a backdrop closes a sheet only when the press began on
+it (`onBackdrop` in cockpit.js, five sheets). On a phone that is a tap during the slide, or a thumb that drifts off a
+key, no longer throwing the sheet away. Every check is as strict as before, plus two new ones. Undo: revert the PR.
+## 2026-11-11 (fable-taste-picks): the route you choose over Vetta's pick teaches your taste (claude/fable-taste-picks)
+
+Taste learning only heard from "Which road was better?" after a drive, and most drivers never answer it. A choice made
+on the route card says the same thing: when you Start a different level's route or swipe to another option than the
+one Vetta picked at the plan's level, that pair (the road you took, the road you passed) goes into the taste fit at
+half the weight of an answer (`PICK_WEIGHT` in taste.js; you may have picked it for the time, not the road). It counts
+only for a destination route, once per plan, when the two times are within 30% (a much quicker pick says nothing about
+corners), and not when the two roads read the same. A short toast says which way it leaned ("Noted: you picked the more
+flowing road"), the Log's taste line counts routes chosen beside answers, and when a route on the card is there because
+it suits your taste the card says so ("Suits your taste for flowing roads"). Half an answer is my call: five picks make
+the fit as sure as two and a half answers.
+
+Undo: revert the PR, or set `PICK_WEIGHT` to 0 (stored picks then carry no weight).
+
+## 2026-11-10 · Vetta Line: the home screen is a masthead over the map and a shelf of road cards (claude/fable-signature)
+
+- What: web/signature.css, a new last stylesheet, restyles the idle map: the place as a masthead in type, the deck as one
+  sheet with a red Just drive and the invitations side by side as cards, soft lift instead of ink boxes, the apex dot on
+  the open tab, a short arrival.
+- Why: the owner asked for big moves toward one cohesive, artist-made look; the home was boxes in 1.5 px ink stacked in rows.
+- Undo: remove the `signature.css` link in web/index.html (the shelf wrapper is harmless without it), or revert the PR.
 
 ## 2026-11-10 (fable-loop-time): a loop can be set by time on the dial (claude/fable-loop-time)
 
@@ -63,6 +155,33 @@ The same for notifications: "Notifications are off for Vetta. Turn them on in th
 now has a **Settings** key that opens Vetta's page there (the shell's `openSettings`, already used by Location is off).
 
 Undo: revert the PR (`askSignIn` in web/cockpit.js, one line in web/friends_map.js).
+## 2026-11-10 (fable-toast-key): a message with a key is one row, and a message is as wide as its words (claude/fable-toast-key)
+
+For "reducing any clunky feelings", seen on the drive screen: "Typing is off while the car moves." took half the
+screen's width, wrapped, and its key ("I'm a passenger") dropped under it, indented, in the red pen. Two causes, both
+in every message the app shows:
+
+- A message is centred from `left: 50%`, so the browser let it be at most half the screen wide and it wrapped early.
+  It is now as wide as its words, up to the screen less 16 px a side.
+- A key on a message (twelve of them: Start drive, Save, Share ETA, Head home, Add as a stop, Garage, Open…) was an
+  inline link. It is now the end of a row: the words wrap on the left, the key stays whole on the right. It is ink and
+  underlined like every other text key (the red pen is for what means slow down), and a thumb tall to hit without
+  making the message taller.
+
+Also: "Saved for offline: … Find it in Where to?." ended "?."; it reads "It's listed in Where to? now."
+
+Undo: revert the PR (`toast()` in web/cockpit.js, four CSS lines in web/index.html).
+
+## 2026-11-10 (fable-camber-sure): banking says how sure it is (claude/fable-camber-sure)
+
+The red team (TE-03) pointed out that banking comes from one phone on a sprung car with no body-roll model, yet the
+gauge read it to a tenth of a degree ("BANK +4.3°"). It now reads whole degrees ("BANK +4°"), the drive's lane readout
+too, and the end-of-drive line says "banked about 4°". Tapping the gauge (parked) says Bank is approximate, to a
+degree or two, because body roll is not modelled. The drive view already says how many runs agree or differ beside
+it. Nothing about how banking is measured or shared changed; a roll model or a surveyed reference road is the real fix
+(docs/PHILOSOPHY.md §4).
+
+Undo: revert the PR.
 
 ## 2026-11-10 (fable-layers): design pass 8: the Layers panel is the map's legend (claude/fable-layers)
 
@@ -125,6 +244,17 @@ weights in fun_route.js (unused by the app now, still tested).
 
 Undo: revert the PR. To bring a level back for loops only, set `LOOP_STYLE` in web/cockpit.js.
 
+## 2026-11-10 (fable-paths-are-keys): "Garage → Settings → Spots" is a key, not a path to walk (claude/fable-paths-are-keys)
+
+For "reducing any clunky feelings": Where to?'s Spots near you, when empty, read "No shared spots near here yet. Add
+one in Garage → Settings → Spots." It now reads "No shared spots near here yet. **Add one**", and the key opens
+Settings on Spots. The crash sheet's note had the same arrows ("Add an emergency contact in Garage → Settings → Crash
+check to text someone from here."); nothing in that sheet should lead away from Call and I'm OK, so it gets no key,
+only a plain sentence: "To text someone from here, add an emergency contact in Settings, under Crash check."
+
+Left for after #358 (it rewrites the same lines): Your data's "deleted from the server in Settings → Account → Delete
+account".
+
 ## 2026-11-10 (fable-one-loop-home): Options loses its "1 hour / 2 hours" loop keys; a loop by time is the dial's (claude/fable-one-loop-home)
 
 Since the loop dial can be set by time (30 min to 3 h), Options' "Loop to fit: 1 hour, 2 hours" was a second, smaller
@@ -147,6 +277,17 @@ the connection is back, so nobody has to press Try again to find out. And the Ga
 cars and profile will be back, and that looks, voices and settings work without it.
 
 Undo: revert the PR.
+
+## 2026-11-10 (fable-settings-values): the last three Settings rows say what they are set to (claude/fable-settings-values)
+
+Design pass 7 gave each Settings row its value, but Road feel, Route tuning and Spots still said nothing (noted then as
+next). Now: **Spots** counts yours ("2 spots", "None"); **Route tuning** says "Standard", or "1 changed" once a slider
+has moved (the words of its own status line), and goes back to Standard after Reset; **Road feel** says On or Off from
+its Share road feel switch when you are signed in. Signed out there is no switch to read, so the row says nothing:
+a row never guesses. Route tuning also says nothing if the tuning is not this phone's to use (after Pro goes on sale,
+for a phone without it), since its sliders are kept but the routes are the defaults.
+
+Undo: revert the PR (three `data-summary` attributes in web/index.html, `data-summary-text` in web/garage_settings.js).
 
 ## 2026-11-10 (fable-end-card): design pass 9: the drive's score is set against your usual; the card's keys sit evenly (claude/fable-end-card)
 
