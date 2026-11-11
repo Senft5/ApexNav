@@ -11,6 +11,13 @@ reach (it covers Ohio, Kentucky and Indiana so far), or it can't be loaded, the 
 instead of a Valhalla route. Calls I made: the map's index gets 8 s (not 1.5 s) at Fun, since there is no stand-in to fall
 back on; spoken turn directions on our route still come from Valhalla's trace_route (it routes nothing, it reads our line);
 loops still use Valhalla off our map until the next PR. Undo: `const ownOnly = false` in cockpit.js `funRoute`.
+## 2026-11-11 (places by name): cafés and fuel along the route, tap for their names (claude/project-thread-me97iw)
+
+The route card's "Along" line ("1 viewpoint · 2 cafés · 3 fuel stops") now opens a list of each place by the name
+OpenStreetMap has for it, how far into the route and how far off the road; tapping one moves the map there and offers it as
+a stop. Tapping a CAFÉ or FUEL pin on the map says its name too. Calls: fuel stations are now counted on the line (before,
+only a long stretch without fuel was said), so there is something to tap; a place with no name on the map says "no name on
+the map" rather than a guess. Undo: revert the PR.
 ## 2026-11-11 (roam-a best run): a drive's page names your best run of clean corners (claude/project-thread-h7xxmf)
 
 New, my call (Nate asked for more fun-driving features). A drive's page now says, when it happened, "Your best run: 9
