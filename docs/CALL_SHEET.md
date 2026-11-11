@@ -4,6 +4,16 @@ Decisions Claude made for you, newest first. Each one says what was decided, why
 you reach one you've seen. If you disagree with a call, say so and it gets reversed; nothing here is hard to undo unless
 it says so. Things only you can do are in docs/OWNER_TODO.md.
 
+## 2026-11-11 (ui-round-two): the Garage and People match the Log and the home screen (claude/project-thread-5sbga7)
+
+The Garage's title is now set large like the place name on the map, its gear is a key laid on the page instead of an
+ink box, each car is a paper card with its name large and its keys as soft wells, your daily car carries the red dot,
+and the look you use is the one card ringed in ink. On People, Friends and Crews are the same size as Drives and Stages
+on the Log, crew tiles are paper, and a friend's request carries the red dot as the one thing to answer. Example and
+empty states stay drawn in pencil. No words or places changed.
+
+Undo: revert the PR (CSS only).
+
 ## 2026-11-11 (roam-c-ci-shards): the e2e check runs as four jobs side by side (claude/roam-c-ci-shards)
 
 The e2e check ran 173 flows one after another in 28-31 minutes against a 35-minute limit, and every PR waited on it. It
