@@ -4,6 +4,15 @@ Decisions Claude made for you, newest first. Each one says what was decided, why
 you reach one you've seen. If you disagree with a call, say so and it gets reversed; nothing here is hard to undo unless
 it says so. Things only you can do are in docs/OWNER_TODO.md.
 
+## 2026-11-11 (security pass, PR 3): the map relays are limited per address (claude/project-thread-4lms1f)
+
+The three relays a phone uses while planning (map features from Overpass, a stage's road attributes from Valhalla, Kentucky
+work zones) need no account, and every miss asks a free public service from our Worker's address. Nothing limited them,
+so anyone could scrape those services through us and get Vetta's server blocked by them. Now each address gets 300 relay
+requests a minute (a plan asks at most 12 map tiles and a few stages, so no driver gets near it), then a 429 for the rest of
+the minute. The relay's mirror check (`?diag=1`, which asks every mirror at once, uncached) is now the owner's alone.
+
+Undo: drop the `RELAY_LIMIT` binding from wrangler.jsonc (nothing is limited without it), or raise its limit.
 ## 2026-11-11 (security pass, PR 2): a crew's private-days chat stays with who was there when it goes public (claude/project-thread-4lms1f)
 
 When an owner made a private crew public, its last 30 days of chat stayed readable to anyone who joined afterwards, and
@@ -14,6 +23,7 @@ owner made the crew public); a member's pinned words from the private days show 
 are public today start from the moment the migration ran, so their newcomers from here on start there too.
 
 Undo: remove `CHAT_READABLE` from crew_page.ts (the column can stay).
+
 ## 2026-11-11 (security pass): photos only to whoever sees what they belong to; a fresh account's report no longer hides one (claude/project-thread-4lms1f)
 
 Any signed-in member could fetch any photo by its id, and list any car's or crew's gallery by its id: a car you hadn't

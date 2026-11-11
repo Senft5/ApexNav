@@ -1,5 +1,10 @@
 # VETTA — CURRENT AGENT HANDOFF STATE
 
+## Session 2026-11-11 (security pass, PR 3): relay rate limit (claude/project-thread-4lms1f, off origin/main)
+
+- ratelimit.ts `RELAYS` (/api/ctx/osm, /api/ctx/trace, /api/ctx/workzones): `RELAY_LIMIT` per IP, 300/60 s (wrangler.jsonc
+  namespaces 1005 prod, 1006 previews). `?diag=1` on /api/ctx/osm: moderator only (404 otherwise, 401 signed out).
+- Tests: backend/test/ratelimit.test.ts (+1).
 ## Session 2026-11-11 (security pass, PR 2): public crews' chat history (claude/project-thread-4lms1f, off origin/main)
 
 - Migration 0056_crew_public_since (crews.public_since; public crews backfilled to the time it ran). Set by crewCreate
