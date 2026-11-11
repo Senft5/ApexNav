@@ -118,6 +118,19 @@ for the plate readers within about 2 km of the trip and sends the router those n
 nearest each camera. A trip more than 1° across, the camera map offline, or no way round them: the route is built without
 avoiding cameras and a toast says so; the cameras still on the route are marked and counted as before (IDEAS R-35).
 
+## Avoid police reports
+
+Avoid → **Police reports** (off by default; the owner, 2026-11-11) keeps a plan away from the live "Police" reports near the
+trip: drivers' reports (`/api/hazards`, members only; the server keeps one 60 min from its last confirmation and drops it
+there, and one cleared by more drivers than confirmed it is skipped here) and a convoy leader's live Police call, 20 at
+most within 15 km of the trip (`ApexHazardReports.policeFor`). The router gets them as `exclude_locations` with the closures
+(cameras take what is left of the 50); our own router costs every road within 150 m of one x8 (`graph_router.js`
+`AVOID_POINT_X`), so a way round wins when there is one near. A route that still passes within 150 m of one is dropped when
+any candidate doesn't (`FunRoute.unavoided`, `passesNear`), and the card says "Couldn't avoid police reports"; one that
+went round says "Around a police report" (or "Around 3 police reports"). Signed out, there are no reports to avoid: the
+plan is the usual one and a toast says to sign in. A plan waits at most 0.8 s for the reports. There is no checkpoint
+report and none is made from these (App Store 1.4.3, docs/APP_REVIEW.md).
+
 ## Drag to reshape
 
 A planned route (not while driving or playing) can be dragged: a mouse grabs the line at once, a finger holds still on it for

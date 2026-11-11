@@ -56,6 +56,7 @@
     STOP_AVOID_X: 1,
     PRIVATE_X: 10, PRIVATE_S: 600, DESTINATION_X: 2, DESTINATION_S: 60, FERRY_X: 2, UNPAVED_X: 1.5,
     AVOID_HWY_X: 4, AVOID_TOLL_X: 3, AVOID_FERRY_X: 5, AVOID_UNPAVED_X: 5,
+    AVOID_POINT_X: 8, AVOID_POINT_M: 150, AVOID_POINT_MAX: 20,   // Avoid police reports: edges within 150 m of a live report
     // the goodness weight is searched in [0, A_MAX] (log steps from A_FIRST), at most BISECT more routes. At Fun and Long
     // way the pick is then by the goodness the extra time buys (pick(): BUY per 100 % more time over the level's quickest,
     // never under BUY_MIN), among those routes and the spread's (SPREAD: penalty alternates of the first step's route)
@@ -314,6 +315,25 @@
    * leave or reach it). `filter(e)` limits which edges count (loops' waypoints: through roads only); service roads and
    * private ones count 25 m and 60 m further, so a start beside the main road takes the main road.
    */
+  /** Every edge (both ways) with a point within `maxM` metres of (la, lo). */
+  function edgesNear(v, la, lo, maxM) {
+    const G = v.grid, out = new Set();
+    if (!v.N || !G || !G.W) return out;
+    const ci = Math.floor(la / K.GRID_DEG) - G.i0, cj = Math.floor(lo / K.GRID_DEG) - G.j0;
+    const R = Math.ceil(maxM / (K.GRID_DEG * 111000 * Math.cos(la * RAD))) + 1, seen = new Set();
+    for (let di = -R; di <= R; di++) for (let dj = -R; dj <= R; dj++) {
+      const i = ci + di, j = cj + dj;
+      if (i < 0 || j < 0 || i >= G.H || j >= G.W) continue;
+      const c = i * G.W + j;
+      for (let p = G.start[c]; p < G.start[c + 1]; p++) {
+        const a = G.nodes[p];
+        const consider = (e) => { if (seen.has(e) || v.to[e] < 0) return; seen.add(e); if (project(v, e, la, lo).d <= maxM) out.add(e); };
+        for (let e = v.first[a]; e < v.first[a + 1]; e++) consider(e);
+        for (let r = v.rfirst[a]; r < v.rfirst[a + 1]; r++) consider(v.redge[r]);
+      }
+    }
+    return out;
+  }
   function snap(v, la, lo, filter = null, maxM = K.SNAP_M) {
     const G = v.grid, B = flagBits();
     if (!v.N || !G.W) return [];
@@ -560,7 +580,7 @@
     return v.objCache.get(key);
   }
   const OBJ_KNOBS = ['W_NOTPOOR', 'W_QUALITY', 'W_FUN', 'W_SCENERY', 'POOR_LO', 'POOR_HI', 'GATE_LO', 'GATE_HI', 'UNKNOWN_G', 'MODEL_WQ', 'MODEL_WS', 'PRIVATE_X', 'PRIVATE_S',
-    'DESTINATION_X', 'DESTINATION_S', 'FERRY_X', 'UNPAVED_X', 'AVOID_HWY_X', 'AVOID_TOLL_X', 'AVOID_FERRY_X', 'AVOID_UNPAVED_X'];
+    'DESTINATION_X', 'DESTINATION_S', 'FERRY_X', 'UNPAVED_X', 'AVOID_HWY_X', 'AVOID_TOLL_X', 'AVOID_FERRY_X', 'AVOID_UNPAVED_X', 'AVOID_POINT_X', 'AVOID_POINT_M'];
   function objectiveOf(v, o = {}) {
     const prefs = o.prefs || {}, taste = o.taste || {}, avoid = o.avoid || {}, B = flagBits();
     const corner = 1 + 0.25 * ((Number(prefs.tight) || 0) + (Number(prefs.fast) || 0));
@@ -609,6 +629,14 @@
       if (avoid.highways && ((fl & B.motorway) || v.cls[e] === CLS.motorway)) m *= K.AVOID_HWY_X;
       if (avoid.tolls && (fl & B.toll)) m *= K.AVOID_TOLL_X;
       mult[e] = m; add[e] = ad;
+    }
+    // Avoid police reports (hazard_reports.js policeFor): the roads by each live report cost AVOID_POINT_X their time, so
+    // a way round wins where one is near; with none, the route goes by and the card says it couldn't avoid them
+    if (avoid.police && Array.isArray(avoid.points)) {
+      for (const p of avoid.points.slice(0, K.AVOID_POINT_MAX)) {
+        if (!p || !Number.isFinite(p.lat) || !Number.isFinite(p.lon)) continue;
+        for (const e of edgesNear(v, p.lat, p.lon, K.AVOID_POINT_M)) mult[e] *= K.AVOID_POINT_X;
+      }
     }
     return { bad, mult, add, minBad, nodeCosts: o.nodeCosts !== false };
   }

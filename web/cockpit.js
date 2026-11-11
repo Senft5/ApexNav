@@ -2369,6 +2369,33 @@
     // sent to the router as exclude_locations. If no way around them exists, the route is asked again without them.
     const closureCache = { key: '', at: 0, list: [] };
     async function closuresAround(points) {
+      return ApexHazardReports.closuresFor(await hazardsAround(points), points);
+    }
+    // Avoid police reports (IDEAS R-35, the owner 2026-11-11): the live "Police" reports near the trip (members' reports
+    // from the last hour, and a convoy leader's live call), as router exclusions and as points our own router keeps off.
+    // No sign-in, no reports: routed as usual and said once. Never a checkpoint (docs/APP_REVIEW.md 1.4.3).
+    let policeNote = 0;
+    function convoyPolice() {
+      try { return convoy && convoy.client && typeof convoy.client.liveHazards === 'function' ? convoy.client.liveHazards().filter((e) => e.type === 'police' && e.anchor).map((e) => e.anchor) : []; }
+      catch (_) { return []; }
+    }
+    async function policeAround(points) {
+      if (!avoid.police || !window.ApexHazardReports) return [];
+      let member = false;
+      try { member = !!(window.ApexSync && typeof ApexSync.signedIn === 'function' && ApexSync.signedIn()); } catch (_) { member = false; }
+      const list = member ? await hazardsAround(points) : [];
+      if (!member && performance.now() - policeNote > 60000 && !convoyPolice().length) { policeNote = performance.now(); toast('Sign in to route around police reports.'); }
+      return ApexHazardReports.policeFor(list, points, Date.now(), convoyPolice());
+    }
+    // The avoid choices for one plan, with the police reports near it (a plan is never held more than POLICE_WAIT_MS for them)
+    const POLICE_WAIT_MS = 800;
+    async function avoidForTrip(points) {
+      if (!avoid.police) return avoid;
+      const pts = await RouteLoading.optional(policeAround(points), POLICE_WAIT_MS).catch(() => null);
+      if (window.apexDebug) window.apexDebug.lastPolice = Array.isArray(pts) ? pts : null;
+      return { ...avoid, points: Array.isArray(pts) ? pts : [] };
+    }
+    async function hazardsAround(points) {
       const mid = points[Math.floor(points.length / 2)] || points[0];
       if (!mid || !window.ApexSync) return [];
       const key = `${mid.lat.toFixed(1)},${mid.lon.toFixed(1)}`;
@@ -2380,7 +2407,7 @@
         } catch (_) { /* offline or signed out: no closures known */ }
         Object.assign(closureCache, { key, at: performance.now(), list: Array.isArray(list) ? list : [] });
       }
-      return ApexHazardReports.closuresFor(closureCache.list, points);
+      return closureCache.list;
     }
     // Avoid cameras (IDEAS R-35): the plate readers near the trip go to the router as exclude_locations with the closures.
     // A trip too big for one camera-map query, or the map offline, routes without them; the card still counts what is on it.
@@ -2399,10 +2426,11 @@
       const closures = await closuresAround(points);
       // roads you chose to route around this session (closed when you'd get there, R-22), near this trip
       closures.push(...FunRoute.camerasToExclude(avoidPoints, points, 10, 1));
-      const cams = await camerasAround(points, 50 - closures.length);   // the public router takes about 50 exclusions
-      if (cams.length) {
-        try { return await valhallaRoutesExcluding(points, throughRoadsOnly, alternates, extra, [...closures, ...cams]); }
-        catch (_) { toast('No way round every camera on this trip. Routing without avoiding them.'); }
+      const police = await policeAround(points);
+      const cams = await camerasAround(points, 50 - closures.length - police.length);   // the public router takes about 50 exclusions
+      if (cams.length || police.length) {
+        try { return await valhallaRoutesExcluding(points, throughRoadsOnly, alternates, extra, [...closures, ...police, ...cams]); }
+        catch (_) { toast(`No way round every ${police.length && cams.length ? 'camera and police report' : police.length ? 'police report' : 'camera'} on this trip. Routing without avoiding them.`); }
       }
       const excl = closures;
       try { return await valhallaRoutesExcluding(points, throughRoadsOnly, alternates, extra, excl); }
@@ -2741,12 +2769,15 @@
           : null;
       const feel = mCov != null && mCov > 0 ? `Road feel ${mCov}% driven` : 'Road feel after first drive';
       const missed = Array.isArray(t.unavoided) && t.unavoided.length ? `Couldn't avoid ${t.unavoided.map(k => FunRoute.AVOID_LABELS[k] || k).join(' or ')} · ` : '';
+      // Avoid police reports, and it did: how many live reports near the trip it keeps away from (none known: nothing said)
+      const policeN = avoid.police && Number.isFinite(t.policeAround) && t.policeAround > 0 && !(t.unavoided || []).includes('police') ? t.policeAround : 0;
+      const around = policeN ? `Around ${policeN === 1 ? 'a police report' : `${policeN} police reports`} · ` : '';
       // Planned routes only: a driven track's own time has passed.
       const sun = !(Array.isArray(t.sectors) && t.sectors.length) && t.glareMin >= 3 ? `Low sun ahead for ~${t.glareMin} min · ` : '';
       // Only on a route planned with Towns on (townKm undefined otherwise); null = the town check couldn't run.
       const towns = t.townKm === null ? 'Couldn\'t check towns · ' : t.townKm >= 1.6 ? `Through towns ~${ApexUnits.long(t.townKm * 1000, 0)} · ` : '';
       const carLine = t.request ? FunRoute.carNote(routingCar(), avoid) : '';
-      $('routeCardSub').textContent = `${carLine ? carLine + ' · ' : ''}${missed}${towns}${sun}${cams}${feel}`;
+      $('routeCardSub').textContent = `${carLine ? carLine + ' · ' : ''}${missed}${around}${towns}${sun}${cams}${feel}`;
       $('routeCardWhy').textContent = t.why || '';
       $('routeCardWhy').hidden = !t.why;
       // There and back: a trip to a place (not a round trip already, no stop of yours on it), planned and not driving
@@ -3298,6 +3329,7 @@
     try { funLevel = FunRoute.LEVELS[localStorage.getItem(FUN_LEVEL)] ? localStorage.getItem(FUN_LEVEL) : 'fun'; } catch (_) { /* storage off */ }
     async function funRoute(from, to, id, name, request, ui, opts = {}) {
       const level = funLevel, planT0 = Date.now();      // the early quickest counts from here, not from the router's answer
+      const avoid = await avoidForTrip([from, to]);     // this plan's avoid choices, with the police reports near it
       const dev = (window.apexDebug && window.apexDebug.dev) || null;   // dev mode (devPlanner): off but for a developer
       if (dev && dev.apply) dev.apply();                                    // Route tuning's and the Dev panel's tune, as of now
       const tunedNow = dev && dev.tuned ? dev.tuned() : null;              // (the card says a plan was made with your tuning)
@@ -3590,7 +3622,7 @@
       // The best and up to two really different others (the level cards: each level's pick, then the others) stay on the
       // card (and faint on the map) to pick from.
       const offered = FunRoute.distinctOptions(ranked, 3);
-      const lv = destLevels({ id, name, request, level, quickest, pool, builtLevel: level }, level);
+      const lv = destLevels({ id, name, request, level, quickest, pool, builtLevel: level, police: Array.isArray(avoid.points) ? avoid.points.length : null }, level);
       lv.tuned = tunedNow;
       if (lv.levels[level] == null) Object.assign(lv, { list: offered, levels: null, picked: 0 });   // (never: the same ranking)
       // the quickest already up is the only option: keep it as it is (no second draw of the same route and card), but
@@ -3838,6 +3870,7 @@
     }
     /** What the ranking says about option c, onto its track t (the card reads these): times, the why line, the engine. */
     function optionOnto(t, c, o) {
+      t.policeAround = o && Number.isFinite(o.police) ? o.police : null;
       // A winning alternate is pinned with shaping points along it, so a reroute stays on it; so is the highway-costed
       // route (the router's own costing would reroute it onto the side streets it avoided).
       // Ours always is: a reroute goes to Valhalla, which would otherwise take its own way.

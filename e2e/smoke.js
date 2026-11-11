@@ -1560,6 +1560,37 @@ flow('a reported road closure: routing asks the router to go around it (Worker a
   check(bodies.length && bodies.every((b) => JSON.stringify(b.exclude_locations) === JSON.stringify([{ lat: 35.86, lon: -83.95 }])), 'every route request goes around the closure, and only the closure: ' + JSON.stringify(bodies.map((b) => b.exclude_locations)));
 }, { geolocation: { latitude: 35.9606, longitude: -83.9207 }, permissions: ['geolocation'] });
 
+flow('avoid police reports: with the chip on, live police reports near the trip go to the router as exclusions and the card says it went round (Worker and router stubbed, IDEAS R-35)', async (page, base) => {
+  const bodies = [];
+  await page.route('https://photon.komoot.io/**', (route) => route.fulfill({ contentType: 'application/json', body: JSON.stringify({ features: [
+    { geometry: { coordinates: [-83.9700, 35.7565] }, properties: { name: 'Maryville', state: 'Tennessee' } }] }) }));
+  await page.route('https://valhalla1.openstreetmap.de/route', (route) => {
+    const req = JSON.parse(route.request().postData() || '{}'); bodies.push(req);
+    route.fulfill({ contentType: 'application/json', body: JSON.stringify(stubTrip(req.locations)) });
+  });
+  const soon = new Date(Date.now() + 40 * 60000).toISOString(), gone = new Date(Date.now() - 60000).toISOString();
+  await page.route(base + '/api/**', (route) => {
+    const u = new URL(route.request().url());
+    if (u.pathname === '/api/hazards') return route.fulfill({ contentType: 'application/json', body: JSON.stringify([
+      { id: 'p1', kind: 'police', lat: 35.86, lon: -83.90, heading: null, confirms: 1, clears: 0, expires_at: soon, m: 0 },
+      { id: 'p2', kind: 'police', lat: 35.80, lon: -83.91, heading: null, confirms: 0, clears: 3, expires_at: soon, m: 0 },
+      { id: 'p3', kind: 'police', lat: 35.83, lon: -83.89, heading: null, confirms: 0, clears: 0, expires_at: gone, m: 0 }]) });
+    return route.fulfill({ status: 200, contentType: 'application/json', body: '[]' });
+  });
+  await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); localStorage.setItem('apex.signedIn', '1'); localStorage.setItem('apex.avoid', JSON.stringify({ police: true })); } catch (_) {} });
+  await page.goto(base + '/index.html');
+  await page.waitForFunction(() => window.apexDebug && window.apexDebug.map);
+  check(await page.evaluate(() => document.querySelector('[data-avoid="police"]').getAttribute('aria-pressed')) === 'true', 'the Police reports chip shows it is on');
+  await page.click('#destInput'); await page.fill('#destInput', 'Maryville');
+  await page.waitForSelector('#placeList .place', { timeout: 10000 });
+  await page.click('#placeList .place');
+  await page.waitForFunction(() => { const t = window.apexDebug.track; return t && t.kind === 'route'; }, null, { timeout: 20000 });
+  check(bodies.length && bodies.every((b) => JSON.stringify(b.exclude_locations) === JSON.stringify([{ lat: 35.86, lon: -83.90 }])),
+    'every route request goes around the live report, not the cleared or the expired one: ' + JSON.stringify(bodies.map((b) => b.exclude_locations)));
+  await page.waitForFunction(() => /Around a police report/.test(document.getElementById('routeCardSub').textContent), null, { timeout: 10000 });
+  check(!/checkpoint/i.test(await page.textContent('#planPanel')), 'no checkpoint anywhere');
+}, { geolocation: { latitude: 35.9606, longitude: -83.9207 }, permissions: ['geolocation'] });
+
 // IN-1 / GR-2 (panel round 2): the pages that carry the drive follow the phone's text size, and hold a floor.
 // What a page measures for a text size, set by hand: Chromium has no -apple-system-body (format.js applyTypeScale).
 const TYPE_AT = (scale) => `(() => { const r = document.documentElement, t = ApexFormat.typeScales(${17 * scale});
