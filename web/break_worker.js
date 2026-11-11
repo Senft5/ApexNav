@@ -1,6 +1,6 @@
 // Live break cue (IDEAS D-16) off the main thread: profiles the driving since the last stop and reads Core.fatigue from it,
 // so the map and the pace-note timing never stall. In: { id, rows } (Recorder rows, rebased to start at 0 m). Out: { id, fa }.
-importScripts('apex_core.js', 'sensors.js', 'recording.js');
+importScripts('apex_core.js', 'sensors.js', 'flow.js', 'recording.js');
 self.onmessage = (e) => {
   const { id, rows } = e.data || {};
   let fa = null;

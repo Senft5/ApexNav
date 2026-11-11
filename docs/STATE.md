@@ -1,5 +1,14 @@
 # VETTA — CURRENT AGENT HANDOFF STATE
 
+## Session 2026-11-11 (roam-a best run record): Best run this month (claude/project-thread-h7xxmf, off origin/main)
+
+- IDEAS D-30, part two. web/recording.js `runOf(Core, d)` (repair + scorable corners, as `scoreOf`) and summaries carry
+  `run: { corners, len_m }` (null: none of 5+; absent: flow.js not loaded). SUMMARY_VERSION 2 (rebuilt once).
+- flow.js now loads before recording.js in index.html (deferred, ~2 KB), analysis.html, analysis_worker.js and
+  break_worker.js. drive_view.js uses `runOf` too. analysis.html renderRecords: "Best run this month: corners in a row,
+  smooth and settled, over X" (CSP hash regenerated).
+- Tests: tests/test_flow.py (+2: summary and wiring); e2e "Your records…" seeds runs (an old month's never counts).
+- Next: the end card's line for the run, when a drive just had one.
 ## Session 2026-11-11 (roam-a best run): the drive page names your best run of clean corners (claude/project-thread-h7xxmf, off origin/main)
 
 - IDEAS D-30. `core/flow.py` (reference) and `web/flow.js` (port, parity-tested on synthetic and both demo drives):

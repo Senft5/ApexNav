@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self' apexnav:; script-src 'self' apexnav: 'sha256-k6jhboAqdk7mhi3qFsuNVYTxXLLx5YQdOvPd5GMN9G4=' 'sha256-G7s/ZI+Hqrfc4DqbB6EANJJLmUmhNK06PizQ1LlsG84=' https://cdn.jsdelivr.net 'wasm-unsafe-eval'; worker-src 'self' apexnav: blob:; child-src 'self' apexnav: blob:; style-src 'self' apexnav: 'unsafe-inline'; font-src 'self' apexnav: data:; img-src 'self' apexnav: data: blob: https://tiles.openfreemap.org https://s3.amazonaws.com https://basemap.nationalmap.gov; media-src 'self' apexnav: data: blob:; connect-src 'self' apexnav: data: blob: https://apexnav.senftns.workers.dev wss://apexnav.senftns.workers.dev https://tiles.openfreemap.org https://basemap.nationalmap.gov https://s3.amazonaws.com https://valhalla1.openstreetmap.de https://router.project-osrm.org https://overpass-api.de https://overpass.private.coffee https://overpass.kumi.systems https://maps.mail.ru https://nominatim.openstreetmap.org https://photon.komoot.io https://api.open-meteo.com https://api.weather.gov https://statsapi.mlb.com https://api.seatgeek.com https://api.water.noaa.gov https://waterservices.usgs.gov https://in.carsprogram.org https://publicapi.ohgo.com https://quickstats.nass.usda.gov https://commons.wikimedia.org https://graph.mapillary.com https://vpic.nhtsa.dot.gov https://cdn.jsdelivr.net https://huggingface.co https://*.huggingface.co https://*.hf.co; object-src 'none'; base-uri 'none'; form-action 'self'" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self' apexnav:; script-src 'self' apexnav: 'sha256-LT2tmCBC2uZ4UYKjqD1s/riFBLm1M1kE+IBdZoQJBuY=' 'sha256-G7s/ZI+Hqrfc4DqbB6EANJJLmUmhNK06PizQ1LlsG84=' https://cdn.jsdelivr.net 'wasm-unsafe-eval'; worker-src 'self' apexnav: blob:; child-src 'self' apexnav: blob:; style-src 'self' apexnav: 'unsafe-inline'; font-src 'self' apexnav: data:; img-src 'self' apexnav: data: blob: https://tiles.openfreemap.org https://s3.amazonaws.com https://basemap.nationalmap.gov; media-src 'self' apexnav: data: blob:; connect-src 'self' apexnav: data: blob: https://apexnav.senftns.workers.dev wss://apexnav.senftns.workers.dev https://tiles.openfreemap.org https://basemap.nationalmap.gov https://s3.amazonaws.com https://valhalla1.openstreetmap.de https://router.project-osrm.org https://overpass-api.de https://overpass.private.coffee https://overpass.kumi.systems https://maps.mail.ru https://nominatim.openstreetmap.org https://photon.komoot.io https://api.open-meteo.com https://api.weather.gov https://statsapi.mlb.com https://api.seatgeek.com https://api.water.noaa.gov https://waterservices.usgs.gov https://in.carsprogram.org https://publicapi.ohgo.com https://quickstats.nass.usda.gov https://commons.wikimedia.org https://graph.mapillary.com https://vpic.nhtsa.dot.gov https://cdn.jsdelivr.net https://huggingface.co https://*.huggingface.co https://*.hf.co; object-src 'none'; base-uri 'none'; form-action 'self'" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
   <title>Vetta · Log</title>
   <link rel="icon" href="brand/mark.svg" type="image/svg+xml" />
@@ -27,6 +27,7 @@
   <script src="instruments.js"></script>
   <script src="sync.js"></script>
   <script src="format.js"></script>
+  <script src="flow.js"></script>
   <script src="recording.js"></script>
   <script src="analysis_client.js"></script>   <!-- the Log's heavy work in the analysis worker (REVIEW_FEEL F-06) -->
   <script src="drive_keep.js"></script>
@@ -40,7 +41,6 @@
   <script src="vocabulary.js"></script>   <!-- the grip circle's one line (one term, one meaning) -->
   <script src="drive_basemap.js"></script>   <!-- the real map under the route picture; MapLibre itself loads when it scrolls into view -->
   <script src="brake_heat.js"></script>
-  <script src="flow.js"></script>
   <script src="drive_view.js"></script>
   <script src="drive_card.js"></script>
   <script src="year_review.js"></script>
@@ -783,7 +783,10 @@
       // by kind of corner (D-08 per archetype): your cleanest tight, medium and fast corner, from Your driving's kept observations
       const byId = new Map(list.map((d) => [d.id, d]));
       const kinds = ['tight', 'medium', 'fast'].map((z) => { const r = driving.records && driving.records[z]; return r && byId.has(r.id) ? { z, r, d: byId.get(r.id) } : null; }).filter(Boolean);
-      $('recordsPanel').hidden = !rows.length && !smooth && !brake && !kinds.length;
+      // this month's best run of clean corners in a row (IDEAS D-30, the summary's run): a drive whose run is unknown never counts
+      const runs = list.filter(d => monthOf(d) === key && d.run && d.run.corners >= 1);
+      const run = runs.length ? runs.reduce((m, d) => (d.run.corners > m.run.corners ? d : m)) : null;
+      $('recordsPanel').hidden = !rows.length && !smooth && !brake && !kinds.length && !run;
       if ($('recordsPanel').hidden) return;
       const pct = (v) => `${Math.round(v * 100)}%`;
       const day = (d) => `<span class="nw">${monthOf(d) ? ApexFormat.dateTime(d.date.slice(0, 10)) : 'date unknown'}</span>`;   // "30 Oct", as the list's stamps read; never 2026-10-30
@@ -792,6 +795,7 @@
       for (const r of rows) { out.push(line(`Best Score on this road, of ${r.n} scored drives`, r.best, r.best.ds.score, r.fresh ? `${day(r.best)}, your latest here: a new best` : day(r.best))); names.push(r.name); }
       if (smooth) { out.push(line(`Smoothest drive this month, of ${of('smoothness').length}`, smooth, pct(smooth.ds.components.smoothness), day(smooth))); names.push(smooth.name); }
       if (brake) { out.push(line(`Best braking this month, of ${of('braking').length}`, brake, pct(brake.ds.components.braking), day(brake))); names.push(brake.name); }
+      if (run) { out.push(line(`Best run this month: corners in a row, smooth and settled${Number.isFinite(run.run.len_m) && run.run.len_m > 0 ? `, over ${ApexUnits.long(run.run.len_m, 1)}` : ''}`, run, run.run.corners, day(run))); names.push(run.name); }
       const way = (dir) => (dir === 'L' ? ' left' : dir === 'R' ? ' right' : ' corner');
       for (const { z, r, d } of kinds) { out.push(line(`Cleanest ${z}${way(r.dir)}, of ${r.n} ${z} corners`, d, r.level, day(d))); names.push(d.name); }
       $('recordsTable').innerHTML = out.join('');

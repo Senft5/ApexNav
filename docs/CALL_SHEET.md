@@ -4,6 +4,14 @@ Decisions Claude made for you, newest first. Each one says what was decided, why
 you reach one you've seen. If you disagree with a call, say so and it gets reversed; nothing here is hard to undo unless
 it says so. Things only you can do are in docs/OWNER_TODO.md.
 
+## 2026-11-11 (roam-a best run record): "Best run this month" in Your records (claude/project-thread-h7xxmf)
+
+Your records in the Log gain a row: this month's best run of clean corners in a row, with its drive, length and day. Each
+drive's summary now keeps its best run (recording.js `runOf`, judged on the same rows and corners as the Score, so the
+drive page and the record agree). Calls: the summary version goes to 2, so every saved drive is summarised again once
+from its own rows the next time the Log opens (a one-off, in the worker); a drive whose run can't be known never counts.
+Undo: remove the `run` row in analysis.html renderRecords (and the `run` field in recording.js summarize).
+
 ## 2026-11-11 (roam-a best run): a drive's page names your best run of clean corners (claude/project-thread-h7xxmf)
 
 New, my call (Nate asked for more fun-driving features). A drive's page now says, when it happened, "Your best run: 9

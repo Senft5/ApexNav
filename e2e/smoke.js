@@ -6433,16 +6433,17 @@ flow('Your records: unknown dates and unscored drives never make a "new best", a
     const seed = [d('a1', 'Mulholland Highway', '2020-08-01T09:00:00', 880, c(0.5, 0.5)), d('a2', 'Mulholland Highway', '2020-08-02T09:00:00', 910, c(0.5, 0.5)),
       d('a3', 'Mulholland Highway', '2020-08-03T09:00:00', null, null), d('a4', 'Mulholland Highway', '2026-01-01T00:00:00.000Z', 930, c(0.5, 0.5), { date_known: false }),
       // road B: the dated latest is the best
-      d('b1', 'Tail of the Dragon', '2020-07-01T09:00:00', 700, c(0.5, 0.5)), d('b2', 'Tail of the Dragon', '2020-09-01T09:00:00', 750, c(0.5, 0.5)),
-      // this month: smoothness measured on two, braking on one only
-      d('m1', 'Town loop', `${ym}-01T09:00:00`, 600, c(0.6, NaN)), d('m2', 'Back road', `${ym}-02T09:00:00`, 650, c(0.7, 0.9))];
+      d('b1', 'Tail of the Dragon', '2020-07-01T09:00:00', 700, c(0.5, 0.5)), d('b2', 'Tail of the Dragon', '2020-09-01T09:00:00', 750, c(0.5, 0.5), { run: { corners: 20, len_m: 5000 } }),
+      // this month: smoothness measured on two, braking on one only; best runs of 6 and 9 (an old month's 20 never counts)
+      d('m1', 'Town loop', `${ym}-01T09:00:00`, 600, c(0.6, NaN), { run: { corners: 6, len_m: 2000 } }), d('m2', 'Back road', `${ym}-02T09:00:00`, 650, c(0.7, 0.9), { run: { corners: 9, len_m: 3400 } })];
     window.apexLogDebug.records(seed);
     const rows = [...document.querySelectorAll('#recordsTable tr')].map((tr) => [tr.dataset.drive, tr.textContent]);
     const t = document.getElementById('recordsTable').closest('.scroll');
     return { rows, overflow: t.scrollWidth - t.clientWidth };
   });
   const text = r.rows.map(([id, t]) => `${id}: ${t}`).join('\n');
-  check(r.rows.length === 3, `two roads and one month record (got\n${text})`);
+  check(r.rows.length === 4, `two roads and two month records (got\n${text})`);
+  check(r.rows[3][0] === 'm2' && /Best run this month: corners in a row, smooth and settled, over 2\.1 mi/.test(r.rows[3][1]) && /9\s*$/.test(r.rows[3][1]), `this month's best run, from the summaries (got\n${text})`);
   check(r.rows[0][0] === 'b2' && /a new best/.test(r.rows[0][1]), `the dated latest best is new (got\n${text})`);
   check(r.rows[1][0] === 'a4' && !/new best/.test(r.rows[1][1]) && /date unknown/.test(r.rows[1][1]) && /of 3 scored drives/.test(r.rows[1][1]), `an undated import is no "latest" (got\n${text})`);
   check(r.rows[2][0] === 'm2' && /Smoothest drive this month, of 2/.test(r.rows[2][1]), `braking measured once is no record (got\n${text})`);

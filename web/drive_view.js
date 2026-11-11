@@ -248,7 +248,10 @@
     const brakes = BH && Array.isArray(d.elev) ? BH.driveText(BH.overTrack(d.dist, d.speed_mps, d.elev), (m) => DIST(m, 1)) : null;
     // the best run of corners in a row driven smooth and settled (flow.js, the Score's own judgement of each corner)
     const FL = root.ApexFlow || (typeof module !== 'undefined' && typeof require === 'function' ? require('./flow.js') : null);
-    const flow = FL && Core.cornerTechnique ? FL.text(FL.longest(Core, d.speed_mps, d.lon_g, d.lat_g, d.corners, Array.isArray(d.dist) ? d.dist : null), (m) => DIST(m, 1)) : null;
+    // judged as the Log's summary judges it (recording.js runOf: the Score's rows and corners), so the record and the page agree
+    const REC = root.ApexRecording;
+    const run = REC && REC.runOf ? REC.runOf(Core, d) : (FL && Core.cornerTechnique ? FL.longest(Core, d.speed_mps, d.lon_g, d.lat_g, d.corners, Array.isArray(d.dist) ? d.dist : null) : null);
+    const flow = FL && run ? FL.text(run, (m) => DIST(m, 1)) : null;
     const tired = Core.fatigue ? fatigueText(Core.fatigue(d.speed_mps, d.lon_g, d.lat_g, d.corners, d.g_known || null)) : null;   // unmeasured g is left out
     const mi = finite(S.km) ? DIST(S.km * 1000, 1) : '--';
     const dur = finite(S.duration_s) ? fmtT(S.duration_s) : '--';
