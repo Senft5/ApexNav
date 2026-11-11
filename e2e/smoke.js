@@ -189,6 +189,28 @@ const saidOn = (page, re, opts) => page.waitForFunction((src) => { const r = new
 const frame = (i, extra = {}) => ({ lat: 35.96 + i * 1e-5, lon: -83.92, accuracy_m: 5, speed_mps: 12, course_deg: 0, has_fix: true,
   lat_g: 0.1, lon_g: 0, calibration: 'locked', thermal: 0, low_power_mode: false, recording: false, segments: 0, ...extra });
 
+// Startup budget (IDEAS P-06): what the map page loads and runs before it is ready, so a heavy module added to the boot
+// path shows here instead of on a phone. Bytes are exact, so their budget is about a tenth over today; CPU time varies by runner, so its
+// budget only catches a gross regression (about 0.2 s here on 2026-11-11). Raise a budget on purpose, never to get green.
+const BOOT = { scriptBytes: 3.6e6, scriptCount: 145, cpuS: 2.0, longTaskMs: 1500 };   // 2026-11-11: 3.23 MB in 130 scripts, 0.12 s, 0.17 s
+flow('startup budget: the map page is ready within its script bytes, script count, CPU time and longest task (IDEAS P-06)', async (page, base) => {
+  await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); } catch (_) {}
+    window.__long = 0; try { new PerformanceObserver((l) => { for (const e of l.getEntries()) window.__long = Math.max(window.__long, e.duration); }).observe({ type: 'longtask', buffered: true }); } catch (_) {} });
+  const cdp = await page.context().newCDPSession(page);
+  await cdp.send('Performance.enable');
+  await page.goto(base + '/index.html');
+  await page.waitForFunction(() => window.apex && window.apexDebug, null, { timeout: 15000 });
+  const m = Object.fromEntries((await cdp.send('Performance.getMetrics')).metrics.map((x) => [x.name, x.value]));
+  const r = await page.evaluate((origin) => { const js = performance.getEntriesByType('resource').filter((e) => e.name.startsWith(origin) && /\.js(\?|$)/.test(e.name));
+    return { bytes: js.reduce((s, e) => s + (e.decodedBodySize || 0), 0), count: js.length, long: Math.round(window.__long),
+      top: js.sort((a, b) => b.decodedBodySize - a.decodedBodySize).slice(0, 3).map((e) => `${e.name.split('/').pop()} ${Math.round(e.decodedBodySize / 1024)} KB`) }; }, base);
+  const got = { ...r, cpuS: +m.ScriptDuration.toFixed(2) };
+  console.log('     startup: ' + JSON.stringify(got));
+  check(r.bytes > 1e6 && r.bytes <= BOOT.scriptBytes, `script bytes before ready ${r.bytes} (budget ${BOOT.scriptBytes}): ` + JSON.stringify(got));
+  check(r.count <= BOOT.scriptCount, `scripts before ready ${r.count} (budget ${BOOT.scriptCount}): ` + JSON.stringify(got));
+  check(got.cpuS <= BOOT.cpuS && r.long <= BOOT.longTaskMs, `CPU before ready ${got.cpuS} s (budget ${BOOT.cpuS}), longest task ${r.long} ms (budget ${BOOT.longTaskMs}): ` + JSON.stringify(got));
+}, { viewport: { width: 393, height: 852 }, hasTouch: true });
+
 flow('first run: onboarding, Watch a replay loads the bundled drive and Play moves along it', async (page, base) => {
   await page.goto(base + '/index.html');
   await page.waitForSelector('#onboard.show', { timeout: 10000 });
@@ -1539,12 +1561,13 @@ flow('drag to reshape: dragging the planned route with the mouse adds a stop whe
   check(await page.isHidden('#routeStops'), 'no stops, no list');
 }, { geolocation: { latitude: 35.9606, longitude: -83.9207 }, permissions: ['geolocation'] });
 
-flow('avoid cameras: with the chip on, the cameras near the trip go to the router as exclusions (camera map and router stubbed, IDEAS R-35)', async (page, base) => {
+flow('avoid cameras: with the chip on, the plate readers and speed cameras near the trip go to the router as exclusions and into the plan (camera map and router stubbed, IDEAS R-35)', async (page, base) => {
   const asked = [];
   await page.route('https://photon.komoot.io/**', (route) => route.fulfill({ contentType: 'application/json', body: JSON.stringify({ features: [
     { geometry: { coordinates: [-83.9700, 35.7565] }, properties: { name: 'Maryville', state: 'Tennessee' } }] }) }));
   await page.route('https://overpass-api.de/**', (route) => route.fulfill({ contentType: 'application/json', body: JSON.stringify({ elements: [
-    { type: 'node', id: 1, lat: 35.85, lon: -83.94, tags: { 'surveillance:type': 'ALPR' } }, { type: 'node', id: 2, lat: 37.5, lon: -83.9, tags: { 'surveillance:type': 'ALPR' } }] }) }));
+    { type: 'node', id: 1, lat: 35.85, lon: -83.94, tags: { 'surveillance:type': 'ALPR' } }, { type: 'node', id: 2, lat: 37.5, lon: -83.9, tags: { 'surveillance:type': 'ALPR' } },
+    { type: 'node', id: 3, lat: 35.80, lon: -83.96, tags: { highway: 'speed_camera' } }] }) }));
   await page.route('https://valhalla1.openstreetmap.de/route', (route) => {
     const req = JSON.parse(route.request().postData() || '{}');
     asked.push(req);
@@ -1559,7 +1582,11 @@ flow('avoid cameras: with the chip on, the cameras near the trip go to the route
   await page.click('#placeList .place');
   await page.waitForFunction(() => { const t = window.apexDebug.track; return t && t.kind === 'route' && t.lat.length > 50; }, null, { timeout: 20000 });
   const ex = asked.map((r) => r.exclude_locations || []);
-  check(ex.some((e) => e.length === 1 && e[0].lat === 35.85 && e[0].lon === -83.94), 'the camera near the trip was excluded, the far one not: ' + JSON.stringify(ex));
+  const has = (e, lat, lon) => e.some((x) => x.lat === lat && x.lon === lon);
+  check(ex.some((e) => e.length === 2 && has(e, 35.85, -83.94) && has(e, 35.8, -83.96)), 'the plate reader and the speed camera near the trip were excluded, the far one not: ' + JSON.stringify(ex));
+  // every candidate keeps to it (our router, the quickest, stage plans): the plan's own camera list, both kinds, not the far one
+  const cams = await page.evaluate(() => window.apexDebug.lastCams);
+  check(Array.isArray(cams) && cams.length === 2 && has(cams, 35.85, -83.94) && has(cams, 35.8, -83.96), 'the plan knows the cameras near the trip: ' + JSON.stringify(cams));
   check(await page.evaluate(() => document.querySelector('[data-avoid="cameras"]').getAttribute('aria-pressed')) === 'true', 'the chip shows it');
 }, { geolocation: { latitude: 35.9606, longitude: -83.9207 }, permissions: ['geolocation'] });
 
@@ -1766,6 +1793,68 @@ flow('avoid police reports: with the chip on, live police reports near the trip 
   const waited = await page.evaluate(() => apexDebug.policeWaitMs);
   check(Number.isFinite(waited) && waited <= 260, 'the route card\'s budget holds: the plan waited ' + waited + ' ms for the police reports');
 }, { geolocation: { latitude: 35.9606, longitude: -83.9207 }, permissions: ['geolocation'] });
+
+flow('avoid police reports, driving: a report that lands on the route ahead is offered once with Go round, which routes round it (Worker and router stubbed)', async (page, base) => {
+  await page.route('https://tiles.openfreemap.org/**', (route) => (route.request().url().includes('/styles/')
+    ? route.fulfill({ contentType: 'application/json', body: JSON.stringify({ version: 8, sources: {}, layers: [{ id: 'bg', type: 'background', paint: { 'background-color': '#eee' } }] }) })
+    : route.abort()));
+  const asked = [];
+  let report = null;                                                    // none while planning; one on the route once driving
+  await page.route('https://valhalla1.openstreetmap.de/route', (route) => {
+    const req = JSON.parse(route.request().postData() || '{}'), locs = req.locations;
+    asked.push(req);
+    if (!report) return route.fulfill({ contentType: 'application/json', body: JSON.stringify(stubTrip(locs)) });
+    // the way round: east 4 km, north, back west to the destination
+    const a = locs[0], b = locs[locs.length - 1], pts = [];
+    for (let i = 0; i <= 40; i++) pts.push([a.lat, a.lon + 0.045 * i / 40]);
+    for (let i = 1; i <= 100; i++) pts.push([a.lat + (b.lat - a.lat) * i / 100, a.lon + 0.045]);
+    for (let i = 1; i <= 40; i++) pts.push([b.lat, a.lon + 0.045 - (a.lon + 0.045 - b.lon) * i / 40]);
+    route.fulfill({ contentType: 'application/json', body: JSON.stringify({ trip: { legs: [{ shape: polyline6(pts), maneuvers: [
+      { type: 1, begin_shape_index: 0, length: 8, street_names: ['East Fork Road'] }, { type: 4, begin_shape_index: pts.length - 1, length: 0 }] }],
+      summary: { length: 16, time: 1100, has_highway: false, has_toll: false, has_ferry: false } } }) });
+  });
+  const soon = new Date(Date.now() + 40 * 60000).toISOString();
+  await page.route(base + '/api/**', (route) => {
+    const u = new URL(route.request().url());
+    if (u.pathname === '/api/hazards') return route.fulfill({ contentType: 'application/json', body: JSON.stringify(report ? [
+      { id: 'p9', kind: 'police', lat: report.lat, lon: report.lon, heading: null, confirms: 1, clears: 0, expires_at: soon, m: 0 }] : []) });
+    return route.fulfill({ status: 200, contentType: 'application/json', body: '[]' });
+  });
+  await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); localStorage.setItem('apex.permsExplained', '1'); localStorage.setItem('apex.signedIn', '1');
+    localStorage.setItem('apex.avoid', JSON.stringify({ police: true })); } catch (_) {} window.APEX_REVIEW = true; });
+  await page.goto(base + '/index.html');
+  await page.waitForFunction(() => window.apexDebug && window.apexDebug.map && window.apexDebug.map.loaded() && window.apex && window.apex.live, null, { timeout: 20000 });
+  await page.evaluate(() => apexDebug.buildRoute([{ lat: 35.96, lon: -83.92 }, { lat: 36.06, lon: -83.92 }], 'route_dest', 'To the ridge', null,
+    { from: null, to: { lat: 36.06, lon: -83.92 }, via: [] }));
+  await page.waitForFunction(() => apexDebug.track && apexDebug.track.kind === 'route' && apexDebug.track.request, null, { timeout: 20000 });
+  const plan = await page.evaluate(() => { const t = apexDebug.track, i = Math.floor(t.lat.length * 0.5); window.__plan = t;
+    return { lat: t.lat[i], lon: t.lon[i], startLat: t.lat[0], startLon: t.lon[0], lat2: t.lat[3], lon2: t.lon[3] }; });
+  report = { lat: +plan.lat.toFixed(5), lon: +plan.lon.toFixed(5) };   // halfway along the plan
+  await page.evaluate(() => window.apex.onNative({ type: 'carplay', action: 'start' }));
+  await page.waitForFunction(() => window.apexDebug.driveActive);
+  await page.evaluate(() => apexDebug.loadReported(true));            // the report lands (the drive asks every 2 min)
+  const crs = (Math.atan2((plan.lon2 - plan.startLon) * Math.cos(plan.startLat * Math.PI / 180), plan.lat2 - plan.startLat) * 180 / Math.PI + 360) % 360;
+  const fix = () => page.evaluate(([lat, lon, crs]) => window.apex.live({ lat, lon, accuracy_m: 5, speed_mps: 15, course_deg: crs, has_fix: true, lat_g: 0, lon_g: 0, calibration: 'locked', thermal: 0 }), [plan.startLat, plan.startLon, crs]);
+  let offered = null;
+  for (let k = 0; k < 40 && !offered; k++) {
+    await fix();
+    offered = await page.evaluate(() => { const t = document.getElementById('toast'); return t && t.classList.contains('show') && /Police reported on your route/.test(t.textContent) ? t.textContent : null; });
+    if (!offered) await page.waitForTimeout(250);
+  }
+  check(!!offered && /Go round/.test(offered), 'the report on the route ahead is offered with Go round: ' + offered + ' ' + JSON.stringify(await page.evaluate(() => apexDebug.policeAhead)));
+  const before = asked.length;
+  await page.click('#toast .toast-key');
+  await page.waitForFunction(() => apexDebug.track !== window.__plan && apexDebug.track && apexDebug.track.kind === 'route', null, { timeout: 15000 });
+  const ex = asked.slice(before).map((r) => r.exclude_locations || []);
+  check(ex.length && ex.every((e) => e.some((x) => Math.abs(x.lat - report.lat) < 1e-4 && Math.abs(x.lon - report.lon) < 1e-4)), 'the way round was asked round the report: ' + JSON.stringify(ex));
+  const far = await page.evaluate(([la, lo]) => { const t = apexDebug.track; let m = Infinity;
+    for (let i = 0; i < t.lat.length; i++) m = Math.min(m, Math.hypot((t.lat[i] - la) * 110540, (t.lon[i] - lo) * 111320 * Math.cos(la * Math.PI / 180))); return m; }, [report.lat, report.lon]);
+  check(far > 1000, 'the new route keeps well off the report: ' + Math.round(far) + ' m');
+  // once: more fixes on the new route don't offer the same report again
+  for (let k = 0; k < 8; k++) { await fix(); await page.waitForTimeout(150); }
+  check(!(await page.evaluate(() => /Police reported on your route/.test(document.getElementById('toast').textContent) && document.getElementById('toast').classList.contains('show'))), 'offered once');
+  check(/Going round the police report/.test(await page.textContent('#dsNote')), 'the drive says it is going round: ' + await page.textContent('#dsNote'));
+}, { geolocation: { latitude: 35.96, longitude: -83.92 }, permissions: ['geolocation'] });
 
 // IN-1 / GR-2 (panel round 2): the pages that carry the drive follow the phone's text size, and hold a floor.
 // What a page measures for a text size, set by hand: Chromium has no -apple-system-body (format.js applyTypeScale).
@@ -2325,7 +2414,8 @@ flow('one red that means act now: Sight is ink until you are over it, then colou
     how: document.getElementById('explainHow').textContent, now: document.getElementById('explainNow').textContent }));
   check(sheet.title === 'Sight' && /never a target/.test(sheet.what) && /SLOW/.test(sheet.how) && /^Now: \d+ (mph|km\/h)$/.test(sheet.now), 'the Sight sheet: ' + JSON.stringify(sheet));
   await page.click('#explainDone');
-  check(!(await page.evaluate(() => document.getElementById('explainCard').classList.contains('show'))), 'Done closes it');
+  // waited for, not read once: on a busy runner the class can come off a frame after the click returns (CI 2026-11-11)
+  check(await page.waitForFunction(() => !document.getElementById('explainCard').classList.contains('show'), null, { timeout: 2000 }).then(() => true, () => false), 'Done closes it');
   await page.click('#cluster .g-score');
   await page.waitForSelector('#explainCard.show', { timeout: 3000 });
   check(await page.textContent('#explainTitle') === 'Vetta Score', 'the Score explains itself');
@@ -3320,6 +3410,7 @@ flow('convoy: the leader shows a QR code of the link (Worker stubbed, IDEAS S-22
     if (u.pathname === '/api/me') return json({ signed_in: true, member: true, handle: 'me' });
     if (u.pathname === '/api/convoy' && m === 'POST') return json({ invite: `${id}.${'s'.repeat(32)}`, context: ctx }, 201);
     if (u.pathname === `/api/convoy/${id}/ticket`) return json({ ticket: 't'.repeat(32), expiresAtMs: Date.now() + 60000 }, 201);
+    if (u.pathname === `/api/convoy/${id}/code` && m === 'POST') return json({ code: 'K7P4QX', expiresAtMs: Date.now() + 15 * 60000 }, 201);
     if (u.pathname === `/api/convoy/${id}`) return json(ctx);
     if (m === 'GET') return json([]);
     return json({}, 404);
@@ -3336,6 +3427,43 @@ flow('convoy: the leader shows a QR code of the link (Worker stubbed, IDEAS S-22
   const dark = await page.evaluate(() => { const c = document.querySelector('canvas.cv-qr'), d = c.getContext('2d').getImageData(0, 0, c.width, c.height).data;
     let n = 0; for (let i = 0; i < d.length; i += 4) if (d[i] < 128) n++; return n / (d.length / 4); });
   check(dark > 0.2 && dark < 0.6, `a QR code is drawn (${(dark * 100).toFixed(0)} % dark)`);
+  // and the code to read out, for a friend whose camera can't see the screen
+  await page.waitForFunction(() => { const c = document.querySelector('.convoy-sheet .cv-code'); return c && !c.hidden; }, null, { timeout: 5000 });
+  check((await page.textContent('.convoy-sheet .cv-code')) === 'Or join code K7P 4QX', 'the join code under the QR: ' + await page.textContent('.convoy-sheet .cv-code'));
+});
+
+flow('convoy: a friend joins with the code the leader read out (Worker stubbed, IDEAS S-22)', async (page, base) => {
+  await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); } catch (_) {} });
+  const id = 'CCCCCCCCCCCCCCCCCCCCCC', until = Date.now() + 60 * 60000;
+  const ctx = { sessionId: id, name: 'Car park', role: 'member', you: 'k2', leaderKey: 'k1', expiresAtMs: until, seq: 0, leaderEpoch: 1,
+                members: [{ key: 'k1', handle: 'lead', role: 'leader', online: true }, { key: 'k2', handle: 'me', role: 'member', online: true }] };
+  const sent = [];
+  await page.route('**/api/**', (route) => {
+    const u = new URL(route.request().url()), m = route.request().method();
+    const json = (b, status = 200) => route.fulfill({ status, contentType: 'application/json', body: JSON.stringify(b) });
+    if (u.pathname === '/api/me') return json({ signed_in: true, member: true, handle: 'me' });
+    if (u.pathname === '/api/convoy/code/join' && m === 'POST') {
+      const b = JSON.parse(route.request().postData()); sent.push(b);
+      return b.code.replace(/[\s-]/g, '').toUpperCase() === 'K7P4QX' && b.consent === true ? json(ctx) : json({ error: 'invalid_invite' }, 400);
+    }
+    if (u.pathname === `/api/convoy/${id}/ticket`) return json({ ticket: 't'.repeat(32), expiresAtMs: Date.now() + 60000 }, 201);
+    if (u.pathname === `/api/convoy/${id}`) return json(ctx);
+    if (m === 'GET') return json([]);
+    return json({}, 404);
+  });
+  await page.goto(base + '/index.html');
+  await page.waitForFunction(() => window.apex && typeof window.apex.live === 'function');
+  await page.click('#startMore');
+  await page.waitForSelector('.start-sheet .rec-key');
+  await page.click('.start-sheet button:has-text("Join with a code")');
+  await page.waitForSelector('.convoy-sheet input[aria-label="Convoy join code"]');
+  await page.fill('.convoy-sheet input[aria-label="Convoy join code"]', 'k7p 4qz');
+  await page.click('.convoy-sheet button:has-text("Join with code")');
+  await page.waitForFunction(() => /didn.t work/.test(document.getElementById('toast').textContent), null, { timeout: 5000 });
+  await page.fill('.convoy-sheet input[aria-label="Convoy join code"]', 'k7p 4qx');
+  await page.click('.convoy-sheet button:has-text("Join with code")');
+  await page.waitForFunction(() => /you are following/.test(document.querySelector('.convoy-sheet').textContent), null, { timeout: 5000 });
+  check(sent.length === 2 && sent.every((b) => b.consent === true), 'joined with consent: ' + JSON.stringify(sent));
 });
 
 // @fish5spd, 2026-11-03 ("Shits in my way when I lead"): leading a convoy on a drive, a card over the road just ahead of the
@@ -3575,6 +3703,14 @@ flow('reported hazards: a call ahead, "still there?" after passing, and a one-ta
       const k = window.apexDebug.state.lastSaid;   // a line the voice pack says (web/voice_lines.js) never reaches speechSynthesis
       if (k && window.__said[window.__said.length - 1] !== k) window.__said.push(k);
       await new Promise(r => setTimeout(r, 20)); }
+    // The car keeps sending fixes from here on, as a phone does. A web drive with no fix for 5 s drops back to the replay
+    // ("GPS lost") and the drive bar goes: the ask, the vote and the report's 3 s Undo run past 5 s on a slow runner
+    // (main's e2e 2026-11-11; then a sharded run where the gap opened before the first fix of a later-started feed).
+    const fix = () => window.apex.live({ lat: 35.6 + 330 / 110540, lon: -83.9, accuracy_m: 5, speed_mps: 15, course_deg: 0, has_fix: true, calibration: 'locked' });
+    window.__fixes = setInterval(fix, 500);
+    window.__words = [];   // every word the toast and the status line showed, for the dump below
+    for (const id of ['toast', 'dsNote']) new MutationObserver(() => { const t = document.getElementById(id).textContent; if (t) window.__words.push(id + ': ' + t); })
+      .observe(document.getElementById(id), { childList: true, characterData: true, subtree: true });
   });
   await page.waitForFunction(() => !document.getElementById('hzAsk').hidden, null, { timeout: 5000 });
   check(/Gravel still there\?/.test(await page.textContent('#hzAsk')), 'asks after passing it');
@@ -3585,12 +3721,19 @@ flow('reported hazards: a call ahead, "still there?" after passing, and a one-ta
   check(asked.length >= 1 && asked.every((q) => /^\?lat=35\.6&lon=-83\.9&km=20$/.test(q)), 'the hazards are asked for by cell: ' + JSON.stringify(asked));
   check(await page.evaluate(() => window.__said.some((t) => /gravel reported ahead/i.test(t)) || /Gravel reported ahead/.test(document.body.textContent)), 'the hazard was called ahead');
   await page.click('#hzReportBtn');
-  await page.click('#hzKinds button:has-text("Pothole")');
+  // the tap is the button's own click, in the page: a mouse click at its centre landed while the sheet was still sliding
+  // up on a busy runner (sharded CI 2026-11-11: the sheet stayed open, nothing reported), the review flow does the same
+  await page.evaluate(() => [...document.querySelectorAll('#hzKinds button')].find((b) => b.textContent === 'Pothole').click());
   // REVIEW4 U-74 / U-102 (check): in a drive the confirmation is the status line's, never a toast over the map
-  await page.waitForFunction(() => /Pothole reported/.test(document.getElementById('dsNote').textContent));
+  await page.waitForFunction(() => /Pothole reported/.test(document.getElementById('dsNote').textContent), null, { timeout: 15000 })
+    .catch(async () => { throw new Error('the report\'s status line never came: ' + JSON.stringify(await page.evaluate(() => ({ note: document.getElementById('dsNote').textContent,
+      toast: document.getElementById('toast').textContent, key: document.getElementById('hzReportBtn').textContent, bar: !document.getElementById('driveBar').hidden,
+      outbox: localStorage.getItem('apex.outbox'), said: (window.__said || []).slice(-4),
+      sheet: document.getElementById('hzOverlay').classList.contains('show'), words: (window.__words || []).slice(-6) }))) + ' reports=' + reports.length); });
   check(!(await page.evaluate(() => document.getElementById('toast').classList.contains('show') && /Pothole/.test(document.getElementById('toast').textContent))), 'no toast over the map');
   check(await page.evaluate(() => { const n = document.getElementById('dsNote'); return !n.hidden && n.scrollWidth <= n.clientWidth + 1 && /reported/.test(n.getAttribute('aria-label')); }), 'the status line says it whole (or its first sentence)');
   check(reports.length === 1 && reports[0].kind === 'pothole' && Math.abs(reports[0].lat - (35.6 + 330 / 110540)) < 1e-4 && reports[0].heading === 0, 'reported at your position and heading');
+  await page.evaluate(() => clearInterval(window.__fixes));
 });
 
 flow('review mode (U-94): the recording\'s hazard report is the sheet, Undo and a pin, and nothing reaches the server', async (page, base) => {
@@ -3609,11 +3752,14 @@ flow('review mode (U-94): the recording\'s hazard report is the sheet, Undo and 
     for (let i = 0; i <= 40; i++) { window.apex.live({ lat: 35.6 + (i * 1.5) / 110540, lon: -83.9, accuracy_m: 5, speed_mps: 15, course_deg: 0, has_fix: true, calibration: 'locked' });
       await new Promise(r => setTimeout(r, 20)); }
   });
+  // the car keeps sending fixes, as a phone does: a web drive with no fix for 5 s drops back to the replay (see "reported hazards")
+  await page.evaluate(() => { window.__fixes = setInterval(() => window.apex.live({ lat: 35.6 + 60 / 110540, lon: -83.9, accuracy_m: 5, speed_mps: 15, course_deg: 0, has_fix: true, calibration: 'locked' }), 500); });
   await page.click('#hzReportBtn');
   check(await page.evaluate(() => document.getElementById('hzOverlay').classList.contains('show')), 'the sheet opens');
-  await page.click('#hzKinds button:has-text("Gravel")');
-  // (waited for, not read at once: on a busy CI runner the label lands a frame after the click, 2026-11-11)
-  check(await page.waitForFunction(() => /Undo Gravel/.test(document.getElementById('hzReportBtn').textContent), null, { timeout: 2500 }).then(() => true, () => false), 'the Report key is Undo for 3 s');
+  // the key is read in the same task as the tap: a separate read after a click can land past the 3 s on a slow runner
+  // (CI 2026-11-11, this check failed once when the whole suite ran 27 minutes)
+  check(await page.evaluate(() => { [...document.querySelectorAll('#hzKinds button')].find((b) => b.textContent === 'Gravel').click();
+    return /Undo Gravel/.test(document.getElementById('hzReportBtn').textContent); }), 'the Report key is Undo for 3 s');
   await saidOn(page, /Gravel reported/, { timeout: 6000 });                 // the toast, or the status line in a drive (U-74)
   await page.waitForFunction(() => [...document.querySelectorAll('.hz-pin')].some((p) => p.textContent === 'GRAVEL'), null, { timeout: 4000 });
   await page.evaluate(async () => { await ApexSync.apiFetch('/api/presence', { method: 'POST', body: '{}' }); await ApexSync.apiFetch('/api/feedback', { method: 'POST', body: '{}' }); });
@@ -3621,6 +3767,7 @@ flow('review mode (U-94): the recording\'s hazard report is the sheet, Undo and 
   check([...await page.$$eval('.hz-pin', (ps) => ps.map((p) => p.textContent))].includes('GRAVEL'), 'the pin outlives a reload of the server\'s hazards');
   check(writes.length === 0, 'nothing was written to the server: ' + writes.join(', '));
   check(await page.evaluate(() => !localStorage.getItem('apex.outbox')), 'nothing waits in the outbox either');
+  await page.evaluate(() => clearInterval(window.__fixes));
 });
 
 flow('your data: Settings counts what the phone holds and downloads drives as GPX, offline data deleted (IDEAS Z-03/Z-04, F-06)', async (page, base) => {
@@ -4364,7 +4511,11 @@ flow('Your driving: the profile over every drive opens from the Log, names the w
   check(/From 108 clean corners on 3 drives/.test(text), 'what it is read from: ' + text.slice(0, 120));
   check(/One steering arc is weaker through rights: \d+ against 100 through lefts, on 3 of 3 drives\./.test(text), 'the weak side is named: ' + text);
   check(/Work on: One steering arc\s+It shows most through rights\./.test(text), 'the focus says where');
-  check(await page.evaluate(() => document.querySelector('.dp-st.weak').dataset.skill === 'arc' && document.querySelectorAll('.dp-st').length === 6), 'six stations, the weak one marked');
+  check(await page.evaluate(() => document.querySelector('.dp-st.weak').dataset.skill === 'arc' && document.querySelectorAll('.dp-st:not([data-skill="pace"])').length === 6), 'six stations, the weak one marked');
+  // IDEAS D-29: pace beside them, in its own panel, and never the one to work on
+  const pace = await page.evaluate(() => { const p = document.querySelector('#drivingRoot .dp-pace'); return p ? p.innerText : null; });
+  check(pace && /Your pace/.test(pace) && /\b\d{1,3}\b/.test(pace) && /sane limit/.test(pace) && !/Work on/.test(pace), 'the pace panel: ' + pace);
+  check(!/Work on: Pace/.test(text), 'pace is never the thing to work on');
   check(!/mph|km\/h|\d s\b/.test(text), 'never a speed or a time');
   check(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth), 'nothing wider than the phone');
   // touch: these drives' g runs straight between fixes (as recordings before ten readings a second did), so there is none
@@ -4373,6 +4524,9 @@ flow('Your driving: the profile over every drive opens from the Log, names the w
     const p = (await ApexAnalysis.job('profile')).profile, host = document.createElement('div');
     p.touch = { brake_on: { rate: 0.82, lo: 0.6, hi: 1.1, n: 40, quick: 3, quick_rate: false }, brake_off: { rate: 0.41, lo: 0.3, hi: 0.5, n: 40, quick: 0, quick_rate: false },
       turn_in: { rate: null, lo: 0.7, hi: null, n: 50, quick: 30, quick_rate: true }, release: 0.5, release_n: 37 };
+    const cell = (on) => ({ brake_on: { rate: on, n: 12, quick_rate: false }, brake_off: { rate: 0.4, n: 12, quick_rate: false }, turn_in: { rate: null, n: 12, quick_rate: true } });
+    p.touch_by = { tight: cell(1.2), medium: cell(0.8), fast: { brake_on: { rate: null, n: 4 }, brake_off: { rate: null, n: 4 }, turn_in: { rate: null, n: 4 } } };
+    p.touch_trend = { brake_on: [{ month: '2026-09', rate: 0.9, quick: false, n: 20 }, { month: '2026-10', rate: 0.8, quick: false, n: 20 }], brake_off: [], turn_in: [] };
     document.getElementById('drivingRoot').append(host);
     ApexDriverProfile.render(host, p, {});
     const t = host.querySelector('.dp-touch'), out = t ? t.innerText : null; host.remove();
@@ -4380,6 +4534,17 @@ flow('Your driving: the profile over every drive opens from the Log, names the w
   });
   check(/Your touch/.test(touch) && /brakes on at about 0\.82 g a second and let them off at about 0\.41 g a second/.test(touch) && /more gently/.test(touch)
     && /quick movement of the wheel/.test(touch), 'the touch panel says it in words: ' + touch);
+  // by kind of corner (a row a measure, a column a size, "--" where too few) and month by month
+  check(/By kind of corner/i.test(touch) && /Brakes on\s+1\.2\s+0\.8\s+--/.test(touch) && /Turn-in\s+quick\s+quick\s+--/.test(touch)
+    && /Brakes on month by month, in g a second: Sep 0\.9, Oct 0\.8\./.test(touch), 'touch by kind of corner and month: ' + touch);
+  // a drive's own touch on its Log page: none from g kept once a second, so the panel stays hidden; words when there is one
+  const dt = await page.evaluate(async () => {
+    const info = await ApexAnalysis.job('drive', { id: 'p1' });
+    return { has: !!info.touch, lines: ApexDriverProfile.driveTouchLines(info.touch),
+      say: ApexDriverProfile.driveTouchLines({ drive: { brake_on: { rate: 1.1 }, brake_off: { rate: null }, turn_in: { rate: null, quick_rate: true } }, usual: { brake_on: { rate: 0.8 }, brake_off: { rate: null }, turn_in: { rate: 0.9 } } }) };
+  });
+  check(dt.has && dt.lines.length === 0, 'a drive with g kept once a second has no touch of its own: ' + JSON.stringify(dt.lines));
+  check(dt.say.join(' ') === 'Brakes on: about 1.1 g a second on this drive, 0.8 usually. Turn-in: one quick movement (quicker than the recording can time) on this drive, 0.9 usually.', 'a drive\'s touch in words: ' + dt.say);
   // each drive's observations were kept: a second visit reads no drive again, and a deleted drive's are dropped
   const again = await page.evaluate(() => ApexAnalysis.job('profile'));
   check(again.read === 0 && again.profile.corners === 108, 'kept between visits: read ' + again.read);
@@ -5466,8 +5631,68 @@ flow('road page: About a road shows its archetype, axes and how sure it is (IDEA
   await page.waitForFunction(() => /climbing/.test(document.querySelector('aside.side-pop.open .rp-head').textContent), null, { timeout: 10000 });
   const head = await page.textContent('aside.side-pop.open .rp-head');
   check(/climbing [\d,]+ ft$/.test(head) && !/object/i.test(head), 'the climb in feet: ' + head);
+  check(!/On this road|members felt/.test(await page.textContent('aside.side-pop.open')), 'signed out: nothing said about hazards');
+  await page.click('aside.side-pop.open button:has-text("Close")');
+  // a member: bumps members felt and a live gravel report on the road, a cleared one left out (Q-13 verified hazards)
+  await page.evaluate(() => {
+    ApexSync.member = async () => ({ signed_in: true, member: true });
+    const realFetch = ApexSync.apiFetch;
+    ApexSync.apiFetch = async (path, o) => (/^\/api\/hazards\?/.test(path)
+      ? new Response(JSON.stringify([{ id: 'a', kind: 'gravel', lat: 35 + 50 / 110540, lon: -83, confirms: 3, clears: 0 },
+        { id: 'b', kind: 'animal', lat: 35 + 60 / 110540, lon: -83, confirms: 1, clears: 2 }]), { headers: { 'content-type': 'application/json' } })
+      : realFetch(path, o));
+    ApexContributor.measuredAlong = async () => ({ coverage: 0, avgPasses: 0, crowdBumps: [{ index: 40, p: 0.9 }] });
+    const lat = [], lon = []; let x = 0, y = 0, h = Math.PI / 2;
+    const step = (n, turn) => { for (let i = 0; i < n; i++) { h += turn; x += 5 * Math.cos(h); y += 5 * Math.sin(h); lat.push(35 + y / 110540); lon.push(-83 + x / 91190); } };
+    step(20, 0); for (let k = 0; k < 8; k++) { step(10, (k % 2 ? 1 : -1) * Math.PI / 10); step(16, 0); } step(20, 0);
+    window.apexDebug.openRoadPage({ lat, lon, name: 'Test Pass', km: lat.length * 5 / 1000, junctionsPerKm: 0.2 });
+  });
+  await page.waitForFunction(() => /Bump members felt/.test(document.querySelector('aside.side-pop.open').textContent), null, { timeout: 10000 });
+  const onRoad = await page.textContent('aside.side-pop.open');
+  check(/Gravel\s*at [\d.]+ (mi|ft|km|m) · 3 confirmed/.test(onRoad) && !/Animal/.test(onRoad), 'the live report, not the cleared one: ' + onRoad.slice(0, 600));
   await page.click('aside.side-pop.open button:has-text("Close")');
   check(!(await page.isVisible('aside.side-pop.open[aria-label="About this road"]')), 'closes');
+});
+
+flow('route card: reports on the way and bumps members felt, for members (IDEAS Q-13)', async (page, base) => {
+  await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); } catch (_) {} });
+  await page.goto(base + '/index.html');
+  await page.waitForFunction(() => window.apexDebug && window.apexDebug.map && window.ApexRouteImport && window.ApexSync && window.ApexContributor);
+  const KY = 110540, KX = 111320 * Math.cos(35.5 * Math.PI / 180), pts = [];
+  for (let e = 0; e <= 3000; e += 5) pts.push([0, e]);
+  await page.evaluate(([KY, KX]) => {
+    ApexSync.member = async () => ({ signed_in: true, member: true });
+    const real = ApexSync.apiFetch;
+    ApexSync.apiFetch = async (path, o) => (/^\/api\/hazards\?/.test(path)
+      ? new Response(JSON.stringify([{ id: 'g', kind: 'gravel', lat: 35.5, lon: -83.9 + 1200 / KX, confirms: 3, clears: 0 },
+        { id: 'a', kind: 'animal', lat: 35.5, lon: -83.9 + 1500 / KX, confirms: 1, clears: 2 }]), { headers: { 'content-type': 'application/json' } })
+      : real(path, o));
+    ApexContributor.measuredAlong = async (t) => ({ coverage: 0.5, coveredKm: 1.5, km: 3, avgPasses: 2, roughness: null, bankedKm: 0, roughKm: 0, repavedKm: 0, crowdBumps: [{ index: 100, p: 0.9 }, { index: 400, p: 0.85 }] });
+  }, [KY, KX]);
+  const gpx = pts.map(([n, e]) => `<trkpt lat="${(35.5 + n / KY).toFixed(7)}" lon="${(-83.9 + e / KX).toFixed(7)}"/>`).join('');
+  await page.setInputFiles('#gpxFile', { name: 'flat.gpx', mimeType: 'application/gpx+xml', buffer: Buffer.from(`<gpx><trk><name>Flat run</name><trkseg>${gpx}</trkseg></trk></gpx>`) });
+  await page.waitForFunction(() => !document.getElementById('routeCardReports').hidden, null, { timeout: 15000 });
+  const line = await page.textContent('#routeCardReports');
+  check(/Reported on the way:\s+Gravel\s+at\s+[\d.]+\s*(mi|km)\s+\(3\s+confirmed\)/.test(line) && !/Animal/.test(line), 'the live report, not the cleared one: ' + line);
+  await page.waitForFunction(() => /2 bumps members felt/.test(document.getElementById('measuredNote').textContent), null, { timeout: 8000 });
+});
+
+flow('import: a drive from a file is named after the road that carried it (IDEAS U-04)', async (page, base) => {
+  await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); } catch (_) {} });
+  await page.goto(base + '/index.html');
+  await page.waitForFunction(() => window.apexDebug && window.ApexStages && window.ApexRoadNames);
+  // the map's named road lines along it, as the tiles would give them
+  await page.evaluate(() => { ApexStages.namesAlong = async () => [{ properties: { name: 'Dry Ridge Road' }, geometry: { type: 'MultiLineString', coordinates: [[[-84.75, 39.24], [-84.68, 39.24]]] } }]; });
+  const kx = 111320 * Math.cos(39.24 * Math.PI / 180);
+  const csv = (n) => ['t,lat,lon,speed_mph,lon_g,lat_g', ...Array.from({ length: n }, (_, i) => `${i * 0.25},39.2401,${(-84.74 + i * 5 / kx).toFixed(7)},45,0,0`)].join('\n');
+  await page.setInputFiles('#importFile', { name: 'web_20261027_080000.csv', mimeType: 'text/csv', buffer: Buffer.from(csv(600)) });
+  await page.waitForFunction(() => /is in your Log/.test(document.getElementById('toast').textContent), null, { timeout: 15000 });
+  const said = await page.textContent('#toast');
+  check(/^Dry Ridge Road is in your Log/.test(said.trim()), 'named after its road, not the file: ' + said);
+  // no tiles: it keeps the date name
+  await page.evaluate(() => { ApexStages.namesAlong = async () => []; });
+  await page.setInputFiles('#importFile', { name: 'web_20261028_090000.csv', mimeType: 'text/csv', buffer: Buffer.from(csv(600)) });
+  await page.waitForFunction(() => /^\s*Drive 10\/28\/2026 9:00 AM is in your Log/.test(document.getElementById('toast').textContent), null, { timeout: 15000 });
 });
 
 flow('track day: on a mapped raceway, Start/finish here times laps (IDEAS D-15)', async (page, base) => {
@@ -7567,7 +7792,9 @@ flow('Vetta Line home: a masthead, one shelf of road cards, Just drive the one r
   check(!bad.length, 'the home:\n  ' + bad.join('\n  '));
 }, IPHONE);
 
-flow('safe areas: the Dynamic Island, the home indicator and the rounded corners clear every control, upright, on its side and on small phones', async (page, base) => {
+// One flow a phone shape (they ran as one 4.5 min flow until 2026-11-11, the longest in CI; split so the four e2e shards
+// balance): every screen below, under that shape's island, home indicator and corners. The first also proves the scanner.
+for (const [orient, d] of Object.entries(SAFE)) flow(`safe areas (${orient}): the Dynamic Island, the home indicator and the rounded corners clear every control`, async (page, base) => {
   await page.route(base + '/api/**', (route) => { const p = new URL(route.request().url()).pathname;
     route.fulfill({ contentType: 'application/json', body: p === '/api/me' ? '{"signed_in":true,"member":true,"handle":"kit_r"}' : '[]' }); });
   await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', localStorage.getItem('e2e.fresh') ? '' : '1'); } catch (_) {} });
@@ -7592,39 +7819,37 @@ flow('safe areas: the Dynamic Island, the home indicator and the rounded corners
     ['log', '/analysis.html?tab=log', null],
     ['privacy', '/privacy.html', null],
   ];
-  // the scanner catches what it says it does: two planted keys that overlap, and one 3 pt from the edge
-  await page.setViewportSize({ width: SAFE.portrait.w, height: SAFE.portrait.h });
-  await page.goto(base + '/privacy.html');
-  await page.evaluate(() => { const k = (l, t) => { const b = document.createElement('button'); b.textContent = 'X'; b.style.cssText = `position:absolute;left:${l}px;top:${t}px;width:60px;height:60px;z-index:99`; document.body.append(b); };
-    k(100, 300); k(150, 330); k(3, 500); });
-  const planted = await unsafe(page, SAFE.portrait);
-  check(planted.some((b) => /X" overlaps/.test(b)) && planted.some((b) => /gap left 3/.test(b)), 'the scanner finds a planted overlap and gap: ' + planted.join(' | '));
-  const bad = [], shots = [];
-  for (const [orient, d] of Object.entries(SAFE)) {
-    await page.setViewportSize({ width: d.w, height: d.h });
-    await cdp.send('Emulation.setSafeAreaInsetsOverride', { insets: d.i });
-    for (const [name, url, act, fresh] of screens) {
-      await page.goto(base + '/index.html?blank=1');
-      await page.evaluate((f) => { if (f) localStorage.setItem('e2e.fresh', '1'); else localStorage.removeItem('e2e.fresh'); }, !!fresh);
-      await page.goto(base + url);
-      await page.waitForFunction(() => document.readyState === 'complete' && (!document.getElementById('app') || (window.apex && window.apexDebug)));
-      await page.waitForFunction(() => !document.getElementById('boot'), null, { timeout: 5000 });   // the opening cover (boot.js) hides everything for up to 2.5 s
-      await page.waitForTimeout(300);
-      if (act) { await page.evaluate('(async () => { ' + act + ' })()'); await page.waitForTimeout(700); }
-      for (const b of await unsafe(page, d)) bad.push(`${orient} · ${name}: ${b}`);
-      if (process.env.SHOTS) shots.push({ orient, name, png: (await page.screenshot()).toString('base64'), w: d.w });
-    }
+  if (orient === Object.keys(SAFE)[0]) {
+    // the scanner catches what it says it does: two planted keys that overlap, and one 3 pt from the edge
+    await page.setViewportSize({ width: SAFE.portrait.w, height: SAFE.portrait.h });
+    await page.goto(base + '/privacy.html');
+    await page.evaluate(() => { const k = (l, t) => { const b = document.createElement('button'); b.textContent = 'X'; b.style.cssText = `position:absolute;left:${l}px;top:${t}px;width:60px;height:60px;z-index:99`; document.body.append(b); };
+      k(100, 300); k(150, 330); k(3, 500); });
+    const planted = await unsafe(page, SAFE.portrait);
+    check(planted.some((b) => /X" overlaps/.test(b)) && planted.some((b) => /gap left 3/.test(b)), 'the scanner finds a planted overlap and gap: ' + planted.join(' | '));
   }
-  // SHOTS=<dir>: one contact sheet per phone shape, for the next design review (CI keeps them as an artefact, U-05)
+  const bad = [], shots = [];
+  await page.setViewportSize({ width: d.w, height: d.h });
+  await cdp.send('Emulation.setSafeAreaInsetsOverride', { insets: d.i });
+  for (const [name, url, act, fresh] of screens) {
+    await page.goto(base + '/index.html?blank=1');
+    await page.evaluate((f) => { if (f) localStorage.setItem('e2e.fresh', '1'); else localStorage.removeItem('e2e.fresh'); }, !!fresh);
+    await page.goto(base + url);
+    await page.waitForFunction(() => document.readyState === 'complete' && (!document.getElementById('app') || (window.apex && window.apexDebug)));
+    await page.waitForFunction(() => !document.getElementById('boot'), null, { timeout: 5000 });   // the opening cover (boot.js) hides everything for up to 2.5 s
+    await page.waitForTimeout(300);
+    if (act) { await page.evaluate('(async () => { ' + act + ' })()'); await page.waitForTimeout(700); }
+    for (const b of await unsafe(page, d)) bad.push(`${orient} · ${name}: ${b}`);
+    if (process.env.SHOTS) shots.push({ name, png: (await page.screenshot()).toString('base64') });
+  }
+  // SHOTS=<dir>: this phone shape's contact sheet, for the next design review (CI keeps them as an artefact, U-05)
   if (process.env.SHOTS) {
     require('fs').mkdirSync(process.env.SHOTS, { recursive: true });
-    for (const orient of Object.keys(SAFE)) {
-      const set = shots.filter((x) => x.orient === orient), w = Math.round(set[0].w / 2);
-      await page.setViewportSize({ width: 4 * (w + 16) + 16, height: 600 });
-      await page.setContent(`<body style="margin:0;padding:8px;background:#2b2b2b;font:12px sans-serif;color:#ddd;display:flex;flex-wrap:wrap;gap:16px">${
-        set.map((x) => `<figure style="margin:0;width:${w}px"><img style="width:100%" src="data:image/png;base64,${x.png}"><figcaption>${x.name}</figcaption></figure>`).join('')}</body>`);
-      await page.screenshot({ path: `${process.env.SHOTS}/${orient.replace(/\W+/g, '-')}.png`, fullPage: true });
-    }
+    const w = Math.round(d.w / 2);
+    await page.setViewportSize({ width: 4 * (w + 16) + 16, height: 600 });
+    await page.setContent(`<body style="margin:0;padding:8px;background:#2b2b2b;font:12px sans-serif;color:#ddd;display:flex;flex-wrap:wrap;gap:16px">${
+      shots.map((x) => `<figure style="margin:0;width:${w}px"><img style="width:100%" src="data:image/png;base64,${x.png}"><figcaption>${x.name}</figcaption></figure>`).join('')}</body>`);
+    await page.screenshot({ path: `${process.env.SHOTS}/${orient.replace(/\W+/g, '-')}.png`, fullPage: true });
   }
   check(!bad.length, 'under the island, the home indicator or a corner:\n  ' + bad.join('\n  '));
 }, { hasTouch: true });
@@ -7968,7 +8193,26 @@ flow('time attack this week (SOCIAL 2.9): in Where to?, the area\'s stage and it
   const browser = await chromium.launch();
   let failed = 0;
   // FLOW=<text> runs only the flows whose name contains it; REPEAT=<n> runs each n times (for chasing a flaky one).
-  const only = process.env.FLOW ? flows.filter((f) => f.name.includes(process.env.FLOW)) : flows;
+  const picked = process.env.FLOW ? flows.filter((f) => f.name.includes(process.env.FLOW)) : flows;
+  // SHARD=<k>/<n> runs the k-th of n slices (CI runs n jobs side by side; each flow is in exactly one of them). Flows are
+  // dealt longest first to the lightest slice, so the long ones don't pile into one job. Seconds from the CI log of
+  // 2026-11-11; a flow not listed counts as 5 s (a renamed one still runs, it is only dealt as a short one).
+  const shard = /^(\d+)\/(\d+)$/.exec(process.env.SHARD || '');
+  if (process.env.SHARD && (!shard || +shard[1] < 1 || +shard[1] > +shard[2])) throw new Error(`SHARD must be k/n with 1 <= k <= n, not ${process.env.SHARD}`);
+  const LONG_S = [['safe areas (', 65], ['theme contract on its side', 50], ['TestFlight 2026-11-05 note 6', 41],
+    ['the car map glides between fixes', 32], ['private themes', 32], ['turn by turn in road order', 30], ['level cards: one control', 27],
+    ['the strip never cuts', 23], ['when to go', 21], ['the map is a fixed stage', 20], ['a deliberate detour', 20],
+    ['theme contract on the page', 19], ['plan flow (d)', 18], ['plan flow (g)', 18], ['a loop by time', 17], ['plan flow (a)', 17],
+    ['plan flow (e, f)', 16], ["the map's viewpoint, café and fuel stamps", 15]];
+  const weight = (f) => (LONG_S.find(([p]) => f.name.startsWith(p)) || [, 5])[1];
+  const slice = new Map();
+  if (shard) {
+    const load = Array(+shard[2]).fill(0);
+    const order = picked.map((f, i) => [f, i]).sort((a, b) => weight(b[0]) - weight(a[0]) || a[1] - b[1]);   // stable: same deal every run
+    for (const [f] of order) { const k = load.indexOf(Math.min(...load)); load[k] += weight(f); slice.set(f, k); }
+  }
+  const only = shard ? picked.filter((f) => slice.get(f) === +shard[1] - 1) : picked;
+  if (process.env.LIST) { for (const f of only) console.log(f.name); process.exit(0); }   // LIST=1: the flows this run would take, nothing run
   const runs = only.flatMap((f) => Array.from({ length: Math.max(1, Number(process.env.REPEAT) || 1) }, () => f));
   for (const { name, fn, ctxOpts } of runs) {
     const { news, ...browserOpts } = ctxOpts;

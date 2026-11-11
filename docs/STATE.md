@@ -12,6 +12,126 @@
   is drawn behind other tabs. Refreshed on visibilitychange and every 5 min, never while driving.
 - Tests: backend/test/inbox.test.ts (3), tests/test_inbox.py (3), e2e "For you: …".
 - Next: push notifications for the same items once APNs is set up (OWNER_TODO); a crew's own roadbook; recurring meets (S-13).
+## Session 2026-11-11 (roam-c-boot-budget): startup budget in e2e (claude/roam-c-boot-budget, off origin/main)
+
+- e2e "startup budget" (`BOOT` in smoke.js): own script bytes 3.6 MB, 145 scripts, 2 s CPU, 1.5 s longest task before
+  `window.apex` is ready. Measured 2026-11-11: 3.23 MB / 130 / 0.12 s / 0.17 s (maplibre 784 KB, cockpit.js 753 KB).
+- Measured too: at 4x CPU throttle the page is ready in ~1.7 s; the opening cover waits for the first basemap tile
+  (OpenFreeMap; style, sprites and glyphs are HTTP-cached a day). Next for P-06: load route-only modules (graph_router,
+  route_engine, fun_route, ~260 KB) on first plan instead of at boot.
+
+
+## Session 2026-11-11 (roam-a brake heat): the co-driver knows when your brakes are cooking (claude/project-thread-h7xxmf, off origin/main)
+
+- IDEAS V-12. `core/brake_heat.py` (reference) and `web/brake_heat.js` (port, parity-tested): specific energy v^2/2 + g h
+  (height low-passed 4 s), the loss beyond rolling (0.012) and air (2.6e-4 v^3) is brake power, one lumped disc mass
+  (1.7 % of the car, cast iron: 7.8 J/kg K) cooled with tau 600 s standing to ~120 s at 22 m/s. Warm 150 K, hot 250 K
+  above the air; a call when hot, re-armed below 150 K and 3 min apart. No speed or height: only cools; null before
+  anything known; a gap over 5 s is a new baseline.
+- cockpit.js `noteBrakes(frame)` on both live frame paths (web sensors, the app's frames): toast + the break cue's quiet slot
+  (`breakSay`, takes it). `drive.brakes` reset per drive. drive_view.js: one line when a drive got warm or hot
+  (`driveText`, "by Vetta's estimate"). Script tags in index.html and analysis.html.
+- The bundled demo drives (120 m of relief) come out cool (peaks 112 K, 87 K): no false alarm on ordinary hills.
+- Energy is differenced over 2 s windows: the app's 10 Hz frames hold speed between 1 Hz fixes, and a step-by-step
+  difference lost ~70 % of braking (clipped) and counted drag as braking (review). The call has its own quiet slot (`brakeSay`, 60 s), said before a waiting break cue.
+- Tests: tests/test_brake_heat.py (18, incl. 10 Hz held speed, coasting, held-speed CSV rows). Checked: pytest 1607 passed; e2e first run, drive ended (card and Log), car-started drive.
+- Next: the route card warns of a long descent ahead from the DEM profile (stages.js profile) with the same model at the
+  router's speeds; the Garage car's weight and brake size could set DISC_C; not checked on a real descent yet (VERIFY).
+## Session 2026-11-11 (routing round two, part 2): go round a police report mid-drive; a late loop skips a stage (claude/project-thread-39xbx9)
+
+- `ApexHazardReports.onRouteAhead(t, atM, pts)`: the nearest report within 150 m of the route 0.8-25 km ahead. cockpit.js
+  `policeAheadTick` (from feedReported, every 5 s, Police reports on, driving a planned route) toasts it once with Go round;
+  `goRoundPolice` routes the rest of the plan round the reports (`routePoints` takes `o.avoid`), and keeps it only if it
+  does go round. `policeAround` now also takes the drive's own fetched reports (`reported.list`), so a report that landed
+  mid-drive reaches the router. `reroute` shares `waysAhead`/`trackAhead`. `apexDebug.loadReported` for e2e.
+- `ApexEta.homeByAction(spans, atM)`: a late loop offers "Skip <stage>" (the next not begun, 300 m on) before Head home;
+  `skipStage(span)` takes the one to skip. IDEAS R-37 done.
+- Tests: tests/test_police_ahead.py, tests/test_eta.py (+1), e2e "avoid police reports, driving".
+- Next: CarPlay has no toast keys; the Go round and Skip offers are phone-only (a CPAlert in CarPlay/ would carry them).
+
+## Session 2026-11-11 (routing round two): Avoid cameras holds for every candidate, speed cameras included (claude/project-thread-39xbx9)
+
+- Gap found: Avoid → Cameras only reached Valhalla's requests (exclude_locations). Our own router, the highway-friendly
+  quickest and stage plans ignored it, and the ranking could pick a route past a camera with the switch on.
+- `cockpit.js` `avoidForTrip` → `camsForTrip`: the kept camera tiles (both kinds: ALPR and `highway=speed_camera`) within
+  5 km of the trip's box, 60 nearest its line, as `avoid.cams` (waits 0.25 s at most; `policeWarm` loads the tiles round
+  you when Where to? opens). `graph_router.js` `AVOID_CAM_X` 8 on edges within `AVOID_CAM_M` 35 m. `fun_route.js`
+  `unavoided` → `cameras` within `CAMERA_ON_M` 35 m (route.has.cameras), so keepAvoiding drops it when another doesn't.
+- Tests: tests/test_avoid_cameras.py (+3), tests/test_graph_router.py avoidCameras, e2e "avoid cameras" (speed camera too).
+- Not done: loops don't take `avoid.cams` (only A→B plans go through avoidForTrip).
+## Session 2026-11-11 (roam-c-crest-contract): crest's units written down; IDEAS Q-08 done (claude/roam-c-crest-contract, off origin/main)
+
+- Checked: ApexNavApp.swift, web/sensors.js and both CSVs carry `crest_vertical_g` in g (negative going light);
+  contributor.js uploads max(0, -min) clamped 0..3, which contribute.ts validates. The schema now describes the field.
+- Looked at and left: D-24 "best corners" needs per-corner smoothness in the drive summaries (the Log reads summaries, not
+  rows; a new summary field rebuilds every drive's summary once), so it is bigger than a roam PR.
+
+## Session 2026-11-11 (round two analysis, PR 3): touch by kind of corner and month, and a drive's own touch (claude/project-thread-gd7nre, off origin/main)
+
+- core/driver_profile.py (reference) and web/driver_profile.js (port): `touch(obs, least)`; profile adds `touch_by`
+  (tight/medium/fast, from MATRIX_MIN corners) and `touch_trend` (per measure, months with TREND_MIN corners read);
+  `drive_touch(obs, others)` / `driveTouch`: one drive's touch (from DRIVE_TOUCH_MIN = 8 corners) beside the usual.
+- Your touch panel: a "By kind of corner" table (g a second; quick; --) and month-by-month lines. The Log's drive page:
+  "Your touch on this drive" (`#dvTouch`), from the drive job (`touchOf` in analysis_client.js, the usual from Your
+  driving's kept observations); hidden for drives with g kept once a second. Facts only: never better or worse.
+- Tests: tests/test_touch_detail.py (4); e2e "Your driving" covers the table, the month line and the drive's words.
+- Next: say when a drive's touch is clearly outside your usual spread (its median beyond the usual quartiles on 8+ corners).
+
+## Session 2026-11-11 (sweep round two): time attack wiring and opt-in (claude/project-thread-g9yher, off origin/main 936aec3)
+
+- Bug: analysis.html never loaded time_attack.js or called `ApexTimeAttack.sendRuns`, so no run reached a board. Now after
+  the stage publish loop in `syncSegments`; tests/test_time_attack.py `test_the_log_sends_runs`.
+- Privacy: runs counted on any copy of a circuit (a friend's hand share, a duel copy) without entering, and leaving was
+  undone by the next sync. **Migration 0051 `ta_joins`** (additive): enter writes it, runs / circuits / `entered` read it,
+  leave deletes it. Implausible runs are skipped (`refused`), not a 400 for the batch. Export `time_attack_entered`.
+- 0051 applied on preview and prod 2026-11-11 (owner: "go on 0051"), each with its d1_migrations row.
+- Roadbooks: `booksMine` bound up to 131 values in one query (D1 allows 100): the roads are read in chunks of 90 (`BIND_CHUNK`).
+- Main's red e2e "reported hazards": a web drive with no fix for 5 s drops back to the replay, so on a slow runner the
+  report's word went to the toast, not the status line. The flow now keeps feeding fixes; its wait dumps the screen state.
+- CI: apexkit-linux runs in `container: swift:6.0-jammy` (setup-swift's keyserver refresh timed out every run).
+- Next: the rest of the sweep (iOS shell, CarPlay, performance) was not reached this round.
+## Session 2026-11-11 (roam-c-safe-area-split): the safe-area e2e flow, one a phone shape (claude/roam-c-safe-area-split, off origin/main)
+
+- e2e/smoke.js: `safe areas (<shape>)` x4 from `SAFE`, same screens and checks; scanner self-check in the first; one
+  contact sheet each. `LONG_S` weighs each 65 s. 176 flows; the four shards together list all of them.
+- Next: a fifth e2e job would bring each to about 5.2 min of flows, at one more minute of setup per run.
+
+## Session 2026-11-11 (ui-round-two, PR 3): Settings and the sheets over a page in the Vetta Line (claude/project-thread-5sbga7)
+
+- web/signature.css, new block "the sheets over a page": `.side-pop` rises on `--lift-2` (no top rule), grabber as the
+  deck's, title 26 px Barlow (`min-width: 0`, the Done/back key `flex: none`), no rule under the head (the first row's
+  hairline divides). controls.css `.switch` is a `--well` with no frame; the chosen key keeps its ink fill, no drop edge.
+  The `.sw` slide switch is unchanged (the owner's "hard to tell if they're on or off").
+- Tests: tests/test_sheets_line.py. e2e Settings, Options, units, crew, roadbook, duel, People, Garage, night pass here.
+- Next: the crew page's own head and the route card's Share box; the Log's sub-pages if anything there still boxes.
+## Session 2026-11-11 (roam-c-migration-guard): migration numbers can't clash (claude/roam-c-migration-guard, off origin/main 936aec3)
+
+- tests/test_migrations.py: names NNNN_words.sql, numbers unique from 0001 (the message says which number to take; gaps are
+  allowed, PRs merge out of order), and backend/test/helpers.ts imports and applies every file in order. Eight threads add migrations at once.
+- D1 by hand 2026-11-11: d1_migrations on prod and preview both list 0001–0050, matching the files (no drift).
+- Also this session: my Avoid cameras build (#401) was closed for the routing thread's #396 (same change); one review
+  comment left there (an edge near two cameras compounds to x64).
+- Next: a live drift check in CI needs a Cloudflare API token (owner).
+
+## Session 2026-11-11 (ui-round-two, PR 2): the Garage and People in the Vetta Line (claude/project-thread-5sbga7)
+
+- web/signature.css, new blocks "the Garage" and "People". Sheet header hairline; Garage title a 30 px masthead; `.gear-key`
+  is paper on `--lift-1` (no ink box, no drop edge) everywhere it appears; car cards paper with a 22 px Barlow name, their
+  keys as wells, the daily car marked with the apex dot; theme cards paper, the one in use ringed in ink (`.theme-cards`
+  padding so the shelf doesn't clip it). Car rules are `.garage-cards .car-card` because garage_ui.js appends its CSS later.
+- People: Friends | Crews at 26 px like the Log's head; `.sheet .card` (crew tiles, a friend's request) paper; the request
+  carries the apex dot. The dashed sample crew and the empty bay stay pencil (e2e checks the dashed slot).
+- Tests: tests/test_garage_line.py. e2e Garage, People, crew, friend flows pass here.
+- Next: the crew page and Your data/Settings sub-sheets (ink rules on lists), the route card's Share box.
+## Session 2026-11-11 (roam-c-ci-shards): the e2e check in four parallel jobs (claude/roam-c-ci-shards, off origin/main)
+
+- Done: `e2e/smoke.js` takes `SHARD=k/n` (flows dealt longest first, weights in `LONG_S`) and `LIST=1` (print the flows a
+  run would take). `core-tests.yml` runs `e2e (1/4)`..`e2e (4/4)` side by side (25 min limit, fail-fast off, contact
+  sheets uploaded per shard), caches `~/.cache/ms-playwright`, and keeps one job named `e2e` that needs all four.
+- Checked: the four `LIST=1` shards together are exactly the 173 flows of an unsharded run; expected flow time per job
+  from the last CI log is 5.8-6.9 min (was 25.4 min in one job).
+- Next: when a new flow runs over about 15 s, add it to `LONG_S` so it is dealt as a long one.
+
 ## Session 2026-11-11 (roam-b-crowd-bumps): bumps the crowd felt, verified and called (claude/roam-b-crowd-bumps, off origin/main)
 
 - IDEAS Q-02 crowd half, ROAD_INTELLIGENCE 4.3. `core/road_dna.spike_mask` / `Core.spikeMask` (parity-tested; detect_hazards
@@ -35,7 +155,13 @@
   `web/analysis_client.js` `OBS_VERSION` 2.
 - Tests: tests/test_touch.py (7: planted rates read back within 15 %, quick, coarse g gives none, parity, words); e2e
   "Your driving" checks no panel for once-a-second g and the panel's words.
-- Next: IDEAS D-29, Pace in Your driving (speed-based; never a Work on). Then touch by kind of corner and month.
+- Pace (IDEAS D-29, second PR): `MEASURES = SKILLS + ("pace",)` in both ports; observe adds `pace` (the Score's
+  `_pace_credit`); profile reads it for levels, matrix, trend/change and `pace_findings` (kept apart from `findings`),
+  plus `pace.over` (share of corners over the sane limit). Never strongest/focus/practice. `web/driver_profile.js`
+  `paceLines`, the `.dp-pace` panel, a Pace row in By kind of corner; apex_core exports `PACE_CEILING`, `paceCredit`.
+  Tests: tests/test_pace_profile.py (5); e2e "Your driving" checks the panel. APP_REVIEW 1.4 row added.
+- Next: touch by kind of corner and month (does the release get gentler?); a drive's own touch on its Log page; the end
+  card could say "3rd this week" for time attack (another thread's next).
 
 ## Session 2026-11-11 (ui-round-two, PR 1): the Log in the Vetta Line (claude/project-thread-5sbga7, off origin/main)
 

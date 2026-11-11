@@ -16,8 +16,11 @@ Touch (round two, from the ten g readings a second the recording keeps since #37
 off, and how fast the car is loaded up at turn-in, in g a second, as style facts. Old drives, whose g was kept once a
 second (a staircase or a straight ramp between fixes), give no touch: `_fine` tells them apart from the g itself.
 
-Technique only: no speed, time or legality enters a level, and nothing here rewards pace. The share of a corner's sane
-limit used is reported as a style fact, never as a skill. Unknown stays unknown (None). `web/driver_profile.js` is the
+The six skills are technique: no speed, time or legality enters them. Pace (IDEAS D-29, Nate 2026-11-10: "more speed
+based stuff") is read beside them, the Vetta Score's own pace credit per corner (full from 85 % to 100 % of the corner's
+sane limit, falling steeply above it, so overdriving never earns it): a level, by kind of corner, month by month, and where
+it is measurably lower or higher (`pace_findings`), with the share of corners over the sane limit. It is never the
+strongest, never a Work on and never practised: Vetta does not tell anyone to go faster. Unknown stays unknown (None). `web/driver_profile.js` is the
 port, held to parity by tests/test_driver_profile.py.
 """
 from __future__ import annotations
@@ -29,6 +32,8 @@ import numpy as np
 from core import drive_analysis as da
 
 SKILLS = ("squeeze", "brake", "arc", "entry", "line", "exit")
+PACE = "pace"
+MEASURES = SKILLS + (PACE,)  # pace (IDEAS D-29) is read like a skill but is never the strongest, a Work on or a practice
 # In the order a corner is driven:
 #  squeeze  braking in one go: on once, off once, no second stab or early lift
 #  brake    brakes done by the apex: nothing hard after it
@@ -73,6 +78,7 @@ TREND_MIN = 15               # corners in a month before the month has a level
 TREND_FLOOR = 0.05
 TREND_SE = 2.0
 TOP_FINDINGS = 8
+DRIVE_TOUCH_MIN = 8          # corners one drive needs before its own touch is said (its Log page)
 TOUCH_MIN_G = 0.25           # a braking or turn-in peaking lighter than this has no touch to read (noise is 0.02-0.04 g)
 TOUCH_LO, TOUCH_HI = 0.2, 0.8  # touch is the rise (or fall) between 20 % and 80 % of the peak, over the time it took
 TOUCH_MIN_BINS = 1.5         # a rise over fewer 5 m bins than this is quicker than the recording can time ("quick")
@@ -277,6 +283,7 @@ def observe(drive: dict) -> list:
             "trail": None if ph["brake_m"] is None else (1 if ph["trail_m"] >= TRAIL_MIN_M else 0),
             "slow_m": None if slow is None else (slow - a) * 5.0,
             "brake_on": brake_on, "brake_off": brake_off, "turn_in": turn_in,
+            "pace": da._pace_credit(float(tech["use"])),
         })
     return out
 
@@ -365,10 +372,11 @@ def profile(drives: list) -> dict:
     drives = [d for d in drives if d.get("obs")]
     every = [o for d in drives for o in d["obs"]]
     out = {"corners": len(every), "drives": len(drives), "skills": {}, "style": {}, "touch": {}, "matrix": [], "findings": [],
-           "trend": {}, "change": {}, "strongest": None, "focus": None}
+           "pace_findings": [], "pace": {},
+           "touch_by": {}, "touch_trend": {}, "trend": {}, "change": {}, "strongest": None, "focus": None}
 
     overall = {}
-    for k in SKILLS:
+    for k in MEASURES:
         xs = _vals(every, k)
         overall[k] = da._mean_se(xs)[0] if xs else None
         if len(xs) >= SKILL_MIN:
@@ -384,18 +392,20 @@ def profile(drives: list) -> dict:
         "use": da._r(da._median(use), 4) if len(use) >= SKILL_MIN else None,
     }
     out["touch"] = touch(every)
+    # touch by size of corner (a tight corner takes the brakes on harder) and month by month: facts, never a level
+    out["touch_by"] = {size: touch([o for o in every if o["size"] == size], MATRIX_MIN) for size in ("tight", "medium", "fast")}
 
     by_size = {}                                   # each skill's mean for each size of corner (None: size unknown)
     for size in ("tight", "medium", "fast", None):
         cell = [o for o in every if o["size"] == size]
-        for k in SKILLS:
+        for k in MEASURES:
             xs = _vals(cell, k)
             by_size[(k, size)] = da._mean_se(xs)[0] if xs else 0.0
     for way in ("L", "R"):
         for size in ("tight", "medium", "fast"):
             cell = [o for o in every if o["dir"] == way and o["size"] == size]
             levels = {}
-            for k in SKILLS:
+            for k in MEASURES:
                 xs = _vals(cell, k)
                 levels[k] = _level(da._mean_se(xs)[0]) if len(xs) >= MATRIX_MIN else None
             out["matrix"].append({"dir": way, "size": size, "n": len(cell), "levels": levels})
@@ -409,7 +419,7 @@ def profile(drives: list) -> dict:
         found.append({"skill": k, "split": split, "a": a, "b": b, **r,
                       "mean_a": _level(_clamp01(base + r["mean_a"])), "mean_b": _level(_clamp01(base + r["mean_b"]))})
 
-    for k in SKILLS:
+    for k in MEASURES:
         left = lambda o, k=k: o[k] - by_size[(k, o["size"])]
         for split, a, b, in_a, in_b in WITHIN:
             raw = split == "size"
@@ -422,20 +432,30 @@ def profile(drives: list) -> dict:
         for tag in sorted({t for d in drives for t in (d.get("tags") or [])}):
             add(k, "tag", tag, "rest", _between(drives, k, left, lambda d, tag=tag: tag in (d.get("tags") or [])), False)
     # the strongest evidence first; one line per comparison (the skill it shows most in), the rest named beside it
-    found.sort(key=lambda f: (-abs(f["z"]) if f["z"] is not None else -math.inf, f["split"], str(f["a"]), SKILLS.index(f["skill"])))
-    seen = {}
-    for f in found:
-        key = (f["split"], f["a"])
-        if key in seen:
-            seen[key]["also"].append(f["skill"])
-            continue
-        f = {**f, "also": [], "z": None if f["z"] is None else da._r(f["z"], 2)}
-        seen[key] = f
-        out["findings"].append(f)
-    out["findings"] = out["findings"][:TOP_FINDINGS]
+    found.sort(key=lambda f: (-abs(f["z"]) if f["z"] is not None else -math.inf, f["split"], str(f["a"]), MEASURES.index(f["skill"])))
+    # technique and pace are said apart: "the same shows in pace" would join a fault to a speed
+    for name, group in (("findings", [f for f in found if f["skill"] != PACE]), ("pace_findings", [f for f in found if f["skill"] == PACE])):
+        seen, kept = {}, []
+        for f in group:
+            key = (f["split"], f["a"])
+            if key in seen:
+                seen[key]["also"].append(f["skill"])
+                continue
+            f = {**f, "also": [], "z": None if f["z"] is None else da._r(f["z"], 2)}
+            seen[key] = f
+            kept.append(f)
+        out[name] = kept[:TOP_FINDINGS]
+    over = [1 if o["use"] > da.PACE_CEILING else 0 for o in every]
+    out["pace"] = {"over": da._r(da._mean_se(over)[0], 4) if len(over) >= SKILL_MIN else None, "n": len(over)}
 
     months = sorted({d["month"] for d in drives if d.get("month")})
-    for k in SKILLS:
+    out["touch_trend"] = {k: [] for k in TOUCH}
+    for mth in months:
+        t = touch([o for d in drives if d.get("month") == mth for o in d["obs"]], TREND_MIN)
+        for k in TOUCH:
+            if t[k]["n"] >= TREND_MIN:
+                out["touch_trend"][k].append({"month": mth, "rate": t[k]["rate"], "quick": t[k]["quick_rate"], "n": t[k]["n"]})
+    for k in MEASURES:
         rows, raw = [], []
         for mth in months:
             xs = [x for d in drives if d.get("month") == mth for x in _vals(d["obs"], k)]
@@ -467,23 +487,29 @@ def profile(drives: list) -> dict:
 TOUCH = ("brake_on", "brake_off", "turn_in")
 
 
-def touch(obs: list) -> dict:
+def touch(obs: list, least: int = STYLE_MIN) -> dict:
     """The touch over corners obs: per measure {rate, lo, hi, n, quick}: the median and quartiles in g a second over the n
     corners read, a quick one ranking above every rate (it is quicker than any the bins can time); a statistic that lands
-    among the quick ones is None and quick_rate (rate's) True. None everywhere under STYLE_MIN corners. release: the median
+    among the quick ones is None and quick_rate (rate's) True. None everywhere under `least` corners. release: the median
     of brakes off over brakes on, on corners with both timed (None likewise)."""
     out = {}
     for k in TOUCH:
         xs = sorted(o[k] for o in obs if isinstance(o.get(k), float))
         q = sum(1 for o in obs if o.get(k) == QUICK)
-        n, ok = len(xs) + q, len(xs) + q >= STYLE_MIN
+        n, ok = len(xs) + q, len(xs) + q >= least
         at = lambda f: _rank(xs, n, f) if ok else None
         out[k] = {"rate": at(0.5), "lo": at(0.25), "hi": at(0.75), "n": n, "quick": q,
                   "quick_rate": bool(ok and at(0.5) is None)}
     both = [o["brake_off"] / o["brake_on"] for o in obs if isinstance(o.get("brake_on"), float) and isinstance(o.get("brake_off"), float)]
-    out["release"] = da._r(da._median(both), 3) if len(both) >= STYLE_MIN else None
+    out["release"] = da._r(da._median(both), 3) if len(both) >= least else None
     out["release_n"] = len(both)
     return out
+
+
+def drive_touch(obs: list, others: list) -> dict:
+    """A drive's own touch (its Log page): {drive: touch over its corners (from DRIVE_TOUCH_MIN), usual: touch over the
+    corners of every other drive (from STYLE_MIN)}. Facts side by side; a drive is never marked better or worse for it."""
+    return {"drive": touch(obs, DRIVE_TOUCH_MIN), "usual": touch(others)}
 
 
 def _rank(xs: list, n: int, f: float):

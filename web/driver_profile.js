@@ -9,10 +9,11 @@
 (function (root) {
   'use strict';
   const SKILLS = ['squeeze', 'brake', 'arc', 'entry', 'line', 'exit'];
+  const PACE = 'pace', MEASURES = [...SKILLS, PACE];                  // pace (IDEAS D-29): read like a skill, never a Work on
   const SWING_G = 0.10, ARC_SPAN_G = 0.6, SQUEEZE_SPAN_G = 0.5, SQUEEZE_MIN_G = 0.20, SQUEEZE_PAD = 2, SQUEEZE_GAP = 6, ENTRY_SWING_MPS = 0.6, SLOW_PAD = 10, ENTRY_SPAN_MPS = 3.0,
     FOCUS_MAX = 85, EXIT_FREE_M = 10, EXIT_SPAN_M = 40, LINE_FREE_M = 5, LINE_SPAN_M = 25, TRAIL_MIN_M = 10, GRADE_PAD = 10, GRADE_MIN = 0.04,
     WARM_MIN = 10, LONG_MIN = 60, SKILL_MIN = 30, STYLE_MIN = 20, MATRIX_MIN = 10, SPLIT_MIN = 12, SPLIT_FLOOR = 0.08, SPLIT_SE = 3,
-    SPLIT_DRIVE_MIN = 3, SPLIT_DRIVES = 2, GROUP_DRIVES = 4, GROUP_DRIVE_MIN = 5, TREND_MIN = 15, TREND_FLOOR = 0.05, TREND_SE = 2, TOP_FINDINGS = 8,
+    SPLIT_DRIVE_MIN = 3, SPLIT_DRIVES = 2, GROUP_DRIVES = 4, GROUP_DRIVE_MIN = 5, TREND_MIN = 15, TREND_FLOOR = 0.05, TREND_SE = 2, TOP_FINDINGS = 8, DRIVE_TOUCH_MIN = 8,
     TOUCH_MIN_G = 0.25, TOUCH_LO = 0.2, TOUCH_HI = 0.8, TOUCH_MIN_BINS = 1.5, FINE_EPS = 3e-4, FINE_FLAT = 0.3;
   const TOUCH = ['brake_on', 'brake_off', 'turn_in'];
   const CoreOf = () => root.ApexCore || (typeof require === 'function' ? require('./apex_core.js') : null);
@@ -156,7 +157,7 @@
         exit: slow === null ? null : 1 - clamp01((ph.coast_m - EXIT_FREE_M) / EXIT_SPAN_M),
         trail: ph.brake_m === null ? null : (ph.trail_m >= TRAIL_MIN_M ? 1 : 0),
         slow_m: slow === null ? null : (slow - a) * 5,
-        brake_on: brakeOn, brake_off: brakeOff, turn_in: turnIn,
+        brake_on: brakeOn, brake_off: brakeOff, turn_in: turnIn, pace: Core.paceCredit(tech.use),
       });
     }
     return out;
@@ -216,18 +217,20 @@
   }
   /** The touch over corners obs: per measure { rate, lo, hi, n, quick, quick_rate } in g a second (null under STYLE_MIN
    *  corners; a quick corner ranks above every rate), and release (brakes off over on, corners with both timed). */
-  function touch(obs) {
+  function touch(obs, least = STYLE_MIN) {
     const out = {};
     for (const k of TOUCH) {
-      const xs = obs.map((o) => o[k]).filter(finite).sort((p, q) => p - q), q = obs.filter((o) => o[k] === QUICK).length, n = xs.length + q, ok = n >= STYLE_MIN;
+      const xs = obs.map((o) => o[k]).filter(finite).sort((p, q) => p - q), q = obs.filter((o) => o[k] === QUICK).length, n = xs.length + q, ok = n >= least;
       const at = (f) => (ok ? rank(xs, n, f) : null);
       out[k] = { rate: at(0.5), lo: at(0.25), hi: at(0.75), n, quick: q, quick_rate: ok && at(0.5) === null };
     }
     const both = obs.filter((o) => finite(o.brake_on) && finite(o.brake_off)).map((o) => o.brake_off / o.brake_on);
-    out.release = both.length >= STYLE_MIN ? r(median(both), 3) : null;
+    out.release = both.length >= least ? r(median(both), 3) : null;
     out.release_n = both.length;
     return out;
   }
+  /** A drive's own touch (its Log page): { drive (from DRIVE_TOUCH_MIN corners), usual (every other drive's corners) }. */
+  const driveTouch = (obs, others) => ({ drive: touch(obs || [], DRIVE_TOUCH_MIN), usual: touch(others || []) });
   const cmp = (p, q) => (p < q ? -1 : p > q ? 1 : 0);
 
   /** drives: [{ id, month ('YYYY-MM' or null), car (label or null), tags ([str] or null), obs (observe's) }]. */
@@ -235,9 +238,9 @@
     const drives = (drivesIn || []).filter((d) => d && Array.isArray(d.obs) && d.obs.length);
     const every = [];
     for (const d of drives) every.push(...d.obs);
-    const out = { corners: every.length, drives: drives.length, skills: {}, style: {}, touch: {}, matrix: [], findings: [], trend: {}, change: {}, strongest: null, focus: null };
+    const out = { corners: every.length, drives: drives.length, skills: {}, style: {}, touch: {}, matrix: [], findings: [], pace_findings: [], pace: {}, touch_by: {}, touch_trend: {}, trend: {}, change: {}, strongest: null, focus: null };
     const overall = {};
-    for (const k of SKILLS) {
+    for (const k of MEASURES) {
       const xs = vals(every, k);
       overall[k] = xs.length ? Core.meanSe(xs)[0] : null;
       if (xs.length >= SKILL_MIN) { const [m, se] = Core.meanSe(xs); out.skills[k] = { level: level(m), n: xs.length, se: r(100 * se, 2) }; }
@@ -250,14 +253,16 @@
       use: use.length >= SKILL_MIN ? r(median(use), 4) : null,
     };
     out.touch = touch(every);
+    // touch by size of corner and month by month: facts, never a level
+    for (const z of ['tight', 'medium', 'fast']) out.touch_by[z] = touch(every.filter((o) => o.size === z), MATRIX_MIN);
     const bySize = {};
     for (const size of ['tight', 'medium', 'fast', null]) {
       const cell = every.filter((o) => o.size === size);
-      for (const k of SKILLS) { const xs = vals(cell, k); bySize[k + '|' + size] = xs.length ? Core.meanSe(xs)[0] : 0; }
+      for (const k of MEASURES) { const xs = vals(cell, k); bySize[k + '|' + size] = xs.length ? Core.meanSe(xs)[0] : 0; }
     }
     for (const way of ['L', 'R']) for (const size of ['tight', 'medium', 'fast']) {
       const cell = every.filter((o) => o.dir === way && o.size === size), levels = {};
-      for (const k of SKILLS) { const xs = vals(cell, k); levels[k] = xs.length >= MATRIX_MIN ? level(Core.meanSe(xs)[0]) : null; }
+      for (const k of MEASURES) { const xs = vals(cell, k); levels[k] = xs.length >= MATRIX_MIN ? level(Core.meanSe(xs)[0]) : null; }
       out.matrix.push({ dir: way, size, n: cell.length, levels });
     }
     const found = [];
@@ -268,26 +273,36 @@
     };
     const withCar = drives.filter((d) => d.car), cars = [...new Set(withCar.map((d) => d.car))].sort(cmp);
     const tags = [...new Set(drives.flatMap((d) => d.tags || []))].sort(cmp);
-    for (const k of SKILLS) {
+    for (const k of MEASURES) {
       const left = (o) => o[k] - bySize[k + '|' + o.size], asIs = (o) => o[k];
       for (const [split, a, b, inA, inB] of WITHIN) { const raw = split === 'size'; add(k, split, a, b, within(Core, drives, k, raw ? asIs : left, inA, inB), raw); }
       if (cars.length >= 2) for (const car of cars) add(k, 'car', car, 'rest', between(Core, withCar, k, left, (d) => d.car === car), false);
       for (const tag of tags) add(k, 'tag', tag, 'rest', between(Core, drives, k, left, (d) => (d.tags || []).includes(tag)), false);
     }
     const mag = (f) => (f.z === null ? Infinity : Math.abs(f.z));
-    found.sort((p, q) => mag(q) - mag(p) || cmp(p.split, q.split) || cmp(String(p.a), String(q.a)) || SKILLS.indexOf(p.skill) - SKILLS.indexOf(q.skill));
-    const seen = new Map();
-    for (const f of found) {
-      const key = f.split + '|' + f.a;
-      if (seen.has(key)) { seen.get(key).also.push(f.skill); continue; }
-      const g = { ...f, also: [], z: f.z === null ? null : r(f.z, 2) };
-      seen.set(key, g);
-      out.findings.push(g);
+    found.sort((p, q) => mag(q) - mag(p) || cmp(p.split, q.split) || cmp(String(p.a), String(q.a)) || MEASURES.indexOf(p.skill) - MEASURES.indexOf(q.skill));
+    // technique and pace are said apart: "the same shows in pace" would join a fault to a speed
+    for (const [name, group] of [['findings', found.filter((f) => f.skill !== PACE)], ['pace_findings', found.filter((f) => f.skill === PACE)]]) {
+      const seen = new Map(), kept = [];
+      for (const f of group) {
+        const key = f.split + '|' + f.a;
+        if (seen.has(key)) { seen.get(key).also.push(f.skill); continue; }
+        const g = { ...f, also: [], z: f.z === null ? null : r(f.z, 2) };
+        seen.set(key, g);
+        kept.push(g);
+      }
+      out[name] = kept.slice(0, TOP_FINDINGS);
     }
-    out.findings = out.findings.slice(0, TOP_FINDINGS);
+    const over = every.map((o) => (o.use > Core.PACE_CEILING ? 1 : 0));
+    out.pace = { over: over.length >= SKILL_MIN ? r(Core.meanSe(over)[0], 4) : null, n: over.length };
 
     const months = [...new Set(drives.map((d) => d.month).filter(Boolean))].sort(cmp);
-    for (const k of SKILLS) {
+    for (const k of TOUCH) out.touch_trend[k] = [];
+    for (const mth of months) {
+      const t = touch(drives.filter((d) => d.month === mth).flatMap((d) => d.obs), TREND_MIN);
+      for (const k of TOUCH) if (t[k].n >= TREND_MIN) out.touch_trend[k].push({ month: mth, rate: t[k].rate, quick: t[k].quick_rate, n: t[k].n });
+    }
+    for (const k of MEASURES) {
       const rows = [], raw = [];
       for (const mth of months) {
         const xs = [];
@@ -384,6 +399,7 @@
       tip: 'Set the speed before you turn and hold it to the middle of the corner. Speeding up and slowing again mid-corner means the throttle came too soon.' },
     line: { name: 'Patient apex', is: 'You are slowest at the middle of the corner or just after, not long before it.',
       tip: 'Stay slow a little longer. The slowest point belongs at the middle of the corner, where you can see the way out.' },
+    pace: { name: 'Pace', less: 'lower', more: 'higher', is: 'How much of each corner\'s sane limit you use, read as the Vetta Score reads it: full from 85% to 100% of it, and less above it, so over the limit never earns it.' },
     exit: { name: 'Back to power', is: 'Once the braking is done you pick the throttle straight up.',
       tip: 'When the braking is done, pick the throttle up gently straight away. A long coast is the car waiting for you.' },
   };
@@ -408,8 +424,9 @@
     const seen = f.agree === null || f.agree === undefined ? `across ${f.drives} drives` : `on ${f.agree} of ${f.drives} drives`;
     const also = (f.also || []).length ? ` The same shows in ${f.also.map((k) => WORDS[k].name.toLowerCase()).join(' and ')}.` : '';
     // said about the side that has a name: "weaker through rights", or "stronger in tight corners" when the rest is the weaker
-    const line = GENERIC.has(w[0]) ? `is stronger ${sideWords(f.split, w[2])}: ${w[3]} against ${w[1]} ${sideWords(f.split, w[0])}`
-      : `is weaker ${sideWords(f.split, w[0])}: ${w[1]} against ${w[3]} ${sideWords(f.split, w[2])}`;
+    const W = WORDS[f.skill], more = W.more || 'stronger', less = W.less || 'weaker';
+    const line = GENERIC.has(w[0]) ? `is ${more} ${sideWords(f.split, w[2])}: ${w[3]} against ${w[1]} ${sideWords(f.split, w[0])}`
+      : `is ${less} ${sideWords(f.split, w[0])}: ${w[1]} against ${w[3]} ${sideWords(f.split, w[2])}`;
     return `${WORDS[f.skill].name} ${line}, ${seen}.${also}`;
   }
   /** How you drive, as up to three sentences of fact (never advice to go faster). */
@@ -450,6 +467,39 @@
     }
     if (finite(turn.rate)) out.push(`You load the car up at about ${gps(turn.rate)} as you turn in${finite(turn.lo) && finite(turn.hi) ? `, most corners between ${r(turn.lo, 1).toFixed(1)} and ${r(turn.hi, 1).toFixed(1)}` : ''}.`);
     else if (turn.quick_rate) out.push('You turn in with one quick movement of the wheel (quicker than the recording can time).');
+    return out;
+  }
+  const TOUCH_NAME = { brake_on: 'Brakes on', brake_off: 'Brakes off', turn_in: 'Turn-in' };
+  const rateText = (m) => (m && finite(m.rate) ? (m.rate < 1 ? r(m.rate, 2).toFixed(2).replace(/0$/, '') : r(m.rate, 1).toFixed(1)) : m && (m.quick_rate || m.quick === true) ? 'quick' : null);
+  /** Touch month by month: a line a measure with two months or more read, the rate each month (facts, never a level). */
+  function touchTrendLines(tt) {
+    const out = [];
+    for (const k of TOUCH) {
+      const rows = (tt && tt[k]) || [];
+      if (rows.length < 2) continue;
+      out.push(`${TOUCH_NAME[k]} month by month, in g a second: ${rows.map((x) => `${MONTHS[+x.month.slice(5, 7) - 1]} ${rateText({ rate: x.rate, quick: x.quick }) || '--'}`).join(', ')}.`);
+    }
+    return out;
+  }
+  /** A drive's own touch (driveTouch) as sentences: this drive's rate a measure, beside the usual when there is one. */
+  function driveTouchLines(dt) {
+    const out = [];
+    if (!dt || !dt.drive) return out;
+    for (const k of TOUCH) {
+      const a = rateText(dt.drive[k]), b = dt.usual ? rateText(dt.usual[k]) : null;
+      if (!a) continue;
+      const now = a === 'quick' ? 'one quick movement (quicker than the recording can time)' : `about ${a} g a second`;
+      out.push(`${TOUCH_NAME[k]}: ${now} on this drive${b ? `, ${b === 'quick' ? 'quick' : `${b}`} usually` : ''}.`);
+    }
+    return out;
+  }
+  /** Pace in words: what the level means for this driver, and how often a corner went over its sane limit. */
+  function paceLines(p) {
+    const out = [], s = p && p.skills && p.skills.pace, ov = p && p.pace ? p.pace.over : null;
+    if (!s || s.level === null) return out;
+    if (finite(ov) && ov >= 0.1) out.push(`${Math.round(ov * 10)} of 10 corners went over their sane limit, and pace counts those against you. On the road, leave more in hand.`);
+    else if (finite(ov) && ov > 0) out.push(`Few corners went over their sane limit (${Math.max(1, Math.round(ov * 100))} in 100).`);
+    else if (finite(ov)) out.push('No corner went over its sane limit.');
     return out;
   }
   /** The Log's card: one line. */
@@ -517,6 +567,7 @@
     .dp-lv { font-family: var(--font-num); font-weight: 700; font-size: 26px; line-height: 1; text-align: right; min-width: 44px; }
     .dp-lv small { display: block; font-family: var(--font-ui); font-weight: 600; font-size: 11px; color: var(--panel-dim); margin-top: 4px; white-space: nowrap; }
     .dp-bar { height: 5px; background: color-mix(in srgb, var(--panel-ink) 14%, transparent); margin-top: 8px; } .dp-bar u { display: block; height: 100%; background: var(--panel-ink); } .dp-st.weak .dp-bar u { background: var(--accent); }
+    .dp-touch h3 { font-size: 11px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--panel-dim); margin: 18px 0 2px; }
     .dp-phase { font-size: 11px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--panel-dim); padding: 0 0 6px 38px; }
     .dp-prs { display: grid; gap: 6px; margin: 10px 0; } .dp-pr { display: grid; grid-template-columns: 56px minmax(0, 1fr) 56px; gap: 10px; align-items: center; font-size: 13px; }
     .dp-pr .dp-bar { margin-top: 0; height: 8px; position: relative; } .dp-pr .dp-bar s { position: absolute; top: -3px; bottom: -3px; width: 2px; margin-left: -1px; background: var(--accent); }
@@ -623,6 +674,29 @@
     road.append(el('p', 'note', `Each is 0 to 100 over every corner where it could be measured, and stays "--" until ${SKILL_MIN} corners. The small line is the level month by month.`));
     host.append(road);
 
+    // Pace (IDEAS D-29): beside the skills, never one of them; it is never the one to work on
+    if (p.skills.pace) {
+      const s = p.skills.pace, ch = p.change.pace, pn = el('div', 'panel dp-pace'), row = el('div', 'dp-st'), mid = el('div'), lv = el('div', 'dp-lv');
+      row.dataset.skill = 'pace';
+      pn.append(el('h2', null, 'Your pace'));
+      mid.append(el('div', 'dp-name', WORDS.pace.name), el('div', 'dp-is', WORDS.pace.is));
+      if (s.level === null) { lv.innerHTML = '<i class="unk">--</i>'; lv.append(el('small', null, `${s.n} of ${SKILL_MIN} corners`)); }
+      else {
+        lv.textContent = String(s.level);
+        const bar = el('div', 'dp-bar'), u = el('u'); u.style.width = `${s.level}%`; bar.append(u); mid.append(bar);
+        if (ch && ch.sure) lv.append(el('small', null, `${ch.delta > 0 ? 'up' : 'down'} ${Math.abs(ch.delta)} since ${MONTHS[+ch.from.slice(5, 7) - 1]}`));
+        const sp = spark(p.trend.pace);
+        if (sp) { const w = el('small'); w.innerHTML = sp; w.setAttribute('role', 'img'); w.setAttribute('aria-label', p.trend.pace.map((x) => `${monthName(x.month)} ${x.level}`).join(', ')); lv.append(w); }
+      }
+      lv.setAttribute('aria-label', s.level === null ? `not known yet, ${s.n} of ${SKILL_MIN} corners` : `${s.level} of 100`);
+      row.append(el('div', 'dp-dot'), mid, lv);
+      const list = el('div', 'dp-road'); list.append(row); pn.append(list);
+      pn.append(...paceLines(p).map((t) => el('p', 'dp-say', t)));
+      pn.append(...(p.pace_findings || []).map((f) => { const n = el('p', 'dp-say', findingLine(f)); n.dataset.split = f.split; return n; }));
+      pn.append(el('p', 'note', 'The same pace as in your Vetta Score. It is never the thing to work on here: on a public road, the right pace is the one that leaves you room.'));
+      host.append(pn);
+    }
+
     const style = styleLines(p.style, metric);
     if (style.length) { const pn = el('div', 'panel'); pn.append(el('h2', null, 'Your style'), ...style.map((t) => el('p', 'dp-say', t))); host.append(pn); }
 
@@ -635,6 +709,27 @@
         const most = Math.max(...TOUCH.map((k) => p.touch[k].n));
         pn.append(el('p', 'dp-say', `${most} of ${STYLE_MIN} corners read so far. Your touch is said from ${STYLE_MIN}.`));
       }
+      // by size of corner: a row a measure, a column a size (a tight corner takes the brakes on harder: not a fault)
+      const tb = p.touch_by || {}, sizes = ['tight', 'medium', 'fast'];
+      if (sizes.some((z) => tb[z] && TOUCH.some((k) => tb[z][k] && (finite(tb[z][k].rate) || tb[z][k].quick_rate)))) {
+        const t = el('table', 'dp-grid dp-touch-by'), hr = el('tr');
+        hr.append(el('th', 'l', 'g a second'), ...sizes.map((z) => el('th', null, `${z[0].toUpperCase()}${z.slice(1)}`)));
+        t.append(hr);
+        for (const k of TOUCH) {
+          const tr = el('tr');
+          tr.append(el('td', 'l', TOUCH_NAME[k]));
+          for (const z of sizes) {
+            const v = rateText(tb[z] && tb[z][k]), td = el('td');
+            if (v === null) td.innerHTML = '<i class="unk">--</i>'; else td.textContent = v;
+            td.setAttribute('aria-label', `${TOUCH_NAME[k]}, ${z} corners: ${v === null ? 'not known yet' : v === 'quick' ? 'quicker than the recording can time' : `${v} g a second`}`);
+            tr.append(td);
+          }
+          t.append(tr);
+        }
+        pn.append(el('h3', null, 'By kind of corner'), t, el('p', 'note', `The middle corner of each kind, from ${MATRIX_MIN} corners. Quick: quicker than the recording can time. A tight corner takes the brakes on harder; that is the road, not a fault.`));
+      }
+      const tl = touchTrendLines(p.touch_trend);
+      if (tl.length) pn.append(...tl.map((x) => el('p', 'dp-say', x)));
       pn.append(el('p', 'note', 'Read from the g the phone measures ten times a second: how fast the load comes on and goes off between a fifth and four fifths of its peak. Drives recorded before the phone kept every reading have none to give.'));
       host.append(pn);
     }
@@ -646,7 +741,7 @@
     say.append(el('p', 'note', 'A difference is said only when it is large, far beyond chance, and repeats drive after drive. Lefts against rights, hills, time and cars are compared on corners of the same size.'));
     host.append(say);
 
-    if (p.matrix.some((m) => SKILLS.some((k) => m.levels[k] !== null))) {
+    if (p.matrix.some((m) => MEASURES.some((k) => m.levels[k] != null))) {
       const grid = el('div', 'panel');
       grid.append(el('h2', null, 'By kind of corner'));
       // a row a skill, a column a size, lefts and rights side by side in it: six columns of numbers do not fit a phone
@@ -656,14 +751,14 @@
       const sub = el('tr', 'dp-lr');
       sub.append(el('td', 'l', ''), ...sizes.map(() => { const td = el('td'); td.append(el('span', null, 'left'), el('span', null, 'right')); return td; }));
       t.append(sub);
-      for (const k of SKILLS) {
+      for (const k of MEASURES.filter((x) => p.skills[x])) {
         const tr = el('tr');
         tr.append(el('td', 'l', WORDS[k].name));
         for (const z of sizes) {
           const td = el('td');
           for (const way of ['L', 'R']) {
-            const m = p.matrix.find((x) => x.dir === way && x.size === z), v = m ? m.levels[k] : null;
-            const n = el('span', v !== null && p.skills[k].level !== null && v <= p.skills[k].level - 10 ? 'low' : null);
+            const m = p.matrix.find((x) => x.dir === way && x.size === z), v = m && m.levels[k] != null ? m.levels[k] : null;
+            const n = el('span', v !== null && p.skills[k] && p.skills[k].level !== null && v <= p.skills[k].level - 10 ? 'low' : null);
             if (v === null) n.innerHTML = '<i class="unk">--</i>'; else n.textContent = String(v);
             n.setAttribute('aria-label', `${z} ${way === 'L' ? 'lefts' : 'rights'}: ${v === null ? 'not known yet' : v}`);
             td.append(n);
@@ -677,7 +772,7 @@
     }
   }
 
-  const api = { SKILLS, observe, profile, swing, excess, SKILL_MIN, WORDS, findingLine, styleLines, touchLines, touch, TOUCH, cardLine, focusLines, render,
+  const api = { SKILLS, observe, profile, swing, excess, SKILL_MIN, WORDS, findingLine, styleLines, touchLines, touchTrendLines, driveTouchLines, paceLines, PACE, MEASURES, touch, TOUCH, driveTouch, DRIVE_TOUCH_MIN, cardLine, focusLines, render,
     PRACTICE_MIN, practice, drivePractice, practiceLine, practiceSummary, localStamp, loadPlan, savePlan, PLAN_KEY };
   if (typeof module !== 'undefined' && module.exports) module.exports = api; else root.ApexDriverProfile = api;
 })(typeof window !== 'undefined' ? window : globalThis);

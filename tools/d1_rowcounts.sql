@@ -65,6 +65,7 @@ SELECT
   (SELECT COUNT(*) FROM ta_pool) AS ta_pool,
   (SELECT COUNT(*) FROM ta_weeks) AS ta_weeks,
   (SELECT COUNT(*) FROM ta_entries) AS ta_entries,
+  (SELECT COUNT(*) FROM ta_joins) AS ta_joins,
   (SELECT COUNT(*) FROM roadbooks) AS roadbooks,
   (SELECT COUNT(*) FROM roadbook_roads) AS roadbook_roads,
   (SELECT COUNT(*) FROM roadbook_follows) AS roadbook_follows,

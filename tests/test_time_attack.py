@@ -77,3 +77,14 @@ def test_entered_stage_copy(out):
 
 def test_only_your_own_backed_up_stages_of_1_to_25_km_go_up(out):
     assert out["putUp"] == ["a"]
+
+
+def test_the_log_sends_runs():
+    """The Log (analysis.html) loads time_attack.js and sends the week's runs after the stages sync: without it the board
+    never had a time on it (round two sweep, 2026-11-11)."""
+    with open(os.path.join(ROOT, "web", "analysis.html"), encoding="utf-8") as f:
+        page = f.read()
+    assert '<script src="time_attack.js"></script>' in page
+    sync = page[page.index("async function syncSegments()"):]
+    sync = sync[:sync.index("const act = segs.find(")]
+    assert "ApexTimeAttack.sendRuns(ApexSync, segs, passesFor)" in sync

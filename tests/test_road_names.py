@@ -67,3 +67,26 @@ console.log(JSON.stringify(steps));
     assert p.returncode == 0, p.stderr
     assert json.loads(p.stdout) == ["Dry Ridge Road", "Dry Ridge Road", "Dry Ridge Road", None,
                                     "Bank Street", "Bank Street", "Bank Street", "Bank Street", None, "Mill Road", "Dry Ridge Road"]
+
+
+TRACK = r"""
+const R = require('./web/road_names.js');
+const line = (name, coords) => ({ properties: { name }, geometry: { type: 'LineString', coordinates: coords } });
+const feats = [line('Dry Ridge Road', [[-84.75, 39.2400], [-84.70, 39.2400]]), line('Bank Street', [[-84.70, 39.2400], [-84.69, 39.2400]])];
+// east along 39.2400 from -84.74 to -84.69 (about 4.3 km): 3.4 km on Dry Ridge Road, 0.9 km on Bank Street
+const kx = 111320 * Math.cos(39.24 * Math.PI / 180), lat = [], lon = [];
+for (let m = 0; m <= 4300; m += 5) { lat.push(39.2401); lon.push(-84.74 + m / kx); }
+const off = { lat: lat.map((v) => v + 0.01), lon };
+console.log(JSON.stringify({ road: R.roadOfTrack(feats, { lat, lon }), off: R.roadOfTrack(feats, off), none: R.roadOfTrack([], { lat, lon }),
+  short: R.roadOfTrack(feats, { lat: [39.24], lon: [-84.7] }),
+  stand: ['', 'web_20261027_080000', 'Drive 10/26/2026 5:03 PM', 'my trip'].map((n) => R.isStandInName(n, 'my trip.csv')),
+  kept: ['Sunday run', 'Dry Ridge Road', 'Drive to the coast'].map((n) => R.isStandInName(n, 'x.csv')) }));
+"""
+
+
+def test_an_imported_drive_is_named_after_its_road():
+    out = json.loads(subprocess.run([NODE, "-e", TRACK], capture_output=True, text=True, check=True, cwd=Path(__file__).resolve().parents[1]).stdout)
+    assert out["road"] == "Dry Ridge Road"
+    assert out["off"] is None and out["none"] is None and out["short"] is None   # 1 km off any road, no tiles: unknown
+    assert out["stand"] == [True, True, True, True]
+    assert out["kept"] == [False, False, False]

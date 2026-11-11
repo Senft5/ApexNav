@@ -14,6 +14,122 @@ migration and nothing new is stored about you; the cost is that a second phone s
 Roadbook followers are counted, never named, because a public book's followers can be strangers.
 
 Undo: revert the PR (no data changed).
+## 2026-11-11 (roam-c-boot-budget): an e2e check on what the map page loads and runs before it is ready (claude/roam-c-boot-budget)
+
+New e2e flow "startup budget" (IDEAS P-06): it loads index.html and fails if the page needs more than 3.6 MB of its own
+scripts, more than 145 of them, more than 2 s of script CPU, or a task over 1.5 s before it is ready. Today it is 3.23 MB
+in 130 scripts, 0.12 s and 0.17 s, so bytes and count have about a tenth of headroom (exact numbers, never flaky) and CPU
+only catches a gross regression (runners vary). It takes about a second. Calls: same-origin scripts only (the map's style
+and tiles are the network's, not ours); budgets are raised on purpose in the PR that needs it, with the reason.
+
+Undo: delete the flow (e2e/smoke.js `BOOT`), or raise a budget.
+
+## 2026-11-11 (roam-a brake heat): the co-driver warns when your brakes are getting hot (claude/project-thread-h7xxmf)
+
+New, my call, as the free-roaming thread. On a long spirited descent the co-driver now says once "Brakes are getting
+hot. Use a lower gear and ease off." (and shows it), and a drive's page says when the brakes got warm or hot. Nobody can
+see a brake disc from a phone, so this is a model: the energy the car loses beyond rolling and air drag (from GPS speed
+and height) heats the discs, and the air cools them. It never says a temperature, the page says it is an estimate, and
+it counts engine braking as brake work, so it errs toward warning. Ordinary hills stay quiet (the two demo drives never
+get past cool). Nothing leaves the phone. Undo: revert the PR, or remove the `noteBrakes(...)` calls in cockpit.js to keep
+only the drive page line.
+
+
+## 2026-11-11 (routing round two, part 2): mid-drive, Vetta offers to go round a police report; a late loop drops a stage before going home
+
+- **A police report on your route ahead is offered, not taken.** Between 0.8 and 25 km ahead, with Police reports on, a
+  toast says how far and has Go round (15 s). I didn't reroute on my own: a report can be gone by the time you get there,
+  and a surprise reroute mid-drive is worse than a tap. Nearer than 0.8 km there's no time to turn off, so only the voice's
+  usual call is made. Undo: drop `policeAheadTick` from feedReported.
+- **Go round is kept only if it goes round.** If the new way still passes within 150 m, it says so and you stay put.
+- **A late loop skips its next stage before offering Head home.** "Running 12 min late for home." now has "Skip Foothills
+  Parkway" while a stage you haven't begun is ahead; the stage you're on is never cut. Undo: `homeByAction` returning home always.
+## 2026-11-11 (routing round two): Avoid cameras keeps every route off them, speed cameras with plate readers
+
+With Avoid → Cameras on, only one of the routers was told about the cameras; the others' routes (our own router's, the
+quickest on highways, stage plans) still competed and could win while driving past one. Now every plan carries the
+cameras near the trip, our router costs the road a camera sits on 8 times its time, and a route that still drives past
+one (within 35 m) gives way to any route that doesn't. Fixed speed cameras are in the same list as plate readers, under
+the same switch, as on the map; you asked for speed cameras to be avoided too. A camera on a crossing road doesn't count
+against a route (35 m, not the card's 60 m count). When nothing gets round, the card says "Couldn't avoid cameras".
+
+Undo: revert the PR (no data changed). To split speed cameras onto their own switch, filter `kind` in `camsForTrip` and
+`camerasAround` (cockpit.js) by a new avoid key.
+## 2026-11-11 (sweep round two): time attack counts only a week you entered (claude/project-thread-g9yher)
+
+Two bugs in the weekly time attack (#393). The Log never sent any runs, so every board stayed empty. And the server
+counted a run on any copy of the week's stage, so a friend who had shared that stage with you by hand, or a duel on
+it, would have put your time on a board every member sees without your ever pressing Enter; Take my time off also
+lasted only until your next sync sent the run again. Now pressing Enter is what puts you in that week (migration 0051,
+`ta_joins`), only those weeks take your times, and Take my time off takes you out of the week until you enter again.
+The owner of the stage enters like anyone else; putting a stage up isn't entering. A run no road car could set is now
+skipped instead of rejecting the whole upload.
+
+Undo: revert the PR, then `DROP TABLE ta_joins` on both databases.
+## 2026-11-11 (round two analysis): touch by kind of corner, month and drive is said as facts, never as a grade (claude/project-thread-gd7nre)
+
+Your touch now has a table by size of corner and a line a month, and each drive's Log page says its own touch beside
+your usual ("Brakes on: about 1.1 g a second on this drive, 0.8 usually"). The call: these are rates, never a level or
+"better/worse". A tight corner takes the brakes on harder because of the road, and a sharp input is not a fault on its
+own; grading it would coach the wrong thing. A drive needs 8 timed corners before it says anything.
+
+Undo: hide the table and the month lines in `render` (the `dp-touch-by` block), and the drive page's `#dvTouch` panel.
+
+## 2026-11-11 (ui-round-two): Settings and every sheet that rises over a page match the rest (claude/project-thread-5sbga7)
+
+Every sheet that slides up over a page (Settings and each setting under it, route Options, Best roads nearby, a friend's
+or a crew's sheet, roadbooks, duels) now rises on the same soft shadow as the deck instead of a hard rule and shadow, and
+its title is set large like the Garage's. Every mode switch (Units, Driving side, Roads, Map motion and the rest) is now a
+soft well with the chosen key in ink, instead of a heavy ink frame with a pressed-in thumb; the choice reads the same.
+The on/off slide switches were left alone, since you asked for those to be unmistakable. Undo: delete the "sheets over a
+page" block at the end of web/signature.css. Shots: design-pass/round-two/settings-before-after.png.
+
+## 2026-11-11 (round two analysis): Pace in Your driving, but never "Work on: Pace" (claude/project-thread-gd7nre)
+
+You asked for more speed-based features. Your driving now has a "Your pace" panel: the Score's own Pace credit (full
+from 85 % to 100 % of a corner's sane limit, less above it) as a level, month by month, by kind of corner (a Pace row in
+the table), where it is measurably lower or higher ("Pace is lower downhill: 71 against 88 uphill"), and how often a
+corner went over its sane limit. The call: Pace is never the strongest skill, never "Work on" and never a practice, and
+its findings are said apart from technique ones, because a page that coaches someone to carry more speed on a public
+road is the one thing App Review (1.4) and a crash would both hold against us. APP_REVIEW.md has a row with the fallback.
+
+Undo: let pace be a Work on by adding it to SKILLS (core/driver_profile.py and web/driver_profile.js); hide the panel
+by removing the `dp-pace` block in `render`.
+
+## 2026-11-11 (ui-round-two): the Garage and People match the Log and the home screen (claude/project-thread-5sbga7)
+
+The Garage's title is now set large like the place name on the map, its gear is a key laid on the page instead of an
+ink box, each car is a paper card with its name large and its keys as soft wells, your daily car carries the red dot,
+and the look you use is the one card ringed in ink. On People, Friends and Crews are the same size as Drives and Stages
+on the Log, crew tiles are paper, and a friend's request carries the red dot as the one thing to answer. Example and
+empty states stay drawn in pencil. No words or places changed.
+
+Undo: revert the PR (CSS only).
+
+## 2026-11-11 (roam-c-safe-area-split): the safe-area e2e check runs as one flow a phone shape (claude/roam-c-safe-area-split)
+
+The safe-area flow (every screen under the island, home indicator and corners) walked all four phone shapes in one
+4.5-minute flow, the longest in CI, so whichever e2e shard got it was the slowest. It is now four flows, `safe areas
+(portrait)` and so on, with the same 16 screens and checks each, and the scanner's self-check in the first; each still
+writes its own contact sheet. A failure now names its phone shape. The shards even out (by the last CI log, 5.9 to 6.7
+min of flows each, from 5.8 to 6.9): a small gain at four jobs, and it lets a fifth job pay off later (about 5.2 min
+each), which I left at four because each job pays its own minute of setup in Actions minutes.
+
+Undo: revert the PR (one flow again; set `LONG_S` back to 258 s for it).
+## 2026-11-11 (roam-c-ci-shards): the e2e check runs as four jobs side by side (claude/roam-c-ci-shards)
+
+The e2e check ran 173 flows one after another in 28-31 minutes against a 35-minute limit, and every PR waited on it. It
+now runs as four jobs at once, `e2e (1/4)` to `e2e (4/4)`, each taking a quarter of the flows (smoke.js `SHARD=k/n`),
+and one small job still named `e2e` that is green only when all four are, so anything that reads the check by name sees
+no change. Calls made: (1) four jobs, not more: each pays about a minute of setup, and the safe-area flow alone is about
+4.5 minutes, so more jobs would not finish sooner. (2) Flows are dealt longest first to the lightest job, from a short
+table of the 18 flows over 15 s in smoke.js (`LONG_S`); a flow not in it counts as 5 s, so a renamed or new flow still
+runs, it is only dealt as a short one. From the last CI log that gives 6.4 / 6.5 / 5.8 / 6.9 minutes of flows (plain
+every-4th dealing gave 9.0 for one job). (3) The job limit is 25 minutes. (4) The Playwright browser is cached by its
+version; npm installs only Playwright itself (no lock file to cache), so there is nothing else worth caching. Coverage
+is the same: `LIST=1` over the four shards gives exactly the 173 flows of an unsharded run.
+
+Undo: revert the PR, or set the matrix to `[1]` and `SHARD` to `1/1` (one job running every flow, as before).
 ## 2026-11-11 (roam-b-crowd-bumps): a bump is called on a planned route once two members felt it (claude/roam-b-crowd-bumps)
 
 Each 5 m section of road data now also says whether the phone felt a sharp bump there (yes, no or unknown; never a g
@@ -36,6 +152,7 @@ quicker one is counted as "quick" rather than read too slow, and when most are q
 (quicker than the recording can time)" instead of a number. Finer timing would need the recording to keep the raw frames.
 
 Undo: revert the PR (kept observations rebuild on the next visit, `OBS_VERSION` 2 back to 1).
+
 ## 2026-11-11 (ui-round-two): the Log looks like the rest of the app (claude/project-thread-5sbga7)
 
 The Log is its own page shown over the map, and it had kept the old look: opening it swapped the tab bar's red dot for a
