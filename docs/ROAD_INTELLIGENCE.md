@@ -173,11 +173,20 @@ OSM corners are often simplified polylines; real radii hide between vertices. Ya
 over speed gives true curvature at 100 Hz. Crowd passes overwrite map curvature where
 they disagree, so pace notes improve for everyone, including people without sensors.
 
-### 4.3 Bayesian hazard verification **[next]**
+### 4.3 Bayesian hazard verification **[built 2026-11-11 for bumps]**
 Each pass over a 5 m bin is an observation. Hazard presence is a Beta posterior updated
 by hits and clean passes, with recency decay (potholes get filled). A bump is
 `verified` at posterior > 0.8 with ≥ 2 independent drivers. Only verified hazards are
 called in cruise. (Motivation: on our own data, 1 of 7 single-pass bumps repeats.)
+
+Built: the phone sends `bp` per bin (`spike_mask` / `Core.spikeMask`, parity-tested, the
+same spike rule as `detect_hazards`; unknown at walking pace or without vertical peaks).
+The server keeps hits and passes weighted for a 120-day half-life and counts distinct
+drivers per spot without storing who (contribute.ts `BUMP`). Read over ±2 bins (two passes
+over one pothole land a bin apart), presence is Beta(0.5 + hits, 0.5 + misses): two hits
+and no misses give 0.83 (verified with two drivers), three of four 0.70 (not). Verified
+bumps become `Bump` notes on planned routes, called in cruise too (cockpit.js
+`applyCrowdBumps`, `noteworthyInCruise`), the strip reading "Confirmed by members".
 
 ### 4.4 Camber truth **[built]**
 `a_y = v ω_z cos φ − g sin φ`, turn-relative, aggregated over passes.
