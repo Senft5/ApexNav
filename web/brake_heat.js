@@ -116,6 +116,21 @@
       + `${more ? `, and ${more} more` : ''}. A lower gear saves the brakes.`;
   }
 
+  /** The descent to say on the road now, as you near its top (IDEAS V-12): the first in `list` whose top is within
+   *  AHEAD_M ahead of atM (or up to PAST_M behind it: the call is still worth it a little way down), not yet in `said`
+   *  (a Set of start_m). null when none, or when atM is unknown. */
+  const AHEAD_M = 500.0, PAST_M = 300.0;
+  function descentAhead(list, atM, said) {
+    if (!Array.isArray(list) || !finite(atM)) return null;
+    return list.find((d) => d && finite(d.start_m) && atM >= d.start_m - AHEAD_M && atM <= d.start_m + PAST_M
+      && !(said && said.has(d.start_m))) || null;
+  }
+  /** What the co-driver says at the top: spoken(m) gives a distance as it is said ("3.7 miles"); percent in words. */
+  function descentCall(d, spoken) {
+    if (!d || !finite(d.grade) || typeof spoken !== 'function') return null;
+    return `Long descent ahead: ${spoken(d.end_m - d.start_m)} at ${Math.round(d.grade * 100)} percent. A lower gear saves the brakes.`;
+  }
+
   /** What the co-driver says when the brakes get hot. */
   const CALL_TEXT = 'Brakes are getting hot. Use a lower gear and ease off.';
 
@@ -128,6 +143,6 @@
     return `Your brakes got hot${far} on this drive, by Vetta\u2019s estimate from your speed and the hills. On a long descent, a lower gear lets the engine take some of the work.`;
   }
 
-  const api = { create, overTrack, driveText, longDescents, descentText, tauS, level, CALL_TEXT, WARM_K, HOT_K };
+  const api = { create, overTrack, driveText, longDescents, descentText, descentAhead, descentCall, tauS, level, CALL_TEXT, WARM_K, HOT_K };
   if (typeof module !== 'undefined' && module.exports) module.exports = api; else root.ApexBrakeHeat = api;
 })(typeof window !== 'undefined' ? window : globalThis);
