@@ -8,6 +8,11 @@
   undone by the next sync. **Migration 0051 `ta_joins`** (additive): enter writes it, runs / circuits / `entered` read it,
   leave deletes it. Implausible runs are skipped (`refused`), not a 400 for the batch. Export `time_attack_entered`.
 - 0051 applied on preview and prod 2026-11-11 (owner: "go on 0051"), each with its d1_migrations row.
+- Roadbooks: `booksMine` bound up to 131 values in one query (D1 allows 100): the roads are read in chunks of 90 (`BIND_CHUNK`).
+- Main's red e2e "reported hazards": a web drive with no fix for 5 s drops back to the replay, so on a slow runner the
+  report's word went to the toast, not the status line. The flow now keeps feeding fixes; its wait dumps the screen state.
+- CI: apexkit-linux runs in `container: swift:6.0-jammy` (setup-swift's keyserver refresh timed out every run).
+- Next: the rest of the sweep (iOS shell, CarPlay, performance) was not reached this round.
 
 ## Session 2026-11-11 (fable-time-attack): weekly time attack per area (claude/fable-time-attack, off origin/main)
 
