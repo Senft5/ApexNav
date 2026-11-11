@@ -90,6 +90,8 @@
   <script src="pro.js" defer></script>
   <script src="route_tuning.js" defer></script>
   <script src="theme_sounds.js" defer></script>
+  <script src="audio_bus.js" defer></script>
+  <script src="soundtrack.js" defer></script>
   <script src="week_digest.js" defer></script>
   <script src="drive_card.js" defer></script>
   <script src="road_portrait.js" defer></script>
@@ -132,6 +134,8 @@
   <script src="coverage.js" defer></script>
   <script src="recording.js" defer></script>
   <script src="end_line.js" defer></script>
+  <script src="end_reveal.js" defer></script>   <!-- the drive-ended card's reveal: the driven line, the count, the ledger -->
+  <script src="first_run.js" defer></script>    <!-- the welcome's road and the dot that drives it -->
   <script src="road_memory.js" defer></script>
   <script src="road_carry.js" defer></script>
   <script src="contributor.js" defer></script>
@@ -867,28 +871,88 @@
     .explain-card .note { margin: 0; font-size: 15px; line-height: 1.4; color: var(--panel-dim); }
     /* an instrument says what it is when tapped, parked or in a replay (PR-1); the cursor says so on a desktop */
     #cluster [data-explain], #notes [data-explain] { cursor: help; }
-    .end-kicker { margin: 0; font-size: 12px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; color: var(--accent); }
-    .end-card h2 { margin: 4px 0 0; font-size: 28px; line-height: 1.1; }
-    .end-meta { margin: 4px 0 0; color: var(--panel-dim); font-size: 15px; }
-    .end-score { display: grid; grid-template-columns: auto 1fr; align-items: baseline; column-gap: 6px; margin: 18px 0 0; padding: 12px 0; border-top: 2px solid var(--panel-ink); border-bottom: 1px solid var(--rule); }
-    .end-score b { font: 800 84px/0.9 var(--font-num); font-variant-numeric: tabular-nums; }
+    /* design pass "first and last": the card is a reveal. Head; then the hero between an ink rule and a hairline, the Score
+       large with the driven line drawn beside it (#endGlyph, end_reveal.js); then the facts as a ledger; then words; then keys.
+       One red thing: the dot at the end of the line. Every animation is a `from` with a backwards fill, so the page at rest is
+       the whole page and reduced motion (or a missing script) leaves nothing hidden. */
+    .end-card { --arrive: cubic-bezier(0.2, 0.8, 0.2, 1); }
+    #endCard > .card-sheet { border-top: 1px solid var(--rule); box-shadow: 0 -14px 34px rgba(0, 0, 0, 0.2); padding-top: 22px; }
+    .end-kicker { margin: 0; font-size: 13px; font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase; color: var(--panel-dim); }
+    .end-card h2 { margin: -6px 0 0; font-size: 34px; font-weight: 800; line-height: 1.04; }
+    .end-score { position: relative; display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: end; column-gap: 6px; margin: 4px 0 0; padding: 14px 0 12px; border-bottom: 1px solid var(--hair, var(--rule)); }
+    .end-score::before { content: ""; position: absolute; left: 0; right: 0; top: 0; height: 2px; background: var(--panel-ink); transform-origin: left; }
+    .end-score b { position: relative; grid-column: 1; grid-row: 1; font: 800 108px/0.82 var(--font-num); font-variant-numeric: tabular-nums; transform-origin: left bottom; }
     .end-score b.unk { font-weight: 600; color: var(--panel-dim); letter-spacing: 0.06em; }
-    .end-score small { font-size: 18px; font-weight: 600; color: var(--panel-dim); }
-    .end-score.no-score b { grid-column: 1 / -1; font: 700 22px/1.25 var(--font-ui); letter-spacing: 0; color: var(--panel-ink); }   /* D-6: the drive, in words */
+    .end-score small { grid-column: 2; grid-row: 1; padding-bottom: 4px; font: 600 22px/1 var(--font-num); color: var(--panel-dim); }
+    .end-score.no-score b { grid-column: 1 / span 2; align-self: center; font: 700 26px/1.15 var(--font-num); letter-spacing: 0; color: var(--panel-ink); }   /* D-6: the drive, in words, set as a title */
     .end-score.no-score small, .end-score.no-score span { display: none; }
     /* design pass 9: the number against your usual, on the label's line at the far end ("31 over your usual") */
     .end-score:has(#endUsual:not([hidden])) span { grid-column: 1; }
-    .end-score em { justify-self: end; align-self: end; font-style: normal; font-size: 15px; font-weight: 600; color: var(--panel-ink); }
+    .end-score em { grid-column: 2 / -1; grid-row: 2; justify-self: end; align-self: end; font-style: normal; font-size: 15px; font-weight: 600; color: var(--panel-ink); }
     .end-score em[hidden], .end-score.no-score em { display: none; }
+    /* the driven line, north up, in ink; a ring where it began and the red dot where it ended */
+    .end-glyph { grid-column: 3; grid-row: 1; align-self: center; width: 112px; height: 112px; }
+    .end-glyph svg { display: block; overflow: visible; }
+    .end-card.no-glyph .end-glyph { display: none; }
+    .eg-line { fill: none; stroke: var(--panel-ink); stroke-width: 3; stroke-linecap: round; stroke-linejoin: round; }
+    .eg-from { fill: var(--panel); stroke: var(--panel-ink); stroke-width: 2; }
+    .eg-now { fill: var(--accent); stroke: var(--panel); stroke-width: 2; }
+    .eg-from, .eg-now { transform-box: fill-box; transform-origin: center; }
+    /* the count: the number in the page is the real one; while it counts, its ink is the count laid over it (end_reveal.js) */
+    #endScore.counting { color: transparent; }
+    #endScore.counting::after { content: attr(data-n); position: absolute; left: 0; top: 0; color: var(--panel-ink); }
+    /* still being scored: no number and no "--"; a pen stroke works where the number will stand, and the label says so */
+    #endScore[aria-busy] { color: transparent; min-width: 96px; }
+    #endScore[aria-busy]::after { content: ""; position: absolute; left: 0; bottom: 14px; width: 96px; height: 4px; background: var(--panel-ink); transform-origin: left; animation: end-work 900ms cubic-bezier(0.4, 0, 0.2, 1) infinite alternate; }
+    #endScore[aria-busy] ~ small { visibility: hidden; }
+    #endScore[aria-busy] ~ span::after { content: " \00B7  working it out"; }
+    #endShare[aria-disabled="true"] { opacity: 0.45; }
+    /* the facts as a ledger: the numbers in the instrument face, their words beside them; the dots between are for readers */
+    .end-meta { display: flex; flex-wrap: wrap; gap: 8px 0; margin: 0; padding: 2px 0 12px; border-bottom: 1px solid var(--hair, var(--rule)); color: var(--panel-dim); font-size: 15px; }
+    .end-meta:empty { display: none; }
+    .end-meta > i { display: none; }
+    .end-meta .f { flex: 1 1 0; min-width: max-content; padding-right: 12px; white-space: nowrap; }
+    .end-meta .f + i + .f { padding-left: 12px; border-left: 1px solid var(--hair, var(--rule)); }
+    .end-meta .f b { font: 700 28px/1 var(--font-num); font-variant-numeric: tabular-nums; color: var(--panel-ink); }
+    @keyframes end-pen { from { stroke-dasharray: 1; stroke-dashoffset: 1; } to { stroke-dasharray: 1; stroke-dashoffset: 0; } }
+    @keyframes end-rule { from { transform: scaleX(0); } }
+    @keyframes end-rise { from { opacity: 0; transform: translateY(6px); } }
+    @keyframes end-pop { from { opacity: 0; transform: scale(0.2); } }
+    @keyframes end-thump { from { transform: scale(1.07); } }
+    @keyframes end-work { from { transform: scaleX(0.1); } }
+    @keyframes end-wait { to { opacity: 0.35; } }
+    @keyframes end-ink { from { opacity: 0.45; } }
+    /* the card opens (.pen): the rule and the line are drawn, 600 and 800 ms; the keys are there within half a second */
+    .end-card.pen .end-score::before { animation: end-rule 600ms var(--arrive) backwards; }
+    .end-card.pen .eg-line { animation: end-pen 800ms cubic-bezier(0.4, 0, 0.2, 1) 80ms backwards; }
+    .end-card.pen .eg-from { animation: end-pop 200ms var(--arrive) backwards; }
+    .end-card.pen .eg-now { animation: end-pop 240ms var(--arrive) 820ms backwards; }
+    .end-card.pen .end-score:has(#endScore[aria-busy]) .eg-now { animation: end-pop 240ms var(--arrive) 820ms backwards, end-wait 900ms ease-in-out 1100ms infinite alternate; }
+    .end-card.pen :is(.end-acts, .end-links) { animation: end-rise 220ms var(--arrive) 240ms backwards; }
+    /* the score lands (.landed; --land is the count's length, 0 for a drive with no score): the number settles with weight,
+       then /1000, the new fact, the words, and last the one ink key comes alive */
+    .end-card.landed #endScore { animation: end-thump 280ms var(--arrive) var(--land, 0ms); }
+    .end-card.landed .no-score #endScore { animation: end-rise 320ms var(--arrive) backwards; }
+    .end-card.landed .end-score small { animation: end-rise 240ms var(--arrive) var(--land, 0ms) backwards; }
+    .end-card.landed .end-score em:not([hidden]) { animation: ob-fade 320ms var(--arrive) var(--land, 0ms) backwards; }
+    .end-card.landed .end-meta .f.new { animation: end-rise 280ms var(--arrive) calc(var(--land, 0ms) + 80ms) backwards; }
+    .end-card.landed .end-line { animation: end-rise 320ms var(--arrive) calc(var(--land, 0ms) + 160ms) backwards; }
+    .end-card.landed #endShare { animation: end-ink 300ms ease-out calc(var(--land, 0ms) + 240ms) backwards; }
+    @media (prefers-reduced-motion: reduce) {
+      .end-card, .end-card *, .end-card *::before, .end-card *::after { animation: none !important; }
+      #endScore[aria-busy] { color: var(--panel-dim); } #endScore[aria-busy]::after { display: none; }
+    }
     /* the solid key is a row of its own from the first frame; under it Mark a stage, sharing the row with Drive it again once
        the drive is stored (it was two keys and an orphan). Nothing changes place when the score lands (U-118): Mark a stage
        only gives up its right half. */
     .end-acts > .solid:not([hidden]) { grid-column: 1 / -1; }
     .end-acts:not(:has(#endAgain:not([hidden]))) > #endStage { grid-column: 1 / -1; }
-    .end-score span { grid-column: 1 / -1; margin-top: 6px; font-size: 12px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; color: var(--panel-dim); }
-    .end-line { margin: 12px 0 0; font-size: 16px; line-height: 1.35; }
-    .end-acts { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 18px; }
+    .end-score span { grid-column: 1 / span 2; grid-row: 2; margin-top: 10px; font-size: 13px; font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase; color: var(--panel-dim); white-space: nowrap; }
+    .end-line { margin: 0; font-size: 16px; line-height: 1.35; }
+    .end-line:empty { display: none; }
+    .end-acts { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 8px; }
     .end-acts .ink-btn { min-height: 52px; }
+    .end-acts .ink-btn:not(.solid) { min-height: 48px; border: 1px solid var(--hair, var(--rule)); background: var(--face); color: var(--face-ink); font-weight: 700; }   /* one ink key; the other two are quiet */
     .end-acts a.ink-btn { display: flex; align-items: center; justify-content: center; text-decoration: none; }
     .end-acts [hidden], .end-links [hidden] { display: none; }
     /* U-88: the drive is the picture behind the card, so the map is dimmed one step, not blacked out */
@@ -903,10 +967,52 @@
     .end-portrait .rp-band svg { display: block; width: 100%; height: 100%; }
     #endCard > .card-sheet { position: relative; z-index: 1; }
     @media (prefers-reduced-motion: reduce) { .end-portrait .rp-road { transition: none; } }
-    .end-links { display: flex; justify-content: space-between; align-items: center; margin-top: 12px; }
+    .end-links { display: flex; justify-content: space-between; align-items: center; margin-top: 0; }
+    #endCard .end-links .linkbtn { text-decoration: none; font-weight: 700; }   /* quiet rows: the action is a word in ink */
     .end-links > * { margin: 0; padding: 0 4px; line-height: 1.2; min-height: 44px; display: inline-flex; align-items: center; }   /* the link and the key on one line, the same box */
+    /* ---------------- the first run (design pass "first and last") ----------------
+       One page that shows the app: the lockup comes from the middle of the screen, where the launch screen and the cover
+       drew it, to its place; a road is drawn across the paper (the brand mark at length: ink dot, line, arrowhead); the red
+       dot, you, drives it while the road book strip under it calls each corner (first_run.js, cockpit.js runOnboarding).
+       The two keys are there from the first frame and a touch anywhere ends the drawing (.ob-skip). Every animation is a
+       `from` with a backwards fill: the page at rest is the whole page, so reduced motion is a still, complete page. */
+    #onboard { --arrive: cubic-bezier(0.2, 0.8, 0.2, 1); padding-top: calc(28px + var(--safe-top)); }
+    body:has(#onboard.show) #boot { opacity: 0; pointer-events: none; transition: none; }   /* the welcome is the whole page: the cover has nothing left to hide */
+    #onboard .grow { display: flex; flex-direction: column; gap: 0; min-height: 0; }
+    #onboard .ob-mark { flex: none; display: block; width: 184px; height: 50px; max-width: 70%; }
+    #onboard h1 { margin-top: 22px; max-width: 10.5em; font-size: 34px; line-height: 1.04; }
+    #onboard .ob-sub { margin-top: 10px; font-size: 17px; }
     .ob-link { margin-top: 10px; font-weight: 600; } .ob-link[hidden] { display: none; }   /* P-1: the link that brought you waits */
-    .ob-strip { width: 100%; max-width: 420px; margin: 26px auto 0; border-top: 2px solid var(--panel-ink); border-bottom: 1px solid var(--rule); text-align: left; }
+    .ob-road { flex: 1 1 0; min-height: 110px; margin: 4px calc(-24px - var(--safe-right)) 4px calc(-24px - var(--safe-left)); }
+    .ob-road svg { display: block; width: 100%; height: 100%; overflow: visible; }
+    .ob-topo { fill: none; stroke: var(--hair, var(--rule)); stroke-width: 1; vector-effect: non-scaling-stroke; }
+    .ob-line { fill: none; stroke: var(--panel-ink); stroke-width: 4.5; stroke-linecap: round; stroke-linejoin: round; }
+    .ob-from, .ob-head { fill: var(--panel-ink); }
+    .ob-apex { fill: var(--panel); stroke: var(--panel-ink); stroke-width: 2; transition: fill 200ms ease-out; }
+    .ob-apex.on { fill: var(--panel-ink); }
+    .ob-you { fill: var(--accent); stroke: var(--panel); stroke-width: 2.5; transition: opacity 200ms ease-out; }
+    .ob-you.gone { opacity: 0; }
+    .ob-from, .ob-head, .ob-apex, .ob-you { transform-box: fill-box; transform-origin: center; }
+    #onboard .stack { margin-top: 22px; }
+    #onboard .linkbtn { text-decoration: none; font-weight: 700; }
+    @keyframes ob-home { from { transform: translate(var(--ob-dx, 0px), var(--ob-dy, 0px)); } }
+    @keyframes ob-rise { from { opacity: 0; transform: translateY(10px); } }
+    @keyframes ob-fade { from { opacity: 0; } }
+    @keyframes ob-pen { from { stroke-dasharray: 1; stroke-dashoffset: 1; } to { stroke-dasharray: 1; stroke-dashoffset: 0; } }
+    @keyframes ob-pop { from { opacity: 0; transform: scale(0.2); } }
+    #onboard.ob-go .ob-mark { animation: ob-home 520ms var(--arrive) backwards; }
+    #onboard.ob-go h1 { animation: ob-rise 420ms var(--arrive) 160ms backwards; }
+    #onboard.ob-go :is(.ob-sub, .ob-link) { animation: ob-rise 420ms var(--arrive) 260ms backwards; }
+    #onboard.ob-go .ob-strip { animation: ob-rise 420ms var(--arrive) 360ms backwards; }
+    #onboard.ob-go .ob-topo { animation: ob-fade 700ms ease-out 300ms backwards; }
+    #onboard.ob-go .ob-from { animation: ob-pop 220ms var(--arrive) 380ms backwards; }
+    #onboard.ob-go .ob-line { animation: ob-pen 1300ms cubic-bezier(0.45, 0, 0.2, 1) 440ms backwards; }
+    #onboard.ob-go .ob-apex { animation: ob-pop 220ms var(--arrive) calc(440ms + var(--at, 0.5) * 1300ms) backwards; }
+    #onboard.ob-go .ob-head { animation: ob-pop 220ms var(--arrive) 1680ms backwards; }
+    #onboard.ob-go .ob-you { animation: ob-pop 260ms var(--arrive) 1500ms backwards; }
+    #onboard.ob-skip, #onboard.ob-skip * { animation: none !important; }
+    @media (prefers-reduced-motion: reduce) { #onboard, #onboard * { animation: none !important; transition: none !important; } }
+    .ob-strip { width: 100%; max-width: 420px; margin: 0 auto; border-top: 2px solid var(--panel-ink); border-bottom: 1px solid var(--rule); text-align: left; }
     .ob-strip .notes { position: static; min-height: 84px; padding-left: 0; padding-right: 0; }
     .ob-strip .notes.notes-roadbook { height: 92px; padding-top: 6px; }   /* U-133: the welcome's loop holds still too */
     /* Night is a mode, not a token swap (REVIEW.md roadmap 11): bigger numbers, fewer things, the map quieter (themes.js) */
@@ -1289,9 +1395,24 @@
     .overlay p { font-size: 15px; line-height: 1.45; color: var(--panel-dim); }
     .overlay .stack { display: grid; gap: 12px; margin-top: auto; }
     .overlay .grow { flex: 1; display: grid; align-content: center; gap: 16px; }
-    .perm { display: grid; grid-template-columns: 96px 1fr; gap: 4px 12px; font-size: 15px; border-top: 1px solid var(--hair, var(--panel-dim)); padding-top: 12px; }
-    .perm b { font-weight: 600; }
-    .perm span { color: var(--panel-dim); }
+    /* design pass "first and last": the page after the welcome, in its hand. The same title face, an ink rule, each thing a
+       drive uses as a row with a small pen drawing that draws on, and the red key with its dot, because this key is go. */
+    #permSheet > .card-sheet { gap: 0; padding-top: 26px; border-top: 1px solid var(--rule); box-shadow: 0 -14px 34px rgba(0, 0, 0, 0.2); }
+    #permSheet h2 { font-size: 34px; font-weight: 800; line-height: 1.04; }
+    .perm { display: grid; margin-top: 16px; border-top: 2px solid var(--panel-ink); }
+    .perm-row { display: grid; grid-template-columns: 40px minmax(0, 1fr); column-gap: 16px; align-items: center; padding: 11px 0; border-bottom: 1px solid var(--hair, var(--rule)); }
+    .perm-row[hidden] { display: none; }
+    .perm-row svg { grid-row: 1 / span 2; width: 40px; height: 40px; fill: none; stroke: var(--panel-ink); stroke-width: 2.5; stroke-linecap: round; stroke-linejoin: round; }
+    .perm-row svg .dot { fill: var(--panel-ink); stroke: none; }
+    .perm-row b { align-self: end; font: 700 20px/1.1 var(--font-num); }
+    .perm-row span { align-self: start; font-size: 15px; line-height: 1.35; color: var(--panel-dim); }
+    #permSheet #permNote { margin: 14px 0 18px; }
+    #permGo { width: 100%; }
+    #permGo.rec-key::before { content: ""; flex: none; width: 12px; height: 12px; border-radius: 50%; background: currentColor; }
+    #permNo { margin-top: 6px; justify-self: center; text-decoration: none; font-weight: 700; }
+    #permSheet.show .perm-row path { animation: ob-pen 700ms cubic-bezier(0.45, 0, 0.2, 1) calc(180ms + var(--i, 0) * 110ms) backwards; }
+    #permSheet.show .perm-row .dot { animation: ob-fade 200ms ease-out calc(700ms + var(--i, 0) * 110ms) backwards; }
+    @media (prefers-reduced-motion: reduce) { #permSheet.show .perm-row :is(path, .dot) { animation: none; } }
     /* Location off (the driver said no): the sheet is that, said once, and the way back; the list of what a drive uses is put away */
     #permSheet.loc-off .perm { display: none; }
     #permSheet.loc-off #permNote { font-size: 16px; line-height: 1.4; }
@@ -1582,8 +1703,9 @@
       #onboard.show { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); column-gap: 32px; align-content: center; align-items: center; }   /* 1 */
       #onboard .grow { display: contents; }
       #onboard .grow > svg, #onboard h1, #onboard .grow > p { grid-column: 1; }
-      #onboard .ob-strip { grid-column: 2; grid-row: 1 / span 2; margin: 0; flex: none; }
-      #onboard .stack { grid-column: 2; margin-top: 12px; }
+      #onboard .ob-road { grid-column: 1; margin: 0; height: 96px; min-height: 0; }
+      #onboard .ob-strip { grid-column: 2; grid-row: 1 / span 3; margin: 0; flex: none; }
+      #onboard .stack { grid-column: 2; grid-row: 4 / span 2; margin-top: 12px; }
       #hzOverlay .hz-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }                                 /* 4 */
       #hzOverlay .hz-grid button { min-height: 56px; }
       .overlay.dim .card-sheet { max-height: 100dvh; overflow-y: auto; }
@@ -1591,6 +1713,25 @@
       #endCard .end-card > * { grid-column: 1; }
       #endCard .end-card > .end-line, #endCard .end-card > .end-acts, #endCard .end-card > .end-links { grid-column: 2; }
       #endCard .end-card > .end-line { grid-row: 1 / span 2; }
+      /* design pass "first and last": on its side the hero is shorter so the card and its keys fit the height */
+      #endCard > .card-sheet { padding-top: 14px; }
+      #endCard .end-card > .end-line { grid-row: 1 / span 4; align-self: start; }
+      #endCard .end-card:has(> .end-line:empty) > .end-acts { grid-row: 2 / span 2; align-self: start; margin-top: 0; }
+      #endCard .end-card:has(> .end-line:empty) > .end-links { grid-row: 4; align-self: start; }
+      .end-card h2 { font-size: 28px; }
+      .end-score { padding: 10px 0 8px; } .end-score b { font-size: 76px; } .end-glyph { width: 72px; height: 72px; } .end-glyph svg { width: 72px; height: 72px; }
+      .end-score.no-score b { font-size: 22px; }
+      .end-meta .f b { font-size: 22px; } .end-meta { padding-bottom: 8px; }
+      #permSheet > .card-sheet { padding-top: 14px; }
+      #permSheet h2 { font-size: 26px; }
+      .perm { grid-template-columns: repeat(2, minmax(0, 1fr)); column-gap: 20px; margin-top: 8px; }
+      .perm-row { padding: 6px 0; grid-template-columns: 28px minmax(0, 1fr); column-gap: 10px; }
+      .perm-row svg { width: 28px; height: 28px; }
+      .perm-row b { font-size: 17px; }
+      #permSheet #permNote { margin: 8px 0 10px; }
+      #permSheet .card-sheet { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); column-gap: 20px; }
+      #permSheet .card-sheet > :is(h2, .perm, #permNote) { grid-column: 1 / -1; }
+      #permNo { margin-top: 0; }
       html[data-theme="tapedeck"] .cluster-dials { grid-template-columns: var(--dial) minmax(0, 1fr); }        /* 6: the meters get a row */
       html[data-theme="tapedeck"] .cluster-dials > .dial-g { grid-column: 1 / -1; width: 100%; height: auto; aspect-ratio: auto; }
       html[data-theme="tapedeck"] .dial-g > .vfd-meters { grid-template-columns: 1fr 1fr; column-gap: 16px; }
@@ -1961,7 +2102,11 @@
             <div class="switches">
               <button class="sw" data-toggle="haptics"><i></i><span>Haptics</span></button>
               <button class="sw" data-toggle="keys"><i></i><span>Key sounds</span></button>
+              <button class="sw" data-toggle="soundtrack"><i></i><span>Soundtrack</span></button>
             </div>
+            <!-- the Soundtrack (soundtrack.js, audio_bus.js; ARCHITECTURE section 5): off until asked for; what it follows, said plainly -->
+            <p class="co-row" id="soundtrackRow"><span>Music made by the road, in a drive.</span><button class="linkbtn" id="soundtrackHear">Hear a sample</button></p>
+            <p class="note" id="soundtrackNote">Soundtrack: it builds into each corner, fills out as the road gets busier and settles on the straights. It follows the road, never your speed. It steps back under the co-driver's voice, and thins out when you are over Sight.</p>
             <button class="sw" id="liveVoiceBtn" role="switch" aria-checked="false"><i></i><span>Speak road names</span></button>
             <p class="note" id="liveNote" role="status" aria-live="polite"></p>
             <p class="note">Notes: Full calls every corner; Quiet only hazards and cameras; Auto calls corners once you are cornering with some purpose, quiet otherwise. The words and the voice work offline.</p>
@@ -2009,8 +2154,8 @@
         <div class="card-sheet end-card">
           <p class="end-kicker">Drive saved</p>
           <h2 id="endName">--</h2>
+          <div class="end-score"><b id="endScore">--</b><small>/1000</small><span>Vetta Score</span><em id="endUsual" hidden></em><i class="end-glyph" id="endGlyph" aria-hidden="true"></i></div>
           <p class="end-meta" id="endMeta"></p>
-          <div class="end-score"><b id="endScore">--</b><small>/1000</small><span>Vetta Score</span><em id="endUsual" hidden></em></div>
           <p class="end-feel" id="endFeel" hidden></p>   <!-- panel round 2, HE-1: what this phone felt, only when measured -->
           <p class="end-feel" id="endPractice" hidden></p>   <!-- IDEAS D-27: the skill you are practicing, on this drive -->
           <p class="end-line" id="endLine"></p>
@@ -2107,7 +2252,7 @@
 
   <div class="overlay" id="onboard" role="dialog" aria-modal="true" aria-label="Welcome to Vetta">
     <div class="grow" data-step="1">
-      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 372 100" width="184" height="50" style="max-width:70%;height:auto" role="img" aria-label="Vetta">
+      <svg class="ob-mark" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 372 100" width="184" height="50" role="img" aria-label="Vetta">
         <style>.apex{fill:var(--brand-accent,var(--accent,#C8102E))}</style>
         <defs><clipPath id="cap"><rect x="0" y="26" width="372" height="48"/></clipPath></defs>
         <circle cx="34" cy="84" r="8" fill="currentColor"/>
@@ -2123,9 +2268,28 @@
         </g>
       </svg>
       <h1>Your co-driver for the long way home.</h1>
-      <p>Calls every corner before you reach it.</p>
+      <p class="ob-sub">Calls every corner before you reach it.</p>
       <p class="ob-link" id="obLink" hidden></p>
-      <!-- the product in one look (REVIEW.md 1.2, Onboarding 1): the road book calling a real road's corners, silent -->
+      <!-- the product in one look (REVIEW.md 1.2, Onboarding 1): a road drawn on the paper, its five corners marked in the
+           order the strip under it calls them (left, right, crest, tight left, long right), and the red dot driving it -->
+      <div class="ob-road" aria-hidden="true">
+        <svg viewBox="0 0 400 240" preserveAspectRatio="xMidYMid meet">
+          <g class="ob-topo">
+            <ellipse cx="92" cy="78" rx="74" ry="46" transform="rotate(-10 92 78)"/><ellipse cx="96" cy="76" rx="48" ry="28" transform="rotate(-10 96 76)"/><ellipse cx="100" cy="75" rx="22" ry="12" transform="rotate(-10 100 75)"/>
+            <ellipse cx="328" cy="180" rx="66" ry="44" transform="rotate(8 328 180)"/><ellipse cx="324" cy="178" rx="42" ry="26" transform="rotate(8 324 178)"/><ellipse cx="320" cy="177" rx="18" ry="10" transform="rotate(8 320 177)"/>
+            <ellipse cx="236" cy="113" rx="34" ry="16"/><ellipse cx="240" cy="113" rx="15" ry="6"/>
+          </g>
+          <path class="ob-line" pathLength="1" d="M28 216 C66 216 96 210 108 180 C118 154 140 142 172 142 C190 142 206 142 226 142 C282 142 300 84 244 84 C196 84 190 34 250 30 C296 27 330 40 364 26"/>
+          <circle class="ob-from" cx="28" cy="216" r="7"/>
+          <path class="ob-head" d="M377 20.6 L366.2 34 L360 18.8 Z"/>
+          <circle class="ob-apex" style="--at:0.13" cx="94" cy="200" r="5"/>
+          <circle class="ob-apex" style="--at:0.24" cx="125.6" cy="155.4" r="5"/>
+          <circle class="ob-apex" style="--at:0.37" cx="200" cy="142" r="5"/>
+          <circle class="ob-apex" style="--at:0.52" cx="277" cy="113" r="5"/>
+          <circle class="ob-apex" style="--at:0.72" cx="206.5" cy="58.5" r="5"/>
+          <circle class="ob-you" cx="28" cy="216" r="7"/>
+        </svg>
+      </div>
       <div class="ob-strip" aria-hidden="true"><div class="notes" id="obNotes"></div></div>
     </div>
     <div class="stack">
@@ -2136,9 +2300,14 @@
   <div class="overlay dim" id="permSheet" role="dialog" aria-modal="true" aria-label="Before your first drive">
     <div class="card-sheet">
       <h2 id="permTitle">Before your first drive</h2>
-      <div class="perm"><b>Location</b><span id="permLoc">to call corners ahead</span><b>Motion</b><span id="permMot">to feel bumps and surface</span><b>Screen on</b><span>while you drive</span><b class="mount-row" hidden>Mount</b><span class="mount-row" hidden>in a holder, any way up. It sets itself up in the first minute of driving.</span></div>
+      <div class="perm">
+        <div class="perm-row" style="--i:0"><svg viewBox="0 0 40 40" aria-hidden="true"><path pathLength="1" d="M8 34 V22 Q8 9 21 8 H33"/><circle class="dot" cx="20" cy="21" r="3.4"/></svg><b>Location</b><span id="permLoc">to call corners ahead</span></div>
+        <div class="perm-row" style="--i:1"><svg viewBox="0 0 40 40" aria-hidden="true"><path pathLength="1" d="M4 24 H11 L15 12 L21 32 L26 18 L29 24 H36"/></svg><b>Motion</b><span id="permMot">to feel bumps and surface</span></div>
+        <div class="perm-row" style="--i:2"><svg viewBox="0 0 40 40" aria-hidden="true"><path pathLength="1" d="M12 6 H26 V34 H12 Z M17 29 H21 M31 13 L35 11 M32 20 H36 M31 27 L35 29"/></svg><b>Screen on</b><span>while you drive</span></div>
+        <div class="perm-row mount-row" style="--i:3" hidden><svg viewBox="0 0 40 40" aria-hidden="true"><path pathLength="1" d="M14 4 H26 V26 H14 Z M8 21 V32 H32 V21 M20 32 V37"/></svg><b>Mount</b><span>in a holder, any way up. It sets itself up in the first minute of driving.</span></div>
+      </div>
       <p id="permNote">Your drive stays on this phone.</p>
-      <button class="ink-btn solid" id="permGo">Allow and start</button>
+      <button class="rec-key" id="permGo">Allow and start</button>
       <button class="linkbtn" id="permNo">Not now</button>
     </div>
   </div>
