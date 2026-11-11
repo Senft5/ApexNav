@@ -56,16 +56,16 @@ def test_a_calibrated_drive_says_what_the_phone_felt(out):
     # the first 20 m that are all banked, from the drive's start; the wild -40° sample and its 20 m are left out
     assert s["rows"] == 2000 and s["bankDeg"] == pytest.approx(4.2) and s["bankAtM"] == 800 * 5
     assert s["roughAtM"] == 1200 * 5
-    assert out["line"] == "Road feel: banked 4° at 2.5 mi · roughest at 3.7 mi."
-    assert out["smooth"] == "Road feel: banked 4° at 2.5 mi · a smooth surface."
-    assert out["off"].startswith("Road feel: off-camber 6° at 0.9 mi")
+    assert out["line"] == "Road feel: banked about 4° at 2.5 mi · roughest at 3.7 mi."
+    assert out["smooth"] == "Road feel: banked about 4° at 2.5 mi · a smooth surface."
+    assert out["off"].startswith("Road feel: off-camber about 6° at 0.9 mi")
     assert out["flat"] == "Road feel: flat, no banking over 1°."
 
 
 def test_corners_alone_are_enough(out):
     """Camber is measured only in corners: 40 m of them speak for the banking, and roughness speaks from its own 200 m."""
-    assert out["corners"] == "Road feel: banked 4\u00b0 at 2.5 mi \u00b7 roughest at 3.7 mi."
-    assert out["fewRough"] == "Road feel: banked 4\u00b0 at 2.5 mi.", "30 rows of roughness are not 200 m: not spoken about"
+    assert out["corners"] == "Road feel: banked about 4\u00b0 at 2.5 mi \u00b7 roughest at 3.7 mi."
+    assert out["fewRough"] == "Road feel: banked about 4\u00b0 at 2.5 mi.", "30 rows of roughness are not 200 m: not spoken about"
 
 
 def test_an_uncalibrated_drive_says_nothing(out):

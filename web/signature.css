@@ -1,0 +1,99 @@
+/* Vetta Line: the signature layer (docs/design/SIGNATURE.md). Loaded last, over index.html's own rules and controls.css.
+   The map is the page; chrome is paper laid on it, lifted by a soft shadow instead of boxed in ink. One ink key and at
+   most one red thing per screen. Things arrive by being drawn. Colours are the look's tokens only, so every look keeps
+   its own palette; what this file owns is form: weight, space, lift and motion. */
+:root {
+  --plan-bar: 76px;   /* the deck's bar (14 + 52 + 8 + 2) until cockpit.js measurePlanBar measures it: the first frame is where it stays */
+  --lift-1: 0 1px 2px rgba(20, 16, 8, 0.10), 0 2px 8px rgba(20, 16, 8, 0.10);          /* a key or a plate on the map */
+  --lift-2: 0 -1px 0 rgba(20, 16, 8, 0.06), 0 -10px 30px rgba(20, 16, 8, 0.16);        /* the deck and sheets, rising from below */
+  --lift-0: 0 0 0 1px var(--hair), 0 1px 2px rgba(20, 16, 8, 0.08);                         /* a card on the deck: a hairline and a breath of shadow */
+  --arrive: cubic-bezier(0.2, 0.8, 0.2, 1);
+  --well: color-mix(in srgb, var(--panel-ink) 6%, var(--panel));                         /* a field or a card's ground: paper, one step down */
+  --well-2: color-mix(in srgb, var(--panel-ink) 11%, var(--panel));
+}
+
+/* ---------------- the masthead: where you are, set in type on the map (was a boxed plate) ---------------- */
+.place-plate { top: calc(10px + var(--safe-top)); left: 16px; right: 84px; padding: 0; background: none; border: 0; box-shadow: none;
+  display: grid; gap: 1px; pointer-events: none; color: var(--ink, var(--panel-ink));
+  text-shadow: 0 0 1px var(--stage), 0 0 3px var(--stage), 0 0 8px var(--stage); }
+.place-plate { font: 800 30px/1 var(--font-num); letter-spacing: 0.005em; }
+.place-plate b { font: inherit; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.place-plate i { display: none; }
+.place-plate span { font: 600 14px/1.3 var(--font-ui); letter-spacing: 0; color: var(--dim, var(--panel-dim)); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.place-plate span::before { content: ""; display: inline-block; width: 7px; height: 7px; margin: 0 7px 1px 1px; border-radius: 50%; background: var(--accent); }
+/* the paper under the masthead: a wash down from the top edge, so the type sits on paper and the map fades in under it */
+#app.idle .stage::before { content: ""; position: absolute; z-index: 3; left: 0; right: 0; top: 0; height: calc(var(--safe-top) + 110px); pointer-events: none;
+  background: linear-gradient(to bottom, var(--stage) 0, color-mix(in srgb, var(--stage) 78%, transparent) 42%, transparent 100%); }
+#app.plan-open .stage::before { display: none; }
+
+/* ---------------- map keys: paper on the map ---------------- */
+.map-key { border: 0; box-shadow: var(--lift-1); }
+.map-key:active { box-shadow: 0 0 0 rgba(0, 0, 0, 0); transform: translateY(1px); }
+
+/* ---------------- the deck: one sheet of paper risen over the map ---------------- */
+.plan { border-top: 0; box-shadow: var(--lift-2); }
+[data-theme="roadbook"] .plan { border-top-width: 0; }
+[data-theme="roadbook"] #app.idle .binnacle { border-top: 0; }
+.plan-bar { padding: 14px 16px 8px; gap: 10px; }
+.plan-bar::before { top: 6px; height: 4px; border-radius: 2px; opacity: 0.35; }
+.plan-search { height: 52px; border: 0; background: var(--well); padding-left: 14px; gap: 10px; color: var(--panel-dim); }
+.plan-search:focus-within { box-shadow: inset 0 0 0 2px var(--panel-ink); }
+.plan-search input { font-size: 17px; font-weight: 500; }
+.plan-search svg { width: 20px; height: 20px; }
+/* Just drive: the one red key. The app's first verb is to drive. */
+.btn-start { height: 52px; font-size: 16px; padding: 0 18px; box-shadow: none; }
+.plan:not(.routed) #startDrive { background: var(--accent); color: var(--stage); border: 0; padding: 0 16px; font-size: 16px; font-weight: 700; gap: 8px; }
+.plan:not(.routed) #startDrive i { width: 9px; height: 9px; background: currentColor; }
+.plan:not(.routed) .start-more { background: var(--accent); color: var(--stage); border: 0; width: 34px; margin-left: -10px; box-shadow: inset 1px 0 0 color-mix(in srgb, var(--stage) 35%, transparent); }
+.btn-start:active { filter: brightness(0.9); }
+
+@media (orientation: portrait), (min-height: 541px) {
+  /* the shelf: the deck's invitations side by side, turned with a thumb; each is a card with its road drawn on it */
+  .deck-shelf { display: none; gap: 8px; margin: 0 -10px; padding: 6px 16px 14px; overflow-x: auto; overscroll-behavior-x: contain; scroll-snap-type: x proximity; scroll-padding: 0 16px; scrollbar-width: none; }
+  .deck-shelf::-webkit-scrollbar { display: none; }
+  #app.idle:not(.plan-open):not(.routed):not(.deck-min) .deck-shelf { display: flex; }
+  .deck-shelf .your-roads { display: contents; }
+  .deck-shelf > .deck-chips { order: 9; padding: 0; flex: none; }
+  .deck-shelf .loop-suggest { flex: none; width: auto; min-width: 216px; max-width: 78vw; margin: 0; padding: 8px 6px 8px 8px; border: 0; background: var(--face, var(--panel)); box-shadow: var(--lift-0); scroll-snap-align: start;
+    min-height: 68px; column-gap: 4px; }
+  .deck-shelf .loop-suggest .ls-show { grid-template-columns: 48px minmax(0, 1fr); gap: 10px; }
+  .deck-shelf .loop-suggest .ls-glyph { width: 48px; height: 48px; background: var(--well); }
+  .deck-shelf .loop-suggest svg { width: 48px; height: 48px; border: 0; padding: 6px; }
+  .deck-shelf .loop-suggest b { font-size: 15px; line-height: 1.2; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .deck-shelf .loop-suggest small { margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .deck-shelf .loop-suggest .ls-go { padding: 0 10px; align-self: stretch; }
+  .deck-shelf .loop-suggest em { text-decoration: none; font-weight: 700; font-size: 14px; display: inline-flex; align-items: center; gap: 5px; }
+  .deck-shelf .loop-suggest em::after { content: ""; width: 6px; height: 6px; border-top: 2px solid currentColor; border-right: 2px solid currentColor; transform: rotate(45deg); }
+  .deck-shelf .loop-suggest.drive-today { display: grid; }
+  /* Best roads nearby: the last card on the shelf, a key of the same height */
+  .deck-shelf .deck-chips .chip { min-height: 68px; height: 68px; width: 124px; padding: 8px 12px; border: 0; background: var(--face, var(--panel)); box-shadow: var(--lift-0); font-size: 15px; font-weight: 600; line-height: 1.2; text-align: left;
+    display: grid; align-content: space-between; justify-items: start; scroll-snap-align: start; }
+  .deck-shelf .nearby-chip::before { width: 22px; height: 14px; margin: 2px 0 0; }
+  html[data-type-size] .deck-shelf .loop-suggest { max-width: 86vw; }
+  html[data-type-size] .deck-shelf .loop-suggest :is(b, small) { white-space: normal; }
+  html[data-type-size] .deck-shelf .deck-chips .chip { height: auto; width: auto; max-width: 60vw; }
+}
+@media (orientation: landscape) and (max-height: 540px) { .deck-shelf { display: contents; } }
+
+/* ---------------- the tab bar: the apex dot marks where you are ---------------- */
+.tabbar { border-top: 1px solid var(--hair); }
+.tab { height: 54px; font-size: 11px; letter-spacing: 0.01em; transition: color 0.12s; }
+.tab.on { color: var(--panel-ink); }
+.tab.on::before { top: 3px; left: 50%; right: auto; width: 6px; height: 6px; margin-left: -3px; border-radius: 50%; background: var(--accent); }
+.tab svg { transition: transform 0.22s var(--arrive); }
+.tab.on svg { transform: translateY(1px) scale(1.08); stroke-width: 2.1; }
+
+/* ---------------- arrival: the deck rises, the shelf deals its cards, the masthead is set (once, after the cover lifts) ---------------- */
+@keyframes vl-rise { from { transform: translateY(18px); opacity: 0; } to { transform: none; opacity: 1; } }
+@keyframes vl-ink { from { opacity: 0; transform: translateY(-6px); letter-spacing: 0.04em; } to { opacity: 1; transform: none; } }
+#app.idle .plan-bar { animation: vl-rise 0.42s var(--arrive) 0.05s both; }
+#app.idle .deck-shelf > * { animation: vl-rise 0.46s var(--arrive) both; }
+#app.idle .deck-shelf > :nth-child(1) { animation-delay: 0.12s; }
+#app.idle .deck-shelf > :nth-child(2) { animation-delay: 0.18s; }
+#app.idle .deck-shelf > :nth-child(3) { animation-delay: 0.24s; }
+#app.idle .deck-shelf > :nth-child(n+4) { animation-delay: 0.30s; }
+.place-plate:not([hidden]) b { animation: vl-ink 0.6s var(--arrive) both; }
+.place-plate:not([hidden]) span { animation: vl-rise 0.5s var(--arrive) 0.15s both; }
+@media (prefers-reduced-motion: reduce) {
+  #app.idle .plan-bar, #app.idle .deck-shelf > *, .place-plate b, .place-plate span { animation: none; }
+}
