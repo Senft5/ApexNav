@@ -10,10 +10,11 @@
   'use strict';
   const DELAY = { 0: 'Live', 600: '10 min', 3600: '1 h' };
 
-  /** Where an audience sees you, from the presence settings ({ audience, delay_s, fuzz } or null when unread). */
-  function whereCell(presence, kind) {
+  /** Where an audience sees you, from the presence settings ({ audience, delay_s, fuzz } or null when unread). A public
+   *  crew never does: "Your crews" means private ones (backend presence.ts), since anyone can join a public crew. */
+  function whereCell(presence, kind, isPublic) {
     if (!presence) return { on: false, text: '--', say: 'not known' };
-    const on = presence.audience === (kind === 'crew' ? 'crew' : 'friends');
+    const on = !isPublic && presence.audience === (kind === 'crew' ? 'crew' : 'friends');
     if (!on) return { on: false, text: '–', say: 'does not see where you are' };
     const delay = DELAY[presence.delay_s] || '--';
     return { on: true, text: delay, say: `sees where you are, ${presence.delay_s === 0 ? 'live' : `${delay} late`}, ${presence.fuzz ? 'within a mile' : 'exactly'}` };
@@ -34,7 +35,7 @@
     for (const c of crews || []) {
       if (!c) continue;
       const x = g.get(`crew:${c.id}`) || {};
-      out.push({ kind: 'crew', id: c.id, label: c.name || 'Crew', where: whereCell(presence, 'crew'),
+      out.push({ kind: 'crew', id: c.id, label: c.name || 'Crew', where: whereCell(presence, 'crew', c.visibility === 'public'),
         scores: !!x.share_scores, times: !!x.share_times, car: shown === null ? null : shown && c.visibility !== 'public' });
     }
     return out;
@@ -166,7 +167,7 @@
     function row() {
       const count = el('small'), b = el('button', { className: 'nav-row', type: 'button' }, el('span', { textContent: 'Who sees what' }), count, el('i', { 'aria-hidden': 'true' }));
       b.addEventListener('click', () => open());
-      const fm = page.friendsMap, WHO = { nobody: 'Nobody sees where you are', crew: 'Crews see where you are', friends: 'Friends see where you are' };
+      const fm = page.friendsMap, WHO = { nobody: 'Nobody sees where you are', crew: 'Private crews see where you are', friends: 'Friends see where you are' };
       const paint = () => { count.textContent = fm && fm.loaded ? WHO[fm.settings.audience] || '' : ''; };
       if (fm && !fm.loaded) fm.loadSettings().then(paint).catch(() => {}); else paint();
       return b;
