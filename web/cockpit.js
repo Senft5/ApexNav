@@ -6066,6 +6066,11 @@
         flist.append(row);
       }
       if (accepted.length) body.append(flist);
+      // Sharing came on for existing friends and private crews too (migration 0050, the owner 2026-11-11): said once
+      if (accepted.length) {
+        let told = false; try { told = !!localStorage.getItem('apex.sharingOnTold'); } catch (_) {}
+        if (!told) { try { localStorage.setItem('apex.sharingOnTold', '1'); } catch (_) {} toast('Your friends and private crews now see your Scores and times. Switch it off for anyone: open their row, then What they see of you.'); }
+      }
       // P-08: no friends yet is one sentence and the Invite key, not four empty drawers
       else body.append(el('p', { className: 'people-lead', textContent: 'Bring a friend: they sign in with your link, and you’re friends the moment they do.' }));
 

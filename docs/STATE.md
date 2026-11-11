@@ -43,7 +43,8 @@
   link; `web/crew_events.js` meet card's Join the crew calls it through `page.askPublicSharing`. Onboarding copy changed.
 - Tests: backend/test/share_defaults.test.ts (new); privacy, crews, activity, crew_page, drive_scores updated for the new
   default; e2e "People, a new account" joins a public crew and picks Scores only.
-- Not done: no backfill of existing friendships (CALL_SHEET says why and how).
+- Migration `0050_share_backfill.sql` (data only): sharing on for existing friendships and private-crew members.
+  On preview 2026-11-11 (with its d1_migrations row); **prod: apply at merge**. People says so once (`apex.sharingOnTold`).
 
 ## Session 2026-11-10 (fable-one-corner): singular corners, and the nearby key keeps its label (claude/fable-one-corner, off origin/main e76f1bb)
 

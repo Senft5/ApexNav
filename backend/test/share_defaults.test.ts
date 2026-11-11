@@ -2,7 +2,8 @@
 // Times shared, a public crew with nothing, a choice made (on or off) is never overwritten, never across a block.
 import { env } from "cloudflare:workers";
 import { beforeEach, describe, expect, it } from "vitest";
-import { api, befriend, freshDb, makeUser, ok, type TestUser } from "./helpers";
+import { api, befriend, freshDb, makeUser, ok, splitSql, type TestUser } from "./helpers";
+import backfill from "../migrations/0050_share_backfill.sql?raw";
 
 type G = { audience_type: string; audience_id: string; share_scores: number; share_times: number };
 beforeEach(freshDb);
@@ -50,6 +51,24 @@ describe("sharing defaults", () => {
     await ok(api(b, "PUT", "/api/grants", { audience_type: "crew", audience_id: crew, share_scores: true }));
     await ok(api(a, "PUT", `/api/crews/${crew}`, { visibility: "public", area: { name: "Robbinsville", lat: 35.33, lon: -83.81 }, about: "Sundays" }));
     expect((await grants(b)).filter((g) => g.includes(crew))).toEqual([`crew:${crew}:10`]);
+  });
+
+  it("the backfill (migration 0050): existing friends and private crews share; a row already set stays; blocks and public crews don't", async () => {
+    const [a, b, c, x] = [await makeUser("alice"), await makeUser("bob"), await makeUser("cara"), await makeUser("xavier")];
+    // the old world: friendships and crews made with no grants
+    const pair = (p: TestUser, q: TestUser) => (p.id < q.id ? [p.id, q.id] : [q.id, p.id]);
+    for (const [p, q] of [[a, b], [a, c], [a, x]] as const)
+      await env.DB.prepare("INSERT INTO friendships (user_a, user_b, status, requested_by) VALUES (?, ?, 'accepted', ?)").bind(...pair(p, q), p.id).run();
+    await env.DB.prepare("INSERT INTO blocks (blocker, blocked) VALUES (?, ?)").bind(x.id, a.id).run();
+    await env.DB.prepare("INSERT INTO crews (id, name, owner, visibility) VALUES ('kp', 'Private', ?, 'private'), ('kq', 'Public', ?, 'public')").bind(a.id, a.id).run();
+    await env.DB.prepare("INSERT INTO crew_members (crew_id, user_id, role) VALUES ('kp', ?, 'owner'), ('kp', ?, 'member'), ('kq', ?, 'owner'), ('kq', ?, 'member')").bind(a.id, b.id, a.id, c.id).run();
+    await env.DB.prepare("INSERT INTO grants (user_id, audience_type, audience_id, share_scores, share_times) VALUES (?, 'friend', ?, 0, 0)").bind(c.id, a.id).run();   // cara said no
+    await env.DB.prepare("DELETE FROM grants WHERE NOT (user_id = ? AND audience_id = ?)").bind(c.id, a.id).run();
+    await env.DB.batch(splitSql(backfill).map((q) => env.DB.prepare(q)));
+    expect(await grants(a)).toEqual([`crew:kp:11`, `friend:${b.id}:11`, `friend:${c.id}:11`].sort());
+    expect(await grants(b)).toEqual([`crew:kp:11`, `friend:${a.id}:11`].sort());
+    expect(await grants(c)).toEqual([`friend:${a.id}:00`]);
+    expect(await grants(x)).toEqual([]);
   });
 
   it("an off switch stays off; a block shares nothing", async () => {

@@ -57,10 +57,12 @@ one (from Crews near you, a meet's card or a link) asks once: Share Scores and t
 is still switched off per friend and per crew where it was.
 
 The calls:
-- **Existing friendships and crews are not changed.** A pair who never touched the switch has no grant row, which looks
-  the same as "never chose", so turning those on would publish people's drives without telling them. Only new
-  friendships and joins get the default. To also turn on the old ones, a one-off backfill is a single INSERT OR IGNORE
-  per audience (ask and I'll write it); it would need a line in the app saying so.
+- **Existing friendships and private crews too** (Nate, 2026-11-11: "for those too"): migration 0050 is a one-off
+  backfill (INSERT OR IGNORE, both sides of every accepted friendship and every private-crew member, never across a
+  block, never a public crew). Before this PR switching off deleted the row, so someone who once switched a friend off
+  and never back on is turned on again by it: there is no record of that choice to keep. The app says so once (a note
+  when People opens with friends: "Your friends and private crews now see your Scores and times. Switch it off for
+  anyone"). Apply 0050 on preview then prod at merge (it only adds rows; no schema change).
 - **Switching off now keeps a row with both off** instead of deleting it, so a later default (say a crew link from
   someone you're already friends with) never turns it back on. Everything that reads grants already checks the flag.
 - **Times are on too**, since the stage times decision (2026-11-10) makes them part of "data sharing".
