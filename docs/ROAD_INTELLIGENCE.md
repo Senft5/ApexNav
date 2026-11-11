@@ -28,7 +28,7 @@ Status markers: **[built]** in code and tested · **[next]** scheduled · **[lat
    fiddling weights.
 6. **Confidence is part of the score.** L0 = map + DEM only, L1 = one IMU pass,
    L2 = multi-pass verified. Unknown stays unknown (`null`).
-7. **Zero-snitch.** Crowd signals are shared only as ratios relative to the same driver's
+7. **Never evidence against the driver.** Crowd signals are shared only as ratios relative to the same driver's
    own pace (§4.1). No absolute speeds or timestamps leave the phone.
 
 ---

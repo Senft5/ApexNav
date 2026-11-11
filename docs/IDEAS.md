@@ -44,7 +44,7 @@ makes those four trustworthy in production.
 - Driver Score is technique only. No legality in the score, no public speed or time
   leaderboards; corner and segment times are shared only by explicit opt-in per friend and
   per crew (docs/SOCIAL.md, owner 2026-10-25).
-- Zero subscription and zero budget backend (Cloudflare Workers + D1 today). A paid
+- Free to drive (no part of driving, safety or your own data needs a subscription; Vetta Pro is optional, docs/MONETIZATION.md) and a zero budget backend (Cloudflare Workers + D1 today). A paid
   provider (traffic, tiles, routing) needs the owner's yes first.
 - Never ship placeholder or synthesized road data as if measured. Single-pass hazards are
   "Driven once" until corroborated.

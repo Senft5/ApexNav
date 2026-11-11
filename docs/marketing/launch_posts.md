@@ -24,7 +24,7 @@ The technical part I'd love feedback on:
 - Pace notes are generated from map curvature plus measured feel, spoken on the device, and timed to your speed.
 - The math lives in a Python core with JavaScript and Swift ports checked against it in CI.
 
-No ads, no tracking, no subscription. {Pro sentence once it ships.} {App Store link}
+No ads, no tracking, free to drive. {Pro sentence once it ships: Pro is looks only.} {App Store link}
 
 {one line about you: OWNER}
 
@@ -33,8 +33,8 @@ No ads, no tracking, no subscription. {Pro sentence once it ships.} {App Store l
 **Name:** Vetta
 **Tagline (60):** A co-driver that reads the road ahead out loud
 **Description (260):** Vetta calls every corner before you reach it, finds the twisty roads near you, and scores
-how smoothly you drove them, never how fast. Members' phones measure how roads feel, so the good ones rise. No
-subscription, no ads, no tracking.
+how smoothly you used each corner's grip, never your top speed. Members' phones measure how roads feel, so the good
+ones rise. Free to drive, no ads, no tracking.
 **First comment:** the Show HN text, shortened to its first paragraph and the list of what it does.
 **Gallery:** the six press kit images, then the road of the week flyover.
 
@@ -54,7 +54,7 @@ for from the twistiest roads nearby, and it gives every drive a score.
 The part I think is new: with a switch on, your phone measures how the road actually feels (banking, crests,
 bumps) and shares just those road numbers, so the roads that are twisty and also smooth float to the top.
 
-It's free, with no ads and no subscription. {App Store link}
+It's free to drive, with no ads. {App Store link}
 
 What would make you actually use something like this on a Sunday drive?
 
@@ -85,4 +85,4 @@ Held until Apple approves the CarPlay entitlement.
   sent, never your position, path, times or speeds, and not the first and last km of any trip. {privacy link}
 - **"Android?"** Later. iPhone first because it's one person building it.
 - **"How do you make money?"** {Free forever for driving, notes and crews; an optional Pro subscription (or lifetime) for coaching, track days and clean video, once Pro ships. No ads, and we never sell data about drivers.}
-  No ads, no data sales, no subscription.
+  No ads, no data sales, and driving never needs a subscription.
