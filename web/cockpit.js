@@ -351,9 +351,9 @@
     let glTimer = null;
     map.on('webglcontextlost', () => {
       clearTimeout(glTimer);
-      toast('Map graphics reset · restoring…');
+      toast('Map graphics reset. Restoring…');
       glTimer = setTimeout(() => {
-        if (state.mode === 'live') { toast('Map display lost · your drive is still recording'); return; }
+        if (state.mode === 'live') { toast('Map display lost. Your drive is still recording.'); return; }
         location.reload();                                                   // the planned route is kept (restorePlanned)
       }, 4000);
     });
@@ -3445,7 +3445,7 @@
       if (!L || !trafficMon.shouldSay(jams.map(p => [p.startM, p.endM]), Date.now())) return;
       const delayS = probes.reduce((a, p) => a + (p.level === 'jam' || p.level === 'slow' ? p.delayS : 0), 0);
       const delayMin = Math.max(1, Math.round(delayS / 60));
-      const stay = () => { toast(`Traffic ahead · ${delayMin} min`); const n = ApexVoiceLines.num(delayMin);
+      const stay = () => { toast(`Traffic ahead. ${delayMin} min slower.`); const n = ApexVoiceLines.num(delayMin);
         say(`Traffic ahead. ${delayMin} minute${delayMin === 1 ? '' : 's'} slower`, false, null, null, n ? { tokens: ['line:traffic_ahead', n, delayMin === 1 ? 'line:minute_slower' : 'line:minutes_slower'] } : {}); };
       // Only the driver's own stops still ahead: old shaping points may sit in the jam, and a detour gets its own.
       const ahead = req.via.filter(v => !v.shaping && (v.distM == null || v.distM > routeWatch.bestM)).map(v => ({ lat: v.lat, lon: v.lon }));
@@ -3479,7 +3479,7 @@
       const road = [...c.route.names].filter(([n]) => !primary.names.has(n)).sort((a, b) => b[1] - a[1]).map(([n]) => n)[0] || 'another road';
       const extraMin = Math.round(pick.extraS / 60);
       const sw = { cancelled: false };
-      toast(`Traffic ahead · switching to ${road}${extraMin > 0 ? ` (+${extraMin} min)` : ''}`,
+      toast(`Traffic ahead. Switching to ${road}${extraMin > 0 ? `, ${extraMin} min longer` : ''}.`,
             { label: 'Cancel', ms: 6000, onClick: () => { sw.cancelled = true; say('Staying on this route'); } });
       say(`Traffic ahead. Switching to ${road}${extraMin > 0 ? `, ${extraMin} minute${extraMin === 1 ? '' : 's'} longer` : ''}`, false, null, null, { tokens: ['line:traffic_ahead', 'line:switching'], named: true });
       await new Promise(r => setTimeout(r, 6000));
@@ -4332,7 +4332,7 @@
     async function replanForLevel(what = FunRoute.LEVELS[funLevel].label) {
       const t = plannedRoute;
       if (!t || t.id !== 'route_dest' || !t.request || state.mode === 'live') return true;
-      if (t.request.via.some(v => !v.shaping)) { toast(`${what} from your next route (this one has your added stop)`); return true; }
+      if (t.request.via.some(v => !v.shaping)) { toast(`${what} from your next route. This one has your added stop.`); return true; }
       const ui = planBusy();
       ui.step('Routing…', 0.5);
       let ok = false;
@@ -5923,7 +5923,7 @@
           if (r.ok) {
             const c = ApexVoice.unlock(), buf = await c.decodeAudioData(await r.arrayBuffer()), src = c.createBufferSource();
             src.buffer = buf; src.connect(c.destination); src.start();
-            if (rg.note) toast(`Regroup at ${rg.note}`);
+            if (rg.note) toast(`Regroup at ${rg.note}.`);
             return;
           }
         } catch (_) { /* no clip after all: the plain line */ }
@@ -7443,7 +7443,7 @@
       let kept = false;
       if (photo) { try { await ApexSpotPhotos.put(id, photo); kept = true; } catch (_) { toast('The photo couldn\'t be kept (storage full?). The spot is saved without it.'); } }
       saveHighlights(loadHighlights().concat({ id, name: name.slice(0, 60), lat: p.lat, lon: p.lon, rating: highlightRating, category: highlightCategory, ...(kept ? { photo: true } : {}) }));
-      closeHighlightDialog(); renderHighlights(); toast(`Spot saved · ${name}`);
+      closeHighlightDialog(); renderHighlights(); toast(`Spot saved: ${name}.`);
     });
 
     // A theme suggests a voice (REVIEW.md 4.4, roadmap 18): Roadbook's Marguerite, Tapedeck's Kit, Billet's Hale, and each
@@ -9545,7 +9545,7 @@
         if (msg && (msg.type === 'placeSuggestions' || msg.type === 'placeResolved' || msg.type === 'trafficProbe')) { nativePlaceReply(msg); return; }
         if (msg && msg.type === 'nudge') { nudgeAnswered(!!msg.granted); return; }
         if (msg && msg.type === 'context') { if (window.ApexIosContext) ApexIosContext.receive(msg); return; }   // My free time / This album
-        if (msg && msg.type === 'recordingSaved') toast(`Saved ${msg.segments} road segments to ${msg.file}`);
+        if (msg && msg.type === 'recordingSaved') toast(`Saved ${msg.segments} road segments to ${msg.file}.`);
         // App sign-in finished in the native shell: keep the session token and redraw whatever shows account state.
         // the shell keeps the token in the Keychain and says signedIn (IDEAS Z-10); an older shell hands the token over
         // Redrawn in place (the owner, 2026-10-29: no page reloads): the account and Garage, and drive sharing asks again.
