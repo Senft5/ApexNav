@@ -417,7 +417,8 @@ final class ApexCarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDel
     }
 
     @MainActor private func openLoops() {
-        let loops: [(String, Int)] = [("30 minutes", 30), ("1 hour", 60), ("2 hours", 120)]
+        // The same five times as the phone's loop dial (web/cockpit.js LOOP_MINUTES), so the car and the phone offer one set.
+        let loops: [(String, Int)] = [("30 minutes", 30), ("1 hour", 60), ("1½ hours", 90), ("2 hours", 120), ("3 hours", 180)]
         let items: [CPListItem] = loops.map { label, minutes in
             let item = CPListItem(text: label, detailText: "A twisty loop from here, back where you started")
             item.handler = { [weak self] _, done in
