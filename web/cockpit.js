@@ -6458,7 +6458,7 @@
       if (duels && accepted.length) body.append(duels.cards());
 
       // P-23: you, one tap from People: your face, your handle and who sees where you are; it opens Who sees what (P-09)
-      const WHO = { nobody: 'Nobody sees where you are', crew: 'Your crews see where you are', friends: 'Friends see where you are' };
+      const WHO = { nobody: 'Nobody sees where you are', crew: 'Your private crews see where you are', friends: 'Friends see where you are' };
       const empty = !accepted.length && !(Array.isArray(crews) && crews.length);
       // For you (inbox.js): what happened to you lately, one sentence a row (a new account's page stays its three parts)
       if (inbox && !empty) body.append(inbox.section());
