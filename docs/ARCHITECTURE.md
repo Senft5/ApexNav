@@ -144,6 +144,21 @@ Everything the cockpit shows is measured, derived from measurements, or fetched 
 ## 5. Dynamic Audio DSP Bus
 Maps a normalized **Driver Engagement Score** (0.0 to 1.0, derived from combined horizontal G-load $\sqrt{a_x^2 + a_y^2}$ and yaw jerk $\dot{\omega}_z$) plus a **400-meter look-ahead horizon** from the 5m road mesh to control real-time audio filters, stem crossfades, and musical build-ups timed to corner entry apexes.
 
+Built 2026-11-10 as the **Soundtrack** (Garage > Co-driver, off by default):
+- `core/audio_bus.py` (the reference) and `web/audio_bus.js` (its port, held to one sequence by `tests/test_audio_bus.py`):
+  each 10 Hz step takes the aligned lateral and longitudinal g, the speed, the corners inside 400 m with their severity, the
+  Sight alarm and whether the co-driver is speaking, and returns an `AudioBusFrame` (`schemas/telemetry_contracts.json`):
+  engagement (the same 0.7 g / 0.3 yaw-jerk blend as `kinematics.py`, yaw rate from lateral g over speed), intensity
+  (engagement with a 1.2 s attack and a 6 s release), anticipation (toward the next corner's entry over its last 8 s,
+  weighted by severity, let go at the entry), energy, a low-pass cutoff, four stem gains, a riser, a master and `calm`.
+- Laws: speed is never excitement (it only turns a distance into a time; a crawl toward a corner stirs nothing);
+  unknown stays unknown (an uncalibrated mount gives no intensity, no look-ahead gives no anticipation, and the music rests
+  on its pad); over Sight the energy is capped at 0.12; under the voice the master drops to 0.35.
+- `web/soundtrack.js`: a generated score at a fixed 92 bpm (pad, pulse, bass, lead; seeded, so the same seed is the same
+  piece), synthesised with WebAudio (no files, nothing licensed, works offline), mixed by the bus frame.
+  `tests/test_soundtrack.py`. The iPhone shell keeps its audio session up with `.mixWithOthers` while it plays
+  (`setSoundtrack` in `ApexNavApp.swift`); a voice line still ducks or pauses other apps as set.
+
 ## 6. iOS & CarPlay Deployment Pipeline
 - **Cloud Unsigned `.ipa` Builder**: `.github/workflows/build.yml` uses `xcodegen` (`project.yml`) on `macos-15` runners to compile `ApexNav.ipa` for USB sideloading (Sideloadly / iloader) on pull requests that change native code; main archives for TestFlight (docs/TESTFLIGHT.md).
 - **CarPlay Head-Unit Path**: Uses `WidgetKit` / `LiveActivity` for un-gated CarPlay Dashboard telemetry cards on free sideloaded builds, and `CPMapTemplate` (`com.apple.developer.carplay-maps`) for full head-unit vector map projection.

@@ -160,7 +160,7 @@
       theme: 'roadbook', camFeel: 'dynamic', voiceId: 'marguerite', voicePick: null, liveVoice: false, voiceStyle: 'codriver', voiceName: '', hlOn: false, hlStrength: 1,
       notesMode: 'auto', nightMode: 'auto', musicMode: 'lower',   // Notes: auto | full | quiet. Night: auto (sunset/sunrise) | on | off
       noteWords: 'plain',                     // rally ("Left 4 minus") | plain ("Medium left"), IDEAS V-02; a saved setting wins
-      toggles: { stage: false, voice: true, lpr: true, dna: false, night: false, twisty: true, haptics: true, crash: true, health: true, terrain: false, coverage: false, keys: true, friends: false, nudge: false, satellite: false }   // twisty on by default (panel D-2), the weekly reminder off until asked for (R-1); stage and night are derived from the two modes; analysis.html reads toggles.night
+      toggles: { stage: false, voice: true, lpr: true, dna: false, night: false, twisty: true, haptics: true, soundtrack: false, crash: true, health: true, terrain: false, coverage: false, keys: true, friends: false, nudge: false, satellite: false }   // twisty on by default (panel D-2), the weekly reminder off until asked for (R-1); stage and night are derived from the two modes; analysis.html reads toggles.night
     };
     const NOTES_MODES = ['auto', 'full', 'quiet'], NIGHT_MODES = ['auto', 'on', 'off'], MUSIC_MODES = ['lower', 'pause'];
     const MODE_LABEL = { auto: 'Auto', full: 'Full', quiet: 'Quiet', on: 'On', off: 'Off' };
@@ -308,7 +308,7 @@
       transformRequest: window.ApexOfflineTiles ? ApexOfflineTiles.transform : undefined });
     { const v = document.getElementById('aboutVersion'), m = /ApexNav\/([^ ]+ \([^)]*\))/.exec(navigator.userAgent);   // the iOS shell names its version in the user agent
       if (v) v.textContent = m ? m[1] : (window.APEX_EMBED ? '--' : 'Website'); }
-    window.apexDebug = { map, get track() { return track; }, state, drives, buildRoute: (...a) => buildRoute(...a), renderRouteCard: (...a) => renderRouteCard(...a), openRoadPage: (...a) => openRoadPage(...a), showEndCard: (...a) => showEndCard(...a), get driveActive() { return driveActive; }, get camResets() { return camResets; }, tryTheme: (id) => tryTheme(id), tulipPNG: (svg) => tulipPNG(svg) };
+    window.apexDebug = { map, get soundtrack() { return { playing: !!(soundtrack.eng && soundtrack.eng.playing()), frame: soundtrack.frame, piece: soundtrack.eng && soundtrack.eng.piece(), sample: !!soundtrack.demo }; }, get track() { return track; }, state, drives, buildRoute: (...a) => buildRoute(...a), renderRouteCard: (...a) => renderRouteCard(...a), openRoadPage: (...a) => openRoadPage(...a), showEndCard: (...a) => showEndCard(...a), get driveActive() { return driveActive; }, get camResets() { return camResets; }, tryTheme: (id) => tryTheme(id), tulipPNG: (svg) => tulipPNG(svg) };
     let mapReady = false;
     // F-02: the map's box is fixed (the window, or a drive's edges); it changes on a rotation or at a drive's start and end.
     // A resize the map already made (setPixelRatio resizes) is not made twice.
@@ -1955,6 +1955,7 @@
       d.score = live ? liveScore.value : null;   // the drive's Vetta Score so far (liveScoreTick), only while recording
       cluster.update(d);
       sightAlarm(d, !!live);
+      soundtrackTick(d, vMps, !!live);
       if (live && explainOpen() && !explainGate()) closeExplain();   // PR-1: the car moved off: nothing left to read
       updateRibbon(vMps, idx, snap);
       updatePins();
@@ -1962,6 +1963,67 @@
       if (live) paceDetail(vMps);                                     // F-05: less to draw at speed
       // F-14: a fast replay rewrites the strip at 4 Hz (it reads the same, and each rewrite is a layout)
       if (snap || now - lastNotesAt > (!live && state.rate > 2 ? 250 : 150)) { lastNotesAt = now; updateNotes(vMps, live); drawScrubber(); }
+    }
+    // The Soundtrack (web/soundtrack.js on web/audio_bus.js; docs/ARCHITECTURE.md section 5; Garage > Co-driver, off until
+    // asked for): music made by the road while a drive runs. The bus hears the calibrated g, the corners inside 400 m (a
+    // route's or the road's own, horizon.js) and the Sight alarm; it never hears speed as anything but a distance turned
+    // into a time. Unknown g (the mount not set yet) is passed as unknown, and the music rests on its pad.
+    const soundtrack = { eng: null, bus: null, at: 0, frame: null, demo: 0 };
+    function soundtrackCorners() {
+      if (!track || !Array.isArray(track.events)) return null;
+      const out = [];
+      for (const e of track.events) {
+        if (e.type !== 'corner') continue;
+        const ahead = noteM(e) - state.cursorM;
+        if (ahead < 0 || ahead > ApexAudioBus.HORIZON_M) continue;
+        const n = /^[LR](\d)/.exec(e.code || '');
+        out.push([ahead, n ? ApexAudioBus.severity(Number(n[1])) : /^[LR](HP|SQ|AC)/.test(e.code || '') ? 1 : null]);
+      }
+      return out;
+    }
+    // the app's audio session stays up while it plays (ApexNavApp.swift setSoundtrack), and goes back when it stops
+    function soundtrackNative(on) { if (NATIVE_SHELL) { try { window.webkit.messageHandlers.apex.postMessage({ cmd: 'soundtrack', on }); } catch (_) {} } }
+    function soundtrackEngine() {
+      if (!soundtrack.eng) { soundtrack.eng = ApexSoundtrack.create(ApexVoice.unlock()); soundtrack.bus = ApexAudioBus.create(); }
+      return soundtrack.eng;
+    }
+    function soundtrackStop() {
+      if (soundtrack.demo || !soundtrack.eng || !soundtrack.eng.playing()) return;
+      soundtrack.eng.stop(); soundtrackNative(false); soundtrack.at = 0; soundtrack.frame = null;
+    }
+    function soundtrackTick(d, vMps, live) {
+      if (soundtrack.demo) return;
+      const want = live && driveActive && !pendingEnd && state.toggles.soundtrack === true && window.ApexSoundtrack && window.ApexAudioBus && window.ApexVoice;
+      if (!want) { soundtrackStop(); return; }
+      const now = performance.now();
+      if (soundtrack.at && now - soundtrack.at < 90) return;                 // the bus runs at 10 Hz, whatever the screen draws at
+      const dt = soundtrack.at ? (now - soundtrack.at) / 1000 : 0; soundtrack.at = now;
+      try {
+        const eng = soundtrackEngine(), L = state.live || {};
+        if (!eng.playing()) { soundtrack.bus.reset(); soundtrackNative(true); eng.start((Date.now() / 1000) >>> 0); }
+        const g = !L.calibration || L.calibration === 'locked';              // before the mount is set, g is no measurement
+        soundtrack.frame = soundtrack.bus.step(dt, { lat_g: g ? d.latG : null, lon_g: g ? d.lonG : null, speed_mps: vMps, corners: soundtrackCorners(),
+          over_sight: Inst.sightShort(d), speaking: !!speech.busy });
+        eng.set(soundtrack.frame);
+      } catch (_) {}
+    }
+    // "Hear a sample" beside the switch: 24 s of a made-up road (a straight, a build, a corner, the way out), said to be a
+    // sample. It is the only time the music plays a road that was not driven, and it never plays in a drive.
+    function soundtrackSample(key) {
+      if (!window.ApexSoundtrack || !window.ApexAudioBus || !window.ApexVoice) return;
+      const end = () => { clearInterval(soundtrack.demo); soundtrack.demo = 0; if (soundtrack.eng) soundtrack.eng.stop(); soundtrackNative(false); key.textContent = 'Hear a sample'; };
+      if (soundtrack.demo) { end(); return; }
+      if (state.mode === 'live') { toast('The sample plays when you are not driving.'); return; }
+      try {
+        const eng = soundtrackEngine(), bus = ApexAudioBus.create(); let t = 0;
+        soundtrackNative(true); eng.start(20261110); key.textContent = 'Stop';
+        soundtrack.demo = setInterval(() => {
+          t += 0.1; if (t > 24) { end(); return; }
+          const ahead = 170 - 15 * (t - 4), inCorner = t > 15.3 && t < 20;        // 4 s of straight, 11 s toward a corner, through it, out
+          eng.set(bus.step(0.1, { lat_g: inCorner ? 0.5 * Math.sin((t - 15.3) / 4.7 * Math.PI) : 0.02, lon_g: t > 13 && t < 15.3 ? -0.25 : 0.02, speed_mps: 15,
+            corners: t > 4 && ahead >= 0 ? [[ahead, 0.8]] : [], over_sight: false, speaking: false }));
+        }, 100);
+      } catch (_) { end(); }
     }
     // Panel round 2 (GR-1, IN-3): the one alarm says so in words and in the hand. Going faster than Sight in a drive, the
     // status row's message line says "Slow to 45 for what you can see." for 3 s, in the signal colour with its mark, and the
@@ -7187,6 +7249,7 @@
     document.querySelectorAll('#nightSwitch [data-night]').forEach(b => b.addEventListener('click', () => { state.nightMode = b.dataset.night; applyTheme(); renderThemePicker(); }));   // a car's card follows the mode
     // SO-1 (panel round 2): Notes and Voice have one home, Layers (a drive reaches it); the Garage's link opens it
     $('coNotesLink').addEventListener('click', () => { showView(null); if (!$('swEdge').classList.contains('open')) $('swTab').click(); });
+    $('soundtrackHear').addEventListener('click', (e) => soundtrackSample(e.currentTarget));
     // U-82: the Notes detent (Layers): a stop is chosen, never cycled into by a stray tap
     document.querySelectorAll('[data-notes]').forEach(b => b.addEventListener('click', () => {
       if (!NOTES_MODES.includes(b.dataset.notes) || b.dataset.notes === state.notesMode) return;
@@ -8380,7 +8443,7 @@
     // ended: why a drive ended itself ('car', 'parked'; drive_keep.js EndWatch), or nothing for End
     async function leaveDrive(save, ended) {
       if (pendingEnd) { clearTimeout(pendingEnd.timer); pendingEnd = null; paintEndUndo(); }   // I-3: any other way out ends it now
-      driveActive = false;
+      driveActive = false; soundtrackStop();
       const kept = keepStop();                                         // Round 3: no more checkpoints; dropped once saved
       stageWatch = null; $('stageBar').hidden = true;
       const laps = circuit.timer ? circuit.timer.state(Date.now()).laps : [];
@@ -8615,6 +8678,7 @@
       if (!driveActive) { leaveDrive(true); return; }
       haptic('note');                                                  // a mis-tap is felt
       pendingEnd = { rows: drive.rec ? drive.rec.samples : null, timer: setTimeout(commitEnd, END_UNDO_MS) };
+      soundtrackStop();                                                // End: the music stops at the tap, not at the next frame
       paintEndUndo();
       driveNote(`Drive ended. Saving it in ${Math.round(END_UNDO_MS / 1000)} seconds.`);
       carPost({ kind: 'ending', seconds: END_UNDO_MS / 1000 });
