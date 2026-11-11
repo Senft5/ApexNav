@@ -12,6 +12,9 @@
     at most 40 km; test_route_ctx_router_edges.py covers a loop not relayed.
 - Watch a replay (the welcome's, and a theme trial's) loaded the demo and sat at 0 mph until you found Play: watchDryRidge
   now plays it once the map has its start (replayWhenReady, as a Log replay link does). e2e first-run flow asserts it.
+- The Log tapped before its frame had loaded (a fresh install's first seconds) put a blank full-screen frame over the tab
+  bar for ~4 s. openLog now keeps the frame hidden until it has loaded (toast "Opening your Log…"), opens it then, and
+  another tab cancels it (`logFrame.want`). Two e2e flows gate analysis.html to cover both.
 - Seen, not fixed (other areas): signed-out pages still ask /api/convoy/invites, /api/points, /api/hazards, /api/roads (401s);
   the idle map's top ~150 px is blank paper at pitch 42 with the deck's padding (MapLibre draws no tiles beyond the far
   plane; no sky in the style). Next: replay drive, Log, add a friend, join a crew.

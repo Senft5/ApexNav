@@ -5028,6 +5028,42 @@ flow('units: kilometres in Settings redraw the dial, the notes and the replay in
   check(/ km$/.test(await page.getAttribute('#scrubber', 'aria-valuetext')), 'the replay position in km');
 });
 
+flow('the Log tapped while its page still loads: the map and its tabs stay usable, the Log opens whole once loaded, and another tab cancels it (walkthrough 2026-11-11)', async (page, base) => {
+  await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); } catch (_) {} });
+  let release; const gate = new Promise((ok) => { release = ok; });
+  await page.route(/\/analysis\.html/, async (route) => { await gate; route.continue(); });
+  await page.goto(base + '/index.html');
+  await page.waitForFunction(() => window.apex && window.apexDebug);
+  await page.waitForFunction(() => !document.getElementById('boot'), null, { timeout: 5000 });
+  await page.click('.tab[data-view="log"]');
+  await page.waitForTimeout(300);
+  const waiting = await page.evaluate(() => { const f = document.getElementById('logFrame'); return { frameShown: !!f && !f.hidden, toast: document.getElementById('toast').textContent }; });
+  check(!waiting.frameShown && /Opening your Log/.test(waiting.toast), 'no blank frame over the tabs while the Log loads: ' + JSON.stringify(waiting));
+  await page.click('.tab[data-view="garage"]');                       // the tabs still work, and change your mind
+  await page.waitForFunction(() => document.querySelector('#sheet.open[data-view="garage"]'));
+  release();
+  await page.waitForFunction(() => { const f = document.getElementById('logFrame'); return f && f.contentWindow && f.contentWindow.ApexLogFrame; }, null, { timeout: 15000 });
+  await page.waitForTimeout(300);
+  check(await page.evaluate(() => document.getElementById('logFrame').hidden), 'the Log stays closed: you went to the Garage');
+  await page.click('.tab[data-view="log"]');
+  await page.waitForSelector('#logFrame:not([hidden])', { timeout: 3000 });
+});
+
+flow('the Log tapped while its page still loads opens on its own once it has loaded (walkthrough 2026-11-11)', async (page, base) => {
+  await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); } catch (_) {} });
+  let release; const gate = new Promise((ok) => { release = ok; });
+  await page.route(/\/analysis\.html/, async (route) => { await gate; route.continue(); });
+  await page.goto(base + '/index.html');
+  await page.waitForFunction(() => window.apex && window.apexDebug);
+  await page.waitForFunction(() => !document.getElementById('boot'), null, { timeout: 5000 });
+  await page.click('.tab[data-view="log"]');
+  await page.waitForTimeout(300);
+  check(await page.evaluate(() => { const f = document.getElementById('logFrame'); return !f || f.hidden; }), 'hidden while it loads');
+  release();
+  await page.waitForSelector('#logFrame:not([hidden])', { timeout: 15000 });
+  await page.frameLocator('#logFrame').locator('nav.tabbar a:has-text("Garage")').waitFor();
+});
+
 flow('the Log opens over the map and its tabs come back without loading the map again; switches read on and off (the owner, 2026-10-29)', async (page, base) => {
   await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); } catch (_) {} });
   await page.goto(base + '/index.html');

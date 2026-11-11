@@ -14,6 +14,9 @@ it says so. Things only you can do are in docs/OWNER_TODO.md.
   ask the public router from the phone like every route. Undo: drop the `c.stage` test in route_ctx/router_edges.js.
 - "Watch a replay" on the welcome screen now plays the demo drive straight away; it used to open it paused at 0 mph,
   with Play down in the controls. Undo: remove `replayWhenReady(d)` in cockpit.js watchDryRidge.
+- Tapping Log in the first seconds after install showed a blank screen with no tabs until it loaded. Now the map stays
+  usable with a short "Opening your Log…" and the Log opens when ready (a different tab cancels it). Undo: the
+  `logFrame.want` branch in cockpit.js openLog.
 
 ## 2026-11-11 (roam-c-boot-budget): an e2e check on what the map page loads and runs before it is ready (claude/roam-c-boot-budget)
 
