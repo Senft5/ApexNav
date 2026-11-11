@@ -290,6 +290,13 @@ phone's reader); tests/test_graph_tiles.py round-trips through both. What a rout
     roughness and flow, its scenery loved and banking, with the engine's own weights (rough 1, flow 1, loved 1.5,
     camber 0.5) against the model weight the tile already knew (conf x 37.1 quality, 12.8 scenery). Signed out or no
     data: unchanged. Test: a loved, smooth lane wins a 2 s near-tie in the search.
+    **Crests and verified bumps (IDEAS R-04, 2026-11-11):** a bin's crest (mean peak unweighting, g) counts only where
+    two or more passes measured it; a run of samples over 0.15 g on one edge is one crest, and crests per km (full at 3)
+    go into scenery with weight 2. Crowd-verified bumps (`bp`, roads.ts verifiedBumps: posterior over 0.8, two or more
+    drivers) land on the edge under their own bin; each takes 25 % (at most 100 %) off the edge, both in the search's
+    cost and in its goodness, so the Fun pick sees them too. An unverified bump counts nothing, and no bump data is not
+    "smooth". Test (`crowdCrestBump`): the crested lane wins a 1 s near-tie, one pass of crest data counts nothing, three
+    verified bumps hand the tie back, and bumps under 0.8 change nothing.
   - **Gap:** via-way turn restrictions (259 in Cincinnati) are counted by the ETL and not in the tiles, so the router
     can't apply them; the tile format needs a via-way table (from-edge, via edges, to-edge) first.
   - **Live, 2026-11-04** (scratchpad live2/run_own.js on a local serve; production's pick scored by the same engine in

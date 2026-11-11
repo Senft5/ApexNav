@@ -7208,6 +7208,37 @@ flow('the route card says a long descent before you set off, from the terrain, i
   check(/^A long descent: down [\d,]+ ft over [\d.]+ mi at 8%\. A lower gear saves the brakes\.$/.test(line.replace(/\u00a0/g, ' ')), 'the descent, in feet and miles: ' + line);
 }, IPHONE);
 
+flow('the co-driver says a long descent once as the car nears its top, from the route\'s terrain (brake_heat.js descentAhead, IDEAS V-12)', async (page, base) => {
+  await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); } catch (_) {}
+    window.__said = []; window.APEX_REVIEW = true;
+    window.webkit = { messageHandlers: { apex: { postMessage(m) { if (m && m.cmd === 'said') window.__said.push(m.text); } } } }; });
+  await page.goto(base + '/index.html');
+  await page.waitForFunction(() => window.apexDebug && window.apexDebug.map && window.ApexRouteImport && window.apex && window.apex.live && window.ApexStages);
+  // terrain: a gentle climb to the top at 1.5 km, then 8 % down for 4 km (the DEM is stubbed: no tiles here)
+  await page.evaluate(() => { ApexStages.profile = async (t) => t.dist.map((m) => (m < 1500 ? 1000 + 0.02 * m : 1030 - 0.08 * Math.min(m - 1500, 4000))); });
+  const KY = 110540, pts = [];
+  for (let y = 0; y <= 6000; y += 5) pts.push(y);
+  const gpx = pts.map((n) => `<trkpt lat="${(35.5 + n / KY).toFixed(7)}" lon="-83.9000000"/>`).join('');
+  await page.setInputFiles('#gpxFile', { name: 'pass.gpx', mimeType: 'application/gpx+xml', buffer: Buffer.from(`<gpx><trk><name>Over the pass</name><trkseg>${gpx}</trkseg></trk></gpx>`) });
+  await page.waitForFunction(() => window.apexDebug.track && window.apexDebug.track.name === 'Over the pass', null, { timeout: 10000 });
+  await page.waitForFunction(() => Array.isArray(apexDebug.track.descents) && apexDebug.track.descents.length === 1, null, { timeout: 15000 })
+    .catch(async () => { throw new Error('descents: ' + JSON.stringify(await page.evaluate(() => apexDebug.track.descents))); });
+  await page.evaluate(() => window.apex.onNative({ type: 'carplay', action: 'start' }));
+  await page.waitForFunction(() => window.apexDebug.driveActive);
+  const at = (i, v) => page.evaluate(([i, v]) => { const t = apexDebug.track;
+    window.apex.live({ lat: t.lat[i], lon: t.lon[i], accuracy_m: 5, speed_mps: v, course_deg: 0, has_fix: true, lat_g: 0, lon_g: 0, calibration: 'locked', thermal: 0 }); }, [i, v]);
+  const calls = () => page.evaluate(() => window.__said.filter((s) => /^Long descent ahead/.test(s)));
+  // the climb, well short of the top: nothing yet
+  for (let i = 0; i <= 160; i += 4) { await at(i, 20); await page.waitForTimeout(40); }
+  check((await calls()).length === 0, 'nothing said 700 m short of the top: ' + JSON.stringify(await calls()));
+  // into the last 500 m and over the top: said once, in words
+  for (let i = 200; i <= 420; i += 3) { await at(i, 20); await page.waitForTimeout(60); }
+  const said = await calls();
+  check(said.length === 1 && /^Long descent ahead: [\d.]+ miles at 8 percent\. A lower gear saves the brakes\.$/.test(said[0]), 'said once near the top: ' + JSON.stringify(said));
+  for (let i = 420; i <= 500; i += 3) { await at(i, 20); await page.waitForTimeout(40); }
+  check((await calls()).length === 1, 'and not again on the way down: ' + JSON.stringify(await calls()));
+});
+
 flow('plan flow (e, f) a level change and an alternative are one tap or swipe each: the level cards are the routes found, nothing planned again (finding 4, 11)', async (page, base) => {
   const asked = [];
   await planRouter(page, asked);

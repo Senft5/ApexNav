@@ -14,6 +14,22 @@ migration and nothing new is stored about you; the cost is that a second phone s
 Roadbook followers are counted, never named, because a public book's followers can be strangers.
 
 Undo: revert the PR (no data changed).
+## 2026-11-11 (routing round three): our router reads measured crests and verified bumps (claude/project-thread-39xbx9)
+
+Roads members measured going light over their crests (0.15 g or more, two or more passes) now count as more character in
+our router, and crowd-verified bumps (the same ones the co-driver calls "Confirmed by members") cost a road 25 % of its
+time each, at most double, in both the search and the Fun pick. One pass of crest data, and bumps the server hasn't
+verified, count nothing. The weights are a judgment call: crests at 2 against loved 1.5 and banking 0.5 so a crested road
+wins a near-tie and no more; bumps sized so three on a short lane lose it a 1 s tie, while one bump costs only the stretch
+it sits on (a long road isn't written off for one). Undo: `CROWD_W.crest` 0 and `BUMP_X` 0 in web/graph_router.js.
+
+## 2026-11-11 (roam-a descent call): the co-driver says a long descent as you near its top (claude/project-thread-h7xxmf)
+
+On a planned route, the same long, steep descents the route card names are now said once, as you come within 500 m of the
+top (or up to 300 m down it): "Long descent ahead: 2.5 miles at 8 percent. A lower gear saves the brakes." It waits for a
+quiet moment like the break cue (no corner call due), in any notes mode, since it is a safety line. Off the route, or
+driving without one, nothing is said. Undo: remove the `descentAhead` block in cockpit.js `updateNotes`.
+
 ## 2026-11-11 (roam-a descents): the route card warns of a long, steep descent (claude/project-thread-h7xxmf)
 
 A planned route with a long, steep way down now says so on its card, under the climb: "A long descent: down 1,575 ft over
