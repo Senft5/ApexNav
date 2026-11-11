@@ -6,12 +6,12 @@
   'use strict';
   const KEY = 'apex.newsSeen';
   const NEWS = {
-    id: '2026-10-28b',
+    id: '2026-11-10',
     items: [
-      ['Siri', 'Say "Start a drive in Vetta", "Report a hazard in Vetta" or "End my drive in Vetta", hands on the wheel.'],
-      ['Landscape and 3D', 'Mount the phone sideways for a wide map, and turn on 3D terrain in the map panel to preview a route over the hills.'],
-      ['Stops of the day', 'Tap a viewpoint or café along your route to add it as a stop; move or remove stops on the route card.'],
-      ['Kilometres', 'Prefer km and metres? Garage → Settings → Units. Notes, directions and the Log follow.'],
+      ['Three ways there', 'Every route comes as Quick, Fun and Long way. Tap a card to compare them. Fun and Long way never take the highway.'],
+      ['What it is like', 'The route card says in plain words what the drive is like: its character, its best stretch and what slows it down.'],
+      ['Loops your way', 'Set a loop by distance or by time on the dial, then pick which way to head. It is built from the best roads nearby.'],
+      ['Tune your routes', 'In Garage, Settings, Route tuning: sliders for how much corners, scenery, towns and smooth road count in your routes.'],
     ],
   };
 

@@ -133,6 +133,25 @@
     return root.ApexDriveView.plainCoach(d.ds, co) || null;
   }
 
+  // Your driving's kept observations: a store of its own, only ever derived from the drives (deleting it loses nothing)
+  const OBS_VERSION = 1;
+  function obsDb() {
+    return new Promise((res) => {
+      try {
+        const q = root.indexedDB.open('vetta-profile', 1);
+        q.onupgradeneeded = () => { if (!q.result.objectStoreNames.contains('obs')) q.result.createObjectStore('obs', { keyPath: 'id' }); };
+        q.onsuccess = () => res(q.result); q.onerror = () => res(null); q.onblocked = () => res(null);
+      } catch (_) { res(null); }
+    });
+  }
+  const obsAll = (db) => new Promise((res, rej) => { const q = db.transaction('obs').objectStore('obs').getAll(); q.onsuccess = () => res(q.result || []); q.onerror = () => rej(q.error); });
+  const obsWrite = (db, put, drop) => new Promise((res, rej) => {
+    const t = db.transaction('obs', 'readwrite'), st = t.objectStore('obs');
+    for (const x of put) st.put(x);
+    for (const id of drop) st.delete(id);
+    t.oncomplete = res; t.onerror = () => rej(t.error); t.onabort = () => rej(t.error);
+  });
+
   const jobs = {
     /** Every drive's summary (missing ones built from the drive's rows first). */
     async summaries() { return { list: await Rec().summaries(CoreOf()) }; },
@@ -242,6 +261,36 @@
       release();
       return { key: sums.map((s) => s.id).join(','), months: [...sds.entries()].filter(([, xs]) => xs.length >= minCorners).sort((p, q) => p[0].localeCompare(q[0]))
         .map(([month, xs]) => ({ month, sd_m: med(xs), corners: xs.length })) };
+    },
+
+    /**
+     * Your driving (driver_profile.js): every drive's clean corners as observations, and the profile over all of them.
+     * A drive's observations are kept (IndexedDB 'vetta-profile': credits per corner, no positions) under its summary's
+     * stamp and its car, so opening the page again reads only the drives that are new; those of drives since deleted
+     * are dropped. Without IndexedDB nothing is kept and every drive is read.
+     */
+    async profile() {
+      const Core = CoreOf(), P = root.ApexDriverProfile, sums = await Rec().summaries(Core);
+      if (!P) return { profile: null };
+      const db = await obsDb(), kept = new Map();
+      if (db) try { for (const x of await obsAll(db)) kept.set(x.id, x); } catch (_) {}
+      const list = [], fresh = [];
+      for (const s of sums) {
+        if (!s.corners || !s.corners.length) continue;
+        const key = `${OBS_VERSION}|${stamp(s)}|${s.car ? s.car.label : ''}`;
+        let rec = kept.get(s.id);
+        if (!rec || rec.key !== key) {
+          const raw = await Rec().get(s.id);
+          if (!raw) continue;
+          const d = finish(Core, raw);                                // not kept in memory: a year of drives is read once
+          rec = { id: s.id, key, obs: P.observe({ ...d, corners: Rec().scorableCorners(d, d.corners) }, Core) };
+          fresh.push(rec);
+        }
+        list.push({ id: s.id, month: monthOf(s), car: s.car && s.car.label ? s.car.label : null, tags: Array.isArray(s.tags) && s.tags.length ? s.tags : null, obs: rec.obs });
+      }
+      const live = new Set(sums.map((s) => s.id)), gone = [...kept.keys()].filter((id) => !live.has(id));
+      if (db && (fresh.length || gone.length)) try { await obsWrite(db, fresh, gone); } catch (_) {}
+      return { key: sums.map(stamp).join(','), read: fresh.length, profile: P.profile(list, Core) };
     },
 
     /**
