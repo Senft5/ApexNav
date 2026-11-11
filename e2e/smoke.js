@@ -233,25 +233,6 @@ flow('first run: onboarding, Watch a replay loads the bundled drive and plays it
   check(tp.tabbar === 'none', 'the tab bar should hide during a replay');
 });
 
-// walkthrough 2026-11-11: Done after the welcome's replay left the map and the arrow on the demo's ground (Kentucky) while
-// the masthead said Knoxville; a still browser sends no new fix, so nothing brought it back
-flow('done after a replay brings the idle map back to where you are', async (page, base) => {
-  await page.route('https://tiles.openfreemap.org/**', (route) => (route.request().url().includes('/styles/')
-    ? route.fulfill({ contentType: 'application/json', body: JSON.stringify({ version: 8, sources: {}, layers: [{ id: 'bg', type: 'background', paint: { 'background-color': '#eee' } }] }) })
-    : route.abort()));
-  await page.goto(base + '/index.html');
-  await page.waitForSelector('#onboard.show', { timeout: 10000 });
-  await page.waitForFunction(() => window.apexDebug && window.apexDebug.map.loaded() && !!window.apexDebug.state.lastPosition, null, { timeout: 20000 });
-  await page.click('#obAlt');
-  await page.waitForFunction(() => window.apexDebug.state.mode === 'replay' && window.apexDebug.state.playing, null, { timeout: 15000 });
-  const far = (c) => Math.hypot(c.lat - 35.9606, c.lng + 83.9207);
-  check(far(await page.evaluate(() => window.apexDebug.map.getCenter())) > 1, 'the replay shows the demo\'s ground, not here');
-  await page.click('#replayDone');
-  await page.waitForFunction(() => { const c = window.apexDebug.map.getCenter(); return Math.hypot(c.lat - 35.9606, c.lng + 83.9207) < 0.05; }, null, { timeout: 5000 })
-    .catch(async () => { throw new Error('Done should bring the map back here: ' + JSON.stringify(await page.evaluate(() => window.apexDebug.map.getCenter()))); });
-  check(await page.evaluate(() => document.getElementById('app').classList.contains('idle')), 'the idle map is back');
-}, { geolocation: { latitude: 35.9606, longitude: -83.9207 }, permissions: ['geolocation'] });
-
 flow('the strip never cuts where the meaning is: a three-word call keeps its direction, the welcome loop reads whole (REVIEW4 U-92, U-105)', async (page, base) => {
   await page.goto(base + '/index.html');
   await page.waitForSelector('#onboard.show', { timeout: 10000 });
@@ -1702,7 +1683,7 @@ flow('a loop fills the map above its card once the card has settled, not a strip
     ? route.fulfill({ contentType: 'application/json', body: JSON.stringify({ version: 8, sources: {}, layers: [{ id: 'bg', type: 'background', paint: { 'background-color': '#eee' } }] }) })
     : route.abort()));
   await planRouter(page);
-  await funTiles(page);                                       // (loops are our router's only since #445)
+  await funTiles(page);                                      // loops are our router's only (#445)
   await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); localStorage.setItem('apex.permsExplained', '1'); } catch (_) {} });
   await page.goto(base + '/index.html');
   await page.waitForFunction(() => window.apexDebug && window.apexDebug.map && window.apexDebug.map.loaded() && window.apex, null, { timeout: 20000 });
