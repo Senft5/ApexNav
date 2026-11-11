@@ -29,22 +29,28 @@ describe("time attack", () => {
     expect((await api(b, "POST", "/api/timeattack/pool", { segment_id: seg })).status).toBe(404);   // not yours
     let t = await ta(b);
     expect([t.circuit.segment_id, t.circuit.name, t.circuit.by, t.week, t.entered, t.board]).toEqual([seg, "Dry Ridge climb", "alice", await monday(), false, []]);
-    expect(await json(api(b, "GET", "/api/timeattack/circuits"))).toMatchObject({ week: await monday(), circuits: [{ segment_id: seg, cell: CELL }] });
+    expect(await json(api(b, "GET", "/api/timeattack/circuits"))).toMatchObject({ week: await monday(), circuits: [] });   // only weeks you entered
     // entering copies it; runs on the copy count, the quickest stays
     const e = await json(api(b, "POST", "/api/timeattack/enter", { cell: CELL }));
     expect(e.added).toBe(true);
     expect(await json(api(b, "POST", "/api/timeattack/enter", { cell: CELL }))).toEqual({ segment_id: e.segment_id, added: false });
+    expect(await json(api(b, "GET", "/api/timeattack/circuits"))).toMatchObject({ circuits: [{ segment_id: seg, cell: CELL }] });
     const day = await today();
-    expect(await json(api(b, "POST", "/api/timeattack/runs", { runs: [{ segment_id: e.segment_id, time_s: 200, driver_score: 780, driven_on: day }] }))).toEqual({ accepted: 1 });
+    expect(await json(api(b, "POST", "/api/timeattack/runs", { runs: [{ segment_id: e.segment_id, time_s: 200, driver_score: 780, driven_on: day }] }))).toMatchObject({ accepted: 1 });
     await ok(api(b, "POST", "/api/timeattack/runs", { runs: [{ segment_id: e.segment_id, time_s: 230, driver_score: 900, driven_on: day }] }));   // slower: not kept
-    await ok(api(a, "POST", "/api/timeattack/runs", { runs: [{ segment_id: seg, time_s: 190, driver_score: 700, driven_on: day }] }));           // the owner's own stage counts
+    // the owner's own stage counts once they enter too: putting it up isn't entering
+    expect(await json(api(a, "POST", "/api/timeattack/runs", { runs: [{ segment_id: seg, time_s: 190, driver_score: 700, driven_on: day }] }))).toMatchObject({ accepted: 0 });
+    expect(await json(api(a, "POST", "/api/timeattack/enter", { cell: CELL }))).toEqual({ segment_id: seg, added: false });
+    await ok(api(a, "POST", "/api/timeattack/runs", { runs: [{ segment_id: seg, time_s: 190, driver_score: 700, driven_on: day }] }));
     const cs = await json(api(c, "POST", "/api/timeattack/enter", { cell: CELL }));
     await ok(api(c, "POST", "/api/timeattack/runs", { runs: [{ segment_id: cs.segment_id, time_s: 200, driver_score: 810, driven_on: day }] }));
     // not counted: a stage that isn't the circuit, a day outside the week, 2.5 km in 30 s
     const other = await makeSegment(d, "Other");
-    expect(await json(api(d, "POST", "/api/timeattack/runs", { runs: [{ segment_id: other, time_s: 100, driven_on: day }] }))).toEqual({ accepted: 0 });
-    expect(await json(api(b, "POST", "/api/timeattack/runs", { runs: [{ segment_id: e.segment_id, time_s: 150, driven_on: "2020-01-06" }] }))).toEqual({ accepted: 0 });
-    expect((await api(b, "POST", "/api/timeattack/runs", { runs: [{ segment_id: e.segment_id, time_s: 30, driven_on: day }] })).status).toBe(400);
+    expect(await json(api(d, "POST", "/api/timeattack/runs", { runs: [{ segment_id: other, time_s: 100, driven_on: day }] }))).toMatchObject({ accepted: 0 });
+    expect(await json(api(b, "POST", "/api/timeattack/runs", { runs: [{ segment_id: e.segment_id, time_s: 150, driven_on: "2020-01-06" }] }))).toMatchObject({ accepted: 0 });
+    // 2.5 km in 30 s is skipped and counted as refused, not an error that would hold back the rest of the batch
+    expect(await json(api(b, "POST", "/api/timeattack/runs", { runs: [{ segment_id: e.segment_id, time_s: 30, driven_on: day }, { segment_id: cs.segment_id, time_s: 500, driven_on: day }] })))
+      .toEqual({ accepted: 0, refused: 1 });
     t = await ta(d);
     expect(t.board.map((x: Msg) => [x.place, x.handle, x.time_s, x.gap_s, x.score])).toEqual([[1, "alice", 190, 0, 700], [2, "bob", 200, 10, 780], [2, "cara", 200, 10, 810]]);
     expect([t.you, t.entrants]).toEqual([null, 3]);
@@ -56,12 +62,29 @@ describe("time attack", () => {
     expect((await ta(a)).board.map((x: Msg) => x.handle)).toEqual(["alice", "bob", "cara"]);   // dee isn't on it to hide
     await ok(api(c, "DELETE", `/api/timeattack/entry?${HERE}`));
     expect((await ta(b)).board.map((x: Msg) => x.handle)).toEqual(["alice", "bob"]);
+    // and it stays off: the next sync sends the run again, and it isn't counted until cara enters again
+    expect(await json(api(c, "POST", "/api/timeattack/runs", { runs: [{ segment_id: cs.segment_id, time_s: 200, driven_on: day }] }))).toMatchObject({ accepted: 0 });
+    expect((await ta(c)).entered).toBe(false);
     // the export lists both; deleting the account takes them
     const ex = await json(api(a, "GET", "/api/me/export"));
-    expect([ex.time_attack_stages.length, ex.time_attack_times.length]).toEqual([1, 1]);
+    expect([ex.time_attack_stages.length, ex.time_attack_times.length, ex.time_attack_entered.length]).toEqual([1, 1, 1]);
     await ok(api(a, "DELETE", "/api/me", { confirm: "DELETE" }));
     expect((await env.DB.prepare("SELECT COUNT(*) AS n FROM ta_pool").first<{ n: number }>())!.n).toBe(0);
     expect((await ta(b)).board.map((x: Msg) => x.handle)).toEqual(["bob"]);
+  });
+
+  it("a copy you hold without entering (a friend's share, a duel) never puts your time on the public board", async () => {
+    const [a, b] = [await makeUser("alice"), await makeUser("bob")];
+    const seg = await makeSegment(a, "Dry Ridge climb");
+    await ok(api(a, "POST", "/api/timeattack/pool", { segment_id: seg }));
+    expect((await ta(b)).circuit.segment_id).toBe(seg);
+    const copy = crypto.randomUUID();
+    await env.DB.prepare("INSERT INTO segments (id, owner, name, length_m, geom, start_lat, start_lon, end_lat, end_lon, origin_id) VALUES (?, ?, 'Copy', 2500, '[[1,2]]', 39.25, -84.6, 39.3, -84.5, ?)").bind(copy, b.id, seg).run();
+    expect(await json(api(b, "POST", "/api/timeattack/runs", { runs: [{ segment_id: copy, time_s: 200, driven_on: await today() }] }))).toEqual({ accepted: 0, refused: 0 });
+    const t = await ta(b);
+    expect([t.entered, t.board, t.entrants]).toEqual([false, [], 0]);
+    expect(await json(api(b, "POST", "/api/timeattack/enter", { cell: CELL }))).toEqual({ segment_id: copy, added: false });   // the copy you have is used
+    expect(await json(api(b, "POST", "/api/timeattack/runs", { runs: [{ segment_id: copy, time_s: 200, driven_on: await today() }] }))).toEqual({ accepted: 1, refused: 0 });
   });
 
   it("limits: a handle, your own original stage, 1 to 25 km, three at most; last week's stage isn't picked again while there's another", async () => {
