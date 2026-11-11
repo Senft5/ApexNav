@@ -240,6 +240,13 @@
 - [x] Tests: tests/test_garage_settings.py (+1); e2e "Settings behind the gear…".
 - Next: Road feel, Route tuning and Spots rows have no value yet (Road feel's is drawn by who_sees.js).
 
+## Session 2026-11-10 (fable-carplay-loops): CarPlay's Loops list matches the dial (claude/fable-carplay-loops, off origin/main dc9caf9)
+
+- [x] CarPlay/ApexCarPlay.swift `openLoops()`: 30, 60, 90, 120, 180 minutes (web/cockpit.js `LOOP_MINUTES`).
+  tests/test_carplay.py `test_the_car_offers_the_same_loop_times_as_the_phones_dial`. docs/APP_REVIEW.md needs no
+  change (the CarPlay row already says "Loops from here"; no new template or data).
+- Next: CarPlay has not been looked at on a screen in this run; its three identical detail lines under each loop
+  ("A twisty loop from here, back where you started") could become one section header once someone can see it.
 ## Session 2026-11-10 (fable-route-reveal): design pass, the route card as a page and the route drawn on (claude/fable-route-reveal, off origin/main ac6c6c6)
 
 - web/route_reveal.js (new): `plan(prev, next, still)` (800 ms stroke + 500 ms count for a route found; 300 ms, no count,

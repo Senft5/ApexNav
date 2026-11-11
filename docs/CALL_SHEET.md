@@ -289,6 +289,14 @@ when you come back. A row with nothing to say (Feedback, About) says nothing; a 
 
 The order of the rows is unchanged. Undo: revert the PR.
 
+## 2026-11-10 (fable-carplay-loops): the car offers the same loop times as the phone (claude/fable-carplay-loops)
+
+For "cohesiveness": the phone's loop dial has five times (30 min, 1 h, 1½ h, 2 h, 3 h) since #342, but CarPlay's Loops
+list still had its own three (30 minutes, 1 hour, 2 hours). The car now lists the same five, spelled out for a glance
+("1½ hours", "3 hours"). The message to the page is unchanged (`loop` with `minutes`), and a test holds the two lists
+equal. Not seen on a car screen: this is a list of five rows where there were three, built by CI only.
+
+Undo: revert the PR (one line in CarPlay/ApexCarPlay.swift).
 ## 2026-11-10 (fable-route-reveal): the route card reads like a page, and a route found is drawn onto the map (claude/fable-route-reveal)
 
 When a route is found its line is now drawn onto the map from start to finish in 0.8 s, the profile on the card is
