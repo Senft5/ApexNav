@@ -76,6 +76,24 @@
 - Checked: pytest full; e2e "a pin has a name", "Where to?" 9/9, "plan flow" 6/6, "spot photo", "Dynamic Type",
   "REVIEW.md 1.2" 2/2, "routes from elsewhere", "saved for offline", "drag to reshape", "safe areas".
 - Next: a tapped place could take the road's name once the lookup lands (rename the planned route after the fact).
+## Session 2026-11-10 (fable-roadbooks): Roadbooks, collections of great roads with stamps from your own Log (claude/fable-roadbooks, off origin/main 948cb4b)
+
+- **Needs migration 0046** (`backend/migrations/0046_roadbooks.sql`, additive: `roadbooks`, `roadbook_roads`, `roadbook_follows`,
+  `roadbook_stamps`) on preview then production BEFORE this merges, each with its `d1_migrations` row.
+- backend/src/roadbooks.ts: private / friends / public books (`CAN_SEE`), roads as planned shapes (600 points, 300 m to 600 km,
+  length and box worked out on the server), follows, `GET /api/roadbooks` (yours and followed, roads by box, no shapes),
+  `GET /api/roadbooks/near` (coarse cell, signed out works), `GET /api/roadbooks/:id` (a public one opens signed out),
+  stamps under a keyed hash of the member (`holderOf`, needs `PEPPER`). Report kind `roadbook` (reports_sql.ts, safety.ts:
+  three reports hide a public book, the owner's removal makes it private for good). account.ts exports and erases them.
+- web/roadbooks.js (lazy `social` group): pure `fromTrack` (first 400 m, a loop's last 400 m and privacy zones cut),
+  `coverage` (share of the road within 45 m of a drive's path), `progress`, `bookLine`, `overview`; `mount()` gives People
+  → Friends → Roadbooks (`section`), Where to? → Roadbooks near you (`nearSection`, `#planBooks`), the Share box's "keep this
+  road in a roadbook" (`addPart`), a book's page (`open`), `afterDrive(id)` (cockpit.js `endCardScored`) and `scanLog(book)`.
+  Links: `/?roadbook=<id>` and `apexnav://open?roadbook=<id>` (ApexNavApp.swift `linkKeys`, uncompiled until CI).
+- Tests: backend/test/roadbooks.test.ts (7), tests/test_roadbooks.py (4), e2e "roadbooks: a planned road goes into…".
+- Checked: backend vitest 367/367 + tsc, pytest 1447 passed, e2e roadbooks, shared routes, REVIEW.md 1.2.
+- Next: a crew's own roadbook on its page; a road added from a stage or a drive's page (only planned routes today); a
+  roadbook's roads as pins on the map; "finished the book" on a profile.
 ## Session 2026-11-11 (fable-share-defaults): sharing on by default for friends and private crews (claude/fable-share-defaults, off origin/main fc27c473)
 
 - `backend/src/share_defaults.ts`: `friendDefaults(a, b)` (both ways, only while accepted and unblocked) from

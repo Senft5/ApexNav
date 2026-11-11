@@ -62,6 +62,10 @@ SELECT
   (SELECT COUNT(*) FROM road_love) AS road_love,
   (SELECT COUNT(*) FROM road_hours) AS road_hours,
   (SELECT COUNT(*) FROM road_hour_holders) AS road_hour_holders,
+  (SELECT COUNT(*) FROM roadbooks) AS roadbooks,
+  (SELECT COUNT(*) FROM roadbook_roads) AS roadbook_roads,
+  (SELECT COUNT(*) FROM roadbook_follows) AS roadbook_follows,
+  (SELECT COUNT(*) FROM roadbook_stamps) AS roadbook_stamps,
   (SELECT COUNT(*) FROM duels) AS duels,
   (SELECT COUNT(*) FROM d1_migrations) AS d1_migrations
 ;

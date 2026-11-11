@@ -63,6 +63,34 @@ notes under a search that finds nothing said "Press Go" while the key under them
 "offline" is only said when the phone is offline.
 
 Undo: revert the PR. Typed coordinates still work as before and are still named "Pin lat, lon".
+## 2026-11-10 (fable-roadbooks): Roadbooks, your collections of great roads; a road is stamped only when your own Log covers it (claude/fable-roadbooks)
+
+A new thing people can make and pass around: a roadbook is a named list of roads ("Smokies classics"), each a planned
+shape with a note. It is private until you say otherwise; Friends shows it to friends; Public lets anyone open it by
+its link (no account needed) and lets drivers near its roads find it in People and in Where to?. People follow a book,
+and each road has Drive it, which plans it. You add a road from a route card's Share box.
+
+Calls I made:
+- **Stamps can't be tapped.** A road shows DRIVEN only when a drive in your own Log covers 85% of it (within 45 m). The
+  phone checks; the server is told only "this member drove this road", never the drive, its day or its speed. Why: a
+  list anyone can tick is worth nothing, and this is the one app that can actually know.
+- **The stamp table doesn't say who.** It holds a keyed hash of the member, like first-to-map slots do, so a copy of
+  the database names nobody. Your export still lists your stamps and deleting your account removes them.
+- **A public book carries your handle.** Spots never show who added them; a roadbook does, because being known for a
+  good list is the point. The Public switch says so before you choose it.
+- **What leaves a route when it goes in a book:** the first 400 m, the last 400 m of a loop, and everything inside
+  your privacy zones (the longest stretch outside them is kept).
+- **It lives in Share, not as a sixth key** on the route card's strip, which is full at phone width.
+- **Reports work as for public crews:** three reports from unrelated members hide a public book until you look; your
+  removal makes it private and it can't be made public again.
+- Limits: 30 books, 40 roads a book, 100 follows, 60 new roads a day.
+- **Where it shows in People:** a Roadbooks row under From friends, in the same list. A brand-new account with no
+  friends and no book keeps the one sentence and one key you asked for (P-08); its first book starts from Share.
+
+Needs migration 0046 on both databases before the merge (four new tables, nothing existing changes).
+
+Undo: revert the PR; the four tables can stay or be dropped (`DROP TABLE roadbook_stamps, roadbook_follows,
+roadbook_roads, roadbooks`).
 ## 2026-11-11 (fable-pin-tap): the pin flow names its waits and taps the map where the map is (claude/fable-pin-tap)
 
 The flow's tap on the map once landed on the plan sheet, which stood higher on that run, and the test then waited 20 s

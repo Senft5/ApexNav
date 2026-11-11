@@ -110,7 +110,7 @@ enum ApexWebBundle {
 
     /// "Open in the app" links from the web (apexnav://open?invite=…): the page's own link parameters, and only those, carried
     /// over to the cockpit page, which handles them exactly as it does on the web. Anything else opens the app as usual.
-    static let linkKeys: Set<String> = ["invite", "crew", "add", "convoy", "go", "road"]   // go=drive: start a drive (IDEAS C-05); road: a road someone sent (web/road_link.js)
+    static let linkKeys: Set<String> = ["invite", "crew", "add", "convoy", "go", "road", "roadbook"]   // go=drive: start a drive (IDEAS C-05); road: a road someone sent (web/road_link.js)
     private static let linkValue = CharacterSet(charactersIn: "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789._-")
     /// The link's parameters the page understands, or nil when the link isn't one of ours or carries none.
     static func linkItems(_ url: URL) -> [URLQueryItem]? {
