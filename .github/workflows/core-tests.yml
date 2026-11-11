@@ -70,7 +70,12 @@ jobs:
         with:
           node-version: "22"
       - run: npm install --no-save --no-package-lock --no-audit --no-fund playwright@1.63.0
-      - run: npx playwright install --with-deps --only-shell chromium   # headless launch only needs the shell
+      # headless launch only needs the shell. The system packages are best effort, with a 5-minute cap: the runner image
+      # already has every library Chromium needs (apt only adds fonts), and on 2026-11-11 the Ubuntu mirrors stopped
+      # resolving, so --with-deps spent 10 minutes and failed the job before a single flow ran.
+      - run: npx playwright install --only-shell chromium
+      - name: Browser system packages (best effort)
+        run: timeout 300 npx playwright install-deps chromium || echo "::warning::playwright install-deps failed; running with the runner image's own packages"
       - run: node smoke.js
         env:
           SHOTS: shots   # the safe-area flow's contact sheets, one per phone shape (REVIEW2.md U-05)
