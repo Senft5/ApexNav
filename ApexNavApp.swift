@@ -131,28 +131,43 @@ enum ApexWebBundle {
 }
 
 /// Serves files from the bundled web/ folder for the apexnav:// scheme.
+/// The read happens off the main thread (sweep 2026-11-11): the page asks for multi-megabyte files (the pronunciation
+/// lexicons, 5.5 MB; a routing graph tile, up to 2.8 MB) and reading them on the main thread stalled the phone's UI and
+/// the car's map while it ran. WebKit may stop a task while it is read; a stopped task is never answered (answering one
+/// throws inside WebKit), so the main thread keeps the ones still open and answers only those.
 final class ApexBundleSchemeHandler: NSObject, WKURLSchemeHandler {
     private let root: URL
+    private let io = DispatchQueue(label: "Vetta bundle files", qos: .userInitiated, attributes: .concurrent)
+    private var pending = Set<ObjectIdentifier>()   // main thread only: started, not yet answered or stopped
     init(root: URL) { self.root = root.standardizedFileURL }
 
     func webView(_ webView: WKWebView, start task: WKURLSchemeTask) {
         guard let url = task.request.url else { return }
         let rel = url.path.hasPrefix("/") ? String(url.path.dropFirst()) : url.path
         let file = root.appendingPathComponent(rel.isEmpty ? "index.html" : rel).standardizedFileURL
-        guard file.path.hasPrefix(root.path + "/"), let data = try? Data(contentsOf: file) else {
+        guard file.path.hasPrefix(root.path + "/") else {
             task.didFailWithError(URLError(.fileDoesNotExist))
             return
         }
-        let mime = UTType(filenameExtension: file.pathExtension)?.preferredMIMEType ?? "application/octet-stream"
-        let response = HTTPURLResponse(url: url, statusCode: 200, httpVersion: "HTTP/1.1",
-                                       headerFields: ["Content-Type": mime, "Content-Length": "\(data.count)",
-                                                      "Access-Control-Allow-Origin": "*"])!
-        task.didReceive(response)
-        task.didReceive(data)
-        task.didFinish()
+        let id = ObjectIdentifier(task)
+        pending.insert(id)
+        io.async {
+            let data = try? Data(contentsOf: file, options: .mappedIfSafe)
+            DispatchQueue.main.async { [weak self] in
+                guard let self, self.pending.remove(id) != nil else { return }
+                guard let data else { task.didFailWithError(URLError(.fileDoesNotExist)); return }
+                let mime = UTType(filenameExtension: file.pathExtension)?.preferredMIMEType ?? "application/octet-stream"
+                let response = HTTPURLResponse(url: url, statusCode: 200, httpVersion: "HTTP/1.1",
+                                               headerFields: ["Content-Type": mime, "Content-Length": "\(data.count)",
+                                                              "Access-Control-Allow-Origin": "*"])!
+                task.didReceive(response)
+                task.didReceive(data)
+                task.didFinish()
+            }
+        }
     }
 
-    func webView(_ webView: WKWebView, stop task: WKURLSchemeTask) {}
+    func webView(_ webView: WKWebView, stop task: WKURLSchemeTask) { pending.remove(ObjectIdentifier(task)) }
 }
 
 // What the share sheet carries: a file the app wrote, or an invite's words and link (`shareText`, feedback 07).
