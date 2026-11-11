@@ -31,6 +31,23 @@
 - Tests: tests/test_route_card.py; e2e "plan flow (c)".
 - Next: CarPlay has not had a design pass in this run (Swift, not visible from the cloud).
 
+## Session 2026-11-10 (fable-route-reveal): design pass, the route card as a page and the route drawn on (claude/fable-route-reveal, off origin/main ac6c6c6)
+
+- web/route_reveal.js (new): `plan(prev, next, still)` (800 ms stroke + 500 ms count for a route found; 300 ms, no count,
+  for another route of the same plan; 0 under reduced motion, at launch, in a drive), `countText`, `ease`, `gradient`, `countUp`.
+- web/cockpit.js: `apex-route-src` has `lineMetrics: true`; `loadTrackOnMap` calls `revealOf(track)` (once per route) and
+  `penDraw` (a `line-gradient` on `apex-route` and its casing, taken off at the end and by a timer; a route replaced mid-stroke
+  carries on from where the pen was). `paintProfile` / `paintHere`: the profile drawn at the box's width (80 px), a strip
+  (`ApexRouteCard.strip`) before heights, the red apex dot (`#routeCardHere`) at the cursor (moved on return from a
+  fly-through via `paintIdle`), drawn on with the line (`.rc-profile.draw`). `#routeBarMeta` is time · distance · corners,
+  numbers in ink. The card opens scrolled to the top.
+- web/route_card.js: `strip`, `profileAt`, `tickLen`. web/index.html: card order is stat line, profile, progress, the
+  choice, then groups "This drive" (story, facts), "The road" (dials, sub), "Planned with" (chips), links, Home by. The
+  open bar is the headline (30 px Barlow); folded it is 22 px with the stat line under it, Start beside it. Every id kept.
+  `.plan.routed .plan-body { scroll-padding-bottom: 0 }` (the Find bar's 80 px made a tapped level card scroll).
+- Tests: tests/test_route_reveal.py; e2e "the route reveal…"; "routes from elsewhere" bar regex now expects time first.
+- Next: the fly-through could move the apex dot live while it plays (the card is hidden then; only its return position shows).
+
 ## Session 2026-11-10 (fable-your-data): Your data as Settings-style rows (claude/fable-your-data, off origin/main 3f2f315)
 
 - `web/index.html` only: the Your data section's keys are `.nav-rows.data-rows` with three `.nav-group` headings; the

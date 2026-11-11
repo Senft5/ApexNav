@@ -438,7 +438,7 @@
           layout: { 'symbol-placement': 'line', 'text-size': 9, 'text-field': ['concat', ['number-format', ['get', 'ele'], {}], "'"], 'text-font': ['Noto Sans Regular'] },
           paint: { 'text-halo-width': 1.2 } });
       }
-      map.addSource('apex-route-src', { type: 'geojson', data: emptyFC() });
+      map.addSource('apex-route-src', { type: 'geojson', data: emptyFC(), lineMetrics: true });   // lineMetrics: the reveal draws the line by its progress (penDraw)
       const width = (a, b) => ['interpolate', ['linear'], ['zoom'], 10, a, 16, b];
       // Twisty roads (map shape, not measured): under every route line. t = 2 very twisty, 1 twisty.
       map.addSource('apex-twisty-src', { type: 'geojson', data: emptyFC() });
@@ -1264,10 +1264,60 @@
     map.on('movestart', (e) => { if (e.originalEvent && !touching && e.originalEvent.type !== 'wheel') { pauseFollow(); scheduleResume(); } });
 
     function loadTrackOnMap() {
-      if (!mapReady || !track) return;
+      if (!track) return;
+      const show = revealOf(track);
+      if (!mapReady) return;
       map.getSource('apex-route-src').setData(routeGeoJSON(track));
+      penDraw(track, show.lineMs);
       rebuildPins();
       paintAlternates();
+    }
+    // The reveal (design pass, 2026-11-10; web/route_reveal.js): a route just found is drawn onto the map from its start to
+    // its end like a pen stroke, its profile is drawn on the card with it and the card's numbers count up. Another route
+    // of the same plan (a level card, a loop's way, the ranked route) redraws quickly; a route put up again (a fly-through,
+    // members' corners) is already drawn; reduced motion, a launch, a drive or a driven road: a cut. Worked out once per
+    // route, here where every track reaches the map, and read by the card (cardReveal).
+    let revealLast = null, cardReveal = null;
+    function revealOf(t) {
+      const none = { lineMs: 0, countMs: 0 };
+      if (revealLast === t) return none;
+      const prev = revealLast;
+      revealLast = t;
+      let still = true;
+      try { still = booting || state.mode === 'live' || matchMedia('(prefers-reduced-motion: reduce)').matches; } catch (_) { still = true; }
+      const show = window.ApexReveal && t.kind === 'route' && !t.sectors ? ApexReveal.plan(prev && prev.kind === 'route' ? prev : null, t, still) : none;
+      cardReveal = { t, ms: show.lineMs, countMs: show.countMs, at: performance.now() };
+      return show;
+    }
+    // The line itself, by its own progress (line-gradient over the source's lineMetrics). The gradient is taken off at the
+    // end (and by a timer, should the frames stop: a hidden tab), so the line is never left half drawn and the look's
+    // line-color rules again.
+    const PEN_LAYERS = ['apex-route-casing', 'apex-route'];
+    let pen = null;
+    function penStop() {
+      if (!pen) return;
+      cancelAnimationFrame(pen.raf); clearTimeout(pen.timer); pen = null;
+      try { for (const id of PEN_LAYERS) if (map.getLayer(id)) map.setPaintProperty(id, 'line-gradient', undefined); } catch (_) { /* the map went (a lost context): nothing to tidy */ }
+    }
+    function penDraw(t, ms) {
+      if (pen && pen.t === t && !(ms > 0)) return;                      // the same route sent again mid-stroke: the stroke carries on
+      // another route while the pen is still down (the ranked route lands inside the first stroke): the pen carries on from
+      // where it was along the new line, it never goes back to the start
+      const from = pen && ms > 0 ? pen.p : 0;
+      penStop();
+      if (!(ms > 0) || !window.ApexReveal) return;
+      const C = look.colors, cols = { 'apex-route-casing': C.routeCasing, 'apex-route': C.route }, t0 = performance.now();
+      const at = (p) => { me.p = p; for (const id of PEN_LAYERS) if (map.getLayer(id)) map.setPaintProperty(id, 'line-gradient', ApexReveal.gradient(cols[id], p)); };
+      const me = pen = { t, p: from, raf: 0, timer: setTimeout(() => { if (pen === me) penStop(); }, ms + 250) };
+      const frame = (now) => {
+        if (pen !== me) return;
+        const f = (now - t0) / ms;
+        if (f >= 1) { penStop(); return; }
+        try { at(from + (1 - from) * ApexReveal.ease(f)); } catch (_) { penStop(); return; }
+        me.raf = requestAnimationFrame(frame);
+      };
+      try { at(from); } catch (_) { penStop(); return; }
+      me.raf = requestAnimationFrame(frame);
     }
 
     // =======================================================================
@@ -2093,6 +2143,7 @@
       $('modePlate').hidden = idle || state.mode === 'live';   // driving: the drive bar under the map says it
       $('modePlate').setAttribute('role', replayOn && state.mode !== 'live' ? 'button' : 'status');
       paintPlacePlate();
+      if (idle) { try { paintHere(); } catch (_) { /* before the card's own state is set up */ } }   // back from a fly-through: the dot is where it was left
     }
     function setMode(mode) {
       state.mode = mode;
@@ -2661,7 +2712,9 @@
       b.style.fontSize = ''; bar.classList.remove('two');
       requestAnimationFrame(() => {
         if (!b.clientWidth) return;
-        for (let px = 15; px >= 14 && b.scrollWidth > b.clientWidth + 1; px--) b.style.fontSize = `${px}px`;
+        // (design pass, 2026-11-10: the name is the card's headline, so the steps start from its own size, down a fifth)
+        const base = Math.round(parseFloat(getComputedStyle(b).fontSize)) || 16, floor = Math.max(14, Math.round(base * 0.8));
+        for (let px = base - 1; px >= floor && b.scrollWidth > b.clientWidth + 1; px--) b.style.fontSize = `${px}px`;
         if (b.scrollWidth > b.clientWidth + 1) bar.classList.add('two');
       });
     }
@@ -2677,8 +2730,45 @@
     const VOC = window.ApexVocabulary || null;
     const TWIST_WORD = VOC ? VOC.TERMS.twist.label : 'Curvy', FLOW_WORD = VOC ? VOC.TERMS.flow.label : 'Flowing';
     const isLoop = (t) => !!t && typeof t.id === 'string' && t.id.startsWith('loop_');
+    // The card's hero (design pass, 2026-11-10): the route's profile, its corners ticked along the foot, and the red apex dot
+    // where you are on it (the start, or where the fly-through was left). Before the heights are in, and when they never
+    // come, the road is a level line with its corners (route_card.js strip): the graphic is never an empty box, and the
+    // heights stay "--". Drawn at the box's own width so the highest point's label keeps its shape. A profile that is new
+    // on the card (a route found, its heights arriving) is drawn on from the left, in step with the line on the map.
+    const PROFILE_H = 80;
+    const profileDrawn = new WeakMap();                                // route -> { kind, at, ms }: the stroke under way
+    function paintProfile(t) {
+      const box = $('routeCardProfile'), w = Math.max(240, Math.round(box.clientWidth) || 340);
+      const full = ApexRouteCard.profile(t, w, PROFILE_H, heightLabel), svg = full || ApexRouteCard.strip(t, w, PROFILE_H) || '';
+      box.innerHTML = svg + (svg ? '<i class="rc-here" id="routeCardHere" aria-hidden="true"></i>' : '');
+      box.classList.toggle('none', !full && !!t.profileDone);
+      box.classList.toggle('flat', !full);
+      box.dataset.w = String(w);
+      paintHere(t);
+      const el = box.firstElementChild, kind = full ? 'elev' : 'strip', now = performance.now();
+      if (!el || !svg) return;
+      let d = profileDrawn.get(t);
+      if (!d || d.kind !== kind) {
+        const r = cardReveal && cardReveal.t === t ? cardReveal : null;
+        // heights that arrive later draw themselves on; a swap's are quick; a cut when nothing is to be animated
+        const ms = !r || !(r.ms > 0) ? 0 : kind === 'strip' || now - r.at < 250 ? r.ms : Math.max(r.ms, 600);
+        d = { kind, at: now, ms }; profileDrawn.set(t, d);
+      }
+      const left = d.ms - (now - d.at);
+      if (left > 30) { el.style.setProperty('--rc-draw', `${d.ms}ms`); el.style.animationDelay = `${-(now - d.at)}ms`; el.classList.add('draw'); }
+    }
+    // the apex dot on the profile: where the cursor is along the route (0 at rest; the fly-through moves it)
+    function paintHere(t = plannedRoute) {
+      const dot = $('routeCardHere'), box = $('routeCardProfile');
+      if (!dot || !t || !window.ApexRouteCard) return;
+      const at = ApexRouteCard.profileAt(t, track === t ? state.cursorM : 0, +box.dataset.w || 340, PROFILE_H);
+      dot.hidden = !at;
+      if (at) { dot.style.left = `${(at.fx * 100).toFixed(2)}%`; dot.style.top = `${(at.fy * 100).toFixed(2)}%`; }
+    }
     function renderRouteCard(t = plannedRoute) {
       const card = $('routeCard');
+      // the card takes the plan sheet's place: it opens at its headline, wherever the sheet had been scrolled to
+      if (t && !$('planPanel').classList.contains('routed')) $('planBody').scrollTop = 0;
       $('planPanel').classList.toggle('routed', !!t);
       $('app').classList.toggle('routed', !!t);
       // finding 8: one name for go. The bar's key starts the planned route (Start, red); with none it's the smaller Just drive
@@ -2689,8 +2779,10 @@
         const mi = Array.isArray(t.dist) && t.dist.length ? `${ApexUnits.long(t.dist[t.dist.length - 1], 1)}` : '--';
         $('routeBarName').textContent = t.name || 'Route';
         fitRouteBarName();
-        // U-64: the time too, the router's or the route's own envelope (timeFromEnvelope): "35.4 mi · 1 h 05 · 32 corners"
-        $('routeBarMeta').textContent = [mi, routeTimeText(t.timeS), Array.isArray(t.events) ? ApexFormat.cornerCount(t.events.filter(e => e.type === 'corner').length) : ''].filter(Boolean).join(' · ');
+        // U-64: the time too, the router's or the route's own envelope (timeFromEnvelope), in the card's order: "1 h 05 · 35.4 mi · 32 corners"
+        // (the numbers in ink, their units in pencil, as the card's stat line sets them)
+        $('routeBarMeta').replaceChildren(...[routeTimeText(t.timeS), mi, Array.isArray(t.events) ? ApexFormat.cornerCount(t.events.filter(e => e.type === 'corner').length) : ''].filter(Boolean)
+          .flatMap((part, k) => { const m = /^([\d.,:]+(?: h \d\d)?)(.*)$/.exec(part), n = document.createElement('i'); if (m) n.textContent = m[1]; return [k ? ' · ' : '', ...(m ? [n, m[2]] : [part])]; }));
       }
       carRoute(t);
       if (!t) { card.hidden = true; paintAlternates(); return; }
@@ -2709,10 +2801,13 @@
       // the card as instruments (REVIEW.md roadmap 5): three stamped numbers and the profile with a tick per corner
       $('routeCardStats').innerHTML = ApexRouteCard.stats(t, (m) => ApexUnits.long(m, 1)).map((x) =>
         `<div><b>${x.value}${x.unit ? `<small>${x.unit}</small>` : ''}</b><span>${x.label}</span></div>`).join('');
+      // the reveal: the three numbers count up to what they say, once, for a route just found (never for a redraw)
+      if (cardReveal && cardReveal.t === t && cardReveal.countMs > 0 && !cardReveal.counted && window.ApexReveal) {
+        cardReveal.counted = true;
+        ApexReveal.countUp($('routeCardStats').querySelectorAll('b'), cardReveal.countMs);
+      }
       // finding 2: the profile's room is kept until its heights are in (or known not to come), so nothing under it jumps
-      const prof = ApexRouteCard.profile(t, 340, 92, heightLabel) || '';
-      $('routeCardProfile').innerHTML = prof;
-      $('routeCardProfile').classList.toggle('none', !prof && !!t.profileDone);
+      paintProfile(t);
       const avgSector = (k) => {
         if (!Array.isArray(t.sectors) || !t.sectors.length) return null;
         const vals = t.sectors.map(s => s && s[k]).filter(Number.isFinite);
@@ -4774,6 +4869,7 @@
       if (track && track.kind === 'route' && state.mode !== 'live') {
         setPlaying(false); replayOn = false; track = null;
         if (mapReady) { map.getSource('apex-route-src').setData(emptyFC()); map.getSource('apex-ribbon-src').setData(emptyFC()); ribbonKey = ''; }
+        penStop(); revealLast = null;                                 // the next route found is a new find, drawn on in full
         rebuildPins(); paintIdle(); render(true);
       }
       resumeFollow();
@@ -7657,7 +7753,7 @@
     function heightLabel(m) { return ApexUnits.metric() ? `${Math.round(m)} m` : `${Math.round(m * 3.28084).toLocaleString('en-US')} ft`; }
     function paintClimb(t) {
       const up = ApexStages.climbM(t.elev), lo = Math.min(...t.elev), hi = Math.max(...t.elev);
-      if (plannedRoute === t) $('routeCardProfile').innerHTML = ApexRouteCard.profile(t, 340, 92, heightLabel) || '';
+      if (plannedRoute === t) paintProfile(t);
       if (up == null) return;
       const h = heightLabel;
       $('routeCardClimb').textContent = ApexRouteCard.factText(`Climbs ${h(up)} in all · highest ${h(hi)}`);

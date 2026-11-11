@@ -1795,7 +1795,7 @@ flow('a GPX route has a time from its own envelope (U-64); the Live Activity rea
   await page.waitForFunction(() => window.apexDebug.track && window.apexDebug.track.name === 'Ridge run', null, { timeout: 10000 });
   const t = await page.evaluate(() => ({ s: apexDebug.track.timeS, from: apexDebug.track.timeFrom, bar: document.getElementById('routeBarMeta').textContent, card: document.getElementById('routeCardMeta').textContent }));
   check(t.from === 'envelope' && t.s > 60 && t.s < 3600, 'the envelope\'s time: ' + JSON.stringify(t));
-  check(/ · \d+ min · \d+ corners/.test(t.bar) && /\d+ min/.test(t.card) && !/traffic/i.test(t.bar + t.card), 'the bar and the card show it: ' + JSON.stringify(t));
+  check(/^\d+ min · [\d.]+ mi · \d+ corners/.test(t.bar) && /\d+ min/.test(t.card) && !/traffic/i.test(t.bar + t.card), 'the bar and the card show it: ' + JSON.stringify(t));
   // on the route, nothing within 3 km: a short word and the next corner, the island's distance left to the record dot
   await page.evaluate(() => window.apex.live({ lat: 35.5, lon: -83.9, accuracy_m: 5, speed_mps: 0, course_deg: 0, has_fix: true }));
   await page.evaluate(() => window.apex.onNative({ type: 'carplay', action: 'start' }));
@@ -5975,6 +5975,98 @@ flow('plan flow (a) a destination in 3 taps: Where to?, the place, Start; Start 
   await tap('#routeDriveBtn', 'Start');
   await page.waitForFunction(() => window.apexDebug.driveActive && apexDebug.track && apexDebug.track.kind === 'route', null, { timeout: 10000 });
   check(taps.n === 3, `a destination in 3 taps: ${taps.log.join(' → ')}`);
+}, IPHONE);
+
+// The route reveal and the card as a page (design pass, 2026-11-10; web/route_reveal.js): a route found is drawn onto the
+// map from its start like a pen stroke while the card rises and its numbers count up; Start is up from the first frame of
+// it. Another route of the same plan redraws quickly; reduced motion is a cut, the line whole at once.
+flow('the route reveal: a route found is drawn onto the map like a pen stroke (about 0.8 s) while the card is already up with Start, its numbers count up; a level card redraws in about 0.3 s; reduced motion is a cut; the card reads headline, stat line, profile with the apex dot, the choice, then quiet groups (design pass, 2026-11-10)', async (page, base) => {
+  // a bare map style (the real one is offline here), so the map loads and its route layers exist
+  await page.route('https://tiles.openfreemap.org/**', (route) => (route.request().url().includes('/styles/')
+    ? route.fulfill({ contentType: 'application/json', body: JSON.stringify({ version: 8, glyphs: 'https://tiles.openfreemap.org/fonts/{fontstack}/{range}.pbf', sources: {}, layers: [{ id: 'bg', type: 'background', paint: { 'background-color': '#eee' } }] }) })
+    : route.abort()));
+  await planRouter(page);
+  await planPage(page, base, { 'apex.funLevel': 'quick' });           // Quick keeps the first route: one find, no ranked swap after it
+  await page.waitForFunction(() => !!apexDebug.map.getLayer('apex-route'), null, { timeout: 15000 });
+  // every frame: how far the line is drawn (null: no stroke under way), the distance the card says, whether Start is up
+  const watch = () => page.evaluate(() => { window.__rv = []; window.__rvOn = true;
+    const tick = () => { if (!window.__rvOn) return;
+      const m = apexDebug.map, p = document.getElementById('planPanel'), k = document.getElementById('routeDriveBtn').getBoundingClientRect(), b = document.querySelector('#routeCardStats > div b');
+      let g = null; try { const v = m.getPaintProperty('apex-route', 'line-gradient'); g = Array.isArray(v) ? v[3] : null; } catch (_) { g = null; }
+      window.__rv.push({ t: performance.now(), g, dist: b && b.firstChild ? b.firstChild.textContent : null, up: p.classList.contains('open') && p.classList.contains('routed') && k.height > 0 && k.bottom <= innerHeight,
+        draw: !!document.querySelector('#routeCardProfile .rc-profile.draw') });
+      requestAnimationFrame(tick); };
+    requestAnimationFrame(tick); });
+  const strokes = () => page.evaluate(() => { window.__rvOn = false; const out = []; let cur = null;
+    for (const s of window.__rv) { if (s.g != null) { if (!cur) out.push(cur = { t0: s.t, t1: s.t, lo: s.g, hi: s.g, up: s.up, rising: true, n: 0, draw: s.draw });
+      else { cur.rising = cur.rising && s.g >= cur.hi - 1e-9; cur.t1 = s.t; cur.hi = Math.max(cur.hi, s.g); cur.up = cur.up && s.up; } cur.n++; } else cur = null; }
+    const dists = window.__rv.filter((s) => s.up && s.dist != null).map((s) => parseFloat(s.dist));
+    return { strokes: out.map((k) => ({ ms: Math.round(k.t1 - k.t0), lo: +k.lo.toFixed(3), hi: +k.hi.toFixed(3), up: k.up, rising: k.rising, n: k.n, draw: k.draw })), dists: [...new Set(dists)],
+      last: window.__rv.length ? window.__rv[window.__rv.length - 1] : null }; });
+  await page.click('#destInput'); await page.fill('#destInput', 'Maryville');
+  await page.waitForSelector('#placeList .place', { timeout: 10000 });
+  await watch();
+  await page.click('#placeList .place');
+  await cardUp(page); await planDone(page);
+  await page.waitForTimeout(1300);
+  const found = await strokes();
+  const s = found.strokes[0];
+  // (the ranking's own copy of the route may land inside the stroke: the pen carries on along it, never back to the start)
+  check(found.strokes.length === 1 && s && s.n >= 4 && s.rising && s.lo <= 0.35 && s.hi >= 0.9 && s.ms >= 250 && s.ms <= 1300, 'the line is drawn from its start to its end in one stroke, never backwards: ' + JSON.stringify(found.strokes));
+  check(s && s.up, 'the card is up with Start on it for the whole stroke: the animation runs beside it, never in front: ' + JSON.stringify(found.strokes));
+  check(s && s.draw, 'the profile is drawn on with the line: ' + JSON.stringify(found.strokes));
+  check(found.last.g === null, 'the stroke ends with the line whole, on the look\'s own colour (no gradient left on it)');
+  const total = await page.evaluate(() => parseFloat(document.querySelector('#routeCardStats > div b').firstChild.textContent));
+  check(found.dists.length >= 4 && found.dists.every((d, i) => i === 0 || d >= found.dists[i - 1]) && found.dists[0] < total && found.dists[found.dists.length - 1] === total,
+    'the distance counts up to what it is: ' + JSON.stringify(found.dists.slice(0, 6)) + ' … ' + total);
+  // the card as a page: the name is the headline (the number face, large), then time, distance, corners, the profile with
+  // the apex dot at the start, the choice, and only then the groups; Start is its foot
+  const pg = await page.evaluate(() => { const y = (sel) => { const e = document.querySelector(sel); return e && e.getClientRects().length ? Math.round(e.getBoundingClientRect().top) : null; };
+    const name = document.getElementById('routeBarName'), cs = getComputedStyle(name), dot = document.getElementById('routeCardHere'), box = document.getElementById('routeCardProfile').getBoundingClientRect(), dr = dot.getBoundingClientRect();
+    const cells = [...document.querySelectorAll('#routeCardStats > div')].sort((a, b) => a.getBoundingClientRect().left - b.getBoundingClientRect().left).map((d) => d.querySelector('span').textContent);
+    const probe = document.createElement('i'); probe.style.color = getComputedStyle(document.documentElement).getPropertyValue('--accent').trim(); document.body.append(probe); const red = getComputedStyle(probe).color; probe.remove();
+    return { name: { px: parseFloat(cs.fontSize), face: cs.fontFamily, y: y('#routeBarName') }, cells, ys: ['#routeCardStats', '#routeCardProfile', '#routeCardFun', '.rc-drive, .rc-group', '.rc-with', '.rc-links'].map(y),
+      strip: !!document.querySelector('#routeCardProfile svg.rc-profile'), dot: { w: Math.round(dr.width), red: getComputedStyle(dot).backgroundColor === red, atStart: Math.abs(dr.left + dr.width / 2 - box.left) <= 1.5, inBox: dr.top >= box.top - 6 && dr.bottom <= box.bottom + 6 },
+      groups: [...document.querySelectorAll('#routeCard .rc-h')].map((h) => h.textContent), barMetaShown: document.getElementById('routeBarMeta').getClientRects().length > 0 }; });
+  check(pg.name.px >= 26 && /Barlow Condensed/.test(pg.name.face) && pg.cells.join() === 'time,distance,corners' && !pg.barMetaShown, 'the headline: the name large in the number face, then time, distance, corners: ' + JSON.stringify(pg));
+  const ys = pg.ys.filter((v) => v != null);
+  check(pg.ys[0] != null && pg.ys[1] != null && pg.ys[2] != null && ys.every((v, i) => i === 0 || v >= ys[i - 1]) && pg.name.y < pg.ys[0], 'top to bottom: headline, stat line, profile, the choice, the groups, the links: ' + JSON.stringify(pg.ys));
+  check(pg.strip && pg.dot.w === 10 && pg.dot.red && pg.dot.atStart && pg.dot.inBox, 'the profile is drawn even before its heights are known, with the 10 px apex dot at the start: ' + JSON.stringify(pg.dot));
+  check(pg.groups.join() === 'This drive,The road,Planned with', 'the rest is in named groups: ' + pg.groups);
+  // folded: the same headline a size smaller, its three numbers under it in the card's order, Start beside it
+  await page.click('#routeBar'); await page.waitForTimeout(400);
+  const bar = await page.evaluate(() => { const n = document.getElementById('routeBarName'), m = document.getElementById('routeBarMeta'), k = document.getElementById('startDrive').getBoundingClientRect(), r = document.getElementById('routeBar').getBoundingClientRect();
+    return { open: document.getElementById('planPanel').classList.contains('open'), face: getComputedStyle(n).fontFamily, px: parseFloat(getComputedStyle(n).fontSize), meta: m.textContent, metaFace: getComputedStyle(m).fontFamily,
+      start: k.height >= 44 && k.left >= r.right - 1 && Math.abs((k.top + k.bottom) / 2 - (r.top + r.bottom) / 2) <= 6 }; });
+  check(!bar.open && /Barlow Condensed/.test(bar.face) && bar.px >= 18 && /^\d+ min · [\d.]+ mi · \d+ corners?$/.test(bar.meta) && /Barlow Condensed/.test(bar.metaFace) && bar.start, 'the bar is the card folded, Start beside it: ' + JSON.stringify(bar));
+  await page.click('#routeBar'); await page.waitForTimeout(400);
+  // another route of the same plan: a quick redraw, not the set piece again, and no count
+  await watch();
+  await page.click('#routeCardFun [data-fun="fun"]');
+  await page.waitForFunction(() => apexDebug.track && apexDebug.track.kind === 'route' && apexDebug.track.events.filter((e) => e.type === 'corner').length > 10 && !document.getElementById('planPanel').classList.contains('busy'), null, { timeout: 20000 });
+  await page.waitForTimeout(900);
+  const swap = await strokes();
+  check(swap.strokes.length >= 1 && swap.strokes.every((k) => k.ms <= 500 && k.up) && swap.strokes[swap.strokes.length - 1].hi >= 0.6 && swap.last.g === null, 'a level card redraws the line quickly (about 0.3 s): ' + JSON.stringify(swap.strokes));
+  check(swap.dists.length <= 2, 'and its numbers are simply there: ' + JSON.stringify(swap.dists));
+  // a road found on its own (nothing ranked after it): the whole stroke, 0.8 s
+  await watch();
+  await page.evaluate(() => apexDebug.buildRoute(null, 'road', 'Test Ridge Road', { ...apexDebug.track, id: 'road', name: 'Test Ridge Road' }));
+  await page.waitForTimeout(1500);
+  const whole = await strokes();
+  check(whole.strokes.length === 1 && whole.strokes[0].rising && whole.strokes[0].lo <= 0.2 && whole.strokes[0].hi >= 0.9 && whole.strokes[0].ms >= 600 && whole.strokes[0].ms <= 1100 && whole.strokes[0].up,
+    'a route found is one stroke of 0.6 to 0.9 s (a slow frame aside): ' + JSON.stringify(whole.strokes));
+  // reduced motion: the finished line at once, the numbers as they are
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  await page.click('#planCancel'); await page.click('#planClear');
+  await page.click('#destInput'); await page.fill('#destInput', 'Maryville');
+  await page.waitForSelector('#placeList .place', { timeout: 10000 });
+  await watch();
+  await page.click('#placeList .place');
+  await cardUp(page); await planDone(page);
+  await page.waitForTimeout(600);
+  const still = await strokes();
+  const line = await page.evaluate(() => { const d = apexDebug.map.getSource('apex-route-src').serialize().data; return { n: d && d.features ? d.features.length : 0, g: apexDebug.map.getPaintProperty('apex-route', 'line-gradient') || null, draw: !!document.querySelector('#routeCardProfile .rc-profile.draw') }; });
+  check(still.strokes.length === 0 && line.n === 1 && line.g === null && !line.draw && still.dists.length <= 2, 'reduced motion: the line is whole at once, nothing counts or draws: ' + JSON.stringify({ still: still.strokes, line, dists: still.dists }));
 }, IPHONE);
 
 flow('no connection: People is a page that says which it is (offline, or Vetta not answering) and what still works, Try again under the thumb; the Garage says so in its own corner (design pass 5)', async (page, base) => {
