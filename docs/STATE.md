@@ -5,7 +5,7 @@
 - IDEAS Q-02 crowd half, ROAD_INTELLIGENCE 4.3. `core/road_dna.spike_mask` / `Core.spikeMask` (parity-tested; detect_hazards
   reads it): per sample 1 / 0 / unknown. web/contributor.js `bumpEvidence` + `binBump`: each bin's `bp` (unknown at walking
   pace or with no vertical peaks); the live stream and ambient sharing carry `vert_peak_g` now (cockpit.js feedLive too).
-- Migration 0051 (`road_bins.bump_hit`, `bump_pass`, `bump_drivers`): sums weighted 2^((day - 2026-01-01)/120 d) (D1 refuses
+- Migration 0052 (`road_bins.bump_hit`, `bump_pass`, `bump_drivers`): sums weighted 2^((day - 2026-01-01)/120 d) (D1 refuses
   power()); drivers via a keyed hash per person and 40 m in `seen` (contribute.ts `BUMP`, `bumpDriverStmts`). roads.ts
   `verifiedBumps`: ±2 bins, Jeffreys Beta, > 0.8 and 2+ drivers, `bp: [[bin, p]]` per direction.
 - Phone: `seriesFrom` → `measuredAlong().crowdBumps`; `bumpEvents` makes `Bump` notes (marked `crowd`); cockpit.js

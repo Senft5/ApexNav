@@ -12,7 +12,7 @@ storing who. A bump shows to members once two or more people felt it and most pa
 hits and no clean pass is 0.83; three of four is 0.70, not shown), and the co-driver calls it on a planned route even in
 cruise, the strip saying "Confirmed by members". The calls I made: 120 days for the half-life (potholes get filled
 within a season or two; a frost heave comes back each winter and gets re-felt); ±10 m to treat two hits as one bump
-(GPS); a Jeffreys prior; a repaved section starts its bump evidence again. Migration 0051 (additive). Undo: FLAGS
+(GPS); a Jeffreys prior; a repaved section starts its bump evidence again. Migration 0052 (additive). Undo: FLAGS
 {"crowd_bumps":{"on":false}} stops the calls; the thresholds are `BUMP` (contribute.ts) and `VERIFY` (roads.ts).
 
 ## 2026-11-10 (fable-pro-looks): Pro is looks only; one Pro crew-mate dresses the whole crew (claude/fable-pro-looks)
