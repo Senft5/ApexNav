@@ -82,6 +82,28 @@ const flows = [];
 const scoredCard = (page, timeout = 20000) => page.waitForFunction(() => { const s = document.getElementById('endScore'); return s && !s.hasAttribute('aria-busy'); }, null, { timeout });
 const flow = (name, fn, ctxOpts = {}) => flows.push({ name, fn, ctxOpts });
 function check(cond, msg) { if (!cond) throw new Error(msg); }
+// A sheet that slides up (.overlay.dim, sheet-up 0.2 s) is open and at rest: shown, nothing in it still animating, and in
+// the same place two frames running. Click a key in it only after this: on a slow runner a click aimed while it slid
+// landed where the key had been, on the dimmed backdrop, and the backdrop closes the sheet (CI, 2026-11-10: "a pin has a
+// name" found the spot dialog shut with its stars untouched; "Location off" likewise).
+async function sheetSettled(page, id) {
+  // One evaluate that loops (page.evaluate awaits its promise; a waitForFunction predicate that is async does not wait:
+  // its promise is truthy at once, which is how this once returned with the sheet still at the bottom of its slide).
+  const ok = await page.evaluate(async (id) => {
+    const frames = () => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+    const end = performance.now() + 10000;
+    while (performance.now() < end) {
+      const o = document.getElementById(id);
+      if (o && o.classList.contains('show') && !o.getAnimations({ subtree: true }).some((a) => a.playState === 'running' || a.playState === 'pending')) {
+        const top = () => (o.firstElementChild || o).getBoundingClientRect().top, a = top();
+        await frames();
+        if (o.classList.contains('show') && top() === a) return true;
+      } else await new Promise((r) => setTimeout(r, 50));
+    }
+    return false;
+  }, id);
+  check(ok, `the ${id} sheet is open and at rest`);
+}
 // A car's own cluster (instruments.js carGauge): nothing printed on it overlaps. In each gauge's own units, every word and
 // numeral (its inked glyphs, measured), every tick, the hubs and the lamp, and each needle lying at rest (a needle that reads
 // moves over the face, as a real one does). Returns the clashes as "gauge: a / b".
@@ -264,7 +286,10 @@ flow('Location off, in a browser: the sheet says it once and its key tries again
   await page.evaluate(() => document.getElementById('permGo').click());
   await page.waitForFunction((n) => window.__geo > n && document.getElementById('permSheet').classList.contains('show'), before, { timeout: 8000 }).catch(() => {});
   check(await page.evaluate((n) => window.__geo > n, before) && await page.isVisible('#permSheet.show.loc-off'), 'Try again asks the browser again, and the sheet comes back while it still says no');
+  await sheetSettled(page, 'permSheet');                          // Try again brought it back: at rest before the next key
+  check((await page.textContent('#permNo')).trim() === 'Not now', 'the sheet\'s other key is Not now');
   await page.click('#permNo');
+  await page.waitForFunction(() => !document.getElementById('permSheet').classList.contains('show'), null, { timeout: 3000 }).catch(() => {});
   check(!(await page.isVisible('#permSheet.show')), 'Not now puts it away');
 });
 
@@ -718,8 +743,25 @@ flow('a pin has a name: Go here routes "To <the road>", a tap on the map is a "D
   check((await page.textContent('#pinSaveBtn')).trim() === 'Save as a spot', 'the pin saves "as a spot"');
   // the spot dialog: a rating is stars filled up to it
   await page.click('#pinSaveBtn');
-  await page.waitForFunction(() => document.getElementById('hlOverlay').classList.contains('show'));
+  await sheetSettled(page, 'hlOverlay');
+  // CI (2026-11-10): a star tap once shut the dialog. The press began on the star but the click went to the backdrop, so
+  // the backdrop now closes a sheet only on a press that began on it. Say what lies under the star just before the tap.
+  const under = await page.evaluate(() => {
+    const b = document.querySelector('#hlRating [data-rating="3"]'), r = b.getBoundingClientRect();
+    const hit = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2);
+    return { box: [Math.round(r.left), Math.round(r.top), Math.round(r.width), Math.round(r.height)], hit: hit ? (hit.id || hit.className || hit.tagName) : null, onStar: !!hit && (hit === b || b.contains(hit)) };
+  });
+  check(under.onStar, 'the third star is what lies under its own centre: ' + JSON.stringify(under));
   await page.click('#hlRating [data-rating="3"]');
+  check(await page.evaluate(() => document.getElementById('hlOverlay').classList.contains('show')), 'the spot dialog is still open after a star is tapped: ' + JSON.stringify(under));
+  // a press on a key that lifts on the backdrop is not a tap on the backdrop
+  const drag = await page.evaluate(() => {
+    const o = document.getElementById('hlOverlay'), star = document.querySelector('#hlRating [data-rating="2"]');
+    star.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true }));
+    o.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    return o.classList.contains('show');
+  });
+  check(drag, 'a press on a star that lifts on the backdrop leaves the spot dialog open');
   const stars = await page.evaluate(() => [...document.querySelectorAll('#hlRating button')].map((b) => [b.classList.contains('on'), b.getAttribute('aria-pressed'), Math.round(b.getBoundingClientRect().height)]));
   check(stars.map((s) => s[0]).join() === 'true,true,true,false,false' && stars.map((s) => s[1]).join() === 'false,false,true,false,false' && stars.every((s) => s[2] >= 44), 'three stars: three filled, the third pressed, 44 pt each: ' + JSON.stringify(stars));
   const keys = await page.evaluate(() => ['hlAddBtn', 'hlCancelBtn'].map((id) => { const r = document.getElementById(id).getBoundingClientRect(); return [Math.round(r.top), Math.round(r.height), Math.round(r.width)]; }));
@@ -3769,7 +3811,10 @@ flow('the run as one card: the morning of, a crew-mate\'s convoy to join or your
     if (p === `/api/convoy/${cid}/ticket`) return json({ ticket: 't'.repeat(32), expiresAtMs: Date.now() + 60000 }, 201);
     if (p === `/api/convoy/${cid}`) return json(ctx);
     if (p === '/api/events/e0AAAAAAAAAAAAAA/record') return json({ id: 'e0AAAAAAAAAAAAAA', crew_id: 'k1', crew_name: 'Ridge Runners', title: 'Sunday dawn run', starts_at: last.starts_at, meet_name: 'Tellico Shell',
-      came: ['sam', 'cara'], going: ['sam', 'cara', 'bob'], i_came: false, best: { handle: 'sam', score: 811, stage: 'Cherohala Skyway' } });
+      came: ['sam', 'cara'], going: ['sam', 'cara', 'bob'], i_came: false, best: { handle: 'sam', score: 811, stage: 'Cherohala Skyway' },
+      results: { stages: [{ id: 's1', name: 'Cherohala Skyway', rows: [{ handle: 'sam', score: 811, place: 1, time_s: 184, gap_s: 0 }, { handle: 'cara', score: 790, place: 2, time_s: 190, gap_s: 6 }] },
+        { id: 's2', name: 'Tellico River Road', rows: [{ handle: 'cara', score: 802, place: 1, time_s: null, gap_s: null }] }],
+        overall: [{ handle: 'cara', stages: 2, score: 796, full: true, place: 1 }, { handle: 'sam', stages: 1, score: 811, full: false, place: 2 }] } });
     if (m === 'POST' || m === 'DELETE') return route.fulfill({ status: 204 });
     return json([]);
   });
@@ -3798,6 +3843,16 @@ flow('the run as one card: the morning of, a crew-mate\'s convoy to join or your
   await page.waitForSelector('.cp-week .drive-card.is-remembered .cp-best');
   const rec = await page.textContent('.cp-week');
   check(/Upcoming drives/.test(rec) && /DRIVEN/.test(rec) && /2 came: @sam, @cara/.test(rec) && /811/.test(rec) && /Best Vetta Score · @sam on Cherohala Skyway/.test(rec) && /Nothing planned next/.test(rec) && await page.isVisible('.cp-week .plan-plus'), 'remembered, above the + to plan the next one: ' + rec);
+  // the results sheet (IDEAS S-25): folded under the best Score; the overall, then each stage as SS1, SS2; Share
+  check(/Results · 2 stages/.test(rec) && !(await page.isVisible('.cp-week .cp-results')), 'the results fold, closed: ' + rec);
+  await page.click('.cp-week .cp-results-fold > summary');
+  const sheet = await page.$$eval('.cp-week .cp-results > *', (els) => els.map((x) => x.innerText.replace(/\s+/g, ' ').trim()));
+  check(sheet[0] === 'OVERALL' && /^1\. @cara 796 all 2 stages 2\. @sam 811 1 of 2 stages$/.test(sheet[1]) && sheet[2] === 'SS1 · CHEROHALA SKYWAY' && /^1\. @sam 811 3:04 · quickest 2\. @cara 790 3:10 · \+6 s$/.test(sheet[3]) && sheet[4] === 'SS2 · TELLICO RIVER ROAD' && /share times/.test(sheet[6]), 'the sheet: ' + JSON.stringify(sheet));
+  await page.evaluate(() => { window.__copied = null; Object.defineProperty(navigator, 'share', { value: undefined, configurable: true }); Object.defineProperty(navigator, 'clipboard', { value: { writeText: async (t) => { window.__copied = t; } }, configurable: true }); });
+  await page.click('.cp-week button:has-text("Share the results")');
+  await page.waitForFunction(() => window.__copied);
+  const copied = await page.evaluate(() => window.__copied);
+  check(/^Sunday dawn run · Ridge Runners — results \(Vetta Score\)\n\nOverall\n1\. @cara 796 \(all 2 stages\)\n2\. @sam 811 \(1 of 2 stages\)\n\nSS1 Cherohala Skyway\n1\. @sam 811 · 3:04\n2\. @cara 790 · 3:10 \(\+6 s\)\n\nSS2 Tellico River Road\n1\. @cara 802\n/.test(copied), 'Share copies the sheet as text: ' + JSON.stringify(copied));
   await page.click('.cp-week button:has-text("I was there")');
   await page.waitForTimeout(300);
   check(sent.some(([m, p]) => m === 'POST' && p === '/api/events/e0AAAAAAAAAAAAAA/came'), 'I was there is sent');
@@ -6034,6 +6089,30 @@ flow('plan flow (a) a destination in 3 taps: Where to?, the place, Start; Start 
   await tap('#routeDriveBtn', 'Start');
   await page.waitForFunction(() => window.apexDebug.driveActive && apexDebug.track && apexDebug.track.kind === 'route', null, { timeout: 10000 });
   check(taps.n === 3, `a destination in 3 taps: ${taps.log.join(' → ')}`);
+}, IPHONE);
+
+flow('taste from picks: Start on another level\'s route than Vetta\'s pick teaches the taste, once, at half an answer, and says so', async (page, base) => {
+  const asked = [];
+  await planRouter(page, asked);
+  const { tap } = await planPage(page, base);
+  await tap('#destInput', 'Where to?');
+  await page.fill('#destInput', 'Maryville');
+  await page.waitForSelector('#placeList .place', { timeout: 10000 });
+  await tap('#placeList .place', 'the place');
+  await cardUp(page);
+  await planDone(page);
+  const before = await page.evaluate(() => ({ store: localStorage.getItem('apex.taste') }));
+  check(!before.store || !JSON.parse(before.store).picks, 'no picks yet: ' + before.store);
+  await tap('#routeCardFun [data-fun="quick"]', 'Quick');
+  await page.waitForFunction(() => /^Quick: /.test(document.getElementById('routeProgress').textContent) && !document.getElementById('planPanel').classList.contains('busy'), null, { timeout: 15000 });
+  await tap('#routeDriveBtn', 'Start');
+  await page.waitForFunction(() => window.apexDebug.driveActive, null, { timeout: 10000 });
+  const got = await page.evaluate(() => ({ pick: apexDebug.lastPick || null, store: JSON.parse(localStorage.getItem('apex.taste') || '{}') }));
+  check(got.pick && got.store.picks === 1 && Array.isArray(got.store.pairs) && got.store.pairs.length === 1 && got.store.pairs[0][3] === 0.5,
+    'the route chosen over Vetta\'s pick is one half-weight pair: ' + JSON.stringify(got));
+  if (got.pick.lean) {
+    await page.waitForFunction(() => /Noted: you picked the more (technical|flowing|smooth) road/.test(document.getElementById('toast').textContent), null, { timeout: 5000 });
+  }
 }, IPHONE);
 
 flow('there and back: a trip to a place comes home another way in one tap, the destination a stop, the way out kept off the way home (graph_router.js roundTrip; Valhalla where our tiles don\'t reach)', async (page, base) => {
