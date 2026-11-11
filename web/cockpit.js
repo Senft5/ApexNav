@@ -2754,7 +2754,10 @@
       // Only on a route planned with Towns on (townKm undefined otherwise); null = the town check couldn't run.
       const towns = t.townKm === null ? 'Couldn\'t check towns · ' : t.townKm >= 1.6 ? `Through towns ~${ApexUnits.long(t.townKm * 1000, 0)} · ` : '';
       const carLine = t.request ? FunRoute.carNote(routingCar(), avoid) : '';
-      $('routeCardSub').textContent = `${carLine ? carLine + ' · ' : ''}${missed}${towns}${sun}${cams}${feel}`;
+      // your taste (taste.js) when it moved this route up: the word for what you lean to, never a number
+      const tasteLine = (() => { try { const f = t.tasteBonus >= 1 && window.ApexTaste ? ApexTaste.fit(ApexTaste.load(localStorage)) : null;
+        if (!f) return ''; const k = ApexTaste.AXES.slice().sort((a, b) => f[b] - f[a])[0]; return `Suits your taste for ${{ tech: 'technical roads', flow: 'flowing roads', smooth: 'smooth surfaces' }[k]} · `; } catch (_) { return ''; } })();
+      $('routeCardSub').textContent = `${tasteLine}${carLine ? carLine + ' · ' : ''}${missed}${towns}${sun}${cams}${feel}`;
       $('routeCardWhy').textContent = t.why || '';
       $('routeCardWhy').hidden = !t.why;
       // There and back: a trip to a place (not a round trip already, no stop of yours on it), planned and not driving
@@ -3865,7 +3868,7 @@
       const overLine = rival ? ApexRouteEngine.whyOver(c, rival) : null;
       // Fun and Long way: the exception's highway, or no highway-free way in a sensible time (first: it's what you'd ask)
       const hwyLine = window.ApexRouteEngine && ApexRouteEngine.whyHighway ? ApexRouteEngine.whyHighway(c, { metric: ApexUnits.metric() }) : null;
-      Object.assign(t, { measured: c.t.measured, fun: c.fun, timeS: c.timeS, timeMarks: timeMarksOf(t, c.route), steps: stepsOf(t, c.route), extraS: c.extraS, funLevel: o.level, glareMin: c.glare ? Math.round(c.glare.minutes) : null, townKm: c.townKm,
+      Object.assign(t, { tasteBonus: Number.isFinite(c.tasteBonus) ? c.tasteBonus : null, measured: c.t.measured, fun: c.fun, timeS: c.timeS, timeMarks: timeMarksOf(t, c.route), steps: stepsOf(t, c.route), extraS: c.extraS, funLevel: o.level, glareMin: c.glare ? Math.round(c.glare.minutes) : null, townKm: c.townKm,
                          engine: c.ev ? { quality: c.ev.quality, confidence: c.ev.confidence, poorKm: c.ev.poorKm, hard: c.ev.hard, penalties: c.ev.penalties } : null,
                          unavoided: FunRoute.unavoided(avoid, c.route), why: (hwyLine && hwyLine.kind === 'absurd' ? [hwyLine.text] : [hwyLine && hwyLine.text, (engineWhy && engineWhy.text) || (quickLine && quickLine.text) || whyText(FunRoute.why(c, o.quickest), fewerTownKm(c, o.quickest), c.extraS), overLine && overLine.text]).filter(Boolean).join('. ') || null,
                          request: { ...o.request, via: via.map(p => ({ lat: p.lat, lon: p.lon, shaping: true })) }, tuned: o.tuned || null });
@@ -8195,10 +8198,37 @@
       $('lapSetBtn').hidden = true; $('lapInfo').textContent = 'Line set · laps start at the next crossing';
       toast('Start/finish set here. Laps are timed from the next crossing.');
     });
+    // Your taste from what you drive (taste.js recordPick, IDEAS R-33): starting a route you chose over the one Vetta put
+    // first (another card, a swipe) is half an answer to "which was better?": the chosen road beat the passed one. Only
+    // between routes within 30 % of each other's time (a much longer pick says more about your afternoon than your
+    // taste), once per plan, never for loops (their cards are directions, not kinds of road). Kept on this phone.
+    let pickLearned = null;
+    function learnFromPick() {
+      try {
+        const o = routeOptions, t = plannedRoute;
+        if (!window.ApexTaste || !o || !o.list || o.current !== t || !t || t.id !== 'route_dest' || pickLearned === o) return;
+        // Vetta's pick is the plan's own level's (the list starts with Quick's, so list[0] is not it); after a refine's swap
+        // it is the swapped-in one, since the refine ranks at that same level
+        const first = o.levels && o.builtLevel ? o.levels[o.builtLevel] : null;
+        if (first == null || o.picked === first) return;
+        const chosen = o.list[o.picked], passed = o.list[first];
+        if (!chosen || !passed || !chosen.t || !passed.t || !(chosen.timeS > 0) || !(passed.timeS > 0)) return;
+        if (Math.abs(chosen.timeS - passed.timeS) > 0.3 * Math.min(chosen.timeS, passed.timeS)) return;
+        const fc = ApexTaste.featuresOf(Core, chosen.t, { quick: true }), fp = ApexTaste.featuresOf(Core, passed.t, { quick: true });
+        const before = ApexTaste.load(localStorage), after = ApexTaste.recordPick(before, fc, fp);
+        if (after === before) return;
+        pickLearned = o;
+        ApexTaste.save(localStorage, after);
+        const lean = ApexTaste.leanOf(fc, fp);
+        if (window.apexDebug) window.apexDebug.lastPick = { lean, picks: after.picks, fc, fp };
+        if (lean) setTimeout(() => toast(`Noted: you picked the more ${lean} road. Your fun routes learn from it.`), 1500);
+      } catch (_) { /* a taste is a nicety: never in the way of a drive */ }
+    }
     async function enterDrive() {
       if (state.mode === 'live' && drive.sensors) return;
       if (state.mode === 'live' || driveActive) return;                                   // native app is feeding frames already or start is pending
       driveActive = true; health.bump('drives'); drive.startedAt = performance.now();
+      learnFromPick();                                                 // a route you chose over Vetta's first: your taste (taste.js)
       // A drive takes the whole screen, whatever the phone was showing: a drive started from the car (or a link, or Siri)
       // with the Crew or Garage sheet or the Log open left that page in the middle of the drive screen (the owner, 2026-10-30).
       if (logFrame.el && !logFrame.el.hidden) { logFrame.el.hidden = true; document.documentElement.classList.remove('log-open'); }

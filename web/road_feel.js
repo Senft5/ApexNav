@@ -11,7 +11,7 @@
 //   summary({ dist, camber, rough }) -> null | { rows, bankDeg, bankAtM, roughAtM }
 //        bankDeg: the most banked 20 m (signed: + into the turn, - off-camber), roughAtM: the start of the roughest 100 m
 //        when it is rough enough to matter (null when the whole drive was smooth), distances from the drive's start
-//   endLine(summary, fmtDist)     "Road feel: banked 4° at 2.4 mi · roughest at 3.1 mi", or '' with nothing measured
+//   endLine(summary, fmtDist)     "Road feel: banked about 4° at 2.4 mi · roughest at 3.1 mi", or '' with nothing measured
 (function (root) {
   'use strict';
   const MIN_ROWS = 40;      // roughness: 200 m of measured road before it is spoken about
@@ -66,7 +66,7 @@
     const parts = [];
     if (s.bankDeg != null) {
       const deg = Math.round(Math.abs(s.bankDeg));
-      parts.push(Math.abs(s.bankDeg) < BANK_MIN ? 'flat, no banking over 1°' : `${s.bankDeg < 0 ? 'off-camber' : 'banked'} ${deg}° at ${f(s.bankAtM)}`);
+      parts.push(Math.abs(s.bankDeg) < BANK_MIN ? 'flat, no banking over 1°' : `${s.bankDeg < 0 ? 'off-camber' : 'banked'} about ${deg}° at ${f(s.bankAtM)}`);
     }
     if (s.roughAtM != null) parts.push(`roughest at ${f(s.roughAtM)}`);
     else if (s.rough === false) parts.push('a smooth surface');

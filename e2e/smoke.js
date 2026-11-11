@@ -3811,7 +3811,10 @@ flow('the run as one card: the morning of, a crew-mate\'s convoy to join or your
     if (p === `/api/convoy/${cid}/ticket`) return json({ ticket: 't'.repeat(32), expiresAtMs: Date.now() + 60000 }, 201);
     if (p === `/api/convoy/${cid}`) return json(ctx);
     if (p === '/api/events/e0AAAAAAAAAAAAAA/record') return json({ id: 'e0AAAAAAAAAAAAAA', crew_id: 'k1', crew_name: 'Ridge Runners', title: 'Sunday dawn run', starts_at: last.starts_at, meet_name: 'Tellico Shell',
-      came: ['sam', 'cara'], going: ['sam', 'cara', 'bob'], i_came: false, best: { handle: 'sam', score: 811, stage: 'Cherohala Skyway' } });
+      came: ['sam', 'cara'], going: ['sam', 'cara', 'bob'], i_came: false, best: { handle: 'sam', score: 811, stage: 'Cherohala Skyway' },
+      results: { stages: [{ id: 's1', name: 'Cherohala Skyway', rows: [{ handle: 'sam', score: 811, place: 1, time_s: 184, gap_s: 0 }, { handle: 'cara', score: 790, place: 2, time_s: 190, gap_s: 6 }] },
+        { id: 's2', name: 'Tellico River Road', rows: [{ handle: 'cara', score: 802, place: 1, time_s: null, gap_s: null }] }],
+        overall: [{ handle: 'cara', stages: 2, score: 796, full: true, place: 1 }, { handle: 'sam', stages: 1, score: 811, full: false, place: 2 }] } });
     if (m === 'POST' || m === 'DELETE') return route.fulfill({ status: 204 });
     return json([]);
   });
@@ -3840,6 +3843,16 @@ flow('the run as one card: the morning of, a crew-mate\'s convoy to join or your
   await page.waitForSelector('.cp-week .drive-card.is-remembered .cp-best');
   const rec = await page.textContent('.cp-week');
   check(/Upcoming drives/.test(rec) && /DRIVEN/.test(rec) && /2 came: @sam, @cara/.test(rec) && /811/.test(rec) && /Best Vetta Score · @sam on Cherohala Skyway/.test(rec) && /Nothing planned next/.test(rec) && await page.isVisible('.cp-week .plan-plus'), 'remembered, above the + to plan the next one: ' + rec);
+  // the results sheet (IDEAS S-25): folded under the best Score; the overall, then each stage as SS1, SS2; Share
+  check(/Results · 2 stages/.test(rec) && !(await page.isVisible('.cp-week .cp-results')), 'the results fold, closed: ' + rec);
+  await page.click('.cp-week .cp-results-fold > summary');
+  const sheet = await page.$$eval('.cp-week .cp-results > *', (els) => els.map((x) => x.innerText.replace(/\s+/g, ' ').trim()));
+  check(sheet[0] === 'OVERALL' && /^1\. @cara 796 all 2 stages 2\. @sam 811 1 of 2 stages$/.test(sheet[1]) && sheet[2] === 'SS1 · CHEROHALA SKYWAY' && /^1\. @sam 811 3:04 · quickest 2\. @cara 790 3:10 · \+6 s$/.test(sheet[3]) && sheet[4] === 'SS2 · TELLICO RIVER ROAD' && /share times/.test(sheet[6]), 'the sheet: ' + JSON.stringify(sheet));
+  await page.evaluate(() => { window.__copied = null; Object.defineProperty(navigator, 'share', { value: undefined, configurable: true }); Object.defineProperty(navigator, 'clipboard', { value: { writeText: async (t) => { window.__copied = t; } }, configurable: true }); });
+  await page.click('.cp-week button:has-text("Share the results")');
+  await page.waitForFunction(() => window.__copied);
+  const copied = await page.evaluate(() => window.__copied);
+  check(/^Sunday dawn run · Ridge Runners — results \(Vetta Score\)\n\nOverall\n1\. @cara 796 \(all 2 stages\)\n2\. @sam 811 \(1 of 2 stages\)\n\nSS1 Cherohala Skyway\n1\. @sam 811 · 3:04\n2\. @cara 790 · 3:10 \(\+6 s\)\n\nSS2 Tellico River Road\n1\. @cara 802\n/.test(copied), 'Share copies the sheet as text: ' + JSON.stringify(copied));
   await page.click('.cp-week button:has-text("I was there")');
   await page.waitForTimeout(300);
   check(sent.some(([m, p]) => m === 'POST' && p === '/api/events/e0AAAAAAAAAAAAAA/came'), 'I was there is sent');
@@ -6030,6 +6043,30 @@ flow('plan flow (a) a destination in 3 taps: Where to?, the place, Start; Start 
   await tap('#routeDriveBtn', 'Start');
   await page.waitForFunction(() => window.apexDebug.driveActive && apexDebug.track && apexDebug.track.kind === 'route', null, { timeout: 10000 });
   check(taps.n === 3, `a destination in 3 taps: ${taps.log.join(' → ')}`);
+}, IPHONE);
+
+flow('taste from picks: Start on another level\'s route than Vetta\'s pick teaches the taste, once, at half an answer, and says so', async (page, base) => {
+  const asked = [];
+  await planRouter(page, asked);
+  const { tap } = await planPage(page, base);
+  await tap('#destInput', 'Where to?');
+  await page.fill('#destInput', 'Maryville');
+  await page.waitForSelector('#placeList .place', { timeout: 10000 });
+  await tap('#placeList .place', 'the place');
+  await cardUp(page);
+  await planDone(page);
+  const before = await page.evaluate(() => ({ store: localStorage.getItem('apex.taste') }));
+  check(!before.store || !JSON.parse(before.store).picks, 'no picks yet: ' + before.store);
+  await tap('#routeCardFun [data-fun="quick"]', 'Quick');
+  await page.waitForFunction(() => /^Quick: /.test(document.getElementById('routeProgress').textContent) && !document.getElementById('planPanel').classList.contains('busy'), null, { timeout: 15000 });
+  await tap('#routeDriveBtn', 'Start');
+  await page.waitForFunction(() => window.apexDebug.driveActive, null, { timeout: 10000 });
+  const got = await page.evaluate(() => ({ pick: apexDebug.lastPick || null, store: JSON.parse(localStorage.getItem('apex.taste') || '{}') }));
+  check(got.pick && got.store.picks === 1 && Array.isArray(got.store.pairs) && got.store.pairs.length === 1 && got.store.pairs[0][3] === 0.5,
+    'the route chosen over Vetta\'s pick is one half-weight pair: ' + JSON.stringify(got));
+  if (got.pick.lean) {
+    await page.waitForFunction(() => /Noted: you picked the more (technical|flowing|smooth) road/.test(document.getElementById('toast').textContent), null, { timeout: 5000 });
+  }
 }, IPHONE);
 
 flow('there and back: a trip to a place comes home another way in one tap, the destination a stop, the way out kept off the way home (graph_router.js roundTrip; Valhalla where our tiles don\'t reach)', async (page, base) => {

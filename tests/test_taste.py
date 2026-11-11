@@ -45,3 +45,32 @@ def test_routes_that_suit_you_gain_a_little(out):
 def test_features_from_a_drive(out):
     f = out["f"]
     assert 0 <= f["tech"] <= 100 and 0 <= f["flow"] <= 100 and f["smooth"] == 93
+
+
+PICKS = r"""
+const T = require(process.argv[1] + '/web/taste.js');
+const flowy = { tech: 30, flow: 80, smooth: null }, techy = { tech: 85, flow: 35, smooth: null };
+let st = { pairs: [] };
+const same = T.recordPick(st, flowy, { ...flowy });                        // two roads alike: nothing learned
+const steps = [];
+for (let i = 0; i < 10; i++) { st = T.recordPick(st, flowy, techy); steps.push(T.fit(st)); }
+let mixed = { pairs: [] };
+for (let i = 0; i < 3; i++) mixed = T.record(mixed, flowy, techy);
+for (let i = 0; i < 4; i++) mixed = T.recordPick(mixed, flowy, techy);
+console.log(JSON.stringify({ same: same === st || same.pairs.length === 0, nine: steps[8], ten: steps[9], mixed: T.fit(mixed), line: T.describe(T.fit(mixed)),
+  lean: T.leanOf(flowy, techy), noLean: T.leanOf(flowy, { tech: 31, flow: 79, smooth: null }), picks: st.picks, old: T.fit({ pairs: Array(5).fill([0.5, -0.5, 0]) }) }));
+"""
+
+
+def test_routes_you_choose_teach_your_taste_at_half_an_answer():
+    """A route you start over the one Vetta put first counts half an answer: ten picks (or answers and picks adding to
+    five) make a taste; two roads alike teach nothing; the line says where the taste came from; old answers still fit."""
+    r = json.loads(subprocess.run([NODE, "-e", PICKS, ROOT], capture_output=True, text=True, check=True).stdout)
+    assert r["same"]
+    assert r["nine"] is None and r["ten"] is not None
+    assert r["ten"]["flow"] > r["ten"]["tech"] and r["ten"]["picks"] == 10 and r["ten"]["votes"] == 0
+    assert r["mixed"] is not None and r["mixed"]["votes"] == 3 and r["mixed"]["picks"] == 4
+    assert r["line"].startswith("From 3 answers and 4 routes you chose you lean toward flowing roads")
+    assert r["lean"] == "flowing" and r["noLean"] is None
+    assert r["picks"] == 10
+    assert r["old"]["votes"] == 5 and r["old"]["picks"] == 0
