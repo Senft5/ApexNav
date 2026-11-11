@@ -32,3 +32,16 @@ def test_a_mode_is_a_well_with_the_choice_in_ink():
 def test_the_desk_panel_matches_index_html_breakpoint():
     assert "@media (min-width: 1100px) and (min-height: 600px)" in (WEB / "index.html").read_text()
     assert "@media (min-width: 1100px) and (min-height: 600px) { .side-pop { border-left: 0; } }" in SHEETS
+
+
+def test_the_deck_is_not_an_occluder_so_the_map_reaches_the_top():
+    # an opaque deck over the WebGL canvas let Chromium cull the canvas's top (a blank band the deck's height)
+    sig = SIG[SIG.index("/* ================= the map under the deck"):]
+    assert ".binnacle { background: color-mix(in srgb, var(--panel) 99.6%, transparent); }" in sig
+
+
+def test_a_crews_name_and_the_share_box():
+    tail = SIG[SIG.index("/* ================= a crew's page"):]
+    assert ".crew-head > b { font: 800 30px/1.05 var(--font-num);" in tail
+    assert "body .cp-title h2 { font: 800 32px/1.02 var(--font-num);" in tail   # crew_page.js adds its CSS later
+    assert "#routeSharePick .row .ink-btn:not(.solid):not(.on) { border-color: transparent; background: var(--well); }" in tail

@@ -4,6 +4,17 @@ Decisions Claude made for you, newest first. Each one says what was decided, why
 you reach one you've seen. If you disagree with a call, say so and it gets reversed; nothing here is hard to undo unless
 it says so. Things only you can do are in docs/OWNER_TODO.md.
 
+## 2026-11-11 (ui-round-two): the blank band at the top of the map, signed-out 401s, a crew's name and the Share box (claude/project-thread-5sbga7)
+
+The blank paper band at the top of the idle map (as tall as the deck under it) was not missing tiles: the map draws all
+the way up, but Chrome treated the solid deck over the map as hiding part of it and skipped the wrong end. The deck is now
+99.6 % solid instead of 100 %, which nobody can see, and the map reaches the top. A sky colour would not have helped.
+Undo: delete the "map under the deck" rule at the end of web/signature.css.
+Signed out, the app no longer asks the server for convoy invites, points, hazards or members' roads once it knows you are
+signed out; it answers itself with "sign in required". Undo: the MEMBER_READS lines in web/sync.js.
+A crew's name is set large like the Garage's, its keys are paper, and the people you can share a route with are soft wells
+that turn ink when picked.
+
 ## 2026-11-11 (social round two): For you, and a People badge that counts what's new (claude/project-thread-uwmi4e)
 
 People → Friends now opens with For you: a friend topping your best Score on one of your stages, someone passing your
