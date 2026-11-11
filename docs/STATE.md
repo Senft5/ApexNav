@@ -1,5 +1,14 @@
 # VETTA — CURRENT AGENT HANDOFF STATE
 
+## Session 2026-11-11 (ui-round-two, PR 3): Settings and the sheets over a page in the Vetta Line (claude/project-thread-5sbga7)
+
+- web/signature.css, new block "the sheets over a page": `.side-pop` rises on `--lift-2` (no top rule), grabber as the
+  deck's, title 26 px Barlow (`min-width: 0`, the Done/back key `flex: none`), no rule under the head (the first row's
+  hairline divides). controls.css `.switch` is a `--well` with no frame; the chosen key keeps its ink fill, no drop edge.
+  The `.sw` slide switch is unchanged (the owner's "hard to tell if they're on or off").
+- Tests: tests/test_sheets_line.py. e2e Settings, Options, units, crew, roadbook, duel, People, Garage, night pass here.
+- Next: the crew page's own head and the route card's Share box; the Log's sub-pages if anything there still boxes.
+
 ## Session 2026-11-11 (ui-round-two, PR 2): the Garage and People in the Vetta Line (claude/project-thread-5sbga7)
 
 - web/signature.css, new blocks "the Garage" and "People". Sheet header hairline; Garage title a 30 px masthead; `.gear-key`
