@@ -216,6 +216,22 @@ Undo: revert the PR, or set `PICK_WEIGHT` to 0 (stored picks then carry no weigh
 - Why: the owner asked for big moves toward one cohesive, artist-made look; the home was boxes in 1.5 px ink stacked in rows.
 - Undo: remove the `signature.css` link in web/index.html (the shelf wrapper is harmless without it), or revert the PR.
 
+## 2026-11-10 (fable-when-to-go): the route card says when to go, and plans for the hour you pick (claude/fable-when-to-go)
+
+A route is a different drive at 7 am (into the sunrise, through the school run) than at 10. The card now has one more
+line: "Better at 10:00 AM: no low sun ahead, no school run", or "Leave by 9:30 PM: rain likely after", or "No better
+time to leave in the next day". Tap it for the next 24 hours as bars (taller is better, night dimmed), pick one, and
+Plan for 6:30 PM plans the trip for that hour. Calls made:
+
+- **The same model, not a new one.** Each departure is scored by the route engine with that hour's sun, forecast, deer
+  hours, school runs, events and closures. One addition: scenery driven past in the dark counts for nothing.
+- **Only hours you'd be up for** (6 am to 10 pm) can be called better, and only by 3 points or more.
+- **No forecast, no claim.** Offline it goes by the sun and the calendar and says so.
+- **A real bug fixed on the way:** in the app the routes never knew the sun or the deer hour per stretch (two scripts
+  loaded in the wrong order). Routes near dusk can now rank differently where deer are likely.
+
+Undo: FLAGS {"when_to_go":{"on":false}} hides the line and the panel; the script order fix stays.
+
 ## 2026-11-10 (fable-loop-time): a loop can be set by time on the dial (claude/fable-loop-time)
 
 Following your "the whole point is aimless driving": "I have an hour" is how a loop is usually asked for, and time

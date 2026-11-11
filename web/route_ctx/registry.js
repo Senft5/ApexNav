@@ -247,7 +247,7 @@
     const tasks = chosen.map(async (p) => {
       if (late(p)) await firstPhase;
       const t = Date.now();
-      const inputs = late(p) ? inputsFor(cs, result()) : {};
+      const inputs = late(p) ? (opts.inputs || inputsFor(cs, result())) : {};   // opts.inputs: a context already in hand (when_to_go.js)
       if (p.needs && p.needs.key && !settings[p.needs.key]) { status[p.id] = { status: 'no-key', ms: 0, note: `needs ${p.needs.key}` }; return; }
       if (ctrl && ctrl.signal.aborted) { status[p.id] = { status: 'unavailable', ms: 0, note: 'cancelled' }; return; }
       const mine = typeof AbortController === 'function' ? new AbortController() : null;
