@@ -5460,6 +5460,29 @@ flow('road page: About a road shows its archetype, axes and how sure it is (IDEA
   check(!(await page.isVisible('aside.side-pop.open[aria-label="About this road"]')), 'closes');
 });
 
+flow('route card: reports on the way and bumps members felt, for members (IDEAS Q-13)', async (page, base) => {
+  await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); } catch (_) {} });
+  await page.goto(base + '/index.html');
+  await page.waitForFunction(() => window.apexDebug && window.apexDebug.map && window.ApexRouteImport && window.ApexSync && window.ApexContributor);
+  const KY = 110540, KX = 111320 * Math.cos(35.5 * Math.PI / 180), pts = [];
+  for (let e = 0; e <= 3000; e += 5) pts.push([0, e]);
+  await page.evaluate(([KY, KX]) => {
+    ApexSync.member = async () => ({ signed_in: true, member: true });
+    const real = ApexSync.apiFetch;
+    ApexSync.apiFetch = async (path, o) => (/^\/api\/hazards\?/.test(path)
+      ? new Response(JSON.stringify([{ id: 'g', kind: 'gravel', lat: 35.5, lon: -83.9 + 1200 / KX, confirms: 3, clears: 0 },
+        { id: 'a', kind: 'animal', lat: 35.5, lon: -83.9 + 1500 / KX, confirms: 1, clears: 2 }]), { headers: { 'content-type': 'application/json' } })
+      : real(path, o));
+    ApexContributor.measuredAlong = async (t) => ({ coverage: 0.5, coveredKm: 1.5, km: 3, avgPasses: 2, roughness: null, bankedKm: 0, roughKm: 0, repavedKm: 0, crowdBumps: [{ index: 100, p: 0.9 }, { index: 400, p: 0.85 }] });
+  }, [KY, KX]);
+  const gpx = pts.map(([n, e]) => `<trkpt lat="${(35.5 + n / KY).toFixed(7)}" lon="${(-83.9 + e / KX).toFixed(7)}"/>`).join('');
+  await page.setInputFiles('#gpxFile', { name: 'flat.gpx', mimeType: 'application/gpx+xml', buffer: Buffer.from(`<gpx><trk><name>Flat run</name><trkseg>${gpx}</trkseg></trk></gpx>`) });
+  await page.waitForFunction(() => !document.getElementById('routeCardReports').hidden, null, { timeout: 15000 });
+  const line = await page.textContent('#routeCardReports');
+  check(/Reported on the way:\s+Gravel\s+at\s+[\d.]+\s*(mi|km)\s+\(3\s+confirmed\)/.test(line) && !/Animal/.test(line), 'the live report, not the cleared one: ' + line);
+  await page.waitForFunction(() => /2 bumps members felt/.test(document.getElementById('measuredNote').textContent), null, { timeout: 8000 });
+});
+
 flow('import: a drive from a file is named after the road that carried it (IDEAS U-04)', async (page, base) => {
   await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); } catch (_) {} });
   await page.goto(base + '/index.html');
