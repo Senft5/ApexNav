@@ -83,9 +83,12 @@ Per corner (matched across drives by location, ROAD_INTELLIGENCE corner detectio
   smoothness, braking, consistency). Speed limits and legality never enter it. A perfect
   score means driving at each corner's limit, which is a closed-track figure, not a goal for
   public roads.
-- **Corner and segment times** are shared only by explicit opt-in, **per friend and per
-  crew**, each one granted on its own. Nothing is shared by default, nothing is public, and
-  revoking a grant removes your times from that board.
+- **Scores and stage times are shared with friends and private crews by default** (the owner,
+  2026-11-11: away from the ultra-privacy focus), **switched off per friend and per crew**, each
+  on its own. A public crew starts with nothing shared and asks once on joining (Share Scores and
+  times, Scores only, or Cancel); a private crew made public turns its members' sharing back off and asks them. A switch you set, on or off, is never changed by a default, and
+  switching off removes your Scores and times from that board. Live position, cars and road data
+  keep their own switches and defaults (`backend/src/share_defaults.ts`).
 - No public time leaderboards. Strava has faced exactly this with downhill road segments.
 
 ## 4. Backend (zero budget)

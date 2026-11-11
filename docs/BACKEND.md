@@ -45,7 +45,7 @@ Applied to both `apexnav-db` and `apexnav-preview-db`: **0001_init.sql**, **0002
 |---|---|
 | Identity | `users` (Google sub, handle), `members` (everyone signed in and not banned, since 2026-10-30; kept for old app builds and the inviter link), `invites` (token hash only), `sessions` (token hash only) |
 | Social | `friendships` (canonical ordered pair), `blocks`, `crews`, `crew_members`, `crew_invites` |
-| Segments & boards | `segments` (+`origin_id`), `segment_shares`, `grants` (**opt-in, one row per friend or crew**), `board_entries` (+`canon_id`), `shared_routes` |
+| Segments & boards | `segments` (+`origin_id`), `segment_shares`, `grants` (**one row per friend or crew; Scores and Times on by default for friends and private crews, off for public crews; an "off" row is kept so a default never undoes it**), `board_entries` (+`canon_id`), `shared_routes` |
 | Crowd road data | `road_bins`, `hazard_obs`, `ingest_pending`, `rank_slots`, `seen`, `points_ledger` (private tables: no API route reads or writes them directly) |
 | Road map lines | `road_ways` (a measured way's public OSM line, box, and since 0029 its road class `cls` and map length `len_m`: the open-road rule, docs/ROAD_DATA.md) |
 | Roadbooks | `roadbooks` (private / friends / public), `roadbook_roads` (planned shapes, never drives), `roadbook_follows`, `roadbook_stamps` (a keyed hash of the member, no user id) |
@@ -80,7 +80,7 @@ Implemented in `backend/src/{auth,social,segments}.ts`, one router in `index.ts`
   each look against the theme contract before showing it and drops it when `themes` stops listing it (web/themes.js
   `grant()`). Export has `themes_granted`; the rows go with the account.
 - **State-changing requests** must carry our own `Origin` and an `X-ApexNav: 1` header (CSRF), on top of `SameSite=Lax`, `HttpOnly`, `__Host-` cookies.
-- **Sharing is opt-in per friend and per crew**: a score reaches an audience only through `POST /api/board` and only if a grant for that
+- **Sharing is per friend and per crew** (on by default for a new friendship and a private crew, `share_defaults.ts`; a public crew asks): a score reaches an audience only through `POST /api/board` and only if a grant for that
   audience exists. `GET /api/board/:canon` returns only entries published **to the viewer**, by someone who is still their friend / crew-mate, whose grant is
   still on, and not blocked either way. Times appear only with `share_times`. `GET /api/board/activity` (IDEAS S-03): the same visibility, the last
   14 days of others' best per day on stages the viewer has, with the viewer's rank on each; scores only, never times.
