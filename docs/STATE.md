@@ -16,6 +16,19 @@
 - Tests: tests/test_brake_heat.py (18, incl. 10 Hz held speed, coasting, held-speed CSV rows). Checked: pytest 1607 passed; e2e first run, drive ended (card and Log), car-started drive.
 - Next: the route card warns of a long descent ahead from the DEM profile (stages.js profile) with the same model at the
   router's speeds; the Garage car's weight and brake size could set DISC_C; not checked on a real descent yet (VERIFY).
+## Session 2026-11-11 (sweep round two): time attack wiring and opt-in (claude/project-thread-g9yher, off origin/main 936aec3)
+
+- Bug: analysis.html never loaded time_attack.js or called `ApexTimeAttack.sendRuns`, so no run reached a board. Now after
+  the stage publish loop in `syncSegments`; tests/test_time_attack.py `test_the_log_sends_runs`.
+- Privacy: runs counted on any copy of a circuit (a friend's hand share, a duel copy) without entering, and leaving was
+  undone by the next sync. **Migration 0051 `ta_joins`** (additive): enter writes it, runs / circuits / `entered` read it,
+  leave deletes it. Implausible runs are skipped (`refused`), not a 400 for the batch. Export `time_attack_entered`.
+- 0051 applied on preview and prod 2026-11-11 (owner: "go on 0051"), each with its d1_migrations row.
+- Roadbooks: `booksMine` bound up to 131 values in one query (D1 allows 100): the roads are read in chunks of 90 (`BIND_CHUNK`).
+- Main's red e2e "reported hazards": a web drive with no fix for 5 s drops back to the replay, so on a slow runner the
+  report's word went to the toast, not the status line. The flow now keeps feeding fixes; its wait dumps the screen state.
+- CI: apexkit-linux runs in `container: swift:6.0-jammy` (setup-swift's keyserver refresh timed out every run).
+- Next: the rest of the sweep (iOS shell, CarPlay, performance) was not reached this round.
 ## Session 2026-11-11 (roam-c-safe-area-split): the safe-area e2e flow, one a phone shape (claude/roam-c-safe-area-split, off origin/main)
 
 - e2e/smoke.js: `safe areas (<shape>)` x4 from `SAFE`, same screens and checks; scanner self-check in the first; one
