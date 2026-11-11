@@ -4,13 +4,6 @@ Decisions Claude made for you, newest first. Each one says what was decided, why
 you reach one you've seen. If you disagree with a call, say so and it gets reversed; nothing here is hard to undo unless
 it says so. Things only you can do are in docs/OWNER_TODO.md.
 
-## 2026-11-11 (routing round three, part 2): stage discovery reads crests and verified bumps (claude/project-thread-39xbx9)
-
-Stage discovery (the roads Explore, loops and routes pick from) now lifts a road members measured going light over its
-crests by up to 1.5 points, and drops one by 1.5 points for each crowd-verified bump on it, at most 4.5 (a confirmed
-hand-reported hazard costs 3). The sizes are a judgment call: a crested road wins against a flat one half a point better;
-two verified bumps send it back. Undo: `CREST_MAX` and `BUMP_PTS` 0 in web/measured_stages.js.
-
 ## 2026-11-11 e2e: two flows raced the refine's swap after #434
 - **What:** "taste from picks" and "plan flow (e, f)" wait for `apexDebug.refineDone` (new, set when ownRefine ends) and expect the three routes found after the refine swaps Fun's pick; taste from picks takes the third by a swipe (Quick's is >30 % faster than Fun's on the motorway grid, so it teaches nothing by design).
 - **Why:** since Fun plans on our router, the refine's swap lands ~150 ms after the card; CI hit it every time, local runs sometimes didn't.

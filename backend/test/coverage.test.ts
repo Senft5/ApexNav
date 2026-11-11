@@ -73,27 +73,6 @@ describe("GET /api/coverage (IDEAS Q-14)", () => {
     expect(j.ways[0]).toMatchObject({ rough: [0.3, null], banked: [0.25, null], offCamber: [0.25, null] });
   });
 
-  it("says the share of crests two passes measured and how many bumps the crowd verified, per direction (IDEAS R-04)", async () => {
-    const a = await makeUser("a"), b = await makeUser("b");
-    await optIn(a, b);
-    const crested = (bp: boolean) => bins().map((x, j) => ({ ...x, crest: j < 20 ? 0.3 : 0.05, bp: bp && j === 10 ? 1 : 0 }));
-    await ok(api(a, "POST", "/api/contribute", upload("drive-aaaa-0007", { bins: crested(true) })));
-    let j = await (await ok(api(a, "GET", BOX))).json() as { ways: { crested: (number | null)[]; bumps: number[] }[] };
-    expect(j.ways).toEqual([]);                                     // one driver on a lane: blank
-    await ok(api(b, "POST", "/api/contribute", upload("drive-bbbb-0007", { bins: crested(true) })));
-    j = await (await ok(api(a, "GET", BOX))).json() as { ways: { crested: (number | null)[]; bumps: number[] }[] };
-    expect(j.ways[0]).toMatchObject({ crested: [0.333, null], bumps: [1, 0] });
-  });
-
-  it("one pass of crest data is no crest share, and a bump one person felt is not counted", async () => {
-    const a = await makeUser("a");
-    await optIn(a);
-    const one = bins().map((x, j) => ({ ...x, crest: 0.3, bp: j === 10 ? 1 : 0 }));
-    await ok(api(a, "POST", "/api/contribute", upload("drive-aaaa-0008", { bins: one, cls: "tertiary" })));
-    const j = await (await ok(api(a, "GET", BOX))).json() as { ways: { crested: (number | null)[]; bumps: number[] }[] };
-    expect(j.ways[0]).toMatchObject({ crested: [null, null], bumps: [0, 0] });
-  });
-
   it("is for members, and the box must be small and real", async () => {
     expect((await api(null, "GET", BOX)).status).toBe(401);
     const a = await makeUser("a");

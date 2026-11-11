@@ -34,16 +34,6 @@ console.log(JSON.stringify({
   C: ranked.find((s) => s.name === 'nobody'), sameC: ranked.find((s) => s.name === 'nobody') === C, partial, half,
   haz: withHaz.map((s) => [s.name, s.score, s.hazards || null]), noData: M.rescore([A, B], null, null).map((s) => s.score),
   boxes: M.boxesFor({ lat: 35, lon: -83 }, 14), big: M.boxesFor({ lat: 35, lon: -83 }, 120),
-  // crests and verified bumps: two stages alike but a point apart, measured alike (rough 0.1 g) on both
-  crest: (() => {
-    const F = stage(-83.00, 9, 'flat'), K = stage(-82.989, 8.5, 'crested'), wy = (way, lon, o) => ({ way, line: line(lon), passes: [3, 3], rough: [0.1, 0.1], banked: [0, 0], offCamber: [0, 0], ...o });
-    const plain = M.rescore([F, K], [wy(1, -83.00, {}), wy(2, -82.989, {})], []).map((s) => s.name);
-    const crested = M.rescore([F, K], [wy(1, -83.00, { crested: [0.02, 0.0] }), wy(2, -82.989, { crested: [0.2, 0.15] })], []);
-    const bumped = M.rescore([F, K], [wy(1, -83.00, { crested: [0.02, 0.0] }), wy(2, -82.989, { crested: [0.2, 0.15], bumps: [2, 1] })], []);
-    const noCrest = M.rescore([F, K], [wy(1, -83.00, { crested: [null, null] }), wy(2, -82.989, { crested: [null, null], bumps: [0, 0] })], []);
-    return { plain, crested: crested.map((s) => [s.name, s.score, s.measured.crested]), bumped: bumped.map((s) => [s.name, s.score, s.measured.bumps]),
-      noCrest: noCrest.map((s) => [s.name, s.measured.crested, s.measured.bumps]) };
-  })(),
 }));
 """
 
@@ -78,15 +68,3 @@ def test_boxes():
     assert len(r["boxes"]) == 1 and r["big"] is None
     s, w, n, e = r["boxes"][0]
     assert n - s <= 0.5 and e - w <= 0.5
-
-
-def test_crests_and_verified_bumps():
-    """Crests two passes measured lift a stage over a slightly better-scored flat one; crowd-verified bumps on its roads
-    (the larger direction's count) drop it back; no crest data is no bonus and no bump data no penalty."""
-    c = run()["crest"]
-    assert c["plain"] == ["flat", "crested"], c
-    assert [x[0] for x in c["crested"]] == ["crested", "flat"] and c["crested"][0][2] == pytest.approx(0.175), c
-    assert [x[0] for x in c["bumped"]] == ["flat", "crested"], c
-    crested = next(x for x in c["bumped"] if x[0] == "crested")
-    assert crested[2] == 2 and crested[1] == pytest.approx(next(x for x in c["crested"] if x[0] == "crested")[1] - 3, abs=0.01), c
-    assert c["noCrest"] == [["flat", None, 0], ["crested", None, 0]], c
