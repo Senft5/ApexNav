@@ -4,25 +4,18 @@ Decisions Claude made for you, newest first. Each one says what was decided, why
 you reach one you've seen. If you disagree with a call, say so and it gets reversed; nothing here is hard to undo unless
 it says so. Things only you can do are in docs/OWNER_TODO.md.
 
-## 2026-11-10 (fable-coherence): the docs say what Vetta is and what ships (claude/fable-coherence)
+## 2026-11-10 (fable-pro-looks): Pro is looks only; one Pro crew-mate dresses the whole crew (claude/fable-pro-looks)
 
-A red team (design and philosophy) found the repo describing two products. I rewrote docs/PHILOSOPHY.md: the
-"countermeasure co-driver", "zero-snitch", Octane, the Halda/Singer binnacle and the five unused hex colours are gone,
-with a table of what was dropped and why so nobody rebuilds them. It now states your answers from today: Pace stays in
-the Score and copy says plainly that the Score rewards using a corner's grip; Stage times and gaps stay shareable;
-police reports and speed cameras stay, named in the open; Pro is looks only; Tapedeck's glow is fine.
+Your answer to the red team (PH-06, BR-06, UX-06): Pro is themes and liveries, nothing else. Route tuning, which went
+Pro on 2026-11-09, is free for everyone, with or without Pro and after Pro goes on sale (web/pro.js has two kinds now,
+theme and livery; tests/test_pro.py fails if a third appears). A crew's livery used to climb Plain, Club (5 Decals), Works
+(12), Factory (20) as Pro crew-mates added up, with a meter in Edit livery and "Decals come from crew-mates with Vetta
+Pro" on every crew page. Now any one crew-mate with Pro opens the whole livery for everyone (backend/src/livery.ts); the
+meter is gone; a Plain crew's page says "Plain livery" and nothing it lacks, and a dressed one says who dressed it
+("Factory livery · dressed by @bob"). A crew loses nothing it set when the Pro member leaves: it falls back to Plain
+and comes back with the next one, as before.
 
-CLAUDE.md, AGENTS.md and .cursorrules are now one text (a test keeps them so). The mission no longer claims Android,
-Android Auto, a C++ core, Kalman, FFT or an audio DSP bus; they are listed as not built. ARCHITECTURE.md §5 says the
-same. BRAND.md opens with the shipped state (four tabs, the VETTA wordmark, three themes and their voices, what is
-ownable) and "what Vetta refuses to match"; navigation is the vehicle, the co-driver the reason. SOCIAL.md's "3
-contributors" now matches the built rule in ROAD_DATA.md. "Zero subscription" and "nothing you made behind a paywall"
-became "free to drive" wording (about page, IDEAS, SOCIAL, marketing). "Never how fast" became "how well you used each
-corner's grip, never your top speed" (about page, Log note, marketing). The listing leads with the co-driver and names
-cameras and police reports. APP_REVIEW.md gains rows for the braking ribbon (1.4.1), the Score and boards, and cameras
-and police. The domain is at the top of OWNER_TODO.
-
-Undo: revert the PR. No code behaviour changed.
+Undo: revert the PR (tiers come back as they were; nothing in the database changed).
 
 ## 2026-11-10 (fable-road-page): About a road says its climb, and speaks in words (claude/fable-road-page)
 
@@ -86,6 +79,14 @@ Undo: revert the PR.
 The e2e suite is 152 flows now and takes about 24 minutes, so GitHub cut it off at its 25-minute limit on the last flow
 (twice on #349, once on #344) with every flow before it passing. The limit is 35 minutes. No test is skipped or
 shortened. Undo: set `timeout-minutes` back to 25 in `.github/workflows/core-tests.yml`, or better, split the suite.
+
+## 2026-11-10 · Vetta Line: the home screen is a masthead over the map and a shelf of road cards (claude/fable-signature)
+
+- What: web/signature.css, a new last stylesheet, restyles the idle map: the place as a masthead in type, the deck as one
+  sheet with a red Just drive and the invitations side by side as cards, soft lift instead of ink boxes, the apex dot on
+  the open tab, a short arrival.
+- Why: the owner asked for big moves toward one cohesive, artist-made look; the home was boxes in 1.5 px ink stacked in rows.
+- Undo: remove the `signature.css` link in web/index.html (the shelf wrapper is harmless without it), or revert the PR.
 
 ## 2026-11-10 (fable-loop-time): a loop can be set by time on the dial (claude/fable-loop-time)
 
@@ -177,6 +178,26 @@ Not changed: the 1 hour / 2 hours loops and "My free time" in Options, and the r
 weights in fun_route.js (unused by the app now, still tested).
 
 Undo: revert the PR. To bring a level back for loops only, set `LOOP_STYLE` in web/cockpit.js.
+
+## 2026-11-10 (fable-coherence): the docs say what Vetta is and what ships (claude/fable-coherence)
+
+A red team (design and philosophy) found the repo describing two products. I rewrote docs/PHILOSOPHY.md: the
+"countermeasure co-driver", "zero-snitch", Octane, the Halda/Singer binnacle and the five unused hex colours are gone,
+with a table of what was dropped and why so nobody rebuilds them. It now states your answers from today: Pace stays in
+the Score and copy says plainly that the Score rewards using a corner's grip; Stage times and gaps stay shareable;
+police reports and speed cameras stay, named in the open; Pro is looks only; Tapedeck's glow is fine.
+
+CLAUDE.md, AGENTS.md and .cursorrules are now one text (a test keeps them so). The mission no longer claims Android,
+Android Auto, a C++ core, Kalman, FFT or an audio DSP bus; they are listed as not built. ARCHITECTURE.md §5 says the
+same. BRAND.md opens with the shipped state (four tabs, the VETTA wordmark, three themes and their voices, what is
+ownable) and "what Vetta refuses to match"; navigation is the vehicle, the co-driver the reason. SOCIAL.md's "3
+contributors" now matches the built rule in ROAD_DATA.md. "Zero subscription" and "nothing you made behind a paywall"
+became "free to drive" wording (about page, IDEAS, SOCIAL, marketing). "Never how fast" became "how well you used each
+corner's grip, never your top speed" (about page, Log note, marketing). The listing leads with the co-driver and names
+cameras and police reports. APP_REVIEW.md gains rows for the braking ribbon (1.4.1), the Score and boards, and cameras
+and police. The domain is at the top of OWNER_TODO.
+
+Undo: revert the PR. No code behaviour changed.
 
 ## 2026-11-10 (fable-paths-are-keys): "Garage → Settings → Spots" is a key, not a path to walk (claude/fable-paths-are-keys)
 

@@ -1,13 +1,12 @@
 # VETTA — CURRENT AGENT HANDOFF STATE
 
-## Session 2026-11-10 (fable-coherence): red team doc coherence (claude/fable-coherence, off origin/main ac6c6c6)
+## Session 2026-11-10 (fable-pro-looks): Pro looks only (claude/fable-pro-looks, off origin/main)
 
-- docs/PHILOSOPHY.md rewritten (principles, road scores, measurement limits, built / not built, dropped and why).
-  CLAUDE.md = AGENTS.md = .cursorrules (tests/test_agent_docs.py). ARCHITECTURE.md §5 DSP bus marked not built.
-- BRAND.md shipped-state box; SOCIAL.md threshold; about.html, analysis.html Log note, LISTING.md, marketing copy;
-  APP_REVIEW.md rows (ribbon 1.4.1, Score/boards, cameras/police); OWNER_TODO domain.
-- Owner decisions 2026-11-10: Pace stays, Times/gaps shared, police + speed cameras stay, Pro looks only, Tapedeck stays.
-- Next: Pro looks only in code (Route tuning free, one Pro member dresses a crew); camber shown with how sure it is.
+- web/pro.js: KINDS theme + livery; route_tuning removed; web/route_tuning.js `allowed()` always true.
+- backend/src/livery.ts `liveryOf`: any Decals (one Pro crew-mate) or a grant = factory, else plain; `next` always null.
+  web/crew_page.js: no meter, `dressedBy`, Plain says "Plain livery"; editor locks read "With a crew-mate on Vetta Pro".
+- Tests: tests/test_pro.py, test_crew_page.py, test_route_tuning.py; backend/test/crew_page.test.ts; e2e "crew page" line.
+- Next: camber with how sure it is (red team TE-03).
 
 ## Session 2026-11-10 (fable-road-page): About a road: the climb's "[object Object]" fixed; scores as named bars (claude/fable-road-page, off origin/main 3f2f315)
 
@@ -59,6 +58,20 @@
 
 - [x] .github/workflows/core-tests.yml e2e `timeout-minutes` 25 → 35: 152 flows take ~24 min and were cancelled on the
   last flow. Next: split e2e into two jobs if it passes ~30 min.
+
+## Session 2026-11-10 (fable-signature): Vetta Line, the home screen (claude/fable-signature, off origin/main 948cb4b)
+
+- web/signature.css (new, loaded after controls.css): the signature layer (docs/design/SIGNATURE.md). Map keys and the deck
+  lift on soft shadows instead of ink boxes; the place plate is a masthead (place in Barlow 30 px, the sky under it after a
+  red apex dot) on a paper wash down from the top; Where to? is a 52 px well and Just drive the one red key; the deck's
+  invitations (`#loopSuggest`, `#yourRoads` rows, `#driveToday`, `#deckChips`) stand on one sideways shelf `#deckShelf`
+  (new wrapper in index.html, ids unchanged; `display: contents` on a phone on its side, so landscape is as before); the
+  tab bar marks the open tab with the apex dot. Arrival: bar, shelf cards and masthead rise once (none under reduced motion).
+- web/place_plate.js `parts()` (head / rest); cockpit.js fills `#placePlate` as `<b>` + hidden ` · ` + `<span>` (textContent
+  unchanged) and `apexDebug.placePlate()` (e2e). `--plan-bar` starts at 76 px (the bar's new height).
+- Tests: tests/test_place_plate.py (+1); e2e "Vetta Line home"; "note 6" fold thresholds follow the shorter deck
+  (folds by > 80 px, was 150; the folded bar + tabs under 182 px, was 170: the bar is 12 px taller).
+- Parallel agents on their own branches: claude/fable-drive-hud, claude/fable-first-last, claude/fable-route-reveal.
 
 ## Session 2026-11-10 (fable-loop-time): the loop dial by distance or time (claude/fable-loop-time, off origin/main 1a38381)
 
@@ -130,6 +143,15 @@
   reached by the app (tests/test_plan_options.py still covers them); remove them if loops never get a style back.
 - Next: two cards can share a name (both "Southeast"); a finer name (16 points, or the road it is built on) if it reads
   badly on real roads. The 1 hour / 2 hours loops sit in Options; the card's Length row is miles only.
+
+## Session 2026-11-10 (fable-coherence): red team doc coherence (claude/fable-coherence, off origin/main ac6c6c6)
+
+- docs/PHILOSOPHY.md rewritten (principles, road scores, measurement limits, built / not built, dropped and why).
+  CLAUDE.md = AGENTS.md = .cursorrules (tests/test_agent_docs.py). ARCHITECTURE.md §5 DSP bus marked not built.
+- BRAND.md shipped-state box; SOCIAL.md threshold; about.html, analysis.html Log note, LISTING.md, marketing copy;
+  APP_REVIEW.md rows (ribbon 1.4.1, Score/boards, cameras/police); OWNER_TODO domain.
+- Owner decisions 2026-11-10: Pace stays, Times/gaps shared, police + speed cameras stay, Pro looks only, Tapedeck stays.
+- Next: Pro looks only in code (Route tuning free, one Pro member dresses a crew); camber shown with how sure it is.
 
 ## Session 2026-11-10 (fable-paths-are-keys): the empty Spots list has an Add one key (claude/fable-paths-are-keys, off origin/main dc9caf9)
 
