@@ -1083,6 +1083,22 @@ flow('valhalla for quick only: off our tiles, Fun says it plainly and Use Quick 
   } finally { graphDir = null; }
 }, { geolocation: { latitude: 39.155, longitude: -84.615 }, permissions: ['geolocation'] });
 
+flow('valhalla for quick only: off our tiles, a loop says it plainly and asks Valhalla nothing', async (page, base) => {
+  graphDir = 'none';
+  const calls = { route: 0, matrix: 0 };
+  await page.route('https://valhalla1.openstreetmap.de/**', (route) => { const u = route.request().url(); if (u.endsWith('/route')) calls.route++; if (u.includes('sources_to_targets')) calls.matrix++; return route.abort(); });
+  await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); } catch (_) {} });
+  await page.goto(base + '/index.html');
+  await page.waitForFunction(() => window.apexDebug && window.apexDebug.map);
+  await page.click('#destInput');
+  await page.waitForSelector('#findLoopBtn', { state: 'visible', timeout: 10000 });
+  await page.click('#findLoopBtn');
+  await page.waitForFunction(() => window.apexDebug.loopOwnOnlyFail && document.getElementById('toast').classList.contains('show'), null, { timeout: 20000 });
+  const t = await page.evaluate(() => ({ text: document.getElementById('toast').textContent, why: window.apexDebug.loopOwnOnlyFail, track: window.apexDebug.track && window.apexDebug.track.id }));
+  check(/Loops use Vetta's own road map|Couldn't load Vetta's road map/.test(t.text) && !/^loop_/.test(t.track || ''), 'said plainly, no stand-in loop: ' + JSON.stringify(t));
+  check(calls.route === 0 && calls.matrix === 0, 'Valhalla asked for nothing: ' + JSON.stringify(calls));
+}, { geolocation: { latitude: 39.155, longitude: -84.615 }, permissions: ['geolocation'] });
+
 // What this drive is like (web/route_story.js, the owner 2026-11-09): a planned route's card carries a few plain lines
 // built from the ranking's own data, in your units, after the card is up; nothing it says is unknown to the data.
 flow('route overview: the card says what the drive is like in plain words, from the route\'s own data', async (page, base) => {
@@ -7469,6 +7485,7 @@ flow('the Garage on a phone: the looks are a shelf turned sideways (one in view,
 
 flow('plan flow (b) a loop in 2 taps: Plan on the map, then Start; its progress in view, its card has a length in your units and no Quick / Fun / Long way (the owner, 2026-11-10)', async (page, base) => {
   await planRouter(page);
+  await funTiles(page);                                       // (loops and Fun are our router's only, the owner 2026-11-11)
   const { taps, tap } = await planPage(page, base);
   await page.waitForFunction(() => getComputedStyle(document.getElementById('loopSuggest')).display !== 'none');
   // the suggestion is the dial's loop: pick another length on the dial and it says that one (it kept the length from launch)
@@ -7501,6 +7518,7 @@ flow('plan flow (b) a loop in 2 taps: Plan on the map, then Start; its progress 
 
 flow('a loop by time: the dial turns to Time (half an hour to three hours), Find a loop builds a loop of that time, and its card changes it by time (2026-11-10)', async (page, base) => {
   await planRouter(page);
+  await funTiles(page);                                       // (loops and Fun are our router's only, the owner 2026-11-11)
   await planPage(page, base);
   await page.click('#destInput');
   await page.waitForFunction(() => document.getElementById('planPanel').classList.contains('open') && document.getElementById('loopBy').getClientRects().length > 0);
@@ -7539,6 +7557,7 @@ flow('a loop by time: the dial turns to Time (half an hour to three hours), Find
 
 flow('level cards: one control on the four phone shapes, a destination: each card its level, time and corners, a line each, nothing cut or under the island (the owner, 2026-11-04); a loop has none', async (page, base) => {
   await planRouter(page);
+  await funTiles(page);                                       // (loops and Fun are our router's only, the owner 2026-11-11)
   const { cdp } = await planPage(page, base);
   // every card inside the screen and its row, its name, time and corners each on one line (no "11 min / quicker ·")
   const fit = () => page.evaluate(() => {
@@ -7597,7 +7616,7 @@ flow('level cards: one control on the four phone shapes, a destination: each car
     const under = (await unsafe(page, d)).filter((b) => /\d+ mi\b|Length/i.test(b));
     check(!under.length, `loop, ${orient}: the loop's length clears the island, the home bar and the corners:\n  ${under.join('\n  ')}`);
   }
-}, IPHONE);
+}, { ...IPHONE, funLevel: 'fun' });
 
 flow('a loop\'s choices are which way to head, not Quick / Fun / Long way: the loops found as cards, each its outline, way, time and corners; a tap puts that loop up (the owner, 2026-11-10)', async (page, base) => {
   graphDir = graphFixture(true);

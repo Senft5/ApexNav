@@ -4638,14 +4638,18 @@
       // nothing else came, as before.
       const own = (await ownLoopsP).map((r) => ({ kind: 'own', route: r.route, hwyShare: r.hwyShare, pts: [c, ...FunRoute.alongPoints(r.route.coords), c] }));
       if (window.apexDebug) window.apexDebug.lastLoopRefine = null;
+      // Loops are our router's or nothing (Valhalla is for Quick only, the owner 2026-11-11): no stage loops or circle on
+      // Valhalla stand in, nor refine ours; with none of ours, the card says why
       if (own.length) {
         L.ownTiles = true;
-        const first = await loopRound(L, own, ui, false);
-        if (first) loopRefine(L, first, stageJobs(false));
-        else await loopRound(L, await stageJobs(true), ui, true);         // ours all failed to build: as without them
-        return;
+        if (await loopRound(L, own, ui, false)) return;
       }
-      await loopRound(L, await stageJobs(true), ui, true);
+      const here = ownOn() ? await RouteLoading.optional(ownRouter().covers([c]), OWN_COVERS_ONLY_MS).catch(() => null) : false;
+      if (window.apexDebug) window.apexDebug.loopOwnOnlyFail = !ownOn() ? 'off' : here == null ? 'index' : here ? 'none' : 'out';
+      toast(!ownOn() ? 'Loops need Vetta\'s own router, which is switched off.'
+        : here == null ? 'Couldn\'t load Vetta\'s road map here. Check signal and try again.'
+        : here ? `Couldn't find a ${asked} loop on Vetta's road map from here. Try another length.`
+        : 'Loops use Vetta\'s own road map, which covers Ohio, Kentucky and Indiana so far.');
     }
     const loopCircle = (L) => ({ kind: 'circle', pts: loopWaypoints(L.c, L.miles, Math.random() * 2 * Math.PI), through: true, extra: loopCosting() || {} });
     /** Loop jobs routed (ours come routed) and built into tracks: { t, job, route, km, score, ... } for those that worked. */

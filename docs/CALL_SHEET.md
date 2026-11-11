@@ -4,6 +4,12 @@ Decisions Claude made for you, newest first. Each one says what was decided, why
 you reach one you've seen. If you disagree with a call, say so and it gets reversed; nothing here is hard to undo unless
 it says so. Things only you can do are in docs/OWNER_TODO.md.
 
+## 2026-11-11 (Valhalla for Quick only, part 2): loops come from our router only (claude/project-thread-39xbx9)
+
+Your rule ("anything but the quick route") covers loops too, so Find a loop no longer falls back to Valhalla's stage loops
+or a circle. Off our road map the card says loops use it and where it reaches. Explore's road list still times roads with
+Valhalla's matrix (it plans no route); say if that should go too. Undo: restore the `stageJobs` calls in `buildLoop`.
+
 ## 2026-11-11 (Valhalla for Quick only): Fun and Long way fail plainly instead of falling back (claude/project-thread-39xbx9)
 
 Your rule: Valhalla only for Quick. Fun and Long way now come from our own router or not at all. Where our road map doesn't

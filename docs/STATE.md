@@ -1,5 +1,15 @@
 # VETTA — CURRENT AGENT HANDOFF STATE
 
+## Session 2026-11-11 (Valhalla for Quick only, part 2): loops are our router's or nothing (claude/project-thread-39xbx9, off origin/main)
+
+- cockpit.js `buildLoop`: our router's loops only; no Valhalla stage loops, circle or refine. With none of ours a toast
+  says why (`apexDebug.loopOwnOnlyFail`: out / index / none / off). `stageJobs`, `loopRefine` and funRoute's stage plans are
+  now unreachable (kept for now; stage discovery itself still serves Explore).
+- e2e: the loop flows (plan flow (b), a loop by time, level cards) route on the synthetic tiles (`funTiles`); new flow
+  "valhalla for quick only: off our tiles, a loop says it plainly". Full e2e locally: 4/4 shards green.
+- Next: crests and verified bumps in stage discovery for Explore (/api/coverage `crested`, `bumps`); delete the unreachable
+  Valhalla stage-plan code once the owner has lived with the rule.
+
 ## Session 2026-11-11 (Valhalla for Quick only): Fun and Long way are our router's or nothing (claude/project-thread-39xbx9, off origin/main)
 
 - The owner: Fun and Long way "always say check my signal", and Valhalla only ever for Quick. cockpit.js `funRoute`: at
