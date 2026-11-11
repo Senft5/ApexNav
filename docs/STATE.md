@@ -1,5 +1,21 @@
 # VETTA — CURRENT AGENT HANDOFF STATE
 
+## Session 2026-11-11 (roam-a brake heat): the co-driver knows when your brakes are cooking (claude/project-thread-h7xxmf, off origin/main)
+
+- IDEAS V-12. `core/brake_heat.py` (reference) and `web/brake_heat.js` (port, parity-tested): specific energy v^2/2 + g h
+  (height low-passed 4 s), the loss beyond rolling (0.012) and air (2.6e-4 v^3) is brake power, one lumped disc mass
+  (1.7 % of the car, cast iron: 7.8 J/kg K) cooled with tau 600 s standing to ~120 s at 22 m/s. Warm 150 K, hot 250 K
+  above the air; a call when hot, re-armed below 150 K and 3 min apart. No speed or height: only cools; null before
+  anything known; a gap over 5 s is a new baseline.
+- cockpit.js `noteBrakes(frame)` on both live frame paths (web sensors, the app's frames): toast + the break cue's quiet slot
+  (`breakSay`, takes it). `drive.brakes` reset per drive. drive_view.js: one line when a drive got warm or hot
+  (`driveText`, "by Vetta's estimate"). Script tags in index.html and analysis.html.
+- The bundled demo drives (120 m of relief) come out cool (peaks 112 K, 87 K): no false alarm on ordinary hills.
+- Energy is differenced over 2 s windows: the app's 10 Hz frames hold speed between 1 Hz fixes, and a step-by-step
+  difference lost ~70 % of braking (clipped) and counted drag as braking (review). The call has its own quiet slot (`brakeSay`, 60 s), said before a waiting break cue.
+- Tests: tests/test_brake_heat.py (18, incl. 10 Hz held speed, coasting, held-speed CSV rows). Checked: pytest 1607 passed; e2e first run, drive ended (card and Log), car-started drive.
+- Next: the route card warns of a long descent ahead from the DEM profile (stages.js profile) with the same model at the
+  router's speeds; the Garage car's weight and brake size could set DISC_C; not checked on a real descent yet (VERIFY).
 ## Session 2026-11-11 (routing round two, part 2): go round a police report mid-drive; a late loop skips a stage (claude/project-thread-39xbx9)
 
 - `ApexHazardReports.onRouteAhead(t, atM, pts)`: the nearest report within 150 m of the route 0.8-25 km ahead. cockpit.js

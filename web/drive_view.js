@@ -241,6 +241,9 @@
     const ideal = co && co.clean && co.gain_s > 0 && co.corners.some((x) => x.passes > 1)
       ? { gain: co.gain_s, n: co.clean, drives: new Set(co.corners.filter((x) => x.gain_s != null).map((x) => (x.best ? x.best_from : -1))).size } : null;
     const plain = plainCoach(ds, co);
+    // brake heat (brake_heat.js): said only when the discs got warm or hot by the model; nothing for a drive with no height
+    const BH = root.ApexBrakeHeat || (typeof module !== 'undefined' && typeof require === 'function' ? require('./brake_heat.js') : null);
+    const brakes = BH && Array.isArray(d.elev) ? BH.driveText(BH.overTrack(d.dist, d.speed_mps, d.elev), (m) => DIST(m, 1)) : null;
     const tired = Core.fatigue ? fatigueText(Core.fatigue(d.speed_mps, d.lon_g, d.lat_g, d.corners, d.g_known || null)) : null;   // unmeasured g is left out
     const mi = finite(S.km) ? DIST(S.km * 1000, 1) : '--';
     const dur = finite(S.duration_s) ? fmtT(S.duration_s) : '--';
@@ -259,6 +262,7 @@
       + (d.car && d.car.label ? `<div class="dv-meta">Scored for your ${esc(d.car.label)}${finite(d.car.mu) && d.car.mu < 0.6 ? ` \u00b7 its own grip, ${d.car.mu.toFixed(2)} g (the default is 0.60 g)` : ''}</div>` : '')
       + (plain ? `<p class="dv-plain">${esc(plain)}</p>` : '')
       + (tired ? `<p class="dv-plain">${esc(tired)}</p>` : '')
+      + (brakes ? `<p class="dv-plain">${esc(brakes)}</p>` : '')
       + (ideal ? `<div class="dv-meta">Ideal drive <b class="gain">${ideal.gain.toFixed(2)} s</b> quicker: your best pass of each of ${ideal.n} corners, from ${ideal.drives} drive${ideal.drives === 1 ? '' : 's'}</div>` : '');
     root_.append(head, el('div', 'dv-grid'));
     const grid = root_.lastChild; grid.append(mapBox, el('div', 'dv-right'));
