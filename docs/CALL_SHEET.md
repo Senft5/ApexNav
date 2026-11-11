@@ -125,6 +125,22 @@ keeps its own word and only its progress bar moves.
 
 Undo: revert the PR.
 
+## 2026-11-11 (fable-first-last): the welcome shows the app; the end card is a reveal (claude/fable-first-last)
+
+The welcome was one still page. Now the Vetta lockup moves from the middle of the screen (where the launch screen left
+it) to its place, a road draws itself across the paper, and a red dot drives it while the road book strip calls each
+corner just before the dot reaches it. Start and Watch a replay are there and work from the first frame; a touch anywhere
+ends the drawing; it settles in under 4 s. With Reduce Motion on, it is one still page and the strip no longer changes
+call every 4 s (I made that call: the brief was a still page). The permission sheet uses the same type, a drawing per
+row, and the red Start key with its dot, since that key is go; when Location is off its key stays ink. No permission is
+asked any earlier, and there is no sign-in on either page.
+
+The drive-ended card: the driven line draws itself beside the Score while the drive is being scored (the score's place
+shows a moving pen stroke and "Vetta Score · working it out", never a number); when the number is known it counts up to
+it and settles; the distance, time and corners are a row of big numbers; Mark a stage and Drive it again are quiet keys
+so Share card is the one ink key. A drive with no score shows "0.9 mi · no corners to score" set as a title.
+
+Undo: revert the PR (web/first_run.js and web/end_reveal.js can simply be removed; the page works without them).
 ## 2026-11-10 (fable-ten-hz-g): a recorded drive keeps the car's g ten times a second, where it happened (claude/fable-ten-hz-g)
 
 The app sends the page ten readings a second, but the recorder kept only the one that arrived with each GPS fix and gave
@@ -200,6 +216,19 @@ Calls made: the way home is chosen by the same Fun / Long way rules as any route
 where our own map tiles don't reach, the public router is asked to avoid the way out; a dead end that has only one way
 in says so instead of failing. Undo: hide `#routeRoundBtn` (one line in renderRouteCard), nothing else depends on it.
 
+## 2026-11-10 (fable-soundtrack): the Soundtrack, music made by the road (claude/fable-soundtrack)
+
+Section 5 of the architecture (an audio bus driven by the driver's workload and the road ahead, with build-ups timed to
+corners) was never built. It is now, as an opt-in Soundtrack in Garage > Co-driver. Calls I made:
+- Generated, not licensed: the phone writes the music (WebAudio, no files), so it costs nothing, works with no signal and
+  raises no rights questions. A licensed or stem-based score can replace `soundtrack.js` behind the same bus later.
+- It never follows speed. Speed only turns a distance into a time to the next corner; the energy comes from measured g
+  and the road's corners. Over Sight it drops to the pad. A soundtrack that rose with speed would egg drivers on.
+- Unknown stays unknown: before the mount is set, or with no road ahead known, it rests on its pad instead of acting out
+  a road it has not measured.
+- Off by default, because sound in someone's car is theirs to choose.
+Undo: switch it off (nothing plays), or revert the PR.
+
 ## 2026-11-10 (fable-your-data): Your data is three short lists, like Settings (claude/fable-your-data)
 
 For your "cohesiveness, less clunky": Your data was eight keys of eight widths in two wrapped rows, one of them a link
@@ -216,6 +245,15 @@ The e2e suite is 152 flows now and takes about 24 minutes, so GitHub cut it off 
 (twice on #349, once on #344) with every flow before it passing. The limit is 35 minutes. No test is skipped or
 shortened. Undo: set `timeout-minutes` back to 25 in `.github/workflows/core-tests.yml`, or better, split the suite.
 
+## 2026-11-10 (fable-log-units): the Log's last metre-only lines are in your units (claude/fable-log-units)
+
+After #352 a driver in miles still read metres in the Log: a stage being marked said "up 34 m" and "Make it at least
+200 m long"; the repeatability list said "braking point typically within 6 m"; the steadiness chart's scale, its dots
+and its note were in metres; the grip circle's notes said "every 5 m" and "100 m before turn-in". These now follow
+Settings, Units. Small lengths in feet are said to the nearest 5 ft ("within 20 ft"), since a finer figure would
+claim more than the phone measured. Metric drivers see what they saw before.
+
+Undo: revert the PR. Nothing stored changes; this is only how lengths are written.
 ## 2026-11-10 (fable-driver-profile): the Log has "Your driving", a picture of how you drive over every drive (claude/fable-driver-profile)
 
 Until now every reading was of one drive, or one corner against your other passes of it. Your driving reads every clean

@@ -9,6 +9,8 @@
   const finite = (v) => typeof v === 'number' && Number.isFinite(v);
   // Units (units.js, U-22): the caller's MPH is already the chosen speed factor; these give the words for it and distances.
   const U = () => root.ApexUnits;
+  // a small length in the driver's units (units.js fine): "12 m" or "40 ft"; metres where there is no units module (tests)
+  const fine = (x) => (U() && U().fine ? U().fine(x) : `${Math.round(x)} m`);
   const SPD = () => (U() ? U().speedU() : 'mph');
   const SPD_WORDS = () => (U() && U().metric() ? 'kilometres per hour' : 'miles per hour');
   const DIST = (m, digits = 2) => (U() ? U().long(m, digits) : `${(m / 1609.344).toFixed(digits)} mi`);
@@ -178,7 +180,7 @@
     lede.textContent = term ? term.meaning : '';
     const more = el('details', 'quiet dv-gg-more');
     more.innerHTML = '<summary>What the grip circle shows</summary>'
-      + '<p class="note"><b>The dots.</b> One for every 5 m of the drive where the phone measured the forces on the car: how hard you were braking or speeding up (down and up) and turning (left and right) at that moment. Dots near the middle are gentle driving.</p>'
+      + '<p class="note"><b>The dots.</b> One for every ' + fine(5) + ' of the drive where the phone measured the forces on the car: how hard you were braking or speeding up (down and up) and turning (left and right) at that moment. Dots near the middle are gentle driving.</p>'
       + `<p class="note"><b>The outline.</b> In each of 16 directions, how far your dots reach, leaving out the furthest 5 in 100 so one pothole doesn’t count. Where it breaks off, too few moments went that way to say.</p>`
       + `<p class="note"><b>The rings.</b> 0.5 g${R > 1.05 ? ' and 1 g' : ''}. At 1 g the push you feel is as strong as gravity.</p>`
       + '<p class="note"><b>What the shape means.</b> A bigger shape: you asked more of the tyres. A rounder one: you blended braking into turning, and turning into speeding up, instead of doing one and then the other. It is a picture of how you drove, not a target to push: on a public road the grip left in reserve is what keeps you safe.</p>'
@@ -194,7 +196,7 @@
       for (let i = lo; i <= c.end; i++) if (ok(i)) { const [x, y] = xy(d.lat_g[i], d.lon_g[i]); p += `${p ? 'L' : 'M'}${x.toFixed(1)} ${y.toFixed(1)}`; }
       hot.innerHTML = `<svg viewBox="0 0 ${S} ${S}" aria-hidden="true"><path d="${p}" fill="none" stroke="${C.accent}" stroke-width="2.4" stroke-linejoin="round" stroke-linecap="round" opacity="0.9"/></svg>`;
       const use = Core.gripUse(d.lat_g, d.lon_g, lo, c.end, env, d.g_known || null);
-      cap.textContent = `Corner ${kc + 1}, from 100 m before turn-in to the exit: on average ${use == null ? '--' : `${Math.round(Math.min(1, use) * 100)} %`} of the way out to the outline.`;
+      cap.textContent = `Corner ${kc + 1}, from ${U() && U().size ? U().size(100) : '100 m'} before turn-in to the exit: on average ${use == null ? '--' : `${Math.round(Math.min(1, use) * 100)} %`} of the way out to the outline.`;
     }
     return { box, show, env };
   }
@@ -490,7 +492,7 @@
     list.innerHTML = `<h2>Corners${ref ? ` \u00b7 compared with ${esc(ref.name)} (score ${ref.score}), your best other drive on this road` : ''}</h2>` + (ref ? `<p class="note" style="margin-bottom:8px">${net == null ? 'No clean corners to compare.' : `Over the ${d.corners.map((_, k) => lost(k)).filter((x) => x != null).length} corners both drives took cleanly, this drive was <b class="${net > 0.05 ? 'loss' : net < -0.05 ? 'gain' : ''}">${fmtD(net)}</b> ${net > 0 ? 'slower' : 'faster'}. Stops and traffic are left out.`}</p>` : '');
     const reps = consistencyRows(co);
     if (reps.length) {                                               // how repeatably each corner is driven over your passes (D-07)
-      const ul = el('ol', 'dv-time'), m = (x) => `${Math.max(3, Math.round(x))} m`;
+      const ul = el('ol', 'dv-time'), m = (x) => fine(Math.max(3, x));
       const med = reps[Math.floor((reps.length - 1) / 2)].brake_sd_m;
       const varies = (r) => r.brake_passes >= VARIES_MIN_PASSES && r.brake_sd_m >= Math.max(VARIES_M, 2 * med);
       const steady = reps.filter((r) => r.brake_passes === r.passes && r.brake_sd_m <= med && !varies(r)).slice(0, 2);   // braked clearly on every pass
@@ -507,7 +509,7 @@
       const which = steady.length && loose.length ? 'Your steadiest corners, then the ones that vary most.'
         : steady.length ? 'Your steadiest corners; none varies much more than the rest.'
         : loose.length ? 'The corners that vary most.' : 'None varies much more than the rest.';
-      const intro = el('p', 'note', `In ${reps.length} corners where you braked clearly on three or more passes, your braking point typically moves about ${m(med)} from drive to drive (5 m samples and GPS make about 3 m the floor). ${which}`);
+      const intro = el('p', 'note', `In ${reps.length} corners where you braked clearly on three or more passes, your braking point typically moves about ${m(med)} from drive to drive (${fine(5)} samples and GPS make about ${fine(3)} the floor). ${which}`);
       if (ul.children.length) list.prepend(el('h2', null, 'How repeatable your corners are'), intro, ul);
       else list.prepend(el('h2', null, 'How repeatable your corners are'), intro);
     }

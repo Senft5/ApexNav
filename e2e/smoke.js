@@ -319,6 +319,61 @@ flow('Location off, in a browser: the sheet says it once and its key tries again
   check(!(await page.isVisible('#permSheet.show')), 'Not now puts it away');
 });
 
+// The Soundtrack (web/soundtrack.js on web/audio_bus.js, ARCHITECTURE section 5): off until switched on in the Garage; in
+// a drive it plays, rests on its pad while the mount is not set, fills out on a busy road, and stops at End; the app's
+// audio session is held while it plays. Rendered offline: a busy road is louder and fuller than a straight, nothing clips.
+flow('the Soundtrack: off by default, a Garage switch; in a drive it follows the measured road and stops at End; rendered, it never clips', async (page, base) => {
+  await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); localStorage.setItem('apex.permsExplained', '1'); } catch (_) {}
+    window.__posted = []; window.webkit = { messageHandlers: { apex: { postMessage(m) { window.__posted.push(m); } } } }; });
+  await page.route(base + '/api/**', (route) => route.fulfill({ status: 200, contentType: 'application/json', body: '{"signed_in":false}' }));
+  await page.goto(base + '/index.html');
+  await page.waitForFunction(() => window.apexDebug && window.apexDebug.map && window.apex && window.apex.live && window.ApexSoundtrack && window.ApexAudioBus);
+  check(await page.evaluate(() => window.apexDebug.state.toggles.soundtrack === false), 'off until asked for');
+  await page.click('.tab[data-view="garage"]');
+  const sw = page.locator('[data-toggle="soundtrack"]');
+  await sw.scrollIntoViewIfNeeded();
+  check(/Soundtrack/.test(await sw.textContent()) && (await page.textContent('#soundtrackHear')).trim() === 'Hear a sample', 'the switch and its sample key are on the Garage page');
+  await sw.click();
+  check(await page.evaluate(() => window.apexDebug.state.toggles.soundtrack === true && document.querySelector('[data-toggle="soundtrack"]').getAttribute('aria-checked') === 'true'), 'the switch turns it on');
+  await page.click('.tab[data-view="map"]');
+  const c = await page.evaluate(() => { const m = window.apexDebug.map.getCenter(); return [m.lat, m.lng]; });
+  const feed = (from, n, latG) => page.evaluate(async ([c, from, n, latG]) => {
+    for (let i = from; i < from + n; i++) {
+      window.apex.live({ lat: c[0] + i * 1.3e-5, lon: c[1], accuracy_m: 5, speed_mps: 14, course_deg: 0, has_fix: true, calibration: latG == null ? 'default' : 'locked',
+        lat_g: latG == null ? 0.5 : latG, lon_g: 0.05, roughness_rms: 0.05, thermal: 0, battery: 0.8, charging: true, seq: i, at: Date.now() / 1000 });
+      await new Promise((r) => setTimeout(r, 100));
+    } }, [c, from, n, latG]);
+  await feed(0, 10, 0.02);
+  check(await page.evaluate(() => !window.apexDebug.soundtrack.playing), 'nothing plays before a drive');
+  await page.evaluate(() => document.getElementById('startDrive').click());
+  await feed(10, 25, null);                                           // the mount not set yet: its g is no measurement
+  let st = await page.evaluate(() => window.apexDebug.soundtrack);
+  check(st.playing && st.frame && st.frame.intensity === null && st.frame.energy === 0 && st.frame.layers.pulse === 0, 'in a drive it plays; before the mount is set it rests on its pad: ' + JSON.stringify(st.frame));
+  check(await page.evaluate(() => window.__posted.some((m) => m && m.cmd === 'soundtrack' && m.on === true)), 'the app is asked to hold its audio session');
+  await feed(35, 50, 0.5);
+  st = await page.evaluate(() => window.apexDebug.soundtrack);
+  check(st.frame.intensity > 0.3 && st.frame.layers.pulse > 0.9 && st.frame.cutoff_hz > 1000, 'a busy measured road fills it out: ' + JSON.stringify(st.frame));
+  await page.evaluate(() => document.getElementById('driveEnd').click());
+  await page.waitForFunction(() => !window.apexDebug.soundtrack.playing, null, { timeout: 5000 }).catch(() => {});
+  check(await page.evaluate(() => !window.apexDebug.soundtrack.playing && window.__posted.some((m) => m && m.cmd === 'soundtrack' && m.on === false)), 'End stops it and gives the session back');
+  // rendered offline: the same engine on a quiet straight and on a busy road
+  const r = await page.evaluate(async () => {
+    const out = {};
+    for (const [name, g] of [['quiet', 0.02], ['busy', 0.6]]) {
+      const sr = 22050, ctx = new OfflineAudioContext(1, sr * 14, sr), eng = ApexSoundtrack.create(ctx), bus = ApexAudioBus.create();
+      eng.start(7, { at: 0, live: false }); eng.schedule(0, 6);
+      let f; for (let i = 0; i < 300; i++) f = bus.step(0.1, { lat_g: g, lon_g: 0.02, speed_mps: 15, corners: [] });
+      eng.set(f, 1, 0.01);
+      const d = (await ctx.startRendering()).getChannelData(0); let peak = 0, sq = 0; const from = sr * 4;
+      for (let i = from; i < d.length; i++) { peak = Math.max(peak, Math.abs(d[i])); sq += d[i] * d[i]; }
+      out[name] = { peak, rms: Math.sqrt(sq / (d.length - from)) };
+    }
+    return out;
+  });
+  check(r.quiet.rms > 0.005 && r.busy.rms > 1.5 * r.quiet.rms, 'a busy road is fuller than a straight, and a straight is not silence: ' + JSON.stringify(r));
+  check(r.quiet.peak < 0.95 && r.busy.peak < 0.95, 'nothing clips: ' + JSON.stringify(r));
+});
+
 flow('returning driver: live frames switch to the cockpit, big targets and no keyboard while moving', async (page, base) => {
   await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); } catch (_) {} });
   await page.goto(base + '/index.html');
@@ -2761,6 +2816,74 @@ flow('first open in the app: the welcome runs, and Start is what asks the shell 
   await page.evaluate(() => { window.__native.length = 0; window.apex.onNative({ type: 'carplay', action: 'start' }); });
   await page.waitForFunction(() => window.apexDebug.driveActive && window.__native.includes('requestLocation'), null, { timeout: 5000 });
   check(!(await page.isVisible('#onboard.show')), "the car's Start answers the welcome");
+});
+
+// design pass "first and last": the welcome draws a road and the red dot drives it while the strip calls the corners; the
+// keys are there and take a tap from the first frame; it settles inside 4 s; under reduced motion it is a still, whole page.
+// The drive-ended card draws the line while the drive is scored, counts only once the number is known, and lands on it.
+flow('first run and the end card: the welcome draws its road with the keys live at once, still under reduced motion; the card counts only a known score', async (page, base) => {
+  await page.goto(base + '/index.html');
+  await page.waitForSelector('#onboard.show', { timeout: 10000 });
+  const early = await page.evaluate(() => { const k = document.getElementById('obNext'), r = k.getBoundingClientRect(), hit = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2);
+    return { hit: !!hit && k.contains(hit), op: getComputedStyle(k).opacity, alt: getComputedStyle(document.getElementById('obAlt')).opacity, go: document.getElementById('onboard').classList.contains('ob-go'),
+      marks: document.querySelectorAll('#onboard .ob-apex').length }; });
+  check(early.hit && early.op === '1' && early.alt === '1' && early.go && early.marks === 5, 'the keys are whole and on top from the first frame: ' + JSON.stringify(early));
+  await page.waitForTimeout(3800);                                    // settled: the road drawn, nothing still arriving
+  const settled = await page.evaluate(() => ({ running: document.getAnimations().filter((a) => a.effect && a.effect.target && a.effect.target.closest && a.effect.target.closest('#onboard') && a.playState === 'running').length,
+    on: [...document.querySelectorAll('#onboard .ob-apex')].filter((m) => m.classList.contains('on')).length, you: document.querySelector('#onboard .ob-you').getAttribute('cx') }));
+  check(settled.running === 0 && settled.on === 1, 'the welcome settles inside 4 s, one corner lit with the strip\'s call: ' + JSON.stringify(settled));
+  // a touch mid-drawing ends it at once (the page as it ends), and Start still closes the welcome
+  await page.evaluate(() => localStorage.removeItem('apex.onboarded'));
+  await page.reload();
+  await page.waitForSelector('#onboard.show', { timeout: 10000 });
+  await page.click('#obNext');
+  check(!(await page.isVisible('#onboard.show')) && await page.evaluate(() => localStorage.getItem('apex.onboarded') === '1'), 'an impatient Start is never blocked');
+  // reduced motion: no animation at all, the road whole, the dot at the start, the strip holds its first call
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  await page.evaluate(() => localStorage.removeItem('apex.onboarded'));
+  await page.reload();
+  await page.waitForSelector('#onboard.show', { timeout: 10000 });
+  const still = () => page.evaluate(() => ({ anims: document.getAnimations().filter((a) => a.effect && a.effect.target && a.effect.target.closest && a.effect.target.closest('#onboard')).length,
+    dash: getComputedStyle(document.querySelector('#onboard .ob-line')).strokeDashoffset, head: getComputedStyle(document.querySelector('#onboard .ob-head')).opacity,
+    call: (document.querySelector('#obNotes .rb-box.now .rb-call span') || {}).textContent, you: document.querySelector('#onboard .ob-you').getAttribute('cx') }));
+  const s1 = await still(); await page.waitForTimeout(2200); const s2 = await still();
+  check(s1.anims === 0 && /^0(px)?$/.test(s1.dash) && s1.head === '1' && Math.round(+s1.you) === 28 && s1.call && JSON.stringify(s1) === JSON.stringify(s2), 'reduced motion: a still, whole page: ' + JSON.stringify({ s1, s2 }));
+  await page.click('#obNext');
+  await page.emulateMedia({ reducedMotion: 'no-preference' });
+  // the end card: while scoring, no number (and no count); the line is drawn; when the score lands it counts up and ends on it
+  await page.waitForFunction(() => window.apexDebug && window.ApexCore && window.ApexEndReveal);
+  const seen = await page.evaluate(async () => {
+    ApexCore.driverScore = () => ({ score: 640, components: {} });
+    const lat = [], lon = []; for (let i = 0; i < 300; i++) { lat.push(35.36 + i * 5 / 110540); lon.push(-84.29 + Math.sin(i / 40) * 0.0015); }
+    const counts = [], busy = [];
+    const s = document.getElementById('endScore');
+    const mo = new MutationObserver(() => { if (s.hasAttribute('data-n')) counts.push(+s.getAttribute('data-n')); if (s.hasAttribute('aria-busy')) busy.push(s.textContent); });
+    mo.observe(s, { attributes: true, childList: true, characterData: true, subtree: true });
+    apexDebug.showEndCard({ id: 'fl', name: 'Cherohala Skyway', date: new Date().toISOString(), lat, lon, dist: lat.map((_, i) => i * 5), speed_mps: lat.map(() => 15), lon_g: lat.map(() => 0), lat_g: lat.map(() => 0), g_known: null, events: [], elev: null, hz: 1, source: 'web-gps', corners: [] }, Date.now() - 600e3, { quiet: true });
+    const atOpen = { busy: s.hasAttribute('aria-busy'), n: s.getAttribute('data-n'), glyph: !!document.querySelector('#endGlyph .eg-line'), red: !!document.querySelector('#endGlyph .eg-now'),
+      share: document.getElementById('endShare').getBoundingClientRect().height > 0 };
+    for (let i = 0; i < 100 && s.hasAttribute('aria-busy'); i++) await new Promise((r) => setTimeout(r, 30));
+    await new Promise((r) => setTimeout(r, 1300));
+    mo.disconnect();
+    const meta = document.getElementById('endMeta');
+    return { atOpen, counts, text: s.textContent, counting: s.classList.contains('counting'), n: s.getAttribute('data-n'), meta: meta.textContent, cells: meta.querySelectorAll('.f b').length };
+  });
+  check(seen.atOpen.busy && seen.atOpen.n === null && seen.atOpen.glyph && seen.atOpen.red && seen.atOpen.share, 'scoring: the line drawn, no number, the keys there: ' + JSON.stringify(seen.atOpen));
+  check(seen.text === '640' && !seen.counting && seen.n === null && seen.counts.length >= 2 && seen.counts.every((v, i, a) => v <= 640 && (!i || v >= a[i - 1])), 'the count rises to the known number and ends on it: ' + JSON.stringify(seen));
+  check(/^[\d.]+ (mi|km) · 2 min · 0 corners$/.test(seen.meta) && seen.cells === 3, 'the facts are the same line, set as a ledger: ' + JSON.stringify(seen));
+  // no score: words in the score's place, no count
+  const none = await page.evaluate(async () => {
+    document.getElementById('endDone').click();
+    ApexCore.driverScore = () => ({ score: null, components: {} });
+    const lat = [], lon = []; for (let i = 0; i < 300; i++) { lat.push(35.36 + i * 5 / 110540); lon.push(-84.29); }
+    const s = document.getElementById('endScore'); let counted = false;
+    const mo = new MutationObserver(() => { if (s.hasAttribute('data-n')) counted = true; }); mo.observe(s, { attributes: true });
+    apexDebug.showEndCard({ id: 'fl2', name: 'Circle Freeway', date: new Date().toISOString(), lat, lon, dist: lat.map((_, i) => i * 5), speed_mps: lat.map(() => 15), lon_g: lat.map(() => 0), lat_g: lat.map(() => 0), g_known: null, events: [], elev: null, hz: 1, source: 'web-gps', corners: [] }, Date.now() - 600e3, { quiet: true });
+    for (let i = 0; i < 100 && s.hasAttribute('aria-busy'); i++) await new Promise((r) => setTimeout(r, 30));
+    await new Promise((r) => setTimeout(r, 600)); mo.disconnect();
+    return { counted, text: s.textContent, font: getComputedStyle(s).fontFamily };
+  });
+  check(!none.counted && /no corners to score$/.test(none.text) && /Barlow/.test(none.font), 'no score: words set as a title, nothing counted: ' + JSON.stringify(none));
 });
 
 flow('drive ended: Open in the Log is the solid key with no score, Share card with one, fixed from the first frame; a drive on a route keeps its name (REVIEW4 U-75, REVIEW5 U-118)', async (page, base) => {
@@ -5597,7 +5720,7 @@ flow('a whole road as a stage: the drive\'s roads are keys, the picked one is ci
   await page.click('#segRoads button:has-text("Bank Road uphill")');
   await page.waitForSelector('#segMap ellipse');
   check(await page.getAttribute('#segRoads button:has-text("Bank Road uphill")', 'aria-pressed') === 'true', 'the picked road is pressed');
-  check(/corners · up 20 m/.test(await page.textContent('#segInfo')), 'its length and climb: ' + await page.textContent('#segInfo'));
+  check(/corners · up 65 ft/.test(await page.textContent('#segInfo')), 'its length and climb (20 m), in feet for a driver in miles: ' + await page.textContent('#segInfo'));
   await page.click('#segSave');
   await page.waitForFunction(() => JSON.parse(localStorage.getItem('apex.segments') || '[]').some((s) => s.name === 'Bank Road uphill'));
   const seg = await page.evaluate(() => JSON.parse(localStorage.getItem('apex.segments')).find((s) => s.name === 'Bank Road uphill'));

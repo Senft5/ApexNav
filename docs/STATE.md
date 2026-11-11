@@ -107,6 +107,20 @@
 - Tests: tests/test_route_card.py; e2e "plan flow (c)".
 - Next: CarPlay has not had a design pass in this run (Swift, not visible from the cloud).
 
+## Session 2026-11-11 (fable-first-last): the first run and the drive-ended card as reveals (claude/fable-first-last, off origin/main ac6c6c6)
+
+- web/first_run.js (`ApexFirstRun`: `rests`, `leg`, `attach`): the welcome's lockup moves in from where the cover drew it,
+  a road (`.ob-road`, inline SVG, five `.ob-apex` corners) draws itself, and the red dot (`.ob-you`) drives up to each
+  corner as the strip (`#obNotes`, same renderer) calls it; cockpit.js `runOnboarding` steps both every 1.8 s. Keys live
+  from the first frame; a touch adds `.ob-skip`; under reduced motion there is no beat and no animation (still, whole page).
+- `#permSheet`: rows `.perm-row` with pen drawings; `#permGo` is the red `.rec-key` (ink `.ink-btn solid` when Location is
+  off: paintPerms). Same words, same ids, nothing asked earlier.
+- web/end_reveal.js (`ApexEndReveal`: `glyph`, `cells`, `countAt`, `open`, `land`): `#endGlyph` (the driven line beside
+  the Score, red dot at its end), the Score 108 px, `#endMeta` as a ledger (`.f` cells; its text is still the facts line),
+  busy state = a pen stroke + "working it out"; the count (`data-n` over the real text) only in `land`, after the number is written.
+- Tests: tests/test_end_reveal.py; tests/test_review_recording.py now asserts the welcome is still under reduced motion;
+  e2e "first run and the end card…".
+- Next: the welcome on its side (landscape) is correct but plain; the road could take the left column's full height.
 ## Session 2026-11-10 (fable-ten-hz-g): every live frame's g reaches the recording (IDEAS D-26; claude/fable-ten-hz-g, off origin/main ac6c6c6)
 
 - `web/sensors.js Recorder`: `gs` (each frame's [lat_g, lon_g] or null since the last move, up to 31) and `g0` ([g or
@@ -171,6 +185,26 @@
 - Tests: test_graph_router.py (roundTrips case), e2e "there and back" (the Valhalla path).
 - Not done: offering the round trip as a level card of its own; a timed stop at the destination (lunch: ETA home).
 - Next: discovery of great unknown roads near a planned trip ("a better road 4 min off your route").
+## Session 2026-11-10 (fable-soundtrack): the Soundtrack, music made by the road (claude/fable-soundtrack, off origin/main 948cb4b)
+
+- The mission's audio half (ARCHITECTURE section 5), built: `core/audio_bus.py` (reference) and `web/audio_bus.js` (port,
+  held to one 900-step sequence by tests/test_audio_bus.py), frames under `AudioBusFrame` in the telemetry contract.
+  `web/soundtrack.js`: a seeded score at a fixed 92 bpm in four stems (pad, pulse, bass, lead) synthesised with WebAudio,
+  mixed by the bus. Garage > Co-driver > Soundtrack (off by default) with "Hear a sample" (24 s of a made-up road, said
+  to be a sample, never in a drive).
+- cockpit.js `soundtrackTick` (10 Hz from render): the calibrated g (unknown before the mount is set), the route's or the
+  road's corners inside 400 m (`noteM`, severity from the code), `Inst.sightShort`, `speech.busy`. Stops at End (the tap,
+  not the next frame) and in `leaveDrive`. `apexDebug.soundtrack` for tests.
+- ApexNavApp.swift `setSoundtrack`: the session held `.playback` + `.mixWithOthers` while it plays; `releaseVoice` returns
+  to that instead of deactivating. Not compiled here (CI builds the Swift). APP_REVIEW 2.5.4 row added.
+- Tests: tests/test_audio_bus.py (8), tests/test_soundtrack.py (6), e2e "the Soundtrack" (switch, pad before the mount is
+  set, a busy road fills it, End stops it, the session asked for and given back, offline render: fuller on a busy road,
+  no clipping). pytest 1458 passed; Dynamic Type, REVIEW.md 1.2, REVIEW5 §2 and safe areas flows passed.
+- Not heard by a person yet: the levels were set from offline renders (RMS and peak), not by ear in a car. Next: the
+  owner listens to "Hear a sample" and says what to change; then CarPlay (the session is shared, so it should play there).
+- 2026-11-11: `tests/test_audio_bus.py` checks frames against `AudioBusFrame` with its own small checker (`conform`), not
+  `jsonschema`, which is not in requirements.txt and broke collection on CI. It fails on any schema keyword it does not check.
+
 ## Session 2026-11-10 (fable-your-data): Your data as Settings-style rows (claude/fable-your-data, off origin/main 3f2f315)
 
 - `web/index.html` only: the Your data section's keys are `.nav-rows.data-rows` with three `.nav-group` headings; the
@@ -193,6 +227,12 @@
 - `tests/test_message_sentences.py` (4) reads every `toast('…')` in web/*.js: each ends ". ! ? …", none joins labels with "·".
 - pytest whole suite passed. No e2e flow reads these eight texts (grepped), so none was run for them.
 - Next: messages whose text is built before the call (a variable) are not read by the test.
+## Session 2026-11-10 (fable-log-units): the Log's small lengths in the driver's units (claude/fable-log-units, off origin/main 3f2f315)
+
+- `web/units.js` `fine(m)`: "12 m" or feet to the nearest 5 ("40 ft"). Used in `web/analysis.html` (stage marking's
+  climb and minimum length, the steadiness chart's scale, dots and note) and `web/drive_view.js` (repeatability list,
+  grip circle notes; `size(100)` for "before turn-in"). drive_view falls back to metres with no units module (its tests).
+- Tests: tests/test_units.py (new case); e2e "a whole road as a stage" now expects "up 65 ft".
 ## Session 2026-11-10 (fable-driver-profile): Your driving, the driver profile over every drive (claude/fable-driver-profile, off origin/main 948cb4b)
 
 - `core/driver_profile.py` (new): `observe(drive)` gives one observation per corner the coach may read (six credits
