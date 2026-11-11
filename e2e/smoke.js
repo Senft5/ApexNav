@@ -3593,7 +3593,9 @@ flow('reported hazards: a call ahead, "still there?" after passing, and a one-ta
   check(asked.length >= 1 && asked.every((q) => /^\?lat=35\.6&lon=-83\.9&km=20$/.test(q)), 'the hazards are asked for by cell: ' + JSON.stringify(asked));
   check(await page.evaluate(() => window.__said.some((t) => /gravel reported ahead/i.test(t)) || /Gravel reported ahead/.test(document.body.textContent)), 'the hazard was called ahead');
   await page.click('#hzReportBtn');
-  await page.click('#hzKinds button:has-text("Pothole")');
+  // the tap is the button's own click, in the page: a mouse click at its centre landed while the sheet was still sliding
+  // up on a busy runner (sharded CI 2026-11-11: the sheet stayed open, nothing reported), the review flow does the same
+  await page.evaluate(() => [...document.querySelectorAll('#hzKinds button')].find((b) => b.textContent === 'Pothole').click());
   // REVIEW4 U-74 / U-102 (check): in a drive the confirmation is the status line's, never a toast over the map
   await page.waitForFunction(() => /Pothole reported/.test(document.getElementById('dsNote').textContent), null, { timeout: 15000 })
     .catch(async () => { throw new Error('the report\'s status line never came: ' + JSON.stringify(await page.evaluate(() => ({ note: document.getElementById('dsNote').textContent,
