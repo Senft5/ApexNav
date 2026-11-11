@@ -446,7 +446,7 @@
           layout: { 'symbol-placement': 'line', 'text-size': 9, 'text-field': ['concat', ['number-format', ['get', 'ele'], {}], "'"], 'text-font': ['Noto Sans Regular'] },
           paint: { 'text-halo-width': 1.2 } });
       }
-      map.addSource('apex-route-src', { type: 'geojson', data: emptyFC() });
+      map.addSource('apex-route-src', { type: 'geojson', data: emptyFC(), lineMetrics: true });   // lineMetrics: the reveal draws the line by its progress (penDraw)
       const width = (a, b) => ['interpolate', ['linear'], ['zoom'], 10, a, 16, b];
       // Twisty roads (map shape, not measured): under every route line. t = 2 very twisty, 1 twisty.
       map.addSource('apex-twisty-src', { type: 'geojson', data: emptyFC() });
@@ -1272,10 +1272,60 @@
     map.on('movestart', (e) => { if (e.originalEvent && !touching && e.originalEvent.type !== 'wheel') { pauseFollow(); scheduleResume(); } });
 
     function loadTrackOnMap() {
-      if (!mapReady || !track) return;
+      if (!track) return;
+      const show = revealOf(track);
+      if (!mapReady) return;
       map.getSource('apex-route-src').setData(routeGeoJSON(track));
+      penDraw(track, show.lineMs);
       rebuildPins();
       paintAlternates();
+    }
+    // The reveal (design pass, 2026-11-10; web/route_reveal.js): a route just found is drawn onto the map from its start to
+    // its end like a pen stroke, its profile is drawn on the card with it and the card's numbers count up. Another route
+    // of the same plan (a level card, a loop's way, the ranked route) redraws quickly; a route put up again (a fly-through,
+    // members' corners) is already drawn; reduced motion, a launch, a drive or a driven road: a cut. Worked out once per
+    // route, here where every track reaches the map, and read by the card (cardReveal).
+    let revealLast = null, cardReveal = null;
+    function revealOf(t) {
+      const none = { lineMs: 0, countMs: 0 };
+      if (revealLast === t) return none;
+      const prev = revealLast;
+      revealLast = t;
+      let still = true;
+      try { still = booting || state.mode === 'live' || matchMedia('(prefers-reduced-motion: reduce)').matches; } catch (_) { still = true; }
+      const show = window.ApexReveal && t.kind === 'route' && !t.sectors ? ApexReveal.plan(prev && prev.kind === 'route' ? prev : null, t, still) : none;
+      cardReveal = { t, ms: show.lineMs, countMs: show.countMs, at: performance.now() };
+      return show;
+    }
+    // The line itself, by its own progress (line-gradient over the source's lineMetrics). The gradient is taken off at the
+    // end (and by a timer, should the frames stop: a hidden tab), so the line is never left half drawn and the look's
+    // line-color rules again.
+    const PEN_LAYERS = ['apex-route-casing', 'apex-route'];
+    let pen = null;
+    function penStop() {
+      if (!pen) return;
+      cancelAnimationFrame(pen.raf); clearTimeout(pen.timer); pen = null;
+      try { for (const id of PEN_LAYERS) if (map.getLayer(id)) map.setPaintProperty(id, 'line-gradient', undefined); } catch (_) { /* the map went (a lost context): nothing to tidy */ }
+    }
+    function penDraw(t, ms) {
+      if (pen && pen.t === t && !(ms > 0)) return;                      // the same route sent again mid-stroke: the stroke carries on
+      // another route while the pen is still down (the ranked route lands inside the first stroke): the pen carries on from
+      // where it was along the new line, it never goes back to the start
+      const from = pen && ms > 0 ? pen.p : 0;
+      penStop();
+      if (!(ms > 0) || !window.ApexReveal) return;
+      const C = look.colors, cols = { 'apex-route-casing': C.routeCasing, 'apex-route': C.route }, t0 = performance.now();
+      const at = (p) => { me.p = p; for (const id of PEN_LAYERS) if (map.getLayer(id)) map.setPaintProperty(id, 'line-gradient', ApexReveal.gradient(cols[id], p)); };
+      const me = pen = { t, p: from, raf: 0, timer: setTimeout(() => { if (pen === me) penStop(); }, ms + 250) };
+      const frame = (now) => {
+        if (pen !== me) return;
+        const f = (now - t0) / ms;
+        if (f >= 1) { penStop(); return; }
+        try { at(from + (1 - from) * ApexReveal.ease(f)); } catch (_) { penStop(); return; }
+        me.raf = requestAnimationFrame(frame);
+      };
+      try { at(from); } catch (_) { penStop(); return; }
+      me.raf = requestAnimationFrame(frame);
     }
 
     // =======================================================================
@@ -2101,6 +2151,7 @@
       $('modePlate').hidden = idle || state.mode === 'live';   // driving: the drive bar under the map says it
       $('modePlate').setAttribute('role', replayOn && state.mode !== 'live' ? 'button' : 'status');
       paintPlacePlate();
+      if (idle) { try { paintHere(); } catch (_) { /* before the card's own state is set up */ } }   // back from a fly-through: the dot is where it was left
     }
     function setMode(mode) {
       state.mode = mode;
@@ -2580,7 +2631,16 @@
       // members' road data by the 0.1° cells a plan crosses (VI-1), never by the route's way ids
       // our own network's scores along any corridor (route_ctx/graph.js), from the worker that holds the tiles
       const graphScore = ownClient ? (lines) => ownClient.score(lines) : undefined;
-      return { lookupCells: window.ApexSync ? (cells) => get(`/api/roads?cells=${cells.join(',')}`) : undefined, apiGet: get, graphScore,
+      // With no signal (or the server down) the cells kept on the phone stand in, all of them or none (own_routing.js
+      // keptFor): a day's keep, or for good in a saved offline area (IDEAS F-02). A server that says no (signed out) is final.
+      const lookupCells = window.ApexSync ? async (cells) => {
+        let r = null;
+        try { r = await apiCall('GET', `/api/roads?cells=${cells.join(',')}`); } catch (_) { r = null; }
+        if (r && r.ok) { try { return await r.json(); } catch (_) { return null; } }
+        if (r && r.status < 500) return null;
+        return window.ApexOwnRouting && ApexOwnRouting.keptFor ? ApexOwnRouting.keptFor(cells) : null;
+      } : undefined;
+      return { lookupCells, apiGet: get, graphScore,
         crewLines: (typeof preferCache !== 'undefined' && preferCache.crewLines) || null, myTracks: null, taste, peer: {},
         osmRelay: !!(window.ApexFlags && ApexFlags.on('osm_relay', false)) };   // the OSM relay: off unless the server says on
     }
@@ -2728,7 +2788,9 @@
       b.style.fontSize = ''; bar.classList.remove('two');
       requestAnimationFrame(() => {
         if (!b.clientWidth) return;
-        for (let px = 15; px >= 14 && b.scrollWidth > b.clientWidth + 1; px--) b.style.fontSize = `${px}px`;
+        // (design pass, 2026-11-10: the name is the card's headline, so the steps start from its own size, down a fifth)
+        const base = Math.round(parseFloat(getComputedStyle(b).fontSize)) || 16, floor = Math.max(14, Math.round(base * 0.8));
+        for (let px = base - 1; px >= floor && b.scrollWidth > b.clientWidth + 1; px--) b.style.fontSize = `${px}px`;
         if (b.scrollWidth > b.clientWidth + 1) bar.classList.add('two');
       });
     }
@@ -2744,8 +2806,45 @@
     const VOC = window.ApexVocabulary || null;
     const TWIST_WORD = VOC ? VOC.TERMS.twist.label : 'Curvy', FLOW_WORD = VOC ? VOC.TERMS.flow.label : 'Flowing';
     const isLoop = (t) => !!t && typeof t.id === 'string' && t.id.startsWith('loop_');
+    // The card's hero (design pass, 2026-11-10): the route's profile, its corners ticked along the foot, and the red apex dot
+    // where you are on it (the start, or where the fly-through was left). Before the heights are in, and when they never
+    // come, the road is a level line with its corners (route_card.js strip): the graphic is never an empty box, and the
+    // heights stay "--". Drawn at the box's own width so the highest point's label keeps its shape. A profile that is new
+    // on the card (a route found, its heights arriving) is drawn on from the left, in step with the line on the map.
+    const PROFILE_H = 80;
+    const profileDrawn = new WeakMap();                                // route -> { kind, at, ms }: the stroke under way
+    function paintProfile(t) {
+      const box = $('routeCardProfile'), w = Math.max(240, Math.round(box.clientWidth) || 340);
+      const full = ApexRouteCard.profile(t, w, PROFILE_H, heightLabel), svg = full || ApexRouteCard.strip(t, w, PROFILE_H) || '';
+      box.innerHTML = svg + (svg ? '<i class="rc-here" id="routeCardHere" aria-hidden="true"></i>' : '');
+      box.classList.toggle('none', !full && !!t.profileDone);
+      box.classList.toggle('flat', !full);
+      box.dataset.w = String(w);
+      paintHere(t);
+      const el = box.firstElementChild, kind = full ? 'elev' : 'strip', now = performance.now();
+      if (!el || !svg) return;
+      let d = profileDrawn.get(t);
+      if (!d || d.kind !== kind) {
+        const r = cardReveal && cardReveal.t === t ? cardReveal : null;
+        // heights that arrive later draw themselves on; a swap's are quick; a cut when nothing is to be animated
+        const ms = !r || !(r.ms > 0) ? 0 : kind === 'strip' || now - r.at < 250 ? r.ms : Math.max(r.ms, 600);
+        d = { kind, at: now, ms }; profileDrawn.set(t, d);
+      }
+      const left = d.ms - (now - d.at);
+      if (left > 30) { el.style.setProperty('--rc-draw', `${d.ms}ms`); el.style.animationDelay = `${-(now - d.at)}ms`; el.classList.add('draw'); }
+    }
+    // the apex dot on the profile: where the cursor is along the route (0 at rest; the fly-through moves it)
+    function paintHere(t = plannedRoute) {
+      const dot = $('routeCardHere'), box = $('routeCardProfile');
+      if (!dot || !t || !window.ApexRouteCard) return;
+      const at = ApexRouteCard.profileAt(t, track === t ? state.cursorM : 0, +box.dataset.w || 340, PROFILE_H);
+      dot.hidden = !at;
+      if (at) { dot.style.left = `${(at.fx * 100).toFixed(2)}%`; dot.style.top = `${(at.fy * 100).toFixed(2)}%`; }
+    }
     function renderRouteCard(t = plannedRoute) {
       const card = $('routeCard');
+      // the card takes the plan sheet's place: it opens at its headline, wherever the sheet had been scrolled to
+      if (t && !$('planPanel').classList.contains('routed')) $('planBody').scrollTop = 0;
       $('planPanel').classList.toggle('routed', !!t);
       $('app').classList.toggle('routed', !!t);
       // finding 8: one name for go. The bar's key starts the planned route (Start, red); with none it's the smaller Just drive
@@ -2756,8 +2855,10 @@
         const mi = Array.isArray(t.dist) && t.dist.length ? `${ApexUnits.long(t.dist[t.dist.length - 1], 1)}` : '--';
         $('routeBarName').textContent = t.name || 'Route';
         fitRouteBarName();
-        // U-64: the time too, the router's or the route's own envelope (timeFromEnvelope): "35.4 mi · 1 h 05 · 32 corners"
-        $('routeBarMeta').textContent = [mi, routeTimeText(t.timeS), Array.isArray(t.events) ? ApexFormat.cornerCount(t.events.filter(e => e.type === 'corner').length) : ''].filter(Boolean).join(' · ');
+        // U-64: the time too, the router's or the route's own envelope (timeFromEnvelope), in the card's order: "1 h 05 · 35.4 mi · 32 corners"
+        // (the numbers in ink, their units in pencil, as the card's stat line sets them)
+        $('routeBarMeta').replaceChildren(...[routeTimeText(t.timeS), mi, Array.isArray(t.events) ? ApexFormat.cornerCount(t.events.filter(e => e.type === 'corner').length) : ''].filter(Boolean)
+          .flatMap((part, k) => { const m = /^([\d.,:]+(?: h \d\d)?)(.*)$/.exec(part), n = document.createElement('i'); if (m) n.textContent = m[1]; return [k ? ' · ' : '', ...(m ? [n, m[2]] : [part])]; }));
       }
       carRoute(t);
       if (!t) { card.hidden = true; paintAlternates(); return; }
@@ -2776,10 +2877,13 @@
       // the card as instruments (REVIEW.md roadmap 5): three stamped numbers and the profile with a tick per corner
       $('routeCardStats').innerHTML = ApexRouteCard.stats(t, (m) => ApexUnits.long(m, 1)).map((x) =>
         `<div><b>${x.value}${x.unit ? `<small>${x.unit}</small>` : ''}</b><span>${x.label}</span></div>`).join('');
+      // the reveal: the three numbers count up to what they say, once, for a route just found (never for a redraw)
+      if (cardReveal && cardReveal.t === t && cardReveal.countMs > 0 && !cardReveal.counted && window.ApexReveal) {
+        cardReveal.counted = true;
+        ApexReveal.countUp($('routeCardStats').querySelectorAll('b'), cardReveal.countMs);
+      }
       // finding 2: the profile's room is kept until its heights are in (or known not to come), so nothing under it jumps
-      const prof = ApexRouteCard.profile(t, 340, 92, heightLabel) || '';
-      $('routeCardProfile').innerHTML = prof;
-      $('routeCardProfile').classList.toggle('none', !prof && !!t.profileDone);
+      paintProfile(t);
       const avgSector = (k) => {
         if (!Array.isArray(t.sectors) || !t.sectors.length) return null;
         const vals = t.sectors.map(s => s && s[k]).filter(Number.isFinite);
@@ -4913,6 +5017,7 @@
       if (track && track.kind === 'route' && state.mode !== 'live') {
         setPlaying(false); replayOn = false; track = null;
         if (mapReady) { map.getSource('apex-route-src').setData(emptyFC()); map.getSource('apex-ribbon-src').setData(emptyFC()); ribbonKey = ''; }
+        penStop(); revealLast = null;                                 // the next route found is a new find, drawn on in full
         rebuildPins(); paintIdle(); render(true);
       }
       resumeFollow();
@@ -5943,7 +6048,7 @@
       }
       // Anyone signed in can take their data or close the account, member or not.
       const downloadMyData = async () => { const r = await apiCall('GET', '/api/me/export'); const blob = new Blob([JSON.stringify(await r.json(), null, 2)], { type: 'application/json' }); const a = el('a', { href: URL.createObjectURL(blob), download: 'vetta-my-data.json' }); a.click(); };
-      const deleteMyAccount = async () => { if (await ApexConfirm.prompt('This erases your account, friends, shared results and spots from the server. Type DELETE to confirm.', { action: 'Delete account', placeholder: 'DELETE', maxLength: 10, match: 'DELETE' }) === 'DELETE') { const r = await apiCall('DELETE', '/api/me', { confirm: 'DELETE' }); if (r.ok) { ApexSync.setSession(null); clearCarry(); } redo(); } };
+      const deleteMyAccount = async () => { if (await ApexConfirm.prompt('This erases your account, friends, shared results and spots from the server. Type DELETE to confirm.', { action: 'Delete account', placeholder: 'DELETE', maxLength: 10, match: 'DELETE' }) === 'DELETE') { const r = await apiCall('DELETE', '/api/me', { confirm: 'DELETE' }); if (r.ok) { ApexSync.setSession(null); clearCarry(); clearCrowd(); } redo(); } };
       // Vetta is open (P-02, the owner 2026-10-30): everyone signed in is a member, so the only one who isn't is an account the owner
       // removed. No paste field and no way in to offer; one line on each side, and the account's keys in the Garage, where they live (P-22).
       if (!me.member) {
@@ -5951,7 +6056,7 @@
           el('p', { className: 'note', textContent: 'Driving, notes and your Log work as always. Your account is still yours: download or delete it in the Garage.' }));
         const asec = el('div', { className: 'stack-8' });                        // the sheet's head says Account
         asec.append(el('div', { className: 'row' }, btn('Download my data', downloadMyData),
-          btn('Sign out', async () => { await apiCall('POST', '/api/auth/logout'); ApexSync.setSession(null); clearCarry(); redo(); })), btn('Delete account', deleteMyAccount, 'danger-btn'));
+          btn('Sign out', async () => { await apiCall('POST', '/api/auth/logout'); ApexSync.setSession(null); clearCarry(); clearCrowd(); redo(); })), btn('Delete account', deleteMyAccount, 'danger-btn'));
         accBody.append(asec);
         return;
       }
@@ -6400,7 +6505,7 @@
       const asec = accBody === gbody ? section('Account') : el('div', { className: 'stack-8' });
       asec.append(el('div', { className: 'row' },
         btn('Download my data', downloadMyData),
-        btn('Sign out', async () => { await apiCall('POST', '/api/auth/logout'); ApexSync.setSession(null); clearCarry(); redo(); })),
+        btn('Sign out', async () => { await apiCall('POST', '/api/auth/logout'); ApexSync.setSession(null); clearCarry(); clearCrowd(); redo(); })),
         btn('Delete account', deleteMyAccount, 'danger-btn'));
       accBody.append(asec);                                                 // your account: Garage → Settings → Account
       if (safety) { accBody.append(safety.blockedSection()); if (me.moderator) accBody.append(safety.moderationSection()); }
@@ -6517,6 +6622,8 @@
     // Road data that waited for signal (road_carry.js, IDEAS Q-06) wires itself; the page counts its uploads for app health,
     // says when some went, and empties it when Road data is switched off, on sign-out and when the account is deleted, so
     // nothing measured under one account is sent under another (Erase everything clears its index with the apex.* keys).
+    // Members' road data kept for plans (own_routing.js) is a member's: it leaves the phone on sign-out and account deletion.
+    const clearCrowd = () => { try { if (window.ApexOwnRouting && ApexOwnRouting.clearCrowd) ApexOwnRouting.clearCrowd(); } catch (_) {} };
     const clearCarry = () => { try { localStorage.removeItem('apex.roadShare'); } catch (_) {} try { if (window.ApexRoadCarry && ApexRoadCarry.clear) ApexRoadCarry.clear(); } catch (_) {} };
     if (window.ApexRoadCarry && ApexRoadCarry.flush) {
       ApexRoadCarry.onPost = (r) => health.bump(r === true ? 'road_upload_ok' : 'road_upload_fail');
@@ -6573,7 +6680,14 @@
       try {
         const a = await ApexOfflineTiles.download({ lat: c.lat, lon: c.lng, radiusKm: 25, styleUrl: MAP_STYLE, name: `Around ${c.lat.toFixed(2)}, ${c.lng.toFixed(2)}`,
           onProgress: (d, n) => { if (d % 25 === 0 || d === n) $('myAreaBtn').textContent = `Saving the map… ${Math.round(100 * d / n)}%`; } });
-        toast(`Saved ${ApexUnits.long(a.radiusKm * 1000, 0)} round here for offline · ${(a.bytes / 1048576).toFixed(0)} MB`);
+        // members' road feel for the area too (signed in as a member): measured roads plan the same with no signal
+        let roads = null;
+        if (window.ApexOwnRouting && ApexOwnRouting.holdArea && window.ApexSync && (await ApexSync.member().catch(() => false))) {
+          $('myAreaBtn').textContent = 'Saving members\u2019 road feel…';
+          roads = await ApexOwnRouting.holdArea(routeCtxOpts().lookupCells, ApexOwnRouting.cellsNear(c.lat, c.lng, a.radiusKm), a.id).catch(() => null);
+          if (roads) ApexOfflineTiles.setArea(a.id, { roadCells: roads.held, roadOf: roads.cells, roadWays: roads.ways });
+        }
+        toast(`Saved ${ApexUnits.long(a.radiusKm * 1000, 0)} round here for offline, ${(a.bytes / 1048576).toFixed(0)} MB${roads && roads.ways ? `, with ${roads.ways} measured roads` : ''}.`);
       } catch (_) { toast('Couldn\'t save the map. Check signal and try again.'); }
       finally { areaBusy = false; $('myAreaBtn').disabled = false; $('myAreaBtn').textContent = 'Save the map here for offline'; renderMyData(); }
     });
@@ -6581,9 +6695,10 @@
       const box = $('myAreas'); if (!box || !window.ApexOfflineTiles) return;
       box.replaceChildren(...ApexOfflineTiles.areas().map((a) => {
         const row = document.createElement('div'); row.className = 'row'; row.style.justifyContent = 'space-between';
-        const t = document.createElement('span'); t.className = 'note'; t.textContent = `${a.name} · ${ApexUnits.long(a.radiusKm * 1000, 0)} round · ${(a.bytes / 1048576).toFixed(0)} MB`;
+        const feel = a.roadOf ? (a.roadCells < a.roadOf ? ' · members\u2019 road feel for part of it' : a.roadWays ? ` · ${a.roadWays} measured roads` : ' · no measured roads yet') : '';
+        const t = document.createElement('span'); t.className = 'note'; t.textContent = `${a.name} · ${ApexUnits.long(a.radiusKm * 1000, 0)} round · ${(a.bytes / 1048576).toFixed(0)} MB${feel}`;
         const del = document.createElement('button'); del.className = 'linkbtn'; del.textContent = 'Delete';
-        del.addEventListener('click', async () => { await ApexOfflineTiles.removeArea(a.id); renderMyData(); });
+        del.addEventListener('click', async () => { await ApexOfflineTiles.removeArea(a.id); if (window.ApexOwnRouting && ApexOwnRouting.releaseArea) ApexOwnRouting.releaseArea(a.id); renderMyData(); });
         row.append(t, del); return row;
       }));
     }
@@ -6591,6 +6706,7 @@
       if (!(await ApexConfirm.ask('Delete routes and map areas saved for offline, and downloaded voices? Your drives, spots and settings stay.', 'Delete'))) return;
       try { localStorage.removeItem(ApexSavedRoutes.KEY); } catch (_) {}
       try { if (window.ApexOfflineTiles) await ApexOfflineTiles.clear(); } catch (_) {}
+      try { if (window.ApexOwnRouting && ApexOwnRouting.clearCrowd) await ApexOwnRouting.clearCrowd(); } catch (_) {}   // members' road data kept for plans
       try { if (window.caches) { await caches.delete('kokoro-voices'); for (const k of await caches.keys()) if (k.startsWith('apexnav-shell-')) await caches.delete(k); } } catch (_) {}
       toast('Offline data deleted.'); renderMyData();
     });
@@ -6611,6 +6727,7 @@
       try { if (window.caches) for (const k of await caches.keys()) await caches.delete(k); } catch (_) {}
       try { if (window.ApexSpotPhotos) await ApexSpotPhotos.clear(); } catch (_) {}      // spot photos (IDEAS S-18)
       try { if (window.ApexOfflineTiles) await ApexOfflineTiles.clear(); } catch (_) {}  // offline map areas (IDEAS F-02)
+      try { if (window.ApexOwnRouting && ApexOwnRouting.clearCrowd) await ApexOwnRouting.clearCrowd(); } catch (_) {}   // members' road data kept for plans
       location.reload();
     });
     renderMyData();
@@ -7819,7 +7936,7 @@
     function heightLabel(m) { return ApexUnits.metric() ? `${Math.round(m)} m` : `${Math.round(m * 3.28084).toLocaleString('en-US')} ft`; }
     function paintClimb(t) {
       const up = ApexStages.climbM(t.elev), lo = Math.min(...t.elev), hi = Math.max(...t.elev);
-      if (plannedRoute === t) $('routeCardProfile').innerHTML = ApexRouteCard.profile(t, 340, 92, heightLabel) || '';
+      if (plannedRoute === t) paintProfile(t);
       if (up == null) return;
       const h = heightLabel;
       $('routeCardClimb').textContent = ApexRouteCard.factText(`Climbs ${h(up)} in all · highest ${h(hi)}`);
@@ -8392,6 +8509,7 @@
       // mount never calibrated, so nothing unmeasured is ever said
       const feel = window.ApexRoadFeel && c.feel ? ApexRoadFeel.endLine(c.feel, (m) => ApexUnits.long(m, 1)) : '';
       $('endFeel').textContent = feel; $('endFeel').hidden = !feel;
+      $('endPractice').textContent = ''; $('endPractice').hidden = true;   // IDEAS D-27: with the score (endCardScored)
       // scoring: no number yet, never "--" (that means "no score"), and no key that needs the score
       $('endScore').textContent = '…'; $('endScore').classList.add('unk'); $('endScore').setAttribute('aria-busy', 'true');
       $('endScore').parentElement.classList.remove('no-score');
@@ -8403,6 +8521,10 @@
       $('endAgain').hidden = true;                                     // panel D-1: once the drive is stored (endCardScored)
       $('endCard').classList.add('show');
       showEndTrail(c);
+    }
+    // IDEAS D-27: the plan Your driving keeps (driver_profile.js savePlan), or null
+    function practicePlan() {
+      try { const x = JSON.parse(localStorage.getItem('vetta.practice') || 'null'); return x && typeof x.skill === 'string' ? x : null; } catch (_) { return null; }
     }
     // what a drive with no score was, in the score's slot: no corners at all, or too few clean ones to score
     const noScoreWords = (corners) => (Number.isFinite(corners) && corners > 0 ? 'too few clean corners to score' : 'no corners to score');
@@ -8437,6 +8559,9 @@
       let best = false;
       if (c.ds.score != null && window.ApexEndLine) { try { best = ApexEndLine.bestOnRoad({ id: c.id, name: c.name, score: c.ds.score }, others || []); } catch (_) { best = false; } }
       $('endLine').textContent = best ? ['Your best on this road.', tipLine].filter(Boolean).join(' ') : tipLine;
+      // IDEAS D-27: the skill Your driving is practicing, read on this drive alone (analysis_client.js practiceOf)
+      const prLine = c.practice && typeof c.practice.line === 'string' ? c.practice.line : '';
+      $('endPractice').textContent = prLine; $('endPractice').hidden = !prLine;
       if (window.ApexEndLine && !opts.quiet) {                       // Round 3: never aloud to a parked car or a pocket
         const pack = ['marguerite', 'kit', 'hale'].includes(state.voiceId) ? state.voiceId : 'marguerite';
         // one of the pack's sign-offs, the same for this drive every time, from a clip the loaded bank holds (U-113)
@@ -8472,7 +8597,10 @@
         } catch (_) { others = []; }
         let coach = null;                                              // U-111: the Log's sentence, when the drive is stored
         if (d.ds.score != null && window.ApexAnalysis) try { coach = (await ApexAnalysis.job('coachLine', { id: d.id })).coach || null; } catch (_) { coach = null; }
-        endCardScored({ ...c, corners: d.corners.length, ds: d.ds, coach }, others, opts);
+        let practice = null;                                           // IDEAS D-27: the practised skill, when the drive is stored
+        const plan = practicePlan();
+        if (plan && window.ApexAnalysis) try { practice = (await ApexAnalysis.job('practiceLine', { id: d.id, plan })).practice || null; } catch (_) { practice = null; }
+        endCardScored({ ...c, corners: d.corners.length, ds: d.ds, coach, practice }, others, opts);
       })();
     }
     // U-88: behind the card, the map is the drive: fitted to its trail above the card, the trail drawn at the route's width in
@@ -8627,11 +8755,11 @@
         endCardOpen(card);
         try {
           const { rows: _, ...recState } = rec.snapshot(rec.samples);
-          const res = await ApexAnalysis.job('save', { state: recState, rows: rec.rows, fileName: job.fileName, meta: job.meta, extra });
+          const res = await ApexAnalysis.job('save', { state: recState, rows: rec.rows, fileName: job.fileName, meta: job.meta, extra, plan: practicePlan() });
           keepDone(kept);
           const s = res.summary || {};
           endCardScored({ ...card, id: res.driveId, len_m: s.len_m ?? card.len_m, secs: s.secs ?? card.secs, corners: Array.isArray(s.corners) ? s.corners.length : null,
-                          ds: s.ds || { score: null, components: null }, card: res.card || null, coach: res.coach || null }, res.others || [], { quiet: !!ended });
+                          ds: s.ds || { score: null, components: null }, card: res.card || null, coach: res.coach || null, practice: res.practice || null }, res.others || [], { quiet: !!ended });
           idle(() => refreshSavedDrives().catch(() => {}));            // the road memory learns this drive, off the card's moment
           if (live) {
             live.finish().then(async (shared) => {

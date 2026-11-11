@@ -85,6 +85,13 @@ The calls:
   times. Switch it off for anyone." Tests that encoded "nothing by default" now switch off explicitly (a spec change).
 
 Undo: revert the PR. Grants made in the meantime stay on until switched off.
+## 2026-11-11 (fable-offline-road-feel): saved map areas keep members' road feel (claude/fable-offline-road-feel)
+
+A saved offline area now also keeps the members' measured roads round it, so a plan with no signal still knows which
+roads are smooth, banked and flowing. It asks the server for the area's 0.1° cells, which is the same coarseness the
+privacy rule (VI-1) already allows for a plan, and nothing finer. Only members get it, and it leaves the phone on sign-out,
+account deletion, Erase everything and Delete offline data (before this, the day's kept cells were never cleared on any of
+them). Undo: revert the PR; the areas still save their map.
 ## 2026-11-11 (fable-avoid-police): Avoid → Police reports (claude/fable-avoid-police)
 
 The owner said go (2026-11-11, "yes avoid police"), reversing October's call that dropped routing round police (IDEAS
@@ -107,6 +114,29 @@ keeps its own word and only its progress bar moves.
 
 Undo: revert the PR.
 
+## 2026-11-11 (fable-practice-focus): Work on becomes a practice you can follow drive by drive (claude/fable-practice-focus)
+
+Your driving names one skill to work on. Under it there is now a key: "Practice it on my next drives". Press it and
+every drive after that is read on that one skill alone. The drive's end card gets a line like "Practice · One steering
+arc: 82 on 24 corners, 14 above your 68 before. Through rights: 79 on 12." On Your driving, the Work on box becomes
+"Practicing", with how it has gone since you started, one bar per drive against a mark for your level before, and Stop
+practicing. The Log's card says it too.
+
+The calls I made:
+
+* **What "before" means.** It is every corner of every drive that started before you pressed the key (drives with an
+  unknown date count as before). The plan on the phone keeps that level, so the end card can compare without reading
+  every drive again. The page refreshes it whenever it reads your drives.
+* **When it says "above" or "below".** Only when the change is at least 5 points and twice its standard error.
+  Otherwise it says "close to your 68 before". A drive with fewer than 4 corners for the skill says "too few to say".
+  Nothing is said for a drive with no clean corners.
+* **One skill at a time, by hand.** Practice is never started for you. When the skill to work on changes, the box offers
+  "Practice <the new one> instead"; it does not switch by itself.
+* **Technique only.** Like the profile, it never says a speed or a time.
+
+This PR is stacked on #373 (Your driving) and needs it merged first.
+
+Undo: revert the PR. The plan lives only in the phone's storage (`vetta.practice`); nothing else changes.
 ## 2026-11-10 (fable-whats-new): What's new tells of the routing work (claude/fable-whats-new)
 
 The What's new sheet still showed the news of 2026-10-28 (Siri, landscape, stops of the day, kilometres), which every
@@ -269,6 +299,14 @@ Not changed: what any switch does, the Co-driver half (Notes, Voice, music).
 
 Undo: revert the PR.
 
+## 2026-11-10 (fable-no-orphan-key): a friend's third key takes the row (claude/fable-no-orphan-key)
+
+On People, a friend's row opens on two columns of keys. A friend who shares no position has three (Share a route,
+Invite to a drive, Profile), so Profile sat in the left half of a second row beside a hole. An odd last key now takes
+the whole row; two and four keys are unchanged. One CSS rule.
+
+Undo: revert the PR.
+
 ## 2026-11-10 (fable-polish-7): design pass 7: Settings is three short lists, and each row says what it is set to (claude/fable-polish-7)
 
 Behind the Garage's gear was one list of eleven rows that said nothing: to learn whether Crash check was on or which
@@ -278,6 +316,18 @@ check and Reminder "On" / "Off", Units "Miles and feet", Map motion "Lean". Chan
 when you come back. A row with nothing to say (Feedback, About) says nothing; a row never guesses.
 
 The order of the rows is unchanged. Undo: revert the PR.
+
+## 2026-11-10 (fable-route-reveal): the route card reads like a page, and a route found is drawn onto the map (claude/fable-route-reveal)
+
+When a route is found its line is now drawn onto the map from start to finish in 0.8 s, the profile on the card is
+drawn with it and the card's three numbers count up. The card and Start are up from the first frame, as before (the
+plan flow still times it). Picking another level card or loop way redraws in 0.3 s. With reduced motion the line is
+simply there. The card itself was recomposed: the route's name is the headline in the number face, then time,
+distance and corners large, then the profile (now always drawn: before the heights arrive it is the road and its
+corner ticks, with "Heights --") carrying a red dot where you are, then the one choice, then quiet labelled groups
+(This drive, The road, Planned with) and the links. The Options chips moved from the top to "Planned with". Folded,
+the bar is the same name and numbers, with Start beside it. Why: the card was a long form; this is the moment the app
+makes its promise. Undo: revert the branch's commit (presentation only; no routing, ranking or number changed).
 
 ## 2026-11-10 (fable-drive): Location turned off is said, and Settings is one key away (claude/fable-drive)
 
@@ -379,6 +429,21 @@ Undo: revert the PR. The numbers are `USUAL_N`, `USUAL_MIN`, `USUAL_NEAR` in web
 The row under Where to? read "Loop from here · 45 mi" from launch on, whatever you had turned the dial to, while its
 Plan key built the dial's loop: turn the dial to 15 mi, cancel, and the row still promised 45. It now says the dial's
 length (or time, once #342 is in) the moment you pick it. Undo: revert the PR.
+
+## 2026-11-10 (fable-garage-two-blocks): the Garage's lower page is two blocks, the look and the co-driver (claude/fable-garage-two-blocks)
+
+For "cohesiveness": under the looks the Garage had two more blocks, **Co-driver** (Notes, Haptics, Key sounds and,
+oddly, Night) and **The words**, which opened with "Your co-driver's voice is chosen under Look and voice, above": a
+block that began by pointing back up the page. Now:
+
+- **Look and voice** ends with **Night** (Auto, Day, Night): it turns the page over, so it is the look's.
+- **Co-driver** is one block: The words (Plain words, Rally notes) with their example, the Notes row (Change in
+  Layers), Haptics, Key sounds, Speak road names. The cross-reference sentence is gone.
+
+Nothing was removed and every control keeps its id; the co-driver's voice stays with the looks, which suggest it (the
+one-home rule in tests/test_voice_pick.py). The page is one heading and about 90 px shorter.
+
+Undo: revert the PR (web/index.html only, plus two `set:` lines in web/vocabulary.js).
 
 ## 2026-11-10 (fable-stages): on a stage's page a run is named by when it was driven (claude/fable-stages)
 
