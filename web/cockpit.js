@@ -4132,6 +4132,7 @@
     // card saying why. Driving, a pick, another plan or a cleared route meanwhile: nothing changes.
     const OWN_REFINE = ['graph', 'context_grid', 'conditions', 'wildlife', 'events', 'hazards-live', 'driver'], OWN_REFINE_MS = 3000, OWN_SWAP_POINTS = 5;
     async function ownRefine(pool, level, o, shown, forecasts, fullP) {
+      if (window.apexDebug) window.apexDebug.refineDone = false;          // (e2e: a flow waits for the card to settle)
       try {
         const t0 = Date.now();
         // the whole corridor's routes, when the first plan was made on the tiles in hand: the new ones join the pool
@@ -4175,7 +4176,7 @@
         if (typeof cardNote === 'function') cardNote(`${why}: switched to ${road ? `the way by ${road[0]}` : 'a better way'}`);
         if (window.apexDebug) window.apexDebug.lastRefine.swapped = true;
         if (dp) { dp.picked = best; dev.planned(); }
-      } catch (_) { /* the card stays as it is */ }
+      } catch (_) { /* the card stays as it is */ } finally { if (window.apexDebug) window.apexDebug.refineDone = true; }
     }
     // Warm tiles (OWN_ROUTING.md §5): the tile you are in is read into the worker soon after start (the app's bundled
     // files, kept in IndexedDB), and again when you've moved 10 km; its neighbours load when a plan needs them (never
@@ -4658,14 +4659,18 @@
       // nothing else came, as before.
       const own = (await ownLoopsP).map((r) => ({ kind: 'own', route: r.route, hwyShare: r.hwyShare, pts: [c, ...FunRoute.alongPoints(r.route.coords), c] }));
       if (window.apexDebug) window.apexDebug.lastLoopRefine = null;
+      // Loops are our router's or nothing (Valhalla is for Quick only, the owner 2026-11-11): no stage loops or circle on
+      // Valhalla stand in, nor refine ours; with none of ours, the card says why
       if (own.length) {
         L.ownTiles = true;
-        const first = await loopRound(L, own, ui, false);
-        if (first) loopRefine(L, first, stageJobs(false));
-        else await loopRound(L, await stageJobs(true), ui, true);         // ours all failed to build: as without them
-        return;
+        if (await loopRound(L, own, ui, false)) return;
       }
-      await loopRound(L, await stageJobs(true), ui, true);
+      const here = ownOn() ? await RouteLoading.optional(ownRouter().covers([c]), OWN_COVERS_ONLY_MS).catch(() => null) : false;
+      if (window.apexDebug) window.apexDebug.loopOwnOnlyFail = !ownOn() ? 'off' : here == null ? 'index' : here ? 'none' : 'out';
+      toast(!ownOn() ? 'Loops need Vetta\'s own router, which is switched off.'
+        : here == null ? 'Couldn\'t load Vetta\'s road map here. Check signal and try again.'
+        : here ? `Couldn't find a ${asked} loop on Vetta's road map from here. Try another length.`
+        : 'Loops use Vetta\'s own road map, which covers Ohio, Kentucky and Indiana so far.');
     }
     const loopCircle = (L) => ({ kind: 'circle', pts: loopWaypoints(L.c, L.miles, Math.random() * 2 * Math.PI), through: true, extra: loopCosting() || {} });
     /** Loop jobs routed (ours come routed) and built into tracks: { t, job, route, km, score, ... } for those that worked. */
@@ -8980,6 +8985,7 @@
     function learnFromPick() {
       try {
         const o = routeOptions, t = plannedRoute;
+        window.apexDebug.pickWhy = { levels: o && o.levels, picked: o && o.picked, times: o && o.list && o.list.map((r) => r && Math.round(r.timeS)) };
         if (!window.ApexTaste || !o || !o.list || o.current !== t || !t || t.id !== 'route_dest' || pickLearned === o) return;
         // Vetta's pick is the plan's own level's (the list starts with Quick's, so list[0] is not it); after a refine's swap
         // it is the swapped-in one, since the refine ranks at that same level

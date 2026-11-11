@@ -1087,6 +1087,22 @@ flow('valhalla for quick only: off our tiles, Fun says it plainly and Use Quick 
   } finally { graphDir = null; }
 }, { geolocation: { latitude: 39.155, longitude: -84.615 }, permissions: ['geolocation'] });
 
+flow('valhalla for quick only: off our tiles, a loop says it plainly and asks Valhalla nothing', async (page, base) => {
+  graphDir = 'none';
+  const calls = { route: 0, matrix: 0 };
+  await page.route('https://valhalla1.openstreetmap.de/**', (route) => { const u = route.request().url(); if (u.endsWith('/route')) calls.route++; if (u.includes('sources_to_targets')) calls.matrix++; return route.abort(); });
+  await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); } catch (_) {} });
+  await page.goto(base + '/index.html');
+  await page.waitForFunction(() => window.apexDebug && window.apexDebug.map);
+  await page.click('#destInput');
+  await page.waitForSelector('#findLoopBtn', { state: 'visible', timeout: 10000 });
+  await page.click('#findLoopBtn');
+  await page.waitForFunction(() => window.apexDebug.loopOwnOnlyFail && document.getElementById('toast').classList.contains('show'), null, { timeout: 20000 });
+  const t = await page.evaluate(() => ({ text: document.getElementById('toast').textContent, why: window.apexDebug.loopOwnOnlyFail, track: window.apexDebug.track && window.apexDebug.track.id }));
+  check(/Loops use Vetta's own road map|Couldn't load Vetta's road map/.test(t.text) && !/^loop_/.test(t.track || ''), 'said plainly, no stand-in loop: ' + JSON.stringify(t));
+  check(calls.route === 0 && calls.matrix === 0, 'Valhalla asked for nothing: ' + JSON.stringify(calls));
+}, { geolocation: { latitude: 39.155, longitude: -84.615 }, permissions: ['geolocation'] });
+
 // What this drive is like (web/route_story.js, the owner 2026-11-09): a planned route's card carries a few plain lines
 // built from the ranking's own data, in your units, after the card is up; nothing it says is unknown to the data.
 flow('route overview: the card says what the drive is like in plain words, from the route\'s own data', async (page, base) => {
@@ -7286,7 +7302,7 @@ flow('the route reveal: a route found is drawn onto the map like a pen stroke (a
   check(still.strokes.length === 0 && line.n === 1 && line.g === null && !line.draw && still.dists.length <= 2, 'reduced motion: the line is whole at once, nothing counts or draws: ' + JSON.stringify({ still: still.strokes, line, dists: still.dists }));
 }, IPHONE);
 
-flow('taste from picks: Start on another level\'s route than Vetta\'s pick teaches the taste, once, at half an answer, and says so', async (page, base) => {
+flow('taste from picks: Start on another route than Vetta\'s pick teaches the taste, once, at half an answer, and says so', async (page, base) => {
   const asked = [];
   await planRouter(page, asked);
   await funTiles(page, true);                                // (its arterials motorways: Quick's pick and Fun's differ)
@@ -7299,8 +7315,18 @@ flow('taste from picks: Start on another level\'s route than Vetta\'s pick teach
   await planDone(page);
   const before = await page.evaluate(() => ({ store: localStorage.getItem('apex.taste') }));
   check(!before.store || !JSON.parse(before.store).picks, 'no picks yet: ' + before.store);
-  await tap('#routeCardFun [data-fun="quick"]', 'Quick');
-  await page.waitForFunction(() => /^Quick: /.test(document.getElementById('routeProgress').textContent) && !document.getElementById('planPanel').classList.contains('busy'), null, { timeout: 15000 });
+  // the card settles first: the refine's fuller context swaps Fun's pick for another (Conditions ahead), the first one
+  // staying among the routes found. Quick's is then over 30 % faster than Fun's (a pick that says nothing of taste), so
+  // the route taken is that first one, no level's pick, one swipe left: within 30 % of Fun's
+  await page.waitForFunction(() => window.apexDebug.refineDone === true, null, { timeout: 20000 });
+  await page.waitForFunction(() => /^Route 2 of 3\./.test(document.getElementById('routeCardPager').getAttribute('aria-label') || ''), null, { timeout: 5000 });
+  await page.evaluate(() => {
+    const el = document.getElementById('routeCardName'), y = el.getBoundingClientRect().top + 8;
+    const at = (x) => new Touch({ identifier: 1, target: el, clientX: x, clientY: y });
+    el.dispatchEvent(new TouchEvent('touchstart', { touches: [at(300)], changedTouches: [at(300)], bubbles: true }));
+    el.dispatchEvent(new TouchEvent('touchend', { touches: [], changedTouches: [at(120)], bubbles: true }));
+  });
+  await page.waitForFunction(() => /^Route 3 of 3\./.test(document.getElementById('routeCardPager').getAttribute('aria-label') || '') && !document.getElementById('planPanel').classList.contains('busy'), null, { timeout: 15000 });
   await tap('#routeDriveBtn', 'Start');
   await page.waitForFunction(() => window.apexDebug.driveActive, null, { timeout: 10000 });
   const got = await page.evaluate(() => ({ pick: apexDebug.lastPick || null, store: JSON.parse(localStorage.getItem('apex.taste') || '{}') }));
@@ -7447,6 +7473,10 @@ flow('plan flow (e, f) a level change and an alternative are one tap or swipe ea
   await page.waitForSelector('#placeList .place', { timeout: 10000 });
   await tap('#placeList .place');
   await cardUp(page); await planDone(page);
+  // the card settles first: the refine's fuller context swaps Fun's pick for another (Conditions ahead), the first one
+  // staying as a third route found
+  await page.waitForFunction(() => window.apexDebug.refineDone === true, null, { timeout: 20000 });
+  await page.waitForFunction(() => /^Route 2 of 3\./.test(document.getElementById('routeCardPager').getAttribute('aria-label') || ''), null, { timeout: 5000 });
   check(await page.evaluate(() => document.querySelectorAll('[data-fun]').length === 3 && !!document.querySelector('#routeCard [data-fun]')), 'the level has one home, the route card');
   const level = () => page.evaluate(() => [...document.querySelectorAll('[data-fun]')].find((b) => b.getAttribute('aria-checked') === 'true').querySelector('b').textContent);
   check(await level() === 'Fun', 'planned at Fun');
@@ -7508,8 +7538,8 @@ flow('plan flow (e, f) a level change and an alternative are one tap or swipe ea
   // you scroll down to the options (the wheel first, as a hand would): that ends the level change's hold on the scroll
   await page.evaluate(() => document.getElementById('planBody').dispatchEvent(new WheelEvent('wheel', { bubbles: true })));
   // an alternative: one swipe sideways on the card (finding 11) steps through the routes found, the cards' picks in
-  // their order; the line under the cards says so. Fun is the last of the two found (Long way wasn't looked at): a swipe
-  // to the right goes back to the one before it, Quick's
+  // their order, then the others; the line under the cards says so. Fun's is the second of the three found (Long way
+  // wasn't looked at): a swipe to the right goes back to the one before it, Quick's
   const ons = () => page.evaluate(() => [...document.querySelectorAll('#routeCardFun [data-fun]')].map((b) => b.classList.contains('on')).join());
   check(await ons() === 'false,true,false', 'two routes found, Fun\'s on: ' + await ons());
   // page marks under the cards (design pass, 2026-11-10): one per route found, the one on screen inked, the count, and
@@ -7518,7 +7548,7 @@ flow('plan flow (e, f) a level change and an alternative are one tap or swipe ea
     return { shown: !p.hidden, on: [...p.querySelectorAll('i')].map((i) => +i.classList.contains('on')).join(''), count: p.querySelector('span').textContent.replace(/\s/g, ''),
       words: (p.querySelector('small') || {}).textContent || '', label: p.getAttribute('aria-label'), note: n.hidden ? '' : n.textContent, h: Math.round(p.getBoundingClientRect().height) }; });
   const hint = await marks();
-  check(hint.shown && hint.on === '01' && hint.count === '2/2' && hint.words === 'Swipe the card for the next route' && /^Route 2 of 2\. Swipe/.test(hint.label) && !hint.note && hint.h <= 24,
+  check(hint.shown && hint.on === '010' && hint.count === '2/3' && hint.words === 'Swipe the card for the next route' && /^Route 2 of 3\. Swipe/.test(hint.label) && !hint.note && hint.h <= 24,
     'the marks under the cards say which route and what a swipe does, on one row: ' + JSON.stringify(hint));
   const box = await page.evaluate(() => { const o = document.getElementById('routeCardStats'); o.scrollIntoView({ block: 'nearest' }); const r = o.getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height / 2 }; });
   const startY = await page.evaluate(() => document.getElementById('routeDriveBtn').getBoundingClientRect().top);
@@ -7530,7 +7560,7 @@ flow('plan flow (e, f) a level change and an alternative are one tap or swipe ea
   check(asked.length === routed && await level() === 'Quick', 'a swipe picks the other route already found, and its level with it');
   check(Math.abs(await page.evaluate(() => document.getElementById('routeDriveBtn').getBoundingClientRect().top) - startY) <= 1, 'Start doesn\'t move on a swipe');
   const swiped = await marks();
-  check(swiped.on === '10' && swiped.count === '1/2' && /^Route 1 of 2\./.test(swiped.label), 'the marks count along: ' + JSON.stringify(swiped));
+  check(swiped.on === '100' && swiped.count === '1/3' && /^Route 1 of 3\./.test(swiped.label), 'the marks count along: ' + JSON.stringify(swiped));
   check(!swiped.words && !swiped.note, 'once you have swiped, the words go and the marks stay: ' + JSON.stringify(swiped));
   await scan(page, 'the card after a swipe');
 }, { ...IPHONE, funLevel: 'fun' });
@@ -7583,6 +7613,7 @@ flow('the Garage on a phone: the looks are a shelf turned sideways (one in view,
 
 flow('plan flow (b) a loop in 2 taps: Plan on the map, then Start; its progress in view, its card has a length in your units and no Quick / Fun / Long way (the owner, 2026-11-10)', async (page, base) => {
   await planRouter(page);
+  await funTiles(page);                                       // (loops and Fun are our router's only, the owner 2026-11-11)
   const { taps, tap } = await planPage(page, base);
   await page.waitForFunction(() => getComputedStyle(document.getElementById('loopSuggest')).display !== 'none');
   // the suggestion is the dial's loop: pick another length on the dial and it says that one (it kept the length from launch)
@@ -7615,6 +7646,7 @@ flow('plan flow (b) a loop in 2 taps: Plan on the map, then Start; its progress 
 
 flow('a loop by time: the dial turns to Time (half an hour to three hours), Find a loop builds a loop of that time, and its card changes it by time (2026-11-10)', async (page, base) => {
   await planRouter(page);
+  await funTiles(page);                                       // (loops and Fun are our router's only, the owner 2026-11-11)
   await planPage(page, base);
   await page.click('#destInput');
   await page.waitForFunction(() => document.getElementById('planPanel').classList.contains('open') && document.getElementById('loopBy').getClientRects().length > 0);
@@ -7653,6 +7685,7 @@ flow('a loop by time: the dial turns to Time (half an hour to three hours), Find
 
 flow('level cards: one control on the four phone shapes, a destination: each card its level, time and corners, a line each, nothing cut or under the island (the owner, 2026-11-04); a loop has none', async (page, base) => {
   await planRouter(page);
+  await funTiles(page);                                       // (loops and Fun are our router's only, the owner 2026-11-11)
   const { cdp } = await planPage(page, base);
   // every card inside the screen and its row, its name, time and corners each on one line (no "11 min / quicker ·")
   const fit = () => page.evaluate(() => {
@@ -7711,7 +7744,7 @@ flow('level cards: one control on the four phone shapes, a destination: each car
     const under = (await unsafe(page, d)).filter((b) => /\d+ mi\b|Length/i.test(b));
     check(!under.length, `loop, ${orient}: the loop's length clears the island, the home bar and the corners:\n  ${under.join('\n  ')}`);
   }
-}, IPHONE);
+}, { ...IPHONE, funLevel: 'fun' });
 
 flow('a loop\'s choices are which way to head, not Quick / Fun / Long way: the loops found as cards, each its outline, way, time and corners; a tap puts that loop up (the owner, 2026-11-10)', async (page, base) => {
   graphDir = graphFixture(true);
