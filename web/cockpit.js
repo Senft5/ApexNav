@@ -7687,7 +7687,7 @@
     // =======================================================================
     // 10b. DRIVE MODE (web): real GPS + motion, recorded to this device. REPLAY plays a saved drive; the two never mix.
     // =======================================================================
-    const drive = { sensors: null, rec: null, status: null, frames: 0, live: null, liveIdx: 0, share: 'off', shareKm: 0, shareErr: null, native: false, roads: {}, roadIdx: 0, rest: null };
+    const drive = { sensors: null, rec: null, status: null, frames: 0, live: null, liveIdx: 0, share: 'off', shareKm: 0, shareErr: null, native: false, roads: {}, roadIdx: 0, rest: null, brakes: null };
     const NATIVE_SHELL = !!(window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.apex);
     function paintModeSwitch() {
       const on = state.mode === 'live';
@@ -7844,6 +7844,19 @@
       wk.addEventListener('message', onMsg); wk.addEventListener('error', onErr); wk.addEventListener('messageerror', onErr);
       timer = setTimeout(() => done(null, true), BREAK_WAIT_MS);
       wk.postMessage({ id, rows });
+    }
+    // Brake heat (web/brake_heat.js, core/brake_heat.py): energy the car loses faster than rolling and air take it went into
+    // the discs (or the engine in a low gear: an upper bound). When the model says hot, the co-driver says so once in words,
+    // in the same quiet slot as the break cue (it takes the slot: hot brakes matter more than a rest), and a toast shows it.
+    // At most once every 3 minutes, and only again after the discs cooled. Nothing leaves the phone.
+    function noteBrakes(frame) {
+      if (!window.ApexBrakeHeat || !drive.rec) return;
+      const now = performance.now(), b = drive.brakes || (drive.brakes = { model: ApexBrakeHeat.create(), at: null });
+      const dt = b.at === null ? 0 : (now - b.at) / 1000; b.at = now;
+      const out = b.model.step(dt, frame.speed_mps, frame.elevation_m);
+      if (!out.call) return;
+      toast(ApexBrakeHeat.CALL_TEXT);
+      breakSay = { text: ApexBrakeHeat.CALL_TEXT, until: now + 60000 };
     }
     // Road data whenever the app is open and the phone is mounted (calibration locked), not only during a drive
     // (owner 2026-10-26). Trips, privacy trims and gaps: ApexContributor.createAmbient. Members with ROAD DATA on only.
@@ -8740,7 +8753,7 @@
       startStageWatch();
       state.firstNoteDue = true; state.firstNoteKey = null;   // U-58: the drive's first note is called
       state.openerDue = true; state.openerAt = performance.now(); state.wakeCue = false;   // DA-3: the first words name the road
-      drive.live = null; drive.liveIdx = 0; drive.share = 'off'; drive.shareKm = 0; drive.shareErr = null; drive.roads = {}; drive.roadIdx = 0; drive.rest = null; breakSay = null; if (breakWorker) { breakWorker.terminate(); breakWorker = null; }
+      drive.live = null; drive.liveIdx = 0; drive.share = 'off'; drive.shareKm = 0; drive.shareErr = null; drive.roads = {}; drive.roadIdx = 0; drive.rest = null; drive.brakes = null; breakSay = null; if (breakWorker) { breakWorker.terminate(); breakWorker = null; }
       keepStart();                                                     // Round 3: the drive is kept as it goes (drive_keep.js)
       if (NATIVE_SHELL) {   // the app's own GPS and IMU feed window.apex.live; no browser sensors to start
         drive.native = true;
@@ -8768,7 +8781,7 @@
             paintPerms();
             paintDriveStat();
           },
-          onFrame: (fr) => { if (!fr.has_fix) return; drive.frames++; drive.status.webMount = fr.web_mount || null; recordFrame(fr); feedLive(); noteRoads(); noteRest(fr); feedStage(); feedTrack(fr);
+          onFrame: (fr) => { if (!fr.has_fix) return; drive.frames++; drive.status.webMount = fr.web_mount || null; recordFrame(fr); feedLive(); noteRoads(); noteRest(fr); noteBrakes(fr); feedStage(); feedTrack(fr);
             if (window.ApexBattery && webBattery) drive.battery = ApexBattery.feed(drive.battery, webBattery.level, webBattery.charging, Date.now());
             window.apex.live(fr); paintDriveStat(); },
         });
@@ -9568,7 +9581,7 @@
         feedReported(frame); feedReaction(frame); feedCrash(frame);
         state.live = frame; state.liveAt = performance.now();
         if (drive.native && drive.rec && !(Number.isFinite(frame.seq) && keep.seq != null && frame.seq <= keep.seq)) {   // (taken in a backlog)
-          drive.frames++; recordFrame(frame); feedLive(); noteRoads(); noteRest(frame); feedStage(); feedTrack(frame);
+          drive.frames++; recordFrame(frame); feedLive(); noteRoads(); noteRest(frame); noteBrakes(frame); feedStage(); feedTrack(frame);
           if (window.ApexBattery) drive.battery = ApexBattery.feed(drive.battery, frame.battery, frame.charging === true, Date.now());
           const gps = Number.isFinite(frame.accuracy_m) && frame.accuracy_m > ApexSensors.MAX_ACCURACY_M ? 'weak' : 'on';
           if (drive.status.gps !== gps) drive.status.gps = gps;

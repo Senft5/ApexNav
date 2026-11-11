@@ -4,6 +4,16 @@ Decisions Claude made for you, newest first. Each one says what was decided, why
 you reach one you've seen. If you disagree with a call, say so and it gets reversed; nothing here is hard to undo unless
 it says so. Things only you can do are in docs/OWNER_TODO.md.
 
+## 2026-11-11 (roam-a brake heat): the co-driver warns when your brakes are getting hot (claude/project-thread-h7xxmf)
+
+New, my call, as the free-roaming thread. On a long spirited descent the co-driver now says once "Brakes are getting
+hot. Use a lower gear and ease off." (and shows it), and a drive's page says when the brakes got warm or hot. Nobody can
+see a brake disc from a phone, so this is a model: the energy the car loses beyond rolling and air drag (from GPS speed
+and height) heats the discs, and the air cools them. It never says a temperature, the page says it is an estimate, and
+it counts engine braking as brake work, so it errs toward warning. Ordinary hills stay quiet (the two demo drives never
+get past cool). Nothing leaves the phone. Undo: revert the PR, or remove the `noteBrakes(...)` calls in cockpit.js to keep
+only the drive page line.
+
 ## 2026-11-10 (fable-pro-looks): Pro is looks only; one Pro crew-mate dresses the whole crew (claude/fable-pro-looks)
 
 Your answer to the red team (PH-06, BR-06, UX-06): Pro is themes and liveries, nothing else. Route tuning, which went
