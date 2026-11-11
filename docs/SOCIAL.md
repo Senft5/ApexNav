@@ -58,6 +58,13 @@ and in random batches so a trace cannot be re-assembled.
 - Which of your books' roads a new drive might cover is decided on the phone from each road's box, so the server is
   never asked "what is near where I just drove".
 - Reports and blocks as for public crews (kind `roadbook`).
+### 2.7 Duels (friends, Scores only)
+- Challenge a friend on one of your stages for 3, 7 or 14 days; the higher Vetta Score on it in that window wins.
+  Accepting copies the stage to them. Won by the higher Score, or in a time duel (migration 0048) the quicker time;
+  times count only where that side shares times with the other.
+- Reads only Scores each already shows the other (grants + board entries); the card says in words when one side's
+  don't reach the other. Friends only; a block or unfriend hides it. Kept 60 days after it ends. `web/duels.js`,
+  `backend/src/duels.ts`, migration 0047.
 ### 2.8 Crew drive results (crew members)
 - A remembered crew drive folds out its results: an overall, then each stage as SS1, SS2…, each driver's best Vetta
   Score that day and a place. Overall ranks by stages driven, then the mean Score. Share sends it as text.

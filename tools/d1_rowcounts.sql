@@ -66,5 +66,6 @@ SELECT
   (SELECT COUNT(*) FROM roadbook_roads) AS roadbook_roads,
   (SELECT COUNT(*) FROM roadbook_follows) AS roadbook_follows,
   (SELECT COUNT(*) FROM roadbook_stamps) AS roadbook_stamps,
+  (SELECT COUNT(*) FROM duels) AS duels,
   (SELECT COUNT(*) FROM d1_migrations) AS d1_migrations
 ;

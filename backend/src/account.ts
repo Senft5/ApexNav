@@ -23,6 +23,9 @@ export async function exportMyData(env: Env, v: Viewer) {
     roadbook_roads: await q("SELECT b.name AS roadbook, r.name, r.note, r.length_m, r.geom, r.created_at FROM roadbook_roads r JOIN roadbooks b ON b.id = r.book_id WHERE b.owner = ?"),
     roadbooks_followed: await q("SELECT b.name, f.created_at FROM roadbook_follows f JOIN roadbooks b ON b.id = f.book_id WHERE f.user_id = ?"),
     roadbook_stamps: await stampsOf(env, v.id),
+    // duels you made or were asked into: the stage, the other side's handle, the days and how it stands (Scores stay on the boards)
+    duels: await q(`SELECT d.stage, u.handle AS with_handle, CASE WHEN d.challenger = ?1 THEN 'you challenged' ELSE 'challenged you' END AS side, d.days, d.status, d.starts_on, d.ends_on, d.created_at
+                      FROM duels d JOIN users u ON u.id = CASE WHEN d.challenger = ?1 THEN d.opponent ELSE d.challenger END WHERE d.challenger = ?1 OR d.opponent = ?1`),
     hazard_reports: await q("SELECT kind, lat, lon, heading, created_at, expires_at, confirms, clears FROM hazard_reports WHERE reported_by = ?"),
     crew_drives_planned: await q("SELECT title, starts_at, meet_name, meet_lat, meet_lon, notes, cancelled, created_at FROM crew_events WHERE created_by = ?"),
     crew_drive_rsvps: await q("SELECT e.title, e.starts_at, r.status, r.updated_at FROM crew_event_rsvps r JOIN crew_events e ON e.id = r.event_id WHERE r.user_id = ?"),
