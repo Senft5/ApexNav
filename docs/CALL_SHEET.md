@@ -41,6 +41,12 @@ simulated sane driver"; it reads "as a careful driver would take it. Never a spe
 
 Undo: revert the PR. The scores themselves and how they are worked out are unchanged.
 
+## 2026-11-11 (fable-reveal-once): the ranked route takes the line's place without a second stroke (claude/fable-reveal-once)
+
+On a slow phone the route was drawn onto the map, then drawn again from the start a moment later when the better route
+replaced the first one. Now the better route just takes the line's place once the first stroke is done (mid-stroke it
+carries on, as before). A level card you tap still redraws quickly, since that change is yours. Undo: revert the PR.
+
 ## 2026-11-10 (fable-pin-names): a place you pin or tap goes by its name, never by coordinates (claude/fable-pin-names)
 
 Hold the map on Foothills Parkway and the pin's sheet said "Foothills Parkway", but Go here then filled Where to? with
@@ -312,6 +318,21 @@ Also: a time loop's note said "the closest good loop to 1.5 h"; times now read "
 
 Not changed: Options keeps its 1 hour / 2 hours keys and My free time. Undo: revert the PR.
 
+## 2026-11-10 (fable-sign-in-key): a message that asks you to sign in carries the key (claude/fable-sign-in-key)
+
+Following your "reducing any clunky feelings": five things that need an account answered "Sign in (People) to see
+friends on the map." and the like: a direction to go and find a tab, in brackets. The Garage's empty bay had already
+dropped that wording for a Sign in key. Now the message itself has the key: "Sign in to see friends on the map." with
+**Sign in** on it, which opens People where signing in lives. In a drive (sharing an ETA, reporting a hazard) it is
+only said on the drive's message row, with no key, so no sheet opens over the road.
+
+Also: sharing a route with nobody to share it with read "Sign in and add friends or a crew (People) to share routes."
+It now reads like the convoy's: "No friends or crews to share with yet. Add them in People."
+
+The same for notifications: "Notifications are off for Vetta. Turn them on in the iPhone's Settings, then here."
+now has a **Settings** key that opens Vetta's page there (the shell's `openSettings`, already used by Location is off).
+
+Undo: revert the PR (`askSignIn` in web/cockpit.js, one line in web/friends_map.js).
 ## 2026-11-10 (fable-crew-settings): Crew settings in the Settings list's shape (claude/fable-crew-settings)
 
 For "cohesiveness" (and the first look at a crew's page in this run): the sheet behind a crew's gear had three sizes
@@ -345,17 +366,6 @@ Also: "Saved for offline: … Find it in Where to?." ended "?."; it reads "It's 
 
 Undo: revert the PR (`toast()` in web/cockpit.js, four CSS lines in web/index.html).
 
-## 2026-11-10 (fable-camber-sure): banking says how sure it is (claude/fable-camber-sure)
-
-The red team (TE-03) pointed out that banking comes from one phone on a sprung car with no body-roll model, yet the
-gauge read it to a tenth of a degree ("BANK +4.3°"). It now reads whole degrees ("BANK +4°"), the drive's lane readout
-too, and the end-of-drive line says "banked about 4°". Tapping the gauge (parked) says Bank is approximate, to a
-degree or two, because body roll is not modelled. The drive view already says how many runs agree or differ beside
-it. Nothing about how banking is measured or shared changed; a roll model or a surveyed reference road is the real fix
-(docs/PHILOSOPHY.md §4).
-
-Undo: revert the PR.
-
 ## 2026-11-10 (fable-layers): design pass 8: the Layers panel is the map's legend (claude/fable-layers)
 
 Layers was a column of names and switches: "Cameras" (which cameras?), "Measured roads" (three colours on the map and
@@ -370,6 +380,12 @@ Not changed: what any switch does, the Co-driver half (Notes, Voice, music).
 
 Undo: revert the PR.
 
+## 2026-11-10 (fable-story-flake): the "route overview" e2e flow waits for the settled card (claude/fable-story-flake)
+
+The e2e check went red on PRs that touch nothing near it. The flow compared the overview's lines with the route's
+streets while the app was between two sets of steps. I changed the flow to read once the lines belong to the steps the
+route has now; the app is unchanged, and the check ("every name it says is a street the route drives") is as strict
+as before. Undo: revert the PR.
 ## 2026-11-10 (fable-no-orphan-key): a friend's third key takes the row (claude/fable-no-orphan-key)
 
 On People, a friend's row opens on two columns of keys. A friend who shares no position has three (Share a route,
@@ -444,6 +460,26 @@ Not changed: the 1 hour / 2 hours loops and "My free time" in Options, and the r
 weights in fun_route.js (unused by the app now, still tested).
 
 Undo: revert the PR. To bring a level back for loops only, set `LOOP_STYLE` in web/cockpit.js.
+
+## 2026-11-10 (fable-coherence): the docs say what Vetta is and what ships (claude/fable-coherence)
+
+A red team (design and philosophy) found the repo describing two products. I rewrote docs/PHILOSOPHY.md: the
+"countermeasure co-driver", "zero-snitch", Octane, the Halda/Singer binnacle and the five unused hex colours are gone,
+with a table of what was dropped and why so nobody rebuilds them. It now states your answers from today: Pace stays in
+the Score and copy says plainly that the Score rewards using a corner's grip; Stage times and gaps stay shareable;
+police reports and speed cameras stay, named in the open; Pro is looks only; Tapedeck's glow is fine.
+
+CLAUDE.md, AGENTS.md and .cursorrules are now one text (a test keeps them so). The mission no longer claims Android,
+Android Auto, a C++ core, Kalman, FFT or an audio DSP bus; they are listed as not built. ARCHITECTURE.md §5 says the
+same. BRAND.md opens with the shipped state (four tabs, the VETTA wordmark, three themes and their voices, what is
+ownable) and "what Vetta refuses to match"; navigation is the vehicle, the co-driver the reason. SOCIAL.md's "3
+contributors" now matches the built rule in ROAD_DATA.md. "Zero subscription" and "nothing you made behind a paywall"
+became "free to drive" wording (about page, IDEAS, SOCIAL, marketing). "Never how fast" became "how well you used each
+corner's grip, never your top speed" (about page, Log note, marketing). The listing leads with the co-driver and names
+cameras and police reports. APP_REVIEW.md gains rows for the braking ribbon (1.4.1), the Score and boards, and cameras
+and police. The domain is at the top of OWNER_TODO.
+
+Undo: revert the PR. No code behaviour changed.
 
 ## 2026-11-10 (fable-paths-are-keys): "Garage → Settings → Spots" is a key, not a path to walk (claude/fable-paths-are-keys)
 

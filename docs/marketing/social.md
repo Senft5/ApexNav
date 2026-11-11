@@ -30,7 +30,7 @@ The numbers in braces are filled from the road page on the day; none are guessed
 Between road videos (one post each, mid-week):
 
 - **How it works, in 15 s**: the cockpit calls "left 4, crest, right 3 tightens" over a bundled demo drive.
-- **Why no subscription**: one card with the MONETIZATION.md promise list, plainly.
+- **Why driving is free**: one card with the MONETIZATION.md promise list, plainly (Pro is looks only).
 - **Road data, explained**: the phone on the dash, then a road section going from map-only to measured.
 - **Convoys**: three cars on one map, a hazard pin relayed down the line (filmed on a real crew drive during the beta: there is no bundled convoy demo).
 
@@ -43,7 +43,7 @@ Between road videos (one post each, mid-week):
 | 0–3 | cockpit on a dash mount, demo drive running | co-driver: "Left 4. Crest. Right 3 tightens." |
 | 3–9 | the map strip showing the next three corners | "Vetta reads the road ahead out loud." |
 | 9–13 | Log: the drive's corners, a smooth score | "And scores how smoothly you drove it." |
-| 13–15 | end card | "Never how fast." |
+| 13–15 | end card | "Corner by corner, never top speed." |
 
 ### 2. "The road, measured" (20 s)
 
@@ -52,7 +52,7 @@ Between road videos (one post each, mid-week):
 | 0–5 | a road on the map, plain line | "Maps know a road's shape." |
 | 5–12 | the same road coloured by measured feel (coverage map) | "Your phone feels the rest: banking, crests, the rough bits." |
 | 12–17 | loop builder picking the smooth road over the rough one | "So the good roads rise to the top." |
-| 17–20 | end card | "Free. No ads. No subscription." |
+| 17–20 | end card | "Free to drive. No ads." |
 
 ### 3. "Bring your crew" (15 s, filmed on a real beta crew drive)
 
@@ -65,4 +65,4 @@ Between road videos (one post each, mid-week):
 ## Bluesky / Threads / X launch post
 
 I built Vetta: a co-driver for back roads. It reads every corner before you reach it, finds the twisty roads near
-you, and scores how smoothly you drove them, never how fast. Free, no ads, no subscription. {link}
+you, and scores how smoothly you used each corner's grip, never your top speed. Free to drive, no ads. {link}

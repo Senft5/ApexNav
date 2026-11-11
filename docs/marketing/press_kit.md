@@ -10,7 +10,7 @@ twisty roads near you, and learns how each road actually feels from the phones o
 Vetta turns a phone on the dashboard into a rally co-driver. It calls each corner before you reach it, timed to
 your speed and working with no signal; builds loops from the best driving roads nearby; and gives every
 drive a Vetta Score. Members' phones measure how roads feel (banking, crests, rough surface) so
-good roads rise and broken ones sink. No ads, no tracking, no subscription. Vetta is made in {city, state: OWNER}
+good roads rise and broken ones sink. No ads, no tracking, free to drive. Vetta is made in {city, state: OWNER}
 by {name: OWNER}.
 
 ## Fact sheet
@@ -35,7 +35,7 @@ by {name: OWNER}.
    with no network, timed so the call lands at the corner entry.
 3. **A score for every drive.** The Vetta Score, corner by corner, and how you improve on the roads you drive
    most. There are no speed or time leaderboards anywhere in the app, by design.
-4. **No subscription.** {one sentence on why, OWNER}.
+4. **Free to drive.** Driving, notes, routes, safety and your own drives never need a subscription; Pro is looks only.
 
 ## Founder quote
 

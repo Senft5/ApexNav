@@ -76,7 +76,7 @@
   `;
 
   function mount(page) {
-    const { el, btn, toast, apiCall, map } = page, d = root.document;
+    const { el, btn, toast, apiCall, map } = page, askSignIn = page.askSignIn || ((why) => toast(`Sign in to ${why}.`)), d = root.document;
     if (!d.getElementById('friendsMapStyle')) d.head.append(el('style', { id: 'friendsMapStyle', textContent: STYLE }));
     let settings = { audience: 'nobody', delay_s: 600, fuzz: true }, loaded = false, layerOn = false;
     let onlyDriving = (() => { try { return root.localStorage.getItem(ONLY_DRIVING_KEY) !== '0'; } catch (_) { return true; } })();
@@ -224,7 +224,7 @@
       paint();
       ov.append(body);
       d.body.append(ov);
-      if (!loaded) loadSettings().then((ok) => { if (ok) paint(); else { close(); toast('Sign in (People) to see friends on the map.'); } });
+      if (!loaded) loadSettings().then((ok) => { if (ok) paint(); else { close(); askSignIn('see friends on the map'); } });
       return close;
     }
 

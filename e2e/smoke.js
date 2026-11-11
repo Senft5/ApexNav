@@ -706,6 +706,25 @@ flow('a deliberate detour: one quiet "Rerouting", the new route goes the way the
   check(etas.every(Boolean), 'the arrival never blanks during the reroute: ' + JSON.stringify(seen.slice(12).map((s) => s.eta)));
 }, { geolocation: { latitude: 35.96, longitude: -83.92 }, permissions: ['geolocation'] });
 
+flow('sign-in key: turning Friends on signed out says why and the message carries "Sign in", which opens People', async (page, base) => {
+  await page.route('**/api/**', (r) => r.fulfill({ status: 200, contentType: 'application/json', body: '{"signed_in":false}' }));
+  await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); } catch (_) {} });
+  await page.goto(base + '/index.html');
+  await page.waitForFunction(() => window.apexDebug && window.apexDebug.map && !document.getElementById('boot'));
+  await page.click('#swTab');
+  await page.click('.sw[data-toggle="friends"]');
+  await page.waitForSelector('#toast.show a');
+  const said = await page.evaluate(() => { const t = document.getElementById('toast'); return { all: t.textContent, key: t.querySelector('a').textContent,
+    on: document.querySelector('.sw[data-toggle="friends"]').classList.contains('on') }; });
+  check(said.all === 'Sign in to see friends on the map.Sign in' && said.key === 'Sign in', 'the message and its key: ' + JSON.stringify(said));
+  check(!said.all.includes('(People)') && !said.on, 'no direction to a tab, and the switch stays off');
+  await page.click('#toast a');
+  await page.waitForFunction(() => document.querySelector('.tab[data-view="friends"], .tab[data-view="people"]') && document.getElementById('sheet').classList.contains('open'));
+  const there = await page.evaluate(() => ({ toast: document.getElementById('toast').classList.contains('show'),
+    signIn: [...document.querySelectorAll('#sheet button, #sheet a')].some((b) => b.offsetParent && /sign in/i.test(b.textContent)) }));
+  check(!there.toast && there.signIn, 'People is open on its way to sign in, the message gone: ' + JSON.stringify(there));
+});
+
 flow('while Vetta speaks: Lower music or Pause music, beside Voice in Layers, kept and sent to the shell (TestFlight: "my music played a little too loud over it")', async (page, base) => {
   // a plain browser can't touch other apps' audio: no such switch there
   await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); } catch (_) {} });
@@ -957,14 +976,21 @@ flow('route overview: the card says what the drive is like in plain words, from 
   try {
     await ownTrip(page, base, 'fun');
     await page.waitForFunction(() => !document.getElementById('routeCardStory').hidden, null, { timeout: 5000 });
-    const r = await page.evaluate(() => {
-      const t = window.apexDebug.track, s = t.__story && t.__story.s, box = document.getElementById('routeCardStory');
-      return { lines: s ? s.lines : [], coverage: s && s.coverage, lead: document.getElementById('routeCardStoryLead').textContent,
+    // The lines are rebuilt when the route's steps change (the router's own, then the spoken directions' a moment later),
+    // on a timer. Read in one go, and only once the lines up are the ones built from the steps the route has now: read a
+    // frame early, the lines named the first steps' roads against the second steps' streets (it failed one run in two).
+    const r = await page.evaluate(async () => {
+      const box = document.getElementById('routeCardStory');
+      const settled = () => { const t = window.apexDebug.track, k = t && t.__story; return !!(k && k.steps === t.steps && k.s && Array.isArray(k.s.lines) && k.s.lines.length && !box.hidden); };
+      for (let i = 0; i < 100 && !settled(); i++) await new Promise((ok) => setTimeout(ok, 50));
+      const t = window.apexDebug.track, s = t.__story && t.__story.s, dep = t.ranked && t.ranked.route && Array.isArray(t.ranked.route.steps) && t.ranked.route.steps[0] && t.ranked.route.steps[0].street;
+      return { settled: settled(), lines: s ? s.lines : [], coverage: s && s.coverage, lead: document.getElementById('routeCardStoryLead').textContent,
         more: [...document.querySelectorAll('#routeCardStoryMore p')].map((p) => p.textContent), open: box.open, one: box.classList.contains('one'),
-        streets: (t.steps || []).map((x) => x.street).filter(Boolean), cardW: document.getElementById('routeCard').scrollWidth - document.getElementById('routeCard').clientWidth,
+        streets: [dep, ...(t.steps || []).map((x) => x.street)].filter(Boolean), cardW: document.getElementById('routeCard').scrollWidth - document.getElementById('routeCard').clientWidth,
         // deer hours need no tiles: the clock, the sun and the month (wildlife.js) times the land along the road
         deerKnown: (() => { const c = t.ranked, v = c && c.ctx && ApexRouteEngine.channel(c.ctx, 'deer_risk'); return !!v && [...v].some((x) => Number.isFinite(x) && x > 1); })() };
     });
+    check(r.settled, 'the lines up are built from the route\'s present steps');
     const texts = r.lines.map((l) => l.text);
     if (process.env.STORY_LOG) console.log(JSON.stringify({ texts, coverage: r.coverage, streets: [...new Set(r.streets)] }));
     check(texts.length >= 1 && texts.length <= 5, 'one to five lines: ' + JSON.stringify(texts));
