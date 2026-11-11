@@ -19,7 +19,7 @@
   const SIGNAL_FLOOR = 3;
   const APART = 90;
   const ALARM = { token: 'signal', channels: ['colour', 'shape', 'word'] };
-  const RENDERERS = { dial: ['printed', 'sevenseg', 'bezel', 'car'], meter: ['gball', 'bars', 'bezelg', 'car'], strip: ['roadbook', 'vfd'] };   // grows as themes add theirs (car: a private theme's own cluster, drawn from its data)
+  const RENDERERS = { dial: ['printed', 'line', 'sevenseg', 'bezel', 'car'], meter: ['gball', 'bars', 'bezelg', 'car'], strip: ['roadbook', 'vfd'] };   // grows as themes add theirs (car: a private theme's own cluster, drawn from its data)
   const REQUIRED = ['stage', 'ink', 'dim', 'route', 'panel', 'panelInk', 'panelDim', 'rule', 'accent', 'signal', 'face', 'faceInk', 'faceDim'];
   const FORBIDDEN = ['hzBg', 'hzEdge', 'hzInk'];                                     // a theme can't set the plate
 

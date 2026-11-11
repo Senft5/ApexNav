@@ -106,7 +106,7 @@
   /** Collects frames into 5 m samples (CLAUDE.md spatial binning) and writes the ApexDrive CSV the analysis page imports. */
   const JUMP_M = 1000, JUMP_MPS = 90;                                     // no car covers 1 km between fixes, or 90 m/s over a longer gap
   class Recorder {
-    constructor() { this.rows = []; this.dist = 0; this.prev = null; this.nextAt = 0; this.startedAt = null; this.last = null; this.peaks = []; this.peaksLost = false; }
+    constructor() { this.rows = []; this.dist = 0; this.prev = null; this.nextAt = 0; this.startedAt = null; this.last = null; this.peaks = []; this.peaksLost = false; this.gs = []; this.g0 = null; }
     add(fr) {
       if (!fr || !fr.has_fix) return;
       if (!this.startedAt) this.startedAt = fr.t || Date.now();
@@ -117,20 +117,37 @@
       // Over ~3 s without a new position (tunnel, GPS outage, a stop) the frames can no longer be placed: they are dropped, not guessed.
       if (this.peaks.length <= 30) this.peaks.push(locked && finite(fr.vert_peak_g) && finite(fr.speed_mps) && fr.speed_mps >= 1 ? fr.vert_peak_g : null);
       else this.peaksLost = true;
+      // IDEAS D-26: the g of every frame, not only the one that moved. Ten frames a second share one position between fixes;
+      // like the spikes, frame k of n is placed (k + 1) / n of the way to the next fix, and each 5 m sample takes the g
+      // between the two frames placed either side of it. (It took the g of the frame at the far fix: once a second, up to a
+      // fix early.) Unknown g on either side leaves the sample unknown.
+      const gOk = typeof fr.calibration !== 'string' || locked;            // the app's IMU g; browser frames carry GPS-derived g and no calibration
+      if (this.gs.length <= 30) this.gs.push(gOk && finite(fr.lat_g) && finite(fr.lon_g) ? [fr.lat_g, fr.lon_g] : null);
       if (this.prev) {
         const seg = metres(this.prev, fr), d0 = this.dist;
         if (seg < 0.5) { this.last = fr; return; }                          // stationary: no new road
         // REVIEW4 U-88: a fix farther than any car could have gone since the last (a stray first fix, a cell-tower jump) is a
         // gap, as a privacy zone is: the next stretch starts there and no road is filled in along the straight line between
         const dt = finite(fr.t) && finite(this.prev.t) && fr.t > this.prev.t ? (fr.t - this.prev.t) / 1000 : 0;
-        if (seg > Math.max(JUMP_M, dt * JUMP_MPS)) { this.peaks = []; this.peaksLost = false; this.prev = fr; this.last = fr; return; }
+        if (seg > Math.max(JUMP_M, dt * JUMP_MPS)) { this.peaks = []; this.peaksLost = false; this.gs = []; this.g0 = null; this.prev = fr; this.last = fr; return; }
         this.dist += seg;
-        const gOk = typeof fr.calibration !== 'string' || locked;            // the app's IMU g likewise; browser frames carry GPS-derived g and no calibration
+        // where each frame's g lies along this stretch (from d0), the last frame of the stretch before at its start; over a
+        // gap of 3 s or 100 m the frames cannot be placed, and the samples take this fix's g as they always did
+        const placed = this.g0 && this.gs.length <= 30 && seg <= 100 ? [[0, this.g0[0]], ...this.gs.map((g, k) => [seg * (k + 1) / this.gs.length, g])] : null;
+        const gAt = (x) => {
+          if (!placed) return gOk && finite(fr.lat_g) && finite(fr.lon_g) ? [fr.lat_g, fr.lon_g] : null;
+          let j = 1;
+          while (j < placed.length - 1 && placed[j][0] < x) j++;
+          const [xa, a] = placed[j - 1], [xb, b] = placed[j];
+          if (!a || !b) return null;
+          const f = xb > xa ? Math.min(1, Math.max(0, (x - xa) / (xb - xa))) : 1;
+          return [a[0] + (b[0] - a[0]) * f, a[1] + (b[1] - a[1]) * f];
+        };
         while (this.nextAt <= this.dist) {                                   // interpolate each 5 m crossing
-          const f = (this.nextAt - d0) / seg, mix = (a, b) => (finite(a) && finite(b) ? a + (b - a) * f : (finite(b) ? b : null));
+          const f = (this.nextAt - d0) / seg, mix = (a, b) => (finite(a) && finite(b) ? a + (b - a) * f : (finite(b) ? b : null)), g = gAt(this.nextAt - d0);
           this.rows.push({ distance_m: this.nextAt, lat: this.prev.lat + (fr.lat - this.prev.lat) * f, lon: this.prev.lon + (fr.lon - this.prev.lon) * f,
             elevation_m: mix(this.prev.elevation_m, fr.elevation_m), speed_mps: mix(this.prev.speed_mps, fr.speed_mps),
-            lon_g: gOk && finite(fr.lon_g) ? fr.lon_g : null, lat_g: gOk && finite(fr.lat_g) ? fr.lat_g : null, roughness_rms: finite(fr.roughness_rms) ? fr.roughness_rms : null,
+            lon_g: g ? Math.round(g[1] * 1e4) / 1e4 : null, lat_g: g ? Math.round(g[0] * 1e4) / 1e4 : null, roughness_rms: finite(fr.roughness_rms) ? fr.roughness_rms : null,
             ...(locked && fr.camber_v === CAMBER_V && finite(fr.camber_deg) ? { camber_deg: fr.camber_deg, camber_v: CAMBER_V } : { camber_deg: null }), crest_vertical_g: locked && finite(fr.crest_vertical_g) ? fr.crest_vertical_g : null,
             vert_peak_g: null });
           this.nextAt += 5;
@@ -142,10 +159,11 @@
         });
       } else if (!this.rows.length) this.nextAt = 0;                      // after a pause the distance carries on, nothing filled in
       this.peaks = []; this.peaksLost = false;
+      this.g0 = this.gs.length ? [this.gs[this.gs.length - 1]] : null; this.gs = [];   // [g or null]: null alone is "none to start from"
       this.prev = fr; this.last = fr;
     }
     /** A gap (a privacy zone, IDEAS Z-02): the next fix starts a new stretch; no samples are placed between the two. */
-    pause() { this.prev = null; this.peaks = []; this.peaksLost = false; }
+    pause() { this.prev = null; this.peaks = []; this.peaksLost = false; this.gs = []; this.g0 = null; }
     get km() { return this.dist / 1000; }
     get samples() { return this.rows.length; }
     /** Round 3 (a drive to work lost, 2026-10-30): the recording so far as plain data for storage (drive_keep.js). Rows from
@@ -154,7 +172,7 @@
     snapshot(from = 0) {
       const p = this.prev, keep = (f) => (f ? { lat: f.lat, lon: f.lon, t: f.t, elevation_m: f.elevation_m, speed_mps: f.speed_mps } : null);
       return { v: 1, from, n: this.rows.length, rows: this.rows.slice(from).map((r) => ({ ...r })), dist: this.dist, nextAt: this.nextAt,
-               startedAt: this.startedAt, prev: keep(p), last: keep(this.last), peaks: this.peaks.slice(), peaksLost: this.peaksLost };
+               startedAt: this.startedAt, prev: keep(p), last: keep(this.last), peaks: this.peaks.slice(), peaksLost: this.peaksLost, gs: this.gs.slice(), g0: this.g0 ? this.g0.slice() : null };
     }
     /** A recorder rebuilt from a snapshot's state and its rows (assembled by drive_keep.js), ready for more frames. */
     static restore(state, rows) {
@@ -162,6 +180,7 @@
       r.rows = rows.map((x) => ({ ...x })); r.dist = state.dist; r.nextAt = state.nextAt; r.startedAt = state.startedAt;
       r.prev = state.prev ? { ...state.prev } : null; r.last = state.last ? { ...state.last } : r.prev;
       r.peaks = Array.isArray(state.peaks) ? state.peaks.slice() : []; r.peaksLost = !!state.peaksLost;
+      r.gs = Array.isArray(state.gs) ? state.gs.slice() : []; r.g0 = Array.isArray(state.g0) ? state.g0.map((g) => (g ? g.slice() : null)) : null;
       return r;
     }
     /** The drive as it stood after its first `n` samples (a drive ended by parking: the walk from the car is not road). */
@@ -169,7 +188,7 @@
       if (!(n >= 0) || n >= this.rows.length) return;
       this.rows.length = n;
       this.dist = n ? this.rows[n - 1].distance_m : 0; this.nextAt = n ? this.rows[n - 1].distance_m + 5 : 0;
-      this.prev = null; this.peaks = []; this.peaksLost = false;
+      this.prev = null; this.peaks = []; this.peaksLost = false; this.gs = []; this.g0 = null;
     }
     /** CSV in the ApexDrive column layout; missing values are left blank, never zero. */
     toCsv() {

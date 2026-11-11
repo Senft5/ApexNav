@@ -34,6 +34,10 @@
   <script src="taste.js" defer></script>
   <script src="prefer.js" defer></script>
   <!-- route context providers (builder E): the crowd, the driver, the car, the phone's time, crew meeting points -->
+  <!-- before the route_ctx providers: conditions, wildlife and hazards_live take ApexSun and ApexRouteWeather as they load
+       (after them, as it was until 2026-11-10, the app knew no light, glare, deer hour or forecast hazard per sample) -->
+  <script src="sun.js" defer></script>
+  <script src="route_weather.js" defer></script>
   <script src="route_ctx/ctx_util.js" defer></script>
   <script src="route_ctx/crowd.js" defer></script>
   <script src="route_ctx/driver.js" defer></script>
@@ -76,6 +80,7 @@
   <script src="plain_notes.js" defer></script>
   <script src="hazard_reports.js" defer></script>
   <script src="route_card.js" defer></script>
+  <script src="route_reveal.js" defer></script>
   <script src="route_story.js" defer></script>
   <script src="plan_presets.js" defer></script>
   <script src="plan_options.js" defer></script>
@@ -85,6 +90,8 @@
   <script src="pro.js" defer></script>
   <script src="route_tuning.js" defer></script>
   <script src="theme_sounds.js" defer></script>
+  <script src="audio_bus.js" defer></script>
+  <script src="soundtrack.js" defer></script>
   <script src="week_digest.js" defer></script>
   <script src="drive_card.js" defer></script>
   <script src="road_portrait.js" defer></script>
@@ -113,7 +120,7 @@
   <script src="route_import.js" defer></script>
   <script src="pinned_places.js" defer></script>
   <script src="trip_stops.js" defer></script>
-  <script src="route_weather.js" defer></script>
+  <script src="when_to_go.js" defer></script>
   <script src="conditional_closures.js" defer></script>
   <script src="place_search.js" defer></script>
   <script src="recce.js" defer></script>
@@ -121,13 +128,14 @@
   <script src="traffic.js" defer></script>
   <script src="in_car.js" defer></script>
   <script src="power.js" defer></script>
-  <script src="sun.js" defer></script>
   <script src="format.js" defer></script>
   <script src="road_names.js" defer></script>
   <script src="twisty.js" defer></script>
   <script src="coverage.js" defer></script>
   <script src="recording.js" defer></script>
   <script src="end_line.js" defer></script>
+  <script src="end_reveal.js" defer></script>   <!-- the drive-ended card's reveal: the driven line, the count, the ledger -->
+  <script src="first_run.js" defer></script>    <!-- the welcome's road and the dot that drives it -->
   <script src="road_memory.js" defer></script>
   <script src="road_carry.js" defer></script>
   <script src="contributor.js" defer></script>
@@ -181,8 +189,6 @@
     .notes-roadbook > .note-quiet { padding-left: 8px; grid-column: 1 / -1; }   /* 16 pt from the edge like the deck (docs/design/REVIEW2.md 1.17) */
     .rb-box { display: grid; grid-template-columns: auto 46px minmax(0, 1fr); gap: 6px; align-items: center; padding: 2px 8px; border-left: 1.5px solid var(--rule); min-width: 0; }
     .rb-box:first-child { border-left: none; }
-    .rb-box.advance { animation: rb-advance 160ms ease-out both; }
-    @keyframes rb-advance { from { transform: translateX(14%); opacity: 0.35; } to { transform: none; opacity: 1; } }
     /* The next note steps back in colour, not opacity, so its small text keeps 4.5:1 contrast (only the tulip fades) */
     .rb-box:not(.now) { color: var(--panel-dim); } .rb-box:not(.now) .rb-tulip { opacity: 0.62; }
     @media (max-width: 520px) { .notes-roadbook { grid-template-columns: minmax(0, 1fr) auto; } .rb-box:nth-child(3) { display: none; } }   /* one next cell on a phone upright */
@@ -626,7 +632,7 @@
     /* Roadbook binnacle reads as the printed page */
     [data-theme="roadbook"] .key, [data-theme="roadbook"] .ro, [data-theme="roadbook"] .scrubber { border-width: 1.5px; }
     [data-theme="roadbook"] .notes { border-bottom: 2px solid var(--rule); }
-    [data-theme="roadbook"] .binnacle { border-top: 2px solid var(--rule); }
+    [data-theme="roadbook"] .binnacle { border-top: 2px solid var(--rule); }   /* the idle deck's edge; in a drive both are paper on the map (the Vetta Line block below) */
 
     @media (min-width: 820px) {
       :root { --dial: clamp(128px, 17dvh, 180px); }
@@ -643,17 +649,26 @@
     /* ---------------- the route card as instruments (REVIEW.md roadmap 5) ---------------- */
     #routeCard h3 { font-size: 26px; line-height: 1.1; }
     .rc-via { margin: 4px 0 0; }
-    .rc-stats { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); margin-top: 12px; border-top: 2px solid var(--panel-ink); border-bottom: 1px solid var(--rule); }
-    .rc-stats > div { padding: 8px 8px 8px 0; min-width: 0; }
-    .rc-stats > div + div { border-left: 1px solid var(--rule); padding-left: 8px; }
-    .rc-stats b { display: block; font: 800 34px/1 var(--font-num); font-variant-numeric: tabular-nums; white-space: nowrap; }
-    .rc-stats b small { font: 600 13px var(--font-ui); color: var(--panel-dim); margin-left: 2px; }
-    .rc-stats span { display: block; margin-top: 4px; font-size: 11px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--panel-dim); line-height: 1.2; }
-    .rc-profile { display: block; width: 100%; height: 92px; margin-top: 10px; }
-    .rc-ground { fill: var(--rule); opacity: 0.3; } .rc-line { fill: none; stroke: var(--panel-ink); stroke-width: 1.5; vector-effect: non-scaling-stroke; }
+    /* the stat line (design pass, 2026-11-10): time, distance, corners, large in the number face, no boxes; time first */
+    .rc-stats { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); column-gap: 12px; margin-top: 0; }
+    .rc-stats > div { min-width: 0; }
+    .rc-stats > div:nth-child(2) { order: -1; }
+    .rc-stats b { display: block; font: 800 40px/0.95 var(--font-num); font-variant-numeric: tabular-nums; white-space: nowrap; }
+    .rc-stats b small { font: 600 17px var(--font-num); color: var(--panel-dim); margin-left: 3px; }
+    .rc-stats span { display: block; margin-top: 3px; font-size: 13px; font-weight: 500; color: var(--panel-dim); line-height: 1.2; }
+    .rc-stats span::first-letter { text-transform: uppercase; }
+    /* the profile, the card's hero: the ground in a wash of ink, the line on it, a tick for every corner along the foot */
+    .rc-profile { display: block; width: 100%; height: 80px; }
+    .rc-ground { fill: var(--panel-ink); opacity: 0.1; } .rc-line { fill: none; stroke: var(--panel-ink); stroke-width: 1.75; stroke-linejoin: round; vector-effect: non-scaling-stroke; }
     .rc-base { stroke: var(--rule); stroke-width: 1; vector-effect: non-scaling-stroke; }
     .rc-ticks path { stroke: var(--panel-ink); stroke-width: 1; opacity: 0.55; vector-effect: non-scaling-stroke; }   /* corners in ink; red is the record key */
-    .rc-profile text { font: 600 10px var(--font-ui); fill: var(--panel-dim); }
+    .rc-profile text { font: 600 13px var(--font-num); letter-spacing: 0.02em; fill: var(--panel-dim); }
+    /* the pen: a profile new on the card is drawn on from the left, in step with the line on the map (cockpit.js paintProfile) */
+    .rc-profile.draw { animation: rc-draw var(--rc-draw, 800ms) cubic-bezier(0.2, 0.8, 0.2, 1) both; }
+    @keyframes rc-draw { from { clip-path: inset(0 100% 0 0); } to { clip-path: inset(0 0 0 0); } }
+    /* the apex dot: where you are on the route (the start; where a fly-through was left) */
+    .rc-here { position: absolute; width: 10px; height: 10px; margin: -5px 0 0 -5px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 0 2px var(--panel); pointer-events: none; }
+    .rc-here[hidden] { display: none; }
     .rc-dials { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; margin-top: 12px; text-align: center; }
     .rc-dial svg { width: 60px; height: 36px; display: block; margin: 0 auto; }
     .rc-dial .rc-track { fill: none; stroke: var(--rule); stroke-width: 3; }
@@ -661,7 +676,7 @@
     .rc-dial .rc-arc { fill: none; stroke: var(--accent); stroke-width: 3.5; }
     .rc-dial .rc-needle { stroke: var(--panel-ink); stroke-width: 2.4; stroke-linecap: round; } .rc-dial circle { fill: var(--panel-ink); }
     .rc-dial b { display: block; font: 800 26px/1 var(--font-num); font-variant-numeric: tabular-nums; }
-    .rc-dial span { display: block; margin-top: 3px; font-size: 11px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: var(--panel-dim); }
+    .rc-dial span { display: block; margin-top: 3px; font-size: 13px; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; color: var(--panel-dim); }
     .rc-facts { display: grid; gap: 6px; margin-top: 10px; }
     /* What this drive is like: the lead line as the summary, a chevron for the rest (the plan-more chevron, smaller) */
     .rc-story { margin-top: 10px; }
@@ -684,21 +699,46 @@
     .f-ahead { --glyph: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2.2' stroke-linecap='round'%3E%3Cpath d='M8 22 V14 Q8 7 16 5'/%3E%3Cpath d='M12 2 L17 5 L13 9'/%3E%3Ccircle cx='8' cy='22' r='1.5' fill='black'/%3E%3C/svg%3E"); }
     .f-sky { --glyph: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round'%3E%3Ccircle cx='12' cy='12' r='4'/%3E%3Cpath d='M12 2v3M12 19v3M2 12h3M19 12h3M5 5l2 2M17 17l2 2M5 19l2-2M17 7l2-2'/%3E%3C/svg%3E"); }
     .f-closed { --glyph: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2'%3E%3Crect x='2' y='8' width='20' height='6'/%3E%3Cpath d='M6 8 L10 14 M12 8 L16 14 M18 8 L22 14 M5 14 V21 M19 14 V21'/%3E%3C/svg%3E"); }
+    /* When to go: a fact that opens; the next day as one bar per departure (taller = a better drive), night dimmed */
+    .f-when { --glyph: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round'%3E%3Ccircle cx='12' cy='12' r='9'/%3E%3Cpath d='M12 7 V12 L15.5 14'/%3E%3C/svg%3E"); }
+    .when-line { flex: 1; min-width: 0; min-height: 44px; margin: -12px 0; padding: 0; display: flex; align-items: center; justify-content: space-between; gap: 10px; text-align: left; font: inherit; color: inherit; background: none; border: 0; cursor: pointer; }
+    .when-line::after { content: ""; flex: none; width: 7px; height: 7px; margin: 0 4px 3px 0; border-right: 2px solid currentColor; border-bottom: 2px solid currentColor; transform: rotate(45deg); transition: transform 0.15s; }
+    .when-line[aria-expanded="true"]::after { transform: rotate(-135deg); margin-bottom: -3px; }
+    .rc-when { margin-top: 10px; } .rc-when[hidden] { display: none; }
+    .when-ribbon { display: flex; align-items: flex-end; gap: 1px; height: 64px; border-bottom: 1.5px solid var(--panel-ink); }
+    .when-ribbon > button { flex: 1 1 0; min-width: 0; height: 100%; padding: 0; display: flex; align-items: flex-end; background: none; border: 0; color: var(--panel-ink); cursor: pointer; }
+    .when-ribbon > button > i { display: block; width: 100%; height: calc(var(--h, 0.5) * 100%); min-height: 3px; background: currentColor; }
+    .when-ribbon > button.night > i { opacity: 0.38; }
+    .when-ribbon > button.shut > i { height: 3px; opacity: 0.38; }
+    .when-ribbon > button[aria-selected="true"] { color: var(--accent); } .when-ribbon > button[aria-selected="true"] > i { opacity: 1; }
+    .when-ribbon > button:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+    .when-axis { position: relative; height: 18px; font-size: 12px; font-weight: 600; color: var(--panel-dim); font-variant-numeric: tabular-nums; }
+    .when-axis > span { position: absolute; top: 3px; transform: translateX(-50%); white-space: nowrap; } .when-axis > span:first-child { transform: none; }
+    .when-detail { margin: 6px 0 0; font-size: 15px; line-height: 1.3; color: var(--panel-ink); } .when-detail b { font-variant-numeric: tabular-nums; }
+    .when-keys { display: flex; align-items: center; gap: 12px; margin-top: 8px; } .when-keys .ink-btn { min-height: 44px; } .when-keys .ink-btn[hidden] { display: none; }
+    html[data-type-size] #planBody .when-detail { font-size: 17px; }
+    @media (prefers-reduced-motion: reduce) { .when-line::after { transition: none; } }
     .rc-round { width: 100%; min-height: 44px; margin-top: 10px; } .rc-round[hidden] { display: none; }
     /* the level cards (the owner, 2026-11-04): Quick, Fun, Long way, each its pick's time and corners; on = the route on screen */
-    .rc-levels { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; margin-top: 10px; }
+    /* (design pass, 2026-11-10: the one clear choice. One joined row, hairlines between, the one on screen filled with
+       ink; the time is each card's big number, the corners under it) */
+    .rc-levels { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0; margin-top: 10px; }
     .rc-levels[hidden] { display: none; }
-    .rc-levels > button { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; min-width: 0; min-height: 76px; padding: 7px 9px 8px; text-align: left;
-      border: 1.5px solid var(--panel-ink); background: transparent; color: var(--panel-ink); font: inherit; transition: background-color 0.15s ease-out, color 0.15s ease-out; }
-    .rc-levels > button.on { background: var(--panel-ink); color: var(--panel); box-shadow: inset 0 -3px 0 rgba(0, 0, 0, 0.35); }
-    .rc-levels > button:active { box-shadow: inset 0 2px 0 rgba(0, 0, 0, 0.25); }
-    .rc-levels b { font-size: 17px; font-weight: 800; line-height: 1.1; white-space: nowrap; }
-    .rc-lv { display: grid; gap: 1px; font: 800 20px/1.05 var(--font-num); font-variant-numeric: tabular-nums; white-space: nowrap; }
+    .rc-levels > button { display: flex; flex-direction: column; align-items: flex-start; gap: 0; min-width: 0; min-height: 74px; padding: 7px 10px 8px; text-align: left;
+      border: 1px solid var(--rule); background: transparent; color: var(--panel-ink); font: inherit; transition: background-color 0.12s ease-out, color 0.12s ease-out; }
+    .rc-levels > button + button { margin-left: -1px; }
+    .rc-levels > button.on { position: relative; background: var(--panel-ink); border-color: var(--panel-ink); color: var(--panel); }
+    .rc-levels > button:active { background: var(--hair, var(--rule)); }
+    .rc-levels > button.on:active { background: var(--panel-ink); opacity: 0.85; }
+    .rc-levels b { font-size: 17px; font-weight: 700; line-height: 1.15; white-space: nowrap; }
+    .rc-lv { display: grid; gap: 0; margin-top: auto; font: 800 26px/1 var(--font-num); font-variant-numeric: tabular-nums; white-space: nowrap; }
     .rc-lv i { font-style: normal; }
-    .rc-lv small { font: 600 11px var(--font-ui); letter-spacing: 0.06em; text-transform: uppercase; color: var(--panel-dim); }
-    .rc-lv .rc-lv-c { font-size: 17px; }
+    .rc-lv small { font: 600 15px var(--font-num); color: var(--panel-dim); }
+    .rc-lv .rc-lv-c { font-size: 16px; font-weight: 600; line-height: 1.1; }
+    .rc-lv .rc-lv-c small { font-size: 16px; color: inherit; }
     .rc-levels > button.on .rc-lv small { color: var(--panel); opacity: 0.8; }
-    .rc-levels > button.further .rc-lv { font: 600 15px/1.2 var(--font-ui); color: var(--panel-dim); white-space: normal; }
+    .rc-levels > button.on .rc-lv .rc-lv-c small { opacity: 1; }
+    .rc-levels > button.further .rc-lv { font: 500 15px/1.2 var(--font-ui); color: var(--panel-dim); white-space: normal; }
     /* a loop's ways (2026-11-10): the loops found, each its own outline, the way it heads, time and corners */
     .rc-ways[data-n="2"] { grid-template-columns: repeat(2, minmax(0, 1fr)); }
     .rc-way-art { align-self: stretch; height: 40px; margin: 0 0 3px; overflow: visible; }
@@ -774,9 +814,8 @@
     .opt-chip[data-count] { background: var(--panel-ink); color: var(--panel); }
     .deck-chips { display: none; padding: 8px 2px 0; }
     #app.idle:not(.plan-open):not(.routed):not(.drive-today-on) .deck-chips { display: flex; }
-    .rc-chips { margin: 6px 0 0; }
     /* finding 3: the main key follows the task: once you type, the loop gives way and the key goes to the place */
-    .plan.typing .plan-loop, .plan.typing .plan-links, .plan.typing #planSpots, .plan.typing #planAttack, .plan.typing #findLoopBtn { display: none; }
+    .plan.typing .plan-loop, .plan.typing .plan-links, .plan.typing #planSpots, .plan.typing #planBooks, .plan.typing #planAttack, .plan.typing #findLoopBtn { display: none; }
     #findGoBtn { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     /* finding 1: the plan's progress on the card, then what the ranking did */
     .rc-progress { display: flex; gap: 8px; align-items: center; margin: 4px 0 0; font-size: 14px; font-weight: 600; line-height: 1.3; color: var(--panel-dim); }
@@ -787,16 +826,16 @@
     @keyframes rc-spin { to { transform: rotate(360deg); } }
     @media (prefers-reduced-motion: reduce) { .rc-progress.busy::before { animation: none; } }
     /* finding 2: the profile's room is kept before it loads */
-    .rc-profile-box { min-height: 102px; position: relative; }
+    .rc-profile-box { min-height: 80px; position: relative; margin-top: 6px; }
     /* heights that never came: the room stays (nothing below moves) and says so, unknown as -- */
-    .rc-profile-box.none::after { content: "Heights --"; position: absolute; left: 0; right: 0; top: 50%; border-top: 1px dashed var(--rule); padding-top: 4px; text-align: center; font-size: 13px; color: var(--panel-dim); }
+    .rc-profile-box.none::after { content: "Heights --"; position: absolute; right: 0; top: 0; font: 600 13px var(--font-num); letter-spacing: 0.02em; color: var(--panel-dim); }
     /* finding 6: a loop's length on its card, in your units */
     .rc-loop { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 10px; align-items: center; margin-top: 8px; }
     .rc-loop[hidden] { display: none; }
     .rc-loop-label { font-size: 13px; font-weight: 700; color: var(--panel-dim); }
     .rc-loop .detents > button { min-width: 0; padding: 0 2px; font-size: 14px; }
     /* finding 10: the card opens at half height over the map; dragged up it takes the full sheet */
-    .plan.open.routed:not(.full) { height: min(50%, 440px); }
+    .plan.open.routed:not(.full) { height: min(51.5%, 452px); }
     .plan.routed { transition: transform 0.2s cubic-bezier(0.2, 0.8, 0.2, 1), height 0.2s cubic-bezier(0.2, 0.8, 0.2, 1); }
     .plan.routed.dragging { transition: none; }
     /* finding 11: the alternatives answer a swipe sideways; the card says how many */
@@ -830,28 +869,88 @@
     .explain-card .note { margin: 0; font-size: 15px; line-height: 1.4; color: var(--panel-dim); }
     /* an instrument says what it is when tapped, parked or in a replay (PR-1); the cursor says so on a desktop */
     #cluster [data-explain], #notes [data-explain] { cursor: help; }
-    .end-kicker { margin: 0; font-size: 12px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; color: var(--accent); }
-    .end-card h2 { margin: 4px 0 0; font-size: 28px; line-height: 1.1; }
-    .end-meta { margin: 4px 0 0; color: var(--panel-dim); font-size: 15px; }
-    .end-score { display: grid; grid-template-columns: auto 1fr; align-items: baseline; column-gap: 6px; margin: 18px 0 0; padding: 12px 0; border-top: 2px solid var(--panel-ink); border-bottom: 1px solid var(--rule); }
-    .end-score b { font: 800 84px/0.9 var(--font-num); font-variant-numeric: tabular-nums; }
+    /* design pass "first and last": the card is a reveal. Head; then the hero between an ink rule and a hairline, the Score
+       large with the driven line drawn beside it (#endGlyph, end_reveal.js); then the facts as a ledger; then words; then keys.
+       One red thing: the dot at the end of the line. Every animation is a `from` with a backwards fill, so the page at rest is
+       the whole page and reduced motion (or a missing script) leaves nothing hidden. */
+    .end-card { --arrive: cubic-bezier(0.2, 0.8, 0.2, 1); }
+    #endCard > .card-sheet { border-top: 1px solid var(--rule); box-shadow: 0 -14px 34px rgba(0, 0, 0, 0.2); padding-top: 22px; }
+    .end-kicker { margin: 0; font-size: 13px; font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase; color: var(--panel-dim); }
+    .end-card h2 { margin: -6px 0 0; font-size: 34px; font-weight: 800; line-height: 1.04; }
+    .end-score { position: relative; display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: end; column-gap: 6px; margin: 4px 0 0; padding: 14px 0 12px; border-bottom: 1px solid var(--hair, var(--rule)); }
+    .end-score::before { content: ""; position: absolute; left: 0; right: 0; top: 0; height: 2px; background: var(--panel-ink); transform-origin: left; }
+    .end-score b { position: relative; grid-column: 1; grid-row: 1; font: 800 108px/0.82 var(--font-num); font-variant-numeric: tabular-nums; transform-origin: left bottom; }
     .end-score b.unk { font-weight: 600; color: var(--panel-dim); letter-spacing: 0.06em; }
-    .end-score small { font-size: 18px; font-weight: 600; color: var(--panel-dim); }
-    .end-score.no-score b { grid-column: 1 / -1; font: 700 22px/1.25 var(--font-ui); letter-spacing: 0; color: var(--panel-ink); }   /* D-6: the drive, in words */
+    .end-score small { grid-column: 2; grid-row: 1; padding-bottom: 4px; font: 600 22px/1 var(--font-num); color: var(--panel-dim); }
+    .end-score.no-score b { grid-column: 1 / span 2; align-self: center; font: 700 26px/1.15 var(--font-num); letter-spacing: 0; color: var(--panel-ink); }   /* D-6: the drive, in words, set as a title */
     .end-score.no-score small, .end-score.no-score span { display: none; }
     /* design pass 9: the number against your usual, on the label's line at the far end ("31 over your usual") */
     .end-score:has(#endUsual:not([hidden])) span { grid-column: 1; }
-    .end-score em { justify-self: end; align-self: end; font-style: normal; font-size: 15px; font-weight: 600; color: var(--panel-ink); }
+    .end-score em { grid-column: 2 / -1; grid-row: 2; justify-self: end; align-self: end; font-style: normal; font-size: 15px; font-weight: 600; color: var(--panel-ink); }
     .end-score em[hidden], .end-score.no-score em { display: none; }
+    /* the driven line, north up, in ink; a ring where it began and the red dot where it ended */
+    .end-glyph { grid-column: 3; grid-row: 1; align-self: center; width: 112px; height: 112px; }
+    .end-glyph svg { display: block; overflow: visible; }
+    .end-card.no-glyph .end-glyph { display: none; }
+    .eg-line { fill: none; stroke: var(--panel-ink); stroke-width: 3; stroke-linecap: round; stroke-linejoin: round; }
+    .eg-from { fill: var(--panel); stroke: var(--panel-ink); stroke-width: 2; }
+    .eg-now { fill: var(--accent); stroke: var(--panel); stroke-width: 2; }
+    .eg-from, .eg-now { transform-box: fill-box; transform-origin: center; }
+    /* the count: the number in the page is the real one; while it counts, its ink is the count laid over it (end_reveal.js) */
+    #endScore.counting { color: transparent; }
+    #endScore.counting::after { content: attr(data-n); position: absolute; left: 0; top: 0; color: var(--panel-ink); }
+    /* still being scored: no number and no "--"; a pen stroke works where the number will stand, and the label says so */
+    #endScore[aria-busy] { color: transparent; min-width: 96px; }
+    #endScore[aria-busy]::after { content: ""; position: absolute; left: 0; bottom: 14px; width: 96px; height: 4px; background: var(--panel-ink); transform-origin: left; animation: end-work 900ms cubic-bezier(0.4, 0, 0.2, 1) infinite alternate; }
+    #endScore[aria-busy] ~ small { visibility: hidden; }
+    #endScore[aria-busy] ~ span::after { content: " \00B7  working it out"; }
+    #endShare[aria-disabled="true"] { opacity: 0.45; }
+    /* the facts as a ledger: the numbers in the instrument face, their words beside them; the dots between are for readers */
+    .end-meta { display: flex; flex-wrap: wrap; gap: 8px 0; margin: 0; padding: 2px 0 12px; border-bottom: 1px solid var(--hair, var(--rule)); color: var(--panel-dim); font-size: 15px; }
+    .end-meta:empty { display: none; }
+    .end-meta > i { display: none; }
+    .end-meta .f { flex: 1 1 0; min-width: max-content; padding-right: 12px; white-space: nowrap; }
+    .end-meta .f + i + .f { padding-left: 12px; border-left: 1px solid var(--hair, var(--rule)); }
+    .end-meta .f b { font: 700 28px/1 var(--font-num); font-variant-numeric: tabular-nums; color: var(--panel-ink); }
+    @keyframes end-pen { from { stroke-dasharray: 1; stroke-dashoffset: 1; } to { stroke-dasharray: 1; stroke-dashoffset: 0; } }
+    @keyframes end-rule { from { transform: scaleX(0); } }
+    @keyframes end-rise { from { opacity: 0; transform: translateY(6px); } }
+    @keyframes end-pop { from { opacity: 0; transform: scale(0.2); } }
+    @keyframes end-thump { from { transform: scale(1.07); } }
+    @keyframes end-work { from { transform: scaleX(0.1); } }
+    @keyframes end-wait { to { opacity: 0.35; } }
+    @keyframes end-ink { from { opacity: 0.45; } }
+    /* the card opens (.pen): the rule and the line are drawn, 600 and 800 ms; the keys are there within half a second */
+    .end-card.pen .end-score::before { animation: end-rule 600ms var(--arrive) backwards; }
+    .end-card.pen .eg-line { animation: end-pen 800ms cubic-bezier(0.4, 0, 0.2, 1) 80ms backwards; }
+    .end-card.pen .eg-from { animation: end-pop 200ms var(--arrive) backwards; }
+    .end-card.pen .eg-now { animation: end-pop 240ms var(--arrive) 820ms backwards; }
+    .end-card.pen .end-score:has(#endScore[aria-busy]) .eg-now { animation: end-pop 240ms var(--arrive) 820ms backwards, end-wait 900ms ease-in-out 1100ms infinite alternate; }
+    .end-card.pen :is(.end-acts, .end-links) { animation: end-rise 220ms var(--arrive) 240ms backwards; }
+    /* the score lands (.landed; --land is the count's length, 0 for a drive with no score): the number settles with weight,
+       then /1000, the new fact, the words, and last the one ink key comes alive */
+    .end-card.landed #endScore { animation: end-thump 280ms var(--arrive) var(--land, 0ms); }
+    .end-card.landed .no-score #endScore { animation: end-rise 320ms var(--arrive) backwards; }
+    .end-card.landed .end-score small { animation: end-rise 240ms var(--arrive) var(--land, 0ms) backwards; }
+    .end-card.landed .end-score em:not([hidden]) { animation: ob-fade 320ms var(--arrive) var(--land, 0ms) backwards; }
+    .end-card.landed .end-meta .f.new { animation: end-rise 280ms var(--arrive) calc(var(--land, 0ms) + 80ms) backwards; }
+    .end-card.landed .end-line { animation: end-rise 320ms var(--arrive) calc(var(--land, 0ms) + 160ms) backwards; }
+    .end-card.landed #endShare { animation: end-ink 300ms ease-out calc(var(--land, 0ms) + 240ms) backwards; }
+    @media (prefers-reduced-motion: reduce) {
+      .end-card, .end-card *, .end-card *::before, .end-card *::after { animation: none !important; }
+      #endScore[aria-busy] { color: var(--panel-dim); } #endScore[aria-busy]::after { display: none; }
+    }
     /* the solid key is a row of its own from the first frame; under it Mark a stage, sharing the row with Drive it again once
        the drive is stored (it was two keys and an orphan). Nothing changes place when the score lands (U-118): Mark a stage
        only gives up its right half. */
     .end-acts > .solid:not([hidden]) { grid-column: 1 / -1; }
     .end-acts:not(:has(#endAgain:not([hidden]))) > #endStage { grid-column: 1 / -1; }
-    .end-score span { grid-column: 1 / -1; margin-top: 6px; font-size: 12px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; color: var(--panel-dim); }
-    .end-line { margin: 12px 0 0; font-size: 16px; line-height: 1.35; }
-    .end-acts { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 18px; }
+    .end-score span { grid-column: 1 / span 2; grid-row: 2; margin-top: 10px; font-size: 13px; font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase; color: var(--panel-dim); white-space: nowrap; }
+    .end-line { margin: 0; font-size: 16px; line-height: 1.35; }
+    .end-line:empty { display: none; }
+    .end-acts { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 8px; }
     .end-acts .ink-btn { min-height: 52px; }
+    .end-acts .ink-btn:not(.solid) { min-height: 48px; border: 1px solid var(--hair, var(--rule)); background: var(--face); color: var(--face-ink); font-weight: 700; }   /* one ink key; the other two are quiet */
     .end-acts a.ink-btn { display: flex; align-items: center; justify-content: center; text-decoration: none; }
     .end-acts [hidden], .end-links [hidden] { display: none; }
     /* U-88: the drive is the picture behind the card, so the map is dimmed one step, not blacked out */
@@ -866,10 +965,52 @@
     .end-portrait .rp-band svg { display: block; width: 100%; height: 100%; }
     #endCard > .card-sheet { position: relative; z-index: 1; }
     @media (prefers-reduced-motion: reduce) { .end-portrait .rp-road { transition: none; } }
-    .end-links { display: flex; justify-content: space-between; align-items: center; margin-top: 12px; }
+    .end-links { display: flex; justify-content: space-between; align-items: center; margin-top: 0; }
+    #endCard .end-links .linkbtn { text-decoration: none; font-weight: 700; }   /* quiet rows: the action is a word in ink */
     .end-links > * { margin: 0; padding: 0 4px; line-height: 1.2; min-height: 44px; display: inline-flex; align-items: center; }   /* the link and the key on one line, the same box */
+    /* ---------------- the first run (design pass "first and last") ----------------
+       One page that shows the app: the lockup comes from the middle of the screen, where the launch screen and the cover
+       drew it, to its place; a road is drawn across the paper (the brand mark at length: ink dot, line, arrowhead); the red
+       dot, you, drives it while the road book strip under it calls each corner (first_run.js, cockpit.js runOnboarding).
+       The two keys are there from the first frame and a touch anywhere ends the drawing (.ob-skip). Every animation is a
+       `from` with a backwards fill: the page at rest is the whole page, so reduced motion is a still, complete page. */
+    #onboard { --arrive: cubic-bezier(0.2, 0.8, 0.2, 1); padding-top: calc(28px + var(--safe-top)); }
+    body:has(#onboard.show) #boot { opacity: 0; pointer-events: none; transition: none; }   /* the welcome is the whole page: the cover has nothing left to hide */
+    #onboard .grow { display: flex; flex-direction: column; gap: 0; min-height: 0; }
+    #onboard .ob-mark { flex: none; display: block; width: 184px; height: 50px; max-width: 70%; }
+    #onboard h1 { margin-top: 22px; max-width: 10.5em; font-size: 34px; line-height: 1.04; }
+    #onboard .ob-sub { margin-top: 10px; font-size: 17px; }
     .ob-link { margin-top: 10px; font-weight: 600; } .ob-link[hidden] { display: none; }   /* P-1: the link that brought you waits */
-    .ob-strip { width: 100%; max-width: 420px; margin: 26px auto 0; border-top: 2px solid var(--panel-ink); border-bottom: 1px solid var(--rule); text-align: left; }
+    .ob-road { flex: 1 1 0; min-height: 110px; margin: 4px calc(-24px - var(--safe-right)) 4px calc(-24px - var(--safe-left)); }
+    .ob-road svg { display: block; width: 100%; height: 100%; overflow: visible; }
+    .ob-topo { fill: none; stroke: var(--hair, var(--rule)); stroke-width: 1; vector-effect: non-scaling-stroke; }
+    .ob-line { fill: none; stroke: var(--panel-ink); stroke-width: 4.5; stroke-linecap: round; stroke-linejoin: round; }
+    .ob-from, .ob-head { fill: var(--panel-ink); }
+    .ob-apex { fill: var(--panel); stroke: var(--panel-ink); stroke-width: 2; transition: fill 200ms ease-out; }
+    .ob-apex.on { fill: var(--panel-ink); }
+    .ob-you { fill: var(--accent); stroke: var(--panel); stroke-width: 2.5; transition: opacity 200ms ease-out; }
+    .ob-you.gone { opacity: 0; }
+    .ob-from, .ob-head, .ob-apex, .ob-you { transform-box: fill-box; transform-origin: center; }
+    #onboard .stack { margin-top: 22px; }
+    #onboard .linkbtn { text-decoration: none; font-weight: 700; }
+    @keyframes ob-home { from { transform: translate(var(--ob-dx, 0px), var(--ob-dy, 0px)); } }
+    @keyframes ob-rise { from { opacity: 0; transform: translateY(10px); } }
+    @keyframes ob-fade { from { opacity: 0; } }
+    @keyframes ob-pen { from { stroke-dasharray: 1; stroke-dashoffset: 1; } to { stroke-dasharray: 1; stroke-dashoffset: 0; } }
+    @keyframes ob-pop { from { opacity: 0; transform: scale(0.2); } }
+    #onboard.ob-go .ob-mark { animation: ob-home 520ms var(--arrive) backwards; }
+    #onboard.ob-go h1 { animation: ob-rise 420ms var(--arrive) 160ms backwards; }
+    #onboard.ob-go :is(.ob-sub, .ob-link) { animation: ob-rise 420ms var(--arrive) 260ms backwards; }
+    #onboard.ob-go .ob-strip { animation: ob-rise 420ms var(--arrive) 360ms backwards; }
+    #onboard.ob-go .ob-topo { animation: ob-fade 700ms ease-out 300ms backwards; }
+    #onboard.ob-go .ob-from { animation: ob-pop 220ms var(--arrive) 380ms backwards; }
+    #onboard.ob-go .ob-line { animation: ob-pen 1300ms cubic-bezier(0.45, 0, 0.2, 1) 440ms backwards; }
+    #onboard.ob-go .ob-apex { animation: ob-pop 220ms var(--arrive) calc(440ms + var(--at, 0.5) * 1300ms) backwards; }
+    #onboard.ob-go .ob-head { animation: ob-pop 220ms var(--arrive) 1680ms backwards; }
+    #onboard.ob-go .ob-you { animation: ob-pop 260ms var(--arrive) 1500ms backwards; }
+    #onboard.ob-skip, #onboard.ob-skip * { animation: none !important; }
+    @media (prefers-reduced-motion: reduce) { #onboard, #onboard * { animation: none !important; transition: none !important; } }
+    .ob-strip { width: 100%; max-width: 420px; margin: 0 auto; border-top: 2px solid var(--panel-ink); border-bottom: 1px solid var(--rule); text-align: left; }
     .ob-strip .notes { position: static; min-height: 84px; padding-left: 0; padding-right: 0; }
     .ob-strip .notes.notes-roadbook { height: 92px; padding-top: 6px; }   /* U-133: the welcome's loop holds still too */
     /* Night is a mode, not a token swap (REVIEW.md roadmap 11): bigger numbers, fewer things, the map quieter (themes.js) */
@@ -1097,6 +1238,34 @@
     .home-by .hb-label { font-size: 15px; font-weight: 700; color: var(--panel-ink); }
     .home-by .stepper > output { min-width: 112px; }
     .home-by .stepper > output.unk { color: var(--panel-dim); letter-spacing: 0.06em; }   /* no time set: unknown in pencil */
+    /* ---------------- the route card as a page (design pass, 2026-11-10, "Vetta Line") ---------------- */
+    /* The headline: the bar is the card's title, the route's name large in the number face. Folded down it is the same
+       line a size smaller with its three numbers under it and Start beside it: one object, open or folded. */
+    .plan.routed .plan-bar { padding-left: 14px; }
+    .plan.routed .plan-body { scroll-padding-bottom: 0; }   /* the card's foot is outside its scroll: nothing to clear (the Find bar's 80 px moved a tapped level card) */
+    /* paper laid on the map: a route's card lifts on a soft shadow and a hairline, not a ruled ink edge */
+    .plan.routed, [data-theme="roadbook"] .plan.routed { border-top: 1px solid var(--hair, var(--rule)); box-shadow: 0 -10px 28px rgba(0, 0, 0, 0.16); }
+    .route-bar span i { font-style: normal; font-weight: 700; color: var(--panel-ink); }
+    .route-bar b { font: 700 22px/1.05 var(--font-num); letter-spacing: 0.01em; }
+    .route-bar span { margin-top: 1px; font: 600 16px/1.15 var(--font-num); letter-spacing: 0.02em; font-variant-numeric: tabular-nums; color: var(--panel-dim); }
+    .plan.open.routed .route-bar b { font-size: 30px; font-weight: 800; line-height: 1; }
+    .plan.open.routed .route-bar span { display: none; }   /* the stat line right under it says the same, large */
+    .plan.open.routed .plan-bar { padding-top: 12px; padding-bottom: 2px; }
+    /* quiet groups under the choice: a small label, a hairline over it, rows inside */
+    .rc-group { margin-top: 18px; padding-top: 10px; border-top: 1px solid var(--hair, var(--rule)); }
+    .rc-h { margin: 0 0 4px; font: 700 13px/1.2 var(--font-ui); letter-spacing: 0.08em; text-transform: uppercase; color: var(--panel-dim); }
+    .rc-drive:not(:has(.fact:not([hidden]), .rc-story:not([hidden]))) { display: none; }   /* nothing known about the drive yet: no empty group */
+    .rc-group .rc-story { margin-top: 6px; }
+    .rc-group .rc-story > summary { font-size: 17px; font-weight: 600; }
+    .rc-group .rc-facts { gap: 0; margin-top: 6px; }
+    .rc-group .rc-facts .fact { padding: 9px 0; border-top: 1px solid var(--hair, var(--rule)); font-weight: 500; }
+    .rc-group .rc-dials { margin-top: 10px; }
+    .rc-with .rc-chips { margin: 8px 0 0; }
+    .rc-with .rc-chips .chip { border-width: 1px; border-color: var(--rule); }
+    #routeCard .rc-via { margin: 10px 0 0; font-size: 15px; line-height: 1.35; }
+    #routeCard .rc-links { margin-top: 18px; }
+    /* Start is the page's foot: the tabs under it already clear the home indicator */
+    .plan-foot { padding-bottom: 12px; border-top-color: var(--hair, var(--rule)); }
     .linkbtn { font: inherit; font-size: 15px; font-weight: 500; color: var(--panel-ink); text-decoration: underline; min-height: 44px; padding: 0 4px; background: none; border: none; }
     details.how { margin: 2px 0 6px; }
     details.how > summary { cursor: pointer; font-size: 14px; font-weight: 600; color: var(--panel-dim); min-height: 36px; display: flex; align-items: center; list-style: none; }
@@ -1181,7 +1350,9 @@
     .request-card p { margin: 0; font-size: 16px; } .request-card small { display: block; color: var(--panel-dim); font-size: 13px; margin-top: 2px; }
     #accountBody > .you-row { border-bottom: 1px solid var(--hair, var(--panel-dim)); margin-top: -8px; }
     #accountBody > .you-row + .friend-list { border-top: 0; }
-    .row.friend-keys { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; } .friend-keys .ink-btn, .friend-keys .ink-btn.solid { height: 44px; padding: 0 8px; }
+    .row.friend-keys { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+    .friend-keys > :last-child:nth-child(odd) { grid-column: 1 / -1; }   /* three keys: the third takes the row, not half of it beside a hole */
+    .friend-keys .ink-btn, .friend-keys .ink-btn.solid { height: 44px; padding: 0 8px; }
     #accountBody > .you-row .chev { transform: rotate(-45deg); }   /* it opens a page, it does not unfold */
     .nav-row.quiet { min-height: 44px; font-size: 14px; font-weight: 500; color: var(--panel-dim); border-top: 1px solid var(--hair, var(--panel-dim)); }
     .nav-row.quiet[aria-expanded="true"] { border-bottom: 0; } .nav-row.quiet[aria-expanded="true"] i { transform: rotate(45deg); }
@@ -1222,9 +1393,24 @@
     .overlay p { font-size: 15px; line-height: 1.45; color: var(--panel-dim); }
     .overlay .stack { display: grid; gap: 12px; margin-top: auto; }
     .overlay .grow { flex: 1; display: grid; align-content: center; gap: 16px; }
-    .perm { display: grid; grid-template-columns: 96px 1fr; gap: 4px 12px; font-size: 15px; border-top: 1px solid var(--hair, var(--panel-dim)); padding-top: 12px; }
-    .perm b { font-weight: 600; }
-    .perm span { color: var(--panel-dim); }
+    /* design pass "first and last": the page after the welcome, in its hand. The same title face, an ink rule, each thing a
+       drive uses as a row with a small pen drawing that draws on, and the red key with its dot, because this key is go. */
+    #permSheet > .card-sheet { gap: 0; padding-top: 26px; border-top: 1px solid var(--rule); box-shadow: 0 -14px 34px rgba(0, 0, 0, 0.2); }
+    #permSheet h2 { font-size: 34px; font-weight: 800; line-height: 1.04; }
+    .perm { display: grid; margin-top: 16px; border-top: 2px solid var(--panel-ink); }
+    .perm-row { display: grid; grid-template-columns: 40px minmax(0, 1fr); column-gap: 16px; align-items: center; padding: 11px 0; border-bottom: 1px solid var(--hair, var(--rule)); }
+    .perm-row[hidden] { display: none; }
+    .perm-row svg { grid-row: 1 / span 2; width: 40px; height: 40px; fill: none; stroke: var(--panel-ink); stroke-width: 2.5; stroke-linecap: round; stroke-linejoin: round; }
+    .perm-row svg .dot { fill: var(--panel-ink); stroke: none; }
+    .perm-row b { align-self: end; font: 700 20px/1.1 var(--font-num); }
+    .perm-row span { align-self: start; font-size: 15px; line-height: 1.35; color: var(--panel-dim); }
+    #permSheet #permNote { margin: 14px 0 18px; }
+    #permGo { width: 100%; }
+    #permGo.rec-key::before { content: ""; flex: none; width: 12px; height: 12px; border-radius: 50%; background: currentColor; }
+    #permNo { margin-top: 6px; justify-self: center; text-decoration: none; font-weight: 700; }
+    #permSheet.show .perm-row path { animation: ob-pen 700ms cubic-bezier(0.45, 0, 0.2, 1) calc(180ms + var(--i, 0) * 110ms) backwards; }
+    #permSheet.show .perm-row .dot { animation: ob-fade 200ms ease-out calc(700ms + var(--i, 0) * 110ms) backwards; }
+    @media (prefers-reduced-motion: reduce) { #permSheet.show .perm-row :is(path, .dot) { animation: none; } }
     /* Location off (the driver said no): the sheet is that, said once, and the way back; the list of what a drive uses is put away */
     #permSheet.loc-off .perm { display: none; }
     #permSheet.loc-off #permNote { font-size: 16px; line-height: 1.4; }
@@ -1307,6 +1493,11 @@
     .nav-group { margin: 0; padding: 22px 2px 8px; border-bottom: 1px solid var(--hair, var(--panel-dim)); font: 700 12px var(--font-ui); letter-spacing: 0.08em; text-transform: uppercase; color: var(--panel-dim); }
     .nav-group:first-child { padding-top: 6px; }
     .nav-group[hidden] { display: none; }
+    /* Crew settings (2026-11-10): the same small-caps names as the Settings list; a key that is a line of text starts at the left
+       like the rows around it (a grid stretched it and centred its words), and the parts sit closer than the sheet's 12 px */
+    .crew-settings .nav-group { padding: 10px 0 0; border-bottom: 0; } .crew-settings .linkbtn, .crew-settings .danger-btn { justify-self: start; }
+    .crew-settings p { margin: 0; } .crew-settings .row > .field { flex: 1 1 0; min-width: 0; }
+    .crew-settings p.note { font-size: 13px; color: var(--panel-dim); line-height: 1.45; }   /* as in the Garage's sheets */
     .nav-row.danger { color: var(--accent); }                       /* a row that removes something (Your data) */
     label.nav-row { cursor: pointer; } .nav-row:disabled { color: var(--panel-dim); }
     .data-rows { margin-top: 4px; }
@@ -1333,6 +1524,7 @@
     html[data-type-size] .switch > button { white-space: normal; text-overflow: clip; line-height: 1.15; padding: 4px; }
     /* the level cards one a row once the text is larger: the level, its time and its corners on one line */
     html[data-type-size] .rc-levels { grid-template-columns: minmax(0, 1fr); }
+    html[data-type-size] .rc-levels > button + button { margin-left: 0; margin-top: -1px; }   /* one a row: the hairlines shared top and bottom */
     html[data-type-size] .rc-levels > button { flex-direction: row; flex-wrap: wrap; align-items: baseline; column-gap: 12px; min-height: 52px; }
     html[data-type-size] .rc-way-art { align-self: center; width: 60px; flex: none; margin: 0; }
     html[data-type-size] .rc-lv { display: flex; flex-wrap: wrap; column-gap: 12px; align-items: baseline; }
@@ -1509,8 +1701,9 @@
       #onboard.show { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); column-gap: 32px; align-content: center; align-items: center; }   /* 1 */
       #onboard .grow { display: contents; }
       #onboard .grow > svg, #onboard h1, #onboard .grow > p { grid-column: 1; }
-      #onboard .ob-strip { grid-column: 2; grid-row: 1 / span 2; margin: 0; flex: none; }
-      #onboard .stack { grid-column: 2; margin-top: 12px; }
+      #onboard .ob-road { grid-column: 1; margin: 0; height: 96px; min-height: 0; }
+      #onboard .ob-strip { grid-column: 2; grid-row: 1 / span 3; margin: 0; flex: none; }
+      #onboard .stack { grid-column: 2; grid-row: 4 / span 2; margin-top: 12px; }
       #hzOverlay .hz-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }                                 /* 4 */
       #hzOverlay .hz-grid button { min-height: 56px; }
       .overlay.dim .card-sheet { max-height: 100dvh; overflow-y: auto; }
@@ -1518,6 +1711,25 @@
       #endCard .end-card > * { grid-column: 1; }
       #endCard .end-card > .end-line, #endCard .end-card > .end-acts, #endCard .end-card > .end-links { grid-column: 2; }
       #endCard .end-card > .end-line { grid-row: 1 / span 2; }
+      /* design pass "first and last": on its side the hero is shorter so the card and its keys fit the height */
+      #endCard > .card-sheet { padding-top: 14px; }
+      #endCard .end-card > .end-line { grid-row: 1 / span 4; align-self: start; }
+      #endCard .end-card:has(> .end-line:empty) > .end-acts { grid-row: 2 / span 2; align-self: start; margin-top: 0; }
+      #endCard .end-card:has(> .end-line:empty) > .end-links { grid-row: 4; align-self: start; }
+      .end-card h2 { font-size: 28px; }
+      .end-score { padding: 10px 0 8px; } .end-score b { font-size: 76px; } .end-glyph { width: 72px; height: 72px; } .end-glyph svg { width: 72px; height: 72px; }
+      .end-score.no-score b { font-size: 22px; }
+      .end-meta .f b { font-size: 22px; } .end-meta { padding-bottom: 8px; }
+      #permSheet > .card-sheet { padding-top: 14px; }
+      #permSheet h2 { font-size: 26px; }
+      .perm { grid-template-columns: repeat(2, minmax(0, 1fr)); column-gap: 20px; margin-top: 8px; }
+      .perm-row { padding: 6px 0; grid-template-columns: 28px minmax(0, 1fr); column-gap: 10px; }
+      .perm-row svg { width: 28px; height: 28px; }
+      .perm-row b { font-size: 17px; }
+      #permSheet #permNote { margin: 8px 0 10px; }
+      #permSheet .card-sheet { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); column-gap: 20px; }
+      #permSheet .card-sheet > :is(h2, .perm, #permNote) { grid-column: 1 / -1; }
+      #permNo { margin-top: 0; }
       html[data-theme="tapedeck"] .cluster-dials { grid-template-columns: var(--dial) minmax(0, 1fr); }        /* 6: the meters get a row */
       html[data-theme="tapedeck"] .cluster-dials > .dial-g { grid-column: 1 / -1; width: 100%; height: auto; aspect-ratio: auto; }
       html[data-theme="tapedeck"] .dial-g > .vfd-meters { grid-template-columns: 1fr 1fr; column-gap: 16px; }
@@ -1536,6 +1748,114 @@
       .confirm-sheet .cs-box { border: 1.5px solid var(--panel-ink); margin-bottom: 16px; }
       .plates, .place-plate, .hz-plate { left: calc(16px + var(--safe-left)); }                                  /* 21 */
     }
+
+    /* ---------------- The drive screen, "Vetta Line" (design pass 2026-11-10, docs/CALL_SHEET.md) ----------------
+       The map is the page; the strip and the instrument panel are paper laid on it (a soft warm lift, no black rule).
+       One hero readout: the speed, in Barlow Condensed, over a ruled line the speed is drawn along (instruments.js
+       mountLine, Roadbook's cluster). End is the one ink key; Report is a word. Motion only where a drive starts (the
+       paper arrives, the numeral counts in, the meter's rings are drawn, once) and where a call changes. */
+    /* 1. paper on the map (Roadbook; Tapedeck and Billet keep their own edges) */
+    [data-theme="roadbook"] #app > .notes { border-bottom: 0; box-shadow: 0 10px 22px -14px color-mix(in srgb, var(--rule) 55%, transparent), 0 1px 0 var(--hair); }
+    [data-theme="roadbook"] #app.live > .binnacle, [data-theme="roadbook"] #app.replaying > .binnacle { border-top: 0; border-left: 0;
+      box-shadow: 0 -10px 22px -14px color-mix(in srgb, var(--rule) 55%, transparent), 0 -1px 0 var(--hair); }
+    [data-theme="roadbook"][data-mode="night"] #app > .notes, [data-theme="roadbook"][data-mode="night"] #app.live > .binnacle, [data-theme="roadbook"][data-mode="night"] #app.replaying > .binnacle { box-shadow: 0 0 0 1px var(--hair); }
+    #app.live > .binnacle, #app.replaying > .binnacle { padding-top: 8px; gap: 0; }
+    /* 2. the drive bar: what the drive is doing, said once; Report a quiet word; End the one key */
+    #app .drivebar { padding: 0 6px 8px; gap: 2px; border-bottom: 1px solid var(--hair); min-height: 60px; }
+    #app .drivebar .ds-main { font-size: 17px; }
+    #app #hzReportBtn { height: 52px; padding: 0 12px; border: 0; background: none; box-shadow: none; font-size: 15px; font-weight: 600; color: var(--panel-ink); }
+    #app #driveEnd { height: 52px; min-width: 76px; margin-left: 4px; font-size: 17px; font-weight: 700; }
+    /* seeking (Finding GPS…, Starting…): pencil, an open ring, and a short stroke of ink searching along a hairline; the
+       moment a sample is kept the line is the record line, in ink, and holds still */
+    #driveBar[data-state="seek"] .ds-main { position: relative; width: fit-content; max-width: 100%; padding-bottom: 7px; color: var(--panel-dim); }
+    #driveBar[data-state="seek"] .ds-main::before { content: ""; display: inline-block; width: 10px; height: 10px; margin-right: 9px; border: 2px solid var(--panel-dim); border-radius: 50%; }
+    #driveBar[data-state="seek"] .ds-main::after { content: ""; position: absolute; left: 0; right: 0; bottom: 0; height: 2px;
+      background: linear-gradient(var(--panel-ink), var(--panel-ink)) 0 0 / 30% 100% no-repeat var(--hair); animation: hud-seek 1.8s cubic-bezier(0.45, 0, 0.55, 1) infinite alternate; }
+    @keyframes hud-seek { from { background-position: 0 0; } to { background-position: 100% 0; } }
+    #driveBar[data-state="off"] .ds-main, #driveBar[data-state="zone"] .ds-main { color: var(--panel-ink); }
+    #app .transport { padding: 0 6px 10px; border-bottom: 1px solid var(--hair); }
+    /* the replay's transport in the same hand: the trace bare on the paper, the speeds as numerals with the chosen one
+       underlined in ink, Video a word; Done is the one key. The replay's name is a paper tag on the map. */
+    [data-theme="roadbook"] .transport .scrubber { border: 0; height: 34px; }
+    [data-theme="roadbook"] .transport .detents.tp-rate > button { border: 0; background: none; color: var(--panel-dim); font-size: 20px; }
+    [data-theme="roadbook"] .transport .detents.tp-rate > button::after { display: none; }
+    [data-theme="roadbook"] .transport .detents.tp-rate > [aria-checked="true"] { color: var(--panel-ink); box-shadow: inset 0 -3px 0 var(--panel-ink); }
+    [data-theme="roadbook"] .transport #videoBtn { border: 0; box-shadow: none; padding: 0 6px; }
+    [data-theme="roadbook"] .transport #videoBtn.on { color: var(--accent); }
+    [data-theme="roadbook"] .transport > #replayDone { min-height: 52px; min-width: 76px; font-size: 17px; font-weight: 700; box-shadow: none; }
+    [data-theme="roadbook"] #app.replaying #modePlate { border: 0; padding: 10px 14px; font-size: 15px; box-shadow: 0 6px 18px -8px color-mix(in srgb, var(--rule) 60%, transparent), 0 0 0 1px var(--hair); }
+    /* 3. the Vetta Line cluster */
+    .cluster-line { display: grid; grid-template-columns: minmax(0, 1fr) auto 82px; grid-template-areas: "speed read g" "rule rule rule" "ledger ledger ledger";
+      column-gap: 14px; align-items: end; padding: 10px 6px 0; width: 100%; max-width: 560px; margin: 0 auto; }
+    .cluster-line > * { min-width: 0; }
+    .cluster-line > .dial.dial-speed { grid-area: speed; width: 100%; max-width: 172px; height: auto; aspect-ratio: 150 / 100; }
+    .cluster-line .line-svg { overflow: visible; }
+    .cluster-line .dial-speed .dial-digital, html[data-mode="night"] .cluster-line .dial-speed .dial-digital:not(.small) { font-size: 104px; font-weight: 700; letter-spacing: -1px; fill: var(--panel-ink); filter: none; }
+    .cluster-line .dial-speed .dial-digital.unk { fill: var(--panel-dim); }
+    .cluster-line .dial-speed .dial-label { font-size: 16px; font-weight: 700; letter-spacing: 1.5px; fill: var(--panel-dim); }
+    .cluster-line > .cluster-center { grid-area: read; align-self: center; display: block; }
+    .cluster-line .readouts { grid-template-columns: 44px auto; gap: 12px; width: auto; align-items: center; }
+    .cluster-line .ro.ro-sight { min-width: 58px; padding: 4px 6px; border: 0; justify-items: start; gap: 3px; }
+    .cluster-line .ro.ro-sight b, html[data-mode="night"] .cluster-line .ro.ro-sight b { font-size: 26px; line-height: 1; }
+    .cluster-line .ro-eye { width: 15px; height: 15px; }
+    .cluster-line > .dial.dial-g { grid-area: g; display: block; width: 82px; height: auto; }
+    .cluster-line .dial.dial-g > svg.g-line { display: block; flex: none; width: 100%; height: auto; overflow: visible; }
+    .cluster-line .g-line .dial-label { font-size: 32px; letter-spacing: 3px; fill: var(--panel-dim); }
+    .cluster-line .g-line .dial-digital.small, html[data-mode="night"] .cluster-line .g-line .dial-digital.small { font-size: 34px; font-weight: 700; fill: var(--panel-ink); }
+    .cluster-line .g-line .dial-digital.small.unk { fill: var(--panel-dim); }
+    .cluster-line .g-ring { animation: hud-ring 800ms cubic-bezier(0.2, 0.8, 0.2, 1) 260ms backwards; }
+    @keyframes hud-ring { from { stroke-dasharray: var(--len); stroke-dashoffset: var(--len); } to { stroke-dasharray: var(--len); stroke-dashoffset: 0; } }
+    /* the line: a ruler the width of the panel; the speed in ink along it, the limit, pace and sight marks standing on it */
+    .cluster-line > .speed-line { grid-area: rule; height: 34px; margin-top: 8px; padding: 0 6px; }
+    .speed-line-svg { display: block; }
+    .sl-base, .sl-tick { stroke: var(--panel-dim); stroke-width: 1; } .sl-tick.major { stroke: var(--panel-ink); stroke-width: 1.5; }
+    .sl-num { font: 600 13px var(--font-num); fill: var(--panel-dim); }
+    .sl-fill { stroke: var(--panel-ink); stroke-width: 5; }
+    .sl-tip circle { fill: var(--panel-ink); stroke: var(--panel); stroke-width: 1.5; } .sl-tip.over circle { fill: var(--signal); }
+    .sl-limit rect { fill: var(--face); stroke: var(--panel-ink); stroke-width: 1.5; }
+    .sl-pace path { fill: var(--panel-ink); }
+    .sl-sight path { fill: none; stroke: var(--amber); stroke-width: 2; }
+    /* the ledger: the trip, the road and the Score, one quiet line under the ruler */
+    .cluster-line > .ledger { grid-area: ledger; display: flex; align-items: center; gap: 4px 18px; min-height: 46px; margin-top: 6px; border-top: 1px solid var(--hair); }
+    .cluster-line .odo { display: flex; align-items: baseline; gap: 6px; flex: none; }
+    .cluster-line .odo-meta { display: contents; font-size: 13px; font-weight: 600; color: var(--panel-dim); }
+    .cluster-line .odo-meta > span { font-size: 13px; font-weight: 600; color: var(--panel-dim); white-space: nowrap; } .cluster-line .odo-meta > span:first-child { order: -1; } .cluster-line .odo-meta > span:empty { display: none; }
+    .cluster-line .odo-digits { font-size: 22px; gap: 0; } .cluster-line .odo-digits .lead { color: var(--panel-dim); opacity: 0.55; }
+    .cluster-line .ledger > .dna-arch { flex: 1 1 0; min-width: 0; text-align: left; font-size: 15px; font-weight: 600; line-height: 1.15; white-space: normal; overflow-wrap: break-word; }
+    .cluster-line .ledger > .g-score { flex: none; margin: 0 0 0 auto; display: flex; flex-direction: row-reverse; align-items: baseline; gap: 8px; min-height: 44px; }
+    .cluster-line .ledger > .g-score b { font-size: 26px; line-height: 44px; } .cluster-line .ledger > .g-score.unk b { color: var(--panel-dim); } .cluster-line .ledger > .g-score span { font-size: 13px; }
+    html[data-mode="night"] #cluster.cluster-line:not(.show-trip) .trip-peek { padding: 0; min-width: 44px; text-align: left; }
+    @media (orientation: landscape) and (max-height: 540px), (max-width: 359px) {
+      /* a narrow column (a phone on its side, a small phone): the numeral keeps its size; the meter moves down beside the ledger */
+      .cluster-line { grid-template-columns: 80px minmax(0, 1fr) auto; grid-template-areas: "speed speed read" "rule rule rule" "g ledger ledger"; }
+      #app .drivebar .ds-main { font-size: 15px; }
+      .cluster-line > .dial.dial-speed { max-width: 150px; }
+      .cluster-line > .dial.dial-g { width: 80px; margin-top: 8px; align-self: start; }
+      .cluster-line > .ledger { flex-direction: column; align-items: flex-start; justify-content: center; align-self: stretch; gap: 2px; border-top: 0; margin: 8px 0 0 4px; }
+      .cluster-line .ledger > .dna-arch { flex: none; width: 100%; }
+      .cluster-line .ledger > .g-score { margin: 0; min-height: 0; } .cluster-line .ledger > .g-score b { line-height: 1.2; }
+    }
+    /* 4. the start: the strip and the panel arrive as paper on one curve, once; then stillness */
+    @keyframes hud-rise { from { transform: translateY(100%); } }
+    @keyframes hud-drop { from { transform: translateY(-100%); } }
+    @keyframes hud-side { from { transform: translateX(100%); } }
+    #app.live > .binnacle, #app.replaying > .binnacle { animation: hud-rise 420ms cubic-bezier(0.2, 0.8, 0.2, 1) backwards; }
+    #app.live > .notes, #app.replaying > .notes { animation: hud-drop 420ms cubic-bezier(0.2, 0.8, 0.2, 1) backwards; }
+    @media (orientation: landscape) and (max-height: 540px) {
+      #app.live > .binnacle, #app.replaying > .binnacle { animation-name: hud-side; }
+      [data-theme="roadbook"] #app.live > .binnacle, [data-theme="roadbook"] #app.replaying > .binnacle { box-shadow: -10px 0 22px -14px color-mix(in srgb, var(--rule) 55%, transparent), -1px 0 0 var(--hair); }
+      [data-theme="roadbook"][data-mode="night"] #app.live > .binnacle, [data-theme="roadbook"][data-mode="night"] #app.replaying > .binnacle { box-shadow: 0 0 0 1px var(--hair); }
+      #app.live > .binnacle, #app.replaying > .binnacle { padding-top: 6px; }
+    }
+    /* 5. a call arrives: its words settle up into place and the pen draws its tulip (instruments.js ADVANCE_MS) */
+    .rb-box.advance { animation: rb-advance 420ms cubic-bezier(0.2, 0.8, 0.2, 1) both; }
+    @keyframes rb-advance { from { transform: translateY(10px); opacity: 0.3; } to { transform: none; opacity: 1; } }
+    .rb-box.now.advance .tulip .pen { animation: hud-pen 420ms cubic-bezier(0.2, 0.8, 0.2, 1) var(--adv, 0ms) backwards; }
+    .rb-box.now.advance .tulip polygon { animation: hud-head 420ms linear var(--adv, 0ms) backwards; }
+    @keyframes hud-pen { from { stroke-dasharray: 1; stroke-dashoffset: 1; } to { stroke-dasharray: 1; stroke-dashoffset: 0; } }
+    /* the welcome calls a corner every 1.8 s and settles between calls (e2e "first run and the end card"): its strip keeps the 160 ms slide */
+    #onboard .rb-box.advance, #onboard .rb-box.now.advance .tulip .pen, #onboard .rb-box.now.advance .tulip polygon { animation-duration: 160ms; }
+    @keyframes hud-head { from, 70% { opacity: 0; } }
 
     /* The opening cover (web/boot.js): the theme's panel and the mark until the page has drawn. */
     #boot { position: fixed; inset: 0; z-index: 10000; display: grid; place-items: center; background: var(--panel, #151310); transition: opacity 0.2s ease-out; }
@@ -1620,20 +1940,24 @@
                 <summary>Time attack this week: one stage, quickest time</summary>
                 <div id="planAttackBody"></div>
               </details>
+              <!-- Roadbooks (roadbooks.js): public collections of great roads near you, a planning input like the spots -->
+              <details class="plan-more" id="planBooks" hidden>
+                <summary>Roadbooks near you: great roads, collected</summary>
+                <div id="planBooksBody"></div>
+              </details>
               <!-- finding 3: the main key follows the task: Find a loop with nothing typed, Go to the place once you type -->
               <div class="find-bar"><button class="find-key" id="findLoopBtn">Find a loop</button><button class="find-key" id="findGoBtn" hidden>Search</button></div>
             </section>
             <section id="routeCard" hidden>
               <h3 id="routeCardName"></h3>
+              <!-- The card as a page (design pass, 2026-11-10): the headline is the bar above (the route's name) and this stat line,
+                   time, distance, corners; then the profile, the card's one graphic, with the apex dot where you are on it; then the
+                   one choice (the level cards, or a loop's length and ways); everything else in quiet groups under it. -->
+              <div class="rc-stats" id="routeCardStats"></div>
+              <!-- finding 2: the profile's room is kept before it loads, so nothing under it jumps -->
+              <div class="rc-profile-box" id="routeCardProfile"></div>
               <!-- finding 1: the plan's progress, then what the ranking did ("Better route found: +8 min, 52 more corners") -->
               <p class="rc-progress" id="routeProgress" role="status" aria-live="polite"></p>
-              <!-- finding 5: what is on, as small chips; any of them opens Options -->
-              <div class="plan-chips rc-chips" id="routeCardChips" role="group" aria-label="Options on this route">
-                <button class="chip opt-chip" id="cardOptionsChip" aria-haspopup="dialog">Options</button>
-                <span class="opt-on" id="cardOptsOn"></span>
-                <!-- planned with Route tuning's settings (route_tuning.js): says so, so a surprising route is explainable -->
-                <button class="chip tune-chip" id="cardTuneChip" hidden>Your tuning</button>
-              </div>
               <!-- finding 6: a loop's length, in your units, on its card -->
               <div class="rc-loop" id="routeCardLoop" role="group" aria-label="Loop length" hidden><span class="rc-loop-label">Length</span><div class="detents" id="cardLoopDetents"></div></div>
               <div class="rc-levels rc-ways" id="routeCardWays" role="radiogroup" aria-label="Which way the loop heads" hidden></div>
@@ -1646,11 +1970,9 @@
               <p class="note rc-via" id="routeCardWhy" hidden></p>
               <!-- There and back (graph_router.js roundTrip): the trip home again by other road, the destination a stop -->
               <button type="button" class="ink-btn rc-round" id="routeRoundBtn" hidden>There and back, home another way</button>
-              <div class="rc-stats" id="routeCardStats"></div>
-              <!-- finding 2: the profile's room is kept before it loads, so nothing under it jumps -->
-              <div class="rc-profile-box" id="routeCardProfile"></div>
               <p class="route-meta" id="routeCardMeta" hidden></p>
               <!-- What this drive is like (route_story.js, the owner 2026-11-09): its first line in view, the rest a tap away -->
+              <div class="rc-group rc-drive"><h4 class="rc-h">This drive</h4>
               <details class="rc-story" id="routeCardStory" hidden><summary id="routeCardStoryLead"></summary><div id="routeCardStoryMore"></div></details>
               <div class="rc-facts">
                 <p class="fact f-along" id="routeCardAlong" hidden></p>
@@ -1658,10 +1980,30 @@
                 <p class="fact f-ahead" id="routeCardCharacter" hidden></p>
                 <p class="fact f-sky" id="routeCardWeather" hidden></p>
                 <p class="fact f-closed" id="routeCardClosures" hidden></p>
+                <!-- When to go (when_to_go.js): the best hour to drive this route, a tap opens the next day by the half hour -->
+                <p class="fact f-when" id="routeCardWhen" hidden><button type="button" class="when-line" id="routeWhenLine" aria-expanded="false" aria-controls="routeWhenPanel"></button></p>
+              </div>
+              <div class="rc-when" id="routeWhenPanel" hidden>
+                <div class="when-ribbon" id="routeWhenRibbon" role="listbox" aria-label="When to leave, the next 24 hours"></div>
+                <div class="when-axis" id="routeWhenAxis" aria-hidden="true"></div>
+                <p class="when-detail" id="routeWhenDetail" role="status" aria-live="polite"></p>
+                <div class="when-keys"><button type="button" class="ink-btn" id="routeWhenPlan"></button><button type="button" class="linkbtn" id="routeWhenNow" hidden>Leave now</button></div>
+              </div>
               </div>
               <div class="stack-8" id="routeStops" hidden></div>
+              <div class="rc-group"><h4 class="rc-h">The road</h4>
               <div class="rc-dials" id="routeCardBars"></div>
               <p class="note" id="routeCardSub"></p>
+              </div>
+              <!-- finding 5: what is on, as small chips; any of them opens Options -->
+              <div class="rc-group rc-with"><h4 class="rc-h">Planned with</h4>
+              <div class="plan-chips rc-chips" id="routeCardChips" role="group" aria-label="Options on this route">
+                <button class="chip opt-chip" id="cardOptionsChip" aria-haspopup="dialog">Options</button>
+                <span class="opt-on" id="cardOptsOn"></span>
+                <!-- planned with Route tuning's settings (route_tuning.js): says so, so a surprising route is explainable -->
+                <button class="chip tune-chip" id="cardTuneChip" hidden>Your tuning</button>
+              </div>
+              </div>
               <div class="rc-links">
                 <button class="linkbtn" id="routeSaveBtn" aria-pressed="false">Save</button>
                 <button class="linkbtn" id="routeShareBtn">Share</button>
@@ -1847,9 +2189,23 @@
                 <button data-pack="look" role="radio">Suggested</button><button data-pack="marguerite" role="radio">Marguerite</button><button data-pack="kit" role="radio">Kit</button><button data-pack="hale" role="radio">Hale</button>
               </div></div>
             <p class="note" id="packNote" role="status" aria-live="polite"></p>
+            <!-- Night is the look's (it turns the page over), so it sits with the looks; it was under Co-driver (2026-11-10) -->
+            <div class="ctl"><p class="ctl-label">Night</p>
+              <div class="switch" id="nightSwitch" role="radiogroup" aria-label="Night">
+                <button data-night="auto" role="radio">Auto</button><button data-night="off" role="radio">Day</button><button data-night="on" role="radio">Night</button>
+              </div></div>
+            <p class="note">Auto turns the page over after sunset.</p>
           </section>
-          <section data-panel="garage">
+          <!-- One block for the co-driver (2026-11-10; it was two, Co-driver and The words, and the second began by pointing
+               back up the page): how it speaks, then what else it does. Its voice stays with the looks, which suggest it. -->
+          <section data-panel="garage" id="coSection">
             <h3>Co-driver</h3>
+            <div class="ctl"><p class="ctl-label">The words</p>
+              <div class="switch" id="noteWordsList" role="group" aria-label="Note words">
+                <button data-words="plain">Plain words</button>
+                <button data-words="rally">Rally notes</button>
+              </div></div>
+            <p class="note" id="noteWordsNote"></p>
             <!-- SO-1 (panel round 2): one setting, one home. Notes and Voice live in the map's Layers, where a drive reaches them -->
             <!-- design pass 2026-11-10: a row like the ones under it (what it is now on the left, where to change it on the right); the
                  sentence broke over two lines with the link dropped under its own full stop -->
@@ -1857,23 +2213,14 @@
             <div class="switches">
               <button class="sw" data-toggle="haptics"><i></i><span>Haptics</span></button>
               <button class="sw" data-toggle="keys"><i></i><span>Key sounds</span></button>
+              <button class="sw" data-toggle="soundtrack"><i></i><span>Soundtrack</span></button>
             </div>
-            <div class="ctl"><p class="ctl-label">Night</p>
-              <div class="switch" id="nightSwitch" role="radiogroup" aria-label="Night">
-                <button data-night="auto" role="radio">Auto</button><button data-night="off" role="radio">Day</button><button data-night="on" role="radio">Night</button>
-              </div></div>
-            <p class="note">Notes: Full calls every corner; Quiet only hazards and cameras; Auto calls corners once you are cornering with some purpose, quiet otherwise. Night: Auto turns the page over after sunset.</p>
-          </section>
-          <section data-panel="garage">
-            <h3>The words</h3>
-            <p class="note" style="margin:0 0 8px">Your co-driver's voice is chosen under Look and voice, above. Works offline.</p>
-            <div class="switch mt-8" id="noteWordsList" role="group" aria-label="Note words">
-              <button data-words="plain">Plain words</button>
-              <button data-words="rally">Rally notes</button>
-            </div>
-            <p class="note" id="noteWordsNote"></p>
-            <button class="sw mt-8" id="liveVoiceBtn" role="switch" aria-checked="false"><i></i><span>Speak road names</span></button>
+            <!-- the Soundtrack (soundtrack.js, audio_bus.js; ARCHITECTURE section 5): off until asked for; what it follows, said plainly -->
+            <p class="co-row" id="soundtrackRow"><span>Music made by the road, in a drive.</span><button class="linkbtn" id="soundtrackHear">Hear a sample</button></p>
+            <p class="note" id="soundtrackNote">Soundtrack: it builds into each corner, fills out as the road gets busier and settles on the straights. It follows the road, never your speed. It steps back under the co-driver's voice, and thins out when you are over Sight.</p>
+            <button class="sw" id="liveVoiceBtn" role="switch" aria-checked="false"><i></i><span>Speak road names</span></button>
             <p class="note" id="liveNote" role="status" aria-live="polite"></p>
+            <p class="note">Notes: Full calls every corner; Quiet only hazards and cameras; Auto calls corners once you are cornering with some purpose, quiet otherwise. The words and the voice work offline.</p>
           </section>
           <!-- dev mode (the owner, 2026-11-09): filled only while /api/me says this account is a developer (cockpit.js
                paintDevRow), so for everyone else the row is empty and not offered (data-empty-hides) -->
@@ -1918,9 +2265,10 @@
         <div class="card-sheet end-card">
           <p class="end-kicker">Drive saved</p>
           <h2 id="endName">--</h2>
+          <div class="end-score"><b id="endScore">--</b><small>/1000</small><span>Vetta Score</span><em id="endUsual" hidden></em><i class="end-glyph" id="endGlyph" aria-hidden="true"></i></div>
           <p class="end-meta" id="endMeta"></p>
-          <div class="end-score"><b id="endScore">--</b><small>/1000</small><span>Vetta Score</span><em id="endUsual" hidden></em></div>
           <p class="end-feel" id="endFeel" hidden></p>   <!-- panel round 2, HE-1: what this phone felt, only when measured -->
+          <p class="end-feel" id="endPractice" hidden></p>   <!-- IDEAS D-27: the skill you are practicing, on this drive -->
           <p class="end-line" id="endLine"></p>
           <!-- U-75: the solid key is Share card only when there is a score to share; otherwise it is Open in the Log, and Share
                waits as a link -->
@@ -1973,7 +2321,7 @@
     </section>
 
     <section class="binnacle" id="binnacle">
-      <div class="drivebar" id="driveBar" hidden>
+      <div class="drivebar" id="driveBar" data-state="seek" hidden>
         <div class="dbstat" id="driveStat"><div class="ds-main" id="dsMain">Finding GPS…</div><div class="ds-note" id="dsNote" role="status" aria-live="polite" hidden></div><div class="ds-warn" id="dsWarn" role="status" aria-live="polite" hidden></div></div>
         <button class="key" id="hzReportBtn" aria-label="Report a hazard">Report</button>
         <button class="key" id="driveEnd" aria-label="End drive">End</button>
@@ -2015,7 +2363,7 @@
 
   <div class="overlay" id="onboard" role="dialog" aria-modal="true" aria-label="Welcome to Vetta">
     <div class="grow" data-step="1">
-      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 372 100" width="184" height="50" style="max-width:70%;height:auto" role="img" aria-label="Vetta">
+      <svg class="ob-mark" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 372 100" width="184" height="50" role="img" aria-label="Vetta">
         <style>.apex{fill:var(--brand-accent,var(--accent,#C8102E))}</style>
         <defs><clipPath id="cap"><rect x="0" y="26" width="372" height="48"/></clipPath></defs>
         <circle cx="34" cy="84" r="8" fill="currentColor"/>
@@ -2031,9 +2379,28 @@
         </g>
       </svg>
       <h1>Your co-driver for the long way home.</h1>
-      <p>Calls every corner before you reach it.</p>
+      <p class="ob-sub">Calls every corner before you reach it.</p>
       <p class="ob-link" id="obLink" hidden></p>
-      <!-- the product in one look (REVIEW.md 1.2, Onboarding 1): the road book calling a real road's corners, silent -->
+      <!-- the product in one look (REVIEW.md 1.2, Onboarding 1): a road drawn on the paper, its five corners marked in the
+           order the strip under it calls them (left, right, crest, tight left, long right), and the red dot driving it -->
+      <div class="ob-road" aria-hidden="true">
+        <svg viewBox="0 0 400 240" preserveAspectRatio="xMidYMid meet">
+          <g class="ob-topo">
+            <ellipse cx="92" cy="78" rx="74" ry="46" transform="rotate(-10 92 78)"/><ellipse cx="96" cy="76" rx="48" ry="28" transform="rotate(-10 96 76)"/><ellipse cx="100" cy="75" rx="22" ry="12" transform="rotate(-10 100 75)"/>
+            <ellipse cx="328" cy="180" rx="66" ry="44" transform="rotate(8 328 180)"/><ellipse cx="324" cy="178" rx="42" ry="26" transform="rotate(8 324 178)"/><ellipse cx="320" cy="177" rx="18" ry="10" transform="rotate(8 320 177)"/>
+            <ellipse cx="236" cy="113" rx="34" ry="16"/><ellipse cx="240" cy="113" rx="15" ry="6"/>
+          </g>
+          <path class="ob-line" pathLength="1" d="M28 216 C66 216 96 210 108 180 C118 154 140 142 172 142 C190 142 206 142 226 142 C282 142 300 84 244 84 C196 84 190 34 250 30 C296 27 330 40 364 26"/>
+          <circle class="ob-from" cx="28" cy="216" r="7"/>
+          <path class="ob-head" d="M377 20.6 L366.2 34 L360 18.8 Z"/>
+          <circle class="ob-apex" style="--at:0.13" cx="94" cy="200" r="5"/>
+          <circle class="ob-apex" style="--at:0.24" cx="125.6" cy="155.4" r="5"/>
+          <circle class="ob-apex" style="--at:0.37" cx="200" cy="142" r="5"/>
+          <circle class="ob-apex" style="--at:0.52" cx="277" cy="113" r="5"/>
+          <circle class="ob-apex" style="--at:0.72" cx="206.5" cy="58.5" r="5"/>
+          <circle class="ob-you" cx="28" cy="216" r="7"/>
+        </svg>
+      </div>
       <div class="ob-strip" aria-hidden="true"><div class="notes" id="obNotes"></div></div>
     </div>
     <div class="stack">
@@ -2044,9 +2411,14 @@
   <div class="overlay dim" id="permSheet" role="dialog" aria-modal="true" aria-label="Before your first drive">
     <div class="card-sheet">
       <h2 id="permTitle">Before your first drive</h2>
-      <div class="perm"><b>Location</b><span id="permLoc">to call corners ahead</span><b>Motion</b><span id="permMot">to feel bumps and surface</span><b>Screen on</b><span>while you drive</span><b class="mount-row" hidden>Mount</b><span class="mount-row" hidden>in a holder, any way up. It sets itself up in the first minute of driving.</span></div>
+      <div class="perm">
+        <div class="perm-row" style="--i:0"><svg viewBox="0 0 40 40" aria-hidden="true"><path pathLength="1" d="M8 34 V22 Q8 9 21 8 H33"/><circle class="dot" cx="20" cy="21" r="3.4"/></svg><b>Location</b><span id="permLoc">to call corners ahead</span></div>
+        <div class="perm-row" style="--i:1"><svg viewBox="0 0 40 40" aria-hidden="true"><path pathLength="1" d="M4 24 H11 L15 12 L21 32 L26 18 L29 24 H36"/></svg><b>Motion</b><span id="permMot">to feel bumps and surface</span></div>
+        <div class="perm-row" style="--i:2"><svg viewBox="0 0 40 40" aria-hidden="true"><path pathLength="1" d="M12 6 H26 V34 H12 Z M17 29 H21 M31 13 L35 11 M32 20 H36 M31 27 L35 29"/></svg><b>Screen on</b><span>while you drive</span></div>
+        <div class="perm-row mount-row" style="--i:3" hidden><svg viewBox="0 0 40 40" aria-hidden="true"><path pathLength="1" d="M14 4 H26 V26 H14 Z M8 21 V32 H32 V21 M20 32 V37"/></svg><b>Mount</b><span>in a holder, any way up. It sets itself up in the first minute of driving.</span></div>
+      </div>
       <p id="permNote">Your drive stays on this phone.</p>
-      <button class="ink-btn solid" id="permGo">Allow and start</button>
+      <button class="rec-key" id="permGo">Allow and start</button>
       <button class="linkbtn" id="permNo">Not now</button>
     </div>
   </div>

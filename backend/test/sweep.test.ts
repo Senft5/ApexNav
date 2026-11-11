@@ -20,6 +20,10 @@ async function seed() {
     env.DB.prepare(`INSERT INTO invites (token_hash, created_by, expires_at, used_by, used_at) VALUES ('i-used', ?, ${past}, ?, datetime('now', '-2 days'))`).bind(a.id, b.id),
     env.DB.prepare("INSERT INTO crews (id, name, owner) VALUES (?, 'Crew', ?)").bind(crew, a.id),
     env.DB.prepare(`INSERT INTO crew_invites (token_hash, crew_id, created_by, expires_at) VALUES ('ci-old', ?, ?, ${past}), ('ci-new', ?, ?, ${future})`).bind(crew, a.id, crew, a.id),
+    // A duel long over goes; one accepted late (created long ago, still running) stays.
+    env.DB.prepare(`INSERT INTO duels (id, challenger, opponent, canon_id, stage, days, status, starts_on, ends_on, created_at) VALUES
+      ('d-old', ?, ?, 'seg', 'Stage', 7, 'on', date('now','-90 days'), date('now','-84 days'), datetime('now','-91 days')),
+      ('d-late', ?, ?, 'seg', 'Stage', 14, 'on', date('now','-2 days'), date('now','+11 days'), datetime('now','-61 days'))`).bind(a.id, b.id, a.id, b.id),
   ]);
   return { a, b };
 }
@@ -38,7 +42,8 @@ describe("daily sweep", () => {
     expect((await env.DB.prepare("SELECT token_hash FROM invites ORDER BY token_hash").all()).results.map((r) => r.token_hash)).toEqual(["i-new", "i-used"]);
     expect((await env.DB.prepare("SELECT token_hash FROM crew_invites").all()).results).toEqual([{ token_hash: "ci-new" }]);
     const line = JSON.parse(log.mock.calls.map((c) => c[0] as string).find((l) => l.includes('"sweep"'))!);
-    expect(line).toEqual({ event: "sweep", deleted: { sessions: 1, app_auth_codes: 1, invites: 1, crew_invites: 1, hazard_reports: 0, shared_routes: 0, crew_event_rsvps: 0, crew_event_attendance: 0, crew_events: 0, health_counts: 0, eta_shares: 0, feedback: 0, kudos: 0, route_stats: 0, crew_chat: 0, presence_samples: 0, build_chat: 0, ta_entries: 0, ta_weeks: 0 } });
+    expect(line).toEqual({ event: "sweep", deleted: { sessions: 1, app_auth_codes: 1, invites: 1, crew_invites: 1, hazard_reports: 0, shared_routes: 0, crew_event_rsvps: 0, crew_event_attendance: 0, crew_events: 0, health_counts: 0, eta_shares: 0, feedback: 0, kudos: 0, route_stats: 0, crew_chat: 0, presence_samples: 0, build_chat: 0, ta_entries: 0, ta_weeks: 0, duels: 1 } });
+    expect((await env.DB.prepare("SELECT id FROM duels").all()).results).toEqual([{ id: "d-late" }]);
     log.mockRestore();
   });
 

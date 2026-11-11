@@ -12,6 +12,8 @@ import { sweepExpired } from "./sweep";
 import { appleSignIn } from "./apple";
 import { crewHazardKinds, hazardsNear, reportHazard, voteHazard } from "./hazards";
 import { routeDelete, routeGet, routesSharedWithMe, shareRoute } from "./routes_shared";
+import { bookCreate, bookDelete, bookFollow, bookGet, bookUpdate, booksMine, booksNear, roadAdd, roadRemove, roadStamp, roadUpdate } from "./roadbooks";
+import { duelAccept, duelCreate, duelEnd, duelList } from "./duels";
 
 const BACKUP_CRON = "0 7 * * 1";   // wrangler.jsonc triggers; the other cron is the daily sweep
 import {
@@ -268,6 +270,20 @@ on("POST", "/api/routes", async (req, env) => json(await shareRoute(env, await r
 on("GET", "/api/routes/shared", async (req, env) => json(await routesSharedWithMe(env, await requireMember(req, env))));
 on("GET", "/api/routes/:id", async (req, env, m) => json(await routeGet(env, await requireMember(req, env), m.groups!.id)));
 on("DELETE", "/api/routes/:id", async (req, env, m) => json(await routeDelete(env, await requireMember(req, env), m.groups!.id)));
+// Roadbooks (src/roadbooks.ts): collections of great roads. A public one opens by its link with no account; the rest need a member.
+on("GET", "/api/roadbooks/near", async (req, env) => json(await booksNear(env, await viewer(req, env), new URL(req.url))));
+on("GET", "/api/roadbooks", async (req, env) => json(await booksMine(env, await requireMember(req, env))));
+on("POST", "/api/roadbooks", async (req, env) => json(await bookCreate(env, await requireMember(req, env), req), 201));
+on("PUT", "/api/roadbooks/roads/:rid/stamp", async (req, env, m) => json(await roadStamp(env, await requireMember(req, env), m.groups!.rid, true)));
+on("DELETE", "/api/roadbooks/roads/:rid/stamp", async (req, env, m) => json(await roadStamp(env, await requireMember(req, env), m.groups!.rid, false)));
+on("GET", "/api/roadbooks/:id", async (req, env, m) => json(await bookGet(env, await viewer(req, env), m.groups!.id)));
+on("PUT", "/api/roadbooks/:id", async (req, env, m) => { await bookUpdate(env, await requireMember(req, env), m.groups!.id, req); return noContent(); });
+on("DELETE", "/api/roadbooks/:id", async (req, env, m) => { await bookDelete(env, await requireMember(req, env), m.groups!.id); return noContent(); });
+on("POST", "/api/roadbooks/:id/roads", async (req, env, m) => json(await roadAdd(env, await requireMember(req, env), m.groups!.id, req), 201));
+on("PUT", "/api/roadbooks/:id/roads/:rid", async (req, env, m) => { await roadUpdate(env, await requireMember(req, env), m.groups!.id, m.groups!.rid, req); return noContent(); });
+on("DELETE", "/api/roadbooks/:id/roads/:rid", async (req, env, m) => { await roadRemove(env, await requireMember(req, env), m.groups!.id, m.groups!.rid); return noContent(); });
+on("PUT", "/api/roadbooks/:id/follow", async (req, env, m) => { await bookFollow(env, await requireMember(req, env), m.groups!.id, true); return noContent(); });
+on("DELETE", "/api/roadbooks/:id/follow", async (req, env, m) => { await bookFollow(env, await requireMember(req, env), m.groups!.id, false); return noContent(); });
 on("GET", "/api/hazards/kinds", async (req, env) => json(await crewHazardKinds(env, await requireMember(req, env))));
 on("POST", "/api/hazards", async (req, env) => json(await reportHazard(env, await requireMember(req, env), req), 201));
 on("GET", "/api/hazards", async (req, env) => json(await hazardsNear(env, new URL(req.url), await requireMember(req, env))));
@@ -282,6 +298,11 @@ on("POST", "/api/highlights/:id/report", async (req, env, m) => {   // older rou
 });
 on("DELETE", "/api/highlights/:id", async (req, env, m) => { await highlightDelete(env, await requireMember(req, env), m.groups!.id); return noContent(); });
 
+// Duels (src/duels.ts): a friend against a friend on a stage for a few days, the higher Score wins; Scores they already share.
+on("GET", "/api/duels", async (req, env) => json(await duelList(env, await requireMember(req, env))));
+on("POST", "/api/duels", async (req, env) => json(await duelCreate(env, await requireMember(req, env), req), 201));
+on("POST", "/api/duels/:id/accept", async (req, env, m) => json(await duelAccept(env, await requireMember(req, env), m.groups!.id)));
+on("DELETE", "/api/duels/:id", async (req, env, m) => json(await duelEnd(env, await requireMember(req, env), m.groups!.id)));
 on("POST", "/api/board", async (req, env) => json(await publish(env, await requireMember(req, env), req)));
 // Kudos (IDEAS S-07): a tap of thanks on a friend's run you can see; no text.
 on("POST", "/api/kudos", async (req, env) => { await kudosGive(env, await requireMember(req, env), req); return noContent(); });

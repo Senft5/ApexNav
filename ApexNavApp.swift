@@ -110,7 +110,7 @@ enum ApexWebBundle {
 
     /// "Open in the app" links from the web (apexnav://open?invite=…): the page's own link parameters, and only those, carried
     /// over to the cockpit page, which handles them exactly as it does on the web. Anything else opens the app as usual.
-    static let linkKeys: Set<String> = ["invite", "crew", "add", "convoy", "go", "road"]   // go=drive: start a drive (IDEAS C-05); road: a road someone sent (web/road_link.js)
+    static let linkKeys: Set<String> = ["invite", "crew", "add", "convoy", "go", "road", "roadbook"]   // go=drive: start a drive (IDEAS C-05); road: a road someone sent (web/road_link.js)
     private static let linkValue = CharacterSet(charactersIn: "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789._-")
     /// The link's parameters the page understands, or nil when the link isn't one of ours or carries none.
     static func linkItems(_ url: URL) -> [URLQueryItem]? {
@@ -419,6 +419,12 @@ final class ApexScriptBridge: NSObject, WKScriptMessageHandler {
         }
         if cmd == "voiceBegin" {
             shell?.webVoiceBegin(duck: speechDuck)
+            return
+        }
+        // The Soundtrack (web/soundtrack.js, Garage > Co-driver): the page's own music plays through a drive, so the audio
+        // session stays up, mixed with other apps, until the page says it stopped (cockpit.js soundtrackNative).
+        if cmd == "soundtrack", let dict = body as? [String: Any] {
+            shell?.setSoundtrack((dict["on"] as? Bool) ?? false)
             return
         }
         // While Vetta speaks (the map's Layers): "lower" ducks the music for each line, "pause" pauses it (cockpit.js sendMusicMode).
@@ -1839,6 +1845,25 @@ final class ApexSensorShell: NSObject, ObservableObject, CLLocationManagerDelega
     private static let pauseReleaseS = 0.8
     private var voiceEndGen = 0
 
+    // The Soundtrack: while it plays, the session is kept active between lines with .mixWithOthers (other apps' audio
+    // carries on under it), so WebKit's WebAudio is never cut off by the voice handing the session back. A line still
+    // ducks or pauses other apps as set; the Soundtrack lowers itself under the voice (audio_bus.js `master`).
+    private var soundtrackOn = false
+
+    func setSoundtrack(_ on: Bool) {
+        soundtrackOn = on
+        if on {
+            if !synth.isSpeaking && !webVoiceActive { holdForSoundtrack() }
+        } else if !synth.isSpeaking && !webVoiceActive {
+            releaseVoice()
+        }
+    }
+
+    private func holdForSoundtrack() {
+        try? AVAudioSession.sharedInstance().setCategory(.playback, mode: .default, options: [.mixWithOthers])
+        try? AVAudioSession.sharedInstance().setActive(true)
+    }
+
     func setVoiceMusic(_ mode: String) {
         pauseMusic = mode == "pause"
         UserDefaults.standard.set(pauseMusic ? "pause" : "lower", forKey: Self.musicDefaultsKey)
@@ -1908,6 +1933,7 @@ final class ApexSensorShell: NSObject, ObservableObject, CLLocationManagerDelega
 
     /// Gives the audio back: ducked music comes back up, paused music is told it may play on.
     private func releaseVoice() {
+        if soundtrackOn { holdForSoundtrack(); return }        // the Soundtrack keeps the session; other apps come back up
         try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
     }
 
