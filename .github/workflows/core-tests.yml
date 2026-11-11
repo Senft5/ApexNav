@@ -28,8 +28,8 @@ jobs:
 
   apexkit-linux:
     runs-on: ubuntu-latest
-    # The official Swift image, not swift-actions/setup-swift: that action refreshes Swift's signing keys from
-    # keyserver.ubuntu.com and fails the job whenever the keyserver is down (2026-11-11, every run for an hour).
+    # The official Swift image, not swift-actions/setup-swift: that action refreshes the toolchain's GPG keys from
+    # keyserver.ubuntu.com on every run, and since 2026-11-11 that times out and fails the job before any Swift builds.
     container: swift:6.0-jammy
     steps:
       - uses: actions/checkout@v4

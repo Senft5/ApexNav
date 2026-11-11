@@ -14,6 +14,17 @@
 - Tests: backend/test/crowd_bumps.test.ts, tests/test_contributor.py (bump flags, route bumps), parity spike mask.
 - Next: hand-reported hazards (hazards.ts) still use vote counts; the same posterior could rank them. Crowd bumps on the
   road page (Q-13 "verified hazards") and the map; bumps on a free drive with no route (needs the cells lookup live).
+## Session 2026-11-11 (ui-round-two, PR 1): the Log in the Vetta Line (claude/project-thread-5sbga7, off origin/main)
+
+- The Log (analysis.html, the frame over the map) now loads web/signature.css after controls.css; its rules are under
+  `body.log-page` (new block at the end of signature.css). Open tab = the apex dot, as on the map page (was a red bar).
+- Drives | Stages are the page's head: underlined tabs (`.log-tabs`, role tablist, aria-selected) like People's Friends and
+  Crews; the `Log` h1 is visually hidden (`.vh`). `showTab` sets aria-selected. CSP hash refreshed (tools/csp.py).
+- Rows and panels on hairlines (`--hair`), dates set not stamped, cards (Your driving, stages, corners, the drive's map and
+  lanes) are paper (`--face` + `--lift-0`), fields are wells, keys flat; the drive's title is a 30 px masthead; the hero
+  score is set once (`vl-ink`), cut under reduced motion. Skins keep their palettes (tokens only).
+- Tests: tests/test_log_line.py; e2e "the empty Log is a first page" now wants the numeral face on the head.
+- Next: Garage, then People/Crews in the same language (this thread).
 
 ## Session 2026-11-11 (fable-time-attack): weekly time attack per area (claude/fable-time-attack, off origin/main)
 

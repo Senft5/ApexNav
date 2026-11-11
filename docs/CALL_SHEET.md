@@ -14,6 +14,16 @@ cruise, the strip saying "Confirmed by members". The calls I made: 120 days for 
 within a season or two; a frost heave comes back each winter and gets re-felt); ±10 m to treat two hits as one bump
 (GPS); a Jeffreys prior; a repaved section starts its bump evidence again. Migration 0052 (additive). Undo: FLAGS
 {"crowd_bumps":{"on":false}} stops the calls; the thresholds are `BUMP` (contribute.ts) and `VERIFY` (roads.ts).
+## 2026-11-11 (ui-round-two): the Log looks like the rest of the app (claude/project-thread-5sbga7)
+
+The Log is its own page shown over the map, and it had kept the old look: opening it swapped the tab bar's red dot for a
+red bar, Drives and Stages were a black slide switch (it read as a setting), and every date, card and panel sat in an ink
+box. Now the Log uses the same signature layer as the home screen: the dot marks the open tab, Drives and Stages are the
+page's head as two underlined places (as Friends and Crews are on People), rows are divided by hairlines, a date is
+set in type, cards are paper with a soft shadow, a drive's name is a masthead and the score sets itself once. Tapedeck and
+Billet keep their own colours. Nothing moved and no words changed.
+
+Undo: revert the PR (CSS and markup only; nothing stored changed).
 
 ## 2026-11-10 (fable-pro-looks): Pro is looks only; one Pro crew-mate dresses the whole crew (claude/fable-pro-looks)
 
