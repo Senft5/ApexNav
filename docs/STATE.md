@@ -255,6 +255,15 @@
 - Next: Options' "Loop to fit" 1 hour / 2 hours keys now duplicate the dial; remove them once the owner has used the
   dial (My free time stays).
 
+## Session 2026-11-10 (fable-sign-in-key): "Sign in" is a key on the message, not a direction (claude/fable-sign-in-key, off origin/main 3f2f315)
+
+- [x] web/cockpit.js `askSignIn(why)`: toast "Sign in to <why>." with the action `Sign in` (`showView('friends')`); in a
+  drive `driveNote` only. Used for measured roads (coverage), share ETA, the Friends switch, hazard reports; handed to
+  web/friends_map.js (`page.askSignIn`, falls back to a plain toast). The route share note reads "No friends or crews
+  to share with yet. Add them in People."
+- [x] `nudgeAnswered(false)`: the notifications-off toast has a Settings key (`openSettings`); docs/APP_REVIEW.md 4.5.4.
+- [x] tests/test_sign_in_key.py (4); e2e flow "sign-in key".
+- Next: the same look for other messages that point somewhere without taking you ("Find it in Where to?").
 ## Session 2026-11-10 (fable-crew-settings): the crew gear's sheet has named parts (claude/fable-crew-settings, off origin/main 51c8c4c)
 
 - [x] web/cockpit.js `crewSettingsFor`: `h4.nav-group` names, notes as `p.note`, the area field's placeholder and
