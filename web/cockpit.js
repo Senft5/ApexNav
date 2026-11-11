@@ -7650,6 +7650,16 @@
           axis.append(tick);
         }
       });
+      // a label near the right end (Midnight on a phone, CI 2026-11-11) is set flush right inside the axis, never past it;
+      // one that would then touch the label before it goes
+      const ar = axis.getBoundingClientRect();
+      let prevRight = -Infinity;
+      for (const tick of [...axis.children]) {
+        if (tick.getBoundingClientRect().right > ar.right) Object.assign(tick.style, { left: 'auto', right: '0', transform: 'none' });
+        const r = tick.getBoundingClientRect();
+        if (r.left < prevRight + 4) { tick.remove(); continue; }
+        prevRight = r.right;
+      }
       const p = w.pick, isNow = p === w.sc.now;
       const said = A.reasons(p), vsNow = !isNow && Math.abs(p.delta) >= 1 ? A.reasons(p, w.sc.now) : [];
       const det = $('routeWhenDetail'); det.textContent = '';
