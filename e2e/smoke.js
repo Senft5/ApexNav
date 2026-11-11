@@ -2763,6 +2763,74 @@ flow('first open in the app: the welcome runs, and Start is what asks the shell 
   check(!(await page.isVisible('#onboard.show')), "the car's Start answers the welcome");
 });
 
+// design pass "first and last": the welcome draws a road and the red dot drives it while the strip calls the corners; the
+// keys are there and take a tap from the first frame; it settles inside 4 s; under reduced motion it is a still, whole page.
+// The drive-ended card draws the line while the drive is scored, counts only once the number is known, and lands on it.
+flow('first run and the end card: the welcome draws its road with the keys live at once, still under reduced motion; the card counts only a known score', async (page, base) => {
+  await page.goto(base + '/index.html');
+  await page.waitForSelector('#onboard.show', { timeout: 10000 });
+  const early = await page.evaluate(() => { const k = document.getElementById('obNext'), r = k.getBoundingClientRect(), hit = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2);
+    return { hit: !!hit && k.contains(hit), op: getComputedStyle(k).opacity, alt: getComputedStyle(document.getElementById('obAlt')).opacity, go: document.getElementById('onboard').classList.contains('ob-go'),
+      marks: document.querySelectorAll('#onboard .ob-apex').length }; });
+  check(early.hit && early.op === '1' && early.alt === '1' && early.go && early.marks === 5, 'the keys are whole and on top from the first frame: ' + JSON.stringify(early));
+  await page.waitForTimeout(3800);                                    // settled: the road drawn, nothing still arriving
+  const settled = await page.evaluate(() => ({ running: document.getAnimations().filter((a) => a.effect && a.effect.target && a.effect.target.closest && a.effect.target.closest('#onboard') && a.playState === 'running').length,
+    on: [...document.querySelectorAll('#onboard .ob-apex')].filter((m) => m.classList.contains('on')).length, you: document.querySelector('#onboard .ob-you').getAttribute('cx') }));
+  check(settled.running === 0 && settled.on === 1, 'the welcome settles inside 4 s, one corner lit with the strip\'s call: ' + JSON.stringify(settled));
+  // a touch mid-drawing ends it at once (the page as it ends), and Start still closes the welcome
+  await page.evaluate(() => localStorage.removeItem('apex.onboarded'));
+  await page.reload();
+  await page.waitForSelector('#onboard.show', { timeout: 10000 });
+  await page.click('#obNext');
+  check(!(await page.isVisible('#onboard.show')) && await page.evaluate(() => localStorage.getItem('apex.onboarded') === '1'), 'an impatient Start is never blocked');
+  // reduced motion: no animation at all, the road whole, the dot at the start, the strip holds its first call
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  await page.evaluate(() => localStorage.removeItem('apex.onboarded'));
+  await page.reload();
+  await page.waitForSelector('#onboard.show', { timeout: 10000 });
+  const still = () => page.evaluate(() => ({ anims: document.getAnimations().filter((a) => a.effect && a.effect.target && a.effect.target.closest && a.effect.target.closest('#onboard')).length,
+    dash: getComputedStyle(document.querySelector('#onboard .ob-line')).strokeDashoffset, head: getComputedStyle(document.querySelector('#onboard .ob-head')).opacity,
+    call: (document.querySelector('#obNotes .rb-box.now .rb-call span') || {}).textContent, you: document.querySelector('#onboard .ob-you').getAttribute('cx') }));
+  const s1 = await still(); await page.waitForTimeout(2200); const s2 = await still();
+  check(s1.anims === 0 && /^0(px)?$/.test(s1.dash) && s1.head === '1' && Math.round(+s1.you) === 28 && s1.call && JSON.stringify(s1) === JSON.stringify(s2), 'reduced motion: a still, whole page: ' + JSON.stringify({ s1, s2 }));
+  await page.click('#obNext');
+  await page.emulateMedia({ reducedMotion: 'no-preference' });
+  // the end card: while scoring, no number (and no count); the line is drawn; when the score lands it counts up and ends on it
+  await page.waitForFunction(() => window.apexDebug && window.ApexCore && window.ApexEndReveal);
+  const seen = await page.evaluate(async () => {
+    ApexCore.driverScore = () => ({ score: 640, components: {} });
+    const lat = [], lon = []; for (let i = 0; i < 300; i++) { lat.push(35.36 + i * 5 / 110540); lon.push(-84.29 + Math.sin(i / 40) * 0.0015); }
+    const counts = [], busy = [];
+    const s = document.getElementById('endScore');
+    const mo = new MutationObserver(() => { if (s.hasAttribute('data-n')) counts.push(+s.getAttribute('data-n')); if (s.hasAttribute('aria-busy')) busy.push(s.textContent); });
+    mo.observe(s, { attributes: true, childList: true, characterData: true, subtree: true });
+    apexDebug.showEndCard({ id: 'fl', name: 'Cherohala Skyway', date: new Date().toISOString(), lat, lon, dist: lat.map((_, i) => i * 5), speed_mps: lat.map(() => 15), lon_g: lat.map(() => 0), lat_g: lat.map(() => 0), g_known: null, events: [], elev: null, hz: 1, source: 'web-gps', corners: [] }, Date.now() - 600e3, { quiet: true });
+    const atOpen = { busy: s.hasAttribute('aria-busy'), n: s.getAttribute('data-n'), glyph: !!document.querySelector('#endGlyph .eg-line'), red: !!document.querySelector('#endGlyph .eg-now'),
+      share: document.getElementById('endShare').getBoundingClientRect().height > 0 };
+    for (let i = 0; i < 100 && s.hasAttribute('aria-busy'); i++) await new Promise((r) => setTimeout(r, 30));
+    await new Promise((r) => setTimeout(r, 1300));
+    mo.disconnect();
+    const meta = document.getElementById('endMeta');
+    return { atOpen, counts, text: s.textContent, counting: s.classList.contains('counting'), n: s.getAttribute('data-n'), meta: meta.textContent, cells: meta.querySelectorAll('.f b').length };
+  });
+  check(seen.atOpen.busy && seen.atOpen.n === null && seen.atOpen.glyph && seen.atOpen.red && seen.atOpen.share, 'scoring: the line drawn, no number, the keys there: ' + JSON.stringify(seen.atOpen));
+  check(seen.text === '640' && !seen.counting && seen.n === null && seen.counts.length >= 2 && seen.counts.every((v, i, a) => v <= 640 && (!i || v >= a[i - 1])), 'the count rises to the known number and ends on it: ' + JSON.stringify(seen));
+  check(/^[\d.]+ (mi|km) · 2 min · 0 corners$/.test(seen.meta) && seen.cells === 3, 'the facts are the same line, set as a ledger: ' + JSON.stringify(seen));
+  // no score: words in the score's place, no count
+  const none = await page.evaluate(async () => {
+    document.getElementById('endDone').click();
+    ApexCore.driverScore = () => ({ score: null, components: {} });
+    const lat = [], lon = []; for (let i = 0; i < 300; i++) { lat.push(35.36 + i * 5 / 110540); lon.push(-84.29); }
+    const s = document.getElementById('endScore'); let counted = false;
+    const mo = new MutationObserver(() => { if (s.hasAttribute('data-n')) counted = true; }); mo.observe(s, { attributes: true });
+    apexDebug.showEndCard({ id: 'fl2', name: 'Circle Freeway', date: new Date().toISOString(), lat, lon, dist: lat.map((_, i) => i * 5), speed_mps: lat.map(() => 15), lon_g: lat.map(() => 0), lat_g: lat.map(() => 0), g_known: null, events: [], elev: null, hz: 1, source: 'web-gps', corners: [] }, Date.now() - 600e3, { quiet: true });
+    for (let i = 0; i < 100 && s.hasAttribute('aria-busy'); i++) await new Promise((r) => setTimeout(r, 30));
+    await new Promise((r) => setTimeout(r, 600)); mo.disconnect();
+    return { counted, text: s.textContent, font: getComputedStyle(s).fontFamily };
+  });
+  check(!none.counted && /no corners to score$/.test(none.text) && /Barlow/.test(none.font), 'no score: words set as a title, nothing counted: ' + JSON.stringify(none));
+});
+
 flow('drive ended: Open in the Log is the solid key with no score, Share card with one, fixed from the first frame; a drive on a route keeps its name (REVIEW4 U-75, REVIEW5 U-118)', async (page, base) => {
   await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); localStorage.setItem('apex.permsExplained', '1'); } catch (_) {}
     window.webkit = { messageHandlers: { apex: { postMessage: () => {} } } }; });

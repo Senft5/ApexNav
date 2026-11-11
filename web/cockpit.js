@@ -7574,6 +7574,7 @@
       $('permMot').textContent = motDenied ? MOT_DENIED_TEXT : 'to feel bumps and surface';
       $('permNote').textContent = locDenied ? `Vetta can\u2019t record a drive or call the corners ahead without it. ${NATIVE_SHELL ? 'In Settings, set Location to While Using the App.' : `Turn it on: ${LOC_HOW_TEXT}.`}` : 'Your drive stays on this phone.';
       $('permGo').textContent = locDenied ? (NATIVE_SHELL ? 'Open Settings' : 'Try again') : 'Allow and start';
+      $('permGo').className = locDenied ? 'ink-btn solid' : 'rec-key';   // the red key is go; a way to Settings is ink
     }
     /** The app's own word on Location (a live frame's location_off): the system sheet answered no, or turned off since. */
     function setLocOff(off) {
@@ -8650,10 +8651,14 @@
     // distance, time and trail); the score, the tip and the closing line follow when the worker has parsed, scored and saved
     // the drive (endCardScored). c: { id, name, len_m, secs, corners (a count, or null while scoring), ds (null while
     // scoring), ended, lat, lon }. A full record (showEndCard) goes through the same two steps at once.
+    // The reveal (end_reveal.js): the driven line is drawn beside the score's place while the drive is scored, and the
+    // number counts up only once it is known. The facts are a ledger of the same words (#endMeta's text is still the line).
+    const endEl = () => ({ card: $('endCard').querySelector('.end-card'), glyph: $('endGlyph'), meta: $('endMeta'), score: $('endScore') });
     function endCardOpen(c) {
       endDrive = c;
       $('endName').textContent = c.name || 'Your drive';
       $('endMeta').textContent = ApexFormat.factsLine(c);              // RA-3: the Log's numbers, from the one helper
+      if (window.ApexEndReveal) ApexEndReveal.open(endEl(), { facts: ApexFormat.factsLine(c), runs: Array.isArray(c.lat) && Array.isArray(c.lon) ? endTrailRuns(c.lat, c.lon) : [] });
       const ended = window.ApexDriveKeep ? ApexDriveKeep.endNote(c) : null;   // Round 3: a drive that ended itself says how
       $('endLine').textContent = ended ? ended + '.' : '';
       // panel round 2 (HE-1): one measured road-feel line from this drive's own rows (road_feel.js); none for a drive whose
@@ -8683,7 +8688,7 @@
     function endCardScored(c, others, opts = {}) {
       if (!endDrive || endDrive.id !== c.id) return;                   // another card since
       endDrive = { ...endDrive, ...c };
-      $('endMeta').textContent = ApexFormat.factsLine(c);
+      if (!window.ApexEndReveal) $('endMeta').textContent = ApexFormat.factsLine(c);   // else the ledger takes the new fact in (land, below)
       $('endScore').removeAttribute('aria-busy');
       // D-6 / R-5 (panel round 1): a drive with no score still reads as a drive. The score's slot says what it was, "3.1 mi ·
       // no corners to score", instead of "-- /1000" over a sentence about a failed exam; nothing is invented (no number).
@@ -8691,6 +8696,7 @@
       $('endScore').textContent = none ? [Number.isFinite(c.len_m) ? ApexFormat.distance(c.len_m) : null, noScoreWords(c.corners)].filter(Boolean).join(' · ') : String(c.ds.score);
       $('endScore').classList.remove('unk');                         // the words are the answer; "--" never shows as a score here
       $('endScore').parentElement.classList.toggle('no-score', none);
+      if (window.ApexEndReveal) ApexEndReveal.land(endEl(), { score: none ? null : c.ds.score, facts: ApexFormat.factsLine(c) });
       // the number against your usual (design pass 9): "31 over your usual", from your last few scored drives in the Log.
       // Read after the card is painted (the Log's summaries, on the phone), and only said with three or more to go by.
       if (!none && window.ApexEndLine && ApexEndLine.usual) (async () => {
@@ -9133,21 +9139,26 @@
     const obNote = (n) => (state.noteWords === 'plain' && window.ApexPlainNotes ? { ...n, call: ApexPlainNotes.plainCall(n) } : n);
     function runOnboarding() {
       const ob = $('onboard');
-      let k = 0;
+      let k = 0, intro = null;
+      // the strip calls the next corner and the red dot on the drawn road drives up to it (first_run.js), every 1.8 s; with
+      // reduced motion the page is still: the first call, the dot at the start
       const tick = () => {
         if (!ob.classList.contains('show')) return;
         const page = [0, 1, 2].map(j => ({ ...obNote(OB_NOTES[(k + j) % OB_NOTES.length]), key: k + j }));
         page.words = state.noteWords;
         Inst.renderNotes($('obNotes'), look.theme, page);
+        if (intro) intro.step(k);
         k++;
-        setTimeout(tick, matchMedia('(prefers-reduced-motion: reduce)').matches ? 4000 : 1800);
+        if (!matchMedia('(prefers-reduced-motion: reduce)').matches) setTimeout(tick, 1800);
       };
       // U-65: in the app the system's location sheet follows the welcome's Start, so it comes after a reason, not at launch
       const finish = () => { flag('apex.onboarded', '1'); ob.classList.remove('show'); askLocation(); };
       $('obNext').onclick = finish;
       $('obAlt').onclick = () => { finish(); watchDryRidge(); };
       // Focus the dialog, not its button: VoiceOver reads the welcome, and no focus ring sits on Start before a touch
-      ob.classList.add('show'); tick(); ob.tabIndex = -1; ob.focus();
+      ob.classList.add('show');
+      if (window.ApexFirstRun) intro = ApexFirstRun.attach(ob);
+      tick(); ob.tabIndex = -1; ob.focus();
     }
     setTimeout(() => health.flush(IN_APP_SHELL ? 'ios' : 'web').catch(() => {}), 5000);
     document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') health.flush(IN_APP_SHELL ? 'ios' : 'web').catch(() => {}); });

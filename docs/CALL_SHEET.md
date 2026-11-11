@@ -125,6 +125,22 @@ keeps its own word and only its progress bar moves.
 
 Undo: revert the PR.
 
+## 2026-11-11 (fable-first-last): the welcome shows the app; the end card is a reveal (claude/fable-first-last)
+
+The welcome was one still page. Now the Vetta lockup moves from the middle of the screen (where the launch screen left
+it) to its place, a road draws itself across the paper, and a red dot drives it while the road book strip calls each
+corner just before the dot reaches it. Start and Watch a replay are there and work from the first frame; a touch anywhere
+ends the drawing; it settles in under 4 s. With Reduce Motion on, it is one still page and the strip no longer changes
+call every 4 s (I made that call: the brief was a still page). The permission sheet uses the same type, a drawing per
+row, and the red Start key with its dot, since that key is go; when Location is off its key stays ink. No permission is
+asked any earlier, and there is no sign-in on either page.
+
+The drive-ended card: the driven line draws itself beside the Score while the drive is being scored (the score's place
+shows a moving pen stroke and "Vetta Score · working it out", never a number); when the number is known it counts up to
+it and settles; the distance, time and corners are a row of big numbers; Mark a stage and Drive it again are quiet keys
+so Share card is the one ink key. A drive with no score shows "0.9 mi · no corners to score" set as a title.
+
+Undo: revert the PR (web/first_run.js and web/end_reveal.js can simply be removed; the page works without them).
 ## 2026-11-10 (fable-ten-hz-g): a recorded drive keeps the car's g ten times a second, where it happened (claude/fable-ten-hz-g)
 
 The app sends the page ten readings a second, but the recorder kept only the one that arrived with each GPS fix and gave
