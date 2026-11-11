@@ -3584,10 +3584,14 @@ flow('reported hazards: a call ahead, "still there?" after passing, and a one-ta
   // VI-1: asked by the 0.1-degree cell, never the position (the phone measures the 200 m itself)
   check(asked.length >= 1 && asked.every((q) => /^\?lat=35\.6&lon=-83\.9&km=20$/.test(q)), 'the hazards are asked for by cell: ' + JSON.stringify(asked));
   check(await page.evaluate(() => window.__said.some((t) => /gravel reported ahead/i.test(t)) || /Gravel reported ahead/.test(document.body.textContent)), 'the hazard was called ahead');
+  // a fresh fix where the car now is: a report needs one from the last 10 s, and on a slow runner the waits above can take
+  // longer than that (CI 2026-11-11: the status line said "No GPS fix yet" and this wait ran out at 30 s)
+  await page.evaluate(() => window.apex.live({ lat: 35.6 + 330 / 110540, lon: -83.9, accuracy_m: 5, speed_mps: 15, course_deg: 0, has_fix: true, calibration: 'locked' }));
   await page.click('#hzReportBtn');
   await page.click('#hzKinds button:has-text("Pothole")');
   // REVIEW4 U-74 / U-102 (check): in a drive the confirmation is the status line's, never a toast over the map
-  await page.waitForFunction(() => /Pothole reported/.test(document.getElementById('dsNote').textContent));
+  await page.waitForFunction(() => /Pothole reported/.test(document.getElementById('dsNote').textContent), null, { timeout: 15000 })
+    .catch(async () => { throw new Error('the report\'s status line never came; it said: ' + JSON.stringify(await page.textContent('#dsNote'))); });
   check(!(await page.evaluate(() => document.getElementById('toast').classList.contains('show') && /Pothole/.test(document.getElementById('toast').textContent))), 'no toast over the map');
   check(await page.evaluate(() => { const n = document.getElementById('dsNote'); return !n.hidden && n.scrollWidth <= n.clientWidth + 1 && /reported/.test(n.getAttribute('aria-label')); }), 'the status line says it whole (or its first sentence)');
   check(reports.length === 1 && reports[0].kind === 'pothole' && Math.abs(reports[0].lat - (35.6 + 330 / 110540)) < 1e-4 && reports[0].heading === 0, 'reported at your position and heading');
