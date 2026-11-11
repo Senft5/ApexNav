@@ -4112,6 +4112,7 @@
     // card saying why. Driving, a pick, another plan or a cleared route meanwhile: nothing changes.
     const OWN_REFINE = ['graph', 'context_grid', 'conditions', 'wildlife', 'events', 'hazards-live', 'driver'], OWN_REFINE_MS = 3000, OWN_SWAP_POINTS = 5;
     async function ownRefine(pool, level, o, shown, forecasts, fullP) {
+      if (window.apexDebug) window.apexDebug.refineDone = false;          // (e2e: a flow waits for the card to settle)
       try {
         const t0 = Date.now();
         // the whole corridor's routes, when the first plan was made on the tiles in hand: the new ones join the pool
@@ -4155,7 +4156,7 @@
         if (typeof cardNote === 'function') cardNote(`${why}: switched to ${road ? `the way by ${road[0]}` : 'a better way'}`);
         if (window.apexDebug) window.apexDebug.lastRefine.swapped = true;
         if (dp) { dp.picked = best; dev.planned(); }
-      } catch (_) { /* the card stays as it is */ }
+      } catch (_) { /* the card stays as it is */ } finally { if (window.apexDebug) window.apexDebug.refineDone = true; }
     }
     // Warm tiles (OWN_ROUTING.md §5): the tile you are in is read into the worker soon after start (the app's bundled
     // files, kept in IndexedDB), and again when you've moved 10 km; its neighbours load when a plan needs them (never
@@ -8951,6 +8952,7 @@
     function learnFromPick() {
       try {
         const o = routeOptions, t = plannedRoute;
+        window.apexDebug.pickWhy = { levels: o && o.levels, picked: o && o.picked, times: o && o.list && o.list.map((r) => r && Math.round(r.timeS)) };
         if (!window.ApexTaste || !o || !o.list || o.current !== t || !t || t.id !== 'route_dest' || pickLearned === o) return;
         // Vetta's pick is the plan's own level's (the list starts with Quick's, so list[0] is not it); after a refine's swap
         // it is the swapped-in one, since the refine ranks at that same level
