@@ -97,6 +97,20 @@ The e2e suite is 152 flows now and takes about 24 minutes, so GitHub cut it off 
 (twice on #349, once on #344) with every flow before it passing. The limit is 35 minutes. No test is skipped or
 shortened. Undo: set `timeout-minutes` back to 25 in `.github/workflows/core-tests.yml`, or better, split the suite.
 
+## 2026-11-11 (fable-taste-picks): the route you choose over Vetta's pick teaches your taste (claude/fable-taste-picks)
+
+Taste learning only heard from "Which road was better?" after a drive, and most drivers never answer it. A choice made
+on the route card says the same thing: when you Start a different level's route or swipe to another option than the
+one Vetta picked at the plan's level, that pair (the road you took, the road you passed) goes into the taste fit at
+half the weight of an answer (`PICK_WEIGHT` in taste.js; you may have picked it for the time, not the road). It counts
+only for a destination route, once per plan, when the two times are within 30% (a much quicker pick says nothing about
+corners), and not when the two roads read the same. A short toast says which way it leaned ("Noted: you picked the more
+flowing road"), the Log's taste line counts routes chosen beside answers, and when a route on the card is there because
+it suits your taste the card says so ("Suits your taste for flowing roads"). Half an answer is my call: five picks make
+the fit as sure as two and a half answers.
+
+Undo: revert the PR, or set `PICK_WEIGHT` to 0 (stored picks then carry no weight).
+
 ## 2026-11-10 · Vetta Line: the home screen is a masthead over the map and a shelf of road cards (claude/fable-signature)
 
 - What: web/signature.css, a new last stylesheet, restyles the idle map: the place as a masthead in type, the deck as one

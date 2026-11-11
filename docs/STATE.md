@@ -71,6 +71,13 @@
 - [x] .github/workflows/core-tests.yml e2e `timeout-minutes` 25 → 35: 152 flows take ~24 min and were cancelled on the
   last flow. Next: split e2e into two jobs if it passes ~30 min.
 
+## Session 2026-11-11 (fable-taste-picks): taste learnt from the routes you choose (claude/fable-taste-picks, off origin/main ac6c6c6)
+
+- Done: `ApexTaste.recordPick` / `leanOf` (taste.js), pairs weighted in `fit`; cockpit `learnFromPick` at Start
+  (Vetta's pick = `levels[builtLevel]`); the toast; the card's "Suits your taste" line. Tests: tests/test_taste.py
+  (picks at half weight), e2e "taste from picks". Full pytest green.
+- Next: a picks-only fit could also tune Quick / Fun / Long way's default level (a driver who always takes Quick).
+
 ## Session 2026-11-10 (fable-signature): Vetta Line, the home screen (claude/fable-signature, off origin/main 948cb4b)
 
 - web/signature.css (new, loaded after controls.css): the signature layer (docs/design/SIGNATURE.md). Map keys and the deck
