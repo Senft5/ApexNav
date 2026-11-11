@@ -736,8 +736,17 @@ flow('a pin has a name: Go here routes "To <the road>", a tap on the map is a "D
   // the spot dialog: a rating is stars filled up to it
   await page.click('#pinSaveBtn');
   await sheetSettled(page, 'hlOverlay');
+  // CI only (2026-11-10): the dialog shut right after a star was tapped, at rest. Whatever takes 'show' off it leaves its
+  // stack here, with the mode and the last key, so a failure names its cause.
+  await page.evaluate(() => {
+    const o = document.getElementById('hlOverlay'), rm = o.classList.remove.bind(o.classList);
+    window.__hlShut = null;
+    document.addEventListener('keydown', (e) => { window.__hlKey = e.key; }, true);
+    o.classList.remove = (...a) => { if (a.includes('show') && !window.__hlShut) window.__hlShut = String(new Error().stack).split('\n').slice(1, 6).join(' | '); return rm(...a); };
+  });
   await page.click('#hlRating [data-rating="3"]');
-  check(await page.evaluate(() => document.getElementById('hlOverlay').classList.contains('show')), 'the spot dialog is still open after a star is tapped');
+  const shut = await page.evaluate(() => ({ open: document.getElementById('hlOverlay').classList.contains('show'), by: window.__hlShut, key: window.__hlKey || null, live: document.getElementById('app') && document.getElementById('app').classList.contains('live') }));
+  check(shut.open, 'the spot dialog is still open after a star is tapped: ' + JSON.stringify(shut));
   const stars = await page.evaluate(() => [...document.querySelectorAll('#hlRating button')].map((b) => [b.classList.contains('on'), b.getAttribute('aria-pressed'), Math.round(b.getBoundingClientRect().height)]));
   check(stars.map((s) => s[0]).join() === 'true,true,true,false,false' && stars.map((s) => s[1]).join() === 'false,false,true,false,false' && stars.every((s) => s[2] >= 44), 'three stars: three filled, the third pressed, 44 pt each: ' + JSON.stringify(stars));
   const keys = await page.evaluate(() => ['hlAddBtn', 'hlCancelBtn'].map((id) => { const r = document.getElementById(id).getBoundingClientRect(); return [Math.round(r.top), Math.round(r.height), Math.round(r.width)]; }));
