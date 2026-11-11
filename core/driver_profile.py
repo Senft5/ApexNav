@@ -583,6 +583,45 @@ def drive_records(obs: list, records: dict) -> dict:
     return out
 
 
+ROAD_MIN_PASSES = 3          # passes of a corner (this drive's among them) before its record on the road means anything
+SAME_CORNER_M = 20.0         # the same corner: apexes this close...
+SAME_WAY = 0.7               # ...and headings this alike (cosine, about 45 degrees): not the next bend of an S
+
+
+def road_records(mine: list, others: list) -> dict:
+    """A drive's corners against your other passes of the same road, corner by corner. mine: this drive's clean corners as
+    [{x, y (m, one frame for all), hx, hy (unit heading), level}]; others: one such list per other drive. A corner of
+    another drive is the same corner when its apex is within SAME_CORNER_M and its heading within SAME_WAY; a drive counts
+    once per corner (its cleanest there). Over corners passed ROAD_MIN_PASSES times or more: {corners, best (this drive
+    the cleanest of all), level (equal to the cleanest other), held (the apexes, when given, of the corners it is cleanest
+    at)}. Technique only."""
+    corners = best = level = 0
+    held = []
+    for m in mine:
+        if m.get("level") is None:
+            continue
+        tops = []
+        for drive in others:
+            top = None
+            for o in drive:
+                if o.get("level") is None:
+                    continue
+                if math.hypot(o["x"] - m["x"], o["y"] - m["y"]) < SAME_CORNER_M and o["hx"] * m["hx"] + o["hy"] * m["hy"] > SAME_WAY:
+                    top = o["level"] if top is None else max(top, o["level"])
+            if top is not None:
+                tops.append(top)
+        if 1 + len(tops) < ROAD_MIN_PASSES:
+            continue
+        corners += 1
+        if m["level"] > max(tops):
+            best += 1
+            if m.get("apex") is not None:
+                held.append(m["apex"])
+        elif m["level"] == max(tops):
+            level += 1
+    return {"corners": corners, "best": best, "level": level, "held": held}
+
+
 def drive_touch(obs: list, others: list) -> dict:
     """A drive's own touch (its Log page): {drive: touch over its corners (from DRIVE_TOUCH_MIN), usual: touch over the
     corners of every other drive (from STYLE_MIN), outside: per measure "above" when the drive's middle corner was beyond

@@ -307,6 +307,46 @@
     }
     return out;
   }
+  /** A drive's corners against your other passes of the same road (port of driver_profile.road_records). */
+  const ROAD_MIN_PASSES = 3, SAME_CORNER_M = 20, SAME_WAY = 0.7;
+  function roadRecords(mine, others) {
+    let corners = 0, best = 0, lvl = 0;
+    const held = [];
+    for (const m of mine || []) {
+      if (m.level === null || m.level === undefined) continue;
+      const tops = [];
+      for (const drive of others || []) {
+        let top = null;
+        for (const o of drive) {
+          if (o.level === null || o.level === undefined) continue;
+          if (Math.hypot(o.x - m.x, o.y - m.y) < SAME_CORNER_M && o.hx * m.hx + o.hy * m.hy > SAME_WAY) top = top === null ? o.level : Math.max(top, o.level);
+        }
+        if (top !== null) tops.push(top);
+      }
+      if (1 + tops.length < ROAD_MIN_PASSES) continue;
+      corners++;
+      const mx = Math.max(...tops);
+      if (m.level > mx) { best++; if (m.apex !== null && m.apex !== undefined) held.push(m.apex); } else if (m.level === mx) lvl++;
+    }
+    return { corners, best, level: lvl, held };
+  }
+  /** Clean corners of a drive placed for roadRecords: metres from (lat0, lon0), unit heading, the credits' level. */
+  function placed(d, obs, lat0, lon0) {
+    const c = Math.cos(lat0 * Math.PI / 180), n = d.lat.length;
+    return (obs || []).filter((o) => SKILLS.every((k) => o[k] !== null && o[k] !== undefined)).map((o) => {
+      const a = o.apex, a0 = Math.max(0, a - 2), a1 = Math.min(n - 1, a + 2);
+      const hx = (d.lon[a1] - d.lon[a0]) * c * 111320, hy = (d.lat[a1] - d.lat[a0]) * 110540, hn = Math.hypot(hx, hy) || 1;
+      return { apex: a, x: (d.lon[a] - lon0) * c * 111320, y: (d.lat[a] - lat0) * 110540, hx: hx / hn, hy: hy / hn, level: level(SKILLS.reduce((t, k) => t + o[k], 0) / SKILLS.length) };
+    });
+  }
+  /** "On this road: your cleanest pass yet at 7 of the 24 corners you have driven three or more times, level with it at 2." */
+  function roadRecordLine(r) {
+    if (!r || !(r.corners > 0)) return null;
+    const of = `of the ${r.corners} corner${r.corners === 1 ? '' : 's'} here you have driven three or more times`;
+    if (!r.best && !r.level) return `On this road: ${r.corners} corner${r.corners === 1 ? '' : 's'} you have driven three or more times; your cleanest pass of ${r.corners === 1 ? 'it' : 'each'} came on another drive.`;
+    if (!r.best) return `On this road: level with your cleanest pass at ${r.level} ${of}.`;
+    return `On this road: your cleanest pass yet at ${r.best} ${of}${r.level ? `, level with it at ${r.level}` : ''}.`;
+  }
   /** A drive's own touch (its Log page): { drive (from DRIVE_TOUCH_MIN corners), usual (every other drive's corners) }. */
   // outside: "above" when the drive's middle corner was beyond the usual upper quartile (or quick where that is timed),
   // "below" under the lower one
@@ -863,7 +903,7 @@
     }
   }
 
-  const api = { SKILLS, observe, profile, swing, excess, SKILL_MIN, WORDS, findingLine, styleLines, touchLines, touchTrendLines, driveTouchLines, paceLines, PACE, MEASURES, touch, TOUCH, driveTouch, DRIVE_TOUCH_MIN, bestCorners, recordsBySize, RECORD_MIN, driveRecords, driveRecordLines, cardLine, focusLines, render,
+  const api = { SKILLS, observe, profile, swing, excess, SKILL_MIN, WORDS, findingLine, styleLines, touchLines, touchTrendLines, driveTouchLines, paceLines, PACE, MEASURES, touch, TOUCH, driveTouch, DRIVE_TOUCH_MIN, bestCorners, recordsBySize, RECORD_MIN, driveRecords, driveRecordLines, roadRecords, placed, roadRecordLine, cardLine, focusLines, render,
     PRACTICE_MIN, practice, drivePractice, practiceLine, practiceSummary, localStamp, loadPlan, savePlan, PLAN_KEY };
   if (typeof module !== 'undefined' && module.exports) module.exports = api; else root.ApexDriverProfile = api;
 })(typeof window !== 'undefined' ? window : globalThis);

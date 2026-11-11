@@ -4618,12 +4618,14 @@ flow('Your driving: the profile over every drive opens from the Log, names the w
   // a drive's own touch on its Log page: none from g kept once a second, so the panel stays hidden; words when there is one
   const dt = await page.evaluate(async () => {
     const info = await ApexAnalysis.job('drive', { id: 'p1' });
-    return { has: !!info.touch, lines: ApexDriverProfile.driveTouchLines(info.touch), best: ApexDriverProfile.driveRecordLines(info.touch && info.touch.records, 'p1'),
+    return { has: !!info.touch, lines: ApexDriverProfile.driveTouchLines(info.touch), best: ApexDriverProfile.driveRecordLines(info.touch && info.touch.records, 'p1'), road: info.touch && info.touch.road,
       say: ApexDriverProfile.driveTouchLines({ drive: { brake_on: { rate: 1.1 }, brake_off: { rate: null }, turn_in: { rate: null, quick_rate: true } }, usual: { brake_on: { rate: 0.8 }, brake_off: { rate: null }, turn_in: { rate: 0.9 } } }) };
   });
   check(dt.has && dt.lines.length === 0, 'a drive with g kept once a second has no touch of its own: ' + JSON.stringify(dt.lines));
   // and its corners against your records by kind (the record of each kind is held by the first drive to reach it)
   check(dt.best.length >= 2 && /^Tight corners: \d{1,3} at best here(, your record of \d+ tight corners|, level with your record \(.+\)|; your record is \d{1,3}( \(.+\))?)\.$/.test(dt.best[0]), 'a drive against your records: ' + JSON.stringify(dt.best));
+  // corner by corner on its road: these three drives are on three roads, so no corner has been driven three times
+  check(dt.road && dt.road.corners === 0 && dt.road.best === 0, 'no corner of this road driven three times yet: ' + JSON.stringify(dt.road));
   check(dt.say.join(' ') === 'Brakes on: about 1.1 g a second on this drive, 0.8 usually. Turn-in: one quick movement (quicker than the recording can time) on this drive, 0.9 usually.', 'a drive\'s touch in words: ' + dt.say);
   // each drive's observations were kept: a second visit reads no drive again, and a deleted drive's are dropped
   const again = await page.evaluate(() => ApexAnalysis.job('profile'));

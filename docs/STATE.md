@@ -45,6 +45,19 @@
   stage-plan code in funRoute is now unreachable (kept for now).
 - Next: loops on our router only (the owner's rule says "anything but the quick route"); find the owner's failure (where,
   app or web, which message).
+## Session 2026-11-11 (round two analysis, PR 10): a road's records, corner by corner (claude/project-thread-gd7nre, off origin/main)
+
+- core/driver_profile.py `road_records` (reference) and web/driver_profile.js `roadRecords` (port, with `placed` and
+  `roadRecordLine`): over the corners of this road you have driven three or more times (the same corner: apex within 20 m,
+  heading within about 45 degrees), how many this drive was the cleanest pass of, and how many level with it.
+- web/analysis_client.js drive job: `touch.road` from the drive's own corners and the near drives' (the coach's). The drive
+  page's "Against your records" panel adds "On this road: your cleanest pass yet at 7 of the 24 corners here you have
+  driven three or more times, level with it at 2."
+- Tests: tests/test_best_corners.py (+1, parity and words), e2e "Your driving".
+- The corner list marks each corner this drive is your cleanest pass of ("Your cleanest pass here"; `held`, drive_view.js
+  `markRecords`).
+- Next: the deepest-analysis list: a road page (Your roads) with its corners' records and which drive holds each.
+
 ## Session 2026-11-11 (places by name): the cafés and fuel on the route card are a tap away, by name (claude/project-thread-me97iw, off origin/main)
 
 - The owner: "when it says there's cafes or gas stations ... i want to be able to tap for details. Ideally just show the name".

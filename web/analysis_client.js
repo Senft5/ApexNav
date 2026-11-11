@@ -256,6 +256,12 @@
                    matched: r ? r.matched_corners : 0, delta_s: r ? r.corner_delta_s : null }; });
       let touch = null;
       try { touch = await touchOf(Core, d, id, sums); } catch (_) { touch = null; }
+      // this drive's corners against your other passes of the same road, corner by corner (driver_profile.js roadRecords)
+      const P = root.ApexDriverProfile;
+      if (touch && P && P.roadRecords) try {
+        const ob = (x) => P.observe({ ...x, corners: Rec().scorableCorners(x, x.corners || []) }, Core), lat0 = d.lat[0], lon0 = d.lon[0];
+        touch.road = P.roadRecords(P.placed(d, ob(d), lat0, lon0), near.filter((o) => Array.isArray(o.corners) && o.corners.length).map((o) => P.placed(o, ob(o), lat0, lon0)));
+      } catch (_) { touch.road = null; }
       release();
       return { reference, coach: co, road, touch, bestOther: reference ? reference.id : (sums.find((s) => s.id !== id) || {}).id || null };
     },

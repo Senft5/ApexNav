@@ -106,3 +106,27 @@ def test_a_drive_against_your_records():
     assert out["alone"] == ["Tight corners: 94 at best here.", "Medium corners: 99 at best here."] and out["none"] == []
     words = " ".join(out["say"]).lower()
     assert not any(w in words for w in ("mph", "km/h", "better", "worse", "faster", "push"))
+
+
+def test_road_records_corner_by_corner():
+    c = lambda x, lv, hx=1.0: {"apex": int(x // 5), "x": x, "y": 0.0, "hx": hx, "hy": 0.0, "level": lv}
+    mine = [c(0, 95), c(300, 80), c(600, 90), c(900, 99)]
+    others = [[c(5, 90), c(305, 85), c(603, 90), c(1500, 100)],          # 5 m off: the same corners
+              [c(-8, 93), c(310, 70), c(598, 88, hx=-1.0)]]                # the third the other way: not the same corner
+    r = dp.road_records(mine, others)
+    assert r == {"corners": 2, "best": 1, "level": 0, "held": [0]}       # 0 m: best of three; 300 m: 85 beat it; 600, 900: too few
+    assert dp.road_records(mine, []) == {"corners": 0, "best": 0, "level": 0, "held": []}
+    tie = dp.road_records([c(0, 90)], [[c(1, 90)], [c(2, 80)]])
+    assert tie == {"corners": 1, "best": 0, "level": 1, "held": []}
+    if NODE is None:
+        return
+    runner = ("const P=require(process.argv[1]+'/web/driver_profile.js');const [m,o]=JSON.parse(require('fs').readFileSync(0,'utf8'));"
+              "const r=P.roadRecords(m,o);process.stdout.write(JSON.stringify({r,say:[P.roadRecordLine(r),P.roadRecordLine({corners:24,best:7,level:2}),"
+              "P.roadRecordLine({corners:1,best:0,level:0}),P.roadRecordLine({corners:0,best:0,level:0}),P.roadRecordLine(null),P.roadRecordLine({corners:24,best:0,level:24})]}));")
+    out = json.loads(subprocess.run([NODE, "-e", runner, os.getcwd()], input=json.dumps([mine, others]), capture_output=True, text=True, check=True).stdout)
+    assert out["r"] == r
+    assert out["say"] == ["On this road: your cleanest pass yet at 1 of the 2 corners here you have driven three or more times.",
+                          "On this road: your cleanest pass yet at 7 of the 24 corners here you have driven three or more times, level with it at 2.",
+                          "On this road: 1 corner you have driven three or more times; your cleanest pass of it came on another drive.",
+                          None, None,
+                          "On this road: level with your cleanest pass at 24 of the 24 corners here you have driven three or more times."]
