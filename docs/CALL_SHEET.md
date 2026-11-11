@@ -35,6 +35,16 @@ empty states stay drawn in pencil. No words or places changed.
 
 Undo: revert the PR (CSS only).
 
+## 2026-11-11 (roam-c-safe-area-split): the safe-area e2e check runs as one flow a phone shape (claude/roam-c-safe-area-split)
+
+The safe-area flow (every screen under the island, home indicator and corners) walked all four phone shapes in one
+4.5-minute flow, the longest in CI, so whichever e2e shard got it was the slowest. It is now four flows, `safe areas
+(portrait)` and so on, with the same 16 screens and checks each, and the scanner's self-check in the first; each still
+writes its own contact sheet. A failure now names its phone shape. The shards even out (by the last CI log, 5.9 to 6.7
+min of flows each, from 5.8 to 6.9): a small gain at four jobs, and it lets a fifth job pay off later (about 5.2 min
+each), which I left at four because each job pays its own minute of setup in Actions minutes.
+
+Undo: revert the PR (one flow again; set `LONG_S` back to 258 s for it).
 ## 2026-11-11 (roam-c-ci-shards): the e2e check runs as four jobs side by side (claude/roam-c-ci-shards)
 
 The e2e check ran 173 flows one after another in 28-31 minutes against a 35-minute limit, and every PR waited on it. It

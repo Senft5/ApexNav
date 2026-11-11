@@ -7550,7 +7550,9 @@ flow('Vetta Line home: a masthead, one shelf of road cards, Just drive the one r
   check(!bad.length, 'the home:\n  ' + bad.join('\n  '));
 }, IPHONE);
 
-flow('safe areas: the Dynamic Island, the home indicator and the rounded corners clear every control, upright, on its side and on small phones', async (page, base) => {
+// One flow a phone shape (they ran as one 4.5 min flow until 2026-11-11, the longest in CI; split so the four e2e shards
+// balance): every screen below, under that shape's island, home indicator and corners. The first also proves the scanner.
+for (const [orient, d] of Object.entries(SAFE)) flow(`safe areas (${orient}): the Dynamic Island, the home indicator and the rounded corners clear every control`, async (page, base) => {
   await page.route(base + '/api/**', (route) => { const p = new URL(route.request().url()).pathname;
     route.fulfill({ contentType: 'application/json', body: p === '/api/me' ? '{"signed_in":true,"member":true,"handle":"kit_r"}' : '[]' }); });
   await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', localStorage.getItem('e2e.fresh') ? '' : '1'); } catch (_) {} });
@@ -7575,39 +7577,37 @@ flow('safe areas: the Dynamic Island, the home indicator and the rounded corners
     ['log', '/analysis.html?tab=log', null],
     ['privacy', '/privacy.html', null],
   ];
-  // the scanner catches what it says it does: two planted keys that overlap, and one 3 pt from the edge
-  await page.setViewportSize({ width: SAFE.portrait.w, height: SAFE.portrait.h });
-  await page.goto(base + '/privacy.html');
-  await page.evaluate(() => { const k = (l, t) => { const b = document.createElement('button'); b.textContent = 'X'; b.style.cssText = `position:absolute;left:${l}px;top:${t}px;width:60px;height:60px;z-index:99`; document.body.append(b); };
-    k(100, 300); k(150, 330); k(3, 500); });
-  const planted = await unsafe(page, SAFE.portrait);
-  check(planted.some((b) => /X" overlaps/.test(b)) && planted.some((b) => /gap left 3/.test(b)), 'the scanner finds a planted overlap and gap: ' + planted.join(' | '));
-  const bad = [], shots = [];
-  for (const [orient, d] of Object.entries(SAFE)) {
-    await page.setViewportSize({ width: d.w, height: d.h });
-    await cdp.send('Emulation.setSafeAreaInsetsOverride', { insets: d.i });
-    for (const [name, url, act, fresh] of screens) {
-      await page.goto(base + '/index.html?blank=1');
-      await page.evaluate((f) => { if (f) localStorage.setItem('e2e.fresh', '1'); else localStorage.removeItem('e2e.fresh'); }, !!fresh);
-      await page.goto(base + url);
-      await page.waitForFunction(() => document.readyState === 'complete' && (!document.getElementById('app') || (window.apex && window.apexDebug)));
-      await page.waitForFunction(() => !document.getElementById('boot'), null, { timeout: 5000 });   // the opening cover (boot.js) hides everything for up to 2.5 s
-      await page.waitForTimeout(300);
-      if (act) { await page.evaluate('(async () => { ' + act + ' })()'); await page.waitForTimeout(700); }
-      for (const b of await unsafe(page, d)) bad.push(`${orient} · ${name}: ${b}`);
-      if (process.env.SHOTS) shots.push({ orient, name, png: (await page.screenshot()).toString('base64'), w: d.w });
-    }
+  if (orient === Object.keys(SAFE)[0]) {
+    // the scanner catches what it says it does: two planted keys that overlap, and one 3 pt from the edge
+    await page.setViewportSize({ width: SAFE.portrait.w, height: SAFE.portrait.h });
+    await page.goto(base + '/privacy.html');
+    await page.evaluate(() => { const k = (l, t) => { const b = document.createElement('button'); b.textContent = 'X'; b.style.cssText = `position:absolute;left:${l}px;top:${t}px;width:60px;height:60px;z-index:99`; document.body.append(b); };
+      k(100, 300); k(150, 330); k(3, 500); });
+    const planted = await unsafe(page, SAFE.portrait);
+    check(planted.some((b) => /X" overlaps/.test(b)) && planted.some((b) => /gap left 3/.test(b)), 'the scanner finds a planted overlap and gap: ' + planted.join(' | '));
   }
-  // SHOTS=<dir>: one contact sheet per phone shape, for the next design review (CI keeps them as an artefact, U-05)
+  const bad = [], shots = [];
+  await page.setViewportSize({ width: d.w, height: d.h });
+  await cdp.send('Emulation.setSafeAreaInsetsOverride', { insets: d.i });
+  for (const [name, url, act, fresh] of screens) {
+    await page.goto(base + '/index.html?blank=1');
+    await page.evaluate((f) => { if (f) localStorage.setItem('e2e.fresh', '1'); else localStorage.removeItem('e2e.fresh'); }, !!fresh);
+    await page.goto(base + url);
+    await page.waitForFunction(() => document.readyState === 'complete' && (!document.getElementById('app') || (window.apex && window.apexDebug)));
+    await page.waitForFunction(() => !document.getElementById('boot'), null, { timeout: 5000 });   // the opening cover (boot.js) hides everything for up to 2.5 s
+    await page.waitForTimeout(300);
+    if (act) { await page.evaluate('(async () => { ' + act + ' })()'); await page.waitForTimeout(700); }
+    for (const b of await unsafe(page, d)) bad.push(`${orient} · ${name}: ${b}`);
+    if (process.env.SHOTS) shots.push({ name, png: (await page.screenshot()).toString('base64') });
+  }
+  // SHOTS=<dir>: this phone shape's contact sheet, for the next design review (CI keeps them as an artefact, U-05)
   if (process.env.SHOTS) {
     require('fs').mkdirSync(process.env.SHOTS, { recursive: true });
-    for (const orient of Object.keys(SAFE)) {
-      const set = shots.filter((x) => x.orient === orient), w = Math.round(set[0].w / 2);
-      await page.setViewportSize({ width: 4 * (w + 16) + 16, height: 600 });
-      await page.setContent(`<body style="margin:0;padding:8px;background:#2b2b2b;font:12px sans-serif;color:#ddd;display:flex;flex-wrap:wrap;gap:16px">${
-        set.map((x) => `<figure style="margin:0;width:${w}px"><img style="width:100%" src="data:image/png;base64,${x.png}"><figcaption>${x.name}</figcaption></figure>`).join('')}</body>`);
-      await page.screenshot({ path: `${process.env.SHOTS}/${orient.replace(/\W+/g, '-')}.png`, fullPage: true });
-    }
+    const w = Math.round(d.w / 2);
+    await page.setViewportSize({ width: 4 * (w + 16) + 16, height: 600 });
+    await page.setContent(`<body style="margin:0;padding:8px;background:#2b2b2b;font:12px sans-serif;color:#ddd;display:flex;flex-wrap:wrap;gap:16px">${
+      shots.map((x) => `<figure style="margin:0;width:${w}px"><img style="width:100%" src="data:image/png;base64,${x.png}"><figcaption>${x.name}</figcaption></figure>`).join('')}</body>`);
+    await page.screenshot({ path: `${process.env.SHOTS}/${orient.replace(/\W+/g, '-')}.png`, fullPage: true });
   }
   check(!bad.length, 'under the island, the home indicator or a corner:\n  ' + bad.join('\n  '));
 }, { hasTouch: true });
@@ -7957,7 +7957,7 @@ flow('time attack this week (SOCIAL 2.9): in Where to?, the area\'s stage and it
   // 2026-11-11; a flow not listed counts as 5 s (a renamed one still runs, it is only dealt as a short one).
   const shard = /^(\d+)\/(\d+)$/.exec(process.env.SHARD || '');
   if (process.env.SHARD && (!shard || +shard[1] < 1 || +shard[1] > +shard[2])) throw new Error(`SHARD must be k/n with 1 <= k <= n, not ${process.env.SHARD}`);
-  const LONG_S = [['safe areas: the Dynamic Island', 258], ['theme contract on its side', 50], ['TestFlight 2026-11-05 note 6', 41],
+  const LONG_S = [['safe areas (', 65], ['theme contract on its side', 50], ['TestFlight 2026-11-05 note 6', 41],
     ['the car map glides between fixes', 32], ['private themes', 32], ['turn by turn in road order', 30], ['level cards: one control', 27],
     ['the strip never cuts', 23], ['when to go', 21], ['the map is a fixed stage', 20], ['a deliberate detour', 20],
     ['theme contract on the page', 19], ['plan flow (d)', 18], ['plan flow (g)', 18], ['a loop by time', 17], ['plan flow (a)', 17],
