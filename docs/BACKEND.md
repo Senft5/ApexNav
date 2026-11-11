@@ -29,6 +29,7 @@ drive → phone profiles it (core/ApexKit, offline) → [opt-in + online] → bi
 ```
 - Contributing is opt-in per account (default off). Without it nothing leaves the phone.
 - **Real time (owner decision 2026-10-25):** no holding period and no nightly job. A drive streams as chunks (a run of 5 m bins on one road); each chunk is merged into `road_bins` and paid in the same request. A retried chunk is recognised and merged once.
+- **Crowd bumps (IDEAS Q-02, 2026-11-11):** each bin's upload may carry `bp` (the phone felt a spike there, 1 / 0 / unknown). `road_bins.bump_hit` / `bump_pass` are sums of 2^((day − 2026-01-01) / 120 d), so dividing by today's weight is a 120-day half-life with no exponent in SQL (D1 refuses `power()`); `bump_drivers` counts different people per spot through a keyed hash per person and 40 m in `seen`. `GET /api/roads` adds `bp: [[bin, posterior]]` per direction for bumps whose Jeffreys Beta posterior over ±2 bins is over 0.8 with 2+ drivers (roads.ts `verifiedBumps`, migration 0051, flag `crowd_bumps` on the phone).
 - Client trims a random 0.5–1.5 km at each end of a trip, skips residential/service ways, spreads one trip's upload over days.
 - **Small-group caveat:** with under 20 users, "at least k contributors" hides little. `min_contributors` is a setting (friends phase: 1,
   data visible to signed-in members only). Raise to 3 before any public launch.

@@ -3,6 +3,7 @@
 // (sample standard deviation of camber and roughness, null under two measuring passes), so the phone can show confidence.
 import { Env, HttpError } from "./util";
 import { serverFlag } from "./flags";
+import { bumpWeight } from "./contribute";
 
 const MAX_WAYS = 50;
 /**
@@ -33,7 +34,34 @@ export const confLevel = (passes: number) => (passes >= 5 ? 3 : passes >= 2 ? 2 
 export interface RoadBinRow {
   way_id: number; dir: number; bin_idx: number; n: number; camber_mean: number | null; camber_m2: number | null; camber_n: number;
   rough_mean: number | null; rough_m2: number | null; crest_peak: number | null; changed_on: string | null; k_mean: number | null; k_n: number;
-  flow_mean: number | null; brake_mean: number | null; flow_n: number;
+  flow_mean: number | null; brake_mean: number | null; flow_n: number; bump_hit: number; bump_pass: number; bump_drivers: number;
+}
+
+/**
+ * Crowd-verified bumps (IDEAS Q-02, docs/ROAD_INTELLIGENCE.md 4.3: on our own data 1 of 7 single-pass bumps repeats, so one
+ * hit proves nothing). Two passes over the same bump land a bin or two apart (GPS), so a bump is read over WINDOW bins each
+ * side: hits are the window's decayed hits, passes the most decayed passes over any bin in it, misses the rest. Presence is
+ * Beta(PRIOR + hits, PRIOR + misses) (Jeffreys); a bump is verified when its posterior mean is over MIN_P and at least
+ * MIN_DRIVERS different people hit it. One per window, at the bin with the most hits. Weights are divided by today's
+ * (contribute.ts bumpWeight), so a pass one half-life old counts half.
+ */
+export const VERIFY = { window: 2, prior: 0.5, minP: 0.8, minDrivers: 2 };
+export function verifiedBumps(rows: { bin_idx: number; bump_hit: number; bump_pass: number; bump_drivers: number }[], today = new Date().toISOString().slice(0, 10)): [number, number][] {
+  const now = bumpWeight(today), at = new Map(rows.map((r) => [r.bin_idx, r])), out: [number, number][] = [];
+  const W = VERIFY.window, A = VERIFY.prior;
+  for (const r of rows) {
+    if (!(r.bump_hit > 0)) continue;
+    let hits = 0, passes = 0, drivers = 0, peak = true;
+    for (let j = r.bin_idx - W; j <= r.bin_idx + W; j++) {
+      const q = at.get(j); if (!q) continue;
+      hits += q.bump_hit; passes = Math.max(passes, q.bump_pass); drivers += q.bump_drivers;
+      if (q.bump_hit > r.bump_hit || (q.bump_hit === r.bump_hit && j < r.bin_idx)) peak = false;   // one per window: the most hits, then the first
+    }
+    if (!peak || drivers < VERIFY.minDrivers) continue;
+    const h = hits / now, m = Math.max(0, passes - hits) / now, p = (A + h) / (2 * A + h + m);
+    if (p > VERIFY.minP) out.push([r.bin_idx, Math.round(p * 100) / 100]);
+  }
+  return out;
 }
 
 /** Busy times are shown only for a road+direction this many different people drove (the owner's Quiet hours option a). */
@@ -88,11 +116,11 @@ async function binsFor(env: Env, ids: number[]) {
 
 type Col = (number | null)[];
 type Dir = { i: number[]; n: number[]; cam: Col; cn: number[]; csd: Col; rough: Col; rsd: Col; crest: Col; ch: (string | null)[]; k: Col; kn: number[];
-             fl: Col; hb: Col; fn: number[]; ag?: number; hr?: number[] };
+             fl: Col; hb: Col; fn: number[]; ag?: number; hr?: number[]; bp?: [number, number][] };
 async function binsChunk(env: Env, ids: number[]) {
   const marks = ids.map(() => "?").join(",");
   const rows = (await env.DB.prepare(
-    `SELECT way_id, dir, bin_idx, n, camber_mean, camber_m2, camber_n, rough_mean, rough_m2, crest_peak, changed_on, k_mean, k_n, flow_mean, brake_mean, flow_n FROM road_bins rb
+    `SELECT way_id, dir, bin_idx, n, camber_mean, camber_m2, camber_n, rough_mean, rough_m2, crest_peak, changed_on, k_mean, k_n, flow_mean, brake_mean, flow_n, bump_hit, bump_pass, bump_drivers FROM road_bins rb
       WHERE way_id IN (${marks}) AND ${shownSql("rb.way_id", "rb.dir")}
       ORDER BY way_id, dir, bin_idx`,
   ).bind(...ids).all<RoadBinRow>()).results;
@@ -102,6 +130,7 @@ async function binsChunk(env: Env, ids: number[]) {
   // fl / hb / fn: flow (members' mean speed steadiness 0..1, a ratio with no speed in it), the share of passes that braked hard
   // with no corner ahead, and how many passes sent flow; null / 0 from passes that didn't. ag (per direction): loveLevel, how
   // many members came back to it. hr (per direction, only with the quiet_hours flag on and 5+ drivers): 12 shares of passes.
+  // bp (per direction, only when there are any): crowd-verified bumps as [bin, posterior] (verifiedBumps), never a count.
   const out: Record<string, Record<string, Dir>> = {};
   const r3 = (v: number | null) => (v == null ? null : Math.round(v * 1000) / 1000);
   for (const r of rows) {
@@ -112,6 +141,9 @@ async function binsChunk(env: Env, ids: number[]) {
     d.i.push(r.bin_idx); d.n.push(r.n); d.cam.push(r.camber_mean); d.cn.push(r.camber_n); d.csd.push(sampleSd(r.camber_m2, r.camber_n));
     d.rough.push(r.rough_mean); d.rsd.push(sampleSd(r.rough_m2, r.n)); d.crest.push(r.crest_peak);
   }
+  const byDir = new Map<string, RoadBinRow[]>();
+  for (const r of rows) if (r.bump_hit > 0 || r.bump_pass > 0) { const k = `${r.way_id}:${r.dir}`; (byDir.get(k) ?? byDir.set(k, []).get(k)!).push(r); }
+  for (const [k, rs] of byDir) { const [w, dir] = k.split(":"), bp = verifiedBumps(rs); if (bp.length) out[w][dir].bp = bp; }
   const shownIds = Object.keys(out).map(Number);
   if (shownIds.length) {
     const m2 = shownIds.map(() => "?").join(",");

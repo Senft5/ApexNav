@@ -1,5 +1,20 @@
 # VETTA — CURRENT AGENT HANDOFF STATE
 
+## Session 2026-11-11 (roam-b-crowd-bumps): bumps the crowd felt, verified and called (claude/roam-b-crowd-bumps, off origin/main)
+
+- IDEAS Q-02 crowd half, ROAD_INTELLIGENCE 4.3. `core/road_dna.spike_mask` / `Core.spikeMask` (parity-tested; detect_hazards
+  reads it): per sample 1 / 0 / unknown. web/contributor.js `bumpEvidence` + `binBump`: each bin's `bp` (unknown at walking
+  pace or with no vertical peaks); the live stream and ambient sharing carry `vert_peak_g` now (cockpit.js feedLive too).
+- Migration 0051 (`road_bins.bump_hit`, `bump_pass`, `bump_drivers`): sums weighted 2^((day - 2026-01-01)/120 d) (D1 refuses
+  power()); drivers via a keyed hash per person and 40 m in `seen` (contribute.ts `BUMP`, `bumpDriverStmts`). roads.ts
+  `verifiedBumps`: ±2 bins, Jeffreys Beta, > 0.8 and 2+ drivers, `bp: [[bin, p]]` per direction.
+- Phone: `seriesFrom` → `measuredAlong().crowdBumps`; `bumpEvents` makes `Bump` notes (marked `crowd`); cockpit.js
+  `applyCrowdBumps` (flag `crowd_bumps`, also mid-drive: it only adds), `noteworthyInCruise` calls them in cruise,
+  `seenLabel` says "Confirmed by members". privacy.html and APP_REVIEW.md say what the flag is.
+- Tests: backend/test/crowd_bumps.test.ts, tests/test_contributor.py (bump flags, route bumps), parity spike mask.
+- Next: hand-reported hazards (hazards.ts) still use vote counts; the same posterior could rank them. Crowd bumps on the
+  road page (Q-13 "verified hazards") and the map; bumps on a free drive with no route (needs the cells lookup live).
+
 ## Session 2026-11-11 (fable-time-attack): weekly time attack per area (claude/fable-time-attack, off origin/main)
 
 - Migration 0049 (ta_pool, ta_weeks, ta_entries): applied on preview; prod at merge. backend/src/time_attack.ts, routes /api/timeattack*,

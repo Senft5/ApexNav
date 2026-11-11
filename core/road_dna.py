@@ -579,6 +579,16 @@ def _rolling_median(values: np.ndarray, window: int) -> np.ndarray:
     return np.array([np.median(values[max(0, i - half):min(n, i + half + 1)]) for i in range(n)])
 
 
+def spike_mask(roughness_rms_g, vert_peak_g) -> np.ndarray:
+    """Per 5 m sample: 1.0 where the vertical peak is a spike (over SPIKE_PEAK_G and SPIKE_CONTRAST times the road's
+    rolling-median roughness around it), 0.0 where it was measured and isn't, NaN where either is unknown. The bump
+    evidence each pass contributes (IDEAS Q-02, web/contributor.js `bp`), and what detect_hazards reads bumps from."""
+    peak = np.asarray(vert_peak_g, dtype=float)
+    background = _rolling_median(np.asarray(roughness_rms_g, dtype=float), SPIKE_BACKGROUND_BINS)
+    hit = (peak > SPIKE_PEAK_G) & (peak > SPIKE_CONTRAST * background)
+    return np.where(np.isfinite(peak) & np.isfinite(background), hit.astype(float), np.nan)
+
+
 def detect_hazards(dist_m, crest_g, roughness_rms_g, vert_peak_g=None) -> list[dict]:
     """Bumps (vertical spike), crests (unweighting) and dips (compression) from measured IMU."""
     dist_m = np.asarray(dist_m, dtype=float)
@@ -588,9 +598,7 @@ def detect_hazards(dist_m, crest_g, roughness_rms_g, vert_peak_g=None) -> list[d
         # A pothole is an event that stands out from the road around it; steadily
         # broken pavement is SURF's job, not a stream of bump calls.
         peak = np.asarray(vert_peak_g, dtype=float)
-        rough = np.asarray(roughness_rms_g, dtype=float)
-        background = _rolling_median(rough, SPIKE_BACKGROUND_BINS)
-        is_spike = (peak > SPIKE_PEAK_G) & (peak > SPIKE_CONTRAST * background)
+        is_spike = spike_mask(roughness_rms_g, peak) == 1.0
         for i in _peak_events(peak, is_spike, dist_m, True):
             hazards.append({"index": i, "type": "bump", "severity_g": float(peak[i])})
     else:
