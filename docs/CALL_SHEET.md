@@ -110,6 +110,14 @@ The e2e suite is 152 flows now and takes about 24 minutes, so GitHub cut it off 
 (twice on #349, once on #344) with every flow before it passing. The limit is 35 minutes. No test is skipped or
 shortened. Undo: set `timeout-minutes` back to 25 in `.github/workflows/core-tests.yml`, or better, split the suite.
 
+## 2026-11-10 (fable-sheet-races): e2e waits for a sheet to be still before tapping its keys (claude/fable-sheet-races)
+
+Nine PRs were red on CI-only races: a click aimed at a sheet that was still sliding up landed on its backdrop, which
+closes the sheet. The two flows now wait until the sheet is open and still, and check it is still open after the tap.
+Update 2026-11-11: the wait itself was broken (an async predicate returns at once), and the app had a real fault: a
+press on a key that lifts on the backdrop closed the sheet. Now a backdrop closes a sheet only when the press began on
+it (`onBackdrop` in cockpit.js, five sheets). On a phone that is a tap during the slide, or a thumb that drifts off a
+key, no longer throwing the sheet away. Every check is as strict as before, plus two new ones. Undo: revert the PR.
 ## 2026-11-11 (fable-taste-picks): the route you choose over Vetta's pick teaches your taste (claude/fable-taste-picks)
 
 Taste learning only heard from "Which road was better?" after a drive, and most drivers never answer it. A choice made
@@ -161,6 +169,17 @@ in every message the app shows:
 Also: "Saved for offline: … Find it in Where to?." ended "?."; it reads "It's listed in Where to? now."
 
 Undo: revert the PR (`toast()` in web/cockpit.js, four CSS lines in web/index.html).
+
+## 2026-11-10 (fable-camber-sure): banking says how sure it is (claude/fable-camber-sure)
+
+The red team (TE-03) pointed out that banking comes from one phone on a sprung car with no body-roll model, yet the
+gauge read it to a tenth of a degree ("BANK +4.3°"). It now reads whole degrees ("BANK +4°"), the drive's lane readout
+too, and the end-of-drive line says "banked about 4°". Tapping the gauge (parked) says Bank is approximate, to a
+degree or two, because body roll is not modelled. The drive view already says how many runs agree or differ beside
+it. Nothing about how banking is measured or shared changed; a roll model or a surveyed reference road is the real fix
+(docs/PHILOSOPHY.md §4).
+
+Undo: revert the PR.
 
 ## 2026-11-10 (fable-layers): design pass 8: the Layers panel is the map's legend (claude/fable-layers)
 
