@@ -24,10 +24,11 @@ describe("crew page", () => {
     await ok(api(b, "POST", "/api/board", { segment_id: seg, driver_score: 640, driven_on: today() }));
     await ok(api(b, "POST", "/api/board", { segment_id: seg, driver_score: 702, driven_on: today() }));
     await ok(api(b, "POST", "/api/board", { segment_id: seg, driver_score: 990, driven_on: "2020-01-05" }));   // not this month
+    await ok(api(c, "PUT", "/api/grants", { audience_type: "crew", audience_id: crew, share_scores: false }));   // on by default; carol switched it off
     await ok(api(c, "POST", "/api/board", { segment_id: await makeSegment(c), driver_score: 900, driven_on: today() })); // carol shares nothing
     const p = await page(a, crew);
     expect(p.board.map((r: any) => [r.handle, r.score])).toEqual([["bob", 702], ["alice", null], ["carol", null]]);
-    expect(p).toMatchObject({ name: "Ridge Runners", members: 3, is_owner: true, livery: { tier: "plain", decals: 0, next: null, supporters: [] }, next: null, sharing_scores: false });
+    expect(p).toMatchObject({ name: "Ridge Runners", members: 3, is_owner: true, livery: { tier: "plain", decals: 0, next: null, supporters: [] }, next: null, sharing_scores: true });   // a private crew: on by default
     expect((await page(b, crew)).is_owner).toBe(false);
     expect((await api(out, "GET", `/api/crews/${crew}/page`)).status).toBe(404);
     await ok(api(a, "POST", "/api/blocks", { handle: "carol" }));

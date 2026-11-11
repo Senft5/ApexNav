@@ -83,9 +83,9 @@
       values: ['Lower music', 'Pause music'], set: 'the map’s Layers, under Voice (in the app)', control: 'data-music', homes: 1 },
     words: { label: 'The words', kind: 'setting',
       meaning: 'How the calls are said: Plain words ("Careful, medium right") or Rally notes ("Right 3, care").',
-      values: ['Plain words', 'Rally notes'], set: 'the Garage', control: 'data-words', homes: 1 },
+      values: ['Plain words', 'Rally notes'], set: 'the Garage, under Co-driver', control: 'data-words', homes: 1 },
     night: { label: 'Night', kind: 'setting', meaning: 'The night look: Auto (after sunset), Day or Night.',
-      values: ['Auto', 'Day', 'Night'], set: 'the Garage', control: 'data-night', homes: 1 },
+      values: ['Auto', 'Day', 'Night'], set: 'the Garage, under Look and voice', control: 'data-night', homes: 1 },
     // For this drive (route_ctx/driver.js): route preferences the route engine reads; each a ✓ under Prefer in Options
     passenger: { label: 'Passenger aboard', kind: 'setting',
       meaning: 'Someone is riding with you: routes avoid hairpins, quick left-right sequences and hard cornering loads, and the drive is tagged Passenger.',

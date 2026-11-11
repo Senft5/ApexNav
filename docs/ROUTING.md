@@ -336,6 +336,40 @@ better road. The route card warns "Low sun ahead for ~N min" from 3 minutes. Che
 late October, every candidate has 22–34 min of it and the card says so. Not kept when a route is restored later
 (the time has moved on).
 
+## When to go (2026-11-10)
+
+A route is not the same drive at every hour. `web/when_to_go.js` drives the route on the card at every half hour of the
+next 24 h (every hour past 150 km) and values each departure with the route engine's own model: the corridor is shifted
+in time (`shift`), the providers that hold the hour in their answers (conditions, wildlife, events, hazards-live: `TIMED`)
+are asked again for all departures in one run (`ApexRouteCtx.run` with `inputs`: the plan's context is their terrain and
+land use; the forecast is cached per cell three days ahead, so no new request), their answers replace the plan's hour in
+the context (`overlay`: a timed provider that didn't answer leaves its channels unknown, never the other hour's), and
+`ApexRouteEngine.evaluate` gives the penalties, bonuses and hard constraints (the road's quality and scenery per sample
+are worked out once: `opts.samples`).
+
+A departure's value is the part of the route's value that moves with the clock: bonuses (golden light) − penalties
+(deer hours, school runs, events, works, fog, cold road, ice…) − glare (1 a minute, at most 20) − the forecast
+(route_weather.js COST by the share of the route in rain, storms, snow or ice) − **scenery not seen**: the route's scenery
+points times the share of it driven in the dark. That last term is the one thing here the plan's ranking doesn't have.
+
+The card's line (`advice`), in this order: closed if you leave now ("… Open from 12:00"); **Better at 6:30 PM: no school
+run, golden light** when a departure between 06:00 and 22:00 beats now by 3 points or more; **Leave by 9:30 PM: rain
+likely after** when now is as good as it gets and the value falls 4 points within 3 hours (the departure named is still
+dry); else "No better time to leave in the next day". A departure whose forecast isn't known is never called better when
+now's is, and with no forecast at all the line and the panel say so ("by the sun and the calendar only").
+
+A tap opens the day as a ribbon: one bar per departure, taller is a better drive, night dimmed, a closed hour no bar;
+arrows and Home/End move the pick; under it the pick in words and what it gains or loses on now. **Plan for 6:30 PM**
+sets the plan's hour (`leaveAtMs` in cockpit.js): a trip to a place is ranked again for that hour (corridors, glare,
+the forecast in the ranking), a loop or GPX keeps its line and gets that hour's glare, forecast line and timed closures.
+The line then reads "Leaving 6:30 PM: dry, daylight"; Leave now, Start, or clearing the route puts the clock back.
+It runs 1.2 s after the card is up, yields to the page between departures, and never holds the card. Kill switch: flag
+`when_to_go`. Tests: tests/test_when_to_go.py (a real Cincinnati forecast with rain on 4 Nov); e2e "when to go".
+
+**Found while building it:** `sun.js` and `route_weather.js` loaded after conditions.js, wildlife.js and hazards_live.js,
+which take them once as they load, so in the app (not in the node tests) no route had light, glare, golden-view, deer
+hour or forecast hazard per sample. They now load first; tests/test_when_to_go.py holds the order.
+
 ## Time left while driving
 
 While a planned route (A→B, loop or Explore) is driven, the drive bar shows "48 min left · 5:12 PM" (web/eta.js,

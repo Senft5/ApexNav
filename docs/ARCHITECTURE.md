@@ -135,6 +135,25 @@ The JS file is a line-for-line port used by the browser/iOS cockpit for live OSR
   over a stretch = mean of combined g / that slice's radius (capped at 1.5, shown capped at 100 %) over samples of at least
   0.15 g. The drive view draws it as the Grip circle; scrubbing into a corner shows its trace and grip use from 100 m
   before turn-in to the exit.
+- Driver profile (`core/driver_profile.py`; JS `web/driver_profile.js`, parity-tested; the Log's Your driving): every
+  corner the coach may read, in every drive, is one observation. Six credits in the order a corner is driven: `squeeze`
+  (the braking for it, earlier stabs within 30 m included, is one rise and one fall: `_excess` = movement between
+  turning points, a turn counting once the trace has come back 0.10 g, beyond the one rise and fall it needs; 0.5 g of
+  excess is no credit; unjudged under 0.20 g peak), `brake` (the Score's braking credit, only where there was braking),
+  `arc` (the same excess on lateral g x (mean corner speed / speed)^2, so slowing in and driving out of one arc is not a
+  correction; 0.6 g is no credit), `entry` (the excess of speed through the corner, turns of 0.6 m/s, 3 m/s is no
+  credit), `line` (the slowest point, `_marks` over the corner and 50 m either side, up to 5 m before the apex is full
+  credit, 30 m none) and `exit` (coasting from brakes to throttle beyond 10 m, 50 m none; only with a slowest point).
+  Levels are means x 100 from 30 corners. Findings: lefts/rights, tightens, crests, down/uphill (4 % over the corner and
+  50 m either side), the first 10 and after 60 minutes compare each credit minus its size class's mean; tight and fast
+  against the rest compare it as measured. Kept when the sides differ by 0.08 and 3 standard errors, on 12 corners a
+  side, and two in three of the drives holding 3 of each agree. A car or a tag compares drive means (4 drives a side of
+  5 corners). Months need 15 corners; a change is "sure" at 0.05 and 2 standard errors. Never a speed, time or pace.
+- Practice (`practice`, `drive_practice` in the same files; IDEAS D-27): a plan `{skill, since, where, before}` in
+  localStorage `vetta.practice`, set from Your driving. Every corner of a drive that started before `since` is
+  "before". Each later drive is read on that skill alone (and on the corners of the focus's place) against the kept
+  `before` mean and SE. Sure at 0.05 and 2 SE; unknown under 4 corners. The end card gets its line from the `save` job,
+  or from `practiceLine` for a stored drive.
 - Web shell: `web/index.html` (cockpit markup and styles; its script is `web/cockpit.js`, loaded `defer` with the launch modules, while `web/lazy.js` loads People, the Garage, crews, builds, the convoy, friends on the map and the phonemizer on first use or once the map is idle, REVIEW_FEEL F-03; fonts bundled in `web/fonts/`, F-12), `web/analysis.html` (history / segments / compare), `web/themes.js` (theme registry), `web/instruments.js` (renderers).
 
 ## 3c. Fun routing (`web/fun_route.js`)
