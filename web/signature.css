@@ -225,3 +225,14 @@ body .cp-say textarea:focus { box-shadow: inset 0 0 0 2px var(--panel-ink); outl
    saw the opaque deck over the canvas and culled that much of it, at the wrong end of the y-flipped WebGL layer. A deck
    that is not quite opaque is not an occluder, so nothing is culled; 0.4 % of the map under it is invisible. */
 .binnacle { background: color-mix(in srgb, var(--panel) 99.6%, transparent); }
+
+/* ================= the first friend, the first crew (signed in, nobody yet) =================
+   Signed out, People is a page: a drawing, its name set large, the key at the foot. Signed in with nobody yet it was one
+   grey sentence and a small key. Now it is the same page: your road drawn, the friend's (or the crew's file) still pencil,
+   what to do set large, and the one key full width under it. */
+.people-first { display: flex; flex-direction: column; }
+#accountSection .people-first .join-head { margin-top: 18px; }
+.people-first .people-lead { margin-top: 6px; font-size: 15px; color: var(--panel-dim); }
+.people-first + .row { margin-top: 4px; }
+.people-first + .row > .ink-btn.solid { flex: 1 1 auto; min-height: 52px; font-size: 16px; }
+.join-art .jr-seat { fill: var(--panel); stroke: var(--panel-dim); stroke-width: 2; stroke-dasharray: 2.5 3; }
