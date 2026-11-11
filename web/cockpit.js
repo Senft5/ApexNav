@@ -5764,7 +5764,7 @@
       const bookPart = () => { const p = roadbooks && accountMe && accountMe.member ? roadbooks.addPart(() => box.replaceChildren()) : null; return p ? [p] : []; };
       if (!fr.length && !cr.length) {
         const books = bookPart();                                        // signed in with nobody to send it to yet: the roadbook is the way to keep it
-        box.replaceChildren(el('p', { className: 'note', textContent: books.length ? 'Add friends or a crew (People) to send routes to them.' : 'No friends or crews to share with yet. Add them in People.' }), ...books);
+        box.replaceChildren(el('p', { className: 'note', textContent: books.length ? 'Add friends or a crew in People to send routes to them.' : 'No friends or crews to share with yet. Add them in People.' }), ...books);
         if (books.length) box.scrollIntoView({ block: 'nearest' });
         return;
       }

@@ -174,7 +174,7 @@
     const writeJson = (k, v) => { try { store.setItem(k, JSON.stringify(v)); } catch (_) {} };
     const today = () => new Date().toISOString().slice(0, 10);
     const call = async (method, path, body) => { try { const r = await apiCall(method, path, body); return { ok: r.ok, status: r.status, data: r.status === 204 ? null : await jsonOf(r) }; } catch (_) { return { ok: false, status: 0, data: null }; } };
-    const WHY = { 429: 'That’s the limit for now.', 409: 'Pick a handle first (People): a shared roadbook carries it.', 403: 'This roadbook was taken down and can’t be public again.', 0: 'No connection. Try again.' };
+    const WHY = { 429: 'That’s the limit for now.', 409: 'Pick a handle first in People: a shared roadbook carries it.', 403: 'This roadbook was taken down and can’t be public again.', 0: 'No connection. Try again.' };
     const why = (r, otherwise) => WHY[r.status] || otherwise;
 
     // what the phone remembers between visits: your books' roads by box (to match a drive without asking), and stamp days
@@ -285,7 +285,7 @@
         if (book.visibility !== 'private') keys.append(btn('Share', () => page.copyText(link(page.origin(), book.id), 'Link copied. Anyone it is shown to can open it.', book.name), 'ink-btn'));
       } else {
         const f = btn(book.following ? 'Following' : 'Follow', async () => {
-          if (!member()) { toast('Sign in (People) to follow a roadbook and collect its stamps.'); return; }
+          if (!member()) { toast('Sign in to follow a roadbook and collect its stamps.'); return; }
           const want = !book.following, r = await call(want ? 'PUT' : 'DELETE', `/api/roadbooks/${encodeURIComponent(book.id)}/follow`);
           if (!r.ok) { toast(why(r, 'Couldn’t change that. Try again.')); return; }
           book.following = want; book.followers = Math.max(0, (book.followers || 0) + (want ? 1 : -1));
@@ -382,7 +382,7 @@
       const n = String(name || '').trim();
       if (!n) { toast('Give the roadbook a name.'); return null; }
       const r = await call('POST', '/api/roadbooks', { name: n, visibility });
-      if (!r.ok || !r.data) { toast(why(r, r.status === 401 || r.status === 403 ? 'Sign in (People) to keep a roadbook.' : 'Couldn’t make the roadbook. Try again.')); return null; }
+      if (!r.ok || !r.data) { toast(why(r, r.status === 401 || r.status === 403 ? 'Sign in to keep a roadbook.' : 'Couldn’t make the roadbook. Try again.')); return null; }
       return r.data.id;
     }
     const newForm = (label, then) => {

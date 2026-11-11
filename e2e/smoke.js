@@ -3847,7 +3847,7 @@ flow('roadbooks: a planned road goes into a new roadbook from Share; People list
   await page.waitForSelector('.rb-pop.open .rb-road:has-text("Foothills west")', { timeout: 15000 });
   check(!(await page.$('.rb-pop.open .rb-meter')) && !(await page.$('.rb-pop.open button:has-text("Report")')), 'signed out: no progress of yours, no Report');
   await page.click('.rb-pop.open button:has-text("Follow")');
-  await page.waitForFunction(() => /Sign in \(People\) to follow a roadbook/.test(document.getElementById('toast').textContent));
+  await page.waitForFunction(() => /Sign in to follow a roadbook/.test(document.getElementById('toast').textContent));
 }, { geolocation: { latitude: 35.6, longitude: -83.8 }, permissions: ['geolocation'] });
 
 flow('crash check: a hard impact then a stop asks "Are you OK?"; no answer offers a call and a text to the contact (IDEAS D-17)', async (page, base) => {
