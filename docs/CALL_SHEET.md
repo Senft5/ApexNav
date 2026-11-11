@@ -16,6 +16,16 @@ meter is gone; a Plain crew's page says "Plain livery" and nothing it lacks, and
 and comes back with the next one, as before.
 
 Undo: revert the PR (tiers come back as they were; nothing in the database changed).
+## 2026-11-10 (fable-night-keys): at night no key outshines the road (claude/fable-night-keys)
+
+Red team UX-07: on the night drive screen the brightest things were keys: End, Done and the chosen replay speed were
+solid cream slabs. At night they are now outlined in the panel's ink (same size, same place), so the instruments and
+the road are the brightest things there. Day is unchanged; Tapedeck keeps its own outlined End; the Undo after End
+keeps its running fill. I checked the other "may be stale" UI findings against today's build: the tab bar already
+hides while driving or replaying, the 1 hour / 2 hours loop keys are gone, and the route card and Garage belong to the
+redesign thread, so I left them.
+
+Undo: revert the PR (CSS only).
 
 ## 2026-11-10 (fable-road-page): About a road says its climb, and speaks in words (claude/fable-road-page)
 
