@@ -87,14 +87,22 @@ function check(cond, msg) { if (!cond) throw new Error(msg); }
 // landed where the key had been, on the dimmed backdrop, and the backdrop closes the sheet (CI, 2026-11-10: "a pin has a
 // name" found the spot dialog shut with its stars untouched; "Location off" likewise).
 async function sheetSettled(page, id) {
-  await page.waitForFunction(async (id) => {
-    const o = document.getElementById(id);
-    if (!o || !o.classList.contains('show')) return false;
-    if (o.getAnimations({ subtree: true }).some((a) => a.playState === 'running' || a.playState === 'pending')) return false;
-    const top = () => (o.firstElementChild || o).getBoundingClientRect().top, a = top();
-    await new Promise((ok) => requestAnimationFrame(() => requestAnimationFrame(ok)));
-    return o.classList.contains('show') && top() === a;
-  }, id, { timeout: 10000, polling: 100 });
+  // One evaluate that loops (page.evaluate awaits its promise; a waitForFunction predicate that is async does not wait:
+  // its promise is truthy at once, which is how this once returned with the sheet still at the bottom of its slide).
+  const ok = await page.evaluate(async (id) => {
+    const frames = () => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+    const end = performance.now() + 10000;
+    while (performance.now() < end) {
+      const o = document.getElementById(id);
+      if (o && o.classList.contains('show') && !o.getAnimations({ subtree: true }).some((a) => a.playState === 'running' || a.playState === 'pending')) {
+        const top = () => (o.firstElementChild || o).getBoundingClientRect().top, a = top();
+        await frames();
+        if (o.classList.contains('show') && top() === a) return true;
+      } else await new Promise((r) => setTimeout(r, 50));
+    }
+    return false;
+  }, id);
+  check(ok, `the ${id} sheet is open and at rest`);
 }
 // A car's own cluster (instruments.js carGauge): nothing printed on it overlaps. In each gauge's own units, every word and
 // numeral (its inked glyphs, measured), every tick, the hubs and the lamp, and each needle lying at rest (a needle that reads
@@ -736,17 +744,24 @@ flow('a pin has a name: Go here routes "To <the road>", a tap on the map is a "D
   // the spot dialog: a rating is stars filled up to it
   await page.click('#pinSaveBtn');
   await sheetSettled(page, 'hlOverlay');
-  // CI only (2026-11-10): the dialog shut right after a star was tapped, at rest. Whatever takes 'show' off it leaves its
-  // stack here, with the mode and the last key, so a failure names its cause.
-  await page.evaluate(() => {
-    const o = document.getElementById('hlOverlay'), rm = o.classList.remove.bind(o.classList);
-    window.__hlShut = null;
-    document.addEventListener('keydown', (e) => { window.__hlKey = e.key; }, true);
-    o.classList.remove = (...a) => { if (a.includes('show') && !window.__hlShut) window.__hlShut = String(new Error().stack).split('\n').slice(1, 6).join(' | '); return rm(...a); };
+  // CI (2026-11-10): a star tap once shut the dialog. The press began on the star but the click went to the backdrop, so
+  // the backdrop now closes a sheet only on a press that began on it. Say what lies under the star just before the tap.
+  const under = await page.evaluate(() => {
+    const b = document.querySelector('#hlRating [data-rating="3"]'), r = b.getBoundingClientRect();
+    const hit = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2);
+    return { box: [Math.round(r.left), Math.round(r.top), Math.round(r.width), Math.round(r.height)], hit: hit ? (hit.id || hit.className || hit.tagName) : null, onStar: !!hit && (hit === b || b.contains(hit)) };
   });
+  check(under.onStar, 'the third star is what lies under its own centre: ' + JSON.stringify(under));
   await page.click('#hlRating [data-rating="3"]');
-  const shut = await page.evaluate(() => ({ open: document.getElementById('hlOverlay').classList.contains('show'), by: window.__hlShut, key: window.__hlKey || null, live: document.getElementById('app') && document.getElementById('app').classList.contains('live') }));
-  check(shut.open, 'the spot dialog is still open after a star is tapped: ' + JSON.stringify(shut));
+  check(await page.evaluate(() => document.getElementById('hlOverlay').classList.contains('show')), 'the spot dialog is still open after a star is tapped: ' + JSON.stringify(under));
+  // a press on a key that lifts on the backdrop is not a tap on the backdrop
+  const drag = await page.evaluate(() => {
+    const o = document.getElementById('hlOverlay'), star = document.querySelector('#hlRating [data-rating="2"]');
+    star.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true }));
+    o.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    return o.classList.contains('show');
+  });
+  check(drag, 'a press on a star that lifts on the backdrop leaves the spot dialog open');
   const stars = await page.evaluate(() => [...document.querySelectorAll('#hlRating button')].map((b) => [b.classList.contains('on'), b.getAttribute('aria-pressed'), Math.round(b.getBoundingClientRect().height)]));
   check(stars.map((s) => s[0]).join() === 'true,true,true,false,false' && stars.map((s) => s[1]).join() === 'false,false,true,false,false' && stars.every((s) => s[2] >= 44), 'three stars: three filled, the third pressed, 44 pt each: ' + JSON.stringify(stars));
   const keys = await page.evaluate(() => ['hlAddBtn', 'hlCancelBtn'].map((id) => { const r = document.getElementById(id).getBoundingClientRect(); return [Math.round(r.top), Math.round(r.height), Math.round(r.width)]; }));

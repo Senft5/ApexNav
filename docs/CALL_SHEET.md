@@ -71,7 +71,10 @@ shortened. Undo: set `timeout-minutes` back to 25 in `.github/workflows/core-tes
 
 Nine PRs were red on CI-only races: a click aimed at a sheet that was still sliding up landed on its backdrop, which
 closes the sheet. The two flows now wait until the sheet is open and still, and check it is still open after the tap.
-No app code changed; every check is as strict as before. Undo: revert the PR.
+Update 2026-11-11: the wait itself was broken (an async predicate returns at once), and the app had a real fault: a
+press on a key that lifts on the backdrop closed the sheet. Now a backdrop closes a sheet only when the press began on
+it (`onBackdrop` in cockpit.js, five sheets). On a phone that is a tap during the slide, or a thumb that drifts off a
+key, no longer throwing the sheet away. Every check is as strict as before, plus two new ones. Undo: revert the PR.
 
 ## 2026-11-10 (fable-loop-time): a loop can be set by time on the dial (claude/fable-loop-time)
 

@@ -42,6 +42,16 @@
   sheet over the map. It passed in the whole-suite run and on CI. `overflow: clip` on `.stage` fixes the scroll but the
   sheet still came up in the isolated run, so I left both out of this PR. Next: find what else holds the sheet up there.
 - Location flow 5 of 5 here (also at THROTTLE=6); pin flow passes the star step every run.
+- 2026-11-11, the real cause (from the reviewer's diagnostic run): the star tap reached the backdrop's click handler.
+  Two faults. (1) `sheetSettled` never waited: its `waitForFunction` predicate was `async`, and a promise is truthy, so
+  it returned at once with the sheet still at the bottom of its slide (measured here: card top 844 of 844, sheet-up at
+  0 ms). It now loops in one `page.evaluate`, which does await, and checks it settled. (2) The app: a press that began
+  on a key and lifted on the backdrop (the sheet moving under it, or a drag) sends the click to the backdrop, their
+  shared parent, and that closed the sheet. `onBackdrop(back, close)` in `web/cockpit.js` closes only when the press
+  began on the backdrop too; the spot, pin, explain, spot-photo and Ways-to-go backdrops use it
+  (`tests/test_backdrop_press.py`). The flow now checks the star is under its own centre before the tap, and that a
+  press on a star lifted on the backdrop leaves the dialog open. Not done: the backdrops in confirm.js, convoy_ui.js,
+  crew_page.js, photos.js, row_select.js and whats_new.js still close on the click target alone.
 
 ## Session 2026-11-10 (fable-there-and-back): there and back, home another way (claude/fable-there-and-back, off origin/main 948cb4b)
 
