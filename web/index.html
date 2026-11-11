@@ -1626,6 +1626,25 @@
       #endCard .end-card > * { grid-column: 1; }
       #endCard .end-card > .end-line, #endCard .end-card > .end-acts, #endCard .end-card > .end-links { grid-column: 2; }
       #endCard .end-card > .end-line { grid-row: 1 / span 2; }
+      /* design pass "first and last": on its side the hero is shorter so the card and its keys fit the height */
+      #endCard > .card-sheet { padding-top: 14px; }
+      #endCard .end-card > .end-line { grid-row: 1 / span 4; align-self: start; }
+      #endCard .end-card:has(> .end-line:empty) > .end-acts { grid-row: 2 / span 2; align-self: start; margin-top: 0; }
+      #endCard .end-card:has(> .end-line:empty) > .end-links { grid-row: 4; align-self: start; }
+      .end-card h2 { font-size: 28px; }
+      .end-score { padding: 10px 0 8px; } .end-score b { font-size: 76px; } .end-glyph { width: 72px; height: 72px; } .end-glyph svg { width: 72px; height: 72px; }
+      .end-score.no-score b { font-size: 22px; }
+      .end-meta .f b { font-size: 22px; } .end-meta { padding-bottom: 8px; }
+      #permSheet > .card-sheet { padding-top: 14px; }
+      #permSheet h2 { font-size: 26px; }
+      .perm { grid-template-columns: repeat(2, minmax(0, 1fr)); column-gap: 20px; margin-top: 8px; }
+      .perm-row { padding: 6px 0; grid-template-columns: 28px minmax(0, 1fr); column-gap: 10px; }
+      .perm-row svg { width: 28px; height: 28px; }
+      .perm-row b { font-size: 17px; }
+      #permSheet #permNote { margin: 8px 0 10px; }
+      #permSheet .card-sheet { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); column-gap: 20px; }
+      #permSheet .card-sheet > :is(h2, .perm, #permNote) { grid-column: 1 / -1; }
+      #permNo { margin-top: 0; }
       html[data-theme="tapedeck"] .cluster-dials { grid-template-columns: var(--dial) minmax(0, 1fr); }        /* 6: the meters get a row */
       html[data-theme="tapedeck"] .cluster-dials > .dial-g { grid-column: 1 / -1; width: 100%; height: auto; aspect-ratio: auto; }
       html[data-theme="tapedeck"] .dial-g > .vfd-meters { grid-template-columns: 1fr 1fr; column-gap: 16px; }
