@@ -873,7 +873,9 @@ flow('route overview: the card says what the drive is like in plain words, from 
       const t = window.apexDebug.track, s = t.__story && t.__story.s, box = document.getElementById('routeCardStory');
       return { lines: s ? s.lines : [], coverage: s && s.coverage, lead: document.getElementById('routeCardStoryLead').textContent,
         more: [...document.querySelectorAll('#routeCardStoryMore p')].map((p) => p.textContent), open: box.open, one: box.classList.contains('one'),
-        streets: (t.steps || []).map((x) => x.street).filter(Boolean), cardW: document.getElementById('routeCard').scrollWidth - document.getElementById('routeCard').clientWidth };
+        streets: (t.steps || []).map((x) => x.street).filter(Boolean), cardW: document.getElementById('routeCard').scrollWidth - document.getElementById('routeCard').clientWidth,
+        // deer hours need no tiles: the clock, the sun and the month (wildlife.js) times the land along the road
+        deerKnown: (() => { const c = t.ranked, v = c && c.ctx && ApexRouteEngine.channel(c.ctx, 'deer_risk'); return !!v && [...v].some((x) => Number.isFinite(x) && x > 1); })() };
     });
     const texts = r.lines.map((l) => l.text);
     if (process.env.STORY_LOG) console.log(JSON.stringify({ texts, coverage: r.coverage, streets: [...new Set(r.streets)] }));
@@ -886,8 +888,10 @@ flow('route overview: the card says what the drive is like in plain words, from 
     for (const l of r.lines) for (const n of (l.facts && l.facts.names) || []) check(r.streets.includes(n), `"${n}" is on the route: ` + JSON.stringify(r.streets));
     const hl = r.lines.find((l) => l.kind === 'highlight');
     if (hl) check(hl.facts.m >= 1500 && hl.facts.toM <= r.coverage.km * 1000 + 30, 'the best part is a real stretch of this route: ' + JSON.stringify(hl.facts));
-    // the grid's tiles carry no weather, deer or members' data here: nothing said about them
-    check(!r.lines.some((l) => l.kind === 'members' || l.kind === 'conditions'), 'no members\' or conditions line without their data: ' + JSON.stringify(texts));
+    // the grid's tiles carry no weather or members' data here: nothing said about them; deer only where the route's deer
+    // channel says so (it is evening in November on CI's clock some of the time, and the wildlife provider runs offline)
+    const deerOnly = (l) => l.kind === 'conditions' && l.facts.items.every((x) => x.key === 'deer') && r.deerKnown;
+    check(!r.lines.some((l) => l.kind === 'members' || (l.kind === 'conditions' && !deerOnly(l))), 'no members\' or conditions line without their data: ' + JSON.stringify(texts));
     check(r.cardW <= 1, 'the card does not grow sideways: ' + r.cardW);
     // a tap opens the rest
     if (texts.length > 1) {
