@@ -16,6 +16,16 @@
 - Tests: tests/test_brake_heat.py (18, incl. 10 Hz held speed, coasting, held-speed CSV rows). Checked: pytest 1607 passed; e2e first run, drive ended (card and Log), car-started drive.
 - Next: the route card warns of a long descent ahead from the DEM profile (stages.js profile) with the same model at the
   router's speeds; the Garage car's weight and brake size could set DISC_C; not checked on a real descent yet (VERIFY).
+## Session 2026-11-11 (routing round two): Avoid cameras holds for every candidate, speed cameras included (claude/project-thread-39xbx9)
+
+- Gap found: Avoid → Cameras only reached Valhalla's requests (exclude_locations). Our own router, the highway-friendly
+  quickest and stage plans ignored it, and the ranking could pick a route past a camera with the switch on.
+- `cockpit.js` `avoidForTrip` → `camsForTrip`: the kept camera tiles (both kinds: ALPR and `highway=speed_camera`) within
+  5 km of the trip's box, 60 nearest its line, as `avoid.cams` (waits 0.25 s at most; `policeWarm` loads the tiles round
+  you when Where to? opens). `graph_router.js` `AVOID_CAM_X` 8 on edges within `AVOID_CAM_M` 35 m. `fun_route.js`
+  `unavoided` → `cameras` within `CAMERA_ON_M` 35 m (route.has.cameras), so keepAvoiding drops it when another doesn't.
+- Tests: tests/test_avoid_cameras.py (+3), tests/test_graph_router.py avoidCameras, e2e "avoid cameras" (speed camera too).
+- Not done: loops don't take `avoid.cams` (only A→B plans go through avoidForTrip).
 ## Session 2026-11-11 (roam-c-crest-contract): crest's units written down; IDEAS Q-08 done (claude/roam-c-crest-contract, off origin/main)
 
 - Checked: ApexNavApp.swift, web/sensors.js and both CSVs carry `crest_vertical_g` in g (negative going light);

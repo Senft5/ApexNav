@@ -13,6 +13,18 @@ and height) heats the discs, and the air cools them. It never says a temperature
 it counts engine braking as brake work, so it errs toward warning. Ordinary hills stay quiet (the two demo drives never
 get past cool). Nothing leaves the phone. Undo: revert the PR, or remove the `noteBrakes(...)` calls in cockpit.js to keep
 only the drive page line.
+
+## 2026-11-11 (routing round two): Avoid cameras keeps every route off them, speed cameras with plate readers
+
+With Avoid → Cameras on, only one of the routers was told about the cameras; the others' routes (our own router's, the
+quickest on highways, stage plans) still competed and could win while driving past one. Now every plan carries the
+cameras near the trip, our router costs the road a camera sits on 8 times its time, and a route that still drives past
+one (within 35 m) gives way to any route that doesn't. Fixed speed cameras are in the same list as plate readers, under
+the same switch, as on the map; you asked for speed cameras to be avoided too. A camera on a crossing road doesn't count
+against a route (35 m, not the card's 60 m count). When nothing gets round, the card says "Couldn't avoid cameras".
+
+Undo: revert the PR (no data changed). To split speed cameras onto their own switch, filter `kind` in `camsForTrip` and
+`camerasAround` (cockpit.js) by a new avoid key.
 ## 2026-11-11 (sweep round two): time attack counts only a week you entered (claude/project-thread-g9yher)
 
 Two bugs in the weekly time attack (#393). The Log never sent any runs, so every board stayed empty. And the server

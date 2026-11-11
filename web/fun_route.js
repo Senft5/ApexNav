@@ -803,7 +803,21 @@
     const has = (route && route.has) || {};
     const out = ['highways', 'tolls', 'ferries'].filter(k => avoid && avoid[k] && has[k] === true);
     if (avoid && avoid.police && policeOn(avoid, route)) out.push('police');
+    if (avoid && avoid.cameras && camerasOn(avoid, route)) out.push('cameras');
     return out;
+  }
+  // Avoid cameras: avoid.cams are the plate readers and fixed speed cameras near this trip (the camera map, worked out once
+  // per plan, cockpit.js avoidForTrip); a route within CAMERA_ON_M of one drives past it. Kept on the route for that set
+  // (route.has.cameras), as police is. No camera list (the map offline, a trip too big): nothing is said.
+  const CAMERA_ON_M = 35;
+  const camsSeen = new WeakMap();
+  function camerasOn(avoid, route) {
+    if (!route) return false;
+    const pts = Array.isArray(avoid.cams) ? avoid.cams : null, H = root.ApexHazardReports || (typeof require === 'function' && typeof module !== 'undefined' ? require('./hazard_reports.js') : null);
+    if (pts && H && Array.isArray(route.coords)) {
+      if (camsSeen.get(route) !== pts) { route.has = { ...(route.has || {}), cameras: H.passesNear(route.coords, pts, CAMERA_ON_M) }; camsSeen.set(route, pts); }
+    }
+    return !!(route.has && route.has.cameras === true);
   }
   // Avoid police reports: avoid.points are the live reports near this trip (hazard_reports.js policeFor), worked out once
   // per plan; whether a route passes one is kept on the route for that set (route.has.police), so the card can say it later
@@ -943,6 +957,6 @@
   /** Whether a tune changes anything at all (an empty or absent one is no tune). */
   const tuned = (t) => !!(t && typeof t === 'object' && Object.values(t).some((m) => m && typeof m === 'object' && Object.keys(m).length));
 
-  const api = { tuneOnto, untune, tuned, tuneKnobs, LEVELS, HWY, highwayKm, levelHighways, applyHighways, BUILT, builtKeep, builtAgree, shown, dominates, cornerWeight, townKm, townCost, STREET, streetSample, streetShare, exploreShortlist, exploreTargets, explorePicks, distinctOptions, glare, glareCost, LOOP_BY_TIME, LOOP_LEVEL, loopLevelAdjust, LOOP_HWY, loopHighwayCost, loopDominates, loopRank, loopWay, loopOffer, LOOP_OFFER, AVOID_DEFAULT, AVOID_LABELS, STAGE_KEPT, stageCoverage, keptStages, CAMERA_BOX_DEG, camerasToExclude, costing, unavoided, keepAvoiding, why, geometry, alongPoints, insertVia, loopValue, loopShortlist, loopPlansFromMatrix, score, shortlist, matrixPoints, plansFromMatrix, sectionCount, sectionPoints, combineSections, planKey, searchArea, waypoints, rank, along, kmBetween, directionBonus, setList, SET_FINISH, SET_FATIGUE, MAX_TECH_PER_KM, carNote, stageSpans, stageAhead };
+  const api = { tuneOnto, untune, tuned, tuneKnobs, LEVELS, HWY, highwayKm, levelHighways, applyHighways, BUILT, builtKeep, builtAgree, shown, dominates, cornerWeight, townKm, townCost, STREET, streetSample, streetShare, exploreShortlist, exploreTargets, explorePicks, distinctOptions, glare, glareCost, LOOP_BY_TIME, LOOP_LEVEL, loopLevelAdjust, LOOP_HWY, loopHighwayCost, loopDominates, loopRank, loopWay, loopOffer, LOOP_OFFER, AVOID_DEFAULT, AVOID_LABELS, STAGE_KEPT, stageCoverage, keptStages, CAMERA_BOX_DEG, CAMERA_ON_M, camerasToExclude, costing, unavoided, keepAvoiding, why, geometry, alongPoints, insertVia, loopValue, loopShortlist, loopPlansFromMatrix, score, shortlist, matrixPoints, plansFromMatrix, sectionCount, sectionPoints, combineSections, planKey, searchArea, waypoints, rank, along, kmBetween, directionBonus, setList, SET_FINISH, SET_FATIGUE, MAX_TECH_PER_KM, carNote, stageSpans, stageAhead };
   if (typeof module !== 'undefined' && module.exports) module.exports = api; else root.ApexFunRoute = api;
 })(typeof window !== 'undefined' ? window : globalThis);
