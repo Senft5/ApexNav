@@ -22,7 +22,8 @@ const WEEK = "date('now', '-6 days', 'weekday 1')";
 
 /** The area a point is in: the 1-degree square, south-west corner, as 'lat,lon'. */
 export const cellOf = (lat: number, lon: number) => `${Math.floor(lat)},${Math.floor(lon)}`;
-const cellParam = (u: URL) => cellOf(num(Number(u.searchParams.get("lat")), "lat", -85, 85), num(Number(u.searchParams.get("lon")), "lon", -180, 180));
+const qNum = (u: URL, k: string) => { const s = u.searchParams.get(k); return s === null || s.trim() === "" ? NaN : Number(s); };   // missing is 400, never (0, 0)
+const cellParam = (u: URL) => cellOf(num(qNum(u, "lat"), "lat", -85, 85), num(qNum(u, "lon"), "lon", -180, 180));
 const cellBody = (c: unknown) => {
   const m = /^(-?\d{1,2}),(-?\d{1,3})$/.exec(String(c ?? ""));
   if (!m || Math.abs(+m[1]) > 85 || Math.abs(+m[2]) > 180) throw new HttpError(400, "bad_cell");

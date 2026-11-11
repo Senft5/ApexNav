@@ -24,6 +24,7 @@ describe("time attack", () => {
   it("put up, picked for the week, entered, timed; the quickest stays; the board is everyone's, blocks hide", async () => {
     const [a, b, c, d] = [await makeUser("alice"), await makeUser("bob"), await makeUser("cara"), await makeUser("dee")];
     expect((await ta(b)).circuit).toBeNull();                                                 // nothing put up yet
+    expect((await api(b, "GET", "/api/timeattack")).status).toBe(400);                         // no area: a 400, not the (0, 0) square
     const seg = await makeSegment(a, "Dry Ridge climb");
     expect(await json(api(a, "POST", "/api/timeattack/pool", { segment_id: seg }))).toEqual({ cell: CELL });
     expect((await api(b, "POST", "/api/timeattack/pool", { segment_id: seg })).status).toBe(404);   // not yours
