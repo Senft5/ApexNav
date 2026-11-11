@@ -217,6 +217,12 @@
 - [x] .github/workflows/core-tests.yml e2e `timeout-minutes` 25 → 35: 152 flows take ~24 min and were cancelled on the
   last flow. Next: split e2e into two jobs if it passes ~30 min.
 
+## Session 2026-11-10 (fable-log-units): the Log's small lengths in the driver's units (claude/fable-log-units, off origin/main 3f2f315)
+
+- `web/units.js` `fine(m)`: "12 m" or feet to the nearest 5 ("40 ft"). Used in `web/analysis.html` (stage marking's
+  climb and minimum length, the steadiness chart's scale, dots and note) and `web/drive_view.js` (repeatability list,
+  grip circle notes; `size(100)` for "before turn-in"). drive_view falls back to metres with no units module (its tests).
+- Tests: tests/test_units.py (new case); e2e "a whole road as a stage" now expects "up 65 ft".
 ## Session 2026-11-10 (fable-driver-profile): Your driving, the driver profile over every drive (claude/fable-driver-profile, off origin/main 948cb4b)
 
 - `core/driver_profile.py` (new): `observe(drive)` gives one observation per corner the coach may read (six credits

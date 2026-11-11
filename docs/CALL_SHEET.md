@@ -245,6 +245,15 @@ The e2e suite is 152 flows now and takes about 24 minutes, so GitHub cut it off 
 (twice on #349, once on #344) with every flow before it passing. The limit is 35 minutes. No test is skipped or
 shortened. Undo: set `timeout-minutes` back to 25 in `.github/workflows/core-tests.yml`, or better, split the suite.
 
+## 2026-11-10 (fable-log-units): the Log's last metre-only lines are in your units (claude/fable-log-units)
+
+After #352 a driver in miles still read metres in the Log: a stage being marked said "up 34 m" and "Make it at least
+200 m long"; the repeatability list said "braking point typically within 6 m"; the steadiness chart's scale, its dots
+and its note were in metres; the grip circle's notes said "every 5 m" and "100 m before turn-in". These now follow
+Settings, Units. Small lengths in feet are said to the nearest 5 ft ("within 20 ft"), since a finer figure would
+claim more than the phone measured. Metric drivers see what they saw before.
+
+Undo: revert the PR. Nothing stored changes; this is only how lengths are written.
 ## 2026-11-10 (fable-driver-profile): the Log has "Your driving", a picture of how you drive over every drive (claude/fable-driver-profile)
 
 Until now every reading was of one drive, or one corner against your other passes of it. Your driving reads every clean

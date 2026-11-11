@@ -5720,7 +5720,7 @@ flow('a whole road as a stage: the drive\'s roads are keys, the picked one is ci
   await page.click('#segRoads button:has-text("Bank Road uphill")');
   await page.waitForSelector('#segMap ellipse');
   check(await page.getAttribute('#segRoads button:has-text("Bank Road uphill")', 'aria-pressed') === 'true', 'the picked road is pressed');
-  check(/corners · up 20 m/.test(await page.textContent('#segInfo')), 'its length and climb: ' + await page.textContent('#segInfo'));
+  check(/corners · up 65 ft/.test(await page.textContent('#segInfo')), 'its length and climb (20 m), in feet for a driver in miles: ' + await page.textContent('#segInfo'));
   await page.click('#segSave');
   await page.waitForFunction(() => JSON.parse(localStorage.getItem('apex.segments') || '[]').some((s) => s.name === 'Bank Road uphill'));
   const seg = await page.evaluate(() => JSON.parse(localStorage.getItem('apex.segments')).find((s) => s.name === 'Bank Road uphill'));
