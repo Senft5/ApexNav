@@ -5139,6 +5139,52 @@ flow('offline area: Save the map here keeps the map, labels and terrain; with no
   check(await page.evaluate(() => !!window.apexDebug.map.getSource('openmaptiles')), 'the saved style and its source loaded offline');
 }, { viewport: { width: 1280, height: 900 } });
 
+flow('offline area, as a member: Save the map here keeps the measured roads round it; with no signal a plan still has them, and clearing them (what Sign out calls) leaves nothing (IDEAS F-02)', async (page, base) => {
+  let online = true;
+  const asks = [], way = { 0: { i: [0, 1, 2], n: [3, 3, 3], cam: [0.02, 0.03, 0.02], cn: [3, 3, 3], rough: [0.1, 0.2, 0.1] } };
+  await page.route('https://tiles.openfreemap.org/**', (route) => {
+    if (!online) return route.abort();
+    const u = route.request().url();
+    if (u.includes('/styles/')) return route.fulfill({ contentType: 'application/json', body: JSON.stringify({ version: 8, sources: { openmaptiles: { type: 'vector', url: 'https://tiles.openfreemap.org/planet' } }, layers: [{ id: 'bg', type: 'background', paint: { 'background-color': '#eee' } }] }) });
+    if (u.endsWith('/planet')) return route.fulfill({ contentType: 'application/json', body: JSON.stringify({ tiles: ['https://tiles.openfreemap.org/planet/t/{z}/{x}/{y}.pbf'], minzoom: 0, maxzoom: 14 }) });
+    return route.fulfill({ contentType: 'application/x-protobuf', body: Buffer.alloc(0) });
+  });
+  await page.route('https://s3.amazonaws.com/**', (route) => (online ? route.fulfill({ contentType: 'image/png', body: Buffer.alloc(8) }) : route.abort()));
+  await page.route('**/api/**', (route) => {
+    if (!online) return route.abort();
+    const u = new URL(route.request().url()), json = (b) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(b) });
+    if (u.pathname === '/api/me') return json({ signed_in: true, member: true, handle: 'me' });
+    if (u.pathname === '/api/roads' && u.searchParams.has('cells')) {
+      const cells = u.searchParams.get('cells').split(','); asks.push(cells);
+      return json(cells.includes('356_-835') ? { ways: { 77: way }, lines: { 77: [[35.61, -83.48], [35.62, -83.47]] } } : { ways: {}, lines: {} });
+    }
+    return route.fulfill({ status: 404, contentType: 'application/json', body: '{"error":"not_found"}' });
+  });
+  await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); } catch (_) {} });
+  await page.goto(base + '/index.html');
+  await page.waitForFunction(() => window.apexDebug && window.apexDebug.map && window.apexDebug.map.loaded(), null, { timeout: 15000 });
+  await page.evaluate(() => { window.apexDebug.map.jumpTo({ center: [-83.47, 35.63], zoom: 11 }); document.getElementById('myAreaBtn').click(); });
+  await page.waitForFunction(() => { const a = JSON.parse(localStorage.getItem('apex.offlineAreas') || '[]')[0]; return a && a.roadOf > 0; }, null, { timeout: 60000 });
+  const area = await page.evaluate(() => JSON.parse(localStorage.getItem('apex.offlineAreas'))[0]);
+  check(area.roadCells === area.roadOf && area.roadWays === 1 && asks.every((c) => c.length <= 2) && asks.flat().includes('356_-835'),
+    'the area kept the measured roads of every cell round it, asked two cells at a time: ' + JSON.stringify({ area, asks: asks.length }));
+  check(/1 measured road/.test(await page.textContent('#myAreas')), 'the area\'s row says it has measured roads: ' + await page.textContent('#myAreas'));
+  // no signal and a restart: the kept cells answer from the phone (IndexedDB), all of them or none
+  online = false;
+  await page.reload();
+  await page.waitForFunction(() => window.ApexOwnRouting && window.ApexOwnRouting.keptFor, null, { timeout: 15000 });
+  const off = await page.evaluate(async () => {
+    const whole = await ApexOwnRouting.keptFor(['356_-835', '355_-835']), part = await ApexOwnRouting.keptFor(['356_-835', '999_999']);
+    return { ways: whole ? Object.keys(whole.ways) : null, part };
+  });
+  check(off.ways && off.ways.join() === '77' && off.part === null, 'offline, the saved cells answer and a cell never saved is unknown: ' + JSON.stringify(off));
+  // what Sign out, Erase everything and Delete offline data call (their wiring: tests/test_offline_road_feel.py)
+  online = true;
+  await page.evaluate(async () => { await ApexOwnRouting.clearCrowd(); });
+  const gone = await page.evaluate(async () => ({ kept: await ApexOwnRouting.keptFor(['356_-835']), held: localStorage.getItem(ApexOwnRouting.HELD_KEY) }));
+  check(gone.kept === null && gone.held === null, 'cleared, nothing of it is kept: ' + JSON.stringify(gone));
+}, { viewport: { width: 1280, height: 900 } });
+
 flow('desk: on a big screen Where to? is a column on the left and sheets a panel on the right, the map in view (IDEAS A-05)', async (page, base) => {
   await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); } catch (_) {} });
   await page.goto(base + '/index.html?view=route');

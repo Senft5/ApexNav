@@ -18,6 +18,23 @@
 - Tests: tests/test_road_page.py (plain words, unknown stays null, the climb formatter); e2e "road page…" (names, the
   empty bar for an unknown score, bar length = score, the climb in feet with a stubbed terrain profile).
 
+## Session 2026-11-11 (fable-offline-road-feel): a saved map area keeps the measured roads too (claude/fable-offline-road-feel, off origin/main)
+
+- IDEAS F-02, its last part. The twisty roads are where signal dies, and a saved area kept the map, terrain and road
+  network but not what members measured, so a plan there with no signal lost the road feel. Now Save the map here, signed
+  in as a member, also asks `/api/roads?cells=` for every 0.1° cell round the area (`ApexOwnRouting.cellsNear`,
+  `holdArea`: two cells per ask because the server caps ways per answer) and holds them (`apex.crowdHeld`) past the
+  day's keep until the area is deleted. A cell that didn't answer isn't held.
+- Plans: `routeCtxOpts().lookupCells` (cockpit.js) falls back to `ApexOwnRouting.keptFor(cells)` when the ask throws or
+  the server is down (5xx), never when the server says no (signed out). `keptFor` answers only when every cell asked is
+  kept, so a plan never takes part of the data for the whole.
+- Privacy fix found on the way: the members' cells kept for plans (IndexedDB `vetta-crowd`) were never cleared. Now
+  `clearCrowd` runs on both Sign out keys, Delete account, Erase everything and Delete offline data.
+- The area's row says "N measured roads", "no measured roads yet" or "members' road feel for part of it".
+- Tests: tests/test_offline_road_feel.py (5); e2e "offline area, as a member" (real IndexedDB across a reload offline).
+- Not done: the route card's measured line (`measuredAlong`) needs map matching over the network, so offline it still
+  says nothing; the coverage layer (`/api/coverage`) isn't kept for areas.
+
 ## Session 2026-11-10 (fable-pin-names): pins and tapped places by name; the spot dialog's stars (claude/fable-pin-names, off origin/main e76f1bb)
 
 - `web/cockpit.js`: `setFieldPin(field, point, name)` / `pinIn` / `fieldPin` beside `resolvePlace(q, field)`: Go here,

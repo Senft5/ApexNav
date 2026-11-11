@@ -175,16 +175,81 @@
     for (const [c, v] of per) { cellMemo.set(c, v); cdb('readwrite', c, v); }
   }
   const freshCell = (c, now = Date.now()) => { const m = cellMemo.get(c); return !!m && now - m.at < CROWD_TTL; };
-  const keptCell = (c, now = Date.now()) => { const m = cellMemo.get(c); return !!m && now - m.at < CROWD_KEEP_MS; };
+  // Cells an offline area holds (IDEAS F-02: Save the map here, signed in as a member): kept past CROWD_KEEP_MS until the
+  // area is deleted, the offline data is, or the member signs out. { cell: [area ids] } in apex.crowdHeld.
+  const HELD_KEY = 'apex.crowdHeld', AREA_CHUNK = 2;
+  function heldMap() { try { const v = JSON.parse(root.localStorage.getItem(HELD_KEY) || '{}'); return v && typeof v === 'object' && !Array.isArray(v) ? v : {}; } catch (_) { return {}; } }
+  function saveHeld(m) { try { if (Object.keys(m).length) root.localStorage.setItem(HELD_KEY, JSON.stringify(m)); else root.localStorage.removeItem(HELD_KEY); } catch (_) {} }
+  const isHeld = (c) => { const v = heldMap()[c]; return Array.isArray(v) && v.length > 0; };
+  const keepFor = (c) => (isHeld(c) ? Infinity : CROWD_KEEP_MS);
+  const keptCell = (c, now = Date.now()) => { const m = cellMemo.get(c); return !!m && now - m.at < keepFor(c); };
   /** The cells kept on the phone (IndexedDB) that memory hasn't, read in. */
   async function readKept(cells) {
     const now = Date.now(), want = cells.filter((c) => !keptCell(c, now));
-    await Promise.all(want.map(async (c) => { const v = await cdb('readonly', c); if (v && v.ways && now - v.at < CROWD_KEEP_MS && !keptCell(c, now)) cellMemo.set(c, v); }));
+    await Promise.all(want.map(async (c) => { const v = await cdb('readonly', c); if (v && v.ways && now - v.at < keepFor(c) && !keptCell(c, now)) cellMemo.set(c, v); }));
   }
   function mergedCells(cells) {
     const ways = {}, lines = {}, now = Date.now();
-    for (const c of cells) { const m = cellMemo.get(c); if (m && now - m.at < CROWD_KEEP_MS) { Object.assign(ways, m.ways); Object.assign(lines, m.lines); } }
+    for (const c of cells) { const m = cellMemo.get(c); if (m && now - m.at < keepFor(c)) { Object.assign(ways, m.ways); Object.assign(lines, m.lines); } }
     return { ways, lines };
+  }
+  /** Every 0.1° cell meeting the box round (lat, lon) radiusKm, nearest first (an offline area's members' data). */
+  function cellsNear(lat, lon, radiusKm) {
+    const dLat = radiusKm / 110.54, dLon = radiusKm / (111.32 * Math.cos(lat * Math.PI / 180)), out = [];
+    for (let i = Math.floor((lat - dLat) / CELL); i <= Math.floor((lat + dLat) / CELL); i++) for (let j = Math.floor((lon - dLon) / CELL); j <= Math.floor((lon + dLon) / CELL); j++) {
+      const la = (i + 0.5) * CELL, lo = (j + 0.5) * CELL;
+      out.push([Math.hypot(la - lat, (lo - lon) * Math.cos(lat * Math.PI / 180)), `${i}_${j}`]);
+    }
+    return out.sort((a, b) => a[0] - b[0] || (a[1] < b[1] ? -1 : 1)).map((x) => x[1]);
+  }
+  /**
+   * Members' road data for an offline area: asks lookupCells for its cells, AREA_CHUNK at a time (the server's way cap is
+   * per answer), keeps them and holds them for areaId. onProgress(done, of). Resolves { cells, held, ways }: held counts the
+   * cells that answered, ways the measured ways among them. A cell that didn't answer isn't held (nothing is invented).
+   */
+  async function holdArea(lookupCells, cells, areaId, onProgress) {
+    if (typeof lookupCells !== 'function' || !areaId) return { cells: cells.length, held: 0, ways: 0 };
+    const got = new Set(), ways = new Set();
+    for (let k = 0; k < cells.length; k += AREA_CHUNK) {
+      const part = cells.slice(k, k + AREA_CHUNK);
+      let r = null;
+      try { r = await lookupCells(part); } catch (_) { r = null; }
+      if (r && r.ways && r.lines) {
+        rememberCells(part, r);
+        for (const c of part) got.add(c);
+        for (const w of Object.keys(r.ways)) ways.add(w);
+      }
+      onProgress && onProgress(Math.min(k + AREA_CHUNK, cells.length), cells.length);
+    }
+    const m = heldMap();
+    for (const c of got) m[c] = [...new Set([...(m[c] || []), areaId])];
+    saveHeld(m);
+    return { cells: cells.length, held: got.size, ways: ways.size };
+  }
+  /** The area is gone: its cells go back to the day's keep (and from the phone, when older). */
+  function releaseArea(areaId) {
+    const m = heldMap();
+    for (const c of Object.keys(m)) { m[c] = (m[c] || []).filter((a) => a !== areaId); if (!m[c].length) delete m[c]; }
+    saveHeld(m);
+  }
+  /**
+   * Members' data kept on the phone for these cells, or null unless every one is kept (a plan with no signal: never a
+   * partial answer passed off as the whole). Same shape as GET /api/roads?cells.
+   */
+  async function keptFor(cells) {
+    if (!cells || !cells.length) return null;
+    await readKept(cells);
+    const now = Date.now();
+    return cells.every((c) => keptCell(c, now)) ? mergedCells(cells) : null;
+  }
+  /** Signed out, Erase everything, or offline data deleted: members' data leaves the phone (memory, IndexedDB, holds). */
+  async function clearCrowd() {
+    cellMemo.clear(); cellAsk.clear(); saveHeld({});
+    try {
+      if (crowdDb) { const d = await crowdDb; if (d) d.close(); }
+      crowdDb = null;
+      if (root.indexedDB) await new Promise((ok) => { try { const r = root.indexedDB.deleteDatabase('vetta-crowd'); r.onsuccess = r.onerror = r.onblocked = () => ok(); } catch (_) { ok(); } });
+    } catch (_) {}
   }
   /** Fetch the cells not asked within CROWD_TTL (or being asked); resolves true when every one of `cells` is fresh. */
   function fetchCells(lookupCells, cells, timeoutMs = CROWD_MS) {
@@ -385,7 +450,7 @@
     return 'own';
   }
 
-  const api = { roundTrip, OFF_KEY, on, withCoords, routeOfLine, limitsAlong, candidates, plan, quick, through, loops, cellsFor, crowdItems, crowdFor, crowdSoon, _cells: cellMemo, sharedShare, oneClock, polyline6, thin, traceBody, instruct };
+  const api = { roundTrip, OFF_KEY, on, withCoords, routeOfLine, limitsAlong, candidates, plan, quick, through, loops, cellsFor, crowdItems, crowdFor, crowdSoon, cellsNear, holdArea, releaseArea, keptFor, clearCrowd, HELD_KEY, _cells: cellMemo, sharedShare, oneClock, polyline6, thin, traceBody, instruct };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   root.ApexOwnRouting = api;
 })(typeof window !== 'undefined' ? window : globalThis);
