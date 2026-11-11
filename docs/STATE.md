@@ -1,5 +1,21 @@
 # VETTA — CURRENT AGENT HANDOFF STATE
 
+## Session 2026-11-11 (Valhalla for Quick only): Fun and Long way are our router's or nothing (claude/project-thread-39xbx9, off origin/main)
+
+- The owner: Fun and Long way "always say check my signal", and Valhalla only ever for Quick. cockpit.js `funRoute`: at
+  Fun and Long way (`ownOnly`) no Valhalla route, highway check, stage search or matrix; with no route of ours a toast says
+  why (off the map: "covers Ohio, Kentucky and Indiana so far"; the index not loaded in 8 s, `OWN_COVERS_ONLY_MS`: check
+  signal; router off) with a **Use Quick** key. The index failing is now unknown (null), not "nothing here". There and back
+  at Fun / Long way likewise. Live check on production first: Fun plans on our router in Cincinnati and on Valhalla near the
+  Dragon from a desktop browser, so the owner's failure wasn't reproduced; this makes the message say what really failed.
+- e2e: flows plan at Quick unless they choose a level (`ctxOpts.funLevel`); the plan flows at Fun route on the synthetic
+  tiles (`funTiles`, the motorway grid where Quick's and Fun's picks must differ); new flow "valhalla for quick only".
+  tests/test_fun_route.py: Fun / Long way ask Valhalla nothing without our router. `FLOWS` (newline list) runs several flows.
+- Still on Valhalla: loops off our tiles (stage loops), Explore's matrix, a reroute to rejoin, spoken directions. The
+  stage-plan code in funRoute is now unreachable (kept for now).
+- Next: loops on our router only (the owner's rule says "anything but the quick route"); find the owner's failure (where,
+  app or web, which message).
+
 ## Session 2026-11-11 (ui-round-two, PR 4): the map's top band, signed-out reads, a crew's head and the Share box (claude/project-thread-5sbga7)
 
 - The idle map's blank top band (Roamer B): the canvas draws fully (toDataURL shows the map to y = 0); Chromium culled the
