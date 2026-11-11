@@ -4,6 +4,18 @@ Decisions Claude made for you, newest first. Each one says what was decided, why
 you reach one you've seen. If you disagree with a call, say so and it gets reversed; nothing here is hard to undo unless
 it says so. Things only you can do are in docs/OWNER_TODO.md.
 
+## 2026-11-11 (round two analysis): Your touch, and when the recording is too coarse to time it (claude/project-thread-gd7nre)
+
+Your driving now has a "Your touch" panel: how fast the brakes go on and come off and how fast the car is loaded up at
+turn-in, in g a second (median of every clean corner, from 20 corners), and whether the brakes are let go more gently
+than they go on. Calls made: (1) touch is a style fact, not a 0-100 skill, because nothing yet says what a good rate is
+on a road; it never enters Work on or the Score. (2) Drives whose g was kept once a second (everything before #377, and
+browser drives) give no touch: the g itself is checked for a staircase or a straight ramp between fixes, so no date or
+flag is needed. (3) 5 m bins can only time a rise that spans about one and a half bins (at 20 m/s, about 0.4 s); a
+quicker one is counted as "quick" rather than read too slow, and when most are quick the panel says "one quick movement
+(quicker than the recording can time)" instead of a number. Finer timing would need the recording to keep the raw frames.
+
+Undo: revert the PR (kept observations rebuild on the next visit, `OBS_VERSION` 2 back to 1).
 ## 2026-11-11 (ui-round-two): the Log looks like the rest of the app (claude/project-thread-5sbga7)
 
 The Log is its own page shown over the map, and it had kept the old look: opening it swapped the tab bar's red dot for a
