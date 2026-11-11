@@ -30,6 +30,16 @@
     return `${t.toLocaleDateString(locale, { weekday: 'short' })} ${t.toLocaleTimeString(locale, { hour: 'numeric', minute: '2-digit' })}`;
   }
 
+  /** Recurring meets (S-13): "Every Saturday", "Every other Saturday", "Every 4 weeks on Saturday"; '' for a one-off. */
+  function repeatText(weeks, iso, locale) {
+    const t = new Date(iso), day = Number.isFinite(t.getTime()) ? t.toLocaleDateString(locale, { weekday: 'long' }) : '';
+    if (weeks === 1) return day ? `Every ${day}` : 'Every week';
+    if (weeks === 2) return day ? `Every other ${day}` : 'Every 2 weeks';
+    if (weeks === 4) return day ? `Every 4 weeks on ${day}` : 'Every 4 weeks';
+    return '';
+  }
+  const REPEAT_OPTS = [[0, 'Once'], [1, 'Weekly'], [2, 'Every 2 weeks'], [4, 'Every 4 weeks']];
+
   /** Who leads and who sweeps (roadmap 21): "Lead @bob · Sweep open". */
   function rolesLine(e) {
     const who = (h) => (h ? '@' + h : 'open');
@@ -83,7 +93,8 @@
     const start = Date.parse(e.starts_at);
     const where = e.meet_name ? `${e.meet_name} (${e.meet_lat}, ${e.meet_lon})` : `${e.meet_lat}, ${e.meet_lon}`;
     return ['BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//Vetta//Crew drive//EN', 'BEGIN:VEVENT',
-      `UID:${e.id}@apexnav`, `DTSTAMP:${icsTime(now)}`, `DTSTART:${icsTime(start)}`, `DTEND:${icsTime(start + 2 * 3600_000)}`,
+      `UID:${e.series_id || e.id}@apexnav`, `DTSTAMP:${icsTime(now)}`, `DTSTART:${icsTime(start)}`, `DTEND:${icsTime(start + 2 * 3600_000)}`,
+      ...([1, 2, 4].includes(e.repeat_weeks) ? [`RRULE:FREQ=WEEKLY;INTERVAL=${e.repeat_weeks}`] : []),   // a recurring meet goes in the calendar once
       `SUMMARY:${icsEscape(e.title)}`, `LOCATION:${icsEscape(where)}`, `GEO:${e.meet_lat};${e.meet_lon}`,
       `DESCRIPTION:${icsEscape([e.crew_name && `Crew drive with ${e.crew_name}`, e.notes].filter(Boolean).join('. '))}`,
       'END:VEVENT', 'END:VCALENDAR', ''].join('\r\n');
@@ -256,7 +267,7 @@
       box.append(body);
       const where = e.meet_name ? `Meet at ${e.meet_name}` : 'Meet at the pin';
       body.append(el('span', { className: 'note', textContent: st === 'remembered' ? [e.crew_name && o.crew ? e.crew_name : '', where.replace('Meet at', 'Met at')].filter(Boolean).join(' \u00b7 ')
-        : [timeText(e.starts_at), where].join(' \u00b7 ') }));
+        : [timeText(e.starts_at), where, repeatText(e.repeat_weeks, e.starts_at)].filter(Boolean).join(' \u00b7 ') }));
       if (o.crew && st !== 'remembered') body.append(el('span', { className: 'note', textContent: `${e.crew_name}${e.by_handle ? ` \u00b7 by @${e.by_handle}` : ''}` }));
       if (st === 'remembered') { body.append(remembered(e, redo)); return box; }
       body.append(el('span', { className: 'note', textContent: rolesLine(e) }));
@@ -476,6 +487,18 @@
         listed.addEventListener('click', () => put({ public: !e.public }, e.public ? 'Not listed any more.' : 'Listed for everyone nearby.'));
         box.append(listed);
       }
+      // a recurring meet (S-13): how often, or once; set on the series' latest drive, which plans the next when it starts
+      const rep = el('div', { className: 'row', style: 'flex-wrap:wrap' }); rep.setAttribute('role', 'group'); rep.setAttribute('aria-label', 'Repeats');
+      for (const [n, t] of REPEAT_OPTS) {
+        const on = (e.repeat_weeks || 0) === n, b = btn(t, async () => {
+          if (on) return;
+          const r = await apiCall('PUT', `/api/events/${id(e)}`, { repeat_weeks: n || null }).catch(() => null);
+          if (r && r.ok) { toast(n ? `${repeatText(n, e.starts_at)}: the next one is planned when this one starts.` : 'It won\u2019t repeat after this one.'); redo(); }
+          else toast(r && r.status === 409 ? 'The next one is planned already. Change it there.' : 'Couldn\u2019t save that. Check signal.');
+        }, 'chip' + (on ? ' on' : ''));
+        b.setAttribute('aria-pressed', String(on)); rep.append(b);
+      }
+      box.append(el('b', { textContent: 'Repeats' }), rep);
       if (crew.role === 'owner') box.append(el('div', { className: 'row' }, btn('Keep it as a template', async () => {
         const k = await apiCall('POST', `/api/crews/${encodeURIComponent(e.crew_id)}/templates`, { name: String(e.title).slice(0, 24), title: e.title,
           meet: { name: e.meet_name || null, lat: e.meet_lat, lon: e.meet_lon }, notes: e.notes || null }).catch(() => null);
@@ -578,6 +601,12 @@
         setMeet({ name: m.name || null, lat: m.lat, lon: m.lon });
         meetNote.textContent += ` Fair to everyone sharing: the longest drive there is ${m.estimated ? 'about ' : ''}${m.maxMin} min.`;
       }, 'linkbtn') : null;
+      // how often (S-13): a weekly Cars & Coffee is planned once
+      let repeat = 0;
+      const repRow = el('div', { className: 'row', style: 'flex-wrap:wrap' }); repRow.setAttribute('role', 'group'); repRow.setAttribute('aria-label', 'Repeats');
+      const paintRep = () => repRow.querySelectorAll('button').forEach((b) => { const on = Number(b.dataset.v) === repeat; b.classList.toggle('on', on); b.setAttribute('aria-pressed', String(on)); });
+      for (const [n, t] of REPEAT_OPTS) { const b = btn(t, () => { repeat = n; paintRep(); }, 'chip'); b.dataset.v = String(n); repRow.append(b); }
+      paintRep();
       // the planned route, only when there is one (P-29: no switch that cannot be switched)
       const route = page.plannedRoute();
       const withRoute = route ? sw(`Add the planned route (${route.name})`, true) : null;
@@ -585,7 +614,7 @@
         ...(page.openWhereTo ? [btn('Add a route', () => page.openWhereTo(), 'linkbtn')] : []));
       const label = (text) => el('p', { className: 'ctl-label', textContent: text });
       const head = crews.length > 1 ? [crew] : [];
-      form.append(...head, tplSel, title, label('When'), date, time, label('Meet'), search, ...(fairBtn ? [el('div', { className: 'row' }, fairBtn)] : []), meetNote, routeRow,
+      form.append(...head, tplSel, title, label('When'), date, time, label('Repeats'), repRow, label('Meet'), search, ...(fairBtn ? [el('div', { className: 'row' }, fairBtn)] : []), meetNote, routeRow,
         el('p', { className: 'note', textContent: 'Roles, regroup points and notes go on the drive\u2019s card, under More.' }),
         el('div', { className: 'row' }, btn('Plan it', async (ev) => {
           const b = ev && ev.currentTarget;
@@ -603,9 +632,9 @@
               routeId = j.id;
             }
             const r = await apiCall('POST', `/api/crews/${encodeURIComponent(crew.value)}/events`, {
-              title: title.value.trim(), starts_at: when, meet, route_id: routeId, notes, public: false, sweep: null, regroup: [] });
+              title: title.value.trim(), starts_at: when, meet, route_id: routeId, notes, public: false, sweep: null, regroup: [], ...(repeat ? { repeat_weeks: repeat } : {}) });
             if (!r.ok) { toast(r.status === 429 ? 'That crew has 10 drives coming up already.' : r.status === 400 ? 'Pick a time in the next 30 days.' : 'Couldn\'t plan it. Check signal.'); return; }
-            toast('Drive planned. Set roles and regroup points on its card, under More.');
+            toast(repeat ? `Planned: ${repeatText(repeat, when)}. Each one is planned when the last one starts.` : 'Drive planned. Set roles and regroup points on its card, under More.');
             done();
           } finally { if (b) b.disabled = false; }
         }, 'ink-btn solid'), btn('Cancel', done, 'linkbtn')));
@@ -619,7 +648,7 @@
     function meetCard(e, redo) {
       const box = el('div', { className: 'stack-8 drive-card meet-card', style: 'border:1px solid var(--rule);padding:10px' });
       box.append(el('b', { textContent: e.title }),
-        el('p', { className: 'note', textContent: `${whenText(e.starts_at)} · ${e.crew_name} · ${e.km} km away` }),
+        el('p', { className: 'note', textContent: [whenText(e.starts_at), repeatText(e.repeat_weeks, e.starts_at), e.crew_name, `${e.km} km away`].filter(Boolean).join(' · ') }),
         el('p', { className: 'note', textContent: `Meet: ${e.meet_name || 'the pin'}${e.notes ? ` · ${e.notes}` : ''} · ${e.going} going` }));
       const acts = el('div', { className: 'row', style: 'flex-wrap:wrap' },
         btn('Join the crew', async () => {
@@ -702,6 +731,6 @@
     if (yes) list.push({ id: String(e.id), crew: typeof e.crew_name === 'string' ? e.crew_name.slice(0, 60) : null, at: typeof e.starts_at === 'string' ? e.starts_at.slice(0, 16) : null });
     try { storage.setItem(CAME_KEY, JSON.stringify(list.slice(-CAME_MAX))); } catch (_) {}
   }
-  const api = { noteCame, CAME_KEY, whenText, timeText, resultsText, clock, convoyOpen, convoyName, driveState, onTheDay, icsFor, isoFromInputs, rolesLine, todayDrive, mount };
+  const api = { noteCame, CAME_KEY, whenText, timeText, repeatText, resultsText, clock, convoyOpen, convoyName, driveState, onTheDay, icsFor, isoFromInputs, rolesLine, todayDrive, mount };
   if (typeof module !== 'undefined' && module.exports) module.exports = api; else root.ApexCrewEvents = api;
 })(typeof window !== 'undefined' ? window : globalThis);
