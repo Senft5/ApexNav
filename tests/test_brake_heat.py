@@ -192,3 +192,55 @@ def test_the_drive_page_says_it_in_words_only_when_warm_or_hot():
     view = open(os.path.join(ROOT, "web", "drive_view.js"), encoding="utf-8").read()
     assert "BH.driveText(BH.overTrack(d.dist, d.speed_mps, d.elev)" in view
     assert '<script src="brake_heat.js"></script>' in open(os.path.join(ROOT, "web", "analysis.html"), encoding="utf-8").read()
+
+
+def truth(seconds, grade, hz):
+    """The hairpin descent as the phone sees it: speed from a GPS fix once a second, held between fixes (the app's
+    10 Hz frames), height following the road. Returns [(dt, v, h)] at `hz` frames a second."""
+    out = []
+    for k in range(int(seconds * hz)):
+        t = k / hz
+        fix = math.floor(t)                              # the last fix's speed is what the frame carries
+        out.append((1.0 / hz, hairpins(fix), 1000 - grade * 15 * t))
+    return out
+
+
+def peak_and_calls(seq):
+    b = BrakeHeat()
+    out = [b.step(dt, v, h) for dt, v, h in seq]
+    return b.peak, sum(o["call"] for o in out)
+
+
+def test_ten_frames_a_second_with_held_speed_read_like_one_a_second():
+    p1, c1 = peak_and_calls(truth(480, 0.07, 1))
+    p10, c10 = peak_and_calls(truth(480, 0.07, 10))
+    assert c1 == 1 and c10 == 1                          # the hot call is not lost at the app's frame rate
+    assert p10 == pytest.approx(p1, rel=0.08)
+
+
+def test_held_speed_does_not_turn_coasting_into_braking():
+    """Lift off from 30 to 25 m/s on drag alone and back up, on the flat: no brake work at any frame rate."""
+    def coast(hz):
+        seq = []
+        for k in range(600 * hz):
+            fix = k // hz
+            c = fix % 30
+            v = 30 - 5 * c / 15 if c < 15 else 25 + 5 * (c - 15) / 15
+            seq.append((1.0 / hz, v, 100.0))
+        return seq
+    p1, _ = peak_and_calls(coast(1))
+    p10, _ = peak_and_calls(coast(10))
+    assert p1 < 20 and p10 < 20
+
+
+def test_a_drive_recorded_with_held_speed_reads_like_one_with_smooth_speed():
+    """The app's CSV holds a fix's speed over its 5 m rows; the web Recorder interpolates. Same drive, same answer."""
+    dist, held, smooth, h = [], [], [], []
+    t, d = 0.0, 0.0
+    while t < 480:
+        v = hairpins(t)
+        dist.append(d); smooth.append(v); held.append(hairpins(math.floor(t))); h.append(1000 - 0.09 * 15 * t)
+        d += 5.0; t += 5.0 / v
+    a, b = over_track(dist, smooth, h), over_track(dist, held, h)
+    assert a["level"] == b["level"] == "hot"
+    assert b["peak_k"] == pytest.approx(a["peak_k"], rel=0.1)

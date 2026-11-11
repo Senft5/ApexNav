@@ -38,6 +38,8 @@ GAP_S = 5.0
 WARM_K, HOT_K, REARM_K = 150.0, 250.0, 150.0
 CALL_GAP_S = 180.0            # at most one "hot" call every 3 minutes
 MAX_P = 400.0                 # W/kg: more than a 1.2 g stop from 120 km/h is a glitch, not braking
+WINDOW_S = 2.0                # energy is differenced over at least this long (speed is held between 1 Hz fixes)
+MAX_DT_S = 3600.0             # a page asleep for an hour still cools for that hour
 
 
 def _finite(v):
@@ -64,44 +66,57 @@ class BrakeHeat:
     def reset(self):
         self.rise = None          # K above the air
         self.h = None             # low-passed height, m
-        self.e = None             # last specific energy, J/kg
+        self.e0 = None            # specific energy at the window's start, J/kg
+        self.win = 0.0            # s since the window's start
+        self.loss = 0.0           # J/kg rolling and air took since the window's start
         self.v = None
-        self.since_known = None   # s since the last known step
+        self.pend = None          # s since the last known step (None before any)
+        self.p = None             # brake power over the last closed window, W/kg
         self.armed = True
         self.since_call = None    # s since the last call
         self.peak = None
 
     def step(self, dt, speed_mps=None, elevation_m=None):
-        """One step of dt seconds. Returns {rise_k, power_wkg, level, call}; call is True once when the brakes get hot."""
-        dt = max(0.0, min(60.0, dt)) if _finite(dt) else 0.0
+        """One step of dt seconds. Returns {rise_k, power_wkg, level, call}; call is True once when the brakes get hot.
+
+        Energy is differenced over windows of at least WINDOW_S, not step by step: the app sends frames at 10 Hz with the
+        speed held between 1 Hz fixes, and a step-by-step difference would put a second's braking into a tenth of a
+        second (clipped at MAX_P) and count drag as braking on the step the speed moves. Over a window both even out."""
+        dt = max(0.0, min(MAX_DT_S, dt)) if _finite(dt) else 0.0
         v = speed_mps if _finite(speed_mps) and speed_mps >= 0 else None
         h = elevation_m if _finite(elevation_m) else None
         if self.since_call is not None:
             self.since_call += dt
         power = None
+        if self.rise is not None:
+            vc = v if v is not None else (self.v if self.v is not None else 0.0)
+            self.rise *= math.exp(-dt / tau_s(vc))
         if v is not None and h is not None:
-            fresh = self.e is None or self.since_known is None or self.since_known + dt > GAP_S
+            span = (self.pend or 0.0) + dt
+            fresh = self.e0 is None or self.pend is None or span > GAP_S
             if fresh:
                 self.h = h
             else:
-                self.h += (h - self.h) * (1.0 - math.exp(-dt / H_TAU_S))
+                self.h += (h - self.h) * (1.0 - math.exp(-span / H_TAU_S))
             e = 0.5 * v * v + G_STD * self.h
-            if not fresh and dt > 0:
+            if fresh:
+                self.e0, self.win, self.loss, self.p = e, 0.0, 0.0, None
+            else:
                 vm = 0.5 * (v + self.v)
-                lost = -(e - self.e) / dt - C_RR * G_STD * vm - K_AERO * vm ** 3
-                power = min(MAX_P, max(0.0, lost))
-            self.e, self.v, self.since_known = e, v, 0.0
+                self.win += span
+                self.loss += (C_RR * G_STD * vm + K_AERO * vm ** 3) * span
+                if self.win >= WINDOW_S:
+                    absorbed = min(MAX_P * self.win, max(0.0, (self.e0 - e) - self.loss))
+                    self.p = absorbed / self.win
+                    self.rise = (self.rise or 0.0) + absorbed / DISC_C
+                    self.e0, self.win, self.loss = e, 0.0, 0.0
+                power = self.p
+            self.v, self.pend = v, 0.0
             if self.rise is None:
                 self.rise = 0.0
-        elif self.since_known is not None:
-            self.since_known += dt
+        elif self.pend is not None:
+            self.pend += dt
         if self.rise is not None:
-            vc = v if v is not None else (self.v if self.v is not None else 0.0)
-            gain = (power or 0.0) / DISC_C
-            tau = tau_s(vc)
-            k = math.exp(-dt / tau)
-            # exact for a constant gain over the step: rise -> gain tau + (rise - gain tau) e^(-dt/tau)
-            self.rise = gain * tau + (self.rise - gain * tau) * k
             self.peak = self.rise if self.peak is None else max(self.peak, self.rise)
         call = False
         if self.rise is not None:

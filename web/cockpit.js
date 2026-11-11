@@ -7847,7 +7847,8 @@
     }
     // Brake heat (web/brake_heat.js, core/brake_heat.py): energy the car loses faster than rolling and air take it went into
     // the discs (or the engine in a low gear: an upper bound). When the model says hot, the co-driver says so once in words,
-    // in the same quiet slot as the break cue (it takes the slot: hot brakes matter more than a rest), and a toast shows it.
+    // in the same quiet slot as the break cue (first: hot brakes matter more than a rest), and a toast shows it. Frames come
+    // at 10 Hz from the app with speed held between fixes: the model differences energy over 2 s windows for that.
     // At most once every 3 minutes, and only again after the discs cooled. Nothing leaves the phone.
     function noteBrakes(frame) {
       if (!window.ApexBrakeHeat || !drive.rec) return;
@@ -7856,7 +7857,8 @@
       const out = b.model.step(dt, frame.speed_mps, frame.elevation_m);
       if (!out.call) return;
       toast(ApexBrakeHeat.CALL_TEXT);
-      breakSay = { text: ApexBrakeHeat.CALL_TEXT, until: now + 60000 };
+      // a break cue already waiting rides after it (its kind is marked spoken, so it would not come again)
+      breakSay = { text: breakSay ? `${ApexBrakeHeat.CALL_TEXT} ${breakSay.text}` : ApexBrakeHeat.CALL_TEXT, until: now + (breakSay ? Math.max(60000, breakSay.until - now) : 60000) };
     }
     // Road data whenever the app is open and the phone is mounted (calibration locked), not only during a drive
     // (owner 2026-10-26). Trips, privacy trims and gaps: ApexContributor.createAmbient. Members with ROAD DATA on only.

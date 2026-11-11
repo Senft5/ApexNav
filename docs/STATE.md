@@ -11,7 +11,9 @@
   (`breakSay`, takes it). `drive.brakes` reset per drive. drive_view.js: one line when a drive got warm or hot
   (`driveText`, "by Vetta's estimate"). Script tags in index.html and analysis.html.
 - The bundled demo drives (120 m of relief) come out cool (peaks 112 K, 87 K): no false alarm on ordinary hills.
-- Tests: tests/test_brake_heat.py (16). Checked: pytest 1607 passed; e2e first run, drive ended (card and Log), car-started drive.
+- Energy is differenced over 2 s windows: the app's 10 Hz frames hold speed between 1 Hz fixes, and a step-by-step
+  difference lost ~70 % of braking (clipped) and counted drag as braking (review). A pending break cue rides after the call.
+- Tests: tests/test_brake_heat.py (18, incl. 10 Hz held speed, coasting, held-speed CSV rows). Checked: pytest 1607 passed; e2e first run, drive ended (card and Log), car-started drive.
 - Next: the route card warns of a long descent ahead from the DEM profile (stages.js profile) with the same model at the
   router's speeds; the Garage car's weight and brake size could set DISC_C; not checked on a real descent yet (VERIFY).
 

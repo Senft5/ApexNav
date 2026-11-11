@@ -7,7 +7,7 @@
   'use strict';
   const G_STD = 9.80665, DISC_C = 0.017 * 460.0, C_RR = 0.012, K_AERO = 2.6e-4;
   const TAU_STILL_S = 600.0, TAU_MOVING_S = 150.0, V_REF = 22.0, H_TAU_S = 4.0, GAP_S = 5.0;
-  const WARM_K = 150.0, HOT_K = 250.0, REARM_K = 150.0, CALL_GAP_S = 180.0, MAX_P = 400.0;
+  const WARM_K = 150.0, HOT_K = 250.0, REARM_K = 150.0, CALL_GAP_S = 180.0, MAX_P = 400.0, WINDOW_S = 2.0, MAX_DT_S = 3600.0;
 
   const finite = (v) => typeof v === 'number' && Number.isFinite(v);
 
@@ -20,34 +20,43 @@
   const level = (rise) => (!finite(rise) ? null : rise >= HOT_K ? 'hot' : rise >= WARM_K ? 'warm' : 'cool');
 
   function create() {
-    let rise, h, e, vLast, sinceKnown, armed, sinceCall, peak;
-    function reset() { rise = null; h = null; e = null; vLast = null; sinceKnown = null; armed = true; sinceCall = null; peak = null; }
+    let rise, h, e0, win, loss, vLast, pend, pLast, armed, sinceCall, peak;
+    function reset() { rise = null; h = null; e0 = null; win = 0; loss = 0; vLast = null; pend = null; pLast = null; armed = true; sinceCall = null; peak = null; }
     reset();
-    /** One step of dt seconds. Returns { rise_k, power_wkg, level, call }; call is true once when the brakes get hot. */
+    /** One step of dt seconds. Returns { rise_k, power_wkg, level, call }; call is true once when the brakes get hot.
+     *  Energy is differenced over windows of at least WINDOW_S (the app holds speed between 1 Hz fixes at 10 Hz frames). */
     function step(dt, speedMps = null, elevationM = null) {
-      dt = finite(dt) ? Math.max(0, Math.min(60, dt)) : 0;
+      dt = finite(dt) ? Math.max(0, Math.min(MAX_DT_S, dt)) : 0;
       const v = finite(speedMps) && speedMps >= 0 ? speedMps : null;
       const hz = finite(elevationM) ? elevationM : null;
       if (sinceCall !== null) sinceCall += dt;
       let power = null;
-      if (v !== null && hz !== null) {
-        const fresh = e === null || sinceKnown === null || sinceKnown + dt > GAP_S;
-        if (fresh) h = hz; else h += (hz - h) * (1 - Math.exp(-dt / H_TAU_S));
-        const en = 0.5 * v * v + G_STD * h;
-        if (!fresh && dt > 0) {
-          const vm = 0.5 * (v + vLast);
-          const lost = -(en - e) / dt - C_RR * G_STD * vm - K_AERO * Math.pow(vm, 3);
-          power = Math.min(MAX_P, Math.max(0, lost));
-        }
-        e = en; vLast = v; sinceKnown = 0;
-        if (rise === null) rise = 0;
-      } else if (sinceKnown !== null) sinceKnown += dt;
       if (rise !== null) {
         const vc = v !== null ? v : (vLast !== null ? vLast : 0);
-        const gain = (power || 0) / DISC_C, tau = tauS(vc), k = Math.exp(-dt / tau);
-        rise = gain * tau + (rise - gain * tau) * k;
-        peak = peak === null ? rise : Math.max(peak, rise);
+        rise *= Math.exp(-dt / tauS(vc));
       }
+      if (v !== null && hz !== null) {
+        const span = (pend || 0) + dt;
+        const fresh = e0 === null || pend === null || span > GAP_S;
+        if (fresh) h = hz; else h += (hz - h) * (1 - Math.exp(-span / H_TAU_S));
+        const en = 0.5 * v * v + G_STD * h;
+        if (fresh) { e0 = en; win = 0; loss = 0; pLast = null; }
+        else {
+          const vm = 0.5 * (v + vLast);
+          win += span;
+          loss += (C_RR * G_STD * vm + K_AERO * Math.pow(vm, 3)) * span;
+          if (win >= WINDOW_S) {
+            const absorbed = Math.min(MAX_P * win, Math.max(0, (e0 - en) - loss));
+            pLast = absorbed / win;
+            rise = (rise || 0) + absorbed / DISC_C;
+            e0 = en; win = 0; loss = 0;
+          }
+          power = pLast;
+        }
+        vLast = v; pend = 0;
+        if (rise === null) rise = 0;
+      } else if (pend !== null) pend += dt;
+      if (rise !== null) peak = peak === null ? rise : Math.max(peak, rise);
       let call = false;
       if (rise !== null) {
         if (rise < REARM_K) armed = true;
