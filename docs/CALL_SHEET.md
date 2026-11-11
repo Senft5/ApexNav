@@ -50,6 +50,13 @@ top (or up to 300 m down it): "Long descent ahead: 2.5 miles at 8 percent. A low
 quiet moment like the break cue (no corner call due), in any notes mode, since it is a safety line. Off the route, or
 driving without one, nothing is said. Undo: remove the `descentAhead` block in cockpit.js `updateNotes`.
 
+## 2026-11-11 (round two analysis): records by kind of corner are technique, not speed (claude/project-thread-gd7nre)
+
+- What: Your records lists your cleanest tight, medium and fast corner (the six technique credits' mean, 0 to 100).
+- Why: IDEAS D-08 asked for records per archetype; a fastest-corner record would reward speed on public roads, so this is
+  the technique figure Your year already uses. The first drive to reach a level keeps the record.
+- Undo: drop the `kinds` rows in renderRecords (web/analysis.html).
+
 ## 2026-11-11 (roam-a descents): the route card warns of a long, steep descent (claude/project-thread-h7xxmf)
 
 A planned route with a long, steep way down now says so on its card, under the climb: "A long descent: down 1,575 ft over

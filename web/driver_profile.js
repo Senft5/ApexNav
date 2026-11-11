@@ -255,6 +255,29 @@
     }
     return out.slice(0, n);
   }
+  /** Your records by kind of corner (IDEAS D-08; port of driver_profile.records_by_size): the cleanest corner of each size,
+   * any date, the first to reach a level holding it; null under RECORD_MIN corners of that size. Technique only. */
+  const RECORD_MIN = 5;
+  function recordsBySize(drives) {
+    const out = {};
+    for (const z of ['tight', 'medium', 'fast']) {
+      let n = 0, best = null;
+      for (const d of drives || []) {
+        const at = typeof d.at === 'string' ? d.at : null;
+        for (const o of d.obs || []) {
+          if (o.size !== z || SKILLS.some((k) => o[k] === null || o[k] === undefined)) continue;
+          n++;
+          const lv = level(SKILLS.reduce((a, k) => a + o[k], 0) / SKILLS.length);
+          const key = [-lv, at === null ? 1 : 0, at || '', String(d.id), o.apex];
+          let less = !best;
+          if (best) for (let i = 0; i < key.length; i++) { const c = typeof key[i] === 'string' ? cmp(key[i], best.key[i]) : key[i] - best.key[i]; if (c) { less = c < 0; break; } }
+          if (less) best = { key, r: { id: d.id, at: at ? at.slice(0, 16) : null, name: d.name || null, apex: o.apex, dir: o.dir === undefined ? null : o.dir, level: lv } };
+        }
+      }
+      out[z] = best && n >= RECORD_MIN ? { ...best.r, n } : null;
+    }
+    return out;
+  }
   /** A drive's own touch (its Log page): { drive (from DRIVE_TOUCH_MIN corners), usual (every other drive's corners) }. */
   // outside: "above" when the drive's middle corner was beyond the usual upper quartile (or quick where that is timed),
   // "below" under the lower one
@@ -811,7 +834,7 @@
     }
   }
 
-  const api = { SKILLS, observe, profile, swing, excess, SKILL_MIN, WORDS, findingLine, styleLines, touchLines, touchTrendLines, driveTouchLines, paceLines, PACE, MEASURES, touch, TOUCH, driveTouch, DRIVE_TOUCH_MIN, bestCorners, cardLine, focusLines, render,
+  const api = { SKILLS, observe, profile, swing, excess, SKILL_MIN, WORDS, findingLine, styleLines, touchLines, touchTrendLines, driveTouchLines, paceLines, PACE, MEASURES, touch, TOUCH, driveTouch, DRIVE_TOUCH_MIN, bestCorners, recordsBySize, RECORD_MIN, cardLine, focusLines, render,
     PRACTICE_MIN, practice, drivePractice, practiceLine, practiceSummary, localStamp, loadPlan, savePlan, PLAN_KEY };
   if (typeof module !== 'undefined' && module.exports) module.exports = api; else root.ApexDriverProfile = api;
 })(typeof window !== 'undefined' ? window : globalThis);
