@@ -2542,7 +2542,10 @@
       try { member = !!(window.ApexSync && typeof ApexSync.signedIn === 'function' && ApexSync.signedIn()); } catch (_) { member = false; }
       const list = member ? await hazardsAround(points) : [];
       if (!member && performance.now() - policeNote > 60000 && !convoyPolice().length) { policeNote = performance.now(); toast('Sign in to route around police reports.'); }
-      return ApexHazardReports.policeFor(list, points, Date.now(), convoyPolice());
+      // with the reports the drive has fetched round you (newer than this trip's for a report that landed mid-drive: Go round)
+      let mine = [];
+      try { mine = reported.list.filter((h) => h && h.kind === 'police'); } catch (_) { mine = []; }   // (not yet set up at boot)
+      return ApexHazardReports.policeFor(mine.length ? [...mine, ...list] : list, points, Date.now(), convoyPolice());
     }
     // The avoid choices for one plan, with the police reports near it. The route card's budget (~0.75 s) comes first: the
     // reports asked for this area in the last 5 min are used at once; otherwise a plan waits POLICE_WAIT_MS at most and
@@ -3369,7 +3372,11 @@
       if (est) pushEtaShare(est.leftS, atM);
       if (est && track && track.homeBy && driveActive) {
         const o = ApexEta.homeByOffer(est.arriveAt, track.homeBy, track.homeByOfferedAt ?? null, now);
-        if (o) { track.homeByOfferedAt = now; toast(`Running ${o.lateMin} min late for home.`, { label: 'Head home', ms: 15000, onClick: headHome }); }
+        // a stage still ahead is skipped first (the loop shortens itself, your call); with none left, the quickest way home
+        if (o) { track.homeByOfferedAt = now; const a = ApexEta.homeByAction(track.stageSpans, routeWatch.bestM);
+          toast(`Running ${o.lateMin} min late for home.`, { label: a.label, ms: 15000, onClick: () => {
+            const b = track ? ApexEta.homeByAction(track.stageSpans, routeWatch.bestM) : a;   // as of the tap (a reroute meanwhile)
+            if (b.kind === 'skip') skipStage(b.span); else headHome(); } }); }
       }
       etaLeftS = est ? est.leftS : null;
       const text = est ? `${ApexEta.leftText(est.leftS, est.rough)} · ${etaClock().format(new Date(est.arriveAt))}` : '';
@@ -3459,18 +3466,57 @@
       if (rerouter.announce()) say('Rerouting');
       // From here through the via points still ahead (a loop's next unpassed waypoint, then the rest) to the destination.
       // Stage points stay shaping points, so a reroute still drives the fun roads ahead.
-      const ahead = req.via.filter(v => v.distM == null || v.distM > routeWatch.bestM).map(v => ({ lat: v.lat, lon: v.lon, ...(v.shaping ? { shaping: true } : {}), ...(v.planned ? { planned: true } : {}), ...(v.label ? { label: v.label } : {}) }));
+      const ahead = waysAhead(t);
       const points = [{ lat: L.lat, lon: L.lon, heading: headingOf(L) }, ...ahead, req.to];
       let r;
       try { [r] = await routePoints(points, { osrm: true, level: t.funLevel || (isLoop(t) ? LOOP_STYLE : 'quick') }); } catch (_) { failed(); return; }
       if (track !== t || state.mode !== 'live') return;           // the driver loaded something else meanwhile
       if (!rerouter.off) return;                                  // back on the planned route meanwhile: it stays
-      const nt = await trackFromPolyline(r.coords, t.id, t.name);
+      const nt = await trackAhead(t, r, ahead);
       if (track !== t || state.mode !== 'live' || !rerouter.off) return;
-      Object.assign(nt, { request: { from: null, to: req.to, via: ahead }, fun: funOf(nt, r.turns), timeS: r.timeS, timeMarks: timeMarksOf(nt, r), steps: stepsOf(nt, r) });
+      await buildRoute(null, t.id, t.name, nt);                     // activate() resets the monitor for the new route
+    }
+    // The rest of plan t as a new track from where the car is: route r through the via points still ahead
+    function waysAhead(t) {
+      return t.request.via.filter(v => v.distM == null || v.distM > routeWatch.bestM).map(v => ({ lat: v.lat, lon: v.lon, ...(v.shaping ? { shaping: true } : {}), ...(v.planned ? { planned: true } : {}), ...(v.label ? { label: v.label } : {}) }));
+    }
+    async function trackAhead(t, r, ahead) {
+      const nt = await trackFromPolyline(r.coords, t.id, t.name);
+      Object.assign(nt, { request: { from: null, to: t.request.to, via: ahead }, fun: funOf(nt, r.turns), timeS: r.timeS, timeMarks: timeMarksOf(nt, r), steps: stepsOf(nt, r) });
       ownInstructLater(nt, r);
       if (t.stageSpans) nt.stageSpans = FunRoute.stageSpans(nt, t.stageSpans.filter(s => s.endM > routeWatch.bestM));
-      await buildRoute(null, t.id, t.name, nt);                     // activate() resets the monitor for the new route
+      return nt;
+    }
+    // Avoid police reports, while driving (docs/ROUTING.md): a live report that lands on the route ahead (0.8 to 25 km on,
+    // within 150 m of it) is offered once, with Go round: the rest of the plan from here, routed round the reports. A way
+    // that still passes it isn't taken, and that's said. Off with the switch; looked at every 5 s at most.
+    const policeAhead = { at: 0, offered: new Set() };
+    function policeAheadTick(me) {
+      const t = track, now = Date.now();
+      if (!avoid.police || !t || !t.request || t.kind !== 'route' || state.mode !== 'live' || !driveActive || rerouter.off || now - policeAhead.at < 5000) return;
+      policeAhead.at = now;
+      const pts = ApexHazardReports.policeFor(reported.list, [me, t.request.to], now, convoyPolice());
+      const hit = ApexHazardReports.onRouteAhead(t, routeWatch.bestM, pts);
+      if (window.apexDebug) window.apexDebug.policeAhead = { n: reported.list.length, pts: pts.length, hit };
+      if (!hit) return;
+      const key = `${hit.lat.toFixed(4)},${hit.lon.toFixed(4)}`;
+      if (policeAhead.offered.has(key)) return;
+      policeAhead.offered.add(key);
+      toast(`Police reported on your route in ${ApexUnits.long(hit.aheadM, 1)}.`, { label: 'Go round', ms: 15000, onClick: () => goRoundPolice(t, hit, pts) });
+    }
+    async function goRoundPolice(t, hit, pts) {
+      const L = state.live;
+      if (track !== t || !L || !t.request) return;
+      const ahead = waysAhead(t);
+      let r;
+      try { [r] = await routePoints([{ lat: L.lat, lon: L.lon, heading: headingOf(L) }, ...ahead, t.request.to], { osrm: true, level: t.funLevel || (isLoop(t) ? LOOP_STYLE : 'quick'), avoid: { ...avoid, points: pts } }); }
+      catch (_) { toast('Couldn\'t plan a way round. Check signal.'); return; }
+      if (track !== t || state.mode !== 'live') return;
+      if (!r || ApexHazardReports.passesNear(r.coords, [hit])) { toast('No way round that police report. Staying on this route.'); return; }
+      const nt = await trackAhead(t, r, ahead);
+      if (track !== t || state.mode !== 'live') return;
+      await buildRoute(null, t.id, t.name, nt);
+      toast('Going round the police report.');
     }
     // Traffic ahead (iOS app only; docs/ARCHITECTURE.md section 8). Every 2 min while on a planned route, Apple times the next
     // 20 km in chunks, now and at 3 am. A jam (or a slowdown) costs the route fun even with no delay; on a jam, a detour that
@@ -4021,7 +4067,7 @@
     async function routePoints(points, o = {}) {
       const level = FunRoute.LEVELS[o.level] ? o.level : 'quick';
       if (ownOn()) {
-        const r = await RouteLoading.optional(ApexOwnRouting.through(ownRouter(), points, { level, avoid, prefs: roadPrefs }), OWN_THROUGH_MS);
+        const r = await RouteLoading.optional(ApexOwnRouting.through(ownRouter(), points, { level, avoid: o.avoid || avoid, prefs: roadPrefs }), OWN_THROUGH_MS);
         if (r) { tlSpan('own through (worker)', performance.now()); return [r]; }
       }
       const extra = FunRoute.LEVELS[level].noHighway && window.ApexRouteEngine ? ApexRouteEngine.levelCosting(avoid, routingCar(), level) : {};
@@ -7959,6 +8005,7 @@
     // from a privacy zone or before the drive's private edge (nearLookupOk).
     const reported = { list: [], at: -Infinity, cellKey: '', busy: false, said: new Set(), mine: new Set(), pins: new Map(), watch: ApexHazardReports.createPassWatch(), asking: null, local: [],
                        cells: ApexPrivacyZones.cellCache(120e3) };
+    if (window.apexDebug) window.apexDebug.loadReported = (force) => loadReported(force);   // e2e: a report that lands mid-drive
     async function loadReported(force = false) {
       const p = state.lastPosition, c = p && ApexPrivacyZones.cell(p.lat, p.lon);
       if (!c || reported.busy || !window.ApexSync || !nearLookupOk(p)) return;
@@ -8413,6 +8460,7 @@
       paintHazardPlate(ApexHazardReports.nextAhead(reported.list, me, HZ_PLATE_M, null));
       if (next) { reported.said.add(next.id); say(next.text, false, null, null, { kind: 'hazard', key: `rep:${next.id}`, repeatMs: 10 * 60000, alert: true,
         tokens: [!next.label && ApexVoiceLines.TEXT[`line:rep_${next.kind}`] ? `line:rep_${next.kind}` : 'line:rep_hazard'], named: !!next.label }); }
+      try { policeAheadTick(me); } catch (_) { /* never in the way of the drive */ }
       const passed = reported.watch.update(reported.list, me, reported.mine);
       if (passed && !reported.asking) askStill(passed);
     }
@@ -9495,10 +9543,11 @@
         : n.on ? `On ${n.span.name || 'a stage'} now: ${ApexUnits.long(n.toM, 1)} to go.` : `Next stage${n.span.name ? `, ${n.span.name},` : ''} in ${ApexUnits.long(n.toM, 1)}.`;
       toast(line); say(line, true);
     }
-    function skipStage() {
+    // (span: the one to skip, a late loop's offer; none: the one you're on or the next)
+    function skipStage(span) {
       const t = track;
       if (state.mode !== 'live' || !t || !t.request) { toast('Skip a stage during a drive on a fun route.'); return; }
-      const n = t.stageSpans ? FunRoute.stageAhead(t.stageSpans, routeWatch.bestM || 0) : null;
+      const n = span && t.stageSpans && t.stageSpans.includes(span) ? { span } : t.stageSpans ? FunRoute.stageAhead(t.stageSpans, routeWatch.bestM || 0) : null;
       if (!n) { const line = 'No stage ahead to skip.'; toast(line); say(line, true); return; }
       // its shaping points come out of the plan; your own stops stay
       const near = (v) => { const h = Core.nearestIndex(v.lat, v.lon, t.lat, t.lon, -1); return h.index >= 0 && h.distM <= 80 ? t.dist[h.index] : null; };

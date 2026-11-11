@@ -134,3 +134,27 @@ def test_home_by_offer():
     assert out["at7pm"] == "2026-10-30T23:00:00.000Z"          # tonight
     assert out["at6am"] == "2026-10-31T10:00:00.000Z"          # 6 AM is long gone today: tomorrow
     assert out["bad"] is None
+
+
+def test_a_late_loop_skips_its_next_stage_before_heading_home():
+    """IDEAS R-37: late for home, the offer is to skip the next stage not yet begun (300 m on at least); with none, Head home."""
+    import json as _json, shutil as _sh, subprocess as _sp
+    node = _sh.which("node")
+    if not node:
+        pytest.skip("node not installed")
+    js = r"""
+    const E = require(process.argv[1] + '/web/eta.js');
+    const spans = [{ name: 'Foothills Parkway', startM: 2000, endM: 9000 }, { name: '', startM: 15000, endM: 21000 }];
+    const pick = (a) => ({ kind: a.kind, label: a.label, start: a.span ? a.span.startM : null });
+    console.log(JSON.stringify({
+      before: pick(E.homeByAction(spans, 500)), on: pick(E.homeByAction(spans, 4000)), close: pick(E.homeByAction(spans, 1800)),
+      after: pick(E.homeByAction(spans, 16000)), none: pick(E.homeByAction(null, 0)), noAt: pick(E.homeByAction(spans, NaN)),
+    }));
+    """
+    root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    out = _json.loads(_sp.run([node, "-e", js, root], capture_output=True, text=True, check=True).stdout)
+    assert out["before"] == {"kind": "skip", "label": "Skip Foothills Parkway", "start": 2000}
+    assert out["on"] == {"kind": "skip", "label": "Skip the next stage", "start": 15000}     # the one you're on is driven
+    assert out["close"]["start"] == 15000                                                       # 200 m to go: too late to turn off
+    assert out["after"] == {"kind": "home", "label": "Head home", "start": None}
+    assert out["none"]["kind"] == "home" and out["noAt"]["start"] == 2000

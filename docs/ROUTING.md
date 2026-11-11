@@ -74,7 +74,10 @@ corners per km back to back lose 25%, since tiring on hard roads is a safety iss
 A loop's route card takes a **Home by** time (the next time it comes round; an hour or more ago means tomorrow). While the loop
 is driven, when the live arrival (above) is more than 5 minutes past it, a toast offers **Head home**, once and then again
 after 10 minutes if still late; it plans the quickest way from where you are back to the loop's start (IDEAS R-37,
-`homeByOffer` in web/eta.js).
+`homeByOffer` in web/eta.js). While a stage the loop hasn't begun is still ahead (300 m on at least), the offer is to skip
+it first: **Skip Foothills Parkway** drops that stage's points and reroutes through the rest of the loop, the way Siri's
+"skip this stage" does. Ten minutes on, still late, the next stage is offered, and with none left, Head home
+(`homeByAction`). The stage you're on is never cut short.
 
 ## Did the route drive the stage?
 
@@ -138,6 +141,13 @@ any candidate doesn't (`FunRoute.unavoided`, `passesNear`), and the card says "C
 went round says "Around a police report" (or "Around 3 police reports"). Signed out, there are no reports to avoid: the
 plan is the usual one and a toast says to sign in. A plan never waits more than 0.2 s for the reports (the route card's 0.75 s budget): reports for the area from the last 5 min are used at once, Where to? opening asks for them ahead, and ones that land later still reach the router's requests and the card. There is no checkpoint
 report and none is made from these (App Store 1.4.3, docs/APP_REVIEW.md).
+
+While driving a planned route with Police reports on, a live report that lands on the route ahead (0.8 to 25 km on,
+within 150 m of the line; the drive's own reports round you and a convoy's Police call) is offered once: "Police reported
+on your route in 3.2 mi." with **Go round** (15 s). Go round plans the rest of the trip from where the car is (the stops
+and stages still ahead kept) round the reports, and takes it only when it does go round; otherwise "No way round that
+police report. Staying on this route." (`ApexHazardReports.onRouteAhead`, cockpit.js `policeAheadTick`, `goRoundPolice`).
+Nearer than 0.8 km there's no time to go round; the voice still calls a report as you near it, as before.
 
 ## Drag to reshape
 

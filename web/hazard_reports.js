@@ -128,6 +128,34 @@
     return false;
   }
 
-  const api = { nextAhead, createPassWatch, closuresFor, policeFor, passesNear, POLICE_M, plate, LABEL, KINDS: Object.keys(LABEL) };
+  /**
+   * The nearest police report on the route ahead of you (the drive's offer to go round one, docs/ROUTING.md): a point of
+   * `pts` within `m` of the route's line between `atM + minM` and `atM + maxM` along it. Nearer than minM there's no time to
+   * go round; further than maxM it may be gone by then. t: { lat[], lon[], dist[] } (metres along). { lat, lon, aheadM } or null.
+   */
+  function onRouteAhead(t, atM, pts, { m = POLICE_M, minM = 800, maxM = 25000 } = {}) {
+    if (!t || !Array.isArray(t.lat) || !Array.isArray(t.dist) || t.lat.length < 2 || !finite(atM) || !Array.isArray(pts) || !pts.length) return null;
+    const n = t.lat.length, a = atM + minM, b = atM + maxM;
+    let best = null;
+    for (const p of pts) {
+      if (!p || !finite(p.lat) || !finite(p.lon)) continue;
+      const kx = 111320 * Math.cos(p.lat * Math.PI / 180);
+      let pass = null;                                                   // the route's first pass by it: its nearest point
+      for (let i = 1; i < n; i++) {
+        if (t.dist[i] < a) continue;
+        if (t.dist[i - 1] > b) break;
+        const ax = (t.lon[i - 1] - p.lon) * kx, ay = (t.lat[i - 1] - p.lat) * M_LAT, bx = (t.lon[i] - p.lon) * kx, by = (t.lat[i] - p.lat) * M_LAT;
+        const dx = bx - ax, dy = by - ay, L = dx * dx + dy * dy, u = L > 0 ? Math.max(0, Math.min(1, -(ax * dx + ay * dy) / L)) : 0;
+        const d = Math.hypot(ax + u * dx, ay + u * dy);
+        if (d > m) { if (pass) break; continue; }
+        const at = t.dist[i - 1] + u * (t.dist[i] - t.dist[i - 1]);
+        if (!pass || d < pass.d) pass = { d, at };
+      }
+      if (pass && pass.at >= a && pass.at <= b && (!best || pass.at - atM < best.aheadM)) best = { lat: p.lat, lon: p.lon, aheadM: Math.round(pass.at - atM) };
+    }
+    return best;
+  }
+
+  const api = { nextAhead, createPassWatch, closuresFor, policeFor, passesNear, onRouteAhead, POLICE_M, plate, LABEL, KINDS: Object.keys(LABEL) };
   if (typeof module !== 'undefined' && module.exports) module.exports = api; else root.ApexHazardReports = api;
 })(typeof window !== 'undefined' ? window : globalThis);

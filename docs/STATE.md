@@ -1,5 +1,17 @@
 # VETTA — CURRENT AGENT HANDOFF STATE
 
+## Session 2026-11-11 (routing round two, part 2): go round a police report mid-drive; a late loop skips a stage (claude/project-thread-39xbx9)
+
+- `ApexHazardReports.onRouteAhead(t, atM, pts)`: the nearest report within 150 m of the route 0.8-25 km ahead. cockpit.js
+  `policeAheadTick` (from feedReported, every 5 s, Police reports on, driving a planned route) toasts it once with Go round;
+  `goRoundPolice` routes the rest of the plan round the reports (`routePoints` takes `o.avoid`), and keeps it only if it
+  does go round. `policeAround` now also takes the drive's own fetched reports (`reported.list`), so a report that landed
+  mid-drive reaches the router. `reroute` shares `waysAhead`/`trackAhead`. `apexDebug.loadReported` for e2e.
+- `ApexEta.homeByAction(spans, atM)`: a late loop offers "Skip <stage>" (the next not begun, 300 m on) before Head home;
+  `skipStage(span)` takes the one to skip. IDEAS R-37 done.
+- Tests: tests/test_police_ahead.py, tests/test_eta.py (+1), e2e "avoid police reports, driving".
+- Next: CarPlay has no toast keys; the Go round and Skip offers are phone-only (a CPAlert in CarPlay/ would carry them).
+
 ## Session 2026-11-11 (routing round two): Avoid cameras holds for every candidate, speed cameras included (claude/project-thread-39xbx9)
 
 - Gap found: Avoid → Cameras only reached Valhalla's requests (exclude_locations). Our own router, the highway-friendly
