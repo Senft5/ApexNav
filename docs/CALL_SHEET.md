@@ -16,6 +16,16 @@ meter is gone; a Plain crew's page says "Plain livery" and nothing it lacks, and
 and comes back with the next one, as before.
 
 Undo: revert the PR (tiers come back as they were; nothing in the database changed).
+## 2026-11-10 (fable-night-keys): at night no key outshines the road (claude/fable-night-keys)
+
+Red team UX-07: on the night drive screen the brightest things were keys: End, Done and the chosen replay speed were
+solid cream slabs. At night they are now outlined in the panel's ink (same size, same place), so the instruments and
+the road are the brightest things there. Day is unchanged; Tapedeck keeps its own outlined End; the Undo after End
+keeps its running fill. I checked the other "may be stale" UI findings against today's build: the tab bar already
+hides while driving or replaying, the 1 hour / 2 hours loop keys are gone, and the route card and Garage belong to the
+redesign thread, so I left them.
+
+Undo: revert the PR (CSS only).
 
 ## 2026-11-10 (fable-road-page): About a road says its climb, and speaks in words (claude/fable-road-page)
 
@@ -54,6 +64,18 @@ Undo: revert the PR. Typed coordinates still work as before and are still named 
 - **The board is every member's, by handle; entering is the opt-in.** Why: a weekly attack is a public contest by nature; only entrants' times show and Take my time off removes yours. This breaks the old "no public time board" guardrail, by the owner's call, logged in IDEAS and APP_REVIEW 1.4 with a fallback (hide the time column, order by Score). Undo: that fallback, or hide `#planAttack`.
 - **Over 60 m/s average is refused, not ranked.** Why: a bad clock or a fake; it also keeps an absurd time off the top. Undo: `MAX_AVG_MS`.
 - **A moderator's remove takes that week's times with it.** Why: otherwise the area's next pick would inherit the old board. Undo: drop the first statement in safety.ts `act.circuit`.
+## 2026-11-11 (fable-avoid-police): Avoid → Police reports (claude/fable-avoid-police)
+
+The owner said go (2026-11-11, "yes avoid police"), reversing October's call that dropped routing round police (IDEAS
+R-35). My calls inside it: only live reports count (the server's 60 min life, and a report cleared by more drivers than
+confirmed it is skipped), within 15 km of the trip, 20 at most; a convoy leader's live Police call counts first. Valhalla
+gets them as exclusions ahead of cameras in the 50-slot budget (police reports move, cameras don't, so a fresh report is
+the more useful exclusion). Our own router can't exclude a point, so the roads within 150 m cost x8: a way round wins
+unless it is much longer, and then the card says "Couldn't avoid police reports". A plan waits at most 0.2 s for the
+reports. Signed out there are none, and a toast says so once a minute. No checkpoint kind exists and none is made
+(App Store 1.4.3, APP_REVIEW.md).
+
+Undo: revert the PR. The chip is off by default, so turning it off in Options also undoes it for one driver.
 
 ## 2026-11-10 (fable-one-corner): "1 corners" is "1 corner"; a Best roads nearby key keeps its word while it searches (claude/fable-one-corner)
 
@@ -64,6 +86,15 @@ keeps its own word and only its progress bar moves.
 
 Undo: revert the PR.
 
+## 2026-11-10 (fable-whats-new): What's new tells of the routing work (claude/fable-whats-new)
+
+The What's new sheet still showed the news of 2026-10-28 (Siri, landscape, stops of the day, kilometres), which every
+tester has already seen, so the biggest changes since (three levels for every route, the plain-words overview, loops
+on a dial, Route tuning) were never said to anyone. It now says those four, once, on a quiet launch as before. I left
+out "routes are planned on the phone, with no signal" because that is only true inside the region our tiles cover.
+I wrote "highway" (the app's own word on its keys). Places in the app are named in words, not with arrows.
+
+Undo: set `NEWS` back in web/whats_new.js. A phone that has seen '2026-11-10' will not be shown it again.
 ## 2026-11-11 (fable-rally-sheet): a crew drive's results sheet, rally style, Scores and shared times (claude/fable-rally-sheet)
 
 A crew drive used to remember one number afterwards: the best Score of the day. Its card now folds out "Results · 3
@@ -105,6 +136,33 @@ The e2e suite is 152 flows now and takes about 24 minutes, so GitHub cut it off 
 (twice on #349, once on #344) with every flow before it passing. The limit is 35 minutes. No test is skipped or
 shortened. Undo: set `timeout-minutes` back to 25 in `.github/workflows/core-tests.yml`, or better, split the suite.
 
+## 2026-11-10 (fable-driver-profile): the Log has "Your driving", a picture of how you drive over every drive (claude/fable-driver-profile)
+
+Until now every reading was of one drive, or one corner against your other passes of it. Your driving reads every clean
+corner of every drive on the phone together and says what kind of driver they show: six skills in the order a corner is
+driven (one braking, brakes done by the apex, one steering arc, entry speed, patient apex, back to power), each 0 to
+100; where you are measurably weaker (rights against lefts, tight against fast, downhill, the first ten minutes, after
+an hour, one car, a tag); each kind of corner side by side; each skill month by month; and the one thing to work on,
+with where it shows most. It opens from a card at the top of the Log.
+
+Calls I made:
+- No "pace" skill, and no rhythm skill. The share of a corner's sane limit you use is stated as a fact of your style
+  ("you keep about 40% in hand"), never as a level to raise. Nothing on the page is a speed or a time.
+- A skill stays "--" until 30 corners, a kind of corner until 10. A difference is only said when it is 8 points or more,
+  3 standard errors, and shows the same way on two drives in three (cars and tags: 4 drives a side). On made-up drives
+  with nothing planted, 12 sets of 8 drives produced no finding.
+- Lefts against rights, hills, time, cars and tags are compared after taking each corner's size out, so a road whose
+  tight corners happen to be lefts does not read as "weaker through lefts".
+- Steering is judged with the speed taken out (the load a given arc needs goes with speed squared), so slowing into a
+  long corner and driving out of it is one arc, not a correction.
+- "Work on" is only offered when the weakest skill is 85 or under. A driver with nothing short is told nothing.
+- Each drive's readings are kept on the phone in a small store of their own (credits per corner, no positions), so the
+  page opens without reading every drive again. It is only ever derived from your drives and is never sent.
+
+What it cannot see yet: the app records one g reading per GPS fix (once a second), so a correction shorter than about
+15 m does not show. That is the next piece of work (ten readings a second between fixes).
+
+Undo: revert the PR; the kept store ('vetta-profile') is unused without it and can be left.
 ## 2026-11-10 (fable-sheet-races): e2e waits for a sheet to be still before tapping its keys (claude/fable-sheet-races)
 
 Nine PRs were red on CI-only races: a click aimed at a sheet that was still sliding up landed on its backdrop, which
@@ -316,6 +374,19 @@ the rule that hides the other tabs' panels. So, signed out, the whole "Drive wit
 the Garage as well. Both rules now apply on the People tab only. I had read the page on People and never opened the
 Garage signed out after the change; the screen-by-screen flow now checks that the Garage shows no People page.
 - Undo: not something to undo; reverting #332 would also remove it.
+
+## 2026-11-10 (fable-no-leftovers): every e2e flow ends by checking the screen for the code's own leftovers (claude/fable-no-leftovers)
+
+About a road read "descending [object Object]" for weeks (#356) and no test saw it, because no test read that line. So
+the e2e runner now ends every flow with one more check: on whatever screens the flow left open, no text in view and no
+spoken label (aria-label, placeholder, title, alt) says "[object Something]", "undefined" or "NaN". Hidden nodes are
+left alone, and whole words only ("Undefined roads" would pass, lower-case "undefined" would not). All 154 flows pass
+with it, so nothing else like #356 is on the screens the flows end on. A flow of its own proves the check sees each of
+the three and ignores what is hidden.
+
+Its limit: it reads the screen a flow ends on, not every screen it passed through.
+
+Undo: revert the PR (e2e/smoke.js only; no app code).
 
 ## 2026-11-10 (fable-your-units): sizes that were always metric are in your units (claude/fable-your-units)
 

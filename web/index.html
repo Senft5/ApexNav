@@ -444,6 +444,12 @@
     /* I-3: 16 pt from Report, not 6; after End, the key is Undo in the panel's ink with a fill running out (cockpit.js askEnd).
        #app outranks the themes' own #driveEnd */
     #driveEnd { margin-left: 8px; }
+    /* Red team UX-07 (2026-11-10): at night the brightest thing on the drive screen was a key (End, Done, the chosen
+       replay speed: solid cream). At night they are outlined in the panel's ink, so the instruments and the road stay
+       the brightest; the layout is the same as by day. Tapedeck keeps its own outlined End. */
+    html[data-mode="night"]:not([data-theme="tapedeck"]) #app #driveEnd:not(.undo),
+    html[data-mode="night"] .transport > #replayDone { background: transparent; color: var(--panel-ink); border: 1.5px solid var(--panel-ink); }
+    html[data-mode="night"] .transport .detents > [aria-checked="true"] { background: transparent; color: var(--panel-ink); box-shadow: inset 0 0 0 2px var(--panel-ink); }
     #app #driveEnd.undo { position: relative; overflow: hidden; background: var(--panel); color: var(--panel-ink); border: 2px solid var(--panel-ink); }
     #app #driveEnd.undo::after { content: ""; position: absolute; left: 0; right: 0; bottom: 0; height: 4px; background: var(--panel-ink); transform-origin: left; animation: end-undo var(--end-undo-ms, 5s) linear forwards; }
     @keyframes end-undo { to { transform: scaleX(0); } }
@@ -2052,7 +2058,7 @@
       <aside class="side-pop opt-sheet" id="optSheet" role="dialog" aria-modal="true" aria-labelledby="optTitle">
         <div class="side-pop-head"><h3 id="optTitle">Options</h3><button class="linkbtn" id="optDone">Done</button></div>
         <div class="ctl"><div class="ctl-label">Avoid <small>✕ keeps off it when it can</small></div>
-          <div class="stamps opt-stamps opt-avoid" role="group" aria-label="Avoid"><button data-avoid="highways" aria-pressed="false">Highways</button><button data-avoid="tolls" aria-pressed="false">Tolls</button><button data-avoid="ferries" aria-pressed="false">Ferries</button><button data-avoid="unpaved" aria-pressed="false">Unpaved</button><button data-avoid="towns" aria-pressed="false">Towns</button><button data-avoid="cameras" aria-pressed="false">Cameras</button></div></div>
+          <div class="stamps opt-stamps opt-avoid" role="group" aria-label="Avoid"><button data-avoid="highways" aria-pressed="false">Highways</button><button data-avoid="tolls" aria-pressed="false">Tolls</button><button data-avoid="ferries" aria-pressed="false">Ferries</button><button data-avoid="unpaved" aria-pressed="false">Unpaved</button><button data-avoid="towns" aria-pressed="false">Towns</button><button data-avoid="cameras" aria-pressed="false">Cameras</button><button data-avoid="police" aria-pressed="false">Police reports</button></div></div>
         <!-- Prefer: the roads (prefer.js) and this drive (route_ctx/driver.js; vocabulary.js passenger / litRoads / cyclists / tunnels) -->
         <div class="ctl"><div class="ctl-label">Prefer <small>✓ ranks routes higher for it</small></div>
           <div class="stamps opt-stamps opt-prefer" role="group" aria-label="Prefer"><button data-prefer="measured" aria-pressed="false">Measured roads</button><button data-prefer="novel" aria-pressed="false">New to me</button><button data-prefer="crew" aria-pressed="false">Crew favourites</button><button data-driver="passenger" aria-pressed="false">Passenger aboard</button><button data-driver="lit" aria-pressed="false">Lit roads at night</button><button data-driver="cyclists" aria-pressed="false">Cyclist courtesy</button><button data-driver="tunnels" aria-pressed="false">Tunnels</button></div>
