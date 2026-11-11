@@ -70,6 +70,9 @@
     LOWER: [0.9, 0.75],      // then these fractions of the weight found: cheaper ways to the road the budget-filler found
     ALT_PENALTIES: [0.6, 1.5, 4], ALT_MIN_DIFF: 0.3, ALTS: 2,
     LOOP_A: { quick: 0.6, fun: 3, max: 8 }, LOOP_ROAD_FACTOR: 1.35, LOOP_RETRACE_X: 3,
+    // there and back (roundTrip): the way out costs ROUND_RETRACE_X on the way back (both directions), so the return finds
+    // other road; a pair driving more than ROUND_MAX_RETRACED of itself twice is not offered as a round trip
+    ROUND_RETRACE_X: 4, ROUND_MAX_RETRACED: 0.5, ROUND_A: { quick: [0, 1], fun: [1, 3, 8], max: [3, 8, 20] }, ROUND_PAIRS: 3,
     // levels (the owner, 2026-11-08: "fun should never go on the highway. Quick should essentially be a normal route"):
     // at Fun and Long way (NO_HWY) a motorway, trunk or one of their links is never driven: a hard filter in the search, not a
     // cost. Only where no way without one exists in the level's corridor (a river crossed only by an interstate bridge, a
@@ -886,7 +889,7 @@
     // motorway, trunk and their links driven (km) and the one most of it is on, by name (NO_HWY levels report it)
     const hwyName = hwyM > 0 ? [...hwyBy].sort((x, y) => y[1] - x[1])[0][0] : null;
     return {
-      coords, edges: E.map((e) => edgeId(v, e)), edgeIdx: Int32Array.from(E), timeS, distM: distM_, names, why, hwyKm: hwyM / 1000,
+      coords, edges: E.map((e) => edgeId(v, e)), edgeIdx: Int32Array.from(E), fs: res.fs, ft: res.ft, timeS, distM: distM_, names, why, hwyKm: hwyM / 1000,
       route: { coords: coords.map(([la, lo]) => [lo, la]), turns, times, steps, names: nameKm, has, timeS, source: 'own', graph: edgeTable(v, gEdge, gEnd), hwyKm: hwyM / 1000, hwyName },
     };
   }
@@ -1163,6 +1166,60 @@
     }
     return best;
   }
+  // ---- there and back ------------------------------------------------------------------------------------------------
+  /**
+   * A destination and home again, never the same way twice where another way exists (the owner's ask for the best fun
+   * routing: a drive out to a café or a viewpoint is two drives, and the second should be new road). The way out is the
+   * level's own plan (planNow: its pick and its alternates). The way back starts at the destination (either direction: you
+   * stopped there, turning round is free), its search costs the way out's edges ROUND_RETRACE_X both ways, at the weights
+   * ROUND_A (at Fun and Long way off the highways, as loops' legs), and is picked by the level's own rule (pick(): the
+   * goodness its extra time buys over the quickest way back that avoids the way out). Each out is paired with its best
+   * back; the pairs are ranked: a fifth or less driven twice first, then by goodness. Returns
+   * { routes: [round trip: { ...route, retraced, out: { timeS, distM }, back: { timeS, distM } }], out, ms }.
+   */
+  function roundTrip(v, req) { return withTune(req && req.tune, () => roundNow(v, req)); }
+  function roundNow(v, req) {
+    const t0 = Date.now(), level = levels()[req.level] ? req.level : 'fun', L = levels()[level];
+    const there = planNow(v, req);
+    const obj = objective(v, req), free = noHighway(level), is = hwyOf(v);
+    let home = snap(v, req.from.lat, req.from.lon), at = snap(v, req.to.lat, req.to.lon);
+    if (!home.length || !at.length) throw new Error('no road near the ends');
+    if (free) { home = snapOff(v, req.from, home); at = snapOff(v, req.to, at); }
+    const base = loopBase(v, level), out = [];
+    // the ways out worth pairing: the plan's pick first, then its alternates (a way out that leaves the best road for the
+    // way back can be the better pair), never two the same
+    const outs = [];
+    for (const r of there.routes) if (r.why.role !== 'quickest-highway' && !(free && r.hwyKm > 0 && there.hwy.mode !== 'link') && !outs.some((x) => sameRoute(x, r))) outs.push(r);
+    for (const o of outs.slice(0, K.ROUND_PAIRS)) {
+      const penal = Float32Array.from(base);
+      for (const e of o.edgeIdx) { penal[e] *= K.ROUND_RETRACE_X; const tw = twin(v, e); if (tw >= 0) penal[tw] *= K.ROUND_RETRACE_X; }
+      const ell = { ellipse: ellipseFor(req.to, req.from, level === 'quick' ? 'fun' : level) };
+      const backs = [];
+      for (const a of K.ROUND_A[level] || [0]) {
+        const res = loopLeg(v, obj, at, home, a, penal, ell, level);
+        if (!res) continue;
+        const r = assemble(v, res, obj, { level, role: 'back', a });
+        if (!backs.some((x) => sameRoute(x, r))) backs.push(r);
+      }
+      if (!backs.length) continue;
+      const quickBack = backs.reduce((x, y) => (y.timeS < x.timeS ? y : x));
+      const limitS = quickBack.timeS * (1 + L.budget) + L.slackS;
+      const back = K.BUY[level] != null ? pick(quickBack, backs, limitS, K.BUY[level]) : quickBack;
+      const r = loopRoute(v, obj, [{ edges: Array.from(o.edgeIdx), fs: o.fs, ft: o.ft }, { edges: Array.from(back.edgeIdx), fs: back.fs, ft: back.ft }], level, back.why.a);
+      r.kind = 'round'; r.why.role = 'round';
+      r.out = { timeS: o.timeS, distM: o.distM, role: o.why.role }; r.back = { timeS: back.timeS, distM: back.distM, a: back.why.a };
+      // the turn at the destination is a stop, not a manoeuvre: the two legs' times, not the joined search's turn there
+      r.timeS = o.timeS + back.timeS; r.route.timeS = r.timeS;
+      if (!out.some((x) => sameRoute(x, r))) out.push(r);
+    }
+    const ok = out.filter((r) => r.retraced <= K.ROUND_MAX_RETRACED);
+    // little driven twice first (a fifth or less is a different drive home); among those the most good road (goodness);
+    // the route engine has the last word on the page
+    const twice = (r) => (r.retraced <= 0.2 ? 0 : 1), good = (r) => (Number.isFinite(r.why.goodness) ? r.why.goodness : 0);
+    const list = (ok.length ? ok : out).sort((x, y) => twice(x) - twice(y) || good(y) - good(x) || x.timeS - y.timeS);
+    return { routes: list.slice(0, req.max || 3), out: there.routes[0], quick: there.quick, ms: Date.now() - t0 };
+  }
+
   // ---- loops ----------------------------------------------------------------------------------------------------------
   /**
    * A loop (the owner, 2026-11-04: "the loops don't at all need to be a circle they just need to start and end at the same
@@ -1676,6 +1733,11 @@
             return { id, result: { ...strip(r), tiles: v.keys, partial, viewMs, geoMs: Date.now() - t1, crowdEdges: v.crowd ? v.crowd.edges : 0 } };
           } finally { v.crowd = null; }
         }
+        if (type === 'round') {
+          const v = await viewFor(tilesFor(msg.from, msg.to, msg.level === 'quick' ? 'fun' : msg.level));
+          const r = roundTrip(v, msg);
+          return { id, result: { ...strip({ routes: r.routes, quick: r.quick }), outTimeS: r.out ? r.out.timeS : null, ms: r.ms, tiles: v.keys } };
+        }
         if (type === 'loop') {
           const v = await viewFor(loopTiles(msg.start, msg.km));
           return { id, result: { ...strip(loop(v, msg)), tiles: v.keys } };
@@ -1751,12 +1813,13 @@
       keep: (at) => ask({ type: 'keep', ...at }, 120000).then((m) => m.result),
       explore: (req) => ask({ type: 'explore', ...req }).then((m) => m.result),
       loop: (req) => ask({ type: 'loop', ...req }).then((m) => m.result),
+      round: (req) => ask({ type: 'round', ...req }, 12000).then((m) => m.result),
       close: () => { try { if (w) w.terminate(); } catch (_) { /* gone */ } w = null; },
     };
   }
 
   const api = { VERSION: 1, K, withTune, BUILT_READ, builtAgreeOf, lineTiles, edgeTable, fromTable, crowdOnto, project, quickest, scoreLine, reach, explore, streetEdge, deadEndAt, junctionAt, TILE_DEG, FLAG_BITS, NODE_BITS, CLS, UNKNOWN_U8, UNKNOWN_FUN, NO_NAME, packedKey, nodeCost, LEVELS_COPY, levels, distM, bearing, turnAngle, tileOf, keyOf, view, geom, snap, objective, search,
-    assemble, through, overlap, sameRoute, tilesFor, loopTiles, plan, pick, loop, hwyOf, isHwyEdge, snapOff, freeQuickest, indexKeys, covers, host, client, edgeId, twin, turnCost };
+    assemble, through, overlap, sameRoute, tilesFor, loopTiles, plan, pick, loop, roundTrip, hwyOf, isHwyEdge, snapOff, freeQuickest, indexKeys, covers, host, client, edgeId, twin, turnCost };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   root.ApexGraphRouter = api;
 })(typeof window !== 'undefined' ? window : globalThis);

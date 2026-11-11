@@ -390,3 +390,25 @@ def test_performance_on_a_cincinnati_size_network():
     fun = [p for p in r["plans"] if p["level"] == "fun"]
     assert max(p["ms"] for p in fun) < 1000, r["plans"]
     print(json.dumps({"viewMs": r["viewMs"], "queries": r["queries"], "plans": r["plans"]}))
+
+
+def test_there_and_back_comes_home_by_other_road():
+    """There and back (graph_router.js roundTrip): to a destination and home again, the way back costing the way out x4 both
+    ways, so a round trip drives little of itself twice; at Fun and Long way the way home buys good road as a plan does;
+    each starts and ends at home and passes the destination. A dead-end valley, the one way in, is still offered, said as
+    driven twice."""
+    r = case("roundTrips")
+    for level in ("quick", "fun", "max"):
+        trips = r[level]["trips"]
+        assert len(trips) >= 2, (level, trips)
+        assert r[level]["ms"] < 2000, r[level]["ms"]
+        for t in trips:
+            assert t["kind"] == "round" and t["role"] == "round", t
+            assert t["retraced"] <= 0.2, (level, t)
+            assert t["d0"] < 300 and t["dN"] < 300, (level, t)          # from home and back to it
+            assert t["reaches"] < 300, (level, t)                       # through the destination
+            assert abs(t["timeS"] - t["outS"] - t["backS"]) < 1, t      # the stop at the destination is not a manoeuvre
+    quick_best = min(t["backS"] for t in r["quick"]["trips"])
+    assert max(t["backS"] for t in r["fun"]["trips"]) > quick_best      # Fun's way home spends time on good road
+    assert r["fun"]["trips"][0]["retraced"] <= r["fun"]["trips"][-1]["retraced"] + 0.2
+    assert r["deadEnd"] and r["deadEnd"][0]["retraced"] > 0.9, r["deadEnd"]
