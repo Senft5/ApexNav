@@ -3581,6 +3581,14 @@ flow('reported hazards: a call ahead, "still there?" after passing, and a one-ta
       const k = window.apexDebug.state.lastSaid;   // a line the voice pack says (web/voice_lines.js) never reaches speechSynthesis
       if (k && window.__said[window.__said.length - 1] !== k) window.__said.push(k);
       await new Promise(r => setTimeout(r, 20)); }
+    // The car keeps sending fixes from here on, as a phone does. A web drive with no fix for 5 s drops back to the replay
+    // ("GPS lost") and the drive bar goes: the ask, the vote and the report's 3 s Undo run past 5 s on a slow runner
+    // (main's e2e 2026-11-11; then a sharded run where the gap opened before the first fix of a later-started feed).
+    const fix = () => window.apex.live({ lat: 35.6 + 330 / 110540, lon: -83.9, accuracy_m: 5, speed_mps: 15, course_deg: 0, has_fix: true, calibration: 'locked' });
+    window.__fixes = setInterval(fix, 500);
+    window.__words = [];   // every word the toast and the status line showed, for the dump below
+    for (const id of ['toast', 'dsNote']) new MutationObserver(() => { const t = document.getElementById(id).textContent; if (t) window.__words.push(id + ': ' + t); })
+      .observe(document.getElementById(id), { childList: true, characterData: true, subtree: true });
   });
   await page.waitForFunction(() => !document.getElementById('hzAsk').hidden, null, { timeout: 5000 });
   check(/Gravel still there\?/.test(await page.textContent('#hzAsk')), 'asks after passing it');
@@ -3590,17 +3598,16 @@ flow('reported hazards: a call ahead, "still there?" after passing, and a one-ta
   // VI-1: asked by the 0.1-degree cell, never the position (the phone measures the 200 m itself)
   check(asked.length >= 1 && asked.every((q) => /^\?lat=35\.6&lon=-83\.9&km=20$/.test(q)), 'the hazards are asked for by cell: ' + JSON.stringify(asked));
   check(await page.evaluate(() => window.__said.some((t) => /gravel reported ahead/i.test(t)) || /Gravel reported ahead/.test(document.body.textContent)), 'the hazard was called ahead');
-  // The car keeps sending fixes from here on, as a phone does. A web drive with no fix for 5 s drops back to the replay
-  // ("GPS lost"), the drive bar goes and the report's word goes to the toast instead of the status line: the ask, the vote
-  // and the report's 3 s Undo run past 5 s on a slow runner (main's e2e, 2026-11-11, a bare 30 s timeout here).
-  await page.evaluate(() => { window.__fixes = setInterval(() => window.apex.live({ lat: 35.6 + 330 / 110540, lon: -83.9, accuracy_m: 5, speed_mps: 15, course_deg: 0, has_fix: true, calibration: 'locked' }), 500); });
   await page.click('#hzReportBtn');
-  await page.click('#hzKinds button:has-text("Pothole")');
+  // the tap is the button's own click, in the page: a mouse click at its centre landed while the sheet was still sliding
+  // up on a busy runner (sharded CI 2026-11-11: the sheet stayed open, nothing reported), the review flow does the same
+  await page.evaluate(() => [...document.querySelectorAll('#hzKinds button')].find((b) => b.textContent === 'Pothole').click());
   // REVIEW4 U-74 / U-102 (check): in a drive the confirmation is the status line's, never a toast over the map
   await page.waitForFunction(() => /Pothole reported/.test(document.getElementById('dsNote').textContent), null, { timeout: 15000 })
     .catch(async () => { throw new Error('the report\'s status line never came: ' + JSON.stringify(await page.evaluate(() => ({ note: document.getElementById('dsNote').textContent,
       toast: document.getElementById('toast').textContent, key: document.getElementById('hzReportBtn').textContent, bar: !document.getElementById('driveBar').hidden,
-      outbox: localStorage.getItem('apex.outbox'), said: (window.__said || []).slice(-4) }))) + ' reports=' + reports.length); });
+      outbox: localStorage.getItem('apex.outbox'), said: (window.__said || []).slice(-4),
+      sheet: document.getElementById('hzOverlay').classList.contains('show'), words: (window.__words || []).slice(-6) }))) + ' reports=' + reports.length); });
   check(!(await page.evaluate(() => document.getElementById('toast').classList.contains('show') && /Pothole/.test(document.getElementById('toast').textContent))), 'no toast over the map');
   check(await page.evaluate(() => { const n = document.getElementById('dsNote'); return !n.hidden && n.scrollWidth <= n.clientWidth + 1 && /reported/.test(n.getAttribute('aria-label')); }), 'the status line says it whole (or its first sentence)');
   check(reports.length === 1 && reports[0].kind === 'pothole' && Math.abs(reports[0].lat - (35.6 + 330 / 110540)) < 1e-4 && reports[0].heading === 0, 'reported at your position and heading');
@@ -5457,6 +5464,24 @@ flow('road page: About a road shows its archetype, axes and how sure it is (IDEA
   check(/Gravel\s*at [\d.]+ (mi|ft|km|m) · 3 confirmed/.test(onRoad) && !/Animal/.test(onRoad), 'the live report, not the cleared one: ' + onRoad.slice(0, 600));
   await page.click('aside.side-pop.open button:has-text("Close")');
   check(!(await page.isVisible('aside.side-pop.open[aria-label="About this road"]')), 'closes');
+});
+
+flow('import: a drive from a file is named after the road that carried it (IDEAS U-04)', async (page, base) => {
+  await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); } catch (_) {} });
+  await page.goto(base + '/index.html');
+  await page.waitForFunction(() => window.apexDebug && window.ApexStages && window.ApexRoadNames);
+  // the map's named road lines along it, as the tiles would give them
+  await page.evaluate(() => { ApexStages.namesAlong = async () => [{ properties: { name: 'Dry Ridge Road' }, geometry: { type: 'MultiLineString', coordinates: [[[-84.75, 39.24], [-84.68, 39.24]]] } }]; });
+  const kx = 111320 * Math.cos(39.24 * Math.PI / 180);
+  const csv = (n) => ['t,lat,lon,speed_mph,lon_g,lat_g', ...Array.from({ length: n }, (_, i) => `${i * 0.25},39.2401,${(-84.74 + i * 5 / kx).toFixed(7)},45,0,0`)].join('\n');
+  await page.setInputFiles('#importFile', { name: 'web_20261027_080000.csv', mimeType: 'text/csv', buffer: Buffer.from(csv(600)) });
+  await page.waitForFunction(() => /is in your Log/.test(document.getElementById('toast').textContent), null, { timeout: 15000 });
+  const said = await page.textContent('#toast');
+  check(/^Dry Ridge Road is in your Log/.test(said.trim()), 'named after its road, not the file: ' + said);
+  // no tiles: it keeps the date name
+  await page.evaluate(() => { ApexStages.namesAlong = async () => []; });
+  await page.setInputFiles('#importFile', { name: 'web_20261028_090000.csv', mimeType: 'text/csv', buffer: Buffer.from(csv(600)) });
+  await page.waitForFunction(() => /^\s*Drive 10\/28\/2026 9:00 AM is in your Log/.test(document.getElementById('toast').textContent), null, { timeout: 15000 });
 });
 
 flow('track day: on a mapped raceway, Start/finish here times laps (IDEAS D-15)', async (page, base) => {

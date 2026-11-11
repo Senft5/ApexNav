@@ -7491,8 +7491,15 @@
       if (!file) return;
       try {
         const d = ApexRecording.parse(Core, await file.text(), file.name);
+        // IDEAS U-04: a file name or a date names it only until the map's tiles say which road carried it
+        if (window.ApexRoadNames && window.ApexStages && ApexRoadNames.isStandInName(d.name, file.name)) {
+          try {
+            const road = ApexRoadNames.roadOfTrack(await RouteLoading.optional(ApexStages.namesAlong(d), 8000) || [], d);
+            if (road) d.name = road;
+          } catch (_) { /* no tiles: it keeps its name */ }
+        }
         await ApexRecording.store(d); await refreshSavedDrives();
-        toast(`${d.name || file.name} is in your Log.`, { label: 'Open', href: `analysis.html?tab=drive&drive=${encodeURIComponent(d.id)}` });
+        toast(`${(window.ApexFormat ? ApexFormat.driveName(d.name) : d.name) || file.name} is in your Log.`, { label: 'Open', href: `analysis.html?tab=drive&drive=${encodeURIComponent(d.id)}` });
       } catch (err) { toast(/^missing column/.test(err.message) ? `Couldn't import ${file.name}. It isn't a Vetta drive log.` : `Couldn't import ${file.name}. The file may be damaged.`); }
       e.target.value = '';
     });

@@ -103,6 +103,18 @@ describe("roadbooks", () => {
     expect((await json(api(a, "GET", "/api/roadbooks"))).mine.map((x: Msg) => x.name).sort()).toEqual(["Empty", "Ohio", "Secret", "Smokies classics"]);
   });
 
+  it("a member with every book and follow allowed still gets their list (more than D1's 100 bound values a query)", async () => {
+    const a = await makeUser("alice"), b = await makeUser("bob");
+    const ids = Array.from({ length: 130 }, (_, i) => `book${String(i).padStart(12, "0")}`);
+    await env.DB.batch(ids.map((id, i) => env.DB.prepare("INSERT INTO roadbooks (id, owner, name, visibility) VALUES (?, ?, ?, 'public')").bind(id, i < 30 ? a.id : b.id, `Book ${i}`)));
+    await env.DB.batch(ids.slice(30).map((id) => env.DB.prepare("INSERT INTO roadbook_follows (book_id, user_id) VALUES (?, ?)").bind(id, a.id)));
+    await ok(add(a, ids[0])); await ok(add(b, ids[129]));
+    const got = await json(api(a, "GET", "/api/roadbooks"));
+    expect([got.mine.length, got.following.length]).toEqual([30, 100]);
+    expect(got.mine.find((x: Msg) => x.id === ids[0]).road_list).toHaveLength(1);
+    expect(got.following.find((x: Msg) => x.id === ids[129]).road_list).toHaveLength(1);
+  });
+
   it("a stamp is counted once per member, comes back as yours, and the table never holds who", async () => {
     const a = await makeUser("alice"), b = await makeUser("bob"), c = await makeUser("cara");
     const id = await book(a, { visibility: "public" });

@@ -10,6 +10,7 @@ import { reportedSql, removedSql } from "./reports_sql";
 export const MAX_BOOKS = 30, MAX_ROADS = 40, MAX_POINTS = 600, MAX_FOLLOWS = 100, ROADS_PER_DAY = 60, NEAR_KM = 160, NEAR_SHOWN = 20;
 export const MIN_ROAD_M = 300, MAX_ROAD_M = 600_000;
 const ID_RE = /^[A-Za-z0-9_-]{16}$/;
+export const BIND_CHUNK = 90;
 const VIS = ["private", "friends", "public"] as const;
 type Vis = typeof VIS[number];
 
@@ -191,11 +192,16 @@ export async function booksMine(env: Env, v: Viewer) {
       ORDER BY b.updated_at DESC LIMIT ${MAX_BOOKS + MAX_FOLLOWS}`, v.id);
   if (!rows.length) return { mine: [], following: [] };
   const holder = await holderOrNull(env, v);
-  const marks = rows.map((_, i) => `?${i + 2}`).join(",");
-  const roads = await all<{ id: string; book_id: string; name: string; length_m: number; south: number; north: number; west: number; east: number; stamped: number }>(env,
-    `SELECT r.id, r.book_id, r.name, r.length_m, r.south, r.north, r.west, r.east,
-            EXISTS (SELECT 1 FROM roadbook_stamps s WHERE s.road_id = r.id AND s.holder = ?1) AS stamped
-       FROM roadbook_roads r WHERE r.book_id IN (${marks}) ORDER BY r.pos, r.created_at`, holder, ...rows.map((r) => r.id));
+  // D1 binds at most 100 values a query and a member can hold MAX_BOOKS + MAX_FOLLOWS books, so the roads come in chunks
+  type RoadRow = { id: string; book_id: string; name: string; length_m: number; south: number; north: number; west: number; east: number; stamped: number };
+  const roads: RoadRow[] = [];
+  for (let k = 0; k < rows.length; k += BIND_CHUNK) {
+    const ids = rows.slice(k, k + BIND_CHUNK).map((r) => r.id);
+    roads.push(...await all<RoadRow>(env,
+      `SELECT r.id, r.book_id, r.name, r.length_m, r.south, r.north, r.west, r.east,
+              EXISTS (SELECT 1 FROM roadbook_stamps s WHERE s.road_id = r.id AND s.holder = ?1) AS stamped
+         FROM roadbook_roads r WHERE r.book_id IN (${ids.map((_, i) => `?${i + 2}`).join(",")}) ORDER BY r.pos, r.created_at`, holder, ...ids));
+  }
   const out = rows.map((r) => ({ ...card(r, v.id),
     road_list: roads.filter((x) => x.book_id === r.id).map((x) => ({ id: x.id, name: x.name, length_m: x.length_m, box: [x.south, x.north, x.west, x.east], stamped: !!x.stamped })) }));
   return { mine: out.filter((b) => b.mine), following: out.filter((b) => !b.mine) };

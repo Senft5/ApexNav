@@ -116,6 +116,25 @@
     const [x, y] = tileOf(lat, lon, z);
     return decodeLayer(new Uint8Array(await bufferOf(tileUrl.replace('{z}', z).replace('{x}', x).replace('{y}', y))), 'transportation', z, x, y);
   }
+  /** The map's named road lines (transportation_name) in the zoom-13 tiles a track passes through, at most `max` tiles
+   *  (for naming an imported drive, IDEAS U-04); [] when no tile came. Only map tiles are fetched, as the map does. */
+  async function namesAlong(t, max = 24) {
+    if (!t || !Array.isArray(t.lat) || !t.lat.length) return [];
+    if (!tileUrl) tileUrl = (await tileJson()).tiles[0];
+    const z = 13, keys = new Map();
+    for (let i = 0; i < t.lat.length && keys.size < max; i += 10) {
+      if (!Number.isFinite(t.lat[i]) || !Number.isFinite(t.lon[i])) continue;
+      const [x, y] = tileOf(t.lat[i], t.lon[i], z); keys.set(`${x}/${y}`, [x, y]);
+    }
+    const out = [];
+    await Promise.all([...keys.values()].map(async ([x, y]) => {
+      try {
+        const buf = new Uint8Array(await bufferOf(tileUrl.replace('{z}', z).replace('{x}', x).replace('{y}', y)));
+        for (const f of decodeLayer(buf, 'transportation_name', z, x, y)) out.push({ properties: f.props, geometry: { type: 'MultiLineString', coordinates: f.lines } });
+      } catch (_) { /* a missing tile names less */ }
+    }));
+    return out;
+  }
   async function roadPieces(c, radiusKm, onProgress, withNames = false) {
     if (!tileUrl) tileUrl = (await tileJson()).tiles[0];
     const z = 13, jobs = [];
@@ -639,5 +658,5 @@
     return copy(await p);
   }
 
-  root.ApexStages = { demTile, DEM_Z, decodeLayer, transportationAt, discover, discoverAsync, discoverKey, DISCOVER_KEEP_MS, nameStages, places, pois, addElevations, profile, fillProfile, climbM, sightOffsets, offsetsFrom, SIGHT_OPEN_M, stageDirection, terrarium, applyHighlights, plans, waypoints, strokes, bestWindow, roadPieces };
+  root.ApexStages = { demTile, DEM_Z, decodeLayer, transportationAt, discover, discoverAsync, discoverKey, DISCOVER_KEEP_MS, nameStages, places, pois, addElevations, profile, fillProfile, climbM, sightOffsets, offsetsFrom, SIGHT_OPEN_M, stageDirection, terrarium, applyHighlights, plans, waypoints, strokes, bestWindow, roadPieces, namesAlong };
 })(typeof window !== 'undefined' ? window : globalThis);

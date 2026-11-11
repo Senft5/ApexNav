@@ -2,7 +2,8 @@
 // An area is a 1-degree square (about 110 by 90 km). Members put one of their own stages up for the area it starts in; each
 // Monday (UTC) one stage is picked per area, the first time anyone there looks, and kept for the week. Entering copies the
 // stage into your Stages; your quickest time on it that week (the Log times stage runs on the phone, as for boards) goes on a
-// board every member can see, by handle, with that run's Vetta Score. Leaving the week takes your time off. Blocks hide
+// board every member can see, by handle, with that run's Vetta Score. Only a week you entered counts (ta_joins);
+// leaving the week takes your time off and your entry. Blocks hide
 // people both ways; a stage put up is reportable (kind `circuit`). Times only from runs the phone timed; an average speed
 // no car on a public road could hold is refused rather than ranked.
 import type { Viewer } from "./auth";
@@ -21,7 +22,8 @@ const WEEK = "date('now', '-6 days', 'weekday 1')";
 
 /** The area a point is in: the 1-degree square, south-west corner, as 'lat,lon'. */
 export const cellOf = (lat: number, lon: number) => `${Math.floor(lat)},${Math.floor(lon)}`;
-const cellParam = (u: URL) => cellOf(num(Number(u.searchParams.get("lat")), "lat", -85, 85), num(Number(u.searchParams.get("lon")), "lon", -180, 180));
+const qNum = (u: URL, k: string) => { const s = u.searchParams.get(k); return s === null || s.trim() === "" ? NaN : Number(s); };   // missing is 400, never (0, 0)
+const cellParam = (u: URL) => cellOf(num(qNum(u, "lat"), "lat", -85, 85), num(qNum(u, "lon"), "lon", -180, 180));
 const cellBody = (c: unknown) => {
   const m = /^(-?\d{1,2}),(-?\d{1,3})$/.exec(String(c ?? ""));
   if (!m || Math.abs(+m[1]) > 85 || Math.abs(+m[2]) > 180) throw new HttpError(400, "bad_cell");
@@ -97,7 +99,7 @@ export async function timeAttack(env: Env, v: Viewer, url: URL) {
   const out = (x: typeof placed[number]) => ({ place: x.place, handle: x.r.handle || "?", time_s: x.r.time_s, gap_s: best == null ? null : x.r.time_s - best,
     score: x.r.driver_score, driven_on: x.r.driven_on, mine: x.r.user_id === v.id });
   const me = placed.find((x) => x.r.user_id === v.id);
-  const entered = circuit ? !!(await first(env, "SELECT 1 FROM segments WHERE owner = ?1 AND (id = ?2 OR origin_id = ?2)", v.id, circuit.segment_id)) : false;
+  const entered = circuit ? !!(await first(env, "SELECT 1 FROM ta_joins WHERE week = ? AND cell = ? AND user_id = ?", week, cell, v.id)) : false;
   const last = await first<{ segment_id: string; name: string | null }>(env,
     `SELECT w.segment_id, s.name FROM ta_weeks w LEFT JOIN segments s ON s.id = w.segment_id WHERE w.week = date(?1, '-7 days') AND w.cell = ?2`, week, cell);
   const podium = last ? await all<{ handle: string | null; time_s: number }>(env,
@@ -115,6 +117,8 @@ export async function enter(env: Env, v: Viewer, req: Request) {
   if (!v.handle) throw new HttpError(409, "handle_required");
   const { circuit } = await current(env, cellBody((await body<{ cell?: unknown }>(req)).cell));
   if (!circuit) throw new HttpError(404, "no_circuit");
+  // entering is the opt-in: only a week you entered puts your times on the board (migration 0051)
+  await env.DB.prepare("INSERT OR IGNORE INTO ta_joins (week, cell, user_id) VALUES (?, ?, ?)").bind(circuit.week, circuit.cell, v.id).run();
   const have = await first<{ id: string }>(env, "SELECT id FROM segments WHERE owner = ?1 AND (id = ?2 OR origin_id = ?2)", v.id, circuit.segment_id);
   if (have) return { segment_id: have.id, added: false };
   const src = (await first<{ name: string; length_m: number; geom: string; start_lat: number; start_lon: number; end_lat: number; end_lon: number }>(env,
@@ -125,21 +129,23 @@ export async function enter(env: Env, v: Viewer, req: Request) {
   return { segment_id: id, added: true };
 }
 
-/** GET /api/timeattack/circuits: this week's circuits (their stage ids), so the phone sends times only for those. */
-export async function circuitsNow(env: Env) {
+/** GET /api/timeattack/circuits: this week's circuits you entered (their stage ids), so the phone sends times only for those. */
+export async function circuitsNow(env: Env, v: Viewer) {
   const w = (await first<{ week: string; ends_on: string }>(env, `SELECT ${WEEK} AS week, date(${WEEK}, '+6 days') AS ends_on`))!;
-  return { ...w, circuits: await all<{ segment_id: string; cell: string }>(env, "SELECT segment_id, cell FROM ta_weeks WHERE week = ?", w.week) };
+  return { ...w, circuits: await all<{ segment_id: string; cell: string }>(env,
+    "SELECT w.segment_id, w.cell FROM ta_weeks w JOIN ta_joins j ON j.week = w.week AND j.cell = w.cell AND j.user_id = ? WHERE w.week = ?", v.id, w.week) };
 }
 
 /**
  * POST /api/timeattack/runs {runs: [{segment_id, time_s, driver_score?, driven_on}]}: your timed runs on stages you have.
- * A run counts when its stage is a circuit this week and it was driven this week; your quickest stays. → { accepted }.
+ * A run counts when its stage is a circuit this week you entered and it was driven this week; your quickest stays. A run no
+ * road car could set is skipped (one bad clock never holds back the others). → { accepted, refused }.
  */
 export async function runs(env: Env, v: Viewer, req: Request) {
   if (!v.handle) throw new HttpError(409, "handle_required");
   const b = await body<{ runs?: unknown }>(req);
   if (!Array.isArray(b.runs) || b.runs.length > 20) throw new HttpError(400, "bad_runs");
-  let accepted = 0;
+  let accepted = 0, refused = 0;
   for (const raw of b.runs as Record<string, unknown>[]) {
     const segId = str(raw && raw.segment_id, "segment_id", 1, 64), time = int(raw.time_s, "time_s", 10, 36000);
     const score = raw.driver_score == null ? null : int(raw.driver_score, "driver_score", 0, 1000);
@@ -147,23 +153,30 @@ export async function runs(env: Env, v: Viewer, req: Request) {
     if (!DATE_RE.test(day)) throw new HttpError(400, "bad_driven_on");
     const c = await first<{ cell: string; week: string; length_m: number }>(env,
       `SELECT w.cell, w.week, s.length_m FROM segments s JOIN ta_weeks w ON w.segment_id = COALESCE(s.origin_id, s.id) AND w.week = ${WEEK}
+        JOIN ta_joins j ON j.week = w.week AND j.cell = w.cell AND j.user_id = ?2
         WHERE s.id = ?1 AND s.owner = ?2 AND ?3 BETWEEN w.week AND date(w.week, '+6 days') AND ?3 <= date('now', '+1 day')`, segId, v.id, day);
     if (!c) continue;
-    if (c.length_m / time > MAX_AVG_MS) throw new HttpError(400, "implausible_time");
+    if (c.length_m / time > MAX_AVG_MS) { refused++; continue; }
     await env.DB.prepare(`INSERT INTO ta_entries (week, cell, user_id, time_s, driver_score, driven_on) VALUES (?1, ?2, ?3, ?4, ?5, ?6)
        ON CONFLICT (week, cell, user_id) DO UPDATE SET time_s = ?4, driver_score = ?5, driven_on = ?6, updated_at = datetime('now') WHERE ?4 < ta_entries.time_s`)
       .bind(c.week, c.cell, v.id, time, score, day).run();
     accepted++;
   }
-  return { accepted };
+  return { accepted, refused };
 }
 
-/** DELETE /api/timeattack/entry?lat&lon: your time off this week's board for that area. */
+/** DELETE /api/timeattack/entry?lat&lon: your time off this week's board for that area, and out of the week (so the next sync
+ * doesn't put it back). Enter again to come back. */
 export async function leave(env: Env, v: Viewer, url: URL) {
-  await env.DB.prepare(`DELETE FROM ta_entries WHERE user_id = ? AND cell = ? AND week = ${WEEK}`).bind(v.id, cellParam(url)).run();
+  const cell = cellParam(url);
+  await env.DB.batch([
+    env.DB.prepare(`DELETE FROM ta_entries WHERE user_id = ? AND cell = ? AND week = ${WEEK}`).bind(v.id, cell),
+    env.DB.prepare(`DELETE FROM ta_joins WHERE user_id = ? AND cell = ? AND week = ${WEEK}`).bind(v.id, cell),
+  ]);
 }
 
 export const TA_SWEEP = {
   ta_entries: `DELETE FROM ta_entries WHERE week < date('now', '-${KEEP_WEEKS * 7} days')`,
   ta_weeks: `DELETE FROM ta_weeks WHERE week < date('now', '-${KEEP_WEEKS * 7} days')`,
+  ta_joins: `DELETE FROM ta_joins WHERE week < date('now', '-${KEEP_WEEKS * 7} days')`,
 };
