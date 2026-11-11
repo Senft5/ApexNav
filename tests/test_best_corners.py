@@ -141,7 +141,7 @@ def test_road_records_corner_by_corner():
 
 
 def test_road_book_every_corner_of_a_road():
-    c = lambda x, lv, hx=1.0, size="tight": {"x": x, "y": 0.0, "hx": hx, "hy": 0.0, "level": lv, "size": size, "dir": "left"}
+    c = lambda x, lv, hx=1.0, size="tight": {"x": x, "y": 0.0, "hx": hx, "hy": 0.0, "level": lv, "size": size, "dir": "L"}
     drives = [{"id": "a", "at": "2026-05-01T09:00", "corners": [c(600, 90), c(0, 80), c(300, 70, size="fast")]},
               {"id": "b", "at": "2026-06-01T09:00", "corners": [c(4, 92), c(305, 70), c(603, 90), c(900, 99)]},
               {"id": "c", "at": "2026-07-01T09:00", "corners": [c(-6, 85), c(298, 75), c(598, 88, hx=-1.0), c(1, 91)]},
@@ -153,11 +153,19 @@ def test_road_book_every_corner_of_a_road():
     assert [(k["x"], k["passes"], k["record"], k["by"], k["at"], k["size"]) for k in b["corners"]] == [
         (0, 3, 92, "b", "2026-06-01T09:00", "tight"), (300, 3, 75, "c", "2026-07-01T09:00", "fast"), (600, 3, 90, "a", "2026-05-01T09:00", "tight")]
     assert b["fewer"] == 2 and b["drives"] == 4
+    assert [k["low"] for k in b["corners"]] == [80, 70, 60] and b["uneven"] == [3]     # 600 m: 90 down to 60; 0 m spans 12 only
     assert [k["x"] for k in dp.road_book(drives)["corners"]] == [600, 0, 300]          # with no ref: as first seen
-    assert dp.road_book([]) == {"corners": [], "fewer": 0, "drives": 0}
+    assert dp.road_book([]) == {"corners": [], "fewer": 0, "drives": 0, "uneven": []}
     if NODE is None:
         return
     runner = ("const P=require(process.argv[1]+'/web/driver_profile.js');const [d,r]=JSON.parse(require('fs').readFileSync(0,'utf8'));"
-              "process.stdout.write(JSON.stringify([P.roadBook(d,r),P.roadBook(d),P.roadBook([])]));")
+              "const b=P.roadBook(d,r),w=P.roadBookRows(b,(at)=>at.slice(5,10)),two=P.roadBookRows({...b,uneven:[3,1]},null);"
+              "process.stdout.write(JSON.stringify([[b,P.roadBook(d),P.roadBook([])],w,two.work,P.roadBookRows(P.roadBook([]),null)]));")
     out = json.loads(subprocess.run([NODE, "-e", runner, os.getcwd()], input=json.dumps([drives, ref]), capture_output=True, text=True, check=True).stdout)
-    assert out == json.loads(json.dumps([b, dp.road_book(drives), dp.road_book([])]))
+    assert out[0] == json.loads(json.dumps([b, dp.road_book(drives), dp.road_book([])]))
+    w = out[1]
+    assert w["head"] == "3 corners you have driven three or more times, in road order; 2 more fewer times. Each with your cleanest pass and the drive it came on."
+    assert w["work"] == "Least even: corner 3, where your passes differ the most."
+    assert [(r["n"], r["what"], r["record"], r["low"], r["uneven"], r["by"], r["on"], r["passes"]) for r in w["rows"]] == [
+        (1, "Tight left", 92, 80, False, "b", "06-01", 3), (2, "Fast left", 75, 70, False, "c", "07-01", 3), (3, "Tight left", 90, 60, True, "a", "05-01", 3)]
+    assert out[2] == "Least even: corners 3 and 1, where your passes differ the most." and out[3] is None

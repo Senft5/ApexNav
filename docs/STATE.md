@@ -9,6 +9,20 @@
 - Tests: test_scenic.py (+1), test_siri_shortcuts.py (7 shortcuts); e2e "along the route by name…" asks in a drive, the
   Siri links flow asks with no route. Swift compiles in CI only (build-ipa). APP_REVIEW.md 2.5.x row updated.
 - Next: CarPlay's route preview could list the cafés and fuel by name.
+## Session 2026-11-11 (roam-c-ta-placement): this week's time attack loop on the home deck (claude/roam-c-ta-placement)
+
+- web/your_roads.js: `attackFrom(t)` reads GET /api/timeattack's answer (no loop, no line, or the week over gives null);
+  `suggest()` takes `attack`: entered, it comes right after a crew drive you're going to ("Time attack · <loop>", "You're
+  3rd of 8 · 3 days left" or "No time yet · last day"); not entered, after the road you haven't driven and before your
+  best road ("This week's loop · 20 mi · 8 times · 3 days left"). `nudgeText(sugg, day, at)`: the reminder says only what
+  lasts, and a week over by the day it names is not named.
+- web/cockpit.js: `refreshAttack` runs with the drive-today check (members, online, every 10 min; once more at 40 s when the
+  position came late) and sends only the middle of the 1-degree area. The suggestion's key routes to the loop's start
+  (routeToPlace); its body draws the loop. Where to?'s Time attack section and the place after a drive are the social
+  thread's; time_attack.ts untouched.
+- Tests: tests/test_your_roads.py (+4), e2e flow "time attack on the home deck". Full pytest 1692 passed.
+
+
 ## Session 2026-11-11 (Valhalla for Quick only, part 2): loops are our router's or nothing (claude/project-thread-39xbx9, off origin/main)
 
 - cockpit.js `buildLoop`: our router's loops only; no Valhalla stage loops, circle or refine. With none of ours a toast
@@ -42,6 +56,14 @@
   `repeat_weeks` (409 `not_latest` on an older drive of a series). `web/crew_events.js` Repeats chips, "Every Saturday"
   on cards and Meets near you, ICS RRULE. Tests: backend event_repeat 4, pytest test_crew_events, e2e crew drives.
 - Next: the auto time attack PR (local branch, built on #397's) once #397 merges.
+## Session 2026-11-11 (deepest analysis, PR 13): the road book names the least even corners (claude/project-thread-gd7nre)
+
+- `road_book` / `roadBook` give each corner its least clean pass (`low`) and the book `uneven`: up to three corners whose
+  passes span 15 levels or more, the widest first. `roadBookRows` adds "Least even: corners 4, 9 and 12, where your passes
+  differ the most."; those rows say "; your least clean 62" and are set a little heavier.
+- Tests: tests/test_best_corners.py road book test (low, uneven, the words and parity); e2e accepts the longer row.
+- Next: the drive page could say, for this drive, which of the road's least even corners it drove near its best.
+
 ## Session 2026-11-11 (deepest analysis, PR 12): Your roads, corner by corner (claude/project-thread-gd7nre)
 
 - core/driver_profile.py `road_book(drives, ref)` and its port `roadBook`: every drive of a road (oldest first, placed in
