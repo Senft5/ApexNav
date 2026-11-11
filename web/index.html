@@ -34,6 +34,10 @@
   <script src="taste.js" defer></script>
   <script src="prefer.js" defer></script>
   <!-- route context providers (builder E): the crowd, the driver, the car, the phone's time, crew meeting points -->
+  <!-- before the route_ctx providers: conditions, wildlife and hazards_live take ApexSun and ApexRouteWeather as they load
+       (after them, as it was until 2026-11-10, the app knew no light, glare, deer hour or forecast hazard per sample) -->
+  <script src="sun.js" defer></script>
+  <script src="route_weather.js" defer></script>
   <script src="route_ctx/ctx_util.js" defer></script>
   <script src="route_ctx/crowd.js" defer></script>
   <script src="route_ctx/driver.js" defer></script>
@@ -114,7 +118,7 @@
   <script src="route_import.js" defer></script>
   <script src="pinned_places.js" defer></script>
   <script src="trip_stops.js" defer></script>
-  <script src="route_weather.js" defer></script>
+  <script src="when_to_go.js" defer></script>
   <script src="conditional_closures.js" defer></script>
   <script src="place_search.js" defer></script>
   <script src="recce.js" defer></script>
@@ -122,7 +126,6 @@
   <script src="traffic.js" defer></script>
   <script src="in_car.js" defer></script>
   <script src="power.js" defer></script>
-  <script src="sun.js" defer></script>
   <script src="format.js" defer></script>
   <script src="road_names.js" defer></script>
   <script src="twisty.js" defer></script>
@@ -692,6 +695,25 @@
     .f-ahead { --glyph: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2.2' stroke-linecap='round'%3E%3Cpath d='M8 22 V14 Q8 7 16 5'/%3E%3Cpath d='M12 2 L17 5 L13 9'/%3E%3Ccircle cx='8' cy='22' r='1.5' fill='black'/%3E%3C/svg%3E"); }
     .f-sky { --glyph: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round'%3E%3Ccircle cx='12' cy='12' r='4'/%3E%3Cpath d='M12 2v3M12 19v3M2 12h3M19 12h3M5 5l2 2M17 17l2 2M5 19l2-2M17 7l2-2'/%3E%3C/svg%3E"); }
     .f-closed { --glyph: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2'%3E%3Crect x='2' y='8' width='20' height='6'/%3E%3Cpath d='M6 8 L10 14 M12 8 L16 14 M18 8 L22 14 M5 14 V21 M19 14 V21'/%3E%3C/svg%3E"); }
+    /* When to go: a fact that opens; the next day as one bar per departure (taller = a better drive), night dimmed */
+    .f-when { --glyph: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round'%3E%3Ccircle cx='12' cy='12' r='9'/%3E%3Cpath d='M12 7 V12 L15.5 14'/%3E%3C/svg%3E"); }
+    .when-line { flex: 1; min-width: 0; min-height: 44px; margin: -12px 0; padding: 0; display: flex; align-items: center; justify-content: space-between; gap: 10px; text-align: left; font: inherit; color: inherit; background: none; border: 0; cursor: pointer; }
+    .when-line::after { content: ""; flex: none; width: 7px; height: 7px; margin: 0 4px 3px 0; border-right: 2px solid currentColor; border-bottom: 2px solid currentColor; transform: rotate(45deg); transition: transform 0.15s; }
+    .when-line[aria-expanded="true"]::after { transform: rotate(-135deg); margin-bottom: -3px; }
+    .rc-when { margin-top: 10px; } .rc-when[hidden] { display: none; }
+    .when-ribbon { display: flex; align-items: flex-end; gap: 1px; height: 64px; border-bottom: 1.5px solid var(--panel-ink); }
+    .when-ribbon > button { flex: 1 1 0; min-width: 0; height: 100%; padding: 0; display: flex; align-items: flex-end; background: none; border: 0; color: var(--panel-ink); cursor: pointer; }
+    .when-ribbon > button > i { display: block; width: 100%; height: calc(var(--h, 0.5) * 100%); min-height: 3px; background: currentColor; }
+    .when-ribbon > button.night > i { opacity: 0.38; }
+    .when-ribbon > button.shut > i { height: 3px; opacity: 0.38; }
+    .when-ribbon > button[aria-selected="true"] { color: var(--accent); } .when-ribbon > button[aria-selected="true"] > i { opacity: 1; }
+    .when-ribbon > button:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+    .when-axis { position: relative; height: 18px; font-size: 12px; font-weight: 600; color: var(--panel-dim); font-variant-numeric: tabular-nums; }
+    .when-axis > span { position: absolute; top: 3px; transform: translateX(-50%); white-space: nowrap; } .when-axis > span:first-child { transform: none; }
+    .when-detail { margin: 6px 0 0; font-size: 15px; line-height: 1.3; color: var(--panel-ink); } .when-detail b { font-variant-numeric: tabular-nums; }
+    .when-keys { display: flex; align-items: center; gap: 12px; margin-top: 8px; } .when-keys .ink-btn { min-height: 44px; } .when-keys .ink-btn[hidden] { display: none; }
+    html[data-type-size] #planBody .when-detail { font-size: 17px; }
+    @media (prefers-reduced-motion: reduce) { .when-line::after { transition: none; } }
     .rc-round { width: 100%; min-height: 44px; margin-top: 10px; } .rc-round[hidden] { display: none; }
     /* the level cards (the owner, 2026-11-04): Quick, Fun, Long way, each its pick's time and corners; on = the route on screen */
     /* (design pass, 2026-11-10: the one clear choice. One joined row, hairlines between, the one on screen filled with
@@ -1350,6 +1372,11 @@
     .nav-group { margin: 0; padding: 22px 2px 8px; border-bottom: 1px solid var(--hair, var(--panel-dim)); font: 700 12px var(--font-ui); letter-spacing: 0.08em; text-transform: uppercase; color: var(--panel-dim); }
     .nav-group:first-child { padding-top: 6px; }
     .nav-group[hidden] { display: none; }
+    /* Crew settings (2026-11-10): the same small-caps names as the Settings list; a key that is a line of text starts at the left
+       like the rows around it (a grid stretched it and centred its words), and the parts sit closer than the sheet's 12 px */
+    .crew-settings .nav-group { padding: 10px 0 0; border-bottom: 0; } .crew-settings .linkbtn, .crew-settings .danger-btn { justify-self: start; }
+    .crew-settings p { margin: 0; } .crew-settings .row > .field { flex: 1 1 0; min-width: 0; }
+    .crew-settings p.note { font-size: 13px; color: var(--panel-dim); line-height: 1.45; }   /* as in the Garage's sheets */
     .nav-row.danger { color: var(--accent); }                       /* a row that removes something (Your data) */
     label.nav-row { cursor: pointer; } .nav-row:disabled { color: var(--panel-dim); }
     .data-rows { margin-top: 4px; }
@@ -1800,6 +1827,14 @@
                 <p class="fact f-ahead" id="routeCardCharacter" hidden></p>
                 <p class="fact f-sky" id="routeCardWeather" hidden></p>
                 <p class="fact f-closed" id="routeCardClosures" hidden></p>
+                <!-- When to go (when_to_go.js): the best hour to drive this route, a tap opens the next day by the half hour -->
+                <p class="fact f-when" id="routeCardWhen" hidden><button type="button" class="when-line" id="routeWhenLine" aria-expanded="false" aria-controls="routeWhenPanel"></button></p>
+              </div>
+              <div class="rc-when" id="routeWhenPanel" hidden>
+                <div class="when-ribbon" id="routeWhenRibbon" role="listbox" aria-label="When to leave, the next 24 hours"></div>
+                <div class="when-axis" id="routeWhenAxis" aria-hidden="true"></div>
+                <p class="when-detail" id="routeWhenDetail" role="status" aria-live="polite"></p>
+                <div class="when-keys"><button type="button" class="ink-btn" id="routeWhenPlan"></button><button type="button" class="linkbtn" id="routeWhenNow" hidden>Leave now</button></div>
               </div>
               </div>
               <div class="stack-8" id="routeStops" hidden></div>
@@ -2076,6 +2111,7 @@
           <p class="end-meta" id="endMeta"></p>
           <div class="end-score"><b id="endScore">--</b><small>/1000</small><span>Vetta Score</span><em id="endUsual" hidden></em></div>
           <p class="end-feel" id="endFeel" hidden></p>   <!-- panel round 2, HE-1: what this phone felt, only when measured -->
+          <p class="end-feel" id="endPractice" hidden></p>   <!-- IDEAS D-27: the skill you are practicing, on this drive -->
           <p class="end-line" id="endLine"></p>
           <!-- U-75: the solid key is Share card only when there is a score to share; otherwise it is Open in the Log, and Share
                waits as a link -->
