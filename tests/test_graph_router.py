@@ -403,6 +403,17 @@ def test_avoid_police_reports_keeps_off_the_road_by_a_report():
     assert r["offNear"] < 20, r
 
 
+def test_avoid_cameras_keeps_off_the_road_a_camera_is_on():
+    """Avoid cameras (graph_router.js AVOID_CAM_X): the edges within 35 m of a plate reader or speed camera cost x8, so our
+    own routes go round one the way Valhalla's do (exclude_locations); off, or no camera list, nothing changes."""
+    r = case("avoidCameras")
+    assert r["baseNear"] < 20, r
+    assert r["quickNear"] > 35 and r["quickS"] > r["baseS"], r
+    assert r["planNear"] and all(d > 35 for d in r["planNear"]), r
+    assert r["offNear"] < 20 and r["noneS"] == r["baseS"], r
+    assert r["max1"] == 8 and r["max2"] == 8, r          # two cameras on one road: x8 once, not x64
+
+
 def test_there_and_back_comes_home_by_other_road():
     """There and back (graph_router.js roundTrip): to a destination and home again, the way back costing the way out x4 both
     ways, so a round trip drives little of itself twice; at Fun and Long way the way home buys good road as a plan does;

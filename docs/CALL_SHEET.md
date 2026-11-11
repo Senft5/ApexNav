@@ -4,15 +4,17 @@ Decisions Claude made for you, newest first. Each one says what was decided, why
 you reach one you've seen. If you disagree with a call, say so and it gets reversed; nothing here is hard to undo unless
 it says so. Things only you can do are in docs/OWNER_TODO.md.
 
-## 2026-11-11 (round two analysis): touch by kind of corner, month and drive is said as facts, never as a grade (claude/project-thread-gd7nre)
+## 2026-11-11 (routing round two): Avoid cameras keeps every route off them, speed cameras with plate readers
 
-Your touch now has a table by size of corner and a line a month, and each drive's Log page says its own touch beside
-your usual ("Brakes on: about 1.1 g a second on this drive, 0.8 usually"). The call: these are rates, never a level or
-"better/worse". A tight corner takes the brakes on harder because of the road, and a sharp input is not a fault on its
-own; grading it would coach the wrong thing. A drive needs 8 timed corners before it says anything.
+With Avoid → Cameras on, only one of the routers was told about the cameras; the others' routes (our own router's, the
+quickest on highways, stage plans) still competed and could win while driving past one. Now every plan carries the
+cameras near the trip, our router costs the road a camera sits on 8 times its time, and a route that still drives past
+one (within 35 m) gives way to any route that doesn't. Fixed speed cameras are in the same list as plate readers, under
+the same switch, as on the map; you asked for speed cameras to be avoided too. A camera on a crossing road doesn't count
+against a route (35 m, not the card's 60 m count). When nothing gets round, the card says "Couldn't avoid cameras".
 
-Undo: hide the table and the month lines in `render` (the `dp-touch-by` block), and the drive page's `#dvTouch` panel.
-
+Undo: revert the PR (no data changed). To split speed cameras onto their own switch, filter `kind` in `camsForTrip` and
+`camerasAround` (cockpit.js) by a new avoid key.
 ## 2026-11-11 (sweep round two): time attack counts only a week you entered (claude/project-thread-g9yher)
 
 Two bugs in the weekly time attack (#393). The Log never sent any runs, so every board stayed empty. And the server
@@ -24,6 +26,15 @@ The owner of the stage enters like anyone else; putting a stage up isn't enterin
 skipped instead of rejecting the whole upload.
 
 Undo: revert the PR, then `DROP TABLE ta_joins` on both databases.
+## 2026-11-11 (round two analysis): touch by kind of corner, month and drive is said as facts, never as a grade (claude/project-thread-gd7nre)
+
+Your touch now has a table by size of corner and a line a month, and each drive's Log page says its own touch beside
+your usual ("Brakes on: about 1.1 g a second on this drive, 0.8 usually"). The call: these are rates, never a level or
+"better/worse". A tight corner takes the brakes on harder because of the road, and a sharp input is not a fault on its
+own; grading it would coach the wrong thing. A drive needs 8 timed corners before it says anything.
+
+Undo: hide the table and the month lines in `render` (the `dp-touch-by` block), and the drive page's `#dvTouch` panel.
+
 ## 2026-11-11 (ui-round-two): Settings and every sheet that rises over a page match the rest (claude/project-thread-5sbga7)
 
 Every sheet that slides up over a page (Settings and each setting under it, route Options, Best roads nearby, a friend's

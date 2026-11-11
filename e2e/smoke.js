@@ -1539,12 +1539,13 @@ flow('drag to reshape: dragging the planned route with the mouse adds a stop whe
   check(await page.isHidden('#routeStops'), 'no stops, no list');
 }, { geolocation: { latitude: 35.9606, longitude: -83.9207 }, permissions: ['geolocation'] });
 
-flow('avoid cameras: with the chip on, the cameras near the trip go to the router as exclusions (camera map and router stubbed, IDEAS R-35)', async (page, base) => {
+flow('avoid cameras: with the chip on, the plate readers and speed cameras near the trip go to the router as exclusions and into the plan (camera map and router stubbed, IDEAS R-35)', async (page, base) => {
   const asked = [];
   await page.route('https://photon.komoot.io/**', (route) => route.fulfill({ contentType: 'application/json', body: JSON.stringify({ features: [
     { geometry: { coordinates: [-83.9700, 35.7565] }, properties: { name: 'Maryville', state: 'Tennessee' } }] }) }));
   await page.route('https://overpass-api.de/**', (route) => route.fulfill({ contentType: 'application/json', body: JSON.stringify({ elements: [
-    { type: 'node', id: 1, lat: 35.85, lon: -83.94, tags: { 'surveillance:type': 'ALPR' } }, { type: 'node', id: 2, lat: 37.5, lon: -83.9, tags: { 'surveillance:type': 'ALPR' } }] }) }));
+    { type: 'node', id: 1, lat: 35.85, lon: -83.94, tags: { 'surveillance:type': 'ALPR' } }, { type: 'node', id: 2, lat: 37.5, lon: -83.9, tags: { 'surveillance:type': 'ALPR' } },
+    { type: 'node', id: 3, lat: 35.80, lon: -83.96, tags: { highway: 'speed_camera' } }] }) }));
   await page.route('https://valhalla1.openstreetmap.de/route', (route) => {
     const req = JSON.parse(route.request().postData() || '{}');
     asked.push(req);
@@ -1559,7 +1560,11 @@ flow('avoid cameras: with the chip on, the cameras near the trip go to the route
   await page.click('#placeList .place');
   await page.waitForFunction(() => { const t = window.apexDebug.track; return t && t.kind === 'route' && t.lat.length > 50; }, null, { timeout: 20000 });
   const ex = asked.map((r) => r.exclude_locations || []);
-  check(ex.some((e) => e.length === 1 && e[0].lat === 35.85 && e[0].lon === -83.94), 'the camera near the trip was excluded, the far one not: ' + JSON.stringify(ex));
+  const has = (e, lat, lon) => e.some((x) => x.lat === lat && x.lon === lon);
+  check(ex.some((e) => e.length === 2 && has(e, 35.85, -83.94) && has(e, 35.8, -83.96)), 'the plate reader and the speed camera near the trip were excluded, the far one not: ' + JSON.stringify(ex));
+  // every candidate keeps to it (our router, the quickest, stage plans): the plan's own camera list, both kinds, not the far one
+  const cams = await page.evaluate(() => window.apexDebug.lastCams);
+  check(Array.isArray(cams) && cams.length === 2 && has(cams, 35.85, -83.94) && has(cams, 35.8, -83.96), 'the plan knows the cameras near the trip: ' + JSON.stringify(cams));
   check(await page.evaluate(() => document.querySelector('[data-avoid="cameras"]').getAttribute('aria-pressed')) === 'true', 'the chip shows it');
 }, { geolocation: { latitude: 35.9606, longitude: -83.9207 }, permissions: ['geolocation'] });
 
@@ -2325,7 +2330,8 @@ flow('one red that means act now: Sight is ink until you are over it, then colou
     how: document.getElementById('explainHow').textContent, now: document.getElementById('explainNow').textContent }));
   check(sheet.title === 'Sight' && /never a target/.test(sheet.what) && /SLOW/.test(sheet.how) && /^Now: \d+ (mph|km\/h)$/.test(sheet.now), 'the Sight sheet: ' + JSON.stringify(sheet));
   await page.click('#explainDone');
-  check(!(await page.evaluate(() => document.getElementById('explainCard').classList.contains('show'))), 'Done closes it');
+  // waited for, not read once: on a busy runner the class can come off a frame after the click returns (CI 2026-11-11)
+  check(await page.waitForFunction(() => !document.getElementById('explainCard').classList.contains('show'), null, { timeout: 2000 }).then(() => true, () => false), 'Done closes it');
   await page.click('#cluster .g-score');
   await page.waitForSelector('#explainCard.show', { timeout: 3000 });
   check(await page.textContent('#explainTitle') === 'Vetta Score', 'the Score explains itself');

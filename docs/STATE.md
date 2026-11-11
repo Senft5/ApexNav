@@ -1,5 +1,22 @@
 # VETTA — CURRENT AGENT HANDOFF STATE
 
+## Session 2026-11-11 (routing round two): Avoid cameras holds for every candidate, speed cameras included (claude/project-thread-39xbx9)
+
+- Gap found: Avoid → Cameras only reached Valhalla's requests (exclude_locations). Our own router, the highway-friendly
+  quickest and stage plans ignored it, and the ranking could pick a route past a camera with the switch on.
+- `cockpit.js` `avoidForTrip` → `camsForTrip`: the kept camera tiles (both kinds: ALPR and `highway=speed_camera`) within
+  5 km of the trip's box, 60 nearest its line, as `avoid.cams` (waits 0.25 s at most; `policeWarm` loads the tiles round
+  you when Where to? opens). `graph_router.js` `AVOID_CAM_X` 8 on edges within `AVOID_CAM_M` 35 m. `fun_route.js`
+  `unavoided` → `cameras` within `CAMERA_ON_M` 35 m (route.has.cameras), so keepAvoiding drops it when another doesn't.
+- Tests: tests/test_avoid_cameras.py (+3), tests/test_graph_router.py avoidCameras, e2e "avoid cameras" (speed camera too).
+- Not done: loops don't take `avoid.cams` (only A→B plans go through avoidForTrip).
+## Session 2026-11-11 (roam-c-crest-contract): crest's units written down; IDEAS Q-08 done (claude/roam-c-crest-contract, off origin/main)
+
+- Checked: ApexNavApp.swift, web/sensors.js and both CSVs carry `crest_vertical_g` in g (negative going light);
+  contributor.js uploads max(0, -min) clamped 0..3, which contribute.ts validates. The schema now describes the field.
+- Looked at and left: D-24 "best corners" needs per-corner smoothness in the drive summaries (the Log reads summaries, not
+  rows; a new summary field rebuilds every drive's summary once), so it is bigger than a roam PR.
+
 ## Session 2026-11-11 (round two analysis, PR 3): touch by kind of corner and month, and a drive's own touch (claude/project-thread-gd7nre, off origin/main)
 
 - core/driver_profile.py (reference) and web/driver_profile.js (port): `touch(obs, least)`; profile adds `touch_by`
@@ -10,14 +27,6 @@
   driving's kept observations); hidden for drives with g kept once a second. Facts only: never better or worse.
 - Tests: tests/test_touch_detail.py (4); e2e "Your driving" covers the table, the month line and the drive's words.
 - Next: say when a drive's touch is clearly outside your usual spread (its median beyond the usual quartiles on 8+ corners).
-
-## Session 2026-11-11 (roam-c-crest-contract): crest's units written down; IDEAS Q-08 done (claude/roam-c-crest-contract, off origin/main)
-
-- Checked: ApexNavApp.swift, web/sensors.js and both CSVs carry `crest_vertical_g` in g (negative going light);
-  contributor.js uploads max(0, -min) clamped 0..3, which contribute.ts validates. The schema now describes the field.
-- Looked at and left: D-24 "best corners" needs per-corner smoothness in the drive summaries (the Log reads summaries, not
-  rows; a new summary field rebuilds every drive's summary once), so it is bigger than a roam PR.
-
 
 ## Session 2026-11-11 (sweep round two): time attack wiring and opt-in (claude/project-thread-g9yher, off origin/main 936aec3)
 
