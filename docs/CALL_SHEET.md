@@ -13,6 +13,17 @@ own; grading it would coach the wrong thing. A drive needs 8 timed corners befor
 
 Undo: hide the table and the month lines in `render` (the `dp-touch-by` block), and the drive page's `#dvTouch` panel.
 
+## 2026-11-11 (sweep round two): time attack counts only a week you entered (claude/project-thread-g9yher)
+
+Two bugs in the weekly time attack (#393). The Log never sent any runs, so every board stayed empty. And the server
+counted a run on any copy of the week's stage, so a friend who had shared that stage with you by hand, or a duel on
+it, would have put your time on a board every member sees without your ever pressing Enter; Take my time off also
+lasted only until your next sync sent the run again. Now pressing Enter is what puts you in that week (migration 0051,
+`ta_joins`), only those weeks take your times, and Take my time off takes you out of the week until you enter again.
+The owner of the stage enters like anyone else; putting a stage up isn't entering. A run no road car could set is now
+skipped instead of rejecting the whole upload.
+
+Undo: revert the PR, then `DROP TABLE ta_joins` on both databases.
 ## 2026-11-11 (ui-round-two): Settings and every sheet that rises over a page match the rest (claude/project-thread-5sbga7)
 
 Every sheet that slides up over a page (Settings and each setting under it, route Options, Best roads nearby, a friend's

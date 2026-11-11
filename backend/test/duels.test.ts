@@ -40,7 +40,8 @@ describe("duels", () => {
     await run(b, bSeg.id, 845, await day(0));
     [mineA] = await duels(a); [mineB] = await duels(b);
     expect([mineA.you.score, mineA.them.score, mineB.you.score, mineB.them.score]).toEqual([812, 845, 845, 812]);
-    expect(JSON.stringify(mineA)).not.toMatch(/300/);                                       // no times shared yet: none shown
+    expect([mineA.you.time_s, mineA.them.time_s, mineB.you.time_s, mineB.them.time_s]).toEqual([null, null, null, null]);   // no times shared yet: none shown
+                                                                                            // (was a /300/ match on the JSON, which a random id could hit)
     // bob shares times with alice: his quickest in the window shows to her; hers, not shared, stays null
     await ok(api(b, "PUT", "/api/grants", { audience_type: "friend", audience_id: a.id, share_scores: true, share_times: true }));
     await run(b, bSeg.id, 845, await day(0), 271);                                             // the same run, now with its time
