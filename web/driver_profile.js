@@ -239,6 +239,62 @@
     return out;
   }
 
+  // Practice (IDEAS D-27; port of core/driver_profile.py practice): the skill "Work on" names, carried into the next drives.
+  // plan: { skill, since ('YYYY-MM-DDTHH:MM', the drives' own local form), where (the focus's place, or null) }.
+  const PRACTICE_MIN = 4, PRACTICE_FLOOR = 0.05, PRACTICE_SE = 2;
+  function sideTest(where) {
+    if (!where || GENERIC.has(where.worse)) return null;
+    for (const [split, a, b, inA, inB] of WITHIN) {
+      if (split !== where.split) continue;
+      if (a === where.worse) return inA;
+      if (b === where.worse) return inB;
+    }
+    return null;
+  }
+  function against(Core, xs, base) {
+    const [m, se] = Core.meanSe(xs);
+    if (!base) return [level(m), null, false];
+    const diff = m - base[0], s = Math.sqrt(se * se + base[1] * base[1]);
+    return [level(m), level(m) - level(base[0]), Math.abs(diff) >= PRACTICE_FLOOR && Math.abs(diff) >= PRACTICE_SE * s];
+  }
+  /** One drive on the practised skill; base: [mean, se] of every corner before the practice, or null. */
+  function drivePractice(obs, plan, base = null, Core = CoreOf()) {
+    const k = plan && plan.skill;
+    if (!SKILLS.includes(k)) return null;
+    const xs = vals(obs, k), out = { skill: k, n: xs.length, level: null, delta: null, sure: false, where_n: null, where_level: null };
+    if (xs.length >= PRACTICE_MIN) [out.level, out.delta, out.sure] = against(Core, xs, base);
+    const side = sideTest(plan.where);
+    if (side) {
+      const ws = obs.filter((o) => o[k] !== null && o[k] !== undefined && side(o)).map((o) => o[k]);
+      out.where_n = ws.length;
+      if (ws.length >= PRACTICE_MIN) out.where_level = level(Core.meanSe(ws)[0]);
+    }
+    return out;
+  }
+  /** The practice so far over the profile's drives (each with at: its local start, or null: unknown, counted before). */
+  function practice(drivesIn, plan, Core = CoreOf()) {
+    const k = plan && plan.skill;
+    if (!SKILLS.includes(k)) return null;
+    const since = String(plan.since || '');
+    const key = (d) => [d.at || '', String(d.id)];
+    const order = drivesIn.filter((d) => d.obs && d.obs.length).sort((p, q) => { const a = key(p), b = key(q); return a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : a[1] < b[1] ? -1 : a[1] > b[1] ? 1 : 0; });
+    const before = [], after = [], rows = [];
+    for (const d of order) {
+      const xs = vals(d.obs, k);
+      if (d.at && d.at >= since) { after.push(...xs); if (xs.length) rows.push(d); } else before.push(...xs);
+    }
+    let base = null;
+    const out = { skill: k, since, before: { level: null, n: before.length, mean: null, se: null }, after: { level: null, n: after.length }, delta: null, sure: false, drives: [] };
+    if (before.length >= SKILL_MIN) {
+      const [m, se] = Core.meanSe(before);
+      base = [r(m, 4), r(se, 4)];                                     // as the plan keeps it for the end card, so both say the same
+      Object.assign(out.before, { level: level(base[0]), mean: base[0], se: base[1] });
+    }
+    if (after.length >= PRACTICE_MIN) [out.after.level, out.delta, out.sure] = against(Core, after, base);
+    out.drives = rows.map((d) => ({ id: d.id, at: d.at, ...drivePractice(d.obs, plan, base, Core) }));
+    return out;
+  }
+
   // -------------------------------------------------------------------------------------------------------------
   // The words (pure, tests/test_driver_profile.py) and the Log's page
   // -------------------------------------------------------------------------------------------------------------
@@ -301,13 +357,15 @@
     return out;
   }
   /** The Log's card: one line. */
-  function cardLine(p) {
+  function cardLine(p, pr = null) {
     if (!p || !p.corners) return null;
     const known = SKILLS.filter((k) => p.skills[k].level !== null);
     if (!known.length) return `${p.corners} of ${SKILL_MIN} clean corners measured. The picture of your driving starts at ${SKILL_MIN}.`;
     const bits = [];
     if (p.strongest) bits.push(`Strongest: ${WORDS[p.strongest].name} ${p.skills[p.strongest].level}`);
-    if (p.focus) bits.push(`Work on: ${WORDS[p.focus.skill].name} ${p.skills[p.focus.skill].level}`);
+    // a practice under way says how it is going (IDEAS D-27); else the skill to work on
+    if (pr) bits.push(`Practicing: ${WORDS[pr.skill].name} ${pr.after.level !== null ? `${pr.after.level}${pr.before.level !== null ? `, ${pr.before.level} before` : ''}` : 'from your next drive'}`);
+    else if (p.focus) bits.push(`Work on: ${WORDS[p.focus.skill].name} ${p.skills[p.focus.skill].level}`);
     return bits.length ? bits.join(' · ') : `${known.length} of 6 skills measured, from ${p.corners} corners.`;
   }
   /** What to work on, as a heading and a sentence; null when nothing is short. */
@@ -316,6 +374,40 @@
     const k = p.focus.skill, w = p.focus.where;
     return { head: `Work on: ${WORDS[k].name}`, where: w && !GENERIC.has(w.worse) ? `It shows most ${sideWords(w.split, w.worse)}.` : null, tip: WORDS[k].tip };
   }
+
+  const cap = (t) => t.charAt(0).toUpperCase() + t.slice(1);
+  const dayOf = (at) => (/^\d{4}-\d{2}-\d{2}/.test(at || '') ? `${+at.slice(8, 10)} ${MONTHS[+at.slice(5, 7) - 1]}` : null);
+  /** The end card's line on the practised skill. r: drivePractice's; plan: the kept plan (its before level, its place). */
+  function practiceLine(r, plan) {
+    if (!r || !WORDS[r.skill]) return null;
+    const head = `Practice · ${WORDS[r.skill].name}:`;
+    if (r.level === null) return r.n ? `${head} ${r.n} corner${r.n === 1 ? '' : 's'} to judge it on, too few to say.` : `${head} no corner on this drive to judge it on.`;
+    const b = plan && plan.before && finite(plan.before.level) ? plan.before.level : null;
+    let t = `${head} ${r.level} on ${r.n} corners`;
+    t += b === null ? '.' : r.sure ? `, ${Math.abs(r.delta)} ${r.delta > 0 ? 'above' : 'below'} your ${b} before.` : `, close to your ${b} before.`;
+    const w = plan && plan.where;
+    if (r.where_level !== null && w) t += ` ${cap(sideWords(w.split, w.worse))}: ${r.where_level} on ${r.where_n}.`;
+    return t;
+  }
+  /** The practice so far, as a sentence for its panel. pr: practice's. */
+  function practiceSummary(pr) {
+    if (!pr) return null;
+    const day = dayOf(pr.since), from = day ? `Since ${day}` : 'Since you started';
+    if (pr.after.level === null) return `${from}, no drive yet with ${PRACTICE_MIN} or more corners to read it on. Your next twisty road is the first.`;
+    const n = pr.drives.length;
+    let t = `${from}: ${pr.after.level} on ${pr.after.n} corners over ${n} drive${n === 1 ? '' : 's'}`;
+    if (pr.before.level === null) return `${t}. There were too few corners before to compare with.`;
+    t += `, against ${pr.before.level} before.`;
+    return t + (pr.sure ? (pr.delta > 0 ? ` Up ${pr.delta}: the practice is showing.` : ` Down ${-pr.delta}: keep at it, and take it slower.`) : ' No clear change yet: a change is said once it is well beyond chance.');
+  }
+  /** "YYYY-MM-DDTHH:MM", local, as the drives' own dates are written: the moment a plan starts. */
+  const localStamp = (when = new Date()) => { const z = (x) => String(x).padStart(2, '0'); return `${when.getFullYear()}-${z(when.getMonth() + 1)}-${z(when.getDate())}T${z(when.getHours())}:${z(when.getMinutes())}`; };
+  // the plan is kept on the phone (localStorage 'vetta.practice'), so the drive page's end card can read it
+  const PLAN_KEY = 'vetta.practice';
+  function loadPlan(store) {
+    try { const x = JSON.parse(store.getItem(PLAN_KEY) || 'null'); return x && SKILLS.includes(x.skill) ? x : null; } catch (_) { return null; }
+  }
+  function savePlan(store, plan) { try { if (plan) store.setItem(PLAN_KEY, JSON.stringify(plan)); else store.removeItem(PLAN_KEY); } catch (_) {} }
 
   const el = (tag, cls, text) => { const n = root.document.createElement(tag); if (cls) n.className = cls; if (text !== undefined && text !== null) n.textContent = text; return n; };
   const CSS = `
@@ -330,6 +422,10 @@
     .dp-lv small { display: block; font-family: var(--font-ui); font-weight: 600; font-size: 11px; color: var(--panel-dim); margin-top: 4px; white-space: nowrap; }
     .dp-bar { height: 5px; background: color-mix(in srgb, var(--panel-ink) 14%, transparent); margin-top: 8px; } .dp-bar u { display: block; height: 100%; background: var(--panel-ink); } .dp-st.weak .dp-bar u { background: var(--accent); }
     .dp-phase { font-size: 11px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--panel-dim); padding: 0 0 6px 38px; }
+    .dp-prs { display: grid; gap: 6px; margin: 10px 0; } .dp-pr { display: grid; grid-template-columns: 56px minmax(0, 1fr) 56px; gap: 10px; align-items: center; font-size: 13px; }
+    .dp-pr .dp-bar { margin-top: 0; height: 8px; position: relative; } .dp-pr .dp-bar s { position: absolute; top: -3px; bottom: -3px; width: 2px; margin-left: -1px; background: var(--accent); }
+    .dp-pr b { font-family: var(--font-num); font-size: 16px; text-align: right; white-space: nowrap; } .dp-practice .note { margin-bottom: 10px; } .dp-pr b.up::before { content: "▲ "; font-size: 10px; } .dp-pr b.down::before { content: "▼ "; font-size: 10px; }
+    .dp-acts { display: flex; flex-wrap: wrap; gap: 4px 16px; margin-top: 4px; } .dp-go { margin-top: 10px; }
     .dp-say { font-size: 15px; line-height: 1.5; } .dp-say + .dp-say { margin-top: 8px; }
     .dp-focus { border: 2px solid var(--panel-ink); padding: 12px; } .dp-focus b { display: block; font-size: 17px; margin-bottom: 4px; }
     .dp-grid { table-layout: fixed; } .dp-grid th.l, .dp-grid td.l { width: 34%; text-align: left; font-family: var(--font-ui); white-space: normal; font-size: 13px; line-height: 1.3; }
@@ -353,7 +449,7 @@
   };
 
   /** Draws the page into `host` (the Log's Your driving view). p: profile(); null while it is being worked out. */
-  function render(host, p) {
+  function render(host, p, opts = {}) {
     styleOnce();
     const metric = root.ApexUnits ? root.ApexUnits.metric() : true;
     host.replaceChildren();
@@ -363,10 +459,43 @@
       return;
     }
     host.append(el('p', 'note', `From ${p.corners} clean corner${p.corners === 1 ? '' : 's'} on ${p.drives} drive${p.drives === 1 ? '' : 's'}, on this phone. Technique only: never speed or time.`));
-    const fl = focusLines(p);
-    if (fl) {
+    const fl = focusLines(p), plan = opts.plan || null, pr = opts.practice || null, onPlan = opts.onPlan || null;
+    const key = (text, cls, fn) => { const b = el('button', cls, text); b.type = 'button'; b.addEventListener('click', fn); return b; };
+    if (plan && pr) {
+      // the practice under way: how it has gone since it started, drive by drive against the level before it
+      const box = el('div', 'dp-focus dp-practice');
+      box.append(el('b', null, `Practicing: ${WORDS[plan.skill].name}`), el('p', 'dp-say', practiceSummary(pr)));
+      const rows = pr.drives.filter((d) => d.level !== null).slice(-8);
+      if (rows.length) {
+        const list = el('div', 'dp-prs');
+        list.setAttribute('role', 'list');
+        for (const d of rows) {
+          const row = el('div', 'dp-pr'), bar = el('div', 'dp-bar'), u = el('u');
+          row.setAttribute('role', 'listitem');
+          u.style.width = `${d.level}%`; bar.append(u);
+          if (pr.before.level !== null) { const m = el('s'); m.style.left = `${pr.before.level}%`; bar.append(m); }
+          row.append(el('span', null, dayOf(d.at) || '--'), bar, el('b', d.sure ? (d.delta > 0 ? 'up' : 'down') : null, String(d.level)));
+          row.setAttribute('aria-label', `${dayOf(d.at) || 'date unknown'}: ${d.level} on ${d.n} corners`);
+          list.append(row);
+        }
+        box.append(list);
+        if (pr.before.level !== null) box.append(el('p', 'note', `Each drive on this one skill. The mark is your ${pr.before.level} before the practice.`));
+      }
+      box.append(el('p', 'dp-say', WORDS[plan.skill].tip));
+      if (onPlan) {
+        const acts = el('div', 'dp-acts');
+        acts.append(key('Stop practicing', 'linkbtn', () => onPlan(null)));
+        if (p.focus && p.focus.skill !== plan.skill) acts.append(key(`Practice ${WORDS[p.focus.skill].name.toLowerCase()} instead`, 'linkbtn', () => onPlan({ skill: p.focus.skill, where: p.focus.where, since: localStamp() })));
+        box.append(acts);
+      }
+      host.append(box);
+    } else if (fl) {
       const box = el('div', 'dp-focus');
       box.append(el('b', null, fl.head), el('p', 'dp-say', [fl.where, fl.tip].filter(Boolean).join(' ')));
+      if (onPlan) {
+        box.append(key('Practice it on my next drives', 'btn solid dp-go', () => onPlan({ skill: p.focus.skill, where: p.focus.where, since: localStamp() })));
+        box.append(el('p', 'note', 'Each drive\'s end card then says how this one skill went, against your level now.'));
+      }
       host.append(box);
     }
     const road = el('div', 'panel');
@@ -439,6 +568,7 @@
     }
   }
 
-  const api = { SKILLS, observe, profile, swing, excess, SKILL_MIN, WORDS, findingLine, styleLines, cardLine, focusLines, render };
+  const api = { SKILLS, observe, profile, swing, excess, SKILL_MIN, WORDS, findingLine, styleLines, cardLine, focusLines, render,
+    PRACTICE_MIN, practice, drivePractice, practiceLine, practiceSummary, localStamp, loadPlan, savePlan, PLAN_KEY };
   if (typeof module !== 'undefined' && module.exports) module.exports = api; else root.ApexDriverProfile = api;
 })(typeof window !== 'undefined' ? window : globalThis);

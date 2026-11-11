@@ -22,7 +22,7 @@ describe("crew board: total of drive Scores over a period", () => {
   it("adds up each member's drive Scores shared with the crew; -- for those who share none; only what was shared counts", async () => {
     const [a, b, c, out] = [await makeUser("alice"), await makeUser("bob"), await makeUser("carol"), await makeUser("outsider")];
     const crew = await crewOf(a, b, c);
-    await share(b, crew); await share(a, crew);
+    await share(b, crew); await share(a, crew); await share(c, crew, false);   // on by default in a private crew; carol switched off
     await ok(publish(b, [{ id: "d1", score: 640, driven_on: day() }, { id: "d2", score: 702, driven_on: day() }, { id: "old", score: 900, driven_on: "2020-01-05" }]));
     await ok(publish(b, [{ id: "d2", score: 710, driven_on: day() }]));   // the same drive again replaces, never doubles
     await ok(publish(a, [{ id: "a1", score: 500, driven_on: day() }]));

@@ -38,7 +38,8 @@ describe("friends' activity", () => {
     const own = await makeSegment(b, "Bob's own road");                 // alice doesn't have it
     await publish(b, own, 750);
     await publish(a, (await makeSegment(a, "Mine")), 600);             // her own run
-    const { adopted: cAdopted } = await stageShared(a, c);              // carol drove it but shares with no one
+    const { adopted: cAdopted } = await stageShared(a, c);              // carol drove it but switched sharing off with alice
+    await ok(api(c, "PUT", "/api/grants", { audience_type: "friend", audience_id: a.id, share_scores: false }));
     await publish(c, cAdopted, 900);
     expect(await activity(a)).toEqual([]);
     // unfriending takes it away at once

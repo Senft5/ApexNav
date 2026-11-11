@@ -2585,6 +2585,11 @@
     // (EARLY_MS) and never waits on this. What's late lands in each provider's cache for the next plan.
     // PLAN_CTX_MS: the stage plans' own run, once they're routed: what's late is unknown (and can't win)
     const CTX_BUDGET_MS = 4000, STAGE_CTX_MS = 1200, PLAN_CTX_MS = 1800;
+    // When to go (when_to_go.js): a route may be planned for a later departure (the card's "Plan for 6:30 PM"); every
+    // clock the plan reads (the sun, the forecast, school runs, timed closures) is then that hour's. null, or a time that
+    // has passed: now. Starting the drive, clearing the route or Leave now puts it back.
+    let leaveAtMs = null;
+    const leaveAt = () => (leaveAtMs && leaveAtMs > Date.now() ? leaveAtMs : Date.now());
     // The driver's For this drive choices (route_ctx/driver.js: passenger, lit, cyclists, tunnels) join the road prefs.
     const engineOpts = (level) => ({ level, prefs: { ...roadPrefs, ...(window.ApexRouteDriver ? ApexRouteDriver.load(localStorage) : {}) }, car: routingCar(),
       score: (c, scaleAt) => funOf(c.t, (c.route && c.route.turns) || [], scaleAt) });
@@ -2593,7 +2598,7 @@
     }
     async function contextOn(cands, budgetMs = CTX_BUDGET_MS, prefix = 'cand', only = null, extra = null, skip = null) {
       if (!window.ApexRouteEngine || !window.ApexRouteCtx || !cands.length || (window.ApexFlags && !ApexFlags.on('route_engine'))) return null;
-      const departAt = Date.now(), car = routingCar(), pace = state.mode === 'live' && etaPace.factors ? etaPace.factors.open : null;
+      const departAt = state.mode === 'live' ? Date.now() : leaveAt(), car = routingCar(), pace = state.mode === 'live' && etaPace.factors ? etaPace.factors.open : null;
       const list = cands.filter((c) => (c.corridor = ApexRouteEngine.corridorFor(c, `${prefix}${cands.indexOf(c)}`, { departAt, car, pace })));
       for (const c of list) if (c.match) c.corridor.match = c.match;     // a loop's spur-cut line isn't the router's own: snap it
       for (const c of list) if (c.route && c.route.graph) c.corridor.graph = c.route.graph;   // ours: the tiles' scores per edge (route_ctx/graph.js)
@@ -2611,7 +2616,7 @@
     async function stagesWithContext(stages, k = 8, only = null) {
       if (!window.ApexRouteEngine || !window.ApexRouteCtx || !stages || !stages.length || (window.ApexFlags && !ApexFlags.on('route_engine'))) return stages;
       try {
-        const cs = ApexRouteEngine.stageCorridors(stages, k, { departAt: Date.now(), car: routingCar() });
+        const cs = ApexRouteEngine.stageCorridors(stages, k, { departAt: leaveAt(), car: routingCar() });
         const res = await ApexRouteCtx.run(cs, { budgetMs: STAGE_CTX_MS, stage: true, ...(only ? { only } : {}), settings: routeCtxSettings(), providerOpts: routeCtxOpts() });
         return [...ApexRouteEngine.rescoreStages(stages.slice(0, k), res.byId), ...stages.slice(k)];
       } catch (_) { return stages; }
@@ -2631,7 +2636,16 @@
       // members' road data by the 0.1° cells a plan crosses (VI-1), never by the route's way ids
       // our own network's scores along any corridor (route_ctx/graph.js), from the worker that holds the tiles
       const graphScore = ownClient ? (lines) => ownClient.score(lines) : undefined;
-      return { lookupCells: window.ApexSync ? (cells) => get(`/api/roads?cells=${cells.join(',')}`) : undefined, apiGet: get, graphScore,
+      // With no signal (or the server down) the cells kept on the phone stand in, all of them or none (own_routing.js
+      // keptFor): a day's keep, or for good in a saved offline area (IDEAS F-02). A server that says no (signed out) is final.
+      const lookupCells = window.ApexSync ? async (cells) => {
+        let r = null;
+        try { r = await apiCall('GET', `/api/roads?cells=${cells.join(',')}`); } catch (_) { r = null; }
+        if (r && r.ok) { try { return await r.json(); } catch (_) { return null; } }
+        if (r && r.status < 500) return null;
+        return window.ApexOwnRouting && ApexOwnRouting.keptFor ? ApexOwnRouting.keptFor(cells) : null;
+      } : undefined;
+      return { lookupCells, apiGet: get, graphScore,
         crewLines: (typeof preferCache !== 'undefined' && preferCache.crewLines) || null, myTracks: null, taste, peer: {},
         osmRelay: !!(window.ApexFlags && ApexFlags.on('osm_relay', false)) };   // the OSM relay: off unless the server says on
     }
@@ -3045,6 +3059,7 @@
       paintStops(t);
       attachWeather(t);
       attachClosures(t);
+      if (typeof attachWhen === 'function') attachWhen(t);        // (tests evaluate buildRoute on its own)
       // the route bar shows this; screen readers hear it (REVIEW.md: the bar is the toast)
       if (!prebuilt) announce(`${name} · ${ApexUnits.long(totalM(), 1)} · ${((n) => `${n} corner${n === 1 ? '' : 's'}`)(t.events.filter(e => e.type === 'corner').length)}`);
     }
@@ -3594,7 +3609,7 @@
         await firstSeen;
         const prepAt = performance.now();
         let ran = Date.now();
-        const leaving = new Date();
+        const leaving = new Date(leaveAt());
         for (const c of directCands) {
           if (!c.t) { c.t = geometryOf(c); c.fun = funOf(c.t, c.route.turns); }
           c.glare = FunRoute.glare(c.t, c.timeS, leaving);                // (as the pool's below: the lead ranking is the final one)
@@ -3713,7 +3728,7 @@
       // Avoid options are router preferences: drop candidates that still use an avoided road when any candidate doesn't.
       const pool = FunRoute.keepAvoiding(cands, avoid);
       // Score on light geometry (corners only); the full track (envelope, sight lines, notes) is built for the winner.
-      const leaving = new Date();
+      const leaving = new Date(leaveAt());
       mark('poolStart');
       // (the page gets a turn only after 40 ms of this: a yield per candidate waited behind the map's own work, live
       // 2026-11-05: 0.3-0.7 s for seven candidates whose scoring took a tenth of that)
@@ -3899,7 +3914,7 @@
         if (full && full.cands && full.cands.length) {
           const same = (a, b) => a.own && b.own && a.own.edges.length === b.own.edges.length && a.own.edges.every((e, i) => e === b.own.edges[i]);
           const clockOf = pool.find((p) => p.own && p.own.clock), k = clockOf ? clockOf.own.clock : 1;   // the pool's one clock
-          for (const c of full.cands) if (!pool.some((p) => same(p, c))) { c.timeS *= k; c.route.timeS = c.timeS; c.t = geometryOf(c); c.fun = funOf(c.t, c.route.turns); c.glare = FunRoute.glare(c.t, c.timeS, new Date()); pool.push(c); added.add(c.t); }
+          for (const c of full.cands) if (!pool.some((p) => same(p, c))) { c.timeS *= k; c.route.timeS = c.timeS; c.t = geometryOf(c); c.fun = funOf(c.t, c.route.turns); c.glare = FunRoute.glare(c.t, c.timeS, new Date(leaveAt())); pool.push(c); added.add(c.t); }
         }
         // the towns the card couldn't wait for (Avoid towns on a weak signal: townsOn's 0.4 s) looked up again, given longer
         const noTowns = avoid.towns ? pool.filter((c) => c.townKm == null && c.t) : [];
@@ -4441,7 +4456,7 @@
         t.unavoided = FunRoute.unavoided(avoid, r);
         t.timeS = r.timeS;
         t.timeMarks = timeMarksOf(t, r);
-        const glare = FunRoute.glare(t, r.timeS, new Date());
+        const glare = FunRoute.glare(t, r.timeS, new Date(leaveAt()));
         t.glareMin = glare ? Math.round(glare.minutes) : null;
         const s = scoreLoop(t, L.miles, L.targetS && Number.isFinite(r.timeS) ? { timeS: r.timeS, targetS: L.targetS } : null);
         // a loop whose spurs were most of it (an out-and-back cut to nothing) isn't a loop (live: a 0 km "loop" won)
@@ -4787,7 +4802,7 @@
         const name = roadLabel(p.s.name), end = pts[pts.length - 1];
         const t = await trackFromPolyline(r.coords, 'explore', name);
         if (explore !== e || state.mode === 'live') return;         // cleared, or a drive started, while routing
-        const glare = FunRoute.glare(t, r.timeS, new Date());
+        const glare = FunRoute.glare(t, r.timeS, new Date(leaveAt()));
         Object.assign(t, { fun: funOf(t, r.turns), timeS: r.timeS, timeMarks: timeMarksOf(t, r), steps: stepsOf(t, r), unavoided: FunRoute.unavoided(avoid, r), glareMin: glare ? Math.round(glare.minutes) : null,
                            request: { from: null, to: { lat: end.lat, lon: end.lon }, via: pts.slice(1, -1).map(q => ({ lat: q.lat, lon: q.lon, shaping: true })) } });
         ownInstructLater(t, r);
@@ -4996,6 +5011,7 @@
     function clearPlanned() {
       plannedRoute = null;
       routeOptions = null;
+      leaveAtMs = null; whenReset();
       cardNote('');
       showExplore(null);
       markDestination(null);
@@ -5788,8 +5804,19 @@
     let safety = null;
     onSocial(() => { try { safety = window.ApexSafetyUI ? ApexSafetyUI.mount({ el, btn, toast, apiCall, jsonOf }) : null; } catch (e) { console.error('safety', e); } });
     // Crew drives (web/crew_events.js, IDEAS S-06): planned drives across your crews, RSVPs, and the day's convoy.
+    // Sharing on by default (the owner, 2026-11-11; backend/src/share_defaults.ts): friends and private crews share Scores and
+    // Times from the start, a public crew nothing, so joining one asks once. Cancel keeps it off; the crew's page switches it.
+    async function askPublicSharing(crewId, name) {
+      try { localStorage.setItem(`apex.askedShare.${crewId}`, '1'); } catch (_) {}
+      if (!window.ApexConfirm || !ApexConfirm.choose) return;
+      const pick = await ApexConfirm.choose(`Share your drives with ${name || 'this crew'}? It's a public crew: anyone can join it and see what you share. Switch it off any time on the crew's page.`,
+        [{ key: 'both', label: 'Share Scores and times' }, { key: 'scores', label: 'Scores only' }]);
+      if (!pick) return;
+      const r = await apiCall('PUT', '/api/grants', { audience_type: 'crew', audience_id: crewId, share_scores: true, share_times: pick === 'both' }).catch(() => null);
+      toast(r && r.ok ? (pick === 'both' ? `${name} sees your Scores and times.` : `${name} sees your Scores.`) : 'Couldn\u2019t change that. Switch it on from the crew\u2019s page.');
+    }
     let crewEvents = null;
-    onSocial(() => { try { crewEvents = window.ApexCrewEvents ? ApexCrewEvents.mount({ el, btn, toast, apiCall, jsonOf, report: safety && safety.report,
+    onSocial(() => { try { crewEvents = window.ApexCrewEvents ? ApexCrewEvents.mount({ el, btn, toast, apiCall, jsonOf, report: safety && safety.report, askPublicSharing,
       here: () => state.lastPosition || null, mapCentre: () => { const c = map.getCenter(); return { lat: c.lat, lon: c.lng }; }, mayLookUp: nearLookupOk,
       myHandle: () => (accountMe && accountMe.handle) || null,
       plannedRoute: () => (plannedRoute && plannedRoute.lat.length > 1 ? { name: plannedRoute.name, geom: sharedGeom(plannedRoute) } : null),
@@ -5838,7 +5865,7 @@
     let crewPage = null, crewDrivesEl = null;
     // in a crew, Crew drives is a row on the Crews side that opens its sheet; not in one, the section on the side itself
     const toDrives = () => { const pop = crewDrivesEl && crewDrivesEl.closest('.side-pop'); if (pop) pop.classList.add('open'); else if (crewDrivesEl) crewDrivesEl.scrollIntoView({ behavior: 'smooth', block: 'start' }); };
-    onSocial(() => { try { crewPage = window.ApexCrewPage ? ApexCrewPage.mount({ el, btn, toast, apiCall, jsonOf, report: safety && safety.report,
+    onSocial(() => { try { crewPage = window.ApexCrewPage ? ApexCrewPage.mount({ el, btn, toast, apiCall, jsonOf, report: safety && safety.report, askPublicSharing,
       invite: (c) => crewInviteLink(c),
       openRoute: (id) => openSharedRoute(id), builds: () => builds, onAllDrives: toDrives, onPlan: (c) => { if (crewEvents) crewEvents.plan(c.id); toDrives(); },
       // the owner's TestFlight note 05: the crew page's Upcoming drives is the crew's drives list, a + plans one (no Crew drives row)
@@ -6007,7 +6034,7 @@
         const crewDrives = ['<rect x="3" y="5" width="18" height="15"/><path d="M3 10h18M8 3v4M16 3v4"/>', 'Crew drives', 'A time, a meeting point and who’s going.'];
         // Friends: two roads that meet, someone on each. P-32: what a newcomer with no friends yet can look forward to, not the board.
         body.append(page(roads('M-12 34 C 70 34 96 96 176 92 S 300 24 372 50', 'M92 140 C 108 112 148 98 176 92') + pucks([116, 115], [277, 60, true]),
-          'Drive with friends.', 'Nothing is shared unless you switch it on.',
+          'Drive with friends.', 'Friends see your Scores and times. Switch it off for anyone.',
           gets(['<path d="M12 21s-6-6.2-6-11a6 6 0 0 1 12 0c0 4.8-6 11-6 11z"/><circle cx="12" cy="10" r="2.2"/>', 'Who’s out driving', 'On your map, on the road they’re driving, when they share it.'],
             crewDrives,
             ['<path d="M6 20c0-5 12-3 12-9 0-3-3-4-6-6"/><circle cx="6" cy="20" r="1.4"/><circle cx="12" cy="5" r="1.4"/>', 'Shared routes', 'A route you planned, sent to a friend to drive.']), waiting));
@@ -6028,7 +6055,7 @@
       }
       // Anyone signed in can take their data or close the account, member or not.
       const downloadMyData = async () => { const r = await apiCall('GET', '/api/me/export'); const blob = new Blob([JSON.stringify(await r.json(), null, 2)], { type: 'application/json' }); const a = el('a', { href: URL.createObjectURL(blob), download: 'vetta-my-data.json' }); a.click(); };
-      const deleteMyAccount = async () => { if (await ApexConfirm.prompt('This erases your account, friends, shared results and spots from the server. Type DELETE to confirm.', { action: 'Delete account', placeholder: 'DELETE', maxLength: 10, match: 'DELETE' }) === 'DELETE') { const r = await apiCall('DELETE', '/api/me', { confirm: 'DELETE' }); if (r.ok) { ApexSync.setSession(null); clearCarry(); } redo(); } };
+      const deleteMyAccount = async () => { if (await ApexConfirm.prompt('This erases your account, friends, shared results and spots from the server. Type DELETE to confirm.', { action: 'Delete account', placeholder: 'DELETE', maxLength: 10, match: 'DELETE' }) === 'DELETE') { const r = await apiCall('DELETE', '/api/me', { confirm: 'DELETE' }); if (r.ok) { ApexSync.setSession(null); clearCarry(); clearCrowd(); } redo(); } };
       // Vetta is open (P-02, the owner 2026-10-30): everyone signed in is a member, so the only one who isn't is an account the owner
       // removed. No paste field and no way in to offer; one line on each side, and the account's keys in the Garage, where they live (P-22).
       if (!me.member) {
@@ -6036,7 +6063,7 @@
           el('p', { className: 'note', textContent: 'Driving, notes and your Log work as always. Your account is still yours: download or delete it in the Garage.' }));
         const asec = el('div', { className: 'stack-8' });                        // the sheet's head says Account
         asec.append(el('div', { className: 'row' }, btn('Download my data', downloadMyData),
-          btn('Sign out', async () => { await apiCall('POST', '/api/auth/logout'); ApexSync.setSession(null); clearCarry(); redo(); })), btn('Delete account', deleteMyAccount, 'danger-btn'));
+          btn('Sign out', async () => { await apiCall('POST', '/api/auth/logout'); ApexSync.setSession(null); clearCarry(); clearCrowd(); redo(); })), btn('Delete account', deleteMyAccount, 'danger-btn'));
         accBody.append(asec);
         return;
       }
@@ -6064,6 +6091,7 @@
               const r = await apiCall('POST', '/api/crews/join', { token: tok }), j = r.ok ? await jsonOf(r) : null;
               if (r.ok || (r.status >= 400 && r.status < 500)) unstash('apex.crew');
               toast(r.ok ? (j && j.friend ? `You're in the crew, and friends with @${j.friend}.` : 'You joined the crew.') : r.status < 500 ? 'That crew link didn\'t work. Ask for a new one.' : 'Couldn\'t join. Check signal and try again.');
+              if (j && j.public) await askPublicSharing(j.id, 'this crew');
               redo();
             } catch (_) { toast('Couldn\'t join. Check signal and try again.'); } finally { if (b) b.disabled = false; }
           }, 'ink-btn solid')), btn('Not now', () => { unstash('apex.crew'); redo(); }, 'linkbtn')));
@@ -6226,6 +6254,11 @@
         flist.append(row);
       }
       if (accepted.length) body.append(flist);
+      // Sharing came on for existing friends and private crews too (migration 0050, the owner 2026-11-11): said once
+      if (accepted.length) {
+        let told = false; try { told = !!localStorage.getItem('apex.sharingOnTold'); } catch (_) {}
+        if (!told) { try { localStorage.setItem('apex.sharingOnTold', '1'); } catch (_) {} toast('Your friends and private crews now see your Scores and times. Switch it off for anyone: open their row, then What they see of you.'); }
+      }
       // P-08: no friends yet is one sentence and the Invite key, not four empty drawers
       else body.append(el('p', { className: 'people-lead', textContent: 'Bring a friend: they sign in with your link, and you’re friends the moment they do.' }));
 
@@ -6295,16 +6328,22 @@
             });
             by.append(b);
           }
-          ownerBox.append(el('p', { className: 'ctl-label', textContent: 'Who can invite' }, el('small', { textContent: 'whoever opens a crew link joins and is friends with the sender' })), by);
+          // 2026-11-10: the sheet in the Settings list's shape (a small-caps name over each part). "Who can invite" had its
+          // explanation set beside it, so the label broke over two lines; the explanation is a line of its own under the keys.
+          ownerBox.append(el('h4', { className: 'nav-group', textContent: 'Who can invite' }), by,
+            el('p', { className: 'note', textContent: 'Whoever opens a crew link joins, and is friends with the sender.' }));
           ownerBox.append(btn('Turn off invite links', async () => {
             if (!(await ApexConfirm.ask(`Turn off every invite link to ${c.name}? People already in stay in.`, 'Turn off'))) return;
             const r = await apiCall('DELETE', `/api/crews/${c.id}/invites`); const j = await jsonOf(r);
             toast(r.ok ? (j.revoked ? `Old links to ${c.name} no longer work.` : `${c.name} had no open links.`) : 'Couldn\'t change that. Try again.');
           }, 'linkbtn'));
-          if (c.visibility === 'public') ownerBox.append(btn('Make private', async () => { const r = await apiCall('PUT', `/api/crews/${c.id}`, { visibility: 'private', about: c.about || '' }); if (r.ok) redo(); else toast('Couldn\'t change that. Try again.'); }, 'linkbtn'));
+          ownerBox.append(el('h4', { className: 'nav-group', textContent: 'Who can find it' }));
+          if (c.visibility === 'public') ownerBox.append(el('p', { className: 'note', textContent: c.area_name ? `Public: people near ${c.area_name} can find and join it.` : 'Public: people nearby can find and join it.' }), btn('Make private', async () => { const r = await apiCall('PUT', `/api/crews/${c.id}`, { visibility: 'private', about: c.about || '' }); if (r.ok) redo(); else toast('Couldn\'t change that. Try again.'); }, 'linkbtn'));
           else {
-            const areaIn = el('input', { className: 'field', placeholder: 'Area people nearby will see, like Robbinsville', maxLength: 60, autocomplete: 'off' });
-            ownerBox.append(el('div', { className: 'row' }, areaIn, btn('Make public', async () => {
+            const areaIn = el('input', { className: 'field', placeholder: 'Area, like Robbinsville', maxLength: 60, autocomplete: 'off' });
+            areaIn.setAttribute('aria-label', 'Area people nearby will see');
+            ownerBox.append(el('p', { className: 'note', textContent: 'Private: only people with a link. Public lets people nearby find and join it, under the area you name.' }),
+              el('div', { className: 'row' }, areaIn, btn('Make public', async () => {
               const near = crewNear(), name = areaIn.value.trim();
               if (name.length < 2) { toast('Name the area people nearby will see.'); return; }
               const r = await apiCall('PUT', `/api/crews/${c.id}`, { visibility: 'public', about: c.about || '', area: { name, lat: near.lat, lon: near.lon } });
@@ -6313,10 +6352,10 @@
           }
         }
         box.append(el('div', { className: 'stack-8' }, el('b', { textContent: c.name }), el('span', { className: 'note', textContent: `${count} ${count === 1 ? 'member' : 'members'} · ${kind}${c.role === 'owner' ? ' · you run it' : ''}` })),
-          el('div', { className: 'stack-8' }, el('p', { className: 'ctl-label', textContent: 'What it sees of yours' }),
+          el('div', { className: 'stack-8' }, el('h4', { className: 'nav-group', textContent: 'What it sees of yours' }),
             el('div', { className: 'row' }, switchRow('Scores', g.share_scores, () => putGrant('crew', c.id, !g.share_scores, g.share_scores ? g.share_times : false)),
               switchRow('Times', g.share_times, () => putGrant('crew', c.id, true, !g.share_times))),
-            el('span', { textContent: g.share_scores ? (g.share_times ? `${c.name} sees your scores and times.` : `${c.name} sees your scores.`) : `${c.name} sees nothing of yours yet.` })),
+            el('p', { className: 'note', textContent: g.share_scores ? (g.share_times ? `${c.name} sees your scores and times.` : `${c.name} sees your scores.`) : `${c.name} sees nothing of yours yet.` })),
           ownerBox,
           // P-07: the crew page's Invite is the one invite key; the gear keeps who can invite, and Leave
           el('div', { className: 'row' },
@@ -6356,6 +6395,7 @@
             if (r.ok || (r.status >= 400 && r.status < 500)) unstash('apex.crew');
             const j = r.ok ? await jsonOf(r).catch(() => null) : null;   // P-02: the link friends its sender too
             toast(r.ok ? (j && j.friend ? `You're in the crew, and friends with @${j.friend}.` : 'You joined the crew.') : r.status < 500 ? 'That crew link didn\'t work. Ask for a new one.' : 'Couldn\'t join. Check signal and try again.');
+            if (j && j.public) await askPublicSharing(j.id, 'this crew');
             redo();
           }, 'ink-btn solid'), btn('Not now', () => { unstash('apex.crew'); redo(); }, 'linkbtn'));
       }
@@ -6433,7 +6473,7 @@
             el('span', { textContent: `${c.members} ${c.members === 1 ? 'member' : 'members'} · ${c.area_name}${Number.isFinite(c.km) ? ` · ${ApexUnits.long(Math.max(1609.344, c.km * 1000), 0)}` : ''}` }),
             ...(c.about ? [el('em', { textContent: c.about })] : [])),
             el('div', { className: 'row' },
-              btn('Join', async () => { const r = await apiCall('POST', `/api/crews/${c.id}/join`); if (r.ok) { toast(`You joined ${c.name}.`); openCrewId = c.id; redo(); } else toast(r.status === 429 ? 'You\'re in 10 crews already.' : 'Couldn\'t join. Try again.'); }, 'ink-btn solid'),
+              btn('Join', async () => { const r = await apiCall('POST', `/api/crews/${c.id}/join`); if (r.ok) { toast(`You joined ${c.name}.`); await askPublicSharing(c.id, c.name); openCrewId = c.id; redo(); } else toast(r.status === 429 ? 'You\'re in 10 crews already.' : 'Couldn\'t join. Try again.'); }, 'ink-btn solid'),
               ...(safety ? [btn('Report', () => safety.report({ kind: 'crew', target: c.id, label: c.name, done: redo }), 'linkbtn')] : [])));
           ntiles.append(t);
         }
@@ -6478,7 +6518,7 @@
       const asec = accBody === gbody ? section('Account') : el('div', { className: 'stack-8' });
       asec.append(el('div', { className: 'row' },
         btn('Download my data', downloadMyData),
-        btn('Sign out', async () => { await apiCall('POST', '/api/auth/logout'); ApexSync.setSession(null); clearCarry(); redo(); })),
+        btn('Sign out', async () => { await apiCall('POST', '/api/auth/logout'); ApexSync.setSession(null); clearCarry(); clearCrowd(); redo(); })),
         btn('Delete account', deleteMyAccount, 'danger-btn'));
       accBody.append(asec);                                                 // your account: Garage → Settings → Account
       if (safety) { accBody.append(safety.blockedSection()); if (me.moderator) accBody.append(safety.moderationSection()); }
@@ -6595,6 +6635,8 @@
     // Road data that waited for signal (road_carry.js, IDEAS Q-06) wires itself; the page counts its uploads for app health,
     // says when some went, and empties it when Road data is switched off, on sign-out and when the account is deleted, so
     // nothing measured under one account is sent under another (Erase everything clears its index with the apex.* keys).
+    // Members' road data kept for plans (own_routing.js) is a member's: it leaves the phone on sign-out and account deletion.
+    const clearCrowd = () => { try { if (window.ApexOwnRouting && ApexOwnRouting.clearCrowd) ApexOwnRouting.clearCrowd(); } catch (_) {} };
     const clearCarry = () => { try { localStorage.removeItem('apex.roadShare'); } catch (_) {} try { if (window.ApexRoadCarry && ApexRoadCarry.clear) ApexRoadCarry.clear(); } catch (_) {} };
     if (window.ApexRoadCarry && ApexRoadCarry.flush) {
       ApexRoadCarry.onPost = (r) => health.bump(r === true ? 'road_upload_ok' : 'road_upload_fail');
@@ -6651,7 +6693,14 @@
       try {
         const a = await ApexOfflineTiles.download({ lat: c.lat, lon: c.lng, radiusKm: 25, styleUrl: MAP_STYLE, name: `Around ${c.lat.toFixed(2)}, ${c.lng.toFixed(2)}`,
           onProgress: (d, n) => { if (d % 25 === 0 || d === n) $('myAreaBtn').textContent = `Saving the map… ${Math.round(100 * d / n)}%`; } });
-        toast(`Saved ${ApexUnits.long(a.radiusKm * 1000, 0)} round here for offline · ${(a.bytes / 1048576).toFixed(0)} MB`);
+        // members' road feel for the area too (signed in as a member): measured roads plan the same with no signal
+        let roads = null;
+        if (window.ApexOwnRouting && ApexOwnRouting.holdArea && window.ApexSync && (await ApexSync.member().catch(() => false))) {
+          $('myAreaBtn').textContent = 'Saving members\u2019 road feel…';
+          roads = await ApexOwnRouting.holdArea(routeCtxOpts().lookupCells, ApexOwnRouting.cellsNear(c.lat, c.lng, a.radiusKm), a.id).catch(() => null);
+          if (roads) ApexOfflineTiles.setArea(a.id, { roadCells: roads.held, roadOf: roads.cells, roadWays: roads.ways });
+        }
+        toast(`Saved ${ApexUnits.long(a.radiusKm * 1000, 0)} round here for offline, ${(a.bytes / 1048576).toFixed(0)} MB${roads && roads.ways ? `, with ${roads.ways} measured roads` : ''}.`);
       } catch (_) { toast('Couldn\'t save the map. Check signal and try again.'); }
       finally { areaBusy = false; $('myAreaBtn').disabled = false; $('myAreaBtn').textContent = 'Save the map here for offline'; renderMyData(); }
     });
@@ -6659,9 +6708,10 @@
       const box = $('myAreas'); if (!box || !window.ApexOfflineTiles) return;
       box.replaceChildren(...ApexOfflineTiles.areas().map((a) => {
         const row = document.createElement('div'); row.className = 'row'; row.style.justifyContent = 'space-between';
-        const t = document.createElement('span'); t.className = 'note'; t.textContent = `${a.name} · ${ApexUnits.long(a.radiusKm * 1000, 0)} round · ${(a.bytes / 1048576).toFixed(0)} MB`;
+        const feel = a.roadOf ? (a.roadCells < a.roadOf ? ' · members\u2019 road feel for part of it' : a.roadWays ? ` · ${a.roadWays} measured roads` : ' · no measured roads yet') : '';
+        const t = document.createElement('span'); t.className = 'note'; t.textContent = `${a.name} · ${ApexUnits.long(a.radiusKm * 1000, 0)} round · ${(a.bytes / 1048576).toFixed(0)} MB${feel}`;
         const del = document.createElement('button'); del.className = 'linkbtn'; del.textContent = 'Delete';
-        del.addEventListener('click', async () => { await ApexOfflineTiles.removeArea(a.id); renderMyData(); });
+        del.addEventListener('click', async () => { await ApexOfflineTiles.removeArea(a.id); if (window.ApexOwnRouting && ApexOwnRouting.releaseArea) ApexOwnRouting.releaseArea(a.id); renderMyData(); });
         row.append(t, del); return row;
       }));
     }
@@ -6669,6 +6719,7 @@
       if (!(await ApexConfirm.ask('Delete routes and map areas saved for offline, and downloaded voices? Your drives, spots and settings stay.', 'Delete'))) return;
       try { localStorage.removeItem(ApexSavedRoutes.KEY); } catch (_) {}
       try { if (window.ApexOfflineTiles) await ApexOfflineTiles.clear(); } catch (_) {}
+      try { if (window.ApexOwnRouting && ApexOwnRouting.clearCrowd) await ApexOwnRouting.clearCrowd(); } catch (_) {}   // members' road data kept for plans
       try { if (window.caches) { await caches.delete('kokoro-voices'); for (const k of await caches.keys()) if (k.startsWith('apexnav-shell-')) await caches.delete(k); } } catch (_) {}
       toast('Offline data deleted.'); renderMyData();
     });
@@ -6689,6 +6740,7 @@
       try { if (window.caches) for (const k of await caches.keys()) await caches.delete(k); } catch (_) {}
       try { if (window.ApexSpotPhotos) await ApexSpotPhotos.clear(); } catch (_) {}      // spot photos (IDEAS S-18)
       try { if (window.ApexOfflineTiles) await ApexOfflineTiles.clear(); } catch (_) {}  // offline map areas (IDEAS F-02)
+      try { if (window.ApexOwnRouting && ApexOwnRouting.clearCrowd) await ApexOwnRouting.clearCrowd(); } catch (_) {}   // members' road data kept for plans
       location.reload();
     });
     renderMyData();
@@ -7697,7 +7749,7 @@
       if (n - s > 1 || e - w > 1) return;
       const json = await ApexCameras.fetchFirst(fetch, 'data=' + encodeURIComponent(ApexConditional.query(s - 0.005, w - 0.005, n + 0.005, e + 0.005)));   // every server raced
       if (!json || plannedRoute !== t) return;
-      const total = t.dist[t.dist.length - 1], now = Date.now();
+      const total = t.dist[t.dist.length - 1], now = leaveAt();
       const secAt = (m) => (Number.isFinite(t.timeS) ? t.timeS - ApexEta.routerLeft(m, total, t.timeS, t.timeMarks) : m / (50 / 3.6));
       const ways = (json.elements || []).filter((x) => x.center && x.tags).map((x) => {
         const hit = Core.nearestIndex(x.center.lat, x.center.lon, t.lat, t.lon, -1);
@@ -7726,7 +7778,7 @@
     // for it afterwards (live: 2-6 s on top of the context), WEATHER_MS at most. Map of candidate -> Promise<{ json, pts }|null>.
     const WEATHER_MS = 2500, WEATHER_GRACE_MS = 400;
     function forecastOf(c) {
-      const pts = ApexRouteWeather.samplePoints(c.t, Date.now(), Number.isFinite(c.timeS) ? (m) => c.timeS * m / Math.max(1, c.t.dist[c.t.dist.length - 1]) : null);
+      const pts = ApexRouteWeather.samplePoints(c.t, leaveAt(), Number.isFinite(c.timeS) ? (m) => c.timeS * m / Math.max(1, c.t.dist[c.t.dist.length - 1]) : null);
       return (async () => {
         const ac = new AbortController(), timer = setTimeout(() => ac.abort(), WEATHER_MS);
         try { const r = await fetch(ApexRouteWeather.url(pts), { signal: ac.signal }); return r.ok ? { json: await r.json(), pts } : null; }
@@ -7814,7 +7866,7 @@
       if (!t || !Array.isArray(t.dist) || t.dist.length < 2 || !window.ApexRouteWeather) return;
       const total = t.dist[t.dist.length - 1];
       const secAt = Number.isFinite(t.timeS) ? (m) => t.timeS - ApexEta.routerLeft(m, total, t.timeS, t.timeMarks) : null;
-      const pts = ApexRouteWeather.samplePoints(t, Date.now(), secAt);
+      const pts = ApexRouteWeather.samplePoints(t, leaveAt(), secAt);
       let json = null, why = 'none';
       try {
         const ac = new AbortController(), timer = setTimeout(() => ac.abort(), 8000);
@@ -7835,6 +7887,127 @@
       $('routeCardWeather').textContent = line;
       $('routeCardWeather').hidden = !line;
     }
+    // When to go (when_to_go.js, docs/ROUTING.md): the route on the card driven at every half hour of the next day, with the
+    // route engine's own model: the sun, the forecast, deer hours, school runs, events, works and timed closures at that
+    // hour. The card says the best time in a line (or that there is none better, or the last good one before rain); a tap
+    // opens the day as a ribbon, and "Plan for 6:30 PM" plans the trip for that hour (leaveAtMs): the ranking, the forecast
+    // line and the closures are then that hour's. It runs after the card is up and never holds it (WHEN_AFTER_MS).
+    const WHEN_AFTER_MS = 1200;
+    let whenState = null, whenTimer = 0, whenAbort = null;
+    const whenClock = (ms) => `${new Date(ms).toDateString() === new Date().toDateString() ? '' : 'tomorrow '}${new Date(ms).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}`;
+    function whenReset() {
+      clearTimeout(whenTimer);
+      if (whenAbort) whenAbort.abort();
+      whenAbort = null; whenState = null;
+      $('routeCardWhen').hidden = true; $('routeWhenPanel').hidden = true; $('routeWhenLine').setAttribute('aria-expanded', 'false');
+    }
+    function attachWhen(t) {
+      whenReset();
+      if (!window.ApexWhenToGo || !window.ApexRouteEngine || !window.ApexRouteCtx || !t || !Array.isArray(t.lat) || t.lat.length < 2 || !Number.isFinite(t.timeS) || state.mode === 'live') return;
+      if (window.ApexFlags && (!ApexFlags.on('route_engine') || !ApexFlags.on('when_to_go'))) return;
+      whenTimer = setTimeout(() => { whenScan(t).catch(() => {}); }, WHEN_AFTER_MS);
+    }
+    async function whenScan(t) {
+      if (plannedRoute !== t || state.mode === 'live') return;
+      const ac = whenAbort = new AbortController();
+      // the ranked candidate on the card has its corridor and context already; a loop, a GPX or a restored route gets one now
+      const o = routeOptions, kept = o && o.current === t && o.list ? o.list[o.picked] : null;
+      const c = kept && kept.corridor && kept.ctx ? kept : { t, route: { coords: Array.from(t.lat, (la, i) => [t.lon[i], la]), times: null }, timeS: t.timeS, fun: t.fun || null };
+      if (!c.ctx) await contextOn([c], CTX_BUDGET_MS, 'when');
+      if (plannedRoute !== t || ac.signal.aborted || !c.ctx || !c.corridor) return;
+      let sc = null;
+      try {
+        sc = await ApexWhenToGo.scan(c, { now: Date.now(), prefs: engineOpts(funLevel).prefs, car: routingCar(), settings: routeCtxSettings(), providerOpts: routeCtxOpts(),
+          signal: ac.signal, breathe: () => RouteLoading.yieldToUI() });
+      } catch (_) { sc = null; }
+      if (!sc || plannedRoute !== t || ac.signal.aborted) return;
+      const planned = leaveAtMs && leaveAtMs > Date.now() ? sc.slots.slice(1).reduce((a, b) => (Math.abs(b.at - leaveAtMs) < Math.abs(a.at - leaveAtMs) ? b : a), sc.slots[1] || sc.now) : null;
+      const advice = ApexWhenToGo.advice(sc, { time: whenClock });
+      whenState = { t, sc, advice, planned, pick: planned || (advice && advice.slot) || sc.now };
+      if (window.apexDebug) window.apexDebug.lastWhen = { advice: advice && { kind: advice.kind, text: advice.text }, slots: sc.slots.length, forecast: sc.forecast, planned: planned ? planned.at : null, status: sc.status };
+      paintWhen();
+    }
+    function paintWhen() {
+      const w = whenState;
+      if (!w || plannedRoute !== w.t) return;
+      const A = ApexWhenToGo, cap = (x) => x.charAt(0).toUpperCase() + x.slice(1);
+      const lead = w.planned ? `Leaving ${whenClock(w.planned.at)}${((r) => (r.length ? `: ${r.join(', ')}` : ''))(A.reasons(w.planned).slice(0, 3))}` : w.advice ? w.advice.text : '';
+      $('routeWhenLine').textContent = lead;
+      $('routeCardWhen').hidden = !lead;
+      if (!lead) return;
+      const h = A.heights(w.sc), ribbon = $('routeWhenRibbon'), axis = $('routeWhenAxis');
+      ribbon.textContent = ''; axis.textContent = '';
+      const n = w.sc.slots.length;
+      w.sc.slots.forEach((s, k) => {
+        const b = document.createElement('button'), bar = document.createElement('i');
+        b.type = 'button'; b.setAttribute('role', 'option'); b.dataset.k = String(k); b.setAttribute('aria-selected', String(s === w.pick));
+        b.className = [s.hard.length ? 'shut' : '', s.dark != null && s.dark >= 0.7 ? 'night' : ''].filter(Boolean).join(' ');
+        b.style.setProperty('--h', h[k].toFixed(2));
+        b.setAttribute('aria-label', `${k === 0 ? 'Now' : whenClock(s.at)}: ${A.reasons(s).join(', ') || 'nothing in the way'}`);
+        b.tabIndex = s === w.pick ? 0 : -1;
+        b.append(bar); ribbon.append(b);
+        const d = new Date(s.at);
+        if (k === 0 || (d.getMinutes() === 0 && d.getHours() % 6 === 0 && k > 2)) {
+          const tick = document.createElement('span');
+          tick.textContent = k === 0 ? 'Now' : d.getHours() === 0 ? 'Midnight' : d.getHours() === 12 ? 'Noon' : d.toLocaleTimeString([], { hour: 'numeric' });
+          tick.style.left = `${((k + 0.5) / n * 100).toFixed(1)}%`;
+          axis.append(tick);
+        }
+      });
+      // a label near the right end (Midnight on a phone, CI 2026-11-11) is set flush right inside the axis, never past it;
+      // one that would then touch the label before it goes
+      const ar = axis.getBoundingClientRect();
+      let prevRight = -Infinity;
+      for (const tick of [...axis.children]) {
+        if (tick.getBoundingClientRect().right > ar.right) Object.assign(tick.style, { left: 'auto', right: '0', transform: 'none' });
+        const r = tick.getBoundingClientRect();
+        if (r.left < prevRight + 4) { tick.remove(); continue; }
+        prevRight = r.right;
+      }
+      const p = w.pick, isNow = p === w.sc.now;
+      const said = A.reasons(p), vsNow = !isNow && Math.abs(p.delta) >= 1 ? A.reasons(p, w.sc.now) : [];
+      const det = $('routeWhenDetail'); det.textContent = '';
+      const head = document.createElement('b');
+      head.textContent = `${isNow ? 'Leave now' : cap(whenClock(p.at))}, there by ${new Date(p.arriveAt).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}`;
+      det.append(head, said.length ? `: ${said.join(', ')}.` : '.',
+        vsNow.length ? ` ${p.delta > 0 ? 'Better' : 'Worse'} than now: ${vsNow.join(', ')}.` : '', !w.sc.forecast ? ' No forecast came back: this is by the sun and the calendar only.' : '');
+      const plan = $('routeWhenPlan'), same = w.planned ? p === w.planned : isNow;
+      plan.hidden = same || p.hard.length > 0;
+      plan.textContent = isNow ? 'Plan for now' : `Plan for ${whenClock(p.at)}`;
+      $('routeWhenNow').hidden = !w.planned || isNow;
+    }
+    function planFor(at) {
+      leaveAtMs = at && at - Date.now() > 5 * 60e3 ? at : null;
+      const t = plannedRoute;
+      if (!t || state.mode === 'live') return;
+      const head = leaveAtMs ? `Planned for ${whenClock(leaveAtMs)}` : 'Planned for leaving now';
+      // a trip to a place is ranked again for that hour (another road may be the better one then); a loop, a GPX or a route
+      // with your own stop keeps its line and gets that hour's sun, forecast and closures
+      if (t.id === 'route_dest' && t.request && !t.request.via.some((v) => !v.shaping)) { replanForLevel(head); return; }
+      const g = FunRoute.glare(t, t.timeS, new Date(leaveAt()));
+      t.glareMin = g ? Math.round(g.minutes) : null;
+      renderRouteCard(t); attachWeather(t); attachClosures(t); attachWhen(t);
+      cardNote(head);
+    }
+    $('routeWhenLine').addEventListener('click', () => {
+      const open = $('routeWhenPanel').hidden;
+      $('routeWhenPanel').hidden = !open; $('routeWhenLine').setAttribute('aria-expanded', String(open));
+    });
+    $('routeWhenRibbon').addEventListener('click', (e) => {
+      const b = e.target.closest('button[data-k]');
+      if (!b || !whenState) return;
+      whenState.pick = whenState.sc.slots[+b.dataset.k]; paintWhen();
+      const again = $('routeWhenRibbon').querySelector('[aria-selected="true"]'); if (again) again.focus({ preventScroll: true });
+    });
+    $('routeWhenRibbon').addEventListener('keydown', (e) => {
+      if (!whenState || !['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(e.key)) return;
+      const list = whenState.sc.slots, i = list.indexOf(whenState.pick);
+      const j = e.key === 'Home' ? 0 : e.key === 'End' ? list.length - 1 : Math.max(0, Math.min(list.length - 1, i + (e.key === 'ArrowRight' ? 1 : -1)));
+      e.preventDefault(); whenState.pick = list[j]; paintWhen();
+      const again = $('routeWhenRibbon').querySelector('[aria-selected="true"]'); if (again) again.focus({ preventScroll: true });
+    });
+    $('routeWhenPlan').addEventListener('click', () => { if (whenState) planFor(whenState.pick === whenState.sc.now ? null : whenState.pick.at); });
+    $('routeWhenNow').addEventListener('click', () => planFor(null));
     // The route's climb (stages.js profile, IDEAS U-21): its elevation from the DEM, so Preview's scrubber shows the hills
     // and the card says how much it climbs. A long trip or no tiles: unknown, nothing shown.
     async function attachProfile(t) {
@@ -8390,6 +8563,7 @@
       if (state.mode === 'live' && drive.sensors) return;
       if (state.mode === 'live' || driveActive) return;                                   // native app is feeding frames already or start is pending
       driveActive = true; health.bump('drives'); drive.startedAt = performance.now();
+      leaveAtMs = null; whenReset();                                                     // driving it now: the plan's hour is this one
       learnFromPick();                                                 // a route you chose over Vetta's first: your taste (taste.js)
       // A drive takes the whole screen, whatever the phone was showing: a drive started from the car (or a link, or Siri)
       // with the Crew or Garage sheet or the Log open left that page in the middle of the drive screen (the owner, 2026-10-30).
@@ -8475,6 +8649,7 @@
       // mount never calibrated, so nothing unmeasured is ever said
       const feel = window.ApexRoadFeel && c.feel ? ApexRoadFeel.endLine(c.feel, (m) => ApexUnits.long(m, 1)) : '';
       $('endFeel').textContent = feel; $('endFeel').hidden = !feel;
+      $('endPractice').textContent = ''; $('endPractice').hidden = true;   // IDEAS D-27: with the score (endCardScored)
       // scoring: no number yet, never "--" (that means "no score"), and no key that needs the score
       $('endScore').textContent = '…'; $('endScore').classList.add('unk'); $('endScore').setAttribute('aria-busy', 'true');
       $('endScore').parentElement.classList.remove('no-score');
@@ -8486,6 +8661,10 @@
       $('endAgain').hidden = true;                                     // panel D-1: once the drive is stored (endCardScored)
       $('endCard').classList.add('show');
       showEndTrail(c);
+    }
+    // IDEAS D-27: the plan Your driving keeps (driver_profile.js savePlan), or null
+    function practicePlan() {
+      try { const x = JSON.parse(localStorage.getItem('vetta.practice') || 'null'); return x && typeof x.skill === 'string' ? x : null; } catch (_) { return null; }
     }
     // what a drive with no score was, in the score's slot: no corners at all, or too few clean ones to score
     const noScoreWords = (corners) => (Number.isFinite(corners) && corners > 0 ? 'too few clean corners to score' : 'no corners to score');
@@ -8521,6 +8700,9 @@
       let best = false;
       if (c.ds.score != null && window.ApexEndLine) { try { best = ApexEndLine.bestOnRoad({ id: c.id, name: c.name, score: c.ds.score }, others || []); } catch (_) { best = false; } }
       $('endLine').textContent = best ? ['Your best on this road.', tipLine].filter(Boolean).join(' ') : tipLine;
+      // IDEAS D-27: the skill Your driving is practicing, read on this drive alone (analysis_client.js practiceOf)
+      const prLine = c.practice && typeof c.practice.line === 'string' ? c.practice.line : '';
+      $('endPractice').textContent = prLine; $('endPractice').hidden = !prLine;
       if (window.ApexEndLine && !opts.quiet) {                       // Round 3: never aloud to a parked car or a pocket
         const pack = ['marguerite', 'kit', 'hale'].includes(state.voiceId) ? state.voiceId : 'marguerite';
         // one of the pack's sign-offs, the same for this drive every time, from a clip the loaded bank holds (U-113)
@@ -8556,7 +8738,10 @@
         } catch (_) { others = []; }
         let coach = null;                                              // U-111: the Log's sentence, when the drive is stored
         if (d.ds.score != null && window.ApexAnalysis) try { coach = (await ApexAnalysis.job('coachLine', { id: d.id })).coach || null; } catch (_) { coach = null; }
-        endCardScored({ ...c, corners: d.corners.length, ds: d.ds, coach }, others, opts);
+        let practice = null;                                           // IDEAS D-27: the practised skill, when the drive is stored
+        const plan = practicePlan();
+        if (plan && window.ApexAnalysis) try { practice = (await ApexAnalysis.job('practiceLine', { id: d.id, plan })).practice || null; } catch (_) { practice = null; }
+        endCardScored({ ...c, corners: d.corners.length, ds: d.ds, coach, practice }, others, opts);
       })();
     }
     // U-88: behind the card, the map is the drive: fitted to its trail above the card, the trail drawn at the route's width in
@@ -8711,11 +8896,11 @@
         endCardOpen(card);
         try {
           const { rows: _, ...recState } = rec.snapshot(rec.samples);
-          const res = await ApexAnalysis.job('save', { state: recState, rows: rec.rows, fileName: job.fileName, meta: job.meta, extra });
+          const res = await ApexAnalysis.job('save', { state: recState, rows: rec.rows, fileName: job.fileName, meta: job.meta, extra, plan: practicePlan() });
           keepDone(kept);
           const s = res.summary || {};
           endCardScored({ ...card, id: res.driveId, len_m: s.len_m ?? card.len_m, secs: s.secs ?? card.secs, corners: Array.isArray(s.corners) ? s.corners.length : null,
-                          ds: s.ds || { score: null, components: null }, card: res.card || null, coach: res.coach || null }, res.others || [], { quiet: !!ended });
+                          ds: s.ds || { score: null, components: null }, card: res.card || null, coach: res.coach || null, practice: res.practice || null }, res.others || [], { quiet: !!ended });
           idle(() => refreshSavedDrives().catch(() => {}));            // the road memory learns this drive, off the card's moment
           if (live) {
             live.finish().then(async (shared) => {
