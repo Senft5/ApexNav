@@ -535,6 +535,7 @@ def _spread(brakes: list, mins: list, passes: int, froms: list, turns: list = ()
     v = [x for x in speeds if x is not None]
     return {"passes": passes, "brake_sd_m": _sd(b), "brake_passes": len(b), "min_sd_m": _sd(m), "min_passes": len(m),
             "turn_sd_m": _sd(t), "turn_passes": len(t), "speed_sd_mps": _sd(v), "speed_passes": len(v),
+            "speed_marks": [[f, x] for f, x in zip(froms, speeds)] if speeds else [],   # per pass: [from, slowest speed m/s]
             "marks": [[f, x, y] for f, x, y in zip(froms, brakes, mins)]}       # per pass: [-1 this drive | j in others, brake, slowest]
 
 
@@ -613,8 +614,9 @@ def coach(a: dict, others: list) -> dict:
 TREND_MIN_PASSES = 5         # marks a corner needs inside one period: with 3, two passes in the same 5 m bin read as 0 m
 
 
-def spread_by(co: dict, keys: list) -> dict:
-    """How repeatably you braked within each period (IDEAS D-07 trend), from coach(a, others). keys[0] is the period of a
+def spread_by(co: dict, keys: list, what: str = "brake") -> dict:
+    """How repeatably you braked within each period (IDEAS D-07 trend), from coach(a, others). what="speed" reads the speed
+    at each corner's slowest point instead (sd in m/s): how steadily you carried speed through it. keys[0] is the period of a
     (e.g. the month it was driven) and keys[j + 1] that of others[j], None when unknown. For every corner, the braking marks
     are grouped by period and each group of TREND_MIN_PASSES or more gives a robust SD (`_sd`). Spread inside a period,
     not distance from an all-time median, so braking deliberately earlier from one month on does not read as unsteady.
@@ -625,7 +627,7 @@ def spread_by(co: dict, keys: list) -> dict:
         if not sp:
             continue
         groups: dict = {}
-        for f, b, _ in sp["marks"]:
+        for f, b in (sp.get("speed_marks", []) if what == "speed" else [(m[0], m[1]) for m in sp["marks"]]):
             k = keys[f + 1] if 0 <= f + 1 < len(keys) else None
             if b is None or k is None:
                 continue

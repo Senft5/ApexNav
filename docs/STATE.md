@@ -19,6 +19,16 @@
 - Next in the sweep: CarPlay (CarPlay/*.swift) and the shell's frame path (pushLiveFrame, 10 Hz evaluateJavaScript).
 
 
+## Session 2026-11-11 (round two analysis, PR 7): corner-speed steadiness month by month (claude/project-thread-gd7nre, off origin/main)
+
+- core/drive_analysis.py `spread_by(co, keys, what="speed")` (reference) and web/apex_core.js `spreadBy(co, keys, 'speed')`
+  (port) read the coach's new `speed_marks` ([from, slowest m/s] per pass) the way the braking trend reads `marks`.
+- web/analysis_client.js steadiness job: each month also has `speed_sd_mps`/`speed_corners` (same 20 m de-duplication,
+  null under minCorners). web/analysis.html's braking-consistency note adds "Your speed at their slowest point varied about
+  1 mph in Oct 2026", and "steadier/less steady than Sep (2 mph)" from a 1 mph change over five corners or more each.
+- Tests: tests/test_web_core_parity.py (speed_marks and the speed trend, JS = Python). Checked in a browser with ten drives.
+- Next: IDEAS D-08's records per kind of corner (your cleanest tight, medium and fast corners).
+
 ## Session 2026-11-11 (round two analysis, PR 6): how steady your turn-in and corner speed are on roads you repeat (claude/project-thread-gd7nre, off origin/main)
 
 - core/drive_analysis.py `_spread` (reference) and web/apex_core.js `spread` (port) add `turn_sd_m`/`turn_passes` (where you

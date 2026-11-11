@@ -872,6 +872,7 @@
     const t = turns.filter((x) => x !== null), v = speeds.filter((x) => x !== null);   // turn-in (m) and slowest speed (m/s) per pass
     return { passes, brake_sd_m: sampleSd(b), brake_passes: b.length, min_sd_m: sampleSd(m), min_passes: m.length,
              turn_sd_m: sampleSd(t), turn_passes: t.length, speed_sd_mps: sampleSd(v), speed_passes: v.length,
+             speed_marks: speeds.length ? froms.map((f, k) => [f, speeds[k]]) : [],   // per pass: [-1 this drive | j in others, slowest m/s]
              marks: froms.map((f, k) => [f, brakes[k], mins[k]]) };     // per pass: [-1 this drive | j in others, brake, slowest]
   }
   function coach(a, others) {
@@ -920,13 +921,13 @@
   // How repeatably you braked within each period (port of drive_analysis.spread_by, IDEAS D-07 trend): keys[0] is a's
   // period, keys[j + 1] others[j]'s (null when unknown); { key: [[apex, robust SD] per corner with TREND_MIN_PASSES+ marks in that period] }.
   const TREND_MIN_PASSES = 5;
-  function spreadBy(co, keys) {
+  function spreadBy(co, keys, what = 'brake') {                       // what 'speed': the slowest point's speed (m/s) instead
     const out = {};
     for (const c of co.corners) {
       const sp = c.spread;
       if (!sp) continue;
       const groups = new Map();
-      for (const [f, b] of sp.marks) {
+      for (const [f, b] of (what === 'speed' ? sp.speed_marks || [] : sp.marks)) {
         const k = f + 1 >= 0 && f + 1 < keys.length ? keys[f + 1] : null;
         if (b === null || k === null || k === undefined) continue;
         if (!groups.has(k)) groups.set(k, []);

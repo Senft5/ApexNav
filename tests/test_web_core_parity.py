@@ -172,7 +172,7 @@ def test_parity_coach_on_real_drives():
     keys = ["2026-09", "2026-09", "2026-09", "2026-09", "2026-09", "2026-10", None]
     runner = (f"const KEYS={json.dumps(keys)};"
               "const c=require(process.argv[1]);const cases=JSON.parse(require('fs').readFileSync(0,'utf8'));"
-              "process.stdout.write(JSON.stringify(cases.map(([a,o])=>{const r=c.coach(a,o);r.dev=c.spreadBy(r,KEYS);return r;})));")
+              "process.stdout.write(JSON.stringify(cases.map(([a,o])=>{const r=c.coach(a,o);r.dev=c.spreadBy(r,KEYS);r.vdev=c.spreadBy(r,KEYS,'speed');return r;})));")
     out = subprocess.run([NODE, "-e", runner, os.path.abspath("web/apex_core.js")], input=json.dumps(cases),
                          capture_output=True, text=True, check=True)
     tips = 0
@@ -194,6 +194,10 @@ def test_parity_coach_on_real_drives():
                     if k == "marks":
                         assert cj["spread"][k] == v                                       # whole multiples of 5 m, or None
                         continue
+                    if k == "speed_marks":
+                        assert [f for f, _ in cj["spread"][k]] == [f for f, _ in v]
+                        assert [x for _, x in cj["spread"][k]] == pytest.approx([x for _, x in v], rel=1e-9)
+                        continue
                     assert cj["spread"][k] == (None if v is None else pytest.approx(v, rel=1e-9, abs=1e-9)), k
             else:
                 assert "spread" not in cj
@@ -213,6 +217,12 @@ def test_parity_coach_on_real_drives():
         for k, v in by.items():
             assert [x[0] for x in j["dev"][k]] == [x[0] for x in v]
             assert [x[1] for x in j["dev"][k]] == pytest.approx([x[1] for x in v], rel=1e-12)
+        vby = da.spread_by(p, keys, "speed")                                       # corner speed per period, the same way
+        assert sorted(j["vdev"]) == sorted(vby)
+        for k, v in vby.items():
+            assert [x[0] for x in j["vdev"][k]] == [x[0] for x in v]
+            assert [x[1] for x in j["vdev"][k]] == pytest.approx([x[1] for x in v], rel=1e-9)
+    assert da.spread_by(py[5], keys, "speed")                                      # five passes in a month give a speed spread
     assert da.spread_by(py[5], keys) and da.spread_by(py[3], keys) == {}             # five passes in a month give figures, four none
     assert "2026-10" not in da.spread_by(py[5], keys)                                 # one pass in October says nothing
     whole = [c["spread"]["brake_sd_m"] for c in py[5]["corners"] if c.get("spread") and c["spread"]["brake_passes"] >= 5]
