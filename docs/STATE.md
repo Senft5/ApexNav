@@ -52,7 +52,13 @@
   `web/analysis_client.js` `OBS_VERSION` 2.
 - Tests: tests/test_touch.py (7: planted rates read back within 15 %, quick, coarse g gives none, parity, words); e2e
   "Your driving" checks no panel for once-a-second g and the panel's words.
-- Next: IDEAS D-29, Pace in Your driving (speed-based; never a Work on). Then touch by kind of corner and month.
+- Pace (IDEAS D-29, second PR): `MEASURES = SKILLS + ("pace",)` in both ports; observe adds `pace` (the Score's
+  `_pace_credit`); profile reads it for levels, matrix, trend/change and `pace_findings` (kept apart from `findings`),
+  plus `pace.over` (share of corners over the sane limit). Never strongest/focus/practice. `web/driver_profile.js`
+  `paceLines`, the `.dp-pace` panel, a Pace row in By kind of corner; apex_core exports `PACE_CEILING`, `paceCredit`.
+  Tests: tests/test_pace_profile.py (5); e2e "Your driving" checks the panel. APP_REVIEW 1.4 row added.
+- Next: touch by kind of corner and month (does the release get gentler?); a drive's own touch on its Log page; the end
+  card could say "3rd this week" for time attack (another thread's next).
 
 ## Session 2026-11-11 (ui-round-two, PR 1): the Log in the Vetta Line (claude/project-thread-5sbga7, off origin/main)
 
