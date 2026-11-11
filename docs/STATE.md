@@ -8,6 +8,15 @@
   a route's fly-through is unchanged. e2e "done after a replay brings the idle map back to where you are" (fails before).
 - Seen, by design: the dash's SCORE reads -- through a replay (the live score is only for a drive being recorded).
 - Next: the Log and a drive's page as a new user; add a friend; join a crew.
+## Session 2026-11-11 (Valhalla for Quick only, part 2): loops are our router's or nothing (claude/project-thread-39xbx9, off origin/main)
+
+- cockpit.js `buildLoop`: our router's loops only; no Valhalla stage loops, circle or refine. With none of ours a toast
+  says why (`apexDebug.loopOwnOnlyFail`: out / index / none / off). `stageJobs`, `loopRefine` and funRoute's stage plans are
+  now unreachable (kept for now; stage discovery itself still serves Explore).
+- e2e: the loop flows (plan flow (b), a loop by time, level cards) route on the synthetic tiles (`funTiles`); new flow
+  "valhalla for quick only: off our tiles, a loop says it plainly". Full e2e locally: 4/4 shards green.
+- Next: crests and verified bumps in stage discovery for Explore (/api/coverage `crested`, `bumps`); delete the unreachable
+  Valhalla stage-plan code once the owner has lived with the rule.
 ## Session 2026-11-11 (roam-b first-run walkthrough, PR 1): a first loop fills the map; loops stay off our relay (claude/project-thread-sxhrgi)
 
 - Walked a brand-new user through production on an iPhone 13 viewport (onboarding, Loop from here). Two bugs fixed:
@@ -32,6 +41,33 @@
   `repeat_weeks` (409 `not_latest` on an older drive of a series). `web/crew_events.js` Repeats chips, "Every Saturday"
   on cards and Meets near you, ICS RRULE. Tests: backend event_repeat 4, pytest test_crew_events, e2e crew drives.
 - Next: the auto time attack PR (local branch, built on #397's) once #397 merges.
+## Session 2026-11-11 (deepest analysis, PR 12): Your roads, corner by corner (claude/project-thread-gd7nre)
+
+- core/driver_profile.py `road_book(drives, ref)` and its port `roadBook`: every drive of a road (oldest first, placed in
+  one frame) merged corner by corner (the first pass seen is the corner; 20 m and about 45 degrees, as road_records); the
+  corners passed three or more times in road order (nearest point of `ref`), each {size, dir, passes, record, by, at}; the
+  first drive to reach the record holds it. `roadBookRows` words it. `placed` now carries size and dir.
+- web/analysis_client.js job `roadBook({ id })`: every drive with that drive's name, in the newest one's frame.
+- web/analysis.html: a quiet "Your roads, corner by corner" line in the Log: roads driven three or more times
+  (your_roads.js roads), one key each; a road lists its corners ("3  Tight right  86 / On May 1, of 4 passes") and each
+  date opens the drive that holds it.
+- Tests: tests/test_best_corners.py (+1, parity), e2e "a drive's corners on a road driven four times" (now the book too).
+- Next: the road book could mark the corners where your passes vary most (the spread by corner, Core.spreadBy), so the
+  page says where on the road to work, not only where your best was.
+
+## Session 2026-11-11 (deepest analysis, PR 11): every corner of a road says its record and which drive holds it (claude/project-thread-gd7nre)
+
+- core/driver_profile.py `road_records(mine, others, ids=None)` and its port `roadRecords` add `rows`: per corner driven
+  three or more times, {apex, level (this pass), passes, record, by (None when this pass holds it, else the holding
+  drive's id)}; of equal passes the first listed (the client lists the oldest first) holds it, as records_by_size does.
+- web/driver_profile.js `roadCornerNote(row, day)`: "Your cleanest of 4 passes here (92)", "Level with your cleanest here
+  (90, Aug 12)", "Your cleanest here: 90, Aug 12; this pass 82". Technique only.
+- The drive page's corner list carries that note under each such corner; when another drive holds it the note is a button
+  that opens that drive (drive_view.js `markRecords(rows, open)`; analysis_client.js adds each row's `on` date).
+- Tests: tests/test_best_corners.py (rows, ids, ties, words, parity), e2e "a drive's corners on a road driven four times".
+- Next: the road itself as a page (from Your roads): its corners in order, each with its record and holder across every
+  drive of it, not only from one drive's page.
+
 ## Session 2026-11-11 (places by name, 2): the drive's fuel stamp names its station (claude/project-thread-me97iw, off origin/main)
 
 - cockpit.js `updatePins`: in a drive the one fuel stamp left (U-85, the next stop ahead) reads "FUEL · Shell" when the map
@@ -53,6 +89,19 @@
   stage-plan code in funRoute is now unreachable (kept for now).
 - Next: loops on our router only (the owner's rule says "anything but the quick route"); find the owner's failure (where,
   app or web, which message).
+## Session 2026-11-11 (round two analysis, PR 10): a road's records, corner by corner (claude/project-thread-gd7nre, off origin/main)
+
+- core/driver_profile.py `road_records` (reference) and web/driver_profile.js `roadRecords` (port, with `placed` and
+  `roadRecordLine`): over the corners of this road you have driven three or more times (the same corner: apex within 20 m,
+  heading within about 45 degrees), how many this drive was the cleanest pass of, and how many level with it.
+- web/analysis_client.js drive job: `touch.road` from the drive's own corners and the near drives' (the coach's). The drive
+  page's "Against your records" panel adds "On this road: your cleanest pass yet at 7 of the 24 corners here you have
+  driven three or more times, level with it at 2."
+- Tests: tests/test_best_corners.py (+1, parity and words), e2e "Your driving".
+- The corner list marks each corner this drive is your cleanest pass of ("Your cleanest pass here"; `held`, drive_view.js
+  `markRecords`).
+- Next: the deepest-analysis list: a road page (Your roads) with its corners' records and which drive holds each.
+
 ## Session 2026-11-11 (places by name): the cafés and fuel on the route card are a tap away, by name (claude/project-thread-me97iw, off origin/main)
 
 - The owner: "when it says there's cafes or gas stations ... i want to be able to tap for details. Ideally just show the name".
