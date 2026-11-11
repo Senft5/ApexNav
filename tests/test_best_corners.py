@@ -81,3 +81,28 @@ def test_parity_and_words():
     line = out["say"][-1]
     assert line.startswith("Cleanest corners: a ") and line.count(";") == 2
     assert not any(w in line for w in ("mph", "km/h", " s,", "fast as"))
+
+
+def test_a_drive_against_your_records():
+    mine = [corner(5, 90, "tight"), corner(9, 94, "tight", "R"), corner(20, 99, "medium"), corner(30, 70, "fast", brake=None)]
+    rec = {"tight": {"id": "x", "at": "2026-08-12T09:00", "name": "Dry Ridge Rd", "apex": 3, "dir": "L", "level": 100, "n": 12},
+           "medium": {"id": "me", "at": "2026-09-01T09:00", "name": "Hill Rd", "apex": 20, "dir": "L", "level": 99, "n": 8}, "fast": None}
+    dr = dp.drive_records(mine, rec)
+    assert dr["tight"]["level"] == 94 and dr["tight"]["record"]["level"] == 100
+    assert dr["medium"]["level"] == 99 and dr["fast"]["level"] is None                  # an unmeasured credit: no fast corner read
+    assert dp.drive_records([], {}) == {z: {"level": None, "record": None} for z in ("tight", "medium", "fast")}
+    if NODE is None:
+        return
+    runner = ("const P=require(process.argv[1]+'/web/driver_profile.js');const [o,r]=JSON.parse(require('fs').readFileSync(0,'utf8'));"
+              "const dr=P.driveRecords(o,r);process.stdout.write(JSON.stringify({dr,say:P.driveRecordLines(dr,'me'),"
+              "alone:P.driveRecordLines(P.driveRecords(o,{}),'me'),none:P.driveRecordLines(null,'me')}));")
+    out = json.loads(subprocess.run([NODE, "-e", runner, os.getcwd()], input=json.dumps([mine, rec]), capture_output=True, text=True, check=True).stdout)
+    assert out["dr"] == dr
+    assert out["say"] == ["Tight corners: 94 at best here; your record is 100 (2026-08-12).",
+                          "Medium corners: 99 at best here, your record of 8 medium corners."]
+    level = subprocess.run([NODE, "-e", "const P=require(process.argv[1]+'/web/driver_profile.js');process.stdout.write(P.driveRecordLines({tight:{level:100,record:{id:'x',at:'2026-05-01T09:00',level:100,n:9}}},'me')[0])", os.getcwd()],
+                           capture_output=True, text=True, check=True).stdout
+    assert level == "Tight corners: 100 at best here, level with your record (2026-05-01)."
+    assert out["alone"] == ["Tight corners: 94 at best here.", "Medium corners: 99 at best here."] and out["none"] == []
+    words = " ".join(out["say"]).lower()
+    assert not any(w in words for w in ("mph", "km/h", "better", "worse", "faster", "push"))

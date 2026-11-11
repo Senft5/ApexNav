@@ -4616,10 +4616,12 @@ flow('Your driving: the profile over every drive opens from the Log, names the w
   // a drive's own touch on its Log page: none from g kept once a second, so the panel stays hidden; words when there is one
   const dt = await page.evaluate(async () => {
     const info = await ApexAnalysis.job('drive', { id: 'p1' });
-    return { has: !!info.touch, lines: ApexDriverProfile.driveTouchLines(info.touch),
+    return { has: !!info.touch, lines: ApexDriverProfile.driveTouchLines(info.touch), best: ApexDriverProfile.driveRecordLines(info.touch && info.touch.records, 'p1'),
       say: ApexDriverProfile.driveTouchLines({ drive: { brake_on: { rate: 1.1 }, brake_off: { rate: null }, turn_in: { rate: null, quick_rate: true } }, usual: { brake_on: { rate: 0.8 }, brake_off: { rate: null }, turn_in: { rate: 0.9 } } }) };
   });
   check(dt.has && dt.lines.length === 0, 'a drive with g kept once a second has no touch of its own: ' + JSON.stringify(dt.lines));
+  // and its corners against your records by kind (the record of each kind is held by the first drive to reach it)
+  check(dt.best.length >= 2 && /^Tight corners: \d{1,3} at best here(, your record of \d+ tight corners|, level with your record \(.+\)|; your record is \d{1,3}( \(.+\))?)\.$/.test(dt.best[0]), 'a drive against your records: ' + JSON.stringify(dt.best));
   check(dt.say.join(' ') === 'Brakes on: about 1.1 g a second on this drive, 0.8 usually. Turn-in: one quick movement (quicker than the recording can time) on this drive, 0.9 usually.', 'a drive\'s touch in words: ' + dt.say);
   // each drive's observations were kept: a second visit reads no drive again, and a deleted drive's are dropped
   const again = await page.evaluate(() => ApexAnalysis.job('profile'));
@@ -7108,12 +7110,12 @@ flow('when to go: the route card says the best time to leave, opens the next day
   await page.waitForFunction(() => !document.getElementById('routeCardWhen').hidden && !/^Leaving /.test(document.getElementById('routeWhenLine').textContent) && apexDebug.lastWhen.planned === null, null, { timeout: 25000 });
 }, IPHONE);
 
-flow('along the route by name: the Along line opens a list of the cafés and fuel stops by their names on the map, and a tap on one (or its pin) says its name and offers it as a stop (the owner, 2026-11-11)', async (page, base) => {
+flow('along the route by name: the Along line opens a list of the cafés and fuel stops by their names on the map, and a tap on one (or its pin) says its name and offers it as a stop; in a drive the next fuel stamp names its station (the owner, 2026-11-11)', async (page, base) => {
   await planRouter(page);
   const { tap } = await planPage(page, base);
   // the map's points (offline here): a named café and an unnamed fuel station beside the route, from the route's own samples
   await page.evaluate(() => { ApexStages.pois = async (pts) => { const a = pts[Math.min(1, pts.length - 1)], b = pts[Math.min(3, pts.length - 1)];
-    return [{ kind: 'cafe', name: 'Bean There Coffee', lat: a.lat + 0.0003, lon: a.lon }, { kind: 'fuel', name: null, lat: b.lat, lon: b.lon + 0.0004 }, { kind: 'fuel', name: 'Shell', lat: pts[pts.length - 1].lat, lon: pts[pts.length - 1].lon }]; }; });
+    return [{ kind: 'cafe', name: 'Bean There Coffee', lat: a.lat + 0.0003, lon: a.lon }, { kind: 'fuel', name: 'Shell', lat: b.lat, lon: b.lon + 0.0004 }, { kind: 'fuel', name: null, lat: pts[pts.length - 1].lat, lon: pts[pts.length - 1].lon }]; }; });
   await tap('#destInput', 'Where to?');
   await page.fill('#destInput', 'Maryville');
   await page.waitForSelector('#placeList .place', { timeout: 10000 });
@@ -7136,6 +7138,13 @@ flow('along the route by name: the Along line opens a list of the cafés and fue
   // the café's pin on the map says the same
   const pin = await page.evaluate(() => { const el = [...document.querySelectorAll('.poi-pin.poi-cafe')][0]; return el ? el.getAttribute('aria-label') : null; });
   check(/^Bean There Coffee · Café · /.test(pin || ''), 'the café pin is named for a screen reader: ' + pin);
+  // in a drive only the next fuel stop keeps its stamp, and it says which station it is
+  await page.evaluate(() => document.getElementById('routeDriveBtn').click());
+  await page.waitForFunction(() => window.apexDebug.driveActive, null, { timeout: 10000 });
+  await page.waitForFunction(() => [...document.querySelectorAll('.poi-pin.poi-fuel')].filter((e) => e.style.display !== 'none').map((e) => e.textContent).join('|') === 'FUEL · Shell', null, { timeout: 5000 })
+    .catch(() => {});
+  const stamps = await page.evaluate(() => [...document.querySelectorAll('.poi-pin.poi-fuel')].map((e) => ({ text: e.textContent, on: e.style.display !== 'none' })));
+  check(stamps.filter((x) => x.on).map((x) => x.text).join('|') === 'FUEL · Shell', 'in a drive, the next fuel stop alone, by its name: ' + JSON.stringify(stamps));
 }, IPHONE);
 
 // The route reveal and the card as a page (design pass, 2026-11-10; web/route_reveal.js): a route found is drawn onto the

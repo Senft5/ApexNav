@@ -17,6 +17,11 @@ it says so. Things only you can do are in docs/OWNER_TODO.md.
 - Tapping Log in the first seconds after install showed a blank screen with no tabs until it loaded. Now the map stays
   usable with a short "Opening your Log…" and the Log opens when ready (a different tab cancels it). Undo: the
   `logFrame.want` branch in cockpit.js openLog.
+## 2026-11-11 (places by name, 2): in a drive, the next fuel stop's stamp says which station (claude/project-thread-me97iw)
+
+While driving a planned route the map keeps only the next fuel stop's stamp; it now reads "FUEL · Shell" instead of FUEL
+when OpenStreetMap has its name (unnamed stays FUEL). Only that one stamp grows, so the map stays clear. Undo: revert the PR.
+
 ## 2026-11-11 (Valhalla for Quick only): Fun and Long way fail plainly instead of falling back (claude/project-thread-39xbx9)
 
 Your rule: Valhalla only for Quick. Fun and Long way now come from our own router or not at all. Where our road map doesn't
