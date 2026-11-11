@@ -9,6 +9,7 @@ import { rateCheck } from "./ratelimit";
 import { clientError, errorSummary, serverError } from "./errors";
 import { backupDatabase } from "./backup";
 import { sweepExpired } from "./sweep";
+import { cronHealth, runCron } from "./cron_runs";
 import { appleSignIn } from "./apple";
 import { crewHazardKinds, hazardsNear, reportHazard, voteHazard } from "./hazards";
 import { routeDelete, routeGet, routesSharedWithMe, shareRoute } from "./routes_shared";
@@ -63,8 +64,9 @@ const on = (method: string, path: string, h: Handler) =>
 const noContent = () => new Response(null, { status: 204 });
 
 // Status checks (tools/status_check.py, IDEAS Y-05): one trivial read proves the database answers, not just the Worker.
+// The cron jobs ride along (src/cron_runs.ts): a backup or sweep that stopped or keeps failing is an outage there too.
 on("GET", "/api/health", async (_req, env) => {
-  try { await env.DB.prepare("SELECT 1").first(); return json({ ok: true, db: true }); }
+  try { return json({ ok: true, db: true, cron: await cronHealth(env) }); }
   catch (e) { console.error(JSON.stringify({ event: "health_db_failed", error: String(e) })); return json({ ok: false, db: false }, 503); }
 });
 // Anonymous crash reports (web/errors.js): scrubbed, logged and counted per day (no person in it). Rate limited per IP like any signed-out write.
@@ -364,9 +366,11 @@ export default {
   // Cron triggers (wrangler.jsonc triggers): the weekly database backup, and the daily sweep of expired rows.
   async scheduled(ctrl: ScheduledController, env: Env, ctx: ExecutionContext): Promise<void> {
     if (ctrl.cron === BACKUP_CRON) {
-      ctx.waitUntil(backupDatabase(env).catch((e) => console.error(JSON.stringify({ event: "backup_failed", reason: String(e) }))));
+      ctx.waitUntil(runCron(env, "backup", async () => {
+        if (env.BACKUPS && !(await backupDatabase(env))) throw new Error("backup not written (too big)");
+      }));
     } else {
-      ctx.waitUntil(sweepExpired(env).catch((e) => console.error(JSON.stringify({ event: "sweep_failed", reason: String(e) }))));
+      ctx.waitUntil(runCron(env, "sweep", () => sweepExpired(env)));
     }
   },
 };

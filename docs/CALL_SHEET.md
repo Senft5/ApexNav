@@ -4,6 +4,15 @@ Decisions Claude made for you, newest first. Each one says what was decided, why
 you reach one you've seen. If you disagree with a call, say so and it gets reversed; nothing here is hard to undo unless
 it says so. Things only you can do are in docs/OWNER_TODO.md.
 
+## 2026-11-11 (sweep: cron monitoring): a stopped backup or sweep opens an issue (claude/project-thread-g9yher)
+
+The weekly D1 backup and the daily sweep used to fail with one log line nobody reads, and a run killed for CPU time left
+nothing at all. Each run now records itself in `cron_runs` (migration 0055); `GET /api/health` reports `cron.backup` and
+`cron.sweep` (hours since the last good run, failing, late), and the status workflow has two new core checks that open an
+issue titled "ApexNav: Weekly backup not running" when the backup is over 8 days 6 hours old or its latest run threw (the
+sweep: 2 days 6 hours). A job never recorded passes, so the issue can't open before the first Monday after deploy.
+Undo: drop the two checks in tools/status_check.py; `runCron` can stay.
+
 ## 2026-11-11 (roam-a descent call): the co-driver says a long descent as you near its top (claude/project-thread-h7xxmf)
 
 On a planned route, the same long, steep descents the route card names are now said once, as you come within 500 m of the

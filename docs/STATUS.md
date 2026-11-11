@@ -9,7 +9,9 @@ with `python tools/status_check.py`.
 | Check | Kind | Passes when |
 |---|---|---|
 | Site | core | `GET /` answers 200 with a page |
-| API and database | core | `GET /api/health` answers `{"ok": true, "db": true}` (the Worker ran `SELECT 1` on D1) |
+| API and database | core | `GET /api/health` answers `{"ok": true, "db": true}` (the Worker read `cron_runs` on D1) |
+| Weekly backup | core | `/api/health`'s `cron.backup` is neither `failing` nor `late` (last good run within 8 days 6 hours) |
+| Daily sweep | core | `cron.sweep` is neither `failing` nor `late` (last good run within 2 days 6 hours) |
 | Routing (Valhalla) | dependency | the public valhalla1.openstreetmap.de routes a short Knoxville trip |
 | Routing fallback (OSRM) | dependency | router.project-osrm.org routes the same trip |
 | Map style (OpenFreeMap) | dependency | the Liberty style loads |
@@ -43,4 +45,10 @@ Re-enable it there ("Status" → Enable workflow). Any commit also resets the 60
 3. **Only the API fails, `db: false`:** D1 is refusing queries. Check the D1 metrics for `apexnav-db` and the free daily
    limits (5 million rows read, 100,000 written). If a migration or a bad write broke the data, restore it with Time
    Travel (docs/BACKUPS.md section 4).
-4. Workers Logs (dashboard → Workers → apexnav → Logs) show the Worker's errors and the apps' `client_error` reports (Y-02).
+4. **Only Weekly backup or Daily sweep fails** (the issue is titled "ApexNav: … not running", the app is up): the cron
+   job threw, or stopped running. Each run writes `cron_runs` (migration 0055, `backend/src/cron_runs.ts`): `ok_at`,
+   `fail_at` and the scrubbed `reason`, read with `SELECT * FROM cron_runs` on D1. A failure is also counted under
+   `cron backup` / `cron sweep` in `GET /api/ops/errors`. A run killed for CPU time writes nothing, so it shows as late,
+   not failing: check the Worker's metrics for `exceededCpu` (docs/BACKUPS.md). A job that was never recorded (a database
+   restored from before 0055, say) passes until its first run.
+5. Workers Logs (dashboard → Workers → apexnav → Logs) show the Worker's errors and the apps' `client_error` reports (Y-02).

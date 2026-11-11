@@ -1,5 +1,15 @@
 # VETTA — CURRENT AGENT HANDOFF STATE
 
+## Session 2026-11-11 (sweep round three): the cron jobs are watched (claude/project-thread-g9yher, off origin/main 6a43a9c)
+
+- Migration 0055 `cron_runs` (job, ok_at, fail_at, reason). backend/src/cron_runs.ts `runCron` wraps the backup and the
+  sweep in `scheduled`: success sets ok_at; a throw sets fail_at + scrubbed reason and counts as `cron <job>` in error_counts.
+  A backup that writes nothing (too big) counts as a failure. `GET /api/health` returns `cron: {backup, sweep}` (age_h,
+  failing, late) from the same single read. tools/status_check.py: core checks "Weekly backup" and "Daily sweep"; the
+  outage issue is titled "ApexNav: … not running" when only those fail. docs/STATUS.md step 4, docs/BACKUPS.md.
+- 0055 must be on preview and prod before merge (/api/health 503s without the table).
+- Next: offline behaviour and App Store / TestFlight readiness checks.
+
 ## Session 2026-11-11 (roam-a descent call): "Long descent ahead" near the top (claude/project-thread-h7xxmf, off origin/main)
 
 - IDEAS V-12, part three. web/brake_heat.js `descentAhead(list, atM, said)` (500 m before a top to 300 m past it, once per
