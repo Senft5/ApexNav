@@ -1,5 +1,17 @@
 # VETTA — CURRENT AGENT HANDOFF STATE
 
+## Session 2026-11-11 (roam-a descents): the route card says a long descent before you set off (claude/project-thread-h7xxmf, off origin/main)
+
+- IDEAS V-12, its second part. `long_descents` (core/brake_heat.py) / `longDescents` (web/brake_heat.js, parity-tested): from the
+  route's terrain profile (stages.js `profile`, the same DEM as the climb line), each run from a high point to the lowest point
+  before the road climbs more than 30 m again; kept when it drops 300 m or more at 5 % or steeper. Biggest first.
+- cockpit.js `paintClimb`: `#routeCardDescent` (index.html, `.f-descent` glyph, under the climb line): "A long descent: down
+  1,575 ft over 3.7 mi at 8%. A lower gear saves the brakes." (", and N more" when there are others). Hidden for a new route.
+- Tests: tests/test_brake_heat.py (+5); e2e "the route card says a long descent…" (DEM stubbed). Checked: pytest, that flow,
+  plan flow (a).
+- Next: a live "long descent ahead" call before the top (the co-driver knows it from the same profile); the Garage car's
+  weight and brakes could tune DISC_C.
+
 ## Session 2026-11-11 (roam-a brake heat): the co-driver knows when your brakes are cooking (claude/project-thread-h7xxmf, off origin/main)
 
 - IDEAS V-12. `core/brake_heat.py` (reference) and `web/brake_heat.js` (port, parity-tested): specific energy v^2/2 + g h

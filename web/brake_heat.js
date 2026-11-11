@@ -86,6 +86,36 @@
     return peak === null ? null : { peak_k: peak, level: level(peak), hot_m: hotM };
   }
 
+  const DESCENT_DROP_M = 300.0, DESCENT_GRADE = 0.05, DESCENT_RISE_M = 30.0;
+  /** The long, steep descents on a planned route, from its terrain profile (the map's heights, not a model):
+   *  [{ start_m, end_m, drop_m, grade }] biggest drop first (core/brake_heat.py long_descents). */
+  function longDescents(dist, elev) {
+    const pts = [];
+    for (let k = 0; k < dist.length; k++) if (finite(dist[k]) && elev && finite(elev[k])) pts.push([dist[k], elev[k]]);
+    const out = [];
+    let i = 0;
+    while (i < pts.length) {
+      let top = i, low = i, j = i + 1;
+      for (; j < pts.length; j++) {
+        if (pts[j][1] > pts[top][1] && low === top) { top = j; low = j; }
+        else if (pts[j][1] < pts[low][1]) low = j;
+        else if (pts[j][1] - pts[low][1] > DESCENT_RISE_M) break;
+      }
+      const drop = pts[top][1] - pts[low][1], run = pts[low][0] - pts[top][0];
+      if (drop >= DESCENT_DROP_M && run > 0 && drop / run >= DESCENT_GRADE) out.push({ start_m: pts[top][0], end_m: pts[low][0], drop_m: drop, grade: drop / run });
+      i = low > i ? Math.max(low, i + 1) : j;
+    }
+    out.sort((a, b) => b.drop_m - a.drop_m);
+    return out;
+  }
+  /** The route card's line for longDescents' answer, or null. fmtDist(m) and fmtHeight(m) in the driver's units. */
+  function descentText(list, fmtDist, fmtHeight) {
+    if (!Array.isArray(list) || !list.length) return null;
+    const d = list[0], more = list.length - 1;
+    return `A long descent: down ${fmtHeight(d.drop_m)} over ${fmtDist(d.end_m - d.start_m)} at ${Math.round(d.grade * 100)}%`
+      + `${more ? `, and ${more} more` : ''}. A lower gear saves the brakes.`;
+  }
+
   /** What the co-driver says when the brakes get hot. */
   const CALL_TEXT = 'Brakes are getting hot. Use a lower gear and ease off.';
 
@@ -98,6 +128,6 @@
     return `Your brakes got hot${far} on this drive, by Vetta\u2019s estimate from your speed and the hills. On a long descent, a lower gear lets the engine take some of the work.`;
   }
 
-  const api = { create, overTrack, driveText, tauS, level, CALL_TEXT, WARM_K, HOT_K };
+  const api = { create, overTrack, driveText, longDescents, descentText, tauS, level, CALL_TEXT, WARM_K, HOT_K };
   if (typeof module !== 'undefined' && module.exports) module.exports = api; else root.ApexBrakeHeat = api;
 })(typeof window !== 'undefined' ? window : globalThis);

@@ -7056,6 +7056,22 @@ flow('no connection: People is a page that says which it is (offline, or Vetta n
   await page.waitForFunction(() => !document.querySelector('.lost-page') && [...document.querySelectorAll('.join-page .join-head')].some((e) => e.getClientRects().length && /Drive with friends|Drive as a crew/.test(e.textContent)), null, { timeout: 10000 });
 }, IPHONE);
 
+flow('the route card says a long descent before you set off, from the terrain, in words (brake_heat.js longDescents, IDEAS V-12)', async (page, base) => {
+  await planRouter(page, []);
+  const { tap } = await planPage(page, base);
+  // terrain: 8 % down for the first 6 km of the route, flat after (the DEM is stubbed: no tiles here)
+  await page.evaluate(() => { ApexStages.profile = async (t) => t.dist.map((m) => 1500 - 0.08 * Math.min(m, 6000)); });
+  await tap('#destInput', 'Where to?');
+  await page.fill('#destInput', 'Maryville');
+  await page.waitForSelector('#placeList .place', { timeout: 10000 });
+  await page.waitForFunction(() => /^Go to Maryville$/.test(document.getElementById('findGoBtn').textContent));
+  await tap('#placeList .place', 'the place');
+  await cardUp(page);
+  await page.waitForFunction(() => !document.getElementById('routeCardDescent').hidden, null, { timeout: 20000 });
+  const line = await page.textContent('#routeCardDescent');
+  check(/^A long descent: down [\d,]+ ft over [\d.]+ mi at 8%\. A lower gear saves the brakes\.$/.test(line.replace(/\u00a0/g, ' ')), 'the descent, in feet and miles: ' + line);
+}, IPHONE);
+
 flow('plan flow (e, f) a level change and an alternative are one tap or swipe each: the level cards are the routes found, nothing planned again (finding 4, 11)', async (page, base) => {
   const asked = [];
   await planRouter(page, asked);
