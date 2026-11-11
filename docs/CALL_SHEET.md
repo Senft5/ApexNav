@@ -10,6 +10,22 @@ Stage discovery (the roads Explore, loops and routes pick from) now lifts a road
 crests by up to 1.5 points, and drops one by 1.5 points for each crowd-verified bump on it, at most 4.5 (a confirmed
 hand-reported hazard costs 3). The sizes are a judgment call: a crested road wins against a flat one half a point better;
 two verified bumps send it back. Undo: `CREST_MAX` and `BUMP_PTS` 0 in web/measured_stages.js.
+## 2026-11-11 (places by name, 3): ask Siri for the next gas station or café (claude/project-thread-me97iw)
+
+Two new Siri phrases: "Where's the next gas station in Vetta" and "Where's the next café in Vetta" (also "Next fuel" /
+"Next coffee in Vetta"). The co-driver says the next one along your planned route by its map name and how far it is
+("Next fuel: Shell, in 3.2 mi."). Calls: only places along the planned route count (not off-route detours); without a
+route it says to plan one. Undo: revert the PR (the two intents and the page's handler).
+## 2026-11-11 (roam-c ta-placement): this week's time attack loop is a home deck suggestion (claude/roam-c-ta-placement)
+
+When you entered this week's loop, the deck's suggestion row names it with your place and the days left, ranked right
+after a crew drive you're going to (a plan with friends beats a solo time). When you haven't entered, it comes after the
+road near you that you haven't driven and before your best road, so a new road you'd like still wins. Tapping it gives
+directions to the loop's start, like a crew drive's meeting point. The phone sends the server only the middle of your
+1-degree area, as the Where to? section does. The reminder never quotes your place or days left (they change by then),
+and skips the loop if the week is over by the day it names. Undo: drop `attack` from the `YR.suggest` call in cockpit.js
+paintDeck (or move `if (ta) return attackSugg();` in your_roads.js to change its rank).
+
 
 ## 2026-11-11 e2e: two flows raced the refine's swap after #434
 - **What:** "taste from picks" and "plan flow (e, f)" wait for `apexDebug.refineDone` (new, set when ownRefine ends) and expect the three routes found after the refine swaps Fun's pick; taste from picks takes the third by a swipe (Quick's is >30 % faster than Fun's on the motorway grid, so it teaches nothing by design).
@@ -44,6 +60,13 @@ Once, or the planner leaving the crew ends the series; editing an older drive in
 calendar puts the series in once with a weekly rule.
 
 Undo: revert the PR. Migration 0053 only adds two columns to `crew_events`; the old code ignores them.
+## 2026-11-11 (deepest analysis, PR 13): "least even" is a 15-level span, at most three corners (claude/project-thread-gd7nre)
+
+A road book now names where your passes differ most, as the place on the road worth working on. It uses the plain span
+between your cleanest and least clean pass, not a statistical spread: three to five passes are too few for one, and a
+span is easy to check against the rows. 15 levels is about one step on the six credits; three corners keep it a short
+list. Undo: UNEVEN_LEVELS / UNEVEN_MAX in core/driver_profile.py and web/driver_profile.js, or revert the PR.
+
 ## 2026-11-11 (deepest analysis, PR 12): roads are matched by name for the corner-by-corner book (claude/project-thread-gd7nre)
 
 The book takes every drive with the same road name (as the deck's Your roads does) and merges their corners by place and

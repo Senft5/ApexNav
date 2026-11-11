@@ -91,6 +91,25 @@
   }
 
   /**
+   * What the co-driver says when asked for the next café or fuel stop (Siri, IDEAS V-07; the owner, 2026-11-11): the
+   * first one of `kind` past `atM` along the route, by its name on the map. `list` = along(); `list` null = no route
+   * (or its places not loaded). "Next fuel: Shell, in 3.2 mi." / "Next café in 1.4 mi." / "No fuel stops ahead on this route."
+   */
+  const ASK_NAME = { cafe: ['café', 'cafés'], fuel: ['fuel', 'fuel stops'], view: ['viewpoint', 'viewpoints'] };
+  function nextAnswer(list, atM, kind, fmt = null) {
+    const words = ASK_NAME[kind];
+    if (!words) return '';
+    if (!Array.isArray(list)) return `Plan a route to hear the ${words[1]} along it.`;
+    const at = finite(atM) ? atM : 0, long = fmt && fmt.long ? fmt.long : (m) => `${(m / 1000).toFixed(1)} km`;
+    const p = list.filter((x) => x && x.kind === kind && finite(x.m) && x.m > at - 50).sort((a, b) => a.m - b.m)[0];
+    if (!p) return `No ${words[1]} ahead on this route.`;
+    const name = typeof p.name === 'string' && p.name.trim() ? p.name.trim() : null, d = Math.max(0, p.m - at);
+    const where = d < 150 ? 'here' : `in ${long(d)}`;
+    const head = words[0].charAt(0).toUpperCase() + words[0].slice(1);
+    return name ? `Next ${words[0]}: ${name}, ${where}.` : d < 150 ? `${head} here, no name on the map.` : `Next ${words[0]} ${where}, no name on the map.`;
+  }
+
+  /**
    * Which pins the map shows so none overlap (the owner, 2026-11-04: "a pile of overlapping FUEL labels"). `pins` =
    * [{ kind, named, m, x, y, w, h }]: the pin's centre and size on screen, `m` its place along the route; `view` = { w, h }.
    * The most useful first: named viewpoints, other viewpoints, cafés, fuel; within a kind, spread along the route (the
@@ -134,6 +153,6 @@
     return show;
   }
 
-  const api = { along, fuelGap, summary, places, placeLine, declutter, NEAR_M, FUEL_WARN_M, KIND_NAME };
+  const api = { along, fuelGap, summary, places, placeLine, nextAnswer, declutter, NEAR_M, FUEL_WARN_M, KIND_NAME };
   if (typeof module !== 'undefined' && module.exports) module.exports = api; else root.ApexScenic = api;
 })(typeof window !== 'undefined' ? window : globalThis);
