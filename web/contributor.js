@@ -1,5 +1,5 @@
 // Phone-side road-data contributor (docs/BACKEND.md sections 3-4). Turns a profiled drive into per-road bin summaries.
-// What leaves the phone: OSM way id, direction, bin index, four road numbers per 5 m bin, the way's road class, and the way's own public OSM line (the
+// What leaves the phone: OSM way id, direction, bin index, four road numbers per 5 m bin (and yes/no flags: hard brake, bump felt), the way's road class, and the way's own public OSM line (the
 // coverage map, IDEAS Q-14). Never your position, your path, speeds or times.
 // The pure part (buildContributions) is deterministic and unit-tested; matchDrive/fetchWays/contributeDrive are the thin network shell.
 (function (root) {
@@ -55,6 +55,27 @@
     if (Array.isArray(k)) for (let i = ids[0]; i < Math.min(k.length, ids[0] + CORNER_AHEAD); i++) if (finite(k[i]) && Math.abs(k[i]) >= 1 / CORNER_R_M) { explained = true; break; }
     return { fl: +fl.toFixed(3), hb: Math.min(...g) <= HARD_BRAKE_G && !explained ? 1 : 0 };
   }
+  /**
+   * Bump evidence per sample (IDEAS Q-02): Core.spikeMask over the drive's roughness and vertical peaks (1 a spike, 0 a clean
+   * sample, null unknown), unknown at walking pace (the phone is being handled, not reading the road) and everywhere when
+   * the drive has no vertical peaks (an older recording) or no core is loaded. Only 1 / 0 per bin leaves the phone.
+   */
+  const BUMP_MIN_MPS = 2.5;
+  function bumpEvidence(drive, Core) {
+    const vp = drive.vpeak, n = drive.lat.length;
+    if (!Core || typeof Core.spikeMask !== 'function' || !Array.isArray(vp) || !vp.some(finite)) return null;
+    const m = Core.spikeMask(drive.rough, vp.slice(0, n));
+    const sp = Array.isArray(drive.speed) ? drive.speed : drive.speed_mps;            // a live slice says speed, a saved drive speed_mps
+    if (Array.isArray(sp)) for (let i = 0; i < n; i++) if (finite(sp[i]) && sp[i] < BUMP_MIN_MPS) m[i] = null;
+    return m;
+  }
+  /** A bin's bump flag from its samples' evidence: 1 if any felt a spike, 0 if any was measured clean, null otherwise. */
+  function binBump(ev, ids) {
+    if (!ev) return null;
+    let known = false;
+    for (const i of ids) { if (ev[i] === 1) return 1; if (ev[i] === 0) known = true; }
+    return known ? 0 : null;
+  }
   /** The busy-time bucket of a moment (0..11): weekday 0..5 or weekend 6..11, by 4-hour block of local time. */
   function hourBucket(date) {
     const d = date instanceof Date ? date : new Date(date);
@@ -63,7 +84,8 @@
   }
 
   /**
-   * drive: { lat[], lon[], camber[] (deg or null), rough[], crest[], kappa[], cam_v } at 5 m spacing; camber is used only
+   * drive: { lat[], lon[], camber[] (deg or null), rough[], crest[], kappa[], cam_v, vpeak[] } at 5 m spacing; vpeak (the
+   *        vertical peak, g) gives each bin its bump flag bp (bumpEvidence; Core: apex_core.js); camber is used only
    *        when cam_v === CAM_V (recorded by the fixed pipeline), otherwise every bin's cam is null
    * match: per-sample { way: number|null, cls: string|null } (null = unmatched)
    * ways:  { [wayId]: [[lat, lon], ...] } OSM geometry, bins count from the way's first node
@@ -72,8 +94,8 @@
    * (loved roads count members back on a road on a second recorded drive); drive.hr, a busy-time bucket, is sent only when
    * the caller passed one (the quiet_hours flag on).
    */
-  function buildContributions({ drive, match, ways, drivenOn, driveId, trimM = 1000 }) {
-    const trim = Math.round(trimM / BIN_M), out = [], best = new Map(), camOk = drive.cam_v === CAM_V;
+  function buildContributions({ drive, match, ways, drivenOn, driveId, trimM = 1000, Core = root.ApexCore }) {
+    const trim = Math.round(trimM / BIN_M), out = [], best = new Map(), camOk = drive.cam_v === CAM_V, bumps = bumpEvidence(drive, Core);
     for (const run of locate({ drive, match, ways, from: trim, to: drive.lat.length - trim })) {   // keep the longest run per (way, direction)
       const byBin = new Map();
       for (const p of run.pts) (byBin.get(p.bin) ?? byBin.set(p.bin, []).get(p.bin)).push(p.i);
@@ -88,7 +110,7 @@
         bins.push({ i: b, cam: cam.length ? +mean(cam).toFixed(2) : null, rough: +Math.min(1.5, mean(rough)).toFixed(3),
                     // crest: the phone's signed vertical g (- = going light); the server keeps the peak unweighting, 0..3 g
                     crest: crest.length ? +Math.min(3, Math.max(0, -Math.min(...crest))).toFixed(3) : null, k: k.length ? +mean(k).toFixed(5) : null,
-                    fl: flow.fl, hb: flow.hb });
+                    fl: flow.fl, hb: flow.hb, bp: binBump(bumps, ids) });
       }
       if (bins.length < MIN_BINS) continue;
       const span = bins[bins.length - 1].i - bins[0].i + 1;
@@ -217,7 +239,7 @@
   // deliberate: a recorded drive (Start), not ambient sharing. hourBucket(): the busy-time bucket to send, or null (quiet_hours off).
   function createLive({ Core, post, fetch: fetchFn, driveId, drivenOn, chunk = 100, lag = privateEdge(), skip = privateEdge(), ctx = 20, retryMs = 30000, maxRetryMs = 300000, now = Date.now, onStatus,
     deliberate = false, hourBucket: bucketFn = null, carry = root.ApexRoadCarry || null, rows = null, pending0 = null, maxRun = 2000 }) {
-    const A = { lat: [], lon: [], rough: [], camber: [], crest: [], speed: [], lon_g: [] };
+    const A = { lat: [], lon: [], rough: [], camber: [], crest: [], speed: [], lon_g: [], vpeak: [] };
     if (rows) for (const k of Object.keys(A)) A[k] = Array.isArray(rows[k]) ? rows[k].slice(0, rows.lat.length) : rows.lat.map(() => null);
     const wayCache = {}, HOLD = MIN_BINS + 5;
     let done = 0, busy = false, stopped = false, retryAt = 0, fails = 0, bins = 0, chunks = 0, error = null, pending = Array.isArray(pending0) ? pending0.slice() : [];
@@ -261,7 +283,7 @@
         if (!pending.length) {
           const lo = Math.max(0, from - ctx), hi = Math.min(n, to + ctx);
           const slice = { lat: A.lat.slice(lo, hi), lon: A.lon.slice(lo, hi), rough: A.rough.slice(lo, hi), camber: A.camber.slice(lo, hi), crest: A.crest.slice(lo, hi), cam_v: CAM_V,   // push() kept only fixed-pipeline camber
-                          speed: A.speed.slice(lo, hi), lon_g: A.lon_g.slice(lo, hi), rec: recorded() };
+                          speed: A.speed.slice(lo, hi), lon_g: A.lon_g.slice(lo, hi), vpeak: A.vpeak.slice(lo, hi), rec: recorded() };
           const hb = bucket();
           if (hb != null) slice.hr = hb;
           slice.kappa = Array.from(Core.computeCurvature(slice.lat, slice.lon).kappa);
@@ -270,7 +292,7 @@
           for (let i = 0; i < match.length; i++) if (i < from - lo || i >= end - lo) match[i] = null;     // context only helps the matcher
           const need = [...new Set(match.filter((m) => m && m.way != null).map((m) => m.way))].filter((id) => !wayCache[id]);
           if (need.length) Object.assign(wayCache, await fetchWays(need, fetchFn));
-          pending = buildContributions({ drive: slice, match, ways: wayCache, drivenOn, driveId, trimM: 0 });
+          pending = buildContributions({ drive: slice, match, ways: wayCache, drivenOn, driveId, trimM: 0, Core });
           done = end;
         }
         while (pending.length) {                                         // a failed post keeps the exact payload, so a resend is merged once
@@ -288,7 +310,7 @@
       finally { busy = false; status(); }
     }
     return {
-      /** One 5 m row from the recorder: { lat, lon, roughness_rms, camber_deg?, camber_v?, crest?, speed_mps?, lon_g? }. Never blocks. */
+      /** One 5 m row from the recorder: { lat, lon, roughness_rms, camber_deg?, camber_v?, crest?, speed_mps?, lon_g?, vert_peak_g? }. Never blocks. */
       push(row) {
         recorded();
         A.lat.push(row.lat); A.lon.push(row.lon);
@@ -296,6 +318,7 @@
         A.rough.push(Number.isFinite(row.roughness_rms) ? row.roughness_rms : null);
         A.camber.push(row.camber_v === CAM_V && Number.isFinite(row.camber_deg) ? row.camber_deg : null);   // an older build's camber: unknown
         A.crest.push(Number.isFinite(row.crest) ? row.crest : null);
+        A.vpeak.push(Number.isFinite(row.vert_peak_g) ? row.vert_peak_g : null);
         if (pending.length || A.lat.length - Math.max(done, skip) - lag >= chunk) run();
       },
       stats: () => ({ km: bins * BIN_M / 1000, chunks, stopped, error, pending: pending.length, rows: A.lat.length }),
@@ -359,7 +382,7 @@
         trip.rec.add(fr);
         while (trip.idx < trip.rec.rows.length) {
           const x = trip.rec.rows[trip.idx++];
-          trip.live.push({ lat: x.lat, lon: x.lon, roughness_rms: x.roughness_rms, camber_deg: x.camber_deg, camber_v: x.camber_v, crest: x.crest_vertical_g, speed_mps: x.speed_mps, lon_g: x.lon_g });
+          trip.live.push({ lat: x.lat, lon: x.lon, roughness_rms: x.roughness_rms, camber_deg: x.camber_deg, camber_v: x.camber_v, crest: x.crest_vertical_g, speed_mps: x.speed_mps, lon_g: x.lon_g, vert_peak_g: x.vert_peak_g });
         }
         if (trip.live.stats().stopped) { end(); pausedUntil = t + pauseS * 1000; status(); }
       },
@@ -404,7 +427,7 @@
     if (!roads) return null;
     const runs = locate({ drive: route, match, ways }), s = seriesFrom(runs, roads, route.lat.length);
     // the driven curvature along it (IDEAS Q-04), per sample, for correcting the map's corners
-    return { ...summarize(runs, roads, route.lat.length), crowdK: s.k, crowdKn: s.kn };
+    return { ...summarize(runs, roads, route.lat.length), crowdK: s.k, crowdKn: s.kn, crowdBumps: s.bumps };
   }
   /**
    * Per-sample measured series along a route: { cam[], rough[], n[], cn[], csd[], rsd[], k[], kn[] } with null where no member has measured
@@ -413,7 +436,7 @@
    */
   function seriesFrom(runs, roads, total) {
     const blank = () => new Array(total).fill(null);
-    const cam = blank(), rough = blank(), n = blank(), cn = blank(), csd = blank(), rsd = blank(), k = blank(), kn = blank();
+    const cam = blank(), rough = blank(), n = blank(), cn = blank(), csd = blank(), rsd = blank(), k = blank(), kn = blank(), bumps = [];
     const at = (a, j) => (a && a[j] != null ? a[j] : null);
     for (const run of runs) {
       const d = roads[run.way] && roads[run.way][run.dir]; if (!d) continue;
@@ -424,8 +447,36 @@
         cn[p.i] = d.cn ? d.cn[j] : null; csd[p.i] = at(d.csd, j); rsd[p.i] = at(d.rsd, j);
         k[p.i] = at(d.k, j); kn[p.i] = at(d.kn, j);
       }
+      // crowd-verified bumps (IDEAS Q-02, roads.ts verifiedBumps): [bin, posterior] on this road+direction, at the first
+      // sample of the route in that bin
+      if (Array.isArray(d.bp)) for (const [bin, p] of d.bp) {
+        const hit = run.pts.find((q) => q.bin === bin);
+        if (hit && finite(p) && !bumps.some((b) => b.index === hit.i)) bumps.push({ index: hit.i, p });
+      }
     }
-    return { cam, rough, n, cn, csd, rsd, k, kn };
+    bumps.sort((a, b) => a.index - b.index);
+    return { cam, rough, n, cn, csd, rsd, k, kn, bumps };
+  }
+
+  /**
+   * The route's pace-note events for crowd-verified bumps (IDEAS Q-02): one 'bump' event per verified bump on the track
+   * ({ lat[], lon[], dist[] }), marked `crowd` with its posterior, none within SAME_BUMP_M of a bump the track already has.
+   * Verified means several members felt it, so the co-driver may call it in cruise too (cockpit.js noteworthyInCruise).
+   */
+  const SAME_BUMP_M = 30;
+  function bumpEvents(track, bumps, existing = []) {
+    if (!track || !Array.isArray(track.lat) || !Array.isArray(bumps)) return [];
+    const dist = track.dist || track.lat.map((_, i) => i * BIN_M), out = [];
+    const taken = (existing || []).filter((e) => e && e.type === 'bump' && finite(e.dist_m)).map((e) => e.dist_m);
+    for (const b of bumps) {
+      const i = b && b.index;
+      if (!Number.isInteger(i) || i < 0 || i >= track.lat.length || !finite(dist[i])) continue;
+      if (taken.some((m) => Math.abs(m - dist[i]) < SAME_BUMP_M)) continue;
+      taken.push(dist[i]);
+      out.push({ type: 'bump', code: 'BUMP', call: 'Bump', index: i, dist_m: dist[i], start_m: dist[i], end_m: dist[i],
+                 lat: track.lat[i], lon: track.lon[i], severity_g: null, crowd: { p: b.p } });
+    }
+    return out;
   }
 
   // Passes that agree within these spreads make a measurement trustworthy (camber: phone mounts and lines differ by ~1 deg;
@@ -509,6 +560,6 @@
     return Math.round(100 * (1 - Math.max(0, Math.min(1, (m.roughness - 0.08) / 0.30))));
   }
 
-  const api = { CAM_V, binFlow, hourBucket, shapeOf, createLive, privateEdge, createAmbient, driveIdFor, measuredSeries, seriesFrom, agreement, AGREE, measuredAdjust, surfaceScore, measuredAlong, summarize, locate, buildContributions, matchDrive, fetchWays, contributeDrive, eligible, project, cumulative, SKIP_CLASSES };
+  const api = { CAM_V, binFlow, bumpEvidence, binBump, bumpEvents, hourBucket, shapeOf, createLive, privateEdge, createAmbient, driveIdFor, measuredSeries, seriesFrom, agreement, AGREE, measuredAdjust, surfaceScore, measuredAlong, summarize, locate, buildContributions, matchDrive, fetchWays, contributeDrive, eligible, project, cumulative, SKIP_CLASSES };
   if (typeof module !== 'undefined' && module.exports) module.exports = api; else root.ApexContributor = api;
 })(typeof window !== 'undefined' ? window : globalThis);
