@@ -10,6 +10,14 @@
   `unavoided` → `cameras` within `CAMERA_ON_M` 35 m (route.has.cameras), so keepAvoiding drops it when another doesn't.
 - Tests: tests/test_avoid_cameras.py (+3), tests/test_graph_router.py avoidCameras, e2e "avoid cameras" (speed camera too).
 - Not done: loops don't take `avoid.cams` (only A→B plans go through avoidForTrip).
+## Session 2026-11-11 (ui-round-two, PR 3): Settings and the sheets over a page in the Vetta Line (claude/project-thread-5sbga7)
+
+- web/signature.css, new block "the sheets over a page": `.side-pop` rises on `--lift-2` (no top rule), grabber as the
+  deck's, title 26 px Barlow (`min-width: 0`, the Done/back key `flex: none`), no rule under the head (the first row's
+  hairline divides). controls.css `.switch` is a `--well` with no frame; the chosen key keeps its ink fill, no drop edge.
+  The `.sw` slide switch is unchanged (the owner's "hard to tell if they're on or off").
+- Tests: tests/test_sheets_line.py. e2e Settings, Options, units, crew, roadbook, duel, People, Garage, night pass here.
+- Next: the crew page's own head and the route card's Share box; the Log's sub-pages if anything there still boxes.
 ## Session 2026-11-11 (roam-c-migration-guard): migration numbers can't clash (claude/roam-c-migration-guard, off origin/main 936aec3)
 
 - tests/test_migrations.py: names NNNN_words.sql, numbers unique from 0001 (the message says which number to take; gaps are
@@ -62,7 +70,13 @@
   `web/analysis_client.js` `OBS_VERSION` 2.
 - Tests: tests/test_touch.py (7: planted rates read back within 15 %, quick, coarse g gives none, parity, words); e2e
   "Your driving" checks no panel for once-a-second g and the panel's words.
-- Next: IDEAS D-29, Pace in Your driving (speed-based; never a Work on). Then touch by kind of corner and month.
+- Pace (IDEAS D-29, second PR): `MEASURES = SKILLS + ("pace",)` in both ports; observe adds `pace` (the Score's
+  `_pace_credit`); profile reads it for levels, matrix, trend/change and `pace_findings` (kept apart from `findings`),
+  plus `pace.over` (share of corners over the sane limit). Never strongest/focus/practice. `web/driver_profile.js`
+  `paceLines`, the `.dp-pace` panel, a Pace row in By kind of corner; apex_core exports `PACE_CEILING`, `paceCredit`.
+  Tests: tests/test_pace_profile.py (5); e2e "Your driving" checks the panel. APP_REVIEW 1.4 row added.
+- Next: touch by kind of corner and month (does the release get gentler?); a drive's own touch on its Log page; the end
+  card could say "3rd this week" for time attack (another thread's next).
 
 ## Session 2026-11-11 (ui-round-two, PR 1): the Log in the Vetta Line (claude/project-thread-5sbga7, off origin/main)
 

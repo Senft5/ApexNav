@@ -4382,7 +4382,11 @@ flow('Your driving: the profile over every drive opens from the Log, names the w
   check(/From 108 clean corners on 3 drives/.test(text), 'what it is read from: ' + text.slice(0, 120));
   check(/One steering arc is weaker through rights: \d+ against 100 through lefts, on 3 of 3 drives\./.test(text), 'the weak side is named: ' + text);
   check(/Work on: One steering arc\s+It shows most through rights\./.test(text), 'the focus says where');
-  check(await page.evaluate(() => document.querySelector('.dp-st.weak').dataset.skill === 'arc' && document.querySelectorAll('.dp-st').length === 6), 'six stations, the weak one marked');
+  check(await page.evaluate(() => document.querySelector('.dp-st.weak').dataset.skill === 'arc' && document.querySelectorAll('.dp-st:not([data-skill="pace"])').length === 6), 'six stations, the weak one marked');
+  // IDEAS D-29: pace beside them, in its own panel, and never the one to work on
+  const pace = await page.evaluate(() => { const p = document.querySelector('#drivingRoot .dp-pace'); return p ? p.innerText : null; });
+  check(pace && /Your pace/.test(pace) && /\b\d{1,3}\b/.test(pace) && /sane limit/.test(pace) && !/Work on/.test(pace), 'the pace panel: ' + pace);
+  check(!/Work on: Pace/.test(text), 'pace is never the thing to work on');
   check(!/mph|km\/h|\d s\b/.test(text), 'never a speed or a time');
   check(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth), 'nothing wider than the phone');
   // touch: these drives' g runs straight between fixes (as recordings before ten readings a second did), so there is none
@@ -5432,6 +5436,25 @@ flow('road page: About a road shows its archetype, axes and how sure it is (IDEA
   await page.waitForFunction(() => /climbing/.test(document.querySelector('aside.side-pop.open .rp-head').textContent), null, { timeout: 10000 });
   const head = await page.textContent('aside.side-pop.open .rp-head');
   check(/climbing [\d,]+ ft$/.test(head) && !/object/i.test(head), 'the climb in feet: ' + head);
+  check(!/On this road|members felt/.test(await page.textContent('aside.side-pop.open')), 'signed out: nothing said about hazards');
+  await page.click('aside.side-pop.open button:has-text("Close")');
+  // a member: bumps members felt and a live gravel report on the road, a cleared one left out (Q-13 verified hazards)
+  await page.evaluate(() => {
+    ApexSync.member = async () => ({ signed_in: true, member: true });
+    const realFetch = ApexSync.apiFetch;
+    ApexSync.apiFetch = async (path, o) => (/^\/api\/hazards\?/.test(path)
+      ? new Response(JSON.stringify([{ id: 'a', kind: 'gravel', lat: 35 + 50 / 110540, lon: -83, confirms: 3, clears: 0 },
+        { id: 'b', kind: 'animal', lat: 35 + 60 / 110540, lon: -83, confirms: 1, clears: 2 }]), { headers: { 'content-type': 'application/json' } })
+      : realFetch(path, o));
+    ApexContributor.measuredAlong = async () => ({ coverage: 0, avgPasses: 0, crowdBumps: [{ index: 40, p: 0.9 }] });
+    const lat = [], lon = []; let x = 0, y = 0, h = Math.PI / 2;
+    const step = (n, turn) => { for (let i = 0; i < n; i++) { h += turn; x += 5 * Math.cos(h); y += 5 * Math.sin(h); lat.push(35 + y / 110540); lon.push(-83 + x / 91190); } };
+    step(20, 0); for (let k = 0; k < 8; k++) { step(10, (k % 2 ? 1 : -1) * Math.PI / 10); step(16, 0); } step(20, 0);
+    window.apexDebug.openRoadPage({ lat, lon, name: 'Test Pass', km: lat.length * 5 / 1000, junctionsPerKm: 0.2 });
+  });
+  await page.waitForFunction(() => /Bump members felt/.test(document.querySelector('aside.side-pop.open').textContent), null, { timeout: 10000 });
+  const onRoad = await page.textContent('aside.side-pop.open');
+  check(/Gravel\s*at [\d.]+ (mi|ft|km|m) · 3 confirmed/.test(onRoad) && !/Animal/.test(onRoad), 'the live report, not the cleared one: ' + onRoad.slice(0, 600));
   await page.click('aside.side-pop.open button:has-text("Close")');
   check(!(await page.isVisible('aside.side-pop.open[aria-label="About this road"]')), 'closes');
 });
