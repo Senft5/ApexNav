@@ -4241,7 +4241,7 @@ flow('crew drives: an upcoming drive shows on People, Crews, as the crew page’
     const json = (b, status = 200) => route.fulfill({ status, contentType: 'application/json', body: JSON.stringify(b) });
     if (u.pathname === '/api/me') return json({ signed_in: true, member: true, handle: 'me' });
     if (u.pathname === '/api/crews' && m === 'GET') return json([{ id: 'CREW1', name: 'Ridge Runners', role: 'member', members: 3, visibility: 'private' }]);
-    if (u.pathname === '/api/events/near') return json([{ id: 'MEET1AAAAAAAAAAA', crew_id: 'CREW9', crew_name: 'Coffee & Cars', title: 'Sunday coffee', starts_at: starts,
+    if (u.pathname === '/api/events/near') return json([{ id: 'MEET1AAAAAAAAAAA', crew_id: 'CREW9', crew_name: 'Coffee & Cars', title: 'Sunday coffee', repeat_weeks: 1, starts_at: starts,
       meet_name: 'Kroger lot', meet_lat: 39.3, meet_lon: -84.6, notes: null, going: 7, member: false, km: 12 }]);   // VI-1: near the map's centre, as the phone measures it
     if (u.pathname === '/api/events') return json([{ id: 'EVT1AAAAAAAAAAAA', crew_id: 'CREW1', crew_name: 'Ridge Runners', title: 'Cherohala <i>Saturday</i>', starts_at: starts,
       meet_name: 'Tellico Shell', meet_lat: 35.36, meet_lon: -84.29, route_id: null, notes: null, by_handle: 'bob', mine: false, can_cancel: false, my_rsvp: mine, going: ['bob', 'cara'], maybe: 1,
@@ -4282,7 +4282,7 @@ flow('crew drives: an upcoming drive shows on People, Crews, as the crew page’
   await page.waitForSelector('.drive-card:not(.meet-card) .cp-more-body');
   check((await page.textContent('.drive-card:not(.meet-card)')).includes('Going: @bob, @cara · 1 maybe'), 'More names who is going');
   await page.waitForSelector('.meet-card');
-  check(/Sunday coffee/.test(await page.textContent('.meet-card')) && /7 going/.test(await page.textContent('.meet-card')) && /Meets near you/.test(await page.evaluate(() => document.querySelector('.meet-card').closest('.side-pop, #sheet').textContent)), 'a public meet nearby');   // in a crew: under the crew's Upcoming drives
+  check(/Sunday coffee/.test(await page.textContent('.meet-card')) && /7 going/.test(await page.textContent('.meet-card')) && /Every \w+day · Coffee & Cars/.test(await page.textContent('.meet-card')) && /Meets near you/.test(await page.evaluate(() => document.querySelector('.meet-card').closest('.side-pop, #sheet').textContent)), 'a public meet nearby');   // in a crew: under the crew's Upcoming drives
   await page.click('.drive-card:not(.meet-card) .switch button:text-is("Going")');
   await page.waitForFunction(() => document.querySelector('.drive-card:not(.meet-card) .switch button[aria-checked="true"]')?.textContent === 'Going');   // the answer is a slide switch
   check(posted.some(([p, b]) => p === '/api/events/EVT1AAAAAAAAAAAA/rsvp' && b.status === 'going'), 'the answer was sent');
@@ -4347,10 +4347,12 @@ flow('crew drives: an upcoming drive shows on People, Crews, as the crew page’
   check(/Meeting point: Tellico Plains Shell/.test(await page.textContent(`${W} .plan-drive`)), 'the meeting point by search');
   const formH = await page.$eval(`${W} .plan-drive`, (f) => f.getBoundingClientRect().height);
   check(formH < 852, `the form fits one phone screen (${Math.round(formH)} px)`);
+  await page.click(`${W} [aria-label="Repeats"] button:has-text("Weekly")`);
+  check(await page.isVisible(`${W} [aria-label="Repeats"] button.on:has-text("Weekly")`), 'repeats weekly (S-13)');
   await page.click(`${W} button:has-text("Plan it")`);
-  await page.waitForFunction(() => /Drive planned/.test(document.getElementById('toast').textContent));
+  await page.waitForFunction(() => /^Planned: Every \w+day\. Each one is planned when the last one starts\.$/.test(document.getElementById('toast').textContent));
   const plan = posted.find(([p]) => p === '/api/crews/CREW1/events');
-  check(plan && plan[1].title === 'Dragon run' && /Z$/.test(plan[1].starts_at) && plan[1].meet.name === 'Tellico Plains Shell' && Math.abs(plan[1].meet.lat - 35.3601) < 1e-6 && plan[1].route_id === null && plan[1].public === false, 'the plan was sent: ' + JSON.stringify(plan));
+  check(plan && plan[1].title === 'Dragon run' && /Z$/.test(plan[1].starts_at) && plan[1].meet.name === 'Tellico Plains Shell' && Math.abs(plan[1].meet.lat - 35.3601) < 1e-6 && plan[1].route_id === null && plan[1].public === false && plan[1].repeat_weeks === 1, 'the plan was sent: ' + JSON.stringify(plan));
   check(plan[1].lead === undefined && plan[1].sweep === null && plan[1].regroup.length === 0, 'you lead; the rest is set on the card');
 });
 

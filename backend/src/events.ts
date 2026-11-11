@@ -47,10 +47,54 @@ async function roleHolder(env: Env, crewId: string, handle: unknown): Promise<st
 
 const VISIBLE = (e: string) => `${e}.cancelled = 0 AND NOT ${reportedSql("event", `${e}.id`)}`;
 
+export const REPEATS = [1, 2, 4] as const, ROLL_MAX = 50;
+/** repeat_weeks from a request: 1, 2 or 4 weeks, or null (once). */
+function repeatOf(x: unknown): number | null {
+  if (x === undefined || x === null || x === 0) return null;
+  if (!(REPEATS as readonly unknown[]).includes(x)) throw new HttpError(400, "bad_repeat");
+  return x as number;
+}
+/** The next date of a series: the same UTC time, `weeks` later, stepped on until it is in the future. Pure. */
+export function nextStart(startsAt: string, weeks: number, nowMs: number): string {
+  let t = Date.parse(startsAt.replace(" ", "T") + "Z");
+  const step = weeks * 7 * 86400000;
+  do t += step; while (t <= nowMs);
+  return new Date(t).toISOString().slice(0, 19).replace("T", " ");
+}
+/**
+ * Recurring meets (S-13): each series' latest drive that has started plans the next one (same crew, planner, title, meet,
+ * route, notes, listing and regroup; the planner going, no other answers or roles carried) and hands it the repeat.
+ * Never while the planner has left the crew, nor for a cancelled or reported drive. Run on read and in the daily sweep;
+ * a guard on series_id means two at once plan it once.
+ */
+export async function rollRepeats(env: Env): Promise<number> {
+  const due = (await env.DB.prepare(
+    `SELECT e.id, e.crew_id, e.created_by, e.title, e.starts_at, e.meet_name, e.meet_lat, e.meet_lon, e.route_id, e.notes, e.public, e.regroup, e.repeat_weeks, COALESCE(e.series_id, e.id) AS series
+       FROM crew_events e WHERE e.repeat_weeks IS NOT NULL AND e.starts_at <= datetime('now') AND ${VISIBLE("e")}
+        AND EXISTS (SELECT 1 FROM crew_members m WHERE m.crew_id = e.crew_id AND m.user_id = e.created_by) LIMIT ${ROLL_MAX}`)
+    .all<{ id: string; crew_id: string; created_by: string; title: string; starts_at: string; meet_name: string | null; meet_lat: number; meet_lon: number; route_id: string | null;
+      notes: string | null; public: number; regroup: string; repeat_weeks: number; series: string }>()).results;
+  let n = 0;
+  for (const e of due) {
+    const claim = await env.DB.prepare("UPDATE crew_events SET repeat_weeks = NULL, series_id = ? WHERE id = ? AND repeat_weeks IS NOT NULL").bind(e.series, e.id).run();
+    if (!claim.meta.changes) continue;                               // another request planned it
+    const id = randomToken(12);
+    await env.DB.batch([
+      env.DB.prepare(`INSERT INTO crew_events (id, crew_id, created_by, title, starts_at, meet_name, meet_lat, meet_lon, route_id, notes, public, lead_id, regroup, repeat_weeks, series_id)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`).bind(id, e.crew_id, e.created_by, e.title, nextStart(e.starts_at, e.repeat_weeks, Date.now()), e.meet_name, e.meet_lat, e.meet_lon,
+        e.route_id, e.notes, e.public, e.created_by, e.regroup, e.repeat_weeks, e.series),
+      env.DB.prepare("INSERT INTO crew_event_rsvps (event_id, user_id, status) VALUES (?, ?, 'going')").bind(id, e.created_by),
+    ]);
+    n++;
+  }
+  return n;
+}
+
 export async function eventCreate(env: Env, v: Viewer, crewId: string, req: Request) {
   if (!(await isCrewMember(env, crewId, v.id))) throw new HttpError(404, "no_crew");
   const b = await body<{ title?: unknown; starts_at?: unknown; meet?: { name?: unknown; lat?: unknown; lon?: unknown }; route_id?: unknown; notes?: unknown; public?: unknown;
-    lead?: unknown; sweep?: unknown; regroup?: unknown }>(req);
+    lead?: unknown; sweep?: unknown; regroup?: unknown; repeat_weeks?: unknown }>(req);
+  const repeat = repeatOf(b.repeat_weeks);
   const title = cleanText(b.title, 60)?.trim();
   if (!title) throw new HttpError(400, "bad_title");
   const when = startsAt(b.starts_at);
@@ -85,9 +129,9 @@ export async function eventCreate(env: Env, v: Viewer, crewId: string, req: Requ
   if ((upcoming?.n ?? 0) >= MAX_UPCOMING) throw new HttpError(429, "too_many_events");
   const id = randomToken(12);
   await env.DB.batch([
-    env.DB.prepare(`INSERT INTO crew_events (id, crew_id, created_by, title, starts_at, meet_name, meet_lat, meet_lon, route_id, notes, public, lead_id, sweep_id, regroup)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`).bind(id, crewId, v.id, title, when, meetName, Math.round(lat * 1e5) / 1e5, Math.round(lon * 1e5) / 1e5, routeId, notes, listed ? 1 : 0,
-      lead, sweep, JSON.stringify(regroup)),
+    env.DB.prepare(`INSERT INTO crew_events (id, crew_id, created_by, title, starts_at, meet_name, meet_lat, meet_lon, route_id, notes, public, lead_id, sweep_id, regroup, repeat_weeks, series_id)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`).bind(id, crewId, v.id, title, when, meetName, Math.round(lat * 1e5) / 1e5, Math.round(lon * 1e5) / 1e5, routeId, notes, listed ? 1 : 0,
+      lead, sweep, JSON.stringify(regroup), repeat, repeat ? id : null),
     env.DB.prepare("INSERT INTO crew_event_rsvps (event_id, user_id, status) VALUES (?, ?, 'going')").bind(id, v.id),
   ]);
   return { id };
@@ -95,14 +139,15 @@ export async function eventCreate(env: Env, v: Viewer, crewId: string, req: Requ
 
 interface EventRow { id: string; crew_id: string; crew_name: string; title: string; starts_at: string; meet_name: string | null; meet_lat: number; meet_lon: number;
   route_id: string | null; notes: string | null; public: number; by_handle: string | null; mine: number; can_cancel: number; my_rsvp: string | null; going: string; maybe: number;
-  lead: string | null; sweep: string | null; regroup: string; call_sign: string | null }
+  lead: string | null; sweep: string | null; regroup: string; call_sign: string | null; repeat_weeks: number | null; series_id: string | null }
 
 /** Upcoming drives (from SHOW_AFTER_START_H ago) in one crew, or in all your crews; each with who's going (handles). */
 export async function eventsList(env: Env, v: Viewer, crewId: string | null) {
   if (crewId && !(await isCrewMember(env, crewId, v.id))) throw new HttpError(404, "no_crew");
+  await rollRepeats(env);
   const rows = (await env.DB.prepare(
     `SELECT e.id, e.crew_id, c.name AS crew_name, e.title, e.starts_at, e.meet_name, e.meet_lat, e.meet_lon, e.route_id, e.notes, e.public,
-            u.handle AS by_handle, (e.created_by = ?1) AS mine, e.regroup, c.call_sign,
+            u.handle AS by_handle, (e.created_by = ?1) AS mine, e.regroup, c.call_sign, e.repeat_weeks, e.series_id,
             (SELECT lu.handle FROM users lu JOIN crew_members lm ON lm.user_id = lu.id AND lm.crew_id = e.crew_id WHERE lu.id = e.lead_id) AS lead,
             (SELECT su.handle FROM users su JOIN crew_members sm ON sm.user_id = su.id AND sm.crew_id = e.crew_id WHERE su.id = e.sweep_id) AS sweep, (e.created_by = ?1 OR c.owner = ?1) AS can_cancel,
             (SELECT status FROM crew_event_rsvps r WHERE r.event_id = e.id AND r.user_id = ?1) AS my_rsvp,
@@ -130,10 +175,11 @@ export const NEAR_KM = 80;
  */
 export async function eventsNear(env: Env, v: Viewer, url: URL) {
   const { lat, lon } = nearCell(url);                                     // VI-1: the 0.1-degree cell, never the point
+  await rollRepeats(env);
   const reach = NEAR_KM + CELL_COVER_KM;
   const dLat = reach / 111.2, dLon = reach / (111.32 * Math.max(0.2, Math.cos(lat * Math.PI / 180)));
   const rows = (await env.DB.prepare(
-    `SELECT e.id, e.crew_id, c.name AS crew_name, e.title, e.starts_at, e.meet_name, e.meet_lat, e.meet_lon, e.notes,
+    `SELECT e.id, e.crew_id, c.name AS crew_name, e.title, e.starts_at, e.meet_name, e.meet_lat, e.meet_lon, e.notes, e.repeat_weeks,
             (SELECT COUNT(*) FROM crew_event_rsvps g JOIN crew_members gm ON gm.crew_id = e.crew_id AND gm.user_id = g.user_id
               WHERE g.event_id = e.id AND g.status = 'going') AS going,
             EXISTS (SELECT 1 FROM crew_members me WHERE me.crew_id = e.crew_id AND me.user_id = ?1) AS member
@@ -142,7 +188,7 @@ export async function eventsNear(env: Env, v: Viewer, url: URL) {
         AND e.starts_at > datetime('now') AND e.meet_lat BETWEEN ?2 AND ?3 AND e.meet_lon BETWEEN ?4 AND ?5
         AND NOT EXISTS (SELECT 1 FROM blocks b WHERE (b.blocker = ?1 AND b.blocked = e.created_by) OR (b.blocker = e.created_by AND b.blocked = ?1))
       ORDER BY e.starts_at LIMIT 100`).bind(v.id, lat - dLat, lat + dLat, lon - dLon, lon + dLon)
-    .all<{ id: string; crew_id: string; crew_name: string; title: string; starts_at: string; meet_name: string | null; meet_lat: number; meet_lon: number; notes: string | null; going: number; member: number }>()).results;
+    .all<{ id: string; crew_id: string; crew_name: string; title: string; starts_at: string; meet_name: string | null; meet_lat: number; meet_lon: number; notes: string | null; repeat_weeks: number | null; going: number; member: number }>()).results;
   const km = (r: { meet_lat: number; meet_lon: number }) => Math.hypot((r.meet_lat - lat) * 111.2, (r.meet_lon - lon) * 111.32 * Math.cos(lat * Math.PI / 180));
   return rows.map((r) => ({ ...r, member: !!r.member, starts_at: r.starts_at.replace(" ", "T") + "Z", km: Math.round(km(r)) }))
     .filter((r) => r.km <= reach).slice(0, 20);
@@ -205,8 +251,12 @@ export async function eventCancel(env: Env, v: Viewer, id: string) {
 export async function eventUpdate(env: Env, v: Viewer, id: string, req: Request): Promise<void> {
   const e = await visibleEvent(env, v, id);
   if (e.created_by !== v.id && e.owner !== v.id) throw new HttpError(403, "not_yours");
-  const b = await body<{ notes?: unknown; regroup?: unknown; public?: unknown; lead?: unknown; sweep?: unknown }>(req);
+  const b = await body<{ notes?: unknown; regroup?: unknown; public?: unknown; lead?: unknown; sweep?: unknown; repeat_weeks?: unknown }>(req);
   const sets: string[] = [], args: unknown[] = [];
+  // repeat: set or stopped on the series' latest drive (it is the one that plans the next)
+  if (b.repeat_weeks !== undefined && await env.DB.prepare(`SELECT 1 FROM crew_events l JOIN crew_events e ON e.id = ?1
+      WHERE l.series_id = COALESCE(e.series_id, e.id) AND l.id != e.id AND l.starts_at > e.starts_at AND l.cancelled = 0`).bind(id).first()) throw new HttpError(409, "not_latest");
+  if (b.repeat_weeks !== undefined) { const r = repeatOf(b.repeat_weeks); sets.push("repeat_weeks = ?", "series_id = COALESCE(series_id, CASE WHEN ? IS NOT NULL THEN id END)"); args.push(r, r); }
   if (b.notes !== undefined) {
     const notes = b.notes === null || b.notes === "" ? null : cleanText(b.notes, 280)?.trim() || null;
     if (b.notes && !notes) throw new HttpError(400, "bad_notes");

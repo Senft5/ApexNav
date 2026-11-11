@@ -17,6 +17,16 @@ it says so. Things only you can do are in docs/OWNER_TODO.md.
 - Tapping Log in the first seconds after install showed a blank screen with no tabs until it loaded. Now the map stays
   usable with a short "Opening your Log…" and the Log opens when ready (a different tab cancels it). Undo: the
   `logFrame.want` branch in cockpit.js openLog.
+## 2026-11-11 (recurring meets): a crew drive can repeat weekly, every 2 or every 4 weeks (claude/project-thread-uwmi4e)
+
+Crews that meet every Saturday had to plan the same drive by hand each week. A drive can now repeat (Repeats: Once,
+Weekly, Every 2 weeks, Every 4 weeks). Calls I made: only the newest drive of a series carries the repeat, and the next
+one is planned when that one starts (on read and in the daily sweep), so there is only ever one upcoming drive to
+answer; the planner is marked Going on the new one and nobody else's answers carry over; cancelling it, setting it to
+Once, or the planner leaving the crew ends the series; editing an older drive in a series is refused (409). Add to
+calendar puts the series in once with a weekly rule.
+
+Undo: revert the PR. Migration 0053 only adds two columns to `crew_events`; the old code ignores them.
 ## 2026-11-11 (places by name, 2): in a drive, the next fuel stop's stamp says which station (claude/project-thread-me97iw)
 
 While driving a planned route the map keeps only the next fuel stop's stamp; it now reads "FUEL · Shell" instead of FUEL
