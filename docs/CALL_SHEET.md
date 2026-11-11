@@ -11,6 +11,16 @@ OpenStreetMap has for it, how far into the route and how far off the road; tappi
 a stop. Tapping a CAFÉ or FUEL pin on the map says its name too. Calls: fuel stations are now counted on the line (before,
 only a long stretch without fuel was said), so there is something to tap; a place with no name on the map says "no name on
 the map" rather than a guess. Undo: revert the PR.
+## 2026-11-11 (social round two): For you, and a People badge that counts what's new (claude/project-thread-uwmi4e)
+
+People → Friends now opens with For you: a friend topping your best Score on one of your stages, someone passing your
+time in this week's time attack, kudos, a duel accepted or won, new followers of your roadbooks, a crew drive you haven't
+answered. The People tab's badge counts those until you've looked, plus requests and duels waiting on you, and it's
+there from launch, not only after People has been opened. I kept "seen" on the phone instead of the server, so there's no
+migration and nothing new is stored about you; the cost is that a second phone shows the same items as new once.
+Roadbook followers are counted, never named, because a public book's followers can be strangers.
+
+Undo: revert the PR (no data changed).
 ## 2026-11-11 (routing round three): our router reads measured crests and verified bumps (claude/project-thread-39xbx9)
 
 Roads members measured going light over their crests (0.15 g or more, two or more passes) now count as more character in
@@ -33,6 +43,23 @@ A planned route with a long, steep way down now says so on its card, under the c
 3.7 mi at 8%. A lower gear saves the brakes." It comes from the map's terrain (the same heights as the climb line), not from a
 model: 300 m or more of drop at 5 % or steeper counts, which is the kind of hill where brakes fade. Ordinary hills say
 nothing. Undo: revert the PR (one line on the card goes away).
+## 2026-11-11 (round two analysis): corner-speed steadiness is shown in mph, beside the braking spread (claude/project-thread-gd7nre)
+
+- What: the Log drive page's repeatable-corners list now also says how steady your turn-in point and your speed at the slowest
+  point are over your passes of each corner ("speed at the slowest point within 2 mph").
+- Why: you asked for more speed-based features; a steady corner speed is a speed figure that rewards repeatability, not going
+  faster. It is a spread, never a target speed.
+- Undo: drop the two `turn_sd_m`/`speed_sd_mps` clauses in web/drive_view.js (the figures can stay in the coach).
+
+## 2026-11-11 (round two analysis): Your year's areas need no map lookup, and crew drives are counted on the phone (claude/project-thread-gd7nre)
+
+"Where you drove" groups your drives within 40 km of one another and names each area after the road you drove most
+there. That avoids a reverse-geocoding service, so no position leaves the phone. Crew drives are counted from a short
+list the phone keeps (drive id, crew name, start time), because the server deletes attendance a week after each drive;
+keeping it longer on the server would have been a privacy change. Drives before today aren't in the count.
+
+Undo: drop the `areas` and `crews` lines in year_review.js `lines`, and `noteCame` in crew_events.js.
+
 ## 2026-11-11 (roam-c-boot-budget): an e2e check on what the map page loads and runs before it is ready (claude/roam-c-boot-budget)
 
 New e2e flow "startup budget" (IDEAS P-06): it loads index.html and fails if the page needs more than 3.6 MB of its own

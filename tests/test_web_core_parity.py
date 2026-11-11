@@ -172,7 +172,7 @@ def test_parity_coach_on_real_drives():
     keys = ["2026-09", "2026-09", "2026-09", "2026-09", "2026-09", "2026-10", None]
     runner = (f"const KEYS={json.dumps(keys)};"
               "const c=require(process.argv[1]);const cases=JSON.parse(require('fs').readFileSync(0,'utf8'));"
-              "process.stdout.write(JSON.stringify(cases.map(([a,o])=>{const r=c.coach(a,o);r.dev=c.spreadBy(r,KEYS);return r;})));")
+              "process.stdout.write(JSON.stringify(cases.map(([a,o])=>{const r=c.coach(a,o);r.dev=c.spreadBy(r,KEYS);r.vdev=c.spreadBy(r,KEYS,'speed');return r;})));")
     out = subprocess.run([NODE, "-e", runner, os.path.abspath("web/apex_core.js")], input=json.dumps(cases),
                          capture_output=True, text=True, check=True)
     tips = 0
@@ -194,6 +194,10 @@ def test_parity_coach_on_real_drives():
                     if k == "marks":
                         assert cj["spread"][k] == v                                       # whole multiples of 5 m, or None
                         continue
+                    if k == "speed_marks":
+                        assert [f for f, _ in cj["spread"][k]] == [f for f, _ in v]
+                        assert [x for _, x in cj["spread"][k]] == pytest.approx([x for _, x in v], rel=1e-9)
+                        continue
                     assert cj["spread"][k] == (None if v is None else pytest.approx(v, rel=1e-9, abs=1e-9)), k
             else:
                 assert "spread" not in cj
@@ -202,6 +206,8 @@ def test_parity_coach_on_real_drives():
                     for k, v in cp[side].items():
                         assert cj[side][k] == (None if v is None else pytest.approx(v, rel=1e-9, abs=1e-9)), k
     assert tips > 0 and py[1]["clean"] > 0 and py[1]["gain_s"] > 0
+    sps = [c["spread"] for r in py for c in r["corners"] if c.get("spread")]
+    assert any(x["turn_sd_m"] for x in sps) and any(x["speed_sd_mps"] for x in sps)   # line and corner-speed spreads are compared too
     kinds = lambda r: [c["tip"]["kind"] for c in r["corners"] if c["tip"]]
     assert "turn_in_later" in kinds(py[6])                                         # turned in sooner than the quicker pass
     assert "turn_in_later" not in kinds(py[4]) + kinds(py[5])                      # same steering, other GPS traces: no such tip
@@ -211,6 +217,12 @@ def test_parity_coach_on_real_drives():
         for k, v in by.items():
             assert [x[0] for x in j["dev"][k]] == [x[0] for x in v]
             assert [x[1] for x in j["dev"][k]] == pytest.approx([x[1] for x in v], rel=1e-12)
+        vby = da.spread_by(p, keys, "speed")                                       # corner speed per period, the same way
+        assert sorted(j["vdev"]) == sorted(vby)
+        for k, v in vby.items():
+            assert [x[0] for x in j["vdev"][k]] == [x[0] for x in v]
+            assert [x[1] for x in j["vdev"][k]] == pytest.approx([x[1] for x in v], rel=1e-9)
+    assert da.spread_by(py[5], keys, "speed")                                      # five passes in a month give a speed spread
     assert da.spread_by(py[5], keys) and da.spread_by(py[3], keys) == {}             # five passes in a month give figures, four none
     assert "2026-10" not in da.spread_by(py[5], keys)                                 # one pass in October says nothing
     whole = [c["spread"]["brake_sd_m"] for c in py[5]["corners"] if c.get("spread") and c["spread"]["brake_passes"] >= 5]
@@ -501,6 +513,30 @@ def test_corner_spread_is_sensor_noise_proof_but_sees_real_variation():
     early = dict(base, lon_g=base["lon_g"][6:] + base["lon_g"][-6:])
     sp = [c["spread"]["brake_sd_m"] for c in da.coach(base, [base, early, early])["corners"] if c.get("spread") and c["spread"]["brake_sd_m"] is not None]
     assert sp and max(sp) >= 20
+
+
+def test_corner_spread_reads_turn_in_and_corner_speed():
+    """Line and corner-speed consistency (D-07, D-18): where you turned in and how fast you were at the slowest point, from pass
+    to pass. The same driving through sensor noise stays steady; passes 8 % slower, or turning in 25 m sooner, spread it."""
+    from core import drive_analysis as da
+    if not os.path.exists("web/data/dry_ridge.js"):
+        pytest.skip("no shipped drive data")
+    base = _dry_ridge_pass()
+    n = len(base["lat"])
+    rng = np.random.default_rng(5)
+    noisy = [dict(base, lat_g=list(np.array(base["lat_g"]) + rng.normal(0, 0.02, n)),
+                  speed_mps=list(np.array(base["speed_mps"]) + rng.normal(0, 0.15, n))) for _ in range(3)]
+    sp = [c["spread"] for c in da.coach(base, noisy)["corners"] if c.get("spread")]
+    assert sum(x["turn_sd_m"] is not None for x in sp) >= 3 and sum(x["speed_sd_mps"] is not None for x in sp) >= 3
+    assert all(x["turn_sd_m"] is None or x["turn_sd_m"] < 10 for x in sp)
+    assert all(x["speed_sd_mps"] is None or x["speed_sd_mps"] < 0.5 for x in sp)
+    assert all(x["speed_passes"] == x["passes"] for x in sp)                       # every clean pass has a slowest speed
+    slow = dict(base, speed_mps=[v * 0.92 for v in base["speed_mps"]])
+    sp = [c["spread"]["speed_sd_mps"] for c in da.coach(base, [base, slow, slow])["corners"] if c.get("spread") and c["spread"]["speed_sd_mps"] is not None]
+    assert sp and max(sp) >= 0.5
+    early = dict(base, lat_g=base["lat_g"][5:] + base["lat_g"][-5:])
+    sp = [c["spread"]["turn_sd_m"] for c in da.coach(base, [base, early, early])["corners"] if c.get("spread") and c["spread"]["turn_sd_m"] is not None]
+    assert sp and max(sp) >= 15
 
 
 def test_corner_marks_take_this_corners_braking_and_one_dip():
