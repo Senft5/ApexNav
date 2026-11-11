@@ -51,7 +51,8 @@ function text(v: unknown, field: string, max: number, required = true): string |
   return t.trim();
 }
 
-/** A member's own pseudonym for stamps: one keyed hash of who they are, never their id. */
+/** A member's own pseudonym for stamps: one keyed hash of who they are (the same for all their stamps, so export and
+ *  delete can find them), never their id. Without the server's key it can't be turned back into anyone. */
 async function holderOf(env: Env, userId: string): Promise<ArrayBuffer> {
   if (!env.PEPPER) throw new HttpError(503, "stamps_not_configured");
   const key = await crypto.subtle.importKey("raw", new TextEncoder().encode(env.PEPPER), { name: "HMAC", hash: "SHA-256" }, false, ["sign"]);

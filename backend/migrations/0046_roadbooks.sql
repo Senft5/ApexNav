@@ -42,8 +42,10 @@ CREATE TABLE roadbook_follows (
 ) WITHOUT ROWID;
 CREATE INDEX roadbook_follows_user ON roadbook_follows(user_id);
 
--- A stamp says "this member drove this road" without the table saying who: holder is an hmac of the member and the road
--- under the server's key (as rank_slots and road_hour_holders do), so a copy of the database names nobody.
+-- A stamp says "this member drove this road" without the table saying who: holder is an hmac of the member alone under the
+-- server's key (roadbooks.ts holderOf), so a copy of the database names nobody. It is one pseudonym per member, not per
+-- road, so the stamps of one member can be told apart from another's (never who they are): that is what lets the export
+-- list them and Delete account remove them without a user id in the table.
 CREATE TABLE roadbook_stamps (
   road_id     TEXT NOT NULL REFERENCES roadbook_roads(id) ON DELETE CASCADE,
   holder      BLOB NOT NULL,
