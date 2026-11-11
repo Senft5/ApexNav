@@ -196,6 +196,12 @@
 - e2e: that flow checks every row has a key and a line, the three surface words, Who sees me under Friends, panel on screen.
 - Next: the drive screen has not had a design pass.
 
+## Session 2026-11-10 (fable-no-orphan-key): three friend keys no longer leave a hole (claude/fable-no-orphan-key, off origin/main 51c8c4c)
+
+- [x] web/index.html `.friend-keys > :last-child:nth-child(odd) { grid-column: 1 / -1; }`. tests/test_friend_keys.py;
+  e2e "People: two tabs" reads the last key's span for a friend with three keys and one with four.
+- Looked over with the flows' fixtures and left as they are: the Friends list, a friend's profile, a crew's page.
+
 ## Session 2026-11-10 (fable-polish-7): the Settings list in groups, with values (claude/fable-polish-7, off origin/main 1a38381)
 
 - [x] web/garage_settings.js: `GROUPS` (a group's name goes before its first key, hidden while all its rows are),

@@ -241,6 +241,14 @@ Not changed: what any switch does, the Co-driver half (Notes, Voice, music).
 
 Undo: revert the PR.
 
+## 2026-11-10 (fable-no-orphan-key): a friend's third key takes the row (claude/fable-no-orphan-key)
+
+On People, a friend's row opens on two columns of keys. A friend who shares no position has three (Share a route,
+Invite to a drive, Profile), so Profile sat in the left half of a second row beside a hole. An odd last key now takes
+the whole row; two and four keys are unchanged. One CSS rule.
+
+Undo: revert the PR.
+
 ## 2026-11-10 (fable-polish-7): design pass 7: Settings is three short lists, and each row says what it is set to (claude/fable-polish-7)
 
 Behind the Garage's gear was one list of eleven rows that said nothing: to learn whether Crash check was on or which

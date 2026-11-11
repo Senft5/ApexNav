@@ -4218,6 +4218,10 @@ flow('People: two tabs; a request is a card on top, then you, then friends with 
   check(/Shared Cherohala loop · /.test(cara) && /What @cara sees of you/.test(cara) && !/Unfriend|Block/.test(cara) && !(await page.isVisible('#accountBody .friend:has-text("@cara") .friend-grants')), 'her last share, a quiet grants row, no Unfriend: ' + cara);
   check(!!(await page.$('#accountBody .friend:has-text("@bob") .friend-keys button:has-text("On the map")')), 'bob shares a delayed position: On the map too');
   check(!(await page.$('#accountBody .friend:has-text("@eve") .friend-keys button:text-is("On the map")')), 'no On the map for a friend who shares nothing');
+  // three keys (eve): the third takes the row, it does not sit in half of it beside a hole; four (cara) stay two and two
+  const spans = await page.evaluate(() => Object.fromEntries(['@eve', '@cara'].map((h) => { const row = [...document.querySelectorAll('#accountBody .friend')].find((f) => f.textContent.includes(h));
+    const keys = [...row.querySelectorAll('.friend-keys > *')]; return [h, { n: keys.length, end: getComputedStyle(keys[keys.length - 1]).gridColumnEnd }]; })));
+  check(spans['@eve'].n === 3 && spans['@eve'].end === '-1' && spans['@cara'].n === 4 && spans['@cara'].end === 'auto', 'an odd last key spans the row: ' + JSON.stringify(spans));
   await page.click('#accountBody .friend:has-text("@cara") .nav-row.quiet');
   check(await page.isVisible('#accountBody .friend:has-text("@cara") .friend-grants [role="switch"][aria-checked="true"]'), 'the quiet row opens her Scores and Times');
   // P-09: Who sees what, from her row, her line marked
