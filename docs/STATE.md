@@ -1,5 +1,15 @@
 # VETTA — CURRENT AGENT HANDOFF STATE
 
+## Session 2026-11-10 (fable-road-page): About a road: the climb's "[object Object]" fixed; scores as named bars (claude/fable-road-page, off origin/main 3f2f315)
+
+- Bug: `openRoadPage` passed `ApexUnits.short` (returns `{ n, u }`) as the headline's height formatter, so a road with a
+  climb read "descending [object Object]". Now `heightLabel` (feet or metres).
+- `web/road_page.js`: `rows()` is gone; `meters(d)` (Technical, Flow, Surface, Clear road: label, hint, value or null)
+  and `facts(d)` (Corners, Blind corners, How sure in words). `web/cockpit.js` draws `.rp-meter` (name, number, bar,
+  hint) and `.rp-fact` rows; CSS in `web/index.html`.
+- Tests: tests/test_road_page.py (plain words, unknown stays null, the climb formatter); e2e "road page…" (names, the
+  empty bar for an unknown score, bar length = score, the climb in feet with a stubbed terrain profile).
+
 ## Session 2026-11-10 (fable-pin-names): pins and tapped places by name; the spot dialog's stars (claude/fable-pin-names, off origin/main e76f1bb)
 
 - `web/cockpit.js`: `setFieldPin(field, point, name)` / `pinIn` / `fieldPin` beside `resolvePlace(q, field)`: Go here,
@@ -20,6 +30,13 @@
   its text, used by `exploreNear`. route_card.js `stats` label "corner" for one; drive_view.js habits; analysis.html `segInfo`.
 - Tests: tests/test_route_card.py; e2e "plan flow (c)".
 - Next: CarPlay has not had a design pass in this run (Swift, not visible from the cloud).
+
+## Session 2026-11-10 (fable-your-data): Your data as Settings-style rows (claude/fable-your-data, off origin/main 3f2f315)
+
+- `web/index.html` only: the Your data section's keys are `.nav-rows.data-rows` with three `.nav-group` headings; the
+  ids are the same (`myGpxBtn` … `myEraseBtn`), so cockpit.js and the tests reach them as before. `.nav-row.danger`.
+- Cohesion pass notes (Nate 2026-11-10 15:12): compared Options, Best roads nearby, Ways to go, About a road, Settings
+  and its eleven sheets side by side. Left alone: Done (a sheet that sets things) vs Close (a sheet that shows things).
 
 ## Session 2026-11-10 (merger): e2e time limit 35 min (claude/project-thread-er8kzz)
 
@@ -100,6 +117,13 @@
 - Next: two cards can share a name (both "Southeast"); a finer name (16 points, or the road it is built on) if it reads
   badly on real roads. The 1 hour / 2 hours loops sit in Options; the card's Length row is miles only.
 
+## Session 2026-11-10 (fable-paths-are-keys): the empty Spots list has an Add one key (claude/fable-paths-are-keys, off origin/main dc9caf9)
+
+- [x] web/spots_feed.js: the empty note is text plus `btn('Add one', page.addSpot, 'linkbtn')`; web/cockpit.js hands
+  `addSpot` (`showView('garage')`, `ApexGarageSettings.ui.open('spots')`). web/incident.js: the note without arrows.
+- [x] tests/test_paths_are_keys.py (3); e2e flow "a path is a key".
+- Next: Your data's "Settings → Account → Delete account" note as a key, once #358 is in.
+
 ## Session 2026-11-10 (fable-one-loop-home): Options' duplicate loop-by-time keys removed (claude/fable-one-loop-home, off origin/main 01fa773)
 
 - web/index.html: `#fitCtl` holds only `#fitRow` (My free time, This album) and is `hidden` until cockpit.js finds
@@ -118,6 +142,16 @@
 - [x] Tests: tests/test_people_no_connection.py (5); e2e "no connection: People is a page…" (/api aborted: both phone
   sizes, both sides, the Garage, offline event, Try again, online event brings People back).
 - Next design pass candidates: the lower Garage blocks (How this works, Pro), the Options sheet's long list.
+
+## Session 2026-11-10 (fable-settings-values): Road feel, Route tuning and Spots rows have values (claude/fable-settings-values, off origin/main dc9caf9)
+
+- [x] web/garage_settings.js `summaryOf`: a node with `data-summary-text` says it itself. web/cockpit.js `paintTuning`
+  sets it on `#garageTuneBody` ("Standard" / "N changed"; removed when `ApexRouteTuning.allowed` is false), again on
+  every change. web/index.html: `data-summary` on roadfeel (`#garageRoadFeelBody .sw`), tuning, spots (`#hlList`,
+  count "spot,spots").
+- [x] tests/test_garage_settings.py (summaryText case, the three selectors, the tuning source test); e2e "Settings
+  behind the gear" checks Spots None, Route tuning Standard, 1 changed after a slider, Standard after Reset.
+- Next: Your data, Feedback and About have nothing to say, which is right; nothing queued here.
 
 ## Session 2026-11-10 (fable-end-card): design pass 9, the drive-ended card (claude/fable-end-card, off origin/main 01fa773)
 

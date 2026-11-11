@@ -3586,6 +3586,25 @@ flow("what's new: shown once after an update, not on a first install, not over a
   } finally { await fresh.close(); }
 }, { news: true });
 
+flow('a path is a key: no shared spots near here offers "Add one", which opens Settings on Spots (it read "Garage → Settings → Spots")', async (page, base) => {
+  await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); } catch (_) {} });
+  await page.route('**/api/**', (route) => {
+    const u = new URL(route.request().url());
+    return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(u.pathname === '/api/me' ? { signed_in: true, member: true, handle: 'me' } : []) });
+  });
+  await page.goto(base + '/index.html');
+  await page.waitForFunction(() => window.apexDebug && window.apexDebug.map && !document.getElementById('boot'));
+  await page.click('#destInput');
+  await page.waitForSelector('#planSpots:not([hidden]) > summary');
+  await page.click('#planSpots > summary');
+  await page.waitForSelector('#planSpots p.note button.linkbtn');
+  const note = await page.textContent('#planSpots p.note');
+  check(note === 'No shared spots near here yet. Add one' && !note.includes('→'), 'the note and its key: ' + note);
+  await page.click('#planSpots p.note button.linkbtn');
+  await page.waitForSelector('.garage-pop.open[data-setting="spots"]');
+  check(await page.evaluate(() => document.getElementById('sheet').dataset.view === 'garage' && document.getElementById('sheet').classList.contains('open')), 'the Garage is open on Spots');
+});
+
 flow('crew drives: an upcoming drive shows on People, Crews, as the crew page’s card; Going answers it; the planner sets it up under More; Plan a drive is one screen with a Meet at search; spots near you (Worker stubbed, IDEAS S-06, S-12, REVIEW_PEOPLE.md P-10, P-18)', async (page, base) => {
   await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); } catch (_) {} });
   const posted = [];
@@ -4510,6 +4529,9 @@ flow('Settings behind the gear: three short lists, each row saying what it is se
   check(groups.join('|') === 'Sharing and safety|How the app reads|You and Vetta' && a[0].group, 'three lists, each under its name: ' + JSON.stringify(a.map((x) => x.group || x.row)));
   check(say['Units'] === 'Miles and feet' && say['Map motion'] === 'Lean' && say['Privacy zones'] === 'None' && /^(On|Off)$/.test(say['Crash check']) && say['Reminder'] === 'Off', 'each row says what it is set to: ' + JSON.stringify(say));
   check(say['Feedback'] === '' && say['About Vetta'] === '', 'a row with nothing to say says nothing: ' + JSON.stringify(say));
+  // the three that said nothing: Spots counts yours, Route tuning says Standard until a slider moves; Road feel has no
+  // switch to read while signed out, so it still says nothing
+  check(say['Spots'] === 'None' && say['Route tuning'] === 'Standard' && say['Road feel'] === '', 'Spots, Route tuning and Road feel: ' + JSON.stringify(say));
   check(rows.every((r) => r.h >= 44 && !r.cut && !r.wide), 'every row a thumb tall, its value whole: ' + JSON.stringify(rows.filter((r) => r.h < 44 || r.cut || r.wide)));
   check(rows.find((r) => r.row === 'Units').label === 'Units: Miles and feet' && rows.find((r) => r.row === 'Feedback').label === 'Feedback', 'read aloud with its value: ' + JSON.stringify(rows.map((r) => r.label)));
   // change one in its sheet, come back: the row has it
@@ -4520,6 +4542,19 @@ flow('Settings behind the gear: three short lists, each row saying what it is se
   await page.waitForFunction(() => !document.querySelector('.garage-pop[data-setting="units"]').classList.contains('open'));
   const b = Object.fromEntries((await list()).filter((x) => x.row).map((r) => [r.row, r.says]));
   check(b['Units'] === 'Kilometres and metres', 'back on the list, Units says what you just chose: ' + JSON.stringify(b));
+  // a slider moved in Route tuning is counted on its row
+  await page.click('#garageSettings .nav-row[data-setting="tuning"]');
+  await page.waitForSelector('.garage-pop[data-setting="tuning"].open input[type="range"]');
+  await page.evaluate(() => { const s = document.querySelector('.garage-pop[data-setting="tuning"] input[type="range"]'); s.value = String(Number(s.value) === Number(s.max) ? s.min : s.max);
+    s.dispatchEvent(new Event('input', { bubbles: true })); s.dispatchEvent(new Event('change', { bubbles: true })); });
+  await page.click('.garage-pop[data-setting="tuning"] .side-pop-head .linkbtn');
+  const c0 = Object.fromEntries((await list()).filter((x) => x.row).map((r) => [r.row, r.says]));
+  check(c0['Route tuning'] === '1 changed', 'Route tuning counts the slider you moved: ' + JSON.stringify(c0));
+  await page.click('#garageSettings .nav-row[data-setting="tuning"]');
+  await page.click('#tuneReset');
+  await page.click('.garage-pop[data-setting="tuning"] .side-pop-head .linkbtn');
+  const c1 = Object.fromEntries((await list()).filter((x) => x.row).map((r) => [r.row, r.says]));
+  check(c1['Route tuning'] === 'Standard', 'and says Standard again after Reset: ' + JSON.stringify(c1));
   await page.evaluate(() => document.querySelector('[data-units="imperial"]').click());
 }, { viewport: { width: 393, height: 852 }, hasTouch: true });
 
@@ -4736,8 +4771,24 @@ flow('road page: About a road shows its archetype, axes and how sure it is (IDEA
   await page.waitForSelector('aside.side-pop.open[aria-label="About this road"]');
   const text = await page.textContent('aside.side-pop.open');
   check(/Test Pass/.test(text) && /Switchbacks/.test(text), 'name and archetype: ' + text.slice(0, 200));
-  check(/TECH/.test(text) && /FLOW/.test(text) && /L0 · From the map only/.test(text), 'axes and confidence');
-  check(/SURF--/.test(text.replace(/\s+/g, '')), 'no member data: SURF unknown');
+  // 2026-11-10: plain names with what they mean, a bar each, and how sure in words (it said TECH, FLOW, SURF, CLEAR and "L0")
+  check(/Technical/.test(text) && /Flow/.test(text) && /How sure\s*From the map only/.test(text) && !/TECH|SURF|\bL0\b/.test(text), 'the scores by name, how sure in words: ' + text.slice(0, 300));
+  const meters = await page.evaluate(() => [...document.querySelectorAll('aside.side-pop.open .rp-meter')].map((m) => ({ name: m.querySelector('.rp-name').textContent, v: m.querySelector('b').textContent, fill: m.querySelector('.rp-bar i').getBoundingClientRect().width, bar: m.querySelector('.rp-bar').getBoundingClientRect().width, hint: m.querySelector('small').textContent })));
+  const surf = meters.find((m) => m.name === 'Surface'), tech = meters.find((m) => m.name === 'Technical');
+  check(meters.length === 4 && surf.v === '--' && surf.fill === 0 && /not measured/.test(surf.hint), 'no member data: Surface is --, its bar empty: ' + JSON.stringify(surf));
+  check(Math.abs(tech.fill / tech.bar - Number(tech.v) / 100) < 0.02, 'a bar is as long as its score: ' + JSON.stringify(tech));
+  // with the terrain known the first line says the climb as a height in the driver's units (it read "climbing [object Object]")
+  await page.click('aside.side-pop.open button:has-text("Close")');
+  await page.evaluate(() => {
+    ApexStages.profile = async (t) => t.lat.map((_, i) => 300 + i * 0.5);
+    const lat = [], lon = []; let x = 0, y = 0, h = Math.PI / 2;
+    const step = (n, turn) => { for (let i = 0; i < n; i++) { h += turn; x += 5 * Math.cos(h); y += 5 * Math.sin(h); lat.push(35 + y / 110540); lon.push(-83 + x / 91190); } };
+    step(20, 0); for (let k = 0; k < 8; k++) { step(10, (k % 2 ? 1 : -1) * Math.PI / 10); step(16, 0); } step(20, 0);
+    window.apexDebug.openRoadPage({ lat, lon, name: 'Test Pass', km: lat.length * 5 / 1000, junctionsPerKm: 0.2 });
+  });
+  await page.waitForFunction(() => /climbing/.test(document.querySelector('aside.side-pop.open .rp-head').textContent), null, { timeout: 10000 });
+  const head = await page.textContent('aside.side-pop.open .rp-head');
+  check(/climbing [\d,]+ ft$/.test(head) && !/object/i.test(head), 'the climb in feet: ' + head);
   await page.click('aside.side-pop.open button:has-text("Close")');
   check(!(await page.isVisible('aside.side-pop.open[aria-label="About this road"]')), 'closes');
 });
@@ -5655,6 +5706,11 @@ flow('REVIEW.md 1.2 screen by screen: the Log, drive detail, Stages, People sign
   const g = await page.evaluate(() => { const s = document.getElementById('sheet'), e = getComputedStyle(document.getElementById('myEraseBtn'));
     return { title: s.querySelector('h2').textContent, themes: document.querySelectorAll('#themeCards > *').length, how: document.querySelectorAll('[data-panel~="garage"] details.how').length, octane: /Octane/.test(document.body.innerText), erase: e.color + '/' + e.textDecorationLine + '/' + e.borderTopStyle }; });
   check(g.title === 'Garage' && g.themes === 3 && g.how >= 2 && !g.octane && g.erase === 'rgb(200, 16, 46)/none/none', 'Garage: ' + JSON.stringify(g));
+  // 2026-11-10: Your data is the Settings list's rows in three groups (it was eight keys of eight widths): one left edge, one width
+  const rowsOf = await page.evaluate(() => { const box = document.querySelector('.data-rows'); return { groups: [...box.querySelectorAll('.nav-group')].map((h) => h.textContent),
+    rows: [...box.querySelectorAll('.nav-row')].map((r) => { const b = r.getBoundingClientRect(); return [r.id, Math.round(b.left), Math.round(b.width), Math.round(b.height)]; }) }; });
+  check(rowsOf.groups.join() === 'Take a copy,Offline,Remove' && rowsOf.rows.length === 7 && new Set(rowsOf.rows.map((r) => r[1] + '/' + r[2])).size === 1 && rowsOf.rows.every((r) => r[3] >= 44),
+    'Your data: seven rows in three groups, one edge and width, 44 pt or more: ' + JSON.stringify(rowsOf));
   let alerted = false; page.on('dialog', (d) => { alerted = true; d.dismiss(); });
   await page.evaluate(() => document.getElementById('myEraseBtn').click());
   await page.waitForSelector('.confirm-sheet [role="alertdialog"], .confirm-sheet .cs-box[role="alertdialog"]');
