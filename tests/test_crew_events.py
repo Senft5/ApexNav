@@ -30,6 +30,8 @@ const early = { ...e, starts_at: '2026-10-31T05:00:00Z' }, te = Date.parse(early
 out.early = [E.convoyOpen(early, te - 1.5 * 3600e3), E.convoyOpen(early, te - 3 * 3600e3)];
 out.ics = E.icsFor(e, Date.parse('2026-10-30T14:00:00Z'));
 out.iso = [E.isoFromInputs('2026-11-01', '09:00'), E.isoFromInputs('2026-11-01', ''), E.isoFromInputs('11/01/2026', '09:00')];
+out.repeat = [E.repeatText(1, '2026-10-31T13:00:00Z', 'en-US'), E.repeatText(2, '2026-10-31T13:00:00Z', 'en-US'), E.repeatText(4, '2026-10-31T13:00:00Z', 'en-US'), E.repeatText(null, '2026-10-31T13:00:00Z', 'en-US'), E.repeatText(3, 'x', 'en-US')];
+out.icsRepeat = E.icsFor({ ...e, repeat_weeks: 2, series_id: 'SER1' }, Date.parse('2026-10-30T14:00:00Z'));
 console.log(JSON.stringify(out));
 """
 
@@ -119,3 +121,9 @@ def test_convoy_time_left():
     run = lambda js: json.loads(subprocess.run([NODE, "-e", f"const C = require({json.dumps(str(src))}); console.log(JSON.stringify({js}));"], capture_output=True, text=True, check=True).stdout)
     assert run("[C.leftText(118 * 60000 + 5000, 0), C.leftText(12 * 60000 + 1, 0), C.leftText(120 * 60000, 0), C.leftText(30000, 0), C.leftText(NaN, 0)]") == \
         ["1 h 58 min left", "12 min left", "2 h left", "Ending", "--"]
+
+
+def test_recurring_meets_say_how_often_and_go_in_the_calendar_once(out):
+    assert out["repeat"] == ["Every Saturday", "Every other Saturday", "Every 4 weeks on Saturday", "", ""]
+    assert "RRULE:FREQ=WEEKLY;INTERVAL=2\r\n" in out["icsRepeat"] and "UID:SER1@apexnav" in out["icsRepeat"]
+    assert "RRULE" not in out["ics"]
