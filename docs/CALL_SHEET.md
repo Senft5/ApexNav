@@ -4,6 +4,11 @@ Decisions Claude made for you, newest first. Each one says what was decided, why
 you reach one you've seen. If you disagree with a call, say so and it gets reversed; nothing here is hard to undo unless
 it says so. Things only you can do are in docs/OWNER_TODO.md.
 
+## 2026-11-11 (places by name, 2): in a drive, the next fuel stop's stamp says which station (claude/project-thread-me97iw)
+
+While driving a planned route the map keeps only the next fuel stop's stamp; it now reads "FUEL · Shell" instead of FUEL
+when OpenStreetMap has its name (unnamed stays FUEL). Only that one stamp grows, so the map stays clear. Undo: revert the PR.
+
 ## 2026-11-11 (Valhalla for Quick only): Fun and Long way fail plainly instead of falling back (claude/project-thread-39xbx9)
 
 Your rule: Valhalla only for Quick. Fun and Long way now come from our own router or not at all. Where our road map doesn't
