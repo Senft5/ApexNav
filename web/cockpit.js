@@ -7171,10 +7171,10 @@
     window.apexDebug.placePlate = () => { placeAsk.at = 0; return refreshPlacePlate(); };   // e2e: ask now (the first ask waits 4 s for a fix)
     // ---- Your roads and a Sunday suggestion (panel round 1, D-1 and R-1; your_roads.js) ----------------------------------
     // The deck's first row names one real suggestion and its reason (a crew drive you're going to this week, the best road
-    // near you that you haven't driven, your best-scored road), else the loop as before; under it up to three of your own
+    // near you that you haven't driven, this week's time attack loop, your best-scored road), else the loop as before; under it up to three of your own
     // roads, each a tap from being driven again. Unknown stays unknown: nothing found, nothing said.
     const YR = window.ApexYourRoads;
-    const deckState = { all: [], dates: [], sugg: null, crew: null, untried: null, untriedAt: -Infinity, untriedLat: null, untriedLon: null };
+    const deckState = { all: [], dates: [], sugg: null, crew: null, attack: null, untried: null, untriedAt: -Infinity, untriedLat: null, untriedLon: null };
     const deckLong = (m) => ApexFormat.distance(m);                  // RA-3: one distance format everywhere
     async function refreshYourRoads() {
       if (!YR || !window.ApexAnalysis) return;
@@ -7282,7 +7282,7 @@
     function paintDeck() {
       if (!YR) return;
       untriedNow();
-      const sugg = YR.suggest({ crew: deckState.crew, untried: deckState.untried, mine: deckState.all, long: deckLong });
+      const sugg = YR.suggest({ crew: deckState.crew, attack: deckState.attack, untried: deckState.untried, mine: deckState.all, long: deckLong });
       deckState.sugg = sugg;
       paintLoopSuggest();
       // TestFlight 2026-11-05 ("takes up so much screen"): the suggestion and one row under it (it was two); the rest are a
@@ -7304,6 +7304,7 @@
     function suggestRoad(s) {
       if (s && s.kind === 'untried' && deckState.untried && deckState.untried.pick) { const st = deckState.untried.pick.s; return { key: 'stage:' + s.name, get: async () => st }; }
       if (s && s.kind === 'best' && s.id) return driveRoad(s.id);
+      if (s && s.kind === 'attack' && deckState.attack) { const g = deckState.attack.geom; return { key: 'ta:' + s.key, get: async () => ({ lat: g.map((p) => p[0]), lon: g.map((p) => p[1]) }) }; }
       return null;
     }
     function paintLoopSuggest() {
@@ -7318,7 +7319,7 @@
       }
       if (s) {
         $('loopSuggestTitle').textContent = s.title; $('loopSuggestWhy').textContent = s.reason; $('loopSuggestKey').textContent = 'Plan';   // finding 8: it plans; Start goes
-        const label = `${s.title}. ${s.reason}. ${s.kind === 'crew' ? 'Directions to the meeting point.' : 'Route it.'}`;
+        const label = `${s.title}. ${s.reason}. ${s.kind === 'crew' ? 'Directions to the meeting point.' : s.kind === 'attack' ? 'Directions to the start.' : 'Route it.'}`;
         $('loopSuggestGo').setAttribute('aria-label', label); body.setAttribute('aria-label', road ? `${s.title}. ${s.reason}. Show it on the map.` : label);
         return;
       }
@@ -7342,6 +7343,7 @@
       const s = deckState.sugg;
       if (s && s.kind === 'crew') { if (Number.isFinite(s.lat) && Number.isFinite(s.lon)) routeToPlace({ label: (deckState.crew && deckState.crew.label) || s.name, lat: s.lat, lon: s.lon }); return; }
       if (s && s.kind === 'best') { driveAgain(s.id, s.name); return; }
+      if (s && s.kind === 'attack') { routeToPlace({ label: s.name, lat: s.lat, lon: s.lon }); return; }
       if (s && s.kind === 'untried' && deckState.untried) { driveSuggested(deckState.untried); return; }
       if (!loopBusy) $('findLoopBtn').click();
     });
@@ -7462,7 +7464,7 @@
       if (state.toggles.nudge) {
         const sugg = deckState.sugg, day = YR.usualDay(deckState.dates);
         at = YR.nudgeAt({ now, day, crewAt: sugg && sugg.kind === 'crew' ? sugg.at : null, lastAt: st.last });
-        text = at ? YR.nudgeText(sugg, day) : null;
+        text = at ? YR.nudgeText(sugg, day, at) : null;
       }
       const key = at ? `${at}|${text.title}|${text.body}` : '';
       if (key !== (st.key || '')) {
@@ -7493,6 +7495,21 @@
       // "Location is off" sheet uses).
       toast('Notifications are off for Vetta. Turn them on in Settings, then here.', { label: 'Settings', onClick: () => { try { nudgeShell().postMessage({ cmd: 'openSettings' }); } catch (_) {} } });
     }
+    // This week's time attack loop in your area (time_attack.ts) as the deck's suggestion: first after a crew drive when you
+    // entered it, else after the road you haven't driven. Members only, with the drive-today check (every 10 min); the server
+    // is sent the middle of your 1-degree area, never where you are (time_attack.js areaPoint). No loop, nothing said.
+    function attackIs(a) {
+      const was = deckState.attack ? `${deckState.attack.key}|${deckState.attack.entered}|${deckState.attack.place}|${deckState.attack.times}|${deckState.attack.left}` : '';
+      deckState.attack = a;
+      if (was !== (a ? `${a.key}|${a.entered}|${a.place}|${a.times}|${a.left}` : '')) paintDeck();
+    }
+    async function refreshAttack() {
+      const p = state.lastPosition;
+      if (!p || !Number.isFinite(p.lat) || !Number.isFinite(p.lon)) return;   // no position yet: what was known stays
+      const at = { lat: Math.floor(p.lat) + 0.5, lon: Math.floor(p.lon) + 0.5 };
+      const t = await apiCall('GET', `/api/timeattack?lat=${at.lat}&lon=${at.lon}`).then((r) => (r && r.ok ? jsonOf(r) : null)).catch(() => null);
+      if (t) attackIs(YR ? YR.attackFrom(t) : null);
+    }
     // The morning of a crew drive you said you're going to (REVIEW.md roadmap 21, crew_events.js todayDrive): from 4 AM until an
     // hour after it starts, the idle map offers directions to the meeting point instead of the loop. Members only, every 10 min.
     let driveTodayEvent = null;
@@ -7502,7 +7519,8 @@
         const rows = await apiCall('GET', '/api/events').then(jsonOf).catch(() => null);
         e = ApexCrewEvents.todayDrive(rows);
         crewSoon(rows);                                                // panel R-1: a drive this week is the deck's suggestion
-      } else crewSoon(null);
+        await refreshAttack();
+      } else { crewSoon(null); attackIs(null); }
       driveTodayEvent = e;
       $('driveToday').hidden = !e;
       $('app').classList.toggle('drive-today-on', !!e);
@@ -7515,6 +7533,7 @@
     }
     $('driveToday').addEventListener('click', () => { const e = driveTodayEvent; if (e) routeToPlace({ label: e.meet_name || e.title, lat: e.meet_lat, lon: e.meet_lon }); });
     setTimeout(refreshDriveToday, 5000); setInterval(refreshDriveToday, 10 * 60000);
+    setTimeout(() => { if (!deckState.attack && accountMe && accountMe.member && navigator.onLine !== false) refreshAttack().catch(() => {}); }, 40000);   // the position comes late
     document.querySelectorAll('#loopDetents button').forEach(b => b.addEventListener('click', paintDeck));
     paintLoopSuggest();
     // ---- Look and voice: the theme picker (REVIEW.md 4.5) ---------------------------------------------------------------
@@ -9704,6 +9723,7 @@
         else if (p.go === 'end') { if (state.mode === 'live') leaveDrive(true); else toast('No drive to end.'); }
         else if (p.go === 'nextstage') nextStageAnswer();
         else if (p.go === 'skipstage') skipStage();
+        else if (p.go === 'nextfuel' || p.go === 'nextcafe') nextPlaceAnswer(p.go === 'nextfuel' ? 'fuel' : 'cafe');
         return;
       }
       showView(ok(p.crew) || ok(p.convoy) ? 'crews' : 'friends'); renderAccount();
@@ -9716,6 +9736,14 @@
       const line = !t || !t.stageSpans ? 'This route has no stages.' : !n ? 'No more stages on this route.'
         : n.on ? `On ${n.span.name || 'a stage'} now: ${ApexUnits.long(n.toM, 1)} to go.` : `Next stage${n.span.name ? `, ${n.span.name},` : ''} in ${ApexUnits.long(n.toM, 1)}.`;
       toast(line); say(line, true);
+    }
+    // Siri (the owner, 2026-11-11): "where's the next gas station / café" says the next one along the planned route by
+    // its name on the map (scenic.js nextAnswer); no route, or its places not loaded, says so.
+    function nextPlaceAnswer(kind) {
+      const t = track, at = state.mode === 'live' ? routeWatch.bestM : state.cursorM;
+      const list = t && t === plannedRoute && Array.isArray(t.scenic) ? t.scenic : null;
+      const line = window.ApexScenic ? ApexScenic.nextAnswer(list, at, kind, { long: (m) => ApexUnits.long(m, 1, true) }) : '';
+      if (line) { toast(line); say(line, true); }
     }
     // (span: the one to skip, a late loop's offer; none: the one you're on or the next)
     function skipStage(span) {

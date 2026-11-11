@@ -308,7 +308,7 @@
     return out;
   }
   /** A drive's corners against your other passes of the same road (port of driver_profile.road_records). */
-  const ROAD_MIN_PASSES = 3, SAME_CORNER_M = 20, SAME_WAY = 0.7;
+  const ROAD_MIN_PASSES = 3, SAME_CORNER_M = 20, SAME_WAY = 0.7, UNEVEN_LEVELS = 15, UNEVEN_MAX = 3;
   function roadRecords(mine, others, ids = null) {
     let corners = 0, best = 0, lvl = 0;
     const held = [], rows = [];
@@ -370,9 +370,11 @@
       if (c.by.size < ROAD_MIN_PASSES) continue;
       const rec = Math.max(...c.by.values());
       const by = [...c.by].filter(([, v]) => v === rec).map(([i]) => i).sort((a, b) => order.get(a) - order.get(b))[0];
-      out.push({ x: c.x, y: c.y, size: c.size, dir: c.dir, passes: c.by.size, record: rec, by, at: at.get(by) });
+      out.push({ x: c.x, y: c.y, size: c.size, dir: c.dir, passes: c.by.size, record: rec, low: Math.min(...c.by.values()), by, at: at.get(by) });
     }
-    return { corners: out, fewer: book.length - out.length, drives: (drives || []).length };
+    const wide = out.map((k, i) => i).filter((i) => out[i].record - out[i].low >= UNEVEN_LEVELS)
+      .sort((a, b) => (out[b].record - out[b].low) - (out[a].record - out[a].low) || a - b);
+    return { corners: out, fewer: book.length - out.length, drives: (drives || []).length, uneven: wide.slice(0, UNEVEN_MAX).map((i) => i + 1) };
   }
   /** A road book in words: { head, rows: [{ n, what ("Tight left"), record, by, on (day(at) or null), passes }] }, or null with
    *  no corner passed three times. head: "12 corners you have driven three or more times, in road order[; 5 more fewer times]." */
@@ -380,9 +382,12 @@
     if (!book || !Array.isArray(book.corners) || !book.corners.length) return null;
     const n = book.corners.length, more = book.fewer > 0 ? `; ${book.fewer} more fewer times` : '';
     const what = (c) => { const z = c.size ? c.size[0].toUpperCase() + c.size.slice(1) : 'A', w = c.dir === 'L' ? 'left' : c.dir === 'R' ? 'right' : 'corner'; return c.size ? `${z} ${w}` : (w === 'corner' ? 'Corner' : w[0].toUpperCase() + w.slice(1)); };
+    const uneven = book.uneven || [], list = (xs) => (xs.length < 2 ? String(xs[0]) : `${xs.slice(0, -1).join(', ')} and ${xs[xs.length - 1]}`);
     return {
       head: `${n} corner${n === 1 ? '' : 's'} you have driven three or more times, in road order${more}. Each with your cleanest pass and the drive it came on.`,
-      rows: book.corners.map((c, i) => ({ n: i + 1, what: what(c), record: c.record, by: c.by, on: c.at && day ? day(c.at) : null, passes: c.passes })),
+      // where on the road to work: the corners your passes differ most at (UNEVEN_LEVELS apart or more)
+      work: uneven.length ? `Least even: corner${uneven.length === 1 ? '' : 's'} ${list(uneven)}, where your passes differ the most.` : null,
+      rows: book.corners.map((c, i) => ({ n: i + 1, what: what(c), record: c.record, low: c.low === undefined ? null : c.low, uneven: uneven.includes(i + 1), by: c.by, on: c.at && day ? day(c.at) : null, passes: c.passes })),
     };
   }
   /** A corner row's note from roadRecords rows: "Your cleanest of 4 passes here (92)", "Level with your cleanest here (90,

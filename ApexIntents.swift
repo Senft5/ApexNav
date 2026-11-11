@@ -2,7 +2,8 @@ import AppIntents
 import Foundation
 
 /// Siri and Shortcuts (IDEAS V-07): "Start a drive in Vetta", "Report a hazard in Vetta", "End my drive in Vetta",
-/// "How far to the next stage in Vetta", "Skip this stage in Vetta".
+/// "How far to the next stage in Vetta", "Skip this stage in Vetta",
+/// "Where's the next gas station in Vetta", "Where's the next café in Vetta".
 /// Each opens the app and hands it the same apexnav://open?go=… link a widget or a Shortcuts automation would, so the
 /// page decides what happens (a report or an end only during a drive). Hands-free in the car: Siri, or "Hey Siri" on CarPlay.
 enum ApexIntentInbox {
@@ -52,6 +53,20 @@ struct SkipStageIntent: AppIntent {
     @MainActor func perform() async throws -> some IntentResult { ApexIntentInbox.deliver("skipstage"); return .result() }
 }
 
+struct NextFuelIntent: AppIntent {
+    static let title: LocalizedStringResource = "Next gas station"
+    static let description = IntentDescription("Says the next gas station along your route, by its name on the map, and how far it is.")
+    static let openAppWhenRun = true
+    @MainActor func perform() async throws -> some IntentResult { ApexIntentInbox.deliver("nextfuel"); return .result() }
+}
+
+struct NextCafeIntent: AppIntent {
+    static let title: LocalizedStringResource = "Next café"
+    static let description = IntentDescription("Says the next café along your route, by its name on the map, and how far it is.")
+    static let openAppWhenRun = true
+    @MainActor func perform() async throws -> some IntentResult { ApexIntentInbox.deliver("nextcafe"); return .result() }
+}
+
 struct ApexShortcuts: AppShortcutsProvider {
     static var appShortcuts: [AppShortcut] {
         AppShortcut(intent: StartDriveIntent(), phrases: ["Start a drive in \(.applicationName)", "Start driving with \(.applicationName)"],
@@ -64,5 +79,9 @@ struct ApexShortcuts: AppShortcutsProvider {
                     shortTitle: "Next stage", systemImageName: "road.lanes.curved.right")
         AppShortcut(intent: SkipStageIntent(), phrases: ["Skip this stage in \(.applicationName)", "Skip the stage in \(.applicationName)"],
                     shortTitle: "Skip this stage", systemImageName: "forward.end")
+        AppShortcut(intent: NextFuelIntent(), phrases: ["Where's the next gas station in \(.applicationName)", "Next fuel in \(.applicationName)"],
+                    shortTitle: "Next gas station", systemImageName: "fuelpump")
+        AppShortcut(intent: NextCafeIntent(), phrases: ["Where's the next café in \(.applicationName)", "Next coffee in \(.applicationName)"],
+                    shortTitle: "Next café", systemImageName: "cup.and.saucer")
     }
 }

@@ -4487,6 +4487,34 @@ flow('crew drive morning: the idle map offers directions to today\'s meeting poi
   check(await page.$eval('#loopSuggest', (b) => getComputedStyle(b).display === 'none'), 'it takes the loop invitation\'s place');
 });
 
+flow('time attack on the home deck: this week\'s loop you entered is the suggestion, with your place; the server gets only the area (Worker stubbed)', async (page, base) => {
+  await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); localStorage.setItem('apex.permsExplained', '1'); } catch (_) {} });
+  const day = (k) => new Date(Date.now() + k * 86400000).toISOString().slice(0, 10), asked = [];
+  await page.route('**/api/**', (route) => {
+    const u = new URL(route.request().url());
+    const json = (b) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(b) });
+    if (u.pathname === '/api/me') return json({ signed_in: true, member: true, handle: 'me' });
+    if (u.pathname === '/api/timeattack') {
+      asked.push(u.search);
+      return json({ week: day(-1), ends_on: day(2), today: day(0), cell: '35,-84', make: null, entered: true, entrants: 8,
+        circuit: { name: 'Tellico <i>loop</i>', length_m: 32187, segment_id: 'TA1', geom: JSON.stringify([[35.36, -84.29], [35.40, -84.20], [35.36, -84.29]]) },
+        board: [], you: { place: 3, handle: 'me', time_s: 1200, gap_s: 40, score: 700, mine: true }, last: null });
+    }
+    return json([]);
+  });
+  await page.goto(base + '/index.html');
+  await page.waitForFunction(() => window.apex && typeof window.apex.live === 'function');
+  await page.evaluate(() => { apexDebug.state.lastPosition = apexDebug.state.lastPosition || { lat: 35.9606, lon: -83.9207 }; });
+  await page.evaluate(() => document.querySelector('.tab[data-view="people"]').click());   // signs the page in (renderAccount)
+  await page.evaluate(() => document.querySelector('.tab[data-view="map"]').click());
+  await page.waitForFunction(() => /^Time attack/.test(document.getElementById('loopSuggestTitle').textContent), null, { timeout: 20000 });
+  const title = await page.textContent('#loopSuggestTitle'), why = await page.textContent('#loopSuggestWhy');
+  check(title === 'Time attack · Tellico <i>loop</i>' && why === 'You’re 3rd of 8 · 3 days left', 'the suggestion: ' + title + ' / ' + why);
+  check(/Directions to the start\.$/.test(await page.getAttribute('#loopSuggestGo', 'aria-label')), 'its key gives directions to the start');
+  check(await page.getAttribute('#loopSuggestShow', 'data-road') === 'ta:' + day(-1) + '|35,-84|TA1', 'its body draws the loop');
+  check(asked.length && asked.every((q) => q === '?lat=35.5&lon=-83.5'), 'only the middle of the area is sent: ' + JSON.stringify(asked));
+}, { geolocation: { latitude: 35.9606, longitude: -83.9207 }, permissions: ['geolocation'] });
+
 flow('drive tags: tag a drive in the Log, filter by it, the note stays on the phone (IDEAS D-23)', async (page, base) => {
   await page.goto(base + '/analysis.html');
   await page.waitForFunction(() => window.apexLogDebug && window.apexLogDebug.loaded() && window.ApexRecording);
@@ -4627,7 +4655,7 @@ flow('a drive\'s corners on a road driven four times: each says your cleanest pa
   const book = await page.evaluate(() => ({ head: document.getElementById('bookHead').textContent, rows: [...document.querySelectorAll('#bookList li')].map((li) => li.innerText.replace(/\s+/g, ' ').trim()),
     wide: document.documentElement.scrollWidth > document.documentElement.clientWidth }));
   check(/^\d+ corners? you have driven three or more times, in road order/.test(book.head) && book.rows.length >= road.rows.length
-    && book.rows.every((t) => /^\d+ (Tight|Medium|Fast) (left|right) \d{1,3} On \w{3} \d{1,2}, of 4 passes$/.test(t)) && !book.wide && !/mph|km\/h/.test(book.rows.join(' ')),
+    && book.rows.every((t) => /^\d+ (Tight|Medium|Fast) (left|right) \d{1,3} On \w{3} \d{1,2}, of 4 passes(; your least clean \d{1,3})?$/.test(t)) && !book.wide && !/mph|km\/h/.test(book.rows.join(' ')),
     'the road corner by corner: ' + JSON.stringify(book).slice(0, 400));
   await page.click('#bookList li .bk-by');
   await page.waitForFunction(() => /^r[0-3]$/.test(document.getElementById('dvPick').value) && !document.getElementById('tab-drive').hidden, null, { timeout: 20000 });
@@ -5452,6 +5480,9 @@ flow('Siri links: report and end act only during a drive, and say so otherwise (
   await page.waitForFunction(() => /no stages|No route/i.test(document.getElementById('toast').textContent));
   await page.evaluate(() => window.apex.onNative({ type: 'link', params: { go: 'skipstage' } }));
   await page.waitForFunction(() => /Skip a stage during a drive/.test(document.getElementById('toast').textContent));
+  // the next gas station or café with no route: it says so
+  await page.evaluate(() => window.apex.onNative({ type: 'link', params: { go: 'nextfuel' } }));
+  await page.waitForFunction(() => /^Plan a route to hear the fuel stops along it\.$/.test(document.getElementById('toast').textContent));
   // during a drive the report sheet opens
   await page.evaluate((f) => window.apex.live(f), frame(1));
   await page.waitForFunction(() => window.apexDebug.state.mode === 'live');
@@ -7225,6 +7256,9 @@ flow('along the route by name: the Along line opens a list of the cafés and fue
     .catch(() => {});
   const stamps = await page.evaluate(() => [...document.querySelectorAll('.poi-pin.poi-fuel')].map((e) => ({ text: e.textContent, on: e.style.display !== 'none' })));
   check(stamps.filter((x) => x.on).map((x) => x.text).join('|') === 'FUEL · Shell', 'in a drive, the next fuel stop alone, by its name: ' + JSON.stringify(stamps));
+  // Siri, "where's the next gas station": said (and shown on the drive's status line) by its name, from where you are on the route
+  await page.evaluate(() => window.apex.onNative({ type: 'link', params: { go: 'nextfuel' } }));
+  await page.waitForFunction(() => /^Next fuel: Shell, (in [\d.]+ (mi|km)|here)\./.test(document.getElementById('dsNote').getAttribute('aria-label') || ''), null, { timeout: 5000 });   // a drive's status line
 }, IPHONE);
 
 // The route reveal and the card as a page (design pass, 2026-11-10; web/route_reveal.js): a route found is drawn onto the
