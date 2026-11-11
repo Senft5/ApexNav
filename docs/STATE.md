@@ -19,6 +19,18 @@
 - Next in the sweep: CarPlay (CarPlay/*.swift) and the shell's frame path (pushLiveFrame, 10 Hz evaluateJavaScript).
 
 
+## Session 2026-11-11 (round two analysis, PR 6): how steady your turn-in and corner speed are on roads you repeat (claude/project-thread-gd7nre, off origin/main)
+
+- core/drive_analysis.py `_spread` (reference) and web/apex_core.js `spread` (port) add `turn_sd_m`/`turn_passes` (where you
+  turned in, `_turn_in`, on this drive's road) and `speed_sd_mps`/`speed_passes` (speed at the corner's slowest point), the
+  same robust SD as the braking spread, over the same clean passes. `marks` and `spread_by` are unchanged.
+- web/drive_view.js: "How repeatable your corners are" says, per corner, "turn-in within 10 ft, speed at the slowest point
+  within 1 mph", and the intro "Your speed at their slowest point typically varies about 1 mph" (from three corners).
+- Tests: tests/test_web_core_parity.py (+1: noise stays steady, 8 % slower passes or a 25 m earlier turn-in spread it; the
+  parity case now compares the new fields), tests/test_drive_view.py (rows carry them).
+- Next: corner-speed steadiness by month beside the braking trend (`spread_by` on the speeds), then IDEAS D-08's records
+  per kind of corner.
+
 ## Session 2026-11-11 (round two analysis, PR 5): Your year's areas and crew drives (claude/project-thread-gd7nre, off origin/main)
 
 - web/year_review.js: `areas` (drives whose map boxes' middles are within AREA_KM 40 of an area's first drive, named after

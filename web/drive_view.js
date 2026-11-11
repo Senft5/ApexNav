@@ -104,7 +104,7 @@
 
   /**
    * Corners ranked by how repeatably you drive them (IDEAS D-07), from Core.coach's per-corner spread over your clean passes:
-   * [{ k, brake_sd_m, brake_passes, passes, min_sd_m, min_passes }] steadiest first, only corners with a known braking spread
+   * [{ k, brake_sd_m, brake_passes, passes, min_sd_m, min_passes, turn_sd_m, turn_passes, speed_sd_mps, speed_passes }] steadiest first, only corners with a known braking spread
    * (a clear braking point on three or more passes). Fewer than 3 such
    * corners: [] (too little to rank).
    */
@@ -113,7 +113,9 @@
     if (!co || !co.corners) return [];
     const rows = co.corners.map((x, k) => (x && x.spread && Number.isFinite(x.spread.brake_sd_m)
       ? { k, brake_sd_m: x.spread.brake_sd_m, brake_passes: x.spread.brake_passes, passes: x.spread.passes,
-          min_sd_m: Number.isFinite(x.spread.min_sd_m) ? x.spread.min_sd_m : null, min_passes: x.spread.min_passes } : null))
+          min_sd_m: Number.isFinite(x.spread.min_sd_m) ? x.spread.min_sd_m : null, min_passes: x.spread.min_passes,
+          turn_sd_m: Number.isFinite(x.spread.turn_sd_m) ? x.spread.turn_sd_m : null, turn_passes: x.spread.turn_passes || 0,
+          speed_sd_mps: Number.isFinite(x.spread.speed_sd_mps) ? x.spread.speed_sd_mps : null, speed_passes: x.spread.speed_passes || 0 } : null))
       .filter(Boolean).sort((a, b) => a.brake_sd_m - b.brake_sd_m || a.k - b.k);
     return rows.length >= 3 ? rows : [];
   }
@@ -496,7 +498,7 @@
     list.innerHTML = `<h2>Corners${ref ? ` \u00b7 compared with ${esc(ref.name)} (score ${ref.score}), your best other drive on this road` : ''}</h2>` + (ref ? `<p class="note" style="margin-bottom:8px">${net == null ? 'No clean corners to compare.' : `Over the ${d.corners.map((_, k) => lost(k)).filter((x) => x != null).length} corners both drives took cleanly, this drive was <b class="${net > 0.05 ? 'loss' : net < -0.05 ? 'gain' : ''}">${fmtD(net)}</b> ${net > 0 ? 'slower' : 'faster'}. Stops and traffic are left out.`}</p>` : '');
     const reps = consistencyRows(co);
     if (reps.length) {                                               // how repeatably each corner is driven over your passes (D-07)
-      const ul = el('ol', 'dv-time'), m = (x) => fine(Math.max(3, x));
+      const ul = el('ol', 'dv-time'), m = (x) => fine(Math.max(3, x)), spd = (x) => `${Math.max(1, Math.round(x * MPH))} ${SPD()}`;
       const med = reps[Math.floor((reps.length - 1) / 2)].brake_sd_m;
       const varies = (r) => r.brake_passes >= VARIES_MIN_PASSES && r.brake_sd_m >= Math.max(VARIES_M, 2 * med);
       const steady = reps.filter((r) => r.brake_passes === r.passes && r.brake_sd_m <= med && !varies(r)).slice(0, 2);   // braked clearly on every pass
@@ -506,6 +508,8 @@
         b.innerHTML = `<b>${r.k + 1}</b><span>${esc(callOf(c))}</span><em class="${v ? 'loss' : 'gain'}">${m(r.brake_sd_m)}</em>`
           + `<span class="note">braking point typically within ${m(r.brake_sd_m)} over ${r.brake_passes} of ${r.passes} passes`
           + `${r.min_sd_m != null ? `, slowest point within ${m(r.min_sd_m)} over ${r.min_passes} passes` : ''}`
+          + `${r.turn_sd_m != null ? `, turn-in within ${m(r.turn_sd_m)}${r.turn_passes < r.passes ? ` over ${r.turn_passes}` : ''}` : ''}`
+          + `${r.speed_sd_mps != null ? `, speed at the slowest point within ${spd(r.speed_sd_mps)}${r.speed_passes < r.passes ? ` over ${r.speed_passes}` : ''}` : ''}`
           + `${v ? '. If it was not traffic or the weather, pick an early, comfortable braking marker you can always make' : ''}</span>`;
         b.onclick = () => { if (zoomM) setZoom(zoomM, c.apex); move(c.apex); lanes.scrollIntoView({ block: 'nearest', behavior: 'smooth' }); };
         li.append(b); ul.append(li);
@@ -513,7 +517,9 @@
       const which = steady.length && loose.length ? 'Your steadiest corners, then the ones that vary most.'
         : steady.length ? 'Your steadiest corners; none varies much more than the rest.'
         : loose.length ? 'The corners that vary most.' : 'None varies much more than the rest.';
-      const intro = el('p', 'note', `In ${reps.length} corners where you braked clearly on three or more passes, your braking point typically moves about ${m(med)} from drive to drive (${fine(5)} samples and GPS make about ${fine(3)} the floor). ${which}`);
+      const speeds = reps.map((r) => r.speed_sd_mps).filter((x) => x != null).sort((p, q) => p - q);
+      const carried = speeds.length >= 3 ? ` Your speed at their slowest point typically varies about ${spd(speeds[(speeds.length - 1) >> 1])}.` : '';
+      const intro = el('p', 'note', `In ${reps.length} corners where you braked clearly on three or more passes, your braking point typically moves about ${m(med)} from drive to drive (${fine(5)} samples and GPS make about ${fine(3)} the floor).${carried} ${which}`);
       if (ul.children.length) list.prepend(el('h2', null, 'How repeatable your corners are'), intro, ul);
       else list.prepend(el('h2', null, 'How repeatable your corners are'), intro);
     }
