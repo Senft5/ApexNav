@@ -3242,8 +3242,23 @@
       if (vehicle) add(vehicle.lat, vehicle.lon);
       if (!(e >= w && n >= so)) return;
       holdFollow();
-      fitInView([[w, so], [e, n]], routeBottom(aboveCard));
+      const bottom = routeBottom(aboveCard);
+      fitInView([[w, so], [e, n]], bottom);
+      cardFit = aboveCard ? { t, at: performance.now(), bottom } : null;
     }
+    // The card a route opens is still filling in when the route is fitted above it (a loop's card was 469 px tall at the fit
+    // and 310 px a moment later: the loop sat in a strip at the top of the map, its start under the masthead). While the card
+    // settles, a change in its height fits the route again, unless you have moved the map since.
+    let cardFit = null;
+    map.on('dragstart', () => { cardFit = null; });
+    map.on('zoomstart', (ev) => { if (ev.originalEvent) cardFit = null; });
+    if (window.ResizeObserver) new ResizeObserver(() => {
+      if (!cardFit || performance.now() - cardFit.at > 4000 || cardFit.t !== plannedRoute || state.mode === 'live') return;
+      const { t, at } = cardFit;
+      if (Math.abs(routeBottom(true) - cardFit.bottom) < 24) return;
+      fitPlannedRoute(t, true);
+      if (cardFit) cardFit.at = at;                                  // the window runs from the first fit, not each refit
+    }).observe($('planPanel'));
     // Plan fields: empty = the phone's position (locate()), "lat, lon" = that point, anything else =
     // the first Nominatim match. Errors carry the toast text.
     const COORDS = /^\s*(-?\d+(?:\.\d+)?)\s*,\s*(-?\d+(?:\.\d+)?)\s*$/;

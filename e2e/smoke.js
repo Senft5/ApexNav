@@ -1621,6 +1621,27 @@ flow('the chosen route stays whole on screen: above the card when it opens, abov
   check(again.open && (!again.roomy || again.ok), 'up again: refitted above the card: ' + JSON.stringify(again));
 }, { geolocation: { latitude: 35.9606, longitude: -83.9207 }, permissions: ['geolocation'] });
 
+flow('a loop fills the map above its card once the card has settled, not a strip at the top fitted to the card\'s first, taller height (walkthrough 2026-11-11)', async (page, base) => {
+  await page.route('https://tiles.openfreemap.org/**', (route) => (route.request().url().includes('/styles/')
+    ? route.fulfill({ contentType: 'application/json', body: JSON.stringify({ version: 8, sources: {}, layers: [{ id: 'bg', type: 'background', paint: { 'background-color': '#eee' } }] }) })
+    : route.abort()));
+  await planRouter(page);
+  await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); localStorage.setItem('apex.permsExplained', '1'); } catch (_) {} });
+  await page.goto(base + '/index.html');
+  await page.waitForFunction(() => window.apexDebug && window.apexDebug.map && window.apexDebug.map.loaded() && window.apex, null, { timeout: 20000 });
+  await page.waitForFunction(() => !!apexDebug.state.lastPosition, null, { timeout: 10000 });
+  await page.waitForFunction(() => getComputedStyle(document.getElementById('loopSuggest')).display !== 'none');
+  await page.click('#loopSuggestGo');
+  await page.waitForFunction(() => document.getElementById('planPanel').classList.contains('routed') && apexDebug.track && /loop$/.test(apexDebug.track.name), null, { timeout: 30000 });
+  await page.waitForTimeout(2500);
+  const fit = await page.evaluate(() => { const m = apexDebug.map, t = apexDebug.track, c = m.getContainer().getBoundingClientRect(), p = document.getElementById('planPanel'), edge = p.getBoundingClientRect().top - c.top;
+    let y0 = 1e9, y1 = -1e9, x0 = 1e9, x1 = -1e9;
+    for (let i = 0; i < t.lat.length; i += Math.max(1, Math.floor(t.lat.length / 200))) { const q = m.project([t.lon[i], t.lat[i]]); y0 = Math.min(y0, q.y); y1 = Math.max(y1, q.y); x0 = Math.min(x0, q.x); x1 = Math.max(x1, q.x); }
+    return { y0: Math.round(y0), y1: Math.round(y1), x0: Math.round(x0), x1: Math.round(x1), edge: Math.round(edge), w: c.width, roomy: c.height - p.offsetHeight >= 120 }; });
+  check(!fit.roomy || (fit.y0 >= 0 && fit.y1 <= fit.edge + 1 && ((fit.y1 - fit.y0) >= 0.4 * fit.edge || (fit.x1 - fit.x0) >= 0.4 * fit.w)),
+    'the loop fills the map above its settled card: ' + JSON.stringify(fit));
+}, { viewport: { width: 393, height: 852 }, hasTouch: true, geolocation: { latitude: 35.9606, longitude: -83.9207 }, permissions: ['geolocation'] });
+
 flow('a road someone sent (#road=) opens as a route card: its name, through its points, nothing of the drive (panel round 2 DA-4)', async (page, base) => {
   const asked = [];
   await page.route('https://valhalla1.openstreetmap.de/route', (route) => {

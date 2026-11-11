@@ -1,5 +1,19 @@
 # VETTA — CURRENT AGENT HANDOFF STATE
 
+## Session 2026-11-11 (roam-b first-run walkthrough, PR 1): a first loop fills the map; loops stay off our relay (claude/project-thread-sxhrgi)
+
+- Walked a brand-new user through production on an iPhone 13 viewport (onboarding, Loop from here). Two bugs fixed:
+  - The loop was fitted above its card while the card was still filling in (469 px), and not again when it settled (310 px):
+    the loop sat in a 56 px strip at the top of the map, its start under the masthead. cockpit.js `cardFit`: for 4 s after a
+    route fit above the card, a change in the card's height fits it again, unless you moved the map. e2e "a loop fills the
+    map above its card" (fails before, passes after).
+  - Every loop candidate was sent to our trace relay (`/api/ctx/trace`), which refused it (400, over 40 km), and APP_REVIEW
+    says only stages go there. router_edges.js now relays only `c.stage` corridors (route_engine.js stageCorridor sets it),
+    at most 40 km; test_route_ctx_router_edges.py covers a loop not relayed.
+- Seen, not fixed (other areas): signed-out pages still ask /api/convoy/invites, /api/points, /api/hazards, /api/roads (401s);
+  the idle map's top ~150 px is blank paper at pitch 42 with the deck's padding (MapLibre draws no tiles beyond the far
+  plane; no sky in the style). Next: replay drive, Log, add a friend, join a crew.
+
 ## Session 2026-11-11 (roam-c-boot-budget): startup budget in e2e (claude/roam-c-boot-budget, off origin/main)
 
 - e2e "startup budget" (`BOOT` in smoke.js): own script bytes 3.6 MB, 145 scripts, 2 s CPU, 1.5 s longest task before
