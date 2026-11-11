@@ -70,6 +70,7 @@
     .convoy-pin.regroup { border-color: var(--gain, #2a6); color: var(--gain, #2a6); }
     .cv-members { display: grid; gap: 4px; }
     .cv-qr { width: 232px; height: 232px; image-rendering: pixelated; border-radius: 8px; }
+    .cv-code { font: 600 22px/1.2 ui-monospace, Menlo, monospace; letter-spacing: 0.12em; margin: 0; }
     .cv-member { display: flex; justify-content: space-between; align-items: center; gap: 8px; min-height: 44px; }
     .cv-member .cv-on { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--panel-dim); margin-right: 6px; }
     .cv-member .cv-on.live { background: var(--gain, #2a6); }
@@ -385,8 +386,30 @@
       const g = cv.getContext('2d');
       g.fillStyle = '#fff'; g.fillRect(0, 0, size, size); g.fillStyle = '#000';
       for (let r = 0; r < n; r++) for (let c = 0; c < n; c++) if (qr.isDark(r, c)) g.fillRect((c + 4) * cell, (r + 4) * cell, cell, cell);
-      box.replaceChildren(cv, el('p', { className: 'note', textContent: 'Point a phone camera at it to join. Works for 30 minutes.' }),
+      // the code to read out (IDEAS S-22), for a friend whose camera can't see the screen: six characters, no 0/O or 1/I
+      const said = el('p', { className: 'cv-code', textContent: '' });
+      said.hidden = true;
+      box.replaceChildren(cv, el('p', { className: 'note', textContent: 'Point a phone camera at it to join. Works for 30 minutes.' }), said,
         btn('Hide', () => box.replaceChildren(), 'linkbtn'));
+      const code = await client.leaderCode();
+      if (code && said.isConnected) {
+        said.textContent = `Or join code ${code.slice(0, 3)} ${code.slice(3)}`; said.hidden = false;
+        said.setAttribute('aria-label', `Or join code ${[...code].join(' ')}, for 15 minutes`);
+      }
+    }
+    // Join with a code read out by the leader (IDEAS S-22): Convoys → the code → Join. Joining shares your position.
+    function codeRow() {
+      const input = labelled(el('input', { className: 'field', placeholder: 'Join code', maxLength: 9, autocomplete: 'off', autocapitalize: 'characters', spellcheck: false }), 'Convoy join code');
+      return [el('p', { className: 'note', textContent: 'Got a join code from the leader? Joining shares your position with the convoy.' }),
+        el('div', { className: 'row' }, input, btn('Join with code', async () => {
+          const v = input.value.trim();
+          if (!v) { toast('Type the code the leader gave you.'); input.focus(); return; }
+          const r = await client.joinCode(v);
+          if (r.ok) { toast('You\'re in the convoy. Your position is shared with it until you leave.'); return; }
+          toast(r.status === 429 ? 'Too many tries. Wait ten minutes, or ask for the link.' : r.status === 409 ? 'That convoy is full.'
+            : r.status === 403 ? 'That code is no longer yours to use. Ask the leader for the link.'
+            : r.status === 0 || r.status >= 500 ? 'No connection. Try again in a moment.' : 'That code didn\'t work. Check it with the leader.');
+        }, 'ink-btn'))];
     }
     const preview = { invite: null, status: null, ok: false, body: null, at: 0 };
     async function loadPreview(invite) {
@@ -440,6 +463,7 @@
               el('p', { className: 'note', textContent: 'Everyone in the convoy sees where everyone is, the leader can call hazards and a regroup point, and the co-driver warns you before you get there. Nothing is kept: it ends when the leader leaves or after two hours.' })),
             el('div', { className: 'row' }, name, btn('Start a convoy', () => now(name.value.trim()), 'ink-btn solid')));
         }
+        if (!pending) kids.push(...codeRow());
         box.replaceChildren(...kids);
         return;
       }

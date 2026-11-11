@@ -3,7 +3,7 @@
 import {
   APP_ORIGIN, appExchange, csrfCheck, createInvite, googleCallback, googleStart, invitePreview, logout, redeemInvite, requireMember, requireUser, sessionHash, viewer,
 } from "./auth";
-import { convoyAccept, convoyConnect, convoyCreate, convoyDismiss, convoyInvitePeople, convoyInvites, convoyJoin, convoyPreview, convoyRoom, unwrap } from "./convoy_routes";
+import { convoyAccept, convoyCode, convoyCodeJoin, convoyCodePreview, convoyConnect, convoyCreate, convoyDismiss, convoyInvitePeople, convoyInvites, convoyJoin, convoyPreview, convoyRoom, unwrap } from "./convoy_routes";
 import { Env, HttpError, body, json, str } from "./util";
 import { rateCheck } from "./ratelimit";
 import { clientError, errorSummary, serverError } from "./errors";
@@ -314,9 +314,12 @@ on("GET", "/api/board/:canon", async (req, env, m) => json(await boardFor(env, a
 on("POST", "/api/convoy", async (req, env) => json(await convoyCreate(env, await requireMember(req, env), req), 201));
 on("POST", "/api/convoy/join", async (req, env) => json(await convoyJoin(env, await requireMember(req, env), req)));
 on("POST", "/api/convoy/preview", async (req, env) => json(await convoyPreview(env, await requireMember(req, env), req)));
+on("POST", "/api/convoy/code/join", async (req, env) => json(await convoyCodeJoin(env, await requireMember(req, env), req)));
+on("POST", "/api/convoy/code/preview", async (req, env) => json(await convoyCodePreview(env, await requireMember(req, env), req)));
 on("GET", "/api/convoy/invites", async (req, env) => json(await convoyInvites(env, await requireMember(req, env))));
 on("DELETE", "/api/convoy/invites/:id", async (req, env, m) => json(await convoyDismiss(env, await requireMember(req, env), m.groups!.id)));
 on("GET", "/api/convoy/:id", async (req, env, m) => json(await convoyRoom(env, m.groups!.id).status((await requireMember(req, env)).id).then(unwrap)));
+on("POST", "/api/convoy/:id/code", async (req, env, m) => json(await convoyCode(env, await requireMember(req, env), m.groups!.id), 201));
 on("POST", "/api/convoy/:id/invite", async (req, env, m) => json(await convoyRoom(env, m.groups!.id).newInvite((await requireMember(req, env)).id).then(unwrap), 201));
 on("POST", "/api/convoy/:id/ticket", async (req, env, m) => {
   const v = await requireMember(req, env);

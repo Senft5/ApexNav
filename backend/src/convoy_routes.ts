@@ -1,6 +1,6 @@
 // The Worker side of convoys: checks the account and the request, then hands over to the convoy's Durable Object.
 import { APP_ORIGIN, type Viewer } from "./auth";
-import { type Result, LIMITS, cleanText, roomStub, userIndex } from "./convoy";
+import { type Result, CODE_ALPHABET, LIMITS, cleanText, codeHolder, roomStub, userIndex } from "./convoy";
 import { Env, HttpError, body, randomToken, str } from "./util";
 
 const ROOM_RE = /^[A-Za-z0-9_-]{22}$/;
@@ -107,4 +107,50 @@ export async function convoyDismiss(env: Env, v: Viewer, id: string) {
   if (!ROOM_RE.test(id)) throw new HttpError(404, "no_convoy");
   await userIndex(env, v.id).dropInvite(id);
   return { ok: true };
+}
+
+// ---- Join codes (IDEAS S-22): six characters to read out in the car park, no link -----------------------------------
+/** "k7p 4qx", "K7P-4QX" -> "K7P4QX"; null when it can't be a code. */
+export function normCode(v: unknown): string | null {
+  if (typeof v !== "string" || v.length > 20) return null;
+  const c = v.toUpperCase().replace(/[\s-]/g, "");
+  return c.length === 6 && [...c].every((ch) => CODE_ALPHABET.includes(ch)) ? c : null;
+}
+function newCode(): string {
+  const r = new Uint8Array(6);
+  crypto.getRandomValues(r);
+  return [...r].map((b) => CODE_ALPHABET[b % CODE_ALPHABET.length]).join("");
+}
+
+/** Leader only: a fresh code for their convoy (the old one stops working). */
+export async function convoyCode(env: Env, v: Viewer, id: string) {
+  const room = convoyRoom(env, id);
+  for (let i = 0; i < 5; i++) {
+    const code = newCode();
+    // the room first: it checks the leader and sets the expiry the holder keeps
+    const r = unwrap(await room.newCode(v.id, code));
+    if (await codeHolder(env, code).holdCode(id, r.expiresAtMs)) return { code, expiresAtMs: r.expiresAtMs };
+  }
+  throw new HttpError(503, "no_code");
+}
+
+/** Which convoy a code opens, after the person's try is counted; every miss looks the same (invalid_invite). */
+async function codeTarget(env: Env, v: Viewer, raw: unknown): Promise<[string, string]> {
+  if (!(await userIndex(env, v.id).codeTry())) throw new HttpError(429, "too_many_tries");
+  const code = normCode(raw);
+  const id = code ? await codeHolder(env, code).codeRoom() : null;
+  if (!code || !id) throw new HttpError(400, "invalid_invite");
+  return [id, code];
+}
+
+export async function convoyCodeJoin(env: Env, v: Viewer, req: Request) {
+  const b = await body<{ consent?: unknown; code?: unknown }>(req);
+  consent(b);
+  const [id, code] = await codeTarget(env, v, b.code);
+  return unwrap(await convoyRoom(env, id).join(who(v), code, true));
+}
+
+export async function convoyCodePreview(env: Env, v: Viewer, req: Request) {
+  const [id, code] = await codeTarget(env, v, (await body<{ code?: unknown }>(req)).code);
+  return unwrap(await convoyRoom(env, id).preview(v.id, code, true));
 }
