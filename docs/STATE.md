@@ -107,6 +107,28 @@
 - [x] .github/workflows/core-tests.yml e2e `timeout-minutes` 25 → 35: 152 flows take ~24 min and were cancelled on the
   last flow. Next: split e2e into two jobs if it passes ~30 min.
 
+## Session 2026-11-10 (fable-driver-profile): Your driving, the driver profile over every drive (claude/fable-driver-profile, off origin/main 948cb4b)
+
+- `core/driver_profile.py` (new): `observe(drive)` gives one observation per corner the coach may read (six credits
+  0..1: `squeeze`, `brake`, `arc`, `entry`, `line`, `exit`; style facts `trail`, `slow_m`, `use`; context `dir`, `size`,
+  `tightens`, `crest`, `grade`, `minute`); `profile(drives)` gives levels (30 corners), `style`, the `matrix` (dir x
+  size, 10 corners), `findings` (within-drive splits with size taken out, drive-level car and tag splits), `trend` and
+  `change` by month (15 corners), `strongest`, `focus` (weakest at 85 or under, with where).
+- `web/driver_profile.js` (new): the port (parity: tests/test_driver_profile.py, made-up drives with planted faults and
+  the two shipped real drives), the words (`findingLine`, `styleLines`, `cardLine`, `focusLines`) and the page (`render`).
+  `web/apex_core.js` exports `knownRun`, `passMarks`, `meanSe` and four constants for it (no behaviour changed).
+- `web/analysis_client.js` job `profile` (in the analysis worker): observations per drive kept in IndexedDB
+  `vetta-profile` / `obs` under `OBS_VERSION|summary stamp|car`; only new drives are read; deleted drives' are dropped.
+  Bump `OBS_VERSION` when `observe` changes.
+- `web/analysis.html`: view `driving` (`?tab=driving`, `#tab-driving`, `#drivingRoot`), the Log's `#drivingCard`
+  (`#drivingOpen`), `apexLogDebug.driving()`. CSP hashes regenerated.
+- Checked: `pytest tests` full; e2e "Your driving" and the Log's flows.
+- Found on the way, not fixed here: `sensors.js Recorder.add` gives every 5 m sample between two GPS fixes the g of the
+  later fix (one reading a second, placed up to a fix early), though the shell sends ten frames a second. Coach marks,
+  the Score's smoothness and this profile all read that.
+- Next: record every frame's g between fixes (placed along the road as `vert_peak_g` already is), plus per-sample
+  steering and brake rates; then the profile's "touch" skills (turn-in, brake application and release rates) and a
+  practice focus that follows the profile's Work on into the next drive.
 ## Session 2026-11-11 (fable-taste-picks): taste learnt from the routes you choose (claude/fable-taste-picks, off origin/main ac6c6c6)
 
 - Done: `ApexTaste.recordPick` / `leanOf` (taste.js), pairs weighted in `fit`; cockpit `learnFromPick` at Start
