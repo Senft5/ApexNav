@@ -568,6 +568,21 @@ def records_by_size(drives: list) -> dict:
     return out
 
 
+def drive_records(obs: list, records: dict) -> dict:
+    """A drive's corners against your records by kind of corner (its Log page): for each size, this drive's cleanest corner
+    (the six technique credits' mean, all six measured; None when it had none) beside your record (records_by_size, which
+    may be this drive's own). {size: {level, record}}; record is the records_by_size entry or None."""
+    out = {}
+    for z in ("tight", "medium", "fast"):
+        lv = None
+        for o in obs or []:
+            if o.get("size") == z and all(o.get(k) is not None for k in SKILLS):
+                v = _level(sum(o[k] for k in SKILLS) / len(SKILLS))
+                lv = v if lv is None or v > lv else lv
+        out[z] = {"level": lv, "record": (records or {}).get(z)}
+    return out
+
+
 def drive_touch(obs: list, others: list) -> dict:
     """A drive's own touch (its Log page): {drive: touch over its corners (from DRIVE_TOUCH_MIN), usual: touch over the
     corners of every other drive (from STYLE_MIN), outside: per measure "above" when the drive's middle corner was beyond
