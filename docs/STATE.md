@@ -1,5 +1,13 @@
 # VETTA — CURRENT AGENT HANDOFF STATE
 
+## Session 2026-11-10 (fable-pro-looks): Pro looks only (claude/fable-pro-looks, off origin/main)
+
+- web/pro.js: KINDS theme + livery; route_tuning removed; web/route_tuning.js `allowed()` always true.
+- backend/src/livery.ts `liveryOf`: any Decals (one Pro crew-mate) or a grant = factory, else plain; `next` always null.
+  web/crew_page.js: no meter, `dressedBy`, Plain says "Plain livery"; editor locks read "With a crew-mate on Vetta Pro".
+- Tests: tests/test_pro.py, test_crew_page.py, test_route_tuning.py; backend/test/crew_page.test.ts; e2e "crew page" line.
+- Next: camber with how sure it is (red team TE-03).
+
 ## Session 2026-11-10 (fable-road-page): About a road: the climb's "[object Object]" fixed; scores as named bars (claude/fable-road-page, off origin/main 3f2f315)
 
 - Bug: `openRoadPage` passed `ApexUnits.short` (returns `{ n, u }`) as the headline's height formatter, so a road with a

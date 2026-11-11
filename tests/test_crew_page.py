@@ -63,10 +63,14 @@ def test_no_emoji_and_typed_text_is_text():
 
 @needs_node
 def test_livery_line_and_tiers():
-    assert run("C.liveryLine({ decals: 0 })") == "Decals come from crew-mates with Vetta Pro."
-    assert run("C.liveryLine({ decals: 14, supporters: [1, 2, 3, 4, 5], next: { tier: 'factory', at: 20 } })") == "14 Decals from 5 supporters · Factory at 20"
-    assert run("C.liveryLine({ decals: 1, supporters: [1], next: { tier: 'club', at: 5 } })") == "1 Decal from 1 supporter · Club at 5"
-    assert run("C.liveryLine({ decals: 22, supporters: [1, 2, 3, 4, 5, 6, 7, 8], next: null })") == "22 Decals from 8 supporters"
+    # the owner, 2026-11-10 (red team UX-06): one Pro crew-mate dresses the whole crew; no count to reach, no deficit line
+    assert run("C.liveryLine({ decals: 0 })") == "One crew-mate with Vetta Pro opens the whole livery for everyone."
+    assert run("C.liveryLine({ decals: 3, supporters: [{ handle: 'bob', decals: 3 }] })") == "Dressed by @bob."
+    assert run("C.liveryLine({ decals: 5, supporters: [{ handle: 'bob' }, { handle: 'carol' }] })") == "Dressed by @bob and @carol."
+    assert run("C.liveryLine({ decals: 9, supporters: [{ handle: 'bob' }, { handle: 'carol' }, { handle: 'dee' }] })") == "Dressed by @bob and 2 more."
+    assert run("C.liveryLine({ granted: true })") == "Every option open (early access)."
+    src = (ROOT / "web" / "crew_page.js").read_text()
+    assert "cp-meter" not in src and "at ${l.next.at}" not in src           # no meter, no "Factory at 20"
     assert run("[C.atLeast('club', 'club'), C.atLeast('plain', 'club'), C.atLeast('factory', 'works'), C.atLeast('works', 'factory')]") == [True, False, True, False]
 
 
@@ -99,9 +103,9 @@ def test_members_strip_owner_then_out_now():
 @needs_node
 def test_livery_is_one_line():
     """P-03: the livery's line at the foot of the page; the meter lives in Edit livery."""
-    assert run("C.liveryShort({ tier: 'club', decals: 6 })") == "Club livery · 6 Decals"
-    assert run("C.liveryShort({ tier: 'plain', decals: 1 })") == "Plain livery · 1 Decal"
-    assert run("C.liveryShort(null)") == "Plain livery · Decals come from crew-mates with Vetta Pro"
+    assert run("C.liveryShort({ tier: 'factory', decals: 6, supporters: [{ handle: 'bob' }] })") == "Factory livery · dressed by @bob"
+    assert run("C.liveryShort({ tier: 'plain', decals: 0 })") == "Plain livery"
+    assert run("C.liveryShort(null)") == "Plain livery"
     assert run("C.liveryShort({ tier: 'factory', granted: true })") == "Factory livery · every option open (early access)"
 
 
