@@ -7,7 +7,7 @@
 - Privacy: runs counted on any copy of a circuit (a friend's hand share, a duel copy) without entering, and leaving was
   undone by the next sync. **Migration 0051 `ta_joins`** (additive): enter writes it, runs / circuits / `entered` read it,
   leave deletes it. Implausible runs are skipped (`refused`), not a 400 for the batch. Export `time_attack_entered`.
-- Needs 0051 on preview then prod (with d1_migrations rows) BEFORE merge.
+- 0051 applied on preview and prod 2026-11-11 (owner: "go on 0051"), each with its d1_migrations row.
 
 ## Session 2026-11-11 (fable-time-attack): weekly time attack per area (claude/fable-time-attack, off origin/main)
 
