@@ -16,6 +16,16 @@ meter is gone; a Plain crew's page says "Plain livery" and nothing it lacks, and
 and comes back with the next one, as before.
 
 Undo: revert the PR (tiers come back as they were; nothing in the database changed).
+## 2026-11-10 (fable-night-keys): at night no key outshines the road (claude/fable-night-keys)
+
+Red team UX-07: on the night drive screen the brightest things were keys: End, Done and the chosen replay speed were
+solid cream slabs. At night they are now outlined in the panel's ink (same size, same place), so the instruments and
+the road are the brightest things there. Day is unchanged; Tapedeck keeps its own outlined End; the Undo after End
+keeps its running fill. I checked the other "may be stale" UI findings against today's build: the tab bar already
+hides while driving or replaying, the 1 hour / 2 hours loop keys are gone, and the route card and Garage belong to the
+redesign thread, so I left them.
+
+Undo: revert the PR (CSS only).
 
 ## 2026-11-10 (fable-road-page): About a road says its climb, and speaks in words (claude/fable-road-page)
 
@@ -47,6 +57,19 @@ notes under a search that finds nothing said "Press Go" while the key under them
 "offline" is only said when the phone is offline.
 
 Undo: revert the PR. Typed coordinates still work as before and are still named "Pin lat, lon".
+## 2026-11-11 (fable-avoid-police): Avoid → Police reports (claude/fable-avoid-police)
+
+The owner said go (2026-11-11, "yes avoid police"), reversing October's call that dropped routing round police (IDEAS
+R-35). My calls inside it: only live reports count (the server's 60 min life, and a report cleared by more drivers than
+confirmed it is skipped), within 15 km of the trip, 20 at most; a convoy leader's live Police call counts first. Valhalla
+gets them as exclusions ahead of cameras in the 50-slot budget (police reports move, cameras don't, so a fresh report is
+the more useful exclusion). Our own router can't exclude a point, so the roads within 150 m cost x8: a way round wins
+unless it is much longer, and then the card says "Couldn't avoid police reports". A plan waits at most 0.2 s for the
+reports. Signed out there are none, and a toast says so once a minute. No checkpoint kind exists and none is made
+(App Store 1.4.3, APP_REVIEW.md).
+
+Undo: revert the PR. The chip is off by default, so turning it off in Options also undoes it for one driver.
+
 ## 2026-11-10 (fable-one-corner): "1 corners" is "1 corner"; a Best roads nearby key keeps its word while it searches (claude/fable-one-corner)
 
 A road with one corner read "1 corners" on its card's line, under its big number, aloud to a screen reader, in "1 more
@@ -74,6 +97,15 @@ Calls I made:
   because a sample no longer jumps at every fix. The Score's formula is unchanged.
 
 Undo: revert the PR.
+## 2026-11-10 (fable-whats-new): What's new tells of the routing work (claude/fable-whats-new)
+
+The What's new sheet still showed the news of 2026-10-28 (Siri, landscape, stops of the day, kilometres), which every
+tester has already seen, so the biggest changes since (three levels for every route, the plain-words overview, loops
+on a dial, Route tuning) were never said to anyone. It now says those four, once, on a quiet launch as before. I left
+out "routes are planned on the phone, with no signal" because that is only true inside the region our tiles cover.
+I wrote "highway" (the app's own word on its keys). Places in the app are named in words, not with arrows.
+
+Undo: set `NEWS` back in web/whats_new.js. A phone that has seen '2026-11-10' will not be shown it again.
 ## 2026-11-11 (fable-rally-sheet): a crew drive's results sheet, rally style, Scores and shared times (claude/fable-rally-sheet)
 
 A crew drive used to remember one number afterwards: the best Score of the day. Its card now folds out "Results · 3
@@ -326,6 +358,19 @@ the rule that hides the other tabs' panels. So, signed out, the whole "Drive wit
 the Garage as well. Both rules now apply on the People tab only. I had read the page on People and never opened the
 Garage signed out after the change; the screen-by-screen flow now checks that the Garage shows no People page.
 - Undo: not something to undo; reverting #332 would also remove it.
+
+## 2026-11-10 (fable-no-leftovers): every e2e flow ends by checking the screen for the code's own leftovers (claude/fable-no-leftovers)
+
+About a road read "descending [object Object]" for weeks (#356) and no test saw it, because no test read that line. So
+the e2e runner now ends every flow with one more check: on whatever screens the flow left open, no text in view and no
+spoken label (aria-label, placeholder, title, alt) says "[object Something]", "undefined" or "NaN". Hidden nodes are
+left alone, and whole words only ("Undefined roads" would pass, lower-case "undefined" would not). All 154 flows pass
+with it, so nothing else like #356 is on the screens the flows end on. A flow of its own proves the check sees each of
+the three and ignores what is hidden.
+
+Its limit: it reads the screen a flow ends on, not every screen it passed through.
+
+Undo: revert the PR (e2e/smoke.js only; no app code).
 
 ## 2026-11-10 (fable-your-units): sizes that were always metric are in your units (claude/fable-your-units)
 

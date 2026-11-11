@@ -88,6 +88,46 @@
     return { title: h.label || LABEL[h.kind] || 'Hazard', detail: parts.join(' · ') };
   }
 
-  const api = { nextAhead, createPassWatch, closuresFor, plate, LABEL, KINDS: Object.keys(LABEL) };
+  // ---- Avoid police reports (IDEAS R-35, the owner 2026-11-11) -------------------------------------------------------
+  // Only what drivers reported in the last hour as "Police" (the server keeps a police report 60 min from its last
+  // confirmation, hazards.ts LIFE_MIN) and a convoy leader's live "Police" call. There is no checkpoint kind, and none is
+  // ever made from these: App Store 1.4.3 allows DUI checkpoints only as published by the police (docs/APP_REVIEW.md).
+  const POLICE_M = 150, POLICE_MAX = 20;
+  const ms = (v) => (typeof v === 'string' ? Date.parse(v.includes('T') ? v : v.replace(' ', 'T') + 'Z') : NaN);
+  /**
+   * Police reports to keep away from on a trip: live ones (not expired at `nowMs`, not cleared by more drivers than
+   * confirmed them) inside the trip's box widened by `padKm`, nearest its middle first, at most `max`, as { lat, lon }.
+   * `calls`: a convoy's live police calls ({ lat, lon }), kept first.
+   */
+  function policeFor(list, points, nowMs = Date.now(), calls = [], padKm = 15, max = POLICE_MAX) {
+    const pts = (points || []).filter((p) => p && finite(p.lat) && finite(p.lon));
+    if (!pts.length) return [];
+    const lat0 = Math.min(...pts.map((p) => p.lat)), lat1 = Math.max(...pts.map((p) => p.lat));
+    const lon0 = Math.min(...pts.map((p) => p.lon)), lon1 = Math.max(...pts.map((p) => p.lon));
+    const dLat = padKm / 110.54, dLon = padKm / (111.32 * Math.max(0.2, Math.cos(((lat0 + lat1) / 2) * Math.PI / 180)));
+    const inBox = (h) => h && finite(h.lat) && finite(h.lon) && h.lat >= lat0 - dLat && h.lat <= lat1 + dLat && h.lon >= lon0 - dLon && h.lon <= lon1 + dLon;
+    const mid = { lat: (lat0 + lat1) / 2, lon: (lon0 + lon1) / 2 };
+    const live = (h) => { const x = ms(h.expires_at); return !finite(x) || x > nowMs; };
+    const kept = (h) => !((Number(h.clears) || 0) > (Number(h.confirms) || 0));
+    const reps = (list || []).filter((h) => h && h.kind === 'police' && inBox(h) && live(h) && kept(h)).sort((a, b) => local(mid, a).m - local(mid, b).m);
+    const out = [];
+    for (const h of [...(calls || []).filter(inBox), ...reps]) if (out.length < max && !out.some((o) => local(o, h).m < 50)) out.push({ lat: h.lat, lon: h.lon });
+    return out;
+  }
+  /** Does a line ([[lon, lat], ...]) pass within `m` metres of any of `pts` ({ lat, lon })? */
+  function passesNear(coords, pts, m = POLICE_M) {
+    if (!Array.isArray(coords) || coords.length < 2 || !Array.isArray(pts) || !pts.length) return false;
+    for (const p of pts) {
+      const kx = 111320 * Math.cos(p.lat * Math.PI / 180);
+      for (let i = 1; i < coords.length; i++) {
+        const ax = (coords[i - 1][0] - p.lon) * kx, ay = (coords[i - 1][1] - p.lat) * M_LAT, bx = (coords[i][0] - p.lon) * kx, by = (coords[i][1] - p.lat) * M_LAT;
+        const dx = bx - ax, dy = by - ay, L = dx * dx + dy * dy, t = L > 0 ? Math.max(0, Math.min(1, -(ax * dx + ay * dy) / L)) : 0;
+        if (Math.hypot(ax + t * dx, ay + t * dy) <= m) return true;
+      }
+    }
+    return false;
+  }
+
+  const api = { nextAhead, createPassWatch, closuresFor, policeFor, passesNear, POLICE_M, plate, LABEL, KINDS: Object.keys(LABEL) };
   if (typeof module !== 'undefined' && module.exports) module.exports = api; else root.ApexHazardReports = api;
 })(typeof window !== 'undefined' ? window : globalThis);
