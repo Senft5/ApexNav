@@ -4387,6 +4387,34 @@ flow('crew drive morning: the idle map offers directions to today\'s meeting poi
   check(await page.$eval('#loopSuggest', (b) => getComputedStyle(b).display === 'none'), 'it takes the loop invitation\'s place');
 });
 
+flow('time attack on the home deck: this week\'s loop you entered is the suggestion, with your place; the server gets only the area (Worker stubbed)', async (page, base) => {
+  await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); localStorage.setItem('apex.permsExplained', '1'); } catch (_) {} });
+  const day = (k) => new Date(Date.now() + k * 86400000).toISOString().slice(0, 10), asked = [];
+  await page.route('**/api/**', (route) => {
+    const u = new URL(route.request().url());
+    const json = (b) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(b) });
+    if (u.pathname === '/api/me') return json({ signed_in: true, member: true, handle: 'me' });
+    if (u.pathname === '/api/timeattack') {
+      asked.push(u.search);
+      return json({ week: day(-1), ends_on: day(2), today: day(0), cell: '35,-84', make: null, entered: true, entrants: 8,
+        circuit: { name: 'Tellico <i>loop</i>', length_m: 32187, segment_id: 'TA1', geom: JSON.stringify([[35.36, -84.29], [35.40, -84.20], [35.36, -84.29]]) },
+        board: [], you: { place: 3, handle: 'me', time_s: 1200, gap_s: 40, score: 700, mine: true }, last: null });
+    }
+    return json([]);
+  });
+  await page.goto(base + '/index.html');
+  await page.waitForFunction(() => window.apex && typeof window.apex.live === 'function');
+  await page.evaluate(() => { apexDebug.state.lastPosition = apexDebug.state.lastPosition || { lat: 35.9606, lon: -83.9207 }; });
+  await page.evaluate(() => document.querySelector('.tab[data-view="people"]').click());   // signs the page in (renderAccount)
+  await page.evaluate(() => document.querySelector('.tab[data-view="map"]').click());
+  await page.waitForFunction(() => /^Time attack/.test(document.getElementById('loopSuggestTitle').textContent), null, { timeout: 20000 });
+  const title = await page.textContent('#loopSuggestTitle'), why = await page.textContent('#loopSuggestWhy');
+  check(title === 'Time attack · Tellico <i>loop</i>' && why === 'You’re 3rd of 8 · 3 days left', 'the suggestion: ' + title + ' / ' + why);
+  check(/Directions to the start\.$/.test(await page.getAttribute('#loopSuggestGo', 'aria-label')), 'its key gives directions to the start');
+  check(await page.getAttribute('#loopSuggestShow', 'data-road') === 'ta:' + day(-1) + '|35,-84|TA1', 'its body draws the loop');
+  check(asked.length && asked.every((q) => q === '?lat=35.5&lon=-83.5'), 'only the middle of the area is sent: ' + JSON.stringify(asked));
+}, { geolocation: { latitude: 35.9606, longitude: -83.9207 }, permissions: ['geolocation'] });
+
 flow('drive tags: tag a drive in the Log, filter by it, the note stays on the phone (IDEAS D-23)', async (page, base) => {
   await page.goto(base + '/analysis.html');
   await page.waitForFunction(() => window.apexLogDebug && window.apexLogDebug.loaded() && window.ApexRecording);

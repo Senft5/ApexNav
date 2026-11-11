@@ -4,6 +4,16 @@ Decisions Claude made for you, newest first. Each one says what was decided, why
 you reach one you've seen. If you disagree with a call, say so and it gets reversed; nothing here is hard to undo unless
 it says so. Things only you can do are in docs/OWNER_TODO.md.
 
+## 2026-11-11 (roam-c ta-placement): this week's time attack loop is a home deck suggestion (claude/roam-c-ta-placement)
+
+When you entered this week's loop, the deck's suggestion row names it with your place and the days left, ranked right
+after a crew drive you're going to (a plan with friends beats a solo time). When you haven't entered, it comes after the
+road near you that you haven't driven and before your best road, so a new road you'd like still wins. Tapping it gives
+directions to the loop's start, like a crew drive's meeting point. The phone sends the server only the middle of your
+1-degree area, as the Where to? section does. The reminder never quotes your place or days left (they change by then),
+and skips the loop if the week is over by the day it names. Undo: drop `attack` from the `YR.suggest` call in cockpit.js
+paintDeck (or move `if (ta) return attackSugg();` in your_roads.js to change its rank).
+
 ## 2026-11-11 (roam-c crew-public-reset): a crew made public stops showing what members shared with it by hand (claude/roam-c-crew-public-reset)
 
 Found in the security pass. When an owner makes a private crew public, members' Scores and times already went back to off
