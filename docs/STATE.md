@@ -13,6 +13,26 @@
   report's word went to the toast, not the status line. The flow now keeps feeding fixes; its wait dumps the screen state.
 - CI: apexkit-linux runs in `container: swift:6.0-jammy` (setup-swift's keyserver refresh timed out every run).
 - Next: the rest of the sweep (iOS shell, CarPlay, performance) was not reached this round.
+
+## Session 2026-11-11 (ui-round-two, PR 2): the Garage and People in the Vetta Line (claude/project-thread-5sbga7)
+
+- web/signature.css, new blocks "the Garage" and "People". Sheet header hairline; Garage title a 30 px masthead; `.gear-key`
+  is paper on `--lift-1` (no ink box, no drop edge) everywhere it appears; car cards paper with a 22 px Barlow name, their
+  keys as wells, the daily car marked with the apex dot; theme cards paper, the one in use ringed in ink (`.theme-cards`
+  padding so the shelf doesn't clip it). Car rules are `.garage-cards .car-card` because garage_ui.js appends its CSS later.
+- People: Friends | Crews at 26 px like the Log's head; `.sheet .card` (crew tiles, a friend's request) paper; the request
+  carries the apex dot. The dashed sample crew and the empty bay stay pencil (e2e checks the dashed slot).
+- Tests: tests/test_garage_line.py. e2e Garage, People, crew, friend flows pass here.
+- Next: the crew page and Your data/Settings sub-sheets (ink rules on lists), the route card's Share box.
+## Session 2026-11-11 (roam-c-ci-shards): the e2e check in four parallel jobs (claude/roam-c-ci-shards, off origin/main)
+
+- Done: `e2e/smoke.js` takes `SHARD=k/n` (flows dealt longest first, weights in `LONG_S`) and `LIST=1` (print the flows a
+  run would take). `core-tests.yml` runs `e2e (1/4)`..`e2e (4/4)` side by side (25 min limit, fail-fast off, contact
+  sheets uploaded per shard), caches `~/.cache/ms-playwright`, and keeps one job named `e2e` that needs all four.
+- Checked: the four `LIST=1` shards together are exactly the 173 flows of an unsharded run; expected flow time per job
+  from the last CI log is 5.8-6.9 min (was 25.4 min in one job).
+- Next: when a new flow runs over about 15 s, add it to `LONG_S` so it is dealt as a long one.
+
 ## Session 2026-11-11 (roam-b-crowd-bumps): bumps the crowd felt, verified and called (claude/roam-b-crowd-bumps, off origin/main)
 
 - IDEAS Q-02 crowd half, ROAD_INTELLIGENCE 4.3. `core/road_dna.spike_mask` / `Core.spikeMask` (parity-tested; detect_hazards
