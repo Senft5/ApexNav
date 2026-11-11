@@ -87,7 +87,7 @@ Implemented in `backend/src/{auth,social,segments}.ts`, one router in `index.ts`
   segment; 404 `no_friend` for strangers and unknown handles alike; 409 `duel_exists`; 10 open, 10 a day), `POST
   /api/duels/:id/accept` (opponent only; copies the stage), `DELETE /api/duels/:id` (decline or withdraw), `GET /api/duels`
   (each side's best `driver_score` on the stage inside the window, only from entries published to the other under a live
-  `share_scores` grant; friends only, never across a block). Swept 60 days after it ends.
+  `share_scores` grant, plus `time_s` (their quickest) only under `share_times`; friends only, never across a block). Swept 60 days after it ends.
 - Unfriend, block, leave crew, revoke grant: the grants and published entries between those people are deleted in the same transaction.
 - Friend requests answer identically for unknown, non-member and real handles (no handle enumeration). The requester cannot accept their own request.
 - **Keep a convoy going:** `POST /api/convoy/:id/keep` (leader only, in the room's last 30 min, one hour at a time, never past 6 h from its start; 409 `too_early` / `convoy_at_limit`) → `{ expiresAtMs, maxExpiresAtMs }`; every open socket gets `extended` (docs/CONVOY_TRANSPORT.md, `backend/test/convoy.test.ts`).

@@ -1,4 +1,4 @@
-"""Duels (web/duels.js, docs/SOCIAL.md 2.7): what each card says, waiting, on, and over; Scores only, never a time."""
+"""Duels (web/duels.js, docs/SOCIAL.md 2.7): what each card says, waiting, on, and over; the Score decides, and a time with the gap shows where a side shares times."""
 import json
 import os
 import shutil
@@ -24,6 +24,9 @@ console.log(JSON.stringify({
   won: c(over({ you: s(845), them: s(812) })), lost: c(over({ you: null, them: s(812) })), draw: c(over({ you: s(800), them: s(800) })), nobody: c(over({})),
   declined: c({ ...base, status: 'declined' }), withdrawn: c({ ...base, status: 'withdrawn', challenger: false }),
   left: [D.daysLeft(on({})), D.daysLeft(on({ ends_on: '2026-11-10' })), D.daysLeft({})],
+  timed: c(on({ you: { ...s(845), time_s: 184 }, them: { ...s(812), time_s: 190 } })),
+  timedOver: c(over({ you: { ...s(845), time_s: 200 }, them: { ...s(812), time_s: 125 } })),
+  oneTime: c(on({ you: s(845), them: { ...s(812), time_s: 190 } })), same: D.timesLine('@bob', { time_s: 90 }, { time_s: 90 }),
   shown: D.shown([over({ id: 'old', ends_on: '2026-11-01' }), on({ id: 'on' }), { ...base, id: 'ask', status: 'pending', challenger: false }, over({ id: 'recent', ends_on: '2026-11-08' }), { ...base, id: 'no', status: 'declined' }]).map((x) => x.d.id),
 }));
 """
@@ -58,8 +61,17 @@ def test_over(out):
     assert out["declined"][2] == "@bob said no thanks" and out["withdrawn"][2] == "Taken back"
 
 
-def test_never_a_time(out):
-    assert not any(w in json.dumps(out) for w in ("time", "sec", " s ", "mph", "km/h", "faster"))
+def test_times_beside_the_score(out):
+    assert out["timed"][2] == "You 845 · @bob 812 · You lead by 33 · 5 days left"     # the Score decides
+    assert out["timed"][3] == "Times: you 3:04, @bob 3:10 · you're 6 s quicker"
+    assert out["timedOver"][:4] == ["won", "Dry Ridge climb · @bob", "You won by 33 · You 845 · @bob 812", "Times: you 3:20, @bob 2:05 · @bob is 1:15 quicker"]
+    assert out["oneTime"][3] == "Times: @bob 3:10"                                       # yours not shared: no gap guessed
+    assert out["same"] == "Times: you 1:30, @bob 1:30 · the same time"
+
+
+def test_no_time_shared_says_none(out):
+    for k in ("lead", "behind", "none", "won", "lost", "draw", "nobody"):
+        assert "Times" not in out[k][3]
 
 
 def test_days_and_which_show(out):

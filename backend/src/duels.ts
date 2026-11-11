@@ -1,5 +1,6 @@
 // Duels (docs/SOCIAL.md 2.7, migration 0047): a friend challenges a friend on one of their stages for a few days, and the
-// higher Vetta Score on it wins. Scores only: technique, never a time or a speed (IDEAS guardrails). A duel reads the
+// higher Vetta Score on it wins. Each side's quickest time and the gap are shown beside it where that side shares times
+// with the other (the owner, 2026-11-10: share stage times); the Score decides. A duel reads the
 // runs each driver already publishes to the other (board_entries, behind their own Scores grant), so accepting one
 // shares nothing by itself; each side sees whether the other's Scores reach them. Challenging also shares the stage
 // itself (segment_shares), so the friend can drive it from their Stages list.
@@ -76,7 +77,8 @@ export async function duelEnd(env: Env, v: Viewer, id: string) {
 /**
  * Your duels: waiting on you, waiting on them, on, and finished in the last KEEP_DAYS. Each side's best Score on the stage
  * within the duel's days, from runs that side publishes to the other (null when none, or when their Scores don't reach
- * the other: `you_share` / `they_share` say which). Never a time.
+ * the other: `you_share` / `they_share` say which), and each side's quickest time in the window while that side shares
+ * times with the other (`time_s`, else null). The higher Score wins; times are shown beside it.
  */
 export async function duelList(env: Env, v: Viewer) {
   const rows = await all<{ id: string; challenger: string; opponent: string; canon_id: string; stage: string; days: number; status: string;
@@ -88,13 +90,15 @@ export async function duelList(env: Env, v: Viewer) {
         AND (${FRIENDS("d.challenger", "d.opponent")} OR d.status IN ('declined', 'withdrawn'))
         AND d.created_at > datetime('now', '-${KEEP_DAYS} days')
       ORDER BY d.created_at DESC, d.rowid DESC LIMIT 50`, v.id);
-  const best = (who: string, to: string, d: typeof rows[number]) => d.status === "pending" || !d.starts_on ? Promise.resolve(null) : first<{ s: number | null; on: string | null }>(env,
+  // a side's best Score in the window, and their quickest time there while they share times with the other (else null)
+  const best = (who: string, to: string, d: typeof rows[number]) => d.status === "pending" || !d.starts_on ? Promise.resolve(null) : first<{ s: number | null; on: string | null; t: number | null }>(env,
     `SELECT MAX(be.driver_score) AS s, (SELECT b2.driven_on FROM board_entries b2 WHERE b2.user_id = ?1 AND b2.canon_id = ?3 AND b2.audience_type = 'friend' AND b2.audience_id = ?2
-         AND b2.driven_on BETWEEN ?4 AND ?5 ORDER BY b2.driver_score DESC, b2.driven_on LIMIT 1) AS "on"
+         AND b2.driven_on BETWEEN ?4 AND ?5 ORDER BY b2.driver_score DESC, b2.driven_on LIMIT 1) AS "on",
+         CASE WHEN EXISTS (SELECT 1 FROM grants g WHERE g.user_id = ?1 AND g.audience_type = 'friend' AND g.audience_id = ?2 AND g.share_times = 1) THEN MIN(be.time_s) END AS t
        FROM board_entries be WHERE be.user_id = ?1 AND be.canon_id = ?3 AND be.audience_type = 'friend' AND be.audience_id = ?2
         AND be.driven_on BETWEEN ?4 AND ?5
         AND EXISTS (SELECT 1 FROM grants g WHERE g.user_id = ?1 AND g.audience_type = 'friend' AND g.audience_id = ?2 AND g.share_scores = 1)`,
-    who, to, d.canon_id, d.starts_on, d.ends_on).then((r) => (r && r.s != null ? { score: r.s, on: r.on } : null));
+    who, to, d.canon_id, d.starts_on, d.ends_on).then((r) => (r && r.s != null ? { score: r.s, on: r.on, time_s: r.t ?? null } : null));
   const shares = (who: string, to: string) => first(env, "SELECT 1 FROM grants WHERE user_id = ? AND audience_type = 'friend' AND audience_id = ? AND share_scores = 1", who, to).then((r) => !!r);
   const out = [];
   for (const d of rows) {

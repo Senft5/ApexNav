@@ -50,8 +50,10 @@ A new thing to do with a friend. On a friend's row in People, Challenge on a sta
 start, and the card shows both of your best Vetta Scores on it in that window, who leads and the days left; when it ends
 it says who won by how much, with Rematch. Drive takes you to the stage.
 
-The calls: it is Scores only, never a time, because the Score is how well corners were driven (the guardrail against
-racing on public roads stays). A duel reads only Scores each of you already shows the other (the per-friend grant and the
+The calls: the Score decides, because it is how well corners were driven. Each side's quickest time in the window and
+the gap ("you're 6 s quicker") sit beside it where that side shares times with the other (the owner, 2026-11-10: share
+stage times and gaps); a time not shared stays unshown and no gap is guessed. A time-decided duel would need a new column
+(a migration); left for the owner's word. A duel reads only Scores each of you already shows the other (the per-friend grant and the
 board entries that exist today); nothing new about a drive is stored. When one side's Scores don't reach the other the
 card says so in words, and your own card has a Show my Scores key that turns on Scores (never times) for that friend.
 Friends only; a block or an unfriend hides every duel between the two at once. At most 10 open, 10 new a day, one open

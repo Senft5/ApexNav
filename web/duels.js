@@ -1,6 +1,7 @@
 // Duels (docs/SOCIAL.md 2.7; backend/src/duels.ts): you challenge a friend on one of your stages for 3, 7 or 14 days, and
-// the higher Vetta Score on it wins. Scores only, never a time (IDEAS guardrails): the Score is how well the corners were
-// driven, so a duel is won by driving better, not faster. A duel reads only the Scores each of you already shows the
+// the higher Vetta Score on it wins: the Score is how well the corners were driven, so a duel is won by driving better.
+// Each side's quickest time there and the gap are shown beside it where that side shares times with the other (the
+// owner, 2026-11-10: share stage times and gaps). A duel reads only the Scores each of you already shows the
 // other, and its card says plainly when one side's don't reach the other yet. card() and daysLeft() are pure
 // (tests/test_duels.py); mount() draws the cards on People → Friends and the Challenge sheet.
 (function (root) {
@@ -12,6 +13,21 @@
   function daysLeft(d) {
     const a = dayMs(d && d.today), b = dayMs(d && d.ends_on);
     return Number.isFinite(a) && Number.isFinite(b) ? Math.round((b - a) / 86400000) + 1 : null;
+  }
+  /** 184 → "3:04". */
+  function clock(sec) {
+    if (!Number.isFinite(sec) || sec < 0) return '--';
+    const x = Math.round(sec), h = Math.floor(x / 3600), m = Math.floor((x % 3600) / 60), s = String(x % 60).padStart(2, '0');
+    return h ? `${h}:${String(m).padStart(2, '0')}:${s}` : `${m}:${s}`;
+  }
+  const quick = (sec) => (sec < 60 ? `${Math.round(sec)} s` : clock(sec));
+  /** "Times: you 3:04, @sam 3:10 · you're 6 s quicker" from what each side shares; '' when neither shares a time. */
+  function timesLine(who, a, b) {
+    const ta = a && a.time_s != null ? a.time_s : null, tb = b && b.time_s != null ? b.time_s : null;
+    if (ta == null && tb == null) return '';
+    const parts = [ta != null ? `you ${clock(ta)}` : '', tb != null ? `${who} ${clock(tb)}` : ''].filter(Boolean).join(', ');
+    const g = ta != null && tb != null ? (ta === tb ? ' \u00b7 the same time' : ta < tb ? ` \u00b7 you're ${quick(tb - ta)} quicker` : ` \u00b7 ${who} is ${quick(ta - tb)} quicker`) : '';
+    return `Times: ${parts}${g}`;
   }
   const left = (n) => (n == null ? '' : n <= 1 ? 'last day' : `${n} days left`);
 
@@ -35,13 +51,13 @@
     if (!d.they_share) gaps.push(`${who}'s Scores don't reach you yet; theirs show once they share them with you.`);
     if (d.status === 'on') {
       const n = daysLeft(d), lead = you != null && them != null ? (you > them ? `You lead by ${you - them}` : them > you ? `${who} leads by ${them - you}` : 'Level') : you == null && them == null ? 'No runs yet' : you == null ? `${who} has a run in` : 'You have a run in';
-      return { kind: 'on', head: `${d.stage} · ${who}`, line: `${score} · ${lead} · ${left(n)}`, note: gaps.join(' '), keys: [...(d.you_share ? [] : ['share']), ...(d.have_stage ? ['drive'] : []), 'withdraw'] };
+      return { kind: 'on', head: `${d.stage} · ${who}`, line: `${score} · ${lead} · ${left(n)}`, note: [timesLine(who, d.you, d.them), ...gaps].filter(Boolean).join(' '), keys: [...(d.you_share ? [] : ['share']), ...(d.have_stage ? ['drive'] : []), 'withdraw'] };
     }
     // over
     const kind = you == null && them == null ? 'none' : them == null || (you != null && you > them) ? 'won' : you == null || them > you ? 'lost' : 'draw';
     const line = { won: `You won${you != null && them != null ? ` by ${you - them}` : ''}`, lost: `${who} won${you != null && them != null ? ` by ${them - you}` : ''}`,
       draw: `A draw at ${you}`, none: 'Neither of you drove it' }[kind];
-    return { kind, head: `${d.stage} · ${who}`, line: `${line} · ${score}`, note: '', keys: ['rematch'] };
+    return { kind, head: `${d.stage} · ${who}`, line: `${line} · ${score}`, note: timesLine(who, d.you, d.them), keys: ['rematch'] };
   }
 
   /** Cards worth a place on People: anything waiting or on, and a result for 3 days after it ends. Asks first. */
@@ -167,6 +183,6 @@
     return { cards, challenge };
   }
 
-  const api = { card, shown, daysLeft, mount, DAYS };
+  const api = { card, shown, daysLeft, timesLine, clock, mount, DAYS };
   if (typeof module !== 'undefined' && module.exports) module.exports = api; else root.ApexDuels = api;
 })(typeof window !== 'undefined' ? window : globalThis);

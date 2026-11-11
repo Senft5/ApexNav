@@ -9,11 +9,11 @@ type Msg = Record<string, any>;
 const json = async (r: Promise<Response>) => (await (await ok(r)).json()) as Msg;
 const duels = async (u: TestUser) => (await json(api(u, "GET", "/api/duels"))) as unknown as Msg[];
 const scoresTo = (u: TestUser, to: TestUser) => ok(api(u, "PUT", "/api/grants", { audience_type: "friend", audience_id: to.id, share_scores: true }));
-const run = (u: TestUser, seg: string, score: number, day: string) => ok(api(u, "POST", "/api/board", { segment_id: seg, driver_score: score, time_s: 300, driven_on: day }));
+const run = (u: TestUser, seg: string, score: number, day: string, time_s = 300) => ok(api(u, "POST", "/api/board", { segment_id: seg, driver_score: score, time_s, driven_on: day }));
 const day = async (offset: number) => (await env.DB.prepare(`SELECT date('now', '${offset} days') AS d`).first<{ d: string }>())!.d;
 
 describe("duels", () => {
-  it("a challenge, accepted: the stage reaches the friend, and each side's best Score in the days counts, never a time", async () => {
+  it("a challenge, accepted: the stage reaches the friend, and each side's best Score in the days counts; a time only from a side that shares times", async () => {
     const a = await makeUser("alice"), b = await makeUser("bob");
     await befriend(a, b);
     const seg = await makeSegment(a, "Dry Ridge climb");
@@ -33,12 +33,18 @@ describe("duels", () => {
     await run(a, seg, 812, await day(0));
     await run(b, bSeg.id, 790, await day(0));
     [mineA] = await duels(a);
-    expect([mineA.you, mineA.them, mineA.you_share, mineA.they_share]).toEqual([{ score: 812, on: await day(0) }, null, true, false]);
+    expect([mineA.you, mineA.them, mineA.you_share, mineA.they_share]).toEqual([{ score: 812, on: await day(0), time_s: null }, null, true, false]);
     await scoresTo(b, a);
     await run(b, bSeg.id, 845, await day(0));
     [mineA] = await duels(a); [mineB] = await duels(b);
     expect([mineA.you.score, mineA.them.score, mineB.you.score, mineB.them.score]).toEqual([812, 845, 845, 812]);
-    expect(JSON.stringify(mineA)).not.toMatch(/time|300/);
+    expect(JSON.stringify(mineA)).not.toMatch(/300/);                                       // no times shared yet: none shown
+    // bob shares times with alice: his quickest in the window shows to her; hers, not shared, stays null
+    await ok(api(b, "PUT", "/api/grants", { audience_type: "friend", audience_id: a.id, share_scores: true, share_times: true }));
+    await run(b, bSeg.id, 845, await day(0), 271);                                             // the same run, now with its time
+    await run(b, bSeg.id, 700, await day(-1), 200);                                             // before it started: not this duel's
+    [mineA] = await duels(a); [mineB] = await duels(b);
+    expect([mineA.them.score, mineA.them.time_s, mineA.you.time_s, mineB.you.time_s]).toEqual([845, 271, null, 271]);
     // over once its last day has passed
     await env.DB.prepare("UPDATE duels SET starts_on = date('now', '-8 days'), ends_on = date('now', '-1 days') WHERE id = ?").bind(id).run();
     await env.DB.prepare("UPDATE board_entries SET driven_on = date(driven_on, '-2 days')").run();
