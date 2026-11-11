@@ -31,6 +31,20 @@
 - Tests: tests/test_route_card.py; e2e "plan flow (c)".
 - Next: CarPlay has not had a design pass in this run (Swift, not visible from the cloud).
 
+## Session 2026-11-11 (fable-drive-hud): the drive screen, "Vetta Line" (claude/fable-drive-hud, off origin/main ac6c6c6)
+
+- `web/instruments.js`: `mountLine` (Roadbook's cluster, `theme.cluster === 'line'`): `lineSpeed` (hero numeral + the
+  `.speed-line` ruler with fill, tip, pace, sight and limit marks; counts in over `COUNT_IN_MS` via pure `countIn`),
+  `gDial(…, line)` (faceless meter, `.g-ring` drawn on, Brake above, Bank below), a `.ledger` row (odometer, Road, Score).
+  `mountDials` unchanged for the other looks. Renderer `dial: 'line'` added to themes.js KNOWN_RENDERERS and
+  theme_contract.js RENDERERS (elsewhere it falls back to the printed dial). Odometer's leading zeros are `.dg.lead`.
+  The strip: `ADVANCE_MS` 420; the corner tulip's stroke is `.pen` with pathLength 1, drawn on by `.rb-box.advance`.
+- `web/cockpit.js` paintDriveStat sets `#driveBar[data-state]` (seek / rec / off / zone) for the drawn seeking state.
+- `web/index.html`: the "Vetta Line" CSS block above "The opening cover"; the old `.rb-advance` rules replaced there.
+- Tests: tests/test_drive_hud.py (count-in curve, which look gets which cluster, parts kept, motion bounds, tokens, 13 px);
+  e2e "the drive screen, Vetta Line…".
+- Next: CarPlay's own speed readout could take the same hierarchy (Swift, not compiled here).
+
 ## Session 2026-11-10 (fable-your-data): Your data as Settings-style rows (claude/fable-your-data, off origin/main 3f2f315)
 
 - `web/index.html` only: the Your data section's keys are `.nav-rows.data-rows` with three `.nav-group` headings; the

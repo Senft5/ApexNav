@@ -17,8 +17,8 @@
       // the theme's co-driver (REVIEW.md 4.4): who reads the notes comes with the look. What the voice says, and the line its
       // card quotes, are the pack's (web/voice_lines.js PACKS, U-113), so a card never quotes a line the voice doesn't say.
       voice: { id: 'marguerite', name: 'Marguerite', who: 'Calm, exact, a step ahead.' },
-      fonts: FONT, cluster: 'dials', notes: 'roadbook', gauge: 'printed',
-      renderers: { dial: 'printed', meter: 'gball', strip: 'roadbook' },   // the theme contract's three renderers (theme_contract.js)
+      fonts: FONT, cluster: 'line', notes: 'roadbook', gauge: 'printed',   // the Vetta Line cluster: a hero numeral over a ruled line (instruments.js mountLine)
+      renderers: { dial: 'line', meter: 'gball', strip: 'roadbook' },   // the theme contract's three renderers (theme_contract.js)
       day: {
         // panel round 2 (IN-3, PR-2): the route is drawn in ink; the one red pen marks only what needs acting on (signal)
         stage: '#F2EBDD', ink: '#1C1A17', dim: '#6A6255', route: '#1C1A17', routeCasing: '#F2EBDD',
@@ -109,7 +109,7 @@
   // A server can be newer than the app on the phone (it deploys at once; a TestFlight build follows): a renderer this build
   // doesn't know, or the car's cluster without its data, falls back to the printed dial, the g-ball and the road book, so a
   // granted theme is drawn plainly instead of vanishing (2026-11-03: the car themes disappeared on 572.1 for exactly this).
-  const KNOWN_RENDERERS = { dial: ['printed', 'sevenseg', 'bezel', 'car'], meter: ['gball', 'bars', 'bezelg', 'car'], strip: ['roadbook', 'vfd'] };
+  const KNOWN_RENDERERS = { dial: ['printed', 'line', 'sevenseg', 'bezel', 'car'], meter: ['gball', 'bars', 'bezelg', 'car'], strip: ['roadbook', 'vfd'] };
   const FALLBACK_RENDERER = { dial: 'printed', meter: 'gball', strip: 'roadbook' };
   function renderersFor(r, car) {
     const out = {};

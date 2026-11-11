@@ -123,7 +123,7 @@
       const p3 = [p2[0] + exitLen * Math.cos(h), p2[1] + exitLen * Math.sin(h)];
       const a = 7, hx = Math.cos(h), hy = Math.sin(h);
       const head = `${p3[0] + hx * a},${p3[1] + hy * a} ${p3[0] - hy * a * 0.6},${p3[1] + hx * a * 0.6} ${p3[0] + hy * a * 0.6},${p3[1] - hx * a * 0.6}`;
-      body += `<path d="M${p0} L${p1} A${r} ${r} 0 0 ${left ? 0 : 1} ${p2} L${p3}" fill="none" stroke="${ink}" stroke-width="${w}" stroke-linecap="round" stroke-linejoin="round"/>`;
+      body += `<path class="pen" pathLength="1" d="M${p0} L${p1} A${r} ${r} 0 0 ${left ? 0 : 1} ${p2} L${p3}" fill="none" stroke="${ink}" stroke-width="${w}" stroke-linecap="round" stroke-linejoin="round"/>`;
       body += `<polygon points="${head}" fill="${ink}"/>`;
       body += `<circle cx="${p0[0]}" cy="${p0[1]}" r="4.2" fill="${ink}"/>`;
       if ((note.mods || []).includes('over crest')) body += `<path d="M10 22 Q20 10 30 22" fill="none" stroke="${accent}" stroke-width="2.6"/>`;
@@ -165,6 +165,7 @@
   if (typeof addEventListener === 'function') addEventListener('resize', () => { stripEpoch++; });
   // and so can the web fonts arriving (the page renders again on document.fonts.ready)
   if (typeof document !== 'undefined' && document.fonts && document.fonts.addEventListener) document.fonts.addEventListener('loadingdone', () => { stripEpoch++; });
+  const ADVANCE_MS = 420;
   function renderNotes(el, theme, notes) {
     const custom = theme && theme.renderers && RENDER.strip[theme.renderers.strip];   // a Pro theme's strip (the contract's third)
     if (custom) return custom(el, theme, notes, { lockup, tulipSVG, hazard: (n) => HAZARD_TYPES.has(n.type) });
@@ -200,8 +201,9 @@
       el._shape = shape; el._dists = JSON.stringify(dists); el._built = el.firstChild;
       return;
     }
-    // When the lead note changes (the old one was passed), the page slides on for 160 ms. The strip is rebuilt every
-    // frame, so each rebuild resumes the slide where it was (negative delay) instead of restarting it.
+    // When the lead note changes (the old one was passed), the new call arrives in ADVANCE_MS: its words settle and its
+    // tulip is drawn on by the pen (index.html .rb-box.advance). A rebuild inside that time resumes the move where it
+    // was (negative delay, --adv for the tulip's line) instead of restarting it.
     const lead = notes[0].key, t0 = typeof performance !== 'undefined' ? performance.now() : 0;
     if (lead !== undefined && el._lead !== undefined && lead !== el._lead) el._advanceAt = t0;
     el._lead = lead;
@@ -211,7 +213,7 @@
       // a measured hazard that becomes the call takes the hazard plate's colours (docs/design/REVIEW.md 4.3)
       const hz = HAZARD_TYPES.has(n.type);
       const box = html('div', 'rb-box' + (i === 0 ? ' now' : '') + (hz && i === 0 ? ' hz' : ''), el);
-      if (since < 160) { box.classList.add('advance'); box.style.animationDelay = `-${Math.round(since)}ms`; }
+      if (since < ADVANCE_MS) { box.classList.add('advance'); box.style.animationDelay = `-${Math.round(since)}ms`; box.style.setProperty('--adv', `-${Math.round(since)}ms`); }
       const d = html('div', 'rb-dist', box);
       html('b', '', d, n.dist);
       html('small', '', d, n.unit);
@@ -322,24 +324,27 @@
     };
   }
 
-  function gDial(parent, printed) {
-    const s = svg('svg', { viewBox: '0 0 200 200', class: 'dial-svg' }, parent);
-    svg('circle', { cx: 100, cy: 100, r: 97, fill: 'var(--face)', stroke: printed ? 'var(--face-ink)' : 'var(--rule)', 'stroke-width': printed ? 2.5 : 1.5 }, s);
+  // line: the Vetta Line cluster's meter (mountLine). The same ball, trail and Bank, printed straight on the panel's paper:
+  // no face, hairline rings the pen draws on once (index.html .g-ring), Brake named over the ring and Bank read under it, not across the ball.
+  function gDial(parent, printed, line) {
+    const s = svg('svg', { viewBox: line ? '0 -40 200 284' : '0 0 200 200', class: line ? 'dial-svg g-line' : 'dial-svg' }, parent);
+    const ring = (r, attrs) => { const c = svg('circle', { cx: 100, cy: 100, r, ...attrs }, s); if (line) { c.setAttribute('class', 'g-ring'); c.style.setProperty('--len', (2 * Math.PI * r).toFixed(1)); } return c; };
+    ring(97, { fill: line ? 'none' : 'var(--face)', stroke: printed ? 'var(--face-ink)' : 'var(--rule)', 'stroke-width': line ? 2 : printed ? 2.5 : 1.5 });
     const G = 72 / 0.8;
-    [0.25, 0.5, 0.75].forEach(g => svg('circle', { cx: 100, cy: 100, r: g * G, fill: 'none', stroke: g === 0.5 ? 'var(--face-ink)' : 'var(--face-dim)', 'stroke-width': g === 0.5 ? 1 : 0.7 }, s));
-    svg('line', { x1: 28, y1: 100, x2: 172, y2: 100, stroke: 'var(--face-dim)', 'stroke-width': 0.7 }, s);
-    svg('line', { x1: 100, y1: 28, x2: 100, y2: 172, stroke: 'var(--face-dim)', 'stroke-width': 0.7 }, s);
-    svg('text', { x: 100, y: 48, 'text-anchor': 'middle', class: 'dial-label' }, s).textContent = 'BRAKE';
-    svg('text', { x: 100 + 0.5 * G + 3, y: 96, class: 'dial-tiny' }, s).textContent = '.5';
+    [0.25, 0.5, 0.75].forEach(g => ring(g * G, { fill: 'none', stroke: g === 0.5 ? 'var(--face-ink)' : 'var(--face-dim)', 'stroke-width': line ? (g === 0.5 ? 1.6 : 1.1) : g === 0.5 ? 1 : 0.7 }));
+    svg('line', { x1: 28, y1: 100, x2: 172, y2: 100, stroke: 'var(--face-dim)', 'stroke-width': line ? 1.1 : 0.7 }, s);
+    svg('line', { x1: 100, y1: 28, x2: 100, y2: 172, stroke: 'var(--face-dim)', 'stroke-width': line ? 1.1 : 0.7 }, s);
+    svg('text', { x: 100, y: line ? -12 : 48, 'text-anchor': 'middle', class: 'dial-label' }, s).textContent = 'BRAKE';   // line: over the ring, where braking rolls the ball
+    if (!line) svg('text', { x: 100 + 0.5 * G + 3, y: 96, class: 'dial-tiny' }, s).textContent = '.5';
     for (let d = -10; d <= 10; d += 2.5) {
       const a = 90 - d * 3, [x1, y1] = polar(92, a), [x2, y2] = polar(d % 5 === 0 ? 84 : 88, a);
       svg('line', { x1, y1, x2, y2, stroke: d === 0 ? 'var(--face-ink)' : 'var(--face-dim)', 'stroke-width': d === 0 ? 1.8 : 1 }, s);
     }
     // panel round 2 (PR-2): the ball, its trail and Bank are readings, in the face's ink; none of them is ever the alarm red
     const bank = svg('path', { d: 'M100 182 L96 172 L104 172 Z', fill: 'var(--face-ink)' }, s);
-    const bankTxt = svg('text', { x: 100, y: 158, 'text-anchor': 'middle', class: 'dial-digital small' }, s);
-    const trail = svg('polyline', { points: '', fill: 'none', stroke: 'var(--face-ink)', 'stroke-opacity': 0.4, 'stroke-width': 2 }, s);
-    const ball = svg('circle', { cx: 100, cy: 100, r: 7, fill: 'var(--face-ink)' }, s);
+    const bankTxt = svg('text', { x: 100, y: line ? 236 : 158, 'text-anchor': 'middle', class: 'dial-digital small' }, s);
+    const trail = svg('polyline', { points: '', fill: 'none', stroke: 'var(--face-ink)', 'stroke-opacity': 0.4, 'stroke-width': line ? 3 : 2 }, s);
+    const ball = svg('circle', { cx: 100, cy: 100, r: line ? 10 : 7, fill: 'var(--face-ink)' }, s);
     const pts = [];
     return (d) => {
       const known = d.latG != null && d.lonG != null;
@@ -480,7 +485,8 @@
       if (digits.dataset.v !== s) {
         digits.dataset.v = s;
         digits.innerHTML = '';
-        for (const ch of s) html('span', ch === '.' ? 'dot' : 'dg', digits, ch);
+        const lead = s.search(/[1-9]|0\./);                          // the zeros before the number: pencil on the printed line
+        [...s].forEach((ch, k) => html('span', ch === '.' ? 'dot' : k < lead ? 'dg lead' : 'dg', digits, ch));
       }
       setT(total, d.totalMi != null ? `of ${d.totalMi.toFixed(1)}` : '');
     };
@@ -809,7 +815,9 @@
 
   // The theme contract's three renderers (theme_contract.js): a theme names its dial, meter and strip; Pro themes register
   // theirs here (register(slot, id, fn)). Everything around them, and the hazard plate, stays the page's.
-  const RENDER = { dial: { printed: (el) => speedDial(el, true), sevenseg: sevenSeg, bezel: bezelDial, car: carDial }, meter: { gball: (el) => gDial(el, true), bars: barMeters, bezelg: bezelG, car: carMeter },
+  // (line: the Vetta Line numeral and ruler; mountLine draws it, since it owns the ruler's place. In the three-dial
+  // layout the name is the printed dial.)
+  const RENDER = { dial: { printed: (el) => speedDial(el, true), line: (el) => speedDial(el, true), sevenseg: sevenSeg, bezel: bezelDial, car: carDial }, meter: { gball: (el) => gDial(el, true), bars: barMeters, bezelg: bezelG, car: carMeter },
     strip: { roadbook: null, vfd: null } };                          // the VFD strip is the road book's, in the VFD skin
   function register(slot, id, fn) { if (RENDER[slot]) RENDER[slot][id] = fn; }
   const pick = (theme, slot, fallback) => (theme.renderers && RENDER[slot][theme.renderers[slot]]) || RENDER[slot][fallback];
@@ -882,11 +890,100 @@
     };
   }
 
+  // ---- The Vetta Line cluster (Roadbook; theme.cluster 'line') ----------------------------------------------------------
+  // One hero readout and a ruled line, printed on the panel's paper: the speed as a numeral you read at arm's length, and
+  // under the whole row a ruler the speed is drawn along in ink, with the limit (the small sign), the corner's pace (the
+  // ink mark) and the sight line (the amber mark) standing on it where they fall. Limit, Sight and the meter sit beside
+  // the numeral, clearly second; the trip, the road and the Score are one quiet ledger line under the ruler.
+  // The start: when the speed first reads (a drive or a replay begins) the numeral counts up and the line is drawn to it
+  // once, COUNT_IN_MS, then both are the reading and nothing else moves. Reduced motion: no count, the reading at once.
+  const COUNT_IN_MS = 700;
+  const calm = () => { try { return typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches; } catch (_) { return false; } };
+  /** How much of the reading shows `ms` after it first read: 0..1, easing out; 1 once the count is over or when `still`. */
+  function countIn(ms, still) {
+    if (still || !(ms >= 0) || ms >= COUNT_IN_MS) return 1;
+    const t = ms / COUNT_IN_MS;
+    return 1 - Math.pow(1 - t, 3);
+  }
+  function lineSpeed(parent, rule) {
+    const s = svg('svg', { viewBox: '0 0 150 100', class: 'dial-svg line-svg', preserveAspectRatio: 'xMinYMax meet' }, parent);
+    svg('text', { x: 1, y: 14, class: 'dial-label' }, s).textContent = U() ? U().speedU().toUpperCase() : 'MPH';
+    const digital = svg('text', { x: -2, y: 97, class: 'dial-digital' }, s);
+    // the ruler: its own drawing the width of the panel (percent positions, so it is never stretched)
+    const r = svg('svg', { class: 'speed-line-svg', width: '100%', height: 34, 'aria-hidden': 'true' }, rule);
+    const pct = (v) => `${(100 * Math.max(0, Math.min(top(), v)) / top()).toFixed(2)}%`;
+    const step = top() > 160 ? 20 : 10, majorEvery = top() > 160 ? 40 : 20;
+    const inner = r; r.style.overflow = 'visible';                  // the end marks and numerals may run into the line's side padding
+    svg('line', { x1: 0, x2: '100%', y1: 13, y2: 13, class: 'sl-base' }, inner);
+    for (let v = 0; v <= top(); v += step) {
+      const major = v % majorEvery === 0;
+      svg('line', { x1: pct(v), x2: pct(v), y1: 13, y2: major ? 20 : 17, class: major ? 'sl-tick major' : 'sl-tick' }, inner);
+      if (major) svg('text', { x: pct(v), y: 33, 'text-anchor': 'middle', class: 'sl-num' }, inner).textContent = v;
+    }
+    const fill = svg('line', { x1: 0, x2: 0, y1: 13, y2: 13, class: 'sl-fill' }, inner);
+    const mark = (cls, draw) => { const g = svg('svg', { x: 0, y: 0, class: 'sl-mark ' + cls }, inner); g.style.overflow = 'visible'; draw(g); return g; };
+    const limit = mark('sl-limit', (g) => svg('rect', { x: -4.5, y: 0.75, width: 9, height: 11 }, g));
+    const sight = mark('sl-sight', (g) => svg('path', { d: 'M0 11.5 L-5 2 L5 2 Z' }, g));
+    const pace = mark('sl-pace', (g) => svg('path', { d: 'M0 12.5 L-5.5 2 L5.5 2 Z' }, g));
+    const tip = mark('sl-tip', (g) => svg('circle', { cx: 0, cy: 13, r: 5 }, g));
+    let since = null;
+    return (d) => {
+      const live = d.speedMph != null;
+      const now = typeof performance !== 'undefined' ? performance.now() : Date.now();
+      if (!live) since = null; else if (since == null) since = now;
+      const k = live ? countIn(now - since, calm()) : 1, shown = live ? d.speedMph * k : 0;
+      setT(digital, live ? Math.round(shown) : '--');
+      digital.classList.toggle('unk', !live);
+      setA(fill, 'x2', pct(shown)); setA(tip, 'x', pct(shown));
+      setS(tip, 'display', live ? '' : 'none');
+      // panel round 2 (PR-2): readings are ink; the line's end takes the signal only when you are over the corner's pace
+      tip.classList.toggle('over', live && d.paceMph != null && d.speedMph > d.paceMph + 1);
+      const place = (node, mph) => {
+        if (mph == null || !isFinite(mph)) { setS(node, 'display', 'none'); return; }
+        setS(node, 'display', ''); setA(node, 'x', pct(mph));
+      };
+      place(pace, d.paceMph); place(sight, d.sightMph); place(limit, d.limitMph);
+    };
+  }
+
+  function mountLine(el, theme) {
+    el.innerHTML = '';
+    el.className = `cluster cluster-line gauge-${theme.gauge}`;
+    const sp = html('div', 'dial dial-speed', el);
+    const ro = html('div', 'cluster-center', el);
+    const gg = html('div', 'dial dial-g', el);
+    const rule = html('div', 'speed-line', el);
+    const ledger = html('div', 'ledger', el);
+    const u = [lineSpeed(sp, rule), readouts(ro), odometer(ledger, false), gDial(gg, true, true)];
+    sp.dataset.explain = 'speed'; gg.dataset.explain = 'gball'; rule.dataset.explain = 'speed';
+    ledger.querySelector('.odo').dataset.explain = 'trip';
+    // Night (REVIEW2.md U-36): the trip readout steps aside for a quiet Trip key; a tap shows it for ten seconds
+    const peek = html('button', 'trip-peek', ledger, 'Trip'); peek.type = 'button'; let peekT = 0;
+    peek.addEventListener('click', () => { el.classList.add('show-trip'); clearTimeout(peekT); peekT = setTimeout(() => el.classList.remove('show-trip'), 10000); });
+    const roadType = html('div', 'dna-arch', ledger, 'Road: --');
+    roadType.dataset.explain = 'road';
+    // the live Vetta Score closes the ledger; "--" until known
+    const sc = html('div', 'g-score', ledger), scV = html('b', '', sc, '--');
+    sc.dataset.explain = 'score';
+    html('span', '', sc, 'SCORE');
+    u.push(d => { const t = Number.isFinite(d.score) ? String(Math.round(d.score)) : '--'; if (scV.textContent !== t) scV.textContent = t; sc.classList.toggle('unk', t === '--'); });
+    u.push(named(el));                                                // AM-3: each instrument said, value first
+    u.push(d => {
+      const type = d.sector && d.sector.archetype;
+      // REVIEW4 U-67: in a drive, the road under the car by the map's name; otherwise the road's type, labelled
+      const name = typeof d.roadName === 'string' && d.roadName.trim() ? d.roadName.trim() : null;
+      const text = `Road: ${name || (type === 'Flowing sweepers' ? 'Sweepers' : type === 'Fast open' ? 'Fast & open' : (type || '--'))}`;
+      if (roadType.textContent !== text) roadType.textContent = text;
+      roadType.hidden = !(d.routeOnly || d.sector || name);
+    });
+    return { update: (d) => u.forEach(f => f(d)) };
+  }
+
   function mountCluster(el, theme) {
-    return mountDials(el, theme);
+    return theme && theme.cluster === 'line' ? mountLine(el, theme) : mountDials(el, theme);
   }
 
   const api = { mountCluster, renderNotes, tulipSVG, lockup, stripCode, register, kitPose, KIT, springNeedle, SPEED_MAX, carGauge, carReading, CAR_READS,
-    sightCell, sightValue, sightShort, slowLine, bankText, EXPLAIN, explainAllowed };
+    sightCell, sightValue, sightShort, slowLine, bankText, EXPLAIN, explainAllowed, countIn, COUNT_IN_MS, ADVANCE_MS };
   if (typeof module !== 'undefined' && module.exports) module.exports = api; else root.ApexInstruments = api;
 })(typeof window !== 'undefined' ? window : globalThis);

@@ -6507,6 +6507,104 @@ flow('plan flow (g) one name for go: Start on the card and the bar, Just drive w
   check(taps.n === 1, 'a free drive is one tap');
 }, IPHONE);
 
+flow('the drive screen, Vetta Line: one hero speed over a ruled line, Limit, Sight and the meter second, a ledger for the trip, the road and the Score; End the one ink key, Report a word; the paper arrives once and a call is drawn on; still under reduced motion; upright and on its side', async (page, base) => {
+  await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); localStorage.setItem('apex.prefs', JSON.stringify({ notesMode: 'full', nightMode: 'off' })); } catch (_) {} });
+  const drive = (mps) => page.evaluate(async (v) => { for (let i = 0; i < 12; i++) { window.apex.live({ lat: 35.96 + i * 1e-5, lon: -83.92, accuracy_m: 5, speed_mps: v, course_deg: 0, has_fix: true, calibration: 'locked', lat_g: 0.1, lon_g: 0 }); await new Promise((r) => setTimeout(r, 40)); } }, mps);
+  const mph = Math.round(12 * 2.23694);
+  await page.goto(base + '/index.html');
+  await page.waitForFunction(() => window.apex && window.apexDebug);
+  check(await page.evaluate(() => document.documentElement.dataset.theme) === 'roadbook', 'Roadbook is the look');
+  await drive(12);
+  // the start: the strip and the panel are arriving on one curve (read while the drive is under half a second old)
+  const start = await page.evaluate(() => ({ panel: getComputedStyle(document.getElementById('binnacle')).animationName, strip: getComputedStyle(document.getElementById('notes')).animationName,
+    panelMs: getComputedStyle(document.getElementById('binnacle')).animationDuration, fill: getComputedStyle(document.getElementById('binnacle')).animationFillMode,
+    ring: getComputedStyle(document.querySelector('#cluster .g-ring')).animationName }));
+  check(start.panel === 'hud-rise' && start.strip === 'hud-drop' && start.panelMs === '0.42s' && start.fill === 'backwards' && start.ring === 'hud-ring', 'the paper arrives once, 420 ms, and leaves nothing held: ' + JSON.stringify(start));
+  await page.waitForTimeout(1500);                                   // the set piece is over inside 1.4 s
+  await drive(12);
+  const r = await page.evaluate(() => {
+    const q = (s) => document.querySelector(s), box = (s) => { const b = q(s).getBoundingClientRect(); return { x: b.left, y: b.top, r: b.right, b: b.bottom, w: b.width, h: b.height }; };
+    const d = q('#cluster .dial-speed .dial-digital'), cs = (s, pe) => getComputedStyle(q(s), pe);
+    const fill = q('#cluster .sl-fill'), rep = cs('#hzReportBtn'), end = cs('#driveEnd');
+    const ink = getComputedStyle(document.documentElement).getPropertyValue('--panel-ink').trim();
+    const probe = document.createElement('i'); probe.style.color = ink; document.body.append(probe); const inkRgb = getComputedStyle(probe).color; probe.remove();
+    return { cls: q('#cluster').className, speed: d.textContent, px: Math.round(parseFloat(getComputedStyle(d).fontSize) * d.getScreenCTM().a), font: getComputedStyle(d).fontFamily,
+      unit: q('#cluster .dial-speed .dial-label').textContent, fillTo: parseFloat(fill.getAttribute('x2')), tip: getComputedStyle(q('#cluster .sl-tip')).display,
+      limitMark: getComputedStyle(q('#cluster .sl-limit')).display, nums: [...document.querySelectorAll('#cluster .sl-num')].map((n) => n.textContent).join(' '),
+      line: box('#cluster .speed-line'), cluster: box('#cluster'), speedBox: box('#cluster .dial-speed'), limit: box('#cluster .ro-limit'), sight: box('#cluster .ro-sight'), meter: box('#cluster .dial-g > svg'),
+      ledger: box('#cluster .ledger'), score: box('#cluster .g-score'), trip: box('#cluster .odo'), scoreIn: !!q('#cluster .ledger > .g-score'), scoreText: q('#cluster .g-score').textContent,
+      bank: q('#cluster .dial-g .dial-digital.small').textContent, brake: q('#cluster .dial-g .dial-label').textContent, tripText: q('#cluster .odo').textContent,
+      inkRgb, endBg: end.backgroundColor, endH: parseFloat(end.height), repBg: rep.backgroundColor, repEdge: parseFloat(rep.borderTopWidth), repH: parseFloat(rep.height), repText: q('#hzReportBtn').textContent,
+      state: q('#driveBar').dataset.state, status: q('#dsMain').textContent, seek: cs('#dsMain', '::after').animationName, ring: cs('#dsMain', '::before').borderTopWidth,
+      stripEdge: parseFloat(cs('#notes').borderBottomWidth), stripLift: cs('#notes').boxShadow !== 'none', panelEdge: parseFloat(cs('#binnacle').borderTopWidth), panelLift: cs('#binnacle').boxShadow !== 'none',
+      side: document.documentElement.scrollWidth - innerWidth };
+  });
+  check(/cluster-line/.test(r.cls), 'Roadbook mounts the Vetta Line cluster: ' + r.cls);
+  check(r.speed === String(mph) && r.unit === 'MPH', 'the numeral reads the speed once it has counted in: ' + r.speed + ' ' + r.unit);
+  check(r.px >= 84 && /Barlow Condensed/.test(r.font), 'the hero numeral, Barlow Condensed at 84 px or more on a 393 pt phone: ' + r.px + ' ' + r.font);
+  check(Math.abs(r.fillTo - 100 * mph / 140) < 0.6 && r.tip !== 'none', 'the line is drawn to the speed: ' + r.fillTo);
+  check(r.limitMark === 'none', 'no limit known: no limit mark on the line (unknown stays unknown)');
+  check(r.nums === '0 20 40 60 80 100 120 140', 'the ruler is numbered: ' + r.nums);
+  check(r.line.w >= r.cluster.w - 16 && r.line.y >= r.speedBox.b - 1 && r.ledger.y >= r.line.b - 1, 'the line runs the width of the panel, under the numeral, over the ledger: ' + JSON.stringify([r.line, r.cluster, r.ledger]));
+  check(r.limit.x >= r.speedBox.r - 1 && r.sight.x >= r.limit.r && r.meter.x >= r.sight.r - 1 && Math.abs(r.limit.y - r.sight.y) < 12, 'Limit, Sight and the meter stand to the right of the speed, in that order: ' + JSON.stringify([r.speedBox, r.limit, r.sight, r.meter]));
+  check(r.speedBox.h > 1.6 * r.limit.h && r.speedBox.w > 1.5 * r.meter.w, 'the speed is the hero, the rest clearly second: ' + JSON.stringify([r.speedBox, r.limit, r.meter]));
+  check(r.scoreIn && /^--SCORE$/.test(r.scoreText) && r.score.y >= r.ledger.y - 1 && r.score.b <= r.ledger.b + 1 && r.trip.y >= r.ledger.y - 1 && r.score.x > r.trip.r, 'the trip and the Score share the ledger line, -- until known: ' + JSON.stringify([r.scoreText, r.score, r.trip, r.ledger]));
+  check(r.bank === 'BANK --' && r.brake === 'BRAKE' && /Trip mi/.test(r.tripText), 'nothing the panel said is lost: ' + JSON.stringify([r.bank, r.brake, r.tripText]));
+  check(r.endBg === r.inkRgb && r.endH >= 52, 'End is the one ink key, 52 pt or more: ' + JSON.stringify([r.endBg, r.inkRgb, r.endH]));
+  check(r.repText === 'Report' && r.repEdge === 0 && /rgba\(0, 0, 0, 0\)|transparent/.test(r.repBg) && r.repH >= 44, 'Report is a quiet word with a full touch target: ' + JSON.stringify([r.repBg, r.repEdge, r.repH]));
+  check(r.state === 'seek' && /Finding GPS|Starting/.test(r.status) && r.seek === 'hud-seek' && r.ring === '2px', 'no sample kept yet: the line is seeking, drawn so: ' + JSON.stringify([r.state, r.status, r.seek, r.ring]));
+  check(r.stripEdge === 0 && r.stripLift && r.panelEdge === 0 && r.panelLift, 'the strip and the panel are paper on the map: a lift, no black rule: ' + JSON.stringify([r.stripEdge, r.stripLift, r.panelEdge, r.panelLift]));
+  check(r.side <= 0, 'no sideways scroll');
+  // faster: three digits fit their box, and the line follows
+  await drive(46);
+  const f = await page.evaluate(() => { const d = document.querySelector('#cluster .dial-speed .dial-digital').getBoundingClientRect(), b = document.querySelector('#cluster .dial-speed').getBoundingClientRect(), l = document.querySelector('#cluster .ro-limit').getBoundingClientRect();
+    return { text: document.querySelector('#cluster .dial-speed .dial-digital').textContent, right: d.right, limit: l.left, box: b.right, fillTo: parseFloat(document.querySelector('#cluster .sl-fill').getAttribute('x2')) }; });
+  check(f.text === '103' && f.right <= f.limit - 4 && Math.abs(f.fillTo - 100 * 103 / 140) < 0.6, 'three digits clear the Limit sign: ' + JSON.stringify(f));
+  // on its side, and on the narrowest phone: the numeral keeps its size, the meter moves down beside the ledger, nothing overprints
+  const boxes = () => { const q = (sel, label) => [...document.querySelectorAll(sel)].filter((e) => e.getClientRects().length && !e.closest('[hidden]')).map((e) => { const b = e.getBoundingClientRect(); return { label, x: b.left, y: b.top, r: b.right, b: b.bottom }; });
+    const bs = [...q('#cluster .dial-speed', 'speed'), ...q('#cluster .ro-limit', 'limit'), ...q('#cluster .ro-sight', 'sight'), ...q('#cluster .speed-line', 'line'), ...q('#cluster .odo', 'trip'), ...q('#cluster .dna-arch', 'road'),
+      ...q('#cluster .dial-g > svg', 'meter'), ...q('#cluster .g-score', 'score'), ...q('#driveBar', 'status')], out = [];
+    for (let i = 0; i < bs.length; i++) for (let j = i + 1; j < bs.length; j++) { const A = bs[i], B = bs[j]; if (Math.min(A.r, B.r) - Math.max(A.x, B.x) > 1 && Math.min(A.b, B.b) - Math.max(A.y, B.y) > 1) out.push(`${A.label} over ${B.label}`); }
+    const d = document.querySelector('#cluster .dial-speed .dial-digital'), p = document.getElementById('binnacle').getBoundingClientRect(), c = document.getElementById('cluster').getBoundingClientRect();
+    return { out, px: Math.round(parseFloat(getComputedStyle(d).fontSize) * d.getScreenCTM().a), fits: c.bottom <= Math.min(p.bottom, innerHeight) + 1, side: document.documentElement.scrollWidth - innerWidth }; };
+  for (const [w, h] of [[852, 393], [320, 568], [375, 667], [393, 852]]) {
+    await page.setViewportSize({ width: w, height: h });
+    await page.waitForTimeout(300);
+    await page.evaluate(() => { const d = document.querySelector('#cluster .dna-arch'); d.hidden = false; d.textContent = 'Road: Northwest Expressway'; });
+    const s = await page.evaluate(boxes);
+    check(!s.out.length && s.px >= 64 && s.fits && s.side <= 0, `${w}x${h}: a 64 px numeral or more, nothing overprints, the cluster whole on screen: ` + JSON.stringify(s));
+  }
+  // a call arrives: its words settle and the pen draws its tulip (420 ms), on the demo replay
+  await page.goto(base + '/index.html?drive=dry_ridge&play=1');
+  await page.waitForFunction(() => window.apexDebug && window.apexDebug.track && window.apexDebug.track.events.length);
+  await page.waitForFunction(() => window.apexDebug.state.playing, null, { timeout: 10000 });
+  check(await page.evaluate(() => getComputedStyle(document.getElementById('binnacle')).animationName) === 'hud-rise', 'a replay\'s panel arrives the same way');
+  await page.waitForFunction(() => document.querySelector('#notes .rb-box.now'), null, { timeout: 8000 });
+  await page.evaluate(() => { const st = window.apexDebug.state, t = window.apexDebug.track; st.cursorM = t.dist[t.dist.length - 1] * 0.45; });
+  await page.waitForFunction(() => document.querySelector('#notes .rb-box.now.advance .tulip .pen'), null, { timeout: 5000 });
+  const call = await page.evaluate(() => { const b = document.querySelector('#notes .rb-box.now.advance'), p = b.querySelector('.tulip .pen'), cb = getComputedStyle(b), cp = getComputedStyle(p);
+    return { box: cb.animationName, ms: cb.animationDuration, pen: cp.animationName, penMs: cp.animationDuration, len: p.getAttribute('pathLength'), fill: cp.animationFillMode }; });
+  check(call.box === 'rb-advance' && call.ms === '0.42s' && call.pen === 'hud-pen' && call.penMs === '0.42s' && call.len === '1' && call.fill === 'backwards', 'the call settles and its tulip is drawn on: ' + JSON.stringify(call));
+  await page.waitForTimeout(700);
+  const drawn = await page.evaluate(() => { const p = document.querySelector('#notes .rb-box.now .tulip .pen'), cs = getComputedStyle(p); return { dash: cs.strokeDasharray, off: cs.strokeDashoffset, op: getComputedStyle(p.closest('.rb-box')).opacity }; });
+  check(drawn.dash === 'none' && parseFloat(drawn.off) === 0 && drawn.op === '1', 'after the move the tulip is whole and the call fully inked: ' + JSON.stringify(drawn));
+  const tp = await page.evaluate(() => { const ink = (() => { const i = document.createElement('i'); i.style.color = getComputedStyle(document.documentElement).getPropertyValue('--panel-ink'); document.body.append(i); const c = getComputedStyle(i).color; i.remove(); return c; })();
+    const filled = [...document.querySelectorAll('#transport button')].filter((b) => b.getClientRects().length && getComputedStyle(b).backgroundColor === ink).map((b) => b.id || b.textContent);
+    return { filled, rates: [...document.querySelectorAll('#rateDetents button')].map((b) => Math.round(b.getBoundingClientRect().height)) }; });
+  check(JSON.stringify(tp.filled) === '["replayDone"]' && tp.rates.every((h) => h >= 44), 'the replay\'s one ink key is Done; the speeds keep a thumb\'s height: ' + JSON.stringify(tp));
+  // reduced motion: cuts. No count, no arriving paper, no searching stroke, and nothing left hidden or half drawn
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  await page.setViewportSize({ width: 393, height: 852 });
+  await page.goto(base + '/index.html');
+  await page.waitForFunction(() => window.apex && window.apexDebug);
+  const still = await page.evaluate(() => { window.apex.live({ lat: 35.96, lon: -83.92, accuracy_m: 5, speed_mps: 12, course_deg: 0, has_fix: true, calibration: 'locked', lat_g: 0.1, lon_g: 0 });
+    const q = (s) => document.querySelector(s), ring = getComputedStyle(q('#cluster .g-ring'));
+    return { speed: q('#cluster .dial-speed .dial-digital').textContent, fillTo: parseFloat(q('#cluster .sl-fill').getAttribute('x2')), panel: getComputedStyle(q('#binnacle')).animationName, tf: getComputedStyle(q('#binnacle')).transform,
+      strip: getComputedStyle(q('#notes')).animationName, seek: getComputedStyle(q('#dsMain'), '::after').animationName, ring: ring.animationName, dash: ring.strokeDasharray, bar: !q('#driveBar').hidden }; });
+  check(still.speed === String(mph) && Math.abs(still.fillTo - 100 * mph / 140) < 0.6, 'reduced motion: the speed is the reading at once, no count: ' + JSON.stringify(still));
+  check(still.bar && still.panel === 'none' && still.strip === 'none' && still.seek === 'none' && still.ring === 'none' && still.dash === 'none' && still.tf === 'none', 'reduced motion: nothing moves and nothing is left hidden or half drawn: ' + JSON.stringify(still));
+}, { hasTouch: true, viewport: { width: 393, height: 852 } });
+
 flow('safe areas: the Dynamic Island, the home indicator and the rounded corners clear every control, upright, on its side and on small phones', async (page, base) => {
   await page.route(base + '/api/**', (route) => { const p = new URL(route.request().url()).pathname;
     route.fulfill({ contentType: 'application/json', body: p === '/api/me' ? '{"signed_in":true,"member":true,"handle":"kit_r"}' : '[]' }); });

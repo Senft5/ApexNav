@@ -43,6 +43,30 @@ keeps its own word and only its progress bar moves.
 
 Undo: revert the PR.
 
+## 2026-11-11 (fable-drive-hud): the drive screen is one big speed over a ruled line, on paper laid over the map (claude/fable-drive-hud)
+
+The drive screen's bottom third was three small gauges of the same weight (a speed dial, a limit sign with an odometer,
+a g-ball with "-- SCORE" under it), a status row of three same-weight boxes, and black rules between the strip, the map
+and the panel. In Roadbook it is now one instrument: the speed as a Barlow Condensed numeral (84 px or more on a
+393 pt phone, 64 px or more on any phone or on its side), and under the whole panel a ruler from 0 to 140 the speed is
+drawn along in ink, with the corner's pace, the sight line and the limit standing on it where they fall. Limit and Sight
+sit beside the numeral; the g-meter is printed straight on the paper (no face), Brake over it and Bank under it; the trip,
+the road and the Score share one quiet line at the foot. Nothing the panel said before is gone, and every id is kept.
+
+End is the one ink key (52 pt). Report is a word with a full touch target. "Finding GPS…" is drawn: pencil, an open ring,
+and a short stroke searching along a hairline until the first sample is kept, then the record line in ink, still.
+
+The strip and the panel lie on the map as paper (a soft warm shadow, no 2 px black rule). Motion only at the start and
+when a call changes: the strip drops and the panel rises on one curve (420 ms), the numeral counts up to the speed and the
+meter's rings are drawn (700 to 800 ms), once; a new call's words settle up and its tulip is drawn on by the pen (420 ms;
+before, it slid sideways in 160 ms). Under reduced motion all of it is a cut. The replay's transport is in the same hand:
+the speeds are numerals underlined when chosen, Video a word, Done the one key.
+
+Tapedeck, Billet and the car themes keep their own clusters; they get only the quieter Report and the arrival.
+
+Undo: in web/themes.js set Roadbook back to `cluster: 'dials'` and `dial: 'printed'` (the three dials come back
+unchanged), and delete the "Vetta Line" CSS block in web/index.html (above "The opening cover").
+
 ## 2026-11-10 (fable-your-data): Your data is three short lists, like Settings (claude/fable-your-data)
 
 For your "cohesiveness, less clunky": Your data was eight keys of eight widths in two wrapped rows, one of them a link
