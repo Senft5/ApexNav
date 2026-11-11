@@ -20,7 +20,7 @@ export const CAM_V = 2;
  * fl: flow, the pass's speed steadiness over about 40 m (1 even, 0 stopped or stop-start), a ratio that holds no speed;
  * hb: 1 when the pass braked hard there with no corner ahead to explain it. Both null from builds that don't send them.
  */
-export interface Bin { i: number; cam: number | null; rough: number; crest: number | null; k: number | null; fl: number | null; hb: 0 | 1 | null }
+export interface Bin { i: number; cam: number | null; rough: number; crest: number | null; k: number | null; fl: number | null; hb: 0 | 1 | null; bp: 0 | 1 | null }
 /** rec: from a recorded drive (the driver pressed Start), not ambient sharing. hr: the pass's busy-time bucket (0..11), only kept
  *  while the quiet_hours flag is on (flags.ts); null otherwise. */
 export interface Contribution { wayId: number; dir: 0 | 1; drivenOn: string; driveId: string; bins: Bin[]; km: number; shape: [number, number][] | null; cls: RoadClass | null; lenM: number | null;
@@ -63,7 +63,9 @@ export function validateContribution(raw: Record<string, unknown>, nowMs = Date.
     if (fl !== null && !isNum(fl, 0, 1)) throw bad("bad_flow");
     const hb = b.hb === null || b.hb === undefined ? null : b.hb;
     if (hb !== null && hb !== 0 && hb !== 1) throw bad("bad_brake");
-    out.push({ i, cam: camTrusted ? cam : null, rough: b.rough, crest, k: b.k, fl: fl === null ? null : Math.round(fl * 1000) / 1000, hb: hb as 0 | 1 | null });   // an old build's camber: validated, then unknown
+    const bp = b.bp === null || b.bp === undefined ? null : b.bp;                      // bump felt here (IDEAS Q-02); an older build: unknown
+    if (bp !== null && bp !== 0 && bp !== 1) throw bad("bad_bump");
+    out.push({ i, cam: camTrusted ? cam : null, rough: b.rough, crest, k: b.k, fl: fl === null ? null : Math.round(fl * 1000) / 1000, hb: hb as 0 | 1 | null, bp: bp as 0 | 1 | null });   // an old build's camber: validated, then unknown
   }
   const lo = Math.min(...seen), hi = Math.max(...seen);
   if (out.length / (hi - lo + 1) < LIMITS.minCoverage) throw bad("not_contiguous");   // real drives cover a run of the road, not scattered bins
@@ -129,6 +131,17 @@ export async function setContribute(env: Env, v: Viewer, req: Request): Promise<
  */
 export const FRESH = { memory: 20, repaveRatio: 0.5, repaveG: 0.05, repavePasses: 2 };
 
+/**
+ * Crowd bumps (IDEAS Q-02, docs/ROAD_INTELLIGENCE.md 4.3). Each pass that says whether it felt a spike in a bin adds its
+ * weight to bump_pass, and to bump_hit when it did. The weight is 2^((day - epoch) / halfLifeDays): read on any later day and
+ * divided by that day's weight, a pass from one half-life earlier counts half, so a filled pothole fades without a sweep and a
+ * pass sent days late (a phone with no signal) counts as old as it is. D1 has no power(), so the weight is worked out here.
+ * cellBins: drivers are counted once per person within a cell of this many bins and the neighbouring cell when the hit is
+ * within nearBins of its edge (two hits of one person 10 m apart on two drives are one driver, never two).
+ */
+export const BUMP = { halfLifeDays: 120, epoch: "2026-01-01", cellBins: 8, nearBins: 2 };
+export const bumpWeight = (day: string) => 2 ** ((Date.parse(day + "T00:00:00Z") - Date.parse(BUMP.epoch + "T00:00:00Z")) / 86400_000 / BUMP.halfLifeDays);
+
 /** Running mean and Welford sum of squares for value x over count k, with the MEMORY cap (SQL; old values on the right). */
 function meanSql(mean: string, m2: string, k: string, x: string) {
   const K = `MIN(${k}, ${FRESH.memory})`, a = `1.0 / (${FRESH.memory} + 1)`;
@@ -147,9 +160,10 @@ function mergeBin(env: Env, wayId: number, dir: number, b: Bin, day: string): D1
   const cam = meanSql("camber_mean", "camber_m2", "camber_n", "?4"), rough = meanSql("rough_mean", "rough_m2", "n", "?5");
   return env.DB.prepare(
     `INSERT INTO road_bins (way_id, dir, bin_idx, n, camber_mean, camber_m2, camber_n, rough_mean, rough_m2, crest_peak, crest_n, last_on, smooth_run, k_mean, k_n,
-                            flow_mean, brake_mean, flow_n)
+                            flow_mean, brake_mean, flow_n, bump_hit, bump_pass)
      VALUES (?1, ?2, ?3, 1, ?4, CASE WHEN ?4 IS NULL THEN NULL ELSE 0 END, CASE WHEN ?4 IS NULL THEN 0 ELSE 1 END, ?5, 0, ?6, CASE WHEN ?6 IS NULL THEN 0 ELSE 1 END, ?7, 0,
-             ?8, CASE WHEN ?8 IS NULL THEN 0 ELSE 1 END, ?9, CASE WHEN ?9 IS NULL THEN NULL ELSE ?10 END, CASE WHEN ?9 IS NULL THEN 0 ELSE 1 END)
+             ?8, CASE WHEN ?8 IS NULL THEN 0 ELSE 1 END, ?9, CASE WHEN ?9 IS NULL THEN NULL ELSE ?10 END, CASE WHEN ?9 IS NULL THEN 0 ELSE 1 END,
+             CASE WHEN ?11 IS NULL THEN 0 ELSE ?11 * ?12 END, CASE WHEN ?11 IS NULL THEN 0 ELSE ?12 END)
      ON CONFLICT (way_id, dir, bin_idx) DO UPDATE SET
        camber_mean = CASE WHEN ${reset} THEN ?4 WHEN ?4 IS NULL THEN camber_mean WHEN camber_n = 0 OR camber_mean IS NULL THEN ?4 ELSE ${cam.mean} END,
        camber_m2   = CASE WHEN ${reset} THEN CASE WHEN ?4 IS NULL THEN NULL ELSE 0 END WHEN ?4 IS NULL THEN camber_m2 WHEN camber_n = 0 OR camber_mean IS NULL THEN 0 ELSE ${cam.m2} END,
@@ -167,10 +181,34 @@ function mergeBin(env: Env, wayId: number, dir: number, b: Bin, day: string): D1
        flow_mean   = CASE WHEN ?9 IS NULL THEN flow_mean WHEN flow_n = 0 OR flow_mean IS NULL THEN ?9 ELSE flow_mean + (?9 - flow_mean) / (MIN(flow_n, ${FRESH.memory}) + 1) END,
        brake_mean  = CASE WHEN ?9 IS NULL THEN brake_mean WHEN flow_n = 0 OR brake_mean IS NULL THEN ?10 ELSE brake_mean + (?10 - brake_mean) / (MIN(flow_n, ${FRESH.memory}) + 1) END,
        flow_n      = flow_n + (?9 IS NOT NULL),
+       -- bumps (IDEAS Q-02): a repaved road starts again too (its potholes went with the old surface); drivers are kept, the
+       -- posterior needs fresh hits to pass again
+       bump_hit    = CASE WHEN ${reset} THEN COALESCE(?11 * ?12, 0) WHEN ?11 IS NULL THEN bump_hit ELSE bump_hit + ?11 * ?12 END,
+       bump_pass   = CASE WHEN ${reset} THEN CASE WHEN ?11 IS NULL THEN 0 ELSE ?12 END WHEN ?11 IS NULL THEN bump_pass ELSE bump_pass + ?12 END,
        smooth_run  = CASE WHEN ${reset} THEN 0 WHEN ${smoother} THEN smooth_run + 1 ELSE 0 END,
        last_on     = MAX(COALESCE(last_on, ''), ?7),
        n           = CASE WHEN ${reset} THEN 1 ELSE n + 1 END`,
-  ).bind(wayId, dir, b.i, b.cam, b.rough, b.crest, day, b.k, b.fl, b.fl === null ? null : (b.hb ?? 0));
+  ).bind(wayId, dir, b.i, b.cam, b.rough, b.crest, day, b.k, b.fl, b.fl === null ? null : (b.hb ?? 0), b.bp, bumpWeight(day));
+}
+
+/**
+ * A bump hit in bin i by this person (IDEAS Q-02): one more driver for the bin unless the same person already hit something
+ * in its 40 m cell, or in the next cell when the hit is near that edge. The marker is a keyed hash, never the person. Runs
+ * after the bin's merge in the same batch (the row exists); the UPDATE checks the markers before the INSERT adds this one.
+ */
+async function bumpDriverStmts(env: Env, userId: string, c: Contribution): Promise<D1PreparedStatement[]> {
+  const out: D1PreparedStatement[] = [];
+  for (const b of c.bins) {
+    if (b.bp !== 1) continue;
+    const cell = Math.floor(b.i / BUMP.cellBins), r = b.i - cell * BUMP.cellBins;
+    const near = r < BUMP.nearBins ? cell - 1 : r >= BUMP.cellBins - BUMP.nearBins ? cell + 1 : null;
+    const mark = async (k: number) => (await hmac(env, `b|${userId}|${c.wayId}|${c.dir}|${k}`)).buffer;
+    const own = await mark(cell), other = near === null ? own : await mark(near);
+    out.push(env.DB.prepare("UPDATE road_bins SET bump_drivers = bump_drivers + 1 WHERE way_id = ? AND dir = ? AND bin_idx = ? AND NOT EXISTS (SELECT 1 FROM seen WHERE h IN (?, ?))")
+      .bind(c.wayId, c.dir, b.i, own, other),
+      env.DB.prepare("INSERT OR IGNORE INTO seen (h) VALUES (?)").bind(own));
+  }
+  return out;
 }
 
 /**
@@ -269,6 +307,7 @@ export async function contribute(env: Env, v: Viewer, req: Request): Promise<{ a
   const stmts: D1PreparedStatement[] = [
     env.DB.prepare("INSERT INTO seen (h) VALUES (?)").bind(chunk.buffer),                                  // fails (409 below) if a parallel copy won the race
     ...c.bins.map((b) => mergeBin(env, c.wayId, c.dir, b, c.drivenOn)),
+    ...(await bumpDriverStmts(env, v.id, c)),
     env.DB.prepare("INSERT INTO upload_counts (user_id, bucket, uploads, km) VALUES (?1, ?2, 1, ?3) ON CONFLICT (user_id, bucket) DO UPDATE SET uploads = uploads + 1, km = km + ?3").bind(v.id, hourKey, c.km),
     env.DB.prepare("DELETE FROM upload_counts WHERE bucket < ?").bind(new Date(now.getTime() - 8 * 86400_000).toISOString().slice(0, 13)),
   ];

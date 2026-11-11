@@ -12,6 +12,20 @@
   is drawn behind other tabs. Refreshed on visibilitychange and every 5 min, never while driving.
 - Tests: backend/test/inbox.test.ts (3), tests/test_inbox.py (3), e2e "For you: …".
 - Next: push notifications for the same items once APNs is set up (OWNER_TODO); a crew's own roadbook; recurring meets (S-13).
+## Session 2026-11-11 (roam-b-crowd-bumps): bumps the crowd felt, verified and called (claude/roam-b-crowd-bumps, off origin/main)
+
+- IDEAS Q-02 crowd half, ROAD_INTELLIGENCE 4.3. `core/road_dna.spike_mask` / `Core.spikeMask` (parity-tested; detect_hazards
+  reads it): per sample 1 / 0 / unknown. web/contributor.js `bumpEvidence` + `binBump`: each bin's `bp` (unknown at walking
+  pace or with no vertical peaks); the live stream and ambient sharing carry `vert_peak_g` now (cockpit.js feedLive too).
+- Migration 0052 (`road_bins.bump_hit`, `bump_pass`, `bump_drivers`): sums weighted 2^((day - 2026-01-01)/120 d) (D1 refuses
+  power()); drivers via a keyed hash per person and 40 m in `seen` (contribute.ts `BUMP`, `bumpDriverStmts`). roads.ts
+  `verifiedBumps`: ±2 bins, Jeffreys Beta, > 0.8 and 2+ drivers, `bp: [[bin, p]]` per direction.
+- Phone: `seriesFrom` → `measuredAlong().crowdBumps`; `bumpEvents` makes `Bump` notes (marked `crowd`); cockpit.js
+  `applyCrowdBumps` (flag `crowd_bumps`, also mid-drive: it only adds), `noteworthyInCruise` calls them in cruise,
+  `seenLabel` says "Confirmed by members". privacy.html and APP_REVIEW.md say what the flag is.
+- Tests: backend/test/crowd_bumps.test.ts, tests/test_contributor.py (bump flags, route bumps), parity spike mask.
+- Next: hand-reported hazards (hazards.ts) still use vote counts; the same posterior could rank them. Crowd bumps on the
+  road page (Q-13 "verified hazards") and the map; bumps on a free drive with no route (needs the cells lookup live).
 ## Session 2026-11-11 (round two analysis): Your touch from the 10 Hz g (IDEAS D-28; claude/project-thread-gd7nre, off origin/main 936aec3)
 
 - `core/driver_profile.py` `observe` adds `brake_on`, `brake_off`, `turn_in` per corner (g a second, 20 % to 80 % of the
