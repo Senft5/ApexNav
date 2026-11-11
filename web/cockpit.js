@@ -8,6 +8,14 @@
     const MPH = Core.MPS_TO_MPH;
     const params = new URLSearchParams(location.search);
     const $ = (id) => document.getElementById(id);
+    // A tap on a sheet's backdrop closes it only when the press began on the backdrop too. A press on a key inside the
+    // sheet that lifts outside it (a drag, or the sheet moving under the finger) makes the browser send the click to the
+    // backdrop, their shared parent; that is not a tap on the backdrop and must not shut the sheet.
+    function onBackdrop(back, close) {
+      let downOnBack = false;
+      back.addEventListener('pointerdown', (e) => { downOnBack = e.target === back; });
+      back.addEventListener('click', (e) => { const ok = e.target === back && downOnBack; downOnBack = false; if (ok) close(e); });
+    }
 
     // =======================================================================
     // 1. TRACKS — one shape for profiled drives and geometry-only routes.
@@ -2005,7 +2013,7 @@
       });
     }
     $('explainDone').addEventListener('click', closeExplain);
-    $('explainCard').addEventListener('click', (e) => { if (e.target === $('explainCard')) closeExplain(); });
+    onBackdrop($('explainCard'), closeExplain);
     const simSpeed = (i) => Math.max(6, Math.min(track.envMps[i] * 0.92, track.limitMps && track.limitMps[i] ? track.limitMps[i] : 27));
 
     let lastTs = 0, raf = null, video = null;   // video: a replay being recorded (startVideo below)
@@ -2746,9 +2754,14 @@
       // Only on a route planned with Towns on (townKm undefined otherwise); null = the town check couldn't run.
       const towns = t.townKm === null ? 'Couldn\'t check towns · ' : t.townKm >= 1.6 ? `Through towns ~${ApexUnits.long(t.townKm * 1000, 0)} · ` : '';
       const carLine = t.request ? FunRoute.carNote(routingCar(), avoid) : '';
-      $('routeCardSub').textContent = `${carLine ? carLine + ' · ' : ''}${missed}${towns}${sun}${cams}${feel}`;
+      // your taste (taste.js) when it moved this route up: the word for what you lean to, never a number
+      const tasteLine = (() => { try { const f = t.tasteBonus >= 1 && window.ApexTaste ? ApexTaste.fit(ApexTaste.load(localStorage)) : null;
+        if (!f) return ''; const k = ApexTaste.AXES.slice().sort((a, b) => f[b] - f[a])[0]; return `Suits your taste for ${{ tech: 'technical roads', flow: 'flowing roads', smooth: 'smooth surfaces' }[k]} · `; } catch (_) { return ''; } })();
+      $('routeCardSub').textContent = `${tasteLine}${carLine ? carLine + ' · ' : ''}${missed}${towns}${sun}${cams}${feel}`;
       $('routeCardWhy').textContent = t.why || '';
       $('routeCardWhy').hidden = !t.why;
+      // There and back: a trip to a place (not a round trip already, no stop of yours on it), planned and not driving
+      $('routeRoundBtn').hidden = !(t.id === 'route_dest' && t.request && !t.request.round && !t.request.via.some((v) => !v.shaping) && state.mode !== 'live');
       // finding 4: the level's one home is the card, for a destination route; a loop's card has its length (finding 6).
       // The owner, 2026-11-04: the levels are the choices, one card each with its own pick (paintLevelCards)
       // (a loop has no level: its card offers its length and which way to head, paintLoopWays)
@@ -2828,7 +2841,7 @@
       const t = plannedRoute;
       if (!t || !Array.isArray(t.lat) || t.lat.length < 2) return;
       if (ApexSavedRoutes.has(localStorage, t.id)) { ApexSavedRoutes.remove(localStorage, t.id); toast(`${t.name} removed from saved routes.`); }
-      else if (ApexSavedRoutes.save(localStorage, ApexSavedRoutes.pack(t)) === 'saved') toast(`Saved for offline: ${t.name}. Find it in Where to?.`);
+      else if (ApexSavedRoutes.save(localStorage, ApexSavedRoutes.pack(t)) === 'saved') toast(`Saved for offline: ${t.name}. It's listed in Where to? now.`);
       else toast('The phone is out of room for saved routes. Remove one first.');
       paintSaveBtn();
     });
@@ -3855,7 +3868,7 @@
       const overLine = rival ? ApexRouteEngine.whyOver(c, rival) : null;
       // Fun and Long way: the exception's highway, or no highway-free way in a sensible time (first: it's what you'd ask)
       const hwyLine = window.ApexRouteEngine && ApexRouteEngine.whyHighway ? ApexRouteEngine.whyHighway(c, { metric: ApexUnits.metric() }) : null;
-      Object.assign(t, { measured: c.t.measured, fun: c.fun, timeS: c.timeS, timeMarks: timeMarksOf(t, c.route), steps: stepsOf(t, c.route), extraS: c.extraS, funLevel: o.level, glareMin: c.glare ? Math.round(c.glare.minutes) : null, townKm: c.townKm,
+      Object.assign(t, { tasteBonus: Number.isFinite(c.tasteBonus) ? c.tasteBonus : null, measured: c.t.measured, fun: c.fun, timeS: c.timeS, timeMarks: timeMarksOf(t, c.route), steps: stepsOf(t, c.route), extraS: c.extraS, funLevel: o.level, glareMin: c.glare ? Math.round(c.glare.minutes) : null, townKm: c.townKm,
                          engine: c.ev ? { quality: c.ev.quality, confidence: c.ev.confidence, poorKm: c.ev.poorKm, hard: c.ev.hard, penalties: c.ev.penalties } : null,
                          unavoided: FunRoute.unavoided(avoid, c.route), why: (hwyLine && hwyLine.kind === 'absurd' ? [hwyLine.text] : [hwyLine && hwyLine.text, (engineWhy && engineWhy.text) || (quickLine && quickLine.text) || whyText(FunRoute.why(c, o.quickest), fewerTownKm(c, o.quickest), c.extraS), overLine && overLine.text]).filter(Boolean).join('. ') || null,
                          request: { ...o.request, via: via.map(p => ({ lat: p.lat, lon: p.lon, shaping: true })) }, tuned: o.tuned || null });
@@ -4087,6 +4100,64 @@
       if (!ok && t.funLevel) setFunLevel(t.funLevel);             // the chips show the level the route on screen was built with
       return ok;
     }
+
+    // There and back (the owner's "best routing for fun driving"): a drive out to a café or a viewpoint is two drives, and
+    // the second should be new road. Our router pairs ways out and back (graph_router.js roundTrip: the way out costs x4
+    // on the way back) where its tiles cover the trip; elsewhere the way out on the card stays and Valhalla is asked for the
+    // way back around it (points along it as exclude_locations, the alternate that shares least with it). Either way the
+    // whole trip is routed through shaping points with the destination as your stop, so Up / Down / Remove, a reroute and
+    // a level change behave as on any trip with a stop. ROUND_SHAPE_KM: a shaping point that often holds the line.
+    const ROUND_SHAPE_KM = 2.5, ROUND_SHAPE_MAX = 14;
+    function outExclusions(coords, everyKm = 1, endKm = 1.5, max = 40) {
+      const cum = [0];
+      for (let i = 1; i < coords.length; i++) cum.push(cum[i - 1] + FunRoute.kmBetween({ lat: coords[i - 1][1], lon: coords[i - 1][0] }, { lat: coords[i][1], lon: coords[i][0] }));
+      const total = cum[cum.length - 1], out = [];
+      if (total < 2 * endKm + everyKm) return out;
+      const step = Math.max(everyKm, (total - 2 * endKm) / max);
+      for (let at = endKm, i = 0; at <= total - endKm && out.length < max; at += step) { while (i < cum.length - 1 && cum[i] < at) i++; out.push({ lat: coords[i][1], lon: coords[i][0] }); }
+      return out;
+    }
+    async function planRoundTrip() {
+      const t = plannedRoute;
+      if (!t || t.id !== 'route_dest' || !t.request || state.mode === 'live') return;
+      const ui = planBusy();
+      ui.step('Finding another way home…', 0.3);
+      try {
+        const from = t.request.from || await locate();
+        if (!from) throw new Error(NO_FIX);
+        const to = t.request.to, level = funLevel, place = (t.name || '').replace(/^To /, '') || 'there';
+        const outCoords = Array.from(t.lat, (la, i) => [t.lon[i], la]);
+        let outLine = outCoords, backLine = null, how = 'valhalla';
+        const own = ownOn() ? await RouteLoading.optional(ApexOwnRouting.roundTrip(ownRouter(), { from, to, level, prefs: roadPrefs, avoid, heading: from.heading, ...devTuneReq() }), 6000) : null;
+        if (own && own.length) {
+          // ours: the best pair (out and back), split at the destination
+          const c = own[0].route.coords, k = c.reduce((b, p, i) => (FunRoute.kmBetween({ lat: p[1], lon: p[0] }, to) < FunRoute.kmBetween({ lat: c[b][1], lon: c[b][0] }, to) ? i : b), 0);
+          outLine = c.slice(0, k + 1); backLine = c.slice(k); how = 'own';
+        } else {
+          const extra = FunRoute.LEVELS[level].noHighway && window.ApexRouteEngine ? ApexRouteEngine.levelCosting(avoid, routingCar(), level) : {};
+          const backs = await valhallaRoutesExcluding([to, from], false, 2, extra, outExclusions(outCoords));
+          const share = (r) => ApexOwnRouting.sharedShare(r.coords, outCoords);
+          backLine = backs.length ? backs.reduce((a, b) => (share(b) < share(a) ? b : a)).coords : null;
+        }
+        if (!backLine) throw new Error('no way back');
+        const shape = (line) => FunRoute.alongPoints(line, ROUND_SHAPE_KM, ROUND_SHAPE_MAX);
+        const via = [...shape(outLine), { lat: to.lat, lon: to.lon, label: place }, ...shape(backLine)];
+        const home = { lat: from.lat, lon: from.lon };
+        await buildRoute([from, ...via, home], 'route_dest', `To ${place} and back`, null, { from: t.request.from, to: home, via, round: true });
+        const r = plannedRoute;
+        if (r && r !== t && Array.isArray(r.lat)) {
+          // the share of the trip driven twice, said plainly (a dead-end valley has no other way, and the card says so)
+          const line = Array.from(r.lat, (la, i) => [r.lon[i], la]), half = line.findIndex((p) => FunRoute.kmBetween({ lat: p[1], lon: p[0] }, to) < 0.06);
+          const twice = half > 0 ? ApexOwnRouting.sharedShare(line.slice(half), line.slice(0, half + 1)) : null;
+          r.roundTwice = twice;
+          cardNote(twice == null ? 'There and back' : twice < 0.1 ? 'There and back: home by other roads all the way' : twice < 0.5 ? `There and back: ${Math.round((1 - twice) * 100)}% of the way home is new road`
+            : 'There and back: no other way home here, so it comes back the way it went');
+          if (window.apexDebug) window.apexDebug.lastRound = { how, twice, via: via.length };
+        }
+      } catch (err) { toast(err && err.message === NO_FIX ? NO_FIX : 'Couldn\'t find a way back just now. Try again in a moment.'); }
+      finally { ui.done(); }
+    }
+    $('routeRoundBtn').addEventListener('click', () => planRoundTrip());
 
     // A loop is any route from the start back to it with little driven twice, built from the best roads within reach
     // (the owner, 2026-11-04; CALL_SHEET): never a circle for its own sake. This circle through the start is only the last
@@ -4578,8 +4649,11 @@
       if (!action && t._holdUntil > performance.now()) return;   // a Cancel countdown owns the toast until it ends
       t._holdUntil = action && action.ms ? performance.now() + action.ms : 0;
       t.textContent = msg;
+      // A message with a key is a row: the words on the left, the key whole on the right (.toast.has-key). The key was an
+      // inline link in the red pen; when the words wrapped it dropped under them, indented.
+      t.classList.toggle('has-key', !!action);
       if (action) {
-        const a = document.createElement('a'); a.href = action.href || '#'; a.textContent = action.label; a.style.cssText = 'margin-left:10px;color:var(--accent);text-decoration:underline'; t.append(a);
+        const a = document.createElement('a'); a.href = action.href || '#'; a.textContent = action.label; a.className = 'toast-key'; t.append(a);
         // Once the countdown is over the action is gone: a late tap must not undo what already happened.
         if (action.onClick) a.onclick = (e) => { e.preventDefault(); if (!a.isConnected) return; t._holdUntil = 0; a.remove(); action.onClick(); t.classList.remove('show'); };
       }
@@ -5042,7 +5116,7 @@
     });
     $('scrim').addEventListener('click', closeSheet);
     $('pinCancelBtn').addEventListener('click', closePin);
-    $('pinOverlay').addEventListener('click', (e) => { if (e.target === $('pinOverlay')) closePin(); });
+    onBackdrop($('pinOverlay'), () => closePin());
     $('pinGoBtn').addEventListener('click', () => {
       if (!droppedPin) return;
       $('fromInput').value = '';
@@ -6295,7 +6369,7 @@
           const ov = document.createElement('div'); ov.className = 'overlay dim show spot-photo'; ov.setAttribute('role', 'dialog'); ov.setAttribute('aria-label', h.name);
           const big = document.createElement('img'); big.src = url; big.alt = h.name;
           const close = document.createElement('button'); close.className = 'ink-btn'; close.textContent = 'Close';
-          ov.onclick = (e) => { if (e.target === ov || e.target === close) ov.remove(); };
+          onBackdrop(ov, () => ov.remove()); close.onclick = () => ov.remove();
           ov.append(big, close); document.body.append(ov); close.focus();
         };
       });
@@ -6489,10 +6563,15 @@
       })().catch(() => {});
       await Promise.all([om, nws]);
       placeAsk.data = d;
-      $('placePlate').textContent = ApexPlacePlate.text(d, ApexUnits.metric());
+      // Vetta Line: a masthead, the place set large and the sky as its line under it. The separator between them stays in the
+      // text (not shown), so the plate still reads "Tellico Plains · Dry · 61°" to a screen reader and to textContent.
+      { const pp = $('placePlate'), m = ApexPlacePlate.parts(d, ApexUnits.metric()), b = document.createElement('b');
+        b.textContent = m.head; pp.replaceChildren(...(m.head ? [b] : []));
+        if (m.rest) { const i = document.createElement('i'), sp = document.createElement('span'); i.textContent = ' · '; sp.textContent = m.rest; pp.append(i, sp); } }
       paintPlacePlate();
     }
     setTimeout(refreshPlacePlate, 4000); setInterval(refreshPlacePlate, 60000);
+    window.apexDebug.placePlate = () => { placeAsk.at = 0; return refreshPlacePlate(); };   // e2e: ask now (the first ask waits 4 s for a fix)
     // ---- Your roads and a Sunday suggestion (panel round 1, D-1 and R-1; your_roads.js) ----------------------------------
     // The deck's first row names one real suggestion and its reason (a crew drive you're going to this week, the best road
     // near you that you haven't driven, your best-scored road), else the loop as before; under it up to three of your own
@@ -7040,7 +7119,7 @@
       openHighlightDialog(p);
     });
     $('hlCancelBtn').addEventListener('click', closeHighlightDialog);
-    $('hlOverlay').addEventListener('click', (e) => { if (e.target === $('hlOverlay')) closeHighlightDialog(); });
+    onBackdrop($('hlOverlay'), () => closeHighlightDialog());
     $('hlAddBtn').addEventListener('click', async () => {
       if (!highlightPoint) return;
       let name = $('hlName').value.trim();
@@ -8120,10 +8199,37 @@
       $('lapSetBtn').hidden = true; $('lapInfo').textContent = 'Line set · laps start at the next crossing';
       toast('Start/finish set here. Laps are timed from the next crossing.');
     });
+    // Your taste from what you drive (taste.js recordPick, IDEAS R-33): starting a route you chose over the one Vetta put
+    // first (another card, a swipe) is half an answer to "which was better?": the chosen road beat the passed one. Only
+    // between routes within 30 % of each other's time (a much longer pick says more about your afternoon than your
+    // taste), once per plan, never for loops (their cards are directions, not kinds of road). Kept on this phone.
+    let pickLearned = null;
+    function learnFromPick() {
+      try {
+        const o = routeOptions, t = plannedRoute;
+        if (!window.ApexTaste || !o || !o.list || o.current !== t || !t || t.id !== 'route_dest' || pickLearned === o) return;
+        // Vetta's pick is the plan's own level's (the list starts with Quick's, so list[0] is not it); after a refine's swap
+        // it is the swapped-in one, since the refine ranks at that same level
+        const first = o.levels && o.builtLevel ? o.levels[o.builtLevel] : null;
+        if (first == null || o.picked === first) return;
+        const chosen = o.list[o.picked], passed = o.list[first];
+        if (!chosen || !passed || !chosen.t || !passed.t || !(chosen.timeS > 0) || !(passed.timeS > 0)) return;
+        if (Math.abs(chosen.timeS - passed.timeS) > 0.3 * Math.min(chosen.timeS, passed.timeS)) return;
+        const fc = ApexTaste.featuresOf(Core, chosen.t, { quick: true }), fp = ApexTaste.featuresOf(Core, passed.t, { quick: true });
+        const before = ApexTaste.load(localStorage), after = ApexTaste.recordPick(before, fc, fp);
+        if (after === before) return;
+        pickLearned = o;
+        ApexTaste.save(localStorage, after);
+        const lean = ApexTaste.leanOf(fc, fp);
+        if (window.apexDebug) window.apexDebug.lastPick = { lean, picks: after.picks, fc, fp };
+        if (lean) setTimeout(() => toast(`Noted: you picked the more ${lean} road. Your fun routes learn from it.`), 1500);
+      } catch (_) { /* a taste is a nicety: never in the way of a drive */ }
+    }
     async function enterDrive() {
       if (state.mode === 'live' && drive.sensors) return;
       if (state.mode === 'live' || driveActive) return;                                   // native app is feeding frames already or start is pending
       driveActive = true; health.bump('drives'); drive.startedAt = performance.now();
+      learnFromPick();                                                 // a route you chose over Vetta's first: your taste (taste.js)
       // A drive takes the whole screen, whatever the phone was showing: a drive started from the car (or a link, or Siri)
       // with the Crew or Garage sheet or the Log open left that page in the middle of the drive screen (the owner, 2026-10-30).
       if (logFrame.el && !logFrame.el.hidden) { logFrame.el.hidden = true; document.documentElement.classList.remove('log-open'); }
@@ -8593,7 +8699,7 @@
         btn('Convoy now', () => { close(); needSocial().then(() => { if (convoy) convoy.now(name); else toast('The convoy isn\u2019t available here.'); }); }, 'ink-btn'),
         el('p', { textContent: 'A convoy: drive together, live, for two hours (the leader can keep it going, up to six). Friends join with the code on your screen; nothing is kept. A crew\u2019s run starts its convoy from the drive\u2019s card.' }),
         btn('Cancel', close, 'linkbtn')));
-      back.addEventListener('click', (e) => { if (e.target === back) close(); });
+      onBackdrop(back, () => close());
       document.addEventListener('keydown', esc);
       document.body.append(back);
       drive.focus({ preventScroll: true });   // TestFlight 2026-11-05: focusing mid-slide scrolled the sheet up past its place (keyboard.js)
