@@ -1,5 +1,14 @@
 # VETTA — CURRENT AGENT HANDOFF STATE
 
+## Session 2026-11-11 (fable-time-attack): weekly time attack per area (claude/fable-time-attack, off origin/main)
+
+- Migration 0049 (ta_pool, ta_weeks, ta_entries): applied on preview; prod at merge. backend/src/time_attack.ts, routes /api/timeattack*,
+  report kind `circuit` (safety.ts), sweep 8 weeks, export, tools/d1_rowcounts.sql.
+- web/time_attack.js in the social group: Where to? → Time attack this week (`#planAttack`, mounted in cockpit.js); Enter adds the
+  copy to apex.segments; analysis.html syncSegments calls `ApexTimeAttack.sendRuns`.
+- Tests: backend/test/time_attack.test.ts, tests/test_time_attack.py, e2e "time attack this week".
+- Next: the drive's end card could say "3rd this week" when a run on the circuit is sent; a reminder on Sunday.
+
 ## Session 2026-11-10 (fable-pro-looks): Pro looks only (claude/fable-pro-looks, off origin/main)
 
 - web/pro.js: KINDS theme + livery; route_tuning removed; web/route_tuning.js `allowed()` always true.

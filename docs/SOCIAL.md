@@ -71,6 +71,18 @@ and in random batches so a trace cannot be re-assembled.
 - Only Scores already shared with the crew, among those who came; a time and its gap to the quickest only where that
   driver shares times with the crew, and the overall's total time when every stage has one. `resultsSheet` in `backend/src/events.ts`.
 
+### 2.9 Weekly time attack (members; owner 2026-11-11)
+- An area is a 1-degree square. A member puts up one of their own stages (1 to 25 km, at most three) for the area it starts
+  in; each Monday (UTC) one is picked per area, the first time anyone there looks, and kept to Sunday. Last week's isn't
+  picked again while the area has another; a reported or removed one never is.
+- Enter (Where to? → Time attack this week) copies it into your Stages. The Log sends your quickest timed run on it that
+  week; the board shows every entrant by handle, quickest first, with the gap and that run's Vetta Score, plus last week's
+  podium. Entering is the opt-in: only entrants' times are on it, and Take my time off removes yours.
+- The phone sends only the middle of the area, never where it is. Blocks hide people both ways. A time faster than 60 m/s
+  (216 km/h) average over the stage is refused. Times are kept eight weeks. `backend/src/time_attack.ts`, `web/time_attack.js`.
+- It is a public time board on public roads, which the guardrails ruled out before the owner's call; the risk and the copy
+  rules are in docs/APP_REVIEW.md (1.4).
+
 ## 3. Drive analysis (private)
 Compare passes of the same road — yours, or a friend's ghost they chose to send you.
 

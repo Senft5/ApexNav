@@ -6006,6 +6006,20 @@
       const d = $('planSpots'); d.hidden = false;
       d.addEventListener('toggle', () => { if (!d.open) return; const sec = spotsFeed.section(); const h = sec.querySelector(':scope > h3'); if (h) h.remove(); $('planSpotsBody').replaceChildren(sec); });
     } });
+    // Weekly time attack (web/time_attack.js, SOCIAL 2.9, IDEAS S-26): this area's stage this week and its board, in Where to?
+    // beside Spots near you; drawn when opened, fresh each time. Runs go up from the Log when stages sync.
+    onSocial(() => { try {
+      const ta = window.ApexTimeAttack ? ApexTimeAttack.mount({ el, btn, toast, apiCall, jsonOf, report: safety && safety.report,
+        ask: (t, a) => ApexConfirm.ask(t, a),
+        here: () => state.lastPosition || (() => { const c = map.getCenter(); return { lat: c.lat, lon: c.lng }; })(), goTo: (p) => { closeSheet(); routeToPlace(p); },
+        segs: () => { try { return JSON.parse(localStorage.getItem('apex.segments') || '[]') || []; } catch (_) { return []; } },
+        saveSegs: (l) => { try { localStorage.setItem('apex.segments', JSON.stringify(l)); } catch (_) {} },
+        fmtKm: (km) => ApexUnits.long(km * 1000, 1) }) : null;
+      if (ta) {
+        const d = $('planAttack'); d.hidden = false;
+        d.addEventListener('toggle', () => { if (!d.open) return; const sec = ta.section(); const h = sec.querySelector(':scope > h3'); if (h) h.remove(); $('planAttackBody').replaceChildren(sec); });
+      }
+    } catch (e) { console.error('time attack', e); } });
     // Roadbooks (web/roadbooks.js, docs/SOCIAL.md 2.6): collections of great roads, yours, followed and public ones near you;
     // a road you drive is stamped from your own Log. In People (Friends), in Where to?, on a route card's Share, and by link.
     let roadbooks = null;

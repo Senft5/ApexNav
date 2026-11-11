@@ -63,6 +63,13 @@ notes under a search that finds nothing said "Press Go" while the key under them
 "offline" is only said when the phone is offline.
 
 Undo: revert the PR. Typed coordinates still work as before and are still named "Pin lat, lon".
+## 2026-11-11 (fable-time-attack): a weekly time attack per area (claude/fable-time-attack)
+
+- **An area is a 1-degree square, the stage is one members put up.** Why: the owner asked for "a weekly time attack circuit per area"; a square needs no map of regions and the phone can send just its middle, and member stages are real roads people chose (no synthesized circuits). Undo: change `cellOf` in `backend/src/time_attack.ts` and `areaPoint` in `web/time_attack.js` together.
+- **The week's stage is picked lazily, by a stable hash, and stored.** Why: no cron, every phone sees the same pick, last week's is skipped while there's another. Undo: a scheduled pick in the Worker writing `ta_weeks`.
+- **The board is every member's, by handle; entering is the opt-in.** Why: a weekly attack is a public contest by nature; only entrants' times show and Take my time off removes yours. This breaks the old "no public time board" guardrail, by the owner's call, logged in IDEAS and APP_REVIEW 1.4 with a fallback (hide the time column, order by Score). Undo: that fallback, or hide `#planAttack`.
+- **Over 60 m/s average is refused, not ranked.** Why: a bad clock or a fake; it also keeps an absurd time off the top. Undo: `MAX_AVG_MS`.
+- **A moderator's remove takes that week's times with it.** Why: otherwise the area's next pick would inherit the old board. Undo: drop the first statement in safety.ts `act.circuit`.
 ## 2026-11-10 (fable-roadbooks): Roadbooks, your collections of great roads; a road is stamped only when your own Log covers it (claude/fable-roadbooks)
 
 A new thing people can make and pass around: a roadbook is a named list of roads ("Smokies classics"), each a planned
