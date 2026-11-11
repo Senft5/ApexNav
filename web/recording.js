@@ -314,8 +314,9 @@
     });
   }
 
-  /** "Confirmed on 3 of 4 drives", "Seen on 1 of 3 drives" or "Driven once" for a hazard event. */
+  /** "Confirmed on 3 of 4 drives", "Seen on 1 of 3 drives", "Driven once", or "Confirmed by members" for a hazard event. */
   function seenLabel(e) {
+    if (e && e.crowd) return 'Confirmed by members';               // crowd-verified (IDEAS Q-02, contributor.js bumpEvents)
     const s = e.seen;
     if (!s || s.passes < 2) return 'Driven once';
     return `${s.hits >= 2 ? 'Confirmed' : 'Seen'} on ${s.hits} of ${s.passes} drives`;

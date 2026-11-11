@@ -167,4 +167,4 @@ def test_contribution_carries_flow_and_rec_but_never_speed():
     out = run(js)
     assert "rec" in out["keys"] and "hr" not in out["keys"]
     assert out["bin"]["fl"] == 1 and out["bin"]["hb"] == 0
-    assert out["binKeys"] == ["cam", "crest", "fl", "hb", "i", "k", "rough"] and 18 not in out["values"]   # the speed never leaves
+    assert out["binKeys"] == ["bp", "cam", "crest", "fl", "hb", "i", "k", "rough"] and 18 not in out["values"]   # the speed never leaves
