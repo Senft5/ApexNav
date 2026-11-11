@@ -285,12 +285,6 @@
   clicks a Layers key before the panel has slid in will. `overflow: clip` on `.stage` would rule it out.
 - Next: the drive screen proper (the status row beside Report and End).
 
-## Session 2026-11-10 (fable-camber-sure): Bank in whole degrees, said as approximate (claude/fable-camber-sure, off origin/main)
-
-- web/instruments.js `bankText` whole degrees; `BANK_SURE` appended to the gball/pod/grip explanations. web/drive_view.js
-  lane Banking whole degrees. web/road_feel.js `endLine` "banked about N°". Tests: test_alarm_grammar.py, test_road_feel.py.
-- Next: a body-roll gain per suspension class (ROAD_DATA.md "planned"), or validate against one surveyed road.
-
 ## Session 2026-11-10 (fable-layers): design pass 8, the Layers panel as the map's legend (claude/fable-layers, off origin/main 1a38381)
 
 - web/index.html only (markup and CSS, no script): `#switchRow` rows are `.sw.ly` = switch, name over a `<small>` line,
@@ -368,6 +362,15 @@
   reached by the app (tests/test_plan_options.py still covers them); remove them if loops never get a style back.
 - Next: two cards can share a name (both "Southeast"); a finer name (16 points, or the road it is built on) if it reads
   badly on real roads. The 1 hour / 2 hours loops sit in Options; the card's Length row is miles only.
+
+## Session 2026-11-10 (fable-coherence): red team doc coherence (claude/fable-coherence, off origin/main ac6c6c6)
+
+- docs/PHILOSOPHY.md rewritten (principles, road scores, measurement limits, built / not built, dropped and why).
+  CLAUDE.md = AGENTS.md = .cursorrules (tests/test_agent_docs.py). ARCHITECTURE.md §5 DSP bus marked not built.
+- BRAND.md shipped-state box; SOCIAL.md threshold; about.html, analysis.html Log note, LISTING.md, marketing copy;
+  APP_REVIEW.md rows (ribbon 1.4.1, Score/boards, cameras/police); OWNER_TODO domain.
+- Owner decisions 2026-11-10: Pace stays, Times/gaps shared, police + speed cameras stay, Pro looks only, Tapedeck stays.
+- Next: Pro looks only in code (Route tuning free, one Pro member dresses a crew); camber shown with how sure it is.
 
 ## Session 2026-11-10 (fable-paths-are-keys): the empty Spots list has an Add one key (claude/fable-paths-are-keys, off origin/main dc9caf9)
 
