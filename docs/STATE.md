@@ -1,5 +1,11 @@
 # VETTA — CURRENT AGENT HANDOFF STATE
 
+## Session 2026-11-11 (places by name, 2): the drive's fuel stamp names its station (claude/project-thread-me97iw, off origin/main)
+
+- cockpit.js `updatePins`: in a drive the one fuel stamp left (U-85, the next stop ahead) reads "FUEL · Shell" when the map
+  names it; the preview keeps plain FUEL stamps (fuelPins carry `name`). e2e "along the route by name…" starts the drive.
+- Next: the co-driver could say the next café or fuel stop by name on request; CarPlay's route preview could list them.
+
 ## Session 2026-11-11 (places by name): the cafés and fuel on the route card are a tap away, by name (claude/project-thread-me97iw, off origin/main)
 
 - The owner: "when it says there's cafes or gas stations ... i want to be able to tap for details. Ideally just show the name".
