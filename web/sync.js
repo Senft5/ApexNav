@@ -20,6 +20,7 @@
   const token = () => { try { return IN_APP && !bridge() ? localStorage.getItem(TOKEN_KEY) : null; } catch (_) { return null; } };
   /** After a sign-in (`t` from an older shell, or true when the shell kept it) or a sign-out (null). */
   let pending = null;                                                   // a Keychain change the next call waits for
+  let known = null;                                                     // signed in (true), out (false), not yet known (null): apiFetch below
   function setSession(t) {
     const b = bridge();
     if (b) {
@@ -28,6 +29,7 @@
       else if (!t) pending = Promise.resolve(b.postMessage({ cmd: 'signOut' })).catch(() => {});
     } else if (typeof t === 'string' || !t) store(TOKEN_KEY, t || null);
     store(SIGNED_KEY, t ? '1' : null);
+    known = t ? true : false;
   }
   // A session an older build left in page storage moves into the Keychain once, then leaves the page.
   try { const old = bridge() && localStorage.getItem(TOKEN_KEY); if (old) { setSession(old); } } catch (_) {}
@@ -35,8 +37,27 @@
   // account on the production Worker. It reads like any member, and writes nothing: no hazard, vote, road feel, score,
   // kudos, presence, crew post or feedback of a replayed drive may reach another driver. A write answers 204 here.
   const reviewing = () => { try { return !!(root.APEX_REVIEW || (root.parent && root.parent !== root && root.parent.APEX_REVIEW)); } catch (_) { return !!root.APEX_REVIEW; } };
+  // Signed out, the member-only reads answer 401 and nothing else (Roamer B's first run, 2026-11-11: a signed-out page
+  // asked for convoy invites, points, hazards and members' roads and got four 401s back). Once the page knows it is
+  // signed out (/api/me said so, a sign-out, or one of these answered 401), they answer 401 here and nothing is sent.
+  // A sign-in (setSession, or /api/me saying signed in) asks again. Unknown (before /api/me answers) still asks.
+  const MEMBER_READS = /^\/api\/(convoy\/invites|points|hazards|roads)(\?|$)/;
+  const learn = (path, method, r) => {
+    if (method !== 'GET' || !r) return;
+    const p = String(path);
+    if (/^\/api\/me(\?|$)/.test(p) && r.ok && typeof r.clone === 'function') r.clone().json().then((j) => { if (j && typeof j.signed_in === 'boolean') known = j.signed_in; }, () => {});   // only what it says
+    else if (r.status === 401 && MEMBER_READS.test(p)) known = false;
+  };
+  const signedOutAnswer = () => new Response(JSON.stringify({ error: 'sign_in_required' }), { status: 401, headers: { 'content-type': 'application/json' } });
   /** fetch() for /api/* from either shell. Rejects when offline, like fetch. */
   async function apiFetch(path, init = {}) {
+    const method = String(init.method || 'GET').toUpperCase();
+    if (known === false && method === 'GET' && MEMBER_READS.test(String(path))) return signedOutAnswer();
+    const r = await apiFetchOnce(path, init);
+    learn(path, method, r);
+    return r;
+  }
+  async function apiFetchOnce(path, init = {}) {
     if (reviewing() && !/^(GET|HEAD)$/i.test(init.method || 'GET')) {
       try { root.console.info(`APEX-REVIEW held ${String(init.method).toUpperCase()} ${String(path).split('?')[0]}`); } catch (_) {}
       return new Response(null, { status: 204 });
