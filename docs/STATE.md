@@ -10,6 +10,16 @@
 - The demo drives' longest runs are 4 (nothing said). Tests: tests/test_flow.py (5). Checked: pytest; e2e drive-ended
   card/Log, Your driving, drive tags, startup budget.
 - Next: "Best run this month" in Your records (needs corners per drive: the analysis worker), and the end card.
+## Session 2026-11-11 (ui-round-three, PR 1): the first friend and the first crew (claude/project-thread-5sbga7)
+
+- Walked the empty and signed-out screens (People, Crews, Garage, Log, Stages, signed in and out). Signed out People and
+  the Log's empty page were already pages; signed in with nobody, Friends and Crews were a grey sentence and a small key.
+- cockpit.js: `.people-first` (the join page's `drawing`, `roads`, `pucks`; a `jr-ghost` road for the friend, `jr-seat`
+  circles for the crew), `.join-head` "Bring a friend." / "Start a crew.", the `.people-lead` sentence kept inside.
+  signature.css: the Invite key after it is full width (52 px). e2e "People, a new account" checks the new first child.
+- Tests: tests/test_people_first.py. e2e People, crew, friend, Dynamic Type, VoiceOver flows pass here.
+- Next ideas: Garage's "Add a car" as a paper key in the empty bay; the drive HUD; CarPlay visuals.
+
 ## Session 2026-11-11 (roam-c-crew-public-reset, security pass): a crew made public drops members' hand-made shares (claude/roam-c-crew-public-reset)
 
 - backend/src/social.ts `crewUpdate` private to public: besides grants, board entries and drive scores (already), members'
