@@ -8,6 +8,15 @@
   The `.sw` slide switch is unchanged (the owner's "hard to tell if they're on or off").
 - Tests: tests/test_sheets_line.py. e2e Settings, Options, units, crew, roadbook, duel, People, Garage, night pass here.
 - Next: the crew page's own head and the route card's Share box; the Log's sub-pages if anything there still boxes.
+## Session 2026-11-11 (roam-c-migration-guard): migration numbers can't clash (claude/roam-c-migration-guard, off origin/main 936aec3)
+
+- tests/test_migrations.py: names NNNN_words.sql, numbers unique from 0001 (the message says which number to take; gaps are
+  allowed, PRs merge out of order), and backend/test/helpers.ts imports and applies every file in order. Eight threads add migrations at once.
+- D1 by hand 2026-11-11: d1_migrations on prod and preview both list 0001–0050, matching the files (no drift).
+- Also this session: my Avoid cameras build (#401) was closed for the routing thread's #396 (same change); one review
+  comment left there (an edge near two cameras compounds to x64).
+- Next: a live drift check in CI needs a Cloudflare API token (owner).
+
 
 ## Session 2026-11-11 (ui-round-two, PR 2): the Garage and People in the Vetta Line (claude/project-thread-5sbga7)
 
