@@ -70,7 +70,10 @@ jobs:
         with:
           node-version: "22"
       - run: npm install --no-save --no-package-lock --no-audit --no-fund playwright@1.63.0
-      - run: npx playwright install --with-deps --only-shell chromium   # headless launch only needs the shell
+      # headless launch only needs the shell. The system packages come from the Ubuntu mirror; when the runner can't reach it
+      # (2026-11-11: "Temporary failure resolving azure.archive.ubuntu.com" for an hour), the runner image already has the
+      # libraries the shell needs and only some fonts are missing, so install the browser alone rather than fail before any flow
+      - run: npx playwright install --with-deps --only-shell chromium || npx playwright install --only-shell chromium
       - run: node smoke.js
         env:
           SHOTS: shots   # the safe-area flow's contact sheets, one per phone shape (REVIEW2.md U-05)
