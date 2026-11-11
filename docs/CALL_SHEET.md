@@ -364,6 +364,21 @@ The row under Where to? read "Loop from here · 45 mi" from launch on, whatever 
 Plan key built the dial's loop: turn the dial to 15 mi, cancel, and the row still promised 45. It now says the dial's
 length (or time, once #342 is in) the moment you pick it. Undo: revert the PR.
 
+## 2026-11-10 (fable-garage-two-blocks): the Garage's lower page is two blocks, the look and the co-driver (claude/fable-garage-two-blocks)
+
+For "cohesiveness": under the looks the Garage had two more blocks, **Co-driver** (Notes, Haptics, Key sounds and,
+oddly, Night) and **The words**, which opened with "Your co-driver's voice is chosen under Look and voice, above": a
+block that began by pointing back up the page. Now:
+
+- **Look and voice** ends with **Night** (Auto, Day, Night): it turns the page over, so it is the look's.
+- **Co-driver** is one block: The words (Plain words, Rally notes) with their example, the Notes row (Change in
+  Layers), Haptics, Key sounds, Speak road names. The cross-reference sentence is gone.
+
+Nothing was removed and every control keeps its id; the co-driver's voice stays with the looks, which suggest it (the
+one-home rule in tests/test_voice_pick.py). The page is one heading and about 90 px shorter.
+
+Undo: revert the PR (web/index.html only, plus two `set:` lines in web/vocabulary.js).
+
 ## 2026-11-10 (fable-stages): on a stage's page a run is named by when it was driven (claude/fable-stages)
 
 Under "Runs · Dry Ridge Rd" every run was titled "Dry Ridge Rd" again (a drive is named after its road), with the one
