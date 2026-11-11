@@ -32,8 +32,8 @@ as rally pace notes, scores how cleanly you drove it, and keeps a shared road bo
 4. **Cameras and police, in the open.** Vetta shows plate-reading (ALPR) and speed cameras from OpenStreetMap and can
    route around them, and drivers report police as a hazard and as a convoy leader call (owner, 2026-11-10). This is
    legal in the US and common in navigation apps; the listing names it plainly and APP_REVIEW.md covers it. Never
-   reported: drunk-driving checkpoints (App Review guidelines allow only checkpoints the police publish). Routing around them is built: Avoid → Cameras,
-   and Avoid → Police reports (drivers' live Police reports and a convoy's Police call, `docs/ROUTING.md`; owner, 2026-11-11).
+   reported: drunk-driving checkpoints (App Review guidelines allow only checkpoints the police publish). Routes can avoid
+   drivers' live Police reports and a convoy's Police call (Avoid → Police reports, owner 2026-11-11, docs/ROUTING.md).
 5. **Friends, not the public.** No public boards. Convoys leave nothing stored. Sharing is said once, at the moment you share.
 6. **Free to drive.** Driving, pace notes, directions, routes and loops, safety, privacy controls, your drives and your
    exports are free and stay free. Vetta Pro is optional and must never gate safety, privacy or your own data
