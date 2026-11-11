@@ -46,6 +46,13 @@ and in random batches so a trace cannot be re-assembled.
 - Share a planned route (geometry + pace notes) to friends or publish a stage list.
   Never a recorded drive.
 
+### 2.7 Duels (friends, Scores only)
+- Challenge a friend on one of your stages for 3, 7 or 14 days; the higher Vetta Score on it in that window wins.
+  Accepting copies the stage to them. Never a time or a speed: the Score is technique.
+- Reads only Scores each already shows the other (grants + board entries); the card says in words when one side's
+  don't reach the other. Friends only; a block or unfriend hides it. Kept 60 days after it ends. `web/duels.js`,
+  `backend/src/duels.ts`, migration 0047.
+
 ## 3. Drive analysis (private)
 Compare passes of the same road — yours, or a friend's ghost they chose to send you.
 

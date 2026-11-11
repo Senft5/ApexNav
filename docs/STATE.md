@@ -31,6 +31,22 @@
 - Tests: tests/test_route_card.py; e2e "plan flow (c)".
 - Next: CarPlay has not had a design pass in this run (Swift, not visible from the cloud).
 
+## Session 2026-11-11 (fable-duels): Duels between friends on a stage (claude/fable-duels, off origin/main affc1d0)
+
+- Migration `0047_duels.sql` (table `duels`). **Apply on preview then prod (and INSERT into d1_migrations) before merging.**
+- `backend/src/duels.ts`: `duelCreate` (friend by handle, your own segment, 3/7/14 days, 409 `duel_exists`, 429
+  `too_many_duels` / `daily_limit`; also shares the segment to them), `duelAccept` (opponent only; days start today; the
+  stage is copied with `origin_id`), `duelEnd` (decline / withdraw), `duelList` (best `driver_score` per side from
+  `board_entries` published to the other inside the window, only while that side's `share_scores` grant holds;
+  `you_share` / `they_share`), `DUELS_SWEEP` (60 days after it ends). Routes `GET/POST /api/duels`,
+  `POST /api/duels/:id/accept`, `DELETE /api/duels/:id`. Export lists `duels`.
+- `web/duels.js` (lazy, social group): pure `card()`, `shown()`, `daysLeft()`; `mount()` → `cards()` (People → Friends,
+  after requests) and `challenge(f)` (a sheet: Stage, How long, Send). cockpit.js `keysFor` adds Challenge on a stage;
+  `openStage` plans a stage from its geometry.
+- Tests: tests/test_duels.py, backend/test/duels.test.ts, sweep.test.ts (a long-over duel goes, a late-accepted one stays),
+  e2e "duels: …", "friend profile", People.
+- Next: a crew's roadbook, or a crew drive's results as a rally sheet (who came, each one's Score on each stage).
+
 ## Session 2026-11-10 (fable-there-and-back): there and back, home another way (claude/fable-there-and-back, off origin/main 948cb4b)
 
 - `web/graph_router.js` `roundTrip` (worker message `round`, client `round`): ways out paired with ways home that avoid

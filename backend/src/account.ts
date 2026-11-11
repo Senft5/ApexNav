@@ -18,6 +18,9 @@ export async function exportMyData(env: Env, v: Viewer) {
     friends: await q("SELECT u.handle, f.status, f.created_at FROM friendships f JOIN users u ON u.id = CASE WHEN f.user_a = ?1 THEN f.user_b ELSE f.user_a END WHERE f.user_a = ?1 OR f.user_b = ?1"),
     blocks: await q("SELECT u.handle FROM blocks b JOIN users u ON u.id = b.blocked WHERE b.blocker = ?"),
     shared_routes: await q("SELECT name, created_at FROM shared_routes WHERE owner = ?"),
+    // duels you made or were asked into: the stage, the other side's handle, the days and how it stands (Scores stay on the boards)
+    duels: await q(`SELECT d.stage, u.handle AS with_handle, CASE WHEN d.challenger = ?1 THEN 'you challenged' ELSE 'challenged you' END AS side, d.days, d.status, d.starts_on, d.ends_on, d.created_at
+                      FROM duels d JOIN users u ON u.id = CASE WHEN d.challenger = ?1 THEN d.opponent ELSE d.challenger END WHERE d.challenger = ?1 OR d.opponent = ?1`),
     hazard_reports: await q("SELECT kind, lat, lon, heading, created_at, expires_at, confirms, clears FROM hazard_reports WHERE reported_by = ?"),
     crew_drives_planned: await q("SELECT title, starts_at, meet_name, meet_lat, meet_lon, notes, cancelled, created_at FROM crew_events WHERE created_by = ?"),
     crew_drive_rsvps: await q("SELECT e.title, e.starts_at, r.status, r.updated_at FROM crew_event_rsvps r JOIN crew_events e ON e.id = r.event_id WHERE r.user_id = ?"),

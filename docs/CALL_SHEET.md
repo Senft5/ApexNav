@@ -43,6 +43,24 @@ keeps its own word and only its progress bar moves.
 
 Undo: revert the PR.
 
+## 2026-11-11 (fable-duels): challenge a friend on a stage; the higher Vetta Score in a few days wins (claude/fable-duels)
+
+A new thing to do with a friend. On a friend's row in People, Challenge on a stage picks one of your stages and 3, 7 or
+14 days. They get a card on People: Accept or No thanks. Once accepted the stage is copied to their Stages, the days
+start, and the card shows both of your best Vetta Scores on it in that window, who leads and the days left; when it ends
+it says who won by how much, with Rematch. Drive takes you to the stage.
+
+The calls: it is Scores only, never a time, because the Score is how well corners were driven (the guardrail against
+racing on public roads stays). A duel reads only Scores each of you already shows the other (the per-friend grant and the
+board entries that exist today); nothing new about a drive is stored. When one side's Scores don't reach the other the
+card says so in words, and your own card has a Show my Scores key that turns on Scores (never times) for that friend.
+Friends only; a block or an unfriend hides every duel between the two at once. At most 10 open, 10 new a day, one open
+duel per friend and stage; a duel row is deleted 60 days after it ends. No report kind: a duel holds no text of its own
+(the stage name is the challenger's, already reportable as a stage). The friend row's key list grew a fourth action, so the
+People e2e check for that row now expects "Challenge on a stage" after "Invite to a drive" (a deliberate spec change).
+
+Needs migration 0047 (one new table) on preview and prod before merging. Undo: revert the PR; `DROP TABLE duels`.
+
 ## 2026-11-10 (fable-there-and-back): a trip to a place can come home another way in one tap (claude/fable-there-and-back)
 
 The route card of a trip to a place has a new key, "There and back, home another way". It plans the drive home too,
