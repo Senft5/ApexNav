@@ -4,6 +4,17 @@ Decisions Claude made for you, newest first. Each one says what was decided, why
 you reach one you've seen. If you disagree with a call, say so and it gets reversed; nothing here is hard to undo unless
 it says so. Things only you can do are in docs/OWNER_TODO.md.
 
+## 2026-11-10 (fable-night-keys): at night no key outshines the road (claude/fable-night-keys)
+
+Red team UX-07: on the night drive screen the brightest things were keys: End, Done and the chosen replay speed were
+solid cream slabs. At night they are now outlined in the panel's ink (same size, same place), so the instruments and
+the road are the brightest things there. Day is unchanged; Tapedeck keeps its own outlined End; the Undo after End
+keeps its running fill. I checked the other "may be stale" UI findings against today's build: the tab bar already
+hides while driving or replaying, the 1 hour / 2 hours loop keys are gone, and the route card and Garage belong to the
+redesign thread, so I left them.
+
+Undo: revert the PR (CSS only).
+
 ## 2026-11-10 (fable-road-page): About a road says its climb, and speaks in words (claude/fable-road-page)
 
 A bug first: on any road with 40 m or more of climb, the sheet's first line read "Switchbacks · 0.8 mi · descending

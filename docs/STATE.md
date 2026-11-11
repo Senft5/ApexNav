@@ -1,5 +1,12 @@
 # VETTA — CURRENT AGENT HANDOFF STATE
 
+## Session 2026-11-10 (fable-night-keys): night drive keys outlined (claude/fable-night-keys, off origin/main)
+
+- web/index.html CSS: `html[data-mode="night"]` #driveEnd (not .undo, not Tapedeck), .transport > #replayDone and the
+  transport's checked detent are outlined, not filled. tests/test_night_keys.py.
+- Red team UI findings checked against the build: UX-02 tab bar (hidden while driving/replaying) and UX-05 Loop keys are
+  stale; UX-04 route card and UX-08 Garage are with the redesign thread.
+
 ## Session 2026-11-10 (fable-road-page): About a road: the climb's "[object Object]" fixed; scores as named bars (claude/fable-road-page, off origin/main 3f2f315)
 
 - Bug: `openRoadPage` passed `ApexUnits.short` (returns `{ n, u }`) as the headline's height formatter, so a road with a
