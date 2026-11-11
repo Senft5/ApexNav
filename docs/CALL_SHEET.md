@@ -43,19 +43,13 @@ keeps its own word and only its progress bar moves.
 
 Undo: revert the PR.
 
-## 2026-11-11 (fable-taste-picks): the route you choose over Vetta's pick teaches your taste (claude/fable-taste-picks)
+## 2026-11-10 (fable-there-and-back): a trip to a place can come home another way in one tap (claude/fable-there-and-back)
 
-Taste learning only heard from "Which road was better?" after a drive, and most drivers never answer it. A choice made
-on the route card says the same thing: when you Start a different level's route or swipe to another option than the
-one Vetta picked at the plan's level, that pair (the road you took, the road you passed) goes into the taste fit at
-half the weight of an answer (`PICK_WEIGHT` in taste.js; you may have picked it for the time, not the road). It counts
-only for a destination route, once per plan, when the two times are within 30% (a much quicker pick says nothing about
-corners), and not when the two roads read the same. A short toast says which way it leaned ("Noted: you picked the more
-flowing road"), the Log's taste line counts routes chosen beside answers, and when a route on the card is there because
-it suits your taste the card says so ("Suits your taste for flowing roads"). Half an answer is my call: five picks make
-the fit as sure as two and a half answers.
-
-Undo: revert the PR, or set `PICK_WEIGHT` to 0 (stored picks then carry no weight).
+The route card of a trip to a place has a new key, "There and back, home another way". It plans the drive home too,
+staying off the road you drove out on wherever another way exists, and the destination becomes a stop on the trip.
+Calls made: the way home is chosen by the same Fun / Long way rules as any route (so it may be longer, on better road);
+where our own map tiles don't reach, the public router is asked to avoid the way out; a dead end that has only one way
+in says so instead of failing. Undo: hide `#routeRoundBtn` (one line in renderRouteCard), nothing else depends on it.
 
 ## 2026-11-10 (fable-your-data): Your data is three short lists, like Settings (claude/fable-your-data)
 
@@ -73,6 +67,28 @@ The e2e suite is 152 flows now and takes about 24 minutes, so GitHub cut it off 
 (twice on #349, once on #344) with every flow before it passing. The limit is 35 minutes. No test is skipped or
 shortened. Undo: set `timeout-minutes` back to 25 in `.github/workflows/core-tests.yml`, or better, split the suite.
 
+## 2026-11-11 (fable-taste-picks): the route you choose over Vetta's pick teaches your taste (claude/fable-taste-picks)
+
+Taste learning only heard from "Which road was better?" after a drive, and most drivers never answer it. A choice made
+on the route card says the same thing: when you Start a different level's route or swipe to another option than the
+one Vetta picked at the plan's level, that pair (the road you took, the road you passed) goes into the taste fit at
+half the weight of an answer (`PICK_WEIGHT` in taste.js; you may have picked it for the time, not the road). It counts
+only for a destination route, once per plan, when the two times are within 30% (a much quicker pick says nothing about
+corners), and not when the two roads read the same. A short toast says which way it leaned ("Noted: you picked the more
+flowing road"), the Log's taste line counts routes chosen beside answers, and when a route on the card is there because
+it suits your taste the card says so ("Suits your taste for flowing roads"). Half an answer is my call: five picks make
+the fit as sure as two and a half answers.
+
+Undo: revert the PR, or set `PICK_WEIGHT` to 0 (stored picks then carry no weight).
+
+## 2026-11-10 · Vetta Line: the home screen is a masthead over the map and a shelf of road cards (claude/fable-signature)
+
+- What: web/signature.css, a new last stylesheet, restyles the idle map: the place as a masthead in type, the deck as one
+  sheet with a red Just drive and the invitations side by side as cards, soft lift instead of ink boxes, the apex dot on
+  the open tab, a short arrival.
+- Why: the owner asked for big moves toward one cohesive, artist-made look; the home was boxes in 1.5 px ink stacked in rows.
+- Undo: remove the `signature.css` link in web/index.html (the shelf wrapper is harmless without it), or revert the PR.
+
 ## 2026-11-10 (fable-loop-time): a loop can be set by time on the dial (claude/fable-loop-time)
 
 Following your "the whole point is aimless driving": "I have an hour" is how a loop is usually asked for, and time
@@ -85,6 +101,23 @@ dial to Time as well, so the card always changes the loop in the unit it was ask
 Also: a time loop's note said "the closest good loop to 1.5 h"; times now read "1½ h" everywhere.
 
 Not changed: Options keeps its 1 hour / 2 hours keys and My free time. Undo: revert the PR.
+
+## 2026-11-10 (fable-toast-key): a message with a key is one row, and a message is as wide as its words (claude/fable-toast-key)
+
+For "reducing any clunky feelings", seen on the drive screen: "Typing is off while the car moves." took half the
+screen's width, wrapped, and its key ("I'm a passenger") dropped under it, indented, in the red pen. Two causes, both
+in every message the app shows:
+
+- A message is centred from `left: 50%`, so the browser let it be at most half the screen wide and it wrapped early.
+  It is now as wide as its words, up to the screen less 16 px a side.
+- A key on a message (twelve of them: Start drive, Save, Share ETA, Head home, Add as a stop, Garage, Open…) was an
+  inline link. It is now the end of a row: the words wrap on the left, the key stays whole on the right. It is ink and
+  underlined like every other text key (the red pen is for what means slow down), and a thumb tall to hit without
+  making the message taller.
+
+Also: "Saved for offline: … Find it in Where to?." ended "?."; it reads "It's listed in Where to? now."
+
+Undo: revert the PR (`toast()` in web/cockpit.js, four CSS lines in web/index.html).
 
 ## 2026-11-10 (fable-layers): design pass 8: the Layers panel is the map's legend (claude/fable-layers)
 

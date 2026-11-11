@@ -2250,6 +2250,19 @@ flow('the car connects: CarPlay offers Start drive, and an apexnav://open?go=dri
   await page.waitForFunction(() => window.apex && typeof window.apex.onNative === 'function');
   await page.evaluate(() => window.apex.onNative({ type: 'car', via: 'carplay' }));
   await page.waitForFunction(() => /CarPlay connected/.test(document.getElementById('toast').textContent));
+  // 2026-11-10: a message with a key is one row, the key whole at the right in ink (it was an inline link in the red pen that
+  // dropped under the words), a thumb tall to hit; and a message is as wide as its words, not half the screen
+  const tk = await page.evaluate(() => { const t = document.getElementById('toast'), a = t.querySelector('a'), r = t.getBoundingClientRect(), k = a.getBoundingClientRect();
+    const words = document.createRange(); words.selectNodeContents(t.firstChild); const w = words.getBoundingClientRect();
+    return { row: Math.abs((w.top + w.bottom) / 2 - (k.top + k.bottom) / 2) < 3 && k.left >= w.right, oneLine: w.height < 20, hit: Math.round(k.height), tall: Math.round(r.height),
+      ink: getComputedStyle(a).color === getComputedStyle(t).color, under: getComputedStyle(a).textDecorationLine, inside: r.left >= 16 && r.right <= innerWidth - 16 }; });
+  check(tk.row && tk.oneLine && tk.ink && tk.under === 'underline' && tk.inside, 'the words, then the key, on one row in ink: ' + JSON.stringify(tk));
+  check(tk.hit >= 44 && tk.tall < 44, 'the key is a thumb tall to hit and the message is no taller for it: ' + JSON.stringify(tk));
+  await page.setViewportSize({ width: 320, height: 640 });
+  const narrow = await page.evaluate(() => { const t = document.getElementById('toast'); t.firstChild.nodeValue = 'No signal on parts of this route. Save the maps there?';
+    const r = t.getBoundingClientRect(), k = t.querySelector('a').getBoundingClientRect(); return { inside: r.left >= 15.5 && r.right <= innerWidth - 15.5, keyWhole: k.right <= r.right && k.height >= 44, w: Math.round(r.width) }; });
+  check(narrow.inside && narrow.keyWhole && narrow.w > 200, 'on a small phone long words wrap beside the key, inside the screen: ' + JSON.stringify(narrow));
+  await page.setViewportSize({ width: 390, height: 844 });
   await page.click('#toast a');
   await page.waitForSelector('#permSheet.show');                 // first drive: the permissions sheet comes first
   await page.evaluate(() => document.getElementById('permNo').click());
@@ -6001,6 +6014,35 @@ flow('taste from picks: Start on another level\'s route than Vetta\'s pick teach
   }
 }, IPHONE);
 
+flow('there and back: a trip to a place comes home another way in one tap, the destination a stop, the way out kept off the way home (graph_router.js roundTrip; Valhalla where our tiles don\'t reach)', async (page, base) => {
+  const asked = [];
+  await planRouter(page, asked);
+  const { tap } = await planPage(page, base);
+  await tap('#destInput', 'Where to?');
+  await page.fill('#destInput', 'Maryville');
+  await page.waitForSelector('#placeList .place', { timeout: 10000 });
+  await tap('#placeList .place', 'the place');
+  await cardUp(page);
+  await planDone(page);
+  await page.waitForFunction(() => !document.getElementById('routeRoundBtn').hidden, null, { timeout: 10000 });
+  const before = asked.length;
+  await page.evaluate(() => document.getElementById('routeRoundBtn').scrollIntoView({ block: 'center' }));
+  await tap('#routeRoundBtn', 'There and back');
+  await page.waitForFunction(() => window.apexDebug.lastRound && /and back$/.test(document.getElementById('routeCardName').textContent), null, { timeout: 25000 });
+  await planDone(page);
+  const r = await page.evaluate(() => ({ name: document.getElementById('routeCardName').textContent, round: apexDebug.lastRound, note: document.getElementById('routeProgress').textContent,
+    stops: document.getElementById('routeStops').innerText.replace(/\s+/g, ' '), key: document.getElementById('routeRoundBtn').hidden, kind: apexDebug.track && apexDebug.track.kind }));
+  check(r.name === 'To Maryville and back' && r.round.how === 'valhalla' && r.round.via >= 1, 'the trip home is planned, named for it: ' + JSON.stringify(r));
+  check(/^There and back/.test(r.note), 'the card says how much of the way home is new road: ' + JSON.stringify(r));
+  check(/Maryville/.test(r.stops), 'the destination is a stop on the trip, as one you added: ' + JSON.stringify(r));
+  check(r.key === true, 'a round trip offers no second round trip: ' + JSON.stringify(r));
+  const back = asked.slice(before).find((q) => q.locations.length === 2 && Math.abs(q.locations[0].lat - 36.06) < 0.01);
+  check(back && Array.isArray(back.exclude_locations) && back.exclude_locations.length >= 3, 'the way back was asked around the way out: ' + JSON.stringify(back && { n: (back.exclude_locations || []).length }));
+  const whole = asked.slice(before).find((q) => q.locations.length > 2);
+  check(whole && Math.abs(whole.locations[0].lat - whole.locations[whole.locations.length - 1].lat) < 1e-4, 'the whole trip starts and ends at home: ' + JSON.stringify(whole && whole.locations.length));
+  await scan(page, 'there and back');
+}, IPHONE);
+
 flow('no connection: People is a page that says which it is (offline, or Vetta not answering) and what still works, Try again under the thumb; the Garage says so in its own corner (design pass 5)', async (page, base) => {
   let down = true;
   await page.route(/\/api\//, (route) => (down ? route.abort() : route.fulfill({ status: 200, contentType: 'application/json', body: '{"signed_in":false}' })));
@@ -6499,7 +6541,10 @@ flow('plan flow (g) one name for go: Start on the card and the bar, Just drive w
   const { taps, tap } = await planPage(page, base);
   const idle = await page.evaluate(() => { const k = document.getElementById('startDrive'), r = k.getBoundingClientRect(), cs = getComputedStyle(k);
     return { text: k.textContent.trim(), w: r.width, bg: cs.backgroundColor, label: k.getAttribute('aria-label') }; });
-  check(idle.text === 'Just drive' && idle.bg === 'rgba(0, 0, 0, 0)' && idle.w < 150 && /no route/.test(idle.label), 'with no route the bar\'s key is the smaller Just drive, not the red Start: ' + JSON.stringify(idle));
+  // Vetta Line (signature.css): with no route, Just drive is the screen's one red key (the app's first verb is to drive);
+  // it stays the shorter word and the narrower key than the card's Start, and says it records with no route
+  const red = await page.evaluate(() => { const c = document.createElement('i'); c.style.color = 'var(--accent)'; document.body.append(c); const v = getComputedStyle(c).color; c.remove(); return v; });
+  check(idle.text === 'Just drive' && idle.bg === red && idle.w < 150 && /no route/.test(idle.label), 'with no route the bar\'s key is Just drive, in red, narrower than Start: ' + JSON.stringify({ idle, red }));
   await page.click('#startMore');
   const sheet = await page.evaluate(() => [...document.querySelectorAll('.start-sheet button')].map((b) => b.textContent.trim()));
   check(sheet[0] === 'Just drive' && !sheet.includes('Drive'), 'the start sheet says Just drive too: ' + JSON.stringify(sheet));
@@ -6529,6 +6574,37 @@ flow('plan flow (g) one name for go: Start on the card and the bar, Just drive w
   await tap('#startDrive', 'Just drive');
   await page.waitForFunction(() => window.apexDebug.driveActive, null, { timeout: 10000 });
   check(taps.n === 1, 'a free drive is one tap');
+}, IPHONE);
+
+// Vetta Line (web/signature.css): the idle map's home. The place is a masthead set in type (no box), the deck's invitations
+// stand side by side on one shelf of cards with Best roads nearby last, Just drive is the one red key, and nothing on the
+// shelf is cut or under the tab bar. Under reduced motion nothing is left mid-arrival.
+flow('Vetta Line home: a masthead, one shelf of road cards, Just drive the one red key, still under reduced motion', async (page, base) => {
+  await page.route(base + '/api/**', (route) => route.fulfill({ contentType: 'application/json', body: '[]' }));
+  await page.route('https://nominatim.openstreetmap.org/**', (route) => route.fulfill({ contentType: 'application/json', body: JSON.stringify({ address: { town: 'Tellico Plains' } }) }));
+  await page.route('https://api.open-meteo.com/**', (route) => route.fulfill({ contentType: 'application/json', body: JSON.stringify({ current: { temperature_2m: 16, weather_code: 1, precipitation: 0 }, hourly: { time: [new Date(Date.now() - 3600e3).toISOString().slice(0, 13) + ':00'], precipitation: [0] } }) }));
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  await planPage(page, base);
+  await page.evaluate(() => { apexDebug.state.lastPosition = apexDebug.state.lastPosition || { lat: 35.36, lon: -84.29 }; return apexDebug.placePlate(); });
+  await page.waitForFunction(() => { const p = document.getElementById('placePlate'); return p && !p.hidden && p.querySelector('b'); }, null, { timeout: 15000 })
+    .catch(() => page.evaluate(() => [document.getElementById('placePlate').outerHTML, JSON.stringify(apexDebug.state.lastPosition), document.getElementById('app').className]).then((t) => { throw new Error('no masthead: ' + JSON.stringify(t)); }));
+  const d = await page.evaluate(() => {
+    const pp = document.getElementById('placePlate'), cs = getComputedStyle(pp), b = pp.querySelector('b'), sp = pp.querySelector('span');
+    const shelf = document.getElementById('deckShelf'), tabs = document.getElementById('tabbar').getBoundingClientRect();
+    const cards = [...shelf.querySelectorAll('.loop-suggest, #deckChips .chip')].filter((e) => e.getBoundingClientRect().width > 0).sort((x, y) => x.getBoundingClientRect().left - y.getBoundingClientRect().left);
+    const reds = [...document.querySelectorAll('#planBar button')].filter((e) => e.getBoundingClientRect().width > 0 && getComputedStyle(e).backgroundColor === getComputedStyle(document.documentElement).getPropertyValue('--accent').trim().replace(/^#(..)(..)(..)$/, (_, r, g, b2) => `rgb(${parseInt(r, 16)}, ${parseInt(g, 16)}, ${parseInt(b2, 16)})`));
+    const anim = [...document.querySelectorAll('#planBar, #deckShelf > *, #placePlate *')].map((e) => getComputedStyle(e)).filter((c) => c.animationName !== 'none' || +c.opacity < 1).length;
+    return { text: pp.textContent, head: b && b.textContent, rest: sp && sp.textContent, border: cs.borderTopStyle, bg: cs.backgroundColor, headPx: parseFloat(getComputedStyle(b).fontSize),
+      flex: getComputedStyle(shelf).display, ys: [...new Set(cards.map((c) => Math.round(c.getBoundingClientRect().top)))], last: cards.length && cards[cards.length - 1].id, n: cards.length,
+      clear: cards.every((c) => c.getBoundingClientRect().bottom <= tabs.top), reds: reds.map((e) => e.id), anim };
+  });
+  check(d.text === 'Tellico Plains · Dry · 61°' && d.head === 'Tellico Plains' && d.rest === 'Dry · 61°', 'the masthead reads as the plate did: ' + JSON.stringify(d));
+  check(d.border === 'none' && d.bg === 'rgba(0, 0, 0, 0)' && d.headPx >= 28, 'the place is type on the map, not a box: ' + JSON.stringify(d));
+  check(d.flex === 'flex' && d.n >= 2 && d.ys.length === 1 && d.last === 'deckNearby' && d.clear, 'one shelf of cards, Best roads nearby last, above the tabs: ' + JSON.stringify(d));
+  check(d.reds.length === 2 && d.reds.includes('startDrive'), 'Just drive (and its chevron) is the one red key: ' + JSON.stringify(d));
+  check(d.anim === 0, 'reduced motion: nothing is left arriving: ' + JSON.stringify(d));
+  const bad = await unsafe(page, SAFE.portrait);
+  check(!bad.length, 'the home:\n  ' + bad.join('\n  '));
 }, IPHONE);
 
 flow('safe areas: the Dynamic Island, the home indicator and the rounded corners clear every control, upright, on its side and on small phones', async (page, base) => {
@@ -6828,7 +6904,7 @@ flow('TestFlight 2026-11-05 note 6: the idle map\'s deck is the suggestion and o
       kept: localStorage.getItem('apex.deckMin'), H: innerHeight }; });
   let d = await deck();
   check(d.rows === 2 && d.chips && !d.min, 'the deck: Best roads nearby, the suggestion and one road (it was three rows): ' + JSON.stringify(d));
-  const unfolded = d.top;
+  const unfolded = d.top;   // Vetta Line: the deck is the bar and one shelf of cards, so it folds by the shelf's height (~95 px; it was two rows, 150+), and the bar is 12 px taller (52 px keys)
   let bad = await unsafe(page, SAFE.portrait);
   check(!bad.length, 'the deck:\n  ' + bad.join('\n  '));
   // a point on the bar itself (its edge beside Where to?), as a thumb drags it
@@ -6840,7 +6916,7 @@ flow('TestFlight 2026-11-05 note 6: the idle map\'s deck is the suggestion and o
   await swipe(cdp, bar.x, bar.y, 0, 120);
   await page.waitForTimeout(300);
   d = await deck();
-  check(d.min && d.rows === 0 && !d.chips && !d.open && d.kept === '1' && d.top - unfolded > 150 && d.H - d.top < 170, 'a swipe down folds the deck to the bar alone: ' + JSON.stringify(d) + ' unfolded at ' + unfolded);
+  check(d.min && d.rows === 0 && !d.chips && !d.open && d.kept === '1' && d.top - unfolded > 80 && d.H - d.top < 182, 'a swipe down folds the deck to the bar alone: ' + JSON.stringify(d) + ' unfolded at ' + unfolded);
   bad = await unsafe(page, SAFE.portrait);
   check(!bad.length, 'the folded deck:\n  ' + bad.join('\n  '));
   await page.reload();
