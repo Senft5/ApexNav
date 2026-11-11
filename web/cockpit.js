@@ -6552,10 +6552,15 @@
       })().catch(() => {});
       await Promise.all([om, nws]);
       placeAsk.data = d;
-      $('placePlate').textContent = ApexPlacePlate.text(d, ApexUnits.metric());
+      // Vetta Line: a masthead, the place set large and the sky as its line under it. The separator between them stays in the
+      // text (not shown), so the plate still reads "Tellico Plains · Dry · 61°" to a screen reader and to textContent.
+      { const pp = $('placePlate'), m = ApexPlacePlate.parts(d, ApexUnits.metric()), b = document.createElement('b');
+        b.textContent = m.head; pp.replaceChildren(...(m.head ? [b] : []));
+        if (m.rest) { const i = document.createElement('i'), sp = document.createElement('span'); i.textContent = ' · '; sp.textContent = m.rest; pp.append(i, sp); } }
       paintPlacePlate();
     }
     setTimeout(refreshPlacePlate, 4000); setInterval(refreshPlacePlate, 60000);
+    window.apexDebug.placePlate = () => { placeAsk.at = 0; return refreshPlacePlate(); };   // e2e: ask now (the first ask waits 4 s for a fix)
     // ---- Your roads and a Sunday suggestion (panel round 1, D-1 and R-1; your_roads.js) ----------------------------------
     // The deck's first row names one real suggestion and its reason (a crew drive you're going to this week, the best road
     // near you that you haven't driven, your best-scored road), else the loop as before; under it up to three of your own
