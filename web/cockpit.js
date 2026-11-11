@@ -168,7 +168,7 @@
       theme: 'roadbook', camFeel: 'dynamic', voiceId: 'marguerite', voicePick: null, liveVoice: false, voiceStyle: 'codriver', voiceName: '', hlOn: false, hlStrength: 1,
       notesMode: 'auto', nightMode: 'auto', musicMode: 'lower',   // Notes: auto | full | quiet. Night: auto (sunset/sunrise) | on | off
       noteWords: 'plain',                     // rally ("Left 4 minus") | plain ("Medium left"), IDEAS V-02; a saved setting wins
-      toggles: { stage: false, voice: true, lpr: true, dna: false, night: false, twisty: true, haptics: true, crash: true, health: true, terrain: false, coverage: false, keys: true, friends: false, nudge: false, satellite: false }   // twisty on by default (panel D-2), the weekly reminder off until asked for (R-1); stage and night are derived from the two modes; analysis.html reads toggles.night
+      toggles: { stage: false, voice: true, lpr: true, dna: false, night: false, twisty: true, haptics: true, soundtrack: false, crash: true, health: true, terrain: false, coverage: false, keys: true, friends: false, nudge: false, satellite: false }   // twisty on by default (panel D-2), the weekly reminder off until asked for (R-1); stage and night are derived from the two modes; analysis.html reads toggles.night
     };
     const NOTES_MODES = ['auto', 'full', 'quiet'], NIGHT_MODES = ['auto', 'on', 'off'], MUSIC_MODES = ['lower', 'pause'];
     const MODE_LABEL = { auto: 'Auto', full: 'Full', quiet: 'Quiet', on: 'On', off: 'Off' };
@@ -316,7 +316,7 @@
       transformRequest: window.ApexOfflineTiles ? ApexOfflineTiles.transform : undefined });
     { const v = document.getElementById('aboutVersion'), m = /ApexNav\/([^ ]+ \([^)]*\))/.exec(navigator.userAgent);   // the iOS shell names its version in the user agent
       if (v) v.textContent = m ? m[1] : (window.APEX_EMBED ? '--' : 'Website'); }
-    window.apexDebug = { map, get track() { return track; }, state, drives, buildRoute: (...a) => buildRoute(...a), renderRouteCard: (...a) => renderRouteCard(...a), openRoadPage: (...a) => openRoadPage(...a), showEndCard: (...a) => showEndCard(...a), get driveActive() { return driveActive; }, get camResets() { return camResets; }, tryTheme: (id) => tryTheme(id), tulipPNG: (svg) => tulipPNG(svg) };
+    window.apexDebug = { map, get soundtrack() { return { playing: !!(soundtrack.eng && soundtrack.eng.playing()), frame: soundtrack.frame, piece: soundtrack.eng && soundtrack.eng.piece(), sample: !!soundtrack.demo }; }, get track() { return track; }, state, drives, buildRoute: (...a) => buildRoute(...a), renderRouteCard: (...a) => renderRouteCard(...a), openRoadPage: (...a) => openRoadPage(...a), showEndCard: (...a) => showEndCard(...a), get driveActive() { return driveActive; }, get camResets() { return camResets; }, tryTheme: (id) => tryTheme(id), tulipPNG: (svg) => tulipPNG(svg) };
     let mapReady = false;
     // F-02: the map's box is fixed (the window, or a drive's edges); it changes on a rotation or at a drive's start and end.
     // A resize the map already made (setPixelRatio resizes) is not made twice.
@@ -799,7 +799,7 @@
       try {
         const r = await apiCall('GET', `/api/coverage?bbox=${box.join(',')}`);
         if (r.status === 401 || r.status === 403) {
-          if (!coverage.said) toast('Sign in (People) to see measured roads.');
+          if (!coverage.said) askSignIn('see measured roads');
           coverage.said = true;
         } else if (r.ok) {
           coverage.had.push(box);
@@ -2021,6 +2021,7 @@
       d.score = live ? liveScore.value : null;   // the drive's Vetta Score so far (liveScoreTick), only while recording
       cluster.update(d);
       sightAlarm(d, !!live);
+      soundtrackTick(d, vMps, !!live);
       if (live && explainOpen() && !explainGate()) closeExplain();   // PR-1: the car moved off: nothing left to read
       updateRibbon(vMps, idx, snap);
       updatePins();
@@ -2028,6 +2029,67 @@
       if (live) paceDetail(vMps);                                     // F-05: less to draw at speed
       // F-14: a fast replay rewrites the strip at 4 Hz (it reads the same, and each rewrite is a layout)
       if (snap || now - lastNotesAt > (!live && state.rate > 2 ? 250 : 150)) { lastNotesAt = now; updateNotes(vMps, live); drawScrubber(); }
+    }
+    // The Soundtrack (web/soundtrack.js on web/audio_bus.js; docs/ARCHITECTURE.md section 5; Garage > Co-driver, off until
+    // asked for): music made by the road while a drive runs. The bus hears the calibrated g, the corners inside 400 m (a
+    // route's or the road's own, horizon.js) and the Sight alarm; it never hears speed as anything but a distance turned
+    // into a time. Unknown g (the mount not set yet) is passed as unknown, and the music rests on its pad.
+    const soundtrack = { eng: null, bus: null, at: 0, frame: null, demo: 0 };
+    function soundtrackCorners() {
+      if (!track || !Array.isArray(track.events)) return null;
+      const out = [];
+      for (const e of track.events) {
+        if (e.type !== 'corner') continue;
+        const ahead = noteM(e) - state.cursorM;
+        if (ahead < 0 || ahead > ApexAudioBus.HORIZON_M) continue;
+        const n = /^[LR](\d)/.exec(e.code || '');
+        out.push([ahead, n ? ApexAudioBus.severity(Number(n[1])) : /^[LR](HP|SQ|AC)/.test(e.code || '') ? 1 : null]);
+      }
+      return out;
+    }
+    // the app's audio session stays up while it plays (ApexNavApp.swift setSoundtrack), and goes back when it stops
+    function soundtrackNative(on) { if (NATIVE_SHELL) { try { window.webkit.messageHandlers.apex.postMessage({ cmd: 'soundtrack', on }); } catch (_) {} } }
+    function soundtrackEngine() {
+      if (!soundtrack.eng) { soundtrack.eng = ApexSoundtrack.create(ApexVoice.unlock()); soundtrack.bus = ApexAudioBus.create(); }
+      return soundtrack.eng;
+    }
+    function soundtrackStop() {
+      if (soundtrack.demo || !soundtrack.eng || !soundtrack.eng.playing()) return;
+      soundtrack.eng.stop(); soundtrackNative(false); soundtrack.at = 0; soundtrack.frame = null;
+    }
+    function soundtrackTick(d, vMps, live) {
+      if (soundtrack.demo) return;
+      const want = live && driveActive && !pendingEnd && state.toggles.soundtrack === true && window.ApexSoundtrack && window.ApexAudioBus && window.ApexVoice;
+      if (!want) { soundtrackStop(); return; }
+      const now = performance.now();
+      if (soundtrack.at && now - soundtrack.at < 90) return;                 // the bus runs at 10 Hz, whatever the screen draws at
+      const dt = soundtrack.at ? (now - soundtrack.at) / 1000 : 0; soundtrack.at = now;
+      try {
+        const eng = soundtrackEngine(), L = state.live || {};
+        if (!eng.playing()) { soundtrack.bus.reset(); soundtrackNative(true); eng.start((Date.now() / 1000) >>> 0); }
+        const g = !L.calibration || L.calibration === 'locked';              // before the mount is set, g is no measurement
+        soundtrack.frame = soundtrack.bus.step(dt, { lat_g: g ? d.latG : null, lon_g: g ? d.lonG : null, speed_mps: vMps, corners: soundtrackCorners(),
+          over_sight: Inst.sightShort(d), speaking: !!speech.busy });
+        eng.set(soundtrack.frame);
+      } catch (_) {}
+    }
+    // "Hear a sample" beside the switch: 24 s of a made-up road (a straight, a build, a corner, the way out), said to be a
+    // sample. It is the only time the music plays a road that was not driven, and it never plays in a drive.
+    function soundtrackSample(key) {
+      if (!window.ApexSoundtrack || !window.ApexAudioBus || !window.ApexVoice) return;
+      const end = () => { clearInterval(soundtrack.demo); soundtrack.demo = 0; if (soundtrack.eng) soundtrack.eng.stop(); soundtrackNative(false); key.textContent = 'Hear a sample'; };
+      if (soundtrack.demo) { end(); return; }
+      if (state.mode === 'live') { toast('The sample plays when you are not driving.'); return; }
+      try {
+        const eng = soundtrackEngine(), bus = ApexAudioBus.create(); let t = 0;
+        soundtrackNative(true); eng.start(20261110); key.textContent = 'Stop';
+        soundtrack.demo = setInterval(() => {
+          t += 0.1; if (t > 24) { end(); return; }
+          const ahead = 170 - 15 * (t - 4), inCorner = t > 15.3 && t < 20;        // 4 s of straight, 11 s toward a corner, through it, out
+          eng.set(bus.step(0.1, { lat_g: inCorner ? 0.5 * Math.sin((t - 15.3) / 4.7 * Math.PI) : 0.02, lon_g: t > 13 && t < 15.3 ? -0.25 : 0.02, speed_mps: 15,
+            corners: t > 4 && ahead >= 0 ? [[ahead, 0.8]] : [], over_sight: false, speaking: false }));
+        }, 100);
+      } catch (_) { end(); }
     }
     // Panel round 2 (GR-1, IN-3): the one alarm says so in words and in the hand. Going faster than Sight in a drive, the
     // status row's message line says "Slow to 45 for what you can see." for 3 s, in the signal colour with its mark, and the
@@ -3280,7 +3342,7 @@
       let r = null;
       try { r = await ApexSync.apiFetch('/api/eta', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ left_s: Math.round(t.timeS) }) }); } catch (_) {}
       if (!r) { toast('No signal. Try again in a moment.'); return; }
-      if (r.status === 401 || r.status === 403) { toast('Sign in (People) to share your ETA.'); return; }
+      if (r.status === 401 || r.status === 403) { askSignIn('share your ETA'); return; }
       if (!r.ok) { toast(r.status === 429 ? 'You\'re sharing three already. Stop one first.' : 'Couldn\'t share it. Try again.'); return; }
       etaShare.token = (await r.json()).token; etaShare.at = performance.now(); paintEtaShareBtn();
       copyText(`${shareOrigin()}/eta.html?t=${etaShare.token}`, 'Link copied. It shows when you\'ll arrive, never where you are.', 'My ETA');
@@ -4842,6 +4904,13 @@
       t.classList.add('show'); clearTimeout(t._h);
       t._h = setTimeout(() => { t.classList.remove('show'); if (action && action.onClick) t.querySelectorAll('a').forEach(x => x.remove()); }, action ? action.ms || 7000 : 4200);
     }
+    // Something that needs an account says so and offers the way in: the toast's "Sign in" key opens People, where signing in
+    // lives. In a drive it is only said, on the drive's message row: no sheet opens over the road.
+    function askSignIn(why) {
+      const msg = `Sign in to ${why}.`;
+      if (!$('driveBar').hidden) { driveNote(msg); return; }
+      toast(msg, { label: 'Sign in', onClick: () => showView('friends') });
+    }
     // The drive's message row: the whole message if it fits beside Report and End, else its first sentence ("Gravel
     // reported."), never a word cut in half; VoiceOver is read all of it. It goes after DRIVE_NOTE_MS.
     const DRIVE_NOTE_MS = 6000;
@@ -5691,7 +5760,7 @@
       let friends = [], crews = [];
       try { [friends, crews] = await Promise.all([apiCall('GET', '/api/friends').then(jsonOf), apiCall('GET', '/api/crews').then(jsonOf)]); } catch (_) {}
       const fr = (friends || []).filter(f => f.status === 'accepted' && f.handle), cr = crews || [];
-      if (!fr.length && !cr.length) { box.replaceChildren(el('p', { className: 'note', textContent: 'Sign in and add friends or a crew (People) to share routes.' })); return; }
+      if (!fr.length && !cr.length) { box.replaceChildren(el('p', { className: 'note', textContent: 'No friends or crews to share with yet. Add them in People.' })); return; }
       const picked = { friends: new Set(), crews: new Set() };
       if (shareTo && fr.some(f => f.handle === shareTo)) picked.friends.add(shareTo);
       shareTo = null;
@@ -5952,7 +6021,7 @@
     onSocial(() => { try { builds = window.ApexBuilds ? ApexBuilds.mount({ el, btn, toast, apiCall, jsonOf, report: safety && safety.report }) : null; } catch (e) { console.error('builds', e); } });
     // Friends on the map (web/friends_map.js, REVIEW.md 5.4): the Friends layer and who sees you, sent only while you drive
     let friendsMap = null;
-    onSocial(() => { try { friendsMap = window.ApexFriendsMap ? ApexFriendsMap.mount({ el, btn, toast, apiCall, map, zones: () => privacyZones, inZone: inPrivacyZone,
+    onSocial(() => { try { friendsMap = window.ApexFriendsMap ? ApexFriendsMap.mount({ el, btn, toast, askSignIn, apiCall, map, zones: () => privacyZones, inZone: inPrivacyZone,
       position: () => state.lastPosition || null, driving: () => driveActive,
       roadName: (lat, lon) => { try { return window.ApexRoadNames ? ApexRoadNames.nearestRoadName(map.querySourceFeatures('openmaptiles', { sourceLayer: 'transportation_name' }), lat, lon) : null; } catch (_) { return null; } },
       setLayerToggle: (on) => { state.toggles.friends = on; paintSwitches(); friendsMap.setLayer(on); savePrefs(); }, openGarage: () => showView('garage') }) : null; } catch (e) { console.error('friends map', e); } });
@@ -7133,7 +7202,9 @@
     function nudgeAnswered(granted) {
       if (granted) { scheduleNudge(); return; }
       state.toggles.nudge = false; paintSwitches(); savePrefs(); scheduleNudge();
-      toast('Notifications are off for Vetta. Turn them on in the iPhone’s Settings, then here.');
+      // Only the shell answers here, so the key can open Vetta's own page in the iPhone's Settings (the `openSettings` the
+      // "Location is off" sheet uses).
+      toast('Notifications are off for Vetta. Turn them on in Settings, then here.', { label: 'Settings', onClick: () => { try { nudgeShell().postMessage({ cmd: 'openSettings' }); } catch (_) {} } });
     }
     // The morning of a crew drive you said you're going to (REVIEW.md roadmap 21, crew_events.js todayDrive): from 4 AM until an
     // hour after it starts, the idle map offers directions to the meeting point instead of the loop. Members only, every 10 min.
@@ -7503,7 +7574,7 @@
         if (state.toggles.terrain && power.low) toast('3D terrain waits until the phone stops saving battery.');
       }
       if (k === 'friends') {   // REVIEW.md 5.4: seeing friends; the first time, the sheet explains both choices
-        if (!accountMe || !accountMe.member) { state.toggles.friends = false; paintSwitches(); toast('Sign in (People) to see friends on the map.'); return; }
+        if (!accountMe || !accountMe.member) { state.toggles.friends = false; paintSwitches(); askSignIn('see friends on the map'); return; }
         needSocial().then(() => {                                      // F-03: friends_map.js loads on first use
           if (friendsMap) friendsMap.setLayer(state.toggles.friends);
           let seen = false; try { seen = localStorage.getItem('apex.friendsExplained') === '1'; localStorage.setItem('apex.friendsExplained', '1'); } catch (_) {}
@@ -7525,6 +7596,7 @@
     document.querySelectorAll('#nightSwitch [data-night]').forEach(b => b.addEventListener('click', () => { state.nightMode = b.dataset.night; applyTheme(); renderThemePicker(); }));   // a car's card follows the mode
     // SO-1 (panel round 2): Notes and Voice have one home, Layers (a drive reaches it); the Garage's link opens it
     $('coNotesLink').addEventListener('click', () => { showView(null); if (!$('swEdge').classList.contains('open')) $('swTab').click(); });
+    $('soundtrackHear').addEventListener('click', (e) => soundtrackSample(e.currentTarget));
     // U-82: the Notes detent (Layers): a stop is chosen, never cycled into by a stray tap
     document.querySelectorAll('[data-notes]').forEach(b => b.addEventListener('click', () => {
       if (!NOTES_MODES.includes(b.dataset.notes) || b.dataset.notes === state.notesMode) return;
@@ -7586,6 +7658,7 @@
       $('permMot').textContent = motDenied ? MOT_DENIED_TEXT : 'to feel bumps and surface';
       $('permNote').textContent = locDenied ? `Vetta can\u2019t record a drive or call the corners ahead without it. ${NATIVE_SHELL ? 'In Settings, set Location to While Using the App.' : `Turn it on: ${LOC_HOW_TEXT}.`}` : 'Your drive stays on this phone.';
       $('permGo').textContent = locDenied ? (NATIVE_SHELL ? 'Open Settings' : 'Try again') : 'Allow and start';
+      $('permGo').className = locDenied ? 'ink-btn solid' : 'rec-key';   // the red key is go; a way to Settings is ink
     }
     /** The app's own word on Location (a live frame's location_off): the system sheet answered no, or turned off since. */
     function setLocOff(off) {
@@ -8287,7 +8360,7 @@
       if (window.APEX_REVIEW) r = reviewHazard(body);
       else try { r = await ApexSync.apiFetch('/api/hazards', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) }); } catch (_) {}
       if (!r || r.status >= 500) { outbox.add('/api/hazards', body, true); health.bump('hazard_queued'); toast(`No signal. ${word} saved; it's sent when you have one.`); return; }
-      if (r.status === 401 || r.status === 403) { toast('Sign in (People) to report hazards for others.'); return; }
+      if (r.status === 401 || r.status === 403) { askSignIn('report hazards for others'); return; }
       if (!r.ok) { toast(r.status === 429 ? 'That\'s a lot of reports today.' : 'Couldn\'t send that. Try again.'); return; }
       const j = await r.json(); reported.mine.add(j.id); reported.said.add(j.id);
       toast(j.confirmed ? `${word}: someone reported it already. You confirmed it.` : `${word} reported. Drivers behind you will hear about it.`);
@@ -8662,10 +8735,14 @@
     // distance, time and trail); the score, the tip and the closing line follow when the worker has parsed, scored and saved
     // the drive (endCardScored). c: { id, name, len_m, secs, corners (a count, or null while scoring), ds (null while
     // scoring), ended, lat, lon }. A full record (showEndCard) goes through the same two steps at once.
+    // The reveal (end_reveal.js): the driven line is drawn beside the score's place while the drive is scored, and the
+    // number counts up only once it is known. The facts are a ledger of the same words (#endMeta's text is still the line).
+    const endEl = () => ({ card: $('endCard').querySelector('.end-card'), glyph: $('endGlyph'), meta: $('endMeta'), score: $('endScore') });
     function endCardOpen(c) {
       endDrive = c;
       $('endName').textContent = c.name || 'Your drive';
       $('endMeta').textContent = ApexFormat.factsLine(c);              // RA-3: the Log's numbers, from the one helper
+      if (window.ApexEndReveal) ApexEndReveal.open(endEl(), { facts: ApexFormat.factsLine(c), runs: Array.isArray(c.lat) && Array.isArray(c.lon) ? endTrailRuns(c.lat, c.lon) : [] });
       const ended = window.ApexDriveKeep ? ApexDriveKeep.endNote(c) : null;   // Round 3: a drive that ended itself says how
       $('endLine').textContent = ended ? ended + '.' : '';
       // panel round 2 (HE-1): one measured road-feel line from this drive's own rows (road_feel.js); none for a drive whose
@@ -8695,7 +8772,7 @@
     function endCardScored(c, others, opts = {}) {
       if (!endDrive || endDrive.id !== c.id) return;                   // another card since
       endDrive = { ...endDrive, ...c };
-      $('endMeta').textContent = ApexFormat.factsLine(c);
+      if (!window.ApexEndReveal) $('endMeta').textContent = ApexFormat.factsLine(c);   // else the ledger takes the new fact in (land, below)
       $('endScore').removeAttribute('aria-busy');
       // D-6 / R-5 (panel round 1): a drive with no score still reads as a drive. The score's slot says what it was, "3.1 mi ·
       // no corners to score", instead of "-- /1000" over a sentence about a failed exam; nothing is invented (no number).
@@ -8703,6 +8780,7 @@
       $('endScore').textContent = none ? [Number.isFinite(c.len_m) ? ApexFormat.distance(c.len_m) : null, noScoreWords(c.corners)].filter(Boolean).join(' · ') : String(c.ds.score);
       $('endScore').classList.remove('unk');                         // the words are the answer; "--" never shows as a score here
       $('endScore').parentElement.classList.toggle('no-score', none);
+      if (window.ApexEndReveal) ApexEndReveal.land(endEl(), { score: none ? null : c.ds.score, facts: ApexFormat.factsLine(c) });
       // the number against your usual (design pass 9): "31 over your usual", from your last few scored drives in the Log.
       // Read after the card is painted (the Log's summaries, on the phone), and only said with three or more to go by.
       if (!none && window.ApexEndLine && ApexEndLine.usual) (async () => {
@@ -8878,7 +8956,7 @@
     // ended: why a drive ended itself ('car', 'parked'; drive_keep.js EndWatch), or nothing for End
     async function leaveDrive(save, ended) {
       if (pendingEnd) { clearTimeout(pendingEnd.timer); pendingEnd = null; paintEndUndo(); }   // I-3: any other way out ends it now
-      driveActive = false;
+      driveActive = false; soundtrackStop();
       const kept = keepStop();                                         // Round 3: no more checkpoints; dropped once saved
       stageWatch = null; $('stageBar').hidden = true;
       const laps = circuit.timer ? circuit.timer.state(Date.now()).laps : [];
@@ -9113,6 +9191,7 @@
       if (!driveActive) { leaveDrive(true); return; }
       haptic('note');                                                  // a mis-tap is felt
       pendingEnd = { rows: drive.rec ? drive.rec.samples : null, timer: setTimeout(commitEnd, END_UNDO_MS) };
+      soundtrackStop();                                                // End: the music stops at the tap, not at the next frame
       paintEndUndo();
       driveNote(`Drive ended. Saving it in ${Math.round(END_UNDO_MS / 1000)} seconds.`);
       carPost({ kind: 'ending', seconds: END_UNDO_MS / 1000 });
@@ -9145,21 +9224,26 @@
     const obNote = (n) => (state.noteWords === 'plain' && window.ApexPlainNotes ? { ...n, call: ApexPlainNotes.plainCall(n) } : n);
     function runOnboarding() {
       const ob = $('onboard');
-      let k = 0;
+      let k = 0, intro = null;
+      // the strip calls the next corner and the red dot on the drawn road drives up to it (first_run.js), every 1.8 s; with
+      // reduced motion the page is still: the first call, the dot at the start
       const tick = () => {
         if (!ob.classList.contains('show')) return;
         const page = [0, 1, 2].map(j => ({ ...obNote(OB_NOTES[(k + j) % OB_NOTES.length]), key: k + j }));
         page.words = state.noteWords;
         Inst.renderNotes($('obNotes'), look.theme, page);
+        if (intro) intro.step(k);
         k++;
-        setTimeout(tick, matchMedia('(prefers-reduced-motion: reduce)').matches ? 4000 : 1800);
+        if (!matchMedia('(prefers-reduced-motion: reduce)').matches) setTimeout(tick, 1800);
       };
       // U-65: in the app the system's location sheet follows the welcome's Start, so it comes after a reason, not at launch
       const finish = () => { flag('apex.onboarded', '1'); ob.classList.remove('show'); askLocation(); };
       $('obNext').onclick = finish;
       $('obAlt').onclick = () => { finish(); watchDryRidge(); };
       // Focus the dialog, not its button: VoiceOver reads the welcome, and no focus ring sits on Start before a touch
-      ob.classList.add('show'); tick(); ob.tabIndex = -1; ob.focus();
+      ob.classList.add('show');
+      if (window.ApexFirstRun) intro = ApexFirstRun.attach(ob);
+      tick(); ob.tabIndex = -1; ob.focus();
     }
     setTimeout(() => health.flush(IN_APP_SHELL ? 'ios' : 'web').catch(() => {}), 5000);
     document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') health.flush(IN_APP_SHELL ? 'ios' : 'web').catch(() => {}); });

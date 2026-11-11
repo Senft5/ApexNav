@@ -8,7 +8,8 @@ Vetta (the product name since 2026-10-28; the repo, bundle id, `apexnav://` sche
 - **Web cockpit (`/web`)**: the whole app UI in plain JS, the same page on the website and inside the iOS app's WKWebView. Keep vehicle-dynamics math in the pure modules (`apex_core.js`, `live_pipeline.js`, small pure files with tests), never inside `cockpit.js` UI code.
 - **Native shells**: `ApexNavApp.swift` (iOS: CoreMotion, CoreLocation, audio, sign-in, StoreKit, the WKWebView), `CarPlay/` (CarPlay templates and a MapLibre Native car map), `ApexKit/` (Swift sensor pipeline). Shells ingest sensors, render and play audio; they do not invent road data.
 - **Backend**: a Cloudflare Worker + D1 (`/backend`, `docs/BACKEND.md`).
-- **Not built (do not describe as existing)**: a C++ core, an Android app or Android Auto, a Kalman filter, FFT analysis, an audio DSP bus driven by driver workload. They are ideas, not architecture.
+- **Not built (do not describe as existing)**: a C++ core, an Android app or Android Auto, a Kalman filter, FFT analysis. They are ideas, not architecture.
+- **Audio bus (built 2026-11-10, the Soundtrack)**: `core/audio_bus.py` and its parity-tested port `web/audio_bus.js` turn the road ahead and the driver's workload (calibrated g, speed, corners within 400 m, Sight, the co-driver speaking) into an `AudioBusFrame` (schemas/telemetry_contracts.json); `web/soundtrack.js` plays it. Unknown inputs give no workload, and the music rests on its pad.
 - **Strict Data Contracts (`/schemas/telemetry_contracts.json`)**: data passed between the sensor pipeline, road-feel engine, map renderer and audio must obey `/schemas/telemetry_contracts.json`.
 
 ## 3. Coordinate Frame & Unit Laws (ISO 8855 Vehicle Axes)

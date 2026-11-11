@@ -74,3 +74,25 @@ console.log(JSON.stringify({ m, i }));
     assert "b.textContent = ApexUnits.size(Number(b.dataset.zoneR));" in page and "labelLoops(); renderZones();" in page
     assert "`${zoneR} m`" not in page and "under 0.2 mi are dropped.'" not in page
     assert "'7 miles' : '11 km'" in open(os.path.join(ROOT, "web", "crew_page.js"), encoding="utf-8").read()
+
+
+def test_small_lengths_in_the_log_are_in_the_drivers_units():
+    """2026-11-10: the Log said "up 34 m", "Make it at least 200 m long", "braking point typically within 6 m" and "from
+    100 m before turn-in" to a driver in miles."""
+    js = r"""
+const store = {}; globalThis.localStorage = { getItem: (k) => store[k] ?? null, setItem: (k, v) => { store[k] = v; } };
+const U = require(process.argv[1] + '/web/units.js');
+U.set('metric'); const m = [3, 5, 12.4, 20, NaN].map(U.fine);
+U.set('imperial'); const i = [3, 5, 12.4, 20, 100].map(U.fine);
+console.log(JSON.stringify({ m, i }));
+"""
+    out = json.loads(subprocess.run([NODE, "-e", js, ROOT], capture_output=True, text=True, check=True).stdout)
+    assert out["m"] == ["3 m", "5 m", "12 m", "20 m", "--"]
+    assert out["i"] == ["10 ft", "15 ft", "40 ft", "65 ft", "330 ft"]          # to the nearest 5 ft: no finer than was measured
+    log = open(os.path.join(ROOT, "web", "analysis.html"), encoding="utf-8").read()
+    view = open(os.path.join(ROOT, "web", "drive_view.js"), encoding="utf-8").read()
+    for old in ("Make it at least 200 m long", "(fewer metres)", "floor near 3 m", "'under 3 m'", "Math.round(Math.abs(dz))} m"):
+        assert old not in log, old
+    for old in ("One for every 5 m of the drive", "(5 m samples and GPS make about 3 m the floor)", "Math.round(x))} m`;"):
+        assert old not in view, old
+    assert "ApexUnits.size(200)" in log and "U().size(100)" in view
