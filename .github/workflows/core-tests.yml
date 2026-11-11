@@ -75,7 +75,7 @@ jobs:
       # resolving, so --with-deps spent 10 minutes and failed the job before a single flow ran.
       - run: npx playwright install --only-shell chromium
       - name: Browser system packages (best effort)
-        run: timeout 300 sudo npx playwright install-deps chromium || echo "::warning::playwright install-deps failed; running with the runner image's own packages"
+        run: timeout 300 npx playwright install-deps chromium || echo "::warning::playwright install-deps failed; running with the runner image's own packages"
       - run: node smoke.js
         env:
           SHOTS: shots   # the safe-area flow's contact sheets, one per phone shape (REVIEW2.md U-05)
