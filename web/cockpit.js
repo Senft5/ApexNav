@@ -2347,6 +2347,7 @@
         try { t.measured = await ApexContributor.measuredAlong(t, async (ids) => { const r = await apiCall('GET', `/api/roads?ways=${ids.join(',')}`); return r.ok ? r.json() : null; }); }
         catch (_) { t.measured = null; }
       }
+      if (t === plannedRoute) paintRouteReports(t);
       const m = t.measured;
       // the corners members actually drove, where the map simplified them (IDEAS Q-04); never mid-drive
       if (state.mode !== 'live' && applyCrowdCurvature(t, m) && track === t) { state.spoken.clear(); loadTrackOnMap(); render(true); }
@@ -2362,7 +2363,24 @@
           (m.roughKm >= 0.05 ? ` · ${ApexUnits.long(m.roughKm * 1000, 1)} rough` : '') +
           (m.repavedKm >= 0.05 && m.repavedOn ? ` · ${ApexUnits.long(m.repavedKm * 1000, 1)} repaved ${repavedMonth(m.repavedOn)}` : '') +
           (m.avgPasses != null ? ` · ${m.avgPasses.toFixed(1)} runs on average` : '') +
-          (t.crowdCorrected >= 30 ? ` · corners from members' drives on ${ApexUnits.long(t.crowdCorrected, 1)}` : '');
+          (t.crowdCorrected >= 30 ? ` · corners from members' drives on ${ApexUnits.long(t.crowdCorrected, 1)}` : '') +
+          (t.crowdBumps > 0 ? ` · ${t.crowdBumps === 1 ? 'a bump' : `${t.crowdBumps} bumps`} members felt` : '');
+    }
+    // Hand reports beside a planned route (road_page.js onThisRoad, within 30 m; cleared ones left out), one line on the
+    // card: what members said is on the way. Members only; offline or none says nothing.
+    async function paintRouteReports(t) {
+      const line = $('routeCardReports');
+      if (!line || !t || !Array.isArray(t.lat) || t.lat.length < 2 || !window.ApexRoadPage) return;
+      if (line.dataset.for !== String(t.id || t.name)) line.hidden = true;
+      const pts = [];
+      for (let i = 0; i < t.lat.length; i += 200) pts.push({ lat: t.lat[i], lon: t.lon[i] });
+      pts.push({ lat: t.lat[t.lat.length - 1], lon: t.lon[t.lon.length - 1] });
+      let list = [];
+      try { list = await hazardsAround(pts); } catch (_) { return; }
+      if (plannedRoute !== t) return;
+      const text = ApexRoadPage.routeReportsLine(ApexRoadPage.onThisRoad(t, null, Array.isArray(list) ? list : []), (m) => ApexUnits.long(m, 1));
+      line.dataset.for = String(t.id || t.name);
+      line.textContent = text ? ApexRouteCard.factText(text) : ''; line.hidden = !text;
     }
     const repavedMonth = (ym) => { const d = new Date(ym + '-15T12:00:00Z'); return Number.isFinite(d.getTime()) ? d.toLocaleDateString([], { month: 'short', year: 'numeric' }) : ym; };
     // Enforcement cameras in a box [s, w, n, e] (web/cameras.js: plate readers and speed cameras from OSM, by tile, kept a
