@@ -306,7 +306,7 @@
      * stamp and its car, so opening the page again reads only the drives that are new; those of drives since deleted
      * are dropped. Without IndexedDB nothing is kept and every drive is read.
      */
-    async profile({ plan = null } = {}) {
+    async profile({ plan = null, year = new Date().getFullYear() } = {}) {
       const Core = CoreOf(), P = root.ApexDriverProfile, sums = await Rec().summaries(Core);
       if (!P) return { profile: null };
       const db = await obsDb(), kept = new Map();
@@ -323,11 +323,11 @@
           rec = { id: s.id, key, obs: P.observe({ ...d, corners: Rec().scorableCorners(d, d.corners) }, Core) };
           fresh.push(rec);
         }
-        list.push({ id: s.id, month: monthOf(s), at: monthOf(s) ? String(s.date).slice(0, 16) : null, car: s.car && s.car.label ? s.car.label : null, tags: Array.isArray(s.tags) && s.tags.length ? s.tags : null, obs: rec.obs });
+        list.push({ id: s.id, name: s.name || null, month: monthOf(s), at: monthOf(s) ? String(s.date).slice(0, 16) : null, car: s.car && s.car.label ? s.car.label : null, tags: Array.isArray(s.tags) && s.tags.length ? s.tags : null, obs: rec.obs });
       }
       const live = new Set(sums.map((s) => s.id)), gone = [...kept.keys()].filter((id) => !live.has(id));
       if (db && (fresh.length || gone.length)) try { await obsWrite(db, fresh, gone); } catch (_) {}
-      return { key: sums.map(stamp).join(','), read: fresh.length, profile: P.profile(list, Core), practice: plan ? P.practice(list, plan, Core) : null };
+      return { key: sums.map(stamp).join(','), read: fresh.length, profile: P.profile(list, Core), practice: plan ? P.practice(list, plan, Core) : null, best: P.bestCorners(list, year) };
     },
 
     /**

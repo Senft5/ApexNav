@@ -1,0 +1,66 @@
+"""Your year's cleanest corners (core/driver_profile.py best_corners, web/driver_profile.js bestCorners, the words in
+web/year_review.js): only that year's dated drives, only corners with all six technique credits, one a drive and one a
+road, a tighter corner first on a tie; the port picks the same; the words never give a speed or a time.
+"""
+import json
+import os
+import shutil
+import subprocess
+
+import pytest
+
+from core import driver_profile as dp
+from tests.test_driver_profile import make_drive
+
+NODE = shutil.which("node")
+
+
+def corner(apex, level, size="medium", way="L", **gaps):
+    o = {"apex": apex, "dir": way, "size": size, "use": 0.9, "pace": 1.0}
+    for k in dp.SKILLS:
+        o[k] = level / 100.0
+    o.update(gaps)
+    return o
+
+
+def test_picks_the_cleanest_corner_of_each_road():
+    drives = [
+        {"id": "a", "at": "2026-05-02T09:00", "name": "Dry Ridge Rd", "obs": [corner(10, 90), corner(50, 97, "tight", "R"), corner(90, 97, "fast")]},
+        {"id": "b", "at": "2026-06-02T09:00", "name": "Dry Ridge Rd", "obs": [corner(10, 99)]},     # same road: its better corner wins it
+        {"id": "c", "at": "2026-07-02T09:00", "name": "Pebble Ridge", "obs": [corner(10, 95), corner(20, 100, brake=None)]},
+        {"id": "d", "at": "2025-12-30T09:00", "name": "Last Year Rd", "obs": [corner(10, 100)]},     # another year
+        {"id": "e", "at": None, "name": "Undated", "obs": [corner(10, 100)]},                    # no known date
+        {"id": "f", "at": "2026-08-02T09:00", "name": "Hill Rd", "obs": [corner(10, 93)]},
+        {"id": "g", "at": "2026-09-02T09:00", "name": "Low Rd", "obs": [corner(10, 80)]},
+    ]
+    b = dp.best_corners(drives, 2026)
+    assert [(x["id"], x["level"]) for x in b] == [("b", 99), ("c", 95), ("f", 93)]
+    assert b[1]["apex"] == 10                          # the 100 there has a credit unmeasured: not read
+    # a tie goes to the tighter corner, then the earlier one
+    tie = dp.best_corners(drives[:1], 2026)
+    assert tie[0]["size"] == "tight" and tie[0]["dir"] == "R" and tie[0]["apex"] == 50
+    assert dp.best_corners(drives, 2024) == [] and dp.best_corners([], 2026) == []
+
+
+def test_from_real_observations():
+    obs = dp.observe(make_drive(3))
+    b = dp.best_corners([{"id": "x", "at": "2026-10-01T08:00", "name": "Test Rd", "obs": obs}], 2026)
+    assert len(b) == 1 and 0 <= b[0]["level"] <= 100 and b[0]["size"] in ("tight", "medium", "fast")
+
+
+@pytest.mark.skipif(NODE is None, reason="node not installed")
+def test_parity_and_words():
+    drives = [{"id": f"d{s}", "at": f"2026-{4 + s:02d}-0{1 + s}T09:00", "name": f"Road {s % 3}", "obs": dp.observe(make_drive(s, fault=(lambda i, w, z: "saw" if i % 4 == s % 4 else None)))} for s in range(6)]
+    py = dp.best_corners(drives, 2026)
+    runner = ("const P=require(process.argv[1]+'/web/driver_profile.js'),Y=require(process.argv[1]+'/web/year_review.js');"
+              "const ds=JSON.parse(require('fs').readFileSync(0,'utf8'));const b=P.bestCorners(ds,2026);"
+              "process.stdout.write(JSON.stringify({b,say:Y.lines({miles:1,m:1609.344,drives:1,corners:3,months:1,topRoads:[],best:null,longest:null,bestCorners:b}),"
+              "one:Y.cornerText({at:'2026-08-12T09:00',name:'Dry Ridge Rd',dir:'R',size:'tight',level:99}),"
+              "bare:Y.cornerText({at:null,name:null,dir:null,size:null,level:90})}));")
+    out = json.loads(subprocess.run([NODE, "-e", runner, os.getcwd()], input=json.dumps(drives), capture_output=True, text=True, check=True).stdout)
+    assert out["b"] == py and len(py) == 3
+    assert out["one"] == "a tight right on Dry Ridge Rd (Aug 12), 99"
+    assert out["bare"] == "a corner, 90"
+    line = out["say"][-1]
+    assert line.startswith("Cleanest corners: a ") and line.count(";") == 2
+    assert not any(w in line for w in ("mph", "km/h", " s,", "fast as"))

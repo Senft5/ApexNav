@@ -24,6 +24,15 @@ only the drive page line.
 - **Go round is kept only if it goes round.** If the new way still passes within 150 m, it says so and you stay put.
 - **A late loop skips its next stage before offering Head home.** "Running 12 min late for home." now has "Skip Foothills
   Parkway" while a stage you haven't begun is ahead; the stage you're on is never cut. Undo: `homeByAction` returning home always.
+## 2026-11-11 (round two analysis): Your year's "cleanest corners" are technique only, one a road (claude/project-thread-gd7nre)
+
+Your year now names its three cleanest corners: the mean of the six technique credits, a corner counted only when all
+six were measured. Pace and speed never count, keeping the year's guardrail (never top speeds or times). One corner a
+road, so it is three roads, not your home road three times. A drive's touch now says "Sharper / Gentler than your usual
+range" when its middle corner is past your usual quartiles. That is a fact about the drive, not a grade.
+
+Undo: drop the `bestCorners` line in year_review.js `lines`; drop the `outside` words in `driveTouchLines`.
+
 ## 2026-11-11 (routing round two): Avoid cameras keeps every route off them, speed cameras with plate readers
 
 With Avoid → Cameras on, only one of the routers was told about the cameras; the others' routes (our own router's, the

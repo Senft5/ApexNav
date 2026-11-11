@@ -28,6 +28,17 @@
 - Tests: tests/test_police_ahead.py, tests/test_eta.py (+1), e2e "avoid police reports, driving".
 - Next: CarPlay has no toast keys; the Go round and Skip offers are phone-only (a CPAlert in CarPlay/ would carry them).
 
+## Session 2026-11-11 (round two analysis, PR 4): Your year's cleanest corners; a drive's touch outside your usual (claude/project-thread-gd7nre, off origin/main)
+
+- core/driver_profile.py `best_corners(drives, year)` (port `bestCorners`): that year's dated drives, corners with all six
+  technique credits, by their mean (tighter first on a tie, then earlier), one a drive and one a road, top 3. The profile
+  job returns `best` (entries now carry `name`); analysis.html `renderYear` repaints with it; year_review.js `cornerText`
+  and a "Cleanest corners: a tight right on Dry Ridge Rd (Aug 12), 99; ..." line (shared with the year's text too).
+- `drive_touch` / `driveTouch` add `outside` per measure ("above" past your usual upper quartile, "below" under the lower);
+  the drive page adds "Sharper / Gentler than your usual range."
+- Tests: tests/test_best_corners.py (3), tests/test_touch_detail.py (+outside); e2e "Your driving" checks the year line.
+- Next: regions and crews for Your year (IDEAS D-24 still lists them).
+
 ## Session 2026-11-11 (routing round two): Avoid cameras holds for every candidate, speed cameras included (claude/project-thread-39xbx9)
 
 - Gap found: Avoid → Cameras only reached Valhalla's requests (exclude_locations). Our own router, the highway-friendly
