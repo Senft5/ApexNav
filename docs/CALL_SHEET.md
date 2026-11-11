@@ -4,6 +4,15 @@ Decisions Claude made for you, newest first. Each one says what was decided, why
 you reach one you've seen. If you disagree with a call, say so and it gets reversed; nothing here is hard to undo unless
 it says so. Things only you can do are in docs/OWNER_TODO.md.
 
+## 2026-11-11 (routing round three): our router reads measured crests and verified bumps (claude/project-thread-39xbx9)
+
+Roads members measured going light over their crests (0.15 g or more, two or more passes) now count as more character in
+our router, and crowd-verified bumps (the same ones the co-driver calls "Confirmed by members") cost a road 25 % of its
+time each, at most double, in both the search and the Fun pick. One pass of crest data, and bumps the server hasn't
+verified, count nothing. The weights are a judgment call: crests at 2 against loved 1.5 and banking 0.5 so a crested road
+wins a near-tie and no more; bumps sized so three on a short lane lose it a 1 s tie, while one bump costs only the stretch
+it sits on (a long road isn't written off for one). Undo: `CROWD_W.crest` 0 and `BUMP_X` 0 in web/graph_router.js.
+
 ## 2026-11-11 (roam-a descent call): the co-driver says a long descent as you near its top (claude/project-thread-h7xxmf)
 
 On a planned route, the same long, steep descents the route card names are now said once, as you come within 500 m of the
