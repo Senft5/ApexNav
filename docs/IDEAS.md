@@ -145,7 +145,7 @@ ideal drive and where to find time (#80), grip circle (#86), automatic mount cal
 | D-26 | Ten g readings a second between GPS fixes in the recording (today: one per fix, placed early), with per-sample steering and brake rates | H | M | done (#377 the recording; rates: D-28) | STATE 2026-11-10 fable-driver-profile |
 | D-27 | Practice focus: the profile's Work on carried into the next drive, each corner judged on that one skill, the end card says how it went | H | M | done (claude/fable-practice-focus: Practice it on my next drives, `core/driver_profile.py` practice) | Garmin Catalyst |
 | D-28 | Touch: how fast the brakes go on and come off and the car is loaded at turn-in (g a second), from the 10 Hz g | H | M | done (claude/project-thread-gd7nre: Your driving → Your touch, `core/driver_profile.py` touch) | Garmin Catalyst, AiM |
-| D-29 | Pace in Your driving: the share of a corner's sane limit used, as a level by kind of corner, hill and time in the drive (same credit as the Score; never a Work on) | H | S | active (thread: Deepen driver and road analysis, round two) | Nate 2026-11-10 "more speed based stuff" |
+| D-29 | Pace in Your driving: the share of a corner's sane limit used, as a level by kind of corner, hill and time in the drive (same credit as the Score; never a Work on) | H | S | done (Your driving → Your pace, `core/driver_profile.py` MEASURES) | Nate 2026-11-10 "more speed based stuff" |
 
 ## 3. Road intelligence (Q)
 

@@ -4376,7 +4376,11 @@ flow('Your driving: the profile over every drive opens from the Log, names the w
   check(/From 108 clean corners on 3 drives/.test(text), 'what it is read from: ' + text.slice(0, 120));
   check(/One steering arc is weaker through rights: \d+ against 100 through lefts, on 3 of 3 drives\./.test(text), 'the weak side is named: ' + text);
   check(/Work on: One steering arc\s+It shows most through rights\./.test(text), 'the focus says where');
-  check(await page.evaluate(() => document.querySelector('.dp-st.weak').dataset.skill === 'arc' && document.querySelectorAll('.dp-st').length === 6), 'six stations, the weak one marked');
+  check(await page.evaluate(() => document.querySelector('.dp-st.weak').dataset.skill === 'arc' && document.querySelectorAll('.dp-st:not([data-skill="pace"])').length === 6), 'six stations, the weak one marked');
+  // IDEAS D-29: pace beside them, in its own panel, and never the one to work on
+  const pace = await page.evaluate(() => { const p = document.querySelector('#drivingRoot .dp-pace'); return p ? p.innerText : null; });
+  check(pace && /Your pace/.test(pace) && /\b\d{1,3}\b/.test(pace) && /sane limit/.test(pace) && !/Work on/.test(pace), 'the pace panel: ' + pace);
+  check(!/Work on: Pace/.test(text), 'pace is never the thing to work on');
   check(!/mph|km\/h|\d s\b/.test(text), 'never a speed or a time');
   check(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth), 'nothing wider than the phone');
   // touch: these drives' g runs straight between fixes (as recordings before ten readings a second did), so there is none
