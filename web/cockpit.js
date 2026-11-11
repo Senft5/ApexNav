@@ -8314,7 +8314,7 @@
     // The route's climb (stages.js profile, IDEAS U-21): its elevation from the DEM, so Preview's scrubber shows the hills
     // and the card says how much it climbs. A long trip or no tiles: unknown, nothing shown.
     async function attachProfile(t) {
-      $('routeCardClimb').hidden = true;
+      $('routeCardClimb').hidden = true; $('routeCardDescent').hidden = true;
       const none = () => { if (!t) return; t.profileDone = true; if (plannedRoute === t && !t.elev) $('routeCardProfile').classList.add('none'); };
       if (!t || t.elev || !window.ApexStages || !ApexStages.profile) { if (t && t.elev) paintClimb(t); else none(); return; }
       let elev = null;
@@ -8379,6 +8379,9 @@
       const h = heightLabel;
       $('routeCardClimb').textContent = ApexRouteCard.factText(`Climbs ${h(up)} in all · highest ${h(hi)}`);
       $('routeCardClimb').hidden = false;
+      // a long, steep descent on the way (brake_heat.js longDescents, from the same terrain): said before you set off
+      const fall = window.ApexBrakeHeat ? ApexBrakeHeat.descentText(ApexBrakeHeat.longDescents(t.dist, t.elev), (m) => ApexUnits.long(m, 1), h) : null;
+      $('routeCardDescent').textContent = fall ? ApexRouteCard.factText(fall) : ''; $('routeCardDescent').hidden = !fall;
     }
     async function attachScenic(t) {
       for (const mk of scenicPins.splice(0)) mk.remove();

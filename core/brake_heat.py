@@ -146,3 +146,36 @@ def over_track(dist_m, speed_mps, elevation_m):
     if bh.peak is None:
         return None
     return {'peak_k': bh.peak, 'level': level(bh.peak), 'hot_m': hot_m}
+
+
+DESCENT_DROP_M = 300.0        # a descent the brakes notice: at least this much height lost...
+DESCENT_GRADE = 0.05          # ...at 5 % or steeper on average
+DESCENT_RISE_M = 30.0         # a rise of more than this ends a descent (a short climb in the middle does not)
+
+
+def long_descents(dist_m, elevation_m):
+    """The long, steep descents on a planned route, from its terrain profile (the map's heights, not a model):
+    [{start_m, end_m, drop_m, grade}] biggest drop first. Each runs from a high point to the lowest point before the road
+    climbs more than DESCENT_RISE_M again. Rows with no height are skipped; [] when nothing qualifies."""
+    pts = [(d, e) for d, e in zip(dist_m, elevation_m or []) if _finite(d) and _finite(e)]
+    out = []
+    i = 0
+    while i < len(pts):
+        top = i
+        low = i
+        j = i + 1
+        while j < len(pts):
+            if pts[j][1] > pts[top][1] and low == top:
+                top = low = j                       # still climbing to the high point
+            elif pts[j][1] < pts[low][1]:
+                low = j
+            elif pts[j][1] - pts[low][1] > DESCENT_RISE_M:
+                break
+            j += 1
+        drop = pts[top][1] - pts[low][1]
+        run = pts[low][0] - pts[top][0]
+        if drop >= DESCENT_DROP_M and run > 0 and drop / run >= DESCENT_GRADE:
+            out.append({'start_m': pts[top][0], 'end_m': pts[low][0], 'drop_m': drop, 'grade': drop / run})
+        i = max(low, i + 1) if low > i else j
+    out.sort(key=lambda x: -x['drop_m'])
+    return out
