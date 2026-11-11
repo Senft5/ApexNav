@@ -3596,7 +3596,9 @@ flow('reported hazards: a call ahead, "still there?" after passing, and a one-ta
   await page.click('#hzKinds button:has-text("Pothole")');
   // REVIEW4 U-74 / U-102 (check): in a drive the confirmation is the status line's, never a toast over the map
   await page.waitForFunction(() => /Pothole reported/.test(document.getElementById('dsNote').textContent), null, { timeout: 15000 })
-    .catch(async () => { throw new Error('the report\'s status line never came; it said: ' + JSON.stringify(await page.textContent('#dsNote'))); });
+    .catch(async () => { throw new Error('the report\'s status line never came: ' + JSON.stringify(await page.evaluate(() => ({ note: document.getElementById('dsNote').textContent,
+      toast: document.getElementById('toast').textContent, key: document.getElementById('hzReportBtn').textContent, bar: !document.getElementById('driveBar').hidden,
+      outbox: localStorage.getItem('apex.outbox'), said: (window.__said || []).slice(-4) }))) + ' reports=' + reports.length); });
   check(!(await page.evaluate(() => document.getElementById('toast').classList.contains('show') && /Pothole/.test(document.getElementById('toast').textContent))), 'no toast over the map');
   check(await page.evaluate(() => { const n = document.getElementById('dsNote'); return !n.hidden && n.scrollWidth <= n.clientWidth + 1 && /reported/.test(n.getAttribute('aria-label')); }), 'the status line says it whole (or its first sentence)');
   check(reports.length === 1 && reports[0].kind === 'pothole' && Math.abs(reports[0].lat - (35.6 + 330 / 110540)) < 1e-4 && reports[0].heading === 0, 'reported at your position and heading');
