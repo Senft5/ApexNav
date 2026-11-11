@@ -46,6 +46,15 @@ The owner of the stage enters like anyone else; putting a stage up isn't enterin
 skipped instead of rejecting the whole upload.
 
 Undo: revert the PR, then `DROP TABLE ta_joins` on both databases.
+## 2026-11-11 (round two analysis): touch by kind of corner, month and drive is said as facts, never as a grade (claude/project-thread-gd7nre)
+
+Your touch now has a table by size of corner and a line a month, and each drive's Log page says its own touch beside
+your usual ("Brakes on: about 1.1 g a second on this drive, 0.8 usually"). The call: these are rates, never a level or
+"better/worse". A tight corner takes the brakes on harder because of the road, and a sharp input is not a fault on its
+own; grading it would coach the wrong thing. A drive needs 8 timed corners before it says anything.
+
+Undo: hide the table and the month lines in `render` (the `dp-touch-by` block), and the drive page's `#dvTouch` panel.
+
 ## 2026-11-11 (ui-round-two): Settings and every sheet that rises over a page match the rest (claude/project-thread-5sbga7)
 
 Every sheet that slides up over a page (Settings and each setting under it, route Options, Best roads nearby, a friend's
