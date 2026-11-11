@@ -13,6 +13,9 @@ export const LIMITS = {
   frameBytes: 32 * 1024, smallFrameBytes: 2048, framesPerS: 20, positionMinMs: 400, positionKeepMs: 120_000,
   socketsPerMember: 2, pendingSockets: 32, pendingPerIp: 4, hazards: 256, hazardDefaultMs: 3 * 60_000, hazardMaxMs: 5 * 60_000, checkMs: 15_000,
   ledAtOnce: 2, createdPerHour: 10,
+  // Join codes (IDEAS S-22): 6 characters of CODE_ALPHABET (31^6, about 887 million), alive codeMs; a person may try
+  // codeTries codes in codeTryMs, right or wrong, so guessing one in the window is out of reach.
+  codeMs: 15 * 60_000, codeTries: 10, codeTryMs: 10 * 60_000,
   // Keep going: in its last keepWindowMs the leader can add keepMs, until the convoy is roomMaxMs old in all.
   keepMs: 3600_000, keepWindowMs: 30 * 60_000, roomMaxMs: 6 * 3600_000,
 };
@@ -20,7 +23,9 @@ export const LIMITS = {
 export const HAZARD_KINDS = ["bump", "hard_braking", "gravel", "debris", "animal", "police", "camera", "stopped"] as const;
 
 export interface Who { id: string; handle: string | null }
-interface Room { id: string; name: string; leaderId: string; epoch: number; createdAt: number; expiresAt: number; invite: { hash: string; issuedAt: number; expiresAt: number } }
+interface Grant { hash: string; issuedAt: number; expiresAt: number }
+// invite: the link's secret; code: the short join code read out in the car park (IDEAS S-22), hashed the same way
+interface Room { id: string; name: string; leaderId: string; epoch: number; createdAt: number; expiresAt: number; invite: Grant; code?: Grant }
 interface Member { key: string; role: "leader" | "member"; joinedAt: number }
 interface Ticket { userId: string; sessionHash: string; expiresAt: number }
 interface Conn { ws: WebSocket; ip: string; userId: string | null; key: string | null; sessionHash: string | null; state: "new" | "auth" | "open" | "closed"; frames: number; windowAt: number; openedAt: number; checkedAt: number; timer: ReturnType<typeof setTimeout> | null }
@@ -48,6 +53,9 @@ const bytes = (s: string) => new TextEncoder().encode(s).length;
 
 export const userIndex = (env: Env, userId: string) => env.CONVOY_INDEX.get(env.CONVOY_INDEX.idFromName(userId));
 export const roomStub = (env: Env, id: string) => env.CONVOY.get(env.CONVOY.idFromName(id));
+/** Join codes: no 0/O, 1/I/L, so a code read out loud or off a screen is typed right. */
+export const CODE_ALPHABET = "23456789ABCDEFGHJKMNPQRSTUVWXYZ";
+export const codeHolder = (env: Env, code: string) => env.CONVOY_INDEX.get(env.CONVOY_INDEX.idFromName(`code:${code}`));
 
 export class ConvoyRoom extends DurableObject<Env> {
   private room: Room | null = null;
@@ -105,16 +113,17 @@ export class ConvoyRoom extends DurableObject<Env> {
     });
   }
 
-  join(who: Who, secret: string | null): Promise<Result<Context>> {
+  join(who: Who, secret: string | null, viaCode = false): Promise<Result<Context>> {
     return this.serial(async () => {
       const room = await this.live();
       if (!room) return fail(404, "no_convoy");
       if (this.members[who.id]) return okR(await this.context(who.id));
       const now = Date.now();
-      // A link (secret) or the leader's in-app invite (secret null). Either one is older than a leave: it can't bring them back.
-      const asked = secret === null ? this.invited[who.id] : null;
-      if (secret === null ? !asked || asked.until <= now : room.invite.expiresAt <= now || (await sha256hex(secret)) !== room.invite.hash) return fail(400, "invalid_invite");
-      if (this.banned[who.id] || (this.revoked[who.id] ?? -1) >= (asked ? asked.at : room.invite.issuedAt)) return fail(403, "invite_revoked");
+      // A link (secret), a join code (secret, viaCode) or the leader's in-app invite (secret null). Each is older than a
+      // leave: it can't bring them back.
+      const asked = secret === null ? this.invited[who.id] : null, grant = viaCode ? room.code : room.invite;
+      if (secret === null ? !asked || asked.until <= now : !grant || grant.expiresAt <= now || (await sha256hex(secret)) !== grant.hash) return fail(400, "invalid_invite");
+      if (this.banned[who.id] || (this.revoked[who.id] ?? -1) >= (asked ? asked.at : grant!.issuedAt)) return fail(403, "invite_revoked");
       if (Object.keys(this.members).length >= LIMITS.members) return fail(409, "convoy_full");
       // Someone who blocked a member, or was blocked by one, never sees that member's live position: no join.
       if ((await this.blockedPairs([who.id], Object.keys(this.members))).length) return fail(403, "cannot_join");
@@ -130,13 +139,13 @@ export class ConvoyRoom extends DurableObject<Env> {
 
   /** A join's checks without the join: who leads, what it's called, how many are in. A blocked pair learns nothing more
    *  than a join would tell them (cannot_join). Only the leader's handle: real names stay with friends, other members aren't named. */
-  async preview(userId: string, secret: string): Promise<Result<{ name: string; leader: { handle: string | null }; members: number; max: number; expiresAtMs: number; member: boolean }>> {
+  async preview(userId: string, secret: string, viaCode = false): Promise<Result<{ name: string; leader: { handle: string | null }; members: number; max: number; expiresAtMs: number; member: boolean }>> {
     const room = await this.live();
     if (!room) return fail(404, "no_convoy");
-    const already = !!this.members[userId];
+    const already = !!this.members[userId], grant = viaCode ? room.code : room.invite;
     if (!already) {
-      if (room.invite.expiresAt <= Date.now() || (await sha256hex(secret)) !== room.invite.hash) return fail(400, "invalid_invite");
-      if (this.banned[userId] || (this.revoked[userId] ?? -1) >= room.invite.issuedAt) return fail(403, "invite_revoked");
+      if (!grant || grant.expiresAt <= Date.now() || (await sha256hex(secret)) !== grant.hash) return fail(400, "invalid_invite");
+      if (this.banned[userId] || (this.revoked[userId] ?? -1) >= grant.issuedAt) return fail(403, "invite_revoked");
       if (Object.keys(this.members).length >= LIMITS.members) return fail(409, "convoy_full");   // join's order of checks
       if ((await this.blockedPairs([userId], Object.keys(this.members))).length) return fail(403, "cannot_join");
     }
@@ -172,6 +181,16 @@ export class ConvoyRoom extends DurableObject<Env> {
     room.invite = { hash: await sha256hex(secret), issuedAt: now, expiresAt: Math.min(now + LIMITS.inviteMs, room.expiresAt) };
     await this.save();
     return okR({ invite: `${room.id}.${secret}`, expiresAtMs: room.invite.expiresAt });
+  }
+
+  /** Leader only: a fresh join code (the Worker made it and holds code -> convoy). The old code stops working. */
+  async newCode(userId: string, code: string): Promise<Result<{ expiresAtMs: number }>> {
+    const room = await this.live();
+    if (!room || this.members[userId]?.role !== "leader") return fail(404, "no_convoy");
+    const now = Date.now();
+    room.code = { hash: await sha256hex(code), issuedAt: now, expiresAt: Math.min(now + LIMITS.codeMs, room.expiresAt) };
+    await this.save();
+    return okR({ expiresAtMs: room.code.expiresAt });
   }
 
   async ticket(userId: string, sessionHash: string): Promise<Result<{ ticket: string; expiresAtMs: number }>> {
@@ -566,12 +585,32 @@ export class ConvoyIndex extends DurableObject<Env> {
     const created = ((await this.ctx.storage.get<number[]>("created")) ?? []).filter((t) => now - t < 3600_000);
     const invites = Object.fromEntries(Object.entries((await this.ctx.storage.get<Record<string, PendingInvite>>("invites")) ?? {})
       .filter(([id, inv]) => inv.expiresAtMs > now && !(id in convoys)));
-    return { convoys, led, created, invites };
+    const tries = ((await this.ctx.storage.get<number[]>("tries")) ?? []).filter((t) => now - t < LIMITS.codeTryMs);
+    const code = (await this.ctx.storage.get<{ room: string; expiresAt: number }>("code")) ?? null;
+    return { convoys, led, created, invites, tries, code: code && code.expiresAt > now ? code : null };
   }
   private async save(s: Awaited<ReturnType<ConvoyIndex["load"]>>) {
-    if (!Object.keys(s.convoys).length && !s.created.length && !Object.keys(s.invites).length) { await this.ctx.storage.deleteAll(); return; }
-    await this.ctx.storage.put({ convoys: s.convoys, led: s.led, created: s.created, invites: s.invites });
+    if (!Object.keys(s.convoys).length && !s.created.length && !Object.keys(s.invites).length && !s.tries.length && !s.code) { await this.ctx.storage.deleteAll(); return; }
+    await this.ctx.storage.put({ convoys: s.convoys, led: s.led, created: s.created, invites: s.invites, tries: s.tries, code: s.code });
   }
+  /** Per person: one more join-code attempt, false when they've had codeTries in codeTryMs (each try counts, right or wrong). */
+  async codeTry(): Promise<boolean> {
+    const s = await this.load();
+    if (s.tries.length >= LIMITS.codeTries) return false;
+    s.tries.push(Date.now());
+    await this.save(s);
+    return true;
+  }
+  // A join code's own instance (codeHolder: named "code:<CODE>"): which convoy it opens, until it runs out.
+  /** Take this code for a convoy; false when it's still another convoy's. */
+  async holdCode(room: string, expiresAt: number): Promise<boolean> {
+    const s = await this.load();
+    if (s.code && s.code.room !== room) return false;
+    s.code = { room, expiresAt };
+    await this.save(s);
+    return true;
+  }
+  async codeRoom(): Promise<string | null> { return (await this.load()).code?.room ?? null; }
   /** In-app convoy invites waiting for this person (IDEAS S-22): newest kept, at most MAX_PENDING. */
   async addInvite(id: string, inv: PendingInvite): Promise<void> {
     const s = await this.load();

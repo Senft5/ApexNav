@@ -74,7 +74,10 @@ corners per km back to back lose 25%, since tiring on hard roads is a safety iss
 A loop's route card takes a **Home by** time (the next time it comes round; an hour or more ago means tomorrow). While the loop
 is driven, when the live arrival (above) is more than 5 minutes past it, a toast offers **Head home**, once and then again
 after 10 minutes if still late; it plans the quickest way from where you are back to the loop's start (IDEAS R-37,
-`homeByOffer` in web/eta.js).
+`homeByOffer` in web/eta.js). While a stage the loop hasn't begun is still ahead (300 m on at least), the offer is to skip
+it first: **Skip Foothills Parkway** drops that stage's points and reroutes through the rest of the loop, the way Siri's
+"skip this stage" does. Ten minutes on, still late, the next stage is offered, and with none left, Head home
+(`homeByAction`). The stage you're on is never cut short.
 
 ## Did the route drive the stage?
 
@@ -112,11 +115,19 @@ are dropped then, since they were chosen for the old order (`web/trip_stops.js`,
 
 ## Avoid cameras
 
-Avoid → **Cameras** (off by default) asks the camera map (OSM `surveillance:type=ALPR`, DeFlock, via Overpass, kept a week)
-for the plate readers within about 2 km of the trip and sends the router those nearest the start-to-end line as
+Avoid → **Cameras** (off by default) asks the camera map (OSM `surveillance:type=ALPR`, DeFlock, and `highway=speed_camera`,
+via Overpass, kept a week) for the cameras within about 2 km of the trip and sends the router those nearest the start-to-end line as
 `exclude_locations`, with any reported closures, 50 at most (`FunRoute.camerasToExclude`). The router avoids the road edge
 nearest each camera. A trip more than 1° across, the camera map offline, or no way round them: the route is built without
 avoiding cameras and a toast says so; the cameras still on the route are marked and counted as before (IDEAS R-35).
+
+Fixed speed cameras (OSM `highway=speed_camera`) are in the same camera map and avoided with the plate readers: one
+switch, as on the map. Every candidate keeps to it, not only Valhalla's (2026-11-11): each plan takes the cameras within
+5 km of the trip's box, 60 nearest its line, from the kept camera tiles (`avoidForTrip` → `avoid.cams`; a plan waits
+0.25 s at most, and Where to? opening loads the tiles round you ahead). Our own router costs the roads within 35 m of
+one x8 (`graph_router.js` `AVOID_CAM_X`), and a route that still drives within 35 m of one (the highway-friendly quickest,
+a stage plan, our router's) is dropped when any candidate doesn't (`FunRoute.unavoided` → `cameras`); when none can, the
+card says "Couldn't avoid cameras". 35 m and not the card's 60 m count: a camera on a crossing road is not on your way.
 
 ## Avoid police reports
 
@@ -130,6 +141,13 @@ any candidate doesn't (`FunRoute.unavoided`, `passesNear`), and the card says "C
 went round says "Around a police report" (or "Around 3 police reports"). Signed out, there are no reports to avoid: the
 plan is the usual one and a toast says to sign in. A plan never waits more than 0.2 s for the reports (the route card's 0.75 s budget): reports for the area from the last 5 min are used at once, Where to? opening asks for them ahead, and ones that land later still reach the router's requests and the card. There is no checkpoint
 report and none is made from these (App Store 1.4.3, docs/APP_REVIEW.md).
+
+While driving a planned route with Police reports on, a live report that lands on the route ahead (0.8 to 25 km on,
+within 150 m of the line; the drive's own reports round you and a convoy's Police call) is offered once: "Police reported
+on your route in 3.2 mi." with **Go round** (15 s). Go round plans the rest of the trip from where the car is (the stops
+and stages still ahead kept) round the reports, and takes it only when it does go round; otherwise "No way round that
+police report. Staying on this route." (`ApexHazardReports.onRouteAhead`, cockpit.js `policeAheadTick`, `goRoundPolice`).
+Nearer than 0.8 km there's no time to go round; the voice still calls a report as you near it, as before.
 
 ## Drag to reshape
 

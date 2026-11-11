@@ -358,6 +358,26 @@ const CASES = {
     return { baseNear: near(base), baseS: base.timeS, quickNear: near(q), quickS: q.timeS, planNear: plan.routes.map(near), offNear: near(off) };
   },
 
+  // Avoid cameras: a camera on the quickest's middle sends quickest and plan round it (only the road it sits on costs
+  // more, so a road 100 m away is untouched); off, or no list: as before
+  avoidCameras() {
+    const g = H.grid({ seed: 9, nx: 28, ny: 28, holes: 0.05, stepDeg: 0.004, lat0: 39.15, lon0: -84.62 });
+    const v = R.view(H.tiles(g.nodes, g.edges).tiles);
+    const from = { lat: 39.17, lon: -84.6 }, to = { lat: 39.23, lon: -84.52 };
+    const base = R.quickest(v, { from, to, level: 'quick' });
+    const mid = base.coords[Math.floor(base.coords.length / 2)], p = { lat: mid[0], lon: mid[1] };
+    const near = (r) => Math.min(...r.coords.map((c) => R.distM(p.lat, p.lon, c[0], c[1])));
+    const avoid = { cameras: true, cams: [p] };
+    const q = R.quickest(v, { from, to, level: 'quick', avoid }), plan = R.plan(v, { from, to, level: 'fun', avoid });
+    const off = R.quickest(v, { from, to, level: 'quick', avoid: { cameras: false, cams: [p] } });
+    const none = R.quickest(v, { from, to, level: 'quick', avoid: { cameras: true } });
+    // two cameras on the same road cost it x8 once, not x64: the road's cost is the same as with one
+    const c0 = R.objective(v, {}), c1 = R.objective(v, { avoid }), c2 = R.objective(v, { avoid: { cameras: true, cams: [p, { lat: p.lat + 1e-5, lon: p.lon }] } });
+    const maxMult = (c) => { let m = 0; for (let e = 0; e < c.mult.length; e++) m = Math.max(m, c.mult[e] / c0.mult[e]); return m; };
+    return { baseNear: near(base), baseS: base.timeS, quickNear: near(q), quickS: q.timeS, planNear: plan.routes.map(near), offNear: near(off), noneS: none.timeS,
+      max1: maxMult(c1), max2: maxMult(c2) };
+  },
+
   roundTrips() {
     const g = H.grid({ seed: 9, nx: 28, ny: 28, holes: 0.05, stepDeg: 0.004, lat0: 39.15, lon0: -84.62 });
     const v = R.view(H.tiles(g.nodes, g.edges).tiles);

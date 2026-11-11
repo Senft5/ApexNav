@@ -110,23 +110,31 @@
     if (!rs || !Array.isArray(rs.lat) || rs.lat.length < 2) return null;
     if (!measured && !Array.isArray(reports)) return null;
     const out = [];
+    // metres along it: the track's own dist when it has one (a planned route), else 5 m a sample (a resampled road)
+    const along = Array.isArray(rs.dist) && rs.dist.length === rs.lat.length && rs.dist.every(finite) ? rs.dist : null;
+    const at = (i, f = 0) => (along ? along[i] + f * ((along[i + 1] ?? along[i]) - along[i]) : (i + f) * 5);
     for (const b of (measured && Array.isArray(measured.crowdBumps) ? measured.crowdBumps : [])) {
-      if (b && Number.isInteger(b.index) && b.index >= 0 && b.index < rs.lat.length) out.push({ kind: 'bump', title: 'Bump', atM: b.index * 5, confirms: null, crowd: true });
+      if (b && Number.isInteger(b.index) && b.index >= 0 && b.index < rs.lat.length) out.push({ kind: 'bump', title: 'Bump', atM: at(b.index), confirms: null, crowd: true });
     }
     const n = rs.lat.length, lat0 = rs.lat[0], kx = 111320 * Math.cos(lat0 * Math.PI / 180), ky = 110540;
+    // the road's box widened by NEAR_M, so a long route only measures the reports beside it
+    let s0 = Infinity, n0 = -Infinity, w0 = Infinity, e0 = -Infinity;
+    for (let i = 0; i < n; i++) { const a = rs.lat[i], o = rs.lon[i]; if (a < s0) s0 = a; if (a > n0) n0 = a; if (o < w0) w0 = o; if (o > e0) e0 = o; }
+    const padLat = NEAR_M / ky, padLon = NEAR_M / kx;
     for (const h of (Array.isArray(reports) ? reports : [])) {
       if (!h || !finite(h.lat) || !finite(h.lon)) continue;
+      if (h.lat < s0 - padLat || h.lat > n0 + padLat || h.lon < w0 - padLon || h.lon > e0 + padLon) continue;
       if ((Number(h.clears) || 0) > (Number(h.confirms) || 0)) continue;
-      let best = Infinity, at = -1;
+      let best = Infinity, pos = -1;
       const px = (h.lon - rs.lon[0]) * kx, py = (h.lat - lat0) * ky;
       for (let i = 1; i < n; i++) {
         const ax = (rs.lon[i - 1] - rs.lon[0]) * kx - px, ay = (rs.lat[i - 1] - lat0) * ky - py;
         const dx = (rs.lon[i] - rs.lon[i - 1]) * kx, dy = (rs.lat[i] - rs.lat[i - 1]) * ky, L = dx * dx + dy * dy;
         const t = L > 0 ? Math.max(0, Math.min(1, -(ax * dx + ay * dy) / L)) : 0, d = Math.hypot(ax + t * dx, ay + t * dy);
-        if (d < best) { best = d; at = (i - 1 + t) * 5; }
+        if (d < best) { best = d; pos = at(i - 1, t); }
       }
       if (best > NEAR_M) continue;
-      out.push({ kind: h.kind, title: h.label || LABEL[h.kind] || 'Hazard', atM: Math.round(at), confirms: finite(h.confirms) ? h.confirms : null, crowd: false });
+      out.push({ kind: h.kind, title: h.label || LABEL[h.kind] || 'Hazard', atM: Math.round(pos), confirms: finite(h.confirms) ? h.confirms : null, crowd: false });
     }
     return out.sort((a, b) => a.atM - b.atM);
   }
@@ -148,6 +156,18 @@
     return rows;
   }
 
-  const api = { describe, headline, meters, facts, CONF, character, characterLine, onThisRoad, hazardFacts, NEAR_M };
+  /**
+   * The route card's line for hand reports on the way (onThisRoad's list; bumps are said in the members' note, closures
+   * by the closure warning): "Reported on the way: Gravel at 12 mi (3 confirmed) · Pothole at 30 mi", at most `max`, then
+   * "and 2 more"; '' when there are none.
+   */
+  function routeReportsLine(list, fmt = (m) => `${(m / 1000).toFixed(1)} km`, max = 3) {
+    const reps = (Array.isArray(list) ? list : []).filter((x) => x && !x.crowd && x.kind !== 'closure');
+    if (!reps.length) return '';
+    const parts = reps.slice(0, max).map((r) => `${r.title} at ${fmt(r.atM)}${finite(r.confirms) && r.confirms > 0 ? ` (${r.confirms} confirmed)` : ''}`);
+    return `Reported on the way: ${parts.join(' · ')}${reps.length > max ? ` and ${reps.length - max} more` : ''}`;
+  }
+
+  const api = { describe, headline, meters, facts, CONF, character, characterLine, onThisRoad, hazardFacts, routeReportsLine, NEAR_M };
   if (typeof module !== 'undefined' && module.exports) module.exports = api; else root.ApexRoadPage = api;
 })(typeof window !== 'undefined' ? window : globalThis);

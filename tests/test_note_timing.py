@@ -18,7 +18,7 @@ def test_every_timing_in_update_notes_uses_the_entry():
     leftovers = [m.group(0) for m in re.finditer(r"e\.dist_m - state\.cursorM", NOTES)]
     assert leftovers == ["e.dist_m - state.cursorM"]          # only calledBumps (a point hazard: entry == apex)
     for needle in ["const d = noteM(e) - state.cursorM;", "distLabel(Math.max(0, noteM(e) - state.cursorM))", "atM: noteM(e)",
-                   ".sort((a, b) => noteM(a) - noteM(b))", "noteM(e) - state.cursorM < reach", "noteM(e) - state.cursorM < breakReach"]:
+                   ".sort((a, b) => noteM(a) - noteM(b))", "noteM(e) - state.cursorM < reach", "noteM(e) - state.cursorM < quietReach"]:
         assert needle in NOTES, needle
 
 

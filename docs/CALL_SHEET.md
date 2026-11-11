@@ -13,6 +13,38 @@ only catches a gross regression (runners vary). It takes about a second. Calls: 
 and tiles are the network's, not ours); budgets are raised on purpose in the PR that needs it, with the reason.
 
 Undo: delete the flow (e2e/smoke.js `BOOT`), or raise a budget.
+
+## 2026-11-11 (roam-a brake heat): the co-driver warns when your brakes are getting hot (claude/project-thread-h7xxmf)
+
+New, my call, as the free-roaming thread. On a long spirited descent the co-driver now says once "Brakes are getting
+hot. Use a lower gear and ease off." (and shows it), and a drive's page says when the brakes got warm or hot. Nobody can
+see a brake disc from a phone, so this is a model: the energy the car loses beyond rolling and air drag (from GPS speed
+and height) heats the discs, and the air cools them. It never says a temperature, the page says it is an estimate, and
+it counts engine braking as brake work, so it errs toward warning. Ordinary hills stay quiet (the two demo drives never
+get past cool). Nothing leaves the phone. Undo: revert the PR, or remove the `noteBrakes(...)` calls in cockpit.js to keep
+only the drive page line.
+
+
+## 2026-11-11 (routing round two, part 2): mid-drive, Vetta offers to go round a police report; a late loop drops a stage before going home
+
+- **A police report on your route ahead is offered, not taken.** Between 0.8 and 25 km ahead, with Police reports on, a
+  toast says how far and has Go round (15 s). I didn't reroute on my own: a report can be gone by the time you get there,
+  and a surprise reroute mid-drive is worse than a tap. Nearer than 0.8 km there's no time to turn off, so only the voice's
+  usual call is made. Undo: drop `policeAheadTick` from feedReported.
+- **Go round is kept only if it goes round.** If the new way still passes within 150 m, it says so and you stay put.
+- **A late loop skips its next stage before offering Head home.** "Running 12 min late for home." now has "Skip Foothills
+  Parkway" while a stage you haven't begun is ahead; the stage you're on is never cut. Undo: `homeByAction` returning home always.
+## 2026-11-11 (routing round two): Avoid cameras keeps every route off them, speed cameras with plate readers
+
+With Avoid → Cameras on, only one of the routers was told about the cameras; the others' routes (our own router's, the
+quickest on highways, stage plans) still competed and could win while driving past one. Now every plan carries the
+cameras near the trip, our router costs the road a camera sits on 8 times its time, and a route that still drives past
+one (within 35 m) gives way to any route that doesn't. Fixed speed cameras are in the same list as plate readers, under
+the same switch, as on the map; you asked for speed cameras to be avoided too. A camera on a crossing road doesn't count
+against a route (35 m, not the card's 60 m count). When nothing gets round, the card says "Couldn't avoid cameras".
+
+Undo: revert the PR (no data changed). To split speed cameras onto their own switch, filter `kind` in `camsForTrip` and
+`camerasAround` (cockpit.js) by a new avoid key.
 ## 2026-11-11 (sweep round two): time attack counts only a week you entered (claude/project-thread-g9yher)
 
 Two bugs in the weekly time attack (#393). The Log never sent any runs, so every board stayed empty. And the server
