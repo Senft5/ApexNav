@@ -1,6 +1,6 @@
-"""Vetta Pro on the web (web/pro.js, docs/MONETIZATION.md 8, docs/design/REVIEW.md 4.5): supporter-only themes and
-liveries, and (the owner, 2026-11-09) Route tuning; never a safety feature, an export, road data, something you made or a
-privacy control; nobody has it until the shell verifies it."""
+"""Vetta Pro on the web (web/pro.js, docs/MONETIZATION.md 8, docs/design/REVIEW.md 4.5): looks only, supporter themes and
+liveries (the owner, 2026-11-10: Route tuning is free); never a safety feature, an export, road data, routing, something you
+made or a privacy control; nobody has it until the shell verifies it."""
 import json
 import os
 import shutil
@@ -42,11 +42,10 @@ def out():
     return json.loads(subprocess.run([NODE, "-e", RUNNER, ROOT], capture_output=True, text=True, check=True).stdout)
 
 
-def test_pro_is_themes_liveries_and_route_tuning_only(out):
-    # the owner, 2026-11-09: "every parameter with a slider for premium users": route tuning joins the cosmetic kinds; the
-    # routes everyone gets stay the defaults, and nothing else may ever be Pro
-    assert set(out["kinds"]) == {"theme", "livery", "tuning"}
-    assert [k for k, it in out["items"].items() if it["kind"] == "tuning"] == ["route_tuning"]
+def test_pro_is_looks_only(out):
+    # the owner, 2026-11-10 (red team PH-06/BR-06): Pro is themes and liveries; Route tuning (Pro from 2026-11-09) is free
+    assert set(out["kinds"]) == {"theme", "livery"}
+    assert "route_tuning" not in out["items"]
     for key, item in out["items"].items():
         assert item["kind"] in out["kinds"], key
         assert not any(w in (key + " " + item["label"]).lower() for w in NEVER), key   # never a safety feature, export or privacy control
@@ -68,9 +67,8 @@ def test_themes_are_open_until_pro_goes_on_sale(out):
     assert out["early"] == [True, True, False, False, True, False]
 
 
-def test_route_tuning_is_open_until_pro_goes_on_sale_then_pro(out):
-    # the owner, 2026-11-09: "everyone has pro if they are an early user. Once we launch app store we will restrict to paid
-    # users and anyone who had the beta" (beta and early users: lifetime Pro, a verified entitlement like any other)
-    assert out["tuning"][:5] == [True, True, False, True, False]
-    assert out["tuning"][5] == "Route tuning comes with Vetta Pro."
+def test_route_tuning_is_free_for_everyone(out):
+    # with or without Pro, before or after Pro goes on sale
+    assert out["tuning"][:5] == [True, True, True, True, True]
+    assert out["tuning"][5] is None                                   # nothing to say: it is not a Pro item
     assert out["tuningPro"] is True
