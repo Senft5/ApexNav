@@ -1,5 +1,14 @@
 # VETTA — CURRENT AGENT HANDOFF STATE
 
+## Session 2026-11-11 (sweep round two): time attack wiring and opt-in (claude/project-thread-g9yher, off origin/main 936aec3)
+
+- Bug: analysis.html never loaded time_attack.js or called `ApexTimeAttack.sendRuns`, so no run reached a board. Now after
+  the stage publish loop in `syncSegments`; tests/test_time_attack.py `test_the_log_sends_runs`.
+- Privacy: runs counted on any copy of a circuit (a friend's hand share, a duel copy) without entering, and leaving was
+  undone by the next sync. **Migration 0051 `ta_joins`** (additive): enter writes it, runs / circuits / `entered` read it,
+  leave deletes it. Implausible runs are skipped (`refused`), not a 400 for the batch. Export `time_attack_entered`.
+- Needs 0051 on preview then prod (with d1_migrations rows) BEFORE merge.
+
 ## Session 2026-11-11 (fable-time-attack): weekly time attack per area (claude/fable-time-attack, off origin/main)
 
 - Migration 0049 (ta_pool, ta_weeks, ta_entries): applied on preview; prod at merge. backend/src/time_attack.ts, routes /api/timeattack*,
