@@ -146,6 +146,7 @@ ideal drive and where to find time (#80), grip circle (#86), automatic mount cal
 | D-27 | Practice focus: the profile's Work on carried into the next drive, each corner judged on that one skill, the end card says how it went | H | M | done (claude/fable-practice-focus: Practice it on my next drives, `core/driver_profile.py` practice) | Garmin Catalyst |
 | D-28 | Touch: how fast the brakes go on and come off and the car is loaded at turn-in (g a second), from the 10 Hz g | H | M | done (claude/project-thread-gd7nre: Your driving → Your touch, `core/driver_profile.py` touch; by kind of corner, month and a drive's own touch on its Log page) | Garmin Catalyst, AiM |
 | D-29 | Pace in Your driving: the share of a corner's sane limit used, as a level by kind of corner, hill and time in the drive (same credit as the Score; never a Work on) | H | S | done (Your driving → Your pace, `core/driver_profile.py` MEASURES) | Nate 2026-11-10 "more speed based stuff" |
+| D-30 | Best run: the longest run of corners in a row driven smooth and settled (the Score's own per-corner judgement: smooth ≥ 0.60, no braking past the apex, inside the sane limit; 2 km of road ends a run; 5+ to say), on the drive page in words. Never speed or time | M | S | done (core/flow.py, web/flow.js, drive_view.js: claude/project-thread-h7xxmf); next: a Records row and the end card | flow state, rally "rhythm" |
 
 ## 3. Road intelligence (Q)
 

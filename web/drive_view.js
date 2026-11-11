@@ -244,6 +244,9 @@
     // brake heat (brake_heat.js): said only when the discs got warm or hot by the model; nothing for a drive with no height
     const BH = root.ApexBrakeHeat || (typeof module !== 'undefined' && typeof require === 'function' ? require('./brake_heat.js') : null);
     const brakes = BH && Array.isArray(d.elev) ? BH.driveText(BH.overTrack(d.dist, d.speed_mps, d.elev), (m) => DIST(m, 1)) : null;
+    // the best run of corners in a row driven smooth and settled (flow.js, the Score's own judgement of each corner)
+    const FL = root.ApexFlow || (typeof module !== 'undefined' && typeof require === 'function' ? require('./flow.js') : null);
+    const flow = FL && Core.cornerTechnique ? FL.text(FL.longest(Core, d.speed_mps, d.lon_g, d.lat_g, d.corners, Array.isArray(d.dist) ? d.dist : null), (m) => DIST(m, 1)) : null;
     const tired = Core.fatigue ? fatigueText(Core.fatigue(d.speed_mps, d.lon_g, d.lat_g, d.corners, d.g_known || null)) : null;   // unmeasured g is left out
     const mi = finite(S.km) ? DIST(S.km * 1000, 1) : '--';
     const dur = finite(S.duration_s) ? fmtT(S.duration_s) : '--';
@@ -261,6 +264,7 @@
       // which car the score is for (IDEAS D-19); a lower limit is said, since it changes what Pace means
       + (d.car && d.car.label ? `<div class="dv-meta">Scored for your ${esc(d.car.label)}${finite(d.car.mu) && d.car.mu < 0.6 ? ` \u00b7 its own grip, ${d.car.mu.toFixed(2)} g (the default is 0.60 g)` : ''}</div>` : '')
       + (plain ? `<p class="dv-plain">${esc(plain)}</p>` : '')
+      + (flow ? `<p class="dv-plain">${esc(flow)}</p>` : '')
       + (tired ? `<p class="dv-plain">${esc(tired)}</p>` : '')
       + (brakes ? `<p class="dv-plain">${esc(brakes)}</p>` : '')
       + (ideal ? `<div class="dv-meta">Ideal drive <b class="gain">${ideal.gain.toFixed(2)} s</b> quicker: your best pass of each of ${ideal.n} corners, from ${ideal.drives} drive${ideal.drives === 1 ? '' : 's'}</div>` : '');
