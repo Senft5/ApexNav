@@ -1,5 +1,29 @@
 # VETTA — CURRENT AGENT HANDOFF STATE
 
+## Session 2026-11-11 (roam-b first-run walkthrough, PR 1): a first loop fills the map; loops stay off our relay (claude/project-thread-sxhrgi)
+
+- Walked a brand-new user through production on an iPhone 13 viewport (onboarding, Loop from here). Two bugs fixed:
+  - The loop was fitted above its card while the card was still filling in (469 px), and not again when it settled (310 px):
+    the loop sat in a 56 px strip at the top of the map, its start under the masthead. cockpit.js `cardFit`: for 4 s after a
+    route fit above the card, a change in the card's height fits it again, unless you moved the map. e2e "a loop fills the
+    map above its card" (fails before, passes after).
+  - Every loop candidate was sent to our trace relay (`/api/ctx/trace`), which refused it (400, over 40 km), and APP_REVIEW
+    says only stages go there. router_edges.js now relays only `c.stage` corridors (route_engine.js stageCorridor sets it),
+    at most 40 km; test_route_ctx_router_edges.py covers a loop not relayed.
+- Watch a replay (the welcome's, and a theme trial's) loaded the demo and sat at 0 mph until you found Play: watchDryRidge
+  now plays it once the map has its start (replayWhenReady, as a Log replay link does). e2e first-run flow asserts it.
+- The Log tapped before its frame had loaded (a fresh install's first seconds) put a blank full-screen frame over the tab
+  bar for ~4 s. openLog now keeps the frame hidden until it has loaded (toast "Opening your Log…"), opens it then, and
+  another tab cancels it (`logFrame.want`). Two e2e flows gate analysis.html to cover both.
+- Seen, not fixed (other areas): signed-out pages still ask /api/convoy/invites, /api/points, /api/hazards, /api/roads (401s);
+  the idle map's top ~150 px is blank paper at pitch 42 with the deck's padding (MapLibre draws no tiles beyond the far
+  plane; no sky in the style). Next: replay drive, Log, add a friend, join a crew.
+## Session 2026-11-11 (recurring meets): crew drives that repeat (claude/project-thread-uwmi4e, after #400)
+- Migration 0053 (`crew_events.repeat_weeks` 1/2/4, `series_id`): applied on preview; prod before merge.
+- `backend/src/events.ts` rollRepeats (on events list/near reads and in the sweep), eventCreate/eventUpdate take
+  `repeat_weeks` (409 `not_latest` on an older drive of a series). `web/crew_events.js` Repeats chips, "Every Saturday"
+  on cards and Meets near you, ICS RRULE. Tests: backend event_repeat 4, pytest test_crew_events, e2e crew drives.
+- Next: the auto time attack PR (local branch, built on #397's) once #397 merges.
 ## Session 2026-11-11 (places by name, 2): the drive's fuel stamp names its station (claude/project-thread-me97iw, off origin/main)
 
 - cockpit.js `updatePins`: in a drive the one fuel stamp left (U-85, the next stop ahead) reads "FUEL · Shell" when the map

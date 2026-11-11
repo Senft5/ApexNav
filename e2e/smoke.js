@@ -211,14 +211,18 @@ flow('startup budget: the map page is ready within its script bytes, script coun
   check(got.cpuS <= BOOT.cpuS && r.long <= BOOT.longTaskMs, `CPU before ready ${got.cpuS} s (budget ${BOOT.cpuS}), longest task ${r.long} ms (budget ${BOOT.longTaskMs}): ` + JSON.stringify(got));
 }, { viewport: { width: 393, height: 852 }, hasTouch: true });
 
-flow('first run: onboarding, Watch a replay loads the bundled drive and Play moves along it', async (page, base) => {
+flow('first run: onboarding, Watch a replay loads the bundled drive and plays it; the Play switch drives it', async (page, base) => {
   await page.goto(base + '/index.html');
   await page.waitForSelector('#onboard.show', { timeout: 10000 });
   await page.click('#obAlt');
   await page.waitForFunction(() => window.apexDebug && window.apexDebug.track && window.apexDebug.state.mode === 'replay', null, { timeout: 15000 });
   check(!(await page.isVisible('#onboard.show')), 'onboarding should close');
-  await page.evaluate(() => document.getElementById('playBtn').click());
+  // Watch means watch: it plays on its own once the map has the drive's start (walkthrough 2026-11-11: it sat at 0 mph)
   await page.waitForFunction(() => window.apexDebug.state.playing && window.apexDebug.state.cursorM > 0, null, { timeout: 10000 });
+  await page.evaluate(() => document.getElementById('playBtn').click());
+  check(!(await page.evaluate(() => window.apexDebug.state.playing)), 'the Play switch pauses it');
+  await page.evaluate(() => document.getElementById('playBtn').click());
+  await page.waitForFunction(() => window.apexDebug.state.playing, null, { timeout: 3000 });
   // REVIEW2.md U-45: Play is one slide switch, speed a detent, and a replay is full-screen like a drive (the plate's × is the exit)
   const tp = await page.evaluate(() => { document.querySelector('#rateDetents [data-rate="4"]').click();
     const tb = document.querySelector('.tabbar');
@@ -1657,6 +1661,27 @@ flow('the chosen route stays whole on screen: above the card when it opens, abov
   const again = await framed('card');
   check(again.open && (!again.roomy || again.ok), 'up again: refitted above the card: ' + JSON.stringify(again));
 }, { geolocation: { latitude: 35.9606, longitude: -83.9207 }, permissions: ['geolocation'] });
+
+flow('a loop fills the map above its card once the card has settled, not a strip at the top fitted to the card\'s first, taller height (walkthrough 2026-11-11)', async (page, base) => {
+  await page.route('https://tiles.openfreemap.org/**', (route) => (route.request().url().includes('/styles/')
+    ? route.fulfill({ contentType: 'application/json', body: JSON.stringify({ version: 8, sources: {}, layers: [{ id: 'bg', type: 'background', paint: { 'background-color': '#eee' } }] }) })
+    : route.abort()));
+  await planRouter(page);
+  await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); localStorage.setItem('apex.permsExplained', '1'); } catch (_) {} });
+  await page.goto(base + '/index.html');
+  await page.waitForFunction(() => window.apexDebug && window.apexDebug.map && window.apexDebug.map.loaded() && window.apex, null, { timeout: 20000 });
+  await page.waitForFunction(() => !!apexDebug.state.lastPosition, null, { timeout: 10000 });
+  await page.waitForFunction(() => getComputedStyle(document.getElementById('loopSuggest')).display !== 'none');
+  await page.click('#loopSuggestGo');
+  await page.waitForFunction(() => document.getElementById('planPanel').classList.contains('routed') && apexDebug.track && /loop$/.test(apexDebug.track.name), null, { timeout: 30000 });
+  await page.waitForTimeout(2500);
+  const fit = await page.evaluate(() => { const m = apexDebug.map, t = apexDebug.track, c = m.getContainer().getBoundingClientRect(), p = document.getElementById('planPanel'), edge = p.getBoundingClientRect().top - c.top;
+    let y0 = 1e9, y1 = -1e9, x0 = 1e9, x1 = -1e9;
+    for (let i = 0; i < t.lat.length; i += Math.max(1, Math.floor(t.lat.length / 200))) { const q = m.project([t.lon[i], t.lat[i]]); y0 = Math.min(y0, q.y); y1 = Math.max(y1, q.y); x0 = Math.min(x0, q.x); x1 = Math.max(x1, q.x); }
+    return { y0: Math.round(y0), y1: Math.round(y1), x0: Math.round(x0), x1: Math.round(x1), edge: Math.round(edge), w: c.width, roomy: c.height - p.offsetHeight >= 120 }; });
+  check(!fit.roomy || (fit.y0 >= 0 && fit.y1 <= fit.edge + 1 && ((fit.y1 - fit.y0) >= 0.4 * fit.edge || (fit.x1 - fit.x0) >= 0.4 * fit.w)),
+    'the loop fills the map above its settled card: ' + JSON.stringify(fit));
+}, { viewport: { width: 393, height: 852 }, hasTouch: true, geolocation: { latitude: 35.9606, longitude: -83.9207 }, permissions: ['geolocation'] });
 
 flow('a road someone sent (#road=) opens as a route card: its name, through its points, nothing of the drive (panel round 2 DA-4)', async (page, base) => {
   const asked = [];
@@ -4216,7 +4241,7 @@ flow('crew drives: an upcoming drive shows on People, Crews, as the crew page’
     const json = (b, status = 200) => route.fulfill({ status, contentType: 'application/json', body: JSON.stringify(b) });
     if (u.pathname === '/api/me') return json({ signed_in: true, member: true, handle: 'me' });
     if (u.pathname === '/api/crews' && m === 'GET') return json([{ id: 'CREW1', name: 'Ridge Runners', role: 'member', members: 3, visibility: 'private' }]);
-    if (u.pathname === '/api/events/near') return json([{ id: 'MEET1AAAAAAAAAAA', crew_id: 'CREW9', crew_name: 'Coffee & Cars', title: 'Sunday coffee', starts_at: starts,
+    if (u.pathname === '/api/events/near') return json([{ id: 'MEET1AAAAAAAAAAA', crew_id: 'CREW9', crew_name: 'Coffee & Cars', title: 'Sunday coffee', repeat_weeks: 1, starts_at: starts,
       meet_name: 'Kroger lot', meet_lat: 39.3, meet_lon: -84.6, notes: null, going: 7, member: false, km: 12 }]);   // VI-1: near the map's centre, as the phone measures it
     if (u.pathname === '/api/events') return json([{ id: 'EVT1AAAAAAAAAAAA', crew_id: 'CREW1', crew_name: 'Ridge Runners', title: 'Cherohala <i>Saturday</i>', starts_at: starts,
       meet_name: 'Tellico Shell', meet_lat: 35.36, meet_lon: -84.29, route_id: null, notes: null, by_handle: 'bob', mine: false, can_cancel: false, my_rsvp: mine, going: ['bob', 'cara'], maybe: 1,
@@ -4257,7 +4282,7 @@ flow('crew drives: an upcoming drive shows on People, Crews, as the crew page’
   await page.waitForSelector('.drive-card:not(.meet-card) .cp-more-body');
   check((await page.textContent('.drive-card:not(.meet-card)')).includes('Going: @bob, @cara · 1 maybe'), 'More names who is going');
   await page.waitForSelector('.meet-card');
-  check(/Sunday coffee/.test(await page.textContent('.meet-card')) && /7 going/.test(await page.textContent('.meet-card')) && /Meets near you/.test(await page.evaluate(() => document.querySelector('.meet-card').closest('.side-pop, #sheet').textContent)), 'a public meet nearby');   // in a crew: under the crew's Upcoming drives
+  check(/Sunday coffee/.test(await page.textContent('.meet-card')) && /7 going/.test(await page.textContent('.meet-card')) && /Every \w+day · Coffee & Cars/.test(await page.textContent('.meet-card')) && /Meets near you/.test(await page.evaluate(() => document.querySelector('.meet-card').closest('.side-pop, #sheet').textContent)), 'a public meet nearby');   // in a crew: under the crew's Upcoming drives
   await page.click('.drive-card:not(.meet-card) .switch button:text-is("Going")');
   await page.waitForFunction(() => document.querySelector('.drive-card:not(.meet-card) .switch button[aria-checked="true"]')?.textContent === 'Going');   // the answer is a slide switch
   check(posted.some(([p, b]) => p === '/api/events/EVT1AAAAAAAAAAAA/rsvp' && b.status === 'going'), 'the answer was sent');
@@ -4322,10 +4347,12 @@ flow('crew drives: an upcoming drive shows on People, Crews, as the crew page’
   check(/Meeting point: Tellico Plains Shell/.test(await page.textContent(`${W} .plan-drive`)), 'the meeting point by search');
   const formH = await page.$eval(`${W} .plan-drive`, (f) => f.getBoundingClientRect().height);
   check(formH < 852, `the form fits one phone screen (${Math.round(formH)} px)`);
+  await page.click(`${W} [aria-label="Repeats"] button:has-text("Weekly")`);
+  check(await page.isVisible(`${W} [aria-label="Repeats"] button.on:has-text("Weekly")`), 'repeats weekly (S-13)');
   await page.click(`${W} button:has-text("Plan it")`);
-  await page.waitForFunction(() => /Drive planned/.test(document.getElementById('toast').textContent));
+  await page.waitForFunction(() => /^Planned: Every \w+day\. Each one is planned when the last one starts\.$/.test(document.getElementById('toast').textContent));
   const plan = posted.find(([p]) => p === '/api/crews/CREW1/events');
-  check(plan && plan[1].title === 'Dragon run' && /Z$/.test(plan[1].starts_at) && plan[1].meet.name === 'Tellico Plains Shell' && Math.abs(plan[1].meet.lat - 35.3601) < 1e-6 && plan[1].route_id === null && plan[1].public === false, 'the plan was sent: ' + JSON.stringify(plan));
+  check(plan && plan[1].title === 'Dragon run' && /Z$/.test(plan[1].starts_at) && plan[1].meet.name === 'Tellico Plains Shell' && Math.abs(plan[1].meet.lat - 35.3601) < 1e-6 && plan[1].route_id === null && plan[1].public === false && plan[1].repeat_weeks === 1, 'the plan was sent: ' + JSON.stringify(plan));
   check(plan[1].lead === undefined && plan[1].sweep === null && plan[1].regroup.length === 0, 'you lead; the rest is set on the card');
 });
 
@@ -5100,6 +5127,42 @@ flow('units: kilometres in Settings redraw the dial, the notes and the replay in
   const notes = await page.textContent('#notes');
   check(/\d\s*(M|KM)/.test(notes) && !/\d\s*(FT|MI)/.test(notes), 'note distances in metres: ' + notes);
   check(/ km$/.test(await page.getAttribute('#scrubber', 'aria-valuetext')), 'the replay position in km');
+});
+
+flow('the Log tapped while its page still loads: the map and its tabs stay usable, the Log opens whole once loaded, and another tab cancels it (walkthrough 2026-11-11)', async (page, base) => {
+  await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); } catch (_) {} });
+  let release; const gate = new Promise((ok) => { release = ok; });
+  await page.route(/\/analysis\.html/, async (route) => { await gate; route.continue(); });
+  await page.goto(base + '/index.html');
+  await page.waitForFunction(() => window.apex && window.apexDebug);
+  await page.waitForFunction(() => !document.getElementById('boot'), null, { timeout: 5000 });
+  await page.click('.tab[data-view="log"]');
+  await page.waitForTimeout(300);
+  const waiting = await page.evaluate(() => { const f = document.getElementById('logFrame'); return { frameShown: !!f && !f.hidden, toast: document.getElementById('toast').textContent }; });
+  check(!waiting.frameShown && /Opening your Log/.test(waiting.toast), 'no blank frame over the tabs while the Log loads: ' + JSON.stringify(waiting));
+  await page.click('.tab[data-view="garage"]');                       // the tabs still work, and change your mind
+  await page.waitForFunction(() => document.querySelector('#sheet.open[data-view="garage"]'));
+  release();
+  await page.waitForFunction(() => { const f = document.getElementById('logFrame'); return f && f.contentWindow && f.contentWindow.ApexLogFrame; }, null, { timeout: 15000 });
+  await page.waitForTimeout(300);
+  check(await page.evaluate(() => document.getElementById('logFrame').hidden), 'the Log stays closed: you went to the Garage');
+  await page.click('.tab[data-view="log"]');
+  await page.waitForSelector('#logFrame:not([hidden])', { timeout: 3000 });
+});
+
+flow('the Log tapped while its page still loads opens on its own once it has loaded (walkthrough 2026-11-11)', async (page, base) => {
+  await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); } catch (_) {} });
+  let release; const gate = new Promise((ok) => { release = ok; });
+  await page.route(/\/analysis\.html/, async (route) => { await gate; route.continue(); });
+  await page.goto(base + '/index.html');
+  await page.waitForFunction(() => window.apex && window.apexDebug);
+  await page.waitForFunction(() => !document.getElementById('boot'), null, { timeout: 5000 });
+  await page.click('.tab[data-view="log"]');
+  await page.waitForTimeout(300);
+  check(await page.evaluate(() => { const f = document.getElementById('logFrame'); return !f || f.hidden; }), 'hidden while it loads');
+  release();
+  await page.waitForSelector('#logFrame:not([hidden])', { timeout: 15000 });
+  await page.frameLocator('#logFrame').locator('nav.tabbar a:has-text("Garage")').waitFor();
 });
 
 flow('the Log opens over the map and its tabs come back without loading the map again; switches read on and off (the owner, 2026-10-29)', async (page, base) => {

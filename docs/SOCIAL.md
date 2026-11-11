@@ -100,6 +100,13 @@ and in random batches so a trace cannot be re-assembled.
 - Made only from what each part already shows you (the same grants, blocks and friendships), so it shares nothing new
   and has no table: what you've seen is kept on the phone (`apex.inboxSeen`). `backend/src/inbox.ts` (`GET /api/inbox`),
   `web/inbox.js`. There are no push notifications yet; this is what a push would say.
+### 2.11 Recurring meets (crews; built 2026-11-11)
+- A crew drive can repeat weekly, every 2 weeks or every 4 weeks (the plan form's Repeats, or the card's Set it up). Only
+  the series' latest drive carries the repeat; once it starts, the next is planned at the same time with the same title,
+  meet, route, notes, listing and regroup points, the planner going and nobody else's answers or roles carried. Cards and
+  Meets near you say "Every Saturday"; Add to calendar puts the series in the calendar once (RRULE).
+- Cancelling the latest, setting it to Once, or its planner leaving the crew ends the series. Planned on read
+  (`rollRepeats` in `backend/src/events.ts`) and by the daily sweep before old drives are deleted. Migration 0053.
 
 ## 3. Drive analysis (private)
 Compare passes of the same road — yours, or a friend's ghost they chose to send you.
