@@ -3,6 +3,7 @@
 // friend link now, nothing more; the `members` table and /api/me's `member` flag stay so old app builds keep working.
 // No library: the id_token is received directly from Google's token endpoint over TLS, so per the OIDC spec its
 // signature need not be re-verified; we still check iss, aud, exp, nonce and email_verified.
+import { friendDefaults } from "./share_defaults";
 import {
   Env, HttpError, b64urlDecode, body, cookie, getCookie, pair, randomToken, sha256b64url, sha256hex, sqlTime, str,
 } from "./util";
@@ -250,8 +251,8 @@ export async function redeemInvite(env: Env, v: Viewer, req: Request): Promise<v
   await befriendOnLink(env, v.id, used.created_by);
 }
 
-/** A link is two people agreeing to meet: the sender made it, the other opened it and signed in. They start as friends (sharing
- *  is still off until each of them turns it on, per friend). Never across a block, either way. Friend links and crew links (P-02). */
+/** A link is two people agreeing to meet: the sender made it, the other opened it and signed in. They start as friends, each
+ *  sharing Scores and Times with the other until they switch it off per friend (share_defaults.ts). Never across a block, either way. Friend links and crew links (P-02). */
 export async function befriendOnLink(env: Env, userId: string, senderId: string): Promise<void> {
   if (userId === senderId) return;
   const [x, y] = pair(userId, senderId);
@@ -260,4 +261,5 @@ export async function befriendOnLink(env: Env, userId: string, senderId: string)
       WHERE NOT EXISTS (SELECT 1 FROM blocks b WHERE (b.blocker = ?1 AND b.blocked = ?2) OR (b.blocker = ?2 AND b.blocked = ?1))
      ON CONFLICT (user_a, user_b) DO UPDATE SET status = 'accepted'`,
   ).bind(x, y, senderId).run();
+  await friendDefaults(env, x, y);
 }
