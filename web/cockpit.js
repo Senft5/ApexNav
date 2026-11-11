@@ -9657,6 +9657,7 @@
         else if (p.go === 'end') { if (state.mode === 'live') leaveDrive(true); else toast('No drive to end.'); }
         else if (p.go === 'nextstage') nextStageAnswer();
         else if (p.go === 'skipstage') skipStage();
+        else if (p.go === 'nextfuel' || p.go === 'nextcafe') nextPlaceAnswer(p.go === 'nextfuel' ? 'fuel' : 'cafe');
         return;
       }
       showView(ok(p.crew) || ok(p.convoy) ? 'crews' : 'friends'); renderAccount();
@@ -9669,6 +9670,14 @@
       const line = !t || !t.stageSpans ? 'This route has no stages.' : !n ? 'No more stages on this route.'
         : n.on ? `On ${n.span.name || 'a stage'} now: ${ApexUnits.long(n.toM, 1)} to go.` : `Next stage${n.span.name ? `, ${n.span.name},` : ''} in ${ApexUnits.long(n.toM, 1)}.`;
       toast(line); say(line, true);
+    }
+    // Siri (the owner, 2026-11-11): "where's the next gas station / café" says the next one along the planned route by
+    // its name on the map (scenic.js nextAnswer); no route, or its places not loaded, says so.
+    function nextPlaceAnswer(kind) {
+      const t = track, at = state.mode === 'live' ? routeWatch.bestM : state.cursorM;
+      const list = t && t === plannedRoute && Array.isArray(t.scenic) ? t.scenic : null;
+      const line = window.ApexScenic ? ApexScenic.nextAnswer(list, at, kind, { long: (m) => ApexUnits.long(m, 1, true) }) : '';
+      if (line) { toast(line); say(line, true); }
     }
     // (span: the one to skip, a late loop's offer; none: the one you're on or the next)
     function skipStage(span) {

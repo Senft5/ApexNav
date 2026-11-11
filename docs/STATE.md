@@ -1,5 +1,15 @@
 # VETTA — CURRENT AGENT HANDOFF STATE
 
+## Session 2026-11-11 (places by name, 3): Siri, "where's the next gas station / café" (claude/project-thread-me97iw, off origin/main)
+
+- ApexIntents.swift: NextFuelIntent / NextCafeIntent (go=nextfuel / nextcafe), 7 App Shortcuts now (Apple allows 10).
+- scenic.js `nextAnswer(list, atM, kind, fmt)`: "Next fuel: Shell, in 3.2 mi." / "Next café in 1.4 mi, no name on the map." /
+  "No cafés ahead on this route." / "Plan a route to hear the fuel stops along it." cockpit.js `nextPlaceAnswer` reads
+  `t.scenic` of the planned route from routeWatch.bestM (live) and says + shows it (a drive's status line).
+- Tests: test_scenic.py (+1), test_siri_shortcuts.py (7 shortcuts); e2e "along the route by name…" asks in a drive, the
+  Siri links flow asks with no route. Swift compiles in CI only (build-ipa). APP_REVIEW.md 2.5.x row updated.
+- Next: CarPlay's route preview could list the cafés and fuel by name.
+
 ## Session 2026-11-11 (places by name, 2): the drive's fuel stamp names its station (claude/project-thread-me97iw, off origin/main)
 
 - cockpit.js `updatePins`: in a drive the one fuel stamp left (U-85, the next stop ahead) reads "FUEL · Shell" when the map

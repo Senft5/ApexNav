@@ -5309,6 +5309,9 @@ flow('Siri links: report and end act only during a drive, and say so otherwise (
   await page.waitForFunction(() => /no stages|No route/i.test(document.getElementById('toast').textContent));
   await page.evaluate(() => window.apex.onNative({ type: 'link', params: { go: 'skipstage' } }));
   await page.waitForFunction(() => /Skip a stage during a drive/.test(document.getElementById('toast').textContent));
+  // the next gas station or café with no route: it says so
+  await page.evaluate(() => window.apex.onNative({ type: 'link', params: { go: 'nextfuel' } }));
+  await page.waitForFunction(() => /^Plan a route to hear the fuel stops along it\.$/.test(document.getElementById('toast').textContent));
   // during a drive the report sheet opens
   await page.evaluate((f) => window.apex.live(f), frame(1));
   await page.waitForFunction(() => window.apexDebug.state.mode === 'live');
@@ -7082,6 +7085,9 @@ flow('along the route by name: the Along line opens a list of the cafés and fue
     .catch(() => {});
   const stamps = await page.evaluate(() => [...document.querySelectorAll('.poi-pin.poi-fuel')].map((e) => ({ text: e.textContent, on: e.style.display !== 'none' })));
   check(stamps.filter((x) => x.on).map((x) => x.text).join('|') === 'FUEL · Shell', 'in a drive, the next fuel stop alone, by its name: ' + JSON.stringify(stamps));
+  // Siri, "where's the next gas station": said (and shown on the drive's status line) by its name, from where you are on the route
+  await page.evaluate(() => window.apex.onNative({ type: 'link', params: { go: 'nextfuel' } }));
+  await page.waitForFunction(() => /^Next fuel: Shell, (in [\d.]+ (mi|km)|here)\./.test(document.getElementById('dsNote').getAttribute('aria-label') || ''), null, { timeout: 5000 });   // a drive's status line
 }, IPHONE);
 
 // The route reveal and the card as a page (design pass, 2026-11-10; web/route_reveal.js): a route found is drawn onto the
