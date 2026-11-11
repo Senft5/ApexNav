@@ -14,6 +14,27 @@ directions to the loop's start, like a crew drive's meeting point. The phone sen
 and skips the loop if the week is over by the day it names. Undo: drop `attack` from the `YR.suggest` call in cockpit.js
 paintDeck (or move `if (ta) return attackSugg();` in your_roads.js to change its rank).
 
+## 2026-11-11 (places by name): cafés and fuel along the route, tap for their names (claude/project-thread-me97iw)
+
+The route card's "Along" line ("1 viewpoint · 2 cafés · 3 fuel stops") now opens a list of each place by the name
+OpenStreetMap has for it, how far into the route and how far off the road; tapping one moves the map there and offers it as
+a stop. Tapping a CAFÉ or FUEL pin on the map says its name too. Calls: fuel stations are now counted on the line (before,
+only a long stretch without fuel was said), so there is something to tap; a place with no name on the map says "no name on
+the map" rather than a guess. Undo: revert the PR.
+## 2026-11-11 (roam-a best run): a drive's page names your best run of clean corners (claude/project-thread-h7xxmf)
+
+New, my call (Nate asked for more fun-driving features). A drive's page now says, when it happened, "Your best run: 9
+corners in a row, smooth and settled over 2.1 mi." A corner counts when the Score itself judged it smooth (the better half
+of real corners), with no braking past the apex and inside the corner's sane limit, so the line can never reward going
+faster. A corner that misses, or 2 km of road between two corners, ends the run; under 5 in a row says nothing. Undo:
+remove the `flow` line in web/drive_view.js (or tune SMOOTH_MIN / MIN_RUN in core/flow.py and web/flow.js together).
+## 2026-11-11 (ui-round-three): People when you have no friends or crews yet looks like the signed-out page (claude/project-thread-5sbga7)
+
+Signed in with nobody yet, Friends and Crews used to show one grey sentence and a small key. Now each is a page like the
+signed-out one: a drawing (your road drawn, a friend's road or three crew seats still in pencil), "Bring a friend." or
+"Start a crew." set large, one sentence, and the Invite key full width. The example card stays under it. Undo: the two
+`people-first` blocks in web/cockpit.js and the "first friend" block at the end of web/signature.css.
+
 ## 2026-11-11 (roam-c crew-public-reset): a crew made public stops showing what members shared with it by hand (claude/roam-c-crew-public-reset)
 
 Found in the security pass. When an owner makes a private crew public, members' Scores and times already went back to off

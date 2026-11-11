@@ -6565,7 +6565,11 @@
         if (!told) { try { localStorage.setItem('apex.sharingOnTold', '1'); } catch (_) {} toast('Your friends and private crews now see your Scores and times. Switch it off for anyone: open their row, then What they see of you.'); }
       }
       // P-08: no friends yet is one sentence and the Invite key, not four empty drawers
-      else body.append(el('p', { className: 'people-lead', textContent: 'Bring a friend: they sign in with your link, and you’re friends the moment they do.' }));
+      // the first friend is a page like the signed-out one (round three, 2026-11-11): your road drawn, the friend's still pencil
+      else body.append(el('div', { className: 'people-first' },
+        drawing(roads('M-12 34 C 70 34 96 96 176 92 S 300 24 372 50') + '<path class="jr-ghost" d="M92 140 C 108 112 148 98 176 92"/>' + pucks([277, 60, true])),
+        el('h3', { className: 'join-head', textContent: 'Bring a friend.' }),
+        el('p', { className: 'people-lead', textContent: 'They sign in with your link, and you’re friends the moment they do.' })));
 
       // One Invite key (the owner, 2026-10-30): someone new gets an invite link, a member your handle or a request; requests here too.
       const ipop = popSheet('Invite'); pops.push(ipop);
@@ -6809,7 +6813,10 @@
       } else {
         if (myCrews.length) cbody.append(nsec, newSec);
         // P-08: no crew yet is one sentence and one row, not five empty drawers
-        else cbody.append(el('p', { className: 'people-lead', textContent: 'A crew is a group for a club or a weekend run: its own page, and drives you plan together.' }),
+        else cbody.append(el('div', { className: 'people-first' },
+            drawing(roads('M-12 96 C 60 96 84 36 156 36 S 262 98 372 70') + [[72, 66], [98, 50], [128, 39]].map(([x, y]) => `<circle class="jr-seat" cx="${x}" cy="${y}" r="7"/>`).join('') + pucks([173, 37, true])),   // the lead, three seats in file still empty
+            el('h3', { className: 'join-head', textContent: 'Start a crew.' }),
+            el('p', { className: 'people-lead', textContent: 'A group for a club or a weekend run: its own page, and drives you plan together.' })),
           el('div', { className: 'nav-rows' }, nearbyRow = navRow('Find or start a crew', findSheet())));
         if (!myCrews.length && window.ApexPeopleSamples) cbody.append(ApexPeopleSamples.crew(el));   // U-121: what a crew looks like, as an example
         if (drives) cbody.append(drives);
@@ -8445,10 +8452,36 @@
       const fall = window.ApexBrakeHeat ? ApexBrakeHeat.descentText(t.descents, (m) => ApexUnits.long(m, 1), h) : null;
       $('routeCardDescent').textContent = fall ? ApexRouteCard.factText(fall) : ''; $('routeCardDescent').hidden = !fall;
     }
+    // the owner, 2026-11-11: the places behind the Along line by name, a tap away (scenic.js places)
+    const placeUnits = { long: (m) => ApexUnits.long(m, 1, true), short: (m) => { const d = ApexUnits.short(m); return `${d.n} ${d.u.toLowerCase()}`; } };
+    function offerPlace(t, row) {
+      const label = row.named ? row.title : row.kindName;
+      toast(ApexScenic.placeLine(row), { label: 'Add as a stop', ms: 6000, onClick: () => { if (plannedRoute === t) addViaAt({ lat: row.lat, lon: row.lon, label }, row.m); } });
+    }
+    function paintAlongPanel(t, rows) {
+      const panel = $('routeAlongPanel');
+      panel.replaceChildren(...rows.map((row) => {
+        const b = document.createElement('button'); b.type = 'button'; b.className = `place${row.named ? '' : ' unnamed'}`; b.setAttribute('role', 'listitem');
+        const name = document.createElement('b'); name.textContent = row.title;
+        const at = document.createElement('span'); at.textContent = ApexRouteCard.factText(row.at);
+        const sub = document.createElement('small'); sub.textContent = ApexRouteCard.factText([row.named ? row.kindName : '', row.off].filter(Boolean).join(' · '));
+        b.append(name, at, sub);
+        b.addEventListener('click', () => {
+          if (mapReady) map.flyTo({ center: [row.lon, row.lat], zoom: Math.max(map.getZoom(), 14), duration: 900 });
+          offerPlace(t, row);
+        });
+        return b;
+      }));
+    }
+    $('routeAlongLine').addEventListener('click', () => {
+      const open = $('routeAlongPanel').hidden && $('routeAlongPanel').childElementCount > 0;
+      $('routeAlongPanel').hidden = !open; $('routeAlongLine').setAttribute('aria-expanded', String(open));
+    });
     async function attachScenic(t) {
       for (const mk of scenicPins.splice(0)) mk.remove();
       fuelPins.length = 0; poiDeclutter.pins = [];
-      $('routeCardAlong').hidden = true;
+      $('routeCardAlong').hidden = true; $('routeAlongPanel').hidden = true; $('routeAlongPanel').replaceChildren();
+      $('routeAlongLine').setAttribute('aria-expanded', 'false');
       if (!t || !Array.isArray(t.lat) || t.lat.length < 2 || !window.ApexScenic) return;
       const pts = [];
       for (let i = 0; i < t.lat.length; i += 200) pts.push({ lat: t.lat[i], lon: t.lon[i] });   // every 1 km
@@ -8457,19 +8490,20 @@
       if (plannedRoute !== t) return;                                                          // another route came up meanwhile
       t.scenic = list;
       const line = ApexScenic.summary(list, t.dist[t.dist.length - 1]);
-      $('routeCardAlong').textContent = ApexRouteCard.factText(line); $('routeCardAlong').hidden = !line;
+      const rows = ApexScenic.places(list, placeUnits);
+      $('routeAlongLine').textContent = ApexRouteCard.factText(line); $('routeCardAlong').hidden = !line;
+      $('routeAlongLine').disabled = !rows.length;                                               // only a fuel warning: nothing to list
       $('routeCardAlong').dataset.glyph = ApexRouteCard.alongGlyph(line);                     // U-134: a café is a cup
+      paintAlongPanel(t, rows);
       for (const p of list) {
+        const row = ApexScenic.places([p], placeUnits)[0];
         const el = document.createElement('div'); el.className = `poi-pin poi-${p.kind}`;
         el.textContent = p.kind === 'view' && p.name ? p.name : SCENIC_LABEL[p.kind];
         el.title = p.name || SCENIC_LABEL[p.kind];
-        // tap a viewpoint, café or fuel stop on the map to make it a stop of the day (IDEAS R-17)
-        el.addEventListener('click', (e) => {
-          e.stopPropagation();
-          const label = p.name || SCENIC_LABEL[p.kind];
-          toast(label, { label: 'Add as a stop', ms: 6000, onClick: () => { if (plannedRoute === t) addViaAt({ lat: p.lat, lon: p.lon, label }, p.m); } });
-        });
+        // tap a viewpoint, café or fuel stop on the map: its name, and it can be a stop of the day (IDEAS R-17)
+        el.addEventListener('click', (e) => { e.stopPropagation(); if (row) offerPlace(t, row); });
         const mk = new maplibregl.Marker({ element: el }).setLngLat([p.lon, p.lat]).addTo(map);
+        el.setAttribute('role', 'button'); el.setAttribute('aria-label', row ? ApexScenic.placeLine(row) : SCENIC_LABEL[p.kind]);   // after the Marker's own "Map marker"
         scenicPins.push(mk);
         poiDeclutter.pins.push({ marker: mk, el, kind: p.kind, named: !!p.name, m: p.m });
         if (p.kind === 'fuel' && Number.isFinite(p.m)) fuelPins.push({ m: p.m, el });
