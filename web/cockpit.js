@@ -3253,8 +3253,23 @@
       if (vehicle) add(vehicle.lat, vehicle.lon);
       if (!(e >= w && n >= so)) return;
       holdFollow();
-      fitInView([[w, so], [e, n]], routeBottom(aboveCard));
+      const bottom = routeBottom(aboveCard);
+      fitInView([[w, so], [e, n]], bottom);
+      cardFit = aboveCard ? { t, at: performance.now(), bottom } : null;
     }
+    // The card a route opens is still filling in when the route is fitted above it (a loop's card was 469 px tall at the fit
+    // and 310 px a moment later: the loop sat in a strip at the top of the map, its start under the masthead). While the card
+    // settles, a change in its height fits the route again, unless you have moved the map since.
+    let cardFit = null;
+    map.on('dragstart', () => { cardFit = null; });
+    map.on('zoomstart', (ev) => { if (ev.originalEvent) cardFit = null; });
+    if (window.ResizeObserver) new ResizeObserver(() => {
+      if (!cardFit || performance.now() - cardFit.at > 4000 || cardFit.t !== plannedRoute || state.mode === 'live') return;
+      const { t, at } = cardFit;
+      if (Math.abs(routeBottom(true) - cardFit.bottom) < 24) return;
+      fitPlannedRoute(t, true);
+      if (cardFit) cardFit.at = at;                                  // the window runs from the first fit, not each refit
+    }).observe($('planPanel'));
     // Plan fields: empty = the phone's position (locate()), "lat, lon" = that point, anything else =
     // the first Nominatim match. Errors carry the toast text.
     const COORDS = /^\s*(-?\d+(?:\.\d+)?)\s*,\s*(-?\d+(?:\.\d+)?)\s*$/;
@@ -5096,10 +5111,12 @@
       $('sheet').querySelector('.body').scrollTop = 0;
       if (next === 'friends' && view === 'people') try { if (inbox) inbox.markSeen(); } catch (_) {}
     }
+    const logFrame = { el: null, url: null, pending: new Set(), want: null };   // the Log's frame (below, F-15)
     function showView(v) {
       if (v) $('endCard').classList.remove('show');                    // R-5 / I-6: a tab never opens under the drive's card
       if (v === 'log') { openLog('analysis.html?tab=log'); return; }
       if (v === 'stages') { openLog('analysis.html?tab=stages'); return; }
+      logFrame.want = null;                                            // another tab while the Log was loading: it stays closed
       if (v === 'setup') v = 'garage';                                   // Settings live in the Garage now (REVIEW.md roadmap 9)
       if (v === 'route') { showView(null); openPlan(true); return; }
       if (v === 'map') v = null;
@@ -5122,7 +5139,6 @@
     // Map, People and Garage tabs close the frame (web/page_return.js). F-15 (REVIEW_FEEL): the frame is loaded once, hidden,
     // when the map is idle after launch, and never again: a different page of the Log, a new or changed drive, the theme and
     // the units are messages to it (analysis.html ApexLogFrame), so opening the Log is showing a page that is already there.
-    const logFrame = { el: null, url: null, pending: new Set() };
     function safeInsets() {
       let probe = $('saProbe');
       if (!probe) { probe = el('div', { id: 'saProbe' }); probe.style.cssText = 'position:fixed;visibility:hidden;pointer-events:none;padding:env(safe-area-inset-top,0px) env(safe-area-inset-right,0px) env(safe-area-inset-bottom,0px) env(safe-area-inset-left,0px)'; document.body.append(probe); }
@@ -5140,7 +5156,11 @@
       if (f) return f;
       f = logFrame.el = el('iframe', { id: 'logFrame', title: 'Log' });
       f.hidden = true;
-      f.addEventListener('load', () => { logInsets(); logFrame.pending.clear(); });   // a fresh page reads everything itself
+      f.addEventListener('load', () => {                              // a fresh page reads everything itself
+        logInsets(); logFrame.pending.clear();
+        const want = logFrame.want; logFrame.want = null;
+        if (want && state.mode !== 'live') openLog(want);              // asked for while it loaded: shown now, whole
+      });
       logFrame.url = url; f.src = url;
       document.body.append(f);
       return f;
@@ -5154,7 +5174,15 @@
         api.open(url);                                                  // the page asked for, in place (never a reload)
         logFrame.url = url;
         logInsets();
-      } else if (logFrame.url !== url) { logFrame.url = url; f.src = url; }   // still loading: load the page asked for instead
+      } else {
+        // still loading (a Log tapped in the first seconds of a fresh install): the frame stays hidden until its page is there,
+        // so the map and its tabs stay usable, rather than a blank full screen with no way out for seconds (walkthrough
+        // 2026-11-11: 4 s of empty paper over the tab bar); it opens on its own when it has loaded, unless another tab was asked
+        if (logFrame.url !== url) { logFrame.url = url; f.src = url; }  // load the page asked for instead
+        if (!logFrame.want) toast('Opening your Log…');
+        logFrame.want = url;
+        return;
+      }
       f.hidden = false;
       document.documentElement.classList.add('log-open');
       if (api) api.shown();
@@ -9387,6 +9415,7 @@
       const d = drives.find(x => x.id === 'dry_ridge');
       if (!d) { toast('Couldn\'t load the replay. Check the connection and try again.'); return; }
       booting = false; replayOn = true; closeSheet(); activate(d, 0);
+      replayWhenReady(d);                                              // "Watch" plays it (walkthrough 2026-11-11: it sat at 0 mph until Play)
     }
     // CarPlay's "Start drive" offer (IDEAS C-05) holds the toast for 10 s: once a drive starts it is moot, so it goes
     // and stops holding back other toasts.

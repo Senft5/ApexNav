@@ -4,6 +4,19 @@ Decisions Claude made for you, newest first. Each one says what was decided, why
 you reach one you've seen. If you disagree with a call, say so and it gets reversed; nothing here is hard to undo unless
 it says so. Things only you can do are in docs/OWNER_TODO.md.
 
+## 2026-11-11 (roam-b walkthrough): a planned loop is fitted again once its card settles; loops never go through our relay (claude/project-thread-sxhrgi)
+
+- When a route or loop comes back, the map frames it above its card. The card was still growing and shrinking for a
+  moment, so the loop ended up in a thin strip at the top. Now, for 4 seconds after that fit, a change in the card's height
+  frames it again, unless you've touched the map. Undo: remove `cardFit` in cockpit.js.
+- Loops were being sent to our Worker's road-attributes relay, which only takes stages (stretches cut from the map, never
+  the driver's own line) and refused them as too long. Only stages go there now, as APP_REVIEW 5.1.2 already says; loops
+  ask the public router from the phone like every route. Undo: drop the `c.stage` test in route_ctx/router_edges.js.
+- "Watch a replay" on the welcome screen now plays the demo drive straight away; it used to open it paused at 0 mph,
+  with Play down in the controls. Undo: remove `replayWhenReady(d)` in cockpit.js watchDryRidge.
+- Tapping Log in the first seconds after install showed a blank screen with no tabs until it loaded. Now the map stays
+  usable with a short "Opening your Log…" and the Log opens when ready (a different tab cancels it). Undo: the
+  `logFrame.want` branch in cockpit.js openLog.
 ## 2026-11-11 (recurring meets): a crew drive can repeat weekly, every 2 or every 4 weeks (claude/project-thread-uwmi4e)
 
 Crews that meet every Saturday had to plan the same drive by hand each week. A drive can now repeat (Repeats: Once,
