@@ -337,7 +337,7 @@
     return (obs || []).filter((o) => SKILLS.every((k) => o[k] !== null && o[k] !== undefined)).map((o) => {
       const a = o.apex, a0 = Math.max(0, a - 2), a1 = Math.min(n - 1, a + 2);
       const hx = (d.lon[a1] - d.lon[a0]) * c * 111320, hy = (d.lat[a1] - d.lat[a0]) * 110540, hn = Math.hypot(hx, hy) || 1;
-      return { apex: a, x: (d.lon[a] - lon0) * c * 111320, y: (d.lat[a] - lat0) * 110540, hx: hx / hn, hy: hy / hn, level: level(SKILLS.reduce((t, k) => t + o[k], 0) / SKILLS.length) };
+      return { apex: a, size: o.size === undefined ? null : o.size, dir: o.dir === undefined ? null : o.dir, x: (d.lon[a] - lon0) * c * 111320, y: (d.lat[a] - lat0) * 110540, hx: hx / hn, hy: hy / hn, level: level(SKILLS.reduce((t, k) => t + o[k], 0) / SKILLS.length) };
     });
   }
   /** "On this road: your cleanest pass yet at 7 of the 24 corners you have driven three or more times, level with it at 2." */
@@ -347,6 +347,43 @@
     if (!r.best && !r.level) return `On this road: ${r.corners} corner${r.corners === 1 ? '' : 's'} you have driven three or more times; your cleanest pass of ${r.corners === 1 ? 'it' : 'each'} came on another drive.`;
     if (!r.best) return `On this road: level with your cleanest pass at ${r.level} ${of}.`;
     return `On this road: your cleanest pass yet at ${r.best} ${of}${r.level ? `, level with it at ${r.level}` : ''}.`;
+  }
+  /** A road's corners across every drive of it (port of driver_profile.road_book). drives oldest first, each
+   *  { id, at, corners: placed() }; ref [[x, y]] along one drive of the road for road order. */
+  function roadBook(drives, ref = null) {
+    const book = [];
+    for (const d of drives || []) for (const o of d.corners || []) {
+      if (o.level === null || o.level === undefined) continue;
+      let c = book.find((c) => Math.hypot(o.x - c.x, o.y - c.y) < SAME_CORNER_M && o.hx * c.hx + o.hy * c.hy > SAME_WAY);
+      if (!c) { c = { x: o.x, y: o.y, hx: o.hx, hy: o.hy, size: o.size === undefined ? null : o.size, dir: o.dir === undefined ? null : o.dir, by: new Map(), k: book.length }; book.push(c); }
+      c.by.set(d.id, Math.max(c.by.has(d.id) ? c.by.get(d.id) : o.level, o.level));
+    }
+    const at = new Map((drives || []).map((d) => [d.id, d.at === undefined ? null : d.at])), order = new Map((drives || []).map((d, i) => [d.id, i]));
+    const pos = (c) => {
+      if (!ref || !ref.length) return c.k;
+      let best = 0, bd = Infinity;
+      ref.forEach((p, i) => { const dd = (p[0] - c.x) ** 2 + (p[1] - c.y) ** 2; if (dd < bd) { bd = dd; best = i; } });
+      return best;
+    };
+    const out = [];
+    for (const c of book.map((c) => ({ c, p: pos(c) })).sort((a, b) => a.p - b.p || a.c.k - b.c.k).map((x) => x.c)) {
+      if (c.by.size < ROAD_MIN_PASSES) continue;
+      const rec = Math.max(...c.by.values());
+      const by = [...c.by].filter(([, v]) => v === rec).map(([i]) => i).sort((a, b) => order.get(a) - order.get(b))[0];
+      out.push({ x: c.x, y: c.y, size: c.size, dir: c.dir, passes: c.by.size, record: rec, by, at: at.get(by) });
+    }
+    return { corners: out, fewer: book.length - out.length, drives: (drives || []).length };
+  }
+  /** A road book in words: { head, rows: [{ n, what ("Tight left"), record, by, on (day(at) or null), passes }] }, or null with
+   *  no corner passed three times. head: "12 corners you have driven three or more times, in road order[; 5 more fewer times]." */
+  function roadBookRows(book, day) {
+    if (!book || !Array.isArray(book.corners) || !book.corners.length) return null;
+    const n = book.corners.length, more = book.fewer > 0 ? `; ${book.fewer} more fewer times` : '';
+    const what = (c) => { const z = c.size ? c.size[0].toUpperCase() + c.size.slice(1) : 'A', w = c.dir === 'L' ? 'left' : c.dir === 'R' ? 'right' : 'corner'; return c.size ? `${z} ${w}` : (w === 'corner' ? 'Corner' : w[0].toUpperCase() + w.slice(1)); };
+    return {
+      head: `${n} corner${n === 1 ? '' : 's'} you have driven three or more times, in road order${more}. Each with your cleanest pass and the drive it came on.`,
+      rows: book.corners.map((c, i) => ({ n: i + 1, what: what(c), record: c.record, by: c.by, on: c.at && day ? day(c.at) : null, passes: c.passes })),
+    };
   }
   /** A corner row's note from roadRecords rows: "Your cleanest of 4 passes here (92)", "Level with your cleanest here (90,
    *  Aug 12)", "Your cleanest here: 90, Aug 12; this pass 82". day(row) gives the holding drive's date, or null. */
@@ -913,7 +950,7 @@
     }
   }
 
-  const api = { SKILLS, observe, profile, swing, excess, SKILL_MIN, WORDS, findingLine, styleLines, touchLines, touchTrendLines, driveTouchLines, paceLines, PACE, MEASURES, touch, TOUCH, driveTouch, DRIVE_TOUCH_MIN, bestCorners, recordsBySize, RECORD_MIN, driveRecords, driveRecordLines, roadRecords, placed, roadRecordLine, roadCornerNote, cardLine, focusLines, render,
+  const api = { SKILLS, observe, profile, swing, excess, SKILL_MIN, WORDS, findingLine, styleLines, touchLines, touchTrendLines, driveTouchLines, paceLines, PACE, MEASURES, touch, TOUCH, driveTouch, DRIVE_TOUCH_MIN, bestCorners, recordsBySize, RECORD_MIN, driveRecords, driveRecordLines, roadRecords, placed, roadRecordLine, roadCornerNote, roadBook, roadBookRows, cardLine, focusLines, render,
     PRACTICE_MIN, practice, drivePractice, practiceLine, practiceSummary, localStamp, loadPlan, savePlan, PLAN_KEY };
   if (typeof module !== 'undefined' && module.exports) module.exports = api; else root.ApexDriverProfile = api;
 })(typeof window !== 'undefined' ? window : globalThis);

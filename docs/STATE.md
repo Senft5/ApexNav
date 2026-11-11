@@ -24,6 +24,20 @@
   `repeat_weeks` (409 `not_latest` on an older drive of a series). `web/crew_events.js` Repeats chips, "Every Saturday"
   on cards and Meets near you, ICS RRULE. Tests: backend event_repeat 4, pytest test_crew_events, e2e crew drives.
 - Next: the auto time attack PR (local branch, built on #397's) once #397 merges.
+## Session 2026-11-11 (deepest analysis, PR 12): Your roads, corner by corner (claude/project-thread-gd7nre)
+
+- core/driver_profile.py `road_book(drives, ref)` and its port `roadBook`: every drive of a road (oldest first, placed in
+  one frame) merged corner by corner (the first pass seen is the corner; 20 m and about 45 degrees, as road_records); the
+  corners passed three or more times in road order (nearest point of `ref`), each {size, dir, passes, record, by, at}; the
+  first drive to reach the record holds it. `roadBookRows` words it. `placed` now carries size and dir.
+- web/analysis_client.js job `roadBook({ id })`: every drive with that drive's name, in the newest one's frame.
+- web/analysis.html: a quiet "Your roads, corner by corner" line in the Log: roads driven three or more times
+  (your_roads.js roads), one key each; a road lists its corners ("3  Tight right  86 / On May 1, of 4 passes") and each
+  date opens the drive that holds it.
+- Tests: tests/test_best_corners.py (+1, parity), e2e "a drive's corners on a road driven four times" (now the book too).
+- Next: the road book could mark the corners where your passes vary most (the spread by corner, Core.spreadBy), so the
+  page says where on the road to work, not only where your best was.
+
 ## Session 2026-11-11 (deepest analysis, PR 11): every corner of a road says its record and which drive holds it (claude/project-thread-gd7nre)
 
 - core/driver_profile.py `road_records(mine, others, ids=None)` and its port `roadRecords` add `rows`: per corner driven
