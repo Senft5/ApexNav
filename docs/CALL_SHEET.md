@@ -4,6 +4,20 @@ Decisions Claude made for you, newest first. Each one says what was decided, why
 you reach one you've seen. If you disagree with a call, say so and it gets reversed; nothing here is hard to undo unless
 it says so. Things only you can do are in docs/OWNER_TODO.md.
 
+## 2026-11-10 (fable-road-page): About a road says its climb, and speaks in words (claude/fable-road-page)
+
+A bug first: on any road with 40 m or more of climb, the sheet's first line read "Switchbacks · 0.8 mi · descending
+[object Object]". The climb was given to the formatter for short distances, which returns a number and a unit as a
+pair. It now uses the height formatter the route card uses: "descending 308 ft", or metres.
+
+Then the words. The sheet listed TECH, FLOW, SURF, CLEAR and "Confidence: L0 · From the map only", which are the
+code's names. They are now Technical, Flow, Surface and Clear road, each with a few words on what it measures, its
+score, and a bar as long as the score. An unknown score is "--" with an empty bar and says why ("not measured by
+members yet"); nothing is guessed. "How sure" is said in words with no L0/L1/L2. The closing note read "scored by a
+simulated sane driver"; it reads "as a careful driver would take it. Never a speed to aim for."
+
+Undo: revert the PR. The scores themselves and how they are worked out are unchanged.
+
 ## 2026-11-10 (fable-pin-names): a place you pin or tap goes by its name, never by coordinates (claude/fable-pin-names)
 
 Hold the map on Foothills Parkway and the pin's sheet said "Foothills Parkway", but Go here then filled Where to? with
@@ -29,6 +43,29 @@ keeps its own word and only its progress bar moves.
 
 Undo: revert the PR.
 
+## 2026-11-10 (fable-soundtrack): the Soundtrack, music made by the road (claude/fable-soundtrack)
+
+Section 5 of the architecture (an audio bus driven by the driver's workload and the road ahead, with build-ups timed to
+corners) was never built. It is now, as an opt-in Soundtrack in Garage > Co-driver. Calls I made:
+- Generated, not licensed: the phone writes the music (WebAudio, no files), so it costs nothing, works with no signal and
+  raises no rights questions. A licensed or stem-based score can replace `soundtrack.js` behind the same bus later.
+- It never follows speed. Speed only turns a distance into a time to the next corner; the energy comes from measured g
+  and the road's corners. Over Sight it drops to the pad. A soundtrack that rose with speed would egg drivers on.
+- Unknown stays unknown: before the mount is set, or with no road ahead known, it rests on its pad instead of acting out
+  a road it has not measured.
+- Off by default, because sound in someone's car is theirs to choose.
+Undo: switch it off (nothing plays), or revert the PR.
+
+## 2026-11-10 (fable-your-data): Your data is three short lists, like Settings (claude/fable-your-data)
+
+For your "cohesiveness, less clunky": Your data was eight keys of eight widths in two wrapped rows, one of them a link
+and two of them red text. It is now the same rows as the Settings list it opens from, in three groups: Take a copy
+(Download drives, Download account data, Import a drive), Offline (Save the map here, Delete offline data), Remove
+(Delete drives on this phone, Erase everything on this phone, both in red). Each row does what it did; the confirm
+sheets are unchanged. A row acts when touched, so it has no chevron; the file type sits at the row's end in pencil.
+
+Undo: revert the PR.
+
 ## 2026-11-10 (merger): e2e may run 35 minutes, not 25 (claude/project-thread-er8kzz)
 
 The e2e suite is 152 flows now and takes about 24 minutes, so GitHub cut it off at its 25-minute limit on the last flow
@@ -47,19 +84,6 @@ dial to Time as well, so the card always changes the loop in the unit it was ask
 Also: a time loop's note said "the closest good loop to 1.5 h"; times now read "1½ h" everywhere.
 
 Not changed: Options keeps its 1 hour / 2 hours keys and My free time. Undo: revert the PR.
-
-## 2026-11-10 (fable-soundtrack): the Soundtrack, music made by the road (claude/fable-soundtrack)
-
-Section 5 of the architecture (an audio bus driven by the driver's workload and the road ahead, with build-ups timed to
-corners) was never built. It is now, as an opt-in Soundtrack in Garage > Co-driver. Calls I made:
-- Generated, not licensed: the phone writes the music (WebAudio, no files), so it costs nothing, works with no signal and
-  raises no rights questions. A licensed or stem-based score can replace `soundtrack.js` behind the same bus later.
-- It never follows speed. Speed only turns a distance into a time to the next corner; the energy comes from measured g
-  and the road's corners. Over Sight it drops to the pad. A soundtrack that rose with speed would egg drivers on.
-- Unknown stays unknown: before the mount is set, or with no road ahead known, it rests on its pad instead of acting out
-  a road it has not measured.
-- Off by default, because sound in someone's car is theirs to choose.
-Undo: switch it off (nothing plays), or revert the PR.
 
 ## 2026-11-10 (fable-layers): design pass 8: the Layers panel is the map's legend (claude/fable-layers)
 
@@ -122,6 +146,17 @@ weights in fun_route.js (unused by the app now, still tested).
 
 Undo: revert the PR. To bring a level back for loops only, set `LOOP_STYLE` in web/cockpit.js.
 
+## 2026-11-10 (fable-paths-are-keys): "Garage → Settings → Spots" is a key, not a path to walk (claude/fable-paths-are-keys)
+
+For "reducing any clunky feelings": Where to?'s Spots near you, when empty, read "No shared spots near here yet. Add
+one in Garage → Settings → Spots." It now reads "No shared spots near here yet. **Add one**", and the key opens
+Settings on Spots. The crash sheet's note had the same arrows ("Add an emergency contact in Garage → Settings → Crash
+check to text someone from here."); nothing in that sheet should lead away from Call and I'm OK, so it gets no key,
+only a plain sentence: "To text someone from here, add an emergency contact in Settings, under Crash check."
+
+Left for after #358 (it rewrites the same lines): Your data's "deleted from the server in Settings → Account → Delete
+account".
+
 ## 2026-11-10 (fable-one-loop-home): Options loses its "1 hour / 2 hours" loop keys; a loop by time is the dial's (claude/fable-one-loop-home)
 
 Since the loop dial can be set by time (30 min to 3 h), Options' "Loop to fit: 1 hour, 2 hours" was a second, smaller
@@ -144,6 +179,17 @@ the connection is back, so nobody has to press Try again to find out. And the Ga
 cars and profile will be back, and that looks, voices and settings work without it.
 
 Undo: revert the PR.
+
+## 2026-11-10 (fable-settings-values): the last three Settings rows say what they are set to (claude/fable-settings-values)
+
+Design pass 7 gave each Settings row its value, but Road feel, Route tuning and Spots still said nothing (noted then as
+next). Now: **Spots** counts yours ("2 spots", "None"); **Route tuning** says "Standard", or "1 changed" once a slider
+has moved (the words of its own status line), and goes back to Standard after Reset; **Road feel** says On or Off from
+its Share road feel switch when you are signed in. Signed out there is no switch to read, so the row says nothing:
+a row never guesses. Route tuning also says nothing if the tuning is not this phone's to use (after Pro goes on sale,
+for a phone without it), since its sliders are kept but the routes are the defaults.
+
+Undo: revert the PR (three `data-summary` attributes in web/index.html, `data-summary-text` in web/garage_settings.js).
 
 ## 2026-11-10 (fable-end-card): design pass 9: the drive's score is set against your usual; the card's keys sit evenly (claude/fable-end-card)
 

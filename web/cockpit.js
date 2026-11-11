@@ -542,8 +542,15 @@
       const b = $('garageTuneBody');
       if (!b || !window.ApexRouteTuning) return null;
       b.textContent = '';
+      // Its row in the Settings list says what the sheet's own status line says: "Standard", or how many sliders were moved.
+      // Nothing while the tuning isn't this phone's to use (the sliders are kept, the routes are the defaults).
+      const summary = () => { try {
+        if (!ApexRouteTuning.allowed(localStorage, tuningFlags())) { delete b.dataset.summaryText; return; }
+        const n = ApexRouteTuning.changed(ApexRouteTuning.load(localStorage)).length; b.dataset.summaryText = n ? `${n} changed` : 'Standard';
+      } catch (_) { delete b.dataset.summaryText; } };
+      summary();
       const ui = ApexRouteTuning.mountScreen(b, {
-        store: localStorage, flags: tuningFlags, changed: () => applyDevTune(),
+        store: localStorage, flags: tuningFlags, changed: () => { applyDevTune(); summary(); },
         planned: () => !!(plannedRoute && plannedRoute.id === 'route_dest' && plannedRoute.request && state.mode !== 'live'),
         replan: () => replanForLevel('Your tuning'), proLine: () => (window.ApexPro ? ApexPro.line('route_tuning', tuningFlags()) : null),
       });
@@ -4556,17 +4563,27 @@
       const h = document.createElement('h3'), close = document.createElement('button');
       h.textContent = roadLabel(s.name); close.className = 'linkbtn'; close.textContent = 'Close'; close.addEventListener('click', () => roadPop.classList.remove('open'));
       head.append(h, close);
-      const body = document.createElement('div'); body.className = 'stack-8';
+      const body = document.createElement('div'); body.className = 'stack-8 road-page';
       const note = (t) => { const p = document.createElement('p'); p.className = 'note'; p.textContent = t; return p; };
       roadPop.replaceChildren(head, body); roadPop.classList.add('open');
       const paint = (d) => {
         if (!d) { body.replaceChildren(note('Too short to describe.')); return; }
-        const lines = ApexRoadPage.rows(d).map(([k, v]) => { const r = document.createElement('div'); r.className = 'row'; r.style.justifyContent = 'space-between';
-          const a = document.createElement('span'), b = document.createElement('b'); a.textContent = k; b.textContent = v; r.append(a, b); return r; });
+        const el = (tag, cls, text) => { const n = document.createElement(tag); if (cls) n.className = cls; if (text != null) n.textContent = text; return n; };
+        // each score: its name and what it means, the number, and a bar that is empty when the score isn't known
+        const meters = ApexRoadPage.meters(d).map((m) => {
+          const r = el('div', 'rp-meter'), bar = el('i', 'rp-bar'), fill = el('i');
+          fill.style.width = `${m.value == null ? 0 : m.value}%`; bar.append(fill);
+          r.append(el('span', 'rp-name', m.label), el('b', '', m.value == null ? '--' : String(m.value)), bar, el('small', '', m.hint));
+          r.setAttribute('role', 'group'); r.setAttribute('aria-label', `${m.label}: ${m.value == null ? 'not known' : `${m.value} out of 100`}, ${m.hint}`);
+          return r;
+        });
+        const lines = [...meters, ...ApexRoadPage.facts(d).map(([k, v]) => { const r = el('div', 'rp-fact'); r.append(el('span', '', k), el('b', '', v)); return r; })];
         const best = Number.isFinite(s.elevA) && Number.isFinite(s.elevB) && Math.abs(s.elevB - s.elevA) >= 40
           ? ((s.tight || 0) / s.km >= 1.2 ? 'Better climbed: tight corners are safer uphill.' : 'Better descended: it flows.') : null;
-        body.replaceChildren(note(ApexRoadPage.headline(d, (km) => ApexUnits.long(km * 1000, 1), (m) => ApexUnits.short(m))), ...lines,
-          ...(best ? [note(best)] : []), note('Map shape and terrain, scored by a simulated sane driver. Never a speed to aim for.'));
+        // the climb is a height (feet or metres, heightLabel); ApexUnits.short is an object and printed "[object Object]"
+        const head = note(ApexRoadPage.headline(d, (km) => ApexUnits.long(km * 1000, 1), heightLabel)); head.classList.add('rp-head');
+        body.replaceChildren(head, ...lines,
+          ...(best ? [note(best)] : []), note('Read from the map\'s shape and terrain, as a careful driver would take it. Never a speed to aim for.'));
       };
       const rs = Core.resamplePolyline(s.lat, s.lon, 5), dist = rs.lat.map((_, i) => i * 5);
       const side = (() => { try { return ApexDrivingSide.forRoute(rs.lat[0], rs.lon[0]); } catch (_) { return null; } })();
@@ -5699,6 +5716,7 @@
     onSocial(() => { try { crewStandings = window.ApexCrewStandings ? ApexCrewStandings.mount({ el, sync: window.ApexSync, fmtKm: (km) => ApexUnits.long(km * 1000, 0) }) : null; } catch (e) { console.error('crew standings', e); } });
     onSocial(() => { try { spotsFeed = window.ApexSpotsFeed ? ApexSpotsFeed.mount({ el, btn, toast, sync: window.ApexSync, report: safety && safety.report,
       here: () => state.lastPosition || (() => { const c = map.getCenter(); return { lat: c.lat, lon: c.lng }; })(), goTo: (p) => { closeSheet(); routeToPlace(p); },
+      addSpot: () => { showView('garage'); if (window.ApexGarageSettings && ApexGarageSettings.ui) ApexGarageSettings.ui.open('spots'); },
       fmtKm: (km) => ApexUnits.long(km * 1000, 1) }) : null; } catch (e) { console.error('spots', e); } });
     onSocial(() => { if (spotsFeed) {
       const d = $('planSpots'); d.hidden = false;
