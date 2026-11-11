@@ -4,6 +4,21 @@ Decisions Claude made for you, newest first. Each one says what was decided, why
 you reach one you've seen. If you disagree with a call, say so and it gets reversed; nothing here is hard to undo unless
 it says so. Things only you can do are in docs/OWNER_TODO.md.
 
+## 2026-11-11 (security pass): photos only to whoever sees what they belong to; a fresh account's report no longer hides one (claude/project-thread-4lms1f)
+
+Any signed-in member could fetch any photo by its id, and list any car's or crew's gallery by its id: a car you hadn't
+shown, a private crew's cover, or a photo someone kept after leaving a crew. Now a photo goes only to whoever sees the
+thing it belongs to: a car's to those who see the car, a build step's to those who see the build, a crew's cover and crest
+to its members. A profile photo still goes to any member, as a handle does. The moderator sees every photo (the queue
+links to them). Anyone else gets the same 404 as a missing photo.
+
+Reports: one report used to take a photo down for everyone for a day, and filing it again restarted the day, so one
+account (even one made a minute ago) could keep any photo down for good. Now the reporter stops seeing it at once, and
+everyone else only when the reporter is one whose reports count toward the three-report hide (invited, or a member for a
+week). Re-filing a report updates its note but no longer its time. Three reports still keep a photo down.
+
+Undo: revert the PR (photos.ts PHOTO_SEEN and photoHiddenSql, safety.ts fileReport).
+
 ## 2026-11-11 (roam-a descent call): the co-driver says a long descent as you near its top (claude/project-thread-h7xxmf)
 
 On a planned route, the same long, steep descents the route card names are now said once, as you come within 500 m of the

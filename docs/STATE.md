@@ -1,5 +1,17 @@
 # VETTA — CURRENT AGENT HANDOFF STATE
 
+## Session 2026-11-11 (security pass, PR 1): photos by circle, not by id; report hides need a reporter of standing (claude/project-thread-4lms1f, off origin/main)
+
+- Took over the Worker API security pass from roam-c (its entries list what was checked: auth, CSRF, rate limits, :id
+  ownership, grants on read, time attack, convoy membership, hazard and report caps; #423 and #424 are roam-c's).
+- photos.ts `PHOTO_SEEN(p)` (viewer ?1): owner; else not hidden, not reported by you, no block either way, and by kind:
+  profile any member, car `CAR_SEEN`, post the build's car `CAR_SEEN`, crew/crest crew members. Used by `photoServe` (the
+  moderator bypasses), `photoList`, and safety.ts `resolveTarget` (you report what you see, or already reported).
+- `photoHiddenSql`: the one-report day-long hide counts only reporters who pass reportedSql's gate (invited or a member 7
+  days). safety.ts `fileReport`: re-filing updates the note, never `created_at` (it restarted the day forever).
+- Tests: backend/test/photos.test.ts (+2; the gallery test now befriends and shows the car). vitest 395, tsc clean.
+- Next: crew chat written while a crew was private stays readable to people who join after it goes public (PR 2).
+
 ## Session 2026-11-11 (roam-a descent call): "Long descent ahead" near the top (claude/project-thread-h7xxmf, off origin/main)
 
 - IDEAS V-12, part three. web/brake_heat.js `descentAhead(list, atM, said)` (500 m before a top to 300 m past it, once per
