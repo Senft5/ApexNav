@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self' apexnav:; script-src 'self' apexnav: 'sha256-LKd5zglKLXeWpfxXxwKqWFJqlm9i/STM53I5WLHcR+Y=' 'sha256-G7s/ZI+Hqrfc4DqbB6EANJJLmUmhNK06PizQ1LlsG84=' https://cdn.jsdelivr.net 'wasm-unsafe-eval'; worker-src 'self' apexnav: blob:; child-src 'self' apexnav: blob:; style-src 'self' apexnav: 'unsafe-inline'; font-src 'self' apexnav: data:; img-src 'self' apexnav: data: blob: https://tiles.openfreemap.org https://s3.amazonaws.com https://basemap.nationalmap.gov; media-src 'self' apexnav: data: blob:; connect-src 'self' apexnav: data: blob: https://apexnav.senftns.workers.dev wss://apexnav.senftns.workers.dev https://tiles.openfreemap.org https://basemap.nationalmap.gov https://s3.amazonaws.com https://valhalla1.openstreetmap.de https://router.project-osrm.org https://overpass-api.de https://overpass.private.coffee https://overpass.kumi.systems https://maps.mail.ru https://nominatim.openstreetmap.org https://photon.komoot.io https://api.open-meteo.com https://api.weather.gov https://statsapi.mlb.com https://api.seatgeek.com https://api.water.noaa.gov https://waterservices.usgs.gov https://in.carsprogram.org https://publicapi.ohgo.com https://quickstats.nass.usda.gov https://commons.wikimedia.org https://graph.mapillary.com https://vpic.nhtsa.dot.gov https://cdn.jsdelivr.net https://huggingface.co https://*.huggingface.co https://*.hf.co; object-src 'none'; base-uri 'none'; form-action 'self'" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self' apexnav:; script-src 'self' apexnav: 'sha256-EgGm0TN48SfmVccg32Ze9NvX63CNnJxLm0dPE9Huhps=' 'sha256-G7s/ZI+Hqrfc4DqbB6EANJJLmUmhNK06PizQ1LlsG84=' https://cdn.jsdelivr.net 'wasm-unsafe-eval'; worker-src 'self' apexnav: blob:; child-src 'self' apexnav: blob:; style-src 'self' apexnav: 'unsafe-inline'; font-src 'self' apexnav: data:; img-src 'self' apexnav: data: blob: https://tiles.openfreemap.org https://s3.amazonaws.com https://basemap.nationalmap.gov; media-src 'self' apexnav: data: blob:; connect-src 'self' apexnav: data: blob: https://apexnav.senftns.workers.dev wss://apexnav.senftns.workers.dev https://tiles.openfreemap.org https://basemap.nationalmap.gov https://s3.amazonaws.com https://valhalla1.openstreetmap.de https://router.project-osrm.org https://overpass-api.de https://overpass.private.coffee https://overpass.kumi.systems https://maps.mail.ru https://nominatim.openstreetmap.org https://photon.komoot.io https://api.open-meteo.com https://api.weather.gov https://statsapi.mlb.com https://api.seatgeek.com https://api.water.noaa.gov https://waterservices.usgs.gov https://in.carsprogram.org https://publicapi.ohgo.com https://quickstats.nass.usda.gov https://commons.wikimedia.org https://graph.mapillary.com https://vpic.nhtsa.dot.gov https://cdn.jsdelivr.net https://huggingface.co https://*.huggingface.co https://*.hf.co; object-src 'none'; base-uri 'none'; form-action 'self'" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
   <title>Vetta · Log</title>
   <link rel="icon" href="brand/mark.svg" type="image/svg+xml" />
@@ -374,7 +374,7 @@
       <details class="quiet" id="yearPanel" hidden><summary id="yearTitle">--</summary><div id="yearLines" class="stack-8"></div>
         <div class="row mt-8" id="yearShareRow"><button class="btn" id="yearShare">Share</button></div>
         <div id="challengePanel" class="stack-8 mt-8" hidden><b id="challengeSum">This month's challenges</b><div id="challengeList" class="stack-8"></div>
-          <p class="note">Exploring and technique, never speed. From the drives on this phone.</p></div></details>
+          <p class="note">Exploring and clean, committed driving, never top speed. From the drives on this phone.</p></div></details>
       <div class="stamps" id="historyFilter" role="group" aria-label="Show drives tagged" hidden></div>
       <!-- the drive list is the Log; your week heads it when the week has drives -->
       <div id="drivingCard" hidden></div>
@@ -827,22 +827,28 @@
     // Your driving (driver_profile.js): the profile over every drive, worked out in the analysis worker (the profile job
     // keeps each drive's observations, so only new drives are read) and asked again only when the library changes.
     const driving = { key: null, p: null, pending: null, wait: [] };
+    // IDEAS D-27: the skill being practiced (driver_profile.js loadPlan), read again with each run; its level before the
+    // practice is kept in the plan from each run, so the end card on the map can set a drive against it
+    const planNow = () => ApexDriverProfile.loadPlan(localStorage);
+    const planKey = (pl) => (pl ? `${pl.skill}|${pl.since}|${pl.where ? `${pl.where.split}|${pl.where.worse}` : ''}` : '');
     function drivingProfile(done) {
-      const key = libKey;
-      if (driving.key === key) { done(driving.p); return; }
+      const plan = planNow(), key = `${libKey}#${planKey(plan)}`;
+      if (driving.key === key) { done(driving.p, driving.pr); return; }
       driving.wait = driving.pending === key ? driving.wait.concat([done]) : [done];
       if (driving.pending === key) return;
       driving.pending = key;
-      ApexAnalysis.job('profile').then((r) => {
+      ApexAnalysis.job('profile', { plan }).then((r) => {
         if (driving.pending !== key) return;                             // the library changed meanwhile: a newer run answers
-        driving.key = key; driving.pending = null; driving.p = r.profile || null; driving.wait.forEach((f) => f(driving.p));
+        driving.key = key; driving.pending = null; driving.p = r.profile || null; driving.pr = r.practice || null;
+        if (plan && driving.pr) ApexDriverProfile.savePlan(localStorage, { ...plan, before: driving.pr.before });
+        driving.wait.forEach((f) => f(driving.p, driving.pr));
       }).catch(() => { if (driving.pending === key) driving.pending = null; });
     }
     function renderDrivingCard() {
       const card = $('drivingCard'); if (!card) return;
       if (!drives.some((d) => d.corners.length)) { card.hidden = true; return; }
-      drivingProfile((p) => {
-        const line = p ? ApexDriverProfile.cardLine(p) : null;
+      drivingProfile((p, pr) => {
+        const line = p ? ApexDriverProfile.cardLine(p, pr) : null;
         card.hidden = !line;
         if (!line) return;
         const b = document.createElement('button');
@@ -856,7 +862,16 @@
     }
     function renderDriving() {
       ApexDriverProfile.render($('drivingRoot'), drives.length ? null : { corners: 0 });
-      if (drives.length) drivingProfile((p) => { if (view === 'driving') ApexDriverProfile.render($('drivingRoot'), p || { corners: 0 }); });
+      if (drives.length) drivingProfile((p, pr) => {
+        if (view !== 'driving') return;
+        ApexDriverProfile.render($('drivingRoot'), p || { corners: 0 }, { plan: pr ? planNow() : null, practice: pr, onPlan: (plan) => {
+          ApexDriverProfile.savePlan(localStorage, plan);
+          driving.moved = true; renderDriving();                         // the Practicing box in the Work on box's place
+        } });
+        const box = driving.moved && $('drivingRoot').querySelector('.dp-focus');   // the pressed key is gone: focus its box
+        if (box) { box.tabIndex = -1; box.focus({ preventScroll: true }); }
+        driving.moved = false;
+      });
     }
 
     for (const id of ['historyTable', 'recordsTable']) {
