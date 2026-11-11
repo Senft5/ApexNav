@@ -4,6 +4,13 @@ Decisions Claude made for you, newest first. Each one says what was decided, why
 you reach one you've seen. If you disagree with a call, say so and it gets reversed; nothing here is hard to undo unless
 it says so. Things only you can do are in docs/OWNER_TODO.md.
 
+## 2026-11-11 (ui-round-three): an empty Garage shows a parking bay and one big "Add a car" key (claude/project-thread-5sbga7)
+
+With no cars yet, the Garage said one grey sentence over a small outlined key. Now it is a small page like the first
+friend and first crew pages: a drawing of a road pulling into an empty bay, "Park your first car.", the same sentence, and
+"Add a car" as the full-width dark key. Once you have a car it is the small key again. Undo: put back the `note` line in
+`render()` in web/garage_ui.js and drop the `.garage-first` rules at the end of web/signature.css.
+
 ## 2026-11-11 (ui-round-three): People when you have no friends or crews yet looks like the signed-out page (claude/project-thread-5sbga7)
 
 Signed in with nobody yet, Friends and Crews used to show one grey sentence and a small key. Now each is a page like the

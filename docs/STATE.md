@@ -1,5 +1,13 @@
 # VETTA — CURRENT AGENT HANDOFF STATE
 
+## Session 2026-11-11 (ui-round-three, PR 2): the empty Garage is a page (claude/project-thread-5sbga7)
+
+- garage_ui.js: with no cars, "Your cars" shows a `people-first garage-first` page: a drawing in a well (a road pulls in
+  to a dashed `jr-bay`, the red puck on it), "Park your first car." large, the old sentence kept, and "Add a car" as the
+  full-width solid key (only while the garage is empty; with cars it stays the plain key). signature.css: three rules.
+- Tests: tests/test_garage_first.py. e2e garage VIN, photos, build threads, Soundtrack, REVIEW 1.2, Dynamic Type pass here.
+- Next ideas: the drive HUD; CarPlay visuals; motion between tabs.
+
 ## Session 2026-11-11 (ui-round-three, PR 1): the first friend and the first crew (claude/project-thread-5sbga7)
 
 - Walked the empty and signed-out screens (People, Crews, Garage, Log, Stages, signed in and out). Signed out People and
