@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self' apexnav:; script-src 'self' apexnav: 'sha256-l2GVHYsgjbpNIsD225EU+HXhpeXRqIwZDU1gGjcx5MM=' 'sha256-G7s/ZI+Hqrfc4DqbB6EANJJLmUmhNK06PizQ1LlsG84=' https://cdn.jsdelivr.net 'wasm-unsafe-eval'; worker-src 'self' apexnav: blob:; child-src 'self' apexnav: blob:; style-src 'self' apexnav: 'unsafe-inline'; font-src 'self' apexnav: data:; img-src 'self' apexnav: data: blob: https://tiles.openfreemap.org https://s3.amazonaws.com https://basemap.nationalmap.gov; media-src 'self' apexnav: data: blob:; connect-src 'self' apexnav: data: blob: https://apexnav.senftns.workers.dev wss://apexnav.senftns.workers.dev https://tiles.openfreemap.org https://basemap.nationalmap.gov https://s3.amazonaws.com https://valhalla1.openstreetmap.de https://router.project-osrm.org https://overpass-api.de https://overpass.private.coffee https://overpass.kumi.systems https://maps.mail.ru https://nominatim.openstreetmap.org https://photon.komoot.io https://api.open-meteo.com https://api.weather.gov https://statsapi.mlb.com https://api.seatgeek.com https://api.water.noaa.gov https://waterservices.usgs.gov https://in.carsprogram.org https://publicapi.ohgo.com https://quickstats.nass.usda.gov https://commons.wikimedia.org https://graph.mapillary.com https://vpic.nhtsa.dot.gov https://cdn.jsdelivr.net https://huggingface.co https://*.huggingface.co https://*.hf.co; object-src 'none'; base-uri 'none'; form-action 'self'" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self' apexnav:; script-src 'self' apexnav: 'sha256-1+UCm0/qCjwEs8qmdkg6Jn8vNOUlqM4q832kIXM5ob4=' 'sha256-G7s/ZI+Hqrfc4DqbB6EANJJLmUmhNK06PizQ1LlsG84=' https://cdn.jsdelivr.net 'wasm-unsafe-eval'; worker-src 'self' apexnav: blob:; child-src 'self' apexnav: blob:; style-src 'self' apexnav: 'unsafe-inline'; font-src 'self' apexnav: data:; img-src 'self' apexnav: data: blob: https://tiles.openfreemap.org https://s3.amazonaws.com https://basemap.nationalmap.gov; media-src 'self' apexnav: data: blob:; connect-src 'self' apexnav: data: blob: https://apexnav.senftns.workers.dev wss://apexnav.senftns.workers.dev https://tiles.openfreemap.org https://basemap.nationalmap.gov https://s3.amazonaws.com https://valhalla1.openstreetmap.de https://router.project-osrm.org https://overpass-api.de https://overpass.private.coffee https://overpass.kumi.systems https://maps.mail.ru https://nominatim.openstreetmap.org https://photon.komoot.io https://api.open-meteo.com https://api.weather.gov https://statsapi.mlb.com https://api.seatgeek.com https://api.water.noaa.gov https://waterservices.usgs.gov https://in.carsprogram.org https://publicapi.ohgo.com https://quickstats.nass.usda.gov https://commons.wikimedia.org https://graph.mapillary.com https://vpic.nhtsa.dot.gov https://cdn.jsdelivr.net https://huggingface.co https://*.huggingface.co https://*.hf.co; object-src 'none'; base-uri 'none'; form-action 'self'" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
   <title>Vetta · Log</title>
   <link rel="icon" href="brand/mark.svg" type="image/svg+xml" />
@@ -168,6 +168,11 @@
     .dv-read > div { background: var(--panel); padding: 8px 10px; display: grid; gap: 2px; } .dv-read b { font-family: var(--font-num); font-size: 16px; }
     .dv-mapmode { max-width: 320px; margin-bottom: 8px; }
     .dv-zoom { display: flex; gap: 6px; flex-wrap: wrap; } .dv-z { font: inherit; font-size: 11px; font-weight: 700; height: 44px; min-width: 44px; padding: 0 10px; background: transparent; color: var(--panel-dim); border: 1px solid var(--rule); cursor: pointer; } .dv-z.on { color: var(--panel); background: var(--panel-ink); border-color: var(--panel-ink); } .mt-8 { margin-top: 8px; } .stack-8 { display: grid; gap: 8px; } .stack-12 { display: grid; gap: 12px; }
+    .book-list { list-style: none; margin: 0; padding: 0; }
+    .book-list li { display: grid; grid-template-columns: 2em 1fr auto; gap: 2px 8px; align-items: baseline; padding: 6px 0; border-top: 1px solid var(--rule); }
+    .book-list li > b { font: 600 15px var(--font-num); text-align: right; }
+    .book-list .bk-n { color: var(--accent); font-family: var(--font-num); }
+    .book-list .bk-by { grid-column: 2 / 4; justify-self: start; min-height: 44px; padding: 0; font: inherit; font-size: 13px; text-align: left; color: var(--panel-dim); background: none; border: 0; text-decoration: underline; cursor: pointer; }
     .dv-rec { grid-column: 2 / 4; font-size: 12px; color: var(--gain); }
     .dv-corner:not(.rec) .dv-rec { color: var(--panel-dim); }
     .dv-rec-by { justify-self: start; min-height: 44px; padding: 0; font: inherit; font-size: 12px; text-align: left; background: none; border: 0; text-decoration: underline; cursor: pointer; }
@@ -395,6 +400,10 @@
       <div class="panel index-panel" id="historyPanel"><table id="historyTable" class="road-index"></table></div>
       <!-- the rest of the Log is quiet lines too (REVIEW.md 1.2 Log): one line each, the detail one tap down -->
       <details class="quiet" id="roadsPanel" hidden><summary>Your roads</summary><div id="roadsList" class="stack-8"></div></details>
+      <!-- a road you have driven three or more times, corner by corner: your cleanest pass at each and the drive it came on -->
+      <details class="quiet" id="bookPanel" hidden><summary>Your roads, corner by corner</summary>
+        <div class="stamps" id="bookRoads" role="group" aria-label="Pick a road"></div>
+        <p class="note" id="bookHead" aria-live="polite"></p><ol class="book-list" id="bookList"></ol></details>
       <details class="quiet" id="kudosPanel" hidden><summary id="kudosSum">Kudos for you</summary><div id="kudosList" class="stack-8"></div></details>
       <div class="panel" id="friendsPanel" hidden><h2>Friends lately</h2><div id="friendsList" class="stack-8"></div>
         <p class="note">From friends and crews who share scores with you, on stages you have. Scores only, never times.</p></div>
@@ -639,7 +648,42 @@
         io.observe(panel);
       }, 1500);
     }
+    // Your roads, corner by corner (driver_profile.js roadBook, the worker's roadBook job): roads driven three or more times
+    // under one name; a road's corners in road order, each with your cleanest pass and a link to the drive it came on.
+    let bookPick = null;
+    function renderBook() {
+      const roads = window.ApexYourRoads ? ApexYourRoads.roads(drives, 50).filter((r) => r.runs >= 3) : [];
+      $('bookPanel').hidden = !roads.length;
+      if (!roads.length) return;
+      if (!roads.some((r) => r.name === bookPick)) bookPick = null;
+      $('bookRoads').replaceChildren(...roads.map((r) => {
+        const b = document.createElement('button'), on = r.name === bookPick;
+        b.className = 'btn' + (on ? ' on' : ''); b.textContent = `${r.name}, ${r.runs} drives`; b.setAttribute('aria-pressed', String(on));
+        b.addEventListener('click', () => { bookPick = r.name; renderBook(); showBook(r); });
+        return b;
+      }));
+      if (!bookPick) { $('bookHead').textContent = 'Pick a road to see each corner\'s cleanest pass.'; $('bookList').replaceChildren(); }
+    }
+    async function showBook(r) {
+      $('bookHead').textContent = 'Reading its drives…'; $('bookList').replaceChildren();
+      let book = null;
+      try { book = (await ApexAnalysis.job('roadBook', { id: r.id })).book; } catch (_) { book = null; }
+      if (bookPick !== r.name) return;
+      const w = ApexDriverProfile.roadBookRows(book, (at) => ApexFormat.dateTime(at.slice(0, 10)));
+      if (!w) { $('bookHead').textContent = 'No corner of it driven cleanly three times yet: only corners with every technique credit measured count.'; return; }
+      $('bookHead').textContent = w.head;
+      $('bookList').replaceChildren(...w.rows.map((x) => {
+        const li = document.createElement('li'), n = document.createElement('span'), t = document.createElement('span'), v = document.createElement('b'), by = document.createElement('button');
+        n.className = 'bk-n'; n.textContent = String(x.n); t.textContent = x.what; v.textContent = String(x.record);
+        by.type = 'button'; by.className = 'bk-by'; by.textContent = `${x.on ? `On ${x.on}` : 'On a drive of unknown date'}, of ${x.passes} passes`;
+        by.addEventListener('click', () => openDrive(x.by));
+        li.setAttribute('aria-label', `Corner ${x.n}, ${x.what}: your cleanest pass ${x.record}`);
+        li.append(n, t, v, by);
+        return li;
+      }));
+    }
     function renderRoads() {
+      renderBook();
       const list = ApexRoadVotes.ranking(ApexRoadVotes.load(localStorage)).slice(0, 10);
       $('roadsPanel').hidden = list.length < 2;
       $('roadsList').replaceChildren(...list.map((r, i) => { const p = document.createElement('p'); p.className = 'friend-act'; p.textContent = `${i + 1}. ${r.name}`; return p; }));

@@ -270,6 +270,29 @@
       return { reference, coach: co, road, touch, bestOther: reference ? reference.id : (sums.find((s) => s.id !== id) || {}).id || null };
     },
 
+    /**
+     * A road's corners across every drive with the same name as drive id (Your roads, corner by corner; driver_profile.js roadBook): the
+     * drives oldest first, placed in the newest one's frame, the corners in its road order. A drive of unknown date holds a
+     * corner with no date. { book: { corners, fewer, drives } | null }.
+     */
+    async roadBook({ id }) {
+      const Core = CoreOf(), P = root.ApexDriverProfile, all = await Rec().summaries(Core), me = all.find((s) => s.id === id);
+      const key = me ? String(me.name || '').trim().toLowerCase() : '';
+      if (!P || !P.roadBook || !key) return { book: null };
+      const sums = all.filter((s) => String(s.name || '').trim().toLowerCase() === key)
+        .sort((p, q) => String(p.date || '').localeCompare(String(q.date || '')));
+      const ds = [];
+      for (const s of sums) { const d = await full(s.id, s); if (d && d.lat && d.lat.length >= 2) ds.push(d); }
+      if (!ds.length) { release(); return { book: null }; }
+      const last = ds[ds.length - 1], lat0 = last.lat[0], lon0 = last.lon[0], c = Math.cos(lat0 * Math.PI / 180);
+      const ob = (x) => P.observe({ ...x, corners: Rec().scorableCorners(x, x.corners || []) }, Core);
+      const drives = ds.map((d) => ({ id: d.id, at: monthOf(d) === null ? null : String(d.date).slice(0, 16), corners: Array.isArray(d.corners) && d.corners.length ? P.placed(d, ob(d), lat0, lon0) : [] }));
+      const ref = [];
+      for (let i = 0; i < last.lat.length; i += 5) ref.push([(last.lon[i] - lon0) * c * 111320, (last.lat[i] - lat0) * 110540]);
+      release();
+      return { book: P.roadBook(drives, ref) };
+    },
+
     /** Corner by corner between two drives (Core.compareDrives). */
     async compare({ a, b }) {
       const sums = await Rec().summaries(CoreOf()), A = await full(a, sums.find((s) => s.id === a)), B = await full(b, sums.find((s) => s.id === b));

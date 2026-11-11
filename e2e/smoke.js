@@ -4581,6 +4581,20 @@ flow('a drive\'s corners on a road driven four times: each says your cleanest pa
     await page.waitForFunction((t) => document.getElementById('dvPick').value === t, by.by, { timeout: 20000 });
   }
   check(!by || await page.evaluate((t) => document.getElementById('dvPick').value === t, by.by), 'the note opens the drive that holds the corner');
+  // the road itself, corner by corner, from the Log: every corner driven three or more times in road order, each with your
+  // cleanest pass there and the drive it came on (driver_profile.js roadBook)
+  await page.goto(base + '/analysis.html');
+  await page.waitForFunction(() => window.apexLogDebug && window.apexLogDebug.loaded() && !document.getElementById('bookPanel').hidden, null, { timeout: 20000 });
+  await page.evaluate(() => { document.getElementById('bookPanel').open = true; });
+  await page.click('#bookRoads button');
+  await page.waitForFunction(() => document.querySelectorAll('#bookList li').length > 0, null, { timeout: 20000 });
+  const book = await page.evaluate(() => ({ head: document.getElementById('bookHead').textContent, rows: [...document.querySelectorAll('#bookList li')].map((li) => li.innerText.replace(/\s+/g, ' ').trim()),
+    wide: document.documentElement.scrollWidth > document.documentElement.clientWidth }));
+  check(/^\d+ corners? you have driven three or more times, in road order/.test(book.head) && book.rows.length >= road.rows.length
+    && book.rows.every((t) => /^\d+ (Tight|Medium|Fast) (left|right) \d{1,3} On \w{3} \d{1,2}, of 4 passes$/.test(t)) && !book.wide && !/mph|km\/h/.test(book.rows.join(' ')),
+    'the road corner by corner: ' + JSON.stringify(book).slice(0, 400));
+  await page.click('#bookList li .bk-by');
+  await page.waitForFunction(() => /^r[0-3]$/.test(document.getElementById('dvPick').value) && !document.getElementById('tab-drive').hidden, null, { timeout: 20000 });
   check(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth), 'nothing wider than the phone');
 });
 

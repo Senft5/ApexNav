@@ -138,3 +138,26 @@ def test_road_records_corner_by_corner():
                           "On this road: 1 corner you have driven three or more times; your cleanest pass of it came on another drive.",
                           None, None,
                           "On this road: level with your cleanest pass at 24 of the 24 corners here you have driven three or more times."]
+
+
+def test_road_book_every_corner_of_a_road():
+    c = lambda x, lv, hx=1.0, size="tight": {"x": x, "y": 0.0, "hx": hx, "hy": 0.0, "level": lv, "size": size, "dir": "left"}
+    drives = [{"id": "a", "at": "2026-05-01T09:00", "corners": [c(600, 90), c(0, 80), c(300, 70, size="fast")]},
+              {"id": "b", "at": "2026-06-01T09:00", "corners": [c(4, 92), c(305, 70), c(603, 90), c(900, 99)]},
+              {"id": "c", "at": "2026-07-01T09:00", "corners": [c(-6, 85), c(298, 75), c(598, 88, hx=-1.0), c(1, 91)]},
+              {"id": "d", "at": None, "corners": [c(602, 60), c(1200, None)]}]
+    ref = [[x, 0.0] for x in range(0, 1001, 50)]
+    b = dp.road_book(drives, ref)
+    # 0 m: a 80, b 92, c 91 (its cleanest of two) -> b; 300 m: 70, 70, 75 -> c; 600 m: a 90, b 90, d 60 -> a (the older of
+    # equals); 600 m the other way (c) and 900 m (b) passed once
+    assert [(k["x"], k["passes"], k["record"], k["by"], k["at"], k["size"]) for k in b["corners"]] == [
+        (0, 3, 92, "b", "2026-06-01T09:00", "tight"), (300, 3, 75, "c", "2026-07-01T09:00", "fast"), (600, 3, 90, "a", "2026-05-01T09:00", "tight")]
+    assert b["fewer"] == 2 and b["drives"] == 4
+    assert [k["x"] for k in dp.road_book(drives)["corners"]] == [600, 0, 300]          # with no ref: as first seen
+    assert dp.road_book([]) == {"corners": [], "fewer": 0, "drives": 0}
+    if NODE is None:
+        return
+    runner = ("const P=require(process.argv[1]+'/web/driver_profile.js');const [d,r]=JSON.parse(require('fs').readFileSync(0,'utf8'));"
+              "process.stdout.write(JSON.stringify([P.roadBook(d,r),P.roadBook(d),P.roadBook([])]));")
+    out = json.loads(subprocess.run([NODE, "-e", runner, os.getcwd()], input=json.dumps([drives, ref]), capture_output=True, text=True, check=True).stdout)
+    assert out == json.loads(json.dumps([b, dp.road_book(drives), dp.road_book([])]))

@@ -629,6 +629,44 @@ def road_records(mine: list, others: list, ids: list | None = None) -> dict:
     return {"corners": corners, "best": best, "level": level, "held": held, "rows": rows}
 
 
+def road_book(drives: list, ref: list | None = None) -> dict:
+    """A road's corners across every drive of it (Your roads, corner by corner). drives: oldest first, each
+    {id, at, corners: [{x, y, hx, hy, level, size?, dir?}]} in one frame (metres); ref: [[x, y], ...] along one drive of
+    the road, to put the corners in road order. A corner is the first pass seen of it; a later pass is the same corner when
+    within SAME_CORNER_M of it and its heading within SAME_WAY (a drive counts once per corner, its cleanest there). The
+    first drive to reach the cleanest level holds the corner, so a tie goes to the older drive. Corners passed
+    ROAD_MIN_PASSES times or more: {corners: [{x, y, size, dir, passes, record, by, at}] in road order (by the nearest
+    point of ref, else as first seen), fewer: corners passed less often, drives: how many drives}. Technique only."""
+    book = []
+    for d in drives:
+        for o in d.get("corners") or []:
+            if o.get("level") is None:
+                continue
+            c = next((c for c in book if math.hypot(o["x"] - c["x"], o["y"] - c["y"]) < SAME_CORNER_M
+                      and o["hx"] * c["hx"] + o["hy"] * c["hy"] > SAME_WAY), None)
+            if c is None:
+                c = {"x": o["x"], "y": o["y"], "hx": o["hx"], "hy": o["hy"], "size": o.get("size"), "dir": o.get("dir"), "by": {}, "k": len(book)}
+                book.append(c)
+            c["by"][d["id"]] = max(c["by"].get(d["id"], o["level"]), o["level"])
+    at = {d["id"]: d.get("at") for d in drives}
+    order = {d["id"]: i for i, d in enumerate(drives)}
+
+    def pos(c):
+        if not ref:
+            return c["k"]
+        return min(range(len(ref)), key=lambda i: (ref[i][0] - c["x"]) ** 2 + (ref[i][1] - c["y"]) ** 2)
+
+    out = []
+    for c in sorted(book, key=lambda c: (pos(c), c["k"])):
+        if len(c["by"]) < ROAD_MIN_PASSES:
+            continue
+        rec = max(c["by"].values())
+        by = min((i for i, v in c["by"].items() if v == rec), key=lambda i: order[i])
+        out.append({"x": c["x"], "y": c["y"], "size": c["size"], "dir": c["dir"], "passes": len(c["by"]),
+                    "record": rec, "by": by, "at": at.get(by)})
+    return {"corners": out, "fewer": len(book) - len(out), "drives": len(drives)}
+
+
 def drive_touch(obs: list, others: list) -> dict:
     """A drive's own touch (its Log page): {drive: touch over its corners (from DRIVE_TOUCH_MIN), usual: touch over the
     corners of every other drive (from STYLE_MIN), outside: per measure "above" when the drive's middle corner was beyond

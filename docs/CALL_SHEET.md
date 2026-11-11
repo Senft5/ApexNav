@@ -27,6 +27,13 @@ Once, or the planner leaving the crew ends the series; editing an older drive in
 calendar puts the series in once with a weekly rule.
 
 Undo: revert the PR. Migration 0053 only adds two columns to `crew_events`; the old code ignores them.
+## 2026-11-11 (deepest analysis, PR 12): roads are matched by name for the corner-by-corner book (claude/project-thread-gd7nre)
+
+The book takes every drive with the same road name (as the deck's Your roads does) and merges their corners by place and
+heading, so a drive the other way round makes its own corners rather than mixing. Drives named after a different road
+that share part of it are not in it; matching by shape across names is the bigger job and can come later. It lives in the
+Log as a quiet line (REVIEW.md 1.2), not a new tab. Undo: revert the PR.
+
 ## 2026-11-11 (deepest analysis, PR 11): a corner's record lives on the drive page's corner rows, not a new page (claude/project-thread-gd7nre)
 
 STATE's next step was "a road page with its corners' records and which drive holds each". I put it on the drive page's
