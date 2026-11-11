@@ -4,6 +4,17 @@ Decisions Claude made for you, newest first. Each one says what was decided, why
 you reach one you've seen. If you disagree with a call, say so and it gets reversed; nothing here is hard to undo unless
 it says so. Things only you can do are in docs/OWNER_TODO.md.
 
+## 2026-11-11 (round two analysis): Pace in Your driving, but never "Work on: Pace" (claude/project-thread-gd7nre)
+
+You asked for more speed-based features. Your driving now has a "Your pace" panel: the Score's own Pace credit (full
+from 85 % to 100 % of a corner's sane limit, less above it) as a level, month by month, by kind of corner (a Pace row in
+the table), where it is measurably lower or higher ("Pace is lower downhill: 71 against 88 uphill"), and how often a
+corner went over its sane limit. The call: Pace is never the strongest skill, never "Work on" and never a practice, and
+its findings are said apart from technique ones, because a page that coaches someone to carry more speed on a public
+road is the one thing App Review (1.4) and a crash would both hold against us. APP_REVIEW.md has a row with the fallback.
+
+Undo: let pace be a Work on by adding it to SKILLS (core/driver_profile.py and web/driver_profile.js); hide the panel
+by removing the `dp-pace` block in `render`.
 ## 2026-11-11 (round two analysis): Your touch, and when the recording is too coarse to time it (claude/project-thread-gd7nre)
 
 Your driving now has a "Your touch" panel: how fast the brakes go on and come off and how fast the car is loaded up at

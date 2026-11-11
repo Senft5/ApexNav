@@ -1211,7 +1211,7 @@
     driverScore, techniqueScore, cornerTechnique, carGrip, cornersForCar, fatigue, spreadBy, turnIn, segmentPass, segmentWindow,
     removeSpurs, retracedShare,
     compareDrives, cornerMetrics, elapsedS, cornerPhases, coach, ggEnvelope, gripUse, ggSector, abruptMoments,
-    knownRun, passMarks, meanSe, BRAKE_G, BRAKE_LOOKBACK, BRAKE_GAP, STOPPED_MPS, TURN_LEAD,   // driver_profile.js reads corners as the coach does
+    knownRun, passMarks, meanSe, BRAKE_G, BRAKE_LOOKBACK, BRAKE_GAP, STOPPED_MPS, TURN_LEAD, PACE_CEILING, paceCredit,   // driver_profile.js reads corners as the coach does
     G_STD, MPS_TO_MPH, ALPR_RADIUS_M,
     movingAverage, gradient, unwrap, localXY, resamplePolyline,
     computeCurvature, apexSpeedMps, effectiveMu, brakingEnvelopeMps, sightDistanceM, sightSpeedMps, SIGHT_MAX_M,
