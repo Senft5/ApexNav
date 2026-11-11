@@ -58,6 +58,11 @@ and in random batches so a trace cannot be re-assembled.
 - Which of your books' roads a new drive might cover is decided on the phone from each road's box, so the server is
   never asked "what is near where I just drove".
 - Reports and blocks as for public crews (kind `roadbook`).
+### 2.8 Crew drive results (crew members)
+- A remembered crew drive folds out its results: an overall, then each stage as SS1, SS2…, each driver's best Vetta
+  Score that day and a place. Overall ranks by stages driven, then the mean Score. Share sends it as text.
+- Only Scores already shared with the crew, among those who came; a time and its gap to the quickest only where that
+  driver shares times with the crew, and the overall's total time when every stage has one. `resultsSheet` in `backend/src/events.ts`.
 
 ## 3. Drive analysis (private)
 Compare passes of the same road — yours, or a friend's ghost they chose to send you.
