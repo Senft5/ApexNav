@@ -24,6 +24,14 @@
   `repeat_weeks` (409 `not_latest` on an older drive of a series). `web/crew_events.js` Repeats chips, "Every Saturday"
   on cards and Meets near you, ICS RRULE. Tests: backend event_repeat 4, pytest test_crew_events, e2e crew drives.
 - Next: the auto time attack PR (local branch, built on #397's) once #397 merges.
+## Session 2026-11-11 (deepest analysis, PR 13): the road book names the least even corners (claude/project-thread-gd7nre)
+
+- `road_book` / `roadBook` give each corner its least clean pass (`low`) and the book `uneven`: up to three corners whose
+  passes span 15 levels or more, the widest first. `roadBookRows` adds "Least even: corners 4, 9 and 12, where your passes
+  differ the most."; those rows say "; your least clean 62" and are set a little heavier.
+- Tests: tests/test_best_corners.py road book test (low, uneven, the words and parity); e2e accepts the longer row.
+- Next: the drive page could say, for this drive, which of the road's least even corners it drove near its best.
+
 ## Session 2026-11-11 (deepest analysis, PR 12): Your roads, corner by corner (claude/project-thread-gd7nre)
 
 - core/driver_profile.py `road_book(drives, ref)` and its port `roadBook`: every drive of a road (oldest first, placed in
