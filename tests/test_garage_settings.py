@@ -101,6 +101,7 @@ process.stdout.write(JSON.stringify({
   sw: [G.summaryOf(btn('Crash check', { on: true })), G.summaryOf(btn('Crash check')), G.summaryOf(btn('x', { 'aria-checked': 'true' }))],
   pick: [G.summaryOf(group(btn('Miles and feet', { on: true }), btn('Kilometres and metres'))), G.summaryOf(group(btn('Steady'), btn(' Lean ', { 'aria-pressed': 'true' }))), G.summaryOf(group(btn('a'), btn('b')))],
   count: [G.summaryOf(group(btn('No zones yet.', { note: true })), 'place,places'), G.summaryOf(group(btn('Home')), 'place,places'), G.summaryOf(group(btn('Home'), btn('Work')), 'place,places')],
+  said: [G.summaryOf({ dataset: { summaryText: '2 changed' }, matches: () => false, querySelectorAll: () => [], children: [] }), G.summaryOf({ dataset: {}, matches: () => false, querySelectorAll: () => [], children: [] })],
   none: G.summaryOf(null), groups: G.GROUPS, order: G.ORDER }));
 """
     out = json.loads(subprocess.run([NODE, "-e", js, str(WEB / "garage_settings.js")], capture_output=True, text=True, check=True, timeout=30).stdout)
@@ -108,6 +109,18 @@ process.stdout.write(JSON.stringify({
     assert out["pick"] == ["Miles and feet", "Lean", ""]                 # nothing on: nothing said
     assert out["count"] == ["None", "1 place", "2 places"]               # the list's own "none yet" line is not an entry
     assert out["none"] == ""
+    assert out["said"] == ["2 changed", ""]                              # a sheet's own words; without them, nothing
     assert all(k in out["order"] for k in out["groups"]) and len(out["groups"]) == 3
-    for key, sel in (("zones", "#zoneList"), ("crash", "[data-toggle=&quot;crash&quot;]"), ("nudge", "[data-toggle=&quot;nudge&quot;]"), ("units", "#unitsRow"), ("motion", "#camList")):
+    for key, sel in (("zones", "#zoneList"), ("crash", "[data-toggle=&quot;crash&quot;]"), ("nudge", "[data-toggle=&quot;nudge&quot;]"), ("units", "#unitsRow"), ("motion", "#camList"),
+                     ("roadfeel", "#garageRoadFeelBody .sw"), ("tuning", "#garageTuneBody"), ("spots", "#hlList")):
         assert f'data-setting="{key}"' in HTML and f'data-summary="{sel}"' in HTML, key
+
+
+def test_route_tuning_says_standard_or_how_many_sliders_moved():
+    from tests.page_source import cockpit_source
+    src = cockpit_source()
+    fn = src[src.index("function paintTuning()"):src.index("function paintTuning()") + 1400]
+    assert "b.dataset.summaryText = n ? `${n} changed` : 'Standard';" in fn
+    assert "if (!ApexRouteTuning.allowed(localStorage, tuningFlags())) { delete b.dataset.summaryText; return; }" in fn   # unknown stays unsaid
+    assert "changed: () => { applyDevTune(); summary(); }" in fn
+    assert 'data-summary="#hlList" data-summary-count="spot,spots"' in HTML

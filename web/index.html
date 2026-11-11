@@ -374,7 +374,12 @@
     #app.plan-open #recenterBtn, #app.sheet-open #recenterBtn { display: none; }
     .toast { position: absolute; left: 50%; top: 12px; transform: translateX(-50%); z-index: 6; max-width: calc(100% - 32px);
       background: var(--panel); color: var(--panel-ink); border: 1px solid var(--panel-ink); padding: 8px 12px; font-size: 12px; font-weight: 600; display: none; }   /* a message: ink, never the red pen */
-    .toast.show { display: block; }
+    .toast.show { display: block; width: max-content; }   /* as wide as its words, up to the screen: centred from left: 50%, it shrank to fit half of it */
+    /* a message with a key (2026-11-10): one row, the words wrapping on the left and the key whole on the right, in ink and
+       underlined like every other text key (.linkbtn); the red pen stays for what means slow down */
+    .toast.show.has-key { display: flex; align-items: center; gap: 14px; text-align: left; }
+    .toast .toast-key { flex: none; color: var(--panel-ink); font-weight: 700; text-decoration: underline; text-underline-offset: 2px; white-space: nowrap;
+      padding: 15px 6px; margin: -15px -6px -15px auto; }   /* a thumb's height to hit, without making the message taller */
     .pin { font-size: 11px; font-weight: 800; letter-spacing: 0.1em; padding: 2px 5px; border: 1.5px solid; background: var(--panel); white-space: nowrap; cursor: pointer; font-family: var(--font-ui); }
     .pin.alpr { color: var(--signal); border-color: var(--signal); }
         .puck { width: 26px; height: 26px; }
@@ -673,6 +678,7 @@
     .f-ahead { --glyph: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2.2' stroke-linecap='round'%3E%3Cpath d='M8 22 V14 Q8 7 16 5'/%3E%3Cpath d='M12 2 L17 5 L13 9'/%3E%3Ccircle cx='8' cy='22' r='1.5' fill='black'/%3E%3C/svg%3E"); }
     .f-sky { --glyph: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round'%3E%3Ccircle cx='12' cy='12' r='4'/%3E%3Cpath d='M12 2v3M12 19v3M2 12h3M19 12h3M5 5l2 2M17 17l2 2M5 19l2-2M17 7l2-2'/%3E%3C/svg%3E"); }
     .f-closed { --glyph: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2'%3E%3Crect x='2' y='8' width='20' height='6'/%3E%3Cpath d='M6 8 L10 14 M12 8 L16 14 M18 8 L22 14 M5 14 V21 M19 14 V21'/%3E%3C/svg%3E"); }
+    .rc-round { width: 100%; min-height: 44px; margin-top: 10px; } .rc-round[hidden] { display: none; }
     /* the level cards (the owner, 2026-11-04): Quick, Fun, Long way, each its pick's time and corners; on = the route on screen */
     .rc-levels { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; margin-top: 10px; }
     .rc-levels[hidden] { display: none; }
@@ -1123,6 +1129,17 @@
     .pop-scrim { position: fixed; inset: 0; z-index: 29; background: rgba(0, 0, 0, 0.45); opacity: 0; pointer-events: none; transition: opacity 0.2s ease-out; }
     body:has(.side-pop.open) .pop-scrim { opacity: 1; pointer-events: auto; }
     .side-pop-head { display: flex; justify-content: space-between; align-items: center; }
+    /* About a road (road_page.js): what kind of road it is, four scores as bars with their meaning, then the facts */
+    .road-page .rp-head { margin: 0; font-size: 16px; font-weight: 600; color: var(--panel-ink); }
+    .rp-meter { display: grid; grid-template-columns: minmax(0, 1fr) auto; column-gap: 12px; align-items: baseline; padding-top: 6px; }
+    .rp-meter .rp-name { font-size: 15px; font-weight: 600; }
+    .rp-meter b { font-size: 17px; font-variant-numeric: tabular-nums; }
+    .rp-meter .rp-bar { grid-column: 1 / -1; display: block; height: 4px; margin: 5px 0 4px; background: color-mix(in srgb, var(--panel-ink) 14%, transparent); }
+    .rp-meter .rp-bar i { display: block; height: 100%; background: var(--panel-ink); }
+    .rp-meter small { grid-column: 1 / -1; font-size: 13px; line-height: 1.35; color: var(--panel-dim); }
+    .rp-fact { display: flex; justify-content: space-between; gap: 12px; padding-top: 8px; border-top: 1px solid color-mix(in srgb, var(--panel-ink) 14%, transparent); font-size: 15px; }
+    .rp-fact b { text-align: right; }
+    .road-page p.note:not(.rp-head) { margin: 2px 0 0; font-size: 13px; line-height: 1.45; color: var(--panel-dim); }
     .side-pop .side-pop-head h3 { border: 0; padding: 0; margin: 0; }
     /* The Garage's settings (REVIEW5 §2, web/garage_settings.js): one gear in the header, a sheet of rows, each row a sheet over
        it. Tall enough that a setting's sheet covers the list under it; hidden when shut, so nothing off screen takes focus. */
@@ -1284,6 +1301,9 @@
     .nav-group { margin: 0; padding: 22px 2px 8px; border-bottom: 1px solid var(--hair, var(--panel-dim)); font: 700 12px var(--font-ui); letter-spacing: 0.08em; text-transform: uppercase; color: var(--panel-dim); }
     .nav-group:first-child { padding-top: 6px; }
     .nav-group[hidden] { display: none; }
+    .nav-row.danger { color: var(--accent); }                       /* a row that removes something (Your data) */
+    label.nav-row { cursor: pointer; } .nav-row:disabled { color: var(--panel-dim); }
+    .data-rows { margin-top: 4px; }
     .nav-rows:has(> .nav-group:first-child) { border-top: 0; }
     .garage-pop .nav-row small { max-width: 55%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-align: right; }
     .sheet .body { overflow-y: auto; padding: 14px 16px 24px; display: grid; gap: 20px; }
@@ -1519,6 +1539,7 @@
     @media (prefers-reduced-motion: reduce) { #boot { transition: none; } }
 </style>
   <link rel="stylesheet" href="controls.css" />
+  <link rel="stylesheet" href="signature.css" />
 </head>
 <body>
   <!-- U-80: the launch screen's lockup (Assets.xcassets/LaunchLogo, 184 x 50 pt, centred) drawn again at the same size and
@@ -1612,6 +1633,8 @@
               <div class="rc-pager" id="routeCardPager" role="img" hidden></div>
               <p class="rc-levels-note" id="routeCardLevelsNote" hidden></p>
               <p class="note rc-via" id="routeCardWhy" hidden></p>
+              <!-- There and back (graph_router.js roundTrip): the trip home again by other road, the destination a stop -->
+              <button type="button" class="ink-btn rc-round" id="routeRoundBtn" hidden>There and back, home another way</button>
               <div class="rc-stats" id="routeCardStats"></div>
               <!-- finding 2: the profile's room is kept before it loads, so nothing under it jumps -->
               <div class="rc-profile-box" id="routeCardProfile"></div>
@@ -1708,7 +1731,7 @@
           </section>
           <!-- REVIEW5 §2, U-49: the settings below sit behind the Garage's one gear (web/garage_settings.js moves each
                data-setting section into its own sheet); the page keeps you, your cars, Look and voice and the co-driver -->
-          <section data-panel="garage" data-setting="roadfeel" data-title="Road feel">
+          <section data-panel="garage" data-setting="roadfeel" data-title="Road feel" data-summary="#garageRoadFeelBody .sw">
             <div id="garageRoadFeelBody" class="stack-8"></div>
             <p class="note" id="ambientNote" role="status" aria-live="polite">--</p>
           </section>
@@ -1764,27 +1787,30 @@
             <p class="note" id="myDataNote" role="status">--</p>
             <p class="note" id="myOfflineNote">--</p>
             <div class="stack-8" id="myAreas"></div>
-            <div class="row" style="flex-wrap:wrap">
-              <button class="ink-btn" id="myGpxBtn">Download drives (GPX)</button>
-              <label class="ink-btn" id="importCsvBtn">Import a drive (.csv)<input type="file" id="importFile" accept=".csv,text/csv" aria-label="Import a recording" hidden /></label>
-              <button class="ink-btn" id="myAccountBtn">Download account data</button>
-            </div>
-            <div class="row mt-8" style="flex-wrap:wrap">
-              <button class="ink-btn" id="myAreaBtn">Save the map here for offline</button>
-              <button class="linkbtn" id="myOfflineDelBtn">Delete offline data</button>
-              <button class="danger-btn" id="myDrivesDelBtn">Delete drives on this phone</button>
-              <button class="danger-btn" id="myEraseBtn">Erase everything on this phone</button>
+            <!-- 2026-11-10: the same rows as the Settings list (it was eight keys of eight widths, two of them red links): what
+                 you can take, what is kept for offline, what you can remove; a row acts when touched, so it has no chevron -->
+            <div class="nav-rows data-rows">
+              <h4 class="nav-group">Take a copy</h4>
+              <button class="nav-row" id="myGpxBtn"><span>Download drives</span><small>GPX</small></button>
+              <button class="nav-row" id="myAccountBtn"><span>Download account data</span></button>
+              <label class="nav-row" id="importCsvBtn"><span>Import a drive</span><small>.csv</small><input type="file" id="importFile" accept=".csv,text/csv" aria-label="Import a recording" hidden /></label>
+              <h4 class="nav-group">Offline</h4>
+              <button class="nav-row" id="myAreaBtn">Save the map here for offline</button>
+              <button class="nav-row" id="myOfflineDelBtn">Delete offline data</button>
+              <h4 class="nav-group">Remove</h4>
+              <button class="nav-row danger" id="myDrivesDelBtn">Delete drives on this phone</button>
+              <button class="nav-row danger" id="myEraseBtn">Erase everything on this phone</button>
             </div>
             <p class="note">Your account (friends, crews, shared spots, routes and results) is deleted from the server in Settings → Account → Delete account.</p>
             <button class="sw mt-8" data-toggle="health"><i></i><span>Share app health (anonymous counts)</span></button>
             <p class="note">Once a day, totals like "3 routes found, 1 failed" go to Vetta with no account, phone or place in them, so problems get fixed. Off: nothing is counted or sent.</p>
           </section>
-          <!-- Tune your routes (the owner, 2026-11-09; web/route_tuning.js): sliders over the routing's weights, Pro (open to
-               everyone until Pro goes on sale), kept on this phone; cockpit.js paintTuning fills it -->
-          <section data-panel="garage" data-setting="tuning" data-title="Route tuning">
+          <!-- Tune your routes (the owner, 2026-11-09; web/route_tuning.js): sliders over the routing's weights, free for
+               everyone (Pro is looks only, 2026-11-10), kept on this phone; cockpit.js paintTuning fills it -->
+          <section data-panel="garage" data-setting="tuning" data-title="Route tuning" data-summary="#garageTuneBody">
             <div id="garageTuneBody" class="stack-8"></div>
           </section>
-        <section data-panel="garage" data-setting="spots" data-title="Spots">
+        <section data-panel="garage" data-setting="spots" data-title="Spots" data-summary="#hlList" data-summary-count="spot,spots">
             <h3>Spots</h3>
             <p class="note" style="margin:0 0 8px">Loops lean toward spots you rate 3★ or more. Your spots stay on this phone until you share one.</p>
             <div class="detents" id="detourList" role="group" aria-label="Detour">
@@ -1951,6 +1977,9 @@
         <div class="scrubber" id="scrubber" role="slider" tabindex="0" aria-label="Replay position" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><canvas id="scrubCanvas" aria-hidden="true"></canvas></div>
       </div>
       <div id="cluster"></div>
+      <!-- Vetta Line (signature.css): the idle deck's invitations stand on one shelf you turn sideways, each a card with its
+           road drawn on it; on a phone on its side the shelf is not a box and they lie where they always did -->
+      <div class="deck-shelf" id="deckShelf">
       <!-- the plan flow (finding 7): Best roads nearby, a chip under Where to?, opens its list sheet -->
         <div class="deck-chips" id="deckChips"><button class="chip nearby-chip" id="deckNearby" aria-haspopup="dialog">Best roads nearby</button></div>
       <!-- one invitation on the idle map (REVIEW.md 3.1, mockup 01): a loop from here, drawn as a tulip -->
@@ -1963,6 +1992,7 @@
       <!-- the morning of a crew drive you're going to, it takes the invitation's place (REVIEW.md roadmap 21) -->
         <button class="loop-suggest drive-today" id="driveToday" hidden><span class="dt-date" aria-hidden="true"><b id="driveTodayDay"></b><small id="driveTodayMon"></small></span>
           <span><b id="driveTodayTitle"></b><small id="driveTodayMeta"></small></span><em>Plan</em></button>
+      </div>
       <nav class="tabbar" id="tabbar" aria-label="Views">
         <button class="tab on" data-view="map" aria-label="Map"><svg viewBox="0 0 24 24"><path d="M12 3l6 15-6-3-6 3z"/></svg><span>Map</span></button>
         <button class="tab" data-view="log" aria-label="Log"><svg viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h10"/></svg><span>Log</span></button>

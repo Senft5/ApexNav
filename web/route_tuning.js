@@ -1,10 +1,10 @@
-// Tune your routes (the owner, 2026-11-09: "every parameter with a slider for premium users"; "remember everyone has pro if
-// they are an early user. Once we launch app store we will restrict to paid users and anyone who had the beta").
+// Tune your routes (the owner, 2026-11-09: "every parameter with a slider"; free for everyone since 2026-11-10, when the owner
+// made Pro looks only).
 // Plain-language sliders over the routing's own numbers: each maps onto the knobs the Dev panel overrides (graph_router.js
 // K, route_engine.js W, fun_route.js LEVELS and HWY) and builds the same tune object ({ router, engine, levels, hwy } of
 // dotted paths), so it rides the same plumbing: req.tune to the router (plan, quickest, loop), ApexRouteEngine.setTune on
 // the page. A slider at its default adds nothing to the tune, so untouched settings are no tune at all and every plan is
-// the code's. Pro (pro.js kind 'tuning'): open to everyone until Pro goes on sale. Kept on this phone (apex.routeTuning).
+// the code's. Free for everyone since 2026-11-10 (Pro is looks only). Kept on this phone (apex.routeTuning).
 // The pure half (sliders, tune, storage) runs in node (tests/test_route_tuning.py); mountScreen draws the Garage sheet.
 (function (root) {
   'use strict';
@@ -125,8 +125,8 @@
     try { if (changed(n).length) store.setItem(KEY, JSON.stringify({ v: VERSION, values: n })); else store.removeItem(KEY); } catch (_) { /* this session only */ }
     return n;
   }
-  /** May this phone use it: Pro's word (pro.js 'route_tuning': open to everyone until Pro goes on sale, then Pro). */
-  const allowed = (store, flags, Pro = root.ApexPro) => !!(Pro && Pro.allowed('route_tuning', store, flags));
+  /** May this phone use it: always. Route tuning is free (the owner, 2026-11-10: Pro is looks only). */
+  const allowed = () => true;
   /** The tune a plan on this phone uses: the stored sliders while allowed, else none (settings are kept, unused). */
   const active = (store, flags, Pro) => (allowed(store, flags, Pro) ? tune(load(store)) : null);
 

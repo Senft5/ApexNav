@@ -1,6 +1,7 @@
 // Decals and livery tiers (docs/design/REVIEW.md 5.1, roadmap 22). A crew-mate with Vetta Pro puts Decals on every crew
-// they're in: one in their first month of continuous Pro, two in the second, three from the third on. A crew's Decals
-// set its livery tier; each tier unlocks more of the crew page's look. Decals never touch the board (the Vetta Score only).
+// they're in: one in their first month of continuous Pro, two in the second, three from the third on. Since 2026-11-10
+// (the owner: Pro is looks only, and one Pro member dresses the whole crew, red team UX-06) any Decals at all open the
+// whole livery (Factory); the count is only shown as thanks, never as a meter to fill. Decals never touch the board.
 // Pro comes only from pro_entitlements, which nothing writes until StoreKit ships (docs/MONETIZATION.md), so every crew is
 // Plain today, except a crew with a member in livery_grants (hand-written, migration 0040), which is Factory.
 import type { Viewer } from "./auth";
@@ -41,7 +42,9 @@ export async function liveryOf(env: Env, crewId: string, viewer?: string) {
   // a member with a hand-written grant (livery_grants, migration 0040) opens the whole livery: Factory, nothing to reach
   const granted = !!(await env.DB.prepare(
     "SELECT 1 FROM crew_members m JOIN livery_grants g ON g.user_id = m.user_id WHERE m.crew_id = ? LIMIT 1").bind(crewId).first());
-  return { decals, ...(granted ? { tier: "factory" as Tier, next: null } : tierFor(decals)), supporters, granted };
+  // one Pro crew-mate (any Decals) or a grant dresses the whole crew: Factory; otherwise Plain, with nothing to count up to
+  const dressed = granted || decals > 0;
+  return { decals, tier: (dressed ? "factory" : "plain") as Tier, next: null, supporters, granted };
 }
 export async function tierOf(env: Env, crewId: string): Promise<Tier> { return (await liveryOf(env, crewId)).tier; }
 
