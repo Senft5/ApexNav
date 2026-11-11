@@ -52,6 +52,8 @@ The JS file is a line-for-line port used by the browser/iOS cockpit for live OSR
   sent as `vert_peak_g`; the web Recorder places each frame's spike on the 5 m sample where the car was (its share of the way
   between the two GPS fixes around it), only with a locked mount and above 1 m/s, as the CSV column `vert_peak_g`;
   spikes inside a gap of over ~3 s or 100 m between fixes are dropped, not guessed. Blank means unmeasured, never 0.
+  The lateral and longitudinal g are placed the same way (IDEAS D-26): each frame's g at its share of the stretch, each
+  5 m sample interpolated between the frames either side (blank if either is unknown); over a gap the fix's own g.
 - A drive is kept as it goes (`web/drive_keep.js`, 2026-10-30): the page checkpoints the Recorder to IndexedDB (`apexnav` v2+,
   store `keep`: a head plus row chunks, `recording.js keepPut/keepAll/keepRemove`) every 15 s or 250 m; the shell numbers
   every fix (`seq`, `at` in each live frame) and journals those since the last checkpoint on disk (`ApexKit.DriveJournal`,
