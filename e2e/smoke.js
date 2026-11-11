@@ -4400,7 +4400,7 @@ flow('Your driving: the profile over every drive opens from the Log, names the w
   check(/Your touch/.test(touch) && /brakes on at about 0\.82 g a second and let them off at about 0\.41 g a second/.test(touch) && /more gently/.test(touch)
     && /quick movement of the wheel/.test(touch), 'the touch panel says it in words: ' + touch);
   // by kind of corner (a row a measure, a column a size, "--" where too few) and month by month
-  check(/By kind of corner/.test(touch) && /Brakes on\s+1\.2\s+0\.8\s+--/.test(touch) && /Turn-in\s+quick\s+quick\s+--/.test(touch)
+  check(/By kind of corner/i.test(touch) && /Brakes on\s+1\.2\s+0\.8\s+--/.test(touch) && /Turn-in\s+quick\s+quick\s+--/.test(touch)
     && /Brakes on month by month, in g a second: Sep 0\.9, Oct 0\.8\./.test(touch), 'touch by kind of corner and month: ' + touch);
   // a drive's own touch on its Log page: none from g kept once a second, so the panel stays hidden; words when there is one
   const dt = await page.evaluate(async () => {
