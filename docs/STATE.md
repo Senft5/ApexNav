@@ -1,5 +1,14 @@
 # VETTA — CURRENT AGENT HANDOFF STATE
 
+## Session 2026-11-11 (roam-c-migration-guard): migration numbers can't clash (claude/roam-c-migration-guard, off origin/main 936aec3)
+
+- tests/test_migrations.py: names NNNN_words.sql, numbers unique and contiguous from 0001 (the message says which number
+  to take), and backend/test/helpers.ts imports and applies every file in order. Eight threads add migrations at once.
+- D1 by hand 2026-11-11: d1_migrations on prod and preview both list 0001–0050, matching the files (no drift).
+- Also this session: my Avoid cameras build (#401) was closed for the routing thread's #396 (same change); one review
+  comment left there (an edge near two cameras compounds to x64).
+- Next: a live drift check in CI needs a Cloudflare API token (owner).
+
 ## Session 2026-11-11 (fable-time-attack): weekly time attack per area (claude/fable-time-attack, off origin/main)
 
 - Migration 0049 (ta_pool, ta_weeks, ta_entries): applied on preview; prod at merge. backend/src/time_attack.ts, routes /api/timeattack*,
