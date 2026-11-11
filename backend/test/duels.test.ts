@@ -61,6 +61,13 @@ describe("duels", () => {
     await ok(api(b, "POST", `/api/duels/${id}/accept`));
     await scoresTo(a, b);                                                                            // Scores only: not enough for a time duel
     await run(a, seg, 812, await day(0), 190);
+    // a quicker, lower-Scored run on another day, published with a time while alice briefly shared times: once she stops,
+    // the day bob sees follows the Score, never her quickest (unshared) run
+    await env.DB.prepare("UPDATE duels SET starts_on = date('now', '-1 days') WHERE id = ?").bind(id).run();
+    await env.DB.prepare(`INSERT INTO board_entries (id, segment_id, canon_id, user_id, audience_type, audience_id, driver_score, time_s, driven_on)
+      VALUES ('q', ?, ?, ?, 'friend', ?, 700, 150, date('now', '-1 days'))`).bind(seg, seg, a.id, b.id).run();
+    expect((await duels(b))[0].them).toEqual({ score: 812, on: await day(0), time_s: null });
+    await env.DB.prepare("DELETE FROM board_entries WHERE id = 'q'").run();
     let [mineA] = await duels(a), [mineB] = await duels(b);
     expect([mineA.kind, mineA.you_share, mineB.they_share, mineB.them.time_s]).toEqual(["time", false, false, null]);
     await ok(api(a, "PUT", "/api/grants", { audience_type: "friend", audience_id: b.id, share_scores: true, share_times: true }));

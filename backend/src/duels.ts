@@ -94,10 +94,12 @@ export async function duelList(env: Env, v: Viewer) {
         AND (${FRIENDS("d.challenger", "d.opponent")} OR d.status IN ('declined', 'withdrawn'))
         AND d.created_at > datetime('now', '-${KEEP_DAYS} days')
       ORDER BY d.created_at DESC, d.rowid DESC LIMIT 50`, v.id);
-  // a side's best Score in the window, and their quickest time there while they share times with the other (else null)
+  // a side's best Score in the window, and their quickest time there while they share times with the other (else null).
+  // `on` is the day of the run that counts; in a time duel it follows the time only under share_times, so the day of an
+  // unshared quickest run is never told.
   const best = (who: string, to: string, d: typeof rows[number]) => d.status === "pending" || !d.starts_on ? Promise.resolve(null) : first<{ s: number | null; on: string | null; t: number | null }>(env,
     `SELECT MAX(be.driver_score) AS s, (SELECT b2.driven_on FROM board_entries b2 WHERE b2.user_id = ?1 AND b2.canon_id = ?3 AND b2.audience_type = 'friend' AND b2.audience_id = ?2
-         AND b2.driven_on BETWEEN ?4 AND ?5 ORDER BY ${d.kind === "time" ? "b2.time_s IS NULL, b2.time_s," : ""} b2.driver_score DESC, b2.driven_on LIMIT 1) AS "on",
+         AND b2.driven_on BETWEEN ?4 AND ?5 ORDER BY ${d.kind === "time" ? "CASE WHEN EXISTS (SELECT 1 FROM grants g2 WHERE g2.user_id = ?1 AND g2.audience_type = 'friend' AND g2.audience_id = ?2 AND g2.share_times = 1) THEN b2.time_s END IS NULL, CASE WHEN EXISTS (SELECT 1 FROM grants g2 WHERE g2.user_id = ?1 AND g2.audience_type = 'friend' AND g2.audience_id = ?2 AND g2.share_times = 1) THEN b2.time_s END," : ""} b2.driver_score DESC, b2.driven_on LIMIT 1) AS "on",
          CASE WHEN EXISTS (SELECT 1 FROM grants g WHERE g.user_id = ?1 AND g.audience_type = 'friend' AND g.audience_id = ?2 AND g.share_times = 1) THEN MIN(be.time_s) END AS t
        FROM board_entries be WHERE be.user_id = ?1 AND be.canon_id = ?3 AND be.audience_type = 'friend' AND be.audience_id = ?2
         AND be.driven_on BETWEEN ?4 AND ?5
