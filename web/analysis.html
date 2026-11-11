@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self' apexnav:; script-src 'self' apexnav: 'sha256-aPZRAHlfqpCUB7VMrLTizJw/+IEll9J8JiGez6XqB+o=' 'sha256-G7s/ZI+Hqrfc4DqbB6EANJJLmUmhNK06PizQ1LlsG84=' https://cdn.jsdelivr.net 'wasm-unsafe-eval'; worker-src 'self' apexnav: blob:; child-src 'self' apexnav: blob:; style-src 'self' apexnav: 'unsafe-inline'; font-src 'self' apexnav: data:; img-src 'self' apexnav: data: blob: https://tiles.openfreemap.org https://s3.amazonaws.com https://basemap.nationalmap.gov; media-src 'self' apexnav: data: blob:; connect-src 'self' apexnav: data: blob: https://apexnav.senftns.workers.dev wss://apexnav.senftns.workers.dev https://tiles.openfreemap.org https://basemap.nationalmap.gov https://s3.amazonaws.com https://valhalla1.openstreetmap.de https://router.project-osrm.org https://overpass-api.de https://overpass.private.coffee https://overpass.kumi.systems https://maps.mail.ru https://nominatim.openstreetmap.org https://photon.komoot.io https://api.open-meteo.com https://api.weather.gov https://statsapi.mlb.com https://api.seatgeek.com https://api.water.noaa.gov https://waterservices.usgs.gov https://in.carsprogram.org https://publicapi.ohgo.com https://quickstats.nass.usda.gov https://commons.wikimedia.org https://graph.mapillary.com https://vpic.nhtsa.dot.gov https://cdn.jsdelivr.net https://huggingface.co https://*.huggingface.co https://*.hf.co; object-src 'none'; base-uri 'none'; form-action 'self'" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self' apexnav:; script-src 'self' apexnav: 'sha256-JuhnXOV66lWpeSl/8HBBcP6A6OpHT534uA7sGTyWXuc=' 'sha256-G7s/ZI+Hqrfc4DqbB6EANJJLmUmhNK06PizQ1LlsG84=' https://cdn.jsdelivr.net 'wasm-unsafe-eval'; worker-src 'self' apexnav: blob:; child-src 'self' apexnav: blob:; style-src 'self' apexnav: 'unsafe-inline'; font-src 'self' apexnav: data:; img-src 'self' apexnav: data: blob: https://tiles.openfreemap.org https://s3.amazonaws.com https://basemap.nationalmap.gov; media-src 'self' apexnav: data: blob:; connect-src 'self' apexnav: data: blob: https://apexnav.senftns.workers.dev wss://apexnav.senftns.workers.dev https://tiles.openfreemap.org https://basemap.nationalmap.gov https://s3.amazonaws.com https://valhalla1.openstreetmap.de https://router.project-osrm.org https://overpass-api.de https://overpass.private.coffee https://overpass.kumi.systems https://maps.mail.ru https://nominatim.openstreetmap.org https://photon.komoot.io https://api.open-meteo.com https://api.weather.gov https://statsapi.mlb.com https://api.seatgeek.com https://api.water.noaa.gov https://waterservices.usgs.gov https://in.carsprogram.org https://publicapi.ohgo.com https://quickstats.nass.usda.gov https://commons.wikimedia.org https://graph.mapillary.com https://vpic.nhtsa.dot.gov https://cdn.jsdelivr.net https://huggingface.co https://*.huggingface.co https://*.hf.co; object-src 'none'; base-uri 'none'; form-action 'self'" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
   <title>Vetta · Log</title>
   <link rel="icon" href="brand/mark.svg" type="image/svg+xml" />
@@ -172,6 +172,7 @@
     .book-list li { display: grid; grid-template-columns: 2em 1fr auto; gap: 2px 8px; align-items: baseline; padding: 6px 0; border-top: 1px solid var(--rule); }
     .book-list li > b { font: 600 15px var(--font-num); text-align: right; }
     .book-list .bk-n { color: var(--accent); font-family: var(--font-num); }
+    .book-list li.uneven > span:nth-child(2) { font-weight: 600; }
     .book-list .bk-by { grid-column: 2 / 4; justify-self: start; min-height: 44px; padding: 0; font: inherit; font-size: 13px; text-align: left; color: var(--panel-dim); background: none; border: 0; text-decoration: underline; cursor: pointer; }
     .dv-rec { grid-column: 2 / 4; font-size: 12px; color: var(--gain); }
     .dv-corner:not(.rec) .dv-rec { color: var(--panel-dim); }
@@ -671,11 +672,12 @@
       if (bookPick !== r.name) return;
       const w = ApexDriverProfile.roadBookRows(book, (at) => ApexFormat.dateTime(at.slice(0, 10)));
       if (!w) { $('bookHead').textContent = 'No corner of it driven cleanly three times yet: only corners with every technique credit measured count.'; return; }
-      $('bookHead').textContent = w.head;
+      $('bookHead').textContent = w.work ? `${w.head} ${w.work}` : w.head;
       $('bookList').replaceChildren(...w.rows.map((x) => {
         const li = document.createElement('li'), n = document.createElement('span'), t = document.createElement('span'), v = document.createElement('b'), by = document.createElement('button');
         n.className = 'bk-n'; n.textContent = String(x.n); t.textContent = x.what; v.textContent = String(x.record);
-        by.type = 'button'; by.className = 'bk-by'; by.textContent = `${x.on ? `On ${x.on}` : 'On a drive of unknown date'}, of ${x.passes} passes`;
+        by.type = 'button'; by.className = 'bk-by'; by.textContent = `${x.on ? `On ${x.on}` : 'On a drive of unknown date'}, of ${x.passes} passes${x.uneven ? `; your least clean ${x.low}` : ''}`;
+        if (x.uneven) li.classList.add('uneven');
         by.addEventListener('click', () => openDrive(x.by));
         li.setAttribute('aria-label', `Corner ${x.n}, ${x.what}: your cleanest pass ${x.record}`);
         li.append(n, t, v, by);
