@@ -1544,7 +1544,8 @@ flow('avoid cameras: with the chip on, the cameras near the trip go to the route
   await page.route('https://photon.komoot.io/**', (route) => route.fulfill({ contentType: 'application/json', body: JSON.stringify({ features: [
     { geometry: { coordinates: [-83.9700, 35.7565] }, properties: { name: 'Maryville', state: 'Tennessee' } }] }) }));
   await page.route('https://overpass-api.de/**', (route) => route.fulfill({ contentType: 'application/json', body: JSON.stringify({ elements: [
-    { type: 'node', id: 1, lat: 35.85, lon: -83.94, tags: { 'surveillance:type': 'ALPR' } }, { type: 'node', id: 2, lat: 37.5, lon: -83.9, tags: { 'surveillance:type': 'ALPR' } }] }) }));
+    { type: 'node', id: 1, lat: 35.85, lon: -83.94, tags: { 'surveillance:type': 'ALPR' } }, { type: 'node', id: 2, lat: 37.5, lon: -83.9, tags: { 'surveillance:type': 'ALPR' } },
+    { type: 'node', id: 3, lat: 35.86, lon: -83.93, tags: { highway: 'speed_camera' } }] }) }));
   await page.route('https://valhalla1.openstreetmap.de/route', (route) => {
     const req = JSON.parse(route.request().postData() || '{}');
     asked.push(req);
@@ -1559,7 +1560,11 @@ flow('avoid cameras: with the chip on, the cameras near the trip go to the route
   await page.click('#placeList .place');
   await page.waitForFunction(() => { const t = window.apexDebug.track; return t && t.kind === 'route' && t.lat.length > 50; }, null, { timeout: 20000 });
   const ex = asked.map((r) => r.exclude_locations || []);
-  check(ex.some((e) => e.length === 1 && e[0].lat === 35.85 && e[0].lon === -83.94), 'the camera near the trip was excluded, the far one not: ' + JSON.stringify(ex));
+  const near = (e) => e.length === 2 && e.some((c) => c.lat === 35.85 && c.lon === -83.94) && e.some((c) => c.lat === 35.86 && c.lon === -83.93);
+  check(ex.some(near), 'the plate reader and the speed camera near the trip were excluded, the far one not: ' + JSON.stringify(ex));
+  // our own router gets the same cameras with the plan's avoid choices (cockpit.js avoidForTrip, graph_router.js AVOID_CAM_X)
+  const cams = await page.evaluate(() => window.apexDebug.lastCams);
+  check(Array.isArray(cams) && near(cams), 'the plan carried the cameras near the trip for our own router: ' + JSON.stringify(cams));
   check(await page.evaluate(() => document.querySelector('[data-avoid="cameras"]').getAttribute('aria-pressed')) === 'true', 'the chip shows it');
 }, { geolocation: { latitude: 35.9606, longitude: -83.9207 }, permissions: ['geolocation'] });
 

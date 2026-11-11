@@ -2530,14 +2530,38 @@
     function policeWarm() {
       const p = state.lastPosition;
       if (avoid.police && p && window.ApexSync && ApexSync.signedIn() && !policeCached([p])) hazardsAround([p]).catch(() => {});
+      // Avoid cameras: the camera tiles round here (about 50 km), so a plan from here finds them kept (camerasForTrip)
+      if (avoid.cameras && p && window.ApexCameras) ApexCameras.load(ApexCameras.tilesInBox(p.lat - 0.25, p.lon - 0.25, p.lat + 0.25, p.lon + 0.25)).catch(() => {});
     }
     async function avoidForTrip(points) {
-      if (!avoid.police) return avoid;
-      const t0 = performance.now(), ask = policeAround(points);
-      const pts = policeCached(points) ? await ask.catch(() => null) : await RouteLoading.optional(ask, POLICE_WAIT_MS).catch(() => null);
-      if (window.apexDebug) window.apexDebug.policeWaitMs = Math.round(performance.now() - t0);
-      if (window.apexDebug) window.apexDebug.lastPolice = Array.isArray(pts) ? pts : null;
-      return { ...avoid, points: Array.isArray(pts) ? pts : [] };
+      if (!avoid.police && !avoid.cameras) return avoid;
+      const camsP = camerasForTrip(points);                       // alongside the police reports, not after them
+      let out = avoid;
+      if (avoid.police) {
+        const t0 = performance.now(), ask = policeAround(points);
+        const pts = policeCached(points) ? await ask.catch(() => null) : await RouteLoading.optional(ask, POLICE_WAIT_MS).catch(() => null);
+        if (window.apexDebug) window.apexDebug.policeWaitMs = Math.round(performance.now() - t0);
+        if (window.apexDebug) window.apexDebug.lastPolice = Array.isArray(pts) ? pts : null;
+        out = { ...out, points: Array.isArray(pts) ? pts : [] };
+      }
+      const cams = await camsP;
+      if (window.apexDebug) window.apexDebug.lastCams = cams;
+      return cams ? { ...out, cams } : out;
+    }
+    // Avoid cameras on our own router (graph_router.js AVOID_CAM_X) and the card's "Couldn't avoid cameras": the mapped
+    // cameras near this trip (plate readers and speed cameras), from the week's kept camera tiles at once, or the camera map
+    // for CAMERA_WAIT_MS at most (the route card's budget comes first; the ask carries on and keeps its tiles for the next
+    // plan, and Where to? opening warms them, policeWarm). null when unknown: too big a trip, the map offline or slow; then
+    // our router plans without them and the card says nothing about cameras (unknown stays unsaid); the public router's
+    // path still waits for the map and routes round them (camerasAround).
+    const CAMERA_WAIT_MS = 600;
+    async function camerasForTrip(points) {
+      if (!avoid.cameras || !window.ApexCameras || !Array.isArray(points) || points.length < 2) return null;
+      const lats = points.map(p => p.lat), lons = points.map(p => p.lon);
+      const s = Math.min(...lats), n = Math.max(...lats), w = Math.min(...lons), e = Math.max(...lons), pad = 0.02;
+      if (n - s > FunRoute.CAMERA_BOX_DEG || e - w > FunRoute.CAMERA_BOX_DEG) return null;   // camerasAround says why
+      const nodes = await RouteLoading.optional(alprNodesIn(s - pad, w - pad, n + pad, e + pad), CAMERA_WAIT_MS).catch(() => null);
+      return Array.isArray(nodes) ? FunRoute.camerasToExclude(nodes, points, (window.ApexGraphRouter && ApexGraphRouter.K.AVOID_CAM_MAX) || 80) : null;
     }
     // The reported hazards around a trip (50 km round its middle, asked by cell, VI-1), kept 5 min and reused for any trip
     // whose points all lie within 35 km of where they were asked for; one request at a time

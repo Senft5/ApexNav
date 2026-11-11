@@ -4,6 +4,18 @@ Decisions Claude made for you, newest first. Each one says what was decided, why
 you reach one you've seen. If you disagree with a call, say so and it gets reversed; nothing here is hard to undo unless
 it says so. Things only you can do are in docs/OWNER_TODO.md.
 
+## 2026-11-11 (roam-c-avoid-cameras): Avoid cameras works on our own router, speed cameras included (claude/roam-c-avoid-cameras)
+
+You asked (2026-11-10) to avoid speed cameras too. The camera map already loaded fixed speed cameras beside the plate
+readers, and the public router already went round both. But where our own road graph covers a trip, our route wins, and
+it ignored Avoid → Cameras completely. Now a plan carries the cameras near the trip to our router, which makes the road
+a camera stands on (within 30 m) cost 8 times its time, the same weight a police report gets. A route that still passes
+within 25 m of one loses to one that doesn't, and the card says "Couldn't avoid cameras". The plan waits at most 0.6 s
+for the camera map (Where to? warms it); if it isn't there in time, our router plans without cameras and the card says
+nothing about them rather than guess. Loops still don't avoid cameras.
+
+Undo: revert the PR (no data or schema change); or set `AVOID_CAM_X` to 1 in web/graph_router.js.
+
 ## 2026-11-10 (fable-pro-looks): Pro is looks only; one Pro crew-mate dresses the whole crew (claude/fable-pro-looks)
 
 Your answer to the red team (PH-06, BR-06, UX-06): Pro is themes and liveries, nothing else. Route tuning, which went

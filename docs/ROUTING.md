@@ -112,11 +112,19 @@ are dropped then, since they were chosen for the old order (`web/trip_stops.js`,
 
 ## Avoid cameras
 
-Avoid → **Cameras** (off by default) asks the camera map (OSM `surveillance:type=ALPR`, DeFlock, via Overpass, kept a week)
-for the plate readers within about 2 km of the trip and sends the router those nearest the start-to-end line as
+Avoid → **Cameras** (off by default) asks the camera map (OSM `surveillance:type=ALPR`, DeFlock, and fixed speed cameras,
+`highway=speed_camera`, via Overpass, kept a week) for the cameras within about 2 km of the trip and sends the router those nearest the start-to-end line as
 `exclude_locations`, with any reported closures, 50 at most (`FunRoute.camerasToExclude`). The router avoids the road edge
 nearest each camera. A trip more than 1° across, the camera map offline, or no way round them: the route is built without
 avoiding cameras and a toast says so; the cameras still on the route are marked and counted as before (IDEAS R-35).
+
+Our own router (2026-11-11, roam-c-avoid-cameras) gets the same cameras with the plan's avoid choices
+(`avoid.cams`, cockpit.js `avoidForTrip` / `camerasForTrip`: the week's kept tiles at once, or the camera map for 0.6 s at
+most; Where to? opening warms the tiles round you) and costs every edge within 30 m of one x8 (`graph_router.js`
+`AVOID_CAM_X`, `AVOID_CAM_M`; an edge by two cameras once; 80 cameras at most). Before, Avoid → Cameras did nothing on a
+trip our graph covers. A route that still passes within 25 m of a camera (`FunRoute.CAMERA_PASS_M`) is dropped when any
+candidate doesn't, on either router, and the card says "Couldn't avoid cameras". Cameras not known in time (the map slow
+or offline, a trip over 1°): our router plans without them and the card says nothing about cameras either way.
 
 ## Avoid police reports
 

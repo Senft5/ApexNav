@@ -403,6 +403,19 @@ def test_avoid_police_reports_keeps_off_the_road_by_a_report():
     assert r["offNear"] < 20, r
 
 
+def test_avoid_cameras_keeps_off_the_road_a_camera_stands_on():
+    """Avoid cameras on our own router (graph_router.js objectiveOf, AVOID_CAM_X): the edges within 30 m of a mapped
+    camera cost x8, so the quickest and the plan's routes go round one on the quickest's middle; two cameras on one spot
+    cost it once; off, or with unusable points, nothing changes."""
+    r = case("avoidCameras")
+    assert r["camM"] == 30 and r["camX"] == 8, r
+    assert r["baseNear"] < 20, r
+    assert r["quickNear"] > 30 and r["quickS"] > r["baseS"], r
+    assert r["quickS"] == r["oneS"], r
+    assert r["planNear"] and all(d > 30 for d in r["planNear"]), r
+    assert r["offNear"] < 20 and r["junkS"] == r["baseS"], r
+
+
 def test_there_and_back_comes_home_by_other_road():
     """There and back (graph_router.js roundTrip): to a destination and home again, the way back costing the way out x4 both
     ways, so a round trip drives little of itself twice; at Fun and Long way the way home buys good road as a plan does;

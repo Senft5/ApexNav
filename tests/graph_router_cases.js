@@ -358,6 +358,22 @@ const CASES = {
     return { baseNear: near(base), baseS: base.timeS, quickNear: near(q), quickS: q.timeS, planNear: plan.routes.map(near), offNear: near(off) };
   },
 
+  avoidCameras() {
+    const g = H.grid({ seed: 9, nx: 28, ny: 28, holes: 0.05, stepDeg: 0.004, lat0: 39.15, lon0: -84.62 });
+    const v = R.view(H.tiles(g.nodes, g.edges).tiles);
+    const from = { lat: 39.17, lon: -84.6 }, to = { lat: 39.23, lon: -84.52 };
+    const base = R.quickest(v, { from, to, level: 'quick' });
+    const mid = base.coords[Math.floor(base.coords.length / 2)], p = { lat: mid[0], lon: mid[1] };
+    const near = (r) => Math.min(...r.coords.map((c) => R.distM(p.lat, p.lon, c[0], c[1])));
+    const avoid = { cameras: true, cams: [p, { lat: p.lat + 0.00001, lon: p.lon }] };   // two on one spot cost it once
+    const one = R.quickest(v, { from, to, level: 'quick', avoid: { cameras: true, cams: [p] } });
+    const q = R.quickest(v, { from, to, level: 'quick', avoid }), plan = R.plan(v, { from, to, level: 'fun', avoid });
+    const off = R.quickest(v, { from, to, level: 'quick', avoid: { cameras: false, cams: [p] } });
+    const junk = R.quickest(v, { from, to, level: 'quick', avoid: { cameras: true, cams: [null, { lat: NaN, lon: 1 }] } });
+    return { baseNear: near(base), baseS: base.timeS, quickNear: near(q), quickS: q.timeS, oneS: one.timeS, planNear: plan.routes.map(near),
+      offNear: near(off), junkS: junk.timeS, camM: R.K.AVOID_CAM_M, camX: R.K.AVOID_CAM_X };
+  },
+
   roundTrips() {
     const g = H.grid({ seed: 9, nx: 28, ny: 28, holes: 0.05, stepDeg: 0.004, lat0: 39.15, lon0: -84.62 });
     const v = R.view(H.tiles(g.nodes, g.edges).tiles);

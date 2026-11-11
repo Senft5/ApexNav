@@ -1,5 +1,17 @@
 # VETTA — CURRENT AGENT HANDOFF STATE
 
+## Session 2026-11-11 (roam-c-avoid-cameras): Avoid → Cameras on our own router, speed cameras included (claude/roam-c-avoid-cameras, off origin/main 936aec3)
+
+- Gap: graph_router ignored `avoid.cameras`, so a trip our graph covers drove past cameras with Avoid on. cockpit.js
+  `avoidForTrip` now adds `avoid.cams` (`camerasForTrip`: `alprNodesIn` with `CAMERA_WAIT_MS` 600, `camerasToExclude` ≤80);
+  `policeWarm` also loads the camera tiles ±0.25° round you. graph_router `AVOID_CAM_X` 8 / `AVOID_CAM_M` 30 /
+  `AVOID_CAM_MAX` 80 (in OBJ_KNOBS). fun_route `unavoided` adds 'cameras' (`camerasOn`, `CAMERA_PASS_M` 25), so
+  keepAvoiding and the card's "Couldn't avoid cameras" work on both routers. Unknown cameras: nothing said.
+- Tests: test_graph_router `avoidCameras`, test_avoid_cameras (+3), e2e "avoid cameras" now has a speed camera and checks
+  `apexDebug.lastCams`. Full pytest 1595 passed; e2e avoid + own routing flows pass.
+- D1 drift check by hand 2026-11-11: d1_migrations on prod and preview both list 0001–0050, matching backend/migrations.
+- Next: loops (and There and back, `through`) don't get `avoid.cams`; a camera on the route mid-drive isn't rerouted round.
+
 ## Session 2026-11-11 (fable-time-attack): weekly time attack per area (claude/fable-time-attack, off origin/main)
 
 - Migration 0049 (ta_pool, ta_weeks, ta_entries): applied on preview; prod at merge. backend/src/time_attack.ts, routes /api/timeattack*,
