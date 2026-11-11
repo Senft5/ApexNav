@@ -1,5 +1,13 @@
 # VETTA — CURRENT AGENT HANDOFF STATE
 
+## Session 2026-11-11 (roam-b first-run walkthrough, PR 2): Done after a replay comes home (claude/project-thread-sxhrgi)
+
+- Watched the welcome's replay to its end on production (iPhone 13 viewport, at Knoxville): it plays through to "Replay
+  finished". Done then left the map and the arrow on the demo's ground (Kentucky) while the masthead read Knoxville; a still
+  browser sends no new fix. cockpit.js `closeReplay` now puts the idle map back at `state.lastPosition` (follow on, snapped);
+  a route's fly-through is unchanged. e2e "done after a replay brings the idle map back to where you are" (fails before).
+- Seen, by design: the dash's SCORE reads -- through a replay (the live score is only for a drive being recorded).
+- Next: the Log and a drive's page as a new user; add a friend; join a crew.
 ## Session 2026-11-11 (routing round three, part 2): crests and verified bumps in stage discovery (claude/project-thread-39xbx9, off origin/main)
 
 - IDEAS R-04. backend/src/roads.ts `coverage`: per direction `crested` (share of bins with crest_n >= 2 at `CREST_G`

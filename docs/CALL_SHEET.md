@@ -4,6 +4,13 @@ Decisions Claude made for you, newest first. Each one says what was decided, why
 you reach one you've seen. If you disagree with a call, say so and it gets reversed; nothing here is hard to undo unless
 it says so. Things only you can do are in docs/OWNER_TODO.md.
 
+## 2026-11-11 (roam-b walkthrough 2): Done after a replay brings the map back to where you are (claude/project-thread-sxhrgi)
+
+- Done (or the plate's ×) after watching a replay, whether the welcome's demo or one of your drives from the Log, now jumps
+  the idle map and your arrow back to your last known position. Before, the map stayed on the replay's ground (the demo is
+  in Kentucky), while the masthead and the road cards described where you are. A browser standing still sends no new fix,
+  so nothing brought the map back. A route's fly-through still keeps its route in view. Undo: remove the `wasReplay` block
+  in cockpit.js `closeReplay`.
 ## 2026-11-11 (routing round three, part 2): stage discovery reads crests and verified bumps (claude/project-thread-39xbx9)
 
 Stage discovery (the roads Explore, loops and routes pick from) now lifts a road members measured going light over its
