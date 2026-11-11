@@ -2443,7 +2443,7 @@ flow('crew page: an old ?view=crew link opens People on Crews, at your crew; goi
   check(!('stripe2' in JSON.parse(liv.b)) && !('pattern' in JSON.parse(liv.b)), 'a Plain crew sends nothing past the Plain livery');
   // fair meeting points (crew_meet.js): your rough area is off until you switch it on, and nothing was sent about it
   check(await page.getAttribute('.cp-meet [data-crew-home]', 'aria-checked') === 'false' && !find('/api/crews/k1/home'), 'Share my rough area is off by default');
-  check(/Plain livery/.test(await page.textContent('.cp-livery-line')) && /Decals come from crew-mates with Vetta Pro/.test(await page.textContent('.cp-livery-line')), 'the livery line says Plain and where Decals come from');
+  check((await page.textContent('.cp-livery-line')).trim() === 'Plain livery', 'the livery line says Plain and nothing it lacks (the owner, 2026-11-10: no Pro nudge on the crew page)');
 });
 
 flow('build threads: start one from a car, add a step, a friend suggests and it shows on a red rule (Worker stubbed, REVIEW.md roadmap 23)', async (page, base) => {
@@ -4662,7 +4662,7 @@ flow('dev mode: a developer opens the Dev panel from the Garage, changes a const
   } finally { graphDir = null; }
 }, { geolocation: { latitude: 39.155, longitude: -84.615 }, permissions: ['geolocation'] });
 
-// Tune your routes (the owner, 2026-11-09: "every parameter with a slider for premium users"; Pro is open to everyone
+// Tune your routes (the owner, 2026-11-09; free for everyone since 2026-11-10, Pro is looks only; it was Pro, open to everyone
 // until it goes on sale): Garage → Settings → Route tuning, plain sliders over the routing's numbers (web/route_tuning.js).
 // Fun's extra time up re-plans the trip on screen to a longer way, the card says "Your tuning", Reset brings the route back.
 flow('route tuning: Fun\'s extra time slider re-plans a longer Fun route, the card says so, Reset brings it back (the owner 2026-11-09)', async (page, base) => {
@@ -4717,7 +4717,7 @@ flow('route tuning: Fun\'s extra time slider re-plans a longer Fun route, the ca
     check(await page.evaluate(() => ApexFunRoute.LEVELS.fun.budget === 0.35 && ApexRouteEngine.W.FUN === 1), 'the code\'s numbers back on the page');
   } finally { graphDir = null; }
 }, { geolocation: { latitude: 39.155, longitude: -84.615 }, permissions: ['geolocation'] });
-flow('route tuning: once Pro is on sale, the screen asks for Pro and settings left on this phone change no plan (the owner 2026-11-09)', async (page, base) => {
+flow('route tuning: once Pro is on sale it is still free: no Pro line, the sliders work, the settings on this phone plan the route (the owner 2026-11-10: Pro is looks only)', async (page, base) => {
   graphDir = graphFixture();
   try {
     // the server's flags as the phone keeps them (flags.js): Pro on sale; no entitlement on this phone
@@ -4728,8 +4728,8 @@ flow('route tuning: once Pro is on sale, the screen asks for Pro and settings le
       locked: !document.getElementById('tuneLock').hidden, lock: document.getElementById('tuneLock').textContent, disabled: document.querySelector('#garageTuneBody input[data-tune="funTime"]').disabled,
       kept: JSON.parse(localStorage.getItem('apex.routeTuning')).values.funTime }));
     check(x.onSale === true, 'Pro on sale: ' + JSON.stringify(x));
-    check(!x.chip && x.budget === 0.35 && x.fun === 1, 'on sale without Pro: the defaults plan it: ' + JSON.stringify(x));
-    check(x.locked && /comes with Vetta Pro/.test(x.lock) && x.disabled && x.kept === 100, 'the screen says Pro, the sliders are off, the settings kept: ' + JSON.stringify(x));
+    check(x.chip && (x.budget !== 0.35 || x.fun !== 1), 'on sale without Pro: your settings plan it, and the card says so: ' + JSON.stringify(x));
+    check(!x.locked && !/Vetta Pro/.test(x.lock) && !x.disabled && x.kept === 100, 'no Pro line, the sliders on, the settings kept: ' + JSON.stringify(x));
   } finally { graphDir = null; }
 }, { geolocation: { latitude: 39.155, longitude: -84.615 }, permissions: ['geolocation'] });
 
@@ -6517,7 +6517,10 @@ flow('plan flow (g) one name for go: Start on the card and the bar, Just drive w
   const { taps, tap } = await planPage(page, base);
   const idle = await page.evaluate(() => { const k = document.getElementById('startDrive'), r = k.getBoundingClientRect(), cs = getComputedStyle(k);
     return { text: k.textContent.trim(), w: r.width, bg: cs.backgroundColor, label: k.getAttribute('aria-label') }; });
-  check(idle.text === 'Just drive' && idle.bg === 'rgba(0, 0, 0, 0)' && idle.w < 150 && /no route/.test(idle.label), 'with no route the bar\'s key is the smaller Just drive, not the red Start: ' + JSON.stringify(idle));
+  // Vetta Line (signature.css): with no route, Just drive is the screen's one red key (the app's first verb is to drive);
+  // it stays the shorter word and the narrower key than the card's Start, and says it records with no route
+  const red = await page.evaluate(() => { const c = document.createElement('i'); c.style.color = 'var(--accent)'; document.body.append(c); const v = getComputedStyle(c).color; c.remove(); return v; });
+  check(idle.text === 'Just drive' && idle.bg === red && idle.w < 150 && /no route/.test(idle.label), 'with no route the bar\'s key is Just drive, in red, narrower than Start: ' + JSON.stringify({ idle, red }));
   await page.click('#startMore');
   const sheet = await page.evaluate(() => [...document.querySelectorAll('.start-sheet button')].map((b) => b.textContent.trim()));
   check(sheet[0] === 'Just drive' && !sheet.includes('Drive'), 'the start sheet says Just drive too: ' + JSON.stringify(sheet));
@@ -6547,6 +6550,37 @@ flow('plan flow (g) one name for go: Start on the card and the bar, Just drive w
   await tap('#startDrive', 'Just drive');
   await page.waitForFunction(() => window.apexDebug.driveActive, null, { timeout: 10000 });
   check(taps.n === 1, 'a free drive is one tap');
+}, IPHONE);
+
+// Vetta Line (web/signature.css): the idle map's home. The place is a masthead set in type (no box), the deck's invitations
+// stand side by side on one shelf of cards with Best roads nearby last, Just drive is the one red key, and nothing on the
+// shelf is cut or under the tab bar. Under reduced motion nothing is left mid-arrival.
+flow('Vetta Line home: a masthead, one shelf of road cards, Just drive the one red key, still under reduced motion', async (page, base) => {
+  await page.route(base + '/api/**', (route) => route.fulfill({ contentType: 'application/json', body: '[]' }));
+  await page.route('https://nominatim.openstreetmap.org/**', (route) => route.fulfill({ contentType: 'application/json', body: JSON.stringify({ address: { town: 'Tellico Plains' } }) }));
+  await page.route('https://api.open-meteo.com/**', (route) => route.fulfill({ contentType: 'application/json', body: JSON.stringify({ current: { temperature_2m: 16, weather_code: 1, precipitation: 0 }, hourly: { time: [new Date(Date.now() - 3600e3).toISOString().slice(0, 13) + ':00'], precipitation: [0] } }) }));
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  await planPage(page, base);
+  await page.evaluate(() => { apexDebug.state.lastPosition = apexDebug.state.lastPosition || { lat: 35.36, lon: -84.29 }; return apexDebug.placePlate(); });
+  await page.waitForFunction(() => { const p = document.getElementById('placePlate'); return p && !p.hidden && p.querySelector('b'); }, null, { timeout: 15000 })
+    .catch(() => page.evaluate(() => [document.getElementById('placePlate').outerHTML, JSON.stringify(apexDebug.state.lastPosition), document.getElementById('app').className]).then((t) => { throw new Error('no masthead: ' + JSON.stringify(t)); }));
+  const d = await page.evaluate(() => {
+    const pp = document.getElementById('placePlate'), cs = getComputedStyle(pp), b = pp.querySelector('b'), sp = pp.querySelector('span');
+    const shelf = document.getElementById('deckShelf'), tabs = document.getElementById('tabbar').getBoundingClientRect();
+    const cards = [...shelf.querySelectorAll('.loop-suggest, #deckChips .chip')].filter((e) => e.getBoundingClientRect().width > 0).sort((x, y) => x.getBoundingClientRect().left - y.getBoundingClientRect().left);
+    const reds = [...document.querySelectorAll('#planBar button')].filter((e) => e.getBoundingClientRect().width > 0 && getComputedStyle(e).backgroundColor === getComputedStyle(document.documentElement).getPropertyValue('--accent').trim().replace(/^#(..)(..)(..)$/, (_, r, g, b2) => `rgb(${parseInt(r, 16)}, ${parseInt(g, 16)}, ${parseInt(b2, 16)})`));
+    const anim = [...document.querySelectorAll('#planBar, #deckShelf > *, #placePlate *')].map((e) => getComputedStyle(e)).filter((c) => c.animationName !== 'none' || +c.opacity < 1).length;
+    return { text: pp.textContent, head: b && b.textContent, rest: sp && sp.textContent, border: cs.borderTopStyle, bg: cs.backgroundColor, headPx: parseFloat(getComputedStyle(b).fontSize),
+      flex: getComputedStyle(shelf).display, ys: [...new Set(cards.map((c) => Math.round(c.getBoundingClientRect().top)))], last: cards.length && cards[cards.length - 1].id, n: cards.length,
+      clear: cards.every((c) => c.getBoundingClientRect().bottom <= tabs.top), reds: reds.map((e) => e.id), anim };
+  });
+  check(d.text === 'Tellico Plains · Dry · 61°' && d.head === 'Tellico Plains' && d.rest === 'Dry · 61°', 'the masthead reads as the plate did: ' + JSON.stringify(d));
+  check(d.border === 'none' && d.bg === 'rgba(0, 0, 0, 0)' && d.headPx >= 28, 'the place is type on the map, not a box: ' + JSON.stringify(d));
+  check(d.flex === 'flex' && d.n >= 2 && d.ys.length === 1 && d.last === 'deckNearby' && d.clear, 'one shelf of cards, Best roads nearby last, above the tabs: ' + JSON.stringify(d));
+  check(d.reds.length === 2 && d.reds.includes('startDrive'), 'Just drive (and its chevron) is the one red key: ' + JSON.stringify(d));
+  check(d.anim === 0, 'reduced motion: nothing is left arriving: ' + JSON.stringify(d));
+  const bad = await unsafe(page, SAFE.portrait);
+  check(!bad.length, 'the home:\n  ' + bad.join('\n  '));
 }, IPHONE);
 
 flow('safe areas: the Dynamic Island, the home indicator and the rounded corners clear every control, upright, on its side and on small phones', async (page, base) => {
@@ -6846,7 +6880,7 @@ flow('TestFlight 2026-11-05 note 6: the idle map\'s deck is the suggestion and o
       kept: localStorage.getItem('apex.deckMin'), H: innerHeight }; });
   let d = await deck();
   check(d.rows === 2 && d.chips && !d.min, 'the deck: Best roads nearby, the suggestion and one road (it was three rows): ' + JSON.stringify(d));
-  const unfolded = d.top;
+  const unfolded = d.top;   // Vetta Line: the deck is the bar and one shelf of cards, so it folds by the shelf's height (~95 px; it was two rows, 150+), and the bar is 12 px taller (52 px keys)
   let bad = await unsafe(page, SAFE.portrait);
   check(!bad.length, 'the deck:\n  ' + bad.join('\n  '));
   // a point on the bar itself (its edge beside Where to?), as a thumb drags it
@@ -6858,7 +6892,7 @@ flow('TestFlight 2026-11-05 note 6: the idle map\'s deck is the suggestion and o
   await swipe(cdp, bar.x, bar.y, 0, 120);
   await page.waitForTimeout(300);
   d = await deck();
-  check(d.min && d.rows === 0 && !d.chips && !d.open && d.kept === '1' && d.top - unfolded > 150 && d.H - d.top < 170, 'a swipe down folds the deck to the bar alone: ' + JSON.stringify(d) + ' unfolded at ' + unfolded);
+  check(d.min && d.rows === 0 && !d.chips && !d.open && d.kept === '1' && d.top - unfolded > 80 && d.H - d.top < 182, 'a swipe down folds the deck to the bar alone: ' + JSON.stringify(d) + ' unfolded at ' + unfolded);
   bad = await unsafe(page, SAFE.portrait);
   check(!bad.length, 'the folded deck:\n  ' + bad.join('\n  '));
   await page.reload();

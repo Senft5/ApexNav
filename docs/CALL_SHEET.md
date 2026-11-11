@@ -4,16 +4,18 @@ Decisions Claude made for you, newest first. Each one says what was decided, why
 you reach one you've seen. If you disagree with a call, say so and it gets reversed; nothing here is hard to undo unless
 it says so. Things only you can do are in docs/OWNER_TODO.md.
 
-## 2026-11-10 (fable-camber-sure): banking says how sure it is (claude/fable-camber-sure)
+## 2026-11-10 (fable-pro-looks): Pro is looks only; one Pro crew-mate dresses the whole crew (claude/fable-pro-looks)
 
-The red team (TE-03) pointed out that banking comes from one phone on a sprung car with no body-roll model, yet the
-gauge read it to a tenth of a degree ("BANK +4.3°"). It now reads whole degrees ("BANK +4°"), the drive's lane readout
-too, and the end-of-drive line says "banked about 4°". Tapping the gauge (parked) says Bank is approximate, to a
-degree or two, because body roll is not modelled. The drive view already says how many runs agree or differ beside
-it. Nothing about how banking is measured or shared changed; a roll model or a surveyed reference road is the real fix
-(docs/PHILOSOPHY.md §4).
+Your answer to the red team (PH-06, BR-06, UX-06): Pro is themes and liveries, nothing else. Route tuning, which went
+Pro on 2026-11-09, is free for everyone, with or without Pro and after Pro goes on sale (web/pro.js has two kinds now,
+theme and livery; tests/test_pro.py fails if a third appears). A crew's livery used to climb Plain, Club (5 Decals), Works
+(12), Factory (20) as Pro crew-mates added up, with a meter in Edit livery and "Decals come from crew-mates with Vetta
+Pro" on every crew page. Now any one crew-mate with Pro opens the whole livery for everyone (backend/src/livery.ts); the
+meter is gone; a Plain crew's page says "Plain livery" and nothing it lacks, and a dressed one says who dressed it
+("Factory livery · dressed by @bob"). A crew loses nothing it set when the Pro member leaves: it falls back to Plain
+and comes back with the next one, as before.
 
-Undo: revert the PR.
+Undo: revert the PR (tiers come back as they were; nothing in the database changed).
 
 ## 2026-11-10 (fable-road-page): About a road says its climb, and speaks in words (claude/fable-road-page)
 
@@ -78,6 +80,14 @@ The e2e suite is 152 flows now and takes about 24 minutes, so GitHub cut it off 
 (twice on #349, once on #344) with every flow before it passing. The limit is 35 minutes. No test is skipped or
 shortened. Undo: set `timeout-minutes` back to 25 in `.github/workflows/core-tests.yml`, or better, split the suite.
 
+## 2026-11-10 · Vetta Line: the home screen is a masthead over the map and a shelf of road cards (claude/fable-signature)
+
+- What: web/signature.css, a new last stylesheet, restyles the idle map: the place as a masthead in type, the deck as one
+  sheet with a red Just drive and the invitations side by side as cards, soft lift instead of ink boxes, the apex dot on
+  the open tab, a short arrival.
+- Why: the owner asked for big moves toward one cohesive, artist-made look; the home was boxes in 1.5 px ink stacked in rows.
+- Undo: remove the `signature.css` link in web/index.html (the shelf wrapper is harmless without it), or revert the PR.
+
 ## 2026-11-10 (fable-loop-time): a loop can be set by time on the dial (claude/fable-loop-time)
 
 Following your "the whole point is aimless driving": "I have an hour" is how a loop is usually asked for, and time
@@ -107,6 +117,17 @@ in every message the app shows:
 Also: "Saved for offline: … Find it in Where to?." ended "?."; it reads "It's listed in Where to? now."
 
 Undo: revert the PR (`toast()` in web/cockpit.js, four CSS lines in web/index.html).
+
+## 2026-11-10 (fable-camber-sure): banking says how sure it is (claude/fable-camber-sure)
+
+The red team (TE-03) pointed out that banking comes from one phone on a sprung car with no body-roll model, yet the
+gauge read it to a tenth of a degree ("BANK +4.3°"). It now reads whole degrees ("BANK +4°"), the drive's lane readout
+too, and the end-of-drive line says "banked about 4°". Tapping the gauge (parked) says Bank is approximate, to a
+degree or two, because body roll is not modelled. The drive view already says how many runs agree or differ beside
+it. Nothing about how banking is measured or shared changed; a roll model or a surveyed reference road is the real fix
+(docs/PHILOSOPHY.md §4).
+
+Undo: revert the PR.
 
 ## 2026-11-10 (fable-layers): design pass 8: the Layers panel is the map's legend (claude/fable-layers)
 

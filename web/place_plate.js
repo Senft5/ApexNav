@@ -83,6 +83,12 @@
     return parts.join(' · ');
   }
 
-  const api = { sky, weather, pastMm, obsOf, town, text };
+  /** The plate as a masthead: the first thing known is the head, the rest its line under it. { head, rest }; both '' when nothing is known. */
+  function parts(p, metric) {
+    const all = text(p, metric).split(' · ').filter(Boolean);
+    return { head: all[0] || '', rest: all.slice(1).join(' · ') };
+  }
+
+  const api = { sky, weather, pastMm, obsOf, town, text, parts };
   if (typeof module !== 'undefined' && module.exports) module.exports = api; else root.ApexPlacePlate = api;
 })(typeof window !== 'undefined' ? window : globalThis);
