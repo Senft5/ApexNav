@@ -63,7 +63,7 @@
       values: ['Quick', 'Fun', 'Long way'], set: 'the route card, as three cards, each its pick of the routes already found (a tap takes it)', control: 'data-fun', homes: 1 },
     // Options (one bottom sheet, from the chips on the plan sheet and the route card): Avoid ✕, Prefer ✓, the kinds of corners
     avoid: { label: 'Avoid', kind: 'setting', meaning: 'Roads a route keeps off when it can: crossed out (✕) means avoided.',
-      values: ['Highways', 'Tolls', 'Ferries', 'Unpaved', 'Towns', 'Cameras'], set: 'the Options sheet, under Avoid', control: 'data-avoid', homes: 1 },
+      values: ['Highways', 'Tolls', 'Ferries', 'Unpaved', 'Towns', 'Cameras', 'Police reports'], set: 'the Options sheet, under Avoid', control: 'data-avoid', homes: 1 },
     prefer: { label: 'Prefer', kind: 'setting', meaning: 'Roads a route is ranked higher for: ticked (✓) means preferred.',
       values: ['Measured roads', 'New to me', 'Crew favourites'], set: 'the Options sheet, under Prefer', control: 'data-prefer', homes: 1 },
     hairpins: { label: 'Hairpins', kind: 'setting', was: 'Corner mix: hairpins', meaning: 'Whether routes look for fewer, any or more very tight corners.',

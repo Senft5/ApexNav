@@ -31,6 +31,15 @@
 - Checked: pytest full; e2e "a pin has a name", "Where to?" 9/9, "plan flow" 6/6, "spot photo", "Dynamic Type",
   "REVIEW.md 1.2" 2/2, "routes from elsewhere", "saved for offline", "drag to reshape", "safe areas".
 - Next: a tapped place could take the road's name once the lookup lands (rename the planned route after the fact).
+## Session 2026-11-11 (fable-avoid-police): Avoid → Police reports (claude/fable-avoid-police, off origin/main fc27c47)
+
+- Done: `ApexHazardReports.policeFor` / `passesNear`; `FunRoute` avoid key `police` (unavoided, keepAvoiding); graph_router
+  `AVOID_POINT_X` on edges near `avoid.points`; cockpit `avoidForTrip` (per plan), police exclusions in valhallaRoutesOnce,
+  card "Around a police report"; the Options chip; APP_REVIEW 1.4.3 row. Tests: tests/test_avoid_police.py, graph router
+  `avoidPolice`, e2e "avoid police reports". Full pytest green.
+- Next: a police report that arrives mid-drive could offer a reroute (today it counts only when a route is planned);
+  fixed speed cameras (IDEAS R-35 todo).
+
 ## Session 2026-11-10 (fable-one-corner): singular corners, and the nearby key keeps its label (claude/fable-one-corner, off origin/main e76f1bb)
 
 - cockpit.js: the route bar and card lines use `ApexFormat.cornerCount`; `buildRoute`'s announce pluralises inline

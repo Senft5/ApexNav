@@ -47,6 +47,19 @@ notes under a search that finds nothing said "Press Go" while the key under them
 "offline" is only said when the phone is offline.
 
 Undo: revert the PR. Typed coordinates still work as before and are still named "Pin lat, lon".
+## 2026-11-11 (fable-avoid-police): Avoid → Police reports (claude/fable-avoid-police)
+
+The owner said go (2026-11-11, "yes avoid police"), reversing October's call that dropped routing round police (IDEAS
+R-35). My calls inside it: only live reports count (the server's 60 min life, and a report cleared by more drivers than
+confirmed it is skipped), within 15 km of the trip, 20 at most; a convoy leader's live Police call counts first. Valhalla
+gets them as exclusions ahead of cameras in the 50-slot budget (police reports move, cameras don't, so a fresh report is
+the more useful exclusion). Our own router can't exclude a point, so the roads within 150 m cost x8: a way round wins
+unless it is much longer, and then the card says "Couldn't avoid police reports". A plan waits at most 0.2 s for the
+reports. Signed out there are none, and a toast says so once a minute. No checkpoint kind exists and none is made
+(App Store 1.4.3, APP_REVIEW.md).
+
+Undo: revert the PR. The chip is off by default, so turning it off in Options also undoes it for one driver.
+
 ## 2026-11-10 (fable-one-corner): "1 corners" is "1 corner"; a Best roads nearby key keeps its word while it searches (claude/fable-one-corner)
 
 A road with one corner read "1 corners" on its card's line, under its big number, aloud to a screen reader, in "1 more
