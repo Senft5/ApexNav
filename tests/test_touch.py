@@ -97,9 +97,39 @@ def test_unknown_stays_unknown():
     assert all(o["brake_on"] is None for o in light)
 
 
+def test_unmeasured_or_stopped_bins_give_no_rate():
+    # a blanked g (g_known 0, held as 0.0) just before the bins the corner itself checks, under a long steady braking:
+    # it would read as a quick application; and a speed gap inside the rise would squeeze the time (a rate too high)
+    base = make_drive(1, corners=6)
+    d = plant(base, 0.5, 0.5, 0.6)
+    lon, known = list(d["lon_g"]), [1] * len(d["lon_g"])
+    for c in d["corners"]:
+        a = c["apex"]
+        for q in range(a - 50, a - 3):
+            lon[q] = -0.45
+        for q in range(a - 50, a - 40):
+            lon[q], known[q] = 0.0, 0
+    obs = dp.observe({**d, "lon_g": lon, "g_known": known})
+    assert obs and all(o["brake_on"] is None for o in obs)
+    d = plant(base, 0.4, 0.4, 0.4)
+    v = list(d["speed_mps"])
+    for c in d["corners"]:
+        v[c["apex"] - 28] = None
+        v[c["start"] - 4] = None
+    timed = dp.observe(plant(base, 0.4, 0.4, 0.4))
+    gap = dp.observe({**d, "speed_mps": v})
+    assert any(o["brake_on"] is not None for o in timed) and all(o["brake_on"] is None and o["turn_in"] is None for o in gap)
+
+
 @pytest.mark.skipif(NODE is None, reason="node not installed")
 def test_parity_and_words():
     drives = [plant(make_drive(s), 0.5 + 0.4 * s, 0.4 + 0.3 * s, 0.4 + 0.2 * s, seed=s) for s in range(4)] + [make_drive(9)]
+    gk = [1] * len(drives[0]["lat_g"])
+    c = drives[0]["corners"][3]
+    gk[c["apex"] - 46:c["apex"] - 40] = [0] * 6                  # blanked g just before the corner's own checks
+    v = list(drives[1]["speed_mps"])
+    v[drives[1]["corners"][2]["apex"] - 28] = None              # a speed gap inside a braking
+    drives[0], drives[1] = {**drives[0], "g_known": gk}, {**drives[1], "speed_mps": v}
     meta = [{"id": f"d{i}", "month": None, "car": None, "tags": None} for i in range(len(drives))]
     py_obs = [dp.observe(d) for d in drives]
     py = dp.profile([{**m, "obs": o} for m, o in zip(meta, py_obs)])["touch"]

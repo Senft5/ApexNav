@@ -74,20 +74,25 @@
     return dt <= 0 ? null : (TOUCH_HI - TOUCH_LO) * p / dt;
   }
   const argmax = (lo, hi, f) => { let best = lo; for (let i = lo + 1; i <= hi; i++) if (f(i) > f(best)) best = i; return best; };
-  function cornerTouch(Core, lon, lat, t, s, e, run, first) {
+  // every bin w0..w1 with its g measured and the car moving at a known speed (a blanked g or a bin taking no time makes a false rate)
+  function measured(Core, v, known, w0, w1) {
+    for (let q = w0; q <= w1; q++) if ((known && !known[q]) || !(Number.isFinite(v[q]) && v[q] >= Core.STOPPED_MPS)) return false;
+    return true;
+  }
+  function cornerTouch(Core, lon, lat, t, s, e, run, first, v, known) {
     const n = lat.length;
     let on = null, off = null, turn = null;
     if (run) {
       const w0 = Math.max(0, first - SQUEEZE_GAP), w1 = Math.min(n - 1, run[1] + SQUEEZE_GAP), dec = [];
       for (let q = w0; q <= w1; q++) dec.push(-lon[q]);
-      if (dec.every(Number.isFinite) && fine(dec)) {
+      if (dec.every(Number.isFinite) && measured(Core, v, known, w0, w1) && fine(dec)) {
         const pk = argmax(first - w0, run[1] - w0, (i) => dec[i]);
         if (dec[pk] >= TOUCH_MIN_G) { const tt = Array.from(t.slice(w0, w1 + 1)); on = touchRate(dec, tt, pk, -1); off = touchRate(dec, tt, pk, 1); }
       }
     }
     const w0 = Math.max(0, s - Core.TURN_LEAD), side = [];
     for (let q = w0; q <= e; q++) side.push(lat[q]);
-    if (side.every(Number.isFinite) && fine(side)) {
+    if (side.every(Number.isFinite) && measured(Core, v, known, w0, e) && fine(side)) {
       const pk = argmax(s - w0, e - w0, (i) => Math.abs(side[i])), way = side[pk] > 0 ? 1 : -1, y = side.map((x) => way * x);
       if (y[pk] >= TOUCH_MIN_G) turn = touchRate(y, Array.from(t.slice(w0, e + 1)), pk, -1);
     }
@@ -135,7 +140,7 @@
           if (Math.max(...dec) >= SQUEEZE_MIN_G) squeeze = 1 - clamp01(excess(dec) / SQUEEZE_SPAN_G);
         }
       }
-      const [brakeOn, brakeOff, turnIn] = cornerTouch(Core, lon, lat, t, s, e, run, first);
+      const [brakeOn, brakeOff, turnIn] = cornerTouch(Core, lon, lat, t, s, e, run, first, v, drive.g_known || null);
       let grade = null;
       if (elev) {
         const g0 = Math.max(0, s - GRADE_PAD), g1 = Math.min(n - 1, e + GRADE_PAD), h0 = elev[g0], h1 = elev[g1];

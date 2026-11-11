@@ -169,15 +169,26 @@ def _touch(y: list, t: list, pk: int, way: int):
     return None if dt <= 0 else (TOUCH_HI - TOUCH_LO) * p / dt
 
 
-def _corner_touch(lon, lat, t: list, s: int, e: int, a: int, run, first):
+def _measured(v, known, w0: int, w1: int) -> bool:
+    """Every bin w0..w1 has its g measured (g_known, where the drive says) and the car moving at a known speed: a
+    blanked g reads as a sudden 0 g, and a stopped or unknown bin takes no time, so either would make a false rate."""
+    for q in range(w0, w1 + 1):
+        if known is not None and not known[q]:
+            return False
+        if not (math.isfinite(v[q]) and v[q] >= da.STOPPED_MPS):
+            return False
+    return True
+
+
+def _corner_touch(lon, lat, t: list, s: int, e: int, a: int, run, first, v, known=None):
     """(brake_on, brake_off, turn_in) in g a second for one corner, each QUICK when quicker than the bins can time and
-    None when it cannot be told."""
+    None when it cannot be told (its window not all measured, moving, and read ten times a second)."""
     n = len(lat)
     on = off = turn = None
     if run is not None:
         w0, w1 = max(0, first - SQUEEZE_GAP), min(n - 1, run[1] + SQUEEZE_GAP)
         dec = [-float(lon[q]) for q in range(w0, w1 + 1)]
-        if all(math.isfinite(x) for x in dec) and _fine(dec):
+        if all(math.isfinite(x) for x in dec) and _measured(v, known, w0, w1) and _fine(dec):
             r0, r1 = first - w0, run[1] - w0
             pk = max(range(r0, r1 + 1), key=lambda i: (dec[i], -i))
             if dec[pk] >= TOUCH_MIN_G:
@@ -185,7 +196,7 @@ def _corner_touch(lon, lat, t: list, s: int, e: int, a: int, run, first):
                 on, off = _touch(dec, tt, pk, -1), _touch(dec, tt, pk, 1)
     w0 = max(0, s - da.TURN_LEAD)
     side = [float(lat[q]) for q in range(w0, e + 1)]
-    if all(math.isfinite(x) for x in side) and _fine(side):
+    if all(math.isfinite(x) for x in side) and _measured(v, known, w0, e) and _fine(side):
         pk = max(range(s - w0, e - w0 + 1), key=lambda i: (abs(side[i]), -i))
         way = 1.0 if side[pk] > 0 else -1.0
         y = [way * x for x in side]
@@ -239,7 +250,7 @@ def observe(drive: dict) -> list:
                 dec = [-float(x) for x in lon[b0:b1 + 1]]
                 if max(dec) >= SQUEEZE_MIN_G:
                     squeeze = 1.0 - _clamp01(_excess(dec) / SQUEEZE_SPAN_G)
-        brake_on, brake_off, turn_in = _corner_touch(lon, lat, t, s, e, a, run, first)
+        brake_on, brake_off, turn_in = _corner_touch(lon, lat, t, s, e, a, run, first, v, drive.get("g_known"))
         grade = None
         if elev is not None:
             g0, g1 = max(0, s - GRADE_PAD), min(n - 1, e + GRADE_PAD)
