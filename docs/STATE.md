@@ -30,7 +30,9 @@
   page's "Against your records" panel adds "On this road: your cleanest pass yet at 7 of the 24 corners here you have
   driven three or more times, level with it at 2."
 - Tests: tests/test_best_corners.py (+1, parity and words), e2e "Your driving".
-- Next: the deepest-analysis list: on the drive page, mark which corners this drive holds the road's record for.
+- The corner list marks each corner this drive is your cleanest pass of ("Your cleanest pass here"; `held`, drive_view.js
+  `markRecords`).
+- Next: the deepest-analysis list: a road page (Your roads) with its corners' records and which drive holds each.
 
 ## Session 2026-11-11 (places by name): the cafés and fuel on the route card are a tap away, by name (claude/project-thread-me97iw, off origin/main)
 

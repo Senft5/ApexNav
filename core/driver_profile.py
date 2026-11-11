@@ -593,8 +593,10 @@ def road_records(mine: list, others: list) -> dict:
     [{x, y (m, one frame for all), hx, hy (unit heading), level}]; others: one such list per other drive. A corner of
     another drive is the same corner when its apex is within SAME_CORNER_M and its heading within SAME_WAY; a drive counts
     once per corner (its cleanest there). Over corners passed ROAD_MIN_PASSES times or more: {corners, best (this drive
-    the cleanest of all), level (equal to the cleanest other)}. Technique only."""
+    the cleanest of all), level (equal to the cleanest other), held (the apexes, when given, of the corners it is cleanest
+    at)}. Technique only."""
     corners = best = level = 0
+    held = []
     for m in mine:
         if m.get("level") is None:
             continue
@@ -613,9 +615,11 @@ def road_records(mine: list, others: list) -> dict:
         corners += 1
         if m["level"] > max(tops):
             best += 1
+            if m.get("apex") is not None:
+                held.append(m["apex"])
         elif m["level"] == max(tops):
             level += 1
-    return {"corners": corners, "best": best, "level": level}
+    return {"corners": corners, "best": best, "level": level, "held": held}
 
 
 def drive_touch(obs: list, others: list) -> dict:

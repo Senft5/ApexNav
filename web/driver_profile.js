@@ -311,6 +311,7 @@
   const ROAD_MIN_PASSES = 3, SAME_CORNER_M = 20, SAME_WAY = 0.7;
   function roadRecords(mine, others) {
     let corners = 0, best = 0, lvl = 0;
+    const held = [];
     for (const m of mine || []) {
       if (m.level === null || m.level === undefined) continue;
       const tops = [];
@@ -325,9 +326,9 @@
       if (1 + tops.length < ROAD_MIN_PASSES) continue;
       corners++;
       const mx = Math.max(...tops);
-      if (m.level > mx) best++; else if (m.level === mx) lvl++;
+      if (m.level > mx) { best++; if (m.apex !== null && m.apex !== undefined) held.push(m.apex); } else if (m.level === mx) lvl++;
     }
-    return { corners, best, level: lvl };
+    return { corners, best, level: lvl, held };
   }
   /** Clean corners of a drive placed for roadRecords: metres from (lat0, lon0), unit heading, the credits' level. */
   function placed(d, obs, lat0, lon0) {
@@ -335,7 +336,7 @@
     return (obs || []).filter((o) => SKILLS.every((k) => o[k] !== null && o[k] !== undefined)).map((o) => {
       const a = o.apex, a0 = Math.max(0, a - 2), a1 = Math.min(n - 1, a + 2);
       const hx = (d.lon[a1] - d.lon[a0]) * c * 111320, hy = (d.lat[a1] - d.lat[a0]) * 110540, hn = Math.hypot(hx, hy) || 1;
-      return { x: (d.lon[a] - lon0) * c * 111320, y: (d.lat[a] - lat0) * 110540, hx: hx / hn, hy: hy / hn, level: level(SKILLS.reduce((t, k) => t + o[k], 0) / SKILLS.length) };
+      return { apex: a, x: (d.lon[a] - lon0) * c * 111320, y: (d.lat[a] - lat0) * 110540, hx: hx / hn, hy: hy / hn, level: level(SKILLS.reduce((t, k) => t + o[k], 0) / SKILLS.length) };
     });
   }
   /** "On this road: your cleanest pass yet at 7 of the 24 corners you have driven three or more times, level with it at 2." */

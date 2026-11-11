@@ -581,7 +581,17 @@
     const ro = new ResizeObserver(() => { if (Math.abs((lanes.clientWidth || 0) - W) > 2) draw(); if (basemap) basemap.refit(); });
     ro.observe(lanes); if (basemap && planBox) ro.observe(planBox);
     function setRoadFeel(series) { feel = series; draw(); }
-    return { move, setRoadFeel, restyleMap() { if (basemap) basemap.restyle(); }, recenterMap() { if (basemap) basemap.recenter(); }, destroy() { ro.disconnect(); if (basemap) basemap.destroy(); }, summary: S };
+    // the corners this drive is your cleanest pass of on this road (driver_profile.js roadRecords, from the drive job)
+    function markRecords(apexes) {
+      const set = new Set(apexes || []);
+      grid2.querySelectorAll('.dv-corner').forEach((r, k) => {
+        const on = set.has(d.corners[k] && d.corners[k].apex), tag = r.querySelector('.dv-rec');
+        r.classList.toggle('rec', on);
+        if (on && !tag) r.append(el('span', 'dv-rec', 'Your cleanest pass here'));
+        if (!on && tag) tag.remove();
+      });
+    }
+    return { move, setRoadFeel, markRecords, restyleMap() { if (basemap) basemap.restyle(); }, recenterMap() { if (basemap) basemap.recenter(); }, destroy() { ro.disconnect(); if (basemap) basemap.destroy(); }, summary: S };
   }
 
   const api = { mount, summarize, tipText, plainCoach, abruptAdvice, fatigueText, consistencyRows, noteWordsPref, cornerCall };
