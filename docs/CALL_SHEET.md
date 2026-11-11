@@ -4,6 +4,18 @@ Decisions Claude made for you, newest first. Each one says what was decided, why
 you reach one you've seen. If you disagree with a call, say so and it gets reversed; nothing here is hard to undo unless
 it says so. Things only you can do are in docs/OWNER_TODO.md.
 
+
+## 2026-11-11 (routing round two): Avoid cameras keeps every route off them, speed cameras with plate readers
+
+With Avoid → Cameras on, only one of the routers was told about the cameras; the others' routes (our own router's, the
+quickest on highways, stage plans) still competed and could win while driving past one. Now every plan carries the
+cameras near the trip, our router costs the road a camera sits on 8 times its time, and a route that still drives past
+one (within 35 m) gives way to any route that doesn't. Fixed speed cameras are in the same list as plate readers, under
+the same switch, as on the map; you asked for speed cameras to be avoided too. A camera on a crossing road doesn't count
+against a route (35 m, not the card's 60 m count). When nothing gets round, the card says "Couldn't avoid cameras".
+
+Undo: revert the PR (no data changed). To split speed cameras onto their own switch, filter `kind` in `camsForTrip` and
+`camerasAround` (cockpit.js) by a new avoid key.
 ## 2026-11-10 (fable-pro-looks): Pro is looks only; one Pro crew-mate dresses the whole crew (claude/fable-pro-looks)
 
 Your answer to the red team (PH-06, BR-06, UX-06): Pro is themes and liveries, nothing else. Route tuning, which went

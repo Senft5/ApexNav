@@ -112,11 +112,19 @@ are dropped then, since they were chosen for the old order (`web/trip_stops.js`,
 
 ## Avoid cameras
 
-Avoid → **Cameras** (off by default) asks the camera map (OSM `surveillance:type=ALPR`, DeFlock, via Overpass, kept a week)
-for the plate readers within about 2 km of the trip and sends the router those nearest the start-to-end line as
+Avoid → **Cameras** (off by default) asks the camera map (OSM `surveillance:type=ALPR`, DeFlock, and `highway=speed_camera`,
+via Overpass, kept a week) for the cameras within about 2 km of the trip and sends the router those nearest the start-to-end line as
 `exclude_locations`, with any reported closures, 50 at most (`FunRoute.camerasToExclude`). The router avoids the road edge
 nearest each camera. A trip more than 1° across, the camera map offline, or no way round them: the route is built without
 avoiding cameras and a toast says so; the cameras still on the route are marked and counted as before (IDEAS R-35).
+
+Fixed speed cameras (OSM `highway=speed_camera`) are in the same camera map and avoided with the plate readers: one
+switch, as on the map. Every candidate keeps to it, not only Valhalla's (2026-11-11): each plan takes the cameras within
+5 km of the trip's box, 60 nearest its line, from the kept camera tiles (`avoidForTrip` → `avoid.cams`; a plan waits
+0.25 s at most, and Where to? opening loads the tiles round you ahead). Our own router costs the roads within 35 m of
+one x8 (`graph_router.js` `AVOID_CAM_X`), and a route that still drives within 35 m of one (the highway-friendly quickest,
+a stage plan, our router's) is dropped when any candidate doesn't (`FunRoute.unavoided` → `cameras`); when none can, the
+card says "Couldn't avoid cameras". 35 m and not the card's 60 m count: a camera on a crossing road is not on your way.
 
 ## Avoid police reports
 

@@ -2527,17 +2527,44 @@
       policeSeen.set(t, { list, r });
       return r;
     }
+    let camWarmAt = -1e9;
     function policeWarm() {
       const p = state.lastPosition;
       if (avoid.police && p && window.ApexSync && ApexSync.signedIn() && !policeCached([p])) hazardsAround([p]).catch(() => {});
+      // the camera tiles round where you are, so a plan that avoids cameras finds them kept (camsForTrip)
+      if (avoid.cameras && p && window.ApexCameras && performance.now() - camWarmAt > 60000 && (camWarmAt = performance.now())) alprNodesIn(p.lat - 0.15, p.lon - 0.15, p.lat + 0.15, p.lon + 0.15).catch(() => {});
     }
     async function avoidForTrip(points) {
-      if (!avoid.police) return avoid;
-      const t0 = performance.now(), ask = policeAround(points);
-      const pts = policeCached(points) ? await ask.catch(() => null) : await RouteLoading.optional(ask, POLICE_WAIT_MS).catch(() => null);
-      if (window.apexDebug) window.apexDebug.policeWaitMs = Math.round(performance.now() - t0);
-      if (window.apexDebug) window.apexDebug.lastPolice = Array.isArray(pts) ? pts : null;
-      return { ...avoid, points: Array.isArray(pts) ? pts : [] };
+      if (!avoid.police && !avoid.cameras) return avoid;
+      const camsP = camsForTrip(points);
+      const out = { ...avoid };
+      if (avoid.police) {
+        const t0 = performance.now(), ask = policeAround(points);
+        const pts = policeCached(points) ? await ask.catch(() => null) : await RouteLoading.optional(ask, POLICE_WAIT_MS).catch(() => null);
+        if (window.apexDebug) window.apexDebug.policeWaitMs = Math.round(performance.now() - t0);
+        if (window.apexDebug) window.apexDebug.lastPolice = Array.isArray(pts) ? pts : null;
+        out.points = Array.isArray(pts) ? pts : [];
+      }
+      const cams = await camsP;
+      if (window.apexDebug) window.apexDebug.lastCams = cams;
+      if (cams) out.cams = cams;
+      return out;
+    }
+    // Avoid cameras for every candidate, not only Valhalla's (IDEAS R-35): the plate readers and fixed speed cameras within
+    // 5 km of the trip's box (60 nearest its line), so our own router keeps off the roads they sit on and a route that
+    // still drives past one gives way to one that doesn't (FunRoute.unavoided). The camera map is kept a week per tile, so
+    // this is usually instant; a plan waits CAM_WAIT_MS at most. Too big a trip, the map offline or slow: null (nothing
+    // known, nothing said here; the Valhalla request asks again and says so).
+    const CAM_WAIT_MS = 250, CAM_PAD_KM = 5;
+    async function camsForTrip(points) {
+      if (!avoid.cameras || !window.ApexCameras) return null;
+      const pts = (points || []).filter((p) => p && Number.isFinite(p.lat) && Number.isFinite(p.lon));
+      if (pts.length < 2) return null;
+      const lats = pts.map(p => p.lat), lons = pts.map(p => p.lon), pad = 0.05;
+      const s = Math.min(...lats), n = Math.max(...lats), w = Math.min(...lons), e = Math.max(...lons);
+      if (n - s > FunRoute.CAMERA_BOX_DEG || e - w > FunRoute.CAMERA_BOX_DEG) return null;
+      const nodes = await RouteLoading.optional(alprNodesIn(s - pad, w - pad, n + pad, e + pad), CAM_WAIT_MS).catch(() => null);
+      return Array.isArray(nodes) ? FunRoute.camerasToExclude(nodes, pts, 60, CAM_PAD_KM) : null;
     }
     // The reported hazards around a trip (50 km round its middle, asked by cell, VI-1), kept 5 min and reused for any trip
     // whose points all lie within 35 km of where they were asked for; one request at a time
