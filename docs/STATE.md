@@ -1,5 +1,16 @@
 # VETTA — CURRENT AGENT HANDOFF STATE
 
+## Session 2026-11-11 (round two analysis): Your touch from the 10 Hz g (IDEAS D-28; claude/project-thread-gd7nre, off origin/main 936aec3)
+
+- `core/driver_profile.py` `observe` adds `brake_on`, `brake_off`, `turn_in` per corner (g a second, 20 % to 80 % of the
+  peak, peak 0.25 g or more), `"quick"` when the rise spans under 1.5 bins, None when unknown or when `_fine` finds the g
+  kept once a second (staircase or ramp). `touch(obs)` → `profile()["touch"]` (median, quartiles, n, quick, release).
+  Port in `web/driver_profile.js` (`touch`, `touchLines`, the `.dp-touch` panel); `web/apex_core.js` exports `TURN_LEAD`.
+  `web/analysis_client.js` `OBS_VERSION` 2.
+- Tests: tests/test_touch.py (7: planted rates read back within 15 %, quick, coarse g gives none, parity, words); e2e
+  "Your driving" checks no panel for once-a-second g and the panel's words.
+- Next: IDEAS D-29, Pace in Your driving (speed-based; never a Work on). Then touch by kind of corner and month.
+
 ## Session 2026-11-11 (fable-time-attack): weekly time attack per area (claude/fable-time-attack, off origin/main)
 
 - Migration 0049 (ta_pool, ta_weeks, ta_entries): applied on preview; prod at merge. backend/src/time_attack.ts, routes /api/timeattack*,
