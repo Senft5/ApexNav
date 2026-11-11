@@ -2330,7 +2330,8 @@ flow('one red that means act now: Sight is ink until you are over it, then colou
     how: document.getElementById('explainHow').textContent, now: document.getElementById('explainNow').textContent }));
   check(sheet.title === 'Sight' && /never a target/.test(sheet.what) && /SLOW/.test(sheet.how) && /^Now: \d+ (mph|km\/h)$/.test(sheet.now), 'the Sight sheet: ' + JSON.stringify(sheet));
   await page.click('#explainDone');
-  check(!(await page.evaluate(() => document.getElementById('explainCard').classList.contains('show'))), 'Done closes it');
+  // waited for, not read once: on a busy runner the class can come off a frame after the click returns (CI 2026-11-11)
+  check(await page.waitForFunction(() => !document.getElementById('explainCard').classList.contains('show'), null, { timeout: 2000 }).then(() => true, () => false), 'Done closes it');
   await page.click('#cluster .g-score');
   await page.waitForSelector('#explainCard.show', { timeout: 3000 });
   check(await page.textContent('#explainTitle') === 'Vetta Score', 'the Score explains itself');
