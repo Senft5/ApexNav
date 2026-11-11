@@ -17,4 +17,5 @@ One language for every screen, so the app reads as one made thing. web/signature
 
 **Where it applies.** The map page (index.html) and the Log (analysis.html, `body.log-page`) both load signature.css last.
 A page that has its own tab bar draws the same apex dot on the open tab. Two places on one tab (Drives | Stages, Friends |
-Crews) are underlined tabs in the numeral face, never a slide switch.
+Crews) are underlined tabs in the numeral face, never a slide switch. A sheet that rises over a page (`.side-pop`) is
+paper on `--lift-2` with its title in the numeral face, and a mode switch (`.switch`) is a well with the chosen key in ink.

@@ -95,7 +95,7 @@ def test_no_api_url_carries_a_fine_coordinate():
 def test_near_me_lookups_use_the_cell():
     cockpit = (WEB / "cockpit.js").read_text(encoding="utf-8")
     events = (WEB / "crew_events.js").read_text(encoding="utf-8")
-    assert cockpit.count("/api/hazards?${ApexPrivacyZones.cellQuery(") == 3
+    assert cockpit.count("/api/hazards?${ApexPrivacyZones.cellQuery(") == 4   # live reports, discovery, the drive and the road page
     assert "/api/crews/discover?${ApexPrivacyZones.cellQuery(" in cockpit
     assert "/api/events/near?${Z.cellQuery(" in events
     # the drive's own lookup: gated (zone, private edge) and cached per cell

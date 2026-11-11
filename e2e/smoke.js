@@ -4381,7 +4381,11 @@ flow('Your driving: the profile over every drive opens from the Log, names the w
   check(/From 108 clean corners on 3 drives/.test(text), 'what it is read from: ' + text.slice(0, 120));
   check(/One steering arc is weaker through rights: \d+ against 100 through lefts, on 3 of 3 drives\./.test(text), 'the weak side is named: ' + text);
   check(/Work on: One steering arc\s+It shows most through rights\./.test(text), 'the focus says where');
-  check(await page.evaluate(() => document.querySelector('.dp-st.weak').dataset.skill === 'arc' && document.querySelectorAll('.dp-st').length === 6), 'six stations, the weak one marked');
+  check(await page.evaluate(() => document.querySelector('.dp-st.weak').dataset.skill === 'arc' && document.querySelectorAll('.dp-st:not([data-skill="pace"])').length === 6), 'six stations, the weak one marked');
+  // IDEAS D-29: pace beside them, in its own panel, and never the one to work on
+  const pace = await page.evaluate(() => { const p = document.querySelector('#drivingRoot .dp-pace'); return p ? p.innerText : null; });
+  check(pace && /Your pace/.test(pace) && /\b\d{1,3}\b/.test(pace) && /sane limit/.test(pace) && !/Work on/.test(pace), 'the pace panel: ' + pace);
+  check(!/Work on: Pace/.test(text), 'pace is never the thing to work on');
   check(!/mph|km\/h|\d s\b/.test(text), 'never a speed or a time');
   check(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth), 'nothing wider than the phone');
   // touch: these drives' g runs straight between fixes (as recordings before ten readings a second did), so there is none
@@ -5431,6 +5435,25 @@ flow('road page: About a road shows its archetype, axes and how sure it is (IDEA
   await page.waitForFunction(() => /climbing/.test(document.querySelector('aside.side-pop.open .rp-head').textContent), null, { timeout: 10000 });
   const head = await page.textContent('aside.side-pop.open .rp-head');
   check(/climbing [\d,]+ ft$/.test(head) && !/object/i.test(head), 'the climb in feet: ' + head);
+  check(!/On this road|members felt/.test(await page.textContent('aside.side-pop.open')), 'signed out: nothing said about hazards');
+  await page.click('aside.side-pop.open button:has-text("Close")');
+  // a member: bumps members felt and a live gravel report on the road, a cleared one left out (Q-13 verified hazards)
+  await page.evaluate(() => {
+    ApexSync.member = async () => ({ signed_in: true, member: true });
+    const realFetch = ApexSync.apiFetch;
+    ApexSync.apiFetch = async (path, o) => (/^\/api\/hazards\?/.test(path)
+      ? new Response(JSON.stringify([{ id: 'a', kind: 'gravel', lat: 35 + 50 / 110540, lon: -83, confirms: 3, clears: 0 },
+        { id: 'b', kind: 'animal', lat: 35 + 60 / 110540, lon: -83, confirms: 1, clears: 2 }]), { headers: { 'content-type': 'application/json' } })
+      : realFetch(path, o));
+    ApexContributor.measuredAlong = async () => ({ coverage: 0, avgPasses: 0, crowdBumps: [{ index: 40, p: 0.9 }] });
+    const lat = [], lon = []; let x = 0, y = 0, h = Math.PI / 2;
+    const step = (n, turn) => { for (let i = 0; i < n; i++) { h += turn; x += 5 * Math.cos(h); y += 5 * Math.sin(h); lat.push(35 + y / 110540); lon.push(-83 + x / 91190); } };
+    step(20, 0); for (let k = 0; k < 8; k++) { step(10, (k % 2 ? 1 : -1) * Math.PI / 10); step(16, 0); } step(20, 0);
+    window.apexDebug.openRoadPage({ lat, lon, name: 'Test Pass', km: lat.length * 5 / 1000, junctionsPerKm: 0.2 });
+  });
+  await page.waitForFunction(() => /Bump members felt/.test(document.querySelector('aside.side-pop.open').textContent), null, { timeout: 10000 });
+  const onRoad = await page.textContent('aside.side-pop.open');
+  check(/Gravel\s*at [\d.]+ (mi|ft|km|m) · 3 confirmed/.test(onRoad) && !/Animal/.test(onRoad), 'the live report, not the cleared one: ' + onRoad.slice(0, 600));
   await page.click('aside.side-pop.open button:has-text("Close")');
   check(!(await page.isVisible('aside.side-pop.open[aria-label="About this road"]')), 'closes');
 });
@@ -7532,7 +7555,9 @@ flow('Vetta Line home: a masthead, one shelf of road cards, Just drive the one r
   check(!bad.length, 'the home:\n  ' + bad.join('\n  '));
 }, IPHONE);
 
-flow('safe areas: the Dynamic Island, the home indicator and the rounded corners clear every control, upright, on its side and on small phones', async (page, base) => {
+// One flow a phone shape (they ran as one 4.5 min flow until 2026-11-11, the longest in CI; split so the four e2e shards
+// balance): every screen below, under that shape's island, home indicator and corners. The first also proves the scanner.
+for (const [orient, d] of Object.entries(SAFE)) flow(`safe areas (${orient}): the Dynamic Island, the home indicator and the rounded corners clear every control`, async (page, base) => {
   await page.route(base + '/api/**', (route) => { const p = new URL(route.request().url()).pathname;
     route.fulfill({ contentType: 'application/json', body: p === '/api/me' ? '{"signed_in":true,"member":true,"handle":"kit_r"}' : '[]' }); });
   await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', localStorage.getItem('e2e.fresh') ? '' : '1'); } catch (_) {} });
@@ -7557,39 +7582,37 @@ flow('safe areas: the Dynamic Island, the home indicator and the rounded corners
     ['log', '/analysis.html?tab=log', null],
     ['privacy', '/privacy.html', null],
   ];
-  // the scanner catches what it says it does: two planted keys that overlap, and one 3 pt from the edge
-  await page.setViewportSize({ width: SAFE.portrait.w, height: SAFE.portrait.h });
-  await page.goto(base + '/privacy.html');
-  await page.evaluate(() => { const k = (l, t) => { const b = document.createElement('button'); b.textContent = 'X'; b.style.cssText = `position:absolute;left:${l}px;top:${t}px;width:60px;height:60px;z-index:99`; document.body.append(b); };
-    k(100, 300); k(150, 330); k(3, 500); });
-  const planted = await unsafe(page, SAFE.portrait);
-  check(planted.some((b) => /X" overlaps/.test(b)) && planted.some((b) => /gap left 3/.test(b)), 'the scanner finds a planted overlap and gap: ' + planted.join(' | '));
-  const bad = [], shots = [];
-  for (const [orient, d] of Object.entries(SAFE)) {
-    await page.setViewportSize({ width: d.w, height: d.h });
-    await cdp.send('Emulation.setSafeAreaInsetsOverride', { insets: d.i });
-    for (const [name, url, act, fresh] of screens) {
-      await page.goto(base + '/index.html?blank=1');
-      await page.evaluate((f) => { if (f) localStorage.setItem('e2e.fresh', '1'); else localStorage.removeItem('e2e.fresh'); }, !!fresh);
-      await page.goto(base + url);
-      await page.waitForFunction(() => document.readyState === 'complete' && (!document.getElementById('app') || (window.apex && window.apexDebug)));
-      await page.waitForFunction(() => !document.getElementById('boot'), null, { timeout: 5000 });   // the opening cover (boot.js) hides everything for up to 2.5 s
-      await page.waitForTimeout(300);
-      if (act) { await page.evaluate('(async () => { ' + act + ' })()'); await page.waitForTimeout(700); }
-      for (const b of await unsafe(page, d)) bad.push(`${orient} · ${name}: ${b}`);
-      if (process.env.SHOTS) shots.push({ orient, name, png: (await page.screenshot()).toString('base64'), w: d.w });
-    }
+  if (orient === Object.keys(SAFE)[0]) {
+    // the scanner catches what it says it does: two planted keys that overlap, and one 3 pt from the edge
+    await page.setViewportSize({ width: SAFE.portrait.w, height: SAFE.portrait.h });
+    await page.goto(base + '/privacy.html');
+    await page.evaluate(() => { const k = (l, t) => { const b = document.createElement('button'); b.textContent = 'X'; b.style.cssText = `position:absolute;left:${l}px;top:${t}px;width:60px;height:60px;z-index:99`; document.body.append(b); };
+      k(100, 300); k(150, 330); k(3, 500); });
+    const planted = await unsafe(page, SAFE.portrait);
+    check(planted.some((b) => /X" overlaps/.test(b)) && planted.some((b) => /gap left 3/.test(b)), 'the scanner finds a planted overlap and gap: ' + planted.join(' | '));
   }
-  // SHOTS=<dir>: one contact sheet per phone shape, for the next design review (CI keeps them as an artefact, U-05)
+  const bad = [], shots = [];
+  await page.setViewportSize({ width: d.w, height: d.h });
+  await cdp.send('Emulation.setSafeAreaInsetsOverride', { insets: d.i });
+  for (const [name, url, act, fresh] of screens) {
+    await page.goto(base + '/index.html?blank=1');
+    await page.evaluate((f) => { if (f) localStorage.setItem('e2e.fresh', '1'); else localStorage.removeItem('e2e.fresh'); }, !!fresh);
+    await page.goto(base + url);
+    await page.waitForFunction(() => document.readyState === 'complete' && (!document.getElementById('app') || (window.apex && window.apexDebug)));
+    await page.waitForFunction(() => !document.getElementById('boot'), null, { timeout: 5000 });   // the opening cover (boot.js) hides everything for up to 2.5 s
+    await page.waitForTimeout(300);
+    if (act) { await page.evaluate('(async () => { ' + act + ' })()'); await page.waitForTimeout(700); }
+    for (const b of await unsafe(page, d)) bad.push(`${orient} · ${name}: ${b}`);
+    if (process.env.SHOTS) shots.push({ name, png: (await page.screenshot()).toString('base64') });
+  }
+  // SHOTS=<dir>: this phone shape's contact sheet, for the next design review (CI keeps them as an artefact, U-05)
   if (process.env.SHOTS) {
     require('fs').mkdirSync(process.env.SHOTS, { recursive: true });
-    for (const orient of Object.keys(SAFE)) {
-      const set = shots.filter((x) => x.orient === orient), w = Math.round(set[0].w / 2);
-      await page.setViewportSize({ width: 4 * (w + 16) + 16, height: 600 });
-      await page.setContent(`<body style="margin:0;padding:8px;background:#2b2b2b;font:12px sans-serif;color:#ddd;display:flex;flex-wrap:wrap;gap:16px">${
-        set.map((x) => `<figure style="margin:0;width:${w}px"><img style="width:100%" src="data:image/png;base64,${x.png}"><figcaption>${x.name}</figcaption></figure>`).join('')}</body>`);
-      await page.screenshot({ path: `${process.env.SHOTS}/${orient.replace(/\W+/g, '-')}.png`, fullPage: true });
-    }
+    const w = Math.round(d.w / 2);
+    await page.setViewportSize({ width: 4 * (w + 16) + 16, height: 600 });
+    await page.setContent(`<body style="margin:0;padding:8px;background:#2b2b2b;font:12px sans-serif;color:#ddd;display:flex;flex-wrap:wrap;gap:16px">${
+      shots.map((x) => `<figure style="margin:0;width:${w}px"><img style="width:100%" src="data:image/png;base64,${x.png}"><figcaption>${x.name}</figcaption></figure>`).join('')}</body>`);
+    await page.screenshot({ path: `${process.env.SHOTS}/${orient.replace(/\W+/g, '-')}.png`, fullPage: true });
   }
   check(!bad.length, 'under the island, the home indicator or a corner:\n  ' + bad.join('\n  '));
 }, { hasTouch: true });
@@ -7939,7 +7962,7 @@ flow('time attack this week (SOCIAL 2.9): in Where to?, the area\'s stage and it
   // 2026-11-11; a flow not listed counts as 5 s (a renamed one still runs, it is only dealt as a short one).
   const shard = /^(\d+)\/(\d+)$/.exec(process.env.SHARD || '');
   if (process.env.SHARD && (!shard || +shard[1] < 1 || +shard[1] > +shard[2])) throw new Error(`SHARD must be k/n with 1 <= k <= n, not ${process.env.SHARD}`);
-  const LONG_S = [['safe areas: the Dynamic Island', 258], ['theme contract on its side', 50], ['TestFlight 2026-11-05 note 6', 41],
+  const LONG_S = [['safe areas (', 65], ['theme contract on its side', 50], ['TestFlight 2026-11-05 note 6', 41],
     ['the car map glides between fixes', 32], ['private themes', 32], ['turn by turn in road order', 30], ['level cards: one control', 27],
     ['the strip never cuts', 23], ['when to go', 21], ['the map is a fixed stage', 20], ['a deliberate detour', 20],
     ['theme contract on the page', 19], ['plan flow (d)', 18], ['plan flow (g)', 18], ['a loop by time', 17], ['plan flow (a)', 17],
