@@ -48,8 +48,8 @@ and in random batches so a trace cannot be re-assembled.
 
 ### 2.7 Duels (friends, Scores only)
 - Challenge a friend on one of your stages for 3, 7 or 14 days; the higher Vetta Score on it in that window wins.
-  Accepting copies the stage to them. The Score decides; each side's quickest time and the gap show where that side
-  shares times with the other.
+  Accepting copies the stage to them. Won by the higher Score, or in a time duel (migration 0048) the quicker time;
+  times count only where that side shares times with the other.
 - Reads only Scores each already shows the other (grants + board entries); the card says in words when one side's
   don't reach the other. Friends only; a block or unfriend hides it. Kept 60 days after it ends. `web/duels.js`,
   `backend/src/duels.ts`, migration 0047.

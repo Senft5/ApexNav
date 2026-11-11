@@ -33,7 +33,8 @@
 
 ## Session 2026-11-11 (fable-duels): Duels between friends on a stage (claude/fable-duels, off origin/main affc1d0)
 
-- Migration `0047_duels.sql` (table `duels`). **Apply on preview then prod (and INSERT into d1_migrations) before merging.**
+- Migrations `0047_duels.sql` (table `duels`) (applied on both) and `0048_duel_kind.sql` (`kind` score|time; on preview 2026-11-11, **prod still to apply before merging**, with its d1_migrations row).
+- Time duels: `kind` 'time' is won by the lower `time_s`; `you_share` / `they_share` then need `share_times` too.
 - `backend/src/duels.ts`: `duelCreate` (friend by handle, your own segment, 3/7/14 days, 409 `duel_exists`, 429
   `too_many_duels` / `daily_limit`; also shares the segment to them), `duelAccept` (opponent only; days start today; the
   stage is copied with `origin_id`), `duelEnd` (decline / withdraw), `duelList` (best `driver_score` per side from

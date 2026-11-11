@@ -83,7 +83,7 @@ Implemented in `backend/src/{auth,social,segments}.ts`, one router in `index.ts`
   audience exists. `GET /api/board/:canon` returns only entries published **to the viewer**, by someone who is still their friend / crew-mate, whose grant is
   still on, and not blocked either way. Times appear only with `share_times`. `GET /api/board/activity` (IDEAS S-03): the same visibility, the last
   14 days of others' best per day on stages the viewer has, with the viewer's rank on each; scores only, never times.
-- **Duels (IDEAS S-24, migration 0047):** `POST /api/duels {handle, segment, days: 3|7|14}` (an accepted friend, your own
+- **Duels (IDEAS S-24, migrations 0047, 0048):** `POST /api/duels {handle, segment_id, days: 3|7|14, kind?: score|time}` (an accepted friend, your own
   segment; 404 `no_friend` for strangers and unknown handles alike; 409 `duel_exists`; 10 open, 10 a day), `POST
   /api/duels/:id/accept` (opponent only; copies the stage), `DELETE /api/duels/:id` (decline or withdraw), `GET /api/duels`
   (each side's best `driver_score` on the stage inside the window, only from entries published to the other under a live

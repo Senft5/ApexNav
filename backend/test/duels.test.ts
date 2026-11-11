@@ -52,6 +52,27 @@ describe("duels", () => {
     expect([mineA.status, mineA.you.score, mineA.them.score]).toEqual(["over", 812, 845]);
   });
 
+  it("a time duel: the kind is kept, and each side's times count only under share_times", async () => {
+    const a = await makeUser("alice"), b = await makeUser("bob");
+    await befriend(a, b);
+    const seg = await makeSegment(a, "Dry Ridge climb");
+    expect((await api(a, "POST", "/api/duels", { handle: "bob", segment_id: seg, days: 7, kind: "lap" })).status).toBe(400);
+    const { id } = await json(api(a, "POST", "/api/duels", { handle: "bob", segment_id: seg, days: 7, kind: "time" }));
+    await ok(api(b, "POST", `/api/duels/${id}/accept`));
+    await scoresTo(a, b);                                                                            // Scores only: not enough for a time duel
+    await run(a, seg, 812, await day(0), 190);
+    let [mineA] = await duels(a), [mineB] = await duels(b);
+    expect([mineA.kind, mineA.you_share, mineB.they_share, mineB.them.time_s]).toEqual(["time", false, false, null]);
+    await ok(api(a, "PUT", "/api/grants", { audience_type: "friend", audience_id: b.id, share_scores: true, share_times: true }));
+    await run(a, seg, 812, await day(0), 190);
+    [mineA] = await duels(a); [mineB] = await duels(b);
+    expect([mineA.you_share, mineB.they_share, mineB.them.time_s]).toEqual([true, true, 190]);
+    // a Score duel stays a Score duel by default
+    const seg2 = await makeSegment(a, "Other");
+    await ok(api(a, "POST", "/api/duels", { handle: "bob", segment_id: seg2, days: 3 }));
+    expect((await duels(a)).map((d) => d.kind).sort()).toEqual(["score", "time"]);
+  });
+
   it("only friends, one live duel per stage and pair, the days are 3, 7 or 14, and a stage must be yours", async () => {
     const a = await makeUser("alice"), b = await makeUser("bob"), s = await makeUser("stranger");
     await befriend(a, b);

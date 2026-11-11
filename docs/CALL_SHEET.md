@@ -52,8 +52,10 @@ it says who won by how much, with Rematch. Drive takes you to the stage.
 
 The calls: the Score decides, because it is how well corners were driven. Each side's quickest time in the window and
 the gap ("you're 6 s quicker") sit beside it where that side shares times with the other (the owner, 2026-11-10: share
-stage times and gaps); a time not shared stays unshown and no gap is guessed. A time-decided duel would need a new column
-(a migration); left for the owner's word. A duel reads only Scores each of you already shows the other (the per-friend grant and the
+stage times and gaps); a time not shared stays unshown and no gap is guessed. Time duels (the owner, 2026-11-11: "we
+should have time duel and score duel"): the Challenge sheet has Won by: Vetta Score (the default) or Time; a time duel is
+won by the quicker time, counts a side's times only while it shares times with the other (its card offers Share my times),
+and shows the Scores beside the times. Migration 0048 adds `duels.kind`. A duel reads only Scores each of you already shows the other (the per-friend grant and the
 board entries that exist today); nothing new about a drive is stored. When one side's Scores don't reach the other the
 card says so in words, and your own card has a Show my Scores key that turns on Scores (never times) for that friend.
 Friends only; a block or an unfriend hides every duel between the two at once. At most 10 open, 10 new a day, one open
@@ -61,7 +63,8 @@ duel per friend and stage; a duel row is deleted 60 days after it ends. No repor
 (the stage name is the challenger's, already reportable as a stage). The friend row's key list grew a fourth action, so the
 People e2e check for that row now expects "Challenge on a stage" after "Invite to a drive" (a deliberate spec change).
 
-Needs migration 0047 (one new table) on preview and prod before merging. Undo: revert the PR; `DROP TABLE duels`.
+Needs migrations 0047 (one new table) and 0048 (one column) on preview and prod before merging. Undo: revert the PR;
+`DROP TABLE duels`.
 
 ## 2026-11-10 (fable-there-and-back): a trip to a place can come home another way in one tap (claude/fable-there-and-back)
 

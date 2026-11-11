@@ -4013,12 +4013,13 @@ flow('duels: a friend\'s challenge is a card on People; Accept starts it; the ca
   await page.waitForSelector('.duel-pop.open [aria-label="Stage"] button:has-text("Esses")');
   await page.click('.duel-pop.open [aria-label="Stage"] button:has-text("Esses")');
   await page.click('.duel-pop.open [aria-label="How long"] button:has-text("3 days")');
-  check(/Times are never compared/.test(await page.textContent('.duel-pop.open')), 'the sheet says what is compared');
+  check(/your best counts/.test(await page.textContent('.duel-pop.open')) && await page.isVisible('.duel-pop.open [aria-label="Won by"] button.on:has-text("Vetta Score")'), 'the sheet says what counts; won by Score unless you pick Time');
+  await page.click('.duel-pop.open [aria-label="Won by"] button:has-text("Time")');
   const small = await page.evaluate(() => [...document.querySelectorAll('.duel-pop.open button')].filter((b) => b.getClientRects().length).map((b) => ({ t: b.textContent, h: Math.round(b.getBoundingClientRect().height) })).filter((b) => b.h < 32));
   check(!small.length, 'keys big enough: ' + JSON.stringify(small));
   await page.click('.duel-pop.open button:has-text("Send to @bob")');
   await page.waitForFunction(() => /Sent\. @bob has 3 days on Esses once they say yes\./.test(document.getElementById('toast').textContent));
-  check(JSON.stringify(sent) === '[{"handle":"bob","segment_id":"MY2","days":3}]', 'what was sent: ' + JSON.stringify(sent));
+  check(JSON.stringify(sent) === '[{"handle":"bob","segment_id":"MY2","days":3,"kind":"time"}]', 'what was sent: ' + JSON.stringify(sent));
 });
 
 flow('Billet: a primary key is light metal with dark ink, not dark on dark (REVIEW_PEOPLE.md P-01)', async (page, base) => {

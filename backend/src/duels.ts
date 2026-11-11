@@ -1,6 +1,7 @@
 // Duels (docs/SOCIAL.md 2.7, migration 0047): a friend challenges a friend on one of their stages for a few days, and the
 // higher Vetta Score on it wins. Each side's quickest time and the gap are shown beside it where that side shares times
-// with the other (the owner, 2026-11-10: share stage times); the Score decides. A duel reads the
+// with the other (the owner, 2026-11-10: share stage times). A duel is decided by the Score or, for a time duel
+// (migration 0048, the owner 2026-11-11), by the quicker time. A duel reads the
 // runs each driver already publishes to the other (board_entries, behind their own Scores grant), so accepting one
 // shares nothing by itself; each side sees whether the other's Scores reach them. Challenging also shares the stage
 // itself (segment_shares), so the friend can drive it from their Stages list.
@@ -18,7 +19,9 @@ const FRIENDS = (a: string, b: string) => `EXISTS (SELECT 1 FROM friendships f W
 const OPEN = `(status = 'pending' OR (status = 'on' AND ends_on >= date('now')))`;
 
 export async function duelCreate(env: Env, v: Viewer, req: Request) {
-  const b = await body<{ handle?: unknown; segment_id?: unknown; days?: unknown }>(req);
+  const b = await body<{ handle?: unknown; segment_id?: unknown; days?: unknown; kind?: unknown }>(req);
+  const kind = b.kind == null ? "score" : b.kind;
+  if (kind !== "score" && kind !== "time") throw new HttpError(400, "bad_kind");
   const handle = str(b.handle, "handle", 3, 21).replace(/^@/, "").toLowerCase();
   const days = int(b.days, "days", 1, 14);
   if (!(DAYS as readonly number[]).includes(days)) throw new HttpError(400, "bad_days");
@@ -35,7 +38,7 @@ export async function duelCreate(env: Env, v: Viewer, req: Request) {
   if ((today?.n ?? 0) >= PER_DAY) throw new HttpError(429, "daily_limit");
   const id = crypto.randomUUID();
   await env.DB.batch([
-    env.DB.prepare("INSERT INTO duels (id, challenger, opponent, canon_id, stage, days) VALUES (?, ?, ?, ?, ?, ?)").bind(id, v.id, other.id, seg.canon, seg.name, days),
+    env.DB.prepare("INSERT INTO duels (id, challenger, opponent, canon_id, stage, days, kind) VALUES (?, ?, ?, ?, ?, ?, ?)").bind(id, v.id, other.id, seg.canon, seg.name, days, kind),
     env.DB.prepare("INSERT OR IGNORE INTO segment_shares (segment_id, audience_type, audience_id) VALUES (?, 'friend', ?)").bind(seg.id, other.id),
   ]);
   return { id };
@@ -78,11 +81,12 @@ export async function duelEnd(env: Env, v: Viewer, id: string) {
  * Your duels: waiting on you, waiting on them, on, and finished in the last KEEP_DAYS. Each side's best Score on the stage
  * within the duel's days, from runs that side publishes to the other (null when none, or when their Scores don't reach
  * the other: `you_share` / `they_share` say which), and each side's quickest time in the window while that side shares
- * times with the other (`time_s`, else null). The higher Score wins; times are shown beside it.
+ * times with the other (`time_s`, else null). `kind` says what decides: the higher Score ('score') or the quicker time
+ * ('time', where `you_share` / `they_share` mean Scores and times both reach the other).
  */
 export async function duelList(env: Env, v: Viewer) {
   const rows = await all<{ id: string; challenger: string; opponent: string; canon_id: string; stage: string; days: number; status: string;
-    starts_on: string | null; ends_on: string | null; created_at: string; other_id: string; other: string | null; today: string; have_stage: number }>(env,
+    starts_on: string | null; ends_on: string | null; created_at: string; other_id: string; other: string | null; today: string; have_stage: number; kind: string }>(env,
     `SELECT d.*, CASE WHEN d.challenger = ?1 THEN d.opponent ELSE d.challenger END AS other_id, u.handle AS other, date('now') AS today,
             EXISTS (SELECT 1 FROM segments s WHERE s.owner = ?1 AND COALESCE(s.origin_id, s.id) = d.canon_id) AS have_stage
        FROM duels d JOIN users u ON u.id = CASE WHEN d.challenger = ?1 THEN d.opponent ELSE d.challenger END
@@ -93,18 +97,20 @@ export async function duelList(env: Env, v: Viewer) {
   // a side's best Score in the window, and their quickest time there while they share times with the other (else null)
   const best = (who: string, to: string, d: typeof rows[number]) => d.status === "pending" || !d.starts_on ? Promise.resolve(null) : first<{ s: number | null; on: string | null; t: number | null }>(env,
     `SELECT MAX(be.driver_score) AS s, (SELECT b2.driven_on FROM board_entries b2 WHERE b2.user_id = ?1 AND b2.canon_id = ?3 AND b2.audience_type = 'friend' AND b2.audience_id = ?2
-         AND b2.driven_on BETWEEN ?4 AND ?5 ORDER BY b2.driver_score DESC, b2.driven_on LIMIT 1) AS "on",
+         AND b2.driven_on BETWEEN ?4 AND ?5 ORDER BY ${d.kind === "time" ? "b2.time_s IS NULL, b2.time_s," : ""} b2.driver_score DESC, b2.driven_on LIMIT 1) AS "on",
          CASE WHEN EXISTS (SELECT 1 FROM grants g WHERE g.user_id = ?1 AND g.audience_type = 'friend' AND g.audience_id = ?2 AND g.share_times = 1) THEN MIN(be.time_s) END AS t
        FROM board_entries be WHERE be.user_id = ?1 AND be.canon_id = ?3 AND be.audience_type = 'friend' AND be.audience_id = ?2
         AND be.driven_on BETWEEN ?4 AND ?5
         AND EXISTS (SELECT 1 FROM grants g WHERE g.user_id = ?1 AND g.audience_type = 'friend' AND g.audience_id = ?2 AND g.share_scores = 1)`,
     who, to, d.canon_id, d.starts_on, d.ends_on).then((r) => (r && r.s != null ? { score: r.s, on: r.on, time_s: r.t ?? null } : null));
-  const shares = (who: string, to: string) => first(env, "SELECT 1 FROM grants WHERE user_id = ? AND audience_type = 'friend' AND audience_id = ? AND share_scores = 1", who, to).then((r) => !!r);
+  // what a duel needs to reach the other side: Scores, and times too in a time duel
+  const shares = (who: string, to: string, kind: string) => first(env,
+    `SELECT 1 FROM grants WHERE user_id = ? AND audience_type = 'friend' AND audience_id = ? AND share_scores = 1${kind === "time" ? " AND share_times = 1" : ""}`, who, to).then((r) => !!r);
   const out = [];
   for (const d of rows) {
-    const [mineBest, theirs, youShare, theyShare] = await Promise.all([best(v.id, d.other_id, d), best(d.other_id, v.id, d), shares(v.id, d.other_id), shares(d.other_id, v.id)]);
+    const [mineBest, theirs, youShare, theyShare] = await Promise.all([best(v.id, d.other_id, d), best(d.other_id, v.id, d), shares(v.id, d.other_id, d.kind), shares(d.other_id, v.id, d.kind)]);
     const over = d.status === "on" && d.ends_on! < d.today;
-    out.push({ id: d.id, stage: d.stage, canon_id: d.canon_id, days: d.days, with: d.other, with_id: d.other_id, challenger: d.challenger === v.id,
+    out.push({ id: d.id, kind: d.kind === "time" ? "time" : "score", stage: d.stage, canon_id: d.canon_id, days: d.days, with: d.other, with_id: d.other_id, challenger: d.challenger === v.id,
       status: over ? "over" : d.status, starts_on: d.starts_on, ends_on: d.ends_on, today: d.today, have_stage: !!d.have_stage,
       you: mineBest, them: theirs, you_share: youShare, they_share: theyShare, created_at: d.created_at });
   }

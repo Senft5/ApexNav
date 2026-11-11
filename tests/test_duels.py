@@ -27,6 +27,11 @@ console.log(JSON.stringify({
   timed: c(on({ you: { ...s(845), time_s: 184 }, them: { ...s(812), time_s: 190 } })),
   timedOver: c(over({ you: { ...s(845), time_s: 200 }, them: { ...s(812), time_s: 125 } })),
   oneTime: c(on({ you: s(845), them: { ...s(812), time_s: 190 } })), same: D.timesLine('@bob', { time_s: 90 }, { time_s: 90 }),
+  tAsk: c({ ...base, kind: 'time', status: 'pending', challenger: false }),
+  tLead: c(on({ kind: 'time', you: { ...s(800), time_s: 184 }, them: { ...s(845), time_s: 190 } })),
+  tGap: c(on({ kind: 'time', you_share: false, you: s(800), them: { ...s(845), time_s: 190 } })),
+  tWon: c(over({ kind: 'time', you: { ...s(800), time_s: 184 }, them: { ...s(845), time_s: 250 } })),
+  tLost: c(over({ kind: 'time', you: s(900), them: { ...s(700), time_s: 250 } })),
   shown: D.shown([over({ id: 'old', ends_on: '2026-11-01' }), on({ id: 'on' }), { ...base, id: 'ask', status: 'pending', challenger: false }, over({ id: 'recent', ends_on: '2026-11-08' }), { ...base, id: 'no', status: 'declined' }]).map((x) => x.d.id),
 }));
 """
@@ -77,3 +82,13 @@ def test_no_time_shared_says_none(out):
 def test_days_and_which_show(out):
     assert out["left"] == [5, 1, None]
     assert out["shown"] == ["ask", "on", "recent"]          # asks first; an old result and a declined one stay off People
+
+
+def test_time_duel(out):
+    assert out["tAsk"][1:3] == ["@bob challenged you to a time duel", "Dry Ridge climb · 7 days. The quicker time on it wins."]
+    # the quicker time leads even with the lower Score; the Scores sit beside it
+    assert out["tLead"][2] == "You 3:04 · @bob 3:10 · You lead by 6 s · 5 days left"
+    assert out["tLead"][3] == "Scores: you 800, @bob 845"
+    assert "Your times don't reach @bob yet" in out["tGap"][3] and out["tGap"][4][0] == "share"
+    assert out["tWon"][2] == "You won by 1:06 · You 3:04 · @bob 4:10"
+    assert out["tLost"][:3] == ["lost", "Dry Ridge climb · @bob", "@bob won · You -- · @bob 4:10"]   # a Score with no time sets no time
