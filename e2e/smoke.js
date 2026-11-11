@@ -6475,7 +6475,10 @@ flow('plan flow (g) one name for go: Start on the card and the bar, Just drive w
   const { taps, tap } = await planPage(page, base);
   const idle = await page.evaluate(() => { const k = document.getElementById('startDrive'), r = k.getBoundingClientRect(), cs = getComputedStyle(k);
     return { text: k.textContent.trim(), w: r.width, bg: cs.backgroundColor, label: k.getAttribute('aria-label') }; });
-  check(idle.text === 'Just drive' && idle.bg === 'rgba(0, 0, 0, 0)' && idle.w < 150 && /no route/.test(idle.label), 'with no route the bar\'s key is the smaller Just drive, not the red Start: ' + JSON.stringify(idle));
+  // Vetta Line (signature.css): with no route, Just drive is the screen's one red key (the app's first verb is to drive);
+  // it stays the shorter word and the narrower key than the card's Start, and says it records with no route
+  const red = await page.evaluate(() => { const c = document.createElement('i'); c.style.color = 'var(--accent)'; document.body.append(c); const v = getComputedStyle(c).color; c.remove(); return v; });
+  check(idle.text === 'Just drive' && idle.bg === red && idle.w < 150 && /no route/.test(idle.label), 'with no route the bar\'s key is Just drive, in red, narrower than Start: ' + JSON.stringify({ idle, red }));
   await page.click('#startMore');
   const sheet = await page.evaluate(() => [...document.querySelectorAll('.start-sheet button')].map((b) => b.textContent.trim()));
   check(sheet[0] === 'Just drive' && !sheet.includes('Drive'), 'the start sheet says Just drive too: ' + JSON.stringify(sheet));
