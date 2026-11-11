@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self' apexnav:; script-src 'self' apexnav: 'sha256-0oK/hrr/L5uPfQ0UViz9lnwiVEterEwczQxqNmifbts=' 'sha256-G7s/ZI+Hqrfc4DqbB6EANJJLmUmhNK06PizQ1LlsG84=' https://cdn.jsdelivr.net 'wasm-unsafe-eval'; worker-src 'self' apexnav: blob:; child-src 'self' apexnav: blob:; style-src 'self' apexnav: 'unsafe-inline'; font-src 'self' apexnav: data:; img-src 'self' apexnav: data: blob: https://tiles.openfreemap.org https://s3.amazonaws.com https://basemap.nationalmap.gov; media-src 'self' apexnav: data: blob:; connect-src 'self' apexnav: data: blob: https://apexnav.senftns.workers.dev wss://apexnav.senftns.workers.dev https://tiles.openfreemap.org https://basemap.nationalmap.gov https://s3.amazonaws.com https://valhalla1.openstreetmap.de https://router.project-osrm.org https://overpass-api.de https://overpass.private.coffee https://overpass.kumi.systems https://maps.mail.ru https://nominatim.openstreetmap.org https://photon.komoot.io https://api.open-meteo.com https://api.weather.gov https://statsapi.mlb.com https://api.seatgeek.com https://api.water.noaa.gov https://waterservices.usgs.gov https://in.carsprogram.org https://publicapi.ohgo.com https://quickstats.nass.usda.gov https://commons.wikimedia.org https://graph.mapillary.com https://vpic.nhtsa.dot.gov https://cdn.jsdelivr.net https://huggingface.co https://*.huggingface.co https://*.hf.co; object-src 'none'; base-uri 'none'; form-action 'self'" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self' apexnav:; script-src 'self' apexnav: 'sha256-fpfHRU0Y9KiwxvFmToig8HgYrureM9HUa/8DBYOUWA4=' 'sha256-G7s/ZI+Hqrfc4DqbB6EANJJLmUmhNK06PizQ1LlsG84=' https://cdn.jsdelivr.net 'wasm-unsafe-eval'; worker-src 'self' apexnav: blob:; child-src 'self' apexnav: blob:; style-src 'self' apexnav: 'unsafe-inline'; font-src 'self' apexnav: data:; img-src 'self' apexnav: data: blob: https://tiles.openfreemap.org https://s3.amazonaws.com https://basemap.nationalmap.gov; media-src 'self' apexnav: data: blob:; connect-src 'self' apexnav: data: blob: https://apexnav.senftns.workers.dev wss://apexnav.senftns.workers.dev https://tiles.openfreemap.org https://basemap.nationalmap.gov https://s3.amazonaws.com https://valhalla1.openstreetmap.de https://router.project-osrm.org https://overpass-api.de https://overpass.private.coffee https://overpass.kumi.systems https://maps.mail.ru https://nominatim.openstreetmap.org https://photon.komoot.io https://api.open-meteo.com https://api.weather.gov https://statsapi.mlb.com https://api.seatgeek.com https://api.water.noaa.gov https://waterservices.usgs.gov https://in.carsprogram.org https://publicapi.ohgo.com https://quickstats.nass.usda.gov https://commons.wikimedia.org https://graph.mapillary.com https://vpic.nhtsa.dot.gov https://cdn.jsdelivr.net https://huggingface.co https://*.huggingface.co https://*.hf.co; object-src 'none'; base-uri 'none'; form-action 'self'" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
   <title>Vetta · Log</title>
   <link rel="icon" href="brand/mark.svg" type="image/svg+xml" />
@@ -46,6 +46,7 @@
   <script src="flyby.js"></script>
   <script src="challenges.js"></script>
   <script src="week_digest.js"></script>
+  <script src="driver_profile.js"></script>   <!-- Your driving: the profile across every drive -->
   <script src="legends.js"></script>
   <script src="road_votes.js"></script>
   <script src="taste.js"></script>
@@ -66,6 +67,7 @@
     /* The phone's text size (format.js applyTypeScale) on the text blocks; charts and the stage strip measure their
        own width and stay unzoomed, so they still fit and track the finger. */
     #tab-history > :not(#trendPanel):not(#steadyPanel), #tab-segments > .bar-top, #segList, #segDetail table, #tab-segments .more > summary, #contribPanel { zoom: var(--type-scale, 1); }
+    #tab-driving { zoom: var(--type-scale, 1); }   /* Your driving is words and numerals: all of it at the phone's text size */
     /* IN-1 (panel round 2): the drive's page too: its title, the score and coaching line, the keys, the corner list, tags
        and the panels' words; the map, lanes and charts (.dv-grid) and the dashcam keep their measured size. */
     #tab-drive > div:first-child, #tab-drive > div:has(#dvTitle), #dvRoot > .dv-head, #dvActs, #dvRoot > .dv-list, #dvTagsPanel, #dvRecce, #dvVote, #dvFlyby, #dvRoad > h2 { zoom: var(--type-scale, 1); }
@@ -341,6 +343,13 @@
       <div class="panel" id="dvRoad" hidden><h2>This road over time</h2><div id="dvRoadChart"></div><div class="scroll"><table id="dvRoadTable"></table></div></div>
     </section>
 
+    <!-- ============================ YOUR DRIVING ============================ -->
+    <section id="tab-driving" class="stack-12" hidden>
+      <div><a href="#" class="back" data-to="history">‹ Log</a></div>
+      <div class="bar-top"><h1 class="stages-h">Your driving</h1></div>
+      <div id="drivingRoot" class="stack-12"></div>
+    </section>
+
     <!-- ============================ HISTORY ============================ -->
     <section id="tab-history" class="stack-12">
       <div class="bar-top"><h1 class="stages-h">Log</h1></div>
@@ -368,6 +377,7 @@
           <p class="note">Exploring and technique, never speed. From the drives on this phone.</p></div></details>
       <div class="stamps" id="historyFilter" role="group" aria-label="Show drives tagged" hidden></div>
       <!-- the drive list is the Log; your week heads it when the week has drives -->
+      <div id="drivingCard" hidden></div>
       <details class="quiet" id="weekPanel" hidden><summary id="weekSum">Your week</summary><div id="weekLines" class="stack-8"></div></details>
       <div class="panel index-panel" id="historyPanel"><table id="historyTable" class="road-index"></table></div>
       <!-- the rest of the Log is quiet lines too (REVIEW.md 1.2 Log): one line each, the detail one tap down -->
@@ -734,6 +744,7 @@
       $('historyTable').innerHTML = !drives.length ? '<tr><td class="l" colspan="3"><span class="note">No drives yet.</span></td></tr>' : !shown.length ? '<tr><td class="l" colspan="3"><span class="note">No drives with those tags.</span></td></tr>' : rows;
       setTimeout(renderRecords, 0);
       setTimeout(renderSteadiness, 0);                                  // the coach runs per road: after the Log has painted
+      setTimeout(renderDrivingCard, 0);
     }
 
     // Your records (IDEAS D-08): the best Score on each road you have driven twice or more (roads by name), and this month's
@@ -769,7 +780,7 @@
       $('recordsNote').textContent = 'Roads are matched by name.';
     }
     const finiteNum = (v) => typeof v === 'number' && Number.isFinite(v);
-    window.apexLogDebug = { loaded: () => drivesLoaded, records: (ds) => renderRecords(ds) };   // e2e/smoke.js seeds the panel (the library itself is untouched)
+    window.apexLogDebug = { loaded: () => drivesLoaded, records: (ds) => renderRecords(ds), driving: () => driving.p };   // e2e/smoke.js seeds the panel (the library itself is untouched)
 
     // Braking consistency by month (IDEAS D-07 trend): how widely your braking point spread inside each month on corners you
     // drove five or more times that month (analysis_client.js steadiness: every drive's coach against the others, in the
@@ -811,6 +822,41 @@
         $('steadyNote').textContent = `How widely your braking point varied, within each month, on corners you drove five or more times that month; higher on the chart is steadier (fewer metres), bigger dots are more corners. `
           + `${monthLabel(z.month)}: ${about(z.sd_m)} over ${z.corners} corners${claim ? `, ${diff < 0 ? 'steadier' : 'less steady'} than ${monthLabel(a.month)} (${about(a.sd_m)})` : ''}. 5 m samples and GPS put the floor near 3 m.`;
       });
+    }
+
+    // Your driving (driver_profile.js): the profile over every drive, worked out in the analysis worker (the profile job
+    // keeps each drive's observations, so only new drives are read) and asked again only when the library changes.
+    const driving = { key: null, p: null, pending: null, wait: [] };
+    function drivingProfile(done) {
+      const key = libKey;
+      if (driving.key === key) { done(driving.p); return; }
+      driving.wait = driving.pending === key ? driving.wait.concat([done]) : [done];
+      if (driving.pending === key) return;
+      driving.pending = key;
+      ApexAnalysis.job('profile').then((r) => {
+        if (driving.pending !== key) return;                             // the library changed meanwhile: a newer run answers
+        driving.key = key; driving.pending = null; driving.p = r.profile || null; driving.wait.forEach((f) => f(driving.p));
+      }).catch(() => { if (driving.pending === key) driving.pending = null; });
+    }
+    function renderDrivingCard() {
+      const card = $('drivingCard'); if (!card) return;
+      if (!drives.some((d) => d.corners.length)) { card.hidden = true; return; }
+      drivingProfile((p) => {
+        const line = p ? ApexDriverProfile.cardLine(p) : null;
+        card.hidden = !line;
+        if (!line) return;
+        const b = document.createElement('button');
+        b.className = 'dp-card'; b.id = 'drivingOpen';
+        b.append(Object.assign(document.createElement('b'), { textContent: 'Your driving' }), Object.assign(document.createElement('i'), { textContent: '›' }), Object.assign(document.createElement('span'), { textContent: line }));
+        b.querySelector('i').setAttribute('aria-hidden', 'true');
+        b.addEventListener('click', () => { showTab('driving'); toTop(); });
+        ApexDriverProfile.render(document.createElement('div'), null);   // its styles, before the card shows
+        card.replaceChildren(b);
+      });
+    }
+    function renderDriving() {
+      ApexDriverProfile.render($('drivingRoot'), drives.length ? null : { corners: 0 });
+      if (drives.length) drivingProfile((p) => { if (view === 'driving') ApexDriverProfile.render($('drivingRoot'), p || { corners: 0 }); });
     }
 
     for (const id of ['historyTable', 'recordsTable']) {
@@ -1283,7 +1329,7 @@
     $('dvPick').addEventListener('change', renderDrive);
     // F-06: one view drawn at a time, the one asked for; the others when they are first shown after the drives (or the theme,
     // or the units) changed. The network panels (stages backed up, road feel to share, friends) after the view is up.
-    const VIEWS = ['drive', 'history', 'segments', 'compare'], dirty = new Set(VIEWS);
+    const VIEWS = ['drive', 'history', 'segments', 'compare', 'driving'], dirty = new Set(VIEWS);
     let drawnWidth = 0;
     function renderView(t) {
       if (!drivesLoaded) return;
@@ -1292,6 +1338,7 @@
       else if (t === 'drive') renderDrive();
       else if (t === 'segments') renderSegments();
       else if (t === 'compare') { renderCompareSelectors(); renderCompare(); }
+      else if (t === 'driving') renderDriving();
     }
     function renderAll() { VIEWS.forEach((v) => dirty.add(v)); renderView(view); }
     const later = (fn) => (window.requestIdleCallback ? requestIdleCallback(fn, { timeout: 1500 }) : setTimeout(fn, 300));
