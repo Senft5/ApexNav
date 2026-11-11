@@ -29,6 +29,13 @@ The Plan sheet and the route card have a **Roads** choice, saved on the phone (`
 | Fun (default) | 35 % + 4 min | 2 good corners a minute |
 | Max fun | 90 % + 10 min | 0.7 good corners a minute |
 
+**Valhalla is for Quick only (the owner, 2026-11-11).** Fun and Long way are planned by our own router on Vetta's road
+map (docs/OWN_ROUTING.md) or not at all: no Valhalla routes, highway checks or stage plans stand in for them, on a bad
+connection or anywhere. Off the map (it covers Ohio, Kentucky and Indiana so far) the plan says so, with a **Use Quick**
+key; if the map's index can't be loaded (8 s) it says to check signal; there and back at Fun or Long way likewise. Valhalla
+still gives our chosen line its spoken directions (trace_route), and Quick and a reroute to rejoin still use it. Loops
+likewise are our router's or nothing: off the map the loop card says so, no Valhalla stage loop or circle stands in.
+
 Changing the level re-plans a destination route that is not being driven (not while one is being planned; a route with a stop you added keeps it and the level applies to the next route). Loops ignore the level, so their card hides it.
 
 ## Avoid

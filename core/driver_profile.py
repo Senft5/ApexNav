@@ -568,6 +568,110 @@ def records_by_size(drives: list) -> dict:
     return out
 
 
+def drive_records(obs: list, records: dict) -> dict:
+    """A drive's corners against your records by kind of corner (its Log page): for each size, this drive's cleanest corner
+    (the six technique credits' mean, all six measured; None when it had none) beside your record (records_by_size, which
+    may be this drive's own). {size: {level, record}}; record is the records_by_size entry or None."""
+    out = {}
+    for z in ("tight", "medium", "fast"):
+        lv = None
+        for o in obs or []:
+            if o.get("size") == z and all(o.get(k) is not None for k in SKILLS):
+                v = _level(sum(o[k] for k in SKILLS) / len(SKILLS))
+                lv = v if lv is None or v > lv else lv
+        out[z] = {"level": lv, "record": (records or {}).get(z)}
+    return out
+
+
+UNEVEN_LEVELS = 15           # a corner whose passes span this many levels or more is uneven on a road book
+UNEVEN_MAX = 3               # ...and the book names at most this many, the widest first
+ROAD_MIN_PASSES = 3          # passes of a corner (this drive's among them) before its record on the road means anything
+SAME_CORNER_M = 20.0         # the same corner: apexes this close...
+SAME_WAY = 0.7               # ...and headings this alike (cosine, about 45 degrees): not the next bend of an S
+
+
+def road_records(mine: list, others: list, ids: list | None = None) -> dict:
+    """A drive's corners against your other passes of the same road, corner by corner. mine: this drive's clean corners as
+    [{x, y (m, one frame for all), hx, hy (unit heading), level}]; others: one such list per other drive. A corner of
+    another drive is the same corner when its apex is within SAME_CORNER_M and its heading within SAME_WAY; a drive counts
+    once per corner (its cleanest there). Over corners passed ROAD_MIN_PASSES times or more: {corners, best (this drive
+    the cleanest of all), level (equal to the cleanest other), held (the apexes, when given, of the corners it is cleanest
+    at), rows (per such corner with an apex: {apex, level (this pass), passes, record (the cleanest of all passes), by (None
+    when this pass holds it, else ids[i] of the other drive, or its index; the first listed of equals holds a tie, so list
+    others oldest first)})}. Technique only."""
+    corners = best = level = 0
+    held, rows = [], []
+    for m in mine:
+        if m.get("level") is None:
+            continue
+        tops, who = [], []
+        for i, drive in enumerate(others):
+            top = None
+            for o in drive:
+                if o.get("level") is None:
+                    continue
+                if math.hypot(o["x"] - m["x"], o["y"] - m["y"]) < SAME_CORNER_M and o["hx"] * m["hx"] + o["hy"] * m["hy"] > SAME_WAY:
+                    top = o["level"] if top is None else max(top, o["level"])
+            if top is not None:
+                tops.append(top)
+                who.append(ids[i] if ids is not None else i)
+        if 1 + len(tops) < ROAD_MIN_PASSES:
+            continue
+        corners += 1
+        mx = max(tops)
+        if m.get("apex") is not None:
+            rows.append({"apex": m["apex"], "level": m["level"], "passes": 1 + len(tops), "record": max(mx, m["level"]),
+                         "by": None if m["level"] > mx else who[tops.index(mx)]})
+        if m["level"] > mx:
+            best += 1
+            if m.get("apex") is not None:
+                held.append(m["apex"])
+        elif m["level"] == mx:
+            level += 1
+    return {"corners": corners, "best": best, "level": level, "held": held, "rows": rows}
+
+
+def road_book(drives: list, ref: list | None = None) -> dict:
+    """A road's corners across every drive of it (Your roads, corner by corner). drives: oldest first, each
+    {id, at, corners: [{x, y, hx, hy, level, size?, dir?}]} in one frame (metres); ref: [[x, y], ...] along one drive of
+    the road, to put the corners in road order. A corner is the first pass seen of it; a later pass is the same corner when
+    within SAME_CORNER_M of it and its heading within SAME_WAY (a drive counts once per corner, its cleanest there). The
+    first drive to reach the cleanest level holds the corner, so a tie goes to the older drive. Corners passed
+    ROAD_MIN_PASSES times or more: {corners: [{x, y, size, dir, passes, record, low (the least clean pass), by, at}] in
+    road order (by the nearest point of ref, else as first seen), fewer: corners passed less often, drives: how many drives,
+    uneven: the 1-based places of the corners whose passes span UNEVEN_LEVELS or more, the widest first (road order
+    among equals), at most UNEVEN_MAX}. Technique only."""
+    book = []
+    for d in drives:
+        for o in d.get("corners") or []:
+            if o.get("level") is None:
+                continue
+            c = next((c for c in book if math.hypot(o["x"] - c["x"], o["y"] - c["y"]) < SAME_CORNER_M
+                      and o["hx"] * c["hx"] + o["hy"] * c["hy"] > SAME_WAY), None)
+            if c is None:
+                c = {"x": o["x"], "y": o["y"], "hx": o["hx"], "hy": o["hy"], "size": o.get("size"), "dir": o.get("dir"), "by": {}, "k": len(book)}
+                book.append(c)
+            c["by"][d["id"]] = max(c["by"].get(d["id"], o["level"]), o["level"])
+    at = {d["id"]: d.get("at") for d in drives}
+    order = {d["id"]: i for i, d in enumerate(drives)}
+
+    def pos(c):
+        if not ref:
+            return c["k"]
+        return min(range(len(ref)), key=lambda i: (ref[i][0] - c["x"]) ** 2 + (ref[i][1] - c["y"]) ** 2)
+
+    out = []
+    for c in sorted(book, key=lambda c: (pos(c), c["k"])):
+        if len(c["by"]) < ROAD_MIN_PASSES:
+            continue
+        rec = max(c["by"].values())
+        by = min((i for i, v in c["by"].items() if v == rec), key=lambda i: order[i])
+        out.append({"x": c["x"], "y": c["y"], "size": c["size"], "dir": c["dir"], "passes": len(c["by"]),
+                    "record": rec, "low": min(c["by"].values()), "by": by, "at": at.get(by)})
+    wide = sorted((i for i, k in enumerate(out) if k["record"] - k["low"] >= UNEVEN_LEVELS), key=lambda i: (-(out[i]["record"] - out[i]["low"]), i))
+    return {"corners": out, "fewer": len(book) - len(out), "drives": len(drives), "uneven": [i + 1 for i in wide[:UNEVEN_MAX]]}
+
+
 def drive_touch(obs: list, others: list) -> dict:
     """A drive's own touch (its Log page): {drive: touch over its corners (from DRIVE_TOUCH_MIN), usual: touch over the
     corners of every other drive (from STYLE_MIN), outside: per measure "above" when the drive's middle corner was beyond

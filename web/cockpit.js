@@ -705,7 +705,12 @@
       // U-85: in a drive only the next fuel stop ahead keeps its stamp (the preview shows them all)
       if (!fuelPins.length) return;                                        // (filled only once a route exists)
       const driving = state.mode === 'live', next = driving && track === plannedRoute ? fuelPins.find((f) => f.m > state.cursorM) : null;
-      for (const f of fuelPins) f.el.style.display = !driving || f === next ? '' : 'none';
+      for (const f of fuelPins) {
+        f.el.style.display = !driving || f === next ? '' : 'none';
+        // the owner, 2026-11-11: the one fuel stamp of a drive says which station it is, when the map names it
+        const label = f === next && f.name ? `FUEL · ${f.name}` : 'FUEL';
+        if (f.el.textContent !== label) f.el.textContent = label;
+      }
       declutterSoon();
     }
     // The owner, 2026-11-04: no pile of overlapping FUEL stamps along the route. The viewpoint, café and fuel pins
@@ -3248,8 +3253,23 @@
       if (vehicle) add(vehicle.lat, vehicle.lon);
       if (!(e >= w && n >= so)) return;
       holdFollow();
-      fitInView([[w, so], [e, n]], routeBottom(aboveCard));
+      const bottom = routeBottom(aboveCard);
+      fitInView([[w, so], [e, n]], bottom);
+      cardFit = aboveCard ? { t, at: performance.now(), bottom } : null;
     }
+    // The card a route opens is still filling in when the route is fitted above it (a loop's card was 469 px tall at the fit
+    // and 310 px a moment later: the loop sat in a strip at the top of the map, its start under the masthead). While the card
+    // settles, a change in its height fits the route again, unless you have moved the map since.
+    let cardFit = null;
+    map.on('dragstart', () => { cardFit = null; });
+    map.on('zoomstart', (ev) => { if (ev.originalEvent) cardFit = null; });
+    if (window.ResizeObserver) new ResizeObserver(() => {
+      if (!cardFit || performance.now() - cardFit.at > 4000 || cardFit.t !== plannedRoute || state.mode === 'live') return;
+      const { t, at } = cardFit;
+      if (Math.abs(routeBottom(true) - cardFit.bottom) < 24) return;
+      fitPlannedRoute(t, true);
+      if (cardFit) cardFit.at = at;                                  // the window runs from the first fit, not each refit
+    }).observe($('planPanel'));
     // Plan fields: empty = the phone's position (locate()), "lat, lon" = that point, anything else =
     // the first Nominatim match. Errors carry the toast text.
     const COORDS = /^\s*(-?\d+(?:\.\d+)?)\s*,\s*(-?\d+(?:\.\d+)?)\s*$/;
@@ -3664,6 +3684,10 @@
     try { funLevel = FunRoute.LEVELS[localStorage.getItem(FUN_LEVEL)] ? localStorage.getItem(FUN_LEVEL) : 'fun'; } catch (_) { /* storage off */ }
     async function funRoute(from, to, id, name, request, ui, opts = {}) {
       const level = funLevel, planT0 = Date.now();      // the early quickest counts from here, not from the router's answer
+      // Valhalla is for Quick only (the owner, 2026-11-11: "I don't want subpar routes going out for users with a bad
+      // connection"): Fun and Long way come from our own router or not at all, never Valhalla's routes or stage plans
+      // (its trace_route still gives our chosen line its spoken directions: own_routing.js instruct)
+      const ownOnly = level !== 'quick';
       const avoid = await avoidForTrip([from, to]);     // this plan's avoid choices, with the police reports near it
       const dev = (window.apexDebug && window.apexDebug.dev) || null;   // dev mode (devPlanner): off but for a developer
       if (dev && dev.apply) dev.apply();                                    // Route tuning's and the Dev panel's tune, as of now
@@ -3700,12 +3724,14 @@
       // our quickest is asked for first, with the coverage question behind it (the worker answers in order; a trip off
       // the tiles answers it with an error, and its answer is only used when the tiles cover the trip)
       const ownQuickAsk = ownOn() ? tlTime('worker: quickest', ApexOwnRouting.quick(ownRouter(), { from, to, level, avoid, heading: from.heading, ...(dev ? dev.tuneReq() : {}) })) : null;
-      const ownCovered = ownOn() ? !!(await RouteLoading.optional(ownRouter().covers([from, to]), OWN_COVERS_MS)) : false;
+      // (Fun and Long way have no stand-in, so they wait longer for the index on a slow connection; null: not known)
+      const coversAns = ownOn() ? await RouteLoading.optional(ownRouter().covers([from, to]), ownOnly ? OWN_COVERS_ONLY_MS : OWN_COVERS_MS).catch(() => null) : false;
+      const ownCovered = coversAns === true;
       mark('covers');
       // Valhalla: today's router without our tiles; with them only a check, asked once our first route is drawn (its
       // answers' decoding on the page held that first draw up, live 2026-11-05)
       // (Fun and Long way never drive a highway: Valhalla is asked to keep off them too, route_engine.js levelCosting)
-      const valhallaP = dev && dev.on('forceOwn') ? Promise.resolve([]) : (ownCovered ? firstSeen : Promise.resolve()).then(() => tlTime('valhalla: route', valhallaRoutes([from, to], false, 2, FunRoute.LEVELS[level].noHighway ? (connectorCosting() || {}) : {}))).catch(() => osrmRoutes([from, to])).catch(() => []);
+      const valhallaP = ownOnly || (dev && dev.on('forceOwn')) ? Promise.resolve([]) : (ownCovered ? firstSeen : Promise.resolve()).then(() => tlTime('valhalla: route', valhallaRoutes([from, to], false, 2, FunRoute.LEVELS[level].noHighway ? (connectorCosting() || {}) : {}))).catch(() => osrmRoutes([from, to])).catch(() => []);
       // (not with our tiles: the map tiles' road data is in them, and the context for our routes doesn't read it)
       try { if (!ownCovered && window.ApexOsmTiles && window.ApexRouteCtx && ApexRouteCtx.corridor && (!window.ApexFlags || ApexFlags.on('route_engine'))) ApexOsmTiles.prefetch([ApexRouteCtx.corridor('ahead', [[from.lon, from.lat], [to.lon, to.lat]], {})]); } catch (_) { /* nothing ahead: fetched with the context */ }
       // members' measured roads round the trip go into our search itself (signed out or none: unchanged)
@@ -3722,11 +3748,11 @@
         .then(([r, late]) => (r && r.result && (r.result.partial || late) ? ApexOwnRouting.plan(ownRouter(), late ? { ...ownReq, crowd: late } : ownReq) : null)).catch(() => null) : Promise.resolve(null);
       // our quickest alone, first (one search): the first route on screen
       const ownQuickP = ownCovered ? ownQuickAsk : null;
-      const stagesAhead = !ownCovered && level !== 'quick' && crowKm >= 3 && crowKm <= 48 && window.ApexStages ? stagesFor(from, to).catch(() => null) : null;
+      const stagesAhead = !ownCovered && !ownOnly && level !== 'quick' && crowKm >= 3 && crowKm <= 48 && window.ApexStages ? stagesFor(from, to).catch(() => null) : null;
       let direct;
       // The router's costing keeps off highways (use_highways 0.15), which is what sent routes through subdivisions and
       // business districts; so the highway-friendly quickest competes too (route_engine.js highwayCosting), unless avoided.
-      const hwyCosting = window.ApexRouteEngine && FunRoute.kmBetween(from, to) >= 2 && !(dev && dev.on('forceOwn')) ? ApexRouteEngine.highwayCosting(avoid, routingCar()) : null;
+      const hwyCosting = !ownOnly && window.ApexRouteEngine && FunRoute.kmBetween(from, to) >= 2 && !(dev && dev.on('forceOwn')) ? ApexRouteEngine.highwayCosting(avoid, routingCar()) : null;
       // (asked with our routes too: Valhalla's highway-friendly quickest is the check, and the clock ours are put on)
       const hwyTry = hwyCosting ? (ownCovered ? firstSeen : Promise.resolve()).then(() => tlTime('valhalla: highway route', valhallaRoutes([from, to], false, 0, hwyCosting))).catch(() => []) : Promise.resolve([]);
       // Where to? stays instant (REVIEW_FEEL): the FIRST answer goes up at once, not held for the other requests, the
@@ -3754,7 +3780,7 @@
       if (ownQuickP) ownQuickP.then((c) => { mark('quick'); if (c) fireEarly([c]); });
       const hwyCandsP = hwyTry.then((rs) => rs.filter(r => Number.isFinite(r.timeS)).map(r => ({ kind: 'router', highway: true, route: r, timeS: r.timeS, via: [] })));
       hwyCandsP.then((h) => { if (!ownCovered) fireEarly(h); });
-      const own = ownP ? await ownP : { cands: [], reason: ownOn() ? 'out' : 'off', ms: 0 };
+      const own = ownP ? await ownP : { cands: [], reason: !ownOn() ? 'off' : coversAns == null ? 'index' : 'out', ms: 0 };
       const ownUsed = own.cands.length > 0;
       mark('own');
       // our quickest already on screen is the same route as the plan's quickest: the plan keeps that very candidate, so
@@ -3764,6 +3790,18 @@
         if (k >= 0) { quickNow.ownRole = own.cands[k].ownRole; quickNow.own = own.cands[k].own; own.cands[k] = quickNow; }
       }
       if (window.apexDebug) window.apexDebug.lastOwn = { covered: ownCovered, used: ownUsed, reason: own.reason, ms: own.ms, n: own.cands.length, error: own.error || null, tiles: own.result ? own.result.tiles : null, routerMs: own.result ? own.result.ms : null, viewMs: own.result ? own.result.viewMs : null, geoMs: own.result ? own.result.geoMs : null, partial: own.result ? !!own.result.partial : null, quickMs: quickNow && quickNow.kind === 'own' ? quickNow.ownMs : null, quickLoadMs: quickNow && quickNow.kind === 'own' ? quickNow.ownLoadMs : null };
+      // Fun and Long way with no route of ours: said plainly, with Quick a tap away (no Valhalla stand-in)
+      if (ownOnly && !ownUsed) {
+        if (window.apexDebug) window.apexDebug.ownOnlyFail = own.reason;
+        if (early.shown) return true;                                       // (never: the early quickest is ours too)
+        const what = FunRoute.LEVELS[level].label;
+        const msg = own.reason === 'out' ? `${what} routes use Vetta's own road map, which covers Ohio, Kentucky and Indiana so far. Quick works anywhere.`
+          : own.reason === 'off' ? `${what} routes need Vetta's own router, which is switched off. Quick still works.`
+          : own.reason === 'index' ? `Couldn't load Vetta's road map for this trip. Check signal and try again, or use Quick.`
+          : `Couldn't plan a ${what} route just now. Try again, or use Quick.`;
+        toast(msg, { label: 'Use Quick', ms: 12000, onClick: () => { setFunLevel('quick'); const u = planBusy(); funRoute(from, to, id, name, request, u, opts).catch((e) => toast(e.message)).finally(() => u.done()); } });
+        return false;
+      }
       // with our routes in, Valhalla's answers are only checks, fetched alongside (below); without, today's path
       if (!ownUsed && !early.fired) openGate();                            // ours failed: Valhalla is asked now, not at the gate's time
       direct = ownUsed ? [] : await valhallaP;
@@ -4011,7 +4049,7 @@
     const EARLY_MS = 0, EARLY_SIGHT_MS = 100, FIRST_GATE_MS = 1800;
     // Our own router (graph_worker.js), started at launch; the Valhalla check waits at most OWN_CHECK_MS once
     // our routes are in, and the chosen route's instructions at most OWN_INSTRUCT_MS (else our own maneuvers)
-    const OWN_CHECK_MS = 2500, OWN_INSTRUCT_MS = 3000, OWN_COVERS_MS = 1500, OWN_PLAN_MS = 6000, OWN_CROWD_MS = 250, OWN_FIRST_WAIT_MS = 700;
+    const OWN_CHECK_MS = 2500, OWN_INSTRUCT_MS = 3000, OWN_COVERS_MS = 1500, OWN_COVERS_ONLY_MS = 8000, OWN_PLAN_MS = 6000, OWN_CROWD_MS = 250, OWN_FIRST_WAIT_MS = 700;
     // members' measured roads for our search: only signed in (the server answers sign_in_required otherwise)
     const ownCrowdOn = () => !!(window.ApexSync && typeof ApexSync.signedIn === 'function' && ApexSync.signedIn());
     // Own-routed plans: the tiles carry the static road data (land use, density, businesses, signals, the grid, the DEM,
@@ -4054,10 +4092,10 @@
     // the shipped tiles' index and the region's (graph_tiles.js index(): the union, the region's asked once a day), so a
     // trip anywhere in OH+KY+IN is ours; without the reader, the shipped index alone
     const ownIndex = () => (ownIndexP || (ownIndexP = (window.ApexGraphTiles && ApexGraphTiles.index ? ApexGraphTiles.index()
-      : fetch('data/graph/v1/index.json').then((r) => (r.ok ? r.json() : null))).then((j) => ApexGraphRouter.indexKeys(j))
-      .catch(() => { ownIndexP = null; return new Set(); })));
+      : fetch('data/graph/v1/index.json').then((r) => (r.ok ? r.json() : null))).then((j) => (j ? ApexGraphRouter.indexKeys(j) : null))
+      .catch(() => null)).then((k) => { if (!k) ownIndexP = null; return k; }));   // (no index: unknown, asked again next time)
     const ownRouter = () => (ownClient || (ownClient = Object.assign(ApexGraphRouter.client({ url: 'graph_worker.js', timeoutMs: OWN_PLAN_MS }),
-      { covers: (points) => ownIndex().then((keys) => ApexGraphRouter.covers(keys, points)) })));
+      { covers: (points) => ownIndex().then((keys) => (keys ? ApexGraphRouter.covers(keys, points) : null)) })));
     // Turn instructions for one of our routes: Valhalla's maneuvers on our line (trace_route), offline our own
     // (one request per route, however often it's asked for)
     const ownInstructed = new WeakMap();
@@ -4094,6 +4132,7 @@
     // card saying why. Driving, a pick, another plan or a cleared route meanwhile: nothing changes.
     const OWN_REFINE = ['graph', 'context_grid', 'conditions', 'wildlife', 'events', 'hazards-live', 'driver'], OWN_REFINE_MS = 3000, OWN_SWAP_POINTS = 5;
     async function ownRefine(pool, level, o, shown, forecasts, fullP) {
+      if (window.apexDebug) window.apexDebug.refineDone = false;          // (e2e: a flow waits for the card to settle)
       try {
         const t0 = Date.now();
         // the whole corridor's routes, when the first plan was made on the tiles in hand: the new ones join the pool
@@ -4137,7 +4176,7 @@
         if (typeof cardNote === 'function') cardNote(`${why}: switched to ${road ? `the way by ${road[0]}` : 'a better way'}`);
         if (window.apexDebug) window.apexDebug.lastRefine.swapped = true;
         if (dp) { dp.picked = best; dev.planned(); }
-      } catch (_) { /* the card stays as it is */ }
+      } catch (_) { /* the card stays as it is */ } finally { if (window.apexDebug) window.apexDebug.refineDone = true; }
     }
     // Warm tiles (OWN_ROUTING.md §5): the tile you are in is read into the worker soon after start (the app's bundled
     // files, kept in IndexedDB), and again when you've moved 10 km; its neighbours load when a plan needs them (never
@@ -4495,6 +4534,10 @@
           // ours: the best pair (out and back), split at the destination
           const c = own[0].route.coords, k = c.reduce((b, p, i) => (FunRoute.kmBetween({ lat: p[1], lon: p[0] }, to) < FunRoute.kmBetween({ lat: c[b][1], lon: c[b][0] }, to) ? i : b), 0);
           outLine = c.slice(0, k + 1); backLine = c.slice(k); how = 'own';
+        } else if (level !== 'quick') {
+          // Fun and Long way are our router's or nothing (Valhalla is for Quick only, the owner 2026-11-11)
+          toast(`Couldn't find a ${FunRoute.LEVELS[level].label} way back on Vetta's road map here. Quick can plan one.`);
+          return;
         } else {
           const extra = FunRoute.LEVELS[level].noHighway && window.ApexRouteEngine ? ApexRouteEngine.levelCosting(avoid, routingCar(), level) : {};
           const backs = await valhallaRoutesExcluding([to, from], false, 2, extra, outExclusions(outCoords));
@@ -4616,14 +4659,18 @@
       // nothing else came, as before.
       const own = (await ownLoopsP).map((r) => ({ kind: 'own', route: r.route, hwyShare: r.hwyShare, pts: [c, ...FunRoute.alongPoints(r.route.coords), c] }));
       if (window.apexDebug) window.apexDebug.lastLoopRefine = null;
+      // Loops are our router's or nothing (Valhalla is for Quick only, the owner 2026-11-11): no stage loops or circle on
+      // Valhalla stand in, nor refine ours; with none of ours, the card says why
       if (own.length) {
         L.ownTiles = true;
-        const first = await loopRound(L, own, ui, false);
-        if (first) loopRefine(L, first, stageJobs(false));
-        else await loopRound(L, await stageJobs(true), ui, true);         // ours all failed to build: as without them
-        return;
+        if (await loopRound(L, own, ui, false)) return;
       }
-      await loopRound(L, await stageJobs(true), ui, true);
+      const here = ownOn() ? await RouteLoading.optional(ownRouter().covers([c]), OWN_COVERS_ONLY_MS).catch(() => null) : false;
+      if (window.apexDebug) window.apexDebug.loopOwnOnlyFail = !ownOn() ? 'off' : here == null ? 'index' : here ? 'none' : 'out';
+      toast(!ownOn() ? 'Loops need Vetta\'s own router, which is switched off.'
+        : here == null ? 'Couldn\'t load Vetta\'s road map here. Check signal and try again.'
+        : here ? `Couldn't find a ${asked} loop on Vetta's road map from here. Try another length.`
+        : 'Loops use Vetta\'s own road map, which covers Ohio, Kentucky and Indiana so far.');
     }
     const loopCircle = (L) => ({ kind: 'circle', pts: loopWaypoints(L.c, L.miles, Math.random() * 2 * Math.PI), through: true, extra: loopCosting() || {} });
     /** Loop jobs routed (ours come routed) and built into tracks: { t, job, route, km, score, ... } for those that worked. */
@@ -5069,10 +5116,12 @@
       $('sheet').querySelector('.body').scrollTop = 0;
       if (next === 'friends' && view === 'people') try { if (inbox) inbox.markSeen(); } catch (_) {}
     }
+    const logFrame = { el: null, url: null, pending: new Set(), want: null };   // the Log's frame (below, F-15)
     function showView(v) {
       if (v) $('endCard').classList.remove('show');                    // R-5 / I-6: a tab never opens under the drive's card
       if (v === 'log') { openLog('analysis.html?tab=log'); return; }
       if (v === 'stages') { openLog('analysis.html?tab=stages'); return; }
+      logFrame.want = null;                                            // another tab while the Log was loading: it stays closed
       if (v === 'setup') v = 'garage';                                   // Settings live in the Garage now (REVIEW.md roadmap 9)
       if (v === 'route') { showView(null); openPlan(true); return; }
       if (v === 'map') v = null;
@@ -5095,7 +5144,6 @@
     // Map, People and Garage tabs close the frame (web/page_return.js). F-15 (REVIEW_FEEL): the frame is loaded once, hidden,
     // when the map is idle after launch, and never again: a different page of the Log, a new or changed drive, the theme and
     // the units are messages to it (analysis.html ApexLogFrame), so opening the Log is showing a page that is already there.
-    const logFrame = { el: null, url: null, pending: new Set() };
     function safeInsets() {
       let probe = $('saProbe');
       if (!probe) { probe = el('div', { id: 'saProbe' }); probe.style.cssText = 'position:fixed;visibility:hidden;pointer-events:none;padding:env(safe-area-inset-top,0px) env(safe-area-inset-right,0px) env(safe-area-inset-bottom,0px) env(safe-area-inset-left,0px)'; document.body.append(probe); }
@@ -5113,7 +5161,11 @@
       if (f) return f;
       f = logFrame.el = el('iframe', { id: 'logFrame', title: 'Log' });
       f.hidden = true;
-      f.addEventListener('load', () => { logInsets(); logFrame.pending.clear(); });   // a fresh page reads everything itself
+      f.addEventListener('load', () => {                              // a fresh page reads everything itself
+        logInsets(); logFrame.pending.clear();
+        const want = logFrame.want; logFrame.want = null;
+        if (want && state.mode !== 'live') openLog(want);              // asked for while it loaded: shown now, whole
+      });
       logFrame.url = url; f.src = url;
       document.body.append(f);
       return f;
@@ -5127,7 +5179,15 @@
         api.open(url);                                                  // the page asked for, in place (never a reload)
         logFrame.url = url;
         logInsets();
-      } else if (logFrame.url !== url) { logFrame.url = url; f.src = url; }   // still loading: load the page asked for instead
+      } else {
+        // still loading (a Log tapped in the first seconds of a fresh install): the frame stays hidden until its page is there,
+        // so the map and its tabs stay usable, rather than a blank full screen with no way out for seconds (walkthrough
+        // 2026-11-11: 4 s of empty paper over the tab bar); it opens on its own when it has loaded, unless another tab was asked
+        if (logFrame.url !== url) { logFrame.url = url; f.src = url; }  // load the page asked for instead
+        if (!logFrame.want) toast('Opening your Log…');
+        logFrame.want = url;
+        return;
+      }
       f.hidden = false;
       document.documentElement.classList.add('log-open');
       if (api) api.shown();
@@ -7111,10 +7171,10 @@
     window.apexDebug.placePlate = () => { placeAsk.at = 0; return refreshPlacePlate(); };   // e2e: ask now (the first ask waits 4 s for a fix)
     // ---- Your roads and a Sunday suggestion (panel round 1, D-1 and R-1; your_roads.js) ----------------------------------
     // The deck's first row names one real suggestion and its reason (a crew drive you're going to this week, the best road
-    // near you that you haven't driven, your best-scored road), else the loop as before; under it up to three of your own
+    // near you that you haven't driven, this week's time attack loop, your best-scored road), else the loop as before; under it up to three of your own
     // roads, each a tap from being driven again. Unknown stays unknown: nothing found, nothing said.
     const YR = window.ApexYourRoads;
-    const deckState = { all: [], dates: [], sugg: null, crew: null, untried: null, untriedAt: -Infinity, untriedLat: null, untriedLon: null };
+    const deckState = { all: [], dates: [], sugg: null, crew: null, attack: null, untried: null, untriedAt: -Infinity, untriedLat: null, untriedLon: null };
     const deckLong = (m) => ApexFormat.distance(m);                  // RA-3: one distance format everywhere
     async function refreshYourRoads() {
       if (!YR || !window.ApexAnalysis) return;
@@ -7222,7 +7282,7 @@
     function paintDeck() {
       if (!YR) return;
       untriedNow();
-      const sugg = YR.suggest({ crew: deckState.crew, untried: deckState.untried, mine: deckState.all, long: deckLong });
+      const sugg = YR.suggest({ crew: deckState.crew, attack: deckState.attack, untried: deckState.untried, mine: deckState.all, long: deckLong });
       deckState.sugg = sugg;
       paintLoopSuggest();
       // TestFlight 2026-11-05 ("takes up so much screen"): the suggestion and one row under it (it was two); the rest are a
@@ -7244,6 +7304,7 @@
     function suggestRoad(s) {
       if (s && s.kind === 'untried' && deckState.untried && deckState.untried.pick) { const st = deckState.untried.pick.s; return { key: 'stage:' + s.name, get: async () => st }; }
       if (s && s.kind === 'best' && s.id) return driveRoad(s.id);
+      if (s && s.kind === 'attack' && deckState.attack) { const g = deckState.attack.geom; return { key: 'ta:' + s.key, get: async () => ({ lat: g.map((p) => p[0]), lon: g.map((p) => p[1]) }) }; }
       return null;
     }
     function paintLoopSuggest() {
@@ -7258,7 +7319,7 @@
       }
       if (s) {
         $('loopSuggestTitle').textContent = s.title; $('loopSuggestWhy').textContent = s.reason; $('loopSuggestKey').textContent = 'Plan';   // finding 8: it plans; Start goes
-        const label = `${s.title}. ${s.reason}. ${s.kind === 'crew' ? 'Directions to the meeting point.' : 'Route it.'}`;
+        const label = `${s.title}. ${s.reason}. ${s.kind === 'crew' ? 'Directions to the meeting point.' : s.kind === 'attack' ? 'Directions to the start.' : 'Route it.'}`;
         $('loopSuggestGo').setAttribute('aria-label', label); body.setAttribute('aria-label', road ? `${s.title}. ${s.reason}. Show it on the map.` : label);
         return;
       }
@@ -7282,6 +7343,7 @@
       const s = deckState.sugg;
       if (s && s.kind === 'crew') { if (Number.isFinite(s.lat) && Number.isFinite(s.lon)) routeToPlace({ label: (deckState.crew && deckState.crew.label) || s.name, lat: s.lat, lon: s.lon }); return; }
       if (s && s.kind === 'best') { driveAgain(s.id, s.name); return; }
+      if (s && s.kind === 'attack') { routeToPlace({ label: s.name, lat: s.lat, lon: s.lon }); return; }
       if (s && s.kind === 'untried' && deckState.untried) { driveSuggested(deckState.untried); return; }
       if (!loopBusy) $('findLoopBtn').click();
     });
@@ -7402,7 +7464,7 @@
       if (state.toggles.nudge) {
         const sugg = deckState.sugg, day = YR.usualDay(deckState.dates);
         at = YR.nudgeAt({ now, day, crewAt: sugg && sugg.kind === 'crew' ? sugg.at : null, lastAt: st.last });
-        text = at ? YR.nudgeText(sugg, day) : null;
+        text = at ? YR.nudgeText(sugg, day, at) : null;
       }
       const key = at ? `${at}|${text.title}|${text.body}` : '';
       if (key !== (st.key || '')) {
@@ -7433,6 +7495,21 @@
       // "Location is off" sheet uses).
       toast('Notifications are off for Vetta. Turn them on in Settings, then here.', { label: 'Settings', onClick: () => { try { nudgeShell().postMessage({ cmd: 'openSettings' }); } catch (_) {} } });
     }
+    // This week's time attack loop in your area (time_attack.ts) as the deck's suggestion: first after a crew drive when you
+    // entered it, else after the road you haven't driven. Members only, with the drive-today check (every 10 min); the server
+    // is sent the middle of your 1-degree area, never where you are (time_attack.js areaPoint). No loop, nothing said.
+    function attackIs(a) {
+      const was = deckState.attack ? `${deckState.attack.key}|${deckState.attack.entered}|${deckState.attack.place}|${deckState.attack.times}|${deckState.attack.left}` : '';
+      deckState.attack = a;
+      if (was !== (a ? `${a.key}|${a.entered}|${a.place}|${a.times}|${a.left}` : '')) paintDeck();
+    }
+    async function refreshAttack() {
+      const p = state.lastPosition;
+      if (!p || !Number.isFinite(p.lat) || !Number.isFinite(p.lon)) return;   // no position yet: what was known stays
+      const at = { lat: Math.floor(p.lat) + 0.5, lon: Math.floor(p.lon) + 0.5 };
+      const t = await apiCall('GET', `/api/timeattack?lat=${at.lat}&lon=${at.lon}`).then((r) => (r && r.ok ? jsonOf(r) : null)).catch(() => null);
+      if (t) attackIs(YR ? YR.attackFrom(t) : null);
+    }
     // The morning of a crew drive you said you're going to (REVIEW.md roadmap 21, crew_events.js todayDrive): from 4 AM until an
     // hour after it starts, the idle map offers directions to the meeting point instead of the loop. Members only, every 10 min.
     let driveTodayEvent = null;
@@ -7442,7 +7519,8 @@
         const rows = await apiCall('GET', '/api/events').then(jsonOf).catch(() => null);
         e = ApexCrewEvents.todayDrive(rows);
         crewSoon(rows);                                                // panel R-1: a drive this week is the deck's suggestion
-      } else crewSoon(null);
+        await refreshAttack();
+      } else { crewSoon(null); attackIs(null); }
       driveTodayEvent = e;
       $('driveToday').hidden = !e;
       $('app').classList.toggle('drive-today-on', !!e);
@@ -7455,6 +7533,7 @@
     }
     $('driveToday').addEventListener('click', () => { const e = driveTodayEvent; if (e) routeToPlace({ label: e.meet_name || e.title, lat: e.meet_lat, lon: e.meet_lon }); });
     setTimeout(refreshDriveToday, 5000); setInterval(refreshDriveToday, 10 * 60000);
+    setTimeout(() => { if (!deckState.attack && accountMe && accountMe.member && navigator.onLine !== false) refreshAttack().catch(() => {}); }, 40000);   // the position comes late
     document.querySelectorAll('#loopDetents button').forEach(b => b.addEventListener('click', paintDeck));
     paintLoopSuggest();
     // ---- Look and voice: the theme picker (REVIEW.md 4.5) ---------------------------------------------------------------
@@ -8487,7 +8566,7 @@
         el.setAttribute('role', 'button'); el.setAttribute('aria-label', row ? ApexScenic.placeLine(row) : SCENIC_LABEL[p.kind]);   // after the Marker's own "Map marker"
         scenicPins.push(mk);
         poiDeclutter.pins.push({ marker: mk, el, kind: p.kind, named: !!p.name, m: p.m });
-        if (p.kind === 'fuel' && Number.isFinite(p.m)) fuelPins.push({ m: p.m, el });
+        if (p.kind === 'fuel' && Number.isFinite(p.m)) fuelPins.push({ m: p.m, el, name: p.name || null });
       }
       fuelPins.sort((a, b) => a.m - b.m);
       updatePins();
@@ -8925,6 +9004,7 @@
     function learnFromPick() {
       try {
         const o = routeOptions, t = plannedRoute;
+        window.apexDebug.pickWhy = { levels: o && o.levels, picked: o && o.picked, times: o && o.list && o.list.map((r) => r && Math.round(r.timeS)) };
         if (!window.ApexTaste || !o || !o.list || o.current !== t || !t || t.id !== 'route_dest' || pickLearned === o) return;
         // Vetta's pick is the plan's own level's (the list starts with Quick's, so list[0] is not it); after a refine's swap
         // it is the swapped-in one, since the refine ranks at that same level
@@ -9360,6 +9440,7 @@
       const d = drives.find(x => x.id === 'dry_ridge');
       if (!d) { toast('Couldn\'t load the replay. Check the connection and try again.'); return; }
       booting = false; replayOn = true; closeSheet(); activate(d, 0);
+      replayWhenReady(d);                                              // "Watch" plays it (walkthrough 2026-11-11: it sat at 0 mph until Play)
     }
     // CarPlay's "Start drive" offer (IDEAS C-05) holds the toast for 10 s: once a drive starts it is moot, so it goes
     // and stops holding back other toasts.
@@ -9446,9 +9527,21 @@
     const closeReplay = () => {
       if (driveActive) return;
       if (!replayOn && state.mode !== 'live') return;
+      const wasReplay = state.mode === 'replay' && !(track && track.kind === 'route');
       replayOn = false; setPlaying(false);
       if (state.mode === 'live') { state.live = null; setMode(track && track.kind === 'route' ? 'sim' : 'replay'); paintModeSwitch(); }
       paintIdle(); measurePlanBar();
+      // walkthrough 2026-11-11: Done after a replay (the welcome's demo, a Log drive) left the map and the arrow on that
+      // drive's ground, hundreds of miles off, while the masthead and the cards spoke of where you are; a still browser sends
+      // no new fix to bring it back. The idle map goes back to your last known position, at once. A route's fly-through keeps
+      // its route in view (unchanged); no position known leaves the map where it is.
+      const here = state.lastPosition;
+      if (wasReplay && here && Number.isFinite(here.lat) && Number.isFinite(here.lon)) {
+        const m = state.lastMotion || {};
+        clearTimeout(resumeTimer); clearInterval(resumeTick); state.follow = true; $('recenterBtn').classList.remove('show');
+        idleSnapped = false;
+        showIdleFix({ lat: here.lat, lon: here.lon, course_deg: Number.isFinite(m.heading) ? m.heading : NaN, speed_mps: 0 });
+      }
     };
     $('modePlate').addEventListener('click', closeReplay);
     $('replayDone').addEventListener('click', closeReplay);
@@ -9630,6 +9723,7 @@
         else if (p.go === 'end') { if (state.mode === 'live') leaveDrive(true); else toast('No drive to end.'); }
         else if (p.go === 'nextstage') nextStageAnswer();
         else if (p.go === 'skipstage') skipStage();
+        else if (p.go === 'nextfuel' || p.go === 'nextcafe') nextPlaceAnswer(p.go === 'nextfuel' ? 'fuel' : 'cafe');
         return;
       }
       showView(ok(p.crew) || ok(p.convoy) ? 'crews' : 'friends'); renderAccount();
@@ -9642,6 +9736,14 @@
       const line = !t || !t.stageSpans ? 'This route has no stages.' : !n ? 'No more stages on this route.'
         : n.on ? `On ${n.span.name || 'a stage'} now: ${ApexUnits.long(n.toM, 1)} to go.` : `Next stage${n.span.name ? `, ${n.span.name},` : ''} in ${ApexUnits.long(n.toM, 1)}.`;
       toast(line); say(line, true);
+    }
+    // Siri (the owner, 2026-11-11): "where's the next gas station / café" says the next one along the planned route by
+    // its name on the map (scenic.js nextAnswer); no route, or its places not loaded, says so.
+    function nextPlaceAnswer(kind) {
+      const t = track, at = state.mode === 'live' ? routeWatch.bestM : state.cursorM;
+      const list = t && t === plannedRoute && Array.isArray(t.scenic) ? t.scenic : null;
+      const line = window.ApexScenic ? ApexScenic.nextAnswer(list, at, kind, { long: (m) => ApexUnits.long(m, 1, true) }) : '';
+      if (line) { toast(line); say(line, true); }
     }
     // (span: the one to skip, a late loop's offer; none: the one you're on or the next)
     function skipStage(span) {
