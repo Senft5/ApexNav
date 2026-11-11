@@ -111,6 +111,17 @@
 - Tests: tests/test_end_reveal.py; tests/test_review_recording.py now asserts the welcome is still under reduced motion;
   e2e "first run and the end card…".
 - Next: the welcome on its side (landscape) is correct but plain; the road could take the left column's full height.
+## Session 2026-11-10 (fable-ten-hz-g): every live frame's g reaches the recording (IDEAS D-26; claude/fable-ten-hz-g, off origin/main ac6c6c6)
+
+- `web/sensors.js Recorder`: `gs` (each frame's [lat_g, lon_g] or null since the last move, up to 31) and `g0` ([g or
+  null] of the last frame placed). On a move, frame k of n sits at (k + 1) / n of the stretch and `g0` at its start; a
+  5 m sample interpolates between the frames either side (null if either is unknown). No placement (first fix, more
+  than 30 frames waiting, a stretch over 100 m) falls back to the fix's g as before. `snapshot`/`restore` carry both,
+  and `pause`, `truncate` and a stray fix clear them.
+- Tests: tests/test_ten_hz_g.py (error vs truth, a 12 m correction, blanks, checkpoint mid-fix, 1 Hz browser frames).
+- Checked: `pytest tests` full; e2e recording and Log flows.
+- Next: IDEAS D-26 in docs/IDEAS.md is added by claude/fable-driver-profile (#373); mark it done when both are merged.
+  Then the driver profile's "touch" skills (brake application and release rates, turn-in rate) from this finer g.
 ## Session 2026-11-11 (fable-practice-focus): practice focus, the profile's Work on carried into the next drives (claude/fable-practice-focus, stacked on claude/fable-driver-profile)
 
 - `core/driver_profile.py` `practice` and `drive_practice`, ported in `web/driver_profile.js` and held to parity by

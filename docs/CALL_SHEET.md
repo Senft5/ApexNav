@@ -135,6 +135,24 @@ it and settles; the distance, time and corners are a row of big numbers; Mark a 
 so Share card is the one ink key. A drive with no score shows "0.9 mi · no corners to score" set as a title.
 
 Undo: revert the PR (web/first_run.js and web/end_reveal.js can simply be removed; the page works without them).
+## 2026-11-10 (fable-ten-hz-g): a recorded drive keeps the car's g ten times a second, where it happened (claude/fable-ten-hz-g)
+
+The app sends the page ten readings a second, but the recorder kept only the one that arrived with each GPS fix and gave
+it to every 5 m sample since the fix before. A drive held one g reading a second, and each reading was placed up to a
+second (about 20 m) early. A short steering correction or a stab at the brakes between two fixes was lost, and every
+corner's load was smeared toward its exit. Now each reading is placed along the road at its share of the way between the
+two fixes (as the bump spikes already were), and each sample takes the g between the readings either side of it. On a
+test road the samples' error went from about 0.2 g to under 0.03 g. A 12 m steering correction now shows where it
+happened.
+
+Calls I made:
+- A reading with no g (an unsolved mount, the motion sensors paused) leaves the samples next to it blank. It is not
+  bridged.
+- Over a GPS gap of 3 s or 100 m, the samples take the fix's g as before. Readings that can't be placed are not guessed.
+- Drives already saved keep their old samples. New drives' Vetta Scores may come out a little higher on smoothness,
+  because a sample no longer jumps at every fix. The Score's formula is unchanged.
+
+Undo: revert the PR.
 ## 2026-11-11 (fable-practice-focus): Work on becomes a practice you can follow drive by drive (claude/fable-practice-focus)
 
 Your driving names one skill to work on. Under it there is now a key: "Practice it on my next drives". Press it and
