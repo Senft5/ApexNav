@@ -4,6 +4,12 @@ Decisions Claude made for you, newest first. Each one says what was decided, why
 you reach one you've seen. If you disagree with a call, say so and it gets reversed; nothing here is hard to undo unless
 it says so. Things only you can do are in docs/OWNER_TODO.md.
 
+## 2026-11-11 (routing round three, part 2): stage discovery reads crests and verified bumps (claude/project-thread-39xbx9)
+
+Stage discovery (the roads Explore, loops and routes pick from) now lifts a road members measured going light over its
+crests by up to 1.5 points, and drops one by 1.5 points for each crowd-verified bump on it, at most 4.5 (a confirmed
+hand-reported hazard costs 3). The sizes are a judgment call: a crested road wins against a flat one half a point better;
+two verified bumps send it back. Undo: `CREST_MAX` and `BUMP_PTS` 0 in web/measured_stages.js.
 ## 2026-11-11 (places by name, 3): ask Siri for the next gas station or café (claude/project-thread-me97iw)
 
 Two new Siri phrases: "Where's the next gas station in Vetta" and "Where's the next café in Vetta" (also "Next fuel" /

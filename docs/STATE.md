@@ -1,5 +1,13 @@
 # VETTA — CURRENT AGENT HANDOFF STATE
 
+## Session 2026-11-11 (routing round three, part 2): crests and verified bumps in stage discovery (claude/project-thread-39xbx9, off origin/main)
+
+- IDEAS R-04. backend/src/roads.ts `coverage`: per direction `crested` (share of bins with crest_n >= 2 at `CREST_G`
+  0.15 g or more, null when none was measured twice) and `bumps` (verifiedBumps over the box's bump rows, only for the
+  ways shown). web/measured_stages.js: crests add up to 1.5 points (full at 15 % of bins), each verified bump costs 1.5
+  (max 4.5), the larger direction's count per matched road. No migration.
+- Tests: backend/test/coverage.test.ts (+2), tests/test_measured_stages.py `test_crests_and_verified_bumps`.
+- Next: the FunRoute ranking of Valhalla candidates (fun_route.js) with the same crest and bump data per route.
 ## Session 2026-11-11 (places by name, 3): Siri, "where's the next gas station / café" (claude/project-thread-me97iw, off origin/main)
 
 - ApexIntents.swift: NextFuelIntent / NextCafeIntent (go=nextfuel / nextcafe), 7 App Shortcuts now (Apple allows 10).
