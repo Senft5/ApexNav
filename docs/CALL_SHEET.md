@@ -107,6 +107,14 @@ The e2e suite is 152 flows now and takes about 24 minutes, so GitHub cut it off 
 (twice on #349, once on #344) with every flow before it passing. The limit is 35 minutes. No test is skipped or
 shortened. Undo: set `timeout-minutes` back to 25 in `.github/workflows/core-tests.yml`, or better, split the suite.
 
+## 2026-11-10 (fable-sheet-races): e2e waits for a sheet to be still before tapping its keys (claude/fable-sheet-races)
+
+Nine PRs were red on CI-only races: a click aimed at a sheet that was still sliding up landed on its backdrop, which
+closes the sheet. The two flows now wait until the sheet is open and still, and check it is still open after the tap.
+Update 2026-11-11: the wait itself was broken (an async predicate returns at once), and the app had a real fault: a
+press on a key that lifts on the backdrop closed the sheet. Now a backdrop closes a sheet only when the press began on
+it (`onBackdrop` in cockpit.js, five sheets). On a phone that is a tap during the slide, or a thumb that drifts off a
+key, no longer throwing the sheet away. Every check is as strict as before, plus two new ones. Undo: revert the PR.
 ## 2026-11-11 (fable-taste-picks): the route you choose over Vetta's pick teaches your taste (claude/fable-taste-picks)
 
 Taste learning only heard from "Which road was better?" after a drive, and most drivers never answer it. A choice made
