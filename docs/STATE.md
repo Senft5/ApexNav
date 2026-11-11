@@ -39,6 +39,14 @@
 - Tests: tests/test_route_card.py; e2e "plan flow (c)".
 - Next: CarPlay has not had a design pass in this run (Swift, not visible from the cloud).
 
+## Session 2026-11-10 (fable-there-and-back): there and back, home another way (claude/fable-there-and-back, off origin/main 948cb4b)
+
+- `web/graph_router.js` `roundTrip` (worker message `round`, client `round`): ways out paired with ways home that avoid
+  them (K.ROUND_*); `assemble` now keeps `fs`/`ft`. `web/own_routing.js` `roundTrip`.
+- `web/cockpit.js` `planRoundTrip`, `outExclusions`; `#routeRoundBtn` on the card (index.html). docs/ROUTING.md.
+- Tests: test_graph_router.py (roundTrips case), e2e "there and back" (the Valhalla path).
+- Not done: offering the round trip as a level card of its own; a timed stop at the destination (lunch: ETA home).
+- Next: discovery of great unknown roads near a planned trip ("a better road 4 min off your route").
 ## Session 2026-11-10 (fable-your-data): Your data as Settings-style rows (claude/fable-your-data, off origin/main 3f2f315)
 
 - `web/index.html` only: the Your data section's keys are `.nav-rows.data-rows` with three `.nav-group` headings; the
@@ -62,6 +70,17 @@
   across a reload, back to distance).
 - Next: Options' "Loop to fit" 1 hour / 2 hours keys now duplicate the dial; remove them once the owner has used the
   dial (My free time stays).
+
+## Session 2026-11-10 (fable-toast-key): toasts are as wide as their words; a toast's key ends its row (claude/fable-toast-key, off origin/main 51c8c4c)
+
+- [x] web/cockpit.js `toast()`: the action is `a.toast-key`, `#toast.has-key` while it has one. web/index.html:
+  `.toast.show { width: max-content }`, `.toast.show.has-key` (flex row), `.toast .toast-key` (ink, underlined, 44 px
+  hit area by padding and negative margin). The saved-for-offline sentence.
+- [x] tests/test_toast_key.py (4); e2e "the car connects" measures the row, the ink, the hit height and a 320 px phone.
+- Found on the way, not a bug in use: `scrollIntoView()` on a key inside the closed Layers panel scrolls `.stage`
+  (overflow: hidden) sideways. Nothing in the app does that (the closed panel can't take focus); a test script that
+  clicks a Layers key before the panel has slid in will. `overflow: clip` on `.stage` would rule it out.
+- Next: the drive screen proper (the status row beside Report and End).
 
 ## Session 2026-11-10 (fable-layers): design pass 8, the Layers panel as the map's legend (claude/fable-layers, off origin/main 1a38381)
 

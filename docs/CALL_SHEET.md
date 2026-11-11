@@ -56,6 +56,14 @@ keeps its own word and only its progress bar moves.
 
 Undo: revert the PR.
 
+## 2026-11-10 (fable-there-and-back): a trip to a place can come home another way in one tap (claude/fable-there-and-back)
+
+The route card of a trip to a place has a new key, "There and back, home another way". It plans the drive home too,
+staying off the road you drove out on wherever another way exists, and the destination becomes a stop on the trip.
+Calls made: the way home is chosen by the same Fun / Long way rules as any route (so it may be longer, on better road);
+where our own map tiles don't reach, the public router is asked to avoid the way out; a dead end that has only one way
+in says so instead of failing. Undo: hide `#routeRoundBtn` (one line in renderRouteCard), nothing else depends on it.
+
 ## 2026-11-10 (fable-your-data): Your data is three short lists, like Settings (claude/fable-your-data)
 
 For your "cohesiveness, less clunky": Your data was eight keys of eight widths in two wrapped rows, one of them a link
@@ -84,6 +92,23 @@ dial to Time as well, so the card always changes the loop in the unit it was ask
 Also: a time loop's note said "the closest good loop to 1.5 h"; times now read "1½ h" everywhere.
 
 Not changed: Options keeps its 1 hour / 2 hours keys and My free time. Undo: revert the PR.
+
+## 2026-11-10 (fable-toast-key): a message with a key is one row, and a message is as wide as its words (claude/fable-toast-key)
+
+For "reducing any clunky feelings", seen on the drive screen: "Typing is off while the car moves." took half the
+screen's width, wrapped, and its key ("I'm a passenger") dropped under it, indented, in the red pen. Two causes, both
+in every message the app shows:
+
+- A message is centred from `left: 50%`, so the browser let it be at most half the screen wide and it wrapped early.
+  It is now as wide as its words, up to the screen less 16 px a side.
+- A key on a message (twelve of them: Start drive, Save, Share ETA, Head home, Add as a stop, Garage, Open…) was an
+  inline link. It is now the end of a row: the words wrap on the left, the key stays whole on the right. It is ink and
+  underlined like every other text key (the red pen is for what means slow down), and a thumb tall to hit without
+  making the message taller.
+
+Also: "Saved for offline: … Find it in Where to?." ended "?."; it reads "It's listed in Where to? now."
+
+Undo: revert the PR (`toast()` in web/cockpit.js, four CSS lines in web/index.html).
 
 ## 2026-11-10 (fable-layers): design pass 8: the Layers panel is the map's legend (claude/fable-layers)
 

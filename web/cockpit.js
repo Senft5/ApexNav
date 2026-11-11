@@ -2749,6 +2749,8 @@
       $('routeCardSub').textContent = `${carLine ? carLine + ' · ' : ''}${missed}${towns}${sun}${cams}${feel}`;
       $('routeCardWhy').textContent = t.why || '';
       $('routeCardWhy').hidden = !t.why;
+      // There and back: a trip to a place (not a round trip already, no stop of yours on it), planned and not driving
+      $('routeRoundBtn').hidden = !(t.id === 'route_dest' && t.request && !t.request.round && !t.request.via.some((v) => !v.shaping) && state.mode !== 'live');
       // finding 4: the level's one home is the card, for a destination route; a loop's card has its length (finding 6).
       // The owner, 2026-11-04: the levels are the choices, one card each with its own pick (paintLevelCards)
       // (a loop has no level: its card offers its length and which way to head, paintLoopWays)
@@ -2828,7 +2830,7 @@
       const t = plannedRoute;
       if (!t || !Array.isArray(t.lat) || t.lat.length < 2) return;
       if (ApexSavedRoutes.has(localStorage, t.id)) { ApexSavedRoutes.remove(localStorage, t.id); toast(`${t.name} removed from saved routes.`); }
-      else if (ApexSavedRoutes.save(localStorage, ApexSavedRoutes.pack(t)) === 'saved') toast(`Saved for offline: ${t.name}. Find it in Where to?.`);
+      else if (ApexSavedRoutes.save(localStorage, ApexSavedRoutes.pack(t)) === 'saved') toast(`Saved for offline: ${t.name}. It's listed in Where to? now.`);
       else toast('The phone is out of room for saved routes. Remove one first.');
       paintSaveBtn();
     });
@@ -4088,6 +4090,64 @@
       return ok;
     }
 
+    // There and back (the owner's "best routing for fun driving"): a drive out to a café or a viewpoint is two drives, and
+    // the second should be new road. Our router pairs ways out and back (graph_router.js roundTrip: the way out costs x4
+    // on the way back) where its tiles cover the trip; elsewhere the way out on the card stays and Valhalla is asked for the
+    // way back around it (points along it as exclude_locations, the alternate that shares least with it). Either way the
+    // whole trip is routed through shaping points with the destination as your stop, so Up / Down / Remove, a reroute and
+    // a level change behave as on any trip with a stop. ROUND_SHAPE_KM: a shaping point that often holds the line.
+    const ROUND_SHAPE_KM = 2.5, ROUND_SHAPE_MAX = 14;
+    function outExclusions(coords, everyKm = 1, endKm = 1.5, max = 40) {
+      const cum = [0];
+      for (let i = 1; i < coords.length; i++) cum.push(cum[i - 1] + FunRoute.kmBetween({ lat: coords[i - 1][1], lon: coords[i - 1][0] }, { lat: coords[i][1], lon: coords[i][0] }));
+      const total = cum[cum.length - 1], out = [];
+      if (total < 2 * endKm + everyKm) return out;
+      const step = Math.max(everyKm, (total - 2 * endKm) / max);
+      for (let at = endKm, i = 0; at <= total - endKm && out.length < max; at += step) { while (i < cum.length - 1 && cum[i] < at) i++; out.push({ lat: coords[i][1], lon: coords[i][0] }); }
+      return out;
+    }
+    async function planRoundTrip() {
+      const t = plannedRoute;
+      if (!t || t.id !== 'route_dest' || !t.request || state.mode === 'live') return;
+      const ui = planBusy();
+      ui.step('Finding another way home…', 0.3);
+      try {
+        const from = t.request.from || await locate();
+        if (!from) throw new Error(NO_FIX);
+        const to = t.request.to, level = funLevel, place = (t.name || '').replace(/^To /, '') || 'there';
+        const outCoords = Array.from(t.lat, (la, i) => [t.lon[i], la]);
+        let outLine = outCoords, backLine = null, how = 'valhalla';
+        const own = ownOn() ? await RouteLoading.optional(ApexOwnRouting.roundTrip(ownRouter(), { from, to, level, prefs: roadPrefs, avoid, heading: from.heading, ...devTuneReq() }), 6000) : null;
+        if (own && own.length) {
+          // ours: the best pair (out and back), split at the destination
+          const c = own[0].route.coords, k = c.reduce((b, p, i) => (FunRoute.kmBetween({ lat: p[1], lon: p[0] }, to) < FunRoute.kmBetween({ lat: c[b][1], lon: c[b][0] }, to) ? i : b), 0);
+          outLine = c.slice(0, k + 1); backLine = c.slice(k); how = 'own';
+        } else {
+          const extra = FunRoute.LEVELS[level].noHighway && window.ApexRouteEngine ? ApexRouteEngine.levelCosting(avoid, routingCar(), level) : {};
+          const backs = await valhallaRoutesExcluding([to, from], false, 2, extra, outExclusions(outCoords));
+          const share = (r) => ApexOwnRouting.sharedShare(r.coords, outCoords);
+          backLine = backs.length ? backs.reduce((a, b) => (share(b) < share(a) ? b : a)).coords : null;
+        }
+        if (!backLine) throw new Error('no way back');
+        const shape = (line) => FunRoute.alongPoints(line, ROUND_SHAPE_KM, ROUND_SHAPE_MAX);
+        const via = [...shape(outLine), { lat: to.lat, lon: to.lon, label: place }, ...shape(backLine)];
+        const home = { lat: from.lat, lon: from.lon };
+        await buildRoute([from, ...via, home], 'route_dest', `To ${place} and back`, null, { from: t.request.from, to: home, via, round: true });
+        const r = plannedRoute;
+        if (r && r !== t && Array.isArray(r.lat)) {
+          // the share of the trip driven twice, said plainly (a dead-end valley has no other way, and the card says so)
+          const line = Array.from(r.lat, (la, i) => [r.lon[i], la]), half = line.findIndex((p) => FunRoute.kmBetween({ lat: p[1], lon: p[0] }, to) < 0.06);
+          const twice = half > 0 ? ApexOwnRouting.sharedShare(line.slice(half), line.slice(0, half + 1)) : null;
+          r.roundTwice = twice;
+          cardNote(twice == null ? 'There and back' : twice < 0.1 ? 'There and back: home by other roads all the way' : twice < 0.5 ? `There and back: ${Math.round((1 - twice) * 100)}% of the way home is new road`
+            : 'There and back: no other way home here, so it comes back the way it went');
+          if (window.apexDebug) window.apexDebug.lastRound = { how, twice, via: via.length };
+        }
+      } catch (err) { toast(err && err.message === NO_FIX ? NO_FIX : 'Couldn\'t find a way back just now. Try again in a moment.'); }
+      finally { ui.done(); }
+    }
+    $('routeRoundBtn').addEventListener('click', () => planRoundTrip());
+
     // A loop is any route from the start back to it with little driven twice, built from the best roads within reach
     // (the owner, 2026-11-04; CALL_SHEET): never a circle for its own sake. This circle through the start is only the last
     // resort, when neither the stage plans nor our own router found a loop.
@@ -4578,8 +4638,11 @@
       if (!action && t._holdUntil > performance.now()) return;   // a Cancel countdown owns the toast until it ends
       t._holdUntil = action && action.ms ? performance.now() + action.ms : 0;
       t.textContent = msg;
+      // A message with a key is a row: the words on the left, the key whole on the right (.toast.has-key). The key was an
+      // inline link in the red pen; when the words wrapped it dropped under them, indented.
+      t.classList.toggle('has-key', !!action);
       if (action) {
-        const a = document.createElement('a'); a.href = action.href || '#'; a.textContent = action.label; a.style.cssText = 'margin-left:10px;color:var(--accent);text-decoration:underline'; t.append(a);
+        const a = document.createElement('a'); a.href = action.href || '#'; a.textContent = action.label; a.className = 'toast-key'; t.append(a);
         // Once the countdown is over the action is gone: a late tap must not undo what already happened.
         if (action.onClick) a.onclick = (e) => { e.preventDefault(); if (!a.isConnected) return; t._holdUntil = 0; a.remove(); action.onClick(); t.classList.remove('show'); };
       }

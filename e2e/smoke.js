@@ -2250,6 +2250,19 @@ flow('the car connects: CarPlay offers Start drive, and an apexnav://open?go=dri
   await page.waitForFunction(() => window.apex && typeof window.apex.onNative === 'function');
   await page.evaluate(() => window.apex.onNative({ type: 'car', via: 'carplay' }));
   await page.waitForFunction(() => /CarPlay connected/.test(document.getElementById('toast').textContent));
+  // 2026-11-10: a message with a key is one row, the key whole at the right in ink (it was an inline link in the red pen that
+  // dropped under the words), a thumb tall to hit; and a message is as wide as its words, not half the screen
+  const tk = await page.evaluate(() => { const t = document.getElementById('toast'), a = t.querySelector('a'), r = t.getBoundingClientRect(), k = a.getBoundingClientRect();
+    const words = document.createRange(); words.selectNodeContents(t.firstChild); const w = words.getBoundingClientRect();
+    return { row: Math.abs((w.top + w.bottom) / 2 - (k.top + k.bottom) / 2) < 3 && k.left >= w.right, oneLine: w.height < 20, hit: Math.round(k.height), tall: Math.round(r.height),
+      ink: getComputedStyle(a).color === getComputedStyle(t).color, under: getComputedStyle(a).textDecorationLine, inside: r.left >= 16 && r.right <= innerWidth - 16 }; });
+  check(tk.row && tk.oneLine && tk.ink && tk.under === 'underline' && tk.inside, 'the words, then the key, on one row in ink: ' + JSON.stringify(tk));
+  check(tk.hit >= 44 && tk.tall < 44, 'the key is a thumb tall to hit and the message is no taller for it: ' + JSON.stringify(tk));
+  await page.setViewportSize({ width: 320, height: 640 });
+  const narrow = await page.evaluate(() => { const t = document.getElementById('toast'); t.firstChild.nodeValue = 'No signal on parts of this route. Save the maps there?';
+    const r = t.getBoundingClientRect(), k = t.querySelector('a').getBoundingClientRect(); return { inside: r.left >= 15.5 && r.right <= innerWidth - 15.5, keyWhole: k.right <= r.right && k.height >= 44, w: Math.round(r.width) }; });
+  check(narrow.inside && narrow.keyWhole && narrow.w > 200, 'on a small phone long words wrap beside the key, inside the screen: ' + JSON.stringify(narrow));
+  await page.setViewportSize({ width: 390, height: 844 });
   await page.click('#toast a');
   await page.waitForSelector('#permSheet.show');                 // first drive: the permissions sheet comes first
   await page.evaluate(() => document.getElementById('permNo').click());
@@ -5975,6 +5988,35 @@ flow('plan flow (a) a destination in 3 taps: Where to?, the place, Start; Start 
   await tap('#routeDriveBtn', 'Start');
   await page.waitForFunction(() => window.apexDebug.driveActive && apexDebug.track && apexDebug.track.kind === 'route', null, { timeout: 10000 });
   check(taps.n === 3, `a destination in 3 taps: ${taps.log.join(' → ')}`);
+}, IPHONE);
+
+flow('there and back: a trip to a place comes home another way in one tap, the destination a stop, the way out kept off the way home (graph_router.js roundTrip; Valhalla where our tiles don\'t reach)', async (page, base) => {
+  const asked = [];
+  await planRouter(page, asked);
+  const { tap } = await planPage(page, base);
+  await tap('#destInput', 'Where to?');
+  await page.fill('#destInput', 'Maryville');
+  await page.waitForSelector('#placeList .place', { timeout: 10000 });
+  await tap('#placeList .place', 'the place');
+  await cardUp(page);
+  await planDone(page);
+  await page.waitForFunction(() => !document.getElementById('routeRoundBtn').hidden, null, { timeout: 10000 });
+  const before = asked.length;
+  await page.evaluate(() => document.getElementById('routeRoundBtn').scrollIntoView({ block: 'center' }));
+  await tap('#routeRoundBtn', 'There and back');
+  await page.waitForFunction(() => window.apexDebug.lastRound && /and back$/.test(document.getElementById('routeCardName').textContent), null, { timeout: 25000 });
+  await planDone(page);
+  const r = await page.evaluate(() => ({ name: document.getElementById('routeCardName').textContent, round: apexDebug.lastRound, note: document.getElementById('routeProgress').textContent,
+    stops: document.getElementById('routeStops').innerText.replace(/\s+/g, ' '), key: document.getElementById('routeRoundBtn').hidden, kind: apexDebug.track && apexDebug.track.kind }));
+  check(r.name === 'To Maryville and back' && r.round.how === 'valhalla' && r.round.via >= 1, 'the trip home is planned, named for it: ' + JSON.stringify(r));
+  check(/^There and back/.test(r.note), 'the card says how much of the way home is new road: ' + JSON.stringify(r));
+  check(/Maryville/.test(r.stops), 'the destination is a stop on the trip, as one you added: ' + JSON.stringify(r));
+  check(r.key === true, 'a round trip offers no second round trip: ' + JSON.stringify(r));
+  const back = asked.slice(before).find((q) => q.locations.length === 2 && Math.abs(q.locations[0].lat - 36.06) < 0.01);
+  check(back && Array.isArray(back.exclude_locations) && back.exclude_locations.length >= 3, 'the way back was asked around the way out: ' + JSON.stringify(back && { n: (back.exclude_locations || []).length }));
+  const whole = asked.slice(before).find((q) => q.locations.length > 2);
+  check(whole && Math.abs(whole.locations[0].lat - whole.locations[whole.locations.length - 1].lat) < 1e-4, 'the whole trip starts and ends at home: ' + JSON.stringify(whole && whole.locations.length));
+  await scan(page, 'there and back');
 }, IPHONE);
 
 flow('no connection: People is a page that says which it is (offline, or Vetta not answering) and what still works, Try again under the thumb; the Garage says so in its own corner (design pass 5)', async (page, base) => {
