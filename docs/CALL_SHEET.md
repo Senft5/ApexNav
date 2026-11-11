@@ -4,6 +4,16 @@ Decisions Claude made for you, newest first. Each one says what was decided, why
 you reach one you've seen. If you disagree with a call, say so and it gets reversed; nothing here is hard to undo unless
 it says so. Things only you can do are in docs/OWNER_TODO.md.
 
+## 2026-11-11 (security pass, PR 2): a crew's private-days chat stays with who was there when it goes public (claude/project-thread-4lms1f)
+
+When an owner made a private crew public, its last 30 days of chat stayed readable to anyone who joined afterwards, and
+anyone can join a public crew. Now a crew remembers when it last became public (`crews.public_since`, migration 0056),
+and someone who joins after that reads only what was written from then on: the public days, not the private ones. Members
+from before keep everything. A private crew is unchanged. A pinned message stays on the page if the owner wrote it (the
+owner made the crew public); a member's pinned words from the private days show only to those who were there. Crews that
+are public today start from the moment the migration ran, so their newcomers from here on start there too.
+
+Undo: remove `CHAT_READABLE` from crew_page.ts (the column can stay).
 ## 2026-11-11 (security pass): photos only to whoever sees what they belong to; a fresh account's report no longer hides one (claude/project-thread-4lms1f)
 
 Any signed-in member could fetch any photo by its id, and list any car's or crew's gallery by its id: a car you hadn't

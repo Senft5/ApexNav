@@ -1,5 +1,12 @@
 # VETTA — CURRENT AGENT HANDOFF STATE
 
+## Session 2026-11-11 (security pass, PR 2): public crews' chat history (claude/project-thread-4lms1f, off origin/main)
+
+- Migration 0056_crew_public_since (crews.public_since; public crews backfilled to the time it ran). Set by crewCreate
+  (public) and crewUpdate (private to public). crew_page.ts `CHAT_READABLE(c)` (viewer ?1): hidden only when the crew is
+  public, the message predates public_since and the viewer joined after it. In `chatList`, `crewFeed`, and the pinned
+  message (unless the crew's owner wrote it). privacy.html, APP_REVIEW.md say so.
+- Tests: backend/test/crew_page.test.ts (+1).
 ## Session 2026-11-11 (security pass, PR 1): photos by circle, not by id; report hides need a reporter of standing (claude/project-thread-4lms1f, off origin/main)
 
 - Took over the Worker API security pass from roam-c (its entries list what was checked: auth, CSRF, rate limits, :id
