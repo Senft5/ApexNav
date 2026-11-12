@@ -4818,15 +4818,15 @@ flow('a drive\'s corners on a road driven four times: each says your cleanest pa
   await page.waitForFunction(() => document.querySelectorAll('#bookList li').length > 0, null, { timeout: 20000 });
   const book = await page.evaluate(() => ({ head: document.getElementById('bookHead').textContent, rows: [...document.querySelectorAll('#bookList li')].map((li) => li.innerText.replace(/\s+/g, ' ').trim()),
     wide: document.documentElement.scrollWidth > document.documentElement.clientWidth }));
-  check(/^\d+ corners? you have driven three or more times, in road order/.test(book.head) && book.rows.length >= road.rows.length
+  check(/^\d+ corners? driven 3\+ times, in road order/.test(book.head) && book.rows.length >= road.rows.length
     && book.rows.every((t) => /^\d+ (Tight|Medium|Fast) (left|right) \d{1,3} On \w{3} \d{1,2}, of 4 passes(; your least clean \d{1,3}(, mostly [a-z ]+)?)?$/.test(t)) && !book.wide && !/mph|km\/h/.test(book.rows.join(' ')),
     'the road corner by corner: ' + JSON.stringify(book).slice(0, 400));
   // where the passes differ, the technique they differ by most can be the next practice (IDEAS D-27, roadBookFocus)
   const pr = await page.evaluate(() => { const b = document.getElementById('bookPractice'); return { shown: !b.hidden, t: b.textContent, go: !!document.getElementById('bookPracticeGo') }; });
-  check(pr.shown && pr.go && /^Most of the difference at corners? [\d, and]+ is [a-z ]+\. (Practice [a-z ]+ on my next drives here|You are practicing it now: Your driving shows how it goes\.)$/.test(pr.t), 'the practice line: ' + pr.t);
+  check(pr.shown && pr.go && /^Most of the difference: [a-z ]+ \(corners? [\d, and]+\)\. (Practice [a-z ]+ on my next drives here|Practicing it\.)$/.test(pr.t), 'the practice line: ' + pr.t);
   await page.click('#bookPracticeGo');
   const after = await page.evaluate(() => ({ t: document.getElementById('bookPractice').textContent, plan: JSON.parse(localStorage.getItem('vetta.practice') || 'null') }));
-  check(/Practicing it on your next drives here: .+ on this road alone\./.test(after.t) && after.plan && after.plan.skill === 'arc' && after.plan.where && after.plan.where.road === 'dry ridge rd' && after.plan.where.name === 'Dry Ridge Rd' && /^\d{4}-\d\d-\d\dT\d\d:\d\d$/.test(after.plan.since), 'the practice is kept: ' + JSON.stringify(after));
+  check(/ Practicing it here\.$/.test(after.t) && after.plan && after.plan.skill === 'arc' && after.plan.where && after.plan.where.road === 'dry ridge rd' && after.plan.where.name === 'Dry Ridge Rd' && /^\d{4}-\d\d-\d\dT\d\d:\d\d$/.test(after.plan.since), 'the practice is kept: ' + JSON.stringify(after));
   await page.click('#bookList li .bk-by');
   await page.waitForFunction(() => /^r[0-3]$/.test(document.getElementById('dvPick').value) && !document.getElementById('tab-drive').hidden, null, { timeout: 20000 });
   // the practice from the road's book keeps to that road (driver_profile.js practice, where.road), and says which

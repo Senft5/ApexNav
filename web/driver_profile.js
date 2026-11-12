@@ -399,16 +399,16 @@
     return res;
   }
   /** A road book in words: { head, rows: [{ n, what ("Tight left"), record, by, on (day(at) or null), passes }] }, or null with
-   *  no corner passed three times. head: "12 corners you have driven three or more times, in road order[; 5 more fewer times]." */
+   *  no corner passed three times. head: "12 corners driven 3+ times, in road order[ · 5 driven less]." */
   function roadBookRows(book, day) {
     if (!book || !Array.isArray(book.corners) || !book.corners.length) return null;
-    const n = book.corners.length, more = book.fewer > 0 ? `; ${book.fewer} more fewer times` : '';
+    const n = book.corners.length, more = book.fewer > 0 ? ` · ${book.fewer} driven less` : '';
     const what = (c) => { const z = c.size ? c.size[0].toUpperCase() + c.size.slice(1) : 'A', w = c.dir === 'L' ? 'left' : c.dir === 'R' ? 'right' : 'corner'; return c.size ? `${z} ${w}` : (w === 'corner' ? 'Corner' : w[0].toUpperCase() + w.slice(1)); };
     const uneven = book.uneven || [], list = (xs) => (xs.length < 2 ? String(xs[0]) : `${xs.slice(0, -1).join(', ')} and ${xs[xs.length - 1]}`);
     return {
-      head: `${n} corner${n === 1 ? '' : 's'} you have driven three or more times, in road order${more}. Each with your cleanest pass and the drive it came on.`,
+      head: `${n} corner${n === 1 ? '' : 's'} driven 3+ times, in road order${more}.`,
       // where on the road to work: the corners your passes differ most at (UNEVEN_LEVELS apart or more)
-      work: uneven.length ? `Least even: corner${uneven.length === 1 ? '' : 's'} ${list(uneven)}, where your passes differ the most.` : null,
+      work: uneven.length ? `Least even: corner${uneven.length === 1 ? '' : 's'} ${list(uneven)}.` : null,
       rows: book.corners.map((c, i) => ({ n: i + 1, what: what(c), record: c.record, low: c.low === undefined ? null : c.low, uneven: uneven.includes(i + 1), why: c.why && WORDS[c.why] ? WORDS[c.why].name[0].toLowerCase() + WORDS[c.why].name.slice(1) : null, by: c.by, on: c.at && day ? day(c.at) : null, passes: c.passes })),
     };
   }
@@ -455,19 +455,19 @@
     }
     return best;
   }
-  /** A road practice's corners that have evened out (roadBook's evened), as "Evened out since you began practicing here:
-   *  corners 4 and 9, every pass there since close to your cleanest." null with none. */
+  /** A road practice's corners that have evened out (roadBook's evened: every pass since the practice began within
+   *  UNEVEN_LEVELS of the cleanest), as "Evened out since the practice began: corners 4 and 9." null with none. */
   function roadEvenedLine(book) {
     const xs = (book && book.evened) || [];
     if (!xs.length) return null;
     const at = xs.length < 2 ? `corner ${xs[0]}` : `corners ${xs.slice(0, -1).join(', ')} and ${xs[xs.length - 1]}`;
-    return `Evened out since you began practicing here: ${at}, every pass there since close to your cleanest.`;
+    return `Evened out since the practice began: ${at}.`;
   }
-  /** "Most of the difference at corner 3 is one steering arc." for a road book's focus, or null. */
+  /** "Most of the difference: one steering arc (corners 3 and 7)." for a road book's focus, or null. */
   function roadBookFocusLine(f) {
     if (!f || !WORDS[f.skill]) return null;
     const w = lowerName(f.skill), at = f.at.length < 2 ? `corner ${f.at[0]}` : `corners ${f.at.slice(0, -1).join(', ')} and ${f.at[f.at.length - 1]}`;
-    return `Most of the difference at ${at} is ${w}.`;
+    return `Most of the difference: ${w} (${at}).`;
   }
   /** A corner row's note from roadRecords rows: "Your cleanest of 4 passes here (92)", "Level with your cleanest here (90,
    *  Aug 12)", "Your cleanest here: 90, Aug 12; this pass 82". day(row) gives the holding drive's date, or null. */

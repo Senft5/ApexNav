@@ -187,12 +187,12 @@ def test_road_book_every_corner_of_a_road():
     out = json.loads(subprocess.run([NODE, "-e", runner, os.getcwd()], input=json.dumps([drives, ref]), capture_output=True, text=True, check=True).stdout)
     assert out[0] == json.loads(json.dumps([b, dp.road_book(drives), dp.road_book([])]))
     w = out[1]
-    assert w["head"] == "3 corners you have driven three or more times, in road order; 2 more fewer times. Each with your cleanest pass and the drive it came on."
-    assert w["work"] == "Least even: corner 3, where your passes differ the most."
+    assert w["head"] == "3 corners driven 3+ times, in road order · 2 driven less."
+    assert w["work"] == "Least even: corner 3."
     assert [(r["n"], r["what"], r["record"], r["low"], r["uneven"], r["by"], r["on"], r["passes"]) for r in w["rows"]] == [
         (1, "Tight left", 92, 80, False, "b", "06-01", 3), (2, "Fast left", 75, 70, False, "c", "07-01", 3), (3, "Tight left", 90, 60, True, "a", "05-01", 3)]
     assert [r["why"] for r in w["rows"]] == [None, None, "one steering arc"]
-    assert out[2] == "Least even: corners 3 and 1, where your passes differ the most." and out[3] is None
+    assert out[2] == "Least even: corners 3 and 1." and out[3] is None
 
 
 def test_road_book_focus_names_the_skill_to_practise():
@@ -210,8 +210,8 @@ def test_road_book_focus_names_the_skill_to_practise():
     cases = [book, tie, {"corners": book["corners"], "uneven": [2]}, None]
     out = json.loads(subprocess.run([NODE, "-e", runner, os.getcwd()], input=json.dumps(cases), capture_output=True, text=True, check=True).stdout)
     assert out[0] == [dp.road_book_focus(b) for b in cases]
-    assert out[1] == ["Most of the difference at corners 1 and 4 is one steering arc.",
-                      "Most of the difference at corner 5 is brakes done by the apex.", None, None]
+    assert out[1] == ["Most of the difference: one steering arc (corners 1 and 4).",
+                      "Most of the difference: brakes done by the apex (corner 5).", None, None]
 
 
 def test_road_end_line_picks_the_road_words():
@@ -276,5 +276,5 @@ def test_road_book_since_a_road_practice_says_which_corners_evened_out():
               "process.stdout.write(JSON.stringify([b,l,P.roadEvenedLine(b),P.roadEvenedLine({evened:[1,4,9]}),P.roadEvenedLine(l),P.roadEvenedLine(P.roadBook(d,r))]));")
     out = json.loads(subprocess.run([NODE, "-e", runner, os.getcwd()], input=json.dumps([drives, ref]), capture_output=True, text=True, check=True).stdout)
     assert out[:2] == json.loads(json.dumps([b, later]))
-    assert out[2:] == ["Evened out since you began practicing here: corner 1, every pass there since close to your cleanest.",
-                       "Evened out since you began practicing here: corners 1, 4 and 9, every pass there since close to your cleanest.", None, None]
+    assert out[2:] == ["Evened out since the practice began: corner 1.",
+                       "Evened out since the practice began: corners 1, 4 and 9.", None, None]

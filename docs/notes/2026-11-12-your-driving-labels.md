@@ -11,7 +11,9 @@
   practice already keeps to a road; a practice with no drive yet says "Since 12 Nov on Dry Ridge Rd: no drive there yet
   with 4 or more corners."
 - Tests: tests/test_practice_focus.py, tests/test_best_corners.py (span, scope line, definition, words); Your driving and Practice e2e flows.
-- Next: the road book's head and its practice line are still two sentences each; make them one line each.
+- Road book: one line each: "12 corners driven 3+ times, in road order · 5 driven less." "Least even: corners 3 and 1."
+  "Most of the difference: one steering arc (corners 10, 14 and 18)." "Evened out since the practice began: corner 4."
+- Next: the end card's road lines (roadRecordLine, roadUnevenLine) are still long sentences; shorten them the same way.
 
 # CALL SHEET
 ## 2026-11-12 (deepest analysis 25): definitions on a tap, not in footnotes (claude/project-thread-gd7nre)
