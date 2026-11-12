@@ -12,6 +12,21 @@ their refine after the card (`stageJobs`, `loopRefine`). They are deleted rather
 switches a Valhalla fallback back on by accident. The pure helpers they used (fun_route.js shortlist / plansFromMatrix /
 loopPlansFromMatrix, stages.js) stay: Explore and their own tests use them. Undo: revert the commit.
 
+## 2026-11-11 (TestFlight 21:14): a corner or moment tapped on a drive's page zooms the map to it (claude/project-thread-0wt1zm)
+
+Your note "tapping a corner or moment here should orient the view above to show that corner zoomed in on the map". A tap on
+a corner, an abrupt moment, a braking-consistency row or a coach row now glides the map in on that stretch (the corner's
+start to end, or 50 m either side of a moment, with 60 m round it and at least 250 m across), and scrolls the map into view
+if it is above the screen. Calls: the lanes keep their own zoom (as before); "All" in the zoom row, or Recenter on the map,
+shows the whole drive again; with no map (offline) the plain picture zooms the same way and a tap on it zooms back out;
+reduced motion jumps instead of gliding. Undo: revert the PR.
+## 2026-11-11 (roam-b walkthrough 2): Done after a replay brings the map back to where you are (claude/project-thread-sxhrgi)
+
+- Done (or the plate's ×) after watching a replay, whether the welcome's demo or one of your drives from the Log, now jumps
+  the idle map and your arrow back to your last known position. Before, the map stayed on the replay's ground (the demo is
+  in Kentucky), while the masthead and the road cards described where you are. A browser standing still sends no new fix,
+  so nothing brought the map back. A route's fly-through still keeps its route in view. Undo: remove the `wasReplay` block
+  in cockpit.js `closeReplay`.
 ## 2026-11-11 (routing round three, part 2): stage discovery reads crests and verified bumps (claude/project-thread-39xbx9)
 
 Stage discovery (the roads Explore, loops and routes pick from) now lifts a road members measured going light over its
@@ -45,6 +60,12 @@ paintDeck (or move `if (ta) return attackSugg();` in your_roads.js to change its
 Your rule ("anything but the quick route") covers loops too, so Find a loop no longer falls back to Valhalla's stage loops
 or a circle. Off our road map the card says loops use it and where it reaches. Explore's road list still times roads with
 Valhalla's matrix (it plans no route); say if that should go too. Undo: restore the `stageJobs` calls in `buildLoop`.
+## 2026-11-11 (deepest analysis, PR 14): "near your cleanest" is within 5 levels (claude/project-thread-gd7nre)
+
+A drive's page says how it went at the road's least even corners. Within 5 levels of your cleanest pass counts as near it:
+about a third of the 15-level span that makes a corner uneven, so a pass in the top third of your own range there.
+Undo: NEAR_BEST in core/driver_profile.py and web/driver_profile.js, or revert the PR.
+
 ## 2026-11-11 (roam-b walkthrough): a planned loop is fitted again once its card settles; loops never go through our relay (claude/project-thread-sxhrgi)
 
 - When a route or loop comes back, the map frames it above its card. The card was still growing and shrinking for a

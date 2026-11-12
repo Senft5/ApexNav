@@ -308,7 +308,7 @@
     return out;
   }
   /** A drive's corners against your other passes of the same road (port of driver_profile.road_records). */
-  const ROAD_MIN_PASSES = 3, SAME_CORNER_M = 20, SAME_WAY = 0.7, UNEVEN_LEVELS = 15, UNEVEN_MAX = 3;
+  const ROAD_MIN_PASSES = 3, SAME_CORNER_M = 20, SAME_WAY = 0.7, UNEVEN_LEVELS = 15, UNEVEN_MAX = 3, NEAR_BEST = 5;
   function roadRecords(mine, others, ids = null) {
     let corners = 0, best = 0, lvl = 0;
     const held = [], rows = [];
@@ -326,10 +326,11 @@
       if (1 + tops.length < ROAD_MIN_PASSES) continue;
       corners++;
       const mx = Math.max(...tops);
-      if (m.apex !== null && m.apex !== undefined) rows.push({ apex: m.apex, level: m.level, passes: 1 + tops.length, record: Math.max(mx, m.level), by: m.level > mx ? null : who[tops.indexOf(mx)] });
+      if (m.apex !== null && m.apex !== undefined) rows.push({ apex: m.apex, level: m.level, passes: 1 + tops.length, record: Math.max(mx, m.level), low: Math.min(...tops, m.level), by: m.level > mx ? null : who[tops.indexOf(mx)] });
       if (m.level > mx) { best++; if (m.apex !== null && m.apex !== undefined) held.push(m.apex); } else if (m.level === mx) lvl++;
     }
-    return { corners, best, level: lvl, held, rows };
+    const wide = rows.filter((r) => r.record - r.low >= UNEVEN_LEVELS);
+    return { corners, best, level: lvl, held, rows, uneven: wide.length, steady: wide.filter((r) => r.level >= r.record - NEAR_BEST).length };
   }
   /** Clean corners of a drive placed for roadRecords: metres from (lat0, lon0), unit heading, the credits' level. */
   function placed(d, obs, lat0, lon0) {
@@ -398,6 +399,14 @@
     const on = day ? day(row) : null;
     if (row.level >= row.record) return `Level with your cleanest here (${row.record}${on ? `, ${on}` : ''})`;
     return `Your cleanest here: ${row.record}${on ? `, ${on}` : ''}; this pass ${row.level}`;
+  }
+  /** "At the 3 corners here where your passes differ most, this drive was near your cleanest at 2." (null with none) */
+  function roadUnevenLine(r) {
+    if (!r || !(r.uneven > 0)) return null;
+    const at = r.uneven === 1 ? 'At the corner here where your passes differ most' : `At the ${r.uneven} corners here where your passes differ most`;
+    if (!r.steady) return `${at}, this drive was not near your cleanest${r.uneven === 1 ? '' : ' at any of them'}: ${r.uneven === 1 ? 'it is' : 'they are'} the place${r.uneven === 1 ? '' : 's'} to work on.`;
+    if (r.steady === r.uneven) return `${at}, this drive was near your cleanest ${r.uneven === 1 ? 'there' : 'at every one'}.`;
+    return `${at}, this drive was near your cleanest at ${r.steady}.`;
   }
   /** A drive's own touch (its Log page): { drive (from DRIVE_TOUCH_MIN corners), usual (every other drive's corners) }. */
   // outside: "above" when the drive's middle corner was beyond the usual upper quartile (or quick where that is timed),
@@ -955,7 +964,7 @@
     }
   }
 
-  const api = { SKILLS, observe, profile, swing, excess, SKILL_MIN, WORDS, findingLine, styleLines, touchLines, touchTrendLines, driveTouchLines, paceLines, PACE, MEASURES, touch, TOUCH, driveTouch, DRIVE_TOUCH_MIN, bestCorners, recordsBySize, RECORD_MIN, driveRecords, driveRecordLines, roadRecords, placed, roadRecordLine, roadCornerNote, roadBook, roadBookRows, cardLine, focusLines, render,
+  const api = { SKILLS, observe, profile, swing, excess, SKILL_MIN, WORDS, findingLine, styleLines, touchLines, touchTrendLines, driveTouchLines, paceLines, PACE, MEASURES, touch, TOUCH, driveTouch, DRIVE_TOUCH_MIN, bestCorners, recordsBySize, RECORD_MIN, driveRecords, driveRecordLines, roadRecords, placed, roadRecordLine, roadCornerNote, roadBook, roadBookRows, roadUnevenLine, cardLine, focusLines, render,
     PRACTICE_MIN, practice, drivePractice, practiceLine, practiceSummary, localStamp, loadPlan, savePlan, PLAN_KEY };
   if (typeof module !== 'undefined' && module.exports) module.exports = api; else root.ApexDriverProfile = api;
 })(typeof window !== 'undefined' ? window : globalThis);

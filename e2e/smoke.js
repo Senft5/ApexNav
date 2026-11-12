@@ -233,6 +233,25 @@ flow('first run: onboarding, Watch a replay loads the bundled drive and plays it
   check(tp.tabbar === 'none', 'the tab bar should hide during a replay');
 });
 
+// walkthrough 2026-11-11: Done after the welcome's replay left the map and the arrow on the demo's ground (Kentucky) while
+// the masthead said Knoxville; a still browser sends no new fix, so nothing brought it back
+flow('done after a replay brings the idle map back to where you are', async (page, base) => {
+  await page.route('https://tiles.openfreemap.org/**', (route) => (route.request().url().includes('/styles/')
+    ? route.fulfill({ contentType: 'application/json', body: JSON.stringify({ version: 8, sources: {}, layers: [{ id: 'bg', type: 'background', paint: { 'background-color': '#eee' } }] }) })
+    : route.abort()));
+  await page.goto(base + '/index.html');
+  await page.waitForSelector('#onboard.show', { timeout: 10000 });
+  await page.waitForFunction(() => window.apexDebug && window.apexDebug.map.loaded() && !!window.apexDebug.state.lastPosition, null, { timeout: 20000 });
+  await page.click('#obAlt');
+  await page.waitForFunction(() => window.apexDebug.state.mode === 'replay' && window.apexDebug.state.playing, null, { timeout: 15000 });
+  const far = (c) => Math.hypot(c.lat - 35.9606, c.lng + 83.9207);
+  check(far(await page.evaluate(() => window.apexDebug.map.getCenter())) > 1, 'the replay shows the demo\'s ground, not here');
+  await page.click('#replayDone');
+  await page.waitForFunction(() => { const c = window.apexDebug.map.getCenter(); return Math.hypot(c.lat - 35.9606, c.lng + 83.9207) < 0.05; }, null, { timeout: 5000 })
+    .catch(async () => { throw new Error('Done should bring the map back here: ' + JSON.stringify(await page.evaluate(() => window.apexDebug.map.getCenter()))); });
+  check(await page.evaluate(() => document.getElementById('app').classList.contains('idle')), 'the idle map is back');
+}, { geolocation: { latitude: 35.9606, longitude: -83.9207 }, permissions: ['geolocation'] });
+
 flow('the strip never cuts where the meaning is: a three-word call keeps its direction, the welcome loop reads whole (REVIEW4 U-92, U-105)', async (page, base) => {
   await page.goto(base + '/index.html');
   await page.waitForSelector('#onboard.show', { timeout: 10000 });
@@ -4613,7 +4632,7 @@ flow('a drive\'s corners on a road driven four times: each says your cleanest pa
     for (let k = 0; k < 4; k++) await ApexRecording.store(ApexRecording.parse(ApexCore, tweak(gen('saw', 0), k), 'r' + k + '.csv', { id: 'r' + k, name: 'Dry Ridge Rd', date: `2026-0${5 + k}-01T09:00`, source: 'web-gps' }));
   }, PROFILE_CSV);
   const road = await page.evaluate(async () => (await ApexAnalysis.job('drive', { id: 'r3' })).touch.road);
-  check(road && road.corners > 0 && road.rows.length === road.corners && road.rows.every((r) => r.passes === 4 && r.record >= r.level)
+  check(road && road.corners > 0 && road.rows.length === road.corners && Number.isInteger(road.uneven) && road.steady <= road.uneven && road.rows.every((r) => r.low <= r.level) && road.rows.every((r) => r.passes === 4 && r.record >= r.level)
     && road.rows.every((r) => r.by === null || (['r0', 'r1', 'r2'].includes(r.by) && /^2026-0[5-7]-01/.test(r.on))), 'every corner driven four times has its record and who holds it: ' + JSON.stringify(road && road.rows.slice(0, 3)));
   await page.goto(base + '/analysis.html?tab=drive&drive=r3');
   await page.waitForFunction(() => document.querySelectorAll('.dv-corner .dv-rec').length > 0, null, { timeout: 20000 });
@@ -6503,6 +6522,16 @@ flow('the drive page\'s map: with no map to be had the picture keeps its blank p
     note: (document.querySelector('.dv-plan .dv-mapnote') || {}).textContent, key: !!document.querySelector('.dv-recenter') }));
   check(!s.on && s.credit && s.path > 10 && s.casing && !s.key, 'the blank panel, the path drawn, no credit for a map not shown: ' + JSON.stringify(s));
   check(s.note === 'Map couldn’t load', 'never silent: the panel says the map couldn’t load: ' + JSON.stringify(s.note));
+
+  // a corner row zooms the plain picture in on that corner too; a tap on the picture off the marks shows the whole drive
+  const p = await page.evaluate(() => {
+    document.querySelector('.dv-corner').click();
+    const zoomed = document.querySelector('#dvGeo').getAttribute('transform');
+    document.querySelector('.dv-plan svg').dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    return { zoomed, back: document.querySelector('#dvGeo').getAttribute('transform') };
+  });
+  const sc = /^matrix\(([\d.]+) /.exec(p.zoomed || '');
+  check(sc && +sc[1] > 2 && p.back == null, 'the plain picture zooms to the corner and back: ' + JSON.stringify(p));
 });
 
 flow('the drive page\'s map: with no signal and no saved area the panel says the map is unavailable offline, and MapLibre never loads', async (page, base) => {
@@ -6540,6 +6569,7 @@ flow('the drive page\'s map: when the map can draw it sits under the path, fitte
       getCenter() { return this.c; } getZoom() { return this.z; } setMinZoom(z) { window.__minZoom = z; } setMaxBounds(b) { if (b) window.__maxBounds = b; }
       moveTo(lng, lat, z) { this.c = { lng, lat }; this.z = z; this.fire('move'); }   // as a pinch or pan would
       isStyleLoaded() { return true; } resize() {} jumpTo(v) { window.__jump = v; this.c = { lng: v.center[0], lat: v.center[1] }; this.z = v.zoom; this.fire('move'); }
+      easeTo(v) { window.__ease = v; this.c = { lng: v.center[0], lat: v.center[1] }; this.z = v.zoom; this.fire('move'); }   // the glide's end, at once
       remove() { window.__removed = (window.__removed || 0) + 1; }
     } };
     window.ApexBasemap = { restyle(map, P) { window.__palette = P; } };
@@ -6591,6 +6621,22 @@ flow('the drive page\'s map: when the map can draw it sits under the path, fitte
   check(Math.abs(z.after[2] - z.before[2]) < 1, 'the corner number keeps its size: ' + JSON.stringify([z.before[2], z.after[2]]));
   check(z.shownKey && z.jump && Math.abs(z.jump.zoom - z.z0) < 1e-9 && Math.abs(z.minZoom - (z.z0 - 1)) < 1e-9, 'Recenter fits the drive again: ' + JSON.stringify(z.jump));
   check(Math.abs(z.again[0] - z.before[0]) < 1 && Math.abs(z.again[1] - z.before[1]) < 1 && /^matrix\(1 0 0 1 /.test(z.back || 'matrix(1 0 0 1 '), 'and the picture is back where it was: ' + JSON.stringify([z.before, z.again, z.back]));
+
+  // the owner, 2026-11-11 (TestFlight): "tapping a corner or moment here should orient the view above to show that corner
+  // zoomed in on the map": a corner row glides the map in on that corner; 'All' in the zoom row fits the drive again
+  const f = await page.evaluate(() => {
+    const svg = document.querySelector('.dv-plan svg'), r = svg.getBoundingClientRect(), z0 = window.__map.z;
+    window.__ease = null; window.__jump = null;
+    document.querySelector('.dv-corner').click();
+    const g = document.querySelector('#dvMarks [data-k="0"]').getBoundingClientRect();
+    const in1 = { x: g.left + g.width / 2 - r.left, y: g.top + g.height / 2 - r.top };
+    const ease = window.__ease, geo = document.querySelector('#dvGeo').getAttribute('transform');
+    [...document.querySelectorAll('.dv-z')].find((b) => b.textContent === 'All').click();
+    return { z0, ease, in1, w: r.width, h: r.height, geo, back: window.__jump, zBack: window.__map.z };
+  });
+  check(f.ease && f.ease.zoom > f.z0 + 1 && f.ease.zoom <= 18, 'a corner row zooms the map in on it: ' + JSON.stringify(f));
+  check(f.in1.x > f.w * 0.2 && f.in1.x < f.w * 0.8 && f.in1.y > f.h * 0.2 && f.in1.y < f.h * 0.8 && /^matrix\(/.test(f.geo || ''), 'with corner 1 in the middle of the picture: ' + JSON.stringify(f));
+  check(f.back && Math.abs(f.zBack - f.z0) < 1e-9, '"All" fits the whole drive again: ' + JSON.stringify(f));
 });
 
 flow('leftovers: the check every flow ends with sees "[object Object]", "undefined" and "NaN" in text and in a spoken label, and not in what is hidden', async (page, base) => {

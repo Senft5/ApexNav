@@ -9401,9 +9401,21 @@
     const closeReplay = () => {
       if (driveActive) return;
       if (!replayOn && state.mode !== 'live') return;
+      const wasReplay = state.mode === 'replay' && !(track && track.kind === 'route');
       replayOn = false; setPlaying(false);
       if (state.mode === 'live') { state.live = null; setMode(track && track.kind === 'route' ? 'sim' : 'replay'); paintModeSwitch(); }
       paintIdle(); measurePlanBar();
+      // walkthrough 2026-11-11: Done after a replay (the welcome's demo, a Log drive) left the map and the arrow on that
+      // drive's ground, hundreds of miles off, while the masthead and the cards spoke of where you are; a still browser sends
+      // no new fix to bring it back. The idle map goes back to your last known position, at once. A route's fly-through keeps
+      // its route in view (unchanged); no position known leaves the map where it is.
+      const here = state.lastPosition;
+      if (wasReplay && here && Number.isFinite(here.lat) && Number.isFinite(here.lon)) {
+        const m = state.lastMotion || {};
+        clearTimeout(resumeTimer); clearInterval(resumeTick); state.follow = true; $('recenterBtn').classList.remove('show');
+        idleSnapped = false;
+        showIdleFix({ lat: here.lat, lon: here.lon, course_deg: Number.isFinite(m.heading) ? m.heading : NaN, speed_mps: 0 });
+      }
     };
     $('modePlate').addEventListener('click', closeReplay);
     $('replayDone').addEventListener('click', closeReplay);
