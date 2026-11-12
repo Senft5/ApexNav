@@ -6777,12 +6777,11 @@
       for (const h of waiting) reqSec.append(el('div', { className: 'friend-sent' }, el('span', { textContent: `@${h} · request sent` }),
         btn('Cancel', async () => { await apiCall('POST', '/api/friends/request/cancel', { handle: h }); setSent(sentList().filter(x => x !== h)); redo(); }, 'linkbtn')));
       ipop.append(
-        el('div', { className: 'stack-8' }, el('h3', { textContent: 'New to Vetta' }),
-          el('p', { className: 'note', textContent: 'They sign in with your link, and you’re friends the moment they do.' }),
-          btn('Send an invite link', async () => { const r = await apiCall('POST', '/api/invites'); const j = await jsonOf(r); if (r.ok) copyText(j.url, 'Invite link copied. They\'ll be your friend the moment they sign in, and you both get 5 points when they first share road data.'); else toast('Couldn\'t make an invite. Try again.'); }, 'ink-btn solid')),
-        el('div', { className: 'stack-8' }, el('h3', { textContent: 'Already on Vetta' }),
-          btn('Share a link to me', () => copyText(`${shareOrigin()}/?add=${me.handle}`, 'Link copied. Anyone who opens it can ask to be your friend.')),
-          el('div', { className: 'row' }, add, btn('Send request', sendRequest))),
+        // one link for anyone, new to Vetta or not: a newcomer is your friend when they sign in, a member is asked first
+        el('div', { className: 'stack-8' },
+          btn('Send a friend link', async () => { const r = await apiCall('POST', '/api/invites'); const j = await jsonOf(r); if (r.ok) copyText(j.url, 'Link copied. You\'re friends once they open it, and you both get 5 points when they first share road data.'); else toast('Couldn\'t make an invite. Try again.'); }, 'ink-btn solid'),
+          el('div', { className: 'row' }, add, btn('Send request', sendRequest)),
+          btn('A link anyone can use', () => copyText(`${shareOrigin()}/?add=${me.handle}`, 'Link copied. Anyone who opens it can ask to be your friend.'), 'linkbtn')),
         reqSec);
       const openInvite = () => { inviteOpen = true; ipop.classList.add('open'); };
       if (stash('apex.add') && peopleSide === 'friends') inviteOpen = true;   // a friend link opens its sheet, never over the Crews side
@@ -8322,8 +8321,8 @@
     // VI-1: asked by the 0.1-degree cell (privacy_zones.js cell), kept per cell for 2 min, filtered and sorted here; never
     // from a privacy zone or before the drive's private edge (nearLookupOk).
     const reported = { list: [], at: -Infinity, cellKey: '', busy: false, said: new Set(), mine: new Set(), pins: new Map(), watch: ApexHazardReports.createPassWatch(), asking: null, local: [],
-                       cells: ApexPrivacyZones.cellCache(120e3) };
-    if (window.apexDebug) window.apexDebug.loadReported = (force) => loadReported(force);   // e2e: a report that lands mid-drive
+                       cells: ApexPrivacyZones.cellCache(120e3), ahead: ApexPrivacyZones.cellCache(6 * 3600e3, 16), aheadFor: null };
+    if (window.apexDebug) { window.apexDebug.loadReported = (force) => loadReported(force); window.apexDebug.reportedIds = () => reported.list.map((h) => h.id); }   // e2e: a report that lands mid-drive
     async function loadReported(force = false) {
       const p = state.lastPosition, c = p && ApexPrivacyZones.cell(p.lat, p.lon);
       if (!c || reported.busy || !window.ApexSync || !nearLookupOk(p)) return;
@@ -8335,8 +8334,37 @@
       try {
         const r = await ApexSync.apiFetch(`/api/hazards?${ApexPrivacyZones.cellQuery(p.lat, p.lon, 20)}`, { method: 'GET' });
         if (r.ok) { const rows = await r.json(); reported.cells.set(c.key, rows); reported.cellKey = c.key; keep(rows); }
-      } catch (_) { /* offline or signed out: keep what we had */ }
+        else keepAhead(c, keep);
+      } catch (_) { keepAhead(c, keep); /* offline: what was asked ahead for this cell, else what we had */ }
       finally { reported.at = performance.now(); reported.busy = false; }
+    }
+    // no signal in a cell the planned route runs through: the reports asked for it as the drive started (askAhead), the
+    // expired ones dropped; the next lookup waits the usual 2 minutes
+    function keepAhead(c, keep) {
+      const rows = reported.ahead.get(c.key);
+      if (!rows || c.key === reported.cellKey) return;
+      reported.cellKey = c.key;
+      keep(ApexHazardReports.stillLive(rows));
+    }
+    // IDEAS F-03: a drive on a planned route asks, while there is signal, for the reports in the cells the route runs through
+    // (privacy_zones.js routeCells: the same coarse cells as any lookup, never the ends' cells or a privacy zone's), so a dead
+    // zone on the way still has them. Once per route; members only; anything that fails just asks nothing.
+    async function askAhead(t) {
+      if (!t || t.kind !== 'route' || reported.aheadFor === t || !window.ApexSync || navigator.onLine === false || window.APEX_REVIEW) return;
+      reported.aheadFor = t;
+      const edgeM = Math.max(1500, window.ApexContributor ? ApexContributor.privateEdge() * 5 : 0);
+      const cells = ApexPrivacyZones.routeCells(t.lat, t.lon, privacyZones, edgeM);
+      if (!cells.length || !(await RouteLoading.optional(ApexSync.member(), 4000).catch(() => null))) return;
+      let n = 0;
+      for (const c of cells) {
+        if (reported.aheadFor !== t) return;
+        try {
+          const r = await RouteLoading.optional(ApexSync.apiFetch(`/api/hazards?${ApexPrivacyZones.cellQuery(c.lat, c.lon, 20)}`, { method: 'GET' }), 6000);
+          const rows = r && r.ok ? await r.json() : null;
+          if (Array.isArray(rows)) { reported.ahead.set(c.key, rows); n++; }
+        } catch (_) { /* this cell stays unasked */ }
+      }
+      if (window.apexDebug) window.apexDebug.askedAhead = n;
     }
     // Viewpoints, cafés and fuel along a planned route (IDEAS R-24, R-23; stages.js pois, scenic.js): pins on the map and a
     // line on the route card. Map data: a mapped viewpoint, a fuel station that may be closed. Nothing found says nothing.
@@ -9275,6 +9303,7 @@
       showView(null);
       openPlan(false);                                                 // the plan sheet too, and the keyboard with it
       if (track && track.kind === 'route') persistActive(track);       // kept if the app is closed mid-drive
+      askAhead(track);                                                 // a planned route: the reports along it, ahead of a dead zone
       clearCarOffer();
       // U-59: the car enters every drive, a route or none (it went into a drive only on a guide message, so a free drive never
       // reached it: no End, no card). A route driven again goes back on the car's map first.

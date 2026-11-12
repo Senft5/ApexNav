@@ -62,9 +62,12 @@ jobs:
             // The dedupe above finds the issue by its label, so make sure the label exists before the first issue needs it.
             try { await github.rest.issues.getLabel({ ...context.repo, name: LABEL }); }
             catch (e) { if (e.status === 404) await github.rest.issues.createLabel({ ...context.repo, name: LABEL, color: 'b60205', description: 'Opened by the Status workflow' }); else throw e; }
-            // only the cron jobs (Weekly backup, Daily sweep): the app is up, a scheduled job stopped or keeps failing
-            const jobsOnly = failing.every((f) => /^(Weekly backup|Daily sweep)$/.test(f));
-            const title = jobsOnly ? `ApexNav: ${failing.join(' and ')} not running` : 'ApexNav is down';
+            // only the cron jobs (Weekly backup, Daily sweep) or API errors: the app is up, a scheduled job stopped or keeps
+            // failing, or one route's 500s keep coming (the error counts in Crew name it)
+            const jobsOnly = failing.every((f) => /^(Weekly backup|Daily sweep|API errors)$/.test(f));
+            const jobs = failing.filter((f) => f !== 'API errors');
+            const title = !jobsOnly ? 'ApexNav is down'
+              : [failing.includes('API errors') ? 'a route keeps failing' : '', jobs.length ? `${jobs.join(' and ')} not running` : ''].filter(Boolean).join('; ').replace(/^/, 'ApexNav: ');
             const { data: made } = await github.rest.issues.create({ ...context.repo, title, labels: [LABEL], assignees: [context.repo.owner],
-              body: `The status check found ${jobsOnly ? 'a scheduled job of the Worker late or failing' : "ApexNav's own site or API failing"}. docs/STATUS.md says what to do.\n\n${md}\n${run}\n${mark}` });
+              body: `The status check found ${jobsOnly ? 'a scheduled job of the Worker late or failing, or a route whose errors keep coming' : "ApexNav's own site or API failing"}. docs/STATUS.md says what to do.\n\n${md}\n${run}\n${mark}` });
             core.warning(`ApexNav is down: ${failing.join(', ')} (opened issue #${made.number})`);

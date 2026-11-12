@@ -12,6 +12,7 @@ with `python tools/status_check.py`.
 | API and database | core | `GET /api/health` answers `{"ok": true, "db": true}` (the Worker read `cron_runs` on D1) |
 | Weekly backup | core | `/api/health`'s `cron.backup` is neither `failing` nor `late` (last good run within 8 days 6 hours) |
 | Daily sweep | core | `cron.sweep` is neither `failing` nor `late` (last good run within 2 days 6 hours) |
+| API errors | core | `/api/health`'s `failing_routes` is empty: no route has 25 or more unexpected 500s today with the latest under 30 minutes old (`backend/src/errors.ts` `failingRoutes`; an older Worker without the field passes) |
 | Routing (Valhalla) | dependency | the public valhalla1.openstreetmap.de routes a short Knoxville trip |
 | Routing fallback (OSRM) | dependency | router.project-osrm.org routes the same trip |
 | Map style (OpenFreeMap) | dependency | the Liberty style loads |
@@ -51,4 +52,9 @@ Re-enable it there ("Status" → Enable workflow). Any commit also resets the 60
    `cron backup` / `cron sweep` in `GET /api/ops/errors`. A run killed for CPU time writes nothing, so it shows as late,
    not failing: check the Worker's metrics for `exceededCpu` (docs/BACKUPS.md). A job that was never recorded (a database
    restored from before 0055, say) passes until its first run.
-5. Workers Logs (dashboard → Workers → apexnav → Logs) show the Worker's errors and the apps' `client_error` reports (Y-02).
+5. **Only API errors fails** (the issue is titled "ApexNav: a route keeps failing", the app is up): one route throws on
+   every call, usually a deploy that broke it or a migration it needs that isn't applied. `curl
+   https://apexnav.senftns.workers.dev/api/health` names the route in `failing_routes`; Crew → error counts (or
+   `GET /api/ops/errors`) has its message and stack. Roll the Worker back (dashboard → Workers → apexnav → Deployments) or
+   fix forward; the issue closes itself on the first check after the errors stop for 30 minutes.
+6. Workers Logs (dashboard → Workers → apexnav → Logs) show the Worker's errors and the apps' `client_error` reports (Y-02).

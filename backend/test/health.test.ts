@@ -14,7 +14,7 @@ describe("health", () => {
     expect(res.status).toBe(200);
     expect(res.headers.get("cache-control")).toBe("no-store");
     const none = { age_h: null, failing: false, late: false };
-    expect(await res.json()).toEqual({ ok: true, db: true, cron: { backup: none, sweep: none } });
+    expect(await res.json()).toEqual({ ok: true, db: true, cron: { backup: none, sweep: none }, failing_routes: [] });
   });
 
   it("a run that finishes is recorded; one that throws is failing, counted with the 500s, and never rethrown", async () => {
@@ -29,6 +29,20 @@ describe("health", () => {
     // a good run after it clears "failing" (the fail time stays for the record)
     await runCron(env as any, "sweep", async () => 1);
     expect((await health()).cron.sweep.failing).toBe(false);
+  });
+
+  it("a route whose 500s keep coming is named; a few, an old burst, or a failing cron job is not", async () => {
+    const add = (kind: string, n: number, ago: string, message = "Error: boom") => env.DB.prepare(
+      "INSERT INTO error_counts (day, source, kind, message, n, last_at) VALUES (date('now'), 'server', ?, ?, ?, datetime('now', ?))").bind(kind, message, n, ago).run();
+    await add("POST /api/drives", 20, "-1 minute");
+    await add("POST /api/drives", 6, "-40 minutes", "TypeError: x");          // two messages on one route add up: 26
+    await add("GET /api/crews/:id", 24, "-1 minute");                        // under 25 today
+    await add("GET /api/roads", 90, "-2 hours");                             // a burst that stopped
+    await add("cron sweep", 40, "-1 minute");                                // has its own check
+    await env.DB.prepare("INSERT INTO error_counts (day, source, kind, message, n) VALUES (date('now'), 'web', 'error', 'x', 500)").run();   // the page's own
+    expect((await health()).failing_routes).toEqual(["POST /api/drives"]);
+    await env.DB.prepare("UPDATE error_counts SET day = date('now', '-1 day') WHERE kind = 'POST /api/drives'").run();   // yesterday's is not today's
+    expect((await health()).failing_routes).toEqual([]);
   });
 
   it("late once a run is missed: the backup past 8 days and 6 hours, the sweep past 2 days and 6 hours", async () => {
