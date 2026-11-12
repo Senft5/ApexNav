@@ -4419,13 +4419,17 @@ flow('crew drives: an upcoming drive shows on People, Crews, as the crew page’
   await openDrives();
   const card = await page.textContent(`${W} .drive-card`);
   check(card.includes('Cherohala <i>Saturday</i>') && /Tomorrow|Today/.test(card) && card.includes('2 going · 1 maybe'), 'the drive, as text: ' + card);
-  // P-18: the sheet's drive is the crew page's card: the date block once, three lines, faces and one key; the rest under More
+  // P-18: the sheet's drive is the crew page's card: the date block once, three lines, faces and your answer; the rest under
+  // More. Nate 2026-11-12 (no clutter): the answer is one Going / Maybe / Can't switch on the card, never again under More
   check(await page.evaluate(() => { const c = document.querySelector('.crew-page .cp-week .drive-card:not(.meet-card)');
-    return c.classList.contains('cp-drive') && !!c.querySelector('.cp-date b') && !!c.querySelector('details.cp-more:not([open])') && !c.querySelector('.switch'); }), 'the card, its detail folded under More');
+    return c.classList.contains('cp-drive') && !!c.querySelector('.cp-date b') && !!c.querySelector('details.cp-more:not([open])')
+      && c.querySelectorAll('.switch').length === 1 && !c.querySelector('details.cp-more .switch'); }), 'the card, one answer on it, its detail folded under More');
   check(!/\b(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec) \d/.test(await page.$eval(`${W} .drive-card:not(.meet-card) .cp-drive-body`, (b) => b.textContent)), 'the date said once, in the block (P-27): ' + card);
   await page.click('.drive-card:not(.meet-card) summary:has-text("More")');
   await page.waitForSelector('.drive-card:not(.meet-card) .cp-more-body');
-  check((await page.textContent('.drive-card:not(.meet-card)')).includes('Going: @bob, @cara · 1 maybe'), 'More names who is going');
+  check(await page.evaluate(() => { const c = document.querySelector('.drive-card:not(.meet-card)');
+    return c.querySelectorAll('.switch').length === 1 && !/Going: @/.test(c.querySelector('.cp-more-body').textContent) && (c.textContent.match(/Lead @bob/g) || []).length === 1; }),
+    'More repeats nothing: no second answer, no "Going:" names under three faces, the roles said once');
   await page.waitForSelector('.meet-card');
   check(/Sunday coffee/.test(await page.textContent('.meet-card')) && /7 going/.test(await page.textContent('.meet-card')) && /Every \w+day · Coffee & Cars/.test(await page.textContent('.meet-card')) && /Meets near you/.test(await page.evaluate(() => document.querySelector('.meet-card').closest('.side-pop, #sheet').textContent)), 'a public meet nearby');   // in a crew: under the crew's Upcoming drives
   await page.click('.drive-card:not(.meet-card) .switch button:text-is("Going")');
