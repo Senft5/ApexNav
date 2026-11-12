@@ -264,6 +264,8 @@
   // The crew page's tabs (Nate 2026-11-12): which one is open, per crew, while the app runs
   const CREW_TABS = [['drives', 'Drives'], ['chat', 'Chat'], ['board', 'Board']];
   const CREW_TAB = new Map();
+  // An unsent chat line per crew, kept while the app runs, through redraws and tab changes
+  const CHAT_DRAFT = new Map();
   function boardPeriod(set) {
     try {
       if (set) localStorage.setItem('apex.boardPeriod', set);
@@ -676,13 +678,15 @@
       };
       const input = el('textarea', { className: 'field', maxLength: 500, rows: 1, placeholder: `Say something to ${c.name}` });
       input.setAttribute('aria-label', `Message to ${c.name}`);
+      input.value = CHAT_DRAFT.get(c.id) || '';
+      input.addEventListener('input', () => { if (input.value) CHAT_DRAFT.set(c.id, input.value); else CHAT_DRAFT.delete(c.id); });
       const send = btn('Send', async () => {
         const text = input.value.trim();
         if (!text) return;
         send.disabled = true;
         const r = await apiCall('POST', `/api/crews/${encodeURIComponent(c.id)}/chat`, { body: text }).catch(() => null);
         send.disabled = false;
-        if (r && r.ok) { input.value = ''; input.style.height = ''; fill(); }
+        if (r && r.ok) { input.value = ''; CHAT_DRAFT.delete(c.id); input.style.height = ''; fill(); }
         else toast(r && r.status === 429 ? 'That’s a lot of messages. Wait a while.' : 'Couldn’t send. Check signal.');
       }, 'ink-btn solid');
       sec.append(el('div', { className: 'cp-say' }, input, send));
