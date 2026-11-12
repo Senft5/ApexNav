@@ -1,5 +1,16 @@
 # VETTA — CURRENT AGENT HANDOFF STATE
 
+## Session 2026-11-12 (deepest analysis, PR 16): a road's least even corners can set the practice (claude/project-thread-gd7nre)
+
+- `core/driver_profile.py` `road_book_focus(book)` (JS port `roadBookFocus`, parity-tested in tests/test_best_corners.py):
+  the technique named most often across a road book's uneven corners (a tie goes to the widest corner), with the corners
+  that name it. `roadBookFocusLine` words it: "Most of the difference at corners 10, 14 and 18 is one steering arc."
+- Log > Your roads, corner by corner: that line under the head, with "Practice one steering arc on my next drives". The
+  key saves the same plan Your driving keeps (`vetta.practice`, `where: null`, since now), so the drive end card and the
+  Practicing box read it as usual. With that skill already practised it says so instead of offering it.
+- e2e: the road-driven-four-times flow's second pass has no steering corrections, so the book shows the line and the key.
+- Next: the drive page's "where your passes differ most" line (roadUnevenLine) could name the same technique.
+
 ## 2026-11-11 Valhalla for Quick only, part 3 (claude/project-thread-39xbx9)
 - Deleted the code Fun, Long way and loops could no longer reach: funRoute's Valhalla stage plans and buildLoop's stage loops and loopRefine. Docs (ROUTING, OWN_ROUTING, CALL_SHEET) updated.
 - Next: the Explore list still times stages with Valhalla's matrix off our tiles; it's a listing, not a route, so it stays for now.

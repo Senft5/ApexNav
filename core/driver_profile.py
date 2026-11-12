@@ -690,6 +690,22 @@ def road_book(drives: list, ref: list | None = None) -> dict:
     return {"corners": out, "fewer": len(book) - len(out), "drives": len(drives), "uneven": [i + 1 for i in wide[:UNEVEN_MAX]]}
 
 
+def road_book_focus(book: dict):
+    """The technique to practise on a road (IDEAS D-27, from its road book): the why named most often over its uneven
+    corners, a tie going to the one at the widest (book["uneven"] lists them widest first). {skill, at: [its 1-based
+    places, in road order]}, or None when no uneven corner names one."""
+    corners, seen = (book or {}).get("corners") or [], {}
+    for rank, n in enumerate((book or {}).get("uneven") or []):
+        k = corners[n - 1].get("why") if 0 < n <= len(corners) else None
+        if k in SKILLS:
+            c, first, at = seen.get(k, (0, rank, []))
+            seen[k] = (c + 1, first, at + [n])
+    if not seen:
+        return None
+    k = max(seen, key=lambda s: (seen[s][0], -seen[s][1]))
+    return {"skill": k, "at": sorted(seen[k][2])}
+
+
 def drive_touch(obs: list, others: list) -> dict:
     """A drive's own touch (its Log page): {drive: touch over its corners (from DRIVE_TOUCH_MIN), usual: touch over the
     corners of every other drive (from STYLE_MIN), outside: per measure "above" when the drive's middle corner was beyond

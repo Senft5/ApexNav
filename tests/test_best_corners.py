@@ -185,3 +185,22 @@ def test_road_book_every_corner_of_a_road():
         (1, "Tight left", 92, 80, False, "b", "06-01", 3), (2, "Fast left", 75, 70, False, "c", "07-01", 3), (3, "Tight left", 90, 60, True, "a", "05-01", 3)]
     assert [r["why"] for r in w["rows"]] == [None, None, "one steering arc"]
     assert out[2] == "Least even: corners 3 and 1, where your passes differ the most." and out[3] is None
+
+
+def test_road_book_focus_names_the_skill_to_practise():
+    k = lambda why: {"why": why}
+    book = {"corners": [k("arc"), k(None), k("brake"), k("arc"), k("brake")], "uneven": [3, 4, 1]}
+    assert dp.road_book_focus(book) == {"skill": "arc", "at": [1, 4]}                    # named twice
+    tie = {"corners": book["corners"], "uneven": [5, 1]}
+    assert dp.road_book_focus(tie) == {"skill": "brake", "at": [5]}                       # a tie: the widest corner's
+    assert dp.road_book_focus({"corners": book["corners"], "uneven": [2]}) is None        # no why there
+    assert dp.road_book_focus({"corners": [], "uneven": []}) is None and dp.road_book_focus(None) is None
+    if NODE is None:
+        return
+    runner = ("const P=require(process.argv[1]+'/web/driver_profile.js');const bs=JSON.parse(require('fs').readFileSync(0,'utf8'));"
+              "const f=bs.map((b)=>P.roadBookFocus(b));process.stdout.write(JSON.stringify([f,f.map((x)=>P.roadBookFocusLine(x))]));")
+    cases = [book, tie, {"corners": book["corners"], "uneven": [2]}, None]
+    out = json.loads(subprocess.run([NODE, "-e", runner, os.getcwd()], input=json.dumps(cases), capture_output=True, text=True, check=True).stdout)
+    assert out[0] == [dp.road_book_focus(b) for b in cases]
+    assert out[1] == ["Most of the difference at corners 1 and 4 is one steering arc.",
+                      "Most of the difference at corner 5 is brakes done by the apex.", None, None]
