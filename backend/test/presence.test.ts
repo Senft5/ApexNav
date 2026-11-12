@@ -3,7 +3,7 @@
 import { env } from "cloudflare:workers";
 import { beforeEach, describe, expect, it } from "vitest";
 import { api, befriend, freshDb, makeUser, ok, type TestUser } from "./helpers";
-import { GRID_DEG, snap } from "../src/presence";
+import { GRID_DEG, PRESENCE_VIEW, snap } from "../src/presence";
 
 beforeEach(freshDb);
 const json = async (r: Promise<Response>) => (await (await ok(r)).json()) as any;
@@ -115,5 +115,13 @@ describe("friends on the map", () => {
     expect(await count()).toBe(1);
     await set(a, { ...share, zones: [{ ...home, r: 5000 }] });          // the zone grown over where the sample is
     expect(await count()).toBe(0);
+  });
+});
+
+describe("friends on the map at scale", () => {
+  it("never scans everyone sharing: the poll starts from your own friends and crew-mates", async () => {
+    const plan = (await env.DB.prepare(`EXPLAIN QUERY PLAN ${PRESENCE_VIEW}`).bind("u").all<{ detail: string }>()).results.map((r) => r.detail);
+    expect(plan.some((d) => /^SCAN (s|presence_settings|u|users|p|presence_samples)\b/.test(d))).toBe(false);
+    expect(plan).toContain("SCAN cand");
   });
 });
