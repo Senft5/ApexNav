@@ -466,15 +466,15 @@
         <label>Compare with<select id="selB" aria-label="Compare with"></select></label>
       </div>
       <section class="cards" id="cards"></section>
-      <section class="grid2">
+      <section class="grid2" id="cmpRoad">
         <div class="panel"><h2>Road</h2><div id="plan"></div></div>
         <div class="panel"><h2>Gap along the road</h2><div id="chart"></div>
           <p class="note">Below the line, the other drive was ahead. Gaps restart where the roads part.</p></div>
       </section>
-      <section class="panel">
+      <section class="panel" id="cmpCorners">
         <h2>Corner by corner</h2>
         <div class="scroll"><table id="table"></table></div>
-        <p class="note mt-8">Greyed rows include a stop (below 2.5 m/s) and are left out of the corner total. Envelope use = minimum speed ÷ the corner's grip limit. Brake = distance before the apex where braking began.</p>
+        <p class="note mt-8">Grey rows include a stop and stay out of the total. Envelope use: your slowest speed against the corner’s grip. Brake: how far before the apex you began braking.</p>
       </section>
     </section>
   </main>

@@ -6944,6 +6944,26 @@ flow('a saved route keeps the map along it: Save fetches the tiles within reach 
   check(true, 'unsaving the route drops its map');
 }, { viewport: { width: 1280, height: 900 } });
 
+flow('offline tiles two areas share: deleting one area keeps the tiles the other still needs, and a copy kept as it arrived keeps its areas (IDEAS F-02, F-03)', async (page, base) => {
+  await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); } catch (_) {} });
+  await page.goto(base + '/index.html');
+  await page.waitForFunction(() => window.ApexOfflineTiles);
+  const r = await page.evaluate(async () => {
+    const T = window.ApexOfflineTiles, b = (n) => new Uint8Array([n]).buffer, has = async (u) => !!(await T.get(u));
+    await T.put('https://x/t/14/1/1.pbf', b(1), 'a1'); await T.put('https://x/t/14/1/2.pbf', b(2), 'a1');
+    await T.put('https://x/t/14/1/2.pbf', b(2), 'route_r1');                  // the route's corridor inside the area
+    await T.put('https://x/t/14/1/3.pbf', b(3), 'route_r1');
+    await T.put('https://x/t/14/1/2.pbf', b(2));                              // the same tile kept again as it arrived
+    await T.removeArea('route_r1');
+    const afterRoute = [await has('https://x/t/14/1/1.pbf'), await has('https://x/t/14/1/2.pbf'), await has('https://x/t/14/1/3.pbf')];
+    await T.removeArea('a1');
+    const afterArea = [await has('https://x/t/14/1/1.pbf'), await has('https://x/t/14/1/2.pbf')];
+    return { afterRoute, afterArea };
+  });
+  check(JSON.stringify(r.afterRoute) === '[true,true,false]', 'the route\'s own tile goes, the shared one stays: ' + JSON.stringify(r));
+  check(JSON.stringify(r.afterArea) === '[false,false]', 'and the area\'s go with the area: ' + JSON.stringify(r));
+});
+
 flow('offline area, as a member: Save the map here keeps the measured roads round it; with no signal a plan still has them, and clearing them (what Sign out calls) leaves nothing (IDEAS F-02)', async (page, base) => {
   let online = true;
   const asks = [], way = { 0: { i: [0, 1, 2], n: [3, 3, 3], cam: [0.02, 0.03, 0.02], cn: [3, 3, 3], rough: [0.1, 0.2, 0.1] } };
@@ -7206,6 +7226,24 @@ flow('Stages with no stage yet: Mark a stage opens the marker right there on you
   const m = await page.evaluate(() => ({ tab: !document.getElementById('tab-segments').hidden, open: document.getElementById('newStage').open,
     shown: !document.getElementById('newStage').hidden, drive: document.getElementById('segDrive').value }));
   check(m.tab && m.open && m.shown && m.drive === 'mk1', 'still on Stages, the marker open on the drive: ' + JSON.stringify(m));
+});
+
+flow('Compare with a single drive: one line says it needs two, no empty panels; with two it draws them (free roamer B, 2026-11-12)', async (page, base) => {
+  await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); } catch (_) {} });
+  await page.goto(base + '/analysis.html');
+  await page.waitForFunction(() => window.apexLogDebug && window.apexLogDebug.loaded() && window.ApexRecording);
+  await storeDashDrive(page, 'cp1', 'Compare road');
+  const look = async () => {
+    await page.goto(base + '/analysis.html?tab=compare');
+    await page.waitForFunction(() => window.apexLogDebug && window.apexLogDebug.loaded() && document.querySelector('#cards').textContent.trim());
+    return page.evaluate(() => ({ cards: document.getElementById('cards').textContent.trim(), road: document.getElementById('cmpRoad').hidden,
+      corners: document.getElementById('cmpCorners').hidden, pick: document.querySelector('.compare-pick').hidden }));
+  };
+  const one = await look();
+  check(/needs two drives/.test(one.cards) && one.road && one.corners && one.pick, 'one drive: one line, nothing empty under it: ' + JSON.stringify(one));
+  await storeDashDrive(page, 'cp2', 'Compare road');
+  const two = await look();
+  check(/Shared road/.test(two.cards) && !two.road && !two.corners && !two.pick, 'two drives: the comparison is drawn: ' + JSON.stringify(two));
 });
 
 flow('the drive page\'s map: with no map to be had the picture keeps its blank panel; MapLibre loads only for it (TestFlight 15)', async (page, base) => {
@@ -7915,6 +7953,34 @@ async function swipe(cdp, x0, y0, dx, dy) {
   for (let i = 1; i <= 10; i++) await cdp.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [{ x: x0 + dx * i / 10, y: y0 + dy * i / 10 }] });
   await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
 }
+
+flow('Where to? while typing is the field and its list: no shortcuts, no Find a loop, every place; Go on nothing puts the keyboard away (TestFlight 2026-11-12 "evil cluttered gap")', async (page, base) => {
+  const recent = JSON.stringify(['Maryville', 'Townsend', 'Tellico Plains', 'Robbinsville', 'Bryson City', 'Deals Gap'].map((label, i) => ({ label, lat: 35.5 + i / 100, lon: -84 + i / 100 })));
+  const { tap } = await planPage(page, base, { 'apex.recentPlaces': recent });
+  await tap('#destInput', 'Where to?');
+  await page.waitForSelector('#placeList .place', { timeout: 10000 });
+  const look = () => page.evaluate(() => {
+    const vis = (el) => !!el && el.getClientRects().length > 0 && getComputedStyle(el).visibility !== 'hidden';
+    return { kb: document.documentElement.classList.contains('kb-open'), chips: vis(document.getElementById('planChips')), find: vis(document.getElementById('findLoopBtn')),
+      places: [...document.querySelectorAll('#placeList .place')].filter(vis).length, all: vis(document.querySelector('#placeList .place-all')),
+      focused: document.activeElement && document.activeElement.id, routed: !!(window.apexDebug && apexDebug.track) };
+  });
+  const before = await look();
+  check(!before.kb && before.chips && before.find && before.places === 3 && before.all, 'no keyboard: the shortcuts, three places and All places, Find a loop: ' + JSON.stringify(before));
+  await page.evaluate(() => ApexKeyboard.native(300));                 // the shell says the keyboard covers 300 px
+  await page.waitForFunction(() => document.documentElement.classList.contains('kb-open'));
+  const typing = await look();
+  check(typing.kb && !typing.chips && !typing.find && typing.places === 6 && !typing.all, 'keyboard up: only the field and every place, nothing over an empty band: ' + JSON.stringify(typing));
+  await page.waitForTimeout(400);                                     // the sheet's refit
+  const fits = await page.evaluate(() => ({ list: Math.round(document.getElementById('planBody').getBoundingClientRect().bottom), kb: Math.round(innerHeight - 300) }));
+  check(fits.list <= fits.kb + 1, 'the list ends at the keyboard: ' + JSON.stringify(fits));
+  await page.press('#destInput', 'Enter');                            // Go with nothing typed
+  await page.evaluate(() => ApexKeyboard.native(0));
+  await page.waitForFunction(() => !document.documentElement.classList.contains('kb-open'));
+  const after = await look();
+  check(after.focused !== 'destInput' && after.chips && after.find && after.places === 3 && !after.routed, 'Go on nothing only put the keyboard away (no route to a recent place), and the sheet is whole again: ' + JSON.stringify(after));
+  await page.evaluate(() => ApexKeyboard.native(null));
+});
 
 flow('plan flow (a) a destination in 3 taps: Where to?, the place, Start; Start never moves, the card says the ranked swap (finding 1, 2, 3)', async (page, base) => {
   const asked = [];
