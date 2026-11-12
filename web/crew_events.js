@@ -650,12 +650,14 @@
       box.append(el('b', { textContent: e.title }),
         el('p', { className: 'note', textContent: [whenText(e.starts_at), repeatText(e.repeat_weeks, e.starts_at), e.crew_name, `${e.km} km away`].filter(Boolean).join(' · ') }),
         el('p', { className: 'note', textContent: `Meet: ${e.meet_name || 'the pin'}${e.notes ? ` · ${e.notes}` : ''} · ${e.going} going` }));
+      // the Meets layer pins your own crews' listed drives too: answer on the crew's card, no Join
+      if (e.member) box.append(el('p', { className: 'note', textContent: 'Your crew\u2019s drive. Answer on its card on the crew page.' }));
       const acts = el('div', { className: 'row', style: 'flex-wrap:wrap' },
-        btn('Join the crew', async () => {
+        ...(e.member ? [] : [btn('Join the crew', async () => {
           const r = await apiCall('POST', `/api/crews/${encodeURIComponent(e.crew_id)}/join`);
           if (r.ok) { toast(`You're in ${e.crew_name}. Answer on its card on the crew page.`); if (page.askPublicSharing) await page.askPublicSharing(e.crew_id, e.crew_name); redo(); }
           else toast(r.status === 429 ? 'You\'re in 10 crews already. Leave one first.' : 'Couldn\'t join. Try again.');
-        }, 'ink-btn solid'),
+        }, 'ink-btn solid')]),
         btn('Directions to meet', () => page.goTo({ label: e.meet_name || e.title, lat: e.meet_lat, lon: e.meet_lon }), 'linkbtn'),
         btn('Add to calendar', () => calendar(e, 'car-meet.ics'), 'linkbtn'));
       if (page.report) acts.append(btn('Report', () => page.report({ kind: 'event', target: e.id, label: e.title, done: redo }), 'linkbtn'));
@@ -715,7 +717,7 @@
     function plan(crewId) { if (lastPlan) lastPlan(crewId); }
     /** Draws the Crew drives sheet again (a card on the crew page changed a drive). */
     function refresh() { if (lastRedo) lastRedo(); }
-    return { section, plan, card, refresh };
+    return { section, plan, card, refresh, meetCard };
   }
 
   // Your year's crew drives (IDEAS D-24): the server forgets who came a week after a drive (sweep.ts), so the phone keeps

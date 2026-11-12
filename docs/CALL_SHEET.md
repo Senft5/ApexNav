@@ -4,16 +4,13 @@ Decisions Claude made for you, newest first. Each one says what was decided, why
 you reach one you've seen. If you disagree with a call, say so and it gets reversed; nothing here is hard to undo unless
 it says so. Things only you can do are in docs/OWNER_TODO.md.
 
-## 2026-11-12 Owner-only service check in Settings (claude/project-thread-9zycz2)
+## 2026-11-12 (meets on the map): public crews' meets pinned on the map (claude/project-thread-uwmi4e)
 
-Nate asked for a service health check only he can run, that sends its results back. Settings → Account (owner only)
-has Service check: 27 checks from the phone (our server, the road graph, our router's real Fun / Long way / loop plans,
-Valhalla, each camera server, map, search, weather), each up, slow or down with the reason and what it affects, plus the
-Worker's own view (config set or not, GitHub graph data and the camera servers asked from Cloudflare). Calls: no
-migration, results go into error_counts under kind `service` (kept 30 days like crash counts), and the Errors list skips
-them; it also runs by itself once a launch at most every 6 hours, so Claude sees his phone's view without him tapping;
-it asks at a fixed downtown Cincinnati spot, never his location. Undo: remove serviceCheckSection and its auto-run line in
-web/cockpit.js, the `ops` lazy group, web/service_check.js, backend/src/service_check.ts and its three routes.
+Calls I made: a Meets layer in Layers, off by default like Friends, for members only. It pins the same public meets as
+Crew → Meets near you, one pin per meeting point with the day on it. A tap opens the existing meet card, so there is one
+card to keep right. Your own crew's listed drives show too, with "answer on the crew page" instead of Join. It asks by the
+map centre's 0.1-degree cell, never from a privacy zone, at most every 5 minutes per cell. Undo: remove the `meets`
+button in web/index.html and the `meetsMap` lines in cockpit.js.
 ## 2026-11-11 (ui-round-three): an empty Garage shows a parking bay and one big "Add a car" key (claude/project-thread-5sbga7)
 
 With no cars yet, the Garage said one grey sentence over a small outlined key. Now it is a small page like the first
@@ -35,6 +32,17 @@ drops a loop a moderator took down. I left the home deck to Roamer C's branch. U
 Above the road picker, one line names the roads (driven three or more times) where your passes differ most, with the
 technique behind most of it. Calls: at most 3 roads, and at most 12 read, to keep the Log quick on a big library; it is read
 once each time the library changes, not on every visit. Undo: remove `bookWork` in web/analysis.html.
+
+## 2026-11-12 Owner-only service check in Settings (claude/project-thread-9zycz2)
+
+Nate asked for a service health check only he can run, that sends its results back. Settings → Account (owner only)
+has Service check: 27 checks from the phone (our server, the road graph, our router's real Fun / Long way / loop plans,
+Valhalla, each camera server, map, search, weather), each up, slow or down with the reason and what it affects, plus the
+Worker's own view (config set or not, GitHub graph data and the camera servers asked from Cloudflare). Calls: no
+migration, results go into error_counts under kind `service` (kept 30 days like crash counts), and the Errors list skips
+them; it also runs by itself once a launch at most every 6 hours, so Claude sees his phone's view without him tapping;
+it asks at a fixed downtown Cincinnati spot, never his location. Undo: remove serviceCheckSection and its auto-run line in
+web/cockpit.js, the `ops` lazy group, web/service_check.js, backend/src/service_check.ts and its three routes.
 
 ## 2026-11-12 (deepest analysis 18): the end card names your passes on a road you know (claude/project-thread-gd7nre)
 

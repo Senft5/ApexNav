@@ -1,10 +1,12 @@
 # VETTA — CURRENT AGENT HANDOFF STATE
 
-## 2026-11-12 Owner-only service check (claude/project-thread-9zycz2)
-- web/service_check.js (lazy 'ops') + cockpit.js serviceCheckSection: Settings → Account, owner only (/api/me moderator). 27 probes at a fixed Cincinnati spot, incl. our router's real Fun / Long way / loop plans via the app's worker and each Overpass camera server separately. Auto-runs once a launch, at most every 6 h.
-- backend/src/service_check.ts: POST /api/ops/service-check (into error_counts kind 'service', no migration), GET /api/ops/service-check, GET /api/ops/service-check/server (config booleans, graph-data branch, Overpass from Cloudflare).
-- Read Nate's results: `SELECT day, source, message, n, stack, last_at FROM error_counts WHERE kind = 'service' ORDER BY last_at DESC` on apexnav-db.
-- Next: once results arrive, pass camera / router findings to the Routing thread; consider a probe for the convoy socket.
+## Session 2026-11-12 (meets on the map): IDEAS S-13's last part (claude/project-thread-uwmi4e, after #446)
+
+- [x] Layers → Meets (`web/meets_map.js`, in the lazy social group): public meets from GET /api/events/near pinned at their
+  meeting points, the day on the pin, grouped per place; a tap opens crew_events.js `meetCard` (now returned by its mount;
+  a member's own crew shows no Join). Off by default, members only; the map centre's cell, `nearLookupOk`. No migration.
+- Tests: tests/test_meets_map.py; e2e "meets on the map".
+- Exact next task: the next social win (a duel on the week's time attack loop, or push for For you once APNs exists).
 ## Session 2026-11-11 (ui-round-three, PR 2): the empty Garage is a page (claude/project-thread-5sbga7)
 
 - garage_ui.js: with no cars, "Your cars" shows a `people-first garage-first` page: a drawing in a well (a road pulls in
@@ -27,6 +29,12 @@
 - `analysis_client.js`: the road book moved into `bookOf`; a new `roadBooks({ ids })` job reads up to 12 roads at once.
 - Log > Your roads, corner by corner: `#bookWork` shows the line above the head, read once per library (libKey).
 - Next: Your driving's Work on could point at the road from roadsToWork ("Dry Ridge Rd is where it shows most").
+
+## 2026-11-12 Owner-only service check (claude/project-thread-9zycz2)
+- web/service_check.js (lazy 'ops') + cockpit.js serviceCheckSection: Settings → Account, owner only (/api/me moderator). 27 probes at a fixed Cincinnati spot, incl. our router's real Fun / Long way / loop plans via the app's worker and each Overpass camera server separately. Auto-runs once a launch, at most every 6 h.
+- backend/src/service_check.ts: POST /api/ops/service-check (into error_counts kind 'service', no migration), GET /api/ops/service-check, GET /api/ops/service-check/server (config booleans, graph-data branch, Overpass from Cloudflare).
+- Read Nate's results: `SELECT day, source, message, n, stack, last_at FROM error_counts WHERE kind = 'service' ORDER BY last_at DESC` on apexnav-db.
+- Next: once results arrive, pass camera / router findings to the Routing thread; consider a probe for the convoy socket.
 
 ## Session 2026-11-12 (deepest analysis, PR 18): the end card says how this drive went on a road you know (claude/project-thread-gd7nre)
 
