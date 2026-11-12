@@ -7,6 +7,14 @@
   a member's own crew shows no Join). Off by default, members only; the map centre's cell, `nearLookupOk`. No migration.
 - Tests: tests/test_meets_map.py; e2e "meets on the map".
 - Exact next task: the next social win (a duel on the week's time attack loop, or push for For you once APNs exists).
+## Session 2026-11-11 (ui-round-three, PR 2): the empty Garage is a page (claude/project-thread-5sbga7)
+
+- garage_ui.js: with no cars, "Your cars" shows a `people-first garage-first` page: a drawing in a well (a road pulls in
+  to a dashed `jr-bay`, the red puck on it), "Park your first car." large, the old sentence kept, and "Add a car" as the
+  full-width solid key (only while the garage is empty; with cars it stays the plain key). signature.css: three rules.
+- Tests: tests/test_garage_first.py. e2e garage VIN, photos, build threads, Soundtrack, REVIEW 1.2, Dynamic Type pass here.
+- Next ideas: the drive HUD; CarPlay visuals; motion between tabs.
+
 
 ## Session 2026-11-11 (time attack placement): where the weekly loop shows (claude/project-thread-uwmi4e, after #433)
 - Done: the Where to? row names the week's loop and your place (time_attack.js summaryLine and peek). Drive it plans the
