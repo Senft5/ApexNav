@@ -1912,7 +1912,7 @@
       <section class="plan" id="planPanel" aria-label="Plan">
         <div class="plan-bar" id="planBar">
           <label class="plan-search"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6"/><path d="M15 15l5 5"/></svg>
-            <input id="destInput" type="search" placeholder="Where to?" aria-label="Where to" aria-controls="planBody" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" enterkeyhint="go" /></label>
+            <input id="destInput" type="search" role="combobox" aria-haspopup="dialog" aria-expanded="false" placeholder="Where to?" aria-label="Where to" aria-controls="planBody" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" enterkeyhint="go" /></label>
           <button class="route-bar" id="routeBar" aria-label="Route details"><b id="routeBarName">--</b><span id="routeBarMeta"></span><em class="rb-open" aria-hidden="true"><svg viewBox="0 0 12 12"><path d="M2 8 L6 4 L10 8"/></svg></em></button>
           <!-- the plan flow (finding 8): one name for go. With no route this is the smaller Just drive (a free drive); with a
                route planned it reads Start (cockpit.js renderRouteCard), as the card's own key does -->
@@ -2286,6 +2286,7 @@
           <p class="end-feel" id="endFeel" hidden></p>   <!-- panel round 2, HE-1: what this phone felt, only when measured -->
           <p class="end-feel" id="endPractice" hidden></p>   <!-- IDEAS D-27: the skill you are practicing, on this drive -->
           <p class="end-feel" id="endRoad" hidden></p>   <!-- on a road driven before: your passes there, corner by corner -->
+          <p class="end-feel" id="endRun" hidden></p>   <!-- IDEAS D-30: a run of clean corners that is this month's best -->
           <p class="end-line" id="endLine"></p>
           <!-- U-75: the solid key is Share card only when there is a score to share; otherwise it is Open in the Log, and Share
                waits as a link -->
