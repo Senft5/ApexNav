@@ -1594,6 +1594,13 @@
        keyboard and may grow to just below the island; keyboard.js scrolls the field into view inside it. */
     html.kb-open .side-pop.open { bottom: calc(100% - var(--kb-h)); min-height: 0; max-height: calc(var(--kb-h) - max(var(--safe-top), 20px) - 12px);
       padding-bottom: 16px; box-shadow: none; }
+    /* TestFlight 2026-11-12 ("evil cluttered gap"): while typing, Where to? is the field and its list, like any maps app.
+       The shortcuts, the loop, the planning inputs and Find a loop (the keyboard's Go key does its work) step aside, and the
+       list shows every place instead of three and a link, so nothing floats over an empty band above the keyboard.
+       Dragging the list or tapping its background puts the keyboard away and brings them back (cockpit.js). */
+    html.kb-open .plan.open:not(.routed) :is(.plan-chips, .plan-links, .plan-loop, .plan-more, .find-bar) { display: none !important; }
+    html:not(.kb-open) .place-extra { display: none; }
+    html.kb-open .place-all { display: none; }
     /* the bar already names the route while the sheet is open */
     .plan.open #routeCardName { display: none; }
     .plan-search:focus-within { border-color: var(--panel-ink); }
