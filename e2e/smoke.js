@@ -686,8 +686,8 @@ flow('for this drive (route context): Passenger aboard and the rest are ✓ stam
   await page.waitForFunction(() => document.querySelector('[data-driver="tunnels"]').getAttribute('aria-pressed') === 'false');
   await page.reload();
   await page.waitForSelector('#planPanel.open');
-  // what is on stays in view once the sheet is shut (finding 5): a chip on the plan sheet
-  check(await page.evaluate(() => [...document.querySelectorAll('#planOptsOn .chip')].map((c) => c.textContent).includes('✓ Passenger aboard')), 'the stamp shows as a chip on the plan sheet');
+  // what is on stays in view once the sheet is shut (finding 5; TestFlight 2026-11-12 note 8: as a count on Where to?, each named to VoiceOver)
+  check(await page.evaluate(() => /Passenger aboard/.test(document.getElementById('planOptionsChip').getAttribute('aria-label')) && /^Options · \d$/.test(document.getElementById('planOptionsChip').textContent)), 'the stamp is counted on the plan sheet');
   const after = await page.evaluate(() => ({ p: document.querySelector('[data-driver="passenger"]').getAttribute('aria-pressed'), t: document.querySelector('[data-driver="tunnels"]').getAttribute('aria-pressed'),
     fit: document.getElementById('fitRow').hidden, skill: document.getElementById('skillNote').hidden,
     providers: ((window.ApexRouteCtx && (window.ApexRouteCtx.pending || window.ApexRouteCtx.providers)) || []).map((x) => x.id || x),
@@ -6934,9 +6934,9 @@ flow('REVIEW.md 1.2 screen by screen: first run, the map, planning, the route, d
   await page.click('#destInput');
   const plan = await page.evaluate(() => ({ detents: [...document.querySelectorAll('#loopDetents button')].map((b) => b.textContent), more: !!document.getElementById('planMore'),
     level: [...document.querySelectorAll('#planBody .plan-search-section [data-fun]')].length,
-    chips: [...document.querySelectorAll('#planChips > .chip')].filter((c) => c.offsetParent).map((c) => c.textContent), on: [...document.querySelectorAll('#planOptsOn .chip')].map((c) => c.textContent) }));
+    chips: [...document.querySelectorAll('#planChips > *')].filter((c) => c.offsetParent).map((c) => c.textContent) }));
   check(plan.detents.length === 5 && plan.detents.every((d) => / mi$/.test(d)) && !plan.more && plan.level === 0 && JSON.stringify(plan.chips) === '["Best roads nearby","Options · 1"]'
-    && JSON.stringify(plan.on) === '["✕ Unpaved"]', 'Plan sheet: ' + JSON.stringify(plan));
+    , 'Plan sheet: ' + JSON.stringify(plan));
   // Route bar: no toast repeating it; Route card: three numbers, four dials with unknowns as --, Start and Fly-through, the rest text links
   await page.fill('#destInput', 'Maryville');
   await page.waitForSelector('#placeList .place', { timeout: 10000 });
@@ -8093,7 +8093,7 @@ flow('plan flow (d) one Options sheet: Avoid ✕ and Prefer ✓ in it, what is o
   await planRouter(page, asked);
   const { cdp } = await planPage(page, base, { 'apex.avoid': JSON.stringify({ unpaved: false }) });
   await page.click('#destInput');
-  check(await page.evaluate(() => document.getElementById('planOptsOn').children.length === 0 && document.getElementById('planOptionsChip').textContent === 'Options'), 'nothing on: just Options');
+  check(await page.evaluate(() => document.getElementById('planOptionsChip').textContent === 'Options'), 'nothing on: just Options');
   await page.click('#planOptionsChip');
   await page.waitForFunction(() => { const s = document.getElementById('optSheet'); return s.classList.contains('open') && Math.abs(s.getBoundingClientRect().bottom - innerHeight) < 2; });
   await page.waitForTimeout(300);
@@ -8109,15 +8109,15 @@ flow('plan flow (d) one Options sheet: Avoid ✕ and Prefer ✓ in it, what is o
   const top = await page.evaluate(() => document.getElementById('optSheet').getBoundingClientRect().top + 20);
   await swipe(cdp, 196, top, 0, 220);
   await page.waitForFunction(() => !document.getElementById('optSheet').classList.contains('open'), null, { timeout: 3000 });
-  const chips = await page.evaluate(() => ({ sheet: [...document.querySelectorAll('#planOptsOn .chip')].map((c) => c.textContent), key: document.getElementById('planOptionsChip').textContent }));
-  check(JSON.stringify(chips.sheet) === '["✕ Highways","✓ Passenger aboard","More hairpins"]' && chips.key === 'Options · 3', 'what is on shows on the plan sheet once Options closes: ' + JSON.stringify(chips));
+  const chips = await page.evaluate(() => ({ sheet: [...document.querySelectorAll('#planChips .opt-on .chip')].length, key: document.getElementById('planOptionsChip').textContent, aria: document.getElementById('planOptionsChip').getAttribute('aria-label') }));
+  check(chips.sheet === 0 && chips.key === 'Options · 3' && /highways/i.test(chips.aria) && /Passenger aboard/.test(chips.aria), 'what is on is counted on the plan sheet once Options closes, each one named to VoiceOver (TestFlight 2026-11-12 note 8): ' + JSON.stringify(chips));
   // the route planned with them shows them on its card; a chip opens the sheet again; closing with nothing changed plans nothing
   await page.fill('#destInput', 'Maryville');
   await page.waitForSelector('#placeList .place', { timeout: 10000 });
   await page.click('#placeList .place');
   await cardUp(page); await planDone(page);
   const card = await page.evaluate(() => [...document.querySelectorAll('#cardOptsOn .chip')].map((c) => c.textContent));
-  check(JSON.stringify(card) === JSON.stringify(chips.sheet), 'and on the route card: ' + JSON.stringify(card));
+  check(JSON.stringify(card) === '["✕ Highways","✓ Passenger aboard","More hairpins"]', 'and on the route card, one chip each: ' + JSON.stringify(card));
   check(asked.some((r) => r.costing_options && JSON.stringify(r.costing_options).includes('"use_highways":0')), 'the plan avoided highways');
   const n = asked.length;
   await page.click('#cardOptsOn .chip');

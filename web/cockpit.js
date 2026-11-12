@@ -5662,11 +5662,13 @@
     function paintOptChips() {
       if (!window.ApexPlanOptions || !optChipsReady) return;                // (painted once the switches above are read)
       const on = ApexPlanOptions.active(optState());
-      for (const [chipId, boxId] of [['planOptionsChip', 'planOptsOn'], ['cardOptionsChip', 'cardOptsOn']]) {
-        const chip = $(chipId), box = $(boxId);
+      // TestFlight 2026-11-12 (note 8, "cluttered"): Where to? says only how many (Options · 3, each named to VoiceOver);
+      // the route card, planned with them, still shows each one as a chip
+      for (const [chipId, boxId] of [['planOptionsChip', null], ['cardOptionsChip', 'cardOptsOn']]) {
+        const chip = $(chipId), box = boxId && $(boxId);
         chip.textContent = ApexPlanOptions.chipLabel(on);
         chip.setAttribute('aria-label', on.length ? `Options: ${on.map((x) => x.aria).join(', ')}` : 'Options');
-        box.replaceChildren(...on.map((x) => { const b = document.createElement('button'); b.className = 'chip'; b.textContent = x.text; b.dataset.opt = x.key;
+        if (box) box.replaceChildren(...on.map((x) => { const b = document.createElement('button'); b.className = 'chip'; b.textContent = x.text; b.dataset.opt = x.key;
           b.setAttribute('aria-label', `${x.aria}. Change in Options`); b.setAttribute('aria-haspopup', 'dialog'); b.addEventListener('click', openOptions); return b; }));
       }
     }
