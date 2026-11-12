@@ -308,7 +308,7 @@
     return out;
   }
   /** A drive's corners against your other passes of the same road (port of driver_profile.road_records). */
-  const ROAD_MIN_PASSES = 3, SAME_CORNER_M = 20, SAME_WAY = 0.7, UNEVEN_LEVELS = 15, UNEVEN_MAX = 3, NEAR_BEST = 5;
+  const ROAD_MIN_PASSES = 3, SAME_CORNER_M = 20, SAME_WAY = 0.7, UNEVEN_LEVELS = 15, UNEVEN_MAX = 3, NEAR_BEST = 5, EVEN_MIN = 2;
   function roadRecords(mine, others, ids = null) {
     let corners = 0, best = 0, lvl = 0;
     const held = [], rows = [];
@@ -365,7 +365,7 @@
   }
   /** A road's corners across every drive of it (port of driver_profile.road_book). drives oldest first, each
    *  { id, at, corners: placed() }; ref [[x, y]] along one drive of the road for road order. */
-  function roadBook(drives, ref = null) {
+  function roadBook(drives, ref = null, since = null) {
     const book = [];
     for (const d of drives || []) for (const o of d.corners || []) {
       if (o.level === null || o.level === undefined) continue;
@@ -387,22 +387,28 @@
       const by = [...c.by].filter(([, v]) => v === rec).map(([i]) => i).sort((a, b) => order.get(a) - order.get(b))[0];
       const low = Math.min(...c.by.values()), worst = [...c.by].filter(([, v]) => v === low).map(([i]) => i).sort((a, b) => order.get(a) - order.get(b))[0];
       out.push({ x: c.x, y: c.y, size: c.size, dir: c.dir, passes: c.by.size, record: rec, low, by, at: at.get(by), why: rec - low >= UNEVEN_LEVELS ? whyOf(c.pass.get(by), c.pass.get(worst)) : null });
+      if (since !== null) {                                            // a road practice under way (core road_book since)
+        const xs = [...c.by].filter(([i]) => at.get(i) && at.get(i) >= since).map(([, v]) => v);
+        Object.assign(out[out.length - 1], { since_n: xs.length, since_low: xs.length ? Math.min(...xs) : null });
+      }
     }
     const wide = out.map((k, i) => i).filter((i) => out[i].record - out[i].low >= UNEVEN_LEVELS)
       .sort((a, b) => (out[b].record - out[b].low) - (out[a].record - out[a].low) || a - b);
-    return { corners: out, fewer: book.length - out.length, drives: (drives || []).length, uneven: wide.slice(0, UNEVEN_MAX).map((i) => i + 1) };
+    const res = { corners: out, fewer: book.length - out.length, drives: (drives || []).length, uneven: wide.slice(0, UNEVEN_MAX).map((i) => i + 1) };
+    if (since !== null) res.evened = out.map((k, i) => i).filter((i) => out[i].record - out[i].low >= UNEVEN_LEVELS && out[i].since_n >= EVEN_MIN && out[i].record - out[i].since_low < UNEVEN_LEVELS).map((i) => i + 1);
+    return res;
   }
   /** A road book in words: { head, rows: [{ n, what ("Tight left"), record, by, on (day(at) or null), passes }] }, or null with
-   *  no corner passed three times. head: "12 corners you have driven three or more times, in road order[; 5 more fewer times]." */
+   *  no corner passed three times. head: "12 corners driven 3+ times, in road order[ · 5 driven less]." */
   function roadBookRows(book, day) {
     if (!book || !Array.isArray(book.corners) || !book.corners.length) return null;
-    const n = book.corners.length, more = book.fewer > 0 ? `; ${book.fewer} more fewer times` : '';
+    const n = book.corners.length, more = book.fewer > 0 ? ` · ${book.fewer} driven less` : '';
     const what = (c) => { const z = c.size ? c.size[0].toUpperCase() + c.size.slice(1) : 'A', w = c.dir === 'L' ? 'left' : c.dir === 'R' ? 'right' : 'corner'; return c.size ? `${z} ${w}` : (w === 'corner' ? 'Corner' : w[0].toUpperCase() + w.slice(1)); };
     const uneven = book.uneven || [], list = (xs) => (xs.length < 2 ? String(xs[0]) : `${xs.slice(0, -1).join(', ')} and ${xs[xs.length - 1]}`);
     return {
-      head: `${n} corner${n === 1 ? '' : 's'} you have driven three or more times, in road order${more}. Each with your cleanest pass and the drive it came on.`,
+      head: `${n} corner${n === 1 ? '' : 's'} driven 3+ times, in road order${more}.`,
       // where on the road to work: the corners your passes differ most at (UNEVEN_LEVELS apart or more)
-      work: uneven.length ? `Least even: corner${uneven.length === 1 ? '' : 's'} ${list(uneven)}, where your passes differ the most.` : null,
+      work: uneven.length ? `Least even: corner${uneven.length === 1 ? '' : 's'} ${list(uneven)}.` : null,
       rows: book.corners.map((c, i) => ({ n: i + 1, what: what(c), record: c.record, low: c.low === undefined ? null : c.low, uneven: uneven.includes(i + 1), why: c.why && WORDS[c.why] ? WORDS[c.why].name[0].toLowerCase() + WORDS[c.why].name.slice(1) : null, by: c.by, on: c.at && day ? day(c.at) : null, passes: c.passes })),
     };
   }
@@ -432,14 +438,12 @@
     return `Where your passes differ most: ${say.length < 2 ? say[0] : `${say.slice(0, -1).join(', ')} and ${say[say.length - 1]}`}.`;
   }
   /** The road where a skill shows most, from the roads' books (list: [{ name, book }]): the one whose least even corners
-   *  name it most often (a tie keeps list order), as "It shows most on Dry Ridge Rd: 2 of the corners where your passes
-   *  there differ most come down to it." null when no road's do. */
+   *  name it most often (a tie keeps list order), as "Shows most on Dry Ridge Rd: 2 of its 3 least even corners." null
+   *  when no road's do. */
   function skillRoadLine(list, skill) {
     const best = skillRoad(list, skill);
     if (!best) return null;
-    const what = best.n === best.of ? (best.n === 1 ? 'the corner where your passes there differ most comes' : `all ${best.n} corners where your passes there differ most come`)
-      : `${best.n} of the ${best.of} corners where your passes there differ most come${best.n === 1 ? 's' : ''}`;
-    return `It shows most on ${best.name}: ${what} down to it.`;
+    return `Shows most on ${best.name}: ${best.of === 1 ? 'its least even corner' : `${best.n} of its ${best.of} least even corners`}.`;
   }
   /** skillRoadLine's road: { name, n (its uneven corners naming the skill), of (its uneven corners) }, or null. */
   function skillRoad(list, skill) {
@@ -451,11 +455,19 @@
     }
     return best;
   }
-  /** "Most of the difference at corner 3 is one steering arc." for a road book's focus, or null. */
+  /** A road practice's corners that have evened out (roadBook's evened: every pass since the practice began within
+   *  UNEVEN_LEVELS of the cleanest), as "Evened out since the practice began: corners 4 and 9." null with none. */
+  function roadEvenedLine(book) {
+    const xs = (book && book.evened) || [];
+    if (!xs.length) return null;
+    const at = xs.length < 2 ? `corner ${xs[0]}` : `corners ${xs.slice(0, -1).join(', ')} and ${xs[xs.length - 1]}`;
+    return `Evened out since the practice began: ${at}.`;
+  }
+  /** "Most of the difference: one steering arc (corners 3 and 7)." for a road book's focus, or null. */
   function roadBookFocusLine(f) {
     if (!f || !WORDS[f.skill]) return null;
     const w = lowerName(f.skill), at = f.at.length < 2 ? `corner ${f.at[0]}` : `corners ${f.at.slice(0, -1).join(', ')} and ${f.at[f.at.length - 1]}`;
-    return `Most of the difference at ${at} is ${w}.`;
+    return `Most of the difference: ${w} (${at}).`;
   }
   /** A corner row's note from roadRecords rows: "Your cleanest of 4 passes here (92)", "Level with your cleanest here (90,
    *  Aug 12)", "Your cleanest here: 90, Aug 12; this pass 82". day(row) gives the holding drive's date, or null. */
@@ -570,6 +582,7 @@
     out.pace = { over: over.length >= SKILL_MIN ? r(Core.meanSe(over)[0], 4) : null, n: over.length };
 
     const months = [...new Set(drives.map((d) => d.month).filter(Boolean))].sort(cmp);
+    out.span = months.length ? [months[0], months[months.length - 1]] : null;   // the period read (core profile span)
     for (const k of TOUCH) out.touch_trend[k] = [];
     for (const mth of months) {
       const t = touch(drives.filter((d) => d.month === mth).flatMap((d) => d.obs), TREND_MIN);
@@ -822,13 +835,13 @@
   function practiceSummary(pr) {
     if (!pr) return null;
     const day = dayOf(pr.since), from = `${day ? `Since ${day}` : 'Since you started'}${pr.road ? ` on ${pr.road}` : ''}`;
-    if (pr.after.level === null) return pr.road ? `${from}, no drive there yet with ${PRACTICE_MIN} or more corners to read it on. Your next drive there is the first.`
-      : `${from}, no drive yet with ${PRACTICE_MIN} or more corners to read it on. Your next twisty road is the first.`;
+    if (pr.after.level === null) return `${from}: no drive ${pr.road ? 'there ' : ''}yet with ${PRACTICE_MIN} or more corners.`;
     const n = pr.drives.length;
     let t = `${from}: ${pr.after.level} on ${pr.after.n} corners over ${n} drive${n === 1 ? '' : 's'}`;
     if (pr.before.level === null) return `${t}. There were too few corners before to compare with.`;
-    t += `, against ${pr.before.level} before.`;
-    return t + (pr.sure ? (pr.delta > 0 ? ` Up ${pr.delta}: the practice is showing.` : ` Down ${-pr.delta}: keep at it, and take it slower.`) : ' No clear change yet: a change is said once it is well beyond chance.');
+    t += `, against ${pr.before.level} on ${pr.before.n} before.`;    // both samples, and the change in points
+    const pts = (x) => `${x} point${x === 1 ? '' : 's'}`;
+    return t + (pr.sure ? (pr.delta > 0 ? ` Up ${pts(pr.delta)}: the practice is showing.` : ` Down ${pts(-pr.delta)}: keep at it, and take it slower.`) : ' No clear change yet: a change is said once it is well beyond chance.');
   }
   /** "YYYY-MM-DDTHH:MM", local, as the drives' own dates are written: the moment a plan starts. */
   const localStamp = (when = new Date()) => { const z = (x) => String(x).padStart(2, '0'); return `${when.getFullYear()}-${z(when.getMonth() + 1)}-${z(when.getDate())}T${z(when.getHours())}:${z(when.getMinutes())}`; };
@@ -845,7 +858,8 @@
     .dp-st::before { content: ""; position: absolute; left: 13px; top: 0; bottom: 0; width: 2px; background: var(--panel-ink); }
     .dp-st:first-child::before { top: 10px; } .dp-st:last-child::before { bottom: auto; height: 10px; } .dp-st:last-child { padding-bottom: 0; }
     .dp-dot { width: 12px; height: 12px; margin: 4px 0 0 8px; border: 2px solid var(--panel-ink); background: var(--panel); position: relative; z-index: 1; border-radius: 50%; }
-    .dp-st.apex .dp-dot { background: var(--panel-ink); }
+    .dp-st.apex .dp-dot { background: var(--panel-ink); } .dp-st[role="button"] { cursor: pointer; }
+    .dp-def { font-size: 13px; color: var(--panel-dim); line-height: 1.45; margin: 4px 0 0; }
     .dp-st.weak .dp-dot { border-color: var(--accent); background: var(--accent); }
     .dp-name { font-weight: 700; font-size: 16px; line-height: 1.25; } .dp-is { font-size: 13px; color: var(--panel-dim); line-height: 1.45; margin-top: 2px; }
     .dp-lv { font-family: var(--font-num); font-weight: 700; font-size: 26px; line-height: 1; text-align: right; min-width: 44px; }
@@ -880,6 +894,28 @@
   };
 
   /** Draws the page into `host` (the Log's Your driving view). p: profile(); null while it is being worked out. */
+  /** What the page is read from, as one scope line: "108 clean corners · 3 drives · Aug–Oct 2026". */
+  function scopeLine(p) {
+    const head = `${p.corners} clean corner${p.corners === 1 ? '' : 's'} · ${p.drives} drive${p.drives === 1 ? '' : 's'}`, sp = p.span;
+    if (!sp || !sp[0]) return head;
+    const m = (x) => MONTHS[+x.slice(5, 7) - 1], y = (x) => x.slice(0, 4);
+    const when = sp[0] === sp[1] ? `${m(sp[0])} ${y(sp[0])}` : y(sp[0]) === y(sp[1]) ? `${m(sp[0])}–${m(sp[1])} ${y(sp[1])}` : `${m(sp[0])} ${y(sp[0])}–${m(sp[1])} ${y(sp[1])}`;
+    return `${head} · ${when}`;
+  }
+  /** A level's definition (what it measures, its scale, what it is read from), shown on a tap, not as a footnote. */
+  function skillDef(k, s) {
+    const n = s && Number.isFinite(s.n) ? s.n : 0;
+    return `${WORDS[k].is} 0 to 100, averaged over ${n} clean corner${n === 1 ? '' : 's'}; -- until ${SKILL_MIN}.`;
+  }
+  function defOnTap(row, mid, k, s) {
+    const def = el('p', 'dp-def', skillDef(k, s));
+    def.hidden = true;
+    mid.append(def);
+    row.tabIndex = 0; row.setAttribute('role', 'button'); row.setAttribute('aria-expanded', 'false');
+    const flip = () => { def.hidden = !def.hidden; row.setAttribute('aria-expanded', String(!def.hidden)); };
+    row.addEventListener('click', flip);
+    row.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); flip(); } });
+  }
   function render(host, p, opts = {}) {
     styleOnce();
     const metric = root.ApexUnits ? root.ApexUnits.metric() : true;
@@ -891,7 +927,7 @@
     }
     // TestFlight 2026-11-12 (notes 4, 5, "walls of text"): the page is its numbers and the sentences that say a finding; the
     // explanations under each panel are gone, and a panel with nothing to say yet is not drawn
-    host.append(el('p', 'note', `${p.corners} clean corner${p.corners === 1 ? '' : 's'} · ${p.drives} drive${p.drives === 1 ? '' : 's'}`));
+    host.append(el('p', 'note', scopeLine(p)));
     const fl = focusLines(p), plan = opts.plan || null, pr = opts.practice || null, onPlan = opts.onPlan || null;
     const key = (text, cls, fn) => { const b = el('button', cls, text); b.type = 'button'; b.addEventListener('click', fn); return b; };
     if (plan && pr) {
@@ -938,7 +974,7 @@
       row.dataset.skill = k;
       const mid = el('div');
       mid.append(el('div', 'dp-name', WORDS[k].name));
-      mid.title = WORDS[k].is;
+      defOnTap(row, mid, k, s);
       const lv = el('div', 'dp-lv');
       if (s.level === null) {
         lv.innerHTML = '<i class="unk">--</i>';
@@ -963,7 +999,7 @@
       row.dataset.skill = 'pace';
       pn.append(el('h2', null, 'Your pace'));
       mid.append(el('div', 'dp-name', WORDS.pace.name));
-      mid.title = WORDS.pace.is;
+      defOnTap(row, mid, 'pace', s);
       if (s.level === null) { lv.innerHTML = '<i class="unk">--</i>'; lv.append(el('small', null, `${s.n} of ${SKILL_MIN} corners`)); }
       else {
         lv.textContent = String(s.level);
@@ -1049,7 +1085,7 @@
     }
   }
 
-  const api = { SKILLS, observe, profile, swing, excess, SKILL_MIN, WORDS, findingLine, styleLines, touchLines, touchTrendLines, driveTouchLines, paceLines, PACE, MEASURES, touch, TOUCH, driveTouch, DRIVE_TOUCH_MIN, bestCorners, recordsBySize, RECORD_MIN, driveRecords, driveRecordLines, roadRecords, placed, roadRecordLine, roadCornerNote, roadBook, roadBookRows, roadBookFocus, roadBookFocusLine, roadsToWork, skillRoadLine, skillRoad, roadUnevenLine, roadEndLine, cardLine, focusLines, render,
+  const api = { SKILLS, observe, profile, swing, excess, SKILL_MIN, WORDS, findingLine, styleLines, touchLines, touchTrendLines, driveTouchLines, paceLines, PACE, MEASURES, touch, TOUCH, driveTouch, DRIVE_TOUCH_MIN, bestCorners, recordsBySize, RECORD_MIN, driveRecords, driveRecordLines, roadRecords, placed, roadRecordLine, roadCornerNote, roadBook, roadBookRows, roadBookFocus, roadBookFocusLine, roadEvenedLine, roadsToWork, skillRoadLine, skillRoad, roadUnevenLine, roadEndLine, cardLine, focusLines, scopeLine, skillDef, render,
     PRACTICE_MIN, practice, drivePractice, onPlanRoad, practiceLine, practiceSummary, localStamp, loadPlan, savePlan, PLAN_KEY };
   if (typeof module !== 'undefined' && module.exports) module.exports = api; else root.ApexDriverProfile = api;
 })(typeof window !== 'undefined' ? window : globalThis);

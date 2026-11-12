@@ -151,7 +151,7 @@
 
   // A road's book (driver_profile.js roadBook) over every drive with the same name as drive id, oldest first, placed in the
   // newest one's frame, its corners in that drive's road order; null without one
-  async function bookOf(Core, all, id) {
+  async function bookOf(Core, all, id, since = null) {
     const P = root.ApexDriverProfile, me = all.find((s) => s.id === id);
     const key = me ? String(me.name || '').trim().toLowerCase() : '';
     if (!P || !P.roadBook || !key) return null;
@@ -165,7 +165,7 @@
     const drives = ds.map((d) => ({ id: d.id, at: monthOf(d) === null ? null : String(d.date).slice(0, 16), corners: Array.isArray(d.corners) && d.corners.length ? P.placed(d, ob(d), lat0, lon0) : [] }));
     const ref = [];
     for (let i = 0; i < last.lat.length; i += 5) ref.push([(last.lon[i] - lon0) * c * 111320, (last.lat[i] - lat0) * 110540]);
-    return P.roadBook(drives, ref);
+    return P.roadBook(drives, ref, since);
   }
 
   // IDEAS D-27: how the practised skill went on one drive, against the level the plan keeps from before it, and the end
@@ -302,9 +302,9 @@
      * drives oldest first, placed in the newest one's frame, the corners in its road order. A drive of unknown date holds a
      * corner with no date. { book: { corners, fewer, drives } | null }.
      */
-    async roadBook({ id }) {
+    async roadBook({ id, since = null }) {                            // since: a practice kept to this road began then
       const Core = CoreOf(), all = await Rec().summaries(Core);
-      const book = await bookOf(Core, all, id);
+      const book = await bookOf(Core, all, id, typeof since === 'string' ? since : null);
       release();
       return { book };
     },

@@ -24,6 +24,27 @@ const metres = (a: { lat: number; lon: number }, b: { lat: number; lon: number }
 
 interface Settings { audience: "crew" | "friends"; delay_s: number; fuzz: number; zones: string }
 
+/** Starts from your own friends and private-crew mates (cand), never a scan of everyone sharing: the phone polls this every
+ *  minute, so a scan grew with users squared. The WHERE still decides who may see you; cand only narrows (test: no SCAN s). */
+export const PRESENCE_VIEW =
+  `WITH cand(id) AS (
+       SELECT CASE WHEN f.user_a = ?1 THEN f.user_b ELSE f.user_a END FROM friendships f
+        WHERE f.status = 'accepted' AND (f.user_a = ?1 OR f.user_b = ?1)
+       UNION
+       SELECT c.user_id FROM crew_members a JOIN crews k ON k.id = a.crew_id AND k.visibility = 'private'
+         JOIN crew_members c ON c.crew_id = a.crew_id WHERE a.user_id = ?1)
+     SELECT u.handle, u.photo_id, s.delay_s, s.fuzz, p.lat, p.lon, p.road, p.at
+       FROM cand CROSS JOIN presence_settings s ON s.user_id = cand.id JOIN users u ON u.id = s.user_id
+       JOIN presence_samples p ON p.user_id = s.user_id
+        AND p.at = (SELECT MAX(at) FROM presence_samples q WHERE q.user_id = s.user_id AND q.at <= datetime('now', '-' || s.delay_s || ' seconds'))
+      WHERE s.user_id != ?1 AND u.handle IS NOT NULL
+        AND p.at > datetime('now', '-' || (s.delay_s + ${STALE_AFTER_S}) || ' seconds')
+        AND NOT EXISTS (SELECT 1 FROM blocks b WHERE (b.blocker = ?1 AND b.blocked = s.user_id) OR (b.blocker = s.user_id AND b.blocked = ?1))
+        AND ( (s.audience = 'friends' AND EXISTS (SELECT 1 FROM friendships f WHERE f.status = 'accepted' AND f.user_a = MIN(s.user_id, ?1) AND f.user_b = MAX(s.user_id, ?1)))
+           OR (s.audience = 'crew' AND EXISTS (SELECT 1 FROM crew_members a JOIN crews k ON k.id = a.crew_id AND k.visibility = 'private'
+                                                 JOIN crew_members c ON c.crew_id = a.crew_id WHERE a.user_id = ?1 AND c.user_id = s.user_id)) )
+      LIMIT 200`;
+
 /** GET /api/presence/settings: yours, or { audience: "nobody" }. */
 export async function presenceSettingsGet(env: Env, v: Viewer) {
   const s = await env.DB.prepare("SELECT audience, delay_s, fuzz FROM presence_settings WHERE user_id = ?").bind(v.id).first<Settings>();
@@ -88,17 +109,6 @@ export async function presencePublish(env: Env, v: Viewer, req: Request): Promis
  *  newest sample that is at least their delay old and not stale; never anyone blocked either way. "crew" is private crews
  *  only: anyone can join a public one, and a stranger who did must not see where you are (as with cars, garage.ts). */
 export async function presenceView(env: Env, v: Viewer) {
-  const rows = (await env.DB.prepare(
-    `SELECT u.handle, u.photo_id, s.delay_s, s.fuzz, p.lat, p.lon, p.road, p.at
-       FROM presence_settings s JOIN users u ON u.id = s.user_id
-       JOIN presence_samples p ON p.user_id = s.user_id
-        AND p.at = (SELECT MAX(at) FROM presence_samples q WHERE q.user_id = s.user_id AND q.at <= datetime('now', '-' || s.delay_s || ' seconds'))
-      WHERE s.user_id != ?1 AND u.handle IS NOT NULL
-        AND p.at > datetime('now', '-' || (s.delay_s + ${STALE_AFTER_S}) || ' seconds')
-        AND NOT EXISTS (SELECT 1 FROM blocks b WHERE (b.blocker = ?1 AND b.blocked = s.user_id) OR (b.blocker = s.user_id AND b.blocked = ?1))
-        AND ( (s.audience = 'friends' AND EXISTS (SELECT 1 FROM friendships f WHERE f.status = 'accepted' AND f.user_a = MIN(s.user_id, ?1) AND f.user_b = MAX(s.user_id, ?1)))
-           OR (s.audience = 'crew' AND EXISTS (SELECT 1 FROM crew_members a JOIN crews k ON k.id = a.crew_id AND k.visibility = 'private'
-                                                 JOIN crew_members c ON c.crew_id = a.crew_id WHERE a.user_id = ?1 AND c.user_id = s.user_id)) )
-      LIMIT 200`).bind(v.id).all<{ handle: string; photo_id: string | null; delay_s: number; fuzz: number; lat: number; lon: number; road: string | null; at: string }>()).results;
+  const rows = (await env.DB.prepare(PRESENCE_VIEW).bind(v.id).all<{ handle: string; photo_id: string | null; delay_s: number; fuzz: number; lat: number; lon: number; road: string | null; at: string }>()).results;
   return rows.map((r) => ({ ...r, fuzz: !!r.fuzz, at: r.at.replace(" ", "T") + "Z" }));
 }

@@ -1646,6 +1646,7 @@
     /* Along the route (IDEAS R-24): viewpoints named, cafés and fuel small; map data, quieter than hazards. */
     .poi-pin { font: 700 10px var(--font-ui, sans-serif); letter-spacing: 0.04em; padding: 1px 4px; border: 1px solid var(--panel-ink, #222); color: var(--panel-ink, #222); background: var(--panel, #fff); white-space: nowrap; max-width: 140px; overflow: hidden; text-overflow: ellipsis; opacity: 0.9; }
     .poi-pin.poi-view { border-color: #2e7d5b; color: #2e7d5b; }
+    .poi-pin.poi-falls { border-color: #2a6f9b; color: #2a6f9b; }   /* IDEAS R-24: water */
     /* A desk (IDEAS A-05): on a big screen the sheets (Where to?, Log list, Crew, Settings) open as a 480 px panel on the
        right and the map stays in view beside them, for planning with a mouse: drag the route, add stops, GPX in and out. */
     @media (min-width: 1100px) and (min-height: 600px) {
@@ -1949,7 +1950,7 @@
               </details>
               <!-- SOCIAL 2.9: the area's loop this week, members' quickest times on it; the line becomes the loop and your place (time_attack.js summaryLine) -->
               <details class="plan-more" id="planAttack" hidden>
-                <summary>Time attack this week</summary>
+                <summary>Time attack</summary>
                 <div id="planAttackBody"></div>
               </details>
               <!-- Roadbooks (roadbooks.js): public collections of great roads near you, a planning input like the spots -->

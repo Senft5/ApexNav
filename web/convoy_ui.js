@@ -312,17 +312,21 @@
         const r = await apiFetch('/api/convoy/invites', { method: 'GET' });
         const list = r.ok ? await r.json() : null;
         if (Array.isArray(list)) {
-          const fresh = list.find((i) => !asked.seen.has(i.id));
-          for (const i of list) asked.seen.add(i.id);
+          // Nate 2026-11-12 (social never in the way of the road): while you drive a new invite isn't said or marked seen;
+          // it toasts when the drive ends (below)
+          const quiet = driving(), fresh = list.find((i) => !asked.seen.has(i.id));
+          if (!quiet) for (const i of list) asked.seen.add(i.id);
           const changed = JSON.stringify(list.map((i) => i.id)) !== JSON.stringify(asked.list.map((i) => i.id));
           asked.list = list;
-          if (fresh) toast(`${fresh.from ? '@' + fresh.from : 'A friend'} invited you to a convoy: ${fresh.name}.`, { label: 'See it', ms: 10000, onClick: open });
+          if (fresh && !quiet) toast(`${fresh.from ? '@' + fresh.from : 'A friend'} invited you to a convoy: ${fresh.name}.`, { label: 'See it', ms: 10000, onClick: open });
           if (changed) { lastKey = null; paint(); }
         }
       } catch (_) { /* signed out or offline: try again next minute */ }
       finally { asked.at = Date.now(); asked.busy = false; }
     }
     setInterval(() => { if (!document.hidden) loadAsked(); }, 60e3);
+    let wasDriving = false;                                           // a drive just ended: what came in during it, now
+    setInterval(() => { const d = driving(); if (wasDriving && !d) loadAsked(true); wasDriving = d; }, 2000);
     document.addEventListener('visibilitychange', () => { if (!document.hidden) loadAsked(); });
     setTimeout(() => loadAsked(true), 3000);
 

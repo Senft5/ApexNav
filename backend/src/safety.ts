@@ -115,7 +115,7 @@ async function resolveTarget(env: Env, v: Viewer, kind: ReportKind, target: unkn
     return { id, person: m.person };
   }
   if (kind === "circuit") {   // a week's time attack loop: every member can see one (time_attack.ts); nobody's, so no one to block
-    const c = await first(env, "SELECT 1 FROM ta_weeks WHERE segment_id = ?1 AND geom IS NOT NULL AND removed = 0", id);
+    const c = await first(env, "SELECT 1 FROM ta_weeks WHERE segment_id = ?1 AND geom IS NOT NULL AND removed = 0 UNION ALL SELECT 1 FROM ta_circuits WHERE id = ?1 AND removed = 0", id);
     if (!c) throw new HttpError(404, "no_circuit");
     return { id, person: null };
   }
@@ -195,7 +195,7 @@ export async function moderationQueue(env: Env, v: Viewer) {
   await each("crew", (q) => `SELECT id, name, visibility FROM crews WHERE id IN (${q})`, (r) => `${r.name} (${r.visibility})`);
   await each("car", (q) => `SELECT c.id, c.make, c.model, c.nickname, u.handle FROM cars c JOIN users u ON u.id = c.owner WHERE c.id IN (${q})`,
     (r) => `${r.make} ${r.model}${r.nickname ? ` "${r.nickname}"` : ""} · @${r.handle ?? "?"}`);
-  await each("circuit", (q) => `SELECT segment_id AS id, name, cell FROM ta_weeks WHERE segment_id IN (${q})`, (r) => `time attack loop "${String(r.name).slice(0, 80)}" · area ${r.cell}`);
+  await each("circuit", (q) => `SELECT id, name, cell FROM (SELECT segment_id AS id, name, cell FROM ta_weeks UNION ALL SELECT id, name, cell FROM ta_circuits) WHERE id IN (${q})`, (r) => `time attack loop "${String(r.name).slice(0, 80)}" · area ${r.cell}`);
   await each("highlight", (q) => `SELECT id, name FROM highlights WHERE id IN (${q})`, (r) => r.name);
   await each("photo", (q) => `SELECT p.id, p.kind, u.handle FROM photos p JOIN users u ON u.id = p.owner WHERE p.id IN (${q})`, (r) => `a ${r.kind} photo · @${r.handle ?? "?"} · /api/photos/${r.id}`);
   await each("chat", (q) => `SELECT m.id, m.body, c.name AS crew, u.handle FROM crew_chat m JOIN crews c ON c.id = m.crew_id JOIN users u ON u.id = m.author WHERE m.id IN (${q})`,
@@ -262,7 +262,10 @@ export async function moderationResolve(env: Env, v: Viewer, req: Request): Prom
     // the next seed (time_attack.ts current)
     circuit: [env.DB.prepare(`DELETE FROM ta_entries WHERE (week, cell) IN (SELECT week, cell FROM ta_weeks WHERE segment_id = ?)`).bind(id),
       env.DB.prepare(`DELETE FROM ta_joins WHERE (week, cell) IN (SELECT week, cell FROM ta_weeks WHERE segment_id = ?)`).bind(id),
-      env.DB.prepare("UPDATE ta_weeks SET removed = 1, tries = tries + 1 WHERE segment_id = ?").bind(id)],
+      env.DB.prepare("UPDATE ta_weeks SET removed = 1, tries = tries + 1 WHERE segment_id = ?").bind(id),
+      // a fixed one (ta_fixed.ts): down, its times and entries with it; its slot is built again from the next seed
+      env.DB.prepare("DELETE FROM ta_times WHERE circuit_id = ?").bind(id), env.DB.prepare("DELETE FROM ta_entered WHERE circuit_id = ?").bind(id),
+      env.DB.prepare("UPDATE ta_circuits SET removed = 1, tries = tries + 1 WHERE id = ?").bind(id)],
     // back to private, its followers let go; a removed book can't be made public again (roadbooks.ts mayShow)
     roadbook: [env.DB.prepare("UPDATE roadbooks SET visibility = 'private' WHERE id = ?").bind(id), env.DB.prepare("DELETE FROM roadbook_follows WHERE book_id = ?").bind(id)],
     photo: [],                                                        // stays down: removed reports hide it for good (photos.ts)
