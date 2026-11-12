@@ -4548,6 +4548,8 @@ flow('crew drives: an upcoming drive shows on People, Crews, as the crew page’
     await page.click('[data-people="crews"]');
     await page.waitForSelector(`${W} .drive-card`);
   };
+  await openDrives();
+  check(!(await page.$('.crew-page .cp-livery-foot')), 'a crew-mate on a Plain crew sees no livery line: nothing to read, nothing to press (walkthrough 2026-11-12)');
   // the Photon search behind "Meet at…" (P-10)
   await page.route('https://photon.komoot.io/**', (route) => route.fulfill({ contentType: 'application/json', body: JSON.stringify({ features: [
     { geometry: { coordinates: [-84.2912, 35.3601] }, properties: { name: 'Tellico Plains Shell', city: 'Tellico Plains', state: 'Tennessee' } }] }) }));

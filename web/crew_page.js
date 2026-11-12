@@ -349,7 +349,7 @@
           chat: [chat(c, draw)],
           board: [boardSec, ...(c.house ? [houseBoard(c)] : []), buildsRow(c)],
         };
-        box.replaceChildren(header(c, draw), el('div', { className: 'cp-body' }, titleBlock(c), tabs(c.id, panes), liveryFoot(c, draw)));
+        box.replaceChildren(header(c, draw), el('div', { className: 'cp-body' }, titleBlock(c), tabs(c.id, panes), ...[liveryFoot(c, draw)].filter(Boolean)));
         // a public crew (joined as one, or made public since: social.ts crewUpdate turns members' sharing off) asks once on
         // this phone whether to share with it (the owner, 2026-11-11: public crews off by default, asked)
         if (c.visibility === 'public' && !c.is_owner && !c.sharing_scores && page.askPublicSharing) {
@@ -419,9 +419,13 @@
     // owner's Edit livery, or for a supporter the meter and their own Decals; for everyone else it is a line, not a key.
     function liveryFoot(c, redo) {
       const l = c.livery || { tier: 'plain', decals: 0, next: null, supporters: [] };
+      // a crew-mate on a Plain crew with nothing to open: no line at all (walkthrough 2026-11-12: "Plain livery" alone told
+      // them nothing and left them nothing to do). The owner keeps it, above their Edit livery.
+      const supporter = !c.is_owner && l.mine && l.mine.pro && !l.granted;
+      if (!c.is_owner && !supporter && !l.granted && !l.decals) return null;
       const line = el('p', { className: 'note cp-livery-line', textContent: liveryShort(l) });
       const foot = el('div', { className: 'cp-livery-foot' }, line);
-      if (!c.is_owner && l.mine && l.mine.pro && !l.granted) foot.append(btn('Your Decals', () => liverySheet(c, redo), 'linkbtn'));
+      if (supporter) foot.append(btn('Your Decals', () => liverySheet(c, redo), 'linkbtn'));
       return foot;
     }
     function liverySheet(c, redo) {
