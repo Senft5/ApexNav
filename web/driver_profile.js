@@ -314,19 +314,22 @@
     const held = [], rows = [];
     for (const m of mine || []) {
       if (m.level === null || m.level === undefined) continue;
-      const tops = [], who = [];
+      const tops = [], who = [], pas = [];
       (others || []).forEach((drive, i) => {
         let top = null;
         for (const o of drive) {
           if (o.level === null || o.level === undefined) continue;
-          if (Math.hypot(o.x - m.x, o.y - m.y) < SAME_CORNER_M && o.hx * m.hx + o.hy * m.hy > SAME_WAY) top = top === null ? o.level : Math.max(top, o.level);
+          if (Math.hypot(o.x - m.x, o.y - m.y) < SAME_CORNER_M && o.hx * m.hx + o.hy * m.hy > SAME_WAY && (top === null || o.level > top.level)) top = o;
         }
-        if (top !== null) { tops.push(top); who.push(ids ? ids[i] : i); }
+        if (top !== null) { tops.push(top.level); who.push(ids ? ids[i] : i); pas.push(top); }
       });
       if (1 + tops.length < ROAD_MIN_PASSES) continue;
       corners++;
       const mx = Math.max(...tops);
-      if (m.apex !== null && m.apex !== undefined) rows.push({ apex: m.apex, level: m.level, passes: 1 + tops.length, record: Math.max(mx, m.level), low: Math.min(...tops, m.level), by: m.level > mx ? null : who[tops.indexOf(mx)] });
+      if (m.apex !== null && m.apex !== undefined) {
+        const low = Math.min(...tops, m.level), off = mx - low >= UNEVEN_LEVELS && m.level < mx - NEAR_BEST;
+        rows.push({ apex: m.apex, level: m.level, passes: 1 + tops.length, record: Math.max(mx, m.level), low, by: m.level > mx ? null : who[tops.indexOf(mx)], why: off ? whyOf(pas[tops.indexOf(mx)], m) : null });
+      }
       if (m.level > mx) { best++; if (m.apex !== null && m.apex !== undefined) held.push(m.apex); } else if (m.level === mx) lvl++;
     }
     const wide = rows.filter((r) => r.record - r.low >= UNEVEN_LEVELS);
@@ -403,6 +406,7 @@
       rows: book.corners.map((c, i) => ({ n: i + 1, what: what(c), record: c.record, low: c.low === undefined ? null : c.low, uneven: uneven.includes(i + 1), why: c.why && WORDS[c.why] ? WORDS[c.why].name[0].toLowerCase() + WORDS[c.why].name.slice(1) : null, by: c.by, on: c.at && day ? day(c.at) : null, passes: c.passes })),
     };
   }
+  const lowerName = (k) => WORDS[k].name[0].toLowerCase() + WORDS[k].name.slice(1);
   /** Port of core/driver_profile.py road_book_focus: the why named most over a road book's uneven corners (a tie to the
    *  widest), { skill, at: [1-based places, road order] }, or null. */
   function roadBookFocus(book) {
@@ -420,7 +424,7 @@
   /** "Most of the difference at corner 3 is one steering arc." for a road book's focus, or null. */
   function roadBookFocusLine(f) {
     if (!f || !WORDS[f.skill]) return null;
-    const w = WORDS[f.skill].name[0].toLowerCase() + WORDS[f.skill].name.slice(1), at = f.at.length < 2 ? `corner ${f.at[0]}` : `corners ${f.at.slice(0, -1).join(', ')} and ${f.at[f.at.length - 1]}`;
+    const w = lowerName(f.skill), at = f.at.length < 2 ? `corner ${f.at[0]}` : `corners ${f.at.slice(0, -1).join(', ')} and ${f.at[f.at.length - 1]}`;
     return `Most of the difference at ${at} is ${w}.`;
   }
   /** A corner row's note from roadRecords rows: "Your cleanest of 4 passes here (92)", "Level with your cleanest here (90,
@@ -430,11 +434,20 @@
     if (row.by === null || row.by === undefined) return `Your cleanest of ${row.passes} passes here (${row.record})`;
     const on = day ? day(row) : null;
     if (row.level >= row.record) return `Level with your cleanest here (${row.record}${on ? `, ${on}` : ''})`;
-    return `Your cleanest here: ${row.record}${on ? `, ${on}` : ''}; this pass ${row.level}`;
+    return `Your cleanest here: ${row.record}${on ? `, ${on}` : ''}; this pass ${row.level}${row.why && WORDS[row.why] ? `, mostly ${lowerName(row.why)}` : ''}`;
   }
   /** "At the 3 corners here where your passes differ most, this drive was near your cleanest at 2." (null with none) */
   function roadUnevenLine(r) {
     if (!r || !(r.uneven > 0)) return null;
+    // the credit named most often where this drive was off your cleanest (rows' why; a tie to the first in road order)
+    const n = new Map();
+    for (const x of r.rows || []) if (x && WORDS[x.why]) n.set(x.why, (n.get(x.why) || 0) + 1);
+    let top = null;
+    for (const [k, c] of n) if (!top || c > top[1]) top = [k, c];
+    const lost = top ? ` What it lost most there: ${lowerName(top[0])}.` : '';
+    return unevenHead(r) + lost;
+  }
+  function unevenHead(r) {
     const at = r.uneven === 1 ? 'At the corner here where your passes differ most' : `At the ${r.uneven} corners here where your passes differ most`;
     if (!r.steady) return `${at}, this drive was not near your cleanest${r.uneven === 1 ? '' : ' at any of them'}: ${r.uneven === 1 ? 'it is' : 'they are'} the place${r.uneven === 1 ? '' : 's'} to work on.`;
     if (r.steady === r.uneven) return `${at}, this drive was near your cleanest ${r.uneven === 1 ? 'there' : 'at every one'}.`;

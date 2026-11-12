@@ -4638,8 +4638,12 @@ flow('a drive\'s corners on a road driven four times: each says your cleanest pa
   await page.goto(base + '/analysis.html?tab=drive&drive=r3');
   await page.waitForFunction(() => document.querySelectorAll('.dv-corner .dv-rec').length > 0, null, { timeout: 20000 });
   const notes = await page.evaluate(() => [...document.querySelectorAll('.dv-corner .dv-rec')].map((n) => ({ t: n.textContent, link: n.tagName === 'BUTTON', rec: n.closest('.dv-corner').classList.contains('rec') })));
-  check(notes.length === road.rows.length && notes.every((n) => /^(Your cleanest of 4 passes here \(\d{1,3}\)|Level with your cleanest here \(\d{1,3}, .+\)|Your cleanest here: \d{1,3}, .+; this pass \d{1,3})$/.test(n.t))
+  check(notes.length === road.rows.length && notes.every((n) => /^(Your cleanest of 4 passes here \(\d{1,3}\)|Level with your cleanest here \(\d{1,3}, .+\)|Your cleanest here: \d{1,3}, .+; this pass \d{1,3}(, mostly [a-z ]+)?)$/.test(n.t))
     && notes.every((n) => n.rec === !n.link) && !notes.some((n) => /mph|km\/h/.test(n.t)), 'a note on each corner row: ' + JSON.stringify(notes.slice(0, 4)));
+  // where this pass was well off your cleanest at a least even corner, the note says what it lost most (the second pass held the arc)
+  check(road.rows.some((r) => r.why === 'arc') && notes.some((n) => /, mostly one steering arc$/.test(n.t)), 'what this pass lost: ' + JSON.stringify(road.rows.filter((r) => r.why)).slice(0, 300));
+  const touchText = await page.evaluate(() => document.body.innerText);
+  check(/where your passes differ most, .+ What it lost most there: one steering arc\./.test(touchText), 'the uneven line names what it lost');
   const by = road.rows.find((r) => r.by !== null);
   if (by) {
     await page.click('.dv-corner button.dv-rec');

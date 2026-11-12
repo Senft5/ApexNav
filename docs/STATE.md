@@ -1,5 +1,14 @@
 # VETTA — CURRENT AGENT HANDOFF STATE
 
+## Session 2026-11-12 (deepest analysis, PR 17): a drive's least even corners say what it lost there (claude/project-thread-gd7nre)
+
+- `road_records` rows (and the JS port) carry `why`: on an uneven corner this drive took more than NEAR_BEST below your
+  cleanest, the technique credit it lost most against that cleanest pass (`_why`), else null.
+- Drive page: that corner's note reads "Your cleanest here: 90, Jun 1; this pass 62, mostly one steering arc", and the
+  touch panel's uneven line ends "What it lost most there: one steering arc." (the credit named most often).
+- e2e: the four-drive road flow checks both on the last drive.
+- Next: the end card on the map after a drive of a known road could say the same in one line.
+
 ## 2026-11-12 Route-failure reasons in crash counts (claude/project-thread-39xbx9)
 - A Fun / Long way / loop plan our router couldn't make reports its reason code (kind `route`) to /api/errors; read them with `SELECT * FROM error_counts WHERE kind = 'route'` on apexnav-db. Next: once Nate hits the signal error again, read the reason there and fix that cause.
 ## Session 2026-11-12 (deepest analysis, PR 16): a road's least even corners can set the practice (claude/project-thread-gd7nre)

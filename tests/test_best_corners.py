@@ -114,15 +114,18 @@ def test_road_records_corner_by_corner():
     others = [[c(5, 90), c(305, 85), c(603, 90), c(1500, 100)],          # 5 m off: the same corners
               [c(-8, 93), c(310, 70), c(598, 88, hx=-1.0)]]                # the third the other way: not the same corner
     r = dp.road_records(mine, others)
-    rows = [{"apex": 0, "level": 95, "passes": 3, "record": 95, "low": 90, "by": None}, {"apex": 60, "level": 80, "passes": 3, "record": 85, "low": 70, "by": 0}]
+    rows = [{"apex": 0, "level": 95, "passes": 3, "record": 95, "low": 90, "by": None, "why": None}, {"apex": 60, "level": 80, "passes": 3, "record": 85, "low": 70, "by": 0, "why": None}]
     # 300 m spans 70 to 85: uneven, and this drive's 80 is within 5 of the 85
     assert r == {"corners": 2, "best": 1, "level": 0, "held": [0], "rows": rows, "uneven": 1, "steady": 1}   # 0 m: best of three; 300 m: 85 beat it; 600, 900: too few
     assert dp.road_records(mine, others, ["a", "b"])["rows"][1]["by"] == "a"   # the other drive by its id
     assert dp.road_records(mine, []) == {"corners": 0, "best": 0, "level": 0, "held": [], "rows": [], "uneven": 0, "steady": 0}
     tie = dp.road_records([c(0, 90)], [[c(1, 90)], [c(2, 80)]])
-    assert tie == {"corners": 1, "best": 0, "level": 1, "held": [], "rows": [{"apex": 0, "level": 90, "passes": 3, "record": 90, "low": 80, "by": 0}], "uneven": 0, "steady": 0}
+    assert tie == {"corners": 1, "best": 0, "level": 1, "held": [], "rows": [{"apex": 0, "level": 90, "passes": 3, "record": 90, "low": 80, "by": 0, "why": None}], "uneven": 0, "steady": 0}
     low = dp.road_records([c(0, 60)], [[c(1, 90)], [c(2, 80)]])
     assert (low["uneven"], low["steady"]) == (1, 0)                      # 60 to 90, and this drive the 60
+    full = {k: 1.0 for k in dp.SKILLS}
+    lost = dp.road_records([{**c(0, 60), "credits": {**full, "arc": 0.3, "exit": 0.7}}], [[{**c(1, 90), "credits": full}], [{**c(2, 80), "credits": full}]])
+    assert lost["rows"][0]["why"] == "arc" and low["rows"][0]["why"] is None   # what this pass lost most against your cleanest (no credits: unknown)
     first = dp.road_records([c(0, 80)], [[c(1, 90)], [c(2, 90)]], ["old", "new"])["rows"][0]
     assert first["by"] == "old"                                          # of equals the first listed (the oldest) holds it
     if NODE is None:
@@ -130,11 +133,15 @@ def test_road_records_corner_by_corner():
     runner = ("const P=require(process.argv[1]+'/web/driver_profile.js');const [m,o]=JSON.parse(require('fs').readFileSync(0,'utf8'));"
               "const r=P.roadRecords(m,o),ids=P.roadRecords(m,o,['a','b']).rows[1].by,day=(x)=>x.by==='a'?'Aug 12':null;"
               "const un=[{uneven:3,steady:2},{uneven:1,steady:1},{uneven:3,steady:3},{uneven:1,steady:0},{uneven:2,steady:0},{uneven:0,steady:0},null].map(P.roadUnevenLine);"
-              "const notes=[{by:null,passes:4,record:92,level:92},{by:'a',passes:3,record:90,level:90},{by:'a',passes:3,record:90,level:82},{by:'b',passes:3,record:90,level:82},null].map((x)=>P.roadCornerNote(x,day));"
-              "process.stdout.write(JSON.stringify({r,ids,notes,un,say:[P.roadRecordLine(r),P.roadRecordLine({corners:24,best:7,level:2}),"
+              "const notes=[{by:null,passes:4,record:92,level:92},{by:'a',passes:3,record:90,level:90},{by:'a',passes:3,record:90,level:82},{by:'b',passes:3,record:90,level:82},{by:'a',passes:3,record:90,level:60,why:'arc'},null].map((x)=>P.roadCornerNote(x,day));"
+              "const lost=P.roadRecords(...JSON.parse(process.env.LOST)),lostLine=P.roadUnevenLine({uneven:2,steady:0,rows:[{why:'arc'},{why:'arc'},{why:'brake'},{why:null}]});"
+              "process.stdout.write(JSON.stringify({r,ids,notes,un,lost,lostLine,say:[P.roadRecordLine(r),P.roadRecordLine({corners:24,best:7,level:2}),"
               "P.roadRecordLine({corners:1,best:0,level:0}),P.roadRecordLine({corners:0,best:0,level:0}),P.roadRecordLine(null),P.roadRecordLine({corners:24,best:0,level:24})]}));")
-    out = json.loads(subprocess.run([NODE, "-e", runner, os.getcwd()], input=json.dumps([mine, others]), capture_output=True, text=True, check=True).stdout)
-    assert out["r"] == r and out["ids"] == "a"
+    lost_in = [[{**c(0, 60), "credits": {**full, "arc": 0.3, "exit": 0.7}}], [[{**c(1, 90), "credits": full}], [{**c(2, 80), "credits": full}]]]
+    out = json.loads(subprocess.run([NODE, "-e", runner, os.getcwd()], input=json.dumps([mine, others]), capture_output=True, text=True, check=True,
+                                    env={**os.environ, "LOST": json.dumps(lost_in)}).stdout)
+    assert out["r"] == r and out["ids"] == "a" and out["lost"] == dp.road_records(*lost_in)
+    assert out["lostLine"] == "At the 2 corners here where your passes differ most, this drive was not near your cleanest at any of them: they are the places to work on. What it lost most there: one steering arc."
     assert out["un"] == ["At the 3 corners here where your passes differ most, this drive was near your cleanest at 2.",
                          "At the corner here where your passes differ most, this drive was near your cleanest there.",
                          "At the 3 corners here where your passes differ most, this drive was near your cleanest at every one.",
@@ -142,7 +149,8 @@ def test_road_records_corner_by_corner():
                          "At the 2 corners here where your passes differ most, this drive was not near your cleanest at any of them: they are the places to work on.",
                          None, None]
     assert out["notes"] == ["Your cleanest of 4 passes here (92)", "Level with your cleanest here (90, Aug 12)",
-                            "Your cleanest here: 90, Aug 12; this pass 82", "Your cleanest here: 90; this pass 82", None]
+                            "Your cleanest here: 90, Aug 12; this pass 82", "Your cleanest here: 90; this pass 82",
+                            "Your cleanest here: 90, Aug 12; this pass 60, mostly one steering arc", None]
     assert out["say"] == ["On this road: your cleanest pass yet at 1 of the 2 corners here you have driven three or more times.",
                           "On this road: your cleanest pass yet at 7 of the 24 corners here you have driven three or more times, level with it at 2.",
                           "On this road: 1 corner you have driven three or more times; your cleanest pass of it came on another drive.",
