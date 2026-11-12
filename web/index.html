@@ -2138,7 +2138,7 @@
           <!-- panel round 1 R-1: one reminder, off until you turn it on, at most once a week; no streaks, no nag -->
           <section data-panel="garage" data-setting="nudge" data-title="Reminder" data-summary="[data-toggle=&quot;nudge&quot;]">
             <h3>Reminder</h3>
-            <p class="note" style="margin:0 0 8px">One notification at most once a week, the evening before the day you usually drive (or before a crew drive you said you're going to), naming the road the map suggests. Off until you turn it on.</p>
+            <p class="note" style="margin:0 0 8px">At most once a week: the evening before you usually drive, or before a crew drive, with a road to try.</p>
             <div class="row" style="flex-wrap:wrap">
               <button class="sw" data-toggle="nudge"><i></i><span>Remind me the evening before</span></button>
             </div>
@@ -2147,8 +2147,8 @@
           <section data-panel="garage" data-setting="units" data-title="Units" data-summary="#unitsRow">
             <h3>Units</h3>
             <div class="switch" role="radiogroup" aria-label="Units" id="unitsRow"><button data-units="imperial" role="radio">Miles and feet</button><button data-units="metric" role="radio">Kilometres and metres</button></div>
-            <p class="note" style="margin:8px 0 4px">Driving side: bends toward your own side of the road get more caution, since you see less round them.</p>
-            <div class="switch" role="radiogroup" aria-label="Driving side" id="sideRow"><button data-side="auto" role="radio">From the map</button><button data-side="right" role="radio">Right</button><button data-side="left" role="radio">Left</button></div>
+            <p class="note" style="margin:8px 0 4px" title="Bends toward your own side get more caution: you see less round them.">Driving side</p>
+            <div class="switch" role="radiogroup" aria-label="Driving side: bends toward your own side get more caution" id="sideRow"><button data-side="auto" role="radio">From the map</button><button data-side="right" role="radio">Right</button><button data-side="left" role="radio">Left</button></div>
           </section>
           <section data-panel="garage" data-setting="feedback" data-title="Feedback">
             <h3>Feedback</h3>

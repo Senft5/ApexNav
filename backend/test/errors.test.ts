@@ -29,6 +29,9 @@ describe("crash reports", () => {
   it("rejects malformed reports and foreign origins", async () => {
     expect((await api(null, "POST", "/api/errors", { ...report, kind: "debug" })).status).toBe(400);
     expect((await api(null, "POST", "/api/errors", { ...report, kind: "route", message: "fun: index", stack: "" })).status).toBe(204);
+    // the shell's native crash and hang reports (ApexCrashReports.swift, MetricKit)
+    expect((await api(null, "POST", "/api/errors", { kind: "crash", app: "ios", message: "crash: exception 1, signal 11", stack: "ApexNav+0x1a2b\nUIKitCore+0x40", page: "native 512" })).status).toBe(204);
+    expect((await api(null, "POST", "/api/errors", { kind: "hang", app: "ios", message: "hang: 2.5 s", stack: "", page: "native 512" })).status).toBe(204);
     expect((await api(null, "POST", "/api/errors", { ...report, app: "android" })).status).toBe(400);
     expect((await api(null, "POST", "/api/errors", { ...report, message: "" })).status).toBe(400);
     expect((await api(null, "POST", "/api/errors", { ...report, stack: "x".repeat(10000) })).status).toBe(400);

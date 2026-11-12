@@ -39,6 +39,8 @@ def nearest_index(lat, lon, path_lat, path_lon, hint: int = -1, window: int = SE
     dx = (np.asarray(path_lon[lo:hi]) - lon) * 111320.0 * c
     dy = (np.asarray(path_lat[lo:hi]) - lat) * 110540.0
     d2 = dx * dx + dy * dy
+    if not len(d2):
+        return lo, math.inf                    # the window lies past the path's end (as the JS port says)
     k = int(np.argmin(d2))
     return lo + k, float(math.sqrt(d2[k]))
 
@@ -704,19 +706,38 @@ def grip_use(lat_g, lon_g, lo: int, hi: int, env: dict, g_known=None):
     return float(sum(use) / len(use)) if use else None
 
 
+def _start_candidates(lat, lon, path_lat, path_lon):
+    """Each time the path comes within MATCH_RADIUS_M of a point: the closest sample of that visit, closest visit first.
+    A loop (its end is its start) or a stage driven twice passes its start more than once."""
+    c = math.cos(math.radians(lat))
+    d = np.hypot((np.asarray(path_lon, dtype=float) - lon) * 111320.0 * c, (np.asarray(path_lat, dtype=float) - lat) * 110540.0)
+    near = d <= MATCH_RADIUS_M
+    out, i, n = [], 0, len(d)
+    while i < n:
+        if not near[i]:
+            i += 1
+            continue
+        j = i
+        while j + 1 < n and near[j + 1]:
+            j += 1
+        k = i + int(np.argmin(d[i:j + 1]))
+        out.append((float(d[k]), k))
+        i = j + 1
+    return [k for _, k in sorted(out)]
+
+
 def segment_window(seg: dict, drive: dict):
     """Bins [lo, hi] where a drive passes a user segment {lat0, lon0, lat1, lon1, length_m}
-    from start to end in that direction, or None."""
-    i0, d0 = nearest_index(seg["lat0"], seg["lon0"], drive["lat"], drive["lon"], -1)
-    if d0 > MATCH_RADIUS_M:
-        return None
+    from start to end in that direction, or None. Every visit to the start is tried, the closest first."""
     span = int(seg["length_m"] / 5.0)
-    i1, d1 = nearest_index(seg["lat1"], seg["lon1"], drive["lat"], drive["lon"], i0 + span, max(40, span // 2))
-    if d1 > MATCH_RADIUS_M or i1 <= i0:
-        return None
-    if not 0.7 <= (i1 - i0) / max(1, span) <= 1.3:
-        return None
-    return i0, i1
+    for i0 in _start_candidates(seg["lat0"], seg["lon0"], drive["lat"], drive["lon"]):
+        i1, d1 = nearest_index(seg["lat1"], seg["lon1"], drive["lat"], drive["lon"], i0 + span, max(40, span // 2))
+        if d1 > MATCH_RADIUS_M or i1 <= i0:
+            continue
+        if not 0.7 <= (i1 - i0) / max(1, span) <= 1.3:
+            continue
+        return i0, i1
+    return None
 
 
 def segment_pass(seg: dict, drive: dict):

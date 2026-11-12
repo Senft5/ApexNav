@@ -57,7 +57,7 @@
   /**
    * Offline data (IDEAS F-06): routes saved for offline (count, size) in `storage`, downloaded voices (`voiceBytes`, from the
    * Cache API, null unknown) and the browser's total (`usage`/`quota` from navigator.storage.estimate, null unknown).
-   * Map tiles sit in the browser's own HTTP cache, which the app can't size or clear; it says so.
+   * Map tiles sit in the browser's own HTTP cache, which the app can't size or clear; it is left out (no footnote, 2026-11-12).
    */
   function offlineSummary(storage, voiceBytes = null, usage = null, quota = null) {
     let routes = 0, routeBytes = 0;
@@ -73,14 +73,14 @@
   /** One line for Settings. */
   function offlineText(o) {
     // U-126: no scoreboard of zeros: nothing saved for offline is one short line
-    if (!(o.routes > 0) && !(o.areas > 0) && !(o.voiceBytes > 0)) return 'Nothing saved for offline. Map tiles you have seen are kept by the phone\u2019s own web cache, which clears itself.';
+    if (!(o.routes > 0) && !(o.areas > 0) && !(o.voiceBytes > 0)) return 'Nothing saved for offline.';
     const parts = [];
     if (o.routes > 0) parts.push(`${o.routes} saved route${o.routes === 1 ? '' : 's'} (${mb(o.routeBytes)})`);
     if (o.areas > 0) parts.push(`${o.areas} map area${o.areas === 1 ? '' : 's'} (${mb(o.areaBytes)})`);
     if (o.voiceBytes != null && o.voiceBytes > 0) parts.push(`downloaded voices ${mb(o.voiceBytes)}`);
     let s = `Offline data: ${parts.join(', ')}.`;
     if (o.usage != null) s += ` The app uses ${mb(o.usage)} on this phone in all${o.quota ? ` (of ${Math.round(o.quota / 1073741824 * 10) / 10} GB allowed)` : ''}.`;
-    return s + (o.areas > 0 ? '' : ' Other map tiles are kept by the phone\u2019s own web cache, which clears itself.');
+    return s;
   }
 
   const api = { toGpx, phoneSummary, phoneText, keysToClear, offlineSummary, offlineText };
