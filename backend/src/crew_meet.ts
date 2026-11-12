@@ -2,8 +2,8 @@
 // they drive from: one 0.1-degree cell (about 11 x 9 km at 40 N, VI-1), stored as its centre. The phone coarsens it before
 // sending (from Home in its pinned places, which itself never leaves the phone) and the server coarsens again, so nothing
 // finer is kept even from an older or altered client. Crew-mates never see whose cell is whose: the meet answer is the set
-// of cells (sorted, no names, no member ids) and only once MIN_SHARING members of that crew share, so one cell can't be
-// pinned on the only person sharing. Leaving the crew deletes it (crew_members row); switching it off clears it.
+// of cells (sorted, no names, no member ids) and only once MIN_SHARING members other than you share, so one cell can't be
+// pinned on the only other person sharing. Leaving the crew deletes it (crew_members row); switching it off clears it.
 import type { Viewer } from "./auth";
 import { Env, HttpError, body } from "./util";
 
@@ -40,8 +40,10 @@ export async function crewMeetCells(env: Env, v: Viewer, crewId: string) {
   const rows = (await env.DB.prepare("SELECT home_cell, (user_id = ?2) AS mine FROM crew_members WHERE crew_id = ?1 AND home_cell IS NOT NULL")
     .bind(crewId, v.id).all<{ home_cell: string; mine: number }>()).results;
   const mine = rows.some((r) => r.mine === 1);
-  if (rows.length < MIN_SHARING) return { cells: [], sharing: rows.length, mine, need: MIN_SHARING };
+  // MIN_SHARING others besides you: counting your own cell, two sharing would hand you the other one's outright
+  const need = MIN_SHARING + (mine ? 1 : 0);
+  if (rows.length < need) return { cells: [], sharing: rows.length, mine, need };
   const cells = rows.map((r) => r.home_cell.split(",").map(Number) as [number, number]).filter((c) => c.every(Number.isFinite))
     .sort((a, b) => a[0] - b[0] || a[1] - b[1]);
-  return { cells, sharing: rows.length, mine, need: MIN_SHARING };
+  return { cells, sharing: rows.length, mine, need };
 }

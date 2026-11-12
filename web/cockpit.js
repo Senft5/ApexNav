@@ -2610,12 +2610,25 @@
     let camWarmAt = -1e9;
     function policeWarm() {
       const p = state.lastPosition;
-      if (avoid.police && p && window.ApexSync && ApexSync.signedIn() && !policeCached([p])) hazardsAround([p]).catch(() => {});
+      // (the reports round you: police for Avoid police, and the closures every plan keeps off, closedForTrip)
+      if (p && window.ApexSync && ApexSync.signedIn() && !policeCached([p])) hazardsAround([p]).catch(() => {});
       // the camera tiles round where you are, so a plan that avoids cameras finds them kept (camsForTrip)
       if (avoid.cameras && p && window.ApexCameras && performance.now() - camWarmAt > 60000 && (camWarmAt = performance.now())) alprNodesIn(p.lat - 0.15, p.lon - 0.15, p.lat + 0.15, p.lon + 0.15).catch(() => {});
     }
+    // members' "Road closed" reports near the trip, for our own router (graph_router.js CLOSED_X): kept 5 min (hazardsAround),
+    // otherwise a plan waits POLICE_WAIT_MS at most and goes without them. Signed out there are none to ask for: []
+    async function closedForTrip(points) {
+      if (!window.ApexHazardReports || !memberNow()) return [];
+      if (hazardsCover(points)) return ApexHazardReports.closuresFor(closureCache.list, points);
+      const list = await RouteLoading.optional(closuresAround(points), POLICE_WAIT_MS).catch(() => null);
+      return Array.isArray(list) ? list : [];
+    }
+    function memberNow() {
+      try { return !!(window.ApexSync && typeof ApexSync.signedIn === 'function' && ApexSync.signedIn()); } catch (_) { return false; }
+    }
     async function avoidForTrip(points) {
-      if (!avoid.police && !avoid.cameras) return avoid;
+      const closedP = closedForTrip(points).catch(() => []);
+      if (!avoid.police && !avoid.cameras) { const closed = await closedP; if (window.apexDebug) window.apexDebug.lastClosed = closed; return closed.length ? { ...avoid, closed } : avoid; }
       const camsP = camsForTrip(points);
       const out = { ...avoid };
       if (avoid.police) {
@@ -2628,7 +2641,16 @@
       const cams = await camsP;
       if (window.apexDebug) window.apexDebug.lastCams = cams;
       if (cams) out.cams = cams;
+      const closed = await closedP;
+      if (window.apexDebug) window.apexDebug.lastClosed = closed;
+      if (closed.length) out.closed = closed;
       return out;
+    }
+    // A loop's avoid choices: the same lists as a trip's, for the box a loop of `km` can reach from `c` (a third of its
+    // length each way, at most 35 km so the camera map's 1 degree limit holds to 50 degrees north), corner to corner through the start
+    function loopAvoidPoints(c, km) {
+      const r = Math.max(3, Math.min(35, km / 3)), dLat = r / 110.54, dLon = r / (111.32 * Math.max(0.2, Math.cos(c.lat * Math.PI / 180)));
+      return [{ lat: c.lat - dLat, lon: c.lon - dLon }, { lat: c.lat, lon: c.lon }, { lat: c.lat + dLat, lon: c.lon + dLon }];
     }
     // Avoid cameras for every candidate, not only Valhalla's (IDEAS R-35): the plate readers and fixed speed cameras within
     // 5 km of the trip's box (60 nearest its line), so our own router keeps off the roads they sit on and a route that
@@ -3344,7 +3366,7 @@
         ui.step('Routing…', 0.7);
         if (via.length) await buildRoute([from, ...via, to].map((p) => ({ lat: p.lat, lon: p.lon })), 'route_link', name);
         else await funRoute(from, to, 'route_dest', name, { from: link.from ? { lat: from.lat, lon: from.lon } : null, to: { lat: to.lat, lon: to.lon }, via: [] }, ui);
-      } catch (err) { toast(err.message); } finally { ui.done(); }
+      } catch (err) { toast(errText(err)); } finally { ui.done(); }
     }
     async function openGpx(text, fileName) {
       const g = ApexRouteImport.parseGpx(text);
@@ -3384,7 +3406,7 @@
         const request = { from: from.label === null ? null : { lat: from.lat, lon: from.lon }, to: { lat: to.lat, lon: to.lon }, via: [] };
         await funRoute(from, to, 'route_dest', to.routeName || `To ${to.label || 'current location'}`, request, ui);
         if (to.label && !to.label.startsWith('Pin ')) rememberPlace(to);
-      } catch (err) { toast(err.message); } finally { ui.done(); }
+      } catch (err) { toast(errText(err)); } finally { ui.done(); }
     }
     // Live off-route handling. Notes, pace and trip distance stay blank while off route (render
     // gives no index); the old route stays drawn until the new one arrives.
@@ -3817,7 +3839,7 @@
           : own.reason === 'off' ? `${what} routes need Vetta's own router, which is switched off. Quick still works.`
           : own.reason === 'index' ? `Couldn't load Vetta's road map for this trip. Check signal and try again, or use Quick.`
           : `Couldn't plan a ${what} route just now. Try again, or use Quick.`;
-        toast(msg, { label: 'Use Quick', ms: 12000, onClick: () => { setFunLevel('quick'); const u = planBusy(); funRoute(from, to, id, name, request, u, opts).catch((e) => toast(e.message)).finally(() => u.done()); } });
+        toast(msg, { label: 'Use Quick', ms: 12000, onClick: () => { setFunLevel('quick'); const u = planBusy(); funRoute(from, to, id, name, request, u, opts).catch((e) => toast(errText(e))).finally(() => u.done()); } });
         return false;
       }
       // with our routes in, Valhalla's answers are only checks, fetched alongside (below); without, today's path
@@ -4455,7 +4477,7 @@
         const from = t.request.from || await locate();
         if (!from) throw new Error(NO_FIX);
         ok = await funRoute(from, t.request.to, t.id, t.name, { from: t.request.from, to: t.request.to, via: [] }, ui, { early: false, head: what });
-      } catch (err) { toast(err.message); } finally { ui.done(); }
+      } catch (err) { toast(errText(err)); } finally { ui.done(); }
       if (!ok && t.funLevel) setFunLevel(t.funLevel);             // the chips show the level the route on screen was built with
       return ok;
     }
@@ -4587,7 +4609,10 @@
       // (Route tuning's road and avoid sliders shape its search: the tune rides with it, as with a plan's)
       applyDevTune();
       loopTuned = ownOn() ? userTuned() : null;
-      const ownLoopsP = ownOn() ? ApexOwnRouting.loops(ownRouter(), { start: { lat: c.lat, lon: c.lon }, km: targetKm, level: LOOP_STYLE, prefs: roadPrefs, avoid, ...devTuneReq() }) : Promise.resolve([]);
+      // the police reports, cameras and closures round the start go into the loop's search, as a trip's do (until
+      // 2026-11-12 loops got none of them: Avoid police and Avoid cameras did nothing for a loop)
+      L.avoid = ownOn() ? await avoidForTrip(loopAvoidPoints(c, targetKm)).catch(() => avoid) : avoid;
+      const ownLoopsP = ownOn() ? ApexOwnRouting.loops(ownRouter(), { start: { lat: c.lat, lon: c.lon }, km: targetKm, level: LOOP_STYLE, prefs: roadPrefs, avoid: L.avoid, ...devTuneReq() }) : Promise.resolve([]);
       // Our loops only (Valhalla is for Quick, the owner 2026-11-11): the card goes up from them, or says why there are none
       const own = (await ownLoopsP).map((r) => ({ kind: 'own', route: r.route, hwyShare: r.hwyShare, pts: [c, ...FunRoute.alongPoints(r.route.coords), c] }));
       // Loops are our router's or nothing (Valhalla is for Quick only, the owner 2026-11-11): no stage loops or circle on
@@ -4625,7 +4650,7 @@
         const rs = Core.removeSpurs(even.lat, even.lon);
         const t = await trackFromPolyline(rs.lat.map((la, i) => [rs.lon[i], la]), L.loopId, `${L.asked} loop`, undefined, { route: r.graph ? r : null });
         t.fun = funOf(t, r.turns);
-        t.unavoided = FunRoute.unavoided(avoid, r);
+        t.unavoided = FunRoute.unavoided(L.avoid || avoid, r);
         t.timeS = r.timeS;
         t.timeMarks = timeMarksOf(t, r);
         const glare = FunRoute.glare(t, r.timeS, new Date(leaveAt()));
@@ -4635,7 +4660,7 @@
         if (s.km < 0.3 * L.targetKm) throw new Error('not a loop');
         return { t, job, route: r, ...s, hwyShare: Number.isFinite(job.hwyShare) ? job.hwyShare : null, score: s.score - FunRoute.glareCost({ glare }), spursCut: rs.removed };
       };
-      return FunRoute.keepAvoiding((await Promise.allSettled(jobs.map(routeJob))).filter(r => r.status === 'fulfilled').map(r => r.value), avoid);
+      return FunRoute.keepAvoiding((await Promise.allSettled(jobs.map(routeJob))).filter(r => r.status === 'fulfilled').map(r => r.value), L.avoid || avoid);
     }
     /** The route engine, towns, the length off, members' data and Prefer on built loops (each once), ranked by the level. */
     async function loopScored(L, done, ui) {
@@ -4993,6 +5018,16 @@
       }
       t.classList.add('show'); clearTimeout(t._h);
       t._h = setTimeout(() => { t.classList.remove('show'); if (action && action.onClick) t.querySelectorAll('a').forEach(x => x.remove()); }, action ? action.ms || 7000 : 4200);
+    }
+    // A failed request reads as the browser's own words ("Load failed", "Failed to fetch", "NetworkError when attempting to
+    // fetch resource.", a bad JSON parse); the driver gets one plain line instead. Our own messages (NO_FIX, "Couldn't find
+    // that place") pass through as written.
+    function errText(err) {
+      const m = String((err && err.message) || err || '');
+      if (!m) return 'Something went wrong. Try again.';
+      if (/load failed|failed to fetch|networkerror|network connection|the internet connection|timed? ?out/i.test(m)) return 'No connection. Try again when you have signal.';
+      if ((err && err.name === 'SyntaxError') || /unexpected token|JSON/i.test(m)) return 'Something went wrong on our side. Try again in a moment.';
+      return m;
     }
     // A drive's one-key offer (Go round, Skip, Head home) is on the car's screen too, as a navigation alert with the key and
     // Not now (CarPlay/ApexCarPlay.swift showOffer): whichever key is tapped first does it, once, and the other goes away.
@@ -5486,7 +5521,7 @@
         const request = { from: from.label === null ? null : { lat: from.lat, lon: from.lon }, to: { lat: p.lat, lon: p.lon }, via: [] };
         await funRoute(from, { lat: p.lat, lon: p.lon }, 'route_dest', toName(p.label), request, ui);
         rememberPlace(p);
-      } catch (err) { toast(err.message); } finally { ui.done(); }
+      } catch (err) { toast(errText(err)); } finally { ui.done(); }
     }
 
     const closeSheet = () => showView(null);
@@ -6470,7 +6505,7 @@
         // An empty bay, not a paragraph (design pass, 2026-11-10): the place a car will stand, drawn in pencil, and the key that gets you there.
         gbody.append(el('h3', { textContent: 'Your cars' }), el('div', { className: 'empty-bay' },
           el('span', { className: 'eb-slot', innerHTML: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 16v-3l2.2-5h13.6L21 13v3M3 16h18M3 16v2M21 16v2"/><circle cx="7.5" cy="13" r="1"/><circle cx="16.5" cy="13" r="1"/></svg>' }),
-          el('p', {}, el('b', { textContent: 'No car parked here yet' }), el('small', { textContent: 'Sign in to keep your cars, a profile and build threads. Everything else in the Garage works without it.' })),
+          el('p', {}, el('b', { textContent: 'No car parked here yet' }), el('small', { textContent: 'Sign in to keep your cars and build threads.' })),
           btn('Sign in', () => showView('friends'), 'ink-btn')));
         ambientFromAccount(false, false);                                     // U-116
         return;
