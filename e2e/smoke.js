@@ -7003,6 +7003,27 @@ flow('the main map: with no signal and no saved area one line says there is no m
   check(await page.evaluate(() => document.getElementById('mapNote').hidden), 'no note once the map draws');
 });
 
+flow('the main map on plain paper: back online it reloads once the style really comes, keeping the paper through a flicker', async (page, base) => {
+  await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); localStorage.setItem('apex.permsExplained', '1'); } catch (_) {} });
+  let tiles = false;
+  await page.route('https://tiles.openfreemap.org/**', (route) => (!tiles ? route.abort('internetdisconnected') : route.request().url().includes('/styles/')
+    ? route.fulfill({ contentType: 'application/json', body: JSON.stringify({ version: 8, sources: {}, layers: [{ id: 'bg', type: 'background', paint: { 'background-color': '#eee' } }] }) })
+    : route.fulfill({ status: 200, contentType: 'application/x-protobuf', body: Buffer.alloc(0) })));
+  await page.goto(base + '/index.html');
+  await page.waitForFunction(() => { try { return !!window.apexDebug.map.getLayer('apex-route'); } catch (_) { return false; } }, null, { timeout: 8000 });
+  await page.evaluate(() => { window.__stayed = 1; });
+  // a flicker: the phone says online, but the style still can't be fetched, so the page stays as it is
+  await page.evaluate(() => window.dispatchEvent(new Event('online')));
+  await page.waitForTimeout(800);
+  check(await page.evaluate(() => window.__stayed === 1), 'a flicker of signal keeps the page');
+  // real signal: the style comes, and the page reloads onto the base map
+  tiles = true;
+  await page.evaluate(() => window.dispatchEvent(new Event('online')));
+  await page.waitForFunction(() => window.__stayed !== 1, null, { timeout: 8000 });
+  await page.waitForFunction(() => { try { const m = window.apexDebug.map; return !!m.getLayer('bg') && !!m.getLayer('apex-route'); } catch (_) { return false; } }, null, { timeout: 8000 });
+  check(true, 'it reloaded onto the base map, with our layers on it');
+});
+
 flow('the drive page\'s map: with no signal and no saved area the panel says the map is unavailable offline, and MapLibre never loads', async (page, base) => {
   await page.addInitScript(() => {
     try { localStorage.setItem('apex.onboarded', '1'); } catch (_) {}
