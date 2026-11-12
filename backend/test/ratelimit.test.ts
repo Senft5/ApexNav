@@ -1,4 +1,4 @@
-// Abuse floor (src/ratelimit.ts): writes per session or IP, sign-in per IP, reads never limited, 429 says when to retry.
+// Abuse floor (src/ratelimit.ts): writes per session or IP, sign-in per IP, reads per session or IP, 429 says when to retry.
 import { env } from "cloudflare:workers";
 import worker from "../src/index";
 import { beforeEach, describe, expect, it } from "vitest";
@@ -70,7 +70,20 @@ describe("rate limits", () => {
     expect((await call({}, "GET", "/api/ctx/osm?bbox=39.25,-84.65,39.3,-84.6&diag=1", u.token)).status).toBe(404);
   });
 
-  it("limits signed-in reads per session, never the map tiles or a signed-out read", async () => {
+  it("limits signed-out reads per IP, and a made-up token's reads with them", async () => {
+    const r = limiter(2);
+    expect((await call({ READ_LIMIT: r }, "GET", "/api/health")).status).toBe(200);
+    expect((await call({ READ_LIMIT: r }, "GET", "/api/roadbooks/near?lat=39.1&lon=-84.5")).status).toBe(200);
+    expect((await call({ READ_LIMIT: r }, "GET", "/api/health")).status).toBe(429);
+    expect((await call({ READ_LIMIT: r }, "GET", "/api/health", undefined, "198.51.100.9")).status).toBe(200);   // another address
+    // a fresh made-up token each time: its own key in rateCheck, then the address's when no session is found for it
+    const f = limiter(2);
+    for (let i = 0; i < 2; i++) await call({ READ_LIMIT: f }, "GET", "/api/roadbooks/near?lat=39.1&lon=-84.5", crypto.randomUUID() + "x".repeat(8));
+    expect((await call({ READ_LIMIT: f }, "GET", "/api/roadbooks/near?lat=39.1&lon=-84.5", crypto.randomUUID() + "x".repeat(8))).status).toBe(429);
+    expect(f.seen.filter((k) => k === "ip:203.0.113.7").length).toBe(3);
+  });
+
+  it("limits signed-in reads per session, never the map tiles", async () => {
     const a = await makeUser("alice"), b = await makeUser("bobby"), r = limiter(2);
     expect((await call({ READ_LIMIT: r }, "GET", "/api/crews", a.token)).status).toBe(200);
     expect((await call({ READ_LIMIT: r }, "GET", "/api/crews", a.token)).status).toBe(200);
@@ -80,7 +93,6 @@ describe("rate limits", () => {
     expect((await call({ READ_LIMIT: r }, "GET", "/api/crews", b.token)).status).toBe(200);          // another person
     const before = r.seen.length;
     await call({ READ_LIMIT: r }, "GET", "/api/graph/v1/index.json", a.token);
-    await call({ READ_LIMIT: r }, "GET", "/api/health");
-    expect(r.seen.length).toBe(before);                                                               // tiles and signed out: not counted
+    expect(r.seen.length).toBe(before);                                                               // tiles: not counted
   });
 });

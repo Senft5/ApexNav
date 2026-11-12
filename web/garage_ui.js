@@ -85,7 +85,7 @@
       return box;
     }
 
-    function form(c, onDone) {
+    function form(c, onDone, more = null) {
       const f = (name, ph, v, extra = {}) => { const i = el('input', { className: 'field', name, placeholder: ph, value: v ?? '', autocomplete: 'off', ...extra }); i.setAttribute('aria-label', ph); return i; };
       const sel = (name, label, opts, v) => {
         const s = el('select', { className: 'field', name }); s.setAttribute('aria-label', label);
@@ -182,7 +182,8 @@
           named('fuel', 'Fuel'), named('range', metric() ? 'Range on a full tank (km)' : 'Range on a full tank (mi)'), el('div', { className: 'wide' }, named('mods', 'Mods'))),
         el('p', { className: 'note', textContent: 'Ride height, width, fuel and range plan your daily car\'s routes: a lowered car stays off unpaved roads, and a long stretch without fuel gets a stop. Fuel and range are never shown to friends.' }),
         share,
-        el('div', { className: 'row' }, btn(c.id ? 'Save' : 'Add car', save, 'ink-btn solid'), btn('Cancel', onDone, 'linkbtn')));
+        el('div', { className: 'row' }, btn(c.id ? 'Save' : 'Add car', save, 'ink-btn solid'), btn('Cancel', onDone, 'linkbtn')),
+        ...(more ? [more] : []));
       if (root.ApexRowSelect) for (const k of ['drivetrain', 'transmission', 'clearance', 'fuel']) root.ApexRowSelect.enhance(inputs[k]);   // the app's row lists (row_select.js)
       return built;
     }
@@ -220,13 +221,15 @@
           el('p', { className: 'people-lead', textContent: 'Friends and private crews see it next to your name when you show it. No location or drives are on a car card.' })));
         const cards = el('div', { className: 'garage-cards' });
         for (const c of mine) {
-          if (editing === c.id) { cards.append(form(c, () => { editing = null; render(); })); continue; }
+          // the rare keys, Make daily and Remove, live in Edit (walkthrough 2026-11-12: a card with six keys read as clutter)
+          const rare = el('div', { className: 'row car-rare' },
+            ...(c.is_primary ? [] : [btn('Make daily', () => { editing = null; act(() => apiCall('PUT', `/api/garage/${encodeURIComponent(c.id)}`, { ...c, shared: !!c.shared, is_primary: true }), 'Couldn\'t change that. Try again.')(); }, 'linkbtn')]),
+            btn('Remove from garage', async () => { if (await ApexConfirm.ask(`Remove ${title(c)} from your garage?`, 'Remove')) { editing = null; act(() => apiCall('DELETE', `/api/garage/${encodeURIComponent(c.id)}`), 'Couldn\'t remove it. Try again.')(); } }, 'danger-btn'));
+          if (editing === c.id) { cards.append(form(c, () => { editing = null; render(); }, rare)); continue; }
           const acts = el('div', { className: 'row' },
             ...(page.builds ? [btn(c.build_id ? 'Build thread' : 'Start a build thread', () => (c.build_id ? page.builds.open(c.build_id, { onClose: render }) : page.builds.start(c, render)), 'ink-btn')] : []),
             btn('Edit', () => { editing = c.id; render(); }, 'linkbtn'),
-            shownSwitch(c, act(() => apiCall('PUT', `/api/garage/${encodeURIComponent(c.id)}`, { ...c, shared: !c.shared, is_primary: !!c.is_primary }), 'Couldn\'t change that. Try again.')),
-            ...(c.is_primary ? [] : [btn('Make daily', act(() => apiCall('PUT', `/api/garage/${encodeURIComponent(c.id)}`, { ...c, shared: !!c.shared, is_primary: true }), 'Couldn\'t change that. Try again.'), 'linkbtn')]),
-            btn('Remove', async () => { if (await ApexConfirm.ask(`Remove ${title(c)} from your garage?`, 'Remove')) act(() => apiCall('DELETE', `/api/garage/${encodeURIComponent(c.id)}`), 'Couldn\'t remove it. Try again.')(); }, 'danger-btn'));
+            shownSwitch(c, act(() => apiCall('PUT', `/api/garage/${encodeURIComponent(c.id)}`, { ...c, shared: !c.shared, is_primary: !!c.is_primary }), 'Couldn\'t change that. Try again.')));
           cards.append(card(c, acts));
         }
         if (editing === 'new') cards.append(form({}, () => { editing = null; render(); }));

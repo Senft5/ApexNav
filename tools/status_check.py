@@ -45,7 +45,7 @@ def _json(body):
         return None
 
 
-JOBS = ("Weekly backup", "Daily sweep")   # core checks on the Worker's cron jobs, not on the app being up
+JOBS = ("Weekly backup", "Daily sweep", "API errors")   # core checks on the Worker's cron jobs and a failing route, not on the app being up
 
 
 def _cron_ok(body, job):
@@ -64,6 +64,8 @@ def checks(base):
         # the Worker's cron jobs (backend/src/cron_runs.ts): late or failing is an outage, never recorded yet is not
         ("Weekly backup", True, base + "/api/health", None, lambda s, b: s == 200 and _cron_ok(b, "backup")),
         ("Daily sweep", True, base + "/api/health", None, lambda s, b: s == 200 and _cron_ok(b, "sweep")),
+        # a route whose unexpected 500s keep coming (backend/src/errors.ts failingRoutes): the app is up, one part of it is broken
+        ("API errors", True, base + "/api/health", None, lambda s, b: s == 200 and not (_json(b) or {}).get("failing_routes")),
         ("Routing (Valhalla)", False, "https://valhalla1.openstreetmap.de/route", valhalla,
          lambda s, b: s == 200 and "trip" in (_json(b) or {})),
         ("Routing fallback (OSRM)", False, f"https://router.project-osrm.org/route/v1/driving/{A[1]},{A[0]};{B[1]},{B[0]}?overview=false",
@@ -117,7 +119,7 @@ def summarize(results, when=None):
     deps_ok = all(r["ok"] for r in results if not r["core"])
     jobs_only = all(r["ok"] or r["name"] in JOBS for r in results if r["core"])
     head = ("All systems normal" if core_ok and deps_ok else "ApexNav is up; a dependency is not" if core_ok
-            else "ApexNav is up; a scheduled job is late or failing" if jobs_only else "ApexNav is DOWN")
+            else "ApexNav is up; a scheduled job is late or failing, or a route keeps failing" if jobs_only else "ApexNav is DOWN")
     lines = [f"### {head}", "", f"Checked {when or time.strftime('%Y-%m-%d %H:%M UTC', time.gmtime())}", "",
              "| Check | Kind | Result | HTTP | Time |", "|---|---|---|---|---|"]
     for r in results:

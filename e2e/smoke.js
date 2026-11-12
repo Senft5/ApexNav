@@ -4044,6 +4044,34 @@ flow('convoy: leading a drive, the convoy is one line behind the car and the cal
   check(!bad.length, 'on its side, the Report sheet with the calls is clear: ' + bad.join(' | '));
 }, { hasTouch: true });
 
+flow('garage: a car card holds the build thread, Edit and Show to friends; Make daily and Remove wait in Edit (walkthrough 2026-11-12)', async (page, base) => {
+  await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); } catch (_) {} });
+  await page.goto(base + '/index.html');
+  await page.waitForFunction(() => window.ApexGarageUI && window.ApexConfirm);
+  await page.evaluate(() => {
+    const el = (tag, props = {}, ...kids) => { const n = Object.assign(document.createElement(tag), props); n.append(...kids); return n; };
+    const btn = (text, onclick, className = 'ink-btn') => el('button', { textContent: text, onclick, className });
+    const ok = (body) => ({ ok: true, status: 200, json: async () => body });
+    window.__garage = { calls: [], cars: [{ id: 'c1', year: 2023, make: 'Toyota', model: 'GR86', shared: 1, is_primary: 1 }, { id: 'c2', year: 1999, make: 'Mazda', model: 'Miata', shared: 0, is_primary: 0 }] };
+    const g = ApexGarageUI.mount({ el, btn, toast: () => {}, jsonOf: (r) => r.json(),
+      apiCall: async (m, p, b) => { window.__garage.calls.push({ m, p }); if (m === 'DELETE') window.__garage.cars = window.__garage.cars.filter((c) => !p.endsWith(c.id)); return ok(p === '/api/garage' ? window.__garage.cars : []); } });
+    const host = el('div', { id: 'e2eGarage' }); host.style.cssText = 'position:relative;z-index:50';
+    document.body.prepend(host); host.append(g.section());
+  });
+  await page.waitForSelector('#e2eGarage .car-card');
+  const keys = await page.$$eval('#e2eGarage .car-card', (cs) => cs.map((c) => [...c.querySelectorAll(':scope > .row button')].map((b) => b.textContent.trim())));
+  check(keys.every((k) => !k.includes('Make daily') && !k.some((t) => /^Remove/.test(t)) && k.includes('Edit') && k.some((t) => /Show to friends/.test(t))), 'a card: build thread, Edit, Show to friends: ' + JSON.stringify(keys));
+  await page.click('#e2eGarage .car-card:nth-of-type(2) button:text-is("Edit")');
+  await page.waitForSelector('#e2eGarage .car-rare');
+  check(JSON.stringify(await page.$$eval('#e2eGarage .car-rare button', (b) => b.map((x) => x.textContent))) === '["Make daily","Remove from garage"]', 'Edit holds Make daily and Remove from garage');
+  await page.click('#e2eGarage .car-rare button:text-is("Remove from garage")');
+  await page.waitForSelector('.confirm-sheet .cs-yes');
+  await page.click('.confirm-sheet .cs-yes');
+  await page.waitForFunction(() => window.__garage.calls.some((c) => c.m === 'DELETE' && c.p === '/api/garage/c2'));
+  await page.waitForFunction(() => document.querySelectorAll('#e2eGarage .car-card').length === 1 && !document.querySelector('#e2eGarage .car-rare'));
+  check(true, 'Remove asks, deletes the car and closes Edit');
+});
+
 flow('garage: a VIN fills the car in, the owner keeps the colour (NHTSA stubbed, IDEAS S-21)', async (page, base) => {
   await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); } catch (_) {} });
   await page.route('https://vpic.nhtsa.dot.gov/**', (route) => route.fulfill({ contentType: 'application/json', body: JSON.stringify({ Results: [
@@ -5543,7 +5571,7 @@ flow('People: two tabs; a request is a card on top, then you, then friends with 
   await page.click('#accountBody button:has-text("Invite or add a friend")');
   await page.waitForSelector('.side-pop.open[aria-label="Invite"]');
   const inv = await page.textContent('.side-pop.open[aria-label="Invite"]');
-  check(/invite link/i.test(inv) && /Share a link to me/.test(inv) && !/invite-only/i.test(inv) && !/@dan|Accept/.test(inv) && await page.isVisible('.side-pop.open input[aria-label="Friend handle"]'), 'the Invite sheet: an invite link and add by handle, no requests: ' + inv);
+  check(/^Send a friend link$/.test((await page.textContent('.side-pop.open .ink-btn.solid')).trim()) && /A link anyone can use/.test(inv) && !/New to Vetta|Already on Vetta/.test(inv) && !/invite-only/i.test(inv) && !/@dan|Accept/.test(inv) && await page.isVisible('.side-pop.open input[aria-label="Friend handle"]'), 'the Invite sheet: an invite link and add by handle, no requests: ' + inv);
   await page.click('.side-pop.open button:has-text("Done")');
   // On the map: the sheet closes, the Friends layer comes on
   await profileOf('@cara');
