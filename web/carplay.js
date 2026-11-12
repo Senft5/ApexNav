@@ -271,11 +271,12 @@
    * rest (the unnamed ones too); short is the first name of each. An unnamed kind is only counted. Both '' with nothing
    * along, which clears the car's line. `list` is web/scenic.js along() (t.scenic); viewpoints stay on the phone.
    * `places` are the same ones for the car's map, a plate each at the place ({ at, kind, text }, at most ALONG_PLATES,
-   * in route order): its name, or "Café" / "Fuel" when the map has none.
+   * in route order): its name, or "Café" / "Fuel" when the map has none. `descent` is the route's first long descent in
+   * a few words ('' with none), for the same line.
    */
   const ALONG_NAME_MAX = 28, ALONG_MAX = 90, ALONG_PLATES = 30, PLATE_NAME_MAX = 18;
-  function alongMessage(list) {
-    const rows = Array.isArray(list) ? list.filter((p) => p && (p.kind === 'cafe' || p.kind === 'fuel')) : [];
+  function alongMessage(list, descent) {
+    const rows = Array.isArray(list) ? list.filter((p) => p && (p.kind === 'cafe' || p.kind === 'fuel' || p.kind === 'charge')) : [];   // charge: an EV's chargers (scenic.js forCar)
     const cut = (s, n) => (s.length > n ? s.slice(0, n - 1).trimEnd() + '…' : s);
     const part = (kind, label, one, many, keep) => {
       const all = rows.filter((p) => p.kind === kind);
@@ -286,12 +287,32 @@
       const rest = all.length - named;
       return label + names.join(', ') + (rest > 0 ? ` +${rest}` : '');
     };
-    const full = [part('cafe', 'Café: ', 'café', 'cafés', 2), part('fuel', 'Fuel: ', 'stop', 'stops', 2)].filter(Boolean).join(' · ');
-    const short = [part('cafe', '', 'café', 'cafés', 1), part('fuel', '', 'fuel stop', 'fuel stops', 1)].filter(Boolean).join(' · ');
+    const full = [part('cafe', 'Café: ', 'café', 'cafés', 2), part('fuel', 'Fuel: ', 'stop', 'stops', 2), part('charge', 'Charge: ', 'charger', 'chargers', 2)].filter(Boolean).join(' · ');
+    const short = [part('cafe', '', 'café', 'cafés', 1), part('fuel', '', 'fuel stop', 'fuel stops', 1), part('charge', '', 'charger', 'chargers', 1)].filter(Boolean).join(' · ');
     const places = rows.filter((p) => finite(p.lat) && finite(p.lon)).slice(0, ALONG_PLATES).map((p) => ({
       at: [+p.lat.toFixed(6), +p.lon.toFixed(6)], kind: p.kind,
-      text: cut((typeof p.name === 'string' && p.name.trim()) || (p.kind === 'cafe' ? 'Café' : 'Fuel'), PLATE_NAME_MAX) }));
-    return { kind: 'along', full: cut(full, ALONG_MAX), short: cut(short, ALONG_MAX), places };
+      text: cut((typeof p.name === 'string' && p.name.trim()) || (p.kind === 'cafe' ? 'Café' : p.kind === 'charge' ? 'Charger' : 'Fuel'), PLATE_NAME_MAX) }));
+    // a long descent on the way (brake_heat.js descentShort), said beside the places: the brakes' warning before Drive
+    const fall = typeof descent === 'string' ? cut(descent.trim(), 48) : '';
+    return { kind: 'along', full: cut(full, ALONG_MAX), short: cut(short, ALONG_MAX), places, descent: fall };
+  }
+
+  /**
+   * A phone offer with one key, on the car's screen too (a navigation alert there: the key and "Not now"): the police
+   * report ahead's Go round, a late loop's Skip or Head home. { kind:'offer', id, title, short, key, seconds }: title
+   * and short are the words, longest first (the car shows the longest that fits); key at most OFFER_KEY_MAX; seconds 5 to
+   * 20, the phone toast's own time. The car answers { action:'offer', id }; null when there are no words or no key.
+   * `cancel`, when given, names the alert's other key (a report's Undo has "OK"; the car says "Not now" without it).
+   */
+  const OFFER_KEY_MAX = 16, OFFER_TITLE_MAX = 64;
+  function offerMessage(id, title, short, key, ms, cancel) {
+    const t = String(title || '').trim(), k = String(key || '').trim();
+    if (!id || !t || !k) return null;
+    const cut = (s, n) => (s.length > n ? s.slice(0, n - 1).trimEnd() + '…' : s);
+    const sh = cut(String(short || '').trim(), OFFER_TITLE_MAX);
+    return { kind: 'offer', id: String(id), title: cut(t, OFFER_TITLE_MAX), short: sh && sh !== t ? sh : '', key: cut(k, OFFER_KEY_MAX),
+             seconds: Math.round(Math.max(5, Math.min(20, (finite(ms) ? ms : 15000) / 1000))),
+             ...(String(cancel || '').trim() ? { cancel: cut(String(cancel).trim(), OFFER_KEY_MAX) } : {}) };
   }
 
   /**
@@ -465,7 +486,7 @@
     return { step, reset };
   }
 
-  const api = { sightMessage, line, routeMessage, guideMessage, recordingMessage, placesMessage, cornersMessage, hazardsMessage, alongMessage, lookMessage, tulipSVG, cornerTulipSVG,
+  const api = { sightMessage, line, routeMessage, guideMessage, recordingMessage, placesMessage, cornersMessage, hazardsMessage, alongMessage, offerMessage, lookMessage, tulipSVG, cornerTulipSVG,
                 recordSVG, CORNER_MODES, CONTINUE_M, MAX_POINTS };
   api.sightFilter = sightFilter;                                       // U-60 (its own line: the list above is shared)
   api.sightTag = sightTag;                                             // panel round 2, TH-2

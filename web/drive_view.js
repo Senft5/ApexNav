@@ -55,15 +55,15 @@
   function tipText(x, MPH) {
     const t = x && x.tip;
     if (!t) return null;
-    const m = Math.round(t.value);
+    const m = fine(t.value);   // in the driver's units ("30 m" read to a driver in miles, 2026-11-12)
     switch (t.kind) {
       case 'min_speed': return `Your best pass was ${Math.max(1, Math.round(t.value * MPH))} ${SPD()} quicker at the slowest point`;
-      case 'brake_later': return `Brake ${m} m later, like your best pass`;
-      case 'throttle_sooner': return `Back on the throttle ${m} m sooner, like your best pass`;
-      case 'turn_in_later': return `Turned in ${m} m earlier than your best pass: wait for the corner`;
-      case 'coast': return t.vs_best ? `${m} m more coasting than your best pass` : `${m} m coasting between brake and throttle`;
+      case 'brake_later': return `Brake ${m} later, like your best pass`;
+      case 'throttle_sooner': return `Back on the throttle ${m} sooner, like your best pass`;
+      case 'turn_in_later': return `Turned in ${m} earlier than your best pass: wait for the corner`;
+      case 'coast': return t.vs_best ? `${m} more coasting than your best pass` : `${m} coasting between brake and throttle`;
       case 'brake_after_apex': return `Still braking after the apex (${t.value.toFixed(2)} g)`;
-      case 'early_apex': return `Slowest ${m} m before the apex: turn in later`;
+      case 'early_apex': return `Slowest ${m} before the apex: turn in later`;
       default: return null;
     }
   }
@@ -225,7 +225,8 @@
     const words = o.noteWords || noteWordsPref(), callOf = (c) => cornerCall(c, words);   // U-123        // ref: { name, score, corners[] } from Core.compareDrives(this, best other drive)
     const co = o.coach || null;                                      // Core.coach(this, other drives) + others: [{ name, date }]
     const lost = (k) => { const r = ref && ref.corners[k]; return r && r.delta_s != null && !r.stopped ? -r.delta_s : null; };   // seconds this pass was slower than the reference
-    const fmtD = (s) => (s == null ? '--' : `${s > 0.005 ? '+' : s < -0.005 ? '\u2212' : ''}${Math.abs(s).toFixed(2)} s`);
+    // to a tenth: a phone's GPS times a corner no finer than that, and a hundredth read as precision it hasn't got
+    const fmtD = (s) => (s == null ? '--' : `${s >= 0.05 ? '+' : s <= -0.05 ? '\u2212' : ''}${Math.abs(s).toFixed(1)} s`);
     root_.innerHTML = '';
     const n = d.lat.length, T = Core.elapsedS(d.speed_mps), S = summarize(d, Core);
     const state = { i: 0, v0: 0, v1: n - 1 };
@@ -248,7 +249,10 @@
     const brakes = BH && Array.isArray(d.elev) ? BH.driveText(BH.overTrack(d.dist, d.speed_mps, d.elev), (m) => DIST(m, 1)) : null;
     // the best run of corners in a row driven smooth and settled (flow.js, the Score's own judgement of each corner)
     const FL = root.ApexFlow || (typeof module !== 'undefined' && typeof require === 'function' ? require('./flow.js') : null);
-    const flow = FL && Core.cornerTechnique ? FL.text(FL.longest(Core, d.speed_mps, d.lon_g, d.lat_g, d.corners, Array.isArray(d.dist) ? d.dist : null), (m) => DIST(m, 1)) : null;
+    // judged as the Log's summary judges it (recording.js runOf: the Score's rows and corners), so the record and the page agree
+    const REC = root.ApexRecording;
+    const run = REC && REC.runOf ? REC.runOf(Core, d) : (FL && Core.cornerTechnique ? FL.longest(Core, d.speed_mps, d.lon_g, d.lat_g, d.corners, Array.isArray(d.dist) ? d.dist : null) : null);
+    const flow = FL && run ? FL.text(run, (m) => DIST(m, 1)) : null;
     const tired = Core.fatigue ? fatigueText(Core.fatigue(d.speed_mps, d.lon_g, d.lat_g, d.corners, d.g_known || null)) : null;   // unmeasured g is left out
     const mi = finite(S.km) ? DIST(S.km * 1000, 1) : '--';
     const dur = finite(S.duration_s) ? fmtT(S.duration_s) : '--';
@@ -269,7 +273,7 @@
       + (flow ? `<p class="dv-plain">${esc(flow)}</p>` : '')
       + (tired ? `<p class="dv-plain">${esc(tired)}</p>` : '')
       + (brakes ? `<p class="dv-plain">${esc(brakes)}</p>` : '')
-      + (ideal ? `<div class="dv-meta">Ideal drive <b class="gain">${ideal.gain.toFixed(2)} s</b> quicker: your best pass of each of ${ideal.n} corners, from ${ideal.drives} drive${ideal.drives === 1 ? '' : 's'}</div>` : '');
+      + (ideal ? `<div class="dv-meta">Ideal drive: <b class="gain">${ideal.gain.toFixed(1)} s</b> quicker \u00b7 your best pass at each of ${ideal.n} corner${ideal.n === 1 ? '' : 's'}, over ${ideal.drives} drive${ideal.drives === 1 ? '' : 's'}</div>` : '');
     root_.append(head, el('div', 'dv-grid'));
     const grid = root_.lastChild; grid.append(mapBox, el('div', 'dv-right'));
     const zoom = el('div', 'dv-zoom'); grid.lastChild.append(zoom, lanes, read);
@@ -538,7 +542,8 @@
     // ---- corner list -----------------------------------------------------------------------------------------------
     let net = null;
     if (ref) { const ks = d.corners.map((_, k) => lost(k)).filter((x) => x != null); net = ks.length ? ks.reduce((s, x) => s + x, 0) : null; }
-    list.innerHTML = `<h2>Corners${ref ? ` \u00b7 compared with ${esc(ref.name)} (score ${ref.score}), your best other drive on this road` : ''}</h2>` + (ref ? `<p class="note" style="margin-bottom:8px">${net == null ? 'No clean corners to compare.' : `Over the ${d.corners.map((_, k) => lost(k)).filter((x) => x != null).length} corners both drives took cleanly, this drive was <b class="${net > 0.05 ? 'loss' : net < -0.05 ? 'gain' : ''}">${fmtD(net)}</b> ${net > 0 ? 'slower' : 'faster'}. Stops and traffic are left out.`}</p>` : '');
+    // TestFlight 2026-11-12 ("walls of text"): the comparison and the repeatability say their numbers in a line each
+    list.innerHTML = `<h2>Corners${ref ? ` \u00b7 vs your best here, ${esc(ref.name)} (${ref.score})` : ''}</h2>` + (ref ? `<p class="note" style="margin-bottom:8px">${net == null ? 'No clean corners to compare.' : `<b class="${net > 0.05 ? 'loss' : net < -0.05 ? 'gain' : ''}">${fmtD(net)}</b> over the ${d.corners.map((_, k) => lost(k)).filter((x) => x != null).length} corners both drives took cleanly`}</p>` : '');
     const reps = consistencyRows(co);
     if (reps.length) {                                               // how repeatably each corner is driven over your passes (D-07)
       const ul = el('ol', 'dv-time'), m = (x) => fine(Math.max(3, x)), spd = (x) => `${Math.max(1, Math.round(x * MPH))} ${SPD()}`;
@@ -549,20 +554,17 @@
       [...steady, ...loose].forEach((r) => {
         const c = d.corners[r.k], li = el('li'), b = el('button'), v = varies(r);
         b.innerHTML = `<b>${r.k + 1}</b><span>${esc(callOf(c))}</span><em class="${v ? 'loss' : 'gain'}">${m(r.brake_sd_m)}</em>`
-          + `<span class="note">braking point typically within ${m(r.brake_sd_m)} over ${r.brake_passes} of ${r.passes} passes`
-          + `${r.min_sd_m != null ? `, slowest point within ${m(r.min_sd_m)} over ${r.min_passes} passes` : ''}`
-          + `${r.turn_sd_m != null ? `, turn-in within ${m(r.turn_sd_m)}${r.turn_passes < r.passes ? ` over ${r.turn_passes}` : ''}` : ''}`
-          + `${r.speed_sd_mps != null ? `, speed at the slowest point within ${spd(r.speed_sd_mps)}${r.speed_passes < r.passes ? ` over ${r.speed_passes}` : ''}` : ''}`
-          + `${v ? '. If it was not traffic or the weather, pick an early, comfortable braking marker you can always make' : ''}</span>`;
+          + `<span class="note">${r.passes} passes · braking point ±${m(r.brake_sd_m)}`
+          + `${r.min_sd_m != null ? ` · slowest point ±${m(r.min_sd_m)}` : ''}`
+          + `${r.turn_sd_m != null ? ` · turn-in ±${m(r.turn_sd_m)}` : ''}`
+          + `${r.speed_sd_mps != null ? ` · speed ±${spd(r.speed_sd_mps)}` : ''}`
+          + `${v ? '. Pick a braking marker you can always make' : ''}</span>`;
         b.onclick = () => pick(c.apex, c.start, c.end);
         li.append(b); ul.append(li);
       });
-      const which = steady.length && loose.length ? 'Your steadiest corners, then the ones that vary most.'
-        : steady.length ? 'Your steadiest corners; none varies much more than the rest.'
-        : loose.length ? 'The corners that vary most.' : 'None varies much more than the rest.';
       const speeds = reps.map((r) => r.speed_sd_mps).filter((x) => x != null).sort((p, q) => p - q);
-      const carried = speeds.length >= 3 ? ` Your speed at their slowest point typically varies about ${spd(speeds[(speeds.length - 1) >> 1])}.` : '';
-      const intro = el('p', 'note', `In ${reps.length} corners where you braked clearly on three or more passes, your braking point typically moves about ${m(med)} from drive to drive (${fine(5)} samples and GPS make about ${fine(3)} the floor).${carried} ${which}`);
+      const carried = speeds.length >= 3 ? ` · speed ±${spd(speeds[(speeds.length - 1) >> 1])}` : '';
+      const intro = el('p', 'note', `Braking point ±${m(med)} drive to drive${carried}, over ${reps.length} corners`);
       if (ul.children.length) list.prepend(el('h2', null, 'How repeatable your corners are'), intro, ul);
       else list.prepend(el('h2', null, 'How repeatable your corners are'), intro);
     }
@@ -570,7 +572,7 @@
       const ul = el('ol', 'dv-time dv-abrupt');
       ab.moments.forEach((m, k) => {
         const near = d.corners.findIndex((c) => m.index >= c.start - 4 && m.index <= c.end + 4), li = el('li'), b = el('button');
-        b.innerHTML = `<b>${String.fromCharCode(65 + k)}</b><span>${near >= 0 ? `Corner ${near + 1} \u00b7 ${esc(callOf(d.corners[near]))}` : 'Between corners'}</span><em class="loss">${m.jerk_gps.toFixed(2)} g/s</em>`
+        b.innerHTML = `<b>${String.fromCharCode(65 + k)}</b><span>${near >= 0 ? `Corner ${near + 1} \u00b7 ${esc(callOf(d.corners[near]))}` : 'Between corners'}</span><em class="loss">${m.jerk_gps.toFixed(1)} g/s</em>`
           + `<span class="note">${DIST(d.dist[m.index])} \u00b7 ${abruptAdvice(d.lat_g, d.lon_g, m.index)}</span>`;
         b.onclick = () => { if (showSmooth) showSmooth(); pick(m.index, m.index - 10, m.index + 10); };
         li.append(b); ul.append(li);

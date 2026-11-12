@@ -89,8 +89,9 @@
             }
             if (k > cur.next + 2) break;                        // look a few corners ahead, not the whole stage
           }
-          const me = metres(p, cur.ref.end);
-          if (me < cur.endMin.m) cur.endMin = { m: me, i };
+          // the end counts only past half the stage: a loop (a time attack's) ends where it starts
+          const me = metres(p, cur.ref.end), half = (i - cur.entry) * 5 >= 0.5 * cur.ref.length_m;
+          if (half && me < cur.endMin.m) cur.endMin = { m: me, i };
           const off = (i - cur.entry) * 5 > 1.5 * cur.ref.length_m + 200;
           if ((cur.endMin.m <= NEAR_M && me > cur.endMin.m + PAST_M) || off) {
             const out = view('done'); cur = null; scanned = i + 1;

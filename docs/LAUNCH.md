@@ -8,7 +8,7 @@ owner's rows are also in docs/OWNER_TODO.md. Apple's rules in detail: docs/APP_R
 | item | status | who |
 |---|---|---|
 | App record name **Vetta** (fallback "Vetta Drive"), subtitle, description, keywords, promo text | Drafted in docs/LISTING.md, limits and speed-claim rules tested (tests/test_listing.py) | owner pastes |
-| Screenshots, 6.9" iPhone | To make: the app tour (tools/app_tour.js, the app-tour workflow) gives real frames; a set of 5 from the simulator run | Claude, then owner uploads |
+| Screenshots, 6.9" iPhone | Made 2026-11-12: six at 1320 x 2868 from `STORE=1 node tools/landing_shots.js` (LISTING.md says which); the owner picks the set and the order | owner picks and uploads |
 | App Privacy answers | Traced in LISTING.md to what the app sends; road class (a public map attribute) added 2026-10-28, not personal data | owner pastes |
 | Age rating, category (Navigation), export compliance (`ITSAppUsesNonExemptEncryption: false`) | Set / in LISTING.md | owner confirms |
 | Review access (2.1) | No gate since 2026-10-30 (REVIEW_PEOPLE P-02): a reviewer signs in with Apple or Google and is a member. The old review code still answers yes for builds from before; the notes (drives need a car, the bundled replays show the cockpit) go only into App Store Connect, never the public repo | owner pastes |
@@ -32,9 +32,9 @@ owner's rows are also in docs/OWNER_TODO.md. Apple's rules in detail: docs/APP_R
 | Abuse | Built: rate limits per route, moderation and reports, blocks |
 | Kill switches | Built: feature flags from the Worker (track mode, taste, crowd curvature; Pro will be one) |
 | Security headers | Built: Content-Security-Policy on every page (tools/csp.py), session token in the Keychain |
-| Offline | Built: notes and directions run without signal once a route is loaded; offline map areas; reports wait and send later |
+| Offline | Built: notes and directions run without signal once a route is loaded; offline map areas; reports wait and send later; a whole drive records, scores and saves with no signal (checked 2026-11-12), and the map says when it has no map |
 | Costs | Workers Free today; Workers Paid ($5/month) once traffic or 30-day Time Travel matter |
-| Monitoring an outage | Health counts show drops; no alerting yet. Before launch: a free uptime check on `/api/health` emailing the owner | owner sets up (5 min) |
+| Monitoring an outage | Built: the status workflow checks the site, `/api/health` and the weekly backup and daily sweep every 30 minutes and opens an "outage" issue (GitHub emails the owner); STATUS.md | — |
 
 ## 3. Quality bar before submitting
 

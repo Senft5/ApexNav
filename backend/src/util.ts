@@ -13,7 +13,10 @@ export interface Env {
   READ_LIMIT?: RateLimit;   // signed-in reads per session (not the static map tiles)
   RELAY_LIMIT?: RateLimit;  // the signed-out relays (/api/ctx/osm, trace, workzones) per IP
   BACKUPS?: KVNamespace;
-  PHOTOS?: KVNamespace;     // photo bytes, key p/<id> (src/photos.ts)
+  PHOTOS?: KVNamespace;     // photo bytes, key p/<id> (src/photos.ts); also siwa/<user id>, a Sign in with Apple refresh token (src/apple_revoke.ts)
+  APPLE_TEAM_ID?: string;   // Sign in with Apple token revocation (src/apple_revoke.ts): the team id and the key's id and .p8 text
+  APPLE_SIWA_KEY_ID?: string;
+  APPLE_SIWA_KEY_P8?: string;
   NREL_API_KEY?: string;    // secret: NLR (ex-NREL) Alternative Fuel Stations key (src/chargers.ts); none = 503 no_key
   CTX_KEYS?: string;        // secret: free client keys for the route-context sources, JSON (src/route_feeds.ts)
   OSM?: KVNamespace;        // optional: the OSM relay's tiles (src/osm_relay.ts), a week each; the Cache API does without it

@@ -52,12 +52,21 @@
 
   const nth = (n) => { const t = n % 100, u = n % 10; return `${n}${t >= 11 && t <= 13 ? 'th' : u === 1 ? 'st' : u === 2 ? 'nd' : u === 3 ? 'rd' : 'th'}`; };
 
+  /** The featured loop of GET /api/ta as one week's time attack (time_attack.js featuredWeek: the same, kept here so the deck
+   *  needn't load the social scripts). */
+  function fixedWeek(t) {
+    const f = t.circuits.find((c) => c && c.featured) || null, b = t.board && f && t.board.id === f.id && t.board.period === 'week' ? t.board : null;
+    const w = Date.parse(`${t.week}T00:00:00Z`);
+    return { week: t.week, ends_on: finite(w) ? new Date(w + 6 * 86400000).toISOString().slice(0, 10) : null, today: t.today, cell: t.cell,
+      circuit: f ? { segment_id: f.id, name: f.name, length_m: f.length_m, geom: f.geom } : null, entered: !!(f && f.entered), entrants: b ? b.entrants : 0, you: b ? b.you : null };
+  }
   /**
    * This week's time attack loop for the deck, from GET /api/timeattack's answer (backend/src/time_attack.ts), or null: no
    * loop in the area yet, the week over, or no start to drive to. { key, name, entered, place (yours, null with no time),
    * times (on the board), left (days, today included), until (ms, the week's end), lenM, lat, lon (the start), geom }.
    */
   function attackFrom(t) {
+    if (t && Array.isArray(t.circuits)) t = fixedWeek(t);   // GET /api/ta (ta_fixed.ts): the featured loop, this week
     const c = t && t.circuit;
     if (!c || typeof c.name !== 'string' || !c.name.trim()) return null;
     let g = [];
@@ -90,10 +99,10 @@
       const left = finite(ta.left) ? (ta.left === 1 ? 'last day' : `${ta.left} days left`) : null;
       const how = ta.entered
         ? (ta.place != null ? `You’re ${nth(ta.place)} of ${ta.times}` : 'No time yet')
-        : ['This week’s loop', finite(ta.lenM) ? long(ta.lenM) : null, ta.times > 0 ? `${ta.times} ${ta.times === 1 ? 'time' : 'times'}` : null].filter(Boolean).join(' · ');
+        : ['Featured this week', finite(ta.lenM) ? long(ta.lenM) : null, ta.times > 0 ? `${ta.times} ${ta.times === 1 ? 'time' : 'times'}` : null].filter(Boolean).join(' · ');
       // the place and the days left are today's: the reminder says only what lasts
       return { kind: 'attack', name: ta.name, key: ta.key, entered: ta.entered, title: `Time attack · ${ta.name}`, reason: [how, left].filter(Boolean).join(' · '),
-               lasting: ['This week’s time attack', finite(ta.lenM) ? long(ta.lenM) : null].filter(Boolean).join(' · '),
+               lasting: ['Time attack', finite(ta.lenM) ? long(ta.lenM) : null].filter(Boolean).join(' · '),
                lat: ta.lat, lon: ta.lon, until: ta.until };
     };
     if (ta && ta.entered) return attackSugg();

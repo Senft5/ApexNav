@@ -374,7 +374,7 @@
         toast(`${book.name} is deleted.`);
       }, 'danger-btn');
       s.pop.append(el('div', { className: 'stack-12' }, name, about, el('h4', { textContent: 'Who sees it' }), sw, says,
-        el('p', { className: 'note', textContent: 'A roadbook holds roads, never drives: no times, dates or speeds are in it.' }), el('div', { className: 'row' }, save), del));
+        el('p', { className: 'note', textContent: 'Roads only: no times, dates or speeds.' }), el('div', { className: 'row' }, save), del));
     }
 
     /** Makes a book. → its id, or null (the reason is toasted). */
@@ -405,7 +405,7 @@
       };
       liveFill = fill;
       const reload = () => loadLists().then((d) => { if (!d) fill(null); return d; });
-      sec.append(el('p', { className: 'people-lead', textContent: 'Your lists of great roads. Keep one to yourself, show it to friends, or publish it for drivers near you. Roads you drive are stamped from your own Log.' }),
+      sec.append(el('p', { className: 'people-lead', textContent: 'Your lists of great roads, for you, friends or everyone.' }),
         newForm('New roadbook', (id) => { reload().then(() => page.changed && page.changed()); open(id); }), mineBox, followBox,
         el('h4', { textContent: 'Near you', style: 'margin:12px 0 0;font-size:13px;letter-spacing:0.06em;text-transform:uppercase;color:var(--panel-dim)' }), nearBox);
       if (lists) fill(lists);
@@ -433,7 +433,7 @@
     /** On the route card's Share: keep the planned road in one of your books (or a new one). → an element, or null signed out. */
     function addPart(done) {
       if (!member()) return null;
-      const part = el('div', { className: 'stack-8 rb-add' }, el('p', { className: 'note', textContent: 'Or keep this road in a roadbook. Its first 400 m and anything inside your privacy zones are left out.' }));
+      const part = el('div', { className: 'stack-8 rb-add' }, el('p', { className: 'note', textContent: 'Or keep it in a roadbook. Its first 400 m and your privacy zones are left out.' }));
       const chips = el('div', { className: 'row', style: 'flex-wrap:wrap' });
       const addTo = async (id, bookName) => {
         const t = page.planned && page.planned(), geom = t ? fromTrack(t, page.zones ? page.zones() : []) : null;

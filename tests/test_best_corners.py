@@ -141,21 +141,21 @@ def test_road_records_corner_by_corner():
     out = json.loads(subprocess.run([NODE, "-e", runner, os.getcwd()], input=json.dumps([mine, others]), capture_output=True, text=True, check=True,
                                     env={**os.environ, "LOST": json.dumps(lost_in)}).stdout)
     assert out["r"] == r and out["ids"] == "a" and out["lost"] == dp.road_records(*lost_in)
-    assert out["lostLine"] == "At the 2 corners here where your passes differ most, this drive was not near your cleanest at any of them: they are the places to work on. What it lost most there: one steering arc."
-    assert out["un"] == ["At the 3 corners here where your passes differ most, this drive was near your cleanest at 2.",
-                         "At the corner here where your passes differ most, this drive was near your cleanest there.",
-                         "At the 3 corners here where your passes differ most, this drive was near your cleanest at every one.",
-                         "At the corner here where your passes differ most, this drive was not near your cleanest: it is the place to work on.",
-                         "At the 2 corners here where your passes differ most, this drive was not near your cleanest at any of them: they are the places to work on.",
+    assert out["lostLine"] == "2 least even corners: off your cleanest at all 2. Lost most: one steering arc."
+    assert out["un"] == ["3 least even corners: near your cleanest at 2.",
+                         "Least even corner: near your cleanest.",
+                         "3 least even corners: near your cleanest at all 3.",
+                         "Least even corner: off your cleanest.",
+                         "2 least even corners: off your cleanest at all 2.",
                          None, None]
     assert out["notes"] == ["Your cleanest of 4 passes here (92)", "Level with your cleanest here (90, Aug 12)",
                             "Your cleanest here: 90, Aug 12; this pass 82", "Your cleanest here: 90; this pass 82",
                             "Your cleanest here: 90, Aug 12; this pass 60, mostly one steering arc", None]
-    assert out["say"] == ["On this road: your cleanest pass yet at 1 of the 2 corners here you have driven three or more times.",
-                          "On this road: your cleanest pass yet at 7 of the 24 corners here you have driven three or more times, level with it at 2.",
-                          "On this road: 1 corner you have driven three or more times; your cleanest pass of it came on another drive.",
+    assert out["say"] == ["On this road: cleanest yet at 1 of 2 corners driven 3+ times.",
+                          "On this road: cleanest yet at 7 of 24 corners driven 3+ times, level at 2.",
+                          "On this road: 1 corner driven 3+ times, cleanest on other drives.",
                           None, None,
-                          "On this road: level with your cleanest pass at 24 of the 24 corners here you have driven three or more times."]
+                          "On this road: level with your cleanest at 24 of 24 corners driven 3+ times."]
 
 
 def test_road_book_every_corner_of_a_road():
@@ -187,12 +187,12 @@ def test_road_book_every_corner_of_a_road():
     out = json.loads(subprocess.run([NODE, "-e", runner, os.getcwd()], input=json.dumps([drives, ref]), capture_output=True, text=True, check=True).stdout)
     assert out[0] == json.loads(json.dumps([b, dp.road_book(drives), dp.road_book([])]))
     w = out[1]
-    assert w["head"] == "3 corners you have driven three or more times, in road order; 2 more fewer times. Each with your cleanest pass and the drive it came on."
-    assert w["work"] == "Least even: corner 3, where your passes differ the most."
+    assert w["head"] == "3 corners driven 3+ times, in road order · 2 driven less."
+    assert w["work"] == "Least even: corner 3."
     assert [(r["n"], r["what"], r["record"], r["low"], r["uneven"], r["by"], r["on"], r["passes"]) for r in w["rows"]] == [
         (1, "Tight left", 92, 80, False, "b", "06-01", 3), (2, "Fast left", 75, 70, False, "c", "07-01", 3), (3, "Tight left", 90, 60, True, "a", "05-01", 3)]
     assert [r["why"] for r in w["rows"]] == [None, None, "one steering arc"]
-    assert out[2] == "Least even: corners 3 and 1, where your passes differ the most." and out[3] is None
+    assert out[2] == "Least even: corners 3 and 1." and out[3] is None
 
 
 def test_road_book_focus_names_the_skill_to_practise():
@@ -210,8 +210,8 @@ def test_road_book_focus_names_the_skill_to_practise():
     cases = [book, tie, {"corners": book["corners"], "uneven": [2]}, None]
     out = json.loads(subprocess.run([NODE, "-e", runner, os.getcwd()], input=json.dumps(cases), capture_output=True, text=True, check=True).stdout)
     assert out[0] == [dp.road_book_focus(b) for b in cases]
-    assert out[1] == ["Most of the difference at corners 1 and 4 is one steering arc.",
-                      "Most of the difference at corner 5 is brakes done by the apex.", None, None]
+    assert out[1] == ["Most of the difference: one steering arc (corners 1 and 4).",
+                      "Most of the difference: brakes done by the apex (corner 5).", None, None]
 
 
 def test_road_end_line_picks_the_road_words():
@@ -221,8 +221,8 @@ def test_road_end_line_picks_the_road_words():
               "process.stdout.write(JSON.stringify([P.roadEndLine({corners:4,best:1,level:0,uneven:1,steady:0,rows:[{why:'brake'}]}),"
               "P.roadEndLine({corners:4,best:1,level:0,uneven:1,steady:1,rows:[{why:null}]}),P.roadEndLine({corners:0}),P.roadEndLine(null)]));")
     out = json.loads(subprocess.run([NODE, "-e", runner, os.getcwd()], capture_output=True, text=True, check=True).stdout)
-    assert out == ["At the corner here where your passes differ most, this drive was not near your cleanest: it is the place to work on. What it lost most there: brakes done by the apex.",
-                   "On this road: your cleanest pass yet at 1 of the 4 corners here you have driven three or more times.", None, None]
+    assert out == ["Least even corner: off your cleanest. Lost most: brakes done by the apex.",
+                   "On this road: cleanest yet at 1 of 4 corners driven 3+ times.", None, None]
 
 
 def test_roads_to_work_names_the_least_even_roads():
@@ -248,7 +248,33 @@ def test_skill_road_line_names_where_a_skill_shows_most():
               "const l=[{name:'Bell Gap',book:b},{name:'Dry Ridge Rd',book:a}];"
               "process.stdout.write(JSON.stringify([P.skillRoadLine(l,'arc'),P.skillRoadLine(l,'brake'),P.skillRoadLine([l[0]],'arc'),P.skillRoadLine(l,'exit'),P.skillRoadLine(null,'arc'),P.skillRoad(l,'arc'),P.skillRoad(l,'exit')]));")
     out = json.loads(subprocess.run([NODE, "-e", runner, os.getcwd()], input=json.dumps([a, b]), capture_output=True, text=True, check=True).stdout)
-    assert out == ["It shows most on Dry Ridge Rd: 2 of the 3 corners where your passes there differ most come down to it.",
-                   "It shows most on Dry Ridge Rd: 1 of the 3 corners where your passes there differ most comes down to it.",
-                   "It shows most on Bell Gap: the corner where your passes there differ most comes down to it.", None, None,
+    assert out == ["Shows most on Dry Ridge Rd: 2 of its 3 least even corners.",
+                   "Shows most on Dry Ridge Rd: 1 of its 3 least even corners.",
+                   "Shows most on Bell Gap: its least even corner.", None, None,
                    {"name": "Dry Ridge Rd", "n": 2, "of": 3}, None]
+
+
+def test_road_book_since_a_road_practice_says_which_corners_evened_out():
+    c = lambda x, lv: {"x": x, "y": 0.0, "hx": 1.0, "hy": 0.0, "level": lv, "size": "tight", "dir": "L"}
+    drives = [{"id": "a", "at": "2026-10-01T09:00", "corners": [c(0, 90), c(300, 90), c(600, 90)]},
+              {"id": "b", "at": "2026-10-08T09:00", "corners": [c(0, 60), c(300, 60), c(600, 60)]},
+              {"id": "u", "at": None, "corners": [c(0, 62)]},                                # undated: counts before
+              {"id": "p", "at": "2026-11-05T09:00", "corners": [c(0, 85), c(300, 89), c(600, 70)]},
+              {"id": "q", "at": "2026-11-06T09:00", "corners": [c(0, 88), c(600, 88)]}]
+    ref = [[x, 0.0] for x in range(0, 701, 50)]
+    b = dp.road_book(drives, ref, since="2026-11-05T09:00")
+    # 0 m: 90/60 before, 85 and 88 since -> evened; 300 m: one pass since (89), too few; 600 m: 70 since, still uneven
+    assert [(k["since_n"], k["since_low"]) for k in b["corners"]] == [(2, 85), (1, 89), (2, 70)]
+    assert b["uneven"] == [1, 2, 3] and b["evened"] == [1]
+    assert "evened" not in dp.road_book(drives, ref) and "since_n" not in dp.road_book(drives, ref)["corners"][0]
+    later = dp.road_book(drives, ref, since="2027-01-01T00:00")
+    assert later["evened"] == [] and later["corners"][0]["since_low"] is None
+    if NODE is None:
+        return
+    runner = ("const P=require(process.argv[1]+'/web/driver_profile.js');const [d,r]=JSON.parse(require('fs').readFileSync(0,'utf8'));"
+              "const b=P.roadBook(d,r,'2026-11-05T09:00'),l=P.roadBook(d,r,'2027-01-01T00:00');"
+              "process.stdout.write(JSON.stringify([b,l,P.roadEvenedLine(b),P.roadEvenedLine({evened:[1,4,9]}),P.roadEvenedLine(l),P.roadEvenedLine(P.roadBook(d,r))]));")
+    out = json.loads(subprocess.run([NODE, "-e", runner, os.getcwd()], input=json.dumps([drives, ref]), capture_output=True, text=True, check=True).stdout)
+    assert out[:2] == json.loads(json.dumps([b, later]))
+    assert out[2:] == ["Evened out since the practice began: corner 1.",
+                       "Evened out since the practice began: corners 1, 4 and 9.", None, None]

@@ -86,3 +86,60 @@ def test_overlapping_pins_hide_keeping_the_most_useful(out):
     assert c[12] is True                                          # off the screen: as it was
     s = out["spread"]
     assert sum(s) == 4 and s[0] and s[8]                          # four of nine, the first and the last among them
+
+
+def test_waterfalls_from_openstreetmap():
+    """IDEAS R-24: the map's tiles have no waterfalls, so they are asked of OpenStreetMap (Overpass) for the route's box:
+    natural=waterfall or waterway=waterfall, a node or a way by its centre, one per place. Along the road (within 400 m)
+    they count on the Along line after viewpoints, are listed by name and rank after viewpoints on the map."""
+    src = r"""
+const S = require(process.argv[1] + '/web/scenic.js');
+const n = 4001, N = (m) => 35 + m / 110540, E = (m) => -84 + m / (111320 * Math.cos(35 * Math.PI / 180));
+const t = { lat: Array.from({ length: n }, (_, i) => N(i * 5)), lon: Array(n).fill(-84), dist: Array.from({ length: n }, (_, i) => i * 5) };
+const json = { elements: [
+  { type: 'node', id: 1, lat: N(3000), lon: E(300), tags: { natural: 'waterfall', name: ' Looking Glass Falls ' } },
+  { type: 'node', id: 2, lat: N(3000), lon: E(300), tags: { waterway: 'waterfall' } },                // the same place twice
+  { type: 'way', id: 3, center: { lat: N(9000), lon: E(-50) }, tags: { waterway: 'waterfall' } },     // a way: its centre, no name
+  { type: 'node', id: 4, lat: N(12000), lon: E(800), tags: { natural: 'waterfall', name: 'Far' } },   // too far off the road
+  { type: 'way', id: 5, tags: { natural: 'waterfall' } },                                             // no position
+] };
+const falls = S.fallsFrom(json), list = S.along(falls.concat([{ kind: 'view', name: 'Top', lat: N(1000), lon: E(0) }]), t);
+console.log(JSON.stringify({ q: S.fallsQuery(35, -84.1, 35.2, -83.9), falls, list: list.map((p) => [p.kind, p.name]), summary: S.summary(list, 20000),
+  rows: S.places(list).map((r) => [r.title, r.kindName]), none: S.fallsFrom(null),
+  shown: S.declutter([{ kind: 'falls', m: 1, x: 50, y: 50 }, { kind: 'cafe', m: 2, x: 52, y: 50 }, { kind: 'view', m: 3, x: 300, y: 50 }]) }));
+"""
+    r = json.loads(subprocess.run([NODE, "-e", src, ROOT], capture_output=True, text=True, check=True).stdout)
+    assert r["q"] == ('[out:json][timeout:20];(nwr["natural"="waterfall"](35.00000,-84.10000,35.20000,-83.90000);'
+                      'nwr["waterway"="waterfall"](35.00000,-84.10000,35.20000,-83.90000););out center 400;')
+    assert [(f["name"], f["kind"]) for f in r["falls"]] == [("Looking Glass Falls", "falls"), (None, "falls"), ("Far", "falls")]
+    assert r["list"] == [["view", "Top"], ["falls", "Looking Glass Falls"], ["falls", None]]
+    assert r["summary"].startswith("1 viewpoint · 2 waterfalls")
+    assert r["rows"][1:] == [["Looking Glass Falls", "Waterfall"], ["Waterfall, no name on the map", "Waterfall"]]
+    assert r["none"] == []
+    assert r["shown"] == [True, False, True]                                 # a waterfall goes before a café it would touch
+
+
+CHARGERS = r"""
+const S = require(process.argv[1] + '/web/scenic.js');
+const n = 26001, N = (m) => 35 + m / 110540;
+const t = { lat: Array.from({ length: n }, (_, i) => N(i * 5)), lon: Array(n).fill(-84), dist: Array.from({ length: n }, (_, i) => i * 5) };
+const pois = [{ kind: 'fuel', name: 'Shell', lat: N(5000), lon: -84 }, { kind: 'charge', name: 'Supercharger', lat: N(100000), lon: -84 },
+  { kind: 'cafe', name: 'Bean', lat: N(6000), lon: -84 }];
+const total = t.dist[n - 1];
+const petrol = S.along(S.forCar(pois, { fuel: 'petrol' }), t), none = S.along(S.forCar(pois, null), t), ev = S.along(S.forCar(pois, { fuel: 'electric' }), t);
+console.log(JSON.stringify({ petrol: petrol.map((p) => p.kind), none: none.map((p) => p.kind), ev: ev.map((p) => p.kind),
+  petrolLine: S.summary(petrol, total), evLine: S.summary(ev, total, { electric: true }),
+  ask: S.nextAnswer(ev, 0, 'charge'), title: S.places(ev)[1].kindName }));
+"""
+
+
+def test_chargers_are_not_fuel_stops():
+    """The tiles file EV chargers under fuel: a petrol car (or none in the Garage) never counts one as a fuel stop, and an
+    electric car's line counts its chargers and warns of a stretch with none."""
+    r = json.loads(subprocess.run([NODE, "-e", CHARGERS, ROOT], capture_output=True, text=True, check=True).stdout)
+    assert r["petrol"] == ["fuel", "cafe"] and r["none"] == ["fuel", "cafe"]
+    assert r["ev"] == ["cafe", "charge"]
+    assert r["petrolLine"] == "1 café · 1 fuel stop · no fuel for the last 78 mi"
+    assert r["evLine"] == "1 café · 1 charger · no charger for the first 62 mi"
+    assert r["ask"] == "Next charger: Supercharger, in 100.0 km."
+    assert r["title"] == "EV charger"

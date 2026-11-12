@@ -686,8 +686,8 @@ flow('for this drive (route context): Passenger aboard and the rest are ✓ stam
   await page.waitForFunction(() => document.querySelector('[data-driver="tunnels"]').getAttribute('aria-pressed') === 'false');
   await page.reload();
   await page.waitForSelector('#planPanel.open');
-  // what is on stays in view once the sheet is shut (finding 5): a chip on the plan sheet
-  check(await page.evaluate(() => [...document.querySelectorAll('#planOptsOn .chip')].map((c) => c.textContent).includes('✓ Passenger aboard')), 'the stamp shows as a chip on the plan sheet');
+  // what is on stays in view once the sheet is shut (finding 5; TestFlight 2026-11-12 note 8: as a count on Where to?, each named to VoiceOver)
+  check(await page.evaluate(() => /Passenger aboard/.test(document.getElementById('planOptionsChip').getAttribute('aria-label')) && /^Options · \d$/.test(document.getElementById('planOptionsChip').textContent)), 'the stamp is counted on the plan sheet');
   const after = await page.evaluate(() => ({ p: document.querySelector('[data-driver="passenger"]').getAttribute('aria-pressed'), t: document.querySelector('[data-driver="tunnels"]').getAttribute('aria-pressed'),
     fit: document.getElementById('fitRow').hidden, skill: document.getElementById('skillNote').hidden,
     providers: ((window.ApexRouteCtx && (window.ApexRouteCtx.pending || window.ApexRouteCtx.providers)) || []).map((x) => x.id || x),
@@ -1842,6 +1842,18 @@ flow('your roads (panel D-1, R-1, D-2): a road you drove is on the deck and its 
   // the drive's page: Drive it again next to Replay, and it plans the drive on the map
   await page.goto(base + '/analysis.html?tab=drive&drive=yr1');
   await page.waitForSelector('#dvAgain:not([hidden])', { timeout: 15000 });
+  // three keys in one row (Replay, Drive it again, ⋯); Compare, Send the road, Share card and Mark a stage wait in the ⋯ menu
+  const keys = await page.evaluate(() => {
+    const top = (id) => Math.round(document.getElementById(id).getBoundingClientRect().top), vis = (id) => document.getElementById(id).checkVisibility();
+    const sum = document.querySelector('.dv-more > summary');
+    return { row: Math.abs(top('dvReplay') - top('dvAgain')) < 30
+      && Math.abs(sum.getBoundingClientRect().top - top('dvAgain')) < 30, hidden: ['dvCompare', 'dvShare', 'dvCard', 'dvStage'].every((id) => !vis(id)), label: sum.getAttribute('aria-label') };
+  });
+  check(keys.row && keys.hidden && keys.label === 'More for this drive', 'the drive page: three keys in a row, the rest in More: ' + JSON.stringify(keys));
+  await page.click('.dv-more > summary');
+  check(await page.evaluate(() => ['dvCompare', 'dvShare', 'dvCard', 'dvStage'].every((id) => document.getElementById(id).checkVisibility())), 'More opens Compare, Send the road, Share card, Mark a stage');
+  await page.mouse.click(5, 5);
+  check(await page.evaluate(() => !document.querySelector('.dv-more').open), 'a tap outside closes More');
   const n = asked.length;
   await page.click('#dvAgain');
   for (let t = 0; t < 100 && asked.length === n; t++) await page.waitForTimeout(200);   // the map page loads with ?again= and routes it
@@ -1982,6 +1994,9 @@ flow('avoid police reports, driving: a report that lands on the route ahead is o
   await page.evaluate(() => window.apex.onNative({ type: 'carplay', action: 'start' }));
   await page.waitForFunction(() => window.apexDebug.driveActive);
   await page.evaluate(() => apexDebug.loadReported(true));            // the report lands (the drive asks every 2 min)
+  // a car's screen is connected from here (the shell's message handler, as in the app; set late: with it from the start
+  // the page takes the app's own API base)
+  await page.evaluate(() => { window.__car = []; window.webkit = { messageHandlers: { apex: { postMessage(m) { if (m && m.cmd === 'car') window.__car.push(m); } } } }; });
   const crs = (Math.atan2((plan.lon2 - plan.startLon) * Math.cos(plan.startLat * Math.PI / 180), plan.lat2 - plan.startLat) * 180 / Math.PI + 360) % 360;
   const fix = () => page.evaluate(([lat, lon, crs]) => window.apex.live({ lat, lon, accuracy_m: 5, speed_mps: 15, course_deg: crs, has_fix: true, lat_g: 0, lon_g: 0, calibration: 'locked', thermal: 0 }), [plan.startLat, plan.startLon, crs]);
   let offered = null;
@@ -1991,14 +2006,20 @@ flow('avoid police reports, driving: a report that lands on the route ahead is o
     if (!offered) await page.waitForTimeout(250);
   }
   check(!!offered && /Go round/.test(offered), 'the report on the route ahead is offered with Go round: ' + offered + ' ' + JSON.stringify(await page.evaluate(() => apexDebug.policeAhead)));
+  // the car's screen has it too, with the same key; tapped there, it goes round and the phone's key goes away
+  const offer = await page.evaluate(() => window.__car.filter((m) => m.kind === 'offer').pop());
+  check(offer && offer.key === 'Go round' && /^Police reported on your route in /.test(offer.title) && /^Police in /.test(offer.short) && offer.seconds === 15,
+    'the offer on the car: ' + JSON.stringify(offer));
   const before = asked.length;
-  await page.click('#toast .toast-key');
+  await page.evaluate((id) => { window.apex.onNative({ type: 'carplay', action: 'offer', id: 'not-' + id }); window.apex.onNative({ type: 'carplay', action: 'offer', id }); }, offer.id);
   await page.waitForFunction(() => apexDebug.track !== window.__plan && apexDebug.track && apexDebug.track.kind === 'route', null, { timeout: 15000 });
   const ex = asked.slice(before).map((r) => r.exclude_locations || []);
   check(ex.length && ex.every((e) => e.some((x) => Math.abs(x.lat - report.lat) < 1e-4 && Math.abs(x.lon - report.lon) < 1e-4)), 'the way round was asked round the report: ' + JSON.stringify(ex));
   const far = await page.evaluate(([la, lo]) => { const t = apexDebug.track; let m = Infinity;
     for (let i = 0; i < t.lat.length; i++) m = Math.min(m, Math.hypot((t.lat[i] - la) * 110540, (t.lon[i] - lo) * 111320 * Math.cos(la * Math.PI / 180))); return m; }, [report.lat, report.lon]);
   check(far > 1000, 'the new route keeps well off the report: ' + Math.round(far) + ' m');
+  check(await page.evaluate(() => !document.querySelector('#toast .toast-key')), 'the phone\'s Go round key is gone once the car took it');
+  check(asked.length - before <= 2, 'one way round asked for, not one per tap: ' + (asked.length - before));
   // once: more fixes on the new route don't offer the same report again
   for (let k = 0; k < 8; k++) { await fix(); await page.waitForTimeout(150); }
   check(!(await page.evaluate(() => /Police reported on your route/.test(document.getElementById('toast').textContent) && document.getElementById('toast').classList.contains('show'))), 'offered once');
@@ -2110,6 +2131,10 @@ flow('Dynamic Type (IN-1, GR-2): the route card, plan sheet, end card and the dr
   check(t2 >= 1.5 * t1, `the drive's page grows: title ${t1} -> ${t2}`);
   const logCut = await page.evaluate(CUT('#tab-drive'));
   check(!logCut.length, 'the drive page at 2x cuts nothing: ' + JSON.stringify(logCut));
+  await page.click('.dv-more > summary');                                 // its ⋯ menu, open, fits too
+  const moreCut = await page.evaluate(CUT('#tab-drive'));
+  check(!moreCut.length, 'the drive page\'s ⋯ menu at 2x cuts nothing: ' + JSON.stringify(moreCut));
+  await page.click('.dv-more > summary');
   // GR-2: the Garage at the largest size fits too (its sections no longer set a width wider than the screen)
   await page.goto(base + '/index.html?view=garage');
   await page.waitForSelector('#garageGear', { state: 'visible' });
@@ -2289,8 +2314,8 @@ flow('CarPlay feed: a planned route sends its line, every corner and the theme; 
     return [{ kind: 'cafe', name: 'Bean There Coffee', lat: a.lat, lon: a.lon + 0.0003 }, { kind: 'fuel', name: 'Shell', lat: pts[pts.length - 1].lat, lon: pts[pts.length - 1].lon }]; }; });
   await page.evaluate(() => window.apex.onNative({ type: 'carplay', action: 'go', lat: 35.7565, lon: -83.97, name: 'Maryville' }));
   await page.waitForFunction(() => window.__car.some((m) => m.kind === 'route') && window.__car.some((m) => m.kind === 'corners' && m.list.length), null, { timeout: 20000 });
-  await page.waitForFunction(() => window.__car.some((m) => m.kind === 'along'), null, { timeout: 10000 });
-  const along = await page.evaluate(() => { const i = window.__car.findIndex((m) => m.kind === 'along'); return { m: window.__car[i], afterRoute: i > window.__car.findIndex((m) => m.kind === 'route') }; });
+  await page.waitForFunction(() => window.__car.some((m) => m.kind === 'along' && m.full), null, { timeout: 10000 });   // (a descent alone may come first)
+  const along = await page.evaluate(() => { const i = window.__car.findIndex((m) => m.kind === 'along' && m.full); return { m: window.__car[i], afterRoute: i > window.__car.findIndex((m) => m.kind === 'route') }; });
   check(along.m.full === 'Café: Bean There Coffee · Fuel: Shell' && along.m.short === 'Bean There Coffee · Shell' && along.afterRoute
     && along.m.places.map((p) => `${p.kind}:${p.text}`).join() === 'cafe:Bean There Coffee,fuel:Shell' && along.m.places.every((p) => Array.isArray(p.at)), 'the car is told the places along by name, after the route: ' + JSON.stringify(along));
   const r = await page.evaluate(() => ({ route: window.__car.find((m) => m.kind === 'route'), corners: window.__car.filter((m) => m.kind === 'corners').pop(),
@@ -2308,6 +2333,9 @@ flow('CarPlay feed: a planned route sends its line, every corner and the theme; 
   await page.evaluate(() => { window.__car = []; window.apex.onNative({ type: 'carplay', action: 'voice' }); });
   await page.waitForFunction(() => window.__car.some((m) => m.kind === 'look' && m.voice === false));
   check(await page.evaluate(() => apexDebug.state.toggles.voice === false), 'the voice is off on the phone too');
+  // the car's Loops list offers the dial's five times; 1½ hours used to do nothing (the page took only 30, 60 and 120)
+  await page.evaluate(() => { document.getElementById('planPanel').classList.remove('routed', 'open'); window.apex.onNative({ type: 'carplay', action: 'loop', minutes: 90 }); });
+  await page.waitForFunction(() => document.getElementById('planPanel').classList.contains('open'), null, { timeout: 5000 });
 });
 
 flow('CarPlay: the car is in every drive: a free drive from its Drive key, a continue step, End goes idle (U-59, U-62, U-63, U-79)', async (page, base) => {
@@ -2775,6 +2803,40 @@ flow('privacy zones: add one at the map centre, kept on the phone only, then rem
   check((await page.evaluate(() => JSON.parse(localStorage.getItem('apex.privacyZones')))).length === 0, 'removed from the phone too');
 });
 
+flow('convoy: an invite that comes in while you drive waits until the drive ends (Nate 2026-11-12: social never in the way of the road)', async (page, base) => {
+  await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); localStorage.setItem('apex.permsExplained', '1'); } catch (_) {}
+    window.webkit = { messageHandlers: { apex: { postMessage: () => {} } } };
+    window.__toasts = [];
+    document.addEventListener('DOMContentLoaded', () => { const t = document.getElementById('toast'); if (t) new MutationObserver(() => window.__toasts.push(t.textContent))
+      .observe(t, { childList: true, characterData: true, subtree: true }); }); });
+  let release = null, askedN = 0;
+  const gate = new Promise((r) => { release = r; });
+  await page.route('**/api/**', async (route) => {
+    const u = new URL(route.request().url()), m = route.request().method();
+    const json = (b, status = 200) => route.fulfill({ status, contentType: 'application/json', body: JSON.stringify(b) });
+    if (u.pathname === '/api/me') return json({ signed_in: true, member: true, handle: 'me' });
+    if (u.pathname === '/api/convoy/invites') { askedN++; await gate; return json([{ id: 'BBBBBBBBBBBBBBBBBBBBBB', name: 'Sunday run', from: 'lead', expiresAtMs: Date.now() + 20 * 60000 }]); }
+    if (m === 'GET') return json([]);
+    return json({}, 404);
+  });
+  await page.goto(base + '/index.html');
+  await page.waitForFunction(() => window.apex && window.apexDebug && window.apexDebug.map);
+  await page.evaluate(() => window.apex.onNative({ type: 'link', params: { go: 'drive' } }));
+  await page.waitForFunction(() => window.apexDebug.driveActive);
+  for (let i = 0; i < 200 && !askedN; i++) await page.waitForTimeout(100);   // the page asks for invites (a few seconds in)
+  check(askedN > 0 && await page.evaluate(() => window.apexDebug.driveActive), 'asked for invites while driving');
+  const landed = page.waitForResponse((r) => r.url().includes('/api/convoy/invites'));
+  release();                                                           // the invite lands mid-drive
+  await landed;
+  // the page reads it a few seconds later while it drives: give it 7 s to (wrongly) say it
+  await page.waitForFunction(() => window.__toasts.some((t) => /invited you to a convoy/.test(t)), null, { timeout: 7000 }).catch(() => {});
+  check(!(await page.evaluate(() => window.__toasts.some((t) => /invited you to a convoy/.test(t)))), 'nothing said while driving');
+  await page.click('#driveEnd');
+  await page.waitForFunction(() => !window.apexDebug.driveActive, null, { timeout: 12000 });
+  await page.waitForFunction(() => window.__toasts.some((t) => /@lead invited you to a convoy: Sunday run/.test(t)), null, { timeout: 8000 }).catch(() => {});
+  check(await page.evaluate(() => window.__toasts.some((t) => /@lead invited you to a convoy: Sunday run/.test(t))), 'said once the drive ended');
+});
+
 flow('convoy: an in-app invite toasts and Join gets you in, no link (Worker stubbed, IDEAS S-22)', async (page, base) => {
   await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); } catch (_) {} });
   const id = 'AAAAAAAAAAAAAAAAAAAAAA', until = Date.now() + 20 * 60000;
@@ -2849,6 +2911,10 @@ flow('crew page: an old ?view=crew link opens People on Crews, at your crew; goi
   check(await page.evaluate(() => document.querySelector('[data-people="crews"]').getAttribute('aria-selected') === 'true' && !document.getElementById('crewsBody').hidden
     && document.getElementById('accountBody').hidden && document.getElementById('sheetTitle').textContent === 'People'), 'on the People tab, its Crews side');
   check(await page.evaluate(() => !!document.querySelector('#crewsBody .crew-head .gear-key') && !document.querySelector('#crewsBody .friend-list')), 'the crew head and its gear are on the Crews side, no friends list there');
+  // Nate 2026-11-12 (as easy as a big social app): three tabs under the crew's name, Drives open first
+  check(JSON.stringify(await page.$$eval('.cp-tabs [role="tab"]', (b) => b.map((x) => x.textContent + ':' + x.getAttribute('aria-selected')))) === '["Drives:true","Chat:false","Board:false"]', 'Drives | Chat | Board, Drives open');
+  check(await page.isHidden('.cp-board') && await page.isHidden('.cp-say'), 'the board and the chat wait behind their tabs');
+  await page.click('.cp-tabs [data-cp-tab="board"]');
   await page.waitForSelector('.cp-board .cp-board-row');
   const boardRows = () => page.$$eval('.cp-board .cp-board-row', (r) => r.map((x) => [x.querySelector('.who b').textContent, x.querySelector('.score').textContent, !!x.querySelector('.avatar')]));
   const rows = await boardRows();
@@ -2859,20 +2925,26 @@ flow('crew page: an old ?view=crew link opens People on Crews, at your crew; goi
   check(JSON.stringify((await boardRows()).map((r) => r[1])) === JSON.stringify([(12840).toLocaleString(), (702).toLocaleString()]) && boardAsks.includes('all'), 'All time asks for all time');
   // the owner's note 05: no Crew drives row; the crew's Upcoming drives has a + in its corner that plans one
   check(!/Crew drives/.test(await page.$$eval('#crewsBody .nav-rows', (n) => n.map((x) => x.textContent).join('|'))), 'no Crew drives row on Crews');
+  await page.click('.cp-tabs [data-cp-tab="drives"]');
   check(/Upcoming drives/.test(await page.textContent('.cp-week .cp-sec h3')) && await page.isVisible('.cp-week .cp-sec .plan-plus'), 'Upcoming drives with a + in its corner');
   await page.click('.cp-week .plan-plus');
   await page.waitForSelector('.cp-week .plan-drive');
   check(await page.isHidden('.cp-week .plan-plus'), 'the + opens the plan form there, and gives way to it');
   await page.click('.cp-week .plan-drive button:text-is("Cancel")');
+  await page.click('.cp-tabs [data-cp-tab="chat"]');
   check(await page.$eval('.cp-msg p', (p) => p.textContent === '<b>Fog</b> by 7?' && !p.querySelector('b')), 'chat is set as text');
-  // P-03: the run first, then the members, then the chat, the board after; the livery one line at the foot; no Convoy heading
-  await page.waitForSelector('.cp-member');
-  const order = await page.$$eval('.crew-page .cp-body > *', (n) => n.map((x) => x.classList.contains('cp-title') ? 'title' : x.classList.contains('cp-week') ? 'run'
-    : x.classList.contains('cp-livery-foot') ? 'livery' : (x.querySelector(':scope > .cp-sec h3') || {}).textContent || x.className).filter(Boolean));
-  check(JSON.stringify(order.slice(0, 5)) === '["title","run","Members","Chat","Vetta Score board"]' && order[order.length - 1] === 'livery', 'the page in order: ' + JSON.stringify(order));
+  // P-03: the run first, then the members; the chat and the board each behind its tab; the livery one line at the foot; no Convoy heading
+  await page.waitForSelector('.cp-member', { state: 'attached' });
+  const order = await page.evaluate(() => {
+    const name = (x) => x.classList.contains('cp-week') ? 'run' : (x.querySelector(':scope > .cp-sec h3') || {}).textContent || x.className;
+    const body = [...document.querySelectorAll('.crew-page .cp-body > *')].map((x) => x.classList.contains('cp-title') ? 'title' : x.classList.contains('cp-livery-foot') ? 'livery' : x.querySelector('.cp-tabs') ? 'tabs' : x.className);
+    return { body, panes: Object.fromEntries([...document.querySelectorAll('.cp-pane')].map((p) => [p.id, [...p.children].map(name).filter(Boolean)])) }; });
+  check(JSON.stringify(order.body) === '["title","tabs","livery"]' && JSON.stringify(order.panes['cpPane-drives'].slice(0, 2)) === '["run","Members"]'
+    && order.panes['cpPane-chat'][0] === 'Chat' && order.panes['cpPane-board'][0] === 'Vetta Score board', 'the page in order: ' + JSON.stringify(order));
   check(!(await page.$$('.crew-page .cp-livery, .crew-page .cp-meter')).length, 'no livery box or meter on the page (they are in Edit livery)');
   check(!/Convoy/.test(await page.$$eval('#crewsBody h3', (h) => h.map((x) => x.textContent).join('|'))), 'no Convoy heading on Crews');
   // P-06: the members as faces, the owner marked, the one on the road lit
+  await page.click('.cp-tabs [data-cp-tab="drives"]');
   const mem = await page.$$eval('.cp-member', (b) => b.map((x) => [x.querySelector('small').textContent, !!x.querySelector('em'), x.classList.contains('live')]));
   check(JSON.stringify(mem) === JSON.stringify([['You', true, false], ['@cara', false, true], ['@sam', false, false]]) && /3 members · 1 out now/.test(await page.textContent('.crew-page')), 'members: ' + JSON.stringify(mem));
   await page.click('.cp-member:has-text("@sam")');
@@ -2880,6 +2952,7 @@ flow('crew page: an old ?view=crew link opens People on Crews, at your crew; goi
   check(await page.isVisible('.cp-member-sheet button:has-text("Report")') && await page.isVisible('.cp-member-sheet button:has-text("Block")'), 'Report and Block are on the member, one tap in');
   await page.click('.cp-member-sheet button:has-text("Done")');
   // P-17: a message is its handle, time and words; Report is behind one key
+  await page.click('.cp-tabs [data-cp-tab="chat"]');
   check(!(await page.$$('.cp-msg .linkbtn')).length && await page.isVisible('.cp-msg .cp-dots'), 'no Delete / Report / Pin links on the message');
   await page.click('.cp-msg .cp-dots');
   await page.waitForSelector('.confirm-sheet .cs-choose');
@@ -2901,13 +2974,20 @@ flow('crew page: an old ?view=crew link opens People on Crews, at your crew; goi
   check(gs.heads.map((h) => h.t).join('|') === 'What it sees of yours|Who can invite|Who can find it' && gs.heads.every((h) => h.lines === 1), 'three parts, each named on one line: ' + JSON.stringify(gs.heads));
   check(gs.offLeft <= 4 && gs.leaveLeft <= 4 && gs.offWide && !gs.hintCut, 'text keys start at the left, the area hint is whole: ' + JSON.stringify(gs));
   await page.click('.side-pop.open[aria-label="Crew settings"] button:has-text("Done")');
+  await page.click('.cp-tabs [data-cp-tab="drives"]');
   await page.click('.cp-drive button:has-text("going")');
+  // a line half written survives the page redrawing: the livery saves, the page redraws
+  await page.click('.cp-tabs [data-cp-tab="chat"]');
   await page.fill('.cp-say textarea', 'Saturday it is');
-  await page.click('.cp-say button:has-text("Send")');
+  const sayBox = await page.$('.cp-say textarea');
   await page.click('.cp-edit');
   await page.click('.cp-crests button[aria-label="Peak"]');
   await page.click('.cp-swatches button[aria-label="Blue"]');
   await page.click('.cp-livery-ed button:has-text("Save")');
+  await page.waitForFunction((b) => !b.isConnected, sayBox, { timeout: 5000 });
+  await page.click('.cp-tabs [data-cp-tab="chat"]');
+  check(await page.inputValue('.cp-say textarea') === 'Saturday it is', 'the unsent line is still there after the page redraws');
+  await page.click('.cp-say button:has-text("Send")');
   const find = (p) => sent.find((x) => x.p === p);
   for (let i = 0; i < 50 && !(find('/api/events/e1/rsvp') && find('/api/crews/k1/chat') && find('/api/crews/k1/page')); i++) await page.waitForTimeout(100);
   check(find('/api/events/e1/rsvp') && JSON.parse(find('/api/events/e1/rsvp').b).status === 'going', 'I\'m going sends going');
@@ -2919,6 +2999,7 @@ flow('crew page: an old ?view=crew link opens People on Crews, at your crew; goi
   check(await page.getAttribute('.cp-meet [data-crew-home]', 'aria-checked') === 'false' && !find('/api/crews/k1/home'), 'Share my rough area is off by default');
   // the owner, 2026-11-12 (TestFlight): "meeting points switch broken": with no Home pinned it refused. Now the square comes
   // from where the phone is (39.2, -84.6 here; sent as its 0.1-degree square's centre, never the position)
+  await page.click('.cp-tabs [data-cp-tab="drives"]');
   await page.click('.cp-meet [data-crew-home]');
   await page.waitForFunction(() => document.querySelector('.cp-meet [data-crew-home]').getAttribute('aria-checked') === 'true', null, { timeout: 10000 });
   const home = JSON.parse(find('/api/crews/k1/home').b);
@@ -3255,20 +3336,24 @@ flow('drive ended: the card and the Log give the same score and time for the rec
   // design pass 9: with one drive in the Log the number stands alone (a usual is not one drive); the keys are a solid row
   // over Mark a stage and Drive it again, side by side, and nothing left on a row by itself
   const alone = await page.evaluate(async () => { await new Promise((r) => setTimeout(r, 400)); const R = (id) => { const e = document.getElementById(id), r = e.getBoundingClientRect(); return e.offsetParent ? [Math.round(r.left), Math.round(r.top), Math.round(r.width)] : null; };
-    return { usual: document.getElementById('endUsual').hidden, share: R('endShare'), stage: R('endStage'), again: R('endAgain'), acts: Math.round(document.querySelector('.end-acts').getBoundingClientRect().width) }; });
-  check(alone.usual && alone.share && alone.stage && alone.again && alone.share[2] === alone.acts && alone.stage[1] === alone.again[1] && alone.stage[1] > alone.share[1] && Math.abs(alone.stage[2] - alone.again[2]) <= 1,
+    return { usual: document.getElementById('endUsual').hidden, run: document.getElementById('endRun').hidden, share: R('endShare'), stage: R('endStage'), again: R('endAgain'), acts: Math.round(document.querySelector('.end-acts').getBoundingClientRect().width) }; });
+  check(alone.usual && alone.run && alone.share && alone.stage && alone.again && alone.share[2] === alone.acts && alone.stage[1] === alone.again[1] && alone.stage[1] > alone.share[1] && Math.abs(alone.stage[2] - alone.again[2]) <= 1,
     'one drive: no "usual"; Share card is the row, Mark a stage and Drive it again share the next: ' + JSON.stringify(alone));
   // with a few scored drives before it in the Log, the number is set against them (the Log's own summaries, read on the phone)
   const usual = await page.evaluate(async (id) => {
     const real = ApexRecording.summaries;
-    ApexRecording.summaries = async (...x) => [640, 655, 612, 649, 630].map((score, i) => ({ id: 'old' + i, name: 'Other Rd', date: '2026-10-0' + (i + 1), ds: { score } })).concat(await real(...x));
+    // IDEAS D-30: this drive's summary given a run of 7 clean corners, against runs of 5 earlier this month: the month's best
+    ApexRecording.summaries = async (...x) => [640, 655, 612, 649, 630].map((score, i) => ({ id: 'old' + i, name: 'Other Rd', date: '2026-10-0' + (i + 1), ds: { score }, run: i ? { corners: 5, len_m: 900 } : null }))
+      .concat((await real(...x)).map((o) => (o.id === id ? { ...o, run: { corners: 7, len_m: 2100 } } : o)));
     const d = await ApexRecording.get(id); apexDebug.showEndCard(d, Date.now() - 600e3, { quiet: true });
     for (let i = 0; i < 100 && document.getElementById('endUsual').hidden; i++) await new Promise((r) => setTimeout(r, 50));
     ApexRecording.summaries = real;
     const u = document.getElementById('endUsual'), l = document.querySelector('.end-score span'), a = u.getBoundingClientRect(), b = l.getBoundingClientRect(), box = document.querySelector('.end-score').getBoundingClientRect();
-    return { text: u.textContent, score: +document.getElementById('endScore').textContent, sameLine: Math.abs(a.bottom - b.bottom) < 6, clear: a.left > b.right + 8, inside: a.right <= box.right + 1 };
+    const rl = document.getElementById('endRun');
+    return { run: rl.hidden ? null : rl.textContent, text: u.textContent, score: +document.getElementById('endScore').textContent, sameLine: Math.abs(a.bottom - b.bottom) < 6, clear: a.left > b.right + 8, inside: a.right <= box.right + 1 };
   }, card.id);
   check(usual.text === `${usual.score - 640} over your usual` && usual.sameLine && usual.clear && usual.inside, 'the score against your usual, on the label\'s line: ' + JSON.stringify(usual));
+  check(usual.run === 'Your best run this month: 7 corners in a row, smooth and settled.', 'a run that beats the month says so on the card: ' + JSON.stringify(usual));
   check(/^\d+$/.test(card.score) && card.share && !/Not enough clean corners/.test(card.line), 'the card scores the drive and offers Share: ' + JSON.stringify(card));
   await page.goto(`${base}/analysis.html?tab=drive&drive=${encodeURIComponent(card.id)}`);
   await page.waitForSelector('.dv-score b', { timeout: 15000 });
@@ -3573,11 +3658,12 @@ flow('the theme cards and the words example say the real words, in the driver\'s
     quote: document.querySelector('#themeCards .tc-voice p').textContent, example: document.getElementById('noteWordsNote').textContent,
     call: ApexVocabulary.sampleCall(apexDebug.state.noteWords, { plain: ApexPlainNotes, units: ApexUnits, paceNoteText: ApexCore.paceNoteText }) }));
   const plain = await read();
-  check(plain.head === 'MEDIUM RIGHT' && plain.tail === 'CAREFUL · LONG' && plain.quote.includes(`"${plain.call}.`) && plain.example === `For example "${plain.call}".`
+  // TestFlight 2026-11-12 (the owner: "walls of text"): the card names its voice and Hear says the call; no quote printed under it
+  check(plain.head === 'MEDIUM RIGHT' && plain.tail === 'CAREFUL · LONG' && plain.quote === 'Marguerite · suggested voice' && plain.example === `For example "${plain.call}".`
     && !/TIGHTENS|Late apex|Slow down/.test(plain.head + plain.quote + plain.example), 'plain words, generated: ' + JSON.stringify(plain));
   await page.evaluate(() => document.querySelector('#noteWordsList [data-words="rally"]').click());
   const rally = await read();
-  check(rally.head === 'RIGHT 3' && rally.quote.includes(`"${rally.call}.`) && rally.example.includes(rally.call), 'rally notes, generated: ' + JSON.stringify(rally));
+  check(rally.head === 'RIGHT 3' && rally.example.includes(rally.call), 'rally notes, generated: ' + JSON.stringify(rally));
 });
 
 flow('small things: Notes is a detent, Layers never cuts the place plate, the Log pager draws its arrows (REVIEW4 U-82, U-81, U-76)', async (page, base) => {
@@ -3940,6 +4026,17 @@ flow('reported hazards: a call ahead, "still there?" after passing, and a one-ta
   check(!(await page.evaluate(() => document.getElementById('toast').classList.contains('show') && /Pothole/.test(document.getElementById('toast').textContent))), 'no toast over the map');
   check(await page.evaluate(() => { const n = document.getElementById('dsNote'); return !n.hidden && n.scrollWidth <= n.clientWidth + 1 && /reported/.test(n.getAttribute('aria-label')); }), 'the status line says it whole (or its first sentence)');
   check(reports.length === 1 && reports[0].kind === 'pothole' && Math.abs(reports[0].lat - (35.6 + 330 / 110540)) < 1e-4 && reports[0].heading === 0, 'reported at your position and heading');
+  // a report from the car's grid: the car says so with its own Undo (and OK), and Undo there sends nothing. The car stub is
+  // set late: present from the load, the page takes the app's API base and the Worker stub above isn't asked.
+  await page.evaluate(() => { window.__car = []; window.webkit = { messageHandlers: { apex: { postMessage(m) { if (m && m.cmd === 'car') window.__car.push(m); } } } };
+    window.apex.onNative({ type: 'carplay', action: 'report', kind: 'gravel' }); });
+  const undo = await page.evaluate(() => window.__car.filter((m) => m.kind === 'offer').pop());
+  check(undo && undo.title === 'Gravel reported' && undo.key === 'Undo' && undo.cancel === 'OK' && undo.seconds === 5, 'the car\'s report has its Undo there: ' + JSON.stringify(undo));
+  check(await page.evaluate(() => /Undo Gravel/.test(document.getElementById('hzReportBtn').textContent)), 'and the phone\'s Report key is Undo too');
+  await page.evaluate((id) => window.apex.onNative({ type: 'carplay', action: 'offer', id }), undo.id);
+  check(await page.evaluate(() => document.getElementById('hzReportBtn').textContent === 'Report'), 'Undo on the car takes the report back');
+  await page.waitForTimeout(5500);
+  check(reports.length === 1, 'the undone report was never sent: ' + JSON.stringify(reports.map((r) => r.kind)));
   await page.evaluate(() => clearInterval(window.__fixes));
 });
 
@@ -4080,9 +4177,14 @@ flow('shared routes: one a friend shared shows on People, Friends, under From fr
     if (u.pathname === '/api/me') return json({ signed_in: true, member: true, handle: 'me' });
     if (u.pathname === '/api/routes/shared') return json([{ id: 'RRRRRRRRRRRRRRRR', name: 'Cherohala loop', created_at: '2026-10-28 05:00:00', from_handle: 'alice' }]);
     if (u.pathname === '/api/routes/RRRRRRRRRRRRRRRR') return json({ id: 'RRRRRRRRRRRRRRRR', name: 'Cherohala loop', geom, from_handle: 'alice' });
+    if (u.pathname === '/api/routes' && m === 'POST') { posted.push(JSON.parse(route.request().postData() || '{}')); return json({ id: 'S1', shared: 2 }, 201); }
+    if (u.pathname === '/api/friends') return json(friendsOn ? [{ id: 'U1', handle: 'alice', name: null, status: 'accepted', incoming: 0 }, { id: 'U2', handle: 'bob', name: null, status: 'accepted', incoming: 0 }] : []);
+    if (u.pathname === '/api/crews') return json(friendsOn ? [{ id: 'k1', name: 'Ridge Runners' }] : []);
     if (m === 'GET') return json([]);
     return json({}, 404);
   });
+  const posted = [];
+  let friendsOn = false;
   await page.goto(base + '/index.html');
   await page.waitForFunction(() => window.apex && typeof window.apex.live === 'function');
   await page.evaluate(() => document.querySelector('.tab[data-view="people"]').click());   // Friends is the side it opens on
@@ -4093,6 +4195,18 @@ flow('shared routes: one a friend shared shows on People, Friends, under From fr
   await page.click('.side-pop.open button:has-text("Open")');
   await page.waitForFunction(() => /Cherohala loop/.test(document.getElementById('routeCardName').textContent), null, { timeout: 8000 });
   check(/corners/.test(await page.textContent('#routeCardMeta')), 'the route card has its corners (notes rebuilt from the shape)');
+  // Share it on: one line says who gets it and what goes, before Send, and follows the picks
+  friendsOn = true;
+  await page.click('#routeShareBtn');
+  await page.waitForSelector('#routeSharePick .share-goes');
+  const goes = () => page.textContent('#routeSharePick .share-goes');
+  check(/^Pick who gets it\. The line only, first 400 m hidden\.$/.test(await goes()), 'nobody picked: it asks: ' + await goes());
+  await page.click('#routeSharePick button:has-text("@alice")');
+  await page.click('#routeSharePick button:has-text("Ridge Runners")');
+  check(await goes() === 'Goes to @alice and Ridge Runners. The line only, first 400 m hidden.', 'it names who gets it: ' + await goes());
+  await page.click('#routeSharePick button:has-text("Send")');
+  for (let i = 0; i < 30 && !posted.length; i++) await page.waitForTimeout(100);
+  check(posted.length === 1 && JSON.stringify(posted[0].friends) === '["alice"]' && JSON.stringify(posted[0].crews) === '["k1"]', 'it goes to the ones named: ' + JSON.stringify(posted[0] && { f: posted[0].friends, c: posted[0].crews }));
 });
 
 flow('roadbooks: a planned road goes into a new roadbook from Share; People lists it; it is made public; one near you is followed; a road your Log covers is stamped; a link opens one signed out (Worker stubbed, SOCIAL 2.6)', async (page, base) => {
@@ -4139,7 +4253,7 @@ flow('roadbooks: a planned road goes into a new roadbook from Share; People list
   await page.waitForFunction(() => /Cherohala loop/.test(document.getElementById('routeCardName').textContent), null, { timeout: 8000 });
   await page.click('#routeShareBtn');
   await page.waitForSelector('#routeSharePick .rb-add');
-  check(/first 400 m and anything inside your privacy zones are left out/.test(await page.textContent('#routeSharePick .rb-add')), 'the part says what is left out');
+  check(/first 400 m and your privacy zones are left out/.test(await page.textContent('#routeSharePick .rb-add')), 'the part says what is left out');
   await page.fill('#routeSharePick .rb-add input', 'Smokies classics');
   await page.click('#routeSharePick .rb-add button:has-text("New roadbook")');
   await page.waitForFunction(() => /Added to Smokies classics\./.test(document.getElementById('toast').textContent));
@@ -4419,13 +4533,17 @@ flow('crew drives: an upcoming drive shows on People, Crews, as the crew page’
   await openDrives();
   const card = await page.textContent(`${W} .drive-card`);
   check(card.includes('Cherohala <i>Saturday</i>') && /Tomorrow|Today/.test(card) && card.includes('2 going · 1 maybe'), 'the drive, as text: ' + card);
-  // P-18: the sheet's drive is the crew page's card: the date block once, three lines, faces and one key; the rest under More
+  // P-18: the sheet's drive is the crew page's card: the date block once, three lines, faces and your answer; the rest under
+  // More. Nate 2026-11-12 (no clutter): the answer is one Going / Maybe / Can't switch on the card, never again under More
   check(await page.evaluate(() => { const c = document.querySelector('.crew-page .cp-week .drive-card:not(.meet-card)');
-    return c.classList.contains('cp-drive') && !!c.querySelector('.cp-date b') && !!c.querySelector('details.cp-more:not([open])') && !c.querySelector('.switch'); }), 'the card, its detail folded under More');
+    return c.classList.contains('cp-drive') && !!c.querySelector('.cp-date b') && !!c.querySelector('details.cp-more:not([open])')
+      && c.querySelectorAll('.switch').length === 1 && !c.querySelector('details.cp-more .switch'); }), 'the card, one answer on it, its detail folded under More');
   check(!/\b(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec) \d/.test(await page.$eval(`${W} .drive-card:not(.meet-card) .cp-drive-body`, (b) => b.textContent)), 'the date said once, in the block (P-27): ' + card);
   await page.click('.drive-card:not(.meet-card) summary:has-text("More")');
   await page.waitForSelector('.drive-card:not(.meet-card) .cp-more-body');
-  check((await page.textContent('.drive-card:not(.meet-card)')).includes('Going: @bob, @cara · 1 maybe'), 'More names who is going');
+  check(await page.evaluate(() => { const c = document.querySelector('.drive-card:not(.meet-card)');
+    return c.querySelectorAll('.switch').length === 1 && !/Going: @/.test(c.querySelector('.cp-more-body').textContent) && (c.textContent.match(/Lead @bob/g) || []).length === 1; }),
+    'More repeats nothing: no second answer, no "Going:" names under three faces, the roles said once');
   await page.waitForSelector('.meet-card');
   check(/Sunday coffee/.test(await page.textContent('.meet-card')) && /7 going/.test(await page.textContent('.meet-card')) && /Every \w+day · Coffee & Cars/.test(await page.textContent('.meet-card')) && /Meets near you/.test(await page.evaluate(() => document.querySelector('.meet-card').closest('.side-pop, #sheet').textContent)), 'a public meet nearby');   // in a crew: under the crew's Upcoming drives
   await page.click('.drive-card:not(.meet-card) .switch button:text-is("Going")');
@@ -4563,7 +4681,7 @@ flow('the run as one card: the morning of, a crew-mate\'s convoy to join or your
   check(/Results · 2 stages/.test(rec) && !(await page.isVisible('.cp-week .cp-results')), 'the results fold, closed: ' + rec);
   await page.click('.cp-week .cp-results-fold > summary');
   const sheet = await page.$$eval('.cp-week .cp-results > *', (els) => els.map((x) => x.innerText.replace(/\s+/g, ' ').trim()));
-  check(sheet[0] === 'OVERALL' && /^1\. @cara 796 all 2 stages 2\. @sam 811 1 of 2 stages$/.test(sheet[1]) && sheet[2] === 'SS1 · CHEROHALA SKYWAY' && /^1\. @sam 811 3:04 · quickest 2\. @cara 790 3:10 · \+6 s$/.test(sheet[3]) && sheet[4] === 'SS2 · TELLICO RIVER ROAD' && /share times/.test(sheet[6]), 'the sheet: ' + JSON.stringify(sheet));
+  check(sheet[0] === 'OVERALL' && /^1\. @cara 796 all 2 stages 2\. @sam 811 1 of 2 stages$/.test(sheet[1]) && sheet[2] === 'SS1 · CHEROHALA SKYWAY' && /^1\. @sam 811 3:04 · quickest 2\. @cara 790 3:10 · \+6 s$/.test(sheet[3]) && sheet[4] === 'SS2 · TELLICO RIVER ROAD' && /^Best Score that day, and time where shared\.$/.test(sheet[6]), 'the sheet: ' + JSON.stringify(sheet));
   await page.evaluate(() => { window.__copied = null; Object.defineProperty(navigator, 'share', { value: undefined, configurable: true }); Object.defineProperty(navigator, 'clipboard', { value: { writeText: async (t) => { window.__copied = t; } }, configurable: true }); });
   await page.click('.cp-week button:has-text("Share the results")');
   await page.waitForFunction(() => window.__copied);
@@ -4596,18 +4714,19 @@ flow('crew drive morning: the idle map offers directions to today\'s meeting poi
   check(await page.$eval('#loopSuggest', (b) => getComputedStyle(b).display === 'none'), 'it takes the loop invitation\'s place');
 });
 
-flow('time attack on the home deck: this week\'s loop you entered is the suggestion, with your place; the server gets only the area (Worker stubbed)', async (page, base) => {
+flow('time attack on the home deck: this week\'s featured loop you entered is the suggestion, with your place; the server gets only the area (Worker stubbed)', async (page, base) => {
   await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); localStorage.setItem('apex.permsExplained', '1'); } catch (_) {} });
   const day = (k) => new Date(Date.now() + k * 86400000).toISOString().slice(0, 10), asked = [];
   await page.route('**/api/**', (route) => {
     const u = new URL(route.request().url());
     const json = (b) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(b) });
     if (u.pathname === '/api/me') return json({ signed_in: true, member: true, handle: 'me' });
-    if (u.pathname === '/api/timeattack') {
+    if (u.pathname === '/api/ta') {
       asked.push(u.search);
-      return json({ week: day(-1), ends_on: day(2), today: day(0), cell: '35,-84', make: null, entered: true, entrants: 8,
-        circuit: { name: 'Tellico <i>loop</i>', length_m: 32187, segment_id: 'TA1', geom: JSON.stringify([[35.36, -84.29], [35.40, -84.20], [35.36, -84.29]]) },
-        board: [], you: { place: 3, handle: 'me', time_s: 1200, gap_s: 40, score: 700, mine: true }, last: null });
+      return json({ season: day(-30), ends_on: day(40), week: day(-4), today: day(0), cell: '35,-84', make: null,
+        circuits: [{ id: 'TA0', slot: 0, name: 'Other loop', length_m: 9000, featured: false, entered: false, geom: JSON.stringify([[35.3, -84.2], [35.31, -84.2], [35.3, -84.2]]) },
+                   { id: 'TA1', slot: 1, name: 'Tellico <i>loop</i>', length_m: 32187, featured: true, entered: true, geom: JSON.stringify([[35.36, -84.29], [35.40, -84.20], [35.36, -84.29]]) }],
+        board: { id: 'TA1', period: 'week', entrants: 8, rows: [], you: { place: 3, handle: 'me', time_s: 1200, gap_s: 40, score: 700, mine: true } } });
     }
     return json([]);
   });
@@ -4620,7 +4739,7 @@ flow('time attack on the home deck: this week\'s loop you entered is the suggest
   const title = await page.textContent('#loopSuggestTitle'), why = await page.textContent('#loopSuggestWhy');
   check(title === 'Time attack · Tellico <i>loop</i>' && why === 'You’re 3rd of 8 · 3 days left', 'the suggestion: ' + title + ' / ' + why);
   check(/Directions to the start\.$/.test(await page.getAttribute('#loopSuggestGo', 'aria-label')), 'its key gives directions to the start');
-  check(await page.getAttribute('#loopSuggestShow', 'data-road') === 'ta:' + day(-1) + '|35,-84|TA1', 'its body draws the loop');
+  check(await page.getAttribute('#loopSuggestShow', 'data-road') === 'ta:' + day(-4) + '|35,-84|TA1', 'its body draws the loop');
   check(asked.length && asked.every((q) => q === '?lat=35.875&lon=-83.875'), 'only the middle of the quarter-degree area is sent: ' + JSON.stringify(asked));
 }, { geolocation: { latitude: 35.9606, longitude: -83.9207 }, permissions: ['geolocation'] });
 
@@ -4752,7 +4871,7 @@ flow('a drive\'s corners on a road driven four times: each says your cleanest pa
   // where this pass was well off your cleanest at a least even corner, the note says what it lost most (the second pass held the arc)
   check(road.rows.some((r) => r.why === 'arc') && notes.some((n) => /, mostly one steering arc$/.test(n.t)), 'what this pass lost: ' + JSON.stringify(road.rows.filter((r) => r.why)).slice(0, 300));
   const touchText = await page.evaluate(() => document.body.innerText);
-  check(/where your passes differ most, .+ What it lost most there: one steering arc\./.test(touchText), 'the uneven line names what it lost');
+  check(/least even corners?: .+ Lost most: one steering arc\./.test(touchText), 'the uneven line names what it lost');
   const by = road.rows.find((r) => r.by !== null);
   if (by) {
     await page.click('.dv-corner button.dv-rec');
@@ -4772,45 +4891,52 @@ flow('a drive\'s corners on a road driven four times: each says your cleanest pa
   await page.waitForFunction(() => document.querySelectorAll('#bookList li').length > 0, null, { timeout: 20000 });
   const book = await page.evaluate(() => ({ head: document.getElementById('bookHead').textContent, rows: [...document.querySelectorAll('#bookList li')].map((li) => li.innerText.replace(/\s+/g, ' ').trim()),
     wide: document.documentElement.scrollWidth > document.documentElement.clientWidth }));
-  check(/^\d+ corners? you have driven three or more times, in road order/.test(book.head) && book.rows.length >= road.rows.length
+  check(/^\d+ corners? driven 3\+ times, in road order/.test(book.head) && book.rows.length >= road.rows.length
     && book.rows.every((t) => /^\d+ (Tight|Medium|Fast) (left|right) \d{1,3} On \w{3} \d{1,2}, of 4 passes(; your least clean \d{1,3}(, mostly [a-z ]+)?)?$/.test(t)) && !book.wide && !/mph|km\/h/.test(book.rows.join(' ')),
     'the road corner by corner: ' + JSON.stringify(book).slice(0, 400));
   // where the passes differ, the technique they differ by most can be the next practice (IDEAS D-27, roadBookFocus)
   const pr = await page.evaluate(() => { const b = document.getElementById('bookPractice'); return { shown: !b.hidden, t: b.textContent, go: !!document.getElementById('bookPracticeGo') }; });
-  check(pr.shown && pr.go && /^Most of the difference at corners? [\d, and]+ is [a-z ]+\. (Practice [a-z ]+ on my next drives here|You are practicing it now: Your driving shows how it goes\.)$/.test(pr.t), 'the practice line: ' + pr.t);
+  check(pr.shown && pr.go && /^Most of the difference: [a-z ]+ \(corners? [\d, and]+\)\. (Practice [a-z ]+ on my next drives here|Practicing it\.)$/.test(pr.t), 'the practice line: ' + pr.t);
   await page.click('#bookPracticeGo');
   const after = await page.evaluate(() => ({ t: document.getElementById('bookPractice').textContent, plan: JSON.parse(localStorage.getItem('vetta.practice') || 'null') }));
-  check(/Practicing it on your next drives here: .+ on this road alone\./.test(after.t) && after.plan && after.plan.skill === 'arc' && after.plan.where && after.plan.where.road === 'dry ridge rd' && after.plan.where.name === 'Dry Ridge Rd' && /^\d{4}-\d\d-\d\dT\d\d:\d\d$/.test(after.plan.since), 'the practice is kept: ' + JSON.stringify(after));
+  check(/ Practicing it here\.$/.test(after.t) && after.plan && after.plan.skill === 'arc' && after.plan.where && after.plan.where.road === 'dry ridge rd' && after.plan.where.name === 'Dry Ridge Rd' && /^\d{4}-\d\d-\d\dT\d\d:\d\d$/.test(after.plan.since), 'the practice is kept: ' + JSON.stringify(after));
   await page.click('#bookList li .bk-by');
   await page.waitForFunction(() => /^r[0-3]$/.test(document.getElementById('dvPick').value) && !document.getElementById('tab-drive').hidden, null, { timeout: 20000 });
-  // Your driving's Work on names the road where its skill shows most
+  // the practice from the road's book keeps to that road (driver_profile.js practice, where.road), and says which
   await page.goto(base + '/analysis.html?tab=driving');
-  await page.waitForSelector('#drivingRoot .dp-focus .dp-where', { timeout: 20000 });
-  const where = await page.textContent('#drivingRoot .dp-where');
-  // the practice from the road's book keeps to that road (driver_profile.js practice, where.road)
+  await page.waitForSelector('#drivingRoot .dp-practice', { timeout: 20000 });
   const practicing = await page.textContent('#drivingRoot .dp-practice .dp-say');
-  check(/^Since \d{1,2} \w{3} on Dry Ridge Rd, no drive there yet with 4 or more corners to read it on\./.test(practicing), 'the practice keeps to the road: ' + practicing);
-  check(/^It shows most on Dry Ridge Rd: (the corner where your passes there differ most comes|all \d+ corners where your passes there differ most come|\d+ of the \d+ corners where your passes there differ most comes?) down to it\.$/.test(where), 'Work on names the road: ' + where);
-  check(!(await page.$('#drivingRoadGo')), 'no second offer while the practice keeps to a road');
+  check(/^Since \d{1,2} \w{3} on Dry Ridge Rd: no drive there yet with 4 or more corners\.$/.test(practicing), 'the practice keeps to the road: ' + practicing);
+  await page.waitForTimeout(500);
+  check(!(await page.$('#drivingRoot .dp-where')) && !(await page.$('#drivingRoadGo')), 'no road line or second offer while the practice keeps to a road');
+  // since a road practice began, each corner's passes since and the corners that have evened out (roadBook since)
+  const since = await page.evaluate(async () => (await ApexAnalysis.job('roadBook', { id: 'r3', since: '2026-07-01T09:00' })).book);
+  check(since && Array.isArray(since.evened) && since.corners.length && since.corners.every((k) => k.since_n === 2 && k.since_low <= k.record)
+    && since.evened.every((i) => i >= 1 && i <= since.corners.length), 'the book since a road practice began: ' + JSON.stringify(since && { evened: since.evened, c: since.corners.slice(0, 2) }));
   // with no practice, the line offers one kept to that road
   await page.evaluate(() => localStorage.removeItem('vetta.practice'));
   await page.goto(base + '/analysis.html?tab=driving');
   await page.waitForSelector('#drivingRoadGo', { timeout: 20000 });
+  // Your driving's Work on names the road where its skill shows most, and offers the practice there
+  const where = await page.textContent('#drivingRoot .dp-where');
+  check(/^Shows most on Dry Ridge Rd: (its least even corner|\d+ of its \d+ least even corners)\. Practice it on Dry Ridge Rd alone$/.test(where), 'Work on names the road: ' + where);
   check(/^Practice it on Dry Ridge Rd alone$/.test(await page.textContent('#drivingRoadGo')), 'the offer names the road');
   await page.click('#drivingRoadGo');
   await page.waitForSelector('#drivingRoot .dp-practice', { timeout: 20000 });
   const kept = await page.evaluate(() => ({ plan: JSON.parse(localStorage.getItem('vetta.practice') || 'null'), say: document.querySelector('#drivingRoot .dp-practice .dp-say').textContent }));
-  check(kept.plan && kept.plan.where && kept.plan.where.road === 'dry ridge rd' && / on Dry Ridge Rd, no drive there yet/.test(kept.say), 'the practice from Your driving keeps to the road: ' + JSON.stringify(kept));
+  check(kept.plan && kept.plan.where && kept.plan.where.road === 'dry ridge rd' && / on Dry Ridge Rd: no drive there yet/.test(kept.say), 'the practice from Your driving keeps to the road: ' + JSON.stringify(kept));
   // the end card on the map after the last of them says the same: what it lost most at the road's least even corners
   await page.goto(base + '/index.html');
   await page.waitForFunction(() => window.apexDebug && window.ApexRecording && window.ApexCore && window.ApexAnalysis);
   const endRoad = await page.evaluate(async () => {
     apexDebug.showEndCard(await ApexRecording.get('r3'), Date.now() - 1800e3);
     const r = document.getElementById('endRoad');
-    for (let i = 0; i < 200 && r.hidden; i++) await new Promise((ok) => setTimeout(ok, 50));
-    return { t: r.textContent, shown: !!r.offsetParent };
+    const e = document.getElementById('endPractice');
+    for (let i = 0; i < 200 && (r.hidden || e.hidden); i++) await new Promise((ok) => setTimeout(ok, 50));
+    return { t: r.textContent, shown: !!r.offsetParent, practice: e.hidden ? null : e.textContent };
   });
-  check(endRoad.shown && /^At the \d+ corners? here where your passes differ most, .+\. What it lost most there: one steering arc\.$/.test(endRoad.t), 'the road on the end card: ' + JSON.stringify(endRoad));
+  check(/^Practice on Dry Ridge Rd · One steering arc: /.test(endRoad.practice || ''), 'the end card names the practised road: ' + endRoad.practice);
+  check(endRoad.shown && /^(\d+ least even corners|Least even corner): .+\. Lost most: one steering arc\.$/.test(endRoad.t), 'the road on the end card: ' + JSON.stringify(endRoad));
   check(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth), 'nothing wider than the phone');
 });
 
@@ -4842,7 +4968,15 @@ flow('Your driving: the profile over every drive opens from the Log, names the w
   await page.click('#drivingOpen');
   await page.waitForSelector('#drivingRoot .dp-st');
   const text = await page.evaluate(() => document.getElementById('drivingRoot').innerText);
-  check(/From 108 clean corners on 3 drives/.test(text), 'what it is read from: ' + text.slice(0, 120));
+  check(/108 clean corners · 3 drives · Aug–Oct 2026/.test(text), 'what it is read from, and when: ' + text.slice(0, 120));
+  // a level's definition on a tap (no hover on a phone), hidden again on a second
+  const def = await page.evaluate(() => {
+    const row = document.querySelector('.dp-st[data-skill="arc"]'), d = row.querySelector('.dp-def'), was = d.hidden;
+    row.click(); const shown = !d.hidden && row.getAttribute('aria-expanded') === 'true', t = d.textContent;
+    row.click();
+    return { was, shown, t, after: d.hidden, title: row.querySelector('[title]') !== null };
+  });
+  check(def.was && def.shown && def.after && !def.title && /^You turn in once .+ 0 to 100, averaged over \d+ clean corners; -- until \d+\.$/.test(def.t), 'the definition on a tap: ' + JSON.stringify(def));
   check(/One steering arc is weaker through rights: \d+ against 100 through lefts, on 3 of 3 drives\./.test(text), 'the weak side is named: ' + text);
   check(/Work on: One steering arc\s+It shows most through rights\./.test(text), 'the focus says where');
   check(await page.evaluate(() => document.querySelector('.dp-st.weak').dataset.skill === 'arc' && document.querySelectorAll('.dp-st:not([data-skill="pace"])').length === 6), 'six stations, the weak one marked');
@@ -4936,7 +5070,7 @@ flow('Practice (IDEAS D-27): Work on is carried into the next drives, the end ca
   await page.waitForSelector('#drivingRoot .dp-pr');
   const pg = await page.evaluate(() => ({ text: document.querySelector('.dp-practice').innerText, rows: document.querySelectorAll('.dp-pr').length, up: !!document.querySelector('.dp-pr b.up'),
     mark: !!document.querySelector('.dp-pr .dp-bar s'), wide: document.documentElement.scrollWidth <= document.documentElement.clientWidth }));
-  check(/on 36 corners over 1 drive, against \d+ before\. Up \d+: the practice is showing\./.test(pg.text), 'the practice so far: ' + pg.text);
+  check(/on 36 corners over 1 drive, against \d+ on \d+ before\. Up \d+ points?: the practice is showing\./.test(pg.text), 'the practice so far: ' + pg.text);
   check(pg.rows === 1 && pg.up && pg.mark && pg.wide, 'one drive, up, with the mark of before, nothing wider than the phone: ' + JSON.stringify(pg));
   await page.click('.dp-practice button:has-text("Stop practicing")');
   await page.waitForSelector('#drivingRoot .dp-go');
@@ -5003,8 +5137,7 @@ flow('friend profile: a friend on People → Profile shows what the friend share
   await page.goto(base + '/index.html');
   await page.waitForFunction(() => window.apex && typeof window.apex.live === 'function');
   await page.evaluate(() => document.querySelector('.tab[data-view="people"]').click());
-  await page.click('#accountBody .friend-head:has-text("@bob")');   // the friend's row opens what you can do with them and their profile
-  await page.click('#accountBody .friend button:has-text("Profile")');
+  await page.click('#accountBody .friend-head:has-text("@bob")');   // a tap on the friend opens their profile (2026-11-12)
   await page.waitForSelector('.profile-view');
   const t = await page.textContent('.profile-view');
   check(t.includes('@bob') && /Bob <b>S<\/b> · friends since September( 2026)?/.test(t) && t.includes('Esses · best 812 · 3 days this month') && t.includes('Ridge Runners'), 'the profile, as text: ' + t);
@@ -5013,7 +5146,7 @@ flow('friend profile: a friend on People → Profile shows what the friend share
   check(JSON.stringify(pk.keys) === '["Share a route","Invite to a drive","Challenge on a stage"]' && JSON.stringify(pk.foot) === '["Unfriend","Report","Block"]' && /profile-foot/.test(pk.last), 'things to do first, Unfriend/Report/Block at the foot: ' + JSON.stringify(pk));
   await page.click('.profile-view button:has-text("Friends")');   // one back glyph and where it goes (REVIEW2.md)
   await page.waitForSelector('.side-pop.open .profile-view', { state: 'detached', timeout: 3000 }).catch(() => {});
-  check(await page.evaluate(() => !document.querySelector('.side-pop.open') && !!document.querySelector('#accountBody .friend-head[aria-expanded="true"]')), 'Back returns to the friends list, the row still open');
+  check(await page.evaluate(() => !document.querySelector('.side-pop.open') && !!document.querySelector('#accountBody .friend-head:not(.you-row)')), 'Back returns to the friends list');
 });
 
 flow('duels: a friend\'s challenge is a card on People; Accept starts it; the card keeps both Scores and the days left; your own Scores can be shown from it; Challenge on a stage sends one (Worker stubbed, SOCIAL 2.7)', async (page, base) => {
@@ -5044,7 +5177,8 @@ flow('duels: a friend\'s challenge is a card on People; Accept starts it; the ca
   await page.waitForFunction(() => /Dry Ridge climb is in your Stages now/.test(document.getElementById('toast').textContent));
   await page.waitForSelector('#accountBody .duel-card.on');
   let t = await page.textContent('.duel-card.on');
-  check(/You -- · @bob 812 · @bob has a run in · 7 days left/.test(t) && /Your Scores don't reach @bob yet/.test(t), 'on: both Scores, the days left, and that yours don\'t reach them: ' + t);
+  check(/@bob 812 · no run from you yet · 7 days left/.test(t) && !/--|has a run in|don't reach/.test(t), 'on: their Score, plain words for yours, the days left; yours not shared is the Show key, not a sentence: ' + t);
+  check(await page.$$eval('.duel-card.on button', (bs) => bs.map((x) => x.textContent).join('|')) === 'Drive it|Show my Scores to @bob|Call it off', 'on: Drive it first, Call it off last');
   await page.click('.duel-card.on button:has-text("Show my Scores to @bob")');
   await page.waitForFunction(() => /You 845 · @bob 812 · You lead by 33/.test((document.querySelector('.duel-card.on') || {}).textContent || ''));
   check(grants.length === 1 && grants[0].audience_id === 'U1' && grants[0].share_scores === true && !grants[0].share_times, 'Scores only, to that friend: ' + JSON.stringify(grants));
@@ -5055,11 +5189,11 @@ flow('duels: a friend\'s challenge is a card on People; Accept starts it; the ca
   // challenging: from the friend's row, pick a stage and the days, Send
   await page.evaluate(() => document.querySelector('.tab[data-view="people"]').click());
   await page.click('#accountBody .friend-head:has-text("@bob")');
-  await page.click('#accountBody .friend button:has-text("Challenge on a stage")');
+  await page.click('.profile-view button:has-text("Challenge on a stage")');
   await page.waitForSelector('.duel-pop.open [aria-label="Stage"] button:has-text("Esses")');
   await page.click('.duel-pop.open [aria-label="Stage"] button:has-text("Esses")');
   await page.click('.duel-pop.open [aria-label="How long"] button:has-text("3 days")');
-  check(/your best counts/.test(await page.textContent('.duel-pop.open')) && await page.isVisible('.duel-pop.open [aria-label="Won by"] button.on:has-text("Vetta Score")'), 'the sheet says what counts; won by Score unless you pick Time');
+  check(/Your best run counts/.test(await page.textContent('.duel-pop.open')) && await page.isVisible('.duel-pop.open [aria-label="Won by"] button.on:has-text("Vetta Score")'), 'the sheet says what counts; won by Score unless you pick Time');
   await page.click('.duel-pop.open [aria-label="Won by"] button:has-text("Time")');
   const small = await page.evaluate(() => [...document.querySelectorAll('.duel-pop.open button')].filter((b) => b.getClientRects().length).map((b) => ({ t: b.textContent, h: Math.round(b.getBoundingClientRect().height) })).filter((b) => b.h < 32));
   check(!small.length, 'keys big enough: ' + JSON.stringify(small));
@@ -5101,6 +5235,10 @@ flow('For you: the People badge counts what is new and what waits; People lists 
   check(rows[0][0] && rows[0][1] === 'Topped · 20 min ago' && rows[0][2] === '@bob scored 850 on Dry Ridge climb, over your best of 800.', 'topped, new, in a sentence: ' + JSON.stringify(rows[0]));
   check(/^Kudos · 2 h ago$/.test(rows[1][1]) && /^Ridge Runners: Cherohala Saturday, .+\. Are you going\?$/.test(rows[2][2]), 'kudos and the crew drive: ' + JSON.stringify(rows));
   check(await page.isVisible('#accountBody .request-card:has-text("@dan")'), 'the request stays a card with its keys');
+  // a row with no key (kudos): its sentence sits under the kicker, the full width, not squeezed beside it
+  const kudos = await page.$eval('#accountBody .inbox-row:has-text("Kudos")', (r) => { const k = r.querySelector('.inbox-kick').getBoundingClientRect(), t = r.querySelector('.inbox-text').getBoundingClientRect();
+    return { under: t.top >= k.bottom - 1, left: Math.abs(t.left - k.left) < 2 }; });
+  check(kudos.under && kudos.left, 'the kudos sentence under its kicker: ' + JSON.stringify(kudos));
   // drawn is seen: the badge keeps only what waits on you
   await page.waitForFunction(() => (document.querySelector('#crewTab .badge') || {}).textContent === '1');
   check(await page.evaluate(() => !!localStorage.getItem('apex.inboxSeen')), 'seen is kept on the phone');
@@ -5176,22 +5314,25 @@ flow('People: two tabs; a request is a card on top, then you, then friends with 
   const navs = await page.$$eval('#accountBody > .nav-rows .nav-row > span', (s) => s.map((x) => x.textContent));
   // Roadbooks (SOCIAL 2.6, 2026-11-10) join From friends in the one list under the friends; nothing else does
   check(JSON.stringify(navs) === '["From friends","Roadbooks"]', 'then what friends shared and the roadbooks, nothing else: ' + JSON.stringify(navs));
-  // P-04: the friend row is about the friend; the grants are one quiet row
-  await page.click('#accountBody .friend-head:has-text("@cara")');
-  const acts = await page.$$eval('#accountBody .friend:has-text("@cara") .friend-keys button', (b) => b.map((x) => x.textContent));
-  check(JSON.stringify(acts) === '["On the map","Share a route","Invite to a drive","Challenge on a stage","Profile"]', 'the row opens on what you can do with her: ' + JSON.stringify(acts));
-  const cara = await page.textContent('#accountBody .friend:has-text("@cara") .crew-detail');
-  check(/Shared Cherohala loop · /.test(cara) && /What @cara sees of you/.test(cara) && !/Unfriend|Block/.test(cara) && !(await page.isVisible('#accountBody .friend:has-text("@cara") .friend-grants')), 'her last share, a quiet grants row, no Unfriend: ' + cara);
-  check(!!(await page.$('#accountBody .friend:has-text("@bob") .friend-keys button:has-text("On the map")')), 'bob shares a delayed position: On the map too');
-  check(!(await page.$('#accountBody .friend:has-text("@eve") .friend-keys button:text-is("On the map")')), 'no On the map for a friend who shares nothing');
-  // with Duel (#383) eve has four keys (two and two) and cara five: an odd last key takes the row, not half of it beside a hole
-  const spans = await page.evaluate(() => Object.fromEntries(['@eve', '@cara'].map((h) => { const row = [...document.querySelectorAll('#accountBody .friend')].find((f) => f.textContent.includes(h));
-    const keys = [...row.querySelectorAll('.friend-keys > *')]; return [h, { n: keys.length, end: getComputedStyle(keys[keys.length - 1]).gridColumnEnd }]; })));
-  check(spans['@eve'].n === 4 && spans['@eve'].end === 'auto' && spans['@cara'].n === 5 && spans['@cara'].end === '-1', 'an odd last key spans the row: ' + JSON.stringify(spans));
-  await page.click('#accountBody .friend:has-text("@cara") .nav-row.quiet');
-  check(await page.isVisible('#accountBody .friend:has-text("@cara") .friend-grants [role="switch"][aria-checked="true"]'), 'the quiet row opens her Scores and Times');
-  // P-09: Who sees what, from her row, her line marked
-  await page.click('#accountBody .friend:has-text("@cara") button:has-text("Who sees what")');
+  // Nate 2026-11-12 (as easy as a big social app): the row is the friend; a tap opens their profile, which holds what you
+  // can do with them, their last share and what they see of you (the row used to open five keys and a grants drawer)
+  check(!(await page.$('#accountBody .friend .crew-detail, #accountBody .friend button.ink-btn')), 'a friend row is one line, no keys in the list');
+  const profileOf = async (h) => { await page.click(`#accountBody .friend-head:has-text("${h}")`); await page.waitForSelector(`.people-pop.open .profile-view h3:text-is("${h}")`);
+    const k = await page.$$eval('.people-pop.open .profile-keys button', (b) => b.map((x) => x.textContent)); return k; };
+  const back = () => page.click('.people-pop.open .profile-view button:has-text("Friends")');
+  const acts = await profileOf('@cara');
+  check(JSON.stringify(acts) === '["On the map","Share a route","Invite to a drive","Challenge on a stage"]', 'her profile opens on what you can do with her: ' + JSON.stringify(acts));
+  const cara = await page.textContent('.people-pop.open .profile-view');
+  check(/Shared Cherohala loop · /.test(cara) && /What @cara sees of you\s*Scores/.test(cara) && /Couldn’t load the rest/.test(cara) && !/No scores shared/.test(cara), 'her last share and what she sees of you; offline, nothing guessed: ' + cara);
+  await back();
+  check((await profileOf('@bob')).includes('On the map'), 'bob shares a delayed position: On the map too');
+  await back();
+  const eve = await profileOf('@eve');
+  check(!eve.includes('On the map') && eve.length === 3 && await page.evaluate(() => getComputedStyle(document.querySelector('.people-pop.open .profile-keys > :last-child')).gridColumnEnd) === '-1', 'no On the map for a friend who shares nothing; an odd last key spans the row: ' + JSON.stringify(eve));
+  await back();
+  // P-09: Who sees what, from her profile, her line marked
+  await profileOf('@cara');
+  await page.click('.people-pop.open .friend-sees');
   await page.waitForSelector('.overlay[aria-label="Who sees what"] .who-grid');
   const grid = await page.$$eval('.who-grid > .who-n', (n) => n.map((x) => x.textContent + (x.classList.contains('focus') ? '*' : '')));
   check(JSON.stringify(grid) === '["@bob","@cara*","@eve"]', 'one grid, her row marked: ' + JSON.stringify(grid));
@@ -5201,6 +5342,7 @@ flow('People: two tabs; a request is a card on top, then you, then friends with 
   check(posted.some(([m, p, b]) => m === 'PUT' && p === '/api/grants' && /"audience_id":"U2"/.test(b) && /"share_times":true/.test(b)), 'Times changed in its cell');
   check(await page.isVisible('.overlay[aria-label="Who sees what"] [aria-label="Show me on the map to"] [aria-checked="true"]:text-is("Friends")'), 'where you are, one choice at the top');
   await page.click('.overlay[aria-label="Who sees what"] button:has-text("Done")');
+  if (await page.isVisible('.people-pop.open')) await back();
   // Accept on the card
   await page.click('#accountBody .request-card button:has-text("Accept")');
   await page.waitForTimeout(200);
@@ -5212,7 +5354,8 @@ flow('People: two tabs; a request is a card on top, then you, then friends with 
   check(/invite link/i.test(inv) && /Share a link to me/.test(inv) && !/invite-only/i.test(inv) && !/@dan|Accept/.test(inv) && await page.isVisible('.side-pop.open input[aria-label="Friend handle"]'), 'the Invite sheet: an invite link and add by handle, no requests: ' + inv);
   await page.click('.side-pop.open button:has-text("Done")');
   // On the map: the sheet closes, the Friends layer comes on
-  await page.click('#accountBody .friend:has-text("@cara") .friend-keys button:has-text("On the map")');
+  await profileOf('@cara');
+  await page.click('.people-pop.open .profile-keys button:has-text("On the map")');
   await page.waitForFunction(() => !document.getElementById('sheet').classList.contains('open'));
   check(await page.evaluate(() => document.querySelector('[data-toggle="friends"]').classList.contains('on')), 'On the map turns the Friends layer on');
   // the Garage: Who sees what under You; the pioneer count with Road feel; no points board anywhere
@@ -6890,16 +7033,17 @@ flow('Your records: unknown dates and unscored drives never make a "new best", a
     const seed = [d('a1', 'Mulholland Highway', '2020-08-01T09:00:00', 880, c(0.5, 0.5)), d('a2', 'Mulholland Highway', '2020-08-02T09:00:00', 910, c(0.5, 0.5)),
       d('a3', 'Mulholland Highway', '2020-08-03T09:00:00', null, null), d('a4', 'Mulholland Highway', '2026-01-01T00:00:00.000Z', 930, c(0.5, 0.5), { date_known: false }),
       // road B: the dated latest is the best
-      d('b1', 'Tail of the Dragon', '2020-07-01T09:00:00', 700, c(0.5, 0.5)), d('b2', 'Tail of the Dragon', '2020-09-01T09:00:00', 750, c(0.5, 0.5)),
-      // this month: smoothness measured on two, braking on one only
-      d('m1', 'Town loop', `${ym}-01T09:00:00`, 600, c(0.6, NaN)), d('m2', 'Back road', `${ym}-02T09:00:00`, 650, c(0.7, 0.9))];
+      d('b1', 'Tail of the Dragon', '2020-07-01T09:00:00', 700, c(0.5, 0.5)), d('b2', 'Tail of the Dragon', '2020-09-01T09:00:00', 750, c(0.5, 0.5), { run: { corners: 20, len_m: 5000 } }),
+      // this month: smoothness measured on two, braking on one only; best runs of 6 and 9 (an old month's 20 never counts)
+      d('m1', 'Town loop', `${ym}-01T09:00:00`, 600, c(0.6, NaN), { run: { corners: 6, len_m: 2000 } }), d('m2', 'Back road', `${ym}-02T09:00:00`, 650, c(0.7, 0.9), { run: { corners: 9, len_m: 3400 } })];
     window.apexLogDebug.records(seed);
     const rows = [...document.querySelectorAll('#recordsTable tr')].map((tr) => [tr.dataset.drive, tr.textContent]);
     const t = document.getElementById('recordsTable').closest('.scroll');
     return { rows, overflow: t.scrollWidth - t.clientWidth };
   });
   const text = r.rows.map(([id, t]) => `${id}: ${t}`).join('\n');
-  check(r.rows.length === 3, `two roads and one month record (got\n${text})`);
+  check(r.rows.length === 4, `two roads and two month records (got\n${text})`);
+  check(r.rows[3][0] === 'm2' && /Best run this month: corners in a row, smooth and settled, over 2\.1 mi/.test(r.rows[3][1]) && /9\s*$/.test(r.rows[3][1]), `this month's best run, from the summaries (got\n${text})`);
   check(r.rows[0][0] === 'b2' && /a new best/.test(r.rows[0][1]), `the dated latest best is new (got\n${text})`);
   check(r.rows[1][0] === 'a4' && !/new best/.test(r.rows[1][1]) && /date unknown/.test(r.rows[1][1]) && /of 3 scored drives/.test(r.rows[1][1]), `an undated import is no "latest" (got\n${text})`);
   check(r.rows[2][0] === 'm2' && /Smoothest drive this month, of 2/.test(r.rows[2][1]), `braking measured once is no record (got\n${text})`);
@@ -7018,9 +7162,9 @@ flow('REVIEW.md 1.2 screen by screen: first run, the map, planning, the route, d
   await page.click('#destInput');
   const plan = await page.evaluate(() => ({ detents: [...document.querySelectorAll('#loopDetents button')].map((b) => b.textContent), more: !!document.getElementById('planMore'),
     level: [...document.querySelectorAll('#planBody .plan-search-section [data-fun]')].length,
-    chips: [...document.querySelectorAll('#planChips > .chip')].filter((c) => c.offsetParent).map((c) => c.textContent), on: [...document.querySelectorAll('#planOptsOn .chip')].map((c) => c.textContent) }));
+    chips: [...document.querySelectorAll('#planChips > *')].filter((c) => c.offsetParent).map((c) => c.textContent) }));
   check(plan.detents.length === 5 && plan.detents.every((d) => / mi$/.test(d)) && !plan.more && plan.level === 0 && JSON.stringify(plan.chips) === '["Best roads nearby","Options · 1"]'
-    && JSON.stringify(plan.on) === '["✕ Unpaved"]', 'Plan sheet: ' + JSON.stringify(plan));
+    , 'Plan sheet: ' + JSON.stringify(plan));
   // Route bar: no toast repeating it; Route card: three numbers, four dials with unknowns as --, Start and Fly-through, the rest text links
   await page.fill('#destInput', 'Maryville');
   await page.waitForSelector('#placeList .place', { timeout: 10000 });
@@ -7506,6 +7650,41 @@ flow('along the route by name: the Along line opens a list of the cafés and fue
   await page.waitForFunction(() => /^Next fuel: Shell, (in [\d.]+ (mi|km)|here)\./.test(document.getElementById('dsNote').getAttribute('aria-label') || ''), null, { timeout: 5000 });   // a drive's status line
 }, IPHONE);
 
+flow('waterfalls along the route: asked of OpenStreetMap (the map tiles have none), counted on the Along line, listed by name and pinned as FALLS (IDEAS R-24)', async (page, base) => {
+  await planRouter(page);
+  const { tap } = await planPage(page, base);
+  // the map's points (offline here): a café; and one waterfall 150 m off the route from "Overpass", every other ask refused
+  await page.evaluate(() => {
+    ApexStages.pois = async (pts) => { window.__pts = pts; const a = pts[Math.min(1, pts.length - 1)]; return [{ kind: 'cafe', name: 'Bean There Coffee', lat: a.lat + 0.0003, lon: a.lon }]; };
+    const real = ApexCameras.fetchFirst;
+    window.__falls = 0;
+    ApexCameras.fetchFirst = async (f, body, ...rest) => {
+      if (!/waterfall/.test(decodeURIComponent(body || ''))) return real(f, body, ...rest);
+      window.__falls++;
+      for (let i = 0; i < 40 && !window.__pts; i++) await new Promise((r) => setTimeout(r, 25));
+      const p = window.__pts[Math.min(2, window.__pts.length - 1)];
+      return { elements: [{ type: 'node', id: 1, lat: p.lat + 150 / 110540, lon: p.lon, tags: { natural: 'waterfall', name: 'Looking Glass Falls' } },
+        { type: 'way', id: 2, center: { lat: p.lat + 0.5, lon: p.lon }, tags: { waterway: 'waterfall', name: 'Far Away Falls' } }] };
+    };
+  });
+  await tap('#destInput', 'Where to?');
+  await page.fill('#destInput', 'Maryville');
+  await page.waitForSelector('#placeList .place', { timeout: 10000 });
+  await tap('#placeList .place', 'the place');
+  await cardUp(page);
+  await planDone(page);
+  await page.waitForFunction(() => /waterfall/.test(document.getElementById('routeAlongLine').textContent), null, { timeout: 20000 })
+    .catch(async () => { throw new Error('Along: ' + JSON.stringify(await page.evaluate(() => [document.getElementById('routeAlongLine').textContent, window.__falls]))); });
+  const line = await page.evaluate(() => document.getElementById('routeAlongLine').textContent);
+  check(/^1 waterfall\s·\s1 café/.test(line), 'one waterfall near the road (the far one never counts), then the café: ' + line);
+  await page.evaluate(() => document.getElementById('routeAlongLine').scrollIntoView({ block: 'center' }));
+  await tap('#routeAlongLine', 'Along the route');
+  const rows = await page.evaluate(() => [...document.querySelectorAll('#routeAlongPanel .place')].map((b) => ({ name: b.querySelector('b').textContent, sub: b.querySelector('small').textContent })));
+  check(rows.some((r) => r.name === 'Looking Glass Falls' && /^Waterfall/.test(r.sub)) && !rows.some((r) => r.name === 'Far Away Falls'), 'the waterfall by its name in the list: ' + JSON.stringify(rows));
+  const pin = await page.evaluate(() => { const el = document.querySelector('.poi-pin.poi-falls'); return el ? { text: el.textContent, label: el.getAttribute('aria-label') } : null; });
+  check(pin && /^FALLS/.test(pin.text) && /^Looking Glass Falls · Waterfall · /.test(pin.label), 'its pin is a FALLS stamp, named for a screen reader: ' + JSON.stringify(pin));
+}, IPHONE);
+
 // The route reveal and the card as a page (design pass, 2026-11-10; web/route_reveal.js): a route found is drawn onto the
 // map from its start like a pen stroke while the card rises and its numbers count up; Start is up from the first frame of
 // it. Another route of the same plan redraws quickly; reduced motion is a cut, the line whole at once.
@@ -7764,6 +7943,45 @@ flow('the co-driver says a long descent once as the car nears its top, from the 
   check(said.length === 1 && /^Long descent ahead: [\d.]+ miles at 8 percent\. A lower gear saves the brakes\.$/.test(said[0]), 'said once near the top: ' + JSON.stringify(said));
   for (let i = 420; i <= 500; i += 3) { await at(i, 20); await page.waitForTimeout(40); }
   check((await calls()).length === 1, 'and not again on the way down: ' + JSON.stringify(await calls()));
+});
+
+flow('the co-driver counts clean corners in a row live and says five, then ten, and passing the month\'s best once, never in Quiet notes (flow_live.js, IDEAS D-30)', async (page, base) => {
+  await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); } catch (_) {}
+    window.__said = []; window.APEX_REVIEW = true;
+    window.webkit = { messageHandlers: { apex: { postMessage(m) { if (m && m.cmd === 'said') window.__said.push(m.text); } } } }; });
+  await page.goto(base + '/index.html');
+  await page.waitForFunction(() => window.apexDebug && window.apex && window.apex.live && window.ApexFlowLive && window.ApexRecording);
+  // the Log: a run of 7 earlier this month (and a longer one last month, which never counts)
+  await page.evaluate(() => { const d = new Date(), key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+    ApexRecording.summaries = async () => [{ id: 'a', date: `${key}-01T09:00`, run: { corners: 7, len_m: 2000 } }, { id: 'b', date: '2001-01-05T09:00', run: { corners: 40, len_m: 9000 } }]; });
+  await page.evaluate(() => window.apex.onNative({ type: 'carplay', action: 'start' }));
+  await page.waitForFunction(() => window.apexDebug.driveActive);
+  // S-bends with no route: 90-degree arcs of 60 m radius, left and right, 60 m between, at a steady 8 m/s with the lateral g
+  // the arc gives and no braking: every corner smooth and settled. One fix every 5 m, as the app sends them.
+  const drive = (from, to) => page.evaluate(async ([from, to]) => {
+    const pts = []; let x = 0, y = 0, h = 0, side = 1; const v = 8, R = 60;
+    for (let k = 0; k < to; k++) {
+      for (let s = 0; s < 60; s += 5) { x += 5 * Math.sin(h); y += 5 * Math.cos(h); if (k >= from) pts.push([x, y, 0]); }
+      for (let s = 0; s < Math.PI / 2 * R; s += 5) { h += side * 5 / R; x += 5 * Math.sin(h); y += 5 * Math.cos(h); if (k >= from) pts.push([x, y, side * v * v / R / 9.80665]); }
+      side = -side;
+    }
+    for (const [px, py, g] of pts) {
+      window.apex.live({ lat: 35.5 + py / 110540, lon: -83.9 + px / (111320 * Math.cos(35.5 * Math.PI / 180)), accuracy_m: 5, speed_mps: v, course_deg: 0,
+        has_fix: true, lat_g: Math.round(g * 1e4) / 1e4, lon_g: 0, calibration: 'locked', thermal: 0 });
+      await new Promise((r) => setTimeout(r, 30));   // ~150 m/s of wall clock: the co-driver has time to speak between lines
+    }
+  }, [from, to]);
+  const counts = () => page.evaluate(() => window.__said.filter((s) => / clean in a row\b/.test(s)));
+  await drive(0, 14);
+  await page.waitForFunction(() => window.__said.filter((s) => / clean in a row\b/.test(s)).length >= 3, null, { timeout: 15000 }).catch(() => {});
+  check(JSON.stringify(await counts()) === JSON.stringify(['Five clean in a row.', 'Eight clean in a row, your best this month.', 'Ten clean in a row.']),
+    'five, then past the month\'s best of seven, then ten, said once each: ' + JSON.stringify(await counts()));
+  // Quiet notes: the count goes on, nothing is said
+  await page.evaluate(() => { const b = document.querySelector('[data-notes="quiet"]'); if (b) b.click(); });
+  await drive(14, 26);
+  await page.waitForTimeout(600);
+  const run = await page.evaluate(() => window.apexDebug.flowRun);
+  check(run >= 20 && (await counts()).length === 3, `the count went on to ${run}, and nothing was said in Quiet notes: ` + JSON.stringify(await counts()));
 });
 
 flow('plan flow (e, f) a level change and an alternative are one tap or swipe each: the level cards are the routes found, nothing planned again (finding 4, 11)', async (page, base) => {
@@ -8184,7 +8402,7 @@ flow('plan flow (d) one Options sheet: Avoid ✕ and Prefer ✓ in it, what is o
   await planRouter(page, asked);
   const { cdp } = await planPage(page, base, { 'apex.avoid': JSON.stringify({ unpaved: false }) });
   await page.click('#destInput');
-  check(await page.evaluate(() => document.getElementById('planOptsOn').children.length === 0 && document.getElementById('planOptionsChip').textContent === 'Options'), 'nothing on: just Options');
+  check(await page.evaluate(() => document.getElementById('planOptionsChip').textContent === 'Options'), 'nothing on: just Options');
   await page.click('#planOptionsChip');
   await page.waitForFunction(() => { const s = document.getElementById('optSheet'); return s.classList.contains('open') && Math.abs(s.getBoundingClientRect().bottom - innerHeight) < 2; });
   await page.waitForTimeout(300);
@@ -8200,15 +8418,15 @@ flow('plan flow (d) one Options sheet: Avoid ✕ and Prefer ✓ in it, what is o
   const top = await page.evaluate(() => document.getElementById('optSheet').getBoundingClientRect().top + 20);
   await swipe(cdp, 196, top, 0, 220);
   await page.waitForFunction(() => !document.getElementById('optSheet').classList.contains('open'), null, { timeout: 3000 });
-  const chips = await page.evaluate(() => ({ sheet: [...document.querySelectorAll('#planOptsOn .chip')].map((c) => c.textContent), key: document.getElementById('planOptionsChip').textContent }));
-  check(JSON.stringify(chips.sheet) === '["✕ Highways","✓ Passenger aboard","More hairpins"]' && chips.key === 'Options · 3', 'what is on shows on the plan sheet once Options closes: ' + JSON.stringify(chips));
+  const chips = await page.evaluate(() => ({ sheet: [...document.querySelectorAll('#planChips .opt-on .chip')].length, key: document.getElementById('planOptionsChip').textContent, aria: document.getElementById('planOptionsChip').getAttribute('aria-label') }));
+  check(chips.sheet === 0 && chips.key === 'Options · 3' && /highways/i.test(chips.aria) && /Passenger aboard/.test(chips.aria), 'what is on is counted on the plan sheet once Options closes, each one named to VoiceOver (TestFlight 2026-11-12 note 8): ' + JSON.stringify(chips));
   // the route planned with them shows them on its card; a chip opens the sheet again; closing with nothing changed plans nothing
   await page.fill('#destInput', 'Maryville');
   await page.waitForSelector('#placeList .place', { timeout: 10000 });
   await page.click('#placeList .place');
   await cardUp(page); await planDone(page);
   const card = await page.evaluate(() => [...document.querySelectorAll('#cardOptsOn .chip')].map((c) => c.textContent));
-  check(JSON.stringify(card) === JSON.stringify(chips.sheet), 'and on the route card: ' + JSON.stringify(card));
+  check(JSON.stringify(card) === '["✕ Highways","✓ Passenger aboard","More hairpins"]', 'and on the route card, one chip each: ' + JSON.stringify(card));
   check(asked.some((r) => r.costing_options && JSON.stringify(r.costing_options).includes('"use_highways":0')), 'the plan avoided highways');
   const n = asked.length;
   await page.click('#cardOptsOn .chip');
@@ -8731,26 +8949,32 @@ flow('TestFlight 2026-11-05 note 6: the idle map\'s deck is the suggestion and o
   }
 }, { hasTouch: true, viewport: { width: 393, height: 852 }, geolocation: { latitude: 35.9606, longitude: -83.9207 }, permissions: ['geolocation'] });
 
-flow('time attack this week (SOCIAL 2.9): in Where to?, the area\'s loop and its board, as text, with gaps and Scores; Enter puts it in your Stages; the area, never where you are, is sent', async (page, base) => {
-  const GEOM = JSON.stringify([[35.95, -83.9], [35.97, -83.88], [35.95, -83.9]]);
-  let entered = false;
+flow('time attack (the owner, 2026-11-12: static best roads, a featured one, boards by week, month, year, all time): in Where to?, the area\'s loops and a board, as text, with gaps and Scores; Enter puts one in your Stages; the area, never where you are, is sent', async (page, base) => {
+  const GEOM = JSON.stringify([[35.95, -83.9], [35.97, -83.88], [35.95, -83.9]]), GEOM2 = JSON.stringify([[36.05, -83.8], [36.07, -83.78], [36.05, -83.8]]);
+  const entered = new Set();
   const sent = [];
   await page.addInitScript(() => { localStorage.setItem('apex.onboarded', '1'); localStorage.setItem('apex.permsExplained', '1'); });
+  const BOARDS = {
+    'ta-CIRC1|week': [{ place: 1, handle: 'alice', time_s: 590, gap_s: 0, score: 700, mine: false }, { place: 2, handle: 'bob', time_s: 600, gap_s: 10, score: 780, mine: false },
+                      { place: 2, handle: 'cara', time_s: 600, gap_s: 10, score: null, mine: false }],
+    'ta-CIRC1|all': [{ place: 1, handle: 'dee', time_s: 540, gap_s: 0, score: 820, mine: false }, { place: 2, handle: 'alice', time_s: 590, gap_s: 50, score: 700, mine: false }],
+  };
   await page.route('**/api/**', (route) => {
     const u = new URL(route.request().url()), m = route.request().method();
     const json = (b, status = 200) => route.fulfill({ status, contentType: 'application/json', body: JSON.stringify(b) });
     if (u.pathname === '/api/me') return json({ signed_in: true, member: true, handle: 'me' });
-    if (u.pathname === '/api/timeattack' && m === 'GET') {
+    if (u.pathname === '/api/ta' && m === 'GET') {
       sent.push(['GET', u.search]);
-      return json({ week: '2026-11-09', ends_on: '2026-11-15', today: '2026-11-13', cell: '35,-84', entered, entrants: 3, make: null,
-        circuit: { segment_id: 'ta-CIRC1', name: 'Foothills <b>run</b> loop', length_m: 12500, geom: GEOM, week: '2026-11-09', ends_on: '2026-11-15', cell: '35,-84' },
-        board: [{ place: 1, handle: 'alice', time_s: 590, gap_s: 0, score: 700, mine: false }, { place: 2, handle: 'bob', time_s: 600, gap_s: 10, score: 780, mine: false },
-                { place: 2, handle: 'cara', time_s: 600, gap_s: 10, score: null, mine: false }],
-        you: null, last: { name: 'Last loop', podium: [{ handle: 'dee', time_s: 712 }] } });
+      const id = u.searchParams.get('id') || 'ta-CIRC1', period = u.searchParams.get('period') || 'week', rows = BOARDS[`${id}|${period}`] || [];
+      return json({ season: '2026-10-01', ends_on: '2026-12-31', week: '2026-11-09', today: '2026-11-13', cell: '35,-84', make: null,
+        circuits: [{ id: 'ta-CIRC1', slot: 0, name: 'Foothills <b>run</b> loop', length_m: 12500, geom: GEOM, featured: true, entered: entered.has('ta-CIRC1') },
+                   { id: 'ta-CIRC2', slot: 1, name: 'Hog Run loop', length_m: 9800, geom: GEOM2, featured: false, entered: entered.has('ta-CIRC2') }],
+        board: { id, period, entrants: rows.length, rows, you: null } });
     }
-    if (m === 'POST' && u.pathname.startsWith('/api/timeattack')) {
-      sent.push([u.pathname, JSON.parse(route.request().postData() || 'null')]);
-      if (u.pathname === '/api/timeattack/enter') { entered = true; return json({ segment_id: 'COPY1', added: true }); }
+    if (m === 'POST' && u.pathname.startsWith('/api/ta')) {
+      const b = JSON.parse(route.request().postData() || 'null');
+      sent.push([u.pathname, b]);
+      if (u.pathname === '/api/ta/enter') { entered.add(b.id); return json({ segment_id: 'COPY1', added: true }); }
       return json({}, 201);
     }
     if (m === 'GET') return json([]);
@@ -8760,33 +8984,50 @@ flow('time attack this week (SOCIAL 2.9): in Where to?, the area\'s loop and its
   await page.waitForFunction(() => window.apex && typeof window.apex.live === 'function');
   await page.click('#destInput');
   await page.waitForSelector('#planAttack:not([hidden]) > summary');
-  // the row says the week's loop before it is opened (time_attack.js peek, summaryLine)
+  // the row says the featured loop before it is opened (time_attack.js peek, summaryLine)
   await page.waitForFunction(() => /Foothills/.test(document.querySelector('#planAttack > summary').textContent));
   const line0 = await page.textContent('#planAttack > summary');
-  check(/^Time attack: Foothills <b>run<\/b> loop \(.+\) · 3 times · 3 days left$/.test(line0), 'the row names this week\'s loop: ' + line0);
+  check(/^Time attack: Foothills <b>run<\/b> loop \(.+\) · 3 times · 3 days left$/.test(line0), 'the row names the featured loop: ' + line0);
   await page.click('#planAttack > summary');
   await page.waitForSelector('#planAttack .ta-board');
-  const text = await page.textContent('#planAttackBody');
-  check(text.includes('Foothills <b>run</b> loop') && /loop from the area’s best roads · 3 days left · 3 times/.test(text) && !/put up/i.test(text), 'the loop, as text: ' + text);
+  const loops = await page.$$eval('#planAttack .ta-loop', (els) => els.map((e) => [e.querySelector('b').textContent, e.querySelector('small').textContent, e.getAttribute('aria-pressed')]));
+  check(loops.length === 2 && loops[0][0] === 'Foothills <b>run</b> loop' && /Featured this week$/.test(loops[0][1]) && loops[0][2] === 'true' && loops[1][2] === 'false' && !/Featured/.test(loops[1][1]),
+    'the area\'s loops, the featured one shown first: ' + JSON.stringify(loops));
+  const sw = await page.$$eval('#planAttack .ta-period [role="radio"]', (els) => els.map((e) => [e.textContent, e.getAttribute('aria-checked')]));
+  check(JSON.stringify(sw) === '[["Week","true"],["Month","false"],["Year","false"],["All time","false"]]', 'the board\'s period, this week first: ' + JSON.stringify(sw));
   const cells = await page.$$eval('#planAttack .ta-board > span', (els) => els.map((e) => e.textContent));
   check(cells.slice(0, 8).join('|') === '1|@alice|9:50|Score 700|2|@bob|10:00 +0:10|Score 780' && cells[11] === '', 'the board, quickest first, with gaps and Scores: ' + cells.join('|'));
-  check(/Last week, Last loop: 1\. @dee 11:52/.test(text) && /A new loop every Monday/.test(text) && /drive within the law/.test(text), 'last week\'s podium and the road note');
+  const text = await page.textContent('#planAttackBody');
+  check(/Featured changes Mondays\. New loops in January\. Drive within the law\./.test(text), 'when the loops change, and the road note: ' + text);
   const q = new URLSearchParams(sent[0][1]);
   check(/\.(125|375|625|875)$/.test(q.get('lat')) && /\.(125|375|625|875)$/.test(q.get('lon')), 'only the middle of the quarter-degree area is sent: ' + sent[0][1]);
-  check(!sent.some(([p]) => p === '/api/timeattack/circuit'), 'a week that has its loop builds none');
+  check(!sent.some(([p]) => p === '/api/ta/circuit'), 'an area that has its loops builds none');
   await page.click('#planAttack button:text-is("Enter")');
   await page.waitForSelector('#planAttack button:text-is("Drive it")');
-  check(sent.some(([p, b]) => p === '/api/timeattack/enter' && b.cell === '35,-84'), 'Enter sends the area');
+  check(sent.some(([p, b]) => p === '/api/ta/enter' && b.id === 'ta-CIRC1'), 'Enter names the loop');
   const segs = await page.evaluate(() => JSON.parse(localStorage.getItem('apex.segments')));
   check(segs.some((x) => x.id === 'COPY1' && x.origin === 'ta-CIRC1' && x.synced && x.lat0 === 35.95 && x.lat1 === 35.95), 'the loop is in your Stages: ' + JSON.stringify(segs));
   const line1 = await page.textContent('#planAttack > summary');
   check(/· log a run on it · 3 days left$/.test(line1), 'entered: the row says what to do next: ' + line1);
+  // All time: the same loop's board from its first day
+  await page.click('#planAttack .ta-period [role="radio"]:text-is("All time")');
+  await page.waitForFunction(() => document.querySelector('#planAttack .ta-period [aria-checked="true"]').textContent === 'All time');
+  check(/[?&]id=ta-CIRC1(&|$)/.test(sent[sent.length - 1][1]) && /period=all/.test(sent[sent.length - 1][1]), 'All time asks for this loop\'s board: ' + sent[sent.length - 1][1]);
+  const all = await page.$$eval('#planAttack .ta-board > span', (els) => els.map((e) => e.textContent));
+  check(all.slice(0, 3).join('|') === '1|@dee|9:00', 'the all-time board: ' + all.join('|'));
+  check(await page.textContent('#planAttack > summary') === line1, 'the row\'s line stays this week\'s');
+  // the other loop: its own board, the period kept
+  await page.click('#planAttack .ta-loop:has-text("Hog Run loop")');
+  await page.waitForFunction(() => document.querySelector('#planAttack .ta-loop[aria-pressed="true"] b').textContent === 'Hog Run loop');
+  check(/id=ta-CIRC2/.test(sent[sent.length - 1][1]) && /period=all/.test(sent[sent.length - 1][1]) && /No times on it yet\./.test(await page.textContent('#planAttackBody')), 'the other loop, no times: ' + sent[sent.length - 1][1]);
+  await page.click('#planAttack .ta-loop:has-text("Foothills")');
+  await page.waitForSelector('#planAttack button:text-is("Drive it")');
   // Drive it plans the loop itself, not the way to its start
   await page.click('#planAttack button:text-is("Drive it")');
   await page.waitForFunction(() => /The clock runs from the start line/.test(document.getElementById('toast').textContent) && document.getElementById('planPanel').classList.contains('routed'), null, { timeout: 15000 });
 }, { geolocation: { latitude: 35.9606, longitude: -83.9207 }, permissions: ['geolocation'] });
 
-flow('time attack duel: Challenge a friend on the week\'s loop picks a friend, won by time, on your copy of the loop (IDEAS S-24, Worker stubbed)', async (page, base) => {
+flow('time attack duel: Challenge a friend on a time attack loop picks a friend, won by time, on your copy of the loop (IDEAS S-24, Worker stubbed)', async (page, base) => {
   const GEOM = JSON.stringify([[35.95, -83.9], [35.97, -83.88], [35.95, -83.9]]);
   const sent = [];
   await page.addInitScript(() => { localStorage.setItem('apex.onboarded', '1'); localStorage.setItem('apex.permsExplained', '1'); });
@@ -8794,10 +9035,10 @@ flow('time attack duel: Challenge a friend on the week\'s loop picks a friend, w
     const u = new URL(route.request().url()), m = route.request().method();
     const json = (b, status = 200) => route.fulfill({ status, contentType: 'application/json', body: JSON.stringify(b) });
     if (u.pathname === '/api/me') return json({ signed_in: true, member: true, handle: 'me' });
-    if (u.pathname === '/api/timeattack' && m === 'GET') return json({ week: '2026-11-09', ends_on: '2026-11-15', today: '2026-11-13', cell: '35,-84', entered: true, entrants: 1, make: null,
-      circuit: { segment_id: 'ta-CIRC1', name: 'Foothills loop', length_m: 12500, geom: GEOM, week: '2026-11-09', ends_on: '2026-11-15', cell: '35,-84' }, board: [], you: null, last: null });
+    if (u.pathname === '/api/ta' && m === 'GET') return json({ season: '2026-10-01', ends_on: '2026-12-31', week: '2026-11-09', today: '2026-11-13', cell: '35,-84', make: null,
+      circuits: [{ id: 'ta-CIRC1', slot: 0, name: 'Foothills loop', length_m: 12500, geom: GEOM, featured: true, entered: true }], board: { id: 'ta-CIRC1', period: 'week', entrants: 0, rows: [], you: null } });
     if (u.pathname === '/api/friends') return json([{ id: 'u1', handle: 'sam', status: 'accepted', incoming: 0 }, { id: 'u2', handle: 'pat', status: 'pending', incoming: 1 }]);
-    if (m === 'POST' && (u.pathname === '/api/timeattack/enter' || u.pathname === '/api/duels')) {
+    if (m === 'POST' && (u.pathname === '/api/ta/enter' || u.pathname === '/api/duels')) {
       sent.push([u.pathname, JSON.parse(route.request().postData() || 'null')]);
       return json(u.pathname === '/api/duels' ? { id: 'd1' } : { segment_id: 'COPY1', added: false });
     }
@@ -8821,23 +9062,27 @@ flow('time attack duel: Challenge a friend on the week\'s loop picks a friend, w
   check(duel && JSON.stringify(duel[1]) === JSON.stringify({ handle: 'sam', segment_id: 'COPY1', days: 7, kind: 'time' }), 'the duel is on your copy of the loop: ' + JSON.stringify(sent));
 }, { geolocation: { latitude: 35.9606, longitude: -83.9207 }, permissions: ['geolocation'] });
 
-flow('time attack, a new week (the owner, 2026-11-11: autogenerated, the area\'s best loop roads at random, small loops): the first phone in the area builds the loop with our own router from the seed and sends it', async (page, base) => {
-  let circuit = null;
+flow('time attack, a new season (the owner, 2026-11-12: static best roads): the first phone in the area builds its loops with our own router from the seeds, each the router\'s best, apart, and sends them', async (page, base) => {
+  const circuits = [];
   const sent = [];
   await page.addInitScript(() => { localStorage.setItem('apex.onboarded', '1'); localStorage.setItem('apex.permsExplained', '1'); });
   await page.route('**/api/**', (route) => {
     const u = new URL(route.request().url()), m = route.request().method();
     const json = (b, status = 200) => route.fulfill({ status, contentType: 'application/json', body: JSON.stringify(b) });
     if (u.pathname === '/api/me') return json({ signed_in: true, member: true, handle: 'me' });
-    if (u.pathname === '/api/timeattack' && m === 'GET') {
-      return json({ week: '2026-11-09', ends_on: '2026-11-15', today: '2026-11-13', cell: '39,-84.5', entered: false, entrants: 0, circuit,
-        make: circuit ? null : { seed: '2026-11-09|39,-84.5|0', km: { min: 8, max: 16 } }, board: [], you: null, last: null });
+    if (u.pathname === '/api/ta' && m === 'GET') {
+      // two slots here (the server has three): the second must start 3 km from the first
+      const slot = circuits.length < 2 ? circuits.length : null;
+      return json({ season: '2026-10-01', ends_on: '2026-12-31', week: '2026-11-09', today: '2026-11-13', cell: '39,-84.5', circuits,
+        make: slot == null ? null : { slot, seed: `2026-10-01|39,-84.5|${slot}|0`, km: { min: 8, max: 16 }, best: true, avoid: circuits.map((c) => JSON.parse(c.geom)[0]) },
+        board: circuits.length ? { id: circuits[0].id, period: 'week', entrants: 0, rows: [], you: null } : null });
     }
-    if (u.pathname === '/api/timeattack/circuit' && m === 'POST') {
+    if (u.pathname === '/api/ta/circuit' && m === 'POST') {
       const b = JSON.parse(route.request().postData() || 'null');
       sent.push(b);
-      circuit = { segment_id: 'ta-NEW', name: b.name, length_m: 10000, geom: JSON.stringify(b.geom), week: '2026-11-09', ends_on: '2026-11-15', cell: '39,-84.5' };
-      return json({ circuit, kept: true });
+      const c = { id: 'ta-NEW' + b.slot, slot: b.slot, name: b.name, length_m: 10000, geom: JSON.stringify(b.geom), featured: b.slot === 0, entered: false };
+      circuits.push(c);
+      return json({ circuit: c, kept: true });
     }
     if (m === 'GET') return json([]);
     return json({}, 404);
@@ -8847,18 +9092,21 @@ flow('time attack, a new week (the owner, 2026-11-11: autogenerated, the area\'s
   await page.click('#destInput');
   await page.waitForSelector('#planAttack:not([hidden]) > summary');
   await page.click('#planAttack > summary');
-  await page.waitForFunction(() => /loop from the area’s best roads|doesn’t reach this area/.test(document.getElementById('planAttackBody').textContent), null, { timeout: 60000 });
+  await page.waitForFunction(() => /New loops in January|doesn’t reach this area/.test(document.getElementById('planAttackBody').textContent), null, { timeout: 90000 });
   const text = await page.textContent('#planAttackBody');
-  check(sent.length === 1, 'one loop sent: ' + text);
+  check(sent.length === 2 && sent[0].slot === 0 && sent[1].slot === 1, 'two loops sent, one a slot: ' + JSON.stringify(sent.map((b) => b.slot)) + ' ' + text);
   const b = sent[0] || {};
   const g = b.geom || [], km = g.reduce((s, p, i) => (i ? s + Math.hypot((p[0] - g[i - 1][0]) * 111195, (p[1] - g[i - 1][1]) * 111195 * Math.cos(p[0] * Math.PI / 180)) : 0), 0) / 1000;
-  check(b.cell === '39,-84.5' && b.seed === '2026-11-09|39,-84.5|0' && / loop$|This week’s loop/.test(b.name || ''), 'the area, the seed and a name: ' + JSON.stringify({ cell: b.cell, seed: b.seed, name: b.name }));
+  check(b.cell === '39,-84.5' && b.seed === '2026-10-01|39,-84.5|0|0' && / loop$/.test(b.name || ''), 'the area, the seed and a name: ' + JSON.stringify({ cell: b.cell, seed: b.seed, name: b.name }));
   // the owner's TestFlight note (2026-11-12): near you (your own quarter-degree area) and not through a neighbourhood
   check(g.length >= 10 && JSON.stringify(g[0]) === JSON.stringify(g[g.length - 1]) && g[0][0] >= 39 && g[0][0] < 39.25 && g[0][1] >= -84.5 && g[0][1] < -84.25, 'a closed line that starts in your quarter-degree area: ' + g.length + ' points ' + JSON.stringify(g[0]));
   const lp = await page.evaluate(() => window.apexDebug.lastAttackLoop || null);
   check(lp && lp.streetM <= 500 && lp.streetShare <= 0.05, 'little or no neighbourhood street: ' + JSON.stringify(lp));
   check(km >= 5 && km <= 25, 'a small loop: ' + km.toFixed(1) + ' km');
-  check(text.includes(b.name) && /Enter/.test(await page.textContent('#planAttack')), 'and it is the week\'s loop on the page: ' + text);
+  const g2 = (sent[1] || {}).geom || [[0, 0]], apart = Math.hypot((g2[0][0] - g[0][0]) * 111195, (g2[0][1] - g[0][1]) * 111195 * Math.cos(g[0][0] * Math.PI / 180));
+  check(sent[1] && sent[1].seed === '2026-10-01|39,-84.5|1|0' && apart >= 3000, 'the second from its own seed, starting apart: ' + Math.round(apart) + ' m');
+  await page.waitForFunction((n) => document.querySelector('#planAttack > summary').textContent.includes(n), b.name);   // the row's line names the featured one
+  check((await page.$$('#planAttack .ta-loop')).length === 2 && /Enter/.test(await page.textContent('#planAttack')), 'and both are on the page: ' + text);
 }, { geolocation: { latitude: 39.1, longitude: -84.5 }, permissions: ['geolocation'] });
 
 

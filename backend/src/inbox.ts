@@ -30,7 +30,7 @@ export function duelOutcome(d: { kind: string; you: { score: number; time_s: num
 
 export async function inbox(env: Env, v: Viewer) {
   const me = v.id;
-  const [requests, topped, passed, kudos, duels, follows, drives] = await Promise.all([
+  const [requests, topped, passed, passedFixed, kudos, duels, follows, drives] = await Promise.all([
     // a friend request waiting on you (the list shows it as a card; here it counts as waiting)
     all<{ handle: string; at: string }>(env,
       `SELECT u.handle, f.created_at AS at FROM friendships f JOIN users u ON u.id = f.requested_by
@@ -54,6 +54,15 @@ export async function inbox(env: Env, v: Viewer) {
         WHERE e.user_id = ?1 AND e.week = ${WEEK} AND o.time_s < e.time_s AND o.updated_at > e.updated_at AND u.handle IS NOT NULL
           AND ${NO_BLOCK("o.user_id", "?1")}
         ORDER BY o.updated_at DESC LIMIT 3`, me),
+    // the same on a fixed time attack (ta_fixed.ts): someone's best this week under yours, set after yours
+    all<{ handle: string; time_s: number; mine: number; at: string; stage: string | null; place: number }>(env,
+      `SELECT u.handle, o.t AS time_s, e.t AS mine, o.at, c.name AS stage,
+              (SELECT COUNT(DISTINCT x.user_id) + 1 FROM ta_times x WHERE x.circuit_id = e.cid AND x.driven_on >= ${WEEK} AND x.time_s < e.t AND ${NO_BLOCK("x.user_id", "?1")}) AS place
+         FROM (SELECT circuit_id AS cid, MIN(time_s) AS t, MAX(updated_at) AS at FROM ta_times WHERE user_id = ?1 AND driven_on >= ${WEEK} GROUP BY circuit_id) e
+         JOIN (SELECT circuit_id AS cid, user_id, MIN(time_s) AS t, MAX(updated_at) AS at FROM ta_times WHERE user_id != ?1 AND driven_on >= ${WEEK} GROUP BY circuit_id, user_id) o ON o.cid = e.cid
+         JOIN users u ON u.id = o.user_id JOIN ta_circuits c ON c.id = e.cid AND c.removed = 0
+        WHERE o.t < e.t AND o.at > e.at AND u.handle IS NOT NULL AND ${NO_BLOCK("o.user_id", "?1")}
+        ORDER BY o.at DESC LIMIT 3`, me),
     kudosReceived(env, v),
     duelList(env, v),
     // new followers of your roadbooks (counted, never named: a public book's followers may be strangers)
@@ -72,7 +81,7 @@ export async function inbox(env: Env, v: Viewer) {
   const items: Item[] = [];
   for (const r of requests) items.push({ kind: "request", at: r.at, handle: r.handle, waiting: true });
   for (const t of topped) items.push({ kind: "topped", at: t.at, handle: t.handle, canon_id: t.canon_id, stage: t.stage, score: t.score, yours: t.yours });
-  for (const p of passed) items.push({ kind: "passed", at: p.at, handle: p.handle, stage: p.stage, gap_s: p.mine - p.time_s, place: p.place });
+  for (const p of [...passed, ...passedFixed]) items.push({ kind: "passed", at: p.at, handle: p.handle, stage: p.stage, gap_s: p.mine - p.time_s, place: p.place });
   const since = Date.now() - DAYS * 86400000;
   for (const k of kudos as { from_handle: string; stage: string | null; canon_id: string; driven_on: string; created_at: string }[]) {
     if (Date.parse(k.created_at.replace(" ", "T") + "Z") < since) continue;

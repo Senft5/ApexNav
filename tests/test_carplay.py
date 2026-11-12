@@ -261,6 +261,12 @@ console.log(JSON.stringify({
   alongPlates: C.alongMessage([{ kind: 'cafe', name: 'The Extremely Long Named Mountain Coffee Roasters', lat: 35.1234567, lon: -83.9 }, { kind: 'view', name: 'Overlook', lat: 35, lon: -84 },
     { kind: 'fuel', name: null, lat: 35.2, lon: -83.8 }, { kind: 'fuel', name: 'Shell' }]).places,
   alongMany: C.alongMessage(Array.from({ length: 50 }, (_, i) => ({ kind: 'fuel', name: 'S' + i, lat: 35 + i / 100, lon: -84 }))).places.length,
+  offer: C.offerMessage('o3', 'Police reported on your route in 1.2 mi.', 'Police in 1.2 mi', 'Go round', 15000),
+  offerSame: C.offerMessage('o4', 'Running 12 min late for home.', 'Running 12 min late for home.', 'Skip Cherohala Skyway', 60000),
+  offerUndo: C.offerMessage('o8', 'Pothole reported', '', 'Undo', 5000, 'OK'),
+  offerNone: [C.offerMessage('', 'x', '', 'k'), C.offerMessage('o5', '', '', 'k'), C.offerMessage('o6', 'x', '', ''), C.offerMessage('o7', 'x', '', 'k', 1000).seconds],
+  alongDescent: C.alongMessage([], 'Long descent: 3.7 mi at 8% +1'),
+  alongCharge: C.alongMessage([{ kind: 'charge', name: 'Tesla Supercharger', lat: 35.5, lon: -83.5 }, { kind: 'charge', name: null, lat: 35.6, lon: -83.6 }]),
   alongNone: [C.alongMessage([]), C.alongMessage(null), C.alongMessage([{ kind: 'view', name: 'Overlook' }])],
   look: C.lookMessage({ id: 'tapedeck', night: { panel: '#0A0C0B', panelInk: '#7DF5DE', accent: '#FFB347' } }, false),
   tulips: [10, 15, 17, 12, 4, 26].map((k) => C.tulipSVG(k, '#7DF5DE')), bad: C.tulipSVG(10, 'red;x'),
@@ -302,24 +308,59 @@ def test_hazards_are_named_and_unplaceable_ones_dropped(maps):
 
 def test_the_cafes_and_fuel_along_go_to_the_car_by_name(maps):
     """The owner, 2026-11-11: show the café's or the station's name. The car's route preview names them, in route order."""
-    assert maps["along"] == {"kind": "along", "full": "Café: Bean There Coffee · Fuel: Shell, Speedway +2", "short": "Bean There Coffee · Shell +3", "places": []}
-    assert maps["alongUnnamed"] == {"kind": "along", "full": "Café: 2 cafés · Fuel: 1 stop", "short": "2 cafés · 1 fuel stop", "places": []}, "no name: counted, never invented"
+    assert maps["along"] == {"kind": "along", "full": "Café: Bean There Coffee · Fuel: Shell, Speedway +2", "short": "Bean There Coffee · Shell +3", "places": [], "descent": ""}
+    assert maps["alongUnnamed"] == {"kind": "along", "full": "Café: 2 cafés · Fuel: 1 stop", "short": "2 cafés · 1 fuel stop", "places": [], "descent": ""}, "no name: counted, never invented"
     assert maps["alongLong"]["full"] == "Café: The Extremely Long Named Mo…"
-    assert all(m == {"kind": "along", "full": "", "short": "", "places": []} for m in maps["alongNone"]), "nothing along clears the car's line; viewpoints stay on the phone"
+    assert all(m == {"kind": "along", "full": "", "short": "", "places": [], "descent": ""} for m in maps["alongNone"]), "nothing along clears the car's line; viewpoints stay on the phone"
     # and on the car's map, a plate at each one: its name, or what it is when the map has none; never a viewpoint
     assert maps["alongPlates"] == [{"at": [35.123457, -83.9], "kind": "cafe", "text": "The Extremely Lon…"}, {"at": [35.2, -83.8], "kind": "fuel", "text": "Fuel"}]
     assert maps["alongMany"] == 30
+    # an electric car's chargers (scenic.js forCar keeps them instead of the pumps): named on the car and on its map
+    assert maps["alongCharge"]["full"] == "Charge: Tesla Supercharger +1" and maps["alongCharge"]["short"] == "Tesla Supercharger +1"
+    assert [p["kind"] for p in maps["alongCharge"]["places"]] == ["charge", "charge"] and maps["alongCharge"]["places"][1]["text"] == "Charger"
+    for f in ("CarPlay/ApexCarPlay.swift", "CarPlay/ApexCarMap.swift", "web/carmap.js", "web/carmap.html"):
+        assert "charge" in open(os.path.join(ROOT, *f.split("/")), encoding="utf-8").read(), f + " takes the chargers too"
+    # a long descent rides on the same line, alone when nothing is along (brake_heat.js descentShort)
+    assert maps["alongDescent"] == {"kind": "along", "full": "", "short": "", "places": [], "descent": "Long descent: 3.7 mi at 8% +1"}
+    assert "if (car.route && track === t) carAlong(t);                      // and on the car's route preview" in cockpit_source()
     js = cockpit_source()
     assert "car.along = ''; carAlong(t);" in js, "every route sent to the car is followed by its places"
     assert "if (car.route && track === t) carAlong(t);" in js, "and the places are sent when they come in"
     swift = open(os.path.join(ROOT, "CarPlay", "ApexCarPlay.swift"), encoding="utf-8").read()
-    assert 'case "along":' in swift and "[along.full, along.short]" in swift
+    assert 'case "along":' in swift and "line([o.detail, along.short, along.descent])" in swift
+    assert "line([o.detail, along.full" not in swift, "the car preview names one place per kind, never the two-name line"
+    assert 'detailText: "A twisty loop' not in swift and 'header: "Twisty loops, back where you started"' in swift
     # the car's map, native and its web fallback: the places after the hazards and corners, so a name never hides a corner
     native = open(os.path.join(ROOT, "CarPlay", "ApexCarMap.swift"), encoding="utf-8").read()
     carmap = open(os.path.join(ROOT, "web", "carmap.js"), encoding="utf-8").read()
     assert "hazards.filter(near) + cs.prefix(all ? 160 : 40) + places.filter(near)" in native
     assert ".concat(state.places.filter(near)" in carmap and "places(list) {" in carmap
     assert swift.count("showPlaces(); setMode()") == 2, "a car map that connects later is given the places too"
+
+
+def test_the_phones_one_key_offers_reach_the_car(maps):
+    """Go round, Skip and Head home were phone-only toasts in a drive; the car shows them as a navigation alert."""
+    assert maps["offer"] == {"kind": "offer", "id": "o3", "title": "Police reported on your route in 1.2 mi.", "short": "Police in 1.2 mi",
+                             "key": "Go round", "seconds": 15}
+    assert maps["offerSame"]["short"] == "" and maps["offerSame"]["key"] == "Skip Cherohala…" and maps["offerSame"]["seconds"] == 20
+    assert maps["offerNone"] == [None, None, None, 5]
+    js = cockpit_source()
+    assert js.count("offerKey(`") == 2, "the police report ahead and the late-for-home offers"
+    assert "m.action === 'offer' && car.offer && m.id === car.offer.id && performance.now() < car.offer.until" in js
+    assert "carPost({ kind: 'offerDone', id })" in js
+    swift = open(os.path.join(ROOT, "CarPlay", "ApexCarPlay.swift"), encoding="utf-8").read()
+    assert 'case "offer":' in swift and 'case "offerDone":' in swift and 'ApexCar.shared.send("offer", ["id": id])' in swift
+    assert "cancel" not in maps["offer"], "without a cancel the car says Not now"
+    assert 'cancel.isEmpty ? "Not now" : cancel' in swift
+
+
+def test_a_report_from_the_car_has_its_undo_on_the_car(maps):
+    """The phone's Report key turns into Undo for a moment; a report from the car's grid gets the car's own Undo."""
+    assert maps["offerUndo"] == {"kind": "offer", "id": "o8", "title": "Pothole reported", "short": "", "key": "Undo", "seconds": 5, "cancel": "OK"}
+    js = cockpit_source()
+    assert "reportHazard(m.kind, null, true)" in js
+    assert "carPost(ApexCarPlay.offerMessage(id, `${word} reported`, '', 'Undo', ms, 'OK'))" in js
+    assert "if (pendingHz.carOffer) carPost({ kind: 'offerDone', id: pendingHz.carOffer });" in js, "an Undo on the phone takes the car's away"
 
 
 def test_the_look_carries_the_theme_and_its_dark_card(maps):
@@ -459,3 +500,10 @@ def test_the_car_offers_the_same_loop_times_as_the_phones_dial():
     dial = json.loads(re.search(r"LOOP_MINUTES = (\[[\d, ]+\])", cockpit_source()).group(1))
     assert car == dial == [30, 60, 90, 120, 180]
     assert '("1½ hours", 90)' in row and '("3 hours", 180)' in row
+    # and the page takes every one of them: it used to accept only 30, 60 and 120, so the car's 1½ and 3 hours did nothing
+    assert "m.action === 'loop' && LOOP_MINUTES.includes(m.minutes)" in cockpit_source()
+
+
+def test_a_close_convoy_hazard_alerts_the_car_with_the_voice_off_too():
+    js = cockpit_source()
+    assert "if (!state.toggles.voice) { toast(text); if (urgent && driveActive) carPost({ kind: 'hazard', title: text }); }" in js

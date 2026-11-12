@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self' apexnav:; script-src 'self' apexnav: 'sha256-dQRNrL8ViJcYBh28ZlC3kexYm+mtIMCFLn6KJTOE0ME=' 'sha256-G7s/ZI+Hqrfc4DqbB6EANJJLmUmhNK06PizQ1LlsG84=' https://cdn.jsdelivr.net 'wasm-unsafe-eval'; worker-src 'self' apexnav: blob:; child-src 'self' apexnav: blob:; style-src 'self' apexnav: 'unsafe-inline'; font-src 'self' apexnav: data:; img-src 'self' apexnav: data: blob: https://tiles.openfreemap.org https://s3.amazonaws.com https://basemap.nationalmap.gov; media-src 'self' apexnav: data: blob:; connect-src 'self' apexnav: data: blob: https://apexnav.senftns.workers.dev wss://apexnav.senftns.workers.dev https://tiles.openfreemap.org https://basemap.nationalmap.gov https://s3.amazonaws.com https://valhalla1.openstreetmap.de https://router.project-osrm.org https://overpass-api.de https://overpass.private.coffee https://overpass.kumi.systems https://maps.mail.ru https://nominatim.openstreetmap.org https://photon.komoot.io https://api.open-meteo.com https://api.weather.gov https://statsapi.mlb.com https://api.seatgeek.com https://api.water.noaa.gov https://waterservices.usgs.gov https://in.carsprogram.org https://publicapi.ohgo.com https://quickstats.nass.usda.gov https://commons.wikimedia.org https://graph.mapillary.com https://vpic.nhtsa.dot.gov https://cdn.jsdelivr.net https://huggingface.co https://*.huggingface.co https://*.hf.co; object-src 'none'; base-uri 'none'; form-action 'self'" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self' apexnav:; script-src 'self' apexnav: 'sha256-C4vsqdToJf7JVcSHEpn1pGJkm2gy+1lFt5Ikq452AXo=' 'sha256-G7s/ZI+Hqrfc4DqbB6EANJJLmUmhNK06PizQ1LlsG84=' https://cdn.jsdelivr.net 'wasm-unsafe-eval'; worker-src 'self' apexnav: blob:; child-src 'self' apexnav: blob:; style-src 'self' apexnav: 'unsafe-inline'; font-src 'self' apexnav: data:; img-src 'self' apexnav: data: blob: https://tiles.openfreemap.org https://s3.amazonaws.com https://basemap.nationalmap.gov; media-src 'self' apexnav: data: blob:; connect-src 'self' apexnav: data: blob: https://apexnav.senftns.workers.dev wss://apexnav.senftns.workers.dev https://tiles.openfreemap.org https://basemap.nationalmap.gov https://s3.amazonaws.com https://valhalla1.openstreetmap.de https://router.project-osrm.org https://overpass-api.de https://overpass.private.coffee https://overpass.kumi.systems https://maps.mail.ru https://nominatim.openstreetmap.org https://photon.komoot.io https://api.open-meteo.com https://api.weather.gov https://statsapi.mlb.com https://api.seatgeek.com https://api.water.noaa.gov https://waterservices.usgs.gov https://in.carsprogram.org https://publicapi.ohgo.com https://quickstats.nass.usda.gov https://commons.wikimedia.org https://graph.mapillary.com https://vpic.nhtsa.dot.gov https://cdn.jsdelivr.net https://huggingface.co https://*.huggingface.co https://*.hf.co; object-src 'none'; base-uri 'none'; form-action 'self'" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
   <title>Vetta · Log</title>
   <link rel="icon" href="brand/mark.svg" type="image/svg+xml" />
@@ -27,6 +27,7 @@
   <script src="instruments.js"></script>
   <script src="sync.js"></script>
   <script src="format.js"></script>
+  <script src="flow.js"></script>
   <script src="recording.js"></script>
   <script src="analysis_client.js"></script>   <!-- the Log's heavy work in the analysis worker (REVIEW_FEEL F-06) -->
   <script src="drive_keep.js"></script>
@@ -40,7 +41,6 @@
   <script src="vocabulary.js"></script>   <!-- the grip circle's one line (one term, one meaning) -->
   <script src="drive_basemap.js"></script>   <!-- the real map under the route picture; MapLibre itself loads when it scrolls into view -->
   <script src="brake_heat.js"></script>
-  <script src="flow.js"></script>
   <script src="drive_view.js"></script>
   <script src="drive_card.js"></script>
   <script src="year_review.js"></script>
@@ -219,7 +219,7 @@
     .fp-ghost .hero-score { display: flex; align-items: flex-end; padding: 6px 0 14px; border-bottom: 1px solid var(--rule); }
     .fp-digits { display: inline-flex; gap: 6px; } .fp-digits i { width: 40px; height: 68px; border: 1.5px dashed var(--panel-dim); }   /* three places for the score's figures */
     .fp-ghost .stamp-d { border: 1.5px dashed var(--panel-dim); } .fp-ghost table.fp-index td { border-bottom: 0; }   /* its own class: a drawing of a row is not a row of the index */
-    .fp-ghost .ix-road b { font-weight: 500; } .fp-ghost .spark .base { stroke: var(--panel-dim); stroke-dasharray: 2 2; } .fp-ghost .score { color: var(--panel-dim); }
+    .fp-ghost .ix-road b { font-weight: 500; } .fp-ghost .score { color: var(--panel-dim); }
     .fp-head { font: 700 26px/1.1 var(--font-num); margin: 0 0 6px; }
     .fp-line { margin: 0 0 18px; font-size: 16px; line-height: 1.45; color: var(--panel-dim); max-width: 34em; }
     a.btn.fp-go { justify-content: center; height: 52px; font-size: 17px; box-shadow: inset 0 -3px 0 rgba(0,0,0,0.3); }
@@ -263,12 +263,23 @@
     .dv-head .score.big { font-size: 80px; line-height: 0.9; letter-spacing: 0.02em; }
     .dv-head .dv-plain { font-size: 17px; line-height: 1.35; font-weight: 600; }
     .dv-acts { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 18px; margin: 12px 0 4px; }
+    .dv-acts > * { flex: none; white-space: nowrap; }
+    .dv-more > summary { list-style: none; cursor: pointer; }
+    .dv-more > summary::-webkit-details-marker { display: none; }
+    .dv-acts { position: relative; }   /* the ⋯ menu hangs from the row's left edge, so it never runs off the screen at any text size */
+    .dv-more > summary { font-size: 22px; padding: 6px 8px; text-decoration: none; display: flex; align-items: center; }
+    .dv-more-box { position: absolute; left: 0; top: 100%; max-width: 100%; z-index: 5; display: flex; flex-direction: column; align-items: flex-start;
+      min-width: 180px; padding: 4px 16px; background: var(--panel, #fff); border: 1px solid var(--hair, var(--rule)); border-radius: 10px;
+      box-shadow: 0 8px 24px rgba(0,0,0,0.18); }
+    .dv-more-box .linkbtn { width: 100%; text-align: left; }
+    .dv-more:not([open]) > .dv-more-box { display: none; }   /* shut, it takes no room anywhere (WebKit and Chromium alike) */
     .dv-acts .dv-replay { min-width: 140px; height: 52px; font-size: 17px; box-shadow: inset 0 -3px 0 rgba(0,0,0,0.3); }
     .dv-tagrow { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 8px 0; border-top: 1px solid var(--rule); border-bottom: 1px solid var(--rule); }
     .dv-tagrow #dvTagNew { width: 110px; height: 36px; }
     .dv-tagrow .dv-notebox { flex-basis: 100%; border-bottom: 0; }
     .dv-tagrow .dv-notebox textarea { width: 100%; }
     .dv-tagrow #dvTagsNote { flex-basis: 100%; margin: 0; }
+    .dv-tagrow #dvTagsNote:empty { display: none; }
     /* the Log (REVIEW.md roadmap 13) */
     .log-hero { padding: 6px 0 10px; border-bottom: 1px solid var(--rule); }
     .hero-score b { font: 800 88px/0.9 var(--font-num); font-variant-numeric: tabular-nums; letter-spacing: 0.04em; }
@@ -288,8 +299,6 @@
     .stamp-d { display: inline-grid; justify-items: center; width: 42px; padding: 3px 0; border: 1.5px solid var(--panel-ink); font-size: 10px; font-weight: 700; letter-spacing: 0.06em; }
     .stamp-d b { font: 800 18px/1 var(--font-num); }
     :is(.road-index, .fp-index) .ix-road b { display: block; font-size: 16px; }
-    :is(.road-index, .fp-index) .spark { display: block; width: 100%; height: 10px; margin: 4px 0 2px; }
-    :is(.road-index, .fp-index) .spark line { stroke: var(--accent); stroke-width: 1; vector-effect: non-scaling-stroke; } :is(.road-index, .fp-index) .spark .base { stroke: var(--rule); }
     :is(.road-index, .fp-index) .ix-score { width: 64px; text-align: right; }
     :is(.road-index, .fp-index) .ix-score .score { font-size: 28px; }
     .actions { display: flex; gap: 8px; flex-wrap: wrap; }
@@ -333,10 +342,13 @@
       <div class="dv-acts" id="dvActs" role="group" aria-label="This drive">
         <button class="btn solid dv-replay" id="dvReplay">Replay</button>
         <button class="linkbtn" id="dvAgain">Drive it again</button>
-        <button class="linkbtn" id="dvCompare">Compare</button>
-        <button class="linkbtn" id="dvShare">Send the road</button>
-        <button class="linkbtn" id="dvCard">Share card</button>
-        <button class="linkbtn" id="dvStage">Mark a stage</button>
+        <details class="dv-more"><summary class="linkbtn" aria-label="More for this drive" title="More">⋯</summary>
+          <div class="dv-more-box">
+            <button class="linkbtn" id="dvCompare">Compare</button>
+            <button class="linkbtn" id="dvShare">Send the road</button>
+            <button class="linkbtn" id="dvCard">Share card</button>
+            <button class="linkbtn" id="dvStage">Mark a stage</button>
+          </div></details>
       </div>
       <div id="dvRoot"></div>
       <div class="dv-tagrow" id="dvTagsPanel">
@@ -344,7 +356,7 @@
         <input id="dvTagNew" maxlength="24" placeholder="+ tag" aria-label="Add a tag" /><button class="linkbtn" id="dvTagAdd">Add</button>
         <details class="quiet dv-notebox"><summary>Note</summary>
           <textarea id="dvNoteText" maxlength="280" placeholder="A note for yourself (stays on this phone)" aria-label="Note"></textarea></details>
-        <p class="note" id="dvTagsNote">Tags and notes stay on this phone. Filter the Log by them.</p></div>
+        <p class="note" id="dvTagsNote" aria-live="polite"></p></div>
       <div id="dvDashcam"></div>
       <div class="panel" id="dvRecce"><h2>Your notes</h2>
         <p class="note" id="dvRecceNote">Keep this drive's notes as yours, change any call, and the co-driver reads yours the next time you drive these corners this way. On this phone only.</p>
@@ -379,7 +391,7 @@
         <div class="fp-ghost" aria-hidden="true">
           <div class="hero-score"><span class="fp-digits"><i></i><i></i><i></i></span><small>/1000</small></div>
           <table class="fp-index"><tr><td class="ix-date"><span class="stamp-d"><b>--</b>---</span></td>
-            <td class="l ix-road"><b>The road you drove</b><svg class="spark" viewBox="0 0 100 10" preserveAspectRatio="none"><line class="base" x1="0" x2="100" y1="9" y2="9"/></svg><span class="sub">How far · how many corners</span></td>
+            <td class="l ix-road"><b>The road you drove</b><span class="sub">How far · how many corners</span></td>
             <td class="ix-score"><span class="score">--</span></td></tr></table>
         </div>
         <h2 class="fp-head">Your first drive goes here.</h2>
@@ -689,11 +701,13 @@
     async function showBook(r) {
       $('bookHead').textContent = 'Reading its drives…'; $('bookList').replaceChildren(); $('bookPractice').hidden = true;
       let book = null;
-      try { book = (await ApexAnalysis.job('roadBook', { id: r.id })).book; } catch (_) { book = null; }
+      // a practice kept to this road: since it began, which uneven corners have evened out (driver_profile.js roadBook since)
+      const plan = ApexDriverProfile.loadPlan(localStorage), since = plan && plan.where && plan.where.road && ApexDriverProfile.onPlanRoad(plan, r.name) ? plan.since : null;
+      try { book = (await ApexAnalysis.job('roadBook', { id: r.id, since })).book; } catch (_) { book = null; }
       if (bookPick !== r.name) return;
       const w = ApexDriverProfile.roadBookRows(book, (at) => ApexFormat.dateTime(at.slice(0, 10)));
       if (!w) { $('bookHead').textContent = 'No corner of it driven cleanly three times yet: only corners with every technique credit measured count.'; return; }
-      $('bookHead').textContent = w.work ? `${w.head} ${w.work}` : w.head;
+      $('bookHead').textContent = [w.head, w.work, ApexDriverProfile.roadEvenedLine(book)].filter(Boolean).join(' ');
       showBookPractice(ApexDriverProfile.roadBookFocus(book), r.name);
       $('bookList').replaceChildren(...w.rows.map((x) => {
         const li = document.createElement('li'), n = document.createElement('span'), t = document.createElement('span'), v = document.createElement('b'), by = document.createElement('button');
@@ -713,12 +727,12 @@
       box.hidden = !line;
       if (!line) { box.replaceChildren(); return; }
       const name = ApexDriverProfile.WORDS[f.skill].name.toLowerCase(), plan = ApexDriverProfile.loadPlan(localStorage);
-      if (plan && plan.skill === f.skill && ApexDriverProfile.onPlanRoad(plan, road)) { box.textContent = `${line} You are practicing it now: Your driving shows how it goes.`; return; }
+      if (plan && plan.skill === f.skill && ApexDriverProfile.onPlanRoad(plan, road)) { box.textContent = `${line} Practicing it.`; return; }
       const b = document.createElement('button');
       b.type = 'button'; b.className = 'linkbtn'; b.id = 'bookPracticeGo'; b.textContent = `Practice ${name} on my next drives here`;
       b.addEventListener('click', () => {
         ApexDriverProfile.savePlan(localStorage, { skill: f.skill, where: { road: String(road || '').trim().toLowerCase(), name: road }, since: ApexDriverProfile.localStamp() });
-        box.textContent = `${line} Practicing it on your next drives here: Your driving shows how it goes, on this road alone.`;
+        box.textContent = `${line} Practicing it here.`;
         box.tabIndex = -1; box.focus({ preventScroll: true });
       });
       box.replaceChildren(document.createTextNode(`${line} `), b);
@@ -830,20 +844,16 @@
         return b;
       }));
       const shown = drives.filter((d) => ApexDriveTags.matches(d, tagFilter));
-      // the drive list as a road-book index (REVIEW.md roadmap 13): the date stamped, the road, a tick per corner along it
-      // (where the drive was busy), the distance and the score
-      const spark = (d) => {
-        const n = d.n || 0;                                           // samples (the summary's count)
-        if (n < 2 || !Array.isArray(d.corners) || !d.corners.length) return '';
-        const ticks = d.corners.map(c => { const x = (100 * c.apex / (n - 1)).toFixed(1); return `<line x1="${x}" x2="${x}" y1="1" y2="9"/>`; }).join('');
-        return `<svg class="spark" viewBox="0 0 100 10" preserveAspectRatio="none" aria-hidden="true"><line class="base" x1="0" x2="100" y1="9" y2="9"/>${ticks}</svg>`;
-      };
+      // the drive list as a road-book index (REVIEW.md roadmap 13): the date stamped, the road, the distance and the score.
+      // TestFlight 2026-11-12 (note 3, "cluttered"): no corner ticks, no "--" for a drive with no Score (its page says so), and
+      // a street address shows without its house number ("To Pebble Ridge Ln"); the drive's own name is unchanged
+      const listName = (n) => String(n || '').replace(/^To \d+[A-Za-z]?(-\d+)? (?=.*\b(St|Street|Rd|Road|Ln|Lane|Dr|Drive|Ave|Avenue|Blvd|Ct|Court|Way|Pl|Place|Pike|Hwy|Cir|Circle|Ter|Trl|Trail|Pkwy|Run|Loop)\.?$)/, 'To ');
       const stamp = (d) => { const m = monthOf(d) ? new Date(d.date.slice(0, 10) + 'T12:00:00') : null;
         return m ? `<span class="stamp-d"><b>${m.getDate()}</b>${m.toLocaleDateString('en-US', { month: 'short' }).toUpperCase()}</span>` : '<span class="stamp-d"><b>--</b></span>'; };
       const rows = shown.slice().reverse().map(d => `<tr class="row-link" data-drive="${d.id}" tabindex="0" role="link" aria-label="Open ${escH(d.name)}">
         <td class="ix-date">${stamp(d)}</td>
-        <td class="l ix-road"><b>${escH(d.name)}</b>${spark(d)}<span class="sub">${ApexFormat.factsLine(d, ['distance', 'corners'])}${ApexDriveTags.normalize(d.tags).length ? ` · <span class="tagline">${escH(ApexDriveTags.normalize(d.tags).join(', '))}</span>` : ''}</span></td>
-        <td class="ix-score"><span class="score">${d.ds.score ?? UNK}</span></td></tr>`).join('');
+        <td class="l ix-road"><b>${escH(listName(d.name))}</b><span class="sub">${ApexFormat.factsLine(d, ['distance', 'corners'])}${ApexDriveTags.normalize(d.tags).length ? ` · <span class="tagline">${escH(ApexDriveTags.normalize(d.tags).join(', '))}</span>` : ''}</span></td>
+        <td class="ix-score">${d.ds.score != null ? `<span class="score">${d.ds.score}</span>` : ''}</td></tr>`).join('');
       $('historyTable').innerHTML = !drives.length ? '<tr><td class="l" colspan="3"><span class="note">No drives yet.</span></td></tr>' : !shown.length ? '<tr><td class="l" colspan="3"><span class="note">No drives with those tags.</span></td></tr>' : rows;
       setTimeout(renderRecords, 0);
       setTimeout(renderSteadiness, 0);                                  // the coach runs per road: after the Log has painted
@@ -873,7 +883,10 @@
       // by kind of corner (D-08 per archetype): your cleanest tight, medium and fast corner, from Your driving's kept observations
       const byId = new Map(list.map((d) => [d.id, d]));
       const kinds = ['tight', 'medium', 'fast'].map((z) => { const r = driving.records && driving.records[z]; return r && byId.has(r.id) ? { z, r, d: byId.get(r.id) } : null; }).filter(Boolean);
-      $('recordsPanel').hidden = !rows.length && !smooth && !brake && !kinds.length;
+      // this month's best run of clean corners in a row (IDEAS D-30, the summary's run): a drive whose run is unknown never counts
+      const runs = list.filter(d => monthOf(d) === key && d.run && d.run.corners >= 1);
+      const run = runs.length ? runs.reduce((m, d) => (d.run.corners > m.run.corners ? d : m)) : null;
+      $('recordsPanel').hidden = !rows.length && !smooth && !brake && !kinds.length && !run;
       if ($('recordsPanel').hidden) return;
       const pct = (v) => `${Math.round(v * 100)}%`;
       const day = (d) => `<span class="nw">${monthOf(d) ? ApexFormat.dateTime(d.date.slice(0, 10)) : 'date unknown'}</span>`;   // "30 Oct", as the list's stamps read; never 2026-10-30
@@ -882,6 +895,7 @@
       for (const r of rows) { out.push(line(`Best Score on this road, of ${r.n} scored drives`, r.best, r.best.ds.score, r.fresh ? `${day(r.best)}, your latest here: a new best` : day(r.best))); names.push(r.name); }
       if (smooth) { out.push(line(`Smoothest drive this month, of ${of('smoothness').length}`, smooth, pct(smooth.ds.components.smoothness), day(smooth))); names.push(smooth.name); }
       if (brake) { out.push(line(`Best braking this month, of ${of('braking').length}`, brake, pct(brake.ds.components.braking), day(brake))); names.push(brake.name); }
+      if (run) { out.push(line(`Best run this month: corners in a row, smooth and settled${Number.isFinite(run.run.len_m) && run.run.len_m > 0 ? `, over ${ApexUnits.long(run.run.len_m, 1)}` : ''}`, run, run.run.corners, day(run))); names.push(run.name); }
       const way = (dir) => (dir === 'L' ? ' left' : dir === 'R' ? ' right' : ' corner');
       for (const { z, r, d } of kinds) { out.push(line(`Cleanest ${z}${way(r.dir)}, of ${r.n} ${z} corners`, d, r.level, day(d))); names.push(d.name); }
       $('recordsTable').innerHTML = out.join('');
@@ -992,14 +1006,14 @@
         // the road where the skill to work on shows most (driver_profile.js skillRoadLine), under its tip
         const skill = (pr && planNow()) ? planNow().skill : p && p.focus ? p.focus.skill : null, shown = $('drivingRoot').querySelector('.dp-focus');
         if (skill && shown) roadBookList().then((list) => {
-          const line = ApexDriverProfile.skillRoadLine(list, skill), box = $('drivingRoot').querySelector('.dp-focus');
+          const line = ApexDriverProfile.skillRoadLine(list, skill), box = $('drivingRoot').querySelector('.dp-focus'), pl = planNow();
           if (!line || box !== shown || box.querySelector('.dp-where')) return;
+          if (pl && pl.skill === skill && pl.where && pl.where.road) return;   // the practice already keeps to a road: it says which
           const say = document.createElement('p'); say.className = 'dp-say dp-where'; say.textContent = line;
           const tip = [...box.querySelectorAll('.dp-say')].pop();
           if (tip) tip.after(say); else box.append(say);
           // ...and a practice kept to that road (driver_profile.js practice, where.road), unless the practice already keeps to one
-          const road = ApexDriverProfile.skillRoad(list, skill).name, plan = planNow();
-          if (plan && plan.skill === skill && plan.where && plan.where.road) return;
+          const road = ApexDriverProfile.skillRoad(list, skill).name;
           const go = document.createElement('button');
           go.type = 'button'; go.className = 'linkbtn'; go.id = 'drivingRoadGo'; go.textContent = `Practice it on ${road} alone`;
           go.addEventListener('click', () => {
@@ -1587,6 +1601,9 @@
     });
     // Compare with…: this drive against the best other drive on the same road (the drive job's reference), else any other
     const bestOther = (d) => summaryOf(dvInfo && dvInfo.bestOther) || drives.find((x) => x.id !== d.id) || null;
+    // the drive's More menu (⋯) closes on a tap outside it or Escape, like any app's menu
+    document.addEventListener('click', (e) => { const m = document.querySelector('.dv-more[open]'); if (m && !m.contains(e.target)) m.open = false; });
+    document.addEventListener('keydown', (e) => { const m = document.querySelector('.dv-more[open]'); if (m && e.key === 'Escape') { m.open = false; m.querySelector('summary').focus(); } });
     $('dvStage').addEventListener('click', () => { const id = $('dvPick').value; if (id) location.href = `analysis.html?tab=segments&drive=${encodeURIComponent(id)}`; });
     $('dvCompare').addEventListener('click', () => {
       const id = $('dvPick').value, d = summaryOf(id);

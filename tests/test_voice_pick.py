@@ -42,4 +42,4 @@ def test_the_pick_wins_over_the_theme_and_is_kept():
     assert "state.voicePick = b.dataset.pack === 'look' ? null : b.dataset.pack;" in js
     # a theme change never touches the pick: only the pack switch (and the saved prefs) write it
     assert len(re.findall(r"state\.voicePick = ", js)) == 2
-    assert "Suggested voice: ${t.voice ? t.voice.name : '--'}" in js, "the card says the theme suggests, not decides"
+    assert "const q = t.voice ? ' · suggested voice' : '';" in js, "the card says the theme suggests, not decides"

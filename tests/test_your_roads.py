@@ -72,6 +72,10 @@ console.log(JSON.stringify({
     const sunEve = new Date(2026, 10, 7, 19, 0).getTime();
     return {
       ta: inA,
+      // GET /api/ta (fixed loops): the featured one, read as this week's, with this week's board when it is the featured one's
+      taFixed: Y.attackFrom({ week: '2026-11-02', today: '2026-11-06', cell: '39,-85', board: { id: 'seg1', period: 'week', entrants: 8, you: { place: 3 } },
+        circuits: [{ id: 'other', name: 'Other loop', length_m: 9000, geom: '[[39.3,-84.6],[39.31,-84.6]]', featured: false, entered: false },
+                   { id: 'seg1', name: 'Pippin and Bank loop', length_m: 32187, featured: true, entered: true, geom: JSON.stringify([[39.1, -84.6], [39.2, -84.5], [39.1, -84.6]]) }] }),
       taNone: [Y.attackFrom(null), Y.attackFrom({ circuit: null }), Y.attackFrom(T({ circuit: { name: 'X', geom: '[[1,2]]' } })), Y.attackFrom(T({ today: '2026-11-09' }))],
       sAttackIn: Y.suggest({ attack: inA, untried, mine, now, long }),
       sAttackNoTime: Y.suggest({ attack: { ...inA, place: null }, untried, mine, now, long }).reason,
@@ -163,6 +167,7 @@ def test_this_weeks_time_attack_is_read_from_the_answer(out):
     assert ta["name"] == "Pippin and Bank loop" and ta["entered"] is True and ta["place"] == 3 and ta["times"] == 8
     assert ta["left"] == 3 and (ta["lat"], ta["lon"]) == (39.1, -84.6) and ta["key"] == "2026-11-02|39,-85|seg1"
     assert out["taNone"] == [None, None, None, None]                       # no loop, no line to drive, the week over
+    assert out["taFixed"] == out["ta"]                      # the featured fixed loop is the same deck suggestion
 
 
 def test_the_time_attack_is_the_suggestion_in_its_place(out):
@@ -174,20 +179,20 @@ def test_the_time_attack_is_the_suggestion_in_its_place(out):
     assert out["sAttackCrew"] == "crew"                                    # a crew drive you're going to still comes first
     assert out["sAttackOutUntried"] == "untried"                           # not entered: after the road you haven't driven
     o = out["sAttackOut"]
-    assert o["kind"] == "attack" and o["reason"] == "This week’s loop · 20.0 mi · 8 times · 3 days left"   # and before your best road
+    assert o["kind"] == "attack" and o["reason"] == "Featured this week · 20.0 mi · 8 times · 3 days left"   # and before your best road
     assert out["sAttackOver"] == "best"
     assert out["nth"] == ["You’re 1st of 200", "You’re 2nd of 200", "You’re 3rd of 200", "You’re 4th of 200", "You’re 11th of 200",
                           "You’re 12th of 200", "You’re 13th of 200", "You’re 21st of 200", "You’re 22nd of 200", "You’re 101st of 200", "You’re 111th of 200"]
 
 
 def test_the_time_attack_reminder_says_only_what_lasts(out):
-    assert out["tAttack"] == {"title": "Sunday: Pippin and Bank loop", "body": "This week’s time attack · 20.0 mi"}
+    assert out["tAttack"] == {"title": "Sunday: Pippin and Bank loop", "body": "Time attack · 20.0 mi"}
     assert out["tAttackOver"]["title"] == "Monday: a loop from home"       # the week is over by the day it names
 
 
 def test_the_deck_reads_the_week_for_members_and_drives_to_the_start():
     src = cockpit_source()
-    assert "apiCall('GET', `/api/timeattack?lat=${at.lat}&lon=${at.lon}`)" in src and "YR.attackFrom(" in src
+    assert "apiCall('GET', `/api/ta?lat=${at.lat}&lon=${at.lon}`)" in src and "YR.attackFrom(" in src
     assert "if (s && s.kind === 'attack') { routeToPlace({ label: s.name, lat: s.lat, lon: s.lon }); return; }" in src
     assert "YR.nudgeText(sugg, day, at)" in src
 

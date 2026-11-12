@@ -81,7 +81,8 @@ def test_it_is_off_until_asked_for_and_wired_to_a_drive():
     assert "soundtrack: false," in js                                        # the default
     assert '<button class="sw" data-toggle="soundtrack"><i></i><span>Soundtrack</span></button>' in page
     assert '<script src="audio_bus.js" defer></script>' in page and '<script src="soundtrack.js" defer></script>' in page
-    assert "It follows the road, never your speed." in page and "thins out when you are over Sight" in page
+    # TestFlight 2026-11-12 (the owner: "walls of text"): the switch and its sample, no essay; never your speed stays in the code
+    assert 'id="soundtrackHear">Hear a sample</button>' in page and "It follows the road, never your speed." not in page
     tick = js[js.index("function soundtrackTick("):js.index("function soundtrackSample(")]
     assert "live && driveActive && !pendingEnd && state.toggles.soundtrack === true" in tick                # only in a drive, only when switched on
     assert "over_sight: Inst.sightShort(d), speaking: !!speech.busy" in tick  # the one alarm and the voice come first

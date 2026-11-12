@@ -5,10 +5,11 @@
 // users.google_sub (the column holds the sign-in identity; bans key on it too), so no migration was needed.
 import { Env, HttpError, b64urlDecode, body, sha256hex, str } from "./util";
 import { startSession } from "./auth";
+import { keepAppleRefresh } from "./apple_revoke";
 
 export const APPLE_ISS = "https://appleid.apple.com";
 const APPLE_KEYS_URL = "https://appleid.apple.com/auth/keys";
-const BUNDLE_ID = "com.senft.ApexNav";
+export const BUNDLE_ID = "com.senft.ApexNav";
 const KEYS_TTL_MS = 3600_000;
 
 interface Jwk { kid: string; kty: string; alg?: string; n: string; e: string }
@@ -64,13 +65,15 @@ export async function upsertAppleUser(env: Env, sub: string, email: string | nul
   return found.id;
 }
 
-/** POST /api/auth/apple {id_token, nonce, name?} from the app: a session token, like the Google code exchange. */
+/** POST /api/auth/apple {id_token, nonce, name?, code?} from the app: a session token, like the Google code exchange. `code`
+ *  (Apple's one-time authorization code) is traded for a refresh token so Delete account can revoke it (apple_revoke.ts). */
 export async function appleSignIn(req: Request, env: Env): Promise<Response> {
-  const b = await body<{ id_token?: unknown; nonce?: unknown; name?: unknown }>(req);
+  const b = await body<{ id_token?: unknown; nonce?: unknown; name?: unknown; code?: unknown }>(req);
   const token = str(b.id_token, "id_token", 20, 4096), nonce = str(b.nonce, "nonce", 16, 128);
   const name = typeof b.name === "string" && b.name.trim() ? b.name.trim().slice(0, 80) : null;
   const claims = await verifyAppleToken(token, nonce);
   const userId = await upsertAppleUser(env, claims.sub!, claims.email ?? null, name);
+  if (typeof b.code === "string" && /^[\w.-]{10,512}$/.test(b.code)) await keepAppleRefresh(env, userId, b.code);
   return new Response(JSON.stringify({ token: await startSession(env, userId) }),
     { status: 200, headers: { "content-type": "application/json", "cache-control": "no-store" } });
 }

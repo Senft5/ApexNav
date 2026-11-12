@@ -23,8 +23,8 @@ console.log(JSON.stringify({ l: S.lines(st), empty: S.lines(null) }));
 
 def test_lines():
     out = json.loads(subprocess.run([NODE, "-e", RUNNER, ROOT], capture_output=True, text=True, check=True).stdout)
-    assert out["l"]["mine"] == ["Ridge Runners · 160 km of road data · Smooth 85 · #2 of 2 for road data, #1 for smoothness",
-                                "Secret · 12 km of road data · private, not ranked", "Duo · 5 km of road data · ranked from 3 members"]
+    # TestFlight 2026-11-12 (note 2): the numbers, no footnotes; private and small crews just carry no rank
+    assert out["l"]["mine"] == ["Ridge Runners · 160 km · Smooth 85 · #2 of 2", "Secret · 12 km", "Duo · 5 km"]
     assert out["l"]["km"] == ["1. Hollow Crew · 440 km", "2. Ridge Runners · 160 km"]
     assert out["l"]["smooth"] == ["1. Ridge Runners · Smooth 85"]
     assert out["empty"] == {"mine": [], "km": [], "smooth": []}

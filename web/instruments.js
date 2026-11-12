@@ -10,6 +10,9 @@
 //   stripCode(note, words)                      the short code the strip's next cells print ("R3", "TIGHT R", "KEEP L") (pure)
 (function (root) {
   'use strict';
+  // The road's type as the binnacle says it (U-55): the reference lap's archetype in the words a driver uses, or null for a
+  // connector (a ramp or a link road, nothing to read: the row steps aside) and for none.
+  const roadKind = (type) => (type === 'Flowing sweepers' ? 'Sweepers' : type === 'Fast open' ? 'Fast & open' : type === 'Connector' ? null : (type || null));
   const NS = 'http://www.w3.org/2000/svg';
   const SPEED_MAX = 140;
 
@@ -859,10 +862,10 @@
       // REVIEW4 U-67: in a drive, the road under the car by the map's name ("Road: I-275"), the same name the strip's quiet
       // line uses; otherwise the road's type, labelled (REVIEW.md 1.2, Replay): "Road: Fast & open", "Road: --" when unknown
       const name = typeof d.roadName === 'string' && d.roadName.trim() ? d.roadName.trim() : null;
-      const text = `Road: ${name || (type === 'Flowing sweepers' ? 'Sweepers' : type === 'Fast open' ? 'Fast & open' : (type || '--'))}`;
+      const text = `Road: ${name || roadKind(type) || '--'}`;
       if (roadType.textContent !== text) roadType.textContent = text;
       // with no route and no named road under the car there is nothing to know: the row steps aside instead of a lone "Road: --"
-      roadType.hidden = !(d.routeOnly || d.sector || name);
+      roadType.hidden = !(d.routeOnly || d.sector || name) || (!name && type === 'Connector');   // U-55: a link road is nothing to read
     });
     return { update: (d) => u.forEach(f => f(d)) };
   }
@@ -975,9 +978,9 @@
       const type = d.sector && d.sector.archetype;
       // REVIEW4 U-67: in a drive, the road under the car by the map's name; otherwise the road's type, labelled
       const name = typeof d.roadName === 'string' && d.roadName.trim() ? d.roadName.trim() : null;
-      const text = `Road: ${name || (type === 'Flowing sweepers' ? 'Sweepers' : type === 'Fast open' ? 'Fast & open' : (type || '--'))}`;
+      const text = `Road: ${name || roadKind(type) || '--'}`;
       if (roadType.textContent !== text) roadType.textContent = text;
-      roadType.hidden = !(d.routeOnly || d.sector || name);
+      roadType.hidden = !(d.routeOnly || d.sector || name) || (!name && type === 'Connector');   // U-55: a link road is nothing to read
     });
     return { update: (d) => u.forEach(f => f(d)) };
   }
@@ -987,6 +990,6 @@
   }
 
   const api = { mountCluster, renderNotes, tulipSVG, lockup, stripCode, register, kitPose, KIT, springNeedle, SPEED_MAX, carGauge, carReading, CAR_READS,
-    sightCell, sightValue, sightShort, slowLine, bankText, EXPLAIN, explainAllowed, countIn, COUNT_IN_MS, ADVANCE_MS };
+    sightCell, sightValue, sightShort, slowLine, bankText, roadKind, EXPLAIN, explainAllowed, countIn, COUNT_IN_MS, ADVANCE_MS };
   if (typeof module !== 'undefined' && module.exports) module.exports = api; else root.ApexInstruments = api;
 })(typeof window !== 'undefined' ? window : globalThis);

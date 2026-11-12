@@ -68,7 +68,7 @@ final class ApexCar {
     private(set) var places: [(name: String, coord: CLLocationCoordinate2D)] = []
     /// The cafés and fuel along the planned route by name (web/carplay.js alongMessage): a longer and a shorter line for the
     /// route preview, empty until the page has looked. A new route clears them; the page sends that route's after it.
-    private(set) var along = (full: "", short: "")
+    private(set) var along = (full: "", short: "", descent: "")
     private(set) var look = Look()
     /// The car's map data as JSON for web/carmap.js: the route line, the corners and the hazards, kept to repaint a map that connects later.
     private(set) var routeJSON = "[]"
@@ -131,14 +131,14 @@ final class ApexCar {
                           options: options.isEmpty ? [Option(summary: "Route", detail: "", timeS: nil, distM: nil)] : options,
                           picked: max(0, min(options.count - 1, Int(Self.num(dict["picked"]) ?? 0))))
             routeJSON = Self.json(coords.map { [$0.latitude, $0.longitude] })
-            along = ("", "")
+            along = ("", "", "")
             placePlates = []; placesJSON = "[]"
             eachMap { $0.showRoute(); $0.setMode(); $0.showPlaces() }
             scene?.routeChanged()
         case "along":
             let full = String(((dict["full"] as? String) ?? "").prefix(90)), short = String(((dict["short"] as? String) ?? "").prefix(90))
             let list = ((dict["places"] as? [[String: Any]]) ?? []).prefix(30).compactMap { p -> ApexCarPlateData? in
-                guard let at = Self.coord(p["at"]), let kind = p["kind"] as? String, kind == "cafe" || kind == "fuel",
+                guard let at = Self.coord(p["at"]), let kind = p["kind"] as? String, kind == "cafe" || kind == "fuel" || kind == "charge",
                       let text = p["text"] as? String, !text.isEmpty else { return nil }
                 return ApexCarPlateData(lat: at.latitude, lon: at.longitude, text: String(text.prefix(18)), tight: false, hazard: false, place: kind)
             }
@@ -147,12 +147,13 @@ final class ApexCar {
                 placesJSON = Self.json(list.map { ["at": [$0.lat, $0.lon], "kind": $0.place ?? "fuel", "text": $0.text] as [String: Any] })
                 eachMap { $0.showPlaces() }
             }
-            guard full != along.full || short != along.short else { return }
-            along = (full, short)
+            let descent = String(((dict["descent"] as? String) ?? "").prefix(48))
+            guard full != along.full || short != along.short || descent != along.descent else { return }
+            along = (full, short, descent)
             scene?.routeChanged()
         case "clear":
             route = nil
-            along = ("", "")
+            along = ("", "", "")
             placePlates = []; placesJSON = "[]"
             routeJSON = "[]"
             eachMap { $0.showRoute(); $0.setMode(); $0.showPlaces() }
@@ -238,6 +239,17 @@ final class ApexCar {
         case "ask":
             guard let title = dict["title"] as? String else { return }
             scene?.askStill(title: title)
+        case "offer":
+            // the phone's one-key offer in a drive (web/carplay.js offerMessage): Go round, Skip, Head home
+            guard let id = dict["id"] as? String, let title = dict["title"] as? String, !title.isEmpty,
+                  let key = dict["key"] as? String, !key.isEmpty else { return }
+            let titles = [String(title.prefix(64)), String(((dict["short"] as? String) ?? "").prefix(64))].filter { !$0.isEmpty }
+            let cancel = String(((dict["cancel"] as? String) ?? "").prefix(16))
+            scene?.showOffer(id: String(id.prefix(16)), titles: titles, key: String(key.prefix(16)), cancel: cancel.isEmpty ? "Not now" : cancel,
+                             seconds: Self.num(dict["seconds"]) ?? 15)
+        case "offerDone":
+            guard let id = dict["id"] as? String else { return }
+            scene?.offerDone(id: id)
         case "places":
             places = ((dict["list"] as? [[String: Any]]) ?? []).prefix(12).compactMap { p in
                 guard let name = p["name"] as? String, let c = Self.coord(p["at"]) else { return nil }
@@ -444,7 +456,7 @@ final class ApexCarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDel
         // The same five times as the phone's loop dial (web/cockpit.js LOOP_MINUTES), so the car and the phone offer one set.
         let loops: [(String, Int)] = [("30 minutes", 30), ("1 hour", 60), ("1½ hours", 90), ("2 hours", 120), ("3 hours", 180)]
         let items: [CPListItem] = loops.map { label, minutes in
-            let item = CPListItem(text: label, detailText: "A twisty loop from here, back where you started")
+            let item = CPListItem(text: label, detailText: nil)
             item.handler = { [weak self] _, done in
                 ApexCar.shared.send("loop", ["minutes": minutes])
                 self?.interfaceController?.popToRootTemplate(animated: true, completion: nil)
@@ -452,7 +464,9 @@ final class ApexCarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDel
             }
             return item
         }
-        interfaceController?.pushTemplate(CPListTemplate(title: "Loops from here", sections: [CPListSection(items: items)]), animated: true, completion: nil)
+        interfaceController?.pushTemplate(CPListTemplate(title: "Loops from here",
+            // one header says what every row is, instead of the same line under each of the five (the owner's no-walls-of-text rule)
+            sections: [CPListSection(items: items, header: "Twisty loops, back where you started", sectionIndexTitle: nil)]), animated: true, completion: nil)
     }
 
     @MainActor private func openPlaces() {
@@ -527,13 +541,16 @@ final class ApexCarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDel
         }
         idleBars()
         // the cafés and fuel along it by name (the owner, 2026-11-11), on the picked route's line only: the page looked along
-        // that one. Variants run longest first and the car shows the first that fits; the last is the detail alone.
+        // that one, and a long descent on it (brake_heat.js). One name per kind at most (along.short; the two-name line read
+        // as a wall of text on the car, 2026-11-12); the car shows the first variant that fits, the last is the detail alone.
         let along = car.along
         let choices = r.options.enumerated().map { (i, o) -> CPRouteChoice in
             var info = [o.detail]
             if i == r.picked {
-                let join = { (a: String) in o.detail.isEmpty ? a : "\(o.detail) · \(a)" }
-                info = [along.full, along.short].filter { !$0.isEmpty }.map(join) + [o.detail]
+                let line = { (parts: [String]) in parts.filter { !$0.isEmpty }.joined(separator: " · ") }
+                var seen = Set<String>()
+                info = [line([o.detail, along.short, along.descent]), line([o.detail, along.short]), line([o.detail, along.descent]),
+                        o.detail].filter { seen.insert($0).inserted }
             }
             return CPRouteChoice(summaryVariants: [o.summary], additionalInformationVariants: info.filter { !$0.isEmpty }, selectionSummaryVariants: [o.summary])
         }
@@ -669,6 +686,25 @@ final class ApexCarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDel
         let alert = CPNavigationAlert(titleVariants: [title], subtitleVariants: [detail].filter { !$0.isEmpty }, image: ApexCar.hazardPlate,
                                       primaryAction: CPAlertAction(title: "OK", style: .default) { _ in }, secondaryAction: nil, duration: 8)
         map.present(navigationAlert: alert, animated: true)
+    }
+
+    /// A drive's one-key offer from the phone (Go round a police report, Skip a stage, Head home): the key and Not now, for
+    /// as long as the phone's toast has its key. Tapped here, the page does it; tapped on the phone, `offerDone` takes it away.
+    private var offerAlert: (id: String, alert: CPNavigationAlert)?
+    @MainActor func showOffer(id: String, titles: [String], key: String, cancel: String, seconds: Double) {
+        guard let map = mapTemplate, ApexCar.shared.driving, !titles.isEmpty else { return }
+        let alert = CPNavigationAlert(titleVariants: titles, subtitleVariants: [], image: nil,
+                                      primaryAction: CPAlertAction(title: key, style: .default) { _ in ApexCar.shared.send("offer", ["id": id]) },
+                                      secondaryAction: CPAlertAction(title: cancel, style: .cancel) { _ in },
+                                      duration: max(5, min(20, seconds)))
+        offerAlert = (id, alert)
+        map.present(navigationAlert: alert, animated: true)
+    }
+    @MainActor func offerDone(id: String) {
+        guard let o = offerAlert, o.id == id else { return }
+        offerAlert = nil
+        guard let map = mapTemplate, map.currentNavigationAlert === o.alert else { return }
+        map.dismissNavigationAlert(animated: true) { _ in }
     }
 
     /// Passed a reported hazard: is it still there? One tap on the car's screen answers the phone's question.

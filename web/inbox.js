@@ -71,6 +71,7 @@
     .inbox-kick { font-size: 11px; font-weight: 800; letter-spacing: 0.1em; text-transform: uppercase; color: var(--panel-dim); }
     .inbox-row.new .inbox-kick::before { content: ''; display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: var(--accent); margin-right: 6px; vertical-align: 1px; }
     .inbox-row .ink-btn { grid-row: span 2; }
+    .inbox-row > p { grid-column: 1; }   /* a row with no key: the sentence under its kicker, not squeezed beside it */
   `;
 
   /**

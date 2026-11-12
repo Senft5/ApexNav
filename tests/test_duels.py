@@ -50,18 +50,19 @@ def test_waiting(out):
 def test_on(out):
     assert out["lead"][2] == "You 845 · @bob 812 · You lead by 33 · 5 days left"
     assert out["behind"][2] == "You 790 · @bob 812 · @bob leads by 22 · last day"
-    assert out["none"][2] == "You -- · @bob -- · No runs yet · 5 days left"
+    assert out["none"][2] == "No runs yet · 5 days left"
     assert out["lead"][4] == ["drive", "withdraw"]
-    # Scores that don't reach the other side are said, and yours can be shown from the card
-    assert "Your Scores don't reach @bob yet" in out["gaps"][3] and "@bob's Scores don't reach you yet" in out["gaps"][3]
-    assert out["gaps"][4][0] == "share"
+    # theirs not shared is one short line; yours not shared is the Show key alone, no sentence (Nate: no walls of text)
+    assert out["gaps"][3] == "@bob hasn't shared Scores with you yet."
+    assert "Your" not in out["gaps"][3]
+    assert out["gaps"][4] == ["drive", "share", "withdraw"]   # the drive first; Call it off last
 
 
 def test_over(out):
     assert out["won"][:3] == ["won", "Dry Ridge climb · @bob", "You won by 33 · You 845 · @bob 812"]
-    assert out["lost"][2] == "@bob won · You -- · @bob 812"
-    assert out["draw"][2] == "A draw at 800 · You 800 · @bob 800"
-    assert out["nobody"][:3] == ["none", "Dry Ridge climb · @bob", "Neither of you drove it · You -- · @bob --"]
+    assert out["lost"][2] == "@bob won · @bob 812 · no run from you"
+    assert out["draw"][2] == "A draw at 800"
+    assert out["nobody"][:3] == ["none", "Dry Ridge climb · @bob", "Neither of you drove it"]
     assert out["won"][4] == ["rematch"]
     assert out["declined"][2] == "@bob said no thanks" and out["withdrawn"][2] == "Taken back"
 
@@ -89,6 +90,6 @@ def test_time_duel(out):
     # the quicker time leads even with the lower Score; the Scores sit beside it
     assert out["tLead"][2] == "You 3:04 · @bob 3:10 · You lead by 6 s · 5 days left"
     assert out["tLead"][3] == "Scores: you 800, @bob 845"
-    assert "Your times don't reach @bob yet" in out["tGap"][3] and out["tGap"][4][0] == "share"
+    assert "Your times" not in out["tGap"][3] and "share" in out["tGap"][4]
     assert out["tWon"][2] == "You won by 1:06 · You 3:04 · @bob 4:10"
-    assert out["tLost"][:3] == ["lost", "Dry Ridge climb · @bob", "@bob won · You -- · @bob 4:10"]   # a Score with no time sets no time
+    assert out["tLost"][:3] == ["lost", "Dry Ridge climb · @bob", "@bob won · @bob 4:10 · no run from you"]   # a Score with no time sets no time

@@ -308,8 +308,8 @@ def test_the_page_empties_it_on_sign_out_and_says_what_waits(share):
     assert share["waitingM"] == 2000 and share["afterClear"] == 0          # 2 rows + 398 built bins, 5 m each
     js = (ROOT / "web" / "cockpit.js").read_text(encoding="utf-8")
     # Road data switched off (both switches), both Sign outs, the account deleted: emptied at once
-    assert js.count("clearCarry()") == 5 and "if (!on) clearCarry();" in js and "if (contribOn && r && r.ok) clearCarry();" in js
-    assert js.count("ApexSync.setSession(null); clearCarry();") == 3
+    assert js.count("clearCarry()") == 6 and "if (!on) clearCarry();" in js and "if (contribOn && r && r.ok) clearCarry();" in js
+    assert js.count("ApexSync.setSession(null); clearCarry();") == 4
     assert "const sh = await ApexSync.roadShare();" in js and "await ApexSync.member())) return;\n        if (!(await ApexSync.contributionEnabled()))" not in js
     assert "ApexRoadCarry.onPost = (r) => health.bump(" in js and "more waits for signal." in js
     carry = (ROOT / "web" / "road_carry.js").read_text(encoding="utf-8")

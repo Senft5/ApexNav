@@ -271,17 +271,12 @@
       if (o.crew && st !== 'remembered') body.append(el('span', { className: 'note', textContent: `${e.crew_name}${e.by_handle ? ` \u00b7 by @${e.by_handle}` : ''}` }));
       if (st === 'remembered') { body.append(remembered(e, redo)); return box; }
       body.append(el('span', { className: 'note', textContent: rolesLine(e) }));
-      // who's going, and your one key for it
-      const going = Array.isArray(e.going) ? e.going : [], mineGoing = e.my_rsvp === 'going';
-      const rsvp = btn(mineGoing ? 'Going' : 'I\u2019m going', async () => {
-        const r = await apiCall('POST', `/api/events/${id(e)}/rsvp`, { status: mineGoing ? 'no' : 'going' }).catch(() => null);
-        if (!r || !r.ok) { toast('Couldn\u2019t save that. Check signal.'); return; }
-        redo();
-      }, mineGoing ? 'ink-btn solid' : 'ink-btn');
-      rsvp.setAttribute('aria-pressed', String(mineGoing));
+      // who's going, and your answer: one slide switch on the card, as a social app's event (Nate 2026-11-12: it was a
+      // key here and the same answer again as a switch under More)
+      const going = Array.isArray(e.going) ? e.going : [];
       body.append(el('div', { className: 'cp-going' }, going.length ? faces(going, 'Going') : '',
-        el('span', { className: 'note', textContent: going.length ? `${going.length} going${e.maybe ? ` \u00b7 ${e.maybe} maybe` : ''}` : 'Nobody going yet' }),
-        el('span', { style: 'flex:1' }), rsvp));
+        el('span', { className: 'note', textContent: going.length ? `${going.length} going${e.maybe ? ` \u00b7 ${e.maybe} maybe` : ''}` : 'Nobody going yet' })),
+        answer(e, redo));
       box._invited = !!(C && C.invites && C.invites().some((i) => i.name === convoyName(e)));
       if (st === 'morning') body.append(morning(e, redo));
       if (st === 'convoy') body.append(convoyNow(e));
@@ -305,7 +300,7 @@
       let startNote = null;
       if (inv) {
         now.append(el('p', { textContent: `${inv.from ? '@' + inv.from : 'A crew-mate'} started the convoy.` }),
-          el('p', { className: 'note', textContent: 'Joining shares your position with the convoy until you leave, and marks you as came on the drive.' }));
+          el('p', { className: 'note', textContent: 'Shares your position until you leave.' }));
         keys.append(btn('Join the convoy', async (ev) => {
           const b = ev && ev.currentTarget; if (b) b.disabled = true;
           const r = await C.accept(inv);
@@ -323,7 +318,7 @@
           toast(r.invited ? `Convoy started. Invited ${r.invited} going.` : 'Convoy started.');
           came(e);
         }, 'ink-btn solid'));
-        startNote = el('p', { className: 'note', textContent: 'Everyone going is invited in the app. It shares your position with them until it ends, and marks you as came on the drive.' });
+        startNote = el('p', { className: 'note', textContent: 'Invites everyone going. Shares your position until it ends.' });
       }
       keys.append(btn(`Directions to ${e.meet_name || 'the meet'}`, () => directions(e), keys.childElementCount ? 'ink-btn' : 'ink-btn solid'));
       now.append(keys, ...(startNote ? [startNote] : []));
@@ -376,7 +371,7 @@
       const body = el('div', { className: 'cp-results' });
       if (n > 1) body.append(el('h4', { textContent: 'Overall' }), list(res.overall || [], (x) => overallNote(x, n)));
       st.forEach((s, i) => body.append(el('h4', { textContent: `SS${i + 1} \u00b7 ${s.name}` }), list(s.rows)));
-      body.append(el('p', { className: 'note', textContent: 'Each driver\u2019s best Vetta Score that day, from Scores shared with the crew, and their time and gap to the quickest if they share times with it. Overall: most stages first, then the average Score; the total time when every stage has one.' }));
+      body.append(el('p', { className: 'note', textContent: 'Best Score that day, and time where shared.' }));
       body.append(el('div', { className: 'row' }, btn('Share the results', async () => {
         const text = resultsText(e.title ? e : { ...e, title: r.title, crew_name: r.crew_name }, res);
         try {
@@ -397,10 +392,9 @@
       if (open) fill();
       return det;
     }
-    function detail(e, redo) {
-      const box = el('div', { className: 'cp-more-body' });
-      // your answer is one of three: a slide switch, not three keys (REVIEW.md principle 1)
-      const answers = el('div', { className: 'switch', role: 'radiogroup' });
+    // your answer is one of three: a slide switch, not three keys (REVIEW.md principle 1)
+    function answer(e, redo) {
+      const answers = el('div', { className: 'switch cp-answer', role: 'radiogroup' });
       answers.setAttribute('aria-label', 'Your answer');
       for (const [k, label] of RSVP) {
         const b = btn(label, async () => {
@@ -411,11 +405,15 @@
         b.setAttribute('role', 'radio'); b.setAttribute('aria-checked', String(e.my_rsvp === k));
         answers.append(b);
       }
-      box.append(answers);
+      return answers;
+    }
+    function detail(e, redo) {
+      const box = el('div', { className: 'cp-more-body' });
+      // the faces show three: More names everyone going when there are more (the count and roles are on the card already)
       const going = Array.isArray(e.going) ? e.going : [];
-      if (going.length) box.append(el('p', { className: 'note', textContent: `Going: ${going.map((h) => '@' + h).join(', ')}${e.maybe ? ` \u00b7 ${e.maybe} maybe` : ''}` }));
+      if (going.length > 3) box.append(el('p', { className: 'note', textContent: `Going: ${going.map((h) => '@' + h).join(', ')}` }));
       // roles (roadmap 21): an open one can be taken by anyone in the crew, which means going
-      const roles = el('div', { className: 'row' }, el('b', { textContent: rolesLine(e) }));
+      const roles = el('div', { className: 'row' });
       const role = (k, take) => async () => {
         const r = await apiCall('POST', `/api/events/${id(e)}/role`, { role: k, take }).catch(() => null);
         if (r && r.ok) redo(); else toast(r && r.status === 409 ? 'Someone took it first.' : 'Couldn\'t change that. Check signal.');
@@ -423,7 +421,7 @@
       const held = me() && (e.lead === me() ? 'lead' : e.sweep === me() ? 'sweep' : null);
       if (held) roles.append(btn(`Stop being ${held}`, role(held, false), 'linkbtn'));
       else for (const k of ['lead', 'sweep']) if (!e[k]) roles.append(btn(k === 'lead' ? 'I\'ll lead' : 'I\'ll sweep', role(k, true), 'linkbtn'));
-      box.append(roles);
+      if (roles.childElementCount) box.append(roles);
       if (Array.isArray(e.regroup) && e.regroup.length) {
         box.append(el('div', { className: 'row' }, el('span', { className: 'note', textContent: 'Regroup:' }),
           ...e.regroup.map((p) => btn(p.name, () => page.goTo({ label: p.name, lat: p.lat, lon: p.lon }), 'linkbtn'))));
@@ -594,7 +592,7 @@
         const r = await apiCall('GET', `/api/crews/${encodeURIComponent(crew.value)}/meet`).catch(() => null);
         const j = r && r.ok ? await jsonOf(r) : null;
         if (!j || !Array.isArray(j.cells)) { toast('Couldn\u2019t load the crew. Check signal.'); return; }
-        if (j.cells.length < root.ApexCrewMeet.MIN_CELLS) { meetNote.textContent = `A fair meeting point needs ${j.need} crew-mates sharing their rough area on the crew page; ${j.sharing} ${j.sharing === 1 ? 'does' : 'do'}.`; return; }
+        if (j.cells.length < root.ApexCrewMeet.MIN_CELLS) { meetNote.textContent = `Needs ${j.need} crew-mates sharing their area (${j.sharing} now).`; return; }
         meetNote.textContent = 'Finding the fairest place\u2026';
         const m = await root.ApexCrewMeet.fairMeet(j.cells);
         if (!m) { meetNote.textContent = 'No place everyone sharing can reach by road. Pick one.'; return; }
@@ -615,7 +613,7 @@
       const label = (text) => el('p', { className: 'ctl-label', textContent: text });
       const head = crews.length > 1 ? [crew] : [];
       form.append(...head, tplSel, title, label('When'), date, time, label('Repeats'), repRow, label('Meet'), search, ...(fairBtn ? [el('div', { className: 'row' }, fairBtn)] : []), meetNote, routeRow,
-        el('p', { className: 'note', textContent: 'Roles, regroup points and notes go on the drive\u2019s card, under More.' }),
+        el('p', { className: 'note', textContent: 'Roles and regroup points: on the card, under More.' }),
         el('div', { className: 'row' }, btn('Plan it', async (ev) => {
           const b = ev && ev.currentTarget;
           const when = isoFromInputs(date.value, time.value);
