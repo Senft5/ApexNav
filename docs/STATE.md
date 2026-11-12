@@ -2,6 +2,591 @@
 
 > Newer entries are in `docs/notes/` (one file per PR, CLAUDE.md rule 7). Don't edit this file in a PR.
 
+## Session 2026-11-12 (declutter 4, 5): Your driving without the explanations (claude/project-thread-5sbga7)
+
+- Nate's TestFlight notes 4 and 5 (build 773.1, "walls of text"): Your driving keeps its numbers and the sentences that
+  say a finding. Gone: the "Technique only" intro (now "108 clean corners · 3 drives"), the line under each skill (still
+  the row's tooltip), the notes under the corner panel, Pace, Your touch, its grid and By kind of corner; the Practicing
+  box's tip and its "The mark is your..." note; the note under "Practice it on my next drives"; Your touch's "N of 20
+  corners read so far"; What your drives say when it has nothing to say.
+- e2e: the Your driving flow checks the new intro line.
+
+## Session 2026-11-12 (deepest analysis, PR 25): Your driving's numbers say what they are (claude/project-thread-gd7nre)
+- The scope line names the period read: "108 clean corners · 3 drives · Aug–Oct 2026" (`profile` gains `span`, Python
+  and JS; `scopeLine`).
+- A skill's definition shows when you tap its row (`skillDef`): what it measures, 0 to 100, how many corners it is
+  averaged over, and the minimum. This replaces a hover tooltip, which a phone cannot show. The row is a keyboard
+  button with aria-expanded.
+- The practice summary gives both samples and the change in points: "100 on 36 corners ... against 52 on 108 before.
+  Up 48 points".
+- Shorter findings: "Shows most on Dry Ridge Rd: 2 of its 3 least even corners." (skillRoadLine), hidden while the
+  practice already keeps to a road; a practice with no drive yet says "Since 12 Nov on Dry Ridge Rd: no drive there yet
+  with 4 or more corners."
+- Tests: tests/test_practice_focus.py, tests/test_best_corners.py (span, scope line, definition, words); Your driving and Practice e2e flows.
+- Road book: one line each: "12 corners driven 3+ times, in road order · 5 driven less." "Least even: corners 3 and 1."
+  "Most of the difference: one steering arc (corners 10, 14 and 18)." "Evened out since the practice began: corner 4."
+- Next: the end card's road lines (roadRecordLine, roadUnevenLine) are still long sentences; shorten them the same way.
+
+## Session 2026-11-12 (slow requests): the website gives up on a dead connection after 30 s (claude/project-thread-g9yher)
+- Done: `apiFetch` in `web/sync.js` on the website now stops a request after 30 s (90 s for an upload or any other write), the same as the app's shell, whose URLRequest already times out at 30 s. Before, a browser on a dead hotel or roadside connection could wait minutes with the spinner up.
+- A timeout throws the same `TypeError('Load failed')` as being offline, so every existing offline path (queued uploads, cached road book, the offline toasts) handles it with no new code. A caller's own `signal` still wins.
+
+## Session 2026-11-12 (roam-a waterfalls): waterfalls along a planned route (claude/project-thread-h7xxmf)
+
+- IDEAS R-24. The map's tiles (OpenFreeMap, OpenMapTiles poi layer) carry no waterfalls (checked on the tiles around
+  Looking Glass Falls: only its parking), so web/scenic.js `fallsQuery(s, w, n, e)` asks Overpass for natural=waterfall
+  and waterway=waterfall (nodes and ways by centre) and `fallsFrom(json)` gives { kind: 'falls', name, lat, lon }.
+  Within 400 m of the road they join the Along line after viewpoints ("1 viewpoint · 2 waterfalls · 1 café"), the
+  list ("Waterfall"), and the map as FALLS stamps (blue), ranked after viewpoints when stamps would touch.
+- web/cockpit.js `attachScenic` paints the tiles' places first, then repaints with the waterfalls when Overpass answers
+  (`fallsNear`: the route's box, ≤ 1° across, every server raced via ApexCameras.fetchFirst; a failure adds none).
+  With no tile places (offline) nothing is said, waterfalls or not: unknown fuel is not "no fuel".
+- Tests: tests/test_scenic.py (+1); e2e "waterfalls along the route…".
+- Next: car-friendly café picks (R-24's last part), or D-16's late-drive cues.
+
+## Session 2026-11-12 (social declutter, part four): the time attack row says the loop once (claude/project-thread-uwmi4e)
+- Done: in Where to?, the time attack row's line names the loop, its length, the times and the days left; opened, its body no longer says the name and the same numbers again (time_attack.js draw, when page.line is given). Without a row line (another host), the body still names the loop.
+- Next: the duel card's keys (Show my Scores, Drive it, Call it off) and the For you rows.
+
+## Session 2026-11-12 (time attack near you): the weekly loop is near you and never through a neighbourhood (claude/project-thread-uwmi4e)
+
+- [x] The owner's TestFlight note (2026-11-12, build 772.1): "generated time attack loops is literally like an hour away
+  from me and goes only through a neighborhood" (this week's Clyo Road loop, Colerain Township, mostly subdivision
+  streets). Two causes, both fixed:
+  - **An hour away**: an area was a 1-degree square (about 110 by 90 km) and the loop started at a random road tile in
+    it. An area is now a quarter-degree square, the router's own road tile (`AREA_DEG` 0.25 in backend/src/time_attack.ts
+    and web/time_attack.js; cells like "39.25,-84.75"; `SLACK_DEG` 0.15). The starts are six points drawn from the seed in
+    the middle half of the area.
+  - **Through a neighbourhood**: the start snapped to whatever road was nearest, and nothing measured streets. Now
+    graph_router.js loop takes `through` (the start goes on the nearest primary to unclassified road within 3 km, never a
+    neighbourhood street), and loopRoute gives each loop `streetM` and `streetShare` (`neighbourhoodEdge`: streetEdge, or a
+    residential or service road where that isn't known). time_attack.js `streety` refuses a loop with more than 500 m or
+    5 % of it, or one that wasn't measured.
+- Checked with real tiles (a scratch e2e, not committed) at Colerain, Northgate, Harrison and Cincinnati, three seeds each:
+  11 of 12 loops have no neighbourhood street, and the other has 346 m (2.4 %).
+- Old 1-degree cells in ta_weeks are left alone: no other area asks for them. One catch: a 1-degree corner such as "39,-85"
+  is also a quarter-degree corner, so this week's only row on prod (Clyo Road loop, "39,-85", one entry) was taken down by
+  hand (removed = 1). Its quarter builds a new loop from the next seed, and the owner's own area ("39.25,-84.75") builds
+  its first.
+- Tests: tests/test_time_attack.py (hubs, areaPoint, streety, choose), backend/test/time_attack.test.ts (cells, bad_cell),
+  e2e "time attack, a new week" (starts in your quarter-degree area, little or no neighbourhood street).
+- Exact next task: watch the next TestFlight notes on the week's loop; if a loop still lands on streets somewhere, lower
+  `STREET_MAX_M`.
+
+## Session 2026-11-12 (time attack duel): a duel on the week's loop (claude/project-thread-uwmi4e, after #466)
+
+- [x] Where to? → Time attack → Challenge a friend (entered weeks): `duels.js challengeOn(stage)` picks an accepted friend,
+  Time by default, 3/7/14 days; the stage is your copy's id from POST /api/timeattack/enter (idempotent). No backend change.
+- Tests: tests/test_time_attack.py wiring; e2e "time attack duel".
+- Exact next task: the next social win (push for For you once APNs exists; a crew's roadbook).
+
+## Session 2026-11-12 (TestFlight 01:29): viewpoint stamps say VIEW, the name close in (claude/project-thread-0wt1zm)
+
+- Owner note 01:29:22Z "bird watching shelter blocks half the route" (a named viewpoint's label across a loop preview).
+- web/cockpit.js attachScenic: the view stamp is SCENIC_LABEL.view; declutterPois sets a named viewpoint's text to its name
+  at zoom >= VIEW_NAME_ZOOM (15), before measuring for the declutter. Tap behaviour unchanged.
+- Tests: e2e "stamps along a route never pile up" (VIEW at the route's zoom, the name at 15.5).
+- The hourly TestFlight run lives in thread "Pull TestFlight feedback every hour" (scheduled task at :52 UTC).
+
+## Session 2026-11-12 (TestFlight 02:30 to 02:48): meeting points switch, Pace vs Sight; the rest handed on (claude/project-thread-0wt1zm)
+
+- 02:35 "meeting points switch broken": web/crew_page.js meetShare took the square only from a pinned Home and otherwise
+  refused with a toast. Now Home, else the phone's current position's 0.1-degree square (geolocation, 8 s); 401 says sign in.
+  privacy.html says so. e2e crew page flow (geolocation granted): the switch turns on and sends the square's centre.
+- 02:30 "why pace and sight different?": web/cockpit.js sets the cluster's paceMph to the lower of the corner's pace and the
+  held Sight (unless Sight is Open), so the gauge's PACE, its lamp and the needle's red read the one speed to drive to.
+- 02:45 to 02:48, eight notes ("cluttered", "walls of text", "ai slop") on Garage, Crews, the Log list, Your driving (x2),
+  Ways to go, the map deck and Where to?: the UI thread took all eight (small PRs, one per screen).
+- 02:33 time attack loop "an hour away" and "only through a neighborhood": the social thread (owner of #433's picker).
+
+## Session 2026-11-12 (fixed time attacks, part one): the server (claude/project-thread-uwmi4e)
+- Done: migration 0057 (ta_circuits, ta_entered, ta_times) and backend/src/ta_fixed.ts: up to three loops per area a season (calendar quarter), built by phones from seeds, 3 km apart; one featured a week in turn; boards by week, month, year, all time; report takes one down and its slot is rebuilt; For you "passed" and the data export cover it. Tests: backend/test/ta_fixed.test.ts.
+- Next: the app (web/time_attack.js): the three loops with the featured one first, Week / Month / Year / All time chips, makeLoop builds a slot with `best` (the router's top loop) away from `avoid`; sync runs to /api/ta/runs. Then drop the weekly endpoints once no build calls them.
+
+## Session 2026-11-12 (fixed time attacks, part two): the app (claude/project-thread-uwmi4e)
+- Done: Where to? → Time attack lists the area's loops (featured this week marked, shown first), what you do with the one picked (Enter / Drive it / Challenge a friend / Report), then a Week / Month / Year / All time switch right above its board. The foot says when the loops change ("New loops in January"). The first phone in an area builds each missing loop: the router's best from a start 3.2 km or more from the area's other loops.
+- Done: the Log sends your quickest run each day since you entered (20 latest days a request) to /api/ta/runs; the home deck's suggestion is the featured loop this week.
+- Next: drop the weekly endpoints and tables (time_attack.ts weekly parts, ta_weeks/ta_entries/ta_joins/ta_pool) once TestFlight builds older than this one are gone.
+
+## Session 2026-11-12 (security pass, time attack loops): only an established member sets an area's loop (claude/project-thread-4lms1f)
+- backend/src/ta_fixed.ts: GET /api/ta hands `make` (the slot to build) only to a member who was invited or has been one
+  a week (`establishedSql`, new in reports_sql.ts); POST /api/ta/circuit from anyone else is a 403 `not_yet` while the slot
+  is empty. backend/src/time_attack.ts makeCircuit (the weekly loop, older builds) checks the same.
+- Tests: ta_fixed.test.ts (+1), time_attack.test.ts (+3 lines).
+- Next in the pass: a single established member can still draw one loop by hand (the server can't route); a report from
+  three established members hides it and the owner takes it down. Checking the loop against the graph tiles would close it.
+
+## Session 2026-11-12 (store screenshots): 2 of 5 App Store shots at 6.9" (claude/project-thread-g9yher)
+- Done: `STORE=1 SHOTS_OUT=store-shots node tools/landing_shots.js` writes cockpit.png and crew.png at 1320 x 2868 (docs/LISTING.md).
+- Open: the cockpit shot shows a speed (49 mph) and Sight, against the listing's "no speeds on screen" rule; the loop builder, Log corners, drive card and convoy shots are not scripted yet.
+- Next: script the remaining three shots and hide the speed readout in the store cockpit shot.
+
+## Session 2026-11-12 (store screenshots 2): all App Store shots scripted (claude/project-thread-g9yher)
+- Done: STORE=1 in tools/landing_shots.js also makes the drive card, the Log, the drive's page and a loop (docs/LISTING.md).
+- Open: the cockpit shot still shows 49 mph; captions are not written yet; the upload to App Store Connect is the owner's.
+- Next: Nate picks the five shots and the order; write the captions in docs/LISTING.md.
+
+## Session 2026-11-12 (roam-a stage result said): the co-driver says how a saved stage went (claude/project-thread-h7xxmf)
+
+- IDEAS D-05 says "the result is said at the end", but it was only written: a toast, plus the drive's status line for
+  VoiceOver. Now, when a stage you marked in the Log ends with corners to compare, the co-driver also says it out loud:
+  "Esses: 12 points up on your best." / "Esses: level with your best.". It is technique points, never time.
+- web/cockpit.js: `sayQuietLine(text)` is the flow lines' slot, now shared: the lowest quiet line, said when no call is
+  due, kept up to 20 s, never in Quiet notes, queued two deep. `noteFlow` and `feedStage` both use it. A stage with
+  nothing to compare ("Esses done.") stays written only.
+- e2e "a saved stage: the live delta…" now listens to the voice: the result is said exactly once, while you drive on
+  past the stage's end.
+- Next: another roam item.
+
+## Session 2026-11-12 (security pass, Spots): blocks hide spots; fresh accounts' stars don't count (claude/project-thread-4lms1f)
+- backend/src/highlights.ts `highlightList`: drops spots whose author you blocked or who blocked you (your own always
+  show), and spots you reported (open). The score and rating count use only ratings from members who pass reportedSql's
+  gate (invited, or a member 7 days); a fresh account's own stars still come back as `my_stars`.
+- Tests: backend/test/highlights.test.ts (+1). APP_REVIEW.md 1.2 updated.
+- Next in the pass: a per-session read limit on member GETs (scraping handles, crews near a point), and the crews-near
+  discovery grid (crewDiscover) against walking the map cell by cell.
+
+## Session 2026-11-12 (social, no walls of text, part one): short copy on the social screens (claude/project-thread-uwmi4e)
+- Nate: "the app in general feels cluttered and unintuitive … Social features should feel just as easy to use as any major social media app. Walls of text should be banned wherever possible."
+- Done: every paragraph on duels, time attack, the crew page, meets and roadbooks is now a few words. tests/test_social_copy.py caps any fixed textContent in the social files at 80 characters.
+- Done: a crew drive's card has one Going / Maybe / Can't switch (it was an "I'm going" key, and the same answer again as a switch under More); More no longer repeats the roles line or names who is going under three faces.
+- Done: a tap on a friend opens their profile (the UI thread handed over People's friend rows in cockpit.js). The profile holds what you do with them, their last share and "What @x sees of you" (opens Who sees what). With no signal it still opens: the person and the keys, "Couldn't load the rest."
+- Next: the crew page itself (chat, board, members, meeting points stacked on one long page); the For you list; the Where to? time attack row.
+
+## Session 2026-11-12 (social declutter, part three): sharing and crew settings in one line each (claude/project-thread-uwmi4e)
+- Done: Who sees what's head and foot, the Friends layer's explainer, and Crew settings' "Who can find it" are one line each. Making a crew public asks first and says then what it costs the members (their shared Scores, routes and stages stop showing until each says yes again). tests/test_social_copy.py now covers who_sees.js, inbox.js and profile_view.js too.
+- Next: the Where to? time attack row and the duel card's keys.
+
+## Session 2026-11-12 (deepest analysis, PR 20): Work on names the road where its skill shows most (claude/project-thread-gd7nre)
+
+- `web/driver_profile.js` `skillRoadLine(list, skill)`: from the roads' books, the road whose least even corners name the
+  skill most often: "It shows most on Dry Ridge Rd: 2 of the 3 corners where your passes there differ most come down to it."
+- `web/analysis.html`: `roadBookList()` reads every road's book once per library (shared with the Log's bookWork line);
+  Your driving puts the line under the tip of its Work on (or Practicing) box.
+- e2e: the four-drive road flow checks the line on Your driving.
+- Next: a per-road practice could take its `where` from that road (practice only on one road's corners).
+
+## Session 2026-11-12 (Sign in with Apple revocation): account deletion now revokes the Apple token (claude/project-thread-g9yher)
+- Done: the shell sends Apple's one-time `authorizationCode` with the identity token. `backend/src/apple_revoke.ts` trades it at appleid.apple.com/auth/token (ES256 client secret) and keeps the refresh token in KV `PHOTOS` under `siwa/<userId>`; `deleteAccount` revokes it at /auth/revoke and always deletes the key.
+- Waiting on the owner: the Sign in with Apple key and the `APPLE_TEAM_ID`, `APPLE_SIWA_KEY_ID`, `APPLE_SIWA_KEY_P8` Worker secrets (OWNER_TODO). Without them the code does nothing and sign-in works as before.
+- Next: people who signed in with Apple before this build have no stored token; they get one the next time they sign in.
+
+## Session 2026-11-12 (Sign in with Apple credential state): turning off Apple sign-in for Vetta signs you out (claude/project-thread-g9yher)
+- Done: the shell keeps the Apple user id (UserDefaults `apex.appleUser`, cleared on any sign-in or sign-out), checks `ASAuthorizationAppleIDProvider.getCredentialState` each time the app comes to the front and on `credentialRevokedNotification`; on `.revoked` it posts /api/auth/logout, clears the Keychain and sends the page `{type:'session', signedIn:false}`, which redraws signed out with one toast.
+- Checked in a browser (the page message); the Swift side compiles only in CI (build-ipa). Needs a device test: sign in with Apple, turn it off in Settings, come back to the app.
+
+## Session 2026-11-12 (social, part three): sharing says who gets it, a chat draft stays (claude/project-thread-uwmi4e)
+- Done: a route's Share box has one line under the picks that follows them: "Goes to @alice and Ridge Runners. The line only, first 400 m hidden." (it was a fixed note above them).
+- Done: a half-written crew chat line is kept per crew while the app runs, through a full redraw of the page (a livery save, a pin).
+- Done: a For you row with no key (Kudos) puts its sentence under its kicker, not squeezed beside it (inbox.js).
+- Done: the friend-link toast ("Their profile has what you share") and the Invite to a drive confirm are one short line each.
+- Next: hold social toasts while driving; the duel card keys.
+
+## 2026-11-12 Service check: first results, and two small fixes (claude/project-thread-9zycz2)
+- First run (Nate's website, 02:45 UTC): the three main Overpass servers timed out at 15 s and maps.mail.ru took 11 s,
+  so the app's camera path read "Camera map offline"; our camera list (/api/cameras/v1/region.json, 11,969 cameras)
+  answered in 0.46 s. Fun, Long way and loop plans were all up on the web. No iOS run yet.
+- web/service_check.js: the OSM relay's 504 still_fetching reads as slow ("up, but still fetching from Overpass"), not
+  down; the graph indexes show their build date, since the long build id was scrubbed to "[token]" on the server.
+- Next: read the first iOS run (after the next TestFlight build) for the "check signal" error on Fun / Long way.
+
+## 2026-11-12 Service check: "Camera map as the app asks it" follows the app's real path (claude/project-thread-9zycz2)
+- Since #462 the app reads our camera list (/api/cameras/v1/region.json) before the Overpass servers; the check's
+  cameras_app probe still asked Overpass only, so it read down while the app had cameras. It now calls
+  ApexCameras.load with no phone cache, the same path the route card takes.
+- Nate's second run (04:01 UTC) was labelled web: all four Overpass servers down or timing out, our list up, every plan up.
+- Next: the first run from the iPhone app (source 'ios' in error_counts kind 'service').
+
+## Session 2026-11-12 (declutter, route card): an unknown is a short line (claude/project-thread-5sbga7)
+
+- Nate (04:05Z): no walls of text. With no signal the route card spent four lines saying nothing was known ("No
+  signal: the weather and live road events on this route aren't known." and "No better time by the sun and the
+  calendar (no forecast)"). They read "Weather not known · no signal" and "No better time (no forecast)" now; still
+  unknown, never a made-up forecast.
+- Next: the end card and the drive page's key rows.
+
+## 2026-11-12 route card: no "Road feel after first drive"
+- Done: the route card's small line under the stats no longer ends "Road feel after first drive" when nothing on the route is measured yet; the dials' dashes already say it. With coverage it still says "Road feel N% driven". The line hides when it has nothing to say, and a trailing " · " is trimmed.
+- Tests: every e2e flow matching "route" passes (47/47).
+- Next: keep sweeping the shell, Where to? and the Log for footnotes that explain an empty state.
+
+## Session 2026-11-12 (roam-a road row): the binnacle never prints "Road: Connector" (claude/project-thread-h7xxmf)
+
+- IDEAS U-55. web/instruments.js `roadKind(type)`: the archetype in a driver's words for both binnacles ("Sweepers",
+  "Fast & open"), null for a connector. A connector with no road name hides the Road row; a named road still shows its
+  name. U-50 marked done (U-134 already gives each Along fact its own glyph).
+- Tests: tests/test_road_kind.py.
+- Next: a fun-driving item (D-16's late-drive cues, or the road book marking corners that evened out).
+
+## Session 2026-11-12 (deepest analysis, PR 26): the end card's and drive page's road lines are one short line (claude/project-thread-gd7nre)
+- `web/driver_profile.js`: `roadRecordLine` reads "On this road: cleanest yet at 7 of 24 corners driven 3+ times, level
+  at 2."; `roadUnevenLine` reads "3 least even corners: near your cleanest at 2. Lost most: one steering arc."
+- Tests: tests/test_best_corners.py; the four-drive road e2e flow (drive page and end card) and the Log flows.
+- Next: the Log's drive notes per corner ("Your cleanest here: 90, Aug 12; this pass 60, mostly one steering arc") are
+  already short; look at the Garage's per-car analysis lines next.
+
+## Session 2026-11-12 (deepest analysis, PR 24): the road book says which corners evened out since a road practice began (claude/project-thread-gd7nre)
+- `core/driver_profile.py` `road_book(drives, ref, since)` and its port: with `since`, each corner has `since_n` /
+  `since_low` (its passes since, an undated drive counting before) and the book `evened`: the corners that span
+  UNEVEN_LEVELS overall but whose passes since (EVEN_MIN = 2 or more) are all within it of the cleanest.
+- `web/driver_profile.js` `roadEvenedLine`: "Evened out since you began practicing here: corners 4 and 9, every pass
+  there since close to your cleanest." `web/analysis.html` shows it in the road book's head when the practice keeps to
+  that road; the roadBook job takes `since`.
+- Tests: tests/test_best_corners.py (since, evened, parity, words); the four-drive road e2e flow reads the job with since.
+- Next: Your driving's Practicing box on a road practice could say the same count ("2 of its 3 least even corners have
+  evened out").
+
+## 2026-11-12: drive page repeatability rows say each number once
+- Done: in "How repeatable your corners are" each row's big number is the braking point's spread (now "±12 m"), and the line under it labels it once ("Braking point over 6 passes · speed ±2 mph"), adding the braking-marker advice only where it varies. The slowest point and turn-in spreads moved into the row's spoken label. The intro reads "Typical: braking point ±6 m · speed ±2 mph · 14 corners".
+- Next: keep applying the UI/UX guide's analytics rules to the remaining driver analysis screens.
+
+## Session 2026-11-12 (security pass, read limit): signed-in reads limited per session (claude/project-thread-4lms1f)
+- backend/src/ratelimit.ts: a GET with a session counts against `READ_LIMIT` (600 a minute per session; wrangler.jsonc
+  namespaces 1007 prod, 1008 previews), except the static map tiles (`TILE_PREFIXES`: /api/graph/, /api/ctx/v1/) and the
+  relays (their own per-IP limit). Signed-out reads are not counted (they are 401s or public).
+- Tests: backend/test/ratelimit.test.ts (+1).
+- Next in the pass: the iOS bearer path (sessionHash on the app's token) under the same limits on a real phone; the
+  crews-near and roadbooks-near cells can be walked by a member (both are public by design, noted, not changed).
+
+## Session 2026-11-12 (time attack): a drive's quickest lap counts (claude/project-thread-uwmi4e)
+- Done: with several passes over a stage in one drive (laps of a time attack loop, a stage driven twice), segment_pass / Core.segmentPass take the quickest, not the first found. New segment_windows / segmentWindows list every pass; segment_window keeps returning the first, so stage_delta's reference is unchanged. Parity-tested.
+- Next: back to the social declutter pass.
+
+## Session 2026-11-12 (App Store risks): the app had no privacy manifest; it has one now (claude/project-thread-g9yher)
+- Done: `PrivacyInfo.xcprivacy` in the app target (project.yml), matching LISTING.md's App Privacy answers; UserDefaults (CA92.1) and system boot time (35F9.1) declared. tests/test_privacy_manifest.py keeps code, manifest and listing in step.
+- Check on the next TestFlight upload: no ITMS-91053 "Missing API declaration" mail from App Store Connect. MapLibre's xcframework carries its own manifest.
+
+## Session 2026-11-12 (backend resilience): the friends-on-map poll no longer scans everyone sharing (claude/project-thread-g9yher)
+- Done: `GET /api/presence` (polled every minute by each phone with the layer on) started from `SCAN presence_settings`, every user sharing, with five correlated lookups each, so rows read grew with users squared now that sharing is on by default. It now starts from your own accepted friends and private-crew mates (`PRESENCE_VIEW`, a `cand` CTE); the WHERE that decides who may see you is unchanged. A test checks the query plan has no full scan.
+- Sweep of all 572 SQL statements in backend/src (EXPLAIN on the migrated schema): the other full scans are daily sweeps, account deletion or rare owner pages. Candidates for an index later (a D1 migration, needs the owner's go): `segment_shares(audience_type, audience_id)` for "shared with me" and crew pages, `highlights(author_id)` for the daily cap.
+- Synthetic load (2026-11-12): run locally with `wrangler dev` on the previews config, a local D1 with every migration and 5,000 seeded sharing users (about 50k friendships). `/api/presence` at 20 concurrent: old code 114 req/s, p95 229 ms; new code 204 to 240 req/s, p95 106 to 131 ms. A mix of 31 signed-in GETs, 6,200 requests at 30 concurrent: 0 errors, p95 about 210 ms on every route (local runtime bound, no slow outlier).
+- Live preview (fa5fd1eb, 2026-11-12): 1,500 requests at 15 concurrent across six endpoints, 0 errors, p95 about 110 ms. One earlier preview deployment (e2977c3b) answered 500 on every path while the next one with the same code was fine: a bad deployment, not the code.
+- Next: add the two indexes above if Nate gives a go.
+
+## Session 2026-11-12 (deepest analysis, PR 22): Your driving offers the practice on the road where it shows most (claude/project-thread-gd7nre)
+- `web/driver_profile.js` `skillRoad(list, skill)`: skillRoadLine's road ({name, n, of}), now shared.
+- `web/analysis.html`: under Work on (or a practice over every road), "It shows most on Dry Ridge Rd: ..." ends with
+  "Practice it on Dry Ridge Rd alone", which saves the per-road plan (where: {road, name}). No offer once the practice
+  keeps to a road.
+- Tests: tests/test_best_corners.py (skillRoad); the four-drive road e2e flow presses the offer and checks the plan.
+- Next: the end card on a drive on the practised road could name the road ("Practice on Dry Ridge Rd · ...").
+
+## Session 2026-11-12 (deepest analysis, PR 23): the end card names the practised road (claude/project-thread-gd7nre)
+- `web/driver_profile.js` `practiceLine`: a per-road plan's line reads "Practice on Dry Ridge Rd · One steering arc: ...".
+  A drive on another road still gives no line (#478).
+- Tests: tests/test_practice_focus.py (the words); the four-drive road e2e flow checks the end card's practice line.
+- Next: when a per-road practice has 3+ drives there, the road book could mark which of its uneven corners have evened out.
+
+## Session 2026-11-12 (deepest analysis, PR 21): a practice from a road's book keeps to that road (claude/project-thread-gd7nre)
+- `core/driver_profile.py` / `web/driver_profile.js`: a plan's `where` can be `{road, name}`. `practice` then reads only
+  the drives with that name, before and after the plan, and says `road`; `on_plan_road` / `onPlanRoad` tell whether a
+  drive counts. `practiceSummary` says "Since 12 Nov on Dry Ridge Rd: ..." (or "no drive there yet").
+- `web/analysis.html`: the road book's "Practice X on my next drives here" saves the road. The end card
+  (`analysis_client.js` practiceOf) says nothing about the practice on a drive elsewhere.
+- Tests: tests/test_practice_focus.py (per-road practice, parity, words); the four-drive road e2e flow checks the plan and
+  the Practicing line.
+- Next: Your driving's "It shows most on Dry Ridge Rd" line could offer "Practice it there", the same per-road plan.
+
+## Session 2026-11-12 (social declutter): the planner's drive card says the roles once (claude/project-thread-uwmi4e)
+- Done: on a crew drive you planned, More no longer shows "Stop being lead" or "I'll sweep" links above Set it up's Lead and Sweep pickers, which set the same thing (crew_events.js detail). Everyone else keeps the one-tap links.
+- Next: keep screenshotting social screens for clutter.
+
+## Session 2026-11-12 (social declutter): one chevron on People (claude/project-thread-uwmi4e)
+- Done: a friend's row on People points right like your own row, since both open a page; it pointed down as if it unfolded (index.html .friend-head .chev). On Who sees what, the link "Cars, on each car" now reads "Who sees each car". In one crew, the Crews side no longer says the crew's name twice: the head above the page is just the gear, and the page's title says the name. Planning a crew drive, the meeting point is said once, in its field (a place's name, or "Pin on the map"), not again in a line under it with raw coordinates; the "Roles and regroup points: on the card, under More." line is gone.
+- Next: the boards could take a drive's quickest lap of a loop, not its first (segmentPass, after #526).
+
+## Session 2026-11-12 (offline): the main map says when it has no map (claude/project-thread-g9yher)
+- Checked with every request off the app refused (cold, and after one online start): the app opens, a whole drive records with its live readouts, the end card scores it and the Log has it. Reports and road feel wait and send later (already covered by e2e).
+- Fixed: with no signal and no saved area the main map was a silent blank. Now one line on it says "No map here without signal. Notes and recording still work." (or "The map couldn't load." when online), gone when a base map tile draws.
+- Next: in a free drive with no tiles the map shows no position arrow or trail either; worth a look.
+
+## Session 2026-11-12 (notes fragments): STATE.md and CALL_SHEET.md stop conflicting (claude/project-thread-g9yher)
+- A PR no longer edits docs/STATE.md or docs/CALL_SHEET.md: it adds `docs/notes/YYYY-MM-DD-slug.md` with `# STATE` and/or
+  `# CALL SHEET` sections (docs/notes/README.md). tools/collect_notes.py folds them in (newest on top) and deletes them;
+  `--check` validates; tests/test_notes.py. CLAUDE.md rules 1, 6, 7 say so. `.gitattributes` merge=union on both files
+  so a local merge of an older branch keeps both sides.
+- Also in this PR: the cron monitoring (migration 0055, applied on preview and prod) and the lighter CI per push.
+- Next: run `python tools/collect_notes.py` in its own PR once a dozen notes pile up; offline behaviour and App Store /
+  TestFlight readiness checks.
+
+## Session 2026-11-12 (native crash reports): the shell's crashes and hangs reach the error counts (claude/project-thread-g9yher)
+- Done: `ApexCrashReports.swift` subscribes to MetricKit; each crash or hang diagnostic (delivered by iOS on a later launch, at most 5 per launch) is posted to `/api/errors` as kind `crash` or `hang`, app `ios`, with the build and the crashed thread's frames (binary + offset, unsymbolicated). The Worker accepts the two new kinds; they show in Garage → Settings → Account → Service check and `/api/ops/errors` like any other.
+- Before this only the page's JS errors were counted; a crash in the shell, CarPlay or the sensor pipeline was visible only in TestFlight's own crash list.
+- Next: symbolicate the frames (the dSYM from build-ipa) when the first ones arrive.
+
+## Session 2026-11-12 (roam-a loop window): a time attack loop's lap is found however GPS lands (claude/project-thread-h7xxmf)
+
+- Bug: the Log times stage runs on the phone (analysis_client.js passes → Core.segmentPass), and those times go to the
+  time attack boards. `segment_window` (core/drive_analysis.py) and its port `segmentWindow` (web/apex_core.js) matched
+  a stage's start at the single closest sample of the whole drive. On a loop the end is the start, so the closest visit
+  to the start is often the way back round, with no lap after it, and the lap was missed: no Log time and no board time.
+  That depends on GPS noise, so it fails about half the time. A stage driven twice had the same problem.
+- Fix: every visit to the start (each run of samples within MATCH_RADIUS_M, its closest sample) is tried, closest first.
+  The first that ends at the stage's end at a plausible length wins. When the old match was valid it is still the first
+  tried, so point-to-point stages give the same answer as before.
+- core: `nearest_index` returns (lo, inf) for a window past the path's end instead of raising. The JS port already did.
+- Tests: tests/test_drive_analysis.py +1 (a 2 km circle driven 1.3 times, the first lap's GPS 3 m wide; it fails without
+  the fix); tests/test_web_core_parity.py +1 (the same in both cores).
+- Next: another roam item.
+
+## Session 2026-11-12 (roam-a loop delta): the live delta on a time attack loop no longer ends as it starts (claude/project-thread-h7xxmf)
+
+- Bug: a fixed time attack saved to your Log (time_attack.js localCopy) is a stage whose end is its start. The live
+  delta (web/stage_delta.js createTracker) ended a pass at the closest approach to the end, which on a loop is the moment
+  you enter it: "Loop done." showed at the start (twice on the test loop), then the pass began again from a few metres in.
+- Fix: the end only counts once the pass has covered half the stage's length. A point-to-point stage is unchanged.
+- Tests: tests/test_stage_delta.py +1 (a 2 km loop with esses: one "done", every corner scored, at the end); it fails
+  without the fix. The e2e "a saved stage: the live delta…" passes.
+- Next: chargers on CarPlay's preview (passed to the CarPlay thread), or another roam item.
+
+## 2026-11-12 A loop our router fails is told apart from "no loop that length" (claude/project-thread-39xbx9)
+- `own_routing.js` `loops` keeps the worker's error in `ApexOwnRouting.lastLoopError` (null when it answered). The
+  cockpit reports `loop: failed (<length>, <error>)`, `loop: rejected (<length>)` (loops found, none survived the build or
+  scoring) or `loop: none (<length>)`. The toast for a failure says "couldn't finish ... Try again, or a shorter one".
+- The loop ask to the router worker waits 20 s, not 8 (it loads every tile the length can reach).
+- Next: when a `loop:` report comes in, read the reason and the length in error_counts (kind 'route').
+
+## 2026-11-12 the Log's top: one line each
+- Done: the Log's headline under the score drops the minute ("Latest Vetta Score · Cherohala Skyway · Yesterday", not "…, 2:17 PM"), so it fits one line. The Your driving card says "Best: One braking 99 · Work on: Back to power 83" (was "Strongest:", which wrapped), and before enough corners: "9 of 30 clean corners to your first picture" (was two sentences).
+- Tests: tests/test_driver_profile.py and the e2e card check expect "Best:" and the short line; screen by screen passes.
+- Next: keep sweeping my areas (shell, Garage, Where to?, Log, drive page) for lines that wrap or explain.
+
+## Session 2026-11-12 (roam-b walkthrough 3): an imported drive with no date says so (claude/project-thread-sxhrgi)
+
+- Walked a drive's page on production as a new user: imported the demo drive as a CSV (Import), opened it from the Log.
+  The page reads well (score, four parts, one thing to work on, map, grip circle, corners).
+- Bug fixed: a file with no date in its name or rows is kept with `date_known: false`; the Log's index stamped it "--",
+  but its page said "Today, 2:53 PM · Imported" and the Log's hero "Latest Vetta Score · Circle Freeway · Today, 2:53 PM"
+  (the time it was imported). analysis.html `dateLabel` now says "Date unknown" for it (the page, a road's runs, pickers)
+  and the hero names no time. e2e "import: a drive from a file…" covers it (fails before).
+- Drive it again from that drive on production: the route card's map had two LPR stamps and a CAFÉ stamp piled on one
+  junction. The pins' declutter (scenic.js) now takes the route notes' stamps (`pins`: LPR, SPD, hazards) as `fixed`: always
+  shown, placed first, the same word twice on one spot shown once, the café / fuel / viewpoint pins kept off them.
+  tests/test_scenic.py covers it.
+- Next: add a friend and join a crew as a new user (needs a signed-in account on production; stubbed Worker in e2e).
+
+## Session 2026-11-12 (roam-c ideas-stale): two IDEAS rows said "todo" for work that is done (claude/roam-c-ideas-stale)
+- IDEAS R-23: chargers on CarPlay's preview are built (carplay.js alongMessage `charge`, ApexCarPlay.swift). U-05: the six
+  phone shapes are e2e flows and a CI artefact (`safe-area-contact-sheets-<shard>`). Both marked done.
+- Checked on main 28cc81a: the whole e2e suite passes locally, 204/204. Startup budget at 3.33 MB of 3.6 MB and 133 of 145
+  scripts (cockpit.js 790 KB); route_ctx/* (~300 KB) loads at launch and is only used to plan, a candidate for a lazy group.
+- Next: R-32 Stelvio, where the road's tile line gives 7 hairpins of 48 on its 9.3 km stroke (detectCorners on
+  tile-simplified hairpins), not stroke joining.
+
+## Session 2026-11-12 (social, never in the way of the road): a convoy invite waits until the drive ends (claude/project-thread-uwmi4e)
+- Done: a convoy invite that lands while you drive isn't toasted or marked seen; when the drive ends the page asks again and toasts it (convoy_ui.js loadAsked). The rest of the social pings already wait: For you doesn't poll during a drive, plain toasts go to the drive's status line, and the invite card is hidden while driving.
+- Next: the duel card keys.
+
+## 2026-11-12 Garage settings: three footnotes gone
+- Done: Reminder's note is one short line ("At most once a week: the evening before you usually drive, or before a crew drive, with a road to try."). Units' driving-side paragraph is the label "Driving side", with the reason in its tooltip and the switch's aria label. Your data's offline line drops the web-cache footnote ("Nothing saved for offline." alone when empty).
+- Tests: tests/test_my_data.py checks the empty line is exactly "Nothing saved for offline." and that no cache sentence is added; e2e your data, units, Garage flows pass.
+- Next: keep checking the Garage, Where to? and Log against Nate's general UI/UX guide (project files reference/), used as background.
+
+## Session 2026-11-12 (declutter 1): Look and voice and Co-driver without the essays (claude/project-thread-5sbga7)
+
+- Nate's TestFlight note 1 (build 773.1, 02:45Z, "walls of text"; taken over from the TestFlight thread): the theme cards
+  lose their paragraph and the printed sample quote (the card says "Marguerite · suggested voice"; Hear still says the
+  call); gone too: Look and voice's intro, "Auto turns the page over after sunset", the Soundtrack essay and its "Music
+  made by the road" line (the switch and "Hear a sample" stay), the Notes paragraph, and "Off. Road and route names use..."
+  under Speak road names. The voice line under Co-driver's voice shows only for Suggested ("Hale, the voice Tiburon
+  suggests."). The words example stays (it is the setting's answer).
+- Note 6: Ways to go has no convoy paragraph under its keys (the convoy sheet says the rest).
+- Note 8: Where to?'s chip row is Best roads nearby and "Options · N" only; each option on is named in the chip's
+  VoiceOver label, and the route card still shows one chip per option.
+- e2e: the theme-cards flow checks the card's voice line instead of the quote; plan flow (d) and the screen-by-screen
+  flow check the count on Where to? and the chips on the card.
+- Note 7: Where to?'s "Or loop from here" loses "back where you started"; Spots, Time attack and Roadbooks rows are
+  their names only (the time attack row still becomes this week's loop and your place once it has loaded).
+- Note 2: Crews this month lines are the crew's numbers ("Ridge Runners · 160 km · Smooth 85 · #2 of 2"); private and
+  small crews just carry no rank; the "Public crews of 3 or more..." footer is gone; with nothing new, "Latest from your
+  crews" shows no heading and no line.
+- Note 3: Log list rows lose the corner-tick bar; a drive with no Score shows nothing in the score column (its own page
+  still says --); "To 10069 Pebble Ridge Ln" lists as "To Pebble Ridge Ln" (street addresses only; the saved name is kept).
+- Next: Your driving (notes 4, 5).
+
+## Session 2026-11-12 (security pass, fake sessions): a made-up session token no longer dodges the write limit (claude/project-thread-4lms1f)
+- backend/src/ratelimit.ts: a write is keyed per session only when the session row exists and has not expired (one D1
+  read per write); anything else is keyed per IP. Before, any bearer token of 20+ characters (or any cookie) got a fresh
+  limiter key on each request, so the signed-out writes (/api/errors, /api/app-health, /api/feedback) had no limit.
+- Tests: backend/test/ratelimit.test.ts (+1).
+- Next in the pass: the anonymous counters (/api/app-health adds to the owner's daily rates with no sign-in) can still be
+  skewed slowly from many IPs; the crews-near and roadbooks-near cells are public by design (noted, not changed).
+
+## Session 2026-11-12 (Download my data): the export names every table that holds your data (claude/project-thread-g9yher)
+- Done: `exportMyData` (backend/src/account.ts) left out eight tables: your recent positions kept for friends on the map, builds you follow, kudos given and received, your Still there / Gone answers, account and crew invites you made, ETA shares and livery grants. All eight are in it now (no secret token, and other people only as what the app already shows you).
+- New guard: `tests/test_export_complete.py` fails when a table with a column pointing at a user is in neither the export nor its short TECHNICAL list (sessions, sign-in codes, upload caps, the road-data queue, rank slots, pioneer hours), each with why.
+- All eight were already deleted with the account (foreign keys cascade).
+
+## Session 2026-11-12 (declutter, end card): two lines under the score at most (claude/project-thread-5sbga7)
+
+- Nate (04:05Z): "Every intersection and interaction between features should be clean." Four features each add a line
+  under the end card's score (Practice D-27, a month's best run D-30, the road's passes, what the phone felt), and a
+  drive could show all four plus the coaching line. `endLinesCap()` in cockpit.js now keeps two, in that order of
+  priority; the rest are in the Log.
+- Next: the drive page's two rows of keys.
+
+## Session 2026-11-12 (social declutter): the duel card reads plainly (claude/project-thread-uwmi4e)
+- Done: a duel card no longer shows "--" or "has a run in". With one run in it shows that run and "no run from you yet" (or from @them); with none, "No runs yet". A result shows only the runs that are in, and a draw or "Neither of you drove it" stands alone. The keys are Drive it, Show my Scores, Call it off, so the drive comes first and Call it off no longer sits alone on a wrapped line (duels.js card).
+- Next: keep screenshotting People and the stage sheet for clutter.
+
+## 2026-11-12: a drive's page says seconds to a tenth
+- Done: on a drive's Log page every corner time (ideal drive, Where to find time, the corner list, the scrub readout) is to 0.1 s, and the most abrupt moments to 0.1 g/s. The ideal line is one labelled line with its sample: "Ideal drive: 0.5 s quicker · your best pass at each of 36 corners, over 2 drives".
+- Next: the same analytics pass on what remains of the drive page (the repeatability rows).
+
+## 2026-11-12 drive page: three keys and a More menu
+- Done: the drive page's six action keys (two rows) are now one row: Replay, Drive it again and a ⋯ More menu holding Compare, Send the road, Share card and Mark a stage (four keys wrapped in wider fonts; the page already compares with your best here in its Corners section). The menu closes on a tap outside or Escape. The tags footnote ("Tags and notes stay on this phone. Filter the Log by them.") is gone; the line now only shows save results and hides when empty.
+- Tests: e2e "your roads (panel D-1…" checks the three keys share a row, the four hide until More opens, and a tap outside closes it.
+- Next: keep sweeping the shell, Garage, Where to?, Log and Your driving for leftover footnotes and second rows (Nate's no-walls-of-text rule).
+
+## Session 2026-11-12 (declutter, drive page): the corner list says its numbers (claude/project-thread-5sbga7)
+
+- Nate (04:05Z): "Walls of text should be banned wherever possible." The drive page's "How repeatable your corners
+  are" was a five-line paragraph and two long sentences per card; it is now one line ("Braking point ±10 ft drive to
+  drive · speed ±1 mph, over 10 corners") and a card line ("5 passes · braking point ±10 ft · slowest point ±10 ft").
+  The comparison heading is "Corners · vs your best here, Tail of the Dragon (669)" with "−0.27 s over the 22 corners
+  both took cleanly" under it.
+- Fixed on the way: a corner's coaching tip said "30 m coasting" to a driver in miles; its lengths now use the driver's
+  units (ApexUnits.fine), as the rest of the Log does.
+- Next: the rest of the shell (route card, end card, drive page actions), keeping out of the social sheets and People.
+
+## Session 2026-11-12 (social declutter, part two): the crew page is three tabs (claude/project-thread-uwmi4e)
+- Done: under the crew's name, Drives (upcoming drives, members, pinned route, meeting points), Chat and Board (the Vetta Score board, the house stage, builds) are ARIA tabs with the People tabs' look; Drives opens first; the pick is kept per crew while the app runs; arrow keys move between them. The livery stays one line at the foot of every tab.
+- Next: the For you list on People; Crew settings' long "Who can find it" paragraph (cockpit.js crew settings).
+
+## 2026-11-12: Compare and the road's drives say seconds to a tenth, in words
+- Done: the Log's Compare cards and corner table, and a drive's "this road" table, give corner times to 0.1 s like the drive page (#518). The road table reads "1.2 s slower on 36 corners" / "quicker" / "level" instead of "+1.20 s on 36 corners (positive = it was slower)".
+- Next: keep applying the UI/UX guide's analytics rules to the remaining driver analysis screens.
+
+## Session 2026-11-12 (roam-a chargers): EV chargers are no longer fuel stops (claude/project-thread-h7xxmf)
+
+- Bug: the map's tiles (OpenMapTiles poi layer) file amenity=charging_station under class `fuel` (checked on real z14
+  tiles: Cincinnati, Lexington and Columbus each have `fuel/charging_station` points). So a petrol car's route card
+  counted a charger as a "fuel stop", it could break up the "no fuel for 60 mi" warning, it got a FUEL pin, and "next gas
+  station" could name a Supercharger.
+- web/stages.js `pois` now gives chargers kind `charge`. web/scenic.js `forCar(pois, car)` keeps the pumps for a petrol,
+  diesel or hybrid car, or when the Garage has no car, and the chargers for an electric one.
+  - `summary(list, totalM, { electric })` counts "N chargers", and an electric car's warning is "no charger for the
+    first 62 mi".
+  - `fuelGap(list, totalM, kind)`, KIND_NAME `EV charger`, and the ask "Next charger: …".
+- web/cockpit.js: `attachScenic` filters by the Garage daily car (`routingCar()`), and an EV's chargers get CHARGE pins.
+  The next-pin highlight (U-85) covers both kinds. Siri's "next gas station" in an EV answers with the next charger.
+- Not done: CarPlay's route preview still lists only cafés and fuel (carplay.js alongMessage, ApexCarPlay.swift), so an
+  EV sees no chargers on the car's screen yet. A charger with no name says "EV charger, no name on the map".
+- Tests: tests/test_scenic.py (+1 test_chargers_are_not_fuel_stops).
+- Next: car-friendly café picks (R-24's last part); chargers on CarPlay's preview.
+
+## Session 2026-11-12 (carplay report undo): a report from the car has its Undo on the car (claude/project-thread-me97iw)
+- The car's Report grid used to send the report with no word back; the phone's Report key turned into Undo where the driver can't see it. Now the car shows "Gravel reported" with Undo and OK for 5 s (the offer alert, with a new optional `cancel` key name).
+- Undo on either screen takes the report back and the other screen's Undo goes too; a second report sends the first at once and its car Undo goes.
+- Next: keep checking phone/car parity (Where to? results, Places list, End and Undo).
+
+## Session 2026-11-12 (CarPlay places by name): the car's map labels the cafés and fuel along the route by name (claude/project-thread-me97iw)
+- web/carplay.js alongMessage now also carries `places` (at most 30, `{at, kind, text}`: the name, or "Café" / "Fuel" when the map has none). ApexCarPlay.swift keeps them as `placePlates`; ApexCarMap.swift draws each as a quiet plate (a cup or a pump, then the name) and web/carmap.js does the same as its fallback (`car.places`).
+- They are placed after hazards and corners, so a name never hides a corner; only those within 6 km of the car while driving, all of them in the preview.
+- Tests: tests/test_carplay.py, e2e "the sight-line speed rides under the position arrow" (the car map part) and "CarPlay feed".
+- Next: nothing open in this area; watch TestFlight for how the plates read on a real car screen.
+
+## Session 2026-11-12 (CarPlay offers): Go round, Skip and Head home on the car's screen (claude/project-thread-me97iw)
+- A drive's one-key offers were phone-only toasts. cockpit.js `offerKey` now also posts web/carplay.js `offerMessage` ({kind:'offer', id, title, short, key, seconds}); ApexCarPlay.swift `showOffer` shows a navigation alert with that key and Not now. A car tap sends `{action:'offer', id}` and the page runs it once and drops the phone's key; a phone tap sends `offerDone` and the car's alert goes away.
+- Used by the police report ahead (Go round) and the late-for-home offer (Skip a stage / Head home).
+- Tests: tests/test_carplay.py, e2e "avoid police reports, driving" (now answered from the car).
+- Next: the late-for-home offer has no e2e of its own firing in a drive.
+
+## Session 2026-11-12 (carplay notice): a request from the car that fails says why on the car (claude/project-thread-me97iw)
+- A loop or a place to go asked on the car that couldn't be planned, or a report with no GPS fix, used to leave the car silent: the reason was a phone toast. Now, while such a request runs (`carAsked` in web/cockpit.js), `toast()` also posts `{kind:'notice', titles}` (carplay.js `noticeMessage`, the first sentence only) and the car shows it: a CPAlertTemplate with OK when idle, a navigation alert in a drive.
+- Next: keep checking phone/car parity.
+
+## Session 2026-11-12 (CarPlay loops): the car's 1½ and 3 hour loops now plan (claude/project-thread-me97iw)
+- Bug: CarPlay's Loops list offered 30 min to 3 hours (since fable-carplay-loops), but the page's `loop` handler took only 30, 60 and 120, so 1½ and 3 hours did nothing. cockpit.js now takes every `LOOP_MINUTES` time.
+- Tests: tests/test_carplay.py (the handler takes the dial's times), e2e "CarPlay feed" (the car's 90 minute loop opens the plan; fails without the fix).
+- Next: CarPlay offers the phone's Go round (police ahead) and Skip / Head home (late for home) keys as navigation alerts.
+
+## Session 2026-11-12 (CarPlay descent): the car's route preview says a long descent on the way (claude/project-thread-me97iw)
+- web/brake_heat.js `descentShort` ("Long descent: 3.7 mi at 8%", "+N" for more) rides in the `along` message as `descent`; cockpit.js `carAlong` now also sends once the terrain is in (`paintClimb`). ApexCarPlay.swift adds it to the picked route's info variants, longest first, down to the detail alone.
+- Tests: tests/test_brake_heat.py, tests/test_carplay.py; e2e "CarPlay feed".
+- Next: nothing queued on the route preview; CarPlay's Loops list rows still repeat one detail line each.
+
+## Session 2026-11-12 (carplay declutter): shorter car preview and loop list (claude/project-thread-me97iw)
+- The picked route's preview line names one café and one fuel stop at most (`along.short`), never the two-name `along.full` line.
+- Loops from here: one section header ("Twisty loops, back where you started") instead of the same detail under all five rows.
+- Next: review the car's voice prompts and glance forms, then phone/car flow parity.
+
+## Session 2026-11-12 (carplay chargers): an electric car's chargers on the car screen (claude/project-thread-me97iw)
+- Since #520 an EV's route keeps chargers (kind `charge`) instead of pumps, but the car took only cafés and fuel, so an EV saw no stops on CarPlay. alongMessage, the native car map and carmap.js/html now take `charge`: named on the preview line ("Charge: X"), a ⚡︎ plate on the map, "Charger" when unnamed.
+- Next: keep checking phone/car parity.
+
+## Session 2026-11-12 (CarPlay places by name): the car's route preview names the cafés and fuel along it (claude/project-thread-me97iw)
+
+The car's route preview now names the cafés and fuel stations along the picked route ("Café: Bean There Coffee · Fuel: Shell, Speedway +2"), from the same places the phone's route card lists (web/scenic.js along). The page sends a new `along` message (web/carplay.js `alongMessage`, full and short lines) after every route it sends the car and when the places come in (cockpit.js `carAlong`); ApexCarPlay.swift puts it on the picked route choice's additional information, longest variant first, the detail alone last. Unnamed places are only counted. Tests: tests/test_carplay.py, e2e "CarPlay feed". Next: the same places as named plates on the car's map.
+
+## Session 2026-11-12 (roam-a month's best, live): the co-driver says when you pass this month's best run (claude/project-thread-h7xxmf)
+
+- IDEAS D-30, part five. web/flow_live.js: `monthBest(all, monthOf, key)` (the most corners in a run among this month's
+  summaries; unknown dates and unjudged runs never count) and `watch.setBest(n)` (5 or more). Passing it says
+  "Eleven clean in a row, your best this month." once a drive, in place of a milestone on the same corner.
+- web/cockpit.js `noteFlow` reads the Log's summaries once after Start for the month's best. The flow lines now queue
+  (two deep) instead of replacing each other, so the record line is not lost to "Ten clean in a row." a few corners
+  later; the queue clears with the slot (Quiet notes, a 20 s expiry, each drive).
+- Tests: tests/test_flow_live.py (+1); the live e2e seeds a run of 7 this month (and 40 in an old month) and hears
+  five, "Eight clean in a row, your best this month.", ten, and nothing in Quiet notes.
+- Next: car-friendly café picks (R-24's last part), or D-16's late-drive cues.
+
+## Session 2026-11-12 (roam-a best run live): the co-driver counts clean corners in a row (claude/project-thread-h7xxmf)
+
+- IDEAS D-30, part four. web/flow_live.js `createWatch(Core, ApexFlow, { mu })`: on the live 5 m rows, each corner is found
+  in the last 1.2 km (ApexCore.profileRecording) and judged once, 30 m after it ends, by flow.js's rule (cornerTechnique,
+  inFlow, GAP_M). It says "Five clean in a row." at 5, 10, 20, 30... A corner can't be judged twice (a later window's
+  copy of it starts before the last judged corner's end).
+- web/cockpit.js `noteFlow` on every live frame; `flowSay` is the lowest quiet slot (after brake heat and a break cue),
+  dropped after 20 s unsaid and never said in Quiet notes. `drive.flow` resets each drive; `apexDebug.flowRun` for e2e.
+  flow.js now exports GAP_M. index.html loads flow_live.js after flow.js (deferred).
+- Tests: tests/test_flow_live.py (the real Dry Ridge geometry driven gently gives the same run live as afterwards: 18,
+  and 7 driven briskly; no g says nothing; a lower-grip car agrees); e2e "the co-driver counts clean corners…".
+- Next: D-16's wider lines, or the road book marking corners that evened out.
+
+## Session 2026-11-12 (roam-a best run end card): the end card says a month's best run (claude/project-thread-h7xxmf)
+
+- IDEAS D-30, part three. web/end_line.js `bestRunMonth(me, all, monthOf)`: "Your best run this month: N corners in a
+  row, smooth and settled." only when this drive's summary `run` (5+) beats every other drive this month whose run is
+  known. Never for the first drive of a month, a tie, an unknown date, or a run never judged (no `run` field).
+- web/cockpit.js reads it in the end card's "usual" step (the Log's summaries, after the score lands) into a new
+  `#endRun` line (index.html), cleared on every card; the trail is refitted when the card grows.
+- Tests: tests/test_end_line.py (+1); e2e "drive ended: the card and the Log" checks the line and that one drive alone
+  says nothing.
+- Next: D-16's wider lines late in a long drive, or the road book marking corners that evened out.
+
+## Session 2026-11-12 (accessibility): axe audit and larger text on every main screen (claude/project-thread-g9yher)
+- An axe-core (WCAG 2.1 A/AA) pass over the map, Where to?, the replay cockpit, People, Garage and the Log, day and night, found one violation: Where to? set `aria-expanded` on a plain search field. It is now a combobox (`role="combobox"`, `aria-haspopup="dialog"`), which VoiceOver reads as "combo box, expanded/collapsed".
+- Larger text (1.5x and 2x) on the map, cockpit, People and Garage cut nothing a reader sees (the only hits were visually hidden screen-reader text and the sideways deck). The cockpit and deck keep their size by design.
+- Next: the real VoiceOver pass on the simulator stays with the owner's TestFlight check (LAUNCH.md section 3).
+
+## Session 2026-11-11 (security pass): photos by circle, report abuse, public crews' private chat, relay limit (claude/project-thread-4lms1f)
+- Took over the Worker API security pass from roam-c (its entries list what was checked: auth, CSRF, rate limits, :id
+  ownership, grants on read, time attack, convoy membership, hazard and report caps; #423 and #424 were roam-c's).
+- photos.ts `PHOTO_SEEN(p)` (viewer ?1): owner; else not hidden, not reported by you, no block either way, and by kind:
+  profile any member, car `CAR_SEEN`, post the build's car `CAR_SEEN`, crew/crest crew members. Used by `photoServe` (the
+  moderator bypasses), `photoList`, and safety.ts `resolveTarget` (you report what you see, or already reported).
+- `photoHiddenSql`: the one-report day-long hide counts only reporters who pass reportedSql's gate (invited or a member 7
+  days). safety.ts `fileReport`: re-filing updates the note, never `created_at` (it restarted the day forever).
+- Migration 0056_crew_public_since (crews.public_since; public crews backfilled to the time it ran; applied on preview and
+  prod). Set by crewCreate (public) and crewUpdate (private to public). crew_page.ts `CHAT_READABLE(c)`: hidden only when
+  the crew is public, the message predates public_since and the viewer joined after it. In `chatList`, `crewFeed`, and
+  the pinned message (unless the crew's owner wrote it).
+- ratelimit.ts `RELAYS` (/api/ctx/osm, /api/ctx/trace, /api/ctx/workzones): `RELAY_LIMIT` per IP, 300/60 s (wrangler.jsonc
+  namespaces 1005 prod, 1006 previews). `?diag=1` on /api/ctx/osm: moderator only.
+- Tests: photos.test.ts (+2), crew_page.test.ts (+1), ratelimit.test.ts (+1). privacy.html, APP_REVIEW.md updated.
+- Next: highlights (Spots) list ignores blocks and ratings are one-per-account (sybil); a read rate limit for member GETs.
+
+## Session 2026-11-11 (roam-a best run record): Best run this month (claude/project-thread-h7xxmf, off origin/main)
+
+- IDEAS D-30, part two. web/recording.js `runOf(Core, d)` (repair + scorable corners, as `scoreOf`) and summaries carry
+  `run: { corners, len_m }` (null: none of 5+; absent: flow.js not loaded). SUMMARY_VERSION 2 (rebuilt once).
+- flow.js now loads before recording.js in index.html (deferred, ~2 KB), analysis.html, analysis_worker.js and
+  break_worker.js. drive_view.js uses `runOf` too. analysis.html renderRecords: "Best run this month: corners in a row,
+  smooth and settled, over X" (CSP hash regenerated).
+- Tests: tests/test_flow.py (+2: summary and wiring); e2e "Your records…" seeds runs (an old month's never counts).
+- Next: the end card's line for the run, when a drive just had one.
+
 ## Session 2026-11-11 (sweep round three): the cron jobs are watched (claude/project-thread-g9yher, off origin/main 6a43a9c)
 
 - Migration 0055 `cron_runs` (job, ok_at, fail_at, reason). backend/src/cron_runs.ts `runCron` wraps the backup and the

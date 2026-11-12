@@ -6,6 +6,350 @@ Decisions Claude made for you, newest first. Each one says what was decided, why
 you reach one you've seen. If you disagree with a call, say so and it gets reversed; nothing here is hard to undo unless
 it says so. Things only you can do are in docs/OWNER_TODO.md.
 
+## 2026-11-12 (declutter 4, 5): Your driving loses its explanations (claude/project-thread-5sbga7)
+
+Your TestFlight notes on Your driving: each panel is its numbers and its findings. A panel with nothing to say yet is not
+drawn (What your drives say, Your touch). The Work on box keeps its tip; the Practicing box shows how it is going, drive
+by drive. Undo: revert this PR.
+
+## 2026-11-12 (deepest analysis 25): definitions on a tap, not in footnotes (claude/project-thread-gd7nre)
+Nate's rule bans explanatory paragraphs, and the UI/UX guide he shared asks for every number to be defined. A tap on the
+row satisfies both. Undo: put `mid.title = WORDS[k].is` back in place of defOnTap in render (web/driver_profile.js).
+
+## 2026-11-12: 30 s / 90 s web request timeout
+- What: `AbortSignal.timeout` on website requests, 30 s for reads, 90 s for writes (a drive upload on a slow link can take a while). Browsers without `AbortSignal.timeout` keep the old behaviour.
+- Why: match the app shell so both behave the same, and let the offline paths take over instead of hanging.
+- Undo: remove the `signal` line in `apiFetchOnce` (web/sync.js).
+
+## 2026-11-12 (roam-a waterfalls): waterfalls along the route from Overpass (claude/project-thread-h7xxmf)
+
+Waterfalls near a planned route now show on the route card's Along line, in its list and as FALLS pins. Calls: they come
+from Overpass, since the map's tiles have none. That sends the route's bounding box to a public Overpass server, as
+seasonal closures and cameras outside our region already do (no account, no drive). Only within 400 m of the road (a
+short walk from a pull-off). The tiles' places paint first, so a slow Overpass never holds the card. Undo: drop the
+`fallsNear` call in cockpit.js `attachScenic`.
+
+## 2026-11-12 (time attack near you): smaller areas and no neighbourhood streets (claude/project-thread-uwmi4e)
+
+Calls I made: the area is a quarter-degree square (about 28 by 22 km), not one loop per member, so friends nearby still
+share a board; that's the router's own tile, so the phone that builds the loop always has its roads. A loop may carry
+500 m or 5 % of neighbourhood street at most (a start's turn out of a side road), and one the router didn't measure is
+refused, since unknown isn't clean. This week's one old loop (Clyo Road) was taken down; the one entry on it goes with it. Undo: `AREA_DEG` back to 1 in
+both files, and drop `streety` from `choose`.
+
+## 2026-11-12 (time attack duel): Challenge a friend on the week's loop (claude/project-thread-uwmi4e)
+
+Once you've entered the week's loop, its card has Challenge a friend: an ordinary duel on your copy of the loop, so nothing
+new on the server. Won by time by default, because the loop is a time attack; Score is one tap away. The duel's days are
+the usual 3, 7 or 14, not tied to the week's end, so a duel can outlast the board. Undo: remove the `challenge` hook in
+cockpit.js's time attack mount.
+
+## 2026-11-12 (TestFlight 01:29): a viewpoint on the route is a VIEW stamp, its name close in (claude/project-thread-0wt1zm)
+
+Your note "bird watching shelter blocks half the route". A named viewpoint's stamp carried its whole name at every zoom and sat
+over the line. Now it says VIEW, like CAFÉ and FUEL, and shows its name only at zoom 15 or closer; a tap on it (or its row
+under Along the route) still says the name and offers it as a stop. Undo: revert the PR (or lower VIEW_NAME_ZOOM in cockpit.js).
+
+## 2026-11-12 (TestFlight 02:30 to 02:48): your meeting points switch and PACE vs Sight (claude/project-thread-0wt1zm)
+
+Meeting points: with no Home pinned, the switch now shares the rough square you are in when you turn it on (the same
+11 km square, never the spot) instead of refusing; the privacy page says so. Undo: revert, and it needs Home again.
+PACE vs Sight: they were two limits, the corner's and the view's. The gauge's PACE is now the lower of the two, the speed
+to drive to, so it matches Sight when the view is what limits you. Undo: drop the one line in cockpit.js.
+
+## 2026-11-12 (fixed time attacks): a season is a calendar quarter, three loops, featured weekly (claude/project-thread-uwmi4e)
+Nate: "static best roads maybe changing every few months ... rotating highlighted time attacks, with a leaderboard that you can view by week; month; year; all time." A quarter is "every few months" and lines up for everyone. Three loops so there is something to rotate; the featured one changes each Monday. Times are kept per day so every period is exact; all time is the loop's own season, and nothing carries over from the weekly loops. The weekly tables and endpoints stay so builds already on phones keep working. Undo: revert the PR; the new tables can be dropped (migration header).
+
+## 2026-11-12 (time attack app): the row's line is the featured loop this week (claude/project-thread-uwmi4e)
+The Where to? line and the deck say the featured loop and your place this week; switching the board to All time or another loop doesn't change that line. Undo: revert this PR (the server keeps both APIs).
+
+## 2026-11-12 (security pass, time attack loops): a new account can't set a season's time attack loop (claude/project-thread-4lms1f)
+The server can't route, so it keeps the first loop a phone posts for a slot, and the seed doesn't bind the geometry. A fresh
+account could post a hand-drawn loop through a neighbourhood and it would stay the area's time attack for three months.
+Now only a member who was invited or has been a member a week is asked to build one or may post one, the same bar a
+reporter needs to count. A new area waits up to a week for its loops if nobody there was invited. Undo: drop the two
+`established` checks in ta_fixed.ts and the one in time_attack.ts makeCircuit.
+
+## 2026-11-12 (store screenshots): STORE=1 mode in the landing shot tool (claude/project-thread-g9yher)
+One script makes both the landing page and the App Store shots, so they show the same real cockpit. The store size is 440 x 956 points at 3x (iPhone 16 Pro Max). Undo: drop the STORE branch in tools/landing_shots.js.
+
+## 2026-11-12 (store screenshots 2): the drive in the store shots is the bundled replay, saved as a drive (claude/project-thread-g9yher)
+Its speeds, g and corners are the recorded ones, so the score and coach line are real; the page labels it "Example drive". The drive's page is shown on Smoothness, not Speed, to keep mph off screen. The crew page stands in for the convoy. Undo: drop the `if (store)` block in tools/landing_shots.js.
+
+## 2026-11-12 (security pass, Spots): a blocked person's spots leave your map, and new accounts can't rate a spot up or down (claude/project-thread-4lms1f)
+Spots near you showed every member's spot, even one from someone you blocked, and a spot's stars counted every account,
+so a few accounts made a minute ago could push one to the top or bury it. Now a spot from someone you blocked (or who
+blocked you), or one you reported, no longer shows to you, and a spot's score counts a rating once the rater was invited
+or has been a member a week, as the three-report rule does. Undo: revert the two clauses in highlights.ts highlightList.
+
+## 2026-11-12 (social copy): privacy lines kept, but as one short line (claude/project-thread-uwmi4e)
+The convoy ("Shares your position until you leave.") and meeting points ("A 7 mile square around Home, never the address or whose.") still say what is shared, in one line each; the full rules stay on the privacy page. A duel no longer says "Your Scores don't reach @bob yet": the "Show my Scores to @bob" key says it. Undo: revert this PR's copy edits.
+
+## 2026-11-12 (friend profile): the friend row opens nothing in the list (claude/project-thread-uwmi4e)
+A social app's friend is a row that opens the person. The five keys, the last share and the grants drawer moved to the profile; Scores and Times switches per friend now live only in Who sees what (one tap from the profile). Undo: revert the People commit; the old row code is in git history.
+
+## 2026-11-12 (sharing copy): privacy said in one line, the cost of going public asked on the key (claude/project-thread-uwmi4e)
+"Never in a home zone." replaces "Inside a home zone, nobody sees you, convoy included. Nothing is kept after you choose Nobody." The privacy page keeps the full rules. Undo: revert this PR's copy edits.
+
+## 2026-11-12 (deepest analysis 20): Your driving's Work on says on which road it shows most (claude/project-thread-gd7nre)
+
+Under the Work on (or the practice under way) tip, one line names the road where that skill accounts for the most of the
+corners your passes differ at. Calls: from the road books (roads driven three or more times), read once per library and
+shared with the Log; none when no road's uneven corners name the skill. Undo: remove the `skillRoadLine` block in
+renderDriving (web/analysis.html).
+
+## 2026-11-12 (Sign in with Apple revocation): keep the refresh token in KV, not a new D1 column (claude/project-thread-g9yher)
+No migration needed, and the token dies with the key on delete. A failed trade or revoke never fails sign-in or deletion (logged with serverError). Undo: drop the `revokeApple` call in account.ts and the `keepAppleRefresh` call in apple.ts.
+
+## 2026-11-12 (Sign in with Apple credential state): act only on `.revoked`, not `.notFound` (claude/project-thread-g9yher)
+`.notFound` can come back when iOS has no record yet (a fresh restore, a simulator) and would sign people out for nothing; `.revoked` is the person's own choice. Undo: drop `checkAppleCredential` from the scenePhase handler.
+
+## 2026-11-12 (share line): who gets it, said before Send (claude/project-thread-uwmi4e)
+Nate wants sharing as easy as a big social app; those apps name the audience on the composer. The line names up to three picks, then "and N more". The chat draft lives in memory only, never on the phone, so a fresh start has none. Undo: revert this PR.
+
+## 2026-11-12 (declutter, route card): the weather and when-to-go lines without the explanation (claude/project-thread-5sbga7)
+
+"Live road events" left the weather line: the road-events row says itself when there are any. Undo: revert this PR.
+
+## 2026-11-12 route card empty-state footnote dropped
+- What: `feel` is '' with no measured coverage; #routeCardSub hides when empty.
+- Why: Nate's rule to hide empty states instead of explaining them; the Surface dial already shows "--".
+- Undo: restore 'Road feel after first drive' in web/cockpit.js and drop the hidden line.
+
+## 2026-11-12 (deepest analysis 24): "evened out" = 2+ passes since the practice, all within 15 levels of the cleanest (claude/project-thread-gd7nre)
+The same 15 levels that make a corner uneven, so a corner leaves that list by the rule that put it there. Two passes, so
+one lucky run is not called a change. Undo: drop `since` from the roadBook job call in showBook (web/analysis.html).
+
+## 2026-11-12: slowest point and turn-in spreads leave the visible repeatability row
+- What: the visible row keeps the braking point (the number the advice acts on), passes and speed; slowest point and turn-in are in the aria-label only.
+- Why: the guide's "no line that only repeats a number" and Nate's no-walls-of-text rule; the row used to repeat its own big number and list five spreads.
+- Undo: restore the `slowest point` / `turn-in` parts of the `.note` span in `web/drive_view.js` (repeatability rows).
+
+## 2026-11-12 (security pass, read limit): one account can read at most 600 times a minute (claude/project-thread-4lms1f)
+Writes and sign-in were limited, reads were not, so one signed-in account could walk the API as fast as it liked to scrape
+handles, crews near a point or spots. Now each session gets 600 reads a minute, then a 429 for the rest of the minute. The
+phone polls a handful of endpoints a minute, and the map tiles a plan reads are not counted, so no driver gets near it.
+Undo: drop `READ_LIMIT` from wrangler.jsonc (nothing is limited without it), or raise it.
+
+## 2026-11-12 (quickest lap): the best of a drive's passes (claude/project-thread-uwmi4e)
+Left open by #526: a drive with several laps gave the first valid one. The boards and the Log keep your best, so the drive's quickest pass is the one sent; a tie keeps the first found. Undo: revert this PR (segment_pass goes back to the first window).
+
+## 2026-11-12 (App Store risks): every collected type declared "App functionality" (claude/project-thread-g9yher)
+LISTING.md's "product improvement" for road data has no matching manifest purpose; App functionality is the honest fit, and diagnostics add Analytics as the label does. Precise location is declared linked (the hazard and friends-map uses are), the stricter reading. Undo: edit PrivacyInfo.xcprivacy and LISTING.md together (the test checks they agree).
+
+## 2026-11-12 (deepest analysis 22): "Practice it on <road> alone" on Your driving's road line (claude/project-thread-gd7nre)
+The road line already names where the skill shows most, so the next step is to practice there. It is a link, not a
+second big button, beside the existing "Practice it on my next drives". Pressing it starts a new plan from now, as every
+plan start does. Undo: remove the drivingRoadGo block in renderDriving (web/analysis.html).
+
+## 2026-11-12 (deepest analysis 21): a practice started from a road's book counts that road's drives only (claude/project-thread-gd7nre)
+The road book names the technique its uneven corners differ by, so practicing it elsewhere mixes in other roads. The
+level before is that road's own too, so the comparison is like for like. A drive on another road gives no practice line
+on its end card, rather than a misleading one. Undo: save `where: null` in showBookPractice (web/analysis.html); the
+`road` handling in `practice` then never applies.
+
+## 2026-11-12 (planner roles): pickers only, for the planner (claude/project-thread-uwmi4e)
+The planner had two controls for the same role, a link and a picker, one above the other. The pickers stay because they can hand a role to anyone in the crew. Undo: revert this PR.
+
+## 2026-11-12 (People chevrons): right, not down (claude/project-thread-uwmi4e)
+A down chevron promises the row unfolds in place; a friend's row opens their profile as a sheet, so it points right like every other row that opens a page. Undo: revert this PR.
+
+## 2026-11-12 (offline): a note over the blank main map (claude/project-thread-g9yher)
+The drive page's map already says "Map unavailable offline" (drive_basemap.js); the main map now does the same, rather than leaving a driver in the hills staring at blank paper. It counts only base map tile failures and a style that never loaded, waits 1.5 s so a passing failure never flashes it, and never takes a tap. Undo: remove `mapNote` in web/cockpit.js and `#mapNote` in web/index.html.
+
+## 2026-11-12 (notes fragments): one note file per PR instead of editing STATE.md and CALL_SHEET.md (claude/project-thread-g9yher)
+Every PR wrote the top of the same two files, so parallel threads lost green CI to conflicts several times a night.
+New files never conflict. merge=union alone was not relied on: GitHub's PR mergeability check is not documented to honour
+`.gitattributes` merge drivers, so it is kept only as a help for local merges of older branches. Undo: delete docs/notes/, tools/collect_notes.py, tests/test_notes.py and
+.gitattributes, and restore CLAUDE.md rules 1, 6 and 7.
+
+## 2026-11-12 (roam-a loop window): with several passes over a stage, the closest one to the start counts (claude/project-thread-h7xxmf)
+
+When a drive passes a stage more than once, segmentPass still returns one pass: the first valid one, trying the visit
+closest to the start first. It does not pick the fastest. Picking the fastest would change which time a board gets, and
+the boards belong to the social thread. Undo: restore the single global nearest in segment_window and segmentWindow.
+
+## 2026-11-12 A loop our router fails to finish says so, and waits longer (claude/project-thread-39xbx9)
+
+Nate's first report was `loop: none`, but a worker error or timeout was reported the same way and told him to try another
+length. Now a failure is `failed` with the error, and the length asked rides with every loop report (never a place).
+Call: loops get 20 s (a plan keeps its 6 s): a loop is asked for on purpose with a progress bar, and a long one loads
+many tiles. Undo: the `20000` in graph_router.js client `loop`, and `failed`/`rejected` in cockpit.js buildLoop.
+
+## 2026-11-12 Log headline and Your driving card shorter
+- What: the hero line shows the day only; "Strongest:" became "Best:"; the few-corners line became one clause.
+- Why: Nate's no-walls-of-text rule; both lines wrapped onto a second row on a phone.
+- Undo: restore `dateLabel(latest)` in web/analysis.html's hero and the two strings in web/driver_profile.js cardLine (and their tests).
+
+## 2026-11-12 (launch readiness): stale rows in LAUNCH.md and OWNER_TODO.md brought up to date (claude/project-thread-g9yher)
+The screenshots are made (#474, #476), outage alerting is the status workflow's "outage" issue (#425), and offline was checked end to end (#483). The uptime-check row for the owner is now optional. Undo: revert the rows.
+
+## 2026-11-12 (roam-b walkthrough 3): an import with no date reads "Date unknown" (claude/project-thread-sxhrgi)
+
+An imported drive whose file carries no date used to show the import time as if it were when you drove it. Its page and
+a road's list of runs now say "Date unknown", and the Log's headline leaves the time out. Drives with a date are
+unchanged. Undo: restore `dateLabel` in analysis.html to `ApexFormat.dateTime(d.date)`.
+
+## 2026-11-12 (roam-b walkthrough 3): camera and hazard stamps win the map's space over café and fuel pins (claude/project-thread-sxhrgi)
+
+Where a camera's stamp and a café's sat on the same spot, both were drawn on top of each other. The camera (a route note)
+now always shows and the café hides until there is room; two stamps of the same camera word on one spot show once.
+Undo: drop `fixed` from the pins in cockpit.js `declutterPois` and scenic.js `declutter`.
+
+## 2026-11-12 (roam-a ideas status): two open IDEAS parts parked rather than left "todo" (claude/project-thread-h7xxmf)
+
+- D-16 "wider lines late in a drive": parked. Lane position needs better than phone GPS (D-18 found the same), so it
+  waits on an external receiver (D-13). Rising corrections and later braking already feed the break cue.
+- R-24 "car-friendly cafés": parked. The map's only signal would be parking near the café, and mapped parking sits
+  next to almost every café in town (hundreds per z14 city tile). A "parking" tag on each would be noise, and Nate's
+  no-clutter rule (2026-11-12) argues against it. Undo: change the rows back if a real signal turns up, such as crew
+  ratings of a stop.
+
+## 2026-11-12 (invites while driving): held, not dropped (claude/project-thread-uwmi4e)
+A convoy invite mid-drive used to pop a toast with a key over the map. Now it waits until the drive ends, so joining a convoy you're invited to mid-drive takes stopping first; the leader's invite still lasts its time. Undo: revert this PR.
+
+## 2026-11-12 settings footnotes cut
+- What: shortened the Reminder note, folded the driving-side explanation into a tooltip/aria label, removed the web-cache footnote from Your data.
+- Why: Nate's no-walls-of-text rule and the general principle (from his UI/UX guide) that words should serve a decision. The reminder's behaviour and its App Review wording are unchanged.
+- Undo: restore the three strings in web/index.html and web/my_data.js, and the test lines in tests/test_my_data.py.
+
+## 2026-11-12 (declutter 1): the Garage's look and co-driver settings lose their explanations (claude/project-thread-5sbga7)
+
+Your TestFlight note on the Garage settings: the helper lines are gone. Each theme card is the look itself, its name, its
+voice and Hear; the Night, Soundtrack and road-names switches have nothing under them. The one line kept is the words
+example ("For example "Careful, medium right, long""), since it is what the switch changes. Undo: revert this PR.
+
+## 2026-11-12 (declutter 6, 8): Ways to go and Where to? lose a paragraph and a row of chips (claude/project-thread-5sbga7)
+
+Ways to go is its keys and Cancel. Where to? shows "Options · 3" instead of a chip per option (each is still read out to
+VoiceOver, and still shown one by one on the route card, where the route was planned with them). Undo: revert this PR.
+
+## 2026-11-12 (declutter 7, 2, 3): Where to?'s rows, Crews this month and the Log list (claude/project-thread-5sbga7)
+
+Where to?'s rows say their names. Crews this month is numbers only. A Log row is the date, the road, its facts and the
+Score; a drive with no Score leaves the column empty there (a blank, never a made-up number; the drive's page shows --),
+and a house number is dropped from a street-address name in the list only. Undo: revert this PR.
+
+## 2026-11-12 (security pass, fake sessions): writes trust the session key only after looking the session up (claude/project-thread-4lms1f)
+The write limit is per session for signed-in people (so a carrier NAT can't lock them out) and per IP otherwise. It took
+the session from the token alone, so anyone could send a new fake token with each request and never be limited. Now the
+session is looked up first: one extra indexed read per write, nothing for reads. Undo: revert the `live` check in rateCheck.
+
+## 2026-11-12 (declutter, end card): at most two feature lines under the score (claude/project-thread-5sbga7)
+
+The order is practice, run, road, feel: what you asked for, then what you earned, then the rest. A new end-card line
+belongs in that list (cockpit.js endLinesCap). Undo: revert this PR.
+
+## 2026-11-12 (duel card): plain words for a missing run, drive first (claude/project-thread-uwmi4e)
+"--" read as a broken number on a social card, so a side with no run is now said in words. Drive it moved ahead of Show my Scores because driving is what a running duel asks for. Undo: revert this PR.
+
+## 2026-11-12: corner times to a tenth of a second
+- What: `fmtD` and the ideal gain round to 0.1 s (was 0.01 s); a sign shows only from 0.05 s, matching the gain/loss colour threshold. Lap times keep hundredths (a lap timer's convention).
+- Why: the UI/UX guide's "no false precision"; phone GPS can't time a corner to a hundredth.
+- Undo: `toFixed(1)` back to `toFixed(2)` in `web/drive_view.js` `fmtD` and the ideal line.
+
+## 2026-11-12 drive page actions behind ⋯
+- What: Compare, Send the road, Share card and Mark a stage moved into a ⋯ More menu on the drive page; the tags privacy footnote removed (the note box placeholder still says it stays on this phone).
+- Why: Nate's TestFlight direction: cluttered, ban walls of text; a social app shows its main actions and puts the rest behind ⋯.
+- Undo: move the four buttons back out of `.dv-more` in web/analysis.html and restore the `#dvTagsNote` text.
+
+## 2026-11-12 (declutter, drive page): repeatability and the comparison in a line each (claude/project-thread-5sbga7)
+
+The page drops "(5 m samples and GPS make about 3 m the floor)", "Your steadiest corners; none varies much more than
+the rest" and "Stops and traffic are left out" (all still true; the numbers carry it). A corner that varies keeps a
+short tip ("Pick a braking marker you can always make"). Undo: revert this PR.
+
+## 2026-11-12 (crew page tabs): Drives, Chat, Board instead of one long page (claude/project-thread-uwmi4e)
+Nate: "Social features should feel just as easy to use as any major social media app." A club page in those apps is a header and tabs, not every part stacked. Meeting points sit under Drives (they pick a drive's meeting point). The chosen tab isn't saved on the phone: a fresh start opens on Drives. Undo: revert this PR (crew_page.js view() put the parts back in one cp-body).
+
+## 2026-11-12: "slower/quicker" in words on the road table
+- What: `slower()` in `web/analysis.html` replaces a signed number plus its "(positive = it was slower)" key.
+- Why: Nate's no-footnotes rule and the guide's every-number-labelled rule; a key to decode a sign is a footnote.
+- Undo: put `fmtS(o.delta_s)` and the key back in the `dvRoadTable` row.
+
+## 2026-11-12 (roam-a chargers): an EV's route card counts chargers, never pumps (claude/project-thread-h7xxmf)
+
+The Garage's daily car decides between pumps and chargers. With no car, the card shows pumps, since most drivers burn fuel.
+A hybrid counts as a fuel car, because it can always fill up. An electric car sees chargers only: a gas station is no stop
+for it. The warning uses the same 50 mi threshold. route_ctx/car.js already plans range against the car's own range.
+Undo: drop the `forCar` line in cockpit.js `attachScenic` (chargers then still stay out of the fuel count, as kind
+`charge` with no pin for any car).
+
+## 2026-11-12 (carplay report undo): a car report waits 5 s, not 3 s, before it is sent (claude/project-thread-me97iw)
+- Why: a CarPlay navigation alert lasts at least 5 s, and the Undo on it must still work for as long as it shows. A report made on the phone keeps its 3 s.
+- Undo: `CAR_HZ_UNDO_MS` in web/cockpit.js back to 3000 (the car alert then outlasts the window by 2 s), or drop the `fromCar` offer.
+
+## 2026-11-12 (CarPlay places by name): café and fuel plates rank below corners on the car's map (claude/project-thread-me97iw)
+A corner is something to slow for; a café is not. When plates overlap, the corner shows and the place waits until the map moves. Undo: move `places.filter(near)` ahead of the corners in ApexCarMap.swift placePlates and web/carmap.js placePlates.
+
+## 2026-11-12 (CarPlay offers): the car gets the phone's drive offers as navigation alerts (claude/project-thread-me97iw)
+A navigation alert is the template's own way to ask a driver something while moving (the same as the hazard Still there / Gone), so it fits the navigation-app rules; the key is the phone's own word, at most 16 characters. Undo: drop `case "offer"` in CarPlay/ApexCarPlay.swift; the phone's toast is unchanged.
+
+## 2026-11-12 (carplay notice): the car shows only the first sentence of the phone's message (claude/project-thread-me97iw)
+- Why: the second sentence is the phone's advice ("Type a start or tap the map"), and errors on the car must never send the driver to the phone. The first is the reason.
+- Undo: drop the `carPost(ApexCarPlay.noticeMessage(msg))` line in `toast()` (web/cockpit.js); the car goes silent again.
+
+## 2026-11-12 (carplay declutter): drop the two-name places line from the car preview (claude/project-thread-me97iw)
+- Why: the owner's no-walls-of-text rule; "34 corners · Café: X · Fuel: A, B +2 · Long descent…" was too much to read at a glance. The phone keeps the full list.
+- Undo: put `line([o.detail, along.full, along.descent])` back first in `routeChanged` (CarPlay/ApexCarPlay.swift).
+
+## 2026-11-12 (carplay parity): a close convoy hazard alerts the car with the voice off too (claude/project-thread-me97iw)
+- Why: with the voice off the phone toasted it but the car showed nothing, unlike every other hazard (say() alerts the car before its voice check).
+- Undo: drop the `carPost` from the convoy `speak` in web/cockpit.js.
+
+## 2026-11-12 (CarPlay places by name): the names ride on the route preview's info line, not a list template (claude/project-thread-me97iw)
+
+What: the names ride on the picked route choice's additional information line in CarPlay's trip preview, not a separate list or map plates. Why: it is where a driver looks before Drive, needs no new template or control (navigation-app template rules), and falls back to the detail alone if the car has no room. Undo: drop `case "along"` in CarPlay/ApexCarPlay.swift (the preview goes back to the detail alone); the page's message is harmless without it.
+
+## 2026-11-12 (roam-a month's best, live): passing the month's best run is said once (claude/project-thread-h7xxmf)
+
+The co-driver now says when a run of clean corners passes this month's best in your Log ("Eleven clean in a row, your
+best this month."), once a drive. Calls: a best under five is no record to speak of; the record line wins over a
+milestone on the same corner; flow lines queue two deep so none is dropped for the next. Undo: drop the `setBest` read
+in cockpit.js `noteFlow`.
+
+## 2026-11-12 (roam-a best run live): the co-driver praises a run of clean corners (claude/project-thread-h7xxmf)
+
+While you drive, the co-driver says "Five clean in a row." when five corners in a row were smooth, settled and inside the
+limit, then at ten and every ten after. Calls: milestones only (a word every corner would be noise); it waits for a quiet
+moment below hot brakes and a break cue and is dropped after 20 s (late praise means nothing); it speaks in Auto and Full
+notes, never in Quiet; technique only, so a slow smooth run counts the same as a quick one (the guardrails). Undo: remove
+`noteFlow()` from the two frame handlers in cockpit.js.
+
+## 2026-11-12 (roam-a best run end card): the end card names a month's best run (claude/project-thread-h7xxmf)
+
+A drive whose run of clean corners beats every other drive this month gets one line on the end card. Calls: only a new
+best is said (an ordinary run already shows on the drive page, and the card has enough lines), and the first drive of a
+month says nothing because there is nothing to beat. Undo: drop `bestRunMonth` in cockpit.js and the `#endRun` line.
+
+## 2026-11-11 (security pass): photos only to whoever sees what they belong to; a fresh account's report no longer hides one (claude/project-thread-4lms1f)
+Any signed-in member could fetch any photo by its id, and list any car's or crew's gallery by its id: a car you hadn't
+shown, a private crew's cover, or a photo someone kept after leaving a crew. Now a photo goes only to whoever sees the
+thing it belongs to (a car's to those who see the car, a build step's to those who see the build, a crew's cover and crest
+to its members); a profile photo still goes to any member, as a handle does. One report used to take a photo down for
+everyone for a day, and filing it again restarted the day, so one account made a minute ago could keep any photo down for
+good. Now the reporter stops seeing it at once, and everyone else only when the reporter was invited or has been a member
+a week. Undo: revert photos.ts PHOTO_SEEN and photoHiddenSql, safety.ts fileReport.
+
+## 2026-11-11 (security pass): a crew's private-days chat stays with who was there when it goes public (claude/project-thread-4lms1f)
+A crew remembers when it last became public (`crews.public_since`, migration 0056); someone who joins after that reads
+only what was written from then on. Members from before keep everything; a private crew is unchanged; a pinned message
+the owner wrote stays. Crews public today start from the moment the migration ran. Undo: remove `CHAT_READABLE` from
+crew_page.ts (the column can stay).
+
+## 2026-11-11 (security pass): the map relays are limited per address (claude/project-thread-4lms1f)
+The three relays a phone uses while planning need no account, and every miss asks a free public service (Overpass,
+Valhalla, a state feed) from our Worker. Now each address gets 300 relay requests a minute (a plan asks at most 12 tiles),
+and the relay's mirror check (`?diag=1`) is the owner's alone. Undo: drop `RELAY_LIMIT` from wrangler.jsonc, or raise it.
+
+## 2026-11-11 (roam-a best run record): "Best run this month" in Your records (claude/project-thread-h7xxmf)
+
+Your records in the Log gain a row: this month's best run of clean corners in a row, with its drive, length and day. Each
+drive's summary now keeps its best run (recording.js `runOf`, judged on the same rows and corners as the Score, so the
+drive page and the record agree). Calls: the summary version goes to 2, so every saved drive is summarised again once
+from its own rows the next time the Log opens (a one-off, in the worker); a drive whose run can't be known never counts.
+Undo: remove the `run` row in analysis.html renderRecords (and the `run` field in recording.js summarize).
+
 ## 2026-11-11 (CI load): e2e sits out PRs that can't change the page; one CI slot per branch (claude/project-thread-g9yher)
 
 The 20:16-21:15 UTC stall was GitHub's own incident (githubstatus.com, 20:48 "Impact across multiple GitHub products

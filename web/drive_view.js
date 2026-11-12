@@ -171,7 +171,7 @@
       + `<path d="${hull}" fill="none" stroke="${C.panelInk}" stroke-width="1.6" stroke-linejoin="round"/>`
       + txt(c0, 26, 'middle', 'THROTTLE') + txt(c0, S - 18, 'middle', 'BRAKE') + txt(16, c0 - 4, 'start', 'L') + txt(S - 16, c0 - 4, 'end', 'R') + '</svg>';
     const g2 = (v) => (v == null ? '--' : `${v.toFixed(2)} g`);
-    const base = `The outline on this drive: braking ${g2(env.brake_g)}, cornering left ${g2(env.left_g)} and right ${g2(env.right_g)}, throttle ${g2(env.throttle_g)}.`;
+    const base = `Outline: braking ${g2(env.brake_g)} \u00b7 left ${g2(env.left_g)} \u00b7 right ${g2(env.right_g)} \u00b7 throttle ${g2(env.throttle_g)}`;   // one labelled row
     cap.textContent = base;
     const head = el('h3', null, 'Grip circle');
     // TestFlight 14 ("explain what grip circle actually means?"): its one line from the vocabulary (one term, one meaning),
@@ -198,7 +198,7 @@
       for (let i = lo; i <= c.end; i++) if (ok(i)) { const [x, y] = xy(d.lat_g[i], d.lon_g[i]); p += `${p ? 'L' : 'M'}${x.toFixed(1)} ${y.toFixed(1)}`; }
       hot.innerHTML = `<svg viewBox="0 0 ${S} ${S}" aria-hidden="true"><path d="${p}" fill="none" stroke="${C.accent}" stroke-width="2.4" stroke-linejoin="round" stroke-linecap="round" opacity="0.9"/></svg>`;
       const use = Core.gripUse(d.lat_g, d.lon_g, lo, c.end, env, d.g_known || null);
-      cap.textContent = `Corner ${kc + 1}, from ${U() && U().size ? U().size(100) : '100 m'} before turn-in to the exit: on average ${use == null ? '--' : `${Math.round(Math.min(1, use) * 100)} %`} of the way out to the outline.`;
+      cap.textContent = `Corner ${kc + 1}: ${use == null ? '--' : `${Math.round(Math.min(1, use) * 100)}%`} of the outline on average, from ${U() && U().size ? U().size(100) : '100 m'} before turn-in to the exit`;
     }
     return { box, show, env };
   }
