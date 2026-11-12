@@ -121,7 +121,10 @@ const repKids = rootRep.children[2].children, repAt = repKids.findIndex((c) => c
 const repIntro = repKids[repAt + 1].innerHTML, repBtns = repKids[repAt + 2].children.map((li) => li.children[0]);
 const reps = repBtns.map((b) => ({ html: b.innerHTML, label: b['aria-label'] }));
 
-console.log(JSON.stringify({ repIntro, reps, full, bare, headHtml, unscoredHeadHtml, hiddenBeforeScrub, hiddenAfterKeyScrub, hiddenBeforeZoom, hiddenAfterZoom,
+const rootCar = mkEl('div');
+V.mount(rootCar, { ...scoredDrive, car: { label: '<b>Miata</b>', mu: 0.52 } }, { Core, C, MPH: Core.MPS_TO_MPH });
+const carHead = rootCar.children[0].innerHTML;
+console.log(JSON.stringify({ carHead, repIntro, reps, full, bare, headHtml, unscoredHeadHtml, hiddenBeforeScrub, hiddenAfterKeyScrub, hiddenBeforeZoom, hiddenAfterZoom,
   coachHead, timeHtml, cardHtml, aloneHead, aloneList, aloneCard, coastNear, ggCaption, ggCorner, ggNone, ggLede, ggMore, ggOrder, feelRead, gapLanes }));
 """
 
@@ -365,3 +368,9 @@ def test_repeatability_rows_label_the_number_once(r):
         assert "slowest point ±" in row["label"] and "turn-in ±" in row["label"] and "over 6 passes" in row["label"]
     assert "pick a braking marker you can always make" in r["reps"][-1]["html"]
     assert "braking marker" not in r["reps"][0]["html"]
+
+
+def test_car_line_says_its_grip_without_a_footnote(r):
+    h = r["carHead"]
+    assert "· grip 0.52 g, below the 0.60 g default</div>" in h and "<b>Miata</b>" not in h, h[:600]
+    assert "(the default" not in h
