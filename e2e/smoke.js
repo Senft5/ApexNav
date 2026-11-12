@@ -4838,6 +4838,10 @@ flow('a drive\'s corners on a road driven four times: each says your cleanest pa
   check(/^Since \d{1,2} \w{3} on Dry Ridge Rd, no drive there yet with 4 or more corners to read it on\./.test(practicing), 'the practice keeps to the road: ' + practicing);
   check(/^It shows most on Dry Ridge Rd: (the corner where your passes there differ most comes|all \d+ corners where your passes there differ most come|\d+ of the \d+ corners where your passes there differ most comes?) down to it\.$/.test(where), 'Work on names the road: ' + where);
   check(!(await page.$('#drivingRoadGo')), 'no second offer while the practice keeps to a road');
+  // since a road practice began, each corner's passes since and the corners that have evened out (roadBook since)
+  const since = await page.evaluate(async () => (await ApexAnalysis.job('roadBook', { id: 'r3', since: '2026-07-01T09:00' })).book);
+  check(since && Array.isArray(since.evened) && since.corners.length && since.corners.every((k) => k.since_n === 2 && k.since_low <= k.record)
+    && since.evened.every((i) => i >= 1 && i <= since.corners.length), 'the book since a road practice began: ' + JSON.stringify(since && { evened: since.evened, c: since.corners.slice(0, 2) }));
   // with no practice, the line offers one kept to that road
   await page.evaluate(() => localStorage.removeItem('vetta.practice'));
   await page.goto(base + '/analysis.html?tab=driving');

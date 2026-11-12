@@ -584,6 +584,7 @@ def drive_records(obs: list, records: dict) -> dict:
 
 
 UNEVEN_LEVELS = 15           # a corner whose passes span this many levels or more is uneven on a road book
+EVEN_MIN = 2                 # passes since a road practice began before a corner can be said to have evened out
 UNEVEN_MAX = 3               # ...and the book names at most this many, the widest first
 NEAR_BEST = 5                # a pass within this many levels of the corner's cleanest is near your best there
 ROAD_MIN_PASSES = 3          # passes of a corner (this drive's among them) before its record on the road means anything
@@ -652,7 +653,7 @@ def _why(best: dict, worst: dict):
     return top[2] if top and top[0] > 0 else None
 
 
-def road_book(drives: list, ref: list | None = None) -> dict:
+def road_book(drives: list, ref: list | None = None, since: str | None = None) -> dict:
     """A road's corners across every drive of it (Your roads, corner by corner). drives: oldest first, each
     {id, at, corners: [{x, y, hx, hy, level, size?, dir?}]} in one frame (metres); ref: [[x, y], ...] along one drive of
     the road, to put the corners in road order. A corner is the first pass seen of it; a later pass is the same corner when
@@ -662,7 +663,12 @@ def road_book(drives: list, ref: list | None = None) -> dict:
     road order (by the nearest point of ref, else as first seen); why: on an uneven corner, the credit (corners' optional
     credits {skill: 0..1}) that differs most between its cleanest and least clean pass (_why), else None; fewer: corners passed less often, drives: how many drives,
     uneven: the 1-based places of the corners whose passes span UNEVEN_LEVELS or more, the widest first (road order
-    among equals), at most UNEVEN_MAX}. Technique only."""
+    among equals), at most UNEVEN_MAX}. Technique only.
+
+    since (a practice kept to this road began then, "YYYY-MM-DDTHH:MM"): each corner also has since_n (its passes on
+    drives at or after since; an undated drive counts before) and since_low (the least clean of them, or None), and the
+    book has evened: the 1-based places of the corners whose passes span UNEVEN_LEVELS or more overall but whose passes
+    since, EVEN_MIN or more of them, are all within UNEVEN_LEVELS of the cleanest."""
     book = []
     for d in drives:
         for o in d.get("corners") or []:
@@ -694,8 +700,15 @@ def road_book(drives: list, ref: list | None = None) -> dict:
         out.append({"x": c["x"], "y": c["y"], "size": c["size"], "dir": c["dir"], "passes": len(c["by"]),
                     "record": rec, "low": low, "by": by, "at": at.get(by),
                     "why": _why(c["pass"][by], c["pass"][worst]) if rec - low >= UNEVEN_LEVELS else None})
+        if since is not None:
+            xs = [v for i, v in c["by"].items() if at.get(i) and at[i] >= since]
+            out[-1].update(since_n=len(xs), since_low=min(xs) if xs else None)
     wide = sorted((i for i, k in enumerate(out) if k["record"] - k["low"] >= UNEVEN_LEVELS), key=lambda i: (-(out[i]["record"] - out[i]["low"]), i))
-    return {"corners": out, "fewer": len(book) - len(out), "drives": len(drives), "uneven": [i + 1 for i in wide[:UNEVEN_MAX]]}
+    res = {"corners": out, "fewer": len(book) - len(out), "drives": len(drives), "uneven": [i + 1 for i in wide[:UNEVEN_MAX]]}
+    if since is not None:
+        res["evened"] = [i + 1 for i, k in enumerate(out) if k["record"] - k["low"] >= UNEVEN_LEVELS
+                         and k["since_n"] >= EVEN_MIN and k["record"] - k["since_low"] < UNEVEN_LEVELS]
+    return res
 
 
 def road_book_focus(book: dict):
