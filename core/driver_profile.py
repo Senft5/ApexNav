@@ -600,30 +600,38 @@ def road_records(mine: list, others: list, ids: list | None = None) -> dict:
     at), rows (per such corner with an apex: {apex, level (this pass), passes, record (the cleanest of all passes), by (None
     when this pass holds it, else ids[i] of the other drive, or its index; the first listed of equals holds a tie, so list
     others oldest first), low: the least clean pass}), uneven: how many of those rows span UNEVEN_LEVELS or more (where your
-    passes differ most), steady: how many of those this drive took within NEAR_BEST of your cleanest}. Technique only."""
+    passes differ most), steady: how many of those this drive took within NEAR_BEST of your cleanest}. A row's why: on an
+    uneven corner this drive took more than NEAR_BEST below your cleanest, the credit (corners' optional credits) it lost
+    most against that cleanest pass (_why), else None. Technique only."""
     corners = best = level = 0
     held, rows = [], []
     for m in mine:
         if m.get("level") is None:
             continue
-        tops, who = [], []
+        tops, who, pas = [], [], []
         for i, drive in enumerate(others):
             top = None
             for o in drive:
                 if o.get("level") is None:
                     continue
                 if math.hypot(o["x"] - m["x"], o["y"] - m["y"]) < SAME_CORNER_M and o["hx"] * m["hx"] + o["hy"] * m["hy"] > SAME_WAY:
-                    top = o["level"] if top is None else max(top, o["level"])
+                    if top is None or o["level"] > top["level"]:
+                        top = o
             if top is not None:
-                tops.append(top)
+                tops.append(top["level"])
                 who.append(ids[i] if ids is not None else i)
+                pas.append(top)
         if 1 + len(tops) < ROAD_MIN_PASSES:
             continue
         corners += 1
         mx = max(tops)
         if m.get("apex") is not None:
+            low = min(min(tops), m["level"])
+            # where the passes differ most and this one was well off your cleanest: the credit it lost most against it
+            off = mx - low >= UNEVEN_LEVELS and m["level"] < mx - NEAR_BEST
             rows.append({"apex": m["apex"], "level": m["level"], "passes": 1 + len(tops), "record": max(mx, m["level"]),
-                         "low": min(min(tops), m["level"]), "by": None if m["level"] > mx else who[tops.index(mx)]})
+                         "low": low, "by": None if m["level"] > mx else who[tops.index(mx)],
+                         "why": _why(pas[tops.index(mx)], m) if off else None})
         if m["level"] > mx:
             best += 1
             if m.get("apex") is not None:

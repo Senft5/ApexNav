@@ -4,6 +4,13 @@ Decisions Claude made for you, newest first. Each one says what was decided, why
 you reach one you've seen. If you disagree with a call, say so and it gets reversed; nothing here is hard to undo unless
 it says so. Things only you can do are in docs/OWNER_TODO.md.
 
+## 2026-11-12 (deepest analysis 17): a drive's page says what it lost at a road's least even corners (claude/project-thread-gd7nre)
+
+Where a road's passes differ most and this drive was more than 5 levels off your cleanest there, its corner note now names
+the technique it lost most against that cleanest pass. Calls: only those corners say it (a corner close to your cleanest
+has nothing worth naming); it compares against your cleanest pass, not your average. Undo: drop `why` from road_records
+rows and the two word changes in web/driver_profile.js.
+
 ## 2026-11-12 A Fun, Long way or loop plan that fails says why to our crash counts (claude/project-thread-39xbx9)
 
 Nate saw "check my signal" on every Fun and Long way plan and the cause was never reproduced here. So a plan our router
