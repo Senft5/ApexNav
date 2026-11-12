@@ -175,6 +175,37 @@ async function leftovers(page) {
   return out;
 }
 
+// A control in view that a screen reader can't name (VoiceOver says only "button"): an icon key with no aria-label, an
+// empty link, a field with no label (LAUNCH.md section 3, IDEAS U-15). In every open page, like leftovers above.
+async function unnamed(page) {
+  const out = [];
+  for (const p of page.context().pages()) {
+    if (p.isClosed()) continue;
+    const found = await p.evaluate(() => {
+      const shown = (el) => { for (let n = el; n && n.nodeType === 1; n = n.parentElement) { if (n.hidden || n.inert || n.getAttribute('aria-hidden') === 'true') return false; }
+        const cs = getComputedStyle(el); return cs.visibility !== 'hidden' && cs.display !== 'none' && el.getClientRects().length > 0; };
+      const text = (el) => (el.innerText || el.textContent || '').replace(/\s+/g, ' ').trim();
+      const nameOf = (el) => {
+        const l = el.getAttribute('aria-label'); if (l && l.trim()) return l;
+        const by = el.getAttribute('aria-labelledby'); if (by) return by.split(/\s+/).map((i) => { const n = document.getElementById(i); return n ? text(n) : ''; }).join(' ').trim();
+        if (el.labels && el.labels.length) return [...el.labels].map(text).join(' ').trim();
+        const t = text(el); if (t) return t;
+        for (const i of el.querySelectorAll('img[alt], svg[aria-label], [role=img][aria-label]')) { const a = i.getAttribute('alt') || i.getAttribute('aria-label'); if (a) return a; }
+        return el.getAttribute('title') || (el.tagName === 'INPUT' && el.value && /^(button|submit)$/i.test(el.type) ? el.value : '') || el.getAttribute('placeholder') || '';
+      };
+      const where = (el) => el.tagName.toLowerCase() + (el.id ? '#' + el.id : '') + (el.className && typeof el.className === 'string' ? '.' + el.className.trim().split(/\s+/).join('.') : '');
+      const hits = [];
+      for (const el of document.querySelectorAll('button, a[href], input:not([type=hidden]), select, textarea, [role=button], [role=switch], [role=tab], [role=slider], [role=checkbox], [role=radio], [role=option]')) {
+        if (!shown(el)) continue;
+        if (!/[\p{L}\p{N}]/u.test(nameOf(el))) hits.push(where(el));
+      }
+      return [...new Set(hits)].slice(0, 8);
+    }).catch(() => []);
+    out.push(...found.map((h) => `${new URL(p.url()).pathname.slice(1) || 'index.html'}: ${h}`));
+  }
+  return out;
+}
+
 async function openSetting(page, key) {
   await page.click('#garageGear');
   await page.click(`#garageSettings .nav-row[data-setting="${key}"]`);
@@ -433,7 +464,7 @@ flow('returning driver: live frames switch to the cockpit, big targets and no ke
   check(await page.evaluate(() => window.apexDebug.state.mode === 'live'), 'frames switch the cockpit to live');
   // A text field must not open the keyboard while moving (IDEAS C-08).
   // (the Plan sheet's fields are hidden in the cockpit, so focus a plain field: the guard is document-wide)
-  await page.evaluate(() => { const i = document.createElement('input'); i.id = 'e2eField'; document.body.append(i); i.focus(); });
+  await page.evaluate(() => { const i = document.createElement('input'); i.id = 'e2eField'; i.setAttribute('aria-label', 'Test field'); document.body.append(i); i.focus(); });
   await page.waitForFunction(() => /Typing is off/.test(document.getElementById('toast').textContent));
   check(await page.evaluate(() => document.activeElement !== document.getElementById('e2eField')), 'the field gives up focus while moving');
 });
@@ -9279,6 +9310,9 @@ flow('time attack, a new season (the owner, 2026-11-12: static best roads): the 
       // spoken label) says "[object Object]", "undefined" or "NaN" (About a road read "descending [object Object]").
       const raw = await leftovers(page);
       check(!raw.length, `the code's own leftovers on screen:\n  ${raw.join('\n  ')}`);
+      const nameless = await unnamed(page);
+      if (process.env.A11Y_LOG) for (const h of nameless) console.log(`A11Y ${name} | ${h}`);
+      else check(!nameless.length, `a control in view a screen reader can't name:\n  ${nameless.join('\n  ')}`);
       check(!errors.length, `page errors or missing files:\n  ${errors.join('\n  ')}`);
       console.log(`ok   ${name} (${Date.now() - t0} ms)`);
     } catch (e) {
