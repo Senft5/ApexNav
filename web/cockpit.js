@@ -3341,7 +3341,7 @@
         ui.step('Routing…', 0.7);
         if (via.length) await buildRoute([from, ...via, to].map((p) => ({ lat: p.lat, lon: p.lon })), 'route_link', name);
         else await funRoute(from, to, 'route_dest', name, { from: link.from ? { lat: from.lat, lon: from.lon } : null, to: { lat: to.lat, lon: to.lon }, via: [] }, ui);
-      } catch (err) { toast(err.message); } finally { ui.done(); }
+      } catch (err) { toast(errText(err)); } finally { ui.done(); }
     }
     async function openGpx(text, fileName) {
       const g = ApexRouteImport.parseGpx(text);
@@ -3381,7 +3381,7 @@
         const request = { from: from.label === null ? null : { lat: from.lat, lon: from.lon }, to: { lat: to.lat, lon: to.lon }, via: [] };
         await funRoute(from, to, 'route_dest', to.routeName || `To ${to.label || 'current location'}`, request, ui);
         if (to.label && !to.label.startsWith('Pin ')) rememberPlace(to);
-      } catch (err) { toast(err.message); } finally { ui.done(); }
+      } catch (err) { toast(errText(err)); } finally { ui.done(); }
     }
     // Live off-route handling. Notes, pace and trip distance stay blank while off route (render
     // gives no index); the old route stays drawn until the new one arrives.
@@ -3814,7 +3814,7 @@
           : own.reason === 'off' ? `${what} routes need Vetta's own router, which is switched off. Quick still works.`
           : own.reason === 'index' ? `Couldn't load Vetta's road map for this trip. Check signal and try again, or use Quick.`
           : `Couldn't plan a ${what} route just now. Try again, or use Quick.`;
-        toast(msg, { label: 'Use Quick', ms: 12000, onClick: () => { setFunLevel('quick'); const u = planBusy(); funRoute(from, to, id, name, request, u, opts).catch((e) => toast(e.message)).finally(() => u.done()); } });
+        toast(msg, { label: 'Use Quick', ms: 12000, onClick: () => { setFunLevel('quick'); const u = planBusy(); funRoute(from, to, id, name, request, u, opts).catch((e) => toast(errText(e))).finally(() => u.done()); } });
         return false;
       }
       // with our routes in, Valhalla's answers are only checks, fetched alongside (below); without, today's path
@@ -4452,7 +4452,7 @@
         const from = t.request.from || await locate();
         if (!from) throw new Error(NO_FIX);
         ok = await funRoute(from, t.request.to, t.id, t.name, { from: t.request.from, to: t.request.to, via: [] }, ui, { early: false, head: what });
-      } catch (err) { toast(err.message); } finally { ui.done(); }
+      } catch (err) { toast(errText(err)); } finally { ui.done(); }
       if (!ok && t.funLevel) setFunLevel(t.funLevel);             // the chips show the level the route on screen was built with
       return ok;
     }
@@ -4991,6 +4991,16 @@
       t.classList.add('show'); clearTimeout(t._h);
       t._h = setTimeout(() => { t.classList.remove('show'); if (action && action.onClick) t.querySelectorAll('a').forEach(x => x.remove()); }, action ? action.ms || 7000 : 4200);
     }
+    // A failed request reads as the browser's own words ("Load failed", "Failed to fetch", "NetworkError when attempting to
+    // fetch resource.", a bad JSON parse); the driver gets one plain line instead. Our own messages (NO_FIX, "Couldn't find
+    // that place") pass through as written.
+    function errText(err) {
+      const m = String((err && err.message) || err || '');
+      if (!m) return 'Something went wrong. Try again.';
+      if (/load failed|failed to fetch|networkerror|network connection|the internet connection|timed? ?out/i.test(m)) return 'No connection. Try again when you have signal.';
+      if ((err && err.name === 'SyntaxError') || /unexpected token|JSON/i.test(m)) return 'Something went wrong on our side. Try again in a moment.';
+      return m;
+    }
     // A drive's one-key offer (Go round, Skip, Head home) is on the car's screen too, as a navigation alert with the key and
     // Not now (CarPlay/ApexCarPlay.swift showOffer): whichever key is tapped first does it, once, and the other goes away.
     function offerKey(msg, short, action) {
@@ -5483,7 +5493,7 @@
         const request = { from: from.label === null ? null : { lat: from.lat, lon: from.lon }, to: { lat: p.lat, lon: p.lon }, via: [] };
         await funRoute(from, { lat: p.lat, lon: p.lon }, 'route_dest', toName(p.label), request, ui);
         rememberPlace(p);
-      } catch (err) { toast(err.message); } finally { ui.done(); }
+      } catch (err) { toast(errText(err)); } finally { ui.done(); }
     }
 
     const closeSheet = () => showView(null);
