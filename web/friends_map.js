@@ -56,10 +56,10 @@
   }
   /** The one paragraph under the sheet, from the choices made. */
   function explainer(s) {
-    if (!s || s.audience === 'nobody') return 'Seeing friends doesn’t share you. Nobody sees you until you choose who can. Inside a home zone, nobody sees you, convoy included.';
+    if (!s || s.audience === 'nobody') return 'Nobody sees you until you choose who can.';
     const who = s.audience === 'crew' ? 'your private crews' : 'your friends';
     const delay = s.delay_s === 0 ? 'as you drive' : `${s.delay_s === 600 ? '10 minutes' : 'an hour'} late`;
-    return `${who[0].toUpperCase()}${who.slice(1)} see you ${delay}, ${s.fuzz ? 'within a mile' : 'where you are'}${s.onlyDriving === false ? ', whenever the app is open' : ', only while you drive'}. Inside a home zone, nobody sees you, convoy included. Nothing is kept after you choose Nobody.`;
+    return `${who[0].toUpperCase()}${who.slice(1)} see you ${delay}, ${s.fuzz ? 'within a mile' : 'where you are'}${s.onlyDriving === false ? ', whenever the app is open' : ', only while you drive'}. Never in a home zone.`;
   }
 
   const STYLE = `

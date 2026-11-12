@@ -6,7 +6,7 @@ import os
 import re
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-SOCIAL = ["crew_page.js", "crew_events.js", "crew_standings.js", "duels.js", "time_attack.js", "friends_map.js",
+SOCIAL = ["crew_page.js", "crew_events.js", "crew_standings.js", "duels.js", "time_attack.js", "friends_map.js", "who_sees.js", "inbox.js", "profile_view.js",
           "meets_map.js", "roadbooks.js"]
 MAX = 80
 LIT = re.compile(r"textContent:\s*(?:'((?:[^'\\]|\\.)*)'|`((?:[^`\\]|\\.)*)`)")
