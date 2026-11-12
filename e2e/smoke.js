@@ -4371,9 +4371,10 @@ flow('no signal: a hazard report waits on the phone and goes when the connection
   check(await page.evaluate(() => localStorage.getItem('apex.outbox')) === null, 'and gone from the phone');
 });
 
-flow('a saved stage: the live delta shows while you drive it and the result at the end (native frames, IDEAS D-05)', async (page, base) => {
+flow('a saved stage: the live delta shows while you drive it and the result at the end, said by the co-driver (native frames, IDEAS D-05)', async (page, base) => {
   await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); localStorage.setItem('apex.permsExplained', '1'); } catch (_) {}
-    window.webkit = { messageHandlers: { apex: { postMessage: () => {} } } }; });
+    window.__said = []; window.APEX_REVIEW = true;
+    window.webkit = { messageHandlers: { apex: { postMessage(m) { if (m && m.cmd === 'said') window.__said.push(m.text); } } } }; });
   await page.route('**/api/**', (route) => route.fulfill({ status: 200, contentType: 'application/json', body: '[]' }));
   await page.goto(base + '/index.html');
   await page.waitForFunction(() => window.apex && window.ApexStageDelta && window.ApexRecording);
@@ -4415,6 +4416,20 @@ flow('a saved stage: the live delta shows while you drive it and the result at t
   // REVIEW4 U-102: said in the drive's status line (its whole text in the live region), not as a toast over the map
   await page.waitForFunction(() => /Esses: (level with|\d+ points (up|down) on) your best/.test(document.getElementById('dsNote').getAttribute('aria-label') || ''), null, { timeout: 4000 });
   check(!(await page.isVisible('#stageBar')), 'the bar goes when the stage ends');
+  // and the co-driver says it once, in a quiet moment (the flow lines' slot), while you drive on down the straight after it
+  for (let burst = 0; burst < 6 && !(await page.evaluate(() => window.__said.some((t) => /^Esses/.test(t)))); burst++) {
+    await page.evaluate((burst) => {
+      const r = window.__road, n = r.lat.length, dLa = r.lat[n - 1] - r.lat[n - 2], dLo = r.lon[n - 1] - r.lon[n - 2];
+      for (let j = 1; j <= 40; j++) { const k = burst * 40 + j;
+        window.apex.live({ lat: r.lat[n - 1] + dLa * k / 2, lon: r.lon[n - 1] + dLo * k / 2, accuracy_m: 4, speed_mps: 20, course_deg: 0,
+          lat_g: 0, lon_g: 0, has_fix: true, calibration: 'locked' }); }
+    }, burst);
+    await page.waitForTimeout(1000);
+  }
+  await page.waitForFunction(() => window.__said.some((t) => /Esses: (level with|\d+ points (up|down) on) your best/.test(t)), null, { timeout: 8000 })
+    .catch(() => {});
+  const said = await page.evaluate(() => window.__said.filter((t) => /^Esses/.test(t)));
+  check(said.length === 1, `the result is said once (${JSON.stringify(said)})`);
 });
 
 flow("friends' activity: the Log lists who drove your stages lately and where you stand, as text; kudos (Worker stubbed, IDEAS S-03, S-07)", async (page, base) => {
@@ -4875,6 +4890,11 @@ flow('a drive\'s corners on a road driven four times: each says your cleanest pa
   const notes = await page.evaluate(() => [...document.querySelectorAll('.dv-corner .dv-rec')].map((n) => ({ t: n.textContent, link: n.tagName === 'BUTTON', rec: n.closest('.dv-corner').classList.contains('rec') })));
   check(notes.length === road.rows.length && notes.every((n) => /^(Your cleanest of 4 passes here \(\d{1,3}\)|Level with your cleanest here \(\d{1,3}, .+\)|Your cleanest here: \d{1,3}, .+; this pass \d{1,3}(, mostly [a-z ]+)?)$/.test(n.t))
     && notes.every((n) => n.rec === !n.link) && !notes.some((n) => /mph|km\/h/.test(n.t)), 'a note on each corner row: ' + JSON.stringify(notes.slice(0, 4)));
+  // the same road's other drives against this one: a tenth of a second, slower or quicker in words (no "+" key to decode)
+  await page.waitForFunction(() => document.querySelectorAll('#dvRoadTable tr').length > 3, null, { timeout: 20000 });
+  const vs = await page.evaluate(() => [...document.querySelectorAll('#dvRoadTable tr')].slice(1, -1).map((tr) => tr.lastElementChild.textContent));
+  check(vs.length === 4 && vs.filter((t) => t === 'this drive').length === 1
+    && vs.filter((t) => t !== 'this drive').every((t) => /^(\d+\.\d s (slower|quicker)|level) on \d+ corners?$/.test(t)), 'the road\'s other drives against this one: ' + JSON.stringify(vs));
   // where this pass was well off your cleanest at a least even corner, the note says what it lost most (the second pass held the arc)
   check(road.rows.some((r) => r.why === 'arc') && notes.some((n) => /, mostly one steering arc$/.test(n.t)), 'what this pass lost: ' + JSON.stringify(road.rows.filter((r) => r.why)).slice(0, 300));
   const touchText = await page.evaluate(() => document.body.innerText);
