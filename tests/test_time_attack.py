@@ -70,6 +70,12 @@ const asked = [];
   names: [T.loopName(routes[1]), T.loopName(routes[2]), T.loopName(null),
           T.loopName({ stages: [], names: [{ name: 'Main St', fromM: 0, toM: 900 }, { name: 'Ridge Rd', fromM: 900, toM: 4000 }, { name: null, fromM: 4000, toM: 9000 }, { name: 'Main St', fromM: 9000, toM: 10000 }] })],
   geom: { n: g.length, first: g[0], last: g[g.length - 1], open: (() => { const o = T.geomOf(ring(50, 10).slice(0, 40)); return JSON.stringify(o[0]) === JSON.stringify(o[o.length - 1]); })() },
+  places: [T.placeLine({ name: 'Dry Ridge loop', place: 3, of: 12, time_s: 761, gap_s: 62 }), T.placeLine({ name: 'Dry Ridge loop', place: 1, of: 4, time_s: 699, gap_s: 0 }),
+           T.placeLine({ name: '', place: 1, of: 1, time_s: 699, gap_s: 0 }), T.placeLine({ place: 0, of: 0 }), T.placeLine(null), T.nth(11), T.nth(22), T.nth(103)],
+  lines: (() => { const c = { name: 'Dry Ridge loop', length_m: 10600 }, base = { today: '2026-11-13', ends_on: '2026-11-15', circuit: c, entrants: 12 };
+    const d = (m) => `${(m / 1000).toFixed(1)} km`;
+    return [T.summaryLine({ ...base, you: { place: 3 } }, d), T.summaryLine({ ...base, entered: true, you: null }, d), T.summaryLine({ ...base, entrants: 0, today: '2026-11-15' }, d),
+            T.summaryLine({ ...base, circuit: null }, d), T.summaryLine(null, d)]; })(),
   made, asked: asked.map(([p, km]) => [p.lat, p.lon, km]), posted: posted.map((b) => ({ cell: b.cell, seed: b.seed, name: b.name, n: b.geom.length })), noneMade: none,
   }));
 })();
@@ -145,4 +151,23 @@ def test_the_log_sends_runs():
     assert '<script src="time_attack.js"></script>' in page
     sync = page[page.index("async function syncSegments()"):]
     sync = sync[:sync.index("const act = segs.find(")]
-    assert "ApexTimeAttack.sendRuns(ApexSync, segs, passesFor)" in sync
+    assert "await ApexTimeAttack.sendRuns(ApexSync, segs, passesFor)" in sync
+    assert "ApexTimeAttack.placeLine" in sync   # and says your place after it
+
+
+def test_your_place_after_a_drive_is_one_sentence(out):
+    assert out["places"] == [
+        "Dry Ridge loop: you're 3rd of 12 this week, 1:02 off the lead (12:41).",
+        "Dry Ridge loop: you're quickest of 4 this week (11:39).",
+        "This week’s loop: the first time on the board this week (11:39).",
+        "", "", "11th", "22nd", "103rd",
+    ]
+
+
+def test_the_where_to_row_says_the_loop_and_your_place(out):
+    assert out["lines"] == [
+        "Time attack: Dry Ridge loop · you're 3rd of 12 · 3 days left",
+        "Time attack: Dry Ridge loop (10.6 km) · log a run on it · 3 days left",
+        "Time attack: Dry Ridge loop (10.6 km) · last day",
+        None, None,
+    ]

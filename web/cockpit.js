@@ -5115,6 +5115,15 @@
       if (!h) return;
       $('planPanel').style.setProperty('--plan-bar', `${h + 2}px`); document.documentElement.style.setProperty('--plan-bar', `${h + 2}px`);   // the floating loop (landscape) sits above it
     }
+    // Where to?'s time attack row says this week's loop and your place before it is opened (time_attack.js peek): only
+    // the area goes, and not from inside a privacy zone or before a drive's private edge (nearLookupOk)
+    function peekTimeAttack() {
+      try {
+        if (!timeAttack || $('planAttack').hidden || !(accountMe && accountMe.member)) return;
+        const p = state.lastPosition || (() => { const c = map.getCenter(); return { lat: c.lat, lon: c.lng }; })();
+        if (nearLookupOk(p)) timeAttack.peek().catch(() => {});
+      } catch (_) {}
+    }
     function openPlan(open) {
       const panel = $('planPanel');
       measurePlanBar();
@@ -5128,7 +5137,7 @@
       if (closing && panel.classList.contains('routed')) requestAnimationFrame(() => { let driving = false; try { driving = driveActive; } catch (_) {} if (!panel.classList.contains('open') && !$('app').classList.contains('sheet-open') && !driving) fitPlannedRoute(); });
       $('destInput').setAttribute('aria-expanded', String(open));
       if (opening) { panel.classList.remove('full'); $('planBody').scrollTop = 0; }   // finding 2: a re-plan keeps the scroll
-      if (open) { refreshSavedDrives(); if (!panel.classList.contains('routed')) renderPlaces(); closeEdge(); }
+      if (open) { refreshSavedDrives(); if (!panel.classList.contains('routed')) renderPlaces(); closeEdge(); peekTimeAttack(); }
       else { $('destInput').blur(); $('fromInput').blur(); }                 // closing puts the keyboard away
     }
     // Routing progress shows under From (the old Go button carried it).
@@ -6076,6 +6085,8 @@
     } });
     // Weekly time attack (web/time_attack.js, SOCIAL 2.9, IDEAS S-26): this area's loop this week and its board, in Where to?
     // beside Spots near you; drawn when opened, fresh each time. Runs go up from the Log when stages sync.
+    let timeAttack = null;
+    const TA_LINE = 'Time attack this week: a loop near you, quickest time';
     onSocial(() => { try {
       const ta = window.ApexTimeAttack ? ApexTimeAttack.mount({ el, btn, toast, apiCall, jsonOf, report: safety && safety.report,
         ask: (t, a) => ApexConfirm.ask(t, a),
@@ -6085,9 +6096,20 @@
         fmtKm: (km) => ApexUnits.long(km * 1000, 1),
         // the week's loop, where nobody in the area has built it yet: our own router's loops (graph_router.js loop) over its tiles
         graphKeys: () => (ownOn() ? ownIndex() : null),
-        loops: (start, km) => (ownOn() ? ApexOwnRouting.loops(ownRouter(), { start, km, level: LOOP_STYLE }) : Promise.resolve([])) }) : null;
+        loops: (start, km) => (ownOn() ? ApexOwnRouting.loops(ownRouter(), { start, km, level: LOOP_STYLE }) : Promise.resolve([])),
+        // Drive it: the loop itself is the route (as a roadbook road is), not just the way to its start
+        driveLoop: async (c, g) => {
+          closeSheet();
+          const t = await trackFromPolyline(g.map(([la, lo]) => [lo, la]), `timeattack_${c.segment_id}`, c.name);
+          await buildRoute(null, t.id, c.name, t);
+          toast(`${c.name}: ${ApexUnits.long(totalM(), 1)}. The clock runs from the start line, as on any stage.`);
+        },
+        // the row's own line says this week's loop and your place on it (time_attack.js summaryLine)
+        line: (txt) => { const s = $('planAttack').querySelector('summary'); if (s) s.textContent = txt || TA_LINE; } }) : null;
       if (ta) {
+        timeAttack = ta;
         const d = $('planAttack'); d.hidden = false;
+        if ($('planPanel').classList.contains('open')) peekTimeAttack();   // Where to? already open as signing in finished
         d.addEventListener('toggle', () => { if (!d.open) return; const sec = ta.section(); const h = sec.querySelector(':scope > h3'); if (h) h.remove(); $('planAttackBody').replaceChildren(sec); });
       }
     } catch (e) { console.error('time attack', e); } });

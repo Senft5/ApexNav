@@ -9,6 +9,13 @@
 - e2e: the four-drive road flow checks the line on Your driving.
 - Next: a per-road practice could take its `where` from that road (practice only on one road's corners).
 
+## Session 2026-11-11 (time attack placement): where the weekly loop shows (claude/project-thread-uwmi4e, after #433)
+- Done: the Where to? row names the week's loop and your place (time_attack.js summaryLine and peek). Drive it plans the
+  loop as the route (cockpit driveLoop). The Log says your place after a sync (runs returns `places`, placeLine). For you's
+  `passed` names the loop and skips taken-down loops.
+- Tests: backend time_attack and inbox, pytest test_time_attack (12), and the e2e time attack flow (row line, Drive it).
+- Next: the home deck's weekly loop is on Roamer C's branch claude/roam-c-ta-placement.
+
 ## Session 2026-11-12 (deepest analysis, PR 19): the Log names the roads where your passes differ most (claude/project-thread-gd7nre)
 
 - `web/driver_profile.js` `roadsToWork(list)`: from each road's book, the roads with uneven corners, most first, at most
@@ -37,6 +44,7 @@
 
 ## 2026-11-12 Route-failure reasons in crash counts (claude/project-thread-39xbx9)
 - A Fun / Long way / loop plan our router couldn't make reports its reason code (kind `route`) to /api/errors; read them with `SELECT * FROM error_counts WHERE kind = 'route'` on apexnav-db. Next: once Nate hits the signal error again, read the reason there and fix that cause.
+
 ## Session 2026-11-12 (deepest analysis, PR 16): a road's least even corners can set the practice (claude/project-thread-gd7nre)
 
 - `core/driver_profile.py` `road_book_focus(book)` (JS port `roadBookFocus`, parity-tested in tests/test_best_corners.py):
@@ -61,6 +69,7 @@
 - Tests: e2e "the drive page's map" flows (stubbed MapLibre: a corner row eases in, All fits again; plain picture zooms and
   back). Checked: pytest, those flows.
 - Next: the hourly run keeps watching TestFlight.
+
 ## Session 2026-11-11 (roam-b first-run walkthrough, PR 2): Done after a replay comes home (claude/project-thread-sxhrgi)
 
 - Watched the welcome's replay to its end on production (iPhone 13 viewport, at Knoxville): it plays through to "Replay
@@ -69,6 +78,7 @@
   a route's fly-through is unchanged. e2e "done after a replay brings the idle map back to where you are" (fails before).
 - Seen, by design: the dash's SCORE reads -- through a replay (the live score is only for a drive being recorded).
 - Next: the Log and a drive's page as a new user; add a friend; join a crew.
+
 ## Session 2026-11-11 (routing round three, part 2): crests and verified bumps in stage discovery (claude/project-thread-39xbx9, off origin/main)
 
 - IDEAS R-04. backend/src/roads.ts `coverage`: per direction `crested` (share of bins with crest_n >= 2 at `CREST_G`
@@ -77,6 +87,7 @@
   (max 4.5), the larger direction's count per matched road. No migration.
 - Tests: backend/test/coverage.test.ts (+2), tests/test_measured_stages.py `test_crests_and_verified_bumps`.
 - Next: the FunRoute ranking of Valhalla candidates (fun_route.js) with the same crest and bump data per route.
+
 ## Session 2026-11-11 (deepest analysis, PR 15): what differs at a road's least even corners (claude/project-thread-gd7nre)
 
 - `road_book` / `roadBook` keep each drive's cleanest pass of a corner with its six credits (`placed` now carries
@@ -95,6 +106,7 @@
 - Tests: test_scenic.py (+1), test_siri_shortcuts.py (7 shortcuts); e2e "along the route by name…" asks in a drive, the
   Siri links flow asks with no route. Swift compiles in CI only (build-ipa). APP_REVIEW.md 2.5.x row updated.
 - Next: CarPlay's route preview could list the cafés and fuel by name.
+
 ## Session 2026-11-11 (roam-c-ta-placement): this week's time attack loop on the home deck (claude/roam-c-ta-placement)
 
 - web/your_roads.js: `attackFrom(t)` reads GET /api/timeattack's answer (no loop, no line, or the week over gives null);
@@ -118,6 +130,7 @@
   "valhalla for quick only: off our tiles, a loop says it plainly". Full e2e locally: 4/4 shards green.
 - Next: crests and verified bumps in stage discovery for Explore (/api/coverage `crested`, `bumps`); delete the unreachable
   Valhalla stage-plan code once the owner has lived with the rule.
+
 ## Session 2026-11-11 (roam-b first-run walkthrough, PR 1): a first loop fills the map; loops stay off our relay (claude/project-thread-sxhrgi)
 
 - Walked a brand-new user through production on an iPhone 13 viewport (onboarding, Loop from here). Two bugs fixed:
@@ -136,6 +149,7 @@
 - Seen, not fixed (other areas): signed-out pages still ask /api/convoy/invites, /api/points, /api/hazards, /api/roads (401s);
   the idle map's top ~150 px is blank paper at pitch 42 with the deck's padding (MapLibre draws no tiles beyond the far
   plane; no sky in the style). Next: replay drive, Log, add a friend, join a crew.
+
 ## Session 2026-11-11 (deepest analysis, PR 14): a drive at its road's least even corners (claude/project-thread-gd7nre)
 
 - `road_records` / `roadRecords` rows carry `low` (the least clean pass); the result adds `uneven` (rows spanning 15
@@ -153,6 +167,7 @@
   `repeat_weeks` (409 `not_latest` on an older drive of a series). `web/crew_events.js` Repeats chips, "Every Saturday"
   on cards and Meets near you, ICS RRULE. Tests: backend event_repeat 4, pytest test_crew_events, e2e crew drives.
 - Next: the auto time attack PR (local branch, built on #397's) once #397 merges.
+
 ## Session 2026-11-11 (deepest analysis, PR 13): the road book names the least even corners (claude/project-thread-gd7nre)
 
 - `road_book` / `roadBook` give each corner its least clean pass (`low`) and the book `uneven`: up to three corners whose
@@ -209,6 +224,7 @@
   stage-plan code in funRoute is now unreachable (kept for now).
 - Next: loops on our router only (the owner's rule says "anything but the quick route"); find the owner's failure (where,
   app or web, which message).
+
 ## Session 2026-11-11 (round two analysis, PR 10): a road's records, corner by corner (claude/project-thread-gd7nre, off origin/main)
 
 - core/driver_profile.py `road_records` (reference) and web/driver_profile.js `roadRecords` (port, with `placed` and
@@ -234,6 +250,7 @@
   costs, car.js fuel spans, which no screen shows). CarPlay shows no cafés or fuel.
 - Tests: tests/test_scenic.py (+1, summary updated); e2e "along the route by name…". Checked: pytest, that flow.
 - Next: the co-driver could name the next café or fuel stop when you ask; CarPlay's route preview could list them.
+
 ## Session 2026-11-11 (roam-a best run): the drive page names your best run of clean corners (claude/project-thread-h7xxmf, off origin/main)
 
 - IDEAS D-30. `core/flow.py` (reference) and `web/flow.js` (port, parity-tested on synthetic and both demo drives):
@@ -244,6 +261,7 @@
 - The demo drives' longest runs are 4 (nothing said). Tests: tests/test_flow.py (5). Checked: pytest; e2e drive-ended
   card/Log, Your driving, drive tags, startup budget.
 - Next: "Best run this month" in Your records (needs corners per drive: the analysis worker), and the end card.
+
 ## Session 2026-11-11 (ui-round-three, PR 1): the first friend and the first crew (claude/project-thread-5sbga7)
 
 - Walked the empty and signed-out screens (People, Crews, Garage, Log, Stages, signed in and out). Signed out People and
@@ -291,6 +309,7 @@
 - signature.css "a crew's page and the Share box": crew name Barlow 30/32 px, cp keys paper, chat a well; Share chips wells.
 - Tests: tests/test_signed_out_reads.py, tests/test_sheets_line.py (+2). e2e convoy, hazard, police, closure flows pass.
 - Next: round two is done (Log, Garage, People, Settings and sheets, crew, Share). Look for screens still boxed in ink.
+
 ## Session 2026-11-11 (round two analysis, PR 9): a drive's corners against your records (claude/project-thread-gd7nre, off origin/main)
 
 - core/driver_profile.py `drive_records` (reference) and web/driver_profile.js `driveRecords` (port): a drive's cleanest
@@ -313,6 +332,7 @@
   is drawn behind other tabs. Refreshed on visibilitychange and every 5 min, never while driving.
 - Tests: backend/test/inbox.test.ts (3), tests/test_inbox.py (3), e2e "For you: …".
 - Next: push notifications for the same items once APNs is set up (OWNER_TODO); a crew's own roadbook; recurring meets (S-13).
+
 ## Session 2026-11-11 (routing round three): measured crests and verified bumps steer our router (claude/project-thread-39xbx9, off origin/main)
 
 - IDEAS R-04 partial (WORKER_QUEUE road-3). own_routing.js `crowdItems` now passes each bin's crest (two passes or more)
@@ -332,6 +352,7 @@
 - Tests: tests/test_brake_heat.py (+2); e2e "the co-driver says a long descent once…" (GPX + stubbed DEM, live frames).
   Checked: pytest, that flow, the route-card descent flow, "co-driver reads the road", startup budget.
 - Next: the Garage car's weight and brakes could tune DISC_C; CarPlay could show the descent line on its route preview.
+
 ## Session 2026-11-11 (round two analysis, PR 8): your records by kind of corner (claude/project-thread-gd7nre, off origin/main)
 
 - core/driver_profile.py `records_by_size` (reference) and web/driver_profile.js `recordsBySize` (port): your cleanest tight,
@@ -396,6 +417,7 @@
   plan flow (a).
 - Next: a live "long descent ahead" call before the top (the co-driver knows it from the same profile); the Garage car's
   weight and brakes could tune DISC_C.
+
 ## Session 2026-11-11 (roam-c-boot-budget): startup budget in e2e (claude/roam-c-boot-budget, off origin/main)
 
 - e2e "startup budget" (`BOOT` in smoke.js): own script bytes 3.6 MB, 145 scripts, 2 s CPU, 1.5 s longest task before
@@ -421,6 +443,7 @@
 - Tests: tests/test_brake_heat.py (18, incl. 10 Hz held speed, coasting, held-speed CSV rows). Checked: pytest 1607 passed; e2e first run, drive ended (card and Log), car-started drive.
 - Next: the route card warns of a long descent ahead from the DEM profile (stages.js profile) with the same model at the
   router's speeds; the Garage car's weight and brake size could set DISC_C; not checked on a real descent yet (VERIFY).
+
 ## Session 2026-11-11 (routing round two, part 2): go round a police report mid-drive; a late loop skips a stage (claude/project-thread-39xbx9)
 
 - `ApexHazardReports.onRouteAhead(t, atM, pts)`: the nearest report within 150 m of the route 0.8-25 km ahead. cockpit.js
@@ -454,6 +477,7 @@
   `unavoided` → `cameras` within `CAMERA_ON_M` 35 m (route.has.cameras), so keepAvoiding drops it when another doesn't.
 - Tests: tests/test_avoid_cameras.py (+3), tests/test_graph_router.py avoidCameras, e2e "avoid cameras" (speed camera too).
 - Not done: loops don't take `avoid.cams` (only A→B plans go through avoidForTrip).
+
 ## Session 2026-11-11 (roam-c-crest-contract): crest's units written down; IDEAS Q-08 done (claude/roam-c-crest-contract, off origin/main)
 
 - Checked: ApexNavApp.swift, web/sensors.js and both CSVs carry `crest_vertical_g` in g (negative going light);
@@ -471,6 +495,7 @@
   driving's kept observations); hidden for drives with g kept once a second. Facts only: never better or worse.
 - Tests: tests/test_touch_detail.py (4); e2e "Your driving" covers the table, the month line and the drive's words.
 - Next: say when a drive's touch is clearly outside your usual spread (its median beyond the usual quartiles on 8+ corners).
+
 ## Session 2026-11-11 (auto time attack): the weekly loop is auto-picked per area (claude/project-thread-uwmi4e, off #397's branch)
 - Owner call (2026-11-11): time attacks autogenerated weekly in any area with users, the best loop roads chosen at random,
   small loops, not member stages. Migration 0054 (`ta_weeks` gets name, length_m, geom, tries, removed; ta_pool unread).
@@ -494,6 +519,7 @@
   report's word went to the toast, not the status line. The flow now keeps feeding fixes; its wait dumps the screen state.
 - CI: apexkit-linux runs in `container: swift:6.0-jammy` (setup-swift's keyserver refresh timed out every run).
 - Next: the rest of the sweep (iOS shell, CarPlay, performance) was not reached this round.
+
 ## Session 2026-11-11 (roam-c-safe-area-split): the safe-area e2e flow, one a phone shape (claude/roam-c-safe-area-split, off origin/main)
 
 - e2e/smoke.js: `safe areas (<shape>)` x4 from `SAFE`, same screens and checks; scanner self-check in the first; one
@@ -508,6 +534,7 @@
   The `.sw` slide switch is unchanged (the owner's "hard to tell if they're on or off").
 - Tests: tests/test_sheets_line.py. e2e Settings, Options, units, crew, roadbook, duel, People, Garage, night pass here.
 - Next: the crew page's own head and the route card's Share box; the Log's sub-pages if anything there still boxes.
+
 ## Session 2026-11-11 (roam-c-migration-guard): migration numbers can't clash (claude/roam-c-migration-guard, off origin/main 936aec3)
 
 - tests/test_migrations.py: names NNNN_words.sql, numbers unique from 0001 (the message says which number to take; gaps are
@@ -527,6 +554,7 @@
   carries the apex dot. The dashed sample crew and the empty bay stay pencil (e2e checks the dashed slot).
 - Tests: tests/test_garage_line.py. e2e Garage, People, crew, friend flows pass here.
 - Next: the crew page and Your data/Settings sub-sheets (ink rules on lists), the route card's Share box.
+
 ## Session 2026-11-11 (roam-c-ci-shards): the e2e check in four parallel jobs (claude/roam-c-ci-shards, off origin/main)
 
 - Done: `e2e/smoke.js` takes `SHARD=k/n` (flows dealt longest first, weights in `LONG_S`) and `LIST=1` (print the flows a
@@ -550,6 +578,7 @@
 - Tests: backend/test/crowd_bumps.test.ts, tests/test_contributor.py (bump flags, route bumps), parity spike mask.
 - Next: hand-reported hazards (hazards.ts) still use vote counts; the same posterior could rank them. Crowd bumps on the
   road page (Q-13 "verified hazards") and the map; bumps on a free drive with no route (needs the cells lookup live).
+
 ## Session 2026-11-11 (round two analysis): Your touch from the 10 Hz g (IDEAS D-28; claude/project-thread-gd7nre, off origin/main 936aec3)
 
 - `core/driver_profile.py` `observe` adds `brake_on`, `brake_off`, `turn_in` per corner (g a second, 20 % to 80 % of the
@@ -595,6 +624,7 @@
   web/crew_page.js: no meter, `dressedBy`, Plain says "Plain livery"; editor locks read "With a crew-mate on Vetta Pro".
 - Tests: tests/test_pro.py, test_crew_page.py, test_route_tuning.py; backend/test/crew_page.test.ts; e2e "crew page" line.
 - Next: camber with how sure it is (red team TE-03).
+
 ## Session 2026-11-10 (fable-night-keys): night drive keys outlined (claude/fable-night-keys, off origin/main)
 
 - web/index.html CSS: `html[data-mode="night"]` #driveEnd (not .undo, not Tapedeck), .transport > #replayDone and the
@@ -634,6 +664,7 @@
   three ([0, 3.3, 9.6], #365). It now takes three or more, rising, with one strictly between the first and the total.
 - 6 of 6 runs passed here after the change, one at THROTTLE=6. Not checked: why the plan sheet's height differs between
   runs after Tap to route (the test now copes; the sheet itself may be worth a look).
+
 ## Session 2026-11-11 (fable-offline-road-feel): a saved map area keeps the measured roads too (claude/fable-offline-road-feel, off origin/main)
 
 - IDEAS F-02, its last part. The twisty roads are where signal dies, and a saved area kept the map, terrain and road
@@ -664,6 +695,7 @@
 - Checked: pytest full; e2e "a pin has a name", "Where to?" 9/9, "plan flow" 6/6, "spot photo", "Dynamic Type",
   "REVIEW.md 1.2" 2/2, "routes from elsewhere", "saved for offline", "drag to reshape", "safe areas".
 - Next: a tapped place could take the road's name once the lookup lands (rename the planned route after the fact).
+
 ## Session 2026-11-10 (fable-roadbooks): Roadbooks, collections of great roads with stamps from your own Log (claude/fable-roadbooks, off origin/main 948cb4b)
 
 - **Needs migration 0046** (`backend/migrations/0046_roadbooks.sql`, additive: `roadbooks`, `roadbook_roads`, `roadbook_follows`,
@@ -682,6 +714,7 @@
 - Checked: backend vitest 367/367 + tsc, pytest 1447 passed, e2e roadbooks, shared routes, REVIEW.md 1.2.
 - Next: a crew's own roadbook on its page; a road added from a stage or a drive's page (only planned routes today); a
   roadbook's roads as pins on the map; "finished the book" on a profile.
+
 ## Session 2026-11-11 (fable-share-defaults): sharing on by default for friends and private crews (claude/fable-share-defaults, off origin/main fc27c473)
 
 - `backend/src/share_defaults.ts`: `friendDefaults(a, b)` (both ways, only while accepted and unblocked) from
@@ -696,6 +729,7 @@
   default; e2e "People, a new account" joins a public crew and picks Scores only.
 - Migration `0050_share_backfill.sql` (data only): sharing on for existing friendships and private-crew members.
   On preview 2026-11-11 (with its d1_migrations row); **prod: apply at merge**. People says so once (`apex.sharingOnTold`).
+
 ## Session 2026-11-11 (fable-avoid-police): Avoid → Police reports (claude/fable-avoid-police, off origin/main fc27c47)
 
 - Done: `ApexHazardReports.policeFor` / `passesNear`; `FunRoute` avoid key `police` (unavoided, keepAvoiding); graph_router
@@ -726,6 +760,7 @@
 - Tests: tests/test_drive_hud.py (count-in curve, which look gets which cluster, parts kept, motion bounds, tokens, 13 px);
   e2e "the drive screen, Vetta Line…".
 - Next: CarPlay's own speed readout could take the same hierarchy (Swift, not compiled here).
+
 ## Session 2026-11-11 (fable-duels): Duels between friends on a stage (claude/fable-duels, off origin/main affc1d0)
 
 - Migrations `0047_duels.sql` (table `duels`) (applied on both) and `0048_duel_kind.sql` (`kind` score|time; on preview 2026-11-11, **prod still to apply before merging**, with its d1_migrations row).
@@ -742,6 +777,7 @@
 - Tests: tests/test_duels.py, backend/test/duels.test.ts, sweep.test.ts (a long-over duel goes, a late-accepted one stays),
   e2e "duels: …", "friend profile", People.
 - Next: a crew's roadbook, or a crew drive's results as a rally sheet (who came, each one's Score on each stage).
+
 ## Session 2026-11-11 (fable-first-last): the first run and the drive-ended card as reveals (claude/fable-first-last, off origin/main ac6c6c6)
 
 - web/first_run.js (`ApexFirstRun`: `rests`, `leg`, `attach`): the welcome's lockup moves in from where the cover drew it,
@@ -756,6 +792,7 @@
 - Tests: tests/test_end_reveal.py; tests/test_review_recording.py now asserts the welcome is still under reduced motion;
   e2e "first run and the end card…".
 - Next: the welcome on its side (landscape) is correct but plain; the road could take the left column's full height.
+
 ## Session 2026-11-10 (fable-ten-hz-g): every live frame's g reaches the recording (IDEAS D-26; claude/fable-ten-hz-g, off origin/main ac6c6c6)
 
 - `web/sensors.js Recorder`: `gs` (each frame's [lat_g, lon_g] or null since the last move, up to 31) and `g0` ([g or
@@ -767,6 +804,7 @@
 - Checked: `pytest tests` full; e2e recording and Log flows.
 - Next: IDEAS D-26 in docs/IDEAS.md is added by claude/fable-driver-profile (#373); mark it done when both are merged.
   Then the driver profile's "touch" skills (brake application and release rates, turn-in rate) from this finer g.
+
 ## Session 2026-11-11 (fable-practice-focus): practice focus, the profile's Work on carried into the next drives (claude/fable-practice-focus, stacked on claude/fable-driver-profile)
 
 - `core/driver_profile.py` `practice` and `drive_practice`, ported in `web/driver_profile.js` and held to parity by
@@ -800,6 +838,7 @@
   (`tests/test_backdrop_press.py`). The flow now checks the star is under its own centre before the tap, and that a
   press on a star lifted on the backdrop leaves the dialog open. Not done: the backdrops in confirm.js, convoy_ui.js,
   crew_page.js, photos.js, row_select.js and whats_new.js still close on the click target alone.
+
 ## Session 2026-11-11 (fable-rally-sheet): crew drive results sheet (claude/fable-rally-sheet, off origin/main affc1d0)
 
 - `backend/src/events.ts`: `eventRecord` adds `results` from `resultsSheet(runs)` (pure): best `driver_score` per stage
@@ -820,6 +859,7 @@
 - Tests: test_graph_router.py (roundTrips case), e2e "there and back" (the Valhalla path).
 - Not done: offering the round trip as a level card of its own; a timed stop at the destination (lunch: ETA home).
 - Next: discovery of great unknown roads near a planned trip ("a better road 4 min off your route").
+
 ## Session 2026-11-10 (fable-soundtrack): the Soundtrack, music made by the road (claude/fable-soundtrack, off origin/main 948cb4b)
 
 - The mission's audio half (ARCHITECTURE section 5), built: `core/audio_bus.py` (reference) and `web/audio_bus.js` (port,
@@ -862,12 +902,14 @@
 - `tests/test_message_sentences.py` (4) reads every `toast('…')` in web/*.js: each ends ". ! ? …", none joins labels with "·".
 - pytest whole suite passed. No e2e flow reads these eight texts (grepped), so none was run for them.
 - Next: messages whose text is built before the call (a variable) are not read by the test.
+
 ## Session 2026-11-10 (fable-log-units): the Log's small lengths in the driver's units (claude/fable-log-units, off origin/main 3f2f315)
 
 - `web/units.js` `fine(m)`: "12 m" or feet to the nearest 5 ("40 ft"). Used in `web/analysis.html` (stage marking's
   climb and minimum length, the steadiness chart's scale, dots and note) and `web/drive_view.js` (repeatability list,
   grip circle notes; `size(100)` for "before turn-in"). drive_view falls back to metres with no units module (its tests).
 - Tests: tests/test_units.py (new case); e2e "a whole road as a stage" now expects "up 65 ft".
+
 ## Session 2026-11-10 (fable-driver-profile): Your driving, the driver profile over every drive (claude/fable-driver-profile, off origin/main 948cb4b)
 
 - `core/driver_profile.py` (new): `observe(drive)` gives one observation per corner the coach may read (six credits
@@ -890,6 +932,7 @@
 - Next: record every frame's g between fixes (placed along the road as `vert_peak_g` already is), plus per-sample
   steering and brake rates; then the profile's "touch" skills (turn-in, brake application and release rates) and a
   practice focus that follows the profile's Work on into the next drive.
+
 ## Session 2026-11-11 (fable-taste-picks): taste learnt from the routes you choose (claude/fable-taste-picks, off origin/main ac6c6c6)
 
 - Done: `ApexTaste.recordPick` / `leanOf` (taste.js), pairs weighted in `fit`; cockpit `learnFromPick` at Start
@@ -949,6 +992,7 @@
 - [x] `nudgeAnswered(false)`: the notifications-off toast has a Settings key (`openSettings`); docs/APP_REVIEW.md 4.5.4.
 - [x] tests/test_sign_in_key.py (4); e2e flow "sign-in key".
 - Next: the same look for other messages that point somewhere without taking you ("Find it in Where to?").
+
 ## Session 2026-11-10 (fable-crew-settings): the crew gear's sheet has named parts (claude/fable-crew-settings, off origin/main 51c8c4c)
 
 - [x] web/cockpit.js `crewSettingsFor`: `h4.nav-group` names, notes as `p.note`, the area field's placeholder and
@@ -960,6 +1004,7 @@
   "REVIEW.md 1.2", "safe areas".
 - Next on a crew's page: the chat row and the Score board were looked at and left; Meeting points and what is under it
   were not reached.
+
 ## Session 2026-11-10 (fable-whats-new): What's new says what changed since October (claude/fable-whats-new, off origin/main 948cb4b)
 
 - `web/whats_new.js`: `NEWS.id` '2026-11-10' with four lines: Quick / Fun / Long way, the drive overview on the route
@@ -968,6 +1013,7 @@
 - `tests/test_whats_new.py::test_it_names_what_is_really_there`: each name in the news is on a screen under that name.
 - Looked at on 393 and 320 px wide screens: one screen, nothing cut. pytest whole suite and the e2e "What's new" flow passed.
 - Next: when a PR adds something a driver would notice, it edits NEWS and its id in the same PR (the file's own rule).
+
 ## Session 2026-11-10 (fable-toast-key): toasts are as wide as their words; a toast's key ends its row (claude/fable-toast-key, off origin/main 51c8c4c)
 
 - [x] web/cockpit.js `toast()`: the action is `a.toast-key`, `#toast.has-key` while it has one. web/index.html:
@@ -996,6 +1042,7 @@
   in 2 here and reddened the e2e check on #368 and the whole-suite run of another branch. It now waits, inside one
   evaluate, until the lines up are the ones built from the present steps, and counts the departure road as the app does.
 - 6 of 6 runs passed after (1 of 2 before). No app code changed.
+
 ## Session 2026-11-10 (fable-no-orphan-key): three friend keys no longer leave a hole (claude/fable-no-orphan-key, off origin/main 51c8c4c)
 
 - [x] web/index.html `.friend-keys > :last-child:nth-child(odd) { grid-column: 1 / -1; }`. tests/test_friend_keys.py;
@@ -1018,6 +1065,7 @@
   change (the CarPlay row already says "Loops from here"; no new template or data).
 - Next: CarPlay has not been looked at on a screen in this run; its three identical detail lines under each loop
   ("A twisty loop from here, back where you started") could become one section header once someone can see it.
+
 ## Session 2026-11-10 (fable-route-reveal): design pass, the route card as a page and the route drawn on (claude/fable-route-reveal, off origin/main ac6c6c6)
 
 - web/route_reveal.js (new): `plan(prev, next, still)` (800 ms stroke + 500 ms count for a route found; 300 ms, no count,
@@ -1392,6 +1440,7 @@
   (Valhalla-planned routes off our tiles) still knows only motorway/trunk.
 - Exact next task: after merge, run Actions → "Graph region (own routing, OH+KY+IN)" so the flag reaches the tiles; then
   unchanged (tools/live_speed.js on the owner's trips at Fun and Long way).
+
 ## Session 2026-11-10 (fable-convoy-keep): the leader keeps a convoy going; a heads-up before it ends (claude/fable-convoy-keep, off origin/main f27a1fe)
 
 - [x] A room lived `LIMITS.roomMs` (2 h, "draft operational bounds" in CONVOY_TRANSPORT.md) and ended by alarm with no
@@ -1435,6 +1484,7 @@
   routing (4), plan flow (6) pass.
 - Exact next task: unchanged (tools/live_speed.js on the owner's trips at Fun and Long way); a "Graph region" run picks
   this up together with the expressway flag.
+
 ## Session 2026-11-10 (fable-zone-samples): a home zone added later reaches the server and hides the stored position (claude/fable-zone-samples, off origin/main f27a1fe)
 
 - [x] Found by reading backend/src/presence.ts against the app: home zones were only sent with a change of "Show me
@@ -2007,6 +2057,7 @@
   live engine also 0.33), Blue Rock rural 0.68, E Miami River 0.72, Lees Creek 0.58, I-275 0.82.
 - Exact next task: the phone router (web/graph_router.js + graph_worker.js) on these tiles (the parallel builder), then
   OWN_ROUTING.md §6's proof against today's picks.
+
 ## Session 2026-11-04 (evening): the plan flow, simpler (branch claude/plan-flow)
 
 - [x] The planux audit's eleven findings are fixed (CALL_SHEET 2026-11-04 evening has each call and how to undo it):
@@ -2138,6 +2189,7 @@
 - Unverified on a device: both videos in the app's WKWebView (MediaRecorder + canvas captureStream), the road keys on a
   real drive (Valhalla's names).
 - Exact next task: TestFlight from main; the owner tries Make the video and a Bank Road stage.
+
 ## Session 2026-10-31: TestFlight notes 05 and 06 (feedback builder)
 
 - [x] 05: the Crew drives row is gone; the crew page's "Upcoming drives" lists the crew's drives with a + to plan one.
@@ -2146,6 +2198,7 @@
 - Migration 0043 (drive_scores) is NOT applied yet: apply it to apexnav-preview-db and apexnav-db before the Worker deploy
   (until then the new board says "Couldn't load the board" and drive Scores wait on the phone to be sent).
 - Exact next task: apply 0043; on a device, check a finished drive shows on the crew board's Week total.
+
 ## Session 2026-10-31: TestFlight feedback 01-04, 07, 08 (screens and sharing)
 
 - [x] A route Preview owns the screen like a replay (no route card or tabs under it); Where to? stays below the Dynamic
