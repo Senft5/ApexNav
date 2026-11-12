@@ -4664,18 +4664,19 @@ flow('crew drive morning: the idle map offers directions to today\'s meeting poi
   check(await page.$eval('#loopSuggest', (b) => getComputedStyle(b).display === 'none'), 'it takes the loop invitation\'s place');
 });
 
-flow('time attack on the home deck: this week\'s loop you entered is the suggestion, with your place; the server gets only the area (Worker stubbed)', async (page, base) => {
+flow('time attack on the home deck: this week\'s featured loop you entered is the suggestion, with your place; the server gets only the area (Worker stubbed)', async (page, base) => {
   await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); localStorage.setItem('apex.permsExplained', '1'); } catch (_) {} });
   const day = (k) => new Date(Date.now() + k * 86400000).toISOString().slice(0, 10), asked = [];
   await page.route('**/api/**', (route) => {
     const u = new URL(route.request().url());
     const json = (b) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(b) });
     if (u.pathname === '/api/me') return json({ signed_in: true, member: true, handle: 'me' });
-    if (u.pathname === '/api/timeattack') {
+    if (u.pathname === '/api/ta') {
       asked.push(u.search);
-      return json({ week: day(-1), ends_on: day(2), today: day(0), cell: '35,-84', make: null, entered: true, entrants: 8,
-        circuit: { name: 'Tellico <i>loop</i>', length_m: 32187, segment_id: 'TA1', geom: JSON.stringify([[35.36, -84.29], [35.40, -84.20], [35.36, -84.29]]) },
-        board: [], you: { place: 3, handle: 'me', time_s: 1200, gap_s: 40, score: 700, mine: true }, last: null });
+      return json({ season: day(-30), ends_on: day(40), week: day(-4), today: day(0), cell: '35,-84', make: null,
+        circuits: [{ id: 'TA0', slot: 0, name: 'Other loop', length_m: 9000, featured: false, entered: false, geom: JSON.stringify([[35.3, -84.2], [35.31, -84.2], [35.3, -84.2]]) },
+                   { id: 'TA1', slot: 1, name: 'Tellico <i>loop</i>', length_m: 32187, featured: true, entered: true, geom: JSON.stringify([[35.36, -84.29], [35.40, -84.20], [35.36, -84.29]]) }],
+        board: { id: 'TA1', period: 'week', entrants: 8, rows: [], you: { place: 3, handle: 'me', time_s: 1200, gap_s: 40, score: 700, mine: true } } });
     }
     return json([]);
   });
@@ -4688,7 +4689,7 @@ flow('time attack on the home deck: this week\'s loop you entered is the suggest
   const title = await page.textContent('#loopSuggestTitle'), why = await page.textContent('#loopSuggestWhy');
   check(title === 'Time attack · Tellico <i>loop</i>' && why === 'You’re 3rd of 8 · 3 days left', 'the suggestion: ' + title + ' / ' + why);
   check(/Directions to the start\.$/.test(await page.getAttribute('#loopSuggestGo', 'aria-label')), 'its key gives directions to the start');
-  check(await page.getAttribute('#loopSuggestShow', 'data-road') === 'ta:' + day(-1) + '|35,-84|TA1', 'its body draws the loop');
+  check(await page.getAttribute('#loopSuggestShow', 'data-road') === 'ta:' + day(-4) + '|35,-84|TA1', 'its body draws the loop');
   check(asked.length && asked.every((q) => q === '?lat=35.875&lon=-83.875'), 'only the middle of the quarter-degree area is sent: ' + JSON.stringify(asked));
 }, { geolocation: { latitude: 35.9606, longitude: -83.9207 }, permissions: ['geolocation'] });
 
@@ -8893,26 +8894,32 @@ flow('TestFlight 2026-11-05 note 6: the idle map\'s deck is the suggestion and o
   }
 }, { hasTouch: true, viewport: { width: 393, height: 852 }, geolocation: { latitude: 35.9606, longitude: -83.9207 }, permissions: ['geolocation'] });
 
-flow('time attack this week (SOCIAL 2.9): in Where to?, the area\'s loop and its board, as text, with gaps and Scores; Enter puts it in your Stages; the area, never where you are, is sent', async (page, base) => {
-  const GEOM = JSON.stringify([[35.95, -83.9], [35.97, -83.88], [35.95, -83.9]]);
-  let entered = false;
+flow('time attack (the owner, 2026-11-12: static best roads, a featured one, boards by week, month, year, all time): in Where to?, the area\'s loops and a board, as text, with gaps and Scores; Enter puts one in your Stages; the area, never where you are, is sent', async (page, base) => {
+  const GEOM = JSON.stringify([[35.95, -83.9], [35.97, -83.88], [35.95, -83.9]]), GEOM2 = JSON.stringify([[36.05, -83.8], [36.07, -83.78], [36.05, -83.8]]);
+  const entered = new Set();
   const sent = [];
   await page.addInitScript(() => { localStorage.setItem('apex.onboarded', '1'); localStorage.setItem('apex.permsExplained', '1'); });
+  const BOARDS = {
+    'ta-CIRC1|week': [{ place: 1, handle: 'alice', time_s: 590, gap_s: 0, score: 700, mine: false }, { place: 2, handle: 'bob', time_s: 600, gap_s: 10, score: 780, mine: false },
+                      { place: 2, handle: 'cara', time_s: 600, gap_s: 10, score: null, mine: false }],
+    'ta-CIRC1|all': [{ place: 1, handle: 'dee', time_s: 540, gap_s: 0, score: 820, mine: false }, { place: 2, handle: 'alice', time_s: 590, gap_s: 50, score: 700, mine: false }],
+  };
   await page.route('**/api/**', (route) => {
     const u = new URL(route.request().url()), m = route.request().method();
     const json = (b, status = 200) => route.fulfill({ status, contentType: 'application/json', body: JSON.stringify(b) });
     if (u.pathname === '/api/me') return json({ signed_in: true, member: true, handle: 'me' });
-    if (u.pathname === '/api/timeattack' && m === 'GET') {
+    if (u.pathname === '/api/ta' && m === 'GET') {
       sent.push(['GET', u.search]);
-      return json({ week: '2026-11-09', ends_on: '2026-11-15', today: '2026-11-13', cell: '35,-84', entered, entrants: 3, make: null,
-        circuit: { segment_id: 'ta-CIRC1', name: 'Foothills <b>run</b> loop', length_m: 12500, geom: GEOM, week: '2026-11-09', ends_on: '2026-11-15', cell: '35,-84' },
-        board: [{ place: 1, handle: 'alice', time_s: 590, gap_s: 0, score: 700, mine: false }, { place: 2, handle: 'bob', time_s: 600, gap_s: 10, score: 780, mine: false },
-                { place: 2, handle: 'cara', time_s: 600, gap_s: 10, score: null, mine: false }],
-        you: null, last: { name: 'Last loop', podium: [{ handle: 'dee', time_s: 712 }] } });
+      const id = u.searchParams.get('id') || 'ta-CIRC1', period = u.searchParams.get('period') || 'week', rows = BOARDS[`${id}|${period}`] || [];
+      return json({ season: '2026-10-01', ends_on: '2026-12-31', week: '2026-11-09', today: '2026-11-13', cell: '35,-84', make: null,
+        circuits: [{ id: 'ta-CIRC1', slot: 0, name: 'Foothills <b>run</b> loop', length_m: 12500, geom: GEOM, featured: true, entered: entered.has('ta-CIRC1') },
+                   { id: 'ta-CIRC2', slot: 1, name: 'Hog Run loop', length_m: 9800, geom: GEOM2, featured: false, entered: entered.has('ta-CIRC2') }],
+        board: { id, period, entrants: rows.length, rows, you: null } });
     }
-    if (m === 'POST' && u.pathname.startsWith('/api/timeattack')) {
-      sent.push([u.pathname, JSON.parse(route.request().postData() || 'null')]);
-      if (u.pathname === '/api/timeattack/enter') { entered = true; return json({ segment_id: 'COPY1', added: true }); }
+    if (m === 'POST' && u.pathname.startsWith('/api/ta')) {
+      const b = JSON.parse(route.request().postData() || 'null');
+      sent.push([u.pathname, b]);
+      if (u.pathname === '/api/ta/enter') { entered.add(b.id); return json({ segment_id: 'COPY1', added: true }); }
       return json({}, 201);
     }
     if (m === 'GET') return json([]);
@@ -8922,33 +8929,50 @@ flow('time attack this week (SOCIAL 2.9): in Where to?, the area\'s loop and its
   await page.waitForFunction(() => window.apex && typeof window.apex.live === 'function');
   await page.click('#destInput');
   await page.waitForSelector('#planAttack:not([hidden]) > summary');
-  // the row says the week's loop before it is opened (time_attack.js peek, summaryLine)
+  // the row says the featured loop before it is opened (time_attack.js peek, summaryLine)
   await page.waitForFunction(() => /Foothills/.test(document.querySelector('#planAttack > summary').textContent));
   const line0 = await page.textContent('#planAttack > summary');
-  check(/^Time attack: Foothills <b>run<\/b> loop \(.+\) · 3 times · 3 days left$/.test(line0), 'the row names this week\'s loop: ' + line0);
+  check(/^Time attack: Foothills <b>run<\/b> loop \(.+\) · 3 times · 3 days left$/.test(line0), 'the row names the featured loop: ' + line0);
   await page.click('#planAttack > summary');
   await page.waitForSelector('#planAttack .ta-board');
-  const text = await page.textContent('#planAttackBody');
-  check(!text.includes('Foothills <b>run</b> loop') && !/loop from the area’s best roads/.test(text) && !/put up/i.test(text), 'the row\'s line names the loop; the body doesn\'t say it again: ' + text);
+  const loops = await page.$$eval('#planAttack .ta-loop', (els) => els.map((e) => [e.querySelector('b').textContent, e.querySelector('small').textContent, e.getAttribute('aria-pressed')]));
+  check(loops.length === 2 && loops[0][0] === 'Foothills <b>run</b> loop' && /Featured this week$/.test(loops[0][1]) && loops[0][2] === 'true' && loops[1][2] === 'false' && !/Featured/.test(loops[1][1]),
+    'the area\'s loops, the featured one shown first: ' + JSON.stringify(loops));
+  const sw = await page.$$eval('#planAttack .ta-period [role="radio"]', (els) => els.map((e) => [e.textContent, e.getAttribute('aria-checked')]));
+  check(JSON.stringify(sw) === '[["Week","true"],["Month","false"],["Year","false"],["All time","false"]]', 'the board\'s period, this week first: ' + JSON.stringify(sw));
   const cells = await page.$$eval('#planAttack .ta-board > span', (els) => els.map((e) => e.textContent));
   check(cells.slice(0, 8).join('|') === '1|@alice|9:50|Score 700|2|@bob|10:00 +0:10|Score 780' && cells[11] === '', 'the board, quickest first, with gaps and Scores: ' + cells.join('|'));
-  check(/Last week, Last loop: 1\. @dee 11:52/.test(text) && /New loop every Monday/.test(text) && /Drive within the law/.test(text), 'last week\'s podium and the road note');
+  const text = await page.textContent('#planAttackBody');
+  check(/Featured changes Mondays\. New loops in January\. Drive within the law\./.test(text), 'when the loops change, and the road note: ' + text);
   const q = new URLSearchParams(sent[0][1]);
   check(/\.(125|375|625|875)$/.test(q.get('lat')) && /\.(125|375|625|875)$/.test(q.get('lon')), 'only the middle of the quarter-degree area is sent: ' + sent[0][1]);
-  check(!sent.some(([p]) => p === '/api/timeattack/circuit'), 'a week that has its loop builds none');
+  check(!sent.some(([p]) => p === '/api/ta/circuit'), 'an area that has its loops builds none');
   await page.click('#planAttack button:text-is("Enter")');
   await page.waitForSelector('#planAttack button:text-is("Drive it")');
-  check(sent.some(([p, b]) => p === '/api/timeattack/enter' && b.cell === '35,-84'), 'Enter sends the area');
+  check(sent.some(([p, b]) => p === '/api/ta/enter' && b.id === 'ta-CIRC1'), 'Enter names the loop');
   const segs = await page.evaluate(() => JSON.parse(localStorage.getItem('apex.segments')));
   check(segs.some((x) => x.id === 'COPY1' && x.origin === 'ta-CIRC1' && x.synced && x.lat0 === 35.95 && x.lat1 === 35.95), 'the loop is in your Stages: ' + JSON.stringify(segs));
   const line1 = await page.textContent('#planAttack > summary');
   check(/· log a run on it · 3 days left$/.test(line1), 'entered: the row says what to do next: ' + line1);
+  // All time: the same loop's board from its first day
+  await page.click('#planAttack .ta-period [role="radio"]:text-is("All time")');
+  await page.waitForFunction(() => document.querySelector('#planAttack .ta-period [aria-checked="true"]').textContent === 'All time');
+  check(/[?&]id=ta-CIRC1(&|$)/.test(sent[sent.length - 1][1]) && /period=all/.test(sent[sent.length - 1][1]), 'All time asks for this loop\'s board: ' + sent[sent.length - 1][1]);
+  const all = await page.$$eval('#planAttack .ta-board > span', (els) => els.map((e) => e.textContent));
+  check(all.slice(0, 3).join('|') === '1|@dee|9:00', 'the all-time board: ' + all.join('|'));
+  check(await page.textContent('#planAttack > summary') === line1, 'the row\'s line stays this week\'s');
+  // the other loop: its own board, the period kept
+  await page.click('#planAttack .ta-loop:has-text("Hog Run loop")');
+  await page.waitForFunction(() => document.querySelector('#planAttack .ta-loop[aria-pressed="true"] b').textContent === 'Hog Run loop');
+  check(/id=ta-CIRC2/.test(sent[sent.length - 1][1]) && /period=all/.test(sent[sent.length - 1][1]) && /No times on it yet\./.test(await page.textContent('#planAttackBody')), 'the other loop, no times: ' + sent[sent.length - 1][1]);
+  await page.click('#planAttack .ta-loop:has-text("Foothills")');
+  await page.waitForSelector('#planAttack button:text-is("Drive it")');
   // Drive it plans the loop itself, not the way to its start
   await page.click('#planAttack button:text-is("Drive it")');
   await page.waitForFunction(() => /The clock runs from the start line/.test(document.getElementById('toast').textContent) && document.getElementById('planPanel').classList.contains('routed'), null, { timeout: 15000 });
 }, { geolocation: { latitude: 35.9606, longitude: -83.9207 }, permissions: ['geolocation'] });
 
-flow('time attack duel: Challenge a friend on the week\'s loop picks a friend, won by time, on your copy of the loop (IDEAS S-24, Worker stubbed)', async (page, base) => {
+flow('time attack duel: Challenge a friend on a time attack loop picks a friend, won by time, on your copy of the loop (IDEAS S-24, Worker stubbed)', async (page, base) => {
   const GEOM = JSON.stringify([[35.95, -83.9], [35.97, -83.88], [35.95, -83.9]]);
   const sent = [];
   await page.addInitScript(() => { localStorage.setItem('apex.onboarded', '1'); localStorage.setItem('apex.permsExplained', '1'); });
@@ -8956,10 +8980,10 @@ flow('time attack duel: Challenge a friend on the week\'s loop picks a friend, w
     const u = new URL(route.request().url()), m = route.request().method();
     const json = (b, status = 200) => route.fulfill({ status, contentType: 'application/json', body: JSON.stringify(b) });
     if (u.pathname === '/api/me') return json({ signed_in: true, member: true, handle: 'me' });
-    if (u.pathname === '/api/timeattack' && m === 'GET') return json({ week: '2026-11-09', ends_on: '2026-11-15', today: '2026-11-13', cell: '35,-84', entered: true, entrants: 1, make: null,
-      circuit: { segment_id: 'ta-CIRC1', name: 'Foothills loop', length_m: 12500, geom: GEOM, week: '2026-11-09', ends_on: '2026-11-15', cell: '35,-84' }, board: [], you: null, last: null });
+    if (u.pathname === '/api/ta' && m === 'GET') return json({ season: '2026-10-01', ends_on: '2026-12-31', week: '2026-11-09', today: '2026-11-13', cell: '35,-84', make: null,
+      circuits: [{ id: 'ta-CIRC1', slot: 0, name: 'Foothills loop', length_m: 12500, geom: GEOM, featured: true, entered: true }], board: { id: 'ta-CIRC1', period: 'week', entrants: 0, rows: [], you: null } });
     if (u.pathname === '/api/friends') return json([{ id: 'u1', handle: 'sam', status: 'accepted', incoming: 0 }, { id: 'u2', handle: 'pat', status: 'pending', incoming: 1 }]);
-    if (m === 'POST' && (u.pathname === '/api/timeattack/enter' || u.pathname === '/api/duels')) {
+    if (m === 'POST' && (u.pathname === '/api/ta/enter' || u.pathname === '/api/duels')) {
       sent.push([u.pathname, JSON.parse(route.request().postData() || 'null')]);
       return json(u.pathname === '/api/duels' ? { id: 'd1' } : { segment_id: 'COPY1', added: false });
     }
@@ -8983,23 +9007,27 @@ flow('time attack duel: Challenge a friend on the week\'s loop picks a friend, w
   check(duel && JSON.stringify(duel[1]) === JSON.stringify({ handle: 'sam', segment_id: 'COPY1', days: 7, kind: 'time' }), 'the duel is on your copy of the loop: ' + JSON.stringify(sent));
 }, { geolocation: { latitude: 35.9606, longitude: -83.9207 }, permissions: ['geolocation'] });
 
-flow('time attack, a new week (the owner, 2026-11-11: autogenerated, the area\'s best loop roads at random, small loops): the first phone in the area builds the loop with our own router from the seed and sends it', async (page, base) => {
-  let circuit = null;
+flow('time attack, a new season (the owner, 2026-11-12: static best roads): the first phone in the area builds its loops with our own router from the seeds, each the router\'s best, apart, and sends them', async (page, base) => {
+  const circuits = [];
   const sent = [];
   await page.addInitScript(() => { localStorage.setItem('apex.onboarded', '1'); localStorage.setItem('apex.permsExplained', '1'); });
   await page.route('**/api/**', (route) => {
     const u = new URL(route.request().url()), m = route.request().method();
     const json = (b, status = 200) => route.fulfill({ status, contentType: 'application/json', body: JSON.stringify(b) });
     if (u.pathname === '/api/me') return json({ signed_in: true, member: true, handle: 'me' });
-    if (u.pathname === '/api/timeattack' && m === 'GET') {
-      return json({ week: '2026-11-09', ends_on: '2026-11-15', today: '2026-11-13', cell: '39,-84.5', entered: false, entrants: 0, circuit,
-        make: circuit ? null : { seed: '2026-11-09|39,-84.5|0', km: { min: 8, max: 16 } }, board: [], you: null, last: null });
+    if (u.pathname === '/api/ta' && m === 'GET') {
+      // two slots here (the server has three): the second must start 3 km from the first
+      const slot = circuits.length < 2 ? circuits.length : null;
+      return json({ season: '2026-10-01', ends_on: '2026-12-31', week: '2026-11-09', today: '2026-11-13', cell: '39,-84.5', circuits,
+        make: slot == null ? null : { slot, seed: `2026-10-01|39,-84.5|${slot}|0`, km: { min: 8, max: 16 }, best: true, avoid: circuits.map((c) => JSON.parse(c.geom)[0]) },
+        board: circuits.length ? { id: circuits[0].id, period: 'week', entrants: 0, rows: [], you: null } : null });
     }
-    if (u.pathname === '/api/timeattack/circuit' && m === 'POST') {
+    if (u.pathname === '/api/ta/circuit' && m === 'POST') {
       const b = JSON.parse(route.request().postData() || 'null');
       sent.push(b);
-      circuit = { segment_id: 'ta-NEW', name: b.name, length_m: 10000, geom: JSON.stringify(b.geom), week: '2026-11-09', ends_on: '2026-11-15', cell: '39,-84.5' };
-      return json({ circuit, kept: true });
+      const c = { id: 'ta-NEW' + b.slot, slot: b.slot, name: b.name, length_m: 10000, geom: JSON.stringify(b.geom), featured: b.slot === 0, entered: false };
+      circuits.push(c);
+      return json({ circuit: c, kept: true });
     }
     if (m === 'GET') return json([]);
     return json({}, 404);
@@ -9009,19 +9037,21 @@ flow('time attack, a new week (the owner, 2026-11-11: autogenerated, the area\'s
   await page.click('#destInput');
   await page.waitForSelector('#planAttack:not([hidden]) > summary');
   await page.click('#planAttack > summary');
-  await page.waitForFunction(() => /New loop every Monday|doesn’t reach this area/.test(document.getElementById('planAttackBody').textContent), null, { timeout: 60000 });
+  await page.waitForFunction(() => /New loops in January|doesn’t reach this area/.test(document.getElementById('planAttackBody').textContent), null, { timeout: 90000 });
   const text = await page.textContent('#planAttackBody');
-  check(sent.length === 1, 'one loop sent: ' + text);
+  check(sent.length === 2 && sent[0].slot === 0 && sent[1].slot === 1, 'two loops sent, one a slot: ' + JSON.stringify(sent.map((b) => b.slot)) + ' ' + text);
   const b = sent[0] || {};
   const g = b.geom || [], km = g.reduce((s, p, i) => (i ? s + Math.hypot((p[0] - g[i - 1][0]) * 111195, (p[1] - g[i - 1][1]) * 111195 * Math.cos(p[0] * Math.PI / 180)) : 0), 0) / 1000;
-  check(b.cell === '39,-84.5' && b.seed === '2026-11-09|39,-84.5|0' && / loop$|This week’s loop/.test(b.name || ''), 'the area, the seed and a name: ' + JSON.stringify({ cell: b.cell, seed: b.seed, name: b.name }));
+  check(b.cell === '39,-84.5' && b.seed === '2026-10-01|39,-84.5|0|0' && / loop$/.test(b.name || ''), 'the area, the seed and a name: ' + JSON.stringify({ cell: b.cell, seed: b.seed, name: b.name }));
   // the owner's TestFlight note (2026-11-12): near you (your own quarter-degree area) and not through a neighbourhood
   check(g.length >= 10 && JSON.stringify(g[0]) === JSON.stringify(g[g.length - 1]) && g[0][0] >= 39 && g[0][0] < 39.25 && g[0][1] >= -84.5 && g[0][1] < -84.25, 'a closed line that starts in your quarter-degree area: ' + g.length + ' points ' + JSON.stringify(g[0]));
   const lp = await page.evaluate(() => window.apexDebug.lastAttackLoop || null);
   check(lp && lp.streetM <= 500 && lp.streetShare <= 0.05, 'little or no neighbourhood street: ' + JSON.stringify(lp));
   check(km >= 5 && km <= 25, 'a small loop: ' + km.toFixed(1) + ' km');
-  await page.waitForFunction((n) => document.querySelector('#planAttack > summary').textContent.includes(n), b.name);   // the row's line names it
-  check(/Enter/.test(await page.textContent('#planAttack')), 'and it is the week\'s loop on the page: ' + text);
+  const g2 = (sent[1] || {}).geom || [[0, 0]], apart = Math.hypot((g2[0][0] - g[0][0]) * 111195, (g2[0][1] - g[0][1]) * 111195 * Math.cos(g[0][0] * Math.PI / 180));
+  check(sent[1] && sent[1].seed === '2026-10-01|39,-84.5|1|0' && apart >= 3000, 'the second from its own seed, starting apart: ' + Math.round(apart) + ' m');
+  await page.waitForFunction((n) => document.querySelector('#planAttack > summary').textContent.includes(n), b.name);   // the row's line names the featured one
+  check((await page.$$('#planAttack .ta-loop')).length === 2 && /Enter/.test(await page.textContent('#planAttack')), 'and both are on the page: ' + text);
 }, { geolocation: { latitude: 39.1, longitude: -84.5 }, permissions: ['geolocation'] });
 
 

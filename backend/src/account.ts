@@ -33,6 +33,9 @@ export async function exportMyData(env: Env, v: Viewer) {
     time_attack_stages: await q("SELECT s.name, p.cell, p.created_at FROM ta_pool p JOIN segments s ON s.id = p.segment_id WHERE p.owner = ?"),   // put up before 0054
     time_attack_times: await q("SELECT week, cell, time_s, driver_score, driven_on FROM ta_entries WHERE user_id = ?"),
     time_attack_entered: await q("SELECT week, cell, created_at FROM ta_joins WHERE user_id = ?"),
+    // fixed time attacks (ta_fixed.ts): your quickest time each day on each, and the ones you entered
+    fixed_time_attack_times: await q("SELECT t.circuit_id, c.name, c.cell, t.driven_on, t.time_s, t.driver_score FROM ta_times t JOIN ta_circuits c ON c.id = t.circuit_id WHERE t.user_id = ?"),
+    fixed_time_attack_entered: await q("SELECT e.circuit_id, c.name, c.cell, e.created_at FROM ta_entered e JOIN ta_circuits c ON c.id = e.circuit_id WHERE e.user_id = ?"),
     crew_drives_came_to: await q("SELECT e.title, e.starts_at, a.created_at FROM crew_event_attendance a JOIN crew_events e ON e.id = a.event_id WHERE a.user_id = ?"),
     // home_area: the 0.1-degree cell you share with that crew for fair meeting points (crew_meet.js), null when off
     crews: await q("SELECT c.name, m.role, m.joined_at, m.home_cell AS home_area FROM crew_members m JOIN crews c ON c.id = m.crew_id WHERE m.user_id = ?"),
