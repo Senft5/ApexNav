@@ -47,10 +47,10 @@ export async function inbox(env: Env, v: Viewer) {
         GROUP BY be.user_id, be.canon_id ORDER BY at DESC LIMIT 10`, me),
     // someone went quicker than you on this week's time attack, after your time went up (entrants' board, by handle)
     all<{ handle: string; time_s: number; mine: number; at: string; stage: string | null; place: number }>(env,
-      `SELECT u.handle, o.time_s, e.time_s AS mine, o.updated_at AS at, (SELECT name FROM segments WHERE id = w.segment_id) AS stage,
+      `SELECT u.handle, o.time_s, e.time_s AS mine, o.updated_at AS at, COALESCE(w.name, (SELECT name FROM segments WHERE id = w.segment_id)) AS stage,
               (SELECT COUNT(*) + 1 FROM ta_entries x WHERE x.week = e.week AND x.cell = e.cell AND x.time_s < e.time_s AND ${NO_BLOCK("x.user_id", "?1")}) AS place
          FROM ta_entries e JOIN ta_entries o ON o.week = e.week AND o.cell = e.cell AND o.user_id != e.user_id
-         JOIN users u ON u.id = o.user_id LEFT JOIN ta_weeks w ON w.week = e.week AND w.cell = e.cell
+         JOIN users u ON u.id = o.user_id JOIN ta_weeks w ON w.week = e.week AND w.cell = e.cell AND w.removed = 0
         WHERE e.user_id = ?1 AND e.week = ${WEEK} AND o.time_s < e.time_s AND o.updated_at > e.updated_at AND u.handle IS NOT NULL
           AND ${NO_BLOCK("o.user_id", "?1")}
         ORDER BY o.updated_at DESC LIMIT 3`, me),
