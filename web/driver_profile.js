@@ -802,9 +802,9 @@
   function cardLine(p, pr = null) {
     if (!p || !p.corners) return null;
     const known = SKILLS.filter((k) => p.skills[k].level !== null);
-    if (!known.length) return `${p.corners} of ${SKILL_MIN} clean corners measured. The picture of your driving starts at ${SKILL_MIN}.`;
+    if (!known.length) return `${p.corners} of ${SKILL_MIN} clean corners to your first picture`;
     const bits = [];
-    if (p.strongest) bits.push(`Strongest: ${WORDS[p.strongest].name} ${p.skills[p.strongest].level}`);
+    if (p.strongest) bits.push(`Best: ${WORDS[p.strongest].name} ${p.skills[p.strongest].level}`);
     // a practice under way says how it is going (IDEAS D-27); else the skill to work on
     if (pr) bits.push(`Practicing: ${WORDS[pr.skill].name} ${pr.after.level !== null ? `${pr.after.level}${pr.before.level !== null ? `, ${pr.before.level} before` : ''}` : 'from your next drive'}`);
     else if (p.focus) bits.push(`Work on: ${WORDS[p.focus.skill].name} ${p.skills[p.focus.skill].level}`);

@@ -764,3 +764,35 @@ def test_parity_spike_mask():
     assert js == [None if not np.isfinite(v) else int(v) for v in py]
     assert [i for i, v in enumerate(js) if v == 1] == [20, 250]
     assert js[100] is None and js[101] is None
+
+
+def test_parity_segment_window_on_a_loop():
+    """segmentWindow tries every visit to a stage's start, as segment_window does (a time attack loop)."""
+    from core import drive_analysis as da
+    from tests.test_drive_analysis import _loop_drive
+    d, seg = _loop_drive()
+    segs = [seg, dict(seg, lat0=36.0), dict(seg, length_m=1000.0)]
+    py = [da.segment_window(s, d) for s in segs]
+    runner = ("const c=require(process.argv[1]);const {d,segs}=JSON.parse(require('fs').readFileSync(0,'utf8'));"
+              "process.stdout.write(JSON.stringify(segs.map(s=>c.segmentWindow(s,d))));")
+    out = subprocess.run([NODE, "-e", runner, os.path.abspath("web/apex_core.js")],
+                         input=json.dumps({"d": {"lat": d["lat"].tolist(), "lon": d["lon"].tolist()}, "segs": segs}),
+                         capture_output=True, text=True, check=True)
+    assert [None if w is None else list(w) for w in py] == json.loads(out.stdout)
+    assert py[0] == (0, 400)
+
+
+def test_parity_segment_pass_takes_the_quickest_lap():
+    """segmentPass takes the quickest of several passes, as segment_pass does (two laps of a loop, either one quicker)."""
+    from core import drive_analysis as da
+    from tests.test_drive_analysis import _two_laps
+    cases = [_two_laps(), _two_laps(25.0, 20.0), _two_laps(22.0, 22.0)]
+    py = [da.segment_pass(seg, d) for d, seg in cases]
+    js_in = [{"d": {k: (v.tolist() if hasattr(v, "tolist") else v) for k, v in d.items()}, "seg": seg} for d, seg in cases]
+    runner = ("const c=require(process.argv[1]);const cases=JSON.parse(require('fs').readFileSync(0,'utf8'));"
+              "process.stdout.write(JSON.stringify(cases.map(({d,seg})=>c.segmentPass(seg,d))));")
+    out = subprocess.run([NODE, "-e", runner, os.path.abspath("web/apex_core.js")], input=json.dumps(js_in),
+                         capture_output=True, text=True, check=True)
+    for j, p in zip(json.loads(out.stdout), py):
+        assert (j["lo"], j["hi"]) == (p["lo"], p["hi"]) and j["time_s"] == pytest.approx(p["time_s"], rel=1e-9)
+    assert [(p["lo"], p["hi"]) for p in py] == [(400, 800), (0, 400), (py[2]["lo"], py[2]["hi"])]

@@ -65,6 +65,17 @@ describe("fixed time attack", () => {
     expect((await api(b, "GET", `/api/ta?${HERE}&id=ta-nope`)).status).toBe(404);
   });
 
+  it("a new account with no inviter isn't asked to build a loop and can't set one", async () => {
+    const [n, a] = [await makeUser("newbie"), await makeUser("alice")];
+    await env.DB.prepare("UPDATE members SET joined_at = datetime('now', '-1 day'), invited_by = NULL WHERE user_id = ?").bind(n.id).run();
+    expect((await area(n)).make).toBeNull();
+    const seed = (await area(a)).make.seed;
+    expect((await api(n, "POST", "/api/ta/circuit", { cell: CELL, slot: 0, seed, geom: square(39.26, -84.6) })).status).toBe(403);
+    expect((await area(a)).make.slot).toBe(0);                                                // nothing kept
+    await env.DB.prepare("UPDATE members SET invited_by = ? WHERE user_id = ?").bind(a.id, n.id).run();   // invited: may
+    expect((await build(n, STARTS[0])).kept).toBe(true);
+  });
+
   it("entered, timed, a board for the week, month, year and all time; blocks hide; leaving takes your times", async () => {
     const [a, b, c, d] = [await makeUser("alice"), await makeUser("bob"), await makeUser("cara"), await makeUser("dee")];
     const id = (await build(a, STARTS[0])).circuit.id, day = await today();

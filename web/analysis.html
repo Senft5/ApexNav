@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self' apexnav:; script-src 'self' apexnav: 'sha256-C4vsqdToJf7JVcSHEpn1pGJkm2gy+1lFt5Ikq452AXo=' 'sha256-G7s/ZI+Hqrfc4DqbB6EANJJLmUmhNK06PizQ1LlsG84=' https://cdn.jsdelivr.net 'wasm-unsafe-eval'; worker-src 'self' apexnav: blob:; child-src 'self' apexnav: blob:; style-src 'self' apexnav: 'unsafe-inline'; font-src 'self' apexnav: data:; img-src 'self' apexnav: data: blob: https://tiles.openfreemap.org https://s3.amazonaws.com https://basemap.nationalmap.gov; media-src 'self' apexnav: data: blob:; connect-src 'self' apexnav: data: blob: https://apexnav.senftns.workers.dev wss://apexnav.senftns.workers.dev https://tiles.openfreemap.org https://basemap.nationalmap.gov https://s3.amazonaws.com https://valhalla1.openstreetmap.de https://router.project-osrm.org https://overpass-api.de https://overpass.private.coffee https://overpass.kumi.systems https://maps.mail.ru https://nominatim.openstreetmap.org https://photon.komoot.io https://api.open-meteo.com https://api.weather.gov https://statsapi.mlb.com https://api.seatgeek.com https://api.water.noaa.gov https://waterservices.usgs.gov https://in.carsprogram.org https://publicapi.ohgo.com https://quickstats.nass.usda.gov https://commons.wikimedia.org https://graph.mapillary.com https://vpic.nhtsa.dot.gov https://cdn.jsdelivr.net https://huggingface.co https://*.huggingface.co https://*.hf.co; object-src 'none'; base-uri 'none'; form-action 'self'" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self' apexnav:; script-src 'self' apexnav: 'sha256-T9bd8DqbV4oB81dudC7GdOCWsT34Vu/CFyl89RMZ9P4=' 'sha256-G7s/ZI+Hqrfc4DqbB6EANJJLmUmhNK06PizQ1LlsG84=' https://cdn.jsdelivr.net 'wasm-unsafe-eval'; worker-src 'self' apexnav: blob:; child-src 'self' apexnav: blob:; style-src 'self' apexnav: 'unsafe-inline'; font-src 'self' apexnav: data:; img-src 'self' apexnav: data: blob: https://tiles.openfreemap.org https://s3.amazonaws.com https://basemap.nationalmap.gov; media-src 'self' apexnav: data: blob:; connect-src 'self' apexnav: data: blob: https://apexnav.senftns.workers.dev wss://apexnav.senftns.workers.dev https://tiles.openfreemap.org https://basemap.nationalmap.gov https://s3.amazonaws.com https://valhalla1.openstreetmap.de https://router.project-osrm.org https://overpass-api.de https://overpass.private.coffee https://overpass.kumi.systems https://maps.mail.ru https://nominatim.openstreetmap.org https://photon.komoot.io https://api.open-meteo.com https://api.weather.gov https://statsapi.mlb.com https://api.seatgeek.com https://api.water.noaa.gov https://waterservices.usgs.gov https://in.carsprogram.org https://publicapi.ohgo.com https://quickstats.nass.usda.gov https://commons.wikimedia.org https://graph.mapillary.com https://vpic.nhtsa.dot.gov https://cdn.jsdelivr.net https://huggingface.co https://*.huggingface.co https://*.hf.co; object-src 'none'; base-uri 'none'; form-action 'self'" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
   <title>Vetta · Log</title>
   <link rel="icon" href="brand/mark.svg" type="image/svg+xml" />
@@ -544,7 +544,9 @@
     // ---------------------------------------------------------------------
     // Shared helpers
     // ---------------------------------------------------------------------
-    const fmtS = (s) => (s == null ? '--' : `${s > 0 ? '+' : ''}${s.toFixed(2)} s`);
+    // to a tenth, as the drive page (drive_view.js fmtD): a phone's GPS times a corner no finer than that
+    const fmtS = (s) => (s == null ? '--' : `${s >= 0.05 ? '+' : s <= -0.05 ? '\u2212' : ''}${Math.abs(s).toFixed(1)} s`);
+    const slower = (s) => (Math.abs(s) < 0.05 ? 'level' : `${Math.abs(s).toFixed(1)} s ${s > 0 ? 'slower' : 'quicker'}`);
     const cls = (s) => (s == null || Math.abs(s) < 0.05 ? '' : s < 0 ? 'gain' : 'loss');
     const mph = (v) => (v == null ? '--' : Math.round(v * MPH));
     const ft = (m) => (m == null ? '--' : `${Math.round(m * (ApexUnits.metric() ? 1 : 3.28084))}`);   // feet or metres (U-22)
@@ -815,7 +817,7 @@
       $('historyCards').hidden = $('historyPanel').hidden = !drives.length;
       // the hero (REVIEW.md roadmap 13): your latest Vetta Score, big, with its road; the best one quietly under it
       $('historyCards').innerHTML = `<div class="hero-score"><b>${latest ? latest.ds.score : UNK}</b><small>/1000</small></div>`
-        + `<p class="hero-what">Latest Vetta Score${latest ? ` · <span></span> · ${dateLabel(latest)}` : ''}</p>`
+        + `<p class="hero-what">Latest Vetta Score${latest ? ` · <span></span> · ${dateLabel(latest).replace(/, \d{1,2}:\d{2}(\s?[AP]M)?$/i, '')}` : ''}</p>`   // the day, not the minute: one line
         + (best && best !== latest ? `<p class="hero-best">Best ${best.ds.score} · <span></span></p>` : '');
       if (latest) $('historyCards').querySelector('.hero-what span').textContent = latest.name;   // names are user text
       if (best && best !== latest) $('historyCards').querySelector('.hero-best span').textContent = best.name;
@@ -1374,7 +1376,7 @@
         const tul = Inst.tulipSVG({ type: 'corner', dir: n.dir, severity: n.severity, turnRad: n.turn_rad, mods: n.mods }, C.panelInk, C.accent).replace('class="tulip"', 'class="tul"');
         const pair = (fa, fb) => `${fa}<span class="sub">${b ? fb : '--'}</span>`;
         return `<tr class="${cc.stopped ? 'stopped' : ''}"><td>${k + 1}</td><td class="l">${tul} <b>${cc.code}</b> <span class="sub">${cc.call}${cc.stopped ? ' · stop' : ''}</span></td>
-          <td>${a.time_s.toFixed(2)}</td><td>${b ? b.time_s.toFixed(2) : '--'}</td><td class="${cc.stopped ? '' : cls(cc.delta_s)}">${fmtS(cc.delta_s)}</td>
+          <td>${a.time_s.toFixed(1)}</td><td>${b ? b.time_s.toFixed(1) : '--'}</td><td class="${cc.stopped ? '' : cls(cc.delta_s)}">${fmtS(cc.delta_s)}</td>
           <td>${pair(mph(a.entry_mps), b && mph(b.entry_mps))}</td><td>${pair(mph(a.min_mps), b && mph(b.min_mps))}</td><td>${pair(mph(a.exit_mps), b && mph(b.exit_mps))}</td>
           <td>${pair(ft(a.brake_m), b && ft(b.brake_m))}</td><td>${pair(a.peak_lat_g.toFixed(2), b && b.peak_lat_g.toFixed(2))}</td>
           <td>${pair(Math.round(a.envelope_use * 100) + '%', b && Math.round(b.envelope_use * 100) + '%')}</td></tr>`;
@@ -1505,7 +1507,7 @@
       $('dvRoadChart').innerHTML = `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Score on this road over time">${grid}<path d="${line}" fill="none" stroke="${C.accent}" stroke-width="2"/>${dots}</svg>`;
       const first = sc[0], last = sc[sc.length - 1], gain = last ? last.score - first.score : 0;
       $('dvRoadTable').innerHTML = '<tr><th class="l">Drive</th><th>Score</th><th>Corners</th><th class="l">vs this drive</th></tr>' + same.map(o =>
-        `<tr class="${o.self ? 'best' : ''}"><td class="l"><b></b><span class="sub">${o.dateLabel}</span></td><td><span class="score">${o.score ?? UNK}</span></td><td>${o.corners ?? UNK}</td><td class="l">${o.self ? 'this drive' : o.matched ? `${fmtS(o.delta_s)} on ${o.matched} corners (positive = it was slower)` : '--'}</td></tr>`
+        `<tr class="${o.self ? 'best' : ''}"><td class="l"><b></b><span class="sub">${o.dateLabel}</span></td><td><span class="score">${o.score ?? UNK}</span></td><td>${o.corners ?? UNK}</td><td class="l">${o.self ? 'this drive' : o.matched ? `${o.delta_s == null ? '--' : slower(o.delta_s)} on ${o.matched} corner${o.matched === 1 ? '' : 's'}` : '--'}</td></tr>`
       ).join('') + `<tr><td class="l" colspan="4"><span class="note">${sc.length > 1 ? `Score ${gain >= 0 ? 'up' : 'down'} ${Math.abs(gain)} points from the first to the latest drive on this road.` : ''}</span></td></tr>`;
       $('dvRoadTable').querySelectorAll('tr td.l b').forEach((b, i) => { if (same[i]) b.textContent = same[i].name; });
     }

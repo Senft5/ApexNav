@@ -38,6 +38,10 @@ export async function rateCheck(req: Request, env: Env, path: string): Promise<v
     return;
   }
   if (!env.WRITE_LIMIT) return;
+  // Keyed per session only when the session is real: a made-up bearer token or cookie would otherwise get a fresh key on
+  // every request and slip past the per-IP limit on the signed-out writes (/api/errors, /api/app-health, /api/feedback).
   const session = await sessionHash(req);
-  if (!(await env.WRITE_LIMIT.limit({ key: session ? `s:${session}` : `ip:${ip}` })).success) throw new HttpError(429, "rate_limited");
+  const live = session && await env.DB.prepare("SELECT 1 FROM sessions WHERE id_hash = ? AND expires_at > datetime('now')")
+    .bind(session).first();
+  if (!(await env.WRITE_LIMIT.limit({ key: live ? `s:${session}` : `ip:${ip}` })).success) throw new HttpError(429, "rate_limited");
 }

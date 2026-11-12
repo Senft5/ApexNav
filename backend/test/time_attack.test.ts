@@ -111,6 +111,9 @@ describe("time attack", () => {
     expect([t.circuit, t.make.seed]).toEqual([null, seedOf(await monday(), CELL, 1)]);
     expect((await api(b, "POST", "/api/timeattack/circuit", { cell: CELL, seed: t.make.seed, geom: square().slice(0, 30) })).status).toBe(400);
     expect((await api(b, "POST", "/api/timeattack/circuit", { cell: CELL, seed: t.make.seed, geom: [[1, 2]] })).status).toBe(400);
+    await env.DB.prepare("UPDATE members SET joined_at = datetime('now') WHERE user_id = ?").bind(b.id).run();   // a new account can't set it
+    expect((await api(b, "POST", "/api/timeattack/circuit", { cell: CELL, seed: t.make.seed, geom: square() })).status).toBe(403);
+    await env.DB.prepare("UPDATE members SET joined_at = datetime('now', '-30 days') WHERE user_id = ?").bind(b.id).run();
     const made = await json(api(b, "POST", "/api/timeattack/circuit", { cell: CELL, seed: t.make.seed, name: "  <b>x</b>\n", geom: square() }));
     expect([made.kept, made.circuit.name]).toEqual([true, "bx/b"]);
     t = await ta(a);
