@@ -7224,6 +7224,24 @@ flow('Stages with no stage yet: Mark a stage opens the marker right there on you
   check(m.tab && m.open && m.shown && m.drive === 'mk1', 'still on Stages, the marker open on the drive: ' + JSON.stringify(m));
 });
 
+flow('Compare with a single drive: one line says it needs two, no empty panels; with two it draws them (free roamer B, 2026-11-12)', async (page, base) => {
+  await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); } catch (_) {} });
+  await page.goto(base + '/analysis.html');
+  await page.waitForFunction(() => window.apexLogDebug && window.apexLogDebug.loaded() && window.ApexRecording);
+  await storeDashDrive(page, 'cp1', 'Compare road');
+  const look = async () => {
+    await page.goto(base + '/analysis.html?tab=compare');
+    await page.waitForFunction(() => window.apexLogDebug && window.apexLogDebug.loaded() && document.querySelector('#cards').textContent.trim());
+    return page.evaluate(() => ({ cards: document.getElementById('cards').textContent.trim(), road: document.getElementById('cmpRoad').hidden,
+      corners: document.getElementById('cmpCorners').hidden, pick: document.querySelector('.compare-pick').hidden }));
+  };
+  const one = await look();
+  check(/needs two drives/.test(one.cards) && one.road && one.corners && one.pick, 'one drive: one line, nothing empty under it: ' + JSON.stringify(one));
+  await storeDashDrive(page, 'cp2', 'Compare road');
+  const two = await look();
+  check(/Shared road/.test(two.cards) && !two.road && !two.corners && !two.pick, 'two drives: the comparison is drawn: ' + JSON.stringify(two));
+});
+
 flow('the drive page\'s map: with no map to be had the picture keeps its blank panel; MapLibre loads only for it (TestFlight 15)', async (page, base) => {
   await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); } catch (_) {} });
   await page.goto(base + '/analysis.html');

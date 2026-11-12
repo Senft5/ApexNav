@@ -855,11 +855,18 @@
     async function renderCompare() {
       const a = $('selA').value, b = $('selB').value, run = ++compareRun;
       const B = summaryOf(b);
-      if (!summaryOf(a) || !B || a === b) { $('cards').innerHTML = '<p class="note">Pick two different drives.</p>'; return; }
+      // 2026-11-12 (free roamer B): with nothing to compare, one line says why, and the empty Road, Gap and Corner panels
+      // (and, with a single drive, the two pickers) are not drawn
+      const none = () => {
+        $('cards').innerHTML = `<p class="note" style="grid-column:1/-1">${drives.length < 2 ? 'Compare needs two drives. Drive this road again and it lands here.' : 'Pick two different drives.'}</p>`;
+        $('cmpRoad').hidden = $('cmpCorners').hidden = true; document.querySelector('.compare-pick').hidden = drives.length < 2;
+      };
+      if (!summaryOf(a) || !B || a === b) { none(); return; }
       const [A, res] = await Promise.all([full(a), ApexAnalysis.job('compare', { a, b })]);
       if (run !== compareRun) return;                                    // another pair picked meanwhile
       const r = res && res.r;
-      if (!A || !r) { $('cards').innerHTML = '<p class="note">Pick two different drives.</p>'; return; }
+      if (!A || !r) { none(); return; }
+      $('cmpRoad').hidden = $('cmpCorners').hidden = document.querySelector('.compare-pick').hidden = false;
       const c = (v, label, extra, k = '') => `<div class="card"><b class="${k}">${v}</b><span>${label}</span>${extra ? `<em>${extra}</em>` : ''}</div>`;
       $('cards').innerHTML =
         c(ApexUnits.long(r.overlap_m), 'Shared road', `${A.name} ∩ ${B.name}`) +
