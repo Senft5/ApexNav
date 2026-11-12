@@ -22,6 +22,24 @@ nothing at all. Each run now records itself in `cron_runs` (migration 0055); `GE
 issue titled "ApexNav: Weekly backup not running" when the backup is over 8 days 6 hours old or its latest run threw (the
 sweep: 2 days 6 hours). A job never recorded passes, so the issue can't open before the first Monday after deploy.
 Undo: drop the two checks in tools/status_check.py; `runCron` can stay.
+## 2026-11-12 (ui-round-three): the website's page uses the app's look and shows today's app (claude/project-thread-5sbga7)
+
+about.html showed screenshots of the app from before the redesign (the old tab bar, boxed keys) and set its type in the
+system face. It now loads the app's typefaces, sets its titles like the app, and shows two fresh screenshots: the Dry Ridge
+replay and an example crew's page. The words are the same, except the screenshots' descriptions. Undo: revert
+web/about.html, web/brand/shots/*.png and tools/landing_shots.js.
+
+
+## 2026-11-12 Avoid cameras reads our own camera list in Ohio, Kentucky and Indiana (claude/project-thread-39xbx9)
+
+Nate: "the camera server always says it's down". The phone asked the public Overpass servers for cameras, and they time
+out or refuse it when busy (all four timed out when the Worker asked them, 2026-11-12). Now a weekly job
+(.github/workflows/cameras.yml) takes plate readers and speed cameras from the same Geofabrik extracts as our roads and
+commits one file to the graph-data branch. The Worker relays it at `GET /api/cameras/v1/region.json`, and web/cameras.js
+reads it before Overpass. Calls: a tile counts as ours only if the state outlines hold it whole, so a border tile isn't
+wrongly "no cameras"; outside the region and when our file can't be read, the phone asks Overpass as before (now with
+maps.mail.ru as a fourth server). The request carries no position: it's the same file for everyone. Undo: drop the
+`regionOnce` lookup in web/cameras.js `load` (pass `region: null`), the route in backend/src/index.ts and the workflow.
 ## 2026-11-12 (ui-round-three): the arrival-time page your friends open looks like Vetta (claude/project-thread-5sbga7)
 
 The page behind a shared ETA link was plain system text. It now uses the app's type and paper: the minutes set large

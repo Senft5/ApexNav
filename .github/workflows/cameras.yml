@@ -1,0 +1,63 @@
+name: Cameras (Avoid cameras, OH+KY+IN)
+
+# Our own camera list for the region (tools/graph_etl/cameras.py; web/cameras.js): plate readers and fixed speed cameras
+# from Geofabrik's ohio, kentucky and indiana extracts, committed to the graph-data branch as cameras/v1/region.json and
+# relayed by the Worker at /api/cameras/v1/region.json (backend/src/graph.ts). The public Overpass servers the phone
+# used to ask time out or refuse it when busy; inside the region the phone now reads this. Weekly (Monday), or by hand.
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "17 7 * * 1"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: cameras
+  cancel-in-progress: false
+
+env:
+  STATES: "ohio kentucky indiana"
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Week (the graph build's cache key)
+        id: week
+        run: echo "w=$(date -u +%G-%V)" >> "$GITHUB_OUTPUT"
+      - name: Restore the extracts (from this week's graph build, if any)
+        id: cache
+        uses: actions/cache/restore@v4
+        with:
+          path: .graph_cache/osm
+          key: graph-osm-${{ steps.week.outputs.w }}
+      - name: Download the extracts
+        if: steps.cache.outputs.cache-hit != 'true'
+        run: |
+          mkdir -p .graph_cache/osm
+          for s in $STATES; do
+            curl -fSL --retry 5 --retry-delay 10 -o ".graph_cache/osm/$s.osm.pbf" "https://download.geofabrik.de/north-america/us/$s-latest.osm.pbf"
+          done
+      - name: Outlines and cameras
+        run: |
+          sudo apt-get update -qq && sudo apt-get install -y -qq osmium-tool
+          mkdir -p work
+          for s in $STATES; do
+            curl -fSL --retry 5 --retry-delay 10 -o "work/$s.poly" "https://download.geofabrik.de/north-america/us/$s.poly"
+            osmium tags-filter --overwrite ".graph_cache/osm/$s.osm.pbf" n/surveillance:type=ALPR n/highway=speed_camera -o "work/$s.cams.pbf"
+            osmium export --overwrite "work/$s.cams.pbf" -f geojsonseq --add-unique-id=type_id -o "work/$s.cams.geojsonseq"
+          done
+          python -m tools.graph_etl.cameras --out out/cameras/v1/region.json --build "${{ steps.week.outputs.w }}" \
+            --poly work/*.poly --cams work/*.cams.geojsonseq | tee -a "$GITHUB_STEP_SUMMARY"
+          ls -la out/cameras/v1
+      - name: Commit to the graph-data branch
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          bash tools/graph_etl/publish_data.sh out/cameras/v1 cameras/v1 "cameras: $(date -u +%F) (build ${{ steps.week.outputs.w }})"
