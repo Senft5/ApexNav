@@ -3082,7 +3082,7 @@
         : (Array.isArray(t.roughG) && t.roughG.length && t.roughG.some(Number.isFinite))
           ? Math.round(t.roughG.filter(Number.isFinite).length / t.roughG.length * 100)
           : null;
-      const feel = mCov != null && mCov > 0 ? `Road feel ${mCov}% driven` : 'Road feel after first drive';
+      const feel = mCov != null && mCov > 0 ? `Road feel ${mCov}% driven` : '';   // none measured: the dials' dashes say so, no footnote
       const missed = Array.isArray(t.unavoided) && t.unavoided.length ? `Couldn't avoid ${t.unavoided.map(k => FunRoute.AVOID_LABELS[k] || k).join(' or ')} · ` : '';
       // Avoid police reports: the live reports near this route, from the reports as they are now (they can land after the
       // plan: the card is painted again then, policeLanded); none known: nothing said
@@ -3097,7 +3097,8 @@
       // your taste (taste.js) when it moved this route up: the word for what you lean to, never a number
       const tasteLine = (() => { try { const f = t.tasteBonus >= 1 && window.ApexTaste ? ApexTaste.fit(ApexTaste.load(localStorage)) : null;
         if (!f) return ''; const k = ApexTaste.AXES.slice().sort((a, b) => f[b] - f[a])[0]; return `Suits your taste for ${{ tech: 'technical roads', flow: 'flowing roads', smooth: 'smooth surfaces' }[k]} · `; } catch (_) { return ''; } })();
-      $('routeCardSub').textContent = `${tasteLine}${carLine ? carLine + ' · ' : ''}${missed}${missedPolice}${around}${towns}${sun}${cams}${feel}`;
+      $('routeCardSub').textContent = `${tasteLine}${carLine ? carLine + ' · ' : ''}${missed}${missedPolice}${around}${towns}${sun}${cams}${feel}`.replace(/ · $/, '');
+      $('routeCardSub').hidden = !$('routeCardSub').textContent;
       $('routeCardWhy').textContent = t.why || '';
       $('routeCardWhy').hidden = !t.why;
       // There and back: a trip to a place (not a round trip already, no stop of yours on it), planned and not driving
