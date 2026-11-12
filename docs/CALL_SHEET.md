@@ -33,6 +33,12 @@ Stage discovery (the roads Explore, loops and routes pick from) now lifts a road
 crests by up to 1.5 points, and drops one by 1.5 points for each crowd-verified bump on it, at most 4.5 (a confirmed
 hand-reported hazard costs 3). The sizes are a judgment call: a crested road wins against a flat one half a point better;
 two verified bumps send it back. Undo: `CREST_MAX` and `BUMP_PTS` 0 in web/measured_stages.js.
+## 2026-11-11 (deepest analysis, PR 15): an uneven corner names one skill, the widest gap (claude/project-thread-gd7nre)
+
+The road list names the one technique credit that differs most between your cleanest and least clean pass at an uneven
+corner, so "where" comes with "what". One skill, not a list: the biggest gap is the clearest thing to try next time; a
+corner whose least clean pass is no lower on any credit names none. Undo: revert the PR.
+
 ## 2026-11-11 (places by name, 3): ask Siri for the next gas station or café (claude/project-thread-me97iw)
 
 Two new Siri phrases: "Where's the next gas station in Vetta" and "Where's the next café in Vetta" (also "Next fuel" /

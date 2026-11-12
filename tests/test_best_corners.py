@@ -156,6 +156,9 @@ def test_road_book_every_corner_of_a_road():
               {"id": "b", "at": "2026-06-01T09:00", "corners": [c(4, 92), c(305, 70), c(603, 90), c(900, 99)]},
               {"id": "c", "at": "2026-07-01T09:00", "corners": [c(-6, 85), c(298, 75), c(598, 88, hx=-1.0), c(1, 91)]},
               {"id": "d", "at": None, "corners": [c(602, 60), c(1200, None)]}]
+    full = {k: 1.0 for k in dp.SKILLS}
+    drives[0]["corners"][0]["credits"] = full                                                   # a's 90 at 600 m
+    drives[3]["corners"][0]["credits"] = {**full, "brake": 0.8, "arc": 0.4, "exit": None}      # d's 60 there: the arc
     ref = [[x, 0.0] for x in range(0, 1001, 50)]
     b = dp.road_book(drives, ref)
     # 0 m: a 80, b 92, c 91 (its cleanest of two) -> b; 300 m: 70, 70, 75 -> c; 600 m: a 90, b 90, d 60 -> a (the older of
@@ -163,9 +166,11 @@ def test_road_book_every_corner_of_a_road():
     assert [(k["x"], k["passes"], k["record"], k["by"], k["at"], k["size"]) for k in b["corners"]] == [
         (0, 3, 92, "b", "2026-06-01T09:00", "tight"), (300, 3, 75, "c", "2026-07-01T09:00", "fast"), (600, 3, 90, "a", "2026-05-01T09:00", "tight")]
     assert b["fewer"] == 2 and b["drives"] == 4
-    assert [k["low"] for k in b["corners"]] == [80, 70, 60] and b["uneven"] == [3]     # 600 m: 90 down to 60; 0 m spans 12 only
+    assert [k["low"] for k in b["corners"]] == [80, 70, 60] and b["uneven"] == [3]
+    assert [k["why"] for k in b["corners"]] == [None, None, "arc"]                     # only the uneven corner says why     # 600 m: 90 down to 60; 0 m spans 12 only
     assert [k["x"] for k in dp.road_book(drives)["corners"]] == [600, 0, 300]          # with no ref: as first seen
     assert dp.road_book([]) == {"corners": [], "fewer": 0, "drives": 0, "uneven": []}
+    assert dp._why({"credits": full}, {"credits": full}) is None and dp._why({}, {"credits": full}) is None
     if NODE is None:
         return
     runner = ("const P=require(process.argv[1]+'/web/driver_profile.js');const [d,r]=JSON.parse(require('fs').readFileSync(0,'utf8'));"
@@ -178,4 +183,5 @@ def test_road_book_every_corner_of_a_road():
     assert w["work"] == "Least even: corner 3, where your passes differ the most."
     assert [(r["n"], r["what"], r["record"], r["low"], r["uneven"], r["by"], r["on"], r["passes"]) for r in w["rows"]] == [
         (1, "Tight left", 92, 80, False, "b", "06-01", 3), (2, "Fast left", 75, 70, False, "c", "07-01", 3), (3, "Tight left", 90, 60, True, "a", "05-01", 3)]
+    assert [r["why"] for r in w["rows"]] == [None, None, "one steering arc"]
     assert out[2] == "Least even: corners 3 and 1, where your passes differ the most." and out[3] is None
