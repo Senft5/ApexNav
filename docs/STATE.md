@@ -5,6 +5,12 @@
 - backend/src/service_check.ts: POST /api/ops/service-check (into error_counts kind 'service', no migration), GET /api/ops/service-check, GET /api/ops/service-check/server (config booleans, graph-data branch, Overpass from Cloudflare).
 - Read Nate's results: `SELECT day, source, message, n, stack, last_at FROM error_counts WHERE kind = 'service' ORDER BY last_at DESC` on apexnav-db.
 - Next: once results arrive, pass camera / router findings to the Routing thread; consider a probe for the convoy socket.
+## Session 2026-11-11 (time attack placement): where the weekly loop shows (claude/project-thread-uwmi4e, after #433)
+- Done: the Where to? row names the week's loop and your place (time_attack.js summaryLine and peek). Drive it plans the
+  loop as the route (cockpit driveLoop). The Log says your place after a sync (runs returns `places`, placeLine). For you's
+  `passed` names the loop and skips taken-down loops.
+- Tests: backend time_attack and inbox, pytest test_time_attack (12), and the e2e time attack flow (row line, Drive it).
+- Next: the home deck's weekly loop is on Roamer C's branch claude/roam-c-ta-placement.
 ## Session 2026-11-12 (deepest analysis, PR 19): the Log names the roads where your passes differ most (claude/project-thread-gd7nre)
 
 - `web/driver_profile.js` `roadsToWork(list)`: from each road's book, the roads with uneven corners, most first, at most
