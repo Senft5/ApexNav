@@ -25,7 +25,7 @@ def test_every_plan_carries_the_closures_even_with_no_avoid_switch_on():
 def test_closures_are_members_only_and_never_hold_a_plan_long():
     b = body("closedForTrip")
     assert "memberNow()" in b and "return [];" in b
-    assert "hazardsCover(points)" in b and "RouteLoading.optional(closuresAround(points), POLICE_WAIT_MS)" in b
+    assert "if (hazardsCover(points)) return closuresAround(points);" in b and "RouteLoading.optional(closuresAround(points), POLICE_WAIT_MS)" in b
 
 
 def test_loops_search_with_the_lists_round_their_start():
@@ -42,3 +42,27 @@ def test_the_loop_box_stays_inside_the_camera_maps_limit():
     assert "Math.min(35, km / 3)" in b
     # 35 km each way at 50 degrees north: under FunRoute.CAMERA_BOX_DEG (1.0) in latitude and longitude
     assert 2 * 35 / 110.54 < 1.0 and 2 * 35 / (111.32 * math.cos(math.radians(50))) < 1.0
+
+
+def test_the_card_says_when_a_route_still_passes_a_reported_closure():
+    i = SRC.index("function closedOnCard(")
+    b = SRC[i:SRC.index("\n    }\n", i)]
+    assert "ApexHazardReports.closuresFor(list, ends)" in b and "passesNear(" in b and ", pts, 40)" in b
+    assert "t.id === 'route_dest' || /^loop_/.test(t.id || '')" in b
+    assert "const closed = closedOnCard(t) ? 'Passes a reported road closure · ' : '';" in SRC
+    assert "${closed}${missed}" in SRC
+    # a slow hazards answer paints the card again for everyone, not only with Avoid police on
+    assert "if (plannedRoute && !driveActive && typeof renderRouteCard === 'function')" in SRC
+
+
+def test_a_closure_that_lands_mid_drive_is_offered_with_go_round():
+    i = SRC.index("function closedAheadTick(")
+    b = SRC[i:SRC.index("\n    }\n", i)]
+    assert "ApexHazardReports.closuresFor(reported.list" in b and "onRouteAhead(t, routeWatch.bestM, pts, { m: 40, minM: 500 })" in b
+    assert "label: 'Go round'" in b and "avoid.police" not in b, "no switch: always on"
+    g = SRC[SRC.index("async function goRoundClosed("):SRC.index("// Traffic ahead (iOS app only")]
+    assert "avoid: { ...avoid, closed: pts }" in g and "passesNear(r.coords, [hit], 40)" in g
+    assert "try { closedAheadTick(me); }" in SRC
+    # the router's exclusions take the drive's own closures too (one that landed after the trip's were fetched)
+    c = SRC[SRC.index("async function closuresAround("):SRC.index("async function closuresAround(") + 700]
+    assert "reported.list.filter((h) => h && h.kind === 'closure')" in c

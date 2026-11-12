@@ -182,34 +182,44 @@ export async function runs(env: Env, v: Viewer, req: Request) {
   if (!v.handle) throw new HttpError(409, "handle_required");
   const b = await body<{ runs?: unknown }>(req);
   if (!Array.isArray(b.runs) || b.runs.length > 20) throw new HttpError(400, "bad_runs");
-  let accepted = 0, refused = 0;
-  const places: { cell: string; week: string; name: string }[] = [];
-  for (const raw of b.runs as Record<string, unknown>[]) {
+  // three batches whatever the count (a batch is one of Workers Free's 50 D1 queries per invocation; two queries per run and
+  // one per board went past it): every run's loop, then the times that count, then your place on each board
+  const want = (b.runs as Record<string, unknown>[]).map((raw) => {
     const segId = str(raw && raw.segment_id, "segment_id", 1, 64), time = int(raw.time_s, "time_s", 10, 36000);
     const score = raw.driver_score == null ? null : int(raw.driver_score, "driver_score", 0, 1000);
     const day = str(raw.driven_on, "driven_on", 10, 10);
     if (!DATE_RE.test(day)) throw new HttpError(400, "bad_driven_on");
-    const c = await first<{ cell: string; week: string; length_m: number; name: string | null }>(env,
-      `SELECT w.cell, w.week, s.length_m, w.name FROM segments s JOIN ta_weeks w ON w.segment_id = s.origin_id AND w.week = ${WEEK} AND w.geom IS NOT NULL AND w.removed = 0
-        JOIN ta_joins j ON j.week = w.week AND j.cell = w.cell AND j.user_id = ?2
-        WHERE s.id = ?1 AND s.owner = ?2 AND ?3 BETWEEN w.week AND date(w.week, '+6 days') AND ?3 <= date('now', '+1 day')`, segId, v.id, day);
+    return { segId, time, score, day };
+  });
+  if (!want.length) return { accepted: 0, refused: 0, places: [] };
+  const found = await env.DB.batch<{ cell: string; week: string; length_m: number; name: string | null }>(want.map((r) => env.DB.prepare(
+    `SELECT w.cell, w.week, s.length_m, w.name FROM segments s JOIN ta_weeks w ON w.segment_id = s.origin_id AND w.week = ${WEEK} AND w.geom IS NOT NULL AND w.removed = 0
+      JOIN ta_joins j ON j.week = w.week AND j.cell = w.cell AND j.user_id = ?2
+      WHERE s.id = ?1 AND s.owner = ?2 AND ?3 BETWEEN w.week AND date(w.week, '+6 days') AND ?3 <= date('now', '+1 day')`).bind(r.segId, v.id, r.day)));
+  let accepted = 0, refused = 0;
+  const places: { cell: string; week: string; name: string }[] = [];
+  const stmts: D1PreparedStatement[] = [];
+  for (const [i, r] of want.entries()) {
+    const c = found[i].results[0];
     if (!c) continue;
-    if (c.length_m / time > MAX_AVG_MS) { refused++; continue; }
-    await env.DB.prepare(`INSERT INTO ta_entries (week, cell, user_id, time_s, driver_score, driven_on) VALUES (?1, ?2, ?3, ?4, ?5, ?6)
+    if (c.length_m / r.time > MAX_AVG_MS) { refused++; continue; }
+    stmts.push(env.DB.prepare(`INSERT INTO ta_entries (week, cell, user_id, time_s, driver_score, driven_on) VALUES (?1, ?2, ?3, ?4, ?5, ?6)
        ON CONFLICT (week, cell, user_id) DO UPDATE SET time_s = ?4, driver_score = ?5, driven_on = ?6, updated_at = datetime('now') WHERE ?4 < ta_entries.time_s`)
-      .bind(c.week, c.cell, v.id, time, score, day).run();
+      .bind(c.week, c.cell, v.id, r.time, r.score, r.day));
     accepted++;
     if (!places.some((p) => p.cell === c.cell)) places.push({ cell: c.cell, week: c.week, name: c.name || "This week's loop" });
   }
+  if (stmts.length) await env.DB.batch(stmts);
   // your place on each board you just sent to, as the board shows it (ties share a place, blocked drivers left out)
-  const out = [];
-  for (const p of places) {
-    const r = await first<{ time_s: number; place: number; of: number; best: number }>(env,
+  const res = places.length ? await env.DB.batch<{ time_s: number; place: number; of: number; best: number }>(places.map((p) => env.DB.prepare(
       `SELECT me.time_s,
          (SELECT COUNT(*) FROM ta_entries e WHERE e.week = me.week AND e.cell = me.cell AND e.time_s < me.time_s AND ${NO_BLOCK("e.user_id", "?3")}) + 1 AS place,
          (SELECT COUNT(*) FROM ta_entries e WHERE e.week = me.week AND e.cell = me.cell AND (e.user_id = ?3 OR ${NO_BLOCK("e.user_id", "?3")})) AS of,
          (SELECT MIN(e.time_s) FROM ta_entries e WHERE e.week = me.week AND e.cell = me.cell AND (e.user_id = ?3 OR ${NO_BLOCK("e.user_id", "?3")})) AS best
-       FROM ta_entries me WHERE me.week = ?1 AND me.cell = ?2 AND me.user_id = ?3`, p.week, p.cell, v.id);
+       FROM ta_entries me WHERE me.week = ?1 AND me.cell = ?2 AND me.user_id = ?3`).bind(p.week, p.cell, v.id))) : [];
+  const out = [];
+  for (const [k, p] of places.entries()) {
+    const r = res[k].results[0];
     if (r) out.push({ cell: p.cell, name: p.name, place: r.place, of: r.of, time_s: r.time_s, gap_s: r.time_s - r.best });
   }
   return { accepted, refused, places: out };

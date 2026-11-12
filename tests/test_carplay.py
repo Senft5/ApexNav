@@ -347,7 +347,7 @@ def test_the_phones_one_key_offers_reach_the_car(maps):
     assert maps["offerSame"]["short"] == "" and maps["offerSame"]["key"] == "Skip Cherohala…" and maps["offerSame"]["seconds"] == 20
     assert maps["offerNone"] == [None, None, None, 5]
     js = cockpit_source()
-    assert js.count("offerKey(`") == 2, "the police report ahead and the late-for-home offers"
+    assert js.count("offerKey(`") == 3, "the police report ahead, the road closure ahead and the late-for-home offers"
     assert "m.action === 'offer' && car.offer && m.id === car.offer.id && performance.now() < car.offer.until" in js
     assert "carPost({ kind: 'offerDone', id })" in js
     swift = open(os.path.join(ROOT, "CarPlay", "ApexCarPlay.swift"), encoding="utf-8").read()

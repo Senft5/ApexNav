@@ -74,20 +74,23 @@ export async function rollRepeats(env: Env): Promise<number> {
         AND EXISTS (SELECT 1 FROM crew_members m WHERE m.crew_id = e.crew_id AND m.user_id = e.created_by) LIMIT ${ROLL_MAX}`)
     .all<{ id: string; crew_id: string; created_by: string; title: string; starts_at: string; meet_name: string | null; meet_lat: number; meet_lon: number; route_id: string | null;
       notes: string | null; public: number; regroup: string; repeat_weeks: number; series: string }>()).results;
-  let n = 0;
+  if (!due.length) return 0;
+  // ONE batch whatever the count (a batch is one of Workers Free's 50 D1 queries per invocation; two per drive went past it).
+  // Per drive: claim it, then plan the next one only if this claim won (changes() = 1; another request may have planned it).
+  // A batch is one transaction, so a failure rolls back every claim and the next run tries again; nothing is lost.
+  const stmts: D1PreparedStatement[] = [];
   for (const e of due) {
-    const claim = await env.DB.prepare("UPDATE crew_events SET repeat_weeks = NULL, series_id = ? WHERE id = ? AND repeat_weeks IS NOT NULL").bind(e.series, e.id).run();
-    if (!claim.meta.changes) continue;                               // another request planned it
     const id = randomToken(12);
-    await env.DB.batch([
+    stmts.push(
+      env.DB.prepare("UPDATE crew_events SET repeat_weeks = NULL, series_id = ? WHERE id = ? AND repeat_weeks IS NOT NULL").bind(e.series, e.id),
       env.DB.prepare(`INSERT INTO crew_events (id, crew_id, created_by, title, starts_at, meet_name, meet_lat, meet_lon, route_id, notes, public, lead_id, regroup, repeat_weeks, series_id)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`).bind(id, e.crew_id, e.created_by, e.title, nextStart(e.starts_at, e.repeat_weeks, Date.now()), e.meet_name, e.meet_lat, e.meet_lon,
+        SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ? WHERE changes() = 1`).bind(id, e.crew_id, e.created_by, e.title, nextStart(e.starts_at, e.repeat_weeks, Date.now()), e.meet_name, e.meet_lat, e.meet_lon,
         e.route_id, e.notes, e.public, e.created_by, e.regroup, e.repeat_weeks, e.series),
-      env.DB.prepare("INSERT INTO crew_event_rsvps (event_id, user_id, status) VALUES (?, ?, 'going')").bind(id, e.created_by),
-    ]);
-    n++;
+      env.DB.prepare("INSERT INTO crew_event_rsvps (event_id, user_id, status) SELECT ?, ?, 'going' WHERE changes() = 1").bind(id, e.created_by),
+    );
   }
-  return n;
+  const res = await env.DB.batch(stmts);
+  return res.filter((r, i) => i % 3 === 1 && (r.meta.changes ?? 0) > 0).length;
 }
 
 export async function eventCreate(env: Env, v: Viewer, crewId: string, req: Request) {
