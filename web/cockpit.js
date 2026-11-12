@@ -717,6 +717,7 @@
         const d = p.e.dist_m - state.cursorM;
         p.el.style.display = d > -150 && d < 2500 && (p.e.type !== 'alpr' || state.toggles.lpr) ? 'block' : 'none';
       }
+      declutterSoon();                                                     // the notes' stamps keep the map's pins off them
       // U-85: in a drive only the next fuel stop ahead keeps its stamp (the preview shows them all)
       if (!fuelPins.length) return;                                        // (filled only once a route exists)
       const driving = state.mode === 'live', next = driving && track === plannedRoute ? fuelPins.find((f) => f.m > state.cursorM) : null;
@@ -734,17 +735,19 @@
     const poiDeclutter = { raf: 0, pins: [] };
     const VIEW_NAME_ZOOM = 15;
     function declutterSoon() {
-      if (!poiDeclutter.raf && poiDeclutter.pins.length) poiDeclutter.raf = requestAnimationFrame(declutterPois);
+      if (!poiDeclutter.raf && (poiDeclutter.pins.length || pins.length)) poiDeclutter.raf = requestAnimationFrame(declutterPois);
     }
     function declutterPois() {
       poiDeclutter.raf = 0;
       if (!window.ApexScenic || !ApexScenic.declutter) return;
-      const shown = poiDeclutter.pins.filter((p) => p.el.style.display !== 'none' && p.el.isConnected), c = map.getContainer();
+      // the route notes' stamps (LPR, SPD, a hazard) are `fixed`: always shown, the map's pins kept off them (scenic.js)
+      const notePins = pins.map((p) => ({ marker: p.marker, el: p.el, kind: `note:${p.e.code}`, fixed: true, m: p.e.dist_m }));
+      const shown = poiDeclutter.pins.concat(notePins).filter((p) => p.el.style.display !== 'none' && p.el.isConnected), c = map.getContainer();
       const close = map.getZoom() >= VIEW_NAME_ZOOM;                    // a named viewpoint's name, only where it has room
       for (const p of shown) if (p.kind === 'view' && p.name) { const t = close ? p.name : SCENIC_LABEL.view; if (p.el.textContent !== t) p.el.textContent = t; }
       const keep = ApexScenic.declutter(shown.map((p) => {
         const xy = map.project(p.marker.getLngLat());
-        return { kind: p.kind, named: p.named, m: p.m, x: xy.x, y: xy.y, w: p.el.offsetWidth, h: p.el.offsetHeight };
+        return { kind: p.kind, named: p.named, fixed: !!p.fixed, m: p.m, x: xy.x, y: xy.y, w: p.el.offsetWidth, h: p.el.offsetHeight };
       }), { w: c.clientWidth, h: c.clientHeight });
       shown.forEach((p, i) => { p.el.style.visibility = keep[i] ? '' : 'hidden'; });
     }
