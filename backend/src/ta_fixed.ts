@@ -13,6 +13,7 @@
 import type { Viewer } from "./auth";
 import { Env, HttpError, body, int, str, DATE_RE } from "./util";
 import { establishedSql, reportedSql } from "./reports_sql";
+import { requireOnRoads } from "./loop_check";
 import { BOARD_SIZE, LOOP_KM, MAX_AVG_MS, NO_BLOCK, cellBody, cellParam, checkLoop, hav, nameOf } from "./time_attack";
 
 export const SLOTS = 3;
@@ -114,6 +115,7 @@ export async function fixedMake(env: Env, v: Viewer, req: Request) {
   if (had) return { circuit: { id: had.id, slot, name: had.name, length_m: had.length_m, geom: had.geom }, kept: false };
   if (!now.make || now.make.slot !== slot || b.seed !== now.make.seed) throw new HttpError(409, "stale_seed");
   const loop = checkLoop(b.geom, cell);
+  await requireOnRoads(env, loop.geom);
   if (now.make.avoid.some((p) => hav(p, loop.geom[0]) < APART_M)) throw new HttpError(400, "too_close");
   const id = "ta-" + crypto.randomUUID(), tries = Number(String(now.make.seed).split("|")[3]) || 0;
   const name = typeof b.name === "string" && b.name.trim() ? nameOf(b.name) : "Local loop";
