@@ -89,7 +89,11 @@
     }
     const t = token();
     if (t) headers.authorization = 'Bearer ' + t;
-    return fetch(API_BASE + path, { ...init, headers, credentials: IN_APP ? 'omit' : 'same-origin' });
+    // the browser waits minutes on a dead connection; give up like the app's shell does (30 s), longer for an upload
+    const ms = /^(GET|HEAD)$/i.test(init.method || 'GET') ? 30000 : 90000;
+    const signal = init.signal || (root.AbortSignal && typeof root.AbortSignal.timeout === 'function' ? root.AbortSignal.timeout(ms) : undefined);
+    try { return await fetch(API_BASE + path, { ...init, headers, signal, credentials: IN_APP ? 'omit' : 'same-origin' }); }
+    catch (e) { if (e && e.name === 'TimeoutError') throw new TypeError('Load failed'); throw e; }   // a timeout reads as offline
   }
   /** Does this phone hold a session? (The app keeps it in the Keychain; this is only the page's flag.) */
   const signedIn = () => { try { return !!(localStorage.getItem(SIGNED_KEY) || localStorage.getItem(TOKEN_KEY)); } catch (_) { return false; } };

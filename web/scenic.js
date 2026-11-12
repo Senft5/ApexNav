@@ -135,6 +135,8 @@
    * first, then each time the one farthest from those already kept). A pin that would touch one already shown is hidden
    * (PAD px apart, PAD_SAME between two of a kind), and at most KEEP of a kind are shown on screen at once. Pins off the
    * screen don't count and stay as they are. Returns a boolean per pin, true = shown.
+   * A `fixed` pin (a route note's stamp: a camera, a hazard; walkthrough 2026-11-12, two LPR stamps and a café piled up) is
+   * placed first and always shown, except one on top of another of its own kind (the same word twice); the others keep off it.
    */
   const KIND_RANK = { view: 0, falls: 1, cafe: 2, fuel: 3, charge: 3 }, KEEP = { view: 6, falls: 4, cafe: 4, fuel: 4, charge: 4 }, PAD = 4, PAD_SAME = 24;
   function declutter(pins, view = null) {
@@ -144,10 +146,10 @@
       if (!p || !finite(p.x) || !finite(p.y)) return false;
       return !view || (p.x >= 0 && p.y >= 0 && p.x <= view.w && p.y <= view.h);
     });
-    const order = [];
+    const order = on.filter((i) => list[i].fixed).sort((a, b) => (list[a].m || 0) - (list[b].m || 0));
     for (const kind of Object.keys(KIND_RANK).sort((a, b) => KIND_RANK[a] - KIND_RANK[b])) {
       for (const named of kind === 'view' ? [true, false] : [null]) {
-        const left = on.filter((i) => list[i].kind === kind && (named == null || !!list[i].named === named)).sort((a, b) => (list[a].m || 0) - (list[b].m || 0));
+        const left = on.filter((i) => !list[i].fixed && list[i].kind === kind && (named == null || !!list[i].named === named)).sort((a, b) => (list[a].m || 0) - (list[b].m || 0));
         const kept = [];
         while (left.length) {
           let k = 0;
@@ -160,12 +162,13 @@
         }
       }
     }
-    for (const i of on) if (!(list[i].kind in KIND_RANK)) order.push(i);   // another kind: last, still kept off the others
+    for (const i of on) if (!list[i].fixed && !(list[i].kind in KIND_RANK)) order.push(i);   // another kind: last, still kept off the others
     const placed = [], count = {};
     for (const i of order) {
       const p = list[i], w = finite(p.w) ? p.w : 40, h = finite(p.h) ? p.h : 16;
       const box = { x0: p.x - w / 2, x1: p.x + w / 2, y0: p.y - h / 2, y1: p.y + h / 2, kind: p.kind };
-      const hit = placed.some((b) => { const g = b.kind === box.kind ? PAD_SAME : PAD; return box.x0 < b.x1 + g && b.x0 < box.x1 + g && box.y0 < b.y1 + g && b.y0 < box.y1 + g; });
+      const hit = placed.some((b) => { if (p.fixed && b.kind !== box.kind) return false;
+        const g = b.kind === box.kind ? (p.fixed ? PAD : PAD_SAME) : PAD; return box.x0 < b.x1 + g && b.x0 < box.x1 + g && box.y0 < b.y1 + g && b.y0 < box.y1 + g; });
       if (hit || (count[p.kind] || 0) >= (KEEP[p.kind] || Infinity)) { show[i] = false; continue; }
       placed.push(box); count[p.kind] = (count[p.kind] || 0) + 1;
     }
