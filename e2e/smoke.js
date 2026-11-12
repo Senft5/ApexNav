@@ -1842,6 +1842,18 @@ flow('your roads (panel D-1, R-1, D-2): a road you drove is on the deck and its 
   // the drive's page: Drive it again next to Replay, and it plans the drive on the map
   await page.goto(base + '/analysis.html?tab=drive&drive=yr1');
   await page.waitForSelector('#dvAgain:not([hidden])', { timeout: 15000 });
+  // three keys in one row (Replay, Drive it again, ⋯); Compare, Send the road, Share card and Mark a stage wait in the ⋯ menu
+  const keys = await page.evaluate(() => {
+    const top = (id) => Math.round(document.getElementById(id).getBoundingClientRect().top), vis = (id) => document.getElementById(id).checkVisibility();
+    const sum = document.querySelector('.dv-more > summary');
+    return { row: Math.abs(top('dvReplay') - top('dvAgain')) < 30
+      && Math.abs(sum.getBoundingClientRect().top - top('dvAgain')) < 30, hidden: ['dvCompare', 'dvShare', 'dvCard', 'dvStage'].every((id) => !vis(id)), label: sum.getAttribute('aria-label') };
+  });
+  check(keys.row && keys.hidden && keys.label === 'More for this drive', 'the drive page: three keys in a row, the rest in More: ' + JSON.stringify(keys));
+  await page.click('.dv-more > summary');
+  check(await page.evaluate(() => ['dvCompare', 'dvShare', 'dvCard', 'dvStage'].every((id) => document.getElementById(id).checkVisibility())), 'More opens Compare, Send the road, Share card, Mark a stage');
+  await page.mouse.click(5, 5);
+  check(await page.evaluate(() => !document.querySelector('.dv-more').open), 'a tap outside closes More');
   const n = asked.length;
   await page.click('#dvAgain');
   for (let t = 0; t < 100 && asked.length === n; t++) await page.waitForTimeout(200);   // the map page loads with ?again= and routes it
@@ -2119,6 +2131,10 @@ flow('Dynamic Type (IN-1, GR-2): the route card, plan sheet, end card and the dr
   check(t2 >= 1.5 * t1, `the drive's page grows: title ${t1} -> ${t2}`);
   const logCut = await page.evaluate(CUT('#tab-drive'));
   check(!logCut.length, 'the drive page at 2x cuts nothing: ' + JSON.stringify(logCut));
+  await page.click('.dv-more > summary');                                 // its ⋯ menu, open, fits too
+  const moreCut = await page.evaluate(CUT('#tab-drive'));
+  check(!moreCut.length, 'the drive page\'s ⋯ menu at 2x cuts nothing: ' + JSON.stringify(moreCut));
+  await page.click('.dv-more > summary');
   // GR-2: the Garage at the largest size fits too (its sections no longer set a width wider than the screen)
   await page.goto(base + '/index.html?view=garage');
   await page.waitForSelector('#garageGear', { state: 'visible' });
