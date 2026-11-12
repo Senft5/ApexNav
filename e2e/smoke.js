@@ -8299,15 +8299,20 @@ flow('plan flow (e, f) a level change and an alternative are one tap or swipe ea
   await page.evaluate(() => { const f = document.getElementById('routeCardFun'), sp = document.createElement('div'); sp.id = 'lateSpacer'; sp.style.height = '90px'; f.parentNode.insertBefore(sp, f); });
   // (you scroll: the wheel, then the scroll; that ends the last change's hold)
   await page.evaluate(() => { const b = document.getElementById('planBody'); b.dispatchEvent(new WheelEvent('wheel', { bubbles: true })); b.scrollTop = Math.min(160, b.scrollHeight - b.clientHeight); });
-  // and the page scrolls the card on its own meanwhile, as CI's did: the hold puts it back
-  await page.evaluate(() => setTimeout(() => { document.getElementById('planBody').scrollTop += 40; }, 250));
-  const swL0 = await page.evaluate((sel) => document.querySelector(sel).getBoundingClientRect().top, card('fun'));
-  await page.evaluate(() => setTimeout(() => { const sp = document.getElementById('lateSpacer'); if (sp) sp.remove(); }, 400));
+  // and the page scrolls the card on its own meanwhile, as CI's did: the hold puts it back. Where the card is, and both
+  // timers, start the moment the finger lands: timed from before the tap, a slow runner let the scroll land before it,
+  // and the card was rightly held 40 px from a stale reading (#578, #590)
+  await page.evaluate((sel) => { window.__swL0 = null; window.addEventListener('pointerdown', () => {
+    window.__swL0 = document.querySelector(sel).getBoundingClientRect().top;
+    setTimeout(() => { document.getElementById('planBody').scrollTop += 40; }, 250);
+    setTimeout(() => { const sp = document.getElementById('lateSpacer'); if (sp) sp.remove(); }, 400);
+  }, { capture: true, once: true }); }, card('fun'));
   await tap(card('fun'), 'Fun');
   await page.waitForFunction(() => /^Fun: /.test(document.getElementById('routeProgress').textContent) && !document.getElementById('lateSpacer'), null, { timeout: 5000 });
   await page.waitForTimeout(150);
+  const swL0 = await page.evaluate(() => window.__swL0);
   const swL1 = await page.evaluate((sel) => document.querySelector(sel).getBoundingClientRect().top, card('fun'));
-  check(Math.abs(swL1 - swL0) <= 2, `the card you tapped stays put when the card shrinks late: ${swL0} -> ${swL1}`);
+  check(swL0 != null && Math.abs(swL1 - swL0) <= 2, `the card you tapped stays put when the card shrinks late: ${swL0} -> ${swL1}`);
   await tap(card('quick'), 'Quick');
   await page.waitForFunction(() => /^Quick: /.test(document.getElementById('routeProgress').textContent), null, { timeout: 5000 });
   await tap(card('fun'), 'Fun');
