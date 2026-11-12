@@ -86,6 +86,50 @@ def test_segment_pass_finds_the_stretch_and_scores_it():
     assert da.segment_pass(back, d) is None, "a pass the other way is a different segment"
 
 
+def _loop_drive():
+    """A 2 km circle driven 1.3 times; the first lap's GPS sits 3 m wide, so the start is closer on the way back round."""
+    n_lap, r0 = 400, 2000.0 / (2 * np.pi)
+    k = np.arange(int(n_lap * 1.3))
+    r = np.where(k < n_lap, r0 + 3.0, r0)
+    th = 2 * np.pi * k / n_lap
+    c = np.cos(np.radians(35.6))
+    lat = 35.6 + r * np.cos(th) / 110540.0
+    lon = -83.9 + r * np.sin(th) / (111320.0 * c)
+    seg = {"lat0": 35.6 + r0 / 110540.0, "lon0": -83.9, "lat1": 35.6 + r0 / 110540.0, "lon1": -83.9, "length_m": n_lap * 5.0}
+    return {"lat": lat, "lon": lon}, seg
+
+
+def test_segment_window_on_a_loop_tries_every_visit_to_the_start():
+    """A time attack loop's end is its start. The closest visit to the start can be the way back round (GPS noise), where
+    no lap follows: every visit is tried, closest first, so the lap is still found."""
+    d, seg = _loop_drive()
+    assert da.segment_window(seg, d) == (0, 400)
+    assert da.segment_window(dict(seg, lat0=36.0), d) is None            # a start the drive never passes
+
+
+def _two_laps(first_mps=20.0, second_mps=25.0):
+    """The same 2 km circle driven 2.3 times: the first lap at first_mps, the rest at second_mps; no corners."""
+    n_lap, r0 = 400, 2000.0 / (2 * np.pi)
+    k = np.arange(int(n_lap * 2.3))
+    th = 2 * np.pi * k / n_lap
+    c = np.cos(np.radians(35.6))
+    d = {"lat": 35.6 + r0 * np.cos(th) / 110540.0, "lon": -83.9 + r0 * np.sin(th) / (111320.0 * c),
+         "speed_mps": np.where(k < n_lap, first_mps, second_mps), "lon_g": np.zeros(len(k)), "lat_g": np.zeros(len(k)), "corners": []}
+    seg = {"lat0": 35.6 + r0 / 110540.0, "lon0": -83.9, "lat1": 35.6 + r0 / 110540.0, "lon1": -83.9, "length_m": n_lap * 5.0}
+    return d, seg
+
+
+def test_segment_pass_takes_the_quickest_lap_of_a_loop():
+    """Two laps of a time attack loop in one drive: both are passes, and the quicker one is the drive's time (the boards
+    and the Log keep your best), whichever visit to the start was closest."""
+    d, seg = _two_laps()
+    assert sorted(da.segment_windows(seg, d)) == [(0, 400), (400, 800)]
+    p = da.segment_pass(seg, d)
+    assert (p["lo"], p["hi"]) == (400, 800) and p["time_s"] == pytest.approx(400 * 5.0 / 25.0, rel=1e-6)
+    slow, _ = _two_laps(25.0, 20.0)
+    assert (da.segment_pass(seg, slow)["lo"], da.segment_pass(seg, slow)["hi"]) == (0, 400)
+
+
 def test_driver_score_leaves_out_corners_with_unknown_speed_or_limit():
     d = _drive()
     whole = _score(d)["score"]

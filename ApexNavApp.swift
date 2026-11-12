@@ -38,7 +38,8 @@ import MediaPlayer
 @main
 struct ApexNavApp: App {
     // the builds-you-follow refresh (ApexBuildNotifier.swift) must be registered before launch finishes
-    init() { ApexBuildNotifier.register() }
+    // native crashes and hangs from earlier launches go to our own Worker (ApexCrashReports.swift)
+    init() { ApexBuildNotifier.register(); ApexCrashReports.start() }
 
     var body: some Scene {
         WindowGroup {

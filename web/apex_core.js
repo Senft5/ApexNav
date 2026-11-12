@@ -995,19 +995,41 @@
     }
     return n ? sum / n : null;
   }
-  function segmentWindow(seg, d) {
-    const [i0, d0] = nearestIndexWin(seg.lat0, seg.lon0, d.lat, d.lon, -1);
-    if (d0 > MATCH_RADIUS_M) return null;
-    const span = Math.floor(seg.length_m / 5);
-    const [i1, d1] = nearestIndexWin(seg.lat1, seg.lon1, d.lat, d.lon, i0 + span, Math.max(40, Math.floor(span / 2)));
-    if (d1 > MATCH_RADIUS_M || i1 <= i0) return null;
-    const ratio = (i1 - i0) / Math.max(1, span);
-    return ratio >= 0.7 && ratio <= 1.3 ? [i0, i1] : null;
+  // Each time the path comes within MATCH_RADIUS_M of a point: that visit's closest sample, closest visit first (a loop,
+  // whose end is its start, or a stage driven twice passes its start more than once). Port of _start_candidates.
+  function startCandidates(lat, lon, pathLat, pathLon) {
+    const c = Math.cos(lat * Math.PI / 180), n = pathLat.length, out = [];
+    const dist = (i) => Math.hypot((pathLon[i] - lon) * 111320 * c, (pathLat[i] - lat) * 110540);
+    for (let i = 0; i < n;) {
+      if (!(dist(i) <= MATCH_RADIUS_M)) { i++; continue; }
+      let k = i, dk = dist(i), j = i;
+      while (j + 1 < n && dist(j + 1) <= MATCH_RADIUS_M) { j++; const dj = dist(j); if (dj < dk) { dk = dj; k = j; } }
+      out.push([dk, k]); i = j + 1;
+    }
+    return out.sort((a, b) => a[0] - b[0] || a[1] - b[1]).map((x) => x[1]);
   }
+  // port of segment_windows: every pass, one per visit to the start, the closest visit first
+  function segmentWindows(seg, d) {
+    const span = Math.floor(seg.length_m / 5), out = [];
+    for (const i0 of startCandidates(seg.lat0, seg.lon0, d.lat, d.lon)) {
+      const [i1, d1] = nearestIndexWin(seg.lat1, seg.lon1, d.lat, d.lon, i0 + span, Math.max(40, Math.floor(span / 2)));
+      if (d1 > MATCH_RADIUS_M || i1 <= i0) continue;
+      const ratio = (i1 - i0) / Math.max(1, span);
+      if (ratio >= 0.7 && ratio <= 1.3) out.push([i0, i1]);
+    }
+    return out;
+  }
+  function segmentWindow(seg, d) {
+    const w = segmentWindows(seg, d);
+    return w.length ? w[0] : null;
+  }
+  // with several passes in one drive (laps of a loop), the quickest counts; a tie keeps the first found
   function segmentPass(seg, d) {
-    const w = segmentWindow(seg, d);
-    if (!w) return null;
-    const [lo, hi] = w, t = elapsedS(d.speed_mps);
+    const ws = segmentWindows(seg, d);
+    if (!ws.length) return null;
+    const t = elapsedS(d.speed_mps);
+    let [lo, hi] = ws[0];
+    for (const [a, b] of ws.slice(1)) if (t[b] - t[a] < t[hi] - t[lo]) [lo, hi] = [a, b];
     return { lo, hi, time_s: t[hi] - t[lo], ...driverScore(d.speed_mps, d.lon_g, d.lat_g, d.corners, lo, hi + 1) };
   }
 
@@ -1225,7 +1247,7 @@
 
   const api = {
     profileRecording, spikeMask, referenceLap, windowFeatures, axisScores, archetype,
-    driverScore, techniqueScore, cornerTechnique, carGrip, cornersForCar, fatigue, spreadBy, turnIn, segmentPass, segmentWindow,
+    driverScore, techniqueScore, cornerTechnique, carGrip, cornersForCar, fatigue, spreadBy, turnIn, segmentPass, segmentWindow, segmentWindows,
     removeSpurs, retracedShare,
     compareDrives, cornerMetrics, elapsedS, cornerPhases, coach, ggEnvelope, gripUse, ggSector, abruptMoments,
     knownRun, passMarks, meanSe, BRAKE_G, BRAKE_LOOKBACK, BRAKE_GAP, STOPPED_MPS, TURN_LEAD, PACE_CEILING, paceCredit,   // driver_profile.js reads corners as the coach does

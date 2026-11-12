@@ -46,6 +46,13 @@ describe("rate limits", () => {
     expect((await call({ AUTH_LIMIT: au }, "POST", "/api/auth/logout")).status).not.toBe(429);
   });
 
+  it("a made-up session token is limited per IP, not given a fresh key each time", async () => {
+    const w = limiter(1);
+    await call({ WRITE_LIMIT: w }, "POST", "/api/errors", "x".repeat(40));
+    expect((await call({ WRITE_LIMIT: w }, "POST", "/api/errors", "y".repeat(40))).status).toBe(429);
+    expect(w.seen).toEqual(["ip:203.0.113.7", "ip:203.0.113.7"]);
+  });
+
   it("does nothing without the binding (local dev)", async () => {
     const a = await makeUser("alice");
     for (let i = 0; i < 3; i++) expect((await call({ WRITE_LIMIT: undefined, AUTH_LIMIT: undefined }, "POST", "/api/crews", a.token)).status).toBe(201);

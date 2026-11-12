@@ -263,6 +263,8 @@ console.log(JSON.stringify({
   alongMany: C.alongMessage(Array.from({ length: 50 }, (_, i) => ({ kind: 'fuel', name: 'S' + i, lat: 35 + i / 100, lon: -84 }))).places.length,
   offer: C.offerMessage('o3', 'Police reported on your route in 1.2 mi.', 'Police in 1.2 mi', 'Go round', 15000),
   offerSame: C.offerMessage('o4', 'Running 12 min late for home.', 'Running 12 min late for home.', 'Skip Cherohala Skyway', 60000),
+  notice: [C.noticeMessage("Couldn't get your location. Type a start or tap the map."), C.noticeMessage('  '),
+    C.noticeMessage("Loops use Vetta's own road map, which covers Ohio, Kentucky and Indiana so far.")],
   offerUndo: C.offerMessage('o8', 'Pothole reported', '', 'Undo', 5000, 'OK'),
   offerNone: [C.offerMessage('', 'x', '', 'k'), C.offerMessage('o5', '', '', 'k'), C.offerMessage('o6', 'x', '', ''), C.offerMessage('o7', 'x', '', 'k', 1000).seconds],
   alongDescent: C.alongMessage([], 'Long descent: 3.7 mi at 8% +1'),
@@ -507,3 +509,16 @@ def test_the_car_offers_the_same_loop_times_as_the_phones_dial():
 def test_a_close_convoy_hazard_alerts_the_car_with_the_voice_off_too():
     js = cockpit_source()
     assert "if (!state.toggles.voice) { toast(text); if (urgent && driveActive) carPost({ kind: 'hazard', title: text }); }" in js
+
+
+def test_a_request_from_the_car_that_fails_says_why_on_the_car(maps):
+    """A loop or a place the phone couldn't plan, or a report with no fix, left the car silent; the reason goes there now."""
+    first, none, long = maps["notice"]
+    assert first == {"kind": "notice", "titles": ["Couldn't get your location."]}, "the reason only, never the phone's advice"
+    assert none is None and long["titles"][0].startswith("Loops use") and len(long["titles"][1]) <= 48
+    js = cockpit_source()
+    assert "if (car.echo > 0 && !action && window.ApexCarPlay) carPost(ApexCarPlay.noticeMessage(msg));" in js
+    for asked in ("carAsked(() => routeToPlace(", "carAsked(() => loop({ minutes: m.minutes }))", "carAsked(() => reportHazard(m.kind, null, true))"):
+        assert asked in js
+    swift = open(os.path.join(ROOT, "CarPlay", "ApexCarPlay.swift"), encoding="utf-8").read()
+    assert 'case "notice":' in swift and "func showNotice(titles: [String])" in swift and "CPAlertTemplate(titleVariants: titles" in swift

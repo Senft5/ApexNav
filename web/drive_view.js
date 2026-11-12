@@ -553,18 +553,21 @@
       const loose = reps.filter(varies).slice(-2).reverse();
       [...steady, ...loose].forEach((r) => {
         const c = d.corners[r.k], li = el('li'), b = el('button'), v = varies(r);
-        b.innerHTML = `<b>${r.k + 1}</b><span>${esc(callOf(c))}</span><em class="${v ? 'loss' : 'gain'}">${m(r.brake_sd_m)}</em>`
-          + `<span class="note">${r.passes} passes · braking point ±${m(r.brake_sd_m)}`
-          + `${r.min_sd_m != null ? ` · slowest point ±${m(r.min_sd_m)}` : ''}`
-          + `${r.turn_sd_m != null ? ` · turn-in ±${m(r.turn_sd_m)}` : ''}`
+        // the big number is the braking point's spread, so the line under it labels it once and adds only what it doesn't say
+        // (the guide: no line that only repeats a number); the slowest point and turn-in stay in the spoken label
+        b.innerHTML = `<b>${r.k + 1}</b><span>${esc(callOf(c))}</span><em class="${v ? 'loss' : 'gain'}">±${m(r.brake_sd_m)}</em>`
+          + `<span class="note">Braking point over ${r.passes} passes`
           + `${r.speed_sd_mps != null ? ` · speed ±${spd(r.speed_sd_mps)}` : ''}`
-          + `${v ? '. Pick a braking marker you can always make' : ''}</span>`;
+          + `${v ? ' · pick a braking marker you can always make' : ''}</span>`;
+        b.setAttribute('aria-label', `Corner ${r.k + 1}, ${callOf(c)}: braking point ±${m(r.brake_sd_m)} over ${r.passes} passes`
+          + `${r.min_sd_m != null ? `, slowest point ±${m(r.min_sd_m)}` : ''}${r.turn_sd_m != null ? `, turn-in ±${m(r.turn_sd_m)}` : ''}`
+          + `${r.speed_sd_mps != null ? `, speed ±${spd(r.speed_sd_mps)}` : ''}${v ? '. Pick a braking marker you can always make' : ''}`);
         b.onclick = () => pick(c.apex, c.start, c.end);
         li.append(b); ul.append(li);
       });
       const speeds = reps.map((r) => r.speed_sd_mps).filter((x) => x != null).sort((p, q) => p - q);
       const carried = speeds.length >= 3 ? ` · speed ±${spd(speeds[(speeds.length - 1) >> 1])}` : '';
-      const intro = el('p', 'note', `Braking point ±${m(med)} drive to drive${carried}, over ${reps.length} corners`);
+      const intro = el('p', 'note', `Typical: braking point ±${m(med)}${carried} · ${reps.length} corners`);
       if (ul.children.length) list.prepend(el('h2', null, 'How repeatable your corners are'), intro, ul);
       else list.prepend(el('h2', null, 'How repeatable your corners are'), intro);
     }

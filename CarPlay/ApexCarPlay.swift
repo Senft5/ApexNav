@@ -247,6 +247,12 @@ final class ApexCar {
             let cancel = String(((dict["cancel"] as? String) ?? "").prefix(16))
             scene?.showOffer(id: String(id.prefix(16)), titles: titles, key: String(key.prefix(16)), cancel: cancel.isEmpty ? "Not now" : cancel,
                              seconds: Self.num(dict["seconds"]) ?? 15)
+        case "notice":
+            // what the phone said back to a request made here (a loop or a place it couldn't plan, a report with no fix),
+            // the reason only (web/carplay.js noticeMessage): the car never went silent on a tap again
+            let titles = ((dict["titles"] as? [String]) ?? []).map { String($0.prefix(96)) }.filter { !$0.isEmpty }
+            guard !titles.isEmpty else { return }
+            scene?.showNotice(titles: titles)
         case "offerDone":
             guard let id = dict["id"] as? String else { return }
             scene?.offerDone(id: id)
@@ -705,6 +711,23 @@ final class ApexCarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDel
         offerAlert = nil
         guard let map = mapTemplate, map.currentNavigationAlert === o.alert else { return }
         map.dismissNavigationAlert(animated: true) { _ in }
+    }
+
+    /// The phone's answer to a request made on the car. In a drive a navigation alert over the map; otherwise an alert
+    /// with OK (CPAlertTemplate), as the idle map can't hold a navigation alert.
+    @MainActor func showNotice(titles: [String]) {
+        guard let map = mapTemplate else { return }
+        if ApexCar.shared.driving {
+            map.present(navigationAlert: CPNavigationAlert(titleVariants: titles, subtitleVariants: [], image: nil,
+                                                           primaryAction: CPAlertAction(title: "OK", style: .default) { _ in }, secondaryAction: nil, duration: 6),
+                        animated: true)
+            return
+        }
+        guard let ic = interfaceController else { return }
+        if ic.presentedTemplate != nil { ic.dismissTemplate(animated: false, completion: nil) }
+        ic.presentTemplate(CPAlertTemplate(titleVariants: titles, actions: [CPAlertAction(title: "OK", style: .cancel) { [weak ic] _ in
+            ic?.dismissTemplate(animated: true, completion: nil)
+        }]), animated: true, completion: nil)
     }
 
     /// Passed a reported hazard: is it still there? One tap on the car's screen answers the phone's question.
