@@ -4,6 +4,13 @@ Decisions Claude made for you, newest first. Each one says what was decided, why
 you reach one you've seen. If you disagree with a call, say so and it gets reversed; nothing here is hard to undo unless
 it says so. Things only you can do are in docs/OWNER_TODO.md.
 
+## 2026-11-12 (time attack duel): Challenge a friend on the week's loop (claude/project-thread-uwmi4e)
+
+Calls I made: once you've entered the week's loop, its card has Challenge a friend. It starts an ordinary duel on your copy
+of the loop, so nothing new on the server. It's won by time by default, because the loop is a time attack; Score is one
+tap away. The duel's days are the usual 3, 7 or 14, not tied to the week's end, so a duel can outlast the board. Undo:
+remove the `challenge` hook in cockpit.js's time attack mount.
+
 ## 2026-11-12 (meets on the map): public crews' meets pinned on the map (claude/project-thread-uwmi4e)
 
 Calls I made: a Meets layer in Layers, off by default like Friends, for members only. It pins the same public meets as

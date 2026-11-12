@@ -1,5 +1,12 @@
 # VETTA — CURRENT AGENT HANDOFF STATE
 
+## Session 2026-11-12 (time attack duel): a duel on the week's loop (claude/project-thread-uwmi4e, after #466)
+
+- [x] Where to? → Time attack → Challenge a friend (entered weeks): `duels.js challengeOn(stage)` picks an accepted friend,
+  Time by default, 3/7/14 days; the stage is your copy's id from POST /api/timeattack/enter (idempotent). No backend change.
+- Tests: tests/test_time_attack.py wiring; e2e "time attack duel".
+- Exact next task: the next social win (push for For you once APNs exists; a crew's roadbook).
+
 ## Session 2026-11-12 (meets on the map): IDEAS S-13's last part (claude/project-thread-uwmi4e, after #446)
 
 - [x] Layers → Meets (`web/meets_map.js`, in the lazy social group): public meets from GET /api/events/near pinned at their
