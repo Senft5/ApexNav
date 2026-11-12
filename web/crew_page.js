@@ -241,6 +241,7 @@
     .cd-feed { display: grid; }
     .cd-item { grid-template-columns: 36px minmax(0, 1fr); min-height: 56px; padding: 8px 0; border-top: 1px solid var(--rule); align-items: start; }
     .cd-item .cd-text small { font-size: 13px; -webkit-line-clamp: 1; }
+    .cd-row .cd-text small { -webkit-line-clamp: 1; }   /* a crew's row is one line under its name, like a chat list: the date never wraps alone */
     .cd-what { font-size: 15px; line-height: 1.4; overflow-wrap: anywhere; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
     .cd-more { justify-self: start; }
     .cp-tabs { display: flex; gap: 24px; border-bottom: 1px solid var(--rule, rgba(0,0,0,0.15)); }
