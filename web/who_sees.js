@@ -96,7 +96,7 @@
 
       const paint = () => {
         const fm = page.friendsMap, presence = data.presence, list = rows(data);
-        const kids = [head, el('p', { className: 'note', textContent: 'What each friend and crew gets of yours, now. Tap Scores or Times to change them.' })];
+        const kids = [head, el('p', { className: 'note', textContent: 'Tap a box to change it.' })];
         if (!data.read) { kids.push(el('p', { className: 'note', textContent: 'Couldn’t load who sees what. Check signal.' }), btn('Try again', async () => { data = await load(); paint(); }, 'ink-btn')); box.replaceChildren(...kids); return; }
         // where you are: one choice for everyone, the delay and exactness on the Friends on the map sheet
         if (fm && presence) {
@@ -143,7 +143,7 @@
         group('Crews', list.filter((r) => r.kind === 'crew'));
         if (list.length) kids.push(grid);
         else kids.push(el('p', { className: 'note', textContent: 'No friends or crews yet, so nobody sees anything of yours.' }));
-        kids.push(el('p', { className: 'note', textContent: 'Scores are your best Vetta Score on a stage; Times, your time on it. A car is seen by friends and private crews, never a public crew.' }));
+        kids.push(el('p', { className: 'note', textContent: 'A car is seen by friends and private crews, never a public crew.' }));
 
         // everyone: road feel without your name, and the places where nobody sees you
         const rf = page.roadFeel ? page.roadFeel.get() : null;

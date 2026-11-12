@@ -6093,7 +6093,8 @@
       },
       getRoute: () => (track && track.kind === 'route' && track.lat.length > 1 ? { name: track.name, pts: track.lat.map((la, i) => [la, track.lon[i]]) } : null),
       // A close hazard cuts in; a far one goes next, after the pace note being spoken (never dropping the notes queued).
-      speak: (text, urgent) => { if (!state.toggles.voice) toast(text); else if (urgent) say(text, true, null, null, { kind: 'hazard', alert: true }); else sayNext(text, `convoy:${text}`); },
+      // With the voice off a close one still alerts on the car's screen, as it does with the voice on (the phone toasts it).
+      speak: (text, urgent) => { if (!state.toggles.voice) { toast(text); if (urgent && driveActive) carPost({ kind: 'hazard', title: text }); } else if (urgent) say(text, true, null, null, { kind: 'hazard', alert: true }); else sayNext(text, `convoy:${text}`); },
       onRegroup: (rg, convoyName) => regroupSay(rg, convoyName),
       drive: () => startDrive(),                                       // the convoy sheet's "Start the drive" (Convoy now, P-11)
     }) : null; } catch (e) { console.error('convoy', e); convoy = null; } });   // the convoy never takes the page down
@@ -6768,10 +6769,12 @@
           else {
             const areaIn = el('input', { className: 'field', placeholder: 'Area, like Robbinsville', maxLength: 60, autocomplete: 'off' });
             areaIn.setAttribute('aria-label', 'Area people nearby will see');
-            ownerBox.append(el('p', { className: 'note', textContent: 'Private: only people with a link. Public lets people nearby find and join it, under the area you name. What members shared with it (scores, routes, stages) stops showing until each says yes again.' }),
+            ownerBox.append(el('p', { className: 'note', textContent: 'Private: link only. Public: people near the area you name can find it.' }),
               el('div', { className: 'row' }, areaIn, btn('Make public', async () => {
               const near = crewNear(), name = areaIn.value.trim();
               if (name.length < 2) { toast('Name the area people nearby will see.'); return; }
+              // what going public costs the members is said once, when it happens (it was a paragraph under the field)
+              if (!(await ApexConfirm.ask(`Make ${c.name} public? Members' shared Scores, routes and stages stop showing until each says yes again.`, 'Make public'))) return;
               const r = await apiCall('PUT', `/api/crews/${c.id}`, { visibility: 'public', about: c.about || '', area: { name, lat: near.lat, lon: near.lon } });
               if (r.ok) { toast(`${c.name} is public. People near ${name} can find and join it.`); redo(); } else toast('Couldn\'t change that. Try again.');
             })));
