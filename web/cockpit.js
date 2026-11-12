@@ -1442,7 +1442,7 @@
     const MEMO_S = 5;   // a remembered coaching tip takes up to this long to say
     let brakeSay = null;  // the brake heat call waiting for a quiet moment (noteBrakes), said before a break cue
     let breakSay = null;  // a break suggestion waiting for a quiet moment (noteRest sets it, the notes loop says it)
-    let flowSay = null;   // "Five clean in a row." (noteFlow, flow_live.js), the lowest of the quiet slots, never in Quiet notes
+    let flowSay = null, flowQueue = [];   // flowQueue: the next ones, in order, when two land close together; "Five clean in a row." (noteFlow, flow_live.js), the lowest of the quiet slots, never in Quiet notes
     const NUM_WORDS = ['zero', 'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine'];
     const TENS = { 30: 'thirty', 40: 'forty', 50: 'fifty', 60: 'sixty', 70: 'seventy', 80: 'eighty' };
     // Co-drivers say "one-fifty", "two hundred", "thirty" — never "one hundred and fifty".
@@ -1973,14 +1973,14 @@
       }
       if (brakeSay && performance.now() > brakeSay.until) brakeSay = null;
       if (breakSay && performance.now() > breakSay.until) breakSay = null;
-      if (flowSay && (performance.now() > flowSay.until || state.notesMode === 'quiet')) flowSay = null;
+      if (flowSay && (performance.now() > flowSay.until || state.notesMode === 'quiet')) { flowSay = null; flowQueue = []; }
       const quiet = brakeSay || breakSay || flowSay;
       if (quiet && live && performance.now() - state.liveAt < 2500 && !speech.busy && !speech.queue.size && performance.now() > speech.talkingUntil) {
         const quietReach = lead + vMps * (0.6 + 0.07 * quiet.text.length + 2);
         const callDue = ev.some(e => noteM(e) - state.cursorM < quietReach && !state.spoken.has(`${track.id}:${e.type}:${e.index}`)
           && (e.type === 'corner' ? spirited : (spirited || noteworthyInCruise(e))));
         const bumpDue = ApexRoadMemory.upcoming(hazardMemory, state.live, 0, quietReach, { has: () => false });
-        if (!callDue && !bumpDue) { say(quiet.text); if (quiet === brakeSay) brakeSay = null; else if (quiet === breakSay) breakSay = null; else flowSay = null; }
+        if (!callDue && !bumpDue) { say(quiet.text); if (quiet === brakeSay) brakeSay = null; else if (quiet === breakSay) breakSay = null; else { flowSay = flowQueue.shift() || null; if (flowSay) flowSay.until = performance.now() + 20000; } }
       }
     }
 
@@ -8189,9 +8189,17 @@
     // is the saved drive's (routingCar). Technique only: a slow, smooth run counts the same as a quick one.
     function noteFlow() {
       if (!window.ApexFlowLive || !window.ApexFlow || !drive.rec) return;
-      if (!drive.flow) { const car = routingCar(); drive.flow = ApexFlowLive.createWatch(Core, ApexFlow, { mu: car ? Core.carGrip(car) : null }); }
+      if (!drive.flow) {
+        const car = routingCar(), w = drive.flow = ApexFlowLive.createWatch(Core, ApexFlow, { mu: car ? Core.carGrip(car) : null });
+        // this month's best run in the Log, read once after Start: passing it is said ("…, your best this month.")
+        const now = new Date(), key = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+        if (window.ApexAnalysis && ApexAnalysis.monthOf) ApexRecording.summaries(null)
+          .then((all) => { if (drive.flow === w) w.setBest(ApexFlowLive.monthBest(all, ApexAnalysis.monthOf, key)); }).catch(() => {});
+      }
       const r = drive.flow.update(drive.rec.rows);
-      if (r && r.say) flowSay = { text: r.say, until: performance.now() + 20000 };
+      if (!r || !r.say) return;
+      const line = { text: r.say, until: performance.now() + 20000 };
+      if (!flowSay) flowSay = line; else if (flowQueue.length < 2) flowQueue.push(line);   // "Eight…, your best" is not lost to "Ten"
     }
     // Road data whenever the app is open and the phone is mounted (calibration locked), not only during a drive
     // (owner 2026-10-26). Trips, privacy trims and gaps: ApexContributor.createAmbient. Members with ROAD DATA on only.
@@ -9182,7 +9190,7 @@
       startStageWatch();
       state.firstNoteDue = true; state.firstNoteKey = null;   // U-58: the drive's first note is called
       state.openerDue = true; state.openerAt = performance.now(); state.wakeCue = false;   // DA-3: the first words name the road
-      drive.live = null; drive.liveIdx = 0; drive.share = 'off'; drive.shareKm = 0; drive.shareErr = null; drive.roads = {}; drive.roadIdx = 0; drive.rest = null; drive.brakes = null; drive.descentSaid = null; drive.flow = null; brakeSay = null; breakSay = null; flowSay = null; if (breakWorker) { breakWorker.terminate(); breakWorker = null; }
+      drive.live = null; drive.liveIdx = 0; drive.share = 'off'; drive.shareKm = 0; drive.shareErr = null; drive.roads = {}; drive.roadIdx = 0; drive.rest = null; drive.brakes = null; drive.descentSaid = null; drive.flow = null; brakeSay = null; breakSay = null; flowSay = null; flowQueue = []; if (breakWorker) { breakWorker.terminate(); breakWorker = null; }
       keepStart();                                                     // Round 3: the drive is kept as it goes (drive_keep.js)
       if (NATIVE_SHELL) {   // the app's own GPS and IMU feed window.apex.live; no browser sensors to start
         drive.native = true;
