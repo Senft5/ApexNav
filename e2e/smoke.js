@@ -6936,6 +6936,9 @@ flow('the main map: with no signal and no saved area one line says there is no m
   const off = await page.evaluate(() => { const n = document.getElementById('mapNote'), r = n.getBoundingClientRect(), m = document.getElementById('map').getBoundingClientRect();
     return { text: n.textContent, inside: r.left >= m.left && r.right <= m.right && r.top >= m.top, taps: getComputedStyle(n).pointerEvents }; });
   check(off.text === 'No map here without signal. Notes and recording still work.' && off.inside && off.taps === 'none', 'said in one line, over the map, never in the way: ' + JSON.stringify(off));
+  // a first launch with no style kept: the map still loads on the paper, so the route, the trail and the corners can draw
+  await page.waitForFunction(() => { try { return !!window.apexDebug.map.getLayer('apex-route'); } catch (_) { return false; } }, null, { timeout: 8000 });
+  check(true, 'our own layers are on the paper with no base map');
   // a tile that draws (a saved area here, or the signal back) takes it away
   tiles = true;
   await page.evaluate(() => window.apexDebug.map.setStyle('https://tiles.openfreemap.org/styles/liberty?again'));
@@ -7689,6 +7692,8 @@ flow('along the route by name: the Along line opens a list of the cafés and fue
   // in a drive only the next fuel stop keeps its stamp, and it says which station it is
   await page.evaluate(() => document.getElementById('routeDriveBtn').click());
   await page.waitForFunction(() => window.apexDebug.driveActive, null, { timeout: 10000 });
+  // a fix at the route's start: the drive's frame is what keeps the stamps (it would race the stamps' arrival otherwise)
+  await page.evaluate(() => { const t = window.apexDebug.track; window.apex.live({ has_fix: true, location_off: false, lat: t.lat[0], lon: t.lon[0], accuracy_m: 5, speed_mps: 10, course_deg: 0, calibration: 'locked', thermal: 0 }); });
   await page.waitForFunction(() => [...document.querySelectorAll('.poi-pin.poi-fuel')].filter((e) => e.style.display !== 'none').map((e) => e.textContent).join('|') === 'FUEL · Shell', null, { timeout: 5000 })
     .catch(() => {});
   const stamps = await page.evaluate(() => [...document.querySelectorAll('.poi-pin.poi-fuel')].map((e) => ({ text: e.textContent, on: e.style.display !== 'none' })));

@@ -343,6 +343,23 @@
     map.on('error', (e) => { if (e && (e.sourceId === 'openmaptiles' || (!e.sourceId && !mapReady))) {   // a base map tile, or the style before the map first loaded
       mapNote.failAt = Date.now(); mapNoteSoon(); } });
     window.addEventListener('online', () => { mapNote.failAt = 0; paintMapNote(); });
+    // A first launch with no signal: the base map's style has never been kept on this phone (offline_tiles.js keeps it as it
+    // arrives), so the map would never load and nothing of ours could draw on the paper: no trail behind the arrow, no route,
+    // no corners. An empty style (our own layers only, on the paper) lets the map load; the base map comes with the next
+    // launch that has signal, or as soon as signal is back while no drive is on (a reload, which keeps the planned route).
+    let paperOnly = false;
+    const PAPER_STYLE = { version: 8, glyphs: 'https://tiles.openfreemap.org/fonts/{fontstack}/{range}.pbf', sources: {}, layers: [] };
+    map.on('error', (e) => {
+      let st = null; try { st = map.getStyle(); } catch (_) { st = null; }
+      if (mapReady || paperOnly || (e && e.sourceId) || st) return;   // only the style itself failing, before the map first loaded
+      paperOnly = true;
+      map.setStyle(PAPER_STYLE);
+    });
+    window.addEventListener('online', async () => {
+      if (!paperOnly || state.mode === 'live' || driveActive) return;
+      const r = await fetch(MAP_STYLE, { cache: 'no-store' }).catch(() => null);   // signal that can fetch the style, not just a flicker
+      if (r && r.ok && state.mode !== 'live' && !driveActive) location.reload();
+    });
     { const v = document.getElementById('aboutVersion'), m = /ApexNav\/([^ ]+ \([^)]*\))/.exec(navigator.userAgent);   // the iOS shell names its version in the user agent
       if (v) v.textContent = m ? m[1] : (window.APEX_EMBED ? '--' : 'Website'); }
     window.apexDebug = { map, get soundtrack() { return { playing: !!(soundtrack.eng && soundtrack.eng.playing()), frame: soundtrack.frame, piece: soundtrack.eng && soundtrack.eng.piece(), sample: !!soundtrack.demo }; }, get track() { return track; }, state, drives, buildRoute: (...a) => buildRoute(...a), renderRouteCard: (...a) => renderRouteCard(...a), openRoadPage: (...a) => openRoadPage(...a), showEndCard: (...a) => showEndCard(...a), get driveActive() { return driveActive; }, get flowRun() { return drive.flow ? drive.flow.run : null; }, get camResets() { return camResets; }, tryTheme: (id) => tryTheme(id), tulipPNG: (svg) => tulipPNG(svg) };
