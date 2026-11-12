@@ -1,8 +1,36 @@
 # Call sheet
 
+> Newer calls are in `docs/notes/` under `# CALL SHEET` (one file per PR). Don't edit this file in a PR.
+
 Decisions Claude made for you, newest first. Each one says what was decided, why, and how to undo it. Read the top until
 you reach one you've seen. If you disagree with a call, say so and it gets reversed; nothing here is hard to undo unless
 it says so. Things only you can do are in docs/OWNER_TODO.md.
+
+## 2026-11-11 (CI load): e2e sits out PRs that can't change the page; one CI slot per branch (claude/project-thread-g9yher)
+
+The 20:16-21:15 UTC stall was GitHub's own incident (githubstatus.com, 20:48 "Impact across multiple GitHub products
+including Actions"): e2e shards passed and then failed uploading their artifact, aggregate jobs never got a runner, and
+runs started by hand ended in "startup failure". It hit harder because every push queued eight Linux jobs, and a run
+started by hand on a PR branch ran beside the PR's own (two concurrency groups). Now core-tests.yml groups by branch
+(the newest run cancels older ones, by hand or not), and a PR that changes only docs, the Worker, Python tests/tools or
+the Swift shells skips the four e2e jobs (the "e2e" check still reports, green). Pushes to main and runs by hand always
+run them. Undo: the `changes` job and the group line in core-tests.yml.
+
+## 2026-11-11 (sweep: cron monitoring): a stopped backup or sweep opens an issue (claude/project-thread-g9yher)
+
+The weekly D1 backup and the daily sweep used to fail with one log line nobody reads, and a run killed for CPU time left
+nothing at all. Each run now records itself in `cron_runs` (migration 0055); `GET /api/health` reports `cron.backup` and
+`cron.sweep` (hours since the last good run, failing, late), and the status workflow has two new core checks that open an
+issue titled "ApexNav: Weekly backup not running" when the backup is over 8 days 6 hours old or its latest run threw (the
+sweep: 2 days 6 hours). A job never recorded passes, so the issue can't open before the first Monday after deploy.
+Undo: drop the two checks in tools/status_check.py; `runCron` can stay.
+## 2026-11-12 (ui-round-three): the website's and the app's promises match today's sharing (claude/project-thread-5sbga7)
+
+Two of the four promises (on the website and in Garage → About Vetta) said there are no time leaderboards and that your
+drives and times stay yours until you share them. Since your calls on 2026-11-11 (sharing with friends and private crews
+on by default; the weekly loop's board) that was no longer true. They now read "No top speeds" and "Shared with your
+people", and the privacy policy gains a paragraph on who sees your Scores and times and how to switch it off. Undo:
+revert the promise lines in web/about.html and web/index.html and the new paragraph in web/privacy.html.
 
 ## 2026-11-12 (ui-round-three): the website's page uses the app's look and shows today's app (claude/project-thread-5sbga7)
 

@@ -36,6 +36,7 @@ SELECT
   (SELECT COUNT(*) FROM crew_event_rsvps) AS crew_event_rsvps,
   (SELECT COUNT(*) FROM crew_event_attendance) AS crew_event_attendance,
   (SELECT COUNT(*) FROM health_counts) AS health_counts,
+  (SELECT COUNT(*) FROM cron_runs) AS cron_runs,
   (SELECT COUNT(*) FROM eta_shares) AS eta_shares,
   (SELECT COUNT(*) FROM feedback) AS feedback,
   (SELECT COUNT(*) FROM kudos) AS kudos,

@@ -45,12 +45,25 @@ def _json(body):
         return None
 
 
+JOBS = ("Weekly backup", "Daily sweep")   # core checks on the Worker's cron jobs, not on the app being up
+
+
+def _cron_ok(body, job):
+    """A cron job in /api/health's "cron": fine unless its latest run failed or its last good run is late. A Worker that
+    doesn't report it yet (older deploy) or a job never recorded is not an outage."""
+    j = ((_json(body) or {}).get("cron") or {}).get(job)
+    return j is None or not (j.get("failing") or j.get("late"))
+
+
 def checks(base):
     """(name, core, url, data, ok(status, body) -> bool). Order is the table's order."""
     valhalla = {"locations": [{"lat": A[0], "lon": A[1]}, {"lat": B[0], "lon": B[1]}], "costing": "auto"}
     return [
         ("Site", True, base + "/", None, lambda s, b: s == 200 and b"<title>" in b),
         ("API and database", True, base + "/api/health", None, lambda s, b: s == 200 and (_json(b) or {}).get("db") is True),
+        # the Worker's cron jobs (backend/src/cron_runs.ts): late or failing is an outage, never recorded yet is not
+        ("Weekly backup", True, base + "/api/health", None, lambda s, b: s == 200 and _cron_ok(b, "backup")),
+        ("Daily sweep", True, base + "/api/health", None, lambda s, b: s == 200 and _cron_ok(b, "sweep")),
         ("Routing (Valhalla)", False, "https://valhalla1.openstreetmap.de/route", valhalla,
          lambda s, b: s == 200 and "trip" in (_json(b) or {})),
         ("Routing fallback (OSRM)", False, f"https://router.project-osrm.org/route/v1/driving/{A[1]},{A[0]};{B[1]},{B[0]}?overview=false",
@@ -102,7 +115,9 @@ def summarize(results, when=None):
     """(markdown, core_ok)."""
     core_ok = all(r["ok"] for r in results if r["core"])
     deps_ok = all(r["ok"] for r in results if not r["core"])
-    head = "All systems normal" if core_ok and deps_ok else ("ApexNav is up; a dependency is not" if core_ok else "ApexNav is DOWN")
+    jobs_only = all(r["ok"] or r["name"] in JOBS for r in results if r["core"])
+    head = ("All systems normal" if core_ok and deps_ok else "ApexNav is up; a dependency is not" if core_ok
+            else "ApexNav is up; a scheduled job is late or failing" if jobs_only else "ApexNav is DOWN")
     lines = [f"### {head}", "", f"Checked {when or time.strftime('%Y-%m-%d %H:%M UTC', time.gmtime())}", "",
              "| Check | Kind | Result | HTTP | Time |", "|---|---|---|---|---|"]
     for r in results:
