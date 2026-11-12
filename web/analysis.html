@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self' apexnav:; script-src 'self' apexnav: 'sha256-sQI7oRlW3zXc/GYAjXFJPX82QeLlStnW72IWcHQ3tfs=' 'sha256-G7s/ZI+Hqrfc4DqbB6EANJJLmUmhNK06PizQ1LlsG84=' https://cdn.jsdelivr.net 'wasm-unsafe-eval'; worker-src 'self' apexnav: blob:; child-src 'self' apexnav: blob:; style-src 'self' apexnav: 'unsafe-inline'; font-src 'self' apexnav: data:; img-src 'self' apexnav: data: blob: https://tiles.openfreemap.org https://s3.amazonaws.com https://basemap.nationalmap.gov; media-src 'self' apexnav: data: blob:; connect-src 'self' apexnav: data: blob: https://apexnav.senftns.workers.dev wss://apexnav.senftns.workers.dev https://tiles.openfreemap.org https://basemap.nationalmap.gov https://s3.amazonaws.com https://valhalla1.openstreetmap.de https://router.project-osrm.org https://overpass-api.de https://overpass.private.coffee https://overpass.kumi.systems https://maps.mail.ru https://nominatim.openstreetmap.org https://photon.komoot.io https://api.open-meteo.com https://api.weather.gov https://statsapi.mlb.com https://api.seatgeek.com https://api.water.noaa.gov https://waterservices.usgs.gov https://in.carsprogram.org https://publicapi.ohgo.com https://quickstats.nass.usda.gov https://commons.wikimedia.org https://graph.mapillary.com https://vpic.nhtsa.dot.gov https://cdn.jsdelivr.net https://huggingface.co https://*.huggingface.co https://*.hf.co; object-src 'none'; base-uri 'none'; form-action 'self'" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self' apexnav:; script-src 'self' apexnav: 'sha256-KU7DIsI/WiEuxyxgSkK4wmhy/ArFezbbEk0wBvNlAy4=' 'sha256-G7s/ZI+Hqrfc4DqbB6EANJJLmUmhNK06PizQ1LlsG84=' https://cdn.jsdelivr.net 'wasm-unsafe-eval'; worker-src 'self' apexnav: blob:; child-src 'self' apexnav: blob:; style-src 'self' apexnav: 'unsafe-inline'; font-src 'self' apexnav: data:; img-src 'self' apexnav: data: blob: https://tiles.openfreemap.org https://s3.amazonaws.com https://basemap.nationalmap.gov; media-src 'self' apexnav: data: blob:; connect-src 'self' apexnav: data: blob: https://apexnav.senftns.workers.dev wss://apexnav.senftns.workers.dev https://tiles.openfreemap.org https://basemap.nationalmap.gov https://s3.amazonaws.com https://valhalla1.openstreetmap.de https://router.project-osrm.org https://overpass-api.de https://overpass.private.coffee https://overpass.kumi.systems https://maps.mail.ru https://nominatim.openstreetmap.org https://photon.komoot.io https://api.open-meteo.com https://api.weather.gov https://statsapi.mlb.com https://api.seatgeek.com https://api.water.noaa.gov https://waterservices.usgs.gov https://in.carsprogram.org https://publicapi.ohgo.com https://quickstats.nass.usda.gov https://commons.wikimedia.org https://graph.mapillary.com https://vpic.nhtsa.dot.gov https://cdn.jsdelivr.net https://huggingface.co https://*.huggingface.co https://*.hf.co; object-src 'none'; base-uri 'none'; form-action 'self'" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
   <title>Vetta · Log</title>
   <link rel="icon" href="brand/mark.svg" type="image/svg+xml" />
@@ -664,20 +664,27 @@
         return b;
       }));
       if (!bookPick) { $('bookHead').textContent = 'Pick a road to see each corner\'s cleanest pass.'; $('bookList').replaceChildren(); $('bookPractice').hidden = true; }
-      bookWork(roads);
+      bookWork();
     }
-    // the roads where your passes differ most (driver_profile.js roadsToWork), read once for each library
-    const bookWorkSeen = { key: null, line: null };
-    async function bookWork(roads) {
+    // every road's book (the worker's roadBooks job), read once for each library: [{ name, book }], shared by the line
+    // below and Your driving's Work on
+    const bookSeen = { key: null, list: null };
+    function roadBookList() {
+      const roads = window.ApexYourRoads ? ApexYourRoads.roads(drives, 50).filter((r) => r.runs >= 3) : [];
       const key = `${libKey}#${roads.map((r) => r.id).join(',')}`;
-      if (bookWorkSeen.key !== key) {
-        bookWorkSeen.key = key; bookWorkSeen.line = null;
-        let books = {};
-        try { books = (await ApexAnalysis.job('roadBooks', { ids: roads.map((r) => r.id) })).books || {}; } catch (_) { books = {}; }
-        if (bookWorkSeen.key !== key) return;
-        bookWorkSeen.line = ApexDriverProfile.roadsToWork(roads.map((r) => ({ name: r.name, book: books[r.id] || null })));
+      if (bookSeen.key !== key) {
+        bookSeen.key = key;
+        bookSeen.list = !roads.length ? Promise.resolve([]) : ApexAnalysis.job('roadBooks', { ids: roads.map((r) => r.id) })
+          .then((x) => roads.map((r) => ({ name: r.name, book: (x.books || {})[r.id] || null })), () => []);
       }
-      $('bookWork').textContent = bookWorkSeen.line || ''; $('bookWork').hidden = !bookWorkSeen.line;
+      return bookSeen.list;
+    }
+    // the roads where your passes differ most (driver_profile.js roadsToWork)
+    async function bookWork() {
+      const key = bookSeen.key, list = await roadBookList();
+      if (key !== null && bookSeen.key !== key) return;
+      const line = ApexDriverProfile.roadsToWork(list);
+      $('bookWork').textContent = line || ''; $('bookWork').hidden = !line;
     }
     async function showBook(r) {
       $('bookHead').textContent = 'Reading its drives…'; $('bookList').replaceChildren(); $('bookPractice').hidden = true;
@@ -981,6 +988,15 @@
           ApexDriverProfile.savePlan(localStorage, plan);
           driving.moved = true; renderDriving();                         // the Practicing box in the Work on box's place
         } });
+        // the road where the skill to work on shows most (driver_profile.js skillRoadLine), under its tip
+        const skill = (pr && planNow()) ? planNow().skill : p && p.focus ? p.focus.skill : null, shown = $('drivingRoot').querySelector('.dp-focus');
+        if (skill && shown) roadBookList().then((list) => {
+          const line = ApexDriverProfile.skillRoadLine(list, skill), box = $('drivingRoot').querySelector('.dp-focus');
+          if (!line || box !== shown || box.querySelector('.dp-where')) return;
+          const say = document.createElement('p'); say.className = 'dp-say dp-where'; say.textContent = line;
+          const tip = [...box.querySelectorAll('.dp-say')].pop();
+          if (tip) tip.after(say); else box.append(say);
+        });
         const box = driving.moved && $('drivingRoot').querySelector('.dp-focus');   // the pressed key is gone: focus its box
         if (box) { box.tabIndex = -1; box.focus({ preventScroll: true }); }
         driving.moved = false;
