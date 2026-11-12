@@ -1,7 +1,7 @@
 // ApexNav API Worker. Static files are served by Cloudflare's asset layer; only /api/* reaches this code
 // (wrangler.jsonc: assets.run_worker_first). Phones never talk to the database directly.
 import {
-  APP_ORIGIN, appExchange, csrfCheck, createInvite, googleCallback, googleStart, invitePreview, logout, redeemInvite, requireMember, requireUser, sessionHash, viewer,
+  APP_ORIGIN, appExchange, csrfCheck, createInvite, googleCallback, googleStart, invitePreview, logout, redeemInvite, requireMember, requireUser, sessionCookie, sessionHash, viewer,
 } from "./auth";
 import { convoyAccept, convoyCode, convoyCodeJoin, convoyCodePreview, convoyConnect, convoyCreate, convoyDismiss, convoyInvitePeople, convoyInvites, convoyJoin, convoyPreview, convoyRoom, unwrap } from "./convoy_routes";
 import { Env, HttpError, body, json, str } from "./util";
@@ -127,8 +127,10 @@ on("GET", "/api/me", async (req, env) => {
   const photo = v.member ? await env.DB.prepare("SELECT photo_id FROM users WHERE id = ?").bind(v.id).first<{ photo_id: string | null }>() : null;
   // private themes granted to this account by hand (migration 0044): their looks, for this account only; [] for everyone else
   const themes = await grantedThemes(env, v.id);
+  const again = sessionCookie(req);                                  // the website's cookie keeps up with the sliding session
   return json({ signed_in: true, id: v.id, handle: v.handle, name: v.displayName, member: v.member, requests: waiting?.n ?? 0, photo_id: photo?.photo_id ?? null,
-               themes, ...(v.member && isModerator(env, v) ? { moderator: true } : {}), ...(await isDeveloper(env, v) ? { developer: true } : {}) });
+               themes, ...(v.member && isModerator(env, v) ? { moderator: true } : {}), ...(await isDeveloper(env, v) ? { developer: true } : {}) },
+              200, again ? { "set-cookie": again } : {});
 });
 on("POST", "/api/invites/redeem", async (req, env) => { await redeemInvite(env, await requireUser(req, env), req); return noContent(); });
 on("POST", "/api/invites/preview", async (req, env) => json(await invitePreview(env, await requireMember(req, env), req)));   // P-02: whose friend link

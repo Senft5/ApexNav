@@ -37,7 +37,7 @@ def test_when_it_shows(out):
 def test_one_screen(out):
     assert 1 <= len(out["items"]) <= 4
     for title, text in out["items"]:
-        assert len(title) <= 20 and len(text) <= 140, title
+        assert len(title) <= 20 and len(text) <= 60, title   # one line on a phone, not a paragraph
         for banned in ("faster", "speed", "race"):
             assert banned not in text.lower()
 

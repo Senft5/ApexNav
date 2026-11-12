@@ -44,7 +44,7 @@ Applied to both `apexnav-db` and `apexnav-preview-db`: **0001_init.sql**, **0002
 
 | Group | Tables |
 |---|---|
-| Identity | `users` (Google sub, handle), `members` (everyone signed in and not banned, since 2026-10-30; kept for old app builds and the inviter link), `invites` (token hash only), `sessions` (token hash only) |
+| Identity | `users` (Google sub, handle), `members` (everyone signed in and not banned, since 2026-10-30; kept for old app builds and the inviter link), `invites` (token hash only), `sessions` (token hash only; 30 days that slide: `viewer()` pushes a session in use back to 30 days at most once a day, and `/api/me` sets the website's cookie again) |
 | Social | `friendships` (canonical ordered pair), `blocks`, `crews`, `crew_members`, `crew_invites` |
 | Segments & boards | `segments` (+`origin_id`), `segment_shares`, `grants` (**one row per friend or crew; Scores and Times on by default for friends and private crews, off for public crews; an "off" row is kept so a default never undoes it**), `board_entries` (+`canon_id`), `shared_routes` |
 | Crowd road data | `road_bins`, `hazard_obs`, `ingest_pending`, `rank_slots`, `seen`, `points_ledger` (private tables: no API route reads or writes them directly) |

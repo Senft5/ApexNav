@@ -12,6 +12,12 @@ import { convoysRecheck } from "./convoy";
 export const SESSION_COOKIE = "__Host-ax_session";
 const OAUTH_COOKIE = "__Host-ax_oauth";
 const SESSION_DAYS = 30;
+const RENEW_AFTER_DAYS = 1;
+/** The website's session cookie, set again for its full life (the session slides in viewer(); the cookie has to keep up). */
+export const sessionCookie = (req: Request): string | null => {
+  const t = bearer(req) ? null : getCookie(req, SESSION_COOKIE);
+  return t ? cookie(SESSION_COOKIE, t, SESSION_DAYS * 86400) : null;
+};
 
 export interface Viewer { id: string; email: string; handle: string | null; displayName: string | null; member: boolean }
 
@@ -39,12 +45,15 @@ export async function sessionHash(req: Request): Promise<string | null> {
 export async function viewer(req: Request, env: Env): Promise<Viewer | null> {
   const token = sessionToken(req);
   if (!token) return null;
+  const hash = await sha256hex(token);
   const row = await env.DB.prepare(
     `SELECT u.id, u.email, u.handle, u.display_name AS displayName, (m.user_id IS NOT NULL) AS member,
-            EXISTS (SELECT 1 FROM bans b WHERE b.google_sub = u.google_sub) AS banned
+            EXISTS (SELECT 1 FROM bans b WHERE b.google_sub = u.google_sub) AS banned,
+            (s.expires_at < datetime('now', ?2)) AS stale
        FROM sessions s JOIN users u ON u.id = s.user_id LEFT JOIN members m ON m.user_id = u.id
-      WHERE s.id_hash = ? AND s.expires_at > datetime('now')`,
-  ).bind(await sha256hex(token)).first<{ id: string; email: string; handle: string | null; displayName: string | null; member: number; banned: number }>();
+      WHERE s.id_hash = ?1 AND s.expires_at > datetime('now')`,
+  ).bind(hash, `+${SESSION_DAYS - RENEW_AFTER_DAYS} days`)
+    .first<{ id: string; email: string; handle: string | null; displayName: string | null; member: number; banned: number; stale: number }>();
   if (!row) {
     // a token with no session behind it: rateCheck counted it under its own (fresh) key, so a read is counted per IP here,
     // or a made-up token on every request would read without limit (ratelimit.ts; a write is keyed per IP there already)
@@ -52,7 +61,10 @@ export async function viewer(req: Request, env: Env): Promise<Viewer | null> {
     if (req.method === "GET" && env.READ_LIMIT && !(await env.READ_LIMIT.limit({ key: `ip:${ip}` })).success) throw new HttpError(429, "rate_limited");
     return null;
   }
-  const { banned, ...v } = row;
+  const { banned, stale, ...v } = row;
+  // Sliding expiry: a session in use stays signed in. At most once a day per session (when it is a day or more into its
+  // 30 days) it is pushed back out to 30 days from now; one left alone for 30 days still ends.
+  if (stale) await env.DB.prepare("UPDATE sessions SET expires_at = ? WHERE id_hash = ?").bind(sqlTime(Date.now() + SESSION_DAYS * 86400_000), hash).run();
   // P-02: someone signed in before Vetta opened (no invite, so no row) becomes a member on their next request.
   const member = !!v.member || (!banned && await admit(env, v.id));
   return { ...v, member };
