@@ -8237,7 +8237,7 @@
     // Viewpoints, cafés and fuel along a planned route (IDEAS R-24, R-23; stages.js pois, scenic.js): pins on the map and a
     // line on the route card. Map data: a mapped viewpoint, a fuel station that may be closed. Nothing found says nothing.
     const scenicPins = [];
-    const SCENIC_LABEL = { view: 'VIEW', cafe: 'CAFÉ', fuel: 'FUEL' };
+    const SCENIC_LABEL = { view: 'VIEW', falls: 'FALLS', cafe: 'CAFÉ', fuel: 'FUEL' };
     // Seasonal and time-of-day closures (conditional_closures.js, IDEAS R-22): OSM conditional access tags on the roads the
     // route uses, read for when you'd get there. A trip over 1° across, or the map offline: nothing said.
     async function attachClosures(t) {
@@ -8606,17 +8606,41 @@
       const open = $('routeAlongPanel').hidden && $('routeAlongPanel').childElementCount > 0;
       $('routeAlongPanel').hidden = !open; $('routeAlongLine').setAttribute('aria-expanded', String(open));
     });
-    async function attachScenic(t) {
+    function clearScenic() {
       for (const mk of scenicPins.splice(0)) mk.remove();
       fuelPins.length = 0; poiDeclutter.pins = [];
       $('routeCardAlong').hidden = true; $('routeAlongPanel').hidden = true; $('routeAlongPanel').replaceChildren();
       $('routeAlongLine').setAttribute('aria-expanded', 'false');
+    }
+    // IDEAS R-24: waterfalls near the route, from OpenStreetMap through Overpass (the map's tiles have none). A trip over 1°
+    // across, the servers down or offline: none, and the Along line says what the tiles gave.
+    async function fallsNear(t) {
+      if (!window.ApexCameras || !ApexScenic.fallsQuery) return [];
+      let s = Infinity, w = Infinity, n = -Infinity, e = -Infinity;
+      for (let i = 0; i < t.lat.length; i++) { s = Math.min(s, t.lat[i]); n = Math.max(n, t.lat[i]); w = Math.min(w, t.lon[i]); e = Math.max(e, t.lon[i]); }
+      if (n - s > 1 || e - w > 1) return [];
+      try {
+        const json = await ApexCameras.fetchFirst(fetch, 'data=' + encodeURIComponent(ApexScenic.fallsQuery(s - 0.005, w - 0.005, n + 0.005, e + 0.005)));
+        return ApexScenic.fallsFrom(json);
+      } catch (_) { return []; }
+    }
+    async function attachScenic(t) {
+      clearScenic();
       if (!t || !Array.isArray(t.lat) || t.lat.length < 2 || !window.ApexScenic) return;
       const pts = [];
       for (let i = 0; i < t.lat.length; i += 200) pts.push({ lat: t.lat[i], lon: t.lon[i] });   // every 1 km
-      let list = [];
-      try { list = ApexScenic.along(await ApexStages.pois(pts), t); } catch (_) { return; }      // offline or a very long route: say nothing
+      const falls = fallsNear(t);                                                              // asked at once, painted when it lands
+      let raw = null;
+      try { raw = await ApexStages.pois(pts); } catch (_) { raw = null; }                     // offline or a very long route
       if (plannedRoute !== t) return;                                                          // another route came up meanwhile
+      if (!raw) return;                                                                        // say nothing: no fuel known is not "no fuel"
+      paintScenic(t, ApexScenic.along(raw, t));
+      const wf = await falls;
+      if (plannedRoute !== t || !wf.length) return;
+      clearScenic();
+      paintScenic(t, ApexScenic.along(raw.concat(wf), t));                                     // the waterfalls join the tiles' places
+    }
+    function paintScenic(t, list) {
       t.scenic = list;
       if (car.route && track === t) carAlong(t);
       const line = ApexScenic.summary(list, t.dist[t.dist.length - 1]);
@@ -9239,6 +9263,16 @@
     // what a drive with no score was, in the score's slot: no corners at all, or too few clean ones to score
     const noScoreWords = (corners) => (Number.isFinite(corners) && corners > 0 ? 'too few clean corners to score' : 'no corners to score');
     // The score arrived (ds: { score, components }, corners: a count; others: your earlier drives with this name, scored)
+    // TestFlight 2026-11-12 (the owner: "cluttered", "walls of text"): at most two lines under the score, the ones you
+    // asked for or earned first (the practice, a month's best run), then the road's and what the phone felt
+    function endLinesCap() {
+      let shown = 0;
+      for (const id of ['endPractice', 'endRun', 'endRoad', 'endFeel']) {
+        const n = $(id);
+        if (!n.textContent) { n.hidden = true; continue; }
+        n.hidden = shown >= 2; if (!n.hidden) shown++;
+      }
+    }
     function endCardScored(c, others, opts = {}) {
       if (!endDrive || endDrive.id !== c.id) return;                   // another card since
       endDrive = { ...endDrive, ...c };
@@ -9262,7 +9296,7 @@
           // IDEAS D-30: a run of clean corners that beats every other drive's this month (its summary's run, flow.js)
           const runLine = me && ApexEndLine.bestRunMonth && window.ApexAnalysis ? ApexEndLine.bestRunMonth(me, all, ApexAnalysis.monthOf) : null;
           if (runLine) {
-            $('endRun').textContent = runLine; $('endRun').hidden = false;
+            $('endRun').textContent = runLine; $('endRun').hidden = false; endLinesCap();
             const sheet = $('endCard').querySelector('.card-sheet');      // a taller card: the drive is fitted again above it
             if (endTrailOn && sheet && Math.abs(sheet.getBoundingClientRect().top - endTrailTop) > 4) showEndTrail(endDrive);
           }
@@ -9285,6 +9319,7 @@
       // a road you have driven before: where this drive lost most at its least even corners, or your cleanest passes on it
       const roadLine = typeof c.road === 'string' ? c.road : '';
       $('endRoad').textContent = roadLine; $('endRoad').hidden = !roadLine;
+      endLinesCap();
       if (window.ApexEndLine && !opts.quiet) {                       // Round 3: never aloud to a parked car or a pocket
         const pack = ['marguerite', 'kit', 'hale'].includes(state.voiceId) ? state.voiceId : 'marguerite';
         // one of the pack's sign-offs, the same for this drive every time, from a clip the loaded bank holds (U-113)

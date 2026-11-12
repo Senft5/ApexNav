@@ -1,9 +1,10 @@
 // Along the route (IDEAS R-24, R-23): viewpoints, cafés and fuel from the map's own OpenStreetMap points (stages.js pois),
+// waterfalls from OpenStreetMap too (the map's tiles carry none: asked of Overpass, fallsQuery / fallsFrom),
 // placed along a planned route, and the longest stretch with no fuel. Map data, labelled as such: a viewpoint is where
 // someone mapped one, a fuel station may be closed. Pure (tests/test_scenic.py); the page pins them and says the summary.
 (function (root) {
   'use strict';
-  const NEAR_M = { view: 350, cafe: 200, fuel: 200 };     // how far off the road still counts as "along" it
+  const NEAR_M = { view: 350, falls: 400, cafe: 200, fuel: 200 };   // a waterfall a short walk from a pull-off still counts     // how far off the road still counts as "along" it
   const SAME_M = 300;                                       // the same kind within this along the road is one stop
   const FUEL_WARN_M = 80 * 1000;                            // ~50 mi without fuel is worth saying
   const MI = 1609.344;
@@ -50,8 +51,9 @@
   function summary(list, totalM) {
     const count = (k) => (list || []).filter((p) => p.kind === k).length;
     const parts = [];
-    const v = count('view'), cf = count('cafe'), fu = count('fuel');
+    const v = count('view'), wf = count('falls'), cf = count('cafe'), fu = count('fuel');
     if (v) parts.push(`${v} viewpoint${v === 1 ? '' : 's'}`);
+    if (wf) parts.push(`${wf} waterfall${wf === 1 ? '' : 's'}`);
     if (cf) parts.push(`${cf} café${cf === 1 ? '' : 's'}`);
     if (fu) parts.push(`${fu} fuel stop${fu === 1 ? '' : 's'}`);           // the owner, 2026-11-11: a station to tap for its name
     const gap = fuelGap(list, totalM);
@@ -71,7 +73,7 @@
    * lat, lon, m }: the name the map has for it (an unnamed one says so, never a made-up name), how far into the route,
    * and how far off the road. `fmt` = { long(m), short(m) } in the driver's units (units.js).
    */
-  const KIND_NAME = { view: 'Viewpoint', cafe: 'Café', fuel: 'Fuel station' };
+  const KIND_NAME = { view: 'Viewpoint', falls: 'Waterfall', cafe: 'Café', fuel: 'Fuel station' };
   function places(list, fmt = null) {
     const long = fmt && fmt.long ? fmt.long : (m) => `${(m / 1000).toFixed(1)} km`;
     const short = fmt && fmt.short ? fmt.short : (m) => `${Math.round(m / 10) * 10} m`;
@@ -95,7 +97,7 @@
    * first one of `kind` past `atM` along the route, by its name on the map. `list` = along(); `list` null = no route
    * (or its places not loaded). "Next fuel: Shell, in 3.2 mi." / "Next café in 1.4 mi." / "No fuel stops ahead on this route."
    */
-  const ASK_NAME = { cafe: ['café', 'cafés'], fuel: ['fuel', 'fuel stops'], view: ['viewpoint', 'viewpoints'] };
+  const ASK_NAME = { cafe: ['café', 'cafés'], fuel: ['fuel', 'fuel stops'], view: ['viewpoint', 'viewpoints'], falls: ['waterfall', 'waterfalls'] };
   function nextAnswer(list, atM, kind, fmt = null) {
     const words = ASK_NAME[kind];
     if (!words) return '';
@@ -112,12 +114,12 @@
   /**
    * Which pins the map shows so none overlap (the owner, 2026-11-04: "a pile of overlapping FUEL labels"). `pins` =
    * [{ kind, named, m, x, y, w, h }]: the pin's centre and size on screen, `m` its place along the route; `view` = { w, h }.
-   * The most useful first: named viewpoints, other viewpoints, cafés, fuel; within a kind, spread along the route (the
+   * The most useful first: named viewpoints, other viewpoints, waterfalls, cafés, fuel; within a kind, spread along the route (the
    * first, then each time the one farthest from those already kept). A pin that would touch one already shown is hidden
    * (PAD px apart, PAD_SAME between two of a kind), and at most KEEP of a kind are shown on screen at once. Pins off the
    * screen don't count and stay as they are. Returns a boolean per pin, true = shown.
    */
-  const KIND_RANK = { view: 0, cafe: 1, fuel: 2 }, KEEP = { view: 6, cafe: 4, fuel: 4 }, PAD = 4, PAD_SAME = 24;
+  const KIND_RANK = { view: 0, falls: 1, cafe: 2, fuel: 3 }, KEEP = { view: 6, falls: 4, cafe: 4, fuel: 4 }, PAD = 4, PAD_SAME = 24;
   function declutter(pins, view = null) {
     const list = pins || [], show = list.map(() => true);
     const on = list.map((p, i) => i).filter((i) => {
@@ -153,6 +155,30 @@
     return show;
   }
 
-  const api = { along, fuelGap, summary, places, placeLine, nextAnswer, declutter, NEAR_M, FUEL_WARN_M, KIND_NAME };
+  /**
+   * IDEAS R-24: waterfalls in a box (south, west, north, east), as an Overpass query. The map's own tiles (OpenMapTiles)
+   * have no waterfall, so they are asked of OpenStreetMap directly: a node or a way tagged natural=waterfall or
+   * waterway=waterfall, a way by its centre.
+   */
+  function fallsQuery(s, w, n, e) {
+    const b = [s, w, n, e].map((x) => Number(x).toFixed(5)).join(',');
+    return `[out:json][timeout:20];(nwr["natural"="waterfall"](${b});nwr["waterway"="waterfall"](${b}););out center 400;`;
+  }
+  /** The waterfalls in an Overpass answer, as points along() takes: [{ kind: 'falls', name, lat, lon }]. One per place. */
+  function fallsFrom(json) {
+    const out = [], seen = new Set();
+    for (const x of (json && Array.isArray(json.elements) ? json.elements : [])) {
+      const lat = finite(x.lat) ? x.lat : x.center && x.center.lat, lon = finite(x.lon) ? x.lon : x.center && x.center.lon;
+      if (!finite(lat) || !finite(lon)) continue;
+      const key = `${lat.toFixed(4)},${lon.toFixed(4)}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      const t = x.tags || {}, name = typeof t.name === 'string' && t.name.trim() ? t.name.trim() : null;
+      out.push({ kind: 'falls', name, lat, lon });
+    }
+    return out;
+  }
+
+  const api = { along, fuelGap, summary, places, placeLine, nextAnswer, declutter, fallsQuery, fallsFrom, NEAR_M, FUEL_WARN_M, KIND_NAME };
   if (typeof module !== 'undefined' && module.exports) module.exports = api; else root.ApexScenic = api;
 })(typeof window !== 'undefined' ? window : globalThis);
