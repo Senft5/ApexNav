@@ -176,6 +176,7 @@
     .cp-board-row.mine .who b { text-decoration: underline; text-decoration-thickness: 2px; }
     .cp-board .cp-board-row { grid-template-columns: 24px 36px minmax(0, 1fr) auto; align-items: center; gap: 10px; }
     .cp-board .cp-board-row .who small { display: block; margin-left: 0; }
+    .cp-board .cp-board-row .who .cp-sub { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .cp-board .cp-board-row > :nth-child(2) { width: 36px; height: 36px; }
     .cp-board[aria-busy="true"] { opacity: 0.5; }
     .cp-periods { width: 100%; } .cp-periods button { flex: 1; min-width: 0; }
@@ -602,8 +603,10 @@
         list.replaceChildren(...j.rows.map((x, i) => {
           const who = el('span', { className: 'who' }, el('b', { textContent: `@${x.handle || '?'}` }));
           if (x.badge) who.append(el('span', { className: 'cp-badge', textContent: x.badge }));   // Works livery
-          if (x.car) who.append(el('small', { textContent: x.car }));
-          if (x.total != null) who.append(el('small', { className: 'cp-drives', textContent: `${x.drives} drive${x.drives === 1 ? '' : 's'}` }));
+          // one line under the name: the drives, then the car, cut short with … (walkthrough 2026-11-12: a long trim name took
+          // two lines and the drives a third, so five crew-mates filled the screen)
+          const sub = [x.total != null ? `${x.drives} drive${x.drives === 1 ? '' : 's'}` : null, x.car || null].filter(Boolean).join(' · ');
+          if (sub) who.append(el('small', { className: 'cp-sub', textContent: sub, title: sub }));
           const row = el('div', { className: 'cp-board-row' + (x.mine ? ' mine' : '') },
             el('span', { className: 'rank', textContent: x.total == null ? '' : String(i + 1) }),
             P() ? P().avatar(x.photo_id || null, x.handle, 36) : el('span'), who,
