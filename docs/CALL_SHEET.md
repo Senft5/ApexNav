@@ -14,6 +14,14 @@ reads it before Overpass. Calls: a tile counts as ours only if the state outline
 wrongly "no cameras"; outside the region and when our file can't be read, the phone asks Overpass as before (now with
 maps.mail.ru as a fourth server). The request carries no position: it's the same file for everyone. Undo: drop the
 `regionOnce` lookup in web/cameras.js `load` (pass `region: null`), the route in backend/src/index.ts and the workflow.
+## 2026-11-11 (ui-round-three): an empty Garage shows a parking bay and one big "Add a car" key (claude/project-thread-5sbga7)
+
+With no cars yet, the Garage said one grey sentence over a small outlined key. Now it is a small page like the first
+friend and first crew pages: a drawing of a road pulling into an empty bay, "Park your first car.", the same sentence, and
+"Add a car" as the full-width dark key. Once you have a car it is the small key again. Undo: put back the `note` line in
+`render()` in web/garage_ui.js and drop the `.garage-first` rules at the end of web/signature.css.
+
+
 ## 2026-11-11 (time attack placement): the week's loop in Where to?, Drive it, and your place after a drive (claude/project-thread-uwmi4e)
 
 Calls I made: the Where to? row asks for the week's loop when Where to? opens (at most every 5 minutes, only the area,

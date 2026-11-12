@@ -209,7 +209,15 @@
         if (mine && page.onCars) page.onCars(mine);
         const kids = [el('h3', { textContent: 'Your cars' })];
         if (mine === null) { kids.push(el('p', { className: 'note', textContent: 'Couldn\'t load your garage. Check signal.' })); host.replaceChildren(...kids); return; }
-        if (!mine.length && editing !== 'new') kids.push(el('p', { className: 'note', textContent: 'Add your car: friends and private crews see it next to your name when you show it. No location or drives are on a car card.' }));
+        // An empty garage is a bay waiting for a car (the People pages' drawing): a road pulls in to a dashed bay, the red puck on it
+        const first = !mine.length && editing !== 'new';
+        if (first) kids.push(el('div', { className: 'people-first garage-first' },
+          el('div', { className: 'join-art', innerHTML: '<svg viewBox="0 0 360 128" preserveAspectRatio="xMidYMid slice" aria-hidden="true">'
+            + '<rect class="jr-bay" x="226" y="30" width="96" height="68" rx="6"/>'
+            + '<path class="jr-case" d="M-12 104 C 80 104 120 64 214 64"/><path class="jr-fill" d="M-12 104 C 80 104 120 64 214 64"/>'
+            + '<circle class="jr-puck lead" cx="200" cy="64" r="7"/></svg>' }),
+          el('h3', { className: 'join-head', textContent: 'Park your first car.' }),
+          el('p', { className: 'people-lead', textContent: 'Friends and private crews see it next to your name when you show it. No location or drives are on a car card.' })));
         const cards = el('div', { className: 'garage-cards' });
         for (const c of mine) {
           if (editing === c.id) { cards.append(form(c, () => { editing = null; render(); })); continue; }
@@ -223,7 +231,7 @@
         }
         if (editing === 'new') cards.append(form({}, () => { editing = null; render(); }));
         if (cards.childNodes.length) kids.push(cards);
-        if (editing !== 'new' && mine.length < 10) kids.push(el('div', { className: 'row' }, btn('Add a car', () => { editing = 'new'; render(); })));
+        if (editing !== 'new' && mine.length < 10) kids.push(el('div', { className: 'row' }, btn('Add a car', () => { editing = 'new'; render(); }, first ? 'ink-btn solid' : undefined)));
         if (theirs.length) {
           kids.push(el('h3', { textContent: 'Friends\' and crew cars' }));
           const list = el('div', { className: 'garage-cards' });
