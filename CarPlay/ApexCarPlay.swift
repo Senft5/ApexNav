@@ -68,7 +68,7 @@ final class ApexCar {
     private(set) var places: [(name: String, coord: CLLocationCoordinate2D)] = []
     /// The cafés and fuel along the planned route by name (web/carplay.js alongMessage): a longer and a shorter line for the
     /// route preview, empty until the page has looked. A new route clears them; the page sends that route's after it.
-    private(set) var along = (full: "", short: "")
+    private(set) var along = (full: "", short: "", descent: "")
     private(set) var look = Look()
     /// The car's map data as JSON for web/carmap.js: the route line, the corners and the hazards, kept to repaint a map that connects later.
     private(set) var routeJSON = "[]"
@@ -131,7 +131,7 @@ final class ApexCar {
                           options: options.isEmpty ? [Option(summary: "Route", detail: "", timeS: nil, distM: nil)] : options,
                           picked: max(0, min(options.count - 1, Int(Self.num(dict["picked"]) ?? 0))))
             routeJSON = Self.json(coords.map { [$0.latitude, $0.longitude] })
-            along = ("", "")
+            along = ("", "", "")
             placePlates = []; placesJSON = "[]"
             eachMap { $0.showRoute(); $0.setMode(); $0.showPlaces() }
             scene?.routeChanged()
@@ -147,12 +147,13 @@ final class ApexCar {
                 placesJSON = Self.json(list.map { ["at": [$0.lat, $0.lon], "kind": $0.place ?? "fuel", "text": $0.text] as [String: Any] })
                 eachMap { $0.showPlaces() }
             }
-            guard full != along.full || short != along.short else { return }
-            along = (full, short)
+            let descent = String(((dict["descent"] as? String) ?? "").prefix(48))
+            guard full != along.full || short != along.short || descent != along.descent else { return }
+            along = (full, short, descent)
             scene?.routeChanged()
         case "clear":
             route = nil
-            along = ("", "")
+            along = ("", "", "")
             placePlates = []; placesJSON = "[]"
             routeJSON = "[]"
             eachMap { $0.showRoute(); $0.setMode(); $0.showPlaces() }
@@ -536,13 +537,16 @@ final class ApexCarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDel
         }
         idleBars()
         // the cafés and fuel along it by name (the owner, 2026-11-11), on the picked route's line only: the page looked along
-        // that one. Variants run longest first and the car shows the first that fits; the last is the detail alone.
+        // that one, and a long descent on it (brake_heat.js). Variants run longest first and the car shows the first that
+        // fits; the last is the detail alone.
         let along = car.along
         let choices = r.options.enumerated().map { (i, o) -> CPRouteChoice in
             var info = [o.detail]
             if i == r.picked {
-                let join = { (a: String) in o.detail.isEmpty ? a : "\(o.detail) · \(a)" }
-                info = [along.full, along.short].filter { !$0.isEmpty }.map(join) + [o.detail]
+                let line = { (parts: [String]) in parts.filter { !$0.isEmpty }.joined(separator: " · ") }
+                var seen = Set<String>()
+                info = [line([o.detail, along.full, along.descent]), line([o.detail, along.short, along.descent]), line([o.detail, along.descent]),
+                        line([o.detail, along.full]), line([o.detail, along.short]), o.detail].filter { seen.insert($0).inserted }
             }
             return CPRouteChoice(summaryVariants: [o.summary], additionalInformationVariants: info.filter { !$0.isEmpty }, selectionSummaryVariants: [o.summary])
         }

@@ -8566,6 +8566,7 @@
       t.descents = window.ApexBrakeHeat ? ApexBrakeHeat.longDescents(t.dist, t.elev) : [];    // also said near each top (notes loop)
       const fall = window.ApexBrakeHeat ? ApexBrakeHeat.descentText(t.descents, (m) => ApexUnits.long(m, 1), h) : null;
       $('routeCardDescent').textContent = fall ? ApexRouteCard.factText(fall) : ''; $('routeCardDescent').hidden = !fall;
+      if (car.route && track === t) carAlong(t);                      // and on the car's route preview
     }
     // the owner, 2026-11-11: the places behind the Along line by name, a tap away (scenic.js places)
     const placeUnits = { long: (m) => ApexUnits.long(m, 1, true), short: (m) => { const d = ApexUnits.short(m); return `${d.n} ${d.u.toLowerCase()}`; } };
@@ -8858,8 +8859,9 @@
     // The cafés and fuel along the route by name on the car's route preview (the owner, 2026-11-11). t.scenic comes later
     // than the route (attachScenic): it is sent then, and again with every route the car is sent.
     function carAlong(t) {
-      if (!t || !Array.isArray(t.scenic)) return;
-      const msg = ApexCarPlay.alongMessage(t.scenic), key = `${car.route}|${JSON.stringify(msg)}`;
+      if (!t || (!Array.isArray(t.scenic) && !Array.isArray(t.descents))) return;
+      const fall = window.ApexBrakeHeat ? ApexBrakeHeat.descentShort(t.descents, (m) => ApexUnits.long(m, 1)) : null;
+      const msg = ApexCarPlay.alongMessage(t.scenic || [], fall), key = `${car.route}|${JSON.stringify(msg)}`;
       if (key === car.along) return;
       car.along = key;
       carPost(msg);

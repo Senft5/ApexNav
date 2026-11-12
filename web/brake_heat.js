@@ -143,6 +143,14 @@
     return `Your brakes got hot${far} on this drive, by Vetta\u2019s estimate from your speed and the hills. On a long descent, a lower gear lets the engine take some of the work.`;
   }
 
-  const api = { create, overTrack, driveText, longDescents, descentText, descentAhead, descentCall, tauS, level, CALL_TEXT, WARM_K, HOT_K };
+  /** The first long descent in a few words, for a line with no room (the car's route preview): "Long descent: 3.7 mi at
+   *  8%", with "+1" for each more; null with none. */
+  function descentShort(list, fmtDist) {
+    if (!Array.isArray(list) || !list.length) return null;
+    const d = list[0], more = list.length - 1;
+    return `Long descent: ${fmtDist(d.end_m - d.start_m)} at ${Math.round(d.grade * 100)}%${more ? ` +${more}` : ''}`;
+  }
+
+  const api = { create, overTrack, driveText, longDescents, descentText, descentShort, descentAhead, descentCall, tauS, level, CALL_TEXT, WARM_K, HOT_K };
   if (typeof module !== 'undefined' && module.exports) module.exports = api; else root.ApexBrakeHeat = api;
 })(typeof window !== 'undefined' ? window : globalThis);

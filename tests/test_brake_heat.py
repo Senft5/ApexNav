@@ -291,7 +291,7 @@ def test_the_js_port_finds_the_same_descents_and_says_them_in_words():
     script = (
         "const B=require(process.argv[1]);const c=JSON.parse(require('fs').readFileSync(0,'utf8'));"
         "const f=(m)=>(m/1000).toFixed(1)+' km', h=(m)=>Math.round(m)+' m';"
-        "process.stdout.write(JSON.stringify(c.map(([d,e])=>{const l=B.longDescents(d,e);return {l,t:B.descentText(l,f,h)};})));"
+        "process.stdout.write(JSON.stringify(c.map(([d,e])=>{const l=B.longDescents(d,e);return {l,t:B.descentText(l,f,h),s:B.descentShort(l,f)};})));"
     )
     res = subprocess.run([NODE, "-e", script, os.path.join(ROOT, "web", "brake_heat.js")], input=json.dumps(cases),
                          capture_output=True, text=True, check=True)
@@ -305,6 +305,8 @@ def test_the_js_port_finds_the_same_descents_and_says_them_in_words():
     assert js[0]["t"] == "A long descent: down 480 m over 6.0 km at 8%. A lower gear saves the brakes."
     assert js[1]["t"].endswith(", and 1 more. A lower gear saves the brakes.")
     assert js[3]["t"] is None
+    # the car's route preview has room for a few words only
+    assert js[0]["s"] == "Long descent: 6.0 km at 8%" and js[1]["s"].endswith(" +1") and js[3]["s"] is None
 
 
 def test_the_route_card_says_it_under_the_climb():

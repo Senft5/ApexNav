@@ -271,10 +271,11 @@
    * rest (the unnamed ones too); short is the first name of each. An unnamed kind is only counted. Both '' with nothing
    * along, which clears the car's line. `list` is web/scenic.js along() (t.scenic); viewpoints stay on the phone.
    * `places` are the same ones for the car's map, a plate each at the place ({ at, kind, text }, at most ALONG_PLATES,
-   * in route order): its name, or "Café" / "Fuel" when the map has none.
+   * in route order): its name, or "Café" / "Fuel" when the map has none. `descent` is the route's first long descent in
+   * a few words ('' with none), for the same line.
    */
   const ALONG_NAME_MAX = 28, ALONG_MAX = 90, ALONG_PLATES = 30, PLATE_NAME_MAX = 18;
-  function alongMessage(list) {
+  function alongMessage(list, descent) {
     const rows = Array.isArray(list) ? list.filter((p) => p && (p.kind === 'cafe' || p.kind === 'fuel')) : [];
     const cut = (s, n) => (s.length > n ? s.slice(0, n - 1).trimEnd() + '…' : s);
     const part = (kind, label, one, many, keep) => {
@@ -291,7 +292,9 @@
     const places = rows.filter((p) => finite(p.lat) && finite(p.lon)).slice(0, ALONG_PLATES).map((p) => ({
       at: [+p.lat.toFixed(6), +p.lon.toFixed(6)], kind: p.kind,
       text: cut((typeof p.name === 'string' && p.name.trim()) || (p.kind === 'cafe' ? 'Café' : 'Fuel'), PLATE_NAME_MAX) }));
-    return { kind: 'along', full: cut(full, ALONG_MAX), short: cut(short, ALONG_MAX), places };
+    // a long descent on the way (brake_heat.js descentShort), said beside the places: the brakes' warning before Drive
+    const fall = typeof descent === 'string' ? cut(descent.trim(), 48) : '';
+    return { kind: 'along', full: cut(full, ALONG_MAX), short: cut(short, ALONG_MAX), places, descent: fall };
   }
 
   /**

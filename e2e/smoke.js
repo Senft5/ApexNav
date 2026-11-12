@@ -2298,8 +2298,8 @@ flow('CarPlay feed: a planned route sends its line, every corner and the theme; 
     return [{ kind: 'cafe', name: 'Bean There Coffee', lat: a.lat, lon: a.lon + 0.0003 }, { kind: 'fuel', name: 'Shell', lat: pts[pts.length - 1].lat, lon: pts[pts.length - 1].lon }]; }; });
   await page.evaluate(() => window.apex.onNative({ type: 'carplay', action: 'go', lat: 35.7565, lon: -83.97, name: 'Maryville' }));
   await page.waitForFunction(() => window.__car.some((m) => m.kind === 'route') && window.__car.some((m) => m.kind === 'corners' && m.list.length), null, { timeout: 20000 });
-  await page.waitForFunction(() => window.__car.some((m) => m.kind === 'along'), null, { timeout: 10000 });
-  const along = await page.evaluate(() => { const i = window.__car.findIndex((m) => m.kind === 'along'); return { m: window.__car[i], afterRoute: i > window.__car.findIndex((m) => m.kind === 'route') }; });
+  await page.waitForFunction(() => window.__car.some((m) => m.kind === 'along' && m.full), null, { timeout: 10000 });   // (a descent alone may come first)
+  const along = await page.evaluate(() => { const i = window.__car.findIndex((m) => m.kind === 'along' && m.full); return { m: window.__car[i], afterRoute: i > window.__car.findIndex((m) => m.kind === 'route') }; });
   check(along.m.full === 'Café: Bean There Coffee · Fuel: Shell' && along.m.short === 'Bean There Coffee · Shell' && along.afterRoute
     && along.m.places.map((p) => `${p.kind}:${p.text}`).join() === 'cafe:Bean There Coffee,fuel:Shell' && along.m.places.every((p) => Array.isArray(p.at)), 'the car is told the places along by name, after the route: ' + JSON.stringify(along));
   const r = await page.evaluate(() => ({ route: window.__car.find((m) => m.kind === 'route'), corners: window.__car.filter((m) => m.kind === 'corners').pop(),
