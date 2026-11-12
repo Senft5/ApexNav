@@ -308,7 +308,7 @@
     return out;
   }
   /** A drive's corners against your other passes of the same road (port of driver_profile.road_records). */
-  const ROAD_MIN_PASSES = 3, SAME_CORNER_M = 20, SAME_WAY = 0.7, UNEVEN_LEVELS = 15, UNEVEN_MAX = 3, NEAR_BEST = 5;
+  const ROAD_MIN_PASSES = 3, SAME_CORNER_M = 20, SAME_WAY = 0.7, UNEVEN_LEVELS = 15, UNEVEN_MAX = 3, NEAR_BEST = 5, EVEN_MIN = 2;
   function roadRecords(mine, others, ids = null) {
     let corners = 0, best = 0, lvl = 0;
     const held = [], rows = [];
@@ -365,7 +365,7 @@
   }
   /** A road's corners across every drive of it (port of driver_profile.road_book). drives oldest first, each
    *  { id, at, corners: placed() }; ref [[x, y]] along one drive of the road for road order. */
-  function roadBook(drives, ref = null) {
+  function roadBook(drives, ref = null, since = null) {
     const book = [];
     for (const d of drives || []) for (const o of d.corners || []) {
       if (o.level === null || o.level === undefined) continue;
@@ -387,10 +387,16 @@
       const by = [...c.by].filter(([, v]) => v === rec).map(([i]) => i).sort((a, b) => order.get(a) - order.get(b))[0];
       const low = Math.min(...c.by.values()), worst = [...c.by].filter(([, v]) => v === low).map(([i]) => i).sort((a, b) => order.get(a) - order.get(b))[0];
       out.push({ x: c.x, y: c.y, size: c.size, dir: c.dir, passes: c.by.size, record: rec, low, by, at: at.get(by), why: rec - low >= UNEVEN_LEVELS ? whyOf(c.pass.get(by), c.pass.get(worst)) : null });
+      if (since !== null) {                                            // a road practice under way (core road_book since)
+        const xs = [...c.by].filter(([i]) => at.get(i) && at.get(i) >= since).map(([, v]) => v);
+        Object.assign(out[out.length - 1], { since_n: xs.length, since_low: xs.length ? Math.min(...xs) : null });
+      }
     }
     const wide = out.map((k, i) => i).filter((i) => out[i].record - out[i].low >= UNEVEN_LEVELS)
       .sort((a, b) => (out[b].record - out[b].low) - (out[a].record - out[a].low) || a - b);
-    return { corners: out, fewer: book.length - out.length, drives: (drives || []).length, uneven: wide.slice(0, UNEVEN_MAX).map((i) => i + 1) };
+    const res = { corners: out, fewer: book.length - out.length, drives: (drives || []).length, uneven: wide.slice(0, UNEVEN_MAX).map((i) => i + 1) };
+    if (since !== null) res.evened = out.map((k, i) => i).filter((i) => out[i].record - out[i].low >= UNEVEN_LEVELS && out[i].since_n >= EVEN_MIN && out[i].record - out[i].since_low < UNEVEN_LEVELS).map((i) => i + 1);
+    return res;
   }
   /** A road book in words: { head, rows: [{ n, what ("Tight left"), record, by, on (day(at) or null), passes }] }, or null with
    *  no corner passed three times. head: "12 corners you have driven three or more times, in road order[; 5 more fewer times]." */
@@ -450,6 +456,14 @@
       if (n > 0 && x.name && (!best || n > best.n)) best = { name: x.name, n, of: b.uneven.length };
     }
     return best;
+  }
+  /** A road practice's corners that have evened out (roadBook's evened), as "Evened out since you began practicing here:
+   *  corners 4 and 9, every pass there since close to your cleanest." null with none. */
+  function roadEvenedLine(book) {
+    const xs = (book && book.evened) || [];
+    if (!xs.length) return null;
+    const at = xs.length < 2 ? `corner ${xs[0]}` : `corners ${xs.slice(0, -1).join(', ')} and ${xs[xs.length - 1]}`;
+    return `Evened out since you began practicing here: ${at}, every pass there since close to your cleanest.`;
   }
   /** "Most of the difference at corner 3 is one steering arc." for a road book's focus, or null. */
   function roadBookFocusLine(f) {
@@ -1049,7 +1063,7 @@
     }
   }
 
-  const api = { SKILLS, observe, profile, swing, excess, SKILL_MIN, WORDS, findingLine, styleLines, touchLines, touchTrendLines, driveTouchLines, paceLines, PACE, MEASURES, touch, TOUCH, driveTouch, DRIVE_TOUCH_MIN, bestCorners, recordsBySize, RECORD_MIN, driveRecords, driveRecordLines, roadRecords, placed, roadRecordLine, roadCornerNote, roadBook, roadBookRows, roadBookFocus, roadBookFocusLine, roadsToWork, skillRoadLine, skillRoad, roadUnevenLine, roadEndLine, cardLine, focusLines, render,
+  const api = { SKILLS, observe, profile, swing, excess, SKILL_MIN, WORDS, findingLine, styleLines, touchLines, touchTrendLines, driveTouchLines, paceLines, PACE, MEASURES, touch, TOUCH, driveTouch, DRIVE_TOUCH_MIN, bestCorners, recordsBySize, RECORD_MIN, driveRecords, driveRecordLines, roadRecords, placed, roadRecordLine, roadCornerNote, roadBook, roadBookRows, roadBookFocus, roadBookFocusLine, roadEvenedLine, roadsToWork, skillRoadLine, skillRoad, roadUnevenLine, roadEndLine, cardLine, focusLines, render,
     PRACTICE_MIN, practice, drivePractice, onPlanRoad, practiceLine, practiceSummary, localStamp, loadPlan, savePlan, PLAN_KEY };
   if (typeof module !== 'undefined' && module.exports) module.exports = api; else root.ApexDriverProfile = api;
 })(typeof window !== 'undefined' ? window : globalThis);

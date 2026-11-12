@@ -3971,6 +3971,17 @@ flow('reported hazards: a call ahead, "still there?" after passing, and a one-ta
   check(!(await page.evaluate(() => document.getElementById('toast').classList.contains('show') && /Pothole/.test(document.getElementById('toast').textContent))), 'no toast over the map');
   check(await page.evaluate(() => { const n = document.getElementById('dsNote'); return !n.hidden && n.scrollWidth <= n.clientWidth + 1 && /reported/.test(n.getAttribute('aria-label')); }), 'the status line says it whole (or its first sentence)');
   check(reports.length === 1 && reports[0].kind === 'pothole' && Math.abs(reports[0].lat - (35.6 + 330 / 110540)) < 1e-4 && reports[0].heading === 0, 'reported at your position and heading');
+  // a report from the car's grid: the car says so with its own Undo (and OK), and Undo there sends nothing. The car stub is
+  // set late: present from the load, the page takes the app's API base and the Worker stub above isn't asked.
+  await page.evaluate(() => { window.__car = []; window.webkit = { messageHandlers: { apex: { postMessage(m) { if (m && m.cmd === 'car') window.__car.push(m); } } } };
+    window.apex.onNative({ type: 'carplay', action: 'report', kind: 'gravel' }); });
+  const undo = await page.evaluate(() => window.__car.filter((m) => m.kind === 'offer').pop());
+  check(undo && undo.title === 'Gravel reported' && undo.key === 'Undo' && undo.cancel === 'OK' && undo.seconds === 5, 'the car\'s report has its Undo there: ' + JSON.stringify(undo));
+  check(await page.evaluate(() => /Undo Gravel/.test(document.getElementById('hzReportBtn').textContent)), 'and the phone\'s Report key is Undo too');
+  await page.evaluate((id) => window.apex.onNative({ type: 'carplay', action: 'offer', id }), undo.id);
+  check(await page.evaluate(() => document.getElementById('hzReportBtn').textContent === 'Report'), 'Undo on the car takes the report back');
+  await page.waitForTimeout(5500);
+  check(reports.length === 1, 'the undone report was never sent: ' + JSON.stringify(reports.map((r) => r.kind)));
   await page.evaluate(() => clearInterval(window.__fixes));
 });
 
@@ -4827,6 +4838,10 @@ flow('a drive\'s corners on a road driven four times: each says your cleanest pa
   check(/^Since \d{1,2} \w{3} on Dry Ridge Rd, no drive there yet with 4 or more corners to read it on\./.test(practicing), 'the practice keeps to the road: ' + practicing);
   check(/^It shows most on Dry Ridge Rd: (the corner where your passes there differ most comes|all \d+ corners where your passes there differ most come|\d+ of the \d+ corners where your passes there differ most comes?) down to it\.$/.test(where), 'Work on names the road: ' + where);
   check(!(await page.$('#drivingRoadGo')), 'no second offer while the practice keeps to a road');
+  // since a road practice began, each corner's passes since and the corners that have evened out (roadBook since)
+  const since = await page.evaluate(async () => (await ApexAnalysis.job('roadBook', { id: 'r3', since: '2026-07-01T09:00' })).book);
+  check(since && Array.isArray(since.evened) && since.corners.length && since.corners.every((k) => k.since_n === 2 && k.since_low <= k.record)
+    && since.evened.every((i) => i >= 1 && i <= since.corners.length), 'the book since a road practice began: ' + JSON.stringify(since && { evened: since.evened, c: since.corners.slice(0, 2) }));
   // with no practice, the line offers one kept to that road
   await page.evaluate(() => localStorage.removeItem('vetta.practice'));
   await page.goto(base + '/analysis.html?tab=driving');

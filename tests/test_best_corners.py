@@ -252,3 +252,29 @@ def test_skill_road_line_names_where_a_skill_shows_most():
                    "It shows most on Dry Ridge Rd: 1 of the 3 corners where your passes there differ most comes down to it.",
                    "It shows most on Bell Gap: the corner where your passes there differ most comes down to it.", None, None,
                    {"name": "Dry Ridge Rd", "n": 2, "of": 3}, None]
+
+
+def test_road_book_since_a_road_practice_says_which_corners_evened_out():
+    c = lambda x, lv: {"x": x, "y": 0.0, "hx": 1.0, "hy": 0.0, "level": lv, "size": "tight", "dir": "L"}
+    drives = [{"id": "a", "at": "2026-10-01T09:00", "corners": [c(0, 90), c(300, 90), c(600, 90)]},
+              {"id": "b", "at": "2026-10-08T09:00", "corners": [c(0, 60), c(300, 60), c(600, 60)]},
+              {"id": "u", "at": None, "corners": [c(0, 62)]},                                # undated: counts before
+              {"id": "p", "at": "2026-11-05T09:00", "corners": [c(0, 85), c(300, 89), c(600, 70)]},
+              {"id": "q", "at": "2026-11-06T09:00", "corners": [c(0, 88), c(600, 88)]}]
+    ref = [[x, 0.0] for x in range(0, 701, 50)]
+    b = dp.road_book(drives, ref, since="2026-11-05T09:00")
+    # 0 m: 90/60 before, 85 and 88 since -> evened; 300 m: one pass since (89), too few; 600 m: 70 since, still uneven
+    assert [(k["since_n"], k["since_low"]) for k in b["corners"]] == [(2, 85), (1, 89), (2, 70)]
+    assert b["uneven"] == [1, 2, 3] and b["evened"] == [1]
+    assert "evened" not in dp.road_book(drives, ref) and "since_n" not in dp.road_book(drives, ref)["corners"][0]
+    later = dp.road_book(drives, ref, since="2027-01-01T00:00")
+    assert later["evened"] == [] and later["corners"][0]["since_low"] is None
+    if NODE is None:
+        return
+    runner = ("const P=require(process.argv[1]+'/web/driver_profile.js');const [d,r]=JSON.parse(require('fs').readFileSync(0,'utf8'));"
+              "const b=P.roadBook(d,r,'2026-11-05T09:00'),l=P.roadBook(d,r,'2027-01-01T00:00');"
+              "process.stdout.write(JSON.stringify([b,l,P.roadEvenedLine(b),P.roadEvenedLine({evened:[1,4,9]}),P.roadEvenedLine(l),P.roadEvenedLine(P.roadBook(d,r))]));")
+    out = json.loads(subprocess.run([NODE, "-e", runner, os.getcwd()], input=json.dumps([drives, ref]), capture_output=True, text=True, check=True).stdout)
+    assert out[:2] == json.loads(json.dumps([b, later]))
+    assert out[2:] == ["Evened out since you began practicing here: corner 1, every pass there since close to your cleanest.",
+                       "Evened out since you began practicing here: corners 1, 4 and 9, every pass there since close to your cleanest.", None, None]
