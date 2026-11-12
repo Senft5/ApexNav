@@ -726,27 +726,35 @@ def _start_candidates(lat, lon, path_lat, path_lon):
     return [k for _, k in sorted(out)]
 
 
-def segment_window(seg: dict, drive: dict):
-    """Bins [lo, hi] where a drive passes a user segment {lat0, lon0, lat1, lon1, length_m}
-    from start to end in that direction, or None. Every visit to the start is tried, the closest first."""
+def segment_windows(seg: dict, drive: dict) -> list:
+    """Every [lo, hi] where a drive passes a user segment {lat0, lon0, lat1, lon1, length_m} from start to end in that
+    direction, one per visit to the start, the closest visit first (laps of a time attack loop, a stage driven twice)."""
     span = int(seg["length_m"] / 5.0)
+    out = []
     for i0 in _start_candidates(seg["lat0"], seg["lon0"], drive["lat"], drive["lon"]):
         i1, d1 = nearest_index(seg["lat1"], seg["lon1"], drive["lat"], drive["lon"], i0 + span, max(40, span // 2))
         if d1 > MATCH_RADIUS_M or i1 <= i0:
             continue
         if not 0.7 <= (i1 - i0) / max(1, span) <= 1.3:
             continue
-        return i0, i1
-    return None
+        out.append((i0, i1))
+    return out
+
+
+def segment_window(seg: dict, drive: dict):
+    """The first of segment_windows (the closest visit to the start that makes a pass), or None."""
+    w = segment_windows(seg, drive)
+    return w[0] if w else None
 
 
 def segment_pass(seg: dict, drive: dict):
-    """Time and Driver Score of one drive over a segment (private: the time stays on-device)."""
-    w = segment_window(seg, drive)
-    if w is None:
+    """Time and Driver Score of one drive over a segment (private: the time stays on-device). With several passes in
+    one drive (laps of a loop), the quickest counts; a tie keeps the first found."""
+    ws = segment_windows(seg, drive)
+    if not ws:
         return None
-    lo, hi = w
     t = elapsed_s(drive["speed_mps"])
+    lo, hi = min(ws, key=lambda w: t[w[1]] - t[w[0]])
     ds = driver_score(drive["speed_mps"], drive["lon_g"], drive["lat_g"], drive["corners"], lo, hi + 1)
     return {"lo": lo, "hi": hi, "time_s": float(t[hi] - t[lo]), **ds}
 
