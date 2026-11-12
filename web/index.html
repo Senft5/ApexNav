@@ -1355,8 +1355,7 @@
     .friend-head small { display: block; margin-top: 2px; font-size: 13px; color: var(--panel-dim); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .friend-head small.live { color: var(--panel-ink); font-weight: 600; }
     .friend-head small.live::before { content: ""; display: inline-block; width: 7px; height: 7px; margin: 0 6px 1px 0; border-radius: 50%; background: var(--accent); }
-    .friend-head .chev { width: 9px; height: 9px; margin-right: 8px; border-right: 2px solid currentColor; border-bottom: 2px solid currentColor; transform: rotate(45deg); transition: transform 0.15s ease-out; }
-    .friend-head[aria-expanded="true"] .chev { transform: rotate(225deg); }
+    .friend-head .chev { width: 9px; height: 9px; margin-right: 8px; border-right: 2px solid currentColor; border-bottom: 2px solid currentColor; transform: rotate(-45deg); }   /* a row opens a page (you, a friend's profile): it points right, it does not unfold */
     .friend .crew-detail { border-top: 0; padding-top: 0; margin: 0 0 12px; }   /* its first switch draws the rule */
     .friend-sent { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-height: 44px; }
     /* REVIEW_PEOPLE P-05: a request in is a card on the list; P-23: you, at the top; P-04: what they see of you, quietly */
@@ -1365,7 +1364,6 @@
     #accountBody > .you-row { border-bottom: 1px solid var(--hair, var(--panel-dim)); margin-top: -8px; }
     #accountBody > .you-row + .friend-list { border-top: 0; }
     .profile-keys > :last-child:nth-child(odd) { grid-column: 1 / -1; }   /* three keys: the third takes the row, not half of it beside a hole */
-    #accountBody > .you-row .chev { transform: rotate(-45deg); }   /* it opens a page, it does not unfold */
     .nav-row.quiet { min-height: 44px; font-size: 14px; font-weight: 500; color: var(--panel-dim); border-top: 1px solid var(--hair, var(--panel-dim)); }
     .nav-row.quiet[aria-expanded="true"] { border-bottom: 0; } .nav-row.quiet[aria-expanded="true"] i { transform: rotate(45deg); }
     .friend-grants .linkbtn { justify-self: start; }

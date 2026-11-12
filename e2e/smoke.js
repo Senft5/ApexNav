@@ -5297,6 +5297,9 @@ flow('People: two tabs; a request is a card on top, then you, then friends with 
   check(await page.evaluate(() => { const t = document.querySelector('.people-tabs'); return t.getAttribute('role') === 'tablist' && t.querySelectorAll('[role="tab"]').length === 2 && !document.querySelector('#sheetHead .switch')
     && getComputedStyle(document.querySelector('[data-people="friends"]'), '::after').transform === 'none'; }), 'Friends | Crews are ARIA tabs, the open one underlined');
   check(await page.evaluate(() => document.querySelector('#crewTab').getAttribute('aria-label') === 'People' && document.querySelector('#crewTab span').textContent === 'People'), 'the tab is People');
+  // every row on People opens a page, so every chevron points the same way (a friend's pointed down, as if it unfolded)
+  const chevs = await page.evaluate(() => [...document.querySelectorAll('#accountBody .friend-head .chev')].map((c) => getComputedStyle(c).transform));
+  check(chevs.length >= 2 && new Set(chevs).size === 1, 'you and each friend: one chevron, pointing right: ' + JSON.stringify(chevs));
   // P-34: the badge counts the friend request and the convoy invite
   check(await page.evaluate(() => { const b = document.querySelector('#crewTab .badge'); return b && b.textContent === '2' && /1 friend request, 1 convoy invite/.test(b.getAttribute('aria-label')); }), 'the badge counts what waits: ' + await page.evaluate(() => document.querySelector('#crewTab .badge')?.getAttribute('aria-label')));
   // P-05: the request is a card on top; P-23: you next; then the friends, live first, a friend who shares nothing under their name (P-15)

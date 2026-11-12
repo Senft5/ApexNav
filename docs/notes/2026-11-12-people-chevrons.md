@@ -1,0 +1,8 @@
+# STATE
+## Session 2026-11-12 (social declutter): one chevron on People (claude/project-thread-uwmi4e)
+- Done: a friend's row on People points right like your own row, since both open a page; it pointed down as if it unfolded (index.html .friend-head .chev). On Who sees what, the link "Cars, on each car" now reads "Who sees each car".
+- Next: the Crews side and a crew page, screenshotted for clutter.
+
+# CALL SHEET
+## 2026-11-12 (People chevrons): right, not down (claude/project-thread-uwmi4e)
+A down chevron promises the row unfolds in place; a friend's row opens their profile as a sheet, so it points right like every other row that opens a page. Undo: revert this PR.
