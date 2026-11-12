@@ -4580,6 +4580,9 @@ flow('crew drives: an upcoming drive shows on People, Crews, as the crew page’
   const myCard = `${W} .drive-card:not(.meet-card):has-text("My run")`;
   await page.click(`${myCard} summary:has-text("More")`);
   await page.waitForSelector(`${myCard} .cp-set`);
+  check(await page.evaluate(() => { const c = [...document.querySelectorAll('.drive-card:not(.meet-card)')].find((x) => /My run/.test(x.textContent));
+    const body = c && c.querySelector('.cp-more-body'); return !!body && !/Stop being|I.ll lead|I.ll sweep/.test(body.textContent); }),
+    'the planner\'s card: the roles in Set it up only, not again as links above it');
   check(!/List it for everyone/.test(await page.textContent(`${myCard} .cp-set`)), 'a private crew is not offered a public meet');
   await page.fill(`${myCard} input[aria-label="Notes"]`, 'Fuel first.');
   await page.click(`${myCard} .cp-set button:text-is("Save")`);
