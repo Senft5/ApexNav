@@ -6,6 +6,14 @@
   `passed` names the loop and skips taken-down loops.
 - Tests: backend time_attack and inbox, pytest test_time_attack (12), and the e2e time attack flow (row line, Drive it).
 - Next: the home deck's weekly loop is on Roamer C's branch claude/roam-c-ta-placement.
+## Session 2026-11-12 (deepest analysis, PR 19): the Log names the roads where your passes differ most (claude/project-thread-gd7nre)
+
+- `web/driver_profile.js` `roadsToWork(list)`: from each road's book, the roads with uneven corners, most first, at most
+  3: "Where your passes differ most: Dry Ridge Rd (3 corners, mostly one steering arc) and Bell Gap (1 corner)."
+- `analysis_client.js`: the road book moved into `bookOf`; a new `roadBooks({ ids })` job reads up to 12 roads at once.
+- Log > Your roads, corner by corner: `#bookWork` shows the line above the head, read once per library (libKey).
+- Next: Your driving's Work on could point at the road from roadsToWork ("Dry Ridge Rd is where it shows most").
+
 ## Session 2026-11-12 (deepest analysis, PR 18): the end card says how this drive went on a road you know (claude/project-thread-gd7nre)
 
 - `web/driver_profile.js` `roadEndLine(r)`: on a road driven three or more times, roadUnevenLine when a least even corner

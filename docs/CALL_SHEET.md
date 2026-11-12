@@ -12,6 +12,12 @@ instead of the way to its start. The Log adds one sentence with your place to it
 the Log has no toast and the line is already where the board is. For you's "went quicker than you" now names the loop and
 drops a loop a moderator took down. I left the home deck to Roamer C's branch. Undo: drop `peek` from `openPlan`, or the
 `driveLoop` hook in cockpit.js, which falls back to the way to the start.
+## 2026-11-12 (deepest analysis 19): the Log's road book says which of your roads to work on (claude/project-thread-gd7nre)
+
+Above the road picker, one line names the roads (driven three or more times) where your passes differ most, with the
+technique behind most of it. Calls: at most 3 roads, and at most 12 read, to keep the Log quick on a big library; it is read
+once each time the library changes, not on every visit. Undo: remove `bookWork` in web/analysis.html.
+
 ## 2026-11-12 (deepest analysis 18): the end card names your passes on a road you know (claude/project-thread-gd7nre)
 
 After a drive on a road you have driven three or more times, the map's end card adds one line: what this drive lost most
