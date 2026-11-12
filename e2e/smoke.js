@@ -5161,7 +5161,8 @@ flow('duels: a friend\'s challenge is a card on People; Accept starts it; the ca
   await page.waitForFunction(() => /Dry Ridge climb is in your Stages now/.test(document.getElementById('toast').textContent));
   await page.waitForSelector('#accountBody .duel-card.on');
   let t = await page.textContent('.duel-card.on');
-  check(/You -- · @bob 812 · @bob has a run in · 7 days left/.test(t) && !/don't reach/.test(t), 'on: both Scores and the days left; yours not shared is the Show key, not a sentence: ' + t);
+  check(/@bob 812 · no run from you yet · 7 days left/.test(t) && !/--|has a run in|don't reach/.test(t), 'on: their Score, plain words for yours, the days left; yours not shared is the Show key, not a sentence: ' + t);
+  check(await page.$$eval('.duel-card.on button', (bs) => bs.map((x) => x.textContent).join('|')) === 'Drive it|Show my Scores to @bob|Call it off', 'on: Drive it first, Call it off last');
   await page.click('.duel-card.on button:has-text("Show my Scores to @bob")');
   await page.waitForFunction(() => /You 845 · @bob 812 · You lead by 33/.test((document.querySelector('.duel-card.on') || {}).textContent || ''));
   check(grants.length === 1 && grants[0].audience_id === 'U1' && grants[0].share_scores === true && !grants[0].share_times, 'Scores only, to that friend: ' + JSON.stringify(grants));

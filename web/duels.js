@@ -57,7 +57,10 @@
     const show = (v) => (v == null ? '--' : timed ? clock(v) : String(v));
     const by = (n) => (timed ? quick(n) : String(n));
     const ahead = (x, y) => (timed ? x < y : x > y);
-    const score = `You ${show(you)} · ${who} ${show(them)}`;
+    // the runs in: both sides when both are in, else the one that is and a plain word for the other (no "--")
+    const yet = d.status === 'on' ? ' yet' : '';
+    const score = you != null && them != null ? `You ${show(you)} · ${who} ${show(them)}`
+      : you != null ? `You ${show(you)} · no run from ${who}${yet}` : them != null ? `${who} ${show(them)} · no run from you${yet}` : '';
     // what may be missing: yours not shown to them, theirs not to you
     const what = timed ? 'times' : 'Scores';
     const gaps = [];
@@ -66,14 +69,15 @@
     // a Score duel shows times beside it; a time duel shows the Scores beside it
     const aside = timed ? scoresLine(who, d.you, d.them) : timesLine(who, d.you, d.them);
     if (d.status === 'on') {
-      const n = daysLeft(d), lead = you != null && them != null ? (ahead(you, them) ? `You lead by ${by(Math.abs(you - them))}` : ahead(them, you) ? `${who} leads by ${by(Math.abs(you - them))}` : 'Level') : you == null && them == null ? 'No runs yet' : you == null ? `${who} has a run in` : 'You have a run in';
-      return { kind: 'on', head: `${d.stage} · ${who}`, line: `${score} · ${lead} · ${left(n)}`, note: [aside, ...gaps].filter(Boolean).join(' '), keys: [...(d.you_share ? [] : ['share']), ...(d.have_stage ? ['drive'] : []), 'withdraw'] };
+      const n = daysLeft(d), lead = you != null && them != null ? (ahead(you, them) ? `You lead by ${by(Math.abs(you - them))}` : ahead(them, you) ? `${who} leads by ${by(Math.abs(you - them))}` : 'Level') : you == null && them == null ? 'No runs yet' : '';
+      // Drive it first (the thing to do), then Show my Scores, then Call it off
+      return { kind: 'on', head: `${d.stage} · ${who}`, line: [score, lead, left(n)].filter(Boolean).join(' · '), note: [aside, ...gaps].filter(Boolean).join(' '), keys: [...(d.have_stage ? ['drive'] : []), ...(d.you_share ? [] : ['share']), 'withdraw'] };
     }
     // over
     const kind = you == null && them == null ? 'none' : them == null || (you != null && ahead(you, them)) ? 'won' : you == null || ahead(them, you) ? 'lost' : 'draw';
     const diff = you != null && them != null ? ` by ${by(Math.abs(you - them))}` : '';
     const line = { won: `You won${diff}`, lost: `${who} won${diff}`, draw: `A draw at ${show(you)}`, none: 'Neither of you drove it' }[kind];
-    return { kind, head: `${d.stage} · ${who}`, line: `${line} · ${score}`, note: aside, keys: ['rematch'] };
+    return { kind, head: `${d.stage} · ${who}`, line: [line, kind === 'none' || kind === 'draw' ? '' : score].filter(Boolean).join(' · '), note: aside, keys: ['rematch'] };
   }
 
   /** Cards worth a place on People: anything waiting or on, and a result for 3 days after it ends. Asks first. */
