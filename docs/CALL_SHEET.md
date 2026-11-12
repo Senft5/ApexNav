@@ -1,5 +1,7 @@
 # Call sheet
 
+> Newer calls are in `docs/notes/` under `# CALL SHEET` (one file per PR). Don't edit this file in a PR.
+
 Decisions Claude made for you, newest first. Each one says what was decided, why, and how to undo it. Read the top until
 you reach one you've seen. If you disagree with a call, say so and it gets reversed; nothing here is hard to undo unless
 it says so. Things only you can do are in docs/OWNER_TODO.md.
