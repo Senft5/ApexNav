@@ -2610,12 +2610,25 @@
     let camWarmAt = -1e9;
     function policeWarm() {
       const p = state.lastPosition;
-      if (avoid.police && p && window.ApexSync && ApexSync.signedIn() && !policeCached([p])) hazardsAround([p]).catch(() => {});
+      // (the reports round you: police for Avoid police, and the closures every plan keeps off, closedForTrip)
+      if (p && window.ApexSync && ApexSync.signedIn() && !policeCached([p])) hazardsAround([p]).catch(() => {});
       // the camera tiles round where you are, so a plan that avoids cameras finds them kept (camsForTrip)
       if (avoid.cameras && p && window.ApexCameras && performance.now() - camWarmAt > 60000 && (camWarmAt = performance.now())) alprNodesIn(p.lat - 0.15, p.lon - 0.15, p.lat + 0.15, p.lon + 0.15).catch(() => {});
     }
+    // members' "Road closed" reports near the trip, for our own router (graph_router.js CLOSED_X): kept 5 min (hazardsAround),
+    // otherwise a plan waits POLICE_WAIT_MS at most and goes without them. Signed out there are none to ask for: []
+    async function closedForTrip(points) {
+      if (!window.ApexHazardReports || !memberNow()) return [];
+      if (hazardsCover(points)) return ApexHazardReports.closuresFor(closureCache.list, points);
+      const list = await RouteLoading.optional(closuresAround(points), POLICE_WAIT_MS).catch(() => null);
+      return Array.isArray(list) ? list : [];
+    }
+    function memberNow() {
+      try { return !!(window.ApexSync && typeof ApexSync.signedIn === 'function' && ApexSync.signedIn()); } catch (_) { return false; }
+    }
     async function avoidForTrip(points) {
-      if (!avoid.police && !avoid.cameras) return avoid;
+      const closedP = closedForTrip(points).catch(() => []);
+      if (!avoid.police && !avoid.cameras) { const closed = await closedP; if (window.apexDebug) window.apexDebug.lastClosed = closed; return closed.length ? { ...avoid, closed } : avoid; }
       const camsP = camsForTrip(points);
       const out = { ...avoid };
       if (avoid.police) {
@@ -2628,7 +2641,16 @@
       const cams = await camsP;
       if (window.apexDebug) window.apexDebug.lastCams = cams;
       if (cams) out.cams = cams;
+      const closed = await closedP;
+      if (window.apexDebug) window.apexDebug.lastClosed = closed;
+      if (closed.length) out.closed = closed;
       return out;
+    }
+    // A loop's avoid choices: the same lists as a trip's, for the box a loop of `km` can reach from `c` (a third of its
+    // length each way, at most 35 km so the camera map's 1 degree limit holds to 50 degrees north), corner to corner through the start
+    function loopAvoidPoints(c, km) {
+      const r = Math.max(3, Math.min(35, km / 3)), dLat = r / 110.54, dLon = r / (111.32 * Math.max(0.2, Math.cos(c.lat * Math.PI / 180)));
+      return [{ lat: c.lat - dLat, lon: c.lon - dLon }, { lat: c.lat, lon: c.lon }, { lat: c.lat + dLat, lon: c.lon + dLon }];
     }
     // Avoid cameras for every candidate, not only Valhalla's (IDEAS R-35): the plate readers and fixed speed cameras within
     // 5 km of the trip's box (60 nearest its line), so our own router keeps off the roads they sit on and a route that
@@ -4587,7 +4609,10 @@
       // (Route tuning's road and avoid sliders shape its search: the tune rides with it, as with a plan's)
       applyDevTune();
       loopTuned = ownOn() ? userTuned() : null;
-      const ownLoopsP = ownOn() ? ApexOwnRouting.loops(ownRouter(), { start: { lat: c.lat, lon: c.lon }, km: targetKm, level: LOOP_STYLE, prefs: roadPrefs, avoid, ...devTuneReq() }) : Promise.resolve([]);
+      // the police reports, cameras and closures round the start go into the loop's search, as a trip's do (until
+      // 2026-11-12 loops got none of them: Avoid police and Avoid cameras did nothing for a loop)
+      L.avoid = ownOn() ? await avoidForTrip(loopAvoidPoints(c, targetKm)).catch(() => avoid) : avoid;
+      const ownLoopsP = ownOn() ? ApexOwnRouting.loops(ownRouter(), { start: { lat: c.lat, lon: c.lon }, km: targetKm, level: LOOP_STYLE, prefs: roadPrefs, avoid: L.avoid, ...devTuneReq() }) : Promise.resolve([]);
       // Our loops only (Valhalla is for Quick, the owner 2026-11-11): the card goes up from them, or says why there are none
       const own = (await ownLoopsP).map((r) => ({ kind: 'own', route: r.route, hwyShare: r.hwyShare, pts: [c, ...FunRoute.alongPoints(r.route.coords), c] }));
       // Loops are our router's or nothing (Valhalla is for Quick only, the owner 2026-11-11): no stage loops or circle on
@@ -4625,7 +4650,7 @@
         const rs = Core.removeSpurs(even.lat, even.lon);
         const t = await trackFromPolyline(rs.lat.map((la, i) => [rs.lon[i], la]), L.loopId, `${L.asked} loop`, undefined, { route: r.graph ? r : null });
         t.fun = funOf(t, r.turns);
-        t.unavoided = FunRoute.unavoided(avoid, r);
+        t.unavoided = FunRoute.unavoided(L.avoid || avoid, r);
         t.timeS = r.timeS;
         t.timeMarks = timeMarksOf(t, r);
         const glare = FunRoute.glare(t, r.timeS, new Date(leaveAt()));
@@ -4635,7 +4660,7 @@
         if (s.km < 0.3 * L.targetKm) throw new Error('not a loop');
         return { t, job, route: r, ...s, hwyShare: Number.isFinite(job.hwyShare) ? job.hwyShare : null, score: s.score - FunRoute.glareCost({ glare }), spursCut: rs.removed };
       };
-      return FunRoute.keepAvoiding((await Promise.allSettled(jobs.map(routeJob))).filter(r => r.status === 'fulfilled').map(r => r.value), avoid);
+      return FunRoute.keepAvoiding((await Promise.allSettled(jobs.map(routeJob))).filter(r => r.status === 'fulfilled').map(r => r.value), L.avoid || avoid);
     }
     /** The route engine, towns, the length off, members' data and Prefer on built loops (each once), ranked by the level. */
     async function loopScored(L, done, ui) {

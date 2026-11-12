@@ -61,6 +61,7 @@
     AVOID_HWY_X: 4, AVOID_TOLL_X: 3, AVOID_FERRY_X: 5, AVOID_UNPAVED_X: 5,
     AVOID_POINT_X: 8, AVOID_POINT_M: 150, AVOID_POINT_MAX: 20,   // Avoid police reports: edges within 150 m of a live report
     AVOID_CAM_X: 8, AVOID_CAM_M: 35, AVOID_CAM_MAX: 60,          // Avoid cameras: edges within 35 m of a plate reader or speed camera
+    CLOSED_X: 50, CLOSED_M: 40, CLOSED_MAX: 30,                  // members' "Road closed" reports: edges within 40 m cost x50 (always on)
     // the goodness weight is searched in [0, A_MAX] (log steps from A_FIRST), at most BISECT more routes. At Fun and Long
     // way the pick is then by the goodness the extra time buys (pick(): BUY per 100 % more time over the level's quickest,
     // never under BUY_MIN), among those routes and the spread's (SPREAD: penalty alternates of the first step's route)
@@ -607,7 +608,7 @@
     return v.objCache.get(key);
   }
   const OBJ_KNOBS = ['W_NOTPOOR', 'W_QUALITY', 'W_FUN', 'W_SCENERY', 'POOR_LO', 'POOR_HI', 'GATE_LO', 'GATE_HI', 'UNKNOWN_G', 'MODEL_WQ', 'MODEL_WS', 'PRIVATE_X', 'PRIVATE_S',
-    'DESTINATION_X', 'DESTINATION_S', 'FERRY_X', 'UNPAVED_X', 'AVOID_HWY_X', 'AVOID_TOLL_X', 'AVOID_FERRY_X', 'AVOID_UNPAVED_X', 'AVOID_POINT_X', 'AVOID_POINT_M', 'AVOID_CAM_X', 'AVOID_CAM_M'];
+    'DESTINATION_X', 'DESTINATION_S', 'FERRY_X', 'UNPAVED_X', 'AVOID_HWY_X', 'AVOID_TOLL_X', 'AVOID_FERRY_X', 'AVOID_UNPAVED_X', 'AVOID_POINT_X', 'AVOID_POINT_M', 'AVOID_CAM_X', 'AVOID_CAM_M', 'CLOSED_X', 'CLOSED_M'];
   function objectiveOf(v, o = {}) {
     const prefs = o.prefs || {}, taste = o.taste || {}, avoid = o.avoid || {}, B = flagBits();
     const corner = 1 + 0.25 * ((Number(prefs.tight) || 0) + (Number(prefs.fast) || 0));
@@ -685,6 +686,18 @@
         for (const e of edgesNear(v, p.lat, p.lon, K.AVOID_CAM_M)) hit.add(e);
       }
       for (const e of hit) mult[e] *= K.AVOID_CAM_X;
+    }
+    // Reported road closures (hazard_reports.js closuresFor, cockpit.js avoidForTrip): members' "Road closed" reports near
+    // the trip, always kept off (no switch: nobody wants a closed road). Valhalla gets them as exclude_locations; since Fun,
+    // Long way and loops are ours only (2026-11-11), ours must see them too. x50, not a ban: with no way round, a route
+    // still goes (a report can be stale), as Valhalla's is asked again without them
+    if (Array.isArray(avoid.closed)) {
+      const hit = new Set();
+      for (const p of avoid.closed.slice(0, K.CLOSED_MAX)) {
+        if (!p || !Number.isFinite(p.lat) || !Number.isFinite(p.lon)) continue;
+        for (const e of edgesNear(v, p.lat, p.lon, K.CLOSED_M)) hit.add(e);
+      }
+      for (const e of hit) mult[e] *= K.CLOSED_X;
     }
     return { bad, mult, add, minBad, nodeCosts: o.nodeCosts !== false };
   }

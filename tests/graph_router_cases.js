@@ -420,6 +420,29 @@ const CASES = {
       max1: maxMult(c1), max2: maxMult(c2) };
   },
 
+  // Reported road closures (avoid.closed, always on): a closure on the quickest's middle sends quickest and plan round
+  // it with no switch; two on one road cost x50 once. And a loop takes the avoid lists too: with a camera on the best
+  // loop, that loop's road is no longer driven past it
+  closures() {
+    const g = H.grid({ seed: 9, nx: 28, ny: 28, holes: 0.05, stepDeg: 0.004, lat0: 39.15, lon0: -84.62 });
+    const v = R.view(H.tiles(g.nodes, g.edges).tiles);
+    const from = { lat: 39.17, lon: -84.6 }, to = { lat: 39.23, lon: -84.52 };
+    const base = R.quickest(v, { from, to, level: 'quick' });
+    const mid = base.coords[Math.floor(base.coords.length / 2)], p = { lat: mid[0], lon: mid[1] };
+    const nearTo = (q) => (r) => Math.min(...r.coords.map((c) => R.distM(q.lat, q.lon, c[0], c[1])));
+    const near = nearTo(p);
+    const avoid = { closed: [p] };
+    const q = R.quickest(v, { from, to, level: 'quick', avoid }), plan = R.plan(v, { from, to, level: 'fun', avoid });
+    const c0 = R.objective(v, {}), c1 = R.objective(v, { avoid }), c2 = R.objective(v, { avoid: { closed: [p, { lat: p.lat + 1e-5, lon: p.lon }] } });
+    const maxMult = (c) => { let m = 0; for (let e = 0; e < c.mult.length; e++) m = Math.max(m, c.mult[e] / c0.mult[e]); return m; };
+    const start = { lat: 39.205, lon: -84.55 };
+    const loop0 = R.loop(v, { start, km: 16, level: 'fun' }).routes[0];
+    const lc = loop0.coords[Math.floor(loop0.coords.length / 3)], cam = { lat: lc[0], lon: lc[1] };
+    const loops1 = R.loop(v, { start, km: 16, level: 'fun', avoid: { cameras: true, cams: [cam] } }).routes;
+    return { baseNear: near(base), baseS: base.timeS, quickNear: near(q), quickS: q.timeS, planNear: plan.routes.map(near),
+      max1: maxMult(c1), max2: maxMult(c2), loop0Near: nearTo(cam)(loop0), loopNear: loops1.map(nearTo(cam)) };
+  },
+
   roundTrips() {
     const g = H.grid({ seed: 9, nx: 28, ny: 28, holes: 0.05, stepDeg: 0.004, lat0: 39.15, lon0: -84.62 });
     const v = R.view(H.tiles(g.nodes, g.edges).tiles);
