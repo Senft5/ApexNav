@@ -6259,6 +6259,21 @@ flow('import: a drive from a file is named after the road that carried it (IDEAS
   await page.evaluate(() => { ApexStages.namesAlong = async () => []; });
   await page.setInputFiles('#importFile', { name: 'web_20261028_090000.csv', mimeType: 'text/csv', buffer: Buffer.from(csv(600)) });
   await page.waitForFunction(() => /^\s*Drive 10\/28\/2026 9:00 AM is in your Log/.test(document.getElementById('toast').textContent), null, { timeout: 15000 });
+  // walkthrough 2026-11-12: a file with no date in its name or rows: the import time is not when it was driven. The index
+  // stamps it "--"; its page and the Log's hero said "Today, 2:53 PM" as if it were the drive's own time
+  await page.evaluate(() => { ApexStages.namesAlong = async () => [{ properties: { name: 'Dry Ridge Road' }, geometry: { type: 'MultiLineString', coordinates: [[[-84.75, 39.24], [-84.68, 39.24]]] } }]; });
+  await page.setInputFiles('#importFile', { name: 'demo.csv', mimeType: 'text/csv', buffer: Buffer.from(csv(600)) });
+  await page.waitForFunction(() => /^\s*Dry Ridge Road is in your Log/.test(document.getElementById('toast').textContent), null, { timeout: 15000 });
+  const undated = await page.evaluate(async () => (await ApexRecording.all()).find((d) => d.id === 'rec_demo_csv'));
+  check(undated && undated.date_known === false, 'a file with no date keeps its date unknown: ' + JSON.stringify(undated && { date: undated.date, known: undated.date_known }));
+  await page.goto(`${base}/analysis.html?tab=drive&drive=rec_demo_csv`);
+  await page.waitForFunction(() => { const e = document.getElementById('dvNote'); return !!e && /Imported/.test(e.textContent); }, null, { timeout: 15000 });
+  const note = await page.textContent('#dvNote');
+  check(/^Date unknown · Imported/.test(note.trim()), 'its page says the date is unknown, not the time it was imported: ' + note);
+  await page.goto(`${base}/analysis.html`);
+  await page.waitForFunction(() => /Latest Vetta Score/.test((document.querySelector('.hero-what') || {}).textContent || '') && document.querySelector('tr.row-link'), null, { timeout: 15000 });
+  const hero = await page.evaluate(() => ({ what: document.querySelector('.hero-what').textContent, stamp: document.querySelector('tr.row-link[data-drive="rec_demo_csv"] .stamp-d').textContent }));
+  check(hero.stamp === '--' && !(/Dry Ridge Road/.test(hero.what) && /Today|AM|PM/.test(hero.what)), 'the index stamps it "--" and the hero names no time for it: ' + JSON.stringify(hero));
 });
 
 flow('track day: on a mapped raceway, Start/finish here times laps (IDEAS D-15)', async (page, base) => {
