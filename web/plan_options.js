@@ -31,7 +31,7 @@
   /** The Options chip's own words: "Options" alone, or "Options · 3" with three on. */
   function chipLabel(list) {
     const n = (list || []).length;
-    return n ? `Options · ${n}` : 'Options';
+    return n ? `Options · ${n} on` : 'Options';
   }
 
   /** A snapshot of what the sheet sets, to tell on closing whether the route on the card needs planning again. */
