@@ -6467,7 +6467,7 @@
         // An empty bay, not a paragraph (design pass, 2026-11-10): the place a car will stand, drawn in pencil, and the key that gets you there.
         gbody.append(el('h3', { textContent: 'Your cars' }), el('div', { className: 'empty-bay' },
           el('span', { className: 'eb-slot', innerHTML: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 16v-3l2.2-5h13.6L21 13v3M3 16h18M3 16v2M21 16v2"/><circle cx="7.5" cy="13" r="1"/><circle cx="16.5" cy="13" r="1"/></svg>' }),
-          el('p', {}, el('b', { textContent: 'No car parked here yet' }), el('small', { textContent: 'Sign in to keep your cars, a profile and build threads. Everything else in the Garage works without it.' })),
+          el('p', {}, el('b', { textContent: 'No car parked here yet' }), el('small', { textContent: 'Sign in to keep your cars and build threads.' })),
           btn('Sign in', () => showView('friends'), 'ink-btn')));
         ambientFromAccount(false, false);                                     // U-116
         return;

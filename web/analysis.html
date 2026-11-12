@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self' apexnav:; script-src 'self' apexnav: 'sha256-xCB/NuSs7xnqoMlgVHVJg0yfP7Me689l46qc1YonMRs=' 'sha256-G7s/ZI+Hqrfc4DqbB6EANJJLmUmhNK06PizQ1LlsG84=' https://cdn.jsdelivr.net 'wasm-unsafe-eval'; worker-src 'self' apexnav: blob:; child-src 'self' apexnav: blob:; style-src 'self' apexnav: 'unsafe-inline'; font-src 'self' apexnav: data:; img-src 'self' apexnav: data: blob: https://tiles.openfreemap.org https://s3.amazonaws.com https://basemap.nationalmap.gov; media-src 'self' apexnav: data: blob:; connect-src 'self' apexnav: data: blob: https://apexnav.senftns.workers.dev wss://apexnav.senftns.workers.dev https://tiles.openfreemap.org https://basemap.nationalmap.gov https://s3.amazonaws.com https://valhalla1.openstreetmap.de https://router.project-osrm.org https://overpass-api.de https://overpass.private.coffee https://overpass.kumi.systems https://maps.mail.ru https://nominatim.openstreetmap.org https://photon.komoot.io https://api.open-meteo.com https://api.weather.gov https://statsapi.mlb.com https://api.seatgeek.com https://api.water.noaa.gov https://waterservices.usgs.gov https://in.carsprogram.org https://publicapi.ohgo.com https://quickstats.nass.usda.gov https://commons.wikimedia.org https://graph.mapillary.com https://vpic.nhtsa.dot.gov https://cdn.jsdelivr.net https://huggingface.co https://*.huggingface.co https://*.hf.co; object-src 'none'; base-uri 'none'; form-action 'self'" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self' apexnav:; script-src 'self' apexnav: 'sha256-2jxLgFkL7NtbfCQGfGtvjBbZxy87vIJnDOMgcKFfj/k=' 'sha256-G7s/ZI+Hqrfc4DqbB6EANJJLmUmhNK06PizQ1LlsG84=' https://cdn.jsdelivr.net 'wasm-unsafe-eval'; worker-src 'self' apexnav: blob:; child-src 'self' apexnav: blob:; style-src 'self' apexnav: 'unsafe-inline'; font-src 'self' apexnav: data:; img-src 'self' apexnav: data: blob: https://tiles.openfreemap.org https://s3.amazonaws.com https://basemap.nationalmap.gov; media-src 'self' apexnav: data: blob:; connect-src 'self' apexnav: data: blob: https://apexnav.senftns.workers.dev wss://apexnav.senftns.workers.dev https://tiles.openfreemap.org https://basemap.nationalmap.gov https://s3.amazonaws.com https://valhalla1.openstreetmap.de https://router.project-osrm.org https://overpass-api.de https://overpass.private.coffee https://overpass.kumi.systems https://maps.mail.ru https://nominatim.openstreetmap.org https://photon.komoot.io https://api.open-meteo.com https://api.weather.gov https://statsapi.mlb.com https://api.seatgeek.com https://api.water.noaa.gov https://waterservices.usgs.gov https://in.carsprogram.org https://publicapi.ohgo.com https://quickstats.nass.usda.gov https://commons.wikimedia.org https://graph.mapillary.com https://vpic.nhtsa.dot.gov https://cdn.jsdelivr.net https://huggingface.co https://*.huggingface.co https://*.hf.co; object-src 'none'; base-uri 'none'; form-action 'self'" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
   <title>Vetta · Log</title>
   <link rel="icon" href="brand/mark.svg" type="image/svg+xml" />
@@ -395,7 +395,6 @@
             <td class="ix-score"><span class="score">--</span></td></tr></table>
         </div>
         <h2 class="fp-head">Your first drive goes here.</h2>
-        <p class="fp-line">Every drive is kept on this phone with its road, its corners and a Vetta Score out of 1000. A few clean corners are enough for a score.</p>
         <a class="btn solid fp-go" href="index.html">Start a drive</a>
         <a class="fp-alt" href="index.html?drive=dry_ridge&amp;play=1">Watch a replay first</a>
       </div>
@@ -1270,8 +1269,8 @@
       list.innerHTML = segs.length ? '' : `<div class="first-page">
         <svg class="fp-mark" viewBox="0 0 320 56" preserveAspectRatio="none" aria-hidden="true"><path d="M4 44 C 50 44, 60 14, 104 16 S 170 46, 214 34 S 280 10, 316 12" stroke-dasharray="3 4"/><path class="ink" d="M104 16 C 140 18, 170 46, 214 34"/><line class="ink" x1="104" y1="6" x2="104" y2="26"/><line class="ink" x1="214" y1="24" x2="214" y2="44"/><circle cx="104" cy="16" r="3.5"/></svg>
         <h2 class="fp-head">No stages yet.</h2>
-        <p class="fp-line">A stage is a stretch of road you drive often, marked from its start to its finish. Every pass over it is set against your best.</p>
-        ${drives.length ? '<a class="btn solid fp-go" href="analysis.html?tab=log">Pick a drive to mark one from</a>' : '<a class="btn solid fp-go" href="index.html">Start a drive</a><p class="fp-line" style="margin:10px 0 0;text-align:center">Mark a stage is on a finished drive\u2019s page.</p>'}</div>`;
+        <p class="fp-line">A stretch you drive often, each pass timed against your best.</p>
+        ${drives.length ? '<a class="btn solid fp-go" href="analysis.html?tab=log">Pick a drive to mark one from</a>' : '<a class="btn solid fp-go" href="index.html">Start a drive</a><p class="fp-line" style="margin:10px 0 0;text-align:center">Mark one from a drive\u2019s page.</p>'}</div>`;
       for (const s of segs) {
         const passes = passesFor(s), best = passes.reduce((m, x) => (x.p.score != null && (m == null || x.p.score > m) ? x.p.score : m), null);
         const b = document.createElement('button');
