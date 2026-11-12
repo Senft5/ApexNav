@@ -6731,6 +6731,27 @@ flow('the drive page\'s map: with no map to be had the picture keeps its blank p
   check(sc && +sc[1] > 2 && p.back == null, 'the plain picture zooms to the corner and back: ' + JSON.stringify(p));
 });
 
+flow('the main map: with no signal and no saved area one line says there is no map and what still works, gone when a tile draws (no silent blank)', async (page, base) => {
+  await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); localStorage.setItem('apex.permsExplained', '1'); } catch (_) {}
+    Object.defineProperty(Navigator.prototype, 'onLine', { get: () => !window.__off, configurable: true }); window.__off = true; });
+  let tiles = false;   // no style, no tiles: every request off the app refused, as the default; then the map's server answers
+  await page.route('https://tiles.openfreemap.org/**', (route) => (!tiles ? route.abort('internetdisconnected') : route.request().url().includes('/styles/')
+    ? route.fulfill({ contentType: 'application/json', body: JSON.stringify({ version: 8, sources: { openmaptiles: { type: 'vector', tiles: ['https://tiles.openfreemap.org/t/{z}/{x}/{y}.pbf'], maxzoom: 14 } },
+      layers: [{ id: 'bg', type: 'background', paint: { 'background-color': '#eee' } }, { id: 'water', type: 'fill', source: 'openmaptiles', 'source-layer': 'water' }] }) })
+    : route.fulfill({ status: 200, contentType: 'application/x-protobuf', body: Buffer.alloc(0) })));
+  await page.goto(base + '/index.html');
+  await page.waitForFunction(() => window.apexDebug && window.apexDebug.map);
+  await page.waitForFunction(() => !document.getElementById('mapNote').hidden, null, { timeout: 8000 });
+  const off = await page.evaluate(() => { const n = document.getElementById('mapNote'), r = n.getBoundingClientRect(), m = document.getElementById('map').getBoundingClientRect();
+    return { text: n.textContent, inside: r.left >= m.left && r.right <= m.right && r.top >= m.top, taps: getComputedStyle(n).pointerEvents }; });
+  check(off.text === 'No map here without signal. Notes and recording still work.' && off.inside && off.taps === 'none', 'said in one line, over the map, never in the way: ' + JSON.stringify(off));
+  // a tile that draws (a saved area here, or the signal back) takes it away
+  tiles = true;
+  await page.evaluate(() => window.apexDebug.map.setStyle('https://tiles.openfreemap.org/styles/liberty?again'));
+  await page.waitForTimeout(2500);
+  check(await page.evaluate(() => document.getElementById('mapNote').hidden), 'no note once the map draws');
+});
+
 flow('the drive page\'s map: with no signal and no saved area the panel says the map is unavailable offline, and MapLibre never loads', async (page, base) => {
   await page.addInitScript(() => {
     try { localStorage.setItem('apex.onboarded', '1'); } catch (_) {}

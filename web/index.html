@@ -1049,6 +1049,11 @@
        while it is open, so it is whole or gone, never cut */
     .place-plate { transition: transform 0.25s cubic-bezier(0.2, 0.8, 0.2, 1), opacity 0.2s; }
     #app:has(.edge.open) .place-plate { transform: translateY(calc(-100% - 16px - var(--safe-top))); opacity: 0; pointer-events: none; }
+    /* no base map here (no signal, no saved area): one line over the blank, never a silent one (cockpit.js paintMapNote) */
+    .map-note { position: absolute; z-index: 3; left: 50%; top: 28%; transform: translateX(-50%); width: max-content; max-width: calc(100% - 140px); margin: 0;
+      padding: 8px 12px; background: var(--panel); color: var(--panel-ink); border: 1.5px solid var(--panel-ink); font: 600 14px/1.35 var(--font-ui);
+      text-align: center; pointer-events: none; }
+    .map-note[hidden] { display: none; }
     .loop-suggest { display: none; width: 100%; grid-template-columns: 40px minmax(0, 1fr) auto; gap: 12px; align-items: center; text-align: left;
       padding: 10px 2px 4px; border-top: 1px solid var(--rule); margin-top: 8px; background: none; color: var(--panel-ink); }
     #app.idle:not(.plan-open):not(.routed) .loop-suggest { display: grid; }
@@ -1892,6 +1897,7 @@
     <section class="stage">
       <div id="map" class="unstyled"></div>
       <div class="place-plate" id="placePlate" role="status" hidden></div>
+      <p class="map-note" id="mapNote" role="status" hidden></p>
       <div class="hz-plate" id="hzPlate" role="status" aria-live="assertive" hidden><svg viewBox="0 0 28 25" aria-hidden="true"><path class="hz-tri" d="M14 1 L27 24 H1 Z"/><path d="M14 9 V16 M14 19.5 V20.5" stroke-width="3" stroke-linecap="round"/></svg><b id="hzPlateTitle"></b><span id="hzPlateDetail" aria-live="off"></span></div>
       <div class="plates">
         <div class="plate" id="modePlate" role="status">Replay</div>
