@@ -5009,8 +5009,7 @@ flow('friend profile: a friend on People → Profile shows what the friend share
   await page.goto(base + '/index.html');
   await page.waitForFunction(() => window.apex && typeof window.apex.live === 'function');
   await page.evaluate(() => document.querySelector('.tab[data-view="people"]').click());
-  await page.click('#accountBody .friend-head:has-text("@bob")');   // the friend's row opens what you can do with them and their profile
-  await page.click('#accountBody .friend button:has-text("Profile")');
+  await page.click('#accountBody .friend-head:has-text("@bob")');   // a tap on the friend opens their profile (2026-11-12)
   await page.waitForSelector('.profile-view');
   const t = await page.textContent('.profile-view');
   check(t.includes('@bob') && /Bob <b>S<\/b> · friends since September( 2026)?/.test(t) && t.includes('Esses · best 812 · 3 days this month') && t.includes('Ridge Runners'), 'the profile, as text: ' + t);
@@ -5019,7 +5018,7 @@ flow('friend profile: a friend on People → Profile shows what the friend share
   check(JSON.stringify(pk.keys) === '["Share a route","Invite to a drive","Challenge on a stage"]' && JSON.stringify(pk.foot) === '["Unfriend","Report","Block"]' && /profile-foot/.test(pk.last), 'things to do first, Unfriend/Report/Block at the foot: ' + JSON.stringify(pk));
   await page.click('.profile-view button:has-text("Friends")');   // one back glyph and where it goes (REVIEW2.md)
   await page.waitForSelector('.side-pop.open .profile-view', { state: 'detached', timeout: 3000 }).catch(() => {});
-  check(await page.evaluate(() => !document.querySelector('.side-pop.open') && !!document.querySelector('#accountBody .friend-head[aria-expanded="true"]')), 'Back returns to the friends list, the row still open');
+  check(await page.evaluate(() => !document.querySelector('.side-pop.open') && !!document.querySelector('#accountBody .friend-head:not(.you-row)')), 'Back returns to the friends list');
 });
 
 flow('duels: a friend\'s challenge is a card on People; Accept starts it; the card keeps both Scores and the days left; your own Scores can be shown from it; Challenge on a stage sends one (Worker stubbed, SOCIAL 2.7)', async (page, base) => {
@@ -5061,7 +5060,7 @@ flow('duels: a friend\'s challenge is a card on People; Accept starts it; the ca
   // challenging: from the friend's row, pick a stage and the days, Send
   await page.evaluate(() => document.querySelector('.tab[data-view="people"]').click());
   await page.click('#accountBody .friend-head:has-text("@bob")');
-  await page.click('#accountBody .friend button:has-text("Challenge on a stage")');
+  await page.click('.profile-view button:has-text("Challenge on a stage")');
   await page.waitForSelector('.duel-pop.open [aria-label="Stage"] button:has-text("Esses")');
   await page.click('.duel-pop.open [aria-label="Stage"] button:has-text("Esses")');
   await page.click('.duel-pop.open [aria-label="How long"] button:has-text("3 days")');
@@ -5182,22 +5181,25 @@ flow('People: two tabs; a request is a card on top, then you, then friends with 
   const navs = await page.$$eval('#accountBody > .nav-rows .nav-row > span', (s) => s.map((x) => x.textContent));
   // Roadbooks (SOCIAL 2.6, 2026-11-10) join From friends in the one list under the friends; nothing else does
   check(JSON.stringify(navs) === '["From friends","Roadbooks"]', 'then what friends shared and the roadbooks, nothing else: ' + JSON.stringify(navs));
-  // P-04: the friend row is about the friend; the grants are one quiet row
-  await page.click('#accountBody .friend-head:has-text("@cara")');
-  const acts = await page.$$eval('#accountBody .friend:has-text("@cara") .friend-keys button', (b) => b.map((x) => x.textContent));
-  check(JSON.stringify(acts) === '["On the map","Share a route","Invite to a drive","Challenge on a stage","Profile"]', 'the row opens on what you can do with her: ' + JSON.stringify(acts));
-  const cara = await page.textContent('#accountBody .friend:has-text("@cara") .crew-detail');
-  check(/Shared Cherohala loop · /.test(cara) && /What @cara sees of you/.test(cara) && !/Unfriend|Block/.test(cara) && !(await page.isVisible('#accountBody .friend:has-text("@cara") .friend-grants')), 'her last share, a quiet grants row, no Unfriend: ' + cara);
-  check(!!(await page.$('#accountBody .friend:has-text("@bob") .friend-keys button:has-text("On the map")')), 'bob shares a delayed position: On the map too');
-  check(!(await page.$('#accountBody .friend:has-text("@eve") .friend-keys button:text-is("On the map")')), 'no On the map for a friend who shares nothing');
-  // with Duel (#383) eve has four keys (two and two) and cara five: an odd last key takes the row, not half of it beside a hole
-  const spans = await page.evaluate(() => Object.fromEntries(['@eve', '@cara'].map((h) => { const row = [...document.querySelectorAll('#accountBody .friend')].find((f) => f.textContent.includes(h));
-    const keys = [...row.querySelectorAll('.friend-keys > *')]; return [h, { n: keys.length, end: getComputedStyle(keys[keys.length - 1]).gridColumnEnd }]; })));
-  check(spans['@eve'].n === 4 && spans['@eve'].end === 'auto' && spans['@cara'].n === 5 && spans['@cara'].end === '-1', 'an odd last key spans the row: ' + JSON.stringify(spans));
-  await page.click('#accountBody .friend:has-text("@cara") .nav-row.quiet');
-  check(await page.isVisible('#accountBody .friend:has-text("@cara") .friend-grants [role="switch"][aria-checked="true"]'), 'the quiet row opens her Scores and Times');
-  // P-09: Who sees what, from her row, her line marked
-  await page.click('#accountBody .friend:has-text("@cara") button:has-text("Who sees what")');
+  // Nate 2026-11-12 (as easy as a big social app): the row is the friend; a tap opens their profile, which holds what you
+  // can do with them, their last share and what they see of you (the row used to open five keys and a grants drawer)
+  check(!(await page.$('#accountBody .friend .crew-detail, #accountBody .friend button.ink-btn')), 'a friend row is one line, no keys in the list');
+  const profileOf = async (h) => { await page.click(`#accountBody .friend-head:has-text("${h}")`); await page.waitForSelector(`.people-pop.open .profile-view h3:text-is("${h}")`);
+    const k = await page.$$eval('.people-pop.open .profile-keys button', (b) => b.map((x) => x.textContent)); return k; };
+  const back = () => page.click('.people-pop.open .profile-view button:has-text("Friends")');
+  const acts = await profileOf('@cara');
+  check(JSON.stringify(acts) === '["On the map","Share a route","Invite to a drive","Challenge on a stage"]', 'her profile opens on what you can do with her: ' + JSON.stringify(acts));
+  const cara = await page.textContent('.people-pop.open .profile-view');
+  check(/Shared Cherohala loop · /.test(cara) && /What @cara sees of you\s*Scores/.test(cara) && /Couldn’t load the rest/.test(cara) && !/No scores shared/.test(cara), 'her last share and what she sees of you; offline, nothing guessed: ' + cara);
+  await back();
+  check((await profileOf('@bob')).includes('On the map'), 'bob shares a delayed position: On the map too');
+  await back();
+  const eve = await profileOf('@eve');
+  check(!eve.includes('On the map') && eve.length === 3 && await page.evaluate(() => getComputedStyle(document.querySelector('.people-pop.open .profile-keys > :last-child')).gridColumnEnd) === '-1', 'no On the map for a friend who shares nothing; an odd last key spans the row: ' + JSON.stringify(eve));
+  await back();
+  // P-09: Who sees what, from her profile, her line marked
+  await profileOf('@cara');
+  await page.click('.people-pop.open .friend-sees');
   await page.waitForSelector('.overlay[aria-label="Who sees what"] .who-grid');
   const grid = await page.$$eval('.who-grid > .who-n', (n) => n.map((x) => x.textContent + (x.classList.contains('focus') ? '*' : '')));
   check(JSON.stringify(grid) === '["@bob","@cara*","@eve"]', 'one grid, her row marked: ' + JSON.stringify(grid));
@@ -5207,6 +5209,7 @@ flow('People: two tabs; a request is a card on top, then you, then friends with 
   check(posted.some(([m, p, b]) => m === 'PUT' && p === '/api/grants' && /"audience_id":"U2"/.test(b) && /"share_times":true/.test(b)), 'Times changed in its cell');
   check(await page.isVisible('.overlay[aria-label="Who sees what"] [aria-label="Show me on the map to"] [aria-checked="true"]:text-is("Friends")'), 'where you are, one choice at the top');
   await page.click('.overlay[aria-label="Who sees what"] button:has-text("Done")');
+  if (await page.isVisible('.people-pop.open')) await back();
   // Accept on the card
   await page.click('#accountBody .request-card button:has-text("Accept")');
   await page.waitForTimeout(200);
@@ -5218,7 +5221,8 @@ flow('People: two tabs; a request is a card on top, then you, then friends with 
   check(/invite link/i.test(inv) && /Share a link to me/.test(inv) && !/invite-only/i.test(inv) && !/@dan|Accept/.test(inv) && await page.isVisible('.side-pop.open input[aria-label="Friend handle"]'), 'the Invite sheet: an invite link and add by handle, no requests: ' + inv);
   await page.click('.side-pop.open button:has-text("Done")');
   // On the map: the sheet closes, the Friends layer comes on
-  await page.click('#accountBody .friend:has-text("@cara") .friend-keys button:has-text("On the map")');
+  await profileOf('@cara');
+  await page.click('.people-pop.open .profile-keys button:has-text("On the map")');
   await page.waitForFunction(() => !document.getElementById('sheet').classList.contains('open'));
   check(await page.evaluate(() => document.querySelector('[data-toggle="friends"]').classList.contains('on')), 'On the map turns the Friends layer on');
   // the Garage: Who sees what under You; the pioneer count with Road feel; no points board anywhere
