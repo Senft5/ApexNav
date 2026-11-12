@@ -5985,10 +5985,18 @@
       const picked = { friends: new Set(), crews: new Set() };
       if (shareTo && fr.some(f => f.handle === shareTo)) picked.friends.add(shareTo);
       shareTo = null;
+      // Nate 2026-11-12 (as easy as a big social app): before Send, one line says who gets it and what goes, and follows the picks
+      const goes = el('p', { className: 'note share-goes', 'aria-live': 'polite' });
+      const paintGoes = () => {
+        const who = [...[...picked.friends].map(h => '@' + h), ...cr.filter(c => picked.crews.has(c.id)).map(c => c.name)];
+        const names = who.length > 3 ? `${who.slice(0, 2).join(', ')} and ${who.length - 2} more` : who.length > 1 ? `${who.slice(0, -1).join(', ')} and ${who[who.length - 1]}` : who[0];
+        goes.textContent = who.length ? `Goes to ${names}. The line only, first 400 m hidden.` : 'Pick who gets it. The line only, first 400 m hidden.';
+      };
       const chip = (label, set, key) => { const b = el('button', { className: 'ink-btn' + (set.has(key) ? ' on' : ''), textContent: label }); b.setAttribute('aria-pressed', String(set.has(key)));
-        b.onclick = () => { if (set.has(key)) set.delete(key); else set.add(key); b.classList.toggle('on', set.has(key)); b.setAttribute('aria-pressed', String(set.has(key))); }; return b; };
-      box.replaceChildren(el('p', { className: 'note', textContent: 'Share this route\'s shape (not a drive). The first 400 m stay private.' }),
-        el('div', { className: 'row', style: 'flex-wrap:wrap' }, ...fr.map(f => chip('@' + f.handle, picked.friends, f.handle)), ...cr.map(c => chip(c.name, picked.crews, c.id))),
+        b.onclick = () => { if (set.has(key)) set.delete(key); else set.add(key); b.classList.toggle('on', set.has(key)); b.setAttribute('aria-pressed', String(set.has(key))); paintGoes(); }; return b; };
+      paintGoes();
+      box.replaceChildren(el('div', { className: 'row', style: 'flex-wrap:wrap' }, ...fr.map(f => chip('@' + f.handle, picked.friends, f.handle)), ...cr.map(c => chip(c.name, picked.crews, c.id))),
+        goes,
         el('div', { className: 'row' }, btn('Send', async () => {
           if (!picked.friends.size && !picked.crews.size) { toast('Pick who to share it with.'); return; }
           const r = await apiCall('POST', '/api/routes', { name: t.name || 'Route', geom: sharedGeom(t), friends: [...picked.friends], crews: [...picked.crews] });
@@ -6221,10 +6229,10 @@
       const d = $('planSpots'); d.hidden = false;
       d.addEventListener('toggle', () => { if (!d.open) return; const sec = spotsFeed.section(); const h = sec.querySelector(':scope > h3'); if (h) h.remove(); $('planSpotsBody').replaceChildren(sec); });
     } });
-    // Weekly time attack (web/time_attack.js, SOCIAL 2.9, IDEAS S-26): this area's loop this week and its board, in Where to?
+    // Time attack (web/time_attack.js, SOCIAL 2.9, IDEAS S-26): this area's loops this season and their boards, in Where to?
     // beside Spots near you; drawn when opened, fresh each time. Runs go up from the Log when stages sync.
     let timeAttack = null;
-    const TA_LINE = 'Time attack this week';   // TestFlight 2026-11-12 (note 7): the row names itself, no tagline
+    const TA_LINE = 'Time attack';   // TestFlight 2026-11-12 (note 7): the row names itself, no tagline
     onSocial(() => { try {
       const ta = window.ApexTimeAttack ? ApexTimeAttack.mount({ el, btn, toast, apiCall, jsonOf, report: safety && safety.report,
         ask: (t, a) => ApexConfirm.ask(t, a),
@@ -6597,7 +6605,7 @@
       const driveWith = async (f) => {
         if (!convoy) return;
         if (convoy.active) { toast(`You're in a convoy: invite @${f.handle} from its Invite friends.`); return; }
-        if (!(await ApexConfirm.ask(`Start a convoy now and invite @${f.handle}? You see each other on the map while you drive, for two hours unless you keep it going. Nothing is kept.`, 'Start convoy'))) return;
+        if (!(await ApexConfirm.ask(`Start a convoy with @${f.handle}? You see each other on the map for two hours. Nothing is kept.`, 'Start convoy'))) return;
         const r = await convoy.startFor(`@${me.handle} and @${f.handle}`, [f.handle]);
         toast(r.ok ? (r.invited ? `Convoy started. @${f.handle} has the invite in the app.` : `Convoy started, but @${f.handle} couldn't be invited. Share its link.`) : 'Couldn\'t start a convoy. Check signal.');
         if (r.ok) closeSheet();
@@ -6647,7 +6655,7 @@
         actions.append(btn('Accept', async () => {
           const r = await apiCall('POST', '/api/invites/redeem', { token: friendTok }).catch(() => null);
           if (r && (r.ok || r.status < 500)) unstash('apex.invite');
-          toast(r && r.ok ? 'You\'re friends. Choose what to share in their row.' : r ? 'That friend link didn\'t work. Ask for a new one.' : 'Couldn\'t reach Vetta. Try again.'); redo();
+          toast(r && r.ok ? 'You\'re friends. Their profile has what you share.' : r ? 'That friend link didn\'t work. Ask for a new one.' : 'Couldn\'t reach Vetta. Try again.'); redo();
         }, 'ink-btn solid'), btn('Not now', () => { unstash('apex.invite'); redo(); }, 'linkbtn'));
         body.append(el('div', { className: 'card stack-8' }, what, actions));
       }
@@ -7545,7 +7553,7 @@
       // "Location is off" sheet uses).
       toast('Notifications are off for Vetta. Turn them on in Settings, then here.', { label: 'Settings', onClick: () => { try { nudgeShell().postMessage({ cmd: 'openSettings' }); } catch (_) {} } });
     }
-    // This week's time attack loop in your area (time_attack.ts) as the deck's suggestion: first after a crew drive when you
+    // This week's featured time attack loop in your area (ta_fixed.ts) as the deck's suggestion: first after a crew drive when you
     // entered it, else after the road you haven't driven. Members only, with the drive-today check (every 10 min); the server
     // is sent the middle of your quarter-degree area, never where you are (time_attack.js areaPoint). No loop, nothing said.
     function attackIs(a) {
@@ -7557,7 +7565,7 @@
       const p = state.lastPosition;
       if (!p || !Number.isFinite(p.lat) || !Number.isFinite(p.lon)) return;   // no position yet: what was known stays
       const at = { lat: Math.floor(p.lat / 0.25) * 0.25 + 0.125, lon: Math.floor(p.lon / 0.25) * 0.25 + 0.125 };   // time_attack.js areaPoint
-      const t = await apiCall('GET', `/api/timeattack?lat=${at.lat}&lon=${at.lon}`).then((r) => (r && r.ok ? jsonOf(r) : null)).catch(() => null);
+      const t = await apiCall('GET', `/api/ta?lat=${at.lat}&lon=${at.lon}`).then((r) => (r && r.ok ? jsonOf(r) : null)).catch(() => null);
       if (t) attackIs(YR ? YR.attackFrom(t) : null);
     }
     // The morning of a crew drive you said you're going to (REVIEW.md roadmap 21, crew_events.js todayDrive): from 4 AM until an

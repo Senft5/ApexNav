@@ -11,6 +11,7 @@ import { CHAT_SWEEP } from "./crew_page";
 import { PRESENCE_SWEEP } from "./presence";
 import { BUILD_CHAT_SWEEP } from "./builds";
 import { TA_SWEEP } from "./time_attack";
+import { TA_FIXED_SWEEP } from "./ta_fixed";
 import { DUELS_SWEEP } from "./duels";
 
 export const SWEEPS: Record<string, string> = {
@@ -33,6 +34,7 @@ export const SWEEPS: Record<string, string> = {
   presence_samples: PRESENCE_SWEEP,
   build_chat: BUILD_CHAT_SWEEP,
   ...TA_SWEEP,
+  ...TA_FIXED_SWEEP,
   duels: DUELS_SWEEP,
 };
 

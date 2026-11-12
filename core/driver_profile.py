@@ -449,6 +449,7 @@ def profile(drives: list) -> dict:
     out["pace"] = {"over": da._r(da._mean_se(over)[0], 4) if len(over) >= SKILL_MIN else None, "n": len(over)}
 
     months = sorted({d["month"] for d in drives if d.get("month")})
+    out["span"] = [months[0], months[-1]] if months else None      # the period read: first and last month with a date
     out["touch_trend"] = {k: [] for k in TOUCH}
     for mth in months:
         t = touch([o for d in drives if d.get("month") == mth for o in d["obs"]], TREND_MIN)

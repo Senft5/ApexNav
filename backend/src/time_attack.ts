@@ -25,7 +25,7 @@ export const MAX_AVG_MS = 60;
 
 const first = <T>(env: Env, sql: string, ...args: unknown[]) => env.DB.prepare(sql).bind(...args).first<T>();
 const all = async <T>(env: Env, sql: string, ...args: unknown[]) => (await env.DB.prepare(sql).bind(...args).all<T>()).results;
-const NO_BLOCK = (a: string, b: string) => `NOT EXISTS (SELECT 1 FROM blocks k WHERE (k.blocker = ${a} AND k.blocked = ${b}) OR (k.blocker = ${b} AND k.blocked = ${a}))`;
+export const NO_BLOCK = (a: string, b: string) => `NOT EXISTS (SELECT 1 FROM blocks k WHERE (k.blocker = ${a} AND k.blocked = ${b}) OR (k.blocker = ${b} AND k.blocked = ${a}))`;
 /** The Monday (UTC) that starts this week, and the Sunday that ends it. */
 const WEEK = "date('now', '-6 days', 'weekday 1')";
 
@@ -35,8 +35,8 @@ const corner = (x: number) => String(Math.floor(x / AREA_DEG + 1e-9) * AREA_DEG)
 /** The area a point is in: the quarter-degree square, south-west corner, as 'lat,lon' ("35.25,-84.5"). */
 export const cellOf = (lat: number, lon: number) => `${corner(lat)},${corner(lon)}`;
 const qNum = (u: URL, k: string) => { const s = u.searchParams.get(k); return s === null || s.trim() === "" ? NaN : Number(s); };   // missing is 400, never (0, 0)
-const cellParam = (u: URL) => cellOf(num(qNum(u, "lat"), "lat", -85, 85), num(qNum(u, "lon"), "lon", -180, 180));
-const cellBody = (c: unknown) => {
+export const cellParam = (u: URL) => cellOf(num(qNum(u, "lat"), "lat", -85, 85), num(qNum(u, "lon"), "lon", -180, 180));
+export const cellBody = (c: unknown) => {
   const m = /^(-?\d{1,2}(?:\.\d{1,2})?),(-?\d{1,3}(?:\.\d{1,2})?)$/.exec(String(c ?? ""));
   if (!m || Math.abs(+m[1]) > 85 || Math.abs(+m[2]) > 180) throw new HttpError(400, "bad_cell");
   const cell = cellOf(+m[1], +m[2]);
@@ -47,7 +47,7 @@ const cellBody = (c: unknown) => {
 export const seedOf = (week: string, cell: string, tries: number) => `${week}|${cell}|${tries}`;
 
 const R = 6371008.8, rad = (d: number) => (d * Math.PI) / 180;
-const hav = (a: number[], b: number[]) => {
+export const hav = (a: number[], b: number[]) => {
   const dl = rad(b[0] - a[0]), dn = rad(b[1] - a[1]);
   const h = Math.sin(dl / 2) ** 2 + Math.cos(rad(a[0])) * Math.cos(rad(b[0])) * Math.sin(dn / 2) ** 2;
   return 2 * R * Math.asin(Math.min(1, Math.sqrt(h)));
@@ -73,7 +73,7 @@ export function checkLoop(raw: unknown, cell: string): { geom: [number, number][
   return { geom: pts, length_m: Math.round(len) };
 }
 /** A loop's name: the phone names it by its main road ("Dry Ridge Road loop"); plain text, 60 characters at most. */
-const nameOf = (v: unknown) => {
+export const nameOf = (v: unknown) => {
   const s = typeof v === "string" ? v.replace(/[\u0000-\u001f\u007f<>]/g, "").replace(/\s+/g, " ").trim().slice(0, 60) : "";
   return s || "This week's loop";
 };
