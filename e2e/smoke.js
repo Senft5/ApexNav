@@ -1982,6 +1982,9 @@ flow('avoid police reports, driving: a report that lands on the route ahead is o
   await page.evaluate(() => window.apex.onNative({ type: 'carplay', action: 'start' }));
   await page.waitForFunction(() => window.apexDebug.driveActive);
   await page.evaluate(() => apexDebug.loadReported(true));            // the report lands (the drive asks every 2 min)
+  // a car's screen is connected from here (the shell's message handler, as in the app; set late: with it from the start
+  // the page takes the app's own API base)
+  await page.evaluate(() => { window.__car = []; window.webkit = { messageHandlers: { apex: { postMessage(m) { if (m && m.cmd === 'car') window.__car.push(m); } } } }; });
   const crs = (Math.atan2((plan.lon2 - plan.startLon) * Math.cos(plan.startLat * Math.PI / 180), plan.lat2 - plan.startLat) * 180 / Math.PI + 360) % 360;
   const fix = () => page.evaluate(([lat, lon, crs]) => window.apex.live({ lat, lon, accuracy_m: 5, speed_mps: 15, course_deg: crs, has_fix: true, lat_g: 0, lon_g: 0, calibration: 'locked', thermal: 0 }), [plan.startLat, plan.startLon, crs]);
   let offered = null;
@@ -1991,14 +1994,20 @@ flow('avoid police reports, driving: a report that lands on the route ahead is o
     if (!offered) await page.waitForTimeout(250);
   }
   check(!!offered && /Go round/.test(offered), 'the report on the route ahead is offered with Go round: ' + offered + ' ' + JSON.stringify(await page.evaluate(() => apexDebug.policeAhead)));
+  // the car's screen has it too, with the same key; tapped there, it goes round and the phone's key goes away
+  const offer = await page.evaluate(() => window.__car.filter((m) => m.kind === 'offer').pop());
+  check(offer && offer.key === 'Go round' && /^Police reported on your route in /.test(offer.title) && /^Police in /.test(offer.short) && offer.seconds === 15,
+    'the offer on the car: ' + JSON.stringify(offer));
   const before = asked.length;
-  await page.click('#toast .toast-key');
+  await page.evaluate((id) => { window.apex.onNative({ type: 'carplay', action: 'offer', id: 'not-' + id }); window.apex.onNative({ type: 'carplay', action: 'offer', id }); }, offer.id);
   await page.waitForFunction(() => apexDebug.track !== window.__plan && apexDebug.track && apexDebug.track.kind === 'route', null, { timeout: 15000 });
   const ex = asked.slice(before).map((r) => r.exclude_locations || []);
   check(ex.length && ex.every((e) => e.some((x) => Math.abs(x.lat - report.lat) < 1e-4 && Math.abs(x.lon - report.lon) < 1e-4)), 'the way round was asked round the report: ' + JSON.stringify(ex));
   const far = await page.evaluate(([la, lo]) => { const t = apexDebug.track; let m = Infinity;
     for (let i = 0; i < t.lat.length; i++) m = Math.min(m, Math.hypot((t.lat[i] - la) * 110540, (t.lon[i] - lo) * 111320 * Math.cos(la * Math.PI / 180))); return m; }, [report.lat, report.lon]);
   check(far > 1000, 'the new route keeps well off the report: ' + Math.round(far) + ' m');
+  check(await page.evaluate(() => !document.querySelector('#toast .toast-key')), 'the phone\'s Go round key is gone once the car took it');
+  check(asked.length - before <= 2, 'one way round asked for, not one per tap: ' + (asked.length - before));
   // once: more fixes on the new route don't offer the same report again
   for (let k = 0; k < 8; k++) { await fix(); await page.waitForTimeout(150); }
   check(!(await page.evaluate(() => /Police reported on your route/.test(document.getElementById('toast').textContent) && document.getElementById('toast').classList.contains('show'))), 'offered once');
