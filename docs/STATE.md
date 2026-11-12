@@ -6,6 +6,18 @@
   Time by default, 3/7/14 days; the stage is your copy's id from POST /api/timeattack/enter (idempotent). No backend change.
 - Tests: tests/test_time_attack.py wiring; e2e "time attack duel".
 - Exact next task: the next social win (push for For you once APNs exists; a crew's roadbook).
+## Session 2026-11-12 (ui-round-three, PR 3): the arrival-time link page in the Vetta Line (claude/project-thread-5sbga7)
+
+- web/eta.html (the page a friend opens from "Share ETA"): the app's faces (fonts.css, preloaded), the minutes as one big
+  numeral ("@nate is about / 14 / min away"), "Arriving around" in the numeral face over a hairline, the freshness line
+  with a red dot while live and an empty ring when stale, night paper under prefers-color-scheme: dark, and the mark
+  inline so its ink follows the paper. eta_share.js viewText adds `parts` (the title in three parts, word for word) and
+  `live`. csp.py rerun.
+- Looked over too, no change: the drive HUD (mature, many review rounds; nothing clearly wrong) and an axe-core WCAG 2.2 AA
+  scan of map, Log, People, Garage day and night, signed in (no violations but the app's meta-viewport).
+- Tests: tests/test_eta_share.py (+2, the live case now has parts and live). e2e share-your-ETA passes here.
+- Next ideas: CarPlay visuals; about.html (the website's page) in the Line.
+
 
 ## Session 2026-11-12 (meets on the map): IDEAS S-13's last part (claude/project-thread-uwmi4e, after #446)
 
@@ -36,6 +48,12 @@
 - `analysis_client.js`: the road book moved into `bookOf`; a new `roadBooks({ ids })` job reads up to 12 roads at once.
 - Log > Your roads, corner by corner: `#bookWork` shows the line above the head, read once per library (libKey).
 - Next: Your driving's Work on could point at the road from roadsToWork ("Dry Ridge Rd is where it shows most").
+
+## 2026-11-12 Owner-only service check (claude/project-thread-9zycz2)
+- web/service_check.js (lazy 'ops') + cockpit.js serviceCheckSection: Settings → Account, owner only (/api/me moderator). 27 probes at a fixed Cincinnati spot, incl. our router's real Fun / Long way / loop plans via the app's worker and each Overpass camera server separately. Auto-runs once a launch, at most every 6 h.
+- backend/src/service_check.ts: POST /api/ops/service-check (into error_counts kind 'service', no migration), GET /api/ops/service-check, GET /api/ops/service-check/server (config booleans, graph-data branch, Overpass from Cloudflare).
+- Read Nate's results: `SELECT day, source, message, n, stack, last_at FROM error_counts WHERE kind = 'service' ORDER BY last_at DESC` on apexnav-db.
+- Next: once results arrive, pass camera / router findings to the Routing thread; consider a probe for the convoy socket.
 
 ## Session 2026-11-12 (deepest analysis, PR 18): the end card says how this drive went on a road you know (claude/project-thread-gd7nre)
 
