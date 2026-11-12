@@ -78,12 +78,16 @@ describe("For you", () => {
     expect(JSON.stringify(f)).not.toMatch(/bob|outsider/);
     // time attack: bob goes quicker than alice after her time went up
     const week = (await env.DB.prepare("SELECT date('now', '-6 days', 'weekday 1') AS w").first<{ w: string }>())!.w;
-    const segId = await makeSegment(a, "Tail of the Dragon");
-    await env.DB.prepare("INSERT INTO ta_weeks (week, cell, segment_id) VALUES (?, '35,-84', ?)").bind(week, segId).run();
+    // (the week's loop is named on its row, migration 0054, and has no stage of its own)
+    await env.DB.prepare("INSERT INTO ta_weeks (week, cell, segment_id, name, length_m, geom) VALUES (?, '35,-84', 'ta-x', 'Tail of the Dragon loop', 10000, '[]')").bind(week).run();
     await env.DB.prepare("INSERT INTO ta_entries (week, cell, user_id, time_s, driven_on, updated_at) VALUES (?, '35,-84', ?, 300, ?, datetime('now', '-1 hour'))").bind(week, a.id, today).run();
     await env.DB.prepare("INSERT INTO ta_entries (week, cell, user_id, time_s, driven_on) VALUES (?, '35,-84', ?, 291, ?)").bind(week, b.id, today).run();
-    expect((await inbox(a)).items.find((i) => i.kind === "passed")).toMatchObject({ handle: "bob", stage: "Tail of the Dragon", gap_s: 9, place: 2 });
+    expect((await inbox(a)).items.find((i) => i.kind === "passed")).toMatchObject({ handle: "bob", stage: "Tail of the Dragon loop", gap_s: 9, place: 2 });
     expect(kinds(await inbox(b))).not.toContain("passed");
+    // a loop a moderator took down says nothing more
+    await env.DB.prepare("UPDATE ta_weeks SET removed = 1").run();
+    expect(kinds(await inbox(a))).not.toContain("passed");
+    await env.DB.prepare("UPDATE ta_weeks SET removed = 0").run();
   });
 
   it("a duel's outcome from your side, by Score or by time", () => {

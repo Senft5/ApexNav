@@ -149,6 +149,25 @@
     return road;
   }
 
+  // A road's book (driver_profile.js roadBook) over every drive with the same name as drive id, oldest first, placed in the
+  // newest one's frame, its corners in that drive's road order; null without one
+  async function bookOf(Core, all, id) {
+    const P = root.ApexDriverProfile, me = all.find((s) => s.id === id);
+    const key = me ? String(me.name || '').trim().toLowerCase() : '';
+    if (!P || !P.roadBook || !key) return null;
+    const sums = all.filter((s) => String(s.name || '').trim().toLowerCase() === key)
+      .sort((p, q) => String(p.date || '').localeCompare(String(q.date || '')));
+    const ds = [];
+    for (const s of sums) { const d = await full(s.id, s); if (d && d.lat && d.lat.length >= 2) ds.push(d); }
+    if (!ds.length) return null;
+    const last = ds[ds.length - 1], lat0 = last.lat[0], lon0 = last.lon[0], c = Math.cos(lat0 * Math.PI / 180);
+    const ob = (x) => P.observe({ ...x, corners: Rec().scorableCorners(x, x.corners || []) }, Core);
+    const drives = ds.map((d) => ({ id: d.id, at: monthOf(d) === null ? null : String(d.date).slice(0, 16), corners: Array.isArray(d.corners) && d.corners.length ? P.placed(d, ob(d), lat0, lon0) : [] }));
+    const ref = [];
+    for (let i = 0; i < last.lat.length; i += 5) ref.push([(last.lon[i] - lon0) * c * 111320, (last.lat[i] - lat0) * 110540]);
+    return P.roadBook(drives, ref);
+  }
+
   // IDEAS D-27: how the practised skill went on one drive, against the level the plan keeps from before it, and the end
   // card's line for it. null with no plan, no driver_profile.js here, or no clean corner at all on the drive.
   function practiceOf(Core, d, plan) {
@@ -283,21 +302,18 @@
      * corner with no date. { book: { corners, fewer, drives } | null }.
      */
     async roadBook({ id }) {
-      const Core = CoreOf(), P = root.ApexDriverProfile, all = await Rec().summaries(Core), me = all.find((s) => s.id === id);
-      const key = me ? String(me.name || '').trim().toLowerCase() : '';
-      if (!P || !P.roadBook || !key) return { book: null };
-      const sums = all.filter((s) => String(s.name || '').trim().toLowerCase() === key)
-        .sort((p, q) => String(p.date || '').localeCompare(String(q.date || '')));
-      const ds = [];
-      for (const s of sums) { const d = await full(s.id, s); if (d && d.lat && d.lat.length >= 2) ds.push(d); }
-      if (!ds.length) { release(); return { book: null }; }
-      const last = ds[ds.length - 1], lat0 = last.lat[0], lon0 = last.lon[0], c = Math.cos(lat0 * Math.PI / 180);
-      const ob = (x) => P.observe({ ...x, corners: Rec().scorableCorners(x, x.corners || []) }, Core);
-      const drives = ds.map((d) => ({ id: d.id, at: monthOf(d) === null ? null : String(d.date).slice(0, 16), corners: Array.isArray(d.corners) && d.corners.length ? P.placed(d, ob(d), lat0, lon0) : [] }));
-      const ref = [];
-      for (let i = 0; i < last.lat.length; i += 5) ref.push([(last.lon[i] - lon0) * c * 111320, (last.lat[i] - lat0) * 110540]);
+      const Core = CoreOf(), all = await Rec().summaries(Core);
+      const book = await bookOf(Core, all, id);
       release();
-      return { book: P.roadBook(drives, ref) };
+      return { book };
+    },
+
+    /** Several roads' books at once (the Log's "where your passes differ most"): { books: { [id]: book | null } }. */
+    async roadBooks({ ids }) {
+      const Core = CoreOf(), all = await Rec().summaries(Core), books = {};
+      for (const id of (ids || []).slice(0, 12)) { try { books[id] = await bookOf(Core, all, id); } catch (_) { books[id] = null; } }
+      release();
+      return { books };
     },
 
     /** Corner by corner between two drives (Core.compareDrives). */

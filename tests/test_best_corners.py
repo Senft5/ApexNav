@@ -223,3 +223,16 @@ def test_road_end_line_picks_the_road_words():
     out = json.loads(subprocess.run([NODE, "-e", runner, os.getcwd()], capture_output=True, text=True, check=True).stdout)
     assert out == ["At the corner here where your passes differ most, this drive was not near your cleanest: it is the place to work on. What it lost most there: brakes done by the apex.",
                    "On this road: your cleanest pass yet at 1 of the 4 corners here you have driven three or more times.", None, None]
+
+
+def test_roads_to_work_names_the_least_even_roads():
+    if NODE is None:
+        return
+    k = lambda why: {"why": why}
+    a = {"corners": [k("arc"), k("arc")], "uneven": [1, 2]}
+    b = {"corners": [k(None)], "uneven": [1]}
+    runner = ("const P=require(process.argv[1]+'/web/driver_profile.js');const [a,b]=JSON.parse(require('fs').readFileSync(0,'utf8'));"
+              "process.stdout.write(JSON.stringify([P.roadsToWork([{name:'Bell Gap',book:b},{name:'Flat Rd',book:{corners:[],uneven:[]}},{name:'Dry Ridge Rd',book:a},{name:'X',book:null}]),"
+              "P.roadsToWork([{name:'Flat Rd',book:{corners:[],uneven:[]}}]),P.roadsToWork(null)]));")
+    out = json.loads(subprocess.run([NODE, "-e", runner, os.getcwd()], input=json.dumps([a, b]), capture_output=True, text=True, check=True).stdout)
+    assert out == ["Where your passes differ most: Dry Ridge Rd (2 corners, mostly one steering arc) and Bell Gap (1 corner).", None, None]

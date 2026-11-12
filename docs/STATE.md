@@ -8,6 +8,19 @@
 - First build ran from the PR branch (2026-11-12): 11,969 cameras (11,924 plate readers) on 470 tiles, 326 KB, already
   on graph-data. Next: after the merge check `/api/cameras/v1/region.json` answers 200 on the prod Worker.
 - Route reports: the first one from Nate (01:27 UTC) was `loop: none`, a loop length with no loop found, not signal.
+## Session 2026-11-11 (time attack placement): where the weekly loop shows (claude/project-thread-uwmi4e, after #433)
+- Done: the Where to? row names the week's loop and your place (time_attack.js summaryLine and peek). Drive it plans the
+  loop as the route (cockpit driveLoop). The Log says your place after a sync (runs returns `places`, placeLine). For you's
+  `passed` names the loop and skips taken-down loops.
+- Tests: backend time_attack and inbox, pytest test_time_attack (12), and the e2e time attack flow (row line, Drive it).
+- Next: the home deck's weekly loop is on Roamer C's branch claude/roam-c-ta-placement.
+## Session 2026-11-12 (deepest analysis, PR 19): the Log names the roads where your passes differ most (claude/project-thread-gd7nre)
+
+- `web/driver_profile.js` `roadsToWork(list)`: from each road's book, the roads with uneven corners, most first, at most
+  3: "Where your passes differ most: Dry Ridge Rd (3 corners, mostly one steering arc) and Bell Gap (1 corner)."
+- `analysis_client.js`: the road book moved into `bookOf`; a new `roadBooks({ ids })` job reads up to 12 roads at once.
+- Log > Your roads, corner by corner: `#bookWork` shows the line above the head, read once per library (libKey).
+- Next: Your driving's Work on could point at the road from roadsToWork ("Dry Ridge Rd is where it shows most").
 
 ## Session 2026-11-12 (deepest analysis, PR 18): the end card says how this drive went on a road you know (claude/project-thread-gd7nre)
 

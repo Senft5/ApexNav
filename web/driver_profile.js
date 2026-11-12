@@ -421,6 +421,16 @@
     for (const [k, s] of seen) if (!best || s.c > best[1].c || (s.c === best[1].c && s.first < best[1].first)) best = [k, s];
     return best ? { skill: best[0], at: best[1].at.slice().sort((a, b) => a - b) } : null;
   }
+  /** The roads to work on, from their books (list: [{ name, book }]): the ones with an uneven corner, the most uneven
+   *  first (a tie keeps list order), at most 3, as "Where your passes differ most: Dry Ridge Rd (3 corners, mostly one
+   *  steering arc) and Bell Gap (1 corner)." null when no road has one. */
+  function roadsToWork(list) {
+    const rows = (list || []).map((x, i) => ({ i, name: x && x.name, n: x && x.book && Array.isArray(x.book.uneven) ? x.book.uneven.length : 0, f: x ? roadBookFocus(x.book) : null }))
+      .filter((x) => x.n > 0 && x.name).sort((a, b) => b.n - a.n || a.i - b.i).slice(0, 3);
+    if (!rows.length) return null;
+    const say = rows.map((x) => `${x.name} (${x.n} corner${x.n === 1 ? '' : 's'}${x.f ? `, mostly ${lowerName(x.f.skill)}` : ''})`);
+    return `Where your passes differ most: ${say.length < 2 ? say[0] : `${say.slice(0, -1).join(', ')} and ${say[say.length - 1]}`}.`;
+  }
   /** "Most of the difference at corner 3 is one steering arc." for a road book's focus, or null. */
   function roadBookFocusLine(f) {
     if (!f || !WORDS[f.skill]) return null;
@@ -1016,7 +1026,7 @@
     }
   }
 
-  const api = { SKILLS, observe, profile, swing, excess, SKILL_MIN, WORDS, findingLine, styleLines, touchLines, touchTrendLines, driveTouchLines, paceLines, PACE, MEASURES, touch, TOUCH, driveTouch, DRIVE_TOUCH_MIN, bestCorners, recordsBySize, RECORD_MIN, driveRecords, driveRecordLines, roadRecords, placed, roadRecordLine, roadCornerNote, roadBook, roadBookRows, roadBookFocus, roadBookFocusLine, roadUnevenLine, roadEndLine, cardLine, focusLines, render,
+  const api = { SKILLS, observe, profile, swing, excess, SKILL_MIN, WORDS, findingLine, styleLines, touchLines, touchTrendLines, driveTouchLines, paceLines, PACE, MEASURES, touch, TOUCH, driveTouch, DRIVE_TOUCH_MIN, bestCorners, recordsBySize, RECORD_MIN, driveRecords, driveRecordLines, roadRecords, placed, roadRecordLine, roadCornerNote, roadBook, roadBookRows, roadBookFocus, roadBookFocusLine, roadsToWork, roadUnevenLine, roadEndLine, cardLine, focusLines, render,
     PRACTICE_MIN, practice, drivePractice, practiceLine, practiceSummary, localStamp, loadPlan, savePlan, PLAN_KEY };
   if (typeof module !== 'undefined' && module.exports) module.exports = api; else root.ApexDriverProfile = api;
 })(typeof window !== 'undefined' ? window : globalThis);

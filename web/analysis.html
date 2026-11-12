@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self' apexnav:; script-src 'self' apexnav: 'sha256-UCtLIo+eJ3aC995Wo/vTa376NMPepWppzd2nlMTT/Xg=' 'sha256-G7s/ZI+Hqrfc4DqbB6EANJJLmUmhNK06PizQ1LlsG84=' https://cdn.jsdelivr.net 'wasm-unsafe-eval'; worker-src 'self' apexnav: blob:; child-src 'self' apexnav: blob:; style-src 'self' apexnav: 'unsafe-inline'; font-src 'self' apexnav: data:; img-src 'self' apexnav: data: blob: https://tiles.openfreemap.org https://s3.amazonaws.com https://basemap.nationalmap.gov; media-src 'self' apexnav: data: blob:; connect-src 'self' apexnav: data: blob: https://apexnav.senftns.workers.dev wss://apexnav.senftns.workers.dev https://tiles.openfreemap.org https://basemap.nationalmap.gov https://s3.amazonaws.com https://valhalla1.openstreetmap.de https://router.project-osrm.org https://overpass-api.de https://overpass.private.coffee https://overpass.kumi.systems https://maps.mail.ru https://nominatim.openstreetmap.org https://photon.komoot.io https://api.open-meteo.com https://api.weather.gov https://statsapi.mlb.com https://api.seatgeek.com https://api.water.noaa.gov https://waterservices.usgs.gov https://in.carsprogram.org https://publicapi.ohgo.com https://quickstats.nass.usda.gov https://commons.wikimedia.org https://graph.mapillary.com https://vpic.nhtsa.dot.gov https://cdn.jsdelivr.net https://huggingface.co https://*.huggingface.co https://*.hf.co; object-src 'none'; base-uri 'none'; form-action 'self'" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self' apexnav:; script-src 'self' apexnav: 'sha256-sQI7oRlW3zXc/GYAjXFJPX82QeLlStnW72IWcHQ3tfs=' 'sha256-G7s/ZI+Hqrfc4DqbB6EANJJLmUmhNK06PizQ1LlsG84=' https://cdn.jsdelivr.net 'wasm-unsafe-eval'; worker-src 'self' apexnav: blob:; child-src 'self' apexnav: blob:; style-src 'self' apexnav: 'unsafe-inline'; font-src 'self' apexnav: data:; img-src 'self' apexnav: data: blob: https://tiles.openfreemap.org https://s3.amazonaws.com https://basemap.nationalmap.gov; media-src 'self' apexnav: data: blob:; connect-src 'self' apexnav: data: blob: https://apexnav.senftns.workers.dev wss://apexnav.senftns.workers.dev https://tiles.openfreemap.org https://basemap.nationalmap.gov https://s3.amazonaws.com https://valhalla1.openstreetmap.de https://router.project-osrm.org https://overpass-api.de https://overpass.private.coffee https://overpass.kumi.systems https://maps.mail.ru https://nominatim.openstreetmap.org https://photon.komoot.io https://api.open-meteo.com https://api.weather.gov https://statsapi.mlb.com https://api.seatgeek.com https://api.water.noaa.gov https://waterservices.usgs.gov https://in.carsprogram.org https://publicapi.ohgo.com https://quickstats.nass.usda.gov https://commons.wikimedia.org https://graph.mapillary.com https://vpic.nhtsa.dot.gov https://cdn.jsdelivr.net https://huggingface.co https://*.huggingface.co https://*.hf.co; object-src 'none'; base-uri 'none'; form-action 'self'" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
   <title>Vetta · Log</title>
   <link rel="icon" href="brand/mark.svg" type="image/svg+xml" />
@@ -404,7 +404,7 @@
       <!-- a road you have driven three or more times, corner by corner: your cleanest pass at each and the drive it came on -->
       <details class="quiet" id="bookPanel" hidden><summary>Your roads, corner by corner</summary>
         <div class="stamps" id="bookRoads" role="group" aria-label="Pick a road"></div>
-        <p class="note" id="bookHead" aria-live="polite"></p><p class="note" id="bookPractice" hidden></p><ol class="book-list" id="bookList"></ol></details>
+        <p class="note" id="bookWork" hidden></p><p class="note" id="bookHead" aria-live="polite"></p><p class="note" id="bookPractice" hidden></p><ol class="book-list" id="bookList"></ol></details>
       <details class="quiet" id="kudosPanel" hidden><summary id="kudosSum">Kudos for you</summary><div id="kudosList" class="stack-8"></div></details>
       <div class="panel" id="friendsPanel" hidden><h2>Friends lately</h2><div id="friendsList" class="stack-8"></div>
         <p class="note">From friends and crews who share scores with you, on stages you have. Scores only, never times.</p></div>
@@ -663,7 +663,21 @@
         b.addEventListener('click', () => { bookPick = r.name; renderBook(); showBook(r); });
         return b;
       }));
-      if (!bookPick) { $('bookHead').textContent = 'Pick a road to see each corner\'s cleanest pass.'; $('bookList').replaceChildren(); }
+      if (!bookPick) { $('bookHead').textContent = 'Pick a road to see each corner\'s cleanest pass.'; $('bookList').replaceChildren(); $('bookPractice').hidden = true; }
+      bookWork(roads);
+    }
+    // the roads where your passes differ most (driver_profile.js roadsToWork), read once for each library
+    const bookWorkSeen = { key: null, line: null };
+    async function bookWork(roads) {
+      const key = `${libKey}#${roads.map((r) => r.id).join(',')}`;
+      if (bookWorkSeen.key !== key) {
+        bookWorkSeen.key = key; bookWorkSeen.line = null;
+        let books = {};
+        try { books = (await ApexAnalysis.job('roadBooks', { ids: roads.map((r) => r.id) })).books || {}; } catch (_) { books = {}; }
+        if (bookWorkSeen.key !== key) return;
+        bookWorkSeen.line = ApexDriverProfile.roadsToWork(roads.map((r) => ({ name: r.name, book: books[r.id] || null })));
+      }
+      $('bookWork').textContent = bookWorkSeen.line || ''; $('bookWork').hidden = !bookWorkSeen.line;
     }
     async function showBook(r) {
       $('bookHead').textContent = 'Reading its drives…'; $('bookList').replaceChildren(); $('bookPractice').hidden = true;
@@ -1085,7 +1099,12 @@
         try { localStorage.setItem('apex.publishedDays', JSON.stringify(sent)); } catch (_) {}
       }
       // the weekly time attack: your quickest run this week on each circuit you entered (the server keeps only weeks you entered)
-      if (window.ApexTimeAttack) await ApexTimeAttack.sendRuns(ApexSync, segs, passesFor);
+      if (window.ApexTimeAttack) {
+        // your place on the week's loop after this sync, said once under the board (SOCIAL 2.9)
+        const ta = await ApexTimeAttack.sendRuns(ApexSync, segs, passesFor);
+        const line = ta.places.map(ApexTimeAttack.placeLine).filter(Boolean).join(' ');
+        if (line) $('segSyncNote').textContent += ` Time attack, ${line}`;
+      }
       const act = segs.find(s => s.id === activeSeg), bt = $('segBoard'), bf = $('segBoardFilter');
       const [fr, crewList, rows] = await Promise.all([
         ApexSync.friends(),

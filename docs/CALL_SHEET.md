@@ -14,6 +14,19 @@ reads it before Overpass. Calls: a tile counts as ours only if the state outline
 wrongly "no cameras"; outside the region and when our file can't be read, the phone asks Overpass as before (now with
 maps.mail.ru as a fourth server). The request carries no position: it's the same file for everyone. Undo: drop the
 `regionOnce` lookup in web/cameras.js `load` (pass `region: null`), the route in backend/src/index.ts and the workflow.
+## 2026-11-11 (time attack placement): the week's loop in Where to?, Drive it, and your place after a drive (claude/project-thread-uwmi4e)
+
+Calls I made: the Where to? row asks for the week's loop when Where to? opens (at most every 5 minutes, only the area,
+and not from a privacy zone), so it can say the loop and your place without a tap. Drive it now plans the loop itself
+instead of the way to its start. The Log adds one sentence with your place to its sync line rather than a toast, because
+the Log has no toast and the line is already where the board is. For you's "went quicker than you" now names the loop and
+drops a loop a moderator took down. I left the home deck to Roamer C's branch. Undo: drop `peek` from `openPlan`, or the
+`driveLoop` hook in cockpit.js, which falls back to the way to the start.
+## 2026-11-12 (deepest analysis 19): the Log's road book says which of your roads to work on (claude/project-thread-gd7nre)
+
+Above the road picker, one line names the roads (driven three or more times) where your passes differ most, with the
+technique behind most of it. Calls: at most 3 roads, and at most 12 read, to keep the Log quick on a big library; it is read
+once each time the library changes, not on every visit. Undo: remove `bookWork` in web/analysis.html.
 
 ## 2026-11-12 (deepest analysis 18): the end card names your passes on a road you know (claude/project-thread-gd7nre)
 
