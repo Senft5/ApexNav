@@ -3751,7 +3751,8 @@ flow('convoy: a friend joins with the code the leader read out (Worker stubbed, 
     if (u.pathname === '/api/me') return json({ signed_in: true, member: true, handle: 'me' });
     if (u.pathname === '/api/convoy/code/join' && m === 'POST') {
       const b = JSON.parse(route.request().postData()); sent.push(b);
-      return b.code.replace(/[\s-]/g, '').toUpperCase() === 'K7P4QX' && b.consent === true ? json(ctx) : json({ error: 'invalid_invite' }, 400);
+      const ok = b.code.replace(/[\s-]/g, '').toUpperCase() === 'K7P4QX' && b.consent === true;
+      return ok ? new Promise((r) => setTimeout(r, 300)).then(() => json(ctx)) : json({ error: 'invalid_invite' }, 400);   // slow enough for a second Return
     }
     if (u.pathname === `/api/convoy/${id}/ticket`) return json({ ticket: 't'.repeat(32), expiresAtMs: Date.now() + 60000 }, 201);
     if (u.pathname === `/api/convoy/${id}`) return json(ctx);
@@ -3768,8 +3769,11 @@ flow('convoy: a friend joins with the code the leader read out (Worker stubbed, 
   await page.click('.convoy-sheet button:has-text("Join with code")');
   await page.waitForFunction(() => /didn.t work/.test(document.getElementById('toast').textContent), null, { timeout: 5000 });
   await page.fill('.convoy-sheet input[aria-label="Convoy join code"]', 'k7p 4qx');
-  await page.click('.convoy-sheet button:has-text("Join with code")');
+  // Return on the keyboard joins, and a second Return while it works spends no second try (walkthrough 2026-11-12)
+  await page.focus('.convoy-sheet input[aria-label="Convoy join code"]');
+  await page.keyboard.press('Enter'); await page.keyboard.press('Enter');
   await page.waitForFunction(() => /you are following/.test(document.querySelector('.convoy-sheet').textContent), null, { timeout: 5000 });
+  check(sent.length === 2, 'Return joins with the code, once: ' + sent.length + ' tries sent');
   check(sent.length === 2 && sent.every((b) => b.consent === true), 'joined with consent: ' + JSON.stringify(sent));
 });
 
