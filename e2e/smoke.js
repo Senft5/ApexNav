@@ -4159,6 +4159,11 @@ flow('road feel that waited for signal: counted in Your data, kept while Road da
     await ApexRoadCarry.idle();
   });
   check((await page.evaluate(() => ApexRoadCarry.size())) === 1 && (await page.evaluate(() => ApexRoadCarry.itemM({ rows: { lat: [1, 2] }, pending: [{ bins: [1, 2, 3] }] }))) === 25, 'one trip waits in the store');
+  // an app restart: the trip is still in the store (IndexedDB plus its index), nothing sent while the account can't be confirmed
+  await page.reload();
+  await page.waitForFunction(() => window.ApexRoadCarry && ApexRoadCarry.flush && window.ApexMyData && window.apexDebug);
+  await page.waitForTimeout(500);
+  check((await page.evaluate(() => ApexRoadCarry.size())) === 1 && posted.length === 0, 'it survives an app restart');
   await page.click('.tab[data-view="garage"]');
   await openSetting(page, 'data');
   await page.waitForFunction(() => /road data from 1\.2 mi waiting for signal/.test(document.getElementById('myDataNote').textContent));
