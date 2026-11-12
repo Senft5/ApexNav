@@ -54,7 +54,13 @@ export async function viewer(req: Request, env: Env): Promise<Viewer | null> {
       WHERE s.id_hash = ?1 AND s.expires_at > datetime('now')`,
   ).bind(hash, `+${SESSION_DAYS - RENEW_AFTER_DAYS} days`)
     .first<{ id: string; email: string; handle: string | null; displayName: string | null; member: number; banned: number; stale: number }>();
-  if (!row) return null;
+  if (!row) {
+    // a token with no session behind it: rateCheck counted it under its own (fresh) key, so a read is counted per IP here,
+    // or a made-up token on every request would read without limit (ratelimit.ts; a write is keyed per IP there already)
+    const ip = req.headers.get("cf-connecting-ip") ?? "unknown";
+    if (req.method === "GET" && env.READ_LIMIT && !(await env.READ_LIMIT.limit({ key: `ip:${ip}` })).success) throw new HttpError(429, "rate_limited");
+    return null;
+  }
   const { banned, stale, ...v } = row;
   // Sliding expiry: a session in use stays signed in. At most once a day per session (when it is a day or more into its
   // 30 days) it is pushed back out to 30 days from now; one left alone for 30 days still ends.
