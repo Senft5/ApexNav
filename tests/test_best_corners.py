@@ -212,3 +212,14 @@ def test_road_book_focus_names_the_skill_to_practise():
     assert out[0] == [dp.road_book_focus(b) for b in cases]
     assert out[1] == ["Most of the difference at corners 1 and 4 is one steering arc.",
                       "Most of the difference at corner 5 is brakes done by the apex.", None, None]
+
+
+def test_road_end_line_picks_the_road_words():
+    if NODE is None:
+        return
+    runner = ("const P=require(process.argv[1]+'/web/driver_profile.js');"
+              "process.stdout.write(JSON.stringify([P.roadEndLine({corners:4,best:1,level:0,uneven:1,steady:0,rows:[{why:'brake'}]}),"
+              "P.roadEndLine({corners:4,best:1,level:0,uneven:1,steady:1,rows:[{why:null}]}),P.roadEndLine({corners:0}),P.roadEndLine(null)]));")
+    out = json.loads(subprocess.run([NODE, "-e", runner, os.getcwd()], capture_output=True, text=True, check=True).stdout)
+    assert out == ["At the corner here where your passes differ most, this drive was not near your cleanest: it is the place to work on. What it lost most there: brakes done by the apex.",
+                   "On this road: your cleanest pass yet at 1 of the 4 corners here you have driven three or more times.", None, None]

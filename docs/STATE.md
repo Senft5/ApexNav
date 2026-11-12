@@ -1,5 +1,14 @@
 # VETTA — CURRENT AGENT HANDOFF STATE
 
+## Session 2026-11-12 (deepest analysis, PR 18): the end card says how this drive went on a road you know (claude/project-thread-gd7nre)
+
+- `web/driver_profile.js` `roadEndLine(r)`: on a road driven three or more times, roadUnevenLine when a least even corner
+  names what this drive lost there, else roadRecordLine ("On this road: your cleanest pass yet at 7 of the 24...").
+- `analysis_client.js`: the road records moved into `roadOf` (the drive job and the coachLine job share it); coachLine now
+  returns `{ coach, road }` from one read of the near drives, so the end card asks nothing extra.
+- Map end card: `#endRoad` under the practice line. e2e: the four-drive road flow opens r3's end card and checks the line.
+- Next: Your driving's profile could list the roads with the most uneven corners, to say where on your roads to practise.
+
 ## Session 2026-11-12 (deepest analysis, PR 17): a drive's least even corners say what it lost there (claude/project-thread-gd7nre)
 
 - `road_records` rows (and the JS port) carry `why`: on an uneven corner this drive took more than NEAR_BEST below your

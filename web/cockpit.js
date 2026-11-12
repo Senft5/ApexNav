@@ -8991,6 +8991,7 @@
       const feel = window.ApexRoadFeel && c.feel ? ApexRoadFeel.endLine(c.feel, (m) => ApexUnits.long(m, 1)) : '';
       $('endFeel').textContent = feel; $('endFeel').hidden = !feel;
       $('endPractice').textContent = ''; $('endPractice').hidden = true;   // IDEAS D-27: with the score (endCardScored)
+      $('endRoad').textContent = ''; $('endRoad').hidden = true;           // the road's line, with the score too
       // scoring: no number yet, never "--" (that means "no score"), and no key that needs the score
       $('endScore').textContent = '…'; $('endScore').classList.add('unk'); $('endScore').setAttribute('aria-busy', 'true');
       $('endScore').parentElement.classList.remove('no-score');
@@ -9045,6 +9046,9 @@
       // IDEAS D-27: the skill Your driving is practicing, read on this drive alone (analysis_client.js practiceOf)
       const prLine = c.practice && typeof c.practice.line === 'string' ? c.practice.line : '';
       $('endPractice').textContent = prLine; $('endPractice').hidden = !prLine;
+      // a road you have driven before: where this drive lost most at its least even corners, or your cleanest passes on it
+      const roadLine = typeof c.road === 'string' ? c.road : '';
+      $('endRoad').textContent = roadLine; $('endRoad').hidden = !roadLine;
       if (window.ApexEndLine && !opts.quiet) {                       // Round 3: never aloud to a parked car or a pocket
         const pack = ['marguerite', 'kit', 'hale'].includes(state.voiceId) ? state.voiceId : 'marguerite';
         // one of the pack's sign-offs, the same for this drive every time, from a clip the loaded bank holds (U-113)
@@ -9078,12 +9082,12 @@
         if (d.ds.score != null) try {
           others = (await ApexRecording.summaries()).filter((o) => o.id !== d.id && o.name === d.name).map((o) => ({ id: o.id, name: o.name, score: o.ds && o.ds.score != null ? Math.round(o.ds.score) : null }));
         } catch (_) { others = []; }
-        let coach = null;                                              // U-111: the Log's sentence, when the drive is stored
-        if (d.ds.score != null && window.ApexAnalysis) try { coach = (await ApexAnalysis.job('coachLine', { id: d.id })).coach || null; } catch (_) { coach = null; }
+        let coach = null, road = null;                                 // U-111: the Log's sentence, when the drive is stored; with it the road's line
+        if (d.ds.score != null && window.ApexAnalysis) try { const r = await ApexAnalysis.job('coachLine', { id: d.id }); coach = r.coach || null; road = r.road || null; } catch (_) { coach = null; road = null; }
         let practice = null;                                           // IDEAS D-27: the practised skill, when the drive is stored
         const plan = practicePlan();
         if (plan && window.ApexAnalysis) try { practice = (await ApexAnalysis.job('practiceLine', { id: d.id, plan })).practice || null; } catch (_) { practice = null; }
-        endCardScored({ ...c, corners: d.corners.length, ds: d.ds, coach, practice }, others, opts);
+        endCardScored({ ...c, corners: d.corners.length, ds: d.ds, coach, practice, road }, others, opts);
       })();
     }
     // U-88: behind the card, the map is the drive: fitted to its trail above the card, the trail drawn at the route's width in
