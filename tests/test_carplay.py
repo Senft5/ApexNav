@@ -264,6 +264,7 @@ console.log(JSON.stringify({
   offer: C.offerMessage('o3', 'Police reported on your route in 1.2 mi.', 'Police in 1.2 mi', 'Go round', 15000),
   offerSame: C.offerMessage('o4', 'Running 12 min late for home.', 'Running 12 min late for home.', 'Skip Cherohala Skyway', 60000),
   offerNone: [C.offerMessage('', 'x', '', 'k'), C.offerMessage('o5', '', '', 'k'), C.offerMessage('o6', 'x', '', ''), C.offerMessage('o7', 'x', '', 'k', 1000).seconds],
+  alongDescent: C.alongMessage([], 'Long descent: 3.7 mi at 8% +1'),
   alongNone: [C.alongMessage([]), C.alongMessage(null), C.alongMessage([{ kind: 'view', name: 'Overlook' }])],
   look: C.lookMessage({ id: 'tapedeck', night: { panel: '#0A0C0B', panelInk: '#7DF5DE', accent: '#FFB347' } }, false),
   tulips: [10, 15, 17, 12, 4, 26].map((k) => C.tulipSVG(k, '#7DF5DE')), bad: C.tulipSVG(10, 'red;x'),
@@ -305,18 +306,21 @@ def test_hazards_are_named_and_unplaceable_ones_dropped(maps):
 
 def test_the_cafes_and_fuel_along_go_to_the_car_by_name(maps):
     """The owner, 2026-11-11: show the café's or the station's name. The car's route preview names them, in route order."""
-    assert maps["along"] == {"kind": "along", "full": "Café: Bean There Coffee · Fuel: Shell, Speedway +2", "short": "Bean There Coffee · Shell +3", "places": []}
-    assert maps["alongUnnamed"] == {"kind": "along", "full": "Café: 2 cafés · Fuel: 1 stop", "short": "2 cafés · 1 fuel stop", "places": []}, "no name: counted, never invented"
+    assert maps["along"] == {"kind": "along", "full": "Café: Bean There Coffee · Fuel: Shell, Speedway +2", "short": "Bean There Coffee · Shell +3", "places": [], "descent": ""}
+    assert maps["alongUnnamed"] == {"kind": "along", "full": "Café: 2 cafés · Fuel: 1 stop", "short": "2 cafés · 1 fuel stop", "places": [], "descent": ""}, "no name: counted, never invented"
     assert maps["alongLong"]["full"] == "Café: The Extremely Long Named Mo…"
-    assert all(m == {"kind": "along", "full": "", "short": "", "places": []} for m in maps["alongNone"]), "nothing along clears the car's line; viewpoints stay on the phone"
+    assert all(m == {"kind": "along", "full": "", "short": "", "places": [], "descent": ""} for m in maps["alongNone"]), "nothing along clears the car's line; viewpoints stay on the phone"
     # and on the car's map, a plate at each one: its name, or what it is when the map has none; never a viewpoint
     assert maps["alongPlates"] == [{"at": [35.123457, -83.9], "kind": "cafe", "text": "The Extremely Lon…"}, {"at": [35.2, -83.8], "kind": "fuel", "text": "Fuel"}]
     assert maps["alongMany"] == 30
+    # a long descent rides on the same line, alone when nothing is along (brake_heat.js descentShort)
+    assert maps["alongDescent"] == {"kind": "along", "full": "", "short": "", "places": [], "descent": "Long descent: 3.7 mi at 8% +1"}
+    assert "if (car.route && track === t) carAlong(t);                      // and on the car's route preview" in cockpit_source()
     js = cockpit_source()
     assert "car.along = ''; carAlong(t);" in js, "every route sent to the car is followed by its places"
     assert "if (car.route && track === t) carAlong(t);" in js, "and the places are sent when they come in"
     swift = open(os.path.join(ROOT, "CarPlay", "ApexCarPlay.swift"), encoding="utf-8").read()
-    assert 'case "along":' in swift and "[along.full, along.short]" in swift
+    assert 'case "along":' in swift and "line([o.detail, along.full, along.descent])" in swift
     # the car's map, native and its web fallback: the places after the hazards and corners, so a name never hides a corner
     native = open(os.path.join(ROOT, "CarPlay", "ApexCarMap.swift"), encoding="utf-8").read()
     carmap = open(os.path.join(ROOT, "web", "carmap.js"), encoding="utf-8").read()
