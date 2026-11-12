@@ -175,6 +175,37 @@ async function leftovers(page) {
   return out;
 }
 
+// A control in view that a screen reader can't name (VoiceOver says only "button"): an icon key with no aria-label, an
+// empty link, a field with no label (LAUNCH.md section 3, IDEAS U-15). In every open page, like leftovers above.
+async function unnamed(page) {
+  const out = [];
+  for (const p of page.context().pages()) {
+    if (p.isClosed()) continue;
+    const found = await p.evaluate(() => {
+      const shown = (el) => { for (let n = el; n && n.nodeType === 1; n = n.parentElement) { if (n.hidden || n.inert || n.getAttribute('aria-hidden') === 'true') return false; }
+        const cs = getComputedStyle(el); return cs.visibility !== 'hidden' && cs.display !== 'none' && el.getClientRects().length > 0; };
+      const text = (el) => (el.innerText || el.textContent || '').replace(/\s+/g, ' ').trim();
+      const nameOf = (el) => {
+        const l = el.getAttribute('aria-label'); if (l && l.trim()) return l;
+        const by = el.getAttribute('aria-labelledby'); if (by) return by.split(/\s+/).map((i) => { const n = document.getElementById(i); return n ? text(n) : ''; }).join(' ').trim();
+        if (el.labels && el.labels.length) return [...el.labels].map(text).join(' ').trim();
+        const t = text(el); if (t) return t;
+        for (const i of el.querySelectorAll('img[alt], svg[aria-label], [role=img][aria-label]')) { const a = i.getAttribute('alt') || i.getAttribute('aria-label'); if (a) return a; }
+        return el.getAttribute('title') || (el.tagName === 'INPUT' && el.value && /^(button|submit)$/i.test(el.type) ? el.value : '') || el.getAttribute('placeholder') || '';
+      };
+      const where = (el) => el.tagName.toLowerCase() + (el.id ? '#' + el.id : '') + (el.className && typeof el.className === 'string' ? '.' + el.className.trim().split(/\s+/).join('.') : '');
+      const hits = [];
+      for (const el of document.querySelectorAll('button, a[href], input:not([type=hidden]), select, textarea, [role=button], [role=switch], [role=tab], [role=slider], [role=checkbox], [role=radio], [role=option]')) {
+        if (!shown(el)) continue;
+        if (!/[\p{L}\p{N}]/u.test(nameOf(el))) hits.push(where(el));
+      }
+      return [...new Set(hits)].slice(0, 8);
+    }).catch(() => []);
+    out.push(...found.map((h) => `${new URL(p.url()).pathname.slice(1) || 'index.html'}: ${h}`));
+  }
+  return out;
+}
+
 async function openSetting(page, key) {
   await page.click('#garageGear');
   await page.click(`#garageSettings .nav-row[data-setting="${key}"]`);
@@ -433,7 +464,7 @@ flow('returning driver: live frames switch to the cockpit, big targets and no ke
   check(await page.evaluate(() => window.apexDebug.state.mode === 'live'), 'frames switch the cockpit to live');
   // A text field must not open the keyboard while moving (IDEAS C-08).
   // (the Plan sheet's fields are hidden in the cockpit, so focus a plain field: the guard is document-wide)
-  await page.evaluate(() => { const i = document.createElement('input'); i.id = 'e2eField'; document.body.append(i); i.focus(); });
+  await page.evaluate(() => { const i = document.createElement('input'); i.id = 'e2eField'; i.setAttribute('aria-label', 'Test field'); document.body.append(i); i.focus(); });
   await page.waitForFunction(() => /Typing is off/.test(document.getElementById('toast').textContent));
   check(await page.evaluate(() => document.activeElement !== document.getElementById('e2eField')), 'the field gives up focus while moving');
 });
@@ -3051,6 +3082,8 @@ flow('build threads: start one from a car, add a step, a friend suggests and it 
   await page.fill('input[aria-label="Step title"]', 'Coilovers <b>in</b>');
   await page.click('.build-view .row-pick[aria-label^="Stage"]'); await page.click('.row-pick-sheet [role="option"]:has-text("Suspension")');   // the app's row list
   await page.fill('input[aria-label="Parts"]', 'Ohlins DFV R&T, 7k / 5k springs');
+  const form = await page.evaluate(() => ({ bold: [...document.querySelectorAll('.bv-form > b')].map((b) => b.textContent), notes: [...document.querySelectorAll('.bv-form > .note')].map((n) => n.textContent) }));
+  check(!form.bold.length && form.notes.length === 1 && form.notes[0].length < 60, 'the step form: no label over the drive pick, one short line about photos: ' + JSON.stringify(form));
   await page.click('button:has-text("Post the step")');
   await page.waitForSelector('.bv-post h3');
   const step = sent.find((x) => x.p === '/api/builds/b1/posts').b;
@@ -6991,6 +7024,9 @@ flow('the main map: with no signal and no saved area one line says there is no m
   const off = await page.evaluate(() => { const n = document.getElementById('mapNote'), r = n.getBoundingClientRect(), m = document.getElementById('map').getBoundingClientRect();
     return { text: n.textContent, inside: r.left >= m.left && r.right <= m.right && r.top >= m.top, taps: getComputedStyle(n).pointerEvents }; });
   check(off.text === 'No map here without signal. Notes and recording still work.' && off.inside && off.taps === 'none', 'said in one line, over the map, never in the way: ' + JSON.stringify(off));
+  // a first launch with no style kept: the map still loads on the paper, so the route, the trail and the corners can draw
+  await page.waitForFunction(() => { try { return !!window.apexDebug.map.getLayer('apex-route'); } catch (_) { return false; } }, null, { timeout: 8000 });
+  check(true, 'our own layers are on the paper with no base map');
   // a tile that draws (a saved area here, or the signal back) takes it away
   tiles = true;
   await page.evaluate(() => window.apexDebug.map.setStyle('https://tiles.openfreemap.org/styles/liberty?again'));
@@ -7744,6 +7780,8 @@ flow('along the route by name: the Along line opens a list of the cafés and fue
   // in a drive only the next fuel stop keeps its stamp, and it says which station it is
   await page.evaluate(() => document.getElementById('routeDriveBtn').click());
   await page.waitForFunction(() => window.apexDebug.driveActive, null, { timeout: 10000 });
+  // a fix at the route's start: the drive's frame is what keeps the stamps (it would race the stamps' arrival otherwise)
+  await page.evaluate(() => { const t = window.apexDebug.track; window.apex.live({ has_fix: true, location_off: false, lat: t.lat[0], lon: t.lon[0], accuracy_m: 5, speed_mps: 10, course_deg: 0, calibration: 'locked', thermal: 0 }); });
   await page.waitForFunction(() => [...document.querySelectorAll('.poi-pin.poi-fuel')].filter((e) => e.style.display !== 'none').map((e) => e.textContent).join('|') === 'FUEL · Shell', null, { timeout: 5000 })
     .catch(() => {});
   const stamps = await page.evaluate(() => [...document.querySelectorAll('.poi-pin.poi-fuel')].map((e) => ({ text: e.textContent, on: e.style.display !== 'none' })));
@@ -9272,6 +9310,9 @@ flow('time attack, a new season (the owner, 2026-11-12: static best roads): the 
       // spoken label) says "[object Object]", "undefined" or "NaN" (About a road read "descending [object Object]").
       const raw = await leftovers(page);
       check(!raw.length, `the code's own leftovers on screen:\n  ${raw.join('\n  ')}`);
+      const nameless = await unnamed(page);
+      if (process.env.A11Y_LOG) for (const h of nameless) console.log(`A11Y ${name} | ${h}`);
+      else check(!nameless.length, `a control in view a screen reader can't name:\n  ${nameless.join('\n  ')}`);
       check(!errors.length, `page errors or missing files:\n  ${errors.join('\n  ')}`);
       console.log(`ok   ${name} (${Date.now() - t0} ms)`);
     } catch (e) {
