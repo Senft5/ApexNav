@@ -1761,14 +1761,14 @@
       if (offWords) return [offWords, /^Wrong way/.test(offWords) ? roadNow.name : null].filter(Boolean).join(' · ');
       if (replayEnded && !driveActive) return state.mode === 'sim' ? 'That\'s the route' : 'That\'s the drive';   // U-110
       if (replayWaiting && !driveActive && track) return track.name || 'Replay';                                     // U-128
-      if (!driving) return track ? `${track.name} · ${spirited ? 'Full notes' : 'Quiet · bumps and cameras only'}` : 'Plan a route for notes';
+      if (!driving) return track ? `${track.name} · ${spirited ? 'Full notes' : 'Quiet notes'}` : 'Plan a route for notes';
       if (!track && !driveActive) return 'No route planned';
       if (spirited) return `${track && !offRoute && track.kind !== 'horizon' ? track.name : 'The road ahead'} · Full notes`;
       const named = roadNow.name && compact && window.ApexRoadNames ? ApexRoadNames.shortRoadName(roadNow.name) : roadNow.name;
       const road = named || (track && track.kind === 'horizon' && !offRoute ? 'The road ahead' : null);
       const ahead = next ? Math.max(0, next.m - state.cursorM) : null, d = ahead != null ? distLabel(ahead) : null;
       const far = d && (d.u === 'MI' || d.u === 'KM') ? ApexUnits.long(ahead, 1, true) : d ? `${d.n} ${d.u.toLowerCase()}` : null;
-      return ['Quiet', road, far ? `${compact ? 'corner' : 'next corner'} ${far}` : compact ? 'bumps, cameras' : 'bumps and cameras only'].filter(Boolean).join(' · ');
+      return ['Quiet', road, far ? `${compact ? 'corner' : 'next corner'} ${far}` : null].filter(Boolean).join(' · ');   // what Quiet calls is the Notes switch's to say, not the strip's
     }
     function updateNotes(vMps, live) {
       // Driving somewhere that is not on the loaded route: its calls (and its stale trip distance) must never be read out as if they were this road.
@@ -6901,7 +6901,7 @@
           const cur = myCrews.find((c) => c.id === crewOpen);
           if (!cur) { chead.replaceChildren(); chead.hidden = true; holder.replaceChildren(crewPage.dashboard(myCrews, openCrew)); }
           else {
-            chead.hidden = false;
+            chead.hidden = false; chead.classList.toggle('solo', !many);
             const back = many ? btn('Your crews', () => { openCrew(null); const k = holder.querySelector('.cd-open'); if (k) k.focus({ preventScroll: true }); }, 'linkbtn cd-back') : el('span');   // one crew: its page's title says the name, so the head is the gear alone (it said it twice)
             if (many) back.setAttribute('aria-label', 'Back to your crews');
             chead.replaceChildren(back, gear);

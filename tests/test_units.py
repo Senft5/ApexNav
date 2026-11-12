@@ -89,7 +89,7 @@ console.log(JSON.stringify({ m, i }));
     out = json.loads(subprocess.run([NODE, "-e", js, ROOT], capture_output=True, text=True, check=True).stdout)
     assert out["m"] == ["3 m", "5 m", "12 m", "20 m", "--"]
     assert out["i"] == ["10 ft", "15 ft", "40 ft", "65 ft", "330 ft"]          # to the nearest 5 ft: no finer than was measured
-    log = open(os.path.join(ROOT, "web", "analysis.html"), encoding="utf-8").read()
+    log = open(os.path.join(ROOT, "web", "analysis.html"), encoding="utf-8").read() + open(os.path.join(ROOT, "web", "analysis_page.js"), encoding="utf-8").read()
     view = open(os.path.join(ROOT, "web", "drive_view.js"), encoding="utf-8").read()
     for old in ("Make it at least 200 m long", "(fewer metres)", "floor near 3 m", "'under 3 m'", "Math.round(Math.abs(dz))} m"):
         assert old not in log, old

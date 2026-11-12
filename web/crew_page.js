@@ -250,6 +250,11 @@
     .cp-tabs > button::after { content: ""; position: absolute; left: 0; right: 0; bottom: -1px; height: 3px; background: var(--panel-ink); transform: scaleX(0); transition: transform 0.18s ease-out; }
     .cp-tabs > button[aria-selected="true"]::after { transform: none; }
     .cp-pane[hidden] { display: none; }
+    /* one crew: its head holds only the gear, so the gear sits on the cover's top-left corner (the owner's Edit livery has the
+       right) instead of a band of its own (walkthrough 2026-11-12) */
+    .crew-head.solo { position: relative; z-index: 2; height: 0; align-items: flex-start; justify-content: flex-start; margin-bottom: -8px; }
+    .crew-head.solo > span:empty { display: none; }
+    .crew-head.solo .gear-key { margin: 22px 0 0 -4px; }   /* 12 px in from the screen edge, level with Edit livery */
     .crew-head .cd-back { flex: 0 1 auto; min-height: 44px; padding: 0 8px 0 0; font-size: 16px; font-weight: 600; text-decoration: none; color: var(--panel-ink); }
     .crew-head .cd-back::before { content: "\\2039"; font-size: 24px; margin-right: 6px; line-height: 1; }
   `;
@@ -349,7 +354,7 @@
           chat: [chat(c, draw)],
           board: [boardSec, ...(c.house ? [houseBoard(c)] : []), buildsRow(c)],
         };
-        box.replaceChildren(header(c, draw), el('div', { className: 'cp-body' }, titleBlock(c), tabs(c.id, panes), liveryFoot(c, draw)));
+        box.replaceChildren(header(c, draw), el('div', { className: 'cp-body' }, titleBlock(c), tabs(c.id, panes), ...[liveryFoot(c, draw)].filter(Boolean)));
         // a public crew (joined as one, or made public since: social.ts crewUpdate turns members' sharing off) asks once on
         // this phone whether to share with it (the owner, 2026-11-11: public crews off by default, asked)
         if (c.visibility === 'public' && !c.is_owner && !c.sharing_scores && page.askPublicSharing) {
@@ -419,9 +424,13 @@
     // owner's Edit livery, or for a supporter the meter and their own Decals; for everyone else it is a line, not a key.
     function liveryFoot(c, redo) {
       const l = c.livery || { tier: 'plain', decals: 0, next: null, supporters: [] };
+      // a crew-mate on a Plain crew with nothing to open: no line at all (walkthrough 2026-11-12: "Plain livery" alone told
+      // them nothing and left them nothing to do). The owner keeps it, above their Edit livery.
+      const supporter = !c.is_owner && l.mine && l.mine.pro && !l.granted;
+      if (!c.is_owner && !supporter && !l.granted && !l.decals) return null;
       const line = el('p', { className: 'note cp-livery-line', textContent: liveryShort(l) });
       const foot = el('div', { className: 'cp-livery-foot' }, line);
-      if (!c.is_owner && l.mine && l.mine.pro && !l.granted) foot.append(btn('Your Decals', () => liverySheet(c, redo), 'linkbtn'));
+      if (supporter) foot.append(btn('Your Decals', () => liverySheet(c, redo), 'linkbtn'));
       return foot;
     }
     function liverySheet(c, redo) {

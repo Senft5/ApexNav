@@ -2917,6 +2917,10 @@ flow('crew page: an old ?view=crew link opens People on Crews, at your crew; goi
     && document.getElementById('accountBody').hidden && document.getElementById('sheetTitle').textContent === 'People'), 'on the People tab, its Crews side');
   check(await page.evaluate(() => !!document.querySelector('#crewsBody .crew-head .gear-key') && !document.querySelector('#crewsBody .friend-list')), 'the crew head and its gear are on the Crews side, no friends list there');
   check(await page.evaluate(() => document.querySelector('#crewsBody .crew-head').textContent.trim() === '' && document.querySelectorAll('#crewsBody .crew-page h2').length === 1), 'one crew: its name once, on its page, not again above it');
+  // one crew: no band of its own for the gear; it sits on the cover's top-left, clear of Edit livery (walkthrough 2026-11-12)
+  const gearSpot = await page.evaluate(() => { const r = (q) => document.querySelector(q).getBoundingClientRect(), g = r('#crewsBody .gear-key'), h = r('.crew-page .cp-head'), e = r('.crew-page .cp-edit');
+    return { onCover: g.top >= h.top && g.bottom <= h.bottom && g.left >= h.left, clear: g.right < e.left || g.bottom < e.top }; });
+  check(gearSpot.onCover && gearSpot.clear, 'the gear sits on the cover, clear of Edit livery: ' + JSON.stringify(gearSpot));
   // Nate 2026-11-12 (as easy as a big social app): three tabs under the crew's name, Drives open first
   check(JSON.stringify(await page.$$eval('.cp-tabs [role="tab"]', (b) => b.map((x) => x.textContent + ':' + x.getAttribute('aria-selected')))) === '["Drives:true","Chat:false","Board:false"]', 'Drives | Chat | Board, Drives open');
   check(await page.isHidden('.cp-board') && await page.isHidden('.cp-say'), 'the board and the chat wait behind their tabs');
@@ -4281,7 +4285,8 @@ flow('roadbooks: a planned road goes into a new roadbook from Share; People list
   await page.click('.side-pop.open .rb-row:has-text("Smokies classics")');
   await page.waitForSelector('.rb-pop.open .rb-road:has-text("Cherohala loop")');
   check(await page.locator('.rb-pop.open .rb-map svg path').count() === 1 && await page.locator('.rb-pop.open .rb-road .rb-thumb svg').count() === 1, 'the book draws its road on a map, and the road has its thumbnail');
-  check(/0 of 1 driven/.test(await page.textContent('.rb-pop.open')), 'progress starts at none driven');
+  check(/0 of 1 driven/.test(await page.textContent('.rb-pop.open')) && !/Nothing to tap|is stamped when/.test(await page.textContent('.rb-pop.open')), 'progress starts at none driven, the meter alone (no how-to line)');
+  check(await page.evaluate(() => [...document.querySelectorAll('.side-pop .people-lead')].every((p) => !/Your lists of great roads/.test(p.textContent) || p.hidden)), 'with a roadbook of your own, no line saying what a roadbook is');
   await page.click('.rb-pop.open button:has-text("Edit")');
   await page.waitForSelector('.rb-pop.open [role="radio"]:has-text("Public")');
   await page.locator('.rb-pop.open [role="radio"]:has-text("Public")').last().click();
@@ -4548,6 +4553,8 @@ flow('crew drives: an upcoming drive shows on People, Crews, as the crew page’
     await page.click('[data-people="crews"]');
     await page.waitForSelector(`${W} .drive-card`);
   };
+  await openDrives();
+  check(!(await page.$('.crew-page .cp-livery-foot')), 'a crew-mate on a Plain crew sees no livery line: nothing to read, nothing to press (walkthrough 2026-11-12)');
   // the Photon search behind "Meet at…" (P-10)
   await page.route('https://photon.komoot.io/**', (route) => route.fulfill({ contentType: 'application/json', body: JSON.stringify({ features: [
     { geometry: { coordinates: [-84.2912, 35.3601] }, properties: { name: 'Tellico Plains Shell', city: 'Tellico Plains', state: 'Tennessee' } }] }) }));
@@ -5171,6 +5178,7 @@ flow('friend profile: a friend on People → Profile shows what the friend share
   await page.waitForSelector('.profile-view');
   const t = await page.textContent('.profile-view');
   check(t.includes('@bob') && /Bob <b>S<\/b> · friends since September( 2026)?/.test(t) && t.includes('Esses · best 812 · 3 days this month') && t.includes('Ridge Runners'), 'the profile, as text: ' + t);
+  check(!/Times are never shown|on them this month/.test(t), 'no line saying what is not shown, and "this month" once under its head: ' + t);
   const pk = await page.evaluate(() => ({ keys: [...document.querySelectorAll('.profile-view .profile-keys button')].map((b) => b.textContent), foot: [...document.querySelectorAll('.profile-view .profile-foot button')].map((b) => b.textContent),
     last: document.querySelector('.profile-view > :last-child').className }));
   check(JSON.stringify(pk.keys) === '["Share a route","Invite to a drive","Challenge on a stage"]' && JSON.stringify(pk.foot) === '["Unfriend","Report","Block"]' && /profile-foot/.test(pk.last), 'things to do first, Unfriend/Report/Block at the foot: ' + JSON.stringify(pk));
