@@ -6777,12 +6777,11 @@
       for (const h of waiting) reqSec.append(el('div', { className: 'friend-sent' }, el('span', { textContent: `@${h} · request sent` }),
         btn('Cancel', async () => { await apiCall('POST', '/api/friends/request/cancel', { handle: h }); setSent(sentList().filter(x => x !== h)); redo(); }, 'linkbtn')));
       ipop.append(
-        el('div', { className: 'stack-8' }, el('h3', { textContent: 'New to Vetta' }),
-          el('p', { className: 'note', textContent: 'They sign in with your link, and you’re friends the moment they do.' }),
-          btn('Send an invite link', async () => { const r = await apiCall('POST', '/api/invites'); const j = await jsonOf(r); if (r.ok) copyText(j.url, 'Invite link copied. They\'ll be your friend the moment they sign in, and you both get 5 points when they first share road data.'); else toast('Couldn\'t make an invite. Try again.'); }, 'ink-btn solid')),
-        el('div', { className: 'stack-8' }, el('h3', { textContent: 'Already on Vetta' }),
-          btn('Share a link to me', () => copyText(`${shareOrigin()}/?add=${me.handle}`, 'Link copied. Anyone who opens it can ask to be your friend.')),
-          el('div', { className: 'row' }, add, btn('Send request', sendRequest))),
+        // one link for anyone, new to Vetta or not: a newcomer is your friend when they sign in, a member is asked first
+        el('div', { className: 'stack-8' },
+          btn('Send a friend link', async () => { const r = await apiCall('POST', '/api/invites'); const j = await jsonOf(r); if (r.ok) copyText(j.url, 'Link copied. You\'re friends once they open it, and you both get 5 points when they first share road data.'); else toast('Couldn\'t make an invite. Try again.'); }, 'ink-btn solid'),
+          el('div', { className: 'row' }, add, btn('Send request', sendRequest)),
+          btn('A link anyone can use', () => copyText(`${shareOrigin()}/?add=${me.handle}`, 'Link copied. Anyone who opens it can ask to be your friend.'), 'linkbtn')),
         reqSec);
       const openInvite = () => { inviteOpen = true; ipop.classList.add('open'); };
       if (stash('apex.add') && peopleSide === 'friends') inviteOpen = true;   // a friend link opens its sheet, never over the Crews side
