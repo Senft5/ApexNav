@@ -5446,7 +5446,7 @@ flow('People: two tabs; a request is a card on top, then you, then friends with 
   await page.click('#accountBody button:has-text("Invite or add a friend")');
   await page.waitForSelector('.side-pop.open[aria-label="Invite"]');
   const inv = await page.textContent('.side-pop.open[aria-label="Invite"]');
-  check(/invite link/i.test(inv) && /Share a link to me/.test(inv) && !/invite-only/i.test(inv) && !/@dan|Accept/.test(inv) && await page.isVisible('.side-pop.open input[aria-label="Friend handle"]'), 'the Invite sheet: an invite link and add by handle, no requests: ' + inv);
+  check(/^Send a friend link$/.test((await page.textContent('.side-pop.open .ink-btn.solid')).trim()) && /A link anyone can use/.test(inv) && !/New to Vetta|Already on Vetta/.test(inv) && !/invite-only/i.test(inv) && !/@dan|Accept/.test(inv) && await page.isVisible('.side-pop.open input[aria-label="Friend handle"]'), 'the Invite sheet: an invite link and add by handle, no requests: ' + inv);
   await page.click('.side-pop.open button:has-text("Done")');
   // On the map: the sheet closes, the Friends layer comes on
   await profileOf('@cara');
