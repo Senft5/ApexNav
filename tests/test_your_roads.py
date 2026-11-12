@@ -216,7 +216,7 @@ def test_the_page_wires_the_deck_the_log_and_the_end_card():
     assert re.search(r"toggles: \{[^}]*twisty: true[^}]*nudge: false", src)
     assert "if (saved.twistyV !== 2) state.toggles.twisty = true;" in src and "twistyV: 2" in src
     assert "state.toggles.twisty && !!window.ApexTwisty && state.mode !== 'live'" in src
-    log = (WEB / "analysis.html").read_text()
+    log = (WEB / "analysis.html").read_text() + (WEB / "analysis_page.js").read_text()
     assert 'id="dvAgain"' in log and "ApexReturn.open('index.html?again=' + encodeURIComponent(id))" in log
 
 

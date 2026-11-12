@@ -48,5 +48,5 @@ def test_text_keys_start_at_the_left_and_notes_are_pencil():
 def test_meeting_points_is_named_like_the_rest_of_the_crews_page():
     js = (Path(__file__).resolve().parents[1] / "web" / "crew_page.js").read_text(encoding="utf-8")
     assert "el('div', { className: 'cp-sec' }, el('h3', { textContent: 'Meeting points' }))" in js
-    for name in ("Members", "Vetta Score board", "Chat"):
+    for name in ("Members", "Vetta Score board"):   # Chat: its tab names it (no heading under the tab)
         assert re.search(r"className: 'cp-sec' \}, el\('h3', \{ textContent: '" + name + "'", js), name
