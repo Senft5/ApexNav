@@ -7843,12 +7843,15 @@ flow('the co-driver says a long descent once as the car nears its top, from the 
   check((await calls()).length === 1, 'and not again on the way down: ' + JSON.stringify(await calls()));
 });
 
-flow('the co-driver counts clean corners in a row live and says five, then ten, never in Quiet notes (flow_live.js, IDEAS D-30)', async (page, base) => {
+flow('the co-driver counts clean corners in a row live and says five, then ten, and passing the month\'s best once, never in Quiet notes (flow_live.js, IDEAS D-30)', async (page, base) => {
   await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); } catch (_) {}
     window.__said = []; window.APEX_REVIEW = true;
     window.webkit = { messageHandlers: { apex: { postMessage(m) { if (m && m.cmd === 'said') window.__said.push(m.text); } } } }; });
   await page.goto(base + '/index.html');
-  await page.waitForFunction(() => window.apexDebug && window.apex && window.apex.live && window.ApexFlowLive);
+  await page.waitForFunction(() => window.apexDebug && window.apex && window.apex.live && window.ApexFlowLive && window.ApexRecording);
+  // the Log: a run of 7 earlier this month (and a longer one last month, which never counts)
+  await page.evaluate(() => { const d = new Date(), key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+    ApexRecording.summaries = async () => [{ id: 'a', date: `${key}-01T09:00`, run: { corners: 7, len_m: 2000 } }, { id: 'b', date: '2001-01-05T09:00', run: { corners: 40, len_m: 9000 } }]; });
   await page.evaluate(() => window.apex.onNative({ type: 'carplay', action: 'start' }));
   await page.waitForFunction(() => window.apexDebug.driveActive);
   // S-bends with no route: 90-degree arcs of 60 m radius, left and right, 60 m between, at a steady 8 m/s with the lateral g
@@ -7863,19 +7866,20 @@ flow('the co-driver counts clean corners in a row live and says five, then ten, 
     for (const [px, py, g] of pts) {
       window.apex.live({ lat: 35.5 + py / 110540, lon: -83.9 + px / (111320 * Math.cos(35.5 * Math.PI / 180)), accuracy_m: 5, speed_mps: v, course_deg: 0,
         has_fix: true, lat_g: Math.round(g * 1e4) / 1e4, lon_g: 0, calibration: 'locked', thermal: 0 });
-      await new Promise((r) => setTimeout(r, 12));
+      await new Promise((r) => setTimeout(r, 30));   // ~150 m/s of wall clock: the co-driver has time to speak between lines
     }
   }, [from, to]);
-  const counts = () => page.evaluate(() => window.__said.filter((s) => / clean in a row\.$/.test(s)));
-  await drive(0, 12);
-  await page.waitForFunction(() => window.__said.filter((s) => / clean in a row\.$/.test(s)).length >= 2, null, { timeout: 8000 }).catch(() => {});
-  check(JSON.stringify(await counts()) === JSON.stringify(['Five clean in a row.', 'Ten clean in a row.']), 'five, then ten, said once each: ' + JSON.stringify(await counts()));
+  const counts = () => page.evaluate(() => window.__said.filter((s) => / clean in a row\b/.test(s)));
+  await drive(0, 14);
+  await page.waitForFunction(() => window.__said.filter((s) => / clean in a row\b/.test(s)).length >= 3, null, { timeout: 15000 }).catch(() => {});
+  check(JSON.stringify(await counts()) === JSON.stringify(['Five clean in a row.', 'Eight clean in a row, your best this month.', 'Ten clean in a row.']),
+    'five, then past the month\'s best of seven, then ten, said once each: ' + JSON.stringify(await counts()));
   // Quiet notes: the count goes on, nothing is said
   await page.evaluate(() => { const b = document.querySelector('[data-notes="quiet"]'); if (b) b.click(); });
-  await drive(12, 24);
+  await drive(14, 26);
   await page.waitForTimeout(600);
   const run = await page.evaluate(() => window.apexDebug.flowRun);
-  check(run >= 20 && (await counts()).length === 2, `the count went on to ${run}, and nothing was said in Quiet notes: ` + JSON.stringify(await counts()));
+  check(run >= 20 && (await counts()).length === 3, `the count went on to ${run}, and nothing was said in Quiet notes: ` + JSON.stringify(await counts()));
 });
 
 flow('plan flow (e, f) a level change and an alternative are one tap or swipe each: the level cards are the routes found, nothing planned again (finding 4, 11)', async (page, base) => {

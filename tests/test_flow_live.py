@@ -25,6 +25,7 @@ const live = (v0, g = true, opts = {}) => {
   const rows = lat.map((_, i) => ({ distance_m: i * 5, lat: lat[i], lon: lon[i], speed_mps: v0, lon_g: g ? 0 : null,
     lat_g: g ? Math.round(v0 * v0 * kappa[i] / 9.80665 * 1e4) / 1e4 : null }));
   const w = L.createWatch(C, F, opts), said = [], seen = [];
+  if (opts.best != null) w.setBest(opts.best);
   let best = 0;
   for (let i = 1; i <= rows.length; i++) { const r = w.update(rows.slice(0, i)); if (r) { best = Math.max(best, r.run); if (r.say) said.push(r.say); } }
   const V = rows.map((r) => r.speed_mps), LO = rows.map((r) => (r.lon_g == null ? NaN : r.lon_g)), LA = rows.map((r) => (r.lat_g == null ? NaN : r.lat_g));
@@ -71,3 +72,21 @@ def test_wiring():
     assert "ApexFlowLive.createWatch(Core, ApexFlow" in js
     assert "const quiet = brakeSay || breakSay || flowSay;" in js     # the lowest of the quiet slots
     assert "drive.flow = null" in js                                    # every drive starts its count again
+
+
+@needs_node
+def test_passing_the_months_best_run_is_said_once():
+    """Passing this month's best run (the Log's summaries, read after Start) is said once a drive, in place of a
+    milestone on the same corner; a month's best under five is no record to speak of."""
+    seven, four, ten = drive([6, True, {"best": 7}], [6, True, {"best": 4}], [6, True, {"best": 9}])
+    assert seven["said"] == ["Five clean in a row.", "Eight clean in a row, your best this month.", "Ten clean in a row.",
+                             "Five clean in a row.", "Ten clean in a row."]
+    assert four["said"] == ["Five clean in a row.", "Ten clean in a row.", "Five clean in a row.", "Ten clean in a row."]
+    assert ten["said"] == ["Five clean in a row.", "Ten clean in a row, your best this month.", "Five clean in a row.", "Ten clean in a row."]
+    src = f"const L = require({json.dumps(str(ROOT / 'web' / 'flow_live.js'))});" \
+          "const m = (o) => (/^\\d{4}-\\d{2}/.test(o.date || '') ? o.date.slice(0, 7) : null);" \
+          "console.log(JSON.stringify([L.monthBest([{ date: '2026-11-02', run: { corners: 6 } }, { date: '2026-11-09', run: { corners: 11 } }," \
+          " { date: '2026-10-30', run: { corners: 30 } }, { date: '2026-11-03', run: null }, { date: '', run: { corners: 40 } }, { date: '2026-11-04' }], m, '2026-11')," \
+          " L.monthBest([], m, '2026-11'), L.monthBest([{ date: '2026-11-02', run: { corners: 6 } }], null, '2026-11')]));"
+    got = json.loads(subprocess.run([NODE, "-e", src], capture_output=True, text=True, check=True).stdout)
+    assert got == [11, None, None]
