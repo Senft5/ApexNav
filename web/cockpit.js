@@ -8046,7 +8046,7 @@
       }
       if (k === 'coverage') {
         updateCoverage();
-        if (state.toggles.coverage) toast(mapReady && map.getZoom() < ApexCoverage.MIN_ZOOM ? 'Zoom in to see measured roads.' : 'Measured roads: green smooth, amber fair, red rough, bolder the surer. Tap one for what was measured. A road without a line is waiting for a pioneer: the first drivers to map it earn extra points.');
+        if (state.toggles.coverage) toast(mapReady && map.getZoom() < ApexCoverage.MIN_ZOOM ? 'Zoom in to see measured roads.' : 'Green smooth, amber fair, red rough. No line yet? Map it first for extra points.');
       }
       if (k === 'nudge') nudgeSwitched();                              // panel R-1: asks for notifications only now
       if (k === 'twisty') {
