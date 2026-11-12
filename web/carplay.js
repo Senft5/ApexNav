@@ -316,6 +316,21 @@
   }
 
   /**
+   * What the phone said back to a request made on the car (a loop or a place to go that couldn't be planned, a report
+   * with no GPS fix): { kind:'notice', titles } with its first sentence only, the reason, longest first. The rest is the
+   * phone's advice ("Type a start or tap the map") and errors on the car never send the driver to the phone. Null when
+   * there are no words.
+   */
+  const NOTICE_MAX = 96, NOTICE_SHORT = 48;
+  function noticeMessage(text) {
+    const s = String(text || '').replace(/\s+/g, ' ').trim();
+    if (!s) return null;
+    const first = (s.match(/^.+?[.!?](?=\s|$)/) || [s])[0];
+    const cut = (t, n) => (t.length > n ? t.slice(0, n - 1).replace(/[\s,·.-]+$/, '') + '…' : t);
+    return { kind: 'notice', titles: [...new Set([cut(first, NOTICE_MAX), cut(first, NOTICE_SHORT)])] };
+  }
+
+  /**
    * The theme for the car's screen: its id (the car's map paints it, web/carmap.js), the guidance card's colours (the
    * theme's dark panel, so the card reads in both the car's light and dark modes), whether the voice is on and the units.
    */
@@ -486,7 +501,7 @@
     return { step, reset };
   }
 
-  const api = { sightMessage, line, routeMessage, guideMessage, recordingMessage, placesMessage, cornersMessage, hazardsMessage, alongMessage, offerMessage, lookMessage, tulipSVG, cornerTulipSVG,
+  const api = { sightMessage, line, routeMessage, guideMessage, recordingMessage, placesMessage, cornersMessage, hazardsMessage, alongMessage, offerMessage, noticeMessage, lookMessage, tulipSVG, cornerTulipSVG,
                 recordSVG, CORNER_MODES, CONTINUE_M, MAX_POINTS };
   api.sightFilter = sightFilter;                                       // U-60 (its own line: the list above is shared)
   api.sightTag = sightTag;                                             // panel round 2, TH-2

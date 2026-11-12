@@ -211,7 +211,7 @@
     const etaSections = new WeakMap();      // track -> its corner sections (ApexEta.cornerSections), worked out once
     let etaText = '', etaLeftS = null;
     let replayEnded = false, replayWaiting = false;   // U-110 a finished replay, U-128 a replay waiting for its map (paintReplayEnd)
-    const car = { serial: 0, route: '', guideAt: 0, guideKey: '', sightKey: '', look: '', hazards: '', symbols: new Map(), ended: null, along: '', offerSerial: 0, offer: null, road: '', roadAt: -1e9 };   // what the car's screen was last sent (carRoute, carGuide below)   // strip text while off route; last frame fed; furthest progress
+    const car = { serial: 0, route: '', guideAt: 0, guideKey: '', sightKey: '', look: '', hazards: '', symbols: new Map(), ended: null, along: '', offerSerial: 0, offer: null, echo: 0, road: '', roadAt: -1e9 };   // what the car's screen was last sent (carRoute, carGuide below)   // strip text while off route; last frame fed; furthest progress
     try {
       const saved = JSON.parse(localStorage.getItem('apex.prefs') || 'null');
       if (saved) {
@@ -4969,6 +4969,9 @@
     // =======================================================================
     function toast(msg, action) {
       const t = $('toast');
+      // while a request made on the car runs (carAsked), what the phone says back is said on the car too: a loop or a
+      // place that couldn't be planned left the car silent, the reason only on the phone in the driver's pocket
+      if (car.echo > 0 && !action && window.ApexCarPlay) carPost(ApexCarPlay.noticeMessage(msg));
       // U-74 / U-102 (check): in a drive a plain message is the status line's, under the record line, never a toast over the
       // map and its next corner (so a Cancel countdown in the toast doesn't swallow it); one with an action still needs the
       // toast's key
@@ -8915,6 +8918,8 @@
     const liveAct = { on: false, last: '', at: 0 };
     // CarPlay (web/carplay.js, CarPlay/ApexCarPlay.swift): the car's screen gets the planned route, the next maneuver and
     // hazards; what the driver picks there comes back as onNative({type:'carplay'}). Only in the app.
+    // a request made on the car (a loop, a place to go, a report): toast() says on the car too what it says meanwhile
+    async function carAsked(run) { car.echo++; try { await run(); } catch (_) { /* each request says its own errors */ } finally { car.echo--; } }
     function carPost(msg) {
       const native = window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.apex;
       if (native && msg) try { native.postMessage({ cmd: 'car', ...msg }); } catch (_) {}
@@ -9625,7 +9630,7 @@
     // From the car's screen (CarPlay/ApexCarPlay.swift). Nothing here asks the driver to use the phone: no explainer sheet
     // (the system's own location prompt is the only one, and only if it was never answered).
     function carAction(m) {
-      if (m.action === 'go' && Number.isFinite(m.lat) && Number.isFinite(m.lon) && !driveActive) routeToPlace({ label: String(m.name || 'Destination').slice(0, 80), lat: m.lat, lon: m.lon });
+      if (m.action === 'go' && Number.isFinite(m.lat) && Number.isFinite(m.lon) && !driveActive) carAsked(() => routeToPlace({ label: String(m.name || 'Destination').slice(0, 80), lat: m.lat, lon: m.lon }));
       else if (m.action === 'pick' && Number.isInteger(m.i)) pickOption(m.i);
       else if (m.action === 'start' && state.mode !== 'live' && !locDenied) {
         // U-79: the idle map's Drive is a free drive. The car shows no route then, so one the phone still holds (the route just
@@ -9640,8 +9645,8 @@
       else if (m.action === 'offer' && car.offer && m.id === car.offer.id && performance.now() < car.offer.until) car.offer.run();
       else if (m.action === 'disconnect') keepCar(false, m.t);      // Round 3: the car switched off; the drive ends once it stays put
       else if (m.action === 'places') carPost(ApexCarPlay.placesMessage(recentPlaces()));
-      else if (m.action === 'loop' && LOOP_MINUTES.includes(m.minutes) && !driveActive) loop({ minutes: m.minutes });
-      else if (m.action === 'report' && ApexHazardReports.KINDS.includes(m.kind)) reportHazard(m.kind, null, true);
+      else if (m.action === 'loop' && LOOP_MINUTES.includes(m.minutes) && !driveActive) carAsked(() => loop({ minutes: m.minutes }));
+      else if (m.action === 'report' && ApexHazardReports.KINDS.includes(m.kind)) carAsked(() => reportHazard(m.kind, null, true));
       else if (m.action === 'still' && typeof m.still === 'boolean') answerStill(m.still);
       else if (m.action === 'voice') { state.toggles.voice = !state.toggles.voice; savePrefs(); paintSwitches(); if (!state.toggles.voice) stopSpeaking(); }
       else if (m.action === 'hello') { keepCar(true); car.route = ''; car.look = ''; car.hazards = ''; carRoute(track && track.kind === 'route' ? track : null); carLook(); carHazards();

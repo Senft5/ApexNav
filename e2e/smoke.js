@@ -2308,6 +2308,11 @@ flow('CarPlay feed: a planned route sends its line, every corner and the theme; 
   await page.waitForFunction(() => window.apex && typeof window.apex.onNative === 'function');
   const kinds = () => page.evaluate(() => window.__car.map((m) => m.kind));
   check((await kinds()).includes('look'), 'the theme goes to the car at start');
+  // a request from the car that the phone can't do says why on the car, the reason only (never "tap the map")
+  await page.evaluate(() => window.apex.onNative({ type: 'carplay', action: 'report', kind: 'pothole' }));
+  await page.waitForFunction(() => window.__car.some((m) => m.kind === 'notice'), null, { timeout: 5000 });
+  const notice = await page.evaluate(() => window.__car.filter((m) => m.kind === 'notice'));
+  check(notice.length === 1 && notice[0].titles.join('|') === 'No GPS fix yet.', 'a report from the car with no fix says so on the car: ' + JSON.stringify(notice));
   await page.evaluate(() => window.apex.live({ lat: 35.6, lon: -84.1, accuracy_m: 5, speed_mps: 0, course_deg: 0, has_fix: true }));   // the shell's fix, as in the app
   // the cafés and fuel along it, by name on the car's route preview (the owner, 2026-11-11)
   await page.evaluate(() => { ApexStages.pois = async (pts) => { const a = pts[Math.min(1, pts.length - 1)];
