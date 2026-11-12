@@ -9205,7 +9205,8 @@ flow('time attack (the owner, 2026-11-12: static best roads, a featured one, boa
   await page.route('**/api/**', (route) => {
     const u = new URL(route.request().url()), m = route.request().method();
     const json = (b, status = 200) => route.fulfill({ status, contentType: 'application/json', body: JSON.stringify(b) });
-    if (u.pathname === '/api/me') return json({ signed_in: true, member: true, handle: 'me' });
+    // the account answers late, after Where to? is open (CI 2026-11-12): the row must still name the loop
+    if (u.pathname === '/api/me') return setTimeout(() => json({ signed_in: true, member: true, handle: 'me' }), 2000);
     if (u.pathname === '/api/ta' && m === 'GET') {
       sent.push(['GET', u.search]);
       const id = u.searchParams.get('id') || 'ta-CIRC1', period = u.searchParams.get('period') || 'week', rows = BOARDS[`${id}|${period}`] || [];
