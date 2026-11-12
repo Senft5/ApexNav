@@ -4818,26 +4818,24 @@ flow('a drive\'s corners on a road driven four times: each says your cleanest pa
   await page.waitForFunction(() => document.querySelectorAll('#bookList li').length > 0, null, { timeout: 20000 });
   const book = await page.evaluate(() => ({ head: document.getElementById('bookHead').textContent, rows: [...document.querySelectorAll('#bookList li')].map((li) => li.innerText.replace(/\s+/g, ' ').trim()),
     wide: document.documentElement.scrollWidth > document.documentElement.clientWidth }));
-  check(/^\d+ corners? you have driven three or more times, in road order/.test(book.head) && book.rows.length >= road.rows.length
+  check(/^\d+ corners? driven 3\+ times, in road order/.test(book.head) && book.rows.length >= road.rows.length
     && book.rows.every((t) => /^\d+ (Tight|Medium|Fast) (left|right) \d{1,3} On \w{3} \d{1,2}, of 4 passes(; your least clean \d{1,3}(, mostly [a-z ]+)?)?$/.test(t)) && !book.wide && !/mph|km\/h/.test(book.rows.join(' ')),
     'the road corner by corner: ' + JSON.stringify(book).slice(0, 400));
   // where the passes differ, the technique they differ by most can be the next practice (IDEAS D-27, roadBookFocus)
   const pr = await page.evaluate(() => { const b = document.getElementById('bookPractice'); return { shown: !b.hidden, t: b.textContent, go: !!document.getElementById('bookPracticeGo') }; });
-  check(pr.shown && pr.go && /^Most of the difference at corners? [\d, and]+ is [a-z ]+\. (Practice [a-z ]+ on my next drives here|You are practicing it now: Your driving shows how it goes\.)$/.test(pr.t), 'the practice line: ' + pr.t);
+  check(pr.shown && pr.go && /^Most of the difference: [a-z ]+ \(corners? [\d, and]+\)\. (Practice [a-z ]+ on my next drives here|Practicing it\.)$/.test(pr.t), 'the practice line: ' + pr.t);
   await page.click('#bookPracticeGo');
   const after = await page.evaluate(() => ({ t: document.getElementById('bookPractice').textContent, plan: JSON.parse(localStorage.getItem('vetta.practice') || 'null') }));
-  check(/Practicing it on your next drives here: .+ on this road alone\./.test(after.t) && after.plan && after.plan.skill === 'arc' && after.plan.where && after.plan.where.road === 'dry ridge rd' && after.plan.where.name === 'Dry Ridge Rd' && /^\d{4}-\d\d-\d\dT\d\d:\d\d$/.test(after.plan.since), 'the practice is kept: ' + JSON.stringify(after));
+  check(/ Practicing it here\.$/.test(after.t) && after.plan && after.plan.skill === 'arc' && after.plan.where && after.plan.where.road === 'dry ridge rd' && after.plan.where.name === 'Dry Ridge Rd' && /^\d{4}-\d\d-\d\dT\d\d:\d\d$/.test(after.plan.since), 'the practice is kept: ' + JSON.stringify(after));
   await page.click('#bookList li .bk-by');
   await page.waitForFunction(() => /^r[0-3]$/.test(document.getElementById('dvPick').value) && !document.getElementById('tab-drive').hidden, null, { timeout: 20000 });
-  // Your driving's Work on names the road where its skill shows most
+  // the practice from the road's book keeps to that road (driver_profile.js practice, where.road), and says which
   await page.goto(base + '/analysis.html?tab=driving');
-  await page.waitForSelector('#drivingRoot .dp-focus .dp-where', { timeout: 20000 });
-  const where = await page.textContent('#drivingRoot .dp-where');
-  // the practice from the road's book keeps to that road (driver_profile.js practice, where.road)
+  await page.waitForSelector('#drivingRoot .dp-practice', { timeout: 20000 });
   const practicing = await page.textContent('#drivingRoot .dp-practice .dp-say');
-  check(/^Since \d{1,2} \w{3} on Dry Ridge Rd, no drive there yet with 4 or more corners to read it on\./.test(practicing), 'the practice keeps to the road: ' + practicing);
-  check(/^It shows most on Dry Ridge Rd: (the corner where your passes there differ most comes|all \d+ corners where your passes there differ most come|\d+ of the \d+ corners where your passes there differ most comes?) down to it\.$/.test(where), 'Work on names the road: ' + where);
-  check(!(await page.$('#drivingRoadGo')), 'no second offer while the practice keeps to a road');
+  check(/^Since \d{1,2} \w{3} on Dry Ridge Rd: no drive there yet with 4 or more corners\.$/.test(practicing), 'the practice keeps to the road: ' + practicing);
+  await page.waitForTimeout(500);
+  check(!(await page.$('#drivingRoot .dp-where')) && !(await page.$('#drivingRoadGo')), 'no road line or second offer while the practice keeps to a road');
   // since a road practice began, each corner's passes since and the corners that have evened out (roadBook since)
   const since = await page.evaluate(async () => (await ApexAnalysis.job('roadBook', { id: 'r3', since: '2026-07-01T09:00' })).book);
   check(since && Array.isArray(since.evened) && since.corners.length && since.corners.every((k) => k.since_n === 2 && k.since_low <= k.record)
@@ -4846,11 +4844,14 @@ flow('a drive\'s corners on a road driven four times: each says your cleanest pa
   await page.evaluate(() => localStorage.removeItem('vetta.practice'));
   await page.goto(base + '/analysis.html?tab=driving');
   await page.waitForSelector('#drivingRoadGo', { timeout: 20000 });
+  // Your driving's Work on names the road where its skill shows most, and offers the practice there
+  const where = await page.textContent('#drivingRoot .dp-where');
+  check(/^Shows most on Dry Ridge Rd: (its least even corner|\d+ of its \d+ least even corners)\. Practice it on Dry Ridge Rd alone$/.test(where), 'Work on names the road: ' + where);
   check(/^Practice it on Dry Ridge Rd alone$/.test(await page.textContent('#drivingRoadGo')), 'the offer names the road');
   await page.click('#drivingRoadGo');
   await page.waitForSelector('#drivingRoot .dp-practice', { timeout: 20000 });
   const kept = await page.evaluate(() => ({ plan: JSON.parse(localStorage.getItem('vetta.practice') || 'null'), say: document.querySelector('#drivingRoot .dp-practice .dp-say').textContent }));
-  check(kept.plan && kept.plan.where && kept.plan.where.road === 'dry ridge rd' && / on Dry Ridge Rd, no drive there yet/.test(kept.say), 'the practice from Your driving keeps to the road: ' + JSON.stringify(kept));
+  check(kept.plan && kept.plan.where && kept.plan.where.road === 'dry ridge rd' && / on Dry Ridge Rd: no drive there yet/.test(kept.say), 'the practice from Your driving keeps to the road: ' + JSON.stringify(kept));
   // the end card on the map after the last of them says the same: what it lost most at the road's least even corners
   await page.goto(base + '/index.html');
   await page.waitForFunction(() => window.apexDebug && window.ApexRecording && window.ApexCore && window.ApexAnalysis);
@@ -4894,7 +4895,15 @@ flow('Your driving: the profile over every drive opens from the Log, names the w
   await page.click('#drivingOpen');
   await page.waitForSelector('#drivingRoot .dp-st');
   const text = await page.evaluate(() => document.getElementById('drivingRoot').innerText);
-  check(/108 clean corners · 3 drives/.test(text), 'what it is read from: ' + text.slice(0, 120));
+  check(/108 clean corners · 3 drives · Aug–Oct 2026/.test(text), 'what it is read from, and when: ' + text.slice(0, 120));
+  // a level's definition on a tap (no hover on a phone), hidden again on a second
+  const def = await page.evaluate(() => {
+    const row = document.querySelector('.dp-st[data-skill="arc"]'), d = row.querySelector('.dp-def'), was = d.hidden;
+    row.click(); const shown = !d.hidden && row.getAttribute('aria-expanded') === 'true', t = d.textContent;
+    row.click();
+    return { was, shown, t, after: d.hidden, title: row.querySelector('[title]') !== null };
+  });
+  check(def.was && def.shown && def.after && !def.title && /^You turn in once .+ 0 to 100, averaged over \d+ clean corners; -- until \d+\.$/.test(def.t), 'the definition on a tap: ' + JSON.stringify(def));
   check(/One steering arc is weaker through rights: \d+ against 100 through lefts, on 3 of 3 drives\./.test(text), 'the weak side is named: ' + text);
   check(/Work on: One steering arc\s+It shows most through rights\./.test(text), 'the focus says where');
   check(await page.evaluate(() => document.querySelector('.dp-st.weak').dataset.skill === 'arc' && document.querySelectorAll('.dp-st:not([data-skill="pace"])').length === 6), 'six stations, the weak one marked');
@@ -4988,7 +4997,7 @@ flow('Practice (IDEAS D-27): Work on is carried into the next drives, the end ca
   await page.waitForSelector('#drivingRoot .dp-pr');
   const pg = await page.evaluate(() => ({ text: document.querySelector('.dp-practice').innerText, rows: document.querySelectorAll('.dp-pr').length, up: !!document.querySelector('.dp-pr b.up'),
     mark: !!document.querySelector('.dp-pr .dp-bar s'), wide: document.documentElement.scrollWidth <= document.documentElement.clientWidth }));
-  check(/on 36 corners over 1 drive, against \d+ before\. Up \d+: the practice is showing\./.test(pg.text), 'the practice so far: ' + pg.text);
+  check(/on 36 corners over 1 drive, against \d+ on \d+ before\. Up \d+ points?: the practice is showing\./.test(pg.text), 'the practice so far: ' + pg.text);
   check(pg.rows === 1 && pg.up && pg.mark && pg.wide, 'one drive, up, with the mark of before, nothing wider than the phone: ' + JSON.stringify(pg));
   await page.click('.dp-practice button:has-text("Stop practicing")');
   await page.waitForSelector('#drivingRoot .dp-go');

@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self' apexnav:; script-src 'self' apexnav: 'sha256-dFZNHWq4rwHiNpMCc2/Ig2CQgLTMoPLjnqTyUm7h29g=' 'sha256-G7s/ZI+Hqrfc4DqbB6EANJJLmUmhNK06PizQ1LlsG84=' https://cdn.jsdelivr.net 'wasm-unsafe-eval'; worker-src 'self' apexnav: blob:; child-src 'self' apexnav: blob:; style-src 'self' apexnav: 'unsafe-inline'; font-src 'self' apexnav: data:; img-src 'self' apexnav: data: blob: https://tiles.openfreemap.org https://s3.amazonaws.com https://basemap.nationalmap.gov; media-src 'self' apexnav: data: blob:; connect-src 'self' apexnav: data: blob: https://apexnav.senftns.workers.dev wss://apexnav.senftns.workers.dev https://tiles.openfreemap.org https://basemap.nationalmap.gov https://s3.amazonaws.com https://valhalla1.openstreetmap.de https://router.project-osrm.org https://overpass-api.de https://overpass.private.coffee https://overpass.kumi.systems https://maps.mail.ru https://nominatim.openstreetmap.org https://photon.komoot.io https://api.open-meteo.com https://api.weather.gov https://statsapi.mlb.com https://api.seatgeek.com https://api.water.noaa.gov https://waterservices.usgs.gov https://in.carsprogram.org https://publicapi.ohgo.com https://quickstats.nass.usda.gov https://commons.wikimedia.org https://graph.mapillary.com https://vpic.nhtsa.dot.gov https://cdn.jsdelivr.net https://huggingface.co https://*.huggingface.co https://*.hf.co; object-src 'none'; base-uri 'none'; form-action 'self'" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self' apexnav:; script-src 'self' apexnav: 'sha256-RHOo6szLTSxqJ0vSv2OZZUbIYlbXcMNquqUINgpowWk=' 'sha256-G7s/ZI+Hqrfc4DqbB6EANJJLmUmhNK06PizQ1LlsG84=' https://cdn.jsdelivr.net 'wasm-unsafe-eval'; worker-src 'self' apexnav: blob:; child-src 'self' apexnav: blob:; style-src 'self' apexnav: 'unsafe-inline'; font-src 'self' apexnav: data:; img-src 'self' apexnav: data: blob: https://tiles.openfreemap.org https://s3.amazonaws.com https://basemap.nationalmap.gov; media-src 'self' apexnav: data: blob:; connect-src 'self' apexnav: data: blob: https://apexnav.senftns.workers.dev wss://apexnav.senftns.workers.dev https://tiles.openfreemap.org https://basemap.nationalmap.gov https://s3.amazonaws.com https://valhalla1.openstreetmap.de https://router.project-osrm.org https://overpass-api.de https://overpass.private.coffee https://overpass.kumi.systems https://maps.mail.ru https://nominatim.openstreetmap.org https://photon.komoot.io https://api.open-meteo.com https://api.weather.gov https://statsapi.mlb.com https://api.seatgeek.com https://api.water.noaa.gov https://waterservices.usgs.gov https://in.carsprogram.org https://publicapi.ohgo.com https://quickstats.nass.usda.gov https://commons.wikimedia.org https://graph.mapillary.com https://vpic.nhtsa.dot.gov https://cdn.jsdelivr.net https://huggingface.co https://*.huggingface.co https://*.hf.co; object-src 'none'; base-uri 'none'; form-action 'self'" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
   <title>Vetta · Log</title>
   <link rel="icon" href="brand/mark.svg" type="image/svg+xml" />
@@ -713,12 +713,12 @@
       box.hidden = !line;
       if (!line) { box.replaceChildren(); return; }
       const name = ApexDriverProfile.WORDS[f.skill].name.toLowerCase(), plan = ApexDriverProfile.loadPlan(localStorage);
-      if (plan && plan.skill === f.skill && ApexDriverProfile.onPlanRoad(plan, road)) { box.textContent = `${line} You are practicing it now: Your driving shows how it goes.`; return; }
+      if (plan && plan.skill === f.skill && ApexDriverProfile.onPlanRoad(plan, road)) { box.textContent = `${line} Practicing it.`; return; }
       const b = document.createElement('button');
       b.type = 'button'; b.className = 'linkbtn'; b.id = 'bookPracticeGo'; b.textContent = `Practice ${name} on my next drives here`;
       b.addEventListener('click', () => {
         ApexDriverProfile.savePlan(localStorage, { skill: f.skill, where: { road: String(road || '').trim().toLowerCase(), name: road }, since: ApexDriverProfile.localStamp() });
-        box.textContent = `${line} Practicing it on your next drives here: Your driving shows how it goes, on this road alone.`;
+        box.textContent = `${line} Practicing it here.`;
         box.tabIndex = -1; box.focus({ preventScroll: true });
       });
       box.replaceChildren(document.createTextNode(`${line} `), b);
@@ -992,14 +992,14 @@
         // the road where the skill to work on shows most (driver_profile.js skillRoadLine), under its tip
         const skill = (pr && planNow()) ? planNow().skill : p && p.focus ? p.focus.skill : null, shown = $('drivingRoot').querySelector('.dp-focus');
         if (skill && shown) roadBookList().then((list) => {
-          const line = ApexDriverProfile.skillRoadLine(list, skill), box = $('drivingRoot').querySelector('.dp-focus');
+          const line = ApexDriverProfile.skillRoadLine(list, skill), box = $('drivingRoot').querySelector('.dp-focus'), pl = planNow();
           if (!line || box !== shown || box.querySelector('.dp-where')) return;
+          if (pl && pl.skill === skill && pl.where && pl.where.road) return;   // the practice already keeps to a road: it says which
           const say = document.createElement('p'); say.className = 'dp-say dp-where'; say.textContent = line;
           const tip = [...box.querySelectorAll('.dp-say')].pop();
           if (tip) tip.after(say); else box.append(say);
           // ...and a practice kept to that road (driver_profile.js practice, where.road), unless the practice already keeps to one
-          const road = ApexDriverProfile.skillRoad(list, skill).name, plan = planNow();
-          if (plan && plan.skill === skill && plan.where && plan.where.road) return;
+          const road = ApexDriverProfile.skillRoad(list, skill).name;
           const go = document.createElement('button');
           go.type = 'button'; go.className = 'linkbtn'; go.id = 'drivingRoadGo'; go.textContent = `Practice it on ${road} alone`;
           go.addEventListener('click', () => {
