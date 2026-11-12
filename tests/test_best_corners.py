@@ -246,8 +246,9 @@ def test_skill_road_line_names_where_a_skill_shows_most():
     b = {"corners": [k("arc")], "uneven": [1]}
     runner = ("const P=require(process.argv[1]+'/web/driver_profile.js');const [a,b]=JSON.parse(require('fs').readFileSync(0,'utf8'));"
               "const l=[{name:'Bell Gap',book:b},{name:'Dry Ridge Rd',book:a}];"
-              "process.stdout.write(JSON.stringify([P.skillRoadLine(l,'arc'),P.skillRoadLine(l,'brake'),P.skillRoadLine([l[0]],'arc'),P.skillRoadLine(l,'exit'),P.skillRoadLine(null,'arc')]));")
+              "process.stdout.write(JSON.stringify([P.skillRoadLine(l,'arc'),P.skillRoadLine(l,'brake'),P.skillRoadLine([l[0]],'arc'),P.skillRoadLine(l,'exit'),P.skillRoadLine(null,'arc'),P.skillRoad(l,'arc'),P.skillRoad(l,'exit')]));")
     out = json.loads(subprocess.run([NODE, "-e", runner, os.getcwd()], input=json.dumps([a, b]), capture_output=True, text=True, check=True).stdout)
     assert out == ["It shows most on Dry Ridge Rd: 2 of the 3 corners where your passes there differ most come down to it.",
                    "It shows most on Dry Ridge Rd: 1 of the 3 corners where your passes there differ most comes down to it.",
-                   "It shows most on Bell Gap: the corner where your passes there differ most comes down to it.", None, None]
+                   "It shows most on Bell Gap: the corner where your passes there differ most comes down to it.", None, None,
+                   {"name": "Dry Ridge Rd", "n": 2, "of": 3}, None]
