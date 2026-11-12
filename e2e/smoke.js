@@ -2930,6 +2930,9 @@ flow('crew page: an old ?view=crew link opens People on Crews, at your crew; goi
   const rows = await boardRows();
   check(JSON.stringify(rows) === JSON.stringify([['@sam', (1622).toLocaleString(), true], ['@me', '--', true]]) && boardAsks[0] === 'month', 'the board: a face and this month\'s total, then -- for none: ' + JSON.stringify(rows));
   check(JSON.stringify(await page.$$eval('.cp-periods button', (b) => b.map((x) => x.textContent + ':' + x.getAttribute('aria-checked')))) === '["Week:false","Month:true","Year:false","All time:false"]', 'Week / Month / Year / All time, Month picked');
+  // one line under the name, drives then car, cut short rather than wrapped (walkthrough 2026-11-12)
+  const sub = await page.$eval('.cp-board .cp-board-row .cp-sub', (x) => ({ t: x.textContent, one: getComputedStyle(x).whiteSpace === 'nowrap' && getComputedStyle(x).textOverflow === 'ellipsis' }));
+  check(sub.t === '2 drives · Mazda MX-5' && sub.one && !(await page.$('.cp-board .cp-board-row:nth-child(2) .cp-sub')), 'one line under a name: drives · car, none for -- : ' + JSON.stringify(sub));
   await page.click('.cp-periods button:text-is("All time")');
   await page.waitForFunction(() => /12/.test((document.querySelector('.cp-board .score') || {}).textContent || ''));
   check(JSON.stringify((await boardRows()).map((r) => r[1])) === JSON.stringify([(12840).toLocaleString(), (702).toLocaleString()]) && boardAsks.includes('all'), 'All time asks for all time');
@@ -2950,7 +2953,8 @@ flow('crew page: an old ?view=crew link opens People on Crews, at your crew; goi
     const body = [...document.querySelectorAll('.crew-page .cp-body > *')].map((x) => x.classList.contains('cp-title') ? 'title' : x.classList.contains('cp-livery-foot') ? 'livery' : x.querySelector('.cp-tabs') ? 'tabs' : x.className);
     return { body, panes: Object.fromEntries([...document.querySelectorAll('.cp-pane')].map((p) => [p.id, [...p.children].map(name).filter(Boolean)])) }; });
   check(JSON.stringify(order.body) === '["title","tabs","livery"]' && JSON.stringify(order.panes['cpPane-drives'].slice(0, 2)) === '["run","Members"]'
-    && order.panes['cpPane-chat'][0] === 'Chat' && order.panes['cpPane-board'][0] === 'Vetta Score board', 'the page in order: ' + JSON.stringify(order));
+    && order.panes['cpPane-chat'].length === 1 && order.panes['cpPane-board'][0] === 'Vetta Score board', 'the page in order: ' + JSON.stringify(order));
+  check(await page.evaluate(() => ![...document.querySelectorAll('#cpPane-chat h3')].some((h) => h.textContent === 'Chat')), 'the Chat tab names the chat: no second "Chat" heading under it');
   check(!(await page.$$('.crew-page .cp-livery, .crew-page .cp-meter')).length, 'no livery box or meter on the page (they are in Edit livery)');
   check(!/Convoy/.test(await page.$$eval('#crewsBody h3', (h) => h.map((x) => x.textContent).join('|'))), 'no Convoy heading on Crews');
   // P-06: the members as faces, the owner marked, the one on the road lit
