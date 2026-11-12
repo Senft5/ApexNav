@@ -21,7 +21,7 @@ Regardless of how the phone is mounted in the cabin, all aligned chassis telemet
 - **Spatial Binning**: Roads are discretized into fixed `5.0 meter` arc-length micro-segments.
 
 ## 4. Closed-Loop Agent Verification Protocol
-1. Before starting any task, read `/docs/STATE.md` and `/docs/ARCHITECTURE.md`.
+1. Before starting any task, read `/docs/notes/` (the newest entries), `/docs/STATE.md` and `/docs/ARCHITECTURE.md`.
 2. After ANY edit to `/core` math or signal processing (or `web/apex_core.js`, its parity-tested port), run the deterministic CLI test suite:
    `pytest tests -v`
    After ANY edit to an inline `<script>` in `web/*.html`, run `python tools/csp.py` (Content-Security-Policy hashes; `tests/test_csp.py` fails otherwise). A new third-party host goes in `tools/csp.py` `CONNECT`.
@@ -29,5 +29,5 @@ Regardless of how the phone is mounted in the cabin, all aligned chassis telemet
 3. Never ship placeholder or synthesized road data as if it were measured. Unknown stays unknown (`null`, `--`).
 4. For iOS / CarPlay changes, verify `project.yml` and `.github/workflows/build.yml` remain valid for cloud `xcodegen` compilation.
 5. For anything touching the iOS shell, sign-in, social features, data collection or the store listing, check `/docs/APP_REVIEW.md` (App Store Review Guidelines) and update it in the same PR.
-6. Make the judgment calls yourself instead of asking, and log each one at the top of `/docs/CALL_SHEET.md` (what, why, how to undo). Money, legal and account actions stay with the owner (`/docs/OWNER_TODO.md`).
-7. Before concluding an agent session, update `/docs/STATE.md` with completed milestones, active bugs, and the exact next task.
+6. Make the judgment calls yourself instead of asking, and log each one (what, why, how to undo) under `# CALL SHEET` in your PR's note file (rule 7). Money, legal and account actions stay with the owner (`/docs/OWNER_TODO.md`).
+7. Before concluding an agent session, write completed milestones, active bugs and the exact next task under `# STATE` in your PR's note file. **Never edit `/docs/STATE.md` or `/docs/CALL_SHEET.md` in a PR**: parallel threads all wrote their tops and every merge conflicted. Add one new file `/docs/notes/YYYY-MM-DD-slug.md` instead (format: `/docs/notes/README.md`; `tests/test_notes.py` checks it); `python tools/collect_notes.py` folds the notes into both files now and then, in a PR of its own.

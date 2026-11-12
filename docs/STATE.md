@@ -1,13 +1,43 @@
 # VETTA — CURRENT AGENT HANDOFF STATE
 
-## Session 2026-11-12 (deepest analysis, PR 20): Work on names the road where its skill shows most (claude/project-thread-gd7nre)
+> Newer entries are in `docs/notes/` (one file per PR, CLAUDE.md rule 7). Don't edit this file in a PR.
 
-- `web/driver_profile.js` `skillRoadLine(list, skill)`: from the roads' books, the road whose least even corners name the
-  skill most often: "It shows most on Dry Ridge Rd: 2 of the 3 corners where your passes there differ most come down to it."
-- `web/analysis.html`: `roadBookList()` reads every road's book once per library (shared with the Log's bookWork line);
-  Your driving puts the line under the tip of its Work on (or Practicing) box.
-- e2e: the four-drive road flow checks the line on Your driving.
-- Next: a per-road practice could take its `where` from that road (practice only on one road's corners).
+## Session 2026-11-11 (sweep round three): the cron jobs are watched (claude/project-thread-g9yher, off origin/main 6a43a9c)
+
+- Migration 0055 `cron_runs` (job, ok_at, fail_at, reason). backend/src/cron_runs.ts `runCron` wraps the backup and the
+  sweep in `scheduled`: success sets ok_at; a throw sets fail_at + scrubbed reason and counts as `cron <job>` in error_counts.
+  A backup that writes nothing (too big) counts as a failure. `GET /api/health` returns `cron: {backup, sweep}` (age_h,
+  failing, late) from the same single read. tools/status_check.py: core checks "Weekly backup" and "Daily sweep"; the
+  outage issue is titled "ApexNav: … not running" when only those fail. docs/STATUS.md step 4, docs/BACKUPS.md.
+- 0055 must be on preview and prod before merge (/api/health 503s without the table).
+- Next: offline behaviour and App Store / TestFlight readiness checks.
+## Session 2026-11-12 (ui-round-three, PR 5): the promises say what the app does now (claude/project-thread-5sbga7)
+
+- The coordinator, for Nate's 2026-11-11 calls (sharing with friends and private crews on by default; a weekly loop with a
+  board): about.html's and About Vetta's (index.html) "No public races / No races" and "Yours until you share it" became
+  "No top speeds" (nothing records or shows how fast anyone went flat out; the weekly loop's board has only those who
+  entered) and "Shared with your people" (Scores and times to friends and private crews until switched off; drives stay
+  on the phone; privacy zones). The App Store listing still must not mention the time attack (APP_REVIEW 1.4).
+- privacy.html: a "Scores and times with friends and crews" paragraph (on from the start, Who sees what, a public crew
+  only on a yes, never the drive itself) that APP_REVIEW 5.1.2 already said existed; the time attack "stage" is now the
+  loop Vetta picks; Last updated 12 November 2026. APP_REVIEW 5.1.2 notes it.
+- Tests: tests/test_promises_current.py (stale promises can't come back).
+
+## Session 2026-11-12 (ui-round-three, PR 4): the website's page in the Line, with today's app on it (claude/project-thread-5sbga7)
+
+- web/about.html: the app's faces loaded (fonts.css, preloaded; it named Inter Tight without loading it), the title and
+  headings in the numeral face, hairlines for the 2 px ink rules, the screenshots as phones on a soft lift, the promises
+  on hairlines instead of red bars (the title's red is the one red thing), 52 px keys. Copy unchanged but the two shots'
+  alt text and one caption.
+- tools/landing_shots.js fixed (it caught the boot cover and waited for a Crew view that is gone): What's new's real id,
+  permsExplained, `night=0`, the boot cover gone, 4 s for the call to land, TZ New York, and the second shot is now a
+  crew's page (stubbed) instead of the old Crew drives list. SHOTS_OUT writes elsewhere. web/brand/shots/*.png re-made.
+- Copy left for the owner (flagged to the coordinator): "Four promises" still says "Yours until you share it / Drives stay
+  on your phone" and "No public races / no public time leaderboards", which may not match 2026-11-11's sharing defaults
+  and the weekly time attack.
+- CarPlay visuals: not changed (native MapLibre is primary; only CI builds it, so a redesign can't be seen here).
+- Next ideas: the copy above once the owner rules; privacy.html and terms.html in the same Line (type only).
+
 
 ## 2026-11-12 Avoid cameras from our own list (claude/project-thread-39xbx9)
 - `tools/graph_etl/cameras.py` + `.github/workflows/cameras.yml` (weekly, Monday 07:17 UTC, or by hand): plate readers and
