@@ -1666,6 +1666,35 @@ flow('avoid cameras: with the chip on, the plate readers and speed cameras near 
   check(await page.evaluate(() => document.querySelector('[data-avoid="cameras"]').getAttribute('aria-pressed')) === 'true', 'the chip shows it');
 }, { geolocation: { latitude: 35.9606, longitude: -83.9207 }, permissions: ['geolocation'] });
 
+flow('avoid cameras from our own list: inside the region the cameras come from /api/cameras/v1/region.json with every Overpass server down (Nate 2026-11-12: "the camera server always says it\'s down")', async (page, base) => {
+  const asked = [], overpass = [];
+  await page.route('https://photon.komoot.io/**', (route) => route.fulfill({ contentType: 'application/json', body: JSON.stringify({ features: [
+    { geometry: { coordinates: [-83.9700, 35.7565] }, properties: { name: 'Maryville', state: 'Tennessee' } }] }) }));
+  for (const host of ['overpass-api.de', 'overpass.kumi.systems', 'overpass.private.coffee', 'maps.mail.ru']) await page.route(`https://${host}/**`, (route) => { if (/surveillance/.test(decodeURIComponent(route.request().postData() || ''))) overpass.push(host); route.abort(); });
+  const tiles = [];
+  for (let i = Math.floor(35 / 0.25); i <= Math.floor(37 / 0.25); i++) for (let j = Math.floor(-85 / 0.25); j <= Math.floor(-83 / 0.25); j++) tiles.push(`${i}_${j}`);
+  await page.route('**/api/cameras/v1/region.json', (route) => route.fulfill({ contentType: 'application/json', body: JSON.stringify({ version: 1, build: 'e2e', tile: 0.25, tiles,
+    cams: [[35.85, -83.94, 'a'], [35.8, -83.96, 's'], [36.9, -84.9, 'a']] }) }));
+  await page.route('https://valhalla1.openstreetmap.de/route', (route) => {
+    const req = JSON.parse(route.request().postData() || '{}');
+    asked.push(req);
+    route.fulfill({ contentType: 'application/json', body: JSON.stringify(stubTrip(req.locations)) });
+  });
+  await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); localStorage.setItem('apex.avoid', JSON.stringify({ cameras: true })); } catch (_) {} });
+  await page.goto(base + '/index.html');
+  await page.waitForFunction(() => window.apexDebug && window.apexDebug.map);
+  await page.click('#destInput');
+  await page.fill('#destInput', 'Maryville');
+  await page.waitForSelector('#placeList .place', { timeout: 10000 });
+  await page.click('#placeList .place');
+  await page.waitForFunction(() => { const t = window.apexDebug.track; return t && t.kind === 'route' && t.lat.length > 50; }, null, { timeout: 20000 });
+  const ex = asked.map((r) => r.exclude_locations || []);
+  const has = (e, lat, lon) => e.some((x) => x.lat === lat && x.lon === lon);
+  check(ex.some((e) => e.length === 2 && has(e, 35.85, -83.94) && has(e, 35.8, -83.96)), 'the two cameras from our list near the trip were excluded: ' + JSON.stringify(ex));
+  check(overpass.length === 0, 'no Overpass server was asked for cameras on tiles our list covers: ' + JSON.stringify(overpass));
+  check(!(await page.evaluate(() => [...document.querySelectorAll('.toast, #toast')].some((t) => /Camera map offline/.test(t.textContent || '')))), 'no "Camera map offline" note');
+}, { geolocation: { latitude: 35.9606, longitude: -83.9207 }, permissions: ['geolocation'] });
+
 flow('the chosen route stays whole on screen: above the card when it opens, above the bar when it goes down (panel round 2 DA-2)', async (page, base) => {
   await page.route('https://tiles.openfreemap.org/**', (route) => (route.request().url().includes('/styles/')
     ? route.fulfill({ contentType: 'application/json', body: JSON.stringify({ version: 8, sources: {}, layers: [{ id: 'bg', type: 'background', paint: { 'background-color': '#eee' } }] }) })

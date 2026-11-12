@@ -4,11 +4,16 @@
 // limit, and a cache keyed to that exact box so no other route could use it. Now the box is cut into fixed tiles, only the
 // tiles the route passes through are asked for, in one query raced against every server, and each tile is kept a week.
 // Pure helpers are exported for tests (tests/test_cameras.py); `load` takes fetch and storage from the page.
+// Our own list first (Nate, 2026-11-12: "the camera server always says it's down"; all four Overpass servers timed out
+// when asked from the Worker): inside Ohio, Kentucky and Indiana the tiles come from /api/cameras/v1/region.json, built
+// weekly from the Geofabrik extracts (tools/graph_etl/cameras.py). Only tiles it doesn't cover go to Overpass.
 (function (root) {
   'use strict';
   const TILE = 0.25;                                   // degrees: about 28 x 20 km in the US, a few per drive
   const KEEP_MS = 7 * 864e5, PREFIX = 'apex.cam.', MAX_TILES = 400, TIMEOUT_MS = 12000;
-  const SERVERS = ['https://overpass-api.de/api/interpreter', 'https://overpass.kumi.systems/api/interpreter', 'https://overpass.private.coffee/api/interpreter'];
+  const SERVERS = ['https://overpass-api.de/api/interpreter', 'https://overpass.kumi.systems/api/interpreter', 'https://overpass.private.coffee/api/interpreter',
+    'https://maps.mail.ru/osm/tools/overpass/api/interpreter'];
+  const REGION_PATH = '/api/cameras/v1/region.json', WORKER = 'https://apexnav.senftns.workers.dev', REGION_WAIT_MS = 8000, REGION_RETRY_MS = 10 * 60000;
   const finite = (v) => typeof v === 'number' && Number.isFinite(v);
 
   const keyOf = (i, j) => `${i}_${j}`;
@@ -86,14 +91,56 @@
     } catch (_) {}
   }
 
+  /** Our region file ({ tiles, cams: [[lat, lon, 'a' | 's']] }) -> Map tile -> cameras, for every tile it covers. */
+  function regionTiles(doc) {
+    if (!doc || !Array.isArray(doc.tiles) || !Array.isArray(doc.cams)) return null;
+    const out = new Map(doc.tiles.filter((k) => typeof k === 'string').map((k) => [k, []]));
+    doc.cams.forEach((c, n) => {
+      if (!Array.isArray(c) || !finite(c[0]) || !finite(c[1]) || (c[2] !== 'a' && c[2] !== 's')) return;
+      const k = keyOf(Math.floor(c[0] / TILE), Math.floor(c[1] / TILE));
+      if (out.has(k)) out.get(k).push({ id: `r${n}`, lat: c[0], lon: c[1], kind: c[2] === 'a' ? 'alpr' : 'speed' });
+    });
+    return out;
+  }
+  const apiBase = () => (root.ApexSync && root.ApexSync.apiBase != null ? root.ApexSync.apiBase
+    : root.location && root.location.protocol === 'apexnav:' ? WORKER : '');
+  let region = null, regionAt = -Infinity;           // the page's one ask: a promise of the Map, or of null (asked again in 10 min)
+  async function askRegion(fetchFn, url, waitMs) {
+    const ctrl = typeof AbortController === 'function' ? new AbortController() : null;
+    const t = setTimeout(() => ctrl && ctrl.abort(), waitMs);
+    try {
+      const r = await fetchFn(url, { method: 'GET', signal: ctrl ? ctrl.signal : undefined });
+      return r.ok ? regionTiles(await r.json()) : null;
+    } catch (_) { return null; } finally { clearTimeout(t); }
+  }
+  function regionOnce(fetchFn, url, nowMs = Date.now()) {
+    if (!region || (nowMs - regionAt > REGION_RETRY_MS && region.failed)) {
+      regionAt = nowMs;
+      const p = askRegion(fetchFn, url, REGION_WAIT_MS).then((m) => { if (!m) p.failed = true; return m; });
+      region = p;
+    }
+    return region;
+  }
+
   /**
-   * The cameras on these tiles: kept ones at once, the rest in one query raced against every server.
-   * Returns [{ id, lat, lon, kind }], or null when some tiles were wanted and no server answered.
+   * The cameras on these tiles: kept ones at once, then the ones our region file covers, the rest in one query raced
+   * against every Overpass server. Returns [{ id, lat, lon, kind }], or null when some tiles were wanted and no source had them.
+   * `region`: our file's URL (null: don't ask it; tests).
    */
-  async function load(tiles, { fetchFn = root.fetch && root.fetch.bind(root), storage = root.localStorage, now = Date.now() } = {}) {
-    const have = [], missing = [];
+  async function load(tiles, { fetchFn = root.fetch && root.fetch.bind(root), storage = root.localStorage, now = Date.now(), region: regionUrl } = {}) {
+    const have = [];
+    let missing = [];
     for (const k of tiles) { const c = storage ? readTile(storage, k, now) : null; if (c) have.push(...c); else missing.push(k); }
     if (!missing.length) return have;
+    const url = regionUrl === null ? null : regionUrl || apiBase() + REGION_PATH;
+    const ours = url ? await (regionUrl ? askRegion(fetchFn, url, REGION_WAIT_MS) : regionOnce(fetchFn, url)) : null;
+    if (ours) {
+      const got = new Map(missing.filter((k) => ours.has(k)).map((k) => [k, ours.get(k)]));
+      if (storage && got.size) writeTiles(storage, got, now);
+      have.push(...[].concat(...got.values()));
+      missing = missing.filter((k) => !got.has(k));
+      if (!missing.length) return have;
+    }
     const json = await fetchFirst(fetchFn, 'data=' + encodeURIComponent(query(missing)));
     if (!json) return null;
     const cams = (json.elements || []).map(classify).filter(Boolean);
@@ -102,6 +149,6 @@
     return have.concat(...split.values());
   }
 
-  const api = { TILE, SERVERS, tileBox, tilesNear, tilesInBox, query, classify, byTile, fetchFirst, load };
+  const api = { TILE, SERVERS, REGION_PATH, tileBox, tilesNear, tilesInBox, query, classify, byTile, regionTiles, fetchFirst, load };
   if (typeof module !== 'undefined' && module.exports) module.exports = api; else root.ApexCameras = api;
 })(typeof window !== 'undefined' ? window : globalThis);
