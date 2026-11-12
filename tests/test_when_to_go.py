@@ -160,8 +160,15 @@ def test_the_page_loads_the_sun_and_the_forecast_words_before_the_providers_that
     """conditions.js, wildlife.js and hazards_live.js read ApexSun (and ApexRouteWeather) once, as they load: after them in
     the page (as it was), the app's routes had no light, glare, deer hour or forecast hazard per sample at all."""
     html = open(os.path.join(ROOT, "web", "index.html"), encoding="utf-8").read()
+    lazy = open(os.path.join(ROOT, "web", "lazy.js"), encoding="utf-8").read()
     at = lambda name: html.index('<script src="%s"' % name)
     for provider in ("route_ctx/conditions.js", "route_ctx/wildlife.js", "route_ctx/hazards_live.js"):
-        assert at("sun.js") < at(provider)
-    assert at("route_weather.js") < at("route_ctx/conditions.js")
+        # after launch (lazy.js 'ctx', since 2026-11-12): sun.js and route_weather.js are launch scripts, so in first
+        if "'%s'" % provider in lazy:
+            assert '<script src="%s"' % provider not in html
+            assert at("sun.js") >= 0 and at("route_weather.js") >= 0
+        else:
+            assert at("sun.js") < at(provider)
+    if "'route_ctx/conditions.js'" not in lazy:
+        assert at("route_weather.js") < at("route_ctx/conditions.js")
     assert at("route_ctx/registry.js") < at("when_to_go.js") and at("route_engine.js") < at("when_to_go.js")

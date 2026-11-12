@@ -2,12 +2,16 @@
 // seeds and kept the season, at least 3 km apart; one featured a week in turn; entering is the opt-in; your quickest each day
 // is kept, so a board reads for the week, month, year or all time; blocks hide; leaving takes your times; a report takes one down.
 import { env } from "cloudflare:workers";
-import { beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { api, freshDb, makeSegment, makeUser, ok, type TestUser } from "./helpers";
 import { featuredOf, seedFor } from "../src/ta_fixed";
 
 type Msg = Record<string, any>;
 beforeEach(freshDb);
+// no graph tiles here (src/loop_check.ts, test/loop_check.test.ts): the loops these tests post go unchecked
+const realFetch = globalThis.fetch;
+beforeEach(() => { globalThis.fetch = (async () => new Response(null, { status: 404 })) as unknown as typeof fetch; });
+afterEach(() => { globalThis.fetch = realFetch; });
 const json = async (r: Promise<Response>) => (await (await ok(r)).json()) as Msg;
 const HERE = "lat=39.3&lon=-84.6", CELL = "39.25,-84.75";
 const area = (u: TestUser, q = "") => json(api(u, "GET", `/api/ta?${HERE}${q}`));

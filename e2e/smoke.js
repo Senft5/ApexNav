@@ -175,6 +175,37 @@ async function leftovers(page) {
   return out;
 }
 
+// A control in view that a screen reader can't name (VoiceOver says only "button"): an icon key with no aria-label, an
+// empty link, a field with no label (LAUNCH.md section 3, IDEAS U-15). In every open page, like leftovers above.
+async function unnamed(page) {
+  const out = [];
+  for (const p of page.context().pages()) {
+    if (p.isClosed()) continue;
+    const found = await p.evaluate(() => {
+      const shown = (el) => { for (let n = el; n && n.nodeType === 1; n = n.parentElement) { if (n.hidden || n.inert || n.getAttribute('aria-hidden') === 'true') return false; }
+        const cs = getComputedStyle(el); return cs.visibility !== 'hidden' && cs.display !== 'none' && el.getClientRects().length > 0; };
+      const text = (el) => (el.innerText || el.textContent || '').replace(/\s+/g, ' ').trim();
+      const nameOf = (el) => {
+        const l = el.getAttribute('aria-label'); if (l && l.trim()) return l;
+        const by = el.getAttribute('aria-labelledby'); if (by) return by.split(/\s+/).map((i) => { const n = document.getElementById(i); return n ? text(n) : ''; }).join(' ').trim();
+        if (el.labels && el.labels.length) return [...el.labels].map(text).join(' ').trim();
+        const t = text(el); if (t) return t;
+        for (const i of el.querySelectorAll('img[alt], svg[aria-label], [role=img][aria-label]')) { const a = i.getAttribute('alt') || i.getAttribute('aria-label'); if (a) return a; }
+        return el.getAttribute('title') || (el.tagName === 'INPUT' && el.value && /^(button|submit)$/i.test(el.type) ? el.value : '') || el.getAttribute('placeholder') || '';
+      };
+      const where = (el) => el.tagName.toLowerCase() + (el.id ? '#' + el.id : '') + (el.className && typeof el.className === 'string' ? '.' + el.className.trim().split(/\s+/).join('.') : '');
+      const hits = [];
+      for (const el of document.querySelectorAll('button, a[href], input:not([type=hidden]), select, textarea, [role=button], [role=switch], [role=tab], [role=slider], [role=checkbox], [role=radio], [role=option]')) {
+        if (!shown(el)) continue;
+        if (!/[\p{L}\p{N}]/u.test(nameOf(el))) hits.push(where(el));
+      }
+      return [...new Set(hits)].slice(0, 8);
+    }).catch(() => []);
+    out.push(...found.map((h) => `${new URL(p.url()).pathname.slice(1) || 'index.html'}: ${h}`));
+  }
+  return out;
+}
+
 async function openSetting(page, key) {
   await page.click('#garageGear');
   await page.click(`#garageSettings .nav-row[data-setting="${key}"]`);
@@ -433,7 +464,7 @@ flow('returning driver: live frames switch to the cockpit, big targets and no ke
   check(await page.evaluate(() => window.apexDebug.state.mode === 'live'), 'frames switch the cockpit to live');
   // A text field must not open the keyboard while moving (IDEAS C-08).
   // (the Plan sheet's fields are hidden in the cockpit, so focus a plain field: the guard is document-wide)
-  await page.evaluate(() => { const i = document.createElement('input'); i.id = 'e2eField'; document.body.append(i); i.focus(); });
+  await page.evaluate(() => { const i = document.createElement('input'); i.id = 'e2eField'; i.setAttribute('aria-label', 'Test field'); document.body.append(i); i.focus(); });
   await page.waitForFunction(() => /Typing is off/.test(document.getElementById('toast').textContent));
   check(await page.evaluate(() => document.activeElement !== document.getElementById('e2eField')), 'the field gives up focus while moving');
 });
@@ -2877,7 +2908,7 @@ flow('convoy: an in-app invite toasts and Join gets you in, no link (Worker stub
   await page.waitForSelector('.convoy-sheet button:has-text("Join")');
   check(/@lead invited you: Sunday run/.test(await page.textContent('.convoy-sheet')), 'the convoy sheet says who invited you and to what');
   await page.click('.convoy-sheet button:text-is("Join")');
-  await page.waitForFunction(() => /you are following/.test(document.querySelector('.convoy-sheet').textContent), null, { timeout: 5000 });
+  await page.waitForFunction(() => /you're following/i.test(document.querySelector('.convoy-sheet').textContent), null, { timeout: 5000 });
   check(/left/.test(await page.textContent('.convoy-sheet')) && !/ends \d/.test(await page.textContent('.convoy-sheet')), 'how long it has left, not a clock time (P-28): ' + await page.textContent('.convoy-sheet .note'));
   check(accepted, 'joined with consent, without a link');
   await page.click('.convoy-sheet button:has-text("Done")');
@@ -3051,6 +3082,8 @@ flow('build threads: start one from a car, add a step, a friend suggests and it 
   await page.fill('input[aria-label="Step title"]', 'Coilovers <b>in</b>');
   await page.click('.build-view .row-pick[aria-label^="Stage"]'); await page.click('.row-pick-sheet [role="option"]:has-text("Suspension")');   // the app's row list
   await page.fill('input[aria-label="Parts"]', 'Ohlins DFV R&T, 7k / 5k springs');
+  const form = await page.evaluate(() => ({ bold: [...document.querySelectorAll('.bv-form > b')].map((b) => b.textContent), notes: [...document.querySelectorAll('.bv-form > .note')].map((n) => n.textContent) }));
+  check(!form.bold.length && form.notes.length === 1 && form.notes[0].length < 60, 'the step form: no label over the drive pick, one short line about photos: ' + JSON.stringify(form));
   await page.click('button:has-text("Post the step")');
   await page.waitForSelector('.bv-post h3');
   const step = sent.find((x) => x.p === '/api/builds/b1/posts').b;
@@ -3730,13 +3763,18 @@ flow('convoy: the leader shows a QR code of the link (Worker stubbed, IDEAS S-22
   check(/^Just drive$/.test((await page.textContent('.start-sheet .rec-key')).trim()), 'the key\'s chevron offers Just drive and Convoy now');
   await page.click('.start-sheet button:has-text("Convoy now")');
   await page.waitForSelector('.convoy-sheet canvas.cv-qr');
-  check(/you are leading/.test(await page.textContent('.convoy-sheet')) && await page.isVisible('.convoy-sheet button:has-text("Start the drive")'), 'leading, the code up, the drive one key away');
+  check(/you're leading/i.test(await page.textContent('.convoy-sheet')) && await page.isVisible('.convoy-sheet button:has-text("Start the drive")'), 'leading, the code up, the drive one key away');
   const dark = await page.evaluate(() => { const c = document.querySelector('canvas.cv-qr'), d = c.getContext('2d').getImageData(0, 0, c.width, c.height).data;
     let n = 0; for (let i = 0; i < d.length; i += 4) if (d[i] < 128) n++; return n / (d.length / 4); });
   check(dark > 0.2 && dark < 0.6, `a QR code is drawn (${(dark * 100).toFixed(0)} % dark)`);
   // and the code to read out, for a friend whose camera can't see the screen
   await page.waitForFunction(() => { const c = document.querySelector('.convoy-sheet .cv-code'); return c && !c.hidden; }, null, { timeout: 5000 });
   check((await page.textContent('.convoy-sheet .cv-code')) === 'Or join code K7P 4QX', 'the join code under the QR: ' + await page.textContent('.convoy-sheet .cv-code'));
+  // the convoy's own row keeps its few keys; New link sits with the code it replaces, and the line under the title doesn't say Convoy again
+  const keys = await page.evaluate(() => { const qr = document.querySelector('.convoy-sheet canvas.cv-qr').parentElement;
+    return { qr: [...qr.querySelectorAll('button')].map((b) => b.textContent), all: [...document.querySelectorAll('.convoy-sheet button')].filter((b) => !qr.contains(b)).map((b) => b.textContent),
+      line: document.querySelector('.convoy-sheet .note').textContent }; });
+  check(keys.qr.includes('New link') && !keys.all.includes('New link') && !/^Convoy ·/.test(keys.line), 'New link under the code, the line says who leads: ' + JSON.stringify(keys));
 });
 
 flow('convoy: a friend joins with the code the leader read out (Worker stubbed, IDEAS S-22)', async (page, base) => {
@@ -3772,7 +3810,7 @@ flow('convoy: a friend joins with the code the leader read out (Worker stubbed, 
   // Return on the keyboard joins, and a second Return while it works spends no second try (walkthrough 2026-11-12)
   await page.focus('.convoy-sheet input[aria-label="Convoy join code"]');
   await page.keyboard.press('Enter'); await page.keyboard.press('Enter');
-  await page.waitForFunction(() => /you are following/.test(document.querySelector('.convoy-sheet').textContent), null, { timeout: 5000 });
+  await page.waitForFunction(() => /you're following/i.test(document.querySelector('.convoy-sheet').textContent), null, { timeout: 5000 });
   check(sent.length === 2, 'Return joins with the code, once: ' + sent.length + ' tries sent');
   check(sent.length === 2 && sent.every((b) => b.consent === true), 'joined with consent: ' + JSON.stringify(sent));
 });
@@ -4733,7 +4771,7 @@ flow('the run as one card: the morning of, a crew-mate\'s convoy to join or your
   await page.click('.cp-week .drive-card button:has-text("Start the convoy")');
   await page.waitForSelector('.cp-week .drive-card.is-convoy .cv-panel', { timeout: 8000 });
   const live = await page.textContent('.cp-week .drive-card');
-  check(/LIVE/.test(live) && /you are leading/.test(live) && /left/.test(live) && /Show QR/.test(live) && /End convoy/.test(live), 'the convoy live on the card: ' + live);
+  check(/LIVE/.test(live) && /you're leading/i.test(live) && /left/.test(live) && /Show QR/.test(live) && /End convoy/.test(live), 'the convoy live on the card: ' + live);
   check(sent.some(([m, p]) => m === 'POST' && p === `/api/convoy/${cid}/invite-people`) && sent.some(([m, p]) => m === 'POST' && p === '/api/events/e1AAAAAAAAAAAAAA/came'), 'everyone going invited; you came: ' + JSON.stringify(sent));
   await page.evaluate(() => document.querySelector('.tab[data-view="map"]').click());
   check(/Ridge Runners · Dawn run/.test(await page.textContent('.convoy-bar.show .cv-line')), 'the map: one line for the convoy');
@@ -7019,6 +7057,9 @@ flow('the main map: with no signal and no saved area one line says there is no m
   const off = await page.evaluate(() => { const n = document.getElementById('mapNote'), r = n.getBoundingClientRect(), m = document.getElementById('map').getBoundingClientRect();
     return { text: n.textContent, inside: r.left >= m.left && r.right <= m.right && r.top >= m.top, taps: getComputedStyle(n).pointerEvents }; });
   check(off.text === 'No map here without signal. Notes and recording still work.' && off.inside && off.taps === 'none', 'said in one line, over the map, never in the way: ' + JSON.stringify(off));
+  // a first launch with no style kept: the map still loads on the paper, so the route, the trail and the corners can draw
+  await page.waitForFunction(() => { try { return !!window.apexDebug.map.getLayer('apex-route'); } catch (_) { return false; } }, null, { timeout: 8000 });
+  check(true, 'our own layers are on the paper with no base map');
   // a tile that draws (a saved area here, or the signal back) takes it away
   tiles = true;
   await page.evaluate(() => window.apexDebug.map.setStyle('https://tiles.openfreemap.org/styles/liberty?again'));
@@ -7414,8 +7455,8 @@ flow('REVIEW.md 1.2 screen by screen: the Log, drive detail, Stages, People sign
   check(stray.join === 0 && stray.acc === 'none', 'People\'s signed-out page is not in the Garage: ' + JSON.stringify(stray));
   await openSetting(page, 'data');
   const g = await page.evaluate(() => { const s = document.getElementById('sheet'), e = getComputedStyle(document.getElementById('myEraseBtn'));
-    return { title: s.querySelector('h2').textContent, themes: document.querySelectorAll('#themeCards > *').length, how: document.querySelectorAll('[data-panel~="garage"] details.how').length, octane: /Octane/.test(document.body.innerText), erase: e.color + '/' + e.textDecorationLine + '/' + e.borderTopStyle }; });
-  check(g.title === 'Garage' && g.themes === 3 && g.how >= 2 && !g.octane && g.erase === 'rgb(200, 16, 46)/none/none', 'Garage: ' + JSON.stringify(g));
+    return { title: s.querySelector('h2').textContent, themes: document.querySelectorAll('#themeCards > *').length, how: document.querySelectorAll('[data-panel~="garage"] details.how').length, bare: [...document.querySelectorAll('[data-panel~="garage"] > p.note')].filter((p) => !p.id && p.textContent.trim().length >= 140).length, octane: /Octane/.test(document.body.innerText), erase: e.color + '/' + e.textDecorationLine + '/' + e.borderTopStyle }; });
+  check(g.title === 'Garage' && g.themes === 3 && g.how >= 1 && g.bare === 0 && !g.octane && g.erase === 'rgb(200, 16, 46)/none/none', 'Garage: ' + JSON.stringify(g));
   // 2026-11-10: Your data is the Settings list's rows in three groups (it was eight keys of eight widths): one left edge, one width
   const rowsOf = await page.evaluate(() => { const box = document.querySelector('.data-rows'); return { groups: [...box.querySelectorAll('.nav-group')].map((h) => h.textContent),
     rows: [...box.querySelectorAll('.nav-row')].map((r) => { const b = r.getBoundingClientRect(); return [r.id, Math.round(b.left), Math.round(b.width), Math.round(b.height)]; }) }; });
@@ -7772,6 +7813,8 @@ flow('along the route by name: the Along line opens a list of the cafés and fue
   // in a drive only the next fuel stop keeps its stamp, and it says which station it is
   await page.evaluate(() => document.getElementById('routeDriveBtn').click());
   await page.waitForFunction(() => window.apexDebug.driveActive, null, { timeout: 10000 });
+  // a fix at the route's start: the drive's frame is what keeps the stamps (it would race the stamps' arrival otherwise)
+  await page.evaluate(() => { const t = window.apexDebug.track; window.apex.live({ has_fix: true, location_off: false, lat: t.lat[0], lon: t.lon[0], accuracy_m: 5, speed_mps: 10, course_deg: 0, calibration: 'locked', thermal: 0 }); });
   await page.waitForFunction(() => [...document.querySelectorAll('.poi-pin.poi-fuel')].filter((e) => e.style.display !== 'none').map((e) => e.textContent).join('|') === 'FUEL · Shell', null, { timeout: 5000 })
     .catch(() => {});
   const stamps = await page.evaluate(() => [...document.querySelectorAll('.poi-pin.poi-fuel')].map((e) => ({ text: e.textContent, on: e.style.display !== 'none' })));
@@ -9300,6 +9343,9 @@ flow('time attack, a new season (the owner, 2026-11-12: static best roads): the 
       // spoken label) says "[object Object]", "undefined" or "NaN" (About a road read "descending [object Object]").
       const raw = await leftovers(page);
       check(!raw.length, `the code's own leftovers on screen:\n  ${raw.join('\n  ')}`);
+      const nameless = await unnamed(page);
+      if (process.env.A11Y_LOG) for (const h of nameless) console.log(`A11Y ${name} | ${h}`);
+      else check(!nameless.length, `a control in view a screen reader can't name:\n  ${nameless.join('\n  ')}`);
       check(!errors.length, `page errors or missing files:\n  ${errors.join('\n  ')}`);
       console.log(`ok   ${name} (${Date.now() - t0} ms)`);
     } catch (e) {

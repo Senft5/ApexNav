@@ -55,17 +55,12 @@
   <script src="stages.js" defer></script>
   <script src="fun_route.js" defer></script>
   <script src="route_ctx/registry.js" defer></script>
-  <script src="route_ctx/graph.js" defer></script>
-  <script src="route_ctx/router_edges.js" defer></script>
-  <script src="route_ctx/dem.js" defer></script>
+  <!-- the providers that only answer a plan (graph, router edges, terrain, conditions, wildlife, events, live
+       hazards, photos, OpenStreetMap) are not on the launch path: web/lazy.js 'ctx', loaded once the map is idle or by the
+       first plan (cockpit.js needCtx) -->
   <script src="route_engine.js" defer></script>
   <script src="graph_router.js" defer></script>
   <script src="own_routing.js" defer></script>
-  <script src="route_ctx/conditions.js" defer></script>
-  <script src="route_ctx/wildlife.js" defer></script>
-  <script src="route_ctx/events.js" defer></script>
-  <script src="route_ctx/hazards_live.js" defer></script>
-  <script src="route_ctx/photos.js" defer></script>
   <script src="route_ctx/context_grid.js" defer></script>
   <script src="sync.js" defer></script>
   <script src="live_pipeline.js" defer></script>
@@ -107,9 +102,6 @@
   <script src="carplay.js" defer></script>
   <script src="cameras.js" defer></script>
   <script src="route_ctx/osm_common.js" defer></script>
-  <script src="route_ctx/osm_tiles.js" defer></script>
-  <script src="route_ctx/osm_overpass.js" defer></script>
-  <script src="route_ctx/road_name_age.js" defer></script>
   <script src="whats_new.js" defer></script>
   <script src="saved_routes.js" defer></script>
   <script src="row_select.js" defer></script>
@@ -2172,9 +2164,9 @@
               <button class="nav-row danger" id="myDrivesDelBtn">Delete drives on this phone</button>
               <button class="nav-row danger" id="myEraseBtn">Erase everything on this phone</button>
             </div>
-            <p class="note">Your account (friends, crews, shared spots, routes and results) is deleted from the server in Settings → Account → Delete account.</p>
+            <p class="note">To delete your account and what it shared: Settings → Account → Delete account.</p>
             <button class="sw mt-8" data-toggle="health"><i></i><span>Share app health (anonymous counts)</span></button>
-            <p class="note">Once a day, totals like "3 routes found, 1 failed" go to Vetta with no account, phone or place in them, so problems get fixed. Off: nothing is counted or sent.</p>
+            <p class="note">Once a day, counts like "3 routes found, 1 failed", with no account, phone or place in them. Off: nothing is sent.</p>
           </section>
           <!-- Tune your routes (the owner, 2026-11-09; web/route_tuning.js): sliders over the routing's weights, free for
                everyone (Pro is looks only, 2026-11-10), kept on this phone; cockpit.js paintTuning fills it -->

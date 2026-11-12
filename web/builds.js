@@ -260,9 +260,9 @@
       const parts = el('input', { className: 'field', maxLength: 500, placeholder: 'Parts, separated by commas', autocomplete: 'off' });
       const drive = el('select', { className: 'field' }, el('option', { value: '', textContent: 'Not tested on a drive yet' }));
       title.setAttribute('aria-label', 'Step title'); stage.setAttribute('aria-label', 'Stage'); text.setAttribute('aria-label', 'Step text'); parts.setAttribute('aria-label', 'Parts'); drive.setAttribute('aria-label', 'Tested on a drive');
-      scoredDrives().then((list) => drive.append(...list.map((x) => el('option', { value: String(x.score), textContent: `${x.name} · Vetta Score ${x.score}` }))));
-      sheet('Add a step', (close) => [title, stage, text, parts, el('b', { textContent: 'Tested on a drive (your Log)' }), drive,
-        el('p', { className: 'note', textContent: 'Add photos to the step once it’s posted. Photos lose their location data before they leave your phone.' }),
+      scoredDrives().then((list) => drive.append(...list.map((x) => el('option', { value: String(x.score), textContent: `Tested on ${x.name} · Vetta Score ${x.score}` }))));
+      sheet('Add a step', (close) => [title, stage, text, parts, drive,
+        el('p', { className: 'note', textContent: 'Photos go on once it’s posted, without their location.' }),
         el('div', { className: 'row' }, btn('Post the step', async () => {
           if (!title.value.trim()) { toast('Give the step a title.'); return; }
           const x = await call('POST', `/api/builds/${encodeURIComponent(b.id)}/posts`, { title: title.value.trim(), body: text.value.trim() || null,
@@ -297,7 +297,7 @@
     function start(car, done) {
       const f = stagesField([]);
       sheet('Start a build thread', (close) => [el('b', { textContent: carName(car) }),
-        el('p', { className: 'note', textContent: 'Name the stages you plan (Suspension, Brakes, Power). You can change them later.' }), f.el,
+        el('p', { className: 'note', textContent: 'Plan its stages. You can change them later.' }), f.el,
         el('div', { className: 'row' }, btn('Start the thread', async () => {
           const x = await call('POST', '/api/builds', { car_id: car.id, stages: f.list });
           const j = x && x.ok ? await jsonOf(x) : null;
