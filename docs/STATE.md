@@ -1,5 +1,20 @@
 # VETTA — CURRENT AGENT HANDOFF STATE
 
+## Session 2026-11-12 (ui-round-three, PR 4): the website's page in the Line, with today's app on it (claude/project-thread-5sbga7)
+
+- web/about.html: the app's faces loaded (fonts.css, preloaded; it named Inter Tight without loading it), the title and
+  headings in the numeral face, hairlines for the 2 px ink rules, the screenshots as phones on a soft lift, the promises
+  on hairlines instead of red bars (the title's red is the one red thing), 52 px keys. Copy unchanged but the two shots'
+  alt text and one caption.
+- tools/landing_shots.js fixed (it caught the boot cover and waited for a Crew view that is gone): What's new's real id,
+  permsExplained, `night=0`, the boot cover gone, 4 s for the call to land, TZ New York, and the second shot is now a
+  crew's page (stubbed) instead of the old Crew drives list. SHOTS_OUT writes elsewhere. web/brand/shots/*.png re-made.
+- Copy left for the owner (flagged to the coordinator): "Four promises" still says "Yours until you share it / Drives stay
+  on your phone" and "No public races / no public time leaderboards", which may not match 2026-11-11's sharing defaults
+  and the weekly time attack.
+- CarPlay visuals: not changed (native MapLibre is primary; only CI builds it, so a redesign can't be seen here).
+- Next ideas: the copy above once the owner rules; privacy.html and terms.html in the same Line (type only).
+
 ## Session 2026-11-12 (ui-round-three, PR 3): the arrival-time link page in the Vetta Line (claude/project-thread-5sbga7)
 
 - web/eta.html (the page a friend opens from "Share ETA"): the app's faces (fonts.css, preloaded), the minutes as one big

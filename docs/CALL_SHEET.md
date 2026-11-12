@@ -4,6 +4,13 @@ Decisions Claude made for you, newest first. Each one says what was decided, why
 you reach one you've seen. If you disagree with a call, say so and it gets reversed; nothing here is hard to undo unless
 it says so. Things only you can do are in docs/OWNER_TODO.md.
 
+## 2026-11-12 (ui-round-three): the website's page uses the app's look and shows today's app (claude/project-thread-5sbga7)
+
+about.html showed screenshots of the app from before the redesign (the old tab bar, boxed keys) and set its type in the
+system face. It now loads the app's typefaces, sets its titles like the app, and shows two fresh screenshots: the Dry Ridge
+replay and an example crew's page. The words are the same, except the screenshots' descriptions. Undo: revert
+web/about.html, web/brand/shots/*.png and tools/landing_shots.js.
+
 ## 2026-11-12 (ui-round-three): the arrival-time page your friends open looks like Vetta (claude/project-thread-5sbga7)
 
 The page behind a shared ETA link was plain system text. It now uses the app's type and paper: the minutes set large
