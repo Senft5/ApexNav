@@ -45,7 +45,13 @@ export async function viewer(req: Request, env: Env): Promise<Viewer | null> {
        FROM sessions s JOIN users u ON u.id = s.user_id LEFT JOIN members m ON m.user_id = u.id
       WHERE s.id_hash = ? AND s.expires_at > datetime('now')`,
   ).bind(await sha256hex(token)).first<{ id: string; email: string; handle: string | null; displayName: string | null; member: number; banned: number }>();
-  if (!row) return null;
+  if (!row) {
+    // a token with no session behind it: rateCheck counted it under its own (fresh) key, so a read is counted per IP here,
+    // or a made-up token on every request would read without limit (ratelimit.ts; a write is keyed per IP there already)
+    const ip = req.headers.get("cf-connecting-ip") ?? "unknown";
+    if (req.method === "GET" && env.READ_LIMIT && !(await env.READ_LIMIT.limit({ key: `ip:${ip}` })).success) throw new HttpError(429, "rate_limited");
+    return null;
+  }
   const { banned, ...v } = row;
   // P-02: someone signed in before Vetta opened (no invite, so no row) becomes a member on their next request.
   const member = !!v.member || (!banned && await admit(env, v.id));
