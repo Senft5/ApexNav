@@ -14,7 +14,8 @@
   const CAM_TILE = '156_-339';                                 // cameras.js 0.25° tile holding AT
   const TIMEOUT_MS = 15000, ROUTER_MS = 45000, SLOW_MS = 4000;
   const VALHALLA = 'https://valhalla1.openstreetmap.de';
-  const OVERPASS = [['overpass_de', 'overpass-api.de'], ['overpass_kumi', 'overpass.kumi.systems'], ['overpass_coffee', 'overpass.private.coffee']];
+  const OVERPASS = [['overpass_de', 'overpass-api.de'], ['overpass_kumi', 'overpass.kumi.systems'], ['overpass_coffee', 'overpass.private.coffee'],
+    ['overpass_vk', 'maps.mail.ru', '/osm/tools/overpass/api/interpreter']];
 
   // id, name, what it feeds (shown under a service that is down), and the request. `api: true` goes through the page's
   // apiFetch (our Worker, with the session); otherwise a plain fetch with no credentials.
@@ -63,8 +64,12 @@
     { id: 'osrm', group: 'Outside services', name: 'OSRM', feeds: 'the last-resort Quick route',
       url: `https://router.project-osrm.org/route/v1/driving/${AT.lon},${AT.lat};${TO.lon},${TO.lat}?overview=false`,
       check: (j) => (json(j) && j.code === 'Ok' ? null : json(j) && j.code ? String(j.code) : 'no route') },
-    ...OVERPASS.map(([id, host]) => ({ id, group: 'Camera map', name: `Overpass (${host})`, feeds: 'plate readers and speed cameras, Avoid cameras',
-      url: `https://${host}/api/interpreter`, method: 'POST', form: true, camera: true,
+    { id: 'cameras_region', group: 'Camera map', name: 'Our camera list (OH, KY, IN)', feeds: 'plate readers and speed cameras, Avoid cameras, in our region',
+      worker: true, path: '/api/cameras/v1/region.json',
+      check: (j) => (json(j) && Array.isArray(j.tiles) && Array.isArray(j.cams) && j.cams.length ? null : 'no cameras in the list'),
+      note: (j) => (json(j) && Array.isArray(j.cams) ? `${j.cams.length.toLocaleString('en-US')} cameras, ${j.tiles.length} tiles` : '') },
+    ...OVERPASS.map(([id, host, path = '/api/interpreter']) => ({ id, group: 'Camera map', name: `Overpass (${host})`, feeds: 'plate readers and speed cameras, Avoid cameras',
+      url: `https://${host}${path}`, method: 'POST', form: true, camera: true,
       check: (j) => (!json(j) || !Array.isArray(j.elements) ? 'not an Overpass answer' : j.remark && /error|timed out/i.test(j.remark) ? String(j.remark).slice(0, 80) : null),
       note: (j) => (json(j) && Array.isArray(j.elements) ? cams(j.elements.length) : '') })),
     { id: 'cameras_app', group: 'Camera map', name: 'Camera map as the app asks it', feeds: 'the "Camera map offline" note', cameras: true },

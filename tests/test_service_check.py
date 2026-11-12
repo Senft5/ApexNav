@@ -29,6 +29,7 @@ const deps = {
     if (url.includes('openfreemap.org/styles')) return res(200, 'bad');
     if (url.endsWith('/api/graph/v1/index.json')) return res(200, { tiles: { '381_516': {}, '1_1': {} }, build: 'b1' });
     if (url.endsWith('.vgr')) return res(200, 5000);
+    if (url.endsWith('/api/cameras/v1/region.json')) return res(200, { tiles: ['156_-339'], cams: [[39.1, -84.5, 'a']] });
     if (url.includes('terrarium')) return res(200, 12);
     throw new TypeError('Load failed');
   },
@@ -70,6 +71,8 @@ def test_states_and_reasons(out):
     assert by["search"]["state"] == "down" and by["search"]["detail"] == "Load failed"
     assert by["valhalla"]["state"] == "up"
     assert by["cameras_app"]["state"] == "down" and "Camera map offline" in by["cameras_app"]["detail"]
+    assert by["cameras_region"] == {**by["cameras_region"], "state": "up", "detail": "1 cameras, 1 tiles"}
+    assert by["overpass_vk"]["state"] == "down"
     assert by["terrain"]["state"] == "down" and by["terrain"]["detail"] == "empty tile"
 
 
