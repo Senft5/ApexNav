@@ -5876,8 +5876,8 @@
           try { const r = await c.loop({ start: AT, km: 40, level: LOOP_STYLE }); return { cands: (r && r.routes) || [], reason: r && r.routes && r.routes.length ? 'ok' : 'none' }; }
           catch (e) { return { cands: [], reason: 'failed', error: String((e && e.message) || e) }; }
         },
-        cameras: (tile) => ApexCameras.fetchFirst(fetch, 'data=' + encodeURIComponent(ApexCameras.query([tile])))
-          .then((j) => (j ? (j.elements || []).map(ApexCameras.classify).filter(Boolean) : null)),
+        // the app's own path (our region list first, then the Overpass servers), with nothing read from this phone's cache
+        cameras: (tile) => ApexCameras.load([tile], { fetchFn: fetch, storage: null }),
         cameraQuery: (tile) => ApexCameras.query([tile]),
       };
     }
