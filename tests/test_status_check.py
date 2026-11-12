@@ -39,7 +39,7 @@ def go(get):
 def test_all_good():
     res = go(fake())
     md, core_ok = sc.summarize(res, when="now")
-    assert core_ok and all(r["ok"] for r in res) and len(res) == 9
+    assert core_ok and all(r["ok"] for r in res) and len(res) == 10
     assert "All systems normal" in md
 
 
@@ -101,3 +101,16 @@ def test_a_cron_job_never_recorded_or_an_older_worker_is_fine():
 def test_the_outage_issue_names_a_stopped_job_without_calling_the_app_down():
     wf = (Path(__file__).resolve().parents[1] / ".github/workflows/status.yml").read_text()
     assert "Weekly backup|Daily sweep" in wf and "not running" in wf
+
+
+def test_a_route_that_keeps_failing_is_a_core_failure_but_not_down():
+    body = {"ok": True, "db": True, "cron": None, "failing_routes": ["POST /api/drives"]}
+    res = go(fake({"/api/health": (200, json.dumps(body).encode())}))
+    md, core_ok = sc.summarize(res, when="now")
+    assert not core_ok and [r["name"] for r in res if not r["ok"]] == ["API errors"]
+    assert "a route keeps failing" in md and "DOWN" not in md
+    for quiet in ([], None):                                         # none failing, or an older Worker without the field
+        b = {"ok": True, "db": True, "cron": None, **({"failing_routes": quiet} if quiet is not None else {})}
+        assert all(r["ok"] for r in go(fake({"/api/health": (200, json.dumps(b).encode())})))
+    wf = (Path(__file__).resolve().parents[1] / ".github/workflows/status.yml").read_text()
+    assert "API errors" in wf and "a route keeps failing" in wf

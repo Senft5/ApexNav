@@ -60,6 +60,18 @@ export async function serverError(env: Env, route: string, err: unknown): Promis
   await countError(env, { source: "server", kind: route, message: scrub(name, 300) || "(no message)", page: "", stack: scrub(stack, 2000) });
 }
 
+// A route that keeps failing now (the status workflow's "API errors" check, tools/status_check.py): its unexpected 500s today
+// reach REPEAT_N and the latest is under REPEAT_MIN old. One-off 500s, and a burst that stopped, are not an outage. Only the
+// route's pattern ("POST /api/drives") goes out, never a message: /api/health is public.
+const REPEAT_N = 25, REPEAT_MIN = 30;
+export async function failingRoutes(env: Env): Promise<string[]> {
+  const rows = (await env.DB.prepare(
+    `SELECT kind, SUM(n) AS n FROM error_counts WHERE source = 'server' AND day = date('now') AND kind NOT LIKE 'cron %' AND kind != 'service'
+      GROUP BY kind HAVING SUM(n) >= ?1 AND MAX(last_at) > datetime('now', ?2) ORDER BY n DESC LIMIT 5`)
+    .bind(REPEAT_N, `-${REPEAT_MIN} minutes`).all<{ kind: string }>()).results;
+  return rows.map((r) => r.kind);
+}
+
 /** Owner only (checked by the caller): the last few days' counts, most frequent first (not the service check's rows, kind 'service'). */
 export async function errorSummary(env: Env, url: URL) {
   const days = url.searchParams.has("days") ? int(Number(url.searchParams.get("days")), "days", 1, KEEP_DAYS) : 7;
