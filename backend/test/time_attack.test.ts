@@ -8,7 +8,7 @@ import { cellOf, checkLoop, seedOf } from "../src/time_attack";
 type Msg = Record<string, any>;
 beforeEach(freshDb);
 const json = async (r: Promise<Response>) => (await (await ok(r)).json()) as Msg;
-const HERE = "lat=39.25&lon=-84.6", CELL = "39,-85";             // makeSegment starts at 39.25, -84.6
+const HERE = "lat=39.25&lon=-84.6", CELL = "39.25,-84.75";             // makeSegment starts at 39.25, -84.6
 const ta = (u: TestUser) => json(api(u, "GET", `/api/timeattack?${HERE}`));
 const today = async () => (await env.DB.prepare("SELECT date('now') AS d").first<{ d: string }>())!.d;
 const monday = async () => (await env.DB.prepare("SELECT date('now', '-6 days', 'weekday 1') AS d").first<{ d: string }>())!.d;
@@ -31,14 +31,15 @@ const build = async (u: TestUser, extra: Msg = {}) => {
 
 describe("time attack", () => {
   it("cells, seeds and the loop check", () => {
-    expect([cellOf(39.25, -84.6), cellOf(-33.9, 151.2), cellOf(0.5, -0.5)]).toEqual(["39,-85", "-34,151", "0,-1"]);
-    expect(seedOf("2026-11-09", "39,-85", 0)).toBe("2026-11-09|39,-85|0");
+    expect([cellOf(39.25, -84.6), cellOf(-33.9, 151.2), cellOf(0.5, -0.5), cellOf(39.1, -84.1)]).toEqual(["39.25,-84.75", "-34,151", "0.5,-0.5", "39,-84.25"]);
+    expect(seedOf("2026-11-09", CELL, 0)).toBe("2026-11-09|39.25,-84.75|0");
     const ok1 = checkLoop(square(), CELL);
     expect(ok1.length_m).toBeGreaterThan(9900);
     expect(ok1.length_m).toBeLessThan(10100);
     const bad = (g: unknown, code: string) => { try { checkLoop(g, CELL); throw new Error("passed"); } catch (e: any) { expect(e.message).toBe(code); } };
     bad(square().slice(0, 30), "not_a_loop");                                  // stops short of its start
-    bad(square(38.5, -84.6), "not_in_area");                                   // starts in the next area south
+    bad(square(38.5, -84.6), "not_in_area");                                   // starts in an area to the south
+    bad(square(39.2, -84.6), "not_in_area");                                   // 5 km south: the next quarter-degree area
     bad(square(39.25, -84.6, 800), "bad_length");                              // 3.2 km: under 5
     bad(square(39.25, -84.6, 7000), "bad_length");                             // 28 km: over 25
     const jump = square(); jump.splice(5, 0, [39.5, -84.6]);
@@ -51,6 +52,7 @@ describe("time attack", () => {
     let t = await ta(b);
     expect([t.circuit, t.make]).toEqual([null, { seed: seedOf(await monday(), CELL, 0), km: { min: 8, max: 16 } }]);
     expect((await api(b, "GET", "/api/timeattack")).status).toBe(400);                         // no area: a 400, not the (0, 0) square
+    expect((await api(b, "POST", "/api/timeattack/enter", { cell: "39.1,-84.75" })).status).toBe(400);   // not an area's corner: nothing finer
     expect((await api(b, "POST", "/api/timeattack/circuit", { cell: CELL, seed: "2020-01-06|39,-85|0", geom: square() })).status).toBe(409);   // not this week's seed
     const made = await build(a);
     expect([made.kept, made.circuit.name, made.circuit.length_m > 9900, made.circuit.segment_id.startsWith("ta-")]).toEqual([true, "Dry Ridge Road loop", true, true]);

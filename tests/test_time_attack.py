@@ -31,16 +31,19 @@ const passes = {
   loc: [{ p: { score: 1, time_s: 50 }, d: { date: '2026-11-10' } }],
 };
 const runs = T.runsToSend(circuits, segs, (s) => passes[s.id], '2026-11-09', '2026-11-15');
-// tiles "i_j": i = (lon + 180) / 0.25, j = (lat + 90) / 0.25. Area 39,-85 holds i 380..383, j 516..519.
+// tiles "i_j": i = (lon + 180) / 0.25, j = (lat + 90) / 0.25. Area 39,-85 (39 to 39.25, -85 to -84.75) is tile 380_516.
 const keys = ['380_516', '381_517', '383_519', '379_516', '384_516', '380_520', 'junk'];
 const seed = '2026-11-09|39,-85|0';
 const ring = (n, km) => { const out = []; for (let k = 0; k <= n; k++) { const a = 2 * Math.PI * k / n, r = km * 1000 / (2 * Math.PI) / 111195;
   out.push([-84.6 + r * Math.cos(a) / Math.cos(39.25 * Math.PI / 180), 39.25 + r * Math.sin(a)]); } return out; };   // [[lon, lat]]
-const routes = [{ distM: 30000, route: { coords: ring(40, 30) }, stages: ['Too long'] },
-                { distM: 11000, route: { coords: ring(400, 11) }, stages: ['', 'Dry Ridge Road'] },
-                { distM: 9000, route: { coords: ring(300, 9) }, stages: [] },
-                { distM: 12000, route: { coords: ring(300, 12) }, stages: ['Third'] },
-                { distM: 10000, route: { coords: ring(300, 10) }, stages: ['Fourth, never in the top three'] }];
+const clean = { streetM: 120, streetShare: 0.01 };
+const routes = [{ distM: 30000, route: { coords: ring(40, 30) }, stages: ['Too long'], ...clean },
+                { distM: 11000, route: { coords: ring(400, 11) }, stages: ['', 'Dry Ridge Road'], ...clean },
+                { distM: 10500, route: { coords: ring(300, 10.5) }, stages: ['Through a subdivision'], streetM: 2600, streetShare: 0.25 },
+                { distM: 9500, route: { coords: ring(300, 9.5) }, stages: ['Unmeasured'] },
+                { distM: 9000, route: { coords: ring(300, 9) }, stages: [], ...clean },
+                { distM: 12000, route: { coords: ring(300, 12) }, stages: ['Third'], ...clean },
+                { distM: 10000, route: { coords: ring(300, 10) }, stages: ['Fourth, never in the top three'], ...clean }];
 const picks = new Set();
 for (let i = 0; i < 40; i++) picks.add(T.choose(routes, 'seed' + i).distM);
 const h = T.hubs(keys, '39,-85', seed);
@@ -64,10 +67,11 @@ const asked = [];
   nocopy: T.localCopy({ segment_id: 'C1', geom: 'oops' }, 'n'),
   rng: [T.rng('a')(), T.rng('a')(), T.rng('b')()],
   hubs: h, hubsAgain: T.hubs([...keys].reverse(), '39,-85', seed), hubsOther: T.hubs(keys, '39,-85', '2026-11-16|39,-85|0'),
-  hubsNone: T.hubs(keys, '10,10', seed),
+  hubsNone: T.hubs(keys, '10,10', seed), hubsNoTile: T.hubs(['381_517'], '39,-85', seed),
+  streety: [T.streety(clean), T.streety({ streetM: 600, streetShare: 0.02 }), T.streety({ streetM: 300, streetShare: 0.06 }), T.streety({})],
   km: h.map((x) => T.kmFor({ min: 8, max: 16 }, seed, x)),
   picks: [...picks].sort((a, b) => a - b), pickSame: T.choose(routes, 'x').distM === T.choose(routes, 'x').distM, pickNone: T.choose([routes[0]], 'x'),
-  names: [T.loopName(routes[1]), T.loopName(routes[2]), T.loopName(null),
+  names: [T.loopName(routes[1]), T.loopName(routes[4]), T.loopName(null),
           T.loopName({ stages: [], names: [{ name: 'Main St', fromM: 0, toM: 900 }, { name: 'Ridge Rd', fromM: 900, toM: 4000 }, { name: null, fromM: 4000, toM: 9000 }, { name: 'Main St', fromM: 9000, toM: 10000 }] })],
   geom: { n: g.length, first: g[0], last: g[g.length - 1], open: (() => { const o = T.geomOf(ring(50, 10).slice(0, 40)); return JSON.stringify(o[0]) === JSON.stringify(o[o.length - 1]); })() },
   places: [T.placeLine({ name: 'Dry Ridge loop', place: 3, of: 12, time_s: 761, gap_s: 62 }), T.placeLine({ name: 'Dry Ridge loop', place: 1, of: 4, time_s: 699, gap_s: 0 }),
@@ -97,7 +101,8 @@ def test_days_left_counts_today(out):
 
 
 def test_the_phone_sends_the_area_not_where_it_is(out):
-    assert out["area"] == [{"lat": 39.5, "lon": -84.5}, {"lat": -33.5, "lon": 151.5}, None]
+    # the middle of the quarter-degree area (the owner, TestFlight 2026-11-12: a 1-degree area put the loop an hour away)
+    assert out["area"] == [{"lat": 39.375, "lon": -84.625}, {"lat": -33.875, "lon": 151.125}, None]
 
 
 def test_runs_are_the_quickest_timed_pass_this_week_on_a_backed_up_circuit(out):
@@ -114,18 +119,26 @@ def test_entered_stage_copy(out):
 def test_the_seed_draws_the_same_start_and_length_on_every_phone(out):
     assert out["rng"][0] == out["rng"][1] and out["rng"][0] != out["rng"][2] and 0 <= out["rng"][0] < 1
     hubs = out["hubs"]
-    # only the area's tiles (379 and 384 are next door, 520 is north), each start the middle of its tile
-    assert sorted(x["key"] for x in hubs) == ["380_516", "381_517", "383_519"]
-    assert {"key": "380_516", "lat": 39.125, "lon": -84.875} in hubs
+    # six starts in the middle half of the area's own tile, drawn from the seed
+    assert len(hubs) == 6 and all(x["key"].startswith("380_516#") for x in hubs)
+    assert all(39.0625 <= x["lat"] <= 39.1875 and -84.9375 <= x["lon"] <= -84.8125 for x in hubs)
+    assert len({(x["lat"], x["lon"]) for x in hubs}) == 6
     assert out["hubsAgain"] == hubs                          # the order the tiles come in doesn't change the draw
-    assert out["hubsNone"] == []
+    assert out["hubsOther"] != hubs                          # next week, other starts
+    assert out["hubsNone"] == [] and out["hubsNoTile"] == []   # no road tile for the area here: nothing
     assert all(8 <= km <= 16 for km in out["km"])
 
 
 def test_one_of_the_best_three_loops_is_picked_at_random(out):
-    assert out["picks"] == [9000, 11000, 12000]             # never the 30 km one, never the fourth
+    assert out["picks"] == [9000, 11000, 12000]             # never the 30 km one, the subdivision one, the unmeasured one or the fourth
     assert out["pickSame"] is True and out["pickNone"] is None
     assert out["names"] == ["Dry Ridge Road loop", "This week\u2019s loop", "This week\u2019s loop", "Ridge Rd loop"]
+
+
+def test_a_loop_through_a_neighbourhood_is_refused(out):
+    """The owner's TestFlight note (2026-11-12): "goes only through a neighborhood". More than 500 m or 5 % of
+    neighbourhood street (graph_router.js loopRoute streetM, streetShare), or not measured at all, and it isn't the loop."""
+    assert out["streety"] == [False, True, True, True]
 
 
 def test_the_loop_line_is_thinned_and_closed_on_its_start(out):

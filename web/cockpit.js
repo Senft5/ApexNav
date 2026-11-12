@@ -6184,7 +6184,8 @@
         fmtKm: (km) => ApexUnits.long(km * 1000, 1),
         // the week's loop, where nobody in the area has built it yet: our own router's loops (graph_router.js loop) over its tiles
         graphKeys: () => (ownOn() ? ownIndex() : null),
-        loops: (start, km) => (ownOn() ? ApexOwnRouting.loops(ownRouter(), { start, km, level: LOOP_STYLE }) : Promise.resolve([])),
+        noteLoop: (x) => { window.apexDebug.lastAttackLoop = x; },   // the e2e reads what the loop drives
+        loops: (start, km) => (ownOn() ? ApexOwnRouting.loops(ownRouter(), { start, km, level: LOOP_STYLE, through: true }) : Promise.resolve([])),   // the start on a through road
         // Drive it: the loop itself is the route (as a roadbook road is), not just the way to its start
         driveLoop: async (c, g) => {
           closeSheet();
@@ -7494,7 +7495,7 @@
     }
     // This week's time attack loop in your area (time_attack.ts) as the deck's suggestion: first after a crew drive when you
     // entered it, else after the road you haven't driven. Members only, with the drive-today check (every 10 min); the server
-    // is sent the middle of your 1-degree area, never where you are (time_attack.js areaPoint). No loop, nothing said.
+    // is sent the middle of your quarter-degree area, never where you are (time_attack.js areaPoint). No loop, nothing said.
     function attackIs(a) {
       const was = deckState.attack ? `${deckState.attack.key}|${deckState.attack.entered}|${deckState.attack.place}|${deckState.attack.times}|${deckState.attack.left}` : '';
       deckState.attack = a;
@@ -7503,7 +7504,7 @@
     async function refreshAttack() {
       const p = state.lastPosition;
       if (!p || !Number.isFinite(p.lat) || !Number.isFinite(p.lon)) return;   // no position yet: what was known stays
-      const at = { lat: Math.floor(p.lat) + 0.5, lon: Math.floor(p.lon) + 0.5 };
+      const at = { lat: Math.floor(p.lat / 0.25) * 0.25 + 0.125, lon: Math.floor(p.lon / 0.25) * 0.25 + 0.125 };   // time_attack.js areaPoint
       const t = await apiCall('GET', `/api/timeattack?lat=${at.lat}&lon=${at.lon}`).then((r) => (r && r.ok ? jsonOf(r) : null)).catch(() => null);
       if (t) attackIs(YR ? YR.attackFrom(t) : null);
     }
