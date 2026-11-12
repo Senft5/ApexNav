@@ -4608,7 +4608,8 @@ flow('crew drives: an upcoming drive shows on People, Crews, as the crew page’
   check(!posted.some(([p]) => /\/home$/.test(p)), 'nothing about your own home was sent');
   await page.fill(`${W} input[aria-label="Meet at"]`, 'Tellico');
   await page.click(`${W} .meet-hits button:has-text("Tellico Plains Shell")`);
-  check(/Meeting point: Tellico Plains Shell/.test(await page.textContent(`${W} .plan-drive`)), 'the meeting point by search');
+  check(await page.inputValue(`${W} input[aria-label="Meet at"]`) === 'Tellico Plains Shell' && !/Meeting point|\d+\.\d{4}, -?\d+\.\d{4}|Roles and regroup/.test(await page.textContent(`${W} .plan-drive`)),
+    'the meeting point by search, said once in its field; no coordinates and no how-to line: ' + await page.textContent(`${W} .plan-drive`));
   const formH = await page.$eval(`${W} .plan-drive`, (f) => f.getBoundingClientRect().height);
   check(formH < 852, `the form fits one phone screen (${Math.round(formH)} px)`);
   await page.click(`${W} [aria-label="Repeats"] button:has-text("Weekly")`);
