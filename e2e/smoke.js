@@ -8776,10 +8776,12 @@ flow('TestFlight 2026-11-05 note 1: in several crews the Crews side is a dashboa
   await peopleCrews(page, base);
   await page.waitForSelector('.crew-dash .cd-row');
   await page.waitForFunction(() => document.querySelectorAll('.crew-dash .cd-item').length === 4);
+  const oneLine = () => page.evaluate(() => [...document.querySelectorAll('.cd-row .cd-text small')].every((x) => x.getBoundingClientRect().height <= parseFloat(getComputedStyle(x).lineHeight) + 1));
   const dash = () => page.evaluate(() => ({ rows: [...document.querySelectorAll('.cd-row')].map((r) => [r.querySelector('.cd-text b').textContent, r.querySelector('.cd-text small').textContent, r.querySelector('.cd-pin').getAttribute('aria-pressed')]),
     feed: [...document.querySelectorAll('.cd-item')].map((b) => b.querySelector('small').textContent + ' | ' + b.querySelector('.cd-what').textContent),
     head: !document.querySelector('#crewsBody .crew-head') || document.querySelector('#crewsBody .crew-head').hidden, switcher: !!document.querySelector('.cp-switch'),
     page: !!document.querySelector('#crewsBody .crew-page'), count: document.querySelector('.cd-head .note').textContent }));
+  check(await oneLine(), 'each crew row is one line under its name (the next drive\'s date never wraps alone)');
   let d = await dash();
   check(!d.page && !d.switcher && d.head, 'several crews: a dashboard, no crew page and no row of name chips: ' + JSON.stringify(d));
   check(JSON.stringify(d.rows.map((r) => r[0])) === '["Ridge Runners","Blue Ridge Breakfast Club","test","VETTA"]', 'the latest active first, the quiet ones by name: ' + JSON.stringify(d.rows));
