@@ -6567,7 +6567,7 @@
           apiCall('POST', '/api/crews/invite/preview', { token: tok }).then((r) => (r.ok ? jsonOf(r) : null)).then((j) => {
             if (gen !== renderGen || !j || !j.name) return;
             what.replaceChildren(document.createTextNode('Join '), el('b', { textContent: j.name }), document.createTextNode('?'));
-            why.textContent = `${j.members} ${j.members === 1 ? 'member' : 'members'}${j.from ? ` · @${j.from} sent you the link, and you’ll be friends` : ''}. Pick a handle: it’s how the crew sees you.`;
+            why.textContent = `${j.members} ${j.members === 1 ? 'member' : 'members'}${j.from ? ` · @${j.from} sent you the link, and you’ll be friends` : ''}.`;   // the field says Pick a handle
           }).catch(() => {});
           cbody.append(el('div', { className: 'card stack-8' }, what, why, el('div', { className: 'row' }, hin, btn('Join crew', async (e) => {
             const b = e && e.currentTarget; if (b) { if (b.disabled) return; b.disabled = true; }
@@ -8041,12 +8041,12 @@
         if (!accountMe || !accountMe.member) { state.toggles.meets = false; paintSwitches(); askSignIn('see car meets on the map'); return; }
         needSocial().then(() => {
           if (meetsMap) meetsMap.setLayer(state.toggles.meets);
-          if (state.toggles.meets) toast('Meets: public crews\u2019 drives coming up within 80 km of the map. Tap a pin for the meet.');
+          if (state.toggles.meets) toast(`Meets within ${ApexUnits.long(80000, 0)} of the map. Tap a pin.`);   // the Worker's 80 km, in the driver's units
         });
       }
       if (k === 'coverage') {
         updateCoverage();
-        if (state.toggles.coverage) toast(mapReady && map.getZoom() < ApexCoverage.MIN_ZOOM ? 'Zoom in to see measured roads.' : 'Measured roads: green smooth, amber fair, red rough, bolder the surer. Tap one for what was measured. A road without a line is waiting for a pioneer: the first drivers to map it earn extra points.');
+        if (state.toggles.coverage) toast(mapReady && map.getZoom() < ApexCoverage.MIN_ZOOM ? 'Zoom in to see measured roads.' : 'Tap a road for what was measured. A road with no line earns its first drivers extra points.');
       }
       if (k === 'nudge') nudgeSwitched();                              // panel R-1: asks for notifications only now
       if (k === 'twisty') {
