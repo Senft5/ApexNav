@@ -2911,6 +2911,7 @@ flow('crew page: an old ?view=crew link opens People on Crews, at your crew; goi
   check(await page.evaluate(() => document.querySelector('[data-people="crews"]').getAttribute('aria-selected') === 'true' && !document.getElementById('crewsBody').hidden
     && document.getElementById('accountBody').hidden && document.getElementById('sheetTitle').textContent === 'People'), 'on the People tab, its Crews side');
   check(await page.evaluate(() => !!document.querySelector('#crewsBody .crew-head .gear-key') && !document.querySelector('#crewsBody .friend-list')), 'the crew head and its gear are on the Crews side, no friends list there');
+  check(await page.evaluate(() => document.querySelector('#crewsBody .crew-head').textContent.trim() === '' && document.querySelectorAll('#crewsBody .crew-page h2').length === 1), 'one crew: its name once, on its page, not again above it');
   // Nate 2026-11-12 (as easy as a big social app): three tabs under the crew's name, Drives open first
   check(JSON.stringify(await page.$$eval('.cp-tabs [role="tab"]', (b) => b.map((x) => x.textContent + ':' + x.getAttribute('aria-selected')))) === '["Drives:true","Chat:false","Board:false"]', 'Drives | Chat | Board, Drives open');
   check(await page.isHidden('.cp-board') && await page.isHidden('.cp-say'), 'the board and the chat wait behind their tabs');
