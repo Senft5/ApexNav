@@ -4,11 +4,22 @@ Decisions Claude made for you, newest first. Each one says what was decided, why
 you reach one you've seen. If you disagree with a call, say so and it gets reversed; nothing here is hard to undo unless
 it says so. Things only you can do are in docs/OWNER_TODO.md.
 
-## 2026-11-12 (TestFlight 01:29): a viewpoint on the route is a VIEW stamp, its name close in (claude/project-thread-0wt1zm)
+## 2026-11-12 (ui-round-three): the website's and the app's promises match today's sharing (claude/project-thread-5sbga7)
 
-Your note "bird watching shelter blocks half the route". A named viewpoint's stamp carried its whole name at every zoom and sat
-over the line. Now it says VIEW, like CAFÉ and FUEL, and shows its name only at zoom 15 or closer; a tap on it (or its row
-under Along the route) still says the name and offers it as a stop. Undo: revert the PR (or lower VIEW_NAME_ZOOM in cockpit.js).
+Two of the four promises (on the website and in Garage → About Vetta) said there are no time leaderboards and that your
+drives and times stay yours until you share them. Since your calls on 2026-11-11 (sharing with friends and private crews
+on by default; the weekly loop's board) that was no longer true. They now read "No top speeds" and "Shared with your
+people", and the privacy policy gains a paragraph on who sees your Scores and times and how to switch it off. Undo:
+revert the promise lines in web/about.html and web/index.html and the new paragraph in web/privacy.html.
+
+## 2026-11-12 (ui-round-three): the website's page uses the app's look and shows today's app (claude/project-thread-5sbga7)
+
+about.html showed screenshots of the app from before the redesign (the old tab bar, boxed keys) and set its type in the
+system face. It now loads the app's typefaces, sets its titles like the app, and shows two fresh screenshots: the Dry Ridge
+replay and an example crew's page. The words are the same, except the screenshots' descriptions. Undo: revert
+web/about.html, web/brand/shots/*.png and tools/landing_shots.js.
+
+
 ## 2026-11-12 Avoid cameras reads our own camera list in Ohio, Kentucky and Indiana (claude/project-thread-39xbx9)
 
 Nate: "the camera server always says it's down". The phone asked the public Overpass servers for cameras, and they time
