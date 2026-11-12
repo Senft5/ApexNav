@@ -7,8 +7,10 @@ on:
   pull_request:
   workflow_dispatch:
 
+# One slot per branch: a PR's run (ref refs/pull/N/merge) and a run started by hand on its branch (refs/heads/<branch>)
+# used to be two groups, so both ran and each push could queue two full sets of jobs. The newest cancels the rest.
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
+  group: ${{ github.workflow }}-${{ github.head_ref || github.ref_name }}
   cancel-in-progress: true
 
 jobs:
@@ -58,8 +60,34 @@ jobs:
 
   # End-to-end smoke tests of the web app in headless Chromium (IDEAS Y-11, e2e/smoke.js): first run and replay, the live
   # cockpit with big targets and the typing lock, the battery saver, search offline, the Log page. No network needed.
+  # Which kinds of files this run changes, so the four e2e jobs sit out a PR that can't change what the browser runs
+  # (docs, the Worker, the Python tests and tools, the Swift shells). Pushes to main and runs by hand always run them.
+  changes:
+    runs-on: ubuntu-latest
+    outputs:
+      web: ${{ steps.diff.outputs.web }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - id: diff
+        env:
+          EVENT: ${{ github.event_name }}
+          BASE: ${{ github.event.pull_request.base.sha }}
+        run: |
+          if [ "$EVENT" != "pull_request" ] || [ -z "$BASE" ] || ! files=$(git diff --name-only "$BASE" "$GITHUB_SHA" 2>/dev/null); then
+            echo "web=true" >> "$GITHUB_OUTPUT"; exit 0
+          fi
+          echo "$files"
+          # e2e reads backend/src/private_themes.json; every other path here is outside what the page loads
+          rest=$( { echo "$files" | grep -vE '^(docs/|tests/|tools/|ApexKit/|CarPlay/|LiveActivity/|UITests/|Assets\.xcassets/|backend/)|\.(md|swift)$|^(LICENSE|project\.yml|\.github/workflows/(build|status|crash-logs)\.yml)$';
+                    echo "$files" | grep -E '^backend/src/private_themes\.json$'; } || true )
+          if [ -n "$(echo "$rest" | tr -d '[:space:]')" ]; then echo "web=true" >> "$GITHUB_OUTPUT"; else echo "web=false" >> "$GITHUB_OUTPUT"; fi
+
   e2e-shard:
     name: e2e (${{ matrix.shard }}/4)
+    needs: changes
+    if: needs.changes.outputs.web == 'true'
     runs-on: ubuntu-latest
     # 2026-11-11: one job ran 173 flows in 28-31 min against a 35 min limit, and with eight threads merging one at a time
     # it was every PR's wait. Four jobs side by side each take a quarter of the flows, dealt longest first (smoke.js SHARD):
@@ -101,10 +129,12 @@ jobs:
           if-no-files-found: ignore
 
   # The one check named "e2e", as before the split (branch rules and the threads read it by that name): green only when
-  # every shard is.
+  # every shard is, or when the PR changes nothing the browser runs (the shards were skipped on purpose).
   e2e:
     runs-on: ubuntu-latest
-    needs: e2e-shard
+    needs: [changes, e2e-shard]
     if: always()
     steps:
-      - run: test "${{ needs.e2e-shard.result }}" = success || { echo "an e2e shard did not pass (${{ needs.e2e-shard.result }})"; exit 1; }
+      - run: |
+          if [ "${{ needs.changes.result }}" = success ] && [ "${{ needs.changes.outputs.web }}" = false ]; then echo "no web change: e2e not needed"; exit 0; fi
+          test "${{ needs.e2e-shard.result }}" = success || { echo "an e2e shard did not pass (${{ needs.e2e-shard.result }})"; exit 1; }

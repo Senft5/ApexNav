@@ -1,11 +1,16 @@
 # VETTA — CURRENT AGENT HANDOFF STATE
 
-## Session 2026-11-12 (time attack duel): a duel on the week's loop (claude/project-thread-uwmi4e, after #466)
+> Newer entries are in `docs/notes/` (one file per PR, CLAUDE.md rule 7). Don't edit this file in a PR.
 
-- [x] Where to? → Time attack → Challenge a friend (entered weeks): `duels.js challengeOn(stage)` picks an accepted friend,
-  Time by default, 3/7/14 days; the stage is your copy's id from POST /api/timeattack/enter (idempotent). No backend change.
-- Tests: tests/test_time_attack.py wiring; e2e "time attack duel".
-- Exact next task: the next social win (push for For you once APNs exists; a crew's roadbook).
+## Session 2026-11-11 (sweep round three): the cron jobs are watched (claude/project-thread-g9yher, off origin/main 6a43a9c)
+
+- Migration 0055 `cron_runs` (job, ok_at, fail_at, reason). backend/src/cron_runs.ts `runCron` wraps the backup and the
+  sweep in `scheduled`: success sets ok_at; a throw sets fail_at + scrubbed reason and counts as `cron <job>` in error_counts.
+  A backup that writes nothing (too big) counts as a failure. `GET /api/health` returns `cron: {backup, sweep}` (age_h,
+  failing, late) from the same single read. tools/status_check.py: core checks "Weekly backup" and "Daily sweep"; the
+  outage issue is titled "ApexNav: … not running" when only those fail. docs/STATUS.md step 4, docs/BACKUPS.md.
+- 0055 must be on preview and prod before merge (/api/health 503s without the table).
+- Next: offline behaviour and App Store / TestFlight readiness checks.
 ## Session 2026-11-12 (ui-round-three, PR 5): the promises say what the app does now (claude/project-thread-5sbga7)
 
 - The coordinator, for Nate's 2026-11-11 calls (sharing with friends and private crews on by default; a weekly loop with a
