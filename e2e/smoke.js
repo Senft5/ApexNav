@@ -1122,6 +1122,28 @@ flow('valhalla for quick only: off our tiles, a loop says it plainly and asks Va
   check(calls.route === 0 && calls.matrix === 0, 'Valhalla asked for nothing: ' + JSON.stringify(calls));
 }, { geolocation: { latitude: 39.155, longitude: -84.615 }, permissions: ['geolocation'] });
 
+flow('a loop our router fails to finish says so (not "try another length") and reports "failed" with the length asked, never a place (Nate\'s "loop: none", 2026-11-12)', async (page, base) => {
+  const reports = [];
+  await page.route('**/api/errors', (route) => { try { reports.push(JSON.parse(route.request().postData() || '{}')); } catch (_) {} return route.fulfill({ status: 204, body: '' }); });
+  try {
+    await funTiles(page);
+    await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); } catch (_) {} });
+    await page.goto(base + '/index.html');
+    await page.waitForFunction(() => window.apexDebug && window.apexDebug.map && window.ApexOwnRouting);
+    // the worker answering with an error (as a timeout does on a phone): our router's loops come back empty, with why
+    await page.evaluate(() => { ApexOwnRouting.loops = async () => { ApexOwnRouting.lastLoopError = 'graph router timed out'; return []; }; });
+    await page.click('#destInput');
+    await page.waitForSelector('#findLoopBtn', { state: 'visible', timeout: 10000 });
+    await page.click('#findLoopBtn');
+    await page.waitForFunction(() => window.apexDebug.loopOwnOnlyFail && document.getElementById('toast').classList.contains('show'), null, { timeout: 20000 });
+    const t = await page.evaluate(() => ({ text: document.getElementById('toast').textContent, why: window.apexDebug.loopOwnOnlyFail }));
+    check(t.why === 'failed' && /couldn't finish/.test(t.text) && !/another length/.test(t.text), 'a failure says so, not "try another length": ' + JSON.stringify(t));
+    for (let i = 0; i < 30 && !reports.some((r) => /^loop: failed/.test(r.message || '')); i++) await page.waitForTimeout(100);
+    const r = reports.find((x) => /^loop: failed/.test(x.message || ''));
+    check(r && r.kind === 'route' && /\(.*graph router timed out\)$/.test(r.message) && !/39\.|84\./.test(JSON.stringify(r)), 'reported as "loop: failed (<length>, graph router timed out)", no position: ' + JSON.stringify(reports));
+  } finally { graphDir = null; }
+}, { geolocation: { latitude: 39.155, longitude: -84.615 }, permissions: ['geolocation'] });
+
 // What this drive is like (web/route_story.js, the owner 2026-11-09): a planned route's card carries a few plain lines
 // built from the ranking's own data, in your units, after the card is up; nothing it says is unknown to the data.
 flow('route overview: the card says what the drive is like in plain words, from the route\'s own data', async (page, base) => {
