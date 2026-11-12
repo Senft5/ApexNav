@@ -66,7 +66,7 @@ def test_the_website_carries_it_in_the_fragment(out):
 
 
 def test_the_log_sends_the_road_not_the_drive():
-    html = open(os.path.join(ROOT, "web", "analysis.html"), encoding="utf-8").read()
+    html = open(os.path.join(ROOT, "web", "analysis.html"), encoding="utf-8").read() + open(os.path.join(ROOT, "web", "analysis_page.js"), encoding="utf-8").read()
     i = html.index("$('dvShare').addEventListener")
     body = html[i:html.index("});", i)]
     assert "ApexRoadLink.roadPoints(d.lat, d.lon, d.dist)" in body and "ApexRoadLink.encode" in body

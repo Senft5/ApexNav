@@ -60,7 +60,7 @@ def test_score_is_for_the_car(out):
 
 def test_every_page_scores_through_score_of():
     html = cockpit_source()
-    log = open(os.path.join(ROOT, "web", "analysis.html"), encoding="utf-8").read()
+    log = open(os.path.join(ROOT, "web", "analysis.html"), encoding="utf-8").read() + open(os.path.join(ROOT, "web", "analysis_page.js"), encoding="utf-8").read()
     end = html[html.index("    function showEndCard("):html.index("    function showEndTrail(")]
     assert "ApexRecording.scoreOf(Core, d)" in end and "Core.driverScore(" not in end
     assert "Date.now() - startedAt" not in end, "the card's time is the recording's, as the Log's is"

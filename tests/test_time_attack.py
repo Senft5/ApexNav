@@ -203,6 +203,8 @@ def test_the_log_sends_runs():
     never had a time on it (round two sweep, 2026-11-11)."""
     with open(os.path.join(ROOT, "web", "analysis.html"), encoding="utf-8") as f:
         page = f.read()
+    with open(os.path.join(ROOT, "web", "analysis_page.js"), encoding="utf-8") as f:
+        page += f.read()
     assert '<script src="time_attack.js"></script>' in page
     sync = page[page.index("async function syncSegments()"):]
     sync = sync[:sync.index("const act = segs.find(")]
