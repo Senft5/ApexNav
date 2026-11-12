@@ -36,6 +36,6 @@
     return `Your best run: ${r.corners} corners in a row, smooth and settled${over}.`;
   }
 
-  const api = { longest, text, inFlow, MIN_RUN };
+  const api = { longest, text, inFlow, MIN_RUN, GAP_M };
   if (typeof module !== 'undefined' && module.exports) module.exports = api; else root.ApexFlow = api;
 })(typeof window !== 'undefined' ? window : globalThis);

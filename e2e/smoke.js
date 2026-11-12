@@ -2861,6 +2861,10 @@ flow('crew page: an old ?view=crew link opens People on Crews, at your crew; goi
   check(await page.evaluate(() => document.querySelector('[data-people="crews"]').getAttribute('aria-selected') === 'true' && !document.getElementById('crewsBody').hidden
     && document.getElementById('accountBody').hidden && document.getElementById('sheetTitle').textContent === 'People'), 'on the People tab, its Crews side');
   check(await page.evaluate(() => !!document.querySelector('#crewsBody .crew-head .gear-key') && !document.querySelector('#crewsBody .friend-list')), 'the crew head and its gear are on the Crews side, no friends list there');
+  // Nate 2026-11-12 (as easy as a big social app): three tabs under the crew's name, Drives open first
+  check(JSON.stringify(await page.$$eval('.cp-tabs [role="tab"]', (b) => b.map((x) => x.textContent + ':' + x.getAttribute('aria-selected')))) === '["Drives:true","Chat:false","Board:false"]', 'Drives | Chat | Board, Drives open');
+  check(await page.isHidden('.cp-board') && await page.isHidden('.cp-say'), 'the board and the chat wait behind their tabs');
+  await page.click('.cp-tabs [data-cp-tab="board"]');
   await page.waitForSelector('.cp-board .cp-board-row');
   const boardRows = () => page.$$eval('.cp-board .cp-board-row', (r) => r.map((x) => [x.querySelector('.who b').textContent, x.querySelector('.score').textContent, !!x.querySelector('.avatar')]));
   const rows = await boardRows();
@@ -2871,20 +2875,26 @@ flow('crew page: an old ?view=crew link opens People on Crews, at your crew; goi
   check(JSON.stringify((await boardRows()).map((r) => r[1])) === JSON.stringify([(12840).toLocaleString(), (702).toLocaleString()]) && boardAsks.includes('all'), 'All time asks for all time');
   // the owner's note 05: no Crew drives row; the crew's Upcoming drives has a + in its corner that plans one
   check(!/Crew drives/.test(await page.$$eval('#crewsBody .nav-rows', (n) => n.map((x) => x.textContent).join('|'))), 'no Crew drives row on Crews');
+  await page.click('.cp-tabs [data-cp-tab="drives"]');
   check(/Upcoming drives/.test(await page.textContent('.cp-week .cp-sec h3')) && await page.isVisible('.cp-week .cp-sec .plan-plus'), 'Upcoming drives with a + in its corner');
   await page.click('.cp-week .plan-plus');
   await page.waitForSelector('.cp-week .plan-drive');
   check(await page.isHidden('.cp-week .plan-plus'), 'the + opens the plan form there, and gives way to it');
   await page.click('.cp-week .plan-drive button:text-is("Cancel")');
+  await page.click('.cp-tabs [data-cp-tab="chat"]');
   check(await page.$eval('.cp-msg p', (p) => p.textContent === '<b>Fog</b> by 7?' && !p.querySelector('b')), 'chat is set as text');
-  // P-03: the run first, then the members, then the chat, the board after; the livery one line at the foot; no Convoy heading
-  await page.waitForSelector('.cp-member');
-  const order = await page.$$eval('.crew-page .cp-body > *', (n) => n.map((x) => x.classList.contains('cp-title') ? 'title' : x.classList.contains('cp-week') ? 'run'
-    : x.classList.contains('cp-livery-foot') ? 'livery' : (x.querySelector(':scope > .cp-sec h3') || {}).textContent || x.className).filter(Boolean));
-  check(JSON.stringify(order.slice(0, 5)) === '["title","run","Members","Chat","Vetta Score board"]' && order[order.length - 1] === 'livery', 'the page in order: ' + JSON.stringify(order));
+  // P-03: the run first, then the members; the chat and the board each behind its tab; the livery one line at the foot; no Convoy heading
+  await page.waitForSelector('.cp-member', { state: 'attached' });
+  const order = await page.evaluate(() => {
+    const name = (x) => x.classList.contains('cp-week') ? 'run' : (x.querySelector(':scope > .cp-sec h3') || {}).textContent || x.className;
+    const body = [...document.querySelectorAll('.crew-page .cp-body > *')].map((x) => x.classList.contains('cp-title') ? 'title' : x.classList.contains('cp-livery-foot') ? 'livery' : x.querySelector('.cp-tabs') ? 'tabs' : x.className);
+    return { body, panes: Object.fromEntries([...document.querySelectorAll('.cp-pane')].map((p) => [p.id, [...p.children].map(name).filter(Boolean)])) }; });
+  check(JSON.stringify(order.body) === '["title","tabs","livery"]' && JSON.stringify(order.panes['cpPane-drives'].slice(0, 2)) === '["run","Members"]'
+    && order.panes['cpPane-chat'][0] === 'Chat' && order.panes['cpPane-board'][0] === 'Vetta Score board', 'the page in order: ' + JSON.stringify(order));
   check(!(await page.$$('.crew-page .cp-livery, .crew-page .cp-meter')).length, 'no livery box or meter on the page (they are in Edit livery)');
   check(!/Convoy/.test(await page.$$eval('#crewsBody h3', (h) => h.map((x) => x.textContent).join('|'))), 'no Convoy heading on Crews');
   // P-06: the members as faces, the owner marked, the one on the road lit
+  await page.click('.cp-tabs [data-cp-tab="drives"]');
   const mem = await page.$$eval('.cp-member', (b) => b.map((x) => [x.querySelector('small').textContent, !!x.querySelector('em'), x.classList.contains('live')]));
   check(JSON.stringify(mem) === JSON.stringify([['You', true, false], ['@cara', false, true], ['@sam', false, false]]) && /3 members · 1 out now/.test(await page.textContent('.crew-page')), 'members: ' + JSON.stringify(mem));
   await page.click('.cp-member:has-text("@sam")');
@@ -2892,6 +2902,7 @@ flow('crew page: an old ?view=crew link opens People on Crews, at your crew; goi
   check(await page.isVisible('.cp-member-sheet button:has-text("Report")') && await page.isVisible('.cp-member-sheet button:has-text("Block")'), 'Report and Block are on the member, one tap in');
   await page.click('.cp-member-sheet button:has-text("Done")');
   // P-17: a message is its handle, time and words; Report is behind one key
+  await page.click('.cp-tabs [data-cp-tab="chat"]');
   check(!(await page.$$('.cp-msg .linkbtn')).length && await page.isVisible('.cp-msg .cp-dots'), 'no Delete / Report / Pin links on the message');
   await page.click('.cp-msg .cp-dots');
   await page.waitForSelector('.confirm-sheet .cs-choose');
@@ -2913,7 +2924,9 @@ flow('crew page: an old ?view=crew link opens People on Crews, at your crew; goi
   check(gs.heads.map((h) => h.t).join('|') === 'What it sees of yours|Who can invite|Who can find it' && gs.heads.every((h) => h.lines === 1), 'three parts, each named on one line: ' + JSON.stringify(gs.heads));
   check(gs.offLeft <= 4 && gs.leaveLeft <= 4 && gs.offWide && !gs.hintCut, 'text keys start at the left, the area hint is whole: ' + JSON.stringify(gs));
   await page.click('.side-pop.open[aria-label="Crew settings"] button:has-text("Done")');
+  await page.click('.cp-tabs [data-cp-tab="drives"]');
   await page.click('.cp-drive button:has-text("going")');
+  await page.click('.cp-tabs [data-cp-tab="chat"]');
   await page.fill('.cp-say textarea', 'Saturday it is');
   await page.click('.cp-say button:has-text("Send")');
   await page.click('.cp-edit');
@@ -2931,6 +2944,7 @@ flow('crew page: an old ?view=crew link opens People on Crews, at your crew; goi
   check(await page.getAttribute('.cp-meet [data-crew-home]', 'aria-checked') === 'false' && !find('/api/crews/k1/home'), 'Share my rough area is off by default');
   // the owner, 2026-11-12 (TestFlight): "meeting points switch broken": with no Home pinned it refused. Now the square comes
   // from where the phone is (39.2, -84.6 here; sent as its 0.1-degree square's centre, never the position)
+  await page.click('.cp-tabs [data-cp-tab="drives"]');
   await page.click('.cp-meet [data-crew-home]');
   await page.waitForFunction(() => document.querySelector('.cp-meet [data-crew-home]').getAttribute('aria-checked') === 'true', null, { timeout: 10000 });
   const home = JSON.parse(find('/api/crews/k1/home').b);
@@ -4156,7 +4170,7 @@ flow('roadbooks: a planned road goes into a new roadbook from Share; People list
   await page.waitForFunction(() => /Cherohala loop/.test(document.getElementById('routeCardName').textContent), null, { timeout: 8000 });
   await page.click('#routeShareBtn');
   await page.waitForSelector('#routeSharePick .rb-add');
-  check(/first 400 m and anything inside your privacy zones are left out/.test(await page.textContent('#routeSharePick .rb-add')), 'the part says what is left out');
+  check(/first 400 m and your privacy zones are left out/.test(await page.textContent('#routeSharePick .rb-add')), 'the part says what is left out');
   await page.fill('#routeSharePick .rb-add input', 'Smokies classics');
   await page.click('#routeSharePick .rb-add button:has-text("New roadbook")');
   await page.waitForFunction(() => /Added to Smokies classics\./.test(document.getElementById('toast').textContent));
@@ -4436,13 +4450,17 @@ flow('crew drives: an upcoming drive shows on People, Crews, as the crew page’
   await openDrives();
   const card = await page.textContent(`${W} .drive-card`);
   check(card.includes('Cherohala <i>Saturday</i>') && /Tomorrow|Today/.test(card) && card.includes('2 going · 1 maybe'), 'the drive, as text: ' + card);
-  // P-18: the sheet's drive is the crew page's card: the date block once, three lines, faces and one key; the rest under More
+  // P-18: the sheet's drive is the crew page's card: the date block once, three lines, faces and your answer; the rest under
+  // More. Nate 2026-11-12 (no clutter): the answer is one Going / Maybe / Can't switch on the card, never again under More
   check(await page.evaluate(() => { const c = document.querySelector('.crew-page .cp-week .drive-card:not(.meet-card)');
-    return c.classList.contains('cp-drive') && !!c.querySelector('.cp-date b') && !!c.querySelector('details.cp-more:not([open])') && !c.querySelector('.switch'); }), 'the card, its detail folded under More');
+    return c.classList.contains('cp-drive') && !!c.querySelector('.cp-date b') && !!c.querySelector('details.cp-more:not([open])')
+      && c.querySelectorAll('.switch').length === 1 && !c.querySelector('details.cp-more .switch'); }), 'the card, one answer on it, its detail folded under More');
   check(!/\b(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec) \d/.test(await page.$eval(`${W} .drive-card:not(.meet-card) .cp-drive-body`, (b) => b.textContent)), 'the date said once, in the block (P-27): ' + card);
   await page.click('.drive-card:not(.meet-card) summary:has-text("More")');
   await page.waitForSelector('.drive-card:not(.meet-card) .cp-more-body');
-  check((await page.textContent('.drive-card:not(.meet-card)')).includes('Going: @bob, @cara · 1 maybe'), 'More names who is going');
+  check(await page.evaluate(() => { const c = document.querySelector('.drive-card:not(.meet-card)');
+    return c.querySelectorAll('.switch').length === 1 && !/Going: @/.test(c.querySelector('.cp-more-body').textContent) && (c.textContent.match(/Lead @bob/g) || []).length === 1; }),
+    'More repeats nothing: no second answer, no "Going:" names under three faces, the roles said once');
   await page.waitForSelector('.meet-card');
   check(/Sunday coffee/.test(await page.textContent('.meet-card')) && /7 going/.test(await page.textContent('.meet-card')) && /Every \w+day · Coffee & Cars/.test(await page.textContent('.meet-card')) && /Meets near you/.test(await page.evaluate(() => document.querySelector('.meet-card').closest('.side-pop, #sheet').textContent)), 'a public meet nearby');   // in a crew: under the crew's Upcoming drives
   await page.click('.drive-card:not(.meet-card) .switch button:text-is("Going")');
@@ -4580,7 +4598,7 @@ flow('the run as one card: the morning of, a crew-mate\'s convoy to join or your
   check(/Results · 2 stages/.test(rec) && !(await page.isVisible('.cp-week .cp-results')), 'the results fold, closed: ' + rec);
   await page.click('.cp-week .cp-results-fold > summary');
   const sheet = await page.$$eval('.cp-week .cp-results > *', (els) => els.map((x) => x.innerText.replace(/\s+/g, ' ').trim()));
-  check(sheet[0] === 'OVERALL' && /^1\. @cara 796 all 2 stages 2\. @sam 811 1 of 2 stages$/.test(sheet[1]) && sheet[2] === 'SS1 · CHEROHALA SKYWAY' && /^1\. @sam 811 3:04 · quickest 2\. @cara 790 3:10 · \+6 s$/.test(sheet[3]) && sheet[4] === 'SS2 · TELLICO RIVER ROAD' && /share times/.test(sheet[6]), 'the sheet: ' + JSON.stringify(sheet));
+  check(sheet[0] === 'OVERALL' && /^1\. @cara 796 all 2 stages 2\. @sam 811 1 of 2 stages$/.test(sheet[1]) && sheet[2] === 'SS1 · CHEROHALA SKYWAY' && /^1\. @sam 811 3:04 · quickest 2\. @cara 790 3:10 · \+6 s$/.test(sheet[3]) && sheet[4] === 'SS2 · TELLICO RIVER ROAD' && /^Best Score that day, and time where shared\.$/.test(sheet[6]), 'the sheet: ' + JSON.stringify(sheet));
   await page.evaluate(() => { window.__copied = null; Object.defineProperty(navigator, 'share', { value: undefined, configurable: true }); Object.defineProperty(navigator, 'clipboard', { value: { writeText: async (t) => { window.__copied = t; } }, configurable: true }); });
   await page.click('.cp-week button:has-text("Share the results")');
   await page.waitForFunction(() => window.__copied);
@@ -5022,8 +5040,7 @@ flow('friend profile: a friend on People → Profile shows what the friend share
   await page.goto(base + '/index.html');
   await page.waitForFunction(() => window.apex && typeof window.apex.live === 'function');
   await page.evaluate(() => document.querySelector('.tab[data-view="people"]').click());
-  await page.click('#accountBody .friend-head:has-text("@bob")');   // the friend's row opens what you can do with them and their profile
-  await page.click('#accountBody .friend button:has-text("Profile")');
+  await page.click('#accountBody .friend-head:has-text("@bob")');   // a tap on the friend opens their profile (2026-11-12)
   await page.waitForSelector('.profile-view');
   const t = await page.textContent('.profile-view');
   check(t.includes('@bob') && /Bob <b>S<\/b> · friends since September( 2026)?/.test(t) && t.includes('Esses · best 812 · 3 days this month') && t.includes('Ridge Runners'), 'the profile, as text: ' + t);
@@ -5032,7 +5049,7 @@ flow('friend profile: a friend on People → Profile shows what the friend share
   check(JSON.stringify(pk.keys) === '["Share a route","Invite to a drive","Challenge on a stage"]' && JSON.stringify(pk.foot) === '["Unfriend","Report","Block"]' && /profile-foot/.test(pk.last), 'things to do first, Unfriend/Report/Block at the foot: ' + JSON.stringify(pk));
   await page.click('.profile-view button:has-text("Friends")');   // one back glyph and where it goes (REVIEW2.md)
   await page.waitForSelector('.side-pop.open .profile-view', { state: 'detached', timeout: 3000 }).catch(() => {});
-  check(await page.evaluate(() => !document.querySelector('.side-pop.open') && !!document.querySelector('#accountBody .friend-head[aria-expanded="true"]')), 'Back returns to the friends list, the row still open');
+  check(await page.evaluate(() => !document.querySelector('.side-pop.open') && !!document.querySelector('#accountBody .friend-head:not(.you-row)')), 'Back returns to the friends list');
 });
 
 flow('duels: a friend\'s challenge is a card on People; Accept starts it; the card keeps both Scores and the days left; your own Scores can be shown from it; Challenge on a stage sends one (Worker stubbed, SOCIAL 2.7)', async (page, base) => {
@@ -5063,7 +5080,7 @@ flow('duels: a friend\'s challenge is a card on People; Accept starts it; the ca
   await page.waitForFunction(() => /Dry Ridge climb is in your Stages now/.test(document.getElementById('toast').textContent));
   await page.waitForSelector('#accountBody .duel-card.on');
   let t = await page.textContent('.duel-card.on');
-  check(/You -- · @bob 812 · @bob has a run in · 7 days left/.test(t) && /Your Scores don't reach @bob yet/.test(t), 'on: both Scores, the days left, and that yours don\'t reach them: ' + t);
+  check(/You -- · @bob 812 · @bob has a run in · 7 days left/.test(t) && !/don't reach/.test(t), 'on: both Scores and the days left; yours not shared is the Show key, not a sentence: ' + t);
   await page.click('.duel-card.on button:has-text("Show my Scores to @bob")');
   await page.waitForFunction(() => /You 845 · @bob 812 · You lead by 33/.test((document.querySelector('.duel-card.on') || {}).textContent || ''));
   check(grants.length === 1 && grants[0].audience_id === 'U1' && grants[0].share_scores === true && !grants[0].share_times, 'Scores only, to that friend: ' + JSON.stringify(grants));
@@ -5074,11 +5091,11 @@ flow('duels: a friend\'s challenge is a card on People; Accept starts it; the ca
   // challenging: from the friend's row, pick a stage and the days, Send
   await page.evaluate(() => document.querySelector('.tab[data-view="people"]').click());
   await page.click('#accountBody .friend-head:has-text("@bob")');
-  await page.click('#accountBody .friend button:has-text("Challenge on a stage")');
+  await page.click('.profile-view button:has-text("Challenge on a stage")');
   await page.waitForSelector('.duel-pop.open [aria-label="Stage"] button:has-text("Esses")');
   await page.click('.duel-pop.open [aria-label="Stage"] button:has-text("Esses")');
   await page.click('.duel-pop.open [aria-label="How long"] button:has-text("3 days")');
-  check(/your best counts/.test(await page.textContent('.duel-pop.open')) && await page.isVisible('.duel-pop.open [aria-label="Won by"] button.on:has-text("Vetta Score")'), 'the sheet says what counts; won by Score unless you pick Time');
+  check(/Your best run counts/.test(await page.textContent('.duel-pop.open')) && await page.isVisible('.duel-pop.open [aria-label="Won by"] button.on:has-text("Vetta Score")'), 'the sheet says what counts; won by Score unless you pick Time');
   await page.click('.duel-pop.open [aria-label="Won by"] button:has-text("Time")');
   const small = await page.evaluate(() => [...document.querySelectorAll('.duel-pop.open button')].filter((b) => b.getClientRects().length).map((b) => ({ t: b.textContent, h: Math.round(b.getBoundingClientRect().height) })).filter((b) => b.h < 32));
   check(!small.length, 'keys big enough: ' + JSON.stringify(small));
@@ -5195,22 +5212,25 @@ flow('People: two tabs; a request is a card on top, then you, then friends with 
   const navs = await page.$$eval('#accountBody > .nav-rows .nav-row > span', (s) => s.map((x) => x.textContent));
   // Roadbooks (SOCIAL 2.6, 2026-11-10) join From friends in the one list under the friends; nothing else does
   check(JSON.stringify(navs) === '["From friends","Roadbooks"]', 'then what friends shared and the roadbooks, nothing else: ' + JSON.stringify(navs));
-  // P-04: the friend row is about the friend; the grants are one quiet row
-  await page.click('#accountBody .friend-head:has-text("@cara")');
-  const acts = await page.$$eval('#accountBody .friend:has-text("@cara") .friend-keys button', (b) => b.map((x) => x.textContent));
-  check(JSON.stringify(acts) === '["On the map","Share a route","Invite to a drive","Challenge on a stage","Profile"]', 'the row opens on what you can do with her: ' + JSON.stringify(acts));
-  const cara = await page.textContent('#accountBody .friend:has-text("@cara") .crew-detail');
-  check(/Shared Cherohala loop · /.test(cara) && /What @cara sees of you/.test(cara) && !/Unfriend|Block/.test(cara) && !(await page.isVisible('#accountBody .friend:has-text("@cara") .friend-grants')), 'her last share, a quiet grants row, no Unfriend: ' + cara);
-  check(!!(await page.$('#accountBody .friend:has-text("@bob") .friend-keys button:has-text("On the map")')), 'bob shares a delayed position: On the map too');
-  check(!(await page.$('#accountBody .friend:has-text("@eve") .friend-keys button:text-is("On the map")')), 'no On the map for a friend who shares nothing');
-  // with Duel (#383) eve has four keys (two and two) and cara five: an odd last key takes the row, not half of it beside a hole
-  const spans = await page.evaluate(() => Object.fromEntries(['@eve', '@cara'].map((h) => { const row = [...document.querySelectorAll('#accountBody .friend')].find((f) => f.textContent.includes(h));
-    const keys = [...row.querySelectorAll('.friend-keys > *')]; return [h, { n: keys.length, end: getComputedStyle(keys[keys.length - 1]).gridColumnEnd }]; })));
-  check(spans['@eve'].n === 4 && spans['@eve'].end === 'auto' && spans['@cara'].n === 5 && spans['@cara'].end === '-1', 'an odd last key spans the row: ' + JSON.stringify(spans));
-  await page.click('#accountBody .friend:has-text("@cara") .nav-row.quiet');
-  check(await page.isVisible('#accountBody .friend:has-text("@cara") .friend-grants [role="switch"][aria-checked="true"]'), 'the quiet row opens her Scores and Times');
-  // P-09: Who sees what, from her row, her line marked
-  await page.click('#accountBody .friend:has-text("@cara") button:has-text("Who sees what")');
+  // Nate 2026-11-12 (as easy as a big social app): the row is the friend; a tap opens their profile, which holds what you
+  // can do with them, their last share and what they see of you (the row used to open five keys and a grants drawer)
+  check(!(await page.$('#accountBody .friend .crew-detail, #accountBody .friend button.ink-btn')), 'a friend row is one line, no keys in the list');
+  const profileOf = async (h) => { await page.click(`#accountBody .friend-head:has-text("${h}")`); await page.waitForSelector(`.people-pop.open .profile-view h3:text-is("${h}")`);
+    const k = await page.$$eval('.people-pop.open .profile-keys button', (b) => b.map((x) => x.textContent)); return k; };
+  const back = () => page.click('.people-pop.open .profile-view button:has-text("Friends")');
+  const acts = await profileOf('@cara');
+  check(JSON.stringify(acts) === '["On the map","Share a route","Invite to a drive","Challenge on a stage"]', 'her profile opens on what you can do with her: ' + JSON.stringify(acts));
+  const cara = await page.textContent('.people-pop.open .profile-view');
+  check(/Shared Cherohala loop · /.test(cara) && /What @cara sees of you\s*Scores/.test(cara) && /Couldn’t load the rest/.test(cara) && !/No scores shared/.test(cara), 'her last share and what she sees of you; offline, nothing guessed: ' + cara);
+  await back();
+  check((await profileOf('@bob')).includes('On the map'), 'bob shares a delayed position: On the map too');
+  await back();
+  const eve = await profileOf('@eve');
+  check(!eve.includes('On the map') && eve.length === 3 && await page.evaluate(() => getComputedStyle(document.querySelector('.people-pop.open .profile-keys > :last-child')).gridColumnEnd) === '-1', 'no On the map for a friend who shares nothing; an odd last key spans the row: ' + JSON.stringify(eve));
+  await back();
+  // P-09: Who sees what, from her profile, her line marked
+  await profileOf('@cara');
+  await page.click('.people-pop.open .friend-sees');
   await page.waitForSelector('.overlay[aria-label="Who sees what"] .who-grid');
   const grid = await page.$$eval('.who-grid > .who-n', (n) => n.map((x) => x.textContent + (x.classList.contains('focus') ? '*' : '')));
   check(JSON.stringify(grid) === '["@bob","@cara*","@eve"]', 'one grid, her row marked: ' + JSON.stringify(grid));
@@ -5220,6 +5240,7 @@ flow('People: two tabs; a request is a card on top, then you, then friends with 
   check(posted.some(([m, p, b]) => m === 'PUT' && p === '/api/grants' && /"audience_id":"U2"/.test(b) && /"share_times":true/.test(b)), 'Times changed in its cell');
   check(await page.isVisible('.overlay[aria-label="Who sees what"] [aria-label="Show me on the map to"] [aria-checked="true"]:text-is("Friends")'), 'where you are, one choice at the top');
   await page.click('.overlay[aria-label="Who sees what"] button:has-text("Done")');
+  if (await page.isVisible('.people-pop.open')) await back();
   // Accept on the card
   await page.click('#accountBody .request-card button:has-text("Accept")');
   await page.waitForTimeout(200);
@@ -5231,7 +5252,8 @@ flow('People: two tabs; a request is a card on top, then you, then friends with 
   check(/invite link/i.test(inv) && /Share a link to me/.test(inv) && !/invite-only/i.test(inv) && !/@dan|Accept/.test(inv) && await page.isVisible('.side-pop.open input[aria-label="Friend handle"]'), 'the Invite sheet: an invite link and add by handle, no requests: ' + inv);
   await page.click('.side-pop.open button:has-text("Done")');
   // On the map: the sheet closes, the Friends layer comes on
-  await page.click('#accountBody .friend:has-text("@cara") .friend-keys button:has-text("On the map")');
+  await profileOf('@cara');
+  await page.click('.people-pop.open .profile-keys button:has-text("On the map")');
   await page.waitForFunction(() => !document.getElementById('sheet').classList.contains('open'));
   check(await page.evaluate(() => document.querySelector('[data-toggle="friends"]').classList.contains('on')), 'On the map turns the Friends layer on');
   // the Garage: Who sees what under You; the pioneer count with Road feel; no points board anywhere
@@ -7786,6 +7808,41 @@ flow('the co-driver says a long descent once as the car nears its top, from the 
   check((await calls()).length === 1, 'and not again on the way down: ' + JSON.stringify(await calls()));
 });
 
+flow('the co-driver counts clean corners in a row live and says five, then ten, never in Quiet notes (flow_live.js, IDEAS D-30)', async (page, base) => {
+  await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); } catch (_) {}
+    window.__said = []; window.APEX_REVIEW = true;
+    window.webkit = { messageHandlers: { apex: { postMessage(m) { if (m && m.cmd === 'said') window.__said.push(m.text); } } } }; });
+  await page.goto(base + '/index.html');
+  await page.waitForFunction(() => window.apexDebug && window.apex && window.apex.live && window.ApexFlowLive);
+  await page.evaluate(() => window.apex.onNative({ type: 'carplay', action: 'start' }));
+  await page.waitForFunction(() => window.apexDebug.driveActive);
+  // S-bends with no route: 90-degree arcs of 60 m radius, left and right, 60 m between, at a steady 8 m/s with the lateral g
+  // the arc gives and no braking: every corner smooth and settled. One fix every 5 m, as the app sends them.
+  const drive = (from, to) => page.evaluate(async ([from, to]) => {
+    const pts = []; let x = 0, y = 0, h = 0, side = 1; const v = 8, R = 60;
+    for (let k = 0; k < to; k++) {
+      for (let s = 0; s < 60; s += 5) { x += 5 * Math.sin(h); y += 5 * Math.cos(h); if (k >= from) pts.push([x, y, 0]); }
+      for (let s = 0; s < Math.PI / 2 * R; s += 5) { h += side * 5 / R; x += 5 * Math.sin(h); y += 5 * Math.cos(h); if (k >= from) pts.push([x, y, side * v * v / R / 9.80665]); }
+      side = -side;
+    }
+    for (const [px, py, g] of pts) {
+      window.apex.live({ lat: 35.5 + py / 110540, lon: -83.9 + px / (111320 * Math.cos(35.5 * Math.PI / 180)), accuracy_m: 5, speed_mps: v, course_deg: 0,
+        has_fix: true, lat_g: Math.round(g * 1e4) / 1e4, lon_g: 0, calibration: 'locked', thermal: 0 });
+      await new Promise((r) => setTimeout(r, 12));
+    }
+  }, [from, to]);
+  const counts = () => page.evaluate(() => window.__said.filter((s) => / clean in a row\.$/.test(s)));
+  await drive(0, 12);
+  await page.waitForFunction(() => window.__said.filter((s) => / clean in a row\.$/.test(s)).length >= 2, null, { timeout: 8000 }).catch(() => {});
+  check(JSON.stringify(await counts()) === JSON.stringify(['Five clean in a row.', 'Ten clean in a row.']), 'five, then ten, said once each: ' + JSON.stringify(await counts()));
+  // Quiet notes: the count goes on, nothing is said
+  await page.evaluate(() => { const b = document.querySelector('[data-notes="quiet"]'); if (b) b.click(); });
+  await drive(12, 24);
+  await page.waitForTimeout(600);
+  const run = await page.evaluate(() => window.apexDebug.flowRun);
+  check(run >= 20 && (await counts()).length === 2, `the count went on to ${run}, and nothing was said in Quiet notes: ` + JSON.stringify(await counts()));
+});
+
 flow('plan flow (e, f) a level change and an alternative are one tap or swipe each: the level cards are the routes found, nothing planned again (finding 4, 11)', async (page, base) => {
   const asked = [];
   // the clock pinned to a weekday noon in Ohio: the refine's conditions (night, deer hours, low sun) swap Fun's pick
@@ -8790,7 +8847,7 @@ flow('time attack this week (SOCIAL 2.9): in Where to?, the area\'s loop and its
   check(text.includes('Foothills <b>run</b> loop') && /loop from the area’s best roads · 3 days left · 3 times/.test(text) && !/put up/i.test(text), 'the loop, as text: ' + text);
   const cells = await page.$$eval('#planAttack .ta-board > span', (els) => els.map((e) => e.textContent));
   check(cells.slice(0, 8).join('|') === '1|@alice|9:50|Score 700|2|@bob|10:00 +0:10|Score 780' && cells[11] === '', 'the board, quickest first, with gaps and Scores: ' + cells.join('|'));
-  check(/Last week, Last loop: 1\. @dee 11:52/.test(text) && /A new loop every Monday/.test(text) && /drive within the law/.test(text), 'last week\'s podium and the road note');
+  check(/Last week, Last loop: 1\. @dee 11:52/.test(text) && /New loop every Monday/.test(text) && /Drive within the law/.test(text), 'last week\'s podium and the road note');
   const q = new URLSearchParams(sent[0][1]);
   check(/\.(125|375|625|875)$/.test(q.get('lat')) && /\.(125|375|625|875)$/.test(q.get('lon')), 'only the middle of the quarter-degree area is sent: ' + sent[0][1]);
   check(!sent.some(([p]) => p === '/api/timeattack/circuit'), 'a week that has its loop builds none');

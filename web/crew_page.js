@@ -243,6 +243,12 @@
     .cd-item .cd-text small { font-size: 13px; -webkit-line-clamp: 1; }
     .cd-what { font-size: 15px; line-height: 1.4; overflow-wrap: anywhere; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
     .cd-more { justify-self: start; }
+    .cp-tabs { display: flex; gap: 24px; border-bottom: 1px solid var(--rule, rgba(0,0,0,0.15)); }
+    .cp-tabs > button { position: relative; min-height: 44px; padding: 0 2px 10px; border: 0; background: transparent; color: var(--panel-dim); font: inherit; font-size: 17px; font-weight: 700; cursor: pointer; }
+    .cp-tabs > button[aria-selected="true"] { color: var(--panel-ink); }
+    .cp-tabs > button::after { content: ""; position: absolute; left: 0; right: 0; bottom: -1px; height: 3px; background: var(--panel-ink); transform: scaleX(0); transition: transform 0.18s ease-out; }
+    .cp-tabs > button[aria-selected="true"]::after { transform: none; }
+    .cp-pane[hidden] { display: none; }
     .crew-head .cd-back { flex: 0 1 auto; min-height: 44px; padding: 0 8px 0 0; font-size: 16px; font-weight: 600; text-decoration: none; color: var(--panel-ink); }
     .crew-head .cd-back::before { content: "\\2039"; font-size: 24px; margin-right: 6px; line-height: 1; }
   `;
@@ -250,11 +256,14 @@
   // The board's periods (the owner's TestFlight note 06); the pick is remembered on this phone.
   const PERIODS = [['week', 'Week'], ['month', 'Month'], ['year', 'Year'], ['all', 'All time']];
   const PERIOD_NOTE = {
-    week: 'Every drive’s Score added up since Monday, only from people who share Scores with the crew.',
-    month: 'Every drive’s Score added up this month, only from people who share Scores with the crew.',
-    year: 'Every drive’s Score added up this year, only from people who share Scores with the crew.',
-    all: 'Every drive’s Score added up, only from people who share Scores with the crew.',
+    week: 'Scores added up since Monday.',
+    month: 'Scores added up this month.',
+    year: 'Scores added up this year.',
+    all: 'Every Score added up.',
   };
+  // The crew page's tabs (Nate 2026-11-12): which one is open, per crew, while the app runs
+  const CREW_TABS = [['drives', 'Drives'], ['chat', 'Chat'], ['board', 'Board']];
+  const CREW_TAB = new Map();
   function boardPeriod(set) {
     try {
       if (set) localStorage.setItem('apex.boardPeriod', set);
@@ -330,9 +339,14 @@
         const redoDrive = part((c2) => thisWeek(c2, redoDrive), () => driveSec, (n) => { driveSec = n; });
         const redoBoard = part((c2) => board(c2, redoBoard), () => boardSec, (n) => { boardSec = n; });
         driveSec = thisWeek(c, redoDrive); boardSec = board(c, redoBoard);
-        // P-03: the run, the people, what they said, then the board; the livery last, as one line
-        box.replaceChildren(header(c, draw), el('div', { className: 'cp-body' }, titleBlock(c), driveSec, members(c), chat(c, draw), boardSec,
-          ...(c.house ? [houseBoard(c)] : []), ...(c.pinned ? [pinnedRow(c)] : []), buildsRow(c), meetShare(c), liveryFoot(c, draw)));
+        // P-03: the run, the people, what they said, then the board. Nate 2026-11-12 (as easy as a big social app): three tabs
+        // under the crew's name, Drives (with the members), Chat and Board, not one long page of all of it; the livery last
+        const panes = {
+          drives: [driveSec, members(c), ...(c.pinned ? [pinnedRow(c)] : []), meetShare(c)],
+          chat: [chat(c, draw)],
+          board: [boardSec, ...(c.house ? [houseBoard(c)] : []), buildsRow(c)],
+        };
+        box.replaceChildren(header(c, draw), el('div', { className: 'cp-body' }, titleBlock(c), tabs(c.id, panes), liveryFoot(c, draw)));
         // a public crew (joined as one, or made public since: social.ts crewUpdate turns members' sharing off) asks once on
         // this phone whether to share with it (the owner, 2026-11-11: public crews off by default, asked)
         if (c.visibility === 'public' && !c.is_owner && !c.sharing_scores && page.askPublicSharing) {
@@ -343,6 +357,38 @@
       };
       draw();
       return box;
+    }
+
+    // The crew page's tabs (ARIA tabs, the People tabs' look): one pane shown, the pick kept for this crew while the app runs
+    function tabs(crewId, panes) {
+      const bar = el('div', { className: 'cp-tabs', role: 'tablist' }); bar.setAttribute('aria-label', 'Crew');
+      const wrap = el('div', { className: 'cp-panes' });
+      const keys = CREW_TABS.filter(([k]) => panes[k]);
+      const boxes = {}, buttons = {};
+      const pick = (k, focus) => {
+        CREW_TAB.set(crewId, k);
+        for (const [x] of keys) {
+          const on = x === k; boxes[x].hidden = !on;
+          buttons[x].setAttribute('aria-selected', String(on)); buttons[x].tabIndex = on ? 0 : -1;
+        }
+        if (focus) buttons[k].focus();
+      };
+      for (const [k, label] of keys) {
+        const b = el('button', { type: 'button', role: 'tab', textContent: label, id: `cpTab-${k}` }); b.dataset.cpTab = k;
+        b.setAttribute('aria-controls', `cpPane-${k}`);
+        b.addEventListener('click', () => pick(k));
+        buttons[k] = b; bar.append(b);
+        boxes[k] = el('div', { className: 'stack-12 cp-pane', role: 'tabpanel', id: `cpPane-${k}` }, ...panes[k].filter(Boolean));
+        boxes[k].setAttribute('aria-labelledby', `cpTab-${k}`);
+        wrap.append(boxes[k]);
+      }
+      bar.addEventListener('keydown', (e) => {
+        if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return;
+        const i = keys.findIndex(([k]) => k === CREW_TAB.get(crewId)), n = keys.length;
+        pick(keys[(i + (e.key === 'ArrowRight' ? 1 : n - 1)) % n][0], true);
+      });
+      pick(keys.some(([k]) => k === CREW_TAB.get(crewId)) ? CREW_TAB.get(crewId) : 'drives');
+      return el('div', { className: 'stack-12' }, bar, wrap);
     }
 
     function header(c, redo) {
@@ -447,7 +493,7 @@
         sw.classList.toggle('on', on); sw.setAttribute('aria-checked', String(on));
       });
       return el('section', { className: 'cp-meet stack-8' }, el('div', { className: 'cp-sec' }, el('h3', { textContent: 'Meeting points' })), sw,   // named like Members, Chat and the board (it was the one small heading under a rule)
-        el('p', { className: 'note', textContent: `Your Home pin\u2019s square (or, with none pinned, where you are now), about ${root.ApexUnits && !root.ApexUnits.metric() ? '7 miles' : '11 km'} across, never the address. Crew-mates see the squares, not whose, once two share. Used to pick a meeting point fair to everyone.` }));
+        el('p', { className: 'note', textContent: `A ${root.ApexUnits && !root.ApexUnits.metric() ? '7 mile' : '11 km'} square around Home, never the address or whose.` }));
     }
     function pinnedRow(c) {
       return el('div', { className: 'cp-pinned' }, el('span', { className: 'note', textContent: 'Pinned route' }), el('b', { textContent: c.pinned.name }),
@@ -732,7 +778,7 @@
       }, 'ink-btn');
       renderVoices.disabled = !canRender;
       const factorySet = el('fieldset', { disabled: !factory }, el('legend', {}, el('b', { textContent: 'Crew hazard categories' }), factory ? '' : lock('factory')), hazardKinds,
-        el('p', { className: 'note', textContent: 'Members report them from the report sheet and read your word on the plate; other drivers see Debris.' }),
+        el('p', { className: 'note', textContent: 'Members report them. Other drivers see Debris.' }),
         el('b', { textContent: 'Crew regroup line' }), regroupLine,
         el('div', { className: 'row' }, renderVoices),
         el('p', { className: 'note', textContent: canRender ? 'Members hear it in their co-driver\u2019s voice when your convoy regroups.' : 'Record it on the Vetta website: the voices are made there, the app only plays them.' }), voiceNote);

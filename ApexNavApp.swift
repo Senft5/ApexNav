@@ -1198,7 +1198,7 @@ final class ApexSensorShell: NSObject, ObservableObject, CLLocationManagerDelega
             guard let self else { return }
             self.appleSignIn = nil
             switch outcome {
-            case .token(let token, let name): Task { await self.appleExchange(idToken: token, nonce: nonce, name: name) }
+            case .token(let token, let name, let code): Task { await self.appleExchange(idToken: token, nonce: nonce, name: name, code: code) }
             case .cancelled: self.signInFailed("cancelled")
             case .failed: self.signInFailed("error")
             }
@@ -1207,13 +1207,13 @@ final class ApexSensorShell: NSObject, ObservableObject, CLLocationManagerDelega
         helper.start()
     }
 
-    private func appleExchange(idToken: String, nonce: String, name: String?) async {
+    private func appleExchange(idToken: String, nonce: String, name: String?, code: String?) async {
         var req = URLRequest(url: Self.apiBase.appendingPathComponent("api/auth/apple"))
         req.httpMethod = "POST"
         req.setValue("application/json", forHTTPHeaderField: "content-type")
         req.setValue("1", forHTTPHeaderField: "x-apexnav")
         req.setValue("\(ApexWebBundle.scheme)://app", forHTTPHeaderField: "origin")
-        req.httpBody = try? JSONSerialization.data(withJSONObject: ["id_token": idToken, "nonce": nonce, "name": name ?? ""])
+        req.httpBody = try? JSONSerialization.data(withJSONObject: ["id_token": idToken, "nonce": nonce, "name": name ?? "", "code": code ?? ""])
         do {
             let (data, resp) = try await URLSession.shared.data(for: req)
             guard (resp as? HTTPURLResponse)?.statusCode == 200,
@@ -2078,7 +2078,8 @@ final class ApexClipPlayer: NSObject, AVAudioPlayerDelegate {
 /// Runs Apple's sign-in sheet once and reports the identity token (and the name, which Apple gives only the first time).
 @MainActor
 final class ApexAppleSignIn: NSObject, ASAuthorizationControllerDelegate, ASAuthorizationControllerPresentationContextProviding {
-    enum Outcome { case token(String, String?), cancelled, failed }
+    /// The one-time authorization code lets the server keep a refresh token, so deleting the account can revoke it (guideline 5.1.1(v)).
+    enum Outcome { case token(String, String?, String?), cancelled, failed }
     private let nonceHash: String
     private let done: (Outcome) -> Void
     private var controller: ASAuthorizationController?
@@ -2103,9 +2104,10 @@ final class ApexAppleSignIn: NSObject, ASAuthorizationControllerDelegate, ASAuth
         let credential = authorization.credential as? ASAuthorizationAppleIDCredential
         let token = credential?.identityToken.flatMap { String(data: $0, encoding: .utf8) }
         let name = credential?.fullName.map { PersonNameComponentsFormatter().string(from: $0) }.flatMap { $0.isEmpty ? nil : $0 }
+        let code = credential?.authorizationCode.flatMap { String(data: $0, encoding: .utf8) }
         MainActor.assumeIsolated {
             self.controller = nil
-            if let token { done(.token(token, name)) } else { done(.failed) }
+            if let token { done(.token(token, name, code)) } else { done(.failed) }
         }
     }
 

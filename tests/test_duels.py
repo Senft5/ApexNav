@@ -52,8 +52,9 @@ def test_on(out):
     assert out["behind"][2] == "You 790 · @bob 812 · @bob leads by 22 · last day"
     assert out["none"][2] == "You -- · @bob -- · No runs yet · 5 days left"
     assert out["lead"][4] == ["drive", "withdraw"]
-    # Scores that don't reach the other side are said, and yours can be shown from the card
-    assert "Your Scores don't reach @bob yet" in out["gaps"][3] and "@bob's Scores don't reach you yet" in out["gaps"][3]
+    # theirs not shared is one short line; yours not shared is the Show key alone, no sentence (Nate: no walls of text)
+    assert out["gaps"][3] == "@bob hasn't shared Scores with you yet."
+    assert "Your" not in out["gaps"][3]
     assert out["gaps"][4][0] == "share"
 
 
@@ -89,6 +90,6 @@ def test_time_duel(out):
     # the quicker time leads even with the lower Score; the Scores sit beside it
     assert out["tLead"][2] == "You 3:04 · @bob 3:10 · You lead by 6 s · 5 days left"
     assert out["tLead"][3] == "Scores: you 800, @bob 845"
-    assert "Your times don't reach @bob yet" in out["tGap"][3] and out["tGap"][4][0] == "share"
+    assert "Your times" not in out["tGap"][3] and out["tGap"][4][0] == "share"
     assert out["tWon"][2] == "You won by 1:06 · You 3:04 · @bob 4:10"
     assert out["tLost"][:3] == ["lost", "Dry Ridge climb · @bob", "@bob won · You -- · @bob 4:10"]   # a Score with no time sets no time
