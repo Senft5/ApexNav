@@ -485,3 +485,8 @@ def test_the_car_offers_the_same_loop_times_as_the_phones_dial():
     assert '("1½ hours", 90)' in row and '("3 hours", 180)' in row
     # and the page takes every one of them: it used to accept only 30, 60 and 120, so the car's 1½ and 3 hours did nothing
     assert "m.action === 'loop' && LOOP_MINUTES.includes(m.minutes)" in cockpit_source()
+
+
+def test_a_close_convoy_hazard_alerts_the_car_with_the_voice_off_too():
+    js = cockpit_source()
+    assert "if (!state.toggles.voice) { toast(text); if (urgent && driveActive) carPost({ kind: 'hazard', title: text }); }" in js

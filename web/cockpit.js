@@ -6091,7 +6091,8 @@
       },
       getRoute: () => (track && track.kind === 'route' && track.lat.length > 1 ? { name: track.name, pts: track.lat.map((la, i) => [la, track.lon[i]]) } : null),
       // A close hazard cuts in; a far one goes next, after the pace note being spoken (never dropping the notes queued).
-      speak: (text, urgent) => { if (!state.toggles.voice) toast(text); else if (urgent) say(text, true, null, null, { kind: 'hazard', alert: true }); else sayNext(text, `convoy:${text}`); },
+      // With the voice off a close one still alerts on the car's screen, as it does with the voice on (the phone toasts it).
+      speak: (text, urgent) => { if (!state.toggles.voice) { toast(text); if (urgent && driveActive) carPost({ kind: 'hazard', title: text }); } else if (urgent) say(text, true, null, null, { kind: 'hazard', alert: true }); else sayNext(text, `convoy:${text}`); },
       onRegroup: (rg, convoyName) => regroupSay(rg, convoyName),
       drive: () => startDrive(),                                       // the convoy sheet's "Start the drive" (Convoy now, P-11)
     }) : null; } catch (e) { console.error('convoy', e); convoy = null; } });   // the convoy never takes the page down
