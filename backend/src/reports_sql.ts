@@ -5,6 +5,11 @@ export type ReportKind = typeof REPORT_KINDS[number];
 
 const kindOk = (kind: ReportKind) => { if (!REPORT_KINDS.includes(kind)) throw new Error("bad kind"); return kind; };
 
+/** True when member `userExpr` was invited, or has been a member a week: what a reporter needs to count (reportedSql), and
+ *  what a member needs to set something everyone in an area drives for months (a time attack loop, ta_fixed.ts). */
+export const establishedSql = (userExpr: string) =>
+  `EXISTS (SELECT 1 FROM members me WHERE me.user_id = ${userExpr} AND (me.invited_by IS NOT NULL OR me.joined_at <= datetime('now', '-7 days')))`;
+
 /** True when the owner removed it. Its owner can't switch it back on (public crew, shown car). */
 export const removedSql = (kind: ReportKind, idExpr: string) =>
   `EXISTS (SELECT 1 FROM reports rx WHERE rx.kind = '${kindOk(kind)}' AND rx.target_id = ${idExpr} AND rx.status = 'removed')`;
