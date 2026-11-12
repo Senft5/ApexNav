@@ -808,7 +808,8 @@
   /** The end card's line on the practised skill. r: drivePractice's; plan: the kept plan (its before level, its place). */
   function practiceLine(r, plan) {
     if (!r || !WORDS[r.skill]) return null;
-    const head = `Practice · ${WORDS[r.skill].name}:`;
+    const road = plan && plan.where && planRoad(plan.where) ? String(plan.where.name || '').trim() || planRoad(plan.where) : null;
+    const head = `Practice${road ? ` on ${road}` : ''} · ${WORDS[r.skill].name}:`;   // a per-road plan names its road
     if (r.level === null) return r.n ? `${head} ${r.n} corner${r.n === 1 ? '' : 's'} to judge it on, too few to say.` : `${head} no corner on this drive to judge it on.`;
     const b = plan && plan.before && finite(plan.before.level) ? plan.before.level : null;
     let t = `${head} ${r.level} on ${r.n} corners`;

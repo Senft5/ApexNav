@@ -149,10 +149,13 @@ def test_a_per_road_practice_parity_and_words():
     names = ["Dry Ridge Rd", "dry ridge rd ", "Bell Gap", None]
     runner = ("const P=require(process.argv[1]+'/web/driver_profile.js');const [cases,plan,names]=JSON.parse(require('fs').readFileSync(0,'utf8'));"
               "const pr=cases.map((c)=>P.practice(c,plan));"
-              "process.stdout.write(JSON.stringify({pr,sums:pr.map(P.practiceSummary),on:names.map((n)=>P.onPlanRoad(plan,n))}));")
+              "const line=P.practiceLine(pr[0].drives[0],{...plan,before:pr[0].before});"
+              "process.stdout.write(JSON.stringify({pr,sums:pr.map(P.practiceSummary),on:names.map((n)=>P.onPlanRoad(plan,n)),line}));")
     out = json.loads(subprocess.run([NODE, "-e", runner, os.getcwd()], input=json.dumps([cases, ROAD, names]), capture_output=True, text=True, check=True).stdout)
     assert json.dumps(out["pr"], sort_keys=True) == json.dumps(py, sort_keys=True)
     assert out["on"] == [dp.on_plan_road(ROAD, n) for n in names] == [True, True, False, False]
     up, none = out["sums"]
     assert up.startswith(f"Since 5 Nov on Dry Ridge Rd: {py[0]['after']['level']} on 30 corners over 1 drive, against ")
     assert none == "Since 5 Nov on Dry Ridge Rd, no drive there yet with 4 or more corners to read it on. Your next drive there is the first."
+    d = py[0]["drives"][0]
+    assert out["line"] == f"Practice on Dry Ridge Rd · One steering arc: {d['level']} on 30 corners, {d['delta']} above your {py[0]['before']['level']} before."
