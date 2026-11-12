@@ -4,6 +4,12 @@ Decisions Claude made for you, newest first. Each one says what was decided, why
 you reach one you've seen. If you disagree with a call, say so and it gets reversed; nothing here is hard to undo unless
 it says so. Things only you can do are in docs/OWNER_TODO.md.
 
+## 2026-11-12 (deepest analysis 19): the Log's road book says which of your roads to work on (claude/project-thread-gd7nre)
+
+Above the road picker, one line names the roads (driven three or more times) where your passes differ most, with the
+technique behind most of it. Calls: at most 3 roads, and at most 12 read, to keep the Log quick on a big library; it is read
+once each time the library changes, not on every visit. Undo: remove `bookWork` in web/analysis.html.
+
 ## 2026-11-12 (deepest analysis 18): the end card names your passes on a road you know (claude/project-thread-gd7nre)
 
 After a drive on a road you have driven three or more times, the map's end card adds one line: what this drive lost most

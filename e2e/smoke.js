@@ -4655,6 +4655,10 @@ flow('a drive\'s corners on a road driven four times: each says your cleanest pa
   await page.goto(base + '/analysis.html');
   await page.waitForFunction(() => window.apexLogDebug && window.apexLogDebug.loaded() && !document.getElementById('bookPanel').hidden, null, { timeout: 20000 });
   await page.evaluate(() => { document.getElementById('bookPanel').open = true; });
+  // before a road is picked: the roads where your passes differ most, and the technique behind most of it
+  await page.waitForFunction(() => !document.getElementById('bookWork').hidden, null, { timeout: 20000 });
+  const work = await page.textContent('#bookWork');
+  check(/^Where your passes differ most: Dry Ridge Rd \(\d+ corners?, mostly one steering arc\)\.$/.test(work), 'the roads to work on: ' + work);
   await page.click('#bookRoads button');
   await page.waitForFunction(() => document.querySelectorAll('#bookList li').length > 0, null, { timeout: 20000 });
   const book = await page.evaluate(() => ({ head: document.getElementById('bookHead').textContent, rows: [...document.querySelectorAll('#bookList li')].map((li) => li.innerText.replace(/\s+/g, ' ').trim()),
