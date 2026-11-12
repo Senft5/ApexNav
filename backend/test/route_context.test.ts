@@ -129,6 +129,8 @@ describe("fair meeting points: rough home areas, opt-in per crew", () => {
     expect((await env.DB.prepare("SELECT home_cell FROM crew_members WHERE user_id = ?").bind(a.id).first<{ home_cell: string }>())!.home_cell).toBe("35.95,-83.95");
     expect(await meet(b)).toEqual({ cells: [], sharing: 1, mine: false, need: 2 });                  // one alone is never shown
     await ok(api(b, "PUT", `/api/crews/${crew}/home`, { on: true, lat: 35.55, lon: -84.21 }));
+    // alice shares too, so her own cell would give bob's away: she needs two others sharing
+    expect(await meet(a)).toEqual({ cells: [], sharing: 2, mine: true, need: 3 });
     const m = await meet(c);
     expect(m.cells).toEqual([[35.55, -84.25], [35.95, -83.95]]); expect(m.mine).toBe(false);
     expect(JSON.stringify(m)).not.toMatch(/alice|bob|user/i);
