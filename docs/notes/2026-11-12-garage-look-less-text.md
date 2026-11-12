@@ -13,7 +13,14 @@
   VoiceOver label, and the route card still shows one chip per option.
 - e2e: the theme-cards flow checks the card's voice line instead of the quote; plan flow (d) and the screen-by-screen
   flow check the count on Where to? and the chips on the card.
-- Next: the map deck, Crews, the Log list, Your driving.
+- Note 7: Where to?'s "Or loop from here" loses "back where you started"; Spots, Time attack and Roadbooks rows are
+  their names only (the time attack row still becomes this week's loop and your place once it has loaded).
+- Note 2: Crews this month lines are the crew's numbers ("Ridge Runners · 160 km · Smooth 85 · #2 of 2"); private and
+  small crews just carry no rank; the "Public crews of 3 or more..." footer is gone; with nothing new, "Latest from your
+  crews" shows no heading and no line.
+- Note 3: Log list rows lose the corner-tick bar; a drive with no Score shows nothing in the score column (its own page
+  still says --); "To 10069 Pebble Ridge Ln" lists as "To Pebble Ridge Ln" (street addresses only; the saved name is kept).
+- Next: Your driving (notes 4, 5).
 
 # CALL SHEET
 
@@ -27,3 +34,9 @@ example ("For example "Careful, medium right, long""), since it is what the swit
 
 Ways to go is its keys and Cancel. Where to? shows "Options · 3" instead of a chip per option (each is still read out to
 VoiceOver, and still shown one by one on the route card, where the route was planned with them). Undo: revert this PR.
+
+## 2026-11-12 (declutter 7, 2, 3): Where to?'s rows, Crews this month and the Log list (claude/project-thread-5sbga7)
+
+Where to?'s rows say their names. Crews this month is numbers only. A Log row is the date, the road, its facts and the
+Score; a drive with no Score leaves the column empty there (a blank, never a made-up number; the drive's page shows --),
+and a house number is dropped from a street-address name in the list only. Undo: revert this PR.
