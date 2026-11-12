@@ -342,12 +342,15 @@ export async function publish(env: Env, v: Viewer, req: Request): Promise<{ publ
   const smooth = b.smoothness == null ? null : b.smoothness;
   if (smooth !== null && (!Number.isInteger(smooth) || smooth < 0 || smooth > 100)) throw new HttpError(400, "bad_smoothness");
 
+  // only to audiences still yours (an accepted friend, a crew you are in), checked in the same query: one check per grant
+  // went past Workers Free's 50 D1 queries per invocation once someone shared with many friends
   const grants = await all<{ audience_type: string; audience_id: string; share_times: number }>(env,
-    "SELECT audience_type, audience_id, share_times FROM grants WHERE user_id = ? AND share_scores = 1", v.id);
+    `SELECT g.audience_type, g.audience_id, g.share_times FROM grants g WHERE g.user_id = ?1 AND g.share_scores = 1
+        AND ((g.audience_type = 'friend' AND EXISTS (SELECT 1 FROM friendships f WHERE f.status = 'accepted'
+                AND f.user_a = MIN(?1, g.audience_id) AND f.user_b = MAX(?1, g.audience_id)))
+          OR (g.audience_type = 'crew' AND EXISTS (SELECT 1 FROM crew_members m WHERE m.crew_id = g.audience_id AND m.user_id = ?1)))`, v.id);
   const stmts: D1PreparedStatement[] = [];
   for (const g of grants) {
-    const ok = g.audience_type === "friend" ? await isAcceptedFriend(env, v.id, g.audience_id) : await isCrewMember(env, g.audience_id, v.id);
-    if (!ok) continue;
     stmts.push(env.DB.prepare(
       `INSERT INTO board_entries (id, segment_id, canon_id, user_id, audience_type, audience_id, driver_score, time_s, driven_on, smoothness)
        VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)
@@ -371,17 +374,20 @@ export const VISIBLE_FROM_OTHERS = `
                   AND EXISTS (SELECT 1 FROM crew_members th WHERE th.crew_id = be.audience_id AND th.user_id = be.user_id)) )`;
 
 /** Only entries published TO the viewer (by someone who is still their friend / crew-mate, grant still on), plus their own. */
-export async function boardFor(env: Env, v: Viewer, canonId: string) {
+type BoardRow = { user_id: string; handle: string | null; name: string | null; driver_score: number; time_s: number | null; driven_on: string; mine: number; days_month: number };
+export async function boardFor(env: Env, v: Viewer, canonId: string): Promise<BoardRow[]> {
+  return (await boardStmt(env, v, canonId).all<BoardRow>()).results;
+}
+const boardStmt = (env: Env, v: Viewer, canonId: string) =>
   // days_month (IDEAS S-08, local legends without speed): how many different days this month each driver posted a score here
-  return all<{ user_id: string; handle: string | null; name: string | null; driver_score: number; time_s: number | null; driven_on: string; mine: number; days_month: number }>(env,
+  env.DB.prepare(
     `SELECT be.user_id, u.handle, ${NAME_FOR("be.user_id", "?1")} AS name, MAX(be.driver_score) AS driver_score, MIN(be.time_s) AS time_s,
             MAX(be.driven_on) AS driven_on, (be.user_id = ?1) AS mine,
             COUNT(DISTINCT CASE WHEN be.driven_on >= date('now', 'start of month') THEN be.driven_on END) AS days_month
        FROM board_entries be JOIN users u ON u.id = be.user_id
       WHERE be.canon_id = ?2
         AND (be.user_id = ?1 OR (${VISIBLE_FROM_OTHERS}))
-      GROUP BY be.user_id ORDER BY driver_score DESC LIMIT 100`, v.id, canonId);
-}
+      GROUP BY be.user_id ORDER BY driver_score DESC LIMIT 100`).bind(v.id, canonId);
 
 export const ACTIVITY_DAYS = 14, ACTIVITY_MAX = 30;
 /**
@@ -398,8 +404,11 @@ export async function boardActivity(env: Env, v: Viewer) {
       GROUP BY be.user_id, be.canon_id, be.driven_on
       ORDER BY be.driven_on DESC, driver_score DESC LIMIT ${ACTIVITY_MAX}`, v.id);
   const standing = new Map<string, { rank: number | null; of: number; mine: number | null }>();
-  for (const canon of new Set(rows.map((r) => r.canon_id))) {
-    const board = await boardFor(env, v, canon);
+  // the boards in one batch (a batch is one of Workers Free's 50 D1 queries per invocation; up to 30 stages here)
+  const canons = [...new Set(rows.map((r) => r.canon_id))];
+  const boards = canons.length ? await env.DB.batch<BoardRow>(canons.map((c) => boardStmt(env, v, c))) : [];
+  for (const [k, canon] of canons.entries()) {
+    const board = boards[k].results;
     const i = board.findIndex((r) => r.mine);
     standing.set(canon, { rank: i < 0 ? null : i + 1, of: board.length, mine: i < 0 ? null : board[i].driver_score });
   }
