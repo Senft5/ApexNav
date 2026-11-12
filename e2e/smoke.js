@@ -3527,11 +3527,12 @@ flow('the theme cards and the words example say the real words, in the driver\'s
     quote: document.querySelector('#themeCards .tc-voice p').textContent, example: document.getElementById('noteWordsNote').textContent,
     call: ApexVocabulary.sampleCall(apexDebug.state.noteWords, { plain: ApexPlainNotes, units: ApexUnits, paceNoteText: ApexCore.paceNoteText }) }));
   const plain = await read();
-  check(plain.head === 'MEDIUM RIGHT' && plain.tail === 'CAREFUL · LONG' && plain.quote.includes(`"${plain.call}.`) && plain.example === `For example "${plain.call}".`
+  // TestFlight 2026-11-12 (the owner: "walls of text"): the card names its voice and Hear says the call; no quote printed under it
+  check(plain.head === 'MEDIUM RIGHT' && plain.tail === 'CAREFUL · LONG' && plain.quote === 'Marguerite · suggested voice' && plain.example === `For example "${plain.call}".`
     && !/TIGHTENS|Late apex|Slow down/.test(plain.head + plain.quote + plain.example), 'plain words, generated: ' + JSON.stringify(plain));
   await page.evaluate(() => document.querySelector('#noteWordsList [data-words="rally"]').click());
   const rally = await read();
-  check(rally.head === 'RIGHT 3' && rally.quote.includes(`"${rally.call}.`) && rally.example.includes(rally.call), 'rally notes, generated: ' + JSON.stringify(rally));
+  check(rally.head === 'RIGHT 3' && rally.example.includes(rally.call), 'rally notes, generated: ' + JSON.stringify(rally));
 });
 
 flow('small things: Notes is a detent, Layers never cuts the place plate, the Log pager draws its arrows (REVIEW4 U-82, U-81, U-76)', async (page, base) => {
