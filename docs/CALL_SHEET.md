@@ -12,6 +12,51 @@ instead of the way to its start. The Log adds one sentence with your place to it
 the Log has no toast and the line is already where the board is. For you's "went quicker than you" now names the loop and
 drops a loop a moderator took down. I left the home deck to Roamer C's branch. Undo: drop `peek` from `openPlan`, or the
 `driveLoop` hook in cockpit.js, which falls back to the way to the start.
+## 2026-11-12 (deepest analysis 18): the end card names your passes on a road you know (claude/project-thread-gd7nre)
+
+After a drive on a road you have driven three or more times, the map's end card adds one line: what this drive lost most
+at the road's least even corners when that is known, else at how many corners it was your cleanest pass yet. Calls: one
+line, not both, to keep the card short; it rides the coaching job so the card does not read your drives twice. Undo:
+remove `#endRoad` from web/index.html and its two lines in cockpit.js.
+
+## 2026-11-12 (deepest analysis 17): a drive's page says what it lost at a road's least even corners (claude/project-thread-gd7nre)
+
+Where a road's passes differ most and this drive was more than 5 levels off your cleanest there, its corner note now names
+the technique it lost most against that cleanest pass. Calls: only those corners say it (a corner close to your cleanest
+has nothing worth naming); it compares against your cleanest pass, not your average. Undo: drop `why` from road_records
+rows and the two word changes in web/driver_profile.js.
+
+## 2026-11-12 A Fun, Long way or loop plan that fails says why to our crash counts (claude/project-thread-39xbx9)
+
+Nate saw "check my signal" on every Fun and Long way plan and the cause was never reproduced here. So a plan our router
+can't make now sends one anonymous report through the existing crash-report channel (`POST /api/errors`, kind `route`):
+the level and the reason code (`index`: the road map didn't load; `out`: off our map; `off`; `failed` with the worker's
+error text, scrubbed like any crash message). No place, trip or account. The Worker counts them per day in error_counts,
+so the next time it happens the cause is in D1. Privacy policy and APP_REVIEW updated. Undo: drop the two
+`ApexErrors.reporter.route` calls in web/cockpit.js and `"route"` from KINDS in backend/src/errors.ts.
+## 2026-11-12 (deepest analysis 16): the road book offers its uneven corners' technique as the practice (claude/project-thread-gd7nre)
+
+Where a road's passes differ most, the road book now says which technique accounts for most of it and offers to practise
+it on your next drives. Calls: the practice it sets covers every corner (no "lefts only" place), since a road's corners
+are not one kind; a tie between techniques goes to the corner whose passes differ most; it replaces any practice already
+under way, the same as "Practice ... instead" in Your driving. Undo: remove `showBookPractice` in web/analysis.html.
+
+## 2026-11-11 (Valhalla for Quick only, part 3): the Valhalla stage-plan and stage-loop code is gone (claude/project-thread-39xbx9)
+
+Since Fun, Long way and loops are our router's only, three pieces of web/cockpit.js could no longer run: funRoute's
+Valhalla stage plans (stage discovery round the trip, the connector matrix, stage legs), and buildLoop's stage loops and
+their refine after the card (`stageJobs`, `loopRefine`). They are deleted rather than kept switched off, so nobody
+switches a Valhalla fallback back on by accident. The pure helpers they used (fun_route.js shortlist / plansFromMatrix /
+loopPlansFromMatrix, stages.js) stay: Explore and their own tests use them. Undo: revert the commit.
+
+## 2026-11-11 (TestFlight 21:14): a corner or moment tapped on a drive's page zooms the map to it (claude/project-thread-0wt1zm)
+
+Your note "tapping a corner or moment here should orient the view above to show that corner zoomed in on the map". A tap on
+a corner, an abrupt moment, a braking-consistency row or a coach row now glides the map in on that stretch (the corner's
+start to end, or 50 m either side of a moment, with 60 m round it and at least 250 m across), and scrolls the map into view
+if it is above the screen. Calls: the lanes keep their own zoom (as before); "All" in the zoom row, or Recenter on the map,
+shows the whole drive again; with no map (offline) the plain picture zooms the same way and a tap on it zooms back out;
+reduced motion jumps instead of gliding. Undo: revert the PR.
 ## 2026-11-11 (roam-b walkthrough 2): Done after a replay brings the map back to where you are (claude/project-thread-sxhrgi)
 
 - Done (or the plate's ×) after watching a replay, whether the welcome's demo or one of your drives from the Log, now jumps
@@ -25,6 +70,12 @@ Stage discovery (the roads Explore, loops and routes pick from) now lifts a road
 crests by up to 1.5 points, and drops one by 1.5 points for each crowd-verified bump on it, at most 4.5 (a confirmed
 hand-reported hazard costs 3). The sizes are a judgment call: a crested road wins against a flat one half a point better;
 two verified bumps send it back. Undo: `CREST_MAX` and `BUMP_PTS` 0 in web/measured_stages.js.
+## 2026-11-11 (deepest analysis, PR 15): an uneven corner names one skill, the widest gap (claude/project-thread-gd7nre)
+
+The road list names the one technique credit that differs most between your cleanest and least clean pass at an uneven
+corner, so "where" comes with "what". One skill, not a list: the biggest gap is the clearest thing to try next time; a
+corner whose least clean pass is no lower on any credit names none. Undo: revert the PR.
+
 ## 2026-11-11 (places by name, 3): ask Siri for the next gas station or café (claude/project-thread-me97iw)
 
 Two new Siri phrases: "Where's the next gas station in Vetta" and "Where's the next café in Vetta" (also "Next fuel" /

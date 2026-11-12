@@ -126,11 +126,27 @@
   // U-111: the one coaching sentence a drive gets, the Log's (drive_view.js plainCoach over this drive's score and the coach's
   // corners against your other drives, as the drive job gives the Log), so the end card says the same words. null when the
   // drive is not stored, drive_view.js is not loaded here, or there is no score to coach from.
+  // With it, the road's own line (driver_profile.js roadEndLine over roadOf), or null: one pass over the near drives for both.
   async function coachLineOf(Core, id, sums) {
     const me = sums.find((s) => s.id === id), d = me ? await full(id, me) : null;
-    if (!d || !root.ApexDriveView) return null;
-    const { co } = await coachOf(Core, d, sums);
-    return root.ApexDriveView.plainCoach(d.ds, co) || null;
+    if (!d || !root.ApexDriveView) return { coach: null, road: null };
+    const { co, near } = await coachOf(Core, d, sums), P = root.ApexDriverProfile;
+    let road = null;
+    try { road = P && P.roadEndLine ? P.roadEndLine(roadOf(Core, d, near)) : null; } catch (_) { road = null; }
+    return { coach: root.ApexDriveView.plainCoach(d.ds, co) || null, road };
+  }
+  // this drive's corners against your other passes of the same road, corner by corner (driver_profile.js roadRecords), each
+  // row with the date of the drive that holds it (null: this one, or unknown); null without driver_profile.js
+  function roadOf(Core, d, near) {
+    const P = root.ApexDriverProfile;
+    if (!P || !P.roadRecords) return null;
+    const ob = (x) => P.observe({ ...x, corners: Rec().scorableCorners(x, x.corners || []) }, Core), lat0 = d.lat[0], lon0 = d.lon[0];
+    // oldest first, so of equal passes the first to reach a level holds the corner (as recordsBySize)
+    const past = near.filter((o) => Array.isArray(o.corners) && o.corners.length).sort((p, q) => String(p.date || '').localeCompare(String(q.date || '')));
+    const road = P.roadRecords(P.placed(d, ob(d), lat0, lon0), past.map((o) => P.placed(o, ob(o), lat0, lon0)), past.map((o) => o.id));
+    const on = new Map(past.map((o) => [o.id, monthOf(o) === null ? null : o.date]));
+    road.rows = (road.rows || []).map((r) => ({ ...r, on: r.by === null ? null : on.get(r.by) || null }));
+    return road;
   }
 
   // IDEAS D-27: how the practised skill went on one drive, against the level the plan keeps from before it, and the end
@@ -216,10 +232,10 @@
     /** U-111: a stored drive's coaching sentence, the Log's (coachLineOf); { coach: null } when there is none. */
     async coachLine({ id }) {
       const Core = CoreOf(), sums = await Rec().summaries(Core);
-      let coach = null;
-      try { coach = await coachLineOf(Core, id, sums); } catch (_) { coach = null; }
+      let out = { coach: null, road: null };
+      try { out = await coachLineOf(Core, id, sums); } catch (_) { out = { coach: null, road: null }; }
       release();
-      return { coach };
+      return out;
     },
 
     /** IDEAS D-27: how the practised skill went on a stored drive (practiceOf); { practice: null } without a plan or corners. */
@@ -256,16 +272,7 @@
                    matched: r ? r.matched_corners : 0, delta_s: r ? r.corner_delta_s : null }; });
       let touch = null;
       try { touch = await touchOf(Core, d, id, sums); } catch (_) { touch = null; }
-      // this drive's corners against your other passes of the same road, corner by corner (driver_profile.js roadRecords)
-      const P = root.ApexDriverProfile;
-      if (touch && P && P.roadRecords) try {
-        const ob = (x) => P.observe({ ...x, corners: Rec().scorableCorners(x, x.corners || []) }, Core), lat0 = d.lat[0], lon0 = d.lon[0];
-        // oldest first, so of equal passes the first to reach a level holds the corner (as recordsBySize)
-        const past = near.filter((o) => Array.isArray(o.corners) && o.corners.length).sort((p, q) => String(p.date || '').localeCompare(String(q.date || '')));
-        touch.road = P.roadRecords(P.placed(d, ob(d), lat0, lon0), past.map((o) => P.placed(o, ob(o), lat0, lon0)), past.map((o) => o.id));
-        const on = new Map(past.map((o) => [o.id, monthOf(o) === null ? null : o.date]));
-        touch.road.rows = (touch.road.rows || []).map((r) => ({ ...r, on: r.by === null ? null : on.get(r.by) || null }));
-      } catch (_) { touch.road = null; }
+      if (touch) try { touch.road = roadOf(Core, d, near); } catch (_) { touch.road = null; }
       release();
       return { reference, coach: co, road, touch, bestOther: reference ? reference.id : (sums.find((s) => s.id !== id) || {}).id || null };
     },

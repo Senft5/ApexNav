@@ -6,6 +6,50 @@
   `passed` names the loop and skips taken-down loops.
 - Tests: backend time_attack and inbox, pytest test_time_attack (12), and the e2e time attack flow (row line, Drive it).
 - Next: the home deck's weekly loop is on Roamer C's branch claude/roam-c-ta-placement.
+## Session 2026-11-12 (deepest analysis, PR 18): the end card says how this drive went on a road you know (claude/project-thread-gd7nre)
+
+- `web/driver_profile.js` `roadEndLine(r)`: on a road driven three or more times, roadUnevenLine when a least even corner
+  names what this drive lost there, else roadRecordLine ("On this road: your cleanest pass yet at 7 of the 24...").
+- `analysis_client.js`: the road records moved into `roadOf` (the drive job and the coachLine job share it); coachLine now
+  returns `{ coach, road }` from one read of the near drives, so the end card asks nothing extra.
+- Map end card: `#endRoad` under the practice line. e2e: the four-drive road flow opens r3's end card and checks the line.
+- Next: Your driving's profile could list the roads with the most uneven corners, to say where on your roads to practise.
+
+## Session 2026-11-12 (deepest analysis, PR 17): a drive's least even corners say what it lost there (claude/project-thread-gd7nre)
+
+- `road_records` rows (and the JS port) carry `why`: on an uneven corner this drive took more than NEAR_BEST below your
+  cleanest, the technique credit it lost most against that cleanest pass (`_why`), else null.
+- Drive page: that corner's note reads "Your cleanest here: 90, Jun 1; this pass 62, mostly one steering arc", and the
+  touch panel's uneven line ends "What it lost most there: one steering arc." (the credit named most often).
+- e2e: the four-drive road flow checks both on the last drive.
+- Next: the end card on the map after a drive of a known road could say the same in one line.
+
+## 2026-11-12 Route-failure reasons in crash counts (claude/project-thread-39xbx9)
+- A Fun / Long way / loop plan our router couldn't make reports its reason code (kind `route`) to /api/errors; read them with `SELECT * FROM error_counts WHERE kind = 'route'` on apexnav-db. Next: once Nate hits the signal error again, read the reason there and fix that cause.
+## Session 2026-11-12 (deepest analysis, PR 16): a road's least even corners can set the practice (claude/project-thread-gd7nre)
+
+- `core/driver_profile.py` `road_book_focus(book)` (JS port `roadBookFocus`, parity-tested in tests/test_best_corners.py):
+  the technique named most often across a road book's uneven corners (a tie goes to the widest corner), with the corners
+  that name it. `roadBookFocusLine` words it: "Most of the difference at corners 10, 14 and 18 is one steering arc."
+- Log > Your roads, corner by corner: that line under the head, with "Practice one steering arc on my next drives". The
+  key saves the same plan Your driving keeps (`vetta.practice`, `where: null`, since now), so the drive end card and the
+  Practicing box read it as usual. With that skill already practised it says so instead of offering it.
+- e2e: the road-driven-four-times flow's second pass has no steering corrections, so the book shows the line and the key.
+- Next: the drive page's "where your passes differ most" line (roadUnevenLine) could name the same technique.
+
+## 2026-11-11 Valhalla for Quick only, part 3 (claude/project-thread-39xbx9)
+- Deleted the code Fun, Long way and loops could no longer reach: funRoute's Valhalla stage plans and buildLoop's stage loops and loopRefine. Docs (ROUTING, OWN_ROUTING, CALL_SHEET) updated.
+- Next: the Explore list still times stages with Valhalla's matrix off our tiles; it's a listing, not a route, so it stays for now.
+
+## Session 2026-11-11 (TestFlight 21:14): corner and moment taps zoom the drive page's map (claude/project-thread-0wt1zm)
+
+- The hourly TestFlight run moved to this thread (scheduled task at :52 UTC; the old task is paused). Owner note 21:14:22Z.
+- web/drive_basemap.js: `attach()` returns `focus(v)` (easeTo, or jumpTo under reduced motion). web/drive_view.js:
+  `applyCam` (the old onMove body), `focusMap(a, b)` frames samples a..b, `pick(i, a, b)` for every list row; "All" and a
+  tap on the plain picture call `unfocusMap`.
+- Tests: e2e "the drive page's map" flows (stubbed MapLibre: a corner row eases in, All fits again; plain picture zooms and
+  back). Checked: pytest, those flows.
+- Next: the hourly run keeps watching TestFlight.
 ## Session 2026-11-11 (roam-b first-run walkthrough, PR 2): Done after a replay comes home (claude/project-thread-sxhrgi)
 
 - Watched the welcome's replay to its end on production (iPhone 13 viewport, at Knoxville): it plays through to "Replay
@@ -22,6 +66,15 @@
   (max 4.5), the larger direction's count per matched road. No migration.
 - Tests: backend/test/coverage.test.ts (+2), tests/test_measured_stages.py `test_crests_and_verified_bumps`.
 - Next: the FunRoute ranking of Valhalla candidates (fun_route.js) with the same crest and bump data per route.
+## Session 2026-11-11 (deepest analysis, PR 15): what differs at a road's least even corners (claude/project-thread-gd7nre)
+
+- `road_book` / `roadBook` keep each drive's cleanest pass of a corner with its six credits (`placed` now carries
+  `credits`); an uneven corner's `why` is the credit that differs most between its cleanest and least clean pass
+  (`_why` / `whyOf`, ties to the earlier skill), else null. The Log's road list says "; your least clean 62, mostly one
+  steering arc".
+- Tests: tests/test_best_corners.py (why, words, parity); e2e row pattern.
+- Next: Practice (IDEAS D-27) could take that corner's skill as the one to work on, from the road list.
+
 ## Session 2026-11-11 (places by name, 3): Siri, "where's the next gas station / café" (claude/project-thread-me97iw, off origin/main)
 
 - ApexIntents.swift: NextFuelIntent / NextCafeIntent (go=nextfuel / nextcafe), 7 App Shortcuts now (Apple allows 10).

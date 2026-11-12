@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self' apexnav:; script-src 'self' apexnav: 'sha256-R/H53eKXyDZUJjKkUeKeFYoFreFlEvyEzmkCeojIHa0=' 'sha256-G7s/ZI+Hqrfc4DqbB6EANJJLmUmhNK06PizQ1LlsG84=' https://cdn.jsdelivr.net 'wasm-unsafe-eval'; worker-src 'self' apexnav: blob:; child-src 'self' apexnav: blob:; style-src 'self' apexnav: 'unsafe-inline'; font-src 'self' apexnav: data:; img-src 'self' apexnav: data: blob: https://tiles.openfreemap.org https://s3.amazonaws.com https://basemap.nationalmap.gov; media-src 'self' apexnav: data: blob:; connect-src 'self' apexnav: data: blob: https://apexnav.senftns.workers.dev wss://apexnav.senftns.workers.dev https://tiles.openfreemap.org https://basemap.nationalmap.gov https://s3.amazonaws.com https://valhalla1.openstreetmap.de https://router.project-osrm.org https://overpass-api.de https://overpass.private.coffee https://overpass.kumi.systems https://maps.mail.ru https://nominatim.openstreetmap.org https://photon.komoot.io https://api.open-meteo.com https://api.weather.gov https://statsapi.mlb.com https://api.seatgeek.com https://api.water.noaa.gov https://waterservices.usgs.gov https://in.carsprogram.org https://publicapi.ohgo.com https://quickstats.nass.usda.gov https://commons.wikimedia.org https://graph.mapillary.com https://vpic.nhtsa.dot.gov https://cdn.jsdelivr.net https://huggingface.co https://*.huggingface.co https://*.hf.co; object-src 'none'; base-uri 'none'; form-action 'self'" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self' apexnav:; script-src 'self' apexnav: 'sha256-GOT/19jDGeKOUpfKXD3C4iWeMd1Qtb/GSmSMw29EAFc=' 'sha256-G7s/ZI+Hqrfc4DqbB6EANJJLmUmhNK06PizQ1LlsG84=' https://cdn.jsdelivr.net 'wasm-unsafe-eval'; worker-src 'self' apexnav: blob:; child-src 'self' apexnav: blob:; style-src 'self' apexnav: 'unsafe-inline'; font-src 'self' apexnav: data:; img-src 'self' apexnav: data: blob: https://tiles.openfreemap.org https://s3.amazonaws.com https://basemap.nationalmap.gov; media-src 'self' apexnav: data: blob:; connect-src 'self' apexnav: data: blob: https://apexnav.senftns.workers.dev wss://apexnav.senftns.workers.dev https://tiles.openfreemap.org https://basemap.nationalmap.gov https://s3.amazonaws.com https://valhalla1.openstreetmap.de https://router.project-osrm.org https://overpass-api.de https://overpass.private.coffee https://overpass.kumi.systems https://maps.mail.ru https://nominatim.openstreetmap.org https://photon.komoot.io https://api.open-meteo.com https://api.weather.gov https://statsapi.mlb.com https://api.seatgeek.com https://api.water.noaa.gov https://waterservices.usgs.gov https://in.carsprogram.org https://publicapi.ohgo.com https://quickstats.nass.usda.gov https://commons.wikimedia.org https://graph.mapillary.com https://vpic.nhtsa.dot.gov https://cdn.jsdelivr.net https://huggingface.co https://*.huggingface.co https://*.hf.co; object-src 'none'; base-uri 'none'; form-action 'self'" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
   <title>Vetta · Log</title>
   <link rel="icon" href="brand/mark.svg" type="image/svg+xml" />
@@ -404,7 +404,7 @@
       <!-- a road you have driven three or more times, corner by corner: your cleanest pass at each and the drive it came on -->
       <details class="quiet" id="bookPanel" hidden><summary>Your roads, corner by corner</summary>
         <div class="stamps" id="bookRoads" role="group" aria-label="Pick a road"></div>
-        <p class="note" id="bookHead" aria-live="polite"></p><ol class="book-list" id="bookList"></ol></details>
+        <p class="note" id="bookHead" aria-live="polite"></p><p class="note" id="bookPractice" hidden></p><ol class="book-list" id="bookList"></ol></details>
       <details class="quiet" id="kudosPanel" hidden><summary id="kudosSum">Kudos for you</summary><div id="kudosList" class="stack-8"></div></details>
       <div class="panel" id="friendsPanel" hidden><h2>Friends lately</h2><div id="friendsList" class="stack-8"></div>
         <p class="note">From friends and crews who share scores with you, on stages you have. Scores only, never times.</p></div>
@@ -666,23 +666,40 @@
       if (!bookPick) { $('bookHead').textContent = 'Pick a road to see each corner\'s cleanest pass.'; $('bookList').replaceChildren(); }
     }
     async function showBook(r) {
-      $('bookHead').textContent = 'Reading its drives…'; $('bookList').replaceChildren();
+      $('bookHead').textContent = 'Reading its drives…'; $('bookList').replaceChildren(); $('bookPractice').hidden = true;
       let book = null;
       try { book = (await ApexAnalysis.job('roadBook', { id: r.id })).book; } catch (_) { book = null; }
       if (bookPick !== r.name) return;
       const w = ApexDriverProfile.roadBookRows(book, (at) => ApexFormat.dateTime(at.slice(0, 10)));
       if (!w) { $('bookHead').textContent = 'No corner of it driven cleanly three times yet: only corners with every technique credit measured count.'; return; }
       $('bookHead').textContent = w.work ? `${w.head} ${w.work}` : w.head;
+      showBookPractice(ApexDriverProfile.roadBookFocus(book));
       $('bookList').replaceChildren(...w.rows.map((x) => {
         const li = document.createElement('li'), n = document.createElement('span'), t = document.createElement('span'), v = document.createElement('b'), by = document.createElement('button');
         n.className = 'bk-n'; n.textContent = String(x.n); t.textContent = x.what; v.textContent = String(x.record);
-        by.type = 'button'; by.className = 'bk-by'; by.textContent = `${x.on ? `On ${x.on}` : 'On a drive of unknown date'}, of ${x.passes} passes${x.uneven ? `; your least clean ${x.low}` : ''}`;
+        by.type = 'button'; by.className = 'bk-by'; by.textContent = `${x.on ? `On ${x.on}` : 'On a drive of unknown date'}, of ${x.passes} passes${x.uneven ? `; your least clean ${x.low}${x.why ? `, mostly ${x.why}` : ''}` : ''}`;
         if (x.uneven) li.classList.add('uneven');
         by.addEventListener('click', () => openDrive(x.by));
         li.setAttribute('aria-label', `Corner ${x.n}, ${x.what}: your cleanest pass ${x.record}`);
         li.append(n, t, v, by);
         return li;
       }));
+    }
+    // IDEAS D-27 from the road book: the technique its uneven corners differ by most, as the skill to practise next
+    function showBookPractice(f) {
+      const box = $('bookPractice'), line = ApexDriverProfile.roadBookFocusLine(f);
+      box.hidden = !line;
+      if (!line) { box.replaceChildren(); return; }
+      const name = ApexDriverProfile.WORDS[f.skill].name.toLowerCase(), plan = ApexDriverProfile.loadPlan(localStorage);
+      if (plan && plan.skill === f.skill) { box.textContent = `${line} You are practicing it now: Your driving shows how it goes.`; return; }
+      const b = document.createElement('button');
+      b.type = 'button'; b.className = 'linkbtn'; b.id = 'bookPracticeGo'; b.textContent = `Practice ${name} on my next drives`;
+      b.addEventListener('click', () => {
+        ApexDriverProfile.savePlan(localStorage, { skill: f.skill, where: null, since: ApexDriverProfile.localStamp() });
+        box.textContent = `${line} Practicing it from your next drive: Your driving shows how it goes.`;
+        box.tabIndex = -1; box.focus({ preventScroll: true });
+      });
+      box.replaceChildren(document.createTextNode(`${line} `), b);
     }
     function renderRoads() {
       renderBook();

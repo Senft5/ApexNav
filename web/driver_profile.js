@@ -314,19 +314,22 @@
     const held = [], rows = [];
     for (const m of mine || []) {
       if (m.level === null || m.level === undefined) continue;
-      const tops = [], who = [];
+      const tops = [], who = [], pas = [];
       (others || []).forEach((drive, i) => {
         let top = null;
         for (const o of drive) {
           if (o.level === null || o.level === undefined) continue;
-          if (Math.hypot(o.x - m.x, o.y - m.y) < SAME_CORNER_M && o.hx * m.hx + o.hy * m.hy > SAME_WAY) top = top === null ? o.level : Math.max(top, o.level);
+          if (Math.hypot(o.x - m.x, o.y - m.y) < SAME_CORNER_M && o.hx * m.hx + o.hy * m.hy > SAME_WAY && (top === null || o.level > top.level)) top = o;
         }
-        if (top !== null) { tops.push(top); who.push(ids ? ids[i] : i); }
+        if (top !== null) { tops.push(top.level); who.push(ids ? ids[i] : i); pas.push(top); }
       });
       if (1 + tops.length < ROAD_MIN_PASSES) continue;
       corners++;
       const mx = Math.max(...tops);
-      if (m.apex !== null && m.apex !== undefined) rows.push({ apex: m.apex, level: m.level, passes: 1 + tops.length, record: Math.max(mx, m.level), low: Math.min(...tops, m.level), by: m.level > mx ? null : who[tops.indexOf(mx)] });
+      if (m.apex !== null && m.apex !== undefined) {
+        const low = Math.min(...tops, m.level), off = mx - low >= UNEVEN_LEVELS && m.level < mx - NEAR_BEST;
+        rows.push({ apex: m.apex, level: m.level, passes: 1 + tops.length, record: Math.max(mx, m.level), low, by: m.level > mx ? null : who[tops.indexOf(mx)], why: off ? whyOf(pas[tops.indexOf(mx)], m) : null });
+      }
       if (m.level > mx) { best++; if (m.apex !== null && m.apex !== undefined) held.push(m.apex); } else if (m.level === mx) lvl++;
     }
     const wide = rows.filter((r) => r.record - r.low >= UNEVEN_LEVELS);
@@ -338,7 +341,7 @@
     return (obs || []).filter((o) => SKILLS.every((k) => o[k] !== null && o[k] !== undefined)).map((o) => {
       const a = o.apex, a0 = Math.max(0, a - 2), a1 = Math.min(n - 1, a + 2);
       const hx = (d.lon[a1] - d.lon[a0]) * c * 111320, hy = (d.lat[a1] - d.lat[a0]) * 110540, hn = Math.hypot(hx, hy) || 1;
-      return { apex: a, size: o.size === undefined ? null : o.size, dir: o.dir === undefined ? null : o.dir, x: (d.lon[a] - lon0) * c * 111320, y: (d.lat[a] - lat0) * 110540, hx: hx / hn, hy: hy / hn, level: level(SKILLS.reduce((t, k) => t + o[k], 0) / SKILLS.length) };
+      return { apex: a, credits: Object.fromEntries(SKILLS.map((k) => [k, o[k]])), size: o.size === undefined ? null : o.size, dir: o.dir === undefined ? null : o.dir, x: (d.lon[a] - lon0) * c * 111320, y: (d.lat[a] - lat0) * 110540, hx: hx / hn, hy: hy / hn, level: level(SKILLS.reduce((t, k) => t + o[k], 0) / SKILLS.length) };
     });
   }
   /** "On this road: your cleanest pass yet at 7 of the 24 corners you have driven three or more times, level with it at 2." */
@@ -349,6 +352,17 @@
     if (!r.best) return `On this road: level with your cleanest pass at ${r.level} ${of}.`;
     return `On this road: your cleanest pass yet at ${r.best} ${of}${r.level ? `, level with it at ${r.level}` : ''}.`;
   }
+  /** The credit that differs most between a corner's cleanest and least clean pass (port of driver_profile._why). */
+  function whyOf(best, worst) {
+    const a = (best && best.credits) || {}, b = (worst && worst.credits) || {};
+    let top = null;
+    SKILLS.forEach((k) => {
+      if (a[k] === null || a[k] === undefined || b[k] === null || b[k] === undefined) return;
+      const g = a[k] - b[k];
+      if (!top || g > top.g) top = { g, k };
+    });
+    return top && top.g > 0 ? top.k : null;
+  }
   /** A road's corners across every drive of it (port of driver_profile.road_book). drives oldest first, each
    *  { id, at, corners: placed() }; ref [[x, y]] along one drive of the road for road order. */
   function roadBook(drives, ref = null) {
@@ -356,8 +370,8 @@
     for (const d of drives || []) for (const o of d.corners || []) {
       if (o.level === null || o.level === undefined) continue;
       let c = book.find((c) => Math.hypot(o.x - c.x, o.y - c.y) < SAME_CORNER_M && o.hx * c.hx + o.hy * c.hy > SAME_WAY);
-      if (!c) { c = { x: o.x, y: o.y, hx: o.hx, hy: o.hy, size: o.size === undefined ? null : o.size, dir: o.dir === undefined ? null : o.dir, by: new Map(), k: book.length }; book.push(c); }
-      c.by.set(d.id, Math.max(c.by.has(d.id) ? c.by.get(d.id) : o.level, o.level));
+      if (!c) { c = { x: o.x, y: o.y, hx: o.hx, hy: o.hy, size: o.size === undefined ? null : o.size, dir: o.dir === undefined ? null : o.dir, by: new Map(), pass: new Map(), k: book.length }; book.push(c); }
+      if (!c.by.has(d.id) || o.level > c.by.get(d.id)) { c.by.set(d.id, o.level); c.pass.set(d.id, o); }
     }
     const at = new Map((drives || []).map((d) => [d.id, d.at === undefined ? null : d.at])), order = new Map((drives || []).map((d, i) => [d.id, i]));
     const pos = (c) => {
@@ -371,7 +385,8 @@
       if (c.by.size < ROAD_MIN_PASSES) continue;
       const rec = Math.max(...c.by.values());
       const by = [...c.by].filter(([, v]) => v === rec).map(([i]) => i).sort((a, b) => order.get(a) - order.get(b))[0];
-      out.push({ x: c.x, y: c.y, size: c.size, dir: c.dir, passes: c.by.size, record: rec, low: Math.min(...c.by.values()), by, at: at.get(by) });
+      const low = Math.min(...c.by.values()), worst = [...c.by].filter(([, v]) => v === low).map(([i]) => i).sort((a, b) => order.get(a) - order.get(b))[0];
+      out.push({ x: c.x, y: c.y, size: c.size, dir: c.dir, passes: c.by.size, record: rec, low, by, at: at.get(by), why: rec - low >= UNEVEN_LEVELS ? whyOf(c.pass.get(by), c.pass.get(worst)) : null });
     }
     const wide = out.map((k, i) => i).filter((i) => out[i].record - out[i].low >= UNEVEN_LEVELS)
       .sort((a, b) => (out[b].record - out[b].low) - (out[a].record - out[a].low) || a - b);
@@ -388,8 +403,29 @@
       head: `${n} corner${n === 1 ? '' : 's'} you have driven three or more times, in road order${more}. Each with your cleanest pass and the drive it came on.`,
       // where on the road to work: the corners your passes differ most at (UNEVEN_LEVELS apart or more)
       work: uneven.length ? `Least even: corner${uneven.length === 1 ? '' : 's'} ${list(uneven)}, where your passes differ the most.` : null,
-      rows: book.corners.map((c, i) => ({ n: i + 1, what: what(c), record: c.record, low: c.low === undefined ? null : c.low, uneven: uneven.includes(i + 1), by: c.by, on: c.at && day ? day(c.at) : null, passes: c.passes })),
+      rows: book.corners.map((c, i) => ({ n: i + 1, what: what(c), record: c.record, low: c.low === undefined ? null : c.low, uneven: uneven.includes(i + 1), why: c.why && WORDS[c.why] ? WORDS[c.why].name[0].toLowerCase() + WORDS[c.why].name.slice(1) : null, by: c.by, on: c.at && day ? day(c.at) : null, passes: c.passes })),
     };
+  }
+  const lowerName = (k) => WORDS[k].name[0].toLowerCase() + WORDS[k].name.slice(1);
+  /** Port of core/driver_profile.py road_book_focus: the why named most over a road book's uneven corners (a tie to the
+   *  widest), { skill, at: [1-based places, road order] }, or null. */
+  function roadBookFocus(book) {
+    const corners = (book && book.corners) || [], seen = new Map();
+    ((book && book.uneven) || []).forEach((n, rank) => {
+      const k = n > 0 && n <= corners.length ? corners[n - 1].why : null;
+      if (!SKILLS.includes(k)) return;
+      const s = seen.get(k) || { c: 0, first: rank, at: [] };
+      s.c += 1; s.at.push(n); seen.set(k, s);
+    });
+    let best = null;
+    for (const [k, s] of seen) if (!best || s.c > best[1].c || (s.c === best[1].c && s.first < best[1].first)) best = [k, s];
+    return best ? { skill: best[0], at: best[1].at.slice().sort((a, b) => a - b) } : null;
+  }
+  /** "Most of the difference at corner 3 is one steering arc." for a road book's focus, or null. */
+  function roadBookFocusLine(f) {
+    if (!f || !WORDS[f.skill]) return null;
+    const w = lowerName(f.skill), at = f.at.length < 2 ? `corner ${f.at[0]}` : `corners ${f.at.slice(0, -1).join(', ')} and ${f.at[f.at.length - 1]}`;
+    return `Most of the difference at ${at} is ${w}.`;
   }
   /** A corner row's note from roadRecords rows: "Your cleanest of 4 passes here (92)", "Level with your cleanest here (90,
    *  Aug 12)", "Your cleanest here: 90, Aug 12; this pass 82". day(row) gives the holding drive's date, or null. */
@@ -398,11 +434,27 @@
     if (row.by === null || row.by === undefined) return `Your cleanest of ${row.passes} passes here (${row.record})`;
     const on = day ? day(row) : null;
     if (row.level >= row.record) return `Level with your cleanest here (${row.record}${on ? `, ${on}` : ''})`;
-    return `Your cleanest here: ${row.record}${on ? `, ${on}` : ''}; this pass ${row.level}`;
+    return `Your cleanest here: ${row.record}${on ? `, ${on}` : ''}; this pass ${row.level}${row.why && WORDS[row.why] ? `, mostly ${lowerName(row.why)}` : ''}`;
   }
   /** "At the 3 corners here where your passes differ most, this drive was near your cleanest at 2." (null with none) */
   function roadUnevenLine(r) {
     if (!r || !(r.uneven > 0)) return null;
+    // the credit named most often where this drive was off your cleanest (rows' why; a tie to the first in road order)
+    const n = new Map();
+    for (const x of r.rows || []) if (x && WORDS[x.why]) n.set(x.why, (n.get(x.why) || 0) + 1);
+    let top = null;
+    for (const [k, c] of n) if (!top || c > top[1]) top = [k, c];
+    const lost = top ? ` What it lost most there: ${lowerName(top[0])}.` : '';
+    return unevenHead(r) + lost;
+  }
+  /** The end card's one line on a road you have driven before: where this drive lost most at the road's least even
+   *  corners when it names a technique, else how many corners it was your cleanest at (roadRecordLine); null for neither. */
+  function roadEndLine(r) {
+    if (!r || !(r.corners > 0)) return null;
+    const off = (r.rows || []).some((x) => x && WORDS[x.why]);
+    return off ? roadUnevenLine(r) : roadRecordLine(r);
+  }
+  function unevenHead(r) {
     const at = r.uneven === 1 ? 'At the corner here where your passes differ most' : `At the ${r.uneven} corners here where your passes differ most`;
     if (!r.steady) return `${at}, this drive was not near your cleanest${r.uneven === 1 ? '' : ' at any of them'}: ${r.uneven === 1 ? 'it is' : 'they are'} the place${r.uneven === 1 ? '' : 's'} to work on.`;
     if (r.steady === r.uneven) return `${at}, this drive was near your cleanest ${r.uneven === 1 ? 'there' : 'at every one'}.`;
@@ -964,7 +1016,7 @@
     }
   }
 
-  const api = { SKILLS, observe, profile, swing, excess, SKILL_MIN, WORDS, findingLine, styleLines, touchLines, touchTrendLines, driveTouchLines, paceLines, PACE, MEASURES, touch, TOUCH, driveTouch, DRIVE_TOUCH_MIN, bestCorners, recordsBySize, RECORD_MIN, driveRecords, driveRecordLines, roadRecords, placed, roadRecordLine, roadCornerNote, roadBook, roadBookRows, roadUnevenLine, cardLine, focusLines, render,
+  const api = { SKILLS, observe, profile, swing, excess, SKILL_MIN, WORDS, findingLine, styleLines, touchLines, touchTrendLines, driveTouchLines, paceLines, PACE, MEASURES, touch, TOUCH, driveTouch, DRIVE_TOUCH_MIN, bestCorners, recordsBySize, RECORD_MIN, driveRecords, driveRecordLines, roadRecords, placed, roadRecordLine, roadCornerNote, roadBook, roadBookRows, roadBookFocus, roadBookFocusLine, roadUnevenLine, roadEndLine, cardLine, focusLines, render,
     PRACTICE_MIN, practice, drivePractice, practiceLine, practiceSummary, localStamp, loadPlan, savePlan, PLAN_KEY };
   if (typeof module !== 'undefined' && module.exports) module.exports = api; else root.ApexDriverProfile = api;
 })(typeof window !== 'undefined' ? window : globalThis);

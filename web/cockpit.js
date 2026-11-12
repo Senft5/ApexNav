@@ -3705,17 +3705,6 @@
       // ... and on screen: the work after it waits for the frame that shows it (live: the corridors and scoring that
       // followed at once held the first paint 0.2-0.3 s)
       const firstSeen = firstUp.then(() => new Promise((r) => { const go = () => setTimeout(r, 0); setTimeout(r, 100); if (typeof requestAnimationFrame === 'function') requestAnimationFrame(go); else go(); }));   // (a hidden page has no frames)
-      const stagesFor = async (a, b) => {
-        const area = FunRoute.searchArea(a, b);
-        const hls = state.hlOn ? await allHighlights(area.center) : [];
-        const found = await (ApexStages.discoverAsync || ApexStages.discover)(area.center, area.radiusKm, null, state.hlOn ? { highlights: hls, strength: state.hlStrength } : {});
-        await firstUp;
-        // the ends' heights (which way round each stage is driven) load alongside the network step, not after it (nor
-        // while the first route is drawn: decoding the height tiles takes the page's thread)
-        try { if (found && found.length && ApexStages.addElevations) ApexStages.addElevations(found.slice(0, 12)).catch(() => {}); } catch (_) { /* after, as before */ }
-        return stagesWithContext(await measuredStages(found, area.center, area.radiusKm));
-      };
-      const crowKm = FunRoute.kmBetween(from, to);
       // the map tiles along the straight line, fetched and decoded while the router routes (the route context reads them
       // next; the page is idle until the router answers)
       // Our own routing (own_routing.js, graph_router.js, docs/OWN_ROUTING.md): where the shipped graph tiles cover the
@@ -3748,7 +3737,6 @@
         .then(([r, late]) => (r && r.result && (r.result.partial || late) ? ApexOwnRouting.plan(ownRouter(), late ? { ...ownReq, crowd: late } : ownReq) : null)).catch(() => null) : Promise.resolve(null);
       // our quickest alone, first (one search): the first route on screen
       const ownQuickP = ownCovered ? ownQuickAsk : null;
-      const stagesAhead = !ownCovered && !ownOnly && level !== 'quick' && crowKm >= 3 && crowKm <= 48 && window.ApexStages ? stagesFor(from, to).catch(() => null) : null;
       let direct;
       // The router's costing keeps off highways (use_highways 0.15), which is what sent routes through subdivisions and
       // business districts; so the highway-friendly quickest competes too (route_engine.js highwayCosting), unless avoided.
@@ -3793,6 +3781,7 @@
       // Fun and Long way with no route of ours: said plainly, with Quick a tap away (no Valhalla stand-in)
       if (ownOnly && !ownUsed) {
         if (window.apexDebug) window.apexDebug.ownOnlyFail = own.reason;
+        try { if (window.ApexErrors && ApexErrors.reporter) ApexErrors.reporter.route(level, own.reason, own.error); } catch (_) { /* a report is never in the way */ }
         if (early.shown) return true;                                       // (never: the early quickest is ours too)
         const what = FunRoute.LEVELS[level].label;
         const msg = own.reason === 'out' ? `${what} routes use Vetta's own road map, which covers Ohio, Kentucky and Indiana so far. Quick works anywhere.`
@@ -3870,7 +3859,7 @@
         for (let k = directCands.length - 1; k >= 0; k--) if (quickNow && quickNow.highway && hwyCands.includes(quickNow) && same(directCands[k].route, quickNow.route)) { directCands.splice(k, 1); quickNow.highway = false; }
       }
       const cands = [...directCands, ...hwyCands];
-      const routerCands = cands.slice(), planCtx = new Map();
+      const routerCands = cands.slice();
       const routerCtx = ownUsed ? directCtx : Promise.all([directCtx, hwyCands.length ? firstUp.then(() => ctxRun(hwyCands, 'hwy')) : null]).then(([a, b]) => a || b);
       // once the router's routes have their context, the best of them is likely the pick: its track is built meanwhile
       (ownPrep ? Promise.all([routerCtx, ownPrep]) : routerCtx).then(() => {
@@ -3882,67 +3871,7 @@
           if (c && !(early.fired && c === quickNow)) buildAhead(c, id, name, ownUsed ? OWN_SIGHT_MS : undefined);
         } catch (_) { /* nothing built ahead: built after the ranking, as before */ }
       });
-      // The baseline is the quickest route that keeps to the avoid options (when one does), as the ranking's is.
-      const allowed = FunRoute.keepAvoiding(cands, avoid);
-      const quickS = Math.min(...allowed.map(c => c.timeS).filter(Number.isFinite));
-      // Under 3 km there is no detour worth taking to the shop round the corner.
-      if (!ownUsed && level !== 'quick' && Number.isFinite(quickS) && FunRoute.kmBetween(from, to) >= 3) {
-        try {
-          // Stage plans for one stretch a→b whose quickest drive takes stretchS: search its corridor, time the connectors, plan.
-          const stretch = async (a, b, stretchS, label, frac, slack) => {
-            ui.step(label, frac);
-            try {
-              const stages = (a === from && b === to && stagesAhead && await stagesAhead) || await stagesFor(a, b);
-              const list = FunRoute.shortlist(a, b, stages, FunRoute.LEVELS[level].budget, 4, slack);
-              if (!list.length) return [];
-              try { await RouteLoading.optional(ApexStages.addElevations(list)); } catch (_) { /* no DEM: which way round each stage (R-11) stays the nearer end */ }
-              const mp = FunRoute.matrixPoints(a, b, list);
-              return FunRoute.plansFromMatrix(list, (await valhallaMatrix(mp.sources, mp.targets, connectorCosting())).times, stretchS, level, 2, 2);
-            } catch (_) { return []; }                                   // no tiles or no matrix here: no stages from this stretch
-          };
-          // Longer trips also try sections along the quickest route, each planned like a short trip and chained (2 sections,
-          // 3 on Max fun): one circle round the middle can't reach the start and end of a long trip, and the public matrix
-          // gives up on long connections. Up to 48 km crow fly the middle circle is planned too and both kinds compete; past
-          // that it only costs requests (its connectors are too long for the matrix).
-          const n = FunRoute.sectionCount(from, to, level === 'max' ? 3 : 2);
-          // the whole trip and its sections are planned at the same time (live: the sections in turn after the whole trip
-          // added 2 s to Harrison); each is its own discovery (off the page's thread), network step and matrix
-          const wholeP = FunRoute.kmBetween(from, to) > 48 ? Promise.resolve([]) : stretch(from, to, quickS, 'Finding fun roads…', 0.75);
-          let sectionsP = null;
-          if (n > 1) {
-            try {
-              const quick = allowed.reduce((x, y) => (y.timeS < x.timeS ? y : x));
-              const cuts = FunRoute.sectionPoints(quick.route.coords, n);
-              cuts[0] = from; cuts[n] = to;
-              sectionsP = Promise.all(Array.from({ length: n }, (_, k) => stretch(cuts[k], cuts[k + 1], quickS / n, `Finding fun roads · ${k + 1} of ${n}`, 0.75 + 0.08 * k / n, 0)
-                .then((ps) => ps.filter(p => p.value > 0))));            // a section only detours when it pays
-            } catch (_) { sectionsP = null; }
-          }
-          const plans = await wholeP;
-          if (sectionsP) {
-            try {
-              const sections = await sectionsP;
-              const seen = new Set(plans.map(FunRoute.planKey));
-              for (const p of FunRoute.combineSections(sections, quickS, level, 2)) if (!seen.has(FunRoute.planKey(p))) { seen.add(FunRoute.planKey(p)); plans.push(p); }
-            } catch (_) { /* no sections: the whole-trip plans still compete */ }
-          }
-          ui.step('Routing fun roads…', 0.85);
-          // Three at a time (the public router rate-limits bursts); each plan's context starts the moment it's routed
-          const routed = [];
-          for (let i = 0; i < plans.length; i += 3) {
-            routed.push(...await Promise.allSettled(plans.slice(i, i + 3).map(async (plan, j) => {
-              const pts = FunRoute.waypoints(from, to, plan);
-              const [r] = await valhallaRoutes(pts, false, 0, connectorCosting() || {});   // fast roads between the good ones
-              // The router may join the shaping points by a shortcut that skips the stage (R-14): then the plan didn't happen.
-              if (!FunRoute.keptStages(r.coords, plan)) throw new Error('stage skipped');
-              const cand = { kind: 'stages', plan, route: r, timeS: r.timeS, via: pts.slice(1, -1) };
-              planCtx.set(cand, contextOn([cand], PLAN_CTX_MS, `plan${i + j}_`));
-              return cand;
-            })));
-          }
-          for (const r of routed) if (r.status === 'fulfilled') cands.push(r.value);
-        } catch (_) { /* no tiles or no matrix: the router's own routes still compete */ }
-      }
+      // (Fun and Long way are our router's only, the owner 2026-11-11: Valhalla stage plans are gone with the fallback)
       ui.step('Scoring roads…', 0.9);
       // Avoid options are router preferences: drop candidates that still use an avoided road when any candidate doesn't.
       const pool = FunRoute.keepAvoiding(cands, avoid);
@@ -3958,8 +3887,8 @@
         if (Date.now() - ranFor > 40) { await RouteLoading.yieldToUI(); ranFor = Date.now(); }
       }
       const ctx = (async () => {                                           // the route context, alongside the towns lookup
-        const rest = pool.filter((c) => !routerCands.includes(c) && !planCtx.has(c));
-        const [a, b] = await Promise.all([routerCtx, rest.length ? contextOn(rest, PLAN_CTX_MS, 'plan') : null, ...planCtx.values()]);
+        const rest = pool.filter((c) => !routerCands.includes(c));
+        const [a, b] = await Promise.all([routerCtx, rest.length ? contextOn(rest, PLAN_CTX_MS, 'plan') : null]);
         return b || a;
       })();
       // and the forecasts, costed once the context is in (ours asked for theirs already)
@@ -4630,35 +4559,8 @@
       applyDevTune();
       loopTuned = ownOn() ? userTuned() : null;
       const ownLoopsP = ownOn() ? ApexOwnRouting.loops(ownRouter(), { start: { lat: c.lat, lon: c.lon }, km: targetKm, level: LOOP_STYLE, prefs: roadPrefs, avoid, ...devTuneReq() }) : Promise.resolve([]);
-      // 1. Stage discovery: score every road around the start from the map's own vector tiles; Valhalla's matrix times
-      // the best of them and routes each plan (the map's stage loops)
-      const stageJobs = async (progress) => {
-        let plans = [];
-        try {
-          const radiusKm = Math.min(14, Math.max(5, targetKm / 4.2));
-          const hls = state.hlOn ? await allHighlights(c) : [];
-          const stages = await stagesWithContext(await measuredStages(await ApexStages.discover(c, radiusKm, (phase, f) => progress && ui.step(phase === 'tiles' ? 'Finding roads' : 'Scoring roads', 0.05 + 0.3 * f),
-            state.hlOn ? { highlights: hls, strength: state.hlStrength } : {}), c, radiusKm));
-          // Real road distances between the best stages (one or two matrix calls); the crow-fly plans are the fallback.
-          try {
-            const list = FunRoute.loopShortlist(c, stages, targetKm);
-            try { await RouteLoading.optional(ApexStages.addElevations(list)); } catch (_) { /* no DEM: which way round each stage (R-11) stays the nearer end */ }
-            if (list.length) {
-              if (progress) ui.step('Measuring roads', 0.36);
-              const mp = FunRoute.matrixPoints(c, c, list), m = await valhallaMatrix(mp.sources, mp.targets, loopCosting());
-              plans = targetS ? FunRoute.loopPlansFromMatrix(list, m.times, targetS, 3, FunRoute.LOOP_BY_TIME) : FunRoute.loopPlansFromMatrix(list, m.km, targetKm, 3);
-            }
-          } catch (_) { plans = []; }
-          if (!plans.length) plans = ApexStages.plans(c, stages, targetKm, 3);
-        } catch (_) { /* no tiles: fall back to circle loops below */ }
-        return plans.map(p => ({ kind: 'stages', plan: p, pts: ApexStages.waypoints(c, p), through: false, extra: loopCosting() || {} }));
-      };
-      // 2. Our loops first where the tiles have them: the card goes up from them alone, and the map's stage loops
-      // (Valhalla's matrix and legs: seconds on the public server, nothing offline) join after it and take its place
-      // only when the level ranks one of them first (loopRefine). Without ours: the stage loops, the circle only when
-      // nothing else came, as before.
+      // Our loops only (Valhalla is for Quick, the owner 2026-11-11): the card goes up from them, or says why there are none
       const own = (await ownLoopsP).map((r) => ({ kind: 'own', route: r.route, hwyShare: r.hwyShare, pts: [c, ...FunRoute.alongPoints(r.route.coords), c] }));
-      if (window.apexDebug) window.apexDebug.lastLoopRefine = null;
       // Loops are our router's or nothing (Valhalla is for Quick only, the owner 2026-11-11): no stage loops or circle on
       // Valhalla stand in, nor refine ours; with none of ours, the card says why
       if (own.length) {
@@ -4666,7 +4568,9 @@
         if (await loopRound(L, own, ui, false)) return;
       }
       const here = ownOn() ? await RouteLoading.optional(ownRouter().covers([c]), OWN_COVERS_ONLY_MS).catch(() => null) : false;
-      if (window.apexDebug) window.apexDebug.loopOwnOnlyFail = !ownOn() ? 'off' : here == null ? 'index' : here ? 'none' : 'out';
+      const why = !ownOn() ? 'off' : here == null ? 'index' : here ? 'none' : 'out';
+      if (window.apexDebug) window.apexDebug.loopOwnOnlyFail = why;
+      try { if (window.ApexErrors && ApexErrors.reporter) ApexErrors.reporter.route('loop', why); } catch (_) { /* a report is never in the way */ }
       toast(!ownOn() ? 'Loops need Vetta\'s own router, which is switched off.'
         : here == null ? 'Couldn\'t load Vetta\'s road map here. Check signal and try again.'
         : here ? `Couldn't find a ${asked} loop on Vetta's road map from here. Try another length.`
@@ -4777,33 +4681,6 @@
     function loopDebug(o, best) {
       window.apexDebug && (window.apexDebug.lastLoop = o.ranked.map(({ item, v }) => ({ kind: item.d.job.kind, fun: item.d.t.fun && item.d.t.fun.fun, score: item.d.score, v, km: item.d.km, good: item.d.good,
         retraced: item.d.retraced, hwyShare: item.hwyShare, corners: item.corners, timeS: item.timeS, picked: item.d === best })));
-    }
-    /**
-     * The map's stage loops (Valhalla's), after our loops' card is up: built and scored, then ranked with ours. The loop on
-     * screen is replaced only when another now ranks first, and only while it is still the one shown (a pick,
-     * another plan, a cleared route or a drive meanwhile: nothing changes). Offline they fail at once and nothing changes.
-     */
-    async function loopRefine(L, first, jobsP) {
-      const t0 = Date.now();
-      try {
-        const jobs = await jobsP;
-        const fresh = jobs.length ? await loopBuilt(L, jobs, null) : [];
-        const scored = fresh.length ? await loopScored(L, fresh, null) : [];
-        const still = () => routeOptions === first.o && plannedRoute === first.best.t && state.mode !== 'live';
-        if (window.apexDebug) window.apexDebug.lastLoopRefine = { ms: Date.now() - t0, stages: scored.length, swapped: false };
-        if (!scored.length || !still()) return;
-        const done = FunRoute.loopRank([...first.done, ...scored].map(loopItem), LOOP_STYLE).map((x) => x.item.d);
-        const o = loopOptions({ id: L.loopId, done, miles: L.miles, targetS: L.targetS, asked: L.asked });
-        const best = o.list[o.picked].loop;
-        // ours stays: the stage loops join the pool, so the other ways on the card are the best of all of them
-        if (best === first.best) { routeOptions = Object.assign(o, { current: first.best.t }); renderRouteCard(first.best.t); return; }
-        routeOptions = Object.assign(o, { current: best.t });
-        await buildRoute(null, L.loopId, best.t.name, best.t);
-        if (window.ApexRouteCar) routeAftercare(best.lc);
-        cardNote('Better loop found on the map\'s roads');
-        loopDebug(o, best);
-        if (window.apexDebug) window.apexDebug.lastLoopRefine.swapped = true;
-      } catch (_) { /* our loop stays */ }
     }
     // A built loop as FunRoute.loopRank reads it: the Fun score, the length off, highway share, the card's corners and time.
     const loopItem = (d) => ({ d, score: d.score, fun: d.t.fun, off: d.off, hwyShare: d.hwyShare, km: d.km, retraced: d.retraced, hard: !!d.hard,
@@ -9136,6 +9013,7 @@
       const feel = window.ApexRoadFeel && c.feel ? ApexRoadFeel.endLine(c.feel, (m) => ApexUnits.long(m, 1)) : '';
       $('endFeel').textContent = feel; $('endFeel').hidden = !feel;
       $('endPractice').textContent = ''; $('endPractice').hidden = true;   // IDEAS D-27: with the score (endCardScored)
+      $('endRoad').textContent = ''; $('endRoad').hidden = true;           // the road's line, with the score too
       // scoring: no number yet, never "--" (that means "no score"), and no key that needs the score
       $('endScore').textContent = '…'; $('endScore').classList.add('unk'); $('endScore').setAttribute('aria-busy', 'true');
       $('endScore').parentElement.classList.remove('no-score');
@@ -9190,6 +9068,9 @@
       // IDEAS D-27: the skill Your driving is practicing, read on this drive alone (analysis_client.js practiceOf)
       const prLine = c.practice && typeof c.practice.line === 'string' ? c.practice.line : '';
       $('endPractice').textContent = prLine; $('endPractice').hidden = !prLine;
+      // a road you have driven before: where this drive lost most at its least even corners, or your cleanest passes on it
+      const roadLine = typeof c.road === 'string' ? c.road : '';
+      $('endRoad').textContent = roadLine; $('endRoad').hidden = !roadLine;
       if (window.ApexEndLine && !opts.quiet) {                       // Round 3: never aloud to a parked car or a pocket
         const pack = ['marguerite', 'kit', 'hale'].includes(state.voiceId) ? state.voiceId : 'marguerite';
         // one of the pack's sign-offs, the same for this drive every time, from a clip the loaded bank holds (U-113)
@@ -9223,12 +9104,12 @@
         if (d.ds.score != null) try {
           others = (await ApexRecording.summaries()).filter((o) => o.id !== d.id && o.name === d.name).map((o) => ({ id: o.id, name: o.name, score: o.ds && o.ds.score != null ? Math.round(o.ds.score) : null }));
         } catch (_) { others = []; }
-        let coach = null;                                              // U-111: the Log's sentence, when the drive is stored
-        if (d.ds.score != null && window.ApexAnalysis) try { coach = (await ApexAnalysis.job('coachLine', { id: d.id })).coach || null; } catch (_) { coach = null; }
+        let coach = null, road = null;                                 // U-111: the Log's sentence, when the drive is stored; with it the road's line
+        if (d.ds.score != null && window.ApexAnalysis) try { const r = await ApexAnalysis.job('coachLine', { id: d.id }); coach = r.coach || null; road = r.road || null; } catch (_) { coach = null; road = null; }
         let practice = null;                                           // IDEAS D-27: the practised skill, when the drive is stored
         const plan = practicePlan();
         if (plan && window.ApexAnalysis) try { practice = (await ApexAnalysis.job('practiceLine', { id: d.id, plan })).practice || null; } catch (_) { practice = null; }
-        endCardScored({ ...c, corners: d.corners.length, ds: d.ds, coach, practice }, others, opts);
+        endCardScored({ ...c, corners: d.corners.length, ds: d.ds, coach, practice, road }, others, opts);
       })();
     }
     // U-88: behind the card, the map is the drive: fitted to its trail above the card, the trail drawn at the route's width in
