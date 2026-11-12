@@ -8374,7 +8374,7 @@
       // unknown stays unknown, and the card says so (offline: our tiles still plan the route, but nothing live is known)
       if (!json) {
         const offline = why === 'signal' || navigator.onLine === false;
-        $('routeCardWeather').textContent = offline ? 'No signal: the weather and live road events on this route aren\'t known.' : 'Weather: not known (no forecast came back).';
+        $('routeCardWeather').textContent = offline ? 'Weather not known · no signal' : 'Weather not known';   // TestFlight 2026-11-12: a line, not a sentence
         $('routeCardWeather').hidden = false;
         return;
       }
