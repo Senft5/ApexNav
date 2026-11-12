@@ -2044,6 +2044,10 @@
       const crawl = si.speed != null && si.speed < (/^km/i.test(si.unit) ? 8 : 5);
       d.sightMph = crawl ? null : held.value; d.sightOpen = !crawl && held.open; d.sightQuiet = crawl;
       d.sightShort = !crawl && !!(held.msg && held.msg.short);       // SO-1: the cell is red when the plate is, not sooner
+      // the owner, 2026-11-12 (TestFlight, a replay showing PACE 83 beside Sight 65): "why pace and sight different?". The
+      // corner's pace and the sight line are two limits; the gauge's PACE (and its lamp) is now the one you drive to, the
+      // lower of the two, so it matches the Sight cell whenever the view is what holds you back
+      if (d.paceMph != null && Number.isFinite(d.sightMph) && !d.sightOpen) d.paceMph = Math.min(d.paceMph, d.sightMph);
       d.limitMph = limit != null ? ApexUnits.speed(limit) : null;
       d.latG = latG; d.lonG = lonG; d.camberDeg = camber;
       d.tripMi = ApexUnits.longN(live && (idx < 0 || track.kind === 'horizon') ? (drive.rec ? drive.rec.km * 1000 : 0) : state.cursorM); d.totalMi = track && track.kind !== 'horizon' && !(live && idx < 0) ? ApexUnits.longN(totalM()) : null;

@@ -2877,8 +2877,14 @@ flow('crew page: an old ?view=crew link opens People on Crews, at your crew; goi
   check(!('stripe2' in JSON.parse(liv.b)) && !('pattern' in JSON.parse(liv.b)), 'a Plain crew sends nothing past the Plain livery');
   // fair meeting points (crew_meet.js): your rough area is off until you switch it on, and nothing was sent about it
   check(await page.getAttribute('.cp-meet [data-crew-home]', 'aria-checked') === 'false' && !find('/api/crews/k1/home'), 'Share my rough area is off by default');
+  // the owner, 2026-11-12 (TestFlight): "meeting points switch broken": with no Home pinned it refused. Now the square comes
+  // from where the phone is (39.2, -84.6 here; sent as its 0.1-degree square's centre, never the position)
+  await page.click('.cp-meet [data-crew-home]');
+  await page.waitForFunction(() => document.querySelector('.cp-meet [data-crew-home]').getAttribute('aria-checked') === 'true', null, { timeout: 10000 });
+  const home = JSON.parse(find('/api/crews/k1/home').b);
+  check(home.on === true && home.lat === 39.25 && home.lon === -84.55, 'no Home pinned: the switch turns on with the square the phone is in: ' + JSON.stringify(home));
   check((await page.textContent('.cp-livery-line')).trim() === 'Plain livery', 'the livery line says Plain and nothing it lacks (the owner, 2026-11-10: no Pro nudge on the crew page)');
-});
+}, { geolocation: { latitude: 39.2, longitude: -84.6 }, permissions: ['geolocation'] });
 
 flow('build threads: start one from a car, add a step, a friend suggests and it shows on a red rule (Worker stubbed, REVIEW.md roadmap 23)', async (page, base) => {
   await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); } catch (_) {} });

@@ -37,3 +37,14 @@ from any tester are fixed when they are an app bug.
 | 2026-11-05T03:26:33Z | owner note | "a dashboard like the facebook groups you're in, with a feed and the option to pin crews?" (Crews) | claude/feedback-1105 (in 2+ crews: the dashboard, pins, Latest from your crews; GET /api/crews/feed) |
 | 2026-11-11T21:14:22Z | owner note | "tapping a corner or moment here should orient the view above to show that corner zoomed in on the map" (a drive's page) | claude/project-thread-0wt1zm (a row glides the map in on that corner or moment; All or Recenter shows the whole drive) |
 | 2026-11-12T01:29:22Z | owner note | "bird watching shelter blocks half the route" (a named viewpoint's stamp on a loop preview) | claude/project-thread-0wt1zm (a VIEW stamp like CAFÉ and FUEL; the name on a tap, or on the stamp at zoom 15+) |
+| 2026-11-12T02:30:37Z | owner note | "why pace and sight different?" (replay HUD: PACE 83, Sight 65) | claude/project-thread-0wt1zm (the gauge's PACE is the lower of the two) |
+| 2026-11-12T02:33:04Z | owner note | "generated time attack loops is literally like an hour away from me and goes only through a neighborhood" | handed to the social thread (owner of the weekly loop picker) |
+| 2026-11-12T02:35:15Z | owner note | "meeting points switch broken" (crew page) | claude/project-thread-0wt1zm (no Home pinned: the square you are in) |
+| 2026-11-12T02:45:11Z | owner note | "cluttered interface ai slop" (Where to? chips) | handed to the UI thread |
+| 2026-11-12T02:45:27Z | owner note | "cryptic hidden cluttered ai slop" (the map deck) | handed to the UI thread |
+| 2026-11-12T02:46:28Z | owner note | "ai slop walls of text everywhere" (Ways to go) | handed to the UI thread |
+| 2026-11-12T02:47:11Z | owner note | "text walls everywhere" (Your driving, Practicing) | handed to the UI thread |
+| 2026-11-12T02:47:34Z | owner note | "unreadable unintuitive slop" (Your driving) | handed to the UI thread |
+| 2026-11-12T02:47:54Z | owner note | "unreadable unintuitive slop" (the Log list) | handed to the UI thread |
+| 2026-11-12T02:48:13Z | owner note | "slop test looks like shit" (Crews) | handed to the UI thread |
+| 2026-11-12T02:48:34Z | owner note | "slop slop sop slop slop sloooop" (Garage settings) | handed to the UI thread |
