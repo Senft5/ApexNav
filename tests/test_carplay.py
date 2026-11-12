@@ -263,6 +263,7 @@ console.log(JSON.stringify({
   alongMany: C.alongMessage(Array.from({ length: 50 }, (_, i) => ({ kind: 'fuel', name: 'S' + i, lat: 35 + i / 100, lon: -84 }))).places.length,
   offer: C.offerMessage('o3', 'Police reported on your route in 1.2 mi.', 'Police in 1.2 mi', 'Go round', 15000),
   offerSame: C.offerMessage('o4', 'Running 12 min late for home.', 'Running 12 min late for home.', 'Skip Cherohala Skyway', 60000),
+  offerUndo: C.offerMessage('o8', 'Pothole reported', '', 'Undo', 5000, 'OK'),
   offerNone: [C.offerMessage('', 'x', '', 'k'), C.offerMessage('o5', '', '', 'k'), C.offerMessage('o6', 'x', '', ''), C.offerMessage('o7', 'x', '', 'k', 1000).seconds],
   alongDescent: C.alongMessage([], 'Long descent: 3.7 mi at 8% +1'),
   alongNone: [C.alongMessage([]), C.alongMessage(null), C.alongMessage([{ kind: 'view', name: 'Overlook' }])],
@@ -343,7 +344,17 @@ def test_the_phones_one_key_offers_reach_the_car(maps):
     assert "carPost({ kind: 'offerDone', id })" in js
     swift = open(os.path.join(ROOT, "CarPlay", "ApexCarPlay.swift"), encoding="utf-8").read()
     assert 'case "offer":' in swift and 'case "offerDone":' in swift and 'ApexCar.shared.send("offer", ["id": id])' in swift
-    assert 'CPAlertAction(title: "Not now", style: .cancel)' in swift
+    assert "cancel" not in maps["offer"], "without a cancel the car says Not now"
+    assert 'cancel.isEmpty ? "Not now" : cancel' in swift
+
+
+def test_a_report_from_the_car_has_its_undo_on_the_car(maps):
+    """The phone's Report key turns into Undo for a moment; a report from the car's grid gets the car's own Undo."""
+    assert maps["offerUndo"] == {"kind": "offer", "id": "o8", "title": "Pothole reported", "short": "", "key": "Undo", "seconds": 5, "cancel": "OK"}
+    js = cockpit_source()
+    assert "reportHazard(m.kind, null, true)" in js
+    assert "carPost(ApexCarPlay.offerMessage(id, `${word} reported`, '', 'Undo', ms, 'OK'))" in js
+    assert "if (pendingHz.carOffer) carPost({ kind: 'offerDone', id: pendingHz.carOffer });" in js, "an Undo on the phone takes the car's away"
 
 
 def test_the_look_carries_the_theme_and_its_dark_card(maps):

@@ -244,7 +244,9 @@ final class ApexCar {
             guard let id = dict["id"] as? String, let title = dict["title"] as? String, !title.isEmpty,
                   let key = dict["key"] as? String, !key.isEmpty else { return }
             let titles = [String(title.prefix(64)), String(((dict["short"] as? String) ?? "").prefix(64))].filter { !$0.isEmpty }
-            scene?.showOffer(id: String(id.prefix(16)), titles: titles, key: String(key.prefix(16)), seconds: Self.num(dict["seconds"]) ?? 15)
+            let cancel = String(((dict["cancel"] as? String) ?? "").prefix(16))
+            scene?.showOffer(id: String(id.prefix(16)), titles: titles, key: String(key.prefix(16)), cancel: cancel.isEmpty ? "Not now" : cancel,
+                             seconds: Self.num(dict["seconds"]) ?? 15)
         case "offerDone":
             guard let id = dict["id"] as? String else { return }
             scene?.offerDone(id: id)
@@ -689,11 +691,11 @@ final class ApexCarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDel
     /// A drive's one-key offer from the phone (Go round a police report, Skip a stage, Head home): the key and Not now, for
     /// as long as the phone's toast has its key. Tapped here, the page does it; tapped on the phone, `offerDone` takes it away.
     private var offerAlert: (id: String, alert: CPNavigationAlert)?
-    @MainActor func showOffer(id: String, titles: [String], key: String, seconds: Double) {
+    @MainActor func showOffer(id: String, titles: [String], key: String, cancel: String, seconds: Double) {
         guard let map = mapTemplate, ApexCar.shared.driving, !titles.isEmpty else { return }
         let alert = CPNavigationAlert(titleVariants: titles, subtitleVariants: [], image: nil,
                                       primaryAction: CPAlertAction(title: key, style: .default) { _ in ApexCar.shared.send("offer", ["id": id]) },
-                                      secondaryAction: CPAlertAction(title: "Not now", style: .cancel) { _ in },
+                                      secondaryAction: CPAlertAction(title: cancel, style: .cancel) { _ in },
                                       duration: max(5, min(20, seconds)))
         offerAlert = (id, alert)
         map.present(navigationAlert: alert, animated: true)
