@@ -7935,13 +7935,20 @@ flow('the map\'s viewpoint, café and fuel stamps along a route never pile up: o
   const pairs = far.flatMap((a, i) => far.slice(i + 1).filter((b) => overlap(a, b)).map((b) => `${a.text} / ${b.text}`));
   const total = await page.evaluate(() => document.querySelectorAll('.poi-pin.poi-fuel').length);
   check(!pairs.length, 'no two stamps overlap: ' + JSON.stringify(pairs));
-  check(far.filter((p) => p.kind === 'fuel').length <= 4 && far.filter((p) => p.kind === 'fuel').length >= 1 && far.some((p) => p.text === 'Big Overlook'),
+  check(far.filter((p) => p.kind === 'fuel').length <= 4 && far.filter((p) => p.kind === 'fuel').length >= 1 && far.some((p) => p.kind === 'view' && p.text === 'VIEW'),
     `the most useful few: the viewpoint, at most four of the ${total} fuel stamps: ` + JSON.stringify(far.map((p) => p.text)));
+  // the owner, 2026-11-12 (TestFlight): "bird watching shelter blocks half the route": at the route's zoom a viewpoint is a
+  // VIEW stamp; its name is on the stamp only close in (zoom 15)
+  check(!far.some((p) => p.text === 'Big Overlook'), 'no viewpoint name across the whole route: ' + JSON.stringify(far.map((p) => p.text)));
   // closer in, the stamps that were hidden come back where there is room
   await page.evaluate(() => apexDebug.map.jumpTo({ center: [apexDebug.track.lon[0], apexDebug.track.lat[0]], zoom: 15 }));
   await page.waitForTimeout(300);
   const near = await shown();
   check(near.some((p) => p.kind === 'fuel'), 'zoomed in, a fuel stamp hidden at the whole route\'s zoom is shown: ' + JSON.stringify(near.map((p) => p.text)));
+  const named = await page.evaluate(() => { const m = apexDebug.map, t = apexDebug.track, i = Math.floor(t.lat.length / 2); m.jumpTo({ center: [t.lon[i], t.lat[i]], zoom: 15.5 }); return true; });
+  await page.waitForTimeout(300);
+  const close = await page.evaluate(() => (document.querySelector('.poi-pin.poi-view') || {}).textContent);
+  check(named && close === 'Big Overlook', 'close in, the viewpoint stamp says its name: ' + close);
 }, IPHONE);
 
 flow('plan flow (c) best roads nearby in 3 taps: the chip under Where to?, a road in a list with named columns, Start (finding 7)', async (page, base) => {

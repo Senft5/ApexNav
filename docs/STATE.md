@@ -1,5 +1,13 @@
 # VETTA — CURRENT AGENT HANDOFF STATE
 
+## Session 2026-11-12 (TestFlight 01:29): viewpoint stamps say VIEW, the name close in (claude/project-thread-0wt1zm)
+
+- Owner note 01:29:22Z "bird watching shelter blocks half the route" (a named viewpoint's label across a loop preview).
+- web/cockpit.js attachScenic: the view stamp is SCENIC_LABEL.view; declutterPois sets a named viewpoint's text to its name
+  at zoom >= VIEW_NAME_ZOOM (15), before measuring for the declutter. Tap behaviour unchanged.
+- Tests: e2e "stamps along a route never pile up" (VIEW at the route's zoom, the name at 15.5). Checked: pytest, that flow
+  and "along the route by name".
+- Next: the hourly TestFlight run keeps watching.
 ## Session 2026-11-11 (time attack placement): where the weekly loop shows (claude/project-thread-uwmi4e, after #433)
 - Done: the Where to? row names the week's loop and your place (time_attack.js summaryLine and peek). Drive it plans the
   loop as the route (cockpit driveLoop). The Log says your place after a sync (runs returns `places`, placeLine). For you's

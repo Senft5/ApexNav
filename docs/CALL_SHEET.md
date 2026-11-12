@@ -4,6 +4,11 @@ Decisions Claude made for you, newest first. Each one says what was decided, why
 you reach one you've seen. If you disagree with a call, say so and it gets reversed; nothing here is hard to undo unless
 it says so. Things only you can do are in docs/OWNER_TODO.md.
 
+## 2026-11-12 (TestFlight 01:29): a viewpoint on the route is a VIEW stamp, its name close in (claude/project-thread-0wt1zm)
+
+Your note "bird watching shelter blocks half the route". A named viewpoint's stamp carried its whole name at every zoom and sat
+over the line. Now it says VIEW, like CAFÉ and FUEL, and shows its name only at zoom 15 or closer; a tap on it (or its row
+under Along the route) still says the name and offers it as a stop. Undo: revert the PR (or lower VIEW_NAME_ZOOM in cockpit.js).
 ## 2026-11-11 (time attack placement): the week's loop in Where to?, Drive it, and your place after a drive (claude/project-thread-uwmi4e)
 
 Calls I made: the Where to? row asks for the week's loop when Where to? opens (at most every 5 minutes, only the area,
