@@ -211,7 +211,7 @@
     const etaSections = new WeakMap();      // track -> its corner sections (ApexEta.cornerSections), worked out once
     let etaText = '', etaLeftS = null;
     let replayEnded = false, replayWaiting = false;   // U-110 a finished replay, U-128 a replay waiting for its map (paintReplayEnd)
-    const car = { serial: 0, route: '', guideAt: 0, guideKey: '', sightKey: '', look: '', hazards: '', symbols: new Map(), ended: null, road: '', roadAt: -1e9 };   // what the car's screen was last sent (carRoute, carGuide below)   // strip text while off route; last frame fed; furthest progress
+    const car = { serial: 0, route: '', guideAt: 0, guideKey: '', sightKey: '', look: '', hazards: '', symbols: new Map(), ended: null, along: '', road: '', roadAt: -1e9 };   // what the car's screen was last sent (carRoute, carGuide below)   // strip text while off route; last frame fed; furthest progress
     try {
       const saved = JSON.parse(localStorage.getItem('apex.prefs') || 'null');
       if (saved) {
@@ -6196,7 +6196,8 @@
         fmtKm: (km) => ApexUnits.long(km * 1000, 1),
         // the week's loop, where nobody in the area has built it yet: our own router's loops (graph_router.js loop) over its tiles
         graphKeys: () => (ownOn() ? ownIndex() : null),
-        loops: (start, km) => (ownOn() ? ApexOwnRouting.loops(ownRouter(), { start, km, level: LOOP_STYLE }) : Promise.resolve([])),
+        noteLoop: (x) => { window.apexDebug.lastAttackLoop = x; },   // the e2e reads what the loop drives
+        loops: (start, km) => (ownOn() ? ApexOwnRouting.loops(ownRouter(), { start, km, level: LOOP_STYLE, through: true }) : Promise.resolve([])),   // the start on a through road
         // Challenge a friend: a duel on the loop (duels.js challengeOn), won by time unless they pick Score
         challenge: (stage) => { if (duels && duels.challengeOn) { closeSheet(); duels.challengeOn(stage); } },
         // Drive it: the loop itself is the route (as a roadbook road is), not just the way to its start
@@ -7508,7 +7509,7 @@
     }
     // This week's time attack loop in your area (time_attack.ts) as the deck's suggestion: first after a crew drive when you
     // entered it, else after the road you haven't driven. Members only, with the drive-today check (every 10 min); the server
-    // is sent the middle of your 1-degree area, never where you are (time_attack.js areaPoint). No loop, nothing said.
+    // is sent the middle of your quarter-degree area, never where you are (time_attack.js areaPoint). No loop, nothing said.
     function attackIs(a) {
       const was = deckState.attack ? `${deckState.attack.key}|${deckState.attack.entered}|${deckState.attack.place}|${deckState.attack.times}|${deckState.attack.left}` : '';
       deckState.attack = a;
@@ -7517,7 +7518,7 @@
     async function refreshAttack() {
       const p = state.lastPosition;
       if (!p || !Number.isFinite(p.lat) || !Number.isFinite(p.lon)) return;   // no position yet: what was known stays
-      const at = { lat: Math.floor(p.lat) + 0.5, lon: Math.floor(p.lon) + 0.5 };
+      const at = { lat: Math.floor(p.lat / 0.25) * 0.25 + 0.125, lon: Math.floor(p.lon / 0.25) * 0.25 + 0.125 };   // time_attack.js areaPoint
       const t = await apiCall('GET', `/api/timeattack?lat=${at.lat}&lon=${at.lon}`).then((r) => (r && r.ok ? jsonOf(r) : null)).catch(() => null);
       if (t) attackIs(YR ? YR.attackFrom(t) : null);
     }
@@ -8567,6 +8568,7 @@
       try { list = ApexScenic.along(await ApexStages.pois(pts), t); } catch (_) { return; }      // offline or a very long route: say nothing
       if (plannedRoute !== t) return;                                                          // another route came up meanwhile
       t.scenic = list;
+      if (car.route && track === t) carAlong(t);
       const line = ApexScenic.summary(list, t.dist[t.dist.length - 1]);
       const rows = ApexScenic.places(list, placeUnits);
       $('routeAlongLine').textContent = ApexRouteCard.factText(line); $('routeCardAlong').hidden = !line;
@@ -8815,6 +8817,16 @@
       carPost(ApexCarPlay.routeMessage(t, o ? o.list.map(c => ({ fun: c.fun, timeS: c.timeS, distM: c.t && c.t.dist ? c.t.dist[c.t.dist.length - 1] : null })) : null,
         o ? o.picked : 0, (m) => ApexUnits.long(m, 1)));
       carPost(ApexCarPlay.cornersMessage(t, (m) => sample(t, m), state.noteWords));        // the road book on the car's map (web/carmap.js)
+      car.along = ''; carAlong(t);                                       // the car forgets the last route's places with it
+    }
+    // The cafés and fuel along the route by name on the car's route preview (the owner, 2026-11-11). t.scenic comes later
+    // than the route (attachScenic): it is sent then, and again with every route the car is sent.
+    function carAlong(t) {
+      if (!t || !Array.isArray(t.scenic)) return;
+      const msg = ApexCarPlay.alongMessage(t.scenic), key = `${car.route}|${msg.full}|${msg.short}`;
+      if (key === car.along) return;
+      car.along = key;
+      carPost(msg);
     }
     // The theme and the voice switch for the car's screen: its map paints the theme, its guidance card takes the theme's dark.
     function carLook() {

@@ -266,6 +266,30 @@
   }
 
   /**
+   * The cafés and fuel stations along the planned route, by name, for the car's route preview (the owner, 2026-11-11:
+   * "just show the name"): { kind:'along', full, short }. full names up to two of each kind, in route order, "+N" for the
+   * rest (the unnamed ones too); short is the first name of each. An unnamed kind is only counted. Both '' with nothing
+   * along, which clears the car's line. `list` is web/scenic.js along() (t.scenic); viewpoints stay on the phone.
+   */
+  const ALONG_NAME_MAX = 28, ALONG_MAX = 90;
+  function alongMessage(list) {
+    const rows = Array.isArray(list) ? list.filter((p) => p && (p.kind === 'cafe' || p.kind === 'fuel')) : [];
+    const cut = (s, n) => (s.length > n ? s.slice(0, n - 1).trimEnd() + '…' : s);
+    const part = (kind, label, one, many, keep) => {
+      const all = rows.filter((p) => p.kind === kind);
+      if (!all.length) return '';
+      const names = [...new Set(all.map((p) => (typeof p.name === 'string' ? p.name.trim() : '')).filter(Boolean))].slice(0, keep).map((n) => cut(n, ALONG_NAME_MAX));
+      const named = all.filter((p) => typeof p.name === 'string' && names.some((n) => n === cut(p.name.trim(), ALONG_NAME_MAX))).length;
+      if (!names.length) return `${label}${all.length} ${all.length === 1 ? one : many}`;
+      const rest = all.length - named;
+      return label + names.join(', ') + (rest > 0 ? ` +${rest}` : '');
+    };
+    const full = [part('cafe', 'Café: ', 'café', 'cafés', 2), part('fuel', 'Fuel: ', 'stop', 'stops', 2)].filter(Boolean).join(' · ');
+    const short = [part('cafe', '', 'café', 'cafés', 1), part('fuel', '', 'fuel stop', 'fuel stops', 1)].filter(Boolean).join(' · ');
+    return { kind: 'along', full: cut(full, ALONG_MAX), short: cut(short, ALONG_MAX) };
+  }
+
+  /**
    * The theme for the car's screen: its id (the car's map paints it, web/carmap.js), the guidance card's colours (the
    * theme's dark panel, so the card reads in both the car's light and dark modes), whether the voice is on and the units.
    */
@@ -436,7 +460,7 @@
     return { step, reset };
   }
 
-  const api = { sightMessage, line, routeMessage, guideMessage, recordingMessage, placesMessage, cornersMessage, hazardsMessage, lookMessage, tulipSVG, cornerTulipSVG,
+  const api = { sightMessage, line, routeMessage, guideMessage, recordingMessage, placesMessage, cornersMessage, hazardsMessage, alongMessage, lookMessage, tulipSVG, cornerTulipSVG,
                 recordSVG, CORNER_MODES, CONTINUE_M, MAX_POINTS };
   api.sightFilter = sightFilter;                                       // U-60 (its own line: the list above is shared)
   api.sightTag = sightTag;                                             // panel round 2, TH-2

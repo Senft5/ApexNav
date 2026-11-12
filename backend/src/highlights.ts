@@ -36,15 +36,22 @@ export async function highlightList(env: Env, v: Viewer, url: URL) {
   if (raw.length !== 4 || raw.some((x) => !Number.isFinite(x))) throw new HttpError(400, "bad_bbox");
   const [minLat, minLon, maxLat, maxLon] = raw;
   if (minLat >= maxLat || minLon >= maxLon || maxLat - minLat > 3 || maxLon - minLon > 3) throw new HttpError(400, "bad_bbox");
-  // rating shrinks toward 3 stars (prior weight 2) so one enthusiastic account cannot pin a spot at 5.0
+  // Rating shrinks toward 3 stars (prior weight 2) so one enthusiastic account cannot pin a spot at 5.0, and only ratings
+  // from members whose reports would count (invited, or a member for a week: reports_sql.ts) are counted, so a handful
+  // of fresh accounts can't rate a spot up or down in a minute (their own stars still show to them as my_stars).
+  // Nothing from someone you blocked or who blocked you, and nothing you reported, as on every other social surface.
   return all(env,
     `SELECT h.id, h.name, h.category, h.note, h.lat, h.lon,
             COUNT(r.user_id) AS ratings, ROUND((COALESCE(SUM(r.stars), 0) + 6.0) / (COUNT(r.user_id) + 2), 2) AS score,
             SUM(CASE WHEN r.visited = 1 THEN 1 ELSE 0 END) AS visits,
             (SELECT stars FROM highlight_ratings m WHERE m.highlight_id = h.id AND m.user_id = ?1) AS my_stars,
             (h.author_id = ?1) AS mine
-       FROM highlights h LEFT JOIN highlight_ratings r ON r.highlight_id = h.id
+       FROM highlights h
+       LEFT JOIN highlight_ratings r ON r.highlight_id = h.id
+         AND EXISTS (SELECT 1 FROM members mr WHERE mr.user_id = r.user_id AND (mr.invited_by IS NOT NULL OR mr.joined_at <= datetime('now', '-7 days')))
       WHERE h.status = 'active' AND h.lat BETWEEN ?2 AND ?4 AND h.lon BETWEEN ?3 AND ?5
+        AND (h.author_id IS NULL OR h.author_id = ?1 OR NOT EXISTS (SELECT 1 FROM blocks b WHERE (b.blocker = ?1 AND b.blocked = h.author_id) OR (b.blocker = h.author_id AND b.blocked = ?1)))
+        AND NOT EXISTS (SELECT 1 FROM reports rp WHERE rp.kind = 'highlight' AND rp.target_id = h.id AND rp.reporter = ?1 AND rp.status = 'open')
       GROUP BY h.id ORDER BY score DESC LIMIT 500`, v.id, minLat, minLon, maxLat, maxLon);
 }
 

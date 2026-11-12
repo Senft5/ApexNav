@@ -1,20 +1,44 @@
 // Photos (docs/design/REVIEW.md 5.2): a profile photo, a car's cover and gallery, a crew's cover and crest, and the photos
 // on build-thread posts. JPEG only; the phone re-encodes before sending (which drops EXIF), and the server strips every
 // metadata segment again (APP1-APP15, comments), so a photo never carries where it was taken. The bytes live in KV
-// (PHOTOS), the row in D1. Members only, both ways. One report hides a photo for 24 hours while the owner looks; three
-// from different people (reports_sql.ts) or the owner's remove keep it down.
+// (PHOTOS), the row in D1. Members only, both ways, and a photo is seen only by whoever sees the thing it belongs to
+// (PHOTO_SEEN): a car's by those who see the car, a build post's by those who see the build, a crew's cover and crest by
+// its members; a profile photo by any member, as a handle is. A report hides a photo at once from the person who filed it,
+// and from everyone for 24 hours while the owner looks when the reporter is one whose reports count (reports_sql.ts:
+// invited, or a member for a week), so a fresh account can't take photos down; three from different people or the
+// owner's remove keep it down.
 import type { Viewer } from "./auth";
 import { Env, HttpError } from "./util";
 import { removedSql, reportedSql } from "./reports_sql";
 import { atLeast, tierOf } from "./livery";
+import { CAR_SEEN } from "./builds";
+import { isModerator } from "./safety";
 
 export const MAX_BYTES = 700_000, MAX_SIDE = 2400, MAX_PER_OWNER = 300, MAX_PER_REF = 12, MAX_PER_POST = 8;
 export const KINDS = ["profile", "car", "crew", "crest", "post"] as const;
 type Kind = typeof KINDS[number];
 
-/** A report hides a photo at once, for a day, until the owner looks (REVIEW.md 5.2); removed or widely reported stays down. */
+/** A report hides a photo at once, for a day, until the owner looks (REVIEW.md 5.2), when its reporter's reports count
+ *  (the same gate as reportedSql: invited, or a member for a week); removed or widely reported stays down. The day runs
+ *  from the report itself: filing it again doesn't restart it (safety.ts). */
 export const photoHiddenSql = (idExpr: string) =>
-  `(${reportedSql("photo", idExpr)} OR EXISTS (SELECT 1 FROM reports rh WHERE rh.kind = 'photo' AND rh.target_id = ${idExpr} AND rh.status = 'open' AND rh.created_at > datetime('now', '-1 day')))`;
+  `(${reportedSql("photo", idExpr)} OR EXISTS (SELECT 1 FROM reports rh JOIN members mh ON mh.user_id = rh.reporter
+     WHERE rh.kind = 'photo' AND rh.target_id = ${idExpr} AND rh.status = 'open' AND rh.created_at > datetime('now', '-1 day')
+       AND (mh.invited_by IS NOT NULL OR mh.joined_at <= datetime('now', '-7 days'))))`;
+
+/** SQL: may viewer ?1 see photo `p`? Its owner always; then whoever sees what it belongs to. Not hidden, not blocked either
+ *  way, and not one the viewer reported (open). */
+export const PHOTO_SEEN = (p: string) => `(${p}.owner = ?1 OR (NOT ${photoHiddenSql(`${p}.id`)}
+  AND NOT EXISTS (SELECT 1 FROM reports rme WHERE rme.kind = 'photo' AND rme.target_id = ${p}.id AND rme.reporter = ?1 AND rme.status = 'open')
+  AND NOT EXISTS (SELECT 1 FROM blocks pb WHERE (pb.blocker = ?1 AND pb.blocked = ${p}.owner) OR (pb.blocker = ${p}.owner AND pb.blocked = ?1))
+  AND CASE ${p}.kind
+    WHEN 'profile' THEN 1
+    WHEN 'car' THEN EXISTS (SELECT 1 FROM cars c WHERE c.id = ${p}.ref_id AND ${CAR_SEEN("c")})
+    WHEN 'post' THEN EXISTS (SELECT 1 FROM build_posts bp JOIN builds bd ON bd.id = bp.build_id JOIN cars c ON c.id = bd.car_id
+                              WHERE bp.id = ${p}.ref_id AND ${CAR_SEEN("c")})
+    WHEN 'crew' THEN EXISTS (SELECT 1 FROM crew_members pm WHERE pm.crew_id = ${p}.ref_id AND pm.user_id = ?1)
+    WHEN 'crest' THEN EXISTS (SELECT 1 FROM crew_members pm WHERE pm.crew_id = ${p}.ref_id AND pm.user_id = ?1)
+    ELSE 0 END))`;
 
 /**
  * A JPEG with every metadata segment taken out, and its size: { bytes, w, h }. Throws 400 for anything that isn't a
@@ -112,26 +136,25 @@ export async function photoUse(env: Env, v: Viewer, id: string): Promise<void> {
   await (ref === null ? env.DB.prepare(sql as string).bind(id, v.id) : env.DB.prepare(sql as string).bind(id, v.id, ref)).run();
 }
 
-/** GET /api/photos/:id: the JPEG, to members, unless it is hidden (your own you always see). */
+/** GET /api/photos/:id: the JPEG, to whoever may see it (PHOTO_SEEN) and to the moderator (the report queue links here);
+ *  anyone else gets the same 404 as a missing one. */
 export async function photoServe(env: Env, v: Viewer, id: string): Promise<Response> {
   if (!env.PHOTOS) throw new HttpError(404, "no_photo");
-  const row = await env.DB.prepare(`SELECT owner, ${photoHiddenSql("p.id")} AS hidden FROM photos p WHERE p.id = ?`).bind(id).first<{ owner: string; hidden: number }>();
-  if (!row || (row.hidden && row.owner !== v.id)) throw new HttpError(404, "no_photo");
-  const blocked = row.owner !== v.id && await env.DB.prepare("SELECT 1 FROM blocks WHERE (blocker = ?1 AND blocked = ?2) OR (blocker = ?2 AND blocked = ?1)").bind(v.id, row.owner).first();
-  if (blocked) throw new HttpError(404, "no_photo");
+  const row = await env.DB.prepare(`SELECT 1 AS x FROM photos p WHERE p.id = ?2 AND (?3 OR ${PHOTO_SEEN("p")})`).bind(v.id, id, isModerator(env, v) ? 1 : 0).first();
+  if (!row) throw new HttpError(404, "no_photo");
   const bytes = await env.PHOTOS.get(`p/${id}`, "arrayBuffer");
   if (!bytes) throw new HttpError(404, "no_photo");
   return new Response(bytes, { headers: { "content-type": "image/jpeg", "cache-control": "private, max-age=86400", "x-content-type-options": "nosniff",
     "content-security-policy": "default-src 'none'" } });
 }
 
-/** GET /api/photos?kind=car&ref=<id>: the gallery's photo ids, newest first, hidden ones left out (yours kept). */
+/** GET /api/photos?kind=car&ref=<id>: the gallery's photo ids, newest first, only those you may see (PHOTO_SEEN). */
 export async function photoList(env: Env, v: Viewer, url: URL) {
   const kind = KINDS.find((k) => k === url.searchParams.get("kind")), ref = url.searchParams.get("ref");
   if (!kind || !ref) throw new HttpError(400, "bad_ref");
-  return (await env.DB.prepare(`SELECT p.id, p.w, p.h, p.owner = ?3 AS mine FROM photos p WHERE p.kind = ?1 AND p.ref_id = ?2
-      AND (p.owner = ?3 OR NOT ${photoHiddenSql("p.id")}) ORDER BY p.created_at DESC, p.rowid DESC LIMIT ${MAX_PER_REF}`)
-    .bind(kind, ref, v.id).all()).results;
+  return (await env.DB.prepare(`SELECT p.id, p.w, p.h, p.owner = ?1 AS mine FROM photos p WHERE p.kind = ?2 AND p.ref_id = ?3
+      AND ${PHOTO_SEEN("p")} ORDER BY p.created_at DESC, p.rowid DESC LIMIT ${MAX_PER_REF}`)
+    .bind(v.id, kind, ref).all()).results;
 }
 
 /** DELETE /api/photos/:id: the owner takes it down; covers and the profile photo that pointed at it are cleared. */
