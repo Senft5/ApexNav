@@ -233,6 +233,25 @@ flow('first run: onboarding, Watch a replay loads the bundled drive and plays it
   check(tp.tabbar === 'none', 'the tab bar should hide during a replay');
 });
 
+// walkthrough 2026-11-11: Done after the welcome's replay left the map and the arrow on the demo's ground (Kentucky) while
+// the masthead said Knoxville; a still browser sends no new fix, so nothing brought it back
+flow('done after a replay brings the idle map back to where you are', async (page, base) => {
+  await page.route('https://tiles.openfreemap.org/**', (route) => (route.request().url().includes('/styles/')
+    ? route.fulfill({ contentType: 'application/json', body: JSON.stringify({ version: 8, sources: {}, layers: [{ id: 'bg', type: 'background', paint: { 'background-color': '#eee' } }] }) })
+    : route.abort()));
+  await page.goto(base + '/index.html');
+  await page.waitForSelector('#onboard.show', { timeout: 10000 });
+  await page.waitForFunction(() => window.apexDebug && window.apexDebug.map.loaded() && !!window.apexDebug.state.lastPosition, null, { timeout: 20000 });
+  await page.click('#obAlt');
+  await page.waitForFunction(() => window.apexDebug.state.mode === 'replay' && window.apexDebug.state.playing, null, { timeout: 15000 });
+  const far = (c) => Math.hypot(c.lat - 35.9606, c.lng + 83.9207);
+  check(far(await page.evaluate(() => window.apexDebug.map.getCenter())) > 1, 'the replay shows the demo\'s ground, not here');
+  await page.click('#replayDone');
+  await page.waitForFunction(() => { const c = window.apexDebug.map.getCenter(); return Math.hypot(c.lat - 35.9606, c.lng + 83.9207) < 0.05; }, null, { timeout: 5000 })
+    .catch(async () => { throw new Error('Done should bring the map back here: ' + JSON.stringify(await page.evaluate(() => window.apexDebug.map.getCenter()))); });
+  check(await page.evaluate(() => document.getElementById('app').classList.contains('idle')), 'the idle map is back');
+}, { geolocation: { latitude: 35.9606, longitude: -83.9207 }, permissions: ['geolocation'] });
+
 flow('the strip never cuts where the meaning is: a three-word call keeps its direction, the welcome loop reads whole (REVIEW4 U-92, U-105)', async (page, base) => {
   await page.goto(base + '/index.html');
   await page.waitForSelector('#onboard.show', { timeout: 10000 });
@@ -4613,7 +4632,7 @@ flow('a drive\'s corners on a road driven four times: each says your cleanest pa
     for (let k = 0; k < 4; k++) await ApexRecording.store(ApexRecording.parse(ApexCore, tweak(gen('saw', 0), k), 'r' + k + '.csv', { id: 'r' + k, name: 'Dry Ridge Rd', date: `2026-0${5 + k}-01T09:00`, source: 'web-gps' }));
   }, PROFILE_CSV);
   const road = await page.evaluate(async () => (await ApexAnalysis.job('drive', { id: 'r3' })).touch.road);
-  check(road && road.corners > 0 && road.rows.length === road.corners && road.rows.every((r) => r.passes === 4 && r.record >= r.level)
+  check(road && road.corners > 0 && road.rows.length === road.corners && Number.isInteger(road.uneven) && road.steady <= road.uneven && road.rows.every((r) => r.low <= r.level) && road.rows.every((r) => r.passes === 4 && r.record >= r.level)
     && road.rows.every((r) => r.by === null || (['r0', 'r1', 'r2'].includes(r.by) && /^2026-0[5-7]-01/.test(r.on))), 'every corner driven four times has its record and who holds it: ' + JSON.stringify(road && road.rows.slice(0, 3)));
   await page.goto(base + '/analysis.html?tab=drive&drive=r3');
   await page.waitForFunction(() => document.querySelectorAll('.dv-corner .dv-rec').length > 0, null, { timeout: 20000 });

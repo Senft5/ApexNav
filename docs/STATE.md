@@ -6,6 +6,14 @@
   `passed` names the loop and skips taken-down loops.
 - Tests: backend time_attack and inbox, pytest test_time_attack (12), and the e2e time attack flow (row line, Drive it).
 - Next: the home deck's weekly loop is on Roamer C's branch claude/roam-c-ta-placement.
+## Session 2026-11-11 (roam-b first-run walkthrough, PR 2): Done after a replay comes home (claude/project-thread-sxhrgi)
+
+- Watched the welcome's replay to its end on production (iPhone 13 viewport, at Knoxville): it plays through to "Replay
+  finished". Done then left the map and the arrow on the demo's ground (Kentucky) while the masthead read Knoxville; a still
+  browser sends no new fix. cockpit.js `closeReplay` now puts the idle map back at `state.lastPosition` (follow on, snapped);
+  a route's fly-through is unchanged. e2e "done after a replay brings the idle map back to where you are" (fails before).
+- Seen, by design: the dash's SCORE reads -- through a replay (the live score is only for a drive being recorded).
+- Next: the Log and a drive's page as a new user; add a friend; join a crew.
 ## Session 2026-11-11 (routing round three, part 2): crests and verified bumps in stage discovery (claude/project-thread-39xbx9, off origin/main)
 
 - IDEAS R-04. backend/src/roads.ts `coverage`: per direction `crested` (share of bins with crest_n >= 2 at `CREST_G`
@@ -64,6 +72,17 @@
 - Seen, not fixed (other areas): signed-out pages still ask /api/convoy/invites, /api/points, /api/hazards, /api/roads (401s);
   the idle map's top ~150 px is blank paper at pitch 42 with the deck's padding (MapLibre draws no tiles beyond the far
   plane; no sky in the style). Next: replay drive, Log, add a friend, join a crew.
+## Session 2026-11-11 (deepest analysis, PR 14): a drive at its road's least even corners (claude/project-thread-gd7nre)
+
+- `road_records` / `roadRecords` rows carry `low` (the least clean pass); the result adds `uneven` (rows spanning 15
+  levels or more) and `steady` (of those, how many this drive took within NEAR_BEST = 5 of your cleanest).
+- web/driver_profile.js `roadUnevenLine`: "At the 3 corners here where your passes differ most, this drive was near your
+  cleanest at 2." (or "...not near your cleanest at any of them: they are the places to work on."), under "Against your
+  records" on the drive page.
+- Tests: tests/test_best_corners.py (rows' low, uneven/steady, words, parity); e2e checks the fields.
+- Next: Practice (IDEAS D-27) could take a road's least even corner as the thing to work on, and say after the next drive
+  of that road how it went there.
+
 ## Session 2026-11-11 (recurring meets): crew drives that repeat (claude/project-thread-uwmi4e, after #400)
 - Migration 0053 (`crew_events.repeat_weeks` 1/2/4, `series_id`): applied on preview; prod before merge.
 - `backend/src/events.ts` rollRepeats (on events list/near reads and in the sweep), eventCreate/eventUpdate take
