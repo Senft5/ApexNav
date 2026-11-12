@@ -796,7 +796,11 @@
         <svg class="fp-mark" viewBox="0 0 320 56" preserveAspectRatio="none" aria-hidden="true"><path d="M4 44 C 50 44, 60 14, 104 16 S 170 46, 214 34 S 280 10, 316 12" stroke-dasharray="3 4"/><path class="ink" d="M104 16 C 140 18, 170 46, 214 34"/><line class="ink" x1="104" y1="6" x2="104" y2="26"/><line class="ink" x1="214" y1="24" x2="214" y2="44"/><circle cx="104" cy="16" r="3.5"/></svg>
         <h2 class="fp-head">No stages yet.</h2>
         <p class="fp-line">A stretch you drive often, each pass timed against your best.</p>
-        ${drives.length ? '<a class="btn solid fp-go" href="analysis.html?tab=log">Pick a drive to mark one from</a>' : '<a class="btn solid fp-go" href="index.html">Start a drive</a><p class="fp-line" style="margin:10px 0 0;text-align:center">Mark one from a drive\u2019s page.</p>'}</div>`;
+        ${drives.length ? '<button type="button" class="btn solid fp-go" id="segMarkGo">Mark a stage</button>' : '<a class="btn solid fp-go" href="index.html">Start a drive</a><p class="fp-line" style="margin:10px 0 0;text-align:center">Mark one from a drive\u2019s page.</p>'}</div>`;
+      // 2026-11-12 (free roamer B): the key opens the marker here on your latest drive (it used to send you to the Drives
+      // list with nothing there saying what to do next); the marker's own picker changes the drive
+      const go = $('segMarkGo');
+      if (go) go.addEventListener('click', () => openMarker(drives[drives.length - 1].id));
       for (const s of segs) {
         const passes = passesFor(s), best = passes.reduce((m, x) => (x.p.score != null && (m == null || x.p.score > m) ? x.p.score : m), null);
         const b = document.createElement('button');
@@ -1139,6 +1143,12 @@
       if (o) $('selB').value = o.id;
       renderCompare(); showTab('compare'); toTop();
     });
+    /** The new-stage marker open on this drive (from the drive-ended card, a drive's page or the empty Stages page). */
+    function openMarker(id, scroll = true) {
+      const box = $('newStage');
+      box.dataset.fromDrive = '1'; box.hidden = false; $('segDrive').value = id; $('segDrive').dispatchEvent(new Event('change')); box.open = true;
+      if (scroll) box.scrollIntoView({ block: 'start' });
+    }
     // The page a Log URL asks for: ?tab= (log, stages, drive, compare) and a drive (?drive=), here or from the map page
     async function route(search) {
       const p = new URLSearchParams(search), q = p.get('tab'), t = TAB_ALIAS[q] || q, want = p.get('drive');
@@ -1148,7 +1158,7 @@
       if (tab === 'segments' && $('segDrive')) {
         showTab('segments');
         if (dirty.has('segments') || !$('segDrive').options.length) await renderSegments();
-        $('newStage').dataset.fromDrive = '1'; $('newStage').hidden = false; $('segDrive').value = want; $('segDrive').dispatchEvent(new Event('change')); $('newStage').open = true;
+        openMarker(want, false);
       } else openDrive(want);
     }
     {
