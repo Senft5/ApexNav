@@ -3971,6 +3971,17 @@ flow('reported hazards: a call ahead, "still there?" after passing, and a one-ta
   check(!(await page.evaluate(() => document.getElementById('toast').classList.contains('show') && /Pothole/.test(document.getElementById('toast').textContent))), 'no toast over the map');
   check(await page.evaluate(() => { const n = document.getElementById('dsNote'); return !n.hidden && n.scrollWidth <= n.clientWidth + 1 && /reported/.test(n.getAttribute('aria-label')); }), 'the status line says it whole (or its first sentence)');
   check(reports.length === 1 && reports[0].kind === 'pothole' && Math.abs(reports[0].lat - (35.6 + 330 / 110540)) < 1e-4 && reports[0].heading === 0, 'reported at your position and heading');
+  // a report from the car's grid: the car says so with its own Undo (and OK), and Undo there sends nothing. The car stub is
+  // set late: present from the load, the page takes the app's API base and the Worker stub above isn't asked.
+  await page.evaluate(() => { window.__car = []; window.webkit = { messageHandlers: { apex: { postMessage(m) { if (m && m.cmd === 'car') window.__car.push(m); } } } };
+    window.apex.onNative({ type: 'carplay', action: 'report', kind: 'gravel' }); });
+  const undo = await page.evaluate(() => window.__car.filter((m) => m.kind === 'offer').pop());
+  check(undo && undo.title === 'Gravel reported' && undo.key === 'Undo' && undo.cancel === 'OK' && undo.seconds === 5, 'the car\'s report has its Undo there: ' + JSON.stringify(undo));
+  check(await page.evaluate(() => /Undo Gravel/.test(document.getElementById('hzReportBtn').textContent)), 'and the phone\'s Report key is Undo too');
+  await page.evaluate((id) => window.apex.onNative({ type: 'carplay', action: 'offer', id }), undo.id);
+  check(await page.evaluate(() => document.getElementById('hzReportBtn').textContent === 'Report'), 'Undo on the car takes the report back');
+  await page.waitForTimeout(5500);
+  check(reports.length === 1, 'the undone report was never sent: ' + JSON.stringify(reports.map((r) => r.kind)));
   await page.evaluate(() => clearInterval(window.__fixes));
 });
 

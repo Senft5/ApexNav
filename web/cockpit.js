@@ -8768,18 +8768,39 @@
       b.classList.toggle('undo', !!pendingHz);
     }
     $('hzReportBtn').addEventListener('click', () => {
-      if (pendingHz) { clearTimeout(pendingHz.timer); pendingHz = null; paintHzUndo(); toast('Not sent.'); return; }
+      if (pendingHz) { undoHazard(); return; }
       $('hzOverlay').classList.add('show');
     });
+    // the report waiting to go is not sent; its Undo on the car's screen, if it has one, goes too
+    function undoHazard() {
+      if (!pendingHz) return;
+      clearTimeout(pendingHz.timer);
+      if (pendingHz.carOffer) carPost({ kind: 'offerDone', id: pendingHz.carOffer });
+      pendingHz = null; paintHzUndo(); toast('Not sent.');
+    }
     $('hzCancel').addEventListener('click', () => $('hzOverlay').classList.remove('show'));
-    async function reportHazard(kind, label = null) {
+    // fromCar: reported on the car's Report grid. The car says so with its own Undo (a navigation alert, "Pothole reported",
+    // Undo and OK), as the phone's Report key turns into Undo; its window is the car alert's shortest, CAR_HZ_UNDO_MS.
+    const CAR_HZ_UNDO_MS = 5000;
+    async function reportHazard(kind, label = null, fromCar = false) {
       $('hzOverlay').classList.remove('show');
       const p = state.lastPosition, heading = state.lastMotion && state.lastMotion.heading;
       if (!p || !state.lastPositionAt || performance.now() - state.lastPositionAt > 10000) { toast('No GPS fix yet. Try again in a moment.'); return; }
       const body = { kind, lat: p.lat, lon: p.lon, heading: Number.isFinite(heading) ? Math.round((heading % 360 + 360) % 360) : null, ...(label ? { label } : {}) };
-      if (pendingHz) { clearTimeout(pendingHz.timer); const was = pendingHz.body; pendingHz = null; sendHazard(was); }   // the one before goes now
-      pendingHz = { body, timer: setTimeout(() => { const b = pendingHz && pendingHz.body; pendingHz = null; paintHzUndo(); if (b) sendHazard(b); }, 3000) };
+      if (pendingHz) {                                                   // the one before goes now
+        clearTimeout(pendingHz.timer); const was = pendingHz.body;
+        if (pendingHz.carOffer) carPost({ kind: 'offerDone', id: pendingHz.carOffer });
+        pendingHz = null; sendHazard(was);
+      }
+      const ms = fromCar ? CAR_HZ_UNDO_MS : 3000;
+      const held = pendingHz = { body, timer: setTimeout(() => { const b = pendingHz && pendingHz.body; pendingHz = null; paintHzUndo(); if (b) sendHazard(b); }, ms) };
       paintHzUndo();
+      if (fromCar) {
+        const id = `o${++car.offerSerial}`, word = label || ApexHazardReports.LABEL[kind] || 'Hazard';
+        held.carOffer = id;
+        car.offer = { id, until: performance.now() + ms, run: () => { car.offer = null; if (pendingHz === held) undoHazard(); } };
+        carPost(ApexCarPlay.offerMessage(id, `${word} reported`, '', 'Undo', ms, 'OK'));
+      }
     }
     // U-94: in the review recording (window.APEX_REVIEW) a report is the member's sheet, Undo and pin, answered here as the
     // Worker would answer it; it never reaches the server or the outbox, so no real driver hears of a replayed drive's gravel.
@@ -9567,7 +9588,7 @@
       else if (m.action === 'disconnect') keepCar(false, m.t);      // Round 3: the car switched off; the drive ends once it stays put
       else if (m.action === 'places') carPost(ApexCarPlay.placesMessage(recentPlaces()));
       else if (m.action === 'loop' && LOOP_MINUTES.includes(m.minutes) && !driveActive) loop({ minutes: m.minutes });
-      else if (m.action === 'report' && ApexHazardReports.KINDS.includes(m.kind)) reportHazard(m.kind);
+      else if (m.action === 'report' && ApexHazardReports.KINDS.includes(m.kind)) reportHazard(m.kind, null, true);
       else if (m.action === 'still' && typeof m.still === 'boolean') answerStill(m.still);
       else if (m.action === 'voice') { state.toggles.voice = !state.toggles.voice; savePrefs(); paintSwitches(); if (!state.toggles.voice) stopSpeaking(); }
       else if (m.action === 'hello') { keepCar(true); car.route = ''; car.look = ''; car.hazards = ''; carRoute(track && track.kind === 'route' ? track : null); carLook(); carHazards();
