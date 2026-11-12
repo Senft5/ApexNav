@@ -1,10 +1,11 @@
 // Along the route (IDEAS R-24, R-23): viewpoints, cafés and fuel from the map's own OpenStreetMap points (stages.js pois),
 // waterfalls from OpenStreetMap too (the map's tiles carry none: asked of Overpass, fallsQuery / fallsFrom),
 // placed along a planned route, and the longest stretch with no fuel. Map data, labelled as such: a viewpoint is where
-// someone mapped one, a fuel station may be closed. Pure (tests/test_scenic.py); the page pins them and says the summary.
+// someone mapped one, a fuel station may be closed. The tiles file EV chargers under fuel too (stages.js keeps them apart,
+// kind 'charge'): forCar keeps the pumps for a petrol, diesel or hybrid car or no car, and the chargers for an electric one. Pure (tests/test_scenic.py); the page pins them and says the summary.
 (function (root) {
   'use strict';
-  const NEAR_M = { view: 350, falls: 400, cafe: 200, fuel: 200 };   // a waterfall a short walk from a pull-off still counts     // how far off the road still counts as "along" it
+  const NEAR_M = { view: 350, falls: 400, cafe: 200, fuel: 200, charge: 200 };   // a waterfall a short walk from a pull-off still counts     // how far off the road still counts as "along" it
   const SAME_M = 300;                                       // the same kind within this along the road is one stop
   const FUEL_WARN_M = 80 * 1000;                            // ~50 mi without fuel is worth saying
   const MI = 1609.344;
@@ -39,29 +40,45 @@
     return out;
   }
 
-  /** The longest stretch of the route with no fuel along it: { m, fromM, toM }. The start and the end count as ends. */
-  function fuelGap(list, totalM) {
-    const stops = [0, ...(list || []).filter((p) => p.kind === 'fuel').map((p) => p.m), totalM].sort((a, b) => a - b);
+  /**
+   * The places that matter for the car: an electric car's chargers instead of the pumps; any other car (or none in the
+   * Garage) the pumps, never a charger counted as a fuel stop. `car` = the Garage's daily car ({ fuel }) or null.
+   */
+  function forCar(pois, car) {
+    const ev = !!(car && car.fuel === 'electric');
+    return (pois || []).filter((p) => p && (ev ? p.kind !== 'fuel' : p.kind !== 'charge'));
+  }
+
+  /**
+   * The longest stretch of the route with no fuel along it: { m, fromM, toM }. The start and the end count as ends.
+   * `kind` 'charge' for an electric car: the longest stretch with no charger.
+   */
+  function fuelGap(list, totalM, kind = 'fuel') {
+    const stops = [0, ...(list || []).filter((p) => p.kind === kind).map((p) => p.m), totalM].sort((a, b) => a - b);
     let gap = { m: 0, fromM: 0, toM: 0 };
     for (let i = 1; i < stops.length; i++) if (stops[i] - stops[i - 1] > gap.m) gap = { m: stops[i] - stops[i - 1], fromM: stops[i - 1], toM: stops[i] };
     return gap;
   }
 
-  /** One line for the route card: "3 viewpoints · 2 cafés", and a fuel warning when a stretch is long; '' with nothing to say. */
-  function summary(list, totalM) {
+  /**
+   * One line for the route card: "3 viewpoints · 2 cafés", and a fuel warning when a stretch is long; '' with nothing to say.
+   * opts.electric: the warning is about chargers ("no charger for the first 60 mi").
+   */
+  function summary(list, totalM, opts = {}) {
     const count = (k) => (list || []).filter((p) => p.kind === k).length;
     const parts = [];
-    const v = count('view'), wf = count('falls'), cf = count('cafe'), fu = count('fuel');
+    const ev = !!(opts && opts.electric), v = count('view'), wf = count('falls'), cf = count('cafe'), fu = count('fuel'), ch = count('charge');
     if (v) parts.push(`${v} viewpoint${v === 1 ? '' : 's'}`);
     if (wf) parts.push(`${wf} waterfall${wf === 1 ? '' : 's'}`);
     if (cf) parts.push(`${cf} café${cf === 1 ? '' : 's'}`);
     if (fu) parts.push(`${fu} fuel stop${fu === 1 ? '' : 's'}`);           // the owner, 2026-11-11: a station to tap for its name
-    const gap = fuelGap(list, totalM);
+    if (ch) parts.push(`${ch} charger${ch === 1 ? '' : 's'}`);
+    const gap = fuelGap(list, totalM, ev ? 'charge' : 'fuel'), none = ev ? 'no charger' : 'no fuel';
     if (finite(totalM) && gap.m >= FUEL_WARN_M) {
       const U = root.ApexUnits, k = U && U.metric() ? 1000 : MI, u = U && U.metric() ? 'km' : 'mi';   // units.js, U-22
       const n = (m) => Math.round(m / k), atStart = gap.fromM < 500, atEnd = totalM - gap.toM < 500;
-      parts.push(atStart && atEnd ? 'no fuel on the way' : atStart ? `no fuel for the first ${n(gap.m)} ${u}`
-        : atEnd ? `no fuel for the last ${n(gap.m)} ${u}` : `no fuel from ${u} ${n(gap.fromM)} to ${n(gap.toM)}`);
+      parts.push(atStart && atEnd ? `${none} on the way` : atStart ? `${none} for the first ${n(gap.m)} ${u}`
+        : atEnd ? `${none} for the last ${n(gap.m)} ${u}` : `${none} from ${u} ${n(gap.fromM)} to ${n(gap.toM)}`);
     }
     const line = parts.join(' · ');
     return line.charAt(0).toUpperCase() + line.slice(1);
@@ -73,7 +90,7 @@
    * lat, lon, m }: the name the map has for it (an unnamed one says so, never a made-up name), how far into the route,
    * and how far off the road. `fmt` = { long(m), short(m) } in the driver's units (units.js).
    */
-  const KIND_NAME = { view: 'Viewpoint', falls: 'Waterfall', cafe: 'Café', fuel: 'Fuel station' };
+  const KIND_NAME = { view: 'Viewpoint', falls: 'Waterfall', cafe: 'Café', fuel: 'Fuel station', charge: 'EV charger' };
   function places(list, fmt = null) {
     const long = fmt && fmt.long ? fmt.long : (m) => `${(m / 1000).toFixed(1)} km`;
     const short = fmt && fmt.short ? fmt.short : (m) => `${Math.round(m / 10) * 10} m`;
@@ -97,7 +114,7 @@
    * first one of `kind` past `atM` along the route, by its name on the map. `list` = along(); `list` null = no route
    * (or its places not loaded). "Next fuel: Shell, in 3.2 mi." / "Next café in 1.4 mi." / "No fuel stops ahead on this route."
    */
-  const ASK_NAME = { cafe: ['café', 'cafés'], fuel: ['fuel', 'fuel stops'], view: ['viewpoint', 'viewpoints'], falls: ['waterfall', 'waterfalls'] };
+  const ASK_NAME = { cafe: ['café', 'cafés'], fuel: ['fuel', 'fuel stops'], charge: ['charger', 'chargers'], view: ['viewpoint', 'viewpoints'], falls: ['waterfall', 'waterfalls'] };
   function nextAnswer(list, atM, kind, fmt = null) {
     const words = ASK_NAME[kind];
     if (!words) return '';
@@ -119,7 +136,7 @@
    * (PAD px apart, PAD_SAME between two of a kind), and at most KEEP of a kind are shown on screen at once. Pins off the
    * screen don't count and stay as they are. Returns a boolean per pin, true = shown.
    */
-  const KIND_RANK = { view: 0, falls: 1, cafe: 2, fuel: 3 }, KEEP = { view: 6, falls: 4, cafe: 4, fuel: 4 }, PAD = 4, PAD_SAME = 24;
+  const KIND_RANK = { view: 0, falls: 1, cafe: 2, fuel: 3, charge: 3 }, KEEP = { view: 6, falls: 4, cafe: 4, fuel: 4, charge: 4 }, PAD = 4, PAD_SAME = 24;
   function declutter(pins, view = null) {
     const list = pins || [], show = list.map(() => true);
     const on = list.map((p, i) => i).filter((i) => {
@@ -179,6 +196,6 @@
     return out;
   }
 
-  const api = { along, fuelGap, summary, places, placeLine, nextAnswer, declutter, fallsQuery, fallsFrom, NEAR_M, FUEL_WARN_M, KIND_NAME };
+  const api = { along, forCar, fuelGap, summary, places, placeLine, nextAnswer, declutter, fallsQuery, fallsFrom, NEAR_M, FUEL_WARN_M, KIND_NAME };
   if (typeof module !== 'undefined' && module.exports) module.exports = api; else root.ApexScenic = api;
 })(typeof window !== 'undefined' ? window : globalThis);

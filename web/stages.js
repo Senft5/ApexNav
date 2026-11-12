@@ -257,7 +257,7 @@
   // an edge; at most POI_MAX_TILES (more is no data, not "nothing there"). Kept for the session.
   const poiTiles = new Map();
   const POI_Z = 14, POI_PAD_KM = 0.4, POI_MAX_TILES = 160;
-  const POI_KIND = (p) => (p.subclass === 'viewpoint' ? 'view' : p.class === 'cafe' ? 'cafe' : p.class === 'fuel' ? 'fuel' : null);
+  const POI_KIND = (p) => (p.subclass === 'viewpoint' ? 'view' : p.class === 'cafe' ? 'cafe' : p.class === 'fuel' ? (p.subclass === 'charging_station' ? 'charge' : 'fuel') : null);   // the tiles file chargers under fuel
   async function pois(points) {
     if (!tileUrl) tileUrl = (await tileJson()).tiles[0];
     const want = new Set();

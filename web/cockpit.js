@@ -8253,7 +8253,7 @@
     // Viewpoints, cafés and fuel along a planned route (IDEAS R-24, R-23; stages.js pois, scenic.js): pins on the map and a
     // line on the route card. Map data: a mapped viewpoint, a fuel station that may be closed. Nothing found says nothing.
     const scenicPins = [];
-    const SCENIC_LABEL = { view: 'VIEW', falls: 'FALLS', cafe: 'CAFÉ', fuel: 'FUEL' };
+    const SCENIC_LABEL = { view: 'VIEW', falls: 'FALLS', cafe: 'CAFÉ', fuel: 'FUEL', charge: 'CHARGE' };
     // Seasonal and time-of-day closures (conditional_closures.js, IDEAS R-22): OSM conditional access tags on the roads the
     // route uses, read for when you'd get there. A trip over 1° across, or the map offline: nothing said.
     async function attachClosures(t) {
@@ -8648,6 +8648,7 @@
       const falls = fallsNear(t);                                                              // asked at once, painted when it lands
       let raw = null;
       try { raw = await ApexStages.pois(pts); } catch (_) { raw = null; }                     // offline or a very long route
+      if (raw && ApexScenic.forCar) raw = ApexScenic.forCar(raw, routingCar());               // an EV's chargers, any other car's pumps
       if (plannedRoute !== t) return;                                                          // another route came up meanwhile
       if (!raw) return;                                                                        // say nothing: no fuel known is not "no fuel"
       paintScenic(t, ApexScenic.along(raw, t));
@@ -8659,7 +8660,8 @@
     function paintScenic(t, list) {
       t.scenic = list;
       if (car.route && track === t) carAlong(t);
-      const line = ApexScenic.summary(list, t.dist[t.dist.length - 1]);
+      const ev = !!(routingCar() && routingCar().fuel === 'electric');
+      const line = ApexScenic.summary(list, t.dist[t.dist.length - 1], { electric: ev });
       const rows = ApexScenic.places(list, placeUnits);
       $('routeAlongLine').textContent = ApexRouteCard.factText(line); $('routeCardAlong').hidden = !line;
       $('routeAlongLine').disabled = !rows.length;                                               // only a fuel warning: nothing to list
@@ -8678,7 +8680,7 @@
         el.setAttribute('role', 'button'); el.setAttribute('aria-label', row ? ApexScenic.placeLine(row) : SCENIC_LABEL[p.kind]);   // after the Marker's own "Map marker"
         scenicPins.push(mk);
         poiDeclutter.pins.push({ marker: mk, el, kind: p.kind, named: !!p.name, name: p.name || null, m: p.m });
-        if (p.kind === 'fuel' && Number.isFinite(p.m)) fuelPins.push({ m: p.m, el, name: p.name || null });
+        if ((p.kind === 'fuel' || p.kind === 'charge') && Number.isFinite(p.m)) fuelPins.push({ m: p.m, el, name: p.name || null });
       }
       fuelPins.sort((a, b) => a.m - b.m);
       updatePins();
@@ -9911,7 +9913,8 @@
     function nextPlaceAnswer(kind) {
       const t = track, at = state.mode === 'live' ? routeWatch.bestM : state.cursorM;
       const list = t && t === plannedRoute && Array.isArray(t.scenic) ? t.scenic : null;
-      const line = window.ApexScenic ? ApexScenic.nextAnswer(list, at, kind, { long: (m) => ApexUnits.long(m, 1, true) }) : '';
+      const car = routingCar(), k = kind === 'fuel' && car && car.fuel === 'electric' ? 'charge' : kind;   // "next gas station" in an EV: the next charger
+      const line = window.ApexScenic ? ApexScenic.nextAnswer(list, at, k, { long: (m) => ApexUnits.long(m, 1, true) }) : '';
       if (line) { toast(line); say(line, true); }
     }
     // (span: the one to skip, a late loop's offer; none: the one you're on or the next)
