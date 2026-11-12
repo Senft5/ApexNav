@@ -44,6 +44,7 @@ import { coverage, exportRoads, roadBins } from "./roads";
 import { crewStandings } from "./standings";
 import { crewBoard, publishDriveScores } from "./drive_scores";
 import { enter as taEnter, circuitsNow, leave as taLeave, makeCircuit, runs as taRuns, timeAttack } from "./time_attack";
+import { fixedArea, fixedEnter, fixedEntered, fixedLeave, fixedMake, fixedRuns } from "./ta_fixed";
 import { eventCame, eventCancel, eventCreate, eventRecord, eventRole, eventRsvp, eventUpdate, eventsList, eventsNear } from "./events";
 import { healthReport, healthSummary } from "./health";
 import { feedbackCreate, feedbackDone, feedbackList } from "./feedback";
@@ -192,6 +193,13 @@ on("POST", "/api/timeattack/circuit", async (req, env) => json(await makeCircuit
 on("POST", "/api/timeattack/enter", async (req, env) => json(await taEnter(env, await requireMember(req, env), req)));
 on("POST", "/api/timeattack/runs", async (req, env) => json(await taRuns(env, await requireMember(req, env), req)));
 on("DELETE", "/api/timeattack/entry", async (req, env) => { await taLeave(env, await requireMember(req, env), new URL(req.url)); return noContent(); });
+// fixed time attacks (ta_fixed.ts): three per area a season, one featured a week, boards by week, month, year or all time
+on("GET", "/api/ta", async (req, env) => json(await fixedArea(env, await requireMember(req, env), new URL(req.url))));
+on("GET", "/api/ta/entered", async (req, env) => json(await fixedEntered(env, await requireMember(req, env))));
+on("POST", "/api/ta/circuit", async (req, env) => json(await fixedMake(env, await requireMember(req, env), req)));
+on("POST", "/api/ta/enter", async (req, env) => json(await fixedEnter(env, await requireMember(req, env), req)));
+on("POST", "/api/ta/runs", async (req, env) => json(await fixedRuns(env, await requireMember(req, env), req)));
+on("DELETE", "/api/ta/entry", async (req, env) => { await fixedLeave(env, await requireMember(req, env), new URL(req.url)); return noContent(); });
 on("GET", "/api/events/near", async (req, env) => json(await eventsNear(env, await requireMember(req, env), new URL(req.url))));
 on("GET", "/api/events", async (req, env) => json(await eventsList(env, await requireMember(req, env), null)));
 on("POST", "/api/events/:id/rsvp", async (req, env, m) => { await eventRsvp(env, await requireMember(req, env), m.groups!.id, req); return noContent(); });

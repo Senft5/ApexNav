@@ -110,9 +110,9 @@ def test_parity_and_the_words():
     assert fresh[0] == f"Practice · One steering arc: {py[3]['drives'][0]['level']} on 30 corners. Through rights: {py[3]['drives'][0]['where_level']} on 15."
     assert out["zero"] == "Practice · Back to power: no corner on this drive to judge it on."
     s_up, s_flat, s_few, s_fresh = out["sums"]
-    assert s_up == f"Since 5 Nov: {py[0]['after']['level']} on 90 corners over 3 drives, against {b} before. Up {py[0]['delta']}: the practice is showing."
+    assert s_up == f"Since 5 Nov: {py[0]['after']['level']} on 90 corners over 3 drives, against {b} on 150 before. Up {py[0]['delta']} points: the practice is showing."
     assert s_flat.endswith("No clear change yet: a change is said once it is well beyond chance.")
-    assert s_few.startswith("Since 5 Nov, no drive yet with 4 or more corners")
+    assert s_few == "Since 5 Nov: no drive yet with 4 or more corners."
     assert s_fresh.endswith("There were too few corners before to compare with.")
     assert out["card"].endswith(f"Practicing: One steering arc {py[0]['after']['level']}, {b} before")
     assert out["cardWait"].endswith("Practicing: One steering arc from your next drive")
@@ -156,6 +156,20 @@ def test_a_per_road_practice_parity_and_words():
     assert out["on"] == [dp.on_plan_road(ROAD, n) for n in names] == [True, True, False, False]
     up, none = out["sums"]
     assert up.startswith(f"Since 5 Nov on Dry Ridge Rd: {py[0]['after']['level']} on 30 corners over 1 drive, against ")
-    assert none == "Since 5 Nov on Dry Ridge Rd, no drive there yet with 4 or more corners to read it on. Your next drive there is the first."
+    assert none == "Since 5 Nov on Dry Ridge Rd: no drive there yet with 4 or more corners."
     d = py[0]["drives"][0]
     assert out["line"] == f"Practice on Dry Ridge Rd · One steering arc: {d['level']} on 30 corners, {d['delta']} above your {py[0]['before']['level']} before."
+
+
+@pytest.mark.skipif(NODE is None, reason="node not installed")
+def test_scope_line_and_definition():
+    ds = [{**d, "month": d["at"][:7]} for d in drives(None)]
+    p = dp.profile(ds)
+    assert p["span"] == ["2026-10", "2026-11"] and dp.profile([])["span"] is None
+    runner = ("const P=require(process.argv[1]+'/web/driver_profile.js');const p=JSON.parse(require('fs').readFileSync(0,'utf8'));"
+              "process.stdout.write(JSON.stringify([P.scopeLine(p),P.scopeLine({...p,span:['2026-11','2026-11']}),P.scopeLine({...p,span:['2025-12','2026-02']}),"
+              "P.scopeLine({...p,span:null}),P.skillDef('arc',{n:1}),P.skillDef('brake',{n:40})]));")
+    out = json.loads(subprocess.run([NODE, "-e", runner, os.getcwd()], input=json.dumps(p), capture_output=True, text=True, check=True).stdout)
+    assert out[:4] == ["240 clean corners · 8 drives · Oct–Nov 2026", "240 clean corners · 8 drives · Nov 2026",
+                       "240 clean corners · 8 drives · Dec 2025–Feb 2026", "240 clean corners · 8 drives"]
+    assert out[4].endswith(" 0 to 100, averaged over 1 clean corner; -- until 30.") and out[5].endswith("averaged over 40 clean corners; -- until 30.")

@@ -31,6 +31,10 @@ const passes = {
   loc: [{ p: { score: 1, time_s: 50 }, d: { date: '2026-11-10' } }],
 };
 const runs = T.runsToSend(circuits, segs, (s) => passes[s.id], '2026-11-09', '2026-11-15');
+// entered on the 12th: from the 11th (a run just before entering, on a clock a day off, still counts), never before
+const runsSince = T.runsToSend([{ id: 'C1', since: '2026-11-12' }], segs, (s) => passes[s.id], '2026-10-01', '2026-12-31');
+const many = { mine1: Array.from({ length: 30 }, (_, i) => ({ p: { score: 1, time_s: 100 + i }, d: { date: `2026-10-${String(i + 1).padStart(2, '0')}` } })) };
+const runsMany = T.runsToSend([{ id: 'C1' }], segs, (s) => many[s.id] || [], '2026-10-01', '2026-12-31');
 // tiles "i_j": i = (lon + 180) / 0.25, j = (lat + 90) / 0.25. Area 39,-85 (39 to 39.25, -85 to -84.75) is tile 380_516.
 const keys = ['380_516', '381_517', '383_519', '379_516', '384_516', '380_520', 'junk'];
 const seed = '2026-11-09|39,-85|0';
@@ -54,6 +58,12 @@ const asked = [];
     keys: async () => new Set(keys),
     loops: async (start, km) => { asked.push([start, km]); return asked.length === 1 ? [] : routes.slice(1); },   // the first start has no loop
     post: async (b) => { posted.push(b); return { circuit: { name: b.name }, kept: true }; } });
+  // a fixed loop's slot (each loop drawn round the start it was asked from): hubs within 3.2 km of the area's other loops are passed over; the slot goes with the loop
+  const asked2 = [], posted2 = [];
+  const h0 = T.hubs(keys, '39,-85', seed + '|s', 10);
+  const made2 = await T.makeLoop({ cell: '39,-85', make: { seed: seed + '|s', km: { min: 8, max: 16 }, slot: 1, best: true, avoid: [[h0[0].lat, h0[0].lon]] } }, {
+    keys: async () => new Set(keys), loops: async (start) => { asked2.push(start); return routes.slice(1).map((r) => ({ ...r, route: { coords: r.route.coords.map(([x, y]) => [x + 84.6 + start.lon, y - 39.25 + start.lat]) } })); },
+    post: async (b) => { posted2.push(b); return { circuit: { name: b.name }, kept: true }; } });
   const none = await T.makeLoop({ cell: '10,10', make: { seed, km: { min: 8, max: 16 } } }, { keys: async () => new Set(keys), loops: async () => routes, post: async () => 'no' });
   const g = T.geomOf(ring(2000, 10));
   console.log(JSON.stringify({
@@ -61,7 +71,13 @@ const asked = [];
   gap: [T.gap(0), T.gap(3), T.gap(null)],
   days: [T.daysLeft('2026-11-13', '2026-11-15'), T.daysLeft('2026-11-15', '2026-11-15'), T.daysLeft('x', '2026-11-15')],
   area: [T.areaPoint({ lat: 39.25, lon: -84.6 }), T.areaPoint({ lat: -33.9, lon: 151.2 }), T.areaPoint(null)],
-  runs,
+  runs, runsSince, runsMany: { n: runsMany.length, first: runsMany[0].driven_on, last: runsMany[19].driven_on },
+  best: [T.choose(routes, 'a', 1).distM, T.choose(routes, 'b', 1).distM],
+  week: [T.featuredWeek({ week: '2026-11-09', today: '2026-11-12', cell: '39,-85', circuits: [{ id: 'A', name: 'A loop', length_m: 9000, geom: '[]', featured: false, entered: true },
+      { id: 'B', name: 'B loop', length_m: 11000, geom: '[[1,2]]', featured: true, entered: true }], board: { id: 'B', period: 'week', entrants: 4, you: { place: 2 } } }),
+    T.featuredWeek({ week: '2026-11-09', circuits: [{ id: 'B', featured: true }], board: { id: 'B', period: 'month', entrants: 9, you: { place: 1 } } }).entrants,
+    T.featuredWeek({ week: '2026-11-09', circuits: [] }).circuit, T.featuredWeek({ circuit: {} })],
+  foot: [T.seasonFoot('2026-12-31'), T.seasonFoot('2027-03-31'), T.seasonFoot(null)],
   none: T.runsToSend([], segs, (s) => passes[s.id], '2026-11-09', '2026-11-15'),
   copy: T.localCopy({ segment_id: 'C1', name: 'Dry Ridge', length_m: 2500, geom: '[[39.2,-84.6],[39.21,-84.61],[39.3,-84.5]]' }, 'new1'),
   nocopy: T.localCopy({ segment_id: 'C1', geom: 'oops' }, 'n'),
@@ -80,6 +96,7 @@ const asked = [];
     const d = (m) => `${(m / 1000).toFixed(1)} km`;
     return [T.summaryLine({ ...base, you: { place: 3 } }, d), T.summaryLine({ ...base, entered: true, you: null }, d), T.summaryLine({ ...base, entrants: 0, today: '2026-11-15' }, d),
             T.summaryLine({ ...base, circuit: null }, d), T.summaryLine(null, d)]; })(),
+  skipped: asked2.length ? Math.hypot((asked2[0].lat - h0[0].lat) * 111195, (asked2[0].lon - h0[0].lon) * 86000) > 3200 : null, slot2: posted2.map((b) => b.slot), made2: !!made2,
   made, asked: asked.map(([p, km]) => [p.lat, p.lon, km]), posted: posted.map((b) => ({ cell: b.cell, seed: b.seed, name: b.name, n: b.geom.length })), noneMade: none,
   }));
 })();
@@ -106,7 +123,11 @@ def test_the_phone_sends_the_area_not_where_it_is(out):
 
 
 def test_runs_are_the_quickest_timed_pass_this_week_on_a_backed_up_circuit(out):
-    assert out["runs"] == [{"segment_id": "mine1", "time_s": 195, "driver_score": 700, "driven_on": "2026-11-12"}]
+    # the quickest each day from the first day asked (the server keeps your quickest each day), newest first
+    assert out["runs"] == [{"segment_id": "mine1", "time_s": 195, "driver_score": 700, "driven_on": "2026-11-12"},
+                           {"segment_id": "mine1", "time_s": 201, "driver_score": 800, "driven_on": "2026-11-10"}]
+    assert out["runsSince"] == [{"segment_id": "mine1", "time_s": 195, "driver_score": 700, "driven_on": "2026-11-12"}]   # nothing before you entered
+    assert out["runsMany"] == {"n": 20, "first": "2026-10-30", "last": "2026-10-11"}   # one request: the 20 latest days
     assert out["none"] == []
 
 
@@ -132,7 +153,28 @@ def test_the_seed_draws_the_same_start_and_length_on_every_phone(out):
 def test_one_of_the_best_three_loops_is_picked_at_random(out):
     assert out["picks"] == [9000, 11000, 12000]             # never the 30 km one, the subdivision one, the unmeasured one or the fourth
     assert out["pickSame"] is True and out["pickNone"] is None
-    assert out["names"] == ["Dry Ridge Road loop", "This week\u2019s loop", "This week\u2019s loop", "Ridge Rd loop"]
+    assert out["names"] == ["Dry Ridge Road loop", "Local loop", "Local loop", "Ridge Rd loop"]
+
+
+def test_a_fixed_loop_is_the_routers_best_away_from_the_areas_others(out):
+    """The owner, 2026-11-12: "static best roads". A season's loop is the router's top loop that fits (not one of three at
+    random), started away from the area's other loops, and posted for its slot."""
+    assert out["best"] == [11000, 11000]
+    assert out["skipped"] is True and out["slot2"] == [1] and out["made2"] is True
+
+
+def test_the_featured_loop_is_this_weeks_time_attack(out):
+    w, month_entrants, none, old = out["week"]
+    assert w == {"week": "2026-11-09", "ends_on": "2026-11-15", "today": "2026-11-12", "cell": "39,-85",
+                 "circuit": {"segment_id": "B", "name": "B loop", "length_m": 11000, "geom": "[[1,2]]"}, "entered": True, "entrants": 4, "you": {"place": 2}}
+    assert month_entrants == 0                               # a month's board isn't this week's
+    assert none is None and old is None
+
+
+def test_the_foot_says_when_the_loops_change(out):
+    assert out["foot"] == ["Featured changes Mondays. New loops in January. Drive within the law.",
+                           "Featured changes Mondays. New loops in April. Drive within the law.",
+                           "Featured changes Mondays. Drive within the law."]
 
 
 def test_a_loop_through_a_neighbourhood_is_refused(out):
@@ -172,7 +214,7 @@ def test_your_place_after_a_drive_is_one_sentence(out):
     assert out["places"] == [
         "Dry Ridge loop: you're 3rd of 12 this week, 1:02 off the lead (12:41).",
         "Dry Ridge loop: you're quickest of 4 this week (11:39).",
-        "This week’s loop: the first time on the board this week (11:39).",
+        "The loop: the first time on the board this week (11:39).",
         "", "", "11th", "22nd", "103rd",
     ]
 
