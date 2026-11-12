@@ -642,7 +642,7 @@
       if (!window.ApexSync || !(await ApexSync.member())) { panel.hidden = true; return; }
       panel.hidden = false;
       const sent = await ApexSync.pushSegments(segs); saveSegs(segs);
-      $('segSyncNote').textContent = sent ? `Backed up ${sent} stage${sent === 1 ? '' : 's'}. Only the stretch itself is stored, never your drives.` : 'Your stages are backed up. Scores are shared only with friends you choose (Account).';
+      $('segSyncNote').textContent = sent ? `Backed up ${sent} stage${sent === 1 ? '' : 's'}.` : '';   // nothing to say when nothing new went up
       const box = $('segShared'); box.innerHTML = '';
       const have = new Set(segs.map(s => s.origin || s.id));
       for (const r of (await ApexSync.sharedWithMe()).filter(r => !have.has(r.origin || r.id))) {
@@ -699,7 +699,7 @@
           }
           if (!filtered.some(r => !r.mine) && filtered.length < 2) {
             // TestFlight 2026-11-05 ("bad text spacing"): an empty board is a sentence that wraps, not one cut in a table cell
-            bt.innerHTML = ''; $('segLegend').textContent = 'No friends on this stage yet. Friends appear once they share scores with you (Account) and have driven it.';
+            bt.innerHTML = ''; $('segLegend').textContent = 'No friends on this stage yet.';
             return;
           }
         } else {
@@ -818,7 +818,7 @@
       // Score cut to "ore", the components' words run together). Now a run is its line (#, run, Score, time) and its four
       // components under it, the whole width; nothing scrolls sideways.
       $('segTable').className = 'runs';
-      $('segTable').innerHTML = `<tr><th class="l">#</th><th class="l">Run</th><th>Score</th><th>Time <small>(private)</small></th></tr>` +
+      $('segTable').innerHTML = `<tr><th class="l">#</th><th class="l">Run</th><th>Score</th><th>Time</th></tr>` +
         passes.map((x, i) => `<tr class="run${i === 0 ? ' best' : ''}"><td class="l">${i + 1}</td><td class="l run-name"><b>${dateLabel(x.d)}</b><span class="sub"></span></td>
           <td><span class="score">${x.p.score ?? UNK}</span></td>
           <td>${mmss(x.p.time_s)}<span class="sub">${x.p.time_s === bestTime ? 'quickest' : '+' + (x.p.time_s - bestTime).toFixed(1) + ' s'}</span></td></tr>

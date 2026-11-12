@@ -7450,6 +7450,8 @@ flow('a stage\'s Board and Runs fit the phone: an empty board is a sentence, a f
   await page.click('#segList button.seg');
   await page.waitForSelector('#segTable tr.run-parts .bars', { timeout: 15000 });
   await page.waitForFunction(() => /No friends on this stage yet/.test(document.getElementById('segLegend').textContent) && document.querySelector('#segShareRow select'), null, { timeout: 15000 });
+  check(await page.evaluate(() => document.getElementById('segLegend').textContent === 'No friends on this stage yet.' && !/\(Account\)/.test(document.getElementById('segSyncPanel').textContent)),
+    'the empty board is one sentence; no notes pointing at an "Account" page that is People now: ' + await page.textContent('#segSyncPanel'));
   const r = await page.evaluate(() => {
     const t = document.getElementById('segTable'), box = t.closest('.scroll'), legend = document.getElementById('segLegend');
     const bars = [...t.querySelectorAll('tr.run-parts .bars')].map((g) => [...g.querySelectorAll('.bar')].map((b) => ({ r: b.getBoundingClientRect(), cut: b.scrollWidth > b.clientWidth + 1, t: b.textContent })));
@@ -7461,7 +7463,7 @@ flow('a stage\'s Board and Runs fit the phone: an empty board is a sentence, a f
       boardOverflow: (() => { const s = document.getElementById('segBoard').closest('.scroll'); return s.scrollWidth - s.clientWidth; })() };
   });
   check(r.overflow <= 1 && r.boardOverflow <= 1, 'nothing on the stage scrolls sideways: ' + JSON.stringify(r));
-  check(r.runs === 2 && JSON.stringify(r.heads) === '["#","Run","Score","Time (private)"]', 'a run a line, four columns: ' + JSON.stringify(r.heads));
+  check(r.runs === 2 && JSON.stringify(r.heads) === '["#","Run","Score","Time"]', 'a run a line, four columns: ' + JSON.stringify(r.heads));
   // a run's name is when it was driven; the drive's name is under it only when it isn't the stage's own; lengths to a tenth
   const names = await page.evaluate(() => ({ runs: [...document.querySelectorAll('#segTable tr.run .run-name')].map((c) => [c.querySelector('b').textContent, c.querySelector('.sub').hidden ? null : c.querySelector('.sub').textContent]),
     title: document.getElementById('segTitle').textContent, len: document.querySelector('#segList button.seg span:nth-of-type(2)').textContent }));
@@ -7469,7 +7471,7 @@ flow('a stage\'s Board and Runs fit the phone: an empty board is a sentence, a f
     'each run is named by its date, and the stage\'s name is not repeated on every line: ' + JSON.stringify(names));
   check(/^\d+\.\d (mi|km) · 2 runs$/.test(names.len), 'a stage\'s length to a tenth: ' + names.len);
   check(r.comps.length === 8 && r.comps.every((t) => /^(Pace|Smooth|Brakes|Rhythm) \d+$/.test(t.trim())) && !r.clash.length && !r.cut.length, 'each run\'s four components whole, side by side, none on another: ' + JSON.stringify(r));
-  check(r.boardRows === 0 && r.legendLines >= 2, 'an empty board is a sentence that wraps, not a cut table cell: ' + JSON.stringify(r));
+  check(r.boardRows === 0 && r.legendLines >= 1, 'an empty board is a sentence, not a cut table cell: ' + JSON.stringify(r));
   check(!r.opts.some((o) => /null|undefined/.test(o)) && r.opts.includes('A friend with no handle yet') && /Share this stage with a friend/.test(r.shareText), 'a friend with no handle is named, never "@null": ' + JSON.stringify(r.opts));
   const bad = await unsafe(page, SAFE.portrait);
   check(!bad.length, 'the stage page under the island, the home bar or a corner, or keys on keys:\n  ' + bad.join('\n  '));
