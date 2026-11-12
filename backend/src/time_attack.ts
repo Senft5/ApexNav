@@ -172,13 +172,14 @@ export async function runs(env: Env, v: Viewer, req: Request) {
   const b = await body<{ runs?: unknown }>(req);
   if (!Array.isArray(b.runs) || b.runs.length > 20) throw new HttpError(400, "bad_runs");
   let accepted = 0, refused = 0;
+  const places: { cell: string; week: string; name: string }[] = [];
   for (const raw of b.runs as Record<string, unknown>[]) {
     const segId = str(raw && raw.segment_id, "segment_id", 1, 64), time = int(raw.time_s, "time_s", 10, 36000);
     const score = raw.driver_score == null ? null : int(raw.driver_score, "driver_score", 0, 1000);
     const day = str(raw.driven_on, "driven_on", 10, 10);
     if (!DATE_RE.test(day)) throw new HttpError(400, "bad_driven_on");
-    const c = await first<{ cell: string; week: string; length_m: number }>(env,
-      `SELECT w.cell, w.week, s.length_m FROM segments s JOIN ta_weeks w ON w.segment_id = s.origin_id AND w.week = ${WEEK} AND w.geom IS NOT NULL AND w.removed = 0
+    const c = await first<{ cell: string; week: string; length_m: number; name: string | null }>(env,
+      `SELECT w.cell, w.week, s.length_m, w.name FROM segments s JOIN ta_weeks w ON w.segment_id = s.origin_id AND w.week = ${WEEK} AND w.geom IS NOT NULL AND w.removed = 0
         JOIN ta_joins j ON j.week = w.week AND j.cell = w.cell AND j.user_id = ?2
         WHERE s.id = ?1 AND s.owner = ?2 AND ?3 BETWEEN w.week AND date(w.week, '+6 days') AND ?3 <= date('now', '+1 day')`, segId, v.id, day);
     if (!c) continue;
@@ -187,8 +188,20 @@ export async function runs(env: Env, v: Viewer, req: Request) {
        ON CONFLICT (week, cell, user_id) DO UPDATE SET time_s = ?4, driver_score = ?5, driven_on = ?6, updated_at = datetime('now') WHERE ?4 < ta_entries.time_s`)
       .bind(c.week, c.cell, v.id, time, score, day).run();
     accepted++;
+    if (!places.some((p) => p.cell === c.cell)) places.push({ cell: c.cell, week: c.week, name: c.name || "This week's loop" });
   }
-  return { accepted, refused };
+  // your place on each board you just sent to, as the board shows it (ties share a place, blocked drivers left out)
+  const out = [];
+  for (const p of places) {
+    const r = await first<{ time_s: number; place: number; of: number; best: number }>(env,
+      `SELECT me.time_s,
+         (SELECT COUNT(*) FROM ta_entries e WHERE e.week = me.week AND e.cell = me.cell AND e.time_s < me.time_s AND ${NO_BLOCK("e.user_id", "?3")}) + 1 AS place,
+         (SELECT COUNT(*) FROM ta_entries e WHERE e.week = me.week AND e.cell = me.cell AND (e.user_id = ?3 OR ${NO_BLOCK("e.user_id", "?3")})) AS of,
+         (SELECT MIN(e.time_s) FROM ta_entries e WHERE e.week = me.week AND e.cell = me.cell AND (e.user_id = ?3 OR ${NO_BLOCK("e.user_id", "?3")})) AS best
+       FROM ta_entries me WHERE me.week = ?1 AND me.cell = ?2 AND me.user_id = ?3`, p.week, p.cell, v.id);
+    if (r) out.push({ cell: p.cell, name: p.name, place: r.place, of: r.of, time_s: r.time_s, gap_s: r.time_s - r.best });
+  }
+  return { accepted, refused, places: out };
 }
 
 /** DELETE /api/timeattack/entry?lat&lon: your time off this week's board for that area, and out of the week (so the next sync

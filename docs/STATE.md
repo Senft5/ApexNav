@@ -8,6 +8,248 @@
 - Tests: tests/test_garage_first.py. e2e garage VIN, photos, build threads, Soundtrack, REVIEW 1.2, Dynamic Type pass here.
 - Next ideas: the drive HUD; CarPlay visuals; motion between tabs.
 
+
+## Session 2026-11-11 (time attack placement): where the weekly loop shows (claude/project-thread-uwmi4e, after #433)
+- Done: the Where to? row names the week's loop and your place (time_attack.js summaryLine and peek). Drive it plans the
+  loop as the route (cockpit driveLoop). The Log says your place after a sync (runs returns `places`, placeLine). For you's
+  `passed` names the loop and skips taken-down loops.
+- Tests: backend time_attack and inbox, pytest test_time_attack (12), and the e2e time attack flow (row line, Drive it).
+- Next: the home deck's weekly loop is on Roamer C's branch claude/roam-c-ta-placement.
+## Session 2026-11-12 (deepest analysis, PR 19): the Log names the roads where your passes differ most (claude/project-thread-gd7nre)
+
+- `web/driver_profile.js` `roadsToWork(list)`: from each road's book, the roads with uneven corners, most first, at most
+  3: "Where your passes differ most: Dry Ridge Rd (3 corners, mostly one steering arc) and Bell Gap (1 corner)."
+- `analysis_client.js`: the road book moved into `bookOf`; a new `roadBooks({ ids })` job reads up to 12 roads at once.
+- Log > Your roads, corner by corner: `#bookWork` shows the line above the head, read once per library (libKey).
+- Next: Your driving's Work on could point at the road from roadsToWork ("Dry Ridge Rd is where it shows most").
+
+## Session 2026-11-12 (deepest analysis, PR 18): the end card says how this drive went on a road you know (claude/project-thread-gd7nre)
+
+- `web/driver_profile.js` `roadEndLine(r)`: on a road driven three or more times, roadUnevenLine when a least even corner
+  names what this drive lost there, else roadRecordLine ("On this road: your cleanest pass yet at 7 of the 24...").
+- `analysis_client.js`: the road records moved into `roadOf` (the drive job and the coachLine job share it); coachLine now
+  returns `{ coach, road }` from one read of the near drives, so the end card asks nothing extra.
+- Map end card: `#endRoad` under the practice line. e2e: the four-drive road flow opens r3's end card and checks the line.
+- Next: Your driving's profile could list the roads with the most uneven corners, to say where on your roads to practise.
+
+## Session 2026-11-12 (deepest analysis, PR 17): a drive's least even corners say what it lost there (claude/project-thread-gd7nre)
+
+- `road_records` rows (and the JS port) carry `why`: on an uneven corner this drive took more than NEAR_BEST below your
+  cleanest, the technique credit it lost most against that cleanest pass (`_why`), else null.
+- Drive page: that corner's note reads "Your cleanest here: 90, Jun 1; this pass 62, mostly one steering arc", and the
+  touch panel's uneven line ends "What it lost most there: one steering arc." (the credit named most often).
+- e2e: the four-drive road flow checks both on the last drive.
+- Next: the end card on the map after a drive of a known road could say the same in one line.
+
+## 2026-11-12 Route-failure reasons in crash counts (claude/project-thread-39xbx9)
+- A Fun / Long way / loop plan our router couldn't make reports its reason code (kind `route`) to /api/errors; read them with `SELECT * FROM error_counts WHERE kind = 'route'` on apexnav-db. Next: once Nate hits the signal error again, read the reason there and fix that cause.
+## Session 2026-11-12 (deepest analysis, PR 16): a road's least even corners can set the practice (claude/project-thread-gd7nre)
+
+- `core/driver_profile.py` `road_book_focus(book)` (JS port `roadBookFocus`, parity-tested in tests/test_best_corners.py):
+  the technique named most often across a road book's uneven corners (a tie goes to the widest corner), with the corners
+  that name it. `roadBookFocusLine` words it: "Most of the difference at corners 10, 14 and 18 is one steering arc."
+- Log > Your roads, corner by corner: that line under the head, with "Practice one steering arc on my next drives". The
+  key saves the same plan Your driving keeps (`vetta.practice`, `where: null`, since now), so the drive end card and the
+  Practicing box read it as usual. With that skill already practised it says so instead of offering it.
+- e2e: the road-driven-four-times flow's second pass has no steering corrections, so the book shows the line and the key.
+- Next: the drive page's "where your passes differ most" line (roadUnevenLine) could name the same technique.
+
+## 2026-11-11 Valhalla for Quick only, part 3 (claude/project-thread-39xbx9)
+- Deleted the code Fun, Long way and loops could no longer reach: funRoute's Valhalla stage plans and buildLoop's stage loops and loopRefine. Docs (ROUTING, OWN_ROUTING, CALL_SHEET) updated.
+- Next: the Explore list still times stages with Valhalla's matrix off our tiles; it's a listing, not a route, so it stays for now.
+
+## Session 2026-11-11 (TestFlight 21:14): corner and moment taps zoom the drive page's map (claude/project-thread-0wt1zm)
+
+- The hourly TestFlight run moved to this thread (scheduled task at :52 UTC; the old task is paused). Owner note 21:14:22Z.
+- web/drive_basemap.js: `attach()` returns `focus(v)` (easeTo, or jumpTo under reduced motion). web/drive_view.js:
+  `applyCam` (the old onMove body), `focusMap(a, b)` frames samples a..b, `pick(i, a, b)` for every list row; "All" and a
+  tap on the plain picture call `unfocusMap`.
+- Tests: e2e "the drive page's map" flows (stubbed MapLibre: a corner row eases in, All fits again; plain picture zooms and
+  back). Checked: pytest, those flows.
+- Next: the hourly run keeps watching TestFlight.
+## Session 2026-11-11 (roam-b first-run walkthrough, PR 2): Done after a replay comes home (claude/project-thread-sxhrgi)
+
+- Watched the welcome's replay to its end on production (iPhone 13 viewport, at Knoxville): it plays through to "Replay
+  finished". Done then left the map and the arrow on the demo's ground (Kentucky) while the masthead read Knoxville; a still
+  browser sends no new fix. cockpit.js `closeReplay` now puts the idle map back at `state.lastPosition` (follow on, snapped);
+  a route's fly-through is unchanged. e2e "done after a replay brings the idle map back to where you are" (fails before).
+- Seen, by design: the dash's SCORE reads -- through a replay (the live score is only for a drive being recorded).
+- Next: the Log and a drive's page as a new user; add a friend; join a crew.
+## Session 2026-11-11 (routing round three, part 2): crests and verified bumps in stage discovery (claude/project-thread-39xbx9, off origin/main)
+
+- IDEAS R-04. backend/src/roads.ts `coverage`: per direction `crested` (share of bins with crest_n >= 2 at `CREST_G`
+  0.15 g or more, null when none was measured twice) and `bumps` (verifiedBumps over the box's bump rows, only for the
+  ways shown). web/measured_stages.js: crests add up to 1.5 points (full at 15 % of bins), each verified bump costs 1.5
+  (max 4.5), the larger direction's count per matched road. No migration.
+- Tests: backend/test/coverage.test.ts (+2), tests/test_measured_stages.py `test_crests_and_verified_bumps`.
+- Next: the FunRoute ranking of Valhalla candidates (fun_route.js) with the same crest and bump data per route.
+## Session 2026-11-11 (deepest analysis, PR 15): what differs at a road's least even corners (claude/project-thread-gd7nre)
+
+- `road_book` / `roadBook` keep each drive's cleanest pass of a corner with its six credits (`placed` now carries
+  `credits`); an uneven corner's `why` is the credit that differs most between its cleanest and least clean pass
+  (`_why` / `whyOf`, ties to the earlier skill), else null. The Log's road list says "; your least clean 62, mostly one
+  steering arc".
+- Tests: tests/test_best_corners.py (why, words, parity); e2e row pattern.
+- Next: Practice (IDEAS D-27) could take that corner's skill as the one to work on, from the road list.
+
+## Session 2026-11-11 (places by name, 3): Siri, "where's the next gas station / café" (claude/project-thread-me97iw, off origin/main)
+
+- ApexIntents.swift: NextFuelIntent / NextCafeIntent (go=nextfuel / nextcafe), 7 App Shortcuts now (Apple allows 10).
+- scenic.js `nextAnswer(list, atM, kind, fmt)`: "Next fuel: Shell, in 3.2 mi." / "Next café in 1.4 mi, no name on the map." /
+  "No cafés ahead on this route." / "Plan a route to hear the fuel stops along it." cockpit.js `nextPlaceAnswer` reads
+  `t.scenic` of the planned route from routeWatch.bestM (live) and says + shows it (a drive's status line).
+- Tests: test_scenic.py (+1), test_siri_shortcuts.py (7 shortcuts); e2e "along the route by name…" asks in a drive, the
+  Siri links flow asks with no route. Swift compiles in CI only (build-ipa). APP_REVIEW.md 2.5.x row updated.
+- Next: CarPlay's route preview could list the cafés and fuel by name.
+## Session 2026-11-11 (roam-c-ta-placement): this week's time attack loop on the home deck (claude/roam-c-ta-placement)
+
+- web/your_roads.js: `attackFrom(t)` reads GET /api/timeattack's answer (no loop, no line, or the week over gives null);
+  `suggest()` takes `attack`: entered, it comes right after a crew drive you're going to ("Time attack · <loop>", "You're
+  3rd of 8 · 3 days left" or "No time yet · last day"); not entered, after the road you haven't driven and before your
+  best road ("This week's loop · 20 mi · 8 times · 3 days left"). `nudgeText(sugg, day, at)`: the reminder says only what
+  lasts, and a week over by the day it names is not named.
+- web/cockpit.js: `refreshAttack` runs with the drive-today check (members, online, every 10 min; once more at 40 s when the
+  position came late) and sends only the middle of the 1-degree area. The suggestion's key routes to the loop's start
+  (routeToPlace); its body draws the loop. Where to?'s Time attack section and the place after a drive are the social
+  thread's; time_attack.ts untouched.
+- Tests: tests/test_your_roads.py (+4), e2e flow "time attack on the home deck". Full pytest 1692 passed.
+
+
+## Session 2026-11-11 (Valhalla for Quick only, part 2): loops are our router's or nothing (claude/project-thread-39xbx9, off origin/main)
+
+- cockpit.js `buildLoop`: our router's loops only; no Valhalla stage loops, circle or refine. With none of ours a toast
+  says why (`apexDebug.loopOwnOnlyFail`: out / index / none / off). `stageJobs`, `loopRefine` and funRoute's stage plans are
+  now unreachable (kept for now; stage discovery itself still serves Explore).
+- e2e: the loop flows (plan flow (b), a loop by time, level cards) route on the synthetic tiles (`funTiles`); new flow
+  "valhalla for quick only: off our tiles, a loop says it plainly". Full e2e locally: 4/4 shards green.
+- Next: crests and verified bumps in stage discovery for Explore (/api/coverage `crested`, `bumps`); delete the unreachable
+  Valhalla stage-plan code once the owner has lived with the rule.
+## Session 2026-11-11 (roam-b first-run walkthrough, PR 1): a first loop fills the map; loops stay off our relay (claude/project-thread-sxhrgi)
+
+- Walked a brand-new user through production on an iPhone 13 viewport (onboarding, Loop from here). Two bugs fixed:
+  - The loop was fitted above its card while the card was still filling in (469 px), and not again when it settled (310 px):
+    the loop sat in a 56 px strip at the top of the map, its start under the masthead. cockpit.js `cardFit`: for 4 s after a
+    route fit above the card, a change in the card's height fits it again, unless you moved the map. e2e "a loop fills the
+    map above its card" (fails before, passes after).
+  - Every loop candidate was sent to our trace relay (`/api/ctx/trace`), which refused it (400, over 40 km), and APP_REVIEW
+    says only stages go there. router_edges.js now relays only `c.stage` corridors (route_engine.js stageCorridor sets it),
+    at most 40 km; test_route_ctx_router_edges.py covers a loop not relayed.
+- Watch a replay (the welcome's, and a theme trial's) loaded the demo and sat at 0 mph until you found Play: watchDryRidge
+  now plays it once the map has its start (replayWhenReady, as a Log replay link does). e2e first-run flow asserts it.
+- The Log tapped before its frame had loaded (a fresh install's first seconds) put a blank full-screen frame over the tab
+  bar for ~4 s. openLog now keeps the frame hidden until it has loaded (toast "Opening your Log…"), opens it then, and
+  another tab cancels it (`logFrame.want`). Two e2e flows gate analysis.html to cover both.
+- Seen, not fixed (other areas): signed-out pages still ask /api/convoy/invites, /api/points, /api/hazards, /api/roads (401s);
+  the idle map's top ~150 px is blank paper at pitch 42 with the deck's padding (MapLibre draws no tiles beyond the far
+  plane; no sky in the style). Next: replay drive, Log, add a friend, join a crew.
+## Session 2026-11-11 (deepest analysis, PR 14): a drive at its road's least even corners (claude/project-thread-gd7nre)
+
+- `road_records` / `roadRecords` rows carry `low` (the least clean pass); the result adds `uneven` (rows spanning 15
+  levels or more) and `steady` (of those, how many this drive took within NEAR_BEST = 5 of your cleanest).
+- web/driver_profile.js `roadUnevenLine`: "At the 3 corners here where your passes differ most, this drive was near your
+  cleanest at 2." (or "...not near your cleanest at any of them: they are the places to work on."), under "Against your
+  records" on the drive page.
+- Tests: tests/test_best_corners.py (rows' low, uneven/steady, words, parity); e2e checks the fields.
+- Next: Practice (IDEAS D-27) could take a road's least even corner as the thing to work on, and say after the next drive
+  of that road how it went there.
+
+## Session 2026-11-11 (recurring meets): crew drives that repeat (claude/project-thread-uwmi4e, after #400)
+- Migration 0053 (`crew_events.repeat_weeks` 1/2/4, `series_id`): applied on preview; prod before merge.
+- `backend/src/events.ts` rollRepeats (on events list/near reads and in the sweep), eventCreate/eventUpdate take
+  `repeat_weeks` (409 `not_latest` on an older drive of a series). `web/crew_events.js` Repeats chips, "Every Saturday"
+  on cards and Meets near you, ICS RRULE. Tests: backend event_repeat 4, pytest test_crew_events, e2e crew drives.
+- Next: the auto time attack PR (local branch, built on #397's) once #397 merges.
+## Session 2026-11-11 (deepest analysis, PR 13): the road book names the least even corners (claude/project-thread-gd7nre)
+
+- `road_book` / `roadBook` give each corner its least clean pass (`low`) and the book `uneven`: up to three corners whose
+  passes span 15 levels or more, the widest first. `roadBookRows` adds "Least even: corners 4, 9 and 12, where your passes
+  differ the most."; those rows say "; your least clean 62" and are set a little heavier.
+- Tests: tests/test_best_corners.py road book test (low, uneven, the words and parity); e2e accepts the longer row.
+- Next: the drive page could say, for this drive, which of the road's least even corners it drove near its best.
+
+## Session 2026-11-11 (deepest analysis, PR 12): Your roads, corner by corner (claude/project-thread-gd7nre)
+
+- core/driver_profile.py `road_book(drives, ref)` and its port `roadBook`: every drive of a road (oldest first, placed in
+  one frame) merged corner by corner (the first pass seen is the corner; 20 m and about 45 degrees, as road_records); the
+  corners passed three or more times in road order (nearest point of `ref`), each {size, dir, passes, record, by, at}; the
+  first drive to reach the record holds it. `roadBookRows` words it. `placed` now carries size and dir.
+- web/analysis_client.js job `roadBook({ id })`: every drive with that drive's name, in the newest one's frame.
+- web/analysis.html: a quiet "Your roads, corner by corner" line in the Log: roads driven three or more times
+  (your_roads.js roads), one key each; a road lists its corners ("3  Tight right  86 / On May 1, of 4 passes") and each
+  date opens the drive that holds it.
+- Tests: tests/test_best_corners.py (+1, parity), e2e "a drive's corners on a road driven four times" (now the book too).
+- Next: the road book could mark the corners where your passes vary most (the spread by corner, Core.spreadBy), so the
+  page says where on the road to work, not only where your best was.
+
+## Session 2026-11-11 (deepest analysis, PR 11): every corner of a road says its record and which drive holds it (claude/project-thread-gd7nre)
+
+- core/driver_profile.py `road_records(mine, others, ids=None)` and its port `roadRecords` add `rows`: per corner driven
+  three or more times, {apex, level (this pass), passes, record, by (None when this pass holds it, else the holding
+  drive's id)}; of equal passes the first listed (the client lists the oldest first) holds it, as records_by_size does.
+- web/driver_profile.js `roadCornerNote(row, day)`: "Your cleanest of 4 passes here (92)", "Level with your cleanest here
+  (90, Aug 12)", "Your cleanest here: 90, Aug 12; this pass 82". Technique only.
+- The drive page's corner list carries that note under each such corner; when another drive holds it the note is a button
+  that opens that drive (drive_view.js `markRecords(rows, open)`; analysis_client.js adds each row's `on` date).
+- Tests: tests/test_best_corners.py (rows, ids, ties, words, parity), e2e "a drive's corners on a road driven four times".
+- Next: the road itself as a page (from Your roads): its corners in order, each with its record and holder across every
+  drive of it, not only from one drive's page.
+
+## Session 2026-11-11 (places by name, 2): the drive's fuel stamp names its station (claude/project-thread-me97iw, off origin/main)
+
+- cockpit.js `updatePins`: in a drive the one fuel stamp left (U-85, the next stop ahead) reads "FUEL · Shell" when the map
+  names it; the preview keeps plain FUEL stamps (fuelPins carry `name`). e2e "along the route by name…" starts the drive.
+- Next: the co-driver could say the next café or fuel stop by name on request; CarPlay's route preview could list them.
+
+## Session 2026-11-11 (Valhalla for Quick only): Fun and Long way are our router's or nothing (claude/project-thread-39xbx9, off origin/main)
+
+- The owner: Fun and Long way "always say check my signal", and Valhalla only ever for Quick. cockpit.js `funRoute`: at
+  Fun and Long way (`ownOnly`) no Valhalla route, highway check, stage search or matrix; with no route of ours a toast says
+  why (off the map: "covers Ohio, Kentucky and Indiana so far"; the index not loaded in 8 s, `OWN_COVERS_ONLY_MS`: check
+  signal; router off) with a **Use Quick** key. The index failing is now unknown (null), not "nothing here". There and back
+  at Fun / Long way likewise. Live check on production first: Fun plans on our router in Cincinnati and on Valhalla near the
+  Dragon from a desktop browser, so the owner's failure wasn't reproduced; this makes the message say what really failed.
+- e2e: flows plan at Quick unless they choose a level (`ctxOpts.funLevel`); the plan flows at Fun route on the synthetic
+  tiles (`funTiles`, the motorway grid where Quick's and Fun's picks must differ); new flow "valhalla for quick only".
+  tests/test_fun_route.py: Fun / Long way ask Valhalla nothing without our router. `FLOWS` (newline list) runs several flows.
+- Still on Valhalla: loops off our tiles (stage loops), Explore's matrix, a reroute to rejoin, spoken directions. The
+  stage-plan code in funRoute is now unreachable (kept for now).
+- Next: loops on our router only (the owner's rule says "anything but the quick route"); find the owner's failure (where,
+  app or web, which message).
+## Session 2026-11-11 (round two analysis, PR 10): a road's records, corner by corner (claude/project-thread-gd7nre, off origin/main)
+
+- core/driver_profile.py `road_records` (reference) and web/driver_profile.js `roadRecords` (port, with `placed` and
+  `roadRecordLine`): over the corners of this road you have driven three or more times (the same corner: apex within 20 m,
+  heading within about 45 degrees), how many this drive was the cleanest pass of, and how many level with it.
+- web/analysis_client.js drive job: `touch.road` from the drive's own corners and the near drives' (the coach's). The drive
+  page's "Against your records" panel adds "On this road: your cleanest pass yet at 7 of the 24 corners here you have
+  driven three or more times, level with it at 2."
+- Tests: tests/test_best_corners.py (+1, parity and words), e2e "Your driving".
+- The corner list marks each corner this drive is your cleanest pass of ("Your cleanest pass here"; `held`, drive_view.js
+  `markRecords`).
+- Next: the deepest-analysis list: a road page (Your roads) with its corners' records and which drive holds each.
+
+## Session 2026-11-11 (places by name): the cafés and fuel on the route card are a tap away, by name (claude/project-thread-me97iw, off origin/main)
+
+- The owner: "when it says there's cafes or gas stations ... i want to be able to tap for details. Ideally just show the name".
+- web/scenic.js: `summary` also counts fuel ("2 fuel stops"); `places(list, fmt)` one row per place (the map's name, or
+  "Café, no name on the map"; "3.1 mi in"; "beside the road" / "300 ft off the road"); `placeLine(row)` for a tap.
+- index.html/cockpit.js: the Along fact is a disclosure (`#routeAlongLine`, `#routeAlongPanel`, like When to go); a row flies
+  the map there and toasts "Bean · Café · 3.1 mi in" with Add as a stop; the map pins toast the same and carry it as
+  their aria-label (set after the Marker, which writes "Map marker"). stages.js pois fall back to name:latin / name_en.
+- Survey: the other mentions already name their place (Spots near you, the day's stops) or name no place (route_engine
+  costs, car.js fuel spans, which no screen shows). CarPlay shows no cafés or fuel.
+- Tests: tests/test_scenic.py (+1, summary updated); e2e "along the route by name…". Checked: pytest, that flow.
+- Next: the co-driver could name the next café or fuel stop when you ask; CarPlay's route preview could list them.
+## Session 2026-11-11 (roam-a best run): the drive page names your best run of clean corners (claude/project-thread-h7xxmf, off origin/main)
+
+- IDEAS D-30. `core/flow.py` (reference) and `web/flow.js` (port, parity-tested on synthetic and both demo drives):
+  `longest_flow` / `longest` over the drive's corners in road order, each judged by `corner_technique` (smooth >= 0.60,
+  brake >= 0.90, use <= 1.0); a miss or > 2 km between apexes ends a run; MIN_RUN 5. `text()`: "Your best run: N corners in
+  a row, smooth and settled over X."
+- web/drive_view.js: a `dv-plain` line after the coach's; analysis.html loads flow.js (index.html untouched: no boot cost).
+- The demo drives' longest runs are 4 (nothing said). Tests: tests/test_flow.py (5). Checked: pytest; e2e drive-ended
+  card/Log, Your driving, drive tags, startup budget.
+- Next: "Best run this month" in Your records (needs corners per drive: the analysis worker), and the end card.
 ## Session 2026-11-11 (ui-round-three, PR 1): the first friend and the first crew (claude/project-thread-5sbga7)
 
 - Walked the empty and signed-out screens (People, Crews, Garage, Log, Stages, signed in and out). Signed out People and
@@ -55,6 +297,16 @@
 - signature.css "a crew's page and the Share box": crew name Barlow 30/32 px, cp keys paper, chat a well; Share chips wells.
 - Tests: tests/test_signed_out_reads.py, tests/test_sheets_line.py (+2). e2e convoy, hazard, police, closure flows pass.
 - Next: round two is done (Log, Garage, People, Settings and sheets, crew, Share). Look for screens still boxed in ink.
+## Session 2026-11-11 (round two analysis, PR 9): a drive's corners against your records (claude/project-thread-gd7nre, off origin/main)
+
+- core/driver_profile.py `drive_records` (reference) and web/driver_profile.js `driveRecords` (port): a drive's cleanest
+  corner of each kind beside your record for it; `driveRecordLines` says "Tight corners: 94 at best here; your record is
+  100 (Aug 12).", "…, level with your record (…)" or "…, your record of 36 tight corners." when the drive holds it.
+- web/analysis_client.js drive job: `touch.records`, from the kept observations of drives still in the Log, dated from
+  their summaries, plus this drive's own. web/analysis.html: the "Against your records" panel on the drive page.
+- Tests: tests/test_best_corners.py (+1, parity and words), e2e "Your driving".
+- Next: the deepest-analysis list: where on a road your cleanest corners come from (a road's own records by corner).
+
 ## Session 2026-11-11 (social round two): For you, what happened to you socially (claude/project-thread-uwmi4e, off origin/main 936aec3)
 
 - IDEAS S-27, SOCIAL 2.10. `backend/src/inbox.ts` `GET /api/inbox` → `{ items, waiting, now }`: kinds `request`, `duel_ask`

@@ -71,15 +71,18 @@ describe("time attack", () => {
     expect(await json(api(b, "POST", "/api/timeattack/runs", { runs: [{ segment_id: e.segment_id, time_s: 600, driver_score: 780, driven_on: day }] }))).toMatchObject({ accepted: 1 });
     await ok(api(b, "POST", "/api/timeattack/runs", { runs: [{ segment_id: e.segment_id, time_s: 640, driver_score: 900, driven_on: day }] }));   // slower: not kept
     const as = await json(api(a, "POST", "/api/timeattack/enter", { cell: CELL }));                 // building it isn't entering
-    await ok(api(a, "POST", "/api/timeattack/runs", { runs: [{ segment_id: as.segment_id, time_s: 590, driver_score: 700, driven_on: day }] }));
+    // your place after the sync, as the board has it (ties share a place)
+    expect((await json(api(a, "POST", "/api/timeattack/runs", { runs: [{ segment_id: as.segment_id, time_s: 590, driver_score: 700, driven_on: day }] }))).places)
+      .toEqual([{ cell: CELL, name: "Dry Ridge Road loop", place: 1, of: 2, time_s: 590, gap_s: 0 }]);
     const cs = await json(api(c, "POST", "/api/timeattack/enter", { cell: CELL }));
-    await ok(api(c, "POST", "/api/timeattack/runs", { runs: [{ segment_id: cs.segment_id, time_s: 600, driver_score: 810, driven_on: day }] }));
+    expect((await json(api(c, "POST", "/api/timeattack/runs", { runs: [{ segment_id: cs.segment_id, time_s: 600, driver_score: 810, driven_on: day }] }))).places)
+      .toEqual([{ cell: CELL, name: "Dry Ridge Road loop", place: 2, of: 3, time_s: 600, gap_s: 10 }]);
     // not counted: a stage that isn't the circuit, a day outside the week; 10 km in 100 s is refused, not an error
     const other = await makeSegment(d, "Other");
     expect(await json(api(d, "POST", "/api/timeattack/runs", { runs: [{ segment_id: other, time_s: 100, driven_on: day }] }))).toMatchObject({ accepted: 0 });
     expect(await json(api(b, "POST", "/api/timeattack/runs", { runs: [{ segment_id: e.segment_id, time_s: 550, driven_on: "2020-01-06" }] }))).toMatchObject({ accepted: 0 });
     expect(await json(api(b, "POST", "/api/timeattack/runs", { runs: [{ segment_id: e.segment_id, time_s: 100, driven_on: day }, { segment_id: cs.segment_id, time_s: 500, driven_on: day }] })))
-      .toEqual({ accepted: 0, refused: 1 });
+      .toEqual({ accepted: 0, refused: 1, places: [] });
     t = await ta(d);
     expect(t.board.map((x: Msg) => [x.place, x.handle, x.time_s, x.gap_s, x.score])).toEqual([[1, "alice", 590, 0, 700], [2, "bob", 600, 10, 780], [2, "cara", 600, 10, 810]]);
     expect([t.you, t.entrants]).toEqual([null, 3]);

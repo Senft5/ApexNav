@@ -41,7 +41,7 @@
     const who = `@${i.handle || '?'}`, stage = i.stage || 'your stage';
     switch (i.kind) {
       case 'topped': return { kicker: 'Topped', text: `${who} scored ${i.score} on ${stage}, over your best of ${i.yours}.`, key: { label: 'Drive it', act: 'stage' } };
-      case 'passed': return { kicker: 'Time attack', text: `${who} went ${secs(i.gap_s)} quicker than you on ${i.stage || 'this week’s stage'}. You're ${nth(i.place)} now.`, key: { label: 'See the board', act: 'board' } };
+      case 'passed': return { kicker: 'Time attack', text: `${who} went ${secs(i.gap_s)} quicker than you on ${i.stage || 'this week’s loop'}. You're ${nth(i.place)} now.`, key: { label: 'See the board', act: 'board' } };
       case 'kudos': return { kicker: 'Kudos', text: `${who} gave you kudos for ${i.stage || 'a run'}.`, key: null };
       case 'duel_on': return { kicker: 'Duel on', text: `${who} took your duel on ${stage}.`, key: i.have_stage ? { label: 'Drive it', act: 'stage' } : null };
       case 'duel_over': {

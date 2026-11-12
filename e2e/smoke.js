@@ -211,14 +211,18 @@ flow('startup budget: the map page is ready within its script bytes, script coun
   check(got.cpuS <= BOOT.cpuS && r.long <= BOOT.longTaskMs, `CPU before ready ${got.cpuS} s (budget ${BOOT.cpuS}), longest task ${r.long} ms (budget ${BOOT.longTaskMs}): ` + JSON.stringify(got));
 }, { viewport: { width: 393, height: 852 }, hasTouch: true });
 
-flow('first run: onboarding, Watch a replay loads the bundled drive and Play moves along it', async (page, base) => {
+flow('first run: onboarding, Watch a replay loads the bundled drive and plays it; the Play switch drives it', async (page, base) => {
   await page.goto(base + '/index.html');
   await page.waitForSelector('#onboard.show', { timeout: 10000 });
   await page.click('#obAlt');
   await page.waitForFunction(() => window.apexDebug && window.apexDebug.track && window.apexDebug.state.mode === 'replay', null, { timeout: 15000 });
   check(!(await page.isVisible('#onboard.show')), 'onboarding should close');
-  await page.evaluate(() => document.getElementById('playBtn').click());
+  // Watch means watch: it plays on its own once the map has the drive's start (walkthrough 2026-11-11: it sat at 0 mph)
   await page.waitForFunction(() => window.apexDebug.state.playing && window.apexDebug.state.cursorM > 0, null, { timeout: 10000 });
+  await page.evaluate(() => document.getElementById('playBtn').click());
+  check(!(await page.evaluate(() => window.apexDebug.state.playing)), 'the Play switch pauses it');
+  await page.evaluate(() => document.getElementById('playBtn').click());
+  await page.waitForFunction(() => window.apexDebug.state.playing, null, { timeout: 3000 });
   // REVIEW2.md U-45: Play is one slide switch, speed a detent, and a replay is full-screen like a drive (the plate's × is the exit)
   const tp = await page.evaluate(() => { document.querySelector('#rateDetents [data-rate="4"]').click();
     const tb = document.querySelector('.tabbar');
@@ -228,6 +232,25 @@ flow('first run: onboarding, Watch a replay loads the bundled drive and Play mov
   check(tp.on === 'true' && tp.rate === 4 && tp.lit === '4', `the Play switch and the speed detent should drive the replay: ${JSON.stringify(tp)}`);
   check(tp.tabbar === 'none', 'the tab bar should hide during a replay');
 });
+
+// walkthrough 2026-11-11: Done after the welcome's replay left the map and the arrow on the demo's ground (Kentucky) while
+// the masthead said Knoxville; a still browser sends no new fix, so nothing brought it back
+flow('done after a replay brings the idle map back to where you are', async (page, base) => {
+  await page.route('https://tiles.openfreemap.org/**', (route) => (route.request().url().includes('/styles/')
+    ? route.fulfill({ contentType: 'application/json', body: JSON.stringify({ version: 8, sources: {}, layers: [{ id: 'bg', type: 'background', paint: { 'background-color': '#eee' } }] }) })
+    : route.abort()));
+  await page.goto(base + '/index.html');
+  await page.waitForSelector('#onboard.show', { timeout: 10000 });
+  await page.waitForFunction(() => window.apexDebug && window.apexDebug.map.loaded() && !!window.apexDebug.state.lastPosition, null, { timeout: 20000 });
+  await page.click('#obAlt');
+  await page.waitForFunction(() => window.apexDebug.state.mode === 'replay' && window.apexDebug.state.playing, null, { timeout: 15000 });
+  const far = (c) => Math.hypot(c.lat - 35.9606, c.lng + 83.9207);
+  check(far(await page.evaluate(() => window.apexDebug.map.getCenter())) > 1, 'the replay shows the demo\'s ground, not here');
+  await page.click('#replayDone');
+  await page.waitForFunction(() => { const c = window.apexDebug.map.getCenter(); return Math.hypot(c.lat - 35.9606, c.lng + 83.9207) < 0.05; }, null, { timeout: 5000 })
+    .catch(async () => { throw new Error('Done should bring the map back here: ' + JSON.stringify(await page.evaluate(() => window.apexDebug.map.getCenter()))); });
+  check(await page.evaluate(() => document.getElementById('app').classList.contains('idle')), 'the idle map is back');
+}, { geolocation: { latitude: 35.9606, longitude: -83.9207 }, permissions: ['geolocation'] });
 
 flow('the strip never cuts where the meaning is: a three-word call keeps its direction, the welcome loop reads whole (REVIEW4 U-92, U-105)', async (page, base) => {
   await page.goto(base + '/index.html');
@@ -1046,6 +1069,59 @@ flow('own routing: where our graph tiles cover the trip, our route wins and Valh
   } finally { graphDir = null; }
 }, { geolocation: { latitude: 39.155, longitude: -84.615 }, permissions: ['geolocation'] });
 
+// Valhalla is for Quick only (the owner, 2026-11-11): Fun and Long way come from our router or not at all. Off our tiles a
+// Fun plan says so, asks Valhalla for nothing, and its "Use Quick" key plans the Quick way (from Valhalla, as before).
+flow('valhalla for quick only: off our tiles, Fun says it plainly and Use Quick plans it; Valhalla never asked for Fun', async (page, base) => {
+  graphDir = 'none';
+  try {
+    const calls = { route: [], matrix: 0 };
+    await page.route('https://photon.komoot.io/**', (route) => route.fulfill({ contentType: 'application/json', body: JSON.stringify({ features: [
+      { geometry: { coordinates: [-84.57, 39.19] }, properties: { name: 'Forest Park', state: 'Ohio' } }] }) }));
+    await page.route('https://valhalla1.openstreetmap.de/**', (route) => {
+      const u = route.request().url(), req = JSON.parse(route.request().postData() || '{}');
+      if (u.endsWith('/route')) { calls.route.push(req); return route.fulfill({ contentType: 'application/json', body: JSON.stringify(stubTrip(req.locations)) }); }
+      if (u.includes('sources_to_targets')) calls.matrix++;
+      return route.abort();
+    });
+    await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); localStorage.setItem('apex.funLevel', 'fun'); } catch (_) {} });
+    await page.goto(base + '/index.html');
+    await page.waitForFunction(() => window.apexDebug && window.apexDebug.map);
+    await page.click('#destInput');
+    await page.fill('#destInput', 'Forest Park');
+    await page.waitForSelector('#placeList .place', { timeout: 10000 });
+    await page.click('#placeList .place');
+    await page.waitForFunction(() => window.apexDebug.ownOnlyFail && document.getElementById('toast').classList.contains('show'), null, { timeout: 20000 })
+      .catch(async (e) => { throw new Error(e.message + ' ' + JSON.stringify(await page.evaluate(() => ({ fail: window.apexDebug.ownOnlyFail, own: window.apexDebug.lastOwn, toast: document.getElementById('toast').textContent,
+        cls: document.getElementById('toast').className, marks: window.apexDebug.planMarks, track: window.apexDebug.track && window.apexDebug.track.id }))) + ' asked ' + calls.route.length); });
+    const t = await page.evaluate(() => ({ text: document.getElementById('toast').textContent, why: window.apexDebug.ownOnlyFail, track: window.apexDebug.track && window.apexDebug.track.id }));
+    check(/Fun routes use Vetta's own road map|Couldn't load Vetta's road map/.test(t.text) && /Use Quick/.test(t.text), 'said plainly, with Quick a tap away: ' + JSON.stringify(t));
+    check(calls.route.length === 0 && calls.matrix === 0, 'Valhalla asked for nothing at Fun: ' + calls.route.length + ' routes, ' + calls.matrix + ' matrices');
+    check(t.track !== 'route_dest', 'no stand-in route on the map: ' + t.track);
+    await page.click('#toast .toast-key');
+    await page.waitForFunction(() => window.apexDebug.track && window.apexDebug.track.id === 'route_dest', null, { timeout: 20000 })
+      .catch(async (e) => { throw new Error('after Use Quick: ' + e.message + ' ' + JSON.stringify(await page.evaluate(() => ({ level: localStorage.getItem('apex.funLevel'), own: window.apexDebug.lastOwn,
+        toast: document.getElementById('toast').textContent, track: window.apexDebug.track && window.apexDebug.track.id }))) + ' asked ' + calls.route.length); });
+    const q = await page.evaluate(() => ({ level: localStorage.getItem('apex.funLevel'), kind: window.apexDebug.track.kind }));
+    check(q.level === 'quick' && calls.route.length >= 1, 'Use Quick plans the Quick way, from Valhalla: ' + JSON.stringify(q) + ' ' + calls.route.length);
+  } finally { graphDir = null; }
+}, { geolocation: { latitude: 39.155, longitude: -84.615 }, permissions: ['geolocation'] });
+
+flow('valhalla for quick only: off our tiles, a loop says it plainly and asks Valhalla nothing', async (page, base) => {
+  graphDir = 'none';
+  const calls = { route: 0, matrix: 0 };
+  await page.route('https://valhalla1.openstreetmap.de/**', (route) => { const u = route.request().url(); if (u.endsWith('/route')) calls.route++; if (u.includes('sources_to_targets')) calls.matrix++; return route.abort(); });
+  await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); } catch (_) {} });
+  await page.goto(base + '/index.html');
+  await page.waitForFunction(() => window.apexDebug && window.apexDebug.map);
+  await page.click('#destInput');
+  await page.waitForSelector('#findLoopBtn', { state: 'visible', timeout: 10000 });
+  await page.click('#findLoopBtn');
+  await page.waitForFunction(() => window.apexDebug.loopOwnOnlyFail && document.getElementById('toast').classList.contains('show'), null, { timeout: 20000 });
+  const t = await page.evaluate(() => ({ text: document.getElementById('toast').textContent, why: window.apexDebug.loopOwnOnlyFail, track: window.apexDebug.track && window.apexDebug.track.id }));
+  check(/Loops use Vetta's own road map|Couldn't load Vetta's road map/.test(t.text) && !/^loop_/.test(t.track || ''), 'said plainly, no stand-in loop: ' + JSON.stringify(t));
+  check(calls.route === 0 && calls.matrix === 0, 'Valhalla asked for nothing: ' + JSON.stringify(calls));
+}, { geolocation: { latitude: 39.155, longitude: -84.615 }, permissions: ['geolocation'] });
+
 // What this drive is like (web/route_story.js, the owner 2026-11-09): a planned route's card carries a few plain lines
 // built from the ranking's own data, in your units, after the card is up; nothing it says is unknown to the data.
 flow('route overview: the card says what the drive is like in plain words, from the route\'s own data', async (page, base) => {
@@ -1620,6 +1696,28 @@ flow('the chosen route stays whole on screen: above the card when it opens, abov
   const again = await framed('card');
   check(again.open && (!again.roomy || again.ok), 'up again: refitted above the card: ' + JSON.stringify(again));
 }, { geolocation: { latitude: 35.9606, longitude: -83.9207 }, permissions: ['geolocation'] });
+
+flow('a loop fills the map above its card once the card has settled, not a strip at the top fitted to the card\'s first, taller height (walkthrough 2026-11-11)', async (page, base) => {
+  await page.route('https://tiles.openfreemap.org/**', (route) => (route.request().url().includes('/styles/')
+    ? route.fulfill({ contentType: 'application/json', body: JSON.stringify({ version: 8, sources: {}, layers: [{ id: 'bg', type: 'background', paint: { 'background-color': '#eee' } }] }) })
+    : route.abort()));
+  await planRouter(page);
+  await funTiles(page);                                      // loops are our router's only (#445)
+  await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); localStorage.setItem('apex.permsExplained', '1'); } catch (_) {} });
+  await page.goto(base + '/index.html');
+  await page.waitForFunction(() => window.apexDebug && window.apexDebug.map && window.apexDebug.map.loaded() && window.apex, null, { timeout: 20000 });
+  await page.waitForFunction(() => !!apexDebug.state.lastPosition, null, { timeout: 10000 });
+  await page.waitForFunction(() => getComputedStyle(document.getElementById('loopSuggest')).display !== 'none');
+  await page.click('#loopSuggestGo');
+  await page.waitForFunction(() => document.getElementById('planPanel').classList.contains('routed') && apexDebug.track && /loop$/.test(apexDebug.track.name), null, { timeout: 30000 });
+  await page.waitForTimeout(2500);
+  const fit = await page.evaluate(() => { const m = apexDebug.map, t = apexDebug.track, c = m.getContainer().getBoundingClientRect(), p = document.getElementById('planPanel'), edge = p.getBoundingClientRect().top - c.top;
+    let y0 = 1e9, y1 = -1e9, x0 = 1e9, x1 = -1e9;
+    for (let i = 0; i < t.lat.length; i += Math.max(1, Math.floor(t.lat.length / 200))) { const q = m.project([t.lon[i], t.lat[i]]); y0 = Math.min(y0, q.y); y1 = Math.max(y1, q.y); x0 = Math.min(x0, q.x); x1 = Math.max(x1, q.x); }
+    return { y0: Math.round(y0), y1: Math.round(y1), x0: Math.round(x0), x1: Math.round(x1), edge: Math.round(edge), w: c.width, roomy: c.height - p.offsetHeight >= 120 }; });
+  check(!fit.roomy || (fit.y0 >= 0 && fit.y1 <= fit.edge + 1 && ((fit.y1 - fit.y0) >= 0.4 * fit.edge || (fit.x1 - fit.x0) >= 0.4 * fit.w)),
+    'the loop fills the map above its settled card: ' + JSON.stringify(fit));
+}, { viewport: { width: 393, height: 852 }, hasTouch: true, geolocation: { latitude: 35.9606, longitude: -83.9207 }, permissions: ['geolocation'] });
 
 flow('a road someone sent (#road=) opens as a route card: its name, through its points, nothing of the drive (panel round 2 DA-4)', async (page, base) => {
   const asked = [];
@@ -4179,7 +4277,7 @@ flow('crew drives: an upcoming drive shows on People, Crews, as the crew page’
     const json = (b, status = 200) => route.fulfill({ status, contentType: 'application/json', body: JSON.stringify(b) });
     if (u.pathname === '/api/me') return json({ signed_in: true, member: true, handle: 'me' });
     if (u.pathname === '/api/crews' && m === 'GET') return json([{ id: 'CREW1', name: 'Ridge Runners', role: 'member', members: 3, visibility: 'private' }]);
-    if (u.pathname === '/api/events/near') return json([{ id: 'MEET1AAAAAAAAAAA', crew_id: 'CREW9', crew_name: 'Coffee & Cars', title: 'Sunday coffee', starts_at: starts,
+    if (u.pathname === '/api/events/near') return json([{ id: 'MEET1AAAAAAAAAAA', crew_id: 'CREW9', crew_name: 'Coffee & Cars', title: 'Sunday coffee', repeat_weeks: 1, starts_at: starts,
       meet_name: 'Kroger lot', meet_lat: 39.3, meet_lon: -84.6, notes: null, going: 7, member: false, km: 12 }]);   // VI-1: near the map's centre, as the phone measures it
     if (u.pathname === '/api/events') return json([{ id: 'EVT1AAAAAAAAAAAA', crew_id: 'CREW1', crew_name: 'Ridge Runners', title: 'Cherohala <i>Saturday</i>', starts_at: starts,
       meet_name: 'Tellico Shell', meet_lat: 35.36, meet_lon: -84.29, route_id: null, notes: null, by_handle: 'bob', mine: false, can_cancel: false, my_rsvp: mine, going: ['bob', 'cara'], maybe: 1,
@@ -4220,7 +4318,7 @@ flow('crew drives: an upcoming drive shows on People, Crews, as the crew page’
   await page.waitForSelector('.drive-card:not(.meet-card) .cp-more-body');
   check((await page.textContent('.drive-card:not(.meet-card)')).includes('Going: @bob, @cara · 1 maybe'), 'More names who is going');
   await page.waitForSelector('.meet-card');
-  check(/Sunday coffee/.test(await page.textContent('.meet-card')) && /7 going/.test(await page.textContent('.meet-card')) && /Meets near you/.test(await page.evaluate(() => document.querySelector('.meet-card').closest('.side-pop, #sheet').textContent)), 'a public meet nearby');   // in a crew: under the crew's Upcoming drives
+  check(/Sunday coffee/.test(await page.textContent('.meet-card')) && /7 going/.test(await page.textContent('.meet-card')) && /Every \w+day · Coffee & Cars/.test(await page.textContent('.meet-card')) && /Meets near you/.test(await page.evaluate(() => document.querySelector('.meet-card').closest('.side-pop, #sheet').textContent)), 'a public meet nearby');   // in a crew: under the crew's Upcoming drives
   await page.click('.drive-card:not(.meet-card) .switch button:text-is("Going")');
   await page.waitForFunction(() => document.querySelector('.drive-card:not(.meet-card) .switch button[aria-checked="true"]')?.textContent === 'Going');   // the answer is a slide switch
   check(posted.some(([p, b]) => p === '/api/events/EVT1AAAAAAAAAAAA/rsvp' && b.status === 'going'), 'the answer was sent');
@@ -4285,10 +4383,12 @@ flow('crew drives: an upcoming drive shows on People, Crews, as the crew page’
   check(/Meeting point: Tellico Plains Shell/.test(await page.textContent(`${W} .plan-drive`)), 'the meeting point by search');
   const formH = await page.$eval(`${W} .plan-drive`, (f) => f.getBoundingClientRect().height);
   check(formH < 852, `the form fits one phone screen (${Math.round(formH)} px)`);
+  await page.click(`${W} [aria-label="Repeats"] button:has-text("Weekly")`);
+  check(await page.isVisible(`${W} [aria-label="Repeats"] button.on:has-text("Weekly")`), 'repeats weekly (S-13)');
   await page.click(`${W} button:has-text("Plan it")`);
-  await page.waitForFunction(() => /Drive planned/.test(document.getElementById('toast').textContent));
+  await page.waitForFunction(() => /^Planned: Every \w+day\. Each one is planned when the last one starts\.$/.test(document.getElementById('toast').textContent));
   const plan = posted.find(([p]) => p === '/api/crews/CREW1/events');
-  check(plan && plan[1].title === 'Dragon run' && /Z$/.test(plan[1].starts_at) && plan[1].meet.name === 'Tellico Plains Shell' && Math.abs(plan[1].meet.lat - 35.3601) < 1e-6 && plan[1].route_id === null && plan[1].public === false, 'the plan was sent: ' + JSON.stringify(plan));
+  check(plan && plan[1].title === 'Dragon run' && /Z$/.test(plan[1].starts_at) && plan[1].meet.name === 'Tellico Plains Shell' && Math.abs(plan[1].meet.lat - 35.3601) < 1e-6 && plan[1].route_id === null && plan[1].public === false && plan[1].repeat_weeks === 1, 'the plan was sent: ' + JSON.stringify(plan));
   check(plan[1].lead === undefined && plan[1].sweep === null && plan[1].regroup.length === 0, 'you lead; the rest is set on the card');
 });
 
@@ -4386,6 +4486,34 @@ flow('crew drive morning: the idle map offers directions to today\'s meeting poi
   check(/Dawn run/.test(t) && /Meet at Tellico Shell/.test(t) && /2 going/.test(t) && /Lead @bob/.test(t), 'the reminder: ' + t);
   check(await page.$eval('#loopSuggest', (b) => getComputedStyle(b).display === 'none'), 'it takes the loop invitation\'s place');
 });
+
+flow('time attack on the home deck: this week\'s loop you entered is the suggestion, with your place; the server gets only the area (Worker stubbed)', async (page, base) => {
+  await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); localStorage.setItem('apex.permsExplained', '1'); } catch (_) {} });
+  const day = (k) => new Date(Date.now() + k * 86400000).toISOString().slice(0, 10), asked = [];
+  await page.route('**/api/**', (route) => {
+    const u = new URL(route.request().url());
+    const json = (b) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(b) });
+    if (u.pathname === '/api/me') return json({ signed_in: true, member: true, handle: 'me' });
+    if (u.pathname === '/api/timeattack') {
+      asked.push(u.search);
+      return json({ week: day(-1), ends_on: day(2), today: day(0), cell: '35,-84', make: null, entered: true, entrants: 8,
+        circuit: { name: 'Tellico <i>loop</i>', length_m: 32187, segment_id: 'TA1', geom: JSON.stringify([[35.36, -84.29], [35.40, -84.20], [35.36, -84.29]]) },
+        board: [], you: { place: 3, handle: 'me', time_s: 1200, gap_s: 40, score: 700, mine: true }, last: null });
+    }
+    return json([]);
+  });
+  await page.goto(base + '/index.html');
+  await page.waitForFunction(() => window.apex && typeof window.apex.live === 'function');
+  await page.evaluate(() => { apexDebug.state.lastPosition = apexDebug.state.lastPosition || { lat: 35.9606, lon: -83.9207 }; });
+  await page.evaluate(() => document.querySelector('.tab[data-view="people"]').click());   // signs the page in (renderAccount)
+  await page.evaluate(() => document.querySelector('.tab[data-view="map"]').click());
+  await page.waitForFunction(() => /^Time attack/.test(document.getElementById('loopSuggestTitle').textContent), null, { timeout: 20000 });
+  const title = await page.textContent('#loopSuggestTitle'), why = await page.textContent('#loopSuggestWhy');
+  check(title === 'Time attack · Tellico <i>loop</i>' && why === 'You’re 3rd of 8 · 3 days left', 'the suggestion: ' + title + ' / ' + why);
+  check(/Directions to the start\.$/.test(await page.getAttribute('#loopSuggestGo', 'aria-label')), 'its key gives directions to the start');
+  check(await page.getAttribute('#loopSuggestShow', 'data-road') === 'ta:' + day(-1) + '|35,-84|TA1', 'its body draws the loop');
+  check(asked.length && asked.every((q) => q === '?lat=35.5&lon=-83.5'), 'only the middle of the area is sent: ' + JSON.stringify(asked));
+}, { geolocation: { latitude: 35.9606, longitude: -83.9207 }, permissions: ['geolocation'] });
 
 flow('drive tags: tag a drive in the Log, filter by it, the note stays on the phone (IDEAS D-23)', async (page, base) => {
   await page.goto(base + '/analysis.html');
@@ -4494,6 +4622,71 @@ const PROFILE_CSV = `(fault, seed) => {
   return 'segment_index,distance_m,lat,lon,elevation_m,speed_mph,lon_g,lat_g\\n' + rows.join('\\n') + '\\n';
 }`;
 
+flow('a drive\'s corners on a road driven four times: each says your cleanest pass there, and a tap opens the drive that holds it (driver_profile.js roadRecords rows)', async (page, base) => {
+  await page.goto(base + '/analysis.html');
+  await page.waitForFunction(() => window.apexLogDebug && window.apexLogDebug.loaded() && window.ApexRecording);
+  await page.evaluate(async (src) => {
+    const gen = eval(src);
+    // one road four times, each pass a little slower through the same corners (a different speed column); the second
+    // without the steering corrections, so its right-handers are where the passes differ
+    const tweak = (csv, k) => csv.split('\n').map((l, i) => { if (!i || !l) return l; const c = l.split(','); c[5] = (+c[5] * (1 - 0.03 * k)).toFixed(3); return c.join(','); }).join('\n');
+    for (let k = 0; k < 4; k++) await ApexRecording.store(ApexRecording.parse(ApexCore, tweak(gen(k === 1 ? 'clean' : 'saw', 0), k), 'r' + k + '.csv', { id: 'r' + k, name: 'Dry Ridge Rd', date: `2026-0${5 + k}-01T09:00`, source: 'web-gps' }));
+  }, PROFILE_CSV);
+  const road = await page.evaluate(async () => (await ApexAnalysis.job('drive', { id: 'r3' })).touch.road);
+  check(road && road.corners > 0 && road.rows.length === road.corners && Number.isInteger(road.uneven) && road.steady <= road.uneven && road.rows.every((r) => r.low <= r.level) && road.rows.every((r) => r.passes === 4 && r.record >= r.level)
+    && road.rows.every((r) => r.by === null || (['r0', 'r1', 'r2'].includes(r.by) && /^2026-0[5-7]-01/.test(r.on))), 'every corner driven four times has its record and who holds it: ' + JSON.stringify(road && road.rows.slice(0, 3)));
+  await page.goto(base + '/analysis.html?tab=drive&drive=r3');
+  await page.waitForFunction(() => document.querySelectorAll('.dv-corner .dv-rec').length > 0, null, { timeout: 20000 });
+  const notes = await page.evaluate(() => [...document.querySelectorAll('.dv-corner .dv-rec')].map((n) => ({ t: n.textContent, link: n.tagName === 'BUTTON', rec: n.closest('.dv-corner').classList.contains('rec') })));
+  check(notes.length === road.rows.length && notes.every((n) => /^(Your cleanest of 4 passes here \(\d{1,3}\)|Level with your cleanest here \(\d{1,3}, .+\)|Your cleanest here: \d{1,3}, .+; this pass \d{1,3}(, mostly [a-z ]+)?)$/.test(n.t))
+    && notes.every((n) => n.rec === !n.link) && !notes.some((n) => /mph|km\/h/.test(n.t)), 'a note on each corner row: ' + JSON.stringify(notes.slice(0, 4)));
+  // where this pass was well off your cleanest at a least even corner, the note says what it lost most (the second pass held the arc)
+  check(road.rows.some((r) => r.why === 'arc') && notes.some((n) => /, mostly one steering arc$/.test(n.t)), 'what this pass lost: ' + JSON.stringify(road.rows.filter((r) => r.why)).slice(0, 300));
+  const touchText = await page.evaluate(() => document.body.innerText);
+  check(/where your passes differ most, .+ What it lost most there: one steering arc\./.test(touchText), 'the uneven line names what it lost');
+  const by = road.rows.find((r) => r.by !== null);
+  if (by) {
+    await page.click('.dv-corner button.dv-rec');
+    await page.waitForFunction((t) => document.getElementById('dvPick').value === t, by.by, { timeout: 20000 });
+  }
+  check(!by || await page.evaluate((t) => document.getElementById('dvPick').value === t, by.by), 'the note opens the drive that holds the corner');
+  // the road itself, corner by corner, from the Log: every corner driven three or more times in road order, each with your
+  // cleanest pass there and the drive it came on (driver_profile.js roadBook)
+  await page.goto(base + '/analysis.html');
+  await page.waitForFunction(() => window.apexLogDebug && window.apexLogDebug.loaded() && !document.getElementById('bookPanel').hidden, null, { timeout: 20000 });
+  await page.evaluate(() => { document.getElementById('bookPanel').open = true; });
+  // before a road is picked: the roads where your passes differ most, and the technique behind most of it
+  await page.waitForFunction(() => !document.getElementById('bookWork').hidden, null, { timeout: 20000 });
+  const work = await page.textContent('#bookWork');
+  check(/^Where your passes differ most: Dry Ridge Rd \(\d+ corners?, mostly one steering arc\)\.$/.test(work), 'the roads to work on: ' + work);
+  await page.click('#bookRoads button');
+  await page.waitForFunction(() => document.querySelectorAll('#bookList li').length > 0, null, { timeout: 20000 });
+  const book = await page.evaluate(() => ({ head: document.getElementById('bookHead').textContent, rows: [...document.querySelectorAll('#bookList li')].map((li) => li.innerText.replace(/\s+/g, ' ').trim()),
+    wide: document.documentElement.scrollWidth > document.documentElement.clientWidth }));
+  check(/^\d+ corners? you have driven three or more times, in road order/.test(book.head) && book.rows.length >= road.rows.length
+    && book.rows.every((t) => /^\d+ (Tight|Medium|Fast) (left|right) \d{1,3} On \w{3} \d{1,2}, of 4 passes(; your least clean \d{1,3}(, mostly [a-z ]+)?)?$/.test(t)) && !book.wide && !/mph|km\/h/.test(book.rows.join(' ')),
+    'the road corner by corner: ' + JSON.stringify(book).slice(0, 400));
+  // where the passes differ, the technique they differ by most can be the next practice (IDEAS D-27, roadBookFocus)
+  const pr = await page.evaluate(() => { const b = document.getElementById('bookPractice'); return { shown: !b.hidden, t: b.textContent, go: !!document.getElementById('bookPracticeGo') }; });
+  check(pr.shown && pr.go && /^Most of the difference at corners? [\d, and]+ is [a-z ]+\. (Practice [a-z ]+ on my next drives|You are practicing it now: Your driving shows how it goes\.)$/.test(pr.t), 'the practice line: ' + pr.t);
+  await page.click('#bookPracticeGo');
+  const after = await page.evaluate(() => ({ t: document.getElementById('bookPractice').textContent, plan: JSON.parse(localStorage.getItem('vetta.practice') || 'null') }));
+  check(/Practicing it from your next drive/.test(after.t) && after.plan && after.plan.skill === 'arc' && after.plan.where === null && /^\d{4}-\d\d-\d\dT\d\d:\d\d$/.test(after.plan.since), 'the practice is kept: ' + JSON.stringify(after));
+  await page.click('#bookList li .bk-by');
+  await page.waitForFunction(() => /^r[0-3]$/.test(document.getElementById('dvPick').value) && !document.getElementById('tab-drive').hidden, null, { timeout: 20000 });
+  // the end card on the map after the last of them says the same: what it lost most at the road's least even corners
+  await page.goto(base + '/index.html');
+  await page.waitForFunction(() => window.apexDebug && window.ApexRecording && window.ApexCore && window.ApexAnalysis);
+  const endRoad = await page.evaluate(async () => {
+    apexDebug.showEndCard(await ApexRecording.get('r3'), Date.now() - 1800e3);
+    const r = document.getElementById('endRoad');
+    for (let i = 0; i < 200 && r.hidden; i++) await new Promise((ok) => setTimeout(ok, 50));
+    return { t: r.textContent, shown: !!r.offsetParent };
+  });
+  check(endRoad.shown && /^At the \d+ corners? here where your passes differ most, .+\. What it lost most there: one steering arc\.$/.test(endRoad.t), 'the road on the end card: ' + JSON.stringify(endRoad));
+  check(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth), 'nothing wider than the phone');
+});
+
 flow('Your driving: the profile over every drive opens from the Log, names the weak side, and is kept between visits (driver_profile.js)', async (page, base) => {
   await page.goto(base + '/analysis.html');
   await page.waitForFunction(() => window.apexLogDebug && window.apexLogDebug.loaded() && window.ApexRecording);
@@ -4554,10 +4747,14 @@ flow('Your driving: the profile over every drive opens from the Log, names the w
   // a drive's own touch on its Log page: none from g kept once a second, so the panel stays hidden; words when there is one
   const dt = await page.evaluate(async () => {
     const info = await ApexAnalysis.job('drive', { id: 'p1' });
-    return { has: !!info.touch, lines: ApexDriverProfile.driveTouchLines(info.touch),
+    return { has: !!info.touch, lines: ApexDriverProfile.driveTouchLines(info.touch), best: ApexDriverProfile.driveRecordLines(info.touch && info.touch.records, 'p1'), road: info.touch && info.touch.road,
       say: ApexDriverProfile.driveTouchLines({ drive: { brake_on: { rate: 1.1 }, brake_off: { rate: null }, turn_in: { rate: null, quick_rate: true } }, usual: { brake_on: { rate: 0.8 }, brake_off: { rate: null }, turn_in: { rate: 0.9 } } }) };
   });
   check(dt.has && dt.lines.length === 0, 'a drive with g kept once a second has no touch of its own: ' + JSON.stringify(dt.lines));
+  // and its corners against your records by kind (the record of each kind is held by the first drive to reach it)
+  check(dt.best.length >= 2 && /^Tight corners: \d{1,3} at best here(, your record of \d+ tight corners|, level with your record \(.+\)|; your record is \d{1,3}( \(.+\))?)\.$/.test(dt.best[0]), 'a drive against your records: ' + JSON.stringify(dt.best));
+  // corner by corner on its road: these three drives are on three roads, so no corner has been driven three times
+  check(dt.road && dt.road.corners === 0 && dt.road.best === 0, 'no corner of this road driven three times yet: ' + JSON.stringify(dt.road));
   check(dt.say.join(' ') === 'Brakes on: about 1.1 g a second on this drive, 0.8 usually. Turn-in: one quick movement (quicker than the recording can time) on this drive, 0.9 usually.', 'a drive\'s touch in words: ' + dt.say);
   // each drive's observations were kept: a second visit reads no drive again, and a deleted drive's are dropped
   const again = await page.evaluate(() => ApexAnalysis.job('profile'));
@@ -5061,6 +5258,42 @@ flow('units: kilometres in Settings redraw the dial, the notes and the replay in
   check(/ km$/.test(await page.getAttribute('#scrubber', 'aria-valuetext')), 'the replay position in km');
 });
 
+flow('the Log tapped while its page still loads: the map and its tabs stay usable, the Log opens whole once loaded, and another tab cancels it (walkthrough 2026-11-11)', async (page, base) => {
+  await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); } catch (_) {} });
+  let release; const gate = new Promise((ok) => { release = ok; });
+  await page.route(/\/analysis\.html/, async (route) => { await gate; route.continue(); });
+  await page.goto(base + '/index.html');
+  await page.waitForFunction(() => window.apex && window.apexDebug);
+  await page.waitForFunction(() => !document.getElementById('boot'), null, { timeout: 5000 });
+  await page.click('.tab[data-view="log"]');
+  await page.waitForTimeout(300);
+  const waiting = await page.evaluate(() => { const f = document.getElementById('logFrame'); return { frameShown: !!f && !f.hidden, toast: document.getElementById('toast').textContent }; });
+  check(!waiting.frameShown && /Opening your Log/.test(waiting.toast), 'no blank frame over the tabs while the Log loads: ' + JSON.stringify(waiting));
+  await page.click('.tab[data-view="garage"]');                       // the tabs still work, and change your mind
+  await page.waitForFunction(() => document.querySelector('#sheet.open[data-view="garage"]'));
+  release();
+  await page.waitForFunction(() => { const f = document.getElementById('logFrame'); return f && f.contentWindow && f.contentWindow.ApexLogFrame; }, null, { timeout: 15000 });
+  await page.waitForTimeout(300);
+  check(await page.evaluate(() => document.getElementById('logFrame').hidden), 'the Log stays closed: you went to the Garage');
+  await page.click('.tab[data-view="log"]');
+  await page.waitForSelector('#logFrame:not([hidden])', { timeout: 3000 });
+});
+
+flow('the Log tapped while its page still loads opens on its own once it has loaded (walkthrough 2026-11-11)', async (page, base) => {
+  await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); } catch (_) {} });
+  let release; const gate = new Promise((ok) => { release = ok; });
+  await page.route(/\/analysis\.html/, async (route) => { await gate; route.continue(); });
+  await page.goto(base + '/index.html');
+  await page.waitForFunction(() => window.apex && window.apexDebug);
+  await page.waitForFunction(() => !document.getElementById('boot'), null, { timeout: 5000 });
+  await page.click('.tab[data-view="log"]');
+  await page.waitForTimeout(300);
+  check(await page.evaluate(() => { const f = document.getElementById('logFrame'); return !f || f.hidden; }), 'hidden while it loads');
+  release();
+  await page.waitForSelector('#logFrame:not([hidden])', { timeout: 15000 });
+  await page.frameLocator('#logFrame').locator('nav.tabbar a:has-text("Garage")').waitFor();
+});
+
 flow('the Log opens over the map and its tabs come back without loading the map again; switches read on and off (the owner, 2026-10-29)', async (page, base) => {
   await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); } catch (_) {} });
   await page.goto(base + '/index.html');
@@ -5272,6 +5505,9 @@ flow('Siri links: report and end act only during a drive, and say so otherwise (
   await page.waitForFunction(() => /no stages|No route/i.test(document.getElementById('toast').textContent));
   await page.evaluate(() => window.apex.onNative({ type: 'link', params: { go: 'skipstage' } }));
   await page.waitForFunction(() => /Skip a stage during a drive/.test(document.getElementById('toast').textContent));
+  // the next gas station or café with no route: it says so
+  await page.evaluate(() => window.apex.onNative({ type: 'link', params: { go: 'nextfuel' } }));
+  await page.waitForFunction(() => /^Plan a route to hear the fuel stops along it\.$/.test(document.getElementById('toast').textContent));
   // during a drive the report sheet opens
   await page.evaluate((f) => window.apex.live(f), frame(1));
   await page.waitForFunction(() => window.apexDebug.state.mode === 'live');
@@ -5487,12 +5723,13 @@ flow('dev mode: a developer opens the Dev panel from the Garage, changes a const
     const reset = await page.evaluate(() => ({ tune: document.getElementById('devPlanTune').textContent, own: apexDebug.devPlan.own.limitS, slack: ApexFunRoute.LEVELS.fun.slackS,
       input: document.querySelector('#devPanel input[data-table="levels"][data-path="fun.slackS"]').value }));
     check(reset.tune === 'planned with the defaults' && reset.slack === 240 && Math.abs(reset.own - before.own) < 1 && reset.input === '240', 'Reset: the defaults again: ' + JSON.stringify(reset));
-    // Force Valhalla: our router off for the next plan
+    // Force Valhalla: our router off for the next plan; at Fun that is no route at all (Valhalla is for Quick only, the
+    // owner 2026-11-11), said plainly
     await page.click('#devPanel input[data-dev="forceValhalla"]');
     await page.click('#devReplan');
-    await page.waitForFunction(() => { const p = window.apexDebug.devPlan; return p && p.switches.forceValhalla && !document.getElementById('planPanel').classList.contains('busy') && /Re-planned|failed/.test(document.getElementById('devStatus').textContent); }, null, { timeout: 30000 });
-    const fv = await page.evaluate(() => ({ own: apexDebug.devPlan.own, kinds: apexDebug.devPlan.pool.map((c) => c.kind) }));
-    check(!fv.own.used && fv.own.reason === 'off' && fv.kinds.every((k) => k !== 'own'), 'Force Valhalla: none of ours: ' + JSON.stringify(fv));
+    await page.waitForFunction(() => window.apexDebug.ownOnlyFail === 'off' && !document.getElementById('planPanel').classList.contains('busy'), null, { timeout: 30000 });
+    const fv = await page.evaluate(() => document.getElementById('toast').textContent);
+    check(/switched off/.test(fv) && /Use Quick/.test(fv), 'Force Valhalla at Fun: none of ours and no stand-in, said plainly: ' + fv);
     await page.click('#devPanel input[data-dev="forceValhalla"]');
     // Offline simulation: other hosts fail and the page reads as offline; off again, as it was
     await page.click('#devPanel input[data-dev="offline"]');
@@ -5503,7 +5740,7 @@ flow('dev mode: a developer opens the Dev panel from the Garage, changes a const
     await page.click('#devClose');
     check(await page.evaluate(() => document.getElementById('devPanel').hidden), 'Close hides it');
   } finally { graphDir = null; }
-}, { geolocation: { latitude: 39.155, longitude: -84.615 }, permissions: ['geolocation'] });
+}, { funLevel: 'fun', geolocation: { latitude: 39.155, longitude: -84.615 }, permissions: ['geolocation'] });
 
 // Tune your routes (the owner, 2026-11-09; free for everyone since 2026-11-10, Pro is looks only; it was Pro, open to everyone
 // until it goes on sale): Garage → Settings → Route tuning, plain sliders over the routing's numbers (web/route_tuning.js).
@@ -6310,6 +6547,16 @@ flow('the drive page\'s map: with no map to be had the picture keeps its blank p
     note: (document.querySelector('.dv-plan .dv-mapnote') || {}).textContent, key: !!document.querySelector('.dv-recenter') }));
   check(!s.on && s.credit && s.path > 10 && s.casing && !s.key, 'the blank panel, the path drawn, no credit for a map not shown: ' + JSON.stringify(s));
   check(s.note === 'Map couldn’t load', 'never silent: the panel says the map couldn’t load: ' + JSON.stringify(s.note));
+
+  // a corner row zooms the plain picture in on that corner too; a tap on the picture off the marks shows the whole drive
+  const p = await page.evaluate(() => {
+    document.querySelector('.dv-corner').click();
+    const zoomed = document.querySelector('#dvGeo').getAttribute('transform');
+    document.querySelector('.dv-plan svg').dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    return { zoomed, back: document.querySelector('#dvGeo').getAttribute('transform') };
+  });
+  const sc = /^matrix\(([\d.]+) /.exec(p.zoomed || '');
+  check(sc && +sc[1] > 2 && p.back == null, 'the plain picture zooms to the corner and back: ' + JSON.stringify(p));
 });
 
 flow('the drive page\'s map: with no signal and no saved area the panel says the map is unavailable offline, and MapLibre never loads', async (page, base) => {
@@ -6347,6 +6594,7 @@ flow('the drive page\'s map: when the map can draw it sits under the path, fitte
       getCenter() { return this.c; } getZoom() { return this.z; } setMinZoom(z) { window.__minZoom = z; } setMaxBounds(b) { if (b) window.__maxBounds = b; }
       moveTo(lng, lat, z) { this.c = { lng, lat }; this.z = z; this.fire('move'); }   // as a pinch or pan would
       isStyleLoaded() { return true; } resize() {} jumpTo(v) { window.__jump = v; this.c = { lng: v.center[0], lat: v.center[1] }; this.z = v.zoom; this.fire('move'); }
+      easeTo(v) { window.__ease = v; this.c = { lng: v.center[0], lat: v.center[1] }; this.z = v.zoom; this.fire('move'); }   // the glide's end, at once
       remove() { window.__removed = (window.__removed || 0) + 1; }
     } };
     window.ApexBasemap = { restyle(map, P) { window.__palette = P; } };
@@ -6398,6 +6646,22 @@ flow('the drive page\'s map: when the map can draw it sits under the path, fitte
   check(Math.abs(z.after[2] - z.before[2]) < 1, 'the corner number keeps its size: ' + JSON.stringify([z.before[2], z.after[2]]));
   check(z.shownKey && z.jump && Math.abs(z.jump.zoom - z.z0) < 1e-9 && Math.abs(z.minZoom - (z.z0 - 1)) < 1e-9, 'Recenter fits the drive again: ' + JSON.stringify(z.jump));
   check(Math.abs(z.again[0] - z.before[0]) < 1 && Math.abs(z.again[1] - z.before[1]) < 1 && /^matrix\(1 0 0 1 /.test(z.back || 'matrix(1 0 0 1 '), 'and the picture is back where it was: ' + JSON.stringify([z.before, z.again, z.back]));
+
+  // the owner, 2026-11-11 (TestFlight): "tapping a corner or moment here should orient the view above to show that corner
+  // zoomed in on the map": a corner row glides the map in on that corner; 'All' in the zoom row fits the drive again
+  const f = await page.evaluate(() => {
+    const svg = document.querySelector('.dv-plan svg'), r = svg.getBoundingClientRect(), z0 = window.__map.z;
+    window.__ease = null; window.__jump = null;
+    document.querySelector('.dv-corner').click();
+    const g = document.querySelector('#dvMarks [data-k="0"]').getBoundingClientRect();
+    const in1 = { x: g.left + g.width / 2 - r.left, y: g.top + g.height / 2 - r.top };
+    const ease = window.__ease, geo = document.querySelector('#dvGeo').getAttribute('transform');
+    [...document.querySelectorAll('.dv-z')].find((b) => b.textContent === 'All').click();
+    return { z0, ease, in1, w: r.width, h: r.height, geo, back: window.__jump, zBack: window.__map.z };
+  });
+  check(f.ease && f.ease.zoom > f.z0 + 1 && f.ease.zoom <= 18, 'a corner row zooms the map in on it: ' + JSON.stringify(f));
+  check(f.in1.x > f.w * 0.2 && f.in1.x < f.w * 0.8 && f.in1.y > f.h * 0.2 && f.in1.y < f.h * 0.8 && /^matrix\(/.test(f.geo || ''), 'with corner 1 in the middle of the picture: ' + JSON.stringify(f));
+  check(f.back && Math.abs(f.zBack - f.z0) < 1e-9, '"All" fits the whole drive again: ' + JSON.stringify(f));
 });
 
 flow('leftovers: the check every flow ends with sees "[object Object]", "undefined" and "NaN" in text and in a spoken label, and not in what is hidden', async (page, base) => {
@@ -6880,6 +7144,15 @@ async function planRouter(page, asked = []) {
     route.fulfill({ contentType: 'application/json', body: JSON.stringify({ sources_to_targets: req.sources.map(() => req.targets.map((_, j) => ({ time: 240 + 60 * j, distance: 3 + j }))) }) });
   });
 }
+// Fun and Long way are our router's only (Valhalla is for Quick, the owner 2026-11-11): a flow that plans at Fun routes on
+// the synthetic graph tiles round Forest Park (tests/graph_fixture.py), the place still called Maryville; graphDir is
+// reset before every flow
+async function funTiles(page, motorway = false) {
+  graphDir = graphFixture(motorway);
+  await page.context().setGeolocation({ latitude: 39.155, longitude: -84.615 });
+  await page.route('https://photon.komoot.io/**', (route) => route.fulfill({ contentType: 'application/json', body: JSON.stringify({ features: [
+    { geometry: { coordinates: [-84.57, 39.19] }, properties: { name: 'Maryville', state: 'Ohio' } }] }) }));
+}
 async function planPage(page, base, store = {}) {
   await page.addInitScript((store) => { try { localStorage.setItem('apex.onboarded', '1'); localStorage.setItem('apex.permsExplained', '1');
     for (const [k, v] of Object.entries(store)) localStorage.setItem(k, v); } catch (_) {} }, store);
@@ -6919,6 +7192,7 @@ async function swipe(cdp, x0, y0, dx, dy) {
 flow('plan flow (a) a destination in 3 taps: Where to?, the place, Start; Start never moves, the card says the ranked swap (finding 1, 2, 3)', async (page, base) => {
   const asked = [];
   await planRouter(page, asked);
+  await funTiles(page);
   const { taps, tap } = await planPage(page, base);
   // the main key follows the task (finding 3): Find a loop with nothing typed, the place once you type
   await tap('#destInput', 'Where to?');
@@ -6939,7 +7213,8 @@ flow('plan flow (a) a destination in 3 taps: Where to?, the place, Start; Start 
   const card = await page.evaluate(() => ({ note: document.getElementById('routeProgress').textContent, found: document.getElementById('routeProgress').classList.contains('found'),
     note2: document.getElementById('routeCardPager').textContent.replace(/\s/g, ' '), name: apexDebug.track.name, h: document.getElementById('planPanel').getBoundingClientRect().height,
     stage: document.querySelector('.stage').getBoundingClientRect().height, dials: document.getElementById('routeCardBars').innerText.replace(/\s+/g, ' ') }));
-  check(card.found && /^Better route found: \+\d+ min, \d+ more corners$/.test(card.note), 'the card says the ranked route replaced the first one, and why: ' + JSON.stringify(card));
+  // (on our router the swap can come from the context's refresh: "Conditions ahead: switched to the way by ...")
+  check(card.found && /^(Better route found: \+\d+ min, \d+ more corners|Conditions ahead: switched to the way by .+)$/.test(card.note), 'the card says the ranked route replaced the first one, and why: ' + JSON.stringify(card));
   // one control: the level cards are the choices, each its pick's time and corners, counted as the card counts them
   const cards = await levelCards(page);
   check(cards.length === 3 && cards.filter((c) => !c.further).every((c) => /^(Quick|Fun|Long way) (\d+:\d\d|\d+ min) \d+ corners?$/i.test(c.text)) && !cards.some((c) => /good corners/i.test(c.text))
@@ -6953,7 +7228,7 @@ flow('plan flow (a) a destination in 3 taps: Where to?, the place, Start; Start 
   await tap('#routeDriveBtn', 'Start');
   await page.waitForFunction(() => window.apexDebug.driveActive && apexDebug.track && apexDebug.track.kind === 'route', null, { timeout: 10000 });
   check(taps.n === 3, `a destination in 3 taps: ${taps.log.join(' → ')}`);
-}, IPHONE);
+}, { ...IPHONE, funLevel: 'fun' });
 
 flow('when to go: the route card says the best time to leave, opens the next day by the half hour, and plans the trip for the hour you pick (web/when_to_go.js)', async (page, base) => {
   const asked = [];
@@ -6996,6 +7271,46 @@ flow('when to go: the route card says the best time to leave, opens the next day
   await page.evaluate(() => document.getElementById('routeWhenNow').click());
   await planDone(page);
   await page.waitForFunction(() => !document.getElementById('routeCardWhen').hidden && !/^Leaving /.test(document.getElementById('routeWhenLine').textContent) && apexDebug.lastWhen.planned === null, null, { timeout: 25000 });
+}, IPHONE);
+
+flow('along the route by name: the Along line opens a list of the cafés and fuel stops by their names on the map, and a tap on one (or its pin) says its name and offers it as a stop; in a drive the next fuel stamp names its station (the owner, 2026-11-11)', async (page, base) => {
+  await planRouter(page);
+  const { tap } = await planPage(page, base);
+  // the map's points (offline here): a named café and an unnamed fuel station beside the route, from the route's own samples
+  await page.evaluate(() => { ApexStages.pois = async (pts) => { const a = pts[Math.min(1, pts.length - 1)], b = pts[Math.min(3, pts.length - 1)];
+    return [{ kind: 'cafe', name: 'Bean There Coffee', lat: a.lat + 0.0003, lon: a.lon }, { kind: 'fuel', name: 'Shell', lat: b.lat, lon: b.lon + 0.0004 }, { kind: 'fuel', name: null, lat: pts[pts.length - 1].lat, lon: pts[pts.length - 1].lon }]; }; });
+  await tap('#destInput', 'Where to?');
+  await page.fill('#destInput', 'Maryville');
+  await page.waitForSelector('#placeList .place', { timeout: 10000 });
+  await tap('#placeList .place', 'the place');
+  await cardUp(page);
+  await planDone(page);
+  await page.waitForFunction(() => !document.getElementById('routeCardAlong').hidden && /café/.test(document.getElementById('routeAlongLine').textContent), null, { timeout: 20000 });
+  const line = await page.evaluate(() => ({ text: document.getElementById('routeAlongLine').textContent, open: document.getElementById('routeAlongLine').getAttribute('aria-expanded'), panel: !document.getElementById('routeAlongPanel').hidden }));
+  check(/1 café/.test(line.text) && /fuel stop/.test(line.text) && line.open === 'false' && !line.panel, 'the Along line counts the café and fuel, closed: ' + JSON.stringify(line));
+  await page.evaluate(() => document.getElementById('routeAlongLine').scrollIntoView({ block: 'center' }));
+  await tap('#routeAlongLine', 'Along the route');
+  const rows = await page.evaluate(() => [...document.querySelectorAll('#routeAlongPanel .place')].map((b) => ({ name: b.querySelector('b').textContent, at: b.querySelector('span').textContent, sub: b.querySelector('small').textContent,
+    h: b.getBoundingClientRect().height, wide: b.getBoundingClientRect().right <= innerWidth })));
+  check(rows.length >= 2 && rows[0].name === 'Bean There Coffee' && /^Café/.test(rows[0].sub) && rows.some((r) => r.name === 'Fuel station, no name on the map')
+    && rows.every((r) => /( in|at the start)$/.test(r.at) && r.h >= 44 && r.wide), 'each place by its name (an unnamed one says so), where on the route, a 44 px row: ' + JSON.stringify(rows));
+  await scan(page, 'Along the route, open');
+  if (process.env.SHOTS) await page.screenshot({ path: `${process.env.SHOTS}/along-open.png` });
+  await page.evaluate(() => document.querySelector('#routeAlongPanel .place').click());
+  await page.waitForFunction(() => /^Bean There Coffee · Café · /.test(document.getElementById('toast').textContent) && /Add as a stop/.test(document.getElementById('toast').textContent), null, { timeout: 5000 });
+  // the café's pin on the map says the same
+  const pin = await page.evaluate(() => { const el = [...document.querySelectorAll('.poi-pin.poi-cafe')][0]; return el ? el.getAttribute('aria-label') : null; });
+  check(/^Bean There Coffee · Café · /.test(pin || ''), 'the café pin is named for a screen reader: ' + pin);
+  // in a drive only the next fuel stop keeps its stamp, and it says which station it is
+  await page.evaluate(() => document.getElementById('routeDriveBtn').click());
+  await page.waitForFunction(() => window.apexDebug.driveActive, null, { timeout: 10000 });
+  await page.waitForFunction(() => [...document.querySelectorAll('.poi-pin.poi-fuel')].filter((e) => e.style.display !== 'none').map((e) => e.textContent).join('|') === 'FUEL · Shell', null, { timeout: 5000 })
+    .catch(() => {});
+  const stamps = await page.evaluate(() => [...document.querySelectorAll('.poi-pin.poi-fuel')].map((e) => ({ text: e.textContent, on: e.style.display !== 'none' })));
+  check(stamps.filter((x) => x.on).map((x) => x.text).join('|') === 'FUEL · Shell', 'in a drive, the next fuel stop alone, by its name: ' + JSON.stringify(stamps));
+  // Siri, "where's the next gas station": said (and shown on the drive's status line) by its name, from where you are on the route
+  await page.evaluate(() => window.apex.onNative({ type: 'link', params: { go: 'nextfuel' } }));
+  await page.waitForFunction(() => /^Next fuel: Shell, (in [\d.]+ (mi|km)|here)\./.test(document.getElementById('dsNote').getAttribute('aria-label') || ''), null, { timeout: 5000 });   // a drive's status line
 }, IPHONE);
 
 // The route reveal and the card as a page (design pass, 2026-11-10; web/route_reveal.js): a route found is drawn onto the
@@ -7065,8 +7380,9 @@ flow('the route reveal: a route found is drawn onto the map like a pen stroke (a
   await page.click('#routeBar'); await page.waitForTimeout(400);
   // another route of the same plan: a quick redraw, not the set piece again, and no count
   await watch();
-  await page.click('#routeCardFun [data-fun="fun"]');
-  await page.waitForFunction(() => apexDebug.track && apexDebug.track.kind === 'route' && apexDebug.track.events.filter((e) => e.type === 'corner').length > 10 && !document.getElementById('planPanel').classList.contains('busy'), null, { timeout: 20000 });
+  // (the same plan's other route put up as a level card does: a Fun plan here would be our router's, and the Valhalla
+  // stand-in this flow routes on is Quick's only, the owner 2026-11-11)
+  await page.evaluate(() => { const t = apexDebug.track; apexDebug.buildRoute(null, t.id, t.name, { ...t, id: t.id, name: t.name }); });
   await page.waitForTimeout(900);
   const swap = await strokes();
   check(swap.strokes.length >= 1 && swap.strokes.every((k) => k.ms <= 500 && k.up) && swap.strokes[swap.strokes.length - 1].hi >= 0.6 && swap.last.g === null, 'a level card redraws the line quickly (about 0.3 s): ' + JSON.stringify(swap.strokes));
@@ -7092,9 +7408,13 @@ flow('the route reveal: a route found is drawn onto the map like a pen stroke (a
   check(still.strokes.length === 0 && line.n === 1 && line.g === null && !line.draw && still.dists.length <= 2, 'reduced motion: the line is whole at once, nothing counts or draws: ' + JSON.stringify({ still: still.strokes, line, dists: still.dists }));
 }, IPHONE);
 
-flow('taste from picks: Start on another level\'s route than Vetta\'s pick teaches the taste, once, at half an answer, and says so', async (page, base) => {
+flow('taste from picks: Start on another route than Vetta\'s pick teaches the taste, once, at half an answer, and says so', async (page, base) => {
   const asked = [];
+  // the clock pinned to a weekday noon in Ohio: the refine's conditions (night, deer hours, low sun) swap Fun's pick
+  // or not by the time of day, and these flows count the routes found (CI went red at 01:00 UTC, 2026-11-12)
+  await page.clock.setFixedTime(new Date('2026-11-10T17:00:00Z'));
   await planRouter(page, asked);
+  await funTiles(page, true);                                // (its arterials motorways: Quick's pick and Fun's differ)
   const { tap } = await planPage(page, base);
   await tap('#destInput', 'Where to?');
   await page.fill('#destInput', 'Maryville');
@@ -7104,8 +7424,18 @@ flow('taste from picks: Start on another level\'s route than Vetta\'s pick teach
   await planDone(page);
   const before = await page.evaluate(() => ({ store: localStorage.getItem('apex.taste') }));
   check(!before.store || !JSON.parse(before.store).picks, 'no picks yet: ' + before.store);
-  await tap('#routeCardFun [data-fun="quick"]', 'Quick');
-  await page.waitForFunction(() => /^Quick: /.test(document.getElementById('routeProgress').textContent) && !document.getElementById('planPanel').classList.contains('busy'), null, { timeout: 15000 });
+  // the card settles first: the refine's fuller context swaps Fun's pick for another (Conditions ahead), the first one
+  // staying among the routes found. Quick's is then over 30 % faster than Fun's (a pick that says nothing of taste), so
+  // the route taken is that first one, no level's pick, one swipe left: within 30 % of Fun's
+  await page.waitForFunction(() => window.apexDebug.refineDone === true, null, { timeout: 20000 });
+  await page.waitForFunction(() => /^Route 2 of 3\./.test(document.getElementById('routeCardPager').getAttribute('aria-label') || ''), null, { timeout: 5000 });
+  await page.evaluate(() => {
+    const el = document.getElementById('routeCardName'), y = el.getBoundingClientRect().top + 8;
+    const at = (x) => new Touch({ identifier: 1, target: el, clientX: x, clientY: y });
+    el.dispatchEvent(new TouchEvent('touchstart', { touches: [at(300)], changedTouches: [at(300)], bubbles: true }));
+    el.dispatchEvent(new TouchEvent('touchend', { touches: [], changedTouches: [at(120)], bubbles: true }));
+  });
+  await page.waitForFunction(() => /^Route 3 of 3\./.test(document.getElementById('routeCardPager').getAttribute('aria-label') || '') && !document.getElementById('planPanel').classList.contains('busy'), null, { timeout: 15000 });
   await tap('#routeDriveBtn', 'Start');
   await page.waitForFunction(() => window.apexDebug.driveActive, null, { timeout: 10000 });
   const got = await page.evaluate(() => ({ pick: apexDebug.lastPick || null, store: JSON.parse(localStorage.getItem('apex.taste') || '{}') }));
@@ -7114,7 +7444,7 @@ flow('taste from picks: Start on another level\'s route than Vetta\'s pick teach
   if (got.pick.lean) {
     await page.waitForFunction(() => /Noted: you picked the more (technical|flowing|smooth) road/.test(document.getElementById('toast').textContent), null, { timeout: 5000 });
   }
-}, IPHONE);
+}, { ...IPHONE, funLevel: 'fun' });
 
 flow('there and back: a trip to a place comes home another way in one tap, the destination a stop, the way out kept off the way home (graph_router.js roundTrip; Valhalla where our tiles don\'t reach)', async (page, base) => {
   const asked = [];
@@ -7245,12 +7575,20 @@ flow('the co-driver says a long descent once as the car nears its top, from the 
 
 flow('plan flow (e, f) a level change and an alternative are one tap or swipe each: the level cards are the routes found, nothing planned again (finding 4, 11)', async (page, base) => {
   const asked = [];
+  // the clock pinned to a weekday noon in Ohio: the refine's conditions (night, deer hours, low sun) swap Fun's pick
+  // or not by the time of day, and these flows count the routes found (CI went red at 01:00 UTC, 2026-11-12)
+  await page.clock.setFixedTime(new Date('2026-11-10T17:00:00Z'));
   await planRouter(page, asked);
+  await funTiles(page, true);                                // (its arterials motorways: Quick's pick and Fun's differ)
   const { cdp, taps, tap } = await planPage(page, base);
   await tap('#destInput'); await page.fill('#destInput', 'Maryville');
   await page.waitForSelector('#placeList .place', { timeout: 10000 });
   await tap('#placeList .place');
   await cardUp(page); await planDone(page);
+  // the card settles first: the refine's fuller context swaps Fun's pick for another (Conditions ahead), the first one
+  // staying as a third route found
+  await page.waitForFunction(() => window.apexDebug.refineDone === true, null, { timeout: 20000 });
+  await page.waitForFunction(() => /^Route 2 of 3\./.test(document.getElementById('routeCardPager').getAttribute('aria-label') || ''), null, { timeout: 5000 });
   check(await page.evaluate(() => document.querySelectorAll('[data-fun]').length === 3 && !!document.querySelector('#routeCard [data-fun]')), 'the level has one home, the route card');
   const level = () => page.evaluate(() => [...document.querySelectorAll('[data-fun]')].find((b) => b.getAttribute('aria-checked') === 'true').querySelector('b').textContent);
   check(await level() === 'Fun', 'planned at Fun');
@@ -7312,8 +7650,8 @@ flow('plan flow (e, f) a level change and an alternative are one tap or swipe ea
   // you scroll down to the options (the wheel first, as a hand would): that ends the level change's hold on the scroll
   await page.evaluate(() => document.getElementById('planBody').dispatchEvent(new WheelEvent('wheel', { bubbles: true })));
   // an alternative: one swipe sideways on the card (finding 11) steps through the routes found, the cards' picks in
-  // their order; the line under the cards says so. Fun is the last of the two found (Long way wasn't looked at): a swipe
-  // to the right goes back to the one before it, Quick's
+  // their order, then the others; the line under the cards says so. Fun's is the second of the three found (Long way
+  // wasn't looked at): a swipe to the right goes back to the one before it, Quick's
   const ons = () => page.evaluate(() => [...document.querySelectorAll('#routeCardFun [data-fun]')].map((b) => b.classList.contains('on')).join());
   check(await ons() === 'false,true,false', 'two routes found, Fun\'s on: ' + await ons());
   // page marks under the cards (design pass, 2026-11-10): one per route found, the one on screen inked, the count, and
@@ -7322,7 +7660,7 @@ flow('plan flow (e, f) a level change and an alternative are one tap or swipe ea
     return { shown: !p.hidden, on: [...p.querySelectorAll('i')].map((i) => +i.classList.contains('on')).join(''), count: p.querySelector('span').textContent.replace(/\s/g, ''),
       words: (p.querySelector('small') || {}).textContent || '', label: p.getAttribute('aria-label'), note: n.hidden ? '' : n.textContent, h: Math.round(p.getBoundingClientRect().height) }; });
   const hint = await marks();
-  check(hint.shown && hint.on === '01' && hint.count === '2/2' && hint.words === 'Swipe the card for the next route' && /^Route 2 of 2\. Swipe/.test(hint.label) && !hint.note && hint.h <= 24,
+  check(hint.shown && hint.on === '010' && hint.count === '2/3' && hint.words === 'Swipe the card for the next route' && /^Route 2 of 3\. Swipe/.test(hint.label) && !hint.note && hint.h <= 24,
     'the marks under the cards say which route and what a swipe does, on one row: ' + JSON.stringify(hint));
   const box = await page.evaluate(() => { const o = document.getElementById('routeCardStats'); o.scrollIntoView({ block: 'nearest' }); const r = o.getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height / 2 }; });
   const startY = await page.evaluate(() => document.getElementById('routeDriveBtn').getBoundingClientRect().top);
@@ -7334,10 +7672,10 @@ flow('plan flow (e, f) a level change and an alternative are one tap or swipe ea
   check(asked.length === routed && await level() === 'Quick', 'a swipe picks the other route already found, and its level with it');
   check(Math.abs(await page.evaluate(() => document.getElementById('routeDriveBtn').getBoundingClientRect().top) - startY) <= 1, 'Start doesn\'t move on a swipe');
   const swiped = await marks();
-  check(swiped.on === '10' && swiped.count === '1/2' && /^Route 1 of 2\./.test(swiped.label), 'the marks count along: ' + JSON.stringify(swiped));
+  check(swiped.on === '100' && swiped.count === '1/3' && /^Route 1 of 3\./.test(swiped.label), 'the marks count along: ' + JSON.stringify(swiped));
   check(!swiped.words && !swiped.note, 'once you have swiped, the words go and the marks stay: ' + JSON.stringify(swiped));
   await scan(page, 'the card after a swipe');
-}, IPHONE);
+}, { ...IPHONE, funLevel: 'fun' });
 
 // Design pass 4 (2026-11-10): on a phone the looks stand on a shelf you turn sideways, so the Garage is a third shorter and
 // the voice picker is on the first screen; signed out, Your cars is an empty bay with the key that gets you signed in.
@@ -7387,6 +7725,7 @@ flow('the Garage on a phone: the looks are a shelf turned sideways (one in view,
 
 flow('plan flow (b) a loop in 2 taps: Plan on the map, then Start; its progress in view, its card has a length in your units and no Quick / Fun / Long way (the owner, 2026-11-10)', async (page, base) => {
   await planRouter(page);
+  await funTiles(page);                                       // (loops and Fun are our router's only, the owner 2026-11-11)
   const { taps, tap } = await planPage(page, base);
   await page.waitForFunction(() => getComputedStyle(document.getElementById('loopSuggest')).display !== 'none');
   // the suggestion is the dial's loop: pick another length on the dial and it says that one (it kept the length from launch)
@@ -7419,6 +7758,7 @@ flow('plan flow (b) a loop in 2 taps: Plan on the map, then Start; its progress 
 
 flow('a loop by time: the dial turns to Time (half an hour to three hours), Find a loop builds a loop of that time, and its card changes it by time (2026-11-10)', async (page, base) => {
   await planRouter(page);
+  await funTiles(page);                                       // (loops and Fun are our router's only, the owner 2026-11-11)
   await planPage(page, base);
   await page.click('#destInput');
   await page.waitForFunction(() => document.getElementById('planPanel').classList.contains('open') && document.getElementById('loopBy').getClientRects().length > 0);
@@ -7457,6 +7797,7 @@ flow('a loop by time: the dial turns to Time (half an hour to three hours), Find
 
 flow('level cards: one control on the four phone shapes, a destination: each card its level, time and corners, a line each, nothing cut or under the island (the owner, 2026-11-04); a loop has none', async (page, base) => {
   await planRouter(page);
+  await funTiles(page);                                       // (loops and Fun are our router's only, the owner 2026-11-11)
   const { cdp } = await planPage(page, base);
   // every card inside the screen and its row, its name, time and corners each on one line (no "11 min / quicker ·")
   const fit = () => page.evaluate(() => {
@@ -7515,7 +7856,7 @@ flow('level cards: one control on the four phone shapes, a destination: each car
     const under = (await unsafe(page, d)).filter((b) => /\d+ mi\b|Length/i.test(b));
     check(!under.length, `loop, ${orient}: the loop's length clears the island, the home bar and the corners:\n  ${under.join('\n  ')}`);
   }
-}, IPHONE);
+}, { ...IPHONE, funLevel: 'fun' });
 
 flow('a loop\'s choices are which way to head, not Quick / Fun / Long way: the loops found as cards, each its outline, way, time and corners; a tap puts that loop up (the owner, 2026-11-10)', async (page, base) => {
   graphDir = graphFixture(true);
@@ -8207,7 +8548,7 @@ flow('time attack this week (SOCIAL 2.9): in Where to?, the area\'s loop and its
                 { place: 2, handle: 'cara', time_s: 600, gap_s: 10, score: null, mine: false }],
         you: null, last: { name: 'Last loop', podium: [{ handle: 'dee', time_s: 712 }] } });
     }
-    if (m === 'POST') {
+    if (m === 'POST' && u.pathname.startsWith('/api/timeattack')) {
       sent.push([u.pathname, JSON.parse(route.request().postData() || 'null')]);
       if (u.pathname === '/api/timeattack/enter') { entered = true; return json({ segment_id: 'COPY1', added: true }); }
       return json({}, 201);
@@ -8219,6 +8560,10 @@ flow('time attack this week (SOCIAL 2.9): in Where to?, the area\'s loop and its
   await page.waitForFunction(() => window.apex && typeof window.apex.live === 'function');
   await page.click('#destInput');
   await page.waitForSelector('#planAttack:not([hidden]) > summary');
+  // the row says the week's loop before it is opened (time_attack.js peek, summaryLine)
+  await page.waitForFunction(() => /Foothills/.test(document.querySelector('#planAttack > summary').textContent));
+  const line0 = await page.textContent('#planAttack > summary');
+  check(/^Time attack: Foothills <b>run<\/b> loop \(.+\) · 3 times · 3 days left$/.test(line0), 'the row names this week\'s loop: ' + line0);
   await page.click('#planAttack > summary');
   await page.waitForSelector('#planAttack .ta-board');
   const text = await page.textContent('#planAttackBody');
@@ -8234,6 +8579,11 @@ flow('time attack this week (SOCIAL 2.9): in Where to?, the area\'s loop and its
   check(sent.some(([p, b]) => p === '/api/timeattack/enter' && b.cell === '35,-84'), 'Enter sends the area');
   const segs = await page.evaluate(() => JSON.parse(localStorage.getItem('apex.segments')));
   check(segs.some((x) => x.id === 'COPY1' && x.origin === 'ta-CIRC1' && x.synced && x.lat0 === 35.95 && x.lat1 === 35.95), 'the loop is in your Stages: ' + JSON.stringify(segs));
+  const line1 = await page.textContent('#planAttack > summary');
+  check(/· log a run on it · 3 days left$/.test(line1), 'entered: the row says what to do next: ' + line1);
+  // Drive it plans the loop itself, not the way to its start
+  await page.click('#planAttack button:text-is("Drive it")');
+  await page.waitForFunction(() => /The clock runs from the start line/.test(document.getElementById('toast').textContent) && document.getElementById('planPanel').classList.contains('routed'), null, { timeout: 15000 });
 }, { geolocation: { latitude: 35.9606, longitude: -83.9207 }, permissions: ['geolocation'] });
 
 flow('time attack, a new week (the owner, 2026-11-11: autogenerated, the area\'s best loop roads at random, small loops): the first phone in the area builds the loop with our own router from the seed and sends it', async (page, base) => {
@@ -8280,7 +8630,8 @@ flow('time attack, a new week (the owner, 2026-11-11: autogenerated, the area\'s
   const browser = await chromium.launch();
   let failed = 0;
   // FLOW=<text> runs only the flows whose name contains it; REPEAT=<n> runs each n times (for chasing a flaky one).
-  const picked = process.env.FLOW ? flows.filter((f) => f.name.includes(process.env.FLOW)) : flows;
+  const pats = process.env.FLOWS ? process.env.FLOWS.split("\n").filter(Boolean) : null;
+  const picked = pats ? flows.filter((f) => pats.some((p) => f.name.includes(p))) : process.env.FLOW ? flows.filter((f) => f.name.includes(process.env.FLOW)) : flows;
   // SHARD=<k>/<n> runs the k-th of n slices (CI runs n jobs side by side; each flow is in exactly one of them). Flows are
   // dealt longest first to the lightest slice, so the long ones don't pile into one job. Seconds from the CI log of
   // 2026-11-11; a flow not listed counts as 5 s (a renamed one still runs, it is only dealt as a short one).
@@ -8302,13 +8653,17 @@ flow('time attack, a new week (the owner, 2026-11-11: autogenerated, the area\'s
   if (process.env.LIST) { for (const f of only) console.log(f.name); process.exit(0); }   // LIST=1: the flows this run would take, nothing run
   const runs = only.flatMap((f) => Array.from({ length: Math.max(1, Number(process.env.REPEAT) || 1) }, () => f));
   for (const { name, fn, ctxOpts } of runs) {
-    const { news, ...browserOpts } = ctxOpts;
+    graphDir = null;
+    const { news, funLevel: lv0, ...browserOpts } = ctxOpts;
     const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 2, ...browserOpts });
     // Only our own server: maps, routers, fonts and voices are blocked, so the result doesn't depend on the network.
     await ctx.route('**/*', (route) => (route.request().url().startsWith(base) ? route.continue() : route.abort()));
     // "What's new" (IDEAS O-10) would sit over every flow; it is seen already unless a flow says otherwise (ctxOpts.news).
     const newsId = require('../web/whats_new.js').NEWS.id;
     if (!ctxOpts.news) await ctx.addInitScript((id) => { try { if (!localStorage.getItem('apex.newsSeen')) localStorage.setItem('apex.newsSeen', id); } catch (_) {} }, newsId);
+    // Fun and Long way are our router's only (Valhalla is for Quick, the owner 2026-11-11), and most flows route on a
+    // stubbed Valhalla off our tiles: they plan at Quick unless they (or ctxOpts.funLevel) choose a level
+    await ctx.addInitScript((lv) => { try { if (!localStorage.getItem('apex.funLevel')) localStorage.setItem('apex.funLevel', lv); } catch (_) {} }, lv0 || 'quick');
     const page = await ctx.newPage();
     if (process.env.THROTTLE) { const c = await ctx.newCDPSession(page); await c.send('Emulation.setCPUThrottlingRate', { rate: Number(process.env.THROTTLE) }); }
     const errors = [];

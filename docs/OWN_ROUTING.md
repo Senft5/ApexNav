@@ -514,9 +514,9 @@ phone's reader); tests/test_graph_tiles.py round-trips through both. What a rout
     | `valhallaRoutes([from, to], 2)` (its quickest) | funRoute check | no: asked after the first route is drawn, joins the ranking only if in when our context is | the one clock (oneClock), a sanity check; the route when ours fail |
     | `valhallaRoutes(..., highwayCosting)` | funRoute check | no (as above) | the same |
     | OSRM after a failed Valhalla check | funRoute | no | the fallback's fallback |
-    | `valhallaMatrix` + stage legs (`connectorCosting`) | funRoute stage plans | skipped with our routes | trips off our tiles |
+    | ~~`valhallaMatrix` + stage legs (`connectorCosting`)~~ | funRoute stage plans | removed 2026-11-11 (Valhalla for Quick only) | nothing |
     | `trace_route` (turn instructions) | ownInstructions, ownInstructLater | no: ours go up with the route, Valhalla's swap in when they come (3 s cap) | lane, exit and roundabout wording until ours are as good |
-    | stage discovery + `valhallaMatrix` + stage legs + circle | buildLoop | **was** (every loop waited for them); now after the card (loopRefine) when our tiles have loops | loops off our tiles; stage loops that the level ranks first |
+    | ~~stage discovery + `valhallaMatrix` + stage legs + circle~~ | buildLoop | removed 2026-11-11 (loops are our router's only; loopRefine gone) | nothing |
     | `valhallaRoutes(points)` | reroute | **was** (a reroute needed the network); now our `through` where the tiles cover | reroutes off our tiles |
     | `valhallaRoutes(pts)` | Best roads nearby's road, a suggestion, Drive it again, a road link, buildRoute(points) (Home, a link's or GPX file's stops) | **was**; now our `through` | the same, off our tiles |
     | `valhallaMatrix` | Explore (Best roads nearby list) | skipped with our tiles (already) | off our tiles |
@@ -576,14 +576,12 @@ phone's reader); tests/test_graph_tiles.py round-trips through both. What a rout
     |---|---|---|---|
     | `route` (its quickest, its highway-friendly one), OSRM after it | funRoute checks | after the first route, joined only when in by our context | a sanity check and the one clock (oneClock) |
     | `trace_route` | ownInstructions, ownInstructLater | after the card, 3 s cap; offline or down ours stay | lane, exit and roundabout wording (optional) |
-    | `sources_to_targets` + stage legs (`route`) | loopRefine | after a loop's card | the map's stage loops, which replace ours only when ranked first |
     | `route` + `exclude_polygons` | trafficDetour (iOS, Apple traffic) | during a drive, after a jam | the live traffic detour (needs the network for traffic anyway) |
     | `trace_attributes` | contributor.js | an upload | contributions' OSM way lines |
     | `sources_to_targets` | crew_meet.js (Fair for the crew) | on a tap, opt-in | the crew's fair meeting point (not planning) |
 
     Loops have no turn instructions from either router (as on main). Off our tiles (no tiles for the area, or our
-    router failing) every call is as before: Valhalla plans (stage plans,
-    matrix, legs), Explore's matrix, points routed, reroutes, map-matched limits (attachLimits) and router_edges' context.
+    router failing) Quick still uses Valhalla; Fun, Long way and loops say why they can't plan (since 2026-11-11). Explore's matrix, points routed, reroutes, map-matched limits (attachLimits) and router_edges' context.
 
 - 2026-11-08 (later): the levels' highway rule (branch claude/level-rules; CALL_SHEET 2026-11-08 (later)): the owner,
   "fun should never go on the highway. Quick should essentially be a normal route". §5 "The levels". Our router at Fun

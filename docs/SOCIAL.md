@@ -84,6 +84,12 @@ and in random batches so a trace cannot be re-assembled.
 - Enter (Where to? → Time attack this week) copies it into your Stages. The Log sends your quickest timed run on it that
   week; the board shows every entrant by handle, quickest first, with the gap and that run's Vetta Score, plus last week's
   podium. Entering is the opt-in: only entrants' times are on it, and Take my time off removes yours.
+- Where it shows (built 2026-11-11): the Where to? row names the week's loop and your place before it is opened ("Time
+  attack: Dry Ridge loop · you're 3rd of 12 · 3 days left"; time_attack.js summaryLine, asked when Where to? opens, at
+  most every 5 minutes, never from inside a privacy zone). Drive it plans the loop itself as the route. After a drive the
+  Log says your place under the board ("you're 3rd of 12 this week, 1:02 off the lead"; POST /api/timeattack/runs
+  returns `places`). Someone passing you shows in For you, named by the loop. The home deck's suggestion is separate
+  (Roamer C).
 - The phone sends only the middle of the area, never where it is. Blocks hide people both ways. A time faster than 60 m/s
   (216 km/h) average over the stage is refused. Times are kept eight weeks. `backend/src/time_attack.ts`, `web/time_attack.js`.
 - It is a public time board on public roads, which the guardrails ruled out before the owner's call; the risk and the copy
@@ -100,6 +106,13 @@ and in random batches so a trace cannot be re-assembled.
 - Made only from what each part already shows you (the same grants, blocks and friendships), so it shares nothing new
   and has no table: what you've seen is kept on the phone (`apex.inboxSeen`). `backend/src/inbox.ts` (`GET /api/inbox`),
   `web/inbox.js`. There are no push notifications yet; this is what a push would say.
+### 2.11 Recurring meets (crews; built 2026-11-11)
+- A crew drive can repeat weekly, every 2 weeks or every 4 weeks (the plan form's Repeats, or the card's Set it up). Only
+  the series' latest drive carries the repeat; once it starts, the next is planned at the same time with the same title,
+  meet, route, notes, listing and regroup points, the planner going and nobody else's answers or roles carried. Cards and
+  Meets near you say "Every Saturday"; Add to calendar puts the series in the calendar once (RRULE).
+- Cancelling the latest, setting it to Once, or its planner leaving the crew ends the series. Planned on read
+  (`rollRepeats` in `backend/src/events.ts`) and by the daily sweep before old drives are deleted. Migration 0053.
 
 ## 3. Drive analysis (private)
 Compare passes of the same road — yours, or a friend's ghost they chose to send you.
