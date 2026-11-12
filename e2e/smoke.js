@@ -7548,6 +7548,41 @@ flow('along the route by name: the Along line opens a list of the cafés and fue
   await page.waitForFunction(() => /^Next fuel: Shell, (in [\d.]+ (mi|km)|here)\./.test(document.getElementById('dsNote').getAttribute('aria-label') || ''), null, { timeout: 5000 });   // a drive's status line
 }, IPHONE);
 
+flow('waterfalls along the route: asked of OpenStreetMap (the map tiles have none), counted on the Along line, listed by name and pinned as FALLS (IDEAS R-24)', async (page, base) => {
+  await planRouter(page);
+  const { tap } = await planPage(page, base);
+  // the map's points (offline here): a café; and one waterfall 150 m off the route from "Overpass", every other ask refused
+  await page.evaluate(() => {
+    ApexStages.pois = async (pts) => { window.__pts = pts; const a = pts[Math.min(1, pts.length - 1)]; return [{ kind: 'cafe', name: 'Bean There Coffee', lat: a.lat + 0.0003, lon: a.lon }]; };
+    const real = ApexCameras.fetchFirst;
+    window.__falls = 0;
+    ApexCameras.fetchFirst = async (f, body, ...rest) => {
+      if (!/waterfall/.test(decodeURIComponent(body || ''))) return real(f, body, ...rest);
+      window.__falls++;
+      for (let i = 0; i < 40 && !window.__pts; i++) await new Promise((r) => setTimeout(r, 25));
+      const p = window.__pts[Math.min(2, window.__pts.length - 1)];
+      return { elements: [{ type: 'node', id: 1, lat: p.lat + 150 / 110540, lon: p.lon, tags: { natural: 'waterfall', name: 'Looking Glass Falls' } },
+        { type: 'way', id: 2, center: { lat: p.lat + 0.5, lon: p.lon }, tags: { waterway: 'waterfall', name: 'Far Away Falls' } }] };
+    };
+  });
+  await tap('#destInput', 'Where to?');
+  await page.fill('#destInput', 'Maryville');
+  await page.waitForSelector('#placeList .place', { timeout: 10000 });
+  await tap('#placeList .place', 'the place');
+  await cardUp(page);
+  await planDone(page);
+  await page.waitForFunction(() => /waterfall/.test(document.getElementById('routeAlongLine').textContent), null, { timeout: 20000 })
+    .catch(async () => { throw new Error('Along: ' + JSON.stringify(await page.evaluate(() => [document.getElementById('routeAlongLine').textContent, window.__falls]))); });
+  const line = await page.evaluate(() => document.getElementById('routeAlongLine').textContent);
+  check(/^1 waterfall\s·\s1 café/.test(line), 'one waterfall near the road (the far one never counts), then the café: ' + line);
+  await page.evaluate(() => document.getElementById('routeAlongLine').scrollIntoView({ block: 'center' }));
+  await tap('#routeAlongLine', 'Along the route');
+  const rows = await page.evaluate(() => [...document.querySelectorAll('#routeAlongPanel .place')].map((b) => ({ name: b.querySelector('b').textContent, sub: b.querySelector('small').textContent })));
+  check(rows.some((r) => r.name === 'Looking Glass Falls' && /^Waterfall/.test(r.sub)) && !rows.some((r) => r.name === 'Far Away Falls'), 'the waterfall by its name in the list: ' + JSON.stringify(rows));
+  const pin = await page.evaluate(() => { const el = document.querySelector('.poi-pin.poi-falls'); return el ? { text: el.textContent, label: el.getAttribute('aria-label') } : null; });
+  check(pin && /^FALLS/.test(pin.text) && /^Looking Glass Falls · Waterfall · /.test(pin.label), 'its pin is a FALLS stamp, named for a screen reader: ' + JSON.stringify(pin));
+}, IPHONE);
+
 // The route reveal and the card as a page (design pass, 2026-11-10; web/route_reveal.js): a route found is drawn onto the
 // map from its start like a pen stroke while the card rises and its numbers count up; Start is up from the first frame of
 // it. Another route of the same plan redraws quickly; reduced motion is a cut, the line whole at once.
