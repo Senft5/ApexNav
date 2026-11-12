@@ -10,6 +10,22 @@ Calls I made: once you've entered the week's loop, its card has Challenge a frie
 of the loop, so nothing new on the server. It's won by time by default, because the loop is a time attack; Score is one
 tap away. The duel's days are the usual 3, 7 or 14, not tied to the week's end, so a duel can outlast the board. Undo:
 remove the `challenge` hook in cockpit.js's time attack mount.
+## 2026-11-12 (ui-round-three): the website's and the app's promises match today's sharing (claude/project-thread-5sbga7)
+
+Two of the four promises (on the website and in Garage → About Vetta) said there are no time leaderboards and that your
+drives and times stay yours until you share them. Since your calls on 2026-11-11 (sharing with friends and private crews
+on by default; the weekly loop's board) that was no longer true. They now read "No top speeds" and "Shared with your
+people", and the privacy policy gains a paragraph on who sees your Scores and times and how to switch it off. Undo:
+revert the promise lines in web/about.html and web/index.html and the new paragraph in web/privacy.html.
+
+## 2026-11-12 (ui-round-three): the website's page uses the app's look and shows today's app (claude/project-thread-5sbga7)
+
+about.html showed screenshots of the app from before the redesign (the old tab bar, boxed keys) and set its type in the
+system face. It now loads the app's typefaces, sets its titles like the app, and shows two fresh screenshots: the Dry Ridge
+replay and an example crew's page. The words are the same, except the screenshots' descriptions. Undo: revert
+web/about.html, web/brand/shots/*.png and tools/landing_shots.js.
+
+
 ## 2026-11-12 Avoid cameras reads our own camera list in Ohio, Kentucky and Indiana (claude/project-thread-39xbx9)
 
 Nate: "the camera server always says it's down". The phone asked the public Overpass servers for cameras, and they time
