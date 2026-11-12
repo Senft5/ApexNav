@@ -2040,7 +2040,6 @@ const CUT = (sel) => `(() => { const W = innerWidth, out = [];
     const r = e.getBoundingClientRect(), cs = getComputedStyle(e);
     if (!r.width || !r.height || cs.visibility === 'hidden' || e.closest('[hidden]')) continue;
     if (e.closest('.garage-pop:not(.open)')) continue;   // a closed Garage panel, parked off the screen
-    if (e.closest('details:not([open])') && !e.closest('summary')) continue;   // inside a closed menu (the drive page's ⋯): not on the screen
     const clips = /hidden|clip/.test(cs.overflowX) || cs.textOverflow === 'ellipsis';
     if (r.left < -1 || r.right > W + 1 || (clips && e.scrollWidth > e.clientWidth + 1)) out.push((e.id || e.className || e.tagName) + ':' + e.textContent.trim().slice(0, 24) + ' ' + [r.left, r.right, e.scrollWidth, e.clientWidth].map(Math.round).join('/'));
   }
