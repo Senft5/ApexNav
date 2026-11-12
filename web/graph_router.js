@@ -1312,9 +1312,14 @@
   function loopNow(v, req) {
     const t0 = Date.now(), level = levels()[req.level] ? req.level : 'fun', km = Math.max(3, Number(req.km) || 30);
     const obj = objective(v, req);
-    let s0 = snap(v, req.start.lat, req.start.lon);
-    if (!s0.length) throw new Error('no road near the start');
-    if (noHighway(level)) s0 = snapOff(v, req.start, s0, req.start.heading);
+    // req.through (the weekly time attack, time_attack.js makeLoop): the start on the nearest through road within 3 km,
+    // never a neighbourhood street, so the loop's start line isn't in a subdivision; else the nearest road, as before
+    let s0 = req.through ? snap(v, req.start.lat, req.start.lon, (e) => throughEdge(v, e), 3000) : [];
+    if (!s0.length) {
+      s0 = snap(v, req.start.lat, req.start.lon);
+      if (!s0.length) throw new Error('no road near the start');
+      if (noHighway(level)) s0 = snapOff(v, req.start, s0, req.start.heading);
+    }
     const hwy = loopBase(v, level);
     const out = [];
     for (const c of loopCombos(v, req.start, km, req.max || K.LOOP_TRIES)) {
@@ -1476,6 +1481,11 @@
     for (const e of edges) { if (used.get(key(e)) > 1) retr += v.len[e]; all += v.len[e]; if (isHwyEdge(v, e)) hw += v.len[e]; }
     route.retraced = route.distM > 0 ? Math.min(1, retr / route.distM) : 0;
     route.hwyShare = all > 0 ? hw / all : 0;
+    // how much of it is neighbourhood street (the time attack drops a loop with more than a start's worth, time_attack.js)
+    let st = 0;
+    for (const e of edges) if (neighbourhoodEdge(v, e)) st += v.len[e];
+    route.streetM = Math.round(st);
+    route.streetShare = all > 0 ? st / all : 0;
     if (noHighway(level) && route.hwyKm > 0) route.route.hwyReason = hwyReason(v, route);
     return route;
   }
@@ -1536,6 +1546,20 @@
     const ch = v.roadCh || {}, at = (k) => (ch[k] ? ch[k][e] : NaN);
     const limit = v.speed[e] && !(v.flags[e] & v.bits.speedEst) ? v.speed[e] : NaN;   // a posted limit, not the class's estimate
     return F.streetSample({ cls: v.cls[e], limit, addr: at('addr_per_km'), bldg: at('bldg_per_km'), density: at('density') });
+  }
+  /**
+   * A neighbourhood street for the time attack (the owner, TestFlight 2026-11-12: "goes only through a neighborhood"):
+   * streetEdge's answer, and where that is unknown, any residential or service road (a residential county road in open
+   * country, which streetEdge knows, is not one).
+   */
+  function neighbourhoodEdge(v, e) {
+    const s = streetEdge(v, e);
+    return s === null ? v.cls[e] >= CLS.residential && v.cls[e] <= CLS.service : s;
+  }
+  /** A through road a loop can start on: trunk's ramps and motorways no, primary to unclassified, never a neighbourhood street. */
+  function throughEdge(v, e) {
+    const B = v.bits || flagBits();
+    return v.cls[e] > CLS.trunk && v.cls[e] <= CLS.unclassified && !(v.flags[e] & (B.ramp | B.private | B.destination)) && !neighbourhoodEdge(v, e);
   }
   /** A real dead end at node n (one neighbour), not the edge of the tiles loaded (an edge into a tile not in the view). */
   function deadEndAt(v, n) {
