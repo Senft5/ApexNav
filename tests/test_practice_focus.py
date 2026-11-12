@@ -112,7 +112,7 @@ def test_parity_and_the_words():
     s_up, s_flat, s_few, s_fresh = out["sums"]
     assert s_up == f"Since 5 Nov: {py[0]['after']['level']} on 90 corners over 3 drives, against {b} on 150 before. Up {py[0]['delta']} points: the practice is showing."
     assert s_flat.endswith("No clear change yet: a change is said once it is well beyond chance.")
-    assert s_few.startswith("Since 5 Nov, no drive yet with 4 or more corners")
+    assert s_few == "Since 5 Nov: no drive yet with 4 or more corners."
     assert s_fresh.endswith("There were too few corners before to compare with.")
     assert out["card"].endswith(f"Practicing: One steering arc {py[0]['after']['level']}, {b} before")
     assert out["cardWait"].endswith("Practicing: One steering arc from your next drive")
@@ -156,7 +156,7 @@ def test_a_per_road_practice_parity_and_words():
     assert out["on"] == [dp.on_plan_road(ROAD, n) for n in names] == [True, True, False, False]
     up, none = out["sums"]
     assert up.startswith(f"Since 5 Nov on Dry Ridge Rd: {py[0]['after']['level']} on 30 corners over 1 drive, against ")
-    assert none == "Since 5 Nov on Dry Ridge Rd, no drive there yet with 4 or more corners to read it on. Your next drive there is the first."
+    assert none == "Since 5 Nov on Dry Ridge Rd: no drive there yet with 4 or more corners."
     d = py[0]["drives"][0]
     assert out["line"] == f"Practice on Dry Ridge Rd · One steering arc: {d['level']} on 30 corners, {d['delta']} above your {py[0]['before']['level']} before."
 

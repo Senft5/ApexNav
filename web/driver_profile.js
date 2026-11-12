@@ -438,14 +438,12 @@
     return `Where your passes differ most: ${say.length < 2 ? say[0] : `${say.slice(0, -1).join(', ')} and ${say[say.length - 1]}`}.`;
   }
   /** The road where a skill shows most, from the roads' books (list: [{ name, book }]): the one whose least even corners
-   *  name it most often (a tie keeps list order), as "It shows most on Dry Ridge Rd: 2 of the corners where your passes
-   *  there differ most come down to it." null when no road's do. */
+   *  name it most often (a tie keeps list order), as "Shows most on Dry Ridge Rd: 2 of its 3 least even corners." null
+   *  when no road's do. */
   function skillRoadLine(list, skill) {
     const best = skillRoad(list, skill);
     if (!best) return null;
-    const what = best.n === best.of ? (best.n === 1 ? 'the corner where your passes there differ most comes' : `all ${best.n} corners where your passes there differ most come`)
-      : `${best.n} of the ${best.of} corners where your passes there differ most come${best.n === 1 ? 's' : ''}`;
-    return `It shows most on ${best.name}: ${what} down to it.`;
+    return `Shows most on ${best.name}: ${best.of === 1 ? 'its least even corner' : `${best.n} of its ${best.of} least even corners`}.`;
   }
   /** skillRoadLine's road: { name, n (its uneven corners naming the skill), of (its uneven corners) }, or null. */
   function skillRoad(list, skill) {
@@ -837,8 +835,7 @@
   function practiceSummary(pr) {
     if (!pr) return null;
     const day = dayOf(pr.since), from = `${day ? `Since ${day}` : 'Since you started'}${pr.road ? ` on ${pr.road}` : ''}`;
-    if (pr.after.level === null) return pr.road ? `${from}, no drive there yet with ${PRACTICE_MIN} or more corners to read it on. Your next drive there is the first.`
-      : `${from}, no drive yet with ${PRACTICE_MIN} or more corners to read it on. Your next twisty road is the first.`;
+    if (pr.after.level === null) return `${from}: no drive ${pr.road ? 'there ' : ''}yet with ${PRACTICE_MIN} or more corners.`;
     const n = pr.drives.length;
     let t = `${from}: ${pr.after.level} on ${pr.after.n} corners over ${n} drive${n === 1 ? '' : 's'}`;
     if (pr.before.level === null) return `${t}. There were too few corners before to compare with.`;

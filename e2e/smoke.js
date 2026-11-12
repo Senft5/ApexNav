@@ -4829,15 +4829,13 @@ flow('a drive\'s corners on a road driven four times: each says your cleanest pa
   check(/Practicing it on your next drives here: .+ on this road alone\./.test(after.t) && after.plan && after.plan.skill === 'arc' && after.plan.where && after.plan.where.road === 'dry ridge rd' && after.plan.where.name === 'Dry Ridge Rd' && /^\d{4}-\d\d-\d\dT\d\d:\d\d$/.test(after.plan.since), 'the practice is kept: ' + JSON.stringify(after));
   await page.click('#bookList li .bk-by');
   await page.waitForFunction(() => /^r[0-3]$/.test(document.getElementById('dvPick').value) && !document.getElementById('tab-drive').hidden, null, { timeout: 20000 });
-  // Your driving's Work on names the road where its skill shows most
+  // the practice from the road's book keeps to that road (driver_profile.js practice, where.road), and says which
   await page.goto(base + '/analysis.html?tab=driving');
-  await page.waitForSelector('#drivingRoot .dp-focus .dp-where', { timeout: 20000 });
-  const where = await page.textContent('#drivingRoot .dp-where');
-  // the practice from the road's book keeps to that road (driver_profile.js practice, where.road)
+  await page.waitForSelector('#drivingRoot .dp-practice', { timeout: 20000 });
   const practicing = await page.textContent('#drivingRoot .dp-practice .dp-say');
-  check(/^Since \d{1,2} \w{3} on Dry Ridge Rd, no drive there yet with 4 or more corners to read it on\./.test(practicing), 'the practice keeps to the road: ' + practicing);
-  check(/^It shows most on Dry Ridge Rd: (the corner where your passes there differ most comes|all \d+ corners where your passes there differ most come|\d+ of the \d+ corners where your passes there differ most comes?) down to it\.$/.test(where), 'Work on names the road: ' + where);
-  check(!(await page.$('#drivingRoadGo')), 'no second offer while the practice keeps to a road');
+  check(/^Since \d{1,2} \w{3} on Dry Ridge Rd: no drive there yet with 4 or more corners\.$/.test(practicing), 'the practice keeps to the road: ' + practicing);
+  await page.waitForTimeout(500);
+  check(!(await page.$('#drivingRoot .dp-where')) && !(await page.$('#drivingRoadGo')), 'no road line or second offer while the practice keeps to a road');
   // since a road practice began, each corner's passes since and the corners that have evened out (roadBook since)
   const since = await page.evaluate(async () => (await ApexAnalysis.job('roadBook', { id: 'r3', since: '2026-07-01T09:00' })).book);
   check(since && Array.isArray(since.evened) && since.corners.length && since.corners.every((k) => k.since_n === 2 && k.since_low <= k.record)
@@ -4846,11 +4844,14 @@ flow('a drive\'s corners on a road driven four times: each says your cleanest pa
   await page.evaluate(() => localStorage.removeItem('vetta.practice'));
   await page.goto(base + '/analysis.html?tab=driving');
   await page.waitForSelector('#drivingRoadGo', { timeout: 20000 });
+  // Your driving's Work on names the road where its skill shows most, and offers the practice there
+  const where = await page.textContent('#drivingRoot .dp-where');
+  check(/^Shows most on Dry Ridge Rd: (its least even corner|\d+ of its \d+ least even corners)\. Practice it on Dry Ridge Rd alone$/.test(where), 'Work on names the road: ' + where);
   check(/^Practice it on Dry Ridge Rd alone$/.test(await page.textContent('#drivingRoadGo')), 'the offer names the road');
   await page.click('#drivingRoadGo');
   await page.waitForSelector('#drivingRoot .dp-practice', { timeout: 20000 });
   const kept = await page.evaluate(() => ({ plan: JSON.parse(localStorage.getItem('vetta.practice') || 'null'), say: document.querySelector('#drivingRoot .dp-practice .dp-say').textContent }));
-  check(kept.plan && kept.plan.where && kept.plan.where.road === 'dry ridge rd' && / on Dry Ridge Rd, no drive there yet/.test(kept.say), 'the practice from Your driving keeps to the road: ' + JSON.stringify(kept));
+  check(kept.plan && kept.plan.where && kept.plan.where.road === 'dry ridge rd' && / on Dry Ridge Rd: no drive there yet/.test(kept.say), 'the practice from Your driving keeps to the road: ' + JSON.stringify(kept));
   // the end card on the map after the last of them says the same: what it lost most at the road's least even corners
   await page.goto(base + '/index.html');
   await page.waitForFunction(() => window.apexDebug && window.ApexRecording && window.ApexCore && window.ApexAnalysis);
