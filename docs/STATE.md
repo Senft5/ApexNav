@@ -1,5 +1,7 @@
 # VETTA — CURRENT AGENT HANDOFF STATE
 
+## 2026-11-12 Route-failure reasons in crash counts (claude/project-thread-39xbx9)
+- A Fun / Long way / loop plan our router couldn't make reports its reason code (kind `route`) to /api/errors; read them with `SELECT * FROM error_counts WHERE kind = 'route'` on apexnav-db. Next: once Nate hits the signal error again, read the reason there and fix that cause.
 ## Session 2026-11-12 (deepest analysis, PR 16): a road's least even corners can set the practice (claude/project-thread-gd7nre)
 
 - `core/driver_profile.py` `road_book_focus(book)` (JS port `roadBookFocus`, parity-tested in tests/test_best_corners.py):

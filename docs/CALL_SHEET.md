@@ -4,6 +4,14 @@ Decisions Claude made for you, newest first. Each one says what was decided, why
 you reach one you've seen. If you disagree with a call, say so and it gets reversed; nothing here is hard to undo unless
 it says so. Things only you can do are in docs/OWNER_TODO.md.
 
+## 2026-11-12 A Fun, Long way or loop plan that fails says why to our crash counts (claude/project-thread-39xbx9)
+
+Nate saw "check my signal" on every Fun and Long way plan and the cause was never reproduced here. So a plan our router
+can't make now sends one anonymous report through the existing crash-report channel (`POST /api/errors`, kind `route`):
+the level and the reason code (`index`: the road map didn't load; `out`: off our map; `off`; `failed` with the worker's
+error text, scrubbed like any crash message). No place, trip or account. The Worker counts them per day in error_counts,
+so the next time it happens the cause is in D1. Privacy policy and APP_REVIEW updated. Undo: drop the two
+`ApexErrors.reporter.route` calls in web/cockpit.js and `"route"` from KINDS in backend/src/errors.ts.
 ## 2026-11-12 (deepest analysis 16): the road book offers its uneven corners' technique as the practice (claude/project-thread-gd7nre)
 
 Where a road's passes differ most, the road book now says which technique accounts for most of it and offers to practise

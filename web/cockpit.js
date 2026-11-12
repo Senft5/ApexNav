@@ -3781,6 +3781,7 @@
       // Fun and Long way with no route of ours: said plainly, with Quick a tap away (no Valhalla stand-in)
       if (ownOnly && !ownUsed) {
         if (window.apexDebug) window.apexDebug.ownOnlyFail = own.reason;
+        try { if (window.ApexErrors && ApexErrors.reporter) ApexErrors.reporter.route(level, own.reason, own.error); } catch (_) { /* a report is never in the way */ }
         if (early.shown) return true;                                       // (never: the early quickest is ours too)
         const what = FunRoute.LEVELS[level].label;
         const msg = own.reason === 'out' ? `${what} routes use Vetta's own road map, which covers Ohio, Kentucky and Indiana so far. Quick works anywhere.`
@@ -4567,7 +4568,9 @@
         if (await loopRound(L, own, ui, false)) return;
       }
       const here = ownOn() ? await RouteLoading.optional(ownRouter().covers([c]), OWN_COVERS_ONLY_MS).catch(() => null) : false;
-      if (window.apexDebug) window.apexDebug.loopOwnOnlyFail = !ownOn() ? 'off' : here == null ? 'index' : here ? 'none' : 'out';
+      const why = !ownOn() ? 'off' : here == null ? 'index' : here ? 'none' : 'out';
+      if (window.apexDebug) window.apexDebug.loopOwnOnlyFail = why;
+      try { if (window.ApexErrors && ApexErrors.reporter) ApexErrors.reporter.route('loop', why); } catch (_) { /* a report is never in the way */ }
       toast(!ownOn() ? 'Loops need Vetta\'s own router, which is switched off.'
         : here == null ? 'Couldn\'t load Vetta\'s road map here. Check signal and try again.'
         : here ? `Couldn't find a ${asked} loop on Vetta's road map from here. Try another length.`

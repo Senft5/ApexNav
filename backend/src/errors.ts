@@ -15,7 +15,8 @@ export function scrub(text: string, max: number): string {
   return s.length > max ? s.slice(0, max) : s;
 }
 
-const KINDS = new Set(["error", "rejection"]);
+// "route": a Fun / Long way / loop plan our router couldn't make, by its reason code only (web/errors.js route)
+const KINDS = new Set(["error", "rejection", "route"]);
 const APPS = new Set(["ios", "web"]);
 const text = (v: unknown, field: string, max: number): string => {
   if (v === undefined || v === null) return "";
