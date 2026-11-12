@@ -8,6 +8,9 @@
   const NEAR_M = 15, STEP = 4, MIN_SHARE = 0.25;                 // a stage point counts as measured within 15 m of a measured road
   const SMOOTH_G = 0.08, ROUGH_G = 0.30;                         // as contributor.js
   const ROUGH_MAX = 6, SMOOTH_MAX = 2, BANK_MAX = 1, HAZARD_PTS = 3, HAZARD_MAX = 6, HAZARD_NEAR_M = 30;
+  // crests two passes measured (share of bins going light by 0.15 g, full at CREST_FULL) are character; each crowd-verified
+  // bump on the stage's roads costs BUMP_PTS, at most BUMP_MAX (a confirmed hand-reported hazard costs HAZARD_PTS)
+  const CREST_MAX = 1.5, CREST_FULL = 0.15, BUMP_PTS = 1.5, BUMP_MAX = 4.5;
   const finite = (v) => typeof v === 'number' && Number.isFinite(v);
   const M_LAT = 110540;
   const mLon = (lat) => 111320 * Math.cos(lat * Math.PI / 180);
@@ -32,7 +35,8 @@
   };
 
   /**
-   * What members measured along one stage: { share (of its points on a measured road), rough (g), banked, offCamber } or null
+   * What members measured along one stage: { share (of its points on a measured road), rough (g), banked, offCamber, crested
+   * (share of crest bins), bumps (crowd-verified, on the roads it was matched to: the larger direction's count) } or null
    * when under MIN_SHARE of it is measured. ways: the /api/coverage `ways` (both directions averaged: a stage has no direction yet).
    */
   function measuredOn(stage, ways) {
@@ -40,7 +44,7 @@
     const pad = NEAR_M / M_LAT * 2;
     const cand = ways.filter((w) => Array.isArray(w.line) && w.line.length >= 2).map((w) => ({ w, b: w.box || boxOf(w.line) }));
     let pts = 0, hit = 0;
-    const rough = [], banked = [], off = [];
+    const rough = [], banked = [], off = [], crested = [], onWays = new Set();
     for (let i = 0; i < stage.lat.length; i += STEP) {
       const la = stage.lat[i], lo = stage.lon[i];
       pts++;
@@ -53,15 +57,20 @@
       }
       if (!best) continue;
       hit++;
-      const r = known(best.rough), b = known(best.banked), o = known(best.offCamber);
+      onWays.add(best);
+      const r = known(best.rough), b = known(best.banked), o = known(best.offCamber), c = known(best.crested);
+      if (c.length) crested.push(mean(c));
       if (r.length) rough.push(mean(r));
       if (b.length) banked.push(mean(b));
       if (o.length) off.push(mean(o));
     }
     const share = pts ? hit / pts : 0;
     if (share < MIN_SHARE) return null;
+    let bumps = 0;
+    for (const w of onWays) bumps += Math.max(0, ...(Array.isArray(w.bumps) ? w.bumps.filter(finite) : []));
     return { share: Math.round(share * 100) / 100, rough: rough.length ? mean(rough) : null,
-             banked: banked.length ? mean(banked) : null, offCamber: off.length ? mean(off) : null };
+             banked: banked.length ? mean(banked) : null, offCamber: off.length ? mean(off) : null,
+             crested: crested.length ? mean(crested) : null, bumps };
   }
 
   /** The score change for a stage's measurements, in stages.js points (good-corner equivalents). 0 for null. */
@@ -75,6 +84,9 @@
     }
     if (finite(m.banked)) adj += BANK_MAX * w * clamp01(m.banked / 0.3);
     if (finite(m.offCamber)) adj -= BANK_MAX * w * clamp01(m.offCamber / 0.3);   // off-camber is a hazard, never a bonus
+    if (finite(m.crested)) adj += CREST_MAX * w * clamp01(m.crested / CREST_FULL);
+    // a verified bump is a bump wherever it is: not scaled by how much of the stage was measured
+    if (finite(m.bumps) && m.bumps > 0) adj -= Math.min(BUMP_MAX, BUMP_PTS * m.bumps);
     return Math.round(adj * 100) / 100;
   }
 
@@ -95,7 +107,7 @@
 
   /**
    * Stages re-scored by measurements and hazards, best first. Each touched stage gets `measured` ({share, rough, banked,
-   * offCamber}), `measuredAdj` and/or `hazards` (kinds). A stage with a reported closure on it is left out. Pure: new objects.
+   * offCamber, crested, bumps}), `measuredAdj` and/or `hazards` (kinds). A stage with a reported closure on it is left out. Pure: new objects.
    */
   function rescore(stages, ways, hazards) {
     const cached = (ways || []).map((w) => (Array.isArray(w.line) && w.line.length >= 2 ? { ...w, box: boxOf(w.line) } : w));

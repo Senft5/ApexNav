@@ -121,6 +121,19 @@ def test_members_data_steers_the_search():
     assert r["cells"] <= 16 and r["cell0"] == "392_-847", r
 
 
+def test_measured_crests_and_verified_bumps_steer_the_search():
+    """Crests members measured (two passes or more) make a lane win a 1 s near-tie; one pass of crest data counts nothing;
+    crowd-verified bumps on the crested lane hand the tie back, unverified ones (posterior 0.6) change nothing, and
+    verified bumps on the other lane leave the crested lane the pick."""
+    r = case("crowdCrestBump")
+    assert r["none"]["road"] == ["Flat Lane"], r
+    assert r["crest"]["road"] == ["Crest Lane"] and r["crest"]["edges"] >= 4 and r["crest"]["crestMax"] > 0, r
+    assert r["onePass"]["road"] == ["Flat Lane"] and r["onePass"]["edges"] == 0, r
+    assert r["crestBumps"]["road"] == ["Flat Lane"] and r["crestBumps"]["bumps"] == 6, r
+    assert r["weakBumps"]["road"] == ["Crest Lane"] and r["weakBumps"]["bumps"] == 0, r
+    assert r["otherBumps"]["road"] == ["Crest Lane"] and r["otherBumps"]["bumps"] == 6, r
+
+
 def test_members_data_never_holds_the_search():
     """Members' roads for the search come from the cells kept on the phone; a slow server gives the plan nothing within
     its budget and the fresh answer after it (the planner plans again with it); the next plan over the same cells has it

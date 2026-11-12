@@ -867,9 +867,12 @@
     const [j, dist] = nearestIndexWin(b.lat[i], b.lon[i], a.lat, a.lon, Math.max(0, near), ON_A_WINDOW);
     return dist <= MATCH_RADIUS_M ? j : null;
   }
-  function spread(brakes, mins, passes, froms) {
+  function spread(brakes, mins, passes, froms, turns = [], speeds = []) {
     const b = brakes.filter((x) => x !== null), m = mins.filter((x) => x !== null);
+    const t = turns.filter((x) => x !== null), v = speeds.filter((x) => x !== null);   // turn-in (m) and slowest speed (m/s) per pass
     return { passes, brake_sd_m: sampleSd(b), brake_passes: b.length, min_sd_m: sampleSd(m), min_passes: m.length,
+             turn_sd_m: sampleSd(t), turn_passes: t.length, speed_sd_mps: sampleSd(v), speed_passes: v.length,
+             speed_marks: speeds.length ? froms.map((f, k) => [f, speeds[k]]) : [],   // per pass: [-1 this drive | j in others, slowest m/s]
              marks: froms.map((f, k) => [f, brakes[k], mins[k]]) };     // per pass: [-1 this drive | j in others, brake, slowest]
   }
   function coach(a, others) {
@@ -883,6 +886,7 @@
       const ta = turnIn(a, c.start, c.end);
       ma.turn_in_m = ta === null || ta > c.apex ? null : (c.apex - ta) * 5;
       const brakes = [oa === null ? null : (c.apex - oa) * 5], mins = [sa === null ? null : (sa - c.apex) * 5], froms = [-1];
+      const turns = [ma.turn_in_m], speeds = [ma.min_mps];
       others.forEach((b, j) => {
         const w = matchWindow(a, c.start, c.end, b, hints[j]);
         if (!w) return;
@@ -901,12 +905,12 @@
         let tt = turnIn(b, bs, be);
         if (tt !== null) tt = onA(a, c.apex - (bApex - tt), b, tt);
         mb.turn_in_m = tt === null || tt > c.apex ? null : (c.apex - tt) * 5;   // on A's road, m before its apex
-        brakes.push(ob === null ? null : (c.apex - ob) * 5); mins.push(sb === null ? null : (sb - c.apex) * 5); froms.push(j);
+        brakes.push(ob === null ? null : (c.apex - ob) * 5); mins.push(sb === null ? null : (sb - c.apex) * 5); froms.push(j); turns.push(mb.turn_in_m); speeds.push(mb.min_mps);
         if (mb.envelope_use <= PACE_CEILING && mb.time_s < best.time_s) { best = mb; bestFrom = j; }
       });
       const gain = ma.time_s - best.time_s;
       out.push({ apex: c.apex, m: ma, best: bestFrom < 0 ? null : best, best_from: bestFrom, gain_s: gain,
-                 tip: coachTip(ma, bestFrom >= 0 && gain >= TIP_GAIN_S ? best : null), passes, spread: spread(brakes, mins, passes, froms) });
+                 tip: coachTip(ma, bestFrom >= 0 && gain >= TIP_GAIN_S ? best : null), passes, spread: spread(brakes, mins, passes, froms, turns, speeds) });
     }
     const clean = out.filter(x => x.gain_s !== null);
     const thisS = clean.reduce((s, x) => s + x.m.time_s, 0), gainS = clean.reduce((s, x) => s + (x.gain_s >= TIP_GAIN_S ? x.gain_s : 0), 0);
@@ -917,13 +921,13 @@
   // How repeatably you braked within each period (port of drive_analysis.spread_by, IDEAS D-07 trend): keys[0] is a's
   // period, keys[j + 1] others[j]'s (null when unknown); { key: [[apex, robust SD] per corner with TREND_MIN_PASSES+ marks in that period] }.
   const TREND_MIN_PASSES = 5;
-  function spreadBy(co, keys) {
+  function spreadBy(co, keys, what = 'brake') {                       // what 'speed': the slowest point's speed (m/s) instead
     const out = {};
     for (const c of co.corners) {
       const sp = c.spread;
       if (!sp) continue;
       const groups = new Map();
-      for (const [f, b] of sp.marks) {
+      for (const [f, b] of (what === 'speed' ? sp.speed_marks || [] : sp.marks)) {
         const k = f + 1 >= 0 && f + 1 < keys.length ? keys[f + 1] : null;
         if (b === null || k === null || k === undefined) continue;
         if (!groups.has(k)) groups.set(k, []);

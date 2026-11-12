@@ -51,6 +51,8 @@ import m49 from "../migrations/0049_time_attack.sql?raw";
 import m50 from "../migrations/0050_share_backfill.sql?raw";
 import m51 from "../migrations/0051_ta_joins.sql?raw";
 import m52 from "../migrations/0052_crowd_bumps.sql?raw";
+import m53 from "../migrations/0053_event_repeat.sql?raw";
+import m54 from "../migrations/0054_ta_circuits.sql?raw";
 import m56 from "../migrations/0056_crew_public_since.sql?raw";
 import { sha256hex } from "../src/util";
 
@@ -70,7 +72,7 @@ export async function freshDb(): Promise<void> {
     await env.DB.batch(tables.map((t) => env.DB.prepare(`DELETE FROM ${t.name}`)));
     return;
   }
-  await env.DB.batch([...splitSql(m1), ...splitSql(m2), ...splitSql(m3), ...splitSql(m4), ...splitSql(m5), ...splitSql(m6), ...splitSql(m7), ...splitSql(m8), ...splitSql(m9), ...splitSql(m10), ...splitSql(m11), ...splitSql(m12), ...splitSql(m13), ...splitSql(m14), ...splitSql(m15), ...splitSql(m16), ...splitSql(m17), ...splitSql(m18), ...splitSql(m19), ...splitSql(m20), ...splitSql(m21), ...splitSql(m22), ...splitSql(m23), ...splitSql(m24), ...splitSql(m25), ...splitSql(m26), ...splitSql(m27), ...splitSql(m28), ...splitSql(m29), ...splitSql(m30), ...splitSql(m31), ...splitSql(m32), ...splitSql(m33), ...splitSql(m34), ...splitSql(m35), ...splitSql(m36), ...splitSql(m37), ...splitSql(m38), ...splitSql(m39), ...splitSql(m40), ...splitSql(m41), ...splitSql(m42), ...splitSql(m43), ...splitSql(m44), ...splitSql(m45), ...splitSql(m46), ...splitSql(m47), ...splitSql(m48), ...splitSql(m49), ...splitSql(m50), ...splitSql(m51), ...splitSql(m52), ...splitSql(m56)].map((s) => env.DB.prepare(s)));
+  await env.DB.batch([...splitSql(m1), ...splitSql(m2), ...splitSql(m3), ...splitSql(m4), ...splitSql(m5), ...splitSql(m6), ...splitSql(m7), ...splitSql(m8), ...splitSql(m9), ...splitSql(m10), ...splitSql(m11), ...splitSql(m12), ...splitSql(m13), ...splitSql(m14), ...splitSql(m15), ...splitSql(m16), ...splitSql(m17), ...splitSql(m18), ...splitSql(m19), ...splitSql(m20), ...splitSql(m21), ...splitSql(m22), ...splitSql(m23), ...splitSql(m24), ...splitSql(m25), ...splitSql(m26), ...splitSql(m27), ...splitSql(m28), ...splitSql(m29), ...splitSql(m30), ...splitSql(m31), ...splitSql(m32), ...splitSql(m33), ...splitSql(m34), ...splitSql(m35), ...splitSql(m36), ...splitSql(m37), ...splitSql(m38), ...splitSql(m39), ...splitSql(m40), ...splitSql(m41), ...splitSql(m42), ...splitSql(m43), ...splitSql(m44), ...splitSql(m45), ...splitSql(m46), ...splitSql(m47), ...splitSql(m48), ...splitSql(m49), ...splitSql(m50), ...splitSql(m51), ...splitSql(m52), ...splitSql(m53), ...splitSql(m54), ...splitSql(m56)].map((s) => env.DB.prepare(s)));
 }
 
 export interface TestUser { id: string; handle: string; token: string }

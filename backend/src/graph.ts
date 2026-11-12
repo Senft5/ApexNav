@@ -72,3 +72,21 @@ export async function graphTile(req: Request, name: string, fetcher: typeof fetc
   try { if (cache) await cache.put(ck, new Response(bytes, { headers: { "content-type": "application/octet-stream", "cache-control": `public, max-age=${EDGE_TILE_S}` } })); } catch { /* not kept */ }
   return new Response(bytes, { headers: { ...headers, "x-cache": "miss" } });
 }
+
+// Our own camera list for the region (tools/graph_etl/cameras.py, .github/workflows/cameras.yml; web/cameras.js): one file
+// on the graph-data branch, relayed. The public Overpass servers time out or refuse the phone when busy; inside the region
+// the phone reads this instead. Public OSM data, no sign-in; the request says nothing about the driver.
+export const CAMERAS_RAW = "https://raw.githubusercontent.com/Senft5/ApexNav/graph-data/cameras/v1/region.json";
+export const CAMERAS_S = 6 * 3600;    // the phone and Cloudflare re-check every 6 hours (a weekly build)
+
+/** GET /api/cameras/v1/region.json: 502 when the data branch has no camera list (yet). */
+export async function cameraList(fetcher: typeof fetch = fetch): Promise<Response> {
+  const init = { headers: { "user-agent": "Vetta-graph-relay/1.0" }, cf: { cacheTtl: CAMERAS_S, cacheEverything: true } } as RequestInit;
+  let r: Response;
+  try { r = await fetcher(CAMERAS_RAW, init); } catch { r = new Response(null, { status: 502 }); }
+  if (!r.ok) return new Response(JSON.stringify({ error: "cameras_unavailable" }), { status: 502, headers: { "content-type": "application/json", "cache-control": "no-store", ...SEC } });
+  const body = await r.text();
+  try { const j = JSON.parse(body) as { tiles?: unknown; cams?: unknown }; if (!Array.isArray(j.tiles) || !Array.isArray(j.cams)) throw new Error("shape"); }
+  catch { return new Response(JSON.stringify({ error: "cameras_unavailable" }), { status: 502, headers: { "content-type": "application/json", "cache-control": "no-store", ...SEC } }); }
+  return new Response(body, { headers: { "content-type": "application/json", "cache-control": `public, max-age=${CAMERAS_S}`, ...SEC } });
+}

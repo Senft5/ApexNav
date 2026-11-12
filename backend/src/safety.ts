@@ -114,10 +114,10 @@ async function resolveTarget(env: Env, v: Viewer, kind: ReportKind, target: unkn
     if (!m) throw new HttpError(404, kind === "post" ? "no_post" : "no_reply");
     return { id, person: m.person };
   }
-  if (kind === "circuit") {   // a stage put up for time attack: every member can see one (time_attack.ts); never your own
-    const c = await first<{ owner: string }>(env, "SELECT owner FROM ta_pool WHERE segment_id = ?1 AND owner != ?2", id, v.id);
+  if (kind === "circuit") {   // a week's time attack loop: every member can see one (time_attack.ts); nobody's, so no one to block
+    const c = await first(env, "SELECT 1 FROM ta_weeks WHERE segment_id = ?1 AND geom IS NOT NULL AND removed = 0", id);
     if (!c) throw new HttpError(404, "no_circuit");
-    return { id, person: c.owner };
+    return { id, person: null };
   }
   if (kind === "chat") {   // a crew chat message: its crew's members (crew_page.ts); never your own
     const m = await first<{ author: string }>(env,
@@ -195,7 +195,7 @@ export async function moderationQueue(env: Env, v: Viewer) {
   await each("crew", (q) => `SELECT id, name, visibility FROM crews WHERE id IN (${q})`, (r) => `${r.name} (${r.visibility})`);
   await each("car", (q) => `SELECT c.id, c.make, c.model, c.nickname, u.handle FROM cars c JOIN users u ON u.id = c.owner WHERE c.id IN (${q})`,
     (r) => `${r.make} ${r.model}${r.nickname ? ` "${r.nickname}"` : ""} · @${r.handle ?? "?"}`);
-  await each("circuit", (q) => `SELECT s.id, s.name, u.handle FROM segments s JOIN users u ON u.id = s.owner WHERE s.id IN (${q})`, (r) => `time attack stage "${String(r.name).slice(0, 80)}" · @${r.handle ?? "?"}`);
+  await each("circuit", (q) => `SELECT segment_id AS id, name, cell FROM ta_weeks WHERE segment_id IN (${q})`, (r) => `time attack loop "${String(r.name).slice(0, 80)}" · area ${r.cell}`);
   await each("highlight", (q) => `SELECT id, name FROM highlights WHERE id IN (${q})`, (r) => r.name);
   await each("photo", (q) => `SELECT p.id, p.kind, u.handle FROM photos p JOIN users u ON u.id = p.owner WHERE p.id IN (${q})`, (r) => `a ${r.kind} photo · @${r.handle ?? "?"} · /api/photos/${r.id}`);
   await each("chat", (q) => `SELECT m.id, m.body, c.name AS crew, u.handle FROM crew_chat m JOIN crews c ON c.id = m.crew_id JOIN users u ON u.id = m.author WHERE m.id IN (${q})`,
@@ -258,11 +258,11 @@ export async function moderationResolve(env: Env, v: Viewer, req: Request): Prom
     post: [env.DB.prepare("DELETE FROM build_posts WHERE id = ?").bind(id)],
     reply: [env.DB.prepare("DELETE FROM build_replies WHERE id = ?").bind(id)],
     build_chat: [env.DB.prepare("DELETE FROM build_chat WHERE id = ?").bind(id)],
-    // a stage put up for time attack: out of the pool, and off this week's pick so the area gets another
-    // the week's times on it go too, so a stage picked in its place starts with an empty board
-    circuit: [env.DB.prepare(`DELETE FROM ta_entries WHERE (week, cell) IN (SELECT week, cell FROM ta_weeks WHERE segment_id = ? AND week = date('now', '-6 days', 'weekday 1'))`).bind(id),
-      env.DB.prepare("DELETE FROM ta_pool WHERE segment_id = ?").bind(id),
-      env.DB.prepare("DELETE FROM ta_weeks WHERE segment_id = ? AND week = date('now', '-6 days', 'weekday 1')").bind(id)],
+    // a week's time attack loop: down, and its week's times and entries with it; the area's next phone builds another from
+    // the next seed (time_attack.ts current)
+    circuit: [env.DB.prepare(`DELETE FROM ta_entries WHERE (week, cell) IN (SELECT week, cell FROM ta_weeks WHERE segment_id = ?)`).bind(id),
+      env.DB.prepare(`DELETE FROM ta_joins WHERE (week, cell) IN (SELECT week, cell FROM ta_weeks WHERE segment_id = ?)`).bind(id),
+      env.DB.prepare("UPDATE ta_weeks SET removed = 1, tries = tries + 1 WHERE segment_id = ?").bind(id)],
     // back to private, its followers let go; a removed book can't be made public again (roadbooks.ts mayShow)
     roadbook: [env.DB.prepare("UPDATE roadbooks SET visibility = 'private' WHERE id = ?").bind(id), env.DB.prepare("DELETE FROM roadbook_follows WHERE book_id = ?").bind(id)],
     photo: [],                                                        // stays down: removed reports hide it for good (photos.ts)

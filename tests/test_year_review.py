@@ -43,3 +43,48 @@ def test_lines_and_unknowns(out):
     assert out["unscored"]["best"] is None
     text = " ".join(out["lines"]).lower()
     assert "mph" not in text and "speed" not in text and "fastest" not in text
+
+
+AREAS = r"""
+const Y = require(process.argv[1] + '/web/year_review.js');
+const MI = 1609.344, d = (name, date, lat, lon, mi = 10) => ({ name, date, dist: [0, mi * MI], ds: { score: 500 }, corners: [], bbox: [lat - 0.05, lat + 0.05, lon - 0.05, lon + 0.05] });
+const all = [d('Tail of the Dragon', '2026-04-01T09:00', 35.5, -83.9), d('Tail of the Dragon', '2026-05-01T09:00', 35.52, -83.95),
+  d('Cherohala Skyway', '2026-05-02T09:00', 35.35, -84.1), d('Blue Ridge Pkwy', '2026-06-01T09:00', 36.6, -81.5),
+  d('Drive 4', '2026-07-01T09:00', 38, -80), { ...d('No box', '2026-07-02T09:00', 0, 0), bbox: null }];
+const s = Y.summary(all, 2026), one = Y.summary(all.slice(0, 2), 2026);
+console.log(JSON.stringify({ areas: s.areas, lines: Y.lines(s), one: one.areas, oneLines: Y.lines(one) }));
+"""
+
+
+def test_areas_where_you_drove():
+    out = json.loads(subprocess.run([NODE, "-e", AREAS, ROOT], capture_output=True, text=True, check=True).stdout)
+    # within 40 km of an area's first drive is that area, named after the road driven most there; a box-less drive is not placed
+    assert out["areas"] == [{"name": "Tail of the Dragon", "drives": 3, "miles": 30}, {"name": "Blue Ridge Pkwy", "drives": 1, "miles": 10},
+                            {"name": None, "drives": 1, "miles": 10}]
+    assert "Where you drove: 3 areas, most around Tail of the Dragon (3 drives), then around Blue Ridge Pkwy (1 drive)" in out["lines"]
+    # one area is not worth a line
+    assert len(out["one"]) == 1 and not any(x.startswith("Where you drove") for x in out["oneLines"])
+
+
+CREWS = r"""
+const Y = require(process.argv[1] + '/web/year_review.js'), E = require(process.argv[1] + '/web/crew_events.js');
+const mem = { v: {}, getItem(k) { return k in this.v ? this.v[k] : null; }, setItem(k, x) { this.v[k] = String(x); } };
+const ev = (id, crew, at) => ({ id, crew_name: crew, starts_at: at, title: 'A drive', meet_lat: 35, meet_lon: -84 });
+E.noteCame(mem, ev('e1', 'Smoky Crew', '2026-04-04T13:00:00Z'), true);
+E.noteCame(mem, ev('e2', 'Smoky Crew', '2026-05-04T13:00:00Z'), true);
+E.noteCame(mem, ev('e2', 'Smoky Crew', '2026-05-04T13:00:00Z'), true);      // twice is once
+E.noteCame(mem, ev('e3', 'Tuesday Night', '2026-06-04T13:00:00Z'), true);
+E.noteCame(mem, ev('e4', 'Tuesday Night', '2026-06-11T13:00:00Z'), true);
+E.noteCame(mem, ev('e4', 'Tuesday Night', '2026-06-11T13:00:00Z'), false);   // "I wasn't there" takes it off
+E.noteCame(mem, ev('e5', 'Old Crew', '2025-06-11T13:00:00Z'), true);
+const crews = Y.crewYear(mem, 2026), s = Y.summary([{ name: 'X', date: '2026-01-02T10:00', dist: [0, 1000], ds: { score: null }, corners: [] }], 2026);
+console.log(JSON.stringify({ crews, kept: JSON.parse(mem.v[E.CAME_KEY]), line: Y.lines({ ...s, crews }), none: Y.crewYear(null, 2026), bad: Y.crewYear({ getItem: () => '{oops' }, 2026) }));
+"""
+
+
+def test_crew_drives_kept_on_the_phone():
+    out = json.loads(subprocess.run([NODE, "-e", CREWS, ROOT], capture_output=True, text=True, check=True).stdout)
+    assert out["crews"] == [{"crew": "Smoky Crew", "drives": 2}, {"crew": "Tuesday Night", "drives": 1}]
+    assert all(set(x) == {"id", "crew", "at"} for x in out["kept"])           # no place, no other driver
+    assert "Crew drives: 2 with Smoky Crew, 1 with Tuesday Night" in out["line"]
+    assert out["none"] == [] and out["bad"] == []
