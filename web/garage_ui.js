@@ -218,7 +218,7 @@
             + '<path class="jr-case" d="M-12 104 C 80 104 120 64 214 64"/><path class="jr-fill" d="M-12 104 C 80 104 120 64 214 64"/>'
             + '<circle class="jr-puck lead" cx="200" cy="64" r="7"/></svg>' }),
           el('h3', { className: 'join-head', textContent: 'Park your first car.' }),
-          el('p', { className: 'people-lead', textContent: 'Friends and private crews see it next to your name when you show it. No location or drives are on a car card.' })));
+          el('p', { className: 'people-lead', textContent: 'Friends and private crews see it next to your name.' })));
         const cards = el('div', { className: 'garage-cards' });
         for (const c of mine) {
           // the rare keys, Make daily and Remove, live in Edit (walkthrough 2026-11-12: a card with six keys read as clutter)

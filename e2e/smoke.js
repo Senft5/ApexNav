@@ -9287,6 +9287,8 @@ flow('TestFlight 2026-11-05 note 3: your own photo is the key: no photo, a tap p
     return { text: sec.innerText, keys: [...sec.querySelectorAll('button, label')].filter((b) => b.offsetParent).map((b) => b.getAttribute('aria-label') || b.textContent.trim()) }; });
   let y = await you();
   check(!/Change photo|Remove photo|Add a photo|location data/.test(y.text) && y.keys[0] === 'Add your profile photo', 'no photo: the face is the key, no other key, no note: ' + JSON.stringify(y));
+  const firstCar = await page.textContent('.garage-first .people-lead');
+  check(firstCar === 'Friends and private crews see it next to your name.', 'no car yet: one line under Park your first car: ' + firstCar);
   // a tap with no photo goes straight to the picker
   const [chooser] = await Promise.all([page.waitForEvent('filechooser', { timeout: 5000 }), page.click('.my-photo')]);
   check(!!chooser && !(await page.$('.my-photo-sheet')), 'no photo: a tap opens the photo picker');
