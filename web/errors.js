@@ -18,7 +18,7 @@
     return cut(s, max);
   }
 
-  /** The report for one error: { kind, message, stack, page, app }. */
+  /** The report for one error (or a route plan that failed, kind 'route'): { kind, message, stack, page, app }. */
   function reportOf(kind, err, fallbackMessage) {
     const message = err && err.message ? err.message : (fallbackMessage || String(err));
     const stack = err && err.stack ? err.stack : '';
@@ -42,7 +42,9 @@
     };
     target.addEventListener('error', (e) => { if (e && (e.error || e.message)) handle('error', e.error, e.message); });
     target.addEventListener('unhandledrejection', (e) => handle('rejection', e && e.reason, 'unhandled rejection'));
-    return { handle, get sent() { return sent; } };
+    // a plan that couldn't be made (Fun, Long way, a loop: our router's only), as a reason code: no place, no trip
+    const route = (what, reason, error) => handle('route', null, `${what}: ${reason || 'unknown'}${error ? ` (${error})` : ''}`);
+    return { handle, route, get sent() { return sent; } };
   }
 
   // Anonymous on purpose: no cookie, no bearer token. The app posts cross-origin to the Worker like ApexSync does.

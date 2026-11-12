@@ -104,7 +104,7 @@
 
   /**
    * Corners ranked by how repeatably you drive them (IDEAS D-07), from Core.coach's per-corner spread over your clean passes:
-   * [{ k, brake_sd_m, brake_passes, passes, min_sd_m, min_passes }] steadiest first, only corners with a known braking spread
+   * [{ k, brake_sd_m, brake_passes, passes, min_sd_m, min_passes, turn_sd_m, turn_passes, speed_sd_mps, speed_passes }] steadiest first, only corners with a known braking spread
    * (a clear braking point on three or more passes). Fewer than 3 such
    * corners: [] (too little to rank).
    */
@@ -113,7 +113,9 @@
     if (!co || !co.corners) return [];
     const rows = co.corners.map((x, k) => (x && x.spread && Number.isFinite(x.spread.brake_sd_m)
       ? { k, brake_sd_m: x.spread.brake_sd_m, brake_passes: x.spread.brake_passes, passes: x.spread.passes,
-          min_sd_m: Number.isFinite(x.spread.min_sd_m) ? x.spread.min_sd_m : null, min_passes: x.spread.min_passes } : null))
+          min_sd_m: Number.isFinite(x.spread.min_sd_m) ? x.spread.min_sd_m : null, min_passes: x.spread.min_passes,
+          turn_sd_m: Number.isFinite(x.spread.turn_sd_m) ? x.spread.turn_sd_m : null, turn_passes: x.spread.turn_passes || 0,
+          speed_sd_mps: Number.isFinite(x.spread.speed_sd_mps) ? x.spread.speed_sd_mps : null, speed_passes: x.spread.speed_passes || 0 } : null))
       .filter(Boolean).sort((a, b) => a.brake_sd_m - b.brake_sd_m || a.k - b.k);
     return rows.length >= 3 ? rows : [];
   }
@@ -244,6 +246,9 @@
     // brake heat (brake_heat.js): said only when the discs got warm or hot by the model; nothing for a drive with no height
     const BH = root.ApexBrakeHeat || (typeof module !== 'undefined' && typeof require === 'function' ? require('./brake_heat.js') : null);
     const brakes = BH && Array.isArray(d.elev) ? BH.driveText(BH.overTrack(d.dist, d.speed_mps, d.elev), (m) => DIST(m, 1)) : null;
+    // the best run of corners in a row driven smooth and settled (flow.js, the Score's own judgement of each corner)
+    const FL = root.ApexFlow || (typeof module !== 'undefined' && typeof require === 'function' ? require('./flow.js') : null);
+    const flow = FL && Core.cornerTechnique ? FL.text(FL.longest(Core, d.speed_mps, d.lon_g, d.lat_g, d.corners, Array.isArray(d.dist) ? d.dist : null), (m) => DIST(m, 1)) : null;
     const tired = Core.fatigue ? fatigueText(Core.fatigue(d.speed_mps, d.lon_g, d.lat_g, d.corners, d.g_known || null)) : null;   // unmeasured g is left out
     const mi = finite(S.km) ? DIST(S.km * 1000, 1) : '--';
     const dur = finite(S.duration_s) ? fmtT(S.duration_s) : '--';
@@ -261,6 +266,7 @@
       // which car the score is for (IDEAS D-19); a lower limit is said, since it changes what Pace means
       + (d.car && d.car.label ? `<div class="dv-meta">Scored for your ${esc(d.car.label)}${finite(d.car.mu) && d.car.mu < 0.6 ? ` \u00b7 its own grip, ${d.car.mu.toFixed(2)} g (the default is 0.60 g)` : ''}</div>` : '')
       + (plain ? `<p class="dv-plain">${esc(plain)}</p>` : '')
+      + (flow ? `<p class="dv-plain">${esc(flow)}</p>` : '')
       + (tired ? `<p class="dv-plain">${esc(tired)}</p>` : '')
       + (brakes ? `<p class="dv-plain">${esc(brakes)}</p>` : '')
       + (ideal ? `<div class="dv-meta">Ideal drive <b class="gain">${ideal.gain.toFixed(2)} s</b> quicker: your best pass of each of ${ideal.n} corners, from ${ideal.drives} drive${ideal.drives === 1 ? '' : 's'}</div>` : '');
@@ -354,16 +360,51 @@
         onShown: () => { const cr = planBox.querySelector('.dv-credit'); if (cr) cr.hidden = false; },
         // the path moves with the map (one transform; CSS keeps its lines their width), the numbers and letters are
         // redrawn where they now fall, at their own size
-        onMove: (c) => {
-          const w = planBox.clientWidth, fit = w ? BM.viewFor(plan.frame, xc, yc, ms * w / MW) : null;
-          cam = c && fit ? BM.overlay(plan.frame, xc, yc, ms, MW, MH, fit.zoom, c) : T0;
-          const g = planBox.querySelector('#dvGeo'), mk = planBox.querySelector('#dvMarks'), jm = planBox.querySelector('#dvJerkMarks');
-          if (g) { if (cam === T0) g.removeAttribute('transform'); else g.setAttribute('transform', `matrix(${cam.s} 0 0 ${cam.s} ${cam.tx} ${cam.ty})`); }
-          if (mk) mk.innerHTML = marksAt(cam);
-          if (jm) jm.innerHTML = jmarksAt(cam);
-          const [px, py] = TP(cam, state.i); dot.setAttribute('cx', px); dot.setAttribute('cy', py);
-        },
+        onMove: (c) => applyCam(c),
       });
+    }
+    // the picture at map camera c ({ center, zoom }; null: fitted): the path moves as one transform, the numbers, letters
+    // and dot are redrawn where they now fall
+    function applyCam(c) {
+      const w = planBox && planBox.clientWidth, fit = w && BM && plan.frame ? BM.viewFor(plan.frame, xc, yc, ms * w / MW) : null;
+      cam = c && fit ? BM.overlay(plan.frame, xc, yc, ms, MW, MH, fit.zoom, c) : T0;
+      const g = mapBox.querySelector('#dvGeo'), mk = mapBox.querySelector('#dvMarks'), jm = mapBox.querySelector('#dvJerkMarks');
+      if (g) { if (cam === T0) g.removeAttribute('transform'); else g.setAttribute('transform', `matrix(${cam.s} 0 0 ${cam.s} ${cam.tx} ${cam.ty})`); }
+      if (mk) mk.innerHTML = marksAt(cam);
+      if (jm) jm.innerHTML = jmarksAt(cam);
+      const [px, py] = TP(cam, state.i); dot.setAttribute('cx', px); dot.setAttribute('cy', py);
+    }
+    // the owner, 2026-11-11 (TestFlight): "tapping a corner or moment here should orient the view above to show that
+    // corner zoomed in on the map". Samples a..b (a corner's start to end, a moment's 50 m either side) framed with 60 m
+    // round them and at least 250 m across, never wider than the whole drive's fit; on the real map a glide, on the plain
+    // picture the same camera. 'All' in the zoom row puts the whole drive back, as Recenter does.
+    let focused = false;
+    function focusMap(a, b) {
+      const w = planBox && planBox.clientWidth, h = planBox && planBox.clientHeight;
+      if (!BM || !plan.frame || !w || !h) return;
+      a = Math.max(0, Math.min(n - 1, a)); b = Math.max(a, Math.min(n - 1, b));
+      let fx0 = Infinity, fx1 = -Infinity, fy0 = Infinity, fy1 = -Infinity;
+      for (let i = a; i <= b; i++) { fx0 = Math.min(fx0, x[i]); fx1 = Math.max(fx1, x[i]); fy0 = Math.min(fy0, y[i]); fy1 = Math.max(fy1, y[i]); }
+      const spanX = Math.max(250, fx1 - fx0 + 120), spanY = Math.max(250, fy1 - fy0 + 120);
+      const ppm = Math.max(ms * w / MW, Math.min(w / spanX, h / spanY));
+      const v = BM.viewFor(plan.frame, (fx0 + fx1) / 2, (fy0 + fy1) / 2, ppm);
+      v.zoom = Math.min(v.zoom, 18);
+      if (!(basemap && basemap.shown && basemap.focus(v))) applyCam(v);
+      focused = true;
+    }
+    function unfocusMap() {
+      if (!focused) return;
+      focused = false;
+      if (basemap && basemap.shown) basemap.recenter(); else applyCam(null);
+    }
+    // a pick from the lists below: the map frames it and the lanes zoom to it, both brought into view (the map first,
+    // it is the one above on a phone)
+    function pick(i, a, b) {
+      focusMap(a, b);
+      if (zoomM) setZoom(zoomM, i);
+      move(i);
+      const r = mapBox.getBoundingClientRect && mapBox.getBoundingClientRect();
+      if (r && r.top < 0) mapBox.scrollIntoView({ block: 'start', behavior: 'smooth' }); else lanes.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
     }
 
     // ---- lanes -----------------------------------------------------------------------------------------------------
@@ -488,7 +529,11 @@
     lanes.addEventListener('pointerup', () => { drag = false; });
     lanes.addEventListener('keydown', (e) => { const big = e.shiftKey ? 50 : 5; if (e.key === 'ArrowRight') { e.preventDefault(); showRead(); move(state.i + big); } if (e.key === 'ArrowLeft') { e.preventDefault(); showRead(); move(state.i - big); } if (e.key === 'Home') { showRead(); move(state.v0); } if (e.key === 'End') { showRead(); move(state.v1); } });
     lanes.tabIndex = 0; lanes.setAttribute('role', 'slider'); lanes.setAttribute('aria-label', 'Position along the drive'); lanes.setAttribute('aria-valuemin', 0); lanes.setAttribute('aria-valuemax', n - 1);
-    mapBox.addEventListener('click', (e) => { const g = e.target.closest('[data-k]'); if (g) move(d.corners[+g.dataset.k].apex); });
+    mapBox.addEventListener('click', (e) => {
+      const g = e.target.closest('[data-k]');
+      if (g) move(d.corners[+g.dataset.k].apex);
+      else if (!(basemap && basemap.shown) && e.target.closest('.dv-plan')) unfocusMap();   // the plain picture: a tap off the marks shows the whole drive again
+    });
 
     // ---- corner list -----------------------------------------------------------------------------------------------
     let net = null;
@@ -496,7 +541,7 @@
     list.innerHTML = `<h2>Corners${ref ? ` \u00b7 compared with ${esc(ref.name)} (score ${ref.score}), your best other drive on this road` : ''}</h2>` + (ref ? `<p class="note" style="margin-bottom:8px">${net == null ? 'No clean corners to compare.' : `Over the ${d.corners.map((_, k) => lost(k)).filter((x) => x != null).length} corners both drives took cleanly, this drive was <b class="${net > 0.05 ? 'loss' : net < -0.05 ? 'gain' : ''}">${fmtD(net)}</b> ${net > 0 ? 'slower' : 'faster'}. Stops and traffic are left out.`}</p>` : '');
     const reps = consistencyRows(co);
     if (reps.length) {                                               // how repeatably each corner is driven over your passes (D-07)
-      const ul = el('ol', 'dv-time'), m = (x) => fine(Math.max(3, x));
+      const ul = el('ol', 'dv-time'), m = (x) => fine(Math.max(3, x)), spd = (x) => `${Math.max(1, Math.round(x * MPH))} ${SPD()}`;
       const med = reps[Math.floor((reps.length - 1) / 2)].brake_sd_m;
       const varies = (r) => r.brake_passes >= VARIES_MIN_PASSES && r.brake_sd_m >= Math.max(VARIES_M, 2 * med);
       const steady = reps.filter((r) => r.brake_passes === r.passes && r.brake_sd_m <= med && !varies(r)).slice(0, 2);   // braked clearly on every pass
@@ -506,14 +551,18 @@
         b.innerHTML = `<b>${r.k + 1}</b><span>${esc(callOf(c))}</span><em class="${v ? 'loss' : 'gain'}">${m(r.brake_sd_m)}</em>`
           + `<span class="note">braking point typically within ${m(r.brake_sd_m)} over ${r.brake_passes} of ${r.passes} passes`
           + `${r.min_sd_m != null ? `, slowest point within ${m(r.min_sd_m)} over ${r.min_passes} passes` : ''}`
+          + `${r.turn_sd_m != null ? `, turn-in within ${m(r.turn_sd_m)}${r.turn_passes < r.passes ? ` over ${r.turn_passes}` : ''}` : ''}`
+          + `${r.speed_sd_mps != null ? `, speed at the slowest point within ${spd(r.speed_sd_mps)}${r.speed_passes < r.passes ? ` over ${r.speed_passes}` : ''}` : ''}`
           + `${v ? '. If it was not traffic or the weather, pick an early, comfortable braking marker you can always make' : ''}</span>`;
-        b.onclick = () => { if (zoomM) setZoom(zoomM, c.apex); move(c.apex); lanes.scrollIntoView({ block: 'nearest', behavior: 'smooth' }); };
+        b.onclick = () => pick(c.apex, c.start, c.end);
         li.append(b); ul.append(li);
       });
       const which = steady.length && loose.length ? 'Your steadiest corners, then the ones that vary most.'
         : steady.length ? 'Your steadiest corners; none varies much more than the rest.'
         : loose.length ? 'The corners that vary most.' : 'None varies much more than the rest.';
-      const intro = el('p', 'note', `In ${reps.length} corners where you braked clearly on three or more passes, your braking point typically moves about ${m(med)} from drive to drive (${fine(5)} samples and GPS make about ${fine(3)} the floor). ${which}`);
+      const speeds = reps.map((r) => r.speed_sd_mps).filter((x) => x != null).sort((p, q) => p - q);
+      const carried = speeds.length >= 3 ? ` Your speed at their slowest point typically varies about ${spd(speeds[(speeds.length - 1) >> 1])}.` : '';
+      const intro = el('p', 'note', `In ${reps.length} corners where you braked clearly on three or more passes, your braking point typically moves about ${m(med)} from drive to drive (${fine(5)} samples and GPS make about ${fine(3)} the floor).${carried} ${which}`);
       if (ul.children.length) list.prepend(el('h2', null, 'How repeatable your corners are'), intro, ul);
       else list.prepend(el('h2', null, 'How repeatable your corners are'), intro);
     }
@@ -523,7 +572,7 @@
         const near = d.corners.findIndex((c) => m.index >= c.start - 4 && m.index <= c.end + 4), li = el('li'), b = el('button');
         b.innerHTML = `<b>${String.fromCharCode(65 + k)}</b><span>${near >= 0 ? `Corner ${near + 1} \u00b7 ${esc(callOf(d.corners[near]))}` : 'Between corners'}</span><em class="loss">${m.jerk_gps.toFixed(2)} g/s</em>`
           + `<span class="note">${DIST(d.dist[m.index])} \u00b7 ${abruptAdvice(d.lat_g, d.lon_g, m.index)}</span>`;
-        b.onclick = () => { if (showSmooth) showSmooth(); if (zoomM) setZoom(zoomM, m.index); move(m.index); lanes.scrollIntoView({ block: 'nearest', behavior: 'smooth' }); };
+        b.onclick = () => { if (showSmooth) showSmooth(); pick(m.index, m.index - 10, m.index + 10); };
         li.append(b); ul.append(li);
       });
       list.prepend(el('h2', null, 'Most abrupt moments'), ul);
@@ -534,7 +583,7 @@
         const x = co.corners[k], c = d.corners[k], from = x.best ? co.others[x.best_from] : null, li = el('li'), b = el('button');
         b.innerHTML = `<b>${k + 1}</b><span>${esc(callOf(c))}</span><em class="loss">${fmtD(x.gain_s)}</em>`
           + `<span class="note">${esc(tipText(x, MPH) || 'Same technique, quicker all the way through')}${from ? ` \u00b7 best pass ${esc(from.date)}` : ''}</span>`;
-        b.onclick = () => { if (zoomM) setZoom(zoomM, c.apex); move(c.apex); lanes.scrollIntoView({ block: 'nearest', behavior: 'smooth' }); };
+        b.onclick = () => pick(c.apex, c.start, c.end);
         li.append(b); ul.append(li);
       }
       list.prepend(el('h2', null, 'Where to find time'), ul);
@@ -544,7 +593,7 @@
       const r = el('button', 'dv-corner'); r.setAttribute('aria-label', `Corner ${k + 1}: ${callOf(c)}, apex ${Math.round(c.apex_mps * MPH)} ${SPD_WORDS()}`);
       r.innerHTML = `<b>${k + 1}</b><span class="dv-call">${esc(callOf(c))}</span><span class="dv-v">${Math.round(c.apex_mps * MPH)} ${SPD()}</span><span class="dv-d">${DIST(d.dist[c.apex])}${ref ? ` \u00b7 <em class="${lost(k) == null ? '' : lost(k) > 0.05 ? 'loss' : lost(k) < -0.05 ? 'gain' : ''}">${fmtD(lost(k))}</em>` : ''}</span>`
         + (co && tipText(co.corners[k], MPH) ? `<span class="dv-tip">${esc(tipText(co.corners[k], MPH))}</span>` : '');
-      r.onclick = () => { if (zoomM) setZoom(zoomM, c.apex); move(c.apex); lanes.scrollIntoView({ block: 'nearest', behavior: 'smooth' }); };
+      r.onclick = () => pick(c.apex, c.start, c.end);
       grid2.append(r);
     });
     if (!d.corners.length) grid2.append(el('p', 'note', 'No corners detected on this drive.'));
@@ -560,7 +609,7 @@
       zoom.querySelectorAll('button').forEach((b) => b.classList.toggle('on', +b.dataset.m === m));
       draw();
     }
-    ZOOMS.forEach(([label, m]) => { const b = el('button', 'dv-z', label); b.dataset.m = m; b.onclick = () => { showRead(); setZoom(m); }; b.setAttribute('aria-label', label === 'All' ? 'Zoom: whole drive' : `Zoom: ${label.toLowerCase()} window`); zoom.append(b); });
+    ZOOMS.forEach(([label, m]) => { const b = el('button', 'dv-z', label); b.dataset.m = m; b.onclick = () => { showRead(); if (!m) unfocusMap(); setZoom(m); }; b.setAttribute('aria-label', label === 'All' ? 'Zoom: whole drive' : `Zoom: ${label.toLowerCase()} window`); zoom.append(b); });
     const pan = (dir) => { showRead(); if (zoomM) setZoom(zoomM, Math.round((state.v0 + state.v1) / 2 + dir * (state.v1 - state.v0) * 0.6)); };
     // U-76: drawn chevrons in the ink, not U+25C0/U+25B6, which iOS paints as blue emoji
     const chev = (d) => `<svg viewBox="0 0 12 12" width="12" height="12" aria-hidden="true" style="display:block;margin:auto"><path d="${d}" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="square"/></svg>`;
@@ -571,7 +620,22 @@
     const ro = new ResizeObserver(() => { if (Math.abs((lanes.clientWidth || 0) - W) > 2) draw(); if (basemap) basemap.refit(); });
     ro.observe(lanes); if (basemap && planBox) ro.observe(planBox);
     function setRoadFeel(series) { feel = series; draw(); }
-    return { move, setRoadFeel, restyleMap() { if (basemap) basemap.restyle(); }, recenterMap() { if (basemap) basemap.recenter(); }, destroy() { ro.disconnect(); if (basemap) basemap.destroy(); }, summary: S };
+    // the corners this drive is your cleanest pass of on this road (driver_profile.js roadRecords, from the drive job)
+    // rows: [{ apex, note, by }] (driver_profile.js roadRecords rows with their words), or bare apexes this pass is cleanest
+    // at; open(by) makes the note a link to the drive that holds the corner
+    function markRecords(rows, open) {
+      const at = new Map((rows || []).map((x) => (typeof x === 'object' && x ? [x.apex, x] : [x, { apex: x, by: null, note: 'Your cleanest pass here' }])));
+      grid2.querySelectorAll('.dv-corner').forEach((r, k) => {
+        const x = at.get(d.corners[k] && d.corners[k].apex), old = r.querySelector('.dv-rec');
+        if (old) old.remove();
+        r.classList.toggle('rec', !!x && (x.by === null || x.by === undefined));
+        if (!x || !x.note) return;
+        if (x.by !== null && x.by !== undefined && open) {
+          const a = el('button', 'dv-rec dv-rec-by'); a.textContent = x.note; a.type = 'button'; a.addEventListener('click', () => open(x.by)); r.append(a);
+        } else { const t = el('span', 'dv-rec'); t.textContent = x.note; r.append(t); }
+      });
+    }
+    return { move, setRoadFeel, markRecords, restyleMap() { if (basemap) basemap.restyle(); }, recenterMap() { if (basemap) basemap.recenter(); }, destroy() { ro.disconnect(); if (basemap) basemap.destroy(); }, summary: S };
   }
 
   const api = { mount, summarize, tipText, plainCoach, abruptAdvice, fatigueText, consistencyRows, noteWordsPref, cornerCall };

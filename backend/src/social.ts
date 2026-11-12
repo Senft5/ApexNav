@@ -135,11 +135,20 @@ export async function crewUpdate(env: Env, v: Viewer, crewId: string, req: Reque
     name, set.visibility, set.about, set.area_name, set.area_lat, set.area_lon, crewId);
   // Private to public: a member's sharing with it was most likely the default for a private crew, never a choice to show
   // strangers. So everyone but the owner (who made it public) starts again at off, their Scores and times published to it
-  // go, and the crew page asks them, as joining a public crew does (share_defaults.ts).
+  // go, and the crew page asks them, as joining a public crew does (share_defaults.ts). The same goes for what they shared
+  // with the private crew by hand: planned routes, stages and the rough area they drive from (crew_meet.ts); a stranger who
+  // joins next must not find them. A member's route the owner pinned is unpinned with it.
   if (crew.visibility !== "public" && set.visibility === "public") await env.DB.batch([
     env.DB.prepare("UPDATE grants SET share_scores = 0, share_times = 0 WHERE audience_type = 'crew' AND audience_id = ? AND user_id != ?").bind(crewId, v.id),
     env.DB.prepare("DELETE FROM board_entries WHERE audience_type = 'crew' AND audience_id = ? AND user_id != ?").bind(crewId, v.id),
     env.DB.prepare("DELETE FROM drive_scores WHERE crew_id = ? AND user_id != ?").bind(crewId, v.id),
+    env.DB.prepare(`DELETE FROM shared_route_audience WHERE audience_type = 'crew' AND audience_id = ?1
+        AND route_id IN (SELECT id FROM shared_routes WHERE owner != ?2)`).bind(crewId, v.id),
+    env.DB.prepare(`DELETE FROM segment_shares WHERE audience_type = 'crew' AND audience_id = ?1
+        AND segment_id IN (SELECT id FROM segments WHERE owner != ?2)`).bind(crewId, v.id),
+    env.DB.prepare("UPDATE crew_members SET home_cell = NULL WHERE crew_id = ? AND user_id != ?").bind(crewId, v.id),
+    env.DB.prepare(`UPDATE crews SET pinned_route_id = NULL WHERE id = ?1
+        AND pinned_route_id IN (SELECT id FROM shared_routes WHERE owner != ?2)`).bind(crewId, v.id),
   ]);
 }
 

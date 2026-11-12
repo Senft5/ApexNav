@@ -29,6 +29,13 @@ for (let i = 0; i < 6; i++) listeners.unhandledrejection({ reason: new Error('no
 listeners.error({ message: 'Script error.' });
 out.sent = sent.map(r => [r.kind, r.message]);
 out.keys = Object.keys(sent[0]).sort();
+// a plan our router couldn't make: its reason code only (no place), scrubbed like the rest
+const rs = [], R = E.install({ send: (x) => rs.push(x), target: { addEventListener: () => {} } });
+R.route('fun', 'index');
+R.route('fun', 'index');
+R.route('max', 'failed', 'worker died at 39.15512');
+R.route('loop', null);
+out.route = rs.map(x => [x.kind, x.message, x.stack]);
 console.log(JSON.stringify(out));
 """
 
@@ -54,3 +61,7 @@ def test_scrub_removes_personal_data(r):
 def test_one_report_per_error_and_five_per_page(r):
     assert r["sent"] == [["error", "boom at [num]"], ["rejection", "nope 0"], ["rejection", "nope 1"], ["rejection", "nope 2"], ["rejection", "nope 3"]]
     assert r["keys"] == ["app", "kind", "message", "page", "stack"], "no session, position or drive data in a report"
+
+
+def test_a_failed_plan_is_reported_by_its_reason_only(r):
+    assert r["route"] == [["route", "fun: index", ""], ["route", "max: failed (worker died at [num])", ""], ["route", "loop: unknown", ""]]

@@ -613,6 +613,7 @@
     .ly-key .k-smooth { stroke: var(--gain); } .ly-key .k-rough { stroke: var(--signal); }
     .ly-key .k-cam { stroke: var(--signal); stroke-width: 1.5; stroke-linecap: butt; stroke-linejoin: miter; fill: var(--panel); }
     .ly-key .k-hill { stroke: var(--panel-dim); stroke-width: 1.5; fill: var(--hair, transparent); }
+    .ly-key .k-meet { stroke: var(--panel-ink); stroke-width: 1.5; fill: var(--panel); }
     .ly-key .k-friend { stroke: var(--panel-ink); stroke-width: 1.5; fill: var(--panel); } .ly-key .k-friend-in { fill: var(--panel-ink); stroke: none; }
     .sw.ly:not(.on) .ly-key { opacity: 0.45; }
     /* Measured roads: the three colours, each beside its word (a colour is never the only way to read it) */
@@ -707,6 +708,10 @@
     .when-line::after { content: ""; flex: none; width: 7px; height: 7px; margin: 0 4px 3px 0; border-right: 2px solid currentColor; border-bottom: 2px solid currentColor; transform: rotate(45deg); transition: transform 0.15s; }
     .when-line[aria-expanded="true"]::after { transform: rotate(-135deg); margin-bottom: -3px; }
     .rc-when { margin-top: 10px; } .rc-when[hidden] { display: none; }
+    .when-line:disabled { cursor: default; } .when-line:disabled::after { display: none; }
+    .rc-along { margin: 4px 0 6px 28px; } .rc-along[hidden] { display: none; }
+    .rc-along .place { width: 100%; font: inherit; color: inherit; background: none; border-left: 0; border-right: 0; border-bottom: 0; cursor: pointer; }
+    .rc-along .place.unnamed b { font-weight: 500; color: var(--panel-dim); }
     .when-ribbon { display: flex; align-items: flex-end; gap: 1px; height: 64px; border-bottom: 1.5px solid var(--panel-ink); }
     .when-ribbon > button { flex: 1 1 0; min-width: 0; height: 100%; padding: 0; display: flex; align-items: flex-end; background: none; border: 0; color: var(--panel-ink); cursor: pointer; }
     .when-ribbon > button > i { display: block; width: 100%; height: calc(var(--h, 0.5) * 100%); min-height: 3px; background: currentColor; }
@@ -1937,9 +1942,9 @@
                 <summary>Spots near you: overlooks, cafés, bridges</summary>
                 <div id="planSpotsBody"></div>
               </details>
-              <!-- SOCIAL 2.9: the area's stage this week, members' quickest times on it -->
+              <!-- SOCIAL 2.9: the area's loop this week, members' quickest times on it; the line becomes the loop and your place (time_attack.js summaryLine) -->
               <details class="plan-more" id="planAttack" hidden>
-                <summary>Time attack this week: one stage, quickest time</summary>
+                <summary>Time attack this week: a loop near you, quickest time</summary>
                 <div id="planAttackBody"></div>
               </details>
               <!-- Roadbooks (roadbooks.js): public collections of great roads near you, a planning input like the spots -->
@@ -1977,7 +1982,9 @@
               <div class="rc-group rc-drive"><h4 class="rc-h">This drive</h4>
               <details class="rc-story" id="routeCardStory" hidden><summary id="routeCardStoryLead"></summary><div id="routeCardStoryMore"></div></details>
               <div class="rc-facts">
-                <p class="fact f-along" id="routeCardAlong" hidden></p>
+                <!-- the owner, 2026-11-11: the cafés and fuel it counts are a tap away, each by its name on the map -->
+                <p class="fact f-along" id="routeCardAlong" hidden><button type="button" class="when-line" id="routeAlongLine" aria-expanded="false" aria-controls="routeAlongPanel"></button></p>
+                <div class="place-list rc-along" id="routeAlongPanel" role="list" aria-label="Along the route" hidden></div>
                 <p class="fact f-climb" id="routeCardClimb" hidden></p>
                 <p class="fact f-descent" id="routeCardDescent" hidden></p>   <!-- brake_heat.js longDescents: from the terrain, never a model -->
                 <p class="fact f-along" id="routeCardReports" hidden></p>
@@ -2053,6 +2060,8 @@
           <svg class="ly-key" viewBox="0 0 28 20" aria-hidden="true"><path class="k-hill" d="M2 17 L10 6 L15 12 L19 8 L26 17 Z"/></svg></button>
         <!-- developers only (cockpit.js applyDevFlags: /api/me's developer flag); hidden for everyone else -->
         <button class="sw ly" data-toggle="satellite" id="satSwitch" hidden><i></i><span>Satellite</span><svg class="ly-key" viewBox="0 0 28 20" aria-hidden="true"></svg></button>
+        <button class="sw ly" data-toggle="meets"><i></i><span>Meets<small>Public crews' meets coming up</small></span>
+          <svg class="ly-key" viewBox="0 0 28 20" aria-hidden="true"><rect class="k-meet" x="6" y="3" width="16" height="10"/><path class="k-meet" d="M14 13 V18"/></svg></button>
         <button class="sw ly" data-toggle="friends"><i></i><span>Friends<small>Sharing where they are</small></span>
           <svg class="ly-key" viewBox="0 0 28 20" aria-hidden="true"><circle class="k-friend" cx="14" cy="10" r="6"/><circle class="k-friend-in" cx="14" cy="10" r="2.5"/></svg></button>
         </div>
@@ -2273,6 +2282,7 @@
           <p class="end-meta" id="endMeta"></p>
           <p class="end-feel" id="endFeel" hidden></p>   <!-- panel round 2, HE-1: what this phone felt, only when measured -->
           <p class="end-feel" id="endPractice" hidden></p>   <!-- IDEAS D-27: the skill you are practicing, on this drive -->
+          <p class="end-feel" id="endRoad" hidden></p>   <!-- on a road driven before: your passes there, corner by corner -->
           <p class="end-line" id="endLine"></p>
           <!-- U-75: the solid key is Share card only when there is a score to share; otherwise it is Open in the Log, and Share
                waits as a link -->

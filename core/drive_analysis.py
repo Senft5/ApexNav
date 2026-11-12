@@ -523,13 +523,19 @@ def _on_a(a: dict, near: int, b: dict, i: int):
     return j if dist <= MATCH_RADIUS_M else None
 
 
-def _spread(brakes: list, mins: list, passes: int, froms: list) -> dict:
+def _spread(brakes: list, mins: list, passes: int, froms: list, turns: list = (), speeds: list = ()) -> dict:
     """How repeatably a corner is driven over your clean passes of it (IDEAS D-07): a robust SD (`_sd`), in m along this drive's
     road, of where braking began and of where the slowest point fell, each over the passes that had a clear one. None
-    with fewer than SPREAD_MIN_PASSES of them; 5 m bins and GPS put the floor near 3 m."""
+    with fewer than SPREAD_MIN_PASSES of them; 5 m bins and GPS put the floor near 3 m. The same for where you turned in
+    (`_turn_in`, m along this road) and for the speed at the corner's slowest point (m/s): how your line and your corner
+    speed vary from pass to pass."""
     b = [x for x in brakes if x is not None]
     m = [x for x in mins if x is not None]
+    t = [x for x in turns if x is not None]
+    v = [x for x in speeds if x is not None]
     return {"passes": passes, "brake_sd_m": _sd(b), "brake_passes": len(b), "min_sd_m": _sd(m), "min_passes": len(m),
+            "turn_sd_m": _sd(t), "turn_passes": len(t), "speed_sd_mps": _sd(v), "speed_passes": len(v),
+            "speed_marks": [[f, x] for f, x in zip(froms, speeds)] if speeds else [],   # per pass: [from, slowest speed m/s]
             "marks": [[f, x, y] for f, x, y in zip(froms, brakes, mins)]}       # per pass: [-1 this drive | j in others, brake, slowest]
 
 
@@ -558,6 +564,7 @@ def coach(a: dict, others: list) -> dict:
         ma["turn_in_m"] = None if ta is None or ta > c["apex"] else (c["apex"] - ta) * 5.0
         brakes = [None if oa is None else (c["apex"] - oa) * 5.0]
         mins = [None if sa is None else (sa - c["apex"]) * 5.0]
+        turns, speeds = [ma["turn_in_m"]], [float(ma["min_mps"])]
         froms = [-1]
         for j, b in enumerate(others):
             w = match_window(a, c["start"], c["end"], b, hints[j])
@@ -586,12 +593,14 @@ def coach(a: dict, others: list) -> dict:
             brakes.append(None if ob is None else (c["apex"] - ob) * 5.0)
             mins.append(None if sb is None else (sb - c["apex"]) * 5.0)
             froms.append(j)
+            turns.append(mb["turn_in_m"])
+            speeds.append(float(mb["min_mps"]))
             if mb["envelope_use"] <= PACE_CEILING and mb["time_s"] < best["time_s"]:
                 best, best_from = mb, j
         gain = ma["time_s"] - best["time_s"]
         tip = _tip(ma, best if best_from >= 0 and gain >= TIP_GAIN_S else None)
         out.append({"apex": c["apex"], "m": ma, "best": None if best_from < 0 else best, "best_from": best_from,
-                    "gain_s": gain, "tip": tip, "passes": passes, "spread": _spread(brakes, mins, passes, froms)})
+                    "gain_s": gain, "tip": tip, "passes": passes, "spread": _spread(brakes, mins, passes, froms, turns, speeds)})
     clean = [x for x in out if x["gain_s"] is not None]
     this_s = float(sum(x["m"]["time_s"] for x in clean))
     gain_s = float(sum(x["gain_s"] for x in clean if x["gain_s"] >= TIP_GAIN_S))     # below that is GPS alignment noise
@@ -605,8 +614,9 @@ def coach(a: dict, others: list) -> dict:
 TREND_MIN_PASSES = 5         # marks a corner needs inside one period: with 3, two passes in the same 5 m bin read as 0 m
 
 
-def spread_by(co: dict, keys: list) -> dict:
-    """How repeatably you braked within each period (IDEAS D-07 trend), from coach(a, others). keys[0] is the period of a
+def spread_by(co: dict, keys: list, what: str = "brake") -> dict:
+    """How repeatably you braked within each period (IDEAS D-07 trend), from coach(a, others). what="speed" reads the speed
+    at each corner's slowest point instead (sd in m/s): how steadily you carried speed through it. keys[0] is the period of a
     (e.g. the month it was driven) and keys[j + 1] that of others[j], None when unknown. For every corner, the braking marks
     are grouped by period and each group of TREND_MIN_PASSES or more gives a robust SD (`_sd`). Spread inside a period,
     not distance from an all-time median, so braking deliberately earlier from one month on does not read as unsteady.
@@ -617,7 +627,7 @@ def spread_by(co: dict, keys: list) -> dict:
         if not sp:
             continue
         groups: dict = {}
-        for f, b, _ in sp["marks"]:
+        for f, b in (sp.get("speed_marks", []) if what == "speed" else [(m[0], m[1]) for m in sp["marks"]]):
             k = keys[f + 1] if 0 <= f + 1 < len(keys) else None
             if b is None or k is None:
                 continue
