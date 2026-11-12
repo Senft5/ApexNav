@@ -887,6 +887,12 @@
     const st = doc.createElement('style'); st.id = 'dpStyle'; st.textContent = CSS; doc.head.appendChild(st);
   }
   const PHASE = { squeeze: 'Into the corner', arc: 'Through it', line: 'Out of it' };   // the heading above the first station of each part
+  /** A trend's spoken label: each month's level with how many corners it rests on, the month under way marked "so far"
+   *  (the UI/UX guide 8.3: say when the latest period is incomplete and how big each sample is). now: a Date (local). */
+  function trendLabel(rows, now = new Date()) {
+    const cur = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+    return rows.map((x) => `${monthName(x.month)}${x.month === cur ? ' so far' : ''} ${x.level}, ${x.n} corner${x.n === 1 ? '' : 's'}`).join('; ');
+  }
   const spark = (rows) => {
     if (!rows || rows.length < 2) return '';
     const W = 64, H = 18, lo = Math.min(...rows.map((x) => x.level)), hi = Math.max(...rows.map((x) => x.level)), span = Math.max(10, hi - lo);
@@ -985,7 +991,7 @@
         const bar = el('div', 'dp-bar'), u = el('u'); u.style.width = `${s.level}%`; bar.append(u); mid.append(bar);
         if (ch && ch.sure) lv.append(el('small', null, `${ch.delta > 0 ? 'up' : 'down'} ${Math.abs(ch.delta)} since ${MONTHS[+ch.from.slice(5, 7) - 1]}`));
         const sp = spark(p.trend[k]);
-        if (sp) { const w = el('small'); w.innerHTML = sp; w.setAttribute('aria-label', p.trend[k].map((x) => `${monthName(x.month)} ${x.level}`).join(', ')); w.setAttribute('role', 'img'); lv.append(w); }
+        if (sp) { const w = el('small'); w.innerHTML = sp; w.setAttribute('aria-label', trendLabel(p.trend[k], opts.now)); w.setAttribute('role', 'img'); lv.append(w); }
       }
       lv.setAttribute('aria-label', s.level === null ? `not known yet, ${s.n} of ${SKILL_MIN} corners` : `${s.level} of 100`);
       row.append(el('div', 'dp-dot'), mid, lv);
@@ -1007,7 +1013,7 @@
         const bar = el('div', 'dp-bar'), u = el('u'); u.style.width = `${s.level}%`; bar.append(u); mid.append(bar);
         if (ch && ch.sure) lv.append(el('small', null, `${ch.delta > 0 ? 'up' : 'down'} ${Math.abs(ch.delta)} since ${MONTHS[+ch.from.slice(5, 7) - 1]}`));
         const sp = spark(p.trend.pace);
-        if (sp) { const w = el('small'); w.innerHTML = sp; w.setAttribute('role', 'img'); w.setAttribute('aria-label', p.trend.pace.map((x) => `${monthName(x.month)} ${x.level}`).join(', ')); lv.append(w); }
+        if (sp) { const w = el('small'); w.innerHTML = sp; w.setAttribute('role', 'img'); w.setAttribute('aria-label', trendLabel(p.trend.pace, opts.now)); lv.append(w); }
       }
       lv.setAttribute('aria-label', s.level === null ? `not known yet, ${s.n} of ${SKILL_MIN} corners` : `${s.level} of 100`);
       row.append(el('div', 'dp-dot'), mid, lv);
@@ -1086,7 +1092,7 @@
     }
   }
 
-  const api = { SKILLS, observe, profile, swing, excess, SKILL_MIN, WORDS, findingLine, styleLines, touchLines, touchTrendLines, driveTouchLines, paceLines, PACE, MEASURES, touch, TOUCH, driveTouch, DRIVE_TOUCH_MIN, bestCorners, recordsBySize, RECORD_MIN, driveRecords, driveRecordLines, roadRecords, placed, roadRecordLine, roadCornerNote, roadBook, roadBookRows, roadBookFocus, roadBookFocusLine, roadEvenedLine, roadsToWork, skillRoadLine, skillRoad, roadUnevenLine, roadEndLine, cardLine, focusLines, scopeLine, skillDef, render,
+  const api = { SKILLS, observe, profile, swing, excess, SKILL_MIN, WORDS, findingLine, styleLines, touchLines, touchTrendLines, driveTouchLines, paceLines, PACE, MEASURES, touch, TOUCH, driveTouch, DRIVE_TOUCH_MIN, bestCorners, recordsBySize, RECORD_MIN, driveRecords, driveRecordLines, roadRecords, placed, roadRecordLine, roadCornerNote, roadBook, roadBookRows, roadBookFocus, roadBookFocusLine, roadEvenedLine, roadsToWork, skillRoadLine, skillRoad, roadUnevenLine, roadEndLine, cardLine, focusLines, scopeLine, skillDef, trendLabel, render,
     PRACTICE_MIN, practice, drivePractice, onPlanRoad, practiceLine, practiceSummary, localStamp, loadPlan, savePlan, PLAN_KEY };
   if (typeof module !== 'undefined' && module.exports) module.exports = api; else root.ApexDriverProfile = api;
 })(typeof window !== 'undefined' ? window : globalThis);

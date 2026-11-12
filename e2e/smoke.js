@@ -4285,7 +4285,8 @@ flow('roadbooks: a planned road goes into a new roadbook from Share; People list
   await page.click('.side-pop.open .rb-row:has-text("Smokies classics")');
   await page.waitForSelector('.rb-pop.open .rb-road:has-text("Cherohala loop")');
   check(await page.locator('.rb-pop.open .rb-map svg path').count() === 1 && await page.locator('.rb-pop.open .rb-road .rb-thumb svg').count() === 1, 'the book draws its road on a map, and the road has its thumbnail');
-  check(/0 of 1 driven/.test(await page.textContent('.rb-pop.open')), 'progress starts at none driven');
+  check(/0 of 1 driven/.test(await page.textContent('.rb-pop.open')) && !/Nothing to tap|is stamped when/.test(await page.textContent('.rb-pop.open')), 'progress starts at none driven, the meter alone (no how-to line)');
+  check(await page.evaluate(() => [...document.querySelectorAll('.side-pop .people-lead')].every((p) => !/Your lists of great roads/.test(p.textContent) || p.hidden)), 'with a roadbook of your own, no line saying what a roadbook is');
   await page.click('.rb-pop.open button:has-text("Edit")');
   await page.waitForSelector('.rb-pop.open [role="radio"]:has-text("Public")');
   await page.locator('.rb-pop.open [role="radio"]:has-text("Public")').last().click();

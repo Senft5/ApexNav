@@ -12,7 +12,9 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 RUNNER = r"""
 const store = new Map(), handlers = {};
-let online = true, served = [];
+let online = true, hang = false, served = [];
+const realTimeout = setTimeout;
+globalThis.setTimeout = (f, ms) => realTimeout(f, ms === 5000 ? 5 : ms);   // SLOW_MS, shortened for the test
 const pathOf = (r) => new URL(typeof r === 'string' ? r : r.url, 'https://apexnav.app').pathname;
 const caches = {
   open: async () => ({ put: async (req, res) => store.set(pathOf(req), res), addAll: async (list) => list.forEach((p) => store.set(p, { body: 'shell ' + p })) }),
@@ -22,6 +24,7 @@ const caches = {
 const self = { location: { origin: 'https://apexnav.app' }, addEventListener: (t, f) => { handlers[t] = f; }, skipWaiting: () => {}, clients: { claim: () => {} } };
 globalThis.self = self; globalThis.caches = caches;
 globalThis.fetch = async (req) => {
+  if (hang && typeof req !== 'string') return new Promise(() => {});              // a connection that answers nothing
   if (!online) throw new Error('offline');
   if (typeof req === 'string') return { ok: true, text: async () => '<script src="apex_core.js"></script><script src="https://cdn.x/y.js"></script>' };   // install reads the pages
   served.push('net ' + new URL(req.url).pathname); return { ok: true, type: 'basic', body: 'fresh', clone() { return { body: 'fresh copy' }; } };
@@ -37,6 +40,10 @@ const run = async (url, mode = 'no-cors', method = 'GET') => {
   handlers.activate({ waitUntil: (x) => { w = x; } }); await w;
   const out = { online: await run('https://apexnav.app/stages.js') };
   await new Promise((r) => setTimeout(r, 0));
+  hang = true;
+  out.slowCached = await run('https://apexnav.app/stages.js');
+  out.slowPage = await run('https://apexnav.app/index.html', 'navigate');
+  hang = false;
   online = false;
   out.offlineCached = await run('https://apexnav.app/stages.js');
   out.offlinePage = await run('https://apexnav.app/index.html?drive=x', 'navigate');
@@ -65,6 +72,11 @@ def test_network_first_then_the_last_copy(out):
     assert out["offlinePage"] == "shell /index.html"
     assert out["offlineUnknownPage"] == "shell /index.html"          # any page offline: the cockpit shell
     assert out["offlineMiss"] == "error"
+
+
+def test_a_connection_that_answers_nothing_gets_the_kept_copy(out):
+    assert out["slowCached"] == "fresh copy"                        # not held for minutes on a dead connection
+    assert out["slowPage"] == "shell /index.html"
 
 
 def test_never_api_voices_other_hosts_or_writes(out):
