@@ -1,5 +1,9 @@
 # VETTA — CURRENT AGENT HANDOFF STATE
 
+## 2026-11-11 Valhalla for Quick only, part 3 (claude/project-thread-39xbx9)
+- Deleted the code Fun, Long way and loops could no longer reach: funRoute's Valhalla stage plans and buildLoop's stage loops and loopRefine. Docs (ROUTING, OWN_ROUTING, CALL_SHEET) updated.
+- Next: the Explore list still times stages with Valhalla's matrix off our tiles; it's a listing, not a route, so it stays for now.
+
 ## Session 2026-11-11 (TestFlight 21:14): corner and moment taps zoom the drive page's map (claude/project-thread-0wt1zm)
 
 - The hourly TestFlight run moved to this thread (scheduled task at :52 UTC; the old task is paused). Owner note 21:14:22Z.

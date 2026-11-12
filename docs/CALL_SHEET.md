@@ -4,6 +4,14 @@ Decisions Claude made for you, newest first. Each one says what was decided, why
 you reach one you've seen. If you disagree with a call, say so and it gets reversed; nothing here is hard to undo unless
 it says so. Things only you can do are in docs/OWNER_TODO.md.
 
+## 2026-11-11 (Valhalla for Quick only, part 3): the Valhalla stage-plan and stage-loop code is gone (claude/project-thread-39xbx9)
+
+Since Fun, Long way and loops are our router's only, three pieces of web/cockpit.js could no longer run: funRoute's
+Valhalla stage plans (stage discovery round the trip, the connector matrix, stage legs), and buildLoop's stage loops and
+their refine after the card (`stageJobs`, `loopRefine`). They are deleted rather than kept switched off, so nobody
+switches a Valhalla fallback back on by accident. The pure helpers they used (fun_route.js shortlist / plansFromMatrix /
+loopPlansFromMatrix, stages.js) stay: Explore and their own tests use them. Undo: revert the commit.
+
 ## 2026-11-11 (TestFlight 21:14): a corner or moment tapped on a drive's page zooms the map to it (claude/project-thread-0wt1zm)
 
 Your note "tapping a corner or moment here should orient the view above to show that corner zoomed in on the map". A tap on
