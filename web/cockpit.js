@@ -211,7 +211,7 @@
     const etaSections = new WeakMap();      // track -> its corner sections (ApexEta.cornerSections), worked out once
     let etaText = '', etaLeftS = null;
     let replayEnded = false, replayWaiting = false;   // U-110 a finished replay, U-128 a replay waiting for its map (paintReplayEnd)
-    const car = { serial: 0, route: '', guideAt: 0, guideKey: '', sightKey: '', look: '', hazards: '', symbols: new Map(), ended: null, along: '', road: '', roadAt: -1e9 };   // what the car's screen was last sent (carRoute, carGuide below)   // strip text while off route; last frame fed; furthest progress
+    const car = { serial: 0, route: '', guideAt: 0, guideKey: '', sightKey: '', look: '', hazards: '', symbols: new Map(), ended: null, along: '', offerSerial: 0, offer: null, road: '', roadAt: -1e9 };   // what the car's screen was last sent (carRoute, carGuide below)   // strip text while off route; last frame fed; furthest progress
     try {
       const saved = JSON.parse(localStorage.getItem('apex.prefs') || 'null');
       if (saved) {
@@ -254,7 +254,8 @@
       // the co-driver's voice is its own choice (any pack with any theme, private ones too); Suggested follows the look
       document.querySelectorAll('[data-pack]').forEach(b => b.setAttribute('aria-checked', String(b.dataset.pack === (state.voicePick || 'look'))));
       const pn = document.getElementById('packNote'), sug = look && look.theme && look.theme.voice;
-      if (pn) pn.textContent = state.voicePick ? `${packName(state.voicePick)} reads the notes, whatever the theme.` : sug ? `${sug.name}, the voice ${look.theme.label} suggests. It changes when the theme does.` : '';
+      // TestFlight 2026-11-12 (less text): a line only for Suggested, to say whose voice that is
+      if (pn) { pn.textContent = !state.voicePick && sug ? `${sug.name}, the voice ${look.theme.label} suggests.` : ''; pn.hidden = !pn.textContent; }
       // SO-1: the Garage says what the one Notes and Voice switches (in Layers) are set to, in their own words
       const now = document.getElementById('coNotesNow');
       if (now) now.textContent = `Notes: ${({ quiet: 'Quiet', auto: 'Auto', full: 'Full' })[state.notesMode] || '--'} · Voice ${state.toggles.voice ? 'on' : 'off'}`;
@@ -3425,7 +3426,7 @@
         const o = ApexEta.homeByOffer(est.arriveAt, track.homeBy, track.homeByOfferedAt ?? null, now);
         // a stage still ahead is skipped first (the loop shortens itself, your call); with none left, the quickest way home
         if (o) { track.homeByOfferedAt = now; const a = ApexEta.homeByAction(track.stageSpans, routeWatch.bestM);
-          toast(`Running ${o.lateMin} min late for home.`, { label: a.label, ms: 15000, onClick: () => {
+          offerKey(`Running ${o.lateMin} min late for home.`, `${o.lateMin} min late`, { label: a.label, ms: 15000, onClick: () => {
             const b = track ? ApexEta.homeByAction(track.stageSpans, routeWatch.bestM) : a;   // as of the tap (a reroute meanwhile)
             if (b.kind === 'skip') skipStage(b.span); else headHome(); } }); }
       }
@@ -3553,7 +3554,8 @@
       const key = `${hit.lat.toFixed(4)},${hit.lon.toFixed(4)}`;
       if (policeAhead.offered.has(key)) return;
       policeAhead.offered.add(key);
-      toast(`Police reported on your route in ${ApexUnits.long(hit.aheadM, 1)}.`, { label: 'Go round', ms: 15000, onClick: () => goRoundPolice(t, hit, pts) });
+      const far = ApexUnits.long(hit.aheadM, 1);
+      offerKey(`Police reported on your route in ${far}.`, `Police in ${far}`, { label: 'Go round', ms: 15000, onClick: () => goRoundPolice(t, hit, pts) });
     }
     async function goRoundPolice(t, hit, pts) {
       const L = state.live;
@@ -4983,6 +4985,23 @@
       t.classList.add('show'); clearTimeout(t._h);
       t._h = setTimeout(() => { t.classList.remove('show'); if (action && action.onClick) t.querySelectorAll('a').forEach(x => x.remove()); }, action ? action.ms || 7000 : 4200);
     }
+    // A drive's one-key offer (Go round, Skip, Head home) is on the car's screen too, as a navigation alert with the key and
+    // Not now (CarPlay/ApexCarPlay.swift showOffer): whichever key is tapped first does it, once, and the other goes away.
+    function offerKey(msg, short, action) {
+      const id = `o${++car.offerSerial}`;
+      let done = false;
+      const once = (fromCar) => {
+        if (done) return;
+        done = true; car.offer = null;
+        if (fromCar) { if (key && key.isConnected) { key.remove(); $('toast')._holdUntil = 0; $('toast').classList.remove('show'); } }
+        else carPost({ kind: 'offerDone', id });
+        action.onClick();
+      };
+      toast(msg, { ...action, onClick: () => once(false) });
+      const key = $('toast').querySelector('a.toast-key');
+      car.offer = { id, until: performance.now() + (action.ms || 7000), run: () => once(true) };
+      carPost(ApexCarPlay.offerMessage(id, msg, short, action.label, action.ms));
+    }
     // Something that needs an account says so and offers the way in: the toast's "Sign in" key opens People, where signing in
     // lives. In a drive it is only said, on the drive's message row: no sheet opens over the road.
     function askSignIn(why) {
@@ -5687,11 +5706,13 @@
     function paintOptChips() {
       if (!window.ApexPlanOptions || !optChipsReady) return;                // (painted once the switches above are read)
       const on = ApexPlanOptions.active(optState());
-      for (const [chipId, boxId] of [['planOptionsChip', 'planOptsOn'], ['cardOptionsChip', 'cardOptsOn']]) {
-        const chip = $(chipId), box = $(boxId);
+      // TestFlight 2026-11-12 (note 8, "cluttered"): Where to? says only how many (Options · 3, each named to VoiceOver);
+      // the route card, planned with them, still shows each one as a chip
+      for (const [chipId, boxId] of [['planOptionsChip', null], ['cardOptionsChip', 'cardOptsOn']]) {
+        const chip = $(chipId), box = boxId && $(boxId);
         chip.textContent = ApexPlanOptions.chipLabel(on);
         chip.setAttribute('aria-label', on.length ? `Options: ${on.map((x) => x.aria).join(', ')}` : 'Options');
-        box.replaceChildren(...on.map((x) => { const b = document.createElement('button'); b.className = 'chip'; b.textContent = x.text; b.dataset.opt = x.key;
+        if (box) box.replaceChildren(...on.map((x) => { const b = document.createElement('button'); b.className = 'chip'; b.textContent = x.text; b.dataset.opt = x.key;
           b.setAttribute('aria-label', `${x.aria}. Change in Options`); b.setAttribute('aria-haspopup', 'dialog'); b.addEventListener('click', openOptions); return b; }));
       }
     }
@@ -5858,8 +5879,8 @@
           try { const r = await c.loop({ start: AT, km: 40, level: LOOP_STYLE }); return { cands: (r && r.routes) || [], reason: r && r.routes && r.routes.length ? 'ok' : 'none' }; }
           catch (e) { return { cands: [], reason: 'failed', error: String((e && e.message) || e) }; }
         },
-        cameras: (tile) => ApexCameras.fetchFirst(fetch, 'data=' + encodeURIComponent(ApexCameras.query([tile])))
-          .then((j) => (j ? (j.elements || []).map(ApexCameras.classify).filter(Boolean) : null)),
+        // the app's own path (our region list first, then the Overpass servers), with nothing read from this phone's cache
+        cameras: (tile) => ApexCameras.load([tile], { fetchFn: fetch, storage: null }),
         cameraQuery: (tile) => ApexCameras.query([tile]),
       };
     }
@@ -6200,7 +6221,7 @@
     // Weekly time attack (web/time_attack.js, SOCIAL 2.9, IDEAS S-26): this area's loop this week and its board, in Where to?
     // beside Spots near you; drawn when opened, fresh each time. Runs go up from the Log when stages sync.
     let timeAttack = null;
-    const TA_LINE = 'Time attack this week: a loop near you, quickest time';
+    const TA_LINE = 'Time attack this week';   // TestFlight 2026-11-12 (note 7): the row names itself, no tagline
     onSocial(() => { try {
       const ta = window.ApexTimeAttack ? ApexTimeAttack.mount({ el, btn, toast, apiCall, jsonOf, report: safety && safety.report,
         ask: (t, a) => ApexConfirm.ask(t, a),
@@ -7658,16 +7679,16 @@
           const quote = document.createTextNode('');
           card.append(preview,
             el('div', { className: 'tc-head' }, el('b', { textContent: t.label }), ...(t.pro ? [el('span', { className: 'tc-pro', textContent: 'PRO' })] : t.granted ? [el('span', { className: 'tc-pro', textContent: 'PRIVATE' })] : []), key),
-            el('p', { className: 'note', textContent: t.about || t.blurb || '' }),
-            el('div', { className: 'tc-voice' }, el('p', {}, el('b', { textContent: `Suggested voice: ${t.voice ? t.voice.name : '--'}. ` }), quote), hear));
+            // TestFlight 2026-11-12 (the owner: "walls of text"): the look shows itself in its preview; the card names its voice and Hear says it
+            el('div', { className: 'tc-voice' }, el('p', {}, el('b', { textContent: t.voice ? t.voice.name : '--' }), quote), hear));
           themeCards.set(t.id, { t, card, preview, key, inUseTag, ok, quote, line });
           return card;
         }));
       }
-      for (const { t, card, preview, key, inUseTag, ok, quote, line } of themeCards.values()) {
-        const allowed = ok(), inUse = state.theme === t.id && !themeTrial, l = line();
+      for (const { t, card, preview, key, inUseTag, ok, quote } of themeCards.values()) {
+        const allowed = ok(), inUse = state.theme === t.id && !themeTrial;
         if (preview._words !== state.noteWords || (t.car && preview._mode !== cardMode())) fillPreview(preview, t);   // the words changed: the strip head follows
-        const q = t.voice ? `${t.voice.who}${l ? ` "${l.text}"` : ''}` : '';
+        const q = t.voice ? ' · suggested voice' : '';
         if (quote.data !== q) quote.data = q;
         card.classList.toggle('in-use', state.theme === t.id);
         preview.classList.toggle('tc-pick', !inUse);
@@ -7837,12 +7858,13 @@
       const info = window.ApexVoice ? ApexVoice.liveInfo() : { text: '' };
       const note = $('liveNote');
       if (note) {
-        note.textContent = !state.liveVoice ? 'Off. Road and route names use the recorded voice or your phone voice.'
+        note.textContent = !state.liveVoice ? ''
           : st === 'error' ? `Failed · ${info.text}`
           : st === 'loading' ? (info.text || 'Loading…')
           : st === 'ready' ? (info.text || 'Ready')
           : 'Loading…';
         note.classList.toggle('err', !!(state.liveVoice && (st === 'error' || info.error)));
+        if (!IN_APP_SHELL) note.hidden = !note.textContent;   // off says nothing (TestFlight 2026-11-12: less text)
       }
     }
     // The app never loads the downloaded voice engine (guideline 2.5.2; web/voice.js): no switch, names use the phone voice.
@@ -9159,6 +9181,7 @@
       $('endFeel').textContent = feel; $('endFeel').hidden = !feel;
       $('endPractice').textContent = ''; $('endPractice').hidden = true;   // IDEAS D-27: with the score (endCardScored)
       $('endRoad').textContent = ''; $('endRoad').hidden = true;           // the road's line, with the score too
+      $('endRun').textContent = ''; $('endRun').hidden = true;             // IDEAS D-30: a month's best run, with the score too
       // scoring: no number yet, never "--" (that means "no score"), and no key that needs the score
       $('endScore').textContent = '…'; $('endScore').classList.add('unk'); $('endScore').setAttribute('aria-busy', 'true');
       $('endScore').parentElement.classList.remove('no-score');
@@ -9197,8 +9220,16 @@
         try {
           const all = await ApexRecording.summaries(null), me = all.find((o) => o.id === c.id);
           const before = all.filter((o) => o.id !== c.id && (!me || String(o.date || '') <= String(me.date || ''))).map((o) => (o.ds && o.ds.score != null ? Math.round(o.ds.score) : null));
+          if (!endDrive || endDrive.id !== c.id) return;
+          // IDEAS D-30: a run of clean corners that beats every other drive's this month (its summary's run, flow.js)
+          const runLine = me && ApexEndLine.bestRunMonth && window.ApexAnalysis ? ApexEndLine.bestRunMonth(me, all, ApexAnalysis.monthOf) : null;
+          if (runLine) {
+            $('endRun').textContent = runLine; $('endRun').hidden = false;
+            const sheet = $('endCard').querySelector('.card-sheet');      // a taller card: the drive is fitted again above it
+            if (endTrailOn && sheet && Math.abs(sheet.getBoundingClientRect().top - endTrailTop) > 4) showEndTrail(endDrive);
+          }
           const u = ApexEndLine.usual(c.ds.score, before);
-          if (!u || !endDrive || endDrive.id !== c.id) return;
+          if (!u) return;
           $('endUsual').textContent = u.text; $('endUsual').hidden = false;
         } catch (_) { /* no Log to read: nothing said */ }
       })();
@@ -9515,9 +9546,10 @@
       }
       else if (m.action === 'end' && driveActive) { if (pendingEnd) commitEnd(); else askEnd(); }   // I-3: the car's End has the Undo window too; End again ends now
       else if (m.action === 'undo') undoEnd();
+      else if (m.action === 'offer' && car.offer && m.id === car.offer.id && performance.now() < car.offer.until) car.offer.run();
       else if (m.action === 'disconnect') keepCar(false, m.t);      // Round 3: the car switched off; the drive ends once it stays put
       else if (m.action === 'places') carPost(ApexCarPlay.placesMessage(recentPlaces()));
-      else if (m.action === 'loop' && [30, 60, 120].includes(m.minutes) && !driveActive) loop({ minutes: m.minutes });
+      else if (m.action === 'loop' && LOOP_MINUTES.includes(m.minutes) && !driveActive) loop({ minutes: m.minutes });
       else if (m.action === 'report' && ApexHazardReports.KINDS.includes(m.kind)) reportHazard(m.kind);
       else if (m.action === 'still' && typeof m.still === 'boolean') answerStill(m.still);
       else if (m.action === 'voice') { state.toggles.voice = !state.toggles.voice; savePrefs(); paintSwitches(); if (!state.toggles.voice) stopSpeaking(); }
@@ -9559,7 +9591,7 @@
         btn('Convoy now', () => { close(); needSocial().then(() => { if (convoy) convoy.now(name); else toast('The convoy isn\u2019t available here.'); }); }, 'ink-btn'),
         // IDEAS S-22: a friend's convoy, by the code they read out (the convoy sheet's Join code field)
         btn('Join with a code', () => { close(); needSocial().then(() => { if (convoy) convoy.open(); else toast('The convoy isn\u2019t available here.'); }); }, 'ink-btn'),
-        el('p', { textContent: 'A convoy: drive together, live, for two hours (the leader can keep it going, up to six). Friends join with the QR or the join code on your screen; nothing is kept. A crew\u2019s run starts its convoy from the drive\u2019s card.' }),
+        // TestFlight 2026-11-12 (note 6, the owner circled it): no paragraph under the keys; the convoy sheet says the rest
         btn('Cancel', close, 'linkbtn')));
       onBackdrop(back, () => close());
       document.addEventListener('keydown', esc);

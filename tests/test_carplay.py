@@ -261,6 +261,9 @@ console.log(JSON.stringify({
   alongPlates: C.alongMessage([{ kind: 'cafe', name: 'The Extremely Long Named Mountain Coffee Roasters', lat: 35.1234567, lon: -83.9 }, { kind: 'view', name: 'Overlook', lat: 35, lon: -84 },
     { kind: 'fuel', name: null, lat: 35.2, lon: -83.8 }, { kind: 'fuel', name: 'Shell' }]).places,
   alongMany: C.alongMessage(Array.from({ length: 50 }, (_, i) => ({ kind: 'fuel', name: 'S' + i, lat: 35 + i / 100, lon: -84 }))).places.length,
+  offer: C.offerMessage('o3', 'Police reported on your route in 1.2 mi.', 'Police in 1.2 mi', 'Go round', 15000),
+  offerSame: C.offerMessage('o4', 'Running 12 min late for home.', 'Running 12 min late for home.', 'Skip Cherohala Skyway', 60000),
+  offerNone: [C.offerMessage('', 'x', '', 'k'), C.offerMessage('o5', '', '', 'k'), C.offerMessage('o6', 'x', '', ''), C.offerMessage('o7', 'x', '', 'k', 1000).seconds],
   alongNone: [C.alongMessage([]), C.alongMessage(null), C.alongMessage([{ kind: 'view', name: 'Overlook' }])],
   look: C.lookMessage({ id: 'tapedeck', night: { panel: '#0A0C0B', panelInk: '#7DF5DE', accent: '#FFB347' } }, false),
   tulips: [10, 15, 17, 12, 4, 26].map((k) => C.tulipSVG(k, '#7DF5DE')), bad: C.tulipSVG(10, 'red;x'),
@@ -320,6 +323,21 @@ def test_the_cafes_and_fuel_along_go_to_the_car_by_name(maps):
     assert "hazards.filter(near) + cs.prefix(all ? 160 : 40) + places.filter(near)" in native
     assert ".concat(state.places.filter(near)" in carmap and "places(list) {" in carmap
     assert swift.count("showPlaces(); setMode()") == 2, "a car map that connects later is given the places too"
+
+
+def test_the_phones_one_key_offers_reach_the_car(maps):
+    """Go round, Skip and Head home were phone-only toasts in a drive; the car shows them as a navigation alert."""
+    assert maps["offer"] == {"kind": "offer", "id": "o3", "title": "Police reported on your route in 1.2 mi.", "short": "Police in 1.2 mi",
+                             "key": "Go round", "seconds": 15}
+    assert maps["offerSame"]["short"] == "" and maps["offerSame"]["key"] == "Skip Cherohala…" and maps["offerSame"]["seconds"] == 20
+    assert maps["offerNone"] == [None, None, None, 5]
+    js = cockpit_source()
+    assert js.count("offerKey(`") == 2, "the police report ahead and the late-for-home offers"
+    assert "m.action === 'offer' && car.offer && m.id === car.offer.id && performance.now() < car.offer.until" in js
+    assert "carPost({ kind: 'offerDone', id })" in js
+    swift = open(os.path.join(ROOT, "CarPlay", "ApexCarPlay.swift"), encoding="utf-8").read()
+    assert 'case "offer":' in swift and 'case "offerDone":' in swift and 'ApexCar.shared.send("offer", ["id": id])' in swift
+    assert 'CPAlertAction(title: "Not now", style: .cancel)' in swift
 
 
 def test_the_look_carries_the_theme_and_its_dark_card(maps):
@@ -459,3 +477,5 @@ def test_the_car_offers_the_same_loop_times_as_the_phones_dial():
     dial = json.loads(re.search(r"LOOP_MINUTES = (\[[\d, ]+\])", cockpit_source()).group(1))
     assert car == dial == [30, 60, 90, 120, 180]
     assert '("1½ hours", 90)' in row and '("3 hours", 180)' in row
+    # and the page takes every one of them: it used to accept only 30, 60 and 120, so the car's 1½ and 3 hours did nothing
+    assert "m.action === 'loop' && LOOP_MINUTES.includes(m.minutes)" in cockpit_source()

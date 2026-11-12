@@ -686,8 +686,8 @@ flow('for this drive (route context): Passenger aboard and the rest are ✓ stam
   await page.waitForFunction(() => document.querySelector('[data-driver="tunnels"]').getAttribute('aria-pressed') === 'false');
   await page.reload();
   await page.waitForSelector('#planPanel.open');
-  // what is on stays in view once the sheet is shut (finding 5): a chip on the plan sheet
-  check(await page.evaluate(() => [...document.querySelectorAll('#planOptsOn .chip')].map((c) => c.textContent).includes('✓ Passenger aboard')), 'the stamp shows as a chip on the plan sheet');
+  // what is on stays in view once the sheet is shut (finding 5; TestFlight 2026-11-12 note 8: as a count on Where to?, each named to VoiceOver)
+  check(await page.evaluate(() => /Passenger aboard/.test(document.getElementById('planOptionsChip').getAttribute('aria-label')) && /^Options · \d$/.test(document.getElementById('planOptionsChip').textContent)), 'the stamp is counted on the plan sheet');
   const after = await page.evaluate(() => ({ p: document.querySelector('[data-driver="passenger"]').getAttribute('aria-pressed'), t: document.querySelector('[data-driver="tunnels"]').getAttribute('aria-pressed'),
     fit: document.getElementById('fitRow').hidden, skill: document.getElementById('skillNote').hidden,
     providers: ((window.ApexRouteCtx && (window.ApexRouteCtx.pending || window.ApexRouteCtx.providers)) || []).map((x) => x.id || x),
@@ -1982,6 +1982,9 @@ flow('avoid police reports, driving: a report that lands on the route ahead is o
   await page.evaluate(() => window.apex.onNative({ type: 'carplay', action: 'start' }));
   await page.waitForFunction(() => window.apexDebug.driveActive);
   await page.evaluate(() => apexDebug.loadReported(true));            // the report lands (the drive asks every 2 min)
+  // a car's screen is connected from here (the shell's message handler, as in the app; set late: with it from the start
+  // the page takes the app's own API base)
+  await page.evaluate(() => { window.__car = []; window.webkit = { messageHandlers: { apex: { postMessage(m) { if (m && m.cmd === 'car') window.__car.push(m); } } } }; });
   const crs = (Math.atan2((plan.lon2 - plan.startLon) * Math.cos(plan.startLat * Math.PI / 180), plan.lat2 - plan.startLat) * 180 / Math.PI + 360) % 360;
   const fix = () => page.evaluate(([lat, lon, crs]) => window.apex.live({ lat, lon, accuracy_m: 5, speed_mps: 15, course_deg: crs, has_fix: true, lat_g: 0, lon_g: 0, calibration: 'locked', thermal: 0 }), [plan.startLat, plan.startLon, crs]);
   let offered = null;
@@ -1991,14 +1994,20 @@ flow('avoid police reports, driving: a report that lands on the route ahead is o
     if (!offered) await page.waitForTimeout(250);
   }
   check(!!offered && /Go round/.test(offered), 'the report on the route ahead is offered with Go round: ' + offered + ' ' + JSON.stringify(await page.evaluate(() => apexDebug.policeAhead)));
+  // the car's screen has it too, with the same key; tapped there, it goes round and the phone's key goes away
+  const offer = await page.evaluate(() => window.__car.filter((m) => m.kind === 'offer').pop());
+  check(offer && offer.key === 'Go round' && /^Police reported on your route in /.test(offer.title) && /^Police in /.test(offer.short) && offer.seconds === 15,
+    'the offer on the car: ' + JSON.stringify(offer));
   const before = asked.length;
-  await page.click('#toast .toast-key');
+  await page.evaluate((id) => { window.apex.onNative({ type: 'carplay', action: 'offer', id: 'not-' + id }); window.apex.onNative({ type: 'carplay', action: 'offer', id }); }, offer.id);
   await page.waitForFunction(() => apexDebug.track !== window.__plan && apexDebug.track && apexDebug.track.kind === 'route', null, { timeout: 15000 });
   const ex = asked.slice(before).map((r) => r.exclude_locations || []);
   check(ex.length && ex.every((e) => e.some((x) => Math.abs(x.lat - report.lat) < 1e-4 && Math.abs(x.lon - report.lon) < 1e-4)), 'the way round was asked round the report: ' + JSON.stringify(ex));
   const far = await page.evaluate(([la, lo]) => { const t = apexDebug.track; let m = Infinity;
     for (let i = 0; i < t.lat.length; i++) m = Math.min(m, Math.hypot((t.lat[i] - la) * 110540, (t.lon[i] - lo) * 111320 * Math.cos(la * Math.PI / 180))); return m; }, [report.lat, report.lon]);
   check(far > 1000, 'the new route keeps well off the report: ' + Math.round(far) + ' m');
+  check(await page.evaluate(() => !document.querySelector('#toast .toast-key')), 'the phone\'s Go round key is gone once the car took it');
+  check(asked.length - before <= 2, 'one way round asked for, not one per tap: ' + (asked.length - before));
   // once: more fixes on the new route don't offer the same report again
   for (let k = 0; k < 8; k++) { await fix(); await page.waitForTimeout(150); }
   check(!(await page.evaluate(() => /Police reported on your route/.test(document.getElementById('toast').textContent) && document.getElementById('toast').classList.contains('show'))), 'offered once');
@@ -2308,6 +2317,9 @@ flow('CarPlay feed: a planned route sends its line, every corner and the theme; 
   await page.evaluate(() => { window.__car = []; window.apex.onNative({ type: 'carplay', action: 'voice' }); });
   await page.waitForFunction(() => window.__car.some((m) => m.kind === 'look' && m.voice === false));
   check(await page.evaluate(() => apexDebug.state.toggles.voice === false), 'the voice is off on the phone too');
+  // the car's Loops list offers the dial's five times; 1½ hours used to do nothing (the page took only 30, 60 and 120)
+  await page.evaluate(() => { document.getElementById('planPanel').classList.remove('routed', 'open'); window.apex.onNative({ type: 'carplay', action: 'loop', minutes: 90 }); });
+  await page.waitForFunction(() => document.getElementById('planPanel').classList.contains('open'), null, { timeout: 5000 });
 });
 
 flow('CarPlay: the car is in every drive: a free drive from its Drive key, a continue step, End goes idle (U-59, U-62, U-63, U-79)', async (page, base) => {
@@ -3255,20 +3267,24 @@ flow('drive ended: the card and the Log give the same score and time for the rec
   // design pass 9: with one drive in the Log the number stands alone (a usual is not one drive); the keys are a solid row
   // over Mark a stage and Drive it again, side by side, and nothing left on a row by itself
   const alone = await page.evaluate(async () => { await new Promise((r) => setTimeout(r, 400)); const R = (id) => { const e = document.getElementById(id), r = e.getBoundingClientRect(); return e.offsetParent ? [Math.round(r.left), Math.round(r.top), Math.round(r.width)] : null; };
-    return { usual: document.getElementById('endUsual').hidden, share: R('endShare'), stage: R('endStage'), again: R('endAgain'), acts: Math.round(document.querySelector('.end-acts').getBoundingClientRect().width) }; });
-  check(alone.usual && alone.share && alone.stage && alone.again && alone.share[2] === alone.acts && alone.stage[1] === alone.again[1] && alone.stage[1] > alone.share[1] && Math.abs(alone.stage[2] - alone.again[2]) <= 1,
+    return { usual: document.getElementById('endUsual').hidden, run: document.getElementById('endRun').hidden, share: R('endShare'), stage: R('endStage'), again: R('endAgain'), acts: Math.round(document.querySelector('.end-acts').getBoundingClientRect().width) }; });
+  check(alone.usual && alone.run && alone.share && alone.stage && alone.again && alone.share[2] === alone.acts && alone.stage[1] === alone.again[1] && alone.stage[1] > alone.share[1] && Math.abs(alone.stage[2] - alone.again[2]) <= 1,
     'one drive: no "usual"; Share card is the row, Mark a stage and Drive it again share the next: ' + JSON.stringify(alone));
   // with a few scored drives before it in the Log, the number is set against them (the Log's own summaries, read on the phone)
   const usual = await page.evaluate(async (id) => {
     const real = ApexRecording.summaries;
-    ApexRecording.summaries = async (...x) => [640, 655, 612, 649, 630].map((score, i) => ({ id: 'old' + i, name: 'Other Rd', date: '2026-10-0' + (i + 1), ds: { score } })).concat(await real(...x));
+    // IDEAS D-30: this drive's summary given a run of 7 clean corners, against runs of 5 earlier this month: the month's best
+    ApexRecording.summaries = async (...x) => [640, 655, 612, 649, 630].map((score, i) => ({ id: 'old' + i, name: 'Other Rd', date: '2026-10-0' + (i + 1), ds: { score }, run: i ? { corners: 5, len_m: 900 } : null }))
+      .concat((await real(...x)).map((o) => (o.id === id ? { ...o, run: { corners: 7, len_m: 2100 } } : o)));
     const d = await ApexRecording.get(id); apexDebug.showEndCard(d, Date.now() - 600e3, { quiet: true });
     for (let i = 0; i < 100 && document.getElementById('endUsual').hidden; i++) await new Promise((r) => setTimeout(r, 50));
     ApexRecording.summaries = real;
     const u = document.getElementById('endUsual'), l = document.querySelector('.end-score span'), a = u.getBoundingClientRect(), b = l.getBoundingClientRect(), box = document.querySelector('.end-score').getBoundingClientRect();
-    return { text: u.textContent, score: +document.getElementById('endScore').textContent, sameLine: Math.abs(a.bottom - b.bottom) < 6, clear: a.left > b.right + 8, inside: a.right <= box.right + 1 };
+    const rl = document.getElementById('endRun');
+    return { run: rl.hidden ? null : rl.textContent, text: u.textContent, score: +document.getElementById('endScore').textContent, sameLine: Math.abs(a.bottom - b.bottom) < 6, clear: a.left > b.right + 8, inside: a.right <= box.right + 1 };
   }, card.id);
   check(usual.text === `${usual.score - 640} over your usual` && usual.sameLine && usual.clear && usual.inside, 'the score against your usual, on the label\'s line: ' + JSON.stringify(usual));
+  check(usual.run === 'Your best run this month: 7 corners in a row, smooth and settled.', 'a run that beats the month says so on the card: ' + JSON.stringify(usual));
   check(/^\d+$/.test(card.score) && card.share && !/Not enough clean corners/.test(card.line), 'the card scores the drive and offers Share: ' + JSON.stringify(card));
   await page.goto(`${base}/analysis.html?tab=drive&drive=${encodeURIComponent(card.id)}`);
   await page.waitForSelector('.dv-score b', { timeout: 15000 });
@@ -3573,11 +3589,12 @@ flow('the theme cards and the words example say the real words, in the driver\'s
     quote: document.querySelector('#themeCards .tc-voice p').textContent, example: document.getElementById('noteWordsNote').textContent,
     call: ApexVocabulary.sampleCall(apexDebug.state.noteWords, { plain: ApexPlainNotes, units: ApexUnits, paceNoteText: ApexCore.paceNoteText }) }));
   const plain = await read();
-  check(plain.head === 'MEDIUM RIGHT' && plain.tail === 'CAREFUL · LONG' && plain.quote.includes(`"${plain.call}.`) && plain.example === `For example "${plain.call}".`
+  // TestFlight 2026-11-12 (the owner: "walls of text"): the card names its voice and Hear says the call; no quote printed under it
+  check(plain.head === 'MEDIUM RIGHT' && plain.tail === 'CAREFUL · LONG' && plain.quote === 'Marguerite · suggested voice' && plain.example === `For example "${plain.call}".`
     && !/TIGHTENS|Late apex|Slow down/.test(plain.head + plain.quote + plain.example), 'plain words, generated: ' + JSON.stringify(plain));
   await page.evaluate(() => document.querySelector('#noteWordsList [data-words="rally"]').click());
   const rally = await read();
-  check(rally.head === 'RIGHT 3' && rally.quote.includes(`"${rally.call}.`) && rally.example.includes(rally.call), 'rally notes, generated: ' + JSON.stringify(rally));
+  check(rally.head === 'RIGHT 3' && rally.example.includes(rally.call), 'rally notes, generated: ' + JSON.stringify(rally));
 });
 
 flow('small things: Notes is a detent, Layers never cuts the place plate, the Log pager draws its arrows (REVIEW4 U-82, U-81, U-76)', async (page, base) => {
@@ -4848,7 +4865,7 @@ flow('Your driving: the profile over every drive opens from the Log, names the w
   await page.click('#drivingOpen');
   await page.waitForSelector('#drivingRoot .dp-st');
   const text = await page.evaluate(() => document.getElementById('drivingRoot').innerText);
-  check(/From 108 clean corners on 3 drives/.test(text), 'what it is read from: ' + text.slice(0, 120));
+  check(/108 clean corners · 3 drives/.test(text), 'what it is read from: ' + text.slice(0, 120));
   check(/One steering arc is weaker through rights: \d+ against 100 through lefts, on 3 of 3 drives\./.test(text), 'the weak side is named: ' + text);
   check(/Work on: One steering arc\s+It shows most through rights\./.test(text), 'the focus says where');
   check(await page.evaluate(() => document.querySelector('.dp-st.weak').dataset.skill === 'arc' && document.querySelectorAll('.dp-st:not([data-skill="pace"])').length === 6), 'six stations, the weak one marked');
@@ -7029,9 +7046,9 @@ flow('REVIEW.md 1.2 screen by screen: first run, the map, planning, the route, d
   await page.click('#destInput');
   const plan = await page.evaluate(() => ({ detents: [...document.querySelectorAll('#loopDetents button')].map((b) => b.textContent), more: !!document.getElementById('planMore'),
     level: [...document.querySelectorAll('#planBody .plan-search-section [data-fun]')].length,
-    chips: [...document.querySelectorAll('#planChips > .chip')].filter((c) => c.offsetParent).map((c) => c.textContent), on: [...document.querySelectorAll('#planOptsOn .chip')].map((c) => c.textContent) }));
+    chips: [...document.querySelectorAll('#planChips > *')].filter((c) => c.offsetParent).map((c) => c.textContent) }));
   check(plan.detents.length === 5 && plan.detents.every((d) => / mi$/.test(d)) && !plan.more && plan.level === 0 && JSON.stringify(plan.chips) === '["Best roads nearby","Options · 1"]'
-    && JSON.stringify(plan.on) === '["✕ Unpaved"]', 'Plan sheet: ' + JSON.stringify(plan));
+    , 'Plan sheet: ' + JSON.stringify(plan));
   // Route bar: no toast repeating it; Route card: three numbers, four dials with unknowns as --, Start and Fly-through, the rest text links
   await page.fill('#destInput', 'Maryville');
   await page.waitForSelector('#placeList .place', { timeout: 10000 });
@@ -8195,7 +8212,7 @@ flow('plan flow (d) one Options sheet: Avoid ✕ and Prefer ✓ in it, what is o
   await planRouter(page, asked);
   const { cdp } = await planPage(page, base, { 'apex.avoid': JSON.stringify({ unpaved: false }) });
   await page.click('#destInput');
-  check(await page.evaluate(() => document.getElementById('planOptsOn').children.length === 0 && document.getElementById('planOptionsChip').textContent === 'Options'), 'nothing on: just Options');
+  check(await page.evaluate(() => document.getElementById('planOptionsChip').textContent === 'Options'), 'nothing on: just Options');
   await page.click('#planOptionsChip');
   await page.waitForFunction(() => { const s = document.getElementById('optSheet'); return s.classList.contains('open') && Math.abs(s.getBoundingClientRect().bottom - innerHeight) < 2; });
   await page.waitForTimeout(300);
@@ -8211,15 +8228,15 @@ flow('plan flow (d) one Options sheet: Avoid ✕ and Prefer ✓ in it, what is o
   const top = await page.evaluate(() => document.getElementById('optSheet').getBoundingClientRect().top + 20);
   await swipe(cdp, 196, top, 0, 220);
   await page.waitForFunction(() => !document.getElementById('optSheet').classList.contains('open'), null, { timeout: 3000 });
-  const chips = await page.evaluate(() => ({ sheet: [...document.querySelectorAll('#planOptsOn .chip')].map((c) => c.textContent), key: document.getElementById('planOptionsChip').textContent }));
-  check(JSON.stringify(chips.sheet) === '["✕ Highways","✓ Passenger aboard","More hairpins"]' && chips.key === 'Options · 3', 'what is on shows on the plan sheet once Options closes: ' + JSON.stringify(chips));
+  const chips = await page.evaluate(() => ({ sheet: [...document.querySelectorAll('#planChips .opt-on .chip')].length, key: document.getElementById('planOptionsChip').textContent, aria: document.getElementById('planOptionsChip').getAttribute('aria-label') }));
+  check(chips.sheet === 0 && chips.key === 'Options · 3' && /highways/i.test(chips.aria) && /Passenger aboard/.test(chips.aria), 'what is on is counted on the plan sheet once Options closes, each one named to VoiceOver (TestFlight 2026-11-12 note 8): ' + JSON.stringify(chips));
   // the route planned with them shows them on its card; a chip opens the sheet again; closing with nothing changed plans nothing
   await page.fill('#destInput', 'Maryville');
   await page.waitForSelector('#placeList .place', { timeout: 10000 });
   await page.click('#placeList .place');
   await cardUp(page); await planDone(page);
   const card = await page.evaluate(() => [...document.querySelectorAll('#cardOptsOn .chip')].map((c) => c.textContent));
-  check(JSON.stringify(card) === JSON.stringify(chips.sheet), 'and on the route card: ' + JSON.stringify(card));
+  check(JSON.stringify(card) === '["✕ Highways","✓ Passenger aboard","More hairpins"]', 'and on the route card, one chip each: ' + JSON.stringify(card));
   check(asked.some((r) => r.costing_options && JSON.stringify(r.costing_options).includes('"use_highways":0')), 'the plan avoided highways');
   const n = asked.length;
   await page.click('#cardOptsOn .chip');

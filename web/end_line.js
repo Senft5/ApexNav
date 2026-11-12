@@ -82,6 +82,24 @@
     return { usual: med, diff, text: Math.abs(diff) <= USUAL_NEAR ? 'About your usual' : `${Math.abs(diff)} ${diff > 0 ? 'over' : 'under'} your usual` };
   }
 
-  const api = { scoreTokens, endLine, pickSignOff, bestOnRoad, usual, under100, WORDS, USUAL_N, USUAL_MIN, USUAL_NEAR };
+  /**
+   * IDEAS D-30, part three: this drive's best run (flow.js, kept in its summary as run: { corners, len_m }) when it beats every
+   * other drive this month whose run is known. `all`: the Log's summaries, this drive among them; monthOf(o): "YYYY-MM", or
+   * null for a date that isn't known. Nothing is said for the first drive of a month (no record to beat), for a drive with
+   * no run, or for one whose date or month is unknown; a drive whose run was never judged (no run field) neither counts nor
+   * beats. A tie is not a new best. The words or null.
+   */
+  const RUN_MIN = 5;
+  function bestRunMonth(me, all, monthOf) {
+    const n = (d) => (d && d.run && Number.isFinite(d.run.corners) ? d.run.corners : 0);
+    if (!me || typeof monthOf !== 'function' || n(me) < RUN_MIN) return null;
+    const month = monthOf(me);
+    if (!month) return null;
+    const others = (all || []).filter((o) => o && o.id !== me.id && 'run' in o && monthOf(o) === month);
+    if (!others.length || !others.every((o) => n(me) > n(o))) return null;
+    return `Your best run this month: ${n(me)} corners in a row, smooth and settled.`;
+  }
+
+  const api = { scoreTokens, endLine, pickSignOff, bestOnRoad, usual, bestRunMonth, under100, WORDS, USUAL_N, USUAL_MIN, USUAL_NEAR };
   if (typeof module !== 'undefined' && module.exports) module.exports = api; else root.ApexEndLine = api;
 })(typeof window !== 'undefined' ? window : globalThis);

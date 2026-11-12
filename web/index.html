@@ -1926,7 +1926,6 @@
               <div class="plan-chips" id="planChips" role="group" aria-label="Plan shortcuts">
                 <button class="chip nearby-chip" id="planNearbyChip" aria-haspopup="dialog">Best roads nearby</button>
                 <button class="chip opt-chip" id="planOptionsChip" aria-haspopup="dialog">Options</button>
-                <span class="opt-on" id="planOptsOn"></span>
               </div>
               <p class="plan-status" id="planStatus" role="status" aria-live="polite"></p>
               <div class="place-list" id="placeList" hidden></div>
@@ -1934,7 +1933,7 @@
                 <button class="linkbtn" id="tapRouteBtn">Tap the map</button>
               </div>
               <!-- the basic level (REVIEW.md roadmap 6, mockup 02-plan-basic.html): a loop dial in your units (finding 6) -->
-              <div class="ctl plan-loop" role="group" aria-label="Loop from here"><div class="ctl-label">Or loop from here <small>back where you started</small></div>
+              <div class="ctl plan-loop" role="group" aria-label="Loop from here"><div class="ctl-label">Or loop from here</div>
                 <div class="loop-by" id="loopBy" role="radiogroup" aria-label="Set the loop by"><button type="button" role="radio" data-loop-by="distance" aria-checked="true">Distance</button><button type="button" role="radio" data-loop-by="time" aria-checked="false">Time</button></div>
                 <!-- one control (REVIEW2.md U-31): the dial, its five detents as ticks around it; tap a tick or turn the dial -->
                 <div class="loop-gauge" id="loopGauge">
@@ -1944,17 +1943,17 @@
               </div>
               <!-- REVIEW_PEOPLE P-13: members' spots are a planning input, so they live here (they were a row on Friends) -->
               <details class="plan-more" id="planSpots" hidden>
-                <summary>Spots near you: overlooks, cafés, bridges</summary>
+                <summary>Spots near you</summary>
                 <div id="planSpotsBody"></div>
               </details>
               <!-- SOCIAL 2.9: the area's loop this week, members' quickest times on it; the line becomes the loop and your place (time_attack.js summaryLine) -->
               <details class="plan-more" id="planAttack" hidden>
-                <summary>Time attack this week: a loop near you, quickest time</summary>
+                <summary>Time attack this week</summary>
                 <div id="planAttackBody"></div>
               </details>
               <!-- Roadbooks (roadbooks.js): public collections of great roads near you, a planning input like the spots -->
               <details class="plan-more" id="planBooks" hidden>
-                <summary>Roadbooks near you: great roads, collected</summary>
+                <summary>Roadbooks near you</summary>
                 <div id="planBooksBody"></div>
               </details>
               <!-- finding 3: the main key follows the task: Find a loop with nothing typed, Go to the place once you type -->
@@ -2198,7 +2197,6 @@
                a Hear key. Pro themes carry a PRO tag (never a padlock) and can be tried in full on the demo replay. -->
           <section data-panel="garage" id="lookSection">
             <h3>Look and voice</h3>
-            <p class="note">A theme changes the type, colours, gauges, map and motion, and suggests a co-driver. The calls, the hazards and where things sit never change.</p>
             <div class="theme-cards" id="themeCards"></div>
             <!-- The co-driver's voice is its own choice: any pack with any theme (private themes too), kept across theme changes.
                  Suggested follows the theme's. One home (web/vocabulary.js TERMS.pack). -->
@@ -2212,7 +2210,6 @@
               <div class="switch" id="nightSwitch" role="radiogroup" aria-label="Night">
                 <button data-night="auto" role="radio">Auto</button><button data-night="off" role="radio">Day</button><button data-night="on" role="radio">Night</button>
               </div></div>
-            <p class="note">Auto turns the page over after sunset.</p>
           </section>
           <!-- One block for the co-driver (2026-11-10; it was two, Co-driver and The words, and the second began by pointing
                back up the page): how it speaks, then what else it does. Its voice stays with the looks, which suggest it. -->
@@ -2234,11 +2231,10 @@
               <button class="sw" data-toggle="soundtrack"><i></i><span>Soundtrack</span></button>
             </div>
             <!-- the Soundtrack (soundtrack.js, audio_bus.js; ARCHITECTURE section 5): off until asked for; what it follows, said plainly -->
-            <p class="co-row" id="soundtrackRow"><span>Music made by the road, in a drive.</span><button class="linkbtn" id="soundtrackHear">Hear a sample</button></p>
-            <p class="note" id="soundtrackNote">Soundtrack: it builds into each corner, fills out as the road gets busier and settles on the straights. It follows the road, never your speed. It steps back under the co-driver's voice, and thins out when you are over Sight.</p>
+            <!-- TestFlight 2026-11-12 (the owner: "walls of text"): the switch and its sample, no essay under them -->
+            <p class="co-row" id="soundtrackRow"><button class="linkbtn" id="soundtrackHear">Hear a sample</button></p>
             <button class="sw" id="liveVoiceBtn" role="switch" aria-checked="false"><i></i><span>Speak road names</span></button>
             <p class="note" id="liveNote" role="status" aria-live="polite"></p>
-            <p class="note">Notes: Full calls every corner; Quiet only hazards and cameras; Auto calls corners once you are cornering with some purpose, quiet otherwise. The words and the voice work offline.</p>
           </section>
           <!-- dev mode (the owner, 2026-11-09): filled only while /api/me says this account is a developer (cockpit.js
                paintDevRow), so for everyone else the row is empty and not offered (data-empty-hides) -->
@@ -2288,6 +2284,7 @@
           <p class="end-feel" id="endFeel" hidden></p>   <!-- panel round 2, HE-1: what this phone felt, only when measured -->
           <p class="end-feel" id="endPractice" hidden></p>   <!-- IDEAS D-27: the skill you are practicing, on this drive -->
           <p class="end-feel" id="endRoad" hidden></p>   <!-- on a road driven before: your passes there, corner by corner -->
+          <p class="end-feel" id="endRun" hidden></p>   <!-- IDEAS D-30: a run of clean corners that is this month's best -->
           <p class="end-line" id="endLine"></p>
           <!-- U-75: the solid key is Share card only when there is a score to share; otherwise it is Open in the Log, and Share
                waits as a link -->

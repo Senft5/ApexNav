@@ -9,12 +9,11 @@
   /** Text for the section: { mine: [string], km: [string], smooth: [string] }; every line from crew totals only. */
   function lines(st, fmtKm = (km) => `${km} km`) {
     if (!st) return { mine: [], km: [], smooth: [] };
+    // TestFlight 2026-11-12 (note 2, "walls of text"): a crew's line is its numbers; an unranked crew just has no rank
     const mine = (st.mine || []).map((c) => {
-      const bits = [c.name, `${fmtKm(c.km)} of road data`];
+      const bits = [c.name, fmtKm(c.km)];
       if (c.smoothness != null) bits.push(`Smooth ${c.smoothness}`);
-      if (c.visibility !== 'public') bits.push('private, not ranked');
-      else if (c.km_rank == null) bits.push('ranked from 3 members');
-      else bits.push(`#${c.km_rank} of ${c.of} for road data${c.smooth_rank ? `, #${c.smooth_rank} for smoothness` : ''}`);
+      if (c.visibility === 'public' && c.km_rank != null) bits.push(`#${c.km_rank} of ${c.of}`);
       return bits.join(' · ');
     });
     const km = (st.top_km || []).slice(0, TOP_SHOWN).map((c, i) => `${i + 1}. ${c.name} · ${fmtKm(c.km)}`);
@@ -35,7 +34,6 @@
         sec.append(el('h3', { textContent: 'Crews this month' }), ...L.mine.map(p));
         if (L.km.length) sec.append(el('b', { textContent: 'Most road data' }), ...L.km.map(p));
         if (L.smooth.length) sec.append(el('b', { textContent: 'Smoothest' }), ...L.smooth.map(p));
-        sec.append(p('Public crews of 3 or more. Never speed: road data shared and how smoothly members drive.'));
         sec.hidden = false;
       }).catch(() => {});
       return sec;

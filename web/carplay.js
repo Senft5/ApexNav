@@ -295,6 +295,22 @@
   }
 
   /**
+   * A phone offer with one key, on the car's screen too (a navigation alert there: the key and "Not now"): the police
+   * report ahead's Go round, a late loop's Skip or Head home. { kind:'offer', id, title, short, key, seconds }: title
+   * and short are the words, longest first (the car shows the longest that fits); key at most OFFER_KEY_MAX; seconds 5 to
+   * 20, the phone toast's own time. The car answers { action:'offer', id }; null when there are no words or no key.
+   */
+  const OFFER_KEY_MAX = 16, OFFER_TITLE_MAX = 64;
+  function offerMessage(id, title, short, key, ms) {
+    const t = String(title || '').trim(), k = String(key || '').trim();
+    if (!id || !t || !k) return null;
+    const cut = (s, n) => (s.length > n ? s.slice(0, n - 1).trimEnd() + '…' : s);
+    const sh = cut(String(short || '').trim(), OFFER_TITLE_MAX);
+    return { kind: 'offer', id: String(id), title: cut(t, OFFER_TITLE_MAX), short: sh && sh !== t ? sh : '', key: cut(k, OFFER_KEY_MAX),
+             seconds: Math.round(Math.max(5, Math.min(20, (finite(ms) ? ms : 15000) / 1000))) };
+  }
+
+  /**
    * The theme for the car's screen: its id (the car's map paints it, web/carmap.js), the guidance card's colours (the
    * theme's dark panel, so the card reads in both the car's light and dark modes), whether the voice is on and the units.
    */
@@ -465,7 +481,7 @@
     return { step, reset };
   }
 
-  const api = { sightMessage, line, routeMessage, guideMessage, recordingMessage, placesMessage, cornersMessage, hazardsMessage, alongMessage, lookMessage, tulipSVG, cornerTulipSVG,
+  const api = { sightMessage, line, routeMessage, guideMessage, recordingMessage, placesMessage, cornersMessage, hazardsMessage, alongMessage, offerMessage, lookMessage, tulipSVG, cornerTulipSVG,
                 recordSVG, CORNER_MODES, CONTINUE_M, MAX_POINTS };
   api.sightFilter = sightFilter;                                       // U-60 (its own line: the list above is shared)
   api.sightTag = sightTag;                                             // panel round 2, TH-2

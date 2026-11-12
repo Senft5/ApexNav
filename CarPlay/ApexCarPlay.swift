@@ -238,6 +238,15 @@ final class ApexCar {
         case "ask":
             guard let title = dict["title"] as? String else { return }
             scene?.askStill(title: title)
+        case "offer":
+            // the phone's one-key offer in a drive (web/carplay.js offerMessage): Go round, Skip, Head home
+            guard let id = dict["id"] as? String, let title = dict["title"] as? String, !title.isEmpty,
+                  let key = dict["key"] as? String, !key.isEmpty else { return }
+            let titles = [String(title.prefix(64)), String(((dict["short"] as? String) ?? "").prefix(64))].filter { !$0.isEmpty }
+            scene?.showOffer(id: String(id.prefix(16)), titles: titles, key: String(key.prefix(16)), seconds: Self.num(dict["seconds"]) ?? 15)
+        case "offerDone":
+            guard let id = dict["id"] as? String else { return }
+            scene?.offerDone(id: id)
         case "places":
             places = ((dict["list"] as? [[String: Any]]) ?? []).prefix(12).compactMap { p in
                 guard let name = p["name"] as? String, let c = Self.coord(p["at"]) else { return nil }
@@ -669,6 +678,25 @@ final class ApexCarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDel
         let alert = CPNavigationAlert(titleVariants: [title], subtitleVariants: [detail].filter { !$0.isEmpty }, image: ApexCar.hazardPlate,
                                       primaryAction: CPAlertAction(title: "OK", style: .default) { _ in }, secondaryAction: nil, duration: 8)
         map.present(navigationAlert: alert, animated: true)
+    }
+
+    /// A drive's one-key offer from the phone (Go round a police report, Skip a stage, Head home): the key and Not now, for
+    /// as long as the phone's toast has its key. Tapped here, the page does it; tapped on the phone, `offerDone` takes it away.
+    private var offerAlert: (id: String, alert: CPNavigationAlert)?
+    @MainActor func showOffer(id: String, titles: [String], key: String, seconds: Double) {
+        guard let map = mapTemplate, ApexCar.shared.driving, !titles.isEmpty else { return }
+        let alert = CPNavigationAlert(titleVariants: titles, subtitleVariants: [], image: nil,
+                                      primaryAction: CPAlertAction(title: key, style: .default) { _ in ApexCar.shared.send("offer", ["id": id]) },
+                                      secondaryAction: CPAlertAction(title: "Not now", style: .cancel) { _ in },
+                                      duration: max(5, min(20, seconds)))
+        offerAlert = (id, alert)
+        map.present(navigationAlert: alert, animated: true)
+    }
+    @MainActor func offerDone(id: String) {
+        guard let o = offerAlert, o.id == id else { return }
+        offerAlert = nil
+        guard let map = mapTemplate, map.currentNavigationAlert === o.alert else { return }
+        map.dismissNavigationAlert(animated: true) { _ in }
     }
 
     /// Passed a reported hazard: is it still there? One tap on the car's screen answers the phone's question.
