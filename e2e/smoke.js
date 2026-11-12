@@ -2911,6 +2911,7 @@ flow('crew page: an old ?view=crew link opens People on Crews, at your crew; goi
   check(await page.evaluate(() => document.querySelector('[data-people="crews"]').getAttribute('aria-selected') === 'true' && !document.getElementById('crewsBody').hidden
     && document.getElementById('accountBody').hidden && document.getElementById('sheetTitle').textContent === 'People'), 'on the People tab, its Crews side');
   check(await page.evaluate(() => !!document.querySelector('#crewsBody .crew-head .gear-key') && !document.querySelector('#crewsBody .friend-list')), 'the crew head and its gear are on the Crews side, no friends list there');
+  check(await page.evaluate(() => document.querySelector('#crewsBody .crew-head').textContent.trim() === '' && document.querySelectorAll('#crewsBody .crew-page h2').length === 1), 'one crew: its name once, on its page, not again above it');
   // Nate 2026-11-12 (as easy as a big social app): three tabs under the crew's name, Drives open first
   check(JSON.stringify(await page.$$eval('.cp-tabs [role="tab"]', (b) => b.map((x) => x.textContent + ':' + x.getAttribute('aria-selected')))) === '["Drives:true","Chat:false","Board:false"]', 'Drives | Chat | Board, Drives open');
   check(await page.isHidden('.cp-board') && await page.isHidden('.cp-say'), 'the board and the chat wait behind their tabs');
@@ -4607,7 +4608,8 @@ flow('crew drives: an upcoming drive shows on People, Crews, as the crew page’
   check(!posted.some(([p]) => /\/home$/.test(p)), 'nothing about your own home was sent');
   await page.fill(`${W} input[aria-label="Meet at"]`, 'Tellico');
   await page.click(`${W} .meet-hits button:has-text("Tellico Plains Shell")`);
-  check(/Meeting point: Tellico Plains Shell/.test(await page.textContent(`${W} .plan-drive`)), 'the meeting point by search');
+  check(await page.inputValue(`${W} input[aria-label="Meet at"]`) === 'Tellico Plains Shell' && !/Meeting point|\d+\.\d{4}, -?\d+\.\d{4}|Roles and regroup/.test(await page.textContent(`${W} .plan-drive`)),
+    'the meeting point by search, said once in its field; no coordinates and no how-to line: ' + await page.textContent(`${W} .plan-drive`));
   const formH = await page.$eval(`${W} .plan-drive`, (f) => f.getBoundingClientRect().height);
   check(formH < 852, `the form fits one phone screen (${Math.round(formH)} px)`);
   await page.click(`${W} [aria-label="Repeats"] button:has-text("Weekly")`);
@@ -5297,6 +5299,9 @@ flow('People: two tabs; a request is a card on top, then you, then friends with 
   check(await page.evaluate(() => { const t = document.querySelector('.people-tabs'); return t.getAttribute('role') === 'tablist' && t.querySelectorAll('[role="tab"]').length === 2 && !document.querySelector('#sheetHead .switch')
     && getComputedStyle(document.querySelector('[data-people="friends"]'), '::after').transform === 'none'; }), 'Friends | Crews are ARIA tabs, the open one underlined');
   check(await page.evaluate(() => document.querySelector('#crewTab').getAttribute('aria-label') === 'People' && document.querySelector('#crewTab span').textContent === 'People'), 'the tab is People');
+  // every row on People opens a page, so every chevron points the same way (a friend's pointed down, as if it unfolded)
+  const chevs = await page.evaluate(() => [...document.querySelectorAll('#accountBody .friend-head .chev')].map((c) => getComputedStyle(c).transform));
+  check(chevs.length >= 2 && new Set(chevs).size === 1, 'you and each friend: one chevron, pointing right: ' + JSON.stringify(chevs));
   // P-34: the badge counts the friend request and the convoy invite
   check(await page.evaluate(() => { const b = document.querySelector('#crewTab .badge'); return b && b.textContent === '2' && /1 friend request, 1 convoy invite/.test(b.getAttribute('aria-label')); }), 'the badge counts what waits: ' + await page.evaluate(() => document.querySelector('#crewTab .badge')?.getAttribute('aria-label')));
   // P-05: the request is a card on top; P-23: you next; then the friends, live first, a friend who shares nothing under their name (P-15)

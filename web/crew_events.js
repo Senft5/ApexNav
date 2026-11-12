@@ -580,11 +580,12 @@
       const date = dayStrip(dayKey(new Date(Date.now() + 86400000))), time = timeStepper('09:00');
       // where: a place search, Where I am and the map's centre as chips (P-10: never "go and move the map first")
       let meet = null, notes = null;
-      const meetNote = el('p', { className: 'note', textContent: 'Search for the meeting point, or use where you are.' });
+      const meetNote = el('p', { className: 'note', hidden: true });
       const setMeet = (p) => {
         meet = { name: p.name ? String(p.name).slice(0, 60) : null, lat: p.lat, lon: p.lon };
-        meetNote.textContent = `Meeting point: ${meet.name || `${p.lat.toFixed(4)}, ${p.lon.toFixed(4)}`}.`;
-        if (meet.name && search.field) search.field.value = meet.name;
+        // the field says where (a name, or a pin for Where I am / the map's centre): no second line repeating it, no raw coordinates
+        meetNote.textContent = ''; meetNote.hidden = true;
+        if (search.field) search.field.value = meet.name || 'Pin on the map';
       };
       const search = placeField('Meet at', setMeet);
       // the fairest meeting point for the crew's shared rough areas (route_ctx/crew_meet.js; opt-in on the crew page)
@@ -592,12 +593,13 @@
         const r = await apiCall('GET', `/api/crews/${encodeURIComponent(crew.value)}/meet`).catch(() => null);
         const j = r && r.ok ? await jsonOf(r) : null;
         if (!j || !Array.isArray(j.cells)) { toast('Couldn\u2019t load the crew. Check signal.'); return; }
+        meetNote.hidden = false;
         if (j.cells.length < root.ApexCrewMeet.MIN_CELLS) { meetNote.textContent = `Needs ${j.need} crew-mates sharing their area (${j.sharing} now).`; return; }
         meetNote.textContent = 'Finding the fairest place\u2026';
         const m = await root.ApexCrewMeet.fairMeet(j.cells);
         if (!m) { meetNote.textContent = 'No place everyone sharing can reach by road. Pick one.'; return; }
         setMeet({ name: m.name || null, lat: m.lat, lon: m.lon });
-        meetNote.textContent += ` Fair to everyone sharing: the longest drive there is ${m.estimated ? 'about ' : ''}${m.maxMin} min.`;
+        meetNote.hidden = false; meetNote.textContent = `Fair to everyone sharing: the longest drive there is ${m.estimated ? 'about ' : ''}${m.maxMin} min.`;
       }, 'linkbtn') : null;
       // how often (S-13): a weekly Cars & Coffee is planned once
       let repeat = 0;
@@ -613,7 +615,6 @@
       const label = (text) => el('p', { className: 'ctl-label', textContent: text });
       const head = crews.length > 1 ? [crew] : [];
       form.append(...head, tplSel, title, label('When'), date, time, label('Repeats'), repRow, label('Meet'), search, ...(fairBtn ? [el('div', { className: 'row' }, fairBtn)] : []), meetNote, routeRow,
-        el('p', { className: 'note', textContent: 'Roles and regroup points: on the card, under More.' }),
         el('div', { className: 'row' }, btn('Plan it', async (ev) => {
           const b = ev && ev.currentTarget;
           const when = isoFromInputs(date.value, time.value);

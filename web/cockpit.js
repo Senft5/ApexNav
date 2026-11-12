@@ -6853,7 +6853,7 @@
           if (!cur) { chead.replaceChildren(); chead.hidden = true; holder.replaceChildren(crewPage.dashboard(myCrews, openCrew)); }
           else {
             chead.hidden = false;
-            const back = many ? btn('Your crews', () => { openCrew(null); const k = holder.querySelector('.cd-open'); if (k) k.focus({ preventScroll: true }); }, 'linkbtn cd-back') : el('b', { textContent: cur.name });
+            const back = many ? btn('Your crews', () => { openCrew(null); const k = holder.querySelector('.cd-open'); if (k) k.focus({ preventScroll: true }); }, 'linkbtn cd-back') : el('span');   // one crew: its page's title says the name, so the head is the gear alone (it said it twice)
             if (many) back.setAttribute('aria-label', 'Back to your crews');
             chead.replaceChildren(back, gear);
             holder.replaceChildren(crewPage.view(cur.id));
