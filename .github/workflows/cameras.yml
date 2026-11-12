@@ -8,9 +8,6 @@ on:
   workflow_dispatch:
   schedule:
     - cron: "17 7 * * 1"
-  push:   # TEMPORARY: one run from the PR branch before merge (removed before merge)
-    branches: [claude/project-thread-39xbx9]
-    paths: [".github/workflows/cameras.yml"]
 
 permissions:
   contents: write
