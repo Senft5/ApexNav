@@ -94,3 +94,8 @@ No third-party analytics or advertising SDKs. Tracking: **No**.
 
 Five, from the bundled replays (they need no car): the cockpit with a note called, the loop builder with three routes,
 the Log with a drive's corners, a drive card, a convoy on the map. Captions in sentence case, no speeds on screen.
+
+Made so far (2026-11-12): run `STORE=1 SHOTS_OUT=store-shots node tools/landing_shots.js` for
+the cockpit and a crew's page at 1320 x 2868 (the 6.9" size, 440 x 956 points at 3x). The cockpit shot shows the replay's
+speed (49 mph) and Sight, which the rule above says to avoid: either accept it (it is a replay, not a live drive) or
+pick a moment at walking pace with `SHOT_AT`. Still to script: the loop builder, the Log's corners, a drive card, a convoy.
