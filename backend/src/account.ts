@@ -55,6 +55,18 @@ export async function exportMyData(env: Env, v: Viewer) {
     build_posts: await q("SELECT p.n, p.title, p.body, p.parts, p.score, p.created_at FROM build_posts p JOIN builds b ON b.id = p.build_id WHERE b.owner = ?"),
     build_replies: await q("SELECT body, suggestion, tried, created_at FROM build_replies WHERE author = ?"),
     sharing_on_map: await q("SELECT audience, delay_s, fuzz, updated_at FROM presence_settings WHERE user_id = ?"),
+    // the positions kept for friends on the map (at most the delay you chose plus half an hour, then swept)
+    sharing_on_map_positions: await q("SELECT at, lat, lon, road FROM presence_samples WHERE user_id = ?"),
+    builds_followed: await q("SELECT b.id, c.make, c.model, f.created_at FROM build_follows f JOIN builds b ON b.id = f.build_id JOIN cars c ON c.id = b.car_id WHERE f.user_id = ?"),
+    // kudos: the runs you gave one to, and how many your own runs got (who gave them is theirs)
+    kudos_given: await q("SELECT canon_id AS stage, driven_on, created_at FROM kudos WHERE giver_id = ?"),
+    kudos_received: await q("SELECT canon_id AS stage, driven_on, COUNT(*) AS n FROM kudos WHERE owner_id = ? GROUP BY canon_id, driven_on"),
+    hazard_answers: await q("SELECT h.kind, v.still, v.at FROM hazard_votes v JOIN hazard_reports h ON h.id = v.hazard_id WHERE v.user_id = ?"),
+    // invite links you made (the link itself is never stored, only its hash) and whether one was used
+    invites_made: await q("SELECT created_at, expires_at, used_by IS NOT NULL AS used, used_at FROM invites WHERE created_by = ?"),
+    crew_invites_made: await q("SELECT c.name AS crew, i.expires_at FROM crew_invites i JOIN crews c ON c.id = i.crew_id WHERE i.created_by = ?"),
+    eta_shares: await q("SELECT arrive_at, updated_at, expires_at, ended FROM eta_shares WHERE owner = ?"),
+    livery_grants: await q("SELECT note, created_at FROM livery_grants WHERE user_id = ?"),
     build_chat: await q("SELECT body, created_at FROM build_chat WHERE author = ?"),
     crew_chat: await q("SELECT c.name AS crew, m.body, m.created_at FROM crew_chat m JOIN crews c ON c.id = m.crew_id WHERE m.author = ?"),
     cars: await q("SELECT year, make, model, trim, nickname, color, power_hp, weight_kg, drivetrain, transmission, tyres, mods, clearance, width_cm, fuel, range_km, shared, is_primary, created_at FROM cars WHERE owner = ?"),

@@ -8,7 +8,7 @@ read = lambda *p: (ROOT.joinpath(*p)).read_text()
 
 def test_registered_at_launch_and_scheduled_when_leaving():
     app = read("ApexNavApp.swift")
-    assert "init() { ApexBuildNotifier.register() }" in app
+    assert "init() { ApexBuildNotifier.register(); ApexCrashReports.start() }" in app
     assert "if phase == .background { ApexBuildNotifier.schedule() }" in app
     assert 'if cmd == "notifyBuilds" {' in app and "ApexBuildNotifier.requestPermission()" in app
 

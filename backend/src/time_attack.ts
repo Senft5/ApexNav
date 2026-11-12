@@ -14,7 +14,7 @@
 // average speed no car on a public road could hold is refused rather than ranked.
 import type { Viewer } from "./auth";
 import { Env, HttpError, body, int, num, str, DATE_RE } from "./util";
-import { removedSql, reportedSql } from "./reports_sql";
+import { establishedSql, removedSql, reportedSql } from "./reports_sql";
 
 /** A loop: 5 to 25 km (the phone aims for LOOP_KM), closed within CLOSE_M, every point within SLACK_DEG of its area. */
 export const MIN_M = 5000, MAX_M = 25000, CLOSE_M = 250, SLACK_DEG = 0.15, MAX_PTS = 6000, BOARD_SIZE = 50, KEEP_WEEKS = 8;
@@ -105,6 +105,8 @@ export async function makeCircuit(env: Env, v: Viewer, req: Request) {
   const now = await current(env, cell);
   if (now.circuit) return { circuit: now.circuit, kept: false };
   if (!now.make || b.seed !== now.make.seed) throw new HttpError(409, "stale_seed");
+  // as for a fixed loop (ta_fixed.ts fixedMake): the server can't check the loop was built from the seed, so a new account can't set it
+  if (!(await env.DB.prepare(`SELECT 1 WHERE ${establishedSql("?1")}`).bind(v.id).first())) throw new HttpError(403, "not_yet");
   const loop = checkLoop(b.geom, cell);
   const id = "ta-" + crypto.randomUUID(), tries = Number(String(now.make.seed).split("|")[2]) || 0;
   const geom = JSON.stringify(loop.geom), name = nameOf(b.name);

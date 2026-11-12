@@ -156,7 +156,7 @@
         const z = page.zones ? page.zones().length : 0;
         kids.push(el('div', { className: 'fm-row' }, el('span', { textContent: 'Home zones' }),
           el('span', { className: 'note' }, z ? `${z} zone${z === 1 ? '' : 's'} · nobody sees you there · ` : 'None yet · ', btn(z ? 'Change' : 'Add one', () => { close(); if (page.openGarage) page.openGarage('privacy'); }, 'linkbtn'))),
-          el('div', { className: 'row' }, btn('Cars, on each car', () => { close(); if (page.openGarage) page.openGarage('cars'); }, 'linkbtn')));
+          el('div', { className: 'row' }, btn('Who sees each car', () => { close(); if (page.openGarage) page.openGarage('cars'); }, 'linkbtn')));
         box.replaceChildren(...kids);
         if (focusEl) { focusEl.scrollIntoView({ block: 'center' }); focus = null; }
       };
