@@ -2926,13 +2926,18 @@ flow('crew page: an old ?view=crew link opens People on Crews, at your crew; goi
   await page.click('.side-pop.open[aria-label="Crew settings"] button:has-text("Done")');
   await page.click('.cp-tabs [data-cp-tab="drives"]');
   await page.click('.cp-drive button:has-text("going")');
+  // a line half written survives the page redrawing: the livery saves, the page redraws
   await page.click('.cp-tabs [data-cp-tab="chat"]');
   await page.fill('.cp-say textarea', 'Saturday it is');
-  await page.click('.cp-say button:has-text("Send")');
+  const sayBox = await page.$('.cp-say textarea');
   await page.click('.cp-edit');
   await page.click('.cp-crests button[aria-label="Peak"]');
   await page.click('.cp-swatches button[aria-label="Blue"]');
   await page.click('.cp-livery-ed button:has-text("Save")');
+  await page.waitForFunction((b) => !b.isConnected, sayBox, { timeout: 5000 });
+  await page.click('.cp-tabs [data-cp-tab="chat"]');
+  check(await page.inputValue('.cp-say textarea') === 'Saturday it is', 'the unsent line is still there after the page redraws');
+  await page.click('.cp-say button:has-text("Send")');
   const find = (p) => sent.find((x) => x.p === p);
   for (let i = 0; i < 50 && !(find('/api/events/e1/rsvp') && find('/api/crews/k1/chat') && find('/api/crews/k1/page')); i++) await page.waitForTimeout(100);
   check(find('/api/events/e1/rsvp') && JSON.parse(find('/api/events/e1/rsvp').b).status === 'going', 'I\'m going sends going');
@@ -4111,9 +4116,14 @@ flow('shared routes: one a friend shared shows on People, Friends, under From fr
     if (u.pathname === '/api/me') return json({ signed_in: true, member: true, handle: 'me' });
     if (u.pathname === '/api/routes/shared') return json([{ id: 'RRRRRRRRRRRRRRRR', name: 'Cherohala loop', created_at: '2026-10-28 05:00:00', from_handle: 'alice' }]);
     if (u.pathname === '/api/routes/RRRRRRRRRRRRRRRR') return json({ id: 'RRRRRRRRRRRRRRRR', name: 'Cherohala loop', geom, from_handle: 'alice' });
+    if (u.pathname === '/api/routes' && m === 'POST') { posted.push(JSON.parse(route.request().postData() || '{}')); return json({ id: 'S1', shared: 2 }, 201); }
+    if (u.pathname === '/api/friends') return json(friendsOn ? [{ id: 'U1', handle: 'alice', name: null, status: 'accepted', incoming: 0 }, { id: 'U2', handle: 'bob', name: null, status: 'accepted', incoming: 0 }] : []);
+    if (u.pathname === '/api/crews') return json(friendsOn ? [{ id: 'k1', name: 'Ridge Runners' }] : []);
     if (m === 'GET') return json([]);
     return json({}, 404);
   });
+  const posted = [];
+  let friendsOn = false;
   await page.goto(base + '/index.html');
   await page.waitForFunction(() => window.apex && typeof window.apex.live === 'function');
   await page.evaluate(() => document.querySelector('.tab[data-view="people"]').click());   // Friends is the side it opens on
@@ -4124,6 +4134,18 @@ flow('shared routes: one a friend shared shows on People, Friends, under From fr
   await page.click('.side-pop.open button:has-text("Open")');
   await page.waitForFunction(() => /Cherohala loop/.test(document.getElementById('routeCardName').textContent), null, { timeout: 8000 });
   check(/corners/.test(await page.textContent('#routeCardMeta')), 'the route card has its corners (notes rebuilt from the shape)');
+  // Share it on: one line says who gets it and what goes, before Send, and follows the picks
+  friendsOn = true;
+  await page.click('#routeShareBtn');
+  await page.waitForSelector('#routeSharePick .share-goes');
+  const goes = () => page.textContent('#routeSharePick .share-goes');
+  check(/^Pick who gets it\. The line only, first 400 m hidden\.$/.test(await goes()), 'nobody picked: it asks: ' + await goes());
+  await page.click('#routeSharePick button:has-text("@alice")');
+  await page.click('#routeSharePick button:has-text("Ridge Runners")');
+  check(await goes() === 'Goes to @alice and Ridge Runners. The line only, first 400 m hidden.', 'it names who gets it: ' + await goes());
+  await page.click('#routeSharePick button:has-text("Send")');
+  for (let i = 0; i < 30 && !posted.length; i++) await page.waitForTimeout(100);
+  check(posted.length === 1 && JSON.stringify(posted[0].friends) === '["alice"]' && JSON.stringify(posted[0].crews) === '["k1"]', 'it goes to the ones named: ' + JSON.stringify(posted[0] && { f: posted[0].friends, c: posted[0].crews }));
 });
 
 flow('roadbooks: a planned road goes into a new roadbook from Share; People lists it; it is made public; one near you is followed; a road your Log covers is stamped; a link opens one signed out (Worker stubbed, SOCIAL 2.6)', async (page, base) => {
@@ -5137,6 +5159,10 @@ flow('For you: the People badge counts what is new and what waits; People lists 
   check(rows[0][0] && rows[0][1] === 'Topped · 20 min ago' && rows[0][2] === '@bob scored 850 on Dry Ridge climb, over your best of 800.', 'topped, new, in a sentence: ' + JSON.stringify(rows[0]));
   check(/^Kudos · 2 h ago$/.test(rows[1][1]) && /^Ridge Runners: Cherohala Saturday, .+\. Are you going\?$/.test(rows[2][2]), 'kudos and the crew drive: ' + JSON.stringify(rows));
   check(await page.isVisible('#accountBody .request-card:has-text("@dan")'), 'the request stays a card with its keys');
+  // a row with no key (kudos): its sentence sits under the kicker, the full width, not squeezed beside it
+  const kudos = await page.$eval('#accountBody .inbox-row:has-text("Kudos")', (r) => { const k = r.querySelector('.inbox-kick').getBoundingClientRect(), t = r.querySelector('.inbox-text').getBoundingClientRect();
+    return { under: t.top >= k.bottom - 1, left: Math.abs(t.left - k.left) < 2 }; });
+  check(kudos.under && kudos.left, 'the kudos sentence under its kicker: ' + JSON.stringify(kudos));
   // drawn is seen: the badge keeps only what waits on you
   await page.waitForFunction(() => (document.querySelector('#crewTab .badge') || {}).textContent === '1');
   check(await page.evaluate(() => !!localStorage.getItem('apex.inboxSeen')), 'seen is kept on the phone');
