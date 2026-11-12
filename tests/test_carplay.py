@@ -320,7 +320,9 @@ def test_the_cafes_and_fuel_along_go_to_the_car_by_name(maps):
     assert "car.along = ''; carAlong(t);" in js, "every route sent to the car is followed by its places"
     assert "if (car.route && track === t) carAlong(t);" in js, "and the places are sent when they come in"
     swift = open(os.path.join(ROOT, "CarPlay", "ApexCarPlay.swift"), encoding="utf-8").read()
-    assert 'case "along":' in swift and "line([o.detail, along.full, along.descent])" in swift
+    assert 'case "along":' in swift and "line([o.detail, along.short, along.descent])" in swift
+    assert "line([o.detail, along.full" not in swift, "the car preview names one place per kind, never the two-name line"
+    assert 'detailText: "A twisty loop' not in swift and 'header: "Twisty loops, back where you started"' in swift
     # the car's map, native and its web fallback: the places after the hazards and corners, so a name never hides a corner
     native = open(os.path.join(ROOT, "CarPlay", "ApexCarMap.swift"), encoding="utf-8").read()
     carmap = open(os.path.join(ROOT, "web", "carmap.js"), encoding="utf-8").read()
