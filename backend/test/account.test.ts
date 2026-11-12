@@ -33,6 +33,12 @@ describe("data export", () => {
     expect(data.segments).toHaveLength(1);
     expect(data.friends.map((f: { handle: string }) => f.handle).sort()).toEqual(["bob", "carol"]);
     expect(data.points_by_week[0].octane).toBe(3);
+    // road data still tied to me is in it too (it goes with the account; merged data is anonymous)
+    await env.DB.prepare("INSERT INTO upload_counts (user_id, bucket, uploads, km) VALUES (?, '2026-11-12T07', 2, 3.5)").bind(a.id).run();
+    await env.DB.prepare("INSERT INTO ingest_pending (user_id, way_id, dir, driven_on, km, bins) VALUES (?, 77, 0, '2026-11-12', 1.2, '[]')").bind(a.id).run();
+    const more = (await (await ok(api(a, "GET", "/api/me/export"))).json()) as Record<string, unknown[]>;
+    expect([more.road_data_uploads_by_hour, more.road_data_waiting.length, more.road_first_drives_held, more.stage_shares])
+      .toEqual([[{ bucket: "2026-11-12T07", uploads: 2, km: 3.5 }], 1, [], []]);
     expect(raw).not.toContain("bob@example.test");
     expect(raw).not.toContain(b.id);                                  // other people appear only as the handle they already show me
     expect(raw).not.toContain("Bob's stretch");
