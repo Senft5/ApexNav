@@ -224,7 +224,9 @@
             ? 'No loop here this week: Vetta’s road map doesn’t reach this area yet.'
             : 'This week’s loop is being looked at after reports.' }));
         } else {
-          kids.push(el('b', { textContent: c.name }),
+          // the Where to? row's own line (page.line, summaryLine) already says the loop, its length, the times and the days
+          // left: the body doesn't say them again (Nate 2026-11-12: no clutter)
+          if (!page.line) kids.push(el('b', { textContent: c.name }),
             el('p', { className: 'note', textContent: `${dist(c.length_m)} loop from the area’s best roads · ${left == null ? '' : left === 1 ? 'last day' : `${left} days left`} · ${t.entrants} ${t.entrants === 1 ? 'time' : 'times'}` }));
           const acts = el('div', { className: 'row', style: 'flex-wrap:wrap' });
           let g = [];
