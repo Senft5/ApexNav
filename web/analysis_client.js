@@ -173,6 +173,7 @@
   function practiceOf(Core, d, plan) {
     const P = root.ApexDriverProfile;
     if (!P || !plan || !d) return null;
+    if (P.onPlanRoad && !P.onPlanRoad(plan, d.name)) return null;     // a per-road plan: a drive elsewhere doesn't count
     const f = finish(Core, d);                                         // read exactly as Your driving reads a stored drive
     if (!f.corners || !f.corners.length) return null;
     const obs = P.observe({ ...f, corners: Rec().scorableCorners(f, f.corners) }, Core);

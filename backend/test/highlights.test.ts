@@ -75,4 +75,23 @@ describe("highlights", () => {
     expect((await api(a, "POST", "/api/highlights", spot({ name: "One too many", lat: 37 }))).status).toBe(429);
     void env;
   });
+
+  it("no spots from someone blocked either way or that you reported; fresh accounts' stars don't move the score", async () => {
+    const a = await makeUser("alice"), b = await makeUser("bobby"), c = await makeUser("carol");
+    const { id } = (await (await ok(api(a, "POST", "/api/highlights", spot()))).json()) as { id: string };
+    const other = (await (await ok(api(c, "POST", "/api/highlights", spot({ name: "Mill Bridge", category: "bridge", lat: 39.5 })))).json()) as { id: string };
+    expect((await list(b)).map((h) => h.name).sort()).toEqual(["Hawk Overlook", "Mill Bridge"]);
+    await ok(api(b, "POST", "/api/blocks", { handle: "alice" }));
+    expect((await list(b)).map((h) => h.name)).toEqual(["Mill Bridge"]);
+    expect((await list(a)).map((h) => h.name).sort()).toEqual(["Hawk Overlook", "Mill Bridge"]);   // the author still sees their own
+    await ok(api(b, "POST", "/api/reports", { kind: "highlight", target: other.id, reason: "spam" }));
+    expect(await list(b)).toEqual([]);
+    expect((await list(a)).length).toBe(2);
+    const fresh = await Promise.all(["f1", "f2", "f3"].map((h) => makeUser(h)));
+    await env.DB.prepare(`UPDATE members SET joined_at = datetime('now') WHERE user_id IN (${fresh.map(() => "?").join(",")})`).bind(...fresh.map((f) => f.id)).run();
+    for (const f of fresh) await ok(api(f, "POST", `/api/highlights/${id}/rating`, { stars: 1 }));
+    const seen = (await list(c)).find((h) => h.id === id)!;
+    expect([seen.ratings, seen.score]).toEqual([0, 3]);
+    expect((await list(fresh[0])).find((h) => h.id === id)!.my_stars).toBe(1);
+  });
 });

@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self' apexnav:; script-src 'self' apexnav: 'sha256-eQgljj3NlcG+punpHs/eKpjclk5v/6bjybxepbB0QFc=' 'sha256-G7s/ZI+Hqrfc4DqbB6EANJJLmUmhNK06PizQ1LlsG84=' https://cdn.jsdelivr.net 'wasm-unsafe-eval'; worker-src 'self' apexnav: blob:; child-src 'self' apexnav: blob:; style-src 'self' apexnav: 'unsafe-inline'; font-src 'self' apexnav: data:; img-src 'self' apexnav: data: blob: https://tiles.openfreemap.org https://s3.amazonaws.com https://basemap.nationalmap.gov; media-src 'self' apexnav: data: blob:; connect-src 'self' apexnav: data: blob: https://apexnav.senftns.workers.dev wss://apexnav.senftns.workers.dev https://tiles.openfreemap.org https://basemap.nationalmap.gov https://s3.amazonaws.com https://valhalla1.openstreetmap.de https://router.project-osrm.org https://overpass-api.de https://overpass.private.coffee https://overpass.kumi.systems https://maps.mail.ru https://nominatim.openstreetmap.org https://photon.komoot.io https://api.open-meteo.com https://api.weather.gov https://statsapi.mlb.com https://api.seatgeek.com https://api.water.noaa.gov https://waterservices.usgs.gov https://in.carsprogram.org https://publicapi.ohgo.com https://quickstats.nass.usda.gov https://commons.wikimedia.org https://graph.mapillary.com https://vpic.nhtsa.dot.gov https://cdn.jsdelivr.net https://huggingface.co https://*.huggingface.co https://*.hf.co; object-src 'none'; base-uri 'none'; form-action 'self'" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self' apexnav:; script-src 'self' apexnav: 'sha256-OOs06FVTv+TrcdL1efxzCcKBxQbJ7kuyMfqHyfcHIfU=' 'sha256-G7s/ZI+Hqrfc4DqbB6EANJJLmUmhNK06PizQ1LlsG84=' https://cdn.jsdelivr.net 'wasm-unsafe-eval'; worker-src 'self' apexnav: blob:; child-src 'self' apexnav: blob:; style-src 'self' apexnav: 'unsafe-inline'; font-src 'self' apexnav: data:; img-src 'self' apexnav: data: blob: https://tiles.openfreemap.org https://s3.amazonaws.com https://basemap.nationalmap.gov; media-src 'self' apexnav: data: blob:; connect-src 'self' apexnav: data: blob: https://apexnav.senftns.workers.dev wss://apexnav.senftns.workers.dev https://tiles.openfreemap.org https://basemap.nationalmap.gov https://s3.amazonaws.com https://valhalla1.openstreetmap.de https://router.project-osrm.org https://overpass-api.de https://overpass.private.coffee https://overpass.kumi.systems https://maps.mail.ru https://nominatim.openstreetmap.org https://photon.komoot.io https://api.open-meteo.com https://api.weather.gov https://statsapi.mlb.com https://api.seatgeek.com https://api.water.noaa.gov https://waterservices.usgs.gov https://in.carsprogram.org https://publicapi.ohgo.com https://quickstats.nass.usda.gov https://commons.wikimedia.org https://graph.mapillary.com https://vpic.nhtsa.dot.gov https://cdn.jsdelivr.net https://huggingface.co https://*.huggingface.co https://*.hf.co; object-src 'none'; base-uri 'none'; form-action 'self'" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
   <title>Vetta · Log</title>
   <link rel="icon" href="brand/mark.svg" type="image/svg+xml" />
@@ -692,7 +692,7 @@
       const w = ApexDriverProfile.roadBookRows(book, (at) => ApexFormat.dateTime(at.slice(0, 10)));
       if (!w) { $('bookHead').textContent = 'No corner of it driven cleanly three times yet: only corners with every technique credit measured count.'; return; }
       $('bookHead').textContent = w.work ? `${w.head} ${w.work}` : w.head;
-      showBookPractice(ApexDriverProfile.roadBookFocus(book));
+      showBookPractice(ApexDriverProfile.roadBookFocus(book), r.name);
       $('bookList').replaceChildren(...w.rows.map((x) => {
         const li = document.createElement('li'), n = document.createElement('span'), t = document.createElement('span'), v = document.createElement('b'), by = document.createElement('button');
         n.className = 'bk-n'; n.textContent = String(x.n); t.textContent = x.what; v.textContent = String(x.record);
@@ -705,17 +705,18 @@
       }));
     }
     // IDEAS D-27 from the road book: the technique its uneven corners differ by most, as the skill to practise next
-    function showBookPractice(f) {
+    // the plan keeps to this road (where: { road, name }): only its drives count, before and after (driver_profile.js practice)
+    function showBookPractice(f, road) {
       const box = $('bookPractice'), line = ApexDriverProfile.roadBookFocusLine(f);
       box.hidden = !line;
       if (!line) { box.replaceChildren(); return; }
       const name = ApexDriverProfile.WORDS[f.skill].name.toLowerCase(), plan = ApexDriverProfile.loadPlan(localStorage);
-      if (plan && plan.skill === f.skill) { box.textContent = `${line} You are practicing it now: Your driving shows how it goes.`; return; }
+      if (plan && plan.skill === f.skill && ApexDriverProfile.onPlanRoad(plan, road)) { box.textContent = `${line} You are practicing it now: Your driving shows how it goes.`; return; }
       const b = document.createElement('button');
-      b.type = 'button'; b.className = 'linkbtn'; b.id = 'bookPracticeGo'; b.textContent = `Practice ${name} on my next drives`;
+      b.type = 'button'; b.className = 'linkbtn'; b.id = 'bookPracticeGo'; b.textContent = `Practice ${name} on my next drives here`;
       b.addEventListener('click', () => {
-        ApexDriverProfile.savePlan(localStorage, { skill: f.skill, where: null, since: ApexDriverProfile.localStamp() });
-        box.textContent = `${line} Practicing it from your next drive: Your driving shows how it goes.`;
+        ApexDriverProfile.savePlan(localStorage, { skill: f.skill, where: { road: String(road || '').trim().toLowerCase(), name: road }, since: ApexDriverProfile.localStamp() });
+        box.textContent = `${line} Practicing it on your next drives here: Your driving shows how it goes, on this road alone.`;
         box.tabIndex = -1; box.focus({ preventScroll: true });
       });
       box.replaceChildren(document.createTextNode(`${line} `), b);
@@ -943,7 +944,7 @@
     // IDEAS D-27: the skill being practiced (driver_profile.js loadPlan), read again with each run; its level before the
     // practice is kept in the plan from each run, so the end card on the map can set a drive against it
     const planNow = () => ApexDriverProfile.loadPlan(localStorage);
-    const planKey = (pl) => (pl ? `${pl.skill}|${pl.since}|${pl.where ? `${pl.where.split}|${pl.where.worse}` : ''}` : '');
+    const planKey = (pl) => (pl ? `${pl.skill}|${pl.since}|${pl.where ? `${pl.where.split}|${pl.where.worse}|${pl.where.road || ''}` : ''}` : '');
     function drivingProfile(done) {
       const plan = planNow(), key = `${libKey}#${planKey(plan)}`;
       if (driving.key === key) { done(driving.p, driving.pr); return; }

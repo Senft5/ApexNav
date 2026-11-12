@@ -609,6 +609,13 @@
     }
     return null;
   }
+  // a per-road plan (where: { road, name }, from that road's book): the road's key, its drives' name trimmed and lower case
+  const planRoad = (where) => (where && typeof where === 'object' ? String(where.road || '').trim().toLowerCase() : '') || null;
+  /** Whether a drive called name counts for the plan: always, unless the plan keeps to one road and this is another. */
+  function onPlanRoad(plan, name) {
+    const road = plan ? planRoad(plan.where) : null;
+    return road === null || String(name || '').trim().toLowerCase() === road;
+  }
   function against(Core, xs, base) {
     const [m, se] = Core.meanSe(xs);
     if (!base) return [level(m), null, false];
@@ -635,14 +642,15 @@
     if (!SKILLS.includes(k)) return null;
     const since = String(plan.since || '');
     const key = (d) => [d.at || '', String(d.id)];
-    const order = drivesIn.filter((d) => d.obs && d.obs.length).sort((p, q) => { const a = key(p), b = key(q); return a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : a[1] < b[1] ? -1 : a[1] > b[1] ? 1 : 0; });
+    const order = drivesIn.filter((d) => d.obs && d.obs.length && onPlanRoad(plan, d.name)).sort((p, q) => { const a = key(p), b = key(q); return a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : a[1] < b[1] ? -1 : a[1] > b[1] ? 1 : 0; });
     const before = [], after = [], rows = [];
     for (const d of order) {
       const xs = vals(d.obs, k);
       if (d.at && d.at >= since) { after.push(...xs); if (xs.length) rows.push(d); } else before.push(...xs);
     }
     let base = null;
-    const out = { skill: k, since, before: { level: null, n: before.length, mean: null, se: null }, after: { level: null, n: after.length }, delta: null, sure: false, drives: [] };
+    const out = { skill: k, since, before: { level: null, n: before.length, mean: null, se: null }, after: { level: null, n: after.length }, delta: null, sure: false, drives: [],
+      road: planRoad(plan.where) ? String(plan.where.name || '').trim() || planRoad(plan.where) : null };
     if (before.length >= SKILL_MIN) {
       const [m, se] = Core.meanSe(before);
       base = [r(m, 4), r(se, 4)];                                     // as the plan keeps it for the end card, so both say the same
@@ -807,8 +815,9 @@
   /** The practice so far, as a sentence for its panel. pr: practice's. */
   function practiceSummary(pr) {
     if (!pr) return null;
-    const day = dayOf(pr.since), from = day ? `Since ${day}` : 'Since you started';
-    if (pr.after.level === null) return `${from}, no drive yet with ${PRACTICE_MIN} or more corners to read it on. Your next twisty road is the first.`;
+    const day = dayOf(pr.since), from = `${day ? `Since ${day}` : 'Since you started'}${pr.road ? ` on ${pr.road}` : ''}`;
+    if (pr.after.level === null) return pr.road ? `${from}, no drive there yet with ${PRACTICE_MIN} or more corners to read it on. Your next drive there is the first.`
+      : `${from}, no drive yet with ${PRACTICE_MIN} or more corners to read it on. Your next twisty road is the first.`;
     const n = pr.drives.length;
     let t = `${from}: ${pr.after.level} on ${pr.after.n} corners over ${n} drive${n === 1 ? '' : 's'}`;
     if (pr.before.level === null) return `${t}. There were too few corners before to compare with.`;
@@ -1035,6 +1044,6 @@
   }
 
   const api = { SKILLS, observe, profile, swing, excess, SKILL_MIN, WORDS, findingLine, styleLines, touchLines, touchTrendLines, driveTouchLines, paceLines, PACE, MEASURES, touch, TOUCH, driveTouch, DRIVE_TOUCH_MIN, bestCorners, recordsBySize, RECORD_MIN, driveRecords, driveRecordLines, roadRecords, placed, roadRecordLine, roadCornerNote, roadBook, roadBookRows, roadBookFocus, roadBookFocusLine, roadsToWork, skillRoadLine, roadUnevenLine, roadEndLine, cardLine, focusLines, render,
-    PRACTICE_MIN, practice, drivePractice, practiceLine, practiceSummary, localStamp, loadPlan, savePlan, PLAN_KEY };
+    PRACTICE_MIN, practice, drivePractice, onPlanRoad, practiceLine, practiceSummary, localStamp, loadPlan, savePlan, PLAN_KEY };
   if (typeof module !== 'undefined' && module.exports) module.exports = api; else root.ApexDriverProfile = api;
 })(typeof window !== 'undefined' ? window : globalThis);
