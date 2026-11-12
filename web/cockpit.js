@@ -6177,7 +6177,7 @@
     // Weekly time attack (web/time_attack.js, SOCIAL 2.9, IDEAS S-26): this area's loop this week and its board, in Where to?
     // beside Spots near you; drawn when opened, fresh each time. Runs go up from the Log when stages sync.
     let timeAttack = null;
-    const TA_LINE = 'Time attack this week: a loop near you, quickest time';
+    const TA_LINE = 'Time attack this week';   // TestFlight 2026-11-12 (note 7): the row names itself, no tagline
     onSocial(() => { try {
       const ta = window.ApexTimeAttack ? ApexTimeAttack.mount({ el, btn, toast, apiCall, jsonOf, report: safety && safety.report,
         ask: (t, a) => ApexConfirm.ask(t, a),
