@@ -4,6 +4,14 @@ Decisions Claude made for you, newest first. Each one says what was decided, why
 you reach one you've seen. If you disagree with a call, say so and it gets reversed; nothing here is hard to undo unless
 it says so. Things only you can do are in docs/OWNER_TODO.md.
 
+## 2026-11-11 (TestFlight 21:14): a corner or moment tapped on a drive's page zooms the map to it (claude/project-thread-0wt1zm)
+
+Your note "tapping a corner or moment here should orient the view above to show that corner zoomed in on the map". A tap on
+a corner, an abrupt moment, a braking-consistency row or a coach row now glides the map in on that stretch (the corner's
+start to end, or 50 m either side of a moment, with 60 m round it and at least 250 m across), and scrolls the map into view
+if it is above the screen. Calls: the lanes keep their own zoom (as before); "All" in the zoom row, or Recenter on the map,
+shows the whole drive again; with no map (offline) the plain picture zooms the same way and a tap on it zooms back out;
+reduced motion jumps instead of gliding. Undo: revert the PR.
 ## 2026-11-11 (roam-b walkthrough 2): Done after a replay brings the map back to where you are (claude/project-thread-sxhrgi)
 
 - Done (or the plate's ×) after watching a replay, whether the welcome's demo or one of your drives from the Log, now jumps

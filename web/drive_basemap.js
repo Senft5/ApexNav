@@ -112,7 +112,7 @@
    * Puts the map under `holder` (a positioned box exactly the size of the SVG) when it first comes into view.
    * view: () => { center, zoom } for the holder's current width; box: [s, w, n, e]; palette: () => the theme's map
    * palette (ApexThemes look.map); onShown: told when the map is up; onMove({ center, zoom } | null): the camera as it
-   * moves (null: back to the plain picture). Returns { restyle(), refit(), recenter(), destroy(), shown, reason }.
+   * moves (null: back to the plain picture). Returns { restyle(), refit(), recenter(), focus(v), destroy(), shown, reason }.
    */
   function attach(holder, { view, box, palette, onShown, onMove } = {}) {
     let map = null, dead = false, shown = false, io = null, timer = 0, tiles = 0, fitW = 0, reason = '';
@@ -210,8 +210,17 @@
       io = new root.IntersectionObserver((es) => { if (es.some((e) => e.isIntersecting)) { io.disconnect(); io = null; start(); } }, { rootMargin: '200px 0px' });
       io.observe(holder);
     } else start();
+    // the owner, 2026-11-11 (TestFlight): "tapping a corner or moment here should orient the view above to show that
+    // corner zoomed in on the map": a glide to camera `v` ({ center, zoom }), a jump when motion is reduced. Inside the
+    // fitted view's pan box (a corner is on the drive), so the limits stay. False when the map isn't up.
+    function focus(v) {
+      if (!map || dead || !shown || !v || !Number.isFinite(v.zoom)) return false;
+      const still = !!(root.matchMedia && root.matchMedia('(prefers-reduced-motion: reduce)').matches);
+      try { if (map.easeTo && !still) map.easeTo({ center: v.center, zoom: v.zoom, duration: 600 }); else map.jumpTo(v); } catch (_) { return false; }
+      return true;
+    }
     return {
-      restyle: paint, refit, recenter: () => fit(true),
+      restyle: paint, refit, recenter: () => fit(true), focus,
       get shown() { return shown; },
       get reason() { return reason; },
       destroy() { dead = true; if (io) io.disconnect(); io = null; teardown(); note.remove(); },
