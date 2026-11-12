@@ -65,6 +65,32 @@ describe("sessions", () => {
     expect(await (await api(a, "GET", "/api/me")).json()).toEqual({ signed_in: false });
   });
 
+  it("a session in use slides: pushed back to 30 days at most once a day, and the website's cookie with it", async () => {
+    const a = await makeUser("alice");
+    const left = async () => (await env.DB.prepare("SELECT (julianday(expires_at) - julianday('now')) AS d FROM sessions WHERE user_id = ?").bind(a.id).first<{ d: number }>())!.d;
+    await env.DB.prepare("UPDATE sessions SET expires_at = datetime('now', '+2 days') WHERE user_id = ?").bind(a.id).run();
+    const r = await api(a, "GET", "/api/me");
+    expect(await r.json()).toMatchObject({ signed_in: true });
+    expect(await left()).toBeGreaterThan(29.9);                                  // 2 days left became 30
+    expect(r.headers.get("set-cookie")).toMatch(/^__Host-ax_session=tok-alice-[^;]+; Max-Age=2592000; Path=\/; HttpOnly; Secure; SameSite=Lax$/);
+    // a few hours in: nothing is written
+    await env.DB.prepare("UPDATE sessions SET expires_at = datetime('now', '+29 days', '+12 hours') WHERE user_id = ?").bind(a.id).run();
+    await api(a, "GET", "/api/me");
+    expect(await left()).toBeLessThan(29.6);
+    // the app sends a bearer token: the session slides, no cookie is set
+    await env.DB.prepare("UPDATE sessions SET expires_at = datetime('now', '+3 days') WHERE user_id = ?").bind(a.id).run();
+    const app = await exports.default.fetch(new Request(`${ORIGIN}/api/me`, { headers: { authorization: `Bearer ${a.token}` } }));
+    expect(await app.json()).toMatchObject({ signed_in: true });
+    expect(app.headers.get("set-cookie")).toBeNull();
+    expect(await left()).toBeGreaterThan(29.9);
+    // an expired session never comes back
+    await env.DB.prepare("UPDATE sessions SET expires_at = datetime('now', '-1 minute') WHERE user_id = ?").bind(a.id).run();
+    const gone = await api(a, "GET", "/api/me");
+    expect(await gone.json()).toEqual({ signed_in: false });
+    expect(gone.headers.get("set-cookie")).toBeNull();
+    expect(await left()).toBeLessThan(0);
+  });
+
   it("logout ends the session server-side", async () => {
     const a = await makeUser("alice");
     expect((await api(a, "POST", "/api/auth/logout")).status).toBe(204);
