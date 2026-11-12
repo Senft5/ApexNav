@@ -7382,8 +7382,8 @@ flow('REVIEW.md 1.2 screen by screen: the Log, drive detail, Stages, People sign
   check(stray.join === 0 && stray.acc === 'none', 'People\'s signed-out page is not in the Garage: ' + JSON.stringify(stray));
   await openSetting(page, 'data');
   const g = await page.evaluate(() => { const s = document.getElementById('sheet'), e = getComputedStyle(document.getElementById('myEraseBtn'));
-    return { title: s.querySelector('h2').textContent, themes: document.querySelectorAll('#themeCards > *').length, how: document.querySelectorAll('[data-panel~="garage"] details.how').length, octane: /Octane/.test(document.body.innerText), erase: e.color + '/' + e.textDecorationLine + '/' + e.borderTopStyle }; });
-  check(g.title === 'Garage' && g.themes === 3 && g.how >= 2 && !g.octane && g.erase === 'rgb(200, 16, 46)/none/none', 'Garage: ' + JSON.stringify(g));
+    return { title: s.querySelector('h2').textContent, themes: document.querySelectorAll('#themeCards > *').length, how: document.querySelectorAll('[data-panel~="garage"] details.how').length, bare: [...document.querySelectorAll('[data-panel~="garage"] > p.note')].filter((p) => !p.id && p.textContent.trim().length >= 140).length, octane: /Octane/.test(document.body.innerText), erase: e.color + '/' + e.textDecorationLine + '/' + e.borderTopStyle }; });
+  check(g.title === 'Garage' && g.themes === 3 && g.how >= 1 && g.bare === 0 && !g.octane && g.erase === 'rgb(200, 16, 46)/none/none', 'Garage: ' + JSON.stringify(g));
   // 2026-11-10: Your data is the Settings list's rows in three groups (it was eight keys of eight widths): one left edge, one width
   const rowsOf = await page.evaluate(() => { const box = document.querySelector('.data-rows'); return { groups: [...box.querySelectorAll('.nav-group')].map((h) => h.textContent),
     rows: [...box.querySelectorAll('.nav-row')].map((r) => { const b = r.getBoundingClientRect(); return [r.id, Math.round(b.left), Math.round(b.width), Math.round(b.height)]; }) }; });
