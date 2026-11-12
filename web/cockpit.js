@@ -211,7 +211,7 @@
     const etaSections = new WeakMap();      // track -> its corner sections (ApexEta.cornerSections), worked out once
     let etaText = '', etaLeftS = null;
     let replayEnded = false, replayWaiting = false;   // U-110 a finished replay, U-128 a replay waiting for its map (paintReplayEnd)
-    const car = { serial: 0, route: '', guideAt: 0, guideKey: '', sightKey: '', look: '', hazards: '', symbols: new Map(), ended: null, along: '', road: '', roadAt: -1e9 };   // what the car's screen was last sent (carRoute, carGuide below)   // strip text while off route; last frame fed; furthest progress
+    const car = { serial: 0, route: '', guideAt: 0, guideKey: '', sightKey: '', look: '', hazards: '', symbols: new Map(), ended: null, along: '', offerSerial: 0, offer: null, road: '', roadAt: -1e9 };   // what the car's screen was last sent (carRoute, carGuide below)   // strip text while off route; last frame fed; furthest progress
     try {
       const saved = JSON.parse(localStorage.getItem('apex.prefs') || 'null');
       if (saved) {
@@ -3426,7 +3426,7 @@
         const o = ApexEta.homeByOffer(est.arriveAt, track.homeBy, track.homeByOfferedAt ?? null, now);
         // a stage still ahead is skipped first (the loop shortens itself, your call); with none left, the quickest way home
         if (o) { track.homeByOfferedAt = now; const a = ApexEta.homeByAction(track.stageSpans, routeWatch.bestM);
-          toast(`Running ${o.lateMin} min late for home.`, { label: a.label, ms: 15000, onClick: () => {
+          offerKey(`Running ${o.lateMin} min late for home.`, `${o.lateMin} min late`, { label: a.label, ms: 15000, onClick: () => {
             const b = track ? ApexEta.homeByAction(track.stageSpans, routeWatch.bestM) : a;   // as of the tap (a reroute meanwhile)
             if (b.kind === 'skip') skipStage(b.span); else headHome(); } }); }
       }
@@ -3554,7 +3554,8 @@
       const key = `${hit.lat.toFixed(4)},${hit.lon.toFixed(4)}`;
       if (policeAhead.offered.has(key)) return;
       policeAhead.offered.add(key);
-      toast(`Police reported on your route in ${ApexUnits.long(hit.aheadM, 1)}.`, { label: 'Go round', ms: 15000, onClick: () => goRoundPolice(t, hit, pts) });
+      const far = ApexUnits.long(hit.aheadM, 1);
+      offerKey(`Police reported on your route in ${far}.`, `Police in ${far}`, { label: 'Go round', ms: 15000, onClick: () => goRoundPolice(t, hit, pts) });
     }
     async function goRoundPolice(t, hit, pts) {
       const L = state.live;
@@ -4983,6 +4984,23 @@
       }
       t.classList.add('show'); clearTimeout(t._h);
       t._h = setTimeout(() => { t.classList.remove('show'); if (action && action.onClick) t.querySelectorAll('a').forEach(x => x.remove()); }, action ? action.ms || 7000 : 4200);
+    }
+    // A drive's one-key offer (Go round, Skip, Head home) is on the car's screen too, as a navigation alert with the key and
+    // Not now (CarPlay/ApexCarPlay.swift showOffer): whichever key is tapped first does it, once, and the other goes away.
+    function offerKey(msg, short, action) {
+      const id = `o${++car.offerSerial}`;
+      let done = false;
+      const once = (fromCar) => {
+        if (done) return;
+        done = true; car.offer = null;
+        if (fromCar) { if (key && key.isConnected) { key.remove(); $('toast')._holdUntil = 0; $('toast').classList.remove('show'); } }
+        else carPost({ kind: 'offerDone', id });
+        action.onClick();
+      };
+      toast(msg, { ...action, onClick: () => once(false) });
+      const key = $('toast').querySelector('a.toast-key');
+      car.offer = { id, until: performance.now() + (action.ms || 7000), run: () => once(true) };
+      carPost(ApexCarPlay.offerMessage(id, msg, short, action.label, action.ms));
     }
     // Something that needs an account says so and offers the way in: the toast's "Sign in" key opens People, where signing in
     // lives. In a drive it is only said, on the drive's message row: no sheet opens over the road.
@@ -9521,6 +9539,7 @@
       }
       else if (m.action === 'end' && driveActive) { if (pendingEnd) commitEnd(); else askEnd(); }   // I-3: the car's End has the Undo window too; End again ends now
       else if (m.action === 'undo') undoEnd();
+      else if (m.action === 'offer' && car.offer && m.id === car.offer.id && performance.now() < car.offer.until) car.offer.run();
       else if (m.action === 'disconnect') keepCar(false, m.t);      // Round 3: the car switched off; the drive ends once it stays put
       else if (m.action === 'places') carPost(ApexCarPlay.placesMessage(recentPlaces()));
       else if (m.action === 'loop' && LOOP_MINUTES.includes(m.minutes) && !driveActive) loop({ minutes: m.minutes });
