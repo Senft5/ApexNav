@@ -10,6 +10,7 @@ export interface Env {
   PUBLIC_ORIGIN?: string;
   WRITE_LIMIT?: RateLimit;  // wrangler.jsonc ratelimits: writes per session (or per IP when signed out)
   AUTH_LIMIT?: RateLimit;   // sign-in endpoints per IP
+  READ_LIMIT?: RateLimit;   // signed-in reads per session (not the static map tiles)
   RELAY_LIMIT?: RateLimit;  // the signed-out relays (/api/ctx/osm, trace, workzones) per IP
   BACKUPS?: KVNamespace;
   PHOTOS?: KVNamespace;     // photo bytes, key p/<id> (src/photos.ts)
