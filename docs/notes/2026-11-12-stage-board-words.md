@@ -2,8 +2,8 @@
 
 ## 2026-11-12 A stage's Board: fewer words, none of them stale
 
-- Done: the empty friends board says "No friends on this stage yet." (it went on about sharing and an "Account" page that is People now). The note under the board ("Your stages are backed up. Scores are shared only with friends you choose (Account).") is gone; a fresh backup still says "Backed up N stages.". The Runs table's head says "Time", not "Time (private)": since 2026-11-11 friends and private crews see times by default. e2e checks the sentence and that no "(Account)" is left on the board.
-- Left: web/privacy.html still names "(Account)" for Download my data and Delete account; that page belongs to the privacy work, not this thread.
+- Done: the empty friends board says "No friends on this stage yet." (it went on about sharing, sending people to Account in Settings, which holds sign-out and your data but not who sees your scores; that is People → Who sees what). The note under the board ("Your stages are backed up. Scores are shared only with friends you choose (Account).") is gone; a fresh backup still says "Backed up N stages.". The Runs table's head says "Time", not "Time (private)": since 2026-11-11 friends and private crews see times by default. e2e checks the sentence and that no "(Account)" is left on the board.
+- Checked: web/privacy.html's "(Account)" for Download my data and Delete account is right; those keys are in Garage → Settings → Account.
 - Next: keep decluttering the social surfaces (Nate 2026-11-12, no walls of text).
 
 # CALL SHEET
