@@ -112,7 +112,16 @@ const rootGap = mkEl('div');                                       // elevation 
 V.mount(rootGap, { ...scoredDrive, elev: scoredDrive.elev.map((v, i) => (i < 50 ? NaN : v)) }, { Core, C, MPH: Core.MPS_TO_MPH });
 const gapLanes = rootGap.children[1].children[1].children[1].innerHTML;
 
-console.log(JSON.stringify({ full, bare, headHtml, unscoredHeadHtml, hiddenBeforeScrub, hiddenAfterKeyScrub, hiddenBeforeZoom, hiddenAfterZoom,
+// Repeatability rows: the big number is labelled once below, the slowest point and turn-in stay in the spoken label.
+const sp = (b, extra) => ({ apex: 20, passes: 6, spread: { passes: 6, brake_passes: 6, brake_sd_m: b, min_sd_m: 4, min_passes: 6, turn_sd_m: 3, turn_passes: 6, speed_sd_mps: 1, speed_passes: 6, ...extra } });
+const repDrive = { ...scoredDrive, corners: [0, 1, 2].map((k) => ({ start: 10 + 60 * k, apex: 20 + 60 * k, end: 30 + 60 * k, apex_mps: 12, code: 'L3', call: 'LEFT 3' })) };
+const rootRep = mkEl('div');
+V.mount(rootRep, repDrive, { Core, C, MPH: Core.MPS_TO_MPH, coach: { corners: [sp(2), sp(3), sp(14)], clean: 3, this_s: 4, ideal_s: 4, gain_s: 0, top: [], others: [] } });
+const repKids = rootRep.children[2].children, repAt = repKids.findIndex((c) => c.tag === 'h2' && /repeatable/.test(c.textContent || c.innerHTML || ''));
+const repIntro = repKids[repAt + 1].innerHTML, repBtns = repKids[repAt + 2].children.map((li) => li.children[0]);
+const reps = repBtns.map((b) => ({ html: b.innerHTML, label: b['aria-label'] }));
+
+console.log(JSON.stringify({ repIntro, reps, full, bare, headHtml, unscoredHeadHtml, hiddenBeforeScrub, hiddenAfterKeyScrub, hiddenBeforeZoom, hiddenAfterZoom,
   coachHead, timeHtml, cardHtml, aloneHead, aloneList, aloneCard, coastNear, ggCaption, ggCorner, ggNone, ggLede, ggMore, ggOrder, feelRead, gapLanes }));
 """
 
@@ -343,3 +352,16 @@ console.log(JSON.stringify({
     src = open(os.path.join(root, "web", "drive_view.js"), encoding="utf-8").read()
     assert "c.call || c.code" not in src.replace("return c.call || c.code || '';", ""), "every corner name goes through cornerCall"
     assert '<script src="plain_notes.js">' in open(os.path.join(root, "web", "analysis.html"), encoding="utf-8").read()
+
+
+def test_repeatability_rows_label_the_number_once(r):
+    assert r["repIntro"].startswith("Typical: braking point ±") and r["repIntro"].endswith(" · 3 corners"), r["repIntro"]
+    assert len(r["reps"]) == 3
+    for row in r["reps"]:
+        h = row["html"]
+        assert "<em" in h and ">±" in h and "Braking point over 6 passes" in h
+        assert h.count("braking point ±") == 0, "the line under the number does not repeat it"
+        assert "slowest point" not in h and "turn-in" not in h, h
+        assert "slowest point ±" in row["label"] and "turn-in ±" in row["label"] and "over 6 passes" in row["label"]
+    assert "pick a braking marker you can always make" in r["reps"][-1]["html"]
+    assert "braking marker" not in r["reps"][0]["html"]
