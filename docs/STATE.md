@@ -1,14 +1,28 @@
 # VETTA — CURRENT AGENT HANDOFF STATE
 
-## Session 2026-11-11 (roam-a best run record): Best run this month (claude/project-thread-h7xxmf, off origin/main)
+> Newer entries are in `docs/notes/` (one file per PR, CLAUDE.md rule 7). Don't edit this file in a PR.
 
-- IDEAS D-30, part two. web/recording.js `runOf(Core, d)` (repair + scorable corners, as `scoreOf`) and summaries carry
-  `run: { corners, len_m }` (null: none of 5+; absent: flow.js not loaded). SUMMARY_VERSION 2 (rebuilt once).
-- flow.js now loads before recording.js in index.html (deferred, ~2 KB), analysis.html, analysis_worker.js and
-  break_worker.js. drive_view.js uses `runOf` too. analysis.html renderRecords: "Best run this month: corners in a row,
-  smooth and settled, over X" (CSP hash regenerated).
-- Tests: tests/test_flow.py (+2: summary and wiring); e2e "Your records…" seeds runs (an old month's never counts).
-- Next: the end card's line for the run, when a drive just had one.
+## Session 2026-11-11 (sweep round three): the cron jobs are watched (claude/project-thread-g9yher, off origin/main 6a43a9c)
+
+- Migration 0055 `cron_runs` (job, ok_at, fail_at, reason). backend/src/cron_runs.ts `runCron` wraps the backup and the
+  sweep in `scheduled`: success sets ok_at; a throw sets fail_at + scrubbed reason and counts as `cron <job>` in error_counts.
+  A backup that writes nothing (too big) counts as a failure. `GET /api/health` returns `cron: {backup, sweep}` (age_h,
+  failing, late) from the same single read. tools/status_check.py: core checks "Weekly backup" and "Daily sweep"; the
+  outage issue is titled "ApexNav: … not running" when only those fail. docs/STATUS.md step 4, docs/BACKUPS.md.
+- 0055 must be on preview and prod before merge (/api/health 503s without the table).
+- Next: offline behaviour and App Store / TestFlight readiness checks.
+## Session 2026-11-12 (ui-round-three, PR 5): the promises say what the app does now (claude/project-thread-5sbga7)
+
+- The coordinator, for Nate's 2026-11-11 calls (sharing with friends and private crews on by default; a weekly loop with a
+  board): about.html's and About Vetta's (index.html) "No public races / No races" and "Yours until you share it" became
+  "No top speeds" (nothing records or shows how fast anyone went flat out; the weekly loop's board has only those who
+  entered) and "Shared with your people" (Scores and times to friends and private crews until switched off; drives stay
+  on the phone; privacy zones). The App Store listing still must not mention the time attack (APP_REVIEW 1.4).
+- privacy.html: a "Scores and times with friends and crews" paragraph (on from the start, Who sees what, a public crew
+  only on a yes, never the drive itself) that APP_REVIEW 5.1.2 already said existed; the time attack "stage" is now the
+  loop Vetta picks; Last updated 12 November 2026. APP_REVIEW 5.1.2 notes it.
+- Tests: tests/test_promises_current.py (stale promises can't come back).
+
 ## Session 2026-11-12 (ui-round-three, PR 4): the website's page in the Line, with today's app on it (claude/project-thread-5sbga7)
 
 - web/about.html: the app's faces loaded (fonts.css, preloaded; it named Inter Tight without loading it), the title and

@@ -89,7 +89,8 @@ AUTOINCREMENT counters so restored ids are never reused.
 The other Free-plan ceiling is 10 ms of CPU per cron run: formatting about a thousand rows fits easily, but somewhere in the
 tens of thousands of rows the run will stop with `exceededCpu` in the Worker's metrics and no `backup` log line. The next
 run that succeeds logs `backup_gap` (no copy for more than 8 days before it), and a week without a new key under
-`d1/apexnav-db/` means the same. Then either move to Workers Paid (30 s per cron run) or split the dump across several
+`d1/apexnav-db/` means the same. Since migration 0055 each run is also recorded in `cron_runs`, and the status check
+opens an issue when the last good backup is more than 8 days 6 hours old or the latest run failed (docs/STATUS.md). Then either move to Workers Paid (30 s per cron run) or split the dump across several
 runs. Integers above 2^53 would lose precision on the way through JavaScript; no column holds one (way ids are under 2^32).
 
 To fetch a copy: dashboard > Storage & Databases > KV > `apexnav-backups`, or
