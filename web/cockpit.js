@@ -4568,13 +4568,18 @@
         if (await loopRound(L, own, ui, false)) return;
       }
       const here = ownOn() ? await RouteLoading.optional(ownRouter().covers([c]), OWN_COVERS_ONLY_MS).catch(() => null) : false;
-      const why = !ownOn() ? 'off' : here == null ? 'index' : here ? 'none' : 'out';
+      // our router failing (its worker errored or ran out of time) is not "no loop of that length"; loops it found that
+      // none survived the build or the scoring is "rejected"
+      const failed = here && ApexOwnRouting.lastLoopError;
+      const why = !ownOn() ? 'off' : here == null ? 'index' : !here ? 'out' : failed ? 'failed' : own.length ? 'rejected' : 'none';
       if (window.apexDebug) window.apexDebug.loopOwnOnlyFail = why;
-      try { if (window.ApexErrors && ApexErrors.reporter) ApexErrors.reporter.route('loop', why); } catch (_) { /* a report is never in the way */ }
+      // the length asked rides with it (never a place): "loop: none (25 mi)", "loop: failed (25 mi, graph router timed out)"
+      try { if (window.ApexErrors && ApexErrors.reporter) ApexErrors.reporter.route('loop', why, failed ? `${asked}, ${failed}` : asked); } catch (_) { /* a report is never in the way */ }
       toast(!ownOn() ? 'Loops need Vetta\'s own router, which is switched off.'
         : here == null ? 'Couldn\'t load Vetta\'s road map here. Check signal and try again.'
-        : here ? `Couldn't find a ${asked} loop on Vetta's road map from here. Try another length.`
-        : 'Loops use Vetta\'s own road map, which covers Ohio, Kentucky and Indiana so far.');
+        : !here ? 'Loops use Vetta\'s own road map, which covers Ohio, Kentucky and Indiana so far.'
+        : failed ? `Vetta's router couldn't finish a ${asked} loop this time. Try again, or a shorter one.`
+        : `Couldn't find a ${asked} loop on Vetta's road map from here. Try another length.`);
     }
     const loopCircle = (L) => ({ kind: 'circle', pts: loopWaypoints(L.c, L.miles, Math.random() * 2 * Math.PI), through: true, extra: loopCosting() || {} });
     /** Loop jobs routed (ours come routed) and built into tracks: { t, job, route, km, score, ... } for those that worked. */
