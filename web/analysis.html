@@ -263,6 +263,7 @@
     .dv-head .score.big { font-size: 80px; line-height: 0.9; letter-spacing: 0.02em; }
     .dv-head .dv-plain { font-size: 17px; line-height: 1.35; font-weight: 600; }
     .dv-acts { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 18px; margin: 12px 0 4px; }
+    .dv-acts > * { flex: none; white-space: nowrap; }
     .dv-more > summary { list-style: none; cursor: pointer; }
     .dv-more > summary::-webkit-details-marker { display: none; }
     .dv-more { position: relative; }
@@ -340,9 +341,9 @@
       <div class="dv-acts" id="dvActs" role="group" aria-label="This drive">
         <button class="btn solid dv-replay" id="dvReplay">Replay</button>
         <button class="linkbtn" id="dvAgain">Drive it again</button>
-        <button class="linkbtn" id="dvCompare">Compare</button>
         <details class="dv-more"><summary class="linkbtn" aria-label="More for this drive" title="More">⋯</summary>
           <div class="dv-more-box">
+            <button class="linkbtn" id="dvCompare">Compare</button>
             <button class="linkbtn" id="dvShare">Send the road</button>
             <button class="linkbtn" id="dvCard">Share card</button>
             <button class="linkbtn" id="dvStage">Mark a stage</button>

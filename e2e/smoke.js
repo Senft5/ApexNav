@@ -1842,16 +1842,16 @@ flow('your roads (panel D-1, R-1, D-2): a road you drove is on the deck and its 
   // the drive's page: Drive it again next to Replay, and it plans the drive on the map
   await page.goto(base + '/analysis.html?tab=drive&drive=yr1');
   await page.waitForSelector('#dvAgain:not([hidden])', { timeout: 15000 });
-  // four keys in one row (Replay, Drive it again, Compare, ⋯); Send the road, Share card and Mark a stage wait in the ⋯ menu
+  // three keys in one row (Replay, Drive it again, ⋯); Compare, Send the road, Share card and Mark a stage wait in the ⋯ menu
   const keys = await page.evaluate(() => {
     const top = (id) => Math.round(document.getElementById(id).getBoundingClientRect().top), vis = (id) => document.getElementById(id).checkVisibility();
     const sum = document.querySelector('.dv-more > summary');
-    return { row: new Set([top('dvAgain'), top('dvCompare')].map((t) => Math.abs(t - top('dvAgain')) < 30 ? 0 : t)).size === 1
-      && Math.abs(sum.getBoundingClientRect().top - top('dvAgain')) < 30, hidden: ['dvShare', 'dvCard', 'dvStage'].every((id) => !vis(id)), label: sum.getAttribute('aria-label') };
+    return { row: Math.abs(top('dvReplay') - top('dvAgain')) < 30
+      && Math.abs(sum.getBoundingClientRect().top - top('dvAgain')) < 30, hidden: ['dvCompare', 'dvShare', 'dvCard', 'dvStage'].every((id) => !vis(id)), label: sum.getAttribute('aria-label') };
   });
-  check(keys.row && keys.hidden && keys.label === 'More for this drive', 'the drive page: four keys in a row, the rest in More: ' + JSON.stringify(keys));
+  check(keys.row && keys.hidden && keys.label === 'More for this drive', 'the drive page: three keys in a row, the rest in More: ' + JSON.stringify(keys));
   await page.click('.dv-more > summary');
-  check(await page.evaluate(() => ['dvShare', 'dvCard', 'dvStage'].every((id) => document.getElementById(id).checkVisibility())), 'More opens Send the road, Share card, Mark a stage');
+  check(await page.evaluate(() => ['dvCompare', 'dvShare', 'dvCard', 'dvStage'].every((id) => document.getElementById(id).checkVisibility())), 'More opens Compare, Send the road, Share card, Mark a stage');
   await page.mouse.click(5, 5);
   check(await page.evaluate(() => !document.querySelector('.dv-more').open), 'a tap outside closes More');
   const n = asked.length;
