@@ -7617,7 +7617,10 @@ flow('REVIEW.md 1.2 screen by screen: first run, the map, planning, the route, d
   check(fitted.whole && fitted.inView && fitted.follow === false, 'collapsed: the name whole and the route fitted on screen: ' + JSON.stringify(fitted));
   // Driving: no tab bar; Report and End; Limit, the Score under the g-ball
   await page.click('#planClear');
-  await page.evaluate(async () => { for (let i = 0; i < 40; i++) { window.apex.live({ lat: 35.96 + i * 1e-5, lon: -83.92, accuracy_m: 5, speed_mps: 12, course_deg: 0, has_fix: true, calibration: 'locked', lat_g: 0.1, lon_g: 0 }); await new Promise((r) => setTimeout(r, 100)); } });
+  await page.evaluate(async () => { for (let i = 0; i < 40; i++) { window.apex.live({ lat: 35.96 + i * 1e-5, lon: -83.92, accuracy_m: 5, speed_mps: 12, course_deg: 0, has_fix: true, calibration: 'locked', lat_g: 0.1, lon_g: 0 }); await new Promise((r) => setTimeout(r, 100)); }
+    // the car keeps sending fixes, as a phone does: a report needs a fix under 10 s old, and a web drive with none for 5 s
+    // drops back to the replay (CI 2026-11-12: "one tap … Undo" failed once on a loaded runner, as the Q-15 flow did)
+    window.__fixes = setInterval(() => window.apex.live({ lat: 35.96 + 40e-5, lon: -83.92, accuracy_m: 5, speed_mps: 12, course_deg: 0, has_fix: true, calibration: 'locked', lat_g: 0.1, lon_g: 0 }), 500); });
   const drv = await page.evaluate(() => { const tb = document.getElementById('tabbar'); return { tabbar: !!(tb.offsetWidth || tb.offsetHeight), limit: !!document.querySelector('#cluster .ro-limit'), score: document.querySelector('#cluster .g-score').textContent, report: !!document.getElementById('hzReportBtn').offsetParent, end: !!document.getElementById('driveEnd').offsetParent }; });
   check(!drv.tabbar && drv.limit && /SCORE$/.test(drv.score) && drv.report && drv.end, 'Driving: ' + JSON.stringify(drv));
   // Hazard report: six plate-style keys, one tap, no confirm, Undo on the Report key for 3 s
@@ -7625,9 +7628,11 @@ flow('REVIEW.md 1.2 screen by screen: first run, the map, planning, the route, d
   const hz = await page.evaluate(() => { const b = [...document.querySelectorAll('#hzKinds button')], cs = getComputedStyle(b[0]); return { n: b.length, bg: cs.backgroundColor, edge: cs.borderTopColor }; });
   check(hz.n === 6 && hz.bg === 'rgb(17, 17, 17)' && hz.edge === 'rgb(255, 122, 26)', 'Hazard report: ' + JSON.stringify(hz));
   await page.click('#hzKinds button');
-  check(!(await page.isVisible('#hzOverlay.show')) && !(await page.$('.confirm-sheet')) && /^Undo /.test(await page.textContent('#hzReportBtn')), 'one tap, no confirm, Undo in the status line');
+  const tap = { overlay: await page.isVisible('#hzOverlay.show'), sheet: !!(await page.$('.confirm-sheet')), key: await page.textContent('#hzReportBtn'), toast: await page.textContent('#toast') };
+  check(!tap.overlay && !tap.sheet && /^Undo /.test(tap.key), 'one tap, no confirm, Undo in the status line: ' + JSON.stringify(tap));
   await page.click('#hzReportBtn');
   check((await page.textContent('#hzReportBtn')) === 'Report', 'Undo takes it back');
+  await page.evaluate(() => clearInterval(window.__fixes));
   // Replay: crest and dip pins wear the hazard plate; the transport is shaped controls (a switch, detents, keys; U-45); no unlabelled "Fast & open"
   await page.goto(base + '/index.html?drive=dry_ridge&play=1');
   await page.waitForFunction(() => window.apexDebug && window.apexDebug.track && window.apexDebug.track.events.length);
