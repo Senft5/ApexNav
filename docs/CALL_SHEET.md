@@ -14,6 +14,11 @@ migration, results go into error_counts under kind `service` (kept 30 days like 
 them; it also runs by itself once a launch at most every 6 hours, so Claude sees his phone's view without him tapping;
 it asks at a fixed downtown Cincinnati spot, never his location. Undo: remove serviceCheckSection and its auto-run line in
 web/cockpit.js, the `ops` lazy group, web/service_check.js, backend/src/service_check.ts and its three routes.
+## 2026-11-12 (deepest analysis 19): the Log's road book says which of your roads to work on (claude/project-thread-gd7nre)
+
+Above the road picker, one line names the roads (driven three or more times) where your passes differ most, with the
+technique behind most of it. Calls: at most 3 roads, and at most 12 read, to keep the Log quick on a big library; it is read
+once each time the library changes, not on every visit. Undo: remove `bookWork` in web/analysis.html.
 
 ## 2026-11-12 (deepest analysis 18): the end card names your passes on a road you know (claude/project-thread-gd7nre)
 
