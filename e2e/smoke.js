@@ -4670,8 +4670,11 @@ flow("friends' activity: the Log lists who drove your stages lately and where yo
   await page.goto(base + '/analysis.html?tab=log');
   await page.waitForSelector('#friendsPanel:not([hidden])');
   const text = await page.textContent('#friendsList');
-  check(/@bob drove Esses <b>bold<\/b> · 812 · .* · you're 2nd of 3/.test(text), 'bob, the stage as typed (not as HTML), your rank: ' + text);
-  check(/@cara drove Dry Ridge · 640 .*you haven't posted a score here/.test(text), 'no rank when you have no score');
+  check(/@bob drove Esses <b>bold<\/b> · 812.*you're 2nd of 3/.test(text), 'bob, the stage as typed (not as HTML), your rank: ' + text);
+  check(/@cara drove Dry Ridge · 640.*no score from you yet/.test(text), 'no rank when you have no score');
+  const feed = await page.evaluate(() => { const r = document.querySelector('#friendsList .friend-act'), k = r.querySelector('.kudos-btn').getBoundingClientRect(), t = r.firstElementChild.getBoundingClientRect();
+    return { right: k.left >= t.right - 1, note: !!document.querySelector('#friendsPanel > .note') }; });
+  check(feed.right && !feed.note, 'each friend is a row with Kudos on its right, no footnote under the list: ' + JSON.stringify(feed));
   check(!(await page.$('#friendsList b b')), 'a stage name never becomes markup');
   await page.click('button[aria-label="Kudos to @bob for Esses <b>bold</b>"]');
   await page.waitForSelector('button[aria-label="Kudos to @bob for Esses <b>bold</b>"][aria-pressed="true"]');

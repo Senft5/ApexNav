@@ -92,11 +92,15 @@
       const rows = await ApexSync.activity();
       panel.hidden = !rows.length;
       box.replaceChildren(...rows.map((r) => {
-        const p = document.createElement('p'); p.className = 'friend-act';
+        // a feed row: who drove what and the score, then the day and where you stand, Kudos on the right (not wrapped into the sentence)
+        const p = document.createElement('div'); p.className = 'friend-act';
         const who = document.createElement('b'); who.textContent = '@' + (r.handle || 'someone');
         const day = new Date(r.driven_on + 'T12:00:00').toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
-        const you = r.you && r.you.rank ? ` · you're ${ordinal(r.you.rank)} of ${r.you.of}` : r.you ? ` · you haven't posted a score here` : '';
-        p.append(who, ` drove ${r.stage} · ${r.driver_score} · ${day}${you} `);
+        const you = r.you && r.you.rank ? ` · you're ${ordinal(r.you.rank)} of ${r.you.of}` : r.you ? ' · no score from you yet' : '';
+        const line = document.createElement('p'); line.append(who, ` drove ${r.stage} · ${r.driver_score}`);
+        const sub = document.createElement('small'); sub.textContent = day + you;
+        const text = document.createElement('div'); text.append(line, sub);
+        p.append(text);
         // Kudos (IDEAS S-07): a tap of thanks, no text; the count is everyone's, the pressed state yours
         const k = document.createElement('button'); k.className = 'btn kudos-btn';
         const paint = () => { k.textContent = `Kudos${r.kudos ? ' ' + r.kudos : ''}`; k.classList.toggle('on', !!r.my_kudos); k.setAttribute('aria-pressed', String(!!r.my_kudos)); };
