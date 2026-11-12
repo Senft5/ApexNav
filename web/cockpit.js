@@ -6229,10 +6229,10 @@
       const d = $('planSpots'); d.hidden = false;
       d.addEventListener('toggle', () => { if (!d.open) return; const sec = spotsFeed.section(); const h = sec.querySelector(':scope > h3'); if (h) h.remove(); $('planSpotsBody').replaceChildren(sec); });
     } });
-    // Weekly time attack (web/time_attack.js, SOCIAL 2.9, IDEAS S-26): this area's loop this week and its board, in Where to?
+    // Time attack (web/time_attack.js, SOCIAL 2.9, IDEAS S-26): this area's loops this season and their boards, in Where to?
     // beside Spots near you; drawn when opened, fresh each time. Runs go up from the Log when stages sync.
     let timeAttack = null;
-    const TA_LINE = 'Time attack this week';   // TestFlight 2026-11-12 (note 7): the row names itself, no tagline
+    const TA_LINE = 'Time attack';   // TestFlight 2026-11-12 (note 7): the row names itself, no tagline
     onSocial(() => { try {
       const ta = window.ApexTimeAttack ? ApexTimeAttack.mount({ el, btn, toast, apiCall, jsonOf, report: safety && safety.report,
         ask: (t, a) => ApexConfirm.ask(t, a),
@@ -7553,7 +7553,7 @@
       // "Location is off" sheet uses).
       toast('Notifications are off for Vetta. Turn them on in Settings, then here.', { label: 'Settings', onClick: () => { try { nudgeShell().postMessage({ cmd: 'openSettings' }); } catch (_) {} } });
     }
-    // This week's time attack loop in your area (time_attack.ts) as the deck's suggestion: first after a crew drive when you
+    // This week's featured time attack loop in your area (ta_fixed.ts) as the deck's suggestion: first after a crew drive when you
     // entered it, else after the road you haven't driven. Members only, with the drive-today check (every 10 min); the server
     // is sent the middle of your quarter-degree area, never where you are (time_attack.js areaPoint). No loop, nothing said.
     function attackIs(a) {
@@ -7565,7 +7565,7 @@
       const p = state.lastPosition;
       if (!p || !Number.isFinite(p.lat) || !Number.isFinite(p.lon)) return;   // no position yet: what was known stays
       const at = { lat: Math.floor(p.lat / 0.25) * 0.25 + 0.125, lon: Math.floor(p.lon / 0.25) * 0.25 + 0.125 };   // time_attack.js areaPoint
-      const t = await apiCall('GET', `/api/timeattack?lat=${at.lat}&lon=${at.lon}`).then((r) => (r && r.ok ? jsonOf(r) : null)).catch(() => null);
+      const t = await apiCall('GET', `/api/ta?lat=${at.lat}&lon=${at.lon}`).then((r) => (r && r.ok ? jsonOf(r) : null)).catch(() => null);
       if (t) attackIs(YR ? YR.attackFrom(t) : null);
     }
     // The morning of a crew drive you said you're going to (REVIEW.md roadmap 21, crew_events.js todayDrive): from 4 AM until an
