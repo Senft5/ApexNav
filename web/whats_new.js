@@ -8,10 +8,11 @@
   const NEWS = {
     id: '2026-11-10',
     items: [
-      ['Three ways there', 'Every route comes as Quick, Fun and Long way. Tap a card to compare them. Fun and Long way never take the highway.'],
-      ['What it is like', 'The route card says in plain words what the drive is like: its character, its best stretch and what slows it down.'],
-      ['Loops your way', 'Set a loop by distance or by time on the dial, then pick which way to head. It is built from the best roads nearby.'],
-      ['Tune your routes', 'In Garage, Settings, Route tuning: sliders for how much corners, scenery, towns and smooth road count in your routes.'],
+      // a line each, as on a phone's update notes (walkthrough 2026-11-12: four three-line paragraphs were a wall of text)
+      ['Three ways there', 'Quick, Fun or Long way. Fun and Long skip the highway.'],
+      ['What it is like', 'The route card sums up the drive and its best stretch.'],
+      ['Loops your way', 'Pick a distance or a time on the dial, then a direction.'],
+      ['Tune your routes', 'Garage › Settings › Route tuning.'],
     ],
   };
 
