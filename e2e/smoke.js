@@ -4609,7 +4609,7 @@ flow('time attack on the home deck: this week\'s loop you entered is the suggest
   check(title === 'Time attack · Tellico <i>loop</i>' && why === 'You’re 3rd of 8 · 3 days left', 'the suggestion: ' + title + ' / ' + why);
   check(/Directions to the start\.$/.test(await page.getAttribute('#loopSuggestGo', 'aria-label')), 'its key gives directions to the start');
   check(await page.getAttribute('#loopSuggestShow', 'data-road') === 'ta:' + day(-1) + '|35,-84|TA1', 'its body draws the loop');
-  check(asked.length && asked.every((q) => q === '?lat=35.5&lon=-83.5'), 'only the middle of the area is sent: ' + JSON.stringify(asked));
+  check(asked.length && asked.every((q) => q === '?lat=35.875&lon=-83.875'), 'only the middle of the quarter-degree area is sent: ' + JSON.stringify(asked));
 }, { geolocation: { latitude: 35.9606, longitude: -83.9207 }, permissions: ['geolocation'] });
 
 flow('drive tags: tag a drive in the Log, filter by it, the note stays on the phone (IDEAS D-23)', async (page, base) => {
@@ -4765,16 +4765,19 @@ flow('a drive\'s corners on a road driven four times: each says your cleanest pa
     'the road corner by corner: ' + JSON.stringify(book).slice(0, 400));
   // where the passes differ, the technique they differ by most can be the next practice (IDEAS D-27, roadBookFocus)
   const pr = await page.evaluate(() => { const b = document.getElementById('bookPractice'); return { shown: !b.hidden, t: b.textContent, go: !!document.getElementById('bookPracticeGo') }; });
-  check(pr.shown && pr.go && /^Most of the difference at corners? [\d, and]+ is [a-z ]+\. (Practice [a-z ]+ on my next drives|You are practicing it now: Your driving shows how it goes\.)$/.test(pr.t), 'the practice line: ' + pr.t);
+  check(pr.shown && pr.go && /^Most of the difference at corners? [\d, and]+ is [a-z ]+\. (Practice [a-z ]+ on my next drives here|You are practicing it now: Your driving shows how it goes\.)$/.test(pr.t), 'the practice line: ' + pr.t);
   await page.click('#bookPracticeGo');
   const after = await page.evaluate(() => ({ t: document.getElementById('bookPractice').textContent, plan: JSON.parse(localStorage.getItem('vetta.practice') || 'null') }));
-  check(/Practicing it from your next drive/.test(after.t) && after.plan && after.plan.skill === 'arc' && after.plan.where === null && /^\d{4}-\d\d-\d\dT\d\d:\d\d$/.test(after.plan.since), 'the practice is kept: ' + JSON.stringify(after));
+  check(/Practicing it on your next drives here: .+ on this road alone\./.test(after.t) && after.plan && after.plan.skill === 'arc' && after.plan.where && after.plan.where.road === 'dry ridge rd' && after.plan.where.name === 'Dry Ridge Rd' && /^\d{4}-\d\d-\d\dT\d\d:\d\d$/.test(after.plan.since), 'the practice is kept: ' + JSON.stringify(after));
   await page.click('#bookList li .bk-by');
   await page.waitForFunction(() => /^r[0-3]$/.test(document.getElementById('dvPick').value) && !document.getElementById('tab-drive').hidden, null, { timeout: 20000 });
   // Your driving's Work on names the road where its skill shows most
   await page.goto(base + '/analysis.html?tab=driving');
   await page.waitForSelector('#drivingRoot .dp-focus .dp-where', { timeout: 20000 });
   const where = await page.textContent('#drivingRoot .dp-where');
+  // the practice from the road's book keeps to that road (driver_profile.js practice, where.road)
+  const practicing = await page.textContent('#drivingRoot .dp-practice .dp-say');
+  check(/^Since \d{1,2} \w{3} on Dry Ridge Rd, no drive there yet with 4 or more corners to read it on\./.test(practicing), 'the practice keeps to the road: ' + practicing);
   check(/^It shows most on Dry Ridge Rd: (the corner where your passes there differ most comes|all \d+ corners where your passes there differ most come|\d+ of the \d+ corners where your passes there differ most comes?) down to it\.$/.test(where), 'Work on names the road: ' + where);
   // the end card on the map after the last of them says the same: what it lost most at the road's least even corners
   await page.goto(base + '/index.html');
@@ -8726,7 +8729,7 @@ flow('time attack this week (SOCIAL 2.9): in Where to?, the area\'s loop and its
   check(cells.slice(0, 8).join('|') === '1|@alice|9:50|Score 700|2|@bob|10:00 +0:10|Score 780' && cells[11] === '', 'the board, quickest first, with gaps and Scores: ' + cells.join('|'));
   check(/Last week, Last loop: 1\. @dee 11:52/.test(text) && /A new loop every Monday/.test(text) && /drive within the law/.test(text), 'last week\'s podium and the road note');
   const q = new URLSearchParams(sent[0][1]);
-  check(/\.5$/.test(q.get('lat')) && /\.5$/.test(q.get('lon')), 'only the middle of the area is sent: ' + sent[0][1]);
+  check(/\.(125|375|625|875)$/.test(q.get('lat')) && /\.(125|375|625|875)$/.test(q.get('lon')), 'only the middle of the quarter-degree area is sent: ' + sent[0][1]);
   check(!sent.some(([p]) => p === '/api/timeattack/circuit'), 'a week that has its loop builds none');
   await page.click('#planAttack button:text-is("Enter")');
   await page.waitForSelector('#planAttack button:text-is("Drive it")');
@@ -8784,13 +8787,13 @@ flow('time attack, a new week (the owner, 2026-11-11: autogenerated, the area\'s
     const json = (b, status = 200) => route.fulfill({ status, contentType: 'application/json', body: JSON.stringify(b) });
     if (u.pathname === '/api/me') return json({ signed_in: true, member: true, handle: 'me' });
     if (u.pathname === '/api/timeattack' && m === 'GET') {
-      return json({ week: '2026-11-09', ends_on: '2026-11-15', today: '2026-11-13', cell: '39,-85', entered: false, entrants: 0, circuit,
-        make: circuit ? null : { seed: '2026-11-09|39,-85|0', km: { min: 8, max: 16 } }, board: [], you: null, last: null });
+      return json({ week: '2026-11-09', ends_on: '2026-11-15', today: '2026-11-13', cell: '39,-84.5', entered: false, entrants: 0, circuit,
+        make: circuit ? null : { seed: '2026-11-09|39,-84.5|0', km: { min: 8, max: 16 } }, board: [], you: null, last: null });
     }
     if (u.pathname === '/api/timeattack/circuit' && m === 'POST') {
       const b = JSON.parse(route.request().postData() || 'null');
       sent.push(b);
-      circuit = { segment_id: 'ta-NEW', name: b.name, length_m: 10000, geom: JSON.stringify(b.geom), week: '2026-11-09', ends_on: '2026-11-15', cell: '39,-85' };
+      circuit = { segment_id: 'ta-NEW', name: b.name, length_m: 10000, geom: JSON.stringify(b.geom), week: '2026-11-09', ends_on: '2026-11-15', cell: '39,-84.5' };
       return json({ circuit, kept: true });
     }
     if (m === 'GET') return json([]);
@@ -8806,8 +8809,11 @@ flow('time attack, a new week (the owner, 2026-11-11: autogenerated, the area\'s
   check(sent.length === 1, 'one loop sent: ' + text);
   const b = sent[0] || {};
   const g = b.geom || [], km = g.reduce((s, p, i) => (i ? s + Math.hypot((p[0] - g[i - 1][0]) * 111195, (p[1] - g[i - 1][1]) * 111195 * Math.cos(p[0] * Math.PI / 180)) : 0), 0) / 1000;
-  check(b.cell === '39,-85' && b.seed === '2026-11-09|39,-85|0' && / loop$|This week’s loop/.test(b.name || ''), 'the area, the seed and a name: ' + JSON.stringify({ cell: b.cell, seed: b.seed, name: b.name }));
-  check(g.length >= 10 && JSON.stringify(g[0]) === JSON.stringify(g[g.length - 1]) && Math.floor(g[0][0]) === 39 && Math.floor(g[0][1]) === -85, 'a closed line that starts in the area: ' + g.length + ' points');
+  check(b.cell === '39,-84.5' && b.seed === '2026-11-09|39,-84.5|0' && / loop$|This week’s loop/.test(b.name || ''), 'the area, the seed and a name: ' + JSON.stringify({ cell: b.cell, seed: b.seed, name: b.name }));
+  // the owner's TestFlight note (2026-11-12): near you (your own quarter-degree area) and not through a neighbourhood
+  check(g.length >= 10 && JSON.stringify(g[0]) === JSON.stringify(g[g.length - 1]) && g[0][0] >= 39 && g[0][0] < 39.25 && g[0][1] >= -84.5 && g[0][1] < -84.25, 'a closed line that starts in your quarter-degree area: ' + g.length + ' points ' + JSON.stringify(g[0]));
+  const lp = await page.evaluate(() => window.apexDebug.lastAttackLoop || null);
+  check(lp && lp.streetM <= 500 && lp.streetShare <= 0.05, 'little or no neighbourhood street: ' + JSON.stringify(lp));
   check(km >= 5 && km <= 25, 'a small loop: ' + km.toFixed(1) + ' km');
   check(text.includes(b.name) && /Enter/.test(await page.textContent('#planAttack')), 'and it is the week\'s loop on the page: ' + text);
 }, { geolocation: { latitude: 39.1, longitude: -84.5 }, permissions: ['geolocation'] });

@@ -20,14 +20,14 @@ const deps = {
   slowMs: 60,
   apiBase: 'https://w.test',
   apiFetch: async (path) => (path === '/api/health' ? res(200, { ok: true, db: true }) : path === '/api/me' ? res(200, { signed_in: true, member: false })
-    : path.startsWith('/api/hazards') ? res(500, { error: 'boom' }) : res(200, {})),
+    : path.startsWith('/api/hazards') ? res(500, { error: 'boom' }) : path.startsWith('/api/ctx/osm') ? res(504, { error: 'still_fetching' }) : res(200, {})),
   fetch: async (url, init) => {
     if (url.includes('overpass-api.de')) { await new Promise((r) => setTimeout(r, 150)); return res(200, { elements: [{}, {}] }); }      // up, but slow
     if (url.includes('kumi')) return res(200, { elements: [], remark: 'runtime error: timed out' });
     if (url.includes('coffee')) return new Promise(() => {});                                          // never answers
     if (url.includes('valhalla')) return res(200, { trip: { status: 0 } });
     if (url.includes('openfreemap.org/styles')) return res(200, 'bad');
-    if (url.endsWith('/api/graph/v1/index.json')) return res(200, { tiles: { '381_516': {}, '1_1': {} }, build: 'b1' });
+    if (url.endsWith('/api/graph/v1/index.json')) return res(200, { tiles: { '381_516': {}, '1_1': {} }, build: '2026-46-0a3822dc-gebab6b', built: '2026-11-10' });
     if (url.endsWith('.vgr')) return res(200, 5000);
     if (url.endsWith('/api/cameras/v1/region.json')) return res(200, { tiles: ['156_-339'], cams: [[39.1, -84.5, 'a']] });
     if (url.includes('terrarium')) return res(200, 12);
@@ -73,6 +73,7 @@ def test_states_and_reasons(out):
     assert by["cameras_app"]["state"] == "down" and "Camera map offline" in by["cameras_app"]["detail"]
     assert by["cameras_region"] == {**by["cameras_region"], "state": "up", "detail": "1 cameras, 1 tiles"}
     assert by["overpass_vk"]["state"] == "down"
+    assert by["osm_relay"] == {**by["osm_relay"], "state": "slow", "http": 504, "detail": "up, but still fetching from Overpass"}
     assert by["terrain"]["state"] == "down" and by["terrain"]["detail"] == "empty tile"
 
 
@@ -85,7 +86,7 @@ def test_our_router_is_asked_for_real_plans(out):
 
 def test_graph_probes_read_a_real_tile_straight_from_the_worker(out):
     assert out["tile"] == "https://w.test/api/graph/v1/381_516.vgr"            # the test place's tile, not just any
-    assert out["by"]["graph_index"]["detail"] == "2 tiles, build b1" and out["by"]["graph_tile"]["state"] == "up"
+    assert out["by"]["graph_index"]["detail"] == "2 tiles, built 2026-11-10" and out["by"]["graph_tile"]["state"] == "up"
 
 
 def test_report_has_no_place_and_names_the_build(out):
@@ -94,7 +95,7 @@ def test_report_has_no_place_and_names_the_build(out):
     assert all(set(x) == {"id", "state", "http", "ms", "detail"} for x in r["results"])
     assert out["web"] == {"app": "web", "version": "", "build": ""}
     assert out["camBody"] == "data=" + "q%3A156_-339"
-    assert out["summary"].startswith(f"{sum(1 for x in r['results'] if x['state'] == 'up')} up, 1 slow, ")
+    assert out["summary"].startswith(f"{sum(1 for x in r['results'] if x['state'] == 'up')} up, 2 slow, ")
 
 
 def test_owner_only_and_lazy():
