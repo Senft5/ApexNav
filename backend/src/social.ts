@@ -116,7 +116,8 @@ export async function crewCreate(env: Env, v: Viewer, req: Request): Promise<{ i
   if ((n?.n ?? 0) >= 10) throw new HttpError(429, "too_many_crews");
   const id = crypto.randomUUID();
   await env.DB.batch([
-    env.DB.prepare("INSERT INTO crews (id, name, owner, visibility, about, area_name, area_lat, area_lon) VALUES (?, ?, ?, ?, ?, ?, ?, ?)")
+    env.DB.prepare(`INSERT INTO crews (id, name, owner, visibility, about, area_name, area_lat, area_lon, public_since)
+      VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, CASE WHEN ?4 = 'public' THEN datetime('now') END)`)
       .bind(id, name, v.id, set.visibility, set.about, set.area_name, set.area_lat, set.area_lon),
     env.DB.prepare("INSERT INTO crew_members (crew_id, user_id, role) VALUES (?, ?, 'owner')").bind(id, v.id),
   ]);
@@ -139,6 +140,7 @@ export async function crewUpdate(env: Env, v: Viewer, crewId: string, req: Reque
   // with the private crew by hand: planned routes, stages and the rough area they drive from (crew_meet.ts); a stranger who
   // joins next must not find them. A member's route the owner pinned is unpinned with it.
   if (crew.visibility !== "public" && set.visibility === "public") await env.DB.batch([
+    env.DB.prepare("UPDATE crews SET public_since = datetime('now') WHERE id = ?").bind(crewId),   // its chat so far stays with who was there (crew_page.ts)
     env.DB.prepare("UPDATE grants SET share_scores = 0, share_times = 0 WHERE audience_type = 'crew' AND audience_id = ? AND user_id != ?").bind(crewId, v.id),
     env.DB.prepare("DELETE FROM board_entries WHERE audience_type = 'crew' AND audience_id = ? AND user_id != ?").bind(crewId, v.id),
     env.DB.prepare("DELETE FROM drive_scores WHERE crew_id = ? AND user_id != ?").bind(crewId, v.id),

@@ -1122,6 +1122,28 @@ flow('valhalla for quick only: off our tiles, a loop says it plainly and asks Va
   check(calls.route === 0 && calls.matrix === 0, 'Valhalla asked for nothing: ' + JSON.stringify(calls));
 }, { geolocation: { latitude: 39.155, longitude: -84.615 }, permissions: ['geolocation'] });
 
+flow('a loop our router fails to finish says so (not "try another length") and reports "failed" with the length asked, never a place (Nate\'s "loop: none", 2026-11-12)', async (page, base) => {
+  const reports = [];
+  await page.route('**/api/errors', (route) => { try { reports.push(JSON.parse(route.request().postData() || '{}')); } catch (_) {} return route.fulfill({ status: 204, body: '' }); });
+  try {
+    await funTiles(page);
+    await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); } catch (_) {} });
+    await page.goto(base + '/index.html');
+    await page.waitForFunction(() => window.apexDebug && window.apexDebug.map && window.ApexOwnRouting);
+    // the worker answering with an error (as a timeout does on a phone): our router's loops come back empty, with why
+    await page.evaluate(() => { ApexOwnRouting.loops = async () => { ApexOwnRouting.lastLoopError = 'graph router timed out'; return []; }; });
+    await page.click('#destInput');
+    await page.waitForSelector('#findLoopBtn', { state: 'visible', timeout: 10000 });
+    await page.click('#findLoopBtn');
+    await page.waitForFunction(() => window.apexDebug.loopOwnOnlyFail && document.getElementById('toast').classList.contains('show'), null, { timeout: 20000 });
+    const t = await page.evaluate(() => ({ text: document.getElementById('toast').textContent, why: window.apexDebug.loopOwnOnlyFail }));
+    check(t.why === 'failed' && /couldn't finish/.test(t.text) && !/another length/.test(t.text), 'a failure says so, not "try another length": ' + JSON.stringify(t));
+    for (let i = 0; i < 30 && !reports.some((r) => /^loop: failed/.test(r.message || '')); i++) await page.waitForTimeout(100);
+    const r = reports.find((x) => /^loop: failed/.test(x.message || ''));
+    check(r && r.kind === 'route' && /\(.*graph router timed out\)$/.test(r.message) && !/39\.|84\./.test(JSON.stringify(r)), 'reported as "loop: failed (<length>, graph router timed out)", no position: ' + JSON.stringify(reports));
+  } finally { graphDir = null; }
+}, { geolocation: { latitude: 39.155, longitude: -84.615 }, permissions: ['geolocation'] });
+
 // What this drive is like (web/route_story.js, the owner 2026-11-09): a planned route's card carries a few plain lines
 // built from the ranking's own data, in your units, after the card is up; nothing it says is unknown to the data.
 flow('route overview: the card says what the drive is like in plain words, from the route\'s own data', async (page, base) => {
@@ -2883,8 +2905,14 @@ flow('crew page: an old ?view=crew link opens People on Crews, at your crew; goi
   check(!('stripe2' in JSON.parse(liv.b)) && !('pattern' in JSON.parse(liv.b)), 'a Plain crew sends nothing past the Plain livery');
   // fair meeting points (crew_meet.js): your rough area is off until you switch it on, and nothing was sent about it
   check(await page.getAttribute('.cp-meet [data-crew-home]', 'aria-checked') === 'false' && !find('/api/crews/k1/home'), 'Share my rough area is off by default');
+  // the owner, 2026-11-12 (TestFlight): "meeting points switch broken": with no Home pinned it refused. Now the square comes
+  // from where the phone is (39.2, -84.6 here; sent as its 0.1-degree square's centre, never the position)
+  await page.click('.cp-meet [data-crew-home]');
+  await page.waitForFunction(() => document.querySelector('.cp-meet [data-crew-home]').getAttribute('aria-checked') === 'true', null, { timeout: 10000 });
+  const home = JSON.parse(find('/api/crews/k1/home').b);
+  check(home.on === true && home.lat === 39.25 && home.lon === -84.55, 'no Home pinned: the switch turns on with the square the phone is in: ' + JSON.stringify(home));
   check((await page.textContent('.cp-livery-line')).trim() === 'Plain livery', 'the livery line says Plain and nothing it lacks (the owner, 2026-11-10: no Pro nudge on the crew page)');
-});
+}, { geolocation: { latitude: 39.2, longitude: -84.6 }, permissions: ['geolocation'] });
 
 flow('build threads: start one from a car, add a step, a friend suggests and it shows on a red rule (Worker stubbed, REVIEW.md roadmap 23)', async (page, base) => {
   await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); } catch (_) {} });
@@ -4743,6 +4771,11 @@ flow('a drive\'s corners on a road driven four times: each says your cleanest pa
   check(/Practicing it from your next drive/.test(after.t) && after.plan && after.plan.skill === 'arc' && after.plan.where === null && /^\d{4}-\d\d-\d\dT\d\d:\d\d$/.test(after.plan.since), 'the practice is kept: ' + JSON.stringify(after));
   await page.click('#bookList li .bk-by');
   await page.waitForFunction(() => /^r[0-3]$/.test(document.getElementById('dvPick').value) && !document.getElementById('tab-drive').hidden, null, { timeout: 20000 });
+  // Your driving's Work on names the road where its skill shows most
+  await page.goto(base + '/analysis.html?tab=driving');
+  await page.waitForSelector('#drivingRoot .dp-focus .dp-where', { timeout: 20000 });
+  const where = await page.textContent('#drivingRoot .dp-where');
+  check(/^It shows most on Dry Ridge Rd: (the corner where your passes there differ most comes|all \d+ corners where your passes there differ most come|\d+ of the \d+ corners where your passes there differ most comes?) down to it\.$/.test(where), 'Work on names the road: ' + where);
   // the end card on the map after the last of them says the same: what it lost most at the road's least even corners
   await page.goto(base + '/index.html');
   await page.waitForFunction(() => window.apexDebug && window.ApexRecording && window.ApexCore && window.ApexAnalysis);
@@ -8049,13 +8082,20 @@ flow('the map\'s viewpoint, café and fuel stamps along a route never pile up: o
   const pairs = far.flatMap((a, i) => far.slice(i + 1).filter((b) => overlap(a, b)).map((b) => `${a.text} / ${b.text}`));
   const total = await page.evaluate(() => document.querySelectorAll('.poi-pin.poi-fuel').length);
   check(!pairs.length, 'no two stamps overlap: ' + JSON.stringify(pairs));
-  check(far.filter((p) => p.kind === 'fuel').length <= 4 && far.filter((p) => p.kind === 'fuel').length >= 1 && far.some((p) => p.text === 'Big Overlook'),
+  check(far.filter((p) => p.kind === 'fuel').length <= 4 && far.filter((p) => p.kind === 'fuel').length >= 1 && far.some((p) => p.kind === 'view' && p.text === 'VIEW'),
     `the most useful few: the viewpoint, at most four of the ${total} fuel stamps: ` + JSON.stringify(far.map((p) => p.text)));
+  // the owner, 2026-11-12 (TestFlight): "bird watching shelter blocks half the route": at the route's zoom a viewpoint is a
+  // VIEW stamp; its name is on the stamp only close in (zoom 15)
+  check(!far.some((p) => p.text === 'Big Overlook'), 'no viewpoint name across the whole route: ' + JSON.stringify(far.map((p) => p.text)));
   // closer in, the stamps that were hidden come back where there is room
   await page.evaluate(() => apexDebug.map.jumpTo({ center: [apexDebug.track.lon[0], apexDebug.track.lat[0]], zoom: 15 }));
   await page.waitForTimeout(300);
   const near = await shown();
   check(near.some((p) => p.kind === 'fuel'), 'zoomed in, a fuel stamp hidden at the whole route\'s zoom is shown: ' + JSON.stringify(near.map((p) => p.text)));
+  const named = await page.evaluate(() => { const m = apexDebug.map, t = apexDebug.track, i = Math.floor(t.lat.length / 2); m.jumpTo({ center: [t.lon[i], t.lat[i]], zoom: 15.5 }); return true; });
+  await page.waitForTimeout(300);
+  const close = await page.evaluate(() => (document.querySelector('.poi-pin.poi-view') || {}).textContent);
+  check(named && close === 'Big Overlook', 'close in, the viewpoint stamp says its name: ' + close);
 }, IPHONE);
 
 flow('plan flow (c) best roads nearby in 3 taps: the chip under Where to?, a road in a list with named columns, Start (finding 7)', async (page, base) => {
@@ -8698,6 +8738,41 @@ flow('time attack this week (SOCIAL 2.9): in Where to?, the area\'s loop and its
   // Drive it plans the loop itself, not the way to its start
   await page.click('#planAttack button:text-is("Drive it")');
   await page.waitForFunction(() => /The clock runs from the start line/.test(document.getElementById('toast').textContent) && document.getElementById('planPanel').classList.contains('routed'), null, { timeout: 15000 });
+}, { geolocation: { latitude: 35.9606, longitude: -83.9207 }, permissions: ['geolocation'] });
+
+flow('time attack duel: Challenge a friend on the week\'s loop picks a friend, won by time, on your copy of the loop (IDEAS S-24, Worker stubbed)', async (page, base) => {
+  const GEOM = JSON.stringify([[35.95, -83.9], [35.97, -83.88], [35.95, -83.9]]);
+  const sent = [];
+  await page.addInitScript(() => { localStorage.setItem('apex.onboarded', '1'); localStorage.setItem('apex.permsExplained', '1'); });
+  await page.route('**/api/**', (route) => {
+    const u = new URL(route.request().url()), m = route.request().method();
+    const json = (b, status = 200) => route.fulfill({ status, contentType: 'application/json', body: JSON.stringify(b) });
+    if (u.pathname === '/api/me') return json({ signed_in: true, member: true, handle: 'me' });
+    if (u.pathname === '/api/timeattack' && m === 'GET') return json({ week: '2026-11-09', ends_on: '2026-11-15', today: '2026-11-13', cell: '35,-84', entered: true, entrants: 1, make: null,
+      circuit: { segment_id: 'ta-CIRC1', name: 'Foothills loop', length_m: 12500, geom: GEOM, week: '2026-11-09', ends_on: '2026-11-15', cell: '35,-84' }, board: [], you: null, last: null });
+    if (u.pathname === '/api/friends') return json([{ id: 'u1', handle: 'sam', status: 'accepted', incoming: 0 }, { id: 'u2', handle: 'pat', status: 'pending', incoming: 1 }]);
+    if (m === 'POST' && (u.pathname === '/api/timeattack/enter' || u.pathname === '/api/duels')) {
+      sent.push([u.pathname, JSON.parse(route.request().postData() || 'null')]);
+      return json(u.pathname === '/api/duels' ? { id: 'd1' } : { segment_id: 'COPY1', added: false });
+    }
+    if (m === 'GET') return json([]);
+    return json({}, 404);
+  });
+  await page.goto(base + '/index.html');
+  await page.waitForFunction(() => window.apex && typeof window.apex.live === 'function');
+  await page.click('#destInput');
+  await page.waitForSelector('#planAttack:not([hidden]) > summary');
+  await page.click('#planAttack > summary');
+  await page.waitForSelector('#planAttack button:text-is("Challenge a friend")');
+  await page.click('#planAttack button:text-is("Challenge a friend")');
+  await page.waitForSelector('aside[aria-label="Challenge on Foothills loop"] button:text-is("@sam")');
+  const pick = await page.evaluate(() => { const a = document.querySelector('aside[aria-label="Challenge on Foothills loop"]');
+    return { friends: [...a.querySelectorAll('[aria-label="Friend"] button')].map((b) => b.textContent), time: a.querySelector('[aria-label="Won by"] button[aria-pressed="true"]').textContent }; });
+  check(JSON.stringify(pick.friends) === '["@sam"]' && pick.time === 'Time', 'friends only, won by time: ' + JSON.stringify(pick));
+  await page.click('aside[aria-label="Challenge on Foothills loop"] button:text-is("Send")');
+  await page.waitForFunction(() => /Sent\. @sam has 7 days on Foothills loop/.test(document.getElementById('toast').textContent));
+  const duel = sent.find(([p]) => p === '/api/duels');
+  check(duel && JSON.stringify(duel[1]) === JSON.stringify({ handle: 'sam', segment_id: 'COPY1', days: 7, kind: 'time' }), 'the duel is on your copy of the loop: ' + JSON.stringify(sent));
 }, { geolocation: { latitude: 35.9606, longitude: -83.9207 }, permissions: ['geolocation'] });
 
 flow('time attack, a new week (the owner, 2026-11-11: autogenerated, the area\'s best loop roads at random, small loops): the first phone in the area builds the loop with our own router from the seed and sends it', async (page, base) => {

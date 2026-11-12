@@ -1,5 +1,6 @@
 // Screenshots for the landing page (web/about.html, IDEAS O-08): the real cockpit at phone size, from the bundled replay,
 // with live map tiles. Run: node tools/landing_shots.js  (writes web/brand/shots/*.png). Not part of CI (needs the network).
+// For the App Store listing: STORE=1 SHOTS_OUT=store-shots node tools/landing_shots.js (1320 x 2868, docs/LISTING.md).
 process.env.TZ = 'America/New_York';   // the example crew's drive is at 7:30 in the morning there, as the page shows it
 const { chromium } = require('playwright');
 const http = require('http'), fs = require('fs'), path = require('path');
@@ -13,7 +14,9 @@ const server = http.createServer((q, r) => {
 (async () => {
   const base = `http://127.0.0.1:${server.address().port}`;
   const browser = await chromium.launch();
-  const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 2, timezoneId: 'America/New_York' });
+  // STORE=1: App Store Connect's 6.9" iPhone size (1320 x 2868: 440 x 956 points at 3x, the iPhone 16 Pro Max), docs/LISTING.md
+  const store = process.env.STORE === '1';
+  const ctx = await browser.newContext({ viewport: store ? { width: 440, height: 956 } : { width: 390, height: 844 }, deviceScaleFactor: store ? 3 : 2, timezoneId: 'America/New_York' });
   // past the welcome, the permissions note and What's new (its current id, or it covers the page)
   const news = require(path.join(WEB, 'whats_new.js')).NEWS.id;
   await ctx.addInitScript((news) => { try { localStorage.setItem('apex.onboarded', '1'); localStorage.setItem('apex.permsExplained', '1'); localStorage.setItem('apex.newsSeen', news);

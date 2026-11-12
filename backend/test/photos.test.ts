@@ -1,6 +1,6 @@
 import { env, exports } from "cloudflare:workers";
 import { beforeEach, describe, expect, it } from "vitest";
-import { ORIGIN, api, freshDb, makeBanned, makeUser, ok, type TestUser } from "./helpers";
+import { ORIGIN, api, befriend, freshDb, makeBanned, makeUser, ok, type TestUser } from "./helpers";
 import { stripJpeg } from "../src/photos";
 
 beforeEach(freshDb);
@@ -57,6 +57,8 @@ describe("photos", () => {
     expect(((await (await ok(api(a, "GET", "/api/garage"))).json()) as { cover_photo_id: string }[])[0].cover_photo_id).toBe(cover.id);
     const res = await Promise.all(Array.from({ length: 14 }, () => upload(a, `kind=car&ref=${car}`, jpeg())));
     expect(res.filter((r) => r.status === 201)).toHaveLength(11);         // 12 with the cover
+    await befriend(a, b);
+    await ok(api(a, "PUT", `/api/garage/${car}`, { make: "Mazda", model: "MX-5", shared: true }));
     const list = (await (await ok(api(b, "GET", `/api/photos?kind=car&ref=${car}`))).json()) as { id: string }[];
     expect(list).toHaveLength(12);
     await ok(api(a, "DELETE", `/api/photos/${cover.id}`));
@@ -65,6 +67,42 @@ describe("photos", () => {
     await ok(api(a, "PUT", `/api/photos/${list[1].id}/use`));                          // make another the cover
     expect(((await (await ok(api(a, "GET", "/api/garage"))).json()) as { cover_photo_id: string }[])[0].cover_photo_id).toBe(list[1].id);
     expect((await api(b, "PUT", `/api/photos/${list[2].id}/use`)).status).toBe(404);
+  });
+
+  it("a photo is seen only by whoever sees what it belongs to: a car's by its circle, a crew's by its members", async () => {
+    const a = await makeUser("alice"), b = await makeUser("bob"), c = await makeUser("carol");
+    await befriend(a, b);
+    const car = ((await (await ok(api(a, "POST", "/api/garage", { make: "Mazda", model: "MX-5" }))).json()) as { id: string }).id;
+    const { id } = (await (await ok(upload(a, `kind=car&ref=${car}`, jpeg()))).json()) as { id: string };
+    expect((await api(b, "GET", `/api/photos/${id}`)).status).toBe(404);               // the car isn't shown yet
+    expect(await (await ok(api(b, "GET", `/api/photos?kind=car&ref=${car}`))).json()).toEqual([]);
+    await ok(api(a, "PUT", `/api/garage/${car}`, { make: "Mazda", model: "MX-5", shared: true }));
+    expect((await api(b, "GET", `/api/photos/${id}`)).status).toBe(200);               // a friend, the car shown
+    expect((await api(c, "GET", `/api/photos/${id}`)).status).toBe(404);               // a stranger holding the id
+    expect(await (await ok(api(c, "GET", `/api/photos?kind=car&ref=${car}`))).json()).toEqual([]);
+    const crew = ((await (await ok(api(a, "POST", "/api/crews", { name: "Ridge Runners" }))).json()) as { id: string }).id;
+    const cover = (await (await ok(upload(a, `kind=crew&ref=${crew}`, jpeg()))).json()) as { id: string };
+    expect((await api(b, "GET", `/api/photos/${cover.id}`)).status).toBe(404);         // a friend, not in the crew
+    const tok = ((await (await ok(api(a, "POST", `/api/crews/${crew}/invite`))).json()) as { token: string }).token;
+    await ok(api(b, "POST", "/api/crews/join", { token: tok }));
+    expect((await api(b, "GET", `/api/photos/${cover.id}`)).status).toBe(200);
+    await ok(api(b, "DELETE", `/api/crews/${crew}/membership`));
+    expect((await api(b, "GET", `/api/photos/${cover.id}`)).status).toBe(404);         // gone with the membership
+  });
+
+  it("a fresh account's report hides a photo only from itself; re-filing never restarts the day", async () => {
+    const a = await makeUser("alice"), b = await makeUser("bob"), c = await makeUser("carol"), fresh = await makeUser("fresh");
+    await env.DB.prepare("UPDATE members SET joined_at = datetime('now') WHERE user_id = ?").bind(fresh.id).run();
+    const { id } = (await (await ok(upload(a, "kind=profile", jpeg()))).json()) as { id: string };
+    await ok(api(fresh, "POST", "/api/reports", { kind: "photo", target: id, reason: "abuse" }));
+    expect((await api(fresh, "GET", `/api/photos/${id}`)).status).toBe(404);           // the reporter stops seeing it
+    expect((await api(c, "GET", `/api/photos/${id}`)).status).toBe(200);               // everyone else still does
+    await ok(api(fresh, "POST", "/api/reports", { kind: "photo", target: id, reason: "abuse", note: "again" }));   // may still add a note
+    await ok(api(b, "POST", "/api/reports", { kind: "photo", target: id, reason: "abuse" }));
+    expect((await api(c, "GET", `/api/photos/${id}`)).status).toBe(404);               // a member of standing: down for a day
+    await env.DB.prepare("UPDATE reports SET created_at = datetime('now', '-25 hours') WHERE reporter = ?").bind(b.id).run();
+    await ok(api(b, "POST", "/api/reports", { kind: "photo", target: id, reason: "abuse", note: "still bad" }));
+    expect((await api(c, "GET", `/api/photos/${id}`)).status).toBe(200);               // the day is over; re-filing didn't restart it
   });
 
   it("one report hides a photo for a day while the owner looks; its owner still sees it", async () => {

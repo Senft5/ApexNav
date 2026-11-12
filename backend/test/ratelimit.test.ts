@@ -50,4 +50,16 @@ describe("rate limits", () => {
     const a = await makeUser("alice");
     for (let i = 0; i < 3; i++) expect((await call({ WRITE_LIMIT: undefined, AUTH_LIMIT: undefined }, "POST", "/api/crews", a.token)).status).toBe(201);
   });
+
+  it("limits the signed-out relays per IP; the owner's ?diag=1 is the owner's alone", async () => {
+    const r = limiter(1), u = await makeUser("alice");
+    expect((await call({ RELAY_LIMIT: r }, "GET", "/api/ctx/trace?shape=x")).status).toBe(400);    // counted, then a bad shape
+    const over = await call({ RELAY_LIMIT: r }, "GET", "/api/ctx/trace?shape=x");
+    expect(over.status).toBe(429);
+    expect(over.headers.get("retry-after")).toBe("60");
+    expect(r.seen).toEqual(["ip:203.0.113.7", "ip:203.0.113.7"]);
+    expect((await call({ RELAY_LIMIT: r }, "GET", "/api/ctx/trace?shape=x", undefined, "198.51.100.1")).status).toBe(400);   // another address
+    expect((await call({}, "GET", "/api/ctx/osm?bbox=39.25,-84.65,39.3,-84.6&diag=1")).status).toBe(401);
+    expect((await call({}, "GET", "/api/ctx/osm?bbox=39.25,-84.65,39.3,-84.6&diag=1", u.token)).status).toBe(404);
+  });
 });
