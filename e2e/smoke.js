@@ -7296,6 +7296,18 @@ flow('the main map: with no signal and no saved area one line says there is no m
   check(await page.evaluate(() => document.getElementById('mapNote').hidden), 'no note once the map draws');
 });
 
+flow('a replay with no map: the one line sits clear of the Replay plate in the short map band (free roamer B, 2026-11-12)', async (page, base) => {
+  await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); localStorage.setItem('apex.permsExplained', '1'); } catch (_) {} });
+  await page.setViewportSize({ width: 390, height: 664 });   // a phone's browser: the map is a short band between the notes and the binnacle
+  await page.route('https://tiles.openfreemap.org/**', (route) => route.abort('internetdisconnected'));
+  await page.goto(base + '/index.html?drive=dry_ridge&play=1');
+  await page.waitForFunction(() => document.getElementById('app').classList.contains('replaying') && !document.getElementById('mapNote').hidden, null, { timeout: 15000 });
+  const r = await page.evaluate(() => { const box = (id) => { const b = document.getElementById(id).getBoundingClientRect(); return { t: b.top, b: b.bottom, l: b.left, r: b.right }; };
+    return { note: box('mapNote'), plate: box('modePlate'), map: box('map') }; });
+  const apart = r.note.b <= r.plate.t || r.plate.b <= r.note.t || r.note.r <= r.plate.l || r.plate.r <= r.note.l;
+  check(apart && r.note.t >= r.map.t, 'the note and the Replay plate do not overlap: ' + JSON.stringify(r));
+});
+
 flow('the main map on plain paper: back online it reloads once the style really comes, keeping the paper through a flicker', async (page, base) => {
   await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); localStorage.setItem('apex.permsExplained', '1'); } catch (_) {} });
   let tiles = false;
