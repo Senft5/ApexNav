@@ -6093,7 +6093,8 @@
       },
       getRoute: () => (track && track.kind === 'route' && track.lat.length > 1 ? { name: track.name, pts: track.lat.map((la, i) => [la, track.lon[i]]) } : null),
       // A close hazard cuts in; a far one goes next, after the pace note being spoken (never dropping the notes queued).
-      speak: (text, urgent) => { if (!state.toggles.voice) toast(text); else if (urgent) say(text, true, null, null, { kind: 'hazard', alert: true }); else sayNext(text, `convoy:${text}`); },
+      // With the voice off a close one still alerts on the car's screen, as it does with the voice on (the phone toasts it).
+      speak: (text, urgent) => { if (!state.toggles.voice) { toast(text); if (urgent && driveActive) carPost({ kind: 'hazard', title: text }); } else if (urgent) say(text, true, null, null, { kind: 'hazard', alert: true }); else sayNext(text, `convoy:${text}`); },
       onRegroup: (rg, convoyName) => regroupSay(rg, convoyName),
       drive: () => startDrive(),                                       // the convoy sheet's "Start the drive" (Convoy now, P-11)
     }) : null; } catch (e) { console.error('convoy', e); convoy = null; } });   // the convoy never takes the page down
@@ -6768,10 +6769,12 @@
           else {
             const areaIn = el('input', { className: 'field', placeholder: 'Area, like Robbinsville', maxLength: 60, autocomplete: 'off' });
             areaIn.setAttribute('aria-label', 'Area people nearby will see');
-            ownerBox.append(el('p', { className: 'note', textContent: 'Private: only people with a link. Public lets people nearby find and join it, under the area you name. What members shared with it (scores, routes, stages) stops showing until each says yes again.' }),
+            ownerBox.append(el('p', { className: 'note', textContent: 'Private: link only. Public: people near the area you name can find it.' }),
               el('div', { className: 'row' }, areaIn, btn('Make public', async () => {
               const near = crewNear(), name = areaIn.value.trim();
               if (name.length < 2) { toast('Name the area people nearby will see.'); return; }
+              // what going public costs the members is said once, when it happens (it was a paragraph under the field)
+              if (!(await ApexConfirm.ask(`Make ${c.name} public? Members' shared Scores, routes and stages stop showing until each says yes again.`, 'Make public'))) return;
               const r = await apiCall('PUT', `/api/crews/${c.id}`, { visibility: 'public', about: c.about || '', area: { name, lat: near.lat, lon: near.lon } });
               if (r.ok) { toast(`${c.name} is public. People near ${name} can find and join it.`); redo(); } else toast('Couldn\'t change that. Try again.');
             })));
@@ -9215,6 +9218,16 @@
     // what a drive with no score was, in the score's slot: no corners at all, or too few clean ones to score
     const noScoreWords = (corners) => (Number.isFinite(corners) && corners > 0 ? 'too few clean corners to score' : 'no corners to score');
     // The score arrived (ds: { score, components }, corners: a count; others: your earlier drives with this name, scored)
+    // TestFlight 2026-11-12 (the owner: "cluttered", "walls of text"): at most two lines under the score, the ones you
+    // asked for or earned first (the practice, a month's best run), then the road's and what the phone felt
+    function endLinesCap() {
+      let shown = 0;
+      for (const id of ['endPractice', 'endRun', 'endRoad', 'endFeel']) {
+        const n = $(id);
+        if (!n.textContent) { n.hidden = true; continue; }
+        n.hidden = shown >= 2; if (!n.hidden) shown++;
+      }
+    }
     function endCardScored(c, others, opts = {}) {
       if (!endDrive || endDrive.id !== c.id) return;                   // another card since
       endDrive = { ...endDrive, ...c };
@@ -9238,7 +9251,7 @@
           // IDEAS D-30: a run of clean corners that beats every other drive's this month (its summary's run, flow.js)
           const runLine = me && ApexEndLine.bestRunMonth && window.ApexAnalysis ? ApexEndLine.bestRunMonth(me, all, ApexAnalysis.monthOf) : null;
           if (runLine) {
-            $('endRun').textContent = runLine; $('endRun').hidden = false;
+            $('endRun').textContent = runLine; $('endRun').hidden = false; endLinesCap();
             const sheet = $('endCard').querySelector('.card-sheet');      // a taller card: the drive is fitted again above it
             if (endTrailOn && sheet && Math.abs(sheet.getBoundingClientRect().top - endTrailTop) > 4) showEndTrail(endDrive);
           }
@@ -9261,6 +9274,7 @@
       // a road you have driven before: where this drive lost most at its least even corners, or your cleanest passes on it
       const roadLine = typeof c.road === 'string' ? c.road : '';
       $('endRoad').textContent = roadLine; $('endRoad').hidden = !roadLine;
+      endLinesCap();
       if (window.ApexEndLine && !opts.quiet) {                       // Round 3: never aloud to a parked car or a pocket
         const pack = ['marguerite', 'kit', 'hale'].includes(state.voiceId) ? state.voiceId : 'marguerite';
         // one of the pack's sign-offs, the same for this drive every time, from a clip the loaded bank holds (U-113)

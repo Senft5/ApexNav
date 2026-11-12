@@ -320,7 +320,9 @@ def test_the_cafes_and_fuel_along_go_to_the_car_by_name(maps):
     assert "car.along = ''; carAlong(t);" in js, "every route sent to the car is followed by its places"
     assert "if (car.route && track === t) carAlong(t);" in js, "and the places are sent when they come in"
     swift = open(os.path.join(ROOT, "CarPlay", "ApexCarPlay.swift"), encoding="utf-8").read()
-    assert 'case "along":' in swift and "line([o.detail, along.full, along.descent])" in swift
+    assert 'case "along":' in swift and "line([o.detail, along.short, along.descent])" in swift
+    assert "line([o.detail, along.full" not in swift, "the car preview names one place per kind, never the two-name line"
+    assert 'detailText: "A twisty loop' not in swift and 'header: "Twisty loops, back where you started"' in swift
     # the car's map, native and its web fallback: the places after the hazards and corners, so a name never hides a corner
     native = open(os.path.join(ROOT, "CarPlay", "ApexCarMap.swift"), encoding="utf-8").read()
     carmap = open(os.path.join(ROOT, "web", "carmap.js"), encoding="utf-8").read()
@@ -483,3 +485,8 @@ def test_the_car_offers_the_same_loop_times_as_the_phones_dial():
     assert '("1½ hours", 90)' in row and '("3 hours", 180)' in row
     # and the page takes every one of them: it used to accept only 30, 60 and 120, so the car's 1½ and 3 hours did nothing
     assert "m.action === 'loop' && LOOP_MINUTES.includes(m.minutes)" in cockpit_source()
+
+
+def test_a_close_convoy_hazard_alerts_the_car_with_the_voice_off_too():
+    js = cockpit_source()
+    assert "if (!state.toggles.voice) { toast(text); if (urgent && driveActive) carPost({ kind: 'hazard', title: text }); }" in js
