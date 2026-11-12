@@ -30,18 +30,32 @@ self.addEventListener('activate', (e) => {
 // Never /api, the voice and pronunciation models (large, cached by the page itself) or the bundled data.
 const cacheable = (url) => url.origin === self.location.origin && !/^\/(api|voices|g2p|data)\//.test(url.pathname);
 
+// A connection that answers nothing (a hotel or roadside "lie-fi") would hold a network-first load for minutes. With a
+// kept copy we wait SLOW_MS for the network, then serve the copy; the network answer still lands in the cache for next time.
+// Without one there is nothing better to show, so the network gets all the time it needs.
+const SLOW_MS = 5000;
+
 self.addEventListener('fetch', (e) => {
   const req = e.request, url = new URL(req.url);
   if (req.method !== 'GET' || !cacheable(url)) return;
+  // a page is kept once, without its query (?drive=, ?add=, ?t= links would each be a copy otherwise)
+  const key = req.mode === 'navigate' ? url.origin + url.pathname : req;
+  const kept = () => caches.match(key, { ignoreSearch: req.mode === 'navigate' });
   e.respondWith((async () => {
-    try {
-      const res = await fetch(req);
-      // a page is kept once, without its query (?drive=, ?add=, ?t= links would each be a copy otherwise)
-      const key = req.mode === 'navigate' ? url.origin + url.pathname : req;
+    const net = fetch(req).then((res) => {
       if (res.ok && res.type === 'basic') { const copy = res.clone(); caches.open(CACHE).then((c) => c.put(key, copy)).catch(() => {}); }
       return res;
+    });
+    const hit = await kept().catch(() => null);
+    try {
+      if (!hit) return await net;
+      let timer;
+      const slow = new Promise((resolve) => { timer = setTimeout(() => resolve(null), SLOW_MS); });
+      const res = await Promise.race([net, slow]).finally(() => clearTimeout(timer));
+      if (res) return res;
+      net.catch(() => {});                                   // the late answer still fills the cache; its failure is no one's
+      return hit;
     } catch (err) {
-      const hit = await caches.match(req.mode === 'navigate' ? url.origin + url.pathname : req, { ignoreSearch: req.mode === 'navigate' });
       if (hit) return hit;
       if (req.mode === 'navigate') { const page = await caches.match('/index.html'); if (page) return page; }
       throw err;
