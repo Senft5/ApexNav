@@ -8,6 +8,13 @@
 - First build ran from the PR branch (2026-11-12): 11,969 cameras (11,924 plate readers) on 470 tiles, 326 KB, already
   on graph-data. Next: after the merge check `/api/cameras/v1/region.json` answers 200 on the prod Worker.
 - Route reports: the first one from Nate (01:27 UTC) was `loop: none`, a loop length with no loop found, not signal.
+## Session 2026-11-12 (meets on the map): IDEAS S-13's last part (claude/project-thread-uwmi4e, after #446)
+
+- [x] Layers → Meets (`web/meets_map.js`, in the lazy social group): public meets from GET /api/events/near pinned at their
+  meeting points, the day on the pin, grouped per place; a tap opens crew_events.js `meetCard` (now returned by its mount;
+  a member's own crew shows no Join). Off by default, members only; the map centre's cell, `nearLookupOk`. No migration.
+- Tests: tests/test_meets_map.py; e2e "meets on the map".
+- Exact next task: the next social win (a duel on the week's time attack loop, or push for For you once APNs exists).
 ## Session 2026-11-11 (ui-round-three, PR 2): the empty Garage is a page (claude/project-thread-5sbga7)
 
 - garage_ui.js: with no cars, "Your cars" shows a `people-first garage-first` page: a drawing in a well (a road pulls in

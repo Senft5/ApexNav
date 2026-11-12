@@ -182,7 +182,7 @@
       theme: 'roadbook', camFeel: 'dynamic', voiceId: 'marguerite', voicePick: null, liveVoice: false, voiceStyle: 'codriver', voiceName: '', hlOn: false, hlStrength: 1,
       notesMode: 'auto', nightMode: 'auto', musicMode: 'lower',   // Notes: auto | full | quiet. Night: auto (sunset/sunrise) | on | off
       noteWords: 'plain',                     // rally ("Left 4 minus") | plain ("Medium left"), IDEAS V-02; a saved setting wins
-      toggles: { stage: false, voice: true, lpr: true, dna: false, night: false, twisty: true, haptics: true, soundtrack: false, crash: true, health: true, terrain: false, coverage: false, keys: true, friends: false, nudge: false, satellite: false }   // twisty on by default (panel D-2), the weekly reminder off until asked for (R-1); stage and night are derived from the two modes; analysis.html reads toggles.night
+      toggles: { stage: false, voice: true, lpr: true, dna: false, night: false, twisty: true, haptics: true, soundtrack: false, crash: true, health: true, terrain: false, coverage: false, keys: true, friends: false, meets: false, nudge: false, satellite: false }   // twisty on by default (panel D-2), the weekly reminder off until asked for (R-1); stage and night are derived from the two modes; analysis.html reads toggles.night
     };
     const NOTES_MODES = ['auto', 'full', 'quiet'], NIGHT_MODES = ['auto', 'on', 'off'], MUSIC_MODES = ['lower', 'pause'];
     const MODE_LABEL = { auto: 'Auto', full: 'Full', quiet: 'Quiet', on: 'On', off: 'Off' };
@@ -6181,6 +6181,12 @@
     // Build threads (web/builds.js, REVIEW.md 5.3): from a car card, the crew page and Builds you follow.
     let builds = null;
     onSocial(() => { try { builds = window.ApexBuilds ? ApexBuilds.mount({ el, btn, toast, apiCall, jsonOf, report: safety && safety.report }) : null; } catch (e) { console.error('builds', e); } });
+    // Meets on the map (web/meets_map.js, IDEAS S-13): public crews' listed drives pinned at their meeting points; a tap
+    // is the same card as Crew → Meets near you. Off by default, members only, asked by the map centre's cell.
+    let meetsMap = null;
+    onSocial(() => { try { meetsMap = window.ApexMeetsMap && crewEvents && crewEvents.meetCard ? ApexMeetsMap.mount({ el, btn, apiCall, jsonOf, map,
+      mapCentre: () => { const c = map.getCenter(); return { lat: c.lat, lon: c.lng }; }, mayLookUp: nearLookupOk,
+      card: (e, redo) => crewEvents.meetCard(e, redo) }) : null; } catch (e) { console.error('meets map', e); } });
     // Friends on the map (web/friends_map.js, REVIEW.md 5.4): the Friends layer and who sees you, sent only while you drive
     let friendsMap = null;
     onSocial(() => { try { friendsMap = window.ApexFriendsMap ? ApexFriendsMap.mount({ el, btn, toast, askSignIn, apiCall, map, zones: () => privacyZones, inZone: inPrivacyZone,
@@ -6223,6 +6229,8 @@
       if (accountMe && accountMe.member) loadCrewHazardKinds();
       if (friendsMap && accountMe && accountMe.member) { friendsMap.start(); if (state.toggles.friends) friendsMap.setLayer(true); }
       else if (state.toggles.friends) { state.toggles.friends = false; paintSwitches(); }
+      if (meetsMap && accountMe && accountMe.member) { if (state.toggles.meets) meetsMap.setLayer(true); }
+      else if (state.toggles.meets && socialIn) { state.toggles.meets = false; paintSwitches(); }
       if (feedbackUi) feedbackUi.refresh();
       if (me && !me.signed_in) setRoutingCars(null);
       else if (me && me.member) apiCall('GET', '/api/garage').then(r => (r.ok ? r.json() : null)).then(list => { if (list) setRoutingCars(list); }).catch(() => {});
@@ -7791,6 +7799,13 @@
           if (friendsMap) friendsMap.setLayer(state.toggles.friends);
           let seen = false; try { seen = localStorage.getItem('apex.friendsExplained') === '1'; localStorage.setItem('apex.friendsExplained', '1'); } catch (_) {}
           if (state.toggles.friends && !seen && friendsMap) friendsMap.sheet();
+        });
+      }
+      if (k === 'meets') {   // S-13: public crews' meets near the map
+        if (!accountMe || !accountMe.member) { state.toggles.meets = false; paintSwitches(); askSignIn('see car meets on the map'); return; }
+        needSocial().then(() => {
+          if (meetsMap) meetsMap.setLayer(state.toggles.meets);
+          if (state.toggles.meets) toast('Meets: public crews\u2019 drives coming up within 80 km of the map. Tap a pin for the meet.');
         });
       }
       if (k === 'coverage') {

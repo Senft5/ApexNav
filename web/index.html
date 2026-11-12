@@ -613,6 +613,7 @@
     .ly-key .k-smooth { stroke: var(--gain); } .ly-key .k-rough { stroke: var(--signal); }
     .ly-key .k-cam { stroke: var(--signal); stroke-width: 1.5; stroke-linecap: butt; stroke-linejoin: miter; fill: var(--panel); }
     .ly-key .k-hill { stroke: var(--panel-dim); stroke-width: 1.5; fill: var(--hair, transparent); }
+    .ly-key .k-meet { stroke: var(--panel-ink); stroke-width: 1.5; fill: var(--panel); }
     .ly-key .k-friend { stroke: var(--panel-ink); stroke-width: 1.5; fill: var(--panel); } .ly-key .k-friend-in { fill: var(--panel-ink); stroke: none; }
     .sw.ly:not(.on) .ly-key { opacity: 0.45; }
     /* Measured roads: the three colours, each beside its word (a colour is never the only way to read it) */
@@ -2059,6 +2060,8 @@
           <svg class="ly-key" viewBox="0 0 28 20" aria-hidden="true"><path class="k-hill" d="M2 17 L10 6 L15 12 L19 8 L26 17 Z"/></svg></button>
         <!-- developers only (cockpit.js applyDevFlags: /api/me's developer flag); hidden for everyone else -->
         <button class="sw ly" data-toggle="satellite" id="satSwitch" hidden><i></i><span>Satellite</span><svg class="ly-key" viewBox="0 0 28 20" aria-hidden="true"></svg></button>
+        <button class="sw ly" data-toggle="meets"><i></i><span>Meets<small>Public crews' meets coming up</small></span>
+          <svg class="ly-key" viewBox="0 0 28 20" aria-hidden="true"><rect class="k-meet" x="6" y="3" width="16" height="10"/><path class="k-meet" d="M14 13 V18"/></svg></button>
         <button class="sw ly" data-toggle="friends"><i></i><span>Friends<small>Sharing where they are</small></span>
           <svg class="ly-key" viewBox="0 0 28 20" aria-hidden="true"><circle class="k-friend" cx="14" cy="10" r="6"/><circle class="k-friend-in" cx="14" cy="10" r="2.5"/></svg></button>
         </div>

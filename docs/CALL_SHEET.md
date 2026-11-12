@@ -14,6 +14,13 @@ reads it before Overpass. Calls: a tile counts as ours only if the state outline
 wrongly "no cameras"; outside the region and when our file can't be read, the phone asks Overpass as before (now with
 maps.mail.ru as a fourth server). The request carries no position: it's the same file for everyone. Undo: drop the
 `regionOnce` lookup in web/cameras.js `load` (pass `region: null`), the route in backend/src/index.ts and the workflow.
+## 2026-11-12 (meets on the map): public crews' meets pinned on the map (claude/project-thread-uwmi4e)
+
+Calls I made: a Meets layer in Layers, off by default like Friends, for members only. It pins the same public meets as
+Crew → Meets near you, one pin per meeting point with the day on it. A tap opens the existing meet card, so there is one
+card to keep right. Your own crew's listed drives show too, with "answer on the crew page" instead of Join. It asks by the
+map centre's 0.1-degree cell, never from a privacy zone, at most every 5 minutes per cell. Undo: remove the `meets`
+button in web/index.html and the `meetsMap` lines in cockpit.js.
 ## 2026-11-11 (ui-round-three): an empty Garage shows a parking bay and one big "Add a car" key (claude/project-thread-5sbga7)
 
 With no cars yet, the Garage said one grey sentence over a small outlined key. Now it is a small page like the first

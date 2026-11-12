@@ -2981,6 +2981,40 @@ flow('friends on the map: off by default; the first time on explains both choice
   check(!sent.some((x) => x.p === '/api/presence' && x.m === 'POST'), 'nothing is sent while not driving');
 });
 
+flow('meets on the map: off by default; on, public meets near the map are pinned by day; a tap opens the meet card (IDEAS S-13, Worker stubbed)', async (page, base) => {
+  await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); } catch (_) {} });
+  const asked = [];
+  const soon = new Date(Date.now() + 3 * 86400000); soon.setHours(9, 0, 0, 0);
+  await page.route('**/api/**', (route) => {
+    const u = new URL(route.request().url()), p = u.pathname;
+    const json = (b, status = 200) => route.fulfill({ status, contentType: 'application/json', body: JSON.stringify(b) });
+    if (p === '/api/me') return json({ signed_in: true, member: true, handle: 'me' });
+    if (p === '/api/events/near') { asked.push(u.search); return json([
+      { id: 'ev1', crew_id: 'c1', crew_name: 'Dragon Crew', title: 'Cars and coffee', starts_at: soon.toISOString(), meet_name: 'Deals Gap', meet_lat: 35.47, meet_lon: -83.92, notes: null, repeat_weeks: 1, going: 6, member: false, km: 12 },
+      { id: 'ev2', crew_id: 'c2', crew_name: 'Our crew', title: 'Sunday run', starts_at: new Date(soon.getTime() + 86400000).toISOString(), meet_name: 'Deals Gap', meet_lat: 35.4701, meet_lon: -83.9201, notes: null, repeat_weeks: null, going: 3, member: true, km: 12 }]); }
+    return json([]);
+  });
+  await page.goto(base + '/index.html');
+  await page.waitForFunction(() => window.apexDebug && window.apex && typeof window.apex.live === 'function');
+  check(await page.evaluate(() => apexDebug.state.toggles.meets === false && !document.querySelector('.mm-pin')), 'the layer is off by default');
+  await page.waitForTimeout(1500);                                                        // the account is known
+  await page.evaluate(() => { apexDebug.state.follow = false; apexDebug.map.jumpTo({ center: [-83.95, 35.45], zoom: 9 }); });
+  await page.click('#swTab');
+  await page.click('[data-toggle="meets"]');
+  await page.waitForSelector('.mm-pin');
+  const pin = await page.evaluate(() => ({ n: document.querySelectorAll('.mm-pin').length, text: document.querySelector('.mm-pin').textContent, label: document.querySelector('.mm-pin').getAttribute('aria-label') }));
+  check(pin.n === 1 && /\+1$/.test(pin.text) && /^Cars and coffee, \w+, and 1 more\./.test(pin.label), 'two meets at one place share a pin, soonest first: ' + JSON.stringify(pin));
+  check(asked.length >= 1 && /^\?lat=35\.\d&lon=-8\d\.\d$/.test(asked[0]), 'asked by the map centre cell only: ' + JSON.stringify(asked));
+  await page.evaluate(() => document.querySelector('.mm-pin').click());
+  await page.waitForSelector('[aria-label="Meets here"]');
+  const sheet = await page.textContent('[aria-label="Meets here"]');
+  check(/2 meets here/.test(sheet) && /Cars and coffee/.test(sheet) && /Dragon Crew/.test(sheet) && /6 going/.test(sheet) && /Join the crew/.test(sheet), 'the sheet is the meet card: ' + sheet.slice(0, 200));
+  check(/Your crew.s drive\. Answer on its card/.test(sheet) && (sheet.match(/Join the crew/g) || []).length === 1, 'your own crew\'s meet has no Join');
+  await page.click('[aria-label="Meets here"] button:has-text("Close")');
+  await page.click('[data-toggle="meets"]');
+  check(await page.evaluate(() => !document.querySelector('.mm-pin')), 'off again, the pins go');
+});
+
 flow('drive ended: your best on this road on the card, and the pack closes with the score from its own clips (REVIEW.md 4.4)', async (page, base) => {
   await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); } catch (_) {}
     const S = window.speechSynthesis; if (S) S.speak = (u) => setTimeout(() => u.onend && u.onend(), 20); });
