@@ -11,6 +11,14 @@ The page behind a shared ETA link was plain system text. It now uses the app's t
 quiet, and a dark page when their phone is in dark mode. The words are unchanged. Undo: revert web/eta.html and the
 `parts` / `live` fields in web/eta_share.js.
 
+
+## 2026-11-12 (meets on the map): public crews' meets pinned on the map (claude/project-thread-uwmi4e)
+
+Calls I made: a Meets layer in Layers, off by default like Friends, for members only. It pins the same public meets as
+Crew → Meets near you, one pin per meeting point with the day on it. A tap opens the existing meet card, so there is one
+card to keep right. Your own crew's listed drives show too, with "answer on the crew page" instead of Join. It asks by the
+map centre's 0.1-degree cell, never from a privacy zone, at most every 5 minutes per cell. Undo: remove the `meets`
+button in web/index.html and the `meetsMap` lines in cockpit.js.
 ## 2026-11-11 (ui-round-three): an empty Garage shows a parking bay and one big "Add a car" key (claude/project-thread-5sbga7)
 
 With no cars yet, the Garage said one grey sentence over a small outlined key. Now it is a small page like the first
