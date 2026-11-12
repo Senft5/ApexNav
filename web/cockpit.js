@@ -3281,11 +3281,27 @@
     $('routeSaveBtn').addEventListener('click', () => {
       const t = plannedRoute;
       if (!t || !Array.isArray(t.lat) || t.lat.length < 2) return;
-      if (ApexSavedRoutes.has(localStorage, t.id)) { ApexSavedRoutes.remove(localStorage, t.id); toast(`${t.name} removed from saved routes.`); }
-      else if (ApexSavedRoutes.save(localStorage, ApexSavedRoutes.pack(t)) === 'saved') toast(`Saved for offline: ${t.name}. It's listed in Where to? now.`);
+      if (ApexSavedRoutes.has(localStorage, t.id)) {
+        ApexSavedRoutes.remove(localStorage, t.id); toast(`${t.name} removed from saved routes.`);
+        if (window.ApexOfflineTiles) ApexOfflineTiles.removeArea(routeAreaId(t)).catch(() => {});   // and the map kept along it
+      } else if (ApexSavedRoutes.save(localStorage, ApexSavedRoutes.pack(t)) === 'saved') { toast(`Saved for offline: ${t.name}. It's listed in Where to? now.`); keepMapAlong(t); }
       else toast('The phone is out of room for saved routes. Remove one first.');
       paintSaveBtn();
     });
+    // IDEAS F-03: a saved route keeps the map along it too (offline_tiles.js planAlong: the map and terrain within 1.5 km of
+    // it), so it draws with no signal on the way. Quietly, with signal; it shows in Your data as a map area and goes when the
+    // route is unsaved. Nothing kept (no signal, a route too long) leaves the saved route as it was.
+    const routeAreaId = (t) => `route_${String(t.id).replace(/[^\w-]/g, '').slice(0, 60)}`;
+    async function keepMapAlong(t) {
+      if (!window.ApexOfflineTiles || navigator.onLine === false || !t || !Array.isArray(t.lat)) return;
+      try {
+        const mid = Math.floor(t.lat.length / 2);
+        const a = await ApexOfflineTiles.download({ lat: t.lat[mid], lon: t.lon[mid], along: { lat: t.lat, lon: t.lon }, id: routeAreaId(t), styleUrl: MAP_STYLE, name: `Along ${t.name}` });
+        if (!ApexSavedRoutes.has(localStorage, t.id)) { await ApexOfflineTiles.removeArea(a.id); return; }   // unsaved meanwhile
+        toast(`The map along ${t.name} is kept for no signal too, ${Math.max(1, Math.round(a.bytes / 1048576))} MB.`);
+        if (window.apexDebug) window.apexDebug.mapAlong = a;
+      } catch (_) { /* the saved route stands without its map */ }
+    }
     // U-64: no router time (a GPX track, a loop or a fallback router without one): the route's own envelope, capped by the
     // posted limits once attachLimits has them (eta.js envelopeTime). A forecast like the router's; timeFrom says whose.
     function timeFromEnvelope(t) {
@@ -7315,7 +7331,7 @@
       box.replaceChildren(...ApexOfflineTiles.areas().map((a) => {
         const row = document.createElement('div'); row.className = 'row'; row.style.justifyContent = 'space-between';
         const feel = a.roadOf ? (a.roadCells < a.roadOf ? ' · members\u2019 road feel for part of it' : a.roadWays ? ` · ${a.roadWays} measured roads` : ' · no measured roads yet') : '';
-        const t = document.createElement('span'); t.className = 'note'; t.textContent = `${a.name} · ${ApexUnits.long(a.radiusKm * 1000, 0)} round · ${(a.bytes / 1048576).toFixed(0)} MB${feel}`;
+        const t = document.createElement('span'); t.className = 'note'; t.textContent = `${a.name} · ${Number.isFinite(a.radiusKm) ? `${ApexUnits.long(a.radiusKm * 1000, 0)} round` : 'along the route'} · ${(a.bytes / 1048576).toFixed(0)} MB${feel}`;
         const del = document.createElement('button'); del.className = 'linkbtn'; del.textContent = 'Delete';
         del.addEventListener('click', async () => { await ApexOfflineTiles.removeArea(a.id); if (window.ApexOwnRouting && ApexOwnRouting.releaseArea) ApexOwnRouting.releaseArea(a.id); renderMyData(); });
         row.append(t, del); return row;

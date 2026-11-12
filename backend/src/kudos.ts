@@ -46,10 +46,12 @@ export async function kudosReceived(env: Env, v: Viewer) {
 /** For activity rows: how many kudos a run has and whether the viewer gave one. */
 export async function kudosFor(env: Env, v: Viewer, runs: { owner: string; canon: string; day: string }[]) {
   const out = new Map<string, { n: number; mine: boolean }>();
-  for (const r of runs) {
-    const row = await env.DB.prepare(
-      "SELECT COUNT(*) AS n, MAX(giver_id = ?4) AS mine FROM kudos WHERE owner_id = ?1 AND canon_id = ?2 AND driven_on = ?3")
-      .bind(r.owner, r.canon, r.day, v.id).first<{ n: number; mine: number | null }>();
+  // one batch (a batch is one of Workers Free's 50 D1 queries per invocation; activity asks for up to 30 runs)
+  const res = runs.length ? await env.DB.batch<{ n: number; mine: number | null }>(runs.map((r) => env.DB.prepare(
+    "SELECT COUNT(*) AS n, MAX(giver_id = ?4) AS mine FROM kudos WHERE owner_id = ?1 AND canon_id = ?2 AND driven_on = ?3")
+    .bind(r.owner, r.canon, r.day, v.id))) : [];
+  for (const [k, r] of runs.entries()) {
+    const row = res[k].results[0];
     out.set(`${r.owner}|${r.canon}|${r.day}`, { n: row?.n ?? 0, mine: !!row?.mine });
   }
   return out;

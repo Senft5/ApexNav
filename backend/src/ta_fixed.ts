@@ -65,11 +65,15 @@ const established = async (env: Env, v: Viewer) => !!(await first(env, `SELECT 1
 const periodOf = (u: URL): Period => { const p = u.searchParams.get("period") || "week"; if (!(PERIODS as readonly string[]).includes(p)) throw new HttpError(400, "bad_period"); return p as Period; };
 
 /** A circuit's board for a period: each entrant's quickest time in it, quickest first (ties share a place). */
+type BoardRow = { user_id: string; handle: string | null; time_s: number; driver_score: number | null; driven_on: string };
+const boardStmt = (env: Env, v: Viewer, id: string, period: Period) => env.DB.prepare(
+  `SELECT t.user_id, u.handle, MIN(t.time_s) AS time_s, t.driver_score, t.driven_on FROM ta_times t JOIN users u ON u.id = t.user_id
+    WHERE t.circuit_id = ?1 AND t.driven_on >= ${FROM[period]} AND (t.user_id = ?2 OR ${NO_BLOCK("t.user_id", "?2")})
+    GROUP BY t.user_id ORDER BY time_s, t.updated_at, u.handle LIMIT 500`).bind(id, v.id);
 async function board(env: Env, v: Viewer, id: string, period: Period) {
-  const rows = await all<{ user_id: string; handle: string | null; time_s: number; driver_score: number | null; driven_on: string }>(env,
-    `SELECT t.user_id, u.handle, MIN(t.time_s) AS time_s, t.driver_score, t.driven_on FROM ta_times t JOIN users u ON u.id = t.user_id
-      WHERE t.circuit_id = ?1 AND t.driven_on >= ${FROM[period]} AND (t.user_id = ?2 OR ${NO_BLOCK("t.user_id", "?2")})
-      GROUP BY t.user_id ORDER BY time_s, t.updated_at, u.handle LIMIT 500`, id, v.id);
+  return boardOf(v, period, (await boardStmt(env, v, id, period).all<BoardRow>()).results);
+}
+function boardOf(v: Viewer, period: Period, rows: BoardRow[]) {
   const best = rows.length ? rows[0].time_s : null;
   let place = 0;
   const placed = rows.map((r, i) => { if (!i || rows[i - 1].time_s !== r.time_s) place = i + 1; return { place, r }; });
@@ -170,29 +174,40 @@ export async function fixedRuns(env: Env, v: Viewer, req: Request) {
   if (!v.handle) throw new HttpError(409, "handle_required");
   const b = await body<{ runs?: unknown }>(req);
   if (!Array.isArray(b.runs) || b.runs.length > 20) throw new HttpError(400, "bad_runs");
-  let accepted = 0, refused = 0;
-  const hit = new Map<string, string>();
-  for (const raw of b.runs as Record<string, unknown>[]) {
+  // three batches whatever the count (a batch is one of Workers Free's 50 D1 queries per invocation; two queries per run and
+  // a board per circuit went past it): every run's circuit, then the times that count, then your place on each board
+  const want = (b.runs as Record<string, unknown>[]).map((raw) => {
     const segId = str(raw && raw.segment_id, "segment_id", 1, 64), time = int(raw.time_s, "time_s", 10, 36000);
     const score = raw.driver_score == null ? null : int(raw.driver_score, "driver_score", 0, 1000);
     const day = str(raw.driven_on, "driven_on", 10, 10);
     if (!DATE_RE.test(day)) throw new HttpError(400, "bad_driven_on");
-    const c = await first<{ id: string; name: string; length_m: number }>(env,
-      `SELECT c.id, c.name, c.length_m FROM segments s JOIN ta_circuits c ON c.id = s.origin_id AND c.season = ${SEASON} AND c.removed = 0
-        JOIN ta_entered e ON e.circuit_id = c.id AND e.user_id = ?2
-        WHERE s.id = ?1 AND s.owner = ?2 AND ?3 >= c.season AND ?3 >= date(e.created_at, '-1 day') AND ?3 <= date('now', '+1 day')`, segId, v.id, day);
+    return { segId, time, score, day };
+  });
+  if (!want.length) return { accepted: 0, refused: 0, places: [] };
+  const found = await env.DB.batch<{ id: string; name: string; length_m: number }>(want.map((r) => env.DB.prepare(
+    `SELECT c.id, c.name, c.length_m FROM segments s JOIN ta_circuits c ON c.id = s.origin_id AND c.season = ${SEASON} AND c.removed = 0
+      JOIN ta_entered e ON e.circuit_id = c.id AND e.user_id = ?2
+      WHERE s.id = ?1 AND s.owner = ?2 AND ?3 >= c.season AND ?3 >= date(e.created_at, '-1 day') AND ?3 <= date('now', '+1 day')`).bind(r.segId, v.id, r.day)));
+  let accepted = 0, refused = 0;
+  const hit = new Map<string, string>();
+  const stmts: D1PreparedStatement[] = [];
+  for (const [i, r] of want.entries()) {
+    const c = found[i].results[0];
     if (!c) continue;
-    if (c.length_m / time > MAX_AVG_MS) { refused++; continue; }
-    await env.DB.prepare(`INSERT INTO ta_times (circuit_id, user_id, driven_on, time_s, driver_score) VALUES (?1, ?2, ?3, ?4, ?5)
+    if (c.length_m / r.time > MAX_AVG_MS) { refused++; continue; }
+    stmts.push(env.DB.prepare(`INSERT INTO ta_times (circuit_id, user_id, driven_on, time_s, driver_score) VALUES (?1, ?2, ?3, ?4, ?5)
        ON CONFLICT (circuit_id, user_id, driven_on) DO UPDATE SET time_s = ?4, driver_score = ?5, updated_at = datetime('now') WHERE ?4 < ta_times.time_s`)
-      .bind(c.id, v.id, day, time, score).run();
+      .bind(c.id, v.id, r.day, r.time, r.score));
     accepted++;
     hit.set(c.id, c.name);
   }
+  if (stmts.length) await env.DB.batch(stmts);
+  const ids = [...hit.keys()];
+  const boards = ids.length ? await env.DB.batch<BoardRow>(ids.map((id) => boardStmt(env, v, id, "week"))) : [];
   const places = [];
-  for (const [id, name] of hit) {
-    const w = await board(env, v, id, "week");
-    if (w.you) places.push({ id, name, place: w.you.place, of: w.entrants, time_s: w.you.time_s, gap_s: w.you.gap_s });
+  for (const [k, id] of ids.entries()) {
+    const w = boardOf(v, "week", boards[k].results);
+    if (w.you) places.push({ id, name: hit.get(id)!, place: w.you.place, of: w.entrants, time_s: w.you.time_s, gap_s: w.you.gap_s });
   }
   return { accepted, refused, places };
 }

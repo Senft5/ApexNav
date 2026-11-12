@@ -4674,8 +4674,11 @@ flow("friends' activity: the Log lists who drove your stages lately and where yo
   await page.goto(base + '/analysis.html?tab=log');
   await page.waitForSelector('#friendsPanel:not([hidden])');
   const text = await page.textContent('#friendsList');
-  check(/@bob drove Esses <b>bold<\/b> · 812 · .* · you're 2nd of 3/.test(text), 'bob, the stage as typed (not as HTML), your rank: ' + text);
-  check(/@cara drove Dry Ridge · 640 .*you haven't posted a score here/.test(text), 'no rank when you have no score');
+  check(/@bob drove Esses <b>bold<\/b> · 812.*you're 2nd of 3/.test(text), 'bob, the stage as typed (not as HTML), your rank: ' + text);
+  check(/@cara drove Dry Ridge · 640.*no score from you yet/.test(text), 'no rank when you have no score');
+  const feed = await page.evaluate(() => { const r = document.querySelector('#friendsList .friend-act'), k = r.querySelector('.kudos-btn').getBoundingClientRect(), t = r.firstElementChild.getBoundingClientRect();
+    return { right: k.left >= t.right - 1, note: !!document.querySelector('#friendsPanel > .note') }; });
+  check(feed.right && !feed.note, 'each friend is a row with Kudos on its right, no footnote under the list: ' + JSON.stringify(feed));
   check(!(await page.$('#friendsList b b')), 'a stage name never becomes markup');
   await page.click('button[aria-label="Kudos to @bob for Esses <b>bold</b>"]');
   await page.waitForSelector('button[aria-label="Kudos to @bob for Esses <b>bold</b>"][aria-pressed="true"]');
@@ -6910,6 +6913,37 @@ flow('offline area: Save the map here keeps the map, labels and terrain; with no
   check(await page.evaluate(() => !!window.apexDebug.map.getSource('openmaptiles')), 'the saved style and its source loaded offline');
 }, { viewport: { width: 1280, height: 900 } });
 
+flow('a saved route keeps the map along it: Save fetches the tiles within reach of the route, not round it, lists it in Your data, and unsaving drops it (IDEAS F-03)', async (page, base) => {
+  const got = [];
+  await page.route('https://tiles.openfreemap.org/**', (route) => {
+    const u = route.request().url();
+    if (u.includes('/styles/')) return route.fulfill({ contentType: 'application/json', body: JSON.stringify({ version: 8, sources: { openmaptiles: { type: 'vector', url: 'https://tiles.openfreemap.org/planet' } }, layers: [{ id: 'bg', type: 'background', paint: { 'background-color': '#eee' } }] }) });
+    if (u.endsWith('/planet')) return route.fulfill({ contentType: 'application/json', body: JSON.stringify({ tiles: ['https://tiles.openfreemap.org/planet/t/{z}/{x}/{y}.pbf'], minzoom: 0, maxzoom: 14 }) });
+    const m = u.match(/\/t\/(\d+)\/(\d+)\/(\d+)\.pbf$/); if (m) got.push(m.slice(1).map(Number));
+    return route.fulfill({ contentType: 'application/x-protobuf', body: Buffer.alloc(0) });
+  });
+  await page.route('https://s3.amazonaws.com/**', (route) => route.fulfill({ contentType: 'image/png', body: Buffer.alloc(8) }));
+  await page.route('https://valhalla1.openstreetmap.de/route', (route) => route.fulfill({ contentType: 'application/json', body: JSON.stringify(stubTrip(JSON.parse(route.request().postData() || '{}').locations)) }));
+  await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); localStorage.setItem('apex.permsExplained', '1'); } catch (_) {} });
+  await page.goto(base + '/index.html');
+  await page.waitForFunction(() => window.apexDebug && window.apexDebug.map && window.apexDebug.map.loaded(), null, { timeout: 15000 });
+  await page.evaluate(() => apexDebug.buildRoute([{ lat: 35.60, lon: -83.90 }, { lat: 35.80, lon: -83.90 }], 'route_dest', 'To the gap', null, { from: null, to: { lat: 35.80, lon: -83.90 }, via: [] }));
+  await page.waitForFunction(() => apexDebug.track && apexDebug.track.kind === 'route' && apexDebug.track.request, null, { timeout: 20000 });
+  got.length = 0;
+  await page.evaluate(() => document.getElementById('routeSaveBtn').click());
+  await page.waitForFunction(() => window.apexDebug.mapAlong, null, { timeout: 60000 });
+  const area = await page.evaluate(() => JSON.parse(localStorage.getItem('apex.offlineAreas') || '[]'));
+  check(area.length === 1 && area[0].alongKm === 1.5 && area[0].radiusKm === null && /^Along /.test(area[0].name), 'an area along the route: ' + JSON.stringify(area));
+  // every z14 tile within reach of the line (x for -83.90 at z14 is 4373; 1.5 km is under one tile), none 25 km round
+  const z14 = got.filter((t) => t[0] === 14), xs = [...new Set(z14.map((t) => t[1]))];
+  check(z14.length > 10 && xs.every((x) => Math.abs(x - 4373) <= 2), 'the tiles hug the route: ' + JSON.stringify({ n: z14.length, xs }));
+  await page.waitForFunction(() => /The map along/.test(document.getElementById('toast').textContent), null, { timeout: 5000 });
+  // unsaved: the map along it goes too
+  await page.evaluate(() => document.getElementById('routeSaveBtn').click());
+  await page.waitForFunction(() => (JSON.parse(localStorage.getItem('apex.offlineAreas') || '[]')).length === 0, null, { timeout: 5000 });
+  check(true, 'unsaving the route drops its map');
+}, { viewport: { width: 1280, height: 900 } });
+
 flow('offline area, as a member: Save the map here keeps the measured roads round it; with no signal a plan still has them, and clearing them (what Sign out calls) leaves nothing (IDEAS F-02)', async (page, base) => {
   let online = true;
   const asks = [], way = { 0: { i: [0, 1, 2], n: [3, 3, 3], cam: [0.02, 0.03, 0.02], cn: [3, 3, 3], rough: [0.1, 0.2, 0.1] } };
@@ -7158,6 +7192,20 @@ flow('the empty Log is a first page: the book\'s furniture in pencil, one key, a
   await page.waitForSelector('#segList .first-page');
   const s = await page.evaluate(() => ({ head: document.querySelector('#segList .fp-head').textContent, go: document.querySelector('#segList .fp-go').textContent, mark: !!document.querySelector('#segList .fp-mark') }));
   check(s.head === 'No stages yet.' && s.go === 'Start a drive' && s.mark, 'Stages: what a stage is, drawn, and the way to one: ' + JSON.stringify(s));
+});
+
+flow('Stages with no stage yet: Mark a stage opens the marker right there on your latest drive (free roamer B, 2026-11-12)', async (page, base) => {
+  await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); } catch (_) {} });
+  await page.goto(base + '/analysis.html');
+  await page.waitForFunction(() => window.apexLogDebug && window.apexLogDebug.loaded() && window.ApexRecording);
+  await storeDashDrive(page, 'mk1', 'Marker road');
+  await page.goto(base + '/analysis.html?tab=stages');
+  await page.waitForSelector('#segList .fp-go');
+  check(await page.evaluate(() => document.getElementById('newStage').hidden), 'the marker waits behind the key');
+  await page.click('#segList .fp-go');
+  const m = await page.evaluate(() => ({ tab: !document.getElementById('tab-segments').hidden, open: document.getElementById('newStage').open,
+    shown: !document.getElementById('newStage').hidden, drive: document.getElementById('segDrive').value }));
+  check(m.tab && m.open && m.shown && m.drive === 'mk1', 'still on Stages, the marker open on the drive: ' + JSON.stringify(m));
 });
 
 flow('the drive page\'s map: with no map to be had the picture keeps its blank panel; MapLibre loads only for it (TestFlight 15)', async (page, base) => {
@@ -7420,6 +7468,8 @@ flow('a stage\'s Board and Runs fit the phone: an empty board is a sentence, a f
   await page.click('#segList button.seg');
   await page.waitForSelector('#segTable tr.run-parts .bars', { timeout: 15000 });
   await page.waitForFunction(() => /No friends on this stage yet/.test(document.getElementById('segLegend').textContent) && document.querySelector('#segShareRow select'), null, { timeout: 15000 });
+  check(await page.evaluate(() => document.getElementById('segLegend').textContent === 'No friends on this stage yet.' && !/\(Account\)/.test(document.getElementById('segSyncPanel').textContent)),
+    'the empty board is one sentence; no notes pointing at an "Account" page that is People now: ' + await page.textContent('#segSyncPanel'));
   const r = await page.evaluate(() => {
     const t = document.getElementById('segTable'), box = t.closest('.scroll'), legend = document.getElementById('segLegend');
     const bars = [...t.querySelectorAll('tr.run-parts .bars')].map((g) => [...g.querySelectorAll('.bar')].map((b) => ({ r: b.getBoundingClientRect(), cut: b.scrollWidth > b.clientWidth + 1, t: b.textContent })));
@@ -7431,7 +7481,7 @@ flow('a stage\'s Board and Runs fit the phone: an empty board is a sentence, a f
       boardOverflow: (() => { const s = document.getElementById('segBoard').closest('.scroll'); return s.scrollWidth - s.clientWidth; })() };
   });
   check(r.overflow <= 1 && r.boardOverflow <= 1, 'nothing on the stage scrolls sideways: ' + JSON.stringify(r));
-  check(r.runs === 2 && JSON.stringify(r.heads) === '["#","Run","Score","Time (private)"]', 'a run a line, four columns: ' + JSON.stringify(r.heads));
+  check(r.runs === 2 && JSON.stringify(r.heads) === '["#","Run","Score","Time"]', 'a run a line, four columns: ' + JSON.stringify(r.heads));
   // a run's name is when it was driven; the drive's name is under it only when it isn't the stage's own; lengths to a tenth
   const names = await page.evaluate(() => ({ runs: [...document.querySelectorAll('#segTable tr.run .run-name')].map((c) => [c.querySelector('b').textContent, c.querySelector('.sub').hidden ? null : c.querySelector('.sub').textContent]),
     title: document.getElementById('segTitle').textContent, len: document.querySelector('#segList button.seg span:nth-of-type(2)').textContent }));
@@ -7439,7 +7489,7 @@ flow('a stage\'s Board and Runs fit the phone: an empty board is a sentence, a f
     'each run is named by its date, and the stage\'s name is not repeated on every line: ' + JSON.stringify(names));
   check(/^\d+\.\d (mi|km) · 2 runs$/.test(names.len), 'a stage\'s length to a tenth: ' + names.len);
   check(r.comps.length === 8 && r.comps.every((t) => /^(Pace|Smooth|Brakes|Rhythm) \d+$/.test(t.trim())) && !r.clash.length && !r.cut.length, 'each run\'s four components whole, side by side, none on another: ' + JSON.stringify(r));
-  check(r.boardRows === 0 && r.legendLines >= 2, 'an empty board is a sentence that wraps, not a cut table cell: ' + JSON.stringify(r));
+  check(r.boardRows === 0 && r.legendLines >= 1, 'an empty board is a sentence, not a cut table cell: ' + JSON.stringify(r));
   check(!r.opts.some((o) => /null|undefined/.test(o)) && r.opts.includes('A friend with no handle yet') && /Share this stage with a friend/.test(r.shareText), 'a friend with no handle is named, never "@null": ' + JSON.stringify(r.opts));
   const bad = await unsafe(page, SAFE.portrait);
   check(!bad.length, 'the stage page under the island, the home bar or a corner, or keys on keys:\n  ' + bad.join('\n  '));
@@ -8386,15 +8436,20 @@ flow('plan flow (e, f) a level change and an alternative are one tap or swipe ea
   await page.evaluate(() => { const f = document.getElementById('routeCardFun'), sp = document.createElement('div'); sp.id = 'lateSpacer'; sp.style.height = '90px'; f.parentNode.insertBefore(sp, f); });
   // (you scroll: the wheel, then the scroll; that ends the last change's hold)
   await page.evaluate(() => { const b = document.getElementById('planBody'); b.dispatchEvent(new WheelEvent('wheel', { bubbles: true })); b.scrollTop = Math.min(160, b.scrollHeight - b.clientHeight); });
-  // and the page scrolls the card on its own meanwhile, as CI's did: the hold puts it back
-  await page.evaluate(() => setTimeout(() => { document.getElementById('planBody').scrollTop += 40; }, 250));
-  const swL0 = await page.evaluate((sel) => document.querySelector(sel).getBoundingClientRect().top, card('fun'));
-  await page.evaluate(() => setTimeout(() => { const sp = document.getElementById('lateSpacer'); if (sp) sp.remove(); }, 400));
+  // and the page scrolls the card on its own meanwhile, as CI's did: the hold puts it back. Where the card is, and both
+  // timers, start the moment the finger lands: timed from before the tap, a slow runner let the scroll land before it,
+  // and the card was rightly held 40 px from a stale reading (#578, #590)
+  await page.evaluate((sel) => { window.__swL0 = null; window.addEventListener('pointerdown', () => {
+    window.__swL0 = document.querySelector(sel).getBoundingClientRect().top;
+    setTimeout(() => { document.getElementById('planBody').scrollTop += 40; }, 250);
+    setTimeout(() => { const sp = document.getElementById('lateSpacer'); if (sp) sp.remove(); }, 400);
+  }, { capture: true, once: true }); }, card('fun'));
   await tap(card('fun'), 'Fun');
   await page.waitForFunction(() => /^Fun: /.test(document.getElementById('routeProgress').textContent) && !document.getElementById('lateSpacer'), null, { timeout: 5000 });
   await page.waitForTimeout(150);
+  const swL0 = await page.evaluate(() => window.__swL0);
   const swL1 = await page.evaluate((sel) => document.querySelector(sel).getBoundingClientRect().top, card('fun'));
-  check(Math.abs(swL1 - swL0) <= 2, `the card you tapped stays put when the card shrinks late: ${swL0} -> ${swL1}`);
+  check(swL0 != null && Math.abs(swL1 - swL0) <= 2, `the card you tapped stays put when the card shrinks late: ${swL0} -> ${swL1}`);
   await tap(card('quick'), 'Quick');
   await page.waitForFunction(() => /^Quick: /.test(document.getElementById('routeProgress').textContent), null, { timeout: 5000 });
   await tap(card('fun'), 'Fun');

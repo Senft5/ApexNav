@@ -20,7 +20,10 @@ def test_the_empty_log_is_a_first_page_with_one_thing_to_do():
 
 def test_the_empty_stages_page_says_what_a_stage_is_and_how_to_make_one():
     assert '<h2 class="fp-head">No stages yet.</h2>' in PAGE
-    assert "Pick a drive to mark one from" in PAGE and "Mark one from a drive\\u2019s page." in PAGE
+    assert "Mark one from a drive\\u2019s page." in PAGE
+    # with a drive, the key opens the marker right here on the latest one (it sent you to the Drives list, with no next step)
+    assert '<button type="button" class="btn solid fp-go" id="segMarkGo">Mark a stage</button>' in PAGE
+    assert "openMarker(drives[drives.length - 1].id)" in PAGE and "Pick a drive to mark one from" not in PAGE
     assert 'class="fp-mark"' in PAGE and 'aria-hidden="true"' in PAGE
 
 
