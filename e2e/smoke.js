@@ -4810,9 +4810,11 @@ flow('a drive\'s corners on a road driven four times: each says your cleanest pa
   const endRoad = await page.evaluate(async () => {
     apexDebug.showEndCard(await ApexRecording.get('r3'), Date.now() - 1800e3);
     const r = document.getElementById('endRoad');
-    for (let i = 0; i < 200 && r.hidden; i++) await new Promise((ok) => setTimeout(ok, 50));
-    return { t: r.textContent, shown: !!r.offsetParent };
+    const e = document.getElementById('endPractice');
+    for (let i = 0; i < 200 && (r.hidden || e.hidden); i++) await new Promise((ok) => setTimeout(ok, 50));
+    return { t: r.textContent, shown: !!r.offsetParent, practice: e.hidden ? null : e.textContent };
   });
+  check(/^Practice on Dry Ridge Rd · One steering arc: /.test(endRoad.practice || ''), 'the end card names the practised road: ' + endRoad.practice);
   check(endRoad.shown && /^At the \d+ corners? here where your passes differ most, .+\. What it lost most there: one steering arc\.$/.test(endRoad.t), 'the road on the end card: ' + JSON.stringify(endRoad));
   check(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth), 'nothing wider than the phone');
 });
@@ -6734,6 +6736,27 @@ flow('the drive page\'s map: with no map to be had the picture keeps its blank p
   check(sc && +sc[1] > 2 && p.back == null, 'the plain picture zooms to the corner and back: ' + JSON.stringify(p));
 });
 
+flow('the main map: with no signal and no saved area one line says there is no map and what still works, gone when a tile draws (no silent blank)', async (page, base) => {
+  await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); localStorage.setItem('apex.permsExplained', '1'); } catch (_) {}
+    Object.defineProperty(Navigator.prototype, 'onLine', { get: () => !window.__off, configurable: true }); window.__off = true; });
+  let tiles = false;   // no style, no tiles: every request off the app refused, as the default; then the map's server answers
+  await page.route('https://tiles.openfreemap.org/**', (route) => (!tiles ? route.abort('internetdisconnected') : route.request().url().includes('/styles/')
+    ? route.fulfill({ contentType: 'application/json', body: JSON.stringify({ version: 8, sources: { openmaptiles: { type: 'vector', tiles: ['https://tiles.openfreemap.org/t/{z}/{x}/{y}.pbf'], maxzoom: 14 } },
+      layers: [{ id: 'bg', type: 'background', paint: { 'background-color': '#eee' } }, { id: 'water', type: 'fill', source: 'openmaptiles', 'source-layer': 'water' }] }) })
+    : route.fulfill({ status: 200, contentType: 'application/x-protobuf', body: Buffer.alloc(0) })));
+  await page.goto(base + '/index.html');
+  await page.waitForFunction(() => window.apexDebug && window.apexDebug.map);
+  await page.waitForFunction(() => !document.getElementById('mapNote').hidden, null, { timeout: 8000 });
+  const off = await page.evaluate(() => { const n = document.getElementById('mapNote'), r = n.getBoundingClientRect(), m = document.getElementById('map').getBoundingClientRect();
+    return { text: n.textContent, inside: r.left >= m.left && r.right <= m.right && r.top >= m.top, taps: getComputedStyle(n).pointerEvents }; });
+  check(off.text === 'No map here without signal. Notes and recording still work.' && off.inside && off.taps === 'none', 'said in one line, over the map, never in the way: ' + JSON.stringify(off));
+  // a tile that draws (a saved area here, or the signal back) takes it away
+  tiles = true;
+  await page.evaluate(() => window.apexDebug.map.setStyle('https://tiles.openfreemap.org/styles/liberty?again'));
+  await page.waitForTimeout(2500);
+  check(await page.evaluate(() => document.getElementById('mapNote').hidden), 'no note once the map draws');
+});
+
 flow('the drive page\'s map: with no signal and no saved area the panel says the map is unavailable offline, and MapLibre never loads', async (page, base) => {
   await page.addInitScript(() => {
     try { localStorage.setItem('apex.onboarded', '1'); } catch (_) {}
@@ -6872,16 +6895,17 @@ flow('Your records: unknown dates and unscored drives never make a "new best", a
     const seed = [d('a1', 'Mulholland Highway', '2020-08-01T09:00:00', 880, c(0.5, 0.5)), d('a2', 'Mulholland Highway', '2020-08-02T09:00:00', 910, c(0.5, 0.5)),
       d('a3', 'Mulholland Highway', '2020-08-03T09:00:00', null, null), d('a4', 'Mulholland Highway', '2026-01-01T00:00:00.000Z', 930, c(0.5, 0.5), { date_known: false }),
       // road B: the dated latest is the best
-      d('b1', 'Tail of the Dragon', '2020-07-01T09:00:00', 700, c(0.5, 0.5)), d('b2', 'Tail of the Dragon', '2020-09-01T09:00:00', 750, c(0.5, 0.5)),
-      // this month: smoothness measured on two, braking on one only
-      d('m1', 'Town loop', `${ym}-01T09:00:00`, 600, c(0.6, NaN)), d('m2', 'Back road', `${ym}-02T09:00:00`, 650, c(0.7, 0.9))];
+      d('b1', 'Tail of the Dragon', '2020-07-01T09:00:00', 700, c(0.5, 0.5)), d('b2', 'Tail of the Dragon', '2020-09-01T09:00:00', 750, c(0.5, 0.5), { run: { corners: 20, len_m: 5000 } }),
+      // this month: smoothness measured on two, braking on one only; best runs of 6 and 9 (an old month's 20 never counts)
+      d('m1', 'Town loop', `${ym}-01T09:00:00`, 600, c(0.6, NaN), { run: { corners: 6, len_m: 2000 } }), d('m2', 'Back road', `${ym}-02T09:00:00`, 650, c(0.7, 0.9), { run: { corners: 9, len_m: 3400 } })];
     window.apexLogDebug.records(seed);
     const rows = [...document.querySelectorAll('#recordsTable tr')].map((tr) => [tr.dataset.drive, tr.textContent]);
     const t = document.getElementById('recordsTable').closest('.scroll');
     return { rows, overflow: t.scrollWidth - t.clientWidth };
   });
   const text = r.rows.map(([id, t]) => `${id}: ${t}`).join('\n');
-  check(r.rows.length === 3, `two roads and one month record (got\n${text})`);
+  check(r.rows.length === 4, `two roads and two month records (got\n${text})`);
+  check(r.rows[3][0] === 'm2' && /Best run this month: corners in a row, smooth and settled, over 2\.1 mi/.test(r.rows[3][1]) && /9\s*$/.test(r.rows[3][1]), `this month's best run, from the summaries (got\n${text})`);
   check(r.rows[0][0] === 'b2' && /a new best/.test(r.rows[0][1]), `the dated latest best is new (got\n${text})`);
   check(r.rows[1][0] === 'a4' && !/new best/.test(r.rows[1][1]) && /date unknown/.test(r.rows[1][1]) && /of 3 scored drives/.test(r.rows[1][1]), `an undated import is no "latest" (got\n${text})`);
   check(r.rows[2][0] === 'm2' && /Smoothest drive this month, of 2/.test(r.rows[2][1]), `braking measured once is no record (got\n${text})`);
