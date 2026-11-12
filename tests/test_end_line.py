@@ -77,3 +77,28 @@ def test_the_score_against_your_usual():
     assert run("E.usual(700, [100, 100, 100, 100, 100].concat(Array(10).fill(650)))")["usual"] == 650
     page = (ROOT / "web" / "cockpit.js").read_text(encoding="utf-8")
     assert "ApexEndLine.usual(c.ds.score, before)" in page and "String(o.date || '') <= String(me.date || '')" in page   # only drives before this one
+
+
+@needs_node
+def test_a_new_best_run_this_month():
+    """IDEAS D-30, part three: the card says a run of clean corners is this month's best only when it beats every other
+    drive this month whose run is known. Never for the first drive of a month, a tie, an unknown month or date, or a drive
+    whose run was never judged."""
+    month = "(o) => (/^\\d{4}-\\d{2}/.test(o.date || '') ? o.date.slice(0, 7) : null)"
+    me = "{ id: 'a', date: '2026-11-12T10:00', run: { corners: 9, len_m: 3400 } }"
+    def best(others, m=me):
+        return run(f"E.bestRunMonth({m}, [{m}].concat({others}), {month})")
+    assert best("[{ id: 'b', date: '2026-11-02', run: { corners: 6, len_m: 900 } }, { id: 'c', date: '2026-11-03', run: null }]") == \
+        "Your best run this month: 9 corners in a row, smooth and settled."
+    assert best("[{ id: 'b', date: '2026-11-02', run: { corners: 9 } }]") is None             # a tie is not a new best
+    assert best("[{ id: 'b', date: '2026-11-02', run: { corners: 12 } }]") is None            # beaten this month
+    assert best("[{ id: 'b', date: '2026-10-30', run: { corners: 2 } }]") is None             # first of the month: nothing to beat
+    assert best("[{ id: 'b', date: '2026-11-02' }]") is None                                  # a run never judged doesn't count
+    assert best("[{ id: 'b', date: '2026-10-02', run: { corners: 30 } }, { id: 'c', date: '2026-11-01', run: null }]") is not None  # last month's 30 never counts
+    assert best("[{ id: 'b', date: '2026-11-02', run: null }]", "{ id: 'a', date: '2026-11-12', run: null }") is None
+    assert best("[{ id: 'b', date: '2026-11-02', run: null }]", "{ id: 'a', date: '', run: { corners: 9 } }") is None
+    assert run(f"E.bestRunMonth(null, [], {month})") is None and run("E.bestRunMonth({ id: 'a', run: { corners: 9 } }, [], null)") is None
+    page = (ROOT / "web" / "cockpit.js").read_text(encoding="utf-8")
+    assert "ApexEndLine.bestRunMonth(me, all, ApexAnalysis.monthOf)" in page
+    assert "$('endRun').textContent = ''; $('endRun').hidden = true;" in page                 # each card starts without it
+    assert 'id="endRun" hidden' in (ROOT / "web" / "index.html").read_text(encoding="utf-8")

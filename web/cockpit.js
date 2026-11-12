@@ -211,7 +211,7 @@
     const etaSections = new WeakMap();      // track -> its corner sections (ApexEta.cornerSections), worked out once
     let etaText = '', etaLeftS = null;
     let replayEnded = false, replayWaiting = false;   // U-110 a finished replay, U-128 a replay waiting for its map (paintReplayEnd)
-    const car = { serial: 0, route: '', guideAt: 0, guideKey: '', sightKey: '', look: '', hazards: '', symbols: new Map(), ended: null, along: '', road: '', roadAt: -1e9 };   // what the car's screen was last sent (carRoute, carGuide below)   // strip text while off route; last frame fed; furthest progress
+    const car = { serial: 0, route: '', guideAt: 0, guideKey: '', sightKey: '', look: '', hazards: '', symbols: new Map(), ended: null, along: '', offerSerial: 0, offer: null, road: '', roadAt: -1e9 };   // what the car's screen was last sent (carRoute, carGuide below)   // strip text while off route; last frame fed; furthest progress
     try {
       const saved = JSON.parse(localStorage.getItem('apex.prefs') || 'null');
       if (saved) {
@@ -254,7 +254,8 @@
       // the co-driver's voice is its own choice (any pack with any theme, private ones too); Suggested follows the look
       document.querySelectorAll('[data-pack]').forEach(b => b.setAttribute('aria-checked', String(b.dataset.pack === (state.voicePick || 'look'))));
       const pn = document.getElementById('packNote'), sug = look && look.theme && look.theme.voice;
-      if (pn) pn.textContent = state.voicePick ? `${packName(state.voicePick)} reads the notes, whatever the theme.` : sug ? `${sug.name}, the voice ${look.theme.label} suggests. It changes when the theme does.` : '';
+      // TestFlight 2026-11-12 (less text): a line only for Suggested, to say whose voice that is
+      if (pn) { pn.textContent = !state.voicePick && sug ? `${sug.name}, the voice ${look.theme.label} suggests.` : ''; pn.hidden = !pn.textContent; }
       // SO-1: the Garage says what the one Notes and Voice switches (in Layers) are set to, in their own words
       const now = document.getElementById('coNotesNow');
       if (now) now.textContent = `Notes: ${({ quiet: 'Quiet', auto: 'Auto', full: 'Full' })[state.notesMode] || '--'} · Voice ${state.toggles.voice ? 'on' : 'off'}`;
@@ -344,7 +345,7 @@
     window.addEventListener('online', () => { mapNote.failAt = 0; paintMapNote(); });
     { const v = document.getElementById('aboutVersion'), m = /ApexNav\/([^ ]+ \([^)]*\))/.exec(navigator.userAgent);   // the iOS shell names its version in the user agent
       if (v) v.textContent = m ? m[1] : (window.APEX_EMBED ? '--' : 'Website'); }
-    window.apexDebug = { map, get soundtrack() { return { playing: !!(soundtrack.eng && soundtrack.eng.playing()), frame: soundtrack.frame, piece: soundtrack.eng && soundtrack.eng.piece(), sample: !!soundtrack.demo }; }, get track() { return track; }, state, drives, buildRoute: (...a) => buildRoute(...a), renderRouteCard: (...a) => renderRouteCard(...a), openRoadPage: (...a) => openRoadPage(...a), showEndCard: (...a) => showEndCard(...a), get driveActive() { return driveActive; }, get camResets() { return camResets; }, tryTheme: (id) => tryTheme(id), tulipPNG: (svg) => tulipPNG(svg) };
+    window.apexDebug = { map, get soundtrack() { return { playing: !!(soundtrack.eng && soundtrack.eng.playing()), frame: soundtrack.frame, piece: soundtrack.eng && soundtrack.eng.piece(), sample: !!soundtrack.demo }; }, get track() { return track; }, state, drives, buildRoute: (...a) => buildRoute(...a), renderRouteCard: (...a) => renderRouteCard(...a), openRoadPage: (...a) => openRoadPage(...a), showEndCard: (...a) => showEndCard(...a), get driveActive() { return driveActive; }, get flowRun() { return drive.flow ? drive.flow.run : null; }, get camResets() { return camResets; }, tryTheme: (id) => tryTheme(id), tulipPNG: (svg) => tulipPNG(svg) };
     let mapReady = false;
     // F-02: the map's box is fixed (the window, or a drive's edges); it changes on a rotation or at a drive's start and end.
     // A resize the map already made (setPixelRatio resizes) is not made twice.
@@ -1441,6 +1442,7 @@
     const MEMO_S = 5;   // a remembered coaching tip takes up to this long to say
     let brakeSay = null;  // the brake heat call waiting for a quiet moment (noteBrakes), said before a break cue
     let breakSay = null;  // a break suggestion waiting for a quiet moment (noteRest sets it, the notes loop says it)
+    let flowSay = null;   // "Five clean in a row." (noteFlow, flow_live.js), the lowest of the quiet slots, never in Quiet notes
     const NUM_WORDS = ['zero', 'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine'];
     const TENS = { 30: 'thirty', 40: 'forty', 50: 'fifty', 60: 'sixty', 70: 'seventy', 80: 'eighty' };
     // Co-drivers say "one-fifty", "two hundred", "thirty" — never "one hundred and fifty".
@@ -1971,13 +1973,14 @@
       }
       if (brakeSay && performance.now() > brakeSay.until) brakeSay = null;
       if (breakSay && performance.now() > breakSay.until) breakSay = null;
-      const quiet = brakeSay || breakSay;
+      if (flowSay && (performance.now() > flowSay.until || state.notesMode === 'quiet')) flowSay = null;
+      const quiet = brakeSay || breakSay || flowSay;
       if (quiet && live && performance.now() - state.liveAt < 2500 && !speech.busy && !speech.queue.size && performance.now() > speech.talkingUntil) {
         const quietReach = lead + vMps * (0.6 + 0.07 * quiet.text.length + 2);
         const callDue = ev.some(e => noteM(e) - state.cursorM < quietReach && !state.spoken.has(`${track.id}:${e.type}:${e.index}`)
           && (e.type === 'corner' ? spirited : (spirited || noteworthyInCruise(e))));
         const bumpDue = ApexRoadMemory.upcoming(hazardMemory, state.live, 0, quietReach, { has: () => false });
-        if (!callDue && !bumpDue) { say(quiet.text); if (quiet === brakeSay) brakeSay = null; else breakSay = null; }
+        if (!callDue && !bumpDue) { say(quiet.text); if (quiet === brakeSay) brakeSay = null; else if (quiet === breakSay) breakSay = null; else flowSay = null; }
       }
     }
 
@@ -3425,7 +3428,7 @@
         const o = ApexEta.homeByOffer(est.arriveAt, track.homeBy, track.homeByOfferedAt ?? null, now);
         // a stage still ahead is skipped first (the loop shortens itself, your call); with none left, the quickest way home
         if (o) { track.homeByOfferedAt = now; const a = ApexEta.homeByAction(track.stageSpans, routeWatch.bestM);
-          toast(`Running ${o.lateMin} min late for home.`, { label: a.label, ms: 15000, onClick: () => {
+          offerKey(`Running ${o.lateMin} min late for home.`, `${o.lateMin} min late`, { label: a.label, ms: 15000, onClick: () => {
             const b = track ? ApexEta.homeByAction(track.stageSpans, routeWatch.bestM) : a;   // as of the tap (a reroute meanwhile)
             if (b.kind === 'skip') skipStage(b.span); else headHome(); } }); }
       }
@@ -3553,7 +3556,8 @@
       const key = `${hit.lat.toFixed(4)},${hit.lon.toFixed(4)}`;
       if (policeAhead.offered.has(key)) return;
       policeAhead.offered.add(key);
-      toast(`Police reported on your route in ${ApexUnits.long(hit.aheadM, 1)}.`, { label: 'Go round', ms: 15000, onClick: () => goRoundPolice(t, hit, pts) });
+      const far = ApexUnits.long(hit.aheadM, 1);
+      offerKey(`Police reported on your route in ${far}.`, `Police in ${far}`, { label: 'Go round', ms: 15000, onClick: () => goRoundPolice(t, hit, pts) });
     }
     async function goRoundPolice(t, hit, pts) {
       const L = state.live;
@@ -4983,6 +4987,23 @@
       t.classList.add('show'); clearTimeout(t._h);
       t._h = setTimeout(() => { t.classList.remove('show'); if (action && action.onClick) t.querySelectorAll('a').forEach(x => x.remove()); }, action ? action.ms || 7000 : 4200);
     }
+    // A drive's one-key offer (Go round, Skip, Head home) is on the car's screen too, as a navigation alert with the key and
+    // Not now (CarPlay/ApexCarPlay.swift showOffer): whichever key is tapped first does it, once, and the other goes away.
+    function offerKey(msg, short, action) {
+      const id = `o${++car.offerSerial}`;
+      let done = false;
+      const once = (fromCar) => {
+        if (done) return;
+        done = true; car.offer = null;
+        if (fromCar) { if (key && key.isConnected) { key.remove(); $('toast')._holdUntil = 0; $('toast').classList.remove('show'); } }
+        else carPost({ kind: 'offerDone', id });
+        action.onClick();
+      };
+      toast(msg, { ...action, onClick: () => once(false) });
+      const key = $('toast').querySelector('a.toast-key');
+      car.offer = { id, until: performance.now() + (action.ms || 7000), run: () => once(true) };
+      carPost(ApexCarPlay.offerMessage(id, msg, short, action.label, action.ms));
+    }
     // Something that needs an account says so and offers the way in: the toast's "Sign in" key opens People, where signing in
     // lives. In a drive it is only said, on the drive's message row: no sheet opens over the road.
     function askSignIn(why) {
@@ -5687,11 +5708,13 @@
     function paintOptChips() {
       if (!window.ApexPlanOptions || !optChipsReady) return;                // (painted once the switches above are read)
       const on = ApexPlanOptions.active(optState());
-      for (const [chipId, boxId] of [['planOptionsChip', 'planOptsOn'], ['cardOptionsChip', 'cardOptsOn']]) {
-        const chip = $(chipId), box = $(boxId);
+      // TestFlight 2026-11-12 (note 8, "cluttered"): Where to? says only how many (Options · 3, each named to VoiceOver);
+      // the route card, planned with them, still shows each one as a chip
+      for (const [chipId, boxId] of [['planOptionsChip', null], ['cardOptionsChip', 'cardOptsOn']]) {
+        const chip = $(chipId), box = boxId && $(boxId);
         chip.textContent = ApexPlanOptions.chipLabel(on);
         chip.setAttribute('aria-label', on.length ? `Options: ${on.map((x) => x.aria).join(', ')}` : 'Options');
-        box.replaceChildren(...on.map((x) => { const b = document.createElement('button'); b.className = 'chip'; b.textContent = x.text; b.dataset.opt = x.key;
+        if (box) box.replaceChildren(...on.map((x) => { const b = document.createElement('button'); b.className = 'chip'; b.textContent = x.text; b.dataset.opt = x.key;
           b.setAttribute('aria-label', `${x.aria}. Change in Options`); b.setAttribute('aria-haspopup', 'dialog'); b.addEventListener('click', openOptions); return b; }));
       }
     }
@@ -5858,8 +5881,8 @@
           try { const r = await c.loop({ start: AT, km: 40, level: LOOP_STYLE }); return { cands: (r && r.routes) || [], reason: r && r.routes && r.routes.length ? 'ok' : 'none' }; }
           catch (e) { return { cands: [], reason: 'failed', error: String((e && e.message) || e) }; }
         },
-        cameras: (tile) => ApexCameras.fetchFirst(fetch, 'data=' + encodeURIComponent(ApexCameras.query([tile])))
-          .then((j) => (j ? (j.elements || []).map(ApexCameras.classify).filter(Boolean) : null)),
+        // the app's own path (our region list first, then the Overpass servers), with nothing read from this phone's cache
+        cameras: (tile) => ApexCameras.load([tile], { fetchFn: fetch, storage: null }),
         cameraQuery: (tile) => ApexCameras.query([tile]),
       };
     }
@@ -6070,7 +6093,8 @@
       },
       getRoute: () => (track && track.kind === 'route' && track.lat.length > 1 ? { name: track.name, pts: track.lat.map((la, i) => [la, track.lon[i]]) } : null),
       // A close hazard cuts in; a far one goes next, after the pace note being spoken (never dropping the notes queued).
-      speak: (text, urgent) => { if (!state.toggles.voice) toast(text); else if (urgent) say(text, true, null, null, { kind: 'hazard', alert: true }); else sayNext(text, `convoy:${text}`); },
+      // With the voice off a close one still alerts on the car's screen, as it does with the voice on (the phone toasts it).
+      speak: (text, urgent) => { if (!state.toggles.voice) { toast(text); if (urgent && driveActive) carPost({ kind: 'hazard', title: text }); } else if (urgent) say(text, true, null, null, { kind: 'hazard', alert: true }); else sayNext(text, `convoy:${text}`); },
       onRegroup: (rg, convoyName) => regroupSay(rg, convoyName),
       drive: () => startDrive(),                                       // the convoy sheet's "Start the drive" (Convoy now, P-11)
     }) : null; } catch (e) { console.error('convoy', e); convoy = null; } });   // the convoy never takes the page down
@@ -6200,7 +6224,7 @@
     // Weekly time attack (web/time_attack.js, SOCIAL 2.9, IDEAS S-26): this area's loop this week and its board, in Where to?
     // beside Spots near you; drawn when opened, fresh each time. Runs go up from the Log when stages sync.
     let timeAttack = null;
-    const TA_LINE = 'Time attack this week: a loop near you, quickest time';
+    const TA_LINE = 'Time attack this week';   // TestFlight 2026-11-12 (note 7): the row names itself, no tagline
     onSocial(() => { try {
       const ta = window.ApexTimeAttack ? ApexTimeAttack.mount({ el, btn, toast, apiCall, jsonOf, report: safety && safety.report,
         ask: (t, a) => ApexConfirm.ask(t, a),
@@ -6562,9 +6586,10 @@
       // A friend's profile (profile_view.js, IDEAS S-15): a sheet over the list; its back key returns to it.
       const ppop = el('aside', { className: 'side-pop people-pop' }); ppop.setAttribute('aria-label', 'Friend'); pops.push(ppop);
       // P-04: what you do with a friend, on their row and on their profile
+      const closeProfile = () => { ppop.classList.remove('open'); openFriendId = null; };
       const seeOnMap = (f) => {
         const p = where.get(f.handle); if (!p || !friendsMap) return;
-        showView(null); ppop.classList.remove('open');
+        showView(null); closeProfile();
         if (!state.toggles.friends) { state.toggles.friends = true; paintSwitches(); savePrefs(); }
         friendsMap.setLayer(true);
         if (mapReady) map.flyTo({ center: [p.lon, p.lat], zoom: Math.max(map.getZoom(), 11), duration: 900 });
@@ -6579,19 +6604,34 @@
       };
       const keysFor = (f) => [
         ...(where.get(f.handle) && friendsMap ? [['On the map', () => seeOnMap(f)]] : []),
-        ['Share a route', () => { ppop.classList.remove('open'); shareRouteWith(f.handle); }],
+        ['Share a route', () => { closeProfile(); shareRouteWith(f.handle); }],
         ...(convoy ? [['Invite to a drive', () => driveWith(f)]] : []),
         ...(duels ? [['Challenge on a stage', () => duels.challenge(f)]] : [])];
+      // Nate 2026-11-12 (as easy as a big social app): a tap on a friend opens their profile; what you do with them, their last
+      // share and what they see of you are on it (the row used to open five keys, a share and a grants drawer in the list)
+      const aboutYou = (f) => {
+        const g = grants.get('friend:' + f.id) || { share_scores: 0, share_times: 0 };
+        const k = el('button', { className: 'nav-row quiet friend-sees', type: 'button' }, el('span', { textContent: `What @${f.handle} sees of you` }),
+          el('small', { textContent: g.share_scores ? (g.share_times ? 'Scores, times' : 'Scores') : 'Nothing' }), el('i', { 'aria-hidden': 'true' }));
+        k.addEventListener('click', () => (whoSees ? whoSees.open({ friend: f.id }) : showView('garage')));
+        return k;
+      };
+      const lastShare = (f) => {
+        const last = shared.find((r) => r.from_handle && r.from_handle === f.handle);
+        return last ? [el('div', { className: 'row friend-last', style: 'align-items:center' }, el('p', { className: 'note', style: 'flex:1;margin:0', textContent: `Shared ${last.name}${sharedWhen(last.created_at) ? ` · ${sharedWhen(last.created_at)}` : ''}` }),
+          btn('Open', () => { closeProfile(); openSharedRoute(last.id); }, 'linkbtn'))] : [];
+      };
       const openProfile = async (f) => {
+        openFriendId = f.id;   // a redraw of People (a grant changed, presence came in) opens it again
         let p = null;
         try { const r = await apiCall('GET', `/api/friends/${encodeURIComponent(f.id)}/profile`); p = r.ok ? await jsonOf(r) : null; } catch (_) {}
-        if (!p) { toast('Couldn’t load the profile. Try again.'); return; }
         const view = el('div', { className: 'stack-8 profile-view' });
         // P-04: Unfriend, Report and Block live at the profile's foot, not on the row
-        ApexProfileView.show(view, p, { el, btn, back: () => ppop.classList.remove('open'), keys: keysFor(f),
-          foot: [['Unfriend', async () => { if (await ApexConfirm.ask(`Unfriend @${f.handle}? This also stops all sharing.`, 'Unfriend')) { await apiCall('DELETE', `/api/friends/${f.id}`); ppop.classList.remove('open'); openFriendId = null; redo(); } }, 'danger-btn'],
+        ApexProfileView.show(view, p && !Array.isArray(p) ? p : { handle: f.handle, name: f.name }, { el, btn, back: () => closeProfile(), keys: keysFor(f),
+          partial: !p || Array.isArray(p), extra: [...lastShare(f), aboutYou(f)],
+          foot: [['Unfriend', async () => { if (await ApexConfirm.ask(`Unfriend @${f.handle}? This also stops all sharing.`, 'Unfriend')) { await apiCall('DELETE', `/api/friends/${f.id}`); closeProfile(); redo(); } }, 'danger-btn'],
             ...(safety && f.handle ? [['Report', () => safety.report({ kind: 'user', target: f.handle, label: `@${f.handle}`, who: f.handle, done: redo })],
-                                     ['Block', () => safety.block(f.handle, () => { ppop.classList.remove('open'); redo(); })]] : [])] });
+                                     ['Block', () => safety.block(f.handle, () => { closeProfile(); redo(); })]] : [])] });
         ppop.replaceChildren(view); ppop.classList.add('open');
       };
       // P-02: a friend link (?invite=) is "add a friend" now, not a way in. It asks first, naming who sent it, at the top of the list.
@@ -6613,40 +6653,22 @@
       }
       const flist = el('div', { className: 'friend-list' });
       for (const { f, st } of order) {
-        const g = grants.get('friend:' + f.id) || { share_scores: 0, share_times: 0 }, row = el('div', { className: 'friend' });
+        const row = el('div', { className: 'friend' });
         const av = window.ApexPhotos ? ApexPhotos.avatar((where.get(f.handle) || {}).photo_id || null, f.handle || '?', 40) : el('span');
         const head = el('button', { className: 'friend-head', type: 'button' }, av,
           el('span', { className: 'friend-who' }, el('b', { textContent: `@${f.handle || '?'}` }), el('small', { className: st && st.live ? 'live' : '', textContent: st && st.text ? st.text : (f.name || '') })),
           el('i', { className: 'chev', 'aria-hidden': 'true' }));
-        // P-04: the row is about the friend: what you can do with them, the last thing they shared, then (quietly) what they see of you
-        const keys = keysFor(f).map(([label, run], i) => btn(label, run, i ? 'ink-btn' : 'ink-btn solid'));
-        if (window.ApexProfileView) keys.push(btn('Profile', () => openProfile(f), 'ink-btn'));
-        const last = shared.find((r) => r.from_handle && r.from_handle === f.handle);
-        const sees = el('div', { className: 'stack-8 friend-grants', hidden: true },
-          el('div', { className: 'row' }, switchRow('Scores', g.share_scores, () => putGrant('friend', f.id, !g.share_scores, g.share_scores ? g.share_times : false)),
-            switchRow('Times', g.share_times, () => putGrant('friend', f.id, true, !g.share_times))),
-          el('p', { className: 'note', style: 'margin:0', textContent: [g.share_scores ? (g.share_times ? 'Your scores and times.' : 'Your scores.') : 'None of your scores or times.',
-            friendsMap && friendsMap.loaded ? (friendsMap.settings.audience === 'friends' ? 'Where you are, as you chose on the map.' : 'Not where you are.') : ''].filter(Boolean).join(' ') }),
-          ...(whoSees ? [btn('Everyone, on one page: Who sees what', () => whoSees.open({ friend: f.id }), 'linkbtn')] : []));
-        const seesKey = el('button', { className: 'nav-row quiet', type: 'button' }, el('span', { textContent: `What @${f.handle} sees of you` }),
-          el('small', { textContent: g.share_scores ? (g.share_times ? 'Scores, times' : 'Scores') : '' }), el('i', { 'aria-hidden': 'true' }));
-        seesKey.setAttribute('aria-expanded', 'false');
-        seesKey.addEventListener('click', () => { const on = sees.hidden; sees.hidden = !on; seesKey.setAttribute('aria-expanded', String(on)); });
-        const detail = el('div', { className: 'crew-detail stack-8' }, el('div', { className: 'row friend-keys' }, ...keys),
-          ...(last ? [el('div', { className: 'row', style: 'align-items:center' }, el('p', { className: 'note', style: 'flex:1;margin:0', textContent: `Shared ${last.name}${sharedWhen(last.created_at) ? ` · ${sharedWhen(last.created_at)}` : ''}` }),
-            btn('Open', () => openSharedRoute(last.id), 'linkbtn'))] : []),
-          seesKey, sees);
-        const setOpen = (on) => { detail.hidden = !on; head.setAttribute('aria-expanded', String(on)); };
-        head.addEventListener('click', () => { const on = detail.hidden; openFriendId = on ? f.id : null; setOpen(on); });
-        setOpen(openFriendId === f.id);
-        row.append(head, detail);
+        head.setAttribute('aria-label', `@${f.handle || '?'}${st && st.text ? `, ${st.text}` : ''}: open the profile`);
+        head.addEventListener('click', () => (window.ApexProfileView ? openProfile(f) : null));
+        row.append(head);
+        if (openFriendId === f.id && window.ApexProfileView) openProfile(f);
         flist.append(row);
       }
       if (accepted.length) body.append(flist);
       // Sharing came on for existing friends and private crews too (migration 0050, the owner 2026-11-11): said once
       if (accepted.length) {
         let told = false; try { told = !!localStorage.getItem('apex.sharingOnTold'); } catch (_) {}
-        if (!told) { try { localStorage.setItem('apex.sharingOnTold', '1'); } catch (_) {} toast('Your friends and private crews now see your Scores and times. Switch it off for anyone: open their row, then What they see of you.'); }
+        if (!told) { try { localStorage.setItem('apex.sharingOnTold', '1'); } catch (_) {} toast('Friends and private crews see your Scores and times now. Change it on their profile.'); }
       }
       // P-08: no friends yet is one sentence and the Invite key, not four empty drawers
       // the first friend is a page like the signed-out one (round three, 2026-11-11): your road drawn, the friend's still pencil
@@ -6747,10 +6769,12 @@
           else {
             const areaIn = el('input', { className: 'field', placeholder: 'Area, like Robbinsville', maxLength: 60, autocomplete: 'off' });
             areaIn.setAttribute('aria-label', 'Area people nearby will see');
-            ownerBox.append(el('p', { className: 'note', textContent: 'Private: only people with a link. Public lets people nearby find and join it, under the area you name. What members shared with it (scores, routes, stages) stops showing until each says yes again.' }),
+            ownerBox.append(el('p', { className: 'note', textContent: 'Private: link only. Public: people near the area you name can find it.' }),
               el('div', { className: 'row' }, areaIn, btn('Make public', async () => {
               const near = crewNear(), name = areaIn.value.trim();
               if (name.length < 2) { toast('Name the area people nearby will see.'); return; }
+              // what going public costs the members is said once, when it happens (it was a paragraph under the field)
+              if (!(await ApexConfirm.ask(`Make ${c.name} public? Members' shared Scores, routes and stages stop showing until each says yes again.`, 'Make public'))) return;
               const r = await apiCall('PUT', `/api/crews/${c.id}`, { visibility: 'public', about: c.about || '', area: { name, lat: near.lat, lon: near.lon } });
               if (r.ok) { toast(`${c.name} is public. People near ${name} can find and join it.`); redo(); } else toast('Couldn\'t change that. Try again.');
             })));
@@ -7660,16 +7684,16 @@
           const quote = document.createTextNode('');
           card.append(preview,
             el('div', { className: 'tc-head' }, el('b', { textContent: t.label }), ...(t.pro ? [el('span', { className: 'tc-pro', textContent: 'PRO' })] : t.granted ? [el('span', { className: 'tc-pro', textContent: 'PRIVATE' })] : []), key),
-            el('p', { className: 'note', textContent: t.about || t.blurb || '' }),
-            el('div', { className: 'tc-voice' }, el('p', {}, el('b', { textContent: `Suggested voice: ${t.voice ? t.voice.name : '--'}. ` }), quote), hear));
+            // TestFlight 2026-11-12 (the owner: "walls of text"): the look shows itself in its preview; the card names its voice and Hear says it
+            el('div', { className: 'tc-voice' }, el('p', {}, el('b', { textContent: t.voice ? t.voice.name : '--' }), quote), hear));
           themeCards.set(t.id, { t, card, preview, key, inUseTag, ok, quote, line });
           return card;
         }));
       }
-      for (const { t, card, preview, key, inUseTag, ok, quote, line } of themeCards.values()) {
-        const allowed = ok(), inUse = state.theme === t.id && !themeTrial, l = line();
+      for (const { t, card, preview, key, inUseTag, ok, quote } of themeCards.values()) {
+        const allowed = ok(), inUse = state.theme === t.id && !themeTrial;
         if (preview._words !== state.noteWords || (t.car && preview._mode !== cardMode())) fillPreview(preview, t);   // the words changed: the strip head follows
-        const q = t.voice ? `${t.voice.who}${l ? ` "${l.text}"` : ''}` : '';
+        const q = t.voice ? ' · suggested voice' : '';
         if (quote.data !== q) quote.data = q;
         card.classList.toggle('in-use', state.theme === t.id);
         preview.classList.toggle('tc-pick', !inUse);
@@ -7839,12 +7863,13 @@
       const info = window.ApexVoice ? ApexVoice.liveInfo() : { text: '' };
       const note = $('liveNote');
       if (note) {
-        note.textContent = !state.liveVoice ? 'Off. Road and route names use the recorded voice or your phone voice.'
+        note.textContent = !state.liveVoice ? ''
           : st === 'error' ? `Failed · ${info.text}`
           : st === 'loading' ? (info.text || 'Loading…')
           : st === 'ready' ? (info.text || 'Ready')
           : 'Loading…';
         note.classList.toggle('err', !!(state.liveVoice && (st === 'error' || info.error)));
+        if (!IN_APP_SHELL) note.hidden = !note.textContent;   // off says nothing (TestFlight 2026-11-12: less text)
       }
     }
     // The app never loads the downloaded voice engine (guideline 2.5.2; web/voice.js): no switch, names use the phone voice.
@@ -7978,7 +8003,7 @@
     // =======================================================================
     // 10b. DRIVE MODE (web): real GPS + motion, recorded to this device. REPLAY plays a saved drive; the two never mix.
     // =======================================================================
-    const drive = { sensors: null, rec: null, status: null, frames: 0, live: null, liveIdx: 0, share: 'off', shareKm: 0, shareErr: null, native: false, roads: {}, roadIdx: 0, rest: null, brakes: null, descentSaid: null };
+    const drive = { sensors: null, rec: null, status: null, frames: 0, live: null, liveIdx: 0, share: 'off', shareKm: 0, shareErr: null, native: false, roads: {}, roadIdx: 0, rest: null, brakes: null, descentSaid: null, flow: null };
     const NATIVE_SHELL = !!(window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.apex);
     function paintModeSwitch() {
       const on = state.mode === 'live';
@@ -8149,6 +8174,16 @@
       if (!out.call) return;
       toast(ApexBrakeHeat.CALL_TEXT);
       brakeSay = { text: ApexBrakeHeat.CALL_TEXT, until: now + 60000 };   // its own slot: a break cue waiting stays as it is
+    }
+    // The best run, live (web/flow_live.js, IDEAS D-30): corners driven smooth and settled in a row, judged as the drive
+    // page's best run judges them, on the rows just recorded; the co-driver says the count at five, ten and every ten after,
+    // in the quiet slot below a break cue (praise waits; a line 20 s late means nothing, so it is dropped). The car's grip
+    // is the saved drive's (routingCar). Technique only: a slow, smooth run counts the same as a quick one.
+    function noteFlow() {
+      if (!window.ApexFlowLive || !window.ApexFlow || !drive.rec) return;
+      if (!drive.flow) { const car = routingCar(); drive.flow = ApexFlowLive.createWatch(Core, ApexFlow, { mu: car ? Core.carGrip(car) : null }); }
+      const r = drive.flow.update(drive.rec.rows);
+      if (r && r.say) flowSay = { text: r.say, until: performance.now() + 20000 };
     }
     // Road data whenever the app is open and the phone is mounted (calibration locked), not only during a drive
     // (owner 2026-10-26). Trips, privacy trims and gaps: ApexContributor.createAmbient. Members with ROAD DATA on only.
@@ -8342,7 +8377,7 @@
       // unknown stays unknown, and the card says so (offline: our tiles still plan the route, but nothing live is known)
       if (!json) {
         const offline = why === 'signal' || navigator.onLine === false;
-        $('routeCardWeather').textContent = offline ? 'No signal: the weather and live road events on this route aren\'t known.' : 'Weather: not known (no forecast came back).';
+        $('routeCardWeather').textContent = offline ? 'Weather not known · no signal' : 'Weather not known';   // TestFlight 2026-11-12: a line, not a sentence
         $('routeCardWeather').hidden = false;
         return;
       }
@@ -8544,6 +8579,7 @@
       t.descents = window.ApexBrakeHeat ? ApexBrakeHeat.longDescents(t.dist, t.elev) : [];    // also said near each top (notes loop)
       const fall = window.ApexBrakeHeat ? ApexBrakeHeat.descentText(t.descents, (m) => ApexUnits.long(m, 1), h) : null;
       $('routeCardDescent').textContent = fall ? ApexRouteCard.factText(fall) : ''; $('routeCardDescent').hidden = !fall;
+      if (car.route && track === t) carAlong(t);                      // and on the car's route preview
     }
     // the owner, 2026-11-11: the places behind the Along line by name, a tap away (scenic.js places)
     const placeUnits = { long: (m) => ApexUnits.long(m, 1, true), short: (m) => { const d = ApexUnits.short(m); return `${d.n} ${d.u.toLowerCase()}`; } };
@@ -8836,8 +8872,9 @@
     // The cafés and fuel along the route by name on the car's route preview (the owner, 2026-11-11). t.scenic comes later
     // than the route (attachScenic): it is sent then, and again with every route the car is sent.
     function carAlong(t) {
-      if (!t || !Array.isArray(t.scenic)) return;
-      const msg = ApexCarPlay.alongMessage(t.scenic), key = `${car.route}|${JSON.stringify(msg)}`;
+      if (!t || (!Array.isArray(t.scenic) && !Array.isArray(t.descents))) return;
+      const fall = window.ApexBrakeHeat ? ApexBrakeHeat.descentShort(t.descents, (m) => ApexUnits.long(m, 1)) : null;
+      const msg = ApexCarPlay.alongMessage(t.scenic || [], fall), key = `${car.route}|${JSON.stringify(msg)}`;
       if (key === car.along) return;
       car.along = key;
       carPost(msg);
@@ -9092,7 +9129,7 @@
       startStageWatch();
       state.firstNoteDue = true; state.firstNoteKey = null;   // U-58: the drive's first note is called
       state.openerDue = true; state.openerAt = performance.now(); state.wakeCue = false;   // DA-3: the first words name the road
-      drive.live = null; drive.liveIdx = 0; drive.share = 'off'; drive.shareKm = 0; drive.shareErr = null; drive.roads = {}; drive.roadIdx = 0; drive.rest = null; drive.brakes = null; drive.descentSaid = null; brakeSay = null; breakSay = null; if (breakWorker) { breakWorker.terminate(); breakWorker = null; }
+      drive.live = null; drive.liveIdx = 0; drive.share = 'off'; drive.shareKm = 0; drive.shareErr = null; drive.roads = {}; drive.roadIdx = 0; drive.rest = null; drive.brakes = null; drive.descentSaid = null; drive.flow = null; brakeSay = null; breakSay = null; flowSay = null; if (breakWorker) { breakWorker.terminate(); breakWorker = null; }
       keepStart();                                                     // Round 3: the drive is kept as it goes (drive_keep.js)
       if (NATIVE_SHELL) {   // the app's own GPS and IMU feed window.apex.live; no browser sensors to start
         drive.native = true;
@@ -9120,7 +9157,7 @@
             paintPerms();
             paintDriveStat();
           },
-          onFrame: (fr) => { if (!fr.has_fix) return; drive.frames++; drive.status.webMount = fr.web_mount || null; recordFrame(fr); feedLive(); noteRoads(); noteRest(fr); noteBrakes(fr); feedStage(); feedTrack(fr);
+          onFrame: (fr) => { if (!fr.has_fix) return; drive.frames++; drive.status.webMount = fr.web_mount || null; recordFrame(fr); feedLive(); noteRoads(); noteRest(fr); noteBrakes(fr); noteFlow(); feedStage(); feedTrack(fr);
             if (window.ApexBattery && webBattery) drive.battery = ApexBattery.feed(drive.battery, webBattery.level, webBattery.charging, Date.now());
             window.apex.live(fr); paintDriveStat(); },
         });
@@ -9161,6 +9198,7 @@
       $('endFeel').textContent = feel; $('endFeel').hidden = !feel;
       $('endPractice').textContent = ''; $('endPractice').hidden = true;   // IDEAS D-27: with the score (endCardScored)
       $('endRoad').textContent = ''; $('endRoad').hidden = true;           // the road's line, with the score too
+      $('endRun').textContent = ''; $('endRun').hidden = true;             // IDEAS D-30: a month's best run, with the score too
       // scoring: no number yet, never "--" (that means "no score"), and no key that needs the score
       $('endScore').textContent = '…'; $('endScore').classList.add('unk'); $('endScore').setAttribute('aria-busy', 'true');
       $('endScore').parentElement.classList.remove('no-score');
@@ -9180,6 +9218,16 @@
     // what a drive with no score was, in the score's slot: no corners at all, or too few clean ones to score
     const noScoreWords = (corners) => (Number.isFinite(corners) && corners > 0 ? 'too few clean corners to score' : 'no corners to score');
     // The score arrived (ds: { score, components }, corners: a count; others: your earlier drives with this name, scored)
+    // TestFlight 2026-11-12 (the owner: "cluttered", "walls of text"): at most two lines under the score, the ones you
+    // asked for or earned first (the practice, a month's best run), then the road's and what the phone felt
+    function endLinesCap() {
+      let shown = 0;
+      for (const id of ['endPractice', 'endRun', 'endRoad', 'endFeel']) {
+        const n = $(id);
+        if (!n.textContent) { n.hidden = true; continue; }
+        n.hidden = shown >= 2; if (!n.hidden) shown++;
+      }
+    }
     function endCardScored(c, others, opts = {}) {
       if (!endDrive || endDrive.id !== c.id) return;                   // another card since
       endDrive = { ...endDrive, ...c };
@@ -9199,8 +9247,16 @@
         try {
           const all = await ApexRecording.summaries(null), me = all.find((o) => o.id === c.id);
           const before = all.filter((o) => o.id !== c.id && (!me || String(o.date || '') <= String(me.date || ''))).map((o) => (o.ds && o.ds.score != null ? Math.round(o.ds.score) : null));
+          if (!endDrive || endDrive.id !== c.id) return;
+          // IDEAS D-30: a run of clean corners that beats every other drive's this month (its summary's run, flow.js)
+          const runLine = me && ApexEndLine.bestRunMonth && window.ApexAnalysis ? ApexEndLine.bestRunMonth(me, all, ApexAnalysis.monthOf) : null;
+          if (runLine) {
+            $('endRun').textContent = runLine; $('endRun').hidden = false; endLinesCap();
+            const sheet = $('endCard').querySelector('.card-sheet');      // a taller card: the drive is fitted again above it
+            if (endTrailOn && sheet && Math.abs(sheet.getBoundingClientRect().top - endTrailTop) > 4) showEndTrail(endDrive);
+          }
           const u = ApexEndLine.usual(c.ds.score, before);
-          if (!u || !endDrive || endDrive.id !== c.id) return;
+          if (!u) return;
           $('endUsual').textContent = u.text; $('endUsual').hidden = false;
         } catch (_) { /* no Log to read: nothing said */ }
       })();
@@ -9218,6 +9274,7 @@
       // a road you have driven before: where this drive lost most at its least even corners, or your cleanest passes on it
       const roadLine = typeof c.road === 'string' ? c.road : '';
       $('endRoad').textContent = roadLine; $('endRoad').hidden = !roadLine;
+      endLinesCap();
       if (window.ApexEndLine && !opts.quiet) {                       // Round 3: never aloud to a parked car or a pocket
         const pack = ['marguerite', 'kit', 'hale'].includes(state.voiceId) ? state.voiceId : 'marguerite';
         // one of the pack's sign-offs, the same for this drive every time, from a clip the loaded bank holds (U-113)
@@ -9517,9 +9574,10 @@
       }
       else if (m.action === 'end' && driveActive) { if (pendingEnd) commitEnd(); else askEnd(); }   // I-3: the car's End has the Undo window too; End again ends now
       else if (m.action === 'undo') undoEnd();
+      else if (m.action === 'offer' && car.offer && m.id === car.offer.id && performance.now() < car.offer.until) car.offer.run();
       else if (m.action === 'disconnect') keepCar(false, m.t);      // Round 3: the car switched off; the drive ends once it stays put
       else if (m.action === 'places') carPost(ApexCarPlay.placesMessage(recentPlaces()));
-      else if (m.action === 'loop' && [30, 60, 120].includes(m.minutes) && !driveActive) loop({ minutes: m.minutes });
+      else if (m.action === 'loop' && LOOP_MINUTES.includes(m.minutes) && !driveActive) loop({ minutes: m.minutes });
       else if (m.action === 'report' && ApexHazardReports.KINDS.includes(m.kind)) reportHazard(m.kind);
       else if (m.action === 'still' && typeof m.still === 'boolean') answerStill(m.still);
       else if (m.action === 'voice') { state.toggles.voice = !state.toggles.voice; savePrefs(); paintSwitches(); if (!state.toggles.voice) stopSpeaking(); }
@@ -9561,7 +9619,7 @@
         btn('Convoy now', () => { close(); needSocial().then(() => { if (convoy) convoy.now(name); else toast('The convoy isn\u2019t available here.'); }); }, 'ink-btn'),
         // IDEAS S-22: a friend's convoy, by the code they read out (the convoy sheet's Join code field)
         btn('Join with a code', () => { close(); needSocial().then(() => { if (convoy) convoy.open(); else toast('The convoy isn\u2019t available here.'); }); }, 'ink-btn'),
-        el('p', { textContent: 'A convoy: drive together, live, for two hours (the leader can keep it going, up to six). Friends join with the QR or the join code on your screen; nothing is kept. A crew\u2019s run starts its convoy from the drive\u2019s card.' }),
+        // TestFlight 2026-11-12 (note 6, the owner circled it): no paragraph under the keys; the convoy sheet says the rest
         btn('Cancel', close, 'linkbtn')));
       onBackdrop(back, () => close());
       document.addEventListener('keydown', esc);
@@ -9949,7 +10007,7 @@
         feedReported(frame); feedReaction(frame); feedCrash(frame);
         state.live = frame; state.liveAt = performance.now();
         if (drive.native && drive.rec && !(Number.isFinite(frame.seq) && keep.seq != null && frame.seq <= keep.seq)) {   // (taken in a backlog)
-          drive.frames++; recordFrame(frame); feedLive(); noteRoads(); noteRest(frame); noteBrakes(frame); feedStage(); feedTrack(frame);
+          drive.frames++; recordFrame(frame); feedLive(); noteRoads(); noteRest(frame); noteBrakes(frame); noteFlow(); feedStage(); feedTrack(frame);
           if (window.ApexBattery) drive.battery = ApexBattery.feed(drive.battery, frame.battery, frame.charging === true, Date.now());
           const gps = Number.isFinite(frame.accuracy_m) && frame.accuracy_m > ApexSensors.MAX_ACCURACY_M ? 'weak' : 'on';
           if (drive.status.gps !== gps) drive.status.gps = gps;

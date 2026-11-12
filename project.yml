@@ -23,6 +23,10 @@ targets:
       - path: CarPlay/ApexCarMap.swift                  # its map, MapLibre Native (F-07)
       - path: LiveActivity/ApexDriveAttributes.swift   # shared with the ApexNavLive extension
       - path: Assets.xcassets      # AppIcon: web/brand/icon-1024.png (single-size iOS icon)
+      # Apple's privacy manifest (required for App Store uploads): no tracking, the App Privacy answers in docs/LISTING.md, and
+      # why the app reads UserDefaults (its own settings) and the system uptime (motion timing). tests/test_privacy_manifest.py
+      - path: PrivacyInfo.xcprivacy
+        buildPhase: resources
       - path: web
         type: folder
         buildPhase: resources

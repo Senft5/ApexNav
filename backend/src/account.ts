@@ -1,5 +1,6 @@
 // Leaving, and taking your data with you (docs/BACKEND.md section 11). Merged road data is anonymous and stays; everything
 // tied to a person goes. Tables without a foreign key to the audience (grants, board entries, segment shares) are cleaned by hand.
+import { revokeApple } from "./apple_revoke";
 import { photosEraseOwner } from "./photos";
 import { Env, HttpError, body, cookie } from "./util";
 import { SESSION_COOKIE, type Viewer } from "./auth";
@@ -68,6 +69,7 @@ export async function deleteAccount(env: Env, v: Viewer, req: Request): Promise<
   const { confirm } = await body<{ confirm?: string }>(req);
   if (confirm !== "DELETE") throw new HttpError(400, "confirmation_required");
   await convoysLeaveAll(env, v.id);                                  // live convoys first: leave them, or end the ones they lead
+  await revokeApple(env, v.id);                                      // App Review 5.1.1(v): their Sign in with Apple token, revoked with Apple
   await photosEraseOwner(env, v.id);                                 // the JPEGs in KV, then their rows (REVIEW.md 5.2)
   const owned = (await all<{ id: string }>(env, "SELECT id FROM crews WHERE owner = ?", v.id)).map((c) => c.id);
   if (env.PHOTOS) for (const id of owned) for (const p of ["marguerite", "kit", "hale"]) await env.PHOTOS.delete(`cv/${id}/${p}`);   // crews' regroup clips
