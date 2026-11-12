@@ -270,8 +270,10 @@
    * "just show the name"): { kind:'along', full, short }. full names up to two of each kind, in route order, "+N" for the
    * rest (the unnamed ones too); short is the first name of each. An unnamed kind is only counted. Both '' with nothing
    * along, which clears the car's line. `list` is web/scenic.js along() (t.scenic); viewpoints stay on the phone.
+   * `places` are the same ones for the car's map, a plate each at the place ({ at, kind, text }, at most ALONG_PLATES,
+   * in route order): its name, or "Café" / "Fuel" when the map has none.
    */
-  const ALONG_NAME_MAX = 28, ALONG_MAX = 90;
+  const ALONG_NAME_MAX = 28, ALONG_MAX = 90, ALONG_PLATES = 30, PLATE_NAME_MAX = 18;
   function alongMessage(list) {
     const rows = Array.isArray(list) ? list.filter((p) => p && (p.kind === 'cafe' || p.kind === 'fuel')) : [];
     const cut = (s, n) => (s.length > n ? s.slice(0, n - 1).trimEnd() + '…' : s);
@@ -286,7 +288,10 @@
     };
     const full = [part('cafe', 'Café: ', 'café', 'cafés', 2), part('fuel', 'Fuel: ', 'stop', 'stops', 2)].filter(Boolean).join(' · ');
     const short = [part('cafe', '', 'café', 'cafés', 1), part('fuel', '', 'fuel stop', 'fuel stops', 1)].filter(Boolean).join(' · ');
-    return { kind: 'along', full: cut(full, ALONG_MAX), short: cut(short, ALONG_MAX) };
+    const places = rows.filter((p) => finite(p.lat) && finite(p.lon)).slice(0, ALONG_PLATES).map((p) => ({
+      at: [+p.lat.toFixed(6), +p.lon.toFixed(6)], kind: p.kind,
+      text: cut((typeof p.name === 'string' && p.name.trim()) || (p.kind === 'cafe' ? 'Café' : 'Fuel'), PLATE_NAME_MAX) }));
+    return { kind: 'along', full: cut(full, ALONG_MAX), short: cut(short, ALONG_MAX), places };
   }
 
   /**

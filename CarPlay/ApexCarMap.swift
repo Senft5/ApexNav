@@ -52,10 +52,15 @@ struct ApexCarPalette {
     )
 }
 
-/// A corner's rating or a hazard on the car's map (web/carplay.js cornersMessage, hazardsMessage).
+/// A corner's rating, a hazard, or a café or fuel stop along the route on the car's map (web/carplay.js cornersMessage,
+/// hazardsMessage, alongMessage's places: `place` is "cafe" or "fuel" for those, nil otherwise).
 struct ApexCarPlateData: Equatable {
     let lat: Double, lon: Double, text: String, tight: Bool, hazard: Bool
-    var key: String { "\(hazard ? "h" : "c")|\(text)|\(tight ? 1 : 0)|\(lat),\(lon)" }
+    var place: String? = nil
+    var key: String {
+        let kind: String = hazard ? "h" : (place.map { "p" + $0 } ?? "c")
+        return "\(kind)|\(text)|\(tight ? 1 : 0)|\(lat),\(lon)"
+    }
 }
 
 /// The sight-line speed under the car's arrow (web/carplay.js sightMessage).
@@ -88,6 +93,7 @@ final class ApexNativeCarMap: UIView {
     private var route: [CLLocationCoordinate2D] = []
     private var corners: [ApexCarPlateData] = []
     private var hazards: [ApexCarPlateData] = []
+    private var places: [ApexCarPlateData] = []
     private var sight: ApexCarSight?
     private var hasPosition = false
     private var mode = "idle"
@@ -264,6 +270,7 @@ final class ApexNativeCarMap: UIView {
 
     func setCorners(_ list: [ApexCarPlateData]) { corners = Array(list.prefix(600)); placePlates() }
     func setHazards(_ list: [ApexCarPlateData]) { hazards = Array(list.prefix(40)); placePlates() }
+    func setPlaces(_ list: [ApexCarPlateData]) { places = Array(list.prefix(30)); placePlates() }
 
     func setSight(_ s: ApexCarSight?) {
         let drawn = s.flatMap { $0.drawn ? $0 : nil }                    // OPEN: no plate (TH-2)
@@ -452,6 +459,14 @@ final class ApexNativeCarMap: UIView {
             v.backgroundColor = UIColor(white: 0.067, alpha: 1)
             v.layer.borderColor = orange.cgColor; v.layer.borderWidth = 2.5
             v.inset = UIEdgeInsets(top: 5, left: 9, bottom: 5, right: 9)
+        } else if let kind = p.data.place {
+            // a café or fuel stop along the route, by name (the owner, 2026-11-11): quieter than a corner, a cup or a pump first
+            let t = NSMutableAttributedString(string: kind == "cafe" ? "☕︎ " : "⛽︎ ", attributes: [.foregroundColor: P.plateInk, .font: UIFont.systemFont(ofSize: 12, weight: .semibold)])
+            t.append(NSAttributedString(string: p.data.text, attributes: [.foregroundColor: P.plateInk, .font: UIFont.systemFont(ofSize: 14, weight: .semibold)]))
+            v.attributedText = t
+            v.backgroundColor = P.plate
+            v.layer.borderColor = P.plateInk.withAlphaComponent(0.55).cgColor; v.layer.borderWidth = 1.5
+            v.inset = UIEdgeInsets(top: 4, left: 7, bottom: 4, right: 7)
         } else {
             v.text = p.data.text
             v.font = .systemFont(ofSize: 17, weight: .bold, width: .condensed)
@@ -484,10 +499,11 @@ final class ApexNativeCarMap: UIView {
         let here = shown ?? glide.pose(at: CACurrentMediaTime()), all = mode == "preview" || here == nil
         func dist(_ d: ApexCarPlateData) -> Double { here.map { CarGlide.metres($0.lat, $0.lon, d.lat, d.lon) } ?? 0 }
         let near = { (d: ApexCarPlateData) in all || dist(d) < Self.nearM }
-        // which plate wins a crowded spot: hazards, then the corners nearest the car (or the tight ones, with no car)
+        // which plate wins a crowded spot: hazards, then the corners nearest the car (or the tight ones, with no car), then
+        // the cafés and fuel along the route: a name never hides a corner
         var cs = corners.filter(near)
         if all { cs.sort { $0.tight && !$1.tight } } else { cs.sort { dist($0) < dist($1) } }
-        let wanted = hazards.filter(near) + cs.prefix(all ? 160 : 40)
+        let wanted = hazards.filter(near) + cs.prefix(all ? 160 : 40) + places.filter(near)
         var old: [String: Plate] = [:]
         for p in plates { old[p.data.key] = p }
         plates = wanted.map { (d) -> Plate in
