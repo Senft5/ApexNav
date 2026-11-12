@@ -275,8 +275,7 @@
       if (map) kids.push(svgBox('rb-map', map));
       if (p.of && member()) {
         const meter = el('div', { className: 'rb-meter', role: 'progressbar', 'aria-valuemin': '0', 'aria-valuemax': String(p.of), 'aria-valuenow': String(p.done), 'aria-label': p.text }, el('i', { style: `width:${(100 * p.done / p.of).toFixed(0)}%` }));
-        kids.push(el('div', { className: 'stack-8' }, el('b', { textContent: p.text }), meter,
-          ...(p.all ? [] : [el('p', { className: 'note', textContent: 'A road is stamped when a drive in your Log covers it. Nothing to tap.' })])));
+        kids.push(el('div', { className: 'stack-8' }, el('b', { textContent: p.text }), meter));   // the meter says it; the how-to line under it ("Nothing to tap") is gone
       }
       // keys: yours to run, or someone's to follow
       const keys = el('div', { className: 'row', style: 'flex-wrap:wrap' });
@@ -396,8 +395,10 @@
     function section(count) {
       const sec = el('div', { className: 'stack-12' }, el('h3', { textContent: 'Roadbooks' }));
       const mineBox = el('div', {}), followBox = el('div', {}), nearBox = el('div', { className: 'stack-8' });
+      const lead = el('p', { className: 'people-lead', textContent: 'Your lists of great roads, for you, friends or everyone.' });
       const fill = (data) => {
         const mine = data ? data.mine : [], fol = data ? data.following : [];
+        lead.hidden = !!(mine.length || fol.length);   // what a roadbook is, said until you have one
         if (count) count([mine.length ? `${mine.length} yours` : '', fol.length ? `${fol.length} followed` : ''].filter(Boolean).join(' · '));
         const sub = (b) => [b.mine ? VIS[b.visibility] : `@${b.by || '?'}`, bookLine(b, fmtLen), progress(b.road_list).done ? progress(b.road_list).text : ''].filter(Boolean).join(' · ');
         mineBox.replaceChildren(...(mine.length ? mine.map((b) => row(b, sub(b), () => open(b.id))) : []));
@@ -405,7 +406,7 @@
       };
       liveFill = fill;
       const reload = () => loadLists().then((d) => { if (!d) fill(null); return d; });
-      sec.append(el('p', { className: 'people-lead', textContent: 'Your lists of great roads, for you, friends or everyone.' }),
+      sec.append(lead,
         newForm('New roadbook', (id) => { reload().then(() => page.changed && page.changed()); open(id); }), mineBox, followBox,
         el('h4', { textContent: 'Near you', style: 'margin:12px 0 0;font-size:13px;letter-spacing:0.06em;text-transform:uppercase;color:var(--panel-dim)' }), nearBox);
       if (lists) fill(lists);

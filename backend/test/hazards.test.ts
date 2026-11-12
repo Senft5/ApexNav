@@ -74,6 +74,18 @@ describe("hand-reported hazards", () => {
     expect(LIFE_MIN.police).toBe(60);
   });
 
+  it("a fresh account's 'gone' is kept but not counted: two new accounts can't wipe a warning", async () => {
+    const [a, n1, n2, b] = [await makeUser("alice"), await makeUser("new1"), await makeUser("new2"), await makeUser("bob")];
+    for (const u of [n1, n2]) await env.DB.prepare("UPDATE members SET joined_at = datetime('now'), invited_by = NULL WHERE user_id = ?").bind(u.id).run();
+    const { id } = await json(report(a, { kind: "debris", ...P }));
+    await ok(vote(n1, id, false)); await ok(vote(n2, id, false));
+    expect((await near(a))[0]).toMatchObject({ id, confirms: 1, clears: 0 });
+    await ok(vote(n1, id, true)); await ok(vote(n1, id, false));                      // a change of mind takes nobody's clear
+    expect((await near(a))[0]).toMatchObject({ confirms: 1, clears: 0 });
+    await ok(vote(b, id, false));                                                     // an established member's counts
+    expect((await near(a))[0]).toMatchObject({ clears: 1 });
+  });
+
   it("seen again by the same person: it lives on from then, and still counts once", async () => {
     const a = await makeUser("alice"), b = await makeUser("bob"), c = await makeUser("carol");
     const { id } = await json(report(a, { kind: "pothole", ...P }));

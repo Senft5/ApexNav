@@ -427,6 +427,19 @@ def test_avoid_cameras_keeps_off_the_road_a_camera_is_on():
     assert r["max1"] == 8 and r["max2"] == 8, r          # two cameras on one road: x8 once, not x64
 
 
+def test_reported_closures_keep_our_routes_and_loops_off_the_road():
+    """Members' "Road closed" reports (graph_router.js CLOSED_X, avoid.closed): the edges within 40 m of one cost x50,
+    always (no switch), so our quickest and plan go round it now that Fun and Long way never ask Valhalla; two on one road
+    cost x50 once. Loops take the avoid lists too: a camera on the best loop sends the loops off that road."""
+    r = case("closures")
+    assert r["baseNear"] < 20, r
+    assert r["quickNear"] > 40 and r["quickS"] > r["baseS"], r
+    assert r["planNear"] and all(d > 40 for d in r["planNear"]), r
+    assert r["max1"] == 50 and r["max2"] == 50, r
+    assert r["loop0Near"] < 20, r
+    assert r["loopNear"] and all(d > 35 for d in r["loopNear"]), r
+
+
 def test_there_and_back_comes_home_by_other_road():
     """There and back (graph_router.js roundTrip): to a destination and home again, the way back costing the way out x4 both
     ways, so a round trip drives little of itself twice; at Fun and Long way the way home buys good road as a plan does;

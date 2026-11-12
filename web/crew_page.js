@@ -176,6 +176,7 @@
     .cp-board-row.mine .who b { text-decoration: underline; text-decoration-thickness: 2px; }
     .cp-board .cp-board-row { grid-template-columns: 24px 36px minmax(0, 1fr) auto; align-items: center; gap: 10px; }
     .cp-board .cp-board-row .who small { display: block; margin-left: 0; }
+    .cp-board .cp-board-row .who .cp-sub { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .cp-board .cp-board-row > :nth-child(2) { width: 36px; height: 36px; }
     .cp-board[aria-busy="true"] { opacity: 0.5; }
     .cp-periods { width: 100%; } .cp-periods button { flex: 1; min-width: 0; }
@@ -241,6 +242,7 @@
     .cd-feed { display: grid; }
     .cd-item { grid-template-columns: 36px minmax(0, 1fr); min-height: 56px; padding: 8px 0; border-top: 1px solid var(--rule); align-items: start; }
     .cd-item .cd-text small { font-size: 13px; -webkit-line-clamp: 1; }
+    .cd-row .cd-text small { -webkit-line-clamp: 1; }   /* a crew's row is one line under its name, like a chat list: the date never wraps alone */
     .cd-what { font-size: 15px; line-height: 1.4; overflow-wrap: anywhere; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
     .cd-more { justify-self: start; }
     .cp-tabs { display: flex; gap: 24px; border-bottom: 1px solid var(--rule, rgba(0,0,0,0.15)); }
@@ -249,6 +251,11 @@
     .cp-tabs > button::after { content: ""; position: absolute; left: 0; right: 0; bottom: -1px; height: 3px; background: var(--panel-ink); transform: scaleX(0); transition: transform 0.18s ease-out; }
     .cp-tabs > button[aria-selected="true"]::after { transform: none; }
     .cp-pane[hidden] { display: none; }
+    /* one crew: its head holds only the gear, so the gear sits on the cover's top-left corner (the owner's Edit livery has the
+       right) instead of a band of its own (walkthrough 2026-11-12) */
+    .crew-head.solo { position: relative; z-index: 2; height: 0; align-items: flex-start; justify-content: flex-start; margin-bottom: -8px; }
+    .crew-head.solo > span:empty { display: none; }
+    .crew-head.solo .gear-key { margin: 22px 0 0 -4px; }   /* 12 px in from the screen edge, level with Edit livery */
     .crew-head .cd-back { flex: 0 1 auto; min-height: 44px; padding: 0 8px 0 0; font-size: 16px; font-weight: 600; text-decoration: none; color: var(--panel-ink); }
     .crew-head .cd-back::before { content: "\\2039"; font-size: 24px; margin-right: 6px; line-height: 1; }
   `;
@@ -348,7 +355,7 @@
           chat: [chat(c, draw)],
           board: [boardSec, ...(c.house ? [houseBoard(c)] : []), buildsRow(c)],
         };
-        box.replaceChildren(header(c, draw), el('div', { className: 'cp-body' }, titleBlock(c), tabs(c.id, panes), liveryFoot(c, draw)));
+        box.replaceChildren(header(c, draw), el('div', { className: 'cp-body' }, titleBlock(c), tabs(c.id, panes), ...[liveryFoot(c, draw)].filter(Boolean)));
         // a public crew (joined as one, or made public since: social.ts crewUpdate turns members' sharing off) asks once on
         // this phone whether to share with it (the owner, 2026-11-11: public crews off by default, asked)
         if (c.visibility === 'public' && !c.is_owner && !c.sharing_scores && page.askPublicSharing) {
@@ -418,9 +425,13 @@
     // owner's Edit livery, or for a supporter the meter and their own Decals; for everyone else it is a line, not a key.
     function liveryFoot(c, redo) {
       const l = c.livery || { tier: 'plain', decals: 0, next: null, supporters: [] };
+      // a crew-mate on a Plain crew with nothing to open: no line at all (walkthrough 2026-11-12: "Plain livery" alone told
+      // them nothing and left them nothing to do). The owner keeps it, above their Edit livery.
+      const supporter = !c.is_owner && l.mine && l.mine.pro && !l.granted;
+      if (!c.is_owner && !supporter && !l.granted && !l.decals) return null;
       const line = el('p', { className: 'note cp-livery-line', textContent: liveryShort(l) });
       const foot = el('div', { className: 'cp-livery-foot' }, line);
-      if (!c.is_owner && l.mine && l.mine.pro && !l.granted) foot.append(btn('Your Decals', () => liverySheet(c, redo), 'linkbtn'));
+      if (supporter) foot.append(btn('Your Decals', () => liverySheet(c, redo), 'linkbtn'));
       return foot;
     }
     function liverySheet(c, redo) {
@@ -592,8 +603,10 @@
         list.replaceChildren(...j.rows.map((x, i) => {
           const who = el('span', { className: 'who' }, el('b', { textContent: `@${x.handle || '?'}` }));
           if (x.badge) who.append(el('span', { className: 'cp-badge', textContent: x.badge }));   // Works livery
-          if (x.car) who.append(el('small', { textContent: x.car }));
-          if (x.total != null) who.append(el('small', { className: 'cp-drives', textContent: `${x.drives} drive${x.drives === 1 ? '' : 's'}` }));
+          // one line under the name: the drives, then the car, cut short with … (walkthrough 2026-11-12: a long trim name took
+          // two lines and the drives a third, so five crew-mates filled the screen)
+          const sub = [x.total != null ? `${x.drives} drive${x.drives === 1 ? '' : 's'}` : null, x.car || null].filter(Boolean).join(' · ');
+          if (sub) who.append(el('small', { className: 'cp-sub', textContent: sub, title: sub }));
           const row = el('div', { className: 'cp-board-row' + (x.mine ? ' mine' : '') },
             el('span', { className: 'rank', textContent: x.total == null ? '' : String(i + 1) }),
             P() ? P().avatar(x.photo_id || null, x.handle, 36) : el('span'), who,

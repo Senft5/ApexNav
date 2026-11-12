@@ -137,10 +137,12 @@ let loopAttempts = 0;
 const messages = [];
 const button = { value: 'Somewhere', classList: { contains: () => false } };
 const busy = () => ({ step() {}, done() { completed++; } });
-const destination = new Function('$', 'planBusy', 'toast', 'resolvePlace', 'funRoute', 'return (' + destinationSource + ')')(
+const errText = new Function('return (' + html.match(/function errText\(.*?\n    }/s)[0] + ')')();
+const destination = new Function('$', 'planBusy', 'toast', 'resolvePlace', 'funRoute', 'errText', 'return (' + destinationSource + ')')(
   () => button, busy, message => messages.push(message),
   async () => ({ lat: 39, lon: -84, label: 'Place' }),
   async () => { throw Error('service deadline'); },
+  errText,
 );
 // the plan flow (finding 6): a loop's progress is on its key and on the plan's status line, and both are released
 const panel = { classList: { contains: (c) => c === 'open' } };

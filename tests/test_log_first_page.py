@@ -3,7 +3,7 @@ key, instead of a sentence on a blank sheet. Nothing drawn there may read as a r
 import re
 from pathlib import Path
 
-PAGE = (Path(__file__).resolve().parents[1] / "web" / "analysis.html").read_text()
+PAGE = (Path(__file__).resolve().parents[1] / "web" / "analysis.html").read_text() + (Path(__file__).resolve().parents[1] / "web" / "analysis_page.js").read_text()
 
 
 def test_the_empty_log_is_a_first_page_with_one_thing_to_do():
@@ -20,7 +20,7 @@ def test_the_empty_log_is_a_first_page_with_one_thing_to_do():
 
 def test_the_empty_stages_page_says_what_a_stage_is_and_how_to_make_one():
     assert '<h2 class="fp-head">No stages yet.</h2>' in PAGE
-    assert "Pick a drive to mark one from" in PAGE and "Mark a stage is on a finished drive" in PAGE
+    assert "Pick a drive to mark one from" in PAGE and "Mark one from a drive\\u2019s page." in PAGE
     assert 'class="fp-mark"' in PAGE and 'aria-hidden="true"' in PAGE
 
 

@@ -13,7 +13,7 @@ owner's rows are also in docs/OWNER_TODO.md. Apple's rules in detail: docs/APP_R
 | Age rating, category (Navigation), export compliance (`ITSAppUsesNonExemptEncryption: false`) | Set / in LISTING.md | owner confirms |
 | Review access (2.1) | No gate since 2026-10-30 (REVIEW_PEOPLE P-02): a reviewer signs in with Apple or Google and is a member. The old review code still answers yes for builds from before; the notes (drives need a car, the bundled replays show the cockpit) go only into App Store Connect, never the public repo | owner pastes |
 | Sign in with Apple next to Google (4.8) | Built | — |
-| Account deletion in the app (5.1.1(v)) | Built; revoking the Apple token needs the owner's Sign in with Apple key | owner: key |
+| Account deletion in the app (5.1.1(v)) | Built, and the Apple token is revoked on deletion (#503); that call waits for the owner's Sign in with Apple key and three Worker secrets (OWNER_TODO.md), and deletion works without them. Turning off Apple sign-in for Vetta in iOS Settings signs the app out (#514) | owner: key |
 | No speeding prompts (1.4.1): never a speed above the limit as a target | Built: scores are smoothness, the binnacle's Sight cell is a braking range (the speed you could stop from within what you can see), shown red when you're above it, and the review notes say so; the demo replay keeps to the limit (docs/REVIEW.md #1–2) | — |
 | Driver distraction: typing locked while moving, no Pro sheet while moving | Built (in_car.js); Pro rules are tests once Pro ships | — |
 | In-app purchases (3.1.1 / 3.1.2) | Not shipped. Plan in MONETIZATION.md; needs the owner's yes to the prices and the Paid Applications Agreement | owner |
@@ -28,11 +28,11 @@ owner's rows are also in docs/OWNER_TODO.md. Apple's rules in detail: docs/APP_R
 |---|---|
 | Backups | Built: D1 Time Travel, a weekly copy to KV by cron, monthly export by hand (BACKUPS.md). Note a Time Travel bookmark before every hand-applied migration (0029 was additive, applied 2026-10-28) |
 | Clean-up | Built: daily sweep of expired sessions, codes and invites |
-| Errors | Built: the app reports error counts (no content, no place) to the Worker; health counts per day |
+| Errors | Built: the page reports error counts (no content, no place) to the Worker, and the iPhone app sends iOS's crash and freeze reports (MetricKit, #523) to the same place; health counts per day |
 | Abuse | Built: rate limits per route, moderation and reports, blocks |
 | Kill switches | Built: feature flags from the Worker (track mode, taste, crowd curvature; Pro will be one) |
 | Security headers | Built: Content-Security-Policy on every page (tools/csp.py), session token in the Keychain |
-| Offline | Built: notes and directions run without signal once a route is loaded; offline map areas; reports wait and send later; a whole drive records, scores and saves with no signal (checked 2026-11-12), and the map says when it has no map |
+| Offline | Built: website requests give up after 30 s like the app's (#538), and the website opens from its kept copy when the network answers nothing (#552); notes and directions run without signal once a route is loaded; offline map areas; reports wait and send later; a whole drive records, scores and saves with no signal (checked 2026-11-12), and the map says when it has no map |
 | Costs | Workers Free today; Workers Paid ($5/month) once traffic or 30-day Time Travel matter |
 | Monitoring an outage | Built: the status workflow checks the site, `/api/health` and the weekly backup and daily sweep every 30 minutes and opens an "outage" issue (GitHub emails the owner); STATUS.md | — |
 

@@ -2917,6 +2917,10 @@ flow('crew page: an old ?view=crew link opens People on Crews, at your crew; goi
     && document.getElementById('accountBody').hidden && document.getElementById('sheetTitle').textContent === 'People'), 'on the People tab, its Crews side');
   check(await page.evaluate(() => !!document.querySelector('#crewsBody .crew-head .gear-key') && !document.querySelector('#crewsBody .friend-list')), 'the crew head and its gear are on the Crews side, no friends list there');
   check(await page.evaluate(() => document.querySelector('#crewsBody .crew-head').textContent.trim() === '' && document.querySelectorAll('#crewsBody .crew-page h2').length === 1), 'one crew: its name once, on its page, not again above it');
+  // one crew: no band of its own for the gear; it sits on the cover's top-left, clear of Edit livery (walkthrough 2026-11-12)
+  const gearSpot = await page.evaluate(() => { const r = (q) => document.querySelector(q).getBoundingClientRect(), g = r('#crewsBody .gear-key'), h = r('.crew-page .cp-head'), e = r('.crew-page .cp-edit');
+    return { onCover: g.top >= h.top && g.bottom <= h.bottom && g.left >= h.left, clear: g.right < e.left || g.bottom < e.top }; });
+  check(gearSpot.onCover && gearSpot.clear, 'the gear sits on the cover, clear of Edit livery: ' + JSON.stringify(gearSpot));
   // Nate 2026-11-12 (as easy as a big social app): three tabs under the crew's name, Drives open first
   check(JSON.stringify(await page.$$eval('.cp-tabs [role="tab"]', (b) => b.map((x) => x.textContent + ':' + x.getAttribute('aria-selected')))) === '["Drives:true","Chat:false","Board:false"]', 'Drives | Chat | Board, Drives open');
   check(await page.isHidden('.cp-board') && await page.isHidden('.cp-say'), 'the board and the chat wait behind their tabs');
@@ -2926,6 +2930,9 @@ flow('crew page: an old ?view=crew link opens People on Crews, at your crew; goi
   const rows = await boardRows();
   check(JSON.stringify(rows) === JSON.stringify([['@sam', (1622).toLocaleString(), true], ['@me', '--', true]]) && boardAsks[0] === 'month', 'the board: a face and this month\'s total, then -- for none: ' + JSON.stringify(rows));
   check(JSON.stringify(await page.$$eval('.cp-periods button', (b) => b.map((x) => x.textContent + ':' + x.getAttribute('aria-checked')))) === '["Week:false","Month:true","Year:false","All time:false"]', 'Week / Month / Year / All time, Month picked');
+  // one line under the name, drives then car, cut short rather than wrapped (walkthrough 2026-11-12)
+  const sub = await page.$eval('.cp-board .cp-board-row .cp-sub', (x) => ({ t: x.textContent, one: getComputedStyle(x).whiteSpace === 'nowrap' && getComputedStyle(x).textOverflow === 'ellipsis' }));
+  check(sub.t === '2 drives · Mazda MX-5' && sub.one && !(await page.$('.cp-board .cp-board-row:nth-child(2) .cp-sub')), 'one line under a name: drives · car, none for -- : ' + JSON.stringify(sub));
   await page.click('.cp-periods button:text-is("All time")');
   await page.waitForFunction(() => /12/.test((document.querySelector('.cp-board .score') || {}).textContent || ''));
   check(JSON.stringify((await boardRows()).map((r) => r[1])) === JSON.stringify([(12840).toLocaleString(), (702).toLocaleString()]) && boardAsks.includes('all'), 'All time asks for all time');
@@ -4281,7 +4288,8 @@ flow('roadbooks: a planned road goes into a new roadbook from Share; People list
   await page.click('.side-pop.open .rb-row:has-text("Smokies classics")');
   await page.waitForSelector('.rb-pop.open .rb-road:has-text("Cherohala loop")');
   check(await page.locator('.rb-pop.open .rb-map svg path').count() === 1 && await page.locator('.rb-pop.open .rb-road .rb-thumb svg').count() === 1, 'the book draws its road on a map, and the road has its thumbnail');
-  check(/0 of 1 driven/.test(await page.textContent('.rb-pop.open')), 'progress starts at none driven');
+  check(/0 of 1 driven/.test(await page.textContent('.rb-pop.open')) && !/Nothing to tap|is stamped when/.test(await page.textContent('.rb-pop.open')), 'progress starts at none driven, the meter alone (no how-to line)');
+  check(await page.evaluate(() => [...document.querySelectorAll('.side-pop .people-lead')].every((p) => !/Your lists of great roads/.test(p.textContent) || p.hidden)), 'with a roadbook of your own, no line saying what a roadbook is');
   await page.click('.rb-pop.open button:has-text("Edit")');
   await page.waitForSelector('.rb-pop.open [role="radio"]:has-text("Public")');
   await page.locator('.rb-pop.open [role="radio"]:has-text("Public")').last().click();
@@ -4548,6 +4556,8 @@ flow('crew drives: an upcoming drive shows on People, Crews, as the crew page’
     await page.click('[data-people="crews"]');
     await page.waitForSelector(`${W} .drive-card`);
   };
+  await openDrives();
+  check(!(await page.$('.crew-page .cp-livery-foot')), 'a crew-mate on a Plain crew sees no livery line: nothing to read, nothing to press (walkthrough 2026-11-12)');
   // the Photon search behind "Meet at…" (P-10)
   await page.route('https://photon.komoot.io/**', (route) => route.fulfill({ contentType: 'application/json', body: JSON.stringify({ features: [
     { geometry: { coordinates: [-84.2912, 35.3601] }, properties: { name: 'Tellico Plains Shell', city: 'Tellico Plains', state: 'Tennessee' } }] }) }));
@@ -5171,6 +5181,7 @@ flow('friend profile: a friend on People → Profile shows what the friend share
   await page.waitForSelector('.profile-view');
   const t = await page.textContent('.profile-view');
   check(t.includes('@bob') && /Bob <b>S<\/b> · friends since September( 2026)?/.test(t) && t.includes('Esses · best 812 · 3 days this month') && t.includes('Ridge Runners'), 'the profile, as text: ' + t);
+  check(!/Times are never shown|on them this month/.test(t), 'no line saying what is not shown, and "this month" once under its head: ' + t);
   const pk = await page.evaluate(() => ({ keys: [...document.querySelectorAll('.profile-view .profile-keys button')].map((b) => b.textContent), foot: [...document.querySelectorAll('.profile-view .profile-foot button')].map((b) => b.textContent),
     last: document.querySelector('.profile-view > :last-child').className }));
   check(JSON.stringify(pk.keys) === '["Share a route","Invite to a drive","Challenge on a stage"]' && JSON.stringify(pk.foot) === '["Unfriend","Report","Block"]' && /profile-foot/.test(pk.last), 'things to do first, Unfriend/Report/Block at the foot: ' + JSON.stringify(pk));
@@ -5411,6 +5422,43 @@ flow('People: two tabs; a request is a card on top, then you, then friends with 
   await page.waitForSelector('#crewsBody >> text=Join Ridge Runners?');
   check((await side()).crews === 'true' && /run by @sam/.test(await page.textContent('#crewsBody')), '?crew= opens Crews with the invite named');
   check(await page.evaluate(() => document.querySelector('#crewTab .badge')?.textContent) === '3', 'a crew link waiting is on the badge too');
+});
+
+flow('People: Return on the keyboard sends a friend request and creates a crew, once each (walkthrough 2026-11-12)', async (page, base) => {
+  await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); } catch (_) {} });
+  const posted = [];
+  await page.route(base + '/api/**', async (route) => {
+    const u = new URL(route.request().url()), m = route.request().method(), json = (b) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(b) });
+    if (u.pathname === '/api/me') return json({ signed_in: true, member: true, handle: 'me' });
+    if (u.pathname === '/api/points') return json({ total: 0 });
+    if (m === 'POST' && (u.pathname === '/api/friends/request' || u.pathname === '/api/crews')) {
+      posted.push([u.pathname, route.request().postData()]);
+      await new Promise((ok) => setTimeout(ok, 400));   // slow enough for a second Return to land while it saves
+      return json({ ok: true, id: 'K1' });
+    }
+    return json([]);
+  });
+  await page.goto(base + '/index.html?view=people');
+  await page.click('#accountBody button:has-text("Invite or add a friend")');
+  const hand = '.side-pop.open input[aria-label="Friend handle"]';
+  await page.waitForSelector(hand);
+  check(await page.getAttribute(hand, 'enterkeyhint') === 'send', 'the handle field\'s keyboard key says Send');
+  await page.fill(hand, '@Sam');
+  await page.press(hand, 'Enter'); await page.press(hand, 'Enter');
+  await page.waitForFunction(() => /Request sent\. @sam/.test(document.getElementById('toast').textContent), null, { timeout: 5000 }).catch(() => {});
+  const reqs = posted.filter(([p]) => p === '/api/friends/request');
+  check(reqs.length === 1 && JSON.parse(reqs[0][1]).handle === 'sam', 'Return sends one request for @sam: ' + JSON.stringify(posted));
+  await page.keyboard.press('Escape').catch(() => {});
+  await page.goto(base + '/index.html?view=people');
+  await page.click('[data-people="crews"]');
+  await page.click('#crewsBody .nav-row:has-text("Find or start a crew")');
+  const cname = '.side-pop.open input[aria-label="Crew name"]';
+  await page.waitForSelector(cname);
+  await page.fill(cname, 'Ridge Runners');
+  await page.press(cname, 'Enter'); await page.press(cname, 'Enter');
+  await page.waitForTimeout(900);
+  const made = posted.filter(([p]) => p === '/api/crews');
+  check(made.length === 1 && JSON.parse(made[0][1]).name === 'Ridge Runners', 'Return creates the crew, once: ' + JSON.stringify(made));
 });
 
 flow('People, a new account: Friends is one sentence and the Invite key; Crews is one "Find or start a crew" row (REVIEW_PEOPLE P-08)', async (page, base) => {
@@ -8781,10 +8829,12 @@ flow('TestFlight 2026-11-05 note 1: in several crews the Crews side is a dashboa
   await peopleCrews(page, base);
   await page.waitForSelector('.crew-dash .cd-row');
   await page.waitForFunction(() => document.querySelectorAll('.crew-dash .cd-item').length === 4);
+  const oneLine = () => page.evaluate(() => [...document.querySelectorAll('.cd-row .cd-text small')].every((x) => x.getBoundingClientRect().height <= parseFloat(getComputedStyle(x).lineHeight) + 1));
   const dash = () => page.evaluate(() => ({ rows: [...document.querySelectorAll('.cd-row')].map((r) => [r.querySelector('.cd-text b').textContent, r.querySelector('.cd-text small').textContent, r.querySelector('.cd-pin').getAttribute('aria-pressed')]),
     feed: [...document.querySelectorAll('.cd-item')].map((b) => b.querySelector('small').textContent + ' | ' + b.querySelector('.cd-what').textContent),
     head: !document.querySelector('#crewsBody .crew-head') || document.querySelector('#crewsBody .crew-head').hidden, switcher: !!document.querySelector('.cp-switch'),
     page: !!document.querySelector('#crewsBody .crew-page'), count: document.querySelector('.cd-head .note').textContent }));
+  check(await oneLine(), 'each crew row is one line under its name (the next drive\'s date never wraps alone)');
   let d = await dash();
   check(!d.page && !d.switcher && d.head, 'several crews: a dashboard, no crew page and no row of name chips: ' + JSON.stringify(d));
   check(JSON.stringify(d.rows.map((r) => r[0])) === '["Ridge Runners","Blue Ridge Breakfast Club","test","VETTA"]', 'the latest active first, the quiet ones by name: ' + JSON.stringify(d.rows));

@@ -1778,14 +1778,14 @@
       if (offWords) return [offWords, /^Wrong way/.test(offWords) ? roadNow.name : null].filter(Boolean).join(' · ');
       if (replayEnded && !driveActive) return state.mode === 'sim' ? 'That\'s the route' : 'That\'s the drive';   // U-110
       if (replayWaiting && !driveActive && track) return track.name || 'Replay';                                     // U-128
-      if (!driving) return track ? `${track.name} · ${spirited ? 'Full notes' : 'Quiet · bumps and cameras only'}` : 'Plan a route for notes';
+      if (!driving) return track ? `${track.name} · ${spirited ? 'Full notes' : 'Quiet notes'}` : 'Plan a route for notes';
       if (!track && !driveActive) return 'No route planned';
       if (spirited) return `${track && !offRoute && track.kind !== 'horizon' ? track.name : 'The road ahead'} · Full notes`;
       const named = roadNow.name && compact && window.ApexRoadNames ? ApexRoadNames.shortRoadName(roadNow.name) : roadNow.name;
       const road = named || (track && track.kind === 'horizon' && !offRoute ? 'The road ahead' : null);
       const ahead = next ? Math.max(0, next.m - state.cursorM) : null, d = ahead != null ? distLabel(ahead) : null;
       const far = d && (d.u === 'MI' || d.u === 'KM') ? ApexUnits.long(ahead, 1, true) : d ? `${d.n} ${d.u.toLowerCase()}` : null;
-      return ['Quiet', road, far ? `${compact ? 'corner' : 'next corner'} ${far}` : compact ? 'bumps, cameras' : 'bumps and cameras only'].filter(Boolean).join(' · ');
+      return ['Quiet', road, far ? `${compact ? 'corner' : 'next corner'} ${far}` : null].filter(Boolean).join(' · ');   // what Quiet calls is the Notes switch's to say, not the strip's
     }
     function updateNotes(vMps, live) {
       // Driving somewhere that is not on the loaded route: its calls (and its stale trip distance) must never be read out as if they were this road.
@@ -2627,12 +2627,25 @@
     let camWarmAt = -1e9;
     function policeWarm() {
       const p = state.lastPosition;
-      if (avoid.police && p && window.ApexSync && ApexSync.signedIn() && !policeCached([p])) hazardsAround([p]).catch(() => {});
+      // (the reports round you: police for Avoid police, and the closures every plan keeps off, closedForTrip)
+      if (p && window.ApexSync && ApexSync.signedIn() && !policeCached([p])) hazardsAround([p]).catch(() => {});
       // the camera tiles round where you are, so a plan that avoids cameras finds them kept (camsForTrip)
       if (avoid.cameras && p && window.ApexCameras && performance.now() - camWarmAt > 60000 && (camWarmAt = performance.now())) alprNodesIn(p.lat - 0.15, p.lon - 0.15, p.lat + 0.15, p.lon + 0.15).catch(() => {});
     }
+    // members' "Road closed" reports near the trip, for our own router (graph_router.js CLOSED_X): kept 5 min (hazardsAround),
+    // otherwise a plan waits POLICE_WAIT_MS at most and goes without them. Signed out there are none to ask for: []
+    async function closedForTrip(points) {
+      if (!window.ApexHazardReports || !memberNow()) return [];
+      if (hazardsCover(points)) return ApexHazardReports.closuresFor(closureCache.list, points);
+      const list = await RouteLoading.optional(closuresAround(points), POLICE_WAIT_MS).catch(() => null);
+      return Array.isArray(list) ? list : [];
+    }
+    function memberNow() {
+      try { return !!(window.ApexSync && typeof ApexSync.signedIn === 'function' && ApexSync.signedIn()); } catch (_) { return false; }
+    }
     async function avoidForTrip(points) {
-      if (!avoid.police && !avoid.cameras) return avoid;
+      const closedP = closedForTrip(points).catch(() => []);
+      if (!avoid.police && !avoid.cameras) { const closed = await closedP; if (window.apexDebug) window.apexDebug.lastClosed = closed; return closed.length ? { ...avoid, closed } : avoid; }
       const camsP = camsForTrip(points);
       const out = { ...avoid };
       if (avoid.police) {
@@ -2645,7 +2658,16 @@
       const cams = await camsP;
       if (window.apexDebug) window.apexDebug.lastCams = cams;
       if (cams) out.cams = cams;
+      const closed = await closedP;
+      if (window.apexDebug) window.apexDebug.lastClosed = closed;
+      if (closed.length) out.closed = closed;
       return out;
+    }
+    // A loop's avoid choices: the same lists as a trip's, for the box a loop of `km` can reach from `c` (a third of its
+    // length each way, at most 35 km so the camera map's 1 degree limit holds to 50 degrees north), corner to corner through the start
+    function loopAvoidPoints(c, km) {
+      const r = Math.max(3, Math.min(35, km / 3)), dLat = r / 110.54, dLon = r / (111.32 * Math.max(0.2, Math.cos(c.lat * Math.PI / 180)));
+      return [{ lat: c.lat - dLat, lon: c.lon - dLon }, { lat: c.lat, lon: c.lon }, { lat: c.lat + dLat, lon: c.lon + dLon }];
     }
     // Avoid cameras for every candidate, not only Valhalla's (IDEAS R-35): the plate readers and fixed speed cameras within
     // 5 km of the trip's box (60 nearest its line), so our own router keeps off the roads they sit on and a route that
@@ -3361,7 +3383,7 @@
         ui.step('Routing…', 0.7);
         if (via.length) await buildRoute([from, ...via, to].map((p) => ({ lat: p.lat, lon: p.lon })), 'route_link', name);
         else await funRoute(from, to, 'route_dest', name, { from: link.from ? { lat: from.lat, lon: from.lon } : null, to: { lat: to.lat, lon: to.lon }, via: [] }, ui);
-      } catch (err) { toast(err.message); } finally { ui.done(); }
+      } catch (err) { toast(errText(err)); } finally { ui.done(); }
     }
     async function openGpx(text, fileName) {
       const g = ApexRouteImport.parseGpx(text);
@@ -3401,7 +3423,7 @@
         const request = { from: from.label === null ? null : { lat: from.lat, lon: from.lon }, to: { lat: to.lat, lon: to.lon }, via: [] };
         await funRoute(from, to, 'route_dest', to.routeName || `To ${to.label || 'current location'}`, request, ui);
         if (to.label && !to.label.startsWith('Pin ')) rememberPlace(to);
-      } catch (err) { toast(err.message); } finally { ui.done(); }
+      } catch (err) { toast(errText(err)); } finally { ui.done(); }
     }
     // Live off-route handling. Notes, pace and trip distance stay blank while off route (render
     // gives no index); the old route stays drawn until the new one arrives.
@@ -3834,7 +3856,7 @@
           : own.reason === 'off' ? `${what} routes need Vetta's own router, which is switched off. Quick still works.`
           : own.reason === 'index' ? `Couldn't load Vetta's road map for this trip. Check signal and try again, or use Quick.`
           : `Couldn't plan a ${what} route just now. Try again, or use Quick.`;
-        toast(msg, { label: 'Use Quick', ms: 12000, onClick: () => { setFunLevel('quick'); const u = planBusy(); funRoute(from, to, id, name, request, u, opts).catch((e) => toast(e.message)).finally(() => u.done()); } });
+        toast(msg, { label: 'Use Quick', ms: 12000, onClick: () => { setFunLevel('quick'); const u = planBusy(); funRoute(from, to, id, name, request, u, opts).catch((e) => toast(errText(e))).finally(() => u.done()); } });
         return false;
       }
       // with our routes in, Valhalla's answers are only checks, fetched alongside (below); without, today's path
@@ -4472,7 +4494,7 @@
         const from = t.request.from || await locate();
         if (!from) throw new Error(NO_FIX);
         ok = await funRoute(from, t.request.to, t.id, t.name, { from: t.request.from, to: t.request.to, via: [] }, ui, { early: false, head: what });
-      } catch (err) { toast(err.message); } finally { ui.done(); }
+      } catch (err) { toast(errText(err)); } finally { ui.done(); }
       if (!ok && t.funLevel) setFunLevel(t.funLevel);             // the chips show the level the route on screen was built with
       return ok;
     }
@@ -4604,7 +4626,10 @@
       // (Route tuning's road and avoid sliders shape its search: the tune rides with it, as with a plan's)
       applyDevTune();
       loopTuned = ownOn() ? userTuned() : null;
-      const ownLoopsP = ownOn() ? ApexOwnRouting.loops(ownRouter(), { start: { lat: c.lat, lon: c.lon }, km: targetKm, level: LOOP_STYLE, prefs: roadPrefs, avoid, ...devTuneReq() }) : Promise.resolve([]);
+      // the police reports, cameras and closures round the start go into the loop's search, as a trip's do (until
+      // 2026-11-12 loops got none of them: Avoid police and Avoid cameras did nothing for a loop)
+      L.avoid = ownOn() ? await avoidForTrip(loopAvoidPoints(c, targetKm)).catch(() => avoid) : avoid;
+      const ownLoopsP = ownOn() ? ApexOwnRouting.loops(ownRouter(), { start: { lat: c.lat, lon: c.lon }, km: targetKm, level: LOOP_STYLE, prefs: roadPrefs, avoid: L.avoid, ...devTuneReq() }) : Promise.resolve([]);
       // Our loops only (Valhalla is for Quick, the owner 2026-11-11): the card goes up from them, or says why there are none
       const own = (await ownLoopsP).map((r) => ({ kind: 'own', route: r.route, hwyShare: r.hwyShare, pts: [c, ...FunRoute.alongPoints(r.route.coords), c] }));
       // Loops are our router's or nothing (Valhalla is for Quick only, the owner 2026-11-11): no stage loops or circle on
@@ -4642,7 +4667,7 @@
         const rs = Core.removeSpurs(even.lat, even.lon);
         const t = await trackFromPolyline(rs.lat.map((la, i) => [rs.lon[i], la]), L.loopId, `${L.asked} loop`, undefined, { route: r.graph ? r : null });
         t.fun = funOf(t, r.turns);
-        t.unavoided = FunRoute.unavoided(avoid, r);
+        t.unavoided = FunRoute.unavoided(L.avoid || avoid, r);
         t.timeS = r.timeS;
         t.timeMarks = timeMarksOf(t, r);
         const glare = FunRoute.glare(t, r.timeS, new Date(leaveAt()));
@@ -4652,7 +4677,7 @@
         if (s.km < 0.3 * L.targetKm) throw new Error('not a loop');
         return { t, job, route: r, ...s, hwyShare: Number.isFinite(job.hwyShare) ? job.hwyShare : null, score: s.score - FunRoute.glareCost({ glare }), spursCut: rs.removed };
       };
-      return FunRoute.keepAvoiding((await Promise.allSettled(jobs.map(routeJob))).filter(r => r.status === 'fulfilled').map(r => r.value), avoid);
+      return FunRoute.keepAvoiding((await Promise.allSettled(jobs.map(routeJob))).filter(r => r.status === 'fulfilled').map(r => r.value), L.avoid || avoid);
     }
     /** The route engine, towns, the length off, members' data and Prefer on built loops (each once), ranked by the level. */
     async function loopScored(L, done, ui) {
@@ -5010,6 +5035,16 @@
       }
       t.classList.add('show'); clearTimeout(t._h);
       t._h = setTimeout(() => { t.classList.remove('show'); if (action && action.onClick) t.querySelectorAll('a').forEach(x => x.remove()); }, action ? action.ms || 7000 : 4200);
+    }
+    // A failed request reads as the browser's own words ("Load failed", "Failed to fetch", "NetworkError when attempting to
+    // fetch resource.", a bad JSON parse); the driver gets one plain line instead. Our own messages (NO_FIX, "Couldn't find
+    // that place") pass through as written.
+    function errText(err) {
+      const m = String((err && err.message) || err || '');
+      if (!m) return 'Something went wrong. Try again.';
+      if (/load failed|failed to fetch|networkerror|network connection|the internet connection|timed? ?out/i.test(m)) return 'No connection. Try again when you have signal.';
+      if ((err && err.name === 'SyntaxError') || /unexpected token|JSON/i.test(m)) return 'Something went wrong on our side. Try again in a moment.';
+      return m;
     }
     // A drive's one-key offer (Go round, Skip, Head home) is on the car's screen too, as a navigation alert with the key and
     // Not now (CarPlay/ApexCarPlay.swift showOffer): whichever key is tapped first does it, once, and the other goes away.
@@ -5503,7 +5538,7 @@
         const request = { from: from.label === null ? null : { lat: from.lat, lon: from.lon }, to: { lat: p.lat, lon: p.lon }, via: [] };
         await funRoute(from, { lat: p.lat, lon: p.lon }, 'route_dest', toName(p.label), request, ui);
         rememberPlace(p);
-      } catch (err) { toast(err.message); } finally { ui.done(); }
+      } catch (err) { toast(errText(err)); } finally { ui.done(); }
     }
 
     const closeSheet = () => showView(null);
@@ -6487,7 +6522,7 @@
         // An empty bay, not a paragraph (design pass, 2026-11-10): the place a car will stand, drawn in pencil, and the key that gets you there.
         gbody.append(el('h3', { textContent: 'Your cars' }), el('div', { className: 'empty-bay' },
           el('span', { className: 'eb-slot', innerHTML: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 16v-3l2.2-5h13.6L21 13v3M3 16h18M3 16v2M21 16v2"/><circle cx="7.5" cy="13" r="1"/><circle cx="16.5" cy="13" r="1"/></svg>' }),
-          el('p', {}, el('b', { textContent: 'No car parked here yet' }), el('small', { textContent: 'Sign in to keep your cars, a profile and build threads. Everything else in the Garage works without it.' })),
+          el('p', {}, el('b', { textContent: 'No car parked here yet' }), el('small', { textContent: 'Sign in to keep your cars and build threads.' })),
           btn('Sign in', () => showView('friends'), 'ink-btn')));
         ambientFromAccount(false, false);                                     // U-116
         return;
@@ -6712,9 +6747,16 @@
       // One Invite key (the owner, 2026-10-30): someone new gets an invite link, a member your handle or a request; requests here too.
       const ipop = popSheet('Invite'); pops.push(ipop);
       ipop.querySelector('.side-pop-head button').addEventListener('click', () => { inviteOpen = false; unstash('apex.add'); });
-      const add = el('input', { className: 'field', placeholder: 'Their handle', autocomplete: 'off', autocapitalize: 'none', 'aria-label': 'Friend handle', value: stash('apex.add') });
+      const add = el('input', { className: 'field', placeholder: 'Their handle', autocomplete: 'off', autocapitalize: 'none', 'aria-label': 'Friend handle', value: stash('apex.add'), enterKeyHint: 'send' });
+      // the phone keyboard's Send key sends, as on any messaging app (walkthrough 2026-11-12: Return did nothing); once at a time
+      let sending = false;
       const sendRequest = async () => {
-        const h = add.value.trim().replace(/^@/, '').toLowerCase(); if (!h) return;
+        const h = add.value.trim().replace(/^@/, '').toLowerCase(); if (!h) { add.focus(); return; }
+        if (sending) return; sending = true;
+        try { await sendTo(h); } finally { sending = false; }
+      };
+      add.addEventListener('keydown', (e) => { if (e.key === 'Enter' && !e.isComposing) { e.preventDefault(); sendRequest(); } });
+      const sendTo = async (h) => {
         const r = await apiCall('POST', '/api/friends/request', { handle: h }); unstash('apex.add'); add.value = '';
         if (r.ok && !accepted.some(f => f.handle === h)) setSent([...sentList().filter(x => x !== h), h]);
         toast(r.ok ? `Request sent. @${h} sees it if that's their handle.` : 'Couldn\'t send that. Try again.'); redo();
@@ -6876,7 +6918,7 @@
           const cur = myCrews.find((c) => c.id === crewOpen);
           if (!cur) { chead.replaceChildren(); chead.hidden = true; holder.replaceChildren(crewPage.dashboard(myCrews, openCrew)); }
           else {
-            chead.hidden = false;
+            chead.hidden = false; chead.classList.toggle('solo', !many);
             const back = many ? btn('Your crews', () => { openCrew(null); const k = holder.querySelector('.cd-open'); if (k) k.focus({ preventScroll: true }); }, 'linkbtn cd-back') : el('span');   // one crew: its page's title says the name, so the head is the gear alone (it said it twice)
             if (many) back.setAttribute('aria-label', 'Back to your crews');
             chead.replaceChildren(back, gear);
@@ -6912,8 +6954,15 @@
         if (!cname.value.trim()) { cname.focus(); return; }
         const pub = cvis.value === 'public', near = crewNear();
         if (pub && carea.value.trim().length < 2) { toast('Name the area people nearby will see.'); return; }
-        const r = await apiCall('POST', '/api/crews', pub ? { name: cname.value.trim(), visibility: 'public', area: { name: carea.value.trim(), lat: near.lat, lon: near.lon } } : { name: cname.value.trim() }); if (r.ok) redo(); else toast('Couldn\'t create the crew.'); }, 'ink-btn solid');
-      cname.enterKeyHint = 'next';
+        if (create.disabled) return; create.disabled = true;   // a second tap or Return while it saves makes no second crew
+        let r = null;
+        try { r = await apiCall('POST', '/api/crews', pub ? { name: cname.value.trim(), visibility: 'public', area: { name: carea.value.trim(), lat: near.lat, lon: near.lon } } : { name: cname.value.trim() }); } catch (_) {}
+        create.disabled = false;
+        if (r && r.ok) redo(); else toast('Couldn\'t create the crew.'); }, 'ink-btn solid');
+      // Return on the keyboard: from the name, Create (or on to the area for a public crew); from the area, Create
+      cname.enterKeyHint = 'next'; carea.enterKeyHint = 'go';
+      cname.addEventListener('keydown', (e) => { if (e.key !== 'Enter' || e.isComposing) return; e.preventDefault(); if (!carea.hidden && carea.value.trim().length < 2) carea.focus(); else create.click(); });
+      carea.addEventListener('keydown', (e) => { if (e.key === 'Enter' && !e.isComposing) { e.preventDefault(); create.click(); } });
       newSec.append(cname, el('div', { className: 'new-crew-who' }, el('b', { textContent: 'Who can join' }), el('small', { textContent: 'Private: by invite link. Public: people nearby can find it.' })), cvis, carea, create);
 
       // public crews near you: tiles with Join (only name, area and size are shown; members stay private)

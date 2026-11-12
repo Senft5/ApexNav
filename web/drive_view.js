@@ -268,7 +268,7 @@
       // what it cost the battery (IDEAS P-01): said only for a drive that didn't charge and ran 10 minutes or more
       + (d.battery && Number.isFinite(d.battery.perHour) ? `<div class="dv-meta">Battery: ${d.battery.usedPct}% in ${d.battery.minutes} min (about ${d.battery.perHour}% an hour)</div>` : '')
       // which car the score is for (IDEAS D-19); a lower limit is said, since it changes what Pace means
-      + (d.car && d.car.label ? `<div class="dv-meta">Scored for your ${esc(d.car.label)}${finite(d.car.mu) && d.car.mu < 0.6 ? ` \u00b7 its own grip, ${d.car.mu.toFixed(2)} g (the default is 0.60 g)` : ''}</div>` : '')
+      + (d.car && d.car.label ? `<div class="dv-meta">Scored for your ${esc(d.car.label)}${finite(d.car.mu) && d.car.mu < 0.6 ? ` \u00b7 grip ${d.car.mu.toFixed(2)} g, below the 0.60 g default` : ''}</div>` : '')
       + (plain ? `<p class="dv-plain">${esc(plain)}</p>` : '')
       + (flow ? `<p class="dv-plain">${esc(flow)}</p>` : '')
       + (tired ? `<p class="dv-plain">${esc(tired)}</p>` : '')

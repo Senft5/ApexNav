@@ -5,6 +5,7 @@
 import type { Viewer } from "./auth";
 import { CELL_COVER_KM, Env, HttpError, body, nearCell, num, randomToken } from "./util";
 import { atLeast, tierOf } from "./livery";
+import { establishedSql } from "./reports_sql";
 
 export const KINDS = ["pothole", "gravel", "debris", "animal", "police", "closure"] as const;
 type Kind = (typeof KINDS)[number];
@@ -98,13 +99,18 @@ export async function vote(env: Env, v: Viewer, id: string, still: boolean) {
     return { ok: true };
   }
   const reporter = await env.DB.prepare("SELECT 1 FROM hazard_reports WHERE id = ? AND reported_by = ?").bind(id, v.id).first();
+  // A "gone" counts only from a member who was invited or has been one a week: two fresh accounts could otherwise wipe any
+  // warning off the map (a deer, debris, police) for everyone. A newcomer's "gone" is kept (one vote a person) but not counted.
+  const established = !!(await env.DB.prepare(`SELECT 1 WHERE ${establishedSql("?1")}`).bind(v.id).first());
   const stmts = [env.DB.prepare("INSERT INTO hazard_votes (hazard_id, user_id, still) VALUES (?, ?, ?) ON CONFLICT (hazard_id, user_id) DO UPDATE SET still = excluded.still, at = datetime('now')")
     .bind(id, v.id, still ? 1 : 0)];
   // a changed mind moves one count from one side to the other; the reporter's own report already counts as a confirmation
-  if (prev) stmts.push(env.DB.prepare(`UPDATE hazard_reports SET ${prev.still ? "confirms = MAX(0, confirms - 1)" : "clears = MAX(0, clears - 1)"} WHERE id = ?`).bind(id));
+  // (a newcomer's earlier "gone" was never counted, so nothing comes off the clears for it)
+  if (prev && prev.still) stmts.push(env.DB.prepare("UPDATE hazard_reports SET confirms = MAX(0, confirms - 1) WHERE id = ?").bind(id));
+  else if (prev && established) stmts.push(env.DB.prepare("UPDATE hazard_reports SET clears = MAX(0, clears - 1) WHERE id = ?").bind(id));
   // the reporter seeing their own again (a second report of it within SAME_M lands here) keeps it alive too, uncounted
   if (still) stmts.push(reporter ? seenAgain : env.DB.prepare(`UPDATE hazard_reports SET confirms = confirms + 1, expires_at = MAX(expires_at, ${until(h.kind)}) WHERE id = ?`).bind(id));
-  else stmts.push(env.DB.prepare("UPDATE hazard_reports SET clears = clears + 1 WHERE id = ?").bind(id),
+  else if (established) stmts.push(env.DB.prepare("UPDATE hazard_reports SET clears = clears + 1 WHERE id = ?").bind(id),
     env.DB.prepare("UPDATE hazard_reports SET expires_at = datetime('now') WHERE id = ? AND clears >= 2 AND clears > confirms").bind(id));
   await env.DB.batch(stmts);
   return { ok: true };
