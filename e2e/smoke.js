@@ -4139,7 +4139,7 @@ flow('roadbooks: a planned road goes into a new roadbook from Share; People list
   await page.waitForFunction(() => /Cherohala loop/.test(document.getElementById('routeCardName').textContent), null, { timeout: 8000 });
   await page.click('#routeShareBtn');
   await page.waitForSelector('#routeSharePick .rb-add');
-  check(/first 400 m and anything inside your privacy zones are left out/.test(await page.textContent('#routeSharePick .rb-add')), 'the part says what is left out');
+  check(/first 400 m and your privacy zones are left out/.test(await page.textContent('#routeSharePick .rb-add')), 'the part says what is left out');
   await page.fill('#routeSharePick .rb-add input', 'Smokies classics');
   await page.click('#routeSharePick .rb-add button:has-text("New roadbook")');
   await page.waitForFunction(() => /Added to Smokies classics\./.test(document.getElementById('toast').textContent));
@@ -4563,7 +4563,7 @@ flow('the run as one card: the morning of, a crew-mate\'s convoy to join or your
   check(/Results · 2 stages/.test(rec) && !(await page.isVisible('.cp-week .cp-results')), 'the results fold, closed: ' + rec);
   await page.click('.cp-week .cp-results-fold > summary');
   const sheet = await page.$$eval('.cp-week .cp-results > *', (els) => els.map((x) => x.innerText.replace(/\s+/g, ' ').trim()));
-  check(sheet[0] === 'OVERALL' && /^1\. @cara 796 all 2 stages 2\. @sam 811 1 of 2 stages$/.test(sheet[1]) && sheet[2] === 'SS1 · CHEROHALA SKYWAY' && /^1\. @sam 811 3:04 · quickest 2\. @cara 790 3:10 · \+6 s$/.test(sheet[3]) && sheet[4] === 'SS2 · TELLICO RIVER ROAD' && /share times/.test(sheet[6]), 'the sheet: ' + JSON.stringify(sheet));
+  check(sheet[0] === 'OVERALL' && /^1\. @cara 796 all 2 stages 2\. @sam 811 1 of 2 stages$/.test(sheet[1]) && sheet[2] === 'SS1 · CHEROHALA SKYWAY' && /^1\. @sam 811 3:04 · quickest 2\. @cara 790 3:10 · \+6 s$/.test(sheet[3]) && sheet[4] === 'SS2 · TELLICO RIVER ROAD' && /^Best Score that day, and time where shared\.$/.test(sheet[6]), 'the sheet: ' + JSON.stringify(sheet));
   await page.evaluate(() => { window.__copied = null; Object.defineProperty(navigator, 'share', { value: undefined, configurable: true }); Object.defineProperty(navigator, 'clipboard', { value: { writeText: async (t) => { window.__copied = t; } }, configurable: true }); });
   await page.click('.cp-week button:has-text("Share the results")');
   await page.waitForFunction(() => window.__copied);
@@ -5046,7 +5046,7 @@ flow('duels: a friend\'s challenge is a card on People; Accept starts it; the ca
   await page.waitForFunction(() => /Dry Ridge climb is in your Stages now/.test(document.getElementById('toast').textContent));
   await page.waitForSelector('#accountBody .duel-card.on');
   let t = await page.textContent('.duel-card.on');
-  check(/You -- · @bob 812 · @bob has a run in · 7 days left/.test(t) && /Your Scores don't reach @bob yet/.test(t), 'on: both Scores, the days left, and that yours don\'t reach them: ' + t);
+  check(/You -- · @bob 812 · @bob has a run in · 7 days left/.test(t) && !/don't reach/.test(t), 'on: both Scores and the days left; yours not shared is the Show key, not a sentence: ' + t);
   await page.click('.duel-card.on button:has-text("Show my Scores to @bob")');
   await page.waitForFunction(() => /You 845 · @bob 812 · You lead by 33/.test((document.querySelector('.duel-card.on') || {}).textContent || ''));
   check(grants.length === 1 && grants[0].audience_id === 'U1' && grants[0].share_scores === true && !grants[0].share_times, 'Scores only, to that friend: ' + JSON.stringify(grants));
@@ -5061,7 +5061,7 @@ flow('duels: a friend\'s challenge is a card on People; Accept starts it; the ca
   await page.waitForSelector('.duel-pop.open [aria-label="Stage"] button:has-text("Esses")');
   await page.click('.duel-pop.open [aria-label="Stage"] button:has-text("Esses")');
   await page.click('.duel-pop.open [aria-label="How long"] button:has-text("3 days")');
-  check(/your best counts/.test(await page.textContent('.duel-pop.open')) && await page.isVisible('.duel-pop.open [aria-label="Won by"] button.on:has-text("Vetta Score")'), 'the sheet says what counts; won by Score unless you pick Time');
+  check(/Your best run counts/.test(await page.textContent('.duel-pop.open')) && await page.isVisible('.duel-pop.open [aria-label="Won by"] button.on:has-text("Vetta Score")'), 'the sheet says what counts; won by Score unless you pick Time');
   await page.click('.duel-pop.open [aria-label="Won by"] button:has-text("Time")');
   const small = await page.evaluate(() => [...document.querySelectorAll('.duel-pop.open button')].filter((b) => b.getClientRects().length).map((b) => ({ t: b.textContent, h: Math.round(b.getBoundingClientRect().height) })).filter((b) => b.h < 32));
   check(!small.length, 'keys big enough: ' + JSON.stringify(small));
@@ -8773,7 +8773,7 @@ flow('time attack this week (SOCIAL 2.9): in Where to?, the area\'s loop and its
   check(text.includes('Foothills <b>run</b> loop') && /loop from the area’s best roads · 3 days left · 3 times/.test(text) && !/put up/i.test(text), 'the loop, as text: ' + text);
   const cells = await page.$$eval('#planAttack .ta-board > span', (els) => els.map((e) => e.textContent));
   check(cells.slice(0, 8).join('|') === '1|@alice|9:50|Score 700|2|@bob|10:00 +0:10|Score 780' && cells[11] === '', 'the board, quickest first, with gaps and Scores: ' + cells.join('|'));
-  check(/Last week, Last loop: 1\. @dee 11:52/.test(text) && /A new loop every Monday/.test(text) && /drive within the law/.test(text), 'last week\'s podium and the road note');
+  check(/Last week, Last loop: 1\. @dee 11:52/.test(text) && /New loop every Monday/.test(text) && /Drive within the law/.test(text), 'last week\'s podium and the road note');
   const q = new URLSearchParams(sent[0][1]);
   check(/\.(125|375|625|875)$/.test(q.get('lat')) && /\.(125|375|625|875)$/.test(q.get('lon')), 'only the middle of the quarter-degree area is sent: ' + sent[0][1]);
   check(!sent.some(([p]) => p === '/api/timeattack/circuit'), 'a week that has its loop builds none');

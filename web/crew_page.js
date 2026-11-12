@@ -250,10 +250,10 @@
   // The board's periods (the owner's TestFlight note 06); the pick is remembered on this phone.
   const PERIODS = [['week', 'Week'], ['month', 'Month'], ['year', 'Year'], ['all', 'All time']];
   const PERIOD_NOTE = {
-    week: 'Every drive’s Score added up since Monday, only from people who share Scores with the crew.',
-    month: 'Every drive’s Score added up this month, only from people who share Scores with the crew.',
-    year: 'Every drive’s Score added up this year, only from people who share Scores with the crew.',
-    all: 'Every drive’s Score added up, only from people who share Scores with the crew.',
+    week: 'Scores added up since Monday.',
+    month: 'Scores added up this month.',
+    year: 'Scores added up this year.',
+    all: 'Every Score added up.',
   };
   function boardPeriod(set) {
     try {
@@ -447,7 +447,7 @@
         sw.classList.toggle('on', on); sw.setAttribute('aria-checked', String(on));
       });
       return el('section', { className: 'cp-meet stack-8' }, el('div', { className: 'cp-sec' }, el('h3', { textContent: 'Meeting points' })), sw,   // named like Members, Chat and the board (it was the one small heading under a rule)
-        el('p', { className: 'note', textContent: `Your Home pin\u2019s square (or, with none pinned, where you are now), about ${root.ApexUnits && !root.ApexUnits.metric() ? '7 miles' : '11 km'} across, never the address. Crew-mates see the squares, not whose, once two share. Used to pick a meeting point fair to everyone.` }));
+        el('p', { className: 'note', textContent: `A ${root.ApexUnits && !root.ApexUnits.metric() ? '7 mile' : '11 km'} square around Home, never the address or whose.` }));
     }
     function pinnedRow(c) {
       return el('div', { className: 'cp-pinned' }, el('span', { className: 'note', textContent: 'Pinned route' }), el('b', { textContent: c.pinned.name }),
@@ -732,7 +732,7 @@
       }, 'ink-btn');
       renderVoices.disabled = !canRender;
       const factorySet = el('fieldset', { disabled: !factory }, el('legend', {}, el('b', { textContent: 'Crew hazard categories' }), factory ? '' : lock('factory')), hazardKinds,
-        el('p', { className: 'note', textContent: 'Members report them from the report sheet and read your word on the plate; other drivers see Debris.' }),
+        el('p', { className: 'note', textContent: 'Members report them. Other drivers see Debris.' }),
         el('b', { textContent: 'Crew regroup line' }), regroupLine,
         el('div', { className: 'row' }, renderVoices),
         el('p', { className: 'note', textContent: canRender ? 'Members hear it in their co-driver\u2019s voice when your convoy regroups.' : 'Record it on the Vetta website: the voices are made there, the app only plays them.' }), voiceNote);

@@ -61,8 +61,8 @@
     // what may be missing: yours not shown to them, theirs not to you
     const what = timed ? 'times' : 'Scores';
     const gaps = [];
-    if (!d.you_share) gaps.push(`Your ${what} don't reach ${who} yet, so they can't see yours.`);
-    if (!d.they_share) gaps.push(`${who}'s ${what} don't reach you yet; theirs show once they share them with you.`);
+    // yours not shared: the Show key says so on its own (no sentence for it)
+    if (!d.they_share) gaps.push(`${who} hasn't shared ${what} with you yet.`);
     // a Score duel shows times beside it; a time duel shows the Scores beside it
     const aside = timed ? scoresLine(who, d.you, d.them) : timesLine(who, d.you, d.them);
     if (d.status === 'on') {
@@ -92,6 +92,8 @@
     .duel-kicker { font-size: 11px; font-weight: 800; letter-spacing: 0.1em; text-transform: uppercase; color: var(--panel-dim); }
     .duel-pick { display: grid; gap: 8px; }
   `;
+  // the one line under a Challenge sheet's choices (it was three sentences)
+  const BEST = 'Your best run counts. Drive within the law.';
   const KICK = { ask: 'Duel', sent: 'Duel sent', on: 'Duel on', won: 'Duel won', lost: 'Duel lost', draw: 'Duel drawn', none: 'Duel over' };
 
   /**
@@ -128,7 +130,7 @@
         if (k === 'accept') act('Accept', async () => {
           const r = await call('POST', `/api/duels/${encodeURIComponent(d.id)}/accept`);
           if (!r.ok) { toast('Couldn’t accept. It may have been taken back.'); page.redo(); return; }
-          toast(`On. ${d.stage} is in your Stages${r.data && r.data.stage_added ? ' now' : ''}: your ${d.kind === 'time' ? 'quickest time' : 'best Score'} on it in ${d.days} days counts.`);
+          toast(`On. ${d.stage} is in your Stages${r.data && r.data.stage_added ? ' now' : ''}.`);
           page.redo();
         }, 'ink-btn solid');
         if (k === 'decline') act('No thanks', async () => { await call('DELETE', `/api/duels/${encodeURIComponent(d.id)}`); toast(`Declined. @${d.with} sees "no thanks".`); page.redo(); }, 'linkbtn');
@@ -139,7 +141,7 @@
         if (k === 'share') act(d.kind === 'time' ? `Share my times with @${d.with}` : `Show my Scores to @${d.with}`, async () => {
           const timed = d.kind === 'time';
           const r = await call('PUT', '/api/grants', { audience_type: 'friend', audience_id: d.with_id, share_scores: true, share_times: timed });
-          toast(!r.ok ? 'Couldn’t change that. Try again.' : timed ? `@${d.with} sees your Scores and times now. Change it in their profile.` : `@${d.with} sees your Scores now (not your times). Change it in their profile.`);
+          toast(!r.ok ? 'Couldn’t change that. Try again.' : timed ? `@${d.with} sees your Scores and times now.` : `@${d.with} sees your Scores now.`);
           page.redo();
         }, 'ink-btn');
         if (k === 'drive') act('Drive it', async () => page.openStage(d.canon_id, d.stage), 'ink-btn solid');
@@ -183,7 +185,7 @@
       s.pop.append(bodyEl);
       const r = await call('GET', '/api/segments');
       const stages = Array.isArray(r.data) ? r.data : [];
-      if (!stages.length) { bodyEl.replaceChildren(el('p', { className: 'people-lead', textContent: 'A duel is on one of your stages. Mark a stretch you love as a stage on a drive’s page in the Log, then come back.' })); return; }
+      if (!stages.length) { bodyEl.replaceChildren(el('p', { className: 'people-lead', textContent: 'Duels are on your stages. Save one from a drive in the Log.' })); return; }
       let pick = stages[0].id, days = 7, kind = 'score';
       const send1 = btn(`Send to @${f.handle}`, async () => {
         send1.disabled = true;
@@ -192,11 +194,10 @@
         send1.disabled = false;
       }, 'ink-btn solid');
       bodyEl.replaceChildren(
-        el('p', { className: 'people-lead', textContent: 'Pick a stage. You both drive it as often as you like in the days you choose; your best counts.' }),
         el('b', { textContent: 'Won by' }), chips([['score', 'Vetta Score'], ['time', 'Time']], () => kind, (v) => { kind = v; }, 'Won by'),
         el('b', { textContent: 'Stage' }), chips(stages.slice(0, 30).map((x) => [x.id, x.name]), () => pick, (v) => { pick = v; }, 'Stage'),
         el('b', { textContent: 'For' }), chips(DAYS.map((n) => [n, `${n} days`]), () => days, (v) => { days = v; }, 'How long'),
-        el('p', { className: 'note', textContent: `@${f.handle} gets the stage in their Stages when they accept. A duel counts only what each of you shares with the other: Scores, and times for a time duel. Drive within the law.` }),
+        el('p', { className: 'note', textContent: BEST }),
         el('div', { className: 'row' }, send1));
     }
 
@@ -216,11 +217,10 @@
         send1.disabled = false;
       }, 'ink-btn solid');
       bodyEl.replaceChildren(
-        el('p', { className: 'people-lead', textContent: `You both drive ${stage.name} as often as you like in the days you choose; your best counts.` }),
         el('b', { textContent: 'Friend' }), chips(friends.slice(0, 30).map((f) => [f.handle, '@' + f.handle]), () => who, (v) => { who = v; }, 'Friend'),
         el('b', { textContent: 'Won by' }), chips([['time', 'Time'], ['score', 'Vetta Score']], () => kind, (v) => { kind = v; }, 'Won by'),
         el('b', { textContent: 'For' }), chips(DAYS.map((n) => [n, `${n} days`]), () => days, (v) => { days = v; }, 'How long'),
-        el('p', { className: 'note', textContent: 'They get the loop in their Stages when they accept. A duel counts only what each of you shares with the other: times for a time duel, Scores for a Score duel. Drive within the law.' }),
+        el('p', { className: 'note', textContent: BEST }),
         el('div', { className: 'row' }, send1));
     }
 

@@ -305,7 +305,7 @@
       let startNote = null;
       if (inv) {
         now.append(el('p', { textContent: `${inv.from ? '@' + inv.from : 'A crew-mate'} started the convoy.` }),
-          el('p', { className: 'note', textContent: 'Joining shares your position with the convoy until you leave, and marks you as came on the drive.' }));
+          el('p', { className: 'note', textContent: 'Shares your position until you leave.' }));
         keys.append(btn('Join the convoy', async (ev) => {
           const b = ev && ev.currentTarget; if (b) b.disabled = true;
           const r = await C.accept(inv);
@@ -323,7 +323,7 @@
           toast(r.invited ? `Convoy started. Invited ${r.invited} going.` : 'Convoy started.');
           came(e);
         }, 'ink-btn solid'));
-        startNote = el('p', { className: 'note', textContent: 'Everyone going is invited in the app. It shares your position with them until it ends, and marks you as came on the drive.' });
+        startNote = el('p', { className: 'note', textContent: 'Invites everyone going. Shares your position until it ends.' });
       }
       keys.append(btn(`Directions to ${e.meet_name || 'the meet'}`, () => directions(e), keys.childElementCount ? 'ink-btn' : 'ink-btn solid'));
       now.append(keys, ...(startNote ? [startNote] : []));
@@ -376,7 +376,7 @@
       const body = el('div', { className: 'cp-results' });
       if (n > 1) body.append(el('h4', { textContent: 'Overall' }), list(res.overall || [], (x) => overallNote(x, n)));
       st.forEach((s, i) => body.append(el('h4', { textContent: `SS${i + 1} \u00b7 ${s.name}` }), list(s.rows)));
-      body.append(el('p', { className: 'note', textContent: 'Each driver\u2019s best Vetta Score that day, from Scores shared with the crew, and their time and gap to the quickest if they share times with it. Overall: most stages first, then the average Score; the total time when every stage has one.' }));
+      body.append(el('p', { className: 'note', textContent: 'Best Score that day, and time where shared.' }));
       body.append(el('div', { className: 'row' }, btn('Share the results', async () => {
         const text = resultsText(e.title ? e : { ...e, title: r.title, crew_name: r.crew_name }, res);
         try {
@@ -594,7 +594,7 @@
         const r = await apiCall('GET', `/api/crews/${encodeURIComponent(crew.value)}/meet`).catch(() => null);
         const j = r && r.ok ? await jsonOf(r) : null;
         if (!j || !Array.isArray(j.cells)) { toast('Couldn\u2019t load the crew. Check signal.'); return; }
-        if (j.cells.length < root.ApexCrewMeet.MIN_CELLS) { meetNote.textContent = `A fair meeting point needs ${j.need} crew-mates sharing their rough area on the crew page; ${j.sharing} ${j.sharing === 1 ? 'does' : 'do'}.`; return; }
+        if (j.cells.length < root.ApexCrewMeet.MIN_CELLS) { meetNote.textContent = `Needs ${j.need} crew-mates sharing their area (${j.sharing} now).`; return; }
         meetNote.textContent = 'Finding the fairest place\u2026';
         const m = await root.ApexCrewMeet.fairMeet(j.cells);
         if (!m) { meetNote.textContent = 'No place everyone sharing can reach by road. Pick one.'; return; }
@@ -615,7 +615,7 @@
       const label = (text) => el('p', { className: 'ctl-label', textContent: text });
       const head = crews.length > 1 ? [crew] : [];
       form.append(...head, tplSel, title, label('When'), date, time, label('Repeats'), repRow, label('Meet'), search, ...(fairBtn ? [el('div', { className: 'row' }, fairBtn)] : []), meetNote, routeRow,
-        el('p', { className: 'note', textContent: 'Roles, regroup points and notes go on the drive\u2019s card, under More.' }),
+        el('p', { className: 'note', textContent: 'Roles and regroup points: on the card, under More.' }),
         el('div', { className: 'row' }, btn('Plan it', async (ev) => {
           const b = ev && ev.currentTarget;
           const when = isoFromInputs(date.value, time.value);
