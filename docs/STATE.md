@@ -5,6 +5,15 @@
 - backend/src/service_check.ts: POST /api/ops/service-check (into error_counts kind 'service', no migration), GET /api/ops/service-check, GET /api/ops/service-check/server (config booleans, graph-data branch, Overpass from Cloudflare).
 - Read Nate's results: `SELECT day, source, message, n, stack, last_at FROM error_counts WHERE kind = 'service' ORDER BY last_at DESC` on apexnav-db.
 - Next: once results arrive, pass camera / router findings to the Routing thread; consider a probe for the convoy socket.
+## Session 2026-11-11 (ui-round-three, PR 2): the empty Garage is a page (claude/project-thread-5sbga7)
+
+- garage_ui.js: with no cars, "Your cars" shows a `people-first garage-first` page: a drawing in a well (a road pulls in
+  to a dashed `jr-bay`, the red puck on it), "Park your first car." large, the old sentence kept, and "Add a car" as the
+  full-width solid key (only while the garage is empty; with cars it stays the plain key). signature.css: three rules.
+- Tests: tests/test_garage_first.py. e2e garage VIN, photos, build threads, Soundtrack, REVIEW 1.2, Dynamic Type pass here.
+- Next ideas: the drive HUD; CarPlay visuals; motion between tabs.
+
+
 ## Session 2026-11-11 (time attack placement): where the weekly loop shows (claude/project-thread-uwmi4e, after #433)
 - Done: the Where to? row names the week's loop and your place (time_attack.js summaryLine and peek). Drive it plans the
   loop as the route (cockpit driveLoop). The Log says your place after a sync (runs returns `places`, placeLine). For you's
