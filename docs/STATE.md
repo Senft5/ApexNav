@@ -9,6 +9,14 @@
 - e2e: the four-drive road flow checks the line on Your driving.
 - Next: a per-road practice could take its `where` from that road (practice only on one road's corners).
 
+## Session 2026-11-11 (ui-round-three, PR 2): the empty Garage is a page (claude/project-thread-5sbga7)
+
+- garage_ui.js: with no cars, "Your cars" shows a `people-first garage-first` page: a drawing in a well (a road pulls in
+  to a dashed `jr-bay`, the red puck on it), "Park your first car." large, the old sentence kept, and "Add a car" as the
+  full-width solid key (only while the garage is empty; with cars it stays the plain key). signature.css: three rules.
+- Tests: tests/test_garage_first.py. e2e garage VIN, photos, build threads, Soundtrack, REVIEW 1.2, Dynamic Type pass here.
+- Next ideas: the drive HUD; CarPlay visuals; motion between tabs.
+
 ## Session 2026-11-11 (time attack placement): where the weekly loop shows (claude/project-thread-uwmi4e, after #433)
 - Done: the Where to? row names the week's loop and your place (time_attack.js summaryLine and peek). Drive it plans the
   loop as the route (cockpit driveLoop). The Log says your place after a sync (runs returns `places`, placeLine). For you's
@@ -119,7 +127,6 @@
   (routeToPlace); its body draws the loop. Where to?'s Time attack section and the place after a drive are the social
   thread's; time_attack.ts untouched.
 - Tests: tests/test_your_roads.py (+4), e2e flow "time attack on the home deck". Full pytest 1692 passed.
-
 
 ## Session 2026-11-11 (Valhalla for Quick only, part 2): loops are our router's or nothing (claude/project-thread-39xbx9, off origin/main)
 
@@ -282,7 +289,6 @@
 - Not changed, noted: a crew chat's last 30 days stay readable to people who join after it goes public (the chat says who
   wrote it; deleting history felt worse than it). Photos are served to any member by id (UUIDs, never listed to strangers).
 
-
 ## Session 2026-11-11 (roam-c-presence-private-crews, security pass): friends map "Crew" is private crews only (claude/roam-c-presence-private-crews)
 
 - backend/src/presence.ts `presenceView`: audience "crew" showed you to members of any crew you share, public ones too, which
@@ -294,9 +300,6 @@
   check; WRITE_LIMIT on every write, AUTH_LIMIT on sign-in), ownership checks on every :id write (cars, routes, highlights,
   segments, templates, chat, events, duels, pool), grants re-checked against current friendship or membership on read.
   Next: the rest of the pass (time attack, drive scores, convoy, hazards and reports rate limits, photos by id).
-
-
-
 
 ## Session 2026-11-11 (ui-round-two, PR 4): the map's top band, signed-out reads, a crew's head and the Share box (claude/project-thread-5sbga7)
 
@@ -372,7 +375,6 @@
 - Swift is compiled only by CI (build.yml simulator tests run the page). APP_REVIEW.md: nothing reviewable changes.
 - Next in the sweep: CarPlay (CarPlay/*.swift) and the shell's frame path (pushLiveFrame, 10 Hz evaluateJavaScript).
 
-
 ## Session 2026-11-11 (round two analysis, PR 7): corner-speed steadiness month by month (claude/project-thread-gd7nre, off origin/main)
 
 - core/drive_analysis.py `spread_by(co, keys, what="speed")` (reference) and web/apex_core.js `spreadBy(co, keys, 'speed')`
@@ -425,7 +427,6 @@
 - Measured too: at 4x CPU throttle the page is ready in ~1.7 s; the opening cover waits for the first basemap tile
   (OpenFreeMap; style, sprites and glyphs are HTTP-cached a day). Next for P-06: load route-only modules (graph_router,
   route_engine, fun_route, ~260 KB) on first plan instead of at boot.
-
 
 ## Session 2026-11-11 (roam-a brake heat): the co-driver knows when your brakes are cooking (claude/project-thread-h7xxmf, off origin/main)
 
