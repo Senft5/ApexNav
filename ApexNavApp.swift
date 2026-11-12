@@ -348,7 +348,6 @@ struct ApexCockpitWebView: UIViewRepresentable {
         config.applicationNameForUserAgent = "ApexNav/\(info?["CFBundleShortVersionString"] as? String ?? "?") (\(info?["CFBundleVersion"] as? String ?? "?"))"
         config.setURLSchemeHandler(ApexBundleSchemeHandler(root: indexURL.deletingLastPathComponent()),
                                    forURLScheme: ApexWebBundle.scheme)
-        Self.enableLocalFileAccess(config)
 
         // A phone-sized frame until a window sizes it: a page started by the car's screen lays out as it would on the phone.
         let webView = WKWebView(frame: CGRect(x: 0, y: 0, width: 390, height: 844), configuration: config)
@@ -379,18 +378,6 @@ struct ApexCockpitWebView: UIViewRepresentable {
         shell.attach(webView: webView)
         webView.load(URLRequest(url: shell.takePendingLink() ?? ApexWebBundle.entryURL))
         return webView
-    }
-
-    /// Lets bundled pages XHR/fetch sibling files (e.g. local styles/glyphs) from a file:// origin.
-    /// Uses KVC on WebKit's private setters, guarded by `responds(to:)` so it can never throw.
-    @MainActor
-    private static func enableLocalFileAccess(_ config: WKWebViewConfiguration) {
-        if config.preferences.responds(to: Selector(("_setAllowFileAccessFromFileURLs:"))) {
-            config.preferences.setValue(true, forKey: "allowFileAccessFromFileURLs")
-        }
-        if config.responds(to: Selector(("_setAllowUniversalAccessFromFileURLs:"))) {
-            config.setValue(true, forKey: "allowUniversalAccessFromFileURLs")
-        }
     }
 }
 
