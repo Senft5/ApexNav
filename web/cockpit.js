@@ -2585,7 +2585,12 @@
     // sent to the router as exclude_locations. If no way around them exists, the route is asked again without them.
     const closureCache = { key: '', at: 0, list: [] };
     async function closuresAround(points) {
-      return ApexHazardReports.closuresFor(await hazardsAround(points), points);
+      const list = await hazardsAround(points);
+      // with the closures the drive has fetched round you (newer than this trip's for one that landed mid-drive: Go round)
+      let mine = [];
+      try { mine = reported.list.filter((h) => h && h.kind === 'closure'); } catch (_) { mine = []; }   // (not yet set up at boot)
+      const ids = new Set(mine.map((h) => h.id));
+      return ApexHazardReports.closuresFor(mine.length ? [...mine, ...list.filter((h) => !h || !ids.has(h.id))] : list, points);
     }
     // Avoid police reports (IDEAS R-35, the owner 2026-11-11): the live "Police" reports near the trip (members' reports
     // from the last hour, and a convoy leader's live call), as router exclusions and as points our own router keeps off.
@@ -2651,7 +2656,7 @@
     // otherwise a plan waits POLICE_WAIT_MS at most and goes without them. Signed out there are none to ask for: []
     async function closedForTrip(points) {
       if (!window.ApexHazardReports || !memberNow()) return [];
-      if (hazardsCover(points)) return ApexHazardReports.closuresFor(closureCache.list, points);
+      if (hazardsCover(points)) return closuresAround(points);   // (with the drive's own, newer: closuresAround)
       const list = await RouteLoading.optional(closuresAround(points), POLICE_WAIT_MS).catch(() => null);
       return Array.isArray(list) ? list : [];
     }
@@ -3643,6 +3648,38 @@
       if (track !== t || state.mode !== 'live') return;
       await buildRoute(null, t.id, t.name, nt);
       toast('Going round the police report.');
+    }
+    // A reported road closure on the route ahead, while driving: a member's "Road closed" report that lands within 40 m of
+    // the route 0.5 to 25 km on (graph_router.js CLOSED_M) is offered once, with Go round, as a police report is; no
+    // switch (nobody wants a closed road). A way that still passes it isn't taken, and that's said. Every 5 s at most.
+    const closedAhead = { at: 0, offered: new Set() };
+    function closedAheadTick(me) {
+      const t = track, now = Date.now();
+      if (!t || !t.request || t.kind !== 'route' || state.mode !== 'live' || !driveActive || rerouter.off || now - closedAhead.at < 5000) return;
+      closedAhead.at = now;
+      const pts = ApexHazardReports.closuresFor(reported.list, t.request.to ? [me, t.request.to] : [me]);
+      const hit = pts.length ? ApexHazardReports.onRouteAhead(t, routeWatch.bestM, pts, { m: 40, minM: 500 }) : null;
+      if (window.apexDebug) window.apexDebug.closedAhead = { pts: pts.length, hit };
+      if (!hit) return;
+      const key = `${hit.lat.toFixed(4)},${hit.lon.toFixed(4)}`;
+      if (closedAhead.offered.has(key)) return;
+      closedAhead.offered.add(key);
+      const far = ApexUnits.long(hit.aheadM, 1);
+      offerKey(`Road closed on your route in ${far}.`, `Road closed in ${far}`, { label: 'Go round', ms: 15000, onClick: () => goRoundClosed(t, hit, pts) });
+    }
+    async function goRoundClosed(t, hit, pts) {
+      const L = state.live;
+      if (track !== t || !L || !t.request) return;
+      const ahead = waysAhead(t);
+      let r;
+      try { [r] = await routePoints([{ lat: L.lat, lon: L.lon, heading: headingOf(L) }, ...ahead, t.request.to], { osrm: true, level: t.funLevel || (isLoop(t) ? LOOP_STYLE : 'quick'), avoid: { ...avoid, closed: pts } }); }
+      catch (_) { toast('Couldn\'t plan a way round. Check signal.'); return; }
+      if (track !== t || state.mode !== 'live') return;
+      if (!r || ApexHazardReports.passesNear(r.coords, [hit], 40)) { toast('No way round that closure. Staying on this route.'); return; }
+      const nt = await trackAhead(t, r, ahead);
+      if (track !== t || state.mode !== 'live') return;
+      await buildRoute(null, t.id, t.name, nt);
+      toast('Going round the road closure.');
     }
     // Traffic ahead (iOS app only; docs/ARCHITECTURE.md section 8). Every 2 min while on a planned route, Apple times the next
     // 20 km in chunks, now and at 3 am. A jam (or a slowdown) costs the route fun even with no delay; on a jam, a detour that
@@ -8858,6 +8895,7 @@
       if (next) { reported.said.add(next.id); say(next.text, false, null, null, { kind: 'hazard', key: `rep:${next.id}`, repeatMs: 10 * 60000, alert: true,
         tokens: [!next.label && ApexVoiceLines.TEXT[`line:rep_${next.kind}`] ? `line:rep_${next.kind}` : 'line:rep_hazard'], named: !!next.label }); }
       try { policeAheadTick(me); } catch (_) { /* never in the way of the drive */ }
+      try { closedAheadTick(me); } catch (_) { /* never in the way of the drive */ }
       const passed = reported.watch.update(reported.list, me, reported.mine);
       if (passed && !reported.asking) askStill(passed);
     }
