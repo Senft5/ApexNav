@@ -4,6 +4,13 @@ Decisions Claude made for you, newest first. Each one says what was decided, why
 you reach one you've seen. If you disagree with a call, say so and it gets reversed; nothing here is hard to undo unless
 it says so. Things only you can do are in docs/OWNER_TODO.md.
 
+## 2026-11-12 (ui-round-three): the arrival-time page your friends open looks like Vetta (claude/project-thread-5sbga7)
+
+The page behind a shared ETA link was plain system text. It now uses the app's type and paper: the minutes set large
+("14 min away"), the arrival time under a hairline, a red dot while the time is fresh and an empty ring when it has gone
+quiet, and a dark page when their phone is in dark mode. The words are unchanged. Undo: revert web/eta.html and the
+`parts` / `live` fields in web/eta_share.js.
+
 ## 2026-11-11 (ui-round-three): an empty Garage shows a parking bay and one big "Add a car" key (claude/project-thread-5sbga7)
 
 With no cars yet, the Garage said one grey sentence over a small outlined key. Now it is a small page like the first

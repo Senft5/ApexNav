@@ -1,5 +1,17 @@
 # VETTA — CURRENT AGENT HANDOFF STATE
 
+## Session 2026-11-12 (ui-round-three, PR 3): the arrival-time link page in the Vetta Line (claude/project-thread-5sbga7)
+
+- web/eta.html (the page a friend opens from "Share ETA"): the app's faces (fonts.css, preloaded), the minutes as one big
+  numeral ("@nate is about / 14 / min away"), "Arriving around" in the numeral face over a hairline, the freshness line
+  with a red dot while live and an empty ring when stale, night paper under prefers-color-scheme: dark, and the mark
+  inline so its ink follows the paper. eta_share.js viewText adds `parts` (the title in three parts, word for word) and
+  `live`. csp.py rerun.
+- Looked over too, no change: the drive HUD (mature, many review rounds; nothing clearly wrong) and an axe-core WCAG 2.2 AA
+  scan of map, Log, People, Garage day and night, signed in (no violations but the app's meta-viewport).
+- Tests: tests/test_eta_share.py (+2, the live case now has parts and live). e2e share-your-ETA passes here.
+- Next ideas: CarPlay visuals; about.html (the website's page) in the Line.
+
 ## Session 2026-11-11 (ui-round-three, PR 2): the empty Garage is a page (claude/project-thread-5sbga7)
 
 - garage_ui.js: with no cars, "Your cars" shows a `people-first garage-first` page: a drawing in a well (a road pulls in
