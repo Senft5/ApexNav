@@ -6695,9 +6695,16 @@
       // One Invite key (the owner, 2026-10-30): someone new gets an invite link, a member your handle or a request; requests here too.
       const ipop = popSheet('Invite'); pops.push(ipop);
       ipop.querySelector('.side-pop-head button').addEventListener('click', () => { inviteOpen = false; unstash('apex.add'); });
-      const add = el('input', { className: 'field', placeholder: 'Their handle', autocomplete: 'off', autocapitalize: 'none', 'aria-label': 'Friend handle', value: stash('apex.add') });
+      const add = el('input', { className: 'field', placeholder: 'Their handle', autocomplete: 'off', autocapitalize: 'none', 'aria-label': 'Friend handle', value: stash('apex.add'), enterKeyHint: 'send' });
+      // the phone keyboard's Send key sends, as on any messaging app (walkthrough 2026-11-12: Return did nothing); once at a time
+      let sending = false;
       const sendRequest = async () => {
-        const h = add.value.trim().replace(/^@/, '').toLowerCase(); if (!h) return;
+        const h = add.value.trim().replace(/^@/, '').toLowerCase(); if (!h) { add.focus(); return; }
+        if (sending) return; sending = true;
+        try { await sendTo(h); } finally { sending = false; }
+      };
+      add.addEventListener('keydown', (e) => { if (e.key === 'Enter' && !e.isComposing) { e.preventDefault(); sendRequest(); } });
+      const sendTo = async (h) => {
         const r = await apiCall('POST', '/api/friends/request', { handle: h }); unstash('apex.add'); add.value = '';
         if (r.ok && !accepted.some(f => f.handle === h)) setSent([...sentList().filter(x => x !== h), h]);
         toast(r.ok ? `Request sent. @${h} sees it if that's their handle.` : 'Couldn\'t send that. Try again.'); redo();
@@ -6895,8 +6902,15 @@
         if (!cname.value.trim()) { cname.focus(); return; }
         const pub = cvis.value === 'public', near = crewNear();
         if (pub && carea.value.trim().length < 2) { toast('Name the area people nearby will see.'); return; }
-        const r = await apiCall('POST', '/api/crews', pub ? { name: cname.value.trim(), visibility: 'public', area: { name: carea.value.trim(), lat: near.lat, lon: near.lon } } : { name: cname.value.trim() }); if (r.ok) redo(); else toast('Couldn\'t create the crew.'); }, 'ink-btn solid');
-      cname.enterKeyHint = 'next';
+        if (create.disabled) return; create.disabled = true;   // a second tap or Return while it saves makes no second crew
+        let r = null;
+        try { r = await apiCall('POST', '/api/crews', pub ? { name: cname.value.trim(), visibility: 'public', area: { name: carea.value.trim(), lat: near.lat, lon: near.lon } } : { name: cname.value.trim() }); } catch (_) {}
+        create.disabled = false;
+        if (r && r.ok) redo(); else toast('Couldn\'t create the crew.'); }, 'ink-btn solid');
+      // Return on the keyboard: from the name, Create (or on to the area for a public crew); from the area, Create
+      cname.enterKeyHint = 'next'; carea.enterKeyHint = 'go';
+      cname.addEventListener('keydown', (e) => { if (e.key !== 'Enter' || e.isComposing) return; e.preventDefault(); if (!carea.hidden && carea.value.trim().length < 2) carea.focus(); else create.click(); });
+      carea.addEventListener('keydown', (e) => { if (e.key === 'Enter' && !e.isComposing) { e.preventDefault(); create.click(); } });
       newSec.append(cname, el('div', { className: 'new-crew-who' }, el('b', { textContent: 'Who can join' }), el('small', { textContent: 'Private: by invite link. Public: people nearby can find it.' })), cvis, carea, create);
 
       // public crews near you: tiles with Join (only name, area and size are shown; members stay private)
