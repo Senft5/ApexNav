@@ -6446,6 +6446,8 @@
       if (!socialIn && !socialFailed && (view === 'people' || view === 'garage')) { needSocial(); return; }
       accountMe = me && me.signed_in ? me : null;
       if (accountMe && accountMe.member) loadCrewHazardKinds();
+      // Where to? opened before the account came back: its time attack row's peek skipped then, so it goes now (CI 2026-11-12)
+      if (accountMe && accountMe.member && $('planPanel').classList.contains('open')) peekTimeAttack();
       if (friendsMap && accountMe && accountMe.member) { friendsMap.start(); if (state.toggles.friends) friendsMap.setLayer(true); }
       else if (state.toggles.friends) { state.toggles.friends = false; paintSwitches(); }
       if (meetsMap && accountMe && accountMe.member) { if (state.toggles.meets) meetsMap.setLayer(true); }
