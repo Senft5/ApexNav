@@ -113,6 +113,10 @@ and in random batches so a trace cannot be re-assembled.
   Meets near you say "Every Saturday"; Add to calendar puts the series in the calendar once (RRULE).
 - Cancelling the latest, setting it to Once, or its planner leaving the crew ends the series. Planned on read
   (`rollRepeats` in `backend/src/events.ts`) and by the daily sweep before old drives are deleted. Migration 0053.
+- **Meets on the map** (Layers → Meets, off by default, members): the same public meets as Meets near you, pinned at
+  their meeting points with the day on the pin ("Sat", "Today", "+1" when several meet at one place). A tap opens the meet
+  cards; your own crew's listed drive says to answer on the crew page instead of Join. Asked by the map centre's 0.1-degree
+  cell, never from a privacy zone, at most once per cell every 5 minutes. `web/meets_map.js`, no migration.
 
 ## 3. Drive analysis (private)
 Compare passes of the same road — yours, or a friend's ghost they chose to send you.

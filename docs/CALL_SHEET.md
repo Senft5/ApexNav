@@ -9,6 +9,39 @@ it says so. Things only you can do are in docs/OWNER_TODO.md.
 Your note "bird watching shelter blocks half the route". A named viewpoint's stamp carried its whole name at every zoom and sat
 over the line. Now it says VIEW, like CAFÉ and FUEL, and shows its name only at zoom 15 or closer; a tap on it (or its row
 under Along the route) still says the name and offers it as a stop. Undo: revert the PR (or lower VIEW_NAME_ZOOM in cockpit.js).
+## 2026-11-12 Avoid cameras reads our own camera list in Ohio, Kentucky and Indiana (claude/project-thread-39xbx9)
+
+Nate: "the camera server always says it's down". The phone asked the public Overpass servers for cameras, and they time
+out or refuse it when busy (all four timed out when the Worker asked them, 2026-11-12). Now a weekly job
+(.github/workflows/cameras.yml) takes plate readers and speed cameras from the same Geofabrik extracts as our roads and
+commits one file to the graph-data branch. The Worker relays it at `GET /api/cameras/v1/region.json`, and web/cameras.js
+reads it before Overpass. Calls: a tile counts as ours only if the state outlines hold it whole, so a border tile isn't
+wrongly "no cameras"; outside the region and when our file can't be read, the phone asks Overpass as before (now with
+maps.mail.ru as a fourth server). The request carries no position: it's the same file for everyone. Undo: drop the
+`regionOnce` lookup in web/cameras.js `load` (pass `region: null`), the route in backend/src/index.ts and the workflow.
+## 2026-11-12 (ui-round-three): the arrival-time page your friends open looks like Vetta (claude/project-thread-5sbga7)
+
+The page behind a shared ETA link was plain system text. It now uses the app's type and paper: the minutes set large
+("14 min away"), the arrival time under a hairline, a red dot while the time is fresh and an empty ring when it has gone
+quiet, and a dark page when their phone is in dark mode. The words are unchanged. Undo: revert web/eta.html and the
+`parts` / `live` fields in web/eta_share.js.
+
+
+## 2026-11-12 (meets on the map): public crews' meets pinned on the map (claude/project-thread-uwmi4e)
+
+Calls I made: a Meets layer in Layers, off by default like Friends, for members only. It pins the same public meets as
+Crew → Meets near you, one pin per meeting point with the day on it. A tap opens the existing meet card, so there is one
+card to keep right. Your own crew's listed drives show too, with "answer on the crew page" instead of Join. It asks by the
+map centre's 0.1-degree cell, never from a privacy zone, at most every 5 minutes per cell. Undo: remove the `meets`
+button in web/index.html and the `meetsMap` lines in cockpit.js.
+## 2026-11-11 (ui-round-three): an empty Garage shows a parking bay and one big "Add a car" key (claude/project-thread-5sbga7)
+
+With no cars yet, the Garage said one grey sentence over a small outlined key. Now it is a small page like the first
+friend and first crew pages: a drawing of a road pulling into an empty bay, "Park your first car.", the same sentence, and
+"Add a car" as the full-width dark key. Once you have a car it is the small key again. Undo: put back the `note` line in
+`render()` in web/garage_ui.js and drop the `.garage-first` rules at the end of web/signature.css.
+
+
 ## 2026-11-11 (time attack placement): the week's loop in Where to?, Drive it, and your place after a drive (claude/project-thread-uwmi4e)
 
 Calls I made: the Where to? row asks for the week's loop when Where to? opens (at most every 5 minutes, only the area,
@@ -22,6 +55,17 @@ drops a loop a moderator took down. I left the home deck to Roamer C's branch. U
 Above the road picker, one line names the roads (driven three or more times) where your passes differ most, with the
 technique behind most of it. Calls: at most 3 roads, and at most 12 read, to keep the Log quick on a big library; it is read
 once each time the library changes, not on every visit. Undo: remove `bookWork` in web/analysis.html.
+
+## 2026-11-12 Owner-only service check in Settings (claude/project-thread-9zycz2)
+
+Nate asked for a service health check only he can run, that sends its results back. Settings → Account (owner only)
+has Service check: 27 checks from the phone (our server, the road graph, our router's real Fun / Long way / loop plans,
+Valhalla, each camera server, map, search, weather), each up, slow or down with the reason and what it affects, plus the
+Worker's own view (config set or not, GitHub graph data and the camera servers asked from Cloudflare). Calls: no
+migration, results go into error_counts under kind `service` (kept 30 days like crash counts), and the Errors list skips
+them; it also runs by itself once a launch at most every 6 hours, so Claude sees his phone's view without him tapping;
+it asks at a fixed downtown Cincinnati spot, never his location. Undo: remove serviceCheckSection and its auto-run line in
+web/cockpit.js, the `ops` lazy group, web/service_check.js, backend/src/service_check.ts and its three routes.
 
 ## 2026-11-12 (deepest analysis 18): the end card names your passes on a road you know (claude/project-thread-gd7nre)
 

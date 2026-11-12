@@ -182,7 +182,7 @@
       theme: 'roadbook', camFeel: 'dynamic', voiceId: 'marguerite', voicePick: null, liveVoice: false, voiceStyle: 'codriver', voiceName: '', hlOn: false, hlStrength: 1,
       notesMode: 'auto', nightMode: 'auto', musicMode: 'lower',   // Notes: auto | full | quiet. Night: auto (sunset/sunrise) | on | off
       noteWords: 'plain',                     // rally ("Left 4 minus") | plain ("Medium left"), IDEAS V-02; a saved setting wins
-      toggles: { stage: false, voice: true, lpr: true, dna: false, night: false, twisty: true, haptics: true, soundtrack: false, crash: true, health: true, terrain: false, coverage: false, keys: true, friends: false, nudge: false, satellite: false }   // twisty on by default (panel D-2), the weekly reminder off until asked for (R-1); stage and night are derived from the two modes; analysis.html reads toggles.night
+      toggles: { stage: false, voice: true, lpr: true, dna: false, night: false, twisty: true, haptics: true, soundtrack: false, crash: true, health: true, terrain: false, coverage: false, keys: true, friends: false, meets: false, nudge: false, satellite: false }   // twisty on by default (panel D-2), the weekly reminder off until asked for (R-1); stage and night are derived from the two modes; analysis.html reads toggles.night
     };
     const NOTES_MODES = ['auto', 'full', 'quiet'], NIGHT_MODES = ['auto', 'on', 'off'], MUSIC_MODES = ['lower', 'pause'];
     const MODE_LABEL = { auto: 'Auto', full: 'Full', quiet: 'Quiet', on: 'On', off: 'Off' };
@@ -5815,6 +5815,94 @@
       }).catch(() => sec.append(el('p', { className: 'note', textContent: 'Couldn\'t load the counts.' })));
       return sec;
     }
+    // Owner only (the owner, 2026-11-12): the service check (web/service_check.js, lazy 'ops'). Asks every service the app
+    // leans on from this phone, at a fixed test place, and sends what it saw to the Worker (backend/src/service_check.ts),
+    // where Claude reads it in D1. Runs on its own once a launch at most every SVC_EVERY_MS, and on Run check.
+    const SVC_KEY = 'apex.svccheck.at', SVC_EVERY_MS = 6 * 3600e3;
+    let svcRun = null;
+    function serviceCheckDeps() {
+      const AT = ApexServiceCheck.AT, TO = ApexServiceCheck.TO;
+      const own = () => (ownOn() ? ownRouter() : null);
+      return {
+        fetch: (u, i) => fetch(u, i),
+        apiFetch: (path, init) => ApexSync.apiFetch(path, init),
+        apiBase: ApexSync.inApp ? ApexSync.apiBase : '',
+        plan: (level) => ApexOwnRouting.plan(own(), { from: AT, to: TO, level, prefs: roadPrefs, avoid, heading: null }),
+        loops: async () => {
+          const c = own();
+          if (!c) return { cands: [], reason: 'off' };
+          if (!(await c.covers([AT]))) return { cands: [], reason: 'out' };
+          try { const r = await c.loop({ start: AT, km: 40, level: LOOP_STYLE }); return { cands: (r && r.routes) || [], reason: r && r.routes && r.routes.length ? 'ok' : 'none' }; }
+          catch (e) { return { cands: [], reason: 'failed', error: String((e && e.message) || e) }; }
+        },
+        cameras: (tile) => ApexCameras.fetchFirst(fetch, 'data=' + encodeURIComponent(ApexCameras.query([tile])))
+          .then((j) => (j ? (j.elements || []).map(ApexCameras.classify).filter(Boolean) : null)),
+        cameraQuery: (tile) => ApexCameras.query([tile]),
+      };
+    }
+    /** Runs the check once (a second ask while one runs gets the same run) and sends it. Resolves { results, sent }. */
+    function runServiceCheck() {
+      if (svcRun) return svcRun;
+      svcRun = (async () => {
+        await ApexLazy.load('ops');
+        try { localStorage.setItem(SVC_KEY, String(Date.now())); } catch (_) {}
+        const results = await ApexServiceCheck.run(serviceCheckDeps());
+        let sent = false;
+        try { const r = await apiCall('POST', '/api/ops/service-check', ApexServiceCheck.report(results, { ua: navigator.userAgent, online: navigator.onLine })); sent = !!(r && r.ok); } catch (_) { sent = false; }
+        return { results, sent, at: Date.now() };
+      })().finally(() => { svcRun = null; });
+      return svcRun;
+    }
+    function serviceCheckDue() {
+      let at = 0; try { at = Number(localStorage.getItem(SVC_KEY)) || 0; } catch (_) {}
+      return Date.now() - at > SVC_EVERY_MS;
+    }
+    let svcLast = null;
+    function serviceCheckSection() {
+      const sec = el('div', { className: 'stack-8 svc-check' }, el('h3', { textContent: 'Service check' }),
+        el('p', { className: 'note', textContent: 'Asks every server the app uses, from this phone, at a test spot in downtown Cincinnati (never where you are). The results go to Vetta’s server, where Claude can read them.' }));
+      const out = el('div', { className: 'stack-8' });
+      const go = btn('Run check', () => show(runServiceCheck()));
+      sec.append(el('div', { className: 'row' }, go), out);
+      const dot = { up: '\u{1F7E2}', slow: '\u{1F7E1}', down: '\u{1F534}', skip: '⚪' };
+      const word = { up: 'up', slow: 'slow', down: 'down', skip: 'not run' };
+      function paint(r) {
+        out.replaceChildren();
+        const P = ApexServiceCheck.PROBES;
+        out.append(el('p', { className: 'note', textContent: `${ApexServiceCheck.summary(r.results)}. ${r.sent ? 'Sent to Vetta’s server.' : 'Couldn’t send it to Vetta’s server.'} ${new Date(r.at).toLocaleTimeString()}` }));
+        for (const g of [...new Set(P.map((p) => p.group))]) {
+          out.append(el('h4', { textContent: g }));
+          for (const p of P.filter((x) => x.group === g)) {
+            const x = r.results.find((y) => y.id === p.id);
+            if (!x) continue;
+            const line = [`${dot[x.state] || ''} ${p.name}: ${word[x.state] || x.state}`, x.ms ? `${(x.ms / 1000).toFixed(1)} s` : null, x.detail || null].filter(Boolean).join(' · ');
+            out.append(el('p', { className: 'note', textContent: line }),
+              ...(x.state === 'down' ? [el('p', { className: 'note', textContent: `Affects: ${p.feeds}.`, style: 'opacity:.75;margin-top:-6px' })] : []));
+          }
+        }
+        out.append(serverSide());
+      }
+      function serverSide() {
+        const box = el('div', { className: 'stack-8' }, el('h4', { textContent: 'From Vetta’s server' }));
+        apiCall('GET', '/api/ops/service-check/server').then(jsonOf).then((s) => {
+          if (!s || !s.config) { box.append(el('p', { className: 'note', textContent: 'Couldn’t ask the server.' })); return; }
+          const missing = Object.entries(s.config).filter(([, v]) => !v).map(([k]) => k);
+          box.append(el('p', { className: 'note', textContent: `Database ${s.db ? 'answers' : 'not answering'} · ${missing.length ? `not set: ${missing.join(', ')}` : 'every binding and secret set'}` }),
+            el('p', { className: 'note', textContent: `Road graph on GitHub: ${s.graph_data.http === 200 ? `${s.graph_data.tiles} tiles` : `HTTP ${s.graph_data.http || '--'} ${s.graph_data.error || ''}`} · ${(s.graph_data.ms / 1000).toFixed(1)} s` }),
+            ...s.overpass.map((o) => el('p', { className: 'note', textContent: `${o.elements != null ? dot.up : dot.down} Overpass ${o.host} from the server: ${o.elements != null ? `${o.elements} features` : `HTTP ${o.http || '--'} ${o.error || ''}`} · ${(o.ms / 1000).toFixed(1)} s` })));
+        }).catch(() => box.append(el('p', { className: 'note', textContent: 'Couldn’t ask the server.' })));
+        return box;
+      }
+      function show(p) {
+        go.disabled = true; go.textContent = 'Checking…';
+        out.replaceChildren(el('p', { className: 'note', textContent: 'Asking every service. Our router’s three plans take up to a minute.' }));
+        p.then((r) => { svcLast = r; paint(r); })
+          .catch(() => out.replaceChildren(el('p', { className: 'note', textContent: 'The check couldn’t run (its file didn’t load).' })))
+          .finally(() => { go.disabled = false; go.textContent = 'Run again'; });
+      }
+      if (svcRun) show(svcRun); else if (svcLast) { paint(svcLast); go.textContent = 'Run again'; }
+      return sec;
+    }
     // ---- planned routes shared with friends and crews (IDEAS S-05; backend/src/routes_shared.ts) ----------------------
     // The shape only, thinned to 1,500 points, without the first 400 m (where you are when you plan is often home).
     const SHARE_TRIM_M = 400, SHARE_MAX_PTS = 1500;
@@ -6184,6 +6272,12 @@
     // Build threads (web/builds.js, REVIEW.md 5.3): from a car card, the crew page and Builds you follow.
     let builds = null;
     onSocial(() => { try { builds = window.ApexBuilds ? ApexBuilds.mount({ el, btn, toast, apiCall, jsonOf, report: safety && safety.report }) : null; } catch (e) { console.error('builds', e); } });
+    // Meets on the map (web/meets_map.js, IDEAS S-13): public crews' listed drives pinned at their meeting points; a tap
+    // is the same card as Crew → Meets near you. Off by default, members only, asked by the map centre's cell.
+    let meetsMap = null;
+    onSocial(() => { try { meetsMap = window.ApexMeetsMap && crewEvents && crewEvents.meetCard ? ApexMeetsMap.mount({ el, btn, apiCall, jsonOf, map,
+      mapCentre: () => { const c = map.getCenter(); return { lat: c.lat, lon: c.lng }; }, mayLookUp: nearLookupOk,
+      card: (e, redo) => crewEvents.meetCard(e, redo) }) : null; } catch (e) { console.error('meets map', e); } });
     // Friends on the map (web/friends_map.js, REVIEW.md 5.4): the Friends layer and who sees you, sent only while you drive
     let friendsMap = null;
     onSocial(() => { try { friendsMap = window.ApexFriendsMap ? ApexFriendsMap.mount({ el, btn, toast, askSignIn, apiCall, map, zones: () => privacyZones, inZone: inPrivacyZone,
@@ -6226,6 +6320,8 @@
       if (accountMe && accountMe.member) loadCrewHazardKinds();
       if (friendsMap && accountMe && accountMe.member) { friendsMap.start(); if (state.toggles.friends) friendsMap.setLayer(true); }
       else if (state.toggles.friends) { state.toggles.friends = false; paintSwitches(); }
+      if (meetsMap && accountMe && accountMe.member) { if (state.toggles.meets) meetsMap.setLayer(true); }
+      else if (state.toggles.meets && socialIn) { state.toggles.meets = false; paintSwitches(); }
       if (feedbackUi) feedbackUi.refresh();
       if (me && !me.signed_in) setRoutingCars(null);
       else if (me && me.member) apiCall('GET', '/api/garage').then(r => (r.ok ? r.json() : null)).then(list => { if (list) setRoutingCars(list); }).catch(() => {});
@@ -6808,7 +6904,9 @@
         btn('Delete account', deleteMyAccount, 'danger-btn'));
       accBody.append(asec);                                                 // your account: Garage → Settings → Account
       if (safety) { accBody.append(safety.blockedSection()); if (me.moderator) accBody.append(safety.moderationSection()); }
-      if (me.moderator) accBody.append(errorsSection(), healthSection(), latencySection(), ...(window.ApexFeedback ? [ApexFeedback.ownerSection({ el, btn, apiCall, jsonOf })] : []));
+      // the owner's service check runs by itself once a launch, at most every 6 h, once the map is idle (its results go to D1)
+      if (me.moderator && !svcRun && !svcLast && serviceCheckDue()) setTimeout(() => runServiceCheck().then((r) => { svcLast = r; }).catch(() => {}), 8000);
+      if (me.moderator) accBody.append(serviceCheckSection(), errorsSection(), healthSection(), latencySection(), ...(window.ApexFeedback ? [ApexFeedback.ownerSection({ el, btn, apiCall, jsonOf })] : []));
     }
 
     // Highlights (local for now): [{id, name, lat, lon, rating}] in localStorage; the server list joins later (docs/BACKEND.md section 9).
@@ -7794,6 +7892,13 @@
           if (friendsMap) friendsMap.setLayer(state.toggles.friends);
           let seen = false; try { seen = localStorage.getItem('apex.friendsExplained') === '1'; localStorage.setItem('apex.friendsExplained', '1'); } catch (_) {}
           if (state.toggles.friends && !seen && friendsMap) friendsMap.sheet();
+        });
+      }
+      if (k === 'meets') {   // S-13: public crews' meets near the map
+        if (!accountMe || !accountMe.member) { state.toggles.meets = false; paintSwitches(); askSignIn('see car meets on the map'); return; }
+        needSocial().then(() => {
+          if (meetsMap) meetsMap.setLayer(state.toggles.meets);
+          if (state.toggles.meets) toast('Meets: public crews\u2019 drives coming up within 80 km of the map. Tap a pin for the meet.');
         });
       }
       if (k === 'coverage') {

@@ -236,3 +236,8 @@ body .cp-say textarea:focus { box-shadow: inset 0 0 0 2px var(--panel-ink); outl
 .people-first + .row { margin-top: 4px; }
 .people-first + .row > .ink-btn.solid { flex: 1 1 auto; min-height: 52px; font-size: 16px; }
 .join-art .jr-seat { fill: var(--panel); stroke: var(--panel-dim); stroke-width: 2; stroke-dasharray: 2.5 3; }
+
+/* The empty Garage: a bay waiting for a car (garage_ui.js), the People first pages' drawing set into the section as a well */
+.garage-first .join-art { margin: 2px 0 0; border: 0; border-radius: 12px; overflow: hidden; background: var(--well); }
+.garage-first .join-art .jr-bay { fill: none; stroke: var(--panel-dim); stroke-width: 2; stroke-dasharray: 5 5; }
+.garage-first .join-head { margin: 18px 0 0; padding: 0; border: 0; font: 700 30px/1.02 var(--font-num); letter-spacing: 0.005em; text-transform: none; }

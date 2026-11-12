@@ -1666,6 +1666,35 @@ flow('avoid cameras: with the chip on, the plate readers and speed cameras near 
   check(await page.evaluate(() => document.querySelector('[data-avoid="cameras"]').getAttribute('aria-pressed')) === 'true', 'the chip shows it');
 }, { geolocation: { latitude: 35.9606, longitude: -83.9207 }, permissions: ['geolocation'] });
 
+flow('avoid cameras from our own list: inside the region the cameras come from /api/cameras/v1/region.json with every Overpass server down (Nate 2026-11-12: "the camera server always says it\'s down")', async (page, base) => {
+  const asked = [], overpass = [];
+  await page.route('https://photon.komoot.io/**', (route) => route.fulfill({ contentType: 'application/json', body: JSON.stringify({ features: [
+    { geometry: { coordinates: [-83.9700, 35.7565] }, properties: { name: 'Maryville', state: 'Tennessee' } }] }) }));
+  for (const host of ['overpass-api.de', 'overpass.kumi.systems', 'overpass.private.coffee', 'maps.mail.ru']) await page.route(`https://${host}/**`, (route) => { if (/surveillance/.test(decodeURIComponent(route.request().postData() || ''))) overpass.push(host); route.abort(); });
+  const tiles = [];
+  for (let i = Math.floor(35 / 0.25); i <= Math.floor(37 / 0.25); i++) for (let j = Math.floor(-85 / 0.25); j <= Math.floor(-83 / 0.25); j++) tiles.push(`${i}_${j}`);
+  await page.route('**/api/cameras/v1/region.json', (route) => route.fulfill({ contentType: 'application/json', body: JSON.stringify({ version: 1, build: 'e2e', tile: 0.25, tiles,
+    cams: [[35.85, -83.94, 'a'], [35.8, -83.96, 's'], [36.9, -84.9, 'a']] }) }));
+  await page.route('https://valhalla1.openstreetmap.de/route', (route) => {
+    const req = JSON.parse(route.request().postData() || '{}');
+    asked.push(req);
+    route.fulfill({ contentType: 'application/json', body: JSON.stringify(stubTrip(req.locations)) });
+  });
+  await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); localStorage.setItem('apex.avoid', JSON.stringify({ cameras: true })); } catch (_) {} });
+  await page.goto(base + '/index.html');
+  await page.waitForFunction(() => window.apexDebug && window.apexDebug.map);
+  await page.click('#destInput');
+  await page.fill('#destInput', 'Maryville');
+  await page.waitForSelector('#placeList .place', { timeout: 10000 });
+  await page.click('#placeList .place');
+  await page.waitForFunction(() => { const t = window.apexDebug.track; return t && t.kind === 'route' && t.lat.length > 50; }, null, { timeout: 20000 });
+  const ex = asked.map((r) => r.exclude_locations || []);
+  const has = (e, lat, lon) => e.some((x) => x.lat === lat && x.lon === lon);
+  check(ex.some((e) => e.length === 2 && has(e, 35.85, -83.94) && has(e, 35.8, -83.96)), 'the two cameras from our list near the trip were excluded: ' + JSON.stringify(ex));
+  check(overpass.length === 0, 'no Overpass server was asked for cameras on tiles our list covers: ' + JSON.stringify(overpass));
+  check(!(await page.evaluate(() => [...document.querySelectorAll('.toast, #toast')].some((t) => /Camera map offline/.test(t.textContent || '')))), 'no "Camera map offline" note');
+}, { geolocation: { latitude: 35.9606, longitude: -83.9207 }, permissions: ['geolocation'] });
+
 flow('the chosen route stays whole on screen: above the card when it opens, above the bar when it goes down (panel round 2 DA-2)', async (page, base) => {
   await page.route('https://tiles.openfreemap.org/**', (route) => (route.request().url().includes('/styles/')
     ? route.fulfill({ contentType: 'application/json', body: JSON.stringify({ version: 8, sources: {}, layers: [{ id: 'bg', type: 'background', paint: { 'background-color': '#eee' } }] }) })
@@ -2950,6 +2979,40 @@ flow('friends on the map: off by default; the first time on explains both choice
   const off = sent.filter((x) => x.p === '/api/presence/settings').pop();
   check(JSON.stringify(off.b) === JSON.stringify({ audience: 'nobody' }), 'Nobody sends nothing else');
   check(!sent.some((x) => x.p === '/api/presence' && x.m === 'POST'), 'nothing is sent while not driving');
+});
+
+flow('meets on the map: off by default; on, public meets near the map are pinned by day; a tap opens the meet card (IDEAS S-13, Worker stubbed)', async (page, base) => {
+  await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); } catch (_) {} });
+  const asked = [];
+  const soon = new Date(Date.now() + 3 * 86400000); soon.setHours(9, 0, 0, 0);
+  await page.route('**/api/**', (route) => {
+    const u = new URL(route.request().url()), p = u.pathname;
+    const json = (b, status = 200) => route.fulfill({ status, contentType: 'application/json', body: JSON.stringify(b) });
+    if (p === '/api/me') return json({ signed_in: true, member: true, handle: 'me' });
+    if (p === '/api/events/near') { asked.push(u.search); return json([
+      { id: 'ev1', crew_id: 'c1', crew_name: 'Dragon Crew', title: 'Cars and coffee', starts_at: soon.toISOString(), meet_name: 'Deals Gap', meet_lat: 35.47, meet_lon: -83.92, notes: null, repeat_weeks: 1, going: 6, member: false, km: 12 },
+      { id: 'ev2', crew_id: 'c2', crew_name: 'Our crew', title: 'Sunday run', starts_at: new Date(soon.getTime() + 86400000).toISOString(), meet_name: 'Deals Gap', meet_lat: 35.4701, meet_lon: -83.9201, notes: null, repeat_weeks: null, going: 3, member: true, km: 12 }]); }
+    return json([]);
+  });
+  await page.goto(base + '/index.html');
+  await page.waitForFunction(() => window.apexDebug && window.apex && typeof window.apex.live === 'function');
+  check(await page.evaluate(() => apexDebug.state.toggles.meets === false && !document.querySelector('.mm-pin')), 'the layer is off by default');
+  await page.waitForTimeout(1500);                                                        // the account is known
+  await page.evaluate(() => { apexDebug.state.follow = false; apexDebug.map.jumpTo({ center: [-83.95, 35.45], zoom: 9 }); });
+  await page.click('#swTab');
+  await page.click('[data-toggle="meets"]');
+  await page.waitForSelector('.mm-pin');
+  const pin = await page.evaluate(() => ({ n: document.querySelectorAll('.mm-pin').length, text: document.querySelector('.mm-pin').textContent, label: document.querySelector('.mm-pin').getAttribute('aria-label') }));
+  check(pin.n === 1 && /\+1$/.test(pin.text) && /^Cars and coffee, \w+, and 1 more\./.test(pin.label), 'two meets at one place share a pin, soonest first: ' + JSON.stringify(pin));
+  check(asked.length >= 1 && /^\?lat=35\.\d&lon=-8\d\.\d$/.test(asked[0]), 'asked by the map centre cell only: ' + JSON.stringify(asked));
+  await page.evaluate(() => document.querySelector('.mm-pin').click());
+  await page.waitForSelector('[aria-label="Meets here"]');
+  const sheet = await page.textContent('[aria-label="Meets here"]');
+  check(/2 meets here/.test(sheet) && /Cars and coffee/.test(sheet) && /Dragon Crew/.test(sheet) && /6 going/.test(sheet) && /Join the crew/.test(sheet), 'the sheet is the meet card: ' + sheet.slice(0, 200));
+  check(/Your crew.s drive\. Answer on its card/.test(sheet) && (sheet.match(/Join the crew/g) || []).length === 1, 'your own crew\'s meet has no Join');
+  await page.click('[aria-label="Meets here"] button:has-text("Close")');
+  await page.click('[data-toggle="meets"]');
+  check(await page.evaluate(() => !document.querySelector('.mm-pin')), 'off again, the pins go');
 });
 
 flow('drive ended: your best on this road on the card, and the pack closes with the score from its own clips (REVIEW.md 4.4)', async (page, base) => {
@@ -5677,6 +5740,51 @@ flow('dev mode: anyone else sees no Dev entry, loads no panel, and settings left
     check(row.hidden && row.filled === 0 && !asked.length && (await page.evaluate(() => !window.ApexDevPanel)), `no Developer row for ${JSON.stringify(me)}: ${JSON.stringify(row)} ${asked.join()}`);
   }
 }, { geolocation: { latitude: 39.155, longitude: -84.615 }, permissions: ['geolocation'] });
+
+// Service check (the owner, 2026-11-12, web/service_check.js): the owner runs it from Settings > Account; each service's
+// state is listed and the report goes to /api/ops/service-check. Anyone else gets no section and never loads its file.
+async function svcPage(page, base, me, posted, asked) {
+  page.on('request', (r) => { if (r.url().includes('service_check.js')) asked.push(r.url()); });
+  await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); localStorage.setItem('apex.permsExplained', '1'); localStorage.setItem('apex.svccheck.at', String(Date.now())); } catch (_) {} });
+  await page.route('**/api/**', (route) => {
+    const u = new URL(route.request().url()), j = (b, status = 200) => route.fulfill({ status, contentType: 'application/json', body: JSON.stringify(b) });
+    if (u.pathname === '/api/me') return j(me);
+    if (u.pathname === '/api/health') return j({ ok: true, db: true });
+    if (u.pathname === '/api/ops/service-check' && route.request().method() === 'POST') { posted.push(JSON.parse(route.request().postData())); return j({ kept: 1 }); }
+    if (u.pathname === '/api/ops/service-check/server') return j({ at: 'now', db: true, config: { db: true, ctx_keys: false }, graph_data: { http: 200, ms: 300, tiles: 120 },
+      overpass: [{ host: 'overpass-api.de', http: 200, ms: 800, elements: 4 }, { host: 'overpass.kumi.systems', http: 429, ms: 200, elements: null }] });
+    return j({ error: 'not_found' }, 404);
+  });
+  // one camera server answers; every other outside host stays blocked (the run's default), so they read as down
+  await page.route('https://overpass-api.de/**', (r) => r.fulfill({ contentType: 'application/json', body: JSON.stringify({ elements: [{ type: 'node', id: 1, lat: 39.1, lon: -84.51, tags: { highway: 'speed_camera' } }] }) }));
+  await page.goto(base + '/index.html?view=garage');
+  await page.waitForFunction(() => window.apexDebug && window.apexDebug.map);
+  await page.waitForTimeout(1200);                                     // /api/me has answered (renderAccount)
+}
+flow('service check: the owner runs it from Settings, sees each service up or down with what it affects, and it is sent (the owner 2026-11-12)', async (page, base) => {
+  const posted = [], asked = [];
+  await svcPage(page, base, { signed_in: true, member: true, handle: 'owner', moderator: true }, posted, asked);
+  await openSetting(page, 'account');
+  await page.click('.svc-check button');
+  await page.waitForFunction(() => /up, .*down/.test((document.querySelector('.svc-check') || {}).textContent || ''), null, { timeout: 120000 });
+  await page.waitForFunction(() => /From Vetta.s server[\s\S]*not set: ctx_keys/.test(document.querySelector('.svc-check').textContent), null, { timeout: 10000 });
+  const text = await page.evaluate(() => document.querySelector('.svc-check').textContent);
+  check(/Overpass \(overpass-api\.de\): up/.test(text) && /Valhalla: down/.test(text) && /Affects: Quick routes/.test(text), 'states and what they affect: ' + text.slice(0, 600));
+  check(/Server and database: up/.test(text) && /Camera map as the app asks it: up/.test(text), 'our server and the app\'s camera path: ' + text.slice(0, 600));
+  check(posted.length === 1, 'one report sent: ' + posted.length);
+  const r = posted[0], by = Object.fromEntries(r.results.map((x) => [x.id, x]));
+  check(r.app === 'web' && by.overpass_de.state === 'up' && by.valhalla.state === 'down' && by.api.state === 'up' && r.results.length >= 25, 'the report: ' + JSON.stringify(r).slice(0, 400));
+  check(['router_fun', 'router_long', 'router_loop'].every((id) => by[id] && by[id].state !== 'skip'), 'our router was asked for each plan: ' + JSON.stringify([by.router_fun, by.router_long, by.router_loop]));
+  check(!JSON.stringify(r).includes('39.155'), 'never where the phone is');
+  check(asked.length >= 1, 'its file loaded on demand');
+}, { geolocation: { latitude: 39.155, longitude: -84.615 }, permissions: ['geolocation'] });
+flow('service check: a member who is not the owner gets no section and never loads it (the owner 2026-11-12)', async (page, base) => {
+  const posted = [], asked = [];
+  await svcPage(page, base, { signed_in: true, member: true, handle: 'me' }, posted, asked);
+  await openSetting(page, 'account');
+  await page.waitForTimeout(500);
+  check(!(await page.evaluate(() => !!document.querySelector('.svc-check'))) && !asked.length && !posted.length, 'no section, no file, nothing sent');
+});
 
 flow('dev mode: a developer opens the Dev panel from the Garage, changes a constant, re-plans and sees it, then resets (the owner 2026-11-09)', async (page, base) => {
   graphDir = graphFixture();
