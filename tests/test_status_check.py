@@ -39,7 +39,7 @@ def go(get):
 def test_all_good():
     res = go(fake())
     md, core_ok = sc.summarize(res, when="now")
-    assert core_ok and all(r["ok"] for r in res) and len(res) == 7
+    assert core_ok and all(r["ok"] for r in res) and len(res) == 9
     assert "All systems normal" in md
 
 
@@ -76,3 +76,28 @@ def test_a_hung_check_times_out_without_holding_the_rest():
     assert _t.monotonic() - t0 < 2
     assert [r["name"] for r in res][0] == "Site" and res[0]["ok"]
     assert res[-1] == {"name": "Overpass", "core": False, "ok": False, "status": "timeout", "ms": 500}
+
+
+def _health(cron):
+    return {"/api/health": (200, json.dumps({"ok": True, "db": True, "cron": cron}).encode())}
+
+
+def test_a_late_or_failing_cron_job_is_a_core_failure_but_not_down():
+    ok = {"age_h": 30.0, "failing": False, "late": False}
+    res = go(fake(_health({"backup": {**ok, "age_h": 300.0, "late": True}, "sweep": ok})))
+    md, core_ok = sc.summarize(res, when="now")
+    assert not core_ok and "a scheduled job is late or failing" in md and "| Weekly backup | core | FAIL | 200 |" in md
+    assert "| Daily sweep | core | ok |" in md and "| API and database | core | ok |" in md
+    res = go(fake(_health({"backup": ok, "sweep": {**ok, "failing": True}})))
+    assert [r["name"] for r in res if not r["ok"]] == ["Daily sweep"]
+
+
+def test_a_cron_job_never_recorded_or_an_older_worker_is_fine():
+    for cron in ({"backup": {"age_h": None, "failing": False, "late": False}, "sweep": {"age_h": None, "failing": False, "late": False}}, None):
+        res = go(fake(_health(cron) if cron else None))
+        assert all(r["ok"] for r in res)
+
+
+def test_the_outage_issue_names_a_stopped_job_without_calling_the_app_down():
+    wf = (Path(__file__).resolve().parents[1] / ".github/workflows/status.yml").read_text()
+    assert "Weekly backup|Daily sweep" in wf and "not running" in wf
