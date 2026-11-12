@@ -66,6 +66,9 @@ final class ApexCar {
     private(set) var guide: Guide?
     private(set) var driving = false
     private(set) var places: [(name: String, coord: CLLocationCoordinate2D)] = []
+    /// The cafés and fuel along the planned route by name (web/carplay.js alongMessage): a longer and a shorter line for the
+    /// route preview, empty until the page has looked. A new route clears them; the page sends that route's after it.
+    private(set) var along = (full: "", short: "")
     private(set) var look = Look()
     /// The car's map data as JSON for web/carmap.js: the route line, the corners and the hazards, kept to repaint a map that connects later.
     private(set) var routeJSON = "[]"
@@ -126,10 +129,17 @@ final class ApexCar {
                           options: options.isEmpty ? [Option(summary: "Route", detail: "", timeS: nil, distM: nil)] : options,
                           picked: max(0, min(options.count - 1, Int(Self.num(dict["picked"]) ?? 0))))
             routeJSON = Self.json(coords.map { [$0.latitude, $0.longitude] })
+            along = ("", "")
             eachMap { $0.showRoute(); $0.setMode() }
+            scene?.routeChanged()
+        case "along":
+            let full = String(((dict["full"] as? String) ?? "").prefix(90)), short = String(((dict["short"] as? String) ?? "").prefix(90))
+            guard full != along.full || short != along.short else { return }
+            along = (full, short)
             scene?.routeChanged()
         case "clear":
             route = nil
+            along = ("", "")
             routeJSON = "[]"
             eachMap { $0.showRoute(); $0.setMode() }
             scene?.routeChanged()
@@ -502,8 +512,16 @@ final class ApexCarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDel
             return
         }
         idleBars()
-        let choices = r.options.map { o -> CPRouteChoice in
-            CPRouteChoice(summaryVariants: [o.summary], additionalInformationVariants: [o.detail].filter { !$0.isEmpty }, selectionSummaryVariants: [o.summary])
+        // the cafés and fuel along it by name (the owner, 2026-11-11), on the picked route's line only: the page looked along
+        // that one. Variants run longest first and the car shows the first that fits; the last is the detail alone.
+        let along = car.along
+        let choices = r.options.enumerated().map { (i, o) -> CPRouteChoice in
+            var info = [o.detail]
+            if i == r.picked {
+                let join = { (a: String) in o.detail.isEmpty ? a : "\(o.detail) · \(a)" }
+                info = [along.full, along.short].filter { !$0.isEmpty }.map(join) + [o.detail]
+            }
+            return CPRouteChoice(summaryVariants: [o.summary], additionalInformationVariants: info.filter { !$0.isEmpty }, selectionSummaryVariants: [o.summary])
         }
         let dest = MKMapItem(placemark: MKPlacemark(coordinate: r.dest))
         dest.name = r.name
