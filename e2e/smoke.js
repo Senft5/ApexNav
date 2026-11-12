@@ -6769,6 +6769,37 @@ flow('offline area: Save the map here keeps the map, labels and terrain; with no
   check(await page.evaluate(() => !!window.apexDebug.map.getSource('openmaptiles')), 'the saved style and its source loaded offline');
 }, { viewport: { width: 1280, height: 900 } });
 
+flow('a saved route keeps the map along it: Save fetches the tiles within reach of the route, not round it, lists it in Your data, and unsaving drops it (IDEAS F-03)', async (page, base) => {
+  const got = [];
+  await page.route('https://tiles.openfreemap.org/**', (route) => {
+    const u = route.request().url();
+    if (u.includes('/styles/')) return route.fulfill({ contentType: 'application/json', body: JSON.stringify({ version: 8, sources: { openmaptiles: { type: 'vector', url: 'https://tiles.openfreemap.org/planet' } }, layers: [{ id: 'bg', type: 'background', paint: { 'background-color': '#eee' } }] }) });
+    if (u.endsWith('/planet')) return route.fulfill({ contentType: 'application/json', body: JSON.stringify({ tiles: ['https://tiles.openfreemap.org/planet/t/{z}/{x}/{y}.pbf'], minzoom: 0, maxzoom: 14 }) });
+    const m = u.match(/\/t\/(\d+)\/(\d+)\/(\d+)\.pbf$/); if (m) got.push(m.slice(1).map(Number));
+    return route.fulfill({ contentType: 'application/x-protobuf', body: Buffer.alloc(0) });
+  });
+  await page.route('https://s3.amazonaws.com/**', (route) => route.fulfill({ contentType: 'image/png', body: Buffer.alloc(8) }));
+  await page.route('https://valhalla1.openstreetmap.de/route', (route) => route.fulfill({ contentType: 'application/json', body: JSON.stringify(stubTrip(JSON.parse(route.request().postData() || '{}').locations)) }));
+  await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); localStorage.setItem('apex.permsExplained', '1'); } catch (_) {} });
+  await page.goto(base + '/index.html');
+  await page.waitForFunction(() => window.apexDebug && window.apexDebug.map && window.apexDebug.map.loaded(), null, { timeout: 15000 });
+  await page.evaluate(() => apexDebug.buildRoute([{ lat: 35.60, lon: -83.90 }, { lat: 35.80, lon: -83.90 }], 'route_dest', 'To the gap', null, { from: null, to: { lat: 35.80, lon: -83.90 }, via: [] }));
+  await page.waitForFunction(() => apexDebug.track && apexDebug.track.kind === 'route' && apexDebug.track.request, null, { timeout: 20000 });
+  got.length = 0;
+  await page.evaluate(() => document.getElementById('routeSaveBtn').click());
+  await page.waitForFunction(() => window.apexDebug.mapAlong, null, { timeout: 60000 });
+  const area = await page.evaluate(() => JSON.parse(localStorage.getItem('apex.offlineAreas') || '[]'));
+  check(area.length === 1 && area[0].alongKm === 1.5 && area[0].radiusKm === null && /^Along /.test(area[0].name), 'an area along the route: ' + JSON.stringify(area));
+  // every z14 tile within reach of the line (x for -83.90 at z14 is 4373; 1.5 km is under one tile), none 25 km round
+  const z14 = got.filter((t) => t[0] === 14), xs = [...new Set(z14.map((t) => t[1]))];
+  check(z14.length > 10 && xs.every((x) => Math.abs(x - 4373) <= 2), 'the tiles hug the route: ' + JSON.stringify({ n: z14.length, xs }));
+  await page.waitForFunction(() => /The map along/.test(document.getElementById('toast').textContent), null, { timeout: 5000 });
+  // unsaved: the map along it goes too
+  await page.evaluate(() => document.getElementById('routeSaveBtn').click());
+  await page.waitForFunction(() => (JSON.parse(localStorage.getItem('apex.offlineAreas') || '[]')).length === 0, null, { timeout: 5000 });
+  check(true, 'unsaving the route drops its map');
+}, { viewport: { width: 1280, height: 900 } });
+
 flow('offline area, as a member: Save the map here keeps the measured roads round it; with no signal a plan still has them, and clearing them (what Sign out calls) leaves nothing (IDEAS F-02)', async (page, base) => {
   let online = true;
   const asks = [], way = { 0: { i: [0, 1, 2], n: [3, 3, 3], cam: [0.02, 0.03, 0.02], cn: [3, 3, 3], rough: [0.1, 0.2, 0.1] } };
