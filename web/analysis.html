@@ -266,9 +266,9 @@
     .dv-acts > * { flex: none; white-space: nowrap; }
     .dv-more > summary { list-style: none; cursor: pointer; }
     .dv-more > summary::-webkit-details-marker { display: none; }
-    .dv-more { position: relative; }
+    .dv-acts { position: relative; }   /* the ⋯ menu hangs from the row's left edge, so it never runs off the screen at any text size */
     .dv-more > summary { font-size: 22px; padding: 6px 8px; text-decoration: none; display: flex; align-items: center; }
-    .dv-more-box { position: absolute; right: 0; top: 100%; z-index: 5; display: flex; flex-direction: column; align-items: flex-start;
+    .dv-more-box { position: absolute; left: 0; top: 100%; max-width: 100%; z-index: 5; display: flex; flex-direction: column; align-items: flex-start;
       min-width: 180px; padding: 4px 16px; background: var(--panel, #fff); border: 1px solid var(--hair, var(--rule)); border-radius: 10px;
       box-shadow: 0 8px 24px rgba(0,0,0,0.18); }
     .dv-more-box .linkbtn { width: 100%; text-align: left; }

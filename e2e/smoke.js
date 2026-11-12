@@ -2040,6 +2040,7 @@ const CUT = (sel) => `(() => { const W = innerWidth, out = [];
     const r = e.getBoundingClientRect(), cs = getComputedStyle(e);
     if (!r.width || !r.height || cs.visibility === 'hidden' || e.closest('[hidden]')) continue;
     if (e.closest('.garage-pop:not(.open)')) continue;   // a closed Garage panel, parked off the screen
+    if (e.closest('details:not([open])') && !e.closest('summary')) continue;   // inside a closed menu (the drive page's ⋯): not on the screen
     const clips = /hidden|clip/.test(cs.overflowX) || cs.textOverflow === 'ellipsis';
     if (r.left < -1 || r.right > W + 1 || (clips && e.scrollWidth > e.clientWidth + 1)) out.push((e.id || e.className || e.tagName) + ':' + e.textContent.trim().slice(0, 24) + ' ' + [r.left, r.right, e.scrollWidth, e.clientWidth].map(Math.round).join('/'));
   }
@@ -2131,6 +2132,10 @@ flow('Dynamic Type (IN-1, GR-2): the route card, plan sheet, end card and the dr
   check(t2 >= 1.5 * t1, `the drive's page grows: title ${t1} -> ${t2}`);
   const logCut = await page.evaluate(CUT('#tab-drive'));
   check(!logCut.length, 'the drive page at 2x cuts nothing: ' + JSON.stringify(logCut));
+  await page.click('.dv-more > summary');                                 // its ⋯ menu, open, fits too
+  const moreCut = await page.evaluate(CUT('#tab-drive'));
+  check(!moreCut.length, 'the drive page\'s ⋯ menu at 2x cuts nothing: ' + JSON.stringify(moreCut));
+  await page.click('.dv-more > summary');
   // GR-2: the Garage at the largest size fits too (its sections no longer set a width wider than the screen)
   await page.goto(base + '/index.html?view=garage');
   await page.waitForSelector('#garageGear', { state: 'visible' });
