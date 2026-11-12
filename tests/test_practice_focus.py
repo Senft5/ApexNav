@@ -119,3 +119,40 @@ def test_parity_and_the_words():
     assert out["stamp"] == "2026-11-05T09:07"
     text = " ".join(up + flat + few + [s_up, s_flat, out["card"]])
     assert not any(w in text.lower() for w in ("faster", "quicker", "mph", "km/h", "seconds"))   # technique, never pace
+
+
+ROAD = {"skill": "arc", "since": "2026-11-05T09:00", "where": {"road": "dry ridge rd", "name": "Dry Ridge Rd"}}
+
+
+def named(ds, road_ids):
+    return [{**d, "name": "Dry Ridge Rd " if d["id"] in road_ids else "Bell Gap"} for d in ds]
+
+
+def test_a_per_road_practice_reads_that_road_alone():
+    # practice from a road's book: only that road's drives count, before and after; elsewhere is not the practice
+    ds = named(drives(None), {"b0", "b1", "b2", "b3", "a1"})
+    pr = dp.practice(ds, ROAD)
+    assert pr["road"] == "Dry Ridge Rd" and pr["before"]["n"] == 120 and pr["after"]["n"] == 30
+    assert [d["id"] for d in pr["drives"]] == ["a1"] and pr["sure"]
+    assert all(d["where_n"] is None for d in pr["drives"])           # a road is not a side of the corner
+    assert dp.practice(ds, PLAN)["road"] is None and dp.practice(ds, PLAN)["after"]["n"] == 90
+    assert dp.on_plan_road(ROAD, "  DRY RIDGE RD") and not dp.on_plan_road(ROAD, "Bell Gap") and not dp.on_plan_road(ROAD, None)
+    assert dp.on_plan_road(PLAN, "Bell Gap") and dp.on_plan_road(None, None)
+    # no drive on the road yet since the plan
+    assert dp.practice(named(drives(None), {"b0", "b1"}), ROAD)["after"] == {"level": None, "n": 0}
+
+
+@pytest.mark.skipif(NODE is None, reason="node not installed")
+def test_a_per_road_practice_parity_and_words():
+    cases = [named(drives(None), {"b0", "b1", "b2", "b3", "a1"}), named(drives(None), {"b0", "b1"})]
+    py = [dp.practice(c, ROAD) for c in cases]
+    names = ["Dry Ridge Rd", "dry ridge rd ", "Bell Gap", None]
+    runner = ("const P=require(process.argv[1]+'/web/driver_profile.js');const [cases,plan,names]=JSON.parse(require('fs').readFileSync(0,'utf8'));"
+              "const pr=cases.map((c)=>P.practice(c,plan));"
+              "process.stdout.write(JSON.stringify({pr,sums:pr.map(P.practiceSummary),on:names.map((n)=>P.onPlanRoad(plan,n))}));")
+    out = json.loads(subprocess.run([NODE, "-e", runner, os.getcwd()], input=json.dumps([cases, ROAD, names]), capture_output=True, text=True, check=True).stdout)
+    assert json.dumps(out["pr"], sort_keys=True) == json.dumps(py, sort_keys=True)
+    assert out["on"] == [dp.on_plan_road(ROAD, n) for n in names] == [True, True, False, False]
+    up, none = out["sums"]
+    assert up.startswith(f"Since 5 Nov on Dry Ridge Rd: {py[0]['after']['level']} on 30 corners over 1 drive, against ")
+    assert none == "Since 5 Nov on Dry Ridge Rd, no drive there yet with 4 or more corners to read it on. Your next drive there is the first."

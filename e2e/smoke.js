@@ -4737,16 +4737,19 @@ flow('a drive\'s corners on a road driven four times: each says your cleanest pa
     'the road corner by corner: ' + JSON.stringify(book).slice(0, 400));
   // where the passes differ, the technique they differ by most can be the next practice (IDEAS D-27, roadBookFocus)
   const pr = await page.evaluate(() => { const b = document.getElementById('bookPractice'); return { shown: !b.hidden, t: b.textContent, go: !!document.getElementById('bookPracticeGo') }; });
-  check(pr.shown && pr.go && /^Most of the difference at corners? [\d, and]+ is [a-z ]+\. (Practice [a-z ]+ on my next drives|You are practicing it now: Your driving shows how it goes\.)$/.test(pr.t), 'the practice line: ' + pr.t);
+  check(pr.shown && pr.go && /^Most of the difference at corners? [\d, and]+ is [a-z ]+\. (Practice [a-z ]+ on my next drives here|You are practicing it now: Your driving shows how it goes\.)$/.test(pr.t), 'the practice line: ' + pr.t);
   await page.click('#bookPracticeGo');
   const after = await page.evaluate(() => ({ t: document.getElementById('bookPractice').textContent, plan: JSON.parse(localStorage.getItem('vetta.practice') || 'null') }));
-  check(/Practicing it from your next drive/.test(after.t) && after.plan && after.plan.skill === 'arc' && after.plan.where === null && /^\d{4}-\d\d-\d\dT\d\d:\d\d$/.test(after.plan.since), 'the practice is kept: ' + JSON.stringify(after));
+  check(/Practicing it on your next drives here: .+ on this road alone\./.test(after.t) && after.plan && after.plan.skill === 'arc' && after.plan.where && after.plan.where.road === 'dry ridge rd' && after.plan.where.name === 'Dry Ridge Rd' && /^\d{4}-\d\d-\d\dT\d\d:\d\d$/.test(after.plan.since), 'the practice is kept: ' + JSON.stringify(after));
   await page.click('#bookList li .bk-by');
   await page.waitForFunction(() => /^r[0-3]$/.test(document.getElementById('dvPick').value) && !document.getElementById('tab-drive').hidden, null, { timeout: 20000 });
   // Your driving's Work on names the road where its skill shows most
   await page.goto(base + '/analysis.html?tab=driving');
   await page.waitForSelector('#drivingRoot .dp-focus .dp-where', { timeout: 20000 });
   const where = await page.textContent('#drivingRoot .dp-where');
+  // the practice from the road's book keeps to that road (driver_profile.js practice, where.road)
+  const practicing = await page.textContent('#drivingRoot .dp-practice .dp-say');
+  check(/^Since \d{1,2} \w{3} on Dry Ridge Rd, no drive there yet with 4 or more corners to read it on\./.test(practicing), 'the practice keeps to the road: ' + practicing);
   check(/^It shows most on Dry Ridge Rd: (the corner where your passes there differ most comes|all \d+ corners where your passes there differ most come|\d+ of the \d+ corners where your passes there differ most comes?) down to it\.$/.test(where), 'Work on names the road: ' + where);
   // the end card on the map after the last of them says the same: what it lost most at the road's least even corners
   await page.goto(base + '/index.html');
