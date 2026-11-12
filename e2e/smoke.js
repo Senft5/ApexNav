@@ -2787,6 +2787,40 @@ flow('privacy zones: add one at the map centre, kept on the phone only, then rem
   check((await page.evaluate(() => JSON.parse(localStorage.getItem('apex.privacyZones')))).length === 0, 'removed from the phone too');
 });
 
+flow('convoy: an invite that comes in while you drive waits until the drive ends (Nate 2026-11-12: social never in the way of the road)', async (page, base) => {
+  await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); localStorage.setItem('apex.permsExplained', '1'); } catch (_) {}
+    window.webkit = { messageHandlers: { apex: { postMessage: () => {} } } };
+    window.__toasts = [];
+    document.addEventListener('DOMContentLoaded', () => { const t = document.getElementById('toast'); if (t) new MutationObserver(() => window.__toasts.push(t.textContent))
+      .observe(t, { childList: true, characterData: true, subtree: true }); }); });
+  let release = null, askedN = 0;
+  const gate = new Promise((r) => { release = r; });
+  await page.route('**/api/**', async (route) => {
+    const u = new URL(route.request().url()), m = route.request().method();
+    const json = (b, status = 200) => route.fulfill({ status, contentType: 'application/json', body: JSON.stringify(b) });
+    if (u.pathname === '/api/me') return json({ signed_in: true, member: true, handle: 'me' });
+    if (u.pathname === '/api/convoy/invites') { askedN++; await gate; return json([{ id: 'BBBBBBBBBBBBBBBBBBBBBB', name: 'Sunday run', from: 'lead', expiresAtMs: Date.now() + 20 * 60000 }]); }
+    if (m === 'GET') return json([]);
+    return json({}, 404);
+  });
+  await page.goto(base + '/index.html');
+  await page.waitForFunction(() => window.apex && window.apexDebug && window.apexDebug.map);
+  await page.evaluate(() => window.apex.onNative({ type: 'link', params: { go: 'drive' } }));
+  await page.waitForFunction(() => window.apexDebug.driveActive);
+  for (let i = 0; i < 200 && !askedN; i++) await page.waitForTimeout(100);   // the page asks for invites (a few seconds in)
+  check(askedN > 0 && await page.evaluate(() => window.apexDebug.driveActive), 'asked for invites while driving');
+  const landed = page.waitForResponse((r) => r.url().includes('/api/convoy/invites'));
+  release();                                                           // the invite lands mid-drive
+  await landed;
+  // the page reads it a few seconds later while it drives: give it 7 s to (wrongly) say it
+  await page.waitForFunction(() => window.__toasts.some((t) => /invited you to a convoy/.test(t)), null, { timeout: 7000 }).catch(() => {});
+  check(!(await page.evaluate(() => window.__toasts.some((t) => /invited you to a convoy/.test(t)))), 'nothing said while driving');
+  await page.click('#driveEnd');
+  await page.waitForFunction(() => !window.apexDebug.driveActive, null, { timeout: 12000 });
+  await page.waitForFunction(() => window.__toasts.some((t) => /@lead invited you to a convoy: Sunday run/.test(t)), null, { timeout: 8000 }).catch(() => {});
+  check(await page.evaluate(() => window.__toasts.some((t) => /@lead invited you to a convoy: Sunday run/.test(t))), 'said once the drive ended');
+});
+
 flow('convoy: an in-app invite toasts and Join gets you in, no link (Worker stubbed, IDEAS S-22)', async (page, base) => {
   await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); } catch (_) {} });
   const id = 'AAAAAAAAAAAAAAAAAAAAAA', until = Date.now() + 20 * 60000;
