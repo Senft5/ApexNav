@@ -172,7 +172,7 @@ def test_the_cockpit_feeds_every_live_frame_and_resets_per_drive():
     assert '<script src="brake_heat.js" defer></script>' in page
     src = open(os.path.join(ROOT, "web", "cockpit.js"), encoding="utf-8").read()
     assert src.count("noteBrakes(fr);") + src.count("noteBrakes(frame);") == 2     # the web sensors and the app's own
-    assert "drive.brakes = null; drive.descentSaid = null; brakeSay = null; breakSay = null;" in src
+    assert "drive.brakes = null; drive.descentSaid = null; drive.flow = null; brakeSay = null; breakSay = null;" in src
     assert "brakeSay = { text: ApexBrakeHeat.CALL_TEXT, until: now + 60000 }" in src   # its own slot and expiry
 
 
@@ -342,5 +342,5 @@ def test_the_cockpit_says_the_descent_through_the_quiet_slot_on_the_planned_rout
     src = open(os.path.join(ROOT, "web", "cockpit.js"), encoding="utf-8").read()
     assert "if (live && !offRoute && !brakeSay && track === plannedRoute && Array.isArray(track.descents)" in src
     assert "ApexBrakeHeat.descentCall(d, ApexUnits.spokenShort)" in src
-    i = src.index("ApexBrakeHeat.descentAhead(track.descents"); j = src.index("const quiet = brakeSay || breakSay;")
+    i = src.index("ApexBrakeHeat.descentAhead(track.descents"); j = src.index("const quiet = brakeSay || breakSay || flowSay;")
     assert i < j                                                               # queued before the gate reads the slot

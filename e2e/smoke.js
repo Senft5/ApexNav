@@ -7794,6 +7794,41 @@ flow('the co-driver says a long descent once as the car nears its top, from the 
   check((await calls()).length === 1, 'and not again on the way down: ' + JSON.stringify(await calls()));
 });
 
+flow('the co-driver counts clean corners in a row live and says five, then ten, never in Quiet notes (flow_live.js, IDEAS D-30)', async (page, base) => {
+  await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); } catch (_) {}
+    window.__said = []; window.APEX_REVIEW = true;
+    window.webkit = { messageHandlers: { apex: { postMessage(m) { if (m && m.cmd === 'said') window.__said.push(m.text); } } } }; });
+  await page.goto(base + '/index.html');
+  await page.waitForFunction(() => window.apexDebug && window.apex && window.apex.live && window.ApexFlowLive);
+  await page.evaluate(() => window.apex.onNative({ type: 'carplay', action: 'start' }));
+  await page.waitForFunction(() => window.apexDebug.driveActive);
+  // S-bends with no route: 90-degree arcs of 60 m radius, left and right, 60 m between, at a steady 8 m/s with the lateral g
+  // the arc gives and no braking: every corner smooth and settled. One fix every 5 m, as the app sends them.
+  const drive = (from, to) => page.evaluate(async ([from, to]) => {
+    const pts = []; let x = 0, y = 0, h = 0, side = 1; const v = 8, R = 60;
+    for (let k = 0; k < to; k++) {
+      for (let s = 0; s < 60; s += 5) { x += 5 * Math.sin(h); y += 5 * Math.cos(h); if (k >= from) pts.push([x, y, 0]); }
+      for (let s = 0; s < Math.PI / 2 * R; s += 5) { h += side * 5 / R; x += 5 * Math.sin(h); y += 5 * Math.cos(h); if (k >= from) pts.push([x, y, side * v * v / R / 9.80665]); }
+      side = -side;
+    }
+    for (const [px, py, g] of pts) {
+      window.apex.live({ lat: 35.5 + py / 110540, lon: -83.9 + px / (111320 * Math.cos(35.5 * Math.PI / 180)), accuracy_m: 5, speed_mps: v, course_deg: 0,
+        has_fix: true, lat_g: Math.round(g * 1e4) / 1e4, lon_g: 0, calibration: 'locked', thermal: 0 });
+      await new Promise((r) => setTimeout(r, 12));
+    }
+  }, [from, to]);
+  const counts = () => page.evaluate(() => window.__said.filter((s) => / clean in a row\.$/.test(s)));
+  await drive(0, 12);
+  await page.waitForFunction(() => window.__said.filter((s) => / clean in a row\.$/.test(s)).length >= 2, null, { timeout: 8000 }).catch(() => {});
+  check(JSON.stringify(await counts()) === JSON.stringify(['Five clean in a row.', 'Ten clean in a row.']), 'five, then ten, said once each: ' + JSON.stringify(await counts()));
+  // Quiet notes: the count goes on, nothing is said
+  await page.evaluate(() => { const b = document.querySelector('[data-notes="quiet"]'); if (b) b.click(); });
+  await drive(12, 24);
+  await page.waitForTimeout(600);
+  const run = await page.evaluate(() => window.apexDebug.flowRun);
+  check(run >= 20 && (await counts()).length === 2, `the count went on to ${run}, and nothing was said in Quiet notes: ` + JSON.stringify(await counts()));
+});
+
 flow('plan flow (e, f) a level change and an alternative are one tap or swipe each: the level cards are the routes found, nothing planned again (finding 4, 11)', async (page, base) => {
   const asked = [];
   // the clock pinned to a weekday noon in Ohio: the refine's conditions (night, deer hours, low sun) swap Fun's pick
