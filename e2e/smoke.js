@@ -2908,7 +2908,7 @@ flow('convoy: an in-app invite toasts and Join gets you in, no link (Worker stub
   await page.waitForSelector('.convoy-sheet button:has-text("Join")');
   check(/@lead invited you: Sunday run/.test(await page.textContent('.convoy-sheet')), 'the convoy sheet says who invited you and to what');
   await page.click('.convoy-sheet button:text-is("Join")');
-  await page.waitForFunction(() => /you are following/.test(document.querySelector('.convoy-sheet').textContent), null, { timeout: 5000 });
+  await page.waitForFunction(() => /you're following/i.test(document.querySelector('.convoy-sheet').textContent), null, { timeout: 5000 });
   check(/left/.test(await page.textContent('.convoy-sheet')) && !/ends \d/.test(await page.textContent('.convoy-sheet')), 'how long it has left, not a clock time (P-28): ' + await page.textContent('.convoy-sheet .note'));
   check(accepted, 'joined with consent, without a link');
   await page.click('.convoy-sheet button:has-text("Done")');
@@ -3763,13 +3763,18 @@ flow('convoy: the leader shows a QR code of the link (Worker stubbed, IDEAS S-22
   check(/^Just drive$/.test((await page.textContent('.start-sheet .rec-key')).trim()), 'the key\'s chevron offers Just drive and Convoy now');
   await page.click('.start-sheet button:has-text("Convoy now")');
   await page.waitForSelector('.convoy-sheet canvas.cv-qr');
-  check(/you are leading/.test(await page.textContent('.convoy-sheet')) && await page.isVisible('.convoy-sheet button:has-text("Start the drive")'), 'leading, the code up, the drive one key away');
+  check(/you're leading/i.test(await page.textContent('.convoy-sheet')) && await page.isVisible('.convoy-sheet button:has-text("Start the drive")'), 'leading, the code up, the drive one key away');
   const dark = await page.evaluate(() => { const c = document.querySelector('canvas.cv-qr'), d = c.getContext('2d').getImageData(0, 0, c.width, c.height).data;
     let n = 0; for (let i = 0; i < d.length; i += 4) if (d[i] < 128) n++; return n / (d.length / 4); });
   check(dark > 0.2 && dark < 0.6, `a QR code is drawn (${(dark * 100).toFixed(0)} % dark)`);
   // and the code to read out, for a friend whose camera can't see the screen
   await page.waitForFunction(() => { const c = document.querySelector('.convoy-sheet .cv-code'); return c && !c.hidden; }, null, { timeout: 5000 });
   check((await page.textContent('.convoy-sheet .cv-code')) === 'Or join code K7P 4QX', 'the join code under the QR: ' + await page.textContent('.convoy-sheet .cv-code'));
+  // the convoy's own row keeps its few keys; New link sits with the code it replaces, and the line under the title doesn't say Convoy again
+  const keys = await page.evaluate(() => { const qr = document.querySelector('.convoy-sheet canvas.cv-qr').parentElement;
+    return { qr: [...qr.querySelectorAll('button')].map((b) => b.textContent), all: [...document.querySelectorAll('.convoy-sheet button')].filter((b) => !qr.contains(b)).map((b) => b.textContent),
+      line: document.querySelector('.convoy-sheet .note').textContent }; });
+  check(keys.qr.includes('New link') && !keys.all.includes('New link') && !/^Convoy ·/.test(keys.line), 'New link under the code, the line says who leads: ' + JSON.stringify(keys));
 });
 
 flow('convoy: a friend joins with the code the leader read out (Worker stubbed, IDEAS S-22)', async (page, base) => {
@@ -3805,7 +3810,7 @@ flow('convoy: a friend joins with the code the leader read out (Worker stubbed, 
   // Return on the keyboard joins, and a second Return while it works spends no second try (walkthrough 2026-11-12)
   await page.focus('.convoy-sheet input[aria-label="Convoy join code"]');
   await page.keyboard.press('Enter'); await page.keyboard.press('Enter');
-  await page.waitForFunction(() => /you are following/.test(document.querySelector('.convoy-sheet').textContent), null, { timeout: 5000 });
+  await page.waitForFunction(() => /you're following/i.test(document.querySelector('.convoy-sheet').textContent), null, { timeout: 5000 });
   check(sent.length === 2, 'Return joins with the code, once: ' + sent.length + ' tries sent');
   check(sent.length === 2 && sent.every((b) => b.consent === true), 'joined with consent: ' + JSON.stringify(sent));
 });
@@ -4738,7 +4743,7 @@ flow('the run as one card: the morning of, a crew-mate\'s convoy to join or your
   await page.click('.cp-week .drive-card button:has-text("Start the convoy")');
   await page.waitForSelector('.cp-week .drive-card.is-convoy .cv-panel', { timeout: 8000 });
   const live = await page.textContent('.cp-week .drive-card');
-  check(/LIVE/.test(live) && /you are leading/.test(live) && /left/.test(live) && /Show QR/.test(live) && /End convoy/.test(live), 'the convoy live on the card: ' + live);
+  check(/LIVE/.test(live) && /you're leading/i.test(live) && /left/.test(live) && /Show QR/.test(live) && /End convoy/.test(live), 'the convoy live on the card: ' + live);
   check(sent.some(([m, p]) => m === 'POST' && p === `/api/convoy/${cid}/invite-people`) && sent.some(([m, p]) => m === 'POST' && p === '/api/events/e1AAAAAAAAAAAAAA/came'), 'everyone going invited; you came: ' + JSON.stringify(sent));
   await page.evaluate(() => document.querySelector('.tab[data-view="map"]').click());
   check(/Ridge Runners · Dawn run/.test(await page.textContent('.convoy-bar.show .cv-line')), 'the map: one line for the convoy');
