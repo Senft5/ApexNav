@@ -254,7 +254,8 @@
       // the co-driver's voice is its own choice (any pack with any theme, private ones too); Suggested follows the look
       document.querySelectorAll('[data-pack]').forEach(b => b.setAttribute('aria-checked', String(b.dataset.pack === (state.voicePick || 'look'))));
       const pn = document.getElementById('packNote'), sug = look && look.theme && look.theme.voice;
-      if (pn) pn.textContent = state.voicePick ? `${packName(state.voicePick)} reads the notes, whatever the theme.` : sug ? `${sug.name}, the voice ${look.theme.label} suggests. It changes when the theme does.` : '';
+      // TestFlight 2026-11-12 (less text): a line only for Suggested, to say whose voice that is
+      if (pn) { pn.textContent = !state.voicePick && sug ? `${sug.name}, the voice ${look.theme.label} suggests.` : ''; pn.hidden = !pn.textContent; }
       // SO-1: the Garage says what the one Notes and Voice switches (in Layers) are set to, in their own words
       const now = document.getElementById('coNotesNow');
       if (now) now.textContent = `Notes: ${({ quiet: 'Quiet', auto: 'Auto', full: 'Full' })[state.notesMode] || '--'} · Voice ${state.toggles.voice ? 'on' : 'off'}`;
@@ -5687,11 +5688,13 @@
     function paintOptChips() {
       if (!window.ApexPlanOptions || !optChipsReady) return;                // (painted once the switches above are read)
       const on = ApexPlanOptions.active(optState());
-      for (const [chipId, boxId] of [['planOptionsChip', 'planOptsOn'], ['cardOptionsChip', 'cardOptsOn']]) {
-        const chip = $(chipId), box = $(boxId);
+      // TestFlight 2026-11-12 (note 8, "cluttered"): Where to? says only how many (Options · 3, each named to VoiceOver);
+      // the route card, planned with them, still shows each one as a chip
+      for (const [chipId, boxId] of [['planOptionsChip', null], ['cardOptionsChip', 'cardOptsOn']]) {
+        const chip = $(chipId), box = boxId && $(boxId);
         chip.textContent = ApexPlanOptions.chipLabel(on);
         chip.setAttribute('aria-label', on.length ? `Options: ${on.map((x) => x.aria).join(', ')}` : 'Options');
-        box.replaceChildren(...on.map((x) => { const b = document.createElement('button'); b.className = 'chip'; b.textContent = x.text; b.dataset.opt = x.key;
+        if (box) box.replaceChildren(...on.map((x) => { const b = document.createElement('button'); b.className = 'chip'; b.textContent = x.text; b.dataset.opt = x.key;
           b.setAttribute('aria-label', `${x.aria}. Change in Options`); b.setAttribute('aria-haspopup', 'dialog'); b.addEventListener('click', openOptions); return b; }));
       }
     }
@@ -6200,7 +6203,7 @@
     // Weekly time attack (web/time_attack.js, SOCIAL 2.9, IDEAS S-26): this area's loop this week and its board, in Where to?
     // beside Spots near you; drawn when opened, fresh each time. Runs go up from the Log when stages sync.
     let timeAttack = null;
-    const TA_LINE = 'Time attack this week: a loop near you, quickest time';
+    const TA_LINE = 'Time attack this week';   // TestFlight 2026-11-12 (note 7): the row names itself, no tagline
     onSocial(() => { try {
       const ta = window.ApexTimeAttack ? ApexTimeAttack.mount({ el, btn, toast, apiCall, jsonOf, report: safety && safety.report,
         ask: (t, a) => ApexConfirm.ask(t, a),
@@ -7660,16 +7663,16 @@
           const quote = document.createTextNode('');
           card.append(preview,
             el('div', { className: 'tc-head' }, el('b', { textContent: t.label }), ...(t.pro ? [el('span', { className: 'tc-pro', textContent: 'PRO' })] : t.granted ? [el('span', { className: 'tc-pro', textContent: 'PRIVATE' })] : []), key),
-            el('p', { className: 'note', textContent: t.about || t.blurb || '' }),
-            el('div', { className: 'tc-voice' }, el('p', {}, el('b', { textContent: `Suggested voice: ${t.voice ? t.voice.name : '--'}. ` }), quote), hear));
+            // TestFlight 2026-11-12 (the owner: "walls of text"): the look shows itself in its preview; the card names its voice and Hear says it
+            el('div', { className: 'tc-voice' }, el('p', {}, el('b', { textContent: t.voice ? t.voice.name : '--' }), quote), hear));
           themeCards.set(t.id, { t, card, preview, key, inUseTag, ok, quote, line });
           return card;
         }));
       }
-      for (const { t, card, preview, key, inUseTag, ok, quote, line } of themeCards.values()) {
-        const allowed = ok(), inUse = state.theme === t.id && !themeTrial, l = line();
+      for (const { t, card, preview, key, inUseTag, ok, quote } of themeCards.values()) {
+        const allowed = ok(), inUse = state.theme === t.id && !themeTrial;
         if (preview._words !== state.noteWords || (t.car && preview._mode !== cardMode())) fillPreview(preview, t);   // the words changed: the strip head follows
-        const q = t.voice ? `${t.voice.who}${l ? ` "${l.text}"` : ''}` : '';
+        const q = t.voice ? ' · suggested voice' : '';
         if (quote.data !== q) quote.data = q;
         card.classList.toggle('in-use', state.theme === t.id);
         preview.classList.toggle('tc-pick', !inUse);
@@ -7839,12 +7842,13 @@
       const info = window.ApexVoice ? ApexVoice.liveInfo() : { text: '' };
       const note = $('liveNote');
       if (note) {
-        note.textContent = !state.liveVoice ? 'Off. Road and route names use the recorded voice or your phone voice.'
+        note.textContent = !state.liveVoice ? ''
           : st === 'error' ? `Failed · ${info.text}`
           : st === 'loading' ? (info.text || 'Loading…')
           : st === 'ready' ? (info.text || 'Ready')
           : 'Loading…';
         note.classList.toggle('err', !!(state.liveVoice && (st === 'error' || info.error)));
+        if (!IN_APP_SHELL) note.hidden = !note.textContent;   // off says nothing (TestFlight 2026-11-12: less text)
       }
     }
     // The app never loads the downloaded voice engine (guideline 2.5.2; web/voice.js): no switch, names use the phone voice.
@@ -9561,7 +9565,7 @@
         btn('Convoy now', () => { close(); needSocial().then(() => { if (convoy) convoy.now(name); else toast('The convoy isn\u2019t available here.'); }); }, 'ink-btn'),
         // IDEAS S-22: a friend's convoy, by the code they read out (the convoy sheet's Join code field)
         btn('Join with a code', () => { close(); needSocial().then(() => { if (convoy) convoy.open(); else toast('The convoy isn\u2019t available here.'); }); }, 'ink-btn'),
-        el('p', { textContent: 'A convoy: drive together, live, for two hours (the leader can keep it going, up to six). Friends join with the QR or the join code on your screen; nothing is kept. A crew\u2019s run starts its convoy from the drive\u2019s card.' }),
+        // TestFlight 2026-11-12 (note 6, the owner circled it): no paragraph under the keys; the convoy sheet says the rest
         btn('Cancel', close, 'linkbtn')));
       onBackdrop(back, () => close());
       document.addEventListener('keydown', esc);

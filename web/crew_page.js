@@ -168,7 +168,7 @@
     .cp-livery > .linkbtn { justify-self: start; color: var(--panel-dim); }   /* Take them off: left, in pencil */
     .cp-sec { display: flex; justify-content: space-between; align-items: baseline; }
     .crew-page .cp-sec h3 { margin: 0; font-size: 22px; border: 0; padding: 0; }
-    .cp-sec { margin-top: 10px; }
+    .cp-sec { margin-top: 10px; } .cp-sec[hidden] { display: none; }
     .cp-board-row { display: grid; grid-template-columns: 28px 1fr auto; align-items: baseline; gap: 8px; padding: 8px 0; border-top: 1px solid var(--rule); }
     .cp-board-row .rank { font-family: var(--font-num); color: var(--panel-dim); font-size: 18px; }
     .cp-board-row .who { min-width: 0; overflow-wrap: anywhere; } .cp-board-row .who small { color: var(--panel-dim); margin-left: 6px; }
@@ -798,9 +798,11 @@
         }));
         if (kept) { const k = [...list.children].find((r) => r.dataset.crew === kept[0]); if (k) k.querySelector(kept[1]).focus({ preventScroll: true }); }
       };
+      const feedHead = el('div', { className: 'cp-sec cd-head' }, el('h3', { textContent: 'Latest from your crews' }));
       const paintFeed = (items) => {
+        feedHead.hidden = !!items && !items.length;
         if (!items) { feedBox.replaceChildren(el('p', { className: 'note', textContent: 'Couldn’t load the latest from your crews. Check signal.' })); return; }
-        if (!items.length) { feedBox.replaceChildren(el('p', { className: 'note', textContent: 'Nothing new in your crews in the last two weeks.' })); return; }
+        if (!items.length) { feedBox.replaceChildren(); return; }   // TestFlight 2026-11-12 (note 2): nothing new, no heading and no line
         const name = (id) => (crews.find((c) => c.id === id) || {}).name || 'A crew';
         const rows = items.slice(0, shown).map((it) => {
           const who = it.mine ? 'You' : `@${it.handle || '?'}`;
@@ -819,7 +821,7 @@
         if (items.length > shown) rows.push(btn('Show more', () => { shown += 12; paintFeed(items); }, 'linkbtn cd-more'));
         feedBox.replaceChildren(...rows);
       };
-      box.append(head, list, el('div', { className: 'cp-sec cd-head' }, el('h3', { textContent: 'Latest from your crews' })), feedBox);
+      box.append(head, list, feedHead, feedBox);
       paintList();
       feedBox.replaceChildren(el('p', { className: 'note', textContent: 'Loading…' }));
       apiCall('GET', '/api/crews/feed').then((r) => (r && r.ok ? r.json() : null)).catch(() => null).then((j) => {

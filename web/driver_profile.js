@@ -889,7 +889,9 @@
       host.append(el('p', 'dp-say', 'Nothing to read yet. Your driving is read from the corners of your own drives: start a drive on the map, and come back after a twisty road.'));
       return;
     }
-    host.append(el('p', 'note', `From ${p.corners} clean corner${p.corners === 1 ? '' : 's'} on ${p.drives} drive${p.drives === 1 ? '' : 's'}, on this phone. Technique only: never speed or time.`));
+    // TestFlight 2026-11-12 (notes 4, 5, "walls of text"): the page is its numbers and the sentences that say a finding; the
+    // explanations under each panel are gone, and a panel with nothing to say yet is not drawn
+    host.append(el('p', 'note', `${p.corners} clean corner${p.corners === 1 ? '' : 's'} · ${p.drives} drive${p.drives === 1 ? '' : 's'}`));
     const fl = focusLines(p), plan = opts.plan || null, pr = opts.practice || null, onPlan = opts.onPlan || null;
     const key = (text, cls, fn) => { const b = el('button', cls, text); b.type = 'button'; b.addEventListener('click', fn); return b; };
     if (plan && pr) {
@@ -910,9 +912,7 @@
           list.append(row);
         }
         box.append(list);
-        if (pr.before.level !== null) box.append(el('p', 'note', `Each drive on this one skill. The mark is your ${pr.before.level} before the practice.`));
       }
-      box.append(el('p', 'dp-say', WORDS[plan.skill].tip));
       if (onPlan) {
         const acts = el('div', 'dp-acts');
         acts.append(key('Stop practicing', 'linkbtn', () => onPlan(null)));
@@ -925,7 +925,6 @@
       box.append(el('b', null, fl.head), el('p', 'dp-say', [fl.where, fl.tip].filter(Boolean).join(' ')));
       if (onPlan) {
         box.append(key('Practice it on my next drives', 'btn solid dp-go', () => onPlan({ skill: p.focus.skill, where: p.focus.where, since: localStamp() })));
-        box.append(el('p', 'note', 'Each drive\'s end card then says how this one skill went, against your level now.'));
       }
       host.append(box);
     }
@@ -938,7 +937,8 @@
       const row = el('div', 'dp-st' + (weak ? ' weak' : '') + (k === 'line' ? ' apex' : ''));
       row.dataset.skill = k;
       const mid = el('div');
-      mid.append(el('div', 'dp-name', WORDS[k].name), el('div', 'dp-is', WORDS[k].is));
+      mid.append(el('div', 'dp-name', WORDS[k].name));
+      mid.title = WORDS[k].is;
       const lv = el('div', 'dp-lv');
       if (s.level === null) {
         lv.innerHTML = '<i class="unk">--</i>';
@@ -955,7 +955,6 @@
       list.append(row);
     }
     road.append(list);
-    road.append(el('p', 'note', `Each is 0 to 100 over every corner where it could be measured, and stays "--" until ${SKILL_MIN} corners. The small line is the level month by month.`));
     host.append(road);
 
     // Pace (IDEAS D-29): beside the skills, never one of them; it is never the one to work on
@@ -963,7 +962,8 @@
       const s = p.skills.pace, ch = p.change.pace, pn = el('div', 'panel dp-pace'), row = el('div', 'dp-st'), mid = el('div'), lv = el('div', 'dp-lv');
       row.dataset.skill = 'pace';
       pn.append(el('h2', null, 'Your pace'));
-      mid.append(el('div', 'dp-name', WORDS.pace.name), el('div', 'dp-is', WORDS.pace.is));
+      mid.append(el('div', 'dp-name', WORDS.pace.name));
+      mid.title = WORDS.pace.is;
       if (s.level === null) { lv.innerHTML = '<i class="unk">--</i>'; lv.append(el('small', null, `${s.n} of ${SKILL_MIN} corners`)); }
       else {
         lv.textContent = String(s.level);
@@ -977,7 +977,6 @@
       const list = el('div', 'dp-road'); list.append(row); pn.append(list);
       pn.append(...paceLines(p).map((t) => el('p', 'dp-say', t)));
       pn.append(...(p.pace_findings || []).map((f) => { const n = el('p', 'dp-say', findingLine(f)); n.dataset.split = f.split; return n; }));
-      pn.append(el('p', 'note', 'The same pace as in your Vetta Score. It is never the thing to work on here: on a public road, the right pace is the one that leaves you room.'));
       host.append(pn);
     }
 
@@ -989,10 +988,6 @@
       const pn = el('div', 'panel dp-touch'), lines = touchLines(p.touch);
       pn.append(el('h2', null, 'Your touch'));
       if (lines.length) pn.append(...lines.map((t) => el('p', 'dp-say', t)));
-      else {
-        const most = Math.max(...TOUCH.map((k) => p.touch[k].n));
-        pn.append(el('p', 'dp-say', `${most} of ${STYLE_MIN} corners read so far. Your touch is said from ${STYLE_MIN}.`));
-      }
       // by size of corner: a row a measure, a column a size (a tight corner takes the brakes on harder: not a fault)
       const tb = p.touch_by || {}, sizes = ['tight', 'medium', 'fast'];
       if (sizes.some((z) => tb[z] && TOUCH.some((k) => tb[z][k] && (finite(tb[z][k].rate) || tb[z][k].quick_rate)))) {
@@ -1010,20 +1005,18 @@
           }
           t.append(tr);
         }
-        pn.append(el('h3', null, 'By kind of corner'), t, el('p', 'note', `The middle corner of each kind, from ${MATRIX_MIN} corners. Quick: quicker than the recording can time. A tight corner takes the brakes on harder; that is the road, not a fault.`));
+        pn.append(el('h3', null, 'By kind of corner'), t);
       }
       const tl = touchTrendLines(p.touch_trend);
       if (tl.length) pn.append(...tl.map((x) => el('p', 'dp-say', x)));
-      pn.append(el('p', 'note', 'Read from the g the phone measures ten times a second: how fast the load comes on and goes off between a fifth and four fifths of its peak. Drives recorded before the phone kept every reading have none to give.'));
-      host.append(pn);
+      if (pn.children.length > 1) host.append(pn);
     }
 
-    const say = el('div', 'panel');
-    say.append(el('h2', null, 'What your drives say'));
-    if (p.findings.length) say.append(...p.findings.map((f) => { const n = el('p', 'dp-say', findingLine(f)); n.dataset.split = f.split; return n; }));
-    else say.append(el('p', 'dp-say', 'No clear difference yet between lefts and rights, tight and fast corners, uphill and down, or early and late in a drive.'));
-    say.append(el('p', 'note', 'A difference is said only when it is large, far beyond chance, and repeats drive after drive. Lefts against rights, hills, time and cars are compared on corners of the same size.'));
-    host.append(say);
+    if (p.findings.length) {
+      const say = el('div', 'panel');
+      say.append(el('h2', null, 'What your drives say'), ...p.findings.map((f) => { const n = el('p', 'dp-say', findingLine(f)); n.dataset.split = f.split; return n; }));
+      host.append(say);
+    }
 
     if (p.matrix.some((m) => MEASURES.some((k) => m.levels[k] != null))) {
       const grid = el('div', 'panel');
@@ -1051,7 +1044,7 @@
         }
         t.append(tr);
       }
-      grid.append(t, el('p', 'note', `A kind of corner has a level from ${MATRIX_MIN} corners. Marked: 10 or more below your level overall.`));
+      grid.append(t);
       host.append(grid);
     }
   }
