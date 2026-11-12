@@ -86,6 +86,27 @@ def test_segment_pass_finds_the_stretch_and_scores_it():
     assert da.segment_pass(back, d) is None, "a pass the other way is a different segment"
 
 
+def _loop_drive():
+    """A 2 km circle driven 1.3 times; the first lap's GPS sits 3 m wide, so the start is closer on the way back round."""
+    n_lap, r0 = 400, 2000.0 / (2 * np.pi)
+    k = np.arange(int(n_lap * 1.3))
+    r = np.where(k < n_lap, r0 + 3.0, r0)
+    th = 2 * np.pi * k / n_lap
+    c = np.cos(np.radians(35.6))
+    lat = 35.6 + r * np.cos(th) / 110540.0
+    lon = -83.9 + r * np.sin(th) / (111320.0 * c)
+    seg = {"lat0": 35.6 + r0 / 110540.0, "lon0": -83.9, "lat1": 35.6 + r0 / 110540.0, "lon1": -83.9, "length_m": n_lap * 5.0}
+    return {"lat": lat, "lon": lon}, seg
+
+
+def test_segment_window_on_a_loop_tries_every_visit_to_the_start():
+    """A time attack loop's end is its start. The closest visit to the start can be the way back round (GPS noise), where
+    no lap follows: every visit is tried, closest first, so the lap is still found."""
+    d, seg = _loop_drive()
+    assert da.segment_window(seg, d) == (0, 400)
+    assert da.segment_window(dict(seg, lat0=36.0), d) is None            # a start the drive never passes
+
+
 def test_driver_score_leaves_out_corners_with_unknown_speed_or_limit():
     d = _drive()
     whole = _score(d)["score"]

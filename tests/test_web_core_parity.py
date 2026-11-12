@@ -764,3 +764,19 @@ def test_parity_spike_mask():
     assert js == [None if not np.isfinite(v) else int(v) for v in py]
     assert [i for i, v in enumerate(js) if v == 1] == [20, 250]
     assert js[100] is None and js[101] is None
+
+
+def test_parity_segment_window_on_a_loop():
+    """segmentWindow tries every visit to a stage's start, as segment_window does (a time attack loop)."""
+    from core import drive_analysis as da
+    from tests.test_drive_analysis import _loop_drive
+    d, seg = _loop_drive()
+    segs = [seg, dict(seg, lat0=36.0), dict(seg, length_m=1000.0)]
+    py = [da.segment_window(s, d) for s in segs]
+    runner = ("const c=require(process.argv[1]);const {d,segs}=JSON.parse(require('fs').readFileSync(0,'utf8'));"
+              "process.stdout.write(JSON.stringify(segs.map(s=>c.segmentWindow(s,d))));")
+    out = subprocess.run([NODE, "-e", runner, os.path.abspath("web/apex_core.js")],
+                         input=json.dumps({"d": {"lat": d["lat"].tolist(), "lon": d["lon"].tolist()}, "segs": segs}),
+                         capture_output=True, text=True, check=True)
+    assert [None if w is None else list(w) for w in py] == json.loads(out.stdout)
+    assert py[0] == (0, 400)
