@@ -4,6 +4,17 @@ Decisions Claude made for you, newest first. Each one says what was decided, why
 you reach one you've seen. If you disagree with a call, say so and it gets reversed; nothing here is hard to undo unless
 it says so. Things only you can do are in docs/OWNER_TODO.md.
 
+## 2026-11-12 Avoid cameras reads our own camera list in Ohio, Kentucky and Indiana (claude/project-thread-39xbx9)
+
+Nate: "the camera server always says it's down". The phone asked the public Overpass servers for cameras, and they time
+out or refuse it when busy (all four timed out when the Worker asked them, 2026-11-12). Now a weekly job
+(.github/workflows/cameras.yml) takes plate readers and speed cameras from the same Geofabrik extracts as our roads and
+commits one file to the graph-data branch. The Worker relays it at `GET /api/cameras/v1/region.json`, and web/cameras.js
+reads it before Overpass. Calls: a tile counts as ours only if the state outlines hold it whole, so a border tile isn't
+wrongly "no cameras"; outside the region and when our file can't be read, the phone asks Overpass as before (now with
+maps.mail.ru as a fourth server). The request carries no position: it's the same file for everyone. Undo: drop the
+`regionOnce` lookup in web/cameras.js `load` (pass `region: null`), the route in backend/src/index.ts and the workflow.
+
 ## 2026-11-12 (deepest analysis 18): the end card names your passes on a road you know (claude/project-thread-gd7nre)
 
 After a drive on a road you have driven three or more times, the map's end card adds one line: what this drive lost most

@@ -1,5 +1,14 @@
 # VETTA — CURRENT AGENT HANDOFF STATE
 
+## 2026-11-12 Avoid cameras from our own list (claude/project-thread-39xbx9)
+- `tools/graph_etl/cameras.py` + `.github/workflows/cameras.yml` (weekly, Monday 07:17 UTC, or by hand): plate readers and
+  speed cameras from the OH/KY/IN extracts and the 0.25° tiles the state outlines hold whole, to graph-data
+  `cameras/v1/region.json`. Worker: `GET /api/cameras/v1/region.json` (graph.ts `cameraList`). `web/cameras.js` `load`
+  reads it first; uncovered tiles, or our file down, still go to Overpass (4 servers now).
+- Next: after the merge, run the Cameras workflow once by hand so the file exists before Monday's run; check
+  `/api/cameras/v1/region.json` answers 200.
+- Route reports: the first one from Nate (01:27 UTC) was `loop: none`, a loop length with no loop found, not signal.
+
 ## Session 2026-11-12 (deepest analysis, PR 18): the end card says how this drive went on a road you know (claude/project-thread-gd7nre)
 
 - `web/driver_profile.js` `roadEndLine(r)`: on a road driven three or more times, roadUnevenLine when a least even corner
