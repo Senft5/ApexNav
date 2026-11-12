@@ -102,4 +102,4 @@ def test_the_page_wires_it():
     # a drive the mounted stream covered, or one whose road feel waits for signal, is not offered by hand in the Log
     assert "else if (nativeShared) ApexAnalysis.job('patch', { id: res.driveId, fields: { contributed: true } })" in html
     assert "if ((shared && shared.chunks > 0) || waits) await ApexAnalysis.job('patch'" in html
-    assert "&& !d.contributed" in (ROOT / "web" / "analysis.html").read_text()
+    assert "&& !d.contributed" in (ROOT / "web" / "analysis_page.js").read_text()

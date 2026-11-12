@@ -99,7 +99,7 @@ def test_the_drive_page_says_it():
     src = open(os.path.join(ROOT, "web", "drive_view.js"), encoding="utf-8").read()
     assert "FL.longest(Core, d.speed_mps, d.lon_g, d.lat_g, d.corners" in src
     assert "(flow ? `<p class=\"dv-plain\">${esc(flow)}</p>` : '')" in src
-    page = open(os.path.join(ROOT, "web", "analysis.html"), encoding="utf-8").read()
+    page = open(os.path.join(ROOT, "web", "analysis.html"), encoding="utf-8").read() + open(os.path.join(ROOT, "web", "analysis_page.js"), encoding="utf-8").read()
     assert page.index('<script src="flow.js"></script>') < page.index('<script src="drive_view.js"></script>')
     assert "REC.runOf(Core, d)" in src
 
@@ -124,7 +124,7 @@ def test_the_log_keeps_each_drives_best_run_in_its_summary():
 
 
 def test_the_records_and_the_workers_have_it():
-    page = open(os.path.join(ROOT, "web", "analysis.html"), encoding="utf-8").read()
+    page = open(os.path.join(ROOT, "web", "analysis.html"), encoding="utf-8").read() + open(os.path.join(ROOT, "web", "analysis_page.js"), encoding="utf-8").read()
     assert "Best run this month: corners in a row, smooth and settled" in page
     assert page.index('<script src="flow.js"></script>') < page.index('<script src="recording.js"></script>')
     for f in ("analysis_worker.js", "break_worker.js"):

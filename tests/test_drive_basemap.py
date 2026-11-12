@@ -97,7 +97,7 @@ def test_asked_for_only_where_it_can_draw(r):
 
 
 def test_the_page_loads_it_lazily_and_inside_the_policy():
-    an = (WEB / "analysis.html").read_text(encoding="utf-8")
+    an = (WEB / "analysis.html").read_text(encoding="utf-8") + (WEB / "analysis_page.js").read_text(encoding="utf-8")
     src = (WEB / "drive_basemap.js").read_text(encoding="utf-8")
     # MapLibre is not in the Log's head: it loads when the picture scrolls into view (REVIEW_FEEL: the Log stays fast)
     assert 'src="vendor/maplibre-gl.js"' not in an and 'href="vendor/maplibre-gl.css"' not in an

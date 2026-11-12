@@ -3,7 +3,7 @@ key, instead of a sentence on a blank sheet. Nothing drawn there may read as a r
 import re
 from pathlib import Path
 
-PAGE = (Path(__file__).resolve().parents[1] / "web" / "analysis.html").read_text()
+PAGE = (Path(__file__).resolve().parents[1] / "web" / "analysis.html").read_text() + (Path(__file__).resolve().parents[1] / "web" / "analysis_page.js").read_text()
 
 
 def test_the_empty_log_is_a_first_page_with_one_thing_to_do():

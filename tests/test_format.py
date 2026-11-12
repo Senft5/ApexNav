@@ -63,6 +63,6 @@ def test_a_chart_day_reads_as_a_day():
     js = "const F=require('./web/format.js');console.log(JSON.stringify([['2026-10-30','2026-11-02T09:00:00','2026-02-30','10-30','',null].map((x)=>F.dayShort(x,'en-GB')),F.dayShort('2026-10-30','en-US')]))"
     gb, us = json.loads(subprocess.run([NODE, "-e", js], cwd=root, capture_output=True, text=True, encoding="utf-8", check=True, timeout=30).stdout)
     assert gb == ["30 Oct", "2 Nov", "", "", "", ""] and us == "Oct 30"      # a day that doesn't exist is no day
-    page = (root / "web" / "analysis.html").read_text(encoding="utf-8")
+    page = (root / "web" / "analysis.html").read_text(encoding="utf-8") + (root / "web" / "analysis_page.js").read_text(encoding="utf-8")
     assert ".slice(5, 10)}</text>" not in page
     assert "ApexFormat.dateTime(d.date.slice(0, 10))" in page and page.count("ApexFormat.dayShort(") == 2
