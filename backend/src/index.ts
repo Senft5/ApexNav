@@ -6,7 +6,7 @@ import {
 import { convoyAccept, convoyCode, convoyCodeJoin, convoyCodePreview, convoyConnect, convoyCreate, convoyDismiss, convoyInvitePeople, convoyInvites, convoyJoin, convoyPreview, convoyRoom, unwrap } from "./convoy_routes";
 import { Env, HttpError, body, json, str } from "./util";
 import { rateCheck } from "./ratelimit";
-import { clientError, errorSummary, serverError } from "./errors";
+import { clientError, errorSummary, failingRoutes, serverError } from "./errors";
 import { backupDatabase } from "./backup";
 import { sweepExpired } from "./sweep";
 import { cronHealth, runCron } from "./cron_runs";
@@ -67,9 +67,10 @@ const on = (method: string, path: string, h: Handler) =>
 const noContent = () => new Response(null, { status: 204 });
 
 // Status checks (tools/status_check.py, IDEAS Y-05): one trivial read proves the database answers, not just the Worker.
-// The cron jobs ride along (src/cron_runs.ts): a backup or sweep that stopped or keeps failing is an outage there too.
+// The cron jobs ride along (src/cron_runs.ts): a backup or sweep that stopped or keeps failing is an outage there too, and so
+// is a route whose 500s keep coming (src/errors.ts failingRoutes).
 on("GET", "/api/health", async (_req, env) => {
-  try { return json({ ok: true, db: true, cron: await cronHealth(env) }); }
+  try { return json({ ok: true, db: true, cron: await cronHealth(env), failing_routes: await failingRoutes(env) }); }
   catch (e) { console.error(JSON.stringify({ event: "health_db_failed", error: String(e) })); return json({ ok: false, db: false }, 503); }
 });
 // Anonymous crash reports (web/errors.js): scrubbed, logged and counted per day (no person in it). Rate limited per IP like any signed-out write.
