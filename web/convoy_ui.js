@@ -394,7 +394,8 @@
       const said = el('p', { className: 'cv-code', textContent: '' });
       said.hidden = true;
       box.replaceChildren(cv, el('p', { className: 'note', textContent: 'Point a phone camera at it to join. Works for 30 minutes.' }), said,
-        btn('Hide', () => box.replaceChildren(), 'linkbtn'));
+        el('div', { className: 'row' }, btn('Hide', () => box.replaceChildren(), 'linkbtn'),   // a new link belongs with the code it replaces, not on the convoy's own row
+          btn('New link', async () => { if (await ApexConfirm.ask('Make a new link? The old one stops working for anyone who hasn\'t joined yet.', 'New link')) { await shareInvite(true); showQr(box); } }, 'linkbtn')));
       const code = await client.leaderCode();
       if (code && said.isConnected) {
         said.textContent = `Or join code ${code.slice(0, 3)} ${code.slice(3)}`; said.hidden = false;
@@ -470,9 +471,9 @@
           const name = labelled(el('input', { className: 'field', placeholder: 'Convoy name', maxLength: 40, autocomplete: 'off', value: h.name || '', enterKeyHint: 'go' }), 'Convoy name');
           const start = once(() => now(name.value.trim()));
           onReturn(name, start);
-          kids.push(el('p', { className: 'note', textContent: 'Drive together, live, for two hours; the leader can keep it going, up to six. Friends join with the code or the link; a crew’s run starts its convoy from the drive’s card.' }),
+          kids.push(el('p', { className: 'note', textContent: 'Drive together, live, up to six cars.' }),
             el('details', { className: 'how' }, el('summary', { textContent: 'How this works' }),
-              el('p', { className: 'note', textContent: 'Everyone in the convoy sees where everyone is, the leader can call hazards and a regroup point, and the co-driver warns you before you get there. Nothing is kept: it ends when the leader leaves or after two hours.' })),
+              el('p', { className: 'note', textContent: 'Everyone in the convoy sees where everyone is, the leader can call hazards and a regroup point, and the co-driver warns you before you get there. Friends join with the code or the link; a crew’s run starts its convoy from the drive’s card. Nothing is kept: it ends when the leader leaves or after two hours, unless the leader keeps it going.' })),
             el('div', { className: 'row' }, name, btn('Start a convoy', start, 'ink-btn solid')));
         }
         if (!pending) kids.push(...codeRow());
@@ -484,7 +485,7 @@
       // P-28: how long it has left, kept fresh every second, not the clock time it ends
       const left = el('span', { textContent: C.leftText(c.expiresAtMs) });
       live.left.push(left);
-      kids.push(el('p', { className: 'note' }, document.createTextNode(`${h.kind === 'sheet' ? `${c.name} · ` : 'Convoy · '}you are ${c.role === 'leader' ? 'leading' : 'following'} · `), left));
+      kids.push(el('p', { className: 'note' }, document.createTextNode(`${h.kind === 'sheet' && c.name && c.name !== 'Convoy' ? `${c.name} · you're` : 'You\'re'} ${c.role === 'leader' ? 'leading' : 'following'} · `), left));
       const list = el('div', { className: 'cv-members' });
       loadCars();
       for (const m of s.members) {
@@ -501,8 +502,7 @@
       // the picker (invite friends, the QR code) is the host's own: a status change redraws around it, never wipes it
       const actions = el('div', { className: 'row', style: 'flex-wrap:wrap' }), picker = h.picker || (h.picker = el('div', { className: 'stack-8' }));
       if (c.role === 'leader') {
-        actions.append(btn('Invite friends', () => invitePeople(picker), 'ink-btn solid'), btn('Show QR', () => showQr(picker)), btn('Share link', () => shareInvite(false)),
-          btn('New link', async () => { if (await ApexConfirm.ask('Make a new link? The old one stops working for anyone who hasn\'t joined yet.', 'New link')) shareInvite(true); }, 'linkbtn'));
+        actions.append(btn('Invite friends', () => invitePeople(picker), 'ink-btn solid'), btn('Show QR', () => showQr(picker)), btn('Share link', () => shareInvite(false)));
         const r = getRoute();
         const shareMsg = { sent: (n) => `${n} shared with the convoy.`, offline: () => 'Not connected to the convoy.', too_long: () => 'That route is too long to share.' };
         if (r) actions.append(btn(client.route ? 'Update shared route' : 'Share my route', () => { const out = client.shareRoute(r.name, r.pts); toast(shareMsg[out](r.name)); }));

@@ -1,12 +1,12 @@
 // ApexNav API Worker. Static files are served by Cloudflare's asset layer; only /api/* reaches this code
 // (wrangler.jsonc: assets.run_worker_first). Phones never talk to the database directly.
 import {
-  APP_ORIGIN, appExchange, csrfCheck, createInvite, googleCallback, googleStart, invitePreview, logout, redeemInvite, requireMember, requireUser, sessionHash, viewer,
+  APP_ORIGIN, appExchange, csrfCheck, createInvite, googleCallback, googleStart, invitePreview, logout, redeemInvite, requireMember, requireUser, sessionCookie, sessionHash, viewer,
 } from "./auth";
 import { convoyAccept, convoyCode, convoyCodeJoin, convoyCodePreview, convoyConnect, convoyCreate, convoyDismiss, convoyInvitePeople, convoyInvites, convoyJoin, convoyPreview, convoyRoom, unwrap } from "./convoy_routes";
 import { Env, HttpError, body, json, str } from "./util";
 import { rateCheck } from "./ratelimit";
-import { clientError, errorSummary, serverError } from "./errors";
+import { clientError, errorSummary, failingRoutes, serverError } from "./errors";
 import { backupDatabase } from "./backup";
 import { sweepExpired } from "./sweep";
 import { cronHealth, runCron } from "./cron_runs";
@@ -67,9 +67,10 @@ const on = (method: string, path: string, h: Handler) =>
 const noContent = () => new Response(null, { status: 204 });
 
 // Status checks (tools/status_check.py, IDEAS Y-05): one trivial read proves the database answers, not just the Worker.
-// The cron jobs ride along (src/cron_runs.ts): a backup or sweep that stopped or keeps failing is an outage there too.
+// The cron jobs ride along (src/cron_runs.ts): a backup or sweep that stopped or keeps failing is an outage there too, and so
+// is a route whose 500s keep coming (src/errors.ts failingRoutes).
 on("GET", "/api/health", async (_req, env) => {
-  try { return json({ ok: true, db: true, cron: await cronHealth(env) }); }
+  try { return json({ ok: true, db: true, cron: await cronHealth(env), failing_routes: await failingRoutes(env) }); }
   catch (e) { console.error(JSON.stringify({ event: "health_db_failed", error: String(e) })); return json({ ok: false, db: false }, 503); }
 });
 // Anonymous crash reports (web/errors.js): scrubbed, logged and counted per day (no person in it). Rate limited per IP like any signed-out write.
@@ -127,8 +128,10 @@ on("GET", "/api/me", async (req, env) => {
   const photo = v.member ? await env.DB.prepare("SELECT photo_id FROM users WHERE id = ?").bind(v.id).first<{ photo_id: string | null }>() : null;
   // private themes granted to this account by hand (migration 0044): their looks, for this account only; [] for everyone else
   const themes = await grantedThemes(env, v.id);
+  const again = sessionCookie(req);                                  // the website's cookie keeps up with the sliding session
   return json({ signed_in: true, id: v.id, handle: v.handle, name: v.displayName, member: v.member, requests: waiting?.n ?? 0, photo_id: photo?.photo_id ?? null,
-               themes, ...(v.member && isModerator(env, v) ? { moderator: true } : {}), ...(await isDeveloper(env, v) ? { developer: true } : {}) });
+               themes, ...(v.member && isModerator(env, v) ? { moderator: true } : {}), ...(await isDeveloper(env, v) ? { developer: true } : {}) },
+              200, again ? { "set-cookie": again } : {});
 });
 on("POST", "/api/invites/redeem", async (req, env) => { await redeemInvite(env, await requireUser(req, env), req); return noContent(); });
 on("POST", "/api/invites/preview", async (req, env) => json(await invitePreview(env, await requireMember(req, env), req)));   // P-02: whose friend link

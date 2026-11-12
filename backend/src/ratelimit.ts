@@ -1,7 +1,7 @@
 // Abuse protection on every write and every sign-in endpoint (docs/IDEAS.md Y-10). Cloudflare's rate limiting binding:
 // free, no database writes, counted per Cloudflare location (approximate by design, which is fine for abuse, not billing).
 // Reads: the relays (RELAYS) need no account and ask a public service (Overpass, Valhalla, a state feed) on a miss, so they
-// are limited per IP so nobody scrapes those through us. A signed-in read is limited per session (READ_LIMIT, generous:
+// are limited per IP so nobody scrapes those through us. A signed-in read is limited per session and a signed-out one per IP (READ_LIMIT, generous:
 // a phone polls a handful of endpoints a minute), so one account can't walk the API to scrape people, crews or spots; the
 // static map tiles (TILE_PREFIXES) are left out, a plan reads many. Per-feature caps (uploads per hour, crews, highlights
 // per day) stay where they are; this is the floor under all of them.
@@ -33,8 +33,10 @@ export async function rateCheck(req: Request, env: Env, path: string): Promise<v
   }
   if (!WRITE_METHODS.has(req.method)) {
     if (!env.READ_LIMIT || TILE_PREFIXES.some((p) => path.startsWith(p))) return;
+    // signed out, per IP: the public reads (road books near a point, a shared ETA, flags) are D1 reads like any other.
+    // A made-up token is charged per IP as well, where auth.ts viewer() finds no session for it.
     const s = await sessionHash(req);
-    if (s && !(await env.READ_LIMIT.limit({ key: `s:${s}` })).success) throw new HttpError(429, "rate_limited");
+    if (!(await env.READ_LIMIT.limit({ key: s ? `s:${s}` : `ip:${ip}` })).success) throw new HttpError(429, "rate_limited");
     return;
   }
   if (!env.WRITE_LIMIT) return;

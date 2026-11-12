@@ -2908,7 +2908,7 @@ flow('convoy: an in-app invite toasts and Join gets you in, no link (Worker stub
   await page.waitForSelector('.convoy-sheet button:has-text("Join")');
   check(/@lead invited you: Sunday run/.test(await page.textContent('.convoy-sheet')), 'the convoy sheet says who invited you and to what');
   await page.click('.convoy-sheet button:text-is("Join")');
-  await page.waitForFunction(() => /you are following/.test(document.querySelector('.convoy-sheet').textContent), null, { timeout: 5000 });
+  await page.waitForFunction(() => /you're following/i.test(document.querySelector('.convoy-sheet').textContent), null, { timeout: 5000 });
   check(/left/.test(await page.textContent('.convoy-sheet')) && !/ends \d/.test(await page.textContent('.convoy-sheet')), 'how long it has left, not a clock time (P-28): ' + await page.textContent('.convoy-sheet .note'));
   check(accepted, 'joined with consent, without a link');
   await page.click('.convoy-sheet button:has-text("Done")');
@@ -3176,6 +3176,7 @@ flow('meets on the map: off by default; on, public meets near the map are pinned
   await page.click('#swTab');
   await page.click('[data-toggle="meets"]');
   await page.waitForSelector('.mm-pin');
+  check(/^Meets within 50 mi of the map\. Tap a pin\.$/.test(await page.textContent('#toast')), 'the switch says where in the driver\'s miles, in one line: ' + await page.textContent('#toast'));
   const pin = await page.evaluate(() => ({ n: document.querySelectorAll('.mm-pin').length, text: document.querySelector('.mm-pin').textContent, label: document.querySelector('.mm-pin').getAttribute('aria-label') }));
   check(pin.n === 1 && /\+1$/.test(pin.text) && /^Cars and coffee, \w+, and 1 more\./.test(pin.label), 'two meets at one place share a pin, soonest first: ' + JSON.stringify(pin));
   check(asked.length >= 1 && /^\?lat=35\.\d&lon=-8\d\.\d$/.test(asked[0]), 'asked by the map centre cell only: ' + JSON.stringify(asked));
@@ -3763,13 +3764,18 @@ flow('convoy: the leader shows a QR code of the link (Worker stubbed, IDEAS S-22
   check(/^Just drive$/.test((await page.textContent('.start-sheet .rec-key')).trim()), 'the key\'s chevron offers Just drive and Convoy now');
   await page.click('.start-sheet button:has-text("Convoy now")');
   await page.waitForSelector('.convoy-sheet canvas.cv-qr');
-  check(/you are leading/.test(await page.textContent('.convoy-sheet')) && await page.isVisible('.convoy-sheet button:has-text("Start the drive")'), 'leading, the code up, the drive one key away');
+  check(/you're leading/i.test(await page.textContent('.convoy-sheet')) && await page.isVisible('.convoy-sheet button:has-text("Start the drive")'), 'leading, the code up, the drive one key away');
   const dark = await page.evaluate(() => { const c = document.querySelector('canvas.cv-qr'), d = c.getContext('2d').getImageData(0, 0, c.width, c.height).data;
     let n = 0; for (let i = 0; i < d.length; i += 4) if (d[i] < 128) n++; return n / (d.length / 4); });
   check(dark > 0.2 && dark < 0.6, `a QR code is drawn (${(dark * 100).toFixed(0)} % dark)`);
   // and the code to read out, for a friend whose camera can't see the screen
   await page.waitForFunction(() => { const c = document.querySelector('.convoy-sheet .cv-code'); return c && !c.hidden; }, null, { timeout: 5000 });
   check((await page.textContent('.convoy-sheet .cv-code')) === 'Or join code K7P 4QX', 'the join code under the QR: ' + await page.textContent('.convoy-sheet .cv-code'));
+  // the convoy's own row keeps its few keys; New link sits with the code it replaces, and the line under the title doesn't say Convoy again
+  const keys = await page.evaluate(() => { const qr = document.querySelector('.convoy-sheet canvas.cv-qr').parentElement;
+    return { qr: [...qr.querySelectorAll('button')].map((b) => b.textContent), all: [...document.querySelectorAll('.convoy-sheet button')].filter((b) => !qr.contains(b)).map((b) => b.textContent),
+      line: document.querySelector('.convoy-sheet .note').textContent }; });
+  check(keys.qr.includes('New link') && !keys.all.includes('New link') && !/^Convoy ·/.test(keys.line), 'New link under the code, the line says who leads: ' + JSON.stringify(keys));
 });
 
 flow('convoy: a friend joins with the code the leader read out (Worker stubbed, IDEAS S-22)', async (page, base) => {
@@ -3805,7 +3811,7 @@ flow('convoy: a friend joins with the code the leader read out (Worker stubbed, 
   // Return on the keyboard joins, and a second Return while it works spends no second try (walkthrough 2026-11-12)
   await page.focus('.convoy-sheet input[aria-label="Convoy join code"]');
   await page.keyboard.press('Enter'); await page.keyboard.press('Enter');
-  await page.waitForFunction(() => /you are following/.test(document.querySelector('.convoy-sheet').textContent), null, { timeout: 5000 });
+  await page.waitForFunction(() => /you're following/i.test(document.querySelector('.convoy-sheet').textContent), null, { timeout: 5000 });
   check(sent.length === 2, 'Return joins with the code, once: ' + sent.length + ' tries sent');
   check(sent.length === 2 && sent.every((b) => b.consent === true), 'joined with consent: ' + JSON.stringify(sent));
 });
@@ -3940,6 +3946,34 @@ flow('convoy: leading a drive, the convoy is one line behind the car and the cal
   bad = await unsafe(page, SAFE.landscape);
   check(!bad.length, 'on its side, the Report sheet with the calls is clear: ' + bad.join(' | '));
 }, { hasTouch: true });
+
+flow('garage: a car card holds the build thread, Edit and Show to friends; Make daily and Remove wait in Edit (walkthrough 2026-11-12)', async (page, base) => {
+  await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); } catch (_) {} });
+  await page.goto(base + '/index.html');
+  await page.waitForFunction(() => window.ApexGarageUI && window.ApexConfirm);
+  await page.evaluate(() => {
+    const el = (tag, props = {}, ...kids) => { const n = Object.assign(document.createElement(tag), props); n.append(...kids); return n; };
+    const btn = (text, onclick, className = 'ink-btn') => el('button', { textContent: text, onclick, className });
+    const ok = (body) => ({ ok: true, status: 200, json: async () => body });
+    window.__garage = { calls: [], cars: [{ id: 'c1', year: 2023, make: 'Toyota', model: 'GR86', shared: 1, is_primary: 1 }, { id: 'c2', year: 1999, make: 'Mazda', model: 'Miata', shared: 0, is_primary: 0 }] };
+    const g = ApexGarageUI.mount({ el, btn, toast: () => {}, jsonOf: (r) => r.json(),
+      apiCall: async (m, p, b) => { window.__garage.calls.push({ m, p }); if (m === 'DELETE') window.__garage.cars = window.__garage.cars.filter((c) => !p.endsWith(c.id)); return ok(p === '/api/garage' ? window.__garage.cars : []); } });
+    const host = el('div', { id: 'e2eGarage' }); host.style.cssText = 'position:relative;z-index:50';
+    document.body.prepend(host); host.append(g.section());
+  });
+  await page.waitForSelector('#e2eGarage .car-card');
+  const keys = await page.$$eval('#e2eGarage .car-card', (cs) => cs.map((c) => [...c.querySelectorAll(':scope > .row button')].map((b) => b.textContent.trim())));
+  check(keys.every((k) => !k.includes('Make daily') && !k.some((t) => /^Remove/.test(t)) && k.includes('Edit') && k.some((t) => /Show to friends/.test(t))), 'a card: build thread, Edit, Show to friends: ' + JSON.stringify(keys));
+  await page.click('#e2eGarage .car-card:nth-of-type(2) button:text-is("Edit")');
+  await page.waitForSelector('#e2eGarage .car-rare');
+  check(JSON.stringify(await page.$$eval('#e2eGarage .car-rare button', (b) => b.map((x) => x.textContent))) === '["Make daily","Remove from garage"]', 'Edit holds Make daily and Remove from garage');
+  await page.click('#e2eGarage .car-rare button:text-is("Remove from garage")');
+  await page.waitForSelector('.confirm-sheet .cs-yes');
+  await page.click('.confirm-sheet .cs-yes');
+  await page.waitForFunction(() => window.__garage.calls.some((c) => c.m === 'DELETE' && c.p === '/api/garage/c2'));
+  await page.waitForFunction(() => document.querySelectorAll('#e2eGarage .car-card').length === 1 && !document.querySelector('#e2eGarage .car-rare'));
+  check(true, 'Remove asks, deletes the car and closes Edit');
+});
 
 flow('garage: a VIN fills the car in, the owner keeps the colour (NHTSA stubbed, IDEAS S-21)', async (page, base) => {
   await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); } catch (_) {} });
@@ -4200,6 +4234,11 @@ flow('road feel that waited for signal: counted in Your data, kept while Road da
     await ApexRoadCarry.idle();
   });
   check((await page.evaluate(() => ApexRoadCarry.size())) === 1 && (await page.evaluate(() => ApexRoadCarry.itemM({ rows: { lat: [1, 2] }, pending: [{ bins: [1, 2, 3] }] }))) === 25, 'one trip waits in the store');
+  // an app restart: the trip is still in the store (IndexedDB plus its index), nothing sent while the account can't be confirmed
+  await page.reload();
+  await page.waitForFunction(() => window.ApexRoadCarry && ApexRoadCarry.flush && window.ApexMyData && window.apexDebug);
+  await page.waitForTimeout(500);
+  check((await page.evaluate(() => ApexRoadCarry.size())) === 1 && posted.length === 0, 'it survives an app restart');
   await page.click('.tab[data-view="garage"]');
   await openSetting(page, 'data');
   await page.waitForFunction(() => /road data from 1\.2 mi waiting for signal/.test(document.getElementById('myDataNote').textContent));
@@ -4738,7 +4777,7 @@ flow('the run as one card: the morning of, a crew-mate\'s convoy to join or your
   await page.click('.cp-week .drive-card button:has-text("Start the convoy")');
   await page.waitForSelector('.cp-week .drive-card.is-convoy .cv-panel', { timeout: 8000 });
   const live = await page.textContent('.cp-week .drive-card');
-  check(/LIVE/.test(live) && /you are leading/.test(live) && /left/.test(live) && /Show QR/.test(live) && /End convoy/.test(live), 'the convoy live on the card: ' + live);
+  check(/LIVE/.test(live) && /you're leading/i.test(live) && /left/.test(live) && /Show QR/.test(live) && /End convoy/.test(live), 'the convoy live on the card: ' + live);
   check(sent.some(([m, p]) => m === 'POST' && p === `/api/convoy/${cid}/invite-people`) && sent.some(([m, p]) => m === 'POST' && p === '/api/events/e1AAAAAAAAAAAAAA/came'), 'everyone going invited; you came: ' + JSON.stringify(sent));
   await page.evaluate(() => document.querySelector('.tab[data-view="map"]').click());
   check(/Ridge Runners · Dawn run/.test(await page.textContent('.convoy-bar.show .cv-line')), 'the map: one line for the convoy');
@@ -5569,7 +5608,7 @@ flow('one link in: no "invite-only" anywhere; a crew link joins a newcomer with 
   await page.click('[data-people="crews"]');
   await page.waitForSelector('#crewsBody >> text=Join Blue Ridge Breakfast Club?');
   const card = await page.textContent('#crewsBody .card');
-  check(/@tilly sent you the link, and you’ll be friends/.test(card) && !/first/i.test(card), 'the newcomer sees the crew and who sent it, nothing to do first: ' + card);
+  check(/@tilly sent you the link, and you’ll be friends\./.test(card) && !/first|how the crew sees/i.test(card), 'the newcomer sees the crew and who sent it, nothing to do first: ' + card);
   await page.fill('#crewsBody .card input[aria-label="Handle"]', 'newbie');
   crews = [];
   await page.click('#crewsBody .card button:has-text("Join crew")');
@@ -7032,6 +7071,27 @@ flow('the main map: with no signal and no saved area one line says there is no m
   await page.evaluate(() => window.apexDebug.map.setStyle('https://tiles.openfreemap.org/styles/liberty?again'));
   await page.waitForTimeout(2500);
   check(await page.evaluate(() => document.getElementById('mapNote').hidden), 'no note once the map draws');
+});
+
+flow('the main map on plain paper: back online it reloads once the style really comes, keeping the paper through a flicker', async (page, base) => {
+  await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); localStorage.setItem('apex.permsExplained', '1'); } catch (_) {} });
+  let tiles = false;
+  await page.route('https://tiles.openfreemap.org/**', (route) => (!tiles ? route.abort('internetdisconnected') : route.request().url().includes('/styles/')
+    ? route.fulfill({ contentType: 'application/json', body: JSON.stringify({ version: 8, sources: {}, layers: [{ id: 'bg', type: 'background', paint: { 'background-color': '#eee' } }] }) })
+    : route.fulfill({ status: 200, contentType: 'application/x-protobuf', body: Buffer.alloc(0) })));
+  await page.goto(base + '/index.html');
+  await page.waitForFunction(() => { try { return !!window.apexDebug.map.getLayer('apex-route'); } catch (_) { return false; } }, null, { timeout: 8000 });
+  await page.evaluate(() => { window.__stayed = 1; });
+  // a flicker: the phone says online, but the style still can't be fetched, so the page stays as it is
+  await page.evaluate(() => window.dispatchEvent(new Event('online')));
+  await page.waitForTimeout(800);
+  check(await page.evaluate(() => window.__stayed === 1), 'a flicker of signal keeps the page');
+  // real signal: the style comes, and the page reloads onto the base map
+  tiles = true;
+  await page.evaluate(() => window.dispatchEvent(new Event('online')));
+  await page.waitForFunction(() => window.__stayed !== 1, null, { timeout: 8000 });
+  await page.waitForFunction(() => { try { const m = window.apexDebug.map; return !!m.getLayer('bg') && !!m.getLayer('apex-route'); } catch (_) { return false; } }, null, { timeout: 8000 });
+  check(true, 'it reloaded onto the base map, with our layers on it');
 });
 
 flow('the drive page\'s map: with no signal and no saved area the panel says the map is unavailable offline, and MapLibre never loads', async (page, base) => {
