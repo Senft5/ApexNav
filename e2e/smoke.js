@@ -2861,6 +2861,10 @@ flow('crew page: an old ?view=crew link opens People on Crews, at your crew; goi
   check(await page.evaluate(() => document.querySelector('[data-people="crews"]').getAttribute('aria-selected') === 'true' && !document.getElementById('crewsBody').hidden
     && document.getElementById('accountBody').hidden && document.getElementById('sheetTitle').textContent === 'People'), 'on the People tab, its Crews side');
   check(await page.evaluate(() => !!document.querySelector('#crewsBody .crew-head .gear-key') && !document.querySelector('#crewsBody .friend-list')), 'the crew head and its gear are on the Crews side, no friends list there');
+  // Nate 2026-11-12 (as easy as a big social app): three tabs under the crew's name, Drives open first
+  check(JSON.stringify(await page.$$eval('.cp-tabs [role="tab"]', (b) => b.map((x) => x.textContent + ':' + x.getAttribute('aria-selected')))) === '["Drives:true","Chat:false","Board:false"]', 'Drives | Chat | Board, Drives open');
+  check(await page.isHidden('.cp-board') && await page.isHidden('.cp-say'), 'the board and the chat wait behind their tabs');
+  await page.click('.cp-tabs [data-cp-tab="board"]');
   await page.waitForSelector('.cp-board .cp-board-row');
   const boardRows = () => page.$$eval('.cp-board .cp-board-row', (r) => r.map((x) => [x.querySelector('.who b').textContent, x.querySelector('.score').textContent, !!x.querySelector('.avatar')]));
   const rows = await boardRows();
@@ -2871,20 +2875,26 @@ flow('crew page: an old ?view=crew link opens People on Crews, at your crew; goi
   check(JSON.stringify((await boardRows()).map((r) => r[1])) === JSON.stringify([(12840).toLocaleString(), (702).toLocaleString()]) && boardAsks.includes('all'), 'All time asks for all time');
   // the owner's note 05: no Crew drives row; the crew's Upcoming drives has a + in its corner that plans one
   check(!/Crew drives/.test(await page.$$eval('#crewsBody .nav-rows', (n) => n.map((x) => x.textContent).join('|'))), 'no Crew drives row on Crews');
+  await page.click('.cp-tabs [data-cp-tab="drives"]');
   check(/Upcoming drives/.test(await page.textContent('.cp-week .cp-sec h3')) && await page.isVisible('.cp-week .cp-sec .plan-plus'), 'Upcoming drives with a + in its corner');
   await page.click('.cp-week .plan-plus');
   await page.waitForSelector('.cp-week .plan-drive');
   check(await page.isHidden('.cp-week .plan-plus'), 'the + opens the plan form there, and gives way to it');
   await page.click('.cp-week .plan-drive button:text-is("Cancel")');
+  await page.click('.cp-tabs [data-cp-tab="chat"]');
   check(await page.$eval('.cp-msg p', (p) => p.textContent === '<b>Fog</b> by 7?' && !p.querySelector('b')), 'chat is set as text');
-  // P-03: the run first, then the members, then the chat, the board after; the livery one line at the foot; no Convoy heading
-  await page.waitForSelector('.cp-member');
-  const order = await page.$$eval('.crew-page .cp-body > *', (n) => n.map((x) => x.classList.contains('cp-title') ? 'title' : x.classList.contains('cp-week') ? 'run'
-    : x.classList.contains('cp-livery-foot') ? 'livery' : (x.querySelector(':scope > .cp-sec h3') || {}).textContent || x.className).filter(Boolean));
-  check(JSON.stringify(order.slice(0, 5)) === '["title","run","Members","Chat","Vetta Score board"]' && order[order.length - 1] === 'livery', 'the page in order: ' + JSON.stringify(order));
+  // P-03: the run first, then the members; the chat and the board each behind its tab; the livery one line at the foot; no Convoy heading
+  await page.waitForSelector('.cp-member', { state: 'attached' });
+  const order = await page.evaluate(() => {
+    const name = (x) => x.classList.contains('cp-week') ? 'run' : (x.querySelector(':scope > .cp-sec h3') || {}).textContent || x.className;
+    const body = [...document.querySelectorAll('.crew-page .cp-body > *')].map((x) => x.classList.contains('cp-title') ? 'title' : x.classList.contains('cp-livery-foot') ? 'livery' : x.querySelector('.cp-tabs') ? 'tabs' : x.className);
+    return { body, panes: Object.fromEntries([...document.querySelectorAll('.cp-pane')].map((p) => [p.id, [...p.children].map(name).filter(Boolean)])) }; });
+  check(JSON.stringify(order.body) === '["title","tabs","livery"]' && JSON.stringify(order.panes['cpPane-drives'].slice(0, 2)) === '["run","Members"]'
+    && order.panes['cpPane-chat'][0] === 'Chat' && order.panes['cpPane-board'][0] === 'Vetta Score board', 'the page in order: ' + JSON.stringify(order));
   check(!(await page.$$('.crew-page .cp-livery, .crew-page .cp-meter')).length, 'no livery box or meter on the page (they are in Edit livery)');
   check(!/Convoy/.test(await page.$$eval('#crewsBody h3', (h) => h.map((x) => x.textContent).join('|'))), 'no Convoy heading on Crews');
   // P-06: the members as faces, the owner marked, the one on the road lit
+  await page.click('.cp-tabs [data-cp-tab="drives"]');
   const mem = await page.$$eval('.cp-member', (b) => b.map((x) => [x.querySelector('small').textContent, !!x.querySelector('em'), x.classList.contains('live')]));
   check(JSON.stringify(mem) === JSON.stringify([['You', true, false], ['@cara', false, true], ['@sam', false, false]]) && /3 members · 1 out now/.test(await page.textContent('.crew-page')), 'members: ' + JSON.stringify(mem));
   await page.click('.cp-member:has-text("@sam")');
@@ -2892,6 +2902,7 @@ flow('crew page: an old ?view=crew link opens People on Crews, at your crew; goi
   check(await page.isVisible('.cp-member-sheet button:has-text("Report")') && await page.isVisible('.cp-member-sheet button:has-text("Block")'), 'Report and Block are on the member, one tap in');
   await page.click('.cp-member-sheet button:has-text("Done")');
   // P-17: a message is its handle, time and words; Report is behind one key
+  await page.click('.cp-tabs [data-cp-tab="chat"]');
   check(!(await page.$$('.cp-msg .linkbtn')).length && await page.isVisible('.cp-msg .cp-dots'), 'no Delete / Report / Pin links on the message');
   await page.click('.cp-msg .cp-dots');
   await page.waitForSelector('.confirm-sheet .cs-choose');
@@ -2913,7 +2924,9 @@ flow('crew page: an old ?view=crew link opens People on Crews, at your crew; goi
   check(gs.heads.map((h) => h.t).join('|') === 'What it sees of yours|Who can invite|Who can find it' && gs.heads.every((h) => h.lines === 1), 'three parts, each named on one line: ' + JSON.stringify(gs.heads));
   check(gs.offLeft <= 4 && gs.leaveLeft <= 4 && gs.offWide && !gs.hintCut, 'text keys start at the left, the area hint is whole: ' + JSON.stringify(gs));
   await page.click('.side-pop.open[aria-label="Crew settings"] button:has-text("Done")');
+  await page.click('.cp-tabs [data-cp-tab="drives"]');
   await page.click('.cp-drive button:has-text("going")');
+  await page.click('.cp-tabs [data-cp-tab="chat"]');
   await page.fill('.cp-say textarea', 'Saturday it is');
   await page.click('.cp-say button:has-text("Send")');
   await page.click('.cp-edit');
@@ -2931,6 +2944,7 @@ flow('crew page: an old ?view=crew link opens People on Crews, at your crew; goi
   check(await page.getAttribute('.cp-meet [data-crew-home]', 'aria-checked') === 'false' && !find('/api/crews/k1/home'), 'Share my rough area is off by default');
   // the owner, 2026-11-12 (TestFlight): "meeting points switch broken": with no Home pinned it refused. Now the square comes
   // from where the phone is (39.2, -84.6 here; sent as its 0.1-degree square's centre, never the position)
+  await page.click('.cp-tabs [data-cp-tab="drives"]');
   await page.click('.cp-meet [data-crew-home]');
   await page.waitForFunction(() => document.querySelector('.cp-meet [data-crew-home]').getAttribute('aria-checked') === 'true', null, { timeout: 10000 });
   const home = JSON.parse(find('/api/crews/k1/home').b);
