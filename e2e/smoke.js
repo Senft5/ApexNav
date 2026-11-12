@@ -7059,6 +7059,20 @@ flow('the empty Log is a first page: the book\'s furniture in pencil, one key, a
   check(s.head === 'No stages yet.' && s.go === 'Start a drive' && s.mark, 'Stages: what a stage is, drawn, and the way to one: ' + JSON.stringify(s));
 });
 
+flow('Stages with no stage yet: Mark a stage opens the marker right there on your latest drive (free roamer B, 2026-11-12)', async (page, base) => {
+  await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); } catch (_) {} });
+  await page.goto(base + '/analysis.html');
+  await page.waitForFunction(() => window.apexLogDebug && window.apexLogDebug.loaded() && window.ApexRecording);
+  await storeDashDrive(page, 'mk1', 'Marker road');
+  await page.goto(base + '/analysis.html?tab=stages');
+  await page.waitForSelector('#segList .fp-go');
+  check(await page.evaluate(() => document.getElementById('newStage').hidden), 'the marker waits behind the key');
+  await page.click('#segList .fp-go');
+  const m = await page.evaluate(() => ({ tab: !document.getElementById('tab-segments').hidden, open: document.getElementById('newStage').open,
+    shown: !document.getElementById('newStage').hidden, drive: document.getElementById('segDrive').value }));
+  check(m.tab && m.open && m.shown && m.drive === 'mk1', 'still on Stages, the marker open on the drive: ' + JSON.stringify(m));
+});
+
 flow('the drive page\'s map: with no map to be had the picture keeps its blank panel; MapLibre loads only for it (TestFlight 15)', async (page, base) => {
   await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); } catch (_) {} });
   await page.goto(base + '/analysis.html');
