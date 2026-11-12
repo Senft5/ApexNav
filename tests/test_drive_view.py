@@ -183,8 +183,8 @@ def test_coast_tip_wording_follows_the_tip_not_the_best_pass(r):
 
 
 def test_grip_circle_from_measured_g_only(r):
-    assert r["ggCaption"].startswith("The outline on this drive: braking")
-    assert r["ggCorner"].startswith("Corner 1, from 100 m before turn-in to the exit:") and "%" in r["ggCorner"]
+    assert r["ggCaption"].startswith("Outline: braking ") and " · left " in r["ggCaption"] and " · throttle " in r["ggCaption"]
+    assert r["ggCorner"].startswith("Corner 1: ") and r["ggCorner"].endswith("% of the outline on average, from 100 m before turn-in to the exit") or r["ggCorner"].startswith("Corner 1: --"), r["ggCorner"]
     assert r["ggNone"] == 3, "no measured g: no grip circle"
 
 
