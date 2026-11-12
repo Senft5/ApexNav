@@ -360,14 +360,19 @@
       return candidates(await client.round(req));
     } catch (_) { return []; }
   }
-  /** Loops from our router, as routes in the shape the loop planner routes (coords [[lon, lat]], turns, times). */
+  /**
+   * Loops from our router, as routes in the shape the loop planner routes (coords [[lon, lat]], turns, times).
+   * `api.lastLoopError`: why the last ask failed (the worker's error, such as "graph router timed out"), or null when it
+   * answered, with loops or without: a failure is not "no loop of that length" (Nate's "loop: none", 2026-11-12).
+   */
   async function loops(client, req) {
+    api.lastLoopError = null;
     if (!client) return [];
     try {
       if (!(await client.covers([req.start]))) return [];
       const res = await client.loop(req);
       return ((res && res.routes) || []).map((r) => (r && r.route ? { ...r, route: withCoords(r.route) } : r)).filter((r) => r && r.route && r.route.coords && r.route.coords.length > 2);
-    } catch (_) { return []; }
+    } catch (e) { api.lastLoopError = String((e && e.message) || e || 'error').slice(0, 80); return []; }
   }
 
   // ---- one clock --------------------------------------------------------------------------------------------------------
@@ -455,7 +460,7 @@
     return 'own';
   }
 
-  const api = { roundTrip, OFF_KEY, on, withCoords, routeOfLine, limitsAlong, candidates, plan, quick, through, loops, cellsFor, crowdItems, crowdFor, crowdSoon, cellsNear, holdArea, releaseArea, keptFor, clearCrowd, HELD_KEY, _cells: cellMemo, sharedShare, oneClock, polyline6, thin, traceBody, instruct };
+  const api = { lastLoopError: null, roundTrip, OFF_KEY, on, withCoords, routeOfLine, limitsAlong, candidates, plan, quick, through, loops, cellsFor, crowdItems, crowdFor, crowdSoon, cellsNear, holdArea, releaseArea, keptFor, clearCrowd, HELD_KEY, _cells: cellMemo, sharedShare, oneClock, polyline6, thin, traceBody, instruct };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   root.ApexOwnRouting = api;
 })(typeof window !== 'undefined' ? window : globalThis);

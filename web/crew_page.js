@@ -420,22 +420,34 @@
      */
     function meetShare(c) {
       const M = root.ApexCrewMeet, Pin = root.ApexPinnedPlaces;
+      // where the phone is now, once, for a rough area when no Home is pinned; null when Location is off or slow
+      const here = () => new Promise((done) => {
+        const g = root.navigator && root.navigator.geolocation;
+        if (!g) { done(null); return; }
+        g.getCurrentPosition((p) => done({ lat: p.coords.latitude, lon: p.coords.longitude }), () => done(null), { maximumAge: 600000, timeout: 8000 });
+      });
       const sw = el('button', { type: 'button', className: 'sw' + (c.home_shared ? ' on' : '') }, el('i'), el('span', { textContent: 'Share my rough area for fair meeting points' }));
       sw.setAttribute('role', 'switch'); sw.setAttribute('aria-checked', String(!!c.home_shared)); sw.dataset.crewHome = '';
       sw.addEventListener('click', async () => {
         const on = !sw.classList.contains('on');
         let body = { on: false };
         if (on) {
-          const cell = M && Pin ? M.homeCell(Pin.list(root.localStorage)) : null;
-          if (!cell) { toast('Pin Home in Where to? first, then switch this on.'); return; }
+          // the owner, 2026-11-12 (TestFlight): "meeting points switch broken". With no Home pin it only said "Pin Home in
+          // Where to? first" and stayed off. Now the square comes from Home when pinned, else from where the phone is now
+          // (the same 0.1-degree square, coarsened here, never the position itself)
+          let cell = M && Pin ? M.homeCell(Pin.list(root.localStorage)) : null;
+          if (!cell && M) { const at = await here(); cell = at ? M.cellOf(at.lat, at.lon) : null; }
+          if (!cell) { toast('Pin Home in Where to?, or allow Location, to share your rough area.'); return; }
           body = { on: true, lat: cell.lat, lon: cell.lon };
         }
+        sw.disabled = true;
         const r = await apiCall('PUT', `/api/crews/${encodeURIComponent(c.id)}/home`, body).catch(() => null);
-        if (!r || !r.ok) { toast('Couldn\u2019t change that. Try again.'); return; }
+        sw.disabled = false;
+        if (!r || !r.ok) { toast(r && r.status === 401 ? 'Sign in again to change that.' : 'Couldn\u2019t change that. Try again.'); return; }
         sw.classList.toggle('on', on); sw.setAttribute('aria-checked', String(on));
       });
       return el('section', { className: 'cp-meet stack-8' }, el('div', { className: 'cp-sec' }, el('h3', { textContent: 'Meeting points' })), sw,   // named like Members, Chat and the board (it was the one small heading under a rule)
-        el('p', { className: 'note', textContent: `Your Home pin\u2019s square, about ${root.ApexUnits && !root.ApexUnits.metric() ? '7 miles' : '11 km'} across, never the address. Crew-mates see the squares, not whose, once two share. Used to pick a meeting point fair to everyone.` }));
+        el('p', { className: 'note', textContent: `Your Home pin\u2019s square (or, with none pinned, where you are now), about ${root.ApexUnits && !root.ApexUnits.metric() ? '7 miles' : '11 km'} across, never the address. Crew-mates see the squares, not whose, once two share. Used to pick a meeting point fair to everyone.` }));
     }
     function pinnedRow(c) {
       return el('div', { className: 'cp-pinned' }, el('span', { className: 'note', textContent: 'Pinned route' }), el('b', { textContent: c.pinned.name }),

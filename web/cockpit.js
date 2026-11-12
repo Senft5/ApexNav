@@ -717,6 +717,7 @@
     // (attachScenic) that would overlap on screen hide, the most useful few kept (scenic.js declutter), again as the map
     // moves. Hidden by visibility, so a drive's "only the next fuel stop" (display) stays its own rule.
     const poiDeclutter = { raf: 0, pins: [] };
+    const VIEW_NAME_ZOOM = 15;
     function declutterSoon() {
       if (!poiDeclutter.raf && poiDeclutter.pins.length) poiDeclutter.raf = requestAnimationFrame(declutterPois);
     }
@@ -724,6 +725,8 @@
       poiDeclutter.raf = 0;
       if (!window.ApexScenic || !ApexScenic.declutter) return;
       const shown = poiDeclutter.pins.filter((p) => p.el.style.display !== 'none' && p.el.isConnected), c = map.getContainer();
+      const close = map.getZoom() >= VIEW_NAME_ZOOM;                    // a named viewpoint's name, only where it has room
+      for (const p of shown) if (p.kind === 'view' && p.name) { const t = close ? p.name : SCENIC_LABEL.view; if (p.el.textContent !== t) p.el.textContent = t; }
       const keep = ApexScenic.declutter(shown.map((p) => {
         const xy = map.project(p.marker.getLngLat());
         return { kind: p.kind, named: p.named, m: p.m, x: xy.x, y: xy.y, w: p.el.offsetWidth, h: p.el.offsetHeight };
@@ -2041,6 +2044,10 @@
       const crawl = si.speed != null && si.speed < (/^km/i.test(si.unit) ? 8 : 5);
       d.sightMph = crawl ? null : held.value; d.sightOpen = !crawl && held.open; d.sightQuiet = crawl;
       d.sightShort = !crawl && !!(held.msg && held.msg.short);       // SO-1: the cell is red when the plate is, not sooner
+      // the owner, 2026-11-12 (TestFlight, a replay showing PACE 83 beside Sight 65): "why pace and sight different?". The
+      // corner's pace and the sight line are two limits; the gauge's PACE (and its lamp) is now the one you drive to, the
+      // lower of the two, so it matches the Sight cell whenever the view is what holds you back
+      if (d.paceMph != null && Number.isFinite(d.sightMph) && !d.sightOpen) d.paceMph = Math.min(d.paceMph, d.sightMph);
       d.limitMph = limit != null ? ApexUnits.speed(limit) : null;
       d.latG = latG; d.lonG = lonG; d.camberDeg = camber;
       d.tripMi = ApexUnits.longN(live && (idx < 0 || track.kind === 'horizon') ? (drive.rec ? drive.rec.km * 1000 : 0) : state.cursorM); d.totalMi = track && track.kind !== 'horizon' && !(live && idx < 0) ? ApexUnits.longN(totalM()) : null;
@@ -4568,13 +4575,18 @@
         if (await loopRound(L, own, ui, false)) return;
       }
       const here = ownOn() ? await RouteLoading.optional(ownRouter().covers([c]), OWN_COVERS_ONLY_MS).catch(() => null) : false;
-      const why = !ownOn() ? 'off' : here == null ? 'index' : here ? 'none' : 'out';
+      // our router failing (its worker errored or ran out of time) is not "no loop of that length"; loops it found that
+      // none survived the build or the scoring is "rejected"
+      const failed = here && ApexOwnRouting.lastLoopError;
+      const why = !ownOn() ? 'off' : here == null ? 'index' : !here ? 'out' : failed ? 'failed' : own.length ? 'rejected' : 'none';
       if (window.apexDebug) window.apexDebug.loopOwnOnlyFail = why;
-      try { if (window.ApexErrors && ApexErrors.reporter) ApexErrors.reporter.route('loop', why); } catch (_) { /* a report is never in the way */ }
+      // the length asked rides with it (never a place): "loop: none (25 mi)", "loop: failed (25 mi, graph router timed out)"
+      try { if (window.ApexErrors && ApexErrors.reporter) ApexErrors.reporter.route('loop', why, failed ? `${asked}, ${failed}` : asked); } catch (_) { /* a report is never in the way */ }
       toast(!ownOn() ? 'Loops need Vetta\'s own router, which is switched off.'
         : here == null ? 'Couldn\'t load Vetta\'s road map here. Check signal and try again.'
-        : here ? `Couldn't find a ${asked} loop on Vetta's road map from here. Try another length.`
-        : 'Loops use Vetta\'s own road map, which covers Ohio, Kentucky and Indiana so far.');
+        : !here ? 'Loops use Vetta\'s own road map, which covers Ohio, Kentucky and Indiana so far.'
+        : failed ? `Vetta's router couldn't finish a ${asked} loop this time. Try again, or a shorter one.`
+        : `Couldn't find a ${asked} loop on Vetta's road map from here. Try another length.`);
     }
     const loopCircle = (L) => ({ kind: 'circle', pts: loopWaypoints(L.c, L.miles, Math.random() * 2 * Math.PI), through: true, extra: loopCosting() || {} });
     /** Loop jobs routed (ours come routed) and built into tracks: { t, job, route, km, score, ... } for those that worked. */
@@ -6185,6 +6197,8 @@
         // the week's loop, where nobody in the area has built it yet: our own router's loops (graph_router.js loop) over its tiles
         graphKeys: () => (ownOn() ? ownIndex() : null),
         loops: (start, km) => (ownOn() ? ApexOwnRouting.loops(ownRouter(), { start, km, level: LOOP_STYLE }) : Promise.resolve([])),
+        // Challenge a friend: a duel on the loop (duels.js challengeOn), won by time unless they pick Score
+        challenge: (stage) => { if (duels && duels.challengeOn) { closeSheet(); duels.challengeOn(stage); } },
         // Drive it: the loop itself is the route (as a roadbook road is), not just the way to its start
         driveLoop: async (c, g) => {
           closeSheet();
@@ -8562,14 +8576,16 @@
       for (const p of list) {
         const row = ApexScenic.places([p], placeUnits)[0];
         const el = document.createElement('div'); el.className = `poi-pin poi-${p.kind}`;
-        el.textContent = p.kind === 'view' && p.name ? p.name : SCENIC_LABEL[p.kind];
+        // the owner, 2026-11-12 (TestFlight): "bird watching shelter blocks half the route". A viewpoint is a VIEW stamp like
+        // a café or fuel stop; its name is a tap away, and on the stamp only close in (declutterPois, VIEW_NAME_ZOOM)
+        el.textContent = SCENIC_LABEL[p.kind];
         el.title = p.name || SCENIC_LABEL[p.kind];
         // tap a viewpoint, café or fuel stop on the map: its name, and it can be a stop of the day (IDEAS R-17)
         el.addEventListener('click', (e) => { e.stopPropagation(); if (row) offerPlace(t, row); });
         const mk = new maplibregl.Marker({ element: el }).setLngLat([p.lon, p.lat]).addTo(map);
         el.setAttribute('role', 'button'); el.setAttribute('aria-label', row ? ApexScenic.placeLine(row) : SCENIC_LABEL[p.kind]);   // after the Marker's own "Map marker"
         scenicPins.push(mk);
-        poiDeclutter.pins.push({ marker: mk, el, kind: p.kind, named: !!p.name, m: p.m });
+        poiDeclutter.pins.push({ marker: mk, el, kind: p.kind, named: !!p.name, name: p.name || null, m: p.m });
         if (p.kind === 'fuel' && Number.isFinite(p.m)) fuelPins.push({ m: p.m, el, name: p.name || null });
       }
       fuelPins.sort((a, b) => a.m - b.m);
