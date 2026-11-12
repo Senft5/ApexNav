@@ -140,7 +140,7 @@
   /** U-134: the Along fact's glyph follows what it leads with: a viewpoint the hills, a café a cup, fuel alone a pump. */
   function alongGlyph(line) {
     const s = String(line || '').toLowerCase();
-    return /viewpoint/.test(s) ? 'view' : /café/.test(s) ? 'cafe' : /fuel/.test(s) ? 'fuel' : 'view';
+    return /viewpoint/.test(s) ? 'view' : /café/.test(s) ? 'cafe' : /fuel|charger/.test(s) ? 'fuel' : 'view';
   }
 
   /** The cameras readout: a count once the check has run, "--" before (it is not a 0-100 scale, so no arc). */
