@@ -2788,7 +2788,17 @@
     function rankPool(pool, level) {
       return window.ApexRouteEngine ? ApexRouteEngine.rank(pool, engineOpts(level)) : FunRoute.rank(pool, level);
     }
+    // The route-context providers that only answer a plan are not on the launch path (web/lazy.js 'ctx'): they load once
+    // the map is idle after the launch, or by the first plan that needs them. Offline website: the plan goes on with the
+    // providers it has (as when one is missing), and the next plan asks again
+    let ctxReady = null;
+    function needCtx() {
+      if (!window.ApexLazy) return Promise.resolve();
+      if (!ctxReady) ctxReady = ApexLazy.load('ctx').catch((e) => { ctxReady = null; console.error('ctx', e); });
+      return ctxReady;
+    }
     async function contextOn(cands, budgetMs = CTX_BUDGET_MS, prefix = 'cand', only = null, extra = null, skip = null) {
+      await needCtx();
       if (!window.ApexRouteEngine || !window.ApexRouteCtx || !cands.length || (window.ApexFlags && !ApexFlags.on('route_engine'))) return null;
       const departAt = state.mode === 'live' ? Date.now() : leaveAt(), car = routingCar(), pace = state.mode === 'live' && etaPace.factors ? etaPace.factors.open : null;
       const list = cands.filter((c) => (c.corridor = ApexRouteEngine.corridorFor(c, `${prefix}${cands.indexOf(c)}`, { departAt, car, pace })));
@@ -2806,6 +2816,7 @@
     // The network step: the stages worth asking about get the context too (router edges, terrain), so a curvy subdivision
     // street falls behind a real back road before any connector is timed. Any failure: the map's order, as before.
     async function stagesWithContext(stages, k = 8, only = null) {
+      await needCtx();
       if (!window.ApexRouteEngine || !window.ApexRouteCtx || !stages || !stages.length || (window.ApexFlags && !ApexFlags.on('route_engine'))) return stages;
       try {
         const cs = ApexRouteEngine.stageCorridors(stages, k, { departAt: leaveAt(), car: routingCar() });
@@ -3773,7 +3784,7 @@
       // (Fun and Long way never drive a highway: Valhalla is asked to keep off them too, route_engine.js levelCosting)
       const valhallaP = ownOnly || (dev && dev.on('forceOwn')) ? Promise.resolve([]) : (ownCovered ? firstSeen : Promise.resolve()).then(() => tlTime('valhalla: route', valhallaRoutes([from, to], false, 2, FunRoute.LEVELS[level].noHighway ? (connectorCosting() || {}) : {}))).catch(() => osrmRoutes([from, to])).catch(() => []);
       // (not with our tiles: the map tiles' road data is in them, and the context for our routes doesn't read it)
-      try { if (!ownCovered && window.ApexOsmTiles && window.ApexRouteCtx && ApexRouteCtx.corridor && (!window.ApexFlags || ApexFlags.on('route_engine'))) ApexOsmTiles.prefetch([ApexRouteCtx.corridor('ahead', [[from.lon, from.lat], [to.lon, to.lat]], {})]); } catch (_) { /* nothing ahead: fetched with the context */ }
+      if (!ownCovered) needCtx().then(() => { try { if (window.ApexOsmTiles && window.ApexRouteCtx && ApexRouteCtx.corridor && (!window.ApexFlags || ApexFlags.on('route_engine'))) ApexOsmTiles.prefetch([ApexRouteCtx.corridor('ahead', [[from.lon, from.lat], [to.lon, to.lat]], {})]); } catch (_) { /* nothing ahead: fetched with the context */ } });
       // members' measured roads round the trip go into our search itself (signed out or none: unchanged)
       // (scope first: on the tiles in hand when the corridor's aren't all in yet; then the whole corridor's plan follows,
       // and its new routes join the background refresh: ownRefine)
@@ -8492,6 +8503,7 @@
       if (plannedRoute !== t || ac.signal.aborted || !c.ctx || !c.corridor) return;
       let sc = null;
       try {
+        await needCtx();
         sc = await ApexWhenToGo.scan(c, { now: Date.now(), prefs: engineOpts(funLevel).prefs, car: routingCar(), settings: routeCtxSettings(), providerOpts: routeCtxOpts(),
           signal: ac.signal, breathe: () => RouteLoading.yieldToUI() });
       } catch (_) { sc = null; }
@@ -10257,6 +10269,8 @@
     // F-03: the social modules once the launch is over; a link that needs them, or People, asks for them at once
     if (['convoy', 'crew', 'invite', 'add', 'roadbook'].some((k) => params.has(k))) needSocial();
     else { let asked = false; const go = () => { if (!asked) { asked = true; idle(needSocial); } }; map.once('idle', () => setTimeout(go, 300)); setTimeout(go, 6000); }
+    // the route-context providers (web/lazy.js 'ctx') likewise, so the first plan finds them in; a plan before then loads them
+    { let warm = false; const goCtx = () => { if (!warm) { warm = true; idle(needCtx); } }; map.once('idle', () => setTimeout(goCtx, 600)); setTimeout(goCtx, 6500); }
     if (document.fonts) document.fonts.ready.then(() => render(true));
   })();
 

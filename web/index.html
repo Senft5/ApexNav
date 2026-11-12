@@ -55,17 +55,12 @@
   <script src="stages.js" defer></script>
   <script src="fun_route.js" defer></script>
   <script src="route_ctx/registry.js" defer></script>
-  <script src="route_ctx/graph.js" defer></script>
-  <script src="route_ctx/router_edges.js" defer></script>
-  <script src="route_ctx/dem.js" defer></script>
+  <!-- the providers that only answer a plan (graph, router edges, terrain, conditions, wildlife, events, live
+       hazards, photos, OpenStreetMap) are not on the launch path: web/lazy.js 'ctx', loaded once the map is idle or by the
+       first plan (cockpit.js needCtx) -->
   <script src="route_engine.js" defer></script>
   <script src="graph_router.js" defer></script>
   <script src="own_routing.js" defer></script>
-  <script src="route_ctx/conditions.js" defer></script>
-  <script src="route_ctx/wildlife.js" defer></script>
-  <script src="route_ctx/events.js" defer></script>
-  <script src="route_ctx/hazards_live.js" defer></script>
-  <script src="route_ctx/photos.js" defer></script>
   <script src="route_ctx/context_grid.js" defer></script>
   <script src="sync.js" defer></script>
   <script src="live_pipeline.js" defer></script>
@@ -107,9 +102,6 @@
   <script src="carplay.js" defer></script>
   <script src="cameras.js" defer></script>
   <script src="route_ctx/osm_common.js" defer></script>
-  <script src="route_ctx/osm_tiles.js" defer></script>
-  <script src="route_ctx/osm_overpass.js" defer></script>
-  <script src="route_ctx/road_name_age.js" defer></script>
   <script src="whats_new.js" defer></script>
   <script src="saved_routes.js" defer></script>
   <script src="row_select.js" defer></script>

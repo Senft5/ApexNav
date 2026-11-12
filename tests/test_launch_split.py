@@ -76,3 +76,24 @@ def test_no_page_asks_google_for_fonts_and_the_fonts_ship_with_their_licence():
         html = (WEB / page).read_text()
         assert '<link rel="stylesheet" href="fonts/fonts.css" />' in html
         assert '<link rel="preload" href="fonts/inter-tight.woff2" as="font" type="font/woff2" crossorigin />' in html
+
+
+@pytest.mark.skipif(NODE is None, reason="node not installed")
+def test_plan_only_route_context_providers_are_lazy_and_plans_wait_for_them():
+    """The route-context providers that only answer a plan (about 200 KB, 11 scripts) load once the map is idle or by the
+    first plan (lazy.js 'ctx', cockpit.js needCtx); the registry and the providers the page reads directly stay."""
+    g = groups()
+    assert {"route_ctx/osm_overpass.js", "route_ctx/osm_tiles.js", "route_ctx/hazards_live.js", "route_ctx/graph.js"} <= set(g["ctx"])
+    html = (WEB / "index.html").read_text()
+    for keep in ("route_ctx/ctx_util.js", "route_ctx/crowd.js", "route_ctx/registry.js", "route_ctx/context_grid.js", "route_ctx/driver.js", "route_ctx/car.js", "route_ctx/osm_common.js"):
+        assert f'<script src="{keep}" defer></script>' in html, keep
+    i = html.index('src="route_ctx/registry.js"')
+    assert html.index('src="lazy.js"') > i
+    js = (WEB / "cockpit.js").read_text()
+    for fn in ("async function contextOn(", "async function stagesWithContext("):
+        body = js[js.index(fn):js.index(fn) + 400]
+        assert "await needCtx();" in body, fn
+    assert "await needCtx();\n        sc = await ApexWhenToGo.scan(" in js
+    assert "map.once('idle', () => setTimeout(goCtx, 600))" in js
+    sw = (WEB / "sw.js").read_text()
+    assert "(?:route_ctx\\/)?[a-z0-9_]+\\.js" in sw, "the offline shell keeps the lazy providers too"
