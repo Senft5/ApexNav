@@ -3051,6 +3051,8 @@ flow('build threads: start one from a car, add a step, a friend suggests and it 
   await page.fill('input[aria-label="Step title"]', 'Coilovers <b>in</b>');
   await page.click('.build-view .row-pick[aria-label^="Stage"]'); await page.click('.row-pick-sheet [role="option"]:has-text("Suspension")');   // the app's row list
   await page.fill('input[aria-label="Parts"]', 'Ohlins DFV R&T, 7k / 5k springs');
+  const form = await page.evaluate(() => ({ bold: [...document.querySelectorAll('.bv-form > b')].map((b) => b.textContent), notes: [...document.querySelectorAll('.bv-form > .note')].map((n) => n.textContent) }));
+  check(!form.bold.length && form.notes.length === 1 && form.notes[0].length < 60, 'the step form: no label over the drive pick, one short line about photos: ' + JSON.stringify(form));
   await page.click('button:has-text("Post the step")');
   await page.waitForSelector('.bv-post h3');
   const step = sent.find((x) => x.p === '/api/builds/b1/posts').b;
