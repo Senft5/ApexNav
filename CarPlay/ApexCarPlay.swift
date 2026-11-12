@@ -79,6 +79,8 @@ final class ApexCar {
     /// The same, parsed for the native car map (ApexCarMap.swift, F-07).
     private(set) var cornerPlates: [ApexCarPlateData] = []
     private(set) var hazardPlates: [ApexCarPlateData] = []
+    private(set) var placePlates: [ApexCarPlateData] = []
+    private(set) var placesJSON = "[]"
     private(set) var sight: ApexCarSight?
     /// The theme's map palettes from the page (web/themes.js, in the look message), nil until it says.
     private(set) var palette: (day: ApexCarPalette, night: ApexCarPalette)?
@@ -130,18 +132,30 @@ final class ApexCar {
                           picked: max(0, min(options.count - 1, Int(Self.num(dict["picked"]) ?? 0))))
             routeJSON = Self.json(coords.map { [$0.latitude, $0.longitude] })
             along = ("", "")
-            eachMap { $0.showRoute(); $0.setMode() }
+            placePlates = []; placesJSON = "[]"
+            eachMap { $0.showRoute(); $0.setMode(); $0.showPlaces() }
             scene?.routeChanged()
         case "along":
             let full = String(((dict["full"] as? String) ?? "").prefix(90)), short = String(((dict["short"] as? String) ?? "").prefix(90))
+            let list = ((dict["places"] as? [[String: Any]]) ?? []).prefix(30).compactMap { p -> ApexCarPlateData? in
+                guard let at = Self.coord(p["at"]), let kind = p["kind"] as? String, kind == "cafe" || kind == "fuel",
+                      let text = p["text"] as? String, !text.isEmpty else { return nil }
+                return ApexCarPlateData(lat: at.latitude, lon: at.longitude, text: String(text.prefix(18)), tight: false, hazard: false, place: kind)
+            }
+            if list != placePlates {
+                placePlates = list
+                placesJSON = Self.json(list.map { ["at": [$0.lat, $0.lon], "kind": $0.place ?? "fuel", "text": $0.text] as [String: Any] })
+                eachMap { $0.showPlaces() }
+            }
             guard full != along.full || short != along.short else { return }
             along = (full, short)
             scene?.routeChanged()
         case "clear":
             route = nil
             along = ("", "")
+            placePlates = []; placesJSON = "[]"
             routeJSON = "[]"
-            eachMap { $0.showRoute(); $0.setMode() }
+            eachMap { $0.showRoute(); $0.setMode(); $0.showPlaces() }
             scene?.routeChanged()
         case "corners":
             cornersJSON = Self.json((dict["list"] as? [Any]) ?? [])
@@ -833,7 +847,7 @@ final class ApexCarMapViewController: UIViewController, WKNavigationDelegate {
         }
         view.addSubview(m)
         native = m
-        showLook(); showRoute(); showCorners(); showHazards(); setMode(); showPosition(); showSight()
+        showLook(); showRoute(); showCorners(); showHazards(); showPlaces(); setMode(); showPosition(); showSight()
     }
 
     @MainActor private func fallBackToWeb() {
@@ -870,7 +884,7 @@ final class ApexCarMapViewController: UIViewController, WKNavigationDelegate {
         loaded = true
         sentMode = ""
         MainActor.assumeIsolated {
-            fitViewport(); showLook(); showRoute(); showCorners(); showHazards(); setMode(); showPosition(); showSight()
+            fitViewport(); showLook(); showRoute(); showCorners(); showHazards(); showPlaces(); setMode(); showPosition(); showSight()
         }
     }
 
@@ -918,6 +932,9 @@ final class ApexCarMapViewController: UIViewController, WKNavigationDelegate {
     }
     @MainActor func showCorners() {
         if let native { native.setCorners(ApexCar.shared.cornerPlates) } else { js("car.corners(\(ApexCar.shared.cornersJSON))") }
+    }
+    @MainActor func showPlaces() {
+        if let native { native.setPlaces(ApexCar.shared.placePlates) } else { js("car.places(\(ApexCar.shared.placesJSON))") }
     }
     @MainActor func showHazards() {
         if let native { native.setHazards(ApexCar.shared.hazardPlates) } else { js("car.hazards(\(ApexCar.shared.hazardsJSON))") }

@@ -2291,7 +2291,8 @@ flow('CarPlay feed: a planned route sends its line, every corner and the theme; 
   await page.waitForFunction(() => window.__car.some((m) => m.kind === 'route') && window.__car.some((m) => m.kind === 'corners' && m.list.length), null, { timeout: 20000 });
   await page.waitForFunction(() => window.__car.some((m) => m.kind === 'along'), null, { timeout: 10000 });
   const along = await page.evaluate(() => { const i = window.__car.findIndex((m) => m.kind === 'along'); return { m: window.__car[i], afterRoute: i > window.__car.findIndex((m) => m.kind === 'route') }; });
-  check(along.m.full === 'Café: Bean There Coffee · Fuel: Shell' && along.m.short === 'Bean There Coffee · Shell' && along.afterRoute, 'the car is told the places along by name, after the route: ' + JSON.stringify(along));
+  check(along.m.full === 'Café: Bean There Coffee · Fuel: Shell' && along.m.short === 'Bean There Coffee · Shell' && along.afterRoute
+    && along.m.places.map((p) => `${p.kind}:${p.text}`).join() === 'cafe:Bean There Coffee,fuel:Shell' && along.m.places.every((p) => Array.isArray(p.at)), 'the car is told the places along by name, after the route: ' + JSON.stringify(along));
   const r = await page.evaluate(() => ({ route: window.__car.find((m) => m.kind === 'route'), corners: window.__car.filter((m) => m.kind === 'corners').pop(),
     look: window.__car.filter((m) => m.kind === 'look').pop() }));
   check(r.route.options[0].detail.includes('corner'), 'the route choice says its corners: ' + JSON.stringify(r.route.options[0]));
@@ -2493,6 +2494,17 @@ flow('the sight-line speed rides under the position arrow, on the phone and on t
   await page.waitForTimeout(300);
   const vis = await page.evaluate(() => [...document.querySelectorAll('.car-corner')].filter((e) => e.style.visibility !== 'hidden').map((e) => e.textContent));
   check(vis.length === 1, 'one plate where three overlap: ' + vis.join());
+  // the cafés and fuel along the route by name (the owner, 2026-11-11): one on the corners' spot gives way to them, one
+  // in the clear shows its name after its pump
+  await page.evaluate(() => { const m = car.map, p = m.unproject([innerWidth * 0.5, innerHeight * 0.8]);   // clear of the car (centre) and the corners
+    car.places([{ at: [35.41, -84.1], kind: 'cafe', text: 'Bean There Coffee' }, { at: [p.lat, p.lng], kind: 'fuel', text: 'Shell' }, { at: [p.lat, p.lng], kind: 'view', text: 'No' }]); });
+  await page.waitForTimeout(300);
+  const placed = await page.evaluate(() => ({ places: [...document.querySelectorAll('.car-place')].filter((e) => e.style.visibility !== 'hidden')
+    .map((e) => ({ text: e.textContent, kind: e.dataset.kind, glyph: getComputedStyle(e, '::before').content })),
+    corners: [...document.querySelectorAll('.car-corner')].filter((e) => e.style.visibility !== 'hidden').length }));
+  check(placed.corners === 1 && placed.places.length === 1 && placed.places[0].text === 'Shell' && placed.places[0].kind === 'fuel' && /\u26FD/.test(placed.places[0].glyph),
+    'a fuel stop by name on the car map; a café never covers a corner; a viewpoint is not sent: ' + JSON.stringify(placed));
+  await page.evaluate(() => car.places([]));
   check(await page.evaluate(() => getComputedStyle(document.querySelector('.car-puck')).zIndex === '3'), 'the car above the plates');
   // U-77: as guidance begins no plate sits on the car's arrow or its sight plate; the one further up the road stays
   await page.evaluate(() => { car.corners([{ at: [35.4, -84.1], text: 'R1', tight: true }, { at: [35.39985, -84.1], text: 'R2', tight: true }, { at: [35.4, -84.097], text: 'L3', tight: false }]); car.mode('guide'); });   // L3 up the road (east, the car's heading), on the screen

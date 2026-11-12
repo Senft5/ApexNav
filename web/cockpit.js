@@ -8822,7 +8822,7 @@
     // than the route (attachScenic): it is sent then, and again with every route the car is sent.
     function carAlong(t) {
       if (!t || !Array.isArray(t.scenic)) return;
-      const msg = ApexCarPlay.alongMessage(t.scenic), key = `${car.route}|${msg.full}|${msg.short}`;
+      const msg = ApexCarPlay.alongMessage(t.scenic), key = `${car.route}|${JSON.stringify(msg)}`;
       if (key === car.along) return;
       car.along = key;
       carPost(msg);
