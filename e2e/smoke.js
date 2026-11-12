@@ -2308,6 +2308,9 @@ flow('CarPlay feed: a planned route sends its line, every corner and the theme; 
   await page.evaluate(() => { window.__car = []; window.apex.onNative({ type: 'carplay', action: 'voice' }); });
   await page.waitForFunction(() => window.__car.some((m) => m.kind === 'look' && m.voice === false));
   check(await page.evaluate(() => apexDebug.state.toggles.voice === false), 'the voice is off on the phone too');
+  // the car's Loops list offers the dial's five times; 1½ hours used to do nothing (the page took only 30, 60 and 120)
+  await page.evaluate(() => { document.getElementById('planPanel').classList.remove('routed', 'open'); window.apex.onNative({ type: 'carplay', action: 'loop', minutes: 90 }); });
+  await page.waitForFunction(() => document.getElementById('planPanel').classList.contains('open'), null, { timeout: 5000 });
 });
 
 flow('CarPlay: the car is in every drive: a free drive from its Drive key, a continue step, End goes idle (U-59, U-62, U-63, U-79)', async (page, base) => {

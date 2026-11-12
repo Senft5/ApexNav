@@ -9519,7 +9519,7 @@
       else if (m.action === 'undo') undoEnd();
       else if (m.action === 'disconnect') keepCar(false, m.t);      // Round 3: the car switched off; the drive ends once it stays put
       else if (m.action === 'places') carPost(ApexCarPlay.placesMessage(recentPlaces()));
-      else if (m.action === 'loop' && [30, 60, 120].includes(m.minutes) && !driveActive) loop({ minutes: m.minutes });
+      else if (m.action === 'loop' && LOOP_MINUTES.includes(m.minutes) && !driveActive) loop({ minutes: m.minutes });
       else if (m.action === 'report' && ApexHazardReports.KINDS.includes(m.kind)) reportHazard(m.kind);
       else if (m.action === 'still' && typeof m.still === 'boolean') answerStill(m.still);
       else if (m.action === 'voice') { state.toggles.voice = !state.toggles.voice; savePrefs(); paintSwitches(); if (!state.toggles.voice) stopSpeaking(); }
