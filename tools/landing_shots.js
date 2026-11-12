@@ -1,6 +1,7 @@
 // Screenshots for the landing page (web/about.html, IDEAS O-08): the real cockpit at phone size, from the bundled replay,
 // with live map tiles. Run: node tools/landing_shots.js  (writes web/brand/shots/*.png). Not part of CI (needs the network).
-// For the App Store listing: STORE=1 SHOTS_OUT=store-shots node tools/landing_shots.js (1320 x 2868, docs/LISTING.md).
+// For the App Store listing: STORE=1 SHOTS_OUT=store-shots node tools/landing_shots.js (1320 x 2868, docs/LISTING.md); it adds
+// the drive card, the Log, the drive's page and a loop (store-*.png), from the same replay saved as a drive on this browser.
 process.env.TZ = 'America/New_York';   // the example crew's drive is at 7:30 in the morning there, as the page shows it
 const { chromium } = require('playwright');
 const http = require('http'), fs = require('fs'), path = require('path');
@@ -16,7 +17,9 @@ const server = http.createServer((q, r) => {
   const browser = await chromium.launch();
   // STORE=1: App Store Connect's 6.9" iPhone size (1320 x 2868: 440 x 956 points at 3x, the iPhone 16 Pro Max), docs/LISTING.md
   const store = process.env.STORE === '1';
-  const ctx = await browser.newContext({ viewport: store ? { width: 440, height: 956 } : { width: 390, height: 844 }, deviceScaleFactor: store ? 3 : 2, timezoneId: 'America/New_York' });
+  const ctx = await browser.newContext({ viewport: store ? { width: 440, height: 956 } : { width: 390, height: 844 }, deviceScaleFactor: store ? 3 : 2, timezoneId: 'America/New_York',
+    // the loop starts here, in the replay's hills (Crittenden, KY), so the routes are found from the live tiles near it
+    ...(store ? { geolocation: { latitude: 38.83, longitude: -84.62 }, permissions: ['geolocation'] } : {}) });
   // past the welcome, the permissions note and What's new (its current id, or it covers the page)
   const news = require(path.join(WEB, 'whats_new.js')).NEWS.id;
   await ctx.addInitScript((news) => { try { localStorage.setItem('apex.onboarded', '1'); localStorage.setItem('apex.permsExplained', '1'); localStorage.setItem('apex.newsSeen', news);
@@ -33,7 +36,47 @@ const server = http.createServer((q, r) => {
     await page.evaluate(() => { const t = document.getElementById('toast'); if (t) t.style.visibility = 'hidden'; });   // service notices aren't the product
     await page.screenshot({ path: path.join(OUT, 'cockpit.png') });
     console.log('cockpit.png');
-    // 2. a crew's page (an example crew, the Worker stubbed): its livery, the next drive with who is going, members, chat
+    if (store) {
+      // 2. the drive card: the replay saved as a drive (its own recorded speeds, g and corners; nothing made up), then ended
+      await page.goto(`${base}/index.html?drive=dry_ridge&night=0`);
+      await page.waitForFunction(() => window.apexDebug && window.ApexRecording && (window.apexDebug.drives || []).some((x) => x.id === 'dry_ridge') && !document.getElementById('boot'), null, { timeout: 30000 });
+      await page.evaluate(async () => {
+        const t = window.apexDebug.drives.find((x) => x.id === 'dry_ridge'), num = (a) => (a ? a.map((v) => (Number.isFinite(v) ? v : 0)) : null);
+        const at = Date.now() - (46 * 60000);
+        const d = { id: 'store_dry_ridge', name: t.name, date: new Date(at).toISOString(), lat: t.lat, lon: t.lon, dist: t.dist, elev: t.elev,
+          speed_mps: num(t.speedMps), lat_g: num(t.latG), lon_g: num(t.lonG), g_known: null, camber: t.camberDeg, events: t.events,
+          envMps: t.envMps, sightM: t.sightM, hz: 1, source: 'ios', corners: [] };
+        await window.ApexRecording.store(d);
+        window.apexDebug.showEndCard(d, at);
+      });
+      await page.waitForTimeout(5000);   // scored, the number counted up and the coach's line written
+      await page.screenshot({ path: path.join(OUT, 'store-card.png') });
+      console.log('store-card.png');
+      // 3. the Log with that drive, then its page on Smoothness (the speed key would put mph on screen, docs/LISTING.md)
+      await page.goto(`${base}/index.html?night=0`);
+      await page.waitForFunction(() => window.apexDebug && !document.getElementById('boot'), null, { timeout: 30000 });
+      await page.click('.tab[data-view="log"]');
+      const log = page.frameLocator('#logFrame');
+      await log.locator('text=30 corners >> visible=true').first().waitFor({ timeout: 20000 });
+      await page.waitForTimeout(1500);
+      await page.screenshot({ path: path.join(OUT, 'store-log.png') });
+      console.log('store-log.png');
+      await log.locator('text=30 corners >> visible=true').first().click();
+      await log.getByText('Smoothness', { exact: true }).click();
+      await page.waitForTimeout(4000);   // the map under the corners loads its tiles
+      await page.screenshot({ path: path.join(OUT, 'store-drive.png') });
+      console.log('store-drive.png');
+      // 4. a 30 mile loop from where the driver is, the best of the ones found, with the others to choose from
+      await page.goto(`${base}/index.html?night=0`);
+      await page.waitForFunction(() => window.apexDebug && window.apexDebug.map && !document.getElementById('boot'), null, { timeout: 30000 });
+      await page.evaluate(() => { const b = document.querySelector('#loopDetents [data-loop-mi="30"]') || document.querySelectorAll('#loopDetents [data-loop-mi]')[1];
+        b.click(); document.getElementById('findLoopBtn').click(); });
+      await page.waitForFunction(() => Array.isArray(window.apexDebug.lastLoop) && !document.getElementById('planPanel').classList.contains('busy'), null, { timeout: 120000 });
+      await page.waitForTimeout(4000);
+      await page.screenshot({ path: path.join(OUT, 'store-loop.png') });
+      console.log('store-loop.png');
+    }
+    // 5. a crew's page (an example crew, the Worker stubbed): its livery, the next drive with who is going, members, chat
     const day = (n, h, m) => { const d = new Date(); d.setDate(d.getDate() + ((n - d.getDay() + 7) % 7 || 7)); d.setHours(h, m, 0, 0); return d.toISOString(); };
     const next = { id: 'E1AAAAAAAAAAAAAA', crew_id: 'k1', crew_name: 'Ridge Runners', title: 'Cherohala Skyway, sunrise', starts_at: day(6, 7, 30),
       meet_name: 'Tellico Plains', meet_lat: 35.36, meet_lon: -84.29, notes: 'Full tank. Quiet through town.', by_handle: 'nate', mine: true, can_cancel: true,
