@@ -12,6 +12,232 @@ drive page and the record agree). Calls: the summary version goes to 2, so every
 from its own rows the next time the Log opens (a one-off, in the worker); a drive whose run can't be known never counts.
 Undo: remove the `run` row in analysis.html renderRecords (and the `run` field in recording.js summarize).
 
+## 2026-11-12 (ui-round-three): the website's page uses the app's look and shows today's app (claude/project-thread-5sbga7)
+
+about.html showed screenshots of the app from before the redesign (the old tab bar, boxed keys) and set its type in the
+system face. It now loads the app's typefaces, sets its titles like the app, and shows two fresh screenshots: the Dry Ridge
+replay and an example crew's page. The words are the same, except the screenshots' descriptions. Undo: revert
+web/about.html, web/brand/shots/*.png and tools/landing_shots.js.
+
+
+## 2026-11-12 Avoid cameras reads our own camera list in Ohio, Kentucky and Indiana (claude/project-thread-39xbx9)
+
+Nate: "the camera server always says it's down". The phone asked the public Overpass servers for cameras, and they time
+out or refuse it when busy (all four timed out when the Worker asked them, 2026-11-12). Now a weekly job
+(.github/workflows/cameras.yml) takes plate readers and speed cameras from the same Geofabrik extracts as our roads and
+commits one file to the graph-data branch. The Worker relays it at `GET /api/cameras/v1/region.json`, and web/cameras.js
+reads it before Overpass. Calls: a tile counts as ours only if the state outlines hold it whole, so a border tile isn't
+wrongly "no cameras"; outside the region and when our file can't be read, the phone asks Overpass as before (now with
+maps.mail.ru as a fourth server). The request carries no position: it's the same file for everyone. Undo: drop the
+`regionOnce` lookup in web/cameras.js `load` (pass `region: null`), the route in backend/src/index.ts and the workflow.
+## 2026-11-12 (ui-round-three): the arrival-time page your friends open looks like Vetta (claude/project-thread-5sbga7)
+
+The page behind a shared ETA link was plain system text. It now uses the app's type and paper: the minutes set large
+("14 min away"), the arrival time under a hairline, a red dot while the time is fresh and an empty ring when it has gone
+quiet, and a dark page when their phone is in dark mode. The words are unchanged. Undo: revert web/eta.html and the
+`parts` / `live` fields in web/eta_share.js.
+
+
+## 2026-11-12 (meets on the map): public crews' meets pinned on the map (claude/project-thread-uwmi4e)
+
+Calls I made: a Meets layer in Layers, off by default like Friends, for members only. It pins the same public meets as
+Crew → Meets near you, one pin per meeting point with the day on it. A tap opens the existing meet card, so there is one
+card to keep right. Your own crew's listed drives show too, with "answer on the crew page" instead of Join. It asks by the
+map centre's 0.1-degree cell, never from a privacy zone, at most every 5 minutes per cell. Undo: remove the `meets`
+button in web/index.html and the `meetsMap` lines in cockpit.js.
+## 2026-11-11 (ui-round-three): an empty Garage shows a parking bay and one big "Add a car" key (claude/project-thread-5sbga7)
+
+With no cars yet, the Garage said one grey sentence over a small outlined key. Now it is a small page like the first
+friend and first crew pages: a drawing of a road pulling into an empty bay, "Park your first car.", the same sentence, and
+"Add a car" as the full-width dark key. Once you have a car it is the small key again. Undo: put back the `note` line in
+`render()` in web/garage_ui.js and drop the `.garage-first` rules at the end of web/signature.css.
+
+
+## 2026-11-11 (time attack placement): the week's loop in Where to?, Drive it, and your place after a drive (claude/project-thread-uwmi4e)
+
+Calls I made: the Where to? row asks for the week's loop when Where to? opens (at most every 5 minutes, only the area,
+and not from a privacy zone), so it can say the loop and your place without a tap. Drive it now plans the loop itself
+instead of the way to its start. The Log adds one sentence with your place to its sync line rather than a toast, because
+the Log has no toast and the line is already where the board is. For you's "went quicker than you" now names the loop and
+drops a loop a moderator took down. I left the home deck to Roamer C's branch. Undo: drop `peek` from `openPlan`, or the
+`driveLoop` hook in cockpit.js, which falls back to the way to the start.
+## 2026-11-12 (deepest analysis 19): the Log's road book says which of your roads to work on (claude/project-thread-gd7nre)
+
+Above the road picker, one line names the roads (driven three or more times) where your passes differ most, with the
+technique behind most of it. Calls: at most 3 roads, and at most 12 read, to keep the Log quick on a big library; it is read
+once each time the library changes, not on every visit. Undo: remove `bookWork` in web/analysis.html.
+
+## 2026-11-12 Owner-only service check in Settings (claude/project-thread-9zycz2)
+
+Nate asked for a service health check only he can run, that sends its results back. Settings → Account (owner only)
+has Service check: 27 checks from the phone (our server, the road graph, our router's real Fun / Long way / loop plans,
+Valhalla, each camera server, map, search, weather), each up, slow or down with the reason and what it affects, plus the
+Worker's own view (config set or not, GitHub graph data and the camera servers asked from Cloudflare). Calls: no
+migration, results go into error_counts under kind `service` (kept 30 days like crash counts), and the Errors list skips
+them; it also runs by itself once a launch at most every 6 hours, so Claude sees his phone's view without him tapping;
+it asks at a fixed downtown Cincinnati spot, never his location. Undo: remove serviceCheckSection and its auto-run line in
+web/cockpit.js, the `ops` lazy group, web/service_check.js, backend/src/service_check.ts and its three routes.
+
+## 2026-11-12 (deepest analysis 18): the end card names your passes on a road you know (claude/project-thread-gd7nre)
+
+After a drive on a road you have driven three or more times, the map's end card adds one line: what this drive lost most
+at the road's least even corners when that is known, else at how many corners it was your cleanest pass yet. Calls: one
+line, not both, to keep the card short; it rides the coaching job so the card does not read your drives twice. Undo:
+remove `#endRoad` from web/index.html and its two lines in cockpit.js.
+
+## 2026-11-12 (deepest analysis 17): a drive's page says what it lost at a road's least even corners (claude/project-thread-gd7nre)
+
+Where a road's passes differ most and this drive was more than 5 levels off your cleanest there, its corner note now names
+the technique it lost most against that cleanest pass. Calls: only those corners say it (a corner close to your cleanest
+has nothing worth naming); it compares against your cleanest pass, not your average. Undo: drop `why` from road_records
+rows and the two word changes in web/driver_profile.js.
+
+## 2026-11-12 A Fun, Long way or loop plan that fails says why to our crash counts (claude/project-thread-39xbx9)
+
+Nate saw "check my signal" on every Fun and Long way plan and the cause was never reproduced here. So a plan our router
+can't make now sends one anonymous report through the existing crash-report channel (`POST /api/errors`, kind `route`):
+the level and the reason code (`index`: the road map didn't load; `out`: off our map; `off`; `failed` with the worker's
+error text, scrubbed like any crash message). No place, trip or account. The Worker counts them per day in error_counts,
+so the next time it happens the cause is in D1. Privacy policy and APP_REVIEW updated. Undo: drop the two
+`ApexErrors.reporter.route` calls in web/cockpit.js and `"route"` from KINDS in backend/src/errors.ts.
+## 2026-11-12 (deepest analysis 16): the road book offers its uneven corners' technique as the practice (claude/project-thread-gd7nre)
+
+Where a road's passes differ most, the road book now says which technique accounts for most of it and offers to practise
+it on your next drives. Calls: the practice it sets covers every corner (no "lefts only" place), since a road's corners
+are not one kind; a tie between techniques goes to the corner whose passes differ most; it replaces any practice already
+under way, the same as "Practice ... instead" in Your driving. Undo: remove `showBookPractice` in web/analysis.html.
+
+## 2026-11-11 (Valhalla for Quick only, part 3): the Valhalla stage-plan and stage-loop code is gone (claude/project-thread-39xbx9)
+
+Since Fun, Long way and loops are our router's only, three pieces of web/cockpit.js could no longer run: funRoute's
+Valhalla stage plans (stage discovery round the trip, the connector matrix, stage legs), and buildLoop's stage loops and
+their refine after the card (`stageJobs`, `loopRefine`). They are deleted rather than kept switched off, so nobody
+switches a Valhalla fallback back on by accident. The pure helpers they used (fun_route.js shortlist / plansFromMatrix /
+loopPlansFromMatrix, stages.js) stay: Explore and their own tests use them. Undo: revert the commit.
+
+## 2026-11-11 (TestFlight 21:14): a corner or moment tapped on a drive's page zooms the map to it (claude/project-thread-0wt1zm)
+
+Your note "tapping a corner or moment here should orient the view above to show that corner zoomed in on the map". A tap on
+a corner, an abrupt moment, a braking-consistency row or a coach row now glides the map in on that stretch (the corner's
+start to end, or 50 m either side of a moment, with 60 m round it and at least 250 m across), and scrolls the map into view
+if it is above the screen. Calls: the lanes keep their own zoom (as before); "All" in the zoom row, or Recenter on the map,
+shows the whole drive again; with no map (offline) the plain picture zooms the same way and a tap on it zooms back out;
+reduced motion jumps instead of gliding. Undo: revert the PR.
+## 2026-11-11 (roam-b walkthrough 2): Done after a replay brings the map back to where you are (claude/project-thread-sxhrgi)
+
+- Done (or the plate's ×) after watching a replay, whether the welcome's demo or one of your drives from the Log, now jumps
+  the idle map and your arrow back to your last known position. Before, the map stayed on the replay's ground (the demo is
+  in Kentucky), while the masthead and the road cards described where you are. A browser standing still sends no new fix,
+  so nothing brought the map back. A route's fly-through still keeps its route in view. Undo: remove the `wasReplay` block
+  in cockpit.js `closeReplay`.
+## 2026-11-11 (routing round three, part 2): stage discovery reads crests and verified bumps (claude/project-thread-39xbx9)
+
+Stage discovery (the roads Explore, loops and routes pick from) now lifts a road members measured going light over its
+crests by up to 1.5 points, and drops one by 1.5 points for each crowd-verified bump on it, at most 4.5 (a confirmed
+hand-reported hazard costs 3). The sizes are a judgment call: a crested road wins against a flat one half a point better;
+two verified bumps send it back. Undo: `CREST_MAX` and `BUMP_PTS` 0 in web/measured_stages.js.
+## 2026-11-11 (deepest analysis, PR 15): an uneven corner names one skill, the widest gap (claude/project-thread-gd7nre)
+
+The road list names the one technique credit that differs most between your cleanest and least clean pass at an uneven
+corner, so "where" comes with "what". One skill, not a list: the biggest gap is the clearest thing to try next time; a
+corner whose least clean pass is no lower on any credit names none. Undo: revert the PR.
+
+## 2026-11-11 (places by name, 3): ask Siri for the next gas station or café (claude/project-thread-me97iw)
+
+Two new Siri phrases: "Where's the next gas station in Vetta" and "Where's the next café in Vetta" (also "Next fuel" /
+"Next coffee in Vetta"). The co-driver says the next one along your planned route by its map name and how far it is
+("Next fuel: Shell, in 3.2 mi."). Calls: only places along the planned route count (not off-route detours); without a
+route it says to plan one. Undo: revert the PR (the two intents and the page's handler).
+## 2026-11-11 (roam-c ta-placement): this week's time attack loop is a home deck suggestion (claude/roam-c-ta-placement)
+
+When you entered this week's loop, the deck's suggestion row names it with your place and the days left, ranked right
+after a crew drive you're going to (a plan with friends beats a solo time). When you haven't entered, it comes after the
+road near you that you haven't driven and before your best road, so a new road you'd like still wins. Tapping it gives
+directions to the loop's start, like a crew drive's meeting point. The phone sends the server only the middle of your
+1-degree area, as the Where to? section does. The reminder never quotes your place or days left (they change by then),
+and skips the loop if the week is over by the day it names. Undo: drop `attack` from the `YR.suggest` call in cockpit.js
+paintDeck (or move `if (ta) return attackSugg();` in your_roads.js to change its rank).
+
+
+## 2026-11-11 e2e: two flows raced the refine's swap after #434
+- **What:** "taste from picks" and "plan flow (e, f)" wait for `apexDebug.refineDone` (new, set when ownRefine ends) and expect the three routes found after the refine swaps Fun's pick; taste from picks takes the third by a swipe (Quick's is >30 % faster than Fun's on the motorway grid, so it teaches nothing by design).
+- **Why:** since Fun plans on our router, the refine's swap lands ~150 ms after the card; CI hit it every time, local runs sometimes didn't.
+- **Undo:** revert the commit; the flag is debug only.
+
+## 2026-11-11 (Valhalla for Quick only, part 2): loops come from our router only (claude/project-thread-39xbx9)
+
+Your rule ("anything but the quick route") covers loops too, so Find a loop no longer falls back to Valhalla's stage loops
+or a circle. Off our road map the card says loops use it and where it reaches. Explore's road list still times roads with
+Valhalla's matrix (it plans no route); say if that should go too. Undo: restore the `stageJobs` calls in `buildLoop`.
+## 2026-11-11 (deepest analysis, PR 14): "near your cleanest" is within 5 levels (claude/project-thread-gd7nre)
+
+A drive's page says how it went at the road's least even corners. Within 5 levels of your cleanest pass counts as near it:
+about a third of the 15-level span that makes a corner uneven, so a pass in the top third of your own range there.
+Undo: NEAR_BEST in core/driver_profile.py and web/driver_profile.js, or revert the PR.
+
+## 2026-11-11 (roam-b walkthrough): a planned loop is fitted again once its card settles; loops never go through our relay (claude/project-thread-sxhrgi)
+
+- When a route or loop comes back, the map frames it above its card. The card was still growing and shrinking for a
+  moment, so the loop ended up in a thin strip at the top. Now, for 4 seconds after that fit, a change in the card's height
+  frames it again, unless you've touched the map. Undo: remove `cardFit` in cockpit.js.
+- Loops were being sent to our Worker's road-attributes relay, which only takes stages (stretches cut from the map, never
+  the driver's own line) and refused them as too long. Only stages go there now, as APP_REVIEW 5.1.2 already says; loops
+  ask the public router from the phone like every route. Undo: drop the `c.stage` test in route_ctx/router_edges.js.
+- "Watch a replay" on the welcome screen now plays the demo drive straight away; it used to open it paused at 0 mph,
+  with Play down in the controls. Undo: remove `replayWhenReady(d)` in cockpit.js watchDryRidge.
+- Tapping Log in the first seconds after install showed a blank screen with no tabs until it loaded. Now the map stays
+  usable with a short "Opening your Log…" and the Log opens when ready (a different tab cancels it). Undo: the
+  `logFrame.want` branch in cockpit.js openLog.
+## 2026-11-11 (recurring meets): a crew drive can repeat weekly, every 2 or every 4 weeks (claude/project-thread-uwmi4e)
+
+Crews that meet every Saturday had to plan the same drive by hand each week. A drive can now repeat (Repeats: Once,
+Weekly, Every 2 weeks, Every 4 weeks). Calls I made: only the newest drive of a series carries the repeat, and the next
+one is planned when that one starts (on read and in the daily sweep), so there is only ever one upcoming drive to
+answer; the planner is marked Going on the new one and nobody else's answers carry over; cancelling it, setting it to
+Once, or the planner leaving the crew ends the series; editing an older drive in a series is refused (409). Add to
+calendar puts the series in once with a weekly rule.
+
+Undo: revert the PR. Migration 0053 only adds two columns to `crew_events`; the old code ignores them.
+## 2026-11-11 (deepest analysis, PR 13): "least even" is a 15-level span, at most three corners (claude/project-thread-gd7nre)
+
+A road book now names where your passes differ most, as the place on the road worth working on. It uses the plain span
+between your cleanest and least clean pass, not a statistical spread: three to five passes are too few for one, and a
+span is easy to check against the rows. 15 levels is about one step on the six credits; three corners keep it a short
+list. Undo: UNEVEN_LEVELS / UNEVEN_MAX in core/driver_profile.py and web/driver_profile.js, or revert the PR.
+
+## 2026-11-11 (deepest analysis, PR 12): roads are matched by name for the corner-by-corner book (claude/project-thread-gd7nre)
+
+The book takes every drive with the same road name (as the deck's Your roads does) and merges their corners by place and
+heading, so a drive the other way round makes its own corners rather than mixing. Drives named after a different road
+that share part of it are not in it; matching by shape across names is the bigger job and can come later. It lives in the
+Log as a quiet line (REVIEW.md 1.2), not a new tab. Undo: revert the PR.
+
+## 2026-11-11 (deepest analysis, PR 11): a corner's record lives on the drive page's corner rows, not a new page (claude/project-thread-gd7nre)
+
+STATE's next step was "a road page with its corners' records and which drive holds each". I put it on the drive page's
+own corner rows first: each corner driven three or more times says your cleanest pass there and, when another drive
+holds it, links to that drive. That reuses the matching already done for "On this road" and adds no new screen. Ties go
+to the earlier drive. Undo: revert the PR (the rows field is additive).
+
+## 2026-11-11 (places by name, 2): in a drive, the next fuel stop's stamp says which station (claude/project-thread-me97iw)
+
+While driving a planned route the map keeps only the next fuel stop's stamp; it now reads "FUEL · Shell" instead of FUEL
+when OpenStreetMap has its name (unnamed stays FUEL). Only that one stamp grows, so the map stays clear. Undo: revert the PR.
+
+## 2026-11-11 (Valhalla for Quick only): Fun and Long way fail plainly instead of falling back (claude/project-thread-39xbx9)
+
+Your rule: Valhalla only for Quick. Fun and Long way now come from our own router or not at all. Where our road map doesn't
+reach (it covers Ohio, Kentucky and Indiana so far), or it can't be loaded, the plan says which, with a **Use Quick** key,
+instead of a Valhalla route. Calls I made: the map's index gets 8 s (not 1.5 s) at Fun, since there is no stand-in to fall
+back on; spoken turn directions on our route still come from Valhalla's trace_route (it routes nothing, it reads our line);
+loops still use Valhalla off our map until the next PR. Undo: `const ownOnly = false` in cockpit.js `funRoute`.
+## 2026-11-11 (places by name): cafés and fuel along the route, tap for their names (claude/project-thread-me97iw)
+
+The route card's "Along" line ("1 viewpoint · 2 cafés · 3 fuel stops") now opens a list of each place by the name
+OpenStreetMap has for it, how far into the route and how far off the road; tapping one moves the map there and offers it as
+a stop. Tapping a CAFÉ or FUEL pin on the map says its name too. Calls: fuel stations are now counted on the line (before,
+only a long stretch without fuel was said), so there is something to tap; a place with no name on the map says "no name on
+the map" rather than a guess. Undo: revert the PR.
 ## 2026-11-11 (roam-a best run): a drive's page names your best run of clean corners (claude/project-thread-h7xxmf)
 
 New, my call (Nate asked for more fun-driving features). A drive's page now says, when it happened, "Your best run: 9

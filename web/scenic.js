@@ -50,9 +50,10 @@
   function summary(list, totalM) {
     const count = (k) => (list || []).filter((p) => p.kind === k).length;
     const parts = [];
-    const v = count('view'), cf = count('cafe');
+    const v = count('view'), cf = count('cafe'), fu = count('fuel');
     if (v) parts.push(`${v} viewpoint${v === 1 ? '' : 's'}`);
     if (cf) parts.push(`${cf} café${cf === 1 ? '' : 's'}`);
+    if (fu) parts.push(`${fu} fuel stop${fu === 1 ? '' : 's'}`);           // the owner, 2026-11-11: a station to tap for its name
     const gap = fuelGap(list, totalM);
     if (finite(totalM) && gap.m >= FUEL_WARN_M) {
       const U = root.ApexUnits, k = U && U.metric() ? 1000 : MI, u = U && U.metric() ? 'km' : 'mi';   // units.js, U-22
@@ -62,6 +63,50 @@
     }
     const line = parts.join(' · ');
     return line.charAt(0).toUpperCase() + line.slice(1);
+  }
+
+  /**
+   * The places behind the Along line, one row each in road order (the owner, 2026-11-11: "when it says there's cafes or
+   * gas stations ... i want to be able to tap for details. Ideally just show the name"). { kind, title, named, at, off,
+   * lat, lon, m }: the name the map has for it (an unnamed one says so, never a made-up name), how far into the route,
+   * and how far off the road. `fmt` = { long(m), short(m) } in the driver's units (units.js).
+   */
+  const KIND_NAME = { view: 'Viewpoint', cafe: 'Café', fuel: 'Fuel station' };
+  function places(list, fmt = null) {
+    const long = fmt && fmt.long ? fmt.long : (m) => `${(m / 1000).toFixed(1)} km`;
+    const short = fmt && fmt.short ? fmt.short : (m) => `${Math.round(m / 10) * 10} m`;
+    return (list || []).filter((p) => p && KIND_NAME[p.kind] && finite(p.lat) && finite(p.lon)).map((p) => {
+      const name = typeof p.name === 'string' && p.name.trim() ? p.name.trim() : null;
+      return { kind: p.kind, title: name || `${KIND_NAME[p.kind]}, no name on the map`, named: !!name, kindName: KIND_NAME[p.kind],
+        at: finite(p.m) ? (p.m < 100 ? 'at the start' : `${long(p.m)} in`) : '',
+        off: !finite(p.offM) ? '' : p.offM < 40 ? 'beside the road' : `${short(p.offM)} off the road`,
+        lat: p.lat, lon: p.lon, m: finite(p.m) ? p.m : null };
+    });
+  }
+
+  /** What tapping a pin says: "Bean · Café · 3.1 mi in" (the name first, when the map has one). */
+  function placeLine(row) {
+    if (!row) return '';
+    return [row.named ? row.title : row.kindName, row.named ? row.kindName : '', row.at].filter(Boolean).join(' · ');
+  }
+
+  /**
+   * What the co-driver says when asked for the next café or fuel stop (Siri, IDEAS V-07; the owner, 2026-11-11): the
+   * first one of `kind` past `atM` along the route, by its name on the map. `list` = along(); `list` null = no route
+   * (or its places not loaded). "Next fuel: Shell, in 3.2 mi." / "Next café in 1.4 mi." / "No fuel stops ahead on this route."
+   */
+  const ASK_NAME = { cafe: ['café', 'cafés'], fuel: ['fuel', 'fuel stops'], view: ['viewpoint', 'viewpoints'] };
+  function nextAnswer(list, atM, kind, fmt = null) {
+    const words = ASK_NAME[kind];
+    if (!words) return '';
+    if (!Array.isArray(list)) return `Plan a route to hear the ${words[1]} along it.`;
+    const at = finite(atM) ? atM : 0, long = fmt && fmt.long ? fmt.long : (m) => `${(m / 1000).toFixed(1)} km`;
+    const p = list.filter((x) => x && x.kind === kind && finite(x.m) && x.m > at - 50).sort((a, b) => a.m - b.m)[0];
+    if (!p) return `No ${words[1]} ahead on this route.`;
+    const name = typeof p.name === 'string' && p.name.trim() ? p.name.trim() : null, d = Math.max(0, p.m - at);
+    const where = d < 150 ? 'here' : `in ${long(d)}`;
+    const head = words[0].charAt(0).toUpperCase() + words[0].slice(1);
+    return name ? `Next ${words[0]}: ${name}, ${where}.` : d < 150 ? `${head} here, no name on the map.` : `Next ${words[0]} ${where}, no name on the map.`;
   }
 
   /**
@@ -108,6 +153,6 @@
     return show;
   }
 
-  const api = { along, fuelGap, summary, declutter, NEAR_M, FUEL_WARN_M };
+  const api = { along, fuelGap, summary, places, placeLine, nextAnswer, declutter, NEAR_M, FUEL_WARN_M, KIND_NAME };
   if (typeof module !== 'undefined' && module.exports) module.exports = api; else root.ApexScenic = api;
 })(typeof window !== 'undefined' ? window : globalThis);

@@ -28,7 +28,7 @@ import { presencePublish, presenceSettingsGet, presenceSettingsPut, presenceView
 import { buildChatDelete, buildChatList, buildChatPost, buildCreate, buildDelete, buildFind, buildFollow, buildGet, buildUpdate, buildsFollowing, postCreate, postDelete, replyCreate, replyDelete, replyTried } from "./builds";
 import { photoDelete, photoList, photoServe, photoUpload, photoUse } from "./photos";
 import { ctxServe } from "./context_grid";
-import { graphIndex, graphTile } from "./graph";
+import { cameraList, graphIndex, graphTile } from "./graph";
 import { block, blockList, fileReport, isModerator, moderationQueue, moderationResolve, report, unblock } from "./safety";
 import { contribute, setContribute } from "./contribute";
 import { pointsFor } from "./points";
@@ -55,6 +55,7 @@ import { highlightCreate, highlightDelete, highlightList, highlightRate } from "
 export { ConvoyIndex, ConvoyRoom } from "./convoy";
 import { crewHomeSet, crewMeetCells } from "./crew_meet";
 import { chargers } from "./chargers";
+import { serverSide, serviceHistory, serviceReport } from "./service_check";
 import { segmentAdopt, segmentCreate, segmentDelete, segmentList, segmentShare, segmentsSharedWithMe } from "./segments";
 
 type Handler = (req: Request, env: Env, m: RegExpMatchArray, ctx?: ExecutionContext) => Promise<Response>;
@@ -94,6 +95,19 @@ on("GET", "/api/ops/latency", async (req, env) => {
 on("GET", "/api/ops/errors", async (req, env) => {
   if (!isModerator(env, await requireMember(req, env))) throw new HttpError(404, "not_found");
   return json(await errorSummary(env, new URL(req.url)));
+});
+// Service check (service_check.ts, web/service_check.js): the owner's phone sends what it saw; the Worker's own side.
+on("POST", "/api/ops/service-check", async (req, env) => {
+  if (!isModerator(env, await requireMember(req, env))) throw new HttpError(404, "not_found");
+  return json(await serviceReport(req, env));
+});
+on("GET", "/api/ops/service-check", async (req, env) => {
+  if (!isModerator(env, await requireMember(req, env))) throw new HttpError(404, "not_found");
+  return json(await serviceHistory(env, new URL(req.url)));
+});
+on("GET", "/api/ops/service-check/server", async (req, env) => {
+  if (!isModerator(env, await requireMember(req, env))) throw new HttpError(404, "not_found");
+  return json(await serverSide(env));
 });
 on("GET", "/api/auth/google/start", (req, env) => googleStart(req, env));
 on("GET", "/api/auth/google/callback", (req, env) => googleCallback(req, env));
@@ -251,6 +265,8 @@ on("GET", "/api/ctx/v1/8/:x/:y", (_req, env, m) => ctxServe(env, `v1/8/${m.group
 // Vetta's own scored road network beyond Cincinnati (src/graph.ts): tiles from the repository's graph-data branch
 on("GET", "/api/graph/v1/index.json", (req) => graphIndex(req));
 on("GET", "/api/graph/v1/:name", (req, _env, m) => graphTile(req, m.groups!.name));
+// Avoid cameras' own camera list for the region (graph.ts cameraList; web/cameras.js), from the graph-data branch
+on("GET", "/api/cameras/v1/region.json", () => cameraList());
 // photos (src/photos.ts, REVIEW.md 5.2): JPEG in, metadata out; members only
 on("POST", "/api/photos", async (req, env) => json(await photoUpload(env, await requireMember(req, env), req), 201));
 on("GET", "/api/photos", async (req, env) => json(await photoList(env, await requireMember(req, env), new URL(req.url))));

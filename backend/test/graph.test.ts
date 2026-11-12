@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { api, freshDb } from "./helpers";
-import { RAW, TILE } from "../src/graph";
+import { CAMERAS_RAW, CAMERAS_S, RAW, TILE } from "../src/graph";
 
 beforeEach(freshDb);
 const real = globalThis.fetch;
@@ -70,5 +70,23 @@ describe("graph tiles relayed from the graph-data branch", () => {
     expect(ix.status).toBe(200);
     expect(((await ix.json()) as { tiles: Record<string, unknown> }).tiles).toEqual({});
     expect((await api(null, "GET", "/api/graph/v1/382_516.vgr")).status).toBe(404);
+  });
+});
+
+describe("Avoid cameras' own camera list relayed from the graph-data branch", () => {
+  it("serves the region file, and 502 (never an empty list) when it is missing or malformed", async () => {
+    const doc = { version: 1, build: "2026-46", tile: 0.25, tiles: ["156_-339"], cams: [[39.1, -84.7, "a"]] };
+    let answer: { body: string; status: number } = { body: JSON.stringify(doc), status: 200 };
+    const seen: string[] = [];
+    globalThis.fetch = (async (input: RequestInfo | URL) => { seen.push(typeof input === "string" ? input : input instanceof URL ? input.href : input.url); return new Response(answer.body, { status: answer.status }); }) as typeof fetch;
+    const ok = await api(null, "GET", "/api/cameras/v1/region.json");
+    expect(ok.status).toBe(200);
+    expect(await ok.json()).toEqual(doc);
+    expect(ok.headers.get("cache-control")).toBe(`public, max-age=${CAMERAS_S}`);
+    expect(seen).toEqual([CAMERAS_RAW]);
+    answer = { body: "no", status: 404 };
+    expect((await api(null, "GET", "/api/cameras/v1/region.json")).status).toBe(502);
+    answer = { body: JSON.stringify({ tiles: "x" }), status: 200 };
+    expect((await api(null, "GET", "/api/cameras/v1/region.json")).status).toBe(502);
   });
 });

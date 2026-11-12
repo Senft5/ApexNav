@@ -28,6 +28,7 @@ describe("crash reports", () => {
 
   it("rejects malformed reports and foreign origins", async () => {
     expect((await api(null, "POST", "/api/errors", { ...report, kind: "debug" })).status).toBe(400);
+    expect((await api(null, "POST", "/api/errors", { ...report, kind: "route", message: "fun: index", stack: "" })).status).toBe(204);
     expect((await api(null, "POST", "/api/errors", { ...report, app: "android" })).status).toBe(400);
     expect((await api(null, "POST", "/api/errors", { ...report, message: "" })).status).toBe(400);
     expect((await api(null, "POST", "/api/errors", { ...report, stack: "x".repeat(10000) })).status).toBe(400);

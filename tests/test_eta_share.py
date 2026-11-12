@@ -31,8 +31,10 @@ def out():
 
 
 def test_live_and_stale(out):
-    assert out["live"] == {"title": "@nate is about 12 min away", "sub": "Arriving around 5:42 PM", "note": "Updated just now"}
+    assert out["live"] == {"title": "@nate is about 12 min away", "parts": ["@nate is about", "12", "min away"],
+                           "sub": "Arriving around 5:42 PM", "note": "Updated just now", "live": True}
     assert out["stale"]["note"] == "Last update 10 min ago. Their phone may have no signal."
+    assert out["stale"]["live"] is False and out["due"]["parts"] is None
     assert out["due"]["title"] == "@nate should be there about now"
 
 
@@ -53,3 +55,15 @@ def test_never_nan_or_invalid_date(out):
         text = json.dumps(out[k])
         assert "NaN" not in text and "Invalid" not in text, out[k]
     assert out["noTime"]["title"] == "@nate's arrival time isn't known yet"
+
+
+def test_the_parts_are_the_title(out):
+    """The page sets the minutes large from `parts`; read in order (a screen reader, a copy) they are the title."""
+    assert " ".join(out["live"]["parts"]) == out["live"]["title"]
+
+
+def test_the_page_is_vetta_line():
+    page = open(os.path.join(ROOT, "web", "eta.html"), encoding="utf-8").read()
+    assert 'href="fonts/fonts.css"' in page and "Barlow Condensed" in page
+    assert "prefers-color-scheme: dark" in page, "a link opened at night reads on night paper"
+    assert "x.parts" in page and "dataset.state" in page

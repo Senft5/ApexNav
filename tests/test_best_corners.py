@@ -81,3 +81,158 @@ def test_parity_and_words():
     line = out["say"][-1]
     assert line.startswith("Cleanest corners: a ") and line.count(";") == 2
     assert not any(w in line for w in ("mph", "km/h", " s,", "fast as"))
+
+
+def test_a_drive_against_your_records():
+    mine = [corner(5, 90, "tight"), corner(9, 94, "tight", "R"), corner(20, 99, "medium"), corner(30, 70, "fast", brake=None)]
+    rec = {"tight": {"id": "x", "at": "2026-08-12T09:00", "name": "Dry Ridge Rd", "apex": 3, "dir": "L", "level": 100, "n": 12},
+           "medium": {"id": "me", "at": "2026-09-01T09:00", "name": "Hill Rd", "apex": 20, "dir": "L", "level": 99, "n": 8}, "fast": None}
+    dr = dp.drive_records(mine, rec)
+    assert dr["tight"]["level"] == 94 and dr["tight"]["record"]["level"] == 100
+    assert dr["medium"]["level"] == 99 and dr["fast"]["level"] is None                  # an unmeasured credit: no fast corner read
+    assert dp.drive_records([], {}) == {z: {"level": None, "record": None} for z in ("tight", "medium", "fast")}
+    if NODE is None:
+        return
+    runner = ("const P=require(process.argv[1]+'/web/driver_profile.js');const [o,r]=JSON.parse(require('fs').readFileSync(0,'utf8'));"
+              "const dr=P.driveRecords(o,r);process.stdout.write(JSON.stringify({dr,say:P.driveRecordLines(dr,'me'),"
+              "alone:P.driveRecordLines(P.driveRecords(o,{}),'me'),none:P.driveRecordLines(null,'me')}));")
+    out = json.loads(subprocess.run([NODE, "-e", runner, os.getcwd()], input=json.dumps([mine, rec]), capture_output=True, text=True, check=True).stdout)
+    assert out["dr"] == dr
+    assert out["say"] == ["Tight corners: 94 at best here; your record is 100 (2026-08-12).",
+                          "Medium corners: 99 at best here, your record of 8 medium corners."]
+    level = subprocess.run([NODE, "-e", "const P=require(process.argv[1]+'/web/driver_profile.js');process.stdout.write(P.driveRecordLines({tight:{level:100,record:{id:'x',at:'2026-05-01T09:00',level:100,n:9}}},'me')[0])", os.getcwd()],
+                           capture_output=True, text=True, check=True).stdout
+    assert level == "Tight corners: 100 at best here, level with your record (2026-05-01)."
+    assert out["alone"] == ["Tight corners: 94 at best here.", "Medium corners: 99 at best here."] and out["none"] == []
+    words = " ".join(out["say"]).lower()
+    assert not any(w in words for w in ("mph", "km/h", "better", "worse", "faster", "push"))
+
+
+def test_road_records_corner_by_corner():
+    c = lambda x, lv, hx=1.0: {"apex": int(x // 5), "x": x, "y": 0.0, "hx": hx, "hy": 0.0, "level": lv}
+    mine = [c(0, 95), c(300, 80), c(600, 90), c(900, 99)]
+    others = [[c(5, 90), c(305, 85), c(603, 90), c(1500, 100)],          # 5 m off: the same corners
+              [c(-8, 93), c(310, 70), c(598, 88, hx=-1.0)]]                # the third the other way: not the same corner
+    r = dp.road_records(mine, others)
+    rows = [{"apex": 0, "level": 95, "passes": 3, "record": 95, "low": 90, "by": None, "why": None}, {"apex": 60, "level": 80, "passes": 3, "record": 85, "low": 70, "by": 0, "why": None}]
+    # 300 m spans 70 to 85: uneven, and this drive's 80 is within 5 of the 85
+    assert r == {"corners": 2, "best": 1, "level": 0, "held": [0], "rows": rows, "uneven": 1, "steady": 1}   # 0 m: best of three; 300 m: 85 beat it; 600, 900: too few
+    assert dp.road_records(mine, others, ["a", "b"])["rows"][1]["by"] == "a"   # the other drive by its id
+    assert dp.road_records(mine, []) == {"corners": 0, "best": 0, "level": 0, "held": [], "rows": [], "uneven": 0, "steady": 0}
+    tie = dp.road_records([c(0, 90)], [[c(1, 90)], [c(2, 80)]])
+    assert tie == {"corners": 1, "best": 0, "level": 1, "held": [], "rows": [{"apex": 0, "level": 90, "passes": 3, "record": 90, "low": 80, "by": 0, "why": None}], "uneven": 0, "steady": 0}
+    low = dp.road_records([c(0, 60)], [[c(1, 90)], [c(2, 80)]])
+    assert (low["uneven"], low["steady"]) == (1, 0)                      # 60 to 90, and this drive the 60
+    full = {k: 1.0 for k in dp.SKILLS}
+    lost = dp.road_records([{**c(0, 60), "credits": {**full, "arc": 0.3, "exit": 0.7}}], [[{**c(1, 90), "credits": full}], [{**c(2, 80), "credits": full}]])
+    assert lost["rows"][0]["why"] == "arc" and low["rows"][0]["why"] is None   # what this pass lost most against your cleanest (no credits: unknown)
+    first = dp.road_records([c(0, 80)], [[c(1, 90)], [c(2, 90)]], ["old", "new"])["rows"][0]
+    assert first["by"] == "old"                                          # of equals the first listed (the oldest) holds it
+    if NODE is None:
+        return
+    runner = ("const P=require(process.argv[1]+'/web/driver_profile.js');const [m,o]=JSON.parse(require('fs').readFileSync(0,'utf8'));"
+              "const r=P.roadRecords(m,o),ids=P.roadRecords(m,o,['a','b']).rows[1].by,day=(x)=>x.by==='a'?'Aug 12':null;"
+              "const un=[{uneven:3,steady:2},{uneven:1,steady:1},{uneven:3,steady:3},{uneven:1,steady:0},{uneven:2,steady:0},{uneven:0,steady:0},null].map(P.roadUnevenLine);"
+              "const notes=[{by:null,passes:4,record:92,level:92},{by:'a',passes:3,record:90,level:90},{by:'a',passes:3,record:90,level:82},{by:'b',passes:3,record:90,level:82},{by:'a',passes:3,record:90,level:60,why:'arc'},null].map((x)=>P.roadCornerNote(x,day));"
+              "const lost=P.roadRecords(...JSON.parse(process.env.LOST)),lostLine=P.roadUnevenLine({uneven:2,steady:0,rows:[{why:'arc'},{why:'arc'},{why:'brake'},{why:null}]});"
+              "process.stdout.write(JSON.stringify({r,ids,notes,un,lost,lostLine,say:[P.roadRecordLine(r),P.roadRecordLine({corners:24,best:7,level:2}),"
+              "P.roadRecordLine({corners:1,best:0,level:0}),P.roadRecordLine({corners:0,best:0,level:0}),P.roadRecordLine(null),P.roadRecordLine({corners:24,best:0,level:24})]}));")
+    lost_in = [[{**c(0, 60), "credits": {**full, "arc": 0.3, "exit": 0.7}}], [[{**c(1, 90), "credits": full}], [{**c(2, 80), "credits": full}]]]
+    out = json.loads(subprocess.run([NODE, "-e", runner, os.getcwd()], input=json.dumps([mine, others]), capture_output=True, text=True, check=True,
+                                    env={**os.environ, "LOST": json.dumps(lost_in)}).stdout)
+    assert out["r"] == r and out["ids"] == "a" and out["lost"] == dp.road_records(*lost_in)
+    assert out["lostLine"] == "At the 2 corners here where your passes differ most, this drive was not near your cleanest at any of them: they are the places to work on. What it lost most there: one steering arc."
+    assert out["un"] == ["At the 3 corners here where your passes differ most, this drive was near your cleanest at 2.",
+                         "At the corner here where your passes differ most, this drive was near your cleanest there.",
+                         "At the 3 corners here where your passes differ most, this drive was near your cleanest at every one.",
+                         "At the corner here where your passes differ most, this drive was not near your cleanest: it is the place to work on.",
+                         "At the 2 corners here where your passes differ most, this drive was not near your cleanest at any of them: they are the places to work on.",
+                         None, None]
+    assert out["notes"] == ["Your cleanest of 4 passes here (92)", "Level with your cleanest here (90, Aug 12)",
+                            "Your cleanest here: 90, Aug 12; this pass 82", "Your cleanest here: 90; this pass 82",
+                            "Your cleanest here: 90, Aug 12; this pass 60, mostly one steering arc", None]
+    assert out["say"] == ["On this road: your cleanest pass yet at 1 of the 2 corners here you have driven three or more times.",
+                          "On this road: your cleanest pass yet at 7 of the 24 corners here you have driven three or more times, level with it at 2.",
+                          "On this road: 1 corner you have driven three or more times; your cleanest pass of it came on another drive.",
+                          None, None,
+                          "On this road: level with your cleanest pass at 24 of the 24 corners here you have driven three or more times."]
+
+
+def test_road_book_every_corner_of_a_road():
+    c = lambda x, lv, hx=1.0, size="tight": {"x": x, "y": 0.0, "hx": hx, "hy": 0.0, "level": lv, "size": size, "dir": "L"}
+    drives = [{"id": "a", "at": "2026-05-01T09:00", "corners": [c(600, 90), c(0, 80), c(300, 70, size="fast")]},
+              {"id": "b", "at": "2026-06-01T09:00", "corners": [c(4, 92), c(305, 70), c(603, 90), c(900, 99)]},
+              {"id": "c", "at": "2026-07-01T09:00", "corners": [c(-6, 85), c(298, 75), c(598, 88, hx=-1.0), c(1, 91)]},
+              {"id": "d", "at": None, "corners": [c(602, 60), c(1200, None)]}]
+    full = {k: 1.0 for k in dp.SKILLS}
+    drives[0]["corners"][0]["credits"] = full                                                   # a's 90 at 600 m
+    drives[3]["corners"][0]["credits"] = {**full, "brake": 0.8, "arc": 0.4, "exit": None}      # d's 60 there: the arc
+    ref = [[x, 0.0] for x in range(0, 1001, 50)]
+    b = dp.road_book(drives, ref)
+    # 0 m: a 80, b 92, c 91 (its cleanest of two) -> b; 300 m: 70, 70, 75 -> c; 600 m: a 90, b 90, d 60 -> a (the older of
+    # equals); 600 m the other way (c) and 900 m (b) passed once
+    assert [(k["x"], k["passes"], k["record"], k["by"], k["at"], k["size"]) for k in b["corners"]] == [
+        (0, 3, 92, "b", "2026-06-01T09:00", "tight"), (300, 3, 75, "c", "2026-07-01T09:00", "fast"), (600, 3, 90, "a", "2026-05-01T09:00", "tight")]
+    assert b["fewer"] == 2 and b["drives"] == 4
+    assert [k["low"] for k in b["corners"]] == [80, 70, 60] and b["uneven"] == [3]
+    assert [k["why"] for k in b["corners"]] == [None, None, "arc"]                     # only the uneven corner says why     # 600 m: 90 down to 60; 0 m spans 12 only
+    assert [k["x"] for k in dp.road_book(drives)["corners"]] == [600, 0, 300]          # with no ref: as first seen
+    assert dp.road_book([]) == {"corners": [], "fewer": 0, "drives": 0, "uneven": []}
+    assert dp._why({"credits": full}, {"credits": full}) is None and dp._why({}, {"credits": full}) is None
+    if NODE is None:
+        return
+    runner = ("const P=require(process.argv[1]+'/web/driver_profile.js');const [d,r]=JSON.parse(require('fs').readFileSync(0,'utf8'));"
+              "const b=P.roadBook(d,r),w=P.roadBookRows(b,(at)=>at.slice(5,10)),two=P.roadBookRows({...b,uneven:[3,1]},null);"
+              "process.stdout.write(JSON.stringify([[b,P.roadBook(d),P.roadBook([])],w,two.work,P.roadBookRows(P.roadBook([]),null)]));")
+    out = json.loads(subprocess.run([NODE, "-e", runner, os.getcwd()], input=json.dumps([drives, ref]), capture_output=True, text=True, check=True).stdout)
+    assert out[0] == json.loads(json.dumps([b, dp.road_book(drives), dp.road_book([])]))
+    w = out[1]
+    assert w["head"] == "3 corners you have driven three or more times, in road order; 2 more fewer times. Each with your cleanest pass and the drive it came on."
+    assert w["work"] == "Least even: corner 3, where your passes differ the most."
+    assert [(r["n"], r["what"], r["record"], r["low"], r["uneven"], r["by"], r["on"], r["passes"]) for r in w["rows"]] == [
+        (1, "Tight left", 92, 80, False, "b", "06-01", 3), (2, "Fast left", 75, 70, False, "c", "07-01", 3), (3, "Tight left", 90, 60, True, "a", "05-01", 3)]
+    assert [r["why"] for r in w["rows"]] == [None, None, "one steering arc"]
+    assert out[2] == "Least even: corners 3 and 1, where your passes differ the most." and out[3] is None
+
+
+def test_road_book_focus_names_the_skill_to_practise():
+    k = lambda why: {"why": why}
+    book = {"corners": [k("arc"), k(None), k("brake"), k("arc"), k("brake")], "uneven": [3, 4, 1]}
+    assert dp.road_book_focus(book) == {"skill": "arc", "at": [1, 4]}                    # named twice
+    tie = {"corners": book["corners"], "uneven": [5, 1]}
+    assert dp.road_book_focus(tie) == {"skill": "brake", "at": [5]}                       # a tie: the widest corner's
+    assert dp.road_book_focus({"corners": book["corners"], "uneven": [2]}) is None        # no why there
+    assert dp.road_book_focus({"corners": [], "uneven": []}) is None and dp.road_book_focus(None) is None
+    if NODE is None:
+        return
+    runner = ("const P=require(process.argv[1]+'/web/driver_profile.js');const bs=JSON.parse(require('fs').readFileSync(0,'utf8'));"
+              "const f=bs.map((b)=>P.roadBookFocus(b));process.stdout.write(JSON.stringify([f,f.map((x)=>P.roadBookFocusLine(x))]));")
+    cases = [book, tie, {"corners": book["corners"], "uneven": [2]}, None]
+    out = json.loads(subprocess.run([NODE, "-e", runner, os.getcwd()], input=json.dumps(cases), capture_output=True, text=True, check=True).stdout)
+    assert out[0] == [dp.road_book_focus(b) for b in cases]
+    assert out[1] == ["Most of the difference at corners 1 and 4 is one steering arc.",
+                      "Most of the difference at corner 5 is brakes done by the apex.", None, None]
+
+
+def test_road_end_line_picks_the_road_words():
+    if NODE is None:
+        return
+    runner = ("const P=require(process.argv[1]+'/web/driver_profile.js');"
+              "process.stdout.write(JSON.stringify([P.roadEndLine({corners:4,best:1,level:0,uneven:1,steady:0,rows:[{why:'brake'}]}),"
+              "P.roadEndLine({corners:4,best:1,level:0,uneven:1,steady:1,rows:[{why:null}]}),P.roadEndLine({corners:0}),P.roadEndLine(null)]));")
+    out = json.loads(subprocess.run([NODE, "-e", runner, os.getcwd()], capture_output=True, text=True, check=True).stdout)
+    assert out == ["At the corner here where your passes differ most, this drive was not near your cleanest: it is the place to work on. What it lost most there: brakes done by the apex.",
+                   "On this road: your cleanest pass yet at 1 of the 4 corners here you have driven three or more times.", None, None]
+
+
+def test_roads_to_work_names_the_least_even_roads():
+    if NODE is None:
+        return
+    k = lambda why: {"why": why}
+    a = {"corners": [k("arc"), k("arc")], "uneven": [1, 2]}
+    b = {"corners": [k(None)], "uneven": [1]}
+    runner = ("const P=require(process.argv[1]+'/web/driver_profile.js');const [a,b]=JSON.parse(require('fs').readFileSync(0,'utf8'));"
+              "process.stdout.write(JSON.stringify([P.roadsToWork([{name:'Bell Gap',book:b},{name:'Flat Rd',book:{corners:[],uneven:[]}},{name:'Dry Ridge Rd',book:a},{name:'X',book:null}]),"
+              "P.roadsToWork([{name:'Flat Rd',book:{corners:[],uneven:[]}}]),P.roadsToWork(null)]));")
+    out = json.loads(subprocess.run([NODE, "-e", runner, os.getcwd()], input=json.dumps([a, b]), capture_output=True, text=True, check=True).stdout)
+    assert out == ["Where your passes differ most: Dry Ridge Rd (2 corners, mostly one steering arc) and Bell Gap (1 corner).", None, None]

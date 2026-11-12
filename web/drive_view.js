@@ -363,16 +363,51 @@
         onShown: () => { const cr = planBox.querySelector('.dv-credit'); if (cr) cr.hidden = false; },
         // the path moves with the map (one transform; CSS keeps its lines their width), the numbers and letters are
         // redrawn where they now fall, at their own size
-        onMove: (c) => {
-          const w = planBox.clientWidth, fit = w ? BM.viewFor(plan.frame, xc, yc, ms * w / MW) : null;
-          cam = c && fit ? BM.overlay(plan.frame, xc, yc, ms, MW, MH, fit.zoom, c) : T0;
-          const g = planBox.querySelector('#dvGeo'), mk = planBox.querySelector('#dvMarks'), jm = planBox.querySelector('#dvJerkMarks');
-          if (g) { if (cam === T0) g.removeAttribute('transform'); else g.setAttribute('transform', `matrix(${cam.s} 0 0 ${cam.s} ${cam.tx} ${cam.ty})`); }
-          if (mk) mk.innerHTML = marksAt(cam);
-          if (jm) jm.innerHTML = jmarksAt(cam);
-          const [px, py] = TP(cam, state.i); dot.setAttribute('cx', px); dot.setAttribute('cy', py);
-        },
+        onMove: (c) => applyCam(c),
       });
+    }
+    // the picture at map camera c ({ center, zoom }; null: fitted): the path moves as one transform, the numbers, letters
+    // and dot are redrawn where they now fall
+    function applyCam(c) {
+      const w = planBox && planBox.clientWidth, fit = w && BM && plan.frame ? BM.viewFor(plan.frame, xc, yc, ms * w / MW) : null;
+      cam = c && fit ? BM.overlay(plan.frame, xc, yc, ms, MW, MH, fit.zoom, c) : T0;
+      const g = mapBox.querySelector('#dvGeo'), mk = mapBox.querySelector('#dvMarks'), jm = mapBox.querySelector('#dvJerkMarks');
+      if (g) { if (cam === T0) g.removeAttribute('transform'); else g.setAttribute('transform', `matrix(${cam.s} 0 0 ${cam.s} ${cam.tx} ${cam.ty})`); }
+      if (mk) mk.innerHTML = marksAt(cam);
+      if (jm) jm.innerHTML = jmarksAt(cam);
+      const [px, py] = TP(cam, state.i); dot.setAttribute('cx', px); dot.setAttribute('cy', py);
+    }
+    // the owner, 2026-11-11 (TestFlight): "tapping a corner or moment here should orient the view above to show that
+    // corner zoomed in on the map". Samples a..b (a corner's start to end, a moment's 50 m either side) framed with 60 m
+    // round them and at least 250 m across, never wider than the whole drive's fit; on the real map a glide, on the plain
+    // picture the same camera. 'All' in the zoom row puts the whole drive back, as Recenter does.
+    let focused = false;
+    function focusMap(a, b) {
+      const w = planBox && planBox.clientWidth, h = planBox && planBox.clientHeight;
+      if (!BM || !plan.frame || !w || !h) return;
+      a = Math.max(0, Math.min(n - 1, a)); b = Math.max(a, Math.min(n - 1, b));
+      let fx0 = Infinity, fx1 = -Infinity, fy0 = Infinity, fy1 = -Infinity;
+      for (let i = a; i <= b; i++) { fx0 = Math.min(fx0, x[i]); fx1 = Math.max(fx1, x[i]); fy0 = Math.min(fy0, y[i]); fy1 = Math.max(fy1, y[i]); }
+      const spanX = Math.max(250, fx1 - fx0 + 120), spanY = Math.max(250, fy1 - fy0 + 120);
+      const ppm = Math.max(ms * w / MW, Math.min(w / spanX, h / spanY));
+      const v = BM.viewFor(plan.frame, (fx0 + fx1) / 2, (fy0 + fy1) / 2, ppm);
+      v.zoom = Math.min(v.zoom, 18);
+      if (!(basemap && basemap.shown && basemap.focus(v))) applyCam(v);
+      focused = true;
+    }
+    function unfocusMap() {
+      if (!focused) return;
+      focused = false;
+      if (basemap && basemap.shown) basemap.recenter(); else applyCam(null);
+    }
+    // a pick from the lists below: the map frames it and the lanes zoom to it, both brought into view (the map first,
+    // it is the one above on a phone)
+    function pick(i, a, b) {
+      focusMap(a, b);
+      if (zoomM) setZoom(zoomM, i);
+      move(i);
+      const r = mapBox.getBoundingClientRect && mapBox.getBoundingClientRect();
+      if (r && r.top < 0) mapBox.scrollIntoView({ block: 'start', behavior: 'smooth' }); else lanes.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
     }
 
     // ---- lanes -----------------------------------------------------------------------------------------------------
@@ -497,7 +532,11 @@
     lanes.addEventListener('pointerup', () => { drag = false; });
     lanes.addEventListener('keydown', (e) => { const big = e.shiftKey ? 50 : 5; if (e.key === 'ArrowRight') { e.preventDefault(); showRead(); move(state.i + big); } if (e.key === 'ArrowLeft') { e.preventDefault(); showRead(); move(state.i - big); } if (e.key === 'Home') { showRead(); move(state.v0); } if (e.key === 'End') { showRead(); move(state.v1); } });
     lanes.tabIndex = 0; lanes.setAttribute('role', 'slider'); lanes.setAttribute('aria-label', 'Position along the drive'); lanes.setAttribute('aria-valuemin', 0); lanes.setAttribute('aria-valuemax', n - 1);
-    mapBox.addEventListener('click', (e) => { const g = e.target.closest('[data-k]'); if (g) move(d.corners[+g.dataset.k].apex); });
+    mapBox.addEventListener('click', (e) => {
+      const g = e.target.closest('[data-k]');
+      if (g) move(d.corners[+g.dataset.k].apex);
+      else if (!(basemap && basemap.shown) && e.target.closest('.dv-plan')) unfocusMap();   // the plain picture: a tap off the marks shows the whole drive again
+    });
 
     // ---- corner list -----------------------------------------------------------------------------------------------
     let net = null;
@@ -518,7 +557,7 @@
           + `${r.turn_sd_m != null ? `, turn-in within ${m(r.turn_sd_m)}${r.turn_passes < r.passes ? ` over ${r.turn_passes}` : ''}` : ''}`
           + `${r.speed_sd_mps != null ? `, speed at the slowest point within ${spd(r.speed_sd_mps)}${r.speed_passes < r.passes ? ` over ${r.speed_passes}` : ''}` : ''}`
           + `${v ? '. If it was not traffic or the weather, pick an early, comfortable braking marker you can always make' : ''}</span>`;
-        b.onclick = () => { if (zoomM) setZoom(zoomM, c.apex); move(c.apex); lanes.scrollIntoView({ block: 'nearest', behavior: 'smooth' }); };
+        b.onclick = () => pick(c.apex, c.start, c.end);
         li.append(b); ul.append(li);
       });
       const which = steady.length && loose.length ? 'Your steadiest corners, then the ones that vary most.'
@@ -536,7 +575,7 @@
         const near = d.corners.findIndex((c) => m.index >= c.start - 4 && m.index <= c.end + 4), li = el('li'), b = el('button');
         b.innerHTML = `<b>${String.fromCharCode(65 + k)}</b><span>${near >= 0 ? `Corner ${near + 1} \u00b7 ${esc(callOf(d.corners[near]))}` : 'Between corners'}</span><em class="loss">${m.jerk_gps.toFixed(2)} g/s</em>`
           + `<span class="note">${DIST(d.dist[m.index])} \u00b7 ${abruptAdvice(d.lat_g, d.lon_g, m.index)}</span>`;
-        b.onclick = () => { if (showSmooth) showSmooth(); if (zoomM) setZoom(zoomM, m.index); move(m.index); lanes.scrollIntoView({ block: 'nearest', behavior: 'smooth' }); };
+        b.onclick = () => { if (showSmooth) showSmooth(); pick(m.index, m.index - 10, m.index + 10); };
         li.append(b); ul.append(li);
       });
       list.prepend(el('h2', null, 'Most abrupt moments'), ul);
@@ -547,7 +586,7 @@
         const x = co.corners[k], c = d.corners[k], from = x.best ? co.others[x.best_from] : null, li = el('li'), b = el('button');
         b.innerHTML = `<b>${k + 1}</b><span>${esc(callOf(c))}</span><em class="loss">${fmtD(x.gain_s)}</em>`
           + `<span class="note">${esc(tipText(x, MPH) || 'Same technique, quicker all the way through')}${from ? ` \u00b7 best pass ${esc(from.date)}` : ''}</span>`;
-        b.onclick = () => { if (zoomM) setZoom(zoomM, c.apex); move(c.apex); lanes.scrollIntoView({ block: 'nearest', behavior: 'smooth' }); };
+        b.onclick = () => pick(c.apex, c.start, c.end);
         li.append(b); ul.append(li);
       }
       list.prepend(el('h2', null, 'Where to find time'), ul);
@@ -557,7 +596,7 @@
       const r = el('button', 'dv-corner'); r.setAttribute('aria-label', `Corner ${k + 1}: ${callOf(c)}, apex ${Math.round(c.apex_mps * MPH)} ${SPD_WORDS()}`);
       r.innerHTML = `<b>${k + 1}</b><span class="dv-call">${esc(callOf(c))}</span><span class="dv-v">${Math.round(c.apex_mps * MPH)} ${SPD()}</span><span class="dv-d">${DIST(d.dist[c.apex])}${ref ? ` \u00b7 <em class="${lost(k) == null ? '' : lost(k) > 0.05 ? 'loss' : lost(k) < -0.05 ? 'gain' : ''}">${fmtD(lost(k))}</em>` : ''}</span>`
         + (co && tipText(co.corners[k], MPH) ? `<span class="dv-tip">${esc(tipText(co.corners[k], MPH))}</span>` : '');
-      r.onclick = () => { if (zoomM) setZoom(zoomM, c.apex); move(c.apex); lanes.scrollIntoView({ block: 'nearest', behavior: 'smooth' }); };
+      r.onclick = () => pick(c.apex, c.start, c.end);
       grid2.append(r);
     });
     if (!d.corners.length) grid2.append(el('p', 'note', 'No corners detected on this drive.'));
@@ -573,7 +612,7 @@
       zoom.querySelectorAll('button').forEach((b) => b.classList.toggle('on', +b.dataset.m === m));
       draw();
     }
-    ZOOMS.forEach(([label, m]) => { const b = el('button', 'dv-z', label); b.dataset.m = m; b.onclick = () => { showRead(); setZoom(m); }; b.setAttribute('aria-label', label === 'All' ? 'Zoom: whole drive' : `Zoom: ${label.toLowerCase()} window`); zoom.append(b); });
+    ZOOMS.forEach(([label, m]) => { const b = el('button', 'dv-z', label); b.dataset.m = m; b.onclick = () => { showRead(); if (!m) unfocusMap(); setZoom(m); }; b.setAttribute('aria-label', label === 'All' ? 'Zoom: whole drive' : `Zoom: ${label.toLowerCase()} window`); zoom.append(b); });
     const pan = (dir) => { showRead(); if (zoomM) setZoom(zoomM, Math.round((state.v0 + state.v1) / 2 + dir * (state.v1 - state.v0) * 0.6)); };
     // U-76: drawn chevrons in the ink, not U+25C0/U+25B6, which iOS paints as blue emoji
     const chev = (d) => `<svg viewBox="0 0 12 12" width="12" height="12" aria-hidden="true" style="display:block;margin:auto"><path d="${d}" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="square"/></svg>`;
@@ -584,7 +623,22 @@
     const ro = new ResizeObserver(() => { if (Math.abs((lanes.clientWidth || 0) - W) > 2) draw(); if (basemap) basemap.refit(); });
     ro.observe(lanes); if (basemap && planBox) ro.observe(planBox);
     function setRoadFeel(series) { feel = series; draw(); }
-    return { move, setRoadFeel, restyleMap() { if (basemap) basemap.restyle(); }, recenterMap() { if (basemap) basemap.recenter(); }, destroy() { ro.disconnect(); if (basemap) basemap.destroy(); }, summary: S };
+    // the corners this drive is your cleanest pass of on this road (driver_profile.js roadRecords, from the drive job)
+    // rows: [{ apex, note, by }] (driver_profile.js roadRecords rows with their words), or bare apexes this pass is cleanest
+    // at; open(by) makes the note a link to the drive that holds the corner
+    function markRecords(rows, open) {
+      const at = new Map((rows || []).map((x) => (typeof x === 'object' && x ? [x.apex, x] : [x, { apex: x, by: null, note: 'Your cleanest pass here' }])));
+      grid2.querySelectorAll('.dv-corner').forEach((r, k) => {
+        const x = at.get(d.corners[k] && d.corners[k].apex), old = r.querySelector('.dv-rec');
+        if (old) old.remove();
+        r.classList.toggle('rec', !!x && (x.by === null || x.by === undefined));
+        if (!x || !x.note) return;
+        if (x.by !== null && x.by !== undefined && open) {
+          const a = el('button', 'dv-rec dv-rec-by'); a.textContent = x.note; a.type = 'button'; a.addEventListener('click', () => open(x.by)); r.append(a);
+        } else { const t = el('span', 'dv-rec'); t.textContent = x.note; r.append(t); }
+      });
+    }
+    return { move, setRoadFeel, markRecords, restyleMap() { if (basemap) basemap.restyle(); }, recenterMap() { if (basemap) basemap.recenter(); }, destroy() { ro.disconnect(); if (basemap) basemap.destroy(); }, summary: S };
   }
 
   const api = { mount, summarize, tipText, plainCoach, abruptAdvice, fatigueText, consistencyRows, noteWordsPref, cornerCall };

@@ -15,7 +15,8 @@ export function scrub(text: string, max: number): string {
   return s.length > max ? s.slice(0, max) : s;
 }
 
-const KINDS = new Set(["error", "rejection"]);
+// "route": a Fun / Long way / loop plan our router couldn't make, by its reason code only (web/errors.js route)
+const KINDS = new Set(["error", "rejection", "route"]);
 const APPS = new Set(["ios", "web"]);
 const text = (v: unknown, field: string, max: number): string => {
   if (v === undefined || v === null) return "";
@@ -59,14 +60,14 @@ export async function serverError(env: Env, route: string, err: unknown): Promis
   await countError(env, { source: "server", kind: route, message: scrub(name, 300) || "(no message)", page: "", stack: scrub(stack, 2000) });
 }
 
-/** Owner only (checked by the caller): the last few days' counts, most frequent first. */
+/** Owner only (checked by the caller): the last few days' counts, most frequent first (not the service check's rows, kind 'service'). */
 export async function errorSummary(env: Env, url: URL) {
   const days = url.searchParams.has("days") ? int(Number(url.searchParams.get("days")), "days", 1, KEEP_DAYS) : 7;
   const rows = (await env.DB.prepare(
     `SELECT source, kind, message, page, SUM(n) AS n, COUNT(*) AS days, MIN(day) AS first_day, MAX(last_at) AS last_at,
             (SELECT stack FROM error_counts s WHERE s.source = e.source AND s.kind = e.kind AND s.message = e.message AND s.page = e.page
               ORDER BY day DESC LIMIT 1) AS stack
-       FROM error_counts e WHERE day >= date('now', ?) GROUP BY source, kind, message, page ORDER BY n DESC LIMIT 200`)
+       FROM error_counts e WHERE day >= date('now', ?) AND kind != 'service' GROUP BY source, kind, message, page ORDER BY n DESC LIMIT 200`)
     .bind(`-${days - 1} days`).all()).results;
   return { days, errors: rows };
 }
