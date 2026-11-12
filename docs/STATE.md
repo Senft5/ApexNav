@@ -1,5 +1,8 @@
 # VETTA — CURRENT AGENT HANDOFF STATE
 
+## 2026-11-12 Route-failure reasons in crash counts (claude/project-thread-39xbx9)
+- A Fun / Long way / loop plan our router couldn't make reports its reason code (kind `route`) to /api/errors; read them with `SELECT * FROM error_counts WHERE kind = 'route'` on apexnav-db. Next: once Nate hits the signal error again, read the reason there and fix that cause.
+
 ## 2026-11-11 Valhalla for Quick only, part 3 (claude/project-thread-39xbx9)
 - Deleted the code Fun, Long way and loops could no longer reach: funRoute's Valhalla stage plans and buildLoop's stage loops and loopRefine. Docs (ROUTING, OWN_ROUTING, CALL_SHEET) updated.
 - Next: the Explore list still times stages with Valhalla's matrix off our tiles; it's a listing, not a route, so it stays for now.
