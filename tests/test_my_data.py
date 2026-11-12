@@ -48,9 +48,9 @@ def test_summary_and_keys(out):
 def test_offline_data(out):
     assert out["off"]["routes"] == 2 and out["off"]["routeBytes"] > 0
     assert out["offText"].startswith("Offline data: 2 saved routes (<0.1 MB), downloaded voices 3.0 MB.")
-    assert "uses 12.0 MB" in out["offText"] and "of 2 GB allowed" in out["offText"]
+    assert "uses 12.0 MB" in out["offText"] and "of 2 GB allowed" in out["offText"] and "cache" not in out["offText"]
     assert out["none"] == {"routes": 0, "routeBytes": 0, "areas": 0, "areaBytes": 0, "voiceBytes": None, "usage": None, "quota": None}   # unknown stays unknown
-    assert out["noneText"].startswith("Nothing saved for offline.")                      # U-126: no line of zeros
+    assert out["noneText"] == "Nothing saved for offline."                               # U-126: no line of zeros, no footnote
 
 
 def test_phone_text_counts_only_what_exists(out):
