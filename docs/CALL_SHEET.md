@@ -4,6 +4,13 @@ Decisions Claude made for you, newest first. Each one says what was decided, why
 you reach one you've seen. If you disagree with a call, say so and it gets reversed; nothing here is hard to undo unless
 it says so. Things only you can do are in docs/OWNER_TODO.md.
 
+## 2026-11-12 (deepest analysis 18): the end card names your passes on a road you know (claude/project-thread-gd7nre)
+
+After a drive on a road you have driven three or more times, the map's end card adds one line: what this drive lost most
+at the road's least even corners when that is known, else at how many corners it was your cleanest pass yet. Calls: one
+line, not both, to keep the card short; it rides the coaching job so the card does not read your drives twice. Undo:
+remove `#endRoad` from web/index.html and its two lines in cockpit.js.
+
 ## 2026-11-12 (deepest analysis 17): a drive's page says what it lost at a road's least even corners (claude/project-thread-gd7nre)
 
 Where a road's passes differ most and this drive was more than 5 levels off your cleanest there, its corner note now names
