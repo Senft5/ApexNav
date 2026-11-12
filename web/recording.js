@@ -8,7 +8,7 @@
   // so the Log lists a year of drives without reading 1.6 MB of rows each. Opening v3 only adds the store: 'drives' is
   // never touched by the upgrade, so every drive already on a phone stays; summaries() builds the missing ones from the
   // drives' own rows the first time it is asked (in the analysis worker, off the page's thread).
-  const DB_VERSION = 3, SUMMARY_VERSION = 1;
+  const DB_VERSION = 3, SUMMARY_VERSION = 2;   // 2: run (flow.js, IDEAS D-30)
   function idb() {
     if (dbp) return dbp;
     dbp = new Promise((res, rej) => {
@@ -49,8 +49,12 @@
    */
   function summarize(Core, d) {
     if (!Core || !d || !d.id || !Array.isArray(d.lat)) return null;
-    let ds = { score: null, corners: 0, components: null }, corners = [];
-    try { const s = scoreOf(Core, d); ds = s.ds; corners = s.corners.map((c) => [c.start, c.end, c.apex]); } catch (_) {}
+    let ds = { score: null, corners: 0, components: null }, corners = [], run;
+    try { const s = scoreOf(Core, d); ds = s.ds; corners = s.corners.map((c) => [c.start, c.end, c.apex]);
+      // the best run of clean corners in a row (runOf, IDEAS D-30): { corners, len_m } or null; left out without flow.js
+      const r = runOf(Core, d, s.corners);
+      if (r !== undefined) run = r ? { corners: r.corners, len_m: r.end_m - r.start_m } : null;
+    } catch (_) {}
     let s = Infinity, n = -Infinity, w = Infinity, e = -Infinity;
     for (let i = 0; i < d.lat.length; i++) { const la = d.lat[i], lo = d.lon[i]; if (!finiteN(la) || !finiteN(lo)) continue; if (la < s) s = la; if (la > n) n = la; if (lo < w) w = lo; if (lo > e) e = lo; }
     let secs = null;
@@ -59,7 +63,7 @@
     return {
       id: d.id, sv: SUMMARY_VERSION, name: d.name, date: d.date, date_known: d.date_known, source: d.source,
       len_m: finiteN(len) ? len : null, n: d.lat.length, secs, bbox: s <= n ? [s, n, w, e] : null,
-      ds: { score: ds.score, corners: ds.corners || 0, components: ds.components || null }, corners,
+      ds: { score: ds.score, corners: ds.corners || 0, components: ds.components || null }, corners, run,
       tags: d.tags, note: d.note, ended: d.ended, contributed: d.contributed, car: d.car ? { label: d.car.label } : undefined,
       battery: d.battery, laps: Array.isArray(d.laps) ? d.laps.length : undefined,
       feel: !!(d.rough && d.kappa),                                  // ApexContributor.eligible asks for both
@@ -243,6 +247,14 @@
    * the record repaired, its corners for its car, only those with measured g. Returns { ds, corners }; ds.score is null
    * (shown "--") when there are not enough clean corners, never NaN.
    */
+  /** A drive's best run of clean corners in a row (flow.js), judged on the rows and corners the Score uses: { corners,
+   *  start_m, end_m } or null; undefined when flow.js isn't loaded (unknown, not "none"). */
+  function runOf(Core, d, corners = null) {
+    const FL = root.ApexFlow || (typeof module !== 'undefined' && typeof require === 'function' ? require('./flow.js') : null);
+    if (!FL || !Core || !d) return undefined;
+    const x = repair(Core, d);
+    return FL.longest(Core, x.speed_mps, x.lon_g, x.lat_g, scorableCorners(x, corners || cornersOf(x)), Array.isArray(x.dist) ? x.dist : null);
+  }
   function scoreOf(Core, d) {
     const x = repair(Core, d), corners = cornersOf(x);
     let ds = null;
@@ -322,6 +334,6 @@
     return `${s.hits >= 2 ? 'Confirmed' : 'Seen'} on ${s.hits} of ${s.passes} drives`;
   }
 
-  const api = { all, get, ids, store, patch, summaries, summarize, remove, keepPut, keepAll, keepRemove, parse, repair, scorableCorners, toTrack, corroborate, seenLabel, cornersOf, scoreOf, DB_VERSION, SUMMARY_VERSION };
+  const api = { all, get, ids, store, patch, summaries, summarize, runOf, remove, keepPut, keepAll, keepRemove, parse, repair, scorableCorners, toTrack, corroborate, seenLabel, cornersOf, scoreOf, DB_VERSION, SUMMARY_VERSION };
   if (typeof module !== 'undefined' && module.exports) module.exports = api; else root.ApexRecording = api;
 })(typeof window !== 'undefined' ? window : globalThis);

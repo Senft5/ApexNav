@@ -97,7 +97,37 @@ def test_the_js_port_agrees_and_says_it_in_words():
 
 def test_the_drive_page_says_it():
     src = open(os.path.join(ROOT, "web", "drive_view.js"), encoding="utf-8").read()
-    assert "FL.text(FL.longest(Core, d.speed_mps, d.lon_g, d.lat_g, d.corners" in src
+    assert "FL.longest(Core, d.speed_mps, d.lon_g, d.lat_g, d.corners" in src
     assert "(flow ? `<p class=\"dv-plain\">${esc(flow)}</p>` : '')" in src
     page = open(os.path.join(ROOT, "web", "analysis.html"), encoding="utf-8").read()
     assert page.index('<script src="flow.js"></script>') < page.index('<script src="drive_view.js"></script>')
+    assert "REC.runOf(Core, d)" in src
+
+
+@pytest.mark.skipif(NODE is None, reason="node not installed")
+def test_the_log_keeps_each_drives_best_run_in_its_summary():
+    v, lon, lat, cs = drive(["ok"] * 3 + ["jerky"] + ["ok"] * 6)
+    n = len(v)
+    d = {"id": "t1", "name": "Test Rd", "date": "2026-11-11T09:00:00", "speed_mps": v, "lon_g": lon, "lat_g": lat,
+         "dist": [5.0 * i for i in range(n)], "lat": [35.5 + 5.0 * i / 110540 for i in range(n)], "lon": [-83.9] * n,
+         "events": [{"type": "corner", "start_m": c["start"] * 5, "end_m": c["end"] * 5, "index": c["apex"], "apex_mph": c["apex_mps"] * MPH,
+                     "code": "L4", "call": "left 4", "dir": "L", "severity": 4, "turn_rad": 1} for c in cs]}
+    script = (
+        "globalThis.ApexCore=require(process.argv[1]+'/web/apex_core.js');const R=require(process.argv[1]+'/web/recording.js');"
+        "const d=JSON.parse(require('fs').readFileSync(0,'utf8'));const s=R.summarize(ApexCore,d),r=R.runOf(ApexCore,d);"
+        "process.stdout.write(JSON.stringify({run:s.run,r,sv:s.sv}));"
+    )
+    out = json.loads(subprocess.run([NODE, "-e", script, ROOT], input=json.dumps(d), capture_output=True, text=True, check=True).stdout)
+    assert out["sv"] == 2                                                # summaries made before the run are rebuilt
+    assert out["r"]["corners"] == 6 and out["run"]["corners"] == 6
+    assert out["run"]["len_m"] == pytest.approx(out["r"]["end_m"] - out["r"]["start_m"])
+
+
+def test_the_records_and_the_workers_have_it():
+    page = open(os.path.join(ROOT, "web", "analysis.html"), encoding="utf-8").read()
+    assert "Best run this month: corners in a row, smooth and settled" in page
+    assert page.index('<script src="flow.js"></script>') < page.index('<script src="recording.js"></script>')
+    for f in ("analysis_worker.js", "break_worker.js"):
+        assert "'flow.js', 'recording.js'" in open(os.path.join(ROOT, "web", f), encoding="utf-8").read(), f
+    idx = open(os.path.join(ROOT, "web", "index.html"), encoding="utf-8").read()
+    assert idx.index('<script src="flow.js" defer>') < idx.index('<script src="recording.js" defer>')
