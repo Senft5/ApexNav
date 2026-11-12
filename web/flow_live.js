@@ -1,5 +1,6 @@
 // The best run, live (IDEAS D-30, part four): while you drive, the co-driver counts corners driven smooth and settled in a
-// row and says it at five, at ten and every ten after ("Five clean in a row."). The same rule as the drive page's best run
+// row and says it at five, at ten and every ten after ("Five clean in a row."), and once when it passes this month's best
+// run ("Eleven clean in a row, your best this month."). The same rule as the drive page's best run
 // (flow.js, the Driver Score's own cornerTechnique), on the live 5 m rows: each corner is found in a trailing window of the
 // road just driven (ApexCore.profileRecording) and judged once, a little after it ends. A miss, a corner that can't be
 // judged (no g, a speed gap) or more than GAP_M between apexes starts the count again. Technique, never speed or time.
@@ -24,10 +25,12 @@
    * else null) or null when nothing new was judged. opts.mu: the car's grip (ApexCore.carGrip), as the saved drive is scored.
    */
   function createWatch(Core, Flow, opts = {}) {
-    let judgedEnd = -1, lastAt = null, run = 0, seen = 0;
+    let judgedEnd = -1, lastAt = null, run = 0, seen = 0, best = null, beat = false;
     const mu = finite(opts.mu) ? opts.mu : null;
     return {
       get run() { return run; },
+      /** This month's best run so far (from the Log's summaries, read after Start): passing it is said once a drive. */
+      setBest(n) { best = finite(n) && n >= 5 ? Math.floor(n) : null; },
       update(rows) {
         const n = rows ? rows.length : 0;
         if (n < 40 || n - seen < STEP) return null;
@@ -54,6 +57,7 @@
           try { t = Core.cornerTechnique(V, LO, LA, c); } catch (_) { t = null; }
           run = Flow.inFlow(t) ? run + 1 : 0;
           if (run && milestone(run)) say = text(run);
+          if (best != null && !beat && run === best + 1) { beat = true; say = bestText(run); }   // the record goes before a milestone
           judgedEnd = off + c.end; lastAt = at;   // the same corner found again a row over in a later window is past this
         }
         return { run, say };
@@ -61,6 +65,21 @@
     };
   }
 
-  const api = { createWatch, milestone, text, WINDOW, PAST };
+  /** Passing the month's best run: "Eleven clean in a row, your best this month." */
+  const bestText = (n) => `${text(n).slice(0, -1)}, your best this month.`;
+
+  /**
+   * This month's best run among the Log's summaries (recording.js keeps each drive's run: { corners, len_m }): the most
+   * corners, from drives whose month (monthOf, e.g. ApexAnalysis.monthOf) is `key` ("2026-11"). Null with none (a drive
+   * whose run was never judged, or whose date is unknown, never counts).
+   */
+  function monthBest(all, monthOf, key) {
+    if (typeof monthOf !== 'function' || !key) return null;
+    let b = null;
+    for (const o of all || []) if (o && o.run && finite(o.run.corners) && monthOf(o) === key) b = Math.max(b || 0, o.run.corners);
+    return b;
+  }
+
+  const api = { createWatch, milestone, text, bestText, monthBest, WINDOW, PAST };
   if (typeof module !== 'undefined' && module.exports) module.exports = api; else root.ApexFlowLive = api;
 })(typeof window !== 'undefined' ? window : globalThis);

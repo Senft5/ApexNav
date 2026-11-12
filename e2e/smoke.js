@@ -1842,6 +1842,18 @@ flow('your roads (panel D-1, R-1, D-2): a road you drove is on the deck and its 
   // the drive's page: Drive it again next to Replay, and it plans the drive on the map
   await page.goto(base + '/analysis.html?tab=drive&drive=yr1');
   await page.waitForSelector('#dvAgain:not([hidden])', { timeout: 15000 });
+  // three keys in one row (Replay, Drive it again, ⋯); Compare, Send the road, Share card and Mark a stage wait in the ⋯ menu
+  const keys = await page.evaluate(() => {
+    const top = (id) => Math.round(document.getElementById(id).getBoundingClientRect().top), vis = (id) => document.getElementById(id).checkVisibility();
+    const sum = document.querySelector('.dv-more > summary');
+    return { row: Math.abs(top('dvReplay') - top('dvAgain')) < 30
+      && Math.abs(sum.getBoundingClientRect().top - top('dvAgain')) < 30, hidden: ['dvCompare', 'dvShare', 'dvCard', 'dvStage'].every((id) => !vis(id)), label: sum.getAttribute('aria-label') };
+  });
+  check(keys.row && keys.hidden && keys.label === 'More for this drive', 'the drive page: three keys in a row, the rest in More: ' + JSON.stringify(keys));
+  await page.click('.dv-more > summary');
+  check(await page.evaluate(() => ['dvCompare', 'dvShare', 'dvCard', 'dvStage'].every((id) => document.getElementById(id).checkVisibility())), 'More opens Compare, Send the road, Share card, Mark a stage');
+  await page.mouse.click(5, 5);
+  check(await page.evaluate(() => !document.querySelector('.dv-more').open), 'a tap outside closes More');
   const n = asked.length;
   await page.click('#dvAgain');
   for (let t = 0; t < 100 && asked.length === n; t++) await page.waitForTimeout(200);   // the map page loads with ?again= and routes it
@@ -2119,6 +2131,10 @@ flow('Dynamic Type (IN-1, GR-2): the route card, plan sheet, end card and the dr
   check(t2 >= 1.5 * t1, `the drive's page grows: title ${t1} -> ${t2}`);
   const logCut = await page.evaluate(CUT('#tab-drive'));
   check(!logCut.length, 'the drive page at 2x cuts nothing: ' + JSON.stringify(logCut));
+  await page.click('.dv-more > summary');                                 // its ⋯ menu, open, fits too
+  const moreCut = await page.evaluate(CUT('#tab-drive'));
+  check(!moreCut.length, 'the drive page\'s ⋯ menu at 2x cuts nothing: ' + JSON.stringify(moreCut));
+  await page.click('.dv-more > summary');
   // GR-2: the Garage at the largest size fits too (its sections no longer set a width wider than the screen)
   await page.goto(base + '/index.html?view=garage');
   await page.waitForSelector('#garageGear', { state: 'visible' });
@@ -7929,12 +7945,15 @@ flow('the co-driver says a long descent once as the car nears its top, from the 
   check((await calls()).length === 1, 'and not again on the way down: ' + JSON.stringify(await calls()));
 });
 
-flow('the co-driver counts clean corners in a row live and says five, then ten, never in Quiet notes (flow_live.js, IDEAS D-30)', async (page, base) => {
+flow('the co-driver counts clean corners in a row live and says five, then ten, and passing the month\'s best once, never in Quiet notes (flow_live.js, IDEAS D-30)', async (page, base) => {
   await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); } catch (_) {}
     window.__said = []; window.APEX_REVIEW = true;
     window.webkit = { messageHandlers: { apex: { postMessage(m) { if (m && m.cmd === 'said') window.__said.push(m.text); } } } }; });
   await page.goto(base + '/index.html');
-  await page.waitForFunction(() => window.apexDebug && window.apex && window.apex.live && window.ApexFlowLive);
+  await page.waitForFunction(() => window.apexDebug && window.apex && window.apex.live && window.ApexFlowLive && window.ApexRecording);
+  // the Log: a run of 7 earlier this month (and a longer one last month, which never counts)
+  await page.evaluate(() => { const d = new Date(), key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+    ApexRecording.summaries = async () => [{ id: 'a', date: `${key}-01T09:00`, run: { corners: 7, len_m: 2000 } }, { id: 'b', date: '2001-01-05T09:00', run: { corners: 40, len_m: 9000 } }]; });
   await page.evaluate(() => window.apex.onNative({ type: 'carplay', action: 'start' }));
   await page.waitForFunction(() => window.apexDebug.driveActive);
   // S-bends with no route: 90-degree arcs of 60 m radius, left and right, 60 m between, at a steady 8 m/s with the lateral g
@@ -7949,19 +7968,20 @@ flow('the co-driver counts clean corners in a row live and says five, then ten, 
     for (const [px, py, g] of pts) {
       window.apex.live({ lat: 35.5 + py / 110540, lon: -83.9 + px / (111320 * Math.cos(35.5 * Math.PI / 180)), accuracy_m: 5, speed_mps: v, course_deg: 0,
         has_fix: true, lat_g: Math.round(g * 1e4) / 1e4, lon_g: 0, calibration: 'locked', thermal: 0 });
-      await new Promise((r) => setTimeout(r, 12));
+      await new Promise((r) => setTimeout(r, 30));   // ~150 m/s of wall clock: the co-driver has time to speak between lines
     }
   }, [from, to]);
-  const counts = () => page.evaluate(() => window.__said.filter((s) => / clean in a row\.$/.test(s)));
-  await drive(0, 12);
-  await page.waitForFunction(() => window.__said.filter((s) => / clean in a row\.$/.test(s)).length >= 2, null, { timeout: 8000 }).catch(() => {});
-  check(JSON.stringify(await counts()) === JSON.stringify(['Five clean in a row.', 'Ten clean in a row.']), 'five, then ten, said once each: ' + JSON.stringify(await counts()));
+  const counts = () => page.evaluate(() => window.__said.filter((s) => / clean in a row\b/.test(s)));
+  await drive(0, 14);
+  await page.waitForFunction(() => window.__said.filter((s) => / clean in a row\b/.test(s)).length >= 3, null, { timeout: 15000 }).catch(() => {});
+  check(JSON.stringify(await counts()) === JSON.stringify(['Five clean in a row.', 'Eight clean in a row, your best this month.', 'Ten clean in a row.']),
+    'five, then past the month\'s best of seven, then ten, said once each: ' + JSON.stringify(await counts()));
   // Quiet notes: the count goes on, nothing is said
   await page.evaluate(() => { const b = document.querySelector('[data-notes="quiet"]'); if (b) b.click(); });
-  await drive(12, 24);
+  await drive(14, 26);
   await page.waitForTimeout(600);
   const run = await page.evaluate(() => window.apexDebug.flowRun);
-  check(run >= 20 && (await counts()).length === 2, `the count went on to ${run}, and nothing was said in Quiet notes: ` + JSON.stringify(await counts()));
+  check(run >= 20 && (await counts()).length === 3, `the count went on to ${run}, and nothing was said in Quiet notes: ` + JSON.stringify(await counts()));
 });
 
 flow('plan flow (e, f) a level change and an alternative are one tap or swipe each: the level cards are the routes found, nothing planned again (finding 4, 11)', async (page, base) => {
