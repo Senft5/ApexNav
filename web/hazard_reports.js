@@ -114,6 +114,10 @@
     for (const h of [...(calls || []).filter(inBox), ...reps]) if (out.length < max && !out.some((o) => local(o, h).m < 50)) out.push({ lat: h.lat, lon: h.lon });
     return out;
   }
+  /** Reports kept from earlier (asked ahead of a dead zone) that are still live: none past its `expires_at`. */
+  function stillLive(list, nowMs = Date.now()) {
+    return (Array.isArray(list) ? list : []).filter((h) => { const x = h ? ms(h.expires_at) : NaN; return h && (!finite(x) || x > nowMs); });
+  }
   /** Does a line ([[lon, lat], ...]) pass within `m` metres of any of `pts` ({ lat, lon })? */
   function passesNear(coords, pts, m = POLICE_M) {
     if (!Array.isArray(coords) || coords.length < 2 || !Array.isArray(pts) || !pts.length) return false;
@@ -156,6 +160,6 @@
     return best;
   }
 
-  const api = { nextAhead, createPassWatch, closuresFor, policeFor, passesNear, onRouteAhead, POLICE_M, plate, LABEL, KINDS: Object.keys(LABEL) };
+  const api = { nextAhead, createPassWatch, stillLive, closuresFor, policeFor, passesNear, onRouteAhead, POLICE_M, plate, LABEL, KINDS: Object.keys(LABEL) };
   if (typeof module !== 'undefined' && module.exports) module.exports = api; else root.ApexHazardReports = api;
 })(typeof window !== 'undefined' ? window : globalThis);

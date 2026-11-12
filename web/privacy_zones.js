@@ -60,6 +60,27 @@
       .map((r) => ({ ...r, m: Math.round(metres(lat, lon, r[latKey], r[lonKey])) }))
       .filter((r) => r.m <= km * 1000).sort((a, b) => a.m - b.m);
   }
+  // The cells a planned route runs through, in driving order, to ask ahead of a dead zone (IDEAS F-03): never a cell
+  // within `edgeM` of either end (where the drive starts and ends stays as private as a drive's own edge), never one a
+  // privacy zone's centre sits in, at most `max`. Each is { lat, lon, key } at a route point inside it.
+  function routeCells(lat, lon, zones, edgeM = 1500, max = 12) {
+    const n = Array.isArray(lat) && Array.isArray(lon) ? Math.min(lat.length, lon.length) : 0;
+    if (n < 2) return [];
+    const along = [0];
+    for (let i = 1; i < n; i++) along.push(along[i - 1] + (finite(lat[i]) && finite(lat[i - 1]) ? metres(lat[i - 1], lon[i - 1], lat[i], lon[i]) : 0));
+    const total = along[n - 1], ends = [cell(lat[0], lon[0]), cell(lat[n - 1], lon[n - 1])].filter(Boolean).map((c) => c.key);
+    const zoned = new Set((Array.isArray(zones) ? zones : []).map((z) => z && cell(z.lat, z.lon)).filter(Boolean).map((c) => c.key));
+    const out = [], seen = new Set();
+    for (let i = 0; i < n && out.length < max; i++) {
+      if (along[i] < edgeM || total - along[i] < edgeM || zoneAt(zones, lat[i], lon[i])) continue;
+      const c = cell(lat[i], lon[i]);
+      if (!c || seen.has(c.key)) continue;
+      seen.add(c.key);
+      if (zoned.has(c.key) || ends.includes(c.key)) continue;
+      out.push({ lat: lat[i], lon: lon[i], key: c.key });
+    }
+    return out;
+  }
   // a per-cell cache: get(key) gives what was kept for that cell within ttlMs, or undefined
   function cellCache(ttlMs = 120000, max = 12) {
     const m = new Map();
@@ -70,6 +91,6 @@
     };
   }
 
-  const api = { load, save, add, remove, zoneAt, clean, cell, cellQuery, mayLookUp, nearFirst, cellCache, metres, CELL_DEG, KEY, MAX_ZONES, RADII };
+  const api = { load, save, add, remove, zoneAt, clean, cell, cellQuery, mayLookUp, nearFirst, routeCells, cellCache, metres, CELL_DEG, KEY, MAX_ZONES, RADII };
   if (typeof module !== 'undefined' && module.exports) module.exports = api; else root.ApexPrivacyZones = api;
 })(typeof window !== 'undefined' ? window : globalThis);

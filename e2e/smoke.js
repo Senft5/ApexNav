@@ -4023,6 +4023,46 @@ flow('garage photos: a big photo with a GPS tag goes up small and clean, and bec
   check(await page.evaluate(() => window.__ph.toasts.some((t) => /location data stayed/.test(t))), 'says the location stayed behind');
 });
 
+flow('reports ahead of a dead zone: a drive on a planned route asks for the cells it runs through (never its ends\' cells), and with no signal there they are still known, expired ones dropped (Worker and router stubbed, IDEAS F-03)', async (page, base) => {
+  await page.route('https://tiles.openfreemap.org/**', (route) => (route.request().url().includes('/styles/')
+    ? route.fulfill({ contentType: 'application/json', body: JSON.stringify({ version: 8, sources: {}, layers: [{ id: 'bg', type: 'background', paint: { 'background-color': '#eee' } }] }) })
+    : route.abort()));
+  await page.route('https://valhalla1.openstreetmap.de/route', (route) => route.fulfill({ contentType: 'application/json', body: JSON.stringify(stubTrip(JSON.parse(route.request().postData() || '{}').locations)) }));
+  const asked = [], soon = new Date(Date.now() + 40 * 60000).toISOString(), gone = new Date(Date.now() - 60000).toISOString();
+  let offline = false, driving = false;   // what the route card asked while planning is not counted
+  await page.route(base + '/api/**', (route) => {
+    const u = new URL(route.request().url());
+    if (u.pathname === '/api/me') return route.fulfill({ contentType: 'application/json', body: JSON.stringify({ signed_in: true, member: true, handle: 'e2e' }) });
+    if (u.pathname === '/api/hazards') {
+      if (offline) return route.abort('internetdisconnected');
+      const lat = Number(u.searchParams.get('lat')), lon = Number(u.searchParams.get('lon'));
+      if (driving) asked.push(u.searchParams.get('lat') + ',' + u.searchParams.get('lon'));
+      return route.fulfill({ contentType: 'application/json', body: JSON.stringify([
+        { id: 'live' + lat.toFixed(1), kind: 'gravel', lat, lon: -83.92, heading: null, confirms: 2, clears: 0, expires_at: soon, m: 0 },
+        { id: 'gone' + lat.toFixed(1), kind: 'debris', lat: lat + 0.002, lon: -83.92, heading: null, confirms: 2, clears: 0, expires_at: gone, m: 0 }]) });
+    }
+    return route.fulfill({ status: 200, contentType: 'application/json', body: '[]' });
+  });
+  await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); localStorage.setItem('apex.permsExplained', '1'); localStorage.setItem('apex.signedIn', '1'); } catch (_) {} });
+  await page.goto(base + '/index.html');
+  await page.waitForFunction(() => window.apexDebug && window.apexDebug.map && window.apexDebug.map.loaded() && window.apex && window.apex.live, null, { timeout: 20000 });
+  await page.evaluate(() => apexDebug.buildRoute([{ lat: 35.52, lon: -83.92 }, { lat: 36.08, lon: -83.92 }], 'route_dest', 'Up the valley', null,
+    { from: null, to: { lat: 36.08, lon: -83.92 }, via: [] }));
+  await page.waitForFunction(() => apexDebug.track && apexDebug.track.kind === 'route' && apexDebug.track.request, null, { timeout: 20000 });
+  await page.waitForTimeout(1500);   // the route card's own lookups settle
+  driving = true;
+  await page.evaluate(() => window.apex.onNative({ type: 'carplay', action: 'start' }));
+  await page.waitForFunction(() => window.apexDebug.askedAhead > 0, null, { timeout: 15000 });   // asked as the drive starts
+  check(asked.includes('35.8,-83.9') && !asked.includes('35.5,-83.9') && !asked.includes('36.1,-83.9'), 'the cells along the way were asked, never the start\'s or the end\'s: ' + JSON.stringify(asked));
+  // no signal from here; the car is well along the route, in the 35.8 cell
+  offline = true;
+  await page.evaluate(async () => { for (let i = 0; i < 40; i++) { window.apex.live({ lat: 35.70 + i * 0.0025, lon: -83.92, accuracy_m: 5, speed_mps: 20, course_deg: 0, has_fix: true, calibration: 'locked' }); await new Promise((r) => setTimeout(r, 10)); } });
+  await page.evaluate(() => apexDebug.loadReported(true));
+  await page.waitForFunction(() => apexDebug.reportedIds().includes('live35.8'), null, { timeout: 8000 });
+  const ids = await page.evaluate(() => apexDebug.reportedIds());
+  check(ids.includes('live35.8') && !ids.some((x) => x.startsWith('gone')), 'with no signal the report ahead is known, the expired one dropped: ' + JSON.stringify(ids));
+});
+
 flow('reported hazards: a call ahead, "still there?" after passing, and a one-tap report (Worker stubbed, IDEAS Q-15/Q-16)', async (page, base) => {
   await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); } catch (_) {}
     window.__said = []; const S = window.speechSynthesis;   // what the co-driver says, whatever voice is set
