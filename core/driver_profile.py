@@ -635,6 +635,15 @@ def road_records(mine: list, others: list, ids: list | None = None) -> dict:
             "uneven": len(wide), "steady": sum(1 for r in wide if r["level"] >= r["record"] - NEAR_BEST)}
 
 
+def _why(best: dict, worst: dict):
+    """The technique credit that differs most between a corner's cleanest pass and its least clean one (credits: {skill:
+    0..1}), or None when no credit was lower on the least clean pass. Ties go to the earlier skill in SKILLS."""
+    a, b = best.get("credits") or {}, worst.get("credits") or {}
+    gaps = [(a[k] - b[k], -i, k) for i, k in enumerate(SKILLS) if a.get(k) is not None and b.get(k) is not None]
+    top = max(gaps, default=None)
+    return top[2] if top and top[0] > 0 else None
+
+
 def road_book(drives: list, ref: list | None = None) -> dict:
     """A road's corners across every drive of it (Your roads, corner by corner). drives: oldest first, each
     {id, at, corners: [{x, y, hx, hy, level, size?, dir?}]} in one frame (metres); ref: [[x, y], ...] along one drive of
@@ -642,7 +651,8 @@ def road_book(drives: list, ref: list | None = None) -> dict:
     within SAME_CORNER_M of it and its heading within SAME_WAY (a drive counts once per corner, its cleanest there). The
     first drive to reach the cleanest level holds the corner, so a tie goes to the older drive. Corners passed
     ROAD_MIN_PASSES times or more: {corners: [{x, y, size, dir, passes, record, low (the least clean pass), by, at}] in
-    road order (by the nearest point of ref, else as first seen), fewer: corners passed less often, drives: how many drives,
+    road order (by the nearest point of ref, else as first seen); why: on an uneven corner, the credit (corners' optional
+    credits {skill: 0..1}) that differs most between its cleanest and least clean pass (_why), else None; fewer: corners passed less often, drives: how many drives,
     uneven: the 1-based places of the corners whose passes span UNEVEN_LEVELS or more, the widest first (road order
     among equals), at most UNEVEN_MAX}. Technique only."""
     book = []
@@ -653,9 +663,10 @@ def road_book(drives: list, ref: list | None = None) -> dict:
             c = next((c for c in book if math.hypot(o["x"] - c["x"], o["y"] - c["y"]) < SAME_CORNER_M
                       and o["hx"] * c["hx"] + o["hy"] * c["hy"] > SAME_WAY), None)
             if c is None:
-                c = {"x": o["x"], "y": o["y"], "hx": o["hx"], "hy": o["hy"], "size": o.get("size"), "dir": o.get("dir"), "by": {}, "k": len(book)}
+                c = {"x": o["x"], "y": o["y"], "hx": o["hx"], "hy": o["hy"], "size": o.get("size"), "dir": o.get("dir"), "by": {}, "pass": {}, "k": len(book)}
                 book.append(c)
-            c["by"][d["id"]] = max(c["by"].get(d["id"], o["level"]), o["level"])
+            if d["id"] not in c["by"] or o["level"] > c["by"][d["id"]]:
+                c["by"][d["id"]], c["pass"][d["id"]] = o["level"], o
     at = {d["id"]: d.get("at") for d in drives}
     order = {d["id"]: i for i, d in enumerate(drives)}
 
@@ -670,10 +681,29 @@ def road_book(drives: list, ref: list | None = None) -> dict:
             continue
         rec = max(c["by"].values())
         by = min((i for i, v in c["by"].items() if v == rec), key=lambda i: order[i])
+        low = min(c["by"].values())
+        worst = min((i for i, v in c["by"].items() if v == low), key=lambda i: order[i])
         out.append({"x": c["x"], "y": c["y"], "size": c["size"], "dir": c["dir"], "passes": len(c["by"]),
-                    "record": rec, "low": min(c["by"].values()), "by": by, "at": at.get(by)})
+                    "record": rec, "low": low, "by": by, "at": at.get(by),
+                    "why": _why(c["pass"][by], c["pass"][worst]) if rec - low >= UNEVEN_LEVELS else None})
     wide = sorted((i for i, k in enumerate(out) if k["record"] - k["low"] >= UNEVEN_LEVELS), key=lambda i: (-(out[i]["record"] - out[i]["low"]), i))
     return {"corners": out, "fewer": len(book) - len(out), "drives": len(drives), "uneven": [i + 1 for i in wide[:UNEVEN_MAX]]}
+
+
+def road_book_focus(book: dict):
+    """The technique to practise on a road (IDEAS D-27, from its road book): the why named most often over its uneven
+    corners, a tie going to the one at the widest (book["uneven"] lists them widest first). {skill, at: [its 1-based
+    places, in road order]}, or None when no uneven corner names one."""
+    corners, seen = (book or {}).get("corners") or [], {}
+    for rank, n in enumerate((book or {}).get("uneven") or []):
+        k = corners[n - 1].get("why") if 0 < n <= len(corners) else None
+        if k in SKILLS:
+            c, first, at = seen.get(k, (0, rank, []))
+            seen[k] = (c + 1, first, at + [n])
+    if not seen:
+        return None
+    k = max(seen, key=lambda s: (seen[s][0], -seen[s][1]))
+    return {"skill": k, "at": sorted(seen[k][2])}
 
 
 def drive_touch(obs: list, others: list) -> dict:

@@ -12,6 +12,12 @@ the level and the reason code (`index`: the road map didn't load; `out`: off our
 error text, scrubbed like any crash message). No place, trip or account. The Worker counts them per day in error_counts,
 so the next time it happens the cause is in D1. Privacy policy and APP_REVIEW updated. Undo: drop the two
 `ApexErrors.reporter.route` calls in web/cockpit.js and `"route"` from KINDS in backend/src/errors.ts.
+## 2026-11-12 (deepest analysis 16): the road book offers its uneven corners' technique as the practice (claude/project-thread-gd7nre)
+
+Where a road's passes differ most, the road book now says which technique accounts for most of it and offers to practise
+it on your next drives. Calls: the practice it sets covers every corner (no "lefts only" place), since a road's corners
+are not one kind; a tie between techniques goes to the corner whose passes differ most; it replaces any practice already
+under way, the same as "Practice ... instead" in Your driving. Undo: remove `showBookPractice` in web/analysis.html.
 
 ## 2026-11-11 (Valhalla for Quick only, part 3): the Valhalla stage-plan and stage-loop code is gone (claude/project-thread-39xbx9)
 
@@ -42,6 +48,12 @@ Stage discovery (the roads Explore, loops and routes pick from) now lifts a road
 crests by up to 1.5 points, and drops one by 1.5 points for each crowd-verified bump on it, at most 4.5 (a confirmed
 hand-reported hazard costs 3). The sizes are a judgment call: a crested road wins against a flat one half a point better;
 two verified bumps send it back. Undo: `CREST_MAX` and `BUMP_PTS` 0 in web/measured_stages.js.
+## 2026-11-11 (deepest analysis, PR 15): an uneven corner names one skill, the widest gap (claude/project-thread-gd7nre)
+
+The road list names the one technique credit that differs most between your cleanest and least clean pass at an uneven
+corner, so "where" comes with "what". One skill, not a list: the biggest gap is the clearest thing to try next time; a
+corner whose least clean pass is no lower on any credit names none. Undo: revert the PR.
+
 ## 2026-11-11 (places by name, 3): ask Siri for the next gas station or café (claude/project-thread-me97iw)
 
 Two new Siri phrases: "Where's the next gas station in Vetta" and "Where's the next café in Vetta" (also "Next fuel" /

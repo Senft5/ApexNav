@@ -2,6 +2,16 @@
 
 ## 2026-11-12 Route-failure reasons in crash counts (claude/project-thread-39xbx9)
 - A Fun / Long way / loop plan our router couldn't make reports its reason code (kind `route`) to /api/errors; read them with `SELECT * FROM error_counts WHERE kind = 'route'` on apexnav-db. Next: once Nate hits the signal error again, read the reason there and fix that cause.
+## Session 2026-11-12 (deepest analysis, PR 16): a road's least even corners can set the practice (claude/project-thread-gd7nre)
+
+- `core/driver_profile.py` `road_book_focus(book)` (JS port `roadBookFocus`, parity-tested in tests/test_best_corners.py):
+  the technique named most often across a road book's uneven corners (a tie goes to the widest corner), with the corners
+  that name it. `roadBookFocusLine` words it: "Most of the difference at corners 10, 14 and 18 is one steering arc."
+- Log > Your roads, corner by corner: that line under the head, with "Practice one steering arc on my next drives". The
+  key saves the same plan Your driving keeps (`vetta.practice`, `where: null`, since now), so the drive end card and the
+  Practicing box read it as usual. With that skill already practised it says so instead of offering it.
+- e2e: the road-driven-four-times flow's second pass has no steering corrections, so the book shows the line and the key.
+- Next: the drive page's "where your passes differ most" line (roadUnevenLine) could name the same technique.
 
 ## 2026-11-11 Valhalla for Quick only, part 3 (claude/project-thread-39xbx9)
 - Deleted the code Fun, Long way and loops could no longer reach: funRoute's Valhalla stage plans and buildLoop's stage loops and loopRefine. Docs (ROUTING, OWN_ROUTING, CALL_SHEET) updated.
@@ -32,6 +42,15 @@
   (max 4.5), the larger direction's count per matched road. No migration.
 - Tests: backend/test/coverage.test.ts (+2), tests/test_measured_stages.py `test_crests_and_verified_bumps`.
 - Next: the FunRoute ranking of Valhalla candidates (fun_route.js) with the same crest and bump data per route.
+## Session 2026-11-11 (deepest analysis, PR 15): what differs at a road's least even corners (claude/project-thread-gd7nre)
+
+- `road_book` / `roadBook` keep each drive's cleanest pass of a corner with its six credits (`placed` now carries
+  `credits`); an uneven corner's `why` is the credit that differs most between its cleanest and least clean pass
+  (`_why` / `whyOf`, ties to the earlier skill), else null. The Log's road list says "; your least clean 62, mostly one
+  steering arc".
+- Tests: tests/test_best_corners.py (why, words, parity); e2e row pattern.
+- Next: Practice (IDEAS D-27) could take that corner's skill as the one to work on, from the road list.
+
 ## Session 2026-11-11 (places by name, 3): Siri, "where's the next gas station / café" (claude/project-thread-me97iw, off origin/main)
 
 - ApexIntents.swift: NextFuelIntent / NextCafeIntent (go=nextfuel / nextcafe), 7 App Shortcuts now (Apple allows 10).
