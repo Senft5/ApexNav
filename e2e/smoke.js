@@ -3176,6 +3176,7 @@ flow('meets on the map: off by default; on, public meets near the map are pinned
   await page.click('#swTab');
   await page.click('[data-toggle="meets"]');
   await page.waitForSelector('.mm-pin');
+  check(/^Meets within 50 mi of the map\. Tap a pin\.$/.test(await page.textContent('#toast')), 'the switch says where in the driver\'s miles, in one line: ' + await page.textContent('#toast'));
   const pin = await page.evaluate(() => ({ n: document.querySelectorAll('.mm-pin').length, text: document.querySelector('.mm-pin').textContent, label: document.querySelector('.mm-pin').getAttribute('aria-label') }));
   check(pin.n === 1 && /\+1$/.test(pin.text) && /^Cars and coffee, \w+, and 1 more\./.test(pin.label), 'two meets at one place share a pin, soonest first: ' + JSON.stringify(pin));
   check(asked.length >= 1 && /^\?lat=35\.\d&lon=-8\d\.\d$/.test(asked[0]), 'asked by the map centre cell only: ' + JSON.stringify(asked));
@@ -4233,6 +4234,11 @@ flow('road feel that waited for signal: counted in Your data, kept while Road da
     await ApexRoadCarry.idle();
   });
   check((await page.evaluate(() => ApexRoadCarry.size())) === 1 && (await page.evaluate(() => ApexRoadCarry.itemM({ rows: { lat: [1, 2] }, pending: [{ bins: [1, 2, 3] }] }))) === 25, 'one trip waits in the store');
+  // an app restart: the trip is still in the store (IndexedDB plus its index), nothing sent while the account can't be confirmed
+  await page.reload();
+  await page.waitForFunction(() => window.ApexRoadCarry && ApexRoadCarry.flush && window.ApexMyData && window.apexDebug);
+  await page.waitForTimeout(500);
+  check((await page.evaluate(() => ApexRoadCarry.size())) === 1 && posted.length === 0, 'it survives an app restart');
   await page.click('.tab[data-view="garage"]');
   await openSetting(page, 'data');
   await page.waitForFunction(() => /road data from 1\.2 mi waiting for signal/.test(document.getElementById('myDataNote').textContent));
@@ -5602,7 +5608,7 @@ flow('one link in: no "invite-only" anywhere; a crew link joins a newcomer with 
   await page.click('[data-people="crews"]');
   await page.waitForSelector('#crewsBody >> text=Join Blue Ridge Breakfast Club?');
   const card = await page.textContent('#crewsBody .card');
-  check(/@tilly sent you the link, and you’ll be friends/.test(card) && !/first/i.test(card), 'the newcomer sees the crew and who sent it, nothing to do first: ' + card);
+  check(/@tilly sent you the link, and you’ll be friends\./.test(card) && !/first|how the crew sees/i.test(card), 'the newcomer sees the crew and who sent it, nothing to do first: ' + card);
   await page.fill('#crewsBody .card input[aria-label="Handle"]', 'newbie');
   crews = [];
   await page.click('#crewsBody .card button:has-text("Join crew")');
@@ -7065,6 +7071,27 @@ flow('the main map: with no signal and no saved area one line says there is no m
   await page.evaluate(() => window.apexDebug.map.setStyle('https://tiles.openfreemap.org/styles/liberty?again'));
   await page.waitForTimeout(2500);
   check(await page.evaluate(() => document.getElementById('mapNote').hidden), 'no note once the map draws');
+});
+
+flow('the main map on plain paper: back online it reloads once the style really comes, keeping the paper through a flicker', async (page, base) => {
+  await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); localStorage.setItem('apex.permsExplained', '1'); } catch (_) {} });
+  let tiles = false;
+  await page.route('https://tiles.openfreemap.org/**', (route) => (!tiles ? route.abort('internetdisconnected') : route.request().url().includes('/styles/')
+    ? route.fulfill({ contentType: 'application/json', body: JSON.stringify({ version: 8, sources: {}, layers: [{ id: 'bg', type: 'background', paint: { 'background-color': '#eee' } }] }) })
+    : route.fulfill({ status: 200, contentType: 'application/x-protobuf', body: Buffer.alloc(0) })));
+  await page.goto(base + '/index.html');
+  await page.waitForFunction(() => { try { return !!window.apexDebug.map.getLayer('apex-route'); } catch (_) { return false; } }, null, { timeout: 8000 });
+  await page.evaluate(() => { window.__stayed = 1; });
+  // a flicker: the phone says online, but the style still can't be fetched, so the page stays as it is
+  await page.evaluate(() => window.dispatchEvent(new Event('online')));
+  await page.waitForTimeout(800);
+  check(await page.evaluate(() => window.__stayed === 1), 'a flicker of signal keeps the page');
+  // real signal: the style comes, and the page reloads onto the base map
+  tiles = true;
+  await page.evaluate(() => window.dispatchEvent(new Event('online')));
+  await page.waitForFunction(() => window.__stayed !== 1, null, { timeout: 8000 });
+  await page.waitForFunction(() => { try { const m = window.apexDebug.map; return !!m.getLayer('bg') && !!m.getLayer('apex-route'); } catch (_) { return false; } }, null, { timeout: 8000 });
+  check(true, 'it reloaded onto the base map, with our layers on it');
 });
 
 flow('the drive page\'s map: with no signal and no saved area the panel says the map is unavailable offline, and MapLibre never loads', async (page, base) => {
