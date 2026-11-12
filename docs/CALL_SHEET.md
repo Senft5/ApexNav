@@ -18,7 +18,6 @@ Crew → Meets near you, one pin per meeting point with the day on it. A tap ope
 card to keep right. Your own crew's listed drives show too, with "answer on the crew page" instead of Join. It asks by the
 map centre's 0.1-degree cell, never from a privacy zone, at most every 5 minutes per cell. Undo: remove the `meets`
 button in web/index.html and the `meetsMap` lines in cockpit.js.
-
 ## 2026-11-11 (ui-round-three): an empty Garage shows a parking bay and one big "Add a car" key (claude/project-thread-5sbga7)
 
 With no cars yet, the Garage said one grey sentence over a small outlined key. Now it is a small page like the first
@@ -35,7 +34,6 @@ instead of the way to its start. The Log adds one sentence with your place to it
 the Log has no toast and the line is already where the board is. For you's "went quicker than you" now names the loop and
 drops a loop a moderator took down. I left the home deck to Roamer C's branch. Undo: drop `peek` from `openPlan`, or the
 `driveLoop` hook in cockpit.js, which falls back to the way to the start.
-
 ## 2026-11-12 (deepest analysis 19): the Log's road book says which of your roads to work on (claude/project-thread-gd7nre)
 
 Above the road picker, one line names the roads (driven three or more times) where your passes differ most, with the
@@ -64,7 +62,6 @@ the level and the reason code (`index`: the road map didn't load; `out`: off our
 error text, scrubbed like any crash message). No place, trip or account. The Worker counts them per day in error_counts,
 so the next time it happens the cause is in D1. Privacy policy and APP_REVIEW updated. Undo: drop the two
 `ApexErrors.reporter.route` calls in web/cockpit.js and `"route"` from KINDS in backend/src/errors.ts.
-
 ## 2026-11-12 (deepest analysis 16): the road book offers its uneven corners' technique as the practice (claude/project-thread-gd7nre)
 
 Where a road's passes differ most, the road book now says which technique accounts for most of it and offers to practise
@@ -88,7 +85,6 @@ start to end, or 50 m either side of a moment, with 60 m round it and at least 2
 if it is above the screen. Calls: the lanes keep their own zoom (as before); "All" in the zoom row, or Recenter on the map,
 shows the whole drive again; with no map (offline) the plain picture zooms the same way and a tap on it zooms back out;
 reduced motion jumps instead of gliding. Undo: revert the PR.
-
 ## 2026-11-11 (roam-b walkthrough 2): Done after a replay brings the map back to where you are (claude/project-thread-sxhrgi)
 
 - Done (or the plate's ×) after watching a replay, whether the welcome's demo or one of your drives from the Log, now jumps
@@ -96,14 +92,12 @@ reduced motion jumps instead of gliding. Undo: revert the PR.
   in Kentucky), while the masthead and the road cards described where you are. A browser standing still sends no new fix,
   so nothing brought the map back. A route's fly-through still keeps its route in view. Undo: remove the `wasReplay` block
   in cockpit.js `closeReplay`.
-
 ## 2026-11-11 (routing round three, part 2): stage discovery reads crests and verified bumps (claude/project-thread-39xbx9)
 
 Stage discovery (the roads Explore, loops and routes pick from) now lifts a road members measured going light over its
 crests by up to 1.5 points, and drops one by 1.5 points for each crowd-verified bump on it, at most 4.5 (a confirmed
 hand-reported hazard costs 3). The sizes are a judgment call: a crested road wins against a flat one half a point better;
 two verified bumps send it back. Undo: `CREST_MAX` and `BUMP_PTS` 0 in web/measured_stages.js.
-
 ## 2026-11-11 (deepest analysis, PR 15): an uneven corner names one skill, the widest gap (claude/project-thread-gd7nre)
 
 The road list names the one technique credit that differs most between your cleanest and least clean pass at an uneven
@@ -116,7 +110,6 @@ Two new Siri phrases: "Where's the next gas station in Vetta" and "Where's the n
 "Next coffee in Vetta"). The co-driver says the next one along your planned route by its map name and how far it is
 ("Next fuel: Shell, in 3.2 mi."). Calls: only places along the planned route count (not off-route detours); without a
 route it says to plan one. Undo: revert the PR (the two intents and the page's handler).
-
 ## 2026-11-11 (roam-c ta-placement): this week's time attack loop is a home deck suggestion (claude/roam-c-ta-placement)
 
 When you entered this week's loop, the deck's suggestion row names it with your place and the days left, ranked right
@@ -126,6 +119,7 @@ directions to the loop's start, like a crew drive's meeting point. The phone sen
 1-degree area, as the Where to? section does. The reminder never quotes your place or days left (they change by then),
 and skips the loop if the week is over by the day it names. Undo: drop `attack` from the `YR.suggest` call in cockpit.js
 paintDeck (or move `if (ta) return attackSugg();` in your_roads.js to change its rank).
+
 
 ## 2026-11-11 e2e: two flows raced the refine's swap after #434
 - **What:** "taste from picks" and "plan flow (e, f)" wait for `apexDebug.refineDone` (new, set when ownRefine ends) and expect the three routes found after the refine swaps Fun's pick; taste from picks takes the third by a swipe (Quick's is >30 % faster than Fun's on the motorway grid, so it teaches nothing by design).
@@ -137,7 +131,6 @@ paintDeck (or move `if (ta) return attackSugg();` in your_roads.js to change its
 Your rule ("anything but the quick route") covers loops too, so Find a loop no longer falls back to Valhalla's stage loops
 or a circle. Off our road map the card says loops use it and where it reaches. Explore's road list still times roads with
 Valhalla's matrix (it plans no route); say if that should go too. Undo: restore the `stageJobs` calls in `buildLoop`.
-
 ## 2026-11-11 (deepest analysis, PR 14): "near your cleanest" is within 5 levels (claude/project-thread-gd7nre)
 
 A drive's page says how it went at the road's least even corners. Within 5 levels of your cleanest pass counts as near it:
@@ -157,7 +150,6 @@ Undo: NEAR_BEST in core/driver_profile.py and web/driver_profile.js, or revert t
 - Tapping Log in the first seconds after install showed a blank screen with no tabs until it loaded. Now the map stays
   usable with a short "Opening your Log…" and the Log opens when ready (a different tab cancels it). Undo: the
   `logFrame.want` branch in cockpit.js openLog.
-
 ## 2026-11-11 (recurring meets): a crew drive can repeat weekly, every 2 or every 4 weeks (claude/project-thread-uwmi4e)
 
 Crews that meet every Saturday had to plan the same drive by hand each week. A drive can now repeat (Repeats: Once,
@@ -168,7 +160,6 @@ Once, or the planner leaving the crew ends the series; editing an older drive in
 calendar puts the series in once with a weekly rule.
 
 Undo: revert the PR. Migration 0053 only adds two columns to `crew_events`; the old code ignores them.
-
 ## 2026-11-11 (deepest analysis, PR 13): "least even" is a 15-level span, at most three corners (claude/project-thread-gd7nre)
 
 A road book now names where your passes differ most, as the place on the road worth working on. It uses the plain span
@@ -202,7 +193,6 @@ reach (it covers Ohio, Kentucky and Indiana so far), or it can't be loaded, the 
 instead of a Valhalla route. Calls I made: the map's index gets 8 s (not 1.5 s) at Fun, since there is no stand-in to fall
 back on; spoken turn directions on our route still come from Valhalla's trace_route (it routes nothing, it reads our line);
 loops still use Valhalla off our map until the next PR. Undo: `const ownOnly = false` in cockpit.js `funRoute`.
-
 ## 2026-11-11 (places by name): cafés and fuel along the route, tap for their names (claude/project-thread-me97iw)
 
 The route card's "Along" line ("1 viewpoint · 2 cafés · 3 fuel stops") now opens a list of each place by the name
@@ -210,7 +200,6 @@ OpenStreetMap has for it, how far into the route and how far off the road; tappi
 a stop. Tapping a CAFÉ or FUEL pin on the map says its name too. Calls: fuel stations are now counted on the line (before,
 only a long stretch without fuel was said), so there is something to tap; a place with no name on the map says "no name on
 the map" rather than a guess. Undo: revert the PR.
-
 ## 2026-11-11 (roam-a best run): a drive's page names your best run of clean corners (claude/project-thread-h7xxmf)
 
 New, my call (Nate asked for more fun-driving features). A drive's page now says, when it happened, "Your best run: 9
@@ -218,7 +207,6 @@ corners in a row, smooth and settled over 2.1 mi." A corner counts when the Scor
 of real corners), with no braking past the apex and inside the corner's sane limit, so the line can never reward going
 faster. A corner that misses, or 2 km of road between two corners, ends the run; under 5 in a row says nothing. Undo:
 remove the `flow` line in web/drive_view.js (or tune SMOOTH_MIN / MIN_RUN in core/flow.py and web/flow.js together).
-
 ## 2026-11-11 (ui-round-three): People when you have no friends or crews yet looks like the signed-out page (claude/project-thread-5sbga7)
 
 Signed in with nobody yet, Friends and Crews used to show one grey sentence and a small key. Now each is a page like the
@@ -242,6 +230,7 @@ where its members were (within a mile and 10 minutes late by default, but exact 
 your private crews only, as cars already did. The sheet, Who sees what and the privacy page say "private crews". Nothing
 stored changes. Undo: revert the PR (public crews' members see your position again).
 
+
 ## 2026-11-11 (ui-round-two): the blank band at the top of the map, signed-out 401s, a crew's name and the Share box (claude/project-thread-5sbga7)
 
 The blank paper band at the top of the idle map (as tall as the deck under it) was not missing tiles: the map draws all
@@ -263,7 +252,6 @@ migration and nothing new is stored about you; the cost is that a second phone s
 Roadbook followers are counted, never named, because a public book's followers can be strangers.
 
 Undo: revert the PR (no data changed).
-
 ## 2026-11-11 (routing round three): our router reads measured crests and verified bumps (claude/project-thread-39xbx9)
 
 Roads members measured going light over their crests (0.15 g or more, two or more passes) now count as more character in
@@ -293,7 +281,6 @@ A planned route with a long, steep way down now says so on its card, under the c
 3.7 mi at 8%. A lower gear saves the brakes." It comes from the map's terrain (the same heights as the climb line), not from a
 model: 300 m or more of drop at 5 % or steeper counts, which is the kind of hill where brakes fade. Ordinary hills say
 nothing. Undo: revert the PR (one line on the card goes away).
-
 ## 2026-11-11 (round two analysis): corner-speed steadiness is shown in mph, beside the braking spread (claude/project-thread-gd7nre)
 
 - What: the Log drive page's repeatable-corners list now also says how steady your turn-in point and your speed at the slowest
@@ -331,6 +318,7 @@ it counts engine braking as brake work, so it errs toward warning. Ordinary hill
 get past cool). Nothing leaves the phone. Undo: revert the PR, or remove the `noteBrakes(...)` calls in cockpit.js to keep
 only the drive page line.
 
+
 ## 2026-11-11 (routing round two, part 2): mid-drive, Vetta offers to go round a police report; a late loop drops a stage before going home
 
 - **A police report on your route ahead is offered, not taken.** Between 0.8 and 25 km ahead, with Police reports on, a
@@ -340,7 +328,6 @@ only the drive page line.
 - **Go round is kept only if it goes round.** If the new way still passes within 150 m, it says so and you stay put.
 - **A late loop skips its next stage before offering Head home.** "Running 12 min late for home." now has "Skip Foothills
   Parkway" while a stage you haven't begun is ahead; the stage you're on is never cut. Undo: `homeByAction` returning home always.
-
 ## 2026-11-11 (round two analysis): Your year's "cleanest corners" are technique only, one a road (claude/project-thread-gd7nre)
 
 Your year now names its three cleanest corners: the mean of the six technique credits, a corner counted only when all
@@ -361,7 +348,6 @@ against a route (35 m, not the card's 60 m count). When nothing gets round, the 
 
 Undo: revert the PR (no data changed). To split speed cameras onto their own switch, filter `kind` in `camsForTrip` and
 `camerasAround` (cockpit.js) by a new avoid key.
-
 ## 2026-11-11 (auto time attack): each area's weekly loop is picked by Vetta, built on the first phone there (claude/project-thread-uwmi4e)
 
 Your call: time attacks are made automatically every week in any area with members, as small loops over the area's best
@@ -374,7 +360,6 @@ area outside our road tiles (Ohio, Kentucky, Indiana today) gets no loop until t
 up is gone. A loop a moderator takes down is replaced by one from the next seed.
 
 Undo: revert the PR. Migration 0054 only adds columns to `ta_weeks`; the old code ignores them.
-
 ## 2026-11-11 (sweep round two): time attack counts only a week you entered (claude/project-thread-g9yher)
 
 Two bugs in the weekly time attack (#393). The Log never sent any runs, so every board stayed empty. And the server
@@ -386,7 +371,6 @@ The owner of the stage enters like anyone else; putting a stage up isn't enterin
 skipped instead of rejecting the whole upload.
 
 Undo: revert the PR, then `DROP TABLE ta_joins` on both databases.
-
 ## 2026-11-11 (round two analysis): touch by kind of corner, month and drive is said as facts, never as a grade (claude/project-thread-gd7nre)
 
 Your touch now has a table by size of corner and a line a month, and each drive's Log page says its own touch beside
@@ -437,7 +421,6 @@ min of flows each, from 5.8 to 6.9): a small gain at four jobs, and it lets a fi
 each), which I left at four because each job pays its own minute of setup in Actions minutes.
 
 Undo: revert the PR (one flow again; set `LONG_S` back to 258 s for it).
-
 ## 2026-11-11 (roam-c-ci-shards): the e2e check runs as four jobs side by side (claude/roam-c-ci-shards)
 
 The e2e check ran 173 flows one after another in 28-31 minutes against a 35-minute limit, and every PR waited on it. It
@@ -452,7 +435,6 @@ version; npm installs only Playwright itself (no lock file to cache), so there i
 is the same: `LIST=1` over the four shards gives exactly the 173 flows of an unsharded run.
 
 Undo: revert the PR, or set the matrix to `[1]` and `SHARD` to `1/1` (one job running every flow, as before).
-
 ## 2026-11-11 (roam-b-crowd-bumps): a bump is called on a planned route once two members felt it (claude/roam-b-crowd-bumps)
 
 Each 5 m section of road data now also says whether the phone felt a sharp bump there (yes, no or unknown; never a g
@@ -463,7 +445,6 @@ cruise, the strip saying "Confirmed by members". The calls I made: 120 days for 
 within a season or two; a frost heave comes back each winter and gets re-felt); ±10 m to treat two hits as one bump
 (GPS); a Jeffreys prior; a repaved section starts its bump evidence again. Migration 0052 (additive). Undo: FLAGS
 {"crowd_bumps":{"on":false}} stops the calls; the thresholds are `BUMP` (contribute.ts) and `VERIFY` (roads.ts).
-
 ## 2026-11-11 (round two analysis): Your touch, and when the recording is too coarse to time it (claude/project-thread-gd7nre)
 
 Your driving now has a "Your touch" panel: how fast the brakes go on and come off and how fast the car is loaded up at
@@ -500,7 +481,6 @@ meter is gone; a Plain crew's page says "Plain livery" and nothing it lacks, and
 and comes back with the next one, as before.
 
 Undo: revert the PR (tiers come back as they were; nothing in the database changed).
-
 ## 2026-11-10 (fable-night-keys): at night no key outshines the road (claude/fable-night-keys)
 
 Red team UX-07: on the night drive screen the brightest things were keys: End, Done and the chosen replay speed were
@@ -548,7 +528,6 @@ notes under a search that finds nothing said "Press Go" while the key under them
 "offline" is only said when the phone is offline.
 
 Undo: revert the PR. Typed coordinates still work as before and are still named "Pin lat, lon".
-
 ## 2026-11-11 (fable-time-attack): a weekly time attack per area (claude/fable-time-attack)
 
 - **An area is a 1-degree square, the stage is one members put up.** Why: the owner asked for "a weekly time attack circuit per area"; a square needs no map of regions and the phone can send just its middle, and member stages are real roads people chose (no synthesized circuits). Undo: change `cellOf` in `backend/src/time_attack.ts` and `areaPoint` in `web/time_attack.js` together.
@@ -556,7 +535,6 @@ Undo: revert the PR. Typed coordinates still work as before and are still named 
 - **The board is every member's, by handle; entering is the opt-in.** Why: a weekly attack is a public contest by nature; only entrants' times show and Take my time off removes yours. This breaks the old "no public time board" guardrail, by the owner's call, logged in IDEAS and APP_REVIEW 1.4 with a fallback (hide the time column, order by Score). Undo: that fallback, or hide `#planAttack`.
 - **Over 60 m/s average is refused, not ranked.** Why: a bad clock or a fake; it also keeps an absurd time off the top. Undo: `MAX_AVG_MS`.
 - **A moderator's remove takes that week's times with it.** Why: otherwise the area's next pick would inherit the old board. Undo: drop the first statement in safety.ts `act.circuit`.
-
 ## 2026-11-10 (fable-roadbooks): Roadbooks, your collections of great roads; a road is stamped only when your own Log covers it (claude/fable-roadbooks)
 
 A new thing people can make and pass around: a roadbook is a named list of roads ("Smokies classics"), each a planned
@@ -585,13 +563,11 @@ Needs migration 0046 on both databases before the merge (four new tables, nothin
 
 Undo: revert the PR; the four tables can stay or be dropped (`DROP TABLE roadbook_stamps, roadbook_follows,
 roadbook_roads, roadbooks`).
-
 ## 2026-11-11 (fable-pin-tap): the pin flow names its waits and taps the map where the map is (claude/fable-pin-tap)
 
 The flow's tap on the map once landed on the plan sheet, which stood higher on that run, and the test then waited 20 s
 with no word of why. It now taps open map, found by looking, and every wait names itself on failure. No check was dropped
 and one was added (there is open map to tap). Undo: revert the PR.
-
 ## 2026-11-11 (fable-share-defaults): Scores and times shared with friends and private crews by default (claude/fable-share-defaults)
 
 Nate (2026-11-11): "data sharing with friends and private crews should be on by default, with an option to turn each
@@ -620,7 +596,6 @@ The calls:
   times. Switch it off for anyone." Tests that encoded "nothing by default" now switch off explicitly (a spec change).
 
 Undo: revert the PR. Grants made in the meantime stay on until switched off.
-
 ## 2026-11-11 (fable-offline-road-feel): saved map areas keep members' road feel (claude/fable-offline-road-feel)
 
 A saved offline area now also keeps the members' measured roads round it, so a plan with no signal still knows which
@@ -628,7 +603,6 @@ roads are smooth, banked and flowing. It asks the server for the area's 0.1° ce
 privacy rule (VI-1) already allows for a plan, and nothing finer. Only members get it, and it leaves the phone on sign-out,
 account deletion, Erase everything and Delete offline data (before this, the day's kept cells were never cleared on any of
 them). Undo: revert the PR; the areas still save their map.
-
 ## 2026-11-11 (fable-avoid-police): Avoid → Police reports (claude/fable-avoid-police)
 
 The owner said go (2026-11-11, "yes avoid police"), reversing October's call that dropped routing round police (IDEAS
@@ -674,7 +648,6 @@ Tapedeck, Billet and the car themes keep their own clusters; they get only the q
 
 Undo: in web/themes.js set Roadbook back to `cluster: 'dials'` and `dial: 'printed'` (the three dials come back
 unchanged), and delete the "Vetta Line" CSS block in web/index.html (above "The opening cover").
-
 ## 2026-11-11 (fable-duels): challenge a friend on a stage; the higher Vetta Score in a few days wins (claude/fable-duels)
 
 A new thing to do with a friend. On a friend's row in People, Challenge on a stage picks one of your stages and 3, 7 or
@@ -697,7 +670,6 @@ People e2e check for that row now expects "Challenge on a stage" after "Invite t
 
 Needs migrations 0047 (one new table) and 0048 (one column) on preview and prod before merging. Undo: revert the PR;
 `DROP TABLE duels`.
-
 ## 2026-11-11 (fable-first-last): the welcome shows the app; the end card is a reveal (claude/fable-first-last)
 
 The welcome was one still page. Now the Vetta lockup moves from the middle of the screen (where the launch screen left
@@ -714,7 +686,6 @@ it and settles; the distance, time and corners are a row of big numbers; Mark a 
 so Share card is the one ink key. A drive with no score shows "0.9 mi · no corners to score" set as a title.
 
 Undo: revert the PR (web/first_run.js and web/end_reveal.js can simply be removed; the page works without them).
-
 ## 2026-11-10 (fable-ten-hz-g): a recorded drive keeps the car's g ten times a second, where it happened (claude/fable-ten-hz-g)
 
 The app sends the page ten readings a second, but the recorder kept only the one that arrived with each GPS fix and gave
@@ -733,7 +704,6 @@ Calls I made:
   because a sample no longer jumps at every fix. The Score's formula is unchanged.
 
 Undo: revert the PR.
-
 ## 2026-11-11 (fable-practice-focus): Work on becomes a practice you can follow drive by drive (claude/fable-practice-focus)
 
 Your driving names one skill to work on. Under it there is now a key: "Practice it on my next drives". Press it and
@@ -757,7 +727,6 @@ The calls I made:
 This PR is stacked on #373 (Your driving) and needs it merged first.
 
 Undo: revert the PR. The plan lives only in the phone's storage (`vetta.practice`); nothing else changes.
-
 ## 2026-11-10 (fable-whats-new): What's new tells of the routing work (claude/fable-whats-new)
 
 The What's new sheet still showed the news of 2026-10-28 (Siri, landscape, stops of the day, kilometres), which every
@@ -767,7 +736,6 @@ out "routes are planned on the phone, with no signal" because that is only true 
 I wrote "highway" (the app's own word on its keys). Places in the app are named in words, not with arrows.
 
 Undo: set `NEWS` back in web/whats_new.js. A phone that has seen '2026-11-10' will not be shown it again.
-
 ## 2026-11-11 (fable-rally-sheet): a crew drive's results sheet, rally style, Scores and shared times (claude/fable-rally-sheet)
 
 A crew drive used to remember one number afterwards: the best Score of the day. Its card now folds out "Results · 3
@@ -831,7 +799,6 @@ Settings, Units. Small lengths in feet are said to the nearest 5 ft ("within 20 
 claim more than the phone measured. Metric drivers see what they saw before.
 
 Undo: revert the PR. Nothing stored changes; this is only how lengths are written.
-
 ## 2026-11-10 (fable-driver-profile): the Log has "Your driving", a picture of how you drive over every drive (claude/fable-driver-profile)
 
 Until now every reading was of one drive, or one corner against your other passes of it. Your driving reads every clean
@@ -859,7 +826,6 @@ What it cannot see yet: the app records one g reading per GPS fix (once a second
 15 m does not show. That is the next piece of work (ten readings a second between fixes).
 
 Undo: revert the PR; the kept store ('vetta-profile') is unused without it and can be left.
-
 ## 2026-11-10 (fable-sheet-races): e2e waits for a sheet to be still before tapping its keys (claude/fable-sheet-races)
 
 Nine PRs were red on CI-only races: a click aimed at a sheet that was still sliding up landed on its backdrop, which
@@ -868,7 +834,6 @@ Update 2026-11-11: the wait itself was broken (an async predicate returns at onc
 press on a key that lifts on the backdrop closed the sheet. Now a backdrop closes a sheet only when the press began on
 it (`onBackdrop` in cockpit.js, five sheets). On a phone that is a tap during the slide, or a thumb that drifts off a
 key, no longer throwing the sheet away. Every check is as strict as before, plus two new ones. Undo: revert the PR.
-
 ## 2026-11-11 (fable-taste-picks): the route you choose over Vetta's pick teaches your taste (claude/fable-taste-picks)
 
 Taste learning only heard from "Which road was better?" after a drive, and most drivers never answer it. A choice made
@@ -929,7 +894,6 @@ slower.", "Traffic ahead. Switching to Route 9, 4 min longer."), so the screen a
 message written in web/*.js and fails on one that doesn't end as a sentence or joins labels with "·".
 
 Undo: revert the PR; nothing else depends on the wording.
-
 ## 2026-11-10 (fable-sign-in-key): a message that asks you to sign in carries the key (claude/fable-sign-in-key)
 
 Following your "reducing any clunky feelings": five things that need an account answered "Sign in (People) to see
@@ -945,7 +909,6 @@ The same for notifications: "Notifications are off for Vetta. Turn them on in th
 now has a **Settings** key that opens Vetta's page there (the shell's `openSettings`, already used by Location is off).
 
 Undo: revert the PR (`askSignIn` in web/cockpit.js, one line in web/friends_map.js).
-
 ## 2026-11-10 (fable-crew-settings): Crew settings in the Settings list's shape (claude/fable-crew-settings)
 
 For "cohesiveness" (and the first look at a crew's page in this run): the sheet behind a crew's gear had three sizes
@@ -962,7 +925,6 @@ the Score board now.
 Every control does what it did and the Worker calls are unchanged.
 
 Undo: revert the PR (`crewSettingsFor` in web/cockpit.js, four CSS lines in web/index.html).
-
 ## 2026-11-10 (fable-toast-key): a message with a key is one row, and a message is as wide as its words (claude/fable-toast-key)
 
 For "reducing any clunky feelings", seen on the drive screen: "Typing is off while the car moves." took half the
@@ -1000,7 +962,6 @@ The e2e check went red on PRs that touch nothing near it. The flow compared the 
 streets while the app was between two sets of steps. I changed the flow to read once the lines belong to the steps the
 route has now; the app is unchanged, and the check ("every name it says is a street the route drives") is as strict
 as before. Undo: revert the PR.
-
 ## 2026-11-10 (fable-no-orphan-key): a friend's third key takes the row (claude/fable-no-orphan-key)
 
 On People, a friend's row opens on two columns of keys. A friend who shares no position has three (Share a route,
@@ -1027,7 +988,6 @@ list still had its own three (30 minutes, 1 hour, 2 hours). The car now lists th
 equal. Not seen on a car screen: this is a list of five rows where there were three, built by CI only.
 
 Undo: revert the PR (one line in CarPlay/ApexCarPlay.swift).
-
 ## 2026-11-10 (fable-route-reveal): the route card reads like a page, and a route found is drawn onto the map (claude/fable-route-reveal)
 
 When a route is found its line is now drawn onto the map from start to finish in 0.8 s, the profile on the card is
@@ -1424,7 +1384,6 @@ mapped one class lower (`primary`), marked only by a tag. The calls:
   then nothing changes on any phone: today's tiles don't carry the mark and the router treats them as before.
 - **A new flag bit, not a new tile version**: old apps ignore the bit, new apps read old tiles as "not an expressway".
 - Undo all of it: revert the branch's commits (tiles built with the flag still read fine in the old code).
-
 ## 2026-11-10 (fable-convoy-keep): a convoy can run past two hours, and says when it is about to end (claude/fable-convoy-keep)
 
 A convoy ended two hours after it started, whatever was happening: a Sunday drive with a coffee stop lost its map
@@ -1455,7 +1414,6 @@ back roads), which nudged how those roads scored. The calls:
 - **I left the tiles' travel times alone.** The inventory knows the posted limit on about half the main-road miles where
   our tiles only guess from the road's class, and using it would make times truer, but a mismatched stretch would make
   them wrong in a new way. The numbers are in STATE for whoever takes it on.
-
 ## 2026-11-10 (fable-zone-samples): a new home zone hides you from friends at once (claude/fable-zone-samples)
 
 Friends on the map keeps your home zones on the server too, so it can refuse a position inside one. Two gaps:
@@ -1882,7 +1840,6 @@ down or go away. Valhalla would stay only as a backup and for turn instructions 
   trip), an engine evaluation reused when the same candidate is ranked again with the same inputs (the level cards rank
   the pool three times), each route's light geometry made in the routing worker, and a track built ahead skips the
   page's turn.
-
 ## 2026-11-06 (later): Destination picks (your work-to-home report)
 
 What the card showed: the pick 35 min / 28 corners, a 34 min / 30 corner option that lost, the 22 min highway. Re-run
@@ -2138,7 +2095,6 @@ until the Cincinnati tiles ship: where no tiles cover a trip, planning is exactl
 - **Blue Rock Road's spot check is its rural stretch** (north of the I-275 ring, the one the calibration's Blue Rock
   route drives): inside the ring it is a posted 35 mph suburban street and scores like one. Undo: the box in check.py.
 - **Via-way turn restrictions are counted, not applied** (index.json `stats`). Undo: none needed; applying them is next.
-
 ## 2026-11-04 (evening): The plan flow, simpler
 
 You said planning a route was "clunky and confusing". An audit on production (iPhone 15 size) found eleven problems; all
@@ -2603,7 +2559,6 @@ Five builders worked in parallel and Claude merged them. These are the calls, ea
   (WebKit streams a canvas as it renders it). Both keys are hidden where the browser has no MediaRecorder type or no
   canvas captureStream, and a failed or empty recording says so instead of handing over nothing. Not verified on a
   phone (Chromium only here). Undo: web/dashcam.js, web/flyover_video.js.
-
 ## 2026-10-31: TestFlight notes 05 and 06 (Crew drives row gone; the Score board as totals)
 
 - *No Crew drives row; the crew page's drive section is "Upcoming drives"*: every planned drive of that crew as its card,
@@ -2621,7 +2576,6 @@ Five builders worked in parallel and Claude merged them. These are the calls, ea
 - *A drive deleted from the Log keeps its Score on the board* (the server has no delete for one drive yet). Undo/extend:
   a `DELETE /api/drives/scores/:id` called from the Log's delete.
 - *Old builds keep the page's `board`* (best stage Score this month) unchanged; only new builds call the new route.
-
 ## 2026-10-31: TestFlight feedback 01-04, 07, 08 (one surface, the island, centred fields, bottom sheets, the share sheet)
 
 - 01: a route Preview now hides the route card, Where to? and the tabs like a replay does (one class, `replaying`, for
