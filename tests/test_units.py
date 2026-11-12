@@ -73,7 +73,7 @@ console.log(JSON.stringify({ m, i }));
     page = open(os.path.join(ROOT, "web", "cockpit.js"), encoding="utf-8").read()
     assert "b.textContent = ApexUnits.size(Number(b.dataset.zoneR));" in page and "labelLoops(); renderZones();" in page
     assert "`${zoneR} m`" not in page and "under 0.2 mi are dropped.'" not in page
-    assert "'7 miles' : '11 km'" in open(os.path.join(ROOT, "web", "crew_page.js"), encoding="utf-8").read()
+    assert "'7 mile' : '11 km'" in open(os.path.join(ROOT, "web", "crew_page.js"), encoding="utf-8").read()
 
 
 def test_small_lengths_in_the_log_are_in_the_drivers_units():

@@ -6583,9 +6583,10 @@
       // A friend's profile (profile_view.js, IDEAS S-15): a sheet over the list; its back key returns to it.
       const ppop = el('aside', { className: 'side-pop people-pop' }); ppop.setAttribute('aria-label', 'Friend'); pops.push(ppop);
       // P-04: what you do with a friend, on their row and on their profile
+      const closeProfile = () => { ppop.classList.remove('open'); openFriendId = null; };
       const seeOnMap = (f) => {
         const p = where.get(f.handle); if (!p || !friendsMap) return;
-        showView(null); ppop.classList.remove('open');
+        showView(null); closeProfile();
         if (!state.toggles.friends) { state.toggles.friends = true; paintSwitches(); savePrefs(); }
         friendsMap.setLayer(true);
         if (mapReady) map.flyTo({ center: [p.lon, p.lat], zoom: Math.max(map.getZoom(), 11), duration: 900 });
@@ -6600,19 +6601,34 @@
       };
       const keysFor = (f) => [
         ...(where.get(f.handle) && friendsMap ? [['On the map', () => seeOnMap(f)]] : []),
-        ['Share a route', () => { ppop.classList.remove('open'); shareRouteWith(f.handle); }],
+        ['Share a route', () => { closeProfile(); shareRouteWith(f.handle); }],
         ...(convoy ? [['Invite to a drive', () => driveWith(f)]] : []),
         ...(duels ? [['Challenge on a stage', () => duels.challenge(f)]] : [])];
+      // Nate 2026-11-12 (as easy as a big social app): a tap on a friend opens their profile; what you do with them, their last
+      // share and what they see of you are on it (the row used to open five keys, a share and a grants drawer in the list)
+      const aboutYou = (f) => {
+        const g = grants.get('friend:' + f.id) || { share_scores: 0, share_times: 0 };
+        const k = el('button', { className: 'nav-row quiet friend-sees', type: 'button' }, el('span', { textContent: `What @${f.handle} sees of you` }),
+          el('small', { textContent: g.share_scores ? (g.share_times ? 'Scores, times' : 'Scores') : 'Nothing' }), el('i', { 'aria-hidden': 'true' }));
+        k.addEventListener('click', () => (whoSees ? whoSees.open({ friend: f.id }) : showView('garage')));
+        return k;
+      };
+      const lastShare = (f) => {
+        const last = shared.find((r) => r.from_handle && r.from_handle === f.handle);
+        return last ? [el('div', { className: 'row friend-last', style: 'align-items:center' }, el('p', { className: 'note', style: 'flex:1;margin:0', textContent: `Shared ${last.name}${sharedWhen(last.created_at) ? ` · ${sharedWhen(last.created_at)}` : ''}` }),
+          btn('Open', () => { closeProfile(); openSharedRoute(last.id); }, 'linkbtn'))] : [];
+      };
       const openProfile = async (f) => {
+        openFriendId = f.id;   // a redraw of People (a grant changed, presence came in) opens it again
         let p = null;
         try { const r = await apiCall('GET', `/api/friends/${encodeURIComponent(f.id)}/profile`); p = r.ok ? await jsonOf(r) : null; } catch (_) {}
-        if (!p) { toast('Couldn’t load the profile. Try again.'); return; }
         const view = el('div', { className: 'stack-8 profile-view' });
         // P-04: Unfriend, Report and Block live at the profile's foot, not on the row
-        ApexProfileView.show(view, p, { el, btn, back: () => ppop.classList.remove('open'), keys: keysFor(f),
-          foot: [['Unfriend', async () => { if (await ApexConfirm.ask(`Unfriend @${f.handle}? This also stops all sharing.`, 'Unfriend')) { await apiCall('DELETE', `/api/friends/${f.id}`); ppop.classList.remove('open'); openFriendId = null; redo(); } }, 'danger-btn'],
+        ApexProfileView.show(view, p && !Array.isArray(p) ? p : { handle: f.handle, name: f.name }, { el, btn, back: () => closeProfile(), keys: keysFor(f),
+          partial: !p || Array.isArray(p), extra: [...lastShare(f), aboutYou(f)],
+          foot: [['Unfriend', async () => { if (await ApexConfirm.ask(`Unfriend @${f.handle}? This also stops all sharing.`, 'Unfriend')) { await apiCall('DELETE', `/api/friends/${f.id}`); closeProfile(); redo(); } }, 'danger-btn'],
             ...(safety && f.handle ? [['Report', () => safety.report({ kind: 'user', target: f.handle, label: `@${f.handle}`, who: f.handle, done: redo })],
-                                     ['Block', () => safety.block(f.handle, () => { ppop.classList.remove('open'); redo(); })]] : [])] });
+                                     ['Block', () => safety.block(f.handle, () => { closeProfile(); redo(); })]] : [])] });
         ppop.replaceChildren(view); ppop.classList.add('open');
       };
       // P-02: a friend link (?invite=) is "add a friend" now, not a way in. It asks first, naming who sent it, at the top of the list.
@@ -6634,40 +6650,22 @@
       }
       const flist = el('div', { className: 'friend-list' });
       for (const { f, st } of order) {
-        const g = grants.get('friend:' + f.id) || { share_scores: 0, share_times: 0 }, row = el('div', { className: 'friend' });
+        const row = el('div', { className: 'friend' });
         const av = window.ApexPhotos ? ApexPhotos.avatar((where.get(f.handle) || {}).photo_id || null, f.handle || '?', 40) : el('span');
         const head = el('button', { className: 'friend-head', type: 'button' }, av,
           el('span', { className: 'friend-who' }, el('b', { textContent: `@${f.handle || '?'}` }), el('small', { className: st && st.live ? 'live' : '', textContent: st && st.text ? st.text : (f.name || '') })),
           el('i', { className: 'chev', 'aria-hidden': 'true' }));
-        // P-04: the row is about the friend: what you can do with them, the last thing they shared, then (quietly) what they see of you
-        const keys = keysFor(f).map(([label, run], i) => btn(label, run, i ? 'ink-btn' : 'ink-btn solid'));
-        if (window.ApexProfileView) keys.push(btn('Profile', () => openProfile(f), 'ink-btn'));
-        const last = shared.find((r) => r.from_handle && r.from_handle === f.handle);
-        const sees = el('div', { className: 'stack-8 friend-grants', hidden: true },
-          el('div', { className: 'row' }, switchRow('Scores', g.share_scores, () => putGrant('friend', f.id, !g.share_scores, g.share_scores ? g.share_times : false)),
-            switchRow('Times', g.share_times, () => putGrant('friend', f.id, true, !g.share_times))),
-          el('p', { className: 'note', style: 'margin:0', textContent: [g.share_scores ? (g.share_times ? 'Your scores and times.' : 'Your scores.') : 'None of your scores or times.',
-            friendsMap && friendsMap.loaded ? (friendsMap.settings.audience === 'friends' ? 'Where you are, as you chose on the map.' : 'Not where you are.') : ''].filter(Boolean).join(' ') }),
-          ...(whoSees ? [btn('Everyone, on one page: Who sees what', () => whoSees.open({ friend: f.id }), 'linkbtn')] : []));
-        const seesKey = el('button', { className: 'nav-row quiet', type: 'button' }, el('span', { textContent: `What @${f.handle} sees of you` }),
-          el('small', { textContent: g.share_scores ? (g.share_times ? 'Scores, times' : 'Scores') : '' }), el('i', { 'aria-hidden': 'true' }));
-        seesKey.setAttribute('aria-expanded', 'false');
-        seesKey.addEventListener('click', () => { const on = sees.hidden; sees.hidden = !on; seesKey.setAttribute('aria-expanded', String(on)); });
-        const detail = el('div', { className: 'crew-detail stack-8' }, el('div', { className: 'row friend-keys' }, ...keys),
-          ...(last ? [el('div', { className: 'row', style: 'align-items:center' }, el('p', { className: 'note', style: 'flex:1;margin:0', textContent: `Shared ${last.name}${sharedWhen(last.created_at) ? ` · ${sharedWhen(last.created_at)}` : ''}` }),
-            btn('Open', () => openSharedRoute(last.id), 'linkbtn'))] : []),
-          seesKey, sees);
-        const setOpen = (on) => { detail.hidden = !on; head.setAttribute('aria-expanded', String(on)); };
-        head.addEventListener('click', () => { const on = detail.hidden; openFriendId = on ? f.id : null; setOpen(on); });
-        setOpen(openFriendId === f.id);
-        row.append(head, detail);
+        head.setAttribute('aria-label', `@${f.handle || '?'}${st && st.text ? `, ${st.text}` : ''}: open the profile`);
+        head.addEventListener('click', () => (window.ApexProfileView ? openProfile(f) : null));
+        row.append(head);
+        if (openFriendId === f.id && window.ApexProfileView) openProfile(f);
         flist.append(row);
       }
       if (accepted.length) body.append(flist);
       // Sharing came on for existing friends and private crews too (migration 0050, the owner 2026-11-11): said once
       if (accepted.length) {
         let told = false; try { told = !!localStorage.getItem('apex.sharingOnTold'); } catch (_) {}
-        if (!told) { try { localStorage.setItem('apex.sharingOnTold', '1'); } catch (_) {} toast('Your friends and private crews now see your Scores and times. Switch it off for anyone: open their row, then What they see of you.'); }
+        if (!told) { try { localStorage.setItem('apex.sharingOnTold', '1'); } catch (_) {} toast('Friends and private crews see your Scores and times now. Change it on their profile.'); }
       }
       // P-08: no friends yet is one sentence and the Invite key, not four empty drawers
       // the first friend is a page like the signed-out one (round three, 2026-11-11): your road drawn, the friend's still pencil

@@ -247,7 +247,7 @@
                 const list = page.segs(), copy = localCopy(c, r.j.segment_id);
                 if (copy && !list.some((s) => s.id === copy.id)) { list.push(copy); page.saveSegs(list); }
               }
-              toast('In your Stages. Log a run on it this week and your quickest time goes on the board.');
+              toast('Entered. Your best time this week counts.');
               load();
             }, 'ink-btn'));
           }
@@ -272,7 +272,7 @@
           }, 'linkbtn'));
         }
         if (t.last && t.last.podium.length) kids.push(el('p', { className: 'note', textContent: `Last week, ${t.last.name}: ${t.last.podium.map((p, i) => `${i + 1}. @${p.handle} ${clock(p.time_s)}`).join(' · ')}` }));
-        kids.push(el('p', { className: 'note', textContent: 'A new loop every Monday. Public roads: drive within the law and the conditions. Only runs the phone timed count, and a time no road car could set is refused.' }));
+        kids.push(el('p', { className: 'note', textContent: 'New loop every Monday. Drive within the law.' }));
         body.replaceChildren(...kids);
       }
       load();

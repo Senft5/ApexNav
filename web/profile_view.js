@@ -34,13 +34,16 @@
 
   /** Draws the profile into `box` (replacing what's there); `back` returns to the list. `keys` ([label, run] pairs) are
    *  the things to do with them, first; `foot` ([label, run, className] triples) the ways to end it, last. */
-  function show(box, p, { el, btn, back, keys = [], foot = [] }) {
+  function show(box, p, { el, btn, back, keys = [], extra = [], foot = [], partial = false }) {
     const v = lines(p);
+    // partial: the profile didn't load (no signal): the person and what you can do with them, nothing guessed about the rest
     box.replaceChildren(el('div', { className: 'side-pop-head' }, el('h3', { textContent: v.title }), btn('‹ Friends', back, 'linkbtn')),
       ...(v.sub ? [el('p', { className: 'note', textContent: v.sub })] : []),
       ...(keys.length ? [el('div', { className: 'row profile-keys' }, ...keys.map(([label, run], i) => btn(label, run, i ? 'ink-btn' : 'ink-btn solid')))] : []),
-      ...v.sections.map((s) => el('div', { className: 'stack-8' }, el('b', { textContent: s.head }), ...s.rows.map((r) => el('p', { className: 'note', textContent: r })))),
-      el('p', { className: 'note', textContent: 'Only what they share with you. Times are never shown here.' }),
+      ...extra,
+      ...(partial ? [el('p', { className: 'note', textContent: 'Couldn’t load the rest. Check signal.' })]
+        : [...v.sections.map((s) => el('div', { className: 'stack-8' }, el('b', { textContent: s.head }), ...s.rows.map((r) => el('p', { className: 'note', textContent: r })))),
+          el('p', { className: 'note', textContent: 'Only what they share with you. Times are never shown here.' })]),
       ...(foot.length ? [el('div', { className: 'row profile-foot' }, ...foot.map(([label, run, cls]) => btn(label, run, cls || 'linkbtn')))] : []));
   }
 
