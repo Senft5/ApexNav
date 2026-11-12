@@ -4894,7 +4894,15 @@ flow('Your driving: the profile over every drive opens from the Log, names the w
   await page.click('#drivingOpen');
   await page.waitForSelector('#drivingRoot .dp-st');
   const text = await page.evaluate(() => document.getElementById('drivingRoot').innerText);
-  check(/108 clean corners · 3 drives/.test(text), 'what it is read from: ' + text.slice(0, 120));
+  check(/108 clean corners · 3 drives · Aug–Oct 2026/.test(text), 'what it is read from, and when: ' + text.slice(0, 120));
+  // a level's definition on a tap (no hover on a phone), hidden again on a second
+  const def = await page.evaluate(() => {
+    const row = document.querySelector('.dp-st[data-skill="arc"]'), d = row.querySelector('.dp-def'), was = d.hidden;
+    row.click(); const shown = !d.hidden && row.getAttribute('aria-expanded') === 'true', t = d.textContent;
+    row.click();
+    return { was, shown, t, after: d.hidden, title: row.querySelector('[title]') !== null };
+  });
+  check(def.was && def.shown && def.after && !def.title && /^You turn in once .+ 0 to 100, averaged over \d+ clean corners; -- until \d+\.$/.test(def.t), 'the definition on a tap: ' + JSON.stringify(def));
   check(/One steering arc is weaker through rights: \d+ against 100 through lefts, on 3 of 3 drives\./.test(text), 'the weak side is named: ' + text);
   check(/Work on: One steering arc\s+It shows most through rights\./.test(text), 'the focus says where');
   check(await page.evaluate(() => document.querySelector('.dp-st.weak').dataset.skill === 'arc' && document.querySelectorAll('.dp-st:not([data-skill="pace"])').length === 6), 'six stations, the weak one marked');
@@ -4988,7 +4996,7 @@ flow('Practice (IDEAS D-27): Work on is carried into the next drives, the end ca
   await page.waitForSelector('#drivingRoot .dp-pr');
   const pg = await page.evaluate(() => ({ text: document.querySelector('.dp-practice').innerText, rows: document.querySelectorAll('.dp-pr').length, up: !!document.querySelector('.dp-pr b.up'),
     mark: !!document.querySelector('.dp-pr .dp-bar s'), wide: document.documentElement.scrollWidth <= document.documentElement.clientWidth }));
-  check(/on 36 corners over 1 drive, against \d+ before\. Up \d+: the practice is showing\./.test(pg.text), 'the practice so far: ' + pg.text);
+  check(/on 36 corners over 1 drive, against \d+ on \d+ before\. Up \d+ points?: the practice is showing\./.test(pg.text), 'the practice so far: ' + pg.text);
   check(pg.rows === 1 && pg.up && pg.mark && pg.wide, 'one drive, up, with the mark of before, nothing wider than the phone: ' + JSON.stringify(pg));
   await page.click('.dp-practice button:has-text("Stop practicing")');
   await page.waitForSelector('#drivingRoot .dp-go');

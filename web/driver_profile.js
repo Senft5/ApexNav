@@ -584,6 +584,7 @@
     out.pace = { over: over.length >= SKILL_MIN ? r(Core.meanSe(over)[0], 4) : null, n: over.length };
 
     const months = [...new Set(drives.map((d) => d.month).filter(Boolean))].sort(cmp);
+    out.span = months.length ? [months[0], months[months.length - 1]] : null;   // the period read (core profile span)
     for (const k of TOUCH) out.touch_trend[k] = [];
     for (const mth of months) {
       const t = touch(drives.filter((d) => d.month === mth).flatMap((d) => d.obs), TREND_MIN);
@@ -841,8 +842,9 @@
     const n = pr.drives.length;
     let t = `${from}: ${pr.after.level} on ${pr.after.n} corners over ${n} drive${n === 1 ? '' : 's'}`;
     if (pr.before.level === null) return `${t}. There were too few corners before to compare with.`;
-    t += `, against ${pr.before.level} before.`;
-    return t + (pr.sure ? (pr.delta > 0 ? ` Up ${pr.delta}: the practice is showing.` : ` Down ${-pr.delta}: keep at it, and take it slower.`) : ' No clear change yet: a change is said once it is well beyond chance.');
+    t += `, against ${pr.before.level} on ${pr.before.n} before.`;    // both samples, and the change in points
+    const pts = (x) => `${x} point${x === 1 ? '' : 's'}`;
+    return t + (pr.sure ? (pr.delta > 0 ? ` Up ${pts(pr.delta)}: the practice is showing.` : ` Down ${pts(-pr.delta)}: keep at it, and take it slower.`) : ' No clear change yet: a change is said once it is well beyond chance.');
   }
   /** "YYYY-MM-DDTHH:MM", local, as the drives' own dates are written: the moment a plan starts. */
   const localStamp = (when = new Date()) => { const z = (x) => String(x).padStart(2, '0'); return `${when.getFullYear()}-${z(when.getMonth() + 1)}-${z(when.getDate())}T${z(when.getHours())}:${z(when.getMinutes())}`; };
@@ -859,7 +861,8 @@
     .dp-st::before { content: ""; position: absolute; left: 13px; top: 0; bottom: 0; width: 2px; background: var(--panel-ink); }
     .dp-st:first-child::before { top: 10px; } .dp-st:last-child::before { bottom: auto; height: 10px; } .dp-st:last-child { padding-bottom: 0; }
     .dp-dot { width: 12px; height: 12px; margin: 4px 0 0 8px; border: 2px solid var(--panel-ink); background: var(--panel); position: relative; z-index: 1; border-radius: 50%; }
-    .dp-st.apex .dp-dot { background: var(--panel-ink); }
+    .dp-st.apex .dp-dot { background: var(--panel-ink); } .dp-st[role="button"] { cursor: pointer; }
+    .dp-def { font-size: 13px; color: var(--panel-dim); line-height: 1.45; margin: 4px 0 0; }
     .dp-st.weak .dp-dot { border-color: var(--accent); background: var(--accent); }
     .dp-name { font-weight: 700; font-size: 16px; line-height: 1.25; } .dp-is { font-size: 13px; color: var(--panel-dim); line-height: 1.45; margin-top: 2px; }
     .dp-lv { font-family: var(--font-num); font-weight: 700; font-size: 26px; line-height: 1; text-align: right; min-width: 44px; }
@@ -894,6 +897,28 @@
   };
 
   /** Draws the page into `host` (the Log's Your driving view). p: profile(); null while it is being worked out. */
+  /** What the page is read from, as one scope line: "108 clean corners · 3 drives · Aug–Oct 2026". */
+  function scopeLine(p) {
+    const head = `${p.corners} clean corner${p.corners === 1 ? '' : 's'} · ${p.drives} drive${p.drives === 1 ? '' : 's'}`, sp = p.span;
+    if (!sp || !sp[0]) return head;
+    const m = (x) => MONTHS[+x.slice(5, 7) - 1], y = (x) => x.slice(0, 4);
+    const when = sp[0] === sp[1] ? `${m(sp[0])} ${y(sp[0])}` : y(sp[0]) === y(sp[1]) ? `${m(sp[0])}–${m(sp[1])} ${y(sp[1])}` : `${m(sp[0])} ${y(sp[0])}–${m(sp[1])} ${y(sp[1])}`;
+    return `${head} · ${when}`;
+  }
+  /** A level's definition (what it measures, its scale, what it is read from), shown on a tap, not as a footnote. */
+  function skillDef(k, s) {
+    const n = s && Number.isFinite(s.n) ? s.n : 0;
+    return `${WORDS[k].is} 0 to 100, averaged over ${n} clean corner${n === 1 ? '' : 's'}; -- until ${SKILL_MIN}.`;
+  }
+  function defOnTap(row, mid, k, s) {
+    const def = el('p', 'dp-def', skillDef(k, s));
+    def.hidden = true;
+    mid.append(def);
+    row.tabIndex = 0; row.setAttribute('role', 'button'); row.setAttribute('aria-expanded', 'false');
+    const flip = () => { def.hidden = !def.hidden; row.setAttribute('aria-expanded', String(!def.hidden)); };
+    row.addEventListener('click', flip);
+    row.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); flip(); } });
+  }
   function render(host, p, opts = {}) {
     styleOnce();
     const metric = root.ApexUnits ? root.ApexUnits.metric() : true;
@@ -905,7 +930,7 @@
     }
     // TestFlight 2026-11-12 (notes 4, 5, "walls of text"): the page is its numbers and the sentences that say a finding; the
     // explanations under each panel are gone, and a panel with nothing to say yet is not drawn
-    host.append(el('p', 'note', `${p.corners} clean corner${p.corners === 1 ? '' : 's'} · ${p.drives} drive${p.drives === 1 ? '' : 's'}`));
+    host.append(el('p', 'note', scopeLine(p)));
     const fl = focusLines(p), plan = opts.plan || null, pr = opts.practice || null, onPlan = opts.onPlan || null;
     const key = (text, cls, fn) => { const b = el('button', cls, text); b.type = 'button'; b.addEventListener('click', fn); return b; };
     if (plan && pr) {
@@ -952,7 +977,7 @@
       row.dataset.skill = k;
       const mid = el('div');
       mid.append(el('div', 'dp-name', WORDS[k].name));
-      mid.title = WORDS[k].is;
+      defOnTap(row, mid, k, s);
       const lv = el('div', 'dp-lv');
       if (s.level === null) {
         lv.innerHTML = '<i class="unk">--</i>';
@@ -977,7 +1002,7 @@
       row.dataset.skill = 'pace';
       pn.append(el('h2', null, 'Your pace'));
       mid.append(el('div', 'dp-name', WORDS.pace.name));
-      mid.title = WORDS.pace.is;
+      defOnTap(row, mid, 'pace', s);
       if (s.level === null) { lv.innerHTML = '<i class="unk">--</i>'; lv.append(el('small', null, `${s.n} of ${SKILL_MIN} corners`)); }
       else {
         lv.textContent = String(s.level);
@@ -1063,7 +1088,7 @@
     }
   }
 
-  const api = { SKILLS, observe, profile, swing, excess, SKILL_MIN, WORDS, findingLine, styleLines, touchLines, touchTrendLines, driveTouchLines, paceLines, PACE, MEASURES, touch, TOUCH, driveTouch, DRIVE_TOUCH_MIN, bestCorners, recordsBySize, RECORD_MIN, driveRecords, driveRecordLines, roadRecords, placed, roadRecordLine, roadCornerNote, roadBook, roadBookRows, roadBookFocus, roadBookFocusLine, roadEvenedLine, roadsToWork, skillRoadLine, skillRoad, roadUnevenLine, roadEndLine, cardLine, focusLines, render,
+  const api = { SKILLS, observe, profile, swing, excess, SKILL_MIN, WORDS, findingLine, styleLines, touchLines, touchTrendLines, driveTouchLines, paceLines, PACE, MEASURES, touch, TOUCH, driveTouch, DRIVE_TOUCH_MIN, bestCorners, recordsBySize, RECORD_MIN, driveRecords, driveRecordLines, roadRecords, placed, roadRecordLine, roadCornerNote, roadBook, roadBookRows, roadBookFocus, roadBookFocusLine, roadEvenedLine, roadsToWork, skillRoadLine, skillRoad, roadUnevenLine, roadEndLine, cardLine, focusLines, scopeLine, skillDef, render,
     PRACTICE_MIN, practice, drivePractice, onPlanRoad, practiceLine, practiceSummary, localStamp, loadPlan, savePlan, PLAN_KEY };
   if (typeof module !== 'undefined' && module.exports) module.exports = api; else root.ApexDriverProfile = api;
 })(typeof window !== 'undefined' ? window : globalThis);
