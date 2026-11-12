@@ -459,3 +459,5 @@ def test_the_car_offers_the_same_loop_times_as_the_phones_dial():
     dial = json.loads(re.search(r"LOOP_MINUTES = (\[[\d, ]+\])", cockpit_source()).group(1))
     assert car == dial == [30, 60, 90, 120, 180]
     assert '("1½ hours", 90)' in row and '("3 hours", 180)' in row
+    # and the page takes every one of them: it used to accept only 30, 60 and 120, so the car's 1½ and 3 hours did nothing
+    assert "m.action === 'loop' && LOOP_MINUTES.includes(m.minutes)" in cockpit_source()
