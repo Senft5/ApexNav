@@ -1,5 +1,28 @@
 # VETTA — CURRENT AGENT HANDOFF STATE
 
+> Newer entries are in `docs/notes/` (one file per PR, CLAUDE.md rule 7). Don't edit this file in a PR.
+
+## Session 2026-11-11 (sweep round three): the cron jobs are watched (claude/project-thread-g9yher, off origin/main 6a43a9c)
+
+- Migration 0055 `cron_runs` (job, ok_at, fail_at, reason). backend/src/cron_runs.ts `runCron` wraps the backup and the
+  sweep in `scheduled`: success sets ok_at; a throw sets fail_at + scrubbed reason and counts as `cron <job>` in error_counts.
+  A backup that writes nothing (too big) counts as a failure. `GET /api/health` returns `cron: {backup, sweep}` (age_h,
+  failing, late) from the same single read. tools/status_check.py: core checks "Weekly backup" and "Daily sweep"; the
+  outage issue is titled "ApexNav: … not running" when only those fail. docs/STATUS.md step 4, docs/BACKUPS.md.
+- 0055 must be on preview and prod before merge (/api/health 503s without the table).
+- Next: offline behaviour and App Store / TestFlight readiness checks.
+## Session 2026-11-12 (ui-round-three, PR 5): the promises say what the app does now (claude/project-thread-5sbga7)
+
+- The coordinator, for Nate's 2026-11-11 calls (sharing with friends and private crews on by default; a weekly loop with a
+  board): about.html's and About Vetta's (index.html) "No public races / No races" and "Yours until you share it" became
+  "No top speeds" (nothing records or shows how fast anyone went flat out; the weekly loop's board has only those who
+  entered) and "Shared with your people" (Scores and times to friends and private crews until switched off; drives stay
+  on the phone; privacy zones). The App Store listing still must not mention the time attack (APP_REVIEW 1.4).
+- privacy.html: a "Scores and times with friends and crews" paragraph (on from the start, Who sees what, a public crew
+  only on a yes, never the drive itself) that APP_REVIEW 5.1.2 already said existed; the time attack "stage" is now the
+  loop Vetta picks; Last updated 12 November 2026. APP_REVIEW 5.1.2 notes it.
+- Tests: tests/test_promises_current.py (stale promises can't come back).
+
 ## Session 2026-11-12 (ui-round-three, PR 4): the website's page in the Line, with today's app on it (claude/project-thread-5sbga7)
 
 - web/about.html: the app's faces loaded (fonts.css, preloaded; it named Inter Tight without loading it), the title and
@@ -378,29 +401,6 @@
 - Test: tests/test_graph_router.py `test_measured_crests_and_verified_bumps_steer_the_search` (graph_router_cases.js
   `crowdCrestBump`). docs/OWN_ROUTING.md says the weights.
 - Next: the same crest and bump data in stage discovery (stages.js) and the FunRoute ranking of Valhalla candidates.
-## Session 2026-11-11 (security pass, PR 3): relay rate limit (claude/project-thread-4lms1f, off origin/main)
-
-- ratelimit.ts `RELAYS` (/api/ctx/osm, /api/ctx/trace, /api/ctx/workzones): `RELAY_LIMIT` per IP, 300/60 s (wrangler.jsonc
-  namespaces 1005 prod, 1006 previews). `?diag=1` on /api/ctx/osm: moderator only (404 otherwise, 401 signed out).
-- Tests: backend/test/ratelimit.test.ts (+1).
-## Session 2026-11-11 (security pass, PR 2): public crews' chat history (claude/project-thread-4lms1f, off origin/main)
-
-- Migration 0056_crew_public_since (crews.public_since; public crews backfilled to the time it ran). Set by crewCreate
-  (public) and crewUpdate (private to public). crew_page.ts `CHAT_READABLE(c)` (viewer ?1): hidden only when the crew is
-  public, the message predates public_since and the viewer joined after it. In `chatList`, `crewFeed`, and the pinned
-  message (unless the crew's owner wrote it). privacy.html, APP_REVIEW.md say so.
-- Tests: backend/test/crew_page.test.ts (+1).
-## Session 2026-11-11 (security pass, PR 1): photos by circle, not by id; report hides need a reporter of standing (claude/project-thread-4lms1f, off origin/main)
-
-- Took over the Worker API security pass from roam-c (its entries list what was checked: auth, CSRF, rate limits, :id
-  ownership, grants on read, time attack, convoy membership, hazard and report caps; #423 and #424 are roam-c's).
-- photos.ts `PHOTO_SEEN(p)` (viewer ?1): owner; else not hidden, not reported by you, no block either way, and by kind:
-  profile any member, car `CAR_SEEN`, post the build's car `CAR_SEEN`, crew/crest crew members. Used by `photoServe` (the
-  moderator bypasses), `photoList`, and safety.ts `resolveTarget` (you report what you see, or already reported).
-- `photoHiddenSql`: the one-report day-long hide counts only reporters who pass reportedSql's gate (invited or a member 7
-  days). safety.ts `fileReport`: re-filing updates the note, never `created_at` (it restarted the day forever).
-- Tests: backend/test/photos.test.ts (+2; the gallery test now befriends and shows the car). vitest 395, tsc clean.
-- Next: crew chat written while a crew was private stays readable to people who join after it goes public (PR 2).
 
 ## Session 2026-11-11 (roam-a descent call): "Long descent ahead" near the top (claude/project-thread-h7xxmf, off origin/main)
 

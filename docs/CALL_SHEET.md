@@ -1,8 +1,36 @@
 # Call sheet
 
+> Newer calls are in `docs/notes/` under `# CALL SHEET` (one file per PR). Don't edit this file in a PR.
+
 Decisions Claude made for you, newest first. Each one says what was decided, why, and how to undo it. Read the top until
 you reach one you've seen. If you disagree with a call, say so and it gets reversed; nothing here is hard to undo unless
 it says so. Things only you can do are in docs/OWNER_TODO.md.
+
+## 2026-11-11 (CI load): e2e sits out PRs that can't change the page; one CI slot per branch (claude/project-thread-g9yher)
+
+The 20:16-21:15 UTC stall was GitHub's own incident (githubstatus.com, 20:48 "Impact across multiple GitHub products
+including Actions"): e2e shards passed and then failed uploading their artifact, aggregate jobs never got a runner, and
+runs started by hand ended in "startup failure". It hit harder because every push queued eight Linux jobs, and a run
+started by hand on a PR branch ran beside the PR's own (two concurrency groups). Now core-tests.yml groups by branch
+(the newest run cancels older ones, by hand or not), and a PR that changes only docs, the Worker, Python tests/tools or
+the Swift shells skips the four e2e jobs (the "e2e" check still reports, green). Pushes to main and runs by hand always
+run them. Undo: the `changes` job and the group line in core-tests.yml.
+
+## 2026-11-11 (sweep: cron monitoring): a stopped backup or sweep opens an issue (claude/project-thread-g9yher)
+
+The weekly D1 backup and the daily sweep used to fail with one log line nobody reads, and a run killed for CPU time left
+nothing at all. Each run now records itself in `cron_runs` (migration 0055); `GET /api/health` reports `cron.backup` and
+`cron.sweep` (hours since the last good run, failing, late), and the status workflow has two new core checks that open an
+issue titled "ApexNav: Weekly backup not running" when the backup is over 8 days 6 hours old or its latest run threw (the
+sweep: 2 days 6 hours). A job never recorded passes, so the issue can't open before the first Monday after deploy.
+Undo: drop the two checks in tools/status_check.py; `runCron` can stay.
+## 2026-11-12 (ui-round-three): the website's and the app's promises match today's sharing (claude/project-thread-5sbga7)
+
+Two of the four promises (on the website and in Garage → About Vetta) said there are no time leaderboards and that your
+drives and times stay yours until you share them. Since your calls on 2026-11-11 (sharing with friends and private crews
+on by default; the weekly loop's board) that was no longer true. They now read "No top speeds" and "Shared with your
+people", and the privacy policy gains a paragraph on who sees your Scores and times and how to switch it off. Undo:
+revert the promise lines in web/about.html and web/index.html and the new paragraph in web/privacy.html.
 
 ## 2026-11-12 (ui-round-three): the website's page uses the app's look and shows today's app (claude/project-thread-5sbga7)
 
@@ -290,40 +318,6 @@ time each, at most double, in both the search and the Fun pick. One pass of cres
 verified, count nothing. The weights are a judgment call: crests at 2 against loved 1.5 and banking 0.5 so a crested road
 wins a near-tie and no more; bumps sized so three on a short lane lose it a 1 s tie, while one bump costs only the stretch
 it sits on (a long road isn't written off for one). Undo: `CROWD_W.crest` 0 and `BUMP_X` 0 in web/graph_router.js.
-## 2026-11-11 (security pass, PR 3): the map relays are limited per address (claude/project-thread-4lms1f)
-
-The three relays a phone uses while planning (map features from Overpass, a stage's road attributes from Valhalla, Kentucky
-work zones) need no account, and every miss asks a free public service from our Worker's address. Nothing limited them,
-so anyone could scrape those services through us and get Vetta's server blocked by them. Now each address gets 300 relay
-requests a minute (a plan asks at most 12 map tiles and a few stages, so no driver gets near it), then a 429 for the rest of
-the minute. The relay's mirror check (`?diag=1`, which asks every mirror at once, uncached) is now the owner's alone.
-
-Undo: drop the `RELAY_LIMIT` binding from wrangler.jsonc (nothing is limited without it), or raise its limit.
-## 2026-11-11 (security pass, PR 2): a crew's private-days chat stays with who was there when it goes public (claude/project-thread-4lms1f)
-
-When an owner made a private crew public, its last 30 days of chat stayed readable to anyone who joined afterwards, and
-anyone can join a public crew. Now a crew remembers when it last became public (`crews.public_since`, migration 0056),
-and someone who joins after that reads only what was written from then on: the public days, not the private ones. Members
-from before keep everything. A private crew is unchanged. A pinned message stays on the page if the owner wrote it (the
-owner made the crew public); a member's pinned words from the private days show only to those who were there. Crews that
-are public today start from the moment the migration ran, so their newcomers from here on start there too.
-
-Undo: remove `CHAT_READABLE` from crew_page.ts (the column can stay).
-
-## 2026-11-11 (security pass): photos only to whoever sees what they belong to; a fresh account's report no longer hides one (claude/project-thread-4lms1f)
-
-Any signed-in member could fetch any photo by its id, and list any car's or crew's gallery by its id: a car you hadn't
-shown, a private crew's cover, or a photo someone kept after leaving a crew. Now a photo goes only to whoever sees the
-thing it belongs to: a car's to those who see the car, a build step's to those who see the build, a crew's cover and crest
-to its members. A profile photo still goes to any member, as a handle does. The moderator sees every photo (the queue
-links to them). Anyone else gets the same 404 as a missing photo.
-
-Reports: one report used to take a photo down for everyone for a day, and filing it again restarted the day, so one
-account (even one made a minute ago) could keep any photo down for good. Now the reporter stops seeing it at once, and
-everyone else only when the reporter is one whose reports count toward the three-report hide (invited, or a member for a
-week). Re-filing a report updates its note but no longer its time. Three reports still keep a photo down.
-
-Undo: revert the PR (photos.ts PHOTO_SEEN and photoHiddenSql, safety.ts fileReport).
 
 ## 2026-11-11 (roam-a descent call): the co-driver says a long descent as you near its top (claude/project-thread-h7xxmf)
 
