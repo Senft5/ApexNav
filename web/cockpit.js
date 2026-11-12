@@ -717,6 +717,7 @@
     // (attachScenic) that would overlap on screen hide, the most useful few kept (scenic.js declutter), again as the map
     // moves. Hidden by visibility, so a drive's "only the next fuel stop" (display) stays its own rule.
     const poiDeclutter = { raf: 0, pins: [] };
+    const VIEW_NAME_ZOOM = 15;
     function declutterSoon() {
       if (!poiDeclutter.raf && poiDeclutter.pins.length) poiDeclutter.raf = requestAnimationFrame(declutterPois);
     }
@@ -724,6 +725,8 @@
       poiDeclutter.raf = 0;
       if (!window.ApexScenic || !ApexScenic.declutter) return;
       const shown = poiDeclutter.pins.filter((p) => p.el.style.display !== 'none' && p.el.isConnected), c = map.getContainer();
+      const close = map.getZoom() >= VIEW_NAME_ZOOM;                    // a named viewpoint's name, only where it has room
+      for (const p of shown) if (p.kind === 'view' && p.name) { const t = close ? p.name : SCENIC_LABEL.view; if (p.el.textContent !== t) p.el.textContent = t; }
       const keep = ApexScenic.declutter(shown.map((p) => {
         const xy = map.project(p.marker.getLngLat());
         return { kind: p.kind, named: p.named, m: p.m, x: xy.x, y: xy.y, w: p.el.offsetWidth, h: p.el.offsetHeight };
@@ -2041,6 +2044,10 @@
       const crawl = si.speed != null && si.speed < (/^km/i.test(si.unit) ? 8 : 5);
       d.sightMph = crawl ? null : held.value; d.sightOpen = !crawl && held.open; d.sightQuiet = crawl;
       d.sightShort = !crawl && !!(held.msg && held.msg.short);       // SO-1: the cell is red when the plate is, not sooner
+      // the owner, 2026-11-12 (TestFlight, a replay showing PACE 83 beside Sight 65): "why pace and sight different?". The
+      // corner's pace and the sight line are two limits; the gauge's PACE (and its lamp) is now the one you drive to, the
+      // lower of the two, so it matches the Sight cell whenever the view is what holds you back
+      if (d.paceMph != null && Number.isFinite(d.sightMph) && !d.sightOpen) d.paceMph = Math.min(d.paceMph, d.sightMph);
       d.limitMph = limit != null ? ApexUnits.speed(limit) : null;
       d.latG = latG; d.lonG = lonG; d.camberDeg = camber;
       d.tripMi = ApexUnits.longN(live && (idx < 0 || track.kind === 'horizon') ? (drive.rec ? drive.rec.km * 1000 : 0) : state.cursorM); d.totalMi = track && track.kind !== 'horizon' && !(live && idx < 0) ? ApexUnits.longN(totalM()) : null;
@@ -8562,14 +8569,16 @@
       for (const p of list) {
         const row = ApexScenic.places([p], placeUnits)[0];
         const el = document.createElement('div'); el.className = `poi-pin poi-${p.kind}`;
-        el.textContent = p.kind === 'view' && p.name ? p.name : SCENIC_LABEL[p.kind];
+        // the owner, 2026-11-12 (TestFlight): "bird watching shelter blocks half the route". A viewpoint is a VIEW stamp like
+        // a café or fuel stop; its name is a tap away, and on the stamp only close in (declutterPois, VIEW_NAME_ZOOM)
+        el.textContent = SCENIC_LABEL[p.kind];
         el.title = p.name || SCENIC_LABEL[p.kind];
         // tap a viewpoint, café or fuel stop on the map: its name, and it can be a stop of the day (IDEAS R-17)
         el.addEventListener('click', (e) => { e.stopPropagation(); if (row) offerPlace(t, row); });
         const mk = new maplibregl.Marker({ element: el }).setLngLat([p.lon, p.lat]).addTo(map);
         el.setAttribute('role', 'button'); el.setAttribute('aria-label', row ? ApexScenic.placeLine(row) : SCENIC_LABEL[p.kind]);   // after the Marker's own "Map marker"
         scenicPins.push(mk);
-        poiDeclutter.pins.push({ marker: mk, el, kind: p.kind, named: !!p.name, m: p.m });
+        poiDeclutter.pins.push({ marker: mk, el, kind: p.kind, named: !!p.name, name: p.name || null, m: p.m });
         if (p.kind === 'fuel' && Number.isFinite(p.m)) fuelPins.push({ m: p.m, el, name: p.name || null });
       }
       fuelPins.sort((a, b) => a.m - b.m);
