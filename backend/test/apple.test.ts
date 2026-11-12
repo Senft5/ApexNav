@@ -5,6 +5,7 @@ import { env, exports } from "cloudflare:workers";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { APP_ORIGIN } from "../src/auth";
 import { APPLE_ISS, setAppleKeysForTest } from "../src/apple";
+import { setAppleFetchForTest } from "../src/apple_revoke";
 import { sha256hex } from "../src/util";
 import { ORIGIN, freshDb } from "./helpers";
 
@@ -77,5 +78,70 @@ describe("Sign in with Apple", () => {
     const r = await exports.default.fetch(new Request(`${ORIGIN}/api/auth/apple`, {
       method: "POST", headers: { origin: "https://evil.example", "x-apexnav": "1", "content-type": "application/json" }, body: "{}" }));
     expect(r.status).toBe(403);
+  });
+});
+
+// App Review 5.1.1(v): the one-time code is traded for a refresh token at sign-in, and Delete account revokes it with Apple.
+describe("Sign in with Apple token revocation", () => {
+  afterEach(() => { setAppleFetchForTest(null); for (const k of ["APPLE_TEAM_ID", "APPLE_SIWA_KEY_ID", "APPLE_SIWA_KEY_P8"]) delete (env as unknown as Record<string, unknown>)[k]; });
+
+  async function configure() {
+    const kp = (await crypto.subtle.generateKey({ name: "ECDSA", namedCurve: "P-256" }, true, ["sign", "verify"])) as CryptoKeyPair;
+    const der = new Uint8Array(await crypto.subtle.exportKey("pkcs8", kp.privateKey) as ArrayBuffer);
+    const pem = `-----BEGIN PRIVATE KEY-----\n${btoa(String.fromCharCode(...der)).replace(/(.{64})/g, "$1\n")}\n-----END PRIVATE KEY-----\n`;
+    Object.assign(env as unknown as Record<string, unknown>, { APPLE_TEAM_ID: "TEAM123456", APPLE_SIWA_KEY_ID: "KEY1234567", APPLE_SIWA_KEY_P8: pem });
+    return kp.publicKey;
+  }
+  const calls: { url: string; form: URLSearchParams }[] = [];
+  const apple = (answer: (url: string) => Response) => setAppleFetchForTest((async (input: RequestInfo | URL, init?: RequestInit) => {
+    const url = String(input); calls.push({ url, form: new URLSearchParams(String(init?.body ?? "")) }); return answer(url);
+  }) as typeof fetch);
+
+  it("keeps the refresh token from the code, signs a valid ES256 client secret, and revokes and drops it on Delete account", async () => {
+    calls.length = 0;
+    const pub = await configure();
+    apple((url) => url.endsWith("/auth/token") ? Response.json({ refresh_token: "r.refresh-1" }) : new Response(null, { status: 200 }));
+    const { kp, jwk } = await keyPair("k1");
+    setAppleKeysForTest([jwk]);
+    const r = await post({ id_token: await sign(kp, "k1", await claims()), nonce: NONCE, code: "c0de.one-time-1234" });
+    expect(r.status).toBe(200);
+    const { token } = (await r.json()) as { token: string };
+    const { id } = (await env.DB.prepare("SELECT id FROM users").first<{ id: string }>())!;
+    expect(await env.PHOTOS!.get(`siwa/${id}`)).toBe("r.refresh-1");
+    expect(calls[0].url).toBe("https://appleid.apple.com/auth/token");
+    expect(Object.fromEntries(calls[0].form)).toMatchObject({ client_id: "com.senft.ApexNav", code: "c0de.one-time-1234", grant_type: "authorization_code" });
+    // the client secret: ES256 by the configured key, for this team and app, five minutes
+    const [h, b, s] = calls[0].form.get("client_secret")!.split(".");
+    const dec = (x: string) => JSON.parse(atob(x.replace(/-/g, "+").replace(/_/g, "/")));
+    expect(dec(h)).toEqual({ alg: "ES256", kid: "KEY1234567" });
+    expect(dec(b)).toMatchObject({ iss: "TEAM123456", aud: "https://appleid.apple.com", sub: "com.senft.ApexNav" });
+    expect(dec(b).exp - dec(b).iat).toBe(300);
+    const sig = Uint8Array.from(atob(s.replace(/-/g, "+").replace(/_/g, "/")), (c) => c.charCodeAt(0));
+    expect(await crypto.subtle.verify({ name: "ECDSA", hash: "SHA-256" }, pub, sig, new TextEncoder().encode(`${h}.${b}`))).toBe(true);
+    // Delete account: revoked with Apple, then gone from KV
+    const del = await exports.default.fetch(new Request(`${ORIGIN}/api/me`, { method: "DELETE", headers: { origin: APP_ORIGIN, "x-apexnav": "1", authorization: `Bearer ${token}`, "content-type": "application/json" }, body: JSON.stringify({ confirm: "DELETE" }) }));
+    expect(del.status).toBe(204);
+    expect(calls[1].url).toBe("https://appleid.apple.com/auth/revoke");
+    expect(Object.fromEntries(calls[1].form)).toMatchObject({ client_id: "com.senft.ApexNav", token: "r.refresh-1", token_type_hint: "refresh_token" });
+    expect(await env.PHOTOS!.get(`siwa/${id}`)).toBeNull();
+  });
+
+  it("without the owner's key nothing is traded or kept, and Apple failing never fails sign-in or deletion", async () => {
+    calls.length = 0;
+    apple(() => new Response("down", { status: 500 }));
+    const { kp, jwk } = await keyPair("k1");
+    setAppleKeysForTest([jwk]);
+    expect((await post({ id_token: await sign(kp, "k1", await claims()), nonce: NONCE, code: "c0de.one-time-1234" })).status).toBe(200);
+    expect(calls.length).toBe(0);
+    await configure();
+    const r = await post({ id_token: await sign(kp, "k1", await claims()), nonce: NONCE, code: "c0de.one-time-5678" });
+    expect(r.status).toBe(200);                                       // Apple's token endpoint down: still signed in
+    const { id } = (await env.DB.prepare("SELECT id FROM users").first<{ id: string }>())!;
+    expect(await env.PHOTOS!.get(`siwa/${id}`)).toBeNull();
+    await env.PHOTOS!.put(`siwa/${id}`, "r.kept");
+    const { token } = (await r.json()) as { token: string };
+    const del = await exports.default.fetch(new Request(`${ORIGIN}/api/me`, { method: "DELETE", headers: { origin: APP_ORIGIN, "x-apexnav": "1", authorization: `Bearer ${token}`, "content-type": "application/json" }, body: JSON.stringify({ confirm: "DELETE" }) }));
+    expect(del.status).toBe(204);                                     // Apple's revoke endpoint down: the account is still deleted
+    expect(await env.PHOTOS!.get(`siwa/${id}`)).toBeNull();
   });
 });
