@@ -216,7 +216,7 @@
       const bad = soon[k], why = reasons(bad, now).slice(0, 2);
       return { kind: 'by', slot: last, text: `${last === now ? 'Go now' : `Leave by ${time(last.at)}`}${why.length ? `: ${why.join(', ')} after` : ': it gets worse after'}` };
     }
-    return { kind: 'now', slot: now, text: sc.forecast ? 'No better time to leave in the next day' : 'No better time by the sun and the calendar (no forecast)' };
+    return { kind: 'now', slot: now, text: sc.forecast ? 'No better time to leave in the next day' : 'No better time (no forecast)' };
   }
   /** Each slot's bar height 0.15–1 for the ribbon: the scan's own range, so the best departure is the tallest; closed = 0. */
   function heights(sc) {
