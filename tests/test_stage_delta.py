@@ -102,3 +102,40 @@ def test_wrong_way_or_another_road_never_starts(out):
 def test_labels_and_unknown(out):
     assert out["labels"] == ["+12 vs best", "−8 vs best", "level with best", "--"]
     assert out["noCover"] is None
+
+
+LOOP = r"""
+const R = process.argv[1];
+const Core = require(R + '/web/apex_core.js'), Rec = require(R + '/web/recording.js'), S = require(R + '/web/stage_delta.js');
+const MPH = 2.2369362921, N = 400;
+const lat = [], lon = []; let la = 35.6, lo = -83.9, h = 0;
+for (let i = 0; i < 60 + N + 80; i++) {
+  const k = i - 60, inLoop = k >= 0 && k < N;
+  h += inLoop ? 2 * Math.PI / N + 0.06 * Math.sin(2 * Math.PI * k / 50) : 0;
+  la += 5 * Math.cos(h) / 110540; lo += 5 * Math.sin(h) / (111320 * Math.cos(35.6 * Math.PI / 180));
+  lat.push(la); lon.push(lo);
+}
+const m = (i, j) => Math.hypot((lon[j] - lon[i]) * 111320 * Math.cos(35.6 * Math.PI / 180), (lat[j] - lat[i]) * 110540);
+const a = 62, b = 60 + N - 2;
+const { kappa } = Core.computeCurvature(lat, lon);
+const v = kappa.map((k) => Math.max(9, 22 - 300 * Math.abs(k))), latG = v.map((x, i) => x * x * kappa[i] / 9.80665), lonG = v.map((x, i) => (i ? (x * x - v[i - 1] ** 2) / 10 / 9.80665 : 0));
+const prof = Core.profileRecording({ lat, lon, distance_m: lat.map((_, i) => i * 5), speed_mph: v.map((x) => x * MPH), lon_g: lonG, lat_g: latG });
+const d = { id: 'x', lat, lon, dist: lat.map((_, i) => i * 5), speed_mps: v, lon_g: lonG, lat_g: latG, events: prof.events, g_known: null };
+d.corners = Rec.scorableCorners(d, Rec.cornersOf(d));
+const seg = { id: 's', name: 'Loop', lat0: lat[a], lon0: lon[a], lat1: lat[b], lon1: lon[b], length_m: (b - a) * 5,
+  geom: JSON.stringify(Array.from({ length: 60 }, (_, k) => { const i = a + Math.round(k * (b - a) / 59); return [lat[i], lon[i]]; })) };
+const ref = S.reference(Core, seg, d, d.corners);
+const rows = lat.map((_, i) => ({ lat: lat[i], lon: lon[i], speed_mps: v[i], lat_g: latG[i], lon_g: lonG[i] }));
+const tr = S.createTracker(Core, [ref]), got = [];
+for (let i = 0; i < rows.length; i += 4) { const r = tr.update(rows.slice(0, i + 1)); if (r && r.state === 'done') got.push({ i, ...r }); }
+console.log(JSON.stringify({ close: Math.round(m(a, b)), corners: ref && ref.corners.length, dones: got }));
+"""
+
+
+def test_a_loop_ends_where_it_starts_only_once_round():
+    """A time attack loop is a Log stage whose end is its start: the pass must not end (and toast "done") as it begins,
+    only when it comes back round, with every corner scored."""
+    r = json.loads(subprocess.run([NODE, "-e", LOOP, ROOT], capture_output=True, text=True, check=True).stdout)
+    assert r["close"] <= 25 and r["corners"] >= 10            # the end is within reach of the start
+    assert len(r["dones"]) == 1
+    assert r["dones"][0]["done"] == r["corners"] and r["dones"][0]["i"] > 400
