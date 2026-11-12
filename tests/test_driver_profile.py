@@ -273,8 +273,8 @@ def test_the_words():
               "car:P.findingLine({skill:'exit',split:'car',a:'Truck',b:'rest',mean_a:50,mean_b:99,drives:10,agree:null,also:[]}),"
               "style:[P.styleLines({trail_share:0.72,slow_m:-8.2,use:0.58},true),P.styleLines({trail_share:0.1,slow_m:1,use:1.02},false),P.styleLines({trail_share:null,slow_m:null,use:null})]}));")
     out = json.loads(subprocess.run([NODE, "-e", runner, os.getcwd()], input=json.dumps([ds, few]), capture_output=True, text=True, check=True).stdout)
-    assert out["card"].startswith("Strongest: ") and "Work on: One steering arc" in out["card"]
-    assert out["few"] == "9 of 30 clean corners measured. The picture of your driving starts at 30." and out["none"] is None
+    assert out["card"].startswith("Best: ") and "Work on: One steering arc" in out["card"]
+    assert out["few"] == "9 of 30 clean corners to your first picture" and out["none"] is None
     assert out["focus"]["head"] == "Work on: One steering arc" and out["focus"]["where"] == "It shows most through rights."
     assert out["nofocus"] is None
     assert out["find"][0].startswith("One steering arc is weaker through rights: ") and out["find"][0].endswith("through lefts, on 5 of 5 drives.")
