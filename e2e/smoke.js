@@ -5413,6 +5413,43 @@ flow('People: two tabs; a request is a card on top, then you, then friends with 
   check(await page.evaluate(() => document.querySelector('#crewTab .badge')?.textContent) === '3', 'a crew link waiting is on the badge too');
 });
 
+flow('People: Return on the keyboard sends a friend request and creates a crew, once each (walkthrough 2026-11-12)', async (page, base) => {
+  await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); } catch (_) {} });
+  const posted = [];
+  await page.route(base + '/api/**', async (route) => {
+    const u = new URL(route.request().url()), m = route.request().method(), json = (b) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(b) });
+    if (u.pathname === '/api/me') return json({ signed_in: true, member: true, handle: 'me' });
+    if (u.pathname === '/api/points') return json({ total: 0 });
+    if (m === 'POST' && (u.pathname === '/api/friends/request' || u.pathname === '/api/crews')) {
+      posted.push([u.pathname, route.request().postData()]);
+      await new Promise((ok) => setTimeout(ok, 400));   // slow enough for a second Return to land while it saves
+      return json({ ok: true, id: 'K1' });
+    }
+    return json([]);
+  });
+  await page.goto(base + '/index.html?view=people');
+  await page.click('#accountBody button:has-text("Invite or add a friend")');
+  const hand = '.side-pop.open input[aria-label="Friend handle"]';
+  await page.waitForSelector(hand);
+  check(await page.getAttribute(hand, 'enterkeyhint') === 'send', 'the handle field\'s keyboard key says Send');
+  await page.fill(hand, '@Sam');
+  await page.press(hand, 'Enter'); await page.press(hand, 'Enter');
+  await page.waitForFunction(() => /Request sent\. @sam/.test(document.getElementById('toast').textContent), null, { timeout: 5000 }).catch(() => {});
+  const reqs = posted.filter(([p]) => p === '/api/friends/request');
+  check(reqs.length === 1 && JSON.parse(reqs[0][1]).handle === 'sam', 'Return sends one request for @sam: ' + JSON.stringify(posted));
+  await page.keyboard.press('Escape').catch(() => {});
+  await page.goto(base + '/index.html?view=people');
+  await page.click('[data-people="crews"]');
+  await page.click('#crewsBody .nav-row:has-text("Find or start a crew")');
+  const cname = '.side-pop.open input[aria-label="Crew name"]';
+  await page.waitForSelector(cname);
+  await page.fill(cname, 'Ridge Runners');
+  await page.press(cname, 'Enter'); await page.press(cname, 'Enter');
+  await page.waitForTimeout(900);
+  const made = posted.filter(([p]) => p === '/api/crews');
+  check(made.length === 1 && JSON.parse(made[0][1]).name === 'Ridge Runners', 'Return creates the crew, once: ' + JSON.stringify(made));
+});
+
 flow('People, a new account: Friends is one sentence and the Invite key; Crews is one "Find or start a crew" row (REVIEW_PEOPLE P-08)', async (page, base) => {
   await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); } catch (_) {} });
   const put = [];
