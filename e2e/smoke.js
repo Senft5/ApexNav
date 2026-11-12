@@ -2930,6 +2930,9 @@ flow('crew page: an old ?view=crew link opens People on Crews, at your crew; goi
   const rows = await boardRows();
   check(JSON.stringify(rows) === JSON.stringify([['@sam', (1622).toLocaleString(), true], ['@me', '--', true]]) && boardAsks[0] === 'month', 'the board: a face and this month\'s total, then -- for none: ' + JSON.stringify(rows));
   check(JSON.stringify(await page.$$eval('.cp-periods button', (b) => b.map((x) => x.textContent + ':' + x.getAttribute('aria-checked')))) === '["Week:false","Month:true","Year:false","All time:false"]', 'Week / Month / Year / All time, Month picked');
+  // one line under the name, drives then car, cut short rather than wrapped (walkthrough 2026-11-12)
+  const sub = await page.$eval('.cp-board .cp-board-row .cp-sub', (x) => ({ t: x.textContent, one: getComputedStyle(x).whiteSpace === 'nowrap' && getComputedStyle(x).textOverflow === 'ellipsis' }));
+  check(sub.t === '2 drives · Mazda MX-5' && sub.one && !(await page.$('.cp-board .cp-board-row:nth-child(2) .cp-sub')), 'one line under a name: drives · car, none for -- : ' + JSON.stringify(sub));
   await page.click('.cp-periods button:text-is("All time")');
   await page.waitForFunction(() => /12/.test((document.querySelector('.cp-board .score') || {}).textContent || ''));
   check(JSON.stringify((await boardRows()).map((r) => r[1])) === JSON.stringify([(12840).toLocaleString(), (702).toLocaleString()]) && boardAsks.includes('all'), 'All time asks for all time');
@@ -2950,7 +2953,8 @@ flow('crew page: an old ?view=crew link opens People on Crews, at your crew; goi
     const body = [...document.querySelectorAll('.crew-page .cp-body > *')].map((x) => x.classList.contains('cp-title') ? 'title' : x.classList.contains('cp-livery-foot') ? 'livery' : x.querySelector('.cp-tabs') ? 'tabs' : x.className);
     return { body, panes: Object.fromEntries([...document.querySelectorAll('.cp-pane')].map((p) => [p.id, [...p.children].map(name).filter(Boolean)])) }; });
   check(JSON.stringify(order.body) === '["title","tabs","livery"]' && JSON.stringify(order.panes['cpPane-drives'].slice(0, 2)) === '["run","Members"]'
-    && order.panes['cpPane-chat'][0] === 'Chat' && order.panes['cpPane-board'][0] === 'Vetta Score board', 'the page in order: ' + JSON.stringify(order));
+    && order.panes['cpPane-chat'].length === 1 && order.panes['cpPane-board'][0] === 'Vetta Score board', 'the page in order: ' + JSON.stringify(order));
+  check(await page.evaluate(() => ![...document.querySelectorAll('#cpPane-chat h3')].some((h) => h.textContent === 'Chat')), 'the Chat tab names the chat: no second "Chat" heading under it');
   check(!(await page.$$('.crew-page .cp-livery, .crew-page .cp-meter')).length, 'no livery box or meter on the page (they are in Edit livery)');
   check(!/Convoy/.test(await page.$$eval('#crewsBody h3', (h) => h.map((x) => x.textContent).join('|'))), 'no Convoy heading on Crews');
   // P-06: the members as faces, the owner marked, the one on the road lit
@@ -3747,7 +3751,8 @@ flow('convoy: a friend joins with the code the leader read out (Worker stubbed, 
     if (u.pathname === '/api/me') return json({ signed_in: true, member: true, handle: 'me' });
     if (u.pathname === '/api/convoy/code/join' && m === 'POST') {
       const b = JSON.parse(route.request().postData()); sent.push(b);
-      return b.code.replace(/[\s-]/g, '').toUpperCase() === 'K7P4QX' && b.consent === true ? json(ctx) : json({ error: 'invalid_invite' }, 400);
+      const ok = b.code.replace(/[\s-]/g, '').toUpperCase() === 'K7P4QX' && b.consent === true;
+      return ok ? new Promise((r) => setTimeout(r, 300)).then(() => json(ctx)) : json({ error: 'invalid_invite' }, 400);   // slow enough for a second Return
     }
     if (u.pathname === `/api/convoy/${id}/ticket`) return json({ ticket: 't'.repeat(32), expiresAtMs: Date.now() + 60000 }, 201);
     if (u.pathname === `/api/convoy/${id}`) return json(ctx);
@@ -3764,8 +3769,11 @@ flow('convoy: a friend joins with the code the leader read out (Worker stubbed, 
   await page.click('.convoy-sheet button:has-text("Join with code")');
   await page.waitForFunction(() => /didn.t work/.test(document.getElementById('toast').textContent), null, { timeout: 5000 });
   await page.fill('.convoy-sheet input[aria-label="Convoy join code"]', 'k7p 4qx');
-  await page.click('.convoy-sheet button:has-text("Join with code")');
+  // Return on the keyboard joins, and a second Return while it works spends no second try (walkthrough 2026-11-12)
+  await page.focus('.convoy-sheet input[aria-label="Convoy join code"]');
+  await page.keyboard.press('Enter'); await page.keyboard.press('Enter');
   await page.waitForFunction(() => /you are following/.test(document.querySelector('.convoy-sheet').textContent), null, { timeout: 5000 });
+  check(sent.length === 2, 'Return joins with the code, once: ' + sent.length + ' tries sent');
   check(sent.length === 2 && sent.every((b) => b.consent === true), 'joined with consent: ' + JSON.stringify(sent));
 });
 
@@ -4905,6 +4913,8 @@ flow('a drive\'s corners on a road driven four times: each says your cleanest pa
   const vs = await page.evaluate(() => [...document.querySelectorAll('#dvRoadTable tr')].slice(1, -1).map((tr) => tr.lastElementChild.textContent));
   check(vs.length === 4 && vs.filter((t) => t === 'this drive').length === 1
     && vs.filter((t) => t !== 'this drive').every((t) => /^(\d+\.\d s (slower|quicker)|level) on \d+ corners?$/.test(t)), 'the road\'s other drives against this one: ' + JSON.stringify(vs));
+  const roadFoot = await page.evaluate(() => [...document.querySelectorAll('#dvRoadTable tr')].pop().textContent);
+  check(/^Latest \d{1,4} · best \d{1,4} · 4 scored drives here$/.test(roadFoot), 'the road table says latest and best, not a two-drive trend: ' + roadFoot);
   // where this pass was well off your cleanest at a least even corner, the note says what it lost most (the second pass held the arc)
   check(road.rows.some((r) => r.why === 'arc') && notes.some((n) => /, mostly one steering arc$/.test(n.t)), 'what this pass lost: ' + JSON.stringify(road.rows.filter((r) => r.why)).slice(0, 300));
   const touchText = await page.evaluate(() => document.body.innerText);

@@ -402,10 +402,13 @@
       }
     }
     // Join with a code read out by the leader (IDEAS S-22): Convoys → the code → Join. Joining shares your position.
+    // Return on the phone keyboard does what the key beside the field does, once (walkthrough 2026-11-12: Return did
+    // nothing, and a second tap while it worked spent another of the code's few tries or started a second convoy)
+    function onReturn(input, go) { input.addEventListener('keydown', (e) => { if (e.key === 'Enter' && !e.isComposing) { e.preventDefault(); go(); } }); }
+    const once = (fn) => { let busy = false; return async (...a) => { if (busy) return; busy = true; try { return await fn(...a); } finally { busy = false; } }; };
     function codeRow() {
-      const input = labelled(el('input', { className: 'field', placeholder: 'Join code', maxLength: 9, autocomplete: 'off', autocapitalize: 'characters', spellcheck: false }), 'Convoy join code');
-      return [el('p', { className: 'note', textContent: 'Got a join code from the leader? Joining shares your position with the convoy.' }),
-        el('div', { className: 'row' }, input, btn('Join with code', async () => {
+      const input = labelled(el('input', { className: 'field', placeholder: 'Join code', maxLength: 9, autocomplete: 'off', autocapitalize: 'characters', spellcheck: false, enterKeyHint: 'go' }), 'Convoy join code');
+      const join = once(async () => {
           const v = input.value.trim();
           if (!v) { toast('Type the code the leader gave you.'); input.focus(); return; }
           const r = await client.joinCode(v);
@@ -413,7 +416,10 @@
           toast(r.status === 429 ? 'Too many tries. Wait ten minutes, or ask for the link.' : r.status === 409 ? 'That convoy is full.'
             : r.status === 403 ? 'That code is no longer yours to use. Ask the leader for the link.'
             : r.status === 0 || r.status >= 500 ? 'No connection. Try again in a moment.' : 'That code didn\'t work. Check it with the leader.');
-        }, 'ink-btn'))];
+        });
+      onReturn(input, join);
+      return [el('p', { className: 'note', textContent: 'Got a join code from the leader? Joining shares your position with the convoy.' }),
+        el('div', { className: 'row' }, input, btn('Join with code', join, 'ink-btn'))];
     }
     const preview = { invite: null, status: null, ok: false, body: null, at: 0 };
     async function loadPreview(invite) {
@@ -461,11 +467,13 @@
           }, 'ink-btn solid'), btn('Not now', () => { store.set('sessionStorage', INVITE_KEY, ''); preview.invite = null; lastKey = null; paint(); }, 'linkbtn')));
         } else if (!asked.list.length) {
           // Convoy now (P-11): drive together now, no crew needed; a crew's convoy starts from its drive's card
-          const name = labelled(el('input', { className: 'field', placeholder: 'Convoy name', maxLength: 40, autocomplete: 'off', value: h.name || '' }), 'Convoy name');
+          const name = labelled(el('input', { className: 'field', placeholder: 'Convoy name', maxLength: 40, autocomplete: 'off', value: h.name || '', enterKeyHint: 'go' }), 'Convoy name');
+          const start = once(() => now(name.value.trim()));
+          onReturn(name, start);
           kids.push(el('p', { className: 'note', textContent: 'Drive together, live, for two hours; the leader can keep it going, up to six. Friends join with the code or the link; a crew’s run starts its convoy from the drive’s card.' }),
             el('details', { className: 'how' }, el('summary', { textContent: 'How this works' }),
               el('p', { className: 'note', textContent: 'Everyone in the convoy sees where everyone is, the leader can call hazards and a regroup point, and the co-driver warns you before you get there. Nothing is kept: it ends when the leader leaves or after two hours.' })),
-            el('div', { className: 'row' }, name, btn('Start a convoy', () => now(name.value.trim()), 'ink-btn solid')));
+            el('div', { className: 'row' }, name, btn('Start a convoy', start, 'ink-btn solid')));
         }
         if (!pending) kids.push(...codeRow());
         box.replaceChildren(...kids);

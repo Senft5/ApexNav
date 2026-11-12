@@ -1,12 +1,16 @@
 // Weekly time attack (src/time_attack.ts, migrations 0049, 0051, 0054): the first phone in an area builds the week's loop from
 // the seed, entering copies it, the quickest time this week goes on a board every member sees, blocks hide, a report takes it down.
 import { env } from "cloudflare:workers";
-import { beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { api, freshDb, makeSegment, makeUser, ok, type TestUser } from "./helpers";
 import { cellOf, checkLoop, seedOf } from "../src/time_attack";
 
 type Msg = Record<string, any>;
 beforeEach(freshDb);
+// no graph tiles here (src/loop_check.ts, test/loop_check.test.ts): the loops these tests post go unchecked
+const realFetch = globalThis.fetch;
+beforeEach(() => { globalThis.fetch = (async () => new Response(null, { status: 404 })) as unknown as typeof fetch; });
+afterEach(() => { globalThis.fetch = realFetch; });
 const json = async (r: Promise<Response>) => (await (await ok(r)).json()) as Msg;
 const HERE = "lat=39.25&lon=-84.6", CELL = "39.25,-84.75";             // makeSegment starts at 39.25, -84.6
 const ta = (u: TestUser) => json(api(u, "GET", `/api/timeattack?${HERE}`));
