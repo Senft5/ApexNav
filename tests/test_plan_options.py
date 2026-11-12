@@ -77,7 +77,7 @@ def test_what_is_on_shows_as_chips(out):
     assert out["none"] == [] and out["chip"][0] == "Options"
     assert [x["text"] for x in out["lots"]] == ["✕ Highways", "✕ Cameras", "✓ Measured roads", "✓ Passenger aboard", "✓ Tunnels",
                                                 "More hairpins", "Fewer fast bends"]
-    assert out["chip"][1] == "Options · 7"
+    assert out["chip"][1] == "Options · 7 on"
     assert all(x["aria"] and x["key"] for x in out["lots"])
 
 
