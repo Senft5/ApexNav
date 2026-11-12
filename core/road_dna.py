@@ -31,7 +31,7 @@ SPLIT_MIN_TURN_RAD = math.radians(45.0)   # ...when both halves are real turns, 
 SPLIT_CORE_EDGE = 0.7        # cut the tight core where curvature falls to 70 % of its peak
 HAIRPIN_CORE_SHARE = 0.64    # a hairpin does >= 64 % of its turning in its tight core; a junction
                              # square that runs on into the next road's bend does far less
-MIN_RADIUS_M = 8.0           # tighter than any car can turn: GPS jitter, not road
+MIN_RADIUS_M = 8.0           # tighter than any car can turn: GPS jitter, not road (but a hairpin-sized turn is kept, at 8 m)
 LONG_TURN_RAD = math.radians(100.0)
 LONG_ARC_M = 90.0            # a corner this long is called "long" whatever its turn
 SHORT_ARC_M = 20.0           # ...and this brief is "short"
@@ -424,7 +424,13 @@ def detect_corners(kappa, ds, camber_rad=None, crest_g=None, roughness_rms_g=Non
         lo, hi = max(start, apex - 2), min(end, apex + 2)
         radius = 1.0 / max(float(np.mean(np.abs(k[lo:hi + 1]))), 1e-6)
         if radius < MIN_RADIUS_M:
-            continue
+            # Under MIN_RADIUS_M is GPS jitter, unless it is a hairpin drawn with a few vertices metres apart (a map
+            # line: Stelvio's east ramp reads 5-6 m, 34 of them, IDEAS R-32): a hairpin-sized turn whose whole arc is
+            # as long as an 8 m radius needs. Jitter at a stop turns as far in a few metres (Dry Ridge: 370 deg in 17 m).
+            # Kept as a hairpin at MIN_RADIUS_M (its speed, its compactness), never dropped.
+            if abs(turn) < HAIRPIN_TURN_RAD or float(np.sum(ds[seg])) < MIN_RADIUS_M * abs(turn):
+                continue
+            radius = MIN_RADIUS_M
         # Compactness on the arc's core (|kappa| >= half the apex), not the smoothed tails.
         core = np.abs(k[seg]) >= 0.5 * abs(float(k[apex]))
         core_arc = float(np.sum(ds[seg][core]))

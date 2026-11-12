@@ -369,8 +369,17 @@
       const lo = Math.max(start, apex - 2), hi = Math.min(end, apex + 2);
       let kSum = 0;
       for (let q = lo; q <= hi; q++) kSum += Math.abs(kappa[q]);
-      const radius = 1 / Math.max(kSum / (hi - lo + 1), 1e-6);
-      if (radius < MIN_RADIUS_M) continue;
+      let radius = 1 / Math.max(kSum / (hi - lo + 1), 1e-6);
+      // Under MIN_RADIUS_M is GPS jitter, unless it is a hairpin drawn with a few vertices metres apart (a map line:
+      // Stelvio's east ramp reads 5-6 m, 34 of them, IDEAS R-32): a hairpin-sized turn whose whole arc is as long as an
+      // 8 m radius needs. Jitter at a stop turns as far in a few metres (Dry Ridge: 370 deg in 17 m). Kept as a hairpin
+      // at MIN_RADIUS_M (its speed, its compactness), never dropped (core/road_dna.py, the same).
+      if (radius < MIN_RADIUS_M) {
+        let arcAll = 0;
+        for (let q = start; q <= end; q++) arcAll += ds[q];
+        if (Math.abs(turn) < HAIRPIN_TURN_RAD || arcAll < MIN_RADIUS_M * Math.abs(turn)) continue;
+        radius = MIN_RADIUS_M;
+      }
       // Compactness on the arc's core (|kappa| >= half the apex), not the smoothed tails.
       let coreArc = 0;
       for (let q = start; q <= end; q++) if (Math.abs(kappa[q]) >= 0.5 * Math.abs(kappa[apex])) coreArc += ds[q];

@@ -75,8 +75,15 @@ export async function exportMyData(env: Env, v: Viewer) {
     highlight_ratings: await q("SELECT highlight_id, stars, visited, created_at FROM highlight_ratings WHERE user_id = ?"),
     points_by_week: await q("SELECT iso_week, octane FROM points_ledger WHERE user_id = ?"),
     road_data_by_month: await q("SELECT month, km, pioneer_km FROM member_months WHERE user_id = ?"),
+    // road data still tied to you: drives waiting to merge (at most 14 days, contribute.ts), the hourly upload counts that cap
+    // uploads, and the first-two-drivers places you hold on a road until they freeze; all deleted with the account
+    road_data_waiting: await q("SELECT way_id, dir, driven_on, km, received_at FROM ingest_pending WHERE user_id = ?"),
+    road_data_uploads_by_hour: await q("SELECT bucket, uploads, km FROM upload_counts WHERE user_id = ?"),
+    road_first_drives_held: await q("SELECT way_id, dir, slot, driven_on FROM rank_slots WHERE user_id = ?"),
+    stage_shares: await q(`SELECT s.name AS segment, x.audience_type, COALESCE(u.handle, c.name) AS audience FROM segment_shares x JOIN segments s ON s.id = x.segment_id
+                       LEFT JOIN users u ON x.audience_type = 'friend' AND u.id = x.audience_id LEFT JOIN crews c ON x.audience_type = 'crew' AND c.id = x.audience_id WHERE s.owner = ?`),
     octane_redemptions: await q("SELECT item, octane, created_at FROM redemptions WHERE user_id = ?"),
-    note: "Merged road data (banking, roughness, crests per 5 m bin) is anonymous and cannot be traced to you, so it is not part of this export and is not deleted with your account.",
+    note: "Merged road data (banking, roughness, crests per 5 m bin) is anonymous once merged (what still waits to merge is in road_data_waiting) and cannot be traced to you, so it is not part of this export and is not deleted with your account.",
   };
 }
 
