@@ -12,7 +12,7 @@
 // The weekly endpoints (time_attack.ts) stay for builds that still ask for them.
 import type { Viewer } from "./auth";
 import { Env, HttpError, body, int, str, DATE_RE } from "./util";
-import { reportedSql } from "./reports_sql";
+import { establishedSql, reportedSql } from "./reports_sql";
 import { BOARD_SIZE, LOOP_KM, MAX_AVG_MS, NO_BLOCK, cellBody, cellParam, checkLoop, hav, nameOf } from "./time_attack";
 
 export const SLOTS = 3;
@@ -59,6 +59,8 @@ async function season(env: Env, cell: string): Promise<Now> {
   return { ...s, shown, make };
 }
 
+const established = async (env: Env, v: Viewer) => !!(await first(env, `SELECT 1 WHERE ${establishedSql("?1")}`, v.id));
+
 const periodOf = (u: URL): Period => { const p = u.searchParams.get("period") || "week"; if (!(PERIODS as readonly string[]).includes(p)) throw new HttpError(400, "bad_period"); return p as Period; };
 
 /** A circuit's board for a period: each entrant's quickest time in it, quickest first (ties share a place). */
@@ -83,6 +85,8 @@ async function board(env: Env, v: Viewer, id: string, period: Period) {
 export async function fixedArea(env: Env, v: Viewer, url: URL) {
   const cell = cellParam(url), period = periodOf(url);
   const now = await season(env, cell);
+  // only an established member's phone is asked to build a missing loop (fixedMake): a new account can't set the area's season
+  if (now.make && !(await established(env, v))) now.make = null;
   const feat = featuredOf(now.shown, now.season, now.week);
   const entered = new Set((await all<{ circuit_id: string }>(env,
     `SELECT circuit_id FROM ta_entered WHERE user_id = ? AND circuit_id IN (${now.shown.map(() => "?").join(",") || "''"})`, v.id, ...now.shown.map((r) => r.id))).map((r) => r.circuit_id));
@@ -103,6 +107,9 @@ export async function fixedMake(env: Env, v: Viewer, req: Request) {
   const b = await body<{ cell?: unknown; slot?: unknown; seed?: unknown; name?: unknown; geom?: unknown }>(req);
   const cell = cellBody(b.cell), slot = int(b.slot, "slot", 0, SLOTS - 1);
   const now = await season(env, cell);
+  // The server can't route, so it can't tell a loop built from the seed from one drawn by hand through a neighbourhood: a loop
+  // stays a whole season, so only a member who was invited or has been one a week may set it (as for reports that count).
+  if (!now.shown.some((r) => r.slot === slot) && !(await established(env, v))) throw new HttpError(403, "not_yet");
   const had = now.shown.find((r) => r.slot === slot);
   if (had) return { circuit: { id: had.id, slot, name: had.name, length_m: had.length_m, geom: had.geom }, kept: false };
   if (!now.make || now.make.slot !== slot || b.seed !== now.make.seed) throw new HttpError(409, "stale_seed");

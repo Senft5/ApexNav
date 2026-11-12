@@ -2308,6 +2308,11 @@ flow('CarPlay feed: a planned route sends its line, every corner and the theme; 
   await page.waitForFunction(() => window.apex && typeof window.apex.onNative === 'function');
   const kinds = () => page.evaluate(() => window.__car.map((m) => m.kind));
   check((await kinds()).includes('look'), 'the theme goes to the car at start');
+  // a request from the car that the phone can't do says why on the car, the reason only (never "tap the map")
+  await page.evaluate(() => window.apex.onNative({ type: 'carplay', action: 'report', kind: 'pothole' }));
+  await page.waitForFunction(() => window.__car.some((m) => m.kind === 'notice'), null, { timeout: 5000 });
+  const notice = await page.evaluate(() => window.__car.filter((m) => m.kind === 'notice'));
+  check(notice.length === 1 && notice[0].titles.join('|') === 'No GPS fix yet.', 'a report from the car with no fix says so on the car: ' + JSON.stringify(notice));
   await page.evaluate(() => window.apex.live({ lat: 35.6, lon: -84.1, accuracy_m: 5, speed_mps: 0, course_deg: 0, has_fix: true }));   // the shell's fix, as in the app
   // the cafés and fuel along it, by name on the car's route preview (the owner, 2026-11-11)
   await page.evaluate(() => { ApexStages.pois = async (pts) => { const a = pts[Math.min(1, pts.length - 1)];
@@ -2911,6 +2916,7 @@ flow('crew page: an old ?view=crew link opens People on Crews, at your crew; goi
   check(await page.evaluate(() => document.querySelector('[data-people="crews"]').getAttribute('aria-selected') === 'true' && !document.getElementById('crewsBody').hidden
     && document.getElementById('accountBody').hidden && document.getElementById('sheetTitle').textContent === 'People'), 'on the People tab, its Crews side');
   check(await page.evaluate(() => !!document.querySelector('#crewsBody .crew-head .gear-key') && !document.querySelector('#crewsBody .friend-list')), 'the crew head and its gear are on the Crews side, no friends list there');
+  check(await page.evaluate(() => document.querySelector('#crewsBody .crew-head').textContent.trim() === '' && document.querySelectorAll('#crewsBody .crew-page h2').length === 1), 'one crew: its name once, on its page, not again above it');
   // Nate 2026-11-12 (as easy as a big social app): three tabs under the crew's name, Drives open first
   check(JSON.stringify(await page.$$eval('.cp-tabs [role="tab"]', (b) => b.map((x) => x.textContent + ':' + x.getAttribute('aria-selected')))) === '["Drives:true","Chat:false","Board:false"]', 'Drives | Chat | Board, Drives open');
   check(await page.isHidden('.cp-board') && await page.isHidden('.cp-say'), 'the board and the chat wait behind their tabs');
@@ -4365,9 +4371,10 @@ flow('no signal: a hazard report waits on the phone and goes when the connection
   check(await page.evaluate(() => localStorage.getItem('apex.outbox')) === null, 'and gone from the phone');
 });
 
-flow('a saved stage: the live delta shows while you drive it and the result at the end (native frames, IDEAS D-05)', async (page, base) => {
+flow('a saved stage: the live delta shows while you drive it and the result at the end, said by the co-driver (native frames, IDEAS D-05)', async (page, base) => {
   await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); localStorage.setItem('apex.permsExplained', '1'); } catch (_) {}
-    window.webkit = { messageHandlers: { apex: { postMessage: () => {} } } }; });
+    window.__said = []; window.APEX_REVIEW = true;
+    window.webkit = { messageHandlers: { apex: { postMessage(m) { if (m && m.cmd === 'said') window.__said.push(m.text); } } } }; });
   await page.route('**/api/**', (route) => route.fulfill({ status: 200, contentType: 'application/json', body: '[]' }));
   await page.goto(base + '/index.html');
   await page.waitForFunction(() => window.apex && window.ApexStageDelta && window.ApexRecording);
@@ -4409,6 +4416,20 @@ flow('a saved stage: the live delta shows while you drive it and the result at t
   // REVIEW4 U-102: said in the drive's status line (its whole text in the live region), not as a toast over the map
   await page.waitForFunction(() => /Esses: (level with|\d+ points (up|down) on) your best/.test(document.getElementById('dsNote').getAttribute('aria-label') || ''), null, { timeout: 4000 });
   check(!(await page.isVisible('#stageBar')), 'the bar goes when the stage ends');
+  // and the co-driver says it once, in a quiet moment (the flow lines' slot), while you drive on down the straight after it
+  for (let burst = 0; burst < 6 && !(await page.evaluate(() => window.__said.some((t) => /^Esses/.test(t)))); burst++) {
+    await page.evaluate((burst) => {
+      const r = window.__road, n = r.lat.length, dLa = r.lat[n - 1] - r.lat[n - 2], dLo = r.lon[n - 1] - r.lon[n - 2];
+      for (let j = 1; j <= 40; j++) { const k = burst * 40 + j;
+        window.apex.live({ lat: r.lat[n - 1] + dLa * k / 2, lon: r.lon[n - 1] + dLo * k / 2, accuracy_m: 4, speed_mps: 20, course_deg: 0,
+          lat_g: 0, lon_g: 0, has_fix: true, calibration: 'locked' }); }
+    }, burst);
+    await page.waitForTimeout(1000);
+  }
+  await page.waitForFunction(() => window.__said.some((t) => /Esses: (level with|\d+ points (up|down) on) your best/.test(t)), null, { timeout: 8000 })
+    .catch(() => {});
+  const said = await page.evaluate(() => window.__said.filter((t) => /^Esses/.test(t)));
+  check(said.length === 1, `the result is said once (${JSON.stringify(said)})`);
 });
 
 flow("friends' activity: the Log lists who drove your stages lately and where you stand, as text; kudos (Worker stubbed, IDEAS S-03, S-07)", async (page, base) => {
@@ -4607,7 +4628,8 @@ flow('crew drives: an upcoming drive shows on People, Crews, as the crew page’
   check(!posted.some(([p]) => /\/home$/.test(p)), 'nothing about your own home was sent');
   await page.fill(`${W} input[aria-label="Meet at"]`, 'Tellico');
   await page.click(`${W} .meet-hits button:has-text("Tellico Plains Shell")`);
-  check(/Meeting point: Tellico Plains Shell/.test(await page.textContent(`${W} .plan-drive`)), 'the meeting point by search');
+  check(await page.inputValue(`${W} input[aria-label="Meet at"]`) === 'Tellico Plains Shell' && !/Meeting point|\d+\.\d{4}, -?\d+\.\d{4}|Roles and regroup/.test(await page.textContent(`${W} .plan-drive`)),
+    'the meeting point by search, said once in its field; no coordinates and no how-to line: ' + await page.textContent(`${W} .plan-drive`));
   const formH = await page.$eval(`${W} .plan-drive`, (f) => f.getBoundingClientRect().height);
   check(formH < 852, `the form fits one phone screen (${Math.round(formH)} px)`);
   await page.click(`${W} [aria-label="Repeats"] button:has-text("Weekly")`);
@@ -5302,6 +5324,9 @@ flow('People: two tabs; a request is a card on top, then you, then friends with 
   check(await page.evaluate(() => { const t = document.querySelector('.people-tabs'); return t.getAttribute('role') === 'tablist' && t.querySelectorAll('[role="tab"]').length === 2 && !document.querySelector('#sheetHead .switch')
     && getComputedStyle(document.querySelector('[data-people="friends"]'), '::after').transform === 'none'; }), 'Friends | Crews are ARIA tabs, the open one underlined');
   check(await page.evaluate(() => document.querySelector('#crewTab').getAttribute('aria-label') === 'People' && document.querySelector('#crewTab span').textContent === 'People'), 'the tab is People');
+  // every row on People opens a page, so every chevron points the same way (a friend's pointed down, as if it unfolded)
+  const chevs = await page.evaluate(() => [...document.querySelectorAll('#accountBody .friend-head .chev')].map((c) => getComputedStyle(c).transform));
+  check(chevs.length >= 2 && new Set(chevs).size === 1, 'you and each friend: one chevron, pointing right: ' + JSON.stringify(chevs));
   // P-34: the badge counts the friend request and the convoy invite
   check(await page.evaluate(() => { const b = document.querySelector('#crewTab .badge'); return b && b.textContent === '2' && /1 friend request, 1 convoy invite/.test(b.getAttribute('aria-label')); }), 'the badge counts what waits: ' + await page.evaluate(() => document.querySelector('#crewTab .badge')?.getAttribute('aria-label')));
   // P-05: the request is a card on top; P-23: you next; then the friends, live first, a friend who shares nothing under their name (P-15)
