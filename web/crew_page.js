@@ -250,6 +250,11 @@
     .cp-tabs > button::after { content: ""; position: absolute; left: 0; right: 0; bottom: -1px; height: 3px; background: var(--panel-ink); transform: scaleX(0); transition: transform 0.18s ease-out; }
     .cp-tabs > button[aria-selected="true"]::after { transform: none; }
     .cp-pane[hidden] { display: none; }
+    /* one crew: its head holds only the gear, so the gear sits on the cover's top-left corner (the owner's Edit livery has the
+       right) instead of a band of its own (walkthrough 2026-11-12) */
+    .crew-head.solo { position: relative; z-index: 2; height: 0; align-items: flex-start; justify-content: flex-start; margin-bottom: -8px; }
+    .crew-head.solo > span:empty { display: none; }
+    .crew-head.solo .gear-key { margin: 22px 0 0 -4px; }   /* 12 px in from the screen edge, level with Edit livery */
     .crew-head .cd-back { flex: 0 1 auto; min-height: 44px; padding: 0 8px 0 0; font-size: 16px; font-weight: 600; text-decoration: none; color: var(--panel-ink); }
     .crew-head .cd-back::before { content: "\\2039"; font-size: 24px; margin-right: 6px; line-height: 1; }
   `;

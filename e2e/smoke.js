@@ -2917,6 +2917,10 @@ flow('crew page: an old ?view=crew link opens People on Crews, at your crew; goi
     && document.getElementById('accountBody').hidden && document.getElementById('sheetTitle').textContent === 'People'), 'on the People tab, its Crews side');
   check(await page.evaluate(() => !!document.querySelector('#crewsBody .crew-head .gear-key') && !document.querySelector('#crewsBody .friend-list')), 'the crew head and its gear are on the Crews side, no friends list there');
   check(await page.evaluate(() => document.querySelector('#crewsBody .crew-head').textContent.trim() === '' && document.querySelectorAll('#crewsBody .crew-page h2').length === 1), 'one crew: its name once, on its page, not again above it');
+  // one crew: no band of its own for the gear; it sits on the cover's top-left, clear of Edit livery (walkthrough 2026-11-12)
+  const gearSpot = await page.evaluate(() => { const r = (q) => document.querySelector(q).getBoundingClientRect(), g = r('#crewsBody .gear-key'), h = r('.crew-page .cp-head'), e = r('.crew-page .cp-edit');
+    return { onCover: g.top >= h.top && g.bottom <= h.bottom && g.left >= h.left, clear: g.right < e.left || g.bottom < e.top }; });
+  check(gearSpot.onCover && gearSpot.clear, 'the gear sits on the cover, clear of Edit livery: ' + JSON.stringify(gearSpot));
   // Nate 2026-11-12 (as easy as a big social app): three tabs under the crew's name, Drives open first
   check(JSON.stringify(await page.$$eval('.cp-tabs [role="tab"]', (b) => b.map((x) => x.textContent + ':' + x.getAttribute('aria-selected')))) === '["Drives:true","Chat:false","Board:false"]', 'Drives | Chat | Board, Drives open');
   check(await page.isHidden('.cp-board') && await page.isHidden('.cp-say'), 'the board and the chat wait behind their tabs');
