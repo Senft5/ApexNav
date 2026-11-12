@@ -656,7 +656,8 @@
       };
       const pinned = c.pinned_chat ? el('div', { className: 'cp-pin' }, el('span', { className: 'cp-badge', textContent: 'Pinned' }),
         el('b', { textContent: `@${c.pinned_chat.handle || '?'}` }), el('p', { textContent: plain(c.pinned_chat.body) }), ...(c.is_owner ? [btn('Unpin', pin(null), 'linkbtn')] : [])) : '';
-      const sec = el('div', { className: 'stack-8' }, el('div', { className: 'cp-sec' }, el('h3', { textContent: 'Chat' }), el('span', { className: 'note', textContent: 'Kept 30 days' })), pinned, list);
+      const sec = el('div', { className: 'stack-8' }, el('p', { className: 'note', textContent: 'Kept 30 days' }), pinned,   // the Chat tab names it: no second "Chat" heading under it
+        list);
       const fill = async () => {
         const r = await apiCall('GET', `/api/crews/${encodeURIComponent(c.id)}/chat`).catch(() => null);
         const msgs = r && r.ok ? await r.json() : null;

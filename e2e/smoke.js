@@ -2950,7 +2950,8 @@ flow('crew page: an old ?view=crew link opens People on Crews, at your crew; goi
     const body = [...document.querySelectorAll('.crew-page .cp-body > *')].map((x) => x.classList.contains('cp-title') ? 'title' : x.classList.contains('cp-livery-foot') ? 'livery' : x.querySelector('.cp-tabs') ? 'tabs' : x.className);
     return { body, panes: Object.fromEntries([...document.querySelectorAll('.cp-pane')].map((p) => [p.id, [...p.children].map(name).filter(Boolean)])) }; });
   check(JSON.stringify(order.body) === '["title","tabs","livery"]' && JSON.stringify(order.panes['cpPane-drives'].slice(0, 2)) === '["run","Members"]'
-    && order.panes['cpPane-chat'][0] === 'Chat' && order.panes['cpPane-board'][0] === 'Vetta Score board', 'the page in order: ' + JSON.stringify(order));
+    && order.panes['cpPane-chat'].length === 1 && order.panes['cpPane-board'][0] === 'Vetta Score board', 'the page in order: ' + JSON.stringify(order));
+  check(await page.evaluate(() => ![...document.querySelectorAll('#cpPane-chat h3')].some((h) => h.textContent === 'Chat')), 'the Chat tab names the chat: no second "Chat" heading under it');
   check(!(await page.$$('.crew-page .cp-livery, .crew-page .cp-meter')).length, 'no livery box or meter on the page (they are in Edit livery)');
   check(!/Convoy/.test(await page.$$eval('#crewsBody h3', (h) => h.map((x) => x.textContent).join('|'))), 'no Convoy heading on Crews');
   // P-06: the members as faces, the owner marked, the one on the road lit
