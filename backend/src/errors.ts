@@ -16,7 +16,7 @@ export function scrub(text: string, max: number): string {
 }
 
 // "route": a Fun / Long way / loop plan our router couldn't make, by its reason code only (web/errors.js route)
-const KINDS = new Set(["error", "rejection", "route"]);
+const KINDS = new Set(["error", "rejection", "route", "crash", "hang"]);   // crash, hang: the iOS shell (ApexCrashReports.swift)
 const APPS = new Set(["ios", "web"]);
 const text = (v: unknown, field: string, max: number): string => {
   if (v === undefined || v === null) return "";
