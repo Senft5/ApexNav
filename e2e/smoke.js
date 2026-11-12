@@ -2284,8 +2284,14 @@ flow('CarPlay feed: a planned route sends its line, every corner and the theme; 
   const kinds = () => page.evaluate(() => window.__car.map((m) => m.kind));
   check((await kinds()).includes('look'), 'the theme goes to the car at start');
   await page.evaluate(() => window.apex.live({ lat: 35.6, lon: -84.1, accuracy_m: 5, speed_mps: 0, course_deg: 0, has_fix: true }));   // the shell's fix, as in the app
+  // the cafés and fuel along it, by name on the car's route preview (the owner, 2026-11-11)
+  await page.evaluate(() => { ApexStages.pois = async (pts) => { const a = pts[Math.min(1, pts.length - 1)];
+    return [{ kind: 'cafe', name: 'Bean There Coffee', lat: a.lat, lon: a.lon + 0.0003 }, { kind: 'fuel', name: 'Shell', lat: pts[pts.length - 1].lat, lon: pts[pts.length - 1].lon }]; }; });
   await page.evaluate(() => window.apex.onNative({ type: 'carplay', action: 'go', lat: 35.7565, lon: -83.97, name: 'Maryville' }));
   await page.waitForFunction(() => window.__car.some((m) => m.kind === 'route') && window.__car.some((m) => m.kind === 'corners' && m.list.length), null, { timeout: 20000 });
+  await page.waitForFunction(() => window.__car.some((m) => m.kind === 'along'), null, { timeout: 10000 });
+  const along = await page.evaluate(() => { const i = window.__car.findIndex((m) => m.kind === 'along'); return { m: window.__car[i], afterRoute: i > window.__car.findIndex((m) => m.kind === 'route') }; });
+  check(along.m.full === 'Café: Bean There Coffee · Fuel: Shell' && along.m.short === 'Bean There Coffee · Shell' && along.afterRoute, 'the car is told the places along by name, after the route: ' + JSON.stringify(along));
   const r = await page.evaluate(() => ({ route: window.__car.find((m) => m.kind === 'route'), corners: window.__car.filter((m) => m.kind === 'corners').pop(),
     look: window.__car.filter((m) => m.kind === 'look').pop() }));
   check(r.route.options[0].detail.includes('corner'), 'the route choice says its corners: ' + JSON.stringify(r.route.options[0]));
@@ -2296,7 +2302,7 @@ flow('CarPlay feed: a planned route sends its line, every corner and the theme; 
   check(typeof png === 'string' && png.length > 400, 'a corner tulip as a PNG, synchronously: ' + (png ? png.length : png));
   // a car screen that connects later asks again and gets the route and the look again
   await page.evaluate(() => { window.__car = []; window.apex.onNative({ type: 'carplay', action: 'hello' }); });
-  await page.waitForFunction(() => ['route', 'corners', 'look', 'places'].every((k) => window.__car.some((m) => m.kind === k)));
+  await page.waitForFunction(() => ['route', 'corners', 'look', 'places', 'along'].every((k) => window.__car.some((m) => m.kind === k)));
   // the mute map button
   await page.evaluate(() => { window.__car = []; window.apex.onNative({ type: 'carplay', action: 'voice' }); });
   await page.waitForFunction(() => window.__car.some((m) => m.kind === 'look' && m.voice === false));

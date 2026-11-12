@@ -254,6 +254,11 @@ console.log(JSON.stringify({
   plainPlates: C.cornersMessage({ events: [...t.events, { type: 'corner', dir: 'L', severity: 2, shape: 'square', dist_m: 1000 }, { type: 'corner', dir: 'R', severity: 1, shape: 'acute', dist_m: 1100 }] }, at, 'plain').list.map((c) => c.text),
   rallyPlates: C.cornersMessage({ events: [{ type: 'corner', dir: 'L', severity: 4, grade: '-', dist_m: 10 }, { type: 'corner', dir: 'L', severity: 2, shape: 'square', dist_m: 1000 }, { type: 'corner', dir: 'R', severity: 1, shape: 'acute', dist_m: 1100 }] }, at, 'rally').list.map((c) => c.text),
   hazards: C.hazardsMessage([{ id: 7, kind: 'gravel', lat: 35.2, lon: -83.5 }, { id: 8, label: 'Cattle grid', lat: 35, lon: -83 }, { id: 9, kind: 'x' }], { gravel: 'Gravel' }),
+  along: C.alongMessage([{ kind: 'cafe', name: 'Bean There Coffee' }, { kind: 'view', name: 'Overlook' }, { kind: 'fuel', name: 'Shell' }, { kind: 'fuel', name: 'Speedway' },
+    { kind: 'fuel', name: 'Marathon' }, { kind: 'fuel', name: null }]),
+  alongUnnamed: C.alongMessage([{ kind: 'fuel', name: null }, { kind: 'cafe', name: '' }, { kind: 'cafe' }]),
+  alongLong: C.alongMessage([{ kind: 'cafe', name: 'The Extremely Long Named Mountain Coffee Roasters' }]),
+  alongNone: [C.alongMessage([]), C.alongMessage(null), C.alongMessage([{ kind: 'view', name: 'Overlook' }])],
   look: C.lookMessage({ id: 'tapedeck', night: { panel: '#0A0C0B', panelInk: '#7DF5DE', accent: '#FFB347' } }, false),
   tulips: [10, 15, 17, 12, 4, 26].map((k) => C.tulipSVG(k, '#7DF5DE')), bad: C.tulipSVG(10, 'red;x'),
   withCorners: C.routeMessage({ lat: [35, 35.01], lon: [-84, -84], dist: [0, 1100], timeS: 120, events: t.events }, null, 0, (m) => `${m} m`).options[0],
@@ -290,6 +295,19 @@ def test_the_cars_plates_say_what_the_head_says(maps):
 
 def test_hazards_are_named_and_unplaceable_ones_dropped(maps):
     assert maps["hazards"]["list"] == [{"id": "7", "at": [35.2, -83.5], "title": "Gravel"}, {"id": "8", "at": [35, -83], "title": "Cattle grid"}]
+
+
+def test_the_cafes_and_fuel_along_go_to_the_car_by_name(maps):
+    """The owner, 2026-11-11: show the café's or the station's name. The car's route preview names them, in route order."""
+    assert maps["along"] == {"kind": "along", "full": "Café: Bean There Coffee · Fuel: Shell, Speedway +2", "short": "Bean There Coffee · Shell +3"}
+    assert maps["alongUnnamed"] == {"kind": "along", "full": "Café: 2 cafés · Fuel: 1 stop", "short": "2 cafés · 1 fuel stop"}, "no name: counted, never invented"
+    assert maps["alongLong"]["full"] == "Café: The Extremely Long Named Mo…"
+    assert all(m == {"kind": "along", "full": "", "short": ""} for m in maps["alongNone"]), "nothing along clears the car's line; viewpoints stay on the phone"
+    js = cockpit_source()
+    assert "car.along = ''; carAlong(t);" in js, "every route sent to the car is followed by its places"
+    assert "if (car.route && track === t) carAlong(t);" in js, "and the places are sent when they come in"
+    swift = open(os.path.join(ROOT, "CarPlay", "ApexCarPlay.swift"), encoding="utf-8").read()
+    assert 'case "along":' in swift and "[along.full, along.short]" in swift
 
 
 def test_the_look_carries_the_theme_and_its_dark_card(maps):
