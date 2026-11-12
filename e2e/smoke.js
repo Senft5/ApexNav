@@ -7406,6 +7406,9 @@ flow('the route reveal: a route found is drawn onto the map like a pen stroke (a
 
 flow('taste from picks: Start on another route than Vetta\'s pick teaches the taste, once, at half an answer, and says so', async (page, base) => {
   const asked = [];
+  // the clock pinned to a weekday noon in Ohio: the refine's conditions (night, deer hours, low sun) swap Fun's pick
+  // or not by the time of day, and these flows count the routes found (CI went red at 01:00 UTC, 2026-11-12)
+  await page.clock.setFixedTime(new Date('2026-11-10T17:00:00Z'));
   await planRouter(page, asked);
   await funTiles(page, true);                                // (its arterials motorways: Quick's pick and Fun's differ)
   const { tap } = await planPage(page, base);
@@ -7568,6 +7571,9 @@ flow('the co-driver says a long descent once as the car nears its top, from the 
 
 flow('plan flow (e, f) a level change and an alternative are one tap or swipe each: the level cards are the routes found, nothing planned again (finding 4, 11)', async (page, base) => {
   const asked = [];
+  // the clock pinned to a weekday noon in Ohio: the refine's conditions (night, deer hours, low sun) swap Fun's pick
+  // or not by the time of day, and these flows count the routes found (CI went red at 01:00 UTC, 2026-11-12)
+  await page.clock.setFixedTime(new Date('2026-11-10T17:00:00Z'));
   await planRouter(page, asked);
   await funTiles(page, true);                                // (its arterials motorways: Quick's pick and Fun's differ)
   const { cdp, taps, tap } = await planPage(page, base);
