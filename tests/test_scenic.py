@@ -39,6 +39,10 @@ console.log(JSON.stringify({ list: list.map((p) => [p.kind, p.name, Math.round(p
     { kind: 'cafe', m: 9000, x: 300, y: 500, w: 40, h: 16 }, { kind: 'fuel', m: 30000, x: 320, y: 700, w: 40, h: 16 },
     { kind: 'fuel', m: 60000, x: 900, y: 100, w: 40, h: 16 }], { w: 390, h: 844 }),
   // more fuel along the road than is useful: four kept, spread along it (the first, the farthest, then the middles)
+  // walkthrough 2026-11-12: two LPR stamps on one junction and a café on them; an SPD beside them; a café clear of all
+  notes: S.declutter([{ kind: 'note:LPR', fixed: true, m: 500, x: 200, y: 300, w: 44, h: 22 }, { kind: 'note:LPR', fixed: true, m: 520, x: 204, y: 304, w: 44, h: 22 },
+    { kind: 'cafe', m: 510, x: 206, y: 306, w: 40, h: 16 }, { kind: 'note:SPD', fixed: true, m: 530, x: 210, y: 300, w: 44, h: 22 },
+    { kind: 'cafe', m: 3000, x: 50, y: 600, w: 40, h: 16 }], { w: 390, h: 844 }),
   spread: S.declutter(Array.from({ length: 9 }, (_, k) => ({ kind: 'fuel', m: k * 10000, x: 20 + k * 42, y: 100 + (k % 2) * 300, w: 36, h: 16 })), { w: 390, h: 844 }) }));
 """
 
@@ -143,3 +147,9 @@ def test_chargers_are_not_fuel_stops():
     assert r["evLine"] == "1 café · 1 charger · no charger for the first 62 mi"
     assert r["ask"] == "Next charger: Supercharger, in 100.0 km."
     assert r["title"] == "EV charger"
+
+
+def test_route_note_stamps_always_show_and_keep_pins_off(out):
+    # a camera's stamp is a route note: never hidden by a café; the same word twice on one spot shows once; another word
+    # (SPD) on top of it still shows; a café clear of them all stays
+    assert out["notes"] == [True, False, False, True, True]
