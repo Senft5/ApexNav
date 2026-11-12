@@ -6,6 +6,13 @@
   made-up token on each request got a fresh key in rateCheck and read without limit (the read side of #486). This costs
   no extra D1 query: the session lookup already ran.
 - Tests: backend/test/ratelimit.test.ts (+1, and the signed-out case of the signed-in test moved into it).
+- Load test on the preview deploy (16:45-16:55 UTC, signed out and with one made-up token, only `/api/health` and
+  sign-in starts). The limits work but they are loose. 3,000 reads with one key in 34 s: 2,550 got through and 450 got a
+  429, about twice the 600 a minute (two Cloudflare locations, YYZ and ORD, each count on their own, and counts are
+  approximate). Sign-in start (20 a minute): 37 of 300 refused. Our test machine went out through five IPs across two
+  locations, so per-IP keys split five ways. Expect the same from an attacker with a few addresses: the limits are a
+  floor against one noisy client, not a wall. Per-feature caps in D1 (uploads an hour, crews, highlights) stay the
+  strict ones.
 - Next: the iOS side (keychain, URL schemes, WebView bridge).
 
 # CALL SHEET
