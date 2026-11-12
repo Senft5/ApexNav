@@ -418,8 +418,9 @@
         const r = await apiCall('POST', `/api/events/${id(e)}/role`, { role: k, take }).catch(() => null);
         if (r && r.ok) redo(); else toast(r && r.status === 409 ? 'Someone took it first.' : 'Couldn\'t change that. Check signal.');
       };
+      // the planner sets both roles in Set it up below, so the quick links would say them twice
       const held = me() && (e.lead === me() ? 'lead' : e.sweep === me() ? 'sweep' : null);
-      if (held) roles.append(btn(`Stop being ${held}`, role(held, false), 'linkbtn'));
+      if (e.can_cancel) { /* Set it up has them */ } else if (held) roles.append(btn(`Stop being ${held}`, role(held, false), 'linkbtn'));
       else for (const k of ['lead', 'sweep']) if (!e[k]) roles.append(btn(k === 'lead' ? 'I\'ll lead' : 'I\'ll sweep', role(k, true), 'linkbtn'));
       if (roles.childElementCount) box.append(roles);
       if (Array.isArray(e.regroup) && e.regroup.length) {
