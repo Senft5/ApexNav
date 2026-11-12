@@ -87,10 +87,13 @@ struct ApexShellRootView: View {
         }
         .onAppear { UIApplication.shared.isIdleTimerDisabled = true }
         .onChange(of: scenePhase) { _, phase in
-            if phase == .active { shell.reloadIfWebContentDied() }
+            if phase == .active { shell.reloadIfWebContentDied(); shell.checkAppleCredential() }
             if phase == .background { ApexBuildNotifier.schedule() }      // new steps on builds you follow, while away
         }
         .onOpenURL { shell.openLink($0) }
+        .onReceive(NotificationCenter.default.publisher(for: ASAuthorizationAppleIDProvider.credentialRevokedNotification)) { _ in
+            Task { await shell.appleRevoked() }
+        }
         // Siri and Shortcuts (ApexIntents.swift, IDEAS V-07): the intent's link, now or from before the view listened
         .onReceive(NotificationCenter.default.publisher(for: ApexIntentInbox.notification)) { note in
             if let url = note.object as? URL { _ = ApexIntentInbox.take(); shell.openLink(url) }
@@ -1198,7 +1201,7 @@ final class ApexSensorShell: NSObject, ObservableObject, CLLocationManagerDelega
             guard let self else { return }
             self.appleSignIn = nil
             switch outcome {
-            case .token(let token, let name, let code): Task { await self.appleExchange(idToken: token, nonce: nonce, name: name, code: code) }
+            case .token(let token, let name, let code, let user): Task { await self.appleExchange(idToken: token, nonce: nonce, name: name, code: code, user: user) }
             case .cancelled: self.signInFailed("cancelled")
             case .failed: self.signInFailed("error")
             }
@@ -1207,7 +1210,7 @@ final class ApexSensorShell: NSObject, ObservableObject, CLLocationManagerDelega
         helper.start()
     }
 
-    private func appleExchange(idToken: String, nonce: String, name: String?, code: String?) async {
+    private func appleExchange(idToken: String, nonce: String, name: String?, code: String?, user: String?) async {
         var req = URLRequest(url: Self.apiBase.appendingPathComponent("api/auth/apple"))
         req.httpMethod = "POST"
         req.setValue("application/json", forHTTPHeaderField: "content-type")
@@ -1221,10 +1224,35 @@ final class ApexSensorShell: NSObject, ObservableObject, CLLocationManagerDelega
                   let token = obj["token"] as? String,
                   token.range(of: "^[A-Za-z0-9_-]{20,200}$", options: .regularExpression) != nil else { signInFailed("error"); return }
             guard ApexKeychain.setSession(token) else { signInFailed("error"); return }
+            if let user { UserDefaults.standard.set(user, forKey: ApexKeychain.appleUserKey) }
             evaluate("window.apex && window.apex.onNative && window.apex.onNative({type:'session',signedIn:true}); void 0;")
         } catch {
             signInFailed("offline")
         }
+    }
+
+    /// Sign in with Apple: someone who stops using their Apple ID with Vetta (iPhone Settings → Apple Account → Sign in with
+    /// Apple) is signed out here too. Checked each time the app comes to the front, and when iOS says so while it runs.
+    func checkAppleCredential() {
+        guard let id = UserDefaults.standard.string(forKey: ApexKeychain.appleUserKey), ApexKeychain.session() != nil else { return }
+        ASAuthorizationAppleIDProvider().getCredentialState(forUserID: id) { state, _ in
+            guard state == .revoked else { return }
+            Task { @MainActor [weak self] in await self?.appleRevoked() }
+        }
+    }
+
+    /// Ends the server session, forgets the Keychain's, and tells the page so it redraws signed out.
+    func appleRevoked() async {
+        guard UserDefaults.standard.string(forKey: ApexKeychain.appleUserKey) != nil, let token = ApexKeychain.session() else { return }
+        var req = URLRequest(url: Self.apiBase.appendingPathComponent("api/auth/logout"))
+        req.httpMethod = "POST"
+        req.setValue("application/json", forHTTPHeaderField: "content-type")
+        req.setValue("1", forHTTPHeaderField: "x-apexnav")
+        req.setValue("\(ApexWebBundle.scheme)://app", forHTTPHeaderField: "origin")
+        req.setValue("Bearer \(token)", forHTTPHeaderField: "authorization")
+        _ = try? await URLSession.shared.data(for: req)
+        ApexKeychain.setSession(nil)
+        evaluate("window.apex && window.apex.onNative && window.apex.onNative({type:'session',signedIn:false,reason:'apple'}); void 0;")
     }
 
     private func signInFailed(_ reason: String) {
@@ -2079,7 +2107,7 @@ final class ApexClipPlayer: NSObject, AVAudioPlayerDelegate {
 @MainActor
 final class ApexAppleSignIn: NSObject, ASAuthorizationControllerDelegate, ASAuthorizationControllerPresentationContextProviding {
     /// The one-time authorization code lets the server keep a refresh token, so deleting the account can revoke it (guideline 5.1.1(v)).
-    enum Outcome { case token(String, String?, String?), cancelled, failed }
+    enum Outcome { case token(String, String?, String?, String?), cancelled, failed }
     private let nonceHash: String
     private let done: (Outcome) -> Void
     private var controller: ASAuthorizationController?
@@ -2105,9 +2133,10 @@ final class ApexAppleSignIn: NSObject, ASAuthorizationControllerDelegate, ASAuth
         let token = credential?.identityToken.flatMap { String(data: $0, encoding: .utf8) }
         let name = credential?.fullName.map { PersonNameComponentsFormatter().string(from: $0) }.flatMap { $0.isEmpty ? nil : $0 }
         let code = credential?.authorizationCode.flatMap { String(data: $0, encoding: .utf8) }
+        let user = credential?.user
         MainActor.assumeIsolated {
             self.controller = nil
-            if let token { done(.token(token, name, code)) } else { done(.failed) }
+            if let token { done(.token(token, name, code, user)) } else { done(.failed) }
         }
     }
 
@@ -2130,6 +2159,8 @@ final class ApexAppleSignIn: NSObject, ASAuthorizationControllerDelegate, ASAuth
 
 /// The app's session token: this device only, readable after the first unlock (a drive can start from the lock screen).
 enum ApexKeychain {
+    /// The Apple user id of a Sign in with Apple session (not a secret), so the shell can ask whether it was revoked.
+    static let appleUserKey = "apex.appleUser"
     private static let query: [String: Any] = [kSecClass as String: kSecClassGenericPassword,
                                                kSecAttrService as String: "com.senft.ApexNav.session",
                                                kSecAttrAccount as String: "session"]
@@ -2158,6 +2189,7 @@ enum ApexKeychain {
         reviewToken = nil
         #endif
         SecItemDelete(query as CFDictionary)
+        UserDefaults.standard.removeObject(forKey: appleUserKey)    // set again by an Apple sign-in, after this
         guard let token else { return true }
         guard token.range(of: "^[A-Za-z0-9_-]{20,200}$", options: .regularExpression) != nil else { return false }
         var q = query

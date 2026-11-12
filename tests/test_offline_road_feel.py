@@ -85,5 +85,5 @@ def test_the_cockpit_wires_it():
     assert "ApexOwnRouting.holdArea(routeCtxOpts().lookupCells, ApexOwnRouting.cellsNear(c.lat, c.lng, a.radiusKm), a.id)" in COCKPIT
     assert "ApexOwnRouting.releaseArea(a.id)" in COCKPIT
     # sign-out (both keys) and account deletion, Erase everything and Delete offline data clear it
-    assert COCKPIT.count("ApexSync.setSession(null); clearCarry(); clearCrowd();") == 3
+    assert COCKPIT.count("ApexSync.setSession(null); clearCarry(); clearCrowd();") == 4   # sign out, delete account (2), and Apple sign-in turned off in Settings
     assert COCKPIT.count("await ApexOwnRouting.clearCrowd()") == 2

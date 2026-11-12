@@ -10112,6 +10112,8 @@
         // App sign-in finished in the native shell: keep the session token and redraw whatever shows account state.
         // the shell keeps the token in the Keychain and says signedIn (IDEAS Z-10); an older shell hands the token over
         // Redrawn in place (the owner, 2026-10-29: no page reloads): the account and Garage, and drive sharing asks again.
+        // the person stopped using their Apple ID with Vetta (iPhone Settings): the shell ended the session; redraw signed out
+        if (msg && msg.type === 'session' && msg.signedIn === false) { ApexSync.setSession(null); clearCarry(); clearCrowd(); toast('Signed out: Apple sign-in was turned off for Vetta.'); renderAccount(); return; }
         if (msg && msg.type === 'session' && (msg.token || msg.signedIn)) { ApexSync.setSession(msg.token || true); toast('Signed in.'); ambient.checkedAt = -Infinity; renderAccount(); checkAmbientAllowed(); }
         if (msg && msg.type === 'promptStyle') { if (promptStyleWaiter) promptStyleWaiter(msg.style || 'normal'); return; }
         if (msg && msg.type === 'link' && msg.params) { openAppLink(msg.params); return; }
