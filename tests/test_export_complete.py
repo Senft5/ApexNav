@@ -45,3 +45,12 @@ def test_every_table_with_a_person_is_exported_or_explained():
 def test_recent_positions_and_kudos_are_in_it():
     src = (ROOT / "backend/src/account.ts").read_text()
     assert "sharing_on_map_positions" in src and "kudos_given" in src and "kudos_received" in src
+
+
+def test_export_stays_inside_the_query_limit():
+    """Workers Free allows 50 D1 queries per invocation; a batch counts as one. The lists go out in one batch, so the export
+    makes a handful of queries however many tables it names (it failed once it passed 50 single queries)."""
+    src = (ROOT / "backend/src/account.ts").read_text()
+    exp = src[src.index("export async function exportMyData"):src.index("export async function deleteAccount")]
+    assert "await q(" not in exp and "env.DB.batch(stmts)" in exp
+    assert exp.count("await ") <= 5, "keep single awaited queries out of the export: add them to the batch with q()"
