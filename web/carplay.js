@@ -276,7 +276,7 @@
    */
   const ALONG_NAME_MAX = 28, ALONG_MAX = 90, ALONG_PLATES = 30, PLATE_NAME_MAX = 18;
   function alongMessage(list, descent) {
-    const rows = Array.isArray(list) ? list.filter((p) => p && (p.kind === 'cafe' || p.kind === 'fuel')) : [];
+    const rows = Array.isArray(list) ? list.filter((p) => p && (p.kind === 'cafe' || p.kind === 'fuel' || p.kind === 'charge')) : [];   // charge: an EV's chargers (scenic.js forCar)
     const cut = (s, n) => (s.length > n ? s.slice(0, n - 1).trimEnd() + '…' : s);
     const part = (kind, label, one, many, keep) => {
       const all = rows.filter((p) => p.kind === kind);
@@ -287,11 +287,11 @@
       const rest = all.length - named;
       return label + names.join(', ') + (rest > 0 ? ` +${rest}` : '');
     };
-    const full = [part('cafe', 'Café: ', 'café', 'cafés', 2), part('fuel', 'Fuel: ', 'stop', 'stops', 2)].filter(Boolean).join(' · ');
-    const short = [part('cafe', '', 'café', 'cafés', 1), part('fuel', '', 'fuel stop', 'fuel stops', 1)].filter(Boolean).join(' · ');
+    const full = [part('cafe', 'Café: ', 'café', 'cafés', 2), part('fuel', 'Fuel: ', 'stop', 'stops', 2), part('charge', 'Charge: ', 'charger', 'chargers', 2)].filter(Boolean).join(' · ');
+    const short = [part('cafe', '', 'café', 'cafés', 1), part('fuel', '', 'fuel stop', 'fuel stops', 1), part('charge', '', 'charger', 'chargers', 1)].filter(Boolean).join(' · ');
     const places = rows.filter((p) => finite(p.lat) && finite(p.lon)).slice(0, ALONG_PLATES).map((p) => ({
       at: [+p.lat.toFixed(6), +p.lon.toFixed(6)], kind: p.kind,
-      text: cut((typeof p.name === 'string' && p.name.trim()) || (p.kind === 'cafe' ? 'Café' : 'Fuel'), PLATE_NAME_MAX) }));
+      text: cut((typeof p.name === 'string' && p.name.trim()) || (p.kind === 'cafe' ? 'Café' : p.kind === 'charge' ? 'Charger' : 'Fuel'), PLATE_NAME_MAX) }));
     // a long descent on the way (brake_heat.js descentShort), said beside the places: the brakes' warning before Drive
     const fall = typeof descent === 'string' ? cut(descent.trim(), 48) : '';
     return { kind: 'along', full: cut(full, ALONG_MAX), short: cut(short, ALONG_MAX), places, descent: fall };

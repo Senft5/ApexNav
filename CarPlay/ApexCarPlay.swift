@@ -138,7 +138,7 @@ final class ApexCar {
         case "along":
             let full = String(((dict["full"] as? String) ?? "").prefix(90)), short = String(((dict["short"] as? String) ?? "").prefix(90))
             let list = ((dict["places"] as? [[String: Any]]) ?? []).prefix(30).compactMap { p -> ApexCarPlateData? in
-                guard let at = Self.coord(p["at"]), let kind = p["kind"] as? String, kind == "cafe" || kind == "fuel",
+                guard let at = Self.coord(p["at"]), let kind = p["kind"] as? String, kind == "cafe" || kind == "fuel" || kind == "charge",
                       let text = p["text"] as? String, !text.isEmpty else { return nil }
                 return ApexCarPlateData(lat: at.latitude, lon: at.longitude, text: String(text.prefix(18)), tight: false, hazard: false, place: kind)
             }

@@ -53,7 +53,7 @@ struct ApexCarPalette {
 }
 
 /// A corner's rating, a hazard, or a café or fuel stop along the route on the car's map (web/carplay.js cornersMessage,
-/// hazardsMessage, alongMessage's places: `place` is "cafe" or "fuel" for those, nil otherwise).
+/// hazardsMessage, alongMessage's places: `place` is "cafe", "fuel" or "charge" (an EV's chargers) for those, nil otherwise).
 struct ApexCarPlateData: Equatable {
     let lat: Double, lon: Double, text: String, tight: Bool, hazard: Bool
     var place: String? = nil
@@ -461,7 +461,7 @@ final class ApexNativeCarMap: UIView {
             v.inset = UIEdgeInsets(top: 5, left: 9, bottom: 5, right: 9)
         } else if let kind = p.data.place {
             // a café or fuel stop along the route, by name (the owner, 2026-11-11): quieter than a corner, a cup or a pump first
-            let t = NSMutableAttributedString(string: kind == "cafe" ? "☕︎ " : "⛽︎ ", attributes: [.foregroundColor: P.plateInk, .font: UIFont.systemFont(ofSize: 12, weight: .semibold)])
+            let t = NSMutableAttributedString(string: kind == "cafe" ? "☕︎ " : kind == "charge" ? "⚡︎ " : "⛽︎ ", attributes: [.foregroundColor: P.plateInk, .font: UIFont.systemFont(ofSize: 12, weight: .semibold)])
             t.append(NSAttributedString(string: p.data.text, attributes: [.foregroundColor: P.plateInk, .font: UIFont.systemFont(ofSize: 14, weight: .semibold)]))
             v.attributedText = t
             v.backgroundColor = P.plate
