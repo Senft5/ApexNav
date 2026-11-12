@@ -95,7 +95,10 @@ No third-party analytics or advertising SDKs. Tracking: **No**.
 Five, from the bundled replays (they need no car): the cockpit with a note called, the loop builder with three routes,
 the Log with a drive's corners, a drive card, a convoy on the map. Captions in sentence case, no speeds on screen.
 
-Made so far (2026-11-12): run `STORE=1 SHOTS_OUT=store-shots node tools/landing_shots.js` for
-the cockpit and a crew's page at 1320 x 2868 (the 6.9" size, 440 x 956 points at 3x). The cockpit shot shows the replay's
-speed (49 mph) and Sight, which the rule above says to avoid: either accept it (it is a replay, not a live drive) or
-pick a moment at walking pace with `SHOT_AT`. Still to script: the loop builder, the Log's corners, a drive card, a convoy.
+Made (2026-11-12): run `STORE=1 SHOTS_OUT=store-shots node tools/landing_shots.js` for six shots at 1320 x 2868 (the 6.9"
+size, 440 x 956 points at 3x): the cockpit with a note called (`cockpit.png`), a loop with the others to choose from
+(`store-loop.png`), the Log (`store-log.png`), the drive's page with its corners (`store-drive.png`, on Smoothness so no mph
+shows), the drive card (`store-card.png`) and a crew's page (`crew.png`). The drive is the bundled Dry Ridge replay saved as a
+drive, its own recorded numbers; its page says "Example drive". The cockpit shot still shows the replay's speed (49 mph) and
+Sight against the rule above: either accept it (it is a replay, not a live drive) or pick a moment at walking pace with
+`SHOT_AT`. The convoy is not scripted; the crew's page stands in for the social shot.
