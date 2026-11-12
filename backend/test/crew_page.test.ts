@@ -48,6 +48,28 @@ describe("crew page", () => {
     expect(await page(a, crew)).toMatchObject({ motto: null, crest: null, stripe: "#c8102e" });
   });
 
+  it("chat: a crew made public shows a stranger who joins later its public days, never its private ones", async () => {
+    const [a, b, s] = [await makeUser("alice"), await makeUser("bob"), await makeUser("stranger")];
+    const crew = await crewOf(a, b);
+    await ok(api(b, "POST", `/api/crews/${crew}/chat`, { body: "My garage code is 4411" }));
+    await env.DB.prepare("UPDATE crew_members SET joined_at = datetime('now', '-1 day')").run();
+    await env.DB.prepare("UPDATE crew_chat SET created_at = datetime('now', '-1 hour')").run();
+    await ok(api(a, "PUT", `/api/crews/${crew}`, { name: "Ridge Runners", visibility: "public", area: { name: "Robbinsville", lat: 35.3254, lon: -83.8071 } }));
+    await env.DB.prepare("UPDATE crews SET public_since = datetime('now', '-30 minutes') WHERE id = ?").bind(crew).run();
+    await ok(api(a, "POST", `/api/crews/${crew}/chat`, { body: "Welcome, everyone" }));
+    await env.DB.prepare("UPDATE crew_chat SET created_at = datetime('now', '-20 minutes') WHERE body = 'Welcome, everyone'").run();
+    await ok(api(s, "POST", `/api/crews/${crew}/join`));
+    await ok(api(b, "POST", `/api/crews/${crew}/chat`, { body: "Sunday, 8am" }));
+    const read = async (u: TestUser) => ((await (await ok(api(u, "GET", `/api/crews/${crew}/chat`))).json()) as { body: string }[]).map((m) => m.body);
+    expect(await read(s)).toEqual(["Welcome, everyone", "Sunday, 8am"]);                    // public days, before and after joining
+    expect(await read(b)).toEqual(["My garage code is 4411", "Welcome, everyone", "Sunday, 8am"]);   // bob was there
+    const feed = (await (await ok(api(s, "GET", "/api/crews/feed"))).json()) as { items: { kind: string; body?: string }[] };
+    expect(feed.items.filter((i) => i.kind === "chat").map((i) => i.body).sort()).toEqual(["Sunday, 8am", "Welcome, everyone"]);
+    const fresh = await makeUser("newcrew");
+    const pub = ((await (await ok(api(fresh, "POST", "/api/crews", { name: "Open Road", visibility: "public", area: { name: "Robbinsville", lat: 35.3254, lon: -83.8071 } }))).json()) as { id: string }).id;
+    expect((await env.DB.prepare("SELECT public_since FROM crews WHERE id = ?").bind(pub).first<{ public_since: string | null }>())!.public_since).not.toBeNull();
+  });
+
   it("chat: members only, newest 50, report hides after three, author or owner deletes, export has yours, 30 days", async () => {
     const [a, b, c, d, out] = [await makeUser("alice"), await makeUser("bob"), await makeUser("carol"), await makeUser("dee"), await makeUser("outsider")];
     const crew = await crewOf(a, b, c, d);
