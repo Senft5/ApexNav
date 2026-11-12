@@ -9161,6 +9161,7 @@
       $('endFeel').textContent = feel; $('endFeel').hidden = !feel;
       $('endPractice').textContent = ''; $('endPractice').hidden = true;   // IDEAS D-27: with the score (endCardScored)
       $('endRoad').textContent = ''; $('endRoad').hidden = true;           // the road's line, with the score too
+      $('endRun').textContent = ''; $('endRun').hidden = true;             // IDEAS D-30: a month's best run, with the score too
       // scoring: no number yet, never "--" (that means "no score"), and no key that needs the score
       $('endScore').textContent = '…'; $('endScore').classList.add('unk'); $('endScore').setAttribute('aria-busy', 'true');
       $('endScore').parentElement.classList.remove('no-score');
@@ -9199,8 +9200,16 @@
         try {
           const all = await ApexRecording.summaries(null), me = all.find((o) => o.id === c.id);
           const before = all.filter((o) => o.id !== c.id && (!me || String(o.date || '') <= String(me.date || ''))).map((o) => (o.ds && o.ds.score != null ? Math.round(o.ds.score) : null));
+          if (!endDrive || endDrive.id !== c.id) return;
+          // IDEAS D-30: a run of clean corners that beats every other drive's this month (its summary's run, flow.js)
+          const runLine = me && ApexEndLine.bestRunMonth && window.ApexAnalysis ? ApexEndLine.bestRunMonth(me, all, ApexAnalysis.monthOf) : null;
+          if (runLine) {
+            $('endRun').textContent = runLine; $('endRun').hidden = false;
+            const sheet = $('endCard').querySelector('.card-sheet');      // a taller card: the drive is fitted again above it
+            if (endTrailOn && sheet && Math.abs(sheet.getBoundingClientRect().top - endTrailTop) > 4) showEndTrail(endDrive);
+          }
           const u = ApexEndLine.usual(c.ds.score, before);
-          if (!u || !endDrive || endDrive.id !== c.id) return;
+          if (!u) return;
           $('endUsual').textContent = u.text; $('endUsual').hidden = false;
         } catch (_) { /* no Log to read: nothing said */ }
       })();
