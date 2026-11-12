@@ -780,3 +780,19 @@ def test_parity_segment_window_on_a_loop():
                          capture_output=True, text=True, check=True)
     assert [None if w is None else list(w) for w in py] == json.loads(out.stdout)
     assert py[0] == (0, 400)
+
+
+def test_parity_segment_pass_takes_the_quickest_lap():
+    """segmentPass takes the quickest of several passes, as segment_pass does (two laps of a loop, either one quicker)."""
+    from core import drive_analysis as da
+    from tests.test_drive_analysis import _two_laps
+    cases = [_two_laps(), _two_laps(25.0, 20.0), _two_laps(22.0, 22.0)]
+    py = [da.segment_pass(seg, d) for d, seg in cases]
+    js_in = [{"d": {k: (v.tolist() if hasattr(v, "tolist") else v) for k, v in d.items()}, "seg": seg} for d, seg in cases]
+    runner = ("const c=require(process.argv[1]);const cases=JSON.parse(require('fs').readFileSync(0,'utf8'));"
+              "process.stdout.write(JSON.stringify(cases.map(({d,seg})=>c.segmentPass(seg,d))));")
+    out = subprocess.run([NODE, "-e", runner, os.path.abspath("web/apex_core.js")], input=json.dumps(js_in),
+                         capture_output=True, text=True, check=True)
+    for j, p in zip(json.loads(out.stdout), py):
+        assert (j["lo"], j["hi"]) == (p["lo"], p["hi"]) and j["time_s"] == pytest.approx(p["time_s"], rel=1e-9)
+    assert [(p["lo"], p["hi"]) for p in py] == [(400, 800), (0, 400), (py[2]["lo"], py[2]["hi"])]

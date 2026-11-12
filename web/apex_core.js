@@ -1008,20 +1008,28 @@
     }
     return out.sort((a, b) => a[0] - b[0] || a[1] - b[1]).map((x) => x[1]);
   }
-  function segmentWindow(seg, d) {
-    const span = Math.floor(seg.length_m / 5);
+  // port of segment_windows: every pass, one per visit to the start, the closest visit first
+  function segmentWindows(seg, d) {
+    const span = Math.floor(seg.length_m / 5), out = [];
     for (const i0 of startCandidates(seg.lat0, seg.lon0, d.lat, d.lon)) {
       const [i1, d1] = nearestIndexWin(seg.lat1, seg.lon1, d.lat, d.lon, i0 + span, Math.max(40, Math.floor(span / 2)));
       if (d1 > MATCH_RADIUS_M || i1 <= i0) continue;
       const ratio = (i1 - i0) / Math.max(1, span);
-      if (ratio >= 0.7 && ratio <= 1.3) return [i0, i1];
+      if (ratio >= 0.7 && ratio <= 1.3) out.push([i0, i1]);
     }
-    return null;
+    return out;
   }
+  function segmentWindow(seg, d) {
+    const w = segmentWindows(seg, d);
+    return w.length ? w[0] : null;
+  }
+  // with several passes in one drive (laps of a loop), the quickest counts; a tie keeps the first found
   function segmentPass(seg, d) {
-    const w = segmentWindow(seg, d);
-    if (!w) return null;
-    const [lo, hi] = w, t = elapsedS(d.speed_mps);
+    const ws = segmentWindows(seg, d);
+    if (!ws.length) return null;
+    const t = elapsedS(d.speed_mps);
+    let [lo, hi] = ws[0];
+    for (const [a, b] of ws.slice(1)) if (t[b] - t[a] < t[hi] - t[lo]) [lo, hi] = [a, b];
     return { lo, hi, time_s: t[hi] - t[lo], ...driverScore(d.speed_mps, d.lon_g, d.lat_g, d.corners, lo, hi + 1) };
   }
 
@@ -1239,7 +1247,7 @@
 
   const api = {
     profileRecording, spikeMask, referenceLap, windowFeatures, axisScores, archetype,
-    driverScore, techniqueScore, cornerTechnique, carGrip, cornersForCar, fatigue, spreadBy, turnIn, segmentPass, segmentWindow,
+    driverScore, techniqueScore, cornerTechnique, carGrip, cornersForCar, fatigue, spreadBy, turnIn, segmentPass, segmentWindow, segmentWindows,
     removeSpurs, retracedShare,
     compareDrives, cornerMetrics, elapsedS, cornerPhases, coach, ggEnvelope, gripUse, ggSector, abruptMoments,
     knownRun, passMarks, meanSe, BRAKE_G, BRAKE_LOOKBACK, BRAKE_GAP, STOPPED_MPS, TURN_LEAD, PACE_CEILING, paceCredit,   // driver_profile.js reads corners as the coach does
