@@ -3176,6 +3176,7 @@ flow('meets on the map: off by default; on, public meets near the map are pinned
   await page.click('#swTab');
   await page.click('[data-toggle="meets"]');
   await page.waitForSelector('.mm-pin');
+  check(/^Meets within 50 mi of the map\. Tap a pin\.$/.test(await page.textContent('#toast')), 'the switch says where in the driver\'s miles, in one line: ' + await page.textContent('#toast'));
   const pin = await page.evaluate(() => ({ n: document.querySelectorAll('.mm-pin').length, text: document.querySelector('.mm-pin').textContent, label: document.querySelector('.mm-pin').getAttribute('aria-label') }));
   check(pin.n === 1 && /\+1$/.test(pin.text) && /^Cars and coffee, \w+, and 1 more\./.test(pin.label), 'two meets at one place share a pin, soonest first: ' + JSON.stringify(pin));
   check(asked.length >= 1 && /^\?lat=35\.\d&lon=-8\d\.\d$/.test(asked[0]), 'asked by the map centre cell only: ' + JSON.stringify(asked));
@@ -5579,7 +5580,7 @@ flow('one link in: no "invite-only" anywhere; a crew link joins a newcomer with 
   await page.click('[data-people="crews"]');
   await page.waitForSelector('#crewsBody >> text=Join Blue Ridge Breakfast Club?');
   const card = await page.textContent('#crewsBody .card');
-  check(/@tilly sent you the link, and you’ll be friends/.test(card) && !/first/i.test(card), 'the newcomer sees the crew and who sent it, nothing to do first: ' + card);
+  check(/@tilly sent you the link, and you’ll be friends\./.test(card) && !/first|how the crew sees/i.test(card), 'the newcomer sees the crew and who sent it, nothing to do first: ' + card);
   await page.fill('#crewsBody .card input[aria-label="Handle"]', 'newbie');
   crews = [];
   await page.click('#crewsBody .card button:has-text("Join crew")');
