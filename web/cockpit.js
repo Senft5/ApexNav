@@ -8198,7 +8198,11 @@
       }
       const r = drive.flow.update(drive.rec.rows);
       if (!r || !r.say) return;
-      const line = { text: r.say, until: performance.now() + 20000 };
+      sayQuietLine(r.say);
+    }
+    // The lowest of the quiet slots (flow lines, a stage's result): said when no call is due, gone after 20 s or in Quiet notes
+    function sayQuietLine(text) {
+      const line = { text, until: performance.now() + 20000 };
       if (!flowSay) flowSay = line; else if (flowQueue.length < 2) flowQueue.push(line);   // "Eight…, your best" is not lost to "Ten"
     }
     // Road data whenever the app is open and the phone is mounted (calibration locked), not only during a drive
@@ -9102,7 +9106,10 @@
       $('stageDelta').textContent = ApexStageDelta.label(r.delta);
       $('stageCount').textContent = `${r.done}/${r.of} corners`;
       bar.classList.toggle('ahead', r.delta > 0); bar.classList.toggle('behind', r.delta < 0);
-      if (r.state === 'done') toast(r.delta == null ? `${r.name} done.` : r.delta === 0 ? `${r.name}: level with your best.` : `${r.name}: ${Math.abs(r.delta)} points ${r.delta > 0 ? 'up on' : 'down on'} your best.`);
+      if (r.state !== 'done') return;
+      const line = r.delta == null ? `${r.name} done.` : r.delta === 0 ? `${r.name}: level with your best.` : `${r.name}: ${Math.abs(r.delta)} points ${r.delta > 0 ? 'up on' : 'down on'} your best.`;
+      toast(line);
+      if (r.delta != null) sayQuietLine(line);   // the co-driver says how the stage went, once it's over (technique, never time)
     }
     // Track day mode (track_mode.js, IDEAS D-15): only on a mapped raceway. Every 30 s while moving the map is asked whether
     // you're on one; then "Start/finish here" sets the line where you are, and the bar shows laps, sectors and the delta.
