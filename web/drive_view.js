@@ -72,13 +72,14 @@
   // the Driver Score components and the coach's technique tips; never a nudge to go faster.
   const PRAISE = { smoothness: 'Smooth, unhurried steering', braking: 'Braking finished by the middle of each corner', consistency: 'An even rhythm from corner to corner',
     pace: 'Good use of the grip you had' };
+  const corners = (n) => `${n} corner${n === 1 ? '' : 's'}`;
   const HABIT = {
-    coast: (n) => `in ${n} corner${n === 1 ? '' : 's'} you rolled with neither brake nor gas between slowing down and speeding up; go straight from one to the other`,
-    brake_after_apex: (n) => `in ${n} corner${n === 1 ? '' : 's'} you were still braking past the middle; finish your braking by the middle of the corner`,
-    early_apex: (n) => `in ${n} corner${n === 1 ? '' : 's'} your slowest point came well before the middle; wait a moment longer before you turn in`,
+    coast: (n) => `you coasted between brake and gas in ${corners(n)}; go from one straight to the other`,
+    brake_after_apex: (n) => `you were still braking past the middle of ${corners(n)}; finish by the middle`,
+    early_apex: (n) => `your slowest point came early in ${corners(n)}; turn in a moment later`,
   };
-  const WEAK = { smoothness: 'steer more gently, with fewer quick corrections in the middle of corners', braking: 'finish your braking by the middle of the corner',
-    consistency: 'aim for the same calm rhythm in every corner; you took some much nearer their limit than others' };
+  const WEAK = { smoothness: 'steer more gently, with fewer corrections mid-corner', braking: 'finish your braking by the middle of the corner',
+    consistency: 'keep the same calm rhythm in every corner' };
   const HABIT_PART = { brake_after_apex: 'braking', coast: null, early_apex: null };   // a habit's own component is never also praised
   /** What changed most at an abrupt moment (sample i is the change from i-1): the steering, or the brake or throttle, and which way. */
   function abruptAdvice(latG, lonG, i) {
