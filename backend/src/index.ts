@@ -55,6 +55,7 @@ import { highlightCreate, highlightDelete, highlightList, highlightRate } from "
 export { ConvoyIndex, ConvoyRoom } from "./convoy";
 import { crewHomeSet, crewMeetCells } from "./crew_meet";
 import { chargers } from "./chargers";
+import { serverSide, serviceHistory, serviceReport } from "./service_check";
 import { segmentAdopt, segmentCreate, segmentDelete, segmentList, segmentShare, segmentsSharedWithMe } from "./segments";
 
 type Handler = (req: Request, env: Env, m: RegExpMatchArray, ctx?: ExecutionContext) => Promise<Response>;
@@ -94,6 +95,19 @@ on("GET", "/api/ops/latency", async (req, env) => {
 on("GET", "/api/ops/errors", async (req, env) => {
   if (!isModerator(env, await requireMember(req, env))) throw new HttpError(404, "not_found");
   return json(await errorSummary(env, new URL(req.url)));
+});
+// Service check (service_check.ts, web/service_check.js): the owner's phone sends what it saw; the Worker's own side.
+on("POST", "/api/ops/service-check", async (req, env) => {
+  if (!isModerator(env, await requireMember(req, env))) throw new HttpError(404, "not_found");
+  return json(await serviceReport(req, env));
+});
+on("GET", "/api/ops/service-check", async (req, env) => {
+  if (!isModerator(env, await requireMember(req, env))) throw new HttpError(404, "not_found");
+  return json(await serviceHistory(env, new URL(req.url)));
+});
+on("GET", "/api/ops/service-check/server", async (req, env) => {
+  if (!isModerator(env, await requireMember(req, env))) throw new HttpError(404, "not_found");
+  return json(await serverSide(env));
 });
 on("GET", "/api/auth/google/start", (req, env) => googleStart(req, env));
 on("GET", "/api/auth/google/callback", (req, env) => googleCallback(req, env));

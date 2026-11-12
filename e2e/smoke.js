@@ -5674,6 +5674,51 @@ flow('dev mode: anyone else sees no Dev entry, loads no panel, and settings left
   }
 }, { geolocation: { latitude: 39.155, longitude: -84.615 }, permissions: ['geolocation'] });
 
+// Service check (the owner, 2026-11-12, web/service_check.js): the owner runs it from Settings > Account; each service's
+// state is listed and the report goes to /api/ops/service-check. Anyone else gets no section and never loads its file.
+async function svcPage(page, base, me, posted, asked) {
+  page.on('request', (r) => { if (r.url().includes('service_check.js')) asked.push(r.url()); });
+  await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); localStorage.setItem('apex.permsExplained', '1'); localStorage.setItem('apex.svccheck.at', String(Date.now())); } catch (_) {} });
+  await page.route('**/api/**', (route) => {
+    const u = new URL(route.request().url()), j = (b, status = 200) => route.fulfill({ status, contentType: 'application/json', body: JSON.stringify(b) });
+    if (u.pathname === '/api/me') return j(me);
+    if (u.pathname === '/api/health') return j({ ok: true, db: true });
+    if (u.pathname === '/api/ops/service-check' && route.request().method() === 'POST') { posted.push(JSON.parse(route.request().postData())); return j({ kept: 1 }); }
+    if (u.pathname === '/api/ops/service-check/server') return j({ at: 'now', db: true, config: { db: true, ctx_keys: false }, graph_data: { http: 200, ms: 300, tiles: 120 },
+      overpass: [{ host: 'overpass-api.de', http: 200, ms: 800, elements: 4 }, { host: 'overpass.kumi.systems', http: 429, ms: 200, elements: null }] });
+    return j({ error: 'not_found' }, 404);
+  });
+  // one camera server answers; every other outside host stays blocked (the run's default), so they read as down
+  await page.route('https://overpass-api.de/**', (r) => r.fulfill({ contentType: 'application/json', body: JSON.stringify({ elements: [{ type: 'node', id: 1, lat: 39.1, lon: -84.51, tags: { highway: 'speed_camera' } }] }) }));
+  await page.goto(base + '/index.html?view=garage');
+  await page.waitForFunction(() => window.apexDebug && window.apexDebug.map);
+  await page.waitForTimeout(1200);                                     // /api/me has answered (renderAccount)
+}
+flow('service check: the owner runs it from Settings, sees each service up or down with what it affects, and it is sent (the owner 2026-11-12)', async (page, base) => {
+  const posted = [], asked = [];
+  await svcPage(page, base, { signed_in: true, member: true, handle: 'owner', moderator: true }, posted, asked);
+  await openSetting(page, 'account');
+  await page.click('.svc-check button');
+  await page.waitForFunction(() => /up, .*down/.test((document.querySelector('.svc-check') || {}).textContent || ''), null, { timeout: 120000 });
+  await page.waitForFunction(() => /From Vetta.s server[\s\S]*not set: ctx_keys/.test(document.querySelector('.svc-check').textContent), null, { timeout: 10000 });
+  const text = await page.evaluate(() => document.querySelector('.svc-check').textContent);
+  check(/Overpass \(overpass-api\.de\): up/.test(text) && /Valhalla: down/.test(text) && /Affects: Quick routes/.test(text), 'states and what they affect: ' + text.slice(0, 600));
+  check(/Server and database: up/.test(text) && /Camera map as the app asks it: up/.test(text), 'our server and the app\'s camera path: ' + text.slice(0, 600));
+  check(posted.length === 1, 'one report sent: ' + posted.length);
+  const r = posted[0], by = Object.fromEntries(r.results.map((x) => [x.id, x]));
+  check(r.app === 'web' && by.overpass_de.state === 'up' && by.valhalla.state === 'down' && by.api.state === 'up' && r.results.length >= 25, 'the report: ' + JSON.stringify(r).slice(0, 400));
+  check(['router_fun', 'router_long', 'router_loop'].every((id) => by[id] && by[id].state !== 'skip'), 'our router was asked for each plan: ' + JSON.stringify([by.router_fun, by.router_long, by.router_loop]));
+  check(!JSON.stringify(r).includes('39.155'), 'never where the phone is');
+  check(asked.length >= 1, 'its file loaded on demand');
+}, { geolocation: { latitude: 39.155, longitude: -84.615 }, permissions: ['geolocation'] });
+flow('service check: a member who is not the owner gets no section and never loads it (the owner 2026-11-12)', async (page, base) => {
+  const posted = [], asked = [];
+  await svcPage(page, base, { signed_in: true, member: true, handle: 'me' }, posted, asked);
+  await openSetting(page, 'account');
+  await page.waitForTimeout(500);
+  check(!(await page.evaluate(() => !!document.querySelector('.svc-check'))) && !asked.length && !posted.length, 'no section, no file, nothing sent');
+});
+
 flow('dev mode: a developer opens the Dev panel from the Garage, changes a constant, re-plans and sees it, then resets (the owner 2026-11-09)', async (page, base) => {
   graphDir = graphFixture();
   try {
