@@ -197,6 +197,10 @@ destination route on screen like the Avoid chips do.
 
 ## Candidates
 
+**Since 2026-11-11 this list is history for Fun, Long way and loops:** they come only from our own router
+(docs/OWN_ROUTING.md), and the Valhalla stage plans and stage loops below were deleted from web/cockpit.js. Quick still
+uses steps 1 and 2. The pure helpers (fun_route.js, stages.js) stay for Explore and their tests.
+
 1. The router's route (Valhalla, highways and tolls de-prioritised) and up to 2 Valhalla alternates
    (`alternates: 2`), plus the highway-friendly quickest (use_highways 1.0, `ApexRouteEngine.highwayCosting`) unless
    Avoid → Highways is on; a highway-costed winner is pinned with shaping points like an alternate. OSRM is the fallback

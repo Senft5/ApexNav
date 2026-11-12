@@ -4,6 +4,14 @@ Decisions Claude made for you, newest first. Each one says what was decided, why
 you reach one you've seen. If you disagree with a call, say so and it gets reversed; nothing here is hard to undo unless
 it says so. Things only you can do are in docs/OWNER_TODO.md.
 
+## 2026-11-11 (Valhalla for Quick only, part 3): the Valhalla stage-plan and stage-loop code is gone (claude/project-thread-39xbx9)
+
+Since Fun, Long way and loops are our router's only, three pieces of web/cockpit.js could no longer run: funRoute's
+Valhalla stage plans (stage discovery round the trip, the connector matrix, stage legs), and buildLoop's stage loops and
+their refine after the card (`stageJobs`, `loopRefine`). They are deleted rather than kept switched off, so nobody
+switches a Valhalla fallback back on by accident. The pure helpers they used (fun_route.js shortlist / plansFromMatrix /
+loopPlansFromMatrix, stages.js) stay: Explore and their own tests use them. Undo: revert the commit.
+
 ## 2026-11-11 (routing round three, part 2): stage discovery reads crests and verified bumps (claude/project-thread-39xbx9)
 
 Stage discovery (the roads Explore, loops and routes pick from) now lifts a road members measured going light over its

@@ -1,5 +1,9 @@
 # VETTA — CURRENT AGENT HANDOFF STATE
 
+## 2026-11-11 Valhalla for Quick only, part 3 (claude/project-thread-39xbx9)
+- Deleted the code Fun, Long way and loops could no longer reach: funRoute's Valhalla stage plans and buildLoop's stage loops and loopRefine. Docs (ROUTING, OWN_ROUTING, CALL_SHEET) updated.
+- Next: the Explore list still times stages with Valhalla's matrix off our tiles; it's a listing, not a route, so it stays for now.
+
 ## Session 2026-11-11 (routing round three, part 2): crests and verified bumps in stage discovery (claude/project-thread-39xbx9, off origin/main)
 
 - IDEAS R-04. backend/src/roads.ts `coverage`: per direction `crested` (share of bins with crest_n >= 2 at `CREST_G`
