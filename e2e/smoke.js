@@ -6940,6 +6940,26 @@ flow('a saved route keeps the map along it: Save fetches the tiles within reach 
   check(true, 'unsaving the route drops its map');
 }, { viewport: { width: 1280, height: 900 } });
 
+flow('offline tiles two areas share: deleting one area keeps the tiles the other still needs, and a copy kept as it arrived keeps its areas (IDEAS F-02, F-03)', async (page, base) => {
+  await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); } catch (_) {} });
+  await page.goto(base + '/index.html');
+  await page.waitForFunction(() => window.ApexOfflineTiles);
+  const r = await page.evaluate(async () => {
+    const T = window.ApexOfflineTiles, b = (n) => new Uint8Array([n]).buffer, has = async (u) => !!(await T.get(u));
+    await T.put('https://x/t/14/1/1.pbf', b(1), 'a1'); await T.put('https://x/t/14/1/2.pbf', b(2), 'a1');
+    await T.put('https://x/t/14/1/2.pbf', b(2), 'route_r1');                  // the route's corridor inside the area
+    await T.put('https://x/t/14/1/3.pbf', b(3), 'route_r1');
+    await T.put('https://x/t/14/1/2.pbf', b(2));                              // the same tile kept again as it arrived
+    await T.removeArea('route_r1');
+    const afterRoute = [await has('https://x/t/14/1/1.pbf'), await has('https://x/t/14/1/2.pbf'), await has('https://x/t/14/1/3.pbf')];
+    await T.removeArea('a1');
+    const afterArea = [await has('https://x/t/14/1/1.pbf'), await has('https://x/t/14/1/2.pbf')];
+    return { afterRoute, afterArea };
+  });
+  check(JSON.stringify(r.afterRoute) === '[true,true,false]', 'the route\'s own tile goes, the shared one stays: ' + JSON.stringify(r));
+  check(JSON.stringify(r.afterArea) === '[false,false]', 'and the area\'s go with the area: ' + JSON.stringify(r));
+});
+
 flow('offline area, as a member: Save the map here keeps the measured roads round it; with no signal a plan still has them, and clearing them (what Sign out calls) leaves nothing (IDEAS F-02)', async (page, base) => {
   let online = true;
   const asks = [], way = { 0: { i: [0, 1, 2], n: [3, 3, 3], cam: [0.02, 0.03, 0.02], cn: [3, 3, 3], rough: [0.1, 0.2, 0.1] } };
