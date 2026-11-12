@@ -4855,7 +4855,7 @@ flow('a drive\'s corners on a road driven four times: each says your cleanest pa
   // where this pass was well off your cleanest at a least even corner, the note says what it lost most (the second pass held the arc)
   check(road.rows.some((r) => r.why === 'arc') && notes.some((n) => /, mostly one steering arc$/.test(n.t)), 'what this pass lost: ' + JSON.stringify(road.rows.filter((r) => r.why)).slice(0, 300));
   const touchText = await page.evaluate(() => document.body.innerText);
-  check(/where your passes differ most, .+ What it lost most there: one steering arc\./.test(touchText), 'the uneven line names what it lost');
+  check(/least even corners?: .+ Lost most: one steering arc\./.test(touchText), 'the uneven line names what it lost');
   const by = road.rows.find((r) => r.by !== null);
   if (by) {
     await page.click('.dv-corner button.dv-rec');
@@ -4920,7 +4920,7 @@ flow('a drive\'s corners on a road driven four times: each says your cleanest pa
     return { t: r.textContent, shown: !!r.offsetParent, practice: e.hidden ? null : e.textContent };
   });
   check(/^Practice on Dry Ridge Rd · One steering arc: /.test(endRoad.practice || ''), 'the end card names the practised road: ' + endRoad.practice);
-  check(endRoad.shown && /^At the \d+ corners? here where your passes differ most, .+\. What it lost most there: one steering arc\.$/.test(endRoad.t), 'the road on the end card: ' + JSON.stringify(endRoad));
+  check(endRoad.shown && /^(\d+ least even corners|Least even corner): .+\. Lost most: one steering arc\.$/.test(endRoad.t), 'the road on the end card: ' + JSON.stringify(endRoad));
   check(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth), 'nothing wider than the phone');
 });
 
