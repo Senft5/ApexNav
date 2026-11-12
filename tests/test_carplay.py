@@ -266,6 +266,7 @@ console.log(JSON.stringify({
   offerUndo: C.offerMessage('o8', 'Pothole reported', '', 'Undo', 5000, 'OK'),
   offerNone: [C.offerMessage('', 'x', '', 'k'), C.offerMessage('o5', '', '', 'k'), C.offerMessage('o6', 'x', '', ''), C.offerMessage('o7', 'x', '', 'k', 1000).seconds],
   alongDescent: C.alongMessage([], 'Long descent: 3.7 mi at 8% +1'),
+  alongCharge: C.alongMessage([{ kind: 'charge', name: 'Tesla Supercharger', lat: 35.5, lon: -83.5 }, { kind: 'charge', name: null, lat: 35.6, lon: -83.6 }]),
   alongNone: [C.alongMessage([]), C.alongMessage(null), C.alongMessage([{ kind: 'view', name: 'Overlook' }])],
   look: C.lookMessage({ id: 'tapedeck', night: { panel: '#0A0C0B', panelInk: '#7DF5DE', accent: '#FFB347' } }, false),
   tulips: [10, 15, 17, 12, 4, 26].map((k) => C.tulipSVG(k, '#7DF5DE')), bad: C.tulipSVG(10, 'red;x'),
@@ -314,6 +315,11 @@ def test_the_cafes_and_fuel_along_go_to_the_car_by_name(maps):
     # and on the car's map, a plate at each one: its name, or what it is when the map has none; never a viewpoint
     assert maps["alongPlates"] == [{"at": [35.123457, -83.9], "kind": "cafe", "text": "The Extremely Lon…"}, {"at": [35.2, -83.8], "kind": "fuel", "text": "Fuel"}]
     assert maps["alongMany"] == 30
+    # an electric car's chargers (scenic.js forCar keeps them instead of the pumps): named on the car and on its map
+    assert maps["alongCharge"]["full"] == "Charge: Tesla Supercharger +1" and maps["alongCharge"]["short"] == "Tesla Supercharger +1"
+    assert [p["kind"] for p in maps["alongCharge"]["places"]] == ["charge", "charge"] and maps["alongCharge"]["places"][1]["text"] == "Charger"
+    for f in ("CarPlay/ApexCarPlay.swift", "CarPlay/ApexCarMap.swift", "web/carmap.js", "web/carmap.html"):
+        assert "charge" in open(os.path.join(ROOT, *f.split("/")), encoding="utf-8").read(), f + " takes the chargers too"
     # a long descent rides on the same line, alone when nothing is along (brake_heat.js descentShort)
     assert maps["alongDescent"] == {"kind": "along", "full": "", "short": "", "places": [], "descent": "Long descent: 3.7 mi at 8% +1"}
     assert "if (car.route && track === t) carAlong(t);                      // and on the car's route preview" in cockpit_source()

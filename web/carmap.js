@@ -271,7 +271,7 @@
     hazards(list) { state.hazards = (Array.isArray(list) ? list : []).filter((h) => h && Array.isArray(h.at)).slice(0, 40); setData(); },
     // the cafés and fuel along the route by name (web/carplay.js alongMessage places)
     places(list) {
-      state.places = (Array.isArray(list) ? list : []).filter((p) => p && Array.isArray(p.at) && (p.kind === 'cafe' || p.kind === 'fuel') && typeof p.text === 'string')
+      state.places = (Array.isArray(list) ? list : []).filter((p) => p && Array.isArray(p.at) && (p.kind === 'cafe' || p.kind === 'fuel' || p.kind === 'charge') && typeof p.text === 'string')
         .slice(0, 30).map((p) => ({ at: p.at, kind: p.kind, text: p.text.slice(0, 18) }));
       setData();
     },
