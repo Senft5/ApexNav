@@ -24,6 +24,14 @@ nothing at all. Each run now records itself in `cron_runs` (migration 0055); `GE
 issue titled "ApexNav: Weekly backup not running" when the backup is over 8 days 6 hours old or its latest run threw (the
 sweep: 2 days 6 hours). A job never recorded passes, so the issue can't open before the first Monday after deploy.
 Undo: drop the two checks in tools/status_check.py; `runCron` can stay.
+## 2026-11-12 (ui-round-three): the website's and the app's promises match today's sharing (claude/project-thread-5sbga7)
+
+Two of the four promises (on the website and in Garage → About Vetta) said there are no time leaderboards and that your
+drives and times stay yours until you share them. Since your calls on 2026-11-11 (sharing with friends and private crews
+on by default; the weekly loop's board) that was no longer true. They now read "No top speeds" and "Shared with your
+people", and the privacy policy gains a paragraph on who sees your Scores and times and how to switch it off. Undo:
+revert the promise lines in web/about.html and web/index.html and the new paragraph in web/privacy.html.
+
 ## 2026-11-12 (ui-round-three): the website's page uses the app's look and shows today's app (claude/project-thread-5sbga7)
 
 about.html showed screenshots of the app from before the redesign (the old tab bar, boxed keys) and set its type in the
