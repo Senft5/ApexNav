@@ -454,7 +454,7 @@ final class ApexCarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDel
         // The same five times as the phone's loop dial (web/cockpit.js LOOP_MINUTES), so the car and the phone offer one set.
         let loops: [(String, Int)] = [("30 minutes", 30), ("1 hour", 60), ("1½ hours", 90), ("2 hours", 120), ("3 hours", 180)]
         let items: [CPListItem] = loops.map { label, minutes in
-            let item = CPListItem(text: label, detailText: "A twisty loop from here, back where you started")
+            let item = CPListItem(text: label, detailText: nil)
             item.handler = { [weak self] _, done in
                 ApexCar.shared.send("loop", ["minutes": minutes])
                 self?.interfaceController?.popToRootTemplate(animated: true, completion: nil)
@@ -462,7 +462,9 @@ final class ApexCarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDel
             }
             return item
         }
-        interfaceController?.pushTemplate(CPListTemplate(title: "Loops from here", sections: [CPListSection(items: items)]), animated: true, completion: nil)
+        interfaceController?.pushTemplate(CPListTemplate(title: "Loops from here",
+            // one header says what every row is, instead of the same line under each of the five (the owner's no-walls-of-text rule)
+            sections: [CPListSection(items: items, header: "Twisty loops, back where you started", sectionIndexTitle: nil)]), animated: true, completion: nil)
     }
 
     @MainActor private func openPlaces() {
@@ -537,16 +539,16 @@ final class ApexCarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDel
         }
         idleBars()
         // the cafés and fuel along it by name (the owner, 2026-11-11), on the picked route's line only: the page looked along
-        // that one, and a long descent on it (brake_heat.js). Variants run longest first and the car shows the first that
-        // fits; the last is the detail alone.
+        // that one, and a long descent on it (brake_heat.js). One name per kind at most (along.short; the two-name line read
+        // as a wall of text on the car, 2026-11-12); the car shows the first variant that fits, the last is the detail alone.
         let along = car.along
         let choices = r.options.enumerated().map { (i, o) -> CPRouteChoice in
             var info = [o.detail]
             if i == r.picked {
                 let line = { (parts: [String]) in parts.filter { !$0.isEmpty }.joined(separator: " · ") }
                 var seen = Set<String>()
-                info = [line([o.detail, along.full, along.descent]), line([o.detail, along.short, along.descent]), line([o.detail, along.descent]),
-                        line([o.detail, along.full]), line([o.detail, along.short]), o.detail].filter { seen.insert($0).inserted }
+                info = [line([o.detail, along.short, along.descent]), line([o.detail, along.short]), line([o.detail, along.descent]),
+                        o.detail].filter { seen.insert($0).inserted }
             }
             return CPRouteChoice(summaryVariants: [o.summary], additionalInformationVariants: info.filter { !$0.isEmpty }, selectionSummaryVariants: [o.summary])
         }
