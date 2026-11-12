@@ -6197,6 +6197,8 @@
         // the week's loop, where nobody in the area has built it yet: our own router's loops (graph_router.js loop) over its tiles
         graphKeys: () => (ownOn() ? ownIndex() : null),
         loops: (start, km) => (ownOn() ? ApexOwnRouting.loops(ownRouter(), { start, km, level: LOOP_STYLE }) : Promise.resolve([])),
+        // Challenge a friend: a duel on the loop (duels.js challengeOn), won by time unless they pick Score
+        challenge: (stage) => { if (duels && duels.challengeOn) { closeSheet(); duels.challengeOn(stage); } },
         // Drive it: the loop itself is the route (as a roadbook road is), not just the way to its start
         driveLoop: async (c, g) => {
           closeSheet();
