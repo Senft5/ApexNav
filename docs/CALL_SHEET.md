@@ -11,7 +11,15 @@ Under the Work on (or the practice under way) tip, one line names the road where
 corners your passes differ at. Calls: from the road books (roads driven three or more times), read once per library and
 shared with the Log; none when no road's uneven corners name the skill. Undo: remove the `skillRoadLine` block in
 renderDriving (web/analysis.html).
+
 =======
+## 2026-11-12 (meets on the map): public crews' meets pinned on the map (claude/project-thread-uwmi4e)
+
+Calls I made: a Meets layer in Layers, off by default like Friends, for members only. It pins the same public meets as
+Crew → Meets near you, one pin per meeting point with the day on it. A tap opens the existing meet card, so there is one
+card to keep right. Your own crew's listed drives show too, with "answer on the crew page" instead of Join. It asks by the
+map centre's 0.1-degree cell, never from a privacy zone, at most every 5 minutes per cell. Undo: remove the `meets`
+button in web/index.html and the `meetsMap` lines in cockpit.js.
 ## 2026-11-11 (ui-round-three): an empty Garage shows a parking bay and one big "Add a car" key (claude/project-thread-5sbga7)
 
 With no cars yet, the Garage said one grey sentence over a small outlined key. Now it is a small page like the first
@@ -120,7 +128,6 @@ directions to the loop's start, like a crew drive's meeting point. The phone sen
 1-degree area, as the Where to? section does. The reminder never quotes your place or days left (they change by then),
 and skips the loop if the week is over by the day it names. Undo: drop `attack` from the `YR.suggest` call in cockpit.js
 paintDeck (or move `if (ta) return attackSugg();` in your_roads.js to change its rank).
-
 
 ## 2026-11-11 e2e: two flows raced the refine's swap after #434
 - **What:** "taste from picks" and "plan flow (e, f)" wait for `apexDebug.refineDone` (new, set when ownRefine ends) and expect the three routes found after the refine swaps Fun's pick; taste from picks takes the third by a swipe (Quick's is >30 % faster than Fun's on the motorway grid, so it teaches nothing by design).
@@ -237,7 +244,6 @@ where its members were (within a mile and 10 minutes late by default, but exact 
 your private crews only, as cars already did. The sheet, Who sees what and the privacy page say "private crews". Nothing
 stored changes. Undo: revert the PR (public crews' members see your position again).
 
-
 ## 2026-11-11 (ui-round-two): the blank band at the top of the map, signed-out 401s, a crew's name and the Share box (claude/project-thread-5sbga7)
 
 The blank paper band at the top of the idle map (as tall as the deck under it) was not missing tiles: the map draws all
@@ -326,7 +332,6 @@ and height) heats the discs, and the air cools them. It never says a temperature
 it counts engine braking as brake work, so it errs toward warning. Ordinary hills stay quiet (the two demo drives never
 get past cool). Nothing leaves the phone. Undo: revert the PR, or remove the `noteBrakes(...)` calls in cockpit.js to keep
 only the drive page line.
-
 
 ## 2026-11-11 (routing round two, part 2): mid-drive, Vetta offers to go round a police report; a late loop drops a stage before going home
 
