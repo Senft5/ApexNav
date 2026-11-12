@@ -344,13 +344,13 @@
       return { apex: a, credits: Object.fromEntries(SKILLS.map((k) => [k, o[k]])), size: o.size === undefined ? null : o.size, dir: o.dir === undefined ? null : o.dir, x: (d.lon[a] - lon0) * c * 111320, y: (d.lat[a] - lat0) * 110540, hx: hx / hn, hy: hy / hn, level: level(SKILLS.reduce((t, k) => t + o[k], 0) / SKILLS.length) };
     });
   }
-  /** "On this road: your cleanest pass yet at 7 of the 24 corners you have driven three or more times, level with it at 2." */
+  /** "On this road: cleanest yet at 7 of 24 corners driven 3+ times, level at 2." */
   function roadRecordLine(r) {
     if (!r || !(r.corners > 0)) return null;
-    const of = `of the ${r.corners} corner${r.corners === 1 ? '' : 's'} here you have driven three or more times`;
-    if (!r.best && !r.level) return `On this road: ${r.corners} corner${r.corners === 1 ? '' : 's'} you have driven three or more times; your cleanest pass of ${r.corners === 1 ? 'it' : 'each'} came on another drive.`;
-    if (!r.best) return `On this road: level with your cleanest pass at ${r.level} ${of}.`;
-    return `On this road: your cleanest pass yet at ${r.best} ${of}${r.level ? `, level with it at ${r.level}` : ''}.`;
+    const of = `of ${r.corners} corner${r.corners === 1 ? '' : 's'} driven 3+ times`;
+    if (!r.best && !r.level) return `On this road: ${r.corners} corner${r.corners === 1 ? '' : 's'} driven 3+ times, cleanest on other drives.`;
+    if (!r.best) return `On this road: level with your cleanest at ${r.level} ${of}.`;
+    return `On this road: cleanest yet at ${r.best} ${of}${r.level ? `, level at ${r.level}` : ''}.`;
   }
   /** The credit that differs most between a corner's cleanest and least clean pass (port of driver_profile._why). */
   function whyOf(best, worst) {
@@ -478,7 +478,7 @@
     if (row.level >= row.record) return `Level with your cleanest here (${row.record}${on ? `, ${on}` : ''})`;
     return `Your cleanest here: ${row.record}${on ? `, ${on}` : ''}; this pass ${row.level}${row.why && WORDS[row.why] ? `, mostly ${lowerName(row.why)}` : ''}`;
   }
-  /** "At the 3 corners here where your passes differ most, this drive was near your cleanest at 2." (null with none) */
+  /** "3 least even corners: near your cleanest at 2." (null with none) */
   function roadUnevenLine(r) {
     if (!r || !(r.uneven > 0)) return null;
     // the credit named most often where this drive was off your cleanest (rows' why; a tie to the first in road order)
@@ -486,7 +486,7 @@
     for (const x of r.rows || []) if (x && WORDS[x.why]) n.set(x.why, (n.get(x.why) || 0) + 1);
     let top = null;
     for (const [k, c] of n) if (!top || c > top[1]) top = [k, c];
-    const lost = top ? ` What it lost most there: ${lowerName(top[0])}.` : '';
+    const lost = top ? ` Lost most: ${lowerName(top[0])}.` : '';
     return unevenHead(r) + lost;
   }
   /** The end card's one line on a road you have driven before: where this drive lost most at the road's least even
@@ -497,10 +497,11 @@
     return off ? roadUnevenLine(r) : roadRecordLine(r);
   }
   function unevenHead(r) {
-    const at = r.uneven === 1 ? 'At the corner here where your passes differ most' : `At the ${r.uneven} corners here where your passes differ most`;
-    if (!r.steady) return `${at}, this drive was not near your cleanest${r.uneven === 1 ? '' : ' at any of them'}: ${r.uneven === 1 ? 'it is' : 'they are'} the place${r.uneven === 1 ? '' : 's'} to work on.`;
-    if (r.steady === r.uneven) return `${at}, this drive was near your cleanest ${r.uneven === 1 ? 'there' : 'at every one'}.`;
-    return `${at}, this drive was near your cleanest at ${r.steady}.`;
+    // "3 least even corners: near your cleanest at 2." (near: within NEAR_BEST of it)
+    const at = r.uneven === 1 ? 'Least even corner' : `${r.uneven} least even corners`;
+    if (!r.steady) return `${at}: off your cleanest${r.uneven === 1 ? '' : ` at all ${r.uneven}`}.`;
+    if (r.steady === r.uneven) return `${at}: near your cleanest${r.uneven === 1 ? '' : ` at all ${r.uneven}`}.`;
+    return `${at}: near your cleanest at ${r.steady}.`;
   }
   /** A drive's own touch (its Log page): { drive (from DRIVE_TOUCH_MIN corners), usual (every other drive's corners) }. */
   // outside: "above" when the drive's middle corner was beyond the usual upper quartile (or quick where that is timed),

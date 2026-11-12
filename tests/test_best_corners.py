@@ -141,21 +141,21 @@ def test_road_records_corner_by_corner():
     out = json.loads(subprocess.run([NODE, "-e", runner, os.getcwd()], input=json.dumps([mine, others]), capture_output=True, text=True, check=True,
                                     env={**os.environ, "LOST": json.dumps(lost_in)}).stdout)
     assert out["r"] == r and out["ids"] == "a" and out["lost"] == dp.road_records(*lost_in)
-    assert out["lostLine"] == "At the 2 corners here where your passes differ most, this drive was not near your cleanest at any of them: they are the places to work on. What it lost most there: one steering arc."
-    assert out["un"] == ["At the 3 corners here where your passes differ most, this drive was near your cleanest at 2.",
-                         "At the corner here where your passes differ most, this drive was near your cleanest there.",
-                         "At the 3 corners here where your passes differ most, this drive was near your cleanest at every one.",
-                         "At the corner here where your passes differ most, this drive was not near your cleanest: it is the place to work on.",
-                         "At the 2 corners here where your passes differ most, this drive was not near your cleanest at any of them: they are the places to work on.",
+    assert out["lostLine"] == "2 least even corners: off your cleanest at all 2. Lost most: one steering arc."
+    assert out["un"] == ["3 least even corners: near your cleanest at 2.",
+                         "Least even corner: near your cleanest.",
+                         "3 least even corners: near your cleanest at all 3.",
+                         "Least even corner: off your cleanest.",
+                         "2 least even corners: off your cleanest at all 2.",
                          None, None]
     assert out["notes"] == ["Your cleanest of 4 passes here (92)", "Level with your cleanest here (90, Aug 12)",
                             "Your cleanest here: 90, Aug 12; this pass 82", "Your cleanest here: 90; this pass 82",
                             "Your cleanest here: 90, Aug 12; this pass 60, mostly one steering arc", None]
-    assert out["say"] == ["On this road: your cleanest pass yet at 1 of the 2 corners here you have driven three or more times.",
-                          "On this road: your cleanest pass yet at 7 of the 24 corners here you have driven three or more times, level with it at 2.",
-                          "On this road: 1 corner you have driven three or more times; your cleanest pass of it came on another drive.",
+    assert out["say"] == ["On this road: cleanest yet at 1 of 2 corners driven 3+ times.",
+                          "On this road: cleanest yet at 7 of 24 corners driven 3+ times, level at 2.",
+                          "On this road: 1 corner driven 3+ times, cleanest on other drives.",
                           None, None,
-                          "On this road: level with your cleanest pass at 24 of the 24 corners here you have driven three or more times."]
+                          "On this road: level with your cleanest at 24 of 24 corners driven 3+ times."]
 
 
 def test_road_book_every_corner_of_a_road():
@@ -221,8 +221,8 @@ def test_road_end_line_picks_the_road_words():
               "process.stdout.write(JSON.stringify([P.roadEndLine({corners:4,best:1,level:0,uneven:1,steady:0,rows:[{why:'brake'}]}),"
               "P.roadEndLine({corners:4,best:1,level:0,uneven:1,steady:1,rows:[{why:null}]}),P.roadEndLine({corners:0}),P.roadEndLine(null)]));")
     out = json.loads(subprocess.run([NODE, "-e", runner, os.getcwd()], capture_output=True, text=True, check=True).stdout)
-    assert out == ["At the corner here where your passes differ most, this drive was not near your cleanest: it is the place to work on. What it lost most there: brakes done by the apex.",
-                   "On this road: your cleanest pass yet at 1 of the 4 corners here you have driven three or more times.", None, None]
+    assert out == ["Least even corner: off your cleanest. Lost most: brakes done by the apex.",
+                   "On this road: cleanest yet at 1 of 4 corners driven 3+ times.", None, None]
 
 
 def test_roads_to_work_names_the_least_even_roads():
