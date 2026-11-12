@@ -5552,8 +5552,9 @@
               ...recentPlaces().map(p => ({ ...p, kind: 'Recent' })),
               ...loadHighlights().filter(h => Number.isFinite(h.lat) && Number.isFinite(h.lon)).map(h => ({ label: h.name || 'Spot', lat: h.lat, lon: h.lon, kind: 'Spot' }))].slice(0, 10 + ApexPinnedPlaces.MAX);
       // with nothing typed, three places and a row for the rest (REVIEW.md: search and three recents, the default first)
+      // The rest are drawn too but stay folded until the keyboard is up (TestFlight 2026-11-12 "evil cluttered gap"): while
+      // typing the list is the sheet, so it fills the space above the keyboard instead of a link and an empty band.
       const more = !q && !allPlaces && rows.length > 3 ? rows.length - 3 : 0;
-      if (more) rows = rows.slice(0, 3);
       paintPlaces(q, rows, empty, more);
     }
     function paintPlaces(q, rows, empty, more) {
@@ -5561,8 +5562,9 @@
       shownRows = { q, rows: empty ? [] : rows };
       paintTask();
       if (empty) { const n = document.createElement('p'); n.className = 'note'; n.textContent = empty; box.replaceChildren(n); box.hidden = false; return; }
-      box.replaceChildren(...rows.map(p => {
+      box.replaceChildren(...rows.map((p, i) => {
         const b = document.createElement('button'); b.className = 'place';
+        if (more && i >= rows.length - more) b.classList.add('place-extra');
         const name = document.createElement('b'); name.textContent = p.label;
         const kind = document.createElement('span'); kind.textContent = p.kind || '';
         b.append(name, kind);
@@ -5573,6 +5575,7 @@
         const un = document.createElement('button'); un.className = 'linkbtn'; un.textContent = 'Unpin'; un.setAttribute('aria-label', `Unpin ${p.label}`);
         un.addEventListener('click', (e) => { e.stopPropagation(); ApexPinnedPlaces.unpin(localStorage, p.pinned.name); renderPlaces(); });
         const row = document.createElement('div'); row.className = 'row pinned-row'; row.append(b, un);
+        if (b.classList.contains('place-extra')) { b.classList.remove('place-extra'); row.classList.add('place-extra'); }
         return row;
       }));
       if (more) {
@@ -5726,6 +5729,7 @@
         if (e.key !== 'Enter') return;
         if (window.apexDebug) window.apexDebug.enterAt = performance.now();
         e.preventDefault(); e.target.blur();
+        if (id === 'destInput' && !e.target.value.trim()) return;      // nothing typed: Go only puts the keyboard away (Find a loop is back)
         if (id === 'fromInput' && $('optSheet').classList.contains('open')) { closeOptions(); if (!plannedRoute && $('destInput').value.trim()) routeToQuery(); return; }
         const pasted = id === 'destInput' && window.ApexRouteImport && ApexRouteImport.parseMapsLink($('destInput').value);   // a maps link beats the top suggestion
         if (pasted || id !== 'destInput') routeToQuery(); else goTyped();
@@ -5805,6 +5809,11 @@
     }));
     $('deckNearby').addEventListener('click', openNearby);
     $('planNearbyChip').addEventListener('click', openNearby);
+    // With the keyboard up the sheet is only the search (index.html, TestFlight 2026-11-12): dragging the list or tapping its
+    // background puts the keyboard away, as in any maps app, and the shortcuts and Find a loop come back.
+    const typingInPlan = () => document.documentElement.classList.contains('kb-open') && [$('destInput'), $('fromInput')].includes(document.activeElement);
+    $('planBody').addEventListener('scroll', () => { if (typingInPlan()) document.activeElement.blur(); }, { passive: true });
+    $('planBody').addEventListener('click', (e) => { if (typingInPlan() && !e.target.closest('button, a, input, summary, [role]')) document.activeElement.blur(); });
     $('nearbyClose').addEventListener('click', closeNearby);
     document.querySelectorAll('[data-fun]').forEach(b => b.addEventListener('click', () => changeLevel(b.dataset.fun)));
     setFunLevel(funLevel);
