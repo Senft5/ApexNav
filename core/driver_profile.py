@@ -767,6 +767,18 @@ def _side(where):
     return None
 
 
+def _road(where):
+    """The road a per-road plan keeps to (its drives' name, trimmed and lower case), or None for a plan over every road."""
+    key = str((where or {}).get("road") or "").strip().lower() if isinstance(where, dict) else ""
+    return key or None
+
+
+def on_plan_road(plan, name) -> bool:
+    """Whether a drive called name counts for the plan: always, unless the plan keeps to one road and this is another."""
+    road = _road(plan.get("where")) if plan else None
+    return road is None or str(name or "").strip().lower() == road
+
+
 def _against(xs: list, base):
     """(level, delta in levels, sure) of corners xs against base (mean, se) of the corners before; delta None without one."""
     m, se = da._mean_se(xs)
@@ -801,12 +813,15 @@ def drive_practice(obs: list, plan: dict, base=None):
 def practice(drives: list, plan: dict):
     """The practice so far. drives: profile's, each with at (its local start, "YYYY-MM-DDTHH:MM", or None: unknown, and
     counted before). Returns {skill, since, before {level, n, mean, se}, after {level, n}, delta, sure, drives [{id, at,
-    ...drive_practice}]}, or None for no plan. Every corner of a drive that started before since is "before"."""
+    ...drive_practice}], road: the one road it keeps to, by name, or None}, or None for no plan. Every corner of a drive
+    that started before since is "before"."""
     k = plan.get("skill") if plan else None
     if k not in SKILLS:
         return None
     since = str(plan.get("since") or "")
-    order = sorted((d for d in drives if d.get("obs")), key=lambda d: (d.get("at") or "", str(d.get("id"))))
+    # a per-road plan (where: {road, name}, from that road's book) reads that road's drives alone, before and after
+    order = sorted((d for d in drives if d.get("obs") and on_plan_road(plan, d.get("name"))),
+                   key=lambda d: (d.get("at") or "", str(d.get("id"))))
     before, after, rows = [], [], []
     for d in order:
         xs = _vals(d["obs"], k)
@@ -818,7 +833,8 @@ def practice(drives: list, plan: dict):
             before.extend(xs)
     base = None
     out = {"skill": k, "since": since, "before": {"level": None, "n": len(before), "mean": None, "se": None},
-           "after": {"level": None, "n": len(after)}, "delta": None, "sure": False, "drives": []}
+           "after": {"level": None, "n": len(after)}, "delta": None, "sure": False, "drives": [],
+           "road": (str(plan["where"].get("name") or "").strip() or _road(plan["where"])) if _road(plan.get("where")) else None}
     if len(before) >= SKILL_MIN:
         m, se = da._mean_se(before)
         base = (da._r(m, 4), da._r(se, 4))          # as the plan keeps it for the end card, so both say the same
