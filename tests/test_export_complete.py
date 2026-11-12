@@ -17,6 +17,7 @@ TECHNICAL = {
     "ingest_pending": "road data waiting to be merged (anonymous once merged)",
     "rank_slots": "leaderboard slots, rebuilt from the boards",
     "road_hour_holders": "who first measured a road this hour (pioneer counting)",
+    "road_floor": "keyed hashes of the first two established drivers of a road (the privacy floor); no id, unreadable without the server pepper",
 }
 
 
