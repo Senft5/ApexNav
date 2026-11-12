@@ -118,6 +118,16 @@ describe("fixed time attack", () => {
     expect((await api(nohandle, "POST", "/api/ta/enter", { id })).status).toBe(409);
   });
 
+  it("twenty runs in one upload: each checked, the quickest kept, one place per circuit", async () => {
+    const [a, b] = [await makeUser("alice"), await makeUser("bob")];
+    const id = (await build(a, STARTS[0])).circuit.id, day = await today();
+    const sb = (await json(api(b, "POST", "/api/ta/enter", { id }))).segment_id as string;
+    const runs = Array.from({ length: 20 }, (_, i) => ({ segment_id: sb, time_s: i === 19 ? 100 : 700 - i, driven_on: day }));
+    expect(await json(api(b, "POST", "/api/ta/runs", { runs }))).toEqual({ accepted: 19, refused: 1,
+      places: [{ id, name: "Dry Ridge Road loop", place: 1, of: 1, time_s: 682, gap_s: 0 }] });
+    expect((await api(b, "POST", "/api/ta/runs", { runs: [...runs, runs[0]] })).status).toBe(400);
+  });
+
   it("someone quicker this week is in For you", async () => {
     const [a, b] = [await makeUser("alice"), await makeUser("bob")];
     const id = (await build(a, STARTS[0])).circuit.id, day = await today();
