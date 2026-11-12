@@ -184,3 +184,14 @@ def test_the_where_to_row_says_the_loop_and_your_place(out):
         "Time attack: Dry Ridge loop (10.6 km) · last day",
         None, None,
     ]
+
+
+def test_challenge_a_friend_on_the_loop_is_wired():
+    """IDEAS S-24 on the week's loop: the duel is on your own copy (the id entering hands back), won by time by default."""
+    from pathlib import Path
+    root = Path(ROOT)
+    ta = (root / "web" / "time_attack.js").read_text()
+    duels = (root / "web" / "duels.js").read_text()
+    assert "Challenge a friend" in ta and "page.challenge({ id: r.j.segment_id" in ta
+    assert "function challengeOn(stage)" in duels and "kind = 'time'" in duels and "f.status === 'accepted'" in duels
+    assert "duels.challengeOn(stage)" in (root / "web" / "cockpit.js").read_text()

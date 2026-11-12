@@ -233,6 +233,12 @@
             // the loop itself as the route when the page can plan it (cockpit driveLoop), else the way to its start
             if (g.length && page.driveLoop) acts.append(btn('Drive it', () => page.driveLoop(c, g), 'ink-btn'));
             else if (g.length && page.goTo) acts.append(btn('Drive it', () => page.goTo({ label: c.name, lat: g[0][0], lon: g[0][1] }), 'ink-btn'));
+            // a duel on the loop with a friend (duels.js challengeOn): your copy's stage id, which entering again hands back
+            if (page.challenge) acts.append(btn('Challenge a friend', async () => {
+              const r = await call('POST', '/api/timeattack/enter', { cell: t.cell });
+              if (!r.ok || !r.j || !r.j.segment_id) { say(r.code); return; }
+              page.challenge({ id: r.j.segment_id, name: c.name });
+            }, 'linkbtn'));
           } else {
             acts.append(btn('Enter', async () => {
               const r = await call('POST', '/api/timeattack/enter', { cell: t.cell });

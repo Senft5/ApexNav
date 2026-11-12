@@ -167,6 +167,15 @@
       return true;
     }
 
+    // one choice of several as chips (pressed shows which)
+    const chips = (list, get, set, label) => {
+      const row = el('div', { className: 'row', style: 'flex-wrap:wrap' }); row.setAttribute('role', 'group'); row.setAttribute('aria-label', label);
+      const paint = () => row.querySelectorAll('button').forEach((b) => { const on = b.dataset.v === String(get()); b.classList.toggle('on', on); b.setAttribute('aria-pressed', String(on)); });
+      for (const [v, t] of list) { const b = btn(t, () => { set(v); paint(); }, 'chip'); b.dataset.v = String(v); row.append(b); }
+      paint();
+      return row;
+    };
+
     /** The Challenge sheet for one friend: one of your stages, how many days, Send. */
     async function challenge(f) {
       const s = sheet(`Challenge @${f.handle}`);
@@ -176,13 +185,6 @@
       const stages = Array.isArray(r.data) ? r.data : [];
       if (!stages.length) { bodyEl.replaceChildren(el('p', { className: 'people-lead', textContent: 'A duel is on one of your stages. Mark a stretch you love as a stage on a drive’s page in the Log, then come back.' })); return; }
       let pick = stages[0].id, days = 7, kind = 'score';
-      const chips = (list, get, set, label) => {
-        const row = el('div', { className: 'row', style: 'flex-wrap:wrap' }); row.setAttribute('role', 'group'); row.setAttribute('aria-label', label);
-        const paint = () => row.querySelectorAll('button').forEach((b) => { const on = b.dataset.v === String(get()); b.classList.toggle('on', on); b.setAttribute('aria-pressed', String(on)); });
-        for (const [v, t] of list) { const b = btn(t, () => { set(v); paint(); }, 'chip'); b.dataset.v = String(v); row.append(b); }
-        paint();
-        return row;
-      };
       const send1 = btn(`Send to @${f.handle}`, async () => {
         send1.disabled = true;
         const st = stages.find((x) => x.id === pick);
@@ -198,7 +200,31 @@
         el('div', { className: 'row' }, send1));
     }
 
-    return { cards, challenge, openStage: page.openStage };
+    /** The Challenge sheet the other way round (the week's time attack loop, IDEAS S-24): the stage is given, pick a friend.
+     *  Won by time unless you say Score. `stage` is { id, name }, one of your own stages (the loop's copy in your Stages). */
+    async function challengeOn(stage) {
+      const s = sheet(`Challenge on ${stage.name}`);
+      const bodyEl = el('div', { className: 'stack-12 duel-pick' }, el('p', { className: 'note', textContent: 'Loading your friends…' }));
+      s.pop.append(bodyEl);
+      const r = await call('GET', '/api/friends');
+      const friends = (Array.isArray(r.data) ? r.data : []).filter((f) => f && f.status === 'accepted' && f.handle);
+      if (!friends.length) { bodyEl.replaceChildren(el('p', { className: 'people-lead', textContent: r.ok ? 'A duel is with a friend. Add one on People, then come back.' : 'Couldn’t load your friends. Check signal.' })); return; }
+      let who = friends[0].handle, days = 7, kind = 'time';
+      const send1 = btn('Send', async () => {
+        send1.disabled = true;
+        if (await send(who, stage.id, days, stage.name, kind)) s.close();
+        send1.disabled = false;
+      }, 'ink-btn solid');
+      bodyEl.replaceChildren(
+        el('p', { className: 'people-lead', textContent: `You both drive ${stage.name} as often as you like in the days you choose; your best counts.` }),
+        el('b', { textContent: 'Friend' }), chips(friends.slice(0, 30).map((f) => [f.handle, '@' + f.handle]), () => who, (v) => { who = v; }, 'Friend'),
+        el('b', { textContent: 'Won by' }), chips([['time', 'Time'], ['score', 'Vetta Score']], () => kind, (v) => { kind = v; }, 'Won by'),
+        el('b', { textContent: 'For' }), chips(DAYS.map((n) => [n, `${n} days`]), () => days, (v) => { days = v; }, 'How long'),
+        el('p', { className: 'note', textContent: 'They get the loop in their Stages when they accept. A duel counts only what each of you shares with the other: times for a time duel, Scores for a Score duel. Drive within the law.' }),
+        el('div', { className: 'row' }, send1));
+    }
+
+    return { cards, challenge, challengeOn, openStage: page.openStage };
   }
 
   const api = { card, shown, daysLeft, timesLine, clock, mount, DAYS };

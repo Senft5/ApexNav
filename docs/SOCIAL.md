@@ -98,6 +98,8 @@ and in random batches so a trace cannot be re-assembled.
   (216 km/h) average over the stage is refused. Times are kept eight weeks. `backend/src/time_attack.ts`, `web/time_attack.js`.
 - It is a public time board on public roads, which the guardrails ruled out before the owner's call; the risk and the copy
   rules are in docs/APP_REVIEW.md (1.4).
+- **Challenge a friend** on the loop (entered weeks): a duel on your copy of the loop (2.7), won by time unless you pick
+  Score, 3, 7 or 14 days. The friend gets the loop in their Stages on Accept; it counts on the week's board only if they enter.
 
 ### 2.10 For you (members; built 2026-11-11)
 - One list on People → Friends of what happened to you, newest first, each a sentence with at most one key: a friend or

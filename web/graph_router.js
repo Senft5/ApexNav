@@ -1912,7 +1912,8 @@
       preload: (at) => ask({ type: 'preload', ...at }, 20000).then((m) => m.result),
       keep: (at) => ask({ type: 'keep', ...at }, 120000).then((m) => m.result),
       explore: (req) => ask({ type: 'explore', ...req }).then((m) => m.result),
-      loop: (req) => ask({ type: 'loop', ...req }).then((m) => m.result),
+      // a loop loads every tile its length can reach and searches them all: on a phone a long one outlasted 8 s (2026-11-12)
+      loop: (req) => ask({ type: 'loop', ...req }, 20000).then((m) => m.result),
       round: (req) => ask({ type: 'round', ...req }, 12000).then((m) => m.result),
       close: () => { try { if (w) w.terminate(); } catch (_) { /* gone */ } w = null; },
     };
