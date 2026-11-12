@@ -2624,6 +2624,21 @@
       policeSeen.set(t, { list, r });
       return r;
     }
+    // the card's word on members' "Road closed" reports: true when a planned route or loop still drives within 40 m of one
+    // (graph_router.js CLOSED_M: our router goes round them where it can; with no way round, or a report that landed after
+    // the plan, the route goes by, and the driver should know). Reports for the area not in hand: null, nothing said
+    const closedSeen = new WeakMap();
+    function closedOnCard(t) {
+      if (!t || !(t.id === 'route_dest' || /^loop_/.test(t.id || '')) || !Array.isArray(t.lat) || t.lat.length < 2 || !window.ApexHazardReports) return null;
+      const ends = [{ lat: t.lat[0], lon: t.lon[0] }, { lat: t.lat[t.lat.length - 1], lon: t.lon[t.lon.length - 1] }];
+      if (!hazardsCover(ends)) return null;
+      const list = closureCache.list, kept = closedSeen.get(t);
+      if (kept && kept.list === list) return kept.r;
+      const pts = ApexHazardReports.closuresFor(list, ends);
+      const r = pts.length > 0 && ApexHazardReports.passesNear(t.lat.map((la, i) => [t.lon[i], la]), pts, 40);
+      closedSeen.set(t, { list, r });
+      return r;
+    }
     let camWarmAt = -1e9;
     function policeWarm() {
       const p = state.lastPosition;
@@ -2701,8 +2716,9 @@
           if (r.ok) list = await r.json();
         } catch (_) { /* offline or signed out: no closures known */ }
         Object.assign(closureCache, { key: `${mid.lat.toFixed(1)},${mid.lon.toFixed(1)}`, mid: { lat: mid.lat, lon: mid.lon }, at: performance.now(), list: Array.isArray(list) ? list : [], asking: null });
-        // the reports landed after the card went up (a slow answer; a plan waits 0.2 s at most): its word again
-        if (avoid.police && plannedRoute && !driveActive && typeof renderRouteCard === 'function') setTimeout(() => { try { if (plannedRoute) renderRouteCard(plannedRoute); } catch (_) {} }, 0);
+        // the reports landed after the card went up (a slow answer; a plan waits 0.2 s at most): its word again (police
+        // reports with Avoid police on, and a reported closure the route passes, always)
+        if (plannedRoute && !driveActive && typeof renderRouteCard === 'function') setTimeout(() => { try { if (plannedRoute) renderRouteCard(plannedRoute); } catch (_) {} }, 0);
         return closureCache.list;
       })();
       Object.assign(closureCache, { asking: ask, askMid: { lat: mid.lat, lon: mid.lon } });
@@ -3140,6 +3156,7 @@
       // Avoid police reports: the live reports near this route, from the reports as they are now (they can land after the
       // plan: the card is painted again then, policeLanded); none known: nothing said
       const pol = policeOnCard(t);
+      const closed = closedOnCard(t) ? 'Passes a reported road closure · ' : '';
       const around = pol && pol.n && !pol.passes ? `Around ${pol.n === 1 ? 'a police report' : `${pol.n} police reports`} · ` : '';
       const missedPolice = pol && pol.passes && !(t.unavoided || []).includes('police') ? 'Couldn\'t avoid police reports · ' : '';
       // Planned routes only: a driven track's own time has passed.
@@ -3150,7 +3167,7 @@
       // your taste (taste.js) when it moved this route up: the word for what you lean to, never a number
       const tasteLine = (() => { try { const f = t.tasteBonus >= 1 && window.ApexTaste ? ApexTaste.fit(ApexTaste.load(localStorage)) : null;
         if (!f) return ''; const k = ApexTaste.AXES.slice().sort((a, b) => f[b] - f[a])[0]; return `Suits your taste for ${{ tech: 'technical roads', flow: 'flowing roads', smooth: 'smooth surfaces' }[k]} · `; } catch (_) { return ''; } })();
-      $('routeCardSub').textContent = `${tasteLine}${carLine ? carLine + ' · ' : ''}${missed}${missedPolice}${around}${towns}${sun}${cams}${feel}`.replace(/ · $/, '');
+      $('routeCardSub').textContent = `${tasteLine}${carLine ? carLine + ' · ' : ''}${closed}${missed}${missedPolice}${around}${towns}${sun}${cams}${feel}`.replace(/ · $/, '');
       $('routeCardSub').hidden = !$('routeCardSub').textContent;
       $('routeCardWhy').textContent = t.why || '';
       $('routeCardWhy').hidden = !t.why;

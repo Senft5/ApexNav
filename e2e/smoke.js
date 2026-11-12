@@ -1986,6 +1986,32 @@ flow('avoid police reports: with the chip on, live police reports near the trip 
   check(Number.isFinite(waited) && waited <= 260, 'the route card\'s budget holds: the plan waited ' + waited + ' ms for the police reports');
 }, { geolocation: { latitude: 35.9606, longitude: -83.9207 }, permissions: ['geolocation'] });
 
+// a member's "Road closed" report on the only way there (the stubbed router ignores exclusions, as if no way round): the
+// card says the route passes it, and a closure off the route says nothing (2026-11-12)
+flow('a reported road closure the route still drives is on the route card (Worker and router stubbed)', async (page, base) => {
+  await page.route('https://photon.komoot.io/**', (route) => route.fulfill({ contentType: 'application/json', body: JSON.stringify({ features: [
+    { geometry: { coordinates: [-83.9700, 35.7565] }, properties: { name: 'Maryville', state: 'Tennessee' } }] }) }));
+  await page.route('https://valhalla1.openstreetmap.de/route', (route) => {
+    const req = JSON.parse(route.request().postData() || '{}');
+    route.fulfill({ contentType: 'application/json', body: JSON.stringify(stubTrip(req.locations)) });
+  });
+  let closures = [{ id: 'c1', kind: 'closure', lat: 35.86255, lon: -83.94135, heading: null, confirms: 1, clears: 0, m: 0 }];
+  await page.route(base + '/api/**', (route) => {
+    const u = new URL(route.request().url());
+    if (u.pathname === '/api/hazards') return route.fulfill({ contentType: 'application/json', body: JSON.stringify(closures) });
+    return route.fulfill({ status: 200, contentType: 'application/json', body: '[]' });
+  });
+  await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); localStorage.setItem('apex.signedIn', '1'); } catch (_) {} });
+  await page.goto(base + '/index.html');
+  await page.waitForFunction(() => window.apexDebug && window.apexDebug.map);
+  await page.click('#destInput'); await page.fill('#destInput', 'Maryville');
+  await page.waitForSelector('#placeList .place', { timeout: 10000 });
+  await page.click('#placeList .place');
+  await page.waitForFunction(() => { const t = window.apexDebug.track; return t && t.kind === 'route'; }, null, { timeout: 20000 });
+  await page.waitForFunction(() => /Passes a reported road closure/.test(document.getElementById('routeCardSub').textContent), null, { timeout: 10000 });
+  check(Array.isArray(await page.evaluate(() => apexDebug.lastClosed)), 'the plan carried the closures to our router');
+}, { geolocation: { latitude: 35.9606, longitude: -83.9207 }, permissions: ['geolocation'] });
+
 flow('avoid police reports, driving: a report that lands on the route ahead is offered once with Go round, which routes round it (Worker and router stubbed)', async (page, base) => {
   await page.route('https://tiles.openfreemap.org/**', (route) => (route.request().url().includes('/styles/')
     ? route.fulfill({ contentType: 'application/json', body: JSON.stringify({ version: 8, sources: {}, layers: [{ id: 'bg', type: 'background', paint: { 'background-color': '#eee' } }] }) })

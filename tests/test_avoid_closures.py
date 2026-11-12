@@ -42,3 +42,14 @@ def test_the_loop_box_stays_inside_the_camera_maps_limit():
     assert "Math.min(35, km / 3)" in b
     # 35 km each way at 50 degrees north: under FunRoute.CAMERA_BOX_DEG (1.0) in latitude and longitude
     assert 2 * 35 / 110.54 < 1.0 and 2 * 35 / (111.32 * math.cos(math.radians(50))) < 1.0
+
+
+def test_the_card_says_when_a_route_still_passes_a_reported_closure():
+    i = SRC.index("function closedOnCard(")
+    b = SRC[i:SRC.index("\n    }\n", i)]
+    assert "ApexHazardReports.closuresFor(list, ends)" in b and "passesNear(" in b and ", pts, 40)" in b
+    assert "t.id === 'route_dest' || /^loop_/.test(t.id || '')" in b
+    assert "const closed = closedOnCard(t) ? 'Passes a reported road closure · ' : '';" in SRC
+    assert "${closed}${missed}" in SRC
+    # a slow hazards answer paints the card again for everyone, not only with Avoid police on
+    assert "if (plannedRoute && !driveActive && typeof renderRouteCard === 'function')" in SRC
