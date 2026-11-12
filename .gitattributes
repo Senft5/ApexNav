@@ -1,0 +1,4 @@
+# STATE.md and CALL_SHEET.md take entries at the top from many branches: a local merge keeps both sides instead of
+# stopping on a conflict (docs/notes/README.md is the way to avoid touching them at all).
+docs/STATE.md merge=union
+docs/CALL_SHEET.md merge=union
