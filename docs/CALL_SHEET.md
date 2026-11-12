@@ -4,6 +4,13 @@ Decisions Claude made for you, newest first. Each one says what was decided, why
 you reach one you've seen. If you disagree with a call, say so and it gets reversed; nothing here is hard to undo unless
 it says so. Things only you can do are in docs/OWNER_TODO.md.
 
+## 2026-11-12 (deepest analysis 16): the road book offers its uneven corners' technique as the practice (claude/project-thread-gd7nre)
+
+Where a road's passes differ most, the road book now says which technique accounts for most of it and offers to practise
+it on your next drives. Calls: the practice it sets covers every corner (no "lefts only" place), since a road's corners
+are not one kind; a tie between techniques goes to the corner whose passes differ most; it replaces any practice already
+under way, the same as "Practice ... instead" in Your driving. Undo: remove `showBookPractice` in web/analysis.html.
+
 ## 2026-11-11 (Valhalla for Quick only, part 3): the Valhalla stage-plan and stage-loop code is gone (claude/project-thread-39xbx9)
 
 Since Fun, Long way and loops are our router's only, three pieces of web/cockpit.js could no longer run: funRoute's

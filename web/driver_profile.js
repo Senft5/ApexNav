@@ -403,6 +403,26 @@
       rows: book.corners.map((c, i) => ({ n: i + 1, what: what(c), record: c.record, low: c.low === undefined ? null : c.low, uneven: uneven.includes(i + 1), why: c.why && WORDS[c.why] ? WORDS[c.why].name[0].toLowerCase() + WORDS[c.why].name.slice(1) : null, by: c.by, on: c.at && day ? day(c.at) : null, passes: c.passes })),
     };
   }
+  /** Port of core/driver_profile.py road_book_focus: the why named most over a road book's uneven corners (a tie to the
+   *  widest), { skill, at: [1-based places, road order] }, or null. */
+  function roadBookFocus(book) {
+    const corners = (book && book.corners) || [], seen = new Map();
+    ((book && book.uneven) || []).forEach((n, rank) => {
+      const k = n > 0 && n <= corners.length ? corners[n - 1].why : null;
+      if (!SKILLS.includes(k)) return;
+      const s = seen.get(k) || { c: 0, first: rank, at: [] };
+      s.c += 1; s.at.push(n); seen.set(k, s);
+    });
+    let best = null;
+    for (const [k, s] of seen) if (!best || s.c > best[1].c || (s.c === best[1].c && s.first < best[1].first)) best = [k, s];
+    return best ? { skill: best[0], at: best[1].at.slice().sort((a, b) => a - b) } : null;
+  }
+  /** "Most of the difference at corner 3 is one steering arc." for a road book's focus, or null. */
+  function roadBookFocusLine(f) {
+    if (!f || !WORDS[f.skill]) return null;
+    const w = WORDS[f.skill].name[0].toLowerCase() + WORDS[f.skill].name.slice(1), at = f.at.length < 2 ? `corner ${f.at[0]}` : `corners ${f.at.slice(0, -1).join(', ')} and ${f.at[f.at.length - 1]}`;
+    return `Most of the difference at ${at} is ${w}.`;
+  }
   /** A corner row's note from roadRecords rows: "Your cleanest of 4 passes here (92)", "Level with your cleanest here (90,
    *  Aug 12)", "Your cleanest here: 90, Aug 12; this pass 82". day(row) gives the holding drive's date, or null. */
   function roadCornerNote(row, day) {
@@ -976,7 +996,7 @@
     }
   }
 
-  const api = { SKILLS, observe, profile, swing, excess, SKILL_MIN, WORDS, findingLine, styleLines, touchLines, touchTrendLines, driveTouchLines, paceLines, PACE, MEASURES, touch, TOUCH, driveTouch, DRIVE_TOUCH_MIN, bestCorners, recordsBySize, RECORD_MIN, driveRecords, driveRecordLines, roadRecords, placed, roadRecordLine, roadCornerNote, roadBook, roadBookRows, roadUnevenLine, cardLine, focusLines, render,
+  const api = { SKILLS, observe, profile, swing, excess, SKILL_MIN, WORDS, findingLine, styleLines, touchLines, touchTrendLines, driveTouchLines, paceLines, PACE, MEASURES, touch, TOUCH, driveTouch, DRIVE_TOUCH_MIN, bestCorners, recordsBySize, RECORD_MIN, driveRecords, driveRecordLines, roadRecords, placed, roadRecordLine, roadCornerNote, roadBook, roadBookRows, roadBookFocus, roadBookFocusLine, roadUnevenLine, cardLine, focusLines, render,
     PRACTICE_MIN, practice, drivePractice, practiceLine, practiceSummary, localStamp, loadPlan, savePlan, PLAN_KEY };
   if (typeof module !== 'undefined' && module.exports) module.exports = api; else root.ApexDriverProfile = api;
 })(typeof window !== 'undefined' ? window : globalThis);

@@ -4627,9 +4627,10 @@ flow('a drive\'s corners on a road driven four times: each says your cleanest pa
   await page.waitForFunction(() => window.apexLogDebug && window.apexLogDebug.loaded() && window.ApexRecording);
   await page.evaluate(async (src) => {
     const gen = eval(src);
-    // one road four times, each pass a little slower through the same corners (a different speed column)
+    // one road four times, each pass a little slower through the same corners (a different speed column); the second
+    // without the steering corrections, so its right-handers are where the passes differ
     const tweak = (csv, k) => csv.split('\n').map((l, i) => { if (!i || !l) return l; const c = l.split(','); c[5] = (+c[5] * (1 - 0.03 * k)).toFixed(3); return c.join(','); }).join('\n');
-    for (let k = 0; k < 4; k++) await ApexRecording.store(ApexRecording.parse(ApexCore, tweak(gen('saw', 0), k), 'r' + k + '.csv', { id: 'r' + k, name: 'Dry Ridge Rd', date: `2026-0${5 + k}-01T09:00`, source: 'web-gps' }));
+    for (let k = 0; k < 4; k++) await ApexRecording.store(ApexRecording.parse(ApexCore, tweak(gen(k === 1 ? 'clean' : 'saw', 0), k), 'r' + k + '.csv', { id: 'r' + k, name: 'Dry Ridge Rd', date: `2026-0${5 + k}-01T09:00`, source: 'web-gps' }));
   }, PROFILE_CSV);
   const road = await page.evaluate(async () => (await ApexAnalysis.job('drive', { id: 'r3' })).touch.road);
   check(road && road.corners > 0 && road.rows.length === road.corners && Number.isInteger(road.uneven) && road.steady <= road.uneven && road.rows.every((r) => r.low <= r.level) && road.rows.every((r) => r.passes === 4 && r.record >= r.level)
@@ -4657,6 +4658,12 @@ flow('a drive\'s corners on a road driven four times: each says your cleanest pa
   check(/^\d+ corners? you have driven three or more times, in road order/.test(book.head) && book.rows.length >= road.rows.length
     && book.rows.every((t) => /^\d+ (Tight|Medium|Fast) (left|right) \d{1,3} On \w{3} \d{1,2}, of 4 passes(; your least clean \d{1,3}(, mostly [a-z ]+)?)?$/.test(t)) && !book.wide && !/mph|km\/h/.test(book.rows.join(' ')),
     'the road corner by corner: ' + JSON.stringify(book).slice(0, 400));
+  // where the passes differ, the technique they differ by most can be the next practice (IDEAS D-27, roadBookFocus)
+  const pr = await page.evaluate(() => { const b = document.getElementById('bookPractice'); return { shown: !b.hidden, t: b.textContent, go: !!document.getElementById('bookPracticeGo') }; });
+  check(pr.shown && pr.go && /^Most of the difference at corners? [\d, and]+ is [a-z ]+\. (Practice [a-z ]+ on my next drives|You are practicing it now: Your driving shows how it goes\.)$/.test(pr.t), 'the practice line: ' + pr.t);
+  await page.click('#bookPracticeGo');
+  const after = await page.evaluate(() => ({ t: document.getElementById('bookPractice').textContent, plan: JSON.parse(localStorage.getItem('vetta.practice') || 'null') }));
+  check(/Practicing it from your next drive/.test(after.t) && after.plan && after.plan.skill === 'arc' && after.plan.where === null && /^\d{4}-\d\d-\d\dT\d\d:\d\d$/.test(after.plan.since), 'the practice is kept: ' + JSON.stringify(after));
   await page.click('#bookList li .bk-by');
   await page.waitForFunction(() => /^r[0-3]$/.test(document.getElementById('dvPick').value) && !document.getElementById('tab-drive').hidden, null, { timeout: 20000 });
   check(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth), 'nothing wider than the phone');
