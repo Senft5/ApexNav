@@ -4,6 +4,13 @@ Decisions Claude made for you, newest first. Each one says what was decided, why
 you reach one you've seen. If you disagree with a call, say so and it gets reversed; nothing here is hard to undo unless
 it says so. Things only you can do are in docs/OWNER_TODO.md.
 
+## 2026-11-12 (deepest analysis 20): Your driving's Work on says on which road it shows most (claude/project-thread-gd7nre)
+
+Under the Work on (or the practice under way) tip, one line names the road where that skill accounts for the most of the
+corners your passes differ at. Calls: from the road books (roads driven three or more times), read once per library and
+shared with the Log; none when no road's uneven corners name the skill. Undo: remove the `skillRoadLine` block in
+renderDriving (web/analysis.html).
+
 ## 2026-11-12 (deepest analysis 19): the Log's road book says which of your roads to work on (claude/project-thread-gd7nre)
 
 Above the road picker, one line names the roads (driven three or more times) where your passes differ most, with the

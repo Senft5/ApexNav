@@ -1,5 +1,14 @@
 # VETTA — CURRENT AGENT HANDOFF STATE
 
+## Session 2026-11-12 (deepest analysis, PR 20): Work on names the road where its skill shows most (claude/project-thread-gd7nre)
+
+- `web/driver_profile.js` `skillRoadLine(list, skill)`: from the roads' books, the road whose least even corners name the
+  skill most often: "It shows most on Dry Ridge Rd: 2 of the 3 corners where your passes there differ most come down to it."
+- `web/analysis.html`: `roadBookList()` reads every road's book once per library (shared with the Log's bookWork line);
+  Your driving puts the line under the tip of its Work on (or Practicing) box.
+- e2e: the four-drive road flow checks the line on Your driving.
+- Next: a per-road practice could take its `where` from that road (practice only on one road's corners).
+
 ## Session 2026-11-12 (deepest analysis, PR 19): the Log names the roads where your passes differ most (claude/project-thread-gd7nre)
 
 - `web/driver_profile.js` `roadsToWork(list)`: from each road's book, the roads with uneven corners, most first, at most
