@@ -10,7 +10,8 @@
       'feedback.js', 'profile_view.js', 'people_samples.js', 'friends_map.js', 'who_sees.js', 'car_lookup.js', 'builds.js', 'garage_ui.js',
       'convoy.js', 'convoy_ui.js'],
     g2p: ['g2p.js'],                 // the neural voice's phonemizer (voice.js), only when a neural voice first speaks
-    dev: ['dev_panel.js'],           // dev mode's panel (cockpit.js devPanel): only on a developer's phone (/api/me developer)
+    dev: ['dev_panel.js'],
+    ops: ['service_check.js'],       // the owner's service check (cockpit.js serviceCheckSection): only while /api/me says moderator           // dev mode's panel (cockpit.js devPanel): only on a developer's phone (/api/me developer)
   };
   const files = new Map();           // file -> Promise, so a file is fetched and run once whoever asks
   const groups = new Map();

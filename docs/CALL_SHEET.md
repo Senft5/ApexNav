@@ -14,6 +14,14 @@ reads it before Overpass. Calls: a tile counts as ours only if the state outline
 wrongly "no cameras"; outside the region and when our file can't be read, the phone asks Overpass as before (now with
 maps.mail.ru as a fourth server). The request carries no position: it's the same file for everyone. Undo: drop the
 `regionOnce` lookup in web/cameras.js `load` (pass `region: null`), the route in backend/src/index.ts and the workflow.
+## 2026-11-12 (ui-round-three): the arrival-time page your friends open looks like Vetta (claude/project-thread-5sbga7)
+
+The page behind a shared ETA link was plain system text. It now uses the app's type and paper: the minutes set large
+("14 min away"), the arrival time under a hairline, a red dot while the time is fresh and an empty ring when it has gone
+quiet, and a dark page when their phone is in dark mode. The words are unchanged. Undo: revert web/eta.html and the
+`parts` / `live` fields in web/eta_share.js.
+
+
 ## 2026-11-12 (meets on the map): public crews' meets pinned on the map (claude/project-thread-uwmi4e)
 
 Calls I made: a Meets layer in Layers, off by default like Friends, for members only. It pins the same public meets as
@@ -42,6 +50,17 @@ drops a loop a moderator took down. I left the home deck to Roamer C's branch. U
 Above the road picker, one line names the roads (driven three or more times) where your passes differ most, with the
 technique behind most of it. Calls: at most 3 roads, and at most 12 read, to keep the Log quick on a big library; it is read
 once each time the library changes, not on every visit. Undo: remove `bookWork` in web/analysis.html.
+
+## 2026-11-12 Owner-only service check in Settings (claude/project-thread-9zycz2)
+
+Nate asked for a service health check only he can run, that sends its results back. Settings → Account (owner only)
+has Service check: 27 checks from the phone (our server, the road graph, our router's real Fun / Long way / loop plans,
+Valhalla, each camera server, map, search, weather), each up, slow or down with the reason and what it affects, plus the
+Worker's own view (config set or not, GitHub graph data and the camera servers asked from Cloudflare). Calls: no
+migration, results go into error_counts under kind `service` (kept 30 days like crash counts), and the Errors list skips
+them; it also runs by itself once a launch at most every 6 hours, so Claude sees his phone's view without him tapping;
+it asks at a fixed downtown Cincinnati spot, never his location. Undo: remove serviceCheckSection and its auto-run line in
+web/cockpit.js, the `ops` lazy group, web/service_check.js, backend/src/service_check.ts and its three routes.
 
 ## 2026-11-12 (deepest analysis 18): the end card names your passes on a road you know (claude/project-thread-gd7nre)
 
