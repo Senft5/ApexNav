@@ -66,7 +66,19 @@
   }
   const tx = async (mode, fn) => { const d = await db(); return new Promise((ok, fail) => { const t = d.transaction(STORE, mode), s = t.objectStore(STORE), r = fn(s); t.oncomplete = () => ok(r && r.result); t.onerror = () => fail(t.error); }); };
   async function get(url) { try { const v = await tx('readonly', (s) => s.get(url)); return v ? v.data : null; } catch (_) { return null; } }
-  async function put(url, data, area = null) { try { await tx('readwrite', (s) => s.put({ url, data, area, at: Date.now() })); } catch (_) {} }
+  // the areas a kept copy belongs to: one tile can serve two areas (a saved route inside a saved area, two areas that
+  // overlap), so it is tagged with each, and goes only when the last of them is deleted (an older copy has one `area`)
+  const areasOf = (v) => (v && Array.isArray(v.areas) ? v.areas : v && v.area ? [v.area] : []);
+  async function put(url, data, area = null) {
+    try {
+      const d = await db();
+      await new Promise((ok, fail) => {
+        const t = d.transaction(STORE, 'readwrite'), s = t.objectStore(STORE), g = s.get(url);
+        g.onsuccess = () => { const tags = areasOf(g.result); if (area && !tags.includes(area)) tags.push(area); s.put({ url, data, areas: tags, at: Date.now() }); };
+        t.oncomplete = ok; t.onerror = () => fail(t.error);
+      });
+    } catch (_) {}
+  }
   async function clear() { try { await tx('readwrite', (s) => s.clear()); } catch (_) {} try { root.localStorage.removeItem(AREAS); } catch (_) {} }
 
   function areas() { try { const v = JSON.parse(root.localStorage.getItem(AREAS) || '[]'); return Array.isArray(v) ? v : []; } catch (_) { return []; } }
@@ -76,7 +88,12 @@
     try {
       const d = await db();
       await new Promise((ok) => { const t = d.transaction(STORE, 'readwrite'), s = t.objectStore(STORE), c = s.openCursor();
-        c.onsuccess = () => { const cur = c.result; if (!cur) return; if (cur.value.area === id) cur.delete(); cur.continue(); }; t.oncomplete = ok; t.onerror = ok; });
+        c.onsuccess = () => {
+          const cur = c.result; if (!cur) return;
+          const tags = areasOf(cur.value);
+          if (tags.includes(id)) { const rest = tags.filter((a) => a !== id); if (rest.length) cur.update({ ...cur.value, area: undefined, areas: rest }); else cur.delete(); }
+          cur.continue();
+        }; t.oncomplete = ok; t.onerror = ok; });
     } catch (_) {}
   }
 
@@ -145,6 +162,6 @@
   /** Bytes saved, from the areas list. */
   const bytesSaved = () => areas().reduce((s, a) => s + (a.bytes || 0), 0);
 
-  const api = { tilesFor, plan, tilesAlong, planAlong, transform, install, download, get, put, clear, areas, setArea, removeArea, bytesSaved, MAX_TILES, PROTO, DEM };
+  const api = { tilesFor, plan, tilesAlong, planAlong, areasOf, transform, install, download, get, put, clear, areas, setArea, removeArea, bytesSaved, MAX_TILES, PROTO, DEM };
   if (typeof module !== 'undefined' && module.exports) module.exports = api; else root.ApexOfflineTiles = api;
 })(typeof window !== 'undefined' ? window : globalThis);
