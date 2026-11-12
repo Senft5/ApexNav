@@ -62,4 +62,18 @@ describe("rate limits", () => {
     expect((await call({}, "GET", "/api/ctx/osm?bbox=39.25,-84.65,39.3,-84.6&diag=1")).status).toBe(401);
     expect((await call({}, "GET", "/api/ctx/osm?bbox=39.25,-84.65,39.3,-84.6&diag=1", u.token)).status).toBe(404);
   });
+
+  it("limits signed-in reads per session, never the map tiles or a signed-out read", async () => {
+    const a = await makeUser("alice"), b = await makeUser("bobby"), r = limiter(2);
+    expect((await call({ READ_LIMIT: r }, "GET", "/api/crews", a.token)).status).toBe(200);
+    expect((await call({ READ_LIMIT: r }, "GET", "/api/crews", a.token)).status).toBe(200);
+    const over = await call({ READ_LIMIT: r }, "GET", "/api/crews", a.token);
+    expect(over.status).toBe(429);
+    expect(over.headers.get("retry-after")).toBe("60");
+    expect((await call({ READ_LIMIT: r }, "GET", "/api/crews", b.token)).status).toBe(200);          // another person
+    const before = r.seen.length;
+    await call({ READ_LIMIT: r }, "GET", "/api/graph/v1/index.json", a.token);
+    await call({ READ_LIMIT: r }, "GET", "/api/health");
+    expect(r.seen.length).toBe(before);                                                               // tiles and signed out: not counted
+  });
 });

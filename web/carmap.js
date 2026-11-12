@@ -10,7 +10,7 @@
   const finite = (v) => typeof v === 'number' && Number.isFinite(v);
   const line = (coords) => ({ type: 'Feature', properties: {}, geometry: { type: 'LineString', coordinates: coords.map(([lat, lon]) => [lon, lat]) } });
 
-  const state = { theme: 'roadbook', night: false, route: [], corners: [], hazards: [], pos: null, sight: null, mode: 'idle', follow: true, inset: 0 };
+  const state = { theme: 'roadbook', night: false, route: [], corners: [], hazards: [], places: [], pos: null, sight: null, mode: 'idle', follow: true, inset: 0 };
   let map = null, ready = false, puck = null, sightTag = null;
 
   const look = () => { const t = root.ApexThemes.get(state.theme); return { P: t.map[state.night ? 'night' : 'day'], C: t[state.night ? 'night' : 'day'] }; };
@@ -28,6 +28,7 @@
   function makePlate(w) {
     const el = document.createElement('div');
     if (w.hazard) { el.className = 'car-plate car-hazard'; el.innerHTML = '<i></i>'; el.append(w.text); }
+    else if (w.place) { el.className = 'car-plate car-place'; el.dataset.kind = w.place; el.textContent = w.text; }   // its cup or pump: CSS ::before
     else { el.className = 'car-plate car-corner' + (w.tight ? ' tight' : ''); el.textContent = w.text; }
     return { key: w.key, el, at: w.at, dy: w.dy, hazard: w.hazard, on: false, m: new root.maplibregl.Marker({ element: el, anchor: 'bottom', offset: [0, -w.dy] }).setLngLat([w.at[1], w.at[0]]) };
   }
@@ -40,11 +41,13 @@
     if (!map) return;
     const here = state.pos ? [state.pos.lat, state.pos.lon] : null, all = state.mode === 'preview' || !here;
     const near = (p) => all || distM(here, p.at) < NEAR_M;
-    // which plate wins a crowded spot: hazards, then the corners nearest the car (or the tight ones, with no car)
+    // which plate wins a crowded spot: hazards, then the corners nearest the car (or the tight ones, with no car), then the
+    // cafés and fuel along the route (a name never hides a corner)
     const corners = state.corners.filter(near).map((c) => ({ c, d: here ? distM(here, c.at) : 0 }))
       .sort((x, y) => (all ? (y.c.tight - x.c.tight) || 0 : x.d - y.d)).slice(0, all ? 160 : 40);
     const wanted = state.hazards.filter(near).map((h) => { const text = String(h.title || 'Hazard').toUpperCase(); return { key: `h|${text}|${h.at}`, text, at: h.at, dy: 6, hazard: true }; })
-      .concat(corners.map(({ c }) => ({ key: `c|${c.text}|${c.tight ? 1 : 0}|${c.at}`, text: c.text, tight: !!c.tight, at: c.at, dy: 8, hazard: false })));
+      .concat(corners.map(({ c }) => ({ key: `c|${c.text}|${c.tight ? 1 : 0}|${c.at}`, text: c.text, tight: !!c.tight, at: c.at, dy: 8, hazard: false })))
+      .concat(state.places.filter(near).map((p) => ({ key: `p${p.kind}|${p.text}|${p.at}`, text: p.text, place: p.kind, at: p.at, dy: 8, hazard: false })));
     const old = new Map(plates.map((p) => [p.key, p]));
     plates.length = 0;
     for (const w of wanted) { const p = old.get(w.key); if (p) old.delete(w.key); plates.push(p || makePlate(w)); }
@@ -266,6 +269,12 @@
     route(coords) { state.route = Array.isArray(coords) ? coords.filter((p) => Array.isArray(p) && finite(p[0]) && finite(p[1])) : []; glider.setRoute(state.route, nowS()); kick(); setData(); camera(); },
     corners(list) { state.corners = (Array.isArray(list) ? list : []).filter((c) => c && Array.isArray(c.at)).slice(0, 600); setData(); },
     hazards(list) { state.hazards = (Array.isArray(list) ? list : []).filter((h) => h && Array.isArray(h.at)).slice(0, 40); setData(); },
+    // the cafés and fuel along the route by name (web/carplay.js alongMessage places)
+    places(list) {
+      state.places = (Array.isArray(list) ? list : []).filter((p) => p && Array.isArray(p.at) && (p.kind === 'cafe' || p.kind === 'fuel') && typeof p.text === 'string')
+        .slice(0, 30).map((p) => ({ at: p.at, kind: p.kind, text: p.text.slice(0, 18) }));
+      setData();
+    },
     // speed in m/s and how old the fix is (ms) when the shell knows them (ApexCar.position); without them the glide
     // takes the speed from the distance between fixes
     position(lat, lon, course, speed, ageMs) {

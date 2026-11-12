@@ -329,6 +329,20 @@
       center: startPos ? [startPos.lon, startPos.lat] : [-84.70, 39.24], zoom: 14.6, pitch: 45, maxPitch: 60, attributionControl: { compact: true }, fadeDuration: 0,
       trackResize: false,   // F-02: the page's own observer resizes it (below), once, not again after setPixelRatio already did
       transformRequest: window.ApexOfflineTiles ? ApexOfflineTiles.transform : undefined });
+    // No silent blank (as the drive page's map, drive_basemap.js): when no base map tile can be drawn here (no signal and no
+    // saved area, or the map's server failing), one line says so and what still works. A tile that draws takes it away.
+    const mapNote = { el: document.getElementById('mapNote'), okAt: 0, failAt: 0, timer: 0 };
+    const paintMapNote = () => {
+      const n = mapNote.el; if (!n) return;
+      const show = mapNote.failAt > mapNote.okAt;
+      n.hidden = !show;
+      if (show) n.textContent = navigator.onLine === false ? 'No map here without signal. Notes and recording still work.' : 'The map couldn’t load. Notes and recording still work.';
+    };
+    const mapNoteSoon = () => { clearTimeout(mapNote.timer); mapNote.timer = setTimeout(paintMapNote, 1500); };   // a passing failure never flashes it
+    map.on('data', (e) => { if (e.dataType === 'source' && e.sourceId === 'openmaptiles' && e.tile) { mapNote.okAt = Date.now(); paintMapNote(); } });
+    map.on('error', (e) => { if (e && (e.sourceId === 'openmaptiles' || (!e.sourceId && !mapReady))) {   // a base map tile, or the style before the map first loaded
+      mapNote.failAt = Date.now(); mapNoteSoon(); } });
+    window.addEventListener('online', () => { mapNote.failAt = 0; paintMapNote(); });
     { const v = document.getElementById('aboutVersion'), m = /ApexNav\/([^ ]+ \([^)]*\))/.exec(navigator.userAgent);   // the iOS shell names its version in the user agent
       if (v) v.textContent = m ? m[1] : (window.APEX_EMBED ? '--' : 'Website'); }
     window.apexDebug = { map, get soundtrack() { return { playing: !!(soundtrack.eng && soundtrack.eng.playing()), frame: soundtrack.frame, piece: soundtrack.eng && soundtrack.eng.piece(), sample: !!soundtrack.demo }; }, get track() { return track; }, state, drives, buildRoute: (...a) => buildRoute(...a), renderRouteCard: (...a) => renderRouteCard(...a), openRoadPage: (...a) => openRoadPage(...a), showEndCard: (...a) => showEndCard(...a), get driveActive() { return driveActive; }, get camResets() { return camResets; }, tryTheme: (id) => tryTheme(id), tulipPNG: (svg) => tulipPNG(svg) };
@@ -8827,7 +8841,7 @@
     // than the route (attachScenic): it is sent then, and again with every route the car is sent.
     function carAlong(t) {
       if (!t || !Array.isArray(t.scenic)) return;
-      const msg = ApexCarPlay.alongMessage(t.scenic), key = `${car.route}|${msg.full}|${msg.short}`;
+      const msg = ApexCarPlay.alongMessage(t.scenic), key = `${car.route}|${JSON.stringify(msg)}`;
       if (key === car.along) return;
       car.along = key;
       carPost(msg);
