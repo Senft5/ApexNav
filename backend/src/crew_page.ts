@@ -54,7 +54,8 @@ export async function crewPage(env: Env, v: Viewer, crewId: string) {
       WHERE a.audience_type = 'crew' AND a.audience_id = ? ORDER BY r.created_at DESC LIMIT 20`).bind(crewId).all<{ id: string; name: string }>()).results : undefined;
   // Club: a pinned chat message. Works: badges on the board, the house stage's board, the convoy call sign.
   const pinnedChat = club && c.pinned_chat_id ? await env.DB.prepare(`SELECT m.id, m.body, m.created_at, u.handle FROM crew_chat m JOIN users u ON u.id = m.author
-      WHERE m.id = ? AND m.crew_id = ? AND NOT ${reportedSql("chat", "m.id")}`).bind(c.pinned_chat_id, crewId).first() : null;
+      WHERE m.id = ?2 AND m.crew_id = ?3 AND NOT ${reportedSql("chat", "m.id")}
+        AND (m.author = (SELECT owner FROM crews WHERE id = ?3) OR ${CHAT_READABLE("m")})`).bind(v.id, c.pinned_chat_id, crewId).first() : null;   // a member's words pinned while private stay with who was there
   const house = works && c.house_canon_id ? await houseStage(env, v, crewId, c.house_canon_id) : null;
   const stages = c.owner === v.id ? (await env.DB.prepare(`SELECT DISTINCT COALESCE(s.origin_id, s.id) AS id, s.name FROM segment_shares sh JOIN segments s ON s.id = sh.segment_id
       WHERE sh.audience_type = 'crew' AND sh.audience_id = ? LIMIT 30`).bind(crewId).all<{ id: string; name: string }>()).results : undefined;
@@ -160,6 +161,13 @@ export async function crewPageUpdate(env: Env, v: Viewer, crewId: string, req: R
   await env.DB.prepare(`UPDATE crews SET ${sets.join(", ")} WHERE id = ?`).bind(...args, crewId).run();
 }
 
+/** SQL: may viewer ?1 read crew chat message `c` by when it was written? In a private crew, yes: everyone there was let in
+ *  by a link. In a public crew (anyone may join), what was written before it last became public (crews.public_since) is
+ *  read only by those who were members by then: a stranger who joins later reads the public days, never the private ones. */
+export const CHAT_READABLE = (c: string) => `(NOT EXISTS (SELECT 1 FROM crews pc WHERE pc.id = ${c}.crew_id AND pc.visibility = 'public'
+    AND ${c}.created_at < COALESCE(pc.public_since, '9999')
+    AND (SELECT jm.joined_at FROM crew_members jm WHERE jm.crew_id = ${c}.crew_id AND jm.user_id = ?1) > COALESCE(pc.public_since, '9999')))`;
+
 /** GET /api/crews/:id/chat[?before=<iso>]: up to CHAT_PAGE messages, oldest first; none from blocked people or hidden by reports. */
 export const FEED_DAYS = 14, FEED_ITEMS = 30;
 interface FeedChat { id: string; crew_id: string; body: string; created_at: string; handle: string | null; photo_id: string | null; mine: number }
@@ -175,7 +183,7 @@ export async function crewFeed(env: Env, v: Viewer) {
   const chat = (await env.DB.prepare(
     `SELECT c.id, c.crew_id, c.body, c.created_at, u.handle, u.photo_id, (c.author = ?1) AS mine
        FROM crew_chat c JOIN users u ON u.id = c.author JOIN crew_members me ON me.crew_id = c.crew_id AND me.user_id = ?1
-      WHERE c.created_at > datetime('now', '-${FEED_DAYS} days')
+      WHERE c.created_at > datetime('now', '-${FEED_DAYS} days') AND ${CHAT_READABLE("c")}
         AND (c.author = ?1 OR (${NOT_BLOCKED("c.author")} AND NOT ${reportedSql("chat", "c.id")}))
         AND EXISTS (SELECT 1 FROM crew_members m WHERE m.crew_id = c.crew_id AND m.user_id = c.author)
       ORDER BY c.created_at DESC, c.rowid DESC LIMIT ${FEED_ITEMS * 2}`).bind(v.id).all<FeedChat>()).results;
@@ -212,6 +220,7 @@ export async function chatList(env: Env, v: Viewer, crewId: string, url: URL) {
     `SELECT c.id, c.body, c.created_at, u.handle, u.photo_id, (c.author = ?1) AS mine
        FROM crew_chat c JOIN users u ON u.id = c.author
       WHERE c.crew_id = ?2 ${before ? "AND c.created_at < ?3" : ""}
+        AND ${CHAT_READABLE("c")}
         AND (c.author = ?1 OR (${NOT_BLOCKED("c.author")} AND NOT ${reportedSql("chat", "c.id")}))
         AND EXISTS (SELECT 1 FROM crew_members m WHERE m.crew_id = c.crew_id AND m.user_id = c.author)
       ORDER BY c.created_at DESC, c.rowid DESC LIMIT ${CHAT_PAGE}`).bind(...(before ? [v.id, crewId, before] : [v.id, crewId])).all<{ mine: number }>()).results;

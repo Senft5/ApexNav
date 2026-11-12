@@ -155,7 +155,11 @@ on("GET", "/api/flags", async (req, env) => json(await flagsFor(env, req)));
 on("GET", "/api/ctx/workzones", async (req) => workzones(req));
 on("GET", "/api/ctx/keys", async (_req, env) => ctxKeys(env));
 // OpenStreetMap map features by one 0.05° tile (osm_relay.ts; route_ctx/osm_overpass.js): Overpass server-side, kept a week
-on("GET", "/api/ctx/osm", async (req, env, _m, ctx) => osmTile(new URL(req.url), env, ctx));
+on("GET", "/api/ctx/osm", async (req, env, _m, ctx) => {
+  const url = new URL(req.url);   // ?diag=1 asks every mirror uncached: the owner's tool, never anyone's
+  if (url.searchParams.get("diag") === "1" && !isModerator(env, await requireMember(req, env))) throw new HttpError(404, "not_found");
+  return osmTile(url, env, ctx);
+});
 // The router's edges for a stage cut from the map tiles (trace_relay.ts; route_ctx/router_edges.js), kept 3 days per shape
 on("GET", "/api/ctx/trace", async (req) => traceTile(new URL(req.url)));
 on("GET", "/api/shop", async (req, env) => json(await shop(env, await requireMember(req, env))));

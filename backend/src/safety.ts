@@ -8,6 +8,7 @@ import { convoysLeaveAll, convoysRecheck } from "./convoy";
 import { removePair } from "./social";
 import { REPORT_KINDS, type ReportKind, reportedSql } from "./reports_sql";
 import { CAR_SEEN } from "./builds";
+import { PHOTO_SEEN } from "./photos";
 
 const REPORTS_PER_DAY = 20;
 const REASONS = ["spam", "abuse", "impersonation", "unsafe", "other"] as const;
@@ -93,8 +94,9 @@ async function resolveTarget(env: Env, v: Viewer, kind: ReportKind, target: unkn
     if (!e) throw new HttpError(404, "no_event");
     return { id, person: e.created_by };
   }
-  if (kind === "photo") {   // any member can see a photo that isn't hidden (photos.ts); never your own
-    const p = await first<{ owner: string }>(env, "SELECT owner FROM photos WHERE id = ?1 AND owner != ?2", id, v.id);
+  if (kind === "photo") {   // one you may see (photos.ts PHOTO_SEEN), or have already reported; never your own
+    const p = await first<{ owner: string }>(env, `SELECT p.owner FROM photos p WHERE p.id = ?2 AND p.owner != ?1 AND (${PHOTO_SEEN("p")}
+      OR EXISTS (SELECT 1 FROM reports r0 WHERE r0.kind = 'photo' AND r0.target_id = p.id AND r0.reporter = ?1))`, v.id, id);
     if (!p) throw new HttpError(404, "no_photo");
     return { id, person: p.owner };
   }
@@ -158,11 +160,12 @@ export async function fileReport(env: Env, v: Viewer, b: ReportBody): Promise<vo
   if ((today?.n ?? 0) >= REPORTS_PER_DAY) throw new HttpError(429, "too_many_reports");
   const t = await resolveTarget(env, v, kind, b.target);
   if (!t) return;
-  // One report per person per target (a second one updates an open one); the cap is checked again inside the insert.
+  // One report per person per target (a second one updates an open one's note, never its time: re-filing must not restart
+  // a photo's day-long hide, photos.ts); the cap is checked again inside the insert.
   await env.DB.prepare(
     `INSERT INTO reports (id, reporter, kind, target_id, note) SELECT ?1, ?2, ?3, ?4, ?5
       WHERE (SELECT COUNT(*) FROM reports WHERE reporter = ?2 AND created_at > datetime('now', '-1 day')) < ?6
-     ON CONFLICT (reporter, kind, target_id) DO UPDATE SET note = excluded.note, created_at = datetime('now') WHERE status = 'open'`,
+     ON CONFLICT (reporter, kind, target_id) DO UPDATE SET note = excluded.note WHERE status = 'open'`,
   ).bind(crypto.randomUUID(), v.id, kind, t.id, `[${reason}]${note ? " " + note : ""}`, REPORTS_PER_DAY).run();
   if (kind === "highlight") {
     await env.DB.prepare(`UPDATE highlights SET status = 'hidden' WHERE id = ?1 AND ${reportedSql("highlight", "?1")}`).bind(t.id).run();
