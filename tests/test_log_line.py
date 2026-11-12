@@ -5,7 +5,7 @@ import re
 from pathlib import Path
 
 WEB = Path(__file__).resolve().parents[1] / "web"
-PAGE = (WEB / "analysis.html").read_text()
+PAGE = (WEB / "analysis.html").read_text() + (WEB / "analysis_page.js").read_text()   # the page and its own script
 SIG = (WEB / "signature.css").read_text()
 
 
