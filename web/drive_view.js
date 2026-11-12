@@ -225,7 +225,8 @@
     const words = o.noteWords || noteWordsPref(), callOf = (c) => cornerCall(c, words);   // U-123        // ref: { name, score, corners[] } from Core.compareDrives(this, best other drive)
     const co = o.coach || null;                                      // Core.coach(this, other drives) + others: [{ name, date }]
     const lost = (k) => { const r = ref && ref.corners[k]; return r && r.delta_s != null && !r.stopped ? -r.delta_s : null; };   // seconds this pass was slower than the reference
-    const fmtD = (s) => (s == null ? '--' : `${s > 0.005 ? '+' : s < -0.005 ? '\u2212' : ''}${Math.abs(s).toFixed(2)} s`);
+    // to a tenth: a phone's GPS times a corner no finer than that, and a hundredth read as precision it hasn't got
+    const fmtD = (s) => (s == null ? '--' : `${s >= 0.05 ? '+' : s <= -0.05 ? '\u2212' : ''}${Math.abs(s).toFixed(1)} s`);
     root_.innerHTML = '';
     const n = d.lat.length, T = Core.elapsedS(d.speed_mps), S = summarize(d, Core);
     const state = { i: 0, v0: 0, v1: n - 1 };
@@ -272,7 +273,7 @@
       + (flow ? `<p class="dv-plain">${esc(flow)}</p>` : '')
       + (tired ? `<p class="dv-plain">${esc(tired)}</p>` : '')
       + (brakes ? `<p class="dv-plain">${esc(brakes)}</p>` : '')
-      + (ideal ? `<div class="dv-meta">Ideal drive <b class="gain">${ideal.gain.toFixed(2)} s</b> quicker: your best pass of each of ${ideal.n} corners, from ${ideal.drives} drive${ideal.drives === 1 ? '' : 's'}</div>` : '');
+      + (ideal ? `<div class="dv-meta">Ideal drive: <b class="gain">${ideal.gain.toFixed(1)} s</b> quicker \u00b7 your best pass at each of ${ideal.n} corner${ideal.n === 1 ? '' : 's'}, over ${ideal.drives} drive${ideal.drives === 1 ? '' : 's'}</div>` : '');
     root_.append(head, el('div', 'dv-grid'));
     const grid = root_.lastChild; grid.append(mapBox, el('div', 'dv-right'));
     const zoom = el('div', 'dv-zoom'); grid.lastChild.append(zoom, lanes, read);
@@ -542,7 +543,7 @@
     let net = null;
     if (ref) { const ks = d.corners.map((_, k) => lost(k)).filter((x) => x != null); net = ks.length ? ks.reduce((s, x) => s + x, 0) : null; }
     // TestFlight 2026-11-12 ("walls of text"): the comparison and the repeatability say their numbers in a line each
-    list.innerHTML = `<h2>Corners${ref ? ` \u00b7 vs your best here, ${esc(ref.name)} (${ref.score})` : ''}</h2>` + (ref ? `<p class="note" style="margin-bottom:8px">${net == null ? 'No clean corners to compare.' : `<b class="${net > 0.05 ? 'loss' : net < -0.05 ? 'gain' : ''}">${fmtD(net)}</b> over the ${d.corners.map((_, k) => lost(k)).filter((x) => x != null).length} corners both took cleanly`}</p>` : '');
+    list.innerHTML = `<h2>Corners${ref ? ` \u00b7 vs your best here, ${esc(ref.name)} (${ref.score})` : ''}</h2>` + (ref ? `<p class="note" style="margin-bottom:8px">${net == null ? 'No clean corners to compare.' : `<b class="${net > 0.05 ? 'loss' : net < -0.05 ? 'gain' : ''}">${fmtD(net)}</b> over the ${d.corners.map((_, k) => lost(k)).filter((x) => x != null).length} corners both drives took cleanly`}</p>` : '');
     const reps = consistencyRows(co);
     if (reps.length) {                                               // how repeatably each corner is driven over your passes (D-07)
       const ul = el('ol', 'dv-time'), m = (x) => fine(Math.max(3, x)), spd = (x) => `${Math.max(1, Math.round(x * MPH))} ${SPD()}`;
@@ -571,7 +572,7 @@
       const ul = el('ol', 'dv-time dv-abrupt');
       ab.moments.forEach((m, k) => {
         const near = d.corners.findIndex((c) => m.index >= c.start - 4 && m.index <= c.end + 4), li = el('li'), b = el('button');
-        b.innerHTML = `<b>${String.fromCharCode(65 + k)}</b><span>${near >= 0 ? `Corner ${near + 1} \u00b7 ${esc(callOf(d.corners[near]))}` : 'Between corners'}</span><em class="loss">${m.jerk_gps.toFixed(2)} g/s</em>`
+        b.innerHTML = `<b>${String.fromCharCode(65 + k)}</b><span>${near >= 0 ? `Corner ${near + 1} \u00b7 ${esc(callOf(d.corners[near]))}` : 'Between corners'}</span><em class="loss">${m.jerk_gps.toFixed(1)} g/s</em>`
           + `<span class="note">${DIST(d.dist[m.index])} \u00b7 ${abruptAdvice(d.lat_g, d.lon_g, m.index)}</span>`;
         b.onclick = () => { if (showSmooth) showSmooth(); pick(m.index, m.index - 10, m.index + 10); };
         li.append(b); ul.append(li);

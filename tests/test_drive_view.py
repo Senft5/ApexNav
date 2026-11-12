@@ -155,9 +155,10 @@ def test_summary_hierarchy_and_scrub_readout(r):
 
 
 def test_corner_coach_shows_ideal_time_and_tips(r):
-    assert "Ideal drive" in r["coachHead"] and "0.50 s" in r["coachHead"] and "from 1 drive<" in r["coachHead"]
+    assert "Ideal drive: <b class=\"gain\">0.5 s</b> quicker · your best pass at each of 1 corner, over 1 drive<" in r["coachHead"]
+    assert "0.50" not in r["coachHead"], "seconds to a tenth, not a hundredth"
     t = r["timeHtml"]
-    assert "Brake 22 m later, like your best pass" in t and "+0.50 s" in t
+    assert "Brake 22 m later, like your best pass" in t and "+0.5 s" in t and "0.50" not in t
     assert "&#60;i&#62;Oct 2&#60;/i&#62;" in t and "<i>" not in t, "drive names and dates are escaped"
     assert "Brake 22 m later" in r["cardHtml"]
 
