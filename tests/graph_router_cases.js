@@ -443,6 +443,23 @@ const CASES = {
       max1: maxMult(c1), max2: maxMult(c2), loop0Near: nearTo(cam)(loop0), loopNear: loops1.map(nearTo(cam)) };
   },
 
+  // Confirmed road hazards (avoid.hazards: pothole, gravel, debris, always on): the edges within 30 m cost x1.3 once, a
+  // nudge: plan prefers a road without one, but a hazard on the only cheap way is still driven
+  hazards() {
+    const g = H.grid({ seed: 9, nx: 28, ny: 28, holes: 0.05, stepDeg: 0.004, lat0: 39.15, lon0: -84.62 });
+    const v = R.view(H.tiles(g.nodes, g.edges).tiles);
+    const from = { lat: 39.17, lon: -84.6 }, to = { lat: 39.23, lon: -84.52 };
+    const base = R.quickest(v, { from, to, level: 'quick' });
+    const mid = base.coords[Math.floor(base.coords.length / 2)], p = { lat: mid[0], lon: mid[1] };
+    const near = (r) => Math.min(...r.coords.map((c) => R.distM(p.lat, p.lon, c[0], c[1])));
+    const c0 = R.objective(v, {}), c1 = R.objective(v, { avoid: { hazards: [p] } }), c2 = R.objective(v, { avoid: { hazards: [p, { lat: p.lat + 1e-5, lon: p.lon }] } });
+    const ratio = (c) => { let m = 0, n = 0; for (let e = 0; e < c.mult.length; e++) { const k = c.mult[e] / c0.mult[e]; m = Math.max(m, k); if (k > 1.0001) n++; } return { m, n }; };
+    const q = R.quickest(v, { from, to, level: 'quick', avoid: { hazards: [p] } });
+    // a hazard far from any road changes nothing
+    const far = R.objective(v, { avoid: { hazards: [{ lat: 10, lon: 10 }] } });
+    return { baseNear: near(base), baseS: base.timeS, quickS: q.timeS, r1: ratio(c1), r2: ratio(c2), farMax: ratio(far).m };
+  },
+
   roundTrips() {
     const g = H.grid({ seed: 9, nx: 28, ny: 28, holes: 0.05, stepDeg: 0.004, lat0: 39.15, lon0: -84.62 });
     const v = R.view(H.tiles(g.nodes, g.edges).tiles);

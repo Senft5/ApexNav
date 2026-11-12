@@ -2654,6 +2654,20 @@
     }
     // members' "Road closed" reports near the trip, for our own router (graph_router.js CLOSED_X): kept 5 min (hazardsAround),
     // otherwise a plan waits POLICE_WAIT_MS at most and goes without them. Signed out there are none to ask for: []
+    // confirmed potholes, gravel and debris near the trip, for our router (graph_router.js HAZARD_X): from the same hazard
+    // reports as the closures (kept 5 min, or no wait at all: a plan doesn't wait for these); none known: []
+    // Confirmed potholes, gravel and debris (IDEAS R-04, hazard_reports.js roadHazardsFor) for our own router's HAZARD_X
+    // nudge: from the reports closedForTrip has just fetched round the trip, with the drive's own (newer); members only,
+    // never a wait of its own, and never a reason a plan fails
+    function hazardsForTrip(points) {
+      try {
+        if (!window.ApexHazardReports || !memberNow() || !hazardsCover(points)) return [];
+        let mine = [];
+        try { mine = reported.list.filter((h) => h && h.kind !== 'police' && h.kind !== 'closure'); } catch (_) { mine = []; }   // (not yet set up at boot)
+        const ids = new Set(mine.map((h) => h.id));
+        return ApexHazardReports.roadHazardsFor([...mine, ...closureCache.list.filter((h) => !h || !ids.has(h.id))], points);
+      } catch (_) { return []; }
+    }
     async function closedForTrip(points) {
       if (!window.ApexHazardReports || !memberNow()) return [];
       if (hazardsCover(points)) return closuresAround(points);   // (with the drive's own, newer: closuresAround)
@@ -2665,7 +2679,15 @@
     }
     async function avoidForTrip(points) {
       const closedP = closedForTrip(points).catch(() => []);
-      if (!avoid.police && !avoid.cameras) { const closed = await closedP; if (window.apexDebug) window.apexDebug.lastClosed = closed; return closed.length ? { ...avoid, closed } : avoid; }
+      if (!avoid.police && !avoid.cameras) {
+        const closed = await closedP, hazards = hazardsForTrip(points);
+        if (window.apexDebug) { window.apexDebug.lastClosed = closed; window.apexDebug.lastRoadHazards = hazards; }
+        if (!closed.length && !hazards.length) return avoid;
+        const out = { ...avoid };
+        if (closed.length) out.closed = closed;
+        if (hazards.length) out.hazards = hazards;
+        return out;
+      }
       const camsP = camsForTrip(points);
       const out = { ...avoid };
       if (avoid.police) {
@@ -2681,6 +2703,9 @@
       const closed = await closedP;
       if (window.apexDebug) window.apexDebug.lastClosed = closed;
       if (closed.length) out.closed = closed;
+      const hazards = hazardsForTrip(points);
+      if (window.apexDebug) window.apexDebug.lastRoadHazards = hazards;
+      if (hazards.length) out.hazards = hazards;
       return out;
     }
     // A loop's avoid choices: the same lists as a trip's, for the box a loop of `km` can reach from `c` (a third of its

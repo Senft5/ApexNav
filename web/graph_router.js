@@ -62,6 +62,7 @@
     AVOID_POINT_X: 8, AVOID_POINT_M: 150, AVOID_POINT_MAX: 20,   // Avoid police reports: edges within 150 m of a live report
     AVOID_CAM_X: 8, AVOID_CAM_M: 35, AVOID_CAM_MAX: 60,          // Avoid cameras: edges within 35 m of a plate reader or speed camera
     CLOSED_X: 50, CLOSED_M: 40, CLOSED_MAX: 30,                  // members' "Road closed" reports: edges within 40 m cost x50 (always on)
+    HAZARD_X: 1.3, HAZARD_M: 30, HAZARD_MAX: 40,                  // confirmed pothole / gravel / debris reports: edges within 30 m cost x1.3
     // the goodness weight is searched in [0, A_MAX] (log steps from A_FIRST), at most BISECT more routes. At Fun and Long
     // way the pick is then by the goodness the extra time buys (pick(): BUY per 100 % more time over the level's quickest,
     // never under BUY_MIN), among those routes and the spread's (SPREAD: penalty alternates of the first step's route)
@@ -608,7 +609,7 @@
     return v.objCache.get(key);
   }
   const OBJ_KNOBS = ['W_NOTPOOR', 'W_QUALITY', 'W_FUN', 'W_SCENERY', 'POOR_LO', 'POOR_HI', 'GATE_LO', 'GATE_HI', 'UNKNOWN_G', 'MODEL_WQ', 'MODEL_WS', 'PRIVATE_X', 'PRIVATE_S',
-    'DESTINATION_X', 'DESTINATION_S', 'FERRY_X', 'UNPAVED_X', 'AVOID_HWY_X', 'AVOID_TOLL_X', 'AVOID_FERRY_X', 'AVOID_UNPAVED_X', 'AVOID_POINT_X', 'AVOID_POINT_M', 'AVOID_CAM_X', 'AVOID_CAM_M', 'CLOSED_X', 'CLOSED_M'];
+    'DESTINATION_X', 'DESTINATION_S', 'FERRY_X', 'UNPAVED_X', 'AVOID_HWY_X', 'AVOID_TOLL_X', 'AVOID_FERRY_X', 'AVOID_UNPAVED_X', 'AVOID_POINT_X', 'AVOID_POINT_M', 'AVOID_CAM_X', 'AVOID_CAM_M', 'CLOSED_X', 'CLOSED_M', 'HAZARD_X', 'HAZARD_M'];
   function objectiveOf(v, o = {}) {
     const prefs = o.prefs || {}, taste = o.taste || {}, avoid = o.avoid || {}, B = flagBits();
     const corner = 1 + 0.25 * ((Number(prefs.tight) || 0) + (Number(prefs.fast) || 0));
@@ -698,6 +699,17 @@
         for (const e of edgesNear(v, p.lat, p.lon, K.CLOSED_M)) hit.add(e);
       }
       for (const e of hit) mult[e] *= K.CLOSED_X;
+    }
+    // Confirmed road hazards (hazard_reports.js roadHazardsFor, IDEAS R-04): a pothole, gravel or debris another driver
+    // confirmed costs the edges within HAZARD_M a little more time (x1.3 once per edge, as a verified bump does), so
+    // the search takes an equal road without one; a road worth more still wins. Always on, like closures
+    if (Array.isArray(avoid.hazards)) {
+      const hit = new Set();
+      for (const p of avoid.hazards.slice(0, K.HAZARD_MAX)) {
+        if (!p || !Number.isFinite(p.lat) || !Number.isFinite(p.lon)) continue;
+        for (const e of edgesNear(v, p.lat, p.lon, K.HAZARD_M)) hit.add(e);
+      }
+      for (const e of hit) mult[e] *= K.HAZARD_X;
     }
     return { bad, mult, add, minBad, nodeCosts: o.nodeCosts !== false };
   }

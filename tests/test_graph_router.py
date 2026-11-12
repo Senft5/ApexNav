@@ -440,6 +440,18 @@ def test_reported_closures_keep_our_routes_and_loops_off_the_road():
     assert r["loopNear"] and all(d > 35 for d in r["loopNear"]), r
 
 
+def test_confirmed_road_hazards_nudge_the_search():
+    """Members' confirmed pothole, gravel and debris reports (graph_router.js HAZARD_X, avoid.hazards): the edges within
+    30 m of one cost x1.3, always (no switch), once however many sit on a road; a nudge, not a closure, so the quickest
+    still drives one when the way round costs more; a report far from any road changes nothing."""
+    r = case("hazards")
+    assert r["baseNear"] < 20, r
+    assert abs(r["r1"]["m"] - 1.3) < 1e-3 and abs(r["r2"]["m"] - 1.3) < 1e-3, r
+    assert 0 < r["r1"]["n"] <= 12 and r["r2"]["n"] == r["r1"]["n"], r
+    assert r["quickS"] >= r["baseS"] and r["quickS"] < r["baseS"] * 1.3, r
+    assert r["farMax"] == 1, r
+
+
 def test_there_and_back_comes_home_by_other_road():
     """There and back (graph_router.js roundTrip): to a destination and home again, the way back costing the way out x4 both
     ways, so a round trip drives little of itself twice; at Fun and Long way the way home buys good road as a plan does;
