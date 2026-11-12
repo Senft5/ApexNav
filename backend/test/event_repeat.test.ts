@@ -42,6 +42,20 @@ describe("recurring meets", () => {
     expect(await rollRepeats(env)).toBe(0);
   });
 
+  it("many due at once are planned in one go, each once, each with its planner going", async () => {
+    const a = await makeUser("alice"), b = await makeUser("bob");
+    const crew = await crewOf(a, b);
+    const ids: string[] = [];
+    for (let i = 0; i < 6; i++) ids.push((await json(api(i % 2 ? b : a, "POST", `/api/crews/${crew}/events`, { ...DRIVE, title: `Run ${i}`, repeat_weeks: 1 }))).id);
+    for (const id of ids) await started(id);
+    expect(await rollRepeats(env)).toBe(6);
+    expect(await rollRepeats(env)).toBe(0);
+    const list = await json(api(a, "GET", `/api/crews/${crew}/events`));
+    const next = list.filter((e: any) => !ids.includes(e.id));
+    expect(next.map((e: any) => e.title).sort()).toEqual(ids.map((_, i) => `Run ${i}`));
+    expect(next.map((e: any) => e.going)).toEqual(next.map((e: any) => (Number(e.title.slice(4)) % 2 ? ["bob"] : ["alice"])));
+  });
+
   it("the planner leaving the crew ends it; stopping it on the card ends it; the sweep plans before it deletes", async () => {
     const a = await makeUser("alice"), b = await makeUser("bob");
     const crew = await crewOf(a, b);

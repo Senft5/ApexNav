@@ -82,6 +82,20 @@ describe("sharing per friend (grants and boards)", () => {
     expect(await board(a, seg)).toHaveLength(1);                   // owner sees their own
   });
 
+  it("a result goes only to audiences still yours: a grant left for a stranger or a crew you are not in publishes nothing", async () => {
+    const [a, b, c] = [await makeUser("alice"), await makeUser("bob"), await makeUser("carol")];
+    await befriend(a, b);
+    const crew = ((await (await ok(api(c, "POST", "/api/crews", { name: "Not Hers" }))).json()) as { id: string }).id;
+    await env.DB.batch([
+      env.DB.prepare("INSERT INTO grants (user_id, audience_type, audience_id, share_scores, share_times) VALUES (?, 'friend', ?, 1, 1)").bind(a.id, c.id),
+      env.DB.prepare("INSERT INTO grants (user_id, audience_type, audience_id, share_scores, share_times) VALUES (?, 'crew', ?, 1, 1)").bind(a.id, crew),
+    ]);
+    const seg = await makeSegment(a);
+    const r = (await (await ok(api(a, "POST", "/api/board", { segment_id: seg, driver_score: 700, time_s: 300, driven_on: "2026-10-20" }))).json()) as { published: number };
+    expect(r.published).toBe(1);                                     // bob only
+    expect(await board(c, seg)).toEqual([]);
+  });
+
   it("a new friend shares Scores and Times both ways by default (the owner, 2026-11-11); switched off, nothing is published", async () => {
     const [a, b] = [await makeUser("alice"), await makeUser("bob")];
     await befriend(a, b);
