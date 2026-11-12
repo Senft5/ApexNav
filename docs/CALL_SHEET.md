@@ -10,6 +10,16 @@ Calls I made: once you've entered the week's loop, its card has Challenge a frie
 of the loop, so nothing new on the server. It's won by time by default, because the loop is a time attack; Score is one
 tap away. The duel's days are the usual 3, 7 or 14, not tied to the week's end, so a duel can outlast the board. Undo:
 remove the `challenge` hook in cockpit.js's time attack mount.
+## 2026-11-12 Avoid cameras reads our own camera list in Ohio, Kentucky and Indiana (claude/project-thread-39xbx9)
+
+Nate: "the camera server always says it's down". The phone asked the public Overpass servers for cameras, and they time
+out or refuse it when busy (all four timed out when the Worker asked them, 2026-11-12). Now a weekly job
+(.github/workflows/cameras.yml) takes plate readers and speed cameras from the same Geofabrik extracts as our roads and
+commits one file to the graph-data branch. The Worker relays it at `GET /api/cameras/v1/region.json`, and web/cameras.js
+reads it before Overpass. Calls: a tile counts as ours only if the state outlines hold it whole, so a border tile isn't
+wrongly "no cameras"; outside the region and when our file can't be read, the phone asks Overpass as before (now with
+maps.mail.ru as a fourth server). The request carries no position: it's the same file for everyone. Undo: drop the
+`regionOnce` lookup in web/cameras.js `load` (pass `region: null`), the route in backend/src/index.ts and the workflow.
 ## 2026-11-12 (ui-round-three): the arrival-time page your friends open looks like Vetta (claude/project-thread-5sbga7)
 
 The page behind a shared ETA link was plain system text. It now uses the app's type and paper: the minutes set large
