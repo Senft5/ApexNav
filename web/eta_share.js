@@ -17,10 +17,14 @@
     const left = Math.round((arrive - now) / 60000);
     const time = new Date(arrive).toLocaleTimeString(locale, { hour: 'numeric', minute: '2-digit' });
     const ago = Math.max(0, Math.floor((now - updated) / 60000));
+    const stale = Number.isFinite(updated) && now - updated > STALE_MS;
     return {
       title: left <= 1 ? `${who} should be there about now` : `${who} is about ${left} min away`,
+      // the title in its three parts, for the page to set the minutes large; read in order they are the title word for word
+      parts: left <= 1 ? null : [`${who} is about`, String(left), 'min away'],
       sub: `Arriving around ${time}`,
-      note: !Number.isFinite(updated) ? '' : now - updated > STALE_MS ? `Last update ${ago} min ago. Their phone may have no signal.` : `Updated ${ago < 1 ? 'just now' : `${ago} min ago`}`,
+      note: !Number.isFinite(updated) ? '' : stale ? `Last update ${ago} min ago. Their phone may have no signal.` : `Updated ${ago < 1 ? 'just now' : `${ago} min ago`}`,
+      live: Number.isFinite(updated) && !stale,
     };
   }
 
