@@ -435,16 +435,21 @@
    *  name it most often (a tie keeps list order), as "It shows most on Dry Ridge Rd: 2 of the corners where your passes
    *  there differ most come down to it." null when no road's do. */
   function skillRoadLine(list, skill) {
+    const best = skillRoad(list, skill);
+    if (!best) return null;
+    const what = best.n === best.of ? (best.n === 1 ? 'the corner where your passes there differ most comes' : `all ${best.n} corners where your passes there differ most come`)
+      : `${best.n} of the ${best.of} corners where your passes there differ most come${best.n === 1 ? 's' : ''}`;
+    return `It shows most on ${best.name}: ${what} down to it.`;
+  }
+  /** skillRoadLine's road: { name, n (its uneven corners naming the skill), of (its uneven corners) }, or null. */
+  function skillRoad(list, skill) {
     let best = null;
     for (const x of list || []) {
       const b = x && x.book, cs = (b && b.corners) || [];
       const n = ((b && b.uneven) || []).filter((i) => i > 0 && i <= cs.length && cs[i - 1].why === skill).length;
       if (n > 0 && x.name && (!best || n > best.n)) best = { name: x.name, n, of: b.uneven.length };
     }
-    if (!best) return null;
-    const what = best.n === best.of ? (best.n === 1 ? 'the corner where your passes there differ most comes' : `all ${best.n} corners where your passes there differ most come`)
-      : `${best.n} of the ${best.of} corners where your passes there differ most come${best.n === 1 ? 's' : ''}`;
-    return `It shows most on ${best.name}: ${what} down to it.`;
+    return best;
   }
   /** "Most of the difference at corner 3 is one steering arc." for a road book's focus, or null. */
   function roadBookFocusLine(f) {
@@ -1050,7 +1055,7 @@
     }
   }
 
-  const api = { SKILLS, observe, profile, swing, excess, SKILL_MIN, WORDS, findingLine, styleLines, touchLines, touchTrendLines, driveTouchLines, paceLines, PACE, MEASURES, touch, TOUCH, driveTouch, DRIVE_TOUCH_MIN, bestCorners, recordsBySize, RECORD_MIN, driveRecords, driveRecordLines, roadRecords, placed, roadRecordLine, roadCornerNote, roadBook, roadBookRows, roadBookFocus, roadBookFocusLine, roadsToWork, skillRoadLine, roadUnevenLine, roadEndLine, cardLine, focusLines, render,
+  const api = { SKILLS, observe, profile, swing, excess, SKILL_MIN, WORDS, findingLine, styleLines, touchLines, touchTrendLines, driveTouchLines, paceLines, PACE, MEASURES, touch, TOUCH, driveTouch, DRIVE_TOUCH_MIN, bestCorners, recordsBySize, RECORD_MIN, driveRecords, driveRecordLines, roadRecords, placed, roadRecordLine, roadCornerNote, roadBook, roadBookRows, roadBookFocus, roadBookFocusLine, roadsToWork, skillRoadLine, skillRoad, roadUnevenLine, roadEndLine, cardLine, focusLines, render,
     PRACTICE_MIN, practice, drivePractice, onPlanRoad, practiceLine, practiceSummary, localStamp, loadPlan, savePlan, PLAN_KEY };
   if (typeof module !== 'undefined' && module.exports) module.exports = api; else root.ApexDriverProfile = api;
 })(typeof window !== 'undefined' ? window : globalThis);

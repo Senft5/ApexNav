@@ -20,6 +20,8 @@
   // id, name, what it feeds (shown under a service that is down), and the request. `api: true` goes through the page's
   // apiFetch (our Worker, with the session); otherwise a plain fetch with no credentials.
   const json = (j) => j && typeof j === 'object';
+  // the build's date, not its id (a long id reads as a token and the server's scrub blanks it)
+  const built = (j) => String(j.built || '').slice(0, 10) || '?';
   const cams = (n) => `${n} camera${n === 1 ? '' : 's'} in the test tile`;
   // the region index's tile nearest the test place (any listed one when that isn't), so a real tile is fetched
   async function firstTile(deps) {
@@ -46,15 +48,15 @@
     { id: 'ctx_keys', group: 'Vetta servers', name: 'Route context keys', feeds: 'events, work zones, photos along a route', api: true,
       path: '/api/ctx/keys', check: (j) => (json(j) ? null : 'no keys') },
     { id: 'osm_relay', group: 'Vetta servers', name: 'Map features relay', feeds: 'route context (OSM features)', api: true,
-      path: `/api/ctx/osm?bbox=${[39.10, -84.55, 39.15, -84.50].join(',')}`, check: (j) => (json(j) && Array.isArray(j.elements) ? null : 'no elements') },
+      path: `/api/ctx/osm?bbox=${[39.10, -84.55, 39.15, -84.50].join(',')}`, soft: { 504: 'up, but still fetching from Overpass' }, check: (j) => (json(j) && Array.isArray(j.elements) ? null : 'no elements') },
     { id: 'graph_index', group: 'Our router', name: 'Road graph index (region)', feeds: 'Fun, Long way and loops outside Cincinnati',
       worker: true, path: '/api/graph/v1/index.json',
-      check: (j) => (json(j) && j.tiles && Object.keys(j.tiles).length ? null : 'index has no tiles'), note: (j) => (json(j) && j.tiles ? `${Object.keys(j.tiles).length} tiles, build ${j.build || j.built || '?'}` : '') },
+      check: (j) => (json(j) && j.tiles && Object.keys(j.tiles).length ? null : 'index has no tiles'), note: (j) => (json(j) && j.tiles ? `${Object.keys(j.tiles).length} tiles, built ${built(j)}` : '') },
     { id: 'graph_tile', group: 'Our router', name: 'Road graph tile (region)', feeds: 'Fun, Long way and loops outside Cincinnati',
       worker: true, bytes: true, pathOf: firstTile, check: (n) => (n > 64 ? null : 'empty tile') },
     { id: 'graph_bundled', group: 'Our router', name: 'Road graph shipped in the app', feeds: 'Fun, Long way and loops around Cincinnati',
       local: true, path: 'data/graph/v1/index.json', check: (j) => (json(j) && j.tiles && Object.keys(j.tiles).length ? null : 'index has no tiles'),
-      note: (j) => (json(j) && j.tiles ? `${Object.keys(j.tiles).length} tiles, build ${j.build || '?'}` : '') },
+      note: (j) => (json(j) && j.tiles ? `${Object.keys(j.tiles).length} tiles, built ${built(j)}` : '') },
     { id: 'router_fun', group: 'Our router', name: 'Fun plan', feeds: 'Fun routes', router: 'fun' },
     { id: 'router_long', group: 'Our router', name: 'Long way plan', feeds: 'Long way routes', router: 'max' },
     { id: 'router_loop', group: 'Our router', name: 'Loop plan', feeds: 'loops', router: 'loop' },
@@ -147,6 +149,8 @@
     if (r.e) return judge(p.id, { ok: false, ms: r.ms, detail: errText(r.e) }, slow);
     const { http, okHttp, body } = r.v;
     if (http == null) return judge(p.id, { ok: false, ms: r.ms, detail: 'no response' }, slow);
+    // an answer that says the service works but its own upstream is slow (the relay waiting on Overpass)
+    if (!okHttp && p.soft && p.soft[http]) return { id: p.id, state: 'slow', http, ms: Math.round(r.ms), detail: p.soft[http] };
     if (!okHttp) return judge(p.id, { ok: false, http, ms: r.ms, detail: `HTTP ${http}${json(body) && body.error ? ` ${String(body.error).slice(0, 60)}` : ''}` });
     if (body === undefined) return judge(p.id, { ok: false, http, ms: r.ms, detail: p.bytes ? 'unreadable body' : 'not JSON' });
     const bad = p.check ? p.check(body) : null;
