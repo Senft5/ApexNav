@@ -4704,6 +4704,42 @@ flow('wet roads: rain where you are (the place plate\'s weather) brings the note
   check(wetLead > dryLead, `the notes come earlier (${dryLead} → ${wetLead} m)`);
 });
 
+flow('cold tyres: a dry road at 4 degrees is said once, and not again on the next drive the same day (wet_roads.js coldLine)', async (page, base) => {
+  await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); localStorage.setItem('apex.permsExplained', '1'); } catch (_) {}
+    window.__said = []; window.APEX_REVIEW = true;
+    window.webkit = { messageHandlers: { apex: { postMessage(m) { if (m && m.cmd === 'said') window.__said.push(m.text); } } } }; });
+  await page.route('**/api.open-meteo.com/**', (route) => route.fulfill({ status: 200, contentType: 'application/json',
+    body: JSON.stringify({ current: { temperature_2m: 4, precipitation: 0, weather_code: 1 },   // dry: the last hours known and dry
+      hourly: { time: [new Date(Date.now() - 3600e3).toISOString().slice(0, 16)], precipitation: [0] } }) }));
+  await page.route('**/api.weather.gov/**', (route) => route.fulfill({ status: 404, body: '' }));
+  await page.route('**/nominatim.openstreetmap.org/**', (route) => route.fulfill({ status: 200, contentType: 'application/json', body: '{}' }));
+  await page.route('**/api/**', (route) => route.fulfill({ status: 200, contentType: 'application/json', body: '[]' }));
+  const drive = async () => {
+    await page.evaluate(() => window.apex.onNative({ type: 'link', params: { go: 'drive' } }));
+    await page.waitForTimeout(300);
+    if (await page.isVisible('#permSheet.show')) await page.click('#permGo');
+    for (let burst = 0; burst < 6; burst++) {
+      await page.evaluate((burst) => {
+        for (let j = 0; j < 20; j++) { const k = burst * 20 + j;
+          window.apex.live({ lat: 39.1 + k * 5 / 110540, lon: -84.5, accuracy_m: 4, speed_mps: 20, course_deg: 0, lat_g: 0, lon_g: 0, has_fix: true, calibration: 'locked' }); }
+      }, burst);
+      await page.waitForTimeout(1000);
+      if (await page.evaluate(() => window.__said.some((t) => /^Cold out/.test(t)))) break;
+    }
+  };
+  await page.goto(base + '/index.html');
+  await page.waitForFunction(() => window.apex && window.ApexWetRoads && window.ApexNoteTiming);
+  await drive();
+  const said = await page.evaluate(() => window.__said.filter((t) => /^Cold out/.test(t)));
+  check(said.length === 1 && said[0] === 'Cold out. Tyres grip less until they warm.', `said once (${JSON.stringify(said)})`);
+  check(await page.evaluate(() => window.apexDebug.wetRoad) === 'dry', 'the road reads dry: the notes keep their timing');
+  // the next drive today: a reload, then drive again
+  await page.reload();
+  await page.waitForFunction(() => window.apex && window.ApexWetRoads);
+  await drive();
+  check(await page.evaluate(() => window.__said.filter((t) => /^Cold out/.test(t)).length) === 0, 'not again the same day');
+});
+
 flow("friends' activity: the Log lists who drove your stages lately and where you stand, as text; kudos (Worker stubbed, IDEAS S-03, S-07)", async (page, base) => {
   const kudos = [];
   await page.route('**/api/**', (route) => {

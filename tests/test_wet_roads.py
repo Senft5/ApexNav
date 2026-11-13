@@ -24,7 +24,10 @@ const states = {
 const v = 25, apex = 12, lead = () => T.leadM({ vMps: v, apexMps: apex, text: 'Left 3', reactionS: 1.2 });
 const dry = lead(); T.setRoad(W.road('wet')); const wet = lead(); const wetBrakes = T.needsBrake(13, 12);
 T.setRoad(W.road('ice')); const ice = lead(); T.setRoad(W.road('dry')); const back = lead(); T.setRoad(null); const reset = lead();
-console.log(JSON.stringify({ states, dry, wet, ice, back, reset, wetBrakes, dryBrakes: T.needsBrake(13, 12), lines: ['wet', 'ice', 'dry', null].map(W.line) }));
+const cold = { plain: W.coldLine('dry', 4), summer: W.coldLine('dry', 4, 'Michelin Pilot Sport 4S'), ps4: W.coldLine('dry', 6, 'PS4 summer'),
+  winter: W.coldLine('dry', -2, 'Bridgestone Blizzak winter'), allTerrain: W.coldLine('dry', 2, 'BFGoodrich A/T'), mild: W.coldLine('dry', 7.5),
+  edge: W.coldLine('dry', 7), wet: W.coldLine('wet', 3), ice: W.coldLine('ice', -1), unknown: W.coldLine('dry', null), noState: W.coldLine(null, 2) };
+console.log(JSON.stringify({ cold, states, dry, wet, ice, back, reset, wetBrakes, dryBrakes: T.needsBrake(13, 12), lines: ['wet', 'ice', 'dry', null].map(W.line) }));
 """
 
 
@@ -49,3 +52,11 @@ def test_notes_come_earlier_on_a_wet_or_icy_road_and_the_dry_road_comes_back(out
 
 def test_said_for_wet_and_ice_only(out):
     assert out["lines"] == ["Wet roads. Notes come earlier.", "Ice risk. Notes come earlier. Go gently.", "", ""]
+
+
+def test_cold_tyres_on_a_dry_road_only_and_never_for_winter_tyres(out):
+    c = out["cold"]
+    assert c["plain"] == c["edge"] == "Cold out. Tyres grip less until they warm."
+    assert c["summer"] == c["ps4"] == "Cold out. Summer tyres grip less in the cold."
+    assert c["winter"] == c["allTerrain"] == ""                  # the score's own winter test (carGrip)
+    assert c["mild"] == c["wet"] == c["ice"] == c["unknown"] == c["noState"] == ""
