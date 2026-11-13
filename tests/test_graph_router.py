@@ -510,3 +510,10 @@ def test_there_and_back_comes_home_by_other_road():
     assert max(t["backS"] for t in r["fun"]["trips"]) > quick_best      # Fun's way home spends time on good road
     assert r["fun"]["trips"][0]["retraced"] <= r["fun"]["trips"][-1]["retraced"] + 0.2
     assert r["deadEnd"] and r["deadEnd"][0]["retraced"] > 0.9, r["deadEnd"]
+
+
+def test_loops_land_near_the_length_asked_on_real_tiles():
+    for c in case("loopLengthReal"):
+        assert c["offs"], c
+        assert min(abs(o) for o in c["offs"]) <= 0.2, c
+        assert all(abs(o) <= 0.6 for o in c["offs"]) and all(r <= 0.4 for r in c["retraced"]), c
