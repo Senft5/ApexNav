@@ -8747,6 +8747,47 @@ flow('the co-driver says a low sun once when the route turns into it, and not ag
   check((await calls()).length === 1, 'not again with the sun in view: ' + JSON.stringify(await calls()));
 });
 
+flow('road marks: a stop sign and a railway crossing from the map are pinned on the route and called with the notes, the stop early enough to brake (road_marks.js)', async (page, base) => {
+  await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); localStorage.setItem('apex.prefs', JSON.stringify({ notesMode: 'full', nightMode: 'off' })); } catch (_) {}
+    window.__said = []; window.APEX_REVIEW = true;
+    window.webkit = { messageHandlers: { apex: { postMessage(m) { if (m && m.cmd === 'said') window.__said.push(m.text); } } } }; });
+  // a straight road north, 3 km; the map has a stop sign at 1.5 km (the route is the minor road at a junction) and a level crossing at 2.2 km
+  const KY = 110540, lat = (m) => 35.5 + m / KY, LON = -83.9, kx = 111320 * Math.cos(35.5 * Math.PI / 180);
+  const g = (m, dx = 0) => ({ lat: lat(m), lon: LON + dx / kx });
+  const ids = []; for (let m = 0; m <= 3000; m += 100) ids.push(1000 + m / 100);
+  const elements = [
+    { type: 'way', id: 1, tags: { highway: 'tertiary', name: 'Straight Road' }, nodes: ids, geometry: ids.map((_, k) => g(k * 100)) },
+    { type: 'way', id: 2, tags: { highway: 'primary', name: 'Big Pike' }, nodes: [9001, 1015, 9002], geometry: [g(1500, -300), g(1500), g(1500, 300)] },
+    { type: 'node', id: 1015, ...g(1500), tags: { highway: 'stop' } },
+    { type: 'node', id: 1022, ...g(2200), tags: { railway: 'level_crossing' } },
+  ];
+  for (const host of ['overpass-api.de', 'overpass.kumi.systems', 'overpass.private.coffee', 'maps.mail.ru'])
+    await page.route(`https://${host}/**`, (route) => route.fulfill({ contentType: 'application/json', body: JSON.stringify({ elements }) }));
+  await page.goto(base + '/index.html');
+  await page.waitForFunction(() => window.apexDebug && window.apexDebug.map && window.apex && window.apex.live && window.ApexRoadMarks);
+  const gpx = []; for (let m = 0; m <= 3000; m += 5) gpx.push(`<trkpt lat="${lat(m).toFixed(7)}" lon="${LON.toFixed(7)}"/>`);
+  await page.setInputFiles('#gpxFile', { name: 'straight.gpx', mimeType: 'application/gpx+xml', buffer: Buffer.from(`<gpx><trk><name>Straight Road</name><trkseg>${gpx.join('')}</trkseg></trk></gpx>`) });
+  await page.waitForFunction(() => window.apexDebug.track && window.apexDebug.track.name === 'Straight Road', null, { timeout: 10000 });
+  await page.waitForFunction(() => Array.isArray(apexDebug.track.marks) && apexDebug.track.marks.length, null, { timeout: 30000 })   // the map's answer lands after the plan: asked again
+    .catch(async () => { throw new Error('no marks: ' + JSON.stringify(await page.evaluate(() => apexDebug.lastCtx))); });
+  const marks = await page.evaluate(() => apexDebug.track.marks.map((m) => [m.code, Math.round(m.dist_m)]));
+  check(marks.length === 2 && marks[0][0] === 'STOP' && Math.abs(marks[0][1] - 1500) <= 30 && marks[1][0] === 'RAIL' && Math.abs(marks[1][1] - 2200) <= 30, 'the stop and the crossing on the route: ' + JSON.stringify(marks));
+  check(await page.evaluate(() => [...document.querySelectorAll('.pin.mark')].map((p) => p.textContent).join(',')) === 'STOP,RAIL', 'pinned on the map');
+  await page.evaluate(() => window.apex.onNative({ type: 'carplay', action: 'start' }));
+  await page.waitForFunction(() => window.apexDebug.driveActive);
+  const at = (i, v) => page.evaluate(([i, v]) => { const t = apexDebug.track;
+    window.apex.live({ lat: t.lat[i], lon: t.lon[i], accuracy_m: 5, speed_mps: v, course_deg: 0, has_fix: true, lat_g: 0, lon_g: 0, calibration: 'locked', thermal: 0 }); }, [i, v]);
+  const iAt = (m) => page.evaluate((m) => apexDebug.track.dist.findIndex((d) => d >= m), m);
+  let saidAt = null;
+  for (let i = await iAt(1000), end = await iAt(1490); i <= end && saidAt === null; i += 2) {
+    await at(i, 25); await page.waitForTimeout(40);
+    if (await page.evaluate(() => window.__said.some((s) => /^Stop sign/.test(s)))) saidAt = await page.evaluate((i) => apexDebug.track.dist[i], i);
+  }
+  check(saidAt !== null && 1500 - saidAt >= 92, `"Stop sign" said with room to stop from 25 m/s (${saidAt === null ? 'never' : Math.round(1500 - saidAt) + ' m before'}): ` + JSON.stringify(await page.evaluate(() => window.__said)));
+  for (let i = await iAt(1500), end = await iAt(2190); i <= end; i += 3) { await at(i, 25); await page.waitForTimeout(30); }
+  check(await page.evaluate(() => window.__said.filter((s) => /Railway crossing/.test(s)).length) === 1, 'the crossing called once: ' + JSON.stringify(await page.evaluate(() => window.__said)));
+});
+
 flow('the co-driver counts clean corners in a row live and says five, then ten, and passing the month\'s best once, never in Quiet notes (flow_live.js, IDEAS D-30)', async (page, base) => {
   await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); } catch (_) {}
     window.__said = []; window.APEX_REVIEW = true;

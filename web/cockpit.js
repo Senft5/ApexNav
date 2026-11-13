@@ -1438,7 +1438,7 @@
     // =======================================================================
     // 6. CO-DRIVER — quiet in cruise, full pace notes when spirited or STAGE
     // =======================================================================
-    const allEvents = () => (track ? track.events.concat(track.alpr || []) : []);
+    const allEvents = () => (track ? track.events.concat(track.alpr || [], track.marks || []) : []);   // marks: road_marks.js
     const distLabel = (m) => ApexUnits.short(m);          // feet and miles, or metres and km (Settings → Units, U-22)
     // Auto: wake on the road ahead (a corner that is tight or needs braking, updateNotes, U-58) or on hard driving. Full:
     // always awake. Quiet: never wake, so only cameras and severe bumps are called.
@@ -1723,7 +1723,7 @@
       if (learned != null) { try { localStorage.setItem(REACT_KEY, learned.toFixed(2)); } catch (_) {} }
     }
     const noteM = (e) => (Number.isFinite(e.start_m) && e.start_m <= e.dist_m ? e.start_m : e.dist_m);
-    const apexMpsOf = (e) => (e.type === 'corner' && Number.isFinite(e.apex_mph) ? e.apex_mph / 2.2369362921 : null);
+    const apexMpsOf = (e) => (e.type === 'corner' && Number.isFinite(e.apex_mph) ? e.apex_mph / 2.2369362921 : e.type === 'mark' && e.kind === 'stop' ? 0 : null);   // a stop sign: braking to a stop
     let lastNotes = [];
     // U-58: Auto says when it goes quiet and when the notes come back (ApexNoteTiming.createWakeVoice: once each way, never
     // within two minutes of the last, silent on a drive's first reading). The drive's first note is called whatever the
@@ -8745,6 +8745,22 @@
       whenAbort = null; whenState = null;
       $('routeCardWhen').hidden = true; $('routeWhenPanel').hidden = true; $('routeWhenLine').setAttribute('aria-expanded', 'false');
     }
+    // Stop signs, railway crossings, one-lane bridges and speed bumps from the route's context (road_marks.js): note events
+    // read with the pace notes and pinned on the map. None without a context (no invented marks).
+    // The map's answer comes off the plan's critical path (osm_overpass.js WAIT_MS: a plan never waits for Overpass; the
+    // late answer is kept for the next ask), so with none yet it asks again for this route alone, up to three times.
+    function attachMarks(t, c, tries = 0) {
+      if (!window.ApexRoadMarks || (t.marks && t.marks.length)) return;
+      t.marks = ApexRoadMarks.events(c.ctx, c.corridor, t, (la, lo, lats, lons) => Core.nearestIndex(la, lo, lats, lons, -1));
+      if (track === t && t.marks.length) { loadTrackOnMap(); render(false); }
+      if (t.marks.length || tries >= 3) return;   // (a route with none asks three times; a kept answer costs no request)
+      setTimeout(async () => {
+        if (plannedRoute !== t) return;
+        const again = { t, route: { coords: Array.from(t.lat, (la, i) => [t.lon[i], la]), times: null }, timeS: t.timeS };
+        await contextOn([again], CTX_BUDGET_MS, 'marks', ['osm_overpass']);
+        if (plannedRoute === t && again.ctx && again.corridor) attachMarks(t, again, tries + 1);
+      }, 4000 * (tries + 1));
+    }
     function attachWhen(t) {
       whenReset();
       if (!window.ApexWhenToGo || !window.ApexRouteEngine || !window.ApexRouteCtx || !t || !Array.isArray(t.lat) || t.lat.length < 2 || !Number.isFinite(t.timeS) || state.mode === 'live') return;
@@ -8759,6 +8775,7 @@
       const c = kept && kept.corridor && kept.ctx ? kept : { t, route: { coords: Array.from(t.lat, (la, i) => [t.lon[i], la]), times: null }, timeS: t.timeS, fun: t.fun || null };
       if (!c.ctx) await contextOn([c], CTX_BUDGET_MS, 'when');
       if (plannedRoute !== t || ac.signal.aborted || !c.ctx || !c.corridor) return;
+      attachMarks(t, c);
       let sc = null;
       try {
         await needCtx();

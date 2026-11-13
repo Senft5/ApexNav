@@ -87,7 +87,8 @@
   <script src="theme_sounds.js" defer></script>
   <script src="audio_bus.js" defer></script>
   <script src="brake_heat.js" defer></script>
-  <script src="sun_ahead.js" defer></script>     <!-- "Sun in your eyes ahead." when the road turns into a low sun (live R-13) -->
+  <script src="sun_ahead.js" defer></script>
+  <script src="road_marks.js" defer></script>    <!-- stop signs, rail crossings, one-lane bridges, speed bumps on a planned route -->     <!-- "Sun in your eyes ahead." when the road turns into a low sun (live R-13) -->
   <script src="soundtrack.js" defer></script>
   <script src="week_digest.js" defer></script>
   <script src="drive_card.js" defer></script>
@@ -1660,8 +1661,8 @@
     .hz-ask span { flex: 1; font-weight: 700; }
     .hz-ask .key { min-height: 56px; }
     .g-score { text-align: center; line-height: 1; margin-top: 2px; } .g-score b { display: block; font: 700 26px var(--font-num); color: var(--panel-ink); letter-spacing: 0.04em; } .g-score span { font-size: 13px; letter-spacing: 0.08em; color: var(--panel-dim); }
-    .hz-pin, .pin.bump, .pin.crest, .pin.dip { font: 800 11px var(--font-ui, sans-serif); letter-spacing: 0.06em; padding: 2px 6px 2px 5px; border: 2px solid var(--hz-edge); color: var(--hz-ink); background: var(--hz-bg); white-space: nowrap; }
-    .hz-pin::before, .pin.bump::before, .pin.crest::before, .pin.dip::before { content: ""; display: inline-block; width: 0; height: 0; margin-right: 4px; vertical-align: -1px;
+    .hz-pin, .pin.bump, .pin.crest, .pin.dip, .pin.mark { font: 800 11px var(--font-ui, sans-serif); letter-spacing: 0.06em; padding: 2px 6px 2px 5px; border: 2px solid var(--hz-edge); color: var(--hz-ink); background: var(--hz-bg); white-space: nowrap; }
+    .hz-pin::before, .pin.bump::before, .pin.crest::before, .pin.dip::before, .pin.mark::before { content: ""; display: inline-block; width: 0; height: 0; margin-right: 4px; vertical-align: -1px;
       border-left: 5px solid transparent; border-right: 5px solid transparent; border-bottom: 9px solid var(--hz-edge); }
     /* the report sheet's buttons are the plate others will see (REVIEW.md 1.2, Hazard report) */
     .hz-grid .hz-btn { background: var(--hz-bg); color: var(--hz-ink); border: 2px solid var(--hz-edge); text-align: left; padding: 0 14px; display: flex; align-items: center; gap: 10px; }
