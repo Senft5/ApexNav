@@ -4242,6 +4242,49 @@ flow('reports ahead of a dead zone: a drive on a planned route asks for the cell
   check(ids.includes('live35.8') && !ids.some((x) => x.startsWith('gone')), 'with no signal the report ahead is known, the expired one dropped: ' + JSON.stringify(ids));
 });
 
+flow('a saved route keeps its reports: Save asks for the cells it runs through, and opened again with no signal its card names them with their age, expired ones dropped (Worker and router stubbed, IDEAS F-03)', async (page, base) => {
+  await page.route('https://tiles.openfreemap.org/**', (route) => (route.request().url().includes('/styles/')
+    ? route.fulfill({ contentType: 'application/json', body: JSON.stringify({ version: 8, sources: {}, layers: [{ id: 'bg', type: 'background', paint: { 'background-color': '#eee' } }] }) })
+    : route.abort()));
+  await page.route('https://valhalla1.openstreetmap.de/route', (route) => route.fulfill({ contentType: 'application/json', body: JSON.stringify(stubTrip(JSON.parse(route.request().postData() || '{}').locations)) }));
+  const soon = new Date(Date.now() + 40 * 60000).toISOString(), later = new Date(Date.now() + 2 * 60000).toISOString();
+  let offline = false;
+  await page.route(base + '/api/**', (route) => {
+    const u = new URL(route.request().url());
+    if (offline) return route.abort('internetdisconnected');
+    if (u.pathname === '/api/me') return route.fulfill({ contentType: 'application/json', body: JSON.stringify({ signed_in: true, member: true, handle: 'e2e' }) });
+    if (u.pathname === '/api/hazards') {
+      const lat = Number(u.searchParams.get('lat'));
+      return route.fulfill({ contentType: 'application/json', body: JSON.stringify(lat > 35.75 && lat < 35.85 ? [
+        { id: 'gravel', kind: 'gravel', lat: 35.80, lon: -83.92, heading: null, confirms: 2, clears: 0, expires_at: soon, m: 0 },
+        { id: 'brief', kind: 'debris', lat: 35.81, lon: -83.92, heading: null, confirms: 0, clears: 0, expires_at: later, m: 0 }] : []) });
+    }
+    return route.fulfill({ status: 200, contentType: 'application/json', body: '[]' });
+  });
+  await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); localStorage.setItem('apex.permsExplained', '1'); localStorage.setItem('apex.signedIn', '1'); } catch (_) {} });
+  await page.goto(base + '/index.html');
+  await page.waitForFunction(() => window.apexDebug && window.apexDebug.map && window.apexDebug.map.loaded() && window.apex && window.apex.live, null, { timeout: 20000 });
+  await page.evaluate(() => apexDebug.buildRoute([{ lat: 35.52, lon: -83.92 }, { lat: 36.08, lon: -83.92 }], 'route_dest', 'Up the valley', null,
+    { from: null, to: { lat: 36.08, lon: -83.92 }, via: [] }));
+  await page.waitForFunction(() => apexDebug.track && apexDebug.track.kind === 'route' && apexDebug.track.request, null, { timeout: 20000 });
+  await page.evaluate(() => document.getElementById('routeSaveBtn').click());
+  await page.waitForFunction(() => window.apexDebug.keptReports > 0, null, { timeout: 20000 });
+  const kept = await page.evaluate(() => JSON.parse(localStorage.getItem('apex.routeReports') || '{}'));
+  const id = Object.keys(kept)[0], rows = id ? Object.values(kept[id].cells).flat().map((h) => h.id) : [];
+  check(rows.includes('gravel') && rows.includes('brief'), 'the reports along it are kept with the route: ' + JSON.stringify(kept));
+  // no signal; time passes the brief report's expiry; the route opened again from the car's Places
+  offline = true;
+  await page.context().setOffline(true);
+  await page.evaluate((id) => { const v = JSON.parse(localStorage.getItem('apex.routeReports')); const t = apexDebug.track, k = Math.floor(t.lat.length / 2);   // both on the route's own line (the stub router's shape)
+    for (const c of Object.values(v[id].cells)) for (const h of c) { h.lat = t.lat[k]; h.lon = t.lon[k]; if (h.id === 'brief') h.expires_at = new Date(Date.now() - 1000).toISOString(); } localStorage.setItem('apex.routeReports', JSON.stringify(v)); }, id);
+  await page.evaluate(() => { document.getElementById('routeCardReports').textContent = ''; });
+  await page.evaluate(() => { const p = JSON.parse(localStorage.getItem('apex.savedRoutes') || '[]')[0]; window.apex.onNative({ type: 'carplay', action: 'saved', id: p.id }); });
+  await page.waitForFunction(() => /as of/.test(document.getElementById('routeCardReports').textContent), null, { timeout: 15000 });
+  const line = await page.textContent('#routeCardReports');
+  check(/Gravel/i.test(line) && !/Debris/i.test(line) && /as of \d/.test(line), 'with no signal the card names the kept report, with its age, the expired one dropped: ' + line);
+  await page.context().setOffline(false);
+}, { viewport: { width: 1280, height: 900 } });
+
 flow('reported hazards: a call ahead, "still there?" after passing, and a one-tap report (Worker stubbed, IDEAS Q-15/Q-16)', async (page, base) => {
   await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); } catch (_) {}
     window.__said = []; const S = window.speechSynthesis;   // what the co-driver says, whatever voice is set
@@ -8332,6 +8375,9 @@ flow('Where to? while typing is the field and its list: no shortcuts, no Find a 
   await page.evaluate(() => ApexKeyboard.native(300));                 // the shell says the keyboard covers 300 px
   await page.waitForFunction(() => document.documentElement.classList.contains('kb-open'));
   const typing = await look();
+  // the kind is said once for the run (six Recents read "Recent" then blanks), and every row still reads it aloud
+  const kinds = await page.evaluate(() => [...document.querySelectorAll('#placeList .place')].map((b) => [b.querySelector('span').textContent, b.getAttribute('aria-label')]));
+  check(kinds.map((k) => k[0]).join() === 'Recent,,,,,' && kinds.slice(1).every((k) => /, Recent$/.test(k[1])), 'Recent once, read on every row: ' + JSON.stringify(kinds));
   check(typing.kb && !typing.chips && !typing.find && typing.places === 6 && !typing.all, 'keyboard up: only the field and every place, nothing over an empty band: ' + JSON.stringify(typing));
   await page.waitForTimeout(400);                                     // the sheet's refit
   const fits = await page.evaluate(() => ({ list: Math.round(document.getElementById('planBody').getBoundingClientRect().bottom), kb: Math.round(innerHeight - 300) }));

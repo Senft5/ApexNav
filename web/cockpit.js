@@ -2407,6 +2407,8 @@
     // What other members have measured along this route (banking, roughness). Members only; silent when signed out or offline.
     async function showMeasured(t) {
       const note = $('measuredNote'); note.hidden = true;
+      // no signal (membership can't be asked): a saved route's card still names the reports kept with it
+      if (navigator.onLine === false && t === plannedRoute && window.ApexRouteReports && t.id && ApexRouteReports.load(localStorage, String(t.id))) paintRouteReports(t);
       if (!window.ApexSync || !window.ApexContributor || !t.lat || t.lat.length < 40 || !(await ApexSync.member())) return;
       if (t.measured === undefined) {
         try { t.measured = await ApexContributor.measuredAlong(t, async (ids) => { const r = await apiCall('GET', `/api/roads?ways=${ids.join(',')}`); return r.ok ? r.json() : null; }); }
@@ -2440,10 +2442,14 @@
       const pts = [];
       for (let i = 0; i < t.lat.length; i += 200) pts.push({ lat: t.lat[i], lon: t.lon[i] });
       pts.push({ lat: t.lat[t.lat.length - 1], lon: t.lon[t.lon.length - 1] });
+      // no signal: the reports kept when the route was saved (route_reports.js), expired ones dropped, with their age
+      const kept = navigator.onLine === false && window.ApexRouteReports && t.id ? ApexRouteReports.load(localStorage, String(t.id)) : null;
       let list = [];
-      try { list = await hazardsAround(pts); } catch (_) { return; }
+      if (kept) list = kept.rows;
+      else try { list = await hazardsAround(pts); } catch (_) { return; }
       if (plannedRoute !== t) return;
-      const text = ApexRoadPage.routeReportsLine(ApexRoadPage.onThisRoad(t, null, Array.isArray(list) ? list : []), (m) => ApexUnits.long(m, 1));
+      let text = ApexRoadPage.routeReportsLine(ApexRoadPage.onThisRoad(t, null, Array.isArray(list) ? list : []), (m) => ApexUnits.long(m, 1));
+      if (text && kept) text += ` (as of ${new Date(kept.at).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}${Date.now() - kept.at > 864e5 ? `, ${new Date(kept.at).toLocaleDateString([], { month: 'short', day: 'numeric' })}` : ''})`;
       line.dataset.for = String(t.id || t.name);
       line.textContent = text ? ApexRouteCard.factText(text) : ''; line.hidden = !text;
     }
@@ -3295,7 +3301,8 @@
       if (ApexSavedRoutes.has(localStorage, t.id)) {
         ApexSavedRoutes.remove(localStorage, t.id); toast(`${t.name} removed from saved routes.`); carPost(carPlaces());
         if (window.ApexOfflineTiles) ApexOfflineTiles.removeArea(routeAreaId(t)).catch(() => {});   // and the map kept along it
-      } else if (ApexSavedRoutes.save(localStorage, ApexSavedRoutes.pack(t)) === 'saved') { toast(`Saved for offline: ${t.name}. It's listed in Where to? now.`); keepMapAlong(t); carPost(carPlaces()); }
+        if (window.ApexRouteReports) ApexRouteReports.remove(localStorage, String(t.id));            // and its reports
+      } else if (ApexSavedRoutes.save(localStorage, ApexSavedRoutes.pack(t)) === 'saved') { toast(`Saved for offline: ${t.name}. It's listed in Where to? now.`); keepMapAlong(t); keepReportsAlong(t); carPost(carPlaces()); }
       else toast('The phone is out of room for saved routes. Remove one first.');
       paintSaveBtn();
     });
@@ -5616,7 +5623,10 @@
         const b = document.createElement('button'); b.className = 'place';
         if (more && i >= rows.length - more) b.classList.add('place-extra');
         const name = document.createElement('b'); name.textContent = p.label;
-        const kind = document.createElement('span'); kind.textContent = p.kind || '';
+        // the kind is said once for a run of the same (three Recents read "Recent", then two blanks; 2026-11-13 sweep), and
+        // read aloud on every row
+        const kind = document.createElement('span'); kind.textContent = !q && i > 0 && p.kind && rows[i - 1].kind === p.kind ? '' : p.kind || '';
+        if (p.kind && !kind.textContent) b.setAttribute('aria-label', `${p.label}, ${p.kind}`);
         b.append(name, kind);
         if (p.sub && p.sub !== p.label) { const sub = document.createElement('small'); sub.textContent = p.sub; b.append(sub); }   // U-73
         b.addEventListener('click', () => (p.saved ? openSaved(p.saved) : routeToPlace(p)));
@@ -7445,7 +7455,7 @@
     }
     $('myOfflineDelBtn').addEventListener('click', async () => {
       if (!(await ApexConfirm.ask('Delete routes and map areas saved for offline, and downloaded voices? Your drives, spots and settings stay.', 'Delete'))) return;
-      try { localStorage.removeItem(ApexSavedRoutes.KEY); } catch (_) {}
+      try { localStorage.removeItem(ApexSavedRoutes.KEY); if (window.ApexRouteReports) localStorage.removeItem(ApexRouteReports.KEY); } catch (_) {}
       try { if (window.ApexOfflineTiles) await ApexOfflineTiles.clear(); } catch (_) {}
       try { if (window.ApexOwnRouting && ApexOwnRouting.clearCrowd) await ApexOwnRouting.clearCrowd(); } catch (_) {}   // members' road data kept for plans
       try { if (window.caches) { await caches.delete('kokoro-voices'); for (const k of await caches.keys()) if (k.startsWith('apexnav-shell-')) await caches.delete(k); } } catch (_) {}
@@ -8583,21 +8593,42 @@
     // (privacy_zones.js routeCells: the same coarse cells as any lookup, never the ends' cells or a privacy zone's), so a dead
     // zone on the way still has them. Once per route; members only; anything that fails just asks nothing.
     async function askAhead(t) {
-      if (!t || t.kind !== 'route' || reported.aheadFor === t || !window.ApexSync || navigator.onLine === false || window.APEX_REVIEW) return;
+      if (!t || t.kind !== 'route' || reported.aheadFor === t || !window.ApexSync || window.APEX_REVIEW) return;
+      if (navigator.onLine === false) {                             // no signal at the start: what was kept when it was saved
+        const kept = window.ApexRouteReports && t.id ? ApexRouteReports.load(localStorage, String(t.id)) : null;
+        if (kept) { reported.aheadFor = t; for (const [k, rows] of Object.entries(kept.cells)) reported.ahead.set(k, rows); }
+        return;
+      }
       reported.aheadFor = t;
+      const got = await askCellsAlong(t, () => reported.aheadFor === t);
+      if (!got) return;
+      for (const [k, rows] of Object.entries(got)) reported.ahead.set(k, rows);
+      if (window.apexDebug) window.apexDebug.askedAhead = Object.keys(got).length;
+    }
+    // the reports in the cells a route runs through ({ cellKey: rows }), members only; null when nothing could be asked.
+    // `still()` false stops the asking (the route changed).
+    async function askCellsAlong(t, still = () => true) {
       const edgeM = Math.max(1500, window.ApexContributor ? ApexContributor.privateEdge() * 5 : 0);
       const cells = ApexPrivacyZones.routeCells(t.lat, t.lon, privacyZones, edgeM);
-      if (!cells.length || !(await RouteLoading.optional(ApexSync.member(), 4000).catch(() => null))) return;
-      let n = 0;
+      if (!cells.length || !(await RouteLoading.optional(ApexSync.member(), 4000).catch(() => null))) return null;
+      const out = {};
       for (const c of cells) {
-        if (reported.aheadFor !== t) return;
+        if (!still()) return null;
         try {
           const r = await RouteLoading.optional(ApexSync.apiFetch(`/api/hazards?${ApexPrivacyZones.cellQuery(c.lat, c.lon, 20)}`, { method: 'GET' }), 6000);
           const rows = r && r.ok ? await r.json() : null;
-          if (Array.isArray(rows)) { reported.ahead.set(c.key, rows); n++; }
+          if (Array.isArray(rows)) out[c.key] = rows;
         } catch (_) { /* this cell stays unasked */ }
       }
-      if (window.apexDebug) window.apexDebug.askedAhead = n;
+      return out;
+    }
+    // Saving a route for offline keeps the reports along it too (route_reports.js), so its card and a drive on it in a dead
+    // zone still know them; the card says how old they are. Members only, while there is signal.
+    async function keepReportsAlong(t) {
+      if (!t || !t.id || !window.ApexRouteReports || !window.ApexSync || navigator.onLine === false || window.APEX_REVIEW) return;
+      const got = await askCellsAlong(t, () => ApexSavedRoutes.has(localStorage, t.id)).catch(() => null);
+      if (got && Object.keys(got).length && ApexSavedRoutes.has(localStorage, t.id)) ApexRouteReports.save(localStorage, String(t.id), got);
+      if (window.apexDebug) window.apexDebug.keptReports = got ? Object.keys(got).length : 0;
     }
     // Viewpoints, cafés and fuel along a planned route (IDEAS R-24, R-23; stages.js pois, scenic.js): pins on the map and a
     // line on the route card. Map data: a mapped viewpoint, a fuel station that may be closed. Nothing found says nothing.
