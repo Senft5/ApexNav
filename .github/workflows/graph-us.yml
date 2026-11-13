@@ -1,0 +1,235 @@
+name: Graph US (own routing, the lower 48)
+
+# Vetta's own scored road network for the lower 48 (docs/OWN_ROUTING.md), hosted for free: ~4 GB a build is too much
+# for a git branch, so each build is a GitHub release (graph-us-<build>) of 2 degree packs (tools/graph_etl/pack.py),
+# and the graph-data branch's us/v1/current.json names the live one, committed last. The Worker reads a tile as an
+# HTTP Range of its pack (backend/src/graph.ts); with no pointer it serves the branch's OH/KY/IN tiles as before.
+#
+# plan (tools/graph_etl/us_plan.py: Geofabrik's index, the states, one job per 1 degree band x 15 degree chunk)
+#   -> osm (one job per state: its extract, kept as an artifact for the bands that need it; Geofabrik asked once each)
+#   -> band (each job: its states merged, its 1 degree blocks built one at a time, as graph-region.yml does)
+#   -> publish (merge, pack, the release, then the pointer; the two newest US releases are kept)
+#
+# A pilot (`only`: Geofabrik ids, comma separated) builds the blocks those states touch and makes a release, but the
+# pointer moves only for the whole country or with `live` (a pilot would take the rest of the region off the map).
+# Triggers: a manual run (once on main), or a push to claude/project-thread-39xbx9 changing tools/graph_etl/US_BUILD
+# (its `only=` and `live=` lines), the way to run it before it is on main.
+on:
+  workflow_dispatch:
+    inputs:
+      only:
+        description: "Pilot: Geofabrik state ids, comma separated (empty: the lower 48)"
+        required: false
+        default: ""
+      live:
+        description: "Point the Worker at this build even if it is a pilot"
+        type: boolean
+        default: false
+  push:
+    branches: [claude/project-thread-39xbx9]
+    paths:
+      - "tools/graph_etl/US_BUILD"
+
+permissions:
+  contents: write
+  actions: read
+
+concurrency:
+  group: graph-us
+  cancel-in-progress: false
+
+jobs:
+  plan:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    outputs:
+      matrix: ${{ steps.plan.outputs.matrix }}
+      states: ${{ steps.plan.outputs.states }}
+      week: ${{ steps.plan.outputs.week }}
+      only: ${{ steps.plan.outputs.only }}
+      live: ${{ steps.plan.outputs.live }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Plan
+        id: plan
+        env:
+          IN_ONLY: ${{ inputs.only }}
+          IN_LIVE: ${{ inputs.live }}
+        run: |
+          only="$IN_ONLY"; live="$IN_LIVE"
+          if [ "${{ github.event_name }}" = "push" ]; then
+            only=$(sed -n 's/^only=//p' tools/graph_etl/US_BUILD | head -1)
+            live=$(sed -n 's/^live=//p' tools/graph_etl/US_BUILD | head -1)
+          fi
+          [ -z "$only" ] && live=true
+          curl -fsSL --retry 5 --retry-delay 10 -o index-v1.json https://download.geofabrik.de/index-v1.json
+          python -m tools.graph_etl.us_plan matrix --index index-v1.json --only "$only" > matrix.json
+          python3 - <<'PY' >> "$GITHUB_OUTPUT"
+          import json
+          m = json.load(open("matrix.json"))
+          ix = {f["properties"]["id"]: f["properties"].get("urls", {}).get("pbf") for f in json.load(open("index-v1.json"))["features"]}
+          states = sorted({s for j in m["include"] for s in j["states"].split()})
+          print("matrix=" + json.dumps(m, separators=(",", ":")))
+          print("states=" + json.dumps({"include": [{"state": s, "url": ix[s]} for s in states]}, separators=(",", ":")))
+          PY
+          echo "week=$(date -u +%G-%V)" >> "$GITHUB_OUTPUT"
+          echo "only=$only" >> "$GITHUB_OUTPUT"
+          echo "live=${live:-false}" >> "$GITHUB_OUTPUT"
+          python3 -c "import json; m=json.load(open('matrix.json')); print(len(m['include']), 'jobs')" | tee -a "$GITHUB_STEP_SUMMARY"
+
+  osm:
+    needs: plan
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      max-parallel: 6           # gentle on Geofabrik
+      matrix: ${{ fromJSON(needs.plan.outputs.states) }}
+    steps:
+      - name: The extract
+        run: |
+          mkdir -p osm
+          curl -fSL --retry 5 --retry-delay 20 -o "osm/${{ matrix.state }}.osm.pbf" "${{ matrix.url }}"
+          ls -la osm
+      - uses: actions/upload-artifact@v4
+        with:
+          name: osm-${{ matrix.state }}
+          path: osm
+          retention-days: 2
+          overwrite: true
+          compression-level: 0
+
+  band:
+    needs: [plan, osm]
+    runs-on: ubuntu-latest
+    timeout-minutes: 345
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.plan.outputs.matrix) }}
+    env:
+      WORK: /home/runner/graph_work
+    steps:
+      - uses: actions/checkout@v4
+      - name: Free disk, add swap
+        run: |
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL || true
+          sudo swapoff -a || true
+          sudo fallocate -l 12G /swapfile2 && sudo chmod 600 /swapfile2 && sudo mkswap /swapfile2 && sudo swapon /swapfile2
+          free -m && df -h /
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Tools
+        run: |
+          sudo apt-get update -qq && sudo apt-get install -y -qq osmium-tool
+          pip install -r tools/graph_etl/requirements.txt
+      - name: The states under this job's blocks
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir -p "$WORK/osm"
+          for s in ${{ matrix.states }}; do
+            for k in 1 2 3; do gh run download "${{ github.run_id }}" -R "${{ github.repository }}" -n "osm-$s" -D "$WORK/osm" && break; sleep 15; done
+          done
+          ls -la "$WORK/osm"
+      - name: The region's context grid (graph-data ctx/v1), else Cincinnati's
+        run: |
+          if git fetch -q --depth 1 origin graph-data && git cat-file -e FETCH_HEAD:ctx/v1/index.json 2>/dev/null; then
+            mkdir -p "$WORK/ctx_dl" && git archive FETCH_HEAD ctx | tar -x -C "$WORK/ctx_dl"
+            echo "CTX_DIR=$WORK/ctx_dl/ctx/v1" >> "$GITHUB_ENV"
+          else
+            echo "CTX_DIR=${{ github.workspace }}/web/data/ctx/v1" >> "$GITHUB_ENV"
+          fi
+      - name: Build the blocks
+        env:
+          JOB: ${{ matrix.job }}
+        run: |
+          mkdir -p "$WORK/blocks"
+          osmium merge --overwrite -o "$WORK/region.osm.pbf" "$WORK"/osm/*.osm.pbf
+          rm -rf "$WORK/osm"
+          python -m tools.graph_etl.us_plan blocks --job "$JOB" > "$WORK/blocks.txt"
+          cat "$WORK/blocks.txt"
+          while read -r name box clip; do
+            echo "::group::$name $box"
+            osmium extract --overwrite -s smart -b "$clip" -o "$WORK/blocks/$name.osm.pbf" "$WORK/region.osm.pbf"
+            # one block failing (out of memory in a big city?) keeps the job's other blocks; the job fails at the end,
+            # and a re-run of the failed job builds its blocks again
+            if ! python -m tools.graph_etl.build --pbf "$WORK/blocks/$name.osm.pbf" --tiles="$box" --out "out/$name/v1" \
+              --work "$WORK/w_$name" --dem-cache "$WORK/dem" --source "Geofabrik US states (merged)" \
+              --build "${{ needs.plan.outputs.week }}" --ctx "$CTX_DIR"; then
+              echo "::error::block $name failed"; echo "$name" >> "$WORK/failed.txt"; rm -rf "out/$name"
+            fi
+            rm -rf "$WORK/w_$name" "$WORK/blocks/$name.osm.pbf"
+            echo "::endgroup::"
+          done < "$WORK/blocks.txt"
+          du -sh out 2>/dev/null || true
+          if [ -s "$WORK/failed.txt" ]; then echo "failed blocks: $(tr '\n' ' ' < "$WORK/failed.txt")" >> "$GITHUB_STEP_SUMMARY"; exit 1; fi
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: graph-us-${{ matrix.name }}
+          path: out
+          retention-days: 3
+          overwrite: true
+          if-no-files-found: ignore
+
+  publish:
+    needs: [plan, band]
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+      - name: Free disk
+        run: |
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL || true
+          df -h /
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: graph-us-*
+          path: bands
+          merge-multiple: true
+      - name: Merge and pack
+        run: |
+          python -m tools.graph_etl.merge_index merged/v1 bands/*/v1 | tee -a "$GITHUB_STEP_SUMMARY"
+          rm -rf bands
+          python -m tools.graph_etl.check merged/v1 | tail -12 | tee -a "$GITHUB_STEP_SUMMARY" || true
+          python -m tools.graph_etl.pack merged/v1 packs | tee -a "$GITHUB_STEP_SUMMARY"
+          rm -rf merged
+          du -sh packs && ls packs | wc -l
+      - name: The release
+        id: rel
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          build=$(python3 -c "import json; print(json.load(open('packs/index.json'))['build'])")
+          tag="graph-us-$build"
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"; echo "build=$build" >> "$GITHUB_OUTPUT"
+          if ! gh release view "$tag" >/dev/null 2>&1; then
+            gh release create "$tag" --target "${{ github.sha }}" --latest=false --title "Road graph (lower 48), build $build" \
+              --notes "Vetta's own routing tiles, packed (tools/graph_etl/pack.py). Road data (c) OpenStreetMap contributors, ODbL 1.0; elevation Mapzen Terrain Tiles. Pilot: ${{ needs.plan.outputs.only || 'no' }}."
+          fi
+          # packs first, the two indexes last: a reader that finds index.json finds every pack
+          for f in packs/*.bin packs/index.json packs/packs.json; do
+            for k in 1 2 3 4 5; do gh release upload "$tag" "$f" --clobber && break; echo "retry $f"; sleep $((k * 20)); done
+          done
+          echo "release $tag: $(ls packs/*.bin | wc -l) packs" >> "$GITHUB_STEP_SUMMARY"
+      - name: Point the Worker at it
+        if: needs.plan.outputs.live == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir -p ptr
+          printf '{"tag":"%s","build":"%s","at":"%s"}\n' "${{ steps.rel.outputs.tag }}" "${{ steps.rel.outputs.build }}" "$(date -u +%FT%TZ)" > ptr/current.json
+          bash tools/graph_etl/publish_data.sh ptr us/v1 "graph us: ${{ steps.rel.outputs.tag }}"
+          # keep the two newest US releases (the live one and the one before, for a phone mid-session)
+          gh release list --limit 100 --json tagName,createdAt --jq '[.[] | select(.tagName | startswith("graph-us-"))] | sort_by(.createdAt) | reverse | .[2:] | .[].tagName' \
+            | while read -r t; do gh release delete "$t" --yes --cleanup-tag || true; done
