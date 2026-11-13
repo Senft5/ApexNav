@@ -1460,6 +1460,11 @@
     .edge:not(.open) .edge-panel { visibility: hidden; transition: visibility 0s linear 0.12s; }
     .sheet.open { transform: none; }
     .sheet.dragging { transition: none; }
+    /* Native speed (big bet #10, 2026-11-13): a closed sheet's contents are not styled or laid out at all, only kept. They
+       were laid out off-screen at every boot (the Garage's pages, Settings, the Options sheet): about 130 ms of a 1.1 s cold
+       start at 4x CPU. The switch waits out the close slide, as visibility does above; a browser without content-visibility
+       just lays them out as before. */
+    .sheet:not(.open), .side-pop:not(.open) { content-visibility: hidden; transition: transform 0.2s cubic-bezier(0.2, 0.8, 0.2, 1), visibility 0s linear 0.2s, content-visibility 0s linear 0.2s; transition-behavior: allow-discrete; }
     [hidden] { display: none !important; }
     .sr-only { position: absolute; width: 1px; height: 1px; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
     /* Menu views (Route / Drives / Setup) get the whole screen above the tab bar: the gauge cluster belongs to the map view only. */

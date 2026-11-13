@@ -235,11 +235,16 @@ flow('startup budget: the map page is ready within its script bytes, script coun
   const r = await page.evaluate((origin) => { const js = performance.getEntriesByType('resource').filter((e) => e.name.startsWith(origin) && /\.js(\?|$)/.test(e.name));
     return { bytes: js.reduce((s, e) => s + (e.decodedBodySize || 0), 0), count: js.length, long: Math.round(window.__long),
       top: js.sort((a, b) => b.decodedBodySize - a.decodedBodySize).slice(0, 3).map((e) => `${e.name.split('/').pop()} ${Math.round(e.decodedBodySize / 1024)} KB`) }; }, base);
-  const got = { ...r, cpuS: +m.ScriptDuration.toFixed(2) };
+  const got = { ...r, cpuS: +m.ScriptDuration.toFixed(2), layoutS: +m.LayoutDuration.toFixed(2), styleS: +m.RecalcStyleDuration.toFixed(2) };
   console.log('     startup: ' + JSON.stringify(got));
   check(r.bytes > 1e6 && r.bytes <= BOOT.scriptBytes, `script bytes before ready ${r.bytes} (budget ${BOOT.scriptBytes}): ` + JSON.stringify(got));
   check(r.count <= BOOT.scriptCount, `scripts before ready ${r.count} (budget ${BOOT.scriptCount}): ` + JSON.stringify(got));
   check(got.cpuS <= BOOT.cpuS && r.long <= BOOT.longTaskMs, `CPU before ready ${got.cpuS} s (budget ${BOOT.cpuS}), longest task ${r.long} ms (budget ${BOOT.longTaskMs}): ` + JSON.stringify(got));
+  // native speed (2026-11-13): a closed sheet's contents are never styled or laid out (content-visibility), which took
+  // about 130 ms off a 1.1 s cold start at 4x CPU; a closed sheet that loses it shows here
+  const laidOut = await page.evaluate(() => [...document.querySelectorAll('.sheet:not(.open), .side-pop:not(.open)')]
+    .filter((e) => getComputedStyle(e).contentVisibility !== 'hidden').map((e) => e.id || e.className));
+  check(!laidOut.length, 'every closed sheet skips its layout: ' + JSON.stringify(laidOut));
 }, { viewport: { width: 393, height: 852 }, hasTouch: true });
 
 flow('first run: onboarding, Watch a replay loads the bundled drive and plays it; the Play switch drives it', async (page, base) => {
