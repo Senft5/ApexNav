@@ -65,7 +65,7 @@ jobs:
             live=$(sed -n 's/^live=//p' tools/graph_etl/US_BUILD | head -1)
           fi
           [ -z "$only" ] && live=true
-          curl -fsSL --retry 5 --retry-delay 10 -o index-v1.json https://download.geofabrik.de/index-v1.json
+          curl -fsSL --retry 5 --retry-delay 10 --retry-all-errors -o index-v1.json https://download.geofabrik.de/index-v1.json
           python3 -c "import json; f=json.load(open('index-v1.json'))['features']; print(len(f), 'extracts;', [x['properties'].get('id') for x in f if 'ohio' in str(x['properties'].get('id'))])"
           python -m tools.graph_etl.us_plan matrix --index index-v1.json --only "$only" > matrix.json
           python3 - <<'PY' >> "$GITHUB_OUTPUT"
@@ -89,13 +89,13 @@ jobs:
     timeout-minutes: 60
     strategy:
       fail-fast: false
-      max-parallel: 6           # gentle on Geofabrik
+      max-parallel: 4           # gentle on Geofabrik (6 got connections refused)
       matrix: ${{ fromJSON(needs.plan.outputs.states) }}
     steps:
       - name: The extract
         run: |
           mkdir -p osm
-          curl -fSL --retry 5 --retry-delay 20 -o "osm/${{ matrix.state }}.osm.pbf" "${{ matrix.url }}"
+          curl -fSL --retry 8 --retry-delay 30 --retry-all-errors -o "osm/${{ matrix.state }}.osm.pbf" "${{ matrix.url }}"
           ls -la osm
       - uses: actions/upload-artifact@v4
         with:
