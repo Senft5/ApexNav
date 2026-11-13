@@ -171,7 +171,7 @@ final class AppTourTests: XCTestCase {
                 do {
                     try app.performAccessibilityAudit(for: .all) { issue in
                         let el = issue.element.map { e in [e.label, e.identifier, "\(e.elementType.rawValue)"].first { !$0.isEmpty } ?? "?" } ?? "-"
-                        lines.append("\(name) · \(size) · \(auditName(issue.auditType)) · \(el): \(issue.compactDescription)")
+                        lines.append("\(name) · \(size) · \(self.auditName(issue.auditType)) · \(el): \(issue.compactDescription)")
                         print("A11Y-AUDIT \(lines.last!)")
                         return true   // recorded here, failed once below with the whole list
                     }
