@@ -5486,6 +5486,7 @@ flow('friend profile: a friend on People → Profile shows what the friend share
     if (u.pathname === '/api/friends/U1/profile') return json({ handle: 'bob', name: 'Bob <b>S</b>', friends_since: '2026-09-01', crews: ['Ridge Runners'], cars: [],
       stages: [{ stage: 'Esses', best: 812, days_month: 3, last: '2026-10-27' }], totals: { stages: 1, days_month: 3, best: 812 } });
     if (u.pathname === '/api/points') return json({ total: 0 });
+    if (u.pathname === '/api/presence') return json([{ handle: 'bob', photo_id: null, delay_s: 0, fuzz: false, road: 'Dry Ridge Rd', lat: 38.7, lon: -84.6, at: new Date(Date.now() - 30e3).toISOString() }]);
     return json([]);
   });
   await page.goto(base + '/index.html');
@@ -5496,9 +5497,13 @@ flow('friend profile: a friend on People → Profile shows what the friend share
   const t = await page.textContent('.profile-view');
   check(t.includes('@bob') && /Bob <b>S<\/b> · friends since September( 2026)?/.test(t) && t.includes('Esses · best 812 · 3 days this month') && t.includes('Ridge Runners'), 'the profile, as text: ' + t);
   check(!/Times are never shown|on them this month/.test(t), 'no line saying what is not shown, and "this month" once under its head: ' + t);
+  // the person first, as a social app opens a profile: their photo, who they are and what they are doing now (the list's line)
+  const who = await page.evaluate(() => { const w = document.querySelector('.profile-view .profile-who'); return w && { photo: !!w.firstElementChild && w.firstElementChild.getBoundingClientRect().width >= 48,
+    text: w.innerText, live: !!w.querySelector('small.live'), first: w.previousElementSibling.classList.contains('side-pop-head') }; });
+  check(who && who.photo && who.live && who.first && /friends since September/.test(who.text) && /On the road · Dry Ridge Rd/.test(who.text), 'the profile opens on the person, photo and status: ' + JSON.stringify(who));
   const pk = await page.evaluate(() => ({ keys: [...document.querySelectorAll('.profile-view .profile-keys button')].map((b) => b.textContent), foot: [...document.querySelectorAll('.profile-view .profile-foot button')].map((b) => b.textContent),
     last: document.querySelector('.profile-view > :last-child').className }));
-  check(JSON.stringify(pk.keys) === '["Share a route","Invite to a drive","Challenge on a stage"]' && JSON.stringify(pk.foot) === '["Unfriend","Report","Block"]' && /profile-foot/.test(pk.last), 'things to do first, Unfriend/Report/Block at the foot: ' + JSON.stringify(pk));
+  check(JSON.stringify(pk.keys) === '["On the map","Share a route","Invite to a drive","Challenge on a stage"]' && JSON.stringify(pk.foot) === '["Unfriend","Report","Block"]' && /profile-foot/.test(pk.last), 'things to do first, Unfriend/Report/Block at the foot: ' + JSON.stringify(pk));
   await page.click('.profile-view button:has-text("Friends")');   // one back glyph and where it goes (REVIEW2.md)
   await page.waitForSelector('.side-pop.open .profile-view', { state: 'detached', timeout: 3000 }).catch(() => {});
   check(await page.evaluate(() => !document.querySelector('.side-pop.open') && !!document.querySelector('#accountBody .friend-head:not(.you-row)')), 'Back returns to the friends list');
