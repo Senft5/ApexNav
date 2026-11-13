@@ -32,7 +32,7 @@
       plain: 'The road’s lean in a corner: + tilts you into the turn and helps, − tilts you out of it.',
       format: 'Degrees with a sign, one decimal; -- until the phone’s mount is known.' },
     gripCircle: { label: 'Grip circle', kind: 'reading',
-      meaning: 'Each dot is a moment of the drive: up is speeding up, down is braking, left and right are turning. The outline is how far you went in each direction.',
+      meaning: 'Each dot is a moment: up is gas, down is brakes, the sides are turning. The outline is how far you went each way.',
       format: 'In g, two decimals; a gap in the outline where too few moments went that way.',
       shown: ['the drive page'],
       source: 'Core.ggEnvelope: in each of 16 directions, the reach of 95 in 100 of that direction’s moments (at least 8 of them, over 0.05 g).' },
