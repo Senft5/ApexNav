@@ -91,6 +91,22 @@
     return Math.round(10 * Math.max(-TASTE_GAIN, Math.min(TASTE_GAIN, TASTE_GAIN * (mine - even) / 50))) / 10;
   }
 
-  const api = { KEY, PICK_WEIGHT, recordPick, leanOf, MIN_VOTES, TASTE_GAIN, AXES, featuresOf, load, save, record, fit, describe, bonus };
+  /**
+   * The corner prefs a search uses (IDEAS R-19 "learned later"): a Hairpins or Sweepers pref you left level leans with
+   * your taste, technical over flowing toward tight corners and away from fast ones (and the other way round), by at most
+   * LEAN_MAX of a step. A pref you set wins; no taste (under MIN_VOTES answers) or an even one: the prefs unchanged.
+   */
+  const LEAN_GAIN = 1.25, LEAN_MAX = 0.5;
+  function cornerLean(t, prefs) {
+    const p = { ...(prefs || {}) };
+    if (!t || !finite(t.tech) || !finite(t.flow)) return p;
+    const tilt = Math.round(20 * Math.max(-LEAN_MAX, Math.min(LEAN_MAX, LEAN_GAIN * (t.tech - t.flow)))) / 20;
+    if (!tilt) return p;
+    if (!p.tight) p.tight = tilt;
+    if (!p.fast) p.fast = -tilt;
+    return p;
+  }
+
+  const api = { KEY, LEAN_GAIN, LEAN_MAX, cornerLean, PICK_WEIGHT, recordPick, leanOf, MIN_VOTES, TASTE_GAIN, AXES, featuresOf, load, save, record, fit, describe, bonus };
   if (typeof module !== 'undefined' && module.exports) module.exports = api; else root.ApexTaste = api;
 })(typeof window !== 'undefined' ? window : globalThis);

@@ -2862,6 +2862,16 @@
     let leaveAtMs = null;
     const leaveAt = () => (leaveAtMs && leaveAtMs > Date.now() ? leaveAtMs : Date.now());
     // The driver's For this drive choices (route_ctx/driver.js: passenger, lit, cyclists, tunnels) join the road prefs.
+    // The corner prefs our router's searches and stage lists use: yours, with a level one leaning toward your taste
+    // (taste.js cornerLean, from five "which road was better?" answers on). Route scores and the card keep yours alone.
+    const searchPrefs = () => {
+      try {
+        const t = window.ApexTaste && !(window.ApexFlags && !ApexFlags.on('taste_ranking')) ? ApexTaste.fit(ApexTaste.load(localStorage)) : null;
+        const p = t ? ApexTaste.cornerLean(t, roadPrefs) : roadPrefs;
+        if (window.apexDebug) window.apexDebug.lastSearchPrefs = { tight: p.tight || 0, fast: p.fast || 0 };
+        return p;
+      } catch (_) { return roadPrefs; }
+    };
     const engineOpts = (level) => ({ level, prefs: { ...roadPrefs, ...(window.ApexRouteDriver ? ApexRouteDriver.load(localStorage) : {}) }, car: routingCar(),
       score: (c, scaleAt) => funOf(c.t, (c.route && c.route.turns) || [], scaleAt) });
     function rankPool(pool, level) {
@@ -3932,7 +3942,7 @@
       // planned on what was kept, and the whole corridor's plan after the card has the fresh answer: ownRefine. Signed out
       // the server has none to give: not asked)
       const crowdS = ownCovered && ownCrowdOn() ? ApexOwnRouting.crowdSoon(routeCtxOpts().lookupCells, from, to, OWN_CROWD_MS) : null;
-      const ownReq = { from, to, level, prefs: roadPrefs, avoid, heading: from.heading, crowd: crowdS ? tlTime('crowd (members\' roads)', crowdS.now) : null, ...(dev ? dev.tuneReq() : {}) };
+      const ownReq = { from, to, level, prefs: searchPrefs(), avoid, heading: from.heading, crowd: crowdS ? tlTime('crowd (members\' roads)', crowdS.now) : null, ...(dev ? dev.tuneReq() : {}) };
       // (Long way's detours reach past the straight line's tiles: it waits for its corridor)
       const ownP = ownCovered ? tlTime('own plan (worker)', ApexOwnRouting.plan(ownRouter(), { ...ownReq, scope: level === 'max' ? 'full' : 'first', waitMs: OWN_FIRST_WAIT_MS })) : null;
       const ownFullP = ownP ? Promise.all([ownP, crowdS ? crowdS.late.catch(() => null) : null])
@@ -4246,7 +4256,7 @@
     async function routePoints(points, o = {}) {
       const level = FunRoute.LEVELS[o.level] ? o.level : 'quick';
       if (ownOn()) {
-        const r = await RouteLoading.optional(ApexOwnRouting.through(ownRouter(), points, { level, avoid: o.avoid || avoid, prefs: roadPrefs }), OWN_THROUGH_MS);
+        const r = await RouteLoading.optional(ApexOwnRouting.through(ownRouter(), points, { level, avoid: o.avoid || avoid, prefs: searchPrefs() }), OWN_THROUGH_MS);
         if (r) { tlSpan('own through (worker)', performance.now()); return [r]; }
       }
       const extra = FunRoute.LEVELS[level].noHighway && window.ApexRouteEngine ? ApexRouteEngine.levelCosting(avoid, routingCar(), level) : {};
@@ -4660,7 +4670,7 @@
         const to = t.request.to, level = funLevel, place = (t.name || '').replace(/^To /, '') || 'there';
         const outCoords = Array.from(t.lat, (la, i) => [t.lon[i], la]);
         let outLine = outCoords, backLine = null, how = 'valhalla';
-        const own = ownOn() ? await RouteLoading.optional(ApexOwnRouting.roundTrip(ownRouter(), { from, to, level, prefs: roadPrefs, avoid, heading: from.heading, ...devTuneReq() }), 6000) : null;
+        const own = ownOn() ? await RouteLoading.optional(ApexOwnRouting.roundTrip(ownRouter(), { from, to, level, prefs: searchPrefs(), avoid, heading: from.heading, ...devTuneReq() }), 6000) : null;
         if (own && own.length) {
           // ours: the best pair (out and back), split at the destination
           const c = own[0].route.coords, k = c.reduce((b, p, i) => (FunRoute.kmBetween({ lat: p[1], lon: p[0] }, to) < FunRoute.kmBetween({ lat: c[b][1], lon: c[b][0] }, to) ? i : b), 0);
@@ -4763,7 +4773,7 @@
       // the police reports, cameras and closures round the start go into the loop's search, as a trip's do (until
       // 2026-11-12 loops got none of them: Avoid police and Avoid cameras did nothing for a loop)
       L.avoid = ownOn() ? await avoidForTrip(loopAvoidPoints(c, targetKm)).catch(() => avoid) : avoid;
-      const ownLoopsP = ownOn() ? ApexOwnRouting.loops(ownRouter(), { start: { lat: c.lat, lon: c.lon }, km: targetKm, level: LOOP_STYLE, prefs: roadPrefs, avoid: L.avoid, ...devTuneReq() }) : Promise.resolve([]);
+      const ownLoopsP = ownOn() ? ApexOwnRouting.loops(ownRouter(), { start: { lat: c.lat, lon: c.lon }, km: targetKm, level: LOOP_STYLE, prefs: searchPrefs(), avoid: L.avoid, ...devTuneReq() }) : Promise.resolve([]);
       // Our loops only (Valhalla is for Quick, the owner 2026-11-11): the card goes up from them, or says why there are none
       const own = (await ownLoopsP).map((r) => ({ kind: 'own', route: r.route, hwyShare: r.hwyShare, pts: [c, ...FunRoute.alongPoints(r.route.coords), c] }));
       // Loops are our router's or nothing (Valhalla is for Quick only, the owner 2026-11-11): no stage loops or circle on
@@ -4978,14 +4988,14 @@
           try {
             if (await RouteLoading.optional(ownRouter().covers([c]), OWN_COVERS_MS)) {
               ui.step('Finding roads', 0.3);
-              const res = await ownRouter().explore({ start: { lat: c.lat, lon: c.lon }, maxKm, maxS: minutes * 60, prefs: roadPrefs });
+              const res = await ownRouter().explore({ start: { lat: c.lat, lon: c.lon }, maxKm, maxS: minutes * 60, prefs: searchPrefs() });
               if (res && res.stages && res.stages.length) own = await stagesWithContext(res.stages, 12, ['graph', 'context_grid']);
             }
           } catch (_) { own = null; }
           if (window.apexDebug) window.apexDebug.lastExploreOwn = own ? own.length : 0;
         }
         const stages = own || await ApexStages.discover(c, maxKm, (phase, f) => ui.step(phase === 'tiles' ? 'Finding roads' : 'Scoring roads', 0.1 + 0.6 * f),
-          { names: inReach, prefs: roadPrefs, ...(state.hlOn ? { highlights: hls, strength: state.hlStrength } : {}) }).then((st) => measuredStages(st, c, maxKm)).then((st) => stagesWithContext(st, 12));
+          { names: inReach, prefs: searchPrefs(), ...(state.hlOn ? { highlights: hls, strength: state.hlStrength } : {}) }).then((st) => measuredStages(st, c, maxKm)).then((st) => stagesWithContext(st, 12));
         const list = FunRoute.exploreShortlist(c, stages, maxKm, 12);   // 24 matrix pairs; most fall to the time limit
         ui.step('Measuring roads', 0.8);
         // ours carry their drive times (aS, bS); the map's stages (highlights on, or no tiles here) are timed on our tiles
