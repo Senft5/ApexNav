@@ -243,7 +243,7 @@
     };
     // the ideal drive only means something once another pass of the same corners exists
     const ideal = co && co.clean && co.gain_s > 0 && co.corners.some((x) => x.passes > 1)
-      ? { gain: co.gain_s, n: co.clean, drives: new Set(co.corners.filter((x) => x.gain_s != null).map((x) => (x.best ? x.best_from : -1))).size } : null;
+      ? { gain: co.gain_s, n: co.clean, drives: (co.others || []).length + 1 } : null;   // the sample: every drive of these corners, this one too
     const plain = plainCoach(ds, co);
     // brake heat (brake_heat.js): said only when the discs got warm or hot by the model; nothing for a drive with no height
     const BH = root.ApexBrakeHeat || (typeof module !== 'undefined' && typeof require === 'function' ? require('./brake_heat.js') : null);
@@ -274,7 +274,7 @@
       + (flow ? `<p class="dv-plain">${esc(flow)}</p>` : '')
       + (tired ? `<p class="dv-plain">${esc(tired)}</p>` : '')
       + (brakes ? `<p class="dv-plain">${esc(brakes)}</p>` : '')
-      + (ideal ? `<div class="dv-meta">Ideal drive: <b class="gain">${ideal.gain.toFixed(1)} s</b> quicker \u00b7 your best pass at each of ${ideal.n} corner${ideal.n === 1 ? '' : 's'}, over ${ideal.drives} drive${ideal.drives === 1 ? '' : 's'}</div>` : '');
+      + (ideal ? `<div class="dv-meta">Ideal drive: <b class="gain">${ideal.gain.toFixed(1)} s</b> quicker \u00b7 your best pass at each of ${ideal.n} corner${ideal.n === 1 ? '' : 's'}, from ${ideal.drives} drive${ideal.drives === 1 ? '' : 's'}</div>` : '');
     root_.append(head, el('div', 'dv-grid'));
     const grid = root_.lastChild; grid.append(mapBox, el('div', 'dv-right'));
     const zoom = el('div', 'dv-zoom'); grid.lastChild.append(zoom, lanes, read);
@@ -598,7 +598,10 @@
     d.corners.forEach((c, k) => {
       const r = el('button', 'dv-corner'); r.setAttribute('aria-label', `Corner ${k + 1}: ${callOf(c)}, apex ${Math.round(c.apex_mps * MPH)} ${SPD_WORDS()}`);
       r.innerHTML = `<b>${k + 1}</b><span class="dv-call">${esc(callOf(c))}</span><span class="dv-v">${Math.round(c.apex_mps * MPH)} ${SPD()}</span><span class="dv-d">${DIST(d.dist[c.apex])}${ref ? ` \u00b7 <em class="${lost(k) == null ? '' : lost(k) > 0.05 ? 'loss' : lost(k) < -0.05 ? 'gain' : ''}">${fmtD(lost(k))}</em>` : ''}</span>`
-        + (co && tipText(co.corners[k], MPH) ? `<span class="dv-tip">${esc(tipText(co.corners[k], MPH))}</span>` : '');
+        // a tip only where it is news: a corner in Where to find time, or a habit (no best pass to copy); the rest say it in
+        // their delta, so 36 cards don't each repeat "your best pass was 4 mph quicker" (TestFlight 2026-11-12, "text walls")
+        + (co && tipText(co.corners[k], MPH) && (co.top.includes(k) || !co.corners[k].best || co.corners[k].tip.vs_best === false)
+          ? `<span class="dv-tip">${esc(tipText(co.corners[k], MPH))}</span>` : '');
       r.onclick = () => pick(c.apex, c.start, c.end);
       grid2.append(r);
     });

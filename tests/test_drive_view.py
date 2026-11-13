@@ -80,6 +80,10 @@ V.mount(rootCoach, scoredDrive, { Core, C, MPH: Core.MPS_TO_MPH,
 const coachHead = rootCoach.children[0].innerHTML, coachList = rootCoach.children[2];
 const timeList = coachList.children.find((c) => c.className === 'dv-time'), timeHtml = timeList.children[0].children[0].innerHTML;
 const cardHtml = coachList.children.find((c) => c.className === 'dv-corners').children[0].innerHTML;
+const rootNotTop = mkEl('div');
+V.mount(rootNotTop, scoredDrive, { Core, C, MPH: Core.MPS_TO_MPH,
+  coach: { corners: [coachCorner], clean: 1, this_s: 4, ideal_s: 3.5, gain_s: 0.5, top: [], others: [{ name: 'x', date: 'Oct 2' }] } });
+const notTopCard = rootNotTop.children[2].children.find((c) => c.className === 'dv-corners').children[0].innerHTML;
 const rootAlone = mkEl('div');
 V.mount(rootAlone, scoredDrive, { Core, C, MPH: Core.MPS_TO_MPH,
   coach: { corners: [{ ...coachCorner, best: null, best_from: -1, gain_s: 0, passes: 1, tip: { kind: 'coast', value: 30 } }], clean: 1, this_s: 4, ideal_s: 4, gain_s: 0, top: [], others: [] } });
@@ -124,7 +128,7 @@ const reps = repBtns.map((b) => ({ html: b.innerHTML, label: b['aria-label'] }))
 const rootCar = mkEl('div');
 V.mount(rootCar, { ...scoredDrive, car: { label: '<b>Miata</b>', mu: 0.52 } }, { Core, C, MPH: Core.MPS_TO_MPH });
 const carHead = rootCar.children[0].innerHTML;
-console.log(JSON.stringify({ carHead, repIntro, reps, full, bare, headHtml, unscoredHeadHtml, hiddenBeforeScrub, hiddenAfterKeyScrub, hiddenBeforeZoom, hiddenAfterZoom,
+console.log(JSON.stringify({ notTopCard, carHead, repIntro, reps, full, bare, headHtml, unscoredHeadHtml, hiddenBeforeScrub, hiddenAfterKeyScrub, hiddenBeforeZoom, hiddenAfterZoom,
   coachHead, timeHtml, cardHtml, aloneHead, aloneList, aloneCard, coastNear, ggCaption, ggCorner, ggNone, ggLede, ggMore, ggOrder, feelRead, gapLanes }));
 """
 
@@ -167,7 +171,7 @@ def test_summary_hierarchy_and_scrub_readout(r):
 
 
 def test_corner_coach_shows_ideal_time_and_tips(r):
-    assert "Ideal drive: <b class=\"gain\">0.5 s</b> quicker · your best pass at each of 1 corner, over 1 drive<" in r["coachHead"]
+    assert "Ideal drive: <b class=\"gain\">0.5 s</b> quicker · your best pass at each of 1 corner, from 2 drives<" in r["coachHead"]
     assert "0.50" not in r["coachHead"], "seconds to a tenth, not a hundredth"
     t = r["timeHtml"]
     assert "Brake 22 m later, like your best pass" in t and "+0.5 s" in t and "0.50" not in t
@@ -375,3 +379,8 @@ def test_car_line_says_its_grip_without_a_footnote(r):
     h = r["carHead"]
     assert "· grip 0.52 g, below the 0.60 g default</div>" in h and "<b>Miata</b>" not in h, h[:600]
     assert "(the default" not in h
+
+
+def test_corner_card_tip_only_where_it_is_news(r):
+    assert "dv-tip" not in r["notTopCard"], "a corner outside Where to find time says its gap in the delta, not a tip"
+    assert "Brake 22 m later" in r["cardHtml"] and "30 m coasting" in r["aloneCard"]
