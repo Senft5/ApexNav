@@ -41,6 +41,14 @@ const stages = [mk(2000, 3000), mk(-8000, 3000), mk(-3000, -5000), mk(3000, -400
 const start = { lat: lat0, lon: lon0 };
 const plans = S.plans(start, stages, 40, 3);
 out.plans = plans.map(p => ({ legs: p.legs.length, total: p.total, wps: S.waypoints(start, p).length }));
+// 4. corner prefs (IDEAS R-19): a road of 2s and a road of 5s; asking for fast corners, not tight ones, flips them
+const wave = (A, L) => ll(Array.from({ length: 6000 / 5 + 1 }, (_, i) => [i * 5, A * Math.sin(2 * Math.PI * i * 5 / L)]));
+const by = (pts, prefs) => { const p = [{ cls: 'minor', pts }]; const s = S.strokes(p); return S.bestWindow(s.strokes[0], s.ends, p, prefs).score; };
+out.prefs = {};
+for (const [k, prefs] of Object.entries({ none: null, zero: { tight: 0, fast: 0 }, fast: { tight: -1, fast: 1 } }))
+  out.prefs[k] = { tight: by(wave(30, 160), prefs), fast: by(wave(30, 400), prefs) };
+out.like = [S.prefLike('HP', { tight: 1 }), S.prefLike(4, { tight: 1, fast: 1 }), S.prefLike(6, { fast: -1 }), S.prefLike(2, null), S.prefLike(1, { tight: 5 })];
+out.keys = [S.discoverKey({ lat: 1, lon: 2 }, 5, {}), S.discoverKey({ lat: 1, lon: 2 }, 5, { prefs: { tight: 1, fast: 0 } })];
 process.stdout.write(JSON.stringify(out));
 """
 
@@ -119,3 +127,13 @@ process.stdout.write(JSON.stringify(st.map(s => s.name || null)));
 def test_stages_are_named_after_the_road_most_of_them_is_on():
     res = subprocess.run([NODE, "-e", NAMES, os.path.abspath(".")], capture_output=True, text=True, check=True)
     assert json.loads(res.stdout) == ["Ridge Rd", None, None], "one name point in five is not enough; no name stays unknown"
+
+
+def test_corner_prefs_rank_the_maps_stages():
+    r = _run()
+    p = r["prefs"]
+    assert p["none"] == p["zero"], "no prefs and level prefs score the same"
+    assert p["none"]["tight"] > p["none"]["fast"], "as before: the road of 2s ranks first"
+    assert p["fast"]["fast"] > p["fast"]["tight"], "fast corners asked for, tight ones not: the road of 5s ranks first"
+    assert r["like"] == [1.6, 1, pytest.approx(0.4), 1, 1.6]
+    assert r["keys"][0] != r["keys"][1], "kept answers are per prefs"

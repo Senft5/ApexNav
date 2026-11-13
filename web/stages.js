@@ -337,7 +337,17 @@
     }
     return out;
   }
-  function bestWindow(stroke, ends, pieces) {
+  // Road character the driver asked for (IDEAS R-19, as fun_route.js cornerWeight): tight corners (hairpins, 1s, 2s)
+  // and fast ones (5s, 6s) count PREF_STEP more or less each. Nothing asked: 1, the gains below unchanged.
+  const PREF_STEP = 0.6;
+  function prefLike(sev, prefs) {
+    if (!prefs) return 1;
+    const step = (x) => Number.isFinite(x) ? 1 + PREF_STEP * Math.max(-1, Math.min(1, x)) : 1;
+    if (sev === 'HP' || sev === 1 || sev === 2) return step(prefs.tight);
+    if (sev === 5 || sev === 6) return step(prefs.fast);
+    return 1;
+  }
+  function bestWindow(stroke, ends, pieces, prefs = null) {
     const lat = stroke.pts.map(p => p[1]), lon = stroke.pts.map(p => p[0]);
     const rs = Core.resamplePolyline(lat, lon, 5);
     const n = rs.lat.length;
@@ -347,7 +357,7 @@
     const nb = Math.floor(n / BIN), gain = new Float64Array(nb);
     for (const c of corners) {
       const b = Math.min(nb - 1, Math.floor(c.apex / BIN));
-      gain[b] += c.severity === 'HP' ? 0.6 : c.severity >= 2 && c.severity <= 5 ? 1.0 : c.severity === 1 ? 0.5 : 0.3;
+      gain[b] += (c.severity === 'HP' ? 0.6 : c.severity >= 2 && c.severity <= 5 ? 1.0 : c.severity === 1 ? 0.5 : 0.3) * prefLike(c.severity, prefs);
     }
     const junc = ends ? junctionBins(stroke, rs, ends, pieces) : new Float64Array(nb);
     for (let b = 0; b < nb; b++) gain[b] -= 0.35 * junc[b];   // each junction costs a third of a corner
@@ -410,7 +420,7 @@
         await Loading.yieldToUI();
         yieldedAt = performance.now();
       }
-      const stage = bestWindow(all[index], ends, pieces);
+      const stage = bestWindow(all[index], ends, pieces, opts.prefs || null);
       if (stage) stages.push(stage);
     }
     onProgress && onProgress('scoring', 1);
@@ -641,7 +651,7 @@
     const id = ++seq;
     return new Promise((resolve, reject) => { waiting.set(id, { resolve, reject }); worker.postMessage({ id, c: { lat: c.lat, lon: c.lon }, radiusKm, opts }); });
   }
-  const discoverKey = (c, radiusKm, opts) => [c.lat.toFixed(4), c.lon.toFixed(4), radiusKm.toFixed(2), JSON.stringify(opts.highlights || []), opts.strength || 0].join('|');
+  const discoverKey = (c, radiusKm, opts) => [c.lat.toFixed(4), c.lon.toFixed(4), radiusKm.toFixed(2), JSON.stringify(opts.highlights || []), opts.strength || 0, opts.prefs ? `${opts.prefs.tight || 0},${opts.prefs.fast || 0}` : ''].join('|');
   const copy = (stages) => (typeof structuredClone === 'function' ? structuredClone(stages) : JSON.parse(JSON.stringify(stages)));
   async function discoverAsync(c, radiusKm, onProgress, opts = {}) {
     const plain = !onProgress && !opts.names;
@@ -658,5 +668,5 @@
     return copy(await p);
   }
 
-  root.ApexStages = { demTile, DEM_Z, decodeLayer, transportationAt, discover, discoverAsync, discoverKey, DISCOVER_KEEP_MS, nameStages, places, pois, addElevations, profile, fillProfile, climbM, sightOffsets, offsetsFrom, SIGHT_OPEN_M, stageDirection, terrarium, applyHighlights, plans, waypoints, strokes, bestWindow, roadPieces, namesAlong };
+  root.ApexStages = { demTile, DEM_Z, decodeLayer, transportationAt, discover, discoverAsync, discoverKey, DISCOVER_KEEP_MS, nameStages, places, pois, addElevations, profile, fillProfile, climbM, sightOffsets, offsetsFrom, SIGHT_OPEN_M, stageDirection, terrarium, applyHighlights, prefLike, plans, waypoints, strokes, bestWindow, roadPieces, namesAlong };
 })(typeof window !== 'undefined' ? window : globalThis);
