@@ -1,0 +1,30 @@
+# The map data on the graph-data branch (graph tiles, context grid, cameras) mirrored into our R2 bucket (apexnav-data),
+# which the Worker serves first (backend/src/data_store.ts); GitHub raw stays the fallback. Runs after each data build and
+# on demand. No secret: the Worker checks this run's GitHub OIDC token (main branch of this repository only).
+name: Map data to R2
+on:
+  workflow_dispatch:
+  workflow_run:
+    workflows: ["Graph region (own routing, OH+KY+IN)", "Context grid region (OH+KY+IN, graph-data branch)", "Cameras (Avoid cameras, OH+KY+IN)"]
+    types: [completed]
+    branches: [main]
+permissions:
+  contents: read
+  id-token: write
+concurrency:
+  group: data-mirror
+  cancel-in-progress: false
+jobs:
+  mirror:
+    if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+        with:
+          ref: graph-data
+          path: graph-data
+      - name: Upload
+        run: |
+          tools/graph_etl/upload_r2.sh graph-data | tee -a "$GITHUB_STEP_SUMMARY"

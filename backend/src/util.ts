@@ -13,6 +13,8 @@ export interface Env {
   READ_LIMIT?: RateLimit;   // signed-in reads per session (not the static map tiles)
   RELAY_LIMIT?: RateLimit;  // the signed-out relays (/api/ctx/osm, trace, workzones) per IP
   BACKUPS?: KVNamespace;
+  ARCHIVE?: R2Bucket;       // R2 (Workers Paid): weekly database copies (backup.ts); graph tiles later
+  DATA?: R2Bucket;          // the map data (graph tiles, context grid, cameras) mirrored by CI (src/data_store.ts)
   PHOTOS?: KVNamespace;     // photo bytes, key p/<id> (src/photos.ts); also siwa/<user id>, a Sign in with Apple refresh token (src/apple_revoke.ts)
   APPLE_TEAM_ID?: string;   // Sign in with Apple token revocation (src/apple_revoke.ts): the team id and the key's id and .p8 text
   APPLE_SIWA_KEY_ID?: string;
