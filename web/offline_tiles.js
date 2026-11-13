@@ -97,7 +97,8 @@
     return dbp;
   }
   const tx = async (mode, fn) => { const d = await db(); return new Promise((ok, fail) => { const t = d.transaction(STORE, mode), s = t.objectStore(STORE), r = fn(s); t.oncomplete = () => ok(r && r.result); t.onerror = () => fail(t.error); }); };
-  async function get(url) { try { const v = await tx('readonly', (s) => s.get(url)); return v ? v.data : null; } catch (_) { return null; } }
+  async function getRec(url) { try { return (await tx('readonly', (s) => s.get(url))) || null; } catch (_) { return null; } }
+  async function get(url) { const v = await getRec(url); return v ? v.data : null; }
   // the areas a kept copy belongs to: one tile can serve two areas (a saved route inside a saved area, two areas that
   // overlap), so it is tagged with each, and goes only when the last of them is deleted (an older copy has one `area`)
   const areasOf = (v) => (v && Array.isArray(v.areas) ? v.areas : v && v.area ? [v.area] : []);
@@ -129,6 +130,41 @@
     } catch (_) {}
   }
 
+  // Native speed (big bet #10): the map tiles last seen are kept too, so a launch draws the map from the phone (no network
+  // wait, no signal needed for where you were), as Apple Maps and Google Maps open on their last view. At most RECENT_MAX
+  // (vector tiles, ~25-60 KB each: ~10-25 MB), the oldest dropped first; a kept one is fetched again after RECENT_DAYS so
+  // roads and names don't go stale. A tile that belongs to a saved area is the area's and never dropped here.
+  const RECENT_MAX = 400, RECENT_DAYS = 30, TILE_URL = /\/\d+\/\d+\/\d+\.pbf$/;
+  /** A kept copy good to draw now: an area's always; a recent one until RECENT_DAYS old. */
+  const servable = (v, nowMs) => !!v && (areasOf(v).length > 0 || !v.recent || nowMs - (v.at || 0) < RECENT_DAYS * 86400000);
+  /** Which recent tiles to drop: the oldest beyond `max` of those no saved area holds. records: [{ url, at, recent, areas }]. */
+  function overflow(records, max = RECENT_MAX) {
+    const mine = records.filter((v) => v.recent && !areasOf(v).length).sort((a, b) => (a.at || 0) - (b.at || 0));
+    return mine.slice(0, Math.max(0, mine.length - max)).map((v) => v.url);
+  }
+  let keptSince = 0;
+  async function keepRecent(url, data) {
+    try {
+      const d = await db();
+      await new Promise((ok, fail) => {
+        const t = d.transaction(STORE, 'readwrite'), s = t.objectStore(STORE), g = s.get(url);
+        g.onsuccess = () => { const tags = areasOf(g.result); s.put({ url, data, areas: tags, recent: !tags.length, at: Date.now() }); };
+        t.oncomplete = ok; t.onerror = () => fail(t.error);
+      });
+      if (++keptSince >= 50) { keptSince = 0; trimRecent(); }
+    } catch (_) {}
+  }
+  async function trimRecent() {
+    try {
+      const d = await db(), recs = [];
+      await new Promise((ok) => { const t = d.transaction(STORE, 'readonly'), c = t.objectStore(STORE).openCursor();
+        c.onsuccess = () => { const cur = c.result; if (!cur) return; const v = cur.value; if (v.recent) recs.push({ url: v.url, at: v.at, recent: true, areas: areasOf(v) }); cur.continue(); };
+        t.oncomplete = ok; t.onerror = ok; });
+      const drop = overflow(recs);
+      if (drop.length) await tx('readwrite', (s) => { for (const u of drop) s.delete(u); });
+    } catch (_) {}
+  }
+
   const KEEP = new Set(['Style', 'Source', 'Glyphs']);   // small, needed to open the map offline: kept as they arrive
   /** For MapLibre's transformRequest: map requests through the protocol; anything else unchanged. */
   const transform = (url, type) => (/^https:\/\/tiles\.openfreemap\.org\//.test(url) && (type === 'Tile' || KEEP.has(type)) ? { url: `${PROTO}://${url}`, type } : undefined);
@@ -136,12 +172,15 @@
   function install(maplibregl) {
     maplibregl.addProtocol(PROTO, async (params, abort) => {
       const url = params.url.slice(PROTO.length + 3);
-      let data = await get(url);
+      const kept = await getRec(url);
+      let data = servable(kept, Date.now()) ? kept.data : null;
       if (!data) {
-        const r = await fetch(url, { signal: abort && abort.signal });
-        if (!r.ok) throw new Error(`HTTP ${r.status}`);
+        let r = null;
+        try { r = await fetch(url, { signal: abort && abort.signal }); } catch (e) { if (kept) r = null; else throw e; }
+        if (!r || !r.ok) { if (kept) return { data: params.type === 'json' ? JSON.parse(new TextDecoder().decode(kept.data)) : kept.data }; throw new Error(`HTTP ${r ? r.status : 'offline'}`); }
         data = await r.arrayBuffer();
-        if (params.type === 'json' || /\/styles\/|\/planet$|\.pbf$/.test(url) && !/\/\d+\/\d+\/\d+\.pbf$/.test(url)) put(url, data);
+        if (TILE_URL.test(url)) keepRecent(url, data.slice(0));   // a copy: MapLibre hands the bytes on to its worker (detached)
+        else if (params.type === 'json' || /\/styles\/|\/planet$|\.pbf$/.test(url)) put(url, data);
       }
       return { data: params.type === 'json' ? JSON.parse(new TextDecoder().decode(data)) : data };
     });
@@ -204,6 +243,6 @@
   /** Bytes saved, from the areas list. */
   const bytesSaved = () => areas().reduce((s, a) => s + (a.bytes || 0), 0);
 
-  const api = { tilesFor, plan, tilesAlong, planAlong, boxOf, lineOf, areasOf, transform, install, download, get, put, clear, areas, setArea, removeArea, bytesSaved, ageOf, STALE_DAYS, MAX_TILES, PROTO, DEM };
+  const api = { tilesFor, plan, tilesAlong, planAlong, boxOf, lineOf, areasOf, servable, overflow, RECENT_MAX, RECENT_DAYS, transform, install, download, get, put, clear, areas, setArea, removeArea, bytesSaved, ageOf, STALE_DAYS, MAX_TILES, PROTO, DEM };
   if (typeof module !== 'undefined' && module.exports) module.exports = api; else root.ApexOfflineTiles = api;
 })(typeof window !== 'undefined' ? window : globalThis);

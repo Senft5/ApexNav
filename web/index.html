@@ -241,7 +241,9 @@
     .ds-main > span { display: inline-block; max-width: 100%; white-space: normal; }
 
     /* ---------------- stage map ---------------- */
-    .stage { position: relative; min-height: 0; background: var(--stage); overflow: hidden; }
+    /* clip, not hidden: a hidden box can still be scrolled, and a tap into Where to? in the first second (the cover lifts
+       at ready, 2026-11-13) scrolled the stage 60 px sideways, the plan sheet cut off at the left; clip never scrolls */
+    .stage { position: relative; min-height: 0; background: var(--stage); overflow: clip; }
     /* F-02 (REVIEW_FEEL.md): the map is a fixed stage under everything, never a grid cell. The strip, the binnacle, the
        sheets and the tab bar lie over it and the camera is told what they cover (stageView), so a tab, a sheet, a wrapped
        status line or a replay never resizes the WebGL canvas. Only a drive's start and end move its edges (--map-*), in
@@ -2183,6 +2185,15 @@
               <input class="field" id="crashName" autocomplete="off" maxlength="40" placeholder="Contact name" aria-label="Emergency contact name">
               <input class="field" id="crashPhone" type="tel" autocomplete="off" maxlength="24" placeholder="Phone number" aria-label="Emergency contact phone number">
             </div>
+          </section>
+          <!-- big bet 5: the app films the road from the mount (DriveCam.swift); in the app only (the row is hidden on the web) -->
+          <section data-panel="garage" data-setting="drivecam" data-title="Film the drive" data-summary="[data-toggle=&quot;drivecam&quot;]" data-empty-hides>
+            <h3>Film the drive</h3>
+            <p class="note" style="margin:0 0 8px">The back camera films the road while you drive, with no sound. Each drive's page lines the video up by itself, for corner clips to share.</p>
+            <div class="row" style="flex-wrap:wrap" id="driveCamRow" data-fill>
+              <button class="sw" data-toggle="drivecam"><i></i><span>Film the drive</span></button>
+            </div>
+            <p class="note" id="driveCamState" role="status" aria-live="polite">Films while Vetta is on the phone's screen. Videos stay on this phone, the oldest going after about two hours of them.</p>
           </section>
           <!-- panel round 1 R-1: one reminder, off until you turn it on, at most once a week; no streaks, no nag -->
           <section data-panel="garage" data-setting="nudge" data-title="Reminder" data-summary="[data-toggle=&quot;nudge&quot;]">
