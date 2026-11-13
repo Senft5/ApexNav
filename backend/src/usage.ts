@@ -11,14 +11,18 @@ import { Env } from "./util";
 
 export const KIND = "usage";
 /** Workers Paid's included amounts a month (developers.cloudflare.com/workers/platform/pricing, 2026-11). */
-export const INCLUDED = { d1_read: 25e9, d1_written: 50e6, kv_read: 10e6, kv_write: 1e6 } as const;
+// R2: its free tier's operations a month (class A = writes and lists, class B = reads); shown, but nothing is paused for
+// them, since the uploads that pause don't touch R2 and the map data it serves is what the app drives on.
+export const INCLUDED = { d1_read: 25e9, d1_written: 50e6, kv_read: 10e6, kv_write: 1e6, r2_a: 1e6, r2_b: 10e6 } as const;
+const SHEDS: ReadonlySet<string> = new Set(["d1_read", "d1_written", "kv_read", "kv_write"]);
 export type Metric = keyof typeof INCLUDED;
 export const SHED_AT = 0.8;
 const FLUSH_MS = 30_000, CHECK_MS = 5 * 60_000;
 /** Routes that stop near the limit: optional, heavy on writes, and the app keeps them for later (uploads queue, photos retry). */
 export const SHED_ROUTES = new Set(["POST /api/contribute", "POST /api/photos"]);
 
-const acc: Record<Metric, number> = { d1_read: 0, d1_written: 0, kv_read: 0, kv_write: 0 };
+const zero = (): Record<Metric, number> => ({ d1_read: 0, d1_written: 0, kv_read: 0, kv_write: 0, r2_a: 0, r2_b: 0 });
+const acc: Record<Metric, number> = zero();
 let lastFlush = Date.now();
 
 /** Adds one D1 result's meta (rows_read / rows_written) to this isolate's count. */
@@ -38,6 +42,21 @@ export function countedKv(kv: KVNamespace): KVNamespace {
       if (typeof v !== "function") return v;
       if (typeof k === "string" && KV_WRITES.has(k)) return (...a: unknown[]) => { acc.kv_write++; return v.apply(t, a); };
       if (typeof k === "string" && KV_READS.has(k)) return (...a: unknown[]) => { acc.kv_read++; return v.apply(t, a); };
+      return v.bind(t);
+    },
+  });
+}
+
+const R2_A = new Set(["put", "list", "delete", "createMultipartUpload"]);
+const R2_B = new Set(["get", "head"]);
+/** An R2Bucket that counts its class A and class B operations into this isolate's count. */
+export function countedR2(b: R2Bucket): R2Bucket {
+  return new Proxy(b, {
+    get(t, k) {
+      const v = Reflect.get(t, k, t);
+      if (typeof v !== "function") return v;
+      if (typeof k === "string" && R2_A.has(k)) return (...a: unknown[]) => { acc.r2_a++; return v.apply(t, a); };
+      if (typeof k === "string" && R2_B.has(k)) return (...a: unknown[]) => { acc.r2_b++; return v.apply(t, a); };
       return v.bind(t);
     },
   });
@@ -72,12 +91,12 @@ export async function usageNow(env: Env, now = Date.now()): Promise<UsageState> 
   const rows = (await env.DB.prepare(
     `SELECT message, SUM(n) AS n FROM error_counts WHERE day >= ? AND source = 'server' AND kind = '${KIND}' GROUP BY message`)
     .bind(`${month}-01`).all<{ message: string; n: number }>()).results;
-  const used = { d1_read: 0, d1_written: 0, kv_read: 0, kv_write: 0 } as Record<Metric, number>;
+  const used = zero();
   for (const r of rows) if (r.message in INCLUDED) used[r.message as Metric] = Number(r.n) || 0;
   for (const k of Object.keys(acc) as Metric[]) used[k] += acc[k];   // what this isolate has not flushed yet
   const share = {} as Record<Metric, number>;
   for (const k of Object.keys(INCLUDED) as Metric[]) share[k] = Math.round((used[k] / INCLUDED[k]) * 1000) / 1000;
-  const shedding = Object.values(share).some((s) => s >= SHED_AT);
+  const shedding = (Object.keys(share) as Metric[]).some((k) => SHEDS.has(k) && share[k] >= SHED_AT);
   return { month, used, share, shedding, until: shedding ? new Date(nextMonthUtc(now)).toISOString() : null };
 }
 

@@ -31,6 +31,7 @@ import { buildChatDelete, buildChatList, buildChatPost, buildCreate, buildDelete
 import { photoDelete, photoList, photoServe, photoUpload, photoUse } from "./photos";
 import { ctxServe } from "./context_grid";
 import { cameraList, graphIndex, graphTile } from "./graph";
+import { dataPut } from "./data_store";
 import { block, blockList, fileReport, isModerator, moderationQueue, moderationResolve, report, unblock } from "./safety";
 import { contribute, setContribute } from "./contribute";
 import { pointsFor } from "./points";
@@ -60,7 +61,7 @@ import { crewHomeSet, crewMeetCells } from "./crew_meet";
 import { chargers } from "./chargers";
 import { dailyServerCheck, serverSide, serviceHistory, serviceReport } from "./service_check";
 import { QUERY_WARN, countedDb } from "./query_budget";
-import { SHED_ROUTES, countedKv, flushUsage, usageState } from "./usage";
+import { SHED_ROUTES, countedKv, countedR2, flushUsage, usageState } from "./usage";
 import { segmentAdopt, segmentCreate, segmentDelete, segmentList, segmentShare, segmentsSharedWithMe } from "./segments";
 
 type Handler = (req: Request, env: Env, m: RegExpMatchArray, ctx?: ExecutionContext) => Promise<Response>;
@@ -287,10 +288,12 @@ on("POST", "/api/presence", async (req, env) => { await presencePublish(env, awa
 on("GET", "/api/ctx/v1/index.json", (_req, env) => ctxServe(env, "v1/index.json"));
 on("GET", "/api/ctx/v1/8/:x/:y", (_req, env, m) => ctxServe(env, `v1/8/${m.groups!.x}/${m.groups!.y}`));
 // Vetta's own scored road network beyond Cincinnati (src/graph.ts): tiles from the repository's graph-data branch
-on("GET", "/api/graph/v1/index.json", (req) => graphIndex(req));
-on("GET", "/api/graph/v1/:name", (req, _env, m) => graphTile(req, m.groups!.name));
+on("GET", "/api/graph/v1/index.json", (req, env) => graphIndex(req, fetch, env));
+on("GET", "/api/graph/v1/:name", (req, env, m) => graphTile(req, m.groups!.name, fetch, env));
 // Avoid cameras' own camera list for the region (graph.ts cameraList; web/cameras.js), from the graph-data branch
-on("GET", "/api/cameras/v1/region.json", () => cameraList());
+on("GET", "/api/cameras/v1/region.json", (_req, env) => cameraList(fetch, env));
+// CI's upload of the map data into R2 (src/data_store.ts): a GitHub OIDC token of this repository's main branch, no secret
+on("PUT", "/api/ops/data", (req, env, _m, ctx) => dataPut(req, env, ctx));
 // photos (src/photos.ts, REVIEW.md 5.2): JPEG in, metadata out; members only
 on("POST", "/api/photos", async (req, env) => json(await photoUpload(env, await requireMember(req, env), req), 201));
 on("GET", "/api/photos", async (req, env) => json(await photoList(env, await requireMember(req, env), new URL(req.url))));
@@ -423,16 +426,16 @@ export default {
 
 // The env a request or cron sees: its D1 queries counted (src/query_budget.ts) and its D1 rows and KV calls metered for
 // the usage guard (src/usage.ts).
-const KV_BINDINGS = new Set<PropertyKey>(["BACKUPS", "PHOTOS", "OSM", "CTX"]);
+const KV_BINDINGS = new Set<PropertyKey>(["BACKUPS", "PHOTOS", "OSM", "CTX"]), R2_BINDINGS = new Set<PropertyKey>(["ARCHIVE", "DATA"]);
 function metered(env: Env, q: { n: number }, limit?: number): Env {
-  const db = countedDb(env.DB, q, limit), kv = new Map<PropertyKey, KVNamespace>();
+  const db = countedDb(env.DB, q, limit), wrapped = new Map<PropertyKey, unknown>();
   return new Proxy(env, {
     get(t, k) {
       if (k === "DB") return db;
       const v = Reflect.get(t, k);
-      if (!KV_BINDINGS.has(k) || !v) return v;
-      if (!kv.has(k)) kv.set(k, countedKv(v as KVNamespace));
-      return kv.get(k);
+      if (!v || !(KV_BINDINGS.has(k) || R2_BINDINGS.has(k))) return v;
+      if (!wrapped.has(k)) wrapped.set(k, KV_BINDINGS.has(k) ? countedKv(v as KVNamespace) : countedR2(v as R2Bucket));
+      return wrapped.get(k);
     },
   });
 }

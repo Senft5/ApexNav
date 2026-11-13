@@ -109,7 +109,7 @@ export async function serverSide(env: Env, fetcher: typeof fetch = fetch) {
   const config = {
     db: set(env.DB), owner_email: set(env.OWNER_EMAIL), pepper: set(env.PEPPER), google: set(env.GOOGLE_CLIENT_ID) && set(env.GOOGLE_CLIENT_SECRET),
     ctx_keys: set(env.CTX_KEYS), nrel_key: set(env.NREL_API_KEY), osm_kv: set(env.OSM), ctx_kv: set(env.CTX), photos_kv: set(env.PHOTOS),
-    backups_kv: set(env.BACKUPS), archive_r2: set(env.ARCHIVE), flags: set(env.FLAGS), write_limit: set(env.WRITE_LIMIT), convoy: set(env.CONVOY),
+    backups_kv: set(env.BACKUPS), archive_r2: set(env.ARCHIVE), data_r2: set(env.DATA), flags: set(env.FLAGS), write_limit: set(env.WRITE_LIMIT), convoy: set(env.CONVOY),
   };
   let db = false;
   try { db = !!(await env.DB.prepare("SELECT 1 AS one").first()); } catch { db = false; }

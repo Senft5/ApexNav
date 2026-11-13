@@ -12,6 +12,9 @@ export const TILE_S = 86400;          // a tile is re-validated daily by the pho
 export const EDGE_TILE_S = 365 * 86400;
 export const SUBREQ_S = 7 * 86400;    // Cloudflare's cache of the raw GitHub fetch, per build
 
+import { graphTileKey, r2Bytes, r2GraphIndex } from "./data_store";
+import type { Env } from "./util";
+
 type Index = { build?: string; built?: string; tiles?: Record<string, unknown> };
 const SEC = { "x-content-type-options": "nosniff", "content-security-policy": "default-src 'none'" };
 const cacheOf = () => (typeof caches !== "undefined" ? (caches as unknown as { default: Cache }).default : null);
@@ -20,8 +23,13 @@ const tileKey = (build: string, name: string) => new Request(`https://apexnav.ca
 const buildOf = (ix: Index) => String(ix.build || ix.built || "0");
 const etag = (s: string) => `"${s.replace(/[^\w.:-]/g, "_")}"`;
 
-/** The region index from the edge cache, else raw GitHub; an empty index (no tiles) when the data branch isn't there. */
-export async function regionIndex(fetcher: typeof fetch = fetch): Promise<{ body: string; ix: Index }> {
+/** The region index from our R2 bucket (src/data_store.ts), else the edge cache, else raw GitHub; an empty index (no
+ *  tiles) when neither has one. */
+export async function regionIndex(fetcher: typeof fetch = fetch, env?: Env): Promise<{ body: string; ix: Index }> {
+  const r2 = env ? await r2GraphIndex(env) : null;
+  if (r2) {
+    try { const ix = JSON.parse(r2) as Index; if (ix && ix.tiles) return { body: r2, ix }; } catch { /* GitHub then */ }
+  }
   const cache = cacheOf();
   try {
     const hit = cache ? await cache.match(indexKey()) : undefined;
@@ -38,8 +46,8 @@ export async function regionIndex(fetcher: typeof fetch = fetch): Promise<{ body
 }
 
 /** GET /api/graph/v1/index.json */
-export async function graphIndex(req: Request, fetcher: typeof fetch = fetch): Promise<Response> {
-  const { body, ix } = await regionIndex(fetcher);
+export async function graphIndex(req: Request, fetcher: typeof fetch = fetch, env?: Env): Promise<Response> {
+  const { body, ix } = await regionIndex(fetcher, env);
   const tag = etag(buildOf(ix));
   const headers = { "content-type": "application/json", "cache-control": `public, max-age=${INDEX_S}`, etag: tag, ...SEC };
   if (req.headers.get("if-none-match") === tag) return new Response(null, { status: 304, headers });
@@ -47,10 +55,10 @@ export async function graphIndex(req: Request, fetcher: typeof fetch = fetch): P
 }
 
 /** GET /api/graph/v1/<i>_<j>.vgr: a tile the index lists, from the edge cache under its build, else raw GitHub. */
-export async function graphTile(req: Request, name: string, fetcher: typeof fetch = fetch): Promise<Response> {
+export async function graphTile(req: Request, name: string, fetcher: typeof fetch = fetch, env?: Env): Promise<Response> {
   const notFound = () => new Response(JSON.stringify({ error: "not_found" }), { status: 404, headers: { "content-type": "application/json", ...SEC } });
   if (!TILE.test(name)) return notFound();
-  const { ix } = await regionIndex(fetcher);
+  const { ix } = await regionIndex(fetcher, env);
   const key = name.slice(0, -4);
   if (!ix.tiles || !Object.prototype.hasOwnProperty.call(ix.tiles, key)) return notFound();
   const build = buildOf(ix), tag = etag(`${build}-${key}`);
@@ -61,6 +69,9 @@ export async function graphTile(req: Request, name: string, fetcher: typeof fetc
     const hit = cache ? await cache.match(ck) : undefined;
     if (hit) return new Response(hit.body, { headers: { ...headers, "x-cache": "hit" } });
   } catch { /* the cache is a speed-up */ }
+  // our bucket first: a build's tiles are all there before its index is (src/data_store.ts)
+  const own = env ? await r2Bytes(env, graphTileKey(build, name)) : null;
+  if (own) return new Response(own, { headers: { ...headers, "x-cache": "r2" } });
   let r: Response;
   // the Cache API is a no-op on *.workers.dev (it needs a custom domain), so the subrequest is cached by Cloudflare
   // instead (cacheEverything, a week). The tile's URL is the same in every build, so the build id goes in the query
@@ -80,7 +91,9 @@ export const CAMERAS_RAW = "https://raw.githubusercontent.com/Senft5/ApexNav/gra
 export const CAMERAS_S = 6 * 3600;    // the phone and Cloudflare re-check every 6 hours (a weekly build)
 
 /** GET /api/cameras/v1/region.json: 502 when the data branch has no camera list (yet). */
-export async function cameraList(fetcher: typeof fetch = fetch): Promise<Response> {
+export async function cameraList(fetcher: typeof fetch = fetch, env?: Env): Promise<Response> {
+  const own = env ? await r2Bytes(env, "cameras/v1/region.json") : null;
+  if (own) return new Response(own, { headers: { "content-type": "application/json", "cache-control": `public, max-age=${CAMERAS_S}`, "x-cache": "r2", ...SEC } });
   const init = { headers: { "user-agent": "Vetta-graph-relay/1.0" }, cf: { cacheTtl: CAMERAS_S, cacheEverything: true } } as RequestInit;
   let r: Response;
   try { r = await fetcher(CAMERAS_RAW, init); } catch { r = new Response(null, { status: 502 }); }

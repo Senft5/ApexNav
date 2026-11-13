@@ -6208,7 +6208,7 @@
           if (u && u.share) {
             const pct = (x) => `${(x * 100).toFixed(x < 0.01 ? 2 : 1)}%`;
             const until = u.until ? new Date(u.until).toLocaleDateString([], { month: 'short', day: 'numeric' }) : '';
-            box.append(el('p', { className: 'note', textContent: `${u.shedding ? dot.down : dot.up} This month of the $5 plan: database reads ${pct(u.share.d1_read)}, writes ${pct(u.share.d1_written)} · storage writes ${pct(u.share.kv_write)}, reads ${pct(u.share.kv_read)}${u.shedding ? ` · uploads and photos paused until ${until}` : ` · uploads pause at ${Math.round(u.shed_at * 100)}%`}` }));
+            box.append(el('p', { className: 'note', textContent: `${u.shedding ? dot.down : dot.up} This month of the $5 plan: database reads ${pct(u.share.d1_read)}, writes ${pct(u.share.d1_written)} · storage writes ${pct(u.share.kv_write)}, reads ${pct(u.share.kv_read)}${u.share.r2_b != null ? ` · map data reads ${pct(u.share.r2_b)}, writes ${pct(u.share.r2_a)}` : ''}${u.shedding ? ` · uploads and photos paused until ${until}` : ` · uploads pause at ${Math.round(u.shed_at * 100)}%`}` }));
           }
         }).catch(() => box.append(el('p', { className: 'note', textContent: 'Couldn’t ask the server.' })));
         return box;
