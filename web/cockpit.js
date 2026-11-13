@@ -4976,7 +4976,7 @@
           if (window.apexDebug) window.apexDebug.lastExploreOwn = own ? own.length : 0;
         }
         const stages = own || await ApexStages.discover(c, maxKm, (phase, f) => ui.step(phase === 'tiles' ? 'Finding roads' : 'Scoring roads', 0.1 + 0.6 * f),
-          { names: inReach, ...(state.hlOn ? { highlights: hls, strength: state.hlStrength } : {}) }).then((st) => measuredStages(st, c, maxKm)).then((st) => stagesWithContext(st, 12));
+          { names: inReach, prefs: roadPrefs, ...(state.hlOn ? { highlights: hls, strength: state.hlStrength } : {}) }).then((st) => measuredStages(st, c, maxKm)).then((st) => stagesWithContext(st, 12));
         const list = FunRoute.exploreShortlist(c, stages, maxKm, 12);   // 24 matrix pairs; most fall to the time limit
         ui.step('Measuring roads', 0.8);
         // ours carry their drive times (aS, bS); the map's stages (highlights on, or no tiles here) are timed on our tiles
