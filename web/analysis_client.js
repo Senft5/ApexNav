@@ -127,12 +127,12 @@
   // corners against your other drives, as the drive job gives the Log), so the end card says the same words. null when the
   // drive is not stored, drive_view.js is not loaded here, or there is no score to coach from.
   // With it, the road's own line (driver_profile.js roadEndLine over roadOf), or null: one pass over the near drives for both.
-  async function coachLineOf(Core, id, sums) {
+  async function coachLineOf(Core, id, sums, skip = null) {   // skip: the practised skill, said on its own line beside it
     const me = sums.find((s) => s.id === id), d = me ? await full(id, me) : null;
     if (!d || !root.ApexDriveView) return { coach: null, road: null };
     const { co, near } = await coachOf(Core, d, sums), P = root.ApexDriverProfile;
     let road = null;
-    try { road = P && P.roadEndLine ? P.roadEndLine(roadOf(Core, d, near)) : null; } catch (_) { road = null; }
+    try { road = P && P.roadEndLine ? P.roadEndLine(roadOf(Core, d, near), skip) : null; } catch (_) { road = null; }
     return { coach: root.ApexDriveView.plainCoach(d.ds, co) || null, road };
   }
   // this drive's corners against your other passes of the same road, corner by corner (driver_profile.js roadRecords), each
@@ -241,19 +241,20 @@
       const sums = await Rec().summaries(Core);
       const others = sums.filter((o) => o.id !== d.id && o.name === d.name)
         .map((o) => ({ id: o.id, name: o.name, score: o.ds && o.ds.score != null ? Math.round(o.ds.score) : null }));
-      let coach = null;                                                // U-111: the Log's sentence, written once, here
-      try { coach = await coachLineOf(Core, d.id, sums); } catch (_) { coach = null; }
       let practice = null;                                             // IDEAS D-27: the practised skill, on this drive alone
       try { practice = practiceOf(Core, d, plan); } catch (_) { practice = null; }
+      let coach = null;                                                // U-111: the Log's sentence, written once, here
+      // the road's line leaves out "Lost most: <skill>" when the practice line above it already names that skill
+      try { coach = await coachLineOf(Core, d.id, sums, practice && plan ? plan.skill : null); } catch (_) { coach = null; }
       release();
       return { driveId: d.id, summary, others, card, coach, practice };   // (never `id`: the message's own)
     },
 
     /** U-111: a stored drive's coaching sentence, the Log's (coachLineOf); { coach: null } when there is none. */
-    async coachLine({ id }) {
+    async coachLine({ id, skip = null }) {
       const Core = CoreOf(), sums = await Rec().summaries(Core);
       let out = { coach: null, road: null };
-      try { out = await coachLineOf(Core, id, sums); } catch (_) { out = { coach: null, road: null }; }
+      try { out = await coachLineOf(Core, id, sums, skip); } catch (_) { out = { coach: null, road: null }; }
       release();
       return out;
     },

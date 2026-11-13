@@ -9680,11 +9680,11 @@
         if (d.ds.score != null) try {
           others = (await ApexRecording.summaries()).filter((o) => o.id !== d.id && o.name === d.name).map((o) => ({ id: o.id, name: o.name, score: o.ds && o.ds.score != null ? Math.round(o.ds.score) : null }));
         } catch (_) { others = []; }
-        let coach = null, road = null;                                 // U-111: the Log's sentence, when the drive is stored; with it the road's line
-        if (d.ds.score != null && window.ApexAnalysis) try { const r = await ApexAnalysis.job('coachLine', { id: d.id }); coach = r.coach || null; road = r.road || null; } catch (_) { coach = null; road = null; }
         let practice = null;                                           // IDEAS D-27: the practised skill, when the drive is stored
         const plan = practicePlan();
         if (plan && window.ApexAnalysis) try { practice = (await ApexAnalysis.job('practiceLine', { id: d.id, plan })).practice || null; } catch (_) { practice = null; }
+        let coach = null, road = null;                                 // U-111: the Log's sentence, when the drive is stored; with it the road's line, which skips the practised skill
+        if (d.ds.score != null && window.ApexAnalysis) try { const r = await ApexAnalysis.job('coachLine', { id: d.id, skip: practice && plan ? plan.skill : null }); coach = r.coach || null; road = r.road || null; } catch (_) { coach = null; road = null; }
         endCardScored({ ...c, corners: d.corners.length, ds: d.ds, coach, practice, road }, others, opts);
       })();
     }

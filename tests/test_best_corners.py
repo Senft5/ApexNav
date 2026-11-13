@@ -219,10 +219,11 @@ def test_road_end_line_picks_the_road_words():
         return
     runner = ("const P=require(process.argv[1]+'/web/driver_profile.js');"
               "process.stdout.write(JSON.stringify([P.roadEndLine({corners:4,best:1,level:0,uneven:1,steady:0,rows:[{why:'brake'}]}),"
-              "P.roadEndLine({corners:4,best:1,level:0,uneven:1,steady:1,rows:[{why:null}]}),P.roadEndLine({corners:0}),P.roadEndLine(null)]));")
+              "P.roadEndLine({corners:4,best:1,level:0,uneven:1,steady:1,rows:[{why:null}]}),P.roadEndLine({corners:0}),P.roadEndLine(null),P.roadEndLine({corners:4,best:1,level:0,uneven:1,steady:0,rows:[{why:'brake'}]},'brake')]));")
     out = json.loads(subprocess.run([NODE, "-e", runner, os.getcwd()], capture_output=True, text=True, check=True).stdout)
     assert out == ["Least even corner: off your cleanest. Lost most: brakes done by the apex.",
-                   "On this road: cleanest yet at 1 of 4 corners driven 3+ times.", None, None]
+                   "On this road: cleanest yet at 1 of 4 corners driven 3+ times.", None, None,
+                   "Least even corner: off your cleanest."]   # the practised skill is said on its own line beside it
 
 
 def test_roads_to_work_names_the_least_even_roads():

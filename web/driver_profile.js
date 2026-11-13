@@ -479,22 +479,22 @@
     return `Your cleanest here: ${row.record}${on ? `, ${on}` : ''}; this pass ${row.level}${row.why && WORDS[row.why] ? `, mostly ${lowerName(row.why)}` : ''}`;
   }
   /** "3 least even corners: near your cleanest at 2." (null with none) */
-  function roadUnevenLine(r) {
+  function roadUnevenLine(r, skip = null) {
     if (!r || !(r.uneven > 0)) return null;
     // the credit named most often where this drive was off your cleanest (rows' why; a tie to the first in road order)
     const n = new Map();
     for (const x of r.rows || []) if (x && WORDS[x.why]) n.set(x.why, (n.get(x.why) || 0) + 1);
     let top = null;
     for (const [k, c] of n) if (!top || c > top[1]) top = [k, c];
-    const lost = top ? ` Lost most: ${lowerName(top[0])}.` : '';
+    const lost = top && top[0] !== skip ? ` Lost most: ${lowerName(top[0])}.` : '';   // skip: the skill a practice line beside it names
     return unevenHead(r) + lost;
   }
   /** The end card's one line on a road you have driven before: where this drive lost most at the road's least even
    *  corners when it names a technique, else how many corners it was your cleanest at (roadRecordLine); null for neither. */
-  function roadEndLine(r) {
+  function roadEndLine(r, skip = null) {
     if (!r || !(r.corners > 0)) return null;
     const off = (r.rows || []).some((x) => x && WORDS[x.why]);
-    return off ? roadUnevenLine(r) : roadRecordLine(r);
+    return off ? roadUnevenLine(r, skip) : roadRecordLine(r);
   }
   function unevenHead(r) {
     // "3 least even corners: near your cleanest at 2." (near: within NEAR_BEST of it)
