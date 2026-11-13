@@ -113,6 +113,27 @@
     const status = el('p', { className: 'note dc-status', hidden: true }); status.setAttribute('role', 'status');
     const say = (t) => { status.textContent = t || ''; status.hidden = !t; };
 
+    // Corner clips (corner_clip.js, big bet 5): once the video is lined up, any corner it holds as a portrait clip to share
+    const CC = root.ApexCornerClip;
+    const clipPick = el('select', { className: 'dc-clip-pick' }); clipPick.setAttribute('aria-label', 'Corner for the clip');
+    const clipBtn = el('button', { className: 'btn solid', textContent: 'Make a clip', type: 'button' });
+    const clipCanvas = el('canvas', { className: 'dc-clip-canvas' });
+    clipCanvas.style.cssText = 'width:min(100%,270px);display:none;background:#000;margin:8px 0';
+    const clipNote = el('p', { className: 'note dc-clip-note' }); clipNote.setAttribute('role', 'status');
+    const clips = el('div', { className: 'dc-clips', hidden: true }, el('h3', { textContent: 'Corner clips' }), el('div', { className: 'dc-row' }, clipPick, clipBtn), clipCanvas, clipNote);
+    let clipList = [], clipBusy = false, clipSaid = '';   // clipSaid: how the last clip went, kept until the video moves
+    function listClips() {
+      if (!CC || clipBusy) return;
+      const keep = clipPick.value;
+      clipList = opened && frameOk !== false ? CC.clippable(d, T, off(), duration()) : [];
+      clipPick.replaceChildren(...clipList.map((x) => { const o = el('option', { textContent: x.label }); o.value = String(x.k); return o; }));
+      if (clipList.some((x) => String(x.k) === keep)) clipPick.value = keep;
+      clips.hidden = !opened;
+      clipBtn.disabled = !clipList.length || frameOk !== true;
+      clipNote.textContent = clipList.length ? clipSaid || 'A portrait clip of the corner, with its call, speed and g, ready for Reels or a message.'
+        : 'No corner falls inside the video at this setting.';
+    }
+
     let anchor = -1, opened = false, frameOk = null, busy = false, pending = null, openTimer = 0, dur = 0;
     const off = () => Number(offset.value);
     const duration = () => (finite(video.duration) && video.duration > 0 ? video.duration : dur);
@@ -136,7 +157,7 @@
           ok = frameDrawn(pg.getImageData(0, 0, 8, 8).data);
         } catch (_) { ok = false; }
       }
-      if (ok) { frameOk = true; clearTimeout(retry); exportBtn.disabled = false; say(''); return; }
+      if (ok) { frameOk = true; clearTimeout(retry); exportBtn.disabled = false; say(''); listClips(); return; }
       exportBtn.disabled = true;
       if (++tries < 8) { clearTimeout(retry); retry = setTimeout(probe, 250); return; }
       frameOk = false;
@@ -157,7 +178,7 @@
       if (Math.abs(video.currentTime - t) < 0.02) { refresh(); return; }
       busy = true; video.currentTime = t;
     }
-    function refresh() { drawPreview(); probe(); describe(); scrub.value = String(video.currentTime); }
+    function refresh() { drawPreview(); probe(); describe(); scrub.value = String(video.currentTime); listClips(); }
     function follow() {                                                // an anchored call stays put as the offset moves
       if (anchor < 0) { refresh(); return; }
       seek(videoTimeFor(T[calls[anchor].i], off()));
@@ -167,7 +188,7 @@
       const lo = Number(offset.min), hi = Number(offset.max);
       offset.value = String(Math.max(lo, Math.min(hi, Math.round(v * 2) / 2)));
       offsetNote.textContent = offsetText(off());
-      follow();
+      clipSaid = ''; follow(); listClips();
     }
     function toCall(dir) {
       if (!calls.length) { where.textContent = 'This drive has no corner calls to line up with: use the slider under the picture.'; return; }
@@ -188,7 +209,7 @@
       const f = input.files && input.files[0];
       if (!f) return;
       pick.firstChild.textContent = 'Pick another video';
-      opened = false; frameOk = null; tries = 0; clearTimeout(retry); anchor = -1; busy = false; pending = null; dur = 0;
+      opened = false; frameOk = null; tries = 0; clearTimeout(retry); anchor = -1; busy = false; pending = null; dur = 0; clipSaid = '';
       stage.hidden = true; tools.hidden = true; exportBtn.disabled = true;
       say('Opening the video…');
       video.src = URL.createObjectURL(f);
@@ -256,7 +277,22 @@
       exportBtn.disabled = frameOk === false;
       follow();
     });
-    box.append(note, pick, status, stage, tools, canvas, balance, fine, offsetNote, exportBtn);
+    clipBtn.addEventListener('click', async () => {
+      const x = clipList.find((c) => String(c.k) === clipPick.value);
+      if (!x || clipBusy) return;
+      clipBusy = true; clipBtn.disabled = true; clipNote.textContent = 'Making the clip: it plays through once.';
+      clipCanvas.style.display = 'block';
+      try {
+        const { blob, mime } = await CC.record({ video, d, T, w: x.w, offsetS: off(), fmtSpeed: page.fmtSpeed, canvas: clipCanvas,
+          meta: { title: d.name || '', label: x.label } });
+        await page.save(blob, root.ApexFlyoverVideo.fileName(`${d.name || 'drive'}-corner-${x.k + 1}`, mime), mime.split(';')[0]);
+        clipSaid = 'Done. The sound isn\u2019t kept.';
+      } catch (_) { clipSaid = 'Couldn\u2019t make the clip on this phone.'; }
+      clipNote.textContent = clipSaid;
+      clipCanvas.style.display = 'none'; clipBusy = false; clipBtn.disabled = !clipList.length || frameOk !== true;
+      follow();
+    });
+    box.append(note, pick, status, stage, tools, canvas, balance, fine, offsetNote, exportBtn, clips);
     return box;
   }
 
