@@ -5897,7 +5897,7 @@
       // the route card, planned with them, still shows each one as a chip
       for (const [chipId, boxId] of [['planOptionsChip', null], ['cardOptionsChip', 'cardOptsOn']]) {
         const chip = $(chipId), box = boxId && $(boxId);
-        chip.textContent = ApexPlanOptions.chipLabel(on);
+        chip.textContent = box ? 'Options' : ApexPlanOptions.chipLabel(on);   // the card's chips beside it name each one: no count to repeat them
         chip.setAttribute('aria-label', on.length ? `Options: ${on.map((x) => x.aria).join(', ')}` : 'Options');
         if (box) box.replaceChildren(...on.map((x) => { const b = document.createElement('button'); b.className = 'chip'; b.textContent = x.text; b.dataset.opt = x.key;
           b.setAttribute('aria-label', `${x.aria}. Change in Options`); b.setAttribute('aria-haspopup', 'dialog'); b.addEventListener('click', openOptions); return b; }));
@@ -8465,8 +8465,9 @@
     function paintAmbient() {
       const note = $('ambientNote'); if (!note) return;
       const a = ambientStats(), mi = a ? `${ApexUnits.long((a.km) * 1000, 1)} shared since the app opened` : '';
-      // U-116: the line for the state you are in: signed out, a member with the switch off (it sits above this line), or on
-      note.textContent = ambient.allowed === false ? (ambient.member ? 'Off. Turn on Share road feel above.' : 'Off. Sign in to share road feel.')
+      // U-116: the line for the state you are in: signed out, a member with the switch off (nothing: the switch right above
+      // already says Off, 2026-11-13), or on
+      note.textContent = ambient.allowed === false ? (ambient.member ? '' : 'Off. Sign in to share road feel.')
         : !NATIVE_SHELL ? 'Sharing banking, bumps and surface while you drive. In the iPhone app it also shares whenever the phone is mounted.'
         : !ambient.mounted ? 'Waiting for the phone to be calibrated in its mount.'
         : a && a.paused ? 'Paused: the server refused. Trying again in a few minutes.'
@@ -9596,7 +9597,7 @@
       try { const x = JSON.parse(localStorage.getItem('vetta.practice') || 'null'); return x && typeof x.skill === 'string' ? x : null; } catch (_) { return null; }
     }
     // what a drive with no score was, in the score's slot: no corners at all, or too few clean ones to score
-    const noScoreWords = (corners) => (Number.isFinite(corners) && corners > 0 ? 'too few clean corners to score' : 'no corners to score');
+    const noScoreWords = (corners) => (Number.isFinite(corners) && corners > 0 ? 'Too few clean corners to score' : 'No corners to score');
     // The score arrived (ds: { score, components }, corners: a count; others: your earlier drives with this name, scored)
     // TestFlight 2026-11-12 (the owner: "cluttered", "walls of text"): at most two lines under the score, the ones you
     // asked for or earned first (the practice, a month's best run), then the road's and what the phone felt
@@ -9614,10 +9615,11 @@
       if (roadbooks) roadbooks.afterDrive(c.id).catch(() => {});      // a road of one of your roadbooks this drive covered is stamped
       if (!window.ApexEndReveal) $('endMeta').textContent = ApexFormat.factsLine(c);   // else the ledger takes the new fact in (land, below)
       $('endScore').removeAttribute('aria-busy');
-      // D-6 / R-5 (panel round 1): a drive with no score still reads as a drive. The score's slot says what it was, "3.1 mi ·
-      // no corners to score", instead of "-- /1000" over a sentence about a failed exam; nothing is invented (no number).
+      // D-6 / R-5 (panel round 1): a drive with no score still reads as a drive. The score's slot says why, "No corners to
+      // score", instead of "-- /1000" over a sentence about a failed exam; nothing is invented (no number). The distance is
+      // the facts row's right under it, so it is not said twice (2026-11-13 sweep: "3.7 mi · no corners…" over "3.7 mi").
       const none = c.ds.score == null;
-      $('endScore').textContent = none ? [Number.isFinite(c.len_m) ? ApexFormat.distance(c.len_m) : null, noScoreWords(c.corners)].filter(Boolean).join(' · ') : String(c.ds.score);
+      $('endScore').textContent = none ? noScoreWords(c.corners) : String(c.ds.score);
       $('endScore').classList.remove('unk');                         // the words are the answer; "--" never shows as a score here
       $('endScore').parentElement.classList.toggle('no-score', none);
       if (window.ApexEndReveal) ApexEndReveal.land(endEl(), { score: none ? null : c.ds.score, facts: ApexFormat.factsLine(c) });
