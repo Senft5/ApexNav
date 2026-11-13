@@ -7241,6 +7241,8 @@ flow('offline area kept: saving the map, or the first drive of a session, asks t
     return route.fulfill({ contentType: 'application/x-protobuf', body: Buffer.alloc(0) });
   });
   await page.route('https://s3.amazonaws.com/**', (route) => route.fulfill({ contentType: 'image/png', body: Buffer.alloc(8) }));
+  const asked = [];
+  await page.route('https://nominatim.openstreetmap.org/reverse**', (route) => { asked.push(route.request().url()); return route.fulfill({ contentType: 'application/json', body: JSON.stringify({ address: { town: 'Tellico Plains', county: 'Monroe County' } }) }); });
   await page.addInitScript(() => {
     try { localStorage.setItem('apex.onboarded', '1'); } catch (_) {}
     window.__persistAsks = 0;
@@ -7253,6 +7255,9 @@ flow('offline area kept: saving the map, or the first drive of a session, asks t
   await page.waitForFunction(() => JSON.parse(localStorage.getItem('apex.offlineAreas') || '[]').length === 1, null, { timeout: 60000 });
   await page.waitForFunction(() => window.__persistAsks === 1, null, { timeout: 5000 });
   check(/round/.test(await page.textContent('#myAreas')), 'the area is listed even though the browser said no: ' + await page.textContent('#myAreas'));
+  // named for its town, asked with the centre to 0.01 degree
+  const named = await page.evaluate(() => JSON.parse(localStorage.getItem('apex.offlineAreas'))[0].name);
+  check(named === 'Around Tellico Plains' && asked.length >= 1 && asked.every((u) => /lat=-?\d+\.\d{2}&lon=-?\d+\.\d{2}&/.test(u)), 'the area named for its town: ' + JSON.stringify({ named, asked }));
   // a kept drive asks once a session, not on every save
   const n = await page.evaluate(async () => {
     const lat = [35.6, 35.6005, 35.601], lon = [-83.5, -83.5, -83.5], d = (id) => ({ id, name: 'Test', date: new Date().toISOString(), lat, lon, dist: [0, 55, 110], speed_mps: [15, 15, 15] });

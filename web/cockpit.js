@@ -7392,7 +7392,10 @@
       if (areaBusy || !window.ApexOfflineTiles) return;
       areaBusy = true; btn.disabled = true;
       try {
-        const a = await ApexOfflineTiles.download({ lat, lon, radiusKm, styleUrl: MAP_STYLE, id, name: name || `Around ${lat.toFixed(2)}, ${lon.toFixed(2)}`,
+        // a new area is named for its town (the map's reverse geocode, as the place plate asks it: to 0.01°), else its place
+        let town = null;
+        if (!name) { try { town = ApexPlacePlate.town(await RouteLoading.json(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat.toFixed(2)}&lon=${lon.toFixed(2)}&zoom=12&addressdetails=1`, {}, 6000)); } catch (_) {} }
+        const a = await ApexOfflineTiles.download({ lat, lon, radiusKm, styleUrl: MAP_STYLE, id, name: name || (town ? `Around ${town}` : `Around ${lat.toFixed(2)}, ${lon.toFixed(2)}`),
           onProgress: (d, n) => { if (d % 25 === 0 || d === n) btn.textContent = `Saving the map… ${Math.round(100 * d / n)}%`; } });
         // members' road feel for the area too (signed in as a member): measured roads plan the same with no signal
         let roads = null;
