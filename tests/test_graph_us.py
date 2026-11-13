@@ -25,6 +25,13 @@ def test_states_are_the_lower_48_only():
     assert list(U.states(INDEX)) == ["ohio", "west-virginia"]
 
 
+def test_geofabriks_us_prefixed_ids_are_states_by_their_short_names():
+    ix = {"features": [{"properties": {"id": "us/ohio", "parent": "us", "urls": {"pbf": "https://x/ohio.pbf"}}, "geometry": box(-84.82, 38.4, -80.52, 42.33)},
+                       {"properties": {"id": "us/alaska", "parent": "us"}, "geometry": box(-179.2, 51.2, -129.9, 71.4)}]}
+    assert list(U.states(ix)) == ["ohio"]
+    assert U.urls(ix)["ohio"] == "https://x/ohio.pbf"
+
+
 def test_jobs_cover_each_block_once_with_the_states_under_its_margin():
     js = U.jobs(U.states(INDEX))
     names = [b[0] for j in js for b in j["blocks"]]

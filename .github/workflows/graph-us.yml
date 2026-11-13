@@ -66,11 +66,13 @@ jobs:
           fi
           [ -z "$only" ] && live=true
           curl -fsSL --retry 5 --retry-delay 10 -o index-v1.json https://download.geofabrik.de/index-v1.json
+          python3 -c "import json; f=json.load(open('index-v1.json'))['features']; print(len(f), 'extracts;', [x['properties'].get('id') for x in f if 'ohio' in str(x['properties'].get('id'))])"
           python -m tools.graph_etl.us_plan matrix --index index-v1.json --only "$only" > matrix.json
           python3 - <<'PY' >> "$GITHUB_OUTPUT"
           import json
           m = json.load(open("matrix.json"))
-          ix = {f["properties"]["id"]: f["properties"].get("urls", {}).get("pbf") for f in json.load(open("index-v1.json"))["features"]}
+          from tools.graph_etl.us_plan import urls
+          ix = urls(json.load(open("index-v1.json")))
           states = sorted({s for j in m["include"] for s in j["states"].split()})
           print("matrix=" + json.dumps(m, separators=(",", ":")))
           print("states=" + json.dumps({"include": [{"state": s, "url": ix[s]} for s in states]}, separators=(",", ":")))
@@ -79,6 +81,7 @@ jobs:
           echo "only=$only" >> "$GITHUB_OUTPUT"
           echo "live=${live:-false}" >> "$GITHUB_OUTPUT"
           python3 -c "import json; m=json.load(open('matrix.json')); print(len(m['include']), 'jobs')" | tee -a "$GITHUB_STEP_SUMMARY"
+          python3 -c "import json,sys; sys.exit(0 if json.load(open('matrix.json'))['include'] else 'no jobs: the plan found no state')"
 
   osm:
     needs: plan

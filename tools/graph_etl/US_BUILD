@@ -3,4 +3,4 @@ the workflow is on main. only= is a pilot (Geofabrik ids, comma separated; empty
 Worker at a pilot build too.
 only=west-virginia
 live=false
-run=1
+run=2

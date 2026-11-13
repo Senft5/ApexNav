@@ -40,12 +40,28 @@ def states(index):
     out = {}
     for f in index.get("features", []):
         p = f.get("properties") or {}
-        if p.get("parent") != "us" or not f.get("geometry"):
+        sid = short(p.get("id"))
+        if not sid or not is_state(p) or not f.get("geometry"):
             continue
         b = _ring_box(f["geometry"]["coordinates"], [math.inf, math.inf, -math.inf, -math.inf])
         if b[0] >= LOWER48[0] - 1 and b[2] <= LOWER48[2] + 1 and b[1] >= LOWER48[1] - 1 and b[3] <= LOWER48[3] + 1:
-            out[p["id"]] = tuple(b)
+            out[sid] = tuple(b)
     return dict(sorted(out.items()))
+
+
+def short(gid):
+    """Geofabrik's id without its "us/" prefix (index-v1 names the states "us/ohio"): a plain name for artifacts."""
+    return str(gid).split("/")[-1] if gid else None
+
+
+def is_state(p):
+    return p.get("parent") == "us" or str(p.get("id", "")).startswith("us/")
+
+
+def urls(index):
+    """{short id: pbf url} for the states."""
+    return {short(f["properties"]["id"]): (f["properties"].get("urls") or {}).get("pbf")
+            for f in index.get("features", []) if is_state(f.get("properties") or {})}
 
 
 def _touch(a, b):
