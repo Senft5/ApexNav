@@ -1,0 +1,6 @@
+# STATE
+
+## 2026-11-13 Clip this corner: one tap from a corner on the drive's page to a clip to share (big bet 5, step 3)
+- Done: when the app filmed a drive (#683), a corner's card, its row in Where to find time and its row in Repeatability offer **Clip this corner**. It sits in the overlay against the best pass, or alone when there is no best pass. One tap opens the drive's own video lined up (if the Dashcam panel hasn't yet), makes the portrait clip and hands it to the share sheet. The key then says "Clip made · make another". dashcam.js `canClip` / `clip` on the panel; drive_view.js `clipKey` / `openCorner`; analysis_page.js passes them through. e2e "film the drive" covers the one tap.
+- Done too: **Your best 3 corners in one clip**. Corner clips picks the drive's best corners that the video holds, ranked by each corner's own Driver Score with unmeasured g left out (corner_clip.js `bestOf`). It records them one after another into one portrait video: the recorder pauses while the video seeks, and each part carries its own call and g trace. tests/test_corner_clip.py; e2e "film the drive".
+- Next: the end card's best corner gets the same key once the drive is saved, and posting a clip to a crew (with the social thread).

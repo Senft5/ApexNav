@@ -141,8 +141,20 @@
     const clipCanvas = el('canvas', { className: 'dc-clip-canvas' });
     clipCanvas.style.cssText = 'width:min(100%,270px);display:none;background:#000;margin:8px 0';
     const clipNote = el('p', { className: 'note dc-clip-note' }); clipNote.setAttribute('role', 'status');
-    const clips = el('div', { className: 'dc-clips', hidden: true }, el('h3', { textContent: 'Corner clips' }), el('div', { className: 'dc-row' }, clipPick, clipBtn), clipCanvas, clipNote);
-    let clipList = [], clipBusy = false, clipSaid = '';   // clipSaid: how the last clip went, kept until the video moves
+    // a reel: the drive's best corners the video holds (their own Driver Score), one after another in one portrait video
+    const reelBtn = el('button', { className: 'btn', type: 'button', hidden: true });
+    const clips = el('div', { className: 'dc-clips', hidden: true }, el('h3', { textContent: 'Corner clips' }), el('div', { className: 'dc-row' }, clipPick, clipBtn), el('div', { className: 'dc-row' }, reelBtn), clipCanvas, clipNote);
+    let clipList = [], clipBusy = false, clipSaid = '', reel = [];   // clipSaid: how the last clip went, kept until the video moves
+    const labelOf = (c) => { const all = CC.cornersOf(d), k = all.findIndex((x) => x.start === c.start && x.end === c.end);
+      return { k: Math.max(0, k), label: k >= 0 ? [`Corner ${k + 1}`, all[k].call].filter(Boolean).join(' \u00b7 ') : (c.call || '') }; };
+    function listReel() {
+      const R = root.ApexRecording, scored = R && R.cornersOf ? (() => { try { return R.cornersOf(d); } catch (_) { return []; } })() : [];
+      const best = CC.bestOf(Core, d, scored, (c) => !!CC.clipWindow(T, c, off(), duration()), 3);
+      reel = best.map((b) => { const c = scored[b.k]; return { ...labelOf(c), w: CC.clipWindow(T, c, off(), duration()) }; });
+      reelBtn.hidden = reel.length < 2;
+      reelBtn.textContent = `Your best ${reel.length} corners in one clip`;
+      reelBtn.disabled = clipBusy || frameOk !== true;
+    }
     function listClips() {
       if (!CC || clipBusy) return;
       const keep = clipPick.value;
@@ -151,6 +163,7 @@
       if (clipList.some((x) => String(x.k) === keep)) clipPick.value = keep;
       clips.hidden = !opened;
       clipBtn.disabled = !clipList.length || frameOk !== true;
+      listReel();
       clipNote.textContent = clipList.length ? clipSaid || 'A portrait clip of the corner, with its call, speed and g, ready for Reels or a message.'
         : 'No corner falls inside the video at this setting.';
     }
@@ -229,7 +242,7 @@
     input.addEventListener('change', () => {
       const f = input.files && input.files[0];
       if (!f) return;
-      pick.firstChild.textContent = 'Pick another video';
+      pick.firstChild.textContent = 'Pick another video'; shownOwn = '';
       openSrc(URL.createObjectURL(f), null);
     });
     /** Opens a video (a picked file, or the app's own film of the drive with where it starts in the drive). */
@@ -247,12 +260,13 @@
     }
     // the app's own film of this drive (DriveCam.swift): one key per video, lined up by itself
     const own = el('div', { className: 'dc-row dc-own', hidden: true });
+    let vids = [], shownOwn = '';
     if (typeof page.ownVideos === 'function') {
       Promise.resolve().then(() => page.ownVideos()).then((list) => {
-        const vids = ownVideos(list, d.t0, total);
+        vids = ownVideos(list, d.t0, total);
         own.replaceChildren(...vids.map((v) => {
           const b = el('button', { className: 'btn solid', type: 'button', textContent: v.label });
-          b.addEventListener('click', () => { pick.firstChild.textContent = 'Pick another video'; openSrc(page.videoUrl(v.name), Math.max(-600, v.offsetS)); });
+          b.addEventListener('click', () => { shownOwn = v.name; pick.firstChild.textContent = 'Pick another video'; openSrc(page.videoUrl(v.name), Math.max(-600, v.offsetS)); });
           return b;
         }));
         own.hidden = !vids.length;
@@ -317,21 +331,42 @@
       exportBtn.disabled = frameOk === false;
       follow();
     });
-    clipBtn.addEventListener('click', async () => {
-      const x = clipList.find((c) => String(c.k) === clipPick.value);
-      if (!x || clipBusy) return;
+    /** Makes and shares the clip of x ({ k, label, w }); true when it was handed to the share sheet. */
+    async function makeClip(x, parts = null) {
+      if (!x || clipBusy) return false;
+      let ok = false;
       clipBusy = true; clipBtn.disabled = true; clipNote.textContent = 'Making the clip: it plays through once.';
       clipCanvas.style.display = 'block';
       try {
         const { blob, mime } = await CC.record({ video, d, T, w: x.w, offsetS: off(), fmtSpeed: page.fmtSpeed, canvas: clipCanvas,
-          meta: { title: d.name || '', label: x.label } });
-        await page.save(blob, root.ApexFlyoverVideo.fileName(`${d.name || 'drive'}-corner-${x.k + 1}`, mime), mime.split(';')[0]);
-        clipSaid = 'Done. The sound isn\u2019t kept.';
+          meta: { title: d.name || '', label: x.label }, ...(parts ? { parts } : {}) });
+        await page.save(blob, root.ApexFlyoverVideo.fileName(`${d.name || 'drive'}-${parts ? 'best-corners' : `corner-${x.k + 1}`}`, mime), mime.split(';')[0]);
+        clipSaid = 'Done. The sound isn\u2019t kept.'; ok = true;
       } catch (_) { clipSaid = 'Couldn\u2019t make the clip on this phone.'; }
       clipNote.textContent = clipSaid;
-      clipCanvas.style.display = 'none'; clipBusy = false; clipBtn.disabled = !clipList.length || frameOk !== true;
+      clipCanvas.style.display = 'none'; clipBusy = false; clipBtn.disabled = !clipList.length || frameOk !== true; reelBtn.disabled = frameOk !== true;
       follow();
-    });
+      return ok;
+    }
+    clipBtn.addEventListener('click', () => makeClip(clipList.find((c) => String(c.k) === clipPick.value)));
+    reelBtn.addEventListener('click', () => { if (reel.length >= 2) { reelBtn.disabled = true; makeClip(reel[0], reel.map((r) => ({ w: r.w, label: r.label }))); } });
+
+    // One tap from a corner on the drive's page (drive_view.js): the app's own video that holds the corner (start, end in
+    // 5 m samples), opened lined up if it isn't yet, and the clip made from it
+    const ownFor = (start, end) => (CC ? vids.find((v) => CC.clipWindow(T, { start, end }, v.offsetS, v.durS)) : null);
+    box.canClip = (start, end) => !!ownFor(start, end);
+    box.clip = async (start, end) => {
+      const v = ownFor(start, end);
+      if (!v || clipBusy) return false;
+      if (shownOwn !== v.name) { shownOwn = v.name; pick.firstChild.textContent = 'Pick another video'; openSrc(page.videoUrl(v.name), Math.max(-600, v.offsetS)); }
+      for (let n = 0; n < 60 && frameOk !== true; n++) {               // opened and its frames copyable, up to 12 s
+        if (frameOk === false) return false;
+        await new Promise((ok) => setTimeout(ok, 200));
+      }
+      const w = frameOk === true && CC.clipWindow(T, { start, end }, off(), duration());
+      if (!w) return false;
+      return makeClip({ ...labelOf({ start, end }), w });
+    };
     lineup.append(balance, fine, offsetNote, exportBtn);
     box.append(note, own, pick, status, stage, tools, canvas, lineup, clips);
     return box;

@@ -245,6 +245,16 @@ flow('startup budget: the map page is ready within its script bytes, script coun
   const laidOut = await page.evaluate(() => [...document.querySelectorAll('.sheet:not(.open), .side-pop:not(.open)')]
     .filter((e) => getComputedStyle(e).contentVisibility !== 'hidden').map((e) => e.id || e.className));
   check(!laidOut.length, 'every closed sheet skips its layout: ' + JSON.stringify(laidOut));
+  // native speed: the cover lifts once the cockpit is built, not when the map's first tile comes in (there are no tiles
+  // here, so a cover still waiting on one would sit to boot.js's 2.5 s ceiling); the map keeps its paper until a tile draws
+  const lift = await page.waitForFunction(() => { const b = document.getElementById('boot'); return !b || b.classList.contains('gone'); }, null, { timeout: 1000, polling: 20 }).then(() => true, () => false);
+  check(lift, 'the cover lifts within a second of the cockpit being ready, without a map tile');
+  check(await page.evaluate(() => document.getElementById('map').classList.contains('unstyled')), 'and the map waits, hidden on its paper, for its first tile');
+  // the stage never scrolls sideways: a closed sheet waits off its right edge, and a tap into Where to? in the first second
+  // brought the field "into view" by scrolling the stage 60 px, the plan sheet cut off at the left (.stage clips, not hidden)
+  await page.evaluate(() => document.getElementById('destInput').scrollIntoView({ inline: 'start' }));
+  const at = await page.evaluate(() => ({ stage: document.querySelector('.stage').scrollLeft, left: Math.round(document.getElementById('planPanel').getBoundingClientRect().left) }));
+  check(at.stage === 0 && at.left === 0, 'Where to? opens in place, the map not scrolled aside: ' + JSON.stringify(at));
 }, { viewport: { width: 393, height: 852 }, hasTouch: true });
 
 flow('first run: onboarding, Watch a replay loads the bundled drive and plays it; the Play switch drives it', async (page, base) => {
@@ -3818,6 +3828,9 @@ flow('the app comes back whole: the deck after a car-started drive, the end card
   await page.route('**/api/**', (route) => route.fulfill({ status: 200, contentType: 'application/json', body: '[]' }));
   await page.goto(base + '/index.html');
   await page.waitForFunction(() => window.apexDebug && window.apexDebug.map && window.apex && window.ApexCore && !document.getElementById('boot'), null, { timeout: 10000 });
+  // the cover lifts at ready now (2026-11-13), as the deck finishes gliding up: measured once it has come to rest
+  await page.waitForFunction(() => new Promise((ok) => { const y = () => document.getElementById('planBar').getBoundingClientRect().top, a = y();
+    setTimeout(() => ok(Math.abs(y() - a) < 0.05), 150); }), null, { timeout: 5000 });
   // the deck: Where to? and Start whole above the tab bar (free-drive/phone/021 had it parked 2 px tall behind the tabs)
   const deck = () => page.evaluate(() => { const bar = document.getElementById('planBar').getBoundingClientRect(), tabs = document.getElementById('tabbar').getBoundingClientRect();
     const start = document.getElementById('startDrive'), r = start.getBoundingClientRect(), hit = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2);
@@ -7334,6 +7347,37 @@ flow('offline area: Save the map here keeps the map, labels and terrain; with no
   check(await page.evaluate(() => !!window.apexDebug.map.getSource('openmaptiles')), 'the saved style and its source loaded offline');
 }, { viewport: { width: 1280, height: 900 } });
 
+flow('the map opens on what it last showed, from the phone: tiles seen are kept, so a launch with no signal still draws them (native speed, big bet #10)', async (page, base) => {
+  let online = true, asked = 0;
+  const style = { version: 8, sources: { openmaptiles: { type: 'vector', url: 'https://tiles.openfreemap.org/planet' } },
+    layers: [{ id: 'bg', type: 'background', paint: { 'background-color': '#eee' } }, { id: 'roads', type: 'line', source: 'openmaptiles', 'source-layer': 'transportation' }] };
+  await page.route('https://tiles.openfreemap.org/**', (route) => {
+    const u = route.request().url();
+    if (/\/\d+\/\d+\/\d+\.pbf$/.test(u)) asked++;
+    if (!online) return route.abort();
+    if (u.includes('/styles/')) return route.fulfill({ contentType: 'application/json', body: JSON.stringify(style) });
+    if (u.endsWith('/planet')) return route.fulfill({ contentType: 'application/json', body: JSON.stringify({ tiles: ['https://tiles.openfreemap.org/planet/t/{z}/{x}/{y}.pbf'], minzoom: 0, maxzoom: 14 }) });
+    return route.fulfill({ contentType: 'application/x-protobuf', body: Buffer.alloc(0) });
+  });
+  await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); } catch (_) {} });
+  const loadedTiles = () => page.evaluate(() => { const m = window.apexDebug && window.apexDebug.map, st = m && m.style, c = st && ((st.sourceCaches || {}).openmaptiles || (st.tileManagers || {}).openmaptiles);
+    return c ? Object.values(c._tiles || {}).filter((t) => t.state === 'loaded').length : 0; });
+  const kept = () => page.evaluate(() => new Promise((ok) => { const r = indexedDB.open('apexnav-tiles', 1);
+    r.onsuccess = () => { const q = r.result.transaction('tiles').objectStore('tiles').getAll(); q.onsuccess = () => ok(q.result.filter((v) => v.recent && v.data.byteLength >= 0).length); }; r.onerror = () => ok(-1); }));
+  await page.goto(base + '/index.html');
+  await page.waitForFunction(() => window.apexDebug && window.apexDebug.map && window.apexDebug.map.loaded(), null, { timeout: 15000 });
+  await page.waitForFunction(() => new Promise((ok) => { const r = indexedDB.open('apexnav-tiles', 1);
+    r.onsuccess = () => { const q = r.result.transaction('tiles').objectStore('tiles').getAll(); q.onsuccess = () => ok(q.result.some((v) => v.recent)); }; r.onerror = () => ok(false); }), null, { timeout: 10000, polling: 200 });
+  const n = await kept();
+  check(n > 0 && n <= 400, 'the tiles the map showed are kept on the phone: ' + n);
+  // no signal: the same view draws from the kept tiles, without asking the network for them
+  online = false; asked = 0;
+  await page.reload();
+  await page.waitForFunction(() => window.apexDebug && window.apexDebug.map && window.apexDebug.map.loaded(), null, { timeout: 15000 });
+  const drawn = await loadedTiles();
+  check(drawn > 0, `with no signal the map still has its last view's tiles: ${drawn} loaded, ${asked} asked of the network`);
+}, { viewport: { width: 393, height: 852 } });
+
 flow('a saved route keeps the map along it: Save fetches the tiles within reach of the route, not round it, lists it in Your data, and unsaving drops it (IDEAS F-03)', async (page, base) => {
   const got = [];
   await page.route('https://tiles.openfreemap.org/**', (route) => {
@@ -7745,7 +7789,7 @@ flow('corner clips: with the video lined up, a corner it holds comes out as a po
   check(await page.evaluate(() => document.querySelector('#dvDashcam .dc-clips button').disabled), 'nothing to clip, the key is off');
 });
 
-flow('film the drive: the app\'s own video of a drive is offered on its page, lined up by itself, and cuts a corner clip (big bet 5)', async (page, base) => {
+flow('film the drive: the app\'s own video of a drive is offered on its page, lined up by itself, and cuts a corner clip and a best-corners reel (big bet 5)', async (page, base) => {
   await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); } catch (_) {} window.APEX_DRIVECAM = '/__drivecam/'; });
   await page.goto(base + '/analysis.html');
   await page.waitForFunction(() => window.apexLogDebug && window.apexLogDebug.loaded() && window.ApexRecording);
@@ -7756,7 +7800,8 @@ flow('film the drive: the app\'s own video of a drive is offered on its page, li
     for (let i = 0; i < 300; i++) { lat.push(35.6 + i * 5 / 110540); lon.push(-83.9); }
     await ApexRecording.store({ id: 'fd1', name: 'Filmed road', date: '2026-11-13T15:00:00Z', t0, t_s: lat.map((_, i) => i / 3), lat, lon, dist: lat.map((_, i) => i * 5), speed_mps: lat.map(() => 15),
       lon_g: lat.map(() => -0.1), lat_g: lat.map((_, i) => Math.sin(i / 3) * 0.4), g_known: null, elev: null, hz: 1, source: 'web-gps',
-      events: [{ type: 'corner', code: 'L4', call: 'Left 4', index: 9, dist_m: 45, start_m: 30, end_m: 60, radius_m: 80, apex_mph: 30, dir: 'L', severity: 4 }] });
+      events: [{ type: 'corner', code: 'L4', call: 'Left 4', index: 9, dist_m: 45, start_m: 30, end_m: 60, radius_m: 80, apex_mph: 30, dir: 'L', severity: 4 },
+               { type: 'corner', code: 'R3', call: 'Right 3', index: 18, dist_m: 90, start_m: 75, end_m: 105, radius_m: 60, apex_mph: 30, dir: 'R', severity: 3 }] });
     const c = Object.assign(document.createElement('canvas'), { width: 320, height: 180 }), g = c.getContext('2d');
     const rec = new MediaRecorder(c.captureStream(15), { mimeType: 'video/webm' }), parts = [];
     rec.ondataavailable = (e) => parts.push(e.data);
@@ -7784,6 +7829,26 @@ flow('film the drive: the app\'s own video of a drive is offered on its page, li
   await page.waitForFunction(() => window.__saved, null, { timeout: 30000 });
   const saved = await page.evaluate(() => window.__saved);
   check(saved.size > 500 && /^Filmed_road-corner-1-/.test(saved.name), 'a clip from the drive\'s own video, with no lining up: ' + JSON.stringify(saved));
+  // one tap from the corner itself: on a fresh page, the corner's card offers Clip this corner, which opens the video and shares the clip
+  await page.goto(base + '/analysis.html?drive=fd1');
+  await page.waitForSelector('#dvDashcam .dc-own button');
+  await page.evaluate(() => { window.__saved = null; ApexSaveFile.saveFile = async (blob, name, type) => { window.__saved = { size: blob.size, name, type }; return 'saved'; }; });
+  await page.click('.dv-corners .dv-corner');
+  await page.waitForSelector('.dv-ovl .dv-clip');
+  await page.click('.dv-ovl .dv-clip');
+  await page.waitForFunction(() => window.__saved, null, { timeout: 40000 });
+  const one = await page.evaluate(() => ({ saved: window.__saved, key: document.querySelector('.dv-ovl .dv-clip').textContent }));
+  await page.waitForFunction(() => /Clip made/.test(document.querySelector('.dv-ovl .dv-clip').textContent), null, { timeout: 5000 });
+  check(one.saved.size > 500 && /^Filmed_road-corner-1-/.test(one.saved.name), 'one tap on the corner: its clip, shared: ' + JSON.stringify(one));
+  // the reel: both corners the video holds, one after the other in one portrait clip
+  await page.evaluate(() => { window.__saved = null; });
+  await page.waitForFunction(() => { const b = [...document.querySelectorAll('#dvDashcam .dc-clips button')].find((x) => /in one clip/.test(x.textContent)); return b && !b.hidden && !b.disabled; }, null, { timeout: 10000 });
+  const reelKey = await page.evaluate(() => [...document.querySelectorAll('#dvDashcam .dc-clips button')].find((x) => /in one clip/.test(x.textContent)).textContent);
+  check(reelKey === 'Your best 2 corners in one clip', 'a reel of the corners the video holds: ' + reelKey);
+  await page.evaluate(() => [...document.querySelectorAll('#dvDashcam .dc-clips button')].find((x) => /in one clip/.test(x.textContent)).click());
+  await page.waitForFunction(() => window.__saved, null, { timeout: 40000 });
+  const reelSaved = await page.evaluate(() => window.__saved);
+  check(reelSaved.size > 500 && /^Filmed_road-best-corners-/.test(reelSaved.name), 'the reel, saved to share: ' + JSON.stringify(reelSaved));
 });
 
 // A drive for the drive page's own flows: north 1.5 km with a corner call (dashcam) and some g (the grip circle)
@@ -8312,8 +8377,15 @@ flow('REVIEW.md 1.2 screen by screen: first run, the map, planning, the route, d
   await page.click('#hzReportBtn');
   const hz = await page.evaluate(() => { const b = [...document.querySelectorAll('#hzKinds button')], cs = getComputedStyle(b[0]); return { n: b.length, bg: cs.backgroundColor, edge: cs.borderTopColor }; });
   check(hz.n === 6 && hz.bg === 'rgb(17, 17, 17)' && hz.edge === 'rgb(255, 122, 26)', 'Hazard report: ' + JSON.stringify(hz));
+  // the sheet slides up first (0.2 s), as a thumb waits for it: a tap while it moves can land on the dim behind (CI
+  // 2026-11-13 failed here three times with the sheet still open and the key back to Report)
+  await page.waitForFunction(() => document.querySelector('#hzOverlay .card-sheet').getAnimations().every((a) => a.playState !== 'running'), null, { timeout: 3000 });
   await page.click('#hzKinds button');
-  const tap = { overlay: await page.isVisible('#hzOverlay.show'), sheet: !!(await page.$('.confirm-sheet')), key: await page.textContent('#hzReportBtn'), toast: await page.textContent('#toast') };
+  // read in one go, straight after the tap (the Undo lasts 3 s); in a drive a refusal ("No GPS fix yet") is the status line's,
+  // so the line and the drive's state are in the record too (CI 2026-11-13 failed here twice with the key back to Report)
+  const tap = await page.evaluate(() => ({ overlay: document.getElementById('hzOverlay').classList.contains('show'), sheet: !!document.querySelector('.confirm-sheet'),
+    key: document.getElementById('hzReportBtn').textContent, toast: document.getElementById('toast').textContent, line: document.getElementById('dsNote').textContent,
+    mode: window.apexDebug.state.mode, driveBar: !document.getElementById('driveBar').hidden }));
   check(!tap.overlay && !tap.sheet && /^Undo /.test(tap.key), 'one tap, no confirm, Undo in the status line: ' + JSON.stringify(tap));
   await page.click('#hzReportBtn');
   check((await page.textContent('#hzReportBtn')) === 'Report', 'Undo takes it back');
