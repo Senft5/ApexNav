@@ -263,10 +263,11 @@
     #map .maplibregl-ctrl-attrib.maplibregl-compact { min-height: 24px; margin: 0 10px 10px 0; padding: 2px 28px 2px 8px; border-radius: 0; background: var(--panel); color: var(--panel-ink); border: 1.5px solid var(--panel-ink); font-family: var(--font-ui); }
     #map .maplibregl-ctrl-attrib.maplibregl-compact:not(.maplibregl-compact-show) { padding: 0; width: 24px; background: var(--panel); }
     #map .maplibregl-ctrl-attrib a { color: var(--panel-ink); text-decoration: underline; }
-    #map .maplibregl-ctrl-attrib-button { top: 0; right: 0; width: 24px; height: 24px; border-radius: 0; background: none; display: grid; place-items: center; }
+    /* the key is 44 pt to touch (Apple's audit, U-15) and still looks the 24 px plate: it overhangs the plate by 10 px each way */
+    #map .maplibregl-ctrl-attrib-button { top: -10px; right: -10px; width: 44px; height: 44px; border-radius: 0; background: none; display: grid; place-items: center; }
     #map .maplibregl-ctrl-attrib-button:focus { box-shadow: none; } #map .maplibregl-ctrl-attrib-button:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
     #map .maplibregl-ctrl-attrib-button::before { content: "i"; font: 700 15px/1 var(--font-num); color: var(--panel-ink); }
-    #map .maplibregl-ctrl-attrib.maplibregl-compact-show .maplibregl-ctrl-attrib-button { background: none; border-left: 1.5px solid var(--panel-ink); }
+    #map .maplibregl-ctrl-attrib.maplibregl-compact-show .maplibregl-ctrl-attrib-button { top: 0; right: 0; width: 24px; height: 100%; min-height: 24px; background: none; border-left: 1.5px solid var(--panel-ink); }
     .plates { position: absolute; left: 10px; bottom: 10px; z-index: 4; display: flex; flex-wrap: wrap; gap: 6px; max-width: calc(100% - 90px); }
     .trial-plate { font-variant-numeric: tabular-nums; } .trial-plate .linkbtn { font: inherit; color: inherit; text-decoration: underline; padding: 0; min-height: 0; }
     .plate { background: var(--panel); color: var(--panel-ink); border: 1px solid var(--rule); padding: 8px 12px; font-size: 13px; font-weight: 600; min-height: 36px; }
