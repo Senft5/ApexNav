@@ -23,8 +23,7 @@ final class AppTourTests: XCTestCase {
     }
 
     /// Launches the app and walks the first-run onboarding if it shows.
-    private func launch() -> (XCUIApplication, XCUIElement) {
-        let app = XCUIApplication()
+    private func launch(_ app: XCUIApplication = XCUIApplication()) -> (XCUIApplication, XCUIElement) {
         app.launch()
         app.tap()
         let web = app.webViews.firstMatch
@@ -63,7 +62,7 @@ final class AppTourTests: XCTestCase {
         try XCTSkipUnless(ProcessInfo.processInfo.environment["APEX_TOUR"] == "1", "recorded tour only")
         let (app, web) = launch()
         let types = [XCUIElement.ElementType.textField, .searchField, .textView, .secureTextField].map { NSNumber(value: $0.rawValue) }
-        for name in ["Map", "Log", "Crew", "Garage"] {
+        for name in ["Map", "Log", "People", "Garage"] {
             let b = tab(web, name)
             guard b.waitForExistence(timeout: 10) else { XCTFail("no \(name) tab"); continue }
             b.tap(); pause(2.5)
@@ -111,7 +110,7 @@ final class AppTourTests: XCTestCase {
     func testTour() throws {
         try XCTSkipUnless(ProcessInfo.processInfo.environment["APEX_TOUR"] == "1", "recorded tour only")
         let (app, web) = launch()
-        for name in ["Log", "Crew", "Garage"] {
+        for name in ["Log", "People", "Garage"] {
             let b = tab(web, name)
             if b.waitForExistence(timeout: 10) { b.tap(); pause(2.5); scroll(app, times: 5) }
         }
@@ -132,5 +131,39 @@ final class AppTourTests: XCTestCase {
             if web.buttons["End drive"].exists { web.buttons["End drive"].tap(); pause(8) }   // I-3: End is undoable for 5 s
         }
         shot(app, "end of tour")
+    }
+
+    /// Apple's own accessibility audit (Xcode 15, iOS 17: the checks Accessibility Inspector runs) on every tab, at the
+    /// default text size and at the largest accessibility size (LAUNCH.md section 3, IDEAS U-15). Each issue is one line
+    /// in the log ("A11Y-AUDIT tab · size · type · element: what") and in the `accessibility-audit` attachment, so a run of
+    /// the app tour workflow lists them all; the test fails while any is open. The cockpit's own sizes are the theme
+    /// contract's (REVIEW5 7.7), so text that doesn't grow on the map tab is listed, not hidden.
+    func testAccessibilityAudit() throws {
+        try XCTSkipUnless(ProcessInfo.processInfo.environment["APEX_TOUR"] == "1", "recorded tour only")
+        var lines: [String] = []
+        for (size, args) in [("default", [String]()), ("AX-XXXL", ["-UIPreferredContentSizeCategoryName", "UICTContentSizeCategoryAccessibilityXXXL"])] {
+            let app = XCUIApplication()
+            app.launchArguments = args
+            let web = launch(app).1
+            for name in ["Map", "Log", "People", "Garage"] {
+                let b = tab(web, name)
+                guard b.waitForExistence(timeout: 10) else { lines.append("\(name) · \(size) · missing tab"); continue }
+                b.tap(); pause(3)
+                shot(app, "audit \(name) \(size)")
+                do {
+                    try app.performAccessibilityAudit(for: .all) { issue in
+                        let el = issue.element.map { e in [e.label, e.identifier, "\(e.elementType.rawValue)"].first { !$0.isEmpty } ?? "?" } ?? "-"
+                        lines.append("\(name) · \(size) · \(issue.auditType) · \(el): \(issue.compactDescription)")
+                        return true   // recorded here, failed once below with the whole list
+                    }
+                } catch {
+                    lines.append("\(name) · \(size) · audit error: \(error)")
+                }
+            }
+            app.terminate()
+        }
+        for l in lines { print("A11Y-AUDIT \(l)") }
+        let a = XCTAttachment(string: lines.joined(separator: "\n")); a.name = "accessibility-audit"; a.lifetime = .keepAlways; add(a)
+        XCTAssertTrue(lines.isEmpty, "\(lines.count) accessibility issues (A11Y-AUDIT lines in the log)")
     }
 }

@@ -38,6 +38,13 @@ jobs:
             -resultBundlePath Keyboard.xcresult || true
           # the screenshots as PNGs (one per field, named tab · field)
           xcrun xcresulttool export attachments --path Keyboard.xcresult --output-path keyboard || true
+      - name: Accessibility audit on every tab
+        run: |
+          # Apple's audit (performAccessibilityAudit) at the default and the largest text size; each issue is an A11Y-AUDIT line
+          TEST_RUNNER_APEX_TOUR=1 xcodebuild test-without-building -project ApexNav.xcodeproj -scheme ApexNav \
+            -destination "id=${{ steps.sim.outputs.udid }}" -derivedDataPath build -only-testing:ApexNavUITests/AppTourTests/testAccessibilityAudit \
+            -resultBundlePath Audit.xcresult 2>&1 | grep -E "A11Y-AUDIT|error:|Test Case" || true
+          xcrun xcresulttool export attachments --path Audit.xcresult --output-path audit || true
       - name: Record the tour
         env:
           UDID: ${{ steps.sim.outputs.udid }}
@@ -60,4 +67,6 @@ jobs:
             app-tour.mp4
             keyboard
             Keyboard.xcresult
+            audit
+            Audit.xcresult
             Tour.xcresult
