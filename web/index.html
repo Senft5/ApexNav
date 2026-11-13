@@ -53,6 +53,7 @@
   <script src="measured_stages.js" defer></script>
   <script src="route_loading.js" defer></script>
   <script src="stages.js" defer></script>
+  <script src="nearby.js" defer></script>
   <script src="fun_route.js" defer></script>
   <script src="route_ctx/registry.js" defer></script>
   <!-- the providers that only answer a plan (graph, router edges, terrain, conditions, wildlife, events, live
@@ -815,6 +816,7 @@
     /* findings 4, 5, 7: Best roads nearby and Options as chips, what is on as small chips beside them */
     .plan-chips, .deck-chips { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
     .plan-chips { margin: 2px 0 4px; }
+    .nearby-keys { flex-wrap: nowrap; } .nearby-keys .chip { flex: 1 1 0; min-width: 0; border-width: 1px; border-color: var(--rule); font-weight: 500; }
     .plan-chips .chip, .deck-chips .chip { height: auto; min-height: 36px; padding: 4px 12px; border: 1.5px solid var(--panel-ink); font-size: 14px; font-weight: 600; background: transparent; color: var(--panel-ink); }
     .nearby-chip::before { content: ""; display: inline-block; width: 14px; height: 10px; margin-right: 6px; vertical-align: -1px; background: currentColor;
       -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 14 10' fill='none' stroke='black' stroke-width='1.8' stroke-linecap='round'%3E%3Cpath d='M1 8 C4 8 4 2 7 2 S10 8 13 8'/%3E%3C/svg%3E") center / contain no-repeat;
@@ -1632,6 +1634,7 @@
        left an empty band below it. The section fills the sheet and the bar sits on its bottom edge, as it does when the rows
        overflow (it's sticky then). Not in phone landscape, which lays the sheet out in two columns. */
     @media not ((orientation: landscape) and (max-height: 540px)) {
+      html:not(.kb-open) .plan.open.nearby:not(.routed) { height: min(52%, 440px); }   /* Find nearby's list: half, its pins on the map above */
       .plan.open:not(.routed) .plan-body { align-content: stretch; }
       .plan.open:not(.routed) .plan-search-section { display: flex; flex-direction: column; }
       /* the spacer before the bar takes what's left; the bar keeps its 16 px when the rows overflow */
@@ -1692,10 +1695,13 @@
     .poi-pin { font: 700 10px var(--font-ui, sans-serif); letter-spacing: 0.04em; padding: 1px 4px; border: 1px solid var(--panel-ink, #222); color: var(--panel-ink, #222); background: var(--panel, #fff); white-space: nowrap; max-width: 140px; overflow: hidden; text-overflow: ellipsis; opacity: 0.9; }
     .poi-pin.poi-view { border-color: #2e7d5b; color: #2e7d5b; }
     .poi-pin.poi-falls { border-color: #2a6f9b; color: #2a6f9b; }   /* IDEAS R-24: water */
-    .poi-pin.poi-charge { border-color: #2e6b8a; color: #2e6b8a; }  /* an electric car's chargers (scenic.js forCar) */
+    .poi-pin.poi-charge { border-color: #2e6b8a; color: #2e6b8a; }
+    /* Find nearby's places: the name on the stamp, a size up from the route's along stamps (they are what you asked for) */
+    .poi-pin.nearby-pin { font-size: 12px; padding: 3px 6px; opacity: 1; max-width: 160px; }  /* an electric car's chargers (scenic.js forCar) */
     /* A desk (IDEAS A-05): on a big screen the sheets (Where to?, Log list, Crew, Settings) open as a 480 px panel on the
        right and the map stays in view beside them, for planning with a mouse: drag the route, add stops, GPX in and out. */
     @media (min-width: 1100px) and (min-height: 600px) {
+      html:not(.kb-open) .plan.open.nearby:not(.routed) { height: calc(100% - 32px); }   /* a side panel: the pins are beside it already */
       .sheet { left: auto; width: 480px; border-left: 1px solid var(--rule); box-shadow: -12px 0 32px rgba(0, 0, 0, 0.25); }
       .side-pop { right: 480px; left: auto; top: 0; width: min(360px, 88vw); min-height: 0; max-height: none; border-top: 0; border-left: 1px solid var(--rule);
         box-shadow: -12px 0 32px rgba(0, 0, 0, 0.3); padding: calc(14px + var(--safe-top)) 16px 24px; transform: translateX(105%); }
@@ -1981,6 +1987,9 @@
                 <button class="chip opt-chip" id="planOptionsChip" aria-haspopup="dialog">Options</button>
               </div>
               <p class="plan-status" id="planStatus" role="status" aria-live="polite"></p>
+              <!-- Find nearby (nearby.js): Gas (an electric car's Chargers), Coffee, Food; a key puts its word in Where to?, and the
+                   list is the nearest of them by name, from the map's own tiles -->
+              <div class="plan-chips nearby-keys" id="nearbyKeys" role="group" aria-label="Find nearby"></div>
               <div class="place-list" id="placeList" hidden></div>
               <div class="plan-links">
                 <button class="linkbtn" id="tapRouteBtn">Tap the map</button>
