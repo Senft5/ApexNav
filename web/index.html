@@ -2193,6 +2193,15 @@
             </div>
             <p class="note" id="nudgeState" role="status" aria-live="polite"></p>
           </section>
+          <!-- push notifications (docs/SOCIAL.md 2.12): off until you turn them on; nothing while you drive -->
+          <section data-panel="garage" data-setting="push" data-title="Notifications" data-summary="[data-toggle=&quot;push&quot;]">
+            <h3>Notifications</h3>
+            <p class="note" style="margin:0 0 8px">Friend requests, kudos, comments, duels and crew drives. Never while you drive.</p>
+            <div class="row" style="flex-wrap:wrap">
+              <button class="sw" data-toggle="push"><i></i><span>Tell me when friends do something</span></button>
+            </div>
+            <p class="note" id="pushState" role="status" aria-live="polite"></p>
+          </section>
           <section data-panel="garage" data-setting="units" data-title="Units" data-summary="#unitsRow">
             <h3>Units</h3>
             <div class="switch" role="radiogroup" aria-label="Units" id="unitsRow"><button data-units="imperial" role="radio">Miles and feet</button><button data-units="metric" role="radio">Kilometres and metres</button></div>

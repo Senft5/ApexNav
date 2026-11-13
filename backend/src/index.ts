@@ -24,6 +24,7 @@ import {
 } from "./social";
 import { deleteAccount, exportMyData } from "./account";
 import * as drivePosts from "./drive_posts";
+import { afterCrewDrive, afterDuel, afterFriend, afterKudos, afterPostComment, afterPostKudos, pushForget, pushQuiet, pushRegister } from "./push";
 import { carCreate, carDelete, carUpdate, myCars, peoplesCars } from "./garage";
 import { chatDelete, chatList, chatPost, crewBadge, crewFeed, crewPage, crewPageUpdate, crewVoiceGet, crewVoicePut, crewVoices, templateCreate, templateDelete, templatesList } from "./crew_page";
 import { decalsPlace } from "./livery";
@@ -64,6 +65,8 @@ import { QUERY_WARN, countedDb } from "./query_budget";
 import { segmentAdopt, segmentCreate, segmentDelete, segmentList, segmentShare, segmentsSharedWithMe } from "./segments";
 
 type Handler = (req: Request, env: Env, m: RegExpMatchArray, ctx?: ExecutionContext) => Promise<Response>;
+/** Work after the answer (a push): in waitUntil where there is a context, else done before answering (tests). */
+const later = async (ctx: ExecutionContext | undefined, p: Promise<unknown>) => { if (ctx) ctx.waitUntil(p); else await p; };
 const routes: [string, RegExp, Handler, string][] = [];
 const on = (method: string, path: string, h: Handler) =>
   routes.push([method, new RegExp(`^${path.replace(/:(\w+)/g, "(?<$1>[^/]+)")}$`), h, `${method} ${path}`]);
@@ -176,10 +179,18 @@ on("GET", "/api/ctx/trace", async (req) => traceTile(new URL(req.url)));
 on("GET", "/api/shop", async (req, env) => json(await shop(env, await requireMember(req, env))));
 on("POST", "/api/redeem", async (req, env) => json(await redeem(env, await requireMember(req, env), req)));
 
-on("POST", "/api/friends/request", async (req, env) => { await friendRequest(env, await requireMember(req, env), req); return json({ ok: true }, 202); });
+on("POST", "/api/friends/request", async (req, env, _m, ctx) => {
+  const v = await requireMember(req, env), n = await friendRequest(env, v, req);
+  if (n) await later(ctx, afterFriend(env, v, n.to, n.mutual));
+  return json({ ok: true }, 202);
+});
 on("POST", "/api/friends/request/cancel", async (req, env) => { await friendRequestCancel(env, await requireMember(req, env), req); return noContent(); });
 on("GET", "/api/friends", async (req, env) => json(await friendList(env, await requireMember(req, env))));
-on("POST", "/api/friends/accept", async (req, env) => { await friendAccept(env, await requireMember(req, env), req); return noContent(); });
+on("POST", "/api/friends/accept", async (req, env, _m, ctx) => {
+  const v = await requireMember(req, env), other = await friendAccept(env, v, req);
+  await later(ctx, afterFriend(env, v, other, true));
+  return noContent();
+});
 on("DELETE", "/api/friends/:id", async (req, env, m) => { await removePair(env, (await requireMember(req, env)).id, m.groups!.id); return noContent(); });
 on("GET", "/api/friends/:id/profile", async (req, env, m) => json(await friendProfile(env, await requireMember(req, env), m.groups!.id)));
 on("POST", "/api/blocks", async (req, env) => { await block(env, await requireMember(req, env), req); return noContent(); });
@@ -192,7 +203,11 @@ on("POST", "/api/moderation/resolve", async (req, env) => { await moderationReso
 on("POST", "/api/crews", async (req, env) => json(await crewCreate(env, await requireMember(req, env), req), 201));
 on("GET", "/api/crews", async (req, env) => json(await crewList(env, await requireMember(req, env))));
 on("GET", "/api/crews/:id/events", async (req, env, m) => json(await eventsList(env, await requireMember(req, env), m.groups!.id)));
-on("POST", "/api/crews/:id/events", async (req, env, m) => json(await eventCreate(env, await requireMember(req, env), m.groups!.id, req), 201));
+on("POST", "/api/crews/:id/events", async (req, env, m, ctx) => {
+  const v = await requireMember(req, env), e = await eventCreate(env, v, m.groups!.id, req);
+  await later(ctx, afterCrewDrive(env, v, m.groups!.id, e.id));
+  return json(e, 201);
+});
 // Share your ETA (IDEAS S-19): the driver starts and refreshes it; anyone with the link reads it, signed out.
 on("POST", "/api/eta", async (req, env) => json(await etaStart(env, await requireMember(req, env), req), 201));
 on("PUT", "/api/eta/:token", async (req, env, m) => { await etaUpdate(env, await requireMember(req, env), m.groups!.token, req); return noContent(); });
@@ -339,8 +354,16 @@ on("DELETE", "/api/highlights/:id", async (req, env, m) => { await highlightDele
 
 // Duels (src/duels.ts): a friend against a friend on a stage for a few days, the higher Score wins; Scores they already share.
 on("GET", "/api/duels", async (req, env) => json(await duelList(env, await requireMember(req, env))));
-on("POST", "/api/duels", async (req, env) => json(await duelCreate(env, await requireMember(req, env), req), 201));
-on("POST", "/api/duels/:id/accept", async (req, env, m) => json(await duelAccept(env, await requireMember(req, env), m.groups!.id)));
+on("POST", "/api/duels", async (req, env, _m, ctx) => {
+  const v = await requireMember(req, env), d = await duelCreate(env, v, req);
+  await later(ctx, afterDuel(env, v, d.id, false));
+  return json(d, 201);
+});
+on("POST", "/api/duels/:id/accept", async (req, env, m, ctx) => {
+  const v = await requireMember(req, env), d = await duelAccept(env, v, m.groups!.id);
+  await later(ctx, afterDuel(env, v, m.groups!.id, true));
+  return json(d);
+});
 on("DELETE", "/api/duels/:id", async (req, env, m) => json(await duelEnd(env, await requireMember(req, env), m.groups!.id)));
 on("POST", "/api/board", async (req, env) => json(await publish(env, await requireMember(req, env), req)));
 // Kudos (IDEAS S-07): a tap of thanks on a friend's run you can see; no text.
@@ -349,11 +372,27 @@ on("GET", "/api/feed", async (req, env) => json(await drivePosts.feed(env, await
 on("POST", "/api/posts", async (req, env) => json(await drivePosts.postCreate(env, await requireMember(req, env), req), 201));
 on("GET", "/api/posts/:id", async (req, env, m) => json(await drivePosts.postGet(env, await requireMember(req, env), m.groups!.id)));
 on("DELETE", "/api/posts/:id", async (req, env, m) => { await drivePosts.postDelete(env, await requireMember(req, env), m.groups!.id); return noContent(); });
-on("POST", "/api/posts/:id/kudos", async (req, env, m) => { await drivePosts.postKudos(env, await requireMember(req, env), m.groups!.id, true); return noContent(); });
+on("POST", "/api/posts/:id/kudos", async (req, env, m, ctx) => {
+  const v = await requireMember(req, env), k = await drivePosts.postKudos(env, v, m.groups!.id, true);
+  if (k) await later(ctx, afterPostKudos(env, v, m.groups!.id, k.author, k.title));
+  return noContent();
+});
 on("DELETE", "/api/posts/:id/kudos", async (req, env, m) => { await drivePosts.postKudos(env, await requireMember(req, env), m.groups!.id, false); return noContent(); });
-on("POST", "/api/posts/:id/comments", async (req, env, m) => json({ id: (await drivePosts.commentCreate(env, await requireMember(req, env), m.groups!.id, req)).id }, 201));
+on("POST", "/api/posts/:id/comments", async (req, env, m, ctx) => {
+  const v = await requireMember(req, env), c = await drivePosts.commentCreate(env, v, m.groups!.id, req);
+  await later(ctx, afterPostComment(env, v, m.groups!.id, c.author, c.title));
+  return json({ id: c.id }, 201);
+});
 on("DELETE", "/api/comments/:id", async (req, env, m) => { await drivePosts.commentDelete(env, await requireMember(req, env), m.groups!.id); return noContent(); });
-on("POST", "/api/kudos", async (req, env) => { await kudosGive(env, await requireMember(req, env), req); return noContent(); });
+on("POST", "/api/kudos", async (req, env, _m, ctx) => {
+  const v = await requireMember(req, env), k = await kudosGive(env, v, req);
+  if (k) await later(ctx, afterKudos(env, v, k.owner, k.canon));
+  return noContent();
+});
+// push notifications (src/push.ts): this phone's APNs token, kept while signed in
+on("POST", "/api/push/token", async (req, env) => json(await pushRegister(env, await requireUser(req, env), req)));
+on("PUT", "/api/push/quiet", async (req, env) => { await pushQuiet(env, await requireMember(req, env), req); return noContent(); });
+on("DELETE", "/api/push/token", async (req, env) => { const v = await requireUser(req, env); const b = (await req.json().catch(() => ({}))) as { token?: unknown }; await pushForget(env, v.id, b.token); return noContent(); });
 on("DELETE", "/api/kudos", async (req, env) => { await kudosTake(env, await requireMember(req, env), req); return noContent(); });
 on("GET", "/api/kudos", async (req, env) => json(await kudosReceived(env, await requireMember(req, env))));
 // For you (src/inbox.ts): what happened to you socially, made from what each part already shows you; seen is kept on the phone.

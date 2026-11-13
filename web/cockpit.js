@@ -182,7 +182,7 @@
       theme: 'roadbook', camFeel: 'dynamic', voiceId: 'marguerite', voicePick: null, liveVoice: false, voiceStyle: 'codriver', voiceName: '', hlOn: false, hlStrength: 1,
       notesMode: 'auto', nightMode: 'auto', musicMode: 'lower',   // Notes: auto | full | quiet. Night: auto (sunset/sunrise) | on | off
       noteWords: 'plain',                     // rally ("Left 4 minus") | plain ("Medium left"), IDEAS V-02; a saved setting wins
-      toggles: { stage: false, voice: true, lpr: true, dna: false, night: false, twisty: true, haptics: true, soundtrack: false, crash: true, health: true, terrain: false, coverage: false, keys: true, friends: false, meets: false, nudge: false, satellite: false }   // twisty on by default (panel D-2), the weekly reminder off until asked for (R-1); stage and night are derived from the two modes; analysis.html reads toggles.night
+      toggles: { stage: false, voice: true, lpr: true, dna: false, night: false, twisty: true, haptics: true, soundtrack: false, crash: true, health: true, terrain: false, coverage: false, keys: true, friends: false, meets: false, nudge: false, push: false, satellite: false }   // twisty on by default (panel D-2), the weekly reminder off until asked for (R-1); stage and night are derived from the two modes; analysis.html reads toggles.night
     };
     const NOTES_MODES = ['auto', 'full', 'quiet'], NIGHT_MODES = ['auto', 'on', 'off'], MUSIC_MODES = ['lower', 'pause'];
     const MODE_LABEL = { auto: 'Auto', full: 'Full', quiet: 'Quiet', on: 'On', off: 'Off' };
@@ -6670,6 +6670,9 @@
       accountMe = me && me.signed_in ? me : null;
       if ($('myAccountDelGo')) $('myAccountDelGo').hidden = !accountMe;   // Your data's way to Delete account, signed in only
       if (accountMe && accountMe.member) loadCrewHazardKinds();
+      // push on: this launch's token to the Worker (it can change), asked of the shell once a page load
+      if (accountMe && accountMe.member && state.toggles.push && !window.apexPushAsked && pushShell()) { window.apexPushAsked = true; try { pushShell().postMessage({ cmd: 'push', op: 'token' }); } catch (_) {} }
+      paintPushState();
       // Where to? opened before the account came back: its time attack row's peek skipped then, so it goes now (CI 2026-11-12)
       if (accountMe && accountMe.member && $('planPanel').classList.contains('open')) peekTimeAttack();
       if (friendsMap && accountMe && accountMe.member) { friendsMap.start(); if (state.toggles.friends) friendsMap.setLayer(true); }
@@ -6774,7 +6777,7 @@
           el('p', { className: 'note', textContent: 'Driving, notes and your Log work as always. Your account is still yours: download or delete it in the Garage.' }));
         const asec = el('div', { className: 'stack-8' });                        // the sheet's head says Account
         asec.append(el('div', { className: 'row' }, btn('Download my data', downloadMyData),
-          btn('Sign out', async () => { await apiCall('POST', '/api/auth/logout'); ApexSync.setSession(null); clearCarry(); clearCrowd(); redo(); })), btn('Delete account', deleteMyAccount, 'danger-btn'));
+          btn('Sign out', async () => { await pushForgetHere(); await apiCall('POST', '/api/auth/logout'); ApexSync.setSession(null); clearCarry(); clearCrowd(); redo(); })), btn('Delete account', deleteMyAccount, 'danger-btn'));
         accBody.append(asec);
         return;
       }
@@ -7275,7 +7278,7 @@
       const asec = accBody === gbody ? section('Account') : el('div', { className: 'stack-8' });
       asec.append(el('div', { className: 'row' },
         btn('Download my data', downloadMyData),
-        btn('Sign out', async () => { await apiCall('POST', '/api/auth/logout'); ApexSync.setSession(null); clearCarry(); clearCrowd(); redo(); })),
+        btn('Sign out', async () => { await pushForgetHere(); await apiCall('POST', '/api/auth/logout'); ApexSync.setSession(null); clearCarry(); clearCrowd(); redo(); })),
         btn('Delete account', deleteMyAccount, 'danger-btn'));
       accBody.append(asec);                                                 // your account: Garage → Settings → Account
       if (safety) { accBody.append(safety.blockedSection()); if (me.moderator) accBody.append(safety.moderationSection()); }
@@ -7901,6 +7904,48 @@
       // "Location is off" sheet uses).
       toast('Notifications are off for Vetta. Turn them on in Settings, then here.', { label: 'Settings', onClick: () => { try { nudgeShell().postMessage({ cmd: 'openSettings' }); } catch (_) {} } });
     }
+    // Push notifications (ApexPush.swift, backend/src/push.ts, docs/SOCIAL.md 2.12): Garage > Notifications, off until turned
+    // on, and only then does iOS ask. The shell hands the phone's token here and the page gives it to the Worker with its own
+    // session; the token is kept here only so this phone can take it back (switch off, Sign out). Nothing during a drive.
+    // (declarations, not consts: renderAccount and Sign out can run before this part of the page has)
+    function pushShell() { return (window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.apex) || null; }
+    function pushKept() { try { return localStorage.getItem('apex.pushToken') || ''; } catch (_) { return ''; } }
+    function pushKeep(t) { try { if (t) localStorage.setItem('apex.pushToken', t); else localStorage.removeItem('apex.pushToken'); } catch (_) {} }
+    function pushMember() { return !!(accountMe && accountMe.member); }
+    function pushSwitched() {
+      const native = pushShell();
+      if (state.toggles.push && !native) { state.toggles.push = false; paintSwitches(); toast('Notifications come from the Vetta app on iPhone.'); }
+      else if (state.toggles.push && !pushMember()) { state.toggles.push = false; paintSwitches(); askSignIn('hear from your friends'); }
+      else if (state.toggles.push) { try { native.postMessage({ cmd: 'push', op: 'allow' }); } catch (_) {} }   // iOS asks once, now
+      else pushForgetHere();
+      paintPushState();
+    }
+    async function pushForgetHere() {
+      const t = pushKept(); if (!t) return;
+      pushKeep('');
+      try { await apiCall('DELETE', '/api/push/token', { token: t }); } catch (_) {}
+    }
+    function pushAnswered(granted) {
+      if (granted) { paintPushState(); return; }   // the token follows from the shell
+      state.toggles.push = false; paintSwitches(); savePrefs(); paintPushState();
+      toast('Notifications are off for Vetta. Turn them on in Settings, then here.', { label: 'Settings', onClick: () => { try { pushShell().postMessage({ cmd: 'openSettings' }); } catch (_) {} } });
+    }
+    async function pushTokenIn(msg) {
+      if (!state.toggles.push || !pushMember() || typeof msg.token !== 'string') return;
+      try { const r = await apiCall('POST', '/api/push/token', { token: msg.token, sandbox: !!msg.sandbox }); if (r.ok) pushKeep(msg.token); } catch (_) {}
+    }
+    // a drive started (on) or ended: the Worker holds every push for this person until it ends (three hours at most)
+    function pushQuiet(on) { if (state.toggles.push && pushMember() && pushKept()) apiCall('PUT', '/api/push/quiet', { on }).catch(() => {}); }
+    function paintPushState() {
+      const n = $('pushState'); if (!n) return;
+      n.textContent = !pushShell() ? 'Notifications come from the Vetta app on iPhone.' : state.toggles.push ? 'On. Nothing comes while you drive.' : 'Off.';
+    }
+    // after your first post: one offer to hear about its kudos and comments (never again once seen)
+    function pushOffer() {
+      if (!pushShell() || state.toggles.push || !pushMember()) return;
+      try { if (localStorage.getItem('apex.pushOffered') === '1') return; localStorage.setItem('apex.pushOffered', '1'); } catch (_) { return; }
+      setTimeout(() => toast('Hear when friends give it kudos?', { label: 'Turn on', ms: 8000, onClick: () => { state.toggles.push = true; paintSwitches(); savePrefs(); pushSwitched(); } }), 2600);
+    }
     // This week's featured time attack loop in your area (ta_fixed.ts) as the deck's suggestion: first after a crew drive when you
     // entered it, else after the road you haven't driven. Members only, with the drive-today check (every 10 min); the server
     // is sent the middle of your quarter-degree area, never where you are (time_attack.js areaPoint). No loop, nothing said.
@@ -8316,6 +8361,7 @@
         if (state.toggles.coverage) toast(mapReady && map.getZoom() < ApexCoverage.MIN_ZOOM ? 'Zoom in to see measured roads.' : 'Tap a road for what was measured. A road with no line earns its first drivers extra points.');
       }
       if (k === 'nudge') nudgeSwitched();                              // panel R-1: asks for notifications only now
+      if (k === 'push') pushSwitched();                                // push notifications: iOS asks only now
       if (k === 'twisty') {
         updateTwisty();
         if (state.toggles.twisty) toast(mapReady && map.getZoom() < ApexTwisty.MIN_ZOOM ? 'Zoom in to see twisty roads.' : 'Twisty roads come from the map\'s shape, not from drives.');
@@ -9665,7 +9711,7 @@
     async function enterDrive() {
       if (state.mode === 'live' && drive.sensors) return;
       if (state.mode === 'live' || driveActive) return;                                   // native app is feeding frames already or start is pending
-      driveActive = true; health.bump('drives'); drive.startedAt = performance.now();
+      driveActive = true; health.bump('drives'); drive.startedAt = performance.now(); pushQuiet(true);
       leaveAtMs = null; whenReset();                                                     // driving it now: the plan's hour is this one
       learnFromPick();                                                 // a route you chose over Vetta's first: your taste (taste.js)
       // A drive takes the whole screen, whatever the phone was showing: a drive started from the car (or a link, or Siri)
@@ -9979,7 +10025,7 @@
       const d = new Date(), day = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
       const ok = await drivePosts.compose({ name: endDrive.name, driven_on: day, len_m: endDrive.len_m, score: endDrive.ds && endDrive.ds.score,
         lat: endDrive.lat, lon: endDrive.lon, roads });
-      if (ok) { $('endPost').textContent = 'Posted'; $('endPost').disabled = true; }
+      if (ok) { $('endPost').textContent = 'Posted'; $('endPost').disabled = true; pushOffer(); }
     });
     $('endStage').addEventListener('click', () => { if (endDrive) openLog(`analysis.html?tab=segments&drive=${encodeURIComponent(endDrive.id)}`); });
     $('endShare').addEventListener('click', async () => {
@@ -10004,7 +10050,7 @@
     // ended: why a drive ended itself ('car', 'parked'; drive_keep.js EndWatch), or nothing for End
     async function leaveDrive(save, ended) {
       if (pendingEnd) { clearTimeout(pendingEnd.timer); pendingEnd = null; paintEndUndo(); }   // I-3: any other way out ends it now
-      driveActive = false; soundtrackStop(); drive.wet = null; if (ApexNoteTiming.setRoad) ApexNoteTiming.setRoad(null);   // the dry road back
+      driveActive = false; pushQuiet(false); soundtrackStop(); drive.wet = null; if (ApexNoteTiming.setRoad) ApexNoteTiming.setRoad(null);   // the dry road back
       const kept = keepStop();                                         // Round 3: no more checkpoints; dropped once saved
       stageWatch = null; $('stageBar').hidden = true;
       const laps = circuit.timer ? circuit.timer.state(Date.now()).laps : [];
@@ -10425,7 +10471,10 @@
         else if (p.go === 'nextfuel' || p.go === 'nextcafe') nextPlaceAnswer(p.go === 'nextfuel' ? 'fuel' : 'cafe');
         return;
       }
-      showView(ok(p.crew) || ok(p.convoy) ? 'crews' : 'friends'); renderAccount();
+      // a push's tap (backend/src/push.ts): the post it is about, or the friend, or People's side
+      showView(ok(p.crew) || ok(p.convoy) || p.view === 'crews' ? 'crews' : 'friends');
+      if (ok(p.post)) needSocial().then(() => { if (drivePosts) drivePosts.open(p.post); });
+      if (ok(p.friend) && /^[A-Za-z0-9_]{3,20}$/.test(p.friend)) window.apexOpenFriend(p.friend.toLowerCase()); else renderAccount();
     }
     // Siri (IDEAS V-07): "how far to the next stage" says it aloud; "skip this stage" drops the stage you're on or the next
     // one and reroutes to your next stop or the destination (only on a fun route with stages, during a drive).
@@ -10635,6 +10684,8 @@
         if (msg && msg.type === 'lifecycle') { if (driveActive) keepSave(); return; }   // going to the background: kept now
         if (msg && (msg.type === 'placeSuggestions' || msg.type === 'placeResolved' || msg.type === 'trafficProbe')) { nativePlaceReply(msg); return; }
         if (msg && msg.type === 'nudge') { nudgeAnswered(!!msg.granted); return; }
+        if (msg && msg.type === 'push') { pushAnswered(!!msg.granted); return; }
+        if (msg && msg.type === 'pushToken') { pushTokenIn(msg); return; }
         if (msg && msg.type === 'context') { if (window.ApexIosContext) ApexIosContext.receive(msg); return; }   // My free time / This album
         if (msg && msg.type === 'recordingSaved') toast(`Saved ${msg.segments} road segments to ${msg.file}.`);
         // App sign-in finished in the native shell: keep the session token and redraw whatever shows account state.

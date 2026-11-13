@@ -5722,6 +5722,54 @@ flow('drive posts: Post on a scored drive\'s card sends it to friends or a crew 
   check(p.crew_id === 'k1' && p.caption === 'First run with the crew.' && p.score === 790 && p.title === 'Cherohala Skyway' && first > 35.36 + 0.0044,
     'the post: to the crew, the caption, the Score, and the line starting 500 m in: ' + JSON.stringify({ ...p, line: p.line.length, first }));
 });
+flow('push notifications: Garage > Notifications asks iOS only at the switch, hands the phone\'s token to the Worker, a push\'s tap opens the post, and off takes the token back (Worker and shell stubbed, docs/SOCIAL.md 2.12)', async (page, base) => {
+  await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); localStorage.setItem('apex.permsExplained', '1'); } catch (_) {}
+    window.__posted = []; window.webkit = { messageHandlers: { apex: { postMessage(m) { window.__posted.push(m); } } } }; });
+  const sent = [];
+  const post = { id: 'P1AAAAAAAAAAAAAA', handle: 'me', photo_id: null, mine: true, crew: null, title: 'Cherohala Skyway', caption: null, driven_on: '2026-11-12', length_m: 32000, score: 812,
+    roads: [], stages: [], line: null, created_at: '2026-11-12 10:00:00', kudos: 1, my_kudos: false, comments: 1,
+    comment_list: [{ id: 'C1AAAAAAAAAAAAAA', body: 'That fog!', created_at: '2026-11-12 11:00:00', handle: 'bob', photo_id: null, mine: false, can_delete: true }] };
+  await page.route(base + '/api/**', (route) => {
+    const u = new URL(route.request().url()), m = route.request().method(), json = (b, status = 200) => route.fulfill({ status, contentType: 'application/json', body: JSON.stringify(b) });
+    if (u.pathname.startsWith('/api/push')) { sent.push({ m, p: u.pathname, b: JSON.parse(route.request().postData() || '{}') }); return m === 'POST' ? json({ ok: true, sending: true }) : route.fulfill({ status: 204 }); }
+    if (u.pathname === '/api/me') return json({ signed_in: true, member: true, handle: 'me' });
+    if (u.pathname === '/api/posts/P1AAAAAAAAAAAAAA') return json(post);
+    return json([]);
+  });
+  await page.goto(base + '/index.html?view=garage');
+  await page.waitForFunction(() => window.apexDebug && !document.getElementById('boot') && document.getElementById('garageGear'), null, { timeout: 20000 });
+  await page.waitForTimeout(800);
+  const posted = () => page.evaluate(() => window.__posted.filter((m) => m && m.cmd === 'push'));
+  check((await posted()).length === 0, 'nothing is asked of iOS until the switch: ' + JSON.stringify(await posted()));
+  await openSetting(page, 'push');
+  await page.click('.garage-pop.open [data-toggle="push"]');
+  await page.waitForTimeout(200);
+  check(JSON.stringify(await posted()) === '[{"cmd":"push","op":"allow"}]', 'the switch asks iOS, once: ' + JSON.stringify(await posted()));
+  const token = 'ab'.repeat(32);
+  await page.evaluate((t) => { window.apex.onNative({ type: 'push', granted: true }); window.apex.onNative({ type: 'pushToken', token: t, sandbox: false }); }, token);
+  for (let i = 0; i < 40 && !sent.length; i++) await page.waitForTimeout(50);
+  check(sent.length === 1 && sent[0].m === 'POST' && sent[0].b.token === token && sent[0].b.sandbox === false, 'the phone\'s token goes to the Worker: ' + JSON.stringify(sent));
+  const note = await page.textContent('#pushState');
+  check(/On\. Nothing comes while you drive\./.test(note), 'the sheet says it is on, and never while driving: ' + note);
+  // a push's tap: kudos on your post opens that post with its comments
+  await page.evaluate(() => window.apex.onNative({ type: 'link', params: { view: 'friends', post: 'P1AAAAAAAAAAAAAA' } }));
+  await page.waitForSelector('.feed-sheet', { timeout: 8000 });
+  const sheet = await page.textContent('.feed-sheet');
+  check(/Cherohala Skyway/.test(sheet) && /That fog!/.test(sheet), 'the tap opens the post it is about: ' + sheet.slice(0, 160));
+  await page.evaluate(() => document.querySelectorAll('.feed-sheet').forEach((n) => n.remove()));
+  // off: the token comes back from the Worker
+  if (!(await page.$('.garage-pop.open[data-setting="push"]'))) { await page.click('#tabbar .tab[data-view="garage"]'); await page.waitForTimeout(400); await openSetting(page, 'push'); }
+  await page.click('.garage-pop.open [data-toggle="push"]');
+  for (let i = 0; i < 40 && sent.length < 2; i++) await page.waitForTimeout(50);
+  check(sent.length === 2 && sent[1].m === 'DELETE' && sent[1].b.token === token, 'off takes this phone\'s token back: ' + JSON.stringify(sent));
+  // turned on, then refused in iOS: the switch goes back off and says where to change it
+  await page.click('.garage-pop.open [data-toggle="push"]');
+  await page.evaluate(() => window.apex.onNative({ type: 'push', granted: false }));
+  await page.waitForTimeout(200);
+  const after = await page.evaluate(() => ({ on: apexDebug.state.toggles.push, toast: document.getElementById('toast').textContent }));
+  check(after.on === false && /Turn them on in Settings/.test(after.toast), 'refused in iOS: off again, with the way to Settings: ' + JSON.stringify(after));
+});
+
 
 flow('friend profile: a friend on People → Profile shows what the friend shares, as text, what to do with them first and Unfriend at the foot; Back returns (Worker stubbed, IDEAS S-15, REVIEW_PEOPLE P-04, P-24)', async (page, base) => {
   await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); } catch (_) {} });
