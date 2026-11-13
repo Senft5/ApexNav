@@ -42,10 +42,11 @@ function injectReceiptLookupFailure(failOnRead = 2): () => number {
   const wrap = (statement: D1PreparedStatement): D1PreparedStatement => new Proxy(statement, {
     get(target, key) {
       if (key === "bind") return (...values: unknown[]) => wrap(target.bind(...values));
-      if (key === "first") return async () => {
+      // first() or all(): the Worker's metered DB reads first() through all() for its meta (src/query_budget.ts)
+      if (key === "first" || key === "all") return async () => {
         reads++;
         if (reads === failOnRead) throw new Error("private db diagnostic");
-        return target.first();
+        return key === "first" ? target.first() : target.all();
       };
       const value = Reflect.get(target, key, target);
       return typeof value === "function" ? value.bind(target) : value;

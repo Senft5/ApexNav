@@ -52,3 +52,20 @@ def test_lining_up_on_the_corner_calls():
     assert out["next0"] == 0 and out["next1"] == 1 and out["prev"] == 0 and out["none"] == -1
     assert out["o"] == ["Video starts 163 s into the drive", "Video starts 12 s before the drive", "Video starts 4.5 s into the drive"]
     assert out["empty"] is False and out["drawn"] is True
+
+
+def test_the_apps_own_videos_of_the_drive_line_up_by_themselves():
+    # big bet 5 (DriveCam.swift): the app's files are named for their first frame's Unix ms, the drive keeps its start t0
+    script = r"""
+const D = require(process.argv[1] + '/web/dashcam.js'), t0 = 1763000000000;
+const list = [{ name: 'b.mov', start_ms: t0 + 600000, dur_s: 300 }, { name: 'a.mov', start_ms: t0 + 1200, dur_s: 540 },
+  { name: 'before.mov', start_ms: t0 - 900000, dur_s: 60 }, { name: 'after.mov', start_ms: t0 + 2000000, dur_s: 60 },
+  { name: 'open.mov', start_ms: t0 + 5000, dur_s: null }, { start_ms: t0, dur_s: 9 }];
+console.log(JSON.stringify({ two: D.ownVideos(list, t0, 1200), one: D.ownVideos([list[1]], t0, 1200), none: D.ownVideos(list, undefined, 1200), bad: D.ownVideos(null, t0, 1200) }));
+"""
+    out = json.loads(subprocess.run([NODE, "-e", script, ROOT], capture_output=True, text=True, check=True).stdout)
+    assert [v["name"] for v in out["two"]] == ["a.mov", "b.mov"]            # in the drive's order; none outside it or without a length
+    assert out["two"][0]["offsetS"] == 1.2 and out["two"][1]["offsetS"] == 600
+    assert [v["label"] for v in out["two"]] == ["Video 1 · 9 min", "Video 2 · 5 min"]
+    assert out["one"][0]["label"] == "This drive's video · 9 min"
+    assert out["none"] == [] and out["bad"] == []                           # a drive from before the clock: nothing to line up

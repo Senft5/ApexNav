@@ -3,7 +3,8 @@ import { describe, expect, it, vi } from "vitest";
 import { env } from "cloudflare:workers";
 import worker from "../src/index";
 import { freshDb, makeUser, splitSql } from "./helpers";
-import { KEEP, backupDatabase, dumpStatements, literal } from "../src/backup";
+import { KEEP, R2_KEEP, backupDatabase, dumpStatements, literal } from "../src/backup";
+import type { Env } from "../src/util";
 
 const restoreDb = (env as unknown as { RESTORE_TEST: D1Database }).RESTORE_TEST;
 
@@ -110,6 +111,24 @@ describe("database backup", () => {
     expect(JSON.stringify(metadata).length).toBeLessThanOrEqual(1000);
     expect(Object.values(metadata!.counts).every((n) => n > 0)).toBe(true);
     expect(metadata).toMatchObject({ tables: expect.any(Number), rows: expect.any(Number) });
+  });
+
+  it("with R2 bound (Workers Paid) the copies go there, half a year of them, and KV is left alone", async () => {
+    await seed();
+    const r2 = (env as unknown as { ARCHIVE_TEST: R2Bucket }).ARCHIVE_TEST;
+    for (const o of (await r2.list()).objects) await r2.delete(o.key);
+    const kvBefore = (await env.BACKUPS!.list()).keys.length;
+    const e = { ...(env as unknown as Env), ARCHIVE: r2 };
+    for (let w = 0; w < R2_KEEP + 2; w++) await backupDatabase(e, new Date(Date.UTC(2026, 0, 5 + 7 * w, 7)));
+    const keys = (await r2.list({ prefix: "d1/apexnav-db/" })).objects.map((o) => o.key).sort();
+    expect(keys).toHaveLength(R2_KEEP);
+    expect(keys[0]).toBe("d1/apexnav-db/2026-01-19.sql");
+    const last = await r2.get(keys.at(-1)!);
+    const sql = await last!.text();
+    expect(last!.customMetadata!.bytes).toBe(String(new TextEncoder().encode(sql).byteLength));
+    expect(JSON.parse(last!.customMetadata!.counts).users).toBe(2);
+    expect(splitSql(sql).some((s) => s.startsWith('INSERT INTO "users"'))).toBe(true);
+    expect((await env.BACKUPS!.list()).keys.length).toBe(kvBefore);
   });
 
   it("runs from the scheduled handler and logs a line", async () => {

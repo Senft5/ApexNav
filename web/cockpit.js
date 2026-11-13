@@ -182,7 +182,7 @@
       theme: 'roadbook', camFeel: 'dynamic', voiceId: 'marguerite', voicePick: null, liveVoice: false, voiceStyle: 'codriver', voiceName: '', hlOn: false, hlStrength: 1,
       notesMode: 'auto', nightMode: 'auto', musicMode: 'lower',   // Notes: auto | full | quiet. Night: auto (sunset/sunrise) | on | off
       noteWords: 'plain',                     // rally ("Left 4 minus") | plain ("Medium left"), IDEAS V-02; a saved setting wins
-      toggles: { stage: false, voice: true, lpr: true, dna: false, night: false, twisty: true, haptics: true, soundtrack: false, crash: true, health: true, terrain: false, coverage: false, keys: true, friends: false, meets: false, nudge: false, satellite: false }   // twisty on by default (panel D-2), the weekly reminder off until asked for (R-1); stage and night are derived from the two modes; analysis.html reads toggles.night
+      toggles: { stage: false, voice: true, lpr: true, dna: false, night: false, twisty: true, haptics: true, soundtrack: false, crash: true, drivecam: false, health: true, terrain: false, coverage: false, keys: true, friends: false, meets: false, nudge: false, satellite: false }   // twisty on by default (panel D-2), the weekly reminder off until asked for (R-1); stage and night are derived from the two modes; analysis.html reads toggles.night
     };
     const NOTES_MODES = ['auto', 'full', 'quiet'], NIGHT_MODES = ['auto', 'on', 'off'], MUSIC_MODES = ['lower', 'pause'];
     const MODE_LABEL = { auto: 'Auto', full: 'Full', quiet: 'Quiet', on: 'On', off: 'Off' };
@@ -5200,8 +5200,14 @@
     }
     // The server hit Workers Free's daily limit (sync.js 'apex:server-down', until midnight UTC): said once, held 10 s so the
     // "Couldn't ... Try again" lines that follow don't hide it. Driving, notes and routes don't need our server.
+    // Near the month's included usage (scope 'uploads', backend src/usage.ts) only road uploads and photos wait, until the 1st.
     window.addEventListener('apex:server-down', (e) => {
-      const until = e && e.detail && e.detail.until;
+      const d = (e && e.detail) || {}, until = d.until;
+      if (d.scope === 'uploads') {
+        const day = Number.isFinite(until) ? new Date(until).toLocaleDateString([], { month: 'short', day: 'numeric' }) : null;
+        toast(`Uploads and photos are paused${day ? ` until ${day}` : ''}: our server is near its monthly limit. Everything else still works.`, { label: 'OK', ms: 10000, onClick: () => {} });
+        return;
+      }
       const at = Number.isFinite(until) ? new Date(until).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }) : null;
       toast(`Sharing is down${at ? ` until ${at}` : ' for today'}: our server hit its daily limit. Driving and notes still work.`, { label: 'OK', ms: 10000, onClick: () => {} });
     });
@@ -6198,6 +6204,13 @@
           box.append(el('p', { className: 'note', textContent: `Database ${s.db ? 'answers' : 'not answering'} · ${missing.length ? `not set: ${missing.join(', ')}` : 'every binding and secret set'}` }),
             el('p', { className: 'note', textContent: `Road graph on GitHub: ${s.graph_data.http === 200 ? `${s.graph_data.tiles} tiles` : `HTTP ${s.graph_data.http || '--'} ${s.graph_data.error || ''}`} · ${(s.graph_data.ms / 1000).toFixed(1)} s` }),
             ...s.overpass.map((o) => el('p', { className: 'note', textContent: `${o.elements != null ? dot.up : dot.down} Overpass ${o.host} from the server: ${o.elements != null ? `${o.elements} features` : `HTTP ${o.http || '--'} ${o.error || ''}`} · ${(o.ms / 1000).toFixed(1)} s` })));
+          // the usage guard (backend src/usage.ts): this month against the $5 plan's included amounts
+          const u = s.usage;
+          if (u && u.share) {
+            const pct = (x) => `${(x * 100).toFixed(x < 0.01 ? 2 : 1)}%`;
+            const until = u.until ? new Date(u.until).toLocaleDateString([], { month: 'short', day: 'numeric' }) : '';
+            box.append(el('p', { className: 'note', textContent: `${u.shedding ? dot.down : dot.up} This month of the $5 plan: database reads ${pct(u.share.d1_read)}, writes ${pct(u.share.d1_written)} · storage writes ${pct(u.share.kv_write)}, reads ${pct(u.share.kv_read)}${u.share.r2_b != null ? ` · map data reads ${pct(u.share.r2_b)}, writes ${pct(u.share.r2_a)}` : ''}${u.shedding ? ` · uploads and photos paused until ${until}` : ` · uploads pause at ${Math.round(u.shed_at * 100)}%`}` }));
+          }
         }).catch(() => box.append(el('p', { className: 'note', textContent: 'Couldn’t ask the server.' })));
         return box;
       }
@@ -8342,6 +8355,7 @@
         updateCoverage();
         if (state.toggles.coverage) toast(mapReady && map.getZoom() < ApexCoverage.MIN_ZOOM ? 'Zoom in to see measured roads.' : 'Tap a road for what was measured. A road with no line earns its first drivers extra points.');
       }
+      if (k === 'drivecam') driveCam(driveActive);                    // switched mid-drive: films (or stops) now
       if (k === 'nudge') nudgeSwitched();                              // panel R-1: asks for notifications only now
       if (k === 'twisty') {
         updateTwisty();
@@ -8391,6 +8405,25 @@
     // =======================================================================
     const drive = { sensors: null, rec: null, status: null, frames: 0, live: null, liveIdx: 0, share: 'off', shareKm: 0, shareErr: null, native: false, roads: {}, roadIdx: 0, rest: null, brakes: null, descentSaid: null, flow: null, wet: null };
     const NATIVE_SHELL = !!(window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.apex);
+    // Film the drive (big bet 5, DriveCam.swift): only the app has a camera to film with; on the web the setting is not offered
+    // (its row hides when #driveCamRow is empty). On while a drive runs with the switch set; the shell says what it is doing.
+    if (!NATIVE_SHELL && $('driveCamRow')) $('driveCamRow').replaceChildren();
+    var driveCamOn = false;                                           // (var: enterDrive may run before this line is reached)
+    function driveCam(want) {
+      const on = !!(want && NATIVE_SHELL && state.toggles.drivecam);
+      if (on === driveCamOn || !NATIVE_SHELL) return;
+      driveCamOn = on;
+      try { window.webkit.messageHandlers.apex.postMessage({ cmd: 'driveCam', on }); } catch (_) {}
+    }
+    function driveCamSaid(st) {
+      const n = $('driveCamState');
+      if (st === 'denied') {
+        if (n) n.textContent = 'Vetta can\'t use the camera. Allow it in the iPhone\'s Settings → Vetta → Camera.';
+        if (driveCamOn) toast('Not filming: Vetta can\'t use the camera. Allow it in Settings → Vetta.');
+      } else if (st === 'unavailable') { if (n) n.textContent = 'This phone\'s back camera isn\'t available to film with.'; }
+      else if (st === 'on' && n) n.textContent = 'Filming this drive.';
+      else if (st === 'off' && n) n.textContent = 'Films while Vetta is on the phone\'s screen. Videos stay on this phone, the oldest going after about two hours of them.';
+    }
     function paintModeSwitch() {
       const on = state.mode === 'live';
       $('driveBar').hidden = !on; $('transport').hidden = on;
@@ -9717,6 +9750,7 @@
       if (state.mode === 'live' && drive.sensors) return;
       if (state.mode === 'live' || driveActive) return;                                   // native app is feeding frames already or start is pending
       driveActive = true; health.bump('drives'); drive.startedAt = performance.now();
+      driveCam(true);                                                  // Film the drive (DriveCam.swift): the app films the road
       leaveAtMs = null; whenReset();                                                     // driving it now: the plan's hour is this one
       learnFromPick();                                                 // a route you chose over Vetta's first: your taste (taste.js)
       // A drive takes the whole screen, whatever the phone was showing: a drive started from the car (or a link, or Siri)
@@ -10055,7 +10089,7 @@
     // ended: why a drive ended itself ('car', 'parked'; drive_keep.js EndWatch), or nothing for End
     async function leaveDrive(save, ended) {
       if (pendingEnd) { clearTimeout(pendingEnd.timer); pendingEnd = null; paintEndUndo(); }   // I-3: any other way out ends it now
-      driveActive = false; soundtrackStop(); drive.wet = null; if (ApexNoteTiming.setRoad) ApexNoteTiming.setRoad(null);   // the dry road back
+      driveActive = false; driveCam(false); soundtrackStop(); drive.wet = null; if (ApexNoteTiming.setRoad) ApexNoteTiming.setRoad(null);   // the dry road back
       const kept = keepStop();                                         // Round 3: no more checkpoints; dropped once saved
       stageWatch = null; $('stageBar').hidden = true;
       const laps = circuit.timer ? circuit.timer.state(Date.now()).laps : [];
@@ -10683,6 +10717,7 @@
       },
       onNative(msg) {
         if (msg && msg.type === 'journals') { if (journalsWaiter) journalsWaiter(msg); return; }
+        if (msg && msg.type === 'driveCam') { driveCamSaid(msg.state); return; }
         if (msg && msg.type === 'lifecycle') { if (driveActive) keepSave(); return; }   // going to the background: kept now
         if (msg && (msg.type === 'placeSuggestions' || msg.type === 'placeResolved' || msg.type === 'trafficProbe')) { nativePlaceReply(msg); return; }
         if (msg && msg.type === 'nudge') { nudgeAnswered(!!msg.granted); return; }
@@ -10774,6 +10809,10 @@
     // the route-context providers (web/lazy.js 'ctx') likewise, so the first plan finds them in; a plan before then loads them
     { let warm = false; const goCtx = () => { if (!warm) { warm = true; idle(needCtx); } }; map.once('idle', () => setTimeout(goCtx, 600)); setTimeout(goCtx, 6500); }
     if (document.fonts) document.fonts.ready.then(() => render(true));
+    // Native speed (big bet #10): the cover lifts on the first frames of the built cockpit, not when the map's first tile has
+    // come in over the network (up to 3 s later on a cold start). The map waits on its own paper until that tile draws (U-68,
+    // the 'load' handler), as Apple Maps shows its grid: the deck, Where to? and the tab bar are there to use at once.
+    requestAnimationFrame(() => requestAnimationFrame(() => ApexBoot.done()));
   })();
 
   // The website's offline shell (web/sw.js, IDEAS A-03). Websites only: the app serves these pages from apexnav:// itself.
