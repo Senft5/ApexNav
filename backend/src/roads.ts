@@ -121,12 +121,20 @@ type Col = (number | null)[];
 type Dir = { i: number[]; n: number[]; cam: Col; cn: number[]; csd: Col; rough: Col; rsd: Col; crest: Col; ch: (string | null)[]; k: Col; kn: number[];
              fl: Col; hb: Col; fn: number[]; ag?: number; hr?: number[]; bp?: [number, number][] };
 async function binsChunk(env: Env, ids: number[]) {
-  const marks = ids.map(() => "?").join(",");
+  // the open-road / two-driver rule is checked once per way and direction (p, s), not once per bin: per bin it read
+  // about 3.5 rows for every bin sent (D1 Free allows 5 million rows read a day), now about one
+  // no ORDER BY (the sort read every row a second time): the pairs go in way order and each direction's bins come off the
+  // primary key in bin order, so rows arrive in order; checked below, and sorted only if they ever don't
+  ids = [...ids].sort((a, b) => a - b);
+  const pairs = ids.map((_, k) => `(?${k + 1}, 0), (?${k + 1}, 1)`).join(", ");
   const rows = (await env.DB.prepare(
-    `SELECT way_id, dir, bin_idx, n, camber_mean, camber_m2, camber_n, rough_mean, rough_m2, crest_peak, changed_on, k_mean, k_n, flow_mean, brake_mean, flow_n, bump_hit, bump_pass, bump_drivers FROM road_bins rb
-      WHERE way_id IN (${marks}) AND ${shownSql("rb.way_id", "rb.dir")}
-      ORDER BY way_id, dir, bin_idx`,
+    `WITH p(way_id, dir) AS (VALUES ${pairs}), s AS (SELECT p.way_id, p.dir FROM p WHERE ${shownSql("p.way_id", "p.dir")})
+     SELECT rb.way_id, rb.dir, rb.bin_idx, rb.n, rb.camber_mean, rb.camber_m2, rb.camber_n, rb.rough_mean, rb.rough_m2, rb.crest_peak, rb.changed_on, rb.k_mean, rb.k_n,
+            rb.flow_mean, rb.brake_mean, rb.flow_n, rb.bump_hit, rb.bump_pass, rb.bump_drivers
+       FROM s JOIN road_bins rb ON rb.way_id = s.way_id AND rb.dir = s.dir`,
   ).bind(...ids).all<RoadBinRow>()).results;
+  const before = (a: RoadBinRow, b: RoadBinRow) => a.way_id - b.way_id || a.dir - b.dir || a.bin_idx - b.bin_idx;
+  for (let k = 1; k < rows.length; k++) if (before(rows[k - 1], rows[k]) > 0) { rows.sort(before); break; }
   // { [way]: { [dir]: { i:[bin], n:[], cam:[], cn:[], csd:[], rough:[], rsd:[], crest:[], ch:[] } } } keeps the payload small;
   // unknown stays null. ch: the month a step change (repaving, IDEAS Q-12) restarted the bin, never the day. k / kn: the
   // driven paths' mean curvature (1/m, + = left in the direction of travel) and how many passes measured it (IDEAS Q-04).
