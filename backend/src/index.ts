@@ -411,6 +411,9 @@ export default {
   },
 };
 
+const D1_DAILY = /exceeded D1's free tier daily/i;
+const untilMidnightUtc = () => { const d = new Date(); return Math.max(60, Math.ceil((Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate() + 1) - d.getTime()) / 1000)); };
+
 async function handle(req: Request, env: Env, seen: { route: string } = { route: "" }, ctx?: ExecutionContext): Promise<Response> {
     let route = "";
     try {
@@ -428,6 +431,12 @@ async function handle(req: Request, env: Env, seen: { route: string } = { route:
       throw new HttpError(404, "not_found");
     } catch (e) {
       if (e instanceof HttpError) return json({ error: e.message }, e.status, e.message === "rate_limited" ? { "retry-after": "60" } : {});
+      // the account used up D1's free daily rows (read or written): every query fails until midnight UTC, so this is the
+      // service being down for the day, not a bug in the route (and it can't be counted: the count is a D1 write too)
+      if (D1_DAILY.test(String(e instanceof Error ? e.message : e))) {
+        console.error(JSON.stringify({ event: "d1_daily_limit", route }));
+        return json({ error: "service_unavailable" }, 503, { "retry-after": String(untilMidnightUtc()) });
+      }
       console.error(e);
       await serverError(env, route || "(no route)", e);
       return json({ error: "server_error" }, 500);
