@@ -7602,6 +7602,48 @@ flow('dashcam overlay: a video from the drive gets its speed, g and calls drawn 
     && [...document.querySelectorAll('#dvDashcam button')].find((x) => /Make the video/.test(x.textContent)).disabled), 'nothing to preview or make from it');
 });
 
+flow('corner clips: with the video lined up, a corner it holds comes out as a portrait clip with its call, speed and g, to share (big bet 5)', async (page, base) => {
+  await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); } catch (_) {} });
+  await page.goto(base + '/analysis.html');
+  await page.waitForFunction(() => window.apexLogDebug && window.apexLogDebug.loaded() && window.ApexRecording);
+  await page.evaluate(async () => {
+    const lat = [], lon = [];
+    for (let i = 0; i < 300; i++) { lat.push(35.6 + i * 5 / 110540); lon.push(-83.9); }
+    await ApexRecording.store({ id: 'cc1', name: 'Clip road', date: '2026-10-20T15:00:00Z', lat, lon, dist: lat.map((_, i) => i * 5), speed_mps: lat.map(() => 15),
+      lon_g: lat.map(() => -0.1), lat_g: lat.map((_, i) => Math.sin(i / 3) * 0.4), g_known: null, elev: null, hz: 1, source: 'web-gps',
+      events: [{ type: 'corner', code: 'L4', call: 'Left 4', index: 9, dist_m: 45, start_m: 30, end_m: 60, radius_m: 80, apex_mph: 30, dir: 'L', severity: 4 },
+               { type: 'corner', code: 'R3', call: 'Right 3', index: 100, dist_m: 500, start_m: 480, end_m: 520, radius_m: 60, apex_mph: 25, dir: 'R', severity: 3 }] });
+  });
+  await page.goto(base + '/analysis.html?drive=cc1');
+  await page.waitForSelector('#dvDashcam input[type=file]', { state: 'attached' });
+  // a 7 s video made right here: the first call (2 to 4 s into the drive) with its lead and tail fits; the second doesn't
+  await page.evaluate(async () => {
+    const c = Object.assign(document.createElement('canvas'), { width: 320, height: 180 }), g = c.getContext('2d');
+    const rec = new MediaRecorder(c.captureStream(15), { mimeType: 'video/webm' }), parts = [];
+    rec.ondataavailable = (e) => parts.push(e.data);
+    const stop = new Promise((ok) => { rec.onstop = ok; });
+    rec.start(); let f = 0; const t = setInterval(() => { g.fillStyle = `hsl(${f++ * 12},60%,50%)`; g.fillRect(0, 0, 320, 180); }, 66);
+    await new Promise((r) => setTimeout(r, 7200)); clearInterval(t); rec.stop(); await stop;
+    const file = new File(parts, 'clip.webm', { type: 'video/webm' }), dt = new DataTransfer(); dt.items.add(file);
+    const input = document.querySelector('#dvDashcam input[type=file]'); input.files = dt.files; input.dispatchEvent(new Event('change'));
+    window.__saved = null; ApexSaveFile.saveFile = async (blob, name, type) => { window.__saved = { size: blob.size, name, type }; return 'saved'; };
+  });
+  await page.waitForFunction(() => { const b = document.querySelector('#dvDashcam .dc-clips button'); return b && !b.disabled && document.querySelector('#dvDashcam .dc-clip-pick option'); }, null, { timeout: 15000 });
+  const opts = await page.evaluate(() => [...document.querySelectorAll('#dvDashcam .dc-clip-pick option')].map((o) => o.textContent));
+  check(opts.length === 1 && opts[0] === 'Corner 1 · Left 4', 'only the corners the video holds: ' + JSON.stringify(opts));
+  await page.click('#dvDashcam .dc-clips button');
+  // a frame of the clip while it is made: portrait, with something drawn
+  await page.waitForFunction(() => { const c = document.querySelector('#dvDashcam .dc-clip-canvas'); return c && c.style.display === 'block' && c.width === 720 && c.height === 1280; }, null, { timeout: 8000 });
+  await page.waitForFunction(() => window.__saved, null, { timeout: 30000 });
+  const saved = await page.evaluate(() => window.__saved);
+  check(saved.size > 500 && /^Clip_road-corner-1-.*\.(webm|mp4)$/.test(saved.name), 'a portrait clip, saved to share: ' + JSON.stringify(saved));
+  check(/Done/.test(await page.textContent('#dvDashcam .dc-clip-note')), 'the clip says it is done');
+  // slid so the call is before the video: no clip offered, said plainly
+  await page.evaluate(() => { const r = document.querySelector('#dvDashcam input[aria-label^="When the video starts"]'); r.value = '20'; r.dispatchEvent(new Event('input')); });
+  await page.waitForFunction(() => /No corner falls inside the video/.test(document.querySelector('#dvDashcam .dc-clip-note').textContent), null, { timeout: 5000 });
+  check(await page.evaluate(() => document.querySelector('#dvDashcam .dc-clips button').disabled), 'nothing to clip, the key is off');
+});
+
 // A drive for the drive page's own flows: north 1.5 km with a corner call (dashcam) and some g (the grip circle)
 async function storeDashDrive(page, id = 'dc1', name = 'Dashcam road') {
   await page.evaluate(async ([id, name]) => {
