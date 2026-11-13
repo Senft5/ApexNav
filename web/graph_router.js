@@ -1247,8 +1247,9 @@
       for (const r of chosen) for (const e of r.edgeIdx) penal[e] = Math.max(penal[e], 1 + p);
       const r = run(lo, penal, 'alternate');
       if (!r) continue;
-      // its real time and cost, not the penalised ones
-      if (r.timeS > limitS) continue;
+      // its real time and cost, not the penalised ones: one already over the budget ends the alternates, as a larger
+      // penalty only sends the next further from the chosen roads (each of these searches settles most of the corridor)
+      if (r.timeS > limitS) break;
       if (chosen.every((c) => 1 - overlap(v, c, r) >= K.ALT_MIN_DIFF)) { alts.push(r); chosen.push(r); }
     }
     // the spread (Fun and Long way): penalty alternates of the first step's route (a moderate weight, the good road near
