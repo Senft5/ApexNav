@@ -2500,6 +2500,9 @@ flow('CarPlay feed: a planned route sends its line, every corner and the theme; 
   // the tulip is drawn at once (Path2D), so it rides on the first guide message; the car showed Apple's arrow without it
   const png = await page.evaluate(() => { const svg = ApexCarPlay.cornerTulipSVG('R', 1, '#EDE4D3'); return document.createElement('canvas') && apexDebug.tulipPNG ? apexDebug.tulipPNG(svg) : null; });
   check(typeof png === 'string' && png.length > 400, 'a corner tulip as a PNG, synchronously: ' + (png ? png.length : png));
+  // the junction's lanes for the car's card (CPManeuver.junctionImage), drawn at once as the road book's lane row
+  const lanesPng = await page.evaluate(() => [apexDebug.carLanes([[2, 0, 0], [2, 0, 0], [64, 64, 0]]), apexDebug.carLanes([[2, 0, 0], [2, 0, 0]])]);
+  check(typeof lanesPng[0] === 'string' && lanesPng[0].length > 300 && lanesPng[1] === null, 'the lanes as a PNG, and none when no lane is marked: ' + JSON.stringify(lanesPng.map((p) => p && p.length)));
   // a car screen that connects later asks again and gets the route and the look again
   await page.evaluate(() => { window.__car = []; window.apex.onNative({ type: 'carplay', action: 'hello' }); });
   await page.waitForFunction(() => ['route', 'corners', 'look', 'places', 'along'].every((k) => window.__car.some((m) => m.kind === k)));

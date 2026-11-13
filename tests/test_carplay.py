@@ -290,6 +290,10 @@ console.log(JSON.stringify({
   offerSame: C.offerMessage('o4', 'Running 12 min late for home.', 'Running 12 min late for home.', 'Skip Cherohala Skyway', 60000),
   notice: [C.noticeMessage("Couldn't get your location. Type a start or tap the map."), C.noticeMessage('  '),
     C.noticeMessage("Loops use Vetta's own road map, which covers Ohio, Kentucky and Indiana so far.")],
+  laneGuide: C.guideMessage({ id: 'r', dist: [0, 5000], steps: [{ m: 1200, type: 15, street: 'Deals Gap Road', lanes: [[2, 0, 0], [2, 0, 0], [64, 64, 0]] }] }, 100, 3600, require(process.argv[1] + '/web/directions.js').phrase),
+  noLanes: C.guideMessage({ id: 'r', dist: [0, 5000], steps: [{ m: 1200, type: 15, street: 'Deals Gap Road' }] }, 100, 3600, require(process.argv[1] + '/web/directions.js').phrase),
+  laneGlyphs: [C.laneGlyphs(require(process.argv[1] + '/web/lanes.js').lanes([[2, 0, 0], [10, 8, 2], [256, 0, 0]])), C.laneGlyphs([{ angle: 0, use: false, ok: false }, { angle: 0 }]),
+    C.laneGlyphs(Array.from({ length: 9 }, () => ({ angle: 0, use: true })))],
   loops: [C.loopsMessage('time', false), C.loopsMessage('distance', false), C.loopsMessage('distance', true)],
   offerUndo: C.offerMessage('o8', 'Pothole reported', '', 'Undo', 5000, 'OK'),
   offerNone: [C.offerMessage('', 'x', '', 'k'), C.offerMessage('o5', '', '', 'k'), C.offerMessage('o6', 'x', '', ''), C.offerMessage('o7', 'x', '', 'k', 1000).seconds],
@@ -530,6 +534,23 @@ def test_the_car_offers_the_same_loop_times_as_the_phones_dial():
     assert '("1½ hours", 90, nil)' in row and '("3 hours", 180, nil)' in row
     # and the page takes every one of them: it used to accept only 30, 60 and 120, so the car's 1½ and 3 hours did nothing
     assert "m.action === 'loop' && LOOP_MINUTES.includes(m.minutes)" in cockpit_source()
+
+
+def test_the_cars_guidance_card_shows_the_junctions_lanes(maps):
+    """Apple Maps and Waze show which lanes to be in on the car's card; the phone's road book drew them and the car didn't."""
+    g = maps["laneGuide"]
+    assert g["lanes"] == [[2, 0, 0], [2, 0, 0], [64, 64, 0]] and g["type"] == 15, "the step's lanes ride with its card"
+    assert "lanes" not in maps["noLanes"] and maps["noLanes"]["type"] == 15, "a step with no lane data sends none: unknown stays unknown"
+    lit, none, wide = maps["laneGlyphs"]
+    assert [x["alpha"] for x in lit] == [0.22, 1, 0.22] and lit[1]["rotate"] == -90, "the lane to use at full ink, its own arrow"
+    assert lit[2]["rotate"] == 0 and lit[2]["d"].startswith("M4 10"), "a U-turn lane is drawn as one, unrotated"
+    assert none == [] and wide == [], "nothing to use, or too many lanes to read: no image"
+    js = cockpit_source()
+    assert "{ lanes, ...msg } = g, ln = lanes ? carLanes(lanes) : null" in js, "the packed lanes never go to the car, only the picture"
+    assert "ApexCarPlay.laneGlyphs(ApexLanes.lanes(packed))" in js
+    swift = open(os.path.join(ROOT, "CarPlay", "ApexCarPlay.swift"), encoding="utf-8").read()
+    assert 'lanes: (dict["lanes"] as? String).flatMap { Data(base64Encoded: $0) }' in swift
+    assert "m.junctionImage = lanes.withRenderingMode(.alwaysOriginal)" in swift
 
 
 def test_the_cars_loops_list_is_the_phones_dial_by_time_or_distance(maps):
