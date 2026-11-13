@@ -42,7 +42,22 @@
   // signed out (/api/me said so, a sign-out, or one of these answered 401), they answer 401 here and nothing is sent.
   // A sign-in (setSession, or /api/me saying signed in) asks again. Unknown (before /api/me answers) still asks.
   const MEMBER_READS = /^\/api\/(convoy\/invites|points|hazards|roads)(\?|$)/;
+  // Workers Free's daily limits (backend index.ts D1_DAILY): every D1 query fails until midnight UTC and the API answers
+  // 503 service_unavailable. The page says so once (cockpit: 'apex:server-down') instead of "Check signal" on every tap.
+  let downUntil = 0;
+  const nextMidnightUtc = (now) => { const d = new Date(now); return Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate() + 1); };
+  const serverDown = (r) => {
+    if (!r || r.status !== 503 || typeof r.clone !== 'function') return;
+    r.clone().json().then((j) => {
+      if (!j || j.error !== 'service_unavailable') return;
+      const now = Date.now(), was = downUntil > now;
+      downUntil = nextMidnightUtc(now);
+      if (!was) try { root.dispatchEvent(new root.CustomEvent('apex:server-down', { detail: { until: downUntil } })); } catch (_) {}
+    }, () => {});
+  };
+  const serverDownUntil = () => (downUntil > Date.now() ? downUntil : 0);
   const learn = (path, method, r) => {
+    serverDown(r);
     if (method !== 'GET' || !r) return;
     const p = String(path);
     if (/^\/api\/me(\?|$)/.test(p) && r.ok && typeof r.clone === 'function') r.clone().json().then((j) => { if (j && typeof j.signed_in === 'boolean') known = j.signed_in; }, () => {});   // only what it says
@@ -225,6 +240,6 @@
     return { on, known: false, member: on };
   }
 
-  const api = { handlers, inApp: IN_APP, apiBase: API_BASE, apiFetch, signIn, signInApple, setSession, signedIn, contribute, newSegmentId, contributionEnabled, roadShare, publishScore, standings, points, board, activity, kudos, kudosReceived, highlightsNear, shareHighlight, rateHighlight, member, pushSegments, sharedWithMe, adopt, shareSegment, friends, crews, crewMembers, removeRemote, toServer, fromServer };
+  const api = { handlers, inApp: IN_APP, apiBase: API_BASE, apiFetch, serverDownUntil, nextMidnightUtc, signIn, signInApple, setSession, signedIn, contribute, newSegmentId, contributionEnabled, roadShare, publishScore, standings, points, board, activity, kudos, kudosReceived, highlightsNear, shareHighlight, rateHighlight, member, pushSegments, sharedWithMe, adopt, shareSegment, friends, crews, crewMembers, removeRemote, toServer, fromServer };
   if (typeof module !== 'undefined' && module.exports) module.exports = api; else root.ApexSync = api;
 })(typeof window !== 'undefined' ? window : globalThis);
