@@ -5237,6 +5237,7 @@ flow('Your driving: the profile over every drive opens from the Log, names the w
   });
   check(def.was && def.shown && def.after && !def.title && /^You turn in once .+ 0 to 100, averaged over \d+ clean corners; -- until \d+\.$/.test(def.t), 'the definition on a tap: ' + JSON.stringify(def));
   check(/One steering arc is weaker through rights: \d+ against 100 through lefts, on 3 of 3 drives\./.test(text), 'the weak side is named: ' + text);
+  check(!/Back to power is stronger in tight corners/.test(text) && (text.match(/^Back to power is /gm) || []).length <= 1, 'one finding a skill: ' + text);
   check(/Work on: One steering arc\s+It shows most through rights\./.test(text), 'the focus says where');
   check(await page.evaluate(() => document.querySelector('.dp-st.weak').dataset.skill === 'arc' && document.querySelectorAll('.dp-st:not([data-skill="pace"])').length === 6), 'six stations, the weak one marked');
   // IDEAS D-29: pace beside them, in its own panel, and never the one to work on
