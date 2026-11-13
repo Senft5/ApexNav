@@ -88,6 +88,26 @@
     return { title: h.label || LABEL[h.kind] || 'Hazard', detail: parts.join(' · ') };
   }
 
+  /**
+   * Road hazards for our router's search (IDEAS R-04): potholes, gravel and debris inside the trip's box (widened by
+   * `padKm`) that another driver confirmed (confirms >= 1) and that weren't cleared by more drivers than confirmed them,
+   * nearest the trip's middle first, at most `max`, as { lat, lon }. One driver's word alone, animals (gone in minutes),
+   * police and closures (their own lists) are not in it.
+   */
+  const ROAD_KINDS = new Set(['pothole', 'gravel', 'debris']);
+  function roadHazardsFor(list, points, padKm = 15, max = 40) {
+    const pts = (points || []).filter((p) => p && finite(p.lat) && finite(p.lon));
+    if (!pts.length) return [];
+    const lat0 = Math.min(...pts.map((p) => p.lat)), lat1 = Math.max(...pts.map((p) => p.lat));
+    const lon0 = Math.min(...pts.map((p) => p.lon)), lon1 = Math.max(...pts.map((p) => p.lon));
+    const dLat = padKm / 110.54, dLon = padKm / (111.32 * Math.max(0.2, Math.cos(((lat0 + lat1) / 2) * Math.PI / 180)));
+    const mid = { lat: (lat0 + lat1) / 2, lon: (lon0 + lon1) / 2 };
+    return (list || []).filter((h) => h && ROAD_KINDS.has(h.kind) && finite(h.lat) && finite(h.lon)
+        && (Number(h.confirms) || 0) >= 1 && !((Number(h.clears) || 0) > (Number(h.confirms) || 0))
+        && h.lat >= lat0 - dLat && h.lat <= lat1 + dLat && h.lon >= lon0 - dLon && h.lon <= lon1 + dLon)
+      .sort((a, b) => local(mid, a).m - local(mid, b).m).slice(0, max).map((h) => ({ lat: h.lat, lon: h.lon }));
+  }
+
   // ---- Avoid police reports (IDEAS R-35, the owner 2026-11-11) -------------------------------------------------------
   // Only what drivers reported in the last hour as "Police" (the server keeps a police report 60 min from its last
   // confirmation, hazards.ts LIFE_MIN) and a convoy leader's live "Police" call. There is no checkpoint kind, and none is
@@ -160,6 +180,6 @@
     return best;
   }
 
-  const api = { nextAhead, createPassWatch, stillLive, closuresFor, policeFor, passesNear, onRouteAhead, POLICE_M, plate, LABEL, KINDS: Object.keys(LABEL) };
+  const api = { nextAhead, createPassWatch, stillLive, closuresFor, roadHazardsFor, policeFor, passesNear, onRouteAhead, POLICE_M, plate, LABEL, KINDS: Object.keys(LABEL) };
   if (typeof module !== 'undefined' && module.exports) module.exports = api; else root.ApexHazardReports = api;
 })(typeof window !== 'undefined' ? window : globalThis);

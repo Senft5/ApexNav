@@ -1995,7 +1995,9 @@ flow('a reported road closure the route still drives is on the route card (Worke
     const req = JSON.parse(route.request().postData() || '{}');
     route.fulfill({ contentType: 'application/json', body: JSON.stringify(stubTrip(req.locations)) });
   });
-  let closures = [{ id: 'c1', kind: 'closure', lat: 35.86255, lon: -83.94135, heading: null, confirms: 1, clears: 0, m: 0 }];
+  let closures = [{ id: 'c1', kind: 'closure', lat: 35.86255, lon: -83.94135, heading: null, confirms: 1, clears: 0, m: 0 },
+    { id: 'h1', kind: 'pothole', lat: 35.85, lon: -83.94, heading: null, confirms: 2, clears: 0, m: 0 },        // confirmed: in the search
+    { id: 'h2', kind: 'gravel', lat: 35.84, lon: -83.94, heading: null, confirms: 0, clears: 0, m: 0 }];       // one driver's: not
   await page.route(base + '/api/**', (route) => {
     const u = new URL(route.request().url());
     if (u.pathname === '/api/hazards') return route.fulfill({ contentType: 'application/json', body: JSON.stringify(closures) });
@@ -2010,6 +2012,8 @@ flow('a reported road closure the route still drives is on the route card (Worke
   await page.waitForFunction(() => { const t = window.apexDebug.track; return t && t.kind === 'route'; }, null, { timeout: 20000 });
   await page.waitForFunction(() => /Passes a reported road closure/.test(document.getElementById('routeCardSub').textContent), null, { timeout: 10000 });
   check(Array.isArray(await page.evaluate(() => apexDebug.lastClosed)), 'the plan carried the closures to our router');
+  const rh = await page.evaluate(() => apexDebug.lastRoadHazards);
+  check(JSON.stringify(rh) === JSON.stringify([{ lat: 35.85, lon: -83.94 }]), 'the plan carried the confirmed pothole to our router, not the unconfirmed gravel: ' + JSON.stringify(rh));
 }, { geolocation: { latitude: 35.9606, longitude: -83.9207 }, permissions: ['geolocation'] });
 
 flow('avoid police reports, driving: a report that lands on the route ahead is offered once with Go round, which routes round it (Worker and router stubbed)', async (page, base) => {
