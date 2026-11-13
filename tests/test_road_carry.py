@@ -243,7 +243,7 @@ def test_the_page_loads_it_before_the_contributor_and_the_privacy_page_says_so()
 SHARE = r"""
 const store = new Map();
 globalThis.localStorage = { getItem: (k) => (store.has(k) ? store.get(k) : null), setItem: (k, v) => store.set(k, String(v)), removeItem: (k) => store.delete(k) };
-let net = { status: 200, body: { member: { contribute: 1 } } };
+let net = { status: 200, body: { signed_in: true, member: true, contribute: true } };   // /api/me
 const posted = [];
 globalThis.fetch = async (url, init) => {
   if (init && init.method === 'POST') { posted.push(JSON.parse(init.body)); return { ok: true, status: 202, json: async () => ({}) }; }
@@ -257,10 +257,10 @@ const S = require(process.argv[1] + '/web/sync.js'), R = require(process.argv[1]
   S.setSession('tok_test');
   out.on = await S.roadShare();
   net = null; out.remembered = await S.roadShare();
-  net = { status: 200, body: { member: { contribute: 0 } } }; out.off = await S.roadShare();
+  net = { status: 200, body: { signed_in: true, member: true, contribute: false } }; out.off = await S.roadShare();
   net = null; out.offRemembered = await S.roadShare();
-  net = { status: 200, body: { member: null } }; out.notMember = await S.roadShare();
-  net = { status: 200, body: { member: { contribute: 1 } } }; await S.roadShare();
+  net = { status: 200, body: { signed_in: true, member: false } }; out.notMember = await S.roadShare();
+  net = { status: 200, body: { signed_in: true, member: true, contribute: true } }; await S.roadShare();
   net = { status: 401, body: {} }; out.signedOut = await S.roadShare();
   net = null; out.afterSignedOut = await S.roadShare();
   const c = { way_id: 77, dir: 0, driven_on: '2026-11-09', drive_id: 'd_payload_02', bins: [{ i: 1, rough: 0.1 }], shape: null, cls: 'secondary', cam_v: 2 };
@@ -314,3 +314,9 @@ def test_the_page_empties_it_on_sign_out_and_says_what_waits(share):
     assert "ApexRoadCarry.onPost = (r) => health.bump(" in js and "more waits for signal." in js
     carry = (ROOT / "web" / "road_carry.js").read_text(encoding="utf-8")
     assert "!!(await sync().member()) && !!(await sync().contributionEnabled())" in carry, "a remembered yes never sends: the server is asked first"
+
+
+def test_road_share_reads_api_me_not_the_whole_export():
+    """The Share road feel flag comes from /api/me; the export reads every table of the account (rows read on D1 Free)."""
+    src = (ROOT / "web/sync.js").read_text()
+    assert "/api/me/export" not in src

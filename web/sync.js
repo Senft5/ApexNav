@@ -201,7 +201,8 @@
     } catch (_) { return 'retry'; }
     return r.status === 202 ? true : r.status === 401 || r.status === 403 ? 'stop' : r.status === 429 || r.status >= 500 ? 'retry' : false;
   }
-  const contributionEnabled = async () => { const e = await call('GET', '/api/me/export'); return !!(e && e.member && e.member.contribute); };
+  // Share road feel, from /api/me (not the export: that reads every table of the account for one flag)
+  const contributionEnabled = async () => { const me = await call('GET', '/api/me'); return !!(me && me.member && me.contribute); };
   /**
    * May this phone share road data? { on, known, member }. The server's answer when it gives one, remembered; with no
    * connection (a drive begun in a car park with no signal: where the best roads start) the last answer it gave while
@@ -213,11 +214,12 @@
     const recall = () => { try { return signedIn() && localStorage.getItem(SHARE_KEY) === '1'; } catch (_) { return false; } };
     const remember = (on) => { try { if (on) localStorage.setItem(SHARE_KEY, '1'); else localStorage.removeItem(SHARE_KEY); } catch (_) {} };
     let r = null;
-    try { r = await apiFetch('/api/me/export', { method: 'GET' }); } catch (_) { r = null; }
+    try { r = await apiFetch('/api/me', { method: 'GET' }); } catch (_) { r = null; }
     if (r && r.ok) {
       let e = null;
       try { e = await r.json(); } catch (_) { e = null; }
-      if (e) { const member = !!e.member, on = !!(e.member && e.member.contribute); remember(on); return { on, known: true, member }; }
+      if (e && e.signed_in === false) { remember(false); return { on: false, known: true, member: false }; }
+      if (e) { const member = !!e.member, on = !!(e.member && e.contribute); remember(on); return { on, known: true, member }; }
     } else if (r && (r.status === 401 || r.status === 403)) { remember(false); return { on: false, known: true, member: false }; }
     const on = recall();
     return { on, known: false, member: on };
