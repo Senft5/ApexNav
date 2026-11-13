@@ -1602,6 +1602,22 @@
     return T;
   }
   /**
+   * Drive times (s) from req.start to each of req.targets ([{ lat, lon }]) within req.maxS, by the same reach as explore:
+   * null for a target with no road near it or past maxS. The map's own stages (Best roads nearby with highlights) are
+   * timed this way where our tiles cover you, not by a router across the network.
+   */
+  function times(v, req) {
+    const s0 = snap(v, req.start.lat, req.start.lon);
+    if (!s0.length) throw new Error('no road near you');
+    const maxS = req.maxS || 1800, T = reach(v, s0, maxS);
+    return { times: (req.targets || []).map((p) => {
+      if (!p || !Number.isFinite(p.lat) || !Number.isFinite(p.lon)) return null;
+      let best = Infinity;
+      for (const t of snap(v, p.lat, p.lon)) { const a = T[v.tail[t.edge]]; if (Number.isFinite(a)) best = Math.min(best, a + t.frac * v.time[t.edge]); }
+      return best <= maxS ? Math.round(best) : null;
+    }) };
+  }
+  /**
    * Is edge e a neighbourhood street (fun_route.js streetSample: residential class in built-up frontage)? true / false /
    * null (unknown: a v1 tile without the road channels, or no ApexFunRoute here).
    */
@@ -1837,6 +1853,13 @@
           const v = await viewFor(box);
           return { id, result: { ...explore(v, msg), tiles: v.keys } };
         }
+        if (type === 'times') {
+          const c = msg.start, d = (msg.maxKm || 14) * 1000 + 2000;
+          const at = (dy, dx) => ({ lat: c.lat + dy / 110540, lon: c.lon + dx / (111320 * Math.cos(c.lat * RAD)) });
+          const sw = tileOf(at(-d, -d).lat, at(-d, -d).lon), ne = tileOf(at(d, d).lat, at(d, d).lon), box = [];
+          for (let i = sw.i; i <= ne.i; i++) for (let j = sw.j; j <= ne.j; j++) box.push({ i, j });
+          return { id, result: times(await viewFor(box), msg) };
+        }
         if (type === 'preload') {
           const t0 = Date.now(), c = { lat: msg.lat, lon: msg.lon }, d = (msg.km || 15) * 1000;
           const at = (dy, dx) => ({ lat: c.lat + dy / 110540, lon: c.lon + dx / (111320 * Math.cos(c.lat * RAD)) });
@@ -1981,6 +2004,7 @@
       preload: (at) => ask({ type: 'preload', ...at }, 20000).then((m) => m.result),
       keep: (at) => ask({ type: 'keep', ...at }, 120000).then((m) => m.result),
       explore: (req) => ask({ type: 'explore', ...req }).then((m) => m.result),
+      times: (req) => ask({ type: 'times', ...req }).then((m) => m.result),
       // a loop loads every tile its length can reach and searches them all: on a phone a long one outlasted 8 s (2026-11-12)
       loop: (req) => ask({ type: 'loop', ...req }, 20000).then((m) => m.result),
       round: (req) => ask({ type: 'round', ...req }, 12000).then((m) => m.result),
@@ -1988,7 +2012,7 @@
     };
   }
 
-  const api = { VERSION: 1, K, withTune, BUILT_READ, builtAgreeOf, lineTiles, edgeTable, fromTable, crowdOnto, project, quickest, scoreLine, reach, explore, streetEdge, deadEndAt, junctionAt, TILE_DEG, FLAG_BITS, NODE_BITS, CLS, UNKNOWN_U8, UNKNOWN_FUN, NO_NAME, packedKey, nodeCost, LEVELS_COPY, levels, distM, bearing, turnAngle, tileOf, keyOf, view, geom, snap, objective, search,
+  const api = { VERSION: 1, K, withTune, BUILT_READ, builtAgreeOf, lineTiles, edgeTable, fromTable, crowdOnto, project, quickest, scoreLine, reach, explore, times, streetEdge, deadEndAt, junctionAt, TILE_DEG, FLAG_BITS, NODE_BITS, CLS, UNKNOWN_U8, UNKNOWN_FUN, NO_NAME, packedKey, nodeCost, LEVELS_COPY, levels, distM, bearing, turnAngle, tileOf, keyOf, view, geom, snap, objective, search,
     assemble, through, overlap, sameRoute, tilesFor, loopTiles, plan, pick, loop, roundTrip, hwyOf, isHwyEdge, snapOff, freeQuickest, indexKeys, covers, host, client, edgeId, twin, turnCost };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   root.ApexGraphRouter = api;

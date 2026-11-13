@@ -487,6 +487,21 @@ const CASES = {
       tight: best({ tight: 1, fast: -1 }), fast: best({ tight: -1, fast: 1 }), tightOnly: best({ tight: 1 }), fastOnly: best({ fast: 1 }) };
   },
 
+  // drive times on our tiles to the map's own stages (times: Best roads nearby with highlights on): a point by a road
+  // gets the reach's time (no more than the quickest's, which adds turn costs), one in a field none, one past maxS none;
+  // the worker answers the same
+  async times() {
+    const g = H.grid({ seed: 9, nx: 28, ny: 28, holes: 0.05, stepDeg: 0.004, lat0: 39.15, lon0: -84.62 });
+    const T = H.tiles(g.nodes, g.edges), v = R.view(T.tiles);
+    const start = { lat: 39.17, lon: -84.6 }, near = { lat: 39.2, lon: -84.56 }, field = { lat: 39.5, lon: -84.2 };
+    const q = R.quickest(v, { from: start, to: near, level: 'quick' });
+    const r = R.times(v, { start, targets: [near, field, { lat: NaN, lon: 0 }], maxS: 3600 });
+    const tight = R.times(v, { start, targets: [near], maxS: 30 });
+    const env = { load: async (i, j) => T.tiles.find((t) => t.tile.i === i && t.tile.j === j) || null, index: null };
+    const viaHost = await R.host(env).handle({ id: 1, type: 'times', start, targets: [near], maxKm: 10, maxS: 3600 });
+    return { quickS: q.timeS, times: r.times, tight: tight.times, host: viaHost.result.times };
+  },
+
   roundTrips() {
     const g = H.grid({ seed: 9, nx: 28, ny: 28, holes: 0.05, stepDeg: 0.004, lat0: 39.15, lon0: -84.62 });
     const v = R.view(H.tiles(g.nodes, g.edges).tiles);

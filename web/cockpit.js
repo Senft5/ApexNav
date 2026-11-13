@@ -4971,8 +4971,19 @@
           { names: inReach, ...(state.hlOn ? { highlights: hls, strength: state.hlStrength } : {}) }).then((st) => measuredStages(st, c, maxKm)).then((st) => stagesWithContext(st, 12));
         const list = FunRoute.exploreShortlist(c, stages, maxKm, 12);   // 24 matrix pairs; most fall to the time limit
         ui.step('Measuring roads', 0.8);
-        // ours carry their drive times (aS, bS); the map's stages are timed by Valhalla's matrix
-        const m = own ? { times: [list.flatMap((s) => [s.aS, s.bS])] } : list.length ? await valhallaMatrix([c], FunRoute.exploreTargets(list)) : { times: [[]] };
+        // ours carry their drive times (aS, bS); the map's stages (highlights on, or no tiles here) are timed on our tiles
+        // where they cover you (graph_router.js times: no network), else by Valhalla's matrix
+        const ownTimes = async (targets) => {
+          if (!ownOn()) return null;
+          try {
+            if (!(await RouteLoading.optional(ownRouter().covers([c]), OWN_COVERS_MS))) return null;
+            const r = await ownRouter().times({ start: { lat: c.lat, lon: c.lon }, targets, maxKm, maxS: minutes * 60 });
+            return r && Array.isArray(r.times) && r.times.length === targets.length ? { times: [r.times], own: true } : null;
+          } catch (_) { return null; }
+        };
+        const m = own ? { times: [list.flatMap((s) => [s.aS, s.bS])] } : list.length
+          ? (await ownTimes(FunRoute.exploreTargets(list))) || await valhallaMatrix([c], FunRoute.exploreTargets(list)) : { times: [[]] };
+        if (window.apexDebug) window.apexDebug.lastExploreTimes = own ? 'own stages' : !list.length ? 'none' : m.own ? 'own' : 'matrix';
         if (state.mode === 'live') return;                            // driving now: too late
         if (plannedRoute && plannedRoute !== was) { toast('Explore cancelled: a route is up.'); return; }
         const picks = FunRoute.explorePicks(list, m.times, minutes * 60);
