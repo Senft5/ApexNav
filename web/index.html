@@ -596,6 +596,7 @@
     .sheet section[data-panel="garage"] .ctl-label { font-size: 15px; font-weight: 500; }
     .co-row { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 0 12px; margin: 0; min-height: 44px; font-size: 15px; font-weight: 500; }
     .co-row .linkbtn { flex: 0 1 auto; max-width: 100%; white-space: normal; text-align: left; }   /* at a large text size the key drops under the words, whole */
+    .co-row .linkbtn:first-child { padding-left: 0; } .co-row .linkbtn:last-child { padding-right: 0; }   /* the words line up with the rows above and below, at both edges */
     .sheet .sw span, .edge-panel .sw span, .side-pop .sw span { font-size: 15px; font-weight: 500; color: var(--panel-ink); text-align: left; }
     .sw.on span { color: var(--panel-ink); }
     /* design pass 8: Layers is the map's legend. A layer row: its key (drawn as the map draws it), its name over a line of

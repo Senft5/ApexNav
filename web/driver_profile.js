@@ -971,6 +971,16 @@
       }
       host.append(box);
     }
+    // 2026-11-13 (free roamer B): before the first picture the page was six skill rows and Pace, each "--" over "8 of 30
+    // corners": one panel says how far along you are instead, and the skills come in as each is known
+    const first = !SKILLS.some((k) => p.skills[k].level !== null);
+    if (first) {
+      const pn = el('div', 'panel dp-first'), bar = el('div', 'dp-bar'), u = el('u');
+      u.style.width = `${Math.min(100, Math.round((p.corners / SKILL_MIN) * 100))}%`; bar.append(u);
+      bar.setAttribute('role', 'img'); bar.setAttribute('aria-label', `${p.corners} of ${SKILL_MIN} clean corners`);
+      pn.append(el('h2', null, 'Your first picture'), el('p', 'dp-say', `${p.corners} of ${SKILL_MIN} clean corners. A few more twisty miles and your skills show here.`), bar);
+      host.append(pn);
+    }
     const road = el('div', 'panel');
     road.append(el('h2', null, 'A corner, the way you drive it'));
     const list = el('div', 'dp-road');
@@ -998,10 +1008,10 @@
       list.append(row);
     }
     road.append(list);
-    host.append(road);
+    if (!first) host.append(road);
 
     // Pace (IDEAS D-29): beside the skills, never one of them; it is never the one to work on
-    if (p.skills.pace) {
+    if (p.skills.pace && !(first && p.skills.pace.level === null)) {
       const s = p.skills.pace, ch = p.change.pace, pn = el('div', 'panel dp-pace'), row = el('div', 'dp-st'), mid = el('div'), lv = el('div', 'dp-lv');
       row.dataset.skill = 'pace';
       pn.append(el('h2', null, 'Your pace'));
