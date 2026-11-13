@@ -6,7 +6,7 @@ import {
 import { convoyAccept, convoyCode, convoyCodeJoin, convoyCodePreview, convoyConnect, convoyCreate, convoyDismiss, convoyInvitePeople, convoyInvites, convoyJoin, convoyPreview, convoyRoom, unwrap } from "./convoy_routes";
 import { Env, HttpError, body, json, str } from "./util";
 import { rateCheck } from "./ratelimit";
-import { clientError, errorSummary, failingRoutes, serverError } from "./errors";
+import { clientError, countError, errorSummary, failingRoutes, serverError } from "./errors";
 import { backupDatabase } from "./backup";
 import { sweepExpired } from "./sweep";
 import { cronHealth, runCron } from "./cron_runs";
@@ -58,6 +58,7 @@ export { ConvoyIndex, ConvoyRoom } from "./convoy";
 import { crewHomeSet, crewMeetCells } from "./crew_meet";
 import { chargers } from "./chargers";
 import { serverSide, serviceHistory, serviceReport } from "./service_check";
+import { QUERY_WARN, countedDb } from "./query_budget";
 import { segmentAdopt, segmentCreate, segmentDelete, segmentList, segmentShare, segmentsSharedWithMe } from "./segments";
 
 type Handler = (req: Request, env: Env, m: RegExpMatchArray, ctx?: ExecutionContext) => Promise<Response>;
@@ -389,7 +390,10 @@ export default {
     const fromApp = req.headers.get("origin") === APP_ORIGIN;
     if (req.method === "OPTIONS") return fromApp ? new Response(null, { status: 204, headers: APP_CORS }) : new Response(null, { status: 405 });
     const t0 = Date.now(), seen = { route: "" };
-    const res = await handle(req, env, seen, ctx);
+    // every D1 query this request makes is counted (src/query_budget.ts); tests set QUERY_LIMIT to fail like production would
+    const q = { n: 0 }, db = countedDb(env.DB, q, env.QUERY_LIMIT ? Number(env.QUERY_LIMIT) : undefined);
+    const res = await handle(req, new Proxy(env, { get: (t, k) => (k === "DB" ? db : Reflect.get(t, k)) }), seen, ctx);
+    if (ctx && q.n > QUERY_WARN) ctx.waitUntil(countError(env, { source: "server", kind: "queries", message: `${q.n} D1 queries in one request`, page: seen.route || "(none)", stack: "" }));
     // latency and error rates (IDEAS Y-17): sampled, 5xx always; written after the response
     const sampled = Math.random() < 1 / STATS_SAMPLE;
     if (ctx && (sampled || res.status >= 500)) ctx.waitUntil(recordStat(env, seen.route || "(none)", res.status, Date.now() - t0, sampled ? STATS_SAMPLE : 0));
