@@ -211,7 +211,7 @@
     const etaSections = new WeakMap();      // track -> its corner sections (ApexEta.cornerSections), worked out once
     let etaText = '', etaLeftS = null;
     let replayEnded = false, replayWaiting = false;   // U-110 a finished replay, U-128 a replay waiting for its map (paintReplayEnd)
-    const car = { serial: 0, route: '', guideAt: 0, guideKey: '', sightKey: '', look: '', hazards: '', symbols: new Map(), ended: null, along: '', offerSerial: 0, offer: null, echo: 0, road: '', roadAt: -1e9 };   // what the car's screen was last sent (carRoute, carGuide below)   // strip text while off route; last frame fed; furthest progress
+    const car = { serial: 0, route: '', guideAt: 0, guideKey: '', sightKey: '', look: '', hazards: '', symbols: new Map(), ended: null, along: '', offerSerial: 0, offer: null, echo: 0, attacks: [], attackWeek: null, road: '', roadAt: -1e9 };   // what the car's screen was last sent (carRoute, carGuide below)   // strip text while off route; last frame fed; furthest progress
     try {
       const saved = JSON.parse(localStorage.getItem('apex.prefs') || 'null');
       if (saved) {
@@ -6449,12 +6449,9 @@
         // Challenge a friend: a duel on the loop (duels.js challengeOn), won by time unless they pick Score
         challenge: (stage) => { if (duels && duels.challengeOn) { closeSheet(); duels.challengeOn(stage); } },
         // Drive it: the loop itself is the route (as a roadbook road is), not just the way to its start
-        driveLoop: async (c, g) => {
-          closeSheet();
-          const t = await trackFromPolyline(g.map(([la, lo]) => [lo, la]), `timeattack_${c.segment_id}`, c.name);
-          await buildRoute(null, t.id, c.name, t);
-          toast(`${c.name}: ${ApexUnits.long(totalM(), 1)}. The clock runs from the start line, as on any stage.`);
-        },
+        driveLoop: (c, g) => driveAttack(c, g),
+        // the area's time attacks you've entered (the featured one first), for the car's Places (time_attack.js peek)
+        entered: (loops, week) => { car.attacks = Array.isArray(loops) ? loops : []; car.attackWeek = week || null; carPost(carPlaces()); },
         // the row's own line says this week's loop and your place on it (time_attack.js summaryLine)
         line: (txt) => { const s = $('planAttack').querySelector('summary'); if (s) s.textContent = txt || TA_LINE; } }) : null;
       if (ta) {
@@ -9188,11 +9185,24 @@
     // CarPlay (web/carplay.js, CarPlay/ApexCarPlay.swift): the car's screen gets the planned route, the next maneuver and
     // hazards; what the driver picks there comes back as onNative({type:'carplay'}). Only in the app.
     // a request made on the car (a loop, a place to go, a report): toast() says on the car too what it says meanwhile
-    // the car's Places: pinned, saved routes and recents, as Where to? lists them (carplay.js placesMessage)
+    // the car's Places: pinned, this week's time attack loop (once entered), saved routes and recents, as Where to? lists
+    // them (carplay.js placesMessage)
     function carPlaces() {
-      let pinned = [], saved = [];
+      let pinned = [], saved = [], attacks = [];
       try { pinned = ApexPinnedPlaces.list(localStorage); saved = ApexSavedRoutes.list(localStorage); } catch (_) {}
-      return ApexCarPlay.placesMessage(recentPlaces(), pinned, saved, (m) => ApexUnits.long(m));
+      try {
+        const w = car.attackWeek, line = w && w.entered && window.ApexTimeAttack ? (ApexTimeAttack.summaryLine(w, (m) => ApexUnits.long(m, 1)) || '').replace(/^Time attack: [^·]*· ?/, '') : '';
+        attacks = car.attacks.map((c) => ({ id: c.segment_id, name: c.name,
+          detail: c.featured && line ? line : Number.isFinite(c.length_m) ? ApexUnits.long(c.length_m, 1) : '' }));
+      } catch (_) {}
+      return ApexCarPlay.placesMessage(recentPlaces(), pinned, saved, (m) => ApexUnits.long(m), attacks);
+    }
+    // Time attack's Drive it (time_attack.js, the phone's or the car's): the loop itself is the route, as a roadbook road is
+    async function driveAttack(c, g) {
+      closeSheet();
+      const t = await trackFromPolyline(g.map(([la, lo]) => [lo, la]), `timeattack_${c.segment_id}`, c.name);
+      await buildRoute(null, t.id, c.name, t);
+      toast(`${c.name}: ${ApexUnits.long(totalM(), 1)}. The clock runs from the start line, as on any stage.`);
     }
     async function carAsked(run) { car.echo++; try { await run(); } catch (_) { /* each request says its own errors */ } finally { car.echo--; } }
     function carPost(msg) {
@@ -9924,6 +9934,12 @@
       else if (m.action === 'offer' && car.offer && m.id === car.offer.id && performance.now() < car.offer.until) car.offer.run();
       else if (m.action === 'disconnect') keepCar(false, m.t);      // Round 3: the car switched off; the drive ends once it stays put
       else if (m.action === 'places') carPost(carPlaces());
+      else if (m.action === 'attack' && !driveActive) {                  // a time attack you've entered, from the car's Places
+        const c = car.attacks.find((x) => String(x.segment_id) === String(m.id));
+        let g = [];
+        try { g = c ? JSON.parse(c.geom) || [] : []; } catch (_) {}
+        if (g.length > 1) driveAttack(c, g).catch(() => {});
+      }
       else if (m.action === 'saved' && typeof m.id === 'string' && !driveActive) {      // a saved route from the car's Places
         const p = ApexSavedRoutes.list(localStorage).find((q) => q.id === m.id);
         if (p) openSaved(p).catch(() => {});
@@ -9934,6 +9950,7 @@
       else if (m.action === 'voice') { state.toggles.voice = !state.toggles.voice; savePrefs(); paintSwitches(); if (!state.toggles.voice) stopSpeaking(); }
       else if (m.action === 'hello') { keepCar(true); car.route = ''; car.look = ''; car.hazards = ''; carRoute(track && track.kind === 'route' ? track : null); carLook(); carHazards();
         carPost(carPlaces());                   // a car screen that just connected gets everything again
+        peekTimeAttack();                                                // and this week's loop for its Places, if you've entered it
         if (driveActive) { carPost({ kind: 'start', title: track && track.kind === 'route' ? String(track.name || 'Route').slice(0, 80) : 'Drive' }); car.guideKey = ''; } }   // and the drive in progress (U-59)
     }
     carPost(carPlaces());
