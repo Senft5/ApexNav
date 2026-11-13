@@ -643,12 +643,19 @@
     v.cornerMix = { tight, fast };
     return v.cornerMix;
   }
+  /** The corner prefs as a per-edge factor on fun (1 - PREF_STEP .. 1 + PREF_STEP), or null with none set. */
+  function likeOf(v, prefs) {
+    const pT = clampPref(prefs && prefs.tight), pF = clampPref(prefs && prefs.fast);
+    if (!pT && !pF) return null;
+    const mix = cornerMix(v), S = K.PREF_STEP;
+    return (e) => Math.max(1 - S, Math.min(1 + S, 1 + S * (pT * mix.tight[e] + pF * mix.fast[e])));
+  }
   function objectiveOf(v, o = {}) {
     const prefs = o.prefs || {}, taste = o.taste || {}, avoid = o.avoid || {}, B = flagBits();
     // the corner prefs (IDEAS R-19, Plan -> Hairpins and Sweepers fewer/more): each edge's fun counts PREF_STEP more or
     // less by the share of its turning that is tight (radius under 40 m: hairpins, 1s and 2s) or fast (100 to 260 m: 5s
     // and 6s), as fun_route.js cornerWeight weighs a route's corners, so the search itself seeks the roads asked for
-    const pT = clampPref(prefs.tight), pF = clampPref(prefs.fast), mix = pT || pF ? cornerMix(v) : null;
+    const likeAt = likeOf(v, prefs);
     const tq = Number.isFinite(taste.quality) ? taste.quality / (K.W_NOTPOOR + K.W_QUALITY) : 1;
     const wp = K.W_NOTPOOR * tq, wq = K.W_QUALITY * tq;
     const wf = Number.isFinite(taste.fun) ? taste.fun : K.W_FUN;
@@ -681,7 +688,7 @@
       const notPoor = clamp01((q - K.POOR_LO) / (K.POOR_HI - K.POOR_LO));
       // fun is already gated by quality in the tiles (corners only count on good road); per km against the network's own
       const keep = builtAt && F && F.builtKeep ? F.builtKeep(builtAt(e)) : 1;
-      const like = mix ? Math.max(1 - K.PREF_STEP, Math.min(1 + K.PREF_STEP, 1 + K.PREF_STEP * (pT * mix.tight[e] + pF * mix.fast[e]))) : 1;
+      const like = likeAt ? likeAt(e) : 1;
       // (after the cap, so a road already at full fun still gains on one that isn't what was asked for; a road of other
       // corners, or none, counts as before; the goodness is then held to 1 at most)
       const f = fk ? Math.min(1, v.fun[e] * keep / Math.max(0.05, v.len[e] / 1000) / v.funFull) * like : 0;
@@ -1387,7 +1394,7 @@
     }
     const hwy = loopBase(v, level);
     const out = [];
-    for (const c of loopCombos(v, req.start, km, req.max || K.LOOP_TRIES)) {
+    for (const c of loopCombos(v, req.start, km, req.max || K.LOOP_TRIES, req.prefs)) {
       const r = loopAlong(v, obj, s0, req.start, c.pts, hwy, level);
       if (!r || r.retraced > K.LOOP_MAX_RETRACED) continue;
       r.kind = 'stages'; r.stages = c.stages.map((x) => x.name);
@@ -1434,10 +1441,10 @@
    * its value is the stages' scores (quality x corners) times how near that guess is to the length. The best `n` with
    * different sets of stages; each as the points to drive through (each stage every LOOP_ALONG_M, with its heading).
    */
-  function loopCombos(v, start, km, n) {
+  function loopCombos(v, start, km, n, prefs = null) {
     const reachS = Math.max(600, km * 1000 / 2 / K.LOOP_REACH_MS);
     let stages;
-    try { stages = explore(v, { start, maxS: reachS, max: 3 * K.LOOP_STAGES }).stages; } catch (_) { return []; }
+    try { stages = explore(v, { start, maxS: reachS, max: 3 * K.LOOP_STAGES, prefs }).stages; } catch (_) { return []; }
     const crow = (a, b) => distM(a.lat, a.lon, b.lat, b.lon) / 1000;
     const near = (s) => Math.min(crow(start, { lat: s.lat[0], lon: s.lon[0] }), crow(start, { lat: s.lat[s.lat.length - 1], lon: s.lon[s.lon.length - 1] }));
     // explore's out-and-back roads (deadEnd: a long good road that ends) are a Best road nearby, not a loop's link: a loop
@@ -1662,21 +1669,22 @@
    * growing forward and back along the best continuing edge (a turn under 60°, at least a third of the seed's score, or
    * the same road), until it runs out or reaches 15 km; chains of 2 km or more within reach (maxS) that go somewhere
    * (an end into a dead end is cut back to the last junction unless that run is OUT_BACK_KM of good road) are the stages, as stages.js shapes them ({ lat, lon,
-   * name, km, score, good }) plus the drive time to each end (aS, bS). req: { start, maxKm, maxS, max }.
+   * name, km, score, good }) plus the drive time to each end (aS, bS). req: { start, maxKm, maxS, max, prefs } (prefs: the corner prefs, likeOf).
    */
   function explore(v, req) {
     const t0 = Date.now(), B = v.bits, maxS = req.maxS || 1800, max = req.max || 12;
     const s0 = snap(v, req.start.lat, req.start.lon);
     if (!s0.length) throw new Error('no road near you');
     const T = reach(v, s0, maxS);
-    const score = new Float32Array(v.E);
+    // (the corner prefs weigh which roads are best here too, as they weigh the search: likeOf)
+    const score = new Float32Array(v.E), likeAt = likeOf(v, req.prefs);
     const seeds = [];
     for (let e = 0; e < v.E; e++) {
       if (v.to[e] < 0 || v.quality[e] === UNKNOWN_U8 || !Number.isFinite(v.fun[e]) || v.fun[e] <= 0) continue;
       const q = v.quality[e] / 254;
       if (q < K.POOR_HI || (v.flags[e] & (B.private | B.barrier | B.ramp | B.destination | B.expressway)) || v.cls[e] === CLS.motorway || v.cls[e] >= CLS.service) continue;
       if (streetEdge(v, e) === true) continue;
-      score[e] = q * v.fun[e] / Math.max(0.05, v.len[e] / 1000);
+      score[e] = q * v.fun[e] * (likeAt ? likeAt(e) : 1) / Math.max(0.05, v.len[e] / 1000);
       if (Number.isFinite(T[v.tail[e]]) || Number.isFinite(T[v.to[e]])) seeds.push(e);
     }
     seeds.sort((a, b) => score[b] - score[a] || a - b);

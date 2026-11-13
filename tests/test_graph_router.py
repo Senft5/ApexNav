@@ -467,6 +467,8 @@ def test_corner_prefs_steer_the_search_to_the_corners_asked_for():
     for k, road, other in (("tight", "Hairpin Road", "Sweeper Road"), ("tightOnly", "Hairpin Road", "Sweeper Road"),
                            ("fast", "Sweeper Road", "Hairpin Road"), ("fastOnly", "Sweeper Road", "Hairpin Road")):
         assert road in r[k] and other not in r[k], (k, r[k])
+    # Best roads nearby, and so the stages a loop is built from, rank by the prefs too
+    assert r["exploreTight"][0] == "Hairpin Road" and r["exploreFast"][0] == "Sweeper Road", r
 
 
 def test_map_stages_are_timed_on_our_tiles():
