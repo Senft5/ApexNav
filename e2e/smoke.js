@@ -6998,7 +6998,7 @@ flow('offline tiles two areas share: deleting one area keeps the tiles the other
   check(JSON.stringify(r.afterArea) === '[false,false]', 'and the area\'s go with the area: ' + JSON.stringify(r));
 });
 
-flow('offline area kept: saving the map asks the browser to keep the storage under pressure (navigator.storage.persist, IDEAS F-02)', async (page, base) => {
+flow('offline area kept: saving the map, or the first drive of a session, asks the browser to keep the storage under pressure (navigator.storage.persist, IDEAS F-02)', async (page, base) => {
   await page.route('https://tiles.openfreemap.org/**', (route) => {
     const u = route.request().url();
     if (u.includes('/styles/')) return route.fulfill({ contentType: 'application/json', body: JSON.stringify({ version: 8, sources: { openmaptiles: { type: 'vector', url: 'https://tiles.openfreemap.org/planet' } }, layers: [{ id: 'bg', type: 'background', paint: { 'background-color': '#eee' } }] }) });
@@ -7018,6 +7018,13 @@ flow('offline area kept: saving the map asks the browser to keep the storage und
   await page.waitForFunction(() => JSON.parse(localStorage.getItem('apex.offlineAreas') || '[]').length === 1, null, { timeout: 60000 });
   await page.waitForFunction(() => window.__persistAsks === 1, null, { timeout: 5000 });
   check(/round/.test(await page.textContent('#myAreas')), 'the area is listed even though the browser said no: ' + await page.textContent('#myAreas'));
+  // a kept drive asks once a session, not on every save
+  const n = await page.evaluate(async () => {
+    const lat = [35.6, 35.6005, 35.601], lon = [-83.5, -83.5, -83.5], d = (id) => ({ id, name: 'Test', date: new Date().toISOString(), lat, lon, dist: [0, 55, 110], speed_mps: [15, 15, 15] });
+    await ApexRecording.store(d('pk1')); await ApexRecording.store(d('pk2'));
+    return { asks: window.__persistAsks, ids: await ApexRecording.ids() };
+  });
+  check(n.asks === 2 && n.ids.includes('pk1') && n.ids.includes('pk2'), 'one more ask for the drives, both kept: ' + JSON.stringify(n));
 });
 
 flow('offline area, as a member: Save the map here keeps the measured roads round it; with no signal a plan still has them, and clearing them (what Sign out calls) leaves nothing (IDEAS F-02)', async (page, base) => {
