@@ -10083,7 +10083,7 @@
       const stamp = `${when.getFullYear()}${pad(when.getMonth() + 1)}${pad(when.getDate())}_${pad(when.getHours())}${pad(when.getMinutes())}${pad(when.getSeconds())}`;
       const fileName = `web_${stamp}.csv`;
       return { fileName, id: 'rec_' + fileName.replace(/\W+/g, '_'),     // the id ApexRecording.parse gives it
-               meta: { source: 'web-gps', date: `${when.getFullYear()}-${pad(when.getMonth() + 1)}-${pad(when.getDate())}T${pad(when.getHours())}:${pad(when.getMinutes())}`, name: nameAt(when) } };
+               meta: { source: 'web-gps', ...(Number.isFinite(rec.startedAt) ? { t0: rec.startedAt } : {}), date: `${when.getFullYear()}-${pad(when.getMonth() + 1)}-${pad(when.getDate())}T${pad(when.getHours())}:${pad(when.getMinutes())}`, name: nameAt(when) } };
     }
     // What the end card can say before the drive is parsed (F-04): its name, the distance and time its own rows give (as
     // the Log will count them), and its trail. No corner count and no score until they are measured.
