@@ -65,7 +65,9 @@ final class ApexCar {
     private(set) var route: Route?
     private(set) var guide: Guide?
     private(set) var driving = false
-    private(set) var places: [(name: String, coord: CLLocationCoordinate2D)] = []
+    /// The car's Places (web/carplay.js placesMessage): pinned places, saved routes (`saved` their id, opened on the phone,
+    /// no position) and recents, each with an optional detail line ("Saved · 12 mi", a pinned place's address).
+    private(set) var places: [(name: String, detail: String, coord: CLLocationCoordinate2D?, saved: String?)] = []
     /// The cafés and fuel along the planned route by name (web/carplay.js alongMessage): a longer and a shorter line for the
     /// route preview, empty until the page has looked. A new route clears them; the page sends that route's after it.
     private(set) var along = (full: "", short: "", descent: "")
@@ -258,8 +260,11 @@ final class ApexCar {
             scene?.offerDone(id: id)
         case "places":
             places = ((dict["list"] as? [[String: Any]]) ?? []).prefix(12).compactMap { p in
-                guard let name = p["name"] as? String, let c = Self.coord(p["at"]) else { return nil }
-                return (name: name, coord: c)
+                guard let name = p["name"] as? String, !name.isEmpty else { return nil }
+                let saved = (p["saved"] as? String).flatMap { $0.isEmpty ? nil : String($0.prefix(80)) }
+                let c = Self.coord(p["at"])
+                guard c != nil || saved != nil else { return nil }
+                return (name: String(name.prefix(60)), detail: String(((p["detail"] as? String) ?? "").prefix(60)), coord: c, saved: saved)
             }
         default:
             break
@@ -477,11 +482,17 @@ final class ApexCarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDel
 
     @MainActor private func openPlaces() {
         let items: [CPListItem] = ApexCar.shared.places.map { p in
-            let item = CPListItem(text: p.name, detailText: nil)
-            item.handler = { [weak self] _, done in self?.go(to: p.coord, name: p.name); done() }
+            let item = CPListItem(text: p.name, detailText: p.detail.isEmpty ? nil : p.detail)
+            item.handler = { [weak self] _, done in
+                if let id = p.saved {
+                    self?.interfaceController?.popToRootTemplate(animated: true, completion: nil)
+                    ApexCar.shared.send("saved", ["id": id])                       // the phone opens its copy (no signal needed)
+                } else if let c = p.coord { self?.go(to: c, name: p.name) }
+                done()
+            }
             return item
         }
-        let empty = CPListItem(text: "No recent places yet", detailText: "Where to? finds one")
+        let empty = CPListItem(text: "No places yet", detailText: "Where to? finds one")
         let t = CPListTemplate(title: "Places", sections: [CPListSection(items: items.isEmpty ? [empty] : items)])
         interfaceController?.pushTemplate(t, animated: true, completion: nil)
     }

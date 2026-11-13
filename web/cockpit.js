@@ -3252,14 +3252,15 @@
       if (!name || !name.trim()) return;
       const label = String(t.name || '').replace(/^To /, '') || name;
       toast(ApexPinnedPlaces.pin(localStorage, name, { label, lat: to.lat, lon: to.lon }) ? `Pinned as ${name.trim()}. It's first in Where to?, on this phone only.` : 'Couldn\u2019t pin that.');
+      carPost(carPlaces());                                              // first in the car's Places too
     });
     $('routeSaveBtn').addEventListener('click', () => {
       const t = plannedRoute;
       if (!t || !Array.isArray(t.lat) || t.lat.length < 2) return;
       if (ApexSavedRoutes.has(localStorage, t.id)) {
-        ApexSavedRoutes.remove(localStorage, t.id); toast(`${t.name} removed from saved routes.`);
+        ApexSavedRoutes.remove(localStorage, t.id); toast(`${t.name} removed from saved routes.`); carPost(carPlaces());
         if (window.ApexOfflineTiles) ApexOfflineTiles.removeArea(routeAreaId(t)).catch(() => {});   // and the map kept along it
-      } else if (ApexSavedRoutes.save(localStorage, ApexSavedRoutes.pack(t)) === 'saved') { toast(`Saved for offline: ${t.name}. It's listed in Where to? now.`); keepMapAlong(t); }
+      } else if (ApexSavedRoutes.save(localStorage, ApexSavedRoutes.pack(t)) === 'saved') { toast(`Saved for offline: ${t.name}. It's listed in Where to? now.`); keepMapAlong(t); carPost(carPlaces()); }
       else toast('The phone is out of room for saved routes. Remove one first.');
       paintSaveBtn();
     });
@@ -5443,7 +5444,7 @@
     function rememberPlace(p) {
       if (!p || !p.label || p.label === PIN_WORD || !Number.isFinite(p.lat) || !Number.isFinite(p.lon)) return;
       try { localStorage.setItem(RECENT_PLACES, JSON.stringify([{ label: p.label, lat: p.lat, lon: p.lon }, ...recentPlaces().filter(q => q.label !== p.label)].slice(0, 6))); } catch (_) {}
-      carPost(ApexCarPlay.placesMessage(recentPlaces()));   // the car's Places list
+      carPost(carPlaces());   // the car's Places list
     }
     // Typing in Where to? suggests places near you. Photon is OpenStreetMap search built for search-as-you-type (public
     // Nominatim forbids it, and stays for the final geocode). Offline: no list; typing and Go still work.
@@ -5573,7 +5574,7 @@
         if (!p.pinned) return b;
         // a pinned place (U-20): its own row with Unpin beside it
         const un = document.createElement('button'); un.className = 'linkbtn'; un.textContent = 'Unpin'; un.setAttribute('aria-label', `Unpin ${p.label}`);
-        un.addEventListener('click', (e) => { e.stopPropagation(); ApexPinnedPlaces.unpin(localStorage, p.pinned.name); renderPlaces(); });
+        un.addEventListener('click', (e) => { e.stopPropagation(); ApexPinnedPlaces.unpin(localStorage, p.pinned.name); renderPlaces(); carPost(carPlaces()); });
         const row = document.createElement('div'); row.className = 'row pinned-row'; row.append(b, un);
         if (b.classList.contains('place-extra')) { b.classList.remove('place-extra'); row.classList.add('place-extra'); }
         return row;
@@ -9115,6 +9116,12 @@
     // CarPlay (web/carplay.js, CarPlay/ApexCarPlay.swift): the car's screen gets the planned route, the next maneuver and
     // hazards; what the driver picks there comes back as onNative({type:'carplay'}). Only in the app.
     // a request made on the car (a loop, a place to go, a report): toast() says on the car too what it says meanwhile
+    // the car's Places: pinned, saved routes and recents, as Where to? lists them (carplay.js placesMessage)
+    function carPlaces() {
+      let pinned = [], saved = [];
+      try { pinned = ApexPinnedPlaces.list(localStorage); saved = ApexSavedRoutes.list(localStorage); } catch (_) {}
+      return ApexCarPlay.placesMessage(recentPlaces(), pinned, saved, (m) => ApexUnits.long(m));
+    }
     async function carAsked(run) { car.echo++; try { await run(); } catch (_) { /* each request says its own errors */ } finally { car.echo--; } }
     function carPost(msg) {
       const native = window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.apex;
@@ -9844,16 +9851,20 @@
       else if (m.action === 'undo') undoEnd();
       else if (m.action === 'offer' && car.offer && m.id === car.offer.id && performance.now() < car.offer.until) car.offer.run();
       else if (m.action === 'disconnect') keepCar(false, m.t);      // Round 3: the car switched off; the drive ends once it stays put
-      else if (m.action === 'places') carPost(ApexCarPlay.placesMessage(recentPlaces()));
+      else if (m.action === 'places') carPost(carPlaces());
+      else if (m.action === 'saved' && typeof m.id === 'string' && !driveActive) {      // a saved route from the car's Places
+        const p = ApexSavedRoutes.list(localStorage).find((q) => q.id === m.id);
+        if (p) openSaved(p).catch(() => {});
+      }
       else if (m.action === 'loop' && LOOP_MINUTES.includes(m.minutes) && !driveActive) carAsked(() => loop({ minutes: m.minutes }));
       else if (m.action === 'report' && ApexHazardReports.KINDS.includes(m.kind)) carAsked(() => reportHazard(m.kind, null, true));
       else if (m.action === 'still' && typeof m.still === 'boolean') answerStill(m.still);
       else if (m.action === 'voice') { state.toggles.voice = !state.toggles.voice; savePrefs(); paintSwitches(); if (!state.toggles.voice) stopSpeaking(); }
       else if (m.action === 'hello') { keepCar(true); car.route = ''; car.look = ''; car.hazards = ''; carRoute(track && track.kind === 'route' ? track : null); carLook(); carHazards();
-        carPost(ApexCarPlay.placesMessage(recentPlaces()));                   // a car screen that just connected gets everything again
+        carPost(carPlaces());                   // a car screen that just connected gets everything again
         if (driveActive) { carPost({ kind: 'start', title: track && track.kind === 'route' ? String(track.name || 'Route').slice(0, 80) : 'Drive' }); car.guideKey = ''; } }   // and the drive in progress (U-59)
     }
-    carPost(ApexCarPlay.placesMessage(recentPlaces()));
+    carPost(carPlaces());
     function startDrive() {
       if (state.mode === 'live') return;
       askLocation();                                                   // never asked (a welcome skipped by a link): ask now

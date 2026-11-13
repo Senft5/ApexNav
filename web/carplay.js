@@ -231,9 +231,25 @@
   }
 
   /** Recent places for the car's Places list: [{ name, at: [lat, lon] }], newest first. */
-  function placesMessage(recent) {
-    const list = (Array.isArray(recent) ? recent : []).filter((p) => p && p.label && finite(p.lat) && finite(p.lon))
-      .slice(0, 12).map((p) => ({ name: p.label, at: [p.lat, p.lon] }));
+  // The car's Places, as Where to?'s list with nothing typed (cockpit.js renderPlaces): your pinned places first (Home,
+  // Work; `detail` the address it was pinned from), then up to SAVED_MAX saved routes (`saved` its id, opened from the
+  // phone's copy, so no position; `detail` "Saved · 12 mi" via `fmtDist`), then recents. One row per name, at most 12.
+  const PLACES_MAX = 12, SAVED_MAX = 4;
+  function placesMessage(recent, pinned, saved, fmtDist) {
+    const arr = (v) => (Array.isArray(v) ? v.filter(Boolean) : []);
+    const name = (s) => (typeof s === 'string' ? s.trim().slice(0, 60) : '');
+    const rows = [
+      ...arr(pinned).filter((p) => name(p.name) && finite(p.lat) && finite(p.lon)).map((p) => {
+        const label = name(p.label), detail = label && label.toLowerCase() !== name(p.name).toLowerCase() ? label : '';
+        return { name: name(p.name), at: [p.lat, p.lon], ...(detail ? { detail } : {}) };
+      }),
+      ...arr(saved).filter((p) => name(p.name) && typeof p.id === 'string' && p.id).slice(0, SAVED_MAX).map((p) => ({
+        name: name(p.name), saved: p.id.slice(0, 80),
+        detail: finite(p.miles) && typeof fmtDist === 'function' ? `Saved · ${fmtDist(p.miles * 1609.344)}` : 'Saved' })),
+      ...arr(recent).filter((p) => name(p.label) && finite(p.lat) && finite(p.lon)).map((p) => ({ name: name(p.label), at: [p.lat, p.lon] })),
+    ];
+    const seen = new Set();
+    const list = rows.filter((r) => { const k = r.name.toLowerCase(); if (seen.has(k)) return false; seen.add(k); return true; }).slice(0, PLACES_MAX);
     return { kind: 'places', list };
   }
 
