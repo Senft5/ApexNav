@@ -110,7 +110,15 @@ export async function photoUpload(env: Env, v: Viewer, req: Request): Promise<{ 
         AND (?4 IS NULL OR (SELECT COUNT(*) FROM photos WHERE kind = ?3 AND ref_id = ?4) < ?9)`,
   ).bind(id, v.id, kind, ref, bytes.length, w, h, MAX_PER_OWNER, kind === "post" ? MAX_PER_POST : MAX_PER_REF).run();
   if (!ins.meta.changes) throw new HttpError(429, "too_many_photos");
-  await env.PHOTOS.put(`p/${id}`, bytes);
+  try {
+    await env.PHOTOS.put(`p/${id}`, bytes);
+  } catch (e) {
+    // KV refused it (Workers Free allows 1,000 writes a day, or a hiccup): no row without bytes, which would show broken
+    // and count against the caps
+    console.error(JSON.stringify({ event: "photo_put_failed", reason: String(e) }));
+    await env.DB.prepare("DELETE FROM photos WHERE id = ?").bind(id).run();
+    throw new HttpError(503, "photo_store_unavailable");
+  }
   const cover = u.searchParams.get("cover") === "1";
   if (kind === "profile") await env.DB.prepare("UPDATE users SET photo_id = ? WHERE id = ?").bind(id, v.id).run();
   else if (kind === "car" && cover) await env.DB.prepare("UPDATE cars SET cover_photo_id = ? WHERE id = ? AND owner = ?").bind(id, ref, v.id).run();

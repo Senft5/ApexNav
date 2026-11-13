@@ -39,6 +39,10 @@ console.log(JSON.stringify({
   sight: [C.sightMessage(52.4, false, 40, 'mph'), C.sightMessage(30, false, 45.5, 'km/h'), C.sightMessage(30, true, 99, 'mph'), C.sightMessage(null, false, 40, 'mph'), C.sightMessage(NaN, false, 1, 'mph')],
   loopNoSteps: C.guideMessage({ id: 'loop_30min', dist: [0, 2000], events: [{ type: 'corner', dir: 'R', severity: 3, start_m: 300, dist_m: 320, call: 'Right 3' }] }, 0, 600, D.phrase),
   places: C.placesMessage([{ label: 'Home', lat: 35.1, lon: -83.2 }, { label: 'Bad', lat: null, lon: 1 }, null]),
+  placesAll: C.placesMessage([{ label: 'Maryville', lat: 35.7, lon: -83.9 }, { label: 'home', lat: 35.3, lon: -83.3 }],
+    [{ name: 'Home', label: '12 Oak St, Maryville', lat: 35.1, lon: -83.2 }, { name: 'Work', label: 'Work', lat: 35.2, lon: -83.1 }, { name: 'Bad', lat: null, lon: 1 }],
+    [{ id: 'r1', name: 'Cherohala Skyway', miles: 42.3 }, { id: 'r2', name: 'Tail', miles: null }, { name: 'No id' }],
+    (m) => `${Math.round(m / 1609.344)} mi`),
   arrive: C.guideMessage(t, 3100, null, D.phrase),
   // U-63: a GPX track on the motorway, its next corner 13 km on; the road named by the map under the car, or not at all
   ...(() => { const g = { id: 'gpx', dist: [0, 20000], events: [{ type: 'corner', dir: 'R', severity: 2, start_m: 13000, dist_m: 13040, call: 'Tight right' }] };
@@ -234,6 +238,17 @@ def test_the_hairpin_reads_as_a_hairpin(out):
 
 def test_places(out):
     assert out["places"] == {"kind": "places", "list": [{"name": "Home", "at": [35.1, -83.2]}]}
+    # as Where to? lists them: pinned first (the address it was pinned from under it), saved routes, then recents; a
+    # recent with a pinned place's name is the pinned one
+    assert out["placesAll"]["list"] == [
+        {"name": "Home", "at": [35.1, -83.2], "detail": "12 Oak St, Maryville"}, {"name": "Work", "at": [35.2, -83.1]},
+        {"name": "Cherohala Skyway", "saved": "r1", "detail": "Saved · 42 mi"}, {"name": "Tail", "saved": "r2", "detail": "Saved"},
+        {"name": "Maryville", "at": [35.7, -83.9]}]
+    js = open(os.path.join(ROOT, "web", "cockpit.js"), encoding="utf-8").read()
+    assert "ApexCarPlay.placesMessage(recentPlaces())" not in js and js.count("carPost(carPlaces())") >= 7, "pin, unpin, save and remove re-send the car's Places"
+    assert "m.action === 'saved' && typeof m.id === 'string' && !driveActive" in js
+    swift = open(os.path.join(ROOT, "CarPlay", "ApexCarPlay.swift"), encoding="utf-8").read()
+    assert 'ApexCar.shared.send("saved", ["id": id])' in swift
 
 
 def test_only_road_hazards_alert_the_car():

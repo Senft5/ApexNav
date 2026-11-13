@@ -103,6 +103,23 @@ describe("crash reports", () => {
     vi.restoreAllMocks();
   });
 
+  it("D1's free daily limit answers 503 with when to try again, not a counted 500", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    const u = await makeUser("nate");
+    const spy = vi.spyOn(env.DB, "prepare").mockImplementation(() => {
+      throw new Error("D1_ERROR: Your account has exceeded D1's free tier daily row write limit. Upgrade to a paid plan or wait until tomorrow (midnight UTC) to continue.");
+    });
+    const res = await api(u, "GET", "/api/garage");
+    spy.mockRestore();
+    expect(res.status).toBe(503);
+    expect(await res.json()).toEqual({ error: "service_unavailable" });
+    const wait = Number(res.headers.get("retry-after"));
+    expect(wait).toBeGreaterThanOrEqual(60);
+    expect(wait).toBeLessThanOrEqual(86400);
+    expect(await counts()).toEqual([]);
+    vi.restoreAllMocks();
+  });
+
   it("shows the counts to the owner only", async () => {
     vi.spyOn(console, "log").mockImplementation(() => {});
     await api(null, "POST", "/api/errors", report);

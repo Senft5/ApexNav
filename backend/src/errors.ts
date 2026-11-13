@@ -28,7 +28,7 @@ const text = (v: unknown, field: string, max: number): string => {
 export const DAY_CAP = 500;
 const KEEP_DAYS = 30;
 
-interface Counted { source: "ios" | "web" | "server"; kind: string; message: string; page: string; stack: string }
+export interface Counted { source: "ios" | "web" | "server"; kind: string; message: string; page: string; stack: string }
 
 /** Adds one to today's count for this error. Never throws: counting must not turn a report or a 500 into another failure. */
 export async function countError(env: Env, e: Counted): Promise<void> {
@@ -66,7 +66,7 @@ export async function serverError(env: Env, route: string, err: unknown): Promis
 const REPEAT_N = 25, REPEAT_MIN = 30;
 export async function failingRoutes(env: Env): Promise<string[]> {
   const rows = (await env.DB.prepare(
-    `SELECT kind, SUM(n) AS n FROM error_counts WHERE source = 'server' AND day = date('now') AND kind NOT LIKE 'cron %' AND kind != 'service'
+    `SELECT kind, SUM(n) AS n FROM error_counts WHERE source = 'server' AND day = date('now') AND kind NOT LIKE 'cron %' AND kind NOT IN ('service', 'queries')
       GROUP BY kind HAVING SUM(n) >= ?1 AND MAX(last_at) > datetime('now', ?2) ORDER BY n DESC LIMIT 5`)
     .bind(REPEAT_N, `-${REPEAT_MIN} minutes`).all<{ kind: string }>()).results;
   return rows.map((r) => r.kind);

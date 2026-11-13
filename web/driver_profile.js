@@ -714,6 +714,12 @@
   }
   /** One finding as a sentence: "One steering arc is weaker through rights: 62 against 97 through lefts, on 5 of 5 drives." */
   const GENERIC = new Set(['rest', 'later', 'before']);
+  /** The findings worth a line each: one a skill (the strongest, as the profile orders them), so "back to power is weaker in
+   *  fast corners" is not said again as "stronger in tight corners" (TestFlight 2026-11-12, "text walls"). */
+  function sayFindings(findings) {
+    const said = new Set();
+    return (findings || []).filter((f) => { if (said.has(f.skill)) return false; said.add(f.skill); return true; });
+  }
   function findingLine(f) {
     const worseA = f.mean_a < f.mean_b, w = worseA ? [f.a, f.mean_a, f.b, f.mean_b] : [f.b, f.mean_b, f.a, f.mean_a];
     const seen = f.agree === null || f.agree === undefined ? `across ${f.drives} drives` : `on ${f.agree} of ${f.drives} drives`;
@@ -1057,7 +1063,7 @@
 
     if (p.findings.length) {
       const say = el('div', 'panel');
-      say.append(el('h2', null, 'What your drives say'), ...p.findings.map((f) => { const n = el('p', 'dp-say', findingLine(f)); n.dataset.split = f.split; return n; }));
+      say.append(el('h2', null, 'What your drives say'), ...sayFindings(p.findings).map((f) => { const n = el('p', 'dp-say', findingLine(f)); n.dataset.split = f.split; return n; }));
       host.append(say);
     }
 
@@ -1092,7 +1098,7 @@
     }
   }
 
-  const api = { SKILLS, observe, profile, swing, excess, SKILL_MIN, WORDS, findingLine, styleLines, touchLines, touchTrendLines, driveTouchLines, paceLines, PACE, MEASURES, touch, TOUCH, driveTouch, DRIVE_TOUCH_MIN, bestCorners, recordsBySize, RECORD_MIN, driveRecords, driveRecordLines, roadRecords, placed, roadRecordLine, roadCornerNote, roadBook, roadBookRows, roadBookFocus, roadBookFocusLine, roadEvenedLine, roadsToWork, skillRoadLine, skillRoad, roadUnevenLine, roadEndLine, cardLine, focusLines, scopeLine, skillDef, trendLabel, render,
+  const api = { SKILLS, observe, profile, swing, excess, SKILL_MIN, WORDS, findingLine, styleLines, touchLines, touchTrendLines, driveTouchLines, paceLines, PACE, MEASURES, touch, TOUCH, driveTouch, DRIVE_TOUCH_MIN, bestCorners, recordsBySize, RECORD_MIN, driveRecords, driveRecordLines, roadRecords, placed, roadRecordLine, roadCornerNote, roadBook, roadBookRows, roadBookFocus, roadBookFocusLine, roadEvenedLine, roadsToWork, skillRoadLine, skillRoad, roadUnevenLine, roadEndLine, cardLine, focusLines, scopeLine, skillDef, trendLabel, sayFindings, render,
     PRACTICE_MIN, practice, drivePractice, onPlanRoad, practiceLine, practiceSummary, localStamp, loadPlan, savePlan, PLAN_KEY };
   if (typeof module !== 'undefined' && module.exports) module.exports = api; else root.ApexDriverProfile = api;
 })(typeof window !== 'undefined' ? window : globalThis);

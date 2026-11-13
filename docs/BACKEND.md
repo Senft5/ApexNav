@@ -42,6 +42,8 @@ drive → phone profiles it (core/ApexKit, offline) → [opt-in + online] → bi
 ## 5. Data model (backend/migrations, D1 = SQLite)
 Applied to both `apexnav-db` and `apexnav-preview-db`: **0001_init.sql**, **0002_segment_sharing.sql**, **0003_camber_count.sql**, **0004_realtime_ingest.sql**.
 
+**Query budget:** Workers Free allows 50 D1 queries per request, and an `env.DB.batch` counts as one. Read or write per row in a batch (or fold the check into the SQL), never one query per row in a loop. `src/query_budget.ts` counts every request. The tests run with `QUERY_LIMIT` 50, so a route over it fails there as it would in production. In production, a request over 40 is counted in `error_counts` under kind `queries`, page = the route.
+
 | Group | Tables |
 |---|---|
 | Identity | `users` (Google sub, handle), `members` (everyone signed in and not banned, since 2026-10-30; kept for old app builds and the inviter link), `invites` (token hash only), `sessions` (token hash only; 30 days that slide: `viewer()` pushes a session in use back to 30 days at most once a day, and `/api/me` sets the website's cookie again) |

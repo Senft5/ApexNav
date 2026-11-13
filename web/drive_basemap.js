@@ -77,11 +77,20 @@
     const s = Math.sin((c - a) * rad / 2) ** 2 + Math.cos(a * rad) * Math.cos(c * rad) * Math.sin((d - b) * rad / 2) ** 2;
     return 2 * 6371 * Math.asin(Math.min(1, Math.sqrt(s)));
   };
-  /** Whether a saved offline area (offline_tiles.js areas()) holds the whole box [south, west, north, east]. */
+  /**
+   * Whether a saved offline area (offline_tiles.js areas()) holds the whole box [south, west, north, east]: a disc round a
+   * point, or the map kept along a saved route (its `box`, padded by its corridor) for a drive that stayed inside it.
+   */
   function covered(areas, box) {
     const [s, w, n, e] = box;
-    return (areas || []).some((a) => Number.isFinite(a.lat) && Number.isFinite(a.lon) && Number.isFinite(a.radiusKm)
-      && [[s, w], [s, e], [n, w], [n, e]].every(([la, lo]) => kmBetween(a.lat, a.lon, la, lo) <= a.radiusKm));
+    return (areas || []).some((a) => {
+      if (Array.isArray(a.box) && a.box.length === 4 && a.box.every(Number.isFinite)) {
+        const pad = (Number.isFinite(a.alongKm) ? a.alongKm : 0) / 110.54, padLon = pad / Math.max(0.2, Math.cos(((a.box[0] + a.box[2]) / 2) * rad));
+        return s >= a.box[0] - pad && n <= a.box[2] + pad && w >= a.box[1] - padLon && e <= a.box[3] + padLon;
+      }
+      return Number.isFinite(a.lat) && Number.isFinite(a.lon) && Number.isFinite(a.radiusKm)
+        && [[s, w], [s, e], [n, w], [n, e]].every(([la, lo]) => kmBetween(a.lat, a.lon, la, lo) <= a.radiusKm);
+    });
   }
   /** Worth asking for the map: a connection, or a saved area under the drive. Never a map that can only fail. */
   function worthTrying(online, areas, box) { return online !== false || covered(areas, box); }
