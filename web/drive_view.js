@@ -121,7 +121,10 @@
     return rows.length >= 3 ? rows : [];
   }
 
-  function plainCoach(ds, co) {
+  // the practised skill (driver_profile.js) each fix is part of: the end card names that skill on its own line, so the
+  // sentence under it does not ask for it again
+  const FIX_SKILL = { smoothness: 'arc', braking: 'brake', brake_after_apex: 'brake', early_apex: 'line', coast: 'exit' };
+  function plainCoach(ds, co, practised = null) {
     const comp = ds && finite(ds.score) && ds.components;
     if (!comp) return null;
     const kinds = {};
@@ -133,6 +136,7 @@
     const skip = isHabit ? HABIT_PART[habit[0]] : weak;
     const strong = Object.keys(PRAISE).filter((k) => k !== skip && finite(comp[k]) && comp[k] >= 0.7).sort((a, b) => comp[b] - comp[a])[0];
     if (!fix) return `${strong ? PRAISE[strong] : 'A tidy drive'}, and nothing stands out to fix.`;
+    if (practised && FIX_SKILL[isHabit ? habit[0] : weak] === practised) return strong ? `${PRAISE[strong]}.` : null;
     return `${strong ? `${PRAISE[strong]}. ` : ''}One thing to work on: ${fix}.`;
   }
 

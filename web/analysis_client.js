@@ -133,7 +133,7 @@
     const { co, near } = await coachOf(Core, d, sums), P = root.ApexDriverProfile;
     let road = null;
     try { road = P && P.roadEndLine ? P.roadEndLine(roadOf(Core, d, near), skip) : null; } catch (_) { road = null; }
-    return { coach: root.ApexDriveView.plainCoach(d.ds, co) || null, road };
+    return { coach: root.ApexDriveView.plainCoach(d.ds, co, skip) || null, road };
   }
   // this drive's corners against your other passes of the same road, corner by corner (driver_profile.js roadRecords), each
   // row with the date of the drive that holds it (null: this one, or unknown); null without driver_profile.js

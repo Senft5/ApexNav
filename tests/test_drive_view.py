@@ -250,6 +250,9 @@ console.log(JSON.stringify({
   noStrong: V.plainCoach(ds({ pace: 0.5, smoothness: 0.5, braking: 0.65, consistency: 0.6 }), null),
   unknown: V.plainCoach({ score: null, components: null }, null),
   noContradiction: V.plainCoach(ds({ smoothness: 0.6, braking: 0.95 }), { corners: [tip('brake_after_apex'), tip('brake_after_apex')] }),
+  practisedHabit: V.plainCoach(ds({}), { corners: [tip('coast'), tip('coast')] }, 'exit'),
+  practisedWeak: V.plainCoach(ds({ pace: 0.5, smoothness: 0.5, braking: 0.65, consistency: 0.6 }), null, 'arc'),
+  otherPractised: V.plainCoach(ds({ braking: 0.4 }), null, 'arc'),
 }));
 """
     root = str(__import__("pathlib").Path(__file__).resolve().parents[1])
@@ -263,6 +266,9 @@ console.log(JSON.stringify({
     assert r["clean"] == "Smooth, unhurried steering, and nothing stands out to fix."
     assert r["noStrong"] == "One thing to work on: steer more gently, with fewer corrections mid-corner."
     assert r["unknown"] is None
+    # the end card's practice line names the skill: the sentence under it does not ask for it again
+    assert r["practisedHabit"] == "Smooth, unhurried steering." and r["practisedWeak"] is None
+    assert r["otherPractised"].endswith("One thing to work on: finish your braking by the middle of the corner.")
     assert r["noContradiction"].startswith("Good use of the grip you had. One thing to work on: you were still braking past the middle of 2 corners")
     for v in r.values():
         assert v is None or not any(w in v.lower() for w in ("faster", "quicker", "speed up", "mph", "apex"))

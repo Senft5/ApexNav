@@ -5268,6 +5268,8 @@ flow('a drive\'s corners on a road driven four times: each says your cleanest pa
   });
   check(/^Practice on Dry Ridge Rd · One steering arc: /.test(endRoad.practice || ''), 'the end card names the practised road: ' + endRoad.practice);
   check(endRoad.shown && /^(\d+ least even corners|Least even corner): [^.]+\.$/.test(endRoad.t) && !/Lost most/.test(endRoad.t), 'the road on the end card, not repeating the practised skill: ' + JSON.stringify(endRoad));
+  const endLine = await page.textContent('#endLine');
+  check(!/steer more gently/.test(endLine), 'the coaching sentence does not ask again for the practised skill: ' + endLine);
   check(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth), 'nothing wider than the phone');
 });
 
