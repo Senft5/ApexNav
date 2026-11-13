@@ -294,6 +294,7 @@ console.log(JSON.stringify({
   noLanes: C.guideMessage({ id: 'r', dist: [0, 5000], steps: [{ m: 1200, type: 15, street: 'Deals Gap Road' }] }, 100, 3600, require(process.argv[1] + '/web/directions.js').phrase),
   laneGlyphs: [C.laneGlyphs(require(process.argv[1] + '/web/lanes.js').lanes([[2, 0, 0], [10, 8, 2], [256, 0, 0]])), C.laneGlyphs([{ angle: 0, use: false, ok: false }, { angle: 0 }]),
     C.laneGlyphs(Array.from({ length: 9 }, () => ({ angle: 0, use: true })))],
+  limits: [C.limitMessage(54.7, 'mph'), C.limitMessage(80, 'km/h'), C.limitMessage(null, 'mph'), C.limitMessage(0, 'mph'), C.limitMessage(500, 'mph')],
   loops: [C.loopsMessage('time', false), C.loopsMessage('distance', false), C.loopsMessage('distance', true)],
   offerUndo: C.offerMessage('o8', 'Pothole reported', '', 'Undo', 5000, 'OK'),
   offerNone: [C.offerMessage('', 'x', '', 'k'), C.offerMessage('o5', '', '', 'k'), C.offerMessage('o6', 'x', '', ''), C.offerMessage('o7', 'x', '', 'k', 1000).seconds],
@@ -534,6 +535,23 @@ def test_the_car_offers_the_same_loop_times_as_the_phones_dial():
     assert '("1½ hours", 90, nil)' in row and '("3 hours", 180, nil)' in row
     # and the page takes every one of them: it used to accept only 30, 60 and 120, so the car's 1½ and 3 hours did nothing
     assert "m.action === 'loop' && LOOP_MINUTES.includes(m.minutes)" in cockpit_source()
+
+
+def test_the_cars_map_shows_the_posted_speed_limit(maps):
+    """Apple Maps and Waze show the posted limit on the car; Vetta knew it (OSM, the binnacle's LIMIT) and the car didn't."""
+    mph, kmh, none, zero, silly = maps["limits"]
+    assert mph == {"kind": "limit", "value": 55, "unit": "MPH", "round": False}
+    assert kmh == {"kind": "limit", "value": 80, "unit": "KM/H", "round": True}
+    assert none["value"] is None and zero["value"] is None and silly["value"] is None, "unknown stays unknown: no sign"
+    js = cockpit_source()
+    assert "carLimit(live ? si.limit : null, si.unit);" in js and "carLimit(null); return; }" in js, "only while the drive is live"
+    assert "car.limitKey = '';" in js, "a car that connects later gets it again"
+    swift = open(os.path.join(ROOT, "CarPlay", "ApexCarPlay.swift"), encoding="utf-8").read()
+    assert 'case "limit":' in swift and "let l = role == .cluster ? nil : ApexCar.shared.limit" in swift, "never in the cluster"
+    native = open(os.path.join(ROOT, "CarPlay", "ApexCarMap.swift"), encoding="utf-8").read()
+    assert "final class ApexCarLimitView" in native and "if limit != nil { shownBoxes.append(limitSign.frame" in native, "plates keep clear of it"
+    web = open(os.path.join(ROOT, "web", "carmap.js"), encoding="utf-8").read()
+    assert "limit(l) {" in web and "if (g.limit) out.push(g.limit);" in web
 
 
 def test_the_cars_guidance_card_shows_the_junctions_lanes(maps):

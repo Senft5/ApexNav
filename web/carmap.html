@@ -28,6 +28,14 @@
     .car-sight small { font: 700 9px/1 -apple-system, system-ui, sans-serif; letter-spacing: 0.08em; }
     .car-sight.short { background: #C8102E; color: #FFFFFF; border-color: #FFFFFF; }   /* faster than you can see: the signal red */
     .car-sight[hidden] { display: none; }
+    /* the posted limit, bottom left past Apple's card (web/carplay.js limitMessage): the US sign, or the km/h red ring */
+    #limit { position: absolute; left: 8px; bottom: 8px; z-index: 4; pointer-events: none; display: flex; flex-direction: column; align-items: center; justify-content: center;
+      width: 44px; height: 56px; box-sizing: border-box; background: #FFFFFF; color: #000000; border: 2px solid #000000; border-radius: 6px; box-shadow: 0 0 0 2px #FFFFFF;
+      font: 700 7.5px/1.05 -apple-system, system-ui, sans-serif; letter-spacing: 0.03em; text-align: center; }
+    #limit b { font: 700 24px/1 "Barlow Condensed", "Arial Narrow", sans-serif; margin-top: 2px; letter-spacing: 0; }
+    #limit.round { width: 50px; height: 50px; border: 6px solid #C8102E; border-radius: 50%; box-shadow: none; }
+    #limit.round small { display: none; }
+    #limit[hidden] { display: none; }
     #credit { position: absolute; right: 0; bottom: 0; padding: 3px 6px 4px 7px; background: #1A1814; color: #A89E8CA6; font: 500 10px/1 -apple-system, system-ui, sans-serif; pointer-events: none; z-index: 4; }   /* on its own strip of ground (U-89): no label under it */
     .maplibregl-ctrl-attrib, .maplibregl-ctrl-logo { display: none !important; }   /* no tappable controls in the base view: the credit is plain text */
   </style>
@@ -40,6 +48,7 @@
 </head>
 <body>
   <div id="map"></div>
+  <div id="limit" hidden role="img"></div>
   <div id="credit">© OpenStreetMap · OpenFreeMap</div>
 </body>
 </html>

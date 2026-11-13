@@ -211,7 +211,7 @@
     const etaSections = new WeakMap();      // track -> its corner sections (ApexEta.cornerSections), worked out once
     let etaText = '', etaLeftS = null;
     let replayEnded = false, replayWaiting = false;   // U-110 a finished replay, U-128 a replay waiting for its map (paintReplayEnd)
-    const car = { serial: 0, route: '', guideAt: 0, guideKey: '', sightKey: '', look: '', hazards: '', symbols: new Map(), ended: null, along: '', offerSerial: 0, offer: null, echo: 0, attacks: [], road: '', roadAt: -1e9 };   // what the car's screen was last sent (carRoute, carGuide below)   // strip text while off route; last frame fed; furthest progress
+    const car = { serial: 0, route: '', guideAt: 0, guideKey: '', sightKey: '', look: '', hazards: '', symbols: new Map(), ended: null, along: '', offerSerial: 0, offer: null, echo: 0, attacks: [], road: '', roadAt: -1e9, limitKey: '' };   // what the car's screen was last sent (carRoute, carGuide below)   // strip text while off route; last frame fed; furthest progress
     try {
       const saved = JSON.parse(localStorage.getItem('apex.prefs') || 'null');
       if (saved) {
@@ -452,6 +452,11 @@
         }
       }
       if (live && key !== car.sightKey) { car.sightKey = key; carPost(m); }
+    }
+    // the posted limit on the car's map (web/carplay.js limitMessage), sent when it changes; never while the drive isn't live
+    function carLimit(limit, unit) {
+      const m = ApexCarPlay.limitMessage(limit, unit), key = JSON.stringify(m);
+      if (key !== car.limitKey) { car.limitKey = key; carPost(m); }
     }
     function drawPuck() {
       const c = look.colors, carSvg = Themes.carSVG(look.theme, look.map.casing, 34, 34);   // outlined as the map draws its roads
@@ -2059,7 +2064,7 @@
         latG = s.latG; lonG = s.lonG; camber = s.camberDeg;
         if (replayEnded && state.cursorM < totalM() - 1) paintReplayEnd(false);   // a seek back: it plays on from there
         if (replayEnded) { vMps = 0; latG = 0; lonG = 0; }           // U-110: the drive is over, the dial at rest (Sight hides under 5 mph)
-      } else { cluster.update({ speedMph: null }); sightHold.reset(); paintSight(ApexCarPlay.sightMessage(null), false); return; }
+      } else { cluster.update({ speedMph: null }); sightHold.reset(); paintSight(ApexCarPlay.sightMessage(null), false); carLimit(null); return; }
       state.cursorIdx = idx;
       if (latG != null && (Math.abs(latG) > 0.30 || Math.abs(lonG) > 0.35)) state.spiritedAt = performance.now();
 
@@ -2083,6 +2088,7 @@
       si.limit = limit != null ? ApexUnits.speed(limit) : null; si.unit = ApexUnits.speedU();
       const held = sightHold.step(si, performance.now());
       paintSight(held.msg, !!live);
+      carLimit(live ? si.limit : null, si.unit);                       // the posted limit's sign on the car's map
       const d = renderIn.cluster;                                       // F-18: one object, refilled each frame (the cluster reads it, keeps nothing)
       // in the chosen units (mph or km/h, U-22); the names are the cluster's
       d.speedMph = vMps != null ? ApexUnits.speed(vMps) : null;
@@ -10350,7 +10356,7 @@
       else if (m.action === 'report' && ApexHazardReports.KINDS.includes(m.kind)) carAsked(() => reportHazard(m.kind, null, true));
       else if (m.action === 'still' && typeof m.still === 'boolean') answerStill(m.still);
       else if (m.action === 'voice') { state.toggles.voice = !state.toggles.voice; savePrefs(); paintSwitches(); if (!state.toggles.voice) stopSpeaking(); }
-      else if (m.action === 'hello') { keepCar(true); car.route = ''; car.look = ''; car.hazards = ''; carRoute(track && track.kind === 'route' ? track : null); carLook(); carHazards();
+      else if (m.action === 'hello') { keepCar(true); car.route = ''; car.look = ''; car.hazards = ''; car.limitKey = ''; carRoute(track && track.kind === 'route' ? track : null); carLook(); carHazards();
         carPost(carPlaces());                   // a car screen that just connected gets everything again
         carPost(ApexCarPlay.loopsMessage(loopBy, ApexUnits.metric()));   // and the loop dial's lengths for its Loops
         peekTimeAttack();                                                // and this week's loop for its Places, if you've entered it
