@@ -7300,6 +7300,18 @@ flow('the main map: with no signal and no saved area one line says there is no m
   check(await page.evaluate(() => document.getElementById('mapNote').hidden), 'no note once the map draws');
 });
 
+flow('a replay with no map: the one line sits clear of the Replay plate in the short map band (free roamer B, 2026-11-12)', async (page, base) => {
+  await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); localStorage.setItem('apex.permsExplained', '1'); } catch (_) {} });
+  await page.setViewportSize({ width: 390, height: 664 });   // a phone's browser: the map is a short band between the notes and the binnacle
+  await page.route('https://tiles.openfreemap.org/**', (route) => route.abort('internetdisconnected'));
+  await page.goto(base + '/index.html?drive=dry_ridge&play=1');
+  await page.waitForFunction(() => document.getElementById('app').classList.contains('replaying') && !document.getElementById('mapNote').hidden, null, { timeout: 15000 });
+  const r = await page.evaluate(() => { const box = (id) => { const b = document.getElementById(id).getBoundingClientRect(); return { t: b.top, b: b.bottom, l: b.left, r: b.right }; };
+    return { note: box('mapNote'), plate: box('modePlate'), map: box('map') }; });
+  const apart = r.note.b <= r.plate.t || r.plate.b <= r.note.t || r.note.r <= r.plate.l || r.plate.r <= r.note.l;
+  check(apart && r.note.t >= r.map.t, 'the note and the Replay plate do not overlap: ' + JSON.stringify(r));
+});
+
 flow('the main map on plain paper: back online it reloads once the style really comes, keeping the paper through a flicker', async (page, base) => {
   await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); localStorage.setItem('apex.permsExplained', '1'); } catch (_) {} });
   let tiles = false;
@@ -7639,7 +7651,10 @@ flow('REVIEW.md 1.2 screen by screen: first run, the map, planning, the route, d
   check(fitted.whole && fitted.inView && fitted.follow === false, 'collapsed: the name whole and the route fitted on screen: ' + JSON.stringify(fitted));
   // Driving: no tab bar; Report and End; Limit, the Score under the g-ball
   await page.click('#planClear');
-  await page.evaluate(async () => { for (let i = 0; i < 40; i++) { window.apex.live({ lat: 35.96 + i * 1e-5, lon: -83.92, accuracy_m: 5, speed_mps: 12, course_deg: 0, has_fix: true, calibration: 'locked', lat_g: 0.1, lon_g: 0 }); await new Promise((r) => setTimeout(r, 100)); } });
+  await page.evaluate(async () => { for (let i = 0; i < 40; i++) { window.apex.live({ lat: 35.96 + i * 1e-5, lon: -83.92, accuracy_m: 5, speed_mps: 12, course_deg: 0, has_fix: true, calibration: 'locked', lat_g: 0.1, lon_g: 0 }); await new Promise((r) => setTimeout(r, 100)); }
+    // the car keeps sending fixes, as a phone does: a report needs a fix under 10 s old, and a web drive with none for 5 s
+    // drops back to the replay (CI 2026-11-12: "one tap … Undo" failed once on a loaded runner, as the Q-15 flow did)
+    window.__fixes = setInterval(() => window.apex.live({ lat: 35.96 + 40e-5, lon: -83.92, accuracy_m: 5, speed_mps: 12, course_deg: 0, has_fix: true, calibration: 'locked', lat_g: 0.1, lon_g: 0 }), 500); });
   const drv = await page.evaluate(() => { const tb = document.getElementById('tabbar'); return { tabbar: !!(tb.offsetWidth || tb.offsetHeight), limit: !!document.querySelector('#cluster .ro-limit'), score: document.querySelector('#cluster .g-score').textContent, report: !!document.getElementById('hzReportBtn').offsetParent, end: !!document.getElementById('driveEnd').offsetParent }; });
   check(!drv.tabbar && drv.limit && /SCORE$/.test(drv.score) && drv.report && drv.end, 'Driving: ' + JSON.stringify(drv));
   // Hazard report: six plate-style keys, one tap, no confirm, Undo on the Report key for 3 s
@@ -7647,9 +7662,11 @@ flow('REVIEW.md 1.2 screen by screen: first run, the map, planning, the route, d
   const hz = await page.evaluate(() => { const b = [...document.querySelectorAll('#hzKinds button')], cs = getComputedStyle(b[0]); return { n: b.length, bg: cs.backgroundColor, edge: cs.borderTopColor }; });
   check(hz.n === 6 && hz.bg === 'rgb(17, 17, 17)' && hz.edge === 'rgb(255, 122, 26)', 'Hazard report: ' + JSON.stringify(hz));
   await page.click('#hzKinds button');
-  check(!(await page.isVisible('#hzOverlay.show')) && !(await page.$('.confirm-sheet')) && /^Undo /.test(await page.textContent('#hzReportBtn')), 'one tap, no confirm, Undo in the status line');
+  const tap = { overlay: await page.isVisible('#hzOverlay.show'), sheet: !!(await page.$('.confirm-sheet')), key: await page.textContent('#hzReportBtn'), toast: await page.textContent('#toast') };
+  check(!tap.overlay && !tap.sheet && /^Undo /.test(tap.key), 'one tap, no confirm, Undo in the status line: ' + JSON.stringify(tap));
   await page.click('#hzReportBtn');
   check((await page.textContent('#hzReportBtn')) === 'Report', 'Undo takes it back');
+  await page.evaluate(() => clearInterval(window.__fixes));
   // Replay: crest and dip pins wear the hazard plate; the transport is shaped controls (a switch, detents, keys; U-45); no unlabelled "Fast & open"
   await page.goto(base + '/index.html?drive=dry_ridge&play=1');
   await page.waitForFunction(() => window.apexDebug && window.apexDebug.track && window.apexDebug.track.events.length);
@@ -9309,6 +9326,8 @@ flow('TestFlight 2026-11-05 note 3: your own photo is the key: no photo, a tap p
     return { text: sec.innerText, keys: [...sec.querySelectorAll('button, label')].filter((b) => b.offsetParent).map((b) => b.getAttribute('aria-label') || b.textContent.trim()) }; });
   let y = await you();
   check(!/Change photo|Remove photo|Add a photo|location data/.test(y.text) && y.keys[0] === 'Add your profile photo', 'no photo: the face is the key, no other key, no note: ' + JSON.stringify(y));
+  const firstCar = await page.textContent('.garage-first .people-lead');
+  check(firstCar === 'Friends and private crews see it next to your name.', 'no car yet: one line under Park your first car: ' + firstCar);
   // a tap with no photo goes straight to the picker
   const [chooser] = await Promise.all([page.waitForEvent('filechooser', { timeout: 5000 }), page.click('.my-photo')]);
   check(!!chooser && !(await page.$('.my-photo-sheet')), 'no photo: a tap opens the photo picker');
