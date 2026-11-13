@@ -814,7 +814,13 @@
   function focusLines(p) {
     if (!p || !p.focus) return null;
     const k = p.focus.skill, w = p.focus.where;
-    return { head: `Work on: ${WORDS[k].name}`, where: w && !GENERIC.has(w.worse) ? `It shows most ${sideWords(w.split, w.worse)}.` : null, tip: WORDS[k].tip };
+    if (!w || GENERIC.has(w.worse)) return { head: `Work on: ${WORDS[k].name}`, where: null, tip: WORDS[k].tip, finding: null };
+    // the finding behind it, its numbers said here once and not again under "What your drives say" (TestFlight 2026-11-12)
+    const f = (p.findings || []).find((x) => x.skill === k && x.split === w.split && (x.a === w.worse || x.b === w.worse));
+    if (!f) return { head: `Work on: ${WORDS[k].name}`, where: `It shows most ${sideWords(w.split, w.worse)}.`, tip: WORDS[k].tip, finding: null };
+    const worseA = f.a === w.worse, lo = worseA ? f.mean_a : f.mean_b, hi = worseA ? f.mean_b : f.mean_a, other = worseA ? f.b : f.a;
+    const seen = f.agree === null || f.agree === undefined ? `across ${f.drives} drives` : `on ${f.agree} of ${f.drives} drives`;
+    return { head: `Work on: ${WORDS[k].name}`, where: `${cap(sideWords(w.split, w.worse))} ${lo}, ${sideWords(f.split, other)} ${hi}, ${seen}.${(f.also || []).length ? ` The same shows in ${f.also.map((x) => WORDS[x].name.toLowerCase()).join(' and ')}.` : ''}`, tip: WORDS[k].tip, finding: f };
   }
 
   const cap = (t) => t.charAt(0).toUpperCase() + t.slice(1);
@@ -1055,9 +1061,10 @@
       if (pn.children.length > 1) host.append(pn);
     }
 
-    if (p.findings.length) {
+    const said = sayFindings(p.findings).filter((f) => (plan && pr) || !fl || f !== fl.finding);   // the focus box said its own
+    if (said.length) {
       const say = el('div', 'panel');
-      say.append(el('h2', null, 'What your drives say'), ...sayFindings(p.findings).map((f) => { const n = el('p', 'dp-say', findingLine(f)); n.dataset.split = f.split; return n; }));
+      say.append(el('h2', null, 'What your drives say'), ...said.map((f) => { const n = el('p', 'dp-say', findingLine(f)); n.dataset.split = f.split; return n; }));
       host.append(say);
     }
 
