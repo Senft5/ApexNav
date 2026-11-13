@@ -206,6 +206,70 @@ async function unnamed(page) {
   return out;
 }
 
+// Text in view a driver can't read: under 4.5:1 on its own surface (3:1 at 24 px, or 18.7 px bold), WCAG AA, the floor of
+// the theme contract (tests/test_themes.py checks the tokens; this checks the page as drawn, IDEAS U-15). In every open page.
+// The surface is the first grounds under the text, composed; text over a picture, a gradient, the map or video has no
+// colour to measure and is left out, as is a disabled key (WCAG exempts it) and text a screen reader alone hears.
+async function lowContrast(page) {
+  const out = [];
+  for (const p of page.context().pages()) {
+    if (p.isClosed()) continue;
+    const found = await p.evaluate(() => {
+      const parse = (s) => { const m = String(s).match(/rgba?\(([^)]+)\)/); if (!m) return null; const v = m[1].split(/[,\s/]+/).filter(Boolean).map(Number); return [v[0], v[1], v[2], v.length > 3 ? v[3] : 1]; };
+      const over = (top, under) => [0, 1, 2].map((i) => top[i] * top[3] + under[i] * (1 - top[3])).concat(1);
+      const lum = (c) => { const f = (v) => { v /= 255; return v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4; }; return 0.2126 * f(c[0]) + 0.7152 * f(c[1]) + 0.0722 * f(c[2]); };
+      const ratio = (a, b) => { const x = lum(a), y = lum(b); return (Math.max(x, y) + 0.05) / (Math.min(x, y) + 0.05); };
+      // the grounds under an element, from the nearest opaque one up to it; null over anything without one colour
+      const surface = (el) => {
+        const chain = [];
+        for (let n = el; n && n.nodeType === 1; n = n.parentElement) {
+          const cs = getComputedStyle(n);
+          if (cs.backgroundImage !== 'none' || /^(CANVAS|VIDEO|IMG)$/.test(n.tagName) || cs.backdropFilter && cs.backdropFilter !== 'none') return null;
+          const c = parse(cs.backgroundColor);
+          if (c && c[3] > 0) { chain.push(c); if (c[3] >= 0.999) break; }
+          if (n === document.documentElement && !(c && c[3] >= 0.999)) return null;
+        }
+        if (!chain.length || chain[chain.length - 1][3] < 0.999) return null;
+        let bg = chain.pop();
+        while (chain.length) bg = over(chain.pop(), bg);
+        return bg;
+      };
+      const opacity = (el) => { let o = 1; for (let n = el; n && n.nodeType === 1; n = n.parentElement) o *= parseFloat(getComputedStyle(n).opacity); return o; };
+      const hidden = (el) => { for (let n = el; n && n.nodeType === 1; n = n.parentElement) { if (n.hidden || n.inert || n.getAttribute('aria-hidden') === 'true' || n.disabled || n.getAttribute('aria-disabled') === 'true') return true; } return false; };
+      const where = (el) => el.tagName.toLowerCase() + (el.id ? '#' + el.id : '') + (el.className && typeof el.className === 'string' && el.className.trim() ? '.' + el.className.trim().split(/\s+/).join('.') : '');
+      // mid-fade is not how it reads: text in (or under) a running animation or transition is left for its last frame
+      const moving = new Set(document.getAnimations().filter((a) => a.playState === 'running' || a.pending).map((a) => a.effect && a.effect.target).filter(Boolean));
+      const still = (el) => { for (let n = el; n && n.nodeType === 1; n = n.parentElement) if (moving.has(n)) return false; return true; };
+      const hits = [], seen = new Set();
+      for (const el of document.querySelectorAll('body *')) {
+        if (el instanceof SVGElement || /^(SCRIPT|STYLE|NOSCRIPT|TEMPLATE|OPTION)$/.test(el.tagName)) continue;
+        const text = [...el.childNodes].filter((c) => c.nodeType === 3).map((c) => c.textContent).join(' ').replace(/\s+/g, ' ').trim();
+        if (!/[\p{L}\p{N}]/u.test(text)) continue;
+        const r = el.getBoundingClientRect(), cs = getComputedStyle(el);
+        if (!r.width || !r.height || r.bottom <= 0 || r.top >= innerHeight || r.right <= 0 || r.left >= innerWidth || cs.visibility !== 'visible') continue;
+        if (cs.clip === 'rect(0px, 0px, 0px, 0px)' || (r.width <= 1 && r.height <= 1) || hidden(el) || !still(el)) continue;
+        // on top where it is drawn: text under a sheet or a scrim is not what the driver reads
+        const hx = Math.min(innerWidth - 1, Math.max(0, r.left + r.width / 2)), hy = Math.min(innerHeight - 1, Math.max(0, r.top + r.height / 2));
+        const hit = document.elementFromPoint(hx, hy);
+        if (!hit || !(hit === el || el.contains(hit) || hit.contains(el))) continue;
+        const o = opacity(el); if (o < 0.05) continue;
+        const fg = parse(cs.color), bg = surface(el); if (!fg || !bg) continue;
+        if (cs.webkitTextFillColor && parse(cs.webkitTextFillColor) && parse(cs.webkitTextFillColor)[3] === 0) continue;   // gradient text
+        const ink = over([fg[0], fg[1], fg[2], fg[3] * o], bg), q = ratio(ink, bg);
+        const px = parseFloat(cs.fontSize), large = px >= 24 || (px >= 18.66 && +cs.fontWeight >= 700);
+        if (q >= (large ? 3 : 4.5) - 0.005) continue;
+        const k = where(el) + '|' + text.slice(0, 30);
+        if (seen.has(k)) continue; seen.add(k);
+        const hex = (c) => '#' + c.slice(0, 3).map((v) => Math.round(v).toString(16).padStart(2, '0')).join('');
+        hits.push(`${where(el)} "${text.slice(0, 40)}" ${q.toFixed(2)}:1 (${px} px, ${hex(ink)} on ${hex(bg)})`);
+      }
+      return hits.slice(0, 8);
+    }).catch(() => []);
+    out.push(...found.map((h) => `${new URL(p.url()).pathname.slice(1) || 'index.html'}: ${h}`));
+  }
+  return out;
+}
+
 async function openSetting(page, key) {
   await page.click('#garageGear');
   await page.click(`#garageSettings .nav-row[data-setting="${key}"]`);
@@ -7065,6 +7129,38 @@ flow('no colour swaps or Octane: an accent picked before is cleared, Settings se
   check(!(await page.$('#lookRow')), 'no colour-swap Look section');
 });
 
+// U-15: the contrast floor in every look, day and night, not only the one most flows run in: the welcome, the map, People,
+// the Garage and the Log, each read with lowContrast (every flow's last screen is read in the default look already)
+flow('contrast in every look: the welcome, the map, People, the Garage and the Log hold 4.5:1 in each theme, day and night (IDEAS U-15)', async (page, base) => {
+  const themes = ['roadbook', 'tapedeck', 'billet'], found = [];
+  for (const theme of themes) {
+    for (const night of [false, true]) {
+      const m = `${theme} ${night ? 'night' : 'day'}`;
+      await page.evaluate(({ t, n }) => { localStorage.clear(); localStorage.setItem('apex.newsSeen', 'all'); localStorage.setItem('apex.prefs', JSON.stringify({ theme: t, themeV: 2, nightMode: n ? 'on' : 'off' })); }, { t: theme, n: night }).catch(() => {});
+      await page.goto(base + '/index.html');
+      await page.waitForFunction((t) => document.documentElement.dataset.theme === t, theme);
+      await page.waitForSelector('#obNext', { state: 'visible' });
+      await page.waitForTimeout(400);
+      found.push(...(await lowContrast(page)).map((h) => `${m} welcome: ${h}`));
+      await page.evaluate(() => localStorage.setItem('apex.onboarded', '1'));
+      await page.goto(base + '/index.html');
+      await page.waitForFunction((t) => document.documentElement.dataset.theme === t, theme);
+      await page.waitForTimeout(800);
+      found.push(...(await lowContrast(page)).map((h) => `${m} map: ${h}`));
+      for (const view of ['people', 'garage']) {
+        await page.click(`#tabbar .tab[data-view="${view}"]`);
+        await page.waitForTimeout(700);
+        found.push(...(await lowContrast(page)).map((h) => `${m} ${view}: ${h}`));
+      }
+      await page.goto(base + '/analysis.html');
+      await page.waitForTimeout(800);
+      found.push(...(await lowContrast(page)).map((h) => `${m} log: ${h}`));
+    }
+  }
+  if (process.env.CONTRAST_LOG) for (const h of found) console.log('CONTRAST sweep | ' + h);
+  else check(!found.length, `text under the contrast floor:\n  ${found.join('\n  ')}`);
+});
+
 flow('theme contract on the page: the hazard plate, the speed, the call and the binnacle floors, day and night (REVIEW.md 4.3)', async (page, base) => {
   for (const night of [false, true]) {
     await page.addInitScript((n) => { try { localStorage.setItem('apex.onboarded', '1'); localStorage.setItem('apex.prefs', JSON.stringify({ notesMode: 'full', nightMode: n ? 'on' : 'off' })); } catch (_) {} }, night);
@@ -10628,6 +10724,9 @@ flow('time attack, a new season (the owner, 2026-11-12: static best roads): the 
       const nameless = await unnamed(page);
       if (process.env.A11Y_LOG) for (const h of nameless) console.log(`A11Y ${name} | ${h}`);
       else check(!nameless.length, `a control in view a screen reader can't name:\n  ${nameless.join('\n  ')}`);
+      const faint = await lowContrast(page);
+      if (process.env.CONTRAST_LOG) for (const h of faint) console.log(`CONTRAST ${name} | ${h}`);
+      else check(!faint.length, `text in view under the contrast floor:\n  ${faint.join('\n  ')}`);
       check(!errors.length, `page errors or missing files:\n  ${errors.join('\n  ')}`);
       console.log(`ok   ${name} (${Date.now() - t0} ms)`);
     } catch (e) {

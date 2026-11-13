@@ -1261,7 +1261,7 @@
     html[data-type-size] .rc-links .linkbtn { white-space: normal; border-left: 0; border-bottom: 1px solid var(--rule); }
     /* two weights: Save and Share in ink, the rest in pencil (REVIEW2.md route card) */
     .rc-links .linkbtn { color: var(--panel-dim); font-weight: 500; } .rc-links #routeSaveBtn, .rc-links #routeShareBtn { color: var(--panel-ink); font-weight: 700; }
-    .rc-links .linkbtn[aria-pressed="true"] { background: var(--panel-ink); color: var(--panel); }
+    .rc-links .linkbtn[aria-pressed="true"], .rc-links #routeSaveBtn[aria-pressed="true"] { background: var(--panel-ink); color: var(--panel); }   /* Saved: the id rule above outranked it, ink on ink */
     label.linkbtn { display: inline-flex; align-items: center; cursor: pointer; }
     .home-by { display: flex; align-items: center; justify-content: center; gap: 12px; margin-top: 10px; }
     .home-by .hb-label { font-size: 15px; font-weight: 700; color: var(--panel-ink); }
@@ -1693,11 +1693,11 @@
     .hz-grid .hz-btn::before { content: ""; flex: none; width: 0; height: 0; border-left: 9px solid transparent; border-right: 9px solid transparent; border-bottom: 16px solid var(--hz-edge); }
     /* Along the route (IDEAS R-24): viewpoints named, cafés and fuel small; map data, quieter than hazards. */
     .poi-pin { font: 700 10px var(--font-ui, sans-serif); letter-spacing: 0.04em; padding: 1px 4px; border: 1px solid var(--panel-ink, #222); color: var(--panel-ink, #222); background: var(--panel, #fff); white-space: nowrap; max-width: 140px; overflow: hidden; text-overflow: ellipsis; opacity: 0.9; }
-    .poi-pin.poi-view { border-color: #2e7d5b; color: #2e7d5b; }
-    .poi-pin.poi-falls { border-color: #2a6f9b; color: #2a6f9b; }   /* IDEAS R-24: water */
-    .poi-pin.poi-charge { border-color: #2e6b8a; color: #2e6b8a; }
+    .poi-pin.poi-view { border-color: #2e7d5b; color: color-mix(in srgb, #2e7d5b 60%, var(--panel-ink, #222)); }   /* the hue, pulled to the ink so it reads at 10 px day and night */
+    .poi-pin.poi-falls { border-color: #2a6f9b; color: color-mix(in srgb, #2a6f9b 60%, var(--panel-ink, #222)); }   /* IDEAS R-24: water */
+    .poi-pin.poi-charge { border-color: #2e6b8a; color: color-mix(in srgb, #2e6b8a 60%, var(--panel-ink, #222)); }  /* an electric car's chargers (scenic.js forCar) */
     /* Find nearby's places: the name on the stamp, a size up from the route's along stamps (they are what you asked for) */
-    .poi-pin.nearby-pin { font-size: 12px; padding: 3px 6px; opacity: 1; max-width: 160px; }  /* an electric car's chargers (scenic.js forCar) */
+    .poi-pin.nearby-pin { font-size: 12px; padding: 3px 6px; opacity: 1; max-width: 160px; }
     /* A desk (IDEAS A-05): on a big screen the sheets (Where to?, Log list, Crew, Settings) open as a 480 px panel on the
        right and the map stays in view beside them, for planning with a mouse: drag the route, add stops, GPX in and out. */
     @media (min-width: 1100px) and (min-height: 600px) {
