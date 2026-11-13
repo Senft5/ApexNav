@@ -8403,6 +8403,11 @@ flow('when to go: the route card says the best time to leave, opens the next day
   const line = await page.evaluate(() => ({ text: document.getElementById('routeWhenLine').textContent, open: document.getElementById('routeWhenLine').getAttribute('aria-expanded'),
     panel: !document.getElementById('routeWhenPanel').hidden, when: apexDebug.lastWhen }));
   check(/^(Better at |Leave by |Go now|No better time )/.test(line.text) && line.open === 'false' && !line.panel, 'the card says when to go in one line, closed: ' + JSON.stringify(line));
+  // its words sit inside their row at any length (two lines at 375 px ran over the rule above, 2026-11-13)
+  const whenBox = await page.evaluate(() => { const p = document.getElementById('routeCardWhen'), b = document.getElementById('routeWhenLine'), was = b.textContent, r = document.createRange();
+    b.textContent = 'Better at 2:00 PM tomorrow: no school run, lighter traffic, the sun behind you'; r.selectNodeContents(b);
+    const t = r.getBoundingClientRect(), q = p.getBoundingClientRect(); b.textContent = was; return { t: Math.round(t.top), b: Math.round(t.bottom), qt: Math.round(q.top), qb: Math.round(q.bottom), h: Math.round(t.height) }; });
+  check(whenBox.t >= whenBox.qt && whenBox.b <= whenBox.qb, 'the When line\'s words are inside its row: ' + JSON.stringify(whenBox));
   check(line.when.forecast === false && line.when.slots >= 40, 'a day of departures, and no forecast claimed without one: ' + JSON.stringify(line.when));
   await page.evaluate(() => document.getElementById('routeWhenLine').scrollIntoView({ block: 'center' }));
   await tap('#routeWhenLine', 'When to go');

@@ -702,7 +702,8 @@
     .f-closed { --glyph: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2'%3E%3Crect x='2' y='8' width='20' height='6'/%3E%3Cpath d='M6 8 L10 14 M12 8 L16 14 M18 8 L22 14 M5 14 V21 M19 14 V21'/%3E%3C/svg%3E"); }
     /* When to go: a fact that opens; the next day as one bar per departure (taller = a better drive), night dimmed */
     .f-when { --glyph: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round'%3E%3Ccircle cx='12' cy='12' r='9'/%3E%3Cpath d='M12 7 V12 L15.5 14'/%3E%3C/svg%3E"); }
-    .when-line { flex: 1; min-width: 0; min-height: 44px; margin: -12px 0; padding: 0; display: flex; align-items: center; justify-content: space-between; gap: 10px; text-align: left; font: inherit; color: inherit; background: none; border: 0; cursor: pointer; }
+    .when-line { flex: 1; min-width: 0; min-height: 44px; margin: -12px 0; padding: 12px 0;   /* the 44 pt target reaches into the row's padding; a second line of words stays inside the row (2026-11-13: it ran over the rule above) */
+                  display: flex; align-items: center; justify-content: space-between; gap: 10px; text-align: left; font: inherit; color: inherit; background: none; border: 0; cursor: pointer; }
     .when-line::after { content: ""; flex: none; width: 7px; height: 7px; margin: 0 4px 3px 0; border-right: 2px solid currentColor; border-bottom: 2px solid currentColor; transform: rotate(45deg); transition: transform 0.15s; }
     .when-line[aria-expanded="true"]::after { transform: rotate(-135deg); margin-bottom: -3px; }
     .rc-when { margin-top: 10px; } .rc-when[hidden] { display: none; }
