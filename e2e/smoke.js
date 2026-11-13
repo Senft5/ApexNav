@@ -6252,9 +6252,9 @@ flow('Settings behind the gear: three short lists, each row saying what it is se
   check(groups.join('|') === 'Sharing and safety|How the app reads|You and Vetta' && a[0].group, 'three lists, each under its name: ' + JSON.stringify(a.map((x) => x.group || x.row)));
   check(say['Units'] === 'Miles and feet' && say['Map motion'] === 'Lean' && say['Privacy zones'] === 'None' && /^(On|Off)$/.test(say['Crash check']) && say['Reminder'] === 'Off', 'each row says what it is set to: ' + JSON.stringify(say));
   check(say['Feedback'] === '' && say['About Vetta'] === '', 'a row with nothing to say says nothing: ' + JSON.stringify(say));
-  // the three that said nothing: Spots counts yours, Route tuning says Standard until a slider moves; Road feel has no
-  // switch to read while signed out, so it still says nothing
-  check(say['Spots'] === 'None' && say['Route tuning'] === 'Standard' && say['Road feel'] === '', 'Spots, Route tuning and Road feel: ' + JSON.stringify(say));
+  // the three that said nothing: Spots counts yours, Route tuning says Standard until a slider moves; Road feel signed out
+  // has no switch to read, so its Sign in key makes it say Off
+  check(say['Spots'] === 'None' && say['Route tuning'] === 'Standard' && say['Road feel'] === 'Off', 'Spots, Route tuning and Road feel: ' + JSON.stringify(say));
   check(rows.every((r) => r.h >= 44 && !r.cut && !r.wide), 'every row a thumb tall, its value whole: ' + JSON.stringify(rows.filter((r) => r.h < 44 || r.cut || r.wide)));
   check(rows.find((r) => r.row === 'Units').label === 'Units: Miles and feet' && rows.find((r) => r.row === 'Feedback').label === 'Feedback', 'read aloud with its value: ' + JSON.stringify(rows.map((r) => r.label)));
   // change one in its sheet, come back: the row has it
@@ -7355,6 +7355,22 @@ flow('the main map: with no signal and no saved area one line says there is no m
   await page.evaluate(() => window.apexDebug.map.setStyle('https://tiles.openfreemap.org/styles/liberty?again'));
   await page.waitForTimeout(2500);
   check(await page.evaluate(() => document.getElementById('mapNote').hidden), 'no note once the map draws');
+});
+
+flow('Road feel signed out: the Settings row says Off, and a Sign in key under the line opens People (free roamer B, 2026-11-13)', async (page, base) => {
+  await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); localStorage.setItem('apex.permsExplained', '1'); } catch (_) {} });
+  await page.route('**/api/**', (route) => route.fulfill({ status: 200, contentType: 'application/json', body: new URL(route.request().url()).pathname === '/api/me' ? '{"signed_in":false}' : '[]' }));
+  await page.goto(base + '/index.html');
+  await page.waitForFunction(() => window.apexDebug && window.apexDebug.map);
+  await page.click('.tabbar >> text=Garage');
+  await openSetting(page, 'roadfeel');
+  await page.waitForSelector('#ambientSignIn:not([hidden])', { timeout: 8000 });
+  const row = await page.evaluate(() => document.querySelector('#garageSettings .nav-row[data-setting="roadfeel"] small').textContent);
+  check(row === 'Off', 'the row says Off, not nothing: ' + row);
+  await page.click('#ambientSignIn');
+  await page.waitForTimeout(400);
+  const after = await page.evaluate(() => ({ pops: document.querySelectorAll('.garage-pop.open').length, google: !!([...document.querySelectorAll('a')].find((a) => /Sign in with Google/.test(a.textContent) && a.offsetParent)) }));
+  check(after.pops === 0 && after.google, 'Settings closed, People open on its sign-in: ' + JSON.stringify(after));
 });
 
 flow('a replay with no map: the one line sits clear of the Replay plate in the short map band (free roamer B, 2026-11-12)', async (page, base) => {

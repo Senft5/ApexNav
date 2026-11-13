@@ -8437,7 +8437,11 @@
         : a && a.paused ? 'Paused: the server refused. Trying again in a few minutes.'
         : a && a.error ? `Couldn't reach the server. Retrying. ${mi}`
         : `Sharing while the phone is mounted. ${mi || 'Starts once you move.'} The first and last km of every trip stay on this phone.`;
+      // 2026-11-13 (free roamer B): signed out, the line said "Sign in" with no way to; the key under it opens People, where
+      // signing in is (as every other "Sign in to …"), and the Settings row reads Off from it
+      const si = $('ambientSignIn'); if (si) si.hidden = !(ambient.allowed === false && !ambient.member);
     }
+    $('ambientSignIn')?.addEventListener('click', () => { if (window.ApexGarageSettings && ApexGarageSettings.ui) ApexGarageSettings.ui.close(); showView('friends'); });
     // what the Garage just read of the account (renderAccount): who you are and the Share road feel switch, said at once
     function ambientFromAccount(member, on) {
       ambient.member = member; ambient.allowed = !!(member && on); ambient.checkedAt = performance.now(); paintAmbient();
