@@ -10782,6 +10782,10 @@
     // the route-context providers (web/lazy.js 'ctx') likewise, so the first plan finds them in; a plan before then loads them
     { let warm = false; const goCtx = () => { if (!warm) { warm = true; idle(needCtx); } }; map.once('idle', () => setTimeout(goCtx, 600)); setTimeout(goCtx, 6500); }
     if (document.fonts) document.fonts.ready.then(() => render(true));
+    // Native speed (big bet #10): the cover lifts on the first frames of the built cockpit, not when the map's first tile has
+    // come in over the network (up to 3 s later on a cold start). The map waits on its own paper until that tile draws (U-68,
+    // the 'load' handler), as Apple Maps shows its grid: the deck, Where to? and the tab bar are there to use at once.
+    requestAnimationFrame(() => requestAnimationFrame(() => ApexBoot.done()));
   })();
 
   // The website's offline shell (web/sw.js, IDEAS A-03). Websites only: the app serves these pages from apexnav:// itself.
