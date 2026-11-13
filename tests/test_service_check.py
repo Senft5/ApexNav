@@ -103,3 +103,25 @@ def test_owner_only_and_lazy():
     assert "if (me.moderator) accBody.append(serviceCheckSection()" in cockpit
     assert "ops: ['service_check.js']" in open(os.path.join(ROOT, "web", "lazy.js"), encoding="utf-8").read()
     assert 'src="service_check.js"' not in open(os.path.join(ROOT, "web", "index.html"), encoding="utf-8").read()
+
+
+AWAY = r"""
+const S = require(process.argv[1] + '/web/service_check.js');
+let away = 0;
+const deps = {
+  plan: async (level) => { if (level === 'max') away++; return { cands: [], reason: 'failed', error: 'graph router timed out' }; },
+  loops: async () => ({ cands: [], reason: 'failed', error: 'graph router timed out' }),
+  away: () => away,
+};
+(async () => {
+  const r = await S.run(deps, ['router_fun', 'router_long', 'router_loop']);
+  console.log(JSON.stringify(Object.fromEntries(r.map((x) => [x.id, x]))));
+})();
+"""
+
+
+def test_a_probe_the_app_was_hidden_through_is_not_judged():
+    # Nate's phone locked mid-check: on return the router said "timed out" after 544 s with nothing wrong (2026-11-13)
+    by = json.loads(subprocess.run([NODE, "-e", AWAY, ROOT], capture_output=True, text=True, check=True, timeout=60).stdout)
+    assert by["router_long"]["state"] == "skip" and "background" in by["router_long"]["detail"]
+    assert by["router_fun"]["state"] == "down" and by["router_loop"]["state"] == "down"   # judged as usual while shown

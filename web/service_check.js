@@ -157,12 +157,23 @@
     return judge(p.id, { ok: !bad, http, ms: r.ms, detail: bad || (p.note ? p.note(body) : '') }, slow);
   }
 
+  // A probe the page was hidden through is not judged: a phone that locks or leaves the app stops its timers and its
+  // worker, and on return every timer fires at once, so the router reported "graph router timed out" after 544 s
+  // (Nate's runs, 2026-11-12/13) when nothing was wrong with it. deps.away() counts the times the page went hidden.
+  async function fairProbe(p, deps) {
+    const now = deps.now || (() => Date.now());
+    const a0 = deps.away ? deps.away() : 0, t0 = now();
+    const r = await probe(p, deps).catch((e) => judge(p.id, { ok: false, ms: now() - t0, detail: errText(e) }));
+    if (deps.away && deps.away() !== a0) return { id: p.id, state: 'skip', http: null, ms: r.ms, detail: 'the app was in the background, so not judged' };
+    return r;
+  }
+
   /** Every probe at once (the router ones one after another, after the rest: they share one worker). */
   async function run(deps, only) {
     const list = PROBES.filter((p) => !only || only.includes(p.id));
     const plain = list.filter((p) => !p.router), routers = list.filter((p) => p.router);
-    const out = await Promise.all(plain.map((p) => probe(p, deps).catch((e) => judge(p.id, { ok: false, ms: 0, detail: errText(e) }))));
-    for (const p of routers) out.push(await probe(p, deps).catch((e) => judge(p.id, { ok: false, ms: 0, detail: errText(e) })));
+    const out = await Promise.all(plain.map((p) => fairProbe(p, deps)));
+    for (const p of routers) out.push(await fairProbe(p, deps));
     const order = new Map(PROBES.map((p, i) => [p.id, i]));
     return out.sort((a, b) => order.get(a.id) - order.get(b.id));
   }
