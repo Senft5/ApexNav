@@ -1,6 +1,7 @@
 // Road marks the co-driver calls on a planned route (the route context's OpenStreetMap points and spans, route_ctx/
 // osm_overpass.js): a stop sign that applies to the route, a railway level crossing, a one-lane bridge on a two-way road,
-// and speed bumps (one call for a run of them). On a back road picked for its corners these are what catch a driver out:
+// speed bumps (one call for a run of them), a mapped deer (or other animal) crossing, horse-drawn buggies and a
+// covered bridge. On a back road picked for its corners these are what catch a driver out:
 // a stop sign over a crest, a hump at the end of a fast straight. Each becomes a note event on the track (type 'mark'),
 // read with the pace notes when they are on and drawn on the strip and the map; a stop sign's call distance includes
 // braking to a stop (cockpit.js apexMpsOf). Only what the map has: a mark the map lacks is not invented, and with no route
@@ -13,7 +14,12 @@
     level_crossing: { code: 'RAIL', call: 'Railway crossing' },
     one_lane_bridge: { code: 'BRIDGE', call: 'One-lane bridge' },
     calming: { code: 'HUMP', call: 'Speed bump', many: 'Speed bumps' },
+    animal_crossing: { code: 'ANIMAL', call: 'Deer crossing' },
+    buggy: { code: 'BUGGY', call: 'Horse-drawn buggies' },
+    covered_bridge: { code: 'COVERED', call: 'Covered bridge' },
   };
+  // a mapped animal-crossing sign names its animal (osm_overpass.js hazardOf label); deer is the one on these roads
+  const animalCall = (label) => { const a = String(label || 'animals').toLowerCase(); return a === 'deer' ? 'Deer crossing' : /^(horse|horses)$/.test(a) ? 'Horse crossing' : /^(cow|cows|cattle)$/.test(a) ? 'Cattle crossing' : 'Animal crossing'; };
   const BUMPS = new Set(['bump', 'hump', 'table', 'cushion', 'yes', 'dip', 'rumble_strip']);   // not chicanes, islands or chokers
   const RUN_M = 200, SAME_M = 40, SNAP_M = 30;
 
@@ -30,26 +36,28 @@
   /**
    * The marks of a route context as corridor positions [{ kind, atM, endM, n }] (n: how many in a bump run, endM its last),
    * in order.
-   * Stops and crossings mapped twice within 40 m are one; bumps within 200 m of the last are one run.
+   * Signs and crossings mapped twice within 40 m are one; bumps within 200 m of the last are one run. A one-lane or
+   * covered bridge both on one span is two marks: different warnings (a covered bridge is often low as well as narrow).
    */
   function marksOf(ctx) {
     if (!ctx) return [];
     const raw = [];
     for (const p of Array.isArray(ctx.points) ? ctx.points : []) {
       if (!p || !finite(p.atM)) continue;
-      if (p.kind === 'stop' || p.kind === 'level_crossing') raw.push({ kind: p.kind, atM: p.atM });
+      if (p.kind === 'stop' || p.kind === 'level_crossing' || p.kind === 'buggy') raw.push({ kind: p.kind, atM: p.atM });
+      else if (p.kind === 'animal_crossing') raw.push({ kind: p.kind, atM: p.atM, call: animalCall(p.label) });
       else if (p.kind === 'calming' && BUMPS.has(String(p.label || 'yes'))) raw.push({ kind: 'calming', atM: p.atM });
     }
-    for (const s of Array.isArray(ctx.spans) ? ctx.spans : []) if (s && s.kind === 'one_lane_bridge' && finite(s.fromM)) raw.push({ kind: 'one_lane_bridge', atM: s.fromM });
+    for (const s of Array.isArray(ctx.spans) ? ctx.spans : []) if (s && (s.kind === 'one_lane_bridge' || s.kind === 'covered_bridge') && finite(s.fromM)) raw.push({ kind: s.kind, atM: s.fromM });
     raw.sort((a, b) => a.atM - b.atM);
     const out = [], last = {};
     for (const r of raw) {
       const prev = last[r.kind];
       if (prev && r.atM - prev.endM < (r.kind === 'calming' ? RUN_M : SAME_M)) { prev.endM = r.atM; prev.n++; continue; }
-      const m = { kind: r.kind, atM: r.atM, endM: r.atM, n: 1 };
+      const m = { kind: r.kind, atM: r.atM, endM: r.atM, n: 1, ...(r.call ? { call: r.call } : {}) };
       out.push(m); last[r.kind] = m;
     }
-    return out.map(({ kind, atM, endM, n }) => ({ kind, atM, endM, n }));
+    return out.map(({ kind, atM, endM, n, call }) => ({ kind, atM, endM, n, ...(call ? { call } : {}) }));
   }
 
   /**
@@ -67,7 +75,7 @@
       if (!hit || !(hit.distM <= SNAP_M) || !(hit.index >= 0)) continue;
       const k = KINDS[m.kind];
       const d = t.dist[hit.index];
-      out.push({ type: 'mark', kind: m.kind, code: k.code, call: m.n > 1 && k.many ? k.many : k.call, index: hit.index, dist_m: d, end_m: d + (m.endM - m.atM), lat: at[0], lon: at[1] });
+      out.push({ type: 'mark', kind: m.kind, code: k.code, call: m.call || (m.n > 1 && k.many ? k.many : k.call), index: hit.index, dist_m: d, end_m: d + (m.endM - m.atM), lat: at[0], lon: at[1] });
     }
     return unfelt(out, t.events);
   }
