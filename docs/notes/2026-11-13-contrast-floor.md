@@ -1,0 +1,10 @@
+# STATE
+## Session 2026-11-13 (contrast floor on every screen): e2e reads text contrast as drawn (claude/project-thread-dpdmcn)
+- Done: `lowContrast` in e2e/smoke.js checks every flow's last screen (all open pages) for text under WCAG AA (4.5:1, 3:1 at 24 px or 18.7 px bold) on its own composed surface; text over a picture, gradient, map or video, disabled keys, aria-hidden text and text mid-animation are left out. `CONTRAST_LOG=1` prints instead of failing, with ink and surface hex. A new flow, "contrast in every look", sweeps the welcome, map, People, Garage and Log in Roadbook, Tapedeck and Billet, day and night.
+- Fixed what it found: the route card's Saved key was ink on ink (an id rule outranked the pressed rule); the red Start key (`.rec-key`) was white on the accent, 1.78:1 in Tapedeck, 3.08 in Billet, 3.69 Roadbook night, now the stage colour as Start drive already was; the map's viewpoint, falls and charger pins pulled toward the ink (color-mix) so they read at 10 px day and night; the service check's "Affects" note lost its 0.75 opacity; the odometer's leading zeros are aria-hidden (print, not the number).
+- Also: People's For you rows could lose their new dot on first open (CI flake on this PR): an earlier draw's answer, landing once People was on screen, marked the list seen before the new draw read it. The draw now reads what was seen when it is made (web/inbox.js section).
+- Next: run the sweep over more screens (the route card, end card and road page in each look need stubs, as their own flows have); the private themes (Tiburon, FR-S) are not in the sweep yet.
+
+# CALL SHEET
+## 2026-11-13 (contrast floor): the Start key's label is the stage colour, not white (claude/project-thread-dpdmcn)
+White on the accent failed WCAG in three of the six looks; the theme contract (tests/test_themes.py) already promises the stage/panel on the accent, and Start drive used it. In Roadbook day the label goes from white to the cream stage (4.96:1). Undo: `color: #fff` back in `.rec-key` (web/controls.css), and accept the Tapedeck Start at 1.78:1.

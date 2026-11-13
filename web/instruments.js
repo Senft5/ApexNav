@@ -160,6 +160,9 @@
       if (note.type === 'mark' && note.code === 'RAIL') body += `<path d="M58 32 L80 54 M80 32 L58 54" stroke="${accent}" stroke-width="3.4" stroke-linecap="round"/>`;
       if (note.type === 'mark' && note.code === 'BRIDGE') body += `<path d="M36 30 L44 42 L44 62 L36 74 M64 30 L56 42 L56 62 L64 74" fill="none" stroke="${accent}" stroke-width="3" stroke-linejoin="round"/>`;
       if (note.type === 'mark' && note.code === 'HUMP') body += `<path d="M30 56 Q50 34 70 56" fill="none" stroke="${accent}" stroke-width="4"/><path d="M30 64 L70 64" stroke="${accent}" stroke-width="2"/>`;
+      if (note.type === 'mark' && note.code === 'ANIMAL') body += `<path d="M69 23 L60 33 L57 49 L69 58 L81 49 L78 33 Z" fill="none" stroke="${accent}" stroke-width="3" stroke-linejoin="round"/><path d="M63 27 L60 20 M75 27 L78 20" stroke="${accent}" stroke-width="2.6" stroke-linecap="round"/>`;
+      if (note.type === 'mark' && note.code === 'BUGGY') body += `<path d="M58 30 L80 30 L80 46 L58 46 Z" fill="none" stroke="${accent}" stroke-width="3"/><circle cx="62" cy="52" r="5" fill="none" stroke="${accent}" stroke-width="2.6"/><circle cx="76" cy="52" r="5" fill="none" stroke="${accent}" stroke-width="2.6"/>`;
+      if (note.type === 'mark' && note.code === 'COVERED') body += `<path d="M30 40 L50 24 L70 40 M36 40 L36 72 M64 40 L64 72" fill="none" stroke="${accent}" stroke-width="3" stroke-linejoin="round"/>`;
       if (note.type === 'alpr') body += `<rect x="62" y="38" width="22" height="14" fill="none" stroke="${accent}" stroke-width="2.6"/><circle cx="73" cy="45" r="3.5" fill="${accent}"/><path d="M62 45 L54 45" stroke="${accent}" stroke-width="2.6"/>`;
     }
     return `<svg viewBox="0 0 100 100" class="tulip">${body}</svg>`;
@@ -497,7 +500,7 @@
         digits.dataset.v = s;
         digits.innerHTML = '';
         const lead = s.search(/[1-9]|0\./);                          // the zeros before the number: pencil on the printed line
-        [...s].forEach((ch, k) => html('span', ch === '.' ? 'dot' : k < lead ? 'dg lead' : 'dg', digits, ch));
+        [...s].forEach((ch, k) => { const d = html('span', ch === '.' ? 'dot' : k < lead ? 'dg lead' : 'dg', digits, ch); if (k < lead) d.setAttribute('aria-hidden', 'true'); });   // the zeros are print, not the number
       }
       setT(total, d.totalMi != null ? `of ${d.totalMi.toFixed(1)}` : '');
     };

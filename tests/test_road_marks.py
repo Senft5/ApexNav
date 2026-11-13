@@ -30,6 +30,7 @@ const els = { elements: [
   node(110, at(10), { highway: 'stop' }), node(120, at(20), { highway: 'stop' }),
   node(130, at(30), { traffic_calming: 'hump' }), node(131, at(31), { traffic_calming: 'hump' }), node(132, at(32), { traffic_calming: 'table' }),
   node(133, at(33), { railway: 'level_crossing' }),
+  node(170, at(70, 12), { hazard: 'animal_crossing', animal: 'deer' }),                                  // a sign at the roadside
 ] };
 const ctx = O.aggregate(c, O.parse(els), new Uint8Array(n).fill(1));
 const t = { lat: Array.from(c.lat), lon: Array.from(c.lon), dist: Array.from(c.distM) };
@@ -39,7 +40,14 @@ const far = { lat: t.lat.map((v) => v + 0.01), lon: t.lon, dist: t.dist };      
 const chicane = M.marksOf({ points: [{ kind: 'calming', atM: 100, label: 'chicane' }, { kind: 'stop', atM: 300 }, { kind: 'stop', atM: 320 }, { kind: 'give_way', atM: 500 }, { kind: 'signal', atM: 600 }] });
 console.log(JSON.stringify({ ev: ev.map((e) => ({ type: e.type, kind: e.kind, code: e.code, call: e.call, dist_m: e.dist_m })),
   far: M.events(ctx, c, far, near).length, none: M.events(null, c, t, near).length, noTrack: M.events(ctx, c, null, near).length, chicane,
-  place: M.placeAt(c, 37.5), past: M.placeAt(c, 5000) }));
+  place: M.placeAt(c, 37.5), past: M.placeAt(c, 5000),
+  felt: M.events(ctx, c, Object.assign({}, t, { events: [{ type: 'bump', dist_m: 790 }, { type: 'corner', dist_m: 250 }] }), near).map((e) => e.code),
+  feltFar: M.events(ctx, c, Object.assign({}, t, { events: [{ type: 'bump', dist_m: 900 }] }), near).map((e) => e.code),
+  feltStop: M.unfelt([{ kind: 'stop', dist_m: 250 }], [{ type: 'bump', dist_m: 250 }]).length,
+  rural: M.events({ points: [{ kind: 'animal_crossing', atM: 200, label: 'deer' }, { kind: 'animal_crossing', atM: 220, label: 'deer' }, { kind: 'animal_crossing', atM: 600, label: 'cattle' },
+    { kind: 'animal_crossing', atM: 900 }, { kind: 'buggy', atM: 1100, label: 'horse-drawn vehicles' }], spans: [{ kind: 'covered_bridge', fromM: 1500, toM: 1530 }, { kind: 'one_lane_bridge', fromM: 1500, toM: 1530 }] }, c, t, near)
+    .map((e) => [e.code, e.call, e.dist_m]),
+  feltSaved: M.unfelt([{ kind: 'calming', dist_m: 500 }], [{ type: 'bump', dist_m: 520 }]).length }));
 """
 
 
@@ -50,19 +58,32 @@ def out():
 
 def test_the_marks_a_driver_needs_from_the_map(out):
     got = [(e["code"], e["call"], round(e["dist_m"])) for e in out["ev"]]
-    assert got == [("STOP", "Stop sign", 250), ("HUMP", "Speed bumps", 750), ("RAIL", "Railway crossing", 825), ("BRIDGE", "One-lane bridge", 1275)]   # the span starts at its first sample matched to the bridge
+    assert got == [("STOP", "Stop sign", 250), ("HUMP", "Speed bumps", 750), ("RAIL", "Railway crossing", 825), ("BRIDGE", "One-lane bridge", 1275), ("ANIMAL", "Deer crossing", 1750)]   # the span starts at its first sample matched to the bridge
     assert all(e["type"] == "mark" for e in out["ev"])
 
 
 def test_nothing_invented_or_off_the_road(out):
     assert out["far"] == 0 and out["none"] == 0 and out["noTrack"] == 0
     # a chicane is no bump; a stop mapped twice is one; give-way and signals are not called
-    assert out["chicane"] == [{"kind": "stop", "atM": 300, "n": 2}]
+    assert out["chicane"] == [{"kind": "stop", "atM": 300, "endM": 320, "n": 2}]
     assert out["place"][0] == pytest.approx(39) and out["past"] is None
 
 
 def test_each_mark_has_its_own_glyph_on_the_strip():
-    js = "const I = require(process.argv[1] + '/web/instruments.js'); console.log(JSON.stringify(['STOP', 'RAIL', 'BRIDGE', 'HUMP', 'XYZ'].map((c) => I.tulipSVG({ type: 'mark', code: c }, '#fff', '#f70'))));"
+    js = "const I = require(process.argv[1] + '/web/instruments.js'); console.log(JSON.stringify(['STOP', 'RAIL', 'BRIDGE', 'HUMP', 'ANIMAL', 'BUGGY', 'COVERED', 'XYZ'].map((c) => I.tulipSVG({ type: 'mark', code: c }, '#fff', '#f70'))));"
     svgs = json.loads(subprocess.run([NODE, "-e", js, ROOT], capture_output=True, text=True, check=True).stdout)
     assert "<polygon" in svgs[0] and "M58 32 L80 54" in svgs[1] and "M36 30" in svgs[2] and "Q50 34" in svgs[3]
-    assert len(set(svgs[:4])) == 4 and all(s.count("#f70") == 0 for s in svgs[4:])   # an unknown code: the bare hazard straight
+    assert len(set(svgs[:7])) == 7 and all(s.count("#f70") == 0 for s in svgs[7:])   # an unknown code: the bare hazard straight
+
+
+def test_rural_signs_deer_buggies_and_a_covered_bridge(out):
+    # a deer sign mapped twice is one call; the sign's animal is named; a covered one-lane bridge gets both warnings
+    assert out["rural"] == [["ANIMAL", "Deer crossing", 200], ["ANIMAL", "Cattle crossing", 600], ["ANIMAL", "Animal crossing", 900],
+                            ["BUGGY", "Horse-drawn buggies", 1100], ["COVERED", "Covered bridge", 1500], ["BRIDGE", "One-lane bridge", 1500]]
+
+
+def test_a_mapped_hump_the_track_already_calls_is_one_call(out):
+    # a bump felt inside the 750-800 m run (a member's or the crowd's) is the call; one 100 m past it is a different thing
+    assert out["felt"] == ["STOP", "RAIL", "BRIDGE", "ANIMAL"]
+    assert out["feltFar"] == ["STOP", "HUMP", "RAIL", "BRIDGE", "ANIMAL"]
+    assert out["feltStop"] == 1 and out["feltSaved"] == 0     # only bumps go; a saved mark (no end) uses its start
