@@ -5200,8 +5200,14 @@
     }
     // The server hit Workers Free's daily limit (sync.js 'apex:server-down', until midnight UTC): said once, held 10 s so the
     // "Couldn't ... Try again" lines that follow don't hide it. Driving, notes and routes don't need our server.
+    // Near the month's included usage (scope 'uploads', backend src/usage.ts) only road uploads and photos wait, until the 1st.
     window.addEventListener('apex:server-down', (e) => {
-      const until = e && e.detail && e.detail.until;
+      const d = (e && e.detail) || {}, until = d.until;
+      if (d.scope === 'uploads') {
+        const day = Number.isFinite(until) ? new Date(until).toLocaleDateString([], { month: 'short', day: 'numeric' }) : null;
+        toast(`Uploads and photos are paused${day ? ` until ${day}` : ''}: our server is near its monthly limit. Everything else still works.`, { label: 'OK', ms: 10000, onClick: () => {} });
+        return;
+      }
       const at = Number.isFinite(until) ? new Date(until).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }) : null;
       toast(`Sharing is down${at ? ` until ${at}` : ' for today'}: our server hit its daily limit. Driving and notes still work.`, { label: 'OK', ms: 10000, onClick: () => {} });
     });
@@ -6197,6 +6203,13 @@
           box.append(el('p', { className: 'note', textContent: `Database ${s.db ? 'answers' : 'not answering'} · ${missing.length ? `not set: ${missing.join(', ')}` : 'every binding and secret set'}` }),
             el('p', { className: 'note', textContent: `Road graph on GitHub: ${s.graph_data.http === 200 ? `${s.graph_data.tiles} tiles` : `HTTP ${s.graph_data.http || '--'} ${s.graph_data.error || ''}`} · ${(s.graph_data.ms / 1000).toFixed(1)} s` }),
             ...s.overpass.map((o) => el('p', { className: 'note', textContent: `${o.elements != null ? dot.up : dot.down} Overpass ${o.host} from the server: ${o.elements != null ? `${o.elements} features` : `HTTP ${o.http || '--'} ${o.error || ''}`} · ${(o.ms / 1000).toFixed(1)} s` })));
+          // the usage guard (backend src/usage.ts): this month against the $5 plan's included amounts
+          const u = s.usage;
+          if (u && u.share) {
+            const pct = (x) => `${(x * 100).toFixed(x < 0.01 ? 2 : 1)}%`;
+            const until = u.until ? new Date(u.until).toLocaleDateString([], { month: 'short', day: 'numeric' }) : '';
+            box.append(el('p', { className: 'note', textContent: `${u.shedding ? dot.down : dot.up} This month of the $5 plan: database reads ${pct(u.share.d1_read)}, writes ${pct(u.share.d1_written)} · storage writes ${pct(u.share.kv_write)}, reads ${pct(u.share.kv_read)}${u.shedding ? ` · uploads and photos paused until ${until}` : ` · uploads pause at ${Math.round(u.shed_at * 100)}%`}` }));
+          }
         }).catch(() => box.append(el('p', { className: 'note', textContent: 'Couldn’t ask the server.' })));
         return box;
       }

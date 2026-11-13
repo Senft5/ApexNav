@@ -10,6 +10,7 @@ import { MIRRORS, MIRROR_MS, UA, query as osmQuery } from "./osm_relay";
 import { RAW } from "./graph";
 import { Env, HttpError, body } from "./util";
 import { scrub } from "./errors";
+import { INCLUDED, SHED_AT, usageNow } from "./usage";
 
 const STATES = new Set(["up", "slow", "down", "skip"]);
 const ID = /^[a-z][a-z0-9_]{1,31}$/;
@@ -119,9 +120,12 @@ export async function serverSide(env: Env, fetcher: typeof fetch = fetch) {
   ]);
   let tiles: number | null = null;
   try { tiles = graph.ok ? Object.keys((JSON.parse(graph.text) as { tiles?: object }).tiles || {}).length : null; } catch { tiles = null; }
+  // this month's metered D1 rows and KV calls against Workers Paid's included amounts (src/usage.ts)
+  let usage: unknown = null;
+  try { const u = await usageNow(env); usage = { ...u, included: INCLUDED, shed_at: SHED_AT }; } catch { usage = null; }
   const elements = (t: string) => { try { const j = JSON.parse(t) as { elements?: unknown[] }; return Array.isArray(j.elements) ? j.elements.length : null; } catch { return null; } };
   return {
-    at: new Date().toISOString(), config, db,
+    at: new Date().toISOString(), config, db, usage,
     graph_data: { http: graph.http, ms: graph.ms, tiles, ...(graph.error ? { error: graph.error } : {}) },
     overpass: MIRRORS.map((url, i) => ({ host: new URL(url).host, http: mirrors[i].http, ms: mirrors[i].ms, elements: mirrors[i].ok ? elements(mirrors[i].text) : null,
       ...(mirrors[i].error ? { error: mirrors[i].error } : {}) })),

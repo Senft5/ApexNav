@@ -112,7 +112,9 @@ describe("crash reports", () => {
     const res = await api(u, "GET", "/api/garage");
     spy.mockRestore();
     expect(res.status).toBe(503);
-    expect(await res.json()).toEqual({ error: "service_unavailable" });
+    const b = await res.json() as { error: string; until: string };
+    expect(b.error).toBe("service_unavailable");
+    expect(Date.parse(b.until) - Date.now()).toBeGreaterThan(0);   // when it ends (the next midnight UTC), for the app to say
     const wait = Number(res.headers.get("retry-after"));
     expect(wait).toBeGreaterThanOrEqual(60);
     expect(wait).toBeLessThanOrEqual(86400);
