@@ -359,8 +359,14 @@
 
       // trend
       const W = Math.max(300, Math.round($('trend').clientWidth || 760)), H = 180, L = 40, R = 22, T = 12, B = 26;   // drawn at the real width so labels stay readable
-      const pts = scored.map((d, i) => [L + (scored.length < 2 ? 0.5 : i / (scored.length - 1)) * (W - L - R), T + (1 - d.ds.score / 1000) * (H - T - B), d]);
-      const grid = [0, 250, 500, 750, 1000].map(v => { const y = T + (1 - v / 1000) * (H - T - B); return `<line x1="${L}" x2="${W - R}" y1="${y}" y2="${y}" stroke="${C.rule}"/><text x="${L - 6}" y="${y + 3}" text-anchor="end" font-size="10" fill="${C.panelDim}">${v}</text>`; }).join('');
+      // the axis from a round number under your lowest Score up to 1000 (walkthrough 2026-11-13: from 0, three drives in the
+      // 800s were one flat line in a tall empty box); light hairlines, so the line is what reads
+      const lowS = scored.length ? Math.min(...scored.map((d) => d.ds.score)) : 0;
+      const lo = Math.max(0, Math.floor((lowS - 50) / 250) * 250), span = 1000 - lo, step = span <= 250 ? 50 : span <= 500 ? 100 : 250;
+      const yOf = (v) => T + (1 - (v - lo) / span) * (H - T - B);
+      const pts = scored.map((d, i) => [L + (scored.length < 2 ? 0.5 : i / (scored.length - 1)) * (W - L - R), yOf(d.ds.score), d]);
+      const ticks = []; for (let v = lo; v <= 1000; v += step) ticks.push(v);
+      const grid = ticks.map(v => { const y = yOf(v); return `<line x1="${L}" x2="${W - R}" y1="${y}" y2="${y}" stroke="${C.hair || C.rule}"/><text x="${L - 6}" y="${y + 3}" text-anchor="end" font-size="10" fill="${C.panelDim}">${v}</text>`; }).join('');
       const line = pts.map((p, i) => `${i ? 'L' : 'M'}${p[0].toFixed(1)} ${p[1].toFixed(1)}`).join('');
       const dots = pts.map(p => `<circle cx="${p[0]}" cy="${p[1]}" r="5" fill="${C.accent}"/><text x="${p[0]}" y="${H - 8}" text-anchor="middle" font-size="10" fill="${C.panelDim}">${ApexFormat.dayShort(p[2].date)}</text>`).join('');
       if (!scored.length) { $('trend').innerHTML = '<p class="note">No scored drives yet. Start a drive on the map, or import a recording in Garage, Your data; a drive needs a few clean corners to get a Score.</p>'; }
@@ -429,7 +435,7 @@
       if (brake) { out.push(line(`Best braking this month, of ${of('braking').length}`, brake, pct(brake.ds.components.braking), day(brake))); names.push(brake.name); }
       if (run) { out.push(line(`Best run this month: corners in a row, smooth and settled${Number.isFinite(run.run.len_m) && run.run.len_m > 0 ? `, over ${ApexUnits.long(run.run.len_m, 1)}` : ''}`, run, run.run.corners, day(run))); names.push(run.name); }
       const way = (dir) => (dir === 'L' ? ' left' : dir === 'R' ? ' right' : ' corner');
-      for (const { z, r, d } of kinds) { out.push(line(`Cleanest ${z}${way(r.dir)}, of ${r.n} ${z} corners`, d, r.level, day(d))); names.push(d.name); }
+      for (const { z, r, d } of kinds) { out.push(line(`Cleanest ${z}${way(r.dir)}, of ${r.n} ${z} corners`, d, `${r.level}<small>/100</small>`, day(d))); names.push(d.name); }   // a corner record out of 100, beside Scores out of 1000
       $('recordsTable').innerHTML = out.join('');
       $('recordsTable').querySelectorAll('tr td.l b').forEach((b, i) => { b.textContent = names[i]; });   // names are user text
     }
