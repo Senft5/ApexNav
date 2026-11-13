@@ -7579,7 +7579,8 @@ flow('desk: on a big screen Where to? is a column on the left and sheets a panel
   await page.click('.tab[data-view="garage"]');
   await page.waitForTimeout(400);
   const sheet = await box('.sheet.open');
-  check(sheet.w === 480 && sheet.x > 900, 'Settings is a right panel: ' + JSON.stringify(sheet));
+  // to the pixel: the sheet's slide can leave its width a float hair short (479.99994), which is still 480 px on screen
+  check(Math.round(sheet.w) === 480 && sheet.x > 900, 'Settings is a right panel: ' + JSON.stringify(sheet));
 }, { viewport: { width: 1440, height: 900 } });
 
 flow('recce: keep a drive\'s notes, change a call, and the cockpit reads yours on that road (IDEAS V-09)', async (page, base) => {

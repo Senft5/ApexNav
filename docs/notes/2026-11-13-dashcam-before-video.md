@@ -10,6 +10,8 @@
   - The line-up controls appear with the video. The line under the picture already says what to do ("Slide until the
     car is at this corner").
   - The e2e flow "dashcam overlay" checks the bare state. It fails on main.
+- **Done:** the e2e flow "desk: on a big screen" failed about 2 runs in 3 on main locally. Its Settings sheet measured
+  479.99994 px wide while sliding, against an exact `=== 480`. The check now rounds to the pixel.
 - **Active bugs:** none known.
 - **Next:** keep walking the phone screens.
 
