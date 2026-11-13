@@ -2,7 +2,8 @@
 
 ## 2026-11-13: a drive's corner cards stop repeating the tip
 - Done: on a drive's Log page a corner card shows its tip only when it is news: the corner is in Where to find time, or the tip is a habit (no best pass to copy). The other cards keep their delta (+0.6 s). The ideal drive line counts its sample as every drive of those corners: "your best pass at each of 36 corners, from 4 drives" (was "over 1 drive": the drives the best passes came from).
-- Next: the drive page's Most abrupt moments rows repeat one advice line three times.
+- Done too: Most abrupt moments says a shared advice once, under its heading, and each row keeps its distance.
+- Next: keep cutting repeated text on the drive page and Your driving.
 
 # CALL SHEET
 

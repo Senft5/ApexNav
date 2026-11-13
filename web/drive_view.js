@@ -574,14 +574,17 @@
     }
     if (ab && ab.moments.length) {                                   // the most abrupt moments, lettered as on the Smoothness map
       const ul = el('ol', 'dv-time dv-abrupt');
+      // one advice said once when every moment shares it (TestFlight 2026-11-12, "text walls"), else on its own row
+      const advice = ab.moments.map((m) => abruptAdvice(d.lat_g, d.lon_g, m.index)), same = advice.every((a) => a === advice[0]);
       ab.moments.forEach((m, k) => {
         const near = d.corners.findIndex((c) => m.index >= c.start - 4 && m.index <= c.end + 4), li = el('li'), b = el('button');
         b.innerHTML = `<b>${String.fromCharCode(65 + k)}</b><span>${near >= 0 ? `Corner ${near + 1} \u00b7 ${esc(callOf(d.corners[near]))}` : 'Between corners'}</span><em class="loss">${m.jerk_gps.toFixed(1)} g/s</em>`
-          + `<span class="note">${DIST(d.dist[m.index])} \u00b7 ${abruptAdvice(d.lat_g, d.lon_g, m.index)}</span>`;
+          + `<span class="note">${DIST(d.dist[m.index])}${same && ab.moments.length > 1 ? '' : ` \u00b7 ${advice[k]}`}</span>`;
         b.onclick = () => { if (showSmooth) showSmooth(); pick(m.index, m.index - 10, m.index + 10); };
         li.append(b); ul.append(li);
       });
-      list.prepend(el('h2', null, 'Most abrupt moments'), ul);
+      const say = same && ab.moments.length > 1 ? el('p', 'note', advice[0].charAt(0).toUpperCase() + advice[0].slice(1)) : null;
+      list.prepend(...[el('h2', null, 'Most abrupt moments'), say, ul].filter(Boolean));
     }
     if (co && co.top.length) {                                      // where the time is: the biggest gaps to your own best passes
       const ul = el('ol', 'dv-time');
