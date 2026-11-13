@@ -8418,7 +8418,7 @@ flow('REVIEW5 §2: the Garage leads with you, your cars, Look and voice and the 
   await page.click('#garageGear');
   await page.waitForSelector('#garageSettings.open');
   const rows = await page.$$eval('#garageSettings .nav-row', (r) => r.filter((x) => !x.hidden).map((x) => x.querySelector('span').textContent));
-  check(JSON.stringify(rows) === '["Road feel","Privacy zones","Crash check","Reminder","Units","Map motion","Route tuning","Spots","Your data","Account","Feedback","About Vetta"]', 'the rows behind the gear: ' + rows);
+  check(JSON.stringify(rows) === '["Road feel","Privacy zones","Crash check","Reminder","Notifications","Units","Map motion","Route tuning","Spots","Your data","Account","Feedback","About Vetta"]', 'the rows behind the gear: ' + rows);
   // U-116: a member with the switch off is never told to sign in; the switch says Off, so no line repeats it
   await page.click('#garageSettings .nav-row[data-setting="roadfeel"]');
   await page.waitForSelector('.garage-pop.open[data-setting="roadfeel"]');
