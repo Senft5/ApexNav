@@ -1912,6 +1912,8 @@
       inline = env ? host(env) : null;
       return inline;
     };
+    const PLAN_MS = { fun: 12000, max: 20000 };
+    const planMs = (level) => Math.max(o.timeoutMs || 8000, PLAN_MS[level] || 0);
     function ask(msg, timeoutMs = o.timeoutMs || 8000) {
       const id = ++seq;
       const full = { ...msg, id };
@@ -1930,7 +1932,9 @@
       covers: (points) => ask({ type: 'covers', points }, 4000).then((m) => !!m.covers),
       // the worker reads its tiles' index now (the app starting), so a first plan doesn't wait for it
       ready: () => ask({ type: 'covers', points: [] }, 10000).then(() => true),
-      plan: (req) => ask({ type: 'plan', ...req }).then((m) => m.result),
+      // Fun and Long way search a wider corridor with more weights than Quick (a 25 km Long way plan: 1.5x a Fun one's
+      // time); on a slow phone one outlasted the page's 6 s and failed with no route (service check, 2026-11-12/13)
+      plan: (req) => ask({ type: 'plan', ...req }, planMs(req && req.level)).then((m) => m.result),
       quick: (req) => ask({ type: 'quick', ...req }).then((m) => m.result),
       through: (req) => ask({ type: 'through', ...req }).then((m) => m.result),
       score: (lines) => ask({ type: 'score', lines }, 3000).then((m) => m.result),

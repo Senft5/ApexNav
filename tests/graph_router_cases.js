@@ -677,10 +677,13 @@ const CASES = {
     const c2 = R.client({ Worker: BrokenWorker, env });
     const res2 = await c2.plan({ from, to, level: 'fun' });
     const c3 = R.client({ Worker: SilentWorker, timeoutMs: 50 });
-    const timeout = await c3.plan({ from, to, level: 'fun' }).then(() => 'answered', (e) => e.message);
+    const timeout = await c3.plan({ from, to, level: 'quick' }).then(() => 'answered', (e) => e.message);
+    // Fun and Long way get longer than the page's own timeout (12 s, 20 s): still waiting after 200 ms
+    const wait = (p) => Promise.race([p.then(() => 'answered', (e) => e.message), new Promise((r) => setTimeout(() => r('waiting'), 200))]);
+    const funWait = await wait(c3.plan({ from, to, level: 'fun' })), maxWait = await wait(c3.plan({ from, to, level: 'max' }));
     const c4 = R.client({ Worker: BrokenWorker });
     const none = await c4.plan({ from, to, level: 'fun' }).then(() => 'answered', (e) => e.message);
-    return { cov, n: res.routes.length, sent: FakeWorker.last.seen, inlineSame: JSON.stringify(res.routes.map((r) => r.edges)) === JSON.stringify(res2.routes.map((r) => r.edges)), timeout, none };
+    return { cov, n: res.routes.length, sent: FakeWorker.last.seen, inlineSame: JSON.stringify(res.routes.map((r) => r.edges)) === JSON.stringify(res2.routes.map((r) => r.edges)), timeout, none, funWait, maxWait };
   },
 
   // the planner's side (own_routing.js): our routes as candidates; out of the tiles, nothing; instructions from Valhalla
@@ -997,5 +1000,6 @@ const CASES = {
 (async () => {
   const name = process.argv[2];
   const out = await CASES[name](process.argv[3]);
-  process.stdout.write(JSON.stringify(out));
+  // (then exit: a case may leave a client's timer pending, such as client's 20 s Long way wait)
+  process.stdout.write(JSON.stringify(out), () => process.exit(0));
 })().catch((e) => { console.error(e && e.stack || e); process.exit(1); });

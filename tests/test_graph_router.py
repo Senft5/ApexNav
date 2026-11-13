@@ -378,6 +378,7 @@ def test_client_worker_fallback_and_timeout():
     assert r["cov"] is True and r["n"] >= 2 and r["sent"] == ["covers", "plan"], r
     assert r["inlineSame"], "a worker that won't start: the same answer from the page"
     assert r["timeout"] == "graph router timed out" and r["none"] == "no graph router here", r
+    assert r["funWait"] == "waiting" and r["maxWait"] == "waiting", "Fun and Long way outlast the page's own timeout"
 
 
 def test_planner_glue():
