@@ -784,9 +784,10 @@
     for (const k of TOUCH) {
       const a = rateText(dt.drive[k]), b = dt.usual ? rateText(dt.usual[k]) : null;
       if (!a) continue;
-      const now = a === 'quick' ? 'one quick movement (quicker than the recording can time)' : `about ${a} g a second`;
+      // a labelled row a measure, as Your touch reads (TestFlight 2026-11-12, "text walls"); the panel says "on this drive"
+      const now = a === 'quick' ? 'one quick movement' : `${a} g a second`;
       const off = dt.outside && dt.outside[k];
-      out.push(`${TOUCH_NAME[k]}: ${now} on this drive${b ? `, ${b === 'quick' ? 'quick' : `${b}`} usually` : ''}.${off === 'above' ? ' Sharper than your usual range.' : off === 'below' ? ' Gentler than your usual range.' : ''}`);
+      out.push(`${TOUCH_NAME[k]}: ${now}${b ? ` \u00b7 usually ${b}` : ''}${off === 'above' ? ' \u00b7 sharper than usual' : off === 'below' ? ' \u00b7 gentler than usual' : ''}`);
     }
     return out;
   }
@@ -794,9 +795,10 @@
   function paceLines(p) {
     const out = [], s = p && p.skills && p.skills.pace, ov = p && p.pace ? p.pace.over : null;
     if (!s || s.level === null) return out;
-    if (finite(ov) && ov >= 0.1) out.push(`${Math.round(ov * 10)} of 10 corners went over their sane limit, and pace counts those against you. On the road, leave more in hand.`);
-    else if (finite(ov) && ov > 0) out.push(`Few corners went over their sane limit (${Math.max(1, Math.round(ov * 100))} in 100).`);
-    else if (finite(ov)) out.push('No corner went over its sane limit.');
+    // a labelled row (TestFlight 2026-11-12, "text walls"); a share over the limit costs pace, and the advice says so once
+    if (finite(ov) && ov >= 0.1) out.push(`Over the sane limit: ${Math.round(ov * 10)} of 10 corners. On the road, leave more in hand`);
+    else if (finite(ov) && ov > 0) out.push(`Over the sane limit: ${Math.max(1, Math.round(ov * 100))} of 100 corners`);
+    else if (finite(ov)) out.push('Over the sane limit: no corner');
     return out;
   }
   /** The Log's card: one line. */
