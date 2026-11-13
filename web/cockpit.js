@@ -5172,6 +5172,13 @@
       t.classList.add('show'); clearTimeout(t._h);
       t._h = setTimeout(() => { t.classList.remove('show'); if (action && action.onClick) t.querySelectorAll('a').forEach(x => x.remove()); }, action ? action.ms || 7000 : 4200);
     }
+    // The server hit Workers Free's daily limit (sync.js 'apex:server-down', until midnight UTC): said once, held 10 s so the
+    // "Couldn't ... Try again" lines that follow don't hide it. Driving, notes and routes don't need our server.
+    window.addEventListener('apex:server-down', (e) => {
+      const until = e && e.detail && e.detail.until;
+      const at = Number.isFinite(until) ? new Date(until).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }) : null;
+      toast(`Sharing is down${at ? ` until ${at}` : ' for today'}: our server hit its daily limit. Driving and notes still work.`, { label: 'OK', ms: 10000, onClick: () => {} });
+    });
     // A failed request reads as the browser's own words ("Load failed", "Failed to fetch", "NetworkError when attempting to
     // fetch resource.", a bad JSON parse); the driver gets one plain line instead. Our own messages (NO_FIX, "Couldn't find
     // that place") pass through as written.
