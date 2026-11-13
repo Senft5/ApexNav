@@ -33,12 +33,18 @@
   }
 
   /** Draws the profile into `box` (replacing what's there); `back` returns to the list. `keys` ([label, run] pairs) are
-   *  the things to do with them, first; `foot` ([label, run, className] triples) the ways to end it, last. */
-  function show(box, p, { el, btn, back, keys = [], extra = [], foot = [], partial = false }) {
+   *  the things to do with them, first; `foot` ([label, run, className] triples) the ways to end it, last. `avatar` (a node)
+   *  and `status` ({ text, live }) put the person at the top. */
+  function show(box, p, { el, btn, back, keys = [], extra = [], foot = [], partial = false, avatar = null, status = null }) {
     const v = lines(p);
+    // Nate 2026-11-12 (as easy as a big social app): the person first, their photo, who they are and what they are doing now
+    // (status: the friend list's own line, "On the road · Cherohala Skyway" or "Seen 15 min ago"), then what to do with them
+    const said = [...(v.sub ? [el('p', { className: 'note', textContent: v.sub })] : []),
+      ...(status && status.text ? [el('small', { className: status.live ? 'live' : '', textContent: status.text })] : [])];
+    const who = avatar ? [el('div', { className: 'profile-who' }, avatar, el('div', {}, ...said))] : said;
     // partial: the profile didn't load (no signal): the person and what you can do with them, nothing guessed about the rest
     box.replaceChildren(el('div', { className: 'side-pop-head' }, el('h3', { textContent: v.title }), btn('‹ Friends', back, 'linkbtn')),
-      ...(v.sub ? [el('p', { className: 'note', textContent: v.sub })] : []),
+      ...who,
       ...(keys.length ? [el('div', { className: 'row profile-keys' }, ...keys.map(([label, run], i) => btn(label, run, i ? 'ink-btn' : 'ink-btn solid')))] : []),
       ...extra,
       ...(partial ? [el('p', { className: 'note', textContent: 'Couldn’t load the rest. Check signal.' })]

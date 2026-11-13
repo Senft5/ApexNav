@@ -326,7 +326,7 @@
       background-image: linear-gradient(45deg, transparent 50%, currentColor 50%), linear-gradient(135deg, currentColor 50%, transparent 50%);
       background-position: calc(100% - 17px) 50%, calc(100% - 12px) 50%; background-size: 5px 5px, 5px 5px; background-repeat: no-repeat; }
     .plan-status { font-size: 12px; color: var(--panel-dim); min-height: 0; margin: 4px 2px 0; }
-    .plan-status:empty { display: none; }
+    .plan-status:empty, #ambientNote:empty { display: none; }
     .plan-links { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-top: 10px; flex-wrap: wrap; }
     .loop-row { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; color: var(--panel-dim); }
     .chip { min-width: 40px; height: 32px; padding: 0 10px; border: 1px solid var(--panel-dim); color: var(--panel-ink); font-size: 13px; font-weight: 600; }
@@ -596,6 +596,7 @@
     .sheet section[data-panel="garage"] .ctl-label { font-size: 15px; font-weight: 500; }
     .co-row { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 0 12px; margin: 0; min-height: 44px; font-size: 15px; font-weight: 500; }
     .co-row .linkbtn { flex: 0 1 auto; max-width: 100%; white-space: normal; text-align: left; }   /* at a large text size the key drops under the words, whole */
+    .co-row .linkbtn:first-child { padding-left: 0; } .co-row .linkbtn:last-child { padding-right: 0; }   /* the words line up with the rows above and below, at both edges */
     .sheet .sw span, .edge-panel .sw span, .side-pop .sw span { font-size: 15px; font-weight: 500; color: var(--panel-ink); text-align: left; }
     .sw.on span { color: var(--panel-ink); }
     /* design pass 8: Layers is the map's legend. A layer row: its key (drawn as the map draws it), its name over a line of
@@ -1378,7 +1379,12 @@
     .crew-tiles.one { grid-template-columns: minmax(0, 1fr); }
     .crew-tiles.one .crew-tile-head b { white-space: normal; overflow-wrap: anywhere; }
     .row.profile-keys { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; } .profile-keys .ink-btn, .profile-keys .ink-btn.solid { height: 44px; padding: 0 8px; }
-    .profile-foot { gap: 16px; border-top: 1px solid var(--hair, var(--panel-dim)); padding-top: 8px; }
+    .profile-foot { gap: 16px; border-top: 1px solid var(--hair, var(--panel-dim)); padding-top: 8px; } .profile-foot > :first-child { padding-left: 0; }
+    /* a friend's profile opens on the person: their photo, name and what they are doing now, as a social app's would */
+    .profile-who { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 12px; align-items: center; } .profile-who .note { margin: 0; }
+    .profile-who small { display: block; margin-top: 2px; font-size: 13px; color: var(--panel-dim); }
+    .profile-who small.live { color: var(--panel-ink); font-weight: 600; }
+    .profile-who small.live::before { content: ""; display: inline-block; width: 7px; height: 7px; margin: 0 6px 1px 0; border-radius: 50%; background: var(--accent); }
     /* P-25: Tapedeck's mono is wide; the status lines and the drive card's lines a size down so each stays one line */
     html[data-theme="tapedeck"] .friend-head small, html[data-theme="tapedeck"] .cp-drive-body .note { font-size: 12px; letter-spacing: 0; }
     .friend-sent span { color: var(--panel-dim); }

@@ -5897,7 +5897,7 @@
       // the route card, planned with them, still shows each one as a chip
       for (const [chipId, boxId] of [['planOptionsChip', null], ['cardOptionsChip', 'cardOptsOn']]) {
         const chip = $(chipId), box = boxId && $(boxId);
-        chip.textContent = ApexPlanOptions.chipLabel(on);
+        chip.textContent = box ? 'Options' : ApexPlanOptions.chipLabel(on);   // the card's chips beside it name each one: no count to repeat them
         chip.setAttribute('aria-label', on.length ? `Options: ${on.map((x) => x.aria).join(', ')}` : 'Options');
         if (box) box.replaceChildren(...on.map((x) => { const b = document.createElement('button'); b.className = 'chip'; b.textContent = x.text; b.dataset.opt = x.key;
           b.setAttribute('aria-label', `${x.aria}. Change in Options`); b.setAttribute('aria-haspopup', 'dialog'); b.addEventListener('click', openOptions); return b; }));
@@ -6166,11 +6166,14 @@
     function shareRouteWith(handle) {
       shareTo = handle;
       showView(null); openPlan(true);
-      if (plannedRoute) { $('routeShareBtn').click(); setTimeout(() => $('routeSharePick').scrollIntoView({ block: 'nearest' }), 50); }
+      // the panel emptied first: Share opens and closes it
+      if (plannedRoute) { $('routeSharePick').replaceChildren(); $('routeShareBtn').click(); setTimeout(() => $('routeSharePick').scrollIntoView({ block: 'nearest' }), 50); }
       else { $('destInput').focus(); toast(`Plan a route, then Share on its card: @${handle} is picked.`); }
     }
     $('routeShareBtn').addEventListener('click', async () => {
       const t = plannedRoute, box = $('routeSharePick');
+      // Share opens and closes its panel, so the panel has no Cancel of its own under the route card's Cancel (which drops the route)
+      if (box.childElementCount) { box.replaceChildren(); return; }
       if (!t || !Array.isArray(t.lat) || t.lat.length < 2) return;
       box.replaceChildren(el('p', { className: 'note', textContent: 'Loading your friends and crews…' }));
       let friends = [], crews = [];
@@ -6205,7 +6208,7 @@
           const j = await jsonOf(r);
           if (!r.ok) { toast(r.status === 429 ? 'That\'s a lot of shares today.' : 'Couldn\'t share it. Try again.'); return; }
           toast(j && j.shared ? `Shared. They'll find it in People.` : 'Nobody to share it with.'); box.replaceChildren();
-        }, 'ink-btn solid'), btn('Cancel', () => box.replaceChildren(), 'linkbtn')), ...bookPart());
+        }, 'ink-btn solid')), ...bookPart());
       box.scrollIntoView({ block: 'nearest' });
     });
     // From friends (REVIEW_PEOPLE P-13/P-14): what friends shared with you, newest first, with when; `list` is the render's read.
@@ -6381,7 +6384,25 @@
       drives: (c, o) => (crewEvents ? crewEvents.section([{ id: c.id, name: c.name, visibility: c.visibility, role: c.is_owner ? 'owner' : 'member' }], { crewId: c.id, ...o }) : null),
       // P-18: the crew page's drive is the Crew drives sheet's card; a change on one redraws the other
       driveCard: (e, o) => (crewEvents ? crewEvents.card(e, { ...o, redo: () => { o.redo(); crewEvents.refresh(); } }) : null),
-      block: safety ? (handle) => safety.block(handle, () => renderAccount()) : null }) : null; } catch (e) { console.error('crew page', e); } });
+      block: safety ? (handle) => safety.block(handle, () => renderAccount()) : null,
+      // a crew-mate's sheet: are they a friend ('friend'), did they ask you ('asked'), did you ask them ('sent', kept on this
+      // phone as the Invite sheet keeps it), or neither ('none'); null when that can't be read
+      friendOf: async (h) => {
+        const l = await apiCall('GET', '/api/friends').then(jsonOf).catch(() => null);
+        if (!Array.isArray(l)) return null;
+        const f = l.find((x) => x && x.handle === h);
+        if (f) return f.status === 'accepted' ? 'friend' : f.incoming ? 'asked' : 'sent';
+        let sent = []; try { sent = JSON.parse(localStorage.getItem('apex.sentRequests') || '[]'); } catch (_) {}
+        return Array.isArray(sent) && sent.includes(h) ? 'sent' : 'none';
+      },
+      // the same request the Invite sheet sends; when they asked first it makes you friends (social.ts friendRequest)
+      addFriend: async (h, accepting) => {
+        const r = await apiCall('POST', '/api/friends/request', { handle: h }).catch(() => null);
+        if (!r || !r.ok) { toast('Couldn\'t send that. Try again.'); return false; }
+        if (!accepting) { try { const l = JSON.parse(localStorage.getItem('apex.sentRequests') || '[]'); localStorage.setItem('apex.sentRequests', JSON.stringify([...(Array.isArray(l) ? l : []).filter((x) => x !== h), h].slice(-30))); } catch (_) {} }
+        toast(accepting ? `You and @${h} are friends now.` : `Request sent to @${h}.`);
+        return true;
+      } }) : null; } catch (e) { console.error('crew page', e); } });
     // Units (web/units.js, IDEAS U-22): every number is formatted when it is drawn, so a change redraws in place (the owner,
     // 2026-10-29: no page reloads). The cluster's unit labels, the loop lengths, the route card and the open sheet are redrawn
     // now; anything else picks the units up the next time it draws. Never mid-drive: the cluster would change under the driver.
@@ -6836,7 +6857,9 @@
         try { const r = await apiCall('GET', `/api/friends/${encodeURIComponent(f.id)}/profile`); p = r.ok ? await jsonOf(r) : null; } catch (_) {}
         const view = el('div', { className: 'stack-8 profile-view' });
         // P-04: Unfriend, Report and Block live at the profile's foot, not on the row
+        const st = stateOf(f), photo = (where.get(f.handle) || {}).photo_id || null;
         ApexProfileView.show(view, p && !Array.isArray(p) ? p : { handle: f.handle, name: f.name }, { el, btn, back: () => closeProfile(), keys: keysFor(f),
+          avatar: window.ApexPhotos ? ApexPhotos.avatar(photo, f.handle || '?', 56) : null, status: st && st.text ? { text: st.text, live: !!st.live } : null,
           partial: !p || Array.isArray(p), extra: [...lastShare(f), aboutYou(f)],
           foot: [['Unfriend', async () => { if (await ApexConfirm.ask(`Unfriend @${f.handle}? This also stops all sharing.`, 'Unfriend')) { await apiCall('DELETE', `/api/friends/${f.id}`); closeProfile(); redo(); } }, 'danger-btn'],
             ...(safety && f.handle ? [['Report', () => safety.report({ kind: 'user', target: f.handle, label: `@${f.handle}`, who: f.handle, done: redo })],
@@ -7379,6 +7402,21 @@
           const up = document.createElement('button'); up.className = 'linkbtn'; up.textContent = 'Update';
           up.setAttribute('aria-label', `Update the map ${a.name}, saved ${age.month}`);
           up.addEventListener('click', () => saveAreaAt(a.lat, a.lon, up, { id: a.id, name: a.name, radiusKm: a.radiusKm, idle: 'Update' }));
+          acts.append(up);
+        }
+        // a saved route's map: fetched again along the route as it is saved now (keepMapAlong, same id)
+        const route = age.stale && !Number.isFinite(a.radiusKm) ? ApexSavedRoutes.list(localStorage).find((p) => routeAreaId(p) === a.id) : null;
+        if (route) {
+          const up = document.createElement('button'); up.className = 'linkbtn'; up.textContent = 'Update';
+          up.setAttribute('aria-label', `Update the map along ${route.name}, saved ${age.month}`);
+          up.addEventListener('click', async () => {
+            if (up.disabled) return;
+            up.disabled = true; up.textContent = 'Saving the map…';
+            await keepMapAlong({ id: route.id, name: route.name, lat: route.coords.map((c) => c[1]), lon: route.coords.map((c) => c[0]) });
+            const now = ApexOfflineTiles.areas().find((x) => x.id === a.id);
+            if (!now || ApexOfflineTiles.ageOf(now, Date.now()).stale) toast('Couldn\'t update the map. Check signal and try again.');
+            renderMyData();
+          });
           acts.append(up);
         }
         const del = document.createElement('button'); del.className = 'linkbtn'; del.textContent = 'Delete';
@@ -8431,6 +8469,14 @@
       ApexNoteTiming.setRoad(ApexWetRoads.road(st));
       const line = ApexWetRoads.line(st);
       if (line && w.said !== st) { w.said = st; toast(line); sayQuietLine(line); }
+      // cold tyres on a dry road (wet_roads.js coldLine): once a drive, and once a day, so a winter of drives isn't told daily
+      const car = routingCar(), cold = !w.cold && ApexWetRoads.coldLine(st, d.tempC, car && car.tyres);
+      if (cold) {
+        w.cold = true;
+        const today = new Date().toDateString();
+        let last = null; try { last = localStorage.getItem('apex.coldSaid'); } catch (_) {}
+        if (last !== today) { try { localStorage.setItem('apex.coldSaid', today); } catch (_) {} toast(cold); sayQuietLine(cold); }
+      }
     }
     function noteFlow() {
       if (!window.ApexFlowLive || !window.ApexFlow || !drive.rec) return;
@@ -8457,8 +8503,9 @@
     function paintAmbient() {
       const note = $('ambientNote'); if (!note) return;
       const a = ambientStats(), mi = a ? `${ApexUnits.long((a.km) * 1000, 1)} shared since the app opened` : '';
-      // U-116: the line for the state you are in: signed out, a member with the switch off (it sits above this line), or on
-      note.textContent = ambient.allowed === false ? (ambient.member ? 'Off. Turn on Share road feel above.' : 'Off. Sign in to share road feel.')
+      // U-116: the line for the state you are in: signed out, a member with the switch off (nothing: the switch right above
+      // already says Off, 2026-11-13), or on
+      note.textContent = ambient.allowed === false ? (ambient.member ? '' : 'Off. Sign in to share road feel.')
         : !NATIVE_SHELL ? 'Sharing banking, bumps and surface while you drive. In the iPhone app it also shares whenever the phone is mounted.'
         : !ambient.mounted ? 'Waiting for the phone to be calibrated in its mount.'
         : a && a.paused ? 'Paused: the server refused. Trying again in a few minutes.'
@@ -9589,7 +9636,7 @@
       try { const x = JSON.parse(localStorage.getItem('vetta.practice') || 'null'); return x && typeof x.skill === 'string' ? x : null; } catch (_) { return null; }
     }
     // what a drive with no score was, in the score's slot: no corners at all, or too few clean ones to score
-    const noScoreWords = (corners) => (Number.isFinite(corners) && corners > 0 ? 'too few clean corners to score' : 'no corners to score');
+    const noScoreWords = (corners) => (Number.isFinite(corners) && corners > 0 ? 'Too few clean corners to score' : 'No corners to score');
     // The score arrived (ds: { score, components }, corners: a count; others: your earlier drives with this name, scored)
     // TestFlight 2026-11-12 (the owner: "cluttered", "walls of text"): at most two lines under the score, the ones you
     // asked for or earned first (the practice, a month's best run), then the road's and what the phone felt
@@ -9607,10 +9654,11 @@
       if (roadbooks) roadbooks.afterDrive(c.id).catch(() => {});      // a road of one of your roadbooks this drive covered is stamped
       if (!window.ApexEndReveal) $('endMeta').textContent = ApexFormat.factsLine(c);   // else the ledger takes the new fact in (land, below)
       $('endScore').removeAttribute('aria-busy');
-      // D-6 / R-5 (panel round 1): a drive with no score still reads as a drive. The score's slot says what it was, "3.1 mi ·
-      // no corners to score", instead of "-- /1000" over a sentence about a failed exam; nothing is invented (no number).
+      // D-6 / R-5 (panel round 1): a drive with no score still reads as a drive. The score's slot says why, "No corners to
+      // score", instead of "-- /1000" over a sentence about a failed exam; nothing is invented (no number). The distance is
+      // the facts row's right under it, so it is not said twice (2026-11-13 sweep: "3.7 mi · no corners…" over "3.7 mi").
       const none = c.ds.score == null;
-      $('endScore').textContent = none ? [Number.isFinite(c.len_m) ? ApexFormat.distance(c.len_m) : null, noScoreWords(c.corners)].filter(Boolean).join(' · ') : String(c.ds.score);
+      $('endScore').textContent = none ? noScoreWords(c.corners) : String(c.ds.score);
       $('endScore').classList.remove('unk');                         // the words are the answer; "--" never shows as a score here
       $('endScore').parentElement.classList.toggle('no-score', none);
       if (window.ApexEndReveal) ApexEndReveal.land(endEl(), { score: none ? null : c.ds.score, facts: ApexFormat.factsLine(c) });

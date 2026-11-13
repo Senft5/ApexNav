@@ -81,19 +81,38 @@
    * Whether a saved offline area (offline_tiles.js areas()) holds the whole box [south, west, north, east]: a disc round a
    * point, or the map kept along a saved route (its `box`, padded by its corridor) for a drive that stayed inside it.
    */
-  function covered(areas, box) {
+  function covered(areas, box, pts = null) {
     const [s, w, n, e] = box;
     return (areas || []).some((a) => {
       if (Array.isArray(a.box) && a.box.length === 4 && a.box.every(Number.isFinite)) {
         const pad = (Number.isFinite(a.alongKm) ? a.alongKm : 0) / 110.54, padLon = pad / Math.max(0.2, Math.cos(((a.box[0] + a.box[2]) / 2) * rad));
-        return s >= a.box[0] - pad && n <= a.box[2] + pad && w >= a.box[1] - padLon && e <= a.box[3] + padLon;
+        if (!(s >= a.box[0] - pad && n <= a.box[2] + pad && w >= a.box[1] - padLon && e <= a.box[3] + padLon)) return false;
+        // with the route's own line and the drive's points: every point within the corridor (less the line's thinning)
+        return !(pts && Array.isArray(a.line) && a.line.length >= 2 && Number.isFinite(a.alongKm))
+          || inCorridor(a.line, a.alongKm - (Number.isFinite(a.lineTolKm) ? a.lineTolKm : 0), pts);
       }
       return Number.isFinite(a.lat) && Number.isFinite(a.lon) && Number.isFinite(a.radiusKm)
         && [[s, w], [s, e], [n, w], [n, e]].every(([la, lo]) => kmBetween(a.lat, a.lon, la, lo) <= a.radiusKm);
     });
   }
+  /** Whether every point of `pts` ({ lat, lon }, at most ~400 looked at) is within `km` of the line [[lat, lon], ...]. */
+  function inCorridor(line, km, pts) {
+    const n = Math.min(pts.lat.length, pts.lon.length), step = Math.max(1, Math.floor(n / 400)), k = Math.cos(line[0][0] * rad);
+    const X = (lo) => lo * 111.32 * k, Y = (la) => la * 110.54;
+    const near = (la, lo) => {
+      const px = X(lo), py = Y(la);
+      for (let j = 0; j + 1 < line.length; j++) {
+        const ax = X(line[j][1]), ay = Y(line[j][0]), dx = X(line[j + 1][1]) - ax, dy = Y(line[j + 1][0]) - ay, L = dx * dx + dy * dy;
+        const t = L ? Math.max(0, Math.min(1, ((px - ax) * dx + (py - ay) * dy) / L)) : 0;
+        if (Math.hypot(px - ax - t * dx, py - ay - t * dy) <= km) return true;
+      }
+      return false;
+    };
+    for (let i = 0; i < n; i += step) if (Number.isFinite(pts.lat[i]) && Number.isFinite(pts.lon[i]) && !near(pts.lat[i], pts.lon[i])) return false;
+    return n === 0 || near(pts.lat[n - 1], pts.lon[n - 1]);
+  }
   /** Worth asking for the map: a connection, or a saved area under the drive. Never a map that can only fail. */
-  function worthTrying(online, areas, box) { return online !== false || covered(areas, box); }
+  function worthTrying(online, areas, box, pts = null) { return online !== false || covered(areas, box, pts); }
 
   // ---- the page ------------------------------------------------------------------------------------------------------
   let loading = null;
@@ -119,11 +138,11 @@
 
   /**
    * Puts the map under `holder` (a positioned box exactly the size of the SVG) when it first comes into view.
-   * view: () => { center, zoom } for the holder's current width; box: [s, w, n, e]; palette: () => the theme's map
+   * view: () => { center, zoom } for the holder's current width; box: [s, w, n, e]; pts: the drive's { lat, lon }; palette: () => the theme's map
    * palette (ApexThemes look.map); onShown: told when the map is up; onMove({ center, zoom } | null): the camera as it
    * moves (null: back to the plain picture). Returns { restyle(), refit(), recenter(), focus(v), destroy(), shown, reason }.
    */
-  function attach(holder, { view, box, palette, onShown, onMove } = {}) {
+  function attach(holder, { view, box, pts = null, palette, onShown, onMove } = {}) {
     let map = null, dead = false, shown = false, io = null, timer = 0, tiles = 0, fitW = 0, reason = '';
     const doc = root.document;
     const layer = doc.createElement('div');
@@ -184,7 +203,7 @@
       if (dead || map) return;
       const offline = root.ApexOfflineTiles;
       const online = root.navigator ? root.navigator.onLine : true;
-      if (!worthTrying(online, offline && offline.areas ? offline.areas() : [], box)) { fail(OFFLINE); return; }
+      if (!worthTrying(online, offline && offline.areas ? offline.areas() : [], box, pts)) { fail(OFFLINE); return; }
       let gl;
       try { gl = await load(); } catch (_) { fail(why()); return; }
       if (dead || !gl || !holder.isConnected) return;
