@@ -68,7 +68,11 @@ final class ApexCar {
     /// The car's Places (web/carplay.js placesMessage): pinned places, saved routes (`saved` their id, opened on the phone,
     /// no position) and recents, each with an optional detail line ("Saved · 12 mi", a pinned place's address).
     /// `attack`: this week's time attack loop (its id), which the phone drives as the route itself.
-    private(set) var places: [(name: String, detail: String, coord: CLLocationCoordinate2D?, saved: String?, attack: String?)] = []
+    typealias Place = (name: String, detail: String, coord: CLLocationCoordinate2D?, saved: String?, attack: String?)
+    private(set) var places: [Place] = []
+    /// The car's Loops list as the phone's loop dial (web/carplay.js loopsMessage): five times or five distances, each sent
+    /// back as it came (`minutes` or `miles`). Empty until the page says, and then the dial's five times stand in.
+    private(set) var loops: [(name: String, minutes: Int?, miles: Double?)] = []
     /// The cafés and fuel along the planned route by name (web/carplay.js alongMessage): a longer and a shorter line for the
     /// route preview, empty until the page has looked. A new route clears them; the page sends that route's after it.
     private(set) var along = (full: "", short: "", descent: "")
@@ -268,6 +272,13 @@ final class ApexCar {
                 guard c != nil || saved != nil || attack != nil else { return nil }
                 return (name: String(name.prefix(60)), detail: String(((p["detail"] as? String) ?? "").prefix(60)), coord: c, saved: saved, attack: attack)
             }
+        case "loops":
+            loops = ((dict["list"] as? [[String: Any]]) ?? []).prefix(5).compactMap { r in
+                guard let name = r["name"] as? String, !name.isEmpty else { return nil }
+                let minutes = (r["minutes"] as? NSNumber)?.intValue, miles = (r["miles"] as? NSNumber)?.doubleValue
+                guard (minutes ?? 0) > 0 || (miles ?? 0) > 0 else { return nil }
+                return (name: String(name.prefix(24)), minutes: minutes, miles: minutes == nil ? miles : nil)
+            }
         default:
             break
         }
@@ -466,12 +477,14 @@ final class ApexCarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDel
     }
 
     @MainActor private func openLoops() {
-        // The same five times as the phone's loop dial (web/cockpit.js LOOP_MINUTES), so the car and the phone offer one set.
-        let loops: [(String, Int)] = [("30 minutes", 30), ("1 hour", 60), ("1½ hours", 90), ("2 hours", 120), ("3 hours", 180)]
-        let items: [CPListItem] = loops.map { label, minutes in
-            let item = CPListItem(text: label, detailText: nil)
+        // The phone's dial, by time or by distance in your units (ApexCar.loops); its five times until the page has said.
+        let times: [(name: String, minutes: Int?, miles: Double?)] = [("30 minutes", 30, nil), ("1 hour", 60, nil), ("1½ hours", 90, nil),
+                                                                       ("2 hours", 120, nil), ("3 hours", 180, nil)]
+        let loops = ApexCar.shared.loops.isEmpty ? times : ApexCar.shared.loops
+        let items: [CPListItem] = loops.map { l in
+            let item = CPListItem(text: l.name, detailText: nil)
             item.handler = { [weak self] _, done in
-                ApexCar.shared.send("loop", ["minutes": minutes])
+                if let m = l.minutes { ApexCar.shared.send("loop", ["minutes": m]) } else if let mi = l.miles { ApexCar.shared.send("loop", ["miles": mi]) }
                 self?.interfaceController?.popToRootTemplate(animated: true, completion: nil)
                 done()
             }
@@ -485,21 +498,22 @@ final class ApexCarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDel
     @MainActor private func openPlaces() {
         let items: [CPListItem] = ApexCar.shared.places.map { p in
             let item = CPListItem(text: p.name, detailText: p.detail.isEmpty ? nil : p.detail)
-            item.handler = { [weak self] _, done in
-                if let id = p.saved {
-                    self?.interfaceController?.popToRootTemplate(animated: true, completion: nil)
-                    ApexCar.shared.send("saved", ["id": id])                       // the phone opens its copy (no signal needed)
-                } else if let id = p.attack {
-                    self?.interfaceController?.popToRootTemplate(animated: true, completion: nil)
-                    ApexCar.shared.send("attack", ["id": id])                      // the phone drives the week's loop itself
-                } else if let c = p.coord { self?.go(to: c, name: p.name) }
-                done()
-            }
+            item.handler = { [weak self] _, done in self?.open(place: p); done() }
             return item
         }
         let empty = CPListItem(text: "No places yet", detailText: "Where to? finds one")
         let t = CPListTemplate(title: "Places", sections: [CPListSection(items: items.isEmpty ? [empty] : items)])
         interfaceController?.pushTemplate(t, animated: true, completion: nil)
+    }
+
+    @MainActor private func open(place p: ApexCar.Place) {
+        if let id = p.saved {
+            interfaceController?.popToRootTemplate(animated: true, completion: nil)
+            ApexCar.shared.send("saved", ["id": id])                               // the phone opens its copy (no signal needed)
+        } else if let id = p.attack {
+            interfaceController?.popToRootTemplate(animated: true, completion: nil)
+            ApexCar.shared.send("attack", ["id": id])                              // the phone drives the loop itself
+        } else if let c = p.coord { go(to: c, name: p.name) }
     }
 
     /// Report a hazard (the phone's report sheet's kinds): one tap on a grid, then back to the map.
@@ -526,21 +540,34 @@ final class ApexCarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDel
         if let p = ApexCar.shared.position {
             req.region = MKCoordinateRegion(center: CLLocationCoordinate2D(latitude: p.lat, longitude: p.lon), latitudinalMeters: 150_000, longitudinalMeters: 150_000)
         }
+        // your own places by name first (Home, a saved route, a time attack), as the phone's Where to? puts them (U-19)
+        let mine: [CPListItem] = ApexCar.shared.places.filter { $0.name.localizedCaseInsensitiveContains(q) }.prefix(4).map { p in
+            let item = CPListItem(text: p.name, detailText: p.detail.isEmpty ? nil : p.detail)
+            item.userInfo = PlaceRef(place: p)
+            return item
+        }
         let s = MKLocalSearch(request: req)
         search = s
         s.start { resp, _ in
             MainActor.assumeIsolated {
-                let items: [CPListItem] = (resp?.mapItems ?? []).prefix(12).map { m in
+                let names = Set(mine.map { $0.text?.lowercased() ?? "" })
+                let found: [CPListItem] = (resp?.mapItems ?? []).filter { !names.contains(($0.name ?? "").lowercased()) }.prefix(12 - mine.count).map { m in
                     let item = CPListItem(text: m.name ?? "Place", detailText: m.placemark.title)
                     item.userInfo = m
                     return item
                 }
-                done(items)
+                done(mine + found)
             }
         }
     }
+    /// One of your own places in the search's list (a class: CPListItem.userInfo holds it as Any).
+    private final class PlaceRef {
+        let place: ApexCar.Place
+        init(place: ApexCar.Place) { self.place = place }
+    }
 
     @MainActor fileprivate func searchPicked(_ item: CPListItem) {
+        if let ref = item.userInfo as? PlaceRef { open(place: ref.place); return }
         guard let m = item.userInfo as? MKMapItem else { return }
         go(to: m.placemark.coordinate, name: m.name ?? "Destination")
     }

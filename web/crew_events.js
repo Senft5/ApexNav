@@ -150,6 +150,10 @@
     .cp-drive-body > b { font-size: 18px; overflow-wrap: anywhere; }
     .cp-going { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
     .cp-faces { display: flex; } .cp-faces .avatar { margin-left: -6px; } .cp-faces .avatar:first-child { margin-left: 0; }
+    .cp-going-who { display: flex; align-items: center; gap: 8px; border: 0; background: none; padding: 0; margin: 0; font: inherit; color: inherit; cursor: pointer; text-align: left; min-height: 44px; }
+    .cp-who-list { display: grid; max-height: 60vh; overflow-y: auto; }
+    .cp-who-row { display: flex; align-items: center; gap: 12px; min-height: 48px; border: 0; border-top: 1px solid var(--rule); background: none; padding: 4px 0; font: inherit; font-weight: 600; color: inherit; text-align: left; }
+    .cp-who-row:first-child { border-top: 0; } button.cp-who-row { cursor: pointer; }
     .cp-now { display: grid; gap: 8px; border-top: 1px solid var(--rule); padding-top: 8px; }
     .cp-now .row { flex-wrap: wrap; gap: 8px; align-items: center; }
     .cp-now p { margin: 0; }
@@ -199,6 +203,25 @@
       if (g.more) row.append(el('span', { className: 'avatar', style: '--av:30px' }, el('b', { textContent: `+${g.more}` })));
       row.setAttribute('aria-label', `${label}: ${(handles || []).map((h) => '@' + h).join(', ')}`);
       return row;
+    }
+    // who's going, one tap from the faces, as a social app's event: each name opens the person (person(h), the crew
+    // page's member sheet: Add friend, Report, Block); you are on the list as You
+    function whoSheet(title, handles, person) {
+      const ov = el('div', { className: 'overlay dim show cp-who-sheet' });
+      ov.setAttribute('role', 'dialog'); ov.setAttribute('aria-modal', 'true'); ov.setAttribute('aria-label', title);
+      const close = () => ov.remove();
+      ov.addEventListener('click', (ev) => { if (ev.target === ov) close(); });
+      const mine = me();
+      const rows = handles.map((h) => {
+        const kids = [face(h), el('span', { textContent: h === mine ? 'You' : '@' + h })];
+        if (h === mine) return el('div', { className: 'cp-who-row' }, ...kids);
+        const b = el('button', { type: 'button', className: 'cp-who-row' }, ...kids);
+        b.addEventListener('click', () => { close(); person(h); });
+        return b;
+      });
+      ov.append(el('div', { className: 'card-sheet' }, el('h2', { textContent: title }), el('div', { className: 'cp-who-list' }, ...rows),
+        el('div', { className: 'row' }, btn('Done', close, 'linkbtn'))));
+      doc.body.append(ov);
     }
     const calendar = (e, file = 'crew-drive.ics') => {
       const a = el('a', { href: URL.createObjectURL(new Blob([icsFor(e)], { type: 'text/calendar' })), download: file });
@@ -269,14 +292,19 @@
       body.append(el('span', { className: 'note', textContent: st === 'remembered' ? [e.crew_name && o.crew ? e.crew_name : '', where.replace('Meet at', 'Met at')].filter(Boolean).join(' \u00b7 ')
         : [timeText(e.starts_at), where, repeatText(e.repeat_weeks, e.starts_at)].filter(Boolean).join(' \u00b7 ') }));
       if (o.crew && st !== 'remembered') body.append(el('span', { className: 'note', textContent: `${e.crew_name}${e.by_handle ? ` \u00b7 by @${e.by_handle}` : ''}` }));
-      if (st === 'remembered') { body.append(remembered(e, redo)); return box; }
+      if (st === 'remembered') { body.append(remembered(e, redo, o.person)); return box; }
       body.append(el('span', { className: 'note', textContent: rolesLine(e) }));
       // who's going, and your answer: one slide switch on the card, as a social app's event (Nate 2026-11-12: it was a
       // key here and the same answer again as a switch under More)
       const going = Array.isArray(e.going) ? e.going : [];
-      body.append(el('div', { className: 'cp-going' }, going.length ? faces(going, 'Going') : '',
-        el('span', { className: 'note', textContent: going.length ? `${going.length} going${e.maybe ? ` \u00b7 ${e.maybe} maybe` : ''}` : 'Nobody going yet' })),
-        answer(e, redo));
+      const count = el('span', { className: 'note', textContent: going.length ? `${going.length} going${e.maybe ? ` \u00b7 ${e.maybe} maybe` : ''}` : 'Nobody going yet' });
+      let who = el('div', { className: 'cp-going' }, going.length ? faces(going, 'Going') : '', count);
+      if (going.length && o.person) {
+        who = el('button', { type: 'button', className: 'cp-going cp-going-who' }, faces(going, 'Going'), count);
+        who.setAttribute('aria-label', `${going.length} going: see who`);
+        who.addEventListener('click', () => whoSheet(`${going.length} going`, going, o.person));
+      }
+      body.append(who, answer(e, redo));
       box._invited = !!(C && C.invites && C.invites().some((i) => i.name === convoyName(e)));
       if (st === 'morning') body.append(morning(e, redo));
       if (st === 'convoy') body.append(convoyNow(e));
@@ -332,13 +360,19 @@
       return now;
     }
     // Remembered (P-03): who came, the best Score that day, and "I was there" for a crew-mate the convoy didn't count.
-    function remembered(e, redo) {
+    function remembered(e, redo, person) {
       const now = el('div', { className: 'cp-now' }, el('p', { className: 'note', textContent: 'Loading the drive\u2026' }));
       apiCall('GET', `/api/events/${id(e)}/record`).then(jsonOf).catch(() => null).then((r) => {
         if (!r || !Array.isArray(r.came)) { now.replaceChildren(el('p', { className: 'note', textContent: 'Couldn\u2019t load who came. Check signal.' })); return; }
         const kids = [];
         if (r.i_came) keep(r, true);                                     // kept on the phone for Your year
-        if (r.came.length) kids.push(el('div', { className: 'cp-going' }, faces(r.came, 'Came'), el('span', { className: 'note', textContent: `${r.came.length} came: ${r.came.map((h) => '@' + h).join(', ')}` })));
+        if (r.came.length && person) {
+          // who came, one tap from the faces, as who's going is (no list of names to read on the card)
+          const b = el('button', { type: 'button', className: 'cp-going cp-going-who' }, faces(r.came, 'Came'), el('span', { className: 'note', textContent: `${r.came.length} came` }));
+          b.setAttribute('aria-label', `${r.came.length} came: see who`);
+          b.addEventListener('click', () => whoSheet(`${r.came.length} came`, r.came, person));
+          kids.push(b);
+        } else if (r.came.length) kids.push(el('div', { className: 'cp-going' }, faces(r.came, 'Came'), el('span', { className: 'note', textContent: `${r.came.length} came: ${r.came.map((h) => '@' + h).join(', ')}` })));
         else kids.push(el('p', { className: 'note', textContent: r.going.length ? `Nobody marked that they came. ${r.going.length} said going.` : 'Nobody marked that they came.' }));
         // the best Vetta Score crew-mates published to the crew that day; none shared, none said
         if (r.best) kids.push(el('p', {}, el('span', { className: 'cp-best', textContent: String(r.best.score) }),
@@ -693,7 +727,7 @@
           const open = new Set([...list.querySelectorAll('.drive-card')].filter((c) => c.querySelector('.cp-more[open]')).map((c) => c.dataset.id));
           const empty = o.crewId ? `${o.before ? 'Nothing planned next' : 'No drives planned'}. Tap + to plan one.`
             : crews.length ? 'No drives planned. Plan one for your crew.' : 'Join or start a crew to plan drives together.';
-          list.replaceChildren(...(rows.length ? rows.map((e) => { const c = card(e, { redo, crew: one.length > 1, open: open.has(e.id) }); c.dataset.id = e.id; return c; })
+          list.replaceChildren(...(rows.length ? rows.map((e) => { const c = card(e, { redo, crew: one.length > 1, open: open.has(e.id), person: o.person }); c.dataset.id = e.id; return c; })
             : [el('p', { className: 'note', textContent: empty })]));
         }).catch(() => list.replaceChildren(el('p', { className: 'note', textContent: 'Couldn\'t load crew drives. Check signal.' })));
       };

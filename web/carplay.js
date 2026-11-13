@@ -230,6 +230,23 @@
              street: d ? `${d} driven` : 'Recording', type: 8, recording: true, ...(d ? { drivenM: Math.round(drivenM) } : {}) };
   }
 
+  /**
+   * The car's Loops list as the phone's loop dial (cockpit.js labelLoops): `by` 'time' gives its five times, otherwise its
+   * five distances in the driver's units (`metric`), so the car never offers lengths the phone's dial doesn't.
+   * { kind:'loops', list:[{ name, minutes }] | [{ name, miles }] }, the miles kept as the dial keeps them.
+   */
+  const LOOP_MINUTES = [30, 60, 90, 120, 180], LOOP_MI = [15, 30, 45, 60, 90], LOOP_KM = [25, 50, 75, 100, 150];
+  function loopHours(m) {
+    if (m < 60) return `${m} minutes`;
+    const h = Math.floor(m / 60), half = m % 60 === 30;
+    return `${h}${half ? '½' : ''} hour${h === 1 && !half ? '' : 's'}`;
+  }
+  function loopsMessage(by, metric) {
+    if (by === 'time') return { kind: 'loops', list: LOOP_MINUTES.map((m) => ({ name: loopHours(m), minutes: m })) };
+    return { kind: 'loops', list: metric ? LOOP_KM.map((km) => ({ name: `${km} km`, miles: km / 1.609344 }))
+                                         : LOOP_MI.map((mi) => ({ name: `${mi} mi`, miles: mi })) };
+  }
+
   /** Recent places for the car's Places list: [{ name, at: [lat, lon] }], newest first. */
   // The car's Places, as Where to?'s list with nothing typed (cockpit.js renderPlaces): your pinned places first (Home,
   // Work; `detail` the address it was pinned from), then the time attacks you've entered (`attacks` [{ id, name, detail }],
@@ -520,7 +537,7 @@
     return { step, reset };
   }
 
-  const api = { sightMessage, line, routeMessage, guideMessage, recordingMessage, placesMessage, cornersMessage, hazardsMessage, alongMessage, offerMessage, noticeMessage, lookMessage, tulipSVG, cornerTulipSVG,
+  const api = { sightMessage, line, routeMessage, loopsMessage, LOOP_MINUTES, LOOP_MI, LOOP_KM, guideMessage, recordingMessage, placesMessage, cornersMessage, hazardsMessage, alongMessage, offerMessage, noticeMessage, lookMessage, tulipSVG, cornerTulipSVG,
                 recordSVG, CORNER_MODES, CONTINUE_M, MAX_POINTS };
   api.sightFilter = sightFilter;                                       // U-60 (its own line: the list above is shared)
   api.sightTag = sightTag;                                             // panel round 2, TH-2

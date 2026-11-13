@@ -866,6 +866,14 @@
     .nb-head .nb-cells > span { font: inherit; text-align: right; }
     .nb-head .nb-cells > span:first-child { text-align: left; }
     .nb-row .linkbtn { justify-self: end; font-size: 13px; }
+    /* a phone: four columns left the name ~80 px, so it broke over three lines. Now the name gets its own line and the
+       three numbers sit under it, left-aligned. The heads name only the numbers, since the name says what it is. */
+    @media (max-width: 520px) {
+      .nb-cells { grid-template-columns: repeat(3, minmax(0, 1fr)); row-gap: 2px; }
+      .nb-cells > :first-child { grid-column: 1 / -1; }
+      .nb-cells > span, .nb-head .nb-cells > span { text-align: left; }
+      .nb-head .nb-cells > span:first-child { display: none; }
+    }
     .place-all { display: block; margin: 6px 0 0; }
     /* ---------------- the drive-ended card (REVIEW.md roadmap 7) ---------------- */
     .end-card { text-align: left; }
@@ -1332,6 +1340,9 @@
     .rp-fact b { text-align: right; }
     .road-page p.note:not(.rp-head) { margin: 2px 0 0; font-size: 13px; line-height: 1.45; color: var(--panel-dim); }
     .side-pop .side-pop-head h3 { border: 0; padding: 0; margin: 0; }
+    /* About a road's one key, Plan this road: held at the sheet's foot as Find a loop is on the plan sheet */
+    .rp-go { position: sticky; bottom: calc(-24px - var(--safe-bottom)); margin: 0 calc(-16px - var(--safe-right)) calc(-24px - var(--safe-bottom)) calc(-16px - var(--safe-left));
+      padding: 10px calc(16px + var(--safe-right)) calc(10px + var(--safe-bottom)) calc(16px + var(--safe-left)); background: var(--panel); border-top: 1px solid var(--rule); }
     /* The Garage's settings (REVIEW5 §2, web/garage_settings.js): one gear in the header, a sheet of rows, each row a sheet over
        it. Tall enough that a setting's sheet covers the list under it; hidden when shut, so nothing off screen takes focus. */
     .sheet:not([data-view="garage"]) .garage-gear { display: none; }
@@ -1776,6 +1787,9 @@
       #app.idle:has(.edge.open) .loop-suggest { display: none; }                                                 /* 8: the panel is the task */
       .plan.open { height: calc(100% - var(--safe-bottom)); }                                                     /* 14 */
       .plan.open.routed:not(.full) { height: calc(100% - var(--safe-bottom)); }                                   /* the plan flow: no half card on a short screen */
+      /* a planned route's card is a column on the left and the map beside it shows the route (2026-11-13: the card covered
+         the whole map, so the route it describes was out of sight until it went down); fitInView keeps the route right of it */
+      .plan.open.routed { right: auto; width: min(400px, 52%); border-right: 1px solid var(--rule); box-shadow: 8px 0 24px rgba(0, 0, 0, 0.18); }
       #app.idle .deck-chips { display: none !important; }
       /* 14: two columns, so the basic level fits without scrolling: places and the loop left, Roads, More and Find right */
       /* :not(.routed): this display won over .plan.routed's display: none, so a route card in landscape sat under the whole

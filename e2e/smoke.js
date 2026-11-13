@@ -1127,7 +1127,7 @@ async function ownTrip(page, base, level = null) {
     steps: (window.apexDebug.track.steps || []).map((s) => s.street), via: ((window.apexDebug.track.request || {}).via || []).length }));
   return { r, calls };
 }
-flow('landscape: a planned route is the card alone, not under the search sheet (2026-11-13: it sat below Where to?\'s two columns)', async (page, base) => {
+flow('landscape: a planned route is its card alone, a column beside the map with the route fitted right of it (2026-11-13: it sat below Where to?\'s two columns, then covered the map)', async (page, base) => {
   graphDir = graphFixture();
   try {
     await ownTrip(page, base);
@@ -1135,6 +1135,12 @@ flow('landscape: a planned route is the card alone, not under the search sheet (
       return { routed: document.getElementById('planPanel').classList.contains('routed'), search: vis(document.querySelector('.plan-search-section')),
         card: Math.round(document.getElementById('routeCard').getBoundingClientRect().top - document.getElementById('planBody').getBoundingClientRect().top) }; });
     check(r.routed && !r.search && r.card <= 8, 'the card is the sheet, at its top: ' + JSON.stringify(r));
+    // and it is a column beside the map, the route fitted into the map right of it (the card covered the whole map)
+    await page.waitForTimeout(1200);                                    // the fit's flight (800 ms)
+    const side = await page.evaluate(() => { const m = apexDebug.map, t = apexDebug.track, c = m.getContainer().getBoundingClientRect(), p = document.getElementById('planPanel').getBoundingClientRect();
+      const xs = t.lat.map((la, i) => m.project([t.lon[i], la]).x + c.left);
+      return { panelR: Math.round(p.right), mapR: Math.round(c.right), minX: Math.round(Math.min(...xs)), maxX: Math.round(Math.max(...xs)), w: Math.round(p.width), mapW: Math.round(c.width) }; });
+    check(side.w < side.mapW * 0.7 && side.minX > side.panelR && side.maxX < side.mapR, 'a column, the route beside it on the map: ' + JSON.stringify(side));
   } finally { graphDir = null; }
 }, { viewport: { width: 844, height: 390 }, geolocation: { latitude: 39.155, longitude: -84.615 }, permissions: ['geolocation'] });
 
@@ -2534,6 +2540,12 @@ flow('CarPlay feed: a planned route sends its line, every corner and the theme; 
   await page.waitForFunction(() => window.apexDebug.track && window.apexDebug.track.id === 'saved_e2e', null, { timeout: 10000 })
     .catch(async () => { throw new Error('the saved route from the car never opened: ' + JSON.stringify(await page.evaluate(() => window.apexDebug.track && window.apexDebug.track.id))); });
   await page.evaluate(() => { ApexSavedRoutes.remove(localStorage, 'saved_e2e'); localStorage.removeItem('apex.pinnedPlaces'); });
+  // the car's Loops list is the phone's loop dial: distances in your units, and its times once the dial is set to time
+  const loopsCar = await page.evaluate(() => { window.apex.onNative({ type: 'carplay', action: 'hello' }); return window.__car.filter((m) => m.kind === 'loops').pop(); });
+  check(loopsCar && loopsCar.list.map((r) => r.name).join('|') === '15 mi|30 mi|45 mi|60 mi|90 mi', 'the car gets the dial\'s distances: ' + JSON.stringify(loopsCar));
+  const timesCar = await page.evaluate(() => { document.querySelector('#loopBy [data-loop-by="time"]').click(); const m = window.__car.filter((x) => x.kind === 'loops').pop();
+    document.querySelector('#loopBy [data-loop-by="distance"]').click(); return m; });
+  check(timesCar && timesCar.list[0].minutes === 30 && timesCar.list.length === 5, 'the dial set to time sends the car its times: ' + JSON.stringify(timesCar));
   await page.evaluate(() => window.apex.live({ lat: 35.6, lon: -84.1, accuracy_m: 5, speed_mps: 0, course_deg: 0, has_fix: true }));   // the shell's fix, as in the app
   // the cafés and fuel along it, by name on the car's route preview (the owner, 2026-11-11)
   await page.evaluate(() => { ApexStages.pois = async (pts) => { const a = pts[Math.min(1, pts.length - 1)];
@@ -3214,6 +3226,15 @@ flow('crew page: an old ?view=crew link opens People on Crews, at your crew; goi
   await page.waitForSelector('.cp-member-sheet h2:has-text("@sam")');
   check(!(await page.$('.cp-board-row.mine.tap')), 'your own row is not a key');
   await page.click('.cp-member-sheet button:has-text("Done")');
+  // who's going is one tap from the faces on the drive's card, and each name opens the person
+  await page.click('.cp-tabs [data-cp-tab="drives"]');
+  await page.click('.drive-card .cp-going-who');
+  await page.waitForSelector('.cp-who-sheet button.cp-who-row:has-text("@sam")');
+  check(/1 going/.test(await page.textContent('.cp-who-sheet h2')), 'the faces open the list of who is going');
+  await page.click('.cp-who-sheet button.cp-who-row:has-text("@sam")');
+  await page.waitForSelector('.cp-member-sheet h2:has-text("@sam")');
+  check(!(await page.$('.cp-who-sheet')), 'a name on the list opens their sheet in its place');
+  await page.click('.cp-member-sheet button:has-text("Done")');
   await page.click('.cp-tabs [data-cp-tab="chat"]');
   // the handle on a message opens the person, as a face on the members strip does
   await page.click('.cp-msg button.cp-who:has-text("@sam")');
@@ -3242,7 +3263,7 @@ flow('crew page: an old ?view=crew link opens People on Crews, at your crew; goi
   check(gs.offLeft <= 4 && gs.leaveLeft <= 4 && gs.offWide && !gs.hintCut, 'text keys start at the left, the area hint is whole: ' + JSON.stringify(gs));
   await page.click('.side-pop.open[aria-label="Crew settings"] button:has-text("Done")');
   await page.click('.cp-tabs [data-cp-tab="drives"]');
-  await page.click('.cp-drive button:has-text("going")');
+  await page.click('.cp-drive .switch button:text-is("Going")');
   // a line half written survives the page redrawing: the livery saves, the page redraws
   await page.click('.cp-tabs [data-cp-tab="chat"]');
   await page.fill('.cp-say textarea', 'Saturday it is');
@@ -5178,7 +5199,11 @@ flow('the run as one card: the morning of, a crew-mate\'s convoy to join or your
   await crewSide();
   await page.waitForSelector('.cp-week .drive-card.is-remembered .cp-best');
   const rec = await page.textContent('.cp-week');
-  check(/Upcoming drives/.test(rec) && /DRIVEN/.test(rec) && /2 came: @sam, @cara/.test(rec) && /811/.test(rec) && /Best Vetta Score · @sam on Cherohala Skyway/.test(rec) && /Nothing planned next/.test(rec) && await page.isVisible('.cp-week .plan-plus'), 'remembered, above the + to plan the next one: ' + rec);
+  check(/Upcoming drives/.test(rec) && /DRIVEN/.test(rec) && /2 came/.test(rec) && !/2 came: @/.test(rec) && /811/.test(rec) && /Best Vetta Score · @sam on Cherohala Skyway/.test(rec) && /Nothing planned next/.test(rec) && await page.isVisible('.cp-week .plan-plus'), 'remembered, above the + to plan the next one: ' + rec);
+  // who came is behind the faces, as who's going is
+  await page.click('.cp-week .drive-card.is-remembered .cp-going-who');
+  check(await page.$$eval('.cp-who-sheet .cp-who-row', (r) => r.map((x) => x.lastElementChild.textContent).join('|')) === '@sam|@cara' && /2 came/.test(await page.textContent('.cp-who-sheet h2')), 'the faces open who came');
+  await page.click('.cp-who-sheet button:has-text("Done")');
   // the results sheet (IDEAS S-25): folded under the best Score; the overall, then each stage as SS1, SS2; Share
   check(/Results · 2 stages/.test(rec) && !(await page.isVisible('.cp-week .cp-results')), 'the results fold, closed: ' + rec);
   await page.click('.cp-week .cp-results-fold > summary');
@@ -5532,8 +5557,8 @@ flow('Your driving: the profile over every drive opens from the Log, names the w
     return { was, shown, t, after: d.hidden, title: row.querySelector('[title]') !== null };
   });
   check(def.was && def.shown && def.after && !def.title && /^You turn in once .+ 0 to 100, averaged over \d+ clean corners; -- until \d+\.$/.test(def.t), 'the definition on a tap: ' + JSON.stringify(def));
-  check(/Work on: One steering arc\s+Through rights \d+, through lefts 100, on 3 of 3 drives\./.test(text) && !/One steering arc is weaker/.test(text), 'the weak side is named once, in the focus: ' + text);
-  check(!/Back to power is stronger in tight corners/.test(text) && (text.match(/^Back to power is /gm) || []).length <= 1, 'one finding a skill: ' + text);
+  check(/Work on: One steering arc\s+Through rights \d+, through lefts 100, on 3 of 3 drives\./.test(text) && !/One steering arc: through rights/.test(text), 'the weak side is named once, in the focus: ' + text);
+  check((text.match(/^Back to power: /gm) || []).length <= 1 && /^Back to power: in fast corners \d+, in the rest \d+, on 3 of 3 drives\./m.test(text), 'one finding a skill, as a row: ' + text);
   check(await page.evaluate(() => document.querySelector('.dp-st.weak').dataset.skill === 'arc' && document.querySelectorAll('.dp-st:not([data-skill="pace"])').length === 6), 'six stations, the weak one marked');
   // IDEAS D-29: pace beside them, in its own panel, and never the one to work on
   const pace = await page.evaluate(() => { const p = document.querySelector('#drivingRoot .dp-pace'); return p ? p.innerText : null; });
@@ -5571,7 +5596,7 @@ flow('Your driving: the profile over every drive opens from the Log, names the w
   check(dt.best.length >= 2 && /^Cleanest tight corner: \d{1,3}( · your best of \d+| · level with your best(, .+)?| · your best \d{1,3}(, .+)?)?$/.test(dt.best[0]), 'a drive against your records: ' + JSON.stringify(dt.best));
   // corner by corner on its road: these three drives are on three roads, so no corner has been driven three times
   check(dt.road && dt.road.corners === 0 && dt.road.best === 0, 'no corner of this road driven three times yet: ' + JSON.stringify(dt.road));
-  check(dt.say.join(' ') === 'Brakes on: about 1.1 g a second on this drive, 0.8 usually. Turn-in: one quick movement (quicker than the recording can time) on this drive, 0.9 usually.', 'a drive\'s touch in words: ' + dt.say);
+  check(dt.say.join(' | ') === 'Brakes on: 1.1 g a second · usually 0.8 | Turn-in: one quick movement · usually 0.9', 'a drive\'s touch in words: ' + dt.say);
   // each drive's observations were kept: a second visit reads no drive again, and a deleted drive's are dropped
   const again = await page.evaluate(() => ApexAnalysis.job('profile'));
   check(again.read === 0 && again.profile.corners === 108, 'kept between visits: read ' + again.read);
@@ -9512,8 +9537,12 @@ flow('plan flow (c) best roads nearby in 3 taps: the chip under Where to?, a roa
   await page.waitForTimeout(300);
   const list = await page.evaluate(() => ({ head: [...document.querySelectorAll('#exploreList .nb-head .nb-cells > span')].map((s) => s.textContent),
     row: [...document.querySelectorAll('#exploreList .nb-row')[0].querySelectorAll('.nb-cells > *')].map((s) => s.textContent), label: document.querySelector('#exploreList .nb-go').getAttribute('aria-label'),
-    status: document.getElementById('nearbyStatus').textContent, sheetBottom: document.getElementById('nearbySheet').getBoundingClientRect().bottom }));
+    status: document.getElementById('nearbyStatus').textContent, sheetBottom: document.getElementById('nearbySheet').getBoundingClientRect().bottom,
+    nameW: document.querySelector('#exploreList .nb-go .nb-cells > b').getBoundingClientRect().width / document.querySelector('#exploreList .nb-go').getBoundingClientRect().width,
+    roadHead: !!document.querySelector('#exploreList .nb-head .nb-cells > span').offsetParent }));
   check(JSON.stringify(list.head) === '["Road","Good corners","Length","Drive there"]', 'the columns are named: ' + JSON.stringify(list));
+  // a phone: the name has the row's whole width (four columns left it ~80 px, three lines), the numbers under it; no Road head
+  check(list.nameW > 0.95 && !list.roadHead, 'on a phone the road name gets its own line: ' + JSON.stringify({ nameW: list.nameW, roadHead: list.roadHead }));
   check(list.row[0] === 'Test Ridge Road' && /^\d+$/.test(list.row[1]) && /^\d+(\.\d)?mi$/.test(list.row[2]) && /^\d+min$/.test(list.row[3]) && /good corners/.test(list.label), 'each number under its name, with its unit: ' + JSON.stringify(list));
   check(Math.abs(list.sheetBottom - 852) <= 1, 'the list slides up from the bottom: ' + list.sheetBottom);
   await scan(page, 'Best roads nearby');
@@ -9529,6 +9558,28 @@ flow('plan flow (c) best roads nearby in 3 taps: the chip under Where to?, a roa
   await tap('#routeDriveBtn', 'Start');
   await page.waitForFunction(() => window.apexDebug.driveActive && apexDebug.track && apexDebug.track.id === 'explore', null, { timeout: 10000 });
   check(taps.n === 3, `best roads nearby in 3 taps: ${taps.log.join(' → ')}`);
+}, IPHONE);
+
+// walkthrough 2026-11-13: About a road was a dead end, Close the only key; it plans that road now, as the row does
+flow('best roads nearby: About a road has its own Plan this road key, which plans that road', async (page, base) => {
+  await planRouter(page);
+  const { tap } = await planPage(page, base);
+  await page.evaluate(() => {
+    const road = (name, lat, lon, n, good) => { const la = [], lo = []; for (let i = 0; i < n; i++) { la.push(lat + i * 0.0004); lo.push(lon + Math.sin(i / 6) * 0.0006); } return { name, lat: la, lon: lo, km: n * 0.045, good, tight: 2, score: good }; };
+    ApexStages.discover = async (c) => [road('Test Ridge Road', c.lat + 0.02, c.lon + 0.01, 80, 14), road('Hollow Creek Road', c.lat - 0.03, c.lon + 0.02, 60, 9)];
+  });
+  await tap('#deckNearby', 'Best roads nearby');
+  await page.waitForSelector('#nearbySheet.open #exploreList .nb-go', { timeout: 15000 });
+  await page.waitForTimeout(300);
+  await page.click('#exploreList .nb-row:nth-child(3) .linkbtn');          // the second road's About (the head is the first child)
+  await page.waitForSelector('aside.side-pop.open[aria-label="About this road"] .find-key');
+  const key = await page.evaluate(() => { const k = document.querySelector('aside.side-pop.open[aria-label="About this road"] .find-key'), r = k.getBoundingClientRect();
+    return { text: k.textContent, inView: r.top >= 0 && r.bottom <= innerHeight, title: document.querySelector('aside.side-pop.open[aria-label="About this road"] h3').textContent }; });
+  check(key.text === 'Plan this road' && key.inView && key.title === 'Hollow Creek Road', 'About a road ends in Plan this road, in view: ' + JSON.stringify(key));
+  await page.click('aside.side-pop.open[aria-label="About this road"] .find-key');
+  await cardUp(page);
+  const after = await page.evaluate(() => ({ name: apexDebug.track && apexDebug.track.name, about: !!document.querySelector('aside.side-pop.open[aria-label="About this road"]') }));
+  check(after.name === 'Hollow Creek Road' && !after.about, 'the key plans that road and the page goes: ' + JSON.stringify(after));
 }, IPHONE);
 
 flow('plan flow (d) one Options sheet: Avoid ✕ and Prefer ✓ in it, what is on stays in view as chips on the sheet and the card, it swipes down to close (finding 4, 5)', async (page, base) => {

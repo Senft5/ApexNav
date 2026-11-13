@@ -2862,6 +2862,16 @@
     let leaveAtMs = null;
     const leaveAt = () => (leaveAtMs && leaveAtMs > Date.now() ? leaveAtMs : Date.now());
     // The driver's For this drive choices (route_ctx/driver.js: passenger, lit, cyclists, tunnels) join the road prefs.
+    // The corner prefs our router's searches and stage lists use: yours, with a level one leaning toward your taste
+    // (taste.js cornerLean, from five "which road was better?" answers on). Route scores and the card keep yours alone.
+    const searchPrefs = () => {
+      try {
+        const t = window.ApexTaste && !(window.ApexFlags && !ApexFlags.on('taste_ranking')) ? ApexTaste.fit(ApexTaste.load(localStorage)) : null;
+        const p = t ? ApexTaste.cornerLean(t, roadPrefs) : roadPrefs;
+        if (window.apexDebug) window.apexDebug.lastSearchPrefs = { tight: p.tight || 0, fast: p.fast || 0 };
+        return p;
+      } catch (_) { return roadPrefs; }
+    };
     const engineOpts = (level) => ({ level, prefs: { ...roadPrefs, ...(window.ApexRouteDriver ? ApexRouteDriver.load(localStorage) : {}) }, car: routingCar(),
       score: (c, scaleAt) => funOf(c.t, (c.route && c.route.turns) || [], scaleAt) });
     function rankPool(pool, level) {
@@ -3390,7 +3400,16 @@
     // frames the whole route and the car: above the open card when it leaves a strip to see the route in (U-70), else above
     // the bar (on its side, or the desk's column, the card covers the map: the fit is for when it goes down).
     // The app's own move: follow pauses without the recenter key, which a drag of the map brings up (U-71, U-122).
+    // The map the open sheet covers from the left when it is a column beside the map (a phone in landscape with a route
+    // planned, the desk's Where to?), in px of the map; 0 when it lies across the map's foot (2026-11-13)
+    function sideCover() {
+      const panel = $('planPanel');
+      if (!panel.classList.contains('open')) return 0;
+      const r = panel.getBoundingClientRect(), m = map.getContainer().getBoundingClientRect();
+      return r.width > 0 && r.width < m.width * 0.7 && r.left <= m.left + 24 && r.right > m.left ? Math.round(r.right - m.left) : 0;
+    }
     function routeBottom(aboveCard) {
+      if (sideCover()) return viewInsets().b + 24;                   // the card is beside the route, not under it
       const sv = viewInsets(), panel = $('planPanel'), mapH = (map.getContainer().clientHeight - sv.t - sv.b) || window.innerHeight;   // F-02: the map you can see, not its full-bleed box
       const desk = matchMedia('(min-width: 1100px) and (min-height: 600px)').matches;
       const overCard = aboveCard && panel.classList.contains('open') && !desk && mapH - panel.offsetHeight >= 120;
@@ -3401,7 +3420,7 @@
       const sv = viewInsets();
       map.stop();
       map.jumpTo({ padding: { top: 0, bottom: 0, left: 0, right: 0 } });
-      map.fitBounds(bounds, { padding: { top: sv.t + 60, left: sv.l + 40, right: sv.r + 60, bottom }, pitch: 0, bearing: 0, duration, maxZoom: 16 });
+      map.fitBounds(bounds, { padding: { top: sv.t + 60, left: Math.max(sv.l, sideCover()) + 40, right: sv.r + 60, bottom }, pitch: 0, bearing: 0, duration, maxZoom: 16 });
     }
     function fitPlannedRoute(t = plannedRoute, aboveCard = false) {
       if (!t || !Array.isArray(t.lat) || t.lat.length < 2 || state.mode === 'live') return;
@@ -3923,7 +3942,7 @@
       // planned on what was kept, and the whole corridor's plan after the card has the fresh answer: ownRefine. Signed out
       // the server has none to give: not asked)
       const crowdS = ownCovered && ownCrowdOn() ? ApexOwnRouting.crowdSoon(routeCtxOpts().lookupCells, from, to, OWN_CROWD_MS) : null;
-      const ownReq = { from, to, level, prefs: roadPrefs, avoid, heading: from.heading, crowd: crowdS ? tlTime('crowd (members\' roads)', crowdS.now) : null, ...(dev ? dev.tuneReq() : {}) };
+      const ownReq = { from, to, level, prefs: searchPrefs(), avoid, heading: from.heading, crowd: crowdS ? tlTime('crowd (members\' roads)', crowdS.now) : null, ...(dev ? dev.tuneReq() : {}) };
       // (Long way's detours reach past the straight line's tiles: it waits for its corridor)
       const ownP = ownCovered ? tlTime('own plan (worker)', ApexOwnRouting.plan(ownRouter(), { ...ownReq, scope: level === 'max' ? 'full' : 'first', waitMs: OWN_FIRST_WAIT_MS })) : null;
       const ownFullP = ownP ? Promise.all([ownP, crowdS ? crowdS.late.catch(() => null) : null])
@@ -4237,7 +4256,7 @@
     async function routePoints(points, o = {}) {
       const level = FunRoute.LEVELS[o.level] ? o.level : 'quick';
       if (ownOn()) {
-        const r = await RouteLoading.optional(ApexOwnRouting.through(ownRouter(), points, { level, avoid: o.avoid || avoid, prefs: roadPrefs }), OWN_THROUGH_MS);
+        const r = await RouteLoading.optional(ApexOwnRouting.through(ownRouter(), points, { level, avoid: o.avoid || avoid, prefs: searchPrefs() }), OWN_THROUGH_MS);
         if (r) { tlSpan('own through (worker)', performance.now()); return [r]; }
       }
       const extra = FunRoute.LEVELS[level].noHighway && window.ApexRouteEngine ? ApexRouteEngine.levelCosting(avoid, routingCar(), level) : {};
@@ -4651,7 +4670,7 @@
         const to = t.request.to, level = funLevel, place = (t.name || '').replace(/^To /, '') || 'there';
         const outCoords = Array.from(t.lat, (la, i) => [t.lon[i], la]);
         let outLine = outCoords, backLine = null, how = 'valhalla';
-        const own = ownOn() ? await RouteLoading.optional(ApexOwnRouting.roundTrip(ownRouter(), { from, to, level, prefs: roadPrefs, avoid, heading: from.heading, ...devTuneReq() }), 6000) : null;
+        const own = ownOn() ? await RouteLoading.optional(ApexOwnRouting.roundTrip(ownRouter(), { from, to, level, prefs: searchPrefs(), avoid, heading: from.heading, ...devTuneReq() }), 6000) : null;
         if (own && own.length) {
           // ours: the best pair (out and back), split at the destination
           const c = own[0].route.coords, k = c.reduce((b, p, i) => (FunRoute.kmBetween({ lat: p[1], lon: p[0] }, to) < FunRoute.kmBetween({ lat: c[b][1], lon: c[b][0] }, to) ? i : b), 0);
@@ -4754,7 +4773,7 @@
       // the police reports, cameras and closures round the start go into the loop's search, as a trip's do (until
       // 2026-11-12 loops got none of them: Avoid police and Avoid cameras did nothing for a loop)
       L.avoid = ownOn() ? await avoidForTrip(loopAvoidPoints(c, targetKm)).catch(() => avoid) : avoid;
-      const ownLoopsP = ownOn() ? ApexOwnRouting.loops(ownRouter(), { start: { lat: c.lat, lon: c.lon }, km: targetKm, level: LOOP_STYLE, prefs: roadPrefs, avoid: L.avoid, ...devTuneReq() }) : Promise.resolve([]);
+      const ownLoopsP = ownOn() ? ApexOwnRouting.loops(ownRouter(), { start: { lat: c.lat, lon: c.lon }, km: targetKm, level: LOOP_STYLE, prefs: searchPrefs(), avoid: L.avoid, ...devTuneReq() }) : Promise.resolve([]);
       // Our loops only (Valhalla is for Quick, the owner 2026-11-11): the card goes up from them, or says why there are none
       const own = (await ownLoopsP).map((r) => ({ kind: 'own', route: r.route, hwyShare: r.hwyShare, pts: [c, ...FunRoute.alongPoints(r.route.coords), c] }));
       // Loops are our router's or nothing (Valhalla is for Quick only, the owner 2026-11-11): no stage loops or circle on
@@ -4969,14 +4988,14 @@
           try {
             if (await RouteLoading.optional(ownRouter().covers([c]), OWN_COVERS_MS)) {
               ui.step('Finding roads', 0.3);
-              const res = await ownRouter().explore({ start: { lat: c.lat, lon: c.lon }, maxKm, maxS: minutes * 60, prefs: roadPrefs });
+              const res = await ownRouter().explore({ start: { lat: c.lat, lon: c.lon }, maxKm, maxS: minutes * 60, prefs: searchPrefs() });
               if (res && res.stages && res.stages.length) own = await stagesWithContext(res.stages, 12, ['graph', 'context_grid']);
             }
           } catch (_) { own = null; }
           if (window.apexDebug) window.apexDebug.lastExploreOwn = own ? own.length : 0;
         }
         const stages = own || await ApexStages.discover(c, maxKm, (phase, f) => ui.step(phase === 'tiles' ? 'Finding roads' : 'Scoring roads', 0.1 + 0.6 * f),
-          { names: inReach, prefs: roadPrefs, ...(state.hlOn ? { highlights: hls, strength: state.hlStrength } : {}) }).then((st) => measuredStages(st, c, maxKm)).then((st) => stagesWithContext(st, 12));
+          { names: inReach, prefs: searchPrefs(), ...(state.hlOn ? { highlights: hls, strength: state.hlStrength } : {}) }).then((st) => measuredStages(st, c, maxKm)).then((st) => stagesWithContext(st, 12));
         const list = FunRoute.exploreShortlist(c, stages, maxKm, 12);   // 24 matrix pairs; most fall to the time limit
         ui.step('Measuring roads', 0.8);
         // ours carry their drive times (aS, bS); the map's stages (highlights on, or no tiles here) are timed on our tiles
@@ -5023,7 +5042,7 @@
         // what the road is like (road_page.js, IDEAS Q-13)
         const about = document.createElement('button'); about.className = 'linkbtn'; about.textContent = 'About';
         about.setAttribute('aria-label', `About ${name.textContent}`);
-        about.addEventListener('click', () => openRoadPage(p.s));
+        about.addEventListener('click', () => openRoadPage(p.s, () => driveStage(i)));
         const row = document.createElement('div'); row.className = 'nb-row'; row.append(b, about);
         return row;
       });
@@ -5060,7 +5079,8 @@
     }
     // Road page (road_page.js, IDEAS Q-13): the reference lap over the road's shape, the DEM's climb, members' measurements.
     let roadPop = null;
-    async function openRoadPage(s) {
+    // go: plan this road (the list's own row tap), so the page is not a dead end you have to Close out of
+    async function openRoadPage(s, go) {
       if (!window.ApexRoadPage) return;
       if (!roadPop) {
         roadPop = document.createElement('aside'); roadPop.className = 'side-pop'; roadPop.setAttribute('role', 'dialog'); roadPop.setAttribute('aria-label', 'About this road');
@@ -5072,7 +5092,13 @@
       head.append(h, close);
       const body = document.createElement('div'); body.className = 'stack-8 road-page';
       const note = (t) => { const p = document.createElement('p'); p.className = 'note'; p.textContent = t; return p; };
-      roadPop.replaceChildren(head, body); roadPop.classList.add('open');
+      const bar = [];
+      if (go) {
+        const key = document.createElement('button'); key.className = 'find-key'; key.textContent = 'Plan this road';
+        key.addEventListener('click', () => { roadPop.classList.remove('open'); go(); });
+        const d = document.createElement('div'); d.className = 'rp-go'; d.append(key); bar.push(d);
+      }
+      roadPop.replaceChildren(head, body, ...bar); roadPop.classList.add('open');
       let onRoad = [];   // ApexRoadPage.hazardFacts: what members felt and reported on it, once looked up
       const paint = (d) => {
         if (!d) { body.replaceChildren(note('Too short to describe.')); return; }
@@ -5819,12 +5845,13 @@
     function labelLoops() {
       document.querySelectorAll('#loopDetents button').forEach((b, i) => {
         if (loopBy === 'time') { delete b.dataset.loopMi; b.dataset.loopMin = String(LOOP_MINUTES[i]); b.textContent = ApexRouteCard.loopTime(LOOP_MINUTES[i]); return; }
-        const km = [25, 50, 75, 100, 150][i], mi = [15, 30, 45, 60, 90][i];
+        const km = ApexCarPlay.LOOP_KM[i], mi = ApexCarPlay.LOOP_MI[i];
         delete b.dataset.loopMin;
         b.dataset.loopMi = String(ApexUnits.metric() ? km / 1.609344 : mi); b.textContent = ApexUnits.metric() ? `${km} km` : `${mi} mi`;
       });
       document.querySelectorAll('#loopBy [data-loop-by]').forEach((b) => b.setAttribute('aria-checked', String(b.dataset.loopBy === loopBy)));
       if (plannedRoute) paintCardLoop(plannedRoute);
+      carPost(ApexCarPlay.loopsMessage(loopBy, ApexUnits.metric()));   // the car's Loops list is this dial (its units too)
     }
     labelLoops();
     // the dial set to distance or time: its detents and its face change, the detent picked keeps its place
@@ -10100,11 +10127,15 @@
         if (p) openSaved(p).catch(() => {});
       }
       else if (m.action === 'loop' && LOOP_MINUTES.includes(m.minutes) && !driveActive) carAsked(() => loop({ minutes: m.minutes }));
+      // a distance from the car's Loops list: only one the dial has (miles, or kilometres kept as miles)
+      else if (m.action === 'loop' && Number.isFinite(m.miles) && !driveActive
+               && [...ApexCarPlay.LOOP_MI, ...ApexCarPlay.LOOP_KM.map((km) => km / 1.609344)].some((x) => Math.abs(x - m.miles) < 0.01)) carAsked(() => loop(m.miles));
       else if (m.action === 'report' && ApexHazardReports.KINDS.includes(m.kind)) carAsked(() => reportHazard(m.kind, null, true));
       else if (m.action === 'still' && typeof m.still === 'boolean') answerStill(m.still);
       else if (m.action === 'voice') { state.toggles.voice = !state.toggles.voice; savePrefs(); paintSwitches(); if (!state.toggles.voice) stopSpeaking(); }
       else if (m.action === 'hello') { keepCar(true); car.route = ''; car.look = ''; car.hazards = ''; carRoute(track && track.kind === 'route' ? track : null); carLook(); carHazards();
         carPost(carPlaces());                   // a car screen that just connected gets everything again
+        carPost(ApexCarPlay.loopsMessage(loopBy, ApexUnits.metric()));   // and the loop dial's lengths for its Loops
         peekTimeAttack();                                                // and this week's loop for its Places, if you've entered it
         if (driveActive) { carPost({ kind: 'start', title: track && track.kind === 'route' ? String(track.name || 'Route').slice(0, 80) : 'Drive' }); car.guideKey = ''; } }   // and the drive in progress (U-59)
     }

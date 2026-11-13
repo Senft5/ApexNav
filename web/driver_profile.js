@@ -713,7 +713,7 @@
     if (split === 'tag') return x === 'rest' ? 'on your other drives' : `on drives tagged ${x}`;
     return SIDES[split + '|' + x] || String(x);
   }
-  /** One finding as a sentence: "One steering arc is weaker through rights: 62 against 97 through lefts, on 5 of 5 drives." */
+  /** One finding as a row: "One steering arc: through rights 62, through lefts 97, on 5 of 5 drives." */
   const GENERIC = new Set(['rest', 'later', 'before']);
   /** The findings worth a line each: one a skill (the strongest, as the profile orders them), so "back to power is weaker in
    *  fast corners" is not said again as "stronger in tight corners" (TestFlight 2026-11-12, "text walls"). */
@@ -722,14 +722,13 @@
     return (findings || []).filter((f) => { if (said.has(f.skill)) return false; said.add(f.skill); return true; });
   }
   function findingLine(f) {
+    // a labelled row, as the Work on box reads (TestFlight 2026-11-12, "text walls"): the skill, then each side's level,
+    // the side with a name first ("in fast corners 38, in the rest 100"), the weaker one when both have names
     const worseA = f.mean_a < f.mean_b, w = worseA ? [f.a, f.mean_a, f.b, f.mean_b] : [f.b, f.mean_b, f.a, f.mean_a];
     const seen = f.agree === null || f.agree === undefined ? `across ${f.drives} drives` : `on ${f.agree} of ${f.drives} drives`;
     const also = (f.also || []).length ? ` The same shows in ${f.also.map((k) => WORDS[k].name.toLowerCase()).join(' and ')}.` : '';
-    // said about the side that has a name: "weaker through rights", or "stronger in tight corners" when the rest is the weaker
-    const W = WORDS[f.skill], more = W.more || 'stronger', less = W.less || 'weaker';
-    const line = GENERIC.has(w[0]) ? `is ${more} ${sideWords(f.split, w[2])}: ${w[3]} against ${w[1]} ${sideWords(f.split, w[0])}`
-      : `is ${less} ${sideWords(f.split, w[0])}: ${w[1]} against ${w[3]} ${sideWords(f.split, w[2])}`;
-    return `${WORDS[f.skill].name} ${line}, ${seen}.${also}`;
+    const [x, xv, y, yv] = GENERIC.has(w[0]) ? [w[2], w[3], w[0], w[1]] : w;
+    return `${WORDS[f.skill].name}: ${sideWords(f.split, x)} ${xv}, ${sideWords(f.split, y)} ${yv}, ${seen}.${also}`;
   }
   /** How you drive, as up to three sentences of fact (never advice to go faster). */
   function styleLines(st, metric = true) {
@@ -784,9 +783,10 @@
     for (const k of TOUCH) {
       const a = rateText(dt.drive[k]), b = dt.usual ? rateText(dt.usual[k]) : null;
       if (!a) continue;
-      const now = a === 'quick' ? 'one quick movement (quicker than the recording can time)' : `about ${a} g a second`;
+      // a labelled row a measure, as Your touch reads (TestFlight 2026-11-12, "text walls"); the panel says "on this drive"
+      const now = a === 'quick' ? 'one quick movement' : `${a} g a second`;
       const off = dt.outside && dt.outside[k];
-      out.push(`${TOUCH_NAME[k]}: ${now} on this drive${b ? `, ${b === 'quick' ? 'quick' : `${b}`} usually` : ''}.${off === 'above' ? ' Sharper than your usual range.' : off === 'below' ? ' Gentler than your usual range.' : ''}`);
+      out.push(`${TOUCH_NAME[k]}: ${now}${b ? ` \u00b7 usually ${b}` : ''}${off === 'above' ? ' \u00b7 sharper than usual' : off === 'below' ? ' \u00b7 gentler than usual' : ''}`);
     }
     return out;
   }
@@ -794,9 +794,10 @@
   function paceLines(p) {
     const out = [], s = p && p.skills && p.skills.pace, ov = p && p.pace ? p.pace.over : null;
     if (!s || s.level === null) return out;
-    if (finite(ov) && ov >= 0.1) out.push(`${Math.round(ov * 10)} of 10 corners went over their sane limit, and pace counts those against you. On the road, leave more in hand.`);
-    else if (finite(ov) && ov > 0) out.push(`Few corners went over their sane limit (${Math.max(1, Math.round(ov * 100))} in 100).`);
-    else if (finite(ov)) out.push('No corner went over its sane limit.');
+    // a labelled row (TestFlight 2026-11-12, "text walls"); a share over the limit costs pace, and the advice says so once
+    if (finite(ov) && ov >= 0.1) out.push(`Over the sane limit: ${Math.round(ov * 10)} of 10 corners. On the road, leave more in hand`);
+    else if (finite(ov) && ov > 0) out.push(`Over the sane limit: ${Math.max(1, Math.round(ov * 100))} of 100 corners`);
+    else if (finite(ov)) out.push('Over the sane limit: no corner');
     return out;
   }
   /** The Log's card: one line. */
