@@ -7648,6 +7648,10 @@ flow('dashcam overlay: a video from the drive gets its speed, g and calls drawn 
   });
   await page.goto(base + '/analysis.html?drive=dc1');
   await page.waitForSelector('#dvDashcam input[type=file]', { state: 'attached' });   // behind the Pick a video key
+  // before a video, a line and Pick a video only: no slider, nudges or Make the video to act on yet (walkthrough 2026-11-13)
+  const bare = await page.evaluate(() => ({ seen: [...document.querySelectorAll('#dvDashcam button, #dvDashcam input[type=range]')].filter((x) => x.offsetParent).map((x) => x.textContent || x.getAttribute('aria-label')),
+    note: document.querySelector('#dvDashcam .note').textContent }));
+  check(!bare.seen.length && bare.note.length <= 100, 'the dashcam section before a video is a line and its key: ' + JSON.stringify(bare));
   // a 2 s video made right here, put in the file box as if picked
   await page.evaluate(async () => {
     const c = Object.assign(document.createElement('canvas'), { width: 320, height: 180 }), g = c.getContext('2d');
