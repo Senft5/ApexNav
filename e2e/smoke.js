@@ -8923,6 +8923,41 @@ flow('road marks: a stop sign and a railway crossing from the map are pinned on 
   check(await page.evaluate(() => window.__said.filter((s) => /Railway crossing/.test(s)).length) === 1, 'the crossing called once: ' + JSON.stringify(await page.evaluate(() => window.__said)));
 });
 
+flow('road marks on a route set during a drive: the map is asked for this route alone (road_marks.js, attachMarksSoon)', async (page, base) => {
+  await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); } catch (_) {} });
+  const KY = 110540, lat = (m) => 35.5 + m / KY, LON = -83.9, kx = 111320 * Math.cos(35.5 * Math.PI / 180);
+  const g = (m, dx = 0) => ({ lat: lat(m), lon: LON + dx / kx });
+  const ids = []; for (let m = 0; m <= 3000; m += 100) ids.push(1000 + m / 100);
+  const elements = [
+    { type: 'way', id: 1, tags: { highway: 'tertiary', name: 'Straight Road' }, nodes: ids, geometry: ids.map((_, k) => g(k * 100)) },
+    { type: 'node', id: 1012, ...g(1200), tags: { traffic_calming: 'hump' } },
+  ];
+  let mapUp = false;                                         // the map's server is down while the route is planned
+  for (const host of ['overpass-api.de', 'overpass.kumi.systems', 'overpass.private.coffee', 'maps.mail.ru'])
+    await page.route(`https://${host}/**`, (route) => (mapUp ? route.fulfill({ contentType: 'application/json', body: JSON.stringify({ elements }) }) : route.abort()));
+  await page.goto(base + '/index.html');
+  await page.waitForFunction(() => window.apexDebug && window.apexDebug.map && window.apex && window.apex.live && window.ApexRoadMarks);
+  const gpx = []; for (let m = 0; m <= 3000; m += 5) gpx.push(`<trkpt lat="${lat(m).toFixed(7)}" lon="${LON.toFixed(7)}"/>`);
+  await page.setInputFiles('#gpxFile', { name: 'straight.gpx', mimeType: 'application/gpx+xml', buffer: Buffer.from(`<gpx><trk><name>Straight Road</name><trkseg>${gpx.join('')}</trkseg></trk></gpx>`) });
+  await page.waitForFunction(() => window.apexDebug.track && window.apexDebug.track.name === 'Straight Road', null, { timeout: 10000 });
+  await page.evaluate(() => window.apex.onNative({ type: 'carplay', action: 'start' }));
+  await page.waitForFunction(() => window.apexDebug.driveActive);
+  await page.evaluate(() => { const fix = () => window.apex.live({ lat: 35.5, lon: -83.9, accuracy_m: 5, speed_mps: 15, course_deg: 0, has_fix: true, lat_g: 0, lon_g: 0, calibration: 'locked' });
+    fix(); window.__fixes = setInterval(fix, 500); });   // the car keeps sending fixes, as a phone does
+  check(!(await page.evaluate(() => (apexDebug.track.marks || []).length)), 'no marks while the map is down');
+  // the map comes back; the route is built again mid-drive (as a reroute does)
+  mapUp = true;
+  await page.evaluate(() => { const t = apexDebug.track, again = { ...t, id: 'again', marks: undefined };
+    return apexDebug.buildRoute(null, 'again', 'Straight Road', again); });
+  const reb = await page.evaluate(() => [apexDebug.state.mode, apexDebug.driveActive, apexDebug.track && apexDebug.track.id]);
+  check(reb[0] === 'live' && reb[2] === 'again', 'rebuilt in live mode: ' + JSON.stringify(reb));
+  await page.waitForFunction(() => Array.isArray(apexDebug.track.marks) && apexDebug.track.marks.length, null, { timeout: 20000 })
+    .catch(async () => { throw new Error('no marks: ' + JSON.stringify(await page.evaluate(() => apexDebug.lastCtx))); });
+  const marks = await page.evaluate(() => apexDebug.track.marks.map((m) => [m.code, m.call, Math.round(m.dist_m)]));
+  check(marks.length === 1 && marks[0][0] === 'HUMP' && marks[0][1] === 'Speed bump' && Math.abs(marks[0][2] - 1200) <= 30, 'the hump on the route: ' + JSON.stringify(marks));
+  await page.evaluate(() => clearInterval(window.__fixes));
+});
+
 flow('the co-driver counts clean corners in a row live and says five, then ten, and passing the month\'s best once, never in Quiet notes (flow_live.js, IDEAS D-30)', async (page, base) => {
   await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); } catch (_) {}
     window.__said = []; window.APEX_REVIEW = true;

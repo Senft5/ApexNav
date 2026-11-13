@@ -155,6 +155,11 @@
       if (note.type === 'bump') body += `<path d="M30 54 Q50 30 70 54" fill="none" stroke="${accent}" stroke-width="4"/>`;
       if (note.type === 'crest') body += `<path d="M28 58 Q50 26 72 58" fill="none" stroke="${accent}" stroke-width="3"/><path d="M38 42 L50 30 L62 42" fill="none" stroke="${accent}" stroke-width="2"/>`;
       if (note.type === 'dip') body += `<path d="M28 40 Q50 72 72 40" fill="none" stroke="${accent}" stroke-width="3"/>`;
+      // road marks from the map (road_marks.js), by code: a stop octagon, a railway crossbuck, a bridge's narrowing rails, a hump
+      if (note.type === 'mark' && note.code === 'STOP') body += `<polygon points="64,30 74,30 81,37 81,47 74,54 64,54 57,47 57,37" fill="none" stroke="${accent}" stroke-width="3"/>`;
+      if (note.type === 'mark' && note.code === 'RAIL') body += `<path d="M58 32 L80 54 M80 32 L58 54" stroke="${accent}" stroke-width="3.4" stroke-linecap="round"/>`;
+      if (note.type === 'mark' && note.code === 'BRIDGE') body += `<path d="M36 30 L44 42 L44 62 L36 74 M64 30 L56 42 L56 62 L64 74" fill="none" stroke="${accent}" stroke-width="3" stroke-linejoin="round"/>`;
+      if (note.type === 'mark' && note.code === 'HUMP') body += `<path d="M30 56 Q50 34 70 56" fill="none" stroke="${accent}" stroke-width="4"/><path d="M30 64 L70 64" stroke="${accent}" stroke-width="2"/>`;
       if (note.type === 'alpr') body += `<rect x="62" y="38" width="22" height="14" fill="none" stroke="${accent}" stroke-width="2.6"/><circle cx="73" cy="45" r="3.5" fill="${accent}"/><path d="M62 45 L54 45" stroke="${accent}" stroke-width="2.6"/>`;
     }
     return `<svg viewBox="0 0 100 100" class="tulip">${body}</svg>`;
