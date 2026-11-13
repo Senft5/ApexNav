@@ -5444,6 +5444,10 @@ flow('Your driving: the profile over every drive opens from the Log, names the w
   check(steady.length === 2 && /^Braking point in Oct 2026: varies under 10 ft, over 8 corners · steadier than Sep 2026, about 30 ft$/.test(steady[0])
     && /^Speed at the slowest point in Oct 2026: varies about 1 mph · steadier than Sep 2026, 3 mph$/.test(steady[1]), 'braking consistency rows: ' + JSON.stringify(steady));
   check(/Cleanest medium/.test(recs) && !/mph|km\/h/.test(recs), 'records by kind of corner: ' + recs);
+  check(/Cleanest (tight|medium|fast) (left|right|corner), of \d+ \w+ corners/.test(recs) && /\d\/100/.test(recs), 'a corner record says it is out of 100, beside Scores out of 1000: ' + recs);
+  // Score over time starts from a round number under the lowest Score, not 0 (three drives in the 800s were a flat line)
+  const axis = await page.evaluate(() => [...document.querySelectorAll('#trend svg text')].map((t) => t.textContent).filter((t) => /^\d+$/.test(t)).map(Number));
+  check(axis.length >= 3 && Math.min(...axis) >= 500 && Math.max(...axis) === 1000, 'the Score axis fits the Scores: ' + JSON.stringify(axis));
   // Your year: the year's cleanest corners, one a road (two roads here), from the same kept observations
   const best = await page.evaluate(() => ApexAnalysis.job('profile', { year: 2026 }).then((r) => r.best));
   check(best.length === 2 && best[0].level >= best[1].level && new Set(best.map((b) => b.name)).size === 2 && best.every((b) => b.at.startsWith('2026-')), 'the year\'s best corners: ' + JSON.stringify(best));
