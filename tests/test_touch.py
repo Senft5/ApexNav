@@ -144,11 +144,10 @@ def test_parity_and_words():
             for k in dp.TOUCH:
                 assert (x[k] is None) == (y[k] is None) and (y[k] is None or x[k] == pytest.approx(y[k], abs=1e-9)), k
     assert out["t"] == py
-    assert out["soft"] == ["You put the brakes on at about 1.4 g a second and let them off at about 0.63 g a second.",
-                           "You let the brakes go more gently than you put them on, which keeps the front tyres loaded as you turn in.",
-                           "You load the car up at about 0.86 g a second as you turn in, most corners between 0.5 and 1.1."]
-    assert out["sharp"][1].startswith("You let the brakes go more sharply") and len(out["sharp"]) == 2
-    assert out["quick"] == ["You put the brakes on in one quick movement (quicker than the recording can time) and let them off at about 0.5 g a second.",
-                            "You turn in with one quick movement of the wheel (quicker than the recording can time)."]
+    assert out["soft"] == ["Brakes on: 1.4 g a second", "Brakes off: 0.63 g a second",
+                           "Letting go: gentler than putting them on, which keeps the front loaded",
+                           "Turn-in: 0.86 g a second, most corners 0.5 to 1.1"]
+    assert out["sharp"][2].startswith("Letting go: sharper") and len(out["sharp"]) == 3
+    assert out["quick"] == ["Brakes on: one quick movement", "Brakes off: 0.5 g a second", "Turn-in: one quick movement"]
     assert out["none"] == [] and len(out["say"]) >= 2
     assert any(o[k] == "quick" for d in py_obs for o in d for k in dp.TOUCH)    # the parity covers quick corners too

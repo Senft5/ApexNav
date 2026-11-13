@@ -748,22 +748,20 @@
   /** Your touch, as sentences of fact: how the brakes go on and come off, and how the car is loaded at turn-in. */
   const gps = (x) => `${x < 1 ? r(x, 2).toFixed(2).replace(/0$/, '') : r(x, 1).toFixed(1)} g a second`;
   function touchLines(t) {
+    // one labelled fact a row (TestFlight 2026-11-12, "text walls"); "quick": quicker than the recording can time
     const out = [];
     if (!t) return out;
     const on = t.brake_on || {}, off = t.brake_off || {}, turn = t.turn_in || {};
-    // a rate, or "quick": most corners quicker than 5 m bins can time
-    const how = (m) => (finite(m.rate) ? `at about ${gps(m.rate)}` : m.quick_rate ? 'in one quick movement (quicker than the recording can time)' : null);
-    const a = how(on), b = how(off);
-    if (a && b) out.push(`You put the brakes on ${a} and let them off ${b}.`);
-    else if (a) out.push(`You put the brakes on ${a}.`);
-    else if (b) out.push(`You let the brakes off ${b}.`);
+    const how = (m) => (finite(m.rate) ? gps(m.rate) : m.quick_rate ? 'one quick movement' : null);
+    if (how(on)) out.push(`Brakes on: ${how(on)}`);
+    if (how(off)) out.push(`Brakes off: ${how(off)}`);
     if (finite(t.release)) {
-      out.push(t.release <= 0.7 ? 'You let the brakes go more gently than you put them on, which keeps the front tyres loaded as you turn in.'
-        : t.release >= 1.3 ? 'You let the brakes go more sharply than you put them on. Easing off them as you turn in keeps the front tyres loaded.'
-          : 'You put the brakes on and let them off at about the same rate.');
+      out.push(t.release <= 0.7 ? 'Letting go: gentler than putting them on, which keeps the front loaded'
+        : t.release >= 1.3 ? 'Letting go: sharper than putting them on. Ease off as you turn in'
+          : 'Letting go: about as fast as putting them on');
     }
-    if (finite(turn.rate)) out.push(`You load the car up at about ${gps(turn.rate)} as you turn in${finite(turn.lo) && finite(turn.hi) ? `, most corners between ${r(turn.lo, 1).toFixed(1)} and ${r(turn.hi, 1).toFixed(1)}` : ''}.`);
-    else if (turn.quick_rate) out.push('You turn in with one quick movement of the wheel (quicker than the recording can time).');
+    if (finite(turn.rate)) out.push(`Turn-in: ${gps(turn.rate)}${finite(turn.lo) && finite(turn.hi) ? `, most corners ${r(turn.lo, 1).toFixed(1)} to ${r(turn.hi, 1).toFixed(1)}` : ''}`);
+    else if (turn.quick_rate) out.push('Turn-in: one quick movement');
     return out;
   }
   const TOUCH_NAME = { brake_on: 'Brakes on', brake_off: 'Brakes off', turn_in: 'Turn-in' };
