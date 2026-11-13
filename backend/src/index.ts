@@ -8,6 +8,7 @@ import { Env, HttpError, body, json, str } from "./util";
 import { rateCheck } from "./ratelimit";
 import { clientError, countError, errorSummary, failingRoutes, serverError } from "./errors";
 import { backupDatabase } from "./backup";
+import { pushStatus } from "./apns";
 import { sweepExpired } from "./sweep";
 import { cronHealth, runCron } from "./cron_runs";
 import { appleSignIn } from "./apple";
@@ -70,6 +71,8 @@ const noContent = () => new Response(null, { status: 204 });
 // Status checks (tools/status_check.py, IDEAS Y-05): one trivial read proves the database answers, not just the Worker.
 // The cron jobs ride along (src/cron_runs.ts): a backup or sweep that stopped or keeps failing is an outage there too, and so
 // is a route whose 500s keep coming (src/errors.ts failingRoutes).
+// Push (src/apns.ts): set up here, and does APNs answer this Worker (the HTTP/2 check). Nothing personal.
+on("GET", "/api/push/status", async (_req, env) => json(await pushStatus(env)));
 on("GET", "/api/health", async (_req, env) => {
   try { return json({ ok: true, db: true, cron: await cronHealth(env), failing_routes: await failingRoutes(env) }); }
   catch (e) { console.error(JSON.stringify({ event: "health_db_failed", error: String(e) })); return json({ ok: false, db: false }, 503); }
