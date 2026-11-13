@@ -2622,8 +2622,13 @@ flow('the sight-line speed rides under the position arrow, on the phone and on t
   await page.goto(base + '/index.html?drive=dry_ridge&play=1');
   await page.waitForFunction(() => window.apexDebug && window.apexDebug.track, null, { timeout: 15000 });
   await page.waitForFunction(() => { const t = document.querySelector('.sight-tag'); return t && !t.hidden; }, null, { timeout: 10000 });
-  const tag = await page.textContent('.sight-tag');
-  const cell = await page.textContent('#cluster');
+  // one snapshot, once they agree: playback runs, and the tag holds a value for 2 s (U-60) while the cell moves at once,
+  // so two separate reads could straddle a change (it flaked in CI that way)
+  const same = await page.waitForFunction(() => { const t = document.querySelector('.sight-tag'), c = document.getElementById('cluster');
+    const n = t && !t.hidden ? t.textContent.replace(/\D/g, '') : ''; return n && c.textContent.includes(n) && { tag: t.textContent, cell: c.textContent }; },
+    null, { timeout: 8000 }).then((h) => h.jsonValue()).catch(() => null);
+  const tag = same ? same.tag : await page.textContent('.sight-tag');
+  const cell = same ? same.cell : await page.textContent('#cluster');
   // panel round 2 (TH-2, IN-3): the tag names itself, SIGHT and the number, no unit (never a limit sign); OPEN draws nothing
   check(/^(SIGHT|SLOW)\d+$/.test(tag.trim()), 'the tag reads SIGHT and a speed: ' + tag);
   check(cell.includes(tag.replace(/\D/g, '')), 'the same value as the Sight cell: ' + tag);
@@ -5058,6 +5063,7 @@ flow('flyby: a friend on the same stage that day shows on the drive, as text; ch
   await page.waitForSelector('#dvFlyby:not([hidden])');
   const t = await page.textContent('#dvFlybyList');
   check(t === 'Straight <b>run</b>: @bob 812', 'only the same day, as text: ' + t);
+  check(!(await page.$('#dvFlyby .note')), 'the friends-that-day panel is the list alone, no footnote under it');
   // this month's challenges (IDEAS S-11): a drive dated now makes the panel, a new road counted (f1 counts too in October 2026)
   await page.evaluate(async () => { const f = (await ApexRecording.all()).find((d) => d.id === 'f1'); await ApexRecording.store({ ...f, id: 'f2', name: 'Fresh road', date: new Date().toISOString() }); });
   await page.goto(base + '/analysis.html');
