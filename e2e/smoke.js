@@ -8473,6 +8473,40 @@ flow('the co-driver says a long descent once as the car nears its top, from the 
   check((await calls()).length === 1, 'and not again on the way down: ' + JSON.stringify(await calls()));
 });
 
+flow('the co-driver says a low sun once when the route turns into it, and not again once it is in view (sun_ahead.js, live R-13)', async (page, base) => {
+  const Sun = require('../web/sun.js'), dusk = new Date('2026-06-21T00:20:00Z'), LAT = 35.5, LON = -83.9;
+  await page.clock.setFixedTime(dusk);                       // the sun 0-15 degrees up in the west-northwest
+  await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); } catch (_) {}
+    window.__said = []; window.APEX_REVIEW = true;
+    window.webkit = { messageHandlers: { apex: { postMessage(m) { if (m && m.cmd === 'said') window.__said.push(m.text); } } } }; });
+  await page.goto(base + '/index.html');
+  await page.waitForFunction(() => window.apexDebug && window.apexDebug.map && window.ApexRouteImport && window.apex && window.apex.live && window.ApexSunAhead);
+  // north for 1 km (the sun off to the left), then 1 km straight at it
+  const az = Sun.sunPosition(dusk, LAT, LON).azimuth, pts = [];
+  let lat = LAT, lon = LON;
+  for (let m = 0; m <= 2000; m += 5) { pts.push([lat, lon]); const h = m < 1000 ? 0 : az;
+    lat += 5 * Math.cos(h) / 110540; lon += 5 * Math.sin(h) / (111320 * Math.cos(lat * Math.PI / 180)); }
+  const gpx = pts.map(([a, o]) => `<trkpt lat="${a.toFixed(7)}" lon="${o.toFixed(7)}"/>`).join('');
+  await page.setInputFiles('#gpxFile', { name: 'sunset.gpx', mimeType: 'application/gpx+xml', buffer: Buffer.from(`<gpx><trk><name>Into the sunset</name><trkseg>${gpx}</trkseg></trk></gpx>`) });
+  await page.waitForFunction(() => window.apexDebug.track && window.apexDebug.track.name === 'Into the sunset', null, { timeout: 10000 });
+  await page.evaluate(() => window.apex.onNative({ type: 'carplay', action: 'start' }));
+  await page.waitForFunction(() => window.apexDebug.driveActive);
+  const at = (i, v) => page.evaluate(([i, v]) => { const t = apexDebug.track, j = Math.min(i + 1, t.lat.length - 1), k = Math.max(0, j - 1);
+    const course = (Math.atan2((t.lon[j] - t.lon[k]) * Math.cos(t.lat[k] * Math.PI / 180), t.lat[j] - t.lat[k]) * 180 / Math.PI + 360) % 360;
+    window.apex.live({ lat: t.lat[i], lon: t.lon[i], accuracy_m: 5, speed_mps: v, course_deg: course, has_fix: true, lat_g: 0, lon_g: 0, calibration: 'locked', thermal: 0 }); }, [i, v]);
+  const calls = () => page.evaluate(() => window.__said.filter((s) => s === 'Sun in your eyes ahead.'));
+  const iAt = (m) => page.evaluate((m) => apexDebug.track.dist.findIndex((d) => d >= m), m);
+  // the first 50 m: the bend is more than 900 m off, nothing yet
+  for (let i = 0, end = await iAt(50); i <= end; i += 2) { await at(i, 20); await page.waitForTimeout(40); }
+  check((await calls()).length === 0, 'nothing said a long way short of the bend: ' + JSON.stringify(await calls()));
+  // up to the bend: said once
+  for (let i = await iAt(50), end = await iAt(900); i <= end; i += 3) { await at(i, 20); await page.waitForTimeout(50); }
+  check((await calls()).length === 1, 'said once before the bend: ' + JSON.stringify(await page.evaluate(() => window.__said)));
+  // into the sun: the driver sees it, not said again
+  for (let i = await iAt(1000), end = await iAt(1600); i <= end; i += 3) { await at(i, 20); await page.waitForTimeout(30); }
+  check((await calls()).length === 1, 'not again with the sun in view: ' + JSON.stringify(await calls()));
+});
+
 flow('the co-driver counts clean corners in a row live and says five, then ten, and passing the month\'s best once, never in Quiet notes (flow_live.js, IDEAS D-30)', async (page, base) => {
   await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); } catch (_) {}
     window.__said = []; window.APEX_REVIEW = true;

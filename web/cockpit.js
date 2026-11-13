@@ -1461,6 +1461,7 @@
     const speech = { busy: false, queue: ApexSpeechQueue.createSpeechQueue(), current: null, talkingUntil: 0, nativeTimer: 0, via: null, chime: null };
     const MEMO_S = 5;   // a remembered coaching tip takes up to this long to say
     let brakeSay = null;  // the brake heat call waiting for a quiet moment (noteBrakes), said before a break cue
+    let sunSay = null;    // "Sun in your eyes ahead." waiting for a quiet moment (sun_ahead.js, the notes loop), after brake heat
     let breakSay = null;  // a break suggestion waiting for a quiet moment (noteRest sets it, the notes loop says it)
     let flowSay = null, flowQueue = [];   // flowQueue: the next ones, in order, when two land close together; "Five clean in a row." (noteFlow, flow_live.js), the lowest of the quiet slots, never in Quiet notes
     const NUM_WORDS = ['zero', 'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine'];
@@ -1991,16 +1992,25 @@
         const d = ApexBrakeHeat.descentAhead(track.descents, state.cursorM, said);
         if (d) { said.add(d.start_m); brakeSay = { text: ApexBrakeHeat.descentCall(d, ApexUnits.spokenShort), until: performance.now() + 60000 }; }
       }
+      // A low sun the road turns into (sun_ahead.js): on the road being followed, live, once every 5 minutes at most, not under
+      // a sky the place plate knows is overcast or wet. Its own slot after brake heat, kept 15 s (then the stretch is near).
+      if (live && !offRoute && !sunSay && track && window.ApexSunAhead && window.ApexSun) {
+        const pd = placeAsk.data || {}, word = window.ApexPlacePlate ? ApexPlacePlate.weather(pd) : null, nowS = performance.now() / 1000;
+        if (!ApexSunAhead.hidden(word, pd.code) && ApexSunAhead.due(nowS, drive.sunAt ?? null) && ApexSunAhead.ahead(track, state.cursorM, new Date())) {
+          drive.sunAt = nowS; sunSay = { text: ApexSunAhead.TEXT, until: performance.now() + 15000 };
+        }
+      }
+      if (sunSay && performance.now() > sunSay.until) sunSay = null;
       if (brakeSay && performance.now() > brakeSay.until) brakeSay = null;
       if (breakSay && performance.now() > breakSay.until) breakSay = null;
       if (flowSay && (performance.now() > flowSay.until || state.notesMode === 'quiet')) { flowSay = null; flowQueue = []; }
-      const quiet = brakeSay || breakSay || flowSay;
+      const quiet = brakeSay || sunSay || breakSay || flowSay;
       if (quiet && live && performance.now() - state.liveAt < 2500 && !speech.busy && !speech.queue.size && performance.now() > speech.talkingUntil) {
         const quietReach = lead + vMps * (0.6 + 0.07 * quiet.text.length + 2);
         const callDue = ev.some(e => noteM(e) - state.cursorM < quietReach && !state.spoken.has(`${track.id}:${e.type}:${e.index}`)
           && (e.type === 'corner' ? spirited : (spirited || noteworthyInCruise(e))));
         const bumpDue = ApexRoadMemory.upcoming(hazardMemory, state.live, 0, quietReach, { has: () => false });
-        if (!callDue && !bumpDue) { say(quiet.text); if (quiet === brakeSay) brakeSay = null; else if (quiet === breakSay) breakSay = null; else { flowSay = flowQueue.shift() || null; if (flowSay) flowSay.until = performance.now() + 20000; } }
+        if (!callDue && !bumpDue) { say(quiet.text); if (quiet === brakeSay) brakeSay = null; else if (quiet === sunSay) sunSay = null; else if (quiet === breakSay) breakSay = null; else { flowSay = flowQueue.shift() || null; if (flowSay) flowSay.until = performance.now() + 20000; } }
       }
     }
 
@@ -9422,7 +9432,7 @@
       startStageWatch();
       state.firstNoteDue = true; state.firstNoteKey = null;   // U-58: the drive's first note is called
       state.openerDue = true; state.openerAt = performance.now(); state.wakeCue = false;   // DA-3: the first words name the road
-      drive.live = null; drive.liveIdx = 0; drive.share = 'off'; drive.shareKm = 0; drive.shareErr = null; drive.roads = {}; drive.roadIdx = 0; drive.rest = null; drive.brakes = null; drive.descentSaid = null; drive.flow = null; brakeSay = null; breakSay = null; flowSay = null; flowQueue = []; drive.wet = null; if (window.ApexNoteTiming && ApexNoteTiming.setRoad) ApexNoteTiming.setRoad(null); if (breakWorker) { breakWorker.terminate(); breakWorker = null; }
+      drive.live = null; drive.liveIdx = 0; drive.share = 'off'; drive.shareKm = 0; drive.shareErr = null; drive.roads = {}; drive.roadIdx = 0; drive.rest = null; drive.brakes = null; drive.descentSaid = null; drive.flow = null; brakeSay = null; breakSay = null; flowSay = null; flowQueue = []; sunSay = null; drive.sunAt = null; drive.wet = null; if (window.ApexNoteTiming && ApexNoteTiming.setRoad) ApexNoteTiming.setRoad(null); if (breakWorker) { breakWorker.terminate(); breakWorker = null; }
       keepStart();                                                     // Round 3: the drive is kept as it goes (drive_keep.js)
       if (NATIVE_SHELL) {   // the app's own GPS and IMU feed window.apex.live; no browser sensors to start
         drive.native = true;
