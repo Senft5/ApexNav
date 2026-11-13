@@ -211,7 +211,7 @@
     const etaSections = new WeakMap();      // track -> its corner sections (ApexEta.cornerSections), worked out once
     let etaText = '', etaLeftS = null;
     let replayEnded = false, replayWaiting = false;   // U-110 a finished replay, U-128 a replay waiting for its map (paintReplayEnd)
-    const car = { serial: 0, route: '', guideAt: 0, guideKey: '', sightKey: '', look: '', hazards: '', symbols: new Map(), ended: null, along: '', offerSerial: 0, offer: null, echo: 0, attack: null, road: '', roadAt: -1e9 };   // what the car's screen was last sent (carRoute, carGuide below)   // strip text while off route; last frame fed; furthest progress
+    const car = { serial: 0, route: '', guideAt: 0, guideKey: '', sightKey: '', look: '', hazards: '', symbols: new Map(), ended: null, along: '', offerSerial: 0, offer: null, echo: 0, attacks: [], attackWeek: null, road: '', roadAt: -1e9 };   // what the car's screen was last sent (carRoute, carGuide below)   // strip text while off route; last frame fed; furthest progress
     try {
       const saved = JSON.parse(localStorage.getItem('apex.prefs') || 'null');
       if (saved) {
@@ -6400,8 +6400,8 @@
         challenge: (stage) => { if (duels && duels.challengeOn) { closeSheet(); duels.challengeOn(stage); } },
         // Drive it: the loop itself is the route (as a roadbook road is), not just the way to its start
         driveLoop: (c, g) => driveAttack(c, g),
-        // this week's loop, for the car's Places: a row there once you've entered it (time_attack.js peek)
-        week: (w) => { car.attack = w && w.circuit && w.entered && w.circuit.segment_id ? w : null; carPost(carPlaces()); },
+        // the area's time attacks you've entered (the featured one first), for the car's Places (time_attack.js peek)
+        entered: (loops, week) => { car.attacks = Array.isArray(loops) ? loops : []; car.attackWeek = week || null; carPost(carPlaces()); },
         // the row's own line says this week's loop and your place on it (time_attack.js summaryLine)
         line: (txt) => { const s = $('planAttack').querySelector('summary'); if (s) s.textContent = txt || TA_LINE; } }) : null;
       if (ta) {
@@ -9134,11 +9134,14 @@
     // the car's Places: pinned, this week's time attack loop (once entered), saved routes and recents, as Where to? lists
     // them (carplay.js placesMessage)
     function carPlaces() {
-      let pinned = [], saved = [], attack = null;
+      let pinned = [], saved = [], attacks = [];
       try { pinned = ApexPinnedPlaces.list(localStorage); saved = ApexSavedRoutes.list(localStorage); } catch (_) {}
-      try { attack = car.attack && window.ApexTimeAttack ? { id: car.attack.circuit.segment_id, name: car.attack.circuit.name,
-        detail: (ApexTimeAttack.summaryLine(car.attack, (m) => ApexUnits.long(m, 1)) || '').replace(/^Time attack: [^·]*· ?/, '') } : null; } catch (_) {}
-      return ApexCarPlay.placesMessage(recentPlaces(), pinned, saved, (m) => ApexUnits.long(m), attack);
+      try {
+        const w = car.attackWeek, line = w && w.entered && window.ApexTimeAttack ? (ApexTimeAttack.summaryLine(w, (m) => ApexUnits.long(m, 1)) || '').replace(/^Time attack: [^·]*· ?/, '') : '';
+        attacks = car.attacks.map((c) => ({ id: c.segment_id, name: c.name,
+          detail: c.featured && line ? line : Number.isFinite(c.length_m) ? ApexUnits.long(c.length_m, 1) : '' }));
+      } catch (_) {}
+      return ApexCarPlay.placesMessage(recentPlaces(), pinned, saved, (m) => ApexUnits.long(m), attacks);
     }
     // Time attack's Drive it (time_attack.js, the phone's or the car's): the loop itself is the route, as a roadbook road is
     async function driveAttack(c, g) {
@@ -9877,10 +9880,11 @@
       else if (m.action === 'offer' && car.offer && m.id === car.offer.id && performance.now() < car.offer.until) car.offer.run();
       else if (m.action === 'disconnect') keepCar(false, m.t);      // Round 3: the car switched off; the drive ends once it stays put
       else if (m.action === 'places') carPost(carPlaces());
-      else if (m.action === 'attack' && car.attack && String(m.id) === String(car.attack.circuit.segment_id) && !driveActive) {   // the week's loop
+      else if (m.action === 'attack' && !driveActive) {                  // a time attack you've entered, from the car's Places
+        const c = car.attacks.find((x) => String(x.segment_id) === String(m.id));
         let g = [];
-        try { g = JSON.parse(car.attack.circuit.geom) || []; } catch (_) {}
-        if (g.length > 1) driveAttack(car.attack.circuit, g).catch(() => {});
+        try { g = c ? JSON.parse(c.geom) || [] : []; } catch (_) {}
+        if (g.length > 1) driveAttack(c, g).catch(() => {});
       }
       else if (m.action === 'saved' && typeof m.id === 'string' && !driveActive) {      // a saved route from the car's Places
         const p = ApexSavedRoutes.list(localStorage).find((q) => q.id === m.id);

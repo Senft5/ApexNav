@@ -72,6 +72,16 @@
    * {segment_id, name, length_m, geom}, entered, entrants, you } (this week's board, read only when it is the featured
    * one's), for the Where to? line and the deck. circuit null when the area has none.
    */
+  /**
+   * The area's loops you've entered, for the car's Places (cockpit carPlaces): the featured one first, then the rest as the
+   * server lists them, at most `max`, each { segment_id, name, length_m, geom, featured }. Only those with a line to drive.
+   */
+  function enteredLoops(t, max = 3) {
+    if (!t || !Array.isArray(t.circuits)) return [];
+    const ok = t.circuits.filter((c) => c && c.entered && c.id != null && typeof c.name === 'string' && typeof c.geom === 'string' && c.geom.length > 4);
+    return [...ok.filter((c) => c.featured), ...ok.filter((c) => !c.featured)].slice(0, max)
+      .map((c) => ({ segment_id: c.id, name: c.name, length_m: c.length_m, geom: c.geom, featured: !!c.featured }));
+  }
   function featuredWeek(t) {
     if (!t || !Array.isArray(t.circuits)) return null;
     const f = t.circuits.find((c) => c.featured) || null, b = t.board && f && t.board.id === f.id && t.board.period === 'week' ? t.board : null;
@@ -356,7 +366,7 @@
       if (!r.ok || !r.j) return;
       const week = featuredWeek(r.j);
       if (page.line) page.line(summaryLine(week, dist));
-      if (page.week) page.week(week);                                    // the car's Places has it too (cockpit carPlaces)
+      if (page.entered) page.entered(enteredLoops(r.j), week);          // the car's Places has them too (cockpit carPlaces)
     }
     return { section, peek };
   }
@@ -383,6 +393,6 @@
     } catch (_) { return none; }
   }
 
-  const api = { AREA_DEG, AVOID_M, PERIOD_KEYS, featuredWeek, seasonFoot, STREET_MAX_M, STREET_MAX_SHARE, streety, clock, gap, nth, placeLine, summaryLine, daysLeft, areaPoint, runsToSend, localCopy, rng, hubs, kmFor, choose, geomOf, loopName, makeLoop, mount, sendRuns };
+  const api = { AREA_DEG, AVOID_M, PERIOD_KEYS, featuredWeek, enteredLoops, seasonFoot, STREET_MAX_M, STREET_MAX_SHARE, streety, clock, gap, nth, placeLine, summaryLine, daysLeft, areaPoint, runsToSend, localCopy, rng, hubs, kmFor, choose, geomOf, loopName, makeLoop, mount, sendRuns };
   if (typeof module !== 'undefined' && module.exports) module.exports = api; else root.ApexTimeAttack = api;
 })(typeof window !== 'undefined' ? window : globalThis);

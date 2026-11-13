@@ -73,6 +73,9 @@ const asked = [];
   area: [T.areaPoint({ lat: 39.25, lon: -84.6 }), T.areaPoint({ lat: -33.9, lon: 151.2 }), T.areaPoint(null)],
   runs, runsSince, runsMany: { n: runsMany.length, first: runsMany[0].driven_on, last: runsMany[19].driven_on },
   best: [T.choose(routes, 'a', 1).distM, T.choose(routes, 'b', 1).distM],
+  entered: [T.enteredLoops({ circuits: [{ id: 'A', name: 'A loop', length_m: 9000, geom: '[[1,2],[3,4]]', entered: true },
+      { id: 'B', name: 'B loop', geom: '[[1,2],[3,4]]', featured: true, entered: true }, { id: 'C', name: 'C loop', geom: '[[1,2],[3,4]]', entered: false },
+      { id: 'D', name: 'No line', geom: '[]', entered: true }] }).map((c) => c.segment_id + (c.featured ? '*' : '')), T.enteredLoops(null)],
   week: [T.featuredWeek({ week: '2026-11-09', today: '2026-11-12', cell: '39,-85', circuits: [{ id: 'A', name: 'A loop', length_m: 9000, geom: '[]', featured: false, entered: true },
       { id: 'B', name: 'B loop', length_m: 11000, geom: '[[1,2]]', featured: true, entered: true }], board: { id: 'B', period: 'week', entrants: 4, you: { place: 2 } } }),
     T.featuredWeek({ week: '2026-11-09', circuits: [{ id: 'B', featured: true }], board: { id: 'B', period: 'month', entrants: 9, you: { place: 1 } } }).entrants,
@@ -239,3 +242,7 @@ def test_challenge_a_friend_on_the_loop_is_wired():
     assert "Challenge a friend" in ta and "page.challenge({ id: r.j.segment_id" in ta
     assert "function challengeOn(stage)" in duels and "kind = 'time'" in duels and "f.status === 'accepted'" in duels
     assert "duels.challengeOn(stage)" in (root / "web" / "cockpit.js").read_text()
+
+
+def test_the_loops_you_entered_featured_first_for_the_car(out):
+    assert out["entered"] == [["B*", "A"], []], "entered ones with a line to drive, the featured one first"
