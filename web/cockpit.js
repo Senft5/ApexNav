@@ -6157,7 +6157,7 @@
             if (!x) continue;
             const line = [`${dot[x.state] || ''} ${p.name}: ${word[x.state] || x.state}`, x.ms ? `${(x.ms / 1000).toFixed(1)} s` : null, x.detail || null].filter(Boolean).join(' · ');
             out.append(el('p', { className: 'note', textContent: line }),
-              ...(x.state === 'down' ? [el('p', { className: 'note', textContent: `Affects: ${p.feeds}.`, style: 'opacity:.75;margin-top:-6px' })] : []));
+              ...(x.state === 'down' ? [el('p', { className: 'note', textContent: `Affects: ${p.feeds}.`, style: 'margin-top:-6px' })] : []));
           }
         }
         out.append(serverSide());

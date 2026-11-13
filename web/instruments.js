@@ -497,7 +497,7 @@
         digits.dataset.v = s;
         digits.innerHTML = '';
         const lead = s.search(/[1-9]|0\./);                          // the zeros before the number: pencil on the printed line
-        [...s].forEach((ch, k) => html('span', ch === '.' ? 'dot' : k < lead ? 'dg lead' : 'dg', digits, ch));
+        [...s].forEach((ch, k) => { const d = html('span', ch === '.' ? 'dot' : k < lead ? 'dg lead' : 'dg', digits, ch); if (k < lead) d.setAttribute('aria-hidden', 'true'); });   // the zeros are print, not the number
       }
       setT(total, d.totalMi != null ? `of ${d.totalMi.toFixed(1)}` : '');
     };
