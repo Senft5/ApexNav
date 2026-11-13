@@ -557,6 +557,19 @@ def test_the_cars_map_shows_the_routes_speed_cameras(maps):
     assert "carHazards();                                                      // and its cameras" in js
 
 
+def test_overview_shows_the_whole_route_while_guiding():
+    """Apple Maps and Waze have Overview while guiding; the car could only follow the arrow or be panned."""
+    swift = open(os.path.join(ROOT, "CarPlay", "ApexCarPlay.swift"), encoding="utf-8").read()
+    assert '[CPBarButton(title: "Stops") { _ in ApexCar.shared.send("stops") }, overview]' in swift, "a route only, beside Stops"
+    assert 'if b.title == "Overview" { mapController?.overview(); b.title = "Recentre" } else { mapController?.recentre(); b.title = "Overview" }' in swift
+    assert 'mapController?.recentre(); overviewButton?.title = "Overview"' in swift, "a pan ends it"
+    assert '@MainActor func overview() { if let native { native.overview() } else { js("car.overview()") } }' in swift
+    native = open(os.path.join(ROOT, "CarPlay", "ApexCarMap.swift"), encoding="utf-8").read()
+    assert "func overview() {" in native and "follow = false\n        fitRoute(animated: true)" in native
+    web = open(os.path.join(ROOT, "web", "carmap.js"), encoding="utf-8").read()
+    assert "overview() {" in web and "state.follow = false; fitRoute(" in web
+
+
 def test_off_route_the_car_says_rerouting(maps):
     """Apple Maps and Waze say "Rerouting" on the car; Vetta's card kept the last turn, its distance frozen, while off route."""
     rr, wrong, off, none, empty = maps["paused"]
@@ -581,7 +594,7 @@ def test_add_a_stop_from_the_car(maps):
     assert "else if (m.action === 'stops') carPost(ApexCarPlay.stopsMessage(" in js
     assert "if (p) carAsked(() => addViaAt({ lat: p.lat, lon: p.lon," in js, "only a place on the route's own list, and a failure says why on the car"
     swift = open(os.path.join(ROOT, "CarPlay", "ApexCarPlay.swift"), encoding="utf-8").read()
-    assert '[CPBarButton(title: "Stops") { _ in ApexCar.shared.send("stops") }]' in swift and 'case "stops":' in swift
+    assert '[CPBarButton(title: "Stops") { _ in ApexCar.shared.send("stops") }, overview]' in swift and 'case "stops":' in swift
     assert 'ApexCar.shared.send("stop", ["lat": s.lat, "lon": s.lon, "name": s.name])' in swift
 
 

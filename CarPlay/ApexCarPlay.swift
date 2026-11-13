@@ -681,13 +681,21 @@ final class ApexCarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDel
         session = map.startNavigationSession(for: t)
         maneuverKey = ""
         // Stops (a route only): the fuel, chargers and cafés still ahead on it, one tap to add one, as Apple Maps and Waze do
-        map.leadingNavigationBarButtons = ApexCar.shared.route == nil ? [] : [CPBarButton(title: "Stops") { _ in ApexCar.shared.send("stops") }]
+        // and Overview: the whole route, north up, until Recentre (the same key) or a pan, as Apple Maps' Overview does
+        let overview = CPBarButton(title: "Overview") { [weak self] b in self?.toggleOverview(b) }
+        overviewButton = overview
+        map.leadingNavigationBarButtons = ApexCar.shared.route == nil ? [] : [CPBarButton(title: "Stops") { _ in ApexCar.shared.send("stops") }, overview]
         map.trailingNavigationBarButtons = [CPBarButton(title: "End") { _ in ApexCar.shared.send("end") }]
         // Owner, 2026-10-30: the guidance card floated mid-left. A bar that never hides holds the card below it;
         // in guidance the bar hides after a moment (a tap on the map brings End back), so the card sits at the top.
         map.automaticallyHidesNavigationBar = true
         map.hidesButtonsWithNavigationBar = false
         mapButtons()
+    }
+
+    private var overviewButton: CPBarButton?
+    @MainActor private func toggleOverview(_ b: CPBarButton) {
+        if b.title == "Overview" { mapController?.overview(); b.title = "Recentre" } else { mapController?.recentre(); b.title = "Overview" }
     }
 
     @MainActor func guideChanged() {
@@ -836,7 +844,7 @@ final class ApexCarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDel
     }
 
     @MainActor fileprivate func pan(_ d: CPMapTemplate.PanDirection) { mapController?.pan(d) }
-    @MainActor fileprivate func panEnded() { mapController?.recentre() }
+    @MainActor fileprivate func panEnded() { mapController?.recentre(); overviewButton?.title = "Overview" }
 
     // Template delegates are separate small objects so the scene delegate stays a plain UIResponder.
     private final class MapDelegate: NSObject, CPMapTemplateDelegate {
@@ -1146,6 +1154,7 @@ final class ApexCarMapViewController: UIViewController, WKNavigationDelegate {
     }
     @MainActor func zoom(_ dir: Int) { if let native { native.zoom(dir) } else { js("car.zoom(\(dir))") } }
     @MainActor func recentre() { if let native { native.recentre() } else { js("car.recentre()") } }
+    @MainActor func overview() { if let native { native.overview() } else { js("car.overview()") } }
     @MainActor func pan(_ d: CPMapTemplate.PanDirection) {
         let dx = d.contains(.left) ? -1 : d.contains(.right) ? 1 : 0
         let dy = d.contains(.up) ? -1 : d.contains(.down) ? 1 : 0

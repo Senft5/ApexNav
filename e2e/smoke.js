@@ -2902,6 +2902,18 @@ flow('the sight-line speed rides under the position arrow, on the phone and on t
   check(card.some((p) => p.text === 'GRAVEL') && card.some((p) => p.text === 'R6'), 'the reported hazard shows beside the car, and a corner in the clear: ' + JSON.stringify(card));
   // U-89: the credit on its own strip of ground, so no map label shows under it
   check(await page.evaluate(() => { const s = getComputedStyle(document.getElementById('credit')); return s.backgroundColor !== 'rgba(0, 0, 0, 0)' && s.opacity === '1'; }), 'the credit sits on a solid strip');
+  // Overview while guiding (Apple Maps'): the whole route north up and flat, the arrow no longer followed; Recentre follows again
+  const ov = await page.evaluate(async () => {
+    const wait = () => new Promise((r) => { car.map.once('moveend', r); setTimeout(r, 1500); });
+    car.route([[35.40, -84.10], [35.45, -84.02], [35.50, -84.10]]); car.mode('guide'); car.position(35.40, -84.10, 45); await wait();
+    const z0 = car.map.getZoom();
+    car.overview(); await wait();
+    const b = car.map.getBounds(), inView = [[35.40, -84.10], [35.45, -84.02], [35.50, -84.10]].every(([la, lo]) => b.contains([lo, la]));
+    const o = { z0, z: car.map.getZoom(), pitch: car.map.getPitch(), bearing: car.map.getBearing(), follow: car.state.follow, inView };
+    car.recentre(); await wait(); o.after = { follow: car.state.follow, pitch: car.map.getPitch() };
+    return o; });
+  check(ov.inView && ov.z < ov.z0 && ov.pitch === 0 && ov.bearing === 0 && ov.follow === false && ov.after.follow && ov.after.pitch > 0,
+    'Overview: the whole route, flat, then Recentre follows the car again: ' + JSON.stringify(ov));
 });
 
 // Panel round 2, build A (IN-3, PR-2, GR-1, HE-1, PR-1): one red that means act now. In the demo replay the Sight cell is
