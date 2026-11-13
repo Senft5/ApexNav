@@ -5340,6 +5340,16 @@ flow('a drive\'s corners on a road driven four times: each says your cleanest pa
     && vs.filter((t) => t !== 'this drive').every((t) => /^(\d+\.\d s (slower|quicker)|level) on \d+ corners?$/.test(t)), 'the road\'s other drives against this one: ' + JSON.stringify(vs));
   const roadFoot = await page.evaluate(() => [...document.querySelectorAll('#dvRoadTable tr')].pop().textContent);
   check(/^Latest \d{1,4} · best \d{1,4} · 4 scored drives here$/.test(roadFoot), 'the road table says latest and best, not a two-drive trend: ' + roadFoot);
+  // the corner overlay: a corner in Where to find time opens against your best pass there: two speed traces, the time between them, rows
+  await page.click('.dv-time li button');
+  await page.waitForSelector('.dv-ovl svg path', { timeout: 20000 });
+  const ovl = await page.evaluate(() => { const b = document.querySelector('.dv-ovl'); return { rows: [...b.querySelectorAll('.dv-ovl-row')].map((n) => n.textContent), paths: b.querySelectorAll('svg path').length,
+    head: b.querySelector('.dv-ovl-h').textContent, open: b.previousElementSibling.getAttribute('aria-expanded'), wide: document.documentElement.scrollWidth > document.documentElement.clientWidth }; });
+  check(/^Corner \d+ against your best pass$/.test(ovl.head) && ovl.paths >= 3 && ovl.open === 'true' && !ovl.wide
+    && ovl.rows.some((t) => /^Slowest: \d+ mph.* · best pass \d+ mph/.test(t)) && /^Through the corner: (\d+\.\d s (slower|quicker) than|level with) the best pass$/.test(ovl.rows[ovl.rows.length - 1]),
+    'the corner overlay: ' + JSON.stringify(ovl));
+  await page.click('.dv-time li button');
+  check(await page.evaluate(() => !document.querySelector('.dv-ovl')), 'a second tap closes the overlay');
   const abrupt = await page.evaluate(() => { const l = document.querySelector('.dv-abrupt'); return l ? { rows: [...l.querySelectorAll('li .note')].map((n) => n.textContent), say: l.previousElementSibling.textContent } : null; });
   check(abrupt && abrupt.rows.length === 3 && abrupt.rows.every((t) => !/·/.test(t)) && /^The brake came on sharply: squeeze it on$/.test(abrupt.say), 'abrupt moments say a shared advice once: ' + JSON.stringify(abrupt));
   // where this pass was well off your cleanest at a least even corner, the note says what it lost most (the second pass held the arc)

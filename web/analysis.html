@@ -48,6 +48,7 @@
   <script src="flyby.js"></script>
   <script src="challenges.js"></script>
   <script src="week_digest.js"></script>
+  <script src="corner_trace.js"></script>   <!-- one corner, two passes: the drive page's corner overlay -->
   <script src="driver_profile.js"></script>   <!-- Your driving: the profile across every drive -->
   <script src="legends.js"></script>
   <script src="road_votes.js"></script>
@@ -184,6 +185,16 @@
     .dv-corner b { font-family: var(--font-num); color: var(--signal); } .dv-call { font-weight: 700; font-size: 14px; } .dv-v { font-family: var(--font-num); font-size: 13px; }
     .dv-d { grid-column: 2 / 4; font-size: 11px; color: var(--panel-dim); }
     .dv-tip { grid-column: 2 / 4; font-size: 12px; line-height: 1.35; }
+    /* the corner overlay: one corner, this pass against your best pass, under the row tapped */
+    .dv-ovl { grid-column: 1 / -1; display: block; padding: 10px 12px 12px; border-radius: 10px; background: var(--face, var(--panel)); }
+    .dv-ovl-h { margin: 0; font-size: 16px; }
+    .dv-ovl-when, .dv-ovl-wait { margin: 2px 0 6px; font-size: 13px; color: var(--panel-dim, inherit); }
+    .dv-ovl-pic svg { display: block; width: 100%; height: auto; }
+    .dv-ovl-key { display: flex; gap: 14px; margin: 4px 0 6px; font-size: 13px; color: var(--panel-dim, inherit); }
+    .dv-ovl-key span::before { content: ''; display: inline-block; width: 16px; height: 0; margin-right: 6px; vertical-align: middle; border-top: 2.5px solid var(--accent); }
+    .dv-ovl-key .b::before { border-top: 2px dashed currentColor; }
+    .dv-ovl-row { margin: 4px 0 0; font-size: 15px; line-height: 1.35; }
+    .dv-time li > .dv-ovl { margin-top: 6px; }
     .dv-plain { margin: 8px 0 0; font-size: 15px; line-height: 1.4; max-width: 60ch; }
     .dv-gg { margin-top: 12px; } .dv-gg h3 { font-size: 13px; margin: 0 0 6px; }
     .dv-gg-pic { position: relative; width: 100%; max-width: 320px; aspect-ratio: 1; } .dv-gg-pic svg { display: block; width: 100%; height: 100%; }
