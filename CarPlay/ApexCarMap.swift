@@ -70,6 +70,11 @@ struct ApexCarSight: Equatable {
     var drawn: Bool { !(text == "OPEN" && !short) }
 }
 
+/// The posted speed limit (web/carplay.js limitMessage): the US "SPEED LIMIT" sign, or the km/h red ring (`round`).
+struct ApexCarLimit: Equatable {
+    let value: Int, round: Bool
+}
+
 @MainActor
 final class ApexNativeCarMap: UIView {
     static let styleURL = URL(string: "https://tiles.openfreemap.org/styles/liberty")!
@@ -83,6 +88,8 @@ final class ApexNativeCarMap: UIView {
     private let puck = ApexCarPuckView()
     private let sightTag = ApexCarSightView()
     private let credit = ApexCarPlateLabel()
+    private let limitSign = ApexCarLimitView()
+    private var limit: ApexCarLimit?
     private let delegateProxy = MapDelegateProxy()
     nonisolated(unsafe) private var link: CADisplayLink?     // invalidated in deinit, which is not on the main actor
     private var style: MLNStyle?
@@ -136,6 +143,8 @@ final class ApexNativeCarMap: UIView {
         credit.font = .systemFont(ofSize: 10, weight: .medium)
         credit.inset = UIEdgeInsets(top: 3, left: 7, bottom: 4, right: 6)
         addSubview(credit)
+        limitSign.isHidden = true
+        addSubview(limitSign)
         let proxy = LinkProxy(); proxy.owner = self
         let l = CADisplayLink(target: proxy, selector: #selector(LinkProxy.tick(_:)))
         l.isPaused = true
@@ -153,6 +162,7 @@ final class ApexNativeCarMap: UIView {
         super.layoutSubviews()
         credit.sizeToFit()
         credit.frame.origin = CGPoint(x: bounds.width - credit.frame.width, y: bounds.height - credit.frame.height)
+        placeLimit()
         if mode == "preview" { fitRoute(animated: false) } else { applyCamera(CACurrentMediaTime()) }
         placeOverlays()
         declutter()
@@ -272,6 +282,20 @@ final class ApexNativeCarMap: UIView {
     func setHazards(_ list: [ApexCarPlateData]) { hazards = Array(list.prefix(40)); placePlates() }
     func setPlaces(_ list: [ApexCarPlateData]) { places = Array(list.prefix(30)); placePlates() }
 
+    /// The posted limit's sign, bottom left just past Apple's card, as Apple Maps and Waze show it; nil hides it.
+    func setLimit(_ l: ApexCarLimit?) {
+        guard l != limit else { return }
+        limit = l
+        limitSign.set(l)
+        limitSign.isHidden = l == nil
+        placeLimit()
+        declutter()
+    }
+    private func placeLimit() {
+        let s = limitSign.bounds.size
+        limitSign.frame.origin = CGPoint(x: (inset > 0 ? inset + Self.cardGap : 0) + 8, y: bounds.height - s.height - 8)
+    }
+
     func setSight(_ s: ApexCarSight?) {
         let drawn = s.flatMap { $0.drawn ? $0 : nil }                    // OPEN: no plate (TH-2)
         guard drawn != sight else { return }
@@ -297,7 +321,7 @@ final class ApexNativeCarMap: UIView {
     /// in a trip preview. A repeat does nothing.
     func setMode(_ m: String, inset px: CGFloat) {
         let now = CACurrentMediaTime()
-        if px != inset { inset = px; if mode == "preview" { fitRoute(animated: false) } else { startBlend(now, dur: 0) } }
+        if px != inset { inset = px; placeLimit(); if mode == "preview" { fitRoute(animated: false) } else { startBlend(now, dur: 0) } }
         guard m != mode else { return }
         mode = m
         follow = true
@@ -533,6 +557,7 @@ final class ApexNativeCarMap: UIView {
         }
         if inset > 0 { shownBoxes.append(CGRect(x: -1e4, y: -1e4, width: 1e4 + inset + Self.cardGap, height: H + 2e4)) }
         shownBoxes.append(credit.frame.insetBy(dx: -3, dy: -3))
+        if limit != nil { shownBoxes.append(limitSign.frame.insetBy(dx: -6, dy: -6)) }
         let reach = max(17, sight != nil ? sightTag.bounds.width / 2 : 0) + Self.clearPx + 6
         for p in plates {
             let q = map.convert(CLLocationCoordinate2D(latitude: p.data.lat, longitude: p.data.lon), toPointTo: overlay)
@@ -701,5 +726,43 @@ final class ApexCarSightView: UIView {
         bounds = CGRect(origin: .zero, size: label.bounds.size)
         label.frame = bounds
         label.layer.cornerRadius = bounds.height / 2
+    }
+}
+
+/// The posted limit's sign (web/carmap.html #limit, the same drawing): a white rectangle with a black border, "SPEED LIMIT"
+/// and the number, or for km/h a white disc in a red ring with the number. Always its own colours, never the theme's: it is a
+/// road sign, and it must read as one.
+final class ApexCarLimitView: UIView {
+    private let top = UILabel(), num = UILabel()
+    override init(frame: CGRect) {
+        super.init(frame: CGRect(x: 0, y: 0, width: 44, height: 56))
+        isUserInteractionEnabled = false
+        backgroundColor = .white
+        layer.borderColor = UIColor.black.cgColor
+        top.numberOfLines = 2; top.textAlignment = .center; top.textColor = .black
+        top.font = .systemFont(ofSize: 7.5, weight: .bold); top.text = "SPEED\nLIMIT"
+        num.textAlignment = .center; num.textColor = .black; num.adjustsFontSizeToFitWidth = true; num.minimumScaleFactor = 0.6
+        num.font = .systemFont(ofSize: 24, weight: .bold, width: .condensed)
+        addSubview(top); addSubview(num)
+        isAccessibilityElement = true
+    }
+    required init?(coder: NSCoder) { fatalError("not from a storyboard") }
+    func set(_ l: ApexCarLimit?) {
+        guard let l else { return }
+        num.text = String(l.value)
+        top.isHidden = l.round
+        if l.round {
+            bounds = CGRect(x: 0, y: 0, width: 50, height: 50)
+            layer.cornerRadius = 25; layer.borderWidth = 6
+            layer.borderColor = UIColor(red: 0xC8 / 255, green: 0x10 / 255, blue: 0x2E / 255, alpha: 1).cgColor
+            num.frame = bounds.insetBy(dx: 8, dy: 8)
+        } else {
+            bounds = CGRect(x: 0, y: 0, width: 44, height: 56)
+            layer.cornerRadius = 6; layer.borderWidth = 2
+            layer.borderColor = UIColor.black.cgColor
+            top.frame = CGRect(x: 2, y: 5, width: 40, height: 20)
+            num.frame = CGRect(x: 3, y: 25, width: 38, height: 26)
+        }
+        accessibilityLabel = "Speed limit \(l.value) \(l.round ? "kilometres an hour" : "miles an hour")"
     }
 }

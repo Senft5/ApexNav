@@ -85,6 +85,8 @@ final class ApexCar {
     private(set) var hazardsJSON = "[]"
     /// The sight-line speed under the car's arrow (web/carplay.js sightMessage), null when unknown or not driving.
     private(set) var sightJSON = "null"
+    /// The posted speed limit's sign on the car's map (web/carplay.js limitMessage), nil when unknown or not driving.
+    private(set) var limit: ApexCarLimit?
     /// The same, parsed for the native car map (ApexCarMap.swift, F-07).
     private(set) var cornerPlates: [ApexCarPlateData] = []
     private(set) var hazardPlates: [ApexCarPlateData] = []
@@ -230,12 +232,17 @@ final class ApexCar {
                 scene?.driveStarted()
                 scene?.guideChanged()
             }
+        case "limit":
+            let v = Self.num(dict["value"]).map { Int($0.rounded()) }
+            limit = v.flatMap { $0 > 0 && $0 <= 200 ? ApexCarLimit(value: $0, round: (dict["round"] as? Bool) ?? false) : nil }
+            eachMap { $0.showLimit() }
         case "end":
             driving = false
             guide = nil
             sightJSON = "null"
             sight = nil
-            eachMap { $0.showSight() }
+            limit = nil
+            eachMap { $0.showSight(); $0.showLimit() }
             eachMap { $0.setMode() }
             scene?.driveEnded()
         case "ending":
@@ -954,7 +961,7 @@ final class ApexCarMapViewController: UIViewController, WKNavigationDelegate {
         }
         view.addSubview(m)
         native = m
-        showLook(); showRoute(); showCorners(); showHazards(); showPlaces(); setMode(); showPosition(); showSight()
+        showLook(); showRoute(); showCorners(); showHazards(); showPlaces(); setMode(); showPosition(); showSight(); showLimit()
     }
 
     @MainActor private func fallBackToWeb() {
@@ -991,7 +998,7 @@ final class ApexCarMapViewController: UIViewController, WKNavigationDelegate {
         loaded = true
         sentMode = ""
         MainActor.assumeIsolated {
-            fitViewport(); showLook(); showRoute(); showCorners(); showHazards(); showPlaces(); setMode(); showPosition(); showSight()
+            fitViewport(); showLook(); showRoute(); showCorners(); showHazards(); showPlaces(); setMode(); showPosition(); showSight(); showLimit()
         }
     }
 
@@ -1051,6 +1058,16 @@ final class ApexCarMapViewController: UIViewController, WKNavigationDelegate {
     @MainActor func showSight() {
         let sight = role == .cluster ? nil : ApexCar.shared.sight
         if let native { native.setSight(sight) } else { js("car.sight(\(role == .cluster ? "null" : ApexCar.shared.sightJSON))") }
+    }
+    /// The posted limit's sign: the main screen and the Dashboard; never the cluster, beside the car's own limit.
+    @MainActor func showLimit() {
+        let l = role == .cluster ? nil : ApexCar.shared.limit
+        if let native { native.setLimit(l); return }
+        let json = l.map { Self.limitJSON($0) } ?? "null"
+        js("car.limit(" + json + ")")
+    }
+    private static func limitJSON(_ l: ApexCarLimit) -> String {
+        "{\"value\":" + String(l.value) + ",\"round\":" + (l.round ? "true" : "false") + "}"
     }
     /// F-01: the fix with its speed and age, so the arrow is dead reckoned to where the car is now.
     @MainActor func showPosition() {

@@ -294,6 +294,7 @@ console.log(JSON.stringify({
   noLanes: C.guideMessage({ id: 'r', dist: [0, 5000], steps: [{ m: 1200, type: 15, street: 'Deals Gap Road' }] }, 100, 3600, require(process.argv[1] + '/web/directions.js').phrase),
   laneGlyphs: [C.laneGlyphs(require(process.argv[1] + '/web/lanes.js').lanes([[2, 0, 0], [10, 8, 2], [256, 0, 0]])), C.laneGlyphs([{ angle: 0, use: false, ok: false }, { angle: 0 }]),
     C.laneGlyphs(Array.from({ length: 9 }, () => ({ angle: 0, use: true })))],
+  limits: [C.limitMessage(54.7, 'mph'), C.limitMessage(80, 'km/h'), C.limitMessage(null, 'mph'), C.limitMessage(0, 'mph'), C.limitMessage(500, 'mph')],
   loops: [C.loopsMessage('time', false), C.loopsMessage('distance', false), C.loopsMessage('distance', true)],
   offerUndo: C.offerMessage('o8', 'Pothole reported', '', 'Undo', 5000, 'OK'),
   offerNone: [C.offerMessage('', 'x', '', 'k'), C.offerMessage('o5', '', '', 'k'), C.offerMessage('o6', 'x', '', ''), C.offerMessage('o7', 'x', '', 'k', 1000).seconds],

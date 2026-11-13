@@ -493,6 +493,17 @@
   }
 
   /**
+   * The posted speed limit for the car's map (web/carmap.js and CarPlay/ApexCarMap.swift draw the sign at the bottom left,
+   * where Apple Maps and Waze show it): { kind:'limit', value, unit, round } in the driver's units, `round` for the
+   * km/h sign (the red ring) and false for the US "SPEED LIMIT" one. value null: unknown, no sign (the map never guesses).
+   */
+  function limitMessage(limit, unit) {
+    const u = String(unit || '').toUpperCase(), km = /^KM/.test(u);
+    if (!finite(limit) || limit <= 0 || limit > 200) return { kind: 'limit', value: null, unit: '', round: false };
+    return { kind: 'limit', value: Math.round(limit / 5) * 5 || Math.round(limit), unit: km ? 'KM/H' : 'MPH', round: km };
+  }
+
+  /**
    * Panel round 2 (TH-2, IN-3): what the sight plate under the arrow draws, on the phone and on the car (web/carmap.js and
    * CarPlay/ApexCarMap.swift draw the same). null draws nothing: unknown, or OPEN (nothing ahead limits you; the binnacle's
    * Sight cell says Open). Else { label, text, short }: "SIGHT" by the number and no unit, so it never reads as a limit sign;
@@ -554,7 +565,7 @@
     return { step, reset };
   }
 
-  const api = { sightMessage, line, routeMessage, loopsMessage, laneGlyphs, LOOP_MINUTES, LOOP_MI, LOOP_KM, guideMessage, recordingMessage, placesMessage, cornersMessage, hazardsMessage, alongMessage, offerMessage, noticeMessage, lookMessage, tulipSVG, cornerTulipSVG,
+  const api = { sightMessage, limitMessage, line, routeMessage, loopsMessage, laneGlyphs, LOOP_MINUTES, LOOP_MI, LOOP_KM, guideMessage, recordingMessage, placesMessage, cornersMessage, hazardsMessage, alongMessage, offerMessage, noticeMessage, lookMessage, tulipSVG, cornerTulipSVG,
                 recordSVG, CORNER_MODES, CONTINUE_M, MAX_POINTS };
   api.sightFilter = sightFilter;                                       // U-60 (its own line: the list above is shared)
   api.sightTag = sightTag;                                             // panel round 2, TH-2

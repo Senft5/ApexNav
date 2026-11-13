@@ -2703,6 +2703,17 @@ flow('the sight-line speed rides under the position arrow, on the phone and on t
   check(!r2.hidden && r2.text === 'SIGHT45' && !r2.short && bg === 'rgb(17, 17, 17)', 'the car tag names itself on the dark plate: ' + JSON.stringify(r2) + bg);
   await page.evaluate(() => car.sight({ text: 'OPEN', unit: '', short: false }));
   check((await read()).hidden, 'OPEN: no plate on the car (TH-2)');
+  // the posted limit's sign, bottom left past Apple's card (as Apple Maps and Waze show it); unknown: none
+  const lim = () => page.evaluate(() => { const e = document.getElementById('limit'), b = e.getBoundingClientRect(); return { hidden: e.hidden, text: e.textContent, round: e.classList.contains('round'), left: b.left, bottom: innerHeight - b.bottom }; });
+  check((await lim()).hidden, 'no limit known: no sign');
+  await page.evaluate(() => car.limit({ value: 55, round: false }));
+  const l1 = await lim();
+  check(!l1.hidden && l1.text === 'SPEEDLIMIT55' && !l1.round && l1.left === 8 && l1.bottom === 8, 'the US sign, bottom left: ' + JSON.stringify(l1));
+  await page.evaluate(() => { car.inset(300); car.limit({ value: 80, round: true }); });
+  const l2 = await lim();
+  check(!l2.hidden && l2.text === '80' && l2.round && l2.left === 324, 'km/h: the red ring, past Apple\'s card: ' + JSON.stringify(l2));
+  await page.evaluate(() => { car.limit(null); car.inset(0); });
+  check((await lim()).hidden, 'the limit gone: the sign goes');
   await page.evaluate(() => car.sight({ text: '43', unit: 'MPH', short: true }));
   // plates never pile up: three corners on one spot show one plate, the tight one when there is no car to measure from
   await page.evaluate(() => { car.mode('preview'); car.corners([{ at: [35.41, -84.1], text: 'R4', tight: false }, { at: [35.41, -84.1], text: 'L2', tight: true }, { at: [35.41001, -84.1], text: 'R3', tight: false }]); });
