@@ -5616,7 +5616,10 @@
         const b = document.createElement('button'); b.className = 'place';
         if (more && i >= rows.length - more) b.classList.add('place-extra');
         const name = document.createElement('b'); name.textContent = p.label;
-        const kind = document.createElement('span'); kind.textContent = p.kind || '';
+        // the kind is said once for a run of the same (three Recents read "Recent", then two blanks; 2026-11-13 sweep), and
+        // read aloud on every row
+        const kind = document.createElement('span'); kind.textContent = !q && i > 0 && p.kind && rows[i - 1].kind === p.kind ? '' : p.kind || '';
+        if (p.kind && !kind.textContent) b.setAttribute('aria-label', `${p.label}, ${p.kind}`);
         b.append(name, kind);
         if (p.sub && p.sub !== p.label) { const sub = document.createElement('small'); sub.textContent = p.sub; b.append(sub); }   // U-73
         b.addEventListener('click', () => (p.saved ? openSaved(p.saved) : routeToPlace(p)));
