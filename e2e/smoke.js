@@ -250,6 +250,11 @@ flow('startup budget: the map page is ready within its script bytes, script coun
   const lift = await page.waitForFunction(() => { const b = document.getElementById('boot'); return !b || b.classList.contains('gone'); }, null, { timeout: 1000, polling: 20 }).then(() => true, () => false);
   check(lift, 'the cover lifts within a second of the cockpit being ready, without a map tile');
   check(await page.evaluate(() => document.getElementById('map').classList.contains('unstyled')), 'and the map waits, hidden on its paper, for its first tile');
+  // the stage never scrolls sideways: a closed sheet waits off its right edge, and a tap into Where to? in the first second
+  // brought the field "into view" by scrolling the stage 60 px, the plan sheet cut off at the left (.stage clips, not hidden)
+  await page.evaluate(() => document.getElementById('destInput').scrollIntoView({ inline: 'start' }));
+  const at = await page.evaluate(() => ({ stage: document.querySelector('.stage').scrollLeft, left: Math.round(document.getElementById('planPanel').getBoundingClientRect().left) }));
+  check(at.stage === 0 && at.left === 0, 'Where to? opens in place, the map not scrolled aside: ' + JSON.stringify(at));
 }, { viewport: { width: 393, height: 852 }, hasTouch: true });
 
 flow('first run: onboarding, Watch a replay loads the bundled drive and plays it; the Play switch drives it', async (page, base) => {
