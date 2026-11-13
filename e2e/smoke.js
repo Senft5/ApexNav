@@ -4733,7 +4733,9 @@ flow("friends' activity: the Log lists who drove your stages lately and where yo
   await page.click('button[aria-label="Kudos to @bob for Esses <b>bold</b>"]');
   await page.waitForSelector('button[aria-label="Kudos to @bob for Esses <b>bold</b>"][aria-pressed="true"]');
   check(kudos.length === 1 && kudos[0][0] === 'POST' && kudos[0][1].handle === 'bob' && kudos[0][1].canon_id === 'seg_1' && kudos[0][1].driven_on === '2026-10-26', 'kudos sent: ' + JSON.stringify(kudos));
-  check(/@dan gave you kudos for Esses <i>x<\/i>/.test(await page.textContent('#kudosList')), 'kudos for you, as text');
+  check(/@dan gave you kudos\s*Esses <i>x<\/i> · Oct 24/.test(await page.textContent('#kudosList')), 'kudos for you, as text, shaped as a feed row: ' + await page.textContent('#kudosList'));
+  const rule = await page.evaluate(() => getComputedStyle(document.getElementById('friendsPanel')).borderTopWidth);
+  check(rule === '0px', 'one rule between Kudos for you and Friends lately, not two: ' + rule);
 });
 
 flow("what's new: shown once after an update, not on a first install, not over a link that opened the app (IDEAS O-10), and never over something you have started", async (page, base) => {
@@ -5500,6 +5502,9 @@ flow('duels: a friend\'s challenge is a card on People; Accept starts it; the ca
   let t = await page.textContent('.duel-card.on');
   check(/@bob 812 · no run from you yet · 7 days left/.test(t) && !/--|has a run in|don't reach/.test(t), 'on: their Score, plain words for yours, the days left; yours not shared is the Show key, not a sentence: ' + t);
   check(await page.$$eval('.duel-card.on button', (bs) => bs.map((x) => x.textContent).join('|')) === 'Drive it|Show my Scores to @bob|Call it off', 'on: Drive it first, Call it off last');
+  const lay = await page.evaluate(() => { const bs = [...document.querySelectorAll('.duel-card.on button')], r = bs.map((b) => b.getBoundingClientRect());
+    return { keys: bs.filter((b) => b.classList.contains('ink-btn')).length, links: Math.abs(r[1].top - r[2].top) < 2 }; });
+  check(lay.keys === 1 && lay.links, 'one key (Drive it), the two links share a line: ' + JSON.stringify(lay));
   await page.click('.duel-card.on button:has-text("Show my Scores to @bob")');
   await page.waitForFunction(() => /You 845 · @bob 812 · You lead by 33/.test((document.querySelector('.duel-card.on') || {}).textContent || ''));
   check(grants.length === 1 && grants[0].audience_id === 'U1' && grants[0].share_scores === true && !grants[0].share_times, 'Scores only, to that friend: ' + JSON.stringify(grants));
