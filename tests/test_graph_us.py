@@ -98,3 +98,42 @@ def test_the_workflow_moves_the_pointer_last_and_only_for_a_whole_build():
     assert "if: needs.plan.outputs.live == 'true'" in pub[ptr:]
     assert "for f in packs/*.bin packs/index.json packs/packs.json; do" in pub[rel:ptr], "indexes after the packs"
     assert '[ -z "$only" ] && live=true' in wf, "the whole country goes live; a pilot only when asked"
+
+
+def test_the_lower_48_goes_live_in_our_bucket_under_its_own_build_name():
+    wf = open(os.path.join(os.path.dirname(__file__), "..", ".github", "workflows", "graph-us.yml")).read()
+    assert '--build "us-${{ needs.plan.outputs.week }}"' in wf, "never the region's build id: R2 keys and edge caches are per build"
+    pub = wf[wf.index("\n  publish:"):]
+    assert "id-token: write" in pub
+    ptr = pub[pub.index("name: Point the Worker at it"):]
+    assert ptr.index("upload_r2.sh merged") < ptr.index("publish_data.sh ptr"), "R2 first: the Worker reads its index before a release"
+    assert "set -o pipefail" in ptr
+    assert "cp packs/index.json merged/v1/index.json" in pub
+
+
+def test_the_region_mirror_never_shrinks_a_live_lower_48(tmp_path):
+    import subprocess, json as _j, http.server, threading
+    sh = os.path.join(os.path.dirname(__file__), "..", "tools", "graph_etl", "upload_r2.sh")
+    (tmp_path / "v1").mkdir()
+    (tmp_path / "v1" / "index.json").write_text(_j.dumps({"build": "2026-46-abc", "tiles": {"1_1": {}}}))
+    (tmp_path / "v1" / "1_1.vgr").write_bytes(b"x")
+    seen = []
+
+    class H(http.server.BaseHTTPRequestHandler):
+        def do_GET(self):
+            body = _j.dumps({"build": "us-2026-46-abc", "tiles": {}}).encode()
+            self.send_response(200); self.send_header("content-length", str(len(body))); self.end_headers(); self.wfile.write(body)
+
+        def do_PUT(self):
+            seen.append(self.path); self.send_response(201); self.end_headers()
+
+        def log_message(self, *a):
+            pass
+
+    srv = http.server.HTTPServer(("127.0.0.1", 0), H)
+    threading.Thread(target=srv.serve_forever, daemon=True).start()
+    env = {**os.environ, "NO_PROXY": "127.0.0.1", "no_proxy": "127.0.0.1"}
+    out = subprocess.run(["bash", sh, str(tmp_path), f"http://127.0.0.1:{srv.server_port}"], capture_output=True, text=True, env=env, timeout=60)
+    srv.shutdown()
+    assert out.returncode == 0, out.stderr
+    assert "is not mirrored over it" in out.stdout and seen == []
