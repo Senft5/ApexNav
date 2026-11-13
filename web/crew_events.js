@@ -292,7 +292,7 @@
       body.append(el('span', { className: 'note', textContent: st === 'remembered' ? [e.crew_name && o.crew ? e.crew_name : '', where.replace('Meet at', 'Met at')].filter(Boolean).join(' \u00b7 ')
         : [timeText(e.starts_at), where, repeatText(e.repeat_weeks, e.starts_at)].filter(Boolean).join(' \u00b7 ') }));
       if (o.crew && st !== 'remembered') body.append(el('span', { className: 'note', textContent: `${e.crew_name}${e.by_handle ? ` \u00b7 by @${e.by_handle}` : ''}` }));
-      if (st === 'remembered') { body.append(remembered(e, redo)); return box; }
+      if (st === 'remembered') { body.append(remembered(e, redo, o.person)); return box; }
       body.append(el('span', { className: 'note', textContent: rolesLine(e) }));
       // who's going, and your answer: one slide switch on the card, as a social app's event (Nate 2026-11-12: it was a
       // key here and the same answer again as a switch under More)
@@ -360,13 +360,19 @@
       return now;
     }
     // Remembered (P-03): who came, the best Score that day, and "I was there" for a crew-mate the convoy didn't count.
-    function remembered(e, redo) {
+    function remembered(e, redo, person) {
       const now = el('div', { className: 'cp-now' }, el('p', { className: 'note', textContent: 'Loading the drive\u2026' }));
       apiCall('GET', `/api/events/${id(e)}/record`).then(jsonOf).catch(() => null).then((r) => {
         if (!r || !Array.isArray(r.came)) { now.replaceChildren(el('p', { className: 'note', textContent: 'Couldn\u2019t load who came. Check signal.' })); return; }
         const kids = [];
         if (r.i_came) keep(r, true);                                     // kept on the phone for Your year
-        if (r.came.length) kids.push(el('div', { className: 'cp-going' }, faces(r.came, 'Came'), el('span', { className: 'note', textContent: `${r.came.length} came: ${r.came.map((h) => '@' + h).join(', ')}` })));
+        if (r.came.length && person) {
+          // who came, one tap from the faces, as who's going is (no list of names to read on the card)
+          const b = el('button', { type: 'button', className: 'cp-going cp-going-who' }, faces(r.came, 'Came'), el('span', { className: 'note', textContent: `${r.came.length} came` }));
+          b.setAttribute('aria-label', `${r.came.length} came: see who`);
+          b.addEventListener('click', () => whoSheet(`${r.came.length} came`, r.came, person));
+          kids.push(b);
+        } else if (r.came.length) kids.push(el('div', { className: 'cp-going' }, faces(r.came, 'Came'), el('span', { className: 'note', textContent: `${r.came.length} came: ${r.came.map((h) => '@' + h).join(', ')}` })));
         else kids.push(el('p', { className: 'note', textContent: r.going.length ? `Nobody marked that they came. ${r.going.length} said going.` : 'Nobody marked that they came.' }));
         // the best Vetta Score crew-mates published to the crew that day; none shared, none said
         if (r.best) kids.push(el('p', {}, el('span', { className: 'cp-best', textContent: String(r.best.score) }),
