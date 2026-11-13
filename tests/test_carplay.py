@@ -43,6 +43,8 @@ console.log(JSON.stringify({
     [{ name: 'Home', label: '12 Oak St, Maryville', lat: 35.1, lon: -83.2 }, { name: 'Work', label: 'Work', lat: 35.2, lon: -83.1 }, { name: 'Bad', lat: null, lon: 1 }],
     [{ id: 'r1', name: 'Cherohala Skyway', miles: 42.3 }, { id: 'r2', name: 'Tail', miles: null }, { name: 'No id' }],
     (m) => `${Math.round(m / 1609.344)} mi`),
+  placesAttack: C.placesMessage([], [{ name: 'Home', lat: 35.1, lon: -83.2 }], [{ id: 'r1', name: 'Cherohala Skyway', miles: 42.3 }], null,
+    { id: 77, name: 'Clinch River loop', detail: "you're 3rd of 12 · 2 days left" }).list,
   arrive: C.guideMessage(t, 3100, null, D.phrase),
   // U-63: a GPX track on the motorway, its next corner 13 km on; the road named by the map under the car, or not at all
   ...(() => { const g = { id: 'gpx', dist: [0, 20000], events: [{ type: 'corner', dir: 'R', severity: 2, start_m: 13000, dist_m: 13040, call: 'Tight right' }] };
@@ -249,6 +251,14 @@ def test_places(out):
     assert "m.action === 'saved' && typeof m.id === 'string' && !driveActive" in js
     swift = open(os.path.join(ROOT, "CarPlay", "ApexCarPlay.swift"), encoding="utf-8").read()
     assert 'ApexCar.shared.send("saved", ["id": id])' in swift
+    # this week's time attack loop, once entered, after the pinned places: the phone drives the loop itself
+    assert out["placesAttack"][1] == {"name": "Clinch River loop", "attack": "77", "detail": "Time attack · you're 3rd of 12 · 2 days left"}
+    assert [r["name"] for r in out["placesAttack"]] == ["Home", "Clinch River loop", "Cherohala Skyway"]
+    assert "m.action === 'attack' && car.attack && String(m.id) === String(car.attack.circuit.segment_id) && !driveActive" in js
+    assert "w.circuit && w.entered" in js, "a loop you haven't entered stays on the phone, where you enter it"
+    assert 'ApexCar.shared.send("attack", ["id": id])' in swift
+    ta = open(os.path.join(ROOT, "web", "time_attack.js"), encoding="utf-8").read()
+    assert "if (page.week) page.week(week);" in ta
 
 
 def test_only_road_hazards_alert_the_car():

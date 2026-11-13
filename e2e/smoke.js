@@ -5043,6 +5043,16 @@ flow('time attack on the home deck: this week\'s featured loop you entered is th
   check(/Directions to the start\.$/.test(await page.getAttribute('#loopSuggestGo', 'aria-label')), 'its key gives directions to the start');
   check(await page.getAttribute('#loopSuggestShow', 'data-road') === 'ta:' + day(-4) + '|35,-84|TA1', 'its body draws the loop');
   check(asked.length && asked.every((q) => q === '?lat=35.875&lon=-83.875'), 'only the middle of the quarter-degree area is sent: ' + JSON.stringify(asked));
+  // the car: a screen that connects gets the week's loop in its Places, and its tap drives the loop itself
+  await page.evaluate(() => { window.__car = []; window.webkit = { messageHandlers: { apex: { postMessage(m) { if (m && m.cmd === 'car') window.__car.push(m); } } } };
+    window.apex.onNative({ type: 'carplay', action: 'hello' }); });
+  await page.waitForFunction(() => window.__car.some((m) => m.kind === 'places' && m.list.some((r) => r.attack)), null, { timeout: 10000 })
+    .catch(async () => { throw new Error('no time attack row on the car: ' + JSON.stringify(await page.evaluate(() => window.__car.filter((m) => m.kind === 'places')))); });
+  const row = await page.evaluate(() => window.__car.filter((m) => m.kind === 'places').pop().list.find((r) => r.attack));
+  check(row.name === 'Tellico <i>loop</i>' && row.attack === 'TA1' && /^Time attack · you're 3rd of 8/.test(row.detail), 'the car\'s row: ' + JSON.stringify(row));
+  check(asked.every((q) => q === '?lat=35.875&lon=-83.875'), 'the car\'s ask sends only the area too: ' + JSON.stringify(asked));
+  await page.evaluate(() => window.apex.onNative({ type: 'carplay', action: 'attack', id: 'TA1' }));
+  await page.waitForFunction(() => window.apexDebug.track && window.apexDebug.track.id === 'timeattack_TA1', null, { timeout: 10000 });
 }, { geolocation: { latitude: 35.9606, longitude: -83.9207 }, permissions: ['geolocation'] });
 
 flow('drive tags: tag a drive in the Log, filter by it, the note stays on the phone (IDEAS D-23)', async (page, base) => {

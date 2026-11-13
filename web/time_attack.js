@@ -353,7 +353,10 @@
       if (!at) return;
       peeked = Date.now();
       const r = await call('GET', `/api/ta?lat=${at.lat}&lon=${at.lon}`);
-      if (r.ok && r.j && page.line) page.line(summaryLine(featuredWeek(r.j), dist));
+      if (!r.ok || !r.j) return;
+      const week = featuredWeek(r.j);
+      if (page.line) page.line(summaryLine(week, dist));
+      if (page.week) page.week(week);                                    // the car's Places has it too (cockpit carPlaces)
     }
     return { section, peek };
   }
