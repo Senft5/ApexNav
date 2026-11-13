@@ -98,34 +98,64 @@
   }
 
   /**
+   * The drive's best corners for a reel: up to n of `corners` (ApexRecording.cornersOf: start, end, apex, apex_mps) that
+   * ok(c) allows (the video holds them), ranked by the corner's own Driver Score (pace, smoothness, braking), then put
+   * back in road order: [{ k, score }]. Corners with g the phone did not measure are not ranked (unknown is not smooth).
+   */
+  function bestOf(Core, d, corners, ok, n = 3) {
+    const gk = d.g_known, scored = [];
+    corners.forEach((c, k) => {
+      if (!ok(c)) return;
+      if (gk) for (let q = c.start; q <= c.end; q++) if (!gk[q]) return;
+      let t = null;
+      try { t = Core.cornerTechnique(d.speed_mps, d.lon_g, d.lat_g, c); } catch (_) { t = null; }
+      const s = t ? Core.techniqueScore([t]).score : null;
+      if (finite(s)) scored.push({ k, score: s });
+    });
+    return scored.sort((a, b) => b.score - a.score || a.k - b.k).slice(0, n).sort((a, b) => a.k - b.k);
+  }
+
+  /**
    * Makes the clip: plays the video from vt0 to vt1 into a portrait canvas and records it. opts: { video, d, T, w, offsetS,
-   * fmtSpeed, meta, canvas }. Resolves { blob, mime }. The sound is not kept.
+   * fmtSpeed, meta, canvas }, or parts: [{ w, label }] for a reel of several corners one after another in one video (the
+   * recorder pauses while the video seeks between them). Resolves { blob, mime }. The sound is not kept.
    */
   async function record(opts) {
-    const { video, d, T, w, offsetS, fmtSpeed, meta, canvas } = opts;
+    const { video, d, T, offsetS, fmtSpeed, meta, canvas } = opts;
+    const parts = opts.parts || [{ w: opts.w, label: meta.label }];
     const MR = root.MediaRecorder, mime = root.ApexFlyoverVideo && root.ApexFlyoverVideo.mimeFor(MR);
-    if (!mime || !canvas.captureStream) throw new Error('no recorder');
+    if (!mime || !canvas.captureStream || !parts.length) throw new Error('no recorder');
     canvas.width = W; canvas.height = H;
-    const g = canvas.getContext('2d'), m = { ...meta, trace: traceOf(d, T, w) };
-    const paint = () => drawClip(g, W, H, video, frameAt(d, T, w, video.currentTime, offsetS, fmtSpeed), m);
-    await new Promise((ok) => { const done = () => { video.removeEventListener('seeked', done); ok(); }; video.addEventListener('seeked', done); video.currentTime = w.vt0; setTimeout(done, 3000); });
-    paint();
-    const rec = new MR(canvas.captureStream(30), { mimeType: mime, videoBitsPerSecond: 6e6 }), chunks = [];
-    rec.ondataavailable = (e) => { if (e.data && e.data.size) chunks.push(e.data); };
-    const stopped = new Promise((ok) => { rec.onstop = ok; });
-    let raf = 0;
-    const end = new Promise((ok) => {
-      const loop = () => { paint(); if (video.currentTime >= w.vt1 || video.ended) { ok(); return; } raf = root.requestAnimationFrame(loop); };
-      raf = root.requestAnimationFrame(loop);
-    });
-    await video.play(); rec.start(500);
-    await end;
-    root.cancelAnimationFrame(raf); video.pause(); rec.stop(); await stopped;
+    const g = canvas.getContext('2d');
+    const seekTo = (t) => new Promise((ok) => { const done = () => { video.removeEventListener('seeked', done); ok(); }; video.addEventListener('seeked', done); video.currentTime = t; setTimeout(done, 3000); });
+    let rec = null, raf = 0, stopped = null;
+    const chunks = [];
+    for (const part of parts) {
+      const w = part.w, m = { ...meta, label: part.label, trace: traceOf(d, T, w) };
+      const paint = () => drawClip(g, W, H, video, frameAt(d, T, w, video.currentTime, offsetS, fmtSpeed), m);
+      await seekTo(w.vt0);
+      paint();
+      if (!rec) {
+        rec = new MR(canvas.captureStream(30), { mimeType: mime, videoBitsPerSecond: 6e6 });
+        rec.ondataavailable = (e) => { if (e.data && e.data.size) chunks.push(e.data); };
+        stopped = new Promise((ok) => { rec.onstop = ok; });
+      }
+      const end = new Promise((ok) => {
+        const loop = () => { paint(); if (video.currentTime >= w.vt1 || video.ended) { ok(); return; } raf = root.requestAnimationFrame(loop); };
+        raf = root.requestAnimationFrame(loop);
+      });
+      await video.play();
+      if (rec.state === 'inactive') rec.start(500); else if (rec.state === 'paused') rec.resume();
+      await end;
+      root.cancelAnimationFrame(raf); video.pause();
+      if (rec.state === 'recording' && part !== parts[parts.length - 1]) rec.pause();
+    }
+    rec.stop(); await stopped;
     const blob = new Blob(chunks, { type: mime.split(';')[0] });
     if (!blob.size) throw new Error('empty');
     return { blob, mime };
   }
 
-  const api = { clipWindow, cornersOf, clippable, traceOf, frameAt, drawClip, record, LEAD_S, TAIL_S, W, H };
+  const api = { clipWindow, cornersOf, clippable, bestOf, traceOf, frameAt, drawClip, record, LEAD_S, TAIL_S, W, H };
   if (typeof module !== 'undefined' && module.exports) module.exports = api; else root.ApexCornerClip = api;
 })(typeof window !== 'undefined' ? window : globalThis);
