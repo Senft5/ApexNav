@@ -789,8 +789,11 @@
     .loop-by > button { min-height: 44px; min-width: 44px; padding: 0 4px; border: 0; background: transparent; color: var(--panel-dim); font: 600 15px var(--font-ui); }
     .loop-by > button[aria-checked="true"] { color: var(--panel-ink); font-weight: 700; text-decoration: underline 2px var(--accent); text-underline-offset: 6px; }
     .plan-loop .detents { display: block; }
-    .loop-row { width: 100%; display: flex; align-items: center; gap: 8px; min-height: 44px; padding: 0 2px; border-top: 1px solid var(--hair, var(--panel-dim)); background: none; color: var(--panel-ink); font: inherit; font-size: 15px; font-weight: 600; text-align: left; cursor: pointer; }
+    /* one grouped list, as the rows under it: the same rule, the same 52 pt row, no gaps between them */
+    .loop-row { width: 100%; display: flex; align-items: center; gap: 8px; min-height: 52px; margin: 0; padding: 0; border: 0; border-top: 1px solid var(--rule); background: none; color: var(--panel-ink); font: inherit; font-size: 16px; font-weight: 700; text-align: left; cursor: pointer; }
     .loop-row span { margin-left: auto; color: var(--panel-dim); font-weight: 500; }
+    .plan-loop > .loop-row { margin: 0; display: flex; align-items: center; } .plan-loop > .loop-row[aria-expanded="true"] { margin-bottom: 6px; }
+    .plan-loop + .plan-more, .plan-more + .plan-more { margin-top: 0; }
     .loop-row svg { width: 12px; height: 12px; flex: none; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; transition: transform 0.2s; }
     .loop-row[aria-expanded="true"] svg { transform: rotate(180deg); }
     .plan-loop .detents > button { position: absolute; width: 56px; min-width: 0; min-height: 36px; padding: 0; border: 0; background: transparent; color: var(--panel-dim); font-size: 17px; }
