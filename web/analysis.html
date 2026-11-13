@@ -181,6 +181,7 @@
     .dv-corner:not(.rec) .dv-rec { color: var(--panel-dim); }
     .dv-rec-by { justify-self: start; min-height: 44px; padding: 0; font: inherit; font-size: 12px; text-align: left; background: none; border: 0; text-decoration: underline; cursor: pointer; }
     .dv-corners { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 6px; }
+    .dv-corners.folded > .dv-corner:nth-child(n+9) { display: none; }   /* drive_view.js CORNERS_SHOWN */
     .dv-corner { display: grid; grid-template-columns: 24px 1fr auto; gap: 2px 8px; align-items: baseline; text-align: left; padding: 8px 10px; border: 1px solid var(--rule); background: transparent; color: inherit; font: inherit; cursor: pointer; }
     .dv-corner.on { border-color: var(--accent); box-shadow: inset 3px 0 0 var(--accent); }
     .dv-corner b { font-family: var(--font-num); color: var(--signal); } .dv-call { font-weight: 700; font-size: 14px; } .dv-v { font-family: var(--font-num); font-size: 13px; }
