@@ -5023,7 +5023,7 @@
         // what the road is like (road_page.js, IDEAS Q-13)
         const about = document.createElement('button'); about.className = 'linkbtn'; about.textContent = 'About';
         about.setAttribute('aria-label', `About ${name.textContent}`);
-        about.addEventListener('click', () => openRoadPage(p.s));
+        about.addEventListener('click', () => openRoadPage(p.s, () => driveStage(i)));
         const row = document.createElement('div'); row.className = 'nb-row'; row.append(b, about);
         return row;
       });
@@ -5060,7 +5060,8 @@
     }
     // Road page (road_page.js, IDEAS Q-13): the reference lap over the road's shape, the DEM's climb, members' measurements.
     let roadPop = null;
-    async function openRoadPage(s) {
+    // go: plan this road (the list's own row tap), so the page is not a dead end you have to Close out of
+    async function openRoadPage(s, go) {
       if (!window.ApexRoadPage) return;
       if (!roadPop) {
         roadPop = document.createElement('aside'); roadPop.className = 'side-pop'; roadPop.setAttribute('role', 'dialog'); roadPop.setAttribute('aria-label', 'About this road');
@@ -5072,7 +5073,13 @@
       head.append(h, close);
       const body = document.createElement('div'); body.className = 'stack-8 road-page';
       const note = (t) => { const p = document.createElement('p'); p.className = 'note'; p.textContent = t; return p; };
-      roadPop.replaceChildren(head, body); roadPop.classList.add('open');
+      const bar = [];
+      if (go) {
+        const key = document.createElement('button'); key.className = 'find-key'; key.textContent = 'Plan this road';
+        key.addEventListener('click', () => { roadPop.classList.remove('open'); go(); });
+        const d = document.createElement('div'); d.className = 'rp-go'; d.append(key); bar.push(d);
+      }
+      roadPop.replaceChildren(head, body, ...bar); roadPop.classList.add('open');
       let onRoad = [];   // ApexRoadPage.hazardFacts: what members felt and reported on it, once looked up
       const paint = (d) => {
         if (!d) { body.replaceChildren(note('Too short to describe.')); return; }
