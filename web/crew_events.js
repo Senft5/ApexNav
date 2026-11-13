@@ -141,7 +141,7 @@
     .plan-plus { align-self: center; margin: -10px -10px -10px 0; color: var(--panel-ink); }
     .plan-plus svg { width: 26px; height: 26px; stroke-width: 2.2; }
     .cp-drive { display: grid; grid-template-columns: 76px minmax(0, 1fr); border: 1.5px solid var(--panel-ink); background: var(--panel); color: var(--panel-ink); }
-    .cp-date { background: var(--panel-ink); color: var(--panel); display: grid; place-content: center; text-align: center; font-family: var(--font-num); align-self: stretch; }
+    .cp-date { background: var(--panel-ink); color: var(--panel); display: grid; place-content: start center; padding-top: 14px; text-align: center; font-family: var(--font-num); align-self: stretch; }
     .cp-date b { font-size: 34px; line-height: 1; } .cp-date span { font-size: 13px; letter-spacing: 0.08em; }
     .cp-date small { font: 700 11px var(--font-ui); letter-spacing: 0.1em; margin-top: 6px; }
     .cp-drive.is-convoy .cp-date small::before { content: ''; display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: var(--gain, #2a6); margin-right: 5px; vertical-align: 1px; }

@@ -3190,6 +3190,9 @@ flow('crew page: an old ?view=crew link opens People on Crews, at your crew; goi
   const home = JSON.parse(find('/api/crews/k1/home').b);
   check(home.on === true && home.lat === 39.25 && home.lon === -84.55, 'no Home pinned: the switch turns on with the square the phone is in: ' + JSON.stringify(home));
   check(!(await page.$('.cp-livery-line')) && !/Plain livery/.test(await page.textContent('.crew-page')), 'a Plain crew\'s owner sees no foot line either: Edit livery is on the cover (2026-11-13; the owner, 2026-11-10: no Pro nudge on the crew page)');
+  // an upcoming drive's date reads from the top of its column, as a calendar page, not floating halfway down a tall card
+  const dt = await page.evaluate(() => { const c = document.querySelector('.cp-drive .cp-date'), b = c.querySelector('b'); return { gap: b.getBoundingClientRect().top - c.getBoundingClientRect().top, h: c.getBoundingClientRect().height }; });
+  check(dt.gap < 24 && dt.h > 120, 'the date sits at the top of its column: ' + JSON.stringify(dt));
 }, { geolocation: { latitude: 39.2, longitude: -84.6 }, permissions: ['geolocation'] });
 
 flow('build threads: start one from a car, add a step, a friend suggests and it shows on a red rule (Worker stubbed, REVIEW.md roadmap 23)', async (page, base) => {
