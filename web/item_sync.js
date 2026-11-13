@@ -31,9 +31,11 @@
     return out;
   }
 
-  /** Puts the account's newer items on the phone. Routes newest first (at most R.MAX), places as pinned_places keeps them. */
+  /** Puts the account's newer items on the phone. Routes newest first (at most R.MAX), places as pinned_places keeps them.
+   *  Returns the ids of the routes it put there (their map is fetched for no signal), or null when nothing changed. */
   function apply(storage, R, P, items) {
-    if (!items.length) return false;
+    if (!items.length) return null;
+    const got = [];
     const have = local(storage, R, P);
     let routes = R.list(storage), places = null, changed = false;
     const placesNow = () => (places = places || JSON.parse(storage.getItem(P.KEY) || '[]').filter((p) => p && typeof p.name === 'string'));
@@ -43,7 +45,7 @@
       if (it.kind === 'route') {
         if (!it.body && !mine) continue;
         routes = routes.filter((p) => p.id !== it.id);
-        if (it.body && typeof it.body.id === 'string' && Array.isArray(it.body.coords)) routes.push(it.body);
+        if (it.body && typeof it.body.id === 'string' && Array.isArray(it.body.coords)) { routes.push(it.body); got.push(it.id); }
       } else if (it.kind === 'place') {
         if (!it.body && !mine) continue;
         placesNow(); places = places.filter((p) => p.name.toLowerCase() !== it.id);
@@ -51,14 +53,15 @@
       } else continue;
       changed = true;
     }
-    if (!changed) return false;
+    if (!changed) return null;
     routes.sort((a, b) => routeAt(b) - routeAt(a));
     routes = routes.slice(0, R.MAX);
     try {
       if (routes.length) storage.setItem(R.KEY, JSON.stringify(routes)); else storage.removeItem(R.KEY);
       if (places) { places = places.slice(0, P.MAX); if (places.length) storage.setItem(P.KEY, JSON.stringify(places)); else storage.removeItem(P.KEY); }
-    } catch (_) { return false; }
-    return true;
+    } catch (_) { return null; }
+    const kept = new Set(routes.map((p) => p.id));
+    return got.filter((id) => kept.has(id));
   }
 
   /** What to send: every item whose change the account hasn't had, and a removal for each it had that the phone dropped. */
@@ -87,20 +90,22 @@
 
   /**
    * One sync for account `uid`. `call(method, path, body)` -> Promise<{ ok, status, json() }>. Returns
-   * { pulled: bool (the phone's lists changed), sent: n } or { off: true }. Never throws on a network error: the next sync goes on.
+   * { pulled: bool (the phone's lists changed), routes: [ids of routes that arrived], sent: n } or { off: true }. Never throws on a network error: the next sync goes on.
    */
   async function sync(storage, R, P, uid, call, now = Date.now()) {
     const s = load(storage, uid);
     if (s.off) return { off: true };
-    let pulled = false;
+    let pulled = false; const routes = [];
     for (let page = 0; page < PAGES; page++) {
       const r = await call('GET', `/api/me/items?since=${s.since}`);
-      if (!r || !r.ok) return { pulled, sent: 0, error: r ? r.status : 0 };
+      if (!r || !r.ok) return { pulled, routes, sent: 0, error: r ? r.status : 0 };
       const got = await r.json();
       const items = Array.isArray(got && got.items) ? got.items : [];
-      if (apply(storage, R, P, items)) pulled = true;
+      const came = apply(storage, R, P, items);
+      if (came) { pulled = true; routes.push(...came); }
+      const now2 = items.length ? local(storage, R, P) : {};
       for (const it of items) {
-        const key = it.kind + ':' + it.id, mine = local(storage, R, P)[key];
+        const key = it.kind + ':' + it.id, mine = now2[key];
         // the account and the phone agree on this item now, unless the phone's own change is newer (then it is sent below)
         if (!mine || mine.at <= it.at) s.sent[key] = { at: mine ? mine.at : it.at, live: !!mine };
       }
@@ -119,7 +124,7 @@
     }
     for (const [key, v] of Object.entries(s.sent)) if (!v.live && !have[key]) delete s.sent[key];   // removals the account has had
     store(storage, s);
-    return { pulled, sent };
+    return { pulled, routes, sent };
   }
 
   /** The switch: off deletes the account's copy (both kinds) and stops this phone; on starts over from the account. */

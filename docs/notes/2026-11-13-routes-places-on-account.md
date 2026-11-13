@@ -1,7 +1,7 @@
 # STATE
 ## Session 2026-11-13 (saved routes and places on your account, big bet #11): sync between phones (claude/project-thread-39xbx9)
 - Done: migration 0060 `member_items` (applied to preview then production 2026-11-13 with Nate's go, d1_migrations row on both), `GET/PUT/DELETE /api/me/items` (backend/src/member_items.ts; newest `at` wins per item, removals kept 60 days then swept, caps 40 routes / 24 places, routes up to 400 KB each past the usual 64 KB body), in Download my data and gone with the account. Phone: web/item_sync.js syncs after the account answers (at most once a minute) and 1.5 s after a save, removal, pin or unpin; Garage → Settings → Account has the switch Saved routes and places on my account (on). pinned_places.js stamps `at` on a pin. Privacy page, LISTING.md, APP_REVIEW.md and BACKEND.md say so.
-- Open: a route that arrives from the account has no offline map along it until it is opened and saved again (keepMapAlong needs the built track). Next: build that track on arrival, or say "map not kept yet" in Your data.
+- A route that arrives from the account gets its map along it kept for no signal too, quietly, one route at a time (cockpit.js syncItems → keepMapAlong quiet). Its hazard reports along it (keepReportsAlong) come when it is opened. Next: watch the TestFlight build with two devices on one account.
 
 # CALL SHEET
 ## 2026-11-13 (routes and places on your account): on by default, one switch for both, per phone (claude/project-thread-39xbx9)

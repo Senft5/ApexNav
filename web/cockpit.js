@@ -3320,13 +3320,13 @@
     // it), so it draws with no signal on the way. Quietly, with signal; it shows in Your data as a map area and goes when the
     // route is unsaved. Nothing kept (no signal, a route too long) leaves the saved route as it was.
     const routeAreaId = (t) => `route_${String(t.id).replace(/[^\w-]/g, '').slice(0, 60)}`;
-    async function keepMapAlong(t) {
+    async function keepMapAlong(t, quiet = false) {
       if (!window.ApexOfflineTiles || navigator.onLine === false || !t || !Array.isArray(t.lat)) return;
       try {
         const mid = Math.floor(t.lat.length / 2);
         const a = await ApexOfflineTiles.download({ lat: t.lat[mid], lon: t.lon[mid], along: { lat: t.lat, lon: t.lon }, id: routeAreaId(t), styleUrl: MAP_STYLE, name: `Along ${t.name}` });
         if (!ApexSavedRoutes.has(localStorage, t.id)) { await ApexOfflineTiles.removeArea(a.id); return; }   // unsaved meanwhile
-        toast(`The map along ${t.name} is kept for no signal too, ${Math.max(1, Math.round(a.bytes / 1048576))} MB.`);
+        if (!quiet) toast(`The map along ${t.name} is kept for no signal too, ${Math.max(1, Math.round(a.bytes / 1048576))} MB.`);
         if (window.apexDebug) window.apexDebug.mapAlong = a;
       } catch (_) { /* the saved route stands without its map */ }
     }
@@ -6318,7 +6318,13 @@
       if (!force && Date.now() - itemSyncAt < 60_000) return;
       itemSyncAt = Date.now();
       itemSyncing = ApexItemSync.sync(localStorage, ApexSavedRoutes, ApexPinnedPlaces, accountMe.id, apiCall)
-        .then((r) => { if (r && r.pulled) { carPost(carPlaces()); if ($('planPanel').classList.contains('open') && !$('destInput').value.trim()) renderPlaces(); } })
+        .then((r) => {
+          if (!r || !r.pulled) return;
+          carPost(carPlaces()); if ($('planPanel').classList.contains('open') && !$('destInput').value.trim()) renderPlaces();
+          // a route saved on another phone was saved for offline there: its map is kept here too, quietly, one at a time
+          const came = ApexSavedRoutes.list(localStorage).filter((p) => (r.routes || []).includes(p.id));
+          came.reduce((go, p) => go.then(() => keepMapAlong({ id: p.id, name: p.name, lat: p.coords.map((c) => c[1]), lon: p.coords.map((c) => c[0]) }, true)), Promise.resolve());
+        })
         .catch((e) => console.error('item sync', e))
         .finally(() => { itemSyncing = null; if (itemSyncAgain) { itemSyncAgain = false; syncItems(true); } });
     }

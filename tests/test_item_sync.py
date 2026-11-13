@@ -83,8 +83,8 @@ def out():
 
 
 def test_a_second_phone_gets_the_first_ones_routes_and_places(out):
-    assert out["first"] == {"pulled": False, "sent": 2}
-    assert out["bFirst"]["pulled"] is True
+    assert out["first"] == {"pulled": False, "routes": [], "sent": 2}
+    assert out["bFirst"]["pulled"] is True and out["bFirst"]["routes"] == ["r1"]      # its map is fetched for no signal
     assert out["b1"] == {"routes": ["Dragon"], "places": ["Home@12 Oak"]}
 
 
@@ -98,7 +98,7 @@ def test_the_newer_pin_of_a_name_wins_on_both(out):
 
 
 def test_nothing_changed_sends_nothing(out):
-    assert out["quiet"] == {"pulled": False, "sent": 0}
+    assert out["quiet"] == {"pulled": False, "routes": [], "sent": 0}
 
 
 def test_another_account_starts_over(out):
@@ -119,7 +119,7 @@ def test_big_routes_split_and_25_at_most_a_call(out):
 
 def test_no_signal_loses_nothing(out):
     assert out["down"]["sent"] == 0 and out["down"]["error"] == 0
-    assert out["downThen"] == {"pulled": False, "sent": 1}
+    assert out["downThen"] == {"pulled": False, "routes": [], "sent": 1}
 
 
 def test_the_page_loads_it_and_syncs_on_every_change():
@@ -127,4 +127,5 @@ def test_the_page_loads_it_and_syncs_on_every_change():
     assert '<script src="item_sync.js" defer></script>' in html
     src = open(os.path.join(ROOT, "web", "cockpit.js")).read()
     assert src.count("itemsChanged();") >= 4, "save, remove, pin and unpin each sync"
+    assert "keepMapAlong({ id: p.id, name: p.name, lat: p.coords.map((c) => c[1]), lon: p.coords.map((c) => c[0]) }, true)" in src
     assert "syncItems(false);" in src and "Saved routes and places on my account" in src
