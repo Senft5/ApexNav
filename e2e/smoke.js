@@ -3825,6 +3825,9 @@ flow('the app comes back whole: the deck after a car-started drive, the end card
   await page.route('**/api/**', (route) => route.fulfill({ status: 200, contentType: 'application/json', body: '[]' }));
   await page.goto(base + '/index.html');
   await page.waitForFunction(() => window.apexDebug && window.apexDebug.map && window.apex && window.ApexCore && !document.getElementById('boot'), null, { timeout: 10000 });
+  // the cover lifts at ready now (2026-11-13), as the deck finishes gliding up: measured once it has come to rest
+  await page.waitForFunction(() => new Promise((ok) => { const y = () => document.getElementById('planBar').getBoundingClientRect().top, a = y();
+    setTimeout(() => ok(Math.abs(y() - a) < 0.05), 150); }), null, { timeout: 5000 });
   // the deck: Where to? and Start whole above the tab bar (free-drive/phone/021 had it parked 2 px tall behind the tabs)
   const deck = () => page.evaluate(() => { const bar = document.getElementById('planBar').getBoundingClientRect(), tabs = document.getElementById('tabbar').getBoundingClientRect();
     const start = document.getElementById('startDrive'), r = start.getBoundingClientRect(), hit = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2);
@@ -8226,6 +8229,9 @@ flow('REVIEW.md 1.2 screen by screen: first run, the map, planning, the route, d
   await page.click('#hzReportBtn');
   const hz = await page.evaluate(() => { const b = [...document.querySelectorAll('#hzKinds button')], cs = getComputedStyle(b[0]); return { n: b.length, bg: cs.backgroundColor, edge: cs.borderTopColor }; });
   check(hz.n === 6 && hz.bg === 'rgb(17, 17, 17)' && hz.edge === 'rgb(255, 122, 26)', 'Hazard report: ' + JSON.stringify(hz));
+  // the sheet slides up first (0.2 s), as a thumb waits for it: a tap while it moves can land on the dim behind (CI
+  // 2026-11-13 failed here three times with the sheet still open and the key back to Report)
+  await page.waitForFunction(() => document.querySelector('#hzOverlay .card-sheet').getAnimations().every((a) => a.playState !== 'running'), null, { timeout: 3000 });
   await page.click('#hzKinds button');
   // read in one go, straight after the tap (the Undo lasts 3 s); in a drive a refusal ("No GPS fix yet") is the status line's,
   // so the line and the drive's state are in the record too (CI 2026-11-13 failed here twice with the key back to Report)
