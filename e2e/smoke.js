@@ -7161,6 +7161,62 @@ flow('contrast in every look: the welcome, the map, People, the Garage and the L
   else check(!found.length, `text under the contrast floor:\n  ${found.join('\n  ')}`);
 });
 
+// U-15: the route card, Saved and Where to? in every look, day and night: the card is what a driver reads most before a drive
+flow('contrast in every look: a planned route\'s card and its Saved key hold 4.5:1 in each theme, day and night (IDEAS U-15)', async (page, base) => {
+  graphDir = graphFixture();
+  const found = [];
+  try {
+    for (const theme of ['roadbook', 'tapedeck', 'billet']) {
+      for (const night of [false, true]) {
+        const m = `${theme} ${night ? 'night' : 'day'}`;
+        // a clean phone per look: a second plan on one page starts from what the first left (recents, the saved route)
+        const ctx = await page.context().browser().newContext({ viewport: { width: 390, height: 844 }, geolocation: { latitude: 39.155, longitude: -84.615 }, permissions: ['geolocation'] });
+        await ctx.route('**/*', (route) => (route.request().url().startsWith(base) ? route.continue() : route.abort()));
+        await ctx.addInitScript(({ t, n }) => { try { localStorage.setItem('apex.newsSeen', 'all'); localStorage.setItem('apex.funLevel', 'quick'); localStorage.setItem('apex.prefs', JSON.stringify({ theme: t, themeV: 2, nightMode: n ? 'on' : 'off' })); } catch (_) {} }, { t: theme, n: night });
+        const p = await ctx.newPage();
+        try {
+        await ownTrip(p, base);
+        await p.waitForFunction((t) => document.documentElement.dataset.theme === t, theme);
+        await p.waitForTimeout(1200);                              // the route reveal and the card's count-up settle
+        found.push(...(await lowContrast(p)).map((h) => `${m} card: ${h}`));
+        await p.click('#routeSaveBtn');
+        await p.waitForFunction(() => document.getElementById('routeSaveBtn').getAttribute('aria-pressed') === 'true');
+        await p.waitForTimeout(400);
+        found.push(...(await lowContrast(p)).map((h) => `${m} saved: ${h}`));
+        } finally { await ctx.close(); }
+      }
+    }
+  } finally { graphDir = null; }
+  if (process.env.CONTRAST_LOG) for (const h of found) console.log('CONTRAST card | ' + h);
+  else check(!found.length, `text under the contrast floor:\n  ${found.join('\n  ')}`);
+}, { geolocation: { latitude: 39.155, longitude: -84.615 }, permissions: ['geolocation'] });
+
+// U-15: the drive screen on the demo replay in every look, day and night, with a note up (tools/contrast_dump.js only
+// reports it for the review pack; this holds it to the floor)
+flow('contrast in every look: the drive screen on the replay holds 4.5:1 in each theme, day and night (IDEAS U-15)', async (page, base) => {
+  const found = [];
+  for (const theme of ['roadbook', 'tapedeck', 'billet']) {
+    for (const night of [false, true]) {
+      const m = `${theme} ${night ? 'night' : 'day'}`;
+      const ctx = await page.context().browser().newContext({ viewport: { width: 390, height: 844 } });
+      await ctx.route('**/*', (route) => (route.request().url().startsWith(base) ? route.continue() : route.abort()));
+      await ctx.addInitScript(({ t, n }) => { try { localStorage.setItem('apex.onboarded', '1'); localStorage.setItem('apex.newsSeen', 'all'); localStorage.setItem('apex.prefs', JSON.stringify({ theme: t, themeV: 2, notesMode: 'full', nightMode: n ? 'on' : 'off' })); } catch (_) {} }, { t: theme, n: night });
+      const p = await ctx.newPage();
+      try {
+        await p.goto(base + '/index.html?drive=dry_ridge&play=1');
+        await p.waitForFunction(() => window.apexDebug && window.apexDebug.track && window.apexDebug.track.events.length);
+        await p.waitForFunction(() => window.apexDebug.state.playing, null, { timeout: 10000 });
+        await p.waitForFunction((t) => document.documentElement.dataset.theme === t, theme);
+        await p.evaluate(() => { const st = window.apexDebug.state, t = window.apexDebug.track; st.cursorM = t.dist[t.dist.length - 1] * 0.45; });
+        await p.waitForTimeout(2500);
+        found.push(...(await lowContrast(p)).map((h) => `${m}: ${h}`));
+      } finally { await ctx.close(); }
+    }
+  }
+  if (process.env.CONTRAST_LOG) for (const h of found) console.log('CONTRAST drive | ' + h);
+  else check(!found.length, `text under the contrast floor:\n  ${found.join('\n  ')}`);
+});
+
 flow('theme contract on the page: the hazard plate, the speed, the call and the binnacle floors, day and night (REVIEW.md 4.3)', async (page, base) => {
   for (const night of [false, true]) {
     await page.addInitScript((n) => { try { localStorage.setItem('apex.onboarded', '1'); localStorage.setItem('apex.prefs', JSON.stringify({ notesMode: 'full', nightMode: n ? 'on' : 'off' })); } catch (_) {} }, night);
@@ -10681,7 +10737,8 @@ flow('time attack, a new season (the owner, 2026-11-12: static best roads): the 
     ['the car map glides between fixes', 32], ['private themes', 32], ['turn by turn in road order', 30], ['level cards: one control', 27],
     ['the strip never cuts', 23], ['when to go', 21], ['the map is a fixed stage', 20], ['a deliberate detour', 20],
     ['theme contract on the page', 19], ['plan flow (d)', 18], ['plan flow (g)', 18], ['a loop by time', 17], ['plan flow (a)', 17],
-    ['plan flow (e, f)', 16], ["the map's viewpoint, café and fuel stamps", 15]];
+    ['plan flow (e, f)', 16], ["the map's viewpoint, café and fuel stamps", 15],
+    ['contrast in every look: the welcome', 30], ['contrast in every look: a planned', 27], ['contrast in every look: the drive', 22]];
   const weight = (f) => (LONG_S.find(([p]) => f.name.startsWith(p)) || [, 5])[1];
   const slice = new Map();
   if (shard) {
