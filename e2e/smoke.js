@@ -6292,6 +6292,26 @@ flow('service check: the owner runs it from Settings, sees each service up or do
   check(!JSON.stringify(r).includes('39.155'), 'never where the phone is');
   check(asked.length >= 1, 'its file loaded on demand');
 }, { geolocation: { latitude: 39.155, longitude: -84.615 }, permissions: ['geolocation'] });
+flow('service check: what ran while the app was hidden is asked again once it is back, and only then sent (2026-11-13)', async (page, base) => {
+  const posted = [], asked = [];
+  await svcPage(page, base, { signed_in: true, member: true, handle: 'owner', moderator: true }, posted, asked);
+  await openSetting(page, 'account');
+  const hide = (h) => page.evaluate((h) => {
+    window.__svcHidden = h;
+    Object.defineProperty(document, 'hidden', { configurable: true, get: () => !!window.__svcHidden });
+    Object.defineProperty(document, 'visibilityState', { configurable: true, get: () => (window.__svcHidden ? 'hidden' : 'visible') });
+    document.dispatchEvent(new Event('visibilitychange'));
+  }, h);
+  await hide(true);                                                    // the phone locks as the check starts
+  await page.click('.svc-check button');
+  await page.waitForTimeout(3000);
+  check(posted.length === 0, 'nothing sent while hidden: ' + JSON.stringify(posted.map((p) => p.results.map((x) => x.id + ':' + x.state + ':' + x.ms))));
+  await hide(false);
+  await page.waitForFunction(() => /up, .*down/.test((document.querySelector('.svc-check') || {}).textContent || ''), null, { timeout: 120000 });
+  check(posted.length === 1, 'one report: ' + posted.length);
+  const r = posted[0];
+  check(r.results.every((x) => !/background/.test(x.detail)) && r.results.find((x) => x.id === 'api').state === 'up', 'everything judged on screen: ' + JSON.stringify(r.results.filter((x) => x.state === 'skip')));
+});
 flow('service check: a member who is not the owner gets no section and never loads it (the owner 2026-11-12)', async (page, base) => {
   const posted = [], asked = [];
   await svcPage(page, base, { signed_in: true, member: true, handle: 'me' }, posted, asked);

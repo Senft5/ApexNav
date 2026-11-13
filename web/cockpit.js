@@ -6037,13 +6037,28 @@
         away: () => svcAway + (document.hidden ? 1 : 0),   // a probe the page was hidden through is not judged
       };
     }
+    /** Resolves true once the page is shown (now, or within ms), false when it stays hidden that long. */
+    function svcShown(ms) {
+      if (!document.hidden) return Promise.resolve(true);
+      return new Promise((done) => {
+        const on = () => { if (!document.hidden) { document.removeEventListener('visibilitychange', on); clearTimeout(t); done(true); } };
+        const t = setTimeout(() => { document.removeEventListener('visibilitychange', on); done(false); }, ms);
+        document.addEventListener('visibilitychange', on);
+      });
+    }
     /** Runs the check once (a second ask while one runs gets the same run) and sends it. Resolves { results, sent }. */
     function runServiceCheck() {
       if (svcRun) return svcRun;
       svcRun = (async () => {
         await ApexLazy.load('ops');
         try { localStorage.setItem(SVC_KEY, String(Date.now())); } catch (_) {}
-        const results = await ApexServiceCheck.run(serviceCheckDeps());
+        let results = await ApexServiceCheck.run(serviceCheckDeps());
+        // a probe the app was hidden through isn't judged; ask those once more when the page is back (within 10 min)
+        const again = results.filter((x) => x.state === 'skip' && /background/.test(x.detail)).map((x) => x.id);
+        if (again.length && await svcShown(600e3)) {
+          const redo = new Map((await ApexServiceCheck.run(serviceCheckDeps(), again)).map((x) => [x.id, x]));
+          results = results.map((x) => redo.get(x.id) || x);
+        }
         let sent = false;
         try { const r = await apiCall('POST', '/api/ops/service-check', ApexServiceCheck.report(results, { ua: navigator.userAgent, online: navigator.onLine })); sent = !!(r && r.ok); } catch (_) { sent = false; }
         return { results, sent, at: Date.now() };
