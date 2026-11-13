@@ -3059,6 +3059,7 @@ flow('crew page: an old ?view=crew link opens People on Crews, at your crew; goi
     if (u.pathname === '/api/crews/k1/chat') return json([{ id: 'm1', handle: 'sam', body: '<b>Fog</b> by 7?', created_at: '2026-10-29 10:00:00', mine: false, photo_id: null }]);
     if (u.pathname === '/api/crews/k1/members') return json([{ handle: 'me', role: 'owner', mine: true }, { handle: 'sam', role: 'member', mine: false }, { handle: 'cara', role: 'member', mine: false }]);
     if (u.pathname === '/api/presence') return json([{ handle: 'cara', photo_id: null, delay_s: 0, fuzz: false, road: 'Cherohala Skyway', lat: 35.3, lon: -84.1, at: new Date(Date.now() - 30e3).toISOString() }]);
+    if (u.pathname === '/api/friends') return json([{ id: 'U2', handle: 'cara', name: null, status: 'accepted', incoming: 0 }]);
     return json([]);
   });
   await page.goto(base + '/index.html?view=crew');
@@ -3115,9 +3116,28 @@ flow('crew page: an old ?view=crew link opens People on Crews, at your crew; goi
   await page.click('.cp-member:has-text("@sam")');
   await page.waitForSelector('.cp-member-sheet');
   check(await page.isVisible('.cp-member-sheet button:has-text("Report")') && await page.isVisible('.cp-member-sheet button:has-text("Block")'), 'Report and Block are on the member, one tap in');
+  // a crew-mate who is not a friend is one tap from one (Nate 2026-11-12: as easy as any social app)
+  await page.waitForSelector('.cp-member-sheet button:text-is("Add friend")');
+  check(await page.$$eval('.cp-member-sheet .row:last-child button', (b) => b.map((x) => x.textContent).join('|')) === 'Report|Block|Done', 'the foot is Report, Block, then Done last');
+  await page.click('.cp-member-sheet button:text-is("Add friend")');
+  await page.waitForSelector('.cp-member-sheet button:text-is("Request sent")[disabled]');
+  check(sent.some((x) => x.p === '/api/friends/request' && JSON.parse(x.b).handle === 'sam'), 'Add friend sends the request to @sam');
+  await page.click('.cp-member-sheet button:has-text("Done")');
+  await page.click('.cp-member:has-text("@sam")');
+  await page.waitForSelector('.cp-member-sheet button:text-is("Request sent")[disabled]');
+  await page.click('.cp-member-sheet button:has-text("Done")');
+  // a friend already: the line says so, and there is no key to press
+  await page.click('.cp-member:has-text("@cara")');
+  await page.waitForFunction(() => /your friend/.test((document.querySelector('.cp-member-sheet') || {}).textContent || ''));
+  check(!(await page.$('.cp-member-sheet button:text-is("Add friend")')), 'a friend has no Add friend');
   await page.click('.cp-member-sheet button:has-text("Done")');
   // P-17: a message is its handle, time and words; Report is behind one key
   await page.click('.cp-tabs [data-cp-tab="chat"]');
+  // the handle on a message opens the person, as a face on the members strip does
+  await page.click('.cp-msg button.cp-who:has-text("@sam")');
+  await page.waitForSelector('.cp-member-sheet button:text-is("Request sent")[disabled]');
+  check(/@sam/.test(await page.textContent('.cp-member-sheet h2')), 'the message\'s handle opens @sam\'s sheet');
+  await page.click('.cp-member-sheet button:has-text("Done")');
   check(!(await page.$$('.cp-msg .linkbtn')).length && await page.isVisible('.cp-msg .cp-dots'), 'no Delete / Report / Pin links on the message');
   await page.click('.cp-msg .cp-dots');
   await page.waitForSelector('.confirm-sheet .cs-choose');

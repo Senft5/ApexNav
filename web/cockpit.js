@@ -6384,7 +6384,25 @@
       drives: (c, o) => (crewEvents ? crewEvents.section([{ id: c.id, name: c.name, visibility: c.visibility, role: c.is_owner ? 'owner' : 'member' }], { crewId: c.id, ...o }) : null),
       // P-18: the crew page's drive is the Crew drives sheet's card; a change on one redraws the other
       driveCard: (e, o) => (crewEvents ? crewEvents.card(e, { ...o, redo: () => { o.redo(); crewEvents.refresh(); } }) : null),
-      block: safety ? (handle) => safety.block(handle, () => renderAccount()) : null }) : null; } catch (e) { console.error('crew page', e); } });
+      block: safety ? (handle) => safety.block(handle, () => renderAccount()) : null,
+      // a crew-mate's sheet: are they a friend ('friend'), did they ask you ('asked'), did you ask them ('sent', kept on this
+      // phone as the Invite sheet keeps it), or neither ('none'); null when that can't be read
+      friendOf: async (h) => {
+        const l = await apiCall('GET', '/api/friends').then(jsonOf).catch(() => null);
+        if (!Array.isArray(l)) return null;
+        const f = l.find((x) => x && x.handle === h);
+        if (f) return f.status === 'accepted' ? 'friend' : f.incoming ? 'asked' : 'sent';
+        let sent = []; try { sent = JSON.parse(localStorage.getItem('apex.sentRequests') || '[]'); } catch (_) {}
+        return Array.isArray(sent) && sent.includes(h) ? 'sent' : 'none';
+      },
+      // the same request the Invite sheet sends; when they asked first it makes you friends (social.ts friendRequest)
+      addFriend: async (h, accepting) => {
+        const r = await apiCall('POST', '/api/friends/request', { handle: h }).catch(() => null);
+        if (!r || !r.ok) { toast('Couldn\'t send that. Try again.'); return false; }
+        if (!accepting) { try { const l = JSON.parse(localStorage.getItem('apex.sentRequests') || '[]'); localStorage.setItem('apex.sentRequests', JSON.stringify([...(Array.isArray(l) ? l : []).filter((x) => x !== h), h].slice(-30))); } catch (_) {} }
+        toast(accepting ? `You and @${h} are friends now.` : `Request sent to @${h}.`);
+        return true;
+      } }) : null; } catch (e) { console.error('crew page', e); } });
     // Units (web/units.js, IDEAS U-22): every number is formatted when it is drawn, so a change redraws in place (the owner,
     // 2026-10-29: no page reloads). The cluster's unit labels, the loop lengths, the route card and the open sheet are redrawn
     // now; anything else picks the units up the next time it draws. Never mid-drive: the cluster would change under the driver.

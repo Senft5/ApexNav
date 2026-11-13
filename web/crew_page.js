@@ -194,6 +194,7 @@
     .cp-livery-foot { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; border-top: 1px solid var(--rule); padding-top: 10px; }
     .cp-msg { display: grid; grid-template-columns: 40px 1fr; gap: 10px; padding: 8px 0; border-top: 1px solid var(--rule); }
     .cp-msg p { margin: 2px 0 0; white-space: pre-wrap; overflow-wrap: anywhere; }
+    .cp-msg .cp-who { border: 0; background: none; padding: 0; margin: 0; font: inherit; color: inherit; cursor: pointer; text-align: left; align-self: start; }
     .cp-msg .row { gap: 10px; align-items: baseline; }
     .cp-say { display: grid; grid-template-columns: 1fr auto; gap: 8px; align-items: end; }
     .cp-say textarea { resize: none; }
@@ -572,13 +573,33 @@
       ov.setAttribute('role', 'dialog'); ov.setAttribute('aria-modal', 'true'); ov.setAttribute('aria-label', `@${m.handle}`);
       const close = () => ov.remove();
       ov.addEventListener('click', (e) => { if (e.target === ov) close(); });
-      const sub = [m.name, m.role === 'owner' ? `Runs ${c.name}` : `In ${c.name}`].filter(Boolean).join(' \u00b7 ');
-      const foot = el('div', { className: 'row' }, btn('Done', close, 'linkbtn'));
+      const subText = [m.name, m.role === 'owner' ? `Runs ${c.name}` : `In ${c.name}`].filter(Boolean).join(' \u00b7 ');
+      const sub = el('p', { className: 'note', textContent: subText });
+      // a crew-mate is one tap from a friend, as on any social app (Nate 2026-11-12): Add friend, Accept when they asked
+      // first, Request sent once asked; a friend already says so on the line under the name
+      const key = el('div', { className: 'row' });
+      if (!m.mine && page.friendOf && page.addFriend) {
+        page.friendOf(m.handle).then((st) => {
+          if (st === 'friend') { sub.textContent = `${subText} \u00b7 your friend`; return; }
+          if (!st) return;
+          const sent = () => { const b = btn('Request sent', () => {}, 'ink-btn'); b.disabled = true; key.replaceChildren(b); };
+          if (st === 'sent') { sent(); return; }
+          const b = btn(st === 'asked' ? 'Accept' : 'Add friend', async () => {
+            b.disabled = true;
+            const ok = await page.addFriend(m.handle, st === 'asked');
+            if (!ok) { b.disabled = false; return; }
+            if (st === 'asked') { sub.textContent = `${subText} \u00b7 your friend`; key.replaceChildren(); } else sent();
+          }, 'ink-btn solid');
+          key.replaceChildren(b);
+        }).catch(() => {});
+      }
+      const foot = el('div', { className: 'row' });
       if (!m.mine && page.report) foot.append(btn('Report', () => { close(); page.report({ kind: 'user', target: m.handle, label: `@${m.handle} in ${c.name}`, who: m.handle }); }, 'linkbtn'));
       if (!m.mine && page.block) foot.append(btn('Block', () => { close(); page.block(m.handle); }, 'linkbtn'));
+      foot.append(btn('Done', close, 'linkbtn'));   // last: the sheet's way out, after what it holds
       ov.append(el('div', { className: 'card-sheet' },
         el('div', { className: 'row', style: 'align-items:center;gap:12px' }, P() ? P().avatar(m.photo_id || null, m.handle, 56) : '', el('h2', { textContent: `@${m.handle}` })),
-        el('p', { className: 'note', textContent: sub }), ...(state ? [el('p', { textContent: state })] : []), foot));
+        sub, ...(state ? [el('p', { textContent: state })] : []), key, foot));
       root.document.body.append(ov);
     }
 
@@ -686,8 +707,14 @@
               else if (pickd === 'pin') pin(m.id)();
             });
           }
-          return el('div', { className: 'cp-msg' }, P() ? P().avatar(m.photo_id, m.handle, 40) : el('span'),
-            el('div', { style: 'min-width:0' }, el('div', { className: 'row' }, el('b', { textContent: `@${m.handle || '?'}` }), el('span', { className: 'note', textContent: ago(m.created_at) }), ...(dots ? [dots] : [])),
+          // the face and the handle open the person (their sheet: Add friend, Report, Block), as on any chat app
+          const face = P() ? P().avatar(m.photo_id, m.handle, 40) : el('span');
+          const who = el('b', { textContent: `@${m.handle || '?'}` });
+          const open = () => member(c, { handle: m.handle, photo_id: m.photo_id, mine: false, role: 'member' }, null);
+          const tap = (child, label) => { const b = el('button', { type: 'button', className: 'cp-who' }, child); b.setAttribute('aria-label', label); b.addEventListener('click', open); return b; };
+          const known = !m.mine && m.handle;
+          return el('div', { className: 'cp-msg' }, known ? tap(face, `@${m.handle}`) : face,
+            el('div', { style: 'min-width:0' }, el('div', { className: 'row' }, known ? tap(who, `@${m.handle}`) : who, el('span', { className: 'note', textContent: ago(m.created_at) }), ...(dots ? [dots] : [])),
               el('p', { textContent: plain(m.body) })));
         }));
       };
