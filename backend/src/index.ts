@@ -6,7 +6,7 @@ import {
 import { convoyAccept, convoyCode, convoyCodeJoin, convoyCodePreview, convoyConnect, convoyCreate, convoyDismiss, convoyInvitePeople, convoyInvites, convoyJoin, convoyPreview, convoyRoom, unwrap } from "./convoy_routes";
 import { Env, HttpError, body, json, str } from "./util";
 import { rateCheck } from "./ratelimit";
-import { clientError, errorSummary, failingRoutes, serverError } from "./errors";
+import { clientError, countError, errorSummary, failingRoutes, serverError } from "./errors";
 import { backupDatabase } from "./backup";
 import { sweepExpired } from "./sweep";
 import { cronHealth, runCron } from "./cron_runs";

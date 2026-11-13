@@ -28,7 +28,7 @@ const text = (v: unknown, field: string, max: number): string => {
 export const DAY_CAP = 500;
 const KEEP_DAYS = 30;
 
-interface Counted { source: "ios" | "web" | "server"; kind: string; message: string; page: string; stack: string }
+export interface Counted { source: "ios" | "web" | "server"; kind: string; message: string; page: string; stack: string }
 
 /** Adds one to today's count for this error. Never throws: counting must not turn a report or a 500 into another failure. */
 export async function countError(env: Env, e: Counted): Promise<void> {
