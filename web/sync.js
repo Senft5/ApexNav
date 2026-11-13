@@ -44,15 +44,19 @@
   const MEMBER_READS = /^\/api\/(convoy\/invites|points|hazards|roads)(\?|$)/;
   // Workers Free's daily limits (backend index.ts D1_DAILY): every D1 query fails until midnight UTC and the API answers
   // 503 service_unavailable. The page says so once (cockpit: 'apex:server-down') instead of "Check signal" on every tap.
-  let downUntil = 0;
+  // Near the month's included usage only uploads and photos answer that way (scope 'uploads', until the 1st).
+  let downUntil = 0, shedUntil = 0;
   const nextMidnightUtc = (now) => { const d = new Date(now); return Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate() + 1); };
   const serverDown = (r) => {
     if (!r || r.status !== 503 || typeof r.clone !== 'function') return;
     r.clone().json().then((j) => {
       if (!j || j.error !== 'service_unavailable') return;
-      const now = Date.now(), was = downUntil > now;
-      downUntil = nextMidnightUtc(now);
-      if (!was) try { root.dispatchEvent(new root.CustomEvent('apex:server-down', { detail: { until: downUntil } })); } catch (_) {}
+      // the server says until when (an ISO time); older servers don't, and the daily limit ends at midnight UTC
+      const now = Date.now(), said = Date.parse(j.until), scope = j.scope === 'uploads' ? 'uploads' : 'all';
+      const until = Number.isFinite(said) && said > now ? said : nextMidnightUtc(now);
+      const was = scope === 'uploads' ? shedUntil > now : downUntil > now;
+      if (scope === 'uploads') shedUntil = until; else downUntil = until;
+      if (!was) try { root.dispatchEvent(new root.CustomEvent('apex:server-down', { detail: { until, scope } })); } catch (_) {}
     }, () => {});
   };
   const serverDownUntil = () => (downUntil > Date.now() ? downUntil : 0);

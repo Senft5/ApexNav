@@ -241,7 +241,9 @@
     .ds-main > span { display: inline-block; max-width: 100%; white-space: normal; }
 
     /* ---------------- stage map ---------------- */
-    .stage { position: relative; min-height: 0; background: var(--stage); overflow: hidden; }
+    /* clip, not hidden: a hidden box can still be scrolled, and a tap into Where to? in the first second (the cover lifts
+       at ready, 2026-11-13) scrolled the stage 60 px sideways, the plan sheet cut off at the left; clip never scrolls */
+    .stage { position: relative; min-height: 0; background: var(--stage); overflow: clip; }
     /* F-02 (REVIEW_FEEL.md): the map is a fixed stage under everything, never a grid cell. The strip, the binnacle, the
        sheets and the tab bar lie over it and the camera is told what they cover (stageView), so a tab, a sheet, a wrapped
        status line or a replay never resizes the WebGL canvas. Only a drive's start and end move its edges (--map-*), in

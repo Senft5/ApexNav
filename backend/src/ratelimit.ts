@@ -17,11 +17,16 @@ const AUTH_LIMITED = new Set(["/api/auth/google/start", "/api/auth/app/exchange"
 // The relays a signed-out phone uses while planning; a plan asks a few dozen tiles, so the limit (wrangler.jsonc) is generous.
 export const RELAYS = new Set(["/api/ctx/osm", "/api/ctx/trace", "/api/ctx/workzones"]);
 
+export const DATA_UPLOAD = "/api/ops/data";
+
 export const TILE_PREFIXES = ["/api/graph/", "/api/ctx/v1/"];
 
 /** Throws 429 when this request is over its limit. Without a binding (a test env without it) nothing is limited. */
 export async function rateCheck(req: Request, env: Env, path: string): Promise<void> {
   const ip = req.headers.get("cf-connecting-ip") ?? "unknown";
+  // CI's map-data upload (src/data_store.ts) sends hundreds of files in a few minutes; it is let in only by a signed GitHub
+  // token, checked before anything is written, so the write floor would only stop the one caller allowed
+  if (path === DATA_UPLOAD) return;
   if (path.startsWith("/api/auth/")) {
     if (!AUTH_LIMITED.has(path)) return;
     if (env.AUTH_LIMIT && !(await env.AUTH_LIMIT.limit({ key: `ip:${ip}` })).success) throw new HttpError(429, "rate_limited");

@@ -6,6 +6,7 @@
 // no sign-in: a request says only which ~150 km tile a route is in.
 import type { Env } from "./util";
 import { HttpError } from "./util";
+import { r2Bytes } from "./data_store";
 
 const KEY = /^v1\/(index\.json|8\/\d{1,3}\/\d{1,3}\.vcg)$/;
 export const CTX_RAW = "https://raw.githubusercontent.com/Senft5/ApexNav/graph-data/ctx/";
@@ -30,7 +31,9 @@ async function fromGitHub(key: string, fetcher: typeof fetch): Promise<ArrayBuff
 /** GET /api/ctx/v1/index.json and /api/ctx/v1/8/:x/:y.vcg: KV, else the graph-data branch; cached a day by the phone. */
 export async function ctxServe(env: Env, key: string, fetcher: typeof fetch = fetch): Promise<Response> {
   if (!KEY.test(key)) throw new HttpError(404, "not_found");
-  let bytes = env.CTX ? await env.CTX.get(key, "arrayBuffer") : null;
+  // our R2 bucket (src/data_store.ts, mirrored by CI), else KV, else the graph-data branch
+  let bytes = await r2Bytes(env, `ctx/${key}`);
+  if (!bytes && env.CTX) bytes = await env.CTX.get(key, "arrayBuffer");
   if (!bytes) bytes = await fromGitHub(key, fetcher);
   // nothing anywhere: the index says "no bundles here" (an empty index, cached an hour) rather than a 404 every phone
   // logs on every plan; the phone then uses the copy it ships with
