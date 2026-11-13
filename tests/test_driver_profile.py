@@ -278,10 +278,10 @@ def test_the_words():
     assert out["few"] == "9 of 30 clean corners to your first picture" and out["none"] is None
     assert out["focus"]["head"] == "Work on: One steering arc" and re.fullmatch(r"Through rights \d+, through lefts \d+, on 5 of 5 drives\.", out["focus"]["where"])
     assert out["nofocus"] is None
-    assert out["find"][0].startswith("One steering arc is weaker through rights: ") and out["find"][0].endswith("through lefts, on 5 of 5 drives.")
+    assert re.fullmatch(r"One steering arc: through rights \d+, through lefts \d+, on 5 of 5 drives\.", out["find"][0])
     # the side with a name is the one spoken of, and a whole-drive comparison counts drives, not votes
-    assert out["rest"] == "Patient apex is stronger in tight corners: 100 against 85 in the rest, on 4 of 4 drives. The same shows in back to power."
-    assert out["car"] == "Back to power is weaker in the Truck: 50 against 99 in your other cars, across 10 drives."
+    assert out["rest"] == "Patient apex: in tight corners 100, in the rest 85, on 4 of 4 drives. The same shows in back to power."
+    assert out["car"] == "Back to power: in the Truck 50, in your other cars 99, across 10 drives."
     a, b, c = out["style"]
     assert a == ["Still braking at turn-in: 7 of 10 corners you brake for",
                  "Slowest point: 8 m before the middle", "Kept in hand: about 40% of the sane limit"]

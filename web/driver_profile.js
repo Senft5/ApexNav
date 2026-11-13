@@ -713,7 +713,7 @@
     if (split === 'tag') return x === 'rest' ? 'on your other drives' : `on drives tagged ${x}`;
     return SIDES[split + '|' + x] || String(x);
   }
-  /** One finding as a sentence: "One steering arc is weaker through rights: 62 against 97 through lefts, on 5 of 5 drives." */
+  /** One finding as a row: "One steering arc: through rights 62, through lefts 97, on 5 of 5 drives." */
   const GENERIC = new Set(['rest', 'later', 'before']);
   /** The findings worth a line each: one a skill (the strongest, as the profile orders them), so "back to power is weaker in
    *  fast corners" is not said again as "stronger in tight corners" (TestFlight 2026-11-12, "text walls"). */
@@ -722,14 +722,13 @@
     return (findings || []).filter((f) => { if (said.has(f.skill)) return false; said.add(f.skill); return true; });
   }
   function findingLine(f) {
+    // a labelled row, as the Work on box reads (TestFlight 2026-11-12, "text walls"): the skill, then each side's level,
+    // the side with a name first ("in fast corners 38, in the rest 100"), the weaker one when both have names
     const worseA = f.mean_a < f.mean_b, w = worseA ? [f.a, f.mean_a, f.b, f.mean_b] : [f.b, f.mean_b, f.a, f.mean_a];
     const seen = f.agree === null || f.agree === undefined ? `across ${f.drives} drives` : `on ${f.agree} of ${f.drives} drives`;
     const also = (f.also || []).length ? ` The same shows in ${f.also.map((k) => WORDS[k].name.toLowerCase()).join(' and ')}.` : '';
-    // said about the side that has a name: "weaker through rights", or "stronger in tight corners" when the rest is the weaker
-    const W = WORDS[f.skill], more = W.more || 'stronger', less = W.less || 'weaker';
-    const line = GENERIC.has(w[0]) ? `is ${more} ${sideWords(f.split, w[2])}: ${w[3]} against ${w[1]} ${sideWords(f.split, w[0])}`
-      : `is ${less} ${sideWords(f.split, w[0])}: ${w[1]} against ${w[3]} ${sideWords(f.split, w[2])}`;
-    return `${WORDS[f.skill].name} ${line}, ${seen}.${also}`;
+    const [x, xv, y, yv] = GENERIC.has(w[0]) ? [w[2], w[3], w[0], w[1]] : w;
+    return `${WORDS[f.skill].name}: ${sideWords(f.split, x)} ${xv}, ${sideWords(f.split, y)} ${yv}, ${seen}.${also}`;
   }
   /** How you drive, as up to three sentences of fact (never advice to go faster). */
   function styleLines(st, metric = true) {

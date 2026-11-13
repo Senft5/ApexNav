@@ -71,6 +71,6 @@ def test_parity_and_words():
     assert [(f["split"], f["a"], f["mean_a"], f["mean_b"]) for f in js["pf"]] == [(f["split"], f["a"], f["mean_a"], f["mean_b"]) for f in py["pace_findings"]]
     assert js["lines"][0].startswith("Over the sane limit: 1 of 10 corners.") and "leave more in hand" in js["lines"][0]
     down_line = next(t for t in js["find"] if "downhill" in t)
-    assert down_line.startswith("Pace is lower downhill: ")
+    assert down_line.startswith("Pace: downhill ")
     assert js["none"] == ["Over the sane limit: no corner"] and js["few"] == ["Over the sane limit: 3 of 100 corners"] and js["unk"] == []
     assert not any(w in " ".join(js["lines"] + js["find"]).lower() for w in ("faster", "quicker", "push", "work on"))

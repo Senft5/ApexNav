@@ -5483,8 +5483,8 @@ flow('Your driving: the profile over every drive opens from the Log, names the w
     return { was, shown, t, after: d.hidden, title: row.querySelector('[title]') !== null };
   });
   check(def.was && def.shown && def.after && !def.title && /^You turn in once .+ 0 to 100, averaged over \d+ clean corners; -- until \d+\.$/.test(def.t), 'the definition on a tap: ' + JSON.stringify(def));
-  check(/Work on: One steering arc\s+Through rights \d+, through lefts 100, on 3 of 3 drives\./.test(text) && !/One steering arc is weaker/.test(text), 'the weak side is named once, in the focus: ' + text);
-  check(!/Back to power is stronger in tight corners/.test(text) && (text.match(/^Back to power is /gm) || []).length <= 1, 'one finding a skill: ' + text);
+  check(/Work on: One steering arc\s+Through rights \d+, through lefts 100, on 3 of 3 drives\./.test(text) && !/One steering arc: through rights/.test(text), 'the weak side is named once, in the focus: ' + text);
+  check((text.match(/^Back to power: /gm) || []).length <= 1 && /^Back to power: in fast corners \d+, in the rest \d+, on 3 of 3 drives\./m.test(text), 'one finding a skill, as a row: ' + text);
   check(await page.evaluate(() => document.querySelector('.dp-st.weak').dataset.skill === 'arc' && document.querySelectorAll('.dp-st:not([data-skill="pace"])').length === 6), 'six stations, the weak one marked');
   // IDEAS D-29: pace beside them, in its own panel, and never the one to work on
   const pace = await page.evaluate(() => { const p = document.querySelector('#drivingRoot .dp-pace'); return p ? p.innerText : null; });
