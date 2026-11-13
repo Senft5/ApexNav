@@ -57,7 +57,7 @@ import { highlightCreate, highlightDelete, highlightList, highlightRate } from "
 export { ConvoyIndex, ConvoyRoom } from "./convoy";
 import { crewHomeSet, crewMeetCells } from "./crew_meet";
 import { chargers } from "./chargers";
-import { serverSide, serviceHistory, serviceReport } from "./service_check";
+import { dailyServerCheck, serverSide, serviceHistory, serviceReport } from "./service_check";
 import { QUERY_WARN, countedDb } from "./query_budget";
 import { segmentAdopt, segmentCreate, segmentDelete, segmentList, segmentShare, segmentsSharedWithMe } from "./segments";
 
@@ -409,6 +409,7 @@ export default {
       }));
     } else {
       ctx.waitUntil(runCron(env, "sweep", () => sweepExpired(env)));
+      ctx.waitUntil(dailyServerCheck(env));   // the service check's server side once a day, no phone needed (source 'server')
     }
   },
 };

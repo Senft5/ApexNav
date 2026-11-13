@@ -1,7 +1,7 @@
 // Health check (IDEAS Y-05): the status workflow reads it to tell "Worker up" from "Worker and database up", and (migration
 // 0055, src/cron_runs.ts) whether the weekly backup and the daily sweep still run.
 import { env } from "cloudflare:workers";
-import { beforeEach, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { api, freshDb } from "./helpers";
 import { cronHealth, runCron } from "../src/cron_runs";
 
@@ -54,6 +54,7 @@ describe("health", () => {
   });
 
   it("the scheduled handler records both jobs", async () => {
+    vi.spyOn(globalThis, "fetch").mockImplementation(async () => new Response("{}", { status: 503 }));   // the daily service check asks upstreams
     const worker = (await import("../src/index")).default as any;
     const waits: Promise<unknown>[] = [];
     const ctx = { waitUntil: (p: Promise<unknown>) => waits.push(p), passThroughOnException() {} };

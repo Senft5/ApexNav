@@ -36,14 +36,47 @@ export function parseReport(b: Record<string, unknown>) {
 /** POST /api/ops/service-check: keeps each result (today's row per service and state, the latest detail in `stack`). */
 export async function serviceReport(req: Request, env: Env) {
   const r = parseReport(await body<Record<string, unknown>>(req));
-  const day = new Date().toISOString().slice(0, 10), at = new Date().toISOString();
   console.log(JSON.stringify({ event: "service_check", app: r.app, version: r.version, build: r.build, online: r.online,
     down: r.results.filter((x) => x.state === "down").map((x) => x.id) }));
-  await env.DB.batch(r.results.map((x) => env.DB.prepare(
+  await keep(env, r.app, r.results, { version: r.version, build: r.build, online: r.online });
+  return { kept: r.results.length };
+}
+
+/** Today's row per service and state for `source` ('ios', 'web' or 'server'), the latest detail in `stack`. One batch. */
+async function keep(env: Env, source: string, results: CheckResult[], meta: Record<string, unknown>) {
+  const day = new Date().toISOString().slice(0, 10), at = new Date().toISOString();
+  await env.DB.batch(results.map((x) => env.DB.prepare(
     `INSERT INTO error_counts (day, source, kind, message, page, stack) VALUES (?, ?, ?, ?, '', ?)
      ON CONFLICT DO UPDATE SET n = n + 1, last_at = datetime('now'), stack = excluded.stack`)
-    .bind(day, r.app, KIND, `${x.id}: ${x.state}`, JSON.stringify({ http: x.http, ms: x.ms, detail: x.detail, at, version: r.version, build: r.build, online: r.online }))));
-  return { kept: r.results.length };
+    .bind(day, source, KIND, `${x.id}: ${x.state}`, JSON.stringify({ http: x.http, ms: x.ms, detail: x.detail, at, ...meta }))));
+}
+
+// the phone's ids for the same servers (web/service_check.js OVERPASS), so the two views line up
+const HOST_ID: Record<string, string> = { "overpass-api.de": "overpass_de", "overpass.kumi.systems": "overpass_kumi",
+  "overpass.private.coffee": "overpass_coffee", "maps.mail.ru": "overpass_vk" };
+
+/** The Worker's own side as results, the same shape the phone sends (ids prefixed srv_). */
+export function serverResults(s: Awaited<ReturnType<typeof serverSide>>): CheckResult[] {
+  const missing = Object.entries(s.config).filter(([, v]) => !v).map(([k]) => k);
+  const g = s.graph_data;
+  return [
+    { id: "srv_db", state: s.db ? "up" : "down", http: null, ms: 0, detail: s.db ? "" : "D1 did not answer" },
+    { id: "srv_config", state: missing.length ? "down" : "up", http: null, ms: 0, detail: missing.length ? scrub(`not set: ${missing.join(", ")}`, 160) : "" },
+    { id: "srv_graph_data", state: g.tiles ? (g.ms > 4000 ? "slow" : "up") : "down", http: g.http, ms: g.ms,
+      detail: g.tiles ? `${g.tiles} tiles` : g.error || (g.http ? `HTTP ${g.http}` : "no answer") },
+    ...s.overpass.map((o) => ({ id: `srv_${HOST_ID[o.host] || o.host.replace(/[^a-z0-9]/g, "_")}`.slice(0, 32),
+      state: o.elements != null ? (o.ms > 4000 ? "slow" : "up") : "down", http: o.http, ms: o.ms,
+      detail: o.elements != null ? `${o.elements} features` : o.error || (o.http ? `HTTP ${o.http}` : "no answer") })),
+  ];
+}
+
+/** The daily cron's own check (no phone needed): the Worker's side, kept as source 'server'. Never throws. */
+export async function dailyServerCheck(env: Env, fetcher: typeof fetch = fetch) {
+  try {
+    const results = serverResults(await serverSide(env, fetcher));
+    await keep(env, "server", results, {});
+    return results;
+  } catch (e) { console.error(JSON.stringify({ event: "service_check_cron_failed", reason: String((e as Error)?.message || e).slice(0, 120) })); return null; }
 }
 
 /** GET /api/ops/service-check?days=: the last few days' results, newest first, per service and state. */
