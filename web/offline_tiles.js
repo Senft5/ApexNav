@@ -51,6 +51,29 @@
     return Number.isFinite(s) ? [s, w, n, e].map((v) => Math.round(v * 1e5) / 1e5) : null;
   }
   /**
+   * The route's line thinned to within `tolKm` (Douglas-Peucker in local km), [[lat, lon], ...] rounded to 1e-5: kept on a
+   * route's area so the drive page can tell a drive that stayed in the corridor from one that left it inside the box.
+   */
+  function lineOf(lat, lon, tolKm = 0.1) {
+    const pts = [];
+    for (let i = 0; i < Math.min(lat.length, lon.length); i++) if (Number.isFinite(lat[i]) && Number.isFinite(lon[i])) pts.push([lat[i], lon[i]]);
+    if (pts.length < 2) return null;
+    const k = Math.cos(pts[0][0] * Math.PI / 180), X = (p) => p[1] * 111.32 * k, Y = (p) => p[0] * 110.54;
+    const keep = new Uint8Array(pts.length); keep[0] = keep[pts.length - 1] = 1;
+    const stack = [[0, pts.length - 1]];
+    while (stack.length) {
+      const [a, b] = stack.pop(); let far = -1, at = -1;
+      const ax = X(pts[a]), ay = Y(pts[a]), dx = X(pts[b]) - ax, dy = Y(pts[b]) - ay, L = dx * dx + dy * dy;
+      for (let i = a + 1; i < b; i++) {
+        const px = X(pts[i]) - ax, py = Y(pts[i]) - ay, t = L ? Math.max(0, Math.min(1, (px * dx + py * dy) / L)) : 0;
+        const d = Math.hypot(px - t * dx, py - t * dy); if (d > far) { far = d; at = i; }
+      }
+      if (far > tolKm) { keep[at] = 1; stack.push([a, at], [at, b]); }
+    }
+    return pts.filter((_, i) => keep[i]).map(([la, lo]) => [Math.round(la * 1e5) / 1e5, Math.round(lo * 1e5) / 1e5]);
+  }
+  const LINE_TOL_KM = 0.1;
+  /**
    * The plan for a route (IDEAS F-03): map tiles z8-14 and terrain z10-12 within 1.5 km of it, the corridor narrowing to
    * 0.5 km, then the closest zoom left out, until it fits MAX_TILES. null for no line.
    */
@@ -161,7 +184,7 @@
       }
     }));
     const g = graph ? await graph : null;
-    const area = { id, name: name || 'Saved area', lat, lon, radiusKm: along ? null : p.radiusKm, ...(along ? { alongKm: p.bufferKm, box: boxOf(along.lat, along.lon) } : {}),
+    const area = { id, name: name || 'Saved area', lat, lon, radiusKm: along ? null : p.radiusKm, ...(along ? { alongKm: p.bufferKm, box: boxOf(along.lat, along.lon), line: lineOf(along.lat, along.lon, LINE_TOL_KM), lineTolKm: LINE_TOL_KM } : {}),
       tiles: urls.length, bytes, at: new Date().toISOString(), graphTiles: g ? g.kept : 0 };
     saveAreas([...areas().filter((a) => a.id !== id), area]);
     // ask the browser to keep the saved map under storage pressure (Safari and Chrome may otherwise evict it); best-effort
@@ -181,6 +204,6 @@
   /** Bytes saved, from the areas list. */
   const bytesSaved = () => areas().reduce((s, a) => s + (a.bytes || 0), 0);
 
-  const api = { tilesFor, plan, tilesAlong, planAlong, boxOf, areasOf, transform, install, download, get, put, clear, areas, setArea, removeArea, bytesSaved, ageOf, STALE_DAYS, MAX_TILES, PROTO, DEM };
+  const api = { tilesFor, plan, tilesAlong, planAlong, boxOf, lineOf, areasOf, transform, install, download, get, put, clear, areas, setArea, removeArea, bytesSaved, ageOf, STALE_DAYS, MAX_TILES, PROTO, DEM };
   if (typeof module !== 'undefined' && module.exports) module.exports = api; else root.ApexOfflineTiles = api;
 })(typeof window !== 'undefined' ? window : globalThis);
