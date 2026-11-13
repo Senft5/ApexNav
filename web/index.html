@@ -266,7 +266,7 @@
     /* the key is 44 pt to touch (Apple's audit, U-15) and still looks the 24 px plate: it overhangs the plate by 10 px each way */
     #map .maplibregl-ctrl-attrib-button { top: -10px; right: -10px; width: 44px; height: 44px; border-radius: 0; background: none; display: grid; place-items: center; }
     #map .maplibregl-ctrl-attrib-button:focus { box-shadow: none; } #map .maplibregl-ctrl-attrib-button:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
-    #map .maplibregl-ctrl-attrib-button::before { content: "i"; font: 700 15px/1 var(--font-num); color: var(--panel-ink); }
+    #map .maplibregl-ctrl-attrib-button::before { content: "i"; content: "i" / ""; font: 700 15px/1 var(--font-num); color: var(--panel-ink); }
     #map .maplibregl-ctrl-attrib.maplibregl-compact-show .maplibregl-ctrl-attrib-button { top: 0; right: 0; width: 24px; height: 100%; min-height: 24px; background: none; border-left: 1.5px solid var(--panel-ink); }
     .plates { position: absolute; left: 10px; bottom: 10px; z-index: 4; display: flex; flex-wrap: wrap; gap: 6px; max-width: calc(100% - 90px); }
     .trial-plate { font-variant-numeric: tabular-nums; } .trial-plate .linkbtn { font: inherit; color: inherit; text-decoration: underline; padding: 0; min-height: 0; }
@@ -1122,6 +1122,7 @@
     .join-sign .apple-btn { margin: 0; min-height: 52px; border-radius: 0; }   /* square, as every key here is (Apple lets the corner match the app) */
     .join-sign a.ink-btn { display: flex; align-items: center; justify-content: center; min-height: 52px; font-size: 17px; text-decoration: none; }
     .join-sign .note { margin: 4px 0 0; text-align: center; }
+    .join-sign .note a { display: inline-block; padding: 13px 4px; margin: -13px -4px; }   /* Terms and Privacy: 44 pt to touch, the line's look kept */
     /* no connection (design pass 5): the road stops where the signal does; the way on is dotted until it is back */
     .join-art .jr-ghost { stroke: var(--panel-dim); stroke-width: 2.5; stroke-dasharray: 1 9; }
     .join-sign button.ink-btn { min-height: 52px; font-size: 17px; }
