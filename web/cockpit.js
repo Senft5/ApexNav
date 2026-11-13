@@ -6703,8 +6703,8 @@
         return;
       }
       const sharedP = apiCall('GET', '/api/routes/shared').then(jsonOf).catch(() => null);
-      const [fr, gr, pts, ex, crews, live, convoyAsks] = await Promise.all([apiCall('GET', '/api/friends').then(jsonOf), apiCall('GET', '/api/grants').then(jsonOf), apiCall('GET', '/api/points').then(jsonOf),
-        apiCall('GET', '/api/me/export').then(jsonOf), window.ApexSync && ApexSync.crews ? ApexSync.crews() : apiCall('GET', '/api/crews').then(jsonOf),
+      const [fr, gr, pts, crews, live, convoyAsks] = await Promise.all([apiCall('GET', '/api/friends').then(jsonOf), apiCall('GET', '/api/grants').then(jsonOf), apiCall('GET', '/api/points').then(jsonOf),
+        window.ApexSync && ApexSync.crews ? ApexSync.crews() : apiCall('GET', '/api/crews').then(jsonOf),
         friendsMap ? friendsMap.sharing().catch(() => null) : null,
         convoy && !convoy.active ? apiCall('GET', '/api/convoy/invites').then(jsonOf).catch(() => null) : null]);
       if (gen !== renderGen) return;
@@ -6712,7 +6712,7 @@
       peopleRequests = me.requests || 0;
       peopleAsks = [[stash('apex.crew') ? 1 : 0, 'crew invite'], [Array.isArray(convoyAsks) ? convoyAsks.length : 0, 'convoy invite']].filter(([n]) => n > 0);
       paintPeopleBadge();
-      roadFeelOn = ex && ex.member ? !!ex.member.contribute : null;
+      roadFeelOn = me && me.member ? !!me.contribute : null;   // /api/me says it: no need for the whole export
       const friends = Array.isArray(fr) ? fr : [], grants = new Map((Array.isArray(gr) ? gr : []).map(g => [g.audience_type + ':' + g.audience_id, g]));
       const putGrant = async (type, id, scores, times) => { await apiCall('PUT', '/api/grants', { audience_type: type, audience_id: id, share_scores: scores, share_times: times }); redo(); };
 
@@ -7147,7 +7147,7 @@
       if (builds) gbody.append(builds.followingSection());
 
       // road feel + account
-      const contribOn = !!ex?.member?.contribute;
+      const contribOn = !!(me && me.contribute);
       ambientFromAccount(true, contribOn);                                    // U-116
       const dsec = rfBody === gbody ? section('Road feel') : el('div', { className: 'stack-8' });   // the sheet's head says Road feel
       dsec.append(switchRow('Share road feel', contribOn, async () => { const r = await apiCall('PUT', '/api/me/contribute', { on: !contribOn }); if (contribOn && r && r.ok) clearCarry(); redo(); }),

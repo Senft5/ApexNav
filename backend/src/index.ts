@@ -126,12 +126,14 @@ on("GET", "/api/me", async (req, env) => {
   // incoming friend requests: lets the app show a badge on the Crew tab without a second call
   const waiting = v.member ? await env.DB.prepare(
     "SELECT COUNT(*) AS n FROM friendships WHERE status = 'pending' AND requested_by != ?1 AND (user_a = ?1 OR user_b = ?1)").bind(v.id).first<{ n: number }>() : null;
-  const photo = v.member ? await env.DB.prepare("SELECT photo_id FROM users WHERE id = ?").bind(v.id).first<{ photo_id: string | null }>() : null;
+  // contribute: the Share road feel switch, so the app needn't fetch the whole export (every table) to read one flag
+  const photo = v.member ? await env.DB.prepare("SELECT u.photo_id, m.contribute FROM users u LEFT JOIN members m ON m.user_id = u.id WHERE u.id = ?")
+    .bind(v.id).first<{ photo_id: string | null; contribute: number | null }>() : null;
   // private themes granted to this account by hand (migration 0044): their looks, for this account only; [] for everyone else
   const themes = await grantedThemes(env, v.id);
   const again = sessionCookie(req);                                  // the website's cookie keeps up with the sliding session
   return json({ signed_in: true, id: v.id, handle: v.handle, name: v.displayName, member: v.member, requests: waiting?.n ?? 0, photo_id: photo?.photo_id ?? null,
-               themes, ...(v.member && isModerator(env, v) ? { moderator: true } : {}), ...(await isDeveloper(env, v) ? { developer: true } : {}) },
+               contribute: !!photo?.contribute, themes, ...(v.member && isModerator(env, v) ? { moderator: true } : {}), ...(await isDeveloper(env, v) ? { developer: true } : {}) },
               200, again ? { "set-cookie": again } : {});
 });
 on("POST", "/api/invites/redeem", async (req, env) => { await redeemInvite(env, await requireUser(req, env), req); return noContent(); });

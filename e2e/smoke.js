@@ -4355,8 +4355,7 @@ flow('loved roads: in the app a recorded drive\'s road feel says it was recorded
     const json = (b, status = 200) => route.fulfill({ status, contentType: 'application/json', body: JSON.stringify(b) });
     if (p === '/api/contribute' && m === 'POST') { posts.push(JSON.parse(route.request().postData())); return json({ accepted: true }, 202); }
     if (m !== 'GET') return route.fulfill({ status: 204 });
-    if (p === '/api/me') return json({ signed_in: true, member: true, handle: 'me' });
-    if (p === '/api/me/export') return json({ member: { contribute: 1 } });
+    if (p === '/api/me') return json({ signed_in: true, member: true, handle: 'me', contribute: true });
     return json([]);
   });
   await page.route('**/trace_attributes', (route) => { const sh = JSON.parse(route.request().postData()).shape;
@@ -4381,8 +4380,7 @@ flow('road feel that waited for signal: counted in Your data, kept while Road da
   await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); localStorage.setItem('apex.signedIn', '1'); } catch (_) {} });
   // the Worker: at first it can't be reached for the account (kept, nothing asked of /api/contribute), then a member with Road data on
   const posted = []; let member = false;
-  await page.route(base + '/api/me', (route) => (member ? route.fulfill({ contentType: 'application/json', body: JSON.stringify({ signed_in: true, member: true, handle: 'e2e' }) }) : route.fulfill({ status: 503, body: '' })));
-  await page.route(base + '/api/me/export', (route) => (member ? route.fulfill({ contentType: 'application/json', body: JSON.stringify({ member: { contribute: 1 } }) }) : route.fulfill({ status: 503, body: '' })));
+  await page.route(base + '/api/me', (route) => (member ? route.fulfill({ contentType: 'application/json', body: JSON.stringify({ signed_in: true, member: true, handle: 'e2e', contribute: true }) }) : route.fulfill({ status: 503, body: '' })));
   await page.route(base + '/api/contribute', (route) => { posted.push(JSON.parse(route.request().postData())); return route.fulfill({ status: 202, contentType: 'application/json', body: '{}' }); });
   await page.goto(base + '/index.html');
   await page.waitForFunction(() => window.ApexRoadCarry && ApexRoadCarry.flush && window.ApexMyData && window.apexDebug);
@@ -7818,8 +7816,7 @@ flow('REVIEW5 §2: the Garage leads with you, your cars, Look and voice and the 
   await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); } catch (_) {} });
   await page.route('**/api/**', (route) => {
     const u = new URL(route.request().url()), json = (b, status = 200) => route.fulfill({ status, contentType: 'application/json', body: JSON.stringify(b) });
-    if (u.pathname === '/api/me') return json({ signed_in: true, member: true, handle: 'me' });
-    if (u.pathname === '/api/me/export') return json({ member: { contribute: 0 } });
+    if (u.pathname === '/api/me') return json({ signed_in: true, member: true, handle: 'me', contribute: false });
     if (u.pathname === '/api/points') return json({ pioneer: { firsts: 0, seconds: 0 } });
     if (route.request().method() === 'GET') return json([]);
     return json({}, 404);
@@ -9407,7 +9404,6 @@ flow('TestFlight 2026-11-05 note 3: your own photo is the key: no photo, a tap p
     if (m !== 'GET') { sent.push({ m, p }); if (m === 'DELETE') me = { ...me, photo_id: null }; if (m === 'POST' && p === '/api/photos') me = { ...me, photo_id: 'P2' }; return m === 'POST' ? json({ id: 'P2' }, 201) : route.fulfill({ status: 204 }); }
     if (p === '/api/me') return json(me);
     if (p.startsWith('/api/photos/')) return route.fulfill({ status: 404 });
-    if (p === '/api/me/export') return json({ member: { contribute: false } });
     return json([]); });
   await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); } catch (_) {} });
   await page.goto(base + '/index.html?view=garage');
