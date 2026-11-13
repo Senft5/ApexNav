@@ -86,9 +86,10 @@
     const a = lonG[i - 1], b = lonG[i], fin = Number.isFinite;
     if (![a, b, latG[i], latG[i - 1]].every((x) => fin(x))) return 'the load on the car changed sharply here';
     const dLat = Math.abs(latG[i] - latG[i - 1]), dLon = b - a;
-    if (dLat >= Math.abs(dLon)) return 'the cornering load changed sharply here: turn in and unwind the wheel more smoothly';
-    if (dLon < 0) return b < 0 ? 'the brake came on sharply here: squeeze it on more progressively' : 'a sudden lift off the throttle here: ease off more progressively';
-    return a < 0 ? 'the brake came off sharply here: release it more gradually' : 'the throttle went on sharply here: squeeze it on more progressively';
+    // one short clause each (the owner, 2026-11-12: "walls of text"): three cards each said a whole sentence
+    if (dLat >= Math.abs(dLon)) return 'the cornering load changed sharply: unwind the wheel more smoothly';
+    if (dLon < 0) return b < 0 ? 'the brake came on sharply: squeeze it on' : 'a sudden lift off the throttle: ease off gently';
+    return a < 0 ? 'the brake came off sharply: let it off gradually' : 'the throttle went on sharply: squeeze it on';
   }
 
   /** Fatigue cue (IDEAS D-16) in plain words from Core.fatigue, or null when the drive was too short to ask or a mean is unknown. */
