@@ -736,7 +736,17 @@
         $('segLegend').textContent = ApexLegends.legendText(ApexLegends.legend(filtered));
         bt.innerHTML = '<tr><th class="l">#</th><th class="l">Driver</th><th>Score</th><th>Time</th></tr>' + filtered.map((r, i) =>
           `<tr class="${r.mine ? 'best' : ''}"><td class="l">${i + 1}</td><td class="l"><b></b></td><td><span class="score">${r.driver_score}</span></td><td>${r.time_s == null ? '--' : mmss(r.time_s)}</td></tr>`).join('');
-        bt.querySelectorAll('tr b').forEach((b, i) => { b.textContent = filtered[i].mine ? 'You' : '@' + (filtered[i].handle || '?'); });
+        // a friend's handle is the friend: a tap opens their profile on People, as on Friends lately
+        const friendHandles = new Set(fr.map(f => (f.handle || '').toLowerCase()).filter(Boolean));
+        bt.querySelectorAll('tr b').forEach((b, i) => {
+          const r = filtered[i];
+          if (r.mine) { b.textContent = 'You'; return; }
+          if (r.handle && friendHandles.has(String(r.handle).toLowerCase())) {
+            const a = document.createElement('a'); a.className = 'friend-link'; a.textContent = '@' + r.handle;
+            a.href = 'index.html?view=friends&friend=' + encodeURIComponent(r.handle); b.append(a); return;
+          }
+          b.textContent = '@' + (r.handle || '?');
+        });
       };
       await drawBoard();
       const row = $('segShareRow'); row.innerHTML = '';
