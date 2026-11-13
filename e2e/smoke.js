@@ -7803,6 +7803,65 @@ flow('film the drive: the app\'s own video of a drive is offered on its page, li
   check(reelSaved.size > 500 && /^Filmed_road-best-corners-/.test(reelSaved.name), 'the reel, saved to share: ' + JSON.stringify(reelSaved));
 });
 
+flow('side by side: a corner filmed on this drive and on your best pass plays as one clip, both from the same point, the gap counting (big bet 5)', async (page, base) => {
+  await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); } catch (_) {} window.APEX_DRIVECAM = '/__drivecam/'; });
+  let index = [], video = null;
+  await page.route('**/__drivecam/index.json', (r) => r.fulfill({ contentType: 'application/json', body: JSON.stringify(index) }));
+  await page.route('**/__drivecam/*.mov', (r) => (video ? r.fulfill({ contentType: 'video/webm', body: video }) : r.fulfill({ status: 404, body: '' })));
+  await page.goto(base + '/analysis.html');
+  await page.waitForFunction(() => window.apexLogDebug && window.apexLogDebug.loaded() && window.ApexRecording);
+  // one road four times (the corner overlay's road), each drive with the clock kept (t0, t_s)
+  await page.evaluate(async (src) => {
+    const gen = eval(src);
+    const tweak = (csv, k) => csv.split('\n').map((l, i) => { if (!i || !l) return l; const c = l.split(','); c[5] = (+c[5] * (1 - 0.03 * k)).toFixed(3); return c.join(','); }).join('\n');
+    for (let k = 0; k < 4; k++) {
+      const d = ApexRecording.parse(ApexCore, tweak(gen(k === 1 ? 'clean' : 'saw', 0), k), 'g' + k + '.csv', { id: 'g' + k, name: 'Dry Ridge Rd', date: `2026-0${5 + k}-01T09:00`, source: 'web-gps', t0: 1760000000000 + k * 864e5 });
+      d.t_s = Array.from(ApexCore.elapsedS(d.speed_mps));
+      await ApexRecording.store(d);
+    }
+  }, PROFILE_CSV);
+  // the corner Where to find time leads with, its best pass, and where it is on both drives
+  await page.goto(base + '/analysis.html?tab=drive&drive=g3');
+  await page.waitForSelector('.dv-time li button', { timeout: 20000 });
+  await page.click('.dv-time li button');
+  await page.waitForSelector('.dv-ovl svg path', { timeout: 20000 });
+  const k = (await page.evaluate(() => +document.querySelector('.dv-ovl-h').textContent.match(/Corner (\d+)/)[1])) - 1;
+  const plan = await page.evaluate(async (k) => {
+    const r = await ApexAnalysis.job('cornerTrace', { id: 'g3', k }), a = await ApexRecording.get('g3'), b = await ApexRecording.get(r.other.id);
+    const c = ApexRecording.scoreOf(ApexCore, a).corners[k], Ta = ApexRecording.timesOf(ApexCore, a), Tb = ApexRecording.timesOf(ApexCore, b);
+    return { other: r.other.id, aStart: Ta[c.start], aEnd: Ta[c.end], bStart: Tb[r.trace.b_win[0]], bEnd: Tb[r.trace.b_win[1]], t0a: a.t0, t0b: b.t0 };
+  }, k);
+  // a video for each drive that starts 3.5 s before the corner there (named for that moment, as the app names them)
+  const len = Math.ceil(Math.max(plan.aEnd - plan.aStart, plan.bEnd - plan.bStart) + 7);
+  const b64 = await page.evaluate(async (ms) => {
+    const c = Object.assign(document.createElement('canvas'), { width: 320, height: 180 }), g = c.getContext('2d');
+    const rec = new MediaRecorder(c.captureStream(15), { mimeType: 'video/webm' }), parts = [];
+    rec.ondataavailable = (e) => parts.push(e.data);
+    const stop = new Promise((ok) => { rec.onstop = ok; });
+    rec.start(); let f = 0; const t = setInterval(() => { g.fillStyle = `hsl(${f++ * 12},60%,50%)`; g.fillRect(0, 0, 320, 180); }, 66);
+    await new Promise((r) => setTimeout(r, ms)); clearInterval(t); rec.stop(); await stop;
+    const buf = new Uint8Array(await new Blob(parts).arrayBuffer());
+    let bin = ''; for (let q = 0; q < buf.length; q += 0x8000) bin += String.fromCharCode(...buf.subarray(q, q + 0x8000));
+    return btoa(bin);
+  }, len * 1000);
+  video = Buffer.from(b64, 'base64');
+  const at = (t0, s) => Math.round(t0 + (s - 3.5) * 1000);
+  index = [{ name: `${at(plan.t0a, plan.aStart)}.mov`, start_ms: at(plan.t0a, plan.aStart), dur_s: len }, { name: `${at(plan.t0b, plan.bStart)}.mov`, start_ms: at(plan.t0b, plan.bStart), dur_s: len }];
+  await page.goto(base + '/analysis.html?tab=drive&drive=g3');
+  await page.waitForSelector('#dvDashcam .dc-own button', { timeout: 20000 });
+  await page.evaluate(() => { window.__saved = null; ApexSaveFile.saveFile = async (blob, name, type) => { window.__saved = { size: blob.size, name, type }; return 'saved'; }; });
+  await page.click('.dv-time li button');
+  await page.waitForSelector('.dv-ovl .dv-ghost', { timeout: 20000 });
+  check(await page.evaluate(() => !!document.querySelector('.dv-ovl .dv-clip.solid')), 'the corner\'s own clip key is there too');
+  // a frame of it: portrait, this pass on top and the best pass below
+  await page.click('.dv-ovl .dv-ghost');
+  await page.waitForFunction(() => { const c = document.querySelector('#dvDashcam .dc-clip-canvas'); return c && c.style.display === 'block' && c.width === 720 && c.height === 1280; }, null, { timeout: 15000 });
+  await page.waitForFunction(() => window.__saved, null, { timeout: 60000 });
+  const saved = await page.evaluate(() => window.__saved);
+  check(saved.size > 500 && /^Dry_Ridge_Rd-side-by-side-\d+-/.test(saved.name), 'the side-by-side clip, saved to share: ' + JSON.stringify(saved));
+  await page.waitForFunction(() => /Clip made/.test(document.querySelector('.dv-ovl .dv-ghost').textContent), null, { timeout: 5000 });
+});
+
 // A drive for the drive page's own flows: north 1.5 km with a corner call (dashcam) and some g (the grip circle)
 async function storeDashDrive(page, id = 'dc1', name = 'Dashcam road') {
   await page.evaluate(async ([id, name]) => {
