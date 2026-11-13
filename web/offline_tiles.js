@@ -41,6 +41,15 @@
     }
     return out;
   }
+  /** [south, west, north, east] of a line, or null. */
+  function boxOf(lat, lon) {
+    let s = Infinity, w = Infinity, n = -Infinity, e = -Infinity;
+    for (let i = 0; i < Math.min(lat.length, lon.length); i++) {
+      if (!Number.isFinite(lat[i]) || !Number.isFinite(lon[i])) continue;
+      s = Math.min(s, lat[i]); n = Math.max(n, lat[i]); w = Math.min(w, lon[i]); e = Math.max(e, lon[i]);
+    }
+    return Number.isFinite(s) ? [s, w, n, e].map((v) => Math.round(v * 1e5) / 1e5) : null;
+  }
   /**
    * The plan for a route (IDEAS F-03): map tiles z8-14 and terrain z10-12 within 1.5 km of it, the corridor narrowing to
    * 0.5 km, then the closest zoom left out, until it fits MAX_TILES. null for no line.
@@ -152,7 +161,7 @@
       }
     }));
     const g = graph ? await graph : null;
-    const area = { id, name: name || 'Saved area', lat, lon, radiusKm: along ? null : p.radiusKm, ...(along ? { alongKm: p.bufferKm } : {}),
+    const area = { id, name: name || 'Saved area', lat, lon, radiusKm: along ? null : p.radiusKm, ...(along ? { alongKm: p.bufferKm, box: boxOf(along.lat, along.lon) } : {}),
       tiles: urls.length, bytes, at: new Date().toISOString(), graphTiles: g ? g.kept : 0 };
     saveAreas([...areas().filter((a) => a.id !== id), area]);
     return area;
@@ -170,6 +179,6 @@
   /** Bytes saved, from the areas list. */
   const bytesSaved = () => areas().reduce((s, a) => s + (a.bytes || 0), 0);
 
-  const api = { tilesFor, plan, tilesAlong, planAlong, areasOf, transform, install, download, get, put, clear, areas, setArea, removeArea, bytesSaved, ageOf, STALE_DAYS, MAX_TILES, PROTO, DEM };
+  const api = { tilesFor, plan, tilesAlong, planAlong, boxOf, areasOf, transform, install, download, get, put, clear, areas, setArea, removeArea, bytesSaved, ageOf, STALE_DAYS, MAX_TILES, PROTO, DEM };
   if (typeof module !== 'undefined' && module.exports) module.exports = api; else root.ApexOfflineTiles = api;
 })(typeof window !== 'undefined' ? window : globalThis);

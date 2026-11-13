@@ -362,7 +362,7 @@
     });
     { const v = document.getElementById('aboutVersion'), m = /ApexNav\/([^ ]+ \([^)]*\))/.exec(navigator.userAgent);   // the iOS shell names its version in the user agent
       if (v) v.textContent = m ? m[1] : (window.APEX_EMBED ? '--' : 'Website'); }
-    window.apexDebug = { map, get soundtrack() { return { playing: !!(soundtrack.eng && soundtrack.eng.playing()), frame: soundtrack.frame, piece: soundtrack.eng && soundtrack.eng.piece(), sample: !!soundtrack.demo }; }, get track() { return track; }, state, drives, buildRoute: (...a) => buildRoute(...a), renderRouteCard: (...a) => renderRouteCard(...a), openRoadPage: (...a) => openRoadPage(...a), showEndCard: (...a) => showEndCard(...a), get driveActive() { return driveActive; }, get flowRun() { return drive.flow ? drive.flow.run : null; }, get camResets() { return camResets; }, tryTheme: (id) => tryTheme(id), tulipPNG: (svg) => tulipPNG(svg) };
+    window.apexDebug = { map, get soundtrack() { return { playing: !!(soundtrack.eng && soundtrack.eng.playing()), frame: soundtrack.frame, piece: soundtrack.eng && soundtrack.eng.piece(), sample: !!soundtrack.demo }; }, get track() { return track; }, state, drives, buildRoute: (...a) => buildRoute(...a), renderRouteCard: (...a) => renderRouteCard(...a), openRoadPage: (...a) => openRoadPage(...a), showEndCard: (...a) => showEndCard(...a), get driveActive() { return driveActive; }, get flowRun() { return drive.flow ? drive.flow.run : null; }, get wetRoad() { return drive.wet ? drive.wet.state : null; }, get camResets() { return camResets; }, tryTheme: (id) => tryTheme(id), tulipPNG: (svg) => tulipPNG(svg) };
     let mapReady = false;
     // F-02: the map's box is fixed (the window, or a drive's edges); it changes on a rotation or at a drive's start and end.
     // A resize the map already made (setPixelRatio resizes) is not made twice.
@@ -3252,14 +3252,15 @@
       if (!name || !name.trim()) return;
       const label = String(t.name || '').replace(/^To /, '') || name;
       toast(ApexPinnedPlaces.pin(localStorage, name, { label, lat: to.lat, lon: to.lon }) ? `Pinned as ${name.trim()}. It's first in Where to?, on this phone only.` : 'Couldn\u2019t pin that.');
+      carPost(carPlaces());                                              // first in the car's Places too
     });
     $('routeSaveBtn').addEventListener('click', () => {
       const t = plannedRoute;
       if (!t || !Array.isArray(t.lat) || t.lat.length < 2) return;
       if (ApexSavedRoutes.has(localStorage, t.id)) {
-        ApexSavedRoutes.remove(localStorage, t.id); toast(`${t.name} removed from saved routes.`);
+        ApexSavedRoutes.remove(localStorage, t.id); toast(`${t.name} removed from saved routes.`); carPost(carPlaces());
         if (window.ApexOfflineTiles) ApexOfflineTiles.removeArea(routeAreaId(t)).catch(() => {});   // and the map kept along it
-      } else if (ApexSavedRoutes.save(localStorage, ApexSavedRoutes.pack(t)) === 'saved') { toast(`Saved for offline: ${t.name}. It's listed in Where to? now.`); keepMapAlong(t); }
+      } else if (ApexSavedRoutes.save(localStorage, ApexSavedRoutes.pack(t)) === 'saved') { toast(`Saved for offline: ${t.name}. It's listed in Where to? now.`); keepMapAlong(t); carPost(carPlaces()); }
       else toast('The phone is out of room for saved routes. Remove one first.');
       paintSaveBtn();
     });
@@ -5443,7 +5444,7 @@
     function rememberPlace(p) {
       if (!p || !p.label || p.label === PIN_WORD || !Number.isFinite(p.lat) || !Number.isFinite(p.lon)) return;
       try { localStorage.setItem(RECENT_PLACES, JSON.stringify([{ label: p.label, lat: p.lat, lon: p.lon }, ...recentPlaces().filter(q => q.label !== p.label)].slice(0, 6))); } catch (_) {}
-      carPost(ApexCarPlay.placesMessage(recentPlaces()));   // the car's Places list
+      carPost(carPlaces());   // the car's Places list
     }
     // Typing in Where to? suggests places near you. Photon is OpenStreetMap search built for search-as-you-type (public
     // Nominatim forbids it, and stays for the final geocode). Offline: no list; typing and Go still work.
@@ -5573,7 +5574,7 @@
         if (!p.pinned) return b;
         // a pinned place (U-20): its own row with Unpin beside it
         const un = document.createElement('button'); un.className = 'linkbtn'; un.textContent = 'Unpin'; un.setAttribute('aria-label', `Unpin ${p.label}`);
-        un.addEventListener('click', (e) => { e.stopPropagation(); ApexPinnedPlaces.unpin(localStorage, p.pinned.name); renderPlaces(); });
+        un.addEventListener('click', (e) => { e.stopPropagation(); ApexPinnedPlaces.unpin(localStorage, p.pinned.name); renderPlaces(); carPost(carPlaces()); });
         const row = document.createElement('div'); row.className = 'row pinned-row'; row.append(b, un);
         if (b.classList.contains('place-extra')) { b.classList.remove('place-extra'); row.classList.add('place-extra'); }
         return row;
@@ -6014,7 +6015,8 @@
     // leans on from this phone, at a fixed test place, and sends what it saw to the Worker (backend/src/service_check.ts),
     // where Claude reads it in D1. Runs on its own once a launch at most every SVC_EVERY_MS, and on Run check.
     const SVC_KEY = 'apex.svccheck.at', SVC_EVERY_MS = 6 * 3600e3;
-    let svcRun = null;
+    let svcRun = null, svcAway = 0;
+    document.addEventListener('visibilitychange', () => { if (document.hidden) svcAway++; });
     function serviceCheckDeps() {
       const AT = ApexServiceCheck.AT, TO = ApexServiceCheck.TO;
       const own = () => (ownOn() ? ownRouter() : null);
@@ -6033,6 +6035,7 @@
         // the app's own path (our region list first, then the Overpass servers), with nothing read from this phone's cache
         cameras: (tile) => ApexCameras.load([tile], { fetchFn: fetch, storage: null }),
         cameraQuery: (tile) => ApexCameras.query([tile]),
+        away: () => svcAway + (document.hidden ? 1 : 0),   // a probe the page was hidden through is not judged
       };
     }
     /** Runs the check once (a second ask while one runs gets the same run) and sends it. Resolves { results, sent }. */
@@ -7127,7 +7130,7 @@
       accBody.append(asec);                                                 // your account: Garage → Settings → Account
       if (safety) { accBody.append(safety.blockedSection()); if (me.moderator) accBody.append(safety.moderationSection()); }
       // the owner's service check runs by itself once a launch, at most every 6 h, once the map is idle (its results go to D1)
-      if (me.moderator && !svcRun && !svcLast && serviceCheckDue()) setTimeout(() => runServiceCheck().then((r) => { svcLast = r; }).catch(() => {}), 8000);
+      if (me.moderator && !svcRun && !svcLast && serviceCheckDue()) setTimeout(() => !document.hidden && runServiceCheck().then((r) => { svcLast = r; }).catch(() => {}), 8000);
       if (me.moderator) accBody.append(serviceCheckSection(), errorsSection(), healthSection(), latencySection(), ...(window.ApexFeedback ? [ApexFeedback.ownerSection({ el, btn, apiCall, jsonOf })] : []));
     }
 
@@ -8190,7 +8193,7 @@
     // =======================================================================
     // 10b. DRIVE MODE (web): real GPS + motion, recorded to this device. REPLAY plays a saved drive; the two never mix.
     // =======================================================================
-    const drive = { sensors: null, rec: null, status: null, frames: 0, live: null, liveIdx: 0, share: 'off', shareKm: 0, shareErr: null, native: false, roads: {}, roadIdx: 0, rest: null, brakes: null, descentSaid: null, flow: null };
+    const drive = { sensors: null, rec: null, status: null, frames: 0, live: null, liveIdx: 0, share: 'off', shareKm: 0, shareErr: null, native: false, roads: {}, roadIdx: 0, rest: null, brakes: null, descentSaid: null, flow: null, wet: null };
     const NATIVE_SHELL = !!(window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.apex);
     function paintModeSwitch() {
       const on = state.mode === 'live';
@@ -8366,6 +8369,22 @@
     // page's best run judges them, on the rows just recorded; the co-driver says the count at five, ten and every ten after,
     // in the quiet slot below a break cue (praise waits; a line 20 s late means nothing, so it is dropped). The car's grip
     // is the saved drive's (routingCar). Technique only: a slow, smooth run counts the same as a quick one.
+    // Wet roads (wet_roads.js): the place plate's weather for where you are (refreshPlacePlate keeps it, every 20 min or
+    // 5 km, while driving too); a wet or icy road brings the notes earlier (note_timing.js setRoad) and is said once.
+    // Unknown weather leaves the dry road; nothing new is asked of anyone.
+    function noteWet() {
+      if (!window.ApexWetRoads || !window.ApexPlacePlate || !driveActive) return;
+      const w = drive.wet || (drive.wet = { data: null, state: null, said: null });
+      const d = placeAsk.data;
+      if (!d || d === w.data) return;                                  // nothing new since the last look
+      w.data = d;
+      const st = ApexWetRoads.stateOf(ApexPlacePlate.weather(d), d.tempC);
+      if (st == null) return;                                          // unknown: keep what we had
+      w.state = st;
+      ApexNoteTiming.setRoad(ApexWetRoads.road(st));
+      const line = ApexWetRoads.line(st);
+      if (line && w.said !== st) { w.said = st; toast(line); sayQuietLine(line); }
+    }
     function noteFlow() {
       if (!window.ApexFlowLive || !window.ApexFlow || !drive.rec) return;
       if (!drive.flow) {
@@ -9130,6 +9149,12 @@
     // CarPlay (web/carplay.js, CarPlay/ApexCarPlay.swift): the car's screen gets the planned route, the next maneuver and
     // hazards; what the driver picks there comes back as onNative({type:'carplay'}). Only in the app.
     // a request made on the car (a loop, a place to go, a report): toast() says on the car too what it says meanwhile
+    // the car's Places: pinned, saved routes and recents, as Where to? lists them (carplay.js placesMessage)
+    function carPlaces() {
+      let pinned = [], saved = [];
+      try { pinned = ApexPinnedPlaces.list(localStorage); saved = ApexSavedRoutes.list(localStorage); } catch (_) {}
+      return ApexCarPlay.placesMessage(recentPlaces(), pinned, saved, (m) => ApexUnits.long(m));
+    }
     async function carAsked(run) { car.echo++; try { await run(); } catch (_) { /* each request says its own errors */ } finally { car.echo--; } }
     function carPost(msg) {
       const native = window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.apex;
@@ -9412,7 +9437,7 @@
       startStageWatch();
       state.firstNoteDue = true; state.firstNoteKey = null;   // U-58: the drive's first note is called
       state.openerDue = true; state.openerAt = performance.now(); state.wakeCue = false;   // DA-3: the first words name the road
-      drive.live = null; drive.liveIdx = 0; drive.share = 'off'; drive.shareKm = 0; drive.shareErr = null; drive.roads = {}; drive.roadIdx = 0; drive.rest = null; drive.brakes = null; drive.descentSaid = null; drive.flow = null; brakeSay = null; breakSay = null; flowSay = null; flowQueue = []; if (breakWorker) { breakWorker.terminate(); breakWorker = null; }
+      drive.live = null; drive.liveIdx = 0; drive.share = 'off'; drive.shareKm = 0; drive.shareErr = null; drive.roads = {}; drive.roadIdx = 0; drive.rest = null; drive.brakes = null; drive.descentSaid = null; drive.flow = null; brakeSay = null; breakSay = null; flowSay = null; flowQueue = []; drive.wet = null; if (window.ApexNoteTiming && ApexNoteTiming.setRoad) ApexNoteTiming.setRoad(null); if (breakWorker) { breakWorker.terminate(); breakWorker = null; }
       keepStart();                                                     // Round 3: the drive is kept as it goes (drive_keep.js)
       if (NATIVE_SHELL) {   // the app's own GPS and IMU feed window.apex.live; no browser sensors to start
         drive.native = true;
@@ -9440,7 +9465,7 @@
             paintPerms();
             paintDriveStat();
           },
-          onFrame: (fr) => { if (!fr.has_fix) return; drive.frames++; drive.status.webMount = fr.web_mount || null; recordFrame(fr); feedLive(); noteRoads(); noteRest(fr); noteBrakes(fr); noteFlow(); feedStage(); feedTrack(fr);
+          onFrame: (fr) => { if (!fr.has_fix) return; drive.frames++; drive.status.webMount = fr.web_mount || null; recordFrame(fr); feedLive(); noteRoads(); noteRest(fr); noteBrakes(fr); noteWet(); noteFlow(); feedStage(); feedTrack(fr);
             if (window.ApexBattery && webBattery) drive.battery = ApexBattery.feed(drive.battery, webBattery.level, webBattery.charging, Date.now());
             window.apex.live(fr); paintDriveStat(); },
         });
@@ -9711,7 +9736,7 @@
     // ended: why a drive ended itself ('car', 'parked'; drive_keep.js EndWatch), or nothing for End
     async function leaveDrive(save, ended) {
       if (pendingEnd) { clearTimeout(pendingEnd.timer); pendingEnd = null; paintEndUndo(); }   // I-3: any other way out ends it now
-      driveActive = false; soundtrackStop();
+      driveActive = false; soundtrackStop(); drive.wet = null; if (ApexNoteTiming.setRoad) ApexNoteTiming.setRoad(null);   // the dry road back
       const kept = keepStop();                                         // Round 3: no more checkpoints; dropped once saved
       stageWatch = null; $('stageBar').hidden = true;
       const laps = circuit.timer ? circuit.timer.state(Date.now()).laps : [];
@@ -9859,16 +9884,20 @@
       else if (m.action === 'undo') undoEnd();
       else if (m.action === 'offer' && car.offer && m.id === car.offer.id && performance.now() < car.offer.until) car.offer.run();
       else if (m.action === 'disconnect') keepCar(false, m.t);      // Round 3: the car switched off; the drive ends once it stays put
-      else if (m.action === 'places') carPost(ApexCarPlay.placesMessage(recentPlaces()));
+      else if (m.action === 'places') carPost(carPlaces());
+      else if (m.action === 'saved' && typeof m.id === 'string' && !driveActive) {      // a saved route from the car's Places
+        const p = ApexSavedRoutes.list(localStorage).find((q) => q.id === m.id);
+        if (p) openSaved(p).catch(() => {});
+      }
       else if (m.action === 'loop' && LOOP_MINUTES.includes(m.minutes) && !driveActive) carAsked(() => loop({ minutes: m.minutes }));
       else if (m.action === 'report' && ApexHazardReports.KINDS.includes(m.kind)) carAsked(() => reportHazard(m.kind, null, true));
       else if (m.action === 'still' && typeof m.still === 'boolean') answerStill(m.still);
       else if (m.action === 'voice') { state.toggles.voice = !state.toggles.voice; savePrefs(); paintSwitches(); if (!state.toggles.voice) stopSpeaking(); }
       else if (m.action === 'hello') { keepCar(true); car.route = ''; car.look = ''; car.hazards = ''; carRoute(track && track.kind === 'route' ? track : null); carLook(); carHazards();
-        carPost(ApexCarPlay.placesMessage(recentPlaces()));                   // a car screen that just connected gets everything again
+        carPost(carPlaces());                   // a car screen that just connected gets everything again
         if (driveActive) { carPost({ kind: 'start', title: track && track.kind === 'route' ? String(track.name || 'Route').slice(0, 80) : 'Drive' }); car.guideKey = ''; } }   // and the drive in progress (U-59)
     }
-    carPost(ApexCarPlay.placesMessage(recentPlaces()));
+    carPost(carPlaces());
     function startDrive() {
       if (state.mode === 'live') return;
       askLocation();                                                   // never asked (a welcome skipped by a link): ask now
@@ -10291,7 +10320,7 @@
         feedReported(frame); feedReaction(frame); feedCrash(frame);
         state.live = frame; state.liveAt = performance.now();
         if (drive.native && drive.rec && !(Number.isFinite(frame.seq) && keep.seq != null && frame.seq <= keep.seq)) {   // (taken in a backlog)
-          drive.frames++; recordFrame(frame); feedLive(); noteRoads(); noteRest(frame); noteBrakes(frame); noteFlow(); feedStage(); feedTrack(frame);
+          drive.frames++; recordFrame(frame); feedLive(); noteRoads(); noteRest(frame); noteBrakes(frame); noteWet(); noteFlow(); feedStage(); feedTrack(frame);
           if (window.ApexBattery) drive.battery = ApexBattery.feed(drive.battery, frame.battery, frame.charging === true, Date.now());
           const gps = Number.isFinite(frame.accuracy_m) && frame.accuracy_m > ApexSensors.MAX_ACCURACY_M ? 'weak' : 'on';
           if (drive.status.gps !== gps) drive.status.gps = gps;

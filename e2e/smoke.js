@@ -2441,6 +2441,20 @@ flow('CarPlay feed: a planned route sends its line, every corner and the theme; 
   await page.waitForFunction(() => window.__car.some((m) => m.kind === 'notice'), null, { timeout: 5000 });
   const notice = await page.evaluate(() => window.__car.filter((m) => m.kind === 'notice'));
   check(notice.length === 1 && notice[0].titles.join('|') === 'No GPS fix yet.', 'a report from the car with no fix says so on the car: ' + JSON.stringify(notice));
+  // the car's Places as Where to? lists them: a pinned Home first, then a saved route, which the phone opens from its copy
+  const placesCar = await page.evaluate(() => {
+    localStorage.setItem('apex.pinnedPlaces', JSON.stringify([{ name: 'Home', label: '12 Oak St', lat: 35.61, lon: -84.11 }]));
+    const coords = Array.from({ length: 40 }, (_, i) => [-84.1 + i * 0.0004, 35.6 + i * 0.0003]);
+    ApexSavedRoutes.save(localStorage, { v: 1, id: 'saved_e2e', name: 'Test road', savedAt: Date.now(), request: null, coords, steps: [], timeMarks: [], miles: 1.2 });
+    window.apex.onNative({ type: 'carplay', action: 'places' });
+    return window.__car.filter((m) => m.kind === 'places').pop();
+  });
+  check(placesCar && placesCar.list[0].name === 'Home' && placesCar.list[0].detail === '12 Oak St' && placesCar.list[1].saved === 'saved_e2e'
+    && /^Saved · /.test(placesCar.list[1].detail), 'the car\'s Places: pinned, then saved: ' + JSON.stringify(placesCar));
+  await page.evaluate(() => window.apex.onNative({ type: 'carplay', action: 'saved', id: 'saved_e2e' }));
+  await page.waitForFunction(() => window.apexDebug.track && window.apexDebug.track.id === 'saved_e2e', null, { timeout: 10000 })
+    .catch(async () => { throw new Error('the saved route from the car never opened: ' + JSON.stringify(await page.evaluate(() => window.apexDebug.track && window.apexDebug.track.id))); });
+  await page.evaluate(() => { ApexSavedRoutes.remove(localStorage, 'saved_e2e'); localStorage.removeItem('apex.pinnedPlaces'); });
   await page.evaluate(() => window.apex.live({ lat: 35.6, lon: -84.1, accuracy_m: 5, speed_mps: 0, course_deg: 0, has_fix: true }));   // the shell's fix, as in the app
   // the cafés and fuel along it, by name on the car's route preview (the owner, 2026-11-11)
   await page.evaluate(() => { ApexStages.pois = async (pts) => { const a = pts[Math.min(1, pts.length - 1)];
@@ -2622,8 +2636,13 @@ flow('the sight-line speed rides under the position arrow, on the phone and on t
   await page.goto(base + '/index.html?drive=dry_ridge&play=1');
   await page.waitForFunction(() => window.apexDebug && window.apexDebug.track, null, { timeout: 15000 });
   await page.waitForFunction(() => { const t = document.querySelector('.sight-tag'); return t && !t.hidden; }, null, { timeout: 10000 });
-  const tag = await page.textContent('.sight-tag');
-  const cell = await page.textContent('#cluster');
+  // one snapshot, once they agree: playback runs, and the tag holds a value for 2 s (U-60) while the cell moves at once,
+  // so two separate reads could straddle a change (it flaked in CI that way)
+  const same = await page.waitForFunction(() => { const t = document.querySelector('.sight-tag'), c = document.getElementById('cluster');
+    const n = t && !t.hidden ? t.textContent.replace(/\D/g, '') : ''; return n && c.textContent.includes(n) && { tag: t.textContent, cell: c.textContent }; },
+    null, { timeout: 8000 }).then((h) => h.jsonValue()).catch(() => null);
+  const tag = same ? same.tag : await page.textContent('.sight-tag');
+  const cell = same ? same.cell : await page.textContent('#cluster');
   // panel round 2 (TH-2, IN-3): the tag names itself, SIGHT and the number, no unit (never a limit sign); OPEN draws nothing
   check(/^(SIGHT|SLOW)\d+$/.test(tag.trim()), 'the tag reads SIGHT and a speed: ' + tag);
   check(cell.includes(tag.replace(/\D/g, '')), 'the same value as the Sight cell: ' + tag);
@@ -4654,6 +4673,37 @@ flow('a saved stage: the live delta shows while you drive it and the result at t
   check(said.length === 1, `the result is said once (${JSON.stringify(said)})`);
 });
 
+flow('wet roads: rain where you are (the place plate\'s weather) brings the notes earlier and is said once (wet_roads.js)', async (page, base) => {
+  await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); localStorage.setItem('apex.permsExplained', '1'); } catch (_) {}
+    window.__said = []; window.APEX_REVIEW = true;
+    window.webkit = { messageHandlers: { apex: { postMessage(m) { if (m && m.cmd === 'said') window.__said.push(m.text); } } } }; });
+  const asked = [];
+  await page.route('**/api.open-meteo.com/**', (route) => { asked.push(route.request().url());
+    route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ current: { temperature_2m: 11, precipitation: 0.6, weather_code: 63 }, hourly: { time: [], precipitation: [] } }) }); });
+  await page.route('**/api.weather.gov/**', (route) => route.fulfill({ status: 404, body: '' }));
+  await page.route('**/nominatim.openstreetmap.org/**', (route) => route.fulfill({ status: 200, contentType: 'application/json', body: '{}' }));
+  await page.route('**/api/**', (route) => route.fulfill({ status: 200, contentType: 'application/json', body: '[]' }));
+  await page.goto(base + '/index.html');
+  await page.waitForFunction(() => window.apex && window.ApexWetRoads && window.ApexNoteTiming);
+  const dryLead = await page.evaluate(() => ApexNoteTiming.leadM({ vMps: 25, apexMps: 12, text: 'Left 3' }));
+  await page.evaluate(() => window.apex.onNative({ type: 'link', params: { go: 'drive' } }));
+  await page.waitForTimeout(300);
+  if (await page.isVisible('#permSheet.show')) await page.click('#permGo');
+  for (let burst = 0; burst < 12 && !(await page.evaluate(() => window.__said.some((t) => /^Wet roads/.test(t)))); burst++) {
+    await page.evaluate((burst) => {
+      for (let j = 0; j < 20; j++) { const k = burst * 20 + j;
+        window.apex.live({ lat: 39.1 + k * 5 / 110540, lon: -84.5, accuracy_m: 4, speed_mps: 20, course_deg: 0, lat_g: 0, lon_g: 0, has_fix: true, calibration: 'locked' }); }
+    }, burst);
+    await page.waitForTimeout(1000);
+  }
+  check(await page.evaluate(() => window.apexDebug.wetRoad) === 'wet', 'the road reads wet');
+  const said = await page.evaluate(() => window.__said.filter((t) => /^Wet roads/.test(t)));
+  check(said.length === 1, `said once (${JSON.stringify(said)})`);
+  check(asked.length === 1, `nothing new asked: the plate's one request (${asked.length})`);
+  const wetLead = await page.evaluate(() => ApexNoteTiming.leadM({ vMps: 25, apexMps: 12, text: 'Left 3' }));
+  check(wetLead > dryLead, `the notes come earlier (${dryLead} → ${wetLead} m)`);
+});
+
 flow("friends' activity: the Log lists who drove your stages lately and where you stand, as text; kudos (Worker stubbed, IDEAS S-03, S-07)", async (page, base) => {
   const kudos = [];
   await page.route('**/api/**', (route) => {
@@ -5058,6 +5108,7 @@ flow('flyby: a friend on the same stage that day shows on the drive, as text; ch
   await page.waitForSelector('#dvFlyby:not([hidden])');
   const t = await page.textContent('#dvFlybyList');
   check(t === 'Straight <b>run</b>: @bob 812', 'only the same day, as text: ' + t);
+  check(!(await page.$('#dvFlyby .note')), 'the friends-that-day panel is the list alone, no footnote under it');
   // this month's challenges (IDEAS S-11): a drive dated now makes the panel, a new road counted (f1 counts too in October 2026)
   await page.evaluate(async () => { const f = (await ApexRecording.all()).find((d) => d.id === 'f1'); await ApexRecording.store({ ...f, id: 'f2', name: 'Fresh road', date: new Date().toISOString() }); });
   await page.goto(base + '/analysis.html');
@@ -5237,6 +5288,7 @@ flow('Your driving: the profile over every drive opens from the Log, names the w
   });
   check(def.was && def.shown && def.after && !def.title && /^You turn in once .+ 0 to 100, averaged over \d+ clean corners; -- until \d+\.$/.test(def.t), 'the definition on a tap: ' + JSON.stringify(def));
   check(/One steering arc is weaker through rights: \d+ against 100 through lefts, on 3 of 3 drives\./.test(text), 'the weak side is named: ' + text);
+  check(!/Back to power is stronger in tight corners/.test(text) && (text.match(/^Back to power is /gm) || []).length <= 1, 'one finding a skill: ' + text);
   check(/Work on: One steering arc\s+It shows most through rights\./.test(text), 'the focus says where');
   check(await page.evaluate(() => document.querySelector('.dp-st.weak').dataset.skill === 'arc' && document.querySelectorAll('.dp-st:not([data-skill="pace"])').length === 6), 'six stations, the weak one marked');
   // IDEAS D-29: pace beside them, in its own panel, and never the one to work on
@@ -6929,7 +6981,7 @@ flow('a saved route keeps the map along it: Save fetches the tiles within reach 
   await page.evaluate(() => document.getElementById('routeSaveBtn').click());
   await page.waitForFunction(() => window.apexDebug.mapAlong, null, { timeout: 60000 });
   const area = await page.evaluate(() => JSON.parse(localStorage.getItem('apex.offlineAreas') || '[]'));
-  check(area.length === 1 && area[0].alongKm === 1.5 && area[0].radiusKm === null && /^Along /.test(area[0].name), 'an area along the route: ' + JSON.stringify(area));
+  check(area.length === 1 && area[0].alongKm === 1.5 && area[0].radiusKm === null && /^Along /.test(area[0].name) && area[0].box && area[0].box[0] < 35.61 && area[0].box[2] > 35.79, 'an area along the route: ' + JSON.stringify(area));
   // every z14 tile within reach of the line (x for -83.90 at z14 is 4373; 1.5 km is under one tile), none 25 km round
   const z14 = got.filter((t) => t[0] === 14), xs = [...new Set(z14.map((t) => t[1]))];
   check(z14.length > 10 && xs.every((x) => Math.abs(x - 4373) <= 2), 'the tiles hug the route: ' + JSON.stringify({ n: z14.length, xs }));
