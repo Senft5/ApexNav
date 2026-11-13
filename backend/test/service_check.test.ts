@@ -3,7 +3,7 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { env } from "cloudflare:workers";
 import { api, freshDb, makeUser } from "./helpers";
-import { parseReport, serverSide } from "../src/service_check";
+import { dailyServerCheck, parseReport, serverSide } from "../src/service_check";
 
 beforeEach(freshDb);
 
@@ -55,5 +55,22 @@ describe("service check", () => {
     expect(s.overpass.find((o) => o.host === "overpass.kumi.systems")).toMatchObject({ http: 429, elements: null });
     expect(s.overpass.find((o) => o.host === "overpass-api.de")).toMatchObject({ http: 200, elements: 3 });
     expect(seen).toContain("raw.githubusercontent.com");
+  });
+
+  it("the daily cron keeps the Worker's own side as source 'server', with the phone's ids for the same servers", async () => {
+    const fake = (async (u: string | URL | Request) => {
+      const url = String(u instanceof Request ? u.url : u);
+      if (url.includes("githubusercontent")) return new Response(JSON.stringify({ tiles: { a: 1 } }));
+      if (url.includes("kumi")) return new Response("busy", { status: 504 });
+      return new Response(JSON.stringify({ elements: [{}] }));
+    }) as typeof fetch;
+    const r = await dailyServerCheck(env as never, fake);
+    expect(r!.find((x) => x.id === "srv_overpass_kumi")).toMatchObject({ state: "down", http: 504, detail: "HTTP 504" });
+    expect(r!.find((x) => x.id === "srv_overpass_de")).toMatchObject({ state: "up", detail: "1 features" });
+    expect(r!.find((x) => x.id === "srv_graph_data")).toMatchObject({ state: "up", detail: "1 tiles" });
+    const rows = (await env.DB.prepare("SELECT source, message FROM error_counts WHERE kind = 'service' ORDER BY message").all<{ source: string; message: string }>()).results;
+    expect(rows.every((x) => x.source === "server")).toBe(true);
+    expect(rows.map((x) => x.message)).toContain("srv_db: up");
+    expect(await dailyServerCheck({ ...env, DB: undefined } as never, fake)).toBeNull();   // never throws
   });
 });

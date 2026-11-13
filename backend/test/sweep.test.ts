@@ -30,6 +30,7 @@ async function seed() {
 
 describe("daily sweep", () => {
   it("deletes only expired rows and keeps used invites", async () => {
+    vi.spyOn(globalThis, "fetch").mockImplementation(async () => new Response("{}", { status: 503 }));   // the daily service check asks upstreams
     await seed();
     const sessions = await count("sessions");
     const log = vi.spyOn(console, "log").mockImplementation(() => {});
