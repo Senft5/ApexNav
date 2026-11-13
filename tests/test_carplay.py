@@ -537,6 +537,23 @@ def test_the_car_offers_the_same_loop_times_as_the_phones_dial():
     assert "m.action === 'loop' && LOOP_MINUTES.includes(m.minutes)" in cockpit_source()
 
 
+def test_the_cars_map_shows_the_posted_speed_limit(maps):
+    """Apple Maps and Waze show the posted limit on the car; Vetta knew it (OSM, the binnacle's LIMIT) and the car didn't."""
+    mph, kmh, none, zero, silly = maps["limits"]
+    assert mph == {"kind": "limit", "value": 55, "unit": "MPH", "round": False}
+    assert kmh == {"kind": "limit", "value": 80, "unit": "KM/H", "round": True}
+    assert none["value"] is None and zero["value"] is None and silly["value"] is None, "unknown stays unknown: no sign"
+    js = cockpit_source()
+    assert "carLimit(live ? si.limit : null, si.unit);" in js and "carLimit(null); return; }" in js, "only while the drive is live"
+    assert "car.limitKey = '';" in js, "a car that connects later gets it again"
+    swift = open(os.path.join(ROOT, "CarPlay", "ApexCarPlay.swift"), encoding="utf-8").read()
+    assert 'case "limit":' in swift and "let l = role == .cluster ? nil : ApexCar.shared.limit" in swift, "never in the cluster"
+    native = open(os.path.join(ROOT, "CarPlay", "ApexCarMap.swift"), encoding="utf-8").read()
+    assert "final class ApexCarLimitView" in native and "if limit != nil { shownBoxes.append(limitSign.frame" in native, "plates keep clear of it"
+    web = open(os.path.join(ROOT, "web", "carmap.js"), encoding="utf-8").read()
+    assert "limit(l) {" in web and "if (g.limit) out.push(g.limit);" in web
+
+
 def test_the_cars_guidance_card_shows_the_junctions_lanes(maps):
     """Apple Maps and Waze show which lanes to be in on the car's card; the phone's road book drew them and the car didn't."""
     g = maps["laneGuide"]
