@@ -94,7 +94,9 @@
       box.replaceChildren(...rows.map((r) => {
         // a feed row: who drove what and the score, then the day and where you stand, Kudos on the right (not wrapped into the sentence)
         const p = document.createElement('div'); p.className = 'friend-act';
-        const who = document.createElement('b'); who.textContent = '@' + (r.handle || 'someone');
+        // the handle is the friend: a tap opens their profile on People (the map page; ApexReturn keeps it in the frame)
+        const who = document.createElement(r.handle ? 'a' : 'b'); who.textContent = '@' + (r.handle || 'someone');
+        if (r.handle) { who.className = 'friend-link'; who.href = 'index.html?view=friends&friend=' + encodeURIComponent(r.handle); }
         const day = new Date(r.driven_on + 'T12:00:00').toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
         const you = r.you && r.you.rank ? ` · you're ${ordinal(r.you.rank)} of ${r.you.of}` : r.you ? ' · no score from you yet' : '';
         const line = document.createElement('p'); line.append(who, ` drove ${r.stage} · ${r.driver_score}`);

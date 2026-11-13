@@ -90,6 +90,9 @@ V.mount(rootAlone, scoredDrive, { Core, C, MPH: Core.MPS_TO_MPH,
 const coastNear = V.tipText({ best: { time_s: 3.9 }, tip: { kind: 'coast', value: 85, vs_best: false } }, Core.MPS_TO_MPH);
 const aloneHead = rootAlone.children[0].innerHTML, aloneList = rootAlone.children[2].children.map((c) => c.className);
 const aloneCard = rootAlone.children[2].children.find((c) => c.className === 'dv-corners').children[0].innerHTML;
+// Against the best drive here: the gap in words, never a "+" to decode
+const refHead = (delta) => { const rt = mkEl('div'); V.mount(rt, scoredDrive, { Core, C, MPH: Core.MPS_TO_MPH, reference: { name: 'X', score: 819, corners: scoredDrive.corners.map(() => ({ delta_s: delta })) } }); return rt.children[2].innerHTML; };
+const refSlower = refHead(-18.94), refLevel = refHead(0.01), refNone = refHead(null);
 
 // Road feel readout names how far to trust each value.
 global.ApexContributor = require(process.argv[1] + '/web/contributor.js');
@@ -129,7 +132,7 @@ const rootCar = mkEl('div');
 V.mount(rootCar, { ...scoredDrive, car: { label: '<b>Miata</b>', mu: 0.52 } }, { Core, C, MPH: Core.MPS_TO_MPH });
 const carHead = rootCar.children[0].innerHTML;
 console.log(JSON.stringify({ notTopCard, carHead, repIntro, reps, full, bare, headHtml, unscoredHeadHtml, hiddenBeforeScrub, hiddenAfterKeyScrub, hiddenBeforeZoom, hiddenAfterZoom,
-  coachHead, timeHtml, cardHtml, aloneHead, aloneList, aloneCard, coastNear, ggCaption, ggCorner, ggNone, ggLede, ggMore, ggOrder, feelRead, gapLanes }));
+  coachHead, timeHtml, cardHtml, refSlower, refLevel, refNone, aloneHead, aloneList, aloneCard, coastNear, ggCaption, ggCorner, ggNone, ggLede, ggMore, ggOrder, feelRead, gapLanes }));
 """
 
 
@@ -176,7 +179,7 @@ def test_corner_coach_shows_ideal_time_and_tips(r):
     t = r["timeHtml"]
     assert "Brake 22 m later, like your best pass" in t and "+0.5 s" in t and "0.50" not in t
     assert "&#60;i&#62;Oct 2&#60;/i&#62;" in t and "<i>" not in t, "drive names and dates are escaped"
-    assert "Brake 22 m later" in r["cardHtml"]
+    assert "dv-tip" not in r["cardHtml"], "a corner in Where to find time is not told its tip twice"
 
 
 def test_corner_coach_alone_has_no_ideal_but_keeps_the_habit_tip(r):
@@ -247,6 +250,9 @@ console.log(JSON.stringify({
   noStrong: V.plainCoach(ds({ pace: 0.5, smoothness: 0.5, braking: 0.65, consistency: 0.6 }), null),
   unknown: V.plainCoach({ score: null, components: null }, null),
   noContradiction: V.plainCoach(ds({ smoothness: 0.6, braking: 0.95 }), { corners: [tip('brake_after_apex'), tip('brake_after_apex')] }),
+  practisedHabit: V.plainCoach(ds({}), { corners: [tip('coast'), tip('coast')] }, 'exit'),
+  practisedWeak: V.plainCoach(ds({ pace: 0.5, smoothness: 0.5, braking: 0.65, consistency: 0.6 }), null, 'arc'),
+  otherPractised: V.plainCoach(ds({ braking: 0.4 }), null, 'arc'),
 }));
 """
     root = str(__import__("pathlib").Path(__file__).resolve().parents[1])
@@ -260,6 +266,9 @@ console.log(JSON.stringify({
     assert r["clean"] == "Smooth, unhurried steering, and nothing stands out to fix."
     assert r["noStrong"] == "One thing to work on: steer more gently, with fewer corrections mid-corner."
     assert r["unknown"] is None
+    # the end card's practice line names the skill: the sentence under it does not ask for it again
+    assert r["practisedHabit"] == "Smooth, unhurried steering." and r["practisedWeak"] is None
+    assert r["otherPractised"].endswith("One thing to work on: finish your braking by the middle of the corner.")
     assert r["noContradiction"].startswith("Good use of the grip you had. One thing to work on: you were still braking past the middle of 2 corners")
     for v in r.values():
         assert v is None or not any(w in v.lower() for w in ("faster", "quicker", "speed up", "mph", "apex"))
@@ -383,4 +392,11 @@ def test_car_line_says_its_grip_without_a_footnote(r):
 
 def test_corner_card_tip_only_where_it_is_news(r):
     assert "dv-tip" not in r["notTopCard"], "a corner outside Where to find time says its gap in the delta, not a tip"
-    assert "Brake 22 m later" in r["cardHtml"] and "30 m coasting" in r["aloneCard"]
+    assert "30 m coasting" in r["aloneCard"]
+
+
+def test_corners_against_the_best_drive_say_slower_in_words(r):
+    n = r["refSlower"]
+    assert "<h2>Corners</h2>" in n and "s slower</b> than your best drive here (819), over " in n and "+" not in n.split("</h2>")[1].split("</p>")[0]
+    assert "Level with your best drive here (819)" in r["refLevel"]
+    assert "No clean corners to compare with your best drive here." in r["refNone"]

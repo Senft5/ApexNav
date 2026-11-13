@@ -3133,6 +3133,13 @@ flow('crew page: an old ?view=crew link opens People on Crews, at your crew; goi
   await page.click('.cp-member-sheet button:has-text("Done")');
   // P-17: a message is its handle, time and words; Report is behind one key
   await page.click('.cp-tabs [data-cp-tab="chat"]');
+  // a row on the Board is the person too
+  await page.click('.cp-tabs [data-cp-tab="board"]');
+  await page.click('.cp-board-row.tap:has-text("@sam")');
+  await page.waitForSelector('.cp-member-sheet h2:has-text("@sam")');
+  check(!(await page.$('.cp-board-row.mine.tap')), 'your own row is not a key');
+  await page.click('.cp-member-sheet button:has-text("Done")');
+  await page.click('.cp-tabs [data-cp-tab="chat"]');
   // the handle on a message opens the person, as a face on the members strip does
   await page.click('.cp-msg button.cp-who:has-text("@sam")');
   await page.waitForSelector('.cp-member-sheet button:text-is("Request sent")[disabled]');
@@ -5124,8 +5131,9 @@ flow('time attack on the home deck: this week\'s featured loop you entered is th
   await page.waitForFunction(() => window.__car.some((m) => m.kind === 'places' && m.list.some((r) => r.attack)), null, { timeout: 10000 })
     .catch(async () => { throw new Error('no time attack row on the car: ' + JSON.stringify(await page.evaluate(() => window.__car.filter((m) => m.kind === 'places')))); });
   const row = await page.evaluate(() => window.__car.filter((m) => m.kind === 'places').pop().list.find((r) => r.attack));
-  check(row.name === 'Tellico <i>loop</i>' && row.attack === 'TA1' && /^Time attack · you're 3rd of 8/.test(row.detail), 'the car\'s row: ' + JSON.stringify(row));
+  check(row.name === 'Tellico <i>loop</i>' && row.attack === 'TA1' && row.detail === 'Time attack · Featured · 20.0 mi', 'the car\'s row: ' + JSON.stringify(row));
   check(asked.every((q) => q === '?lat=35.875&lon=-83.875'), 'the car\'s ask sends only the area too: ' + JSON.stringify(asked));
+  check(await page.evaluate(() => !/3rd/.test(JSON.stringify(window.__car))), 'your place on the board stays on the phone (no scores in the car)');
   await page.evaluate(() => window.apex.onNative({ type: 'carplay', action: 'attack', id: 'TA1' }));
   await page.waitForFunction(() => window.apexDebug.track && window.apexDebug.track.id === 'timeattack_TA1', null, { timeout: 10000 });
 }, { geolocation: { latitude: 35.9606, longitude: -83.9207 }, permissions: ['geolocation'] });
@@ -5333,7 +5341,9 @@ flow('a drive\'s corners on a road driven four times: each says your cleanest pa
     return { t: r.textContent, shown: !!r.offsetParent, practice: e.hidden ? null : e.textContent };
   });
   check(/^Practice on Dry Ridge Rd · One steering arc: /.test(endRoad.practice || ''), 'the end card names the practised road: ' + endRoad.practice);
-  check(endRoad.shown && /^(\d+ least even corners|Least even corner): .+\. Lost most: one steering arc\.$/.test(endRoad.t), 'the road on the end card: ' + JSON.stringify(endRoad));
+  check(endRoad.shown && /^(\d+ least even corners|Least even corner): [^.]+\.$/.test(endRoad.t) && !/Lost most/.test(endRoad.t), 'the road on the end card, not repeating the practised skill: ' + JSON.stringify(endRoad));
+  const endLine = await page.textContent('#endLine');
+  check(!/steer more gently/.test(endLine), 'the coaching sentence does not ask again for the practised skill: ' + endLine);
   check(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth), 'nothing wider than the phone');
 });
 
@@ -5396,9 +5406,8 @@ flow('Your driving: the profile over every drive opens from the Log, names the w
     return { was, shown, t, after: d.hidden, title: row.querySelector('[title]') !== null };
   });
   check(def.was && def.shown && def.after && !def.title && /^You turn in once .+ 0 to 100, averaged over \d+ clean corners; -- until \d+\.$/.test(def.t), 'the definition on a tap: ' + JSON.stringify(def));
-  check(/One steering arc is weaker through rights: \d+ against 100 through lefts, on 3 of 3 drives\./.test(text), 'the weak side is named: ' + text);
+  check(/Work on: One steering arc\s+Through rights \d+, through lefts 100, on 3 of 3 drives\./.test(text) && !/One steering arc is weaker/.test(text), 'the weak side is named once, in the focus: ' + text);
   check(!/Back to power is stronger in tight corners/.test(text) && (text.match(/^Back to power is /gm) || []).length <= 1, 'one finding a skill: ' + text);
-  check(/Work on: One steering arc\s+It shows most through rights\./.test(text), 'the focus says where');
   check(await page.evaluate(() => document.querySelector('.dp-st.weak').dataset.skill === 'arc' && document.querySelectorAll('.dp-st:not([data-skill="pace"])').length === 6), 'six stations, the weak one marked');
   // IDEAS D-29: pace beside them, in its own panel, and never the one to work on
   const pace = await page.evaluate(() => { const p = document.querySelector('#drivingRoot .dp-pace'); return p ? p.innerText : null; });
@@ -5573,6 +5582,23 @@ flow('friend profile: a friend on People → Profile shows what the friend share
   await page.click('.profile-view button:has-text("Friends")');   // one back glyph and where it goes (REVIEW2.md)
   await page.waitForSelector('.side-pop.open .profile-view', { state: 'detached', timeout: 3000 }).catch(() => {});
   check(await page.evaluate(() => !document.querySelector('.side-pop.open') && !!document.querySelector('#accountBody .friend-head:not(.you-row)')), 'Back returns to the friends list');
+  // a friend's handle on the Log's Friends lately links here: the map page opens People on that friend's profile
+  await page.goto(base + '/index.html?view=friends&friend=bob');
+  await page.waitForSelector('.side-pop.open .profile-view', { timeout: 10000 });
+  check((await page.textContent('.side-pop.open .profile-view')).includes('@bob'), 'index.html?view=friends&friend=bob opens @bob\'s profile');
+  // and from the Log itself, in its frame over the map: a tap on @bob closes the Log onto his profile, the map page never reloads
+  await page.goto(base + '/index.html');
+  await page.waitForFunction(() => window.apex && typeof window.apex.live === 'function');
+  await page.evaluate(() => { window.__stay = 1; });
+  await page.route(base + '/api/board/activity', (route) => route.fulfill({ status: 200, contentType: 'application/json',
+    body: JSON.stringify([{ handle: 'bob', canon_id: 'C1', stage: 'Esses', driver_score: 812, driven_on: '2026-10-26', you: null }]) }));
+  await page.evaluate(() => document.querySelector('.tab[data-view="log"]').click());
+  const frame = await (await page.waitForSelector('iframe')).contentFrame();
+  await frame.waitForSelector('#friendsList a.friend-link', { timeout: 10000 });
+  check(await frame.getAttribute('#friendsList a.friend-link', 'href') === 'index.html?view=friends&friend=bob', 'the handle is a link to the friend');
+  await frame.click('#friendsList a.friend-link');
+  await page.waitForSelector('.side-pop.open .profile-view', { timeout: 10000 });
+  check(await page.evaluate(() => window.__stay === 1 && document.querySelector('.side-pop.open .profile-view').textContent.includes('@bob')), 'the Log closes onto @bob\'s profile, in place');
 });
 
 flow('duels: a friend\'s challenge is a card on People; Accept starts it; the card keeps both Scores and the days left; your own Scores can be shown from it; Challenge on a stage sends one (Worker stubbed, SOCIAL 2.7)', async (page, base) => {
@@ -6391,6 +6417,28 @@ flow('Settings behind the gear: three short lists, each row saying what it is se
   const c1 = Object.fromEntries((await list()).filter((x) => x.row).map((r) => [r.row, r.says]));
   check(c1['Route tuning'] === 'Standard', 'and says Standard again after Reset: ' + JSON.stringify(c1));
   await page.evaluate(() => document.querySelector('[data-units="imperial"]').click());
+}, { viewport: { width: 393, height: 852 }, hasTouch: true });
+
+flow('Your data: Delete account is a row that opens Account, signed in only (it was a sentence to follow by hand, 2026-11-13)', async (page, base) => {
+  await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); localStorage.setItem('apex.permsExplained', '1'); } catch (_) {} });
+  let signedIn = false;
+  await page.route('**/api/**', (r) => r.fulfill({ status: 200, contentType: 'application/json', body: r.request().url().endsWith('/api/me') ? JSON.stringify(signedIn ? { signed_in: true, member: true, handle: 'me' } : { signed_in: false }) : '[]' }));
+  await page.goto(base + '/index.html?view=garage');
+  await page.waitForFunction(() => window.apexDebug && !document.getElementById('boot') && document.getElementById('garageGear'), null, { timeout: 20000 });
+  await page.waitForTimeout(800);
+  check(await page.evaluate(() => document.getElementById('myAccountDelGo').hidden), 'signed out: no Delete account row');
+  check(!(await page.evaluate(() => document.querySelector('.garage-pop[data-setting="data"]').textContent.includes('Settings → Account'))), 'no directions to read in its place');
+  signedIn = true;
+  await page.reload();
+  await page.waitForFunction(() => window.apexDebug && !document.getElementById('boot') && !document.getElementById('myAccountDelGo').hidden, null, { timeout: 20000 });
+  await page.click('#garageGear');
+  await page.click('#garageSettings .nav-row[data-setting="data"]');
+  await page.waitForSelector('.garage-pop[data-setting="data"].open');
+  await page.click('#myAccountDelGo');
+  await page.waitForTimeout(400);
+  const open = await page.evaluate(() => [...document.querySelectorAll('.garage-pop[data-setting].open')].map((p) => p.dataset.setting));
+  check(open.join() === 'account', 'it opens Account, in place of Your data: ' + JSON.stringify(open));
+  check(await page.evaluate(() => [...document.querySelectorAll('.garage-pop[data-setting="account"] button')].some((b) => b.textContent === 'Delete account' && b.getBoundingClientRect().height > 0)), 'where Delete account is');
 }, { viewport: { width: 393, height: 852 }, hasTouch: true });
 
 flow('dev mode: anyone else sees no Dev entry, loads no panel, and settings left on this phone change no plan (the owner 2026-11-09)', async (page, base) => {
@@ -8029,7 +8077,8 @@ flow('REVIEW.md 1.2 screen by screen: the Log, drive detail, Stages, People sign
   check(g.title === 'Garage' && g.themes === 3 && g.how >= 1 && g.bare === 0 && !g.octane && g.erase === 'rgb(200, 16, 46)/none/none', 'Garage: ' + JSON.stringify(g));
   // 2026-11-10: Your data is the Settings list's rows in three groups (it was eight keys of eight widths): one left edge, one width
   const rowsOf = await page.evaluate(() => { const box = document.querySelector('.data-rows'); return { groups: [...box.querySelectorAll('.nav-group')].map((h) => h.textContent),
-    rows: [...box.querySelectorAll('.nav-row')].map((r) => { const b = r.getBoundingClientRect(); return [r.id, Math.round(b.left), Math.round(b.width), Math.round(b.height)]; }) }; });
+    rows: [...box.querySelectorAll('.nav-row')].filter((r) => !r.hidden).map((r) => {   // signed out: no Delete account row
+      const b = r.getBoundingClientRect(); return [r.id, Math.round(b.left), Math.round(b.width), Math.round(b.height)]; }) }; });
   check(rowsOf.groups.join() === 'Take a copy,Offline,Remove' && rowsOf.rows.length === 7 && new Set(rowsOf.rows.map((r) => r[1] + '/' + r[2])).size === 1 && rowsOf.rows.every((r) => r[3] >= 44),
     'Your data: seven rows in three groups, one edge and width, 44 pt or more: ' + JSON.stringify(rowsOf));
   let alerted = false; page.on('dialog', (d) => { alerted = true; d.dismiss(); });
@@ -8365,7 +8414,7 @@ flow('when to go: the route card says the best time to leave, opens the next day
   const before = asked.length;
   await page.evaluate(() => document.querySelectorAll('#routeWhenRibbon > button')[12].click());
   const key = await page.evaluate(() => ({ text: document.getElementById('routeWhenPlan').textContent, hidden: document.getElementById('routeWhenPlan').hidden, detail: document.getElementById('routeWhenDetail').textContent }));
-  check(!key.hidden && /^Plan for (tomorrow )?\d{1,2}:\d\d/.test(key.text), 'the key names the hour: ' + JSON.stringify(key));
+  check(!key.hidden && /^Plan for \d{1,2}:\d\d\s?[AP]M( tomorrow)?$/.test(key.text), 'the key names the hour: ' + JSON.stringify(key));
   await tap('#routeWhenPlan', 'Plan for the hour');
   await planDone(page);
   await page.waitForFunction(() => !document.getElementById('routeCardWhen').hidden && /^Leaving /.test(document.getElementById('routeWhenLine').textContent), null, { timeout: 25000 });

@@ -211,7 +211,7 @@
     const etaSections = new WeakMap();      // track -> its corner sections (ApexEta.cornerSections), worked out once
     let etaText = '', etaLeftS = null;
     let replayEnded = false, replayWaiting = false;   // U-110 a finished replay, U-128 a replay waiting for its map (paintReplayEnd)
-    const car = { serial: 0, route: '', guideAt: 0, guideKey: '', sightKey: '', look: '', hazards: '', symbols: new Map(), ended: null, along: '', offerSerial: 0, offer: null, echo: 0, attacks: [], attackWeek: null, road: '', roadAt: -1e9 };   // what the car's screen was last sent (carRoute, carGuide below)   // strip text while off route; last frame fed; furthest progress
+    const car = { serial: 0, route: '', guideAt: 0, guideKey: '', sightKey: '', look: '', hazards: '', symbols: new Map(), ended: null, along: '', offerSerial: 0, offer: null, echo: 0, attacks: [], road: '', roadAt: -1e9 };   // what the car's screen was last sent (carRoute, carGuide below)   // strip text while off route; last frame fed; furthest progress
     try {
       const saved = JSON.parse(localStorage.getItem('apex.prefs') || 'null');
       if (saved) {
@@ -4971,8 +4971,19 @@
           { names: inReach, ...(state.hlOn ? { highlights: hls, strength: state.hlStrength } : {}) }).then((st) => measuredStages(st, c, maxKm)).then((st) => stagesWithContext(st, 12));
         const list = FunRoute.exploreShortlist(c, stages, maxKm, 12);   // 24 matrix pairs; most fall to the time limit
         ui.step('Measuring roads', 0.8);
-        // ours carry their drive times (aS, bS); the map's stages are timed by Valhalla's matrix
-        const m = own ? { times: [list.flatMap((s) => [s.aS, s.bS])] } : list.length ? await valhallaMatrix([c], FunRoute.exploreTargets(list)) : { times: [[]] };
+        // ours carry their drive times (aS, bS); the map's stages (highlights on, or no tiles here) are timed on our tiles
+        // where they cover you (graph_router.js times: no network), else by Valhalla's matrix
+        const ownTimes = async (targets) => {
+          if (!ownOn()) return null;
+          try {
+            if (!(await RouteLoading.optional(ownRouter().covers([c]), OWN_COVERS_MS))) return null;
+            const r = await ownRouter().times({ start: { lat: c.lat, lon: c.lon }, targets, maxKm, maxS: minutes * 60 });
+            return r && Array.isArray(r.times) && r.times.length === targets.length ? { times: [r.times], own: true } : null;
+          } catch (_) { return null; }
+        };
+        const m = own ? { times: [list.flatMap((s) => [s.aS, s.bS])] } : list.length
+          ? (await ownTimes(FunRoute.exploreTargets(list))) || await valhallaMatrix([c], FunRoute.exploreTargets(list)) : { times: [[]] };
+        if (window.apexDebug) window.apexDebug.lastExploreTimes = own ? 'own stages' : !list.length ? 'none' : m.own ? 'own' : 'matrix';
         if (state.mode === 'live') return;                            // driving now: too late
         if (plannedRoute && plannedRoute !== was) { toast('Explore cancelled: a route is up.'); return; }
         const picks = FunRoute.explorePicks(list, m.times, minutes * 60);
@@ -5313,6 +5324,9 @@
       load(url) {                                                      // a replay: the map page loads with that drive
         const again = (() => { try { return new URL(url, location.href).searchParams.get('again'); } catch (_) { return null; } })();
         if (again) { ApexLogHost.close('map'); driveAgain(again); return; }   // panel D-1: Drive it again plans in place
+        // a friend's handle on the Log: People, on their profile, without reloading the map page
+        const friend = (() => { try { return new URL(url, location.href).searchParams.get('friend'); } catch (_) { return null; } })();
+        if (friend && window.apexOpenFriend) { window.apexOpenFriend(String(friend).toLowerCase()); ApexLogHost.close('friends'); return; }
         location.href = url;
       },
       // 'drives' | 'theme' | 'units': told now when the Log is showing, else when it is next opened
@@ -6472,7 +6486,7 @@
         // Drive it: the loop itself is the route (as a roadbook road is), not just the way to its start
         driveLoop: (c, g) => driveAttack(c, g),
         // the area's time attacks you've entered (the featured one first), for the car's Places (time_attack.js peek)
-        entered: (loops, week) => { car.attacks = Array.isArray(loops) ? loops : []; car.attackWeek = week || null; carPost(carPlaces()); },
+        entered: (loops) => { car.attacks = Array.isArray(loops) ? loops : []; carPost(carPlaces()); },
         // the row's own line says this week's loop and your place on it (time_attack.js summaryLine)
         line: (txt) => { const s = $('planAttack').querySelector('summary'); if (s) s.textContent = txt || TA_LINE; } }) : null;
       if (ta) {
@@ -6574,6 +6588,9 @@
     onSocial(() => { try { garage = window.ApexGarageUI ? ApexGarageUI.mount({ el, btn, toast, apiCall, jsonOf, report: safety && safety.report, onCars: setRoutingCars, onPhotos: () => renderAccount(), builds }) : null; } catch (e) { console.error('garage', e); } });
     // an on/off setting is the slide switch (U-44), the label beside it, never a key that reads "Off"
     const switchRow = (label, on, change) => { const b = el('button', { className: 'sw' + (on ? ' on' : ''), onclick: change }, el('i'), el('span', { textContent: label })); b.setAttribute('role', 'switch'); b.setAttribute('aria-checked', String(!!on)); return b; };
+    // ?friend=bob (a friend's handle on the Log's Friends lately): People opens on that friend's profile once the list is drawn
+    let openFriendHandle = (() => { const h = String(params.get('friend') || '').replace(/^@/, '').toLowerCase(); return /^[a-z0-9_]{3,20}$/.test(h) ? h : null; })();
+    window.apexOpenFriend = (h) => { openFriendHandle = h; renderAccount(); };   // the Log frame's link, through ApexLogHost.load: People is drawn again, on them
     let openCrewId = null, openFriendId = null, crewOpen = null;   // crewOpen: the crew open over the crews dashboard (this visit)   // the crew tile and the friend row left open across a redraw
     const crewNear = () => { if (state.lastPosition) return state.lastPosition; const c = map.getCenter(); return { lat: c.lat, lon: c.lng }; };
     // Links people share open the website (in the app the page's own origin is apexnav://app, which no one else can open).
@@ -6595,6 +6612,7 @@
       // F-03: People and the Garage are never drawn without their modules while they are open; once loaded, needSocial draws them
       if (!socialIn && !socialFailed && (view === 'people' || view === 'garage')) { needSocial(); return; }
       accountMe = me && me.signed_in ? me : null;
+      if ($('myAccountDelGo')) $('myAccountDelGo').hidden = !accountMe;   // Your data's way to Delete account, signed in only
       if (accountMe && accountMe.member) loadCrewHazardKinds();
       // Where to? opened before the account came back: its time attack row's peek skipped then, so it goes now (CI 2026-11-12)
       if (accountMe && accountMe.member && $('planPanel').classList.contains('open')) peekTimeAttack();
@@ -6893,6 +6911,7 @@
         head.setAttribute('aria-label', `@${f.handle || '?'}${st && st.text ? `, ${st.text}` : ''}: open the profile`);
         head.addEventListener('click', () => (window.ApexProfileView ? openProfile(f) : null));
         row.append(head);
+        if (openFriendHandle && f.handle && f.handle.toLowerCase() === openFriendHandle) { openFriendId = f.id; openFriendHandle = null; }
         if (openFriendId === f.id && window.ApexProfileView) openProfile(f);
         flist.append(row);
       }
@@ -7432,6 +7451,7 @@
       try { if (window.caches) { await caches.delete('kokoro-voices'); for (const k of await caches.keys()) if (k.startsWith('apexnav-shell-')) await caches.delete(k); } } catch (_) {}
       toast('Offline data deleted.'); renderMyData();
     });
+    $('myAccountDelGo').addEventListener('click', () => { if (window.ApexGarageSettings && ApexGarageSettings.ui) { ApexGarageSettings.ui.close(); ApexGarageSettings.ui.open('account'); } });
     $('myDrivesDelBtn').addEventListener('click', async () => {
       const list = await ApexRecording.ids();
       if (!list.length) { toast('No drives on this phone.'); return; }
@@ -8738,7 +8758,9 @@
     // line and the closures are then that hour's. It runs after the card is up and never holds it (WHEN_AFTER_MS).
     const WHEN_AFTER_MS = 1200;
     let whenState = null, whenTimer = 0, whenAbort = null;
-    const whenClock = (ms) => `${new Date(ms).toDateString() === new Date().toDateString() ? '' : 'tomorrow '}${new Date(ms).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}`;
+    // "2:00 PM tomorrow": the day after the hour, so every sentence it goes into reads ("Better at 2:00 PM tomorrow", not
+    // "Better at tomorrow 2:00 PM"; TestFlight sweep 2026-11-13)
+    const whenClock = (ms) => `${new Date(ms).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}${new Date(ms).toDateString() === new Date().toDateString() ? '' : ' tomorrow'}`;
     function whenReset() {
       clearTimeout(whenTimer);
       if (whenAbort) whenAbort.abort();
@@ -9270,9 +9292,10 @@
       let pinned = [], saved = [], attacks = [];
       try { pinned = ApexPinnedPlaces.list(localStorage); saved = ApexSavedRoutes.list(localStorage); } catch (_) {}
       try {
-        const w = car.attackWeek, line = w && w.entered && window.ApexTimeAttack ? (ApexTimeAttack.summaryLine(w, (m) => ApexUnits.long(m, 1)) || '').replace(/^Time attack: [^·]*· ?/, '') : '';
+        // its length only: the board and your place on it stay on the phone (no scores or social features in the car,
+        // docs/APP_REVIEW.md); the featured one says so, as the phone's row does
         attacks = car.attacks.map((c) => ({ id: c.segment_id, name: c.name,
-          detail: c.featured && line ? line : Number.isFinite(c.length_m) ? ApexUnits.long(c.length_m, 1) : '' }));
+          detail: [c.featured ? 'Featured' : '', Number.isFinite(c.length_m) ? ApexUnits.long(c.length_m, 1) : ''].filter(Boolean).join(' · ') }));
       } catch (_) {}
       return ApexCarPlay.placesMessage(recentPlaces(), pinned, saved, (m) => ApexUnits.long(m), attacks);
     }
@@ -9745,11 +9768,11 @@
         if (d.ds.score != null) try {
           others = (await ApexRecording.summaries()).filter((o) => o.id !== d.id && o.name === d.name).map((o) => ({ id: o.id, name: o.name, score: o.ds && o.ds.score != null ? Math.round(o.ds.score) : null }));
         } catch (_) { others = []; }
-        let coach = null, road = null;                                 // U-111: the Log's sentence, when the drive is stored; with it the road's line
-        if (d.ds.score != null && window.ApexAnalysis) try { const r = await ApexAnalysis.job('coachLine', { id: d.id }); coach = r.coach || null; road = r.road || null; } catch (_) { coach = null; road = null; }
         let practice = null;                                           // IDEAS D-27: the practised skill, when the drive is stored
         const plan = practicePlan();
         if (plan && window.ApexAnalysis) try { practice = (await ApexAnalysis.job('practiceLine', { id: d.id, plan })).practice || null; } catch (_) { practice = null; }
+        let coach = null, road = null;                                 // U-111: the Log's sentence, when the drive is stored; with it the road's line, which skips the practised skill
+        if (d.ds.score != null && window.ApexAnalysis) try { const r = await ApexAnalysis.job('coachLine', { id: d.id, skip: practice && plan ? plan.skill : null }); coach = r.coach || null; road = r.road || null; } catch (_) { coach = null; road = null; }
         endCardScored({ ...c, corners: d.corners.length, ds: d.ds, coach, practice, road }, others, opts);
       })();
     }

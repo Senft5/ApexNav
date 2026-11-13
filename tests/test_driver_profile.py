@@ -3,6 +3,7 @@ where the driver is measurably better or worse, and the months. Each fault is pl
 its own skill and no other; a difference planted on one side (rights, downhill, a car) must be found and named, and
 identical driving must find nothing. The JS port is held to the Python on the same drives, and on the shipped real ones.
 """
+import re
 import json
 import math
 import os
@@ -275,7 +276,7 @@ def test_the_words():
     out = json.loads(subprocess.run([NODE, "-e", runner, os.getcwd()], input=json.dumps([ds, few]), capture_output=True, text=True, check=True).stdout)
     assert out["card"].startswith("Best: ") and "Work on: One steering arc" in out["card"]
     assert out["few"] == "9 of 30 clean corners to your first picture" and out["none"] is None
-    assert out["focus"]["head"] == "Work on: One steering arc" and out["focus"]["where"] == "It shows most through rights."
+    assert out["focus"]["head"] == "Work on: One steering arc" and re.fullmatch(r"Through rights \d+, through lefts \d+, on 5 of 5 drives\.", out["focus"]["where"])
     assert out["nofocus"] is None
     assert out["find"][0].startswith("One steering arc is weaker through rights: ") and out["find"][0].endswith("through lefts, on 5 of 5 drives.")
     # the side with a name is the one spoken of, and a whole-drive comparison counts drives, not votes

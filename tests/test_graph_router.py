@@ -469,6 +469,25 @@ def test_corner_prefs_steer_the_search_to_the_corners_asked_for():
         assert road in r[k] and other not in r[k], (k, r[k])
 
 
+def test_map_stages_are_timed_on_our_tiles():
+    """Best roads nearby with highlights on uses the map's own stage search; their drive times now come from our tiles
+    where they cover you (graph_router.js times, host type 'times'), not Valhalla's matrix: a point by a road gets the
+    reach's time (no turn costs, so no more than the quickest), a point with no road near it or past maxS none."""
+    r = case("times")
+    t, field, bad = r["times"]
+    assert t is not None and 0 < t <= r["quickS"] + 1, r
+    assert field is None and bad is None and r["tight"] == [None], r
+    assert r["host"] == [t], r
+
+
+def test_explore_times_the_map_stages_on_our_tiles_first():
+    src = open(os.path.join(ROOT, "web", "cockpit.js"), encoding="utf-8").read()
+    i = src.index("const ownTimes = async (targets) => {")
+    b = src[i:src.index("lastExploreTimes", i)]
+    assert "ownRouter().covers([c])" in b and "ownRouter().times(" in b
+    assert "(await ownTimes(FunRoute.exploreTargets(list))) || await valhallaMatrix([c], FunRoute.exploreTargets(list))" in b
+
+
 def test_there_and_back_comes_home_by_other_road():
     """There and back (graph_router.js roundTrip): to a destination and home again, the way back costing the way out x4 both
     ways, so a round trip drives little of itself twice; at Fun and Long way the way home buys good road as a plan does;

@@ -253,6 +253,7 @@
     .friend-act { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
     .friend-act > div { min-width: 0; }
     .friend-act p { margin: 0; }
+    .friend-act .friend-link { font-weight: 700; color: inherit; text-decoration: none; }
     .friend-act small { display: block; color: var(--panel-dim); font-size: 13px; }
     .friend-act .kudos-btn { flex: none; margin-left: 0; }
     .ch-bar { height: 6px; background: var(--rule); margin-top: 4px; } .ch-bar i { display: block; height: 100%; background: var(--accent); }
@@ -369,10 +370,8 @@
       <div class="panel" id="dvVote" hidden><h2>Which route was better?</h2><div class="actions" id="dvVoteBtns" role="group" aria-label="Which route was better"></div>
         <p class="note">Your answers rank your roads (Log). They stay on this phone.</p></div>
       <div class="panel" id="dvFlyby" hidden><h2>Friends on these roads that day</h2><div id="dvFlybyList" class="stack-8"></div></div>
-      <div class="panel" id="dvTouch" hidden><h2>Your touch on this drive</h2><div id="dvTouchList" class="stack-8"></div>
-        <p class="note">How fast the load built and eased in a corner. A style, not a score.</p></div>
-      <div class="panel" id="dvBest" hidden><h2>Against your records</h2><div id="dvBestList" class="stack-8"></div>
-        <p class="note">Technique out of 100, never speed.</p></div>
+      <div class="panel" id="dvTouch" hidden><h2>Your touch on this drive</h2><div id="dvTouchList" class="stack-8"></div></div>
+      <div class="panel" id="dvBest" hidden><h2>Against your records</h2><div id="dvBestList" class="stack-8"></div></div>
       <div class="panel" id="dvRoad" hidden><h2>This road over time</h2><div id="dvRoadChart"></div><div class="scroll"><table id="dvRoadTable"></table></div></div>
     </section>
 

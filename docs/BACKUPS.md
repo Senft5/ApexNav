@@ -84,7 +84,9 @@ KV, not R2, because R2 isn't enabled on the account (it needs the owner to turn 
 holds up to 25 MiB and the dump is about 0.1 MB today; the Worker refuses to write past 24 MiB and logs
 `backup_failed` / `too_big`, which is the signal to move to R2. All rows are read in one `db.batch`, which D1 runs as one
 transaction, so a copy is a consistent snapshot even while drives upload; a run uses 4 of Workers Free's 50 D1 queries (a
-batch counts as one). The file restores into an empty database only (plain `CREATE TABLE`), and it carries the
+batch counts as one). Pages are key ranges found by one pass over each table's key, never `OFFSET` (which reads every
+skipped row again: about 5 million rows read at 100,000 road bins, Workers Free's whole day): a run reads about four rows
+per row stored (`backup.test.ts` holds it under five). The file restores into an empty database only (plain `CREATE TABLE`), and it carries the
 AUTOINCREMENT counters so restored ids are never reused.
 The other Free-plan ceiling is 10 ms of CPU per cron run: formatting about a thousand rows fits easily, but somewhere in the
 tens of thousands of rows the run will stop with `exceededCpu` in the Worker's metrics and no `backup` log line. The next
