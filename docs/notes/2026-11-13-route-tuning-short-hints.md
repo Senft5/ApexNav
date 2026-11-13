@@ -6,6 +6,9 @@
   - The intro now reads "Changes routes to a place and loops. Not a loop's length, nor Best roads nearby."
   - Each hint is one short line, at most 64 characters, for example "How much bends count."
   - tests/test_route_tuning.py holds the hints to 64 characters. It fails on main.
+- **Done:** the e2e Layers legend check in "REVIEW.md 1.2 screen by screen: first run…" now waits for the panel's slide
+  to finish. Before, it read the panel at a fixed 400 ms. On a busy CI runner it caught the 120 ms slide 4 px short
+  (box right 394 on a 390 screen) and failed on this PR's first run.
 - **Active bugs:** none known.
 - **Next:** keep walking the phone screens.
 
