@@ -4969,7 +4969,7 @@
           try {
             if (await RouteLoading.optional(ownRouter().covers([c]), OWN_COVERS_MS)) {
               ui.step('Finding roads', 0.3);
-              const res = await ownRouter().explore({ start: { lat: c.lat, lon: c.lon }, maxKm, maxS: minutes * 60 });
+              const res = await ownRouter().explore({ start: { lat: c.lat, lon: c.lon }, maxKm, maxS: minutes * 60, prefs: roadPrefs });
               if (res && res.stages && res.stages.length) own = await stagesWithContext(res.stages, 12, ['graph', 'context_grid']);
             }
           } catch (_) { own = null; }

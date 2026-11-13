@@ -484,7 +484,10 @@ const CASES = {
     const bad = (prefs) => { const c = R.objective(v, { prefs }); return { hp: c.bad[hp], sw: c.bad[sw] }; };
     return { mixBefore: mix, hpTight: m.tight[hp], hpFast: m.fast[hp], swTight: m.tight[sw], swFast: m.fast[sw],
       bad0: { hp: R0.bad[hp], sw: R0.bad[sw] }, badTight: bad({ tight: 1, fast: -1 }), badFast: bad({ tight: -1, fast: 1 }),
-      tight: best({ tight: 1, fast: -1 }), fast: best({ tight: -1, fast: 1 }), tightOnly: best({ tight: 1 }), fastOnly: best({ fast: 1 }) };
+      tight: best({ tight: 1, fast: -1 }), fast: best({ tight: -1, fast: 1 }), tightOnly: best({ tight: 1 }), fastOnly: best({ fast: 1 }),
+      // Best roads nearby (and so a loop's stages) rank by them too
+      exploreTight: R.explore(v, { start: from, maxS: 3600, prefs: { tight: 1, fast: -1 } }).stages.map((x) => x.name),
+      exploreFast: R.explore(v, { start: from, maxS: 3600, prefs: { tight: -1, fast: 1 } }).stages.map((x) => x.name) };
   },
 
   // drive times on our tiles to the map's own stages (times: Best roads nearby with highlights on): a point by a road
