@@ -243,7 +243,7 @@
     };
     // the ideal drive only means something once another pass of the same corners exists
     const ideal = co && co.clean && co.gain_s > 0 && co.corners.some((x) => x.passes > 1)
-      ? { gain: co.gain_s, n: co.clean, drives: new Set(co.corners.filter((x) => x.gain_s != null).map((x) => (x.best ? x.best_from : -1))).size } : null;
+      ? { gain: co.gain_s, n: co.clean, drives: (co.others || []).length + 1 } : null;   // the sample: every drive of these corners, this one too
     const plain = plainCoach(ds, co);
     // brake heat (brake_heat.js): said only when the discs got warm or hot by the model; nothing for a drive with no height
     const BH = root.ApexBrakeHeat || (typeof module !== 'undefined' && typeof require === 'function' ? require('./brake_heat.js') : null);
@@ -274,7 +274,7 @@
       + (flow ? `<p class="dv-plain">${esc(flow)}</p>` : '')
       + (tired ? `<p class="dv-plain">${esc(tired)}</p>` : '')
       + (brakes ? `<p class="dv-plain">${esc(brakes)}</p>` : '')
-      + (ideal ? `<div class="dv-meta">Ideal drive: <b class="gain">${ideal.gain.toFixed(1)} s</b> quicker \u00b7 your best pass at each of ${ideal.n} corner${ideal.n === 1 ? '' : 's'}, over ${ideal.drives} drive${ideal.drives === 1 ? '' : 's'}</div>` : '');
+      + (ideal ? `<div class="dv-meta">Ideal drive: <b class="gain">${ideal.gain.toFixed(1)} s</b> quicker \u00b7 your best pass at each of ${ideal.n} corner${ideal.n === 1 ? '' : 's'}, from ${ideal.drives} drive${ideal.drives === 1 ? '' : 's'}</div>` : '');
     root_.append(head, el('div', 'dv-grid'));
     const grid = root_.lastChild; grid.append(mapBox, el('div', 'dv-right'));
     const zoom = el('div', 'dv-zoom'); grid.lastChild.append(zoom, lanes, read);
@@ -574,14 +574,17 @@
     }
     if (ab && ab.moments.length) {                                   // the most abrupt moments, lettered as on the Smoothness map
       const ul = el('ol', 'dv-time dv-abrupt');
+      // one advice said once when every moment shares it (TestFlight 2026-11-12, "text walls"), else on its own row
+      const advice = ab.moments.map((m) => abruptAdvice(d.lat_g, d.lon_g, m.index)), same = advice.every((a) => a === advice[0]);
       ab.moments.forEach((m, k) => {
         const near = d.corners.findIndex((c) => m.index >= c.start - 4 && m.index <= c.end + 4), li = el('li'), b = el('button');
         b.innerHTML = `<b>${String.fromCharCode(65 + k)}</b><span>${near >= 0 ? `Corner ${near + 1} \u00b7 ${esc(callOf(d.corners[near]))}` : 'Between corners'}</span><em class="loss">${m.jerk_gps.toFixed(1)} g/s</em>`
-          + `<span class="note">${DIST(d.dist[m.index])} \u00b7 ${abruptAdvice(d.lat_g, d.lon_g, m.index)}</span>`;
+          + `<span class="note">${DIST(d.dist[m.index])}${same && ab.moments.length > 1 ? '' : ` \u00b7 ${advice[k]}`}</span>`;
         b.onclick = () => { if (showSmooth) showSmooth(); pick(m.index, m.index - 10, m.index + 10); };
         li.append(b); ul.append(li);
       });
-      list.prepend(el('h2', null, 'Most abrupt moments'), ul);
+      const say = same && ab.moments.length > 1 ? el('p', 'note', advice[0].charAt(0).toUpperCase() + advice[0].slice(1)) : null;
+      list.prepend(...[el('h2', null, 'Most abrupt moments'), say, ul].filter(Boolean));
     }
     if (co && co.top.length) {                                      // where the time is: the biggest gaps to your own best passes
       const ul = el('ol', 'dv-time');
@@ -598,7 +601,10 @@
     d.corners.forEach((c, k) => {
       const r = el('button', 'dv-corner'); r.setAttribute('aria-label', `Corner ${k + 1}: ${callOf(c)}, apex ${Math.round(c.apex_mps * MPH)} ${SPD_WORDS()}`);
       r.innerHTML = `<b>${k + 1}</b><span class="dv-call">${esc(callOf(c))}</span><span class="dv-v">${Math.round(c.apex_mps * MPH)} ${SPD()}</span><span class="dv-d">${DIST(d.dist[c.apex])}${ref ? ` \u00b7 <em class="${lost(k) == null ? '' : lost(k) > 0.05 ? 'loss' : lost(k) < -0.05 ? 'gain' : ''}">${fmtD(lost(k))}</em>` : ''}</span>`
-        + (co && tipText(co.corners[k], MPH) ? `<span class="dv-tip">${esc(tipText(co.corners[k], MPH))}</span>` : '');
+        // a tip only where it is news: a corner in Where to find time, or a habit (no best pass to copy); the rest say it in
+        // their delta, so 36 cards don't each repeat "your best pass was 4 mph quicker" (TestFlight 2026-11-12, "text walls")
+        + (co && tipText(co.corners[k], MPH) && (co.top.includes(k) || !co.corners[k].best || co.corners[k].tip.vs_best === false)
+          ? `<span class="dv-tip">${esc(tipText(co.corners[k], MPH))}</span>` : '');
       r.onclick = () => pick(c.apex, c.start, c.end);
       grid2.append(r);
     });
