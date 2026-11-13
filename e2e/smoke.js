@@ -9015,6 +9015,36 @@ flow('find nearby: Where to? has Gas, Coffee and Food; a key, or "gas near me" t
   check(/Bean There Coffee/.test(card), 'Enter plans the way to the nearest café: ' + card);
 }, { viewport: { width: 393, height: 852 }, hasTouch: true, geolocation: { latitude: 39.155, longitude: -84.615 }, permissions: ['geolocation'] });
 
+flow('places on the map: named eateries, cafés and fuel close in (never in a drive), in italic under the street names; a tap is the place card, by its name, kind and how far, with Go here (2026-11-13, as Apple Maps)', async (page, base) => {
+  await planRouter(page);
+  await funTiles(page);
+  // a base map with its street names (the real style is offline here)
+  const style = { version: 8, glyphs: 'https://tiles.openfreemap.org/fonts/{fontstack}/{range}.pbf', sources: { openmaptiles: { type: 'vector', url: 'https://tiles.openfreemap.org/planet' } },
+    layers: [{ id: 'background', type: 'background', paint: { 'background-color': '#eee' } }, { id: 'highway-name-minor', type: 'symbol', source: 'openmaptiles', 'source-layer': 'transportation_name', layout: { 'text-field': '{name}', 'text-font': ['Noto Sans Regular'] } }] };
+  await page.route('https://tiles.openfreemap.org/**', (route) => { const u = route.request().url();
+    if (u.includes('/styles/')) return route.fulfill({ contentType: 'application/json', body: JSON.stringify(style) });
+    if (u.endsWith('/planet')) return route.fulfill({ contentType: 'application/json', body: JSON.stringify({ tiles: ['https://tiles.openfreemap.org/planet/t/{z}/{x}/{y}.pbf'], minzoom: 0, maxzoom: 14 }) });
+    return route.fulfill({ contentType: 'application/x-protobuf', body: Buffer.alloc(0) }); });
+  await planPage(page, base);
+  await page.waitForFunction(() => apexDebug.map.getLayer('apex-places'), null, { timeout: 10000 });
+  const layer = await page.evaluate(() => { const m = apexDebug.map, l = m.getLayer('apex-places'), order = m.getLayersOrder();
+    return l ? { min: l.minzoom, vis: m.getLayoutProperty('apex-places', 'visibility'), font: m.getLayoutProperty('apex-places', 'text-font'), under: order.indexOf('apex-places') < order.indexOf(order.find((id) => /road.*label|label.*road|highway-name/i.test(id)) || order[order.length - 1]) } : null; });
+  check(layer && layer.min === 15 && layer.vis === 'visible' && /Italic/.test(layer.font) && layer.under, 'the places layer: ' + JSON.stringify(layer));
+  // a tap on a place (the tiles are offline here: the map is asked what is under the tap, and a café is there)
+  await page.evaluate(() => { const m = apexDebug.map, real = m.queryRenderedFeatures.bind(m), c = m.getCenter();
+    m.queryRenderedFeatures = (pt, o) => (o && o.layers && o.layers.includes('apex-places') ? [{ layer: { id: 'apex-places' }, geometry: { type: 'Point', coordinates: [c.lng, c.lat + 0.005] }, properties: { name: 'Bean There Coffee', class: 'cafe' } }] : real(pt, o));
+    const p = m.project([c.lng, c.lat + 0.005]); m.fire('click', { point: p, lngLat: m.unproject(p), originalEvent: new MouseEvent('click') }); });
+  await page.waitForSelector('#pinOverlay.show', { timeout: 3000 });
+  const card = await page.evaluate(() => ({ name: document.getElementById('pinPlace').textContent, kind: document.getElementById('pinKind').textContent, go: !!document.getElementById('pinGoBtn').offsetParent }));
+  check(card.name === 'Bean There Coffee' && /^Café · 0\.\d mi$/.test(card.kind) && card.go, 'the place card: its name, kind and how far: ' + JSON.stringify(card));
+  await page.click('#pinCancelBtn');
+  // in a drive the map carries the road, not the shops
+  await page.evaluate(() => { for (let i = 0; i < 5; i++) window.apex.live({ lat: 39.155 + i * 1e-5, lon: -84.615, accuracy_m: 5, speed_mps: 12, course_deg: 0, has_fix: true, calibration: 'locked', lat_g: 0, lon_g: 0 }); });
+  await page.click('#startDrive');
+  await page.waitForFunction(() => window.apexDebug.state.mode === 'live', null, { timeout: 5000 });
+  check(await page.evaluate(() => apexDebug.map.getLayoutProperty('apex-places', 'visibility')) === 'none', 'no places on the map in a drive');
+}, { viewport: { width: 393, height: 852 }, hasTouch: true, geolocation: { latitude: 39.155, longitude: -84.615 }, permissions: ['geolocation'] });
+
 flow('along the route by name: the Along line opens a list of the cafés and fuel stops by their names on the map, and a tap on one (or its pin) says its name and offers it as a stop; in a drive the next fuel stamp names its station (the owner, 2026-11-11)', async (page, base) => {
   await planRouter(page);
   const { tap } = await planPage(page, base);
