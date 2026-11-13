@@ -41,7 +41,9 @@ final class ApexCar {
     /// `short` (U-112): the same instruction in fewer words, longest first, for a glance; `drivenM` (U-120): a record card's
     /// distance driven, for the trip strip.
     struct Guide { let key: String; let instruction: String; let street: String; let type: Int; let distM: Double?; let timeS: Double?; let remainM: Double?; let remainS: Double?; let symbol: UIImage?; var recording = false
-                   var short: [String] = []; var drivenM: Double? = nil }
+                   var short: [String] = []; var drivenM: Double? = nil
+                   /// the junction's lanes, drawn by the page (cockpit.js carLanes) for the card's junction image
+                   var lanes: UIImage? = nil }
     /// U-59: a free drive's card until the page's first guide message (web/carplay.js recordingMessage) says how far it has gone.
     static let recordingGuide = Guide(key: "rec:", instruction: "Recording · the road ahead", street: "Recording", type: 8, distM: nil, timeS: nil,
                                       remainM: nil, remainS: nil, symbol: nil, recording: true, short: ["Recording"])
@@ -213,7 +215,8 @@ final class ApexCar {
                           distM: d.map { max(0, $0) }, timeS: Self.num(dict["timeS"]), remainM: Self.num(dict["remainM"]), remainS: Self.num(dict["remainS"]),
                           symbol: symbol, recording: recording,
                           short: ((dict["short"] as? [Any]) ?? []).prefix(3).compactMap { $0 as? String }.map { String($0.prefix(80)) },
-                          drivenM: Self.num(dict["drivenM"]).map { max(0, $0) })
+                          drivenM: Self.num(dict["drivenM"]).map { max(0, $0) },
+                          lanes: (dict["lanes"] as? String).flatMap { Data(base64Encoded: $0) }.flatMap { UIImage(data: $0, scale: 3) })
             if !driving { driving = true; eachMap { $0.setMode() }; scene?.driveStarted() }
             scene?.guideChanged()
         case "start":
@@ -677,6 +680,8 @@ final class ApexCarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDel
             } else {
                 m.symbolImage = ApexCar.symbol(g.type)
             }
+            // the lanes to be in, as the phone's road book draws them under the turn (Apple Maps shows lanes here too)
+            if let lanes = g.lanes { m.junctionImage = lanes.withRenderingMode(.alwaysOriginal) }
             m.initialTravelEstimates = est
             maneuver = m
             maneuverKey = g.key

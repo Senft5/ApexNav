@@ -362,7 +362,7 @@
     });
     { const v = document.getElementById('aboutVersion'), m = /ApexNav\/([^ ]+ \([^)]*\))/.exec(navigator.userAgent);   // the iOS shell names its version in the user agent
       if (v) v.textContent = m ? m[1] : (window.APEX_EMBED ? '--' : 'Website'); }
-    window.apexDebug = { map, get soundtrack() { return { playing: !!(soundtrack.eng && soundtrack.eng.playing()), frame: soundtrack.frame, piece: soundtrack.eng && soundtrack.eng.piece(), sample: !!soundtrack.demo }; }, get track() { return track; }, state, drives, buildRoute: (...a) => buildRoute(...a), renderRouteCard: (...a) => renderRouteCard(...a), openRoadPage: (...a) => openRoadPage(...a), showEndCard: (...a) => showEndCard(...a), get driveActive() { return driveActive; }, get flowRun() { return drive.flow ? drive.flow.run : null; }, get wetRoad() { return drive.wet ? drive.wet.state : null; }, get camResets() { return camResets; }, tryTheme: (id) => tryTheme(id), tulipPNG: (svg) => tulipPNG(svg) };
+    window.apexDebug = { map, get soundtrack() { return { playing: !!(soundtrack.eng && soundtrack.eng.playing()), frame: soundtrack.frame, piece: soundtrack.eng && soundtrack.eng.piece(), sample: !!soundtrack.demo }; }, get track() { return track; }, state, drives, buildRoute: (...a) => buildRoute(...a), renderRouteCard: (...a) => renderRouteCard(...a), openRoadPage: (...a) => openRoadPage(...a), showEndCard: (...a) => showEndCard(...a), get driveActive() { return driveActive; }, get flowRun() { return drive.flow ? drive.flow.run : null; }, get wetRoad() { return drive.wet ? drive.wet.state : null; }, get camResets() { return camResets; }, tryTheme: (id) => tryTheme(id), tulipPNG: (svg) => tulipPNG(svg), carLanes: (p) => carLanes(p) };
     let mapReady = false;
     // F-02: the map's box is fixed (the window, or a drive's edges); it changes on a rotation or at a drive's start and end.
     // A resize the map already made (setPixelRatio resizes) is not made twice.
@@ -9480,6 +9480,30 @@
       }
       return car.symbols.get(key);
     }
+    // The junction's lanes for the car's guidance card (CarPlay/ApexCarPlay.swift junctionImage), a PNG drawn as the road
+    // book's lane row (web/carplay.js laneGlyphs) in the card's ink: 105 pt by 30 at 3x, each lane a 24-unit box.
+    function carLanes(packed) {
+      const glyphs = ApexCarPlay.laneGlyphs(ApexLanes.lanes(packed));
+      if (!glyphs.length) return null;
+      const ink = ((look && look.theme && look.theme.night) || {}).panelInk || '#EDE4D3', key = `lanes|${JSON.stringify(packed)}|${ink}`;
+      if (!car.symbols.has(key)) {
+        let png = null;
+        try {
+          const cv = document.createElement('canvas'); cv.width = 315; cv.height = 90;
+          const x = cv.getContext('2d'), u = Math.min(cv.height / 26, cv.width / (glyphs.length * 26));   // px per unit: 24 and a gap
+          x.strokeStyle = ink; x.lineWidth = 2.6; x.lineCap = 'round'; x.lineJoin = 'round';
+          const x0 = (cv.width - glyphs.length * 26 * u) / 2;
+          glyphs.forEach((g, i) => {
+            x.save(); x.globalAlpha = g.alpha;
+            x.translate(x0 + (i + 0.5) * 26 * u, cv.height / 2); x.scale(u, u); x.rotate(g.rotate * Math.PI / 180);
+            x.stroke(new Path2D(g.d)); x.restore();
+          });
+          png = cv.toDataURL('image/png').split(',')[1];
+        } catch (_) { /* no canvas: the card goes without lanes */ }
+        car.symbols.set(key, png);
+      }
+      return car.symbols.get(key);
+    }
     // U-63: the road under the car for the continue step on a route with no named steps (a GPX track, a loop), read from the
     // map's own tiles (ApexRoadNames, as the saved drive's name is) at most every 5 s and only when a continue step asks.
     function carRoad() {
@@ -9505,8 +9529,8 @@
             speedMps: state.live ? state.live.speed_mps : null, road: carRoad, step: carStep() });
       if (!g || (g.key === car.guideKey && now - car.guideAt < 1000)) return;
       car.guideKey = g.key; car.guideAt = now;
-      const sym = carSymbol(g.type, g.corner, g.recording);
-      carPost(sym ? { ...g, symbol: sym } : g);
+      const sym = carSymbol(g.type, g.corner, g.recording), { lanes, ...msg } = g, ln = lanes ? carLanes(lanes) : null;
+      carPost({ ...msg, ...(sym ? { symbol: sym } : {}), ...(ln ? { lanes: ln } : {}) });
     }
     function activity(action, fields = {}) {
       const native = window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.apex;
