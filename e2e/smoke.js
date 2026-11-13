@@ -5259,6 +5259,28 @@ flow('a drive\'s corners on a road driven four times: each says your cleanest pa
   check(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth), 'nothing wider than the phone');
 });
 
+flow('Your driving before 30 clean corners: one first-picture panel with a progress bar, no rows of dashes (driver_profile.js)', async (page, base) => {
+  await page.setViewportSize({ width: 390, height: 664 });
+  await page.goto(base + '/analysis.html');
+  await page.waitForFunction(() => window.apexLogDebug && window.apexLogDebug.loaded() && window.ApexRecording);
+  await page.evaluate(async (src) => {
+    // a third of the profile road: about a dozen corners, fewer than a skill needs
+    const lines = eval(src)('', 0).split('\n'), cut = lines.slice(0, Math.floor(lines.length / 3)).join('\n') + '\n';
+    await ApexRecording.store(ApexRecording.parse(ApexCore, cut, 'f1.csv', { id: 'f1', name: 'Dry Ridge Rd', date: '2026-08-12T09:00', source: 'web-gps' }));
+  }, PROFILE_CSV);
+  await page.goto(base + '/analysis.html');
+  await page.waitForSelector('#drivingOpen', { timeout: 20000 });
+  await page.click('#drivingOpen');
+  await page.waitForSelector('#drivingRoot .dp-first', { timeout: 20000 });
+  const r = await page.evaluate(() => {
+    const root = document.getElementById('drivingRoot'), f = root.querySelector('.dp-first'), u = f.querySelector('.dp-bar u');
+    return { say: f.querySelector('.dp-say').textContent, w: parseFloat(u.style.width), rows: root.querySelectorAll('.dp-st').length, dashes: (root.innerText.match(/--/g) || []).length,
+      fits: document.documentElement.scrollWidth <= document.documentElement.clientWidth };
+  });
+  check(/^\d+ of 30 clean corners\. /.test(r.say) && r.w > 0 && r.w < 100, 'the panel counts toward 30: ' + JSON.stringify(r));
+  check(r.rows === 0 && r.dashes === 0 && r.fits, 'no skill rows or dashes, and it fits a phone: ' + JSON.stringify(r));
+});
+
 flow('Your driving: the profile over every drive opens from the Log, names the weak side, and is kept between visits (driver_profile.js)', async (page, base) => {
   await page.goto(base + '/analysis.html');
   await page.waitForFunction(() => window.apexLogDebug && window.apexLogDebug.loaded() && window.ApexRecording);
