@@ -135,7 +135,7 @@
 .log-page tr.row-link:active td { background: var(--well); }
 
 /* a box is paper on the page: a hairline and a breath of shadow, never an ink frame */
-.log-page :is(.dp-card, .seg, .dv-corner, .dv-time button, .card, .empty, .dv-map, .dv-lanes, .seg-map, .vote-map) { border: 0; background: var(--face, var(--panel)); box-shadow: var(--lift-0); }
+.log-page :is(.dp-card, .seg, .dv-corner, .dv-time button:not(.dv-clip), .card, .empty, .dv-map, .dv-lanes, .seg-map, .vote-map) { border: 0; background: var(--face, var(--panel)); box-shadow: var(--lift-0); }
 .log-page .dp-card { padding: 14px; } .log-page .dp-card b { font-size: 20px; }
 .log-page :is(.seg, .dv-corner).on { box-shadow: inset 3px 0 0 var(--accent), var(--lift-0); }
 .log-page .dv-read { background: var(--hair); border-color: var(--hair); }
