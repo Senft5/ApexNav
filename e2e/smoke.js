@@ -6998,6 +6998,28 @@ flow('offline tiles two areas share: deleting one area keeps the tiles the other
   check(JSON.stringify(r.afterArea) === '[false,false]', 'and the area\'s go with the area: ' + JSON.stringify(r));
 });
 
+flow('offline area kept: saving the map asks the browser to keep the storage under pressure (navigator.storage.persist, IDEAS F-02)', async (page, base) => {
+  await page.route('https://tiles.openfreemap.org/**', (route) => {
+    const u = route.request().url();
+    if (u.includes('/styles/')) return route.fulfill({ contentType: 'application/json', body: JSON.stringify({ version: 8, sources: { openmaptiles: { type: 'vector', url: 'https://tiles.openfreemap.org/planet' } }, layers: [{ id: 'bg', type: 'background', paint: { 'background-color': '#eee' } }] }) });
+    if (u.endsWith('/planet')) return route.fulfill({ contentType: 'application/json', body: JSON.stringify({ tiles: ['https://tiles.openfreemap.org/planet/t/{z}/{x}/{y}.pbf'], minzoom: 0, maxzoom: 14 }) });
+    return route.fulfill({ contentType: 'application/x-protobuf', body: Buffer.alloc(0) });
+  });
+  await page.route('https://s3.amazonaws.com/**', (route) => route.fulfill({ contentType: 'image/png', body: Buffer.alloc(8) }));
+  await page.addInitScript(() => {
+    try { localStorage.setItem('apex.onboarded', '1'); } catch (_) {}
+    window.__persistAsks = 0;
+    if (navigator.storage) navigator.storage.persist = () => { window.__persistAsks++; return Promise.resolve(false); };   // refused: the save still stands
+  });
+  await page.goto(base + '/index.html');
+  await page.waitForFunction(() => window.apexDebug && window.apexDebug.map && window.apexDebug.map.loaded(), null, { timeout: 15000 });
+  check(await page.evaluate(() => window.__persistAsks) === 0, 'nothing asked before a save');
+  await page.evaluate(() => { window.apexDebug.map.jumpTo({ center: [-83.47, 35.63], zoom: 11 }); document.getElementById('myAreaBtn').click(); });
+  await page.waitForFunction(() => JSON.parse(localStorage.getItem('apex.offlineAreas') || '[]').length === 1, null, { timeout: 60000 });
+  await page.waitForFunction(() => window.__persistAsks === 1, null, { timeout: 5000 });
+  check(/round/.test(await page.textContent('#myAreas')), 'the area is listed even though the browser said no: ' + await page.textContent('#myAreas'));
+});
+
 flow('offline area, as a member: Save the map here keeps the measured roads round it; with no signal a plan still has them, and clearing them (what Sign out calls) leaves nothing (IDEAS F-02)', async (page, base) => {
   let online = true;
   const asks = [], way = { 0: { i: [0, 1, 2], n: [3, 3, 3], cam: [0.02, 0.03, 0.02], cn: [3, 3, 3], rough: [0.1, 0.2, 0.1] } };
