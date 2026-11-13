@@ -5819,12 +5819,13 @@
     function labelLoops() {
       document.querySelectorAll('#loopDetents button').forEach((b, i) => {
         if (loopBy === 'time') { delete b.dataset.loopMi; b.dataset.loopMin = String(LOOP_MINUTES[i]); b.textContent = ApexRouteCard.loopTime(LOOP_MINUTES[i]); return; }
-        const km = [25, 50, 75, 100, 150][i], mi = [15, 30, 45, 60, 90][i];
+        const km = ApexCarPlay.LOOP_KM[i], mi = ApexCarPlay.LOOP_MI[i];
         delete b.dataset.loopMin;
         b.dataset.loopMi = String(ApexUnits.metric() ? km / 1.609344 : mi); b.textContent = ApexUnits.metric() ? `${km} km` : `${mi} mi`;
       });
       document.querySelectorAll('#loopBy [data-loop-by]').forEach((b) => b.setAttribute('aria-checked', String(b.dataset.loopBy === loopBy)));
       if (plannedRoute) paintCardLoop(plannedRoute);
+      carPost(ApexCarPlay.loopsMessage(loopBy, ApexUnits.metric()));   // the car's Loops list is this dial (its units too)
     }
     labelLoops();
     // the dial set to distance or time: its detents and its face change, the detent picked keeps its place
@@ -10100,11 +10101,15 @@
         if (p) openSaved(p).catch(() => {});
       }
       else if (m.action === 'loop' && LOOP_MINUTES.includes(m.minutes) && !driveActive) carAsked(() => loop({ minutes: m.minutes }));
+      // a distance from the car's Loops list: only one the dial has (miles, or kilometres kept as miles)
+      else if (m.action === 'loop' && Number.isFinite(m.miles) && !driveActive
+               && [...ApexCarPlay.LOOP_MI, ...ApexCarPlay.LOOP_KM.map((km) => km / 1.609344)].some((x) => Math.abs(x - m.miles) < 0.01)) carAsked(() => loop(m.miles));
       else if (m.action === 'report' && ApexHazardReports.KINDS.includes(m.kind)) carAsked(() => reportHazard(m.kind, null, true));
       else if (m.action === 'still' && typeof m.still === 'boolean') answerStill(m.still);
       else if (m.action === 'voice') { state.toggles.voice = !state.toggles.voice; savePrefs(); paintSwitches(); if (!state.toggles.voice) stopSpeaking(); }
       else if (m.action === 'hello') { keepCar(true); car.route = ''; car.look = ''; car.hazards = ''; carRoute(track && track.kind === 'route' ? track : null); carLook(); carHazards();
         carPost(carPlaces());                   // a car screen that just connected gets everything again
+        carPost(ApexCarPlay.loopsMessage(loopBy, ApexUnits.metric()));   // and the loop dial's lengths for its Loops
         peekTimeAttack();                                                // and this week's loop for its Places, if you've entered it
         if (driveActive) { carPost({ kind: 'start', title: track && track.kind === 'route' ? String(track.name || 'Route').slice(0, 80) : 'Drive' }); car.guideKey = ''; } }   // and the drive in progress (U-59)
     }

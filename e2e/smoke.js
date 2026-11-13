@@ -2470,6 +2470,12 @@ flow('CarPlay feed: a planned route sends its line, every corner and the theme; 
   await page.waitForFunction(() => window.apexDebug.track && window.apexDebug.track.id === 'saved_e2e', null, { timeout: 10000 })
     .catch(async () => { throw new Error('the saved route from the car never opened: ' + JSON.stringify(await page.evaluate(() => window.apexDebug.track && window.apexDebug.track.id))); });
   await page.evaluate(() => { ApexSavedRoutes.remove(localStorage, 'saved_e2e'); localStorage.removeItem('apex.pinnedPlaces'); });
+  // the car's Loops list is the phone's loop dial: distances in your units, and its times once the dial is set to time
+  const loopsCar = await page.evaluate(() => { window.apex.onNative({ type: 'carplay', action: 'hello' }); return window.__car.filter((m) => m.kind === 'loops').pop(); });
+  check(loopsCar && loopsCar.list.map((r) => r.name).join('|') === '15 mi|30 mi|45 mi|60 mi|90 mi', 'the car gets the dial\'s distances: ' + JSON.stringify(loopsCar));
+  const timesCar = await page.evaluate(() => { document.querySelector('#loopBy [data-loop-by="time"]').click(); const m = window.__car.filter((x) => x.kind === 'loops').pop();
+    document.querySelector('#loopBy [data-loop-by="distance"]').click(); return m; });
+  check(timesCar && timesCar.list[0].minutes === 30 && timesCar.list.length === 5, 'the dial set to time sends the car its times: ' + JSON.stringify(timesCar));
   await page.evaluate(() => window.apex.live({ lat: 35.6, lon: -84.1, accuracy_m: 5, speed_mps: 0, course_deg: 0, has_fix: true }));   // the shell's fix, as in the app
   // the cafés and fuel along it, by name on the car's route preview (the owner, 2026-11-11)
   await page.evaluate(() => { ApexStages.pois = async (pts) => { const a = pts[Math.min(1, pts.length - 1)];
