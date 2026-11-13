@@ -8306,6 +8306,9 @@ flow('Where to? while typing is the field and its list: no shortcuts, no Find a 
   await page.evaluate(() => ApexKeyboard.native(300));                 // the shell says the keyboard covers 300 px
   await page.waitForFunction(() => document.documentElement.classList.contains('kb-open'));
   const typing = await look();
+  // the kind is said once for the run (six Recents read "Recent" then blanks), and every row still reads it aloud
+  const kinds = await page.evaluate(() => [...document.querySelectorAll('#placeList .place')].map((b) => [b.querySelector('span').textContent, b.getAttribute('aria-label')]));
+  check(kinds.map((k) => k[0]).join() === 'Recent,,,,,' && kinds.slice(1).every((k) => /, Recent$/.test(k[1])), 'Recent once, read on every row: ' + JSON.stringify(kinds));
   check(typing.kb && !typing.chips && !typing.find && typing.places === 6 && !typing.all, 'keyboard up: only the field and every place, nothing over an empty band: ' + JSON.stringify(typing));
   await page.waitForTimeout(400);                                     // the sheet's refit
   const fits = await page.evaluate(() => ({ list: Math.round(document.getElementById('planBody').getBoundingClientRect().bottom), kb: Math.round(innerHeight - 300) }));
