@@ -982,7 +982,11 @@
       if (window.ApexDashcam && ApexDashcam.supported() && Array.isArray(d.speed_mps) && d.speed_mps.length > 20) {
         const mk = (tag, props = {}, ...kids) => { const n = Object.assign(document.createElement(tag), props); n.append(...kids); return n; };
         $('dvDashcam').replaceChildren(ApexDashcam.mount({ el: mk, Core, d, fmtSpeed: (v) => `${Math.round(ApexUnits.speed(v))} ${ApexUnits.speedU()}`,
-          save: (blob, name, type) => ApexSaveFile.saveFile(blob, name, type) }));
+          save: (blob, name, type) => ApexSaveFile.saveFile(blob, name, type),
+          // the app's own film of the drive (DriveCam.swift, big bet 5): served by the app at drivecam/; the web has none
+          ...(location.protocol === 'apexnav:' || window.APEX_DRIVECAM ? {
+            ownVideos: () => fetch(`${window.APEX_DRIVECAM || 'drivecam/'}index.json`, { cache: 'no-store' }).then((r) => (r.ok ? r.json() : [])),
+            videoUrl: (name) => `${window.APEX_DRIVECAM || 'drivecam/'}${encodeURIComponent(name)}` } : {}) }));
       } else $('dvDashcam').replaceChildren();
       renderRoadHistory(d, dvInfo.road || []);
       renderTouch(dvInfo.touch || null);

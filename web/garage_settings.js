@@ -9,7 +9,7 @@
 (function (root) {
   'use strict';
   // The rows, in the order a driver looks for them: what you share and keep, how the app reads, then the account and help.
-  const ORDER = ['roadfeel', 'zones', 'crash', 'nudge', 'units', 'motion', 'tuning', 'spots', 'data', 'account', 'feedback', 'about', 'dev'];
+  const ORDER = ['roadfeel', 'zones', 'crash', 'drivecam', 'nudge', 'units', 'motion', 'tuning', 'spots', 'data', 'account', 'feedback', 'about', 'dev'];
   // The list reads as three short lists, not one of twelve (design pass 7, 2026-11-10): each starts at its first key here.
   const GROUPS = { roadfeel: 'Sharing and safety', units: 'How the app reads', data: 'You and Vetta' };
   /**
