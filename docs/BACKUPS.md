@@ -9,7 +9,7 @@ migrations first. All of this is free on the Workers Free plan.
 | Layer | What it is | How far back | Who acts |
 |---|---|---|---|
 | D1 Time Travel | Cloudflare keeps every change; any minute can be restored in place | 7 days on Free (30 on Workers Paid) | automatic, restore by hand |
-| Weekly automatic copy | The Worker's cron (Mondays 07:00 UTC) dumps every table to the private `apexnav-backups` KV namespace (section 3a) | 8 weeks (last 8 copies) | automatic |
+| Weekly automatic copy | The Worker's cron (Mondays 07:00 UTC) dumps every table to the private R2 bucket `apexnav-archive` (section 3a; KV `apexnav-backups` before 2026-11-13) | 26 weeks (last 26 copies) | automatic |
 | Daily sweep | The Worker's second cron (06:23 UTC daily, `backend/src/sweep.ts`) deletes expired sessions, app sign-in codes, unused account invites and crew invites; used invites stay (invite chains) | n/a | automatic |
 | Monthly export | `wrangler d1 export` writes the whole database as one `.sql` file | as long as the files are kept | owner, once a month and before risky work |
 | Bookmark before a migration | The Time Travel bookmark noted just before a hand-applied migration | 7 days | whoever applies the migration |
@@ -73,16 +73,17 @@ Scripts > Read, Account > Account Analytics > Read, and Workers Observability (l
 ## 3a. Weekly automatic copy (IDEAS Y-12)
 
 `backend/src/backup.ts`, run by the cron trigger in `wrangler.jsonc`, reads every table through the Worker's own D1
-binding (no API token anywhere) and writes one `.sql` file to the KV namespace `apexnav-backups`
-(id `3be0be04839649c0a5b474c8389e8e4b`) as `d1/apexnav-db/YYYY-MM-DD.sql`. Its metadata carries the byte size and the
-row count of every table, and the Worker logs one `{"event":"backup",...}` line (or `backup_failed`). Copies beyond the
-last 8 are deleted. The file has the same shape as `wrangler d1 export`: all `CREATE TABLE`s, then the rows, then the
+binding (no API token anywhere) and writes one `.sql` file to the private R2 bucket `apexnav-archive` (binding `ARCHIVE`,
+since 2026-11-13, Workers Paid) as `d1/apexnav-db/YYYY-MM-DD.sql`. Its custom metadata carries the byte size and the
+row count of every table, and the Worker logs one `{"event":"backup","store":"r2",...}` line (or `backup_failed`). Copies
+beyond the last 26 are deleted; the Worker refuses a dump over 100 MB (it is built in memory first). Without `ARCHIVE` it
+falls back to the KV namespace `apexnav-backups` (id `3be0be04839649c0a5b474c8389e8e4b`, last 8 copies, 24 MiB each),
+which still holds the copies from before the move; they age out there by hand, nothing deletes them now.
+Download one: Cloudflare → R2 → apexnav-archive → the file → Download (or `npx wrangler r2 object get apexnav-archive/d1/apexnav-db/YYYY-MM-DD.sql --remote --file=x.sql`). The file has the same shape as `wrangler d1 export`: all `CREATE TABLE`s, then the rows, then the
 indexes, so it restores with `wrangler d1 execute <db> --remote --file=<file>` (section 5). Only the production Worker
-has the binding and the cron; preview builds have neither.
+has the cron; preview builds bind their own bucket (`apexnav-archive-preview`) but never run it.
 
-KV, not R2, because R2 isn't enabled on the account (it needs the owner to turn it on in the dashboard). One KV value
-holds up to 25 MiB and the dump is about 0.1 MB today; the Worker refuses to write past 24 MiB and logs
-`backup_failed` / `too_big`, which is the signal to move to R2. All rows are read in one `db.batch`, which D1 runs as one
+The dump is about 0.1 MB today, so R2 storage is free (10 GB included) and each run is a handful of class A operations. All rows are read in one `db.batch`, which D1 runs as one
 transaction, so a copy is a consistent snapshot even while drives upload; a run uses 4 of Workers Free's 50 D1 queries (a
 batch counts as one). Pages are key ranges found by one pass over each table's key, never `OFFSET` (which reads every
 skipped row again: about 5 million rows read at 100,000 road bins, Workers Free's whole day): a run reads about four rows

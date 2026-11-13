@@ -10,5 +10,6 @@
     { "binding": "RESTORE_TEST", "database_name": "apexnav-restore-test", "database_id": "00000000-0000-0000-0000-000000000001" }
   ],
   "kv_namespaces": [{ "binding": "BACKUPS", "id": "00000000000000000000000000000000" }, { "binding": "PHOTOS", "id": "00000000000000000000000000000001" }, { "binding": "CTX", "id": "00000000000000000000000000000002" }],
+  "r2_buckets": [{ "binding": "ARCHIVE_TEST", "bucket_name": "apexnav-archive-test" }],
   "vars": { "GOOGLE_CLIENT_ID": "test-client", "GOOGLE_CLIENT_SECRET": "test-secret", "OWNER_EMAIL": "owner@example.test", "PEPPER": "test-pepper", "PUBLIC_ORIGIN": "https://apexnav.test", "REVIEW_INVITE_HASH": "5f48f2f96660bcebf73f3d53ab9cd4645eeedb54e9a04c40800fc358c47ac15e", "DEV_FINGERPRINTS": "982c50c806e5c861", "QUERY_LIMIT": "50" }
 }

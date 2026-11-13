@@ -412,7 +412,7 @@ export default {
       ctx.waitUntil(runCron(env, "backup", async () => {
         // near this month's included D1 / KV amounts the backup waits for the 1st (src/usage.ts); last week's copy stays
         if ((await usageState(env))?.shedding) { console.log(JSON.stringify({ event: "backup_skipped", reason: "usage" })); return; }
-        if (env.BACKUPS && !(await backupDatabase(env))) throw new Error("backup not written (too big)");
+        if ((env.ARCHIVE || env.BACKUPS) && !(await backupDatabase(env))) throw new Error("backup not written (too big)");
       }).finally(() => flushUsage(raw, true)));
     } else {
       ctx.waitUntil(runCron(env, "sweep", () => sweepExpired(env)).finally(() => flushUsage(raw, true)));
