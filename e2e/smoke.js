@@ -2622,8 +2622,13 @@ flow('the sight-line speed rides under the position arrow, on the phone and on t
   await page.goto(base + '/index.html?drive=dry_ridge&play=1');
   await page.waitForFunction(() => window.apexDebug && window.apexDebug.track, null, { timeout: 15000 });
   await page.waitForFunction(() => { const t = document.querySelector('.sight-tag'); return t && !t.hidden; }, null, { timeout: 10000 });
-  const tag = await page.textContent('.sight-tag');
-  const cell = await page.textContent('#cluster');
+  // one snapshot, once they agree: playback runs, and the tag holds a value for 2 s (U-60) while the cell moves at once,
+  // so two separate reads could straddle a change (it flaked in CI that way)
+  const same = await page.waitForFunction(() => { const t = document.querySelector('.sight-tag'), c = document.getElementById('cluster');
+    const n = t && !t.hidden ? t.textContent.replace(/\D/g, '') : ''; return n && c.textContent.includes(n) && { tag: t.textContent, cell: c.textContent }; },
+    null, { timeout: 8000 }).then((h) => h.jsonValue()).catch(() => null);
+  const tag = same ? same.tag : await page.textContent('.sight-tag');
+  const cell = same ? same.cell : await page.textContent('#cluster');
   // panel round 2 (TH-2, IN-3): the tag names itself, SIGHT and the number, no unit (never a limit sign); OPEN draws nothing
   check(/^(SIGHT|SLOW)\d+$/.test(tag.trim()), 'the tag reads SIGHT and a speed: ' + tag);
   check(cell.includes(tag.replace(/\D/g, '')), 'the same value as the Sight cell: ' + tag);
@@ -5058,6 +5063,7 @@ flow('flyby: a friend on the same stage that day shows on the drive, as text; ch
   await page.waitForSelector('#dvFlyby:not([hidden])');
   const t = await page.textContent('#dvFlybyList');
   check(t === 'Straight <b>run</b>: @bob 812', 'only the same day, as text: ' + t);
+  check(!(await page.$('#dvFlyby .note')), 'the friends-that-day panel is the list alone, no footnote under it');
   // this month's challenges (IDEAS S-11): a drive dated now makes the panel, a new road counted (f1 counts too in October 2026)
   await page.evaluate(async () => { const f = (await ApexRecording.all()).find((d) => d.id === 'f1'); await ApexRecording.store({ ...f, id: 'f2', name: 'Fresh road', date: new Date().toISOString() }); });
   await page.goto(base + '/analysis.html');
@@ -6929,7 +6935,7 @@ flow('a saved route keeps the map along it: Save fetches the tiles within reach 
   await page.evaluate(() => document.getElementById('routeSaveBtn').click());
   await page.waitForFunction(() => window.apexDebug.mapAlong, null, { timeout: 60000 });
   const area = await page.evaluate(() => JSON.parse(localStorage.getItem('apex.offlineAreas') || '[]'));
-  check(area.length === 1 && area[0].alongKm === 1.5 && area[0].radiusKm === null && /^Along /.test(area[0].name), 'an area along the route: ' + JSON.stringify(area));
+  check(area.length === 1 && area[0].alongKm === 1.5 && area[0].radiusKm === null && /^Along /.test(area[0].name) && area[0].box && area[0].box[0] < 35.61 && area[0].box[2] > 35.79, 'an area along the route: ' + JSON.stringify(area));
   // every z14 tile within reach of the line (x for -83.90 at z14 is 4373; 1.5 km is under one tile), none 25 km round
   const z14 = got.filter((t) => t[0] === 14), xs = [...new Set(z14.map((t) => t[1]))];
   check(z14.length > 10 && xs.every((x) => Math.abs(x - 4373) <= 2), 'the tiles hug the route: ' + JSON.stringify({ n: z14.length, xs }));
@@ -7296,6 +7302,18 @@ flow('the main map: with no signal and no saved area one line says there is no m
   check(await page.evaluate(() => document.getElementById('mapNote').hidden), 'no note once the map draws');
 });
 
+flow('a replay with no map: the one line sits clear of the Replay plate in the short map band (free roamer B, 2026-11-12)', async (page, base) => {
+  await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); localStorage.setItem('apex.permsExplained', '1'); } catch (_) {} });
+  await page.setViewportSize({ width: 390, height: 664 });   // a phone's browser: the map is a short band between the notes and the binnacle
+  await page.route('https://tiles.openfreemap.org/**', (route) => route.abort('internetdisconnected'));
+  await page.goto(base + '/index.html?drive=dry_ridge&play=1');
+  await page.waitForFunction(() => document.getElementById('app').classList.contains('replaying') && !document.getElementById('mapNote').hidden, null, { timeout: 15000 });
+  const r = await page.evaluate(() => { const box = (id) => { const b = document.getElementById(id).getBoundingClientRect(); return { t: b.top, b: b.bottom, l: b.left, r: b.right }; };
+    return { note: box('mapNote'), plate: box('modePlate'), map: box('map') }; });
+  const apart = r.note.b <= r.plate.t || r.plate.b <= r.note.t || r.note.r <= r.plate.l || r.plate.r <= r.note.l;
+  check(apart && r.note.t >= r.map.t, 'the note and the Replay plate do not overlap: ' + JSON.stringify(r));
+});
+
 flow('the main map on plain paper: back online it reloads once the style really comes, keeping the paper through a flicker', async (page, base) => {
   await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); localStorage.setItem('apex.permsExplained', '1'); } catch (_) {} });
   let tiles = false;
@@ -7635,7 +7653,10 @@ flow('REVIEW.md 1.2 screen by screen: first run, the map, planning, the route, d
   check(fitted.whole && fitted.inView && fitted.follow === false, 'collapsed: the name whole and the route fitted on screen: ' + JSON.stringify(fitted));
   // Driving: no tab bar; Report and End; Limit, the Score under the g-ball
   await page.click('#planClear');
-  await page.evaluate(async () => { for (let i = 0; i < 40; i++) { window.apex.live({ lat: 35.96 + i * 1e-5, lon: -83.92, accuracy_m: 5, speed_mps: 12, course_deg: 0, has_fix: true, calibration: 'locked', lat_g: 0.1, lon_g: 0 }); await new Promise((r) => setTimeout(r, 100)); } });
+  await page.evaluate(async () => { for (let i = 0; i < 40; i++) { window.apex.live({ lat: 35.96 + i * 1e-5, lon: -83.92, accuracy_m: 5, speed_mps: 12, course_deg: 0, has_fix: true, calibration: 'locked', lat_g: 0.1, lon_g: 0 }); await new Promise((r) => setTimeout(r, 100)); }
+    // the car keeps sending fixes, as a phone does: a report needs a fix under 10 s old, and a web drive with none for 5 s
+    // drops back to the replay (CI 2026-11-12: "one tap … Undo" failed once on a loaded runner, as the Q-15 flow did)
+    window.__fixes = setInterval(() => window.apex.live({ lat: 35.96 + 40e-5, lon: -83.92, accuracy_m: 5, speed_mps: 12, course_deg: 0, has_fix: true, calibration: 'locked', lat_g: 0.1, lon_g: 0 }), 500); });
   const drv = await page.evaluate(() => { const tb = document.getElementById('tabbar'); return { tabbar: !!(tb.offsetWidth || tb.offsetHeight), limit: !!document.querySelector('#cluster .ro-limit'), score: document.querySelector('#cluster .g-score').textContent, report: !!document.getElementById('hzReportBtn').offsetParent, end: !!document.getElementById('driveEnd').offsetParent }; });
   check(!drv.tabbar && drv.limit && /SCORE$/.test(drv.score) && drv.report && drv.end, 'Driving: ' + JSON.stringify(drv));
   // Hazard report: six plate-style keys, one tap, no confirm, Undo on the Report key for 3 s
@@ -7643,9 +7664,11 @@ flow('REVIEW.md 1.2 screen by screen: first run, the map, planning, the route, d
   const hz = await page.evaluate(() => { const b = [...document.querySelectorAll('#hzKinds button')], cs = getComputedStyle(b[0]); return { n: b.length, bg: cs.backgroundColor, edge: cs.borderTopColor }; });
   check(hz.n === 6 && hz.bg === 'rgb(17, 17, 17)' && hz.edge === 'rgb(255, 122, 26)', 'Hazard report: ' + JSON.stringify(hz));
   await page.click('#hzKinds button');
-  check(!(await page.isVisible('#hzOverlay.show')) && !(await page.$('.confirm-sheet')) && /^Undo /.test(await page.textContent('#hzReportBtn')), 'one tap, no confirm, Undo in the status line');
+  const tap = { overlay: await page.isVisible('#hzOverlay.show'), sheet: !!(await page.$('.confirm-sheet')), key: await page.textContent('#hzReportBtn'), toast: await page.textContent('#toast') };
+  check(!tap.overlay && !tap.sheet && /^Undo /.test(tap.key), 'one tap, no confirm, Undo in the status line: ' + JSON.stringify(tap));
   await page.click('#hzReportBtn');
   check((await page.textContent('#hzReportBtn')) === 'Report', 'Undo takes it back');
+  await page.evaluate(() => clearInterval(window.__fixes));
   // Replay: crest and dip pins wear the hazard plate; the transport is shaped controls (a switch, detents, keys; U-45); no unlabelled "Fast & open"
   await page.goto(base + '/index.html?drive=dry_ridge&play=1');
   await page.waitForFunction(() => window.apexDebug && window.apexDebug.track && window.apexDebug.track.events.length);
@@ -9305,6 +9328,8 @@ flow('TestFlight 2026-11-05 note 3: your own photo is the key: no photo, a tap p
     return { text: sec.innerText, keys: [...sec.querySelectorAll('button, label')].filter((b) => b.offsetParent).map((b) => b.getAttribute('aria-label') || b.textContent.trim()) }; });
   let y = await you();
   check(!/Change photo|Remove photo|Add a photo|location data/.test(y.text) && y.keys[0] === 'Add your profile photo', 'no photo: the face is the key, no other key, no note: ' + JSON.stringify(y));
+  const firstCar = await page.textContent('.garage-first .people-lead');
+  check(firstCar === 'Friends and private crews see it next to your name.', 'no car yet: one line under Park your first car: ' + firstCar);
   // a tap with no photo goes straight to the picker
   const [chooser] = await Promise.all([page.waitForEvent('filechooser', { timeout: 5000 }), page.click('.my-photo')]);
   check(!!chooser && !(await page.$('.my-photo-sheet')), 'no photo: a tap opens the photo picker');

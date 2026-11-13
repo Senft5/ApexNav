@@ -69,6 +69,9 @@ console.log(JSON.stringify({
   tn: worst(la, lo, 0.1), north: worst(nla, nlo, 0.004),
   inArea: B.covered(areas, [35.55, -83.95, 35.65, -83.85]), edge: B.covered(areas, [35.55, -83.95, 35.65, -83.5]),
   bad: B.covered([{ lat: null, lon: 1, radiusKm: 5 }], [0, 0, 0.01, 0.01]),
+  route: [B.covered([{ lat: 35.7, lon: -83.9, radiusKm: null, alongKm: 1.5, box: [35.6, -83.91, 35.8, -83.89] }], [35.62, -83.905, 35.78, -83.895]),
+          B.covered([{ lat: 35.7, lon: -83.9, radiusKm: null, alongKm: 1.5, box: [35.6, -83.91, 35.8, -83.89] }], [35.62, -83.95, 35.78, -83.895]),
+          B.covered([{ lat: 35.7, lon: -83.9, radiusKm: null, alongKm: 1.5, box: [35.6, -83.91, 35.8, null] }], [35.62, -83.905, 35.78, -83.895])],
   tryOnline: B.worthTrying(true, [], [0, 0, 1, 1]), tryOffNone: B.worthTrying(false, [], [35.55, -83.95, 35.65, -83.85]),
   tryOffSaved: B.worthTrying(false, areas, [35.55, -83.95, 35.65, -83.85]), tryUnknown: B.worthTrying(undefined, [], [0, 0, 1, 1]),
   follow: follow(la, lo), lim: lim(la, lo),
@@ -91,6 +94,7 @@ def test_the_map_lies_exactly_under_the_path(r):
 
 def test_asked_for_only_where_it_can_draw(r):
     assert r["inArea"] is True and r["edge"] is False and r["bad"] is False
+    assert r["route"] == [True, False, False], "a saved route's map: a drive inside its corridor's box, not one that leaves it"
     assert r["tryOnline"] is True and r["tryUnknown"] is True
     assert r["tryOffNone"] is False, "no signal and no saved area: the blank panel, never a broken map"
     assert r["tryOffSaved"] is True, "no signal but a saved area under the drive: the map from the phone"

@@ -1048,6 +1048,10 @@
       padding: 8px 12px; background: var(--panel); color: var(--panel-ink); border: 1.5px solid var(--panel-ink); font: 600 14px/1.35 var(--font-ui);
       text-align: center; pointer-events: none; }
     .map-note[hidden] { display: none; }
+    /* 2026-11-12 (free roamer B): replaying or driving, the map is a short band and 28% down put the note over the Replay
+       plate at its foot; it goes to the top there (the place plate is away then), and gives way to a hazard plate */
+    #app:not(.idle) .map-note { top: 12px; }
+    .stage:has(.hz-plate:not([hidden])) .map-note { display: none; }
     .loop-suggest { display: none; width: 100%; grid-template-columns: 40px minmax(0, 1fr) auto; gap: 12px; align-items: center; text-align: left;
       padding: 10px 2px 4px; border-top: 1px solid var(--rule); margin-top: 8px; background: none; color: var(--panel-ink); }
     #app.idle:not(.plan-open):not(.routed) .loop-suggest { display: grid; }
