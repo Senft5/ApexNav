@@ -8431,6 +8431,14 @@
       ApexNoteTiming.setRoad(ApexWetRoads.road(st));
       const line = ApexWetRoads.line(st);
       if (line && w.said !== st) { w.said = st; toast(line); sayQuietLine(line); }
+      // cold tyres on a dry road (wet_roads.js coldLine): once a drive, and once a day, so a winter of drives isn't told daily
+      const car = routingCar(), cold = !w.cold && ApexWetRoads.coldLine(st, d.tempC, car && car.tyres);
+      if (cold) {
+        w.cold = true;
+        const today = new Date().toDateString();
+        let last = null; try { last = localStorage.getItem('apex.coldSaid'); } catch (_) {}
+        if (last !== today) { try { localStorage.setItem('apex.coldSaid', today); } catch (_) {} toast(cold); sayQuietLine(cold); }
+      }
     }
     function noteFlow() {
       if (!window.ApexFlowLive || !window.ApexFlow || !drive.rec) return;
