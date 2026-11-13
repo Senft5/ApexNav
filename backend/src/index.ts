@@ -23,6 +23,7 @@ import {
   myGrants, publish, removePair, setGrant, setHandle,
 } from "./social";
 import { deleteAccount, exportMyData } from "./account";
+import { itemsDelete, itemsGet, itemsPut } from "./member_items";
 import * as drivePosts from "./drive_posts";
 import { carCreate, carDelete, carUpdate, myCars, peoplesCars } from "./garage";
 import { chatDelete, chatList, chatPost, crewBadge, crewFeed, crewPage, crewPageUpdate, crewVoiceGet, crewVoicePut, crewVoices, templateCreate, templateDelete, templatesList } from "./crew_page";
@@ -146,6 +147,10 @@ on("POST", "/api/invites", async (req, env) => json(await createInvite(env, awai
 // Signed in is enough to take your data or close your account, member or not (someone removed by the owner keeps both rights).
 on("GET", "/api/me/export", async (req, env) => json(await exportMyData(env, await requireUser(req, env))));
 on("DELETE", "/api/me", async (req, env) => deleteAccount(env, await requireUser(req, env), req));
+// Saved routes and pinned places on your account (member_items.ts): signed in is enough, they are your own
+on("GET", "/api/me/items", async (req, env) => json(await itemsGet(env, await requireUser(req, env), new URL(req.url))));
+on("PUT", "/api/me/items", async (req, env) => json(await itemsPut(env, await requireUser(req, env), req)));
+on("DELETE", "/api/me/items", async (req, env) => { await itemsDelete(env, await requireUser(req, env), new URL(req.url)); return noContent(); });
 on("PUT", "/api/me/handle", async (req, env) => { await setHandle(env, await requireMember(req, env), req); return noContent(); });
 
 on("PUT", "/api/me/contribute", async (req, env) => { await setContribute(env, await requireMember(req, env), req); return noContent(); });
