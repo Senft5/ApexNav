@@ -5,6 +5,8 @@ import { Env, HttpError, body } from "./util";
 import type { Viewer } from "./auth";
 import { isoWeek } from "./points";
 import { serverFlag } from "./flags";
+import { establishedSql } from "./reports_sql";
+import { MIN_DRIVERS } from "./roads";
 
 export const LIMITS = { maxBins: 2000, minBins: 20, maxAgeDays: 14, kmPerDay: 600, kmPerWeek: 1500, uploadsPerHour: 300, minCoverage: 0.6 };
 const BIN_KM = 0.005;
@@ -308,6 +310,12 @@ export async function contribute(env: Env, v: Viewer, req: Request): Promise<{ a
     env.DB.prepare("INSERT INTO seen (h) VALUES (?)").bind(chunk.buffer),                                  // fails (409 below) if a parallel copy won the race
     ...c.bins.map((b) => mergeBin(env, c.wayId, c.dir, b, c.drivenOn)),
     ...(await bumpDriverStmts(env, v.id, c)),
+    // the two-driver privacy floor (roads.ts shownSql) counts established members only (migration 0058): a fresh account
+    // still earns its slot above, but can't alone make a lone driver's road visible. Counted again on a later drive, once
+    // the account is a week old.
+    env.DB.prepare(`INSERT OR IGNORE INTO road_floor (way_id, dir, holder) SELECT ?1, ?2, ?3
+                     WHERE ${establishedSql("?4")} AND (SELECT COUNT(*) FROM road_floor WHERE way_id = ?1 AND dir = ?2) < ${MIN_DRIVERS}`)
+      .bind(c.wayId, c.dir, holder.buffer, v.id),
     env.DB.prepare("INSERT INTO upload_counts (user_id, bucket, uploads, km) VALUES (?1, ?2, 1, ?3) ON CONFLICT (user_id, bucket) DO UPDATE SET uploads = uploads + 1, km = km + ?3").bind(v.id, hourKey, c.km),
     env.DB.prepare("DELETE FROM upload_counts WHERE bucket < ?").bind(new Date(now.getTime() - 8 * 86400_000).toISOString().slice(0, 13)),
   ];
