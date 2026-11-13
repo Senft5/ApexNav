@@ -73,13 +73,29 @@
     // the climbs along the kept stretch, when its height was measured (10 heights or more spanning 3 m or more)
     const el = Array.isArray(d.elev) ? keep.map((i) => d.elev[i]).filter(finite) : [];
     const climb = el.length >= 10 && Math.max(...el) - Math.min(...el) >= 3 ? downsample(el, 120) : [];
+    const date = typeof d.date === 'string' ? d.date : null;
     return {
-      name: d.name || 'Drive', date: typeof d.date === 'string' ? d.date : null,
+      name: d.name || 'Drive', title: cardTitle(d.name, date), date,
       miles: dist.length ? dist[dist.length - 1] / 1609.344 : null,
       score: finite(ds.score) ? ds.score : null,
       parts: comp ? PARTS.map(([k, label]) => [label, pct(comp[k])]) : [],
       mix: cornerMix(d.corners), shape: silhouette(kl, ko), ticks, climb,
     };
+  }
+  /** The picture's title (2026-11-12, free roamer B): a road's or route's name as it is; the date name a drive gets when no road
+   *  carried it ("Drive 11/13/2026 7:20 PM", which put the date twice over the date line) reads as the part of the day it was
+   *  driven in, as sports apps name a workout: "Evening drive". No date: "Drive". */
+  function cardTitle(name, date) {
+    if (typeof name === 'string' && name.trim() && !/^Drive \d/.test(name.trim())) return name.trim();
+    const t = date ? new Date(date) : null, h = t && !Number.isNaN(t.getTime()) ? t.getHours() : null;
+    if (h == null) return 'Drive';
+    return `${h >= 5 && h < 12 ? 'Morning' : h >= 12 && h < 17 ? 'Afternoon' : h >= 17 && h < 21 ? 'Evening' : 'Night'} drive`;
+  }
+  /** The corner line under the score: only the kinds the drive had ("8 fast corners", not "0 tight · 0 medium · 8 fast"). */
+  function mixLine(mix) {
+    const m = mix || {}, kinds = [['tight', m.tight], ['medium', m.medium], ['fast', m.fast]].filter(([, n]) => n > 0);
+    const total = kinds.reduce((a, [, n]) => a + n, 0);
+    return total ? `${kinds.map(([k, n]) => `${n} ${k}`).join(' · ')} corner${total === 1 ? '' : 's'}` : '';
   }
   function downsample(a, max) { const step = Math.max(1, Math.ceil(a.length / max)), out = []; for (let i = 0; i < a.length; i += step) out.push(a[i]); return out; }
 
@@ -92,7 +108,7 @@
     g.textBaseline = 'top';
     // title block: the road's name, the date and the distance
     g.fillStyle = ink; g.font = font(800, 84, C.fontNum);
-    const title = m.name.length > 24 ? m.name.slice(0, 23) + '…' : m.name;
+    const name = m.title || m.name, title = name.length > 24 ? name.slice(0, 23) + '…' : name;
     g.fillText(title.toUpperCase(), 90, 120);
     g.fillStyle = dim; g.font = font(500, 40);
     const when = m.date ? new Date(m.date).toLocaleDateString(opts.locale, { year: 'numeric', month: 'short', day: 'numeric' }) : '';
@@ -129,7 +145,7 @@
       g.fillStyle = dim; g.font = font(600, 30); g.fillText(label, x, y);
       g.fillStyle = ink; g.font = font(800, 52, C.fontNum); g.fillText(v == null ? '--' : String(v), x, y + 36);
     });
-    const mixText = `${m.mix.tight} tight · ${m.mix.medium} medium · ${m.mix.fast} fast corners`;
+    const mixText = mixLine(m.mix);
     g.fillStyle = dim; g.font = font(500, 34); g.fillText(mixText, 90, H - 170);
     g.fillStyle = accent; g.font = font(800, 40, C.fontNum); g.textAlign = 'right'; g.fillText('VETTA', W - 90, H - 172); g.textAlign = 'left';
     if (opts.car) drawCar(g, opts.car, ink, W - 90, H - 212);
@@ -162,6 +178,6 @@
     return 'saved';
   }
 
-  const api = { cardModel, silhouette, trimEnds, TRIM_M, cornerMix, drawCard, shareCard, PARTS, W, H };
+  const api = { cardModel, cardTitle, mixLine, silhouette, trimEnds, TRIM_M, cornerMix, drawCard, shareCard, PARTS, W, H };
   if (typeof module !== 'undefined' && module.exports) module.exports = api; else root.ApexDriveCard = api;
 })(typeof window !== 'undefined' ? window : globalThis);

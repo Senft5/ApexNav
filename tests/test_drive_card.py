@@ -23,7 +23,10 @@ const m = K.cardModel(d);
 const sh = K.silhouette(lat, lon);
 const [tl] = K.trimEnds(lat, lon, dist);
 console.log(JSON.stringify({ trimmed: [tl.length, tl[0] === lat[14], tl[tl.length - 1] === lat[85]], short: K.trimEnds([1, 2], [1, 2], [0, 900])[0].length, m: { ...m, shape: m.shape.length, ticks: m.ticks.length, climb: m.climb.length }, ticksIn: m.ticks.every(([x, y]) => x >= 0 && x <= 1 && y >= 0 && y <= 1), size: [K.W, K.H], inBox: sh.every(([x, y]) => x >= 0 && x <= 1 && y >= 0 && y <= 1),
-  empty: K.cardModel({}), few: K.silhouette([1], [2]) }));
+  empty: K.cardModel({}), few: K.silhouette([1], [2]),
+  titles: [K.cardTitle('Dragon', '2026-10-20T15:00:00'), K.cardTitle('Drive 11/13/2026 7:20 PM', '2026-11-13T19:20:00'), K.cardTitle('Drive 11/13/2026 7:20 AM', '2026-11-13T07:20:00'),
+    K.cardTitle('', '2026-11-13T13:00:00'), K.cardTitle('Drive 10/1/2026 11:40 PM', '2026-10-01T23:40:00'), K.cardTitle(null, null)],
+  mixes: [{ tight: 0, medium: 0, fast: 8 }, { tight: 3, medium: 1, fast: 1 }, { tight: 0, medium: 1, fast: 0 }, { tight: 0, medium: 0, fast: 0 }, null].map(K.mixLine) }));
 """
 
 
@@ -38,7 +41,18 @@ def test_card_model(out):
     # HE-4 (panel round 2): the Log's own four, in its words and order (drive_view.js bars); Pace is a part of the score, not a speed
     assert m["parts"] == [["Pace", 90], ["Smooth", 84], ["Brakes", 71], ["Rhythm", 66]]
     assert m["mix"] == {"tight": 3, "medium": 1, "fast": 1}
+    assert m["title"] == "Dragon"
     assert m["shape"] > 50 and out["inBox"]
+
+
+def test_title_says_the_date_once(out):
+    """2026-11-12: a drive no road named had its date name on the picture over the date line, the date twice. It reads as the
+    part of the day instead; a road's name stays as it is."""
+    assert out["titles"] == ["Dragon", "Evening drive", "Morning drive", "Afternoon drive", "Night drive", "Drive"]
+
+
+def test_corner_line_names_only_the_kinds_driven(out):
+    assert out["mixes"] == ["8 fast corners", "3 tight · 1 medium · 1 fast corners", "1 medium corner", "", ""]
 
 
 def test_outline_leaves_out_both_ends(out):
