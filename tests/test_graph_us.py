@@ -89,16 +89,12 @@ def test_packs_hold_every_tile_at_its_offset(tmp_path):
 
 
 def test_the_workflow_moves_the_pointer_last_and_only_for_a_whole_build():
-    import yaml
-    wf = yaml.safe_load(open(os.path.join(os.path.dirname(__file__), "..", ".github", "workflows", "graph-us.yml")))
-    jobs = wf["jobs"]
-    assert jobs["band"]["needs"] == ["plan", "osm"] and jobs["publish"]["needs"] == ["plan", "band"]
-    steps = jobs["publish"]["steps"]
-    names = [s.get("name") for s in steps]
-    rel, ptr = names.index("The release"), names.index("Point the Worker at it")
-    assert rel < ptr == len(steps) - 1
-    assert steps[ptr]["if"] == "needs.plan.outputs.live == 'true'"
-    run = steps[rel]["run"]
-    assert "for f in packs/*.bin packs/index.json packs/packs.json; do" in run, "indexes after the packs"
-    plan = jobs["plan"]["steps"][-1]["run"]
-    assert '[ -z "$only" ] && live=true' in plan, "the whole country goes live; a pilot only when asked"
+    # Plain text checks: CI's Python has no PyYAML.
+    wf = open(os.path.join(os.path.dirname(__file__), "..", ".github", "workflows", "graph-us.yml")).read()
+    assert "needs: [plan, osm]" in wf and "needs: [plan, band]" in wf
+    pub = wf[wf.index("\n  publish:"):]
+    rel, ptr = pub.index("name: The release"), pub.index("name: Point the Worker at it")
+    assert rel < ptr and "- name:" not in pub[ptr + 10:], "the pointer is the last step"
+    assert "if: needs.plan.outputs.live == 'true'" in pub[ptr:]
+    assert "for f in packs/*.bin packs/index.json packs/packs.json; do" in pub[rel:ptr], "indexes after the packs"
+    assert '[ -z "$only" ] && live=true' in wf, "the whole country goes live; a pilot only when asked"
