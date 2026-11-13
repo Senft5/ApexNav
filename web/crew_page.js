@@ -524,8 +524,8 @@
       if (page.drives) {
         const now = Date.now(), last = c.last ? { ...c.last, crew_id: c.id, crew_name: c.name } : null;
         const CE = root.ApexCrewEvents, next = c.next || null, onDay = next && CE && CE.onTheDay(next, now);
-        const before = last && now - Date.parse(last.starts_at) < 3 * 86400e3 && !onDay && page.driveCard ? page.driveCard(last, { redo }) : null;
-        const sec = page.drives(c, { before });
+        const before = last && now - Date.parse(last.starts_at) < 3 * 86400e3 && !onDay && page.driveCard ? page.driveCard(last, { redo, person: crewMate(c) }) : null;
+        const sec = page.drives(c, { before, person: crewMate(c) });
         if (sec) return sec;
       }
       const all = page.onAllDrives ? btn('All drives', page.onAllDrives, 'linkbtn') : '';
@@ -533,7 +533,7 @@
       const soon = next && Date.parse(next.starts_at) - now < 7 * 86400e3;
       const recent = last && now - Date.parse(last.starts_at) < 3 * 86400e3;
       const sec = el('div', { className: 'stack-8 cp-week' }, el('div', { className: 'cp-sec' }, el('h3', { textContent: next ? (soon ? 'This week' : 'Next drive') : last ? 'Last drive' : 'This week' }), all));
-      const card = (e) => (page.driveCard && page.driveCard(e, { redo })) || el('b', { textContent: e.title });
+      const card = (e) => (page.driveCard && page.driveCard(e, { redo, person: crewMate(c) })) || el('b', { textContent: e.title });
       const CE = root.ApexCrewEvents, onDay = next && CE && CE.onTheDay(next, now);
       if (last && (!next || (recent && !onDay))) sec.append(card(last));
       if (next) sec.append(card(next));
@@ -568,6 +568,8 @@
       });
       return sec;
     }
+    // a handle on a drive card (who's going) opens the same sheet as the members strip
+    const crewMate = (c) => (h) => member(c, { handle: h, photo_id: null, mine: false, role: 'member' }, null);
     // A member, one tap in: who they are in this crew, and Report and Block at the foot (P-06), never on the strip.
     function member(c, m, state) {
       const ov = el('div', { className: 'overlay dim show cp-member-sheet' });

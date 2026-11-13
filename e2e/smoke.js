@@ -3139,6 +3139,15 @@ flow('crew page: an old ?view=crew link opens People on Crews, at your crew; goi
   await page.waitForSelector('.cp-member-sheet h2:has-text("@sam")');
   check(!(await page.$('.cp-board-row.mine.tap')), 'your own row is not a key');
   await page.click('.cp-member-sheet button:has-text("Done")');
+  // who's going is one tap from the faces on the drive's card, and each name opens the person
+  await page.click('.cp-tabs [data-cp-tab="drives"]');
+  await page.click('.drive-card .cp-going-who');
+  await page.waitForSelector('.cp-who-sheet button.cp-who-row:has-text("@sam")');
+  check(/1 going/.test(await page.textContent('.cp-who-sheet h2')), 'the faces open the list of who is going');
+  await page.click('.cp-who-sheet button.cp-who-row:has-text("@sam")');
+  await page.waitForSelector('.cp-member-sheet h2:has-text("@sam")');
+  check(!(await page.$('.cp-who-sheet')), 'a name on the list opens their sheet in its place');
+  await page.click('.cp-member-sheet button:has-text("Done")');
   await page.click('.cp-tabs [data-cp-tab="chat"]');
   // the handle on a message opens the person, as a face on the members strip does
   await page.click('.cp-msg button.cp-who:has-text("@sam")');
@@ -3167,7 +3176,7 @@ flow('crew page: an old ?view=crew link opens People on Crews, at your crew; goi
   check(gs.offLeft <= 4 && gs.leaveLeft <= 4 && gs.offWide && !gs.hintCut, 'text keys start at the left, the area hint is whole: ' + JSON.stringify(gs));
   await page.click('.side-pop.open[aria-label="Crew settings"] button:has-text("Done")');
   await page.click('.cp-tabs [data-cp-tab="drives"]');
-  await page.click('.cp-drive button:has-text("going")');
+  await page.click('.cp-drive .switch button:text-is("Going")');
   // a line half written survives the page redrawing: the livery saves, the page redraws
   await page.click('.cp-tabs [data-cp-tab="chat"]');
   await page.fill('.cp-say textarea', 'Saturday it is');
