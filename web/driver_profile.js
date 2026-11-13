@@ -685,18 +685,18 @@
   // -------------------------------------------------------------------------------------------------------------
   const WORDS = {
     squeeze: { name: 'One braking', is: 'You brake once for a corner: on, then off.',
-      tip: 'Pick the braking point early and squeeze on once. A second go at the pedal means the first was too light or too late.' },
+      tip: 'Pick the braking point early and squeeze on once.' },
     brake: { name: 'Brakes done by the apex', is: 'Your slowing is finished by the middle of the corner.',
-      tip: 'Finish slowing before the middle of the corner. Braking past it means you arrived too fast: brake a little earlier.' },
+      tip: 'Brake a little earlier, so the slowing is done before the middle.' },
     arc: { name: 'One steering arc', is: 'You turn in once and hold it, with no corrections on the way round.',
-      tip: 'Turn in once and hold the wheel. A correction mid-corner means the turn-in was early or sharp: look further through the corner before you turn.' },
+      tip: 'Look further through the corner, then turn in once and hold the wheel.' },
     entry: { name: 'Entry speed', is: 'You set your speed before the corner and keep it to the middle.',
-      tip: 'Set the speed before you turn and hold it to the middle of the corner. Speeding up and slowing again mid-corner means the throttle came too soon.' },
+      tip: 'Set the speed before you turn and hold it to the middle.' },
     line: { name: 'Patient apex', is: 'You are slowest at the middle of the corner or just after, not long before it.',
-      tip: 'Stay slow a little longer. The slowest point belongs at the middle of the corner, where you can see the way out.' },
+      tip: 'Stay slow a little longer, until you can see the way out.' },
     pace: { name: 'Pace', less: 'lower', more: 'higher', is: 'How much of each corner\'s sane limit you use, read as the Vetta Score reads it: full from 85% to 100% of it, and less above it, so over the limit never earns it.' },
     exit: { name: 'Back to power', is: 'Once the braking is done you pick the throttle straight up.',
-      tip: 'When the braking is done, pick the throttle up gently straight away. A long coast is the car waiting for you.' },
+      tip: 'Pick the throttle up gently as soon as the braking is done.' },
   };
   const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
   const monthName = (m) => `${MONTHS[+m.slice(5, 7) - 1]} ${m.slice(0, 4)}`;
@@ -732,20 +732,16 @@
   }
   /** How you drive, as up to three sentences of fact (never advice to go faster). */
   function styleLines(st, metric = true) {
+    // one labelled fact a row (TestFlight 2026-11-12, "text walls"): the label says what is measured, the number after it
     const out = [];
-    if (finite(st.trail_share)) {
-      const n = Math.round(st.trail_share * 10);
-      out.push(n >= 6 ? `You brake into the corner: still on the brakes as the car turns in ${n} of 10 corners you brake for.`
-        : n <= 2 ? `You finish braking in a straight line: still on the brakes as the car turns in only ${n} of 10 corners you brake for.`
-          : `You brake into the corner about half the time (${n} of 10 corners you brake for).`);
-    }
+    if (finite(st.trail_share)) out.push(`Still braking at turn-in: ${Math.round(st.trail_share * 10)} of 10 corners you brake for`);
     if (finite(st.slow_m)) {
       const m = Math.abs(st.slow_m), d = metric ? `${Math.round(m)} m` : `${Math.round(m * 3.28084 / 5) * 5} ft`;
-      out.push(m < 2.5 ? 'Your slowest point sits on the middle of the corner.' : `Your slowest point sits about ${d} ${st.slow_m < 0 ? 'before' : 'after'} the middle of the corner.`);
+      out.push(m < 2.5 ? 'Slowest point: the middle of the corner' : `Slowest point: ${d} ${st.slow_m < 0 ? 'before' : 'after'} the middle`);
     }
     if (finite(st.use)) {
       const left = Math.round((1 - st.use) * 20) * 5;
-      out.push(left > 0 ? `You usually keep about ${left}% of a corner's sane limit in hand.` : 'You usually drive at the corner\'s sane limit. On the road, leave more in hand.');
+      out.push(left > 0 ? `Kept in hand: about ${left}% of the sane limit` : 'Kept in hand: none. On the road, leave more in hand');
     }
     return out;
   }

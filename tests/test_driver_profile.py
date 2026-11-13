@@ -282,8 +282,9 @@ def test_the_words():
     assert out["rest"] == "Patient apex is stronger in tight corners: 100 against 85 in the rest, on 4 of 4 drives. The same shows in back to power."
     assert out["car"] == "Back to power is weaker in the Truck: 50 against 99 in your other cars, across 10 drives."
     a, b, c = out["style"]
-    assert a == ["You brake into the corner: still on the brakes as the car turns in 7 of 10 corners you brake for.",
-                 "Your slowest point sits about 8 m before the middle of the corner.", "You usually keep about 40% of a corner's sane limit in hand."]
-    assert b[1] == "Your slowest point sits on the middle of the corner." and "leave more in hand" in b[2] and c == []
+    assert a == ["Still braking at turn-in: 7 of 10 corners you brake for",
+                 "Slowest point: 8 m before the middle", "Kept in hand: about 40% of the sane limit"]
+    assert b[0] == "Still braking at turn-in: 1 of 10 corners you brake for"
+    assert b[1] == "Slowest point: the middle of the corner" and "leave more in hand" in b[2] and c == []
     text = " ".join(out["find"] + a + b + [out["card"], out["focus"]["tip"]])
     assert not any(w in text.lower() for w in ("faster", "quicker", "mph", "km/h", "seconds"))      # technique, never pace
