@@ -120,9 +120,14 @@
       $('kudosPanel').hidden = !got.length;
       $('kudosSum').textContent = `Kudos for you: ${got.length}`;
       $('kudosList').replaceChildren(...got.map((g) => {
-        const p = document.createElement('p'); p.className = 'friend-act';
+        // the feed's shape: who on the line, the stage and the day under it
+        const p = document.createElement('div'); p.className = 'friend-act';
         const day = new Date(g.driven_on + 'T12:00:00').toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
-        p.textContent = `@${g.from_handle} gave you kudos for ${g.stage || 'a stage'} · ${day}`;
+        const who = document.createElement('b'); who.textContent = '@' + (g.from_handle || 'someone');
+        const line = document.createElement('p'); line.append(who, ' gave you kudos');
+        const sub = document.createElement('small'); sub.textContent = `${g.stage || 'a stage'} · ${day}`;
+        const text = document.createElement('div'); text.append(line, sub);
+        p.append(text);
         return p;
       }));
     }

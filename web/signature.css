@@ -143,6 +143,8 @@
 /* a panel is a section of the page under a hairline, not a box */
 .log-page .panel:not(.index-panel) { border: 0; border-top: 1px solid var(--hair); padding: 14px 0 0; }
 .log-page .panel h2 { font-size: 20px; }
+/* a disclosure's own hairline is the rule above the panel after it: one line, not two (Kudos for you, then Friends lately) */
+.log-page details.quiet:not([hidden]) + .panel:not(.index-panel) { border-top: 0; }
 
 /* fields are wells, as Where to? is on the map page */
 .log-page :is(select, input:not([type="range"]):not([type="checkbox"]), textarea) { border: 0; background-color: var(--well); }
