@@ -94,8 +94,8 @@
     // stages within reach of half the length at LOOP_REACH_MS; at most LOOP_STAGES of them chained, LOOP_TRIES loops
     // routed, each stage driven through a point every LOOP_ALONG_M; a loop with more than LOOP_MAX_RETRACED driven twice
     // is dropped
-    LOOP_HWY_X: { quick: 2.5 }, LOOP_REACH_MS: 15, LOOP_STAGES: 8, LOOP_TRIES: 6, LOOP_ALONG_M: 1500, LOOP_MAX_RETRACED: 0.4,
-    LOOP_CONN_FACTOR: 1.7, LOOP_CONN_A: 3, LOOP_MAX_OFF: 0.6,   // a connector's road length over its crow line, the router's detours to good road in it (Cincinnati, 2026-11-04)
+    LOOP_HWY_X: { quick: 2.5 }, LOOP_REACH_MS: 15, LOOP_STAGES: 12, LOOP_TRIES: 6, LOOP_ALONG_M: 1500, LOOP_MAX_RETRACED: 0.4,
+    LOOP_CONN_FACTOR: 1.7, LOOP_CONN_A: 3, LOOP_MAX_OFF: 0.6, LOOP_NEAR_OFF: 0.15, LOOP_RING_OFF: 0.3, LOOP_RETRIES: 4, LOOP_REFITS: 2, LOOP_CONN_A_SHORT: 1, LOOP_CONN_A_LONG: 6, LOOP_FIT_OFF: 0.12,   // a connector's road length over its crow line, the router's detours to good road in it (Cincinnati, 2026-11-04)
     SNAP_M: 1500, GRID_DEG: 0.01,
     OUT_BACK_KM: 2,          // Best roads nearby: a dead-end run of good road this long stays (driven there and back); the stage minimum
   };
@@ -1393,16 +1393,47 @@
       if (noHighway(level)) s0 = snapOff(v, req.start, s0, req.start.heading);
     }
     const hwy = loopBase(v, level);
-    const out = [];
-    for (const c of loopCombos(v, req.start, km, req.max || K.LOOP_TRIES, req.prefs)) {
-      const r = loopAlong(v, obj, s0, req.start, c.pts, hwy, level);
-      if (!r || r.retraced > K.LOOP_MAX_RETRACED) continue;
-      r.kind = 'stages'; r.stages = c.stages.map((x) => x.name);
-      if (!out.some((x) => sameRoute(x, r))) out.push(r);
+    const out = [], tried = new Set(), ratios = [];
+    const offOf = (r) => Math.abs(r.distM / 1000 - km) / km;
+    const drive = (combos, max) => {
+      let n = 0;
+      for (const c of combos) {
+        if (tried.has(c.key) || n >= max) continue;
+        tried.add(c.key); n++;
+        const r = loopAlong(v, obj, s0, req.start, c.pts, hwy, level);
+        if (r && c.est > 0) ratios.push(r.distM / 1000 / c.est);
+        if (!r || r.retraced > K.LOOP_MAX_RETRACED) continue;
+        r.kind = 'stages'; r.stages = c.stages.map((x) => x.name); r.combo = c;
+        if (!out.some((x) => sameRoute(x, r))) out.push(r);
+      }
+    };
+    // the same stages with the connectors to them quicker (a loop too long: they wandered off to good road on the way) or
+    // freer to seek good road (too short)
+    const refit = () => {
+      for (const r of out.filter((x) => x.combo && offOf(x) > K.LOOP_NEAR_OFF).sort((x, y) => offOf(x) - offOf(y)).slice(0, K.LOOP_REFITS)) {
+        const long = r.distM / 1000 > km, x = loopAlong(v, obj, s0, req.start, r.combo.pts, hwy, level, long ? K.LOOP_CONN_A_SHORT : K.LOOP_CONN_A_LONG);
+        if (!x || x.retraced > K.LOOP_MAX_RETRACED || !(offOf(x) < offOf(r))) continue;
+        x.kind = 'stages'; x.stages = r.stages;
+        if (!out.some((y) => sameRoute(y, x))) out.push(x);
+      }
+    };
+    const tries = req.max || K.LOOP_TRIES;
+    drive(loopCombos(v, req.start, km, tries, req.prefs), tries);
+    // The length is a guess until routed (connectors as crow lines x LOOP_CONN_FACTOR): routed loops came out 0.6 to 1.7
+    // times it (Cincinnati, 2026-11-13: 112 to 127 km for 80 asked). None within LOOP_NEAR_OFF: once more, the stages
+    // picked for the length the routed ones say this ground needs (their median ratio); still none within LOOP_RING_OFF,
+    // the rings, which aim at the length itself. The ranking (fun_route.js loopRank) weighs length against the roads.
+    if (!out.some((r) => offOf(r) <= K.LOOP_NEAR_OFF) && ratios.length) {
+      const q = ratios.slice().sort((x, y) => x - y)[Math.floor(ratios.length / 2)], rho = Math.max(0.6, Math.min(1.7, q));
+      if (Math.abs(rho - 1) >= 0.05) drive(loopCombos(v, req.start, km / rho, tries + 2 * K.LOOP_RETRIES, req.prefs), K.LOOP_RETRIES);
     }
-    if (!out.length) out.push(...rings(v, req, obj, s0, hwy, level, km));
+    if (!out.some((r) => offOf(r) <= K.LOOP_NEAR_OFF)) refit();
+    if (!out.length || !out.some((r) => offOf(r) <= K.LOOP_RING_OFF)) {
+      for (const r of rings(v, req, obj, s0, hwy, level, km)) if (!out.some((x) => sameRoute(x, r))) out.push(r);
+    }
     // the length is a guess until routed: one more than 60 % off it isn't the loop asked for
     const routes = out.filter((r) => Math.abs(r.distM / 1000 - km) / km <= K.LOOP_MAX_OFF);
+    for (const r of routes) delete r.combo;
     return { routes, ms: Date.now() - t0 };
   }
   /**
@@ -1462,8 +1493,11 @@
         const est = len + K.LOOP_CONN_FACTOR * conn;
         if (!best || est < best.est) best = { est, mask: m };
       }
-      const fit = Math.max(0, 1 - 1.5 * Math.abs(best.est - km) / km);
-      if (fit <= 0) return;
+      // how near the asked length: half the credit 12 % off, a fifth 25 % off (2026-11-13: a straight 1 - 1.5 x off let
+      // three good roads 40 % over outscore one road on the length, so 90 km asked gave 110 to 130 km loops)
+      const off = Math.abs(best.est - km) / km;
+      if (off >= 2 / 3) return;
+      const fit = 1 / (1 + (off / K.LOOP_FIT_OFF) ** 2);
       const score = idx.reduce((a, i) => a + list[i].score, 0) * fit;
       combos.push({ idx, mask: best.mask, est: best.est, score });
     };
@@ -1484,7 +1518,9 @@
       seen.add(key); picked.push(c);
       if (picked.length >= n) break;
     }
-    return picked.map((c) => ({ stages: c.idx.map((i) => list[i]), est: c.est, pts: [].concat(...c.idx.map((i, k) => alongStage(list[i], (c.mask >> k) & 1))) }));
+    // key: the stages themselves (where they start and end), so a second pick for another length skips loops already driven
+    const keyOf = (c) => c.idx.map((i) => `${list[i].lat[0].toFixed(5)},${list[i].lon[0].toFixed(5)}`).sort().join('|') + `/${c.mask}`;
+    return picked.map((c) => ({ key: keyOf(c), stages: c.idx.map((i) => list[i]), est: c.est, pts: [].concat(...c.idx.map((i, k) => alongStage(list[i], (c.mask >> k) & 1))) }));
   }
   /** Points along a stage every LOOP_ALONG_M (its two ends included), driven forward or back, each with its heading. */
   function alongStage(s, rev) {
@@ -1515,7 +1551,7 @@
    * search on the loop's costs, earlier legs' edges (both ways) x LOOP_RETRACE_X. The route with `retraced` (share of its
    * length on road driven twice) and `hwyShare` (on motorway or trunk), or null.
    */
-  function loopAlong(v, obj, s0, start, pts, hwy, level) {
+  function loopAlong(v, obj, s0, start, pts, hwy, level, connA = K.LOOP_CONN_A) {
     const a = K.LOOP_A[level], penal = Float32Array.from(hwy), is = hwyOf(v);
     const snaps = [];
     for (const p of pts) {
@@ -1531,7 +1567,7 @@
     for (const nx of snaps) {
       // a connector (to a stage, back to the start) at most LOOP_CONN_A: at Long way's weight it wandered 100 km of back
       // roads to reach the next stage (a 175 mi loop for 90 asked, live 2026-11-06); the stages themselves at the level's
-      const res = loopLeg(v, obj, prev, nx.s, nx.conn ? Math.min(a, K.LOOP_CONN_A) : a, penal, { ellipse: ellipseFor(at, nx, nx.conn ? 'fun' : 'max') }, level);
+      const res = loopLeg(v, obj, prev, nx.s, nx.conn ? Math.min(a, connA) : a, penal, { ellipse: ellipseFor(at, nx, nx.conn ? 'fun' : 'max') }, level);
       if (!res) return null;
       legs.push(res);
       for (const e of res.edges) { penal[e] = hwy[e] * K.LOOP_RETRACE_X; const tw = twin(v, e); if (tw >= 0) penal[tw] = hwy[tw] * K.LOOP_RETRACE_X; }
