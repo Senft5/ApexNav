@@ -840,6 +840,19 @@ const CASES = {
       street: R.streetEdge && FunRoute.streetSample ? [R.streetEdge(v, v.name.findIndex((_, e) => v.cls[e] === 6 && v.roadCh.addr_per_km[e] === 70)), FunRoute.streetSample({ cls: 6, addr: 0, bldg: 2, density: 1 }), FunRoute.streetSample({ cls: 6 })] : null };
   },
 
+  // Loops near the length asked, on the real Cincinnati tiles: four starts where every loop came out 20 to 55 % off
+  // (2026-11-13: three good roads 40 % over outscored one road on the length); now one within 20 % each
+  loopLengthReal() {
+    globalThis.ApexFunRoute = FunRoute; globalThis.ApexCore = require('../web/apex_core.js');
+    const T = require('../web/graph_tiles.js'), dir = path.join(ROOT, 'web/data/graph/v1');
+    const tiles = fs.readdirSync(dir).filter((f) => f.endsWith('.vgr')).map((f) => { const b = fs.readFileSync(path.join(dir, f)); return T.decode(b.buffer.slice(b.byteOffset, b.byteOffset + b.length)); });
+    const v = R.view(tiles);
+    return [[39.0802, -84.4465, 90, 'fun'], [39.1655, -84.3880, 90, 'max'], [39.2866, -84.3824, 90, 'fun'], [39.0265, -84.4502, 30, 'fun']].map(([lat, lon, km, level]) => {
+      const r = R.loop(v, { start: { lat, lon }, km, level });
+      return { km, offs: r.routes.map((x) => (x.distM / 1000 - km) / km), retraced: r.routes.map((x) => x.retraced) };
+    });
+  },
+
   // Best roads nearby on the real Cincinnati tiles (web/data/graph/v1) at two public places: the map's own stage search
   // (stages.js, saved in tests/fixtures/best_roads from OpenFreeMap) ranked by the route engine with our tiles' context,
   // as cockpit.js exploreNear does where the tiles cover you, and our tiles' own search. A neighbourhood is told by our
