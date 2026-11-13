@@ -125,3 +125,15 @@ def test_a_probe_the_app_was_hidden_through_is_not_judged():
     by = json.loads(subprocess.run([NODE, "-e", AWAY, ROOT], capture_output=True, text=True, check=True, timeout=60).stdout)
     assert by["router_long"]["state"] == "skip" and "background" in by["router_long"]["detail"]
     assert by["router_fun"]["state"] == "down" and by["router_loop"]["state"] == "down"   # judged as usual while shown
+
+
+HIDDEN = r"""
+const S = require(process.argv[1] + '/web/service_check.js');
+const deps = { plan: async () => ({ cands: [1], reason: 'ok' }), loops: async () => ({ cands: [1] }), away: () => 0, hidden: () => true };
+S.run(deps, ['router_fun']).then((r) => console.log(JSON.stringify(r[0])));
+"""
+
+
+def test_a_probe_run_while_hidden_the_whole_time_is_not_judged():
+    r = json.loads(subprocess.run([NODE, "-e", HIDDEN, ROOT], capture_output=True, text=True, check=True, timeout=60).stdout)
+    assert r["state"] == "skip" and "background" in r["detail"]

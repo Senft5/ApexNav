@@ -159,12 +159,14 @@
 
   // A probe the page was hidden through is not judged: a phone that locks or leaves the app stops its timers and its
   // worker, and on return every timer fires at once, so the router reported "graph router timed out" after 544 s
-  // (Nate's runs, 2026-11-12/13) when nothing was wrong with it. deps.away() counts the times the page went hidden.
+  // (Nate's runs, 2026-11-12/13) when nothing was wrong with it. deps.away() counts the times the page went hidden,
+  // deps.hidden() says whether it is hidden now (hidden at the start or the end counts too).
   async function fairProbe(p, deps) {
     const now = deps.now || (() => Date.now());
-    const a0 = deps.away ? deps.away() : 0, t0 = now();
+    const hid = () => !!(deps.hidden && deps.hidden());
+    const a0 = deps.away ? deps.away() : 0, h0 = hid(), t0 = now();
     const r = await probe(p, deps).catch((e) => judge(p.id, { ok: false, ms: now() - t0, detail: errText(e) }));
-    if (deps.away && deps.away() !== a0) return { id: p.id, state: 'skip', http: null, ms: r.ms, detail: 'the app was in the background, so not judged' };
+    if (h0 || hid() || (deps.away && deps.away() !== a0)) return { id: p.id, state: 'skip', http: null, ms: r.ms, detail: 'the app was in the background, so not judged' };
     return r;
   }
 
