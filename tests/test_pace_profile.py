@@ -69,8 +69,8 @@ def test_parity_and_words():
     js = json.loads(subprocess.run([NODE, "-e", runner, os.getcwd()], input=json.dumps([ds, meta]), capture_output=True, text=True, check=True).stdout)
     assert js["pace"] == py["pace"] and js["lv"] == py["skills"]["pace"] and js["trend"] == py["trend"]["pace"]
     assert [(f["split"], f["a"], f["mean_a"], f["mean_b"]) for f in js["pf"]] == [(f["split"], f["a"], f["mean_a"], f["mean_b"]) for f in py["pace_findings"]]
-    assert js["lines"][0].startswith("1 of 10 corners went over their sane limit") and "leave more in hand" in js["lines"][0]
+    assert js["lines"][0].startswith("Over the sane limit: 1 of 10 corners.") and "leave more in hand" in js["lines"][0]
     down_line = next(t for t in js["find"] if "downhill" in t)
     assert down_line.startswith("Pace is lower downhill: ")
-    assert js["none"] == ["No corner went over its sane limit."] and js["few"] == ["Few corners went over their sane limit (3 in 100)."] and js["unk"] == []
+    assert js["none"] == ["Over the sane limit: no corner"] and js["few"] == ["Over the sane limit: 3 of 100 corners"] and js["unk"] == []
     assert not any(w in " ".join(js["lines"] + js["find"]).lower() for w in ("faster", "quicker", "push", "work on"))

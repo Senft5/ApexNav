@@ -795,9 +795,10 @@
   function paceLines(p) {
     const out = [], s = p && p.skills && p.skills.pace, ov = p && p.pace ? p.pace.over : null;
     if (!s || s.level === null) return out;
-    if (finite(ov) && ov >= 0.1) out.push(`${Math.round(ov * 10)} of 10 corners went over their sane limit, and pace counts those against you. On the road, leave more in hand.`);
-    else if (finite(ov) && ov > 0) out.push(`Few corners went over their sane limit (${Math.max(1, Math.round(ov * 100))} in 100).`);
-    else if (finite(ov)) out.push('No corner went over its sane limit.');
+    // a labelled row (TestFlight 2026-11-12, "text walls"); a share over the limit costs pace, and the advice says so once
+    if (finite(ov) && ov >= 0.1) out.push(`Over the sane limit: ${Math.round(ov * 10)} of 10 corners. On the road, leave more in hand`);
+    else if (finite(ov) && ov > 0) out.push(`Over the sane limit: ${Math.max(1, Math.round(ov * 100))} of 100 corners`);
+    else if (finite(ov)) out.push('Over the sane limit: no corner');
     return out;
   }
   /** The Log's card: one line. */
