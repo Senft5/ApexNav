@@ -5411,6 +5411,7 @@
     }
     function openPlan(open) {
       const panel = $('planPanel');
+      if (!open) clearNearbyPins();
       measurePlanBar();
       const closing = !open && panel.classList.contains('open');
       const opening = open && !panel.classList.contains('open');
@@ -5613,7 +5614,8 @@
       if ($('fromInput').value.trim() || $('planPanel').classList.contains('busy')) { routeToQuery(); return; }
       clearTimeout(suggestTimer);
       if (placesAsk.q === q) toast('Searching…');
-      placesFor(q).then((p) => { if ($('destInput').value.trim() !== q) return; if (p) take(p); else routeToQuery(); }).catch(() => routeToQuery());
+      const near = window.ApexNearby && ApexNearby.categoryOf(q, isElectric());   // "gas" with none found: the list says so
+      placesFor(q).then((p) => { if ($('destInput').value.trim() !== q) return; if (p) take(p); else if (!near) routeToQuery(); }).catch(() => { if (!near) routeToQuery(); });
     }
     // Your places by name while typing (pinned first, then recent; tests/test_place_search.py): on the phone, so the list's
     // top row, and Enter, need no network for a place you've been (2026-11-08)
@@ -5624,11 +5626,85 @@
       try { segs = JSON.parse(localStorage.getItem('apex.segments') || '[]'); } catch (_) {}
       return ApexPlaceSearch.localMatches(q, segs, loadHighlights(), 4, yourPlaces());
     }
+    // Find nearby (nearby.js, against Apple Maps' and Google Maps' Gas / Coffee / Food): the keys put their word in Where
+    // to?, and "gas", "coffee near me" or "food" typed lists the nearest by name from the map's own tiles (stages.js
+    // poisAll, kept on the phone: works with no signal where the map was seen), the same places the car's Places name.
+    const isElectric = () => { const c = routingCar(); return !!(c && c.fuel === 'electric'); };
+    function paintNearbyKeys() {
+      const box = $('nearbyKeys');
+      if (!window.ApexNearby) { box.hidden = true; return; }
+      const want = ApexNearby.keys(isElectric()).join();
+      if (box.dataset.keys !== want) {
+        box.dataset.keys = want;
+        box.replaceChildren(...ApexNearby.keys(isElectric()).map((k) => {
+          const b = document.createElement('button'), c = ApexNearby.CATS[k];
+          b.className = 'chip'; b.textContent = c.label; b.setAttribute('aria-label', `${c.label} nearby`);
+          b.addEventListener('click', () => { $('destInput').value = c.label; clearTimeout(suggestTimer); renderPlaces(); paintTask(); });
+          return b;
+        }));
+      }
+      box.hidden = !!$('destInput').value.trim();
+    }
+    // where "nearby" is: your position when it's fresh, else the middle of the map
+    function nearbyHere() {
+      const p = state.lastPosition;
+      if (p && state.lastPositionAt && performance.now() - state.lastPositionAt < 120000) return { lat: p.lat, lon: p.lon };
+      const c = map.getCenter(); return { lat: c.lat, lon: c.lng };
+    }
+    async function nearbyFor(cat) {
+      const here = nearbyHere();
+      let rows = [], failed = false;
+      for (const km of [3, 8]) {                                         // 3 km is ~25 tiles; 8 km only when that finds few
+        let pois;
+        try { pois = await ApexStages.poisAll(ApexNearby.gridPoints(here.lat, here.lon, km)); } catch (_) { failed = !rows.length; break; }
+        rows = ApexNearby.list(pois, here, cat, { km });
+        if (rows.length >= 3) break;
+      }
+      return { rows, failed };
+    }
+    async function renderNearby(q, cat, seq) {
+      paintPlaces(q, [], 'Looking nearby…', 0);
+      const here = nearbyHere(), { rows, failed } = await nearbyFor(cat);
+      if (seq !== suggestSeq) return;                                    // a newer keystroke won
+      const out = rows.map((r) => ({ label: r.label, lat: r.lat, lon: r.lon, kind: ApexUnits.long(r.m) }));
+      paintPlaces(q, out, out.length ? '' : ApexNearby.emptyLine(cat, failed, 8, (m) => ApexUnits.long(m)), 0);
+      paintNearbyPins(rows, cat, here, out);
+      warmPlace(out[0]);
+    }
+    // the listed places on the map too, by name (an unnamed one by its stamp), the map fitted to them above the sheet; a tap
+    // on one goes there, as its row does. They go when the list stops being a kind, the plan closes, or a route is planned.
+    let nearbyPins = [];
+    function clearNearbyPins() { for (const m of nearbyPins) m.remove(); nearbyPins = []; }
+    function paintNearbyPins(rows, cat, here, out) {
+      clearNearbyPins();
+      if (!rows.length || !mapReady) return;
+      rows.forEach((r, i) => {
+        const el = document.createElement('div'); el.className = `poi-pin nearby-pin poi-${cat === 'charge' ? 'charge' : cat}`;
+        el.textContent = r.named ? r.label : ApexNearby.CATS[cat].stamp;
+        el.setAttribute('role', 'button'); el.setAttribute('aria-label', `${r.label}, ${out[i].kind}`);
+        el.addEventListener('click', (e) => { e.stopPropagation(); suppressMapClickUntil = Date.now() + 400; routeToPlace(out[i]); });
+        nearbyPins.push(new maplibregl.Marker({ element: el }).setLngLat([r.lon, r.lat]).addTo(map));
+      });
+      const top = $('planPanel').getBoundingClientRect().top, h = map.getContainer().clientHeight;
+      if (top < h * 0.3) return;                                         // the sheet is up over most of the map: leave the view
+      let w = here.lon, e = here.lon, so = here.lat, n = here.lat;
+      for (const r of rows) { w = Math.min(w, r.lon); e = Math.max(e, r.lon); so = Math.min(so, r.lat); n = Math.max(n, r.lat); }
+      fitInView([[w, so], [e, n]], Math.max(0, h - top) + 24, 600);
+    }
     // the map search asked for what's typed (Enter pressed before its rows are up waits for them: placesFor)
     let placesAsk = { q: null, p: null };
     async function renderPlaces() {
       const q = $('destInput').value.trim(), seq = ++suggestSeq;
       let rows, empty = '';
+      paintNearbyKeys();
+      const cat = window.ApexNearby && window.ApexStages && !COORDS.test(q) && !pinIn('destInput', q) ? ApexNearby.categoryOf(q, isElectric()) : null;
+      if (!cat) clearNearbyPins();
+      if (cat) {
+        let done;
+        placesAsk = { q, p: new Promise((r) => { done = r; }) };
+        try { await renderNearby(q, cat, seq); } finally { done(); }
+        return;
+      }
       if (q.length >= 3 && !COORDS.test(q) && !pinIn('destInput', q)) {
         // your own places, stages and spots by name first (U-19), at once; then the map search's rows below them
         const mine = mineFor(q);
@@ -5705,11 +5781,16 @@
       if (q.length < 3 || COORDS.test(q) || pinIn('destInput', q)) return null;
       const mine = mineFor(q);
       if (mine.length) return mine[0];
-      if (placesAsk.q === q && placesAsk.p) await RouteLoading.optional(placesAsk.p, PLACES_WAIT_MS);
+      // "gas": the nearest one once the tiles are read (the tiles can take a few seconds on a slow signal; a geocode of the
+      // word would be a town called Gas)
+      const near = window.ApexNearby && ApexNearby.categoryOf(q, isElectric());
+      if (near && placesAsk.q !== q) renderPlaces();
+      if (placesAsk.q === q && placesAsk.p) await RouteLoading.optional(placesAsk.p, near ? 15000 : PLACES_WAIT_MS);
       return shownRows.q === q ? shownRows.rows[0] || null : null;
     }
     async function routeToPlace(p) {
       if ($('planPanel').classList.contains('busy')) return;
+      clearNearbyPins();
       $('destInput').value = p.label;
       const ui = planBusy();
       ui.step('Routing…', 0.5);

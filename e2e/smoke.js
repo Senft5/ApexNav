@@ -8810,6 +8810,42 @@ flow('when to go: the route card says the best time to leave, opens the next day
   await page.waitForFunction(() => !document.getElementById('routeCardWhen').hidden && !/^Leaving /.test(document.getElementById('routeWhenLine').textContent) && apexDebug.lastWhen.planned === null, null, { timeout: 25000 });
 }, IPHONE);
 
+flow('find nearby: Where to? has Gas, Coffee and Food; a key, or "gas near me" typed, lists the nearest by name and how far, and a tap plans the way there (big gap vs Apple Maps, 2026-11-13)', async (page, base) => {
+  await planRouter(page);
+  await funTiles(page);
+  const { tap } = await planPage(page, base);
+  // the map's places (offline here): round the middle of the spots asked for, a café 600 m north, an unnamed one 1.5 km
+  // south, a Shell 1 km east; the keys come from nearby.js, the places from the tiles (stages.js poisAll)
+  await page.evaluate(() => { window.__asked = 0; ApexStages.poisAll = async (pts) => { window.__asked++;
+    const lat = pts.reduce((a, p) => a + p.lat, 0) / pts.length, lon = pts.reduce((a, p) => a + p.lon, 0) / pts.length;
+    return [{ cls: 'cafe', name: 'Bean There Coffee', lat: lat + 0.0054, lon }, { cls: 'cafe', name: null, lat: lat - 0.0136, lon },
+      { cls: 'fuel', sub: null, name: 'Shell', lat, lon: lon + 0.0116 }, { cls: 'restaurant', name: null, lat: lat + 0.2, lon }]; }; });
+  await tap('#destInput', 'Where to?');
+  const keys = await page.evaluate(() => [...document.querySelectorAll('#nearbyKeys .chip')].map((b) => ({ t: b.textContent, h: Math.round(b.getBoundingClientRect().height), l: b.getAttribute('aria-label') })));
+  check(keys.map((k) => k.t).join() === 'Gas,Coffee,Food' && keys.every((k) => k.h >= 44 && / nearby$/.test(k.l)), 'three keys under Where to?: ' + JSON.stringify(keys));
+  await tap('#nearbyKeys .chip:nth-child(2)', 'Coffee');
+  await page.waitForFunction(() => document.querySelectorAll('#placeList .place').length >= 2, null, { timeout: 5000 });
+  const rows = await page.evaluate(() => ({ q: document.getElementById('destInput').value, keys: document.getElementById('nearbyKeys').hidden,
+    rows: [...document.querySelectorAll('#placeList .place')].map((b) => [b.querySelector('b').textContent, b.querySelector('span').textContent]) }));
+  check(rows.q === 'Coffee' && rows.keys && rows.rows.length === 2 && rows.rows[0][0] === 'Bean There Coffee' && /^0\.\d mi$/.test(rows.rows[0][1])
+    && rows.rows[1][0] === 'Café, no name on the map', 'the key says Coffee in the field, and the cafés are listed nearest first, how far, an unnamed one says so: ' + JSON.stringify(rows));
+  const pins = await page.evaluate(() => [...document.querySelectorAll('.nearby-pin')].map((p) => p.textContent));
+  check(pins.join() === 'Bean There Coffee,CAFÉ', 'and they are on the map, by name (an unnamed one by its stamp): ' + JSON.stringify(pins));
+  // typed, in the words people use: the fuel, never a geocode of the word; the restaurant 22 km off is out of reach
+  await page.fill('#destInput', 'gas near me');
+  await page.waitForFunction(() => { const b = document.querySelector('#placeList .place b'); return b && b.textContent === 'Shell'; }, null, { timeout: 5000 });
+  await page.fill('#destInput', 'food');
+  await page.waitForFunction(() => /^No food on the map within/.test(document.getElementById('placeList').textContent), null, { timeout: 5000 });
+  check(await page.evaluate(() => !document.querySelector('.nearby-pin')), 'none found, no pins left from before');
+  // Enter on "coffee" goes to the nearest
+  await page.fill('#destInput', 'coffee');
+  await page.press('#destInput', 'Enter');
+  await cardUp(page);
+  await planDone(page);
+  const card = await page.evaluate(() => document.getElementById('routeCardName') ? document.getElementById('routeCardName').textContent : document.getElementById('routeBarName').textContent);
+  check(/Bean There Coffee/.test(card), 'Enter plans the way to the nearest café: ' + card);
+}, { viewport: { width: 393, height: 852 }, hasTouch: true, geolocation: { latitude: 39.155, longitude: -84.615 }, permissions: ['geolocation'] });
+
 flow('along the route by name: the Along line opens a list of the cafés and fuel stops by their names on the map, and a tap on one (or its pin) says its name and offers it as a stop; in a drive the next fuel stamp names its station (the owner, 2026-11-11)', async (page, base) => {
   await planRouter(page);
   const { tap } = await planPage(page, base);
