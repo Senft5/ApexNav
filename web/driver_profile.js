@@ -292,18 +292,19 @@
     }
     return out;
   }
-  /** Words for driveRecords on drive `id`: "Tight corners: 94 at best here; your record is 100 (Aug 12)." Facts, never a push. */
+  /** Words for driveRecords on drive `id`, a labelled row a size: "Cleanest tight corner: 94 · your best 100, Aug 12".
+   *  Facts, never a push (TestFlight 2026-11-12: "94 at best here; your record is 100" read as a riddle). */
   function driveRecordLines(dr, id, day = (at) => at.slice(0, 10)) {
     if (!dr) return [];
     const out = [];
     for (const z of ['tight', 'medium', 'fast']) {
       const x = dr[z];
       if (!x || x.level === null) continue;
-      const r = x.record, Z = z[0].toUpperCase() + z.slice(1);
-      if (r && r.id === id) out.push(`${Z} corners: ${x.level} at best here, your record of ${r.n} ${z} corners.`);
-      else if (r && x.level >= r.level) out.push(`${Z} corners: ${x.level} at best here, level with your record (${r.at ? day(r.at) : 'set first'}).`);
-      else if (r) out.push(`${Z} corners: ${x.level} at best here; your record is ${r.level}${r.at ? ` (${day(r.at)})` : ''}.`);
-      else out.push(`${Z} corners: ${x.level} at best here.`);
+      const r = x.record, head = `Cleanest ${z} corner: ${x.level}`;
+      if (r && r.id === id) out.push(`${head} · your best of ${r.n}`);
+      else if (r && x.level >= r.level) out.push(`${head} · level with your best${r.at ? `, ${day(r.at)}` : ''}`);
+      else if (r) out.push(`${head} · your best ${r.level}${r.at ? `, ${day(r.at)}` : ''}`);
+      else out.push(head);
     }
     return out;
   }

@@ -98,12 +98,12 @@ def test_a_drive_against_your_records():
               "alone:P.driveRecordLines(P.driveRecords(o,{}),'me'),none:P.driveRecordLines(null,'me')}));")
     out = json.loads(subprocess.run([NODE, "-e", runner, os.getcwd()], input=json.dumps([mine, rec]), capture_output=True, text=True, check=True).stdout)
     assert out["dr"] == dr
-    assert out["say"] == ["Tight corners: 94 at best here; your record is 100 (2026-08-12).",
-                          "Medium corners: 99 at best here, your record of 8 medium corners."]
+    assert out["say"] == ["Cleanest tight corner: 94 · your best 100, 2026-08-12",
+                          "Cleanest medium corner: 99 · your best of 8"]
     level = subprocess.run([NODE, "-e", "const P=require(process.argv[1]+'/web/driver_profile.js');process.stdout.write(P.driveRecordLines({tight:{level:100,record:{id:'x',at:'2026-05-01T09:00',level:100,n:9}}},'me')[0])", os.getcwd()],
                            capture_output=True, text=True, check=True).stdout
-    assert level == "Tight corners: 100 at best here, level with your record (2026-05-01)."
-    assert out["alone"] == ["Tight corners: 94 at best here.", "Medium corners: 99 at best here."] and out["none"] == []
+    assert level == "Cleanest tight corner: 100 · level with your best, 2026-05-01"
+    assert out["alone"] == ["Cleanest tight corner: 94", "Cleanest medium corner: 99"] and out["none"] == []
     words = " ".join(out["say"]).lower()
     assert not any(w in words for w in ("mph", "km/h", "better", "worse", "faster", "push"))
 
