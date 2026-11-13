@@ -11,3 +11,8 @@
 - What: index.html, outside phone landscape: .plan-body stretches its rows, .plan-search-section is a flex column with an ::after spacer (order 1) before .find-bar (order 2), the chips lose their 4 px bottom margin (flex margins don't collapse), and the bar's bottom padding drops the safe-area inset.
 - Why: no dead band under the main key; the tab bar handles the home indicator (the sheet is hidden while driving or replaying, the bar while typing).
 - Undo: delete that @media block.
+
+## 2026-11-13 the sight-tag e2e check reads the plate and the cell together
+- What: e2e "the sight-line speed rides under the position arrow" reads .sight-tag and #cluster in one page.evaluate, and gives them up to 2 s to agree.
+- Why: CI on this PR failed it with "SIGHT15" against a cell that had moved on. The app paints both in the same frame from the same held value (cockpit.js render, sightHold); the test's two separate textContent calls could straddle a step of the held value. Not reproducible locally (3 of 3 passed before the change).
+- Undo: go back to the two page.textContent calls.

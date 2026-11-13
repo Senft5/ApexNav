@@ -2622,8 +2622,11 @@ flow('the sight-line speed rides under the position arrow, on the phone and on t
   await page.goto(base + '/index.html?drive=dry_ridge&play=1');
   await page.waitForFunction(() => window.apexDebug && window.apexDebug.track, null, { timeout: 15000 });
   await page.waitForFunction(() => { const t = document.querySelector('.sight-tag'); return t && !t.hidden; }, null, { timeout: 10000 });
-  const tag = await page.textContent('.sight-tag');
-  const cell = await page.textContent('#cluster');
+  // read together, in one frame: two separate reads can straddle the held value's step (CI 2026-11-13, "SIGHT15" against a
+  // cell that had already moved on); the plate and the cell are painted in the same frame from the same held value
+  const pair = () => page.evaluate(() => ({ tag: document.querySelector('.sight-tag').textContent, cell: document.getElementById('cluster').textContent }));
+  let { tag, cell } = await pair();
+  for (let i = 0; i < 20 && !cell.includes(tag.replace(/\D/g, '')); i++) { await page.waitForTimeout(100); ({ tag, cell } = await pair()); }
   // panel round 2 (TH-2, IN-3): the tag names itself, SIGHT and the number, no unit (never a limit sign); OPEN draws nothing
   check(/^(SIGHT|SLOW)\d+$/.test(tag.trim()), 'the tag reads SIGHT and a speed: ' + tag);
   check(cell.includes(tag.replace(/\D/g, '')), 'the same value as the Sight cell: ' + tag);
