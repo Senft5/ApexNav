@@ -27,6 +27,33 @@
     return { radiusKm: 2, map: tilesFor(lat, lon, 2, 8, 14), dem: tilesFor(lat, lon, 2, 10, 12) };
   }
 
+  /** Every tile [z, x, y] within bufferKm of a line (lat[], lon[]) for zooms zmin..zmax, each once. */
+  function tilesAlong(lat, lon, bufferKm, zmin = 8, zmax = 14) {
+    const n = Array.isArray(lat) && Array.isArray(lon) ? Math.min(lat.length, lon.length) : 0, out = [];
+    for (let z = zmin; z <= zmax; z++) {
+      const seen = new Set();
+      for (let i = 0; i < n; i++) {
+        if (!Number.isFinite(lat[i]) || !Number.isFinite(lon[i])) continue;
+        const dLat = bufferKm / 110.54, dLon = bufferKm / (111.32 * Math.cos(lat[i] * Math.PI / 180));
+        const [x0, y0] = tileOf(lat[i] + dLat, lon[i] - dLon, z), [x1, y1] = tileOf(lat[i] - dLat, lon[i] + dLon, z);
+        for (let x = x0; x <= x1; x++) for (let y = y0; y <= y1; y++) { const k = `${x}/${y}`; if (!seen.has(k)) { seen.add(k); out.push([z, x, y]); } }
+      }
+    }
+    return out;
+  }
+  /**
+   * The plan for a route (IDEAS F-03): map tiles z8-14 and terrain z10-12 within 1.5 km of it, the corridor narrowing to
+   * 0.5 km, then the closest zoom left out, until it fits MAX_TILES. null for no line.
+   */
+  function planAlong(lat, lon) {
+    if (!Array.isArray(lat) || lat.length < 2) return null;
+    for (const zmax of [14, 13, 12]) for (const b of [1.5, 1, 0.5]) {
+      const map = tilesAlong(lat, lon, b, 8, zmax), dem = tilesAlong(lat, lon, b, 10, Math.min(12, zmax));
+      if (map.length + dem.length <= MAX_TILES) return { bufferKm: b, zmax, map, dem };
+    }
+    return null;
+  }
+
   let dbp = null;
   function db() {
     if (dbp) return dbp;
@@ -39,7 +66,19 @@
   }
   const tx = async (mode, fn) => { const d = await db(); return new Promise((ok, fail) => { const t = d.transaction(STORE, mode), s = t.objectStore(STORE), r = fn(s); t.oncomplete = () => ok(r && r.result); t.onerror = () => fail(t.error); }); };
   async function get(url) { try { const v = await tx('readonly', (s) => s.get(url)); return v ? v.data : null; } catch (_) { return null; } }
-  async function put(url, data, area = null) { try { await tx('readwrite', (s) => s.put({ url, data, area, at: Date.now() })); } catch (_) {} }
+  // the areas a kept copy belongs to: one tile can serve two areas (a saved route inside a saved area, two areas that
+  // overlap), so it is tagged with each, and goes only when the last of them is deleted (an older copy has one `area`)
+  const areasOf = (v) => (v && Array.isArray(v.areas) ? v.areas : v && v.area ? [v.area] : []);
+  async function put(url, data, area = null) {
+    try {
+      const d = await db();
+      await new Promise((ok, fail) => {
+        const t = d.transaction(STORE, 'readwrite'), s = t.objectStore(STORE), g = s.get(url);
+        g.onsuccess = () => { const tags = areasOf(g.result); if (area && !tags.includes(area)) tags.push(area); s.put({ url, data, areas: tags, at: Date.now() }); };
+        t.oncomplete = ok; t.onerror = () => fail(t.error);
+      });
+    } catch (_) {}
+  }
   async function clear() { try { await tx('readwrite', (s) => s.clear()); } catch (_) {} try { root.localStorage.removeItem(AREAS); } catch (_) {} }
 
   function areas() { try { const v = JSON.parse(root.localStorage.getItem(AREAS) || '[]'); return Array.isArray(v) ? v : []; } catch (_) { return []; } }
@@ -49,7 +88,12 @@
     try {
       const d = await db();
       await new Promise((ok) => { const t = d.transaction(STORE, 'readwrite'), s = t.objectStore(STORE), c = s.openCursor();
-        c.onsuccess = () => { const cur = c.result; if (!cur) return; if (cur.value.area === id) cur.delete(); cur.continue(); }; t.oncomplete = ok; t.onerror = ok; });
+        c.onsuccess = () => {
+          const cur = c.result; if (!cur) return;
+          const tags = areasOf(cur.value);
+          if (tags.includes(id)) { const rest = tags.filter((a) => a !== id); if (rest.length) cur.update({ ...cur.value, area: undefined, areas: rest }); else cur.delete(); }
+          cur.continue();
+        }; t.oncomplete = ok; t.onerror = ok; });
     } catch (_) {}
   }
 
@@ -75,8 +119,10 @@
    * Saves the area round (lat, lon): the style, its data description, label fonts, map tiles and terrain. onProgress(done, of).
    * Resolves the area record ({ id, name, lat, lon, radiusKm, tiles, bytes, at }); a failed tile is skipped, not fatal.
    */
-  async function download({ lat, lon, radiusKm = 25, name, styleUrl, onProgress, concurrency = 6 }) {
-    const p = plan(lat, lon, radiusKm), id = `a${Date.now().toString(36)}`;
+  async function download({ lat, lon, radiusKm = 25, name, styleUrl, onProgress, concurrency = 6, along = null, id: areaId = null }) {
+    // `along`: a planned route's line ({ lat, lon }): the corridor along it (planAlong) instead of a disc round (lat, lon)
+    const p = along ? planAlong(along.lat, along.lon) : plan(lat, lon, radiusKm), id = areaId || `a${Date.now().toString(36)}`;
+    if (!p) throw new Error('route too long to keep');
     const keep = async (url) => { const r = await fetch(url); if (!r.ok) throw new Error(`HTTP ${r.status}`); const b = await r.arrayBuffer(); await put(url, b, id); return b; };
     const style = JSON.parse(new TextDecoder().decode(await keep(styleUrl)));
     const src = Object.values(style.sources || {}).find((s) => s.type === 'vector' && s.url);
@@ -90,10 +136,10 @@
     for (const [z, x, y] of p.map) urls.push(template.replace('{z}', z).replace('{x}', x).replace('{y}', y));
     for (const [z, x, y] of p.dem) urls.push(DEM.replace('{z}', z).replace('{x}', x).replace('{y}', y));
     // the route context bundles for the area (route_ctx/context_grid.js), so offline plans keep their traffic and land data
-    if (root.ApexContextGrid) { try { urls.push(...await root.ApexContextGrid.urlsNear(lat, lon, p.radiusKm)); } catch (_) {} }
+    if (root.ApexContextGrid && !along) { try { urls.push(...await root.ApexContextGrid.urlsNear(lat, lon, p.radiusKm)); } catch (_) {} }
     // Vetta's own road network for the area (web/graph_tiles.js), kept in its IndexedDB store so own routing works offline
     let graph = null;
-    if (root.ApexGraphTiles && root.ApexGraphTiles.prefetchArea) {
+    if (root.ApexGraphTiles && root.ApexGraphTiles.prefetchArea && !along) {
       const dLat = p.radiusKm / 110.54, dLon = p.radiusKm / (111.32 * Math.cos(lat * Math.PI / 180));
       graph = root.ApexGraphTiles.prefetchArea({ s: lat - dLat, w: lon - dLon, n: lat + dLat, e: lon + dLon }).catch(() => null);
     }
@@ -106,9 +152,9 @@
       }
     }));
     const g = graph ? await graph : null;
-    const area = { id, name: name || 'Saved area', lat, lon, radiusKm: p.radiusKm, tiles: urls.length, bytes, at: new Date().toISOString(),
-      graphTiles: g ? g.kept : 0 };
-    saveAreas([...areas(), area]);
+    const area = { id, name: name || 'Saved area', lat, lon, radiusKm: along ? null : p.radiusKm, ...(along ? { alongKm: p.bufferKm } : {}),
+      tiles: urls.length, bytes, at: new Date().toISOString(), graphTiles: g ? g.kept : 0 };
+    saveAreas([...areas().filter((a) => a.id !== id), area]);
     return area;
   }
   /** Adds fields to a saved area's record (members' road feel counts, set after the tiles). */
@@ -116,6 +162,6 @@
   /** Bytes saved, from the areas list. */
   const bytesSaved = () => areas().reduce((s, a) => s + (a.bytes || 0), 0);
 
-  const api = { tilesFor, plan, transform, install, download, get, put, clear, areas, setArea, removeArea, bytesSaved, MAX_TILES, PROTO, DEM };
+  const api = { tilesFor, plan, tilesAlong, planAlong, areasOf, transform, install, download, get, put, clear, areas, setArea, removeArea, bytesSaved, MAX_TILES, PROTO, DEM };
   if (typeof module !== 'undefined' && module.exports) module.exports = api; else root.ApexOfflineTiles = api;
 })(typeof window !== 'undefined' ? window : globalThis);

@@ -92,11 +92,15 @@
       const rows = await ApexSync.activity();
       panel.hidden = !rows.length;
       box.replaceChildren(...rows.map((r) => {
-        const p = document.createElement('p'); p.className = 'friend-act';
+        // a feed row: who drove what and the score, then the day and where you stand, Kudos on the right (not wrapped into the sentence)
+        const p = document.createElement('div'); p.className = 'friend-act';
         const who = document.createElement('b'); who.textContent = '@' + (r.handle || 'someone');
         const day = new Date(r.driven_on + 'T12:00:00').toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
-        const you = r.you && r.you.rank ? ` · you're ${ordinal(r.you.rank)} of ${r.you.of}` : r.you ? ` · you haven't posted a score here` : '';
-        p.append(who, ` drove ${r.stage} · ${r.driver_score} · ${day}${you} `);
+        const you = r.you && r.you.rank ? ` · you're ${ordinal(r.you.rank)} of ${r.you.of}` : r.you ? ' · no score from you yet' : '';
+        const line = document.createElement('p'); line.append(who, ` drove ${r.stage} · ${r.driver_score}`);
+        const sub = document.createElement('small'); sub.textContent = day + you;
+        const text = document.createElement('div'); text.append(line, sub);
+        p.append(text);
         // Kudos (IDEAS S-07): a tap of thanks, no text; the count is everyone's, the pressed state yours
         const k = document.createElement('button'); k.className = 'btn kudos-btn';
         const paint = () => { k.textContent = `Kudos${r.kudos ? ' ' + r.kudos : ''}`; k.classList.toggle('on', !!r.my_kudos); k.setAttribute('aria-pressed', String(!!r.my_kudos)); };
@@ -638,7 +642,7 @@
       if (!window.ApexSync || !(await ApexSync.member())) { panel.hidden = true; return; }
       panel.hidden = false;
       const sent = await ApexSync.pushSegments(segs); saveSegs(segs);
-      $('segSyncNote').textContent = sent ? `Backed up ${sent} stage${sent === 1 ? '' : 's'}. Only the stretch itself is stored, never your drives.` : 'Your stages are backed up. Scores are shared only with friends you choose (Account).';
+      $('segSyncNote').textContent = sent ? `Backed up ${sent} stage${sent === 1 ? '' : 's'}.` : '';   // nothing to say when nothing new went up
       const box = $('segShared'); box.innerHTML = '';
       const have = new Set(segs.map(s => s.origin || s.id));
       for (const r of (await ApexSync.sharedWithMe()).filter(r => !have.has(r.origin || r.id))) {
@@ -695,7 +699,7 @@
           }
           if (!filtered.some(r => !r.mine) && filtered.length < 2) {
             // TestFlight 2026-11-05 ("bad text spacing"): an empty board is a sentence that wraps, not one cut in a table cell
-            bt.innerHTML = ''; $('segLegend').textContent = 'No friends on this stage yet. Friends appear once they share scores with you (Account) and have driven it.';
+            bt.innerHTML = ''; $('segLegend').textContent = 'No friends on this stage yet.';
             return;
           }
         } else {
@@ -792,7 +796,11 @@
         <svg class="fp-mark" viewBox="0 0 320 56" preserveAspectRatio="none" aria-hidden="true"><path d="M4 44 C 50 44, 60 14, 104 16 S 170 46, 214 34 S 280 10, 316 12" stroke-dasharray="3 4"/><path class="ink" d="M104 16 C 140 18, 170 46, 214 34"/><line class="ink" x1="104" y1="6" x2="104" y2="26"/><line class="ink" x1="214" y1="24" x2="214" y2="44"/><circle cx="104" cy="16" r="3.5"/></svg>
         <h2 class="fp-head">No stages yet.</h2>
         <p class="fp-line">A stretch you drive often, each pass timed against your best.</p>
-        ${drives.length ? '<a class="btn solid fp-go" href="analysis.html?tab=log">Pick a drive to mark one from</a>' : '<a class="btn solid fp-go" href="index.html">Start a drive</a><p class="fp-line" style="margin:10px 0 0;text-align:center">Mark one from a drive\u2019s page.</p>'}</div>`;
+        ${drives.length ? '<button type="button" class="btn solid fp-go" id="segMarkGo">Mark a stage</button>' : '<a class="btn solid fp-go" href="index.html">Start a drive</a><p class="fp-line" style="margin:10px 0 0;text-align:center">Mark one from a drive\u2019s page.</p>'}</div>`;
+      // 2026-11-12 (free roamer B): the key opens the marker here on your latest drive (it used to send you to the Drives
+      // list with nothing there saying what to do next); the marker's own picker changes the drive
+      const go = $('segMarkGo');
+      if (go) go.addEventListener('click', () => openMarker(drives[drives.length - 1].id));
       for (const s of segs) {
         const passes = passesFor(s), best = passes.reduce((m, x) => (x.p.score != null && (m == null || x.p.score > m) ? x.p.score : m), null);
         const b = document.createElement('button');
@@ -814,7 +822,7 @@
       // Score cut to "ore", the components' words run together). Now a run is its line (#, run, Score, time) and its four
       // components under it, the whole width; nothing scrolls sideways.
       $('segTable').className = 'runs';
-      $('segTable').innerHTML = `<tr><th class="l">#</th><th class="l">Run</th><th>Score</th><th>Time <small>(private)</small></th></tr>` +
+      $('segTable').innerHTML = `<tr><th class="l">#</th><th class="l">Run</th><th>Score</th><th>Time</th></tr>` +
         passes.map((x, i) => `<tr class="run${i === 0 ? ' best' : ''}"><td class="l">${i + 1}</td><td class="l run-name"><b>${dateLabel(x.d)}</b><span class="sub"></span></td>
           <td><span class="score">${x.p.score ?? UNK}</span></td>
           <td>${mmss(x.p.time_s)}<span class="sub">${x.p.time_s === bestTime ? 'quickest' : '+' + (x.p.time_s - bestTime).toFixed(1) + ' s'}</span></td></tr>
@@ -847,11 +855,18 @@
     async function renderCompare() {
       const a = $('selA').value, b = $('selB').value, run = ++compareRun;
       const B = summaryOf(b);
-      if (!summaryOf(a) || !B || a === b) { $('cards').innerHTML = '<p class="note">Pick two different drives.</p>'; return; }
+      // 2026-11-12 (free roamer B): with nothing to compare, one line says why, and the empty Road, Gap and Corner panels
+      // (and, with a single drive, the two pickers) are not drawn
+      const none = () => {
+        $('cards').innerHTML = `<p class="note" style="grid-column:1/-1">${drives.length < 2 ? 'Compare needs two drives. Drive this road again and it lands here.' : 'Pick two different drives.'}</p>`;
+        $('cmpRoad').hidden = $('cmpCorners').hidden = true; document.querySelector('.compare-pick').hidden = drives.length < 2;
+      };
+      if (!summaryOf(a) || !B || a === b) { none(); return; }
       const [A, res] = await Promise.all([full(a), ApexAnalysis.job('compare', { a, b })]);
       if (run !== compareRun) return;                                    // another pair picked meanwhile
       const r = res && res.r;
-      if (!A || !r) { $('cards').innerHTML = '<p class="note">Pick two different drives.</p>'; return; }
+      if (!A || !r) { none(); return; }
+      $('cmpRoad').hidden = $('cmpCorners').hidden = document.querySelector('.compare-pick').hidden = false;
       const c = (v, label, extra, k = '') => `<div class="card"><b class="${k}">${v}</b><span>${label}</span>${extra ? `<em>${extra}</em>` : ''}</div>`;
       $('cards').innerHTML =
         c(ApexUnits.long(r.overlap_m), 'Shared road', `${A.name} ∩ ${B.name}`) +
@@ -1135,6 +1150,12 @@
       if (o) $('selB').value = o.id;
       renderCompare(); showTab('compare'); toTop();
     });
+    /** The new-stage marker open on this drive (from the drive-ended card, a drive's page or the empty Stages page). */
+    function openMarker(id, scroll = true) {
+      const box = $('newStage');
+      box.dataset.fromDrive = '1'; box.hidden = false; $('segDrive').value = id; $('segDrive').dispatchEvent(new Event('change')); box.open = true;
+      if (scroll) box.scrollIntoView({ block: 'start' });
+    }
     // The page a Log URL asks for: ?tab= (log, stages, drive, compare) and a drive (?drive=), here or from the map page
     async function route(search) {
       const p = new URLSearchParams(search), q = p.get('tab'), t = TAB_ALIAS[q] || q, want = p.get('drive');
@@ -1144,7 +1165,7 @@
       if (tab === 'segments' && $('segDrive')) {
         showTab('segments');
         if (dirty.has('segments') || !$('segDrive').options.length) await renderSegments();
-        $('newStage').dataset.fromDrive = '1'; $('newStage').hidden = false; $('segDrive').value = want; $('segDrive').dispatchEvent(new Event('change')); $('newStage').open = true;
+        openMarker(want, false);
       } else openDrive(want);
     }
     {

@@ -249,16 +249,17 @@ console.log(JSON.stringify({
     p = subprocess.run([NODE, "-e", runner, root], capture_output=True, text=True, timeout=60)
     assert p.returncode == 0, p.stderr
     r = json.loads(p.stdout)
-    assert r["habit"] == ("Smooth, unhurried steering. One thing to work on: in 2 corners you rolled with neither brake nor gas "
-                          "between slowing down and speeding up; go straight from one to the other.")
+    assert r["habit"] == ("Smooth, unhurried steering. One thing to work on: you coasted between brake and gas in 2 corners; "
+                          "go from one straight to the other.")
     assert r["speedOnly"] == "Smooth, unhurried steering, and nothing stands out to fix."   # tips against a faster pass are not habits
     assert r["weak"].endswith("One thing to work on: finish your braking by the middle of the corner.")   # one coast tip is not a habit
     assert r["clean"] == "Smooth, unhurried steering, and nothing stands out to fix."
-    assert r["noStrong"] == "One thing to work on: steer more gently, with fewer quick corrections in the middle of corners."
+    assert r["noStrong"] == "One thing to work on: steer more gently, with fewer corrections mid-corner."
     assert r["unknown"] is None
-    assert r["noContradiction"].startswith("Good use of the grip you had. One thing to work on: in 2 corners you were still braking")
+    assert r["noContradiction"].startswith("Good use of the grip you had. One thing to work on: you were still braking past the middle of 2 corners")
     for v in r.values():
         assert v is None or not any(w in v.lower() for w in ("faster", "quicker", "speed up", "mph", "apex"))
+        assert v is None or len(v) <= 140, v   # two or three lines on a phone, not a paragraph
 
 
 def test_unknown_elevation_is_a_gap_not_nan(r):

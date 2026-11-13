@@ -97,20 +97,31 @@ export async function duelList(env: Env, v: Viewer) {
   // a side's best Score in the window, and their quickest time there while they share times with the other (else null).
   // `on` is the day of the run that counts; in a time duel it follows the time only under share_times, so the day of an
   // unshared quickest run is never told.
-  const best = (who: string, to: string, d: typeof rows[number]) => d.status === "pending" || !d.starts_on ? Promise.resolve(null) : first<{ s: number | null; on: string | null; t: number | null }>(env,
+  // All of a page's reads go out in one batch: Workers Free allows 50 D1 queries per invocation (a batch counts as one), and
+  // four per duel on a page of up to 50 went past it.
+  const best = (who: string, to: string, d: typeof rows[number]) => d.status === "pending" || !d.starts_on ? null : env.DB.prepare(
     `SELECT MAX(be.driver_score) AS s, (SELECT b2.driven_on FROM board_entries b2 WHERE b2.user_id = ?1 AND b2.canon_id = ?3 AND b2.audience_type = 'friend' AND b2.audience_id = ?2
          AND b2.driven_on BETWEEN ?4 AND ?5 ORDER BY ${d.kind === "time" ? "CASE WHEN EXISTS (SELECT 1 FROM grants g2 WHERE g2.user_id = ?1 AND g2.audience_type = 'friend' AND g2.audience_id = ?2 AND g2.share_times = 1) THEN b2.time_s END IS NULL, CASE WHEN EXISTS (SELECT 1 FROM grants g2 WHERE g2.user_id = ?1 AND g2.audience_type = 'friend' AND g2.audience_id = ?2 AND g2.share_times = 1) THEN b2.time_s END," : ""} b2.driver_score DESC, b2.driven_on LIMIT 1) AS "on",
          CASE WHEN EXISTS (SELECT 1 FROM grants g WHERE g.user_id = ?1 AND g.audience_type = 'friend' AND g.audience_id = ?2 AND g.share_times = 1) THEN MIN(be.time_s) END AS t
        FROM board_entries be WHERE be.user_id = ?1 AND be.canon_id = ?3 AND be.audience_type = 'friend' AND be.audience_id = ?2
         AND be.driven_on BETWEEN ?4 AND ?5
         AND EXISTS (SELECT 1 FROM grants g WHERE g.user_id = ?1 AND g.audience_type = 'friend' AND g.audience_id = ?2 AND g.share_scores = 1)`,
-    who, to, d.canon_id, d.starts_on, d.ends_on).then((r) => (r && r.s != null ? { score: r.s, on: r.on, time_s: r.t ?? null } : null));
+  ).bind(who, to, d.canon_id, d.starts_on, d.ends_on);
   // what a duel needs to reach the other side: Scores, and times too in a time duel
-  const shares = (who: string, to: string, kind: string) => first(env,
-    `SELECT 1 FROM grants WHERE user_id = ? AND audience_type = 'friend' AND audience_id = ? AND share_scores = 1${kind === "time" ? " AND share_times = 1" : ""}`, who, to).then((r) => !!r);
+  const shares = (who: string, to: string, kind: string) => env.DB.prepare(
+    `SELECT 1 FROM grants WHERE user_id = ? AND audience_type = 'friend' AND audience_id = ? AND share_scores = 1${kind === "time" ? " AND share_times = 1" : ""}`).bind(who, to);
+  const stmts: D1PreparedStatement[] = [];
+  const slot = (st: D1PreparedStatement | null) => (st ? stmts.push(st) - 1 : -1);
+  const plan = rows.map((d) => [best(v.id, d.other_id, d), best(d.other_id, v.id, d), shares(v.id, d.other_id, d.kind), shares(d.other_id, v.id, d.kind)].map(slot));
+  const res = stmts.length ? await env.DB.batch(stmts) : [];
+  const row = (i: number) => (i < 0 ? null : (res[i].results[0] as Record<string, unknown> | undefined) ?? null);
+  const score = (i: number) => {
+    const r = row(i) as { s: number | null; on: string | null; t: number | null } | null;
+    return r && r.s != null ? { score: r.s, on: r.on, time_s: r.t ?? null } : null;
+  };
   const out = [];
-  for (const d of rows) {
-    const [mineBest, theirs, youShare, theyShare] = await Promise.all([best(v.id, d.other_id, d), best(d.other_id, v.id, d), shares(v.id, d.other_id, d.kind), shares(d.other_id, v.id, d.kind)]);
+  for (const [k, d] of rows.entries()) {
+    const [mineBest, theirs, youShare, theyShare] = [score(plan[k][0]), score(plan[k][1]), !!row(plan[k][2]), !!row(plan[k][3])];
     const over = d.status === "on" && d.ends_on! < d.today;
     out.push({ id: d.id, kind: d.kind === "time" ? "time" : "score", stage: d.stage, canon_id: d.canon_id, days: d.days, with: d.other, with_id: d.other_id, challenger: d.challenger === v.id,
       status: over ? "over" : d.status, starts_on: d.starts_on, ends_on: d.ends_on, today: d.today, have_stage: !!d.have_stage,

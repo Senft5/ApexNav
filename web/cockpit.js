@@ -2585,7 +2585,12 @@
     // sent to the router as exclude_locations. If no way around them exists, the route is asked again without them.
     const closureCache = { key: '', at: 0, list: [] };
     async function closuresAround(points) {
-      return ApexHazardReports.closuresFor(await hazardsAround(points), points);
+      const list = await hazardsAround(points);
+      // with the closures the drive has fetched round you (newer than this trip's for one that landed mid-drive: Go round)
+      let mine = [];
+      try { mine = reported.list.filter((h) => h && h.kind === 'closure'); } catch (_) { mine = []; }   // (not yet set up at boot)
+      const ids = new Set(mine.map((h) => h.id));
+      return ApexHazardReports.closuresFor(mine.length ? [...mine, ...list.filter((h) => !h || !ids.has(h.id))] : list, points);
     }
     // Avoid police reports (IDEAS R-35, the owner 2026-11-11): the live "Police" reports near the trip (members' reports
     // from the last hour, and a convoy leader's live call), as router exclusions and as points our own router keeps off.
@@ -2624,6 +2629,21 @@
       policeSeen.set(t, { list, r });
       return r;
     }
+    // the card's word on members' "Road closed" reports: true when a planned route or loop still drives within 40 m of one
+    // (graph_router.js CLOSED_M: our router goes round them where it can; with no way round, or a report that landed after
+    // the plan, the route goes by, and the driver should know). Reports for the area not in hand: null, nothing said
+    const closedSeen = new WeakMap();
+    function closedOnCard(t) {
+      if (!t || !(t.id === 'route_dest' || /^loop_/.test(t.id || '')) || !Array.isArray(t.lat) || t.lat.length < 2 || !window.ApexHazardReports) return null;
+      const ends = [{ lat: t.lat[0], lon: t.lon[0] }, { lat: t.lat[t.lat.length - 1], lon: t.lon[t.lon.length - 1] }];
+      if (!hazardsCover(ends)) return null;
+      const list = closureCache.list, kept = closedSeen.get(t);
+      if (kept && kept.list === list) return kept.r;
+      const pts = ApexHazardReports.closuresFor(list, ends);
+      const r = pts.length > 0 && ApexHazardReports.passesNear(t.lat.map((la, i) => [t.lon[i], la]), pts, 40);
+      closedSeen.set(t, { list, r });
+      return r;
+    }
     let camWarmAt = -1e9;
     function policeWarm() {
       const p = state.lastPosition;
@@ -2636,7 +2656,7 @@
     // otherwise a plan waits POLICE_WAIT_MS at most and goes without them. Signed out there are none to ask for: []
     async function closedForTrip(points) {
       if (!window.ApexHazardReports || !memberNow()) return [];
-      if (hazardsCover(points)) return ApexHazardReports.closuresFor(closureCache.list, points);
+      if (hazardsCover(points)) return closuresAround(points);   // (with the drive's own, newer: closuresAround)
       const list = await RouteLoading.optional(closuresAround(points), POLICE_WAIT_MS).catch(() => null);
       return Array.isArray(list) ? list : [];
     }
@@ -2701,8 +2721,9 @@
           if (r.ok) list = await r.json();
         } catch (_) { /* offline or signed out: no closures known */ }
         Object.assign(closureCache, { key: `${mid.lat.toFixed(1)},${mid.lon.toFixed(1)}`, mid: { lat: mid.lat, lon: mid.lon }, at: performance.now(), list: Array.isArray(list) ? list : [], asking: null });
-        // the reports landed after the card went up (a slow answer; a plan waits 0.2 s at most): its word again
-        if (avoid.police && plannedRoute && !driveActive && typeof renderRouteCard === 'function') setTimeout(() => { try { if (plannedRoute) renderRouteCard(plannedRoute); } catch (_) {} }, 0);
+        // the reports landed after the card went up (a slow answer; a plan waits 0.2 s at most): its word again (police
+        // reports with Avoid police on, and a reported closure the route passes, always)
+        if (plannedRoute && !driveActive && typeof renderRouteCard === 'function') setTimeout(() => { try { if (plannedRoute) renderRouteCard(plannedRoute); } catch (_) {} }, 0);
         return closureCache.list;
       })();
       Object.assign(closureCache, { asking: ask, askMid: { lat: mid.lat, lon: mid.lon } });
@@ -3140,6 +3161,7 @@
       // Avoid police reports: the live reports near this route, from the reports as they are now (they can land after the
       // plan: the card is painted again then, policeLanded); none known: nothing said
       const pol = policeOnCard(t);
+      const closed = closedOnCard(t) ? 'Passes a reported road closure · ' : '';
       const around = pol && pol.n && !pol.passes ? `Around ${pol.n === 1 ? 'a police report' : `${pol.n} police reports`} · ` : '';
       const missedPolice = pol && pol.passes && !(t.unavoided || []).includes('police') ? 'Couldn\'t avoid police reports · ' : '';
       // Planned routes only: a driven track's own time has passed.
@@ -3150,7 +3172,7 @@
       // your taste (taste.js) when it moved this route up: the word for what you lean to, never a number
       const tasteLine = (() => { try { const f = t.tasteBonus >= 1 && window.ApexTaste ? ApexTaste.fit(ApexTaste.load(localStorage)) : null;
         if (!f) return ''; const k = ApexTaste.AXES.slice().sort((a, b) => f[b] - f[a])[0]; return `Suits your taste for ${{ tech: 'technical roads', flow: 'flowing roads', smooth: 'smooth surfaces' }[k]} · `; } catch (_) { return ''; } })();
-      $('routeCardSub').textContent = `${tasteLine}${carLine ? carLine + ' · ' : ''}${missed}${missedPolice}${around}${towns}${sun}${cams}${feel}`.replace(/ · $/, '');
+      $('routeCardSub').textContent = `${tasteLine}${carLine ? carLine + ' · ' : ''}${closed}${missed}${missedPolice}${around}${towns}${sun}${cams}${feel}`.replace(/ · $/, '');
       $('routeCardSub').hidden = !$('routeCardSub').textContent;
       $('routeCardWhy').textContent = t.why || '';
       $('routeCardWhy').hidden = !t.why;
@@ -3234,11 +3256,27 @@
     $('routeSaveBtn').addEventListener('click', () => {
       const t = plannedRoute;
       if (!t || !Array.isArray(t.lat) || t.lat.length < 2) return;
-      if (ApexSavedRoutes.has(localStorage, t.id)) { ApexSavedRoutes.remove(localStorage, t.id); toast(`${t.name} removed from saved routes.`); }
-      else if (ApexSavedRoutes.save(localStorage, ApexSavedRoutes.pack(t)) === 'saved') toast(`Saved for offline: ${t.name}. It's listed in Where to? now.`);
+      if (ApexSavedRoutes.has(localStorage, t.id)) {
+        ApexSavedRoutes.remove(localStorage, t.id); toast(`${t.name} removed from saved routes.`);
+        if (window.ApexOfflineTiles) ApexOfflineTiles.removeArea(routeAreaId(t)).catch(() => {});   // and the map kept along it
+      } else if (ApexSavedRoutes.save(localStorage, ApexSavedRoutes.pack(t)) === 'saved') { toast(`Saved for offline: ${t.name}. It's listed in Where to? now.`); keepMapAlong(t); }
       else toast('The phone is out of room for saved routes. Remove one first.');
       paintSaveBtn();
     });
+    // IDEAS F-03: a saved route keeps the map along it too (offline_tiles.js planAlong: the map and terrain within 1.5 km of
+    // it), so it draws with no signal on the way. Quietly, with signal; it shows in Your data as a map area and goes when the
+    // route is unsaved. Nothing kept (no signal, a route too long) leaves the saved route as it was.
+    const routeAreaId = (t) => `route_${String(t.id).replace(/[^\w-]/g, '').slice(0, 60)}`;
+    async function keepMapAlong(t) {
+      if (!window.ApexOfflineTiles || navigator.onLine === false || !t || !Array.isArray(t.lat)) return;
+      try {
+        const mid = Math.floor(t.lat.length / 2);
+        const a = await ApexOfflineTiles.download({ lat: t.lat[mid], lon: t.lon[mid], along: { lat: t.lat, lon: t.lon }, id: routeAreaId(t), styleUrl: MAP_STYLE, name: `Along ${t.name}` });
+        if (!ApexSavedRoutes.has(localStorage, t.id)) { await ApexOfflineTiles.removeArea(a.id); return; }   // unsaved meanwhile
+        toast(`The map along ${t.name} is kept for no signal too, ${Math.max(1, Math.round(a.bytes / 1048576))} MB.`);
+        if (window.apexDebug) window.apexDebug.mapAlong = a;
+      } catch (_) { /* the saved route stands without its map */ }
+    }
     // U-64: no router time (a GPX track, a loop or a fallback router without one): the route's own envelope, capped by the
     // posted limits once attachLimits has them (eta.js envelopeTime). A forecast like the router's; timeFrom says whose.
     function timeFromEnvelope(t) {
@@ -3626,6 +3664,38 @@
       if (track !== t || state.mode !== 'live') return;
       await buildRoute(null, t.id, t.name, nt);
       toast('Going round the police report.');
+    }
+    // A reported road closure on the route ahead, while driving: a member's "Road closed" report that lands within 40 m of
+    // the route 0.5 to 25 km on (graph_router.js CLOSED_M) is offered once, with Go round, as a police report is; no
+    // switch (nobody wants a closed road). A way that still passes it isn't taken, and that's said. Every 5 s at most.
+    const closedAhead = { at: 0, offered: new Set() };
+    function closedAheadTick(me) {
+      const t = track, now = Date.now();
+      if (!t || !t.request || t.kind !== 'route' || state.mode !== 'live' || !driveActive || rerouter.off || now - closedAhead.at < 5000) return;
+      closedAhead.at = now;
+      const pts = ApexHazardReports.closuresFor(reported.list, t.request.to ? [me, t.request.to] : [me]);
+      const hit = pts.length ? ApexHazardReports.onRouteAhead(t, routeWatch.bestM, pts, { m: 40, minM: 500 }) : null;
+      if (window.apexDebug) window.apexDebug.closedAhead = { pts: pts.length, hit };
+      if (!hit) return;
+      const key = `${hit.lat.toFixed(4)},${hit.lon.toFixed(4)}`;
+      if (closedAhead.offered.has(key)) return;
+      closedAhead.offered.add(key);
+      const far = ApexUnits.long(hit.aheadM, 1);
+      offerKey(`Road closed on your route in ${far}.`, `Road closed in ${far}`, { label: 'Go round', ms: 15000, onClick: () => goRoundClosed(t, hit, pts) });
+    }
+    async function goRoundClosed(t, hit, pts) {
+      const L = state.live;
+      if (track !== t || !L || !t.request) return;
+      const ahead = waysAhead(t);
+      let r;
+      try { [r] = await routePoints([{ lat: L.lat, lon: L.lon, heading: headingOf(L) }, ...ahead, t.request.to], { osrm: true, level: t.funLevel || (isLoop(t) ? LOOP_STYLE : 'quick'), avoid: { ...avoid, closed: pts } }); }
+      catch (_) { toast('Couldn\'t plan a way round. Check signal.'); return; }
+      if (track !== t || state.mode !== 'live') return;
+      if (!r || ApexHazardReports.passesNear(r.coords, [hit], 40)) { toast('No way round that closure. Staying on this route.'); return; }
+      const nt = await trackAhead(t, r, ahead);
+      if (track !== t || state.mode !== 'live') return;
+      await buildRoute(null, t.id, t.name, nt);
+      toast('Going round the road closure.');
     }
     // Traffic ahead (iOS app only; docs/ARCHITECTURE.md section 8). Every 2 min while on a planned route, Apple times the next
     // 20 km in chunks, now and at 3 am. A jam (or a slowdown) costs the route fun even with no delay; on a jam, a detour that
@@ -5482,8 +5552,9 @@
               ...recentPlaces().map(p => ({ ...p, kind: 'Recent' })),
               ...loadHighlights().filter(h => Number.isFinite(h.lat) && Number.isFinite(h.lon)).map(h => ({ label: h.name || 'Spot', lat: h.lat, lon: h.lon, kind: 'Spot' }))].slice(0, 10 + ApexPinnedPlaces.MAX);
       // with nothing typed, three places and a row for the rest (REVIEW.md: search and three recents, the default first)
+      // The rest are drawn too but stay folded until the keyboard is up (TestFlight 2026-11-12 "evil cluttered gap"): while
+      // typing the list is the sheet, so it fills the space above the keyboard instead of a link and an empty band.
       const more = !q && !allPlaces && rows.length > 3 ? rows.length - 3 : 0;
-      if (more) rows = rows.slice(0, 3);
       paintPlaces(q, rows, empty, more);
     }
     function paintPlaces(q, rows, empty, more) {
@@ -5491,8 +5562,9 @@
       shownRows = { q, rows: empty ? [] : rows };
       paintTask();
       if (empty) { const n = document.createElement('p'); n.className = 'note'; n.textContent = empty; box.replaceChildren(n); box.hidden = false; return; }
-      box.replaceChildren(...rows.map(p => {
+      box.replaceChildren(...rows.map((p, i) => {
         const b = document.createElement('button'); b.className = 'place';
+        if (more && i >= rows.length - more) b.classList.add('place-extra');
         const name = document.createElement('b'); name.textContent = p.label;
         const kind = document.createElement('span'); kind.textContent = p.kind || '';
         b.append(name, kind);
@@ -5503,6 +5575,7 @@
         const un = document.createElement('button'); un.className = 'linkbtn'; un.textContent = 'Unpin'; un.setAttribute('aria-label', `Unpin ${p.label}`);
         un.addEventListener('click', (e) => { e.stopPropagation(); ApexPinnedPlaces.unpin(localStorage, p.pinned.name); renderPlaces(); });
         const row = document.createElement('div'); row.className = 'row pinned-row'; row.append(b, un);
+        if (b.classList.contains('place-extra')) { b.classList.remove('place-extra'); row.classList.add('place-extra'); }
         return row;
       }));
       if (more) {
@@ -5656,6 +5729,7 @@
         if (e.key !== 'Enter') return;
         if (window.apexDebug) window.apexDebug.enterAt = performance.now();
         e.preventDefault(); e.target.blur();
+        if (id === 'destInput' && !e.target.value.trim()) return;      // nothing typed: Go only puts the keyboard away (Find a loop is back)
         if (id === 'fromInput' && $('optSheet').classList.contains('open')) { closeOptions(); if (!plannedRoute && $('destInput').value.trim()) routeToQuery(); return; }
         const pasted = id === 'destInput' && window.ApexRouteImport && ApexRouteImport.parseMapsLink($('destInput').value);   // a maps link beats the top suggestion
         if (pasted || id !== 'destInput') routeToQuery(); else goTyped();
@@ -5735,6 +5809,11 @@
     }));
     $('deckNearby').addEventListener('click', openNearby);
     $('planNearbyChip').addEventListener('click', openNearby);
+    // With the keyboard up the sheet is only the search (index.html, TestFlight 2026-11-12): dragging the list or tapping its
+    // background puts the keyboard away, as in any maps app, and the shortcuts and Find a loop come back.
+    const typingInPlan = () => document.documentElement.classList.contains('kb-open') && [$('destInput'), $('fromInput')].includes(document.activeElement);
+    $('planBody').addEventListener('scroll', () => { if (typingInPlan()) document.activeElement.blur(); }, { passive: true });
+    $('planBody').addEventListener('click', (e) => { if (typingInPlan() && !e.target.closest('button, a, input, summary, [role]')) document.activeElement.blur(); });
     $('nearbyClose').addEventListener('click', closeNearby);
     document.querySelectorAll('[data-fun]').forEach(b => b.addEventListener('click', () => changeLevel(b.dataset.fun)));
     setFunLevel(funLevel);
@@ -5778,7 +5857,7 @@
     function paintOptChips() {
       if (!window.ApexPlanOptions || !optChipsReady) return;                // (painted once the switches above are read)
       const on = ApexPlanOptions.active(optState());
-      // TestFlight 2026-11-12 (note 8, "cluttered"): Where to? says only how many (Options · 3, each named to VoiceOver);
+      // TestFlight 2026-11-12 (note 8, "cluttered"): Where to? says only how many (Options · 3 on, each named to VoiceOver);
       // the route card, planned with them, still shows each one as a chip
       for (const [chipId, boxId] of [['planOptionsChip', null], ['cardOptionsChip', 'cardOptsOn']]) {
         const chip = $(chipId), box = boxId && $(boxId);
@@ -6446,6 +6525,8 @@
       if (!socialIn && !socialFailed && (view === 'people' || view === 'garage')) { needSocial(); return; }
       accountMe = me && me.signed_in ? me : null;
       if (accountMe && accountMe.member) loadCrewHazardKinds();
+      // Where to? opened before the account came back: its time attack row's peek skipped then, so it goes now (CI 2026-11-12)
+      if (accountMe && accountMe.member && $('planPanel').classList.contains('open')) peekTimeAttack();
       if (friendsMap && accountMe && accountMe.member) { friendsMap.start(); if (state.toggles.friends) friendsMap.setLayer(true); }
       else if (state.toggles.friends) { state.toggles.friends = false; paintSwitches(); }
       if (meetsMap && accountMe && accountMe.member) { if (state.toggles.meets) meetsMap.setLayer(true); }
@@ -7234,7 +7315,7 @@
       box.replaceChildren(...ApexOfflineTiles.areas().map((a) => {
         const row = document.createElement('div'); row.className = 'row'; row.style.justifyContent = 'space-between';
         const feel = a.roadOf ? (a.roadCells < a.roadOf ? ' · members\u2019 road feel for part of it' : a.roadWays ? ` · ${a.roadWays} measured roads` : ' · no measured roads yet') : '';
-        const t = document.createElement('span'); t.className = 'note'; t.textContent = `${a.name} · ${ApexUnits.long(a.radiusKm * 1000, 0)} round · ${(a.bytes / 1048576).toFixed(0)} MB${feel}`;
+        const t = document.createElement('span'); t.className = 'note'; t.textContent = `${a.name} · ${Number.isFinite(a.radiusKm) ? `${ApexUnits.long(a.radiusKm * 1000, 0)} round` : 'along the route'} · ${(a.bytes / 1048576).toFixed(0)} MB${feel}`;
         const del = document.createElement('button'); del.className = 'linkbtn'; del.textContent = 'Delete';
         del.addEventListener('click', async () => { await ApexOfflineTiles.removeArea(a.id); if (window.ApexOwnRouting && ApexOwnRouting.releaseArea) ApexOwnRouting.releaseArea(a.id); renderMyData(); });
         row.append(t, del); return row;
@@ -8321,8 +8402,8 @@
     // VI-1: asked by the 0.1-degree cell (privacy_zones.js cell), kept per cell for 2 min, filtered and sorted here; never
     // from a privacy zone or before the drive's private edge (nearLookupOk).
     const reported = { list: [], at: -Infinity, cellKey: '', busy: false, said: new Set(), mine: new Set(), pins: new Map(), watch: ApexHazardReports.createPassWatch(), asking: null, local: [],
-                       cells: ApexPrivacyZones.cellCache(120e3) };
-    if (window.apexDebug) window.apexDebug.loadReported = (force) => loadReported(force);   // e2e: a report that lands mid-drive
+                       cells: ApexPrivacyZones.cellCache(120e3), ahead: ApexPrivacyZones.cellCache(6 * 3600e3, 16), aheadFor: null };
+    if (window.apexDebug) { window.apexDebug.loadReported = (force) => loadReported(force); window.apexDebug.reportedIds = () => reported.list.map((h) => h.id); }   // e2e: a report that lands mid-drive
     async function loadReported(force = false) {
       const p = state.lastPosition, c = p && ApexPrivacyZones.cell(p.lat, p.lon);
       if (!c || reported.busy || !window.ApexSync || !nearLookupOk(p)) return;
@@ -8334,8 +8415,37 @@
       try {
         const r = await ApexSync.apiFetch(`/api/hazards?${ApexPrivacyZones.cellQuery(p.lat, p.lon, 20)}`, { method: 'GET' });
         if (r.ok) { const rows = await r.json(); reported.cells.set(c.key, rows); reported.cellKey = c.key; keep(rows); }
-      } catch (_) { /* offline or signed out: keep what we had */ }
+        else keepAhead(c, keep);
+      } catch (_) { keepAhead(c, keep); /* offline: what was asked ahead for this cell, else what we had */ }
       finally { reported.at = performance.now(); reported.busy = false; }
+    }
+    // no signal in a cell the planned route runs through: the reports asked for it as the drive started (askAhead), the
+    // expired ones dropped; the next lookup waits the usual 2 minutes
+    function keepAhead(c, keep) {
+      const rows = reported.ahead.get(c.key);
+      if (!rows || c.key === reported.cellKey) return;
+      reported.cellKey = c.key;
+      keep(ApexHazardReports.stillLive(rows));
+    }
+    // IDEAS F-03: a drive on a planned route asks, while there is signal, for the reports in the cells the route runs through
+    // (privacy_zones.js routeCells: the same coarse cells as any lookup, never the ends' cells or a privacy zone's), so a dead
+    // zone on the way still has them. Once per route; members only; anything that fails just asks nothing.
+    async function askAhead(t) {
+      if (!t || t.kind !== 'route' || reported.aheadFor === t || !window.ApexSync || navigator.onLine === false || window.APEX_REVIEW) return;
+      reported.aheadFor = t;
+      const edgeM = Math.max(1500, window.ApexContributor ? ApexContributor.privateEdge() * 5 : 0);
+      const cells = ApexPrivacyZones.routeCells(t.lat, t.lon, privacyZones, edgeM);
+      if (!cells.length || !(await RouteLoading.optional(ApexSync.member(), 4000).catch(() => null))) return;
+      let n = 0;
+      for (const c of cells) {
+        if (reported.aheadFor !== t) return;
+        try {
+          const r = await RouteLoading.optional(ApexSync.apiFetch(`/api/hazards?${ApexPrivacyZones.cellQuery(c.lat, c.lon, 20)}`, { method: 'GET' }), 6000);
+          const rows = r && r.ok ? await r.json() : null;
+          if (Array.isArray(rows)) { reported.ahead.set(c.key, rows); n++; }
+        } catch (_) { /* this cell stays unasked */ }
+      }
+      if (window.apexDebug) window.apexDebug.askedAhead = n;
     }
     // Viewpoints, cafés and fuel along a planned route (IDEAS R-24, R-23; stages.js pois, scenic.js): pins on the map and a
     // line on the route card. Map data: a mapped viewpoint, a fuel station that may be closed. Nothing found says nothing.
@@ -8840,6 +8950,7 @@
       if (next) { reported.said.add(next.id); say(next.text, false, null, null, { kind: 'hazard', key: `rep:${next.id}`, repeatMs: 10 * 60000, alert: true,
         tokens: [!next.label && ApexVoiceLines.TEXT[`line:rep_${next.kind}`] ? `line:rep_${next.kind}` : 'line:rep_hazard'], named: !!next.label }); }
       try { policeAheadTick(me); } catch (_) { /* never in the way of the drive */ }
+      try { closedAheadTick(me); } catch (_) { /* never in the way of the drive */ }
       const passed = reported.watch.update(reported.list, me, reported.mine);
       if (passed && !reported.asking) askStill(passed);
     }
@@ -9274,6 +9385,7 @@
       showView(null);
       openPlan(false);                                                 // the plan sheet too, and the keyboard with it
       if (track && track.kind === 'route') persistActive(track);       // kept if the app is closed mid-drive
+      askAhead(track);                                                 // a planned route: the reports along it, ahead of a dead zone
       clearCarOffer();
       // U-59: the car enters every drive, a route or none (it went into a drive only on a guide message, so a free drive never
       // reached it: no End, no card). A route driven again goes back on the car's map first.

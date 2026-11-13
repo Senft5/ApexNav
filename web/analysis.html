@@ -143,7 +143,7 @@
     table.runs .bars { grid-template-columns: repeat(4, minmax(0, 1fr)); min-width: 0; gap: 8px; }
     table.runs .bar { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     table.runs tr.best td:first-child { box-shadow: none; } table.runs tr.run.best td:first-child, table.runs tr.run-parts.best td:first-child { box-shadow: inset 3px 0 0 var(--accent); }
-    #segLegend:empty { display: none; }
+    #segLegend:empty, #segSyncNote:empty { display: none; }
     #segShareRow .share-with { flex-basis: 100%; margin: 0; }
     .seg-map { border: 1px solid var(--rule); margin: 8px 0; padding: 4px; }
     .seg-map svg, .vote-map svg { display: block; width: 100%; height: auto; max-height: 260px; }
@@ -250,6 +250,11 @@
     .tagline { color: var(--accent); }
     .recce-row { display: grid; grid-template-columns: 28px minmax(0, 1fr); gap: 8px; align-items: center; } .recce-row input { width: 100%; }
     .kudos-btn { height: 44px; font-size: 13px; padding: 0 10px; margin-left: 6px; vertical-align: middle; }
+    .friend-act { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+    .friend-act > div { min-width: 0; }
+    .friend-act p { margin: 0; }
+    .friend-act small { display: block; color: var(--panel-dim); font-size: 13px; }
+    .friend-act .kudos-btn { flex: none; margin-left: 0; }
     .ch-bar { height: 6px; background: var(--rule); margin-top: 4px; } .ch-bar i { display: block; height: 100%; background: var(--accent); }
     details.more { border-top: 1px solid var(--rule); margin-top: 12px; }
     details.more summary { min-height: 44px; display: flex; align-items: center; font-size: 15px; font-weight: 600; cursor: pointer; list-style: none; }
@@ -359,16 +364,16 @@
         <p class="note" id="dvTagsNote" aria-live="polite"></p></div>
       <div id="dvDashcam"></div>
       <div class="panel" id="dvRecce"><h2>Your notes</h2>
-        <p class="note" id="dvRecceNote">Keep this drive's notes as yours, change any call, and the co-driver reads yours the next time you drive these corners this way. On this phone only.</p>
+        <p class="note" id="dvRecceNote">Make these notes yours and change any call; the co-driver reads them here next time. On this phone only.</p>
         <div class="actions" id="dvRecceActs"></div><div class="stack-8 mt-8" id="dvRecceList"></div></div>
       <div class="panel" id="dvVote" hidden><h2>Which route was better?</h2><div class="actions" id="dvVoteBtns" role="group" aria-label="Which route was better"></div>
         <p class="note">Your answers rank your roads (Log). They stay on this phone.</p></div>
       <div class="panel" id="dvFlyby" hidden><h2>Friends on these roads that day</h2><div id="dvFlybyList" class="stack-8"></div>
         <p class="note">From the scores friends chose to show you, on stages you both marked. The last 14 days.</p></div>
       <div class="panel" id="dvTouch" hidden><h2>Your touch on this drive</h2><div id="dvTouchList" class="stack-8"></div>
-        <p class="note">How fast the load came on and went off, from the g the phone measures ten times a second, beside your other drives. The middle corner of each; never better or worse.</p></div>
+        <p class="note">How quickly the load built and eased in a typical corner, beside your other drives. A style, not a score.</p></div>
       <div class="panel" id="dvBest" hidden><h2>Against your records</h2><div id="dvBestList" class="stack-8"></div>
-        <p class="note">This drive's cleanest corner of each kind beside your record for it (Your records in the Log): technique credits out of 100, never speed.</p></div>
+        <p class="note">Your cleanest corner of each kind against your record: technique out of 100, never speed.</p></div>
       <div class="panel" id="dvRoad" hidden><h2>This road over time</h2><div id="dvRoadChart"></div><div class="scroll"><table id="dvRoadTable"></table></div></div>
     </section>
 
@@ -417,8 +422,7 @@
         <div class="stamps" id="bookRoads" role="group" aria-label="Pick a road"></div>
         <p class="note" id="bookWork" hidden></p><p class="note" id="bookHead" aria-live="polite"></p><p class="note" id="bookPractice" hidden></p><ol class="book-list" id="bookList"></ol></details>
       <details class="quiet" id="kudosPanel" hidden><summary id="kudosSum">Kudos for you</summary><div id="kudosList" class="stack-8"></div></details>
-      <div class="panel" id="friendsPanel" hidden><h2>Friends lately</h2><div id="friendsList" class="stack-8"></div>
-        <p class="note">From friends and crews who share scores with you, on stages you have. Scores only, never times.</p></div>
+      <div class="panel" id="friendsPanel" hidden><h2>Friends lately</h2><div id="friendsList" class="stack-8"></div></div>
       <div class="panel" id="trendPanel" hidden><h2>Score over time</h2><div id="trend"></div></div>
       <div class="panel" id="recordsPanel" hidden><h2>Your records</h2><div class="scroll"><table id="recordsTable"></table></div><p class="note" id="recordsNote"></p></div>
       <div class="panel" id="steadyPanel" hidden><h2>Braking consistency by month</h2><div id="steadyChart"></div><p class="note" id="steadyNote"></p></div>
@@ -462,15 +466,15 @@
         <label>Compare with<select id="selB" aria-label="Compare with"></select></label>
       </div>
       <section class="cards" id="cards"></section>
-      <section class="grid2">
+      <section class="grid2" id="cmpRoad">
         <div class="panel"><h2>Road</h2><div id="plan"></div></div>
         <div class="panel"><h2>Gap along the road</h2><div id="chart"></div>
           <p class="note">Below the line, the other drive was ahead. Gaps restart where the roads part.</p></div>
       </section>
-      <section class="panel">
+      <section class="panel" id="cmpCorners">
         <h2>Corner by corner</h2>
         <div class="scroll"><table id="table"></table></div>
-        <p class="note mt-8">Greyed rows include a stop (below 2.5 m/s) and are left out of the corner total. Envelope use = minimum speed ÷ the corner's grip limit. Brake = distance before the apex where braking began.</p>
+        <p class="note mt-8">Grey rows include a stop and stay out of the total. Envelope use: your slowest speed against the corner’s grip. Brake: how far before the apex you began braking.</p>
       </section>
     </section>
   </main>
