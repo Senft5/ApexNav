@@ -5492,7 +5492,7 @@ flow('Your driving: the profile over every drive opens from the Log, names the w
   check(dt.best.length >= 2 && /^Cleanest tight corner: \d{1,3}( · your best of \d+| · level with your best(, .+)?| · your best \d{1,3}(, .+)?)?$/.test(dt.best[0]), 'a drive against your records: ' + JSON.stringify(dt.best));
   // corner by corner on its road: these three drives are on three roads, so no corner has been driven three times
   check(dt.road && dt.road.corners === 0 && dt.road.best === 0, 'no corner of this road driven three times yet: ' + JSON.stringify(dt.road));
-  check(dt.say.join(' ') === 'Brakes on: about 1.1 g a second on this drive, 0.8 usually. Turn-in: one quick movement (quicker than the recording can time) on this drive, 0.9 usually.', 'a drive\'s touch in words: ' + dt.say);
+  check(dt.say.join(' | ') === 'Brakes on: 1.1 g a second · usually 0.8 | Turn-in: one quick movement · usually 0.9', 'a drive\'s touch in words: ' + dt.say);
   // each drive's observations were kept: a second visit reads no drive again, and a deleted drive's are dropped
   const again = await page.evaluate(() => ApexAnalysis.job('profile'));
   check(again.read === 0 && again.profile.corners === 108, 'kept between visits: read ' + again.read);

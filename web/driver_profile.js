@@ -784,9 +784,10 @@
     for (const k of TOUCH) {
       const a = rateText(dt.drive[k]), b = dt.usual ? rateText(dt.usual[k]) : null;
       if (!a) continue;
-      const now = a === 'quick' ? 'one quick movement (quicker than the recording can time)' : `about ${a} g a second`;
+      // a labelled row a measure, as Your touch reads (TestFlight 2026-11-12, "text walls"); the panel says "on this drive"
+      const now = a === 'quick' ? 'one quick movement' : `${a} g a second`;
       const off = dt.outside && dt.outside[k];
-      out.push(`${TOUCH_NAME[k]}: ${now} on this drive${b ? `, ${b === 'quick' ? 'quick' : `${b}`} usually` : ''}.${off === 'above' ? ' Sharper than your usual range.' : off === 'below' ? ' Gentler than your usual range.' : ''}`);
+      out.push(`${TOUCH_NAME[k]}: ${now}${b ? ` \u00b7 usually ${b}` : ''}${off === 'above' ? ' \u00b7 sharper than usual' : off === 'below' ? ' \u00b7 gentler than usual' : ''}`);
     }
     return out;
   }
