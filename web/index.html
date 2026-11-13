@@ -2133,7 +2133,8 @@
           <section data-panel="garage" data-setting="zones" data-title="Privacy zones" data-summary="#zoneList" data-summary-count="place,places">
             <h3>Privacy zones</h3>
             <p class="note" style="margin:0 0 8px">Places like home and work. Inside one, nothing is recorded or shared, and convoys don't see you. Kept on this phone only.</p>
-            <div class="detents" id="zoneRadius" role="group" aria-label="Zone size">
+            <p class="note" style="margin:0 0 4px" aria-hidden="true">Size of a new zone</p>
+            <div class="detents" id="zoneRadius" role="group" aria-label="Size of a new zone">
               <button data-zone-r="200">200 m</button>
               <button data-zone-r="500">500 m</button>
               <button data-zone-r="1000">1 km</button>
@@ -2192,8 +2193,9 @@
               <h4 class="nav-group">Remove</h4>
               <button class="nav-row danger" id="myDrivesDelBtn">Delete drives on this phone</button>
               <button class="nav-row danger" id="myEraseBtn">Erase everything on this phone</button>
+              <!-- a way there, not a pointer to read (2026-11-13 sweep): opens Account, where Delete account asks; signed in only -->
+              <button class="nav-row" id="myAccountDelGo" hidden><span>Delete account</span><small>In Account</small></button>
             </div>
-            <p class="note">To delete your account and what it shared: Settings → Account → Delete account.</p>
             <button class="sw mt-8" data-toggle="health"><i></i><span>Share app health (anonymous counts)</span></button>
             <p class="note">Once a day, counts like "3 routes found, 1 failed", with no account, phone or place in them. Off: nothing is sent.</p>
           </section>
@@ -2205,7 +2207,8 @@
         <section data-panel="garage" data-setting="spots" data-title="Spots" data-summary="#hlList" data-summary-count="spot,spots">
             <h3>Spots</h3>
             <p class="note" style="margin:0 0 8px">Loops lean toward spots you rate 3★ or more. Your spots stay on this phone until you share one.</p>
-            <div class="detents" id="detourList" role="group" aria-label="Detour">
+            <p class="note" style="margin:0 0 4px" aria-hidden="true">How far loops go out of their way</p>
+            <div class="detents" id="detourList" role="group" aria-label="How far loops go out of their way for your spots">
               <button data-detour="0">Off</button>
               <button data-detour="0.5">Little</button>
               <button data-detour="1">Some</button>

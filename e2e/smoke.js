@@ -6354,6 +6354,28 @@ flow('Settings behind the gear: three short lists, each row saying what it is se
   await page.evaluate(() => document.querySelector('[data-units="imperial"]').click());
 }, { viewport: { width: 393, height: 852 }, hasTouch: true });
 
+flow('Your data: Delete account is a row that opens Account, signed in only (it was a sentence to follow by hand, 2026-11-13)', async (page, base) => {
+  await page.addInitScript(() => { try { localStorage.setItem('apex.onboarded', '1'); localStorage.setItem('apex.permsExplained', '1'); } catch (_) {} });
+  let signedIn = false;
+  await page.route('**/api/**', (r) => r.fulfill({ status: 200, contentType: 'application/json', body: r.request().url().endsWith('/api/me') ? JSON.stringify(signedIn ? { signed_in: true, member: true, handle: 'me' } : { signed_in: false }) : '[]' }));
+  await page.goto(base + '/index.html?view=garage');
+  await page.waitForFunction(() => window.apexDebug && !document.getElementById('boot') && document.getElementById('garageGear'), null, { timeout: 20000 });
+  await page.waitForTimeout(800);
+  check(await page.evaluate(() => document.getElementById('myAccountDelGo').hidden), 'signed out: no Delete account row');
+  check(!(await page.evaluate(() => document.querySelector('.garage-pop[data-setting="data"]').textContent.includes('Settings → Account'))), 'no directions to read in its place');
+  signedIn = true;
+  await page.reload();
+  await page.waitForFunction(() => window.apexDebug && !document.getElementById('boot') && !document.getElementById('myAccountDelGo').hidden, null, { timeout: 20000 });
+  await page.click('#garageGear');
+  await page.click('#garageSettings .nav-row[data-setting="data"]');
+  await page.waitForSelector('.garage-pop[data-setting="data"].open');
+  await page.click('#myAccountDelGo');
+  await page.waitForTimeout(400);
+  const open = await page.evaluate(() => [...document.querySelectorAll('.garage-pop[data-setting].open')].map((p) => p.dataset.setting));
+  check(open.join() === 'account', 'it opens Account, in place of Your data: ' + JSON.stringify(open));
+  check(await page.evaluate(() => [...document.querySelectorAll('.garage-pop[data-setting="account"] button')].some((b) => b.textContent === 'Delete account' && b.getBoundingClientRect().height > 0)), 'where Delete account is');
+}, { viewport: { width: 393, height: 852 }, hasTouch: true });
+
 flow('dev mode: anyone else sees no Dev entry, loads no panel, and settings left on this phone change no plan (the owner 2026-11-09)', async (page, base) => {
   graphDir = graphFixture();
   try {
@@ -8294,7 +8316,7 @@ flow('when to go: the route card says the best time to leave, opens the next day
   const before = asked.length;
   await page.evaluate(() => document.querySelectorAll('#routeWhenRibbon > button')[12].click());
   const key = await page.evaluate(() => ({ text: document.getElementById('routeWhenPlan').textContent, hidden: document.getElementById('routeWhenPlan').hidden, detail: document.getElementById('routeWhenDetail').textContent }));
-  check(!key.hidden && /^Plan for (tomorrow )?\d{1,2}:\d\d/.test(key.text), 'the key names the hour: ' + JSON.stringify(key));
+  check(!key.hidden && /^Plan for \d{1,2}:\d\d\s?[AP]M( tomorrow)?$/.test(key.text), 'the key names the hour: ' + JSON.stringify(key));
   await tap('#routeWhenPlan', 'Plan for the hour');
   await planDone(page);
   await page.waitForFunction(() => !document.getElementById('routeCardWhen').hidden && /^Leaving /.test(document.getElementById('routeWhenLine').textContent), null, { timeout: 25000 });
