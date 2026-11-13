@@ -480,6 +480,7 @@
       if (has('apex-alt')) map.setPaintProperty('apex-alt', 'line-color', C.route);
       if (has('apex-explore')) map.setPaintProperty('apex-explore', 'line-color', C.route);
       if (has('apex-twisty')) map.setPaintProperty('apex-twisty', 'line-color', C.amber);
+      if (has('apex-places')) { map.setPaintProperty('apex-places', 'text-color', P.label); map.setPaintProperty('apex-places', 'text-halo-color', P.halo); }
       // Measured roads by the pavement measured there (coverage.js surface): smooth, fair, rough; ink where roughness is unknown
       if (has('apex-coverage')) map.setPaintProperty('apex-coverage', 'line-color', ['match', ['get', 's'], 1, C.gain, 2, C.amber, 3, C.signal, C.dim]);
     }
@@ -519,11 +520,24 @@
       map.addLayer({ id: 'apex-route', type: 'line', source: 'apex-route-src', layout: { 'line-cap': 'round', 'line-join': 'round' }, paint: { 'line-width': width(3, 7) } });
       map.addLayer({ id: 'apex-dna', type: 'line', source: 'apex-route-src', filter: ['has', 'dna'], layout: { 'line-cap': 'butt', 'line-join': 'round', visibility: 'none' },
         paint: { 'line-color': ['get', 'dna'], 'line-width': width(3, 7) } });
+      // Places on the map (2026-11-13, as Apple and Google Maps show them): the eateries, cafés, fuel and shops with a name,
+      // in the map's own label ink set in italic (a place, not a street), only close in (street zoom) and never in a drive;
+      // a tap is the place's card (showPin)
+      if (map.getSource('openmaptiles')) map.addLayer({ id: 'apex-places', type: 'symbol', source: 'openmaptiles', 'source-layer': 'poi', minzoom: 15,
+        filter: ['all', ['has', 'name'], ['match', ['get', 'class'], PLACE_CLASSES, true, false]],
+        layout: { 'text-field': ['get', 'name'], 'text-font': ['Noto Sans Italic'], 'text-size': 11, 'text-max-width': 8, 'text-padding': 10,
+          'symbol-sort-key': ['get', 'rank'], visibility: state.mode === 'live' ? 'none' : 'visible' },
+        paint: { 'text-halo-width': 1.4 } }, firstSymbol);                // under the street and town names: they win a clash
       map.addSource('apex-ribbon-src', { type: 'geojson', data: emptyFC() }); ribbonKey = null;
       map.addLayer({ id: 'apex-ribbon', type: 'line', source: 'apex-ribbon-src', layout: { 'line-cap': 'round', 'line-join': 'round' },
         paint: { 'line-color': ['get', 'c'], 'line-width': width(4, 9) } });
     }
     const emptyFC = () => ({ type: 'FeatureCollection', features: [] });
+    // the kinds of place drawn (OpenMapTiles poi classes): what a driver stops for
+    const PLACE_CLASSES = ['restaurant', 'fast_food', 'cafe', 'bar', 'beer', 'ice_cream', 'bakery', 'fuel', 'grocery', 'lodging', 'car', 'attraction', 'museum'];
+    const PLACE_WORD = { restaurant: 'Restaurant', fast_food: 'Fast food', cafe: 'Café', bar: 'Bar', beer: 'Bar', ice_cream: 'Ice cream', bakery: 'Bakery',
+      fuel: 'Fuel station', grocery: 'Grocery', lodging: 'Lodging', car: 'Car shop', attraction: 'Attraction', museum: 'Museum' };
+    function applyPlaces() { if (mapReady && map.getLayer('apex-places')) map.setLayoutProperty('apex-places', 'visibility', state.mode === 'live' ? 'none' : 'visible'); }
     // Satellite, for developers only (the owner, 2026-11-04: to troubleshoot picks like a neighbourhood ranked a best road):
     // USGS The National Map's orthoimagery (USDA NAIP and USGS, public domain; the US only; tiles to zoom 16, stretched past
     // it) over the base map's fills and road lines, under our twisty and measured roads, the labels and every route line,
@@ -812,6 +826,16 @@
         const say = ApexCoverage.describe(coverage.cache.get(e.features[0].properties.way));
         if (say) toast(say);
       });
+      // tap a place on the map: its card, by its name and kind, with Go here, Start from here and Add via (the dropped pin's)
+      map.on('click', 'apex-places', (e) => {
+        if (state.tapToRoute || state.mode === 'live' || Date.now() < suppressMapClickUntil || !e.features || !e.features.length) return;
+        if (map.queryRenderedFeatures(e.point, { layers: ['apex-route', 'apex-alt', 'apex-explore'].filter((id) => map.getLayer(id)) }).length) return;
+        const f = e.features[0], at = f.geometry && f.geometry.coordinates;
+        if (!Array.isArray(at) || !f.properties.name) return;
+        showPin({ lat: at[1], lon: at[0] }, { name: f.properties.name, kind: PLACE_WORD[f.properties.class] || '' });
+      });
+      map.on('mouseenter', 'apex-places', () => { map.getCanvas().style.cursor = 'pointer'; });
+      map.on('mouseleave', 'apex-places', () => { map.getCanvas().style.cursor = ''; });
       map.on('click', 'apex-explore', (e) => {
         if (state.tapToRoute || !e.features || !e.features.length) return;
         suppressMapClickUntil = Date.now() + 400;
@@ -1217,17 +1241,22 @@
       } catch (_) { /* An offline or unnamed place remains unknown. */ }
       if (lookup === pinLookup && droppedPin === p) $('pinPlace').textContent = name;
     }
-    function showPin(point) {
+    // place: a place tapped on the map ({ name, kind }): its card says its name and kind and how far, with no lookup
+    function showPin(point, place = null) {
       if (state.mode === 'live') return;
       closePin();
       droppedPin = point;
       const markerEl = document.createElement('div'); markerEl.className = 'dropped-pin';
       pinMarker = new maplibregl.Marker({ element: markerEl }).setLngLat([point.lon, point.lat]).addTo(map);
-      $('pinPlace').textContent = '--';
+      $('pinPlace').textContent = place ? place.name : '--';
+      const here = state.lastPosition, far = place && here ? FunRoute.kmBetween(here, point) * 1000 : null;
+      $('pinKind').textContent = place ? [place.kind, Number.isFinite(far) ? ApexUnits.long(far) : ''].filter(Boolean).join(' · ') : '';
+      $('pinKind').hidden = !$('pinKind').textContent;
+      $('pinOverlay').setAttribute('aria-label', place ? place.name : 'Dropped pin');
       $('pinViaBtn').hidden = !plannedRoute?.request;
       $('pinOverlay').classList.add('show');
       suppressMapClickUntil = Date.now() + 700;
-      reversePin(point);
+      if (!place) reversePin(point);
     }
     mapEl.addEventListener('pointerdown', (e) => {
       activeMapPointers.add(e.pointerId);
@@ -2318,6 +2347,7 @@
       $('modePlate').classList.toggle('live', mode === 'live');
       paintIdle();
       updateTwisty();
+      applyPlaces();
     }
     // Names are known now: pre-render them in the co-driver's own voice (only when the owner turned Speak-road-names / LIVE on).
     function prefetchNames(t) {
@@ -6293,7 +6323,7 @@
             if (!x) continue;
             const line = [`${dot[x.state] || ''} ${p.name}: ${word[x.state] || x.state}`, x.ms ? `${(x.ms / 1000).toFixed(1)} s` : null, x.detail || null].filter(Boolean).join(' · ');
             out.append(el('p', { className: 'note', textContent: line }),
-              ...(x.state === 'down' ? [el('p', { className: 'note', textContent: `Affects: ${p.feeds}.`, style: 'opacity:.75;margin-top:-6px' })] : []));
+              ...(x.state === 'down' ? [el('p', { className: 'note', textContent: `Affects: ${p.feeds}.`, style: 'margin-top:-6px' })] : []));
           }
         }
         out.append(serverSide());

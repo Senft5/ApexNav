@@ -35,8 +35,15 @@ upload() {   # stdin: lines "<path> <key>"
   return $bad
 }
 fail=0
+# The lower 48 (graph-us.yml, builds named us-*) is a superset of the OH/KY/IN region: once it is live, the region's weekly
+# mirror leaves the graph alone instead of shrinking it back to three states.
+live=$(curl -fsS "$base/api/graph/v1/index.json" 2>/dev/null | python3 -c 'import json,sys;print(json.load(sys.stdin).get("build") or "")' 2>/dev/null || true)
 if [ -f "$dir/v1/index.json" ]; then
   build=$(python3 -c 'import json,sys;print(json.load(open(sys.argv[1]))["build"])' "$dir/v1/index.json")
+fi
+if [ -f "$dir/v1/index.json" ] && [ "${live#us-}" != "$live" ] && [ "${build#us-}" = "$build" ]; then
+  echo "graph: the lower 48 ($live) is live; the region build $build is not mirrored over it"
+elif [ -f "$dir/v1/index.json" ]; then
   echo "graph build $build:"
   ( cd "$dir/v1" && ls *.vgr 2>/dev/null | sed "s|.*|$dir/v1/& graph/v1/b/$build/&|" ) | upload || fail=1
   if [ "$fail" = 0 ]; then echo "$dir/v1/index.json graph/v1/index.json" | upload || fail=1; fi
