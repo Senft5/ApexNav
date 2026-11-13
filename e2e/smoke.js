@@ -5356,6 +5356,16 @@ flow('a drive\'s corners on a road driven four times: each says your cleanest pa
   check(road.rows.some((r) => r.why === 'arc') && notes.some((n) => /, mostly one steering arc$/.test(n.t)), 'what this pass lost: ' + JSON.stringify(road.rows.filter((r) => r.why)).slice(0, 300));
   const touchText = await page.evaluate(() => document.body.innerText);
   check(/least even corners?: .+ Lost most: one steering arc\./.test(touchText), 'the uneven line names what it lost');
+  // a long road's list folds (walkthrough 2026-11-13: 36 cards were five phone screens): eight, then All 36 corners
+  const fold = await page.evaluate(() => ({ shown: [...document.querySelectorAll('.dv-corner')].filter((c) => c.offsetParent).length, all: document.querySelectorAll('.dv-corner').length,
+    key: (document.querySelector('.dv-all') || {}).textContent }));
+  check(fold.all > 10 && fold.shown === 8 && fold.key === `All ${fold.all} corners`, 'the corner list shows eight, then one key for the rest: ' + JSON.stringify(fold));
+  // a corner past the fold picked on the drive's map opens the list, so its card is there to read
+  await page.evaluate(() => { const m = document.querySelector('[data-k="20"]'); m.dispatchEvent(new MouseEvent('click', { bubbles: true })); });
+  const picked = await page.evaluate(() => { const on = document.querySelector('.dv-corner.on'); return { on: on ? [...document.querySelectorAll('.dv-corner')].indexOf(on) : -1, seen: !!(on && on.offsetParent), key: !!document.querySelector('.dv-all') }; });
+  check(picked.on === 20 && picked.seen && !picked.key, 'a folded corner picked on the map unfolds the list: ' + JSON.stringify(picked));
+  const opened = await page.evaluate(() => ({ shown: [...document.querySelectorAll('.dv-corner')].filter((c) => c.offsetParent).length, key: !!document.querySelector('.dv-all') }));
+  check(opened.shown === fold.all && !opened.key, 'All N corners shows them all and goes: ' + JSON.stringify(opened));
   const by = road.rows.find((r) => r.by !== null);
   if (by) {
     await page.click('.dv-corner button.dv-rec');

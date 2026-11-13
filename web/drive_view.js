@@ -110,6 +110,7 @@
    * (a clear braking point on three or more passes). Fewer than 3 such
    * corners: [] (too little to rank).
    */
+  const CORNERS_SHOWN = 8;                        // a drive's corner list shows this many, then All N corners
   const VARIES_M = 10, VARIES_MIN_PASSES = 5;   // a braking point that typically moves this much (and twice your usual), over 5+ passes
   function consistencyRows(co) {
     if (!co || !co.corners) return [];
@@ -515,6 +516,7 @@
       move(state.i);
     }
     const cornerAt = (i) => d.corners.findIndex((c) => i >= c.start && i <= c.end);
+    let unfold = null;                                                 // set when the corner list folds (below)
     function move(i) {
       i = Math.max(0, Math.min(n - 1, Math.round(i))); state.i = i;
       const hair = lanes.querySelector('#dvHair'); if (hair && geo) { const gx = geo.X(i); hair.setAttribute('x1', gx); hair.setAttribute('x2', gx); hair.style.display = i < state.v0 || i > state.v1 ? 'none' : ''; }
@@ -529,6 +531,7 @@
         + (feel ? cell(`Banking${trustLabel(feel, i, 'cam')}`, finite(feel.cam[i]) ? `${Math.round(feel.cam[i])}\u00b0` : '--')
           + cell(`Roughness${trustLabel(feel, i, 'rough')}`, finite(feel.rough[i]) ? `${feel.rough[i].toFixed(2)} g` : '--') + cell('Runs', feel.n[i] != null ? feel.n[i] : '--') : '');
       list.querySelectorAll('.dv-corner').forEach((r, q) => r.classList.toggle('on', q === k));
+      if (k >= CORNERS_SHOWN && unfold) unfold();                    // a folded corner picked on the map or the lanes: show them all
       if (gg) gg.show(c, k);
     }
     // pointer scrubbing on the lanes and taps on map corners
@@ -618,6 +621,15 @@
     });
     if (!d.corners.length) grid2.append(el('p', 'note', 'No corners detected on this drive.'));
     list.append(grid2);
+    // a long road is a long list (36 cards, five screens on a phone; walkthrough 2026-11-13): the first few, then one key for
+    // the rest. The map and the lanes still reach every corner, and picking a folded one opens the list
+    if (d.corners.length > CORNERS_SHOWN + 2) {
+      const all = el('button', 'linkbtn dv-all', `All ${d.corners.length} corners`);
+      grid2.classList.add('folded');
+      unfold = () => { grid2.classList.remove('folded'); all.remove(); unfold = null; };
+      all.onclick = unfold;
+      list.append(all);
+    }
 
     // Zoom: the lanes show the whole drive, or a window around the cursor (a corner pick recentres it).
     const ZOOMS = U() && U().metric() ? [['All', 0], ['3 km', 3000], ['1 km', 1000], ['250 m', 250]] : [['All', 0], ['2 mi', 2 * 1609.344], ['0.5 mi', 0.5 * 1609.344], ['0.15 mi', 0.15 * 1609.344]];
