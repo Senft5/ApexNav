@@ -866,6 +866,14 @@
     .nb-head .nb-cells > span { font: inherit; text-align: right; }
     .nb-head .nb-cells > span:first-child { text-align: left; }
     .nb-row .linkbtn { justify-self: end; font-size: 13px; }
+    /* a phone: four columns left the name ~80 px, so it broke over three lines. Now the name gets its own line and the
+       three numbers sit under it, left-aligned. The heads name only the numbers, since the name says what it is. */
+    @media (max-width: 520px) {
+      .nb-cells { grid-template-columns: repeat(3, minmax(0, 1fr)); row-gap: 2px; }
+      .nb-cells > :first-child { grid-column: 1 / -1; }
+      .nb-cells > span, .nb-head .nb-cells > span { text-align: left; }
+      .nb-head .nb-cells > span:first-child { display: none; }
+    }
     .place-all { display: block; margin: 6px 0 0; }
     /* ---------------- the drive-ended card (REVIEW.md roadmap 7) ---------------- */
     .end-card { text-align: left; }

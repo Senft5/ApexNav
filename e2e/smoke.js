@@ -9416,8 +9416,12 @@ flow('plan flow (c) best roads nearby in 3 taps: the chip under Where to?, a roa
   await page.waitForTimeout(300);
   const list = await page.evaluate(() => ({ head: [...document.querySelectorAll('#exploreList .nb-head .nb-cells > span')].map((s) => s.textContent),
     row: [...document.querySelectorAll('#exploreList .nb-row')[0].querySelectorAll('.nb-cells > *')].map((s) => s.textContent), label: document.querySelector('#exploreList .nb-go').getAttribute('aria-label'),
-    status: document.getElementById('nearbyStatus').textContent, sheetBottom: document.getElementById('nearbySheet').getBoundingClientRect().bottom }));
+    status: document.getElementById('nearbyStatus').textContent, sheetBottom: document.getElementById('nearbySheet').getBoundingClientRect().bottom,
+    nameW: document.querySelector('#exploreList .nb-go .nb-cells > b').getBoundingClientRect().width / document.querySelector('#exploreList .nb-go').getBoundingClientRect().width,
+    roadHead: !!document.querySelector('#exploreList .nb-head .nb-cells > span').offsetParent }));
   check(JSON.stringify(list.head) === '["Road","Good corners","Length","Drive there"]', 'the columns are named: ' + JSON.stringify(list));
+  // a phone: the name has the row's whole width (four columns left it ~80 px, three lines), the numbers under it; no Road head
+  check(list.nameW > 0.95 && !list.roadHead, 'on a phone the road name gets its own line: ' + JSON.stringify({ nameW: list.nameW, roadHead: list.roadHead }));
   check(list.row[0] === 'Test Ridge Road' && /^\d+$/.test(list.row[1]) && /^\d+(\.\d)?mi$/.test(list.row[2]) && /^\d+min$/.test(list.row[3]) && /good corners/.test(list.label), 'each number under its name, with its unit: ' + JSON.stringify(list));
   check(Math.abs(list.sheetBottom - 852) <= 1, 'the list slides up from the bottom: ' + list.sheetBottom);
   await scan(page, 'Best roads nearby');
