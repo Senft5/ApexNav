@@ -1063,7 +1063,7 @@ async function ownTrip(page, base, level = null) {
     steps: (window.apexDebug.track.steps || []).map((s) => s.street), via: ((window.apexDebug.track.request || {}).via || []).length }));
   return { r, calls };
 }
-flow('landscape: a planned route is the card alone, not under the search sheet (2026-11-13: it sat below Where to?\'s two columns)', async (page, base) => {
+flow('landscape: a planned route is its card alone, a column beside the map with the route fitted right of it (2026-11-13: it sat below Where to?\'s two columns, then covered the map)', async (page, base) => {
   graphDir = graphFixture();
   try {
     await ownTrip(page, base);
@@ -1071,6 +1071,12 @@ flow('landscape: a planned route is the card alone, not under the search sheet (
       return { routed: document.getElementById('planPanel').classList.contains('routed'), search: vis(document.querySelector('.plan-search-section')),
         card: Math.round(document.getElementById('routeCard').getBoundingClientRect().top - document.getElementById('planBody').getBoundingClientRect().top) }; });
     check(r.routed && !r.search && r.card <= 8, 'the card is the sheet, at its top: ' + JSON.stringify(r));
+    // and it is a column beside the map, the route fitted into the map right of it (the card covered the whole map)
+    await page.waitForTimeout(1200);                                    // the fit's flight (800 ms)
+    const side = await page.evaluate(() => { const m = apexDebug.map, t = apexDebug.track, c = m.getContainer().getBoundingClientRect(), p = document.getElementById('planPanel').getBoundingClientRect();
+      const xs = t.lat.map((la, i) => m.project([t.lon[i], la]).x + c.left);
+      return { panelR: Math.round(p.right), mapR: Math.round(c.right), minX: Math.round(Math.min(...xs)), maxX: Math.round(Math.max(...xs)), w: Math.round(p.width), mapW: Math.round(c.width) }; });
+    check(side.w < side.mapW * 0.7 && side.minX > side.panelR && side.maxX < side.mapR, 'a column, the route beside it on the map: ' + JSON.stringify(side));
   } finally { graphDir = null; }
 }, { viewport: { width: 844, height: 390 }, geolocation: { latitude: 39.155, longitude: -84.615 }, permissions: ['geolocation'] });
 

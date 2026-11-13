@@ -1787,6 +1787,9 @@
       #app.idle:has(.edge.open) .loop-suggest { display: none; }                                                 /* 8: the panel is the task */
       .plan.open { height: calc(100% - var(--safe-bottom)); }                                                     /* 14 */
       .plan.open.routed:not(.full) { height: calc(100% - var(--safe-bottom)); }                                   /* the plan flow: no half card on a short screen */
+      /* a planned route's card is a column on the left and the map beside it shows the route (2026-11-13: the card covered
+         the whole map, so the route it describes was out of sight until it went down); fitInView keeps the route right of it */
+      .plan.open.routed { right: auto; width: min(400px, 52%); border-right: 1px solid var(--rule); box-shadow: 8px 0 24px rgba(0, 0, 0, 0.18); }
       #app.idle .deck-chips { display: none !important; }
       /* 14: two columns, so the basic level fits without scrolling: places and the loop left, Roads, More and Find right */
       /* :not(.routed): this display won over .plan.routed's display: none, so a route card in landscape sat under the whole
