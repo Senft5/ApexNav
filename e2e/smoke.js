@@ -5131,8 +5131,9 @@ flow('time attack on the home deck: this week\'s featured loop you entered is th
   await page.waitForFunction(() => window.__car.some((m) => m.kind === 'places' && m.list.some((r) => r.attack)), null, { timeout: 10000 })
     .catch(async () => { throw new Error('no time attack row on the car: ' + JSON.stringify(await page.evaluate(() => window.__car.filter((m) => m.kind === 'places')))); });
   const row = await page.evaluate(() => window.__car.filter((m) => m.kind === 'places').pop().list.find((r) => r.attack));
-  check(row.name === 'Tellico <i>loop</i>' && row.attack === 'TA1' && /^Time attack · you're 3rd of 8/.test(row.detail), 'the car\'s row: ' + JSON.stringify(row));
+  check(row.name === 'Tellico <i>loop</i>' && row.attack === 'TA1' && row.detail === 'Time attack · Featured · 20.0 mi', 'the car\'s row: ' + JSON.stringify(row));
   check(asked.every((q) => q === '?lat=35.875&lon=-83.875'), 'the car\'s ask sends only the area too: ' + JSON.stringify(asked));
+  check(await page.evaluate(() => !/3rd/.test(JSON.stringify(window.__car))), 'your place on the board stays on the phone (no scores in the car)');
   await page.evaluate(() => window.apex.onNative({ type: 'carplay', action: 'attack', id: 'TA1' }));
   await page.waitForFunction(() => window.apexDebug.track && window.apexDebug.track.id === 'timeattack_TA1', null, { timeout: 10000 });
 }, { geolocation: { latitude: 35.9606, longitude: -83.9207 }, permissions: ['geolocation'] });
