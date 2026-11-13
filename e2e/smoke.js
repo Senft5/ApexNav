@@ -2622,8 +2622,13 @@ flow('the sight-line speed rides under the position arrow, on the phone and on t
   await page.goto(base + '/index.html?drive=dry_ridge&play=1');
   await page.waitForFunction(() => window.apexDebug && window.apexDebug.track, null, { timeout: 15000 });
   await page.waitForFunction(() => { const t = document.querySelector('.sight-tag'); return t && !t.hidden; }, null, { timeout: 10000 });
-  const tag = await page.textContent('.sight-tag');
-  const cell = await page.textContent('#cluster');
+  // one snapshot, once they agree: playback runs, and the tag holds a value for 2 s (U-60) while the cell moves at once,
+  // so two separate reads could straddle a change (it flaked in CI that way)
+  const same = await page.waitForFunction(() => { const t = document.querySelector('.sight-tag'), c = document.getElementById('cluster');
+    const n = t && !t.hidden ? t.textContent.replace(/\D/g, '') : ''; return n && c.textContent.includes(n) && { tag: t.textContent, cell: c.textContent }; },
+    null, { timeout: 8000 }).then((h) => h.jsonValue()).catch(() => null);
+  const tag = same ? same.tag : await page.textContent('.sight-tag');
+  const cell = same ? same.cell : await page.textContent('#cluster');
   // panel round 2 (TH-2, IN-3): the tag names itself, SIGHT and the number, no unit (never a limit sign); OPEN draws nothing
   check(/^(SIGHT|SLOW)\d+$/.test(tag.trim()), 'the tag reads SIGHT and a speed: ' + tag);
   check(cell.includes(tag.replace(/\D/g, '')), 'the same value as the Sight cell: ' + tag);

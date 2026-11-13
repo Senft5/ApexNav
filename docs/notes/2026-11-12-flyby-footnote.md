@@ -10,3 +10,8 @@
 - What: removed the note under #dvFlyby in web/analysis.html.
 - Why: Nate's no-walls-of-text rule; the note described the old opt-in sharing.
 - Undo: put the `<p class="note">` back under #dvFlybyList and drop the e2e check.
+
+## 2026-11-13: the sight-line e2e reads the tag and the cell together
+- What: the "sight-line speed rides under the position arrow" flow now waits, for up to 8 s, until the Sight tag's number shows in the cluster, and reads both in one snapshot.
+- Why: it failed twice in CI (the second time on this PR) with tag SIGHT15 and a cell that had already moved on. Playback runs while the test reads, and the tag holds a value for 2 s (U-60) while the cell updates at once, so two separate reads could straddle a change. If they never agree, the check still fails.
+- Undo: go back to the two `page.textContent` reads.
