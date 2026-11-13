@@ -76,7 +76,25 @@
     return false;
   }
 
-  /** page: el, Core, drive d, fmtSpeed, save(blob, name, type) → Promise. Returns the panel element. */
+  /**
+   * Big bet 5: the app's own videos of this drive (DriveCam.swift index.json: [{ name, start_ms, dur_s }]) that overlap it,
+   * from t0 (the drive's start, Unix ms) for totalS seconds, in order: [{ name, offsetS, durS, label }]. offsetS is where
+   * the video starts in the drive, so it lines up by itself. A file without a length is not offered (it can't be placed).
+   */
+  function ownVideos(list, t0, totalS) {
+    if (!Array.isArray(list) || !finite(t0) || !(totalS > 0)) return [];
+    const mins = (s) => (s < 90 ? `${Math.max(1, Math.round(s))} s` : `${Math.round(s / 60)} min`);
+    const out = list.filter((v) => v && typeof v.name === 'string' && finite(v.start_ms) && finite(v.dur_s) && v.dur_s > 0)
+      .map((v) => ({ name: v.name, offsetS: (v.start_ms - t0) / 1000, durS: v.dur_s }))
+      .filter((v) => v.offsetS < totalS && v.offsetS + v.durS > 0)
+      .sort((a, b) => a.offsetS - b.offsetS);
+    return out.map((v, k) => ({ ...v, label: out.length === 1 ? `This drive's video \u00b7 ${mins(v.durS)}` : `Video ${k + 1} \u00b7 ${mins(v.durS)}` }));
+  }
+
+  /**
+   * page: el, Core, drive d, fmtSpeed, save(blob, name, type) → Promise, and ownVideos() → Promise of the app's video list
+   * (optional; videoUrl(name) is where one plays). Returns the panel element.
+   */
   function mount(page) {
     const { el, Core, d } = page, R = root.ApexRecording, T = R && R.timesOf ? R.timesOf(Core, d) : Core.elapsedS(d.speed_mps), total = T[T.length - 1] || 0, calls = cornerCalls(d);
     // a rule-separated section, not a box; the picker is an ink key, the offset the balance slider (REVIEW2.md U-18)
@@ -94,7 +112,7 @@
     // the made video's own canvas: in the page (WebKit streams a canvas as it renders it), shown only while it is made
     const canvas = el('canvas'), g = canvas.getContext('2d');
     canvas.style.cssText = 'width:100%;max-width:640px;display:none;background:#000';
-    const step = '0.5';
+    const step = '0.1';                                           // (0.1: the app's own video lines up to a tenth)
     const offset = el('input', { type: 'range', min: '-600', max: String(Math.max(600, Math.ceil(total))), step, value: '0' }); offset.setAttribute('aria-label', 'When the video starts in the drive (s)');
     const balance = el('label', { className: 'balance' }, el('span', { textContent: 'Earlier' }), offset, el('span', { textContent: 'Later' }));
     const offsetNote = el('p', { className: 'note', textContent: offsetText(0) });
@@ -186,7 +204,7 @@
     }
     function setOffset(v) {
       const lo = Number(offset.min), hi = Number(offset.max);
-      offset.value = String(Math.max(lo, Math.min(hi, Math.round(v * 2) / 2)));
+      offset.value = String(Math.max(lo, Math.min(hi, Math.round(v * 10) / 10)));
       offsetNote.textContent = offsetText(off());
       clipSaid = ''; follow(); listClips();
     }
@@ -209,16 +227,35 @@
       const f = input.files && input.files[0];
       if (!f) return;
       pick.firstChild.textContent = 'Pick another video';
+      openSrc(URL.createObjectURL(f), null);
+    });
+    /** Opens a video (a picked file, or the app's own film of the drive with where it starts in the drive). */
+    function openSrc(src, startS) {
+      if (startS != null) setOffset(startS);
       opened = false; frameOk = null; tries = 0; clearTimeout(retry); anchor = -1; busy = false; pending = null; dur = 0; clipSaid = '';
       stage.hidden = true; tools.hidden = true; exportBtn.disabled = true;
       say('Opening the video…');
-      video.src = URL.createObjectURL(f);
+      video.src = src;
       video.load();
       // a muted play and pause makes iOS fetch and decode it (preload alone may not); then the preview seeks
       Promise.resolve(video.play()).catch(() => {}).then(() => { video.pause(); });
       clearTimeout(openTimer);
       openTimer = setTimeout(() => { if (!opened) say('No preview: this phone hasn’t opened the video in the app. Try picking it again, or a video from the Camera app.'); }, 10000);
-    });
+    }
+    // the app's own film of this drive (DriveCam.swift): one key per video, lined up by itself
+    const own = el('div', { className: 'dc-row dc-own', hidden: true });
+    if (typeof page.ownVideos === 'function') {
+      Promise.resolve().then(() => page.ownVideos()).then((list) => {
+        const vids = ownVideos(list, d.t0, total);
+        own.replaceChildren(...vids.map((v) => {
+          const b = el('button', { className: 'btn solid', type: 'button', textContent: v.label });
+          b.addEventListener('click', () => { pick.firstChild.textContent = 'Pick another video'; openSrc(page.videoUrl(v.name), Math.max(-600, v.offsetS)); });
+          return b;
+        }));
+        own.hidden = !vids.length;
+        if (vids.length) note.textContent = 'Vetta filmed this drive: open the video and it is lined up already. Corner clips are under it.';
+      }).catch(() => {});
+    }
     video.addEventListener('loadedmetadata', () => {
       if (finite(video.duration)) { ready(); return; }
       // a recorded WebM can say its length is unknown until a seek far past its end finds it
@@ -292,10 +329,10 @@
       clipCanvas.style.display = 'none'; clipBusy = false; clipBtn.disabled = !clipList.length || frameOk !== true;
       follow();
     });
-    box.append(note, pick, status, stage, tools, canvas, balance, fine, offsetNote, exportBtn, clips);
+    box.append(note, own, pick, status, stage, tools, canvas, balance, fine, offsetNote, exportBtn, clips);
     return box;
   }
 
-  const api = { indexAt, overlayAt, drawOverlay, mount, supported, cornerCalls, videoTimeFor, stepCall, offsetText, frameDrawn };
+  const api = { indexAt, overlayAt, drawOverlay, mount, supported, ownVideos, cornerCalls, videoTimeFor, stepCall, offsetText, frameDrawn };
   if (typeof module !== 'undefined' && module.exports) module.exports = api; else root.ApexDashcam = api;
 })(typeof window !== 'undefined' ? window : globalThis);
