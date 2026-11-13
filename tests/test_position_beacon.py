@@ -96,9 +96,14 @@ def test_near_me_lookups_use_the_cell():
     cockpit = (WEB / "cockpit.js").read_text(encoding="utf-8")
     events = (WEB / "crew_events.js").read_text(encoding="utf-8")
     assert cockpit.count("/api/hazards?${ApexPrivacyZones.cellQuery(") == 5   # live reports, discovery, the drive, the road page, ahead
-    ahead = cockpit[cockpit.index("async function askAhead"):]
+    ahead = cockpit[cockpit.index("async function askCellsAlong"):]
     ahead = ahead[:ahead.index("\n    }\n")]
     assert "ApexPrivacyZones.routeCells(t.lat, t.lon, privacyZones, edgeM)" in ahead   # the route's cells: no ends, no zones
+    # askAhead (a drive starting) and keepReportsAlong (a route saved) ask only through it
+    for fn in ("async function askAhead", "async function keepReportsAlong"):
+        body = cockpit[cockpit.index(fn):]
+        body = body[:body.index("\n    }\n")]
+        assert "askCellsAlong(t" in body and "/api/" not in body, fn
     assert "/api/crews/discover?${ApexPrivacyZones.cellQuery(" in cockpit
     assert "/api/events/near?${Z.cellQuery(" in events
     # the drive's own lookup: gated (zone, private edge) and cached per cell
