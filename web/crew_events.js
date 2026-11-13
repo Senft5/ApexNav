@@ -458,7 +458,7 @@
       // roles from the crew's members (the app's row list)
       const lead = el('select', { className: 'field' }), sweep = el('select', { className: 'field' });
       lead.setAttribute('aria-label', 'Lead'); sweep.setAttribute('aria-label', 'Sweep');
-      const rolesRow = el('div', { className: 'stack-8' }, lead, sweep);
+      const rolesRow = el('div', { className: 'row-pick-list' }, lead, sweep);
       apiCall('GET', `/api/crews/${encodeURIComponent(e.crew_id)}/members`).then(jsonOf).catch(() => null).then((list) => {
         const hs = (Array.isArray(list) ? list : []).filter((m) => m && m.handle);
         if (!hs.length) { rolesRow.remove(); return; }

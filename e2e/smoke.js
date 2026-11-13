@@ -4861,6 +4861,11 @@ flow('crew drives: an upcoming drive shows on People, Crews, as the crew page’
     const body = c && c.querySelector('.cp-more-body'); return !!body && !/Stop being|I.ll lead|I.ll sweep/.test(body.textContent); }),
     'the planner\'s card: the roles in Set it up only, not again as links above it');
   check(!/List it for everyone/.test(await page.textContent(`${myCard} .cp-set`)), 'a private crew is not offered a public meet');
+  await page.waitForSelector(`${myCard} .cp-set .row-pick + .row-pick-native + .row-pick`);
+  const rules = await page.evaluate(() => { const c = [...document.querySelectorAll('.drive-card:not(.meet-card)')].find((x) => /My run/.test(x.textContent));
+    const [a, b] = c.querySelectorAll('.cp-set .row-pick'), ra = a.getBoundingClientRect(), rb = b.getBoundingClientRect();
+    return { gap: Math.round(rb.top - ra.bottom), top: getComputedStyle(b).borderTopWidth }; });
+  check(rules.gap === 0 && rules.top === '0px', 'Lead and Sweep are one list, one rule between them: ' + JSON.stringify(rules));
   await page.fill(`${myCard} input[aria-label="Notes"]`, 'Fuel first.');
   await page.click(`${myCard} .cp-set button:text-is("Save")`);
   await page.waitForFunction(() => /Notes saved/.test(document.getElementById('toast').textContent));
