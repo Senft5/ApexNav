@@ -44,7 +44,7 @@ console.log(JSON.stringify({
     [{ id: 'r1', name: 'Cherohala Skyway', miles: 42.3 }, { id: 'r2', name: 'Tail', miles: null }, { name: 'No id' }],
     (m) => `${Math.round(m / 1609.344)} mi`),
   placesAttack: C.placesMessage([], [{ name: 'Home', lat: 35.1, lon: -83.2 }], [{ id: 'r1', name: 'Cherohala Skyway', miles: 42.3 }], null,
-    [{ id: 77, name: 'Clinch River loop', detail: "you're 3rd of 12 · 2 days left" }, { id: 'ta-2', name: 'Tail of the Dragon', detail: '11 mi' }]).list,
+    [{ id: 77, name: 'Clinch River loop', detail: 'Featured · 20 mi' }, { id: 'ta-2', name: 'Tail of the Dragon', detail: '11 mi' }]).list,
   arrive: C.guideMessage(t, 3100, null, D.phrase),
   // U-63: a GPX track on the motorway, its next corner 13 km on; the road named by the map under the car, or not at all
   ...(() => { const g = { id: 'gpx', dist: [0, 20000], events: [{ type: 'corner', dir: 'R', severity: 2, start_m: 13000, dist_m: 13040, call: 'Tight right' }] };
@@ -252,7 +252,8 @@ def test_places(out):
     swift = open(os.path.join(ROOT, "CarPlay", "ApexCarPlay.swift"), encoding="utf-8").read()
     assert 'ApexCar.shared.send("saved", ["id": id])' in swift
     # this week's time attack loop, once entered, after the pinned places: the phone drives the loop itself
-    assert out["placesAttack"][1] == {"name": "Clinch River loop", "attack": "77", "detail": "Time attack · you're 3rd of 12 · 2 days left"}
+    assert out["placesAttack"][1] == {"name": "Clinch River loop", "attack": "77", "detail": "Time attack · Featured · 20 mi"}
+    assert "summaryLine(w" not in js, "the board and your place on it stay on the phone: no scores in the car"
     assert [r["name"] for r in out["placesAttack"]] == ["Home", "Clinch River loop", "Tail of the Dragon", "Cherohala Skyway"]
     assert "const c = car.attacks.find((x) => String(x.segment_id) === String(m.id));" in js
     assert 'ApexCar.shared.send("attack", ["id": id])' in swift

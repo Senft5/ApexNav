@@ -211,7 +211,7 @@
     const etaSections = new WeakMap();      // track -> its corner sections (ApexEta.cornerSections), worked out once
     let etaText = '', etaLeftS = null;
     let replayEnded = false, replayWaiting = false;   // U-110 a finished replay, U-128 a replay waiting for its map (paintReplayEnd)
-    const car = { serial: 0, route: '', guideAt: 0, guideKey: '', sightKey: '', look: '', hazards: '', symbols: new Map(), ended: null, along: '', offerSerial: 0, offer: null, echo: 0, attacks: [], attackWeek: null, road: '', roadAt: -1e9 };   // what the car's screen was last sent (carRoute, carGuide below)   // strip text while off route; last frame fed; furthest progress
+    const car = { serial: 0, route: '', guideAt: 0, guideKey: '', sightKey: '', look: '', hazards: '', symbols: new Map(), ended: null, along: '', offerSerial: 0, offer: null, echo: 0, attacks: [], road: '', roadAt: -1e9 };   // what the car's screen was last sent (carRoute, carGuide below)   // strip text while off route; last frame fed; furthest progress
     try {
       const saved = JSON.parse(localStorage.getItem('apex.prefs') || 'null');
       if (saved) {
@@ -6451,7 +6451,7 @@
         // Drive it: the loop itself is the route (as a roadbook road is), not just the way to its start
         driveLoop: (c, g) => driveAttack(c, g),
         // the area's time attacks you've entered (the featured one first), for the car's Places (time_attack.js peek)
-        entered: (loops, week) => { car.attacks = Array.isArray(loops) ? loops : []; car.attackWeek = week || null; carPost(carPlaces()); },
+        entered: (loops) => { car.attacks = Array.isArray(loops) ? loops : []; carPost(carPlaces()); },
         // the row's own line says this week's loop and your place on it (time_attack.js summaryLine)
         line: (txt) => { const s = $('planAttack').querySelector('summary'); if (s) s.textContent = txt || TA_LINE; } }) : null;
       if (ta) {
@@ -9206,9 +9206,10 @@
       let pinned = [], saved = [], attacks = [];
       try { pinned = ApexPinnedPlaces.list(localStorage); saved = ApexSavedRoutes.list(localStorage); } catch (_) {}
       try {
-        const w = car.attackWeek, line = w && w.entered && window.ApexTimeAttack ? (ApexTimeAttack.summaryLine(w, (m) => ApexUnits.long(m, 1)) || '').replace(/^Time attack: [^·]*· ?/, '') : '';
+        // its length only: the board and your place on it stay on the phone (no scores or social features in the car,
+        // docs/APP_REVIEW.md); the featured one says so, as the phone's row does
         attacks = car.attacks.map((c) => ({ id: c.segment_id, name: c.name,
-          detail: c.featured && line ? line : Number.isFinite(c.length_m) ? ApexUnits.long(c.length_m, 1) : '' }));
+          detail: [c.featured ? 'Featured' : '', Number.isFinite(c.length_m) ? ApexUnits.long(c.length_m, 1) : ''].filter(Boolean).join(' · ') }));
       } catch (_) {}
       return ApexCarPlay.placesMessage(recentPlaces(), pinned, saved, (m) => ApexUnits.long(m), attacks);
     }
