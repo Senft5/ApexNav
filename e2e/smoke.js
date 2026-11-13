@@ -5058,6 +5058,7 @@ flow('flyby: a friend on the same stage that day shows on the drive, as text; ch
   await page.waitForSelector('#dvFlyby:not([hidden])');
   const t = await page.textContent('#dvFlybyList');
   check(t === 'Straight <b>run</b>: @bob 812', 'only the same day, as text: ' + t);
+  check(!(await page.$('#dvFlyby .note')), 'the friends-that-day panel is the list alone, no footnote under it');
   // this month's challenges (IDEAS S-11): a drive dated now makes the panel, a new road counted (f1 counts too in October 2026)
   await page.evaluate(async () => { const f = (await ApexRecording.all()).find((d) => d.id === 'f1'); await ApexRecording.store({ ...f, id: 'f2', name: 'Fresh road', date: new Date().toISOString() }); });
   await page.goto(base + '/analysis.html');
