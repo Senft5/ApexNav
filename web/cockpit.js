@@ -5313,6 +5313,9 @@
       load(url) {                                                      // a replay: the map page loads with that drive
         const again = (() => { try { return new URL(url, location.href).searchParams.get('again'); } catch (_) { return null; } })();
         if (again) { ApexLogHost.close('map'); driveAgain(again); return; }   // panel D-1: Drive it again plans in place
+        // a friend's handle on the Log: People, on their profile, without reloading the map page
+        const friend = (() => { try { return new URL(url, location.href).searchParams.get('friend'); } catch (_) { return null; } })();
+        if (friend && window.apexOpenFriend) { window.apexOpenFriend(String(friend).toLowerCase()); ApexLogHost.close('friends'); return; }
         location.href = url;
       },
       // 'drives' | 'theme' | 'units': told now when the Log is showing, else when it is next opened
@@ -6574,6 +6577,9 @@
     onSocial(() => { try { garage = window.ApexGarageUI ? ApexGarageUI.mount({ el, btn, toast, apiCall, jsonOf, report: safety && safety.report, onCars: setRoutingCars, onPhotos: () => renderAccount(), builds }) : null; } catch (e) { console.error('garage', e); } });
     // an on/off setting is the slide switch (U-44), the label beside it, never a key that reads "Off"
     const switchRow = (label, on, change) => { const b = el('button', { className: 'sw' + (on ? ' on' : ''), onclick: change }, el('i'), el('span', { textContent: label })); b.setAttribute('role', 'switch'); b.setAttribute('aria-checked', String(!!on)); return b; };
+    // ?friend=bob (a friend's handle on the Log's Friends lately): People opens on that friend's profile once the list is drawn
+    let openFriendHandle = (() => { const h = String(params.get('friend') || '').replace(/^@/, '').toLowerCase(); return /^[a-z0-9_]{3,20}$/.test(h) ? h : null; })();
+    window.apexOpenFriend = (h) => { openFriendHandle = h; renderAccount(); };   // the Log frame's link, through ApexLogHost.load: People is drawn again, on them
     let openCrewId = null, openFriendId = null, crewOpen = null;   // crewOpen: the crew open over the crews dashboard (this visit)   // the crew tile and the friend row left open across a redraw
     const crewNear = () => { if (state.lastPosition) return state.lastPosition; const c = map.getCenter(); return { lat: c.lat, lon: c.lng }; };
     // Links people share open the website (in the app the page's own origin is apexnav://app, which no one else can open).
@@ -6893,6 +6899,7 @@
         head.setAttribute('aria-label', `@${f.handle || '?'}${st && st.text ? `, ${st.text}` : ''}: open the profile`);
         head.addEventListener('click', () => (window.ApexProfileView ? openProfile(f) : null));
         row.append(head);
+        if (openFriendHandle && f.handle && f.handle.toLowerCase() === openFriendHandle) { openFriendId = f.id; openFriendHandle = null; }
         if (openFriendId === f.id && window.ApexProfileView) openProfile(f);
         flist.append(row);
       }
