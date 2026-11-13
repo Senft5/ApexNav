@@ -544,7 +544,10 @@
     let net = null;
     if (ref) { const ks = d.corners.map((_, k) => lost(k)).filter((x) => x != null); net = ks.length ? ks.reduce((s, x) => s + x, 0) : null; }
     // TestFlight 2026-11-12 ("walls of text"): the comparison and the repeatability say their numbers in a line each
-    list.innerHTML = `<h2>Corners${ref ? ` \u00b7 vs your best here, ${esc(ref.name)} (${ref.score})` : ''}</h2>` + (ref ? `<p class="note" style="margin-bottom:8px">${net == null ? 'No clean corners to compare.' : `<b class="${net > 0.05 ? 'loss' : net < -0.05 ? 'gain' : ''}">${fmtD(net)}</b> over the ${d.corners.map((_, k) => lost(k)).filter((x) => x != null).length} corners both drives took cleanly`}</p>` : '');
+    // the gap in words, against the drive it is measured from ("+18.9 s" was a sign to decode); each card's delta follows it
+    const nk = d.corners.map((_, k) => lost(k)).filter((x) => x != null).length;
+    const gap = net == null ? null : Math.abs(net) < 0.05 ? 'level' : `${Math.abs(net).toFixed(1)} s ${net > 0 ? 'slower' : 'quicker'}`;
+    list.innerHTML = '<h2>Corners</h2>' + (ref ? `<p class="note" style="margin-bottom:8px">${gap == null ? 'No clean corners to compare with your best drive here.' : `${gap === 'level' ? 'Level with' : `<b class="${net > 0 ? 'loss' : 'gain'}">${gap}</b> than`} your best drive here (${esc(String(ref.score))}), over ${nk} corner${nk === 1 ? '' : 's'}`}</p>` : '');
     const reps = consistencyRows(co);
     if (reps.length) {                                               // how repeatably each corner is driven over your passes (D-07)
       const ul = el('ol', 'dv-time'), m = (x) => fine(Math.max(3, x)), spd = (x) => `${Math.max(1, Math.round(x * MPH))} ${SPD()}`;

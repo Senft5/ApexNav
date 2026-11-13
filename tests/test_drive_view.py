@@ -90,6 +90,9 @@ V.mount(rootAlone, scoredDrive, { Core, C, MPH: Core.MPS_TO_MPH,
 const coastNear = V.tipText({ best: { time_s: 3.9 }, tip: { kind: 'coast', value: 85, vs_best: false } }, Core.MPS_TO_MPH);
 const aloneHead = rootAlone.children[0].innerHTML, aloneList = rootAlone.children[2].children.map((c) => c.className);
 const aloneCard = rootAlone.children[2].children.find((c) => c.className === 'dv-corners').children[0].innerHTML;
+// Against the best drive here: the gap in words, never a "+" to decode
+const refHead = (delta) => { const rt = mkEl('div'); V.mount(rt, scoredDrive, { Core, C, MPH: Core.MPS_TO_MPH, reference: { name: 'X', score: 819, corners: scoredDrive.corners.map(() => ({ delta_s: delta })) } }); return rt.children[2].innerHTML; };
+const refSlower = refHead(-18.94), refLevel = refHead(0.01), refNone = refHead(null);
 
 // Road feel readout names how far to trust each value.
 global.ApexContributor = require(process.argv[1] + '/web/contributor.js');
@@ -129,7 +132,7 @@ const rootCar = mkEl('div');
 V.mount(rootCar, { ...scoredDrive, car: { label: '<b>Miata</b>', mu: 0.52 } }, { Core, C, MPH: Core.MPS_TO_MPH });
 const carHead = rootCar.children[0].innerHTML;
 console.log(JSON.stringify({ notTopCard, carHead, repIntro, reps, full, bare, headHtml, unscoredHeadHtml, hiddenBeforeScrub, hiddenAfterKeyScrub, hiddenBeforeZoom, hiddenAfterZoom,
-  coachHead, timeHtml, cardHtml, aloneHead, aloneList, aloneCard, coastNear, ggCaption, ggCorner, ggNone, ggLede, ggMore, ggOrder, feelRead, gapLanes }));
+  coachHead, timeHtml, cardHtml, refSlower, refLevel, refNone, aloneHead, aloneList, aloneCard, coastNear, ggCaption, ggCorner, ggNone, ggLede, ggMore, ggOrder, feelRead, gapLanes }));
 """
 
 
@@ -384,3 +387,10 @@ def test_car_line_says_its_grip_without_a_footnote(r):
 def test_corner_card_tip_only_where_it_is_news(r):
     assert "dv-tip" not in r["notTopCard"], "a corner outside Where to find time says its gap in the delta, not a tip"
     assert "30 m coasting" in r["aloneCard"]
+
+
+def test_corners_against_the_best_drive_say_slower_in_words(r):
+    n = r["refSlower"]
+    assert "<h2>Corners</h2>" in n and "s slower</b> than your best drive here (819), over " in n and "+" not in n.split("</h2>")[1].split("</p>")[0]
+    assert "Level with your best drive here (819)" in r["refLevel"]
+    assert "No clean corners to compare with your best drive here." in r["refNone"]
