@@ -7533,9 +7533,11 @@ flow('desk: on a big screen Where to? is a column on the left and sheets a panel
   const plan = await box('#planPanel');
   check(plan.w === 440 && plan.x < 40 && plan.h > 600, 'Where to? is a left column: ' + JSON.stringify(plan));
   await page.click('.tab[data-view="garage"]');
-  await page.waitForTimeout(400);
+  // the panel slides and scales in: measure once it has settled (CI caught it mid-way at x 987, width 479.9999)
+  await page.waitForFunction(() => { const s = document.querySelector('.sheet.open'); if (!s) return false; const r = s.getBoundingClientRect();
+    return Math.abs(r.right - innerWidth) < 1 && Math.abs(r.width - 480) < 0.01; }, null, { timeout: 3000 }).catch(() => {});
   const sheet = await box('.sheet.open');
-  check(sheet.w === 480 && sheet.x > 900, 'Settings is a right panel: ' + JSON.stringify(sheet));
+  check(Math.round(sheet.w) === 480 && sheet.x > 900, 'Settings is a right panel: ' + JSON.stringify(sheet));
 }, { viewport: { width: 1440, height: 900 } });
 
 flow('recce: keep a drive\'s notes, change a call, and the cockpit reads yours on that road (IDEAS V-09)', async (page, base) => {
