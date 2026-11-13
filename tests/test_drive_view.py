@@ -176,7 +176,7 @@ def test_corner_coach_shows_ideal_time_and_tips(r):
     t = r["timeHtml"]
     assert "Brake 22 m later, like your best pass" in t and "+0.5 s" in t and "0.50" not in t
     assert "&#60;i&#62;Oct 2&#60;/i&#62;" in t and "<i>" not in t, "drive names and dates are escaped"
-    assert "Brake 22 m later" in r["cardHtml"]
+    assert "dv-tip" not in r["cardHtml"], "a corner in Where to find time is not told its tip twice"
 
 
 def test_corner_coach_alone_has_no_ideal_but_keeps_the_habit_tip(r):
@@ -383,4 +383,4 @@ def test_car_line_says_its_grip_without_a_footnote(r):
 
 def test_corner_card_tip_only_where_it_is_news(r):
     assert "dv-tip" not in r["notTopCard"], "a corner outside Where to find time says its gap in the delta, not a tip"
-    assert "Brake 22 m later" in r["cardHtml"] and "30 m coasting" in r["aloneCard"]
+    assert "30 m coasting" in r["aloneCard"]

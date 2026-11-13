@@ -601,9 +601,9 @@
     d.corners.forEach((c, k) => {
       const r = el('button', 'dv-corner'); r.setAttribute('aria-label', `Corner ${k + 1}: ${callOf(c)}, apex ${Math.round(c.apex_mps * MPH)} ${SPD_WORDS()}`);
       r.innerHTML = `<b>${k + 1}</b><span class="dv-call">${esc(callOf(c))}</span><span class="dv-v">${Math.round(c.apex_mps * MPH)} ${SPD()}</span><span class="dv-d">${DIST(d.dist[c.apex])}${ref ? ` \u00b7 <em class="${lost(k) == null ? '' : lost(k) > 0.05 ? 'loss' : lost(k) < -0.05 ? 'gain' : ''}">${fmtD(lost(k))}</em>` : ''}</span>`
-        // a tip only where it is news: a corner in Where to find time, or a habit (no best pass to copy); the rest say it in
-        // their delta, so 36 cards don't each repeat "your best pass was 4 mph quicker" (TestFlight 2026-11-12, "text walls")
-        + (co && tipText(co.corners[k], MPH) && (co.top.includes(k) || !co.corners[k].best || co.corners[k].tip.vs_best === false)
+        // a tip only where it is news: a habit (no best pass to copy) that Where to find time does not already say; the rest
+        // say it in their delta, so cards don't repeat "your best pass was 4 mph quicker" (TestFlight 2026-11-12, "text walls")
+        + (co && tipText(co.corners[k], MPH) && !co.top.includes(k) && (!co.corners[k].best || co.corners[k].tip.vs_best === false)
           ? `<span class="dv-tip">${esc(tipText(co.corners[k], MPH))}</span>` : '');
       r.onclick = () => pick(c.apex, c.start, c.end);
       grid2.append(r);
